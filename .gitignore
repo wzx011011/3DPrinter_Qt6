@@ -1,0 +1,49 @@
+# === Build outputs ===
+build/
+cmake-build-*/
+out/
+
+# === IDE / Editor ===
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln
+*.vcxproj*
+.idea/
+*.swp
+*~
+
+# === Compiled / Generated ===
+*.obj
+*.o
+*.pdb
+*.exe
+*.dll
+*.lib
+*.exp
+*.ilk
+*.a
+*.so
+*.dylib
+*.qm
+*.autosave
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+
+# === Test outputs (regenerated each run) ===
+tests/output/
+tests/baseline/
+
+# === OS junk ===
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# === Python ===
+__pycache__/
+*.pyc
+
+# === Third-party dependencies (will be managed by submodule or vcpkg) ===
+# third_party/ directories are tracked individually

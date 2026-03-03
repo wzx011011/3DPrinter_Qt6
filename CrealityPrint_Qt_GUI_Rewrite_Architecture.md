@@ -1,15 +1,16 @@
 # CrealityPrint 7.0 — Qt/QML GUI 重写架构文档
 
-> **版本**: 2.0  
-> **日期**: 2026-03-01  
+> **版本**: 3.0  
+> **日期**: 2026-03-04  
 > **作者**: Architecture Team  
-> **状态**: Final
+> **状态**: Active
 
 | 版本 | 日期       | 变更摘要                                                                                                                     |
 | ---- | ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | 1.0  | 2026-02-28 | 初稿：11 章 + 3 附录                                                                                                         |
 | 1.1  | 2026-03-01 | 逻辑审核修复：架构图/MVP/VM 注册/Service 补全                                                                                |
 | 2.0  | 2026-03-01 | **最终版**：新增 ADR、线程模型、VM-Service 依赖矩阵、错误处理策略、CI/CD 管线、任务依赖图、性能预算、回滚/降级/安全/迁移方案 |
+| 3.0  | 2026-03-04 | **重大扩展**：新增第 12 章——libslic3r 切片引擎迁移（3MF 加载 + 切片流水线 + G-code 预览渲染完整方案）                        |
 
 ---
 
@@ -26,6 +27,7 @@
 9. [测试策略](#9-测试策略)
 10. [开发计划与里程碑](#10-开发计划与里程碑)
 11. [风险与缓解措施](#11-风险与缓解措施)
+12. [libslic3r 切片引擎迁移](#12-libslic3r-切片引擎迁移)
 
 ---
 
@@ -1833,6 +1835,566 @@ src/slic3r/GUI/
 
 ---
 
-> **文档结束 — v2.0 Final**  
+---
+
+## 12. libslic3r 切片引擎迁移
+
+### 12.1 迁移目标与策略
+
+本章描述将 [CrealityOfficial/CrealityPrint](https://github.com/CrealityOfficial/CrealityPrint) 上游仓库中的 `src/libslic3r/` 切片引擎以及 3MF 格式加载模块完整迁移到本 Qt/QML 重写项目的详细方案。
+
+**迁移原则**：
+
+| 原则           | 说明                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| 引擎零修改     | `libslic3r/` 核心算法代码原封不动，仅调整 CMake 集成和依赖路径                             |
+| 隔离 wxWidgets | `BackgroundSlicingProcess` 含有大量 `wxQueueEvent`/`wxGetApp()` 调用，需用 Qt 信号机制替换 |
+| 格式完整支持   | 同时支持标准 3MF (`load_3mf`) 和 BBS/Creality 扩展 3MF (`load_bbs_3mf`)                    |
+| 异步切片       | 切片流程运行在独立线程，通过 Qt 信号通知 UI 进度和完成事件                                 |
+
+**ADR-09（新增）**：
+
+| ID     | 决策点                            | 备选方案                             | 最终选择                                 | 核心理由                                            |
+| ------ | --------------------------------- | ------------------------------------ | ---------------------------------------- | --------------------------------------------------- |
+| ADR-09 | 切片引擎集成方式                  | 独立进程 IPC / 动态库 / 源码直接编译 | **源码直接编译（静态链接）**             | 零 IPC 开销；与 Qt Worker Thread 直接集成；调试方便 |
+| ADR-10 | BackgroundSlicingProcess 去 wx 化 | 完全重写 / 最小化 wx 替换            | **最小化替换（用 Qt 信号替换 wxEvent）** | 保留切片逻辑不变，仅替换事件通知层                  |
+| ADR-11 | 3MF 加载线程模型                  | 主线程同步 / QThread / std::thread   | **QtConcurrent::run + 进度信号**         | 与现有 ImportProgressFn 回调契合；UI 保持响应       |
+
+---
+
+### 12.2 上游模块分析
+
+#### 12.2.1 3MF 加载模块（来源：CrealityPrint/src/libslic3r/Format/）
+
+上游项目存在两套 3MF 加载路径，均需迁移：
+
+```
+libslic3r/Format/
+├── 3mf.cpp / 3mf.hpp          # 标准 PrusaSlicer 兼容 3MF
+│   ├── load_3mf()             # 公共入口
+│   ├── _3MF_Importer          # ZIP 解析 + expat XML 解析
+│   └── _3MF_Exporter          # 3MF 导出
+├── bbs_3mf.cpp / bbs_3mf.hpp  # BBS/Creality 扩展 3MF（含多平板/缩略图/切片数据）
+│   ├── load_bbs_3mf()         # BBS 格式入口（含 PlateData / ProjectPresets）
+│   └── store_bbs_3mf()        # BBS 格式导出
+├── AMF.cpp / AMF.hpp          # AMF 格式（次优先）
+├── STL.cpp / STL.hpp          # STL 格式
+├── OBJ.cpp / OBJ.hpp          # OBJ 格式
+└── STEP.cpp / STEP.hpp        # STEP 格式（依赖 OCCT）
+```
+
+**关键入口函数**：
+
+```cpp
+// 统一入口——自动检测格式类型
+Model Model::read_from_archive(
+    const std::string& input_file,
+    DynamicPrintConfig* config,
+    ConfigSubstitutionContext* config_substitutions,
+    En3mfType& out_file_type,          // 输出：From_BBS / From_Prusa / From_Creality
+    LoadStrategy options,              // Default / LoadModel / LoadConfig / Restore
+    PlateDataPtrs* plate_data,         // 多平板数据（BBS 扩展）
+    std::vector<Preset*>* project_presets,
+    Semver* file_version,
+    Import3mfProgressFn proFn,         // 进度回调（用于 UI 进度条）
+    BBLProject* project
+);
+
+// 标准 3MF 加载（PrusaSlicer 兼容格式）
+bool load_3mf(
+    const char* path,
+    DynamicPrintConfig& config,
+    ConfigSubstitutionContext& config_substitutions,
+    Model* model,
+    bool check_version
+);
+
+// BBS/Creality 扩展格式加载
+bool load_bbs_3mf(
+    const char* path,
+    DynamicPrintConfig* config,
+    ConfigSubstitutionContext* config_substitutions,
+    Model* model,
+    PlateDataPtrs* plate_data_list,
+    std::vector<Preset*>* project_presets,
+    bool* is_bbl_3mf,
+    Semver* file_version,
+    Import3mfProgressFn proFn = nullptr,
+    LoadStrategy strategy = LoadStrategy::Default,
+    BBLProject* project = nullptr,
+    int plate_id = 0
+);
+```
+
+**自动格式检测逻辑**（`Model::read_from_archive` 内）：
+
+```
+文件扩展名 .3mf / .cxprj
+    └─→ PrusaFileParser::check_3mf_from_prusa()
+            ├─ true  → load_3mf()      (标准格式)
+            └─ false → load_bbs_3mf()  (BBS/Creality 格式)
+```
+
+#### 12.2.2 3MF 模块依赖项
+
+| 依赖库         | 用途                             | 来源              |
+| -------------- | -------------------------------- | ----------------- |
+| **expat**      | XML 解析（SAX 流式，低内存占用） | `deps/expat`      |
+| **miniz**      | ZIP 压缩/解压（.3mf 本质是 ZIP） | `deps/miniz`      |
+| **boost**      | 文件系统、字符串算法、日志       | `deps/boost`      |
+| **Eigen 3**    | Transform3d（变换矩阵）、Vec3f   | `deps/eigen`      |
+| **fast_float** | 高速浮点字符串解析（顶点坐标）   | `deps/fast_float` |
+| **Intel TBB**  | 并行解析（大文件优化）           | `deps/tbb`        |
+
+#### 12.2.3 切片引擎核心（`src/libslic3r/`）
+
+```
+libslic3r/
+├── Print.cpp / Print.hpp              # FDM 切片主控（Print::process() / export_gcode()）
+├── PrintBase.hpp                      # 抽象基类（状态机 + 取消机制）
+├── PrintObject.cpp / PrintObject.hpp  # 单个对象切片步骤
+├── PrintObjectSlice.cpp               # 网格切层（posSlice 步骤）
+├── GCode.cpp / GCode.hpp              # G-code 生成（GCode::do_export()）
+├── GCode/GCodeProcessor.cpp/hpp       # G-code 解析（用于预览，GCodeProcessorResult）
+├── GCode/ThumbnailData.hpp            # 缩略图数据结构
+├── Model.cpp / Model.hpp              # 场景模型（ModelObject / ModelInstance / ModelVolume）
+├── Config.cpp / Config.hpp            # 打印配置（DynamicPrintConfig）
+├── Preset.cpp / Preset.hpp            # 参数预设（Preset / PresetBundle）
+├── TriangleMesh.cpp / TriangleMesh.hpp# 三角网格结构
+├── Format/ （见上）                    # 文件格式读写
+└── SLAPrint.hpp                       # SLA 切片（暂不迁移）
+```
+
+#### 12.2.4 BackgroundSlicingProcess（现有 wxWidgets 版本）
+
+```cpp
+// 现有依赖（需要去除）:
+#include <wx/app.h>         // wxGetApp()
+#include <wx/event.h>       // wxQueueEvent / wxCommandEvent
+#include <wx/stdpaths.h>
+
+// 现有通知调用（需替换）:
+wxQueueEvent(GUI::wxGetApp().mainframe->m_plater, evt.Clone());  // 切片完成
+wxQueueEvent(GUI::wxGetApp().mainframe->m_plater, new wxCommandEvent(m_event_export_began_id));
+```
+
+---
+
+### 12.3 新 Qt 切片服务架构
+
+#### 12.3.1 SliceService（去 wx 化的 Qt 替代版）
+
+```cpp
+// src/core/services/SliceService.h
+class SliceService : public QObject {
+    Q_OBJECT
+public:
+    enum class State { Idle, Started, Running, GCodeExport, Finished, Canceled, Error };
+    Q_ENUM(State)
+
+signals:
+    // 进度通知（替代 wxQueueEvent 切片状态事件）
+    void stateChanged(SliceService::State state);
+    void progressUpdated(int percent, const QString& label);  // 替代 set_status() 回调
+    void slicingFinished(int64_t timestamp);                   // 替代 m_event_slicing_completed_id
+    void gcodeExportStarted();
+    void gcodeExportFinished(const QString& outputPath, bool success);
+    void errorOccurred(const QString& message);
+
+public slots:
+    void startSlice(const QString& outputPath = {});
+    void cancelSlice();
+    void loadGCodeFromPrevious(const QString& gcodeFile);      // export_gcode_from_previous_file
+
+public:
+    // 注入依赖
+    void setModel(Slic3r::Model* model);
+    void setConfig(const Slic3r::DynamicPrintConfig& config);
+    void setCurrentPlate(int plateIndex);
+    Slic3r::GCodeProcessorResult* gcodeResult() { return &m_gcodeResult; }
+    State state() const { return m_state; }
+
+private:
+    Slic3r::Print            m_print;
+    Slic3r::GCodeProcessorResult m_gcodeResult;
+    QThread*                 m_workerThread = nullptr;
+    std::atomic<State>       m_state{State::Idle};
+    QString                  m_outputPath;
+
+    void workerProc();   // 在 m_workerThread 中执行 m_print.process() + export_gcode()
+    void setupStatusCallback();  // 将 Print::set_status 桥接为 Qt 信号
+};
+```
+
+#### 12.3.2 3MF 加载服务
+
+```cpp
+// src/core/services/ProjectService.h（扩展现有）
+class ProjectService : public QObject {
+    Q_OBJECT
+public:
+    // 3MF / cxprj 加载（异步，带进度）
+    Q_INVOKABLE void loadFile(const QString& path);
+    Q_INVOKABLE void saveFile(const QString& path);  // store_bbs_3mf
+
+signals:
+    void loadProgress(int percent, const QString& stage);  // Import3mfProgressFn 回调转发
+    void loadFinished(bool success, const QString& error);
+    void modelChanged();   // 通知 EditorViewModel 刷新对象列表
+    void plateDataLoaded(int plateCount);  // BBS 多平板
+    void projectPresetsLoaded();           // 项目内嵌预设
+
+private:
+    // 内部异步加载
+    void loadFileAsync(const QString& path);
+
+    // 格式路由（对应 Model::read_from_archive 逻辑）
+    bool loadBbs3mf(const std::string& path);
+    bool loadStandard3mf(const std::string& path);
+    bool loadStl(const std::string& path);
+    bool loadAmf(const std::string& path);
+
+    Slic3r::Model              m_model;
+    Slic3r::DynamicPrintConfig m_config;
+    Slic3r::PlateDataPtrs      m_plateData;
+};
+```
+
+#### 12.3.3 完整数据流：3MF 加载 → 切片 → G-code 预览
+
+```
+用户操作: 打开 .3mf / .cxprj 文件
+    │
+    ▼
+ProjectService::loadFile(path)          [Qt Worker Thread via QtConcurrent]
+    │  Model::read_from_archive()
+    │  ├─ PrusaFileParser::check_3mf_from_prusa() → 检测格式
+    │  ├─ load_3mf() 或 load_bbs_3mf()  ← expat XML + miniz ZIP
+    │  │   ├─ 解析顶点/三角面 → TriangleMesh
+    │  │   ├─ 解析变换矩阵  → ModelInstance::Transform3d
+    │  │   ├─ 解析配置      → DynamicPrintConfig
+    │  │   └─ 解析平板数据  → PlateDataPtrs（BBS 扩展）
+    │  └─ emit loadFinished(true)
+    │
+    ▼ [Main Thread]
+ProjectService::loadFinished()
+    ├─ emit modelChanged()  →  EditorViewModel 更新对象列表
+    ├─ 3D 视口刷新（GLViewport::synchronize → GLCanvas3D 更新）
+    └─ emit plateDataLoaded(n)  →  PlateViewModel 更新平板栏
+    │
+    ▼ 用户点击「切片」
+SliceService::startSlice(outputPath)
+    │  [Qt Worker Thread]
+    │  ├─ m_print.apply(model, config)    ← 增量差分，仅重算变更步骤
+    │  ├─ m_print.process()              ← 切层/填充/支撑/wipe_tower（TBB 并行）
+    │  │   └─ PrintObject::slice() → posPerimeters → ... → psSkirtBrim
+    │  ├─ emit progressUpdated(80, "生成 G-code")
+    │  └─ m_print.export_gcode(path, &m_gcodeResult)
+    │       └─ GCode::do_export()  →  写入 .gcode 文件 + 填充 GCodeProcessorResult
+    │
+    ▼ [Main Thread]
+SliceService::slicingFinished(timestamp)
+    └─ PreviewViewModel::onSlicingFinished()
+           ├─ 读取 m_gcodeResult（层线条/颜色/统计数据）
+           ├─ 更新 layerCount / moveCount / legendItems 属性
+           └─ GLViewport(CanvasPreview) 刷新 → GCodeRenderer::render()
+```
+
+---
+
+### 12.4 GCodeRenderer 渲染管线
+
+#### 12.4.1 架构
+
+```
+GCodeProcessorResult
+    │ （包含：paths[]，每个 path 有 type/feedrate/height/width/layer_id/color）
+    ▼
+GCodeRenderer  (GLViewportRenderer 子类)
+    ├─ buildBuffers()        → 解析 GCodeProcessorResult，生成 VBO/IBO
+    │   ├─ 按 layer_id 分组  → layerOffsets[] （支持 LayerSlider 范围裁剪）
+    │   ├─ 按 view_type 映射颜色 → vertex color attribute
+    │   └─ 存入 m_vertexBuffer / m_indexBuffer (QOpenGLBuffer)
+    ├─ render(int layerMin, int layerMax, int moveEnd)
+    │   ├─ glDrawArrays / glDrawElements  （范围绘制）
+    │   └─ 按 viewType 切换 GLSL uniform
+    └─ GLViewport(CanvasPreview) 调用 synchronize() 传递 layerMin/layerMax 参数
+```
+
+**支持的 13 种视图模式**（对应 `GCodeViewer::EViewType`）：
+
+| 模式           | 颜色锚定字段                   | 实现优先级 |
+| -------------- | ------------------------------ | ---------- |
+| FeatureType    | path.type（外墙/填充/支撑...） | P0（必做） |
+| Height         | path.height                    | P0         |
+| Width          | path.width                     | P0         |
+| Feedrate       | path.feedrate                  | P1         |
+| FanSpeed       | path.fan_speed                 | P1         |
+| Temperature    | path.extruder_temp             | P1         |
+| Tool           | path.extruder_id               | P0         |
+| ColorPrint     | path.cp_color_id               | P1         |
+| FilamentId     | path.filament_id               | P1         |
+| Chronology     | path 顺序索引（时间线动画）    | P2         |
+| VolumetricRate | 体积流量计算                   | P2         |
+| LayerTime      | 每层时间着色                   | P2         |
+| 无（外壳叠加） | Shells 独立 pass               | P1         |
+
+#### 12.4.2 G-code 渲染类定义
+
+```cpp
+// src/qml_gui/renderer/GCodeRenderer.h
+class GCodeRenderer : public GLViewportRenderer {
+public:
+    explicit GCodeRenderer(GLViewport* viewport);
+
+    // 加载 GCodeProcessorResult，解析并构建 GPU 缓冲
+    void loadResult(const Slic3r::GCodeProcessorResult* result);
+
+    // 设置当前视图模式（对应 EViewType 枚举）
+    void setViewType(int viewType);
+
+    // 设置层范围（由 LayerSlider 控制）
+    void setLayerRange(int minLayer, int maxLayer);
+
+    // 设置移动位置（由 MoveSlider 控制，用于动画回放）
+    void setMoveEnd(int moveIndex);
+
+    // QQuickFramebufferObject::Renderer 接口
+    void render() override;
+    void synchronize(QQuickFramebufferObject* item) override;
+
+private:
+    struct VertexData { GLfloat x, y, z, r, g, b, a; };
+
+    void buildBuffers();
+    QColor colorForViewType(const Slic3r::GCodeProcessorResult::MoveVertex& move) const;
+
+    std::vector<VertexData>        m_vertices;
+    std::vector<uint32_t>          m_indices;
+    std::vector<int>               m_layerOffsets;  // 每层起始 index
+    QOpenGLBuffer                  m_vbo, m_ibo;
+    QOpenGLVertexArrayObject       m_vao;
+    QOpenGLShaderProgram*          m_shader = nullptr;
+    const Slic3r::GCodeProcessorResult* m_result = nullptr;
+
+    int  m_viewType  = 0;  // EViewType::FeatureType
+    int  m_layerMin  = 0;
+    int  m_layerMax  = INT_MAX;
+    int  m_moveEnd   = INT_MAX;
+    bool m_dirty     = false;
+};
+```
+
+---
+
+### 12.5 PreviewPage 完整更新方案
+
+#### 12.5.1 PreviewViewModel（补全切片引擎对接）
+
+```cpp
+// 新增属性（在现有基础上）
+Q_PROPERTY(int   layerCount    READ layerCount    NOTIFY layerCountChanged)
+Q_PROPERTY(int   currentLayerMin READ currentLayerMin WRITE setCurrentLayerMin NOTIFY layerRangeChanged)
+Q_PROPERTY(int   currentLayerMax READ currentLayerMax WRITE setCurrentLayerMax NOTIFY layerRangeChanged)
+Q_PROPERTY(int   moveCount     READ moveCount     NOTIFY moveCountChanged)
+Q_PROPERTY(int   currentMove   READ currentMove   WRITE setCurrentMove   NOTIFY currentMoveChanged)
+Q_PROPERTY(int   viewType      READ viewType      WRITE setViewType      NOTIFY viewTypeChanged)
+Q_PROPERTY(bool  isPlaying     READ isPlaying     NOTIFY isPlayingChanged)
+Q_PROPERTY(QVariantList legendItems READ legendItems NOTIFY legendChanged)
+Q_PROPERTY(QString totalTime   READ totalTime     NOTIFY statsChanged)
+Q_PROPERTY(QString filamentUsed READ filamentUsed NOTIFY statsChanged)
+
+Q_INVOKABLE void setLayerRange(int minLayer, int maxLayer);
+Q_INVOKABLE void playAnimation();
+Q_INVOKABLE void pauseAnimation();
+Q_INVOKABLE void stepForward();
+Q_INVOKABLE void stepBackward();
+Q_INVOKABLE void jumpToEnd();
+```
+
+#### 12.5.2 PreviewPage.qml 骨架更新
+
+```qml
+Item {
+    id: root
+
+    // 左侧：层滑块
+    LayerSlider {
+        id: layerSlider
+        anchors { left: parent.left; top: parent.top; bottom: moveSlider.top }
+        minValue: 0
+        maxValue: previewVm.layerCount
+        lowerValue: previewVm.currentLayerMin
+        upperValue: previewVm.currentLayerMax
+        onRangeChanged: previewVm.setLayerRange(lowerValue, upperValue)
+    }
+
+    // 主视口：G-code 渲染（CanvasPreview 模式）
+    GLViewport {
+        id: viewport
+        anchors { left: layerSlider.right; right: parent.right; top: parent.top; bottom: moveSlider.top }
+        canvasType: GLViewport.CanvasPreview     // 触发 GCodeRenderer
+        layerMin:   previewVm.currentLayerMin
+        layerMax:   previewVm.currentLayerMax
+        moveEnd:    previewVm.currentMove
+        viewType:   previewVm.viewType
+    }
+
+    // 底部：移动滑块 + 播放控件
+    MoveSlider {
+        id: moveSlider
+        anchors { left: layerSlider.right; right: parent.right; bottom: parent.bottom }
+        value:    previewVm.currentMove
+        maxValue: previewVm.moveCount
+        isPlaying: previewVm.isPlaying
+        onValueChanged:  previewVm.setCurrentMove(value)
+        onPlayClicked:   previewVm.playAnimation()
+        onPauseClicked:  previewVm.pauseAnimation()
+    }
+
+    // 右上角：视图模式选择
+    ComboBox {
+        id: viewTypeCombo
+        anchors { right: parent.right; top: parent.top; margins: 8 }
+        model: ["特征类型", "高度", "宽度", "进给速度", "风扇转速", "温度", "工具", "颜色打印", "耗材 ID"]
+        currentIndex: previewVm.viewType
+        onActivated: previewVm.viewType = currentIndex
+    }
+
+    // 图例面板
+    Legend { legendItems: previewVm.legendItems; anchors { left: viewport.left; top: parent.top } }
+
+    // 统计信息
+    StatsPanel {
+        totalTime:    previewVm.totalTime
+        filamentUsed: previewVm.filamentUsed
+        anchors { right: parent.right; bottom: moveSlider.top }
+    }
+}
+```
+
+---
+
+### 12.6 构建系统集成
+
+#### 12.6.1 CMake 集成策略
+
+```cmake
+# CMakeLists.txt 顶层改动
+
+# 方案一：git submodule（推荐，保持与上游同步）
+# git submodule add https://github.com/CrealityOfficial/CrealityPrint.git upstream
+# 仅引用 upstream/src/libslic3r/
+
+add_subdirectory(upstream/src/libslic3r libslic3r)
+
+target_link_libraries(FramelessDialogDemo
+    PRIVATE
+        libslic3r           # 切片引擎（静态库）
+        Qt6::Core
+        Qt6::Quick
+        # ... 其余 Qt 模块
+)
+```
+
+```cmake
+# 方案二：仅复制必要文件（适合独立维护，避免上游庞大仓库体积）
+# 手动同步以下目录：
+#   upstream/src/libslic3r/
+#   upstream/deps/{expat,miniz,boost,eigen,tbb,fast_float}/
+add_subdirectory(src/libslic3r)
+```
+
+#### 12.6.2 第三方依赖清单（3MF + 切片引擎）
+
+| 库                 | 版本   | 集成方式                  | CMake target             |
+| ------------------ | ------ | ------------------------- | ------------------------ |
+| expat              | 2.5.0  | `deps/expat` 源码编译     | `EXPAT::EXPAT`           |
+| miniz              | 3.0.2  | `deps/miniz` 源码编译     | `miniz`                  |
+| Boost              | ≥ 1.78 | 系统安装或 `deps/boost`   | `Boost::filesystem` etc. |
+| Eigen              | 3.4.0  | Header-only，`deps/eigen` | `Eigen3::Eigen`          |
+| Intel TBB          | ≥ 2021 | `deps/tbb` 或系统         | `TBB::tbb`               |
+| fast_float         | 3.x    | Header-only               | 直接 include             |
+| NLopt              | ≥ 2.7  | `deps/nlopt`              | `NLopt::nlopt`           |
+| CGAL               | ≥ 5.4  | `deps/cgal`               | `CGAL::CGAL`             |
+| OpenCASCADE (OCCT) | ≥ 7.6  | STEP 格式需要（可选）     | `OpenCASCADE::...`       |
+
+#### 12.6.3 Windows 特殊配置
+
+```cmake
+# MSVC 编译器选项（libslic3r 需要）
+target_compile_options(libslic3r PRIVATE
+    /bigobj           # 超大目标文件（3mf.cpp > 64K 符号）
+    /utf-8            # UTF-8 源码
+    /W3               # 警告级别
+    /wd4244 /wd4267   # 精度转换警告（libslic3r 内部大量存在）
+)
+
+# TBB 在 Windows 下需要
+target_compile_definitions(libslic3r PRIVATE
+    _USE_MATH_DEFINES
+    NOMINMAX
+    WIN32_LEAN_AND_MEAN
+)
+```
+
+---
+
+### 12.7 分阶段实施计划
+
+#### Phase J：3MF 加载（2 周）
+
+| 步骤 | 任务                                                                         | 验收标准                                       |
+| ---- | ---------------------------------------------------------------------------- | ---------------------------------------------- |
+| J1   | 将 `libslic3r/Format/3mf.*` + `bbs_3mf.*` + 依赖（expat/miniz）加入 CMake    | 编译通过，单元测试 `test_3mf` 绿灯             |
+| J2   | 实现 `ProjectService::loadFile()` 异步加载，`Import3mfProgressFn` 转 Qt 信号 | 能打开标准 3MF 文件，进度条正确显示            |
+| J3   | BBS 格式支持：`load_bbs_3mf` 接入，`PlateDataPtrs` 解析                      | 能打开 `.cxprj` / BBS 3MF 文件，多平板正确加载 |
+| J4   | 对接 `EditorViewModel`：`Model` 对象列表刷新、3D 视口更新                    | 打开文件后 3D 编辑器显示模型网格               |
+
+#### Phase K：切片引擎接入（3 周）
+
+| 步骤 | 任务                                                                                  | 验收标准                                                   |
+| ---- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| K1   | `libslic3r/Print.*` + `PrintObject.*` + `GCode.*` 加入 CMake                          | 编译通过                                                   |
+| K2   | `SliceService` 实现（去 wx 化的 `BackgroundSlicingProcess` Qt 替代）                  | 调用 `startSlice()` 能驱动 `Print::process()` 跑完所有步骤 |
+| K3   | 进度回调桥接：`Print::set_status()` → `Qt::QueuedConnection` → `progressUpdated` 信号 | UI 进度条随切片推进更新                                    |
+| K4   | G-code 导出：`Print::export_gcode()` 写入临时文件 + 填充 `GCodeProcessorResult`       | 生成有效 .gcode 文件                                       |
+| K5   | 从已有 G-code 重新加载：`export_gcode_from_previous_file()` 接入                      | 重开文件时直接复用缓存 G-code                              |
+
+#### Phase L：G-code 预览渲染（3 周）
+
+| 步骤 | 任务                                                            | 验收标准                     |
+| ---- | --------------------------------------------------------------- | ---------------------------- |
+| L1   | `GCodeRenderer` 类实现（解析 `GCodeProcessorResult`，构建 VBO） | 编译通过，调试输出正确顶点数 |
+| L2   | 基础渲染：层线条绘制（FeatureType 着色）                        | 预览页面显示 G-code 路径     |
+| L3   | `LayerSlider.qml` + `MoveSlider.qml` 组件                       | 层范围裁剪正确，动画播放流畅 |
+| L4   | 13 种视图模式完整实现（P0 优先：FeatureType/Height/Width/Tool） | 切换视图模式颜色变化正确     |
+| L5   | 图例面板 + 统计信息（时间/耗材）                                | 图例与着色一致，统计数据准确 |
+
+**里程碑总结**：
+
+```
+Phase J（3MF 加载）  → 打开 .3mf 文件，3D 视口显示模型   [2 周]
+Phase K（切片引擎）  → 点击「切片」生成 G-code 文件       [3 周]
+Phase L（G-code 预览）→ 预览页面渲染 G-code 路径           [3 週]
+────────────────────────────────────────────────────────
+合计                  → 完整 3MF→切片→预览 闭环            [~8 周]
+```
+
+---
+
+### 12.8 关键风险与缓解
+
+| #   | 风险                                             | 概率 | 影响 | 缓解措施                                                             |
+| --- | ------------------------------------------------ | ---- | ---- | -------------------------------------------------------------------- |
+| R8  | libslic3r 编译体积过大（MSVC /bigobj 不足）      | 高   | 中   | 分拆 `3mf.cpp` 为多文件；先接 Format/ 子集再扩展                     |
+| R9  | BackgroundSlicingProcess wx 依赖难以剥离         | 中   | 高   | 只复制核心逻辑（process_fff 内核），事件回调全部重写为 std::function |
+| R10 | TBB 版本与 Qt 6.10 MSVC 工具链冲突               | 中   | 中   | 锁定 oneAPI TBB 2021.11；与 Qt 官方 deps 版本对齐                    |
+| R11 | GCodeProcessorResult 内存占用（大 G-code > 1GB） | 低   | 高   | 分帧加载；`setMoveEnd` 流式更新，不全量持有                          |
+| R12 | OCCT（STEP 格式）链接复杂                        | 中   | 低   | 阶段 J 先不启用 STEP，仅 3MF/STL/OBJ；后续单独 Phase 接入            |
+
+---
+
+> **文档结束 — v3.0**  
 > 本文档将随开发进展持续更新。每个 Phase 完成后进行架构评审和文档修订。  
 > 任何结构性变更须更新版本号并追加修订记录。

@@ -1,0 +1,49 @@
+<RCC>
+    <qresource prefix="/qml">
+        <file>main.qml</file>
+        <file>Theme.qml</file>
+        <!-- Pages -->
+        <file>pages/HomePage.qml</file>
+        <file>pages/PreparePage.qml</file>
+        <file>pages/PreviewPage.qml</file>
+        <file>pages/MonitorPage.qml</file>
+        <file>pages/ConfigPage.qml</file>
+        <file>pages/ProjectPage.qml</file>
+        <file>pages/CalibrationPage.qml</file>
+        <file>pages/AuxiliaryPage.qml</file>
+        <file>pages/DeviceListPage.qml</file>
+        <file>pages/PreferencesPage.qml</file>
+        <file>pages/ModelMallPage.qml</file>
+        <file>pages/MultiMachinePage.qml</file>
+        <!-- Dialogs -->
+        <file>dialogs/PrintDialog.qml</file>
+        <file>dialogs/CalibrationDialog.qml</file>
+        <file>dialogs/AboutDialog.qml</file>
+        <file>pages/SettingsPage.qml</file>
+        <!-- Panels -->
+        <file>panels/ObjectList.qml</file>
+        <file>panels/PrintSettings.qml</file>
+        <file>panels/SliceProgress.qml</file>
+        <file>panels/Sidebar.qml</file>
+        <!-- Components -->
+        <file>components/StatusBar.qml</file>
+        <file>components/Toolbar.qml</file>
+        <file>components/ErrorToast.qml</file>
+        <file>components/ErrorBanner.qml</file>
+        <!-- Controls -->
+        <file>controls/CxButton.qml</file>
+        <file>controls/CxComboBox.qml</file>
+        <file>controls/CxTextField.qml</file>
+        <file>controls/CxSlider.qml</file>
+        <file>controls/CxCheckBox.qml</file>
+        <file>controls/CxSpinBox.qml</file>
+        <!-- Reference assets -->
+        <file>assets/prepare_ref.png</file>
+        <file>assets/preview_ref.png</file>
+        <file>assets/monitor_ref.png</file>
+    </qresource>
+    <!-- Qt Quick Controls 2 style config must be at root prefix -->
+    <qresource prefix="/">
+        <file alias="qtquickcontrols2.conf">qtquickcontrols2.conf</file>
+    </qresource>
+</RCC>
