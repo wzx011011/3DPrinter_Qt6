@@ -51,17 +51,23 @@ public:
       Press,
       Move,
       Release,
-      Wheel
+      Wheel,
+      FitView   ///< 相机自适应 bbox
     } type;
     Qt::MouseButton button = Qt::NoButton;
     Qt::MouseButtons buttons = Qt::NoButton;
     float x = 0.f;
     float y = 0.f;
     float wheelDelta = 0.f;
+    // FitView payload
+    float fitCX = 0.f, fitCY = 0.f, fitCZ = 0.f, fitRadius = 100.f;
   };
 
   /** Atomically swap out & return all pending events. */
   QList<InputEvent> takeEvents();
+
+  /** QML 调用: 令相机自适应包含中心 (cx, cy, cz)、半径 r 的球体 */
+  Q_INVOKABLE void requestFitView(float cx, float cy, float cz, float r);
 
 signals:
   void canvasTypeChanged();

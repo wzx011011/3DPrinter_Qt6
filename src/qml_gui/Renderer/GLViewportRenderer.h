@@ -3,8 +3,10 @@
 #include <QOpenGLShaderProgram>
 #include <QOpenGLBuffer>
 #include <QOpenGLVertexArrayObject>
-#include <QOpenGLFunctions>
+#include <QOpenGLExtraFunctions>
 #include <QByteArray>
+#include <QVector3D>
+#include <vector>
 #include "CameraController.h"
 
 class GLViewport;
@@ -13,11 +15,11 @@ class GLViewport;
  * GLViewportRenderer — OpenGL renderer attached to a GLViewport.
  *
  * Draws:
- *   • Grey build-plate grid  (XZ plane, −100 … +100, step 20)
- *   • RGB axis lines         (X=red, Y=green, Z=blue)
- *   • Loaded model mesh      (flat-shaded triangles, uploaded after loadFile)
+ *   • 220×220mm build plate grid (10mm fine / 50mm coarse / white border)
+ *   • RGB axis lines              (X=red, Y=green, Z=blue)
+ *   • Per-object mesh batches     (flat-shaded, distinct colours)
  *
- * Camera input (orbit / pan / zoom) is consumed via synchronize().
+ * Camera input (orbit / pan / zoom / fitView) from synchronize().
  */
 class GLViewportRenderer : public QQuickFramebufferObject::Renderer
 {
@@ -35,32 +37,50 @@ private:
   void uploadMesh();
 
   bool m_initialized = false;
-  QOpenGLFunctions *m_f = nullptr;
+  QOpenGLExtraFunctions *m_f = nullptr;
 
   // ─── 基础着色器 (grid + axes) ───────────────────────────────────────────
   QOpenGLShaderProgram m_prog;
   QOpenGLVertexArrayObject m_vao;
   QOpenGLBuffer m_vbo{QOpenGLBuffer::VertexBuffer};
-  int m_totalVertices = 0;
-  int m_uMVP = -1;
+
+  // 各段顶点偏移／数量
+  int m_axisStart       = 0;
+  int m_axisCount       = 0;
+  int m_borderStart     = 0;
+  int m_borderCount     = 0;
+  int m_fineGridStart   = 0;
+  int m_fineGridCount   = 0;
+  int m_coarseGridStart = 0;
+  int m_coarseGridCount = 0;
+
+  int m_uMVP   = -1;
   int m_uColor = -1;
 
-  // ─── 网格着色器 (flat-shaded triangles) ─────────────────────────────────
+  // ─── 多对象 Mesh 着色器 (flat-shaded per-object colour) ─────────────────
   QOpenGLShaderProgram m_meshProg;
-  QOpenGLVertexArrayObject m_meshVao;
-  QOpenGLBuffer m_meshVbo{QOpenGLBuffer::VertexBuffer};
-  int m_meshVertexCount = 0;   // 渲染帧用的顶点数
-  int m_uMeshMVP = -1;
+  int m_uMeshMVP       = -1;
+  int m_uMeshBaseColor = -1;
+
+  // Raw GL handles (Qt wrappers are non-copyable/non-movable, can't live in vector)
+  struct MeshBatch
+  {
+    GLuint vao        = 0;
+    GLuint vbo        = 0;
+    int    vertexCount = 0;
+    int    objectId    = 0;
+  };
+  std::vector<MeshBatch> m_meshBatches;
 
   // GUI 线程推送过来的待上传数据
   QByteArray m_pendingMesh;
   bool m_meshDirty = false;
-  int m_meshVersion = -1;      // 与 GLViewport::m_meshVersion 同步
+  int  m_meshVersion = -1;
 
   CameraController m_camera;
   QSize m_viewSize;
 
-  // drag tracking (GUI-thread state copied in synchronize)
+  // drag tracking
   bool m_dragging = false;
   Qt::MouseButton m_dragButton = Qt::NoButton;
   float m_lastX = 0.f;

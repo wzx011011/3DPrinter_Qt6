@@ -3,6 +3,9 @@
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceServiceMock.h"
 #include <QUrl>
+#include <QVector4D>
+#include <cstring>  // memcpy
+#include <cmath>
 
 EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServiceMock *sliceService, QObject *parent)
     : QObject(parent), projectService_(projectService), sliceService_(sliceService)
@@ -108,6 +111,28 @@ bool EditorViewModel::loadFile(const QString &filePath)
     }
     m_selectedObjectIndex = m_objects.isEmpty() ? -1 : 0;
     statusText_ = QStringLiteral("已加载 %1 个模型").arg(m_objects.size());
+
+    // ── 从 TLV 尾部 bbox 计算相机 fitHint ─────────────────────────────
+    const QByteArray md = projectService_->meshData();
+    m_fitHint = QVector4D(); // reset
+    // TLV trailer 最后 6 个 float = bbox
+    constexpr int kBboxBytes = 6 * int(sizeof(float));
+    if (md.size() >= kBboxBytes)
+    {
+      float bbox[6];
+      memcpy(bbox, md.constData() + md.size() - kBboxBytes, kBboxBytes);
+      // bbox: [minX, minY, minZ, maxX, maxY, maxZ] in GL coords
+      const float cx = (bbox[0] + bbox[3]) * 0.5f;
+      const float cy = (bbox[1] + bbox[4]) * 0.5f;
+      const float cz = (bbox[2] + bbox[5]) * 0.5f;
+      const float dx = bbox[3] - bbox[0];
+      const float dy = bbox[4] - bbox[1];
+      const float dz = bbox[5] - bbox[2];
+      const float radius = std::sqrt(dx*dx + dy*dy + dz*dz) * 0.5f;
+      m_fitHint = QVector4D(cx, cy, cz, std::max(radius, 10.f));
+      qInfo("[EditorViewModel] fitHint: center=(%.1f, %.1f, %.1f) radius=%.1f",
+            cx, cy, cz, m_fitHint.w());
+    }
   }
   else
   {

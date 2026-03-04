@@ -15,12 +15,18 @@ public:
   void pan(float dx, float dy);
   void zoom(float delta);
 
+  /// 加载模型后自适应视角: 将相机对准 bbox 球心，距离自动适配
+  void fitView(float cx, float cy, float cz, float radius);
+  /// 重置到 K1C 平台默认视角
+  void resetToDefault();
+
   QMatrix4x4 viewMatrix() const;
   QMatrix4x4 projMatrix(float aspect) const;
 
 private:
-  float m_azimuth = 45.0f;   // degrees, horizontal
-  float m_elevation = 30.0f; // degrees, vertical
-  float m_distance = 350.0f; // world units
-  QVector3D m_target{0.f, 0.f, 0.f};
+  float m_azimuth = 45.0f;    // degrees, horizontal
+  float m_elevation = 35.0f;  // degrees, vertical
+  float m_distance = 380.0f;  // world units
+  // 默认 target = K1C 打印平台中心 (GL: x=110, y=0, z=110)
+  QVector3D m_target{110.f, 0.f, 110.f};
 };
