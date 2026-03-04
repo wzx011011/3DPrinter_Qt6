@@ -79,3 +79,11 @@ void ProjectViewModel::selectFile(const QString &path)
     emit selectionChanged();
   }
 }
+
+void ProjectViewModel::clearRecentProjects()
+{
+  if (m_recentProjects.isEmpty())
+    return;
+  m_recentProjects.clear();
+  emit recentChanged();
+}

@@ -216,6 +216,10 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
             auto [orig,dir]=computeRay(sx,sy);
             QVector3D axDir(ax==1?1:0, ax==2?1:0, ax==3?1:0);
             m_gizmoAxisT=rayToAxisT(orig,dir,axDir);
+            auto it = m_objectOffsets.find(m_selectedId);
+            m_dragStartOffset = (it!=m_objectOffsets.end()) ? it->second : QVector3D(0,0,0);
+            m_dragObjectId = m_selectedId;
+            m_objectDragActive = true;
             m_freeXZDragging=false; m_mouseDragging=false;
             m_lastX=sx; m_lastY=sy;
             break;
@@ -227,14 +231,20 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
           m_selectedId=hitId;
           m_freeXZDragging=true;
           m_freeXZOrigin=rayXZIntersect(sx,sy);
+          auto it = m_objectOffsets.find(m_selectedId);
+          m_dragStartOffset = (it!=m_objectOffsets.end()) ? it->second : QVector3D(0,0,0);
+          m_dragObjectId = m_selectedId;
+          m_objectDragActive = true;
           m_mouseDragging=false; m_gizmoAxis=0;
         } else {
           m_selectedId=-1;
           m_freeXZDragging=false; m_gizmoAxis=0;
+          m_objectDragActive=false; m_dragObjectId=-1;
           m_mouseDragging=true; m_dragButton=Qt::LeftButton;
         }
       } else {
         m_freeXZDragging=false; m_gizmoAxis=0;
+        m_objectDragActive=false; m_dragObjectId=-1;
         m_mouseDragging=true; m_dragButton=e.button;
       }
       m_lastX=sx; m_lastY=sy;
@@ -283,12 +293,51 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
       break;
     }
     case GLViewport::InputEvent::Release:
+    {
+      if(m_objectDragActive && m_dragObjectId>=0){
+        QVector3D after(0,0,0);
+        auto it = m_objectOffsets.find(m_dragObjectId);
+        if(it!=m_objectOffsets.end()) after = it->second;
+        if((after - m_dragStartOffset).lengthSquared() > 1e-8f){
+          GLViewportRenderer::TransformCmd cmd;
+          cmd.objectId = m_dragObjectId;
+          cmd.before = m_dragStartOffset;
+          cmd.after = after;
+          m_undoStack.push_back(cmd);
+          if(m_undoStack.size() > 100) m_undoStack.erase(m_undoStack.begin());
+          m_redoStack.clear();
+        }
+      }
       m_mouseDragging=false; m_freeXZDragging=false; m_gizmoAxis=0;
+      m_objectDragActive=false; m_dragObjectId=-1;
       break;
+    }
     case GLViewport::InputEvent::Wheel:
       m_camera.zoom(e.wheelDelta); break;
     case GLViewport::InputEvent::FitView:
       m_camera.fitView(e.fitCX,e.fitCY,e.fitCZ,e.fitRadius); break;
+    case GLViewport::InputEvent::Undo:
+      if(!m_undoStack.empty()){
+        TransformCmd cmd = m_undoStack.back();
+        m_undoStack.pop_back();
+        m_objectOffsets[cmd.objectId] = cmd.before;
+        m_redoStack.push_back(cmd);
+        m_selectedId = cmd.objectId;
+      }
+      break;
+    case GLViewport::InputEvent::Redo:
+      if(!m_redoStack.empty()){
+        TransformCmd cmd = m_redoStack.back();
+        m_redoStack.pop_back();
+        m_objectOffsets[cmd.objectId] = cmd.after;
+        m_undoStack.push_back(cmd);
+        m_selectedId = cmd.objectId;
+      }
+      break;
+    case GLViewport::InputEvent::ClearHistory:
+      m_undoStack.clear();
+      m_redoStack.clear();
+      break;
     }
   }
 

@@ -113,3 +113,30 @@ void GLViewport::requestFitView(float cx, float cy, float cz, float r)
   m_events.append(e);
   update();
 }
+
+void GLViewport::undo()
+{
+  QMutexLocker lk(&m_eventMutex);
+  InputEvent e;
+  e.type = InputEvent::Undo;
+  m_events.append(e);
+  update();
+}
+
+void GLViewport::redo()
+{
+  QMutexLocker lk(&m_eventMutex);
+  InputEvent e;
+  e.type = InputEvent::Redo;
+  m_events.append(e);
+  update();
+}
+
+void GLViewport::clearHistory()
+{
+  QMutexLocker lk(&m_eventMutex);
+  InputEvent e;
+  e.type = InputEvent::ClearHistory;
+  m_events.append(e);
+  update();
+}
