@@ -43,6 +43,9 @@ QVector3D CameraController::eye() const
   return m_target + dir * m_distance;
 }
 
+QVector3D CameraController::target() const   { return m_target; }
+float     CameraController::distance() const { return m_distance; }
+
 QMatrix4x4 CameraController::viewMatrix() const
 {
   const float az = qDegreesToRadians(m_azimuth);
