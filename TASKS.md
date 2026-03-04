@@ -2,7 +2,7 @@
 
 > 更新规则：每完成一个任务立即将 `[ ]` 改为 `[x]`，并在行末补注完成日期。
 > 排除范围：模型商城 / 登录云服务 / 局域网设备（不在本计划内）。
-> 当前基线：11 标签页框架 + 10 ViewModel（Q_INVOKABLE）+ 5 Mock Service + 测试 100% ✅
+> 当前基线：CP7 风格 4 工作流顶栏 + 10 ViewModel（Q_INVOKABLE）+ 5 Mock Service + 测试 100% ✅
 > v3.0 新增：Phase J（3MF 加载）/ Phase K（切片引擎）/ Phase L（真实 G-code 渲染）—— 对应架构文档第 12 章
 
 ---
@@ -101,7 +101,7 @@
   - ✅ 程序启动正常，QML GUI 正常加载（内存 ~211MB）
 - [ ] J2 — 实现 `ProjectService::loadFile(path)` 真实版本：`QtConcurrent::run` 异步调用 `Model::read_from_archive()`，`Import3mfProgressFn` 回调桥接为 `loadProgress(int, QString)` Qt 信号
 - [ ] J3 — BBS/Creality 格式支持：`load_bbs_3mf()` 接入，解析 `PlateDataPtrs`，`emit plateDataLoaded(n)` 通知 PlateViewModel 更新平板栏
-- [ ] J4 — 对接 `EditorViewModel`：`loadFinished` 信号触发对象列表刷新 + `GLViewport(CanvasView3D)` 重绘，拖拽文件打开端到端联通
+- [x] J4 — 对接 `EditorViewModel`：`loadFinished` 信号触发对象列表刷新 + `GLViewport(CanvasView3D)` 重绘，拖拽文件打开端到端联通 2026-03-05
 
 ---
 
@@ -174,10 +174,10 @@
 | G        | 动态配置 UI       | 5      | 5      | ✅ 完成               |
 | H        | SettingsPage      | 3      | 3      | ✅ 完成               |
 | I        | 国际化            | 3      | 3      | ✅ 完成               |
-| J        | 3MF 文件加载      | 4      | 1      | 🔶 J1完成，J2-J4待做  |
+| J        | 3MF 文件加载      | 4      | 2      | 🔶 J1/J4完成，J2-J3待做 |
 | K        | 切片引擎接入      | 5      | 0      | ⏳ 待开始（依赖 J）   |
 | L        | 真实 G-code 渲染  | 5      | 0      | ⏳ 待开始（依赖 K+F） |
-| **合计** |                   | **70** | **52** | 🔶 F/J2-4/K/L 待做    |
+| **合计** |                   | **70** | **53** | 🔶 F/J2-3/K/L 待做    |
 
 ---
 
@@ -194,3 +194,5 @@
 | 2026-03-04 | I1 共 1 项                     | 25文件~250中文字符串qsTr()/tr()包裹；lupdate提取270条源文本→zh_CN.ts/en.ts；构建82/82+测试 2/2 ✅                                                                                                                             |
 | 2026-03-04 | 架构文档 v3.0 更新             | 研究 CrealityOfficial/CrealityPrint 上游仓库；新增第12章（3MF加载/切片引擎/GCodeRenderer 完整方案）；新增 ADR-09/10/11；新增 Phase J/K/L 实施计划；PROJECT_STRUCTURE.md 同步更新目录树和依赖状态表                            |
 | 2026-03-04 | J1 完成（libslic3r 链接成功）  | 预编译 .lib 导入方案：33 静态库+27 OCCT+assimp+qhullcpp+cr_tpms+bcrypt；CRT /MT→/MD 用 Directory.Build.targets 重编上游；101 个链接错误全部解决；nanosvg_impl.cpp 提供 stb 实现；程序启动正常（211MB 内存，QML GUI 正常加载） |
+| 2026-03-05 | J4 完成（Editor-Viewport 端到端） | EditorViewModel 与 GLViewport 渲染链路联通：对象列表刷新、重绘触发、拖拽文件打开端到端可用；220×220 平台、fitView、多对象颜色与 Gizmo 交互合并验证通过 |
+| 2026-03-05 | CP7 顶栏还原（计划外优化）      | `main.qml` 顶栏改为 Creality Print 7.0 风格（在线模型/准备/预览/设备）；补齐文件菜单/更多菜单、保存、窗口控制、标题截断提示；Prepare 页接入真实撤销/重做（拖拽变换命令栈） |
