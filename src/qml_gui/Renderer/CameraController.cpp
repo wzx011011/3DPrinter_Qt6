@@ -32,6 +32,17 @@ void CameraController::zoom(float delta)
   m_distance = qMax(10.0f, m_distance - delta * 0.5f);
 }
 
+QVector3D CameraController::eye() const
+{
+  const float az = qDegreesToRadians(m_azimuth);
+  const float el = qDegreesToRadians(m_elevation);
+  QVector3D dir(
+      qCos(el) * qSin(az),
+      qSin(el),
+      qCos(el) * qCos(az));
+  return m_target + dir * m_distance;
+}
+
 QMatrix4x4 CameraController::viewMatrix() const
 {
   const float az = qDegreesToRadians(m_azimuth);
