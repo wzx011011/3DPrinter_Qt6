@@ -64,6 +64,7 @@ void GLViewport::mousePressEvent(QMouseEvent *event)
                    event->button(), event->buttons(),
                    (float)event->position().x(),
                    (float)event->position().y(), 0.f});
+  event->accept(); // 必须 accept，否则事件冗泡丢失
   update();
 }
 
@@ -74,6 +75,7 @@ void GLViewport::mouseMoveEvent(QMouseEvent *event)
                    Qt::NoButton, event->buttons(),
                    (float)event->position().x(),
                    (float)event->position().y(), 0.f});
+  event->accept();
   update();
 }
 
@@ -84,6 +86,7 @@ void GLViewport::mouseReleaseEvent(QMouseEvent *event)
                    event->button(), event->buttons(),
                    (float)event->position().x(),
                    (float)event->position().y(), 0.f});
+  event->accept();
   update();
 }
 
@@ -94,5 +97,6 @@ void GLViewport::wheelEvent(QWheelEvent *event)
                    Qt::NoButton, Qt::NoButton,
                    0.f, 0.f,
                    (float)event->angleDelta().y()});
+  event->accept();
   update();
 }
