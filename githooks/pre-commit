@@ -1,0 +1,20 @@
+#!/bin/sh
+# =============================================================================
+# Pre-commit hook: 禁止修改 third_party/ 目录下的上游源码
+# 安装方式: cp githooks/pre-commit .git/hooks/pre-commit
+# =============================================================================
+
+PROTECTED_DIR="third_party/"
+
+CHANGED=$(git diff --cached --name-only --diff-filter=ACDMR | grep "^${PROTECTED_DIR}" || true)
+
+if [ -n "$CHANGED" ]; then
+    echo "ERROR: 以下上游源码文件被修改，提交被拒绝："
+    echo "$CHANGED"
+    echo ""
+    echo "设计原则：绝不修改 third_party/ 下的上游源码。"
+    echo "如确需修改，请使用 git commit --no-verify 跳过检查。"
+    exit 1
+fi
+
+exit 0

@@ -39,6 +39,8 @@ public:
 
   Q_INVOKABLE void importMockModel();
   Q_INVOKABLE void requestSlice();
+  /// 加载模型文件 (3MF/STL/OBJ)
+  Q_INVOKABLE bool loadFile(const QString &filePath);
 
 signals:
   void stateChanged();

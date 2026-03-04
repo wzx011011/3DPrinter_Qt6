@@ -94,7 +94,11 @@
 > 前置：从上游仓库同步 `src/libslic3r/Format/3mf.*`、`bbs_3mf.*` 及依赖（expat / miniz / Boost / Eigen）。
 > 完成后：能打开 .3mf / .cxprj 文件，3D 编辑器视口显示模型网格。
 
-- [ ] J1 — 将 `libslic3r/Format/3mf.cpp/.hpp` + `bbs_3mf.cpp/.hpp` 及依赖库（expat/miniz/Boost/Eigen/fast_float）加入 `CMakeLists.txt`，MSVC 补 `/bigobj /utf-8` 编译选项，确认编译通过
+- [x] J1 — 将 `libslic3r/Format/3mf.cpp/.hpp` + `bbs_3mf.cpp/.hpp` 及依赖库（expat/miniz/Boost/Eigen/fast_float）加入 `CMakeLists.txt`，MSVC 补 `/bigobj /utf-8` 编译选项，确认编译通过 2026-03-04
+  - ✅ 采用预编译 .lib 导入方案（`cmake/BuildLibslic3r.cmake`），无需重编译 ~480 个源文件
+  - ✅ 上游 libslic3r 用 `Directory.Build.targets` 重编为 /MD CRT，与 Qt/TBB/Boost 完全兼容
+  - ✅ 33 个静态库 + 27 个 OCCT 动态库 + bcrypt/assimp/qhullcpp/cr_tpms_library 全部链接成功
+  - ✅ 程序启动正常，QML GUI 正常加载（内存 ~211MB）
 - [ ] J2 — 实现 `ProjectService::loadFile(path)` 真实版本：`QtConcurrent::run` 异步调用 `Model::read_from_archive()`，`Import3mfProgressFn` 回调桥接为 `loadProgress(int, QString)` Qt 信号
 - [ ] J3 — BBS/Creality 格式支持：`load_bbs_3mf()` 接入，解析 `PlateDataPtrs`，`emit plateDataLoaded(n)` 通知 PlateViewModel 更新平板栏
 - [ ] J4 — 对接 `EditorViewModel`：`loadFinished` 信号触发对象列表刷新 + `GLViewport(CanvasView3D)` 重绘，拖拽文件打开端到端联通
@@ -170,10 +174,10 @@
 | G        | 动态配置 UI       | 5      | 5      | ✅ 完成               |
 | H        | SettingsPage      | 3      | 3      | ✅ 完成               |
 | I        | 国际化            | 3      | 3      | ✅ 完成               |
-| J        | 3MF 文件加载      | 4      | 0      | ⏳ 待开始             |
+| J        | 3MF 文件加载      | 4      | 1      | 🔶 J1完成，J2-J4待做  |
 | K        | 切片引擎接入      | 5      | 0      | ⏳ 待开始（依赖 J）   |
 | L        | 真实 G-code 渲染  | 5      | 0      | ⏳ 待开始（依赖 K+F） |
-| **合计** |                   | **70** | **51** | 🔶 F/J/K/L 待做       |
+| **合计** |                   | **70** | **52** | 🔶 F/J2-4/K/L 待做    |
 
 ---
 
@@ -189,3 +193,4 @@
 | 2026-03-04 | E1-E6 共 6 项                  | GLViewport(QQuickFramebufferObject)+GLViewportRenderer(GLSL 330 core/MSAA×4/坐标轴+网格)+CameraController(orbit/pan/zoom)；PreparePage接入；VisualRegressionTests用GLViewportTestStub避Qt6.10析构堆损坏；构建+测试 2/2 ✅ |
 | 2026-03-04 | I1 共 1 项                     | 25文件~250中文字符串qsTr()/tr()包裹；lupdate提取270条源文本→zh_CN.ts/en.ts；构建82/82+测试 2/2 ✅                                                                                                                         |
 | 2026-03-04 | 架构文档 v3.0 更新             | 研究 CrealityOfficial/CrealityPrint 上游仓库；新增第12章（3MF加载/切片引擎/GCodeRenderer 完整方案）；新增 ADR-09/10/11；新增 Phase J/K/L 实施计划；PROJECT_STRUCTURE.md 同步更新目录树和依赖状态表                        |
+| 2026-03-04 | J1 完成（libslic3r 链接成功）  | 预编译 .lib 导入方案：33 静态库+27 OCCT+assimp+qhullcpp+cr_tpms+bcrypt；CRT /MT→/MD 用 Directory.Build.targets 重编上游；101 个链接错误全部解决；nanosvg_impl.cpp 提供 stb 实现；程序启动正常（211MB 内存，QML GUI 正常加载） |
