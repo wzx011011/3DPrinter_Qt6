@@ -255,9 +255,22 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
       }
       else if(m_freeXZDragging && m_selectedId>=0)
       {
-        QVector3D newPt=rayXZIntersect(e.x,e.y);
-        m_objectOffsets[m_selectedId]+=newPt-m_freeXZOrigin;
-        m_freeXZOrigin=newPt;
+        // Screen-space drag: stable at any camera elevation angle.
+        // Decompose screen delta into camera right / forward projected onto XZ plane.
+        QMatrix4x4 view = m_camera.viewMatrix();
+        // Row 0 of view matrix = camera right; Row 2 = camera back (-forward)
+        QVector3D camRight(view(0,0), 0.f, view(0,2));
+        QVector3D camFwd  (-view(2,0), 0.f, -view(2,2)); // pointing into scene
+        if(camRight.lengthSquared()<1e-6f) camRight=QVector3D(1,0,0);
+        else camRight.normalize();
+        if(camFwd.lengthSquared()<1e-6f) camFwd=QVector3D(0,0,1);
+        else camFwd.normalize();
+        // world units per pixel: tan(fov/2)/halfHeight * distance
+        const float vH = float(m_viewSize.height());
+        const float scale = m_camera.distance() * 0.4142f / (vH > 1.f ? vH * 0.5f : 1.f);
+        // dx>0 → right, dy>0 (screen down) → toward viewer = -camFwd
+        m_objectOffsets[m_selectedId] += camRight * (dx * scale)
+                                        - camFwd  * (dy * scale);
       }
       else if(m_mouseDragging)
       {
