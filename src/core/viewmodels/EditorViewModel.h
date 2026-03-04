@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QList>
 #include <QString>
+#include <QByteArray>
 
 class ProjectServiceMock;
 class SliceServiceMock;
@@ -16,6 +17,8 @@ class EditorViewModel final : public QObject
   // Object-list panel support
   Q_PROPERTY(int objectCount READ objectCount NOTIFY stateChanged)
   Q_PROPERTY(int selectedObjectIndex READ selectedObjectIndex NOTIFY stateChanged)
+  /// 模型网格数据（flat float数组，用于 GLViewport 渲染）
+  Q_PROPERTY(QByteArray meshData READ meshData NOTIFY stateChanged)
 
 public:
   explicit EditorViewModel(ProjectServiceMock *projectService, SliceServiceMock *sliceService, QObject *parent = nullptr);
@@ -23,6 +26,7 @@ public:
   QString projectName() const;
   int modelCount() const;
   QString statusText() const;
+  QByteArray meshData() const;
 
   // Object list accessors (safe Q_INVOKABLE — no QVariantList)
   int objectCount() const;

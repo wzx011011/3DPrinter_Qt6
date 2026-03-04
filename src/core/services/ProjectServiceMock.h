@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QStringList>
+#include <QByteArray>
 
 #ifdef HAS_LIBSLIC3R
 namespace Slic3r
@@ -30,6 +31,12 @@ public:
 
   /// 返回已加载的模型对象名称列表
   Q_INVOKABLE QStringList objectNames() const;
+
+  /**
+   * 提取所有三角面顶点为紧凑 float 数组 (x,y,z per vertex, 3 verts per face)。
+   * 坐标系转换：libslic3r Z-up → GL Y-up：GL(x,z,y)
+   */
+  QByteArray meshData() const;
 
   /// Mock 导入（保留向后兼容）
   Q_INVOKABLE void importMockModel();

@@ -2,6 +2,7 @@
 #include <QQuickFramebufferObject>
 #include <QMutex>
 #include <QList>
+#include <QByteArray>
 
 /**
  * GLViewport — QML-exposed OpenGL viewport.
@@ -16,6 +17,8 @@ class GLViewport : public QQuickFramebufferObject
 {
   Q_OBJECT
   Q_PROPERTY(int canvasType READ canvasType WRITE setCanvasType NOTIFY canvasTypeChanged)
+  /// 写入属性: QML 侧绑定 editorVm.meshData，触发网格上传 GPU
+  Q_PROPERTY(QByteArray meshData READ meshData WRITE setMeshData)
 
 public:
   enum CanvasType
@@ -33,6 +36,12 @@ public:
   // Property accessors
   int canvasType() const { return m_canvasType; }
   void setCanvasType(int t);
+
+  // --- 网格数据 (GUI 线程写，渲染线程通过 takeMesh 读) ---
+  QByteArray meshData() const { QMutexLocker lk(&m_eventMutex); return m_meshData; }
+  void setMeshData(const QByteArray &data);
+  /** 渲染线程调用: 取走待上传的数据。若版本相同则返回 false。 */
+  bool takeMesh(QByteArray &out, int &version);
 
   // --- Input event queue (consumed by GLViewportRenderer::synchronize) ---
   struct InputEvent
@@ -67,4 +76,7 @@ private:
   int m_canvasType = CanvasView3D;
   mutable QMutex m_eventMutex;
   QList<InputEvent> m_events;
+  // 网格数据双缓冲
+  QByteArray m_meshData;
+  int m_meshVersion = 0;
 };

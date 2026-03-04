@@ -36,6 +36,25 @@ QList<GLViewport::InputEvent> GLViewport::takeEvents()
   return std::exchange(m_events, {});
 }
 
+void GLViewport::setMeshData(const QByteArray &data)
+{
+  QMutexLocker lk(&m_eventMutex);
+  m_meshData = data;
+  ++m_meshVersion;
+  lk.unlock();
+  update(); // 触发重绘，渲染线程会在 synchronize() 里取走数据
+}
+
+bool GLViewport::takeMesh(QByteArray &out, int &version)
+{
+  QMutexLocker lk(&m_eventMutex);
+  if (version == m_meshVersion)
+    return false; // 无新数据
+  version = m_meshVersion;
+  out = m_meshData;
+  return true;
+}
+
 // ---- Mouse / wheel handlers ------------------------------------------------
 
 void GLViewport::mousePressEvent(QMouseEvent *event)
