@@ -56,7 +56,10 @@ public:
       Move,
       Release,
       Wheel,
-      FitView ///< 相机自适应 bbox
+      FitView, ///< 相机自适应 bbox
+      Undo,
+      Redo,
+      ClearHistory
     } type;
     Qt::MouseButton button = Qt::NoButton;
     Qt::MouseButtons buttons = Qt::NoButton;
@@ -72,6 +75,9 @@ public:
 
   /** QML 调用: 令相机自适应包含中心 (cx, cy, cz)、半径 r 的球体 */
   Q_INVOKABLE void requestFitView(float cx, float cy, float cz, float r);
+  Q_INVOKABLE void undo();
+  Q_INVOKABLE void redo();
+  Q_INVOKABLE void clearHistory();
 
 signals:
   void canvasTypeChanged();

@@ -42,6 +42,7 @@ public slots:
   void saveProjectAs(const QString &path);
   void importModel(const QStringList &paths);
   void selectFile(const QString &path);
+  void clearRecentProjects();
 
 private:
   struct FileEntry

@@ -10,6 +10,14 @@ Item {
     id: root
     required property var editorVm
     required property var configVm
+    property alias viewport3dRef: viewport3d
+
+    function undoFromTopbar() {
+        viewport3d.undo()
+    }
+    function redoFromTopbar() {
+        viewport3d.redo()
+    }
 
     PrintDialog {
         id: printDlg

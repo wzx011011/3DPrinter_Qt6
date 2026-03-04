@@ -101,6 +101,20 @@ private:
   float m_gizmoAxisT = 0.f;
   QVector3D m_gizmoCenter;
 
+  // Per-drag tracking for transform history
+  bool m_objectDragActive = false;
+  int m_dragObjectId = -1;
+  QVector3D m_dragStartOffset;
+
+  struct TransformCmd
+  {
+    int objectId = -1;
+    QVector3D before;
+    QVector3D after;
+  };
+  std::vector<TransformCmd> m_undoStack;
+  std::vector<TransformCmd> m_redoStack;
+
   // Accumulated per-object translation offsets
   std::unordered_map<int, QVector3D> m_objectOffsets;
 };
