@@ -4,7 +4,7 @@
 #include "core/services/SliceServiceMock.h"
 #include <QUrl>
 #include <QVector4D>
-#include <cstring>  // memcpy
+#include <cstring> // memcpy
 #include <cmath>
 
 EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServiceMock *sliceService, QObject *parent)
@@ -128,7 +128,7 @@ bool EditorViewModel::loadFile(const QString &filePath)
       const float dx = bbox[3] - bbox[0];
       const float dy = bbox[4] - bbox[1];
       const float dz = bbox[5] - bbox[2];
-      const float radius = std::sqrt(dx*dx + dy*dy + dz*dz) * 0.5f;
+      const float radius = std::sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
       m_fitHint = QVector4D(cx, cy, cz, std::max(radius, 10.f));
       qInfo("[EditorViewModel] fitHint: center=(%.1f, %.1f, %.1f) radius=%.1f",
             cx, cy, cz, m_fitHint.w());
