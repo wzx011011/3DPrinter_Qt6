@@ -1,5 +1,6 @@
 #include "CameraController.h"
 #include <QtMath>
+#include <algorithm>
 
 void CameraController::orbit(float dAzimuth, float dElevation)
 {
@@ -45,6 +46,24 @@ QMatrix4x4 CameraController::viewMatrix() const
   QMatrix4x4 mat;
   mat.lookAt(eye, m_target, QVector3D(0, 1, 0));
   return mat;
+}
+
+void CameraController::fitView(float cx, float cy, float cz, float radius)
+{
+  m_target = QVector3D(cx, cy, cz);
+  // FOV=45°, tan(22.5°)≈0.4142; 加 20% 边距
+  const float minDist = 50.f;
+  m_distance = std::max(minDist, radius / 0.4142f * 1.2f);
+  m_elevation = 35.0f;
+  m_azimuth   = 45.0f;
+}
+
+void CameraController::resetToDefault()
+{
+  m_target    = QVector3D(110.f, 0.f, 110.f);
+  m_distance  = 380.0f;
+  m_elevation = 35.0f;
+  m_azimuth   = 45.0f;
 }
 
 QMatrix4x4 CameraController::projMatrix(float aspect) const

@@ -8,9 +8,11 @@
 #include <libslic3r/Model.hpp>
 #include <libslic3r/ModelObject.hpp>
 #include <libslic3r/ModelVolume.hpp>
+#include <libslic3r/ModelInstance.hpp>
 #include <libslic3r/TriangleMesh.hpp>
 #include <libslic3r/Format/3mf.hpp>
 #include <libslic3r/PrintConfig.hpp>
+#include <cstring>  // memcpy
 #endif
 
 ProjectServiceMock::ProjectServiceMock(QObject *parent)
@@ -149,51 +151,115 @@ QByteArray ProjectServiceMock::meshData() const
   if (!model_ || model_->objects.empty())
     return {};
 
-  // 第一遍: 统计面数 + 计算包围盒，直接用 const & 引用，避免拷贝大 Mesh
-  size_t totalFaces = 0;
-  float xmin = 1e30f, xmax = -1e30f;
-  float ymin = 1e30f, ymax = -1e30f;
-  for (const auto *obj : model_->objects)
-  {
-    for (const auto *vol : obj->volumes)
-    {
-      const auto &its = vol->mesh().its; // const ref — 零拷贝
-      totalFaces += its.indices.size();
-      for (const auto &v : its.vertices)
-      {
-        xmin = std::min(xmin, v.x()); xmax = std::max(xmax, v.x());
-        ymin = std::min(ymin, v.y()); ymax = std::max(ymax, v.y());
-      }
-    }
-  }
-  if (totalFaces == 0)
-    return {};
+  // ── TLV 格式 ─────────────────────────────────────────────────────────────
+  // [int32 objectCount]
+  // per object: [int32 objectId][int32 triangleCount][float * triangleCount*9]
+  // trailer:    [float * 6] bbox (minGLx, minGLy, minGLz, maxGLx, maxGLy, maxGLz)
+  //
+  // 坐标转换: slic3r(X=right, Y=forward, Z=up) → GL(X=right, Y=up, Z=toward)
+  //   GL.x = slic3r.x,  GL.y = slic3r.z,  GL.z = slic3r.y
+  // ──────────────────────────────────────────────────────────────────────────
 
-  const float offsetX = (xmin + xmax) * 0.5f;
-  const float offsetY = (ymin + ymax) * 0.5f;
+  struct ObjBatch {
+    int32_t objectId;
+    std::vector<float> verts; // 9 floats per triangle (3 verts × xyz)
+  };
 
-  // 第二遍: 填充顶点 float 数组
-  QByteArray buf;
-  buf.resize(static_cast<int>(totalFaces * 9 * sizeof(float)));
-  float *dst = reinterpret_cast<float *>(buf.data());
+  std::vector<ObjBatch> batches;
+  batches.reserve(8);
+
+  float bminX = 1e30f, bminY = 1e30f, bminZ = 1e30f;
+  float bmaxX = -1e30f, bmaxY = -1e30f, bmaxZ = -1e30f;
+
+  int32_t linearId = 0;
 
   for (const auto *obj : model_->objects)
   {
-    for (const auto *vol : obj->volumes)
+    for (const auto *inst : obj->instances)
     {
-      const auto &its = vol->mesh().its;
-      for (const auto &face : its.indices)
+      // 实例变换矩阵 (世界坐标)
+      const Slic3r::Transform3d &instMat = inst->get_transformation().get_matrix();
+
+      ObjBatch batch;
+      batch.objectId = linearId++;
+
+      for (const auto *vol : obj->volumes)
       {
-        for (int k = 0; k < 3; ++k)
+        // 只渲染实体几何，跳过修改器 / 支撑区域 / 布尔减体
+        if (!vol->is_model_part())
+          continue;
+
+        // volume 自身的局部变换
+        const Slic3r::Transform3d &volMat = vol->get_transformation().get_matrix();
+        const Slic3r::Transform3d combined = instMat * volMat;
+
+        const auto &its = vol->mesh().its; // const ref — 零拷贝
+
+        for (const auto &face : its.indices)
         {
-          const auto &v = its.vertices[face(k)];
-          *dst++ = v.x() - offsetX;  // GL X
-          *dst++ = v.z();             // GL Y (高度)
-          *dst++ = v.y() - offsetY;  // GL Z
+          for (int k = 0; k < 3; ++k)
+          {
+            const Slic3r::Vec3f &lv = its.vertices[face(k)];
+            // 应用实例+Volume 变换到世界坐标 (slic3r)
+            // Transform3d * Vec3d 直接应用仿射变换（含平移）
+            const Slic3r::Vec3d hw = combined * Slic3r::Vec3d(
+                (double)lv.x(), (double)lv.y(), (double)lv.z());
+
+            // slic3r → GL 坐标系
+            const float gx = (float)hw.x();
+            const float gy = (float)hw.z(); // slic3r Z → GL Y (高度)
+            const float gz = (float)hw.y(); // slic3r Y → GL Z
+
+            batch.verts.push_back(gx);
+            batch.verts.push_back(gy);
+            batch.verts.push_back(gz);
+
+            bminX = std::min(bminX, gx); bmaxX = std::max(bmaxX, gx);
+            bminY = std::min(bminY, gy); bmaxY = std::max(bmaxY, gy);
+            bminZ = std::min(bminZ, gz); bmaxZ = std::max(bmaxZ, gz);
+          }
         }
       }
+
+      if (!batch.verts.empty())
+        batches.push_back(std::move(batch));
     }
   }
+
+  if (batches.empty())
+    return {};
+
+  // ── 计算缓冲区大小并写入 ──────────────────────────────────────────────────
+  int32_t objCount = static_cast<int32_t>(batches.size());
+  int totalBytes = static_cast<int>(sizeof(int32_t)); // objectCount header
+  for (const auto &b : batches)
+    totalBytes += static_cast<int>(2 * sizeof(int32_t) +           // objectId + triangleCount
+                                   b.verts.size() * sizeof(float)); // vertex data
+  totalBytes += 6 * static_cast<int>(sizeof(float)); // bbox trailer
+
+  QByteArray buf;
+  buf.resize(totalBytes);
+  char *p = buf.data();
+
+  // objectCount
+  memcpy(p, &objCount, sizeof(int32_t));
+  p += sizeof(int32_t);
+
+  for (const auto &b : batches)
+  {
+    int32_t triCount = static_cast<int32_t>(b.verts.size() / 9);
+    memcpy(p, &b.objectId, sizeof(int32_t)); p += sizeof(int32_t);
+    memcpy(p, &triCount,   sizeof(int32_t)); p += sizeof(int32_t);
+    memcpy(p, b.verts.data(), b.verts.size() * sizeof(float));
+    p += static_cast<int>(b.verts.size() * sizeof(float));
+  }
+
+  // bbox trailer
+  const float bbox[6] = { bminX, bminY, bminZ, bmaxX, bmaxY, bmaxZ };
+  memcpy(p, bbox, 6 * sizeof(float));
+
+  qInfo("[ProjectService] meshData: %d batches, bbox=[%.1f..%.1f, %.1f..%.1f, %.1f..%.1f]",
+        objCount, bminX, bmaxX, bminY, bmaxY, bminZ, bmaxZ);
   return buf;
 #else
   return {};

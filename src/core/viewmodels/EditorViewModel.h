@@ -4,6 +4,7 @@
 #include <QList>
 #include <QString>
 #include <QByteArray>
+#include <QVector4D>
 
 class ProjectServiceMock;
 class SliceServiceMock;
@@ -17,8 +18,10 @@ class EditorViewModel final : public QObject
   // Object-list panel support
   Q_PROPERTY(int objectCount READ objectCount NOTIFY stateChanged)
   Q_PROPERTY(int selectedObjectIndex READ selectedObjectIndex NOTIFY stateChanged)
-  /// 模型网格数据（flat float数组，用于 GLViewport 渲染）
+  /// 模型网格数据（TLV 格式，用于 GLViewport 渲染）
   Q_PROPERTY(QByteArray meshData READ meshData NOTIFY stateChanged)
+  /// 加载完成后的相机适应提示: (cx, cy, cz, radius)，全零表示无效
+  Q_PROPERTY(QVector4D fitHint READ fitHint NOTIFY stateChanged)
 
 public:
   explicit EditorViewModel(ProjectServiceMock *projectService, SliceServiceMock *sliceService, QObject *parent = nullptr);
@@ -27,6 +30,7 @@ public:
   int modelCount() const;
   QString statusText() const;
   QByteArray meshData() const;
+  QVector4D fitHint() const { return m_fitHint; }
 
   // Object list accessors (safe Q_INVOKABLE — no QVariantList)
   int objectCount() const;
@@ -61,4 +65,5 @@ private:
   QString statusText_ = tr("就绪");
   QList<ObjectEntry> m_objects;
   int m_selectedObjectIndex = -1;
+  QVector4D m_fitHint;  ///< (cx, cy, cz, radius) in GL coords; zero = invalid
 };

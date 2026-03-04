@@ -133,6 +133,18 @@ Item {
                 // 模型加载后把网格数据推给渲染线程
                 meshData: root.editorVm ? root.editorVm.meshData : null
 
+                // 监听 fitHint 变化: 模型加载完毕后自动适配相机
+                Connections {
+                    target: root.editorVm
+                    function onStateChanged() {
+                        if (!root.editorVm) return
+                        var h = root.editorVm.fitHint
+                        // fitHint.w = radius; 非零才有效
+                        if (h && h.w > 0)
+                            viewport3d.requestFitView(h.x, h.y, h.z, h.w)
+                    }
+                }
+
                 // Drag-and-drop model files directly onto the viewport
                 DropArea {
                     anchors.fill: parent
