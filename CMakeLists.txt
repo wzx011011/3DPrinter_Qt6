@@ -1,10 +1,27 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(FramelessDialogDemo LANGUAGES CXX)
+# ── CRT 运行库：使用 /MD（动态CRT）匹配 Qt、TBB、Boost deps ────────────
+# 预编译 libslic3r 是 /MT，通过 NODEFAULTLIB 抑制冲突
+cmake_policy(SET CMP0091 NEW)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+
+# ── 预编译依赖库路径（来自 E:\ai\3D-Printer\deps\build） ─────────────────
+set(DEPS_PREFIX "E:/ai/3D-Printer/deps/build/OrcaSlicer_dep/usr/local"
+    CACHE PATH "Pre-built dependencies prefix from upstream OrcaSlicer build")
+
+# 将预编译依赖加入 CMAKE_PREFIX_PATH
+list(APPEND CMAKE_PREFIX_PATH
+    "${DEPS_PREFIX}"
+    "${DEPS_PREFIX}/lib/cmake"
+    "${DEPS_PREFIX}/share/cmake"
+)
+
+project(FramelessDialogDemo LANGUAGES C CXX)
 
 option(CREALITY_QML_GUI "Build QML-first GUI architecture" ON)
 option(ENABLE_VISUAL_REGRESSION "Enable visual regression tests" ON)
 option(ENABLE_COVERAGE "Enable compiler coverage instrumentation" OFF)
+option(BUILD_LIBSLIC3R "Build libslic3r backend (3MF loading etc.)" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -15,11 +32,17 @@ set(CMAKE_AUTOUIC ON)
 
 include(CTest)
 
+# ── 构建 libslic3r 后端 ──────────────────────────────────────────────────
+if(BUILD_LIBSLIC3R)
+    include("${CMAKE_SOURCE_DIR}/cmake/BuildLibslic3r.cmake")
+endif()
+
 if(CREALITY_QML_GUI)
     find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL)
 
     qt_add_executable(FramelessDialogDemo
         src/qml_gui/main_qml.cpp
+        src/nanosvg_impl.cpp
         src/qml_gui/BackendContext.cpp
         src/qml_gui/BackendContext.h
         src/core/services/SliceServiceMock.cpp
@@ -68,6 +91,10 @@ if(CREALITY_QML_GUI)
     )
 
     target_link_libraries(FramelessDialogDemo PRIVATE Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL)
+    if(BUILD_LIBSLIC3R AND TARGET libslic3r)
+        target_link_libraries(FramelessDialogDemo PRIVATE libslic3r)
+        target_compile_definitions(FramelessDialogDemo PRIVATE HAS_LIBSLIC3R=1)
+    endif()
     target_compile_definitions(FramelessDialogDemo PRIVATE CREALITY_QML_GUI=1)
 else()
     find_package(Qt6 REQUIRED COMPONENTS Widgets)

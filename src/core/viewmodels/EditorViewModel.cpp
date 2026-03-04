@@ -88,3 +88,26 @@ void EditorViewModel::requestSlice()
 {
   sliceService_->startSlice(projectService_->projectName());
 }
+
+bool EditorViewModel::loadFile(const QString &filePath)
+{
+  bool ok = projectService_->loadFile(filePath);
+  if (ok)
+  {
+    // Sync object list from ProjectService
+    m_objects.clear();
+    const QStringList names = projectService_->objectNames();
+    for (const auto &name : names)
+    {
+      m_objects.append({name, true});
+    }
+    m_selectedObjectIndex = m_objects.isEmpty() ? -1 : 0;
+    statusText_ = QStringLiteral("已加载 %1 个模型").arg(m_objects.size());
+  }
+  else
+  {
+    statusText_ = projectService_->lastError();
+  }
+  emit stateChanged();
+  return ok;
+}
