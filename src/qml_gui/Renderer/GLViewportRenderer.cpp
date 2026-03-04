@@ -5,7 +5,7 @@
 #include <QOpenGLFramebufferObjectFormat>
 #include <QVector>
 
-// ── GLSL shaders ────────────────────────────────────────────────────────────
+// ── 基础着色器 (grid / axes) ─────────────────────────────────────────────────
 static const char *kVertSrc =
     "#version 330 core\n"
     "layout(location = 0) in vec3 aPos;\n"
@@ -17,6 +17,33 @@ static const char *kFragSrc =
     "uniform vec4 uColor;\n"
     "out vec4 fragColor;\n"
     "void main() { fragColor = uColor; }\n";
+
+// ── 网格着色器 (flat-shaded via dFdx/dFdy) ───────────────────────────────────
+static const char *kMeshVertSrc =
+    "#version 330 core\n"
+    "layout(location = 0) in vec3 aPos;\n"
+    "uniform mat4 uMVP;\n"
+    "out vec3 vWorldPos;\n"
+    "void main() {\n"
+    "  vWorldPos = aPos;\n"
+    "  gl_Position = uMVP * vec4(aPos, 1.0);\n"
+    "}\n";
+
+static const char *kMeshFragSrc =
+    "#version 330 core\n"
+    "in vec3 vWorldPos;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "  vec3 dx = dFdx(vWorldPos);\n"
+    "  vec3 dy = dFdy(vWorldPos);\n"
+    "  vec3 normal = normalize(cross(dx, dy));\n"
+    "  vec3 lightDir = normalize(vec3(0.6, 1.0, 0.8));\n"
+    "  float diff = clamp(dot(normal, lightDir), 0.0, 1.0);\n"
+    "  float ambient = 0.25;\n"
+    "  float light = ambient + (1.0 - ambient) * diff;\n"
+    "  vec3 baseColor = vec3(0.72, 0.72, 0.74);\n" // 银灰色
+    "  fragColor = vec4(baseColor * light, 1.0);\n"
+    "}\n";
 
 // ── Geometry helpers ─────────────────────────────────────────────────────────
 struct Vertex
@@ -62,6 +89,8 @@ GLViewportRenderer::~GLViewportRenderer()
   // Destroy GL objects while the context is still current
   m_vao.destroy();
   m_vbo.destroy();
+  m_meshVao.destroy();
+  m_meshVbo.destroy();
 }
 
 // ── QQuickFramebufferObject::Renderer interface ──────────────────────────────
@@ -81,44 +110,47 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
   m_viewSize = QSize(static_cast<int>(vp->width()),
                      static_cast<int>(vp->height()));
 
+  // 取走相机输入事件
   const auto events = vp->takeEvents();
   for (const auto &e : events)
   {
     switch (e.type)
     {
-
     case GLViewport::InputEvent::Press:
       m_dragging = true;
       m_dragButton = e.button;
       m_lastX = e.x;
       m_lastY = e.y;
       break;
-
     case GLViewport::InputEvent::Release:
       m_dragging = false;
       m_dragButton = Qt::NoButton;
       break;
-
     case GLViewport::InputEvent::Move:
       if (m_dragging)
       {
         const float dx = e.x - m_lastX;
         const float dy = e.y - m_lastY;
-
         if (m_dragButton == Qt::LeftButton)
           m_camera.orbit(dx * 0.5f, -dy * 0.5f);
         else if (m_dragButton == Qt::MiddleButton)
           m_camera.pan(dx, dy);
-
         m_lastX = e.x;
         m_lastY = e.y;
       }
       break;
-
     case GLViewport::InputEvent::Wheel:
       m_camera.zoom(e.wheelDelta);
       break;
     }
+  }
+
+  // 取走网格数据（有新版本时）
+  QByteArray newMesh;
+  if (vp->takeMesh(newMesh, m_meshVersion))
+  {
+    m_pendingMesh = std::move(newMesh);
+    m_meshDirty = true;
   }
 }
 
@@ -127,8 +159,15 @@ void GLViewportRenderer::render()
   if (!m_initialized)
     initialize();
 
+  // 若有新的网格数据，上传 GPU
+  if (m_meshDirty)
+  {
+    uploadMesh();
+    m_meshDirty = false;
+  }
+
   m_f->glEnable(GL_DEPTH_TEST);
-  m_f->glClearColor(0.208f, 0.224f, 0.243f, 1.0f); // matches #353941
+  m_f->glClearColor(0.208f, 0.224f, 0.243f, 1.0f);
   m_f->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   const float aspect = (m_viewSize.height() > 0)
@@ -138,11 +177,23 @@ void GLViewportRenderer::render()
 
   const QMatrix4x4 mvp = m_camera.projMatrix(aspect) * m_camera.viewMatrix();
 
+  // ── 绘制网格模型 (先画，不然网格线会覆盖模型边缘) ──
+  if (m_meshVertexCount > 0)
+  {
+    m_meshProg.bind();
+    m_meshProg.setUniformValue(m_uMeshMVP, mvp);
+    m_meshVao.bind();
+    m_f->glDrawArrays(GL_TRIANGLES, 0, m_meshVertexCount);
+    m_meshVao.release();
+    m_meshProg.release();
+  }
+
+  // ── 绘制网格线和坐标轴 ──
   m_prog.bind();
   m_prog.setUniformValue(m_uMVP, mvp);
   m_vao.bind();
 
-  // Grid (grey) — vertices start at index 6
+  // Grid (grey)
   m_prog.setUniformValue(m_uColor, QVector4D(0.35f, 0.37f, 0.40f, 1.0f));
   m_f->glDrawArrays(GL_LINES, 6, m_totalVertices - 6);
 
@@ -161,7 +212,6 @@ void GLViewportRenderer::render()
   m_vao.release();
   m_prog.release();
 
-  // Restore default Qt Quick state
   m_f->glDisable(GL_DEPTH_TEST);
 }
 
@@ -171,36 +221,72 @@ void GLViewportRenderer::initialize()
   m_f = QOpenGLContext::currentContext()->functions();
   m_f->initializeOpenGLFunctions();
 
-  // Compile + link shaders
+  // 编译基础着色器 (grid/axes)
   m_prog.addShaderFromSourceCode(QOpenGLShader::Vertex, kVertSrc);
   m_prog.addShaderFromSourceCode(QOpenGLShader::Fragment, kFragSrc);
   if (!m_prog.link())
-    qWarning("[GLViewportRenderer] Shader link error: %s",
+    qWarning("[GLViewportRenderer] Base shader link error: %s",
              qPrintable(m_prog.log()));
 
   m_uMVP = m_prog.uniformLocation("uMVP");
   m_uColor = m_prog.uniformLocation("uColor");
 
-  // Upload geometry
+  // 上传 grid + axes 静态几何
   int axisVerts = 0, gridVerts = 0;
   const auto verts = buildGeometry(axisVerts, gridVerts);
   m_totalVertices = verts.size();
 
   m_vao.create();
   m_vao.bind();
-
   m_vbo.create();
   m_vbo.bind();
   m_vbo.setUsagePattern(QOpenGLBuffer::StaticDraw);
   m_vbo.allocate(verts.constData(),
                  static_cast<int>(verts.size() * sizeof(Vertex)));
-
-  // Vertex attribute 0: position (3 floats)
   m_prog.enableAttributeArray(0);
   m_prog.setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(Vertex));
-
   m_vao.release();
   m_vbo.release();
 
+  // 编译网格着色器 (flat-shaded)
+  m_meshProg.addShaderFromSourceCode(QOpenGLShader::Vertex, kMeshVertSrc);
+  m_meshProg.addShaderFromSourceCode(QOpenGLShader::Fragment, kMeshFragSrc);
+  if (!m_meshProg.link())
+    qWarning("[GLViewportRenderer] Mesh shader link error: %s",
+             qPrintable(m_meshProg.log()));
+
+  m_uMeshMVP = m_meshProg.uniformLocation("uMVP");
+
+  // 创建网格 VAO/VBO（内容稍后 uploadMesh() 填充）
+  m_meshVao.create();
+  m_meshVbo.create();
+
   m_initialized = true;
+}
+
+void GLViewportRenderer::uploadMesh()
+{
+  if (!m_meshVao.isCreated())
+    return;
+
+  const int floatCount = m_pendingMesh.size() / static_cast<int>(sizeof(float));
+  m_meshVertexCount = floatCount / 3; // 每个顶点 3 floats
+
+  if (m_meshVertexCount == 0)
+    return;
+
+  m_meshProg.bind();
+  m_meshVao.bind();
+  m_meshVbo.bind();
+  m_meshVbo.setUsagePattern(QOpenGLBuffer::DynamicDraw);
+  m_meshVbo.allocate(m_pendingMesh.constData(), m_pendingMesh.size());
+
+  m_meshProg.enableAttributeArray(0);
+  m_meshProg.setAttributeBuffer(0, GL_FLOAT, 0, 3, 3 * sizeof(float));
+
+  m_meshVao.release();
+  m_meshVbo.release();
+  m_meshProg.release();
+
+  qInfo("[GLViewportRenderer] Mesh uploaded: %d triangles", m_meshVertexCount / 3);
 }

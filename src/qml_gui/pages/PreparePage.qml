@@ -130,6 +130,8 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 canvasType: GLViewport.CanvasView3D
+                // 模型加载后把网格数据推给渲染线程
+                meshData: root.editorVm ? root.editorVm.meshData : null
 
                 // Drag-and-drop model files directly onto the viewport
                 DropArea {

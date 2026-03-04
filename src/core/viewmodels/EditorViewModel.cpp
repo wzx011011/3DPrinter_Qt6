@@ -29,6 +29,7 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
 QString EditorViewModel::projectName() const { return projectService_->projectName(); }
 int EditorViewModel::modelCount() const { return projectService_->modelCount(); }
 QString EditorViewModel::statusText() const { return statusText_; }
+QByteArray EditorViewModel::meshData() const { return projectService_->meshData(); }
 
 // ---------- object list ----------
 int EditorViewModel::objectCount() const { return m_objects.size(); }
