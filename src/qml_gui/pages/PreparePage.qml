@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 import "../panels"
 import "../dialogs"
 import CrealityGL 1.0
@@ -13,6 +14,22 @@ Item {
     PrintDialog {
         id: printDlg
         editorVm: root.editorVm
+    }
+
+    FileDialog {
+        id: openFileDlg
+        title: qsTr("打开模型文件")
+        nameFilters: [
+            qsTr("3MF 文件 (*.3mf)"),
+            qsTr("STL 文件 (*.stl)"),
+            qsTr("OBJ 文件 (*.obj)"),
+            qsTr("AMF 文件 (*.amf)"),
+            qsTr("所有文件 (*)")
+        ]
+        onAccepted: {
+            if (root.editorVm)
+                root.editorVm.loadFile(selectedFile.toString())
+        }
     }
 
     Rectangle {
@@ -40,9 +57,21 @@ Item {
                         width: 22
                         height: 22
                         radius: 2
-                        color: "#2f343d"
+                        color: toolHov.containsMouse ? "#3d8858" : "#2f343d"
                         border.color: "#434a57"
                         Text { anchors.centerIn: parent; text: modelData; color: "#8e98a8"; font.pixelSize: 11 }
+                        // First button (⛶) opens the file dialog
+                        MouseArea {
+                            id: toolHov
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            visible: index === 0
+                            onClicked: openFileDlg.open()
+                            ToolTip.visible: containsMouse
+                            ToolTip.text: qsTr("导入模型")
+                            ToolTip.delay: 500
+                        }
                     }
                 }
                 Item { Layout.fillWidth: true }
@@ -102,6 +131,28 @@ Item {
                 Layout.fillHeight: true
                 canvasType: GLViewport.CanvasView3D
 
+                // Drag-and-drop model files directly onto the viewport
+                DropArea {
+                    anchors.fill: parent
+                    keys: ["text/uri-list"]
+                    onDropped: (drop) => {
+                        if (drop.hasUrls && drop.urls.length > 0 && root.editorVm)
+                            root.editorVm.loadFile(drop.urls[0].toString())
+                    }
+                    // Dim-overlay while hovering
+                    Rectangle {
+                        anchors.fill: parent
+                        color: "#40000000"
+                        visible: parent.containsDrag
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("松开以导入模型")
+                            color: "white"
+                            font.pixelSize: 18
+                            font.bold: true
+                        }
+                    }
+                }
                 Column {
                     spacing: 8
                     anchors.right: parent.right

@@ -2,6 +2,7 @@
 
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceServiceMock.h"
+#include <QUrl>
 
 EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServiceMock *sliceService, QObject *parent)
     : QObject(parent), projectService_(projectService), sliceService_(sliceService)
@@ -91,7 +92,10 @@ void EditorViewModel::requestSlice()
 
 bool EditorViewModel::loadFile(const QString &filePath)
 {
-  bool ok = projectService_->loadFile(filePath);
+  // Accept both local paths and file:// URLs (from QML FileDialog)
+  QUrl url(filePath);
+  const QString localPath = url.isLocalFile() ? url.toLocalFile() : filePath;
+  bool ok = projectService_->loadFile(localPath);
   if (ok)
   {
     // Sync object list from ProjectService
