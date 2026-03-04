@@ -22,6 +22,7 @@ public:
 
   QMatrix4x4 viewMatrix() const;
   QMatrix4x4 projMatrix(float aspect) const;
+  QVector3D  eye() const;  // world-space camera position
 
 private:
   float m_azimuth = 45.0f;    // degrees, horizontal
