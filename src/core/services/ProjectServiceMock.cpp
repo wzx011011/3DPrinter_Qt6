@@ -12,7 +12,7 @@
 #include <libslic3r/TriangleMesh.hpp>
 #include <libslic3r/Format/3mf.hpp>
 #include <libslic3r/PrintConfig.hpp>
-#include <cstring>  // memcpy
+#include <cstring> // memcpy
 #endif
 
 ProjectServiceMock::ProjectServiceMock(QObject *parent)
@@ -160,7 +160,8 @@ QByteArray ProjectServiceMock::meshData() const
   //   GL.x = slic3r.x,  GL.y = slic3r.z,  GL.z = slic3r.y
   // ──────────────────────────────────────────────────────────────────────────
 
-  struct ObjBatch {
+  struct ObjBatch
+  {
     int32_t objectId;
     std::vector<float> verts; // 9 floats per triangle (3 verts × xyz)
   };
@@ -203,7 +204,7 @@ QByteArray ProjectServiceMock::meshData() const
             // 应用实例+Volume 变换到世界坐标 (slic3r)
             // Transform3d * Vec3d 直接应用仿射变换（含平移）
             const Slic3r::Vec3d hw = combined * Slic3r::Vec3d(
-                (double)lv.x(), (double)lv.y(), (double)lv.z());
+                                                    (double)lv.x(), (double)lv.y(), (double)lv.z());
 
             // slic3r → GL 坐标系
             const float gx = (float)hw.x();
@@ -214,9 +215,12 @@ QByteArray ProjectServiceMock::meshData() const
             batch.verts.push_back(gy);
             batch.verts.push_back(gz);
 
-            bminX = std::min(bminX, gx); bmaxX = std::max(bmaxX, gx);
-            bminY = std::min(bminY, gy); bmaxY = std::max(bmaxY, gy);
-            bminZ = std::min(bminZ, gz); bmaxZ = std::max(bmaxZ, gz);
+            bminX = std::min(bminX, gx);
+            bmaxX = std::max(bmaxX, gx);
+            bminY = std::min(bminY, gy);
+            bmaxY = std::max(bmaxY, gy);
+            bminZ = std::min(bminZ, gz);
+            bmaxZ = std::max(bmaxZ, gz);
           }
         }
       }
@@ -233,9 +237,9 @@ QByteArray ProjectServiceMock::meshData() const
   int32_t objCount = static_cast<int32_t>(batches.size());
   int totalBytes = static_cast<int>(sizeof(int32_t)); // objectCount header
   for (const auto &b : batches)
-    totalBytes += static_cast<int>(2 * sizeof(int32_t) +           // objectId + triangleCount
+    totalBytes += static_cast<int>(2 * sizeof(int32_t) +            // objectId + triangleCount
                                    b.verts.size() * sizeof(float)); // vertex data
-  totalBytes += 6 * static_cast<int>(sizeof(float)); // bbox trailer
+  totalBytes += 6 * static_cast<int>(sizeof(float));                // bbox trailer
 
   QByteArray buf;
   buf.resize(totalBytes);
@@ -248,14 +252,16 @@ QByteArray ProjectServiceMock::meshData() const
   for (const auto &b : batches)
   {
     int32_t triCount = static_cast<int32_t>(b.verts.size() / 9);
-    memcpy(p, &b.objectId, sizeof(int32_t)); p += sizeof(int32_t);
-    memcpy(p, &triCount,   sizeof(int32_t)); p += sizeof(int32_t);
+    memcpy(p, &b.objectId, sizeof(int32_t));
+    p += sizeof(int32_t);
+    memcpy(p, &triCount, sizeof(int32_t));
+    p += sizeof(int32_t);
     memcpy(p, b.verts.data(), b.verts.size() * sizeof(float));
     p += static_cast<int>(b.verts.size() * sizeof(float));
   }
 
   // bbox trailer
-  const float bbox[6] = { bminX, bminY, bminZ, bmaxX, bmaxY, bmaxZ };
+  const float bbox[6] = {bminX, bminY, bminZ, bmaxX, bmaxY, bmaxZ};
   memcpy(p, bbox, 6 * sizeof(float));
 
   qInfo("[ProjectService] meshData: %d batches, bbox=[%.1f..%.1f, %.1f..%.1f, %.1f..%.1f]",

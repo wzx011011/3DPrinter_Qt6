@@ -105,10 +105,10 @@ void GLViewport::requestFitView(float cx, float cy, float cz, float r)
 {
   QMutexLocker lk(&m_eventMutex);
   InputEvent e;
-  e.type     = InputEvent::FitView;
-  e.fitCX    = cx;
-  e.fitCY    = cy;
-  e.fitCZ    = cz;
+  e.type = InputEvent::FitView;
+  e.fitCX = cx;
+  e.fitCY = cy;
+  e.fitCZ = cz;
   e.fitRadius = r;
   m_events.append(e);
   update();

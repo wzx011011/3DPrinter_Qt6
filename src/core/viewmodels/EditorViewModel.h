@@ -65,5 +65,5 @@ private:
   QString statusText_ = tr("就绪");
   QList<ObjectEntry> m_objects;
   int m_selectedObjectIndex = -1;
-  QVector4D m_fitHint;  ///< (cx, cy, cz, radius) in GL coords; zero = invalid
+  QVector4D m_fitHint; ///< (cx, cy, cz, radius) in GL coords; zero = invalid
 };

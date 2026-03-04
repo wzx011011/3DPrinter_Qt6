@@ -38,7 +38,11 @@ public:
   void setCanvasType(int t);
 
   // --- 网格数据 (GUI 线程写，渲染线程通过 takeMesh 读) ---
-  QByteArray meshData() const { QMutexLocker lk(&m_eventMutex); return m_meshData; }
+  QByteArray meshData() const
+  {
+    QMutexLocker lk(&m_eventMutex);
+    return m_meshData;
+  }
   void setMeshData(const QByteArray &data);
   /** 渲染线程调用: 取走待上传的数据。若版本相同则返回 false。 */
   bool takeMesh(QByteArray &out, int &version);
@@ -52,7 +56,7 @@ public:
       Move,
       Release,
       Wheel,
-      FitView   ///< 相机自适应 bbox
+      FitView ///< 相机自适应 bbox
     } type;
     Qt::MouseButton button = Qt::NoButton;
     Qt::MouseButtons buttons = Qt::NoButton;
