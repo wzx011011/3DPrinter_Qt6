@@ -1,0 +1,22 @@
+name: Tag Trigger Debug
+
+on:
+  push:
+    tags:
+      - '*'
+  create:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    if: github.event_name != 'create' || github.event.ref_type == 'tag'
+    runs-on: windows-latest
+    steps:
+      - name: Print event context
+        shell: pwsh
+        run: |
+          Write-Host "event_name=${{ github.event_name }}"
+          Write-Host "ref=${{ github.ref }}"
+          Write-Host "ref_name=${{ github.ref_name }}"
+          Write-Host "sha=${{ github.sha }}"
+          Write-Host "actor=${{ github.actor }}"
