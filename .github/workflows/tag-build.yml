@@ -2,6 +2,8 @@ name: Tag Build (Windows)
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "*"
   create:
