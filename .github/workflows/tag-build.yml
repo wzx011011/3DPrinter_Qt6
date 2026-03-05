@@ -3,7 +3,7 @@ name: Tag Build (Windows)
 on:
   push:
     tags:
-      - '*'
+      - "*"
   workflow_dispatch:
 
 permissions:
@@ -25,10 +25,10 @@ jobs:
       - name: Install Qt 6.10.0
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.10.0'
-          host: 'windows'
-          target: 'desktop'
-          arch: 'win64_msvc2022_64'
+          version: "6.10.0"
+          host: "windows"
+          target: "desktop"
+          arch: "win64_msvc2022_64"
 
       - name: Configure (CMake)
         run: >
@@ -38,7 +38,32 @@ jobs:
           -DCREALITY_QML_GUI=ON
 
       - name: Build
-        run: cmake --build build --config Release --target FramelessDialogDemo
+        run: cmake --build build --config Release --target FramelessDialogDemo --verbose
+
+      - name: Collect failure diagnostics
+        if: failure()
+        shell: pwsh
+        run: |
+          if (Test-Path "build/.ninja_log") {
+            Copy-Item "build/.ninja_log" "build/ninja_log.txt" -Force
+          }
+          if (Test-Path "build/CMakeFiles/CMakeError.log") {
+            Copy-Item "build/CMakeFiles/CMakeError.log" "build/CMakeError.log" -Force
+          }
+          if (Test-Path "build/CMakeFiles/CMakeOutput.log") {
+            Copy-Item "build/CMakeFiles/CMakeOutput.log" "build/CMakeOutput.log" -Force
+          }
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics-${{ github.ref_name }}
+          path: |
+            build/ninja_log.txt
+            build/CMakeError.log
+            build/CMakeOutput.log
+          if-no-files-found: warn
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
