@@ -38,15 +38,15 @@ if(BUILD_LIBSLIC3R)
 endif()
 
 if(CREALITY_QML_GUI)
-    find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL)
+    find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent)
 
     qt_add_executable(FramelessDialogDemo
         src/qml_gui/main_qml.cpp
         src/nanosvg_impl.cpp
         src/qml_gui/BackendContext.cpp
         src/qml_gui/BackendContext.h
-        src/core/services/SliceServiceMock.cpp
-        src/core/services/SliceServiceMock.h
+        src/core/services/SliceService.cpp
+        src/core/services/SliceService.h
         src/core/services/PresetServiceMock.cpp
         src/core/services/PresetServiceMock.h
         src/core/services/DeviceServiceMock.cpp
@@ -87,10 +87,12 @@ if(CREALITY_QML_GUI)
         src/qml_gui/Renderer/GLViewport.h
         src/qml_gui/Renderer/GLViewportRenderer.cpp
         src/qml_gui/Renderer/GLViewportRenderer.h
+        src/qml_gui/Renderer/GCodeRenderer.cpp
+        src/qml_gui/Renderer/GCodeRenderer.h
         src/qml_gui/qml.qrc
     )
 
-    target_link_libraries(FramelessDialogDemo PRIVATE Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL)
+    target_link_libraries(FramelessDialogDemo PRIVATE Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent)
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
         target_link_libraries(FramelessDialogDemo PRIVATE libslic3r)
         target_compile_definitions(FramelessDialogDemo PRIVATE HAS_LIBSLIC3R=1)
@@ -132,7 +134,7 @@ qt_add_translations(FramelessDialogDemo
 )
 
 if(BUILD_TESTING)
-    find_package(Qt6 REQUIRED COMPONENTS Test Quick Qml OpenGL)
+    find_package(Qt6 REQUIRED COMPONENTS Test Quick Qml OpenGL Gui)
 
     if(ENABLE_COVERAGE AND (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
         add_compile_options(-O0 -g --coverage)
@@ -141,8 +143,11 @@ if(BUILD_TESTING)
 
     qt_add_executable(ViewModelSmokeTests
         tests/ViewModelSmokeTests.cpp
-        src/core/services/SliceServiceMock.cpp
-        src/core/services/SliceServiceMock.h
+        src/nanosvg_impl.cpp
+        src/qml_gui/BackendContext.cpp
+        src/qml_gui/BackendContext.h
+        src/core/services/SliceService.cpp
+        src/core/services/SliceService.h
         src/core/services/PresetServiceMock.cpp
         src/core/services/PresetServiceMock.h
         src/core/services/DeviceServiceMock.cpp
@@ -180,7 +185,11 @@ if(BUILD_TESTING)
     )
 
     target_include_directories(ViewModelSmokeTests PRIVATE src)
-    target_link_libraries(ViewModelSmokeTests PRIVATE Qt6::Core Qt6::Test)
+    target_link_libraries(ViewModelSmokeTests PRIVATE Qt6::Core Qt6::Gui Qt6::Test)
+    if(BUILD_LIBSLIC3R AND TARGET libslic3r)
+        target_link_libraries(ViewModelSmokeTests PRIVATE libslic3r)
+        target_compile_definitions(ViewModelSmokeTests PRIVATE HAS_LIBSLIC3R=1)
+    endif()
 
     add_test(
         NAME ViewModelSmokeTests
@@ -193,10 +202,11 @@ if(BUILD_TESTING)
     if(ENABLE_VISUAL_REGRESSION)
         qt_add_executable(VisualRegressionTests
             tests/visual/VisualRegressionTests.cpp
+            src/nanosvg_impl.cpp
             src/qml_gui/BackendContext.cpp
             src/qml_gui/BackendContext.h
-            src/core/services/SliceServiceMock.cpp
-            src/core/services/SliceServiceMock.h
+            src/core/services/SliceService.cpp
+            src/core/services/SliceService.h
             src/core/services/PresetServiceMock.cpp
             src/core/services/PresetServiceMock.h
             src/core/services/DeviceServiceMock.cpp

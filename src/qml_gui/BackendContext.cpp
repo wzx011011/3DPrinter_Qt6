@@ -5,7 +5,7 @@
 #include "core/services/CalibrationServiceMock.h"
 #include "core/services/PresetServiceMock.h"
 #include "core/services/ProjectServiceMock.h"
-#include "core/services/SliceServiceMock.h"
+#include "core/services/SliceService.h"
 #include "core/viewmodels/ConfigViewModel.h"
 #include "core/viewmodels/EditorViewModel.h"
 #include "core/viewmodels/MonitorViewModel.h"
@@ -21,6 +21,7 @@
 #include <QGuiApplication>
 #include <QFont>
 #include <iterator>
+#include <QUrl>
 
 // 主题颜色预设
 struct ThemeColors
@@ -44,10 +45,10 @@ BackendContext::BackendContext(QObject *parent)
   visualCompareMode_ = (compareMode == "1" || compareMode.compare("true", Qt::CaseInsensitive) == 0);
 
   calibrationService_ = new CalibrationServiceMock(this);
-  sliceService_ = new SliceServiceMock(this);
   presetService_ = new PresetServiceMock(this);
   deviceService_ = new DeviceServiceMock(this);
   projectService_ = new ProjectServiceMock(this);
+  sliceService_ = new SliceService(projectService_, this);
   networkService_ = new NetworkServiceMock(this);
 
   editorViewModel_ = new EditorViewModel(projectService_, sliceService_, this);
@@ -108,6 +109,76 @@ void BackendContext::openSettings()
 {
   setCurrentPage(11);
 }
+
+void BackendContext::topbarNewProject()
+{
+  if (projectViewModel_)
+    projectViewModel_->newProject();
+  if (editorViewModel_)
+    editorViewModel_->clearWorkspace();
+  setCurrentPage(1);
+}
+
+bool BackendContext::topbarOpenProject(const QString &filePath)
+{
+  const QUrl url(filePath);
+  const QString localPath = url.isLocalFile() ? url.toLocalFile() : filePath;
+  if (localPath.isEmpty())
+    return false;
+
+  const bool loaded = editorViewModel_ ? editorViewModel_->loadFile(localPath) : false;
+  if (loaded)
+  {
+    if (projectViewModel_)
+      projectViewModel_->openProject(localPath);
+    setCurrentPage(1);
+  }
+  return loaded;
+}
+
+bool BackendContext::topbarImportModel(const QString &filePath)
+{
+  const QUrl url(filePath);
+  const QString localPath = url.isLocalFile() ? url.toLocalFile() : filePath;
+  if (localPath.isEmpty())
+    return false;
+
+  const bool loaded = editorViewModel_ ? editorViewModel_->loadFile(localPath) : false;
+  if (loaded)
+  {
+    if (projectViewModel_)
+      projectViewModel_->importModel(QStringList{localPath});
+    setCurrentPage(1);
+  }
+  return loaded;
+}
+
+bool BackendContext::topbarSaveProject()
+{
+  if (!projectViewModel_)
+    return false;
+
+  if (projectViewModel_->currentProjectPath().isEmpty())
+    return false;
+
+  projectViewModel_->saveProject();
+  return true;
+}
+
+bool BackendContext::topbarSaveProjectAs(const QString &filePath)
+{
+  if (!projectViewModel_)
+    return false;
+
+  const QUrl url(filePath);
+  const QString localPath = url.isLocalFile() ? url.toLocalFile() : filePath;
+  if (localPath.isEmpty())
+    return false;
+
+  projectViewModel_->saveProjectAs(localPath);
+  return true;
+}
+
 void BackendContext::postError(const QString &message, int severity)
 {
   lastErrorMessage_ = message;

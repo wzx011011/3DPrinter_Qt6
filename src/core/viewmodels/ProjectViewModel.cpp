@@ -1,5 +1,19 @@
 #include "ProjectViewModel.h"
 
+namespace
+{
+  void prependRecent(QStringList &items, const QString &path)
+  {
+    if (path.isEmpty())
+      return;
+    items.removeAll(path);
+    items.prepend(path);
+    constexpr int kMaxRecent = 12;
+    while (items.size() > kMaxRecent)
+      items.removeLast();
+  }
+} // namespace
+
 ProjectViewModel::ProjectViewModel(QObject *parent) : QObject(parent)
 {
   m_recentProjects = {
@@ -46,22 +60,34 @@ void ProjectViewModel::openProject(const QString &path)
 {
   m_currentProjectPath = path;
   m_isDirty = false;
+  const QStringList before = m_recentProjects;
+  prependRecent(m_recentProjects, path);
   emit projectChanged();
   emit dirtyChanged();
+  if (before != m_recentProjects)
+    emit recentChanged();
 }
 
 void ProjectViewModel::saveProject()
 {
   m_isDirty = false;
+  const QStringList before = m_recentProjects;
+  prependRecent(m_recentProjects, m_currentProjectPath);
   emit dirtyChanged();
+  if (before != m_recentProjects)
+    emit recentChanged();
 }
 
 void ProjectViewModel::saveProjectAs(const QString &path)
 {
   m_currentProjectPath = path;
   m_isDirty = false;
+  const QStringList before = m_recentProjects;
+  prependRecent(m_recentProjects, path);
   emit projectChanged();
   emit dirtyChanged();
+  if (before != m_recentProjects)
+    emit recentChanged();
 }
 
 void ProjectViewModel::importModel(const QStringList &paths)

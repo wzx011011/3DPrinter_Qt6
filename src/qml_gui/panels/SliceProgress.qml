@@ -139,7 +139,7 @@ Item {
                 onClicked: {
                     if (!root.editorVm) return
                     if (root.slicingNow) {
-                        // SliceServiceMock 暂无 cancel，用 requestSlice 触发重置
+                        root.editorVm.cancelSlice()
                     } else {
                         root.editorVm.requestSlice()
                     }

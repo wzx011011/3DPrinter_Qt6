@@ -30,6 +30,10 @@
         <file>components/Toolbar.qml</file>
         <file>components/ErrorToast.qml</file>
         <file>components/ErrorBanner.qml</file>
+        <file>components/LayerSlider.qml</file>
+        <file>components/MoveSlider.qml</file>
+        <file>components/Legend.qml</file>
+        <file>components/StatsPanel.qml</file>
         <!-- Controls -->
         <file>controls/CxButton.qml</file>
         <file>controls/CxComboBox.qml</file>
