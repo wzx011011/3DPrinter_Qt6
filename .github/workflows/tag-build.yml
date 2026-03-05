@@ -89,6 +89,7 @@ jobs:
           Copy-Item "build/*.dll" $outDir -Force -ErrorAction SilentlyContinue
           Copy-Item "build/en.qm" $outDir -Force -ErrorAction SilentlyContinue
           Copy-Item "build/zh_CN.qm" $outDir -Force -ErrorAction SilentlyContinue
+          windeployqt --release --qmldir src "$outDir/FramelessDialogDemo.exe"
           $zipPath = "build/FramelessDialogDemo-${{ env.TAG_NAME }}-windows.zip"
           if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
           Compress-Archive -Path "$outDir/*" -DestinationPath $zipPath
