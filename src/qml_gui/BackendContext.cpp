@@ -22,6 +22,7 @@
 #include <QFont>
 #include <iterator>
 #include <QUrl>
+#include <algorithm>
 
 // 主题颜色预设
 struct ThemeColors
@@ -41,6 +42,7 @@ static const char *kLangCodes[] = {"zh_CN", "en", "ja", "ko", "de", "fr"};
 BackendContext::BackendContext(QObject *parent)
     : QObject(parent)
 {
+  m_latencyClock.start();
   const QByteArray compareMode = qgetenv("CREALITY_VISUAL_COMPARE_MODE");
   visualCompareMode_ = (compareMode == "1" || compareMode.compare("true", Qt::CaseInsensitive) == 0);
 
@@ -112,15 +114,18 @@ void BackendContext::openSettings()
 
 void BackendContext::topbarNewProject()
 {
+  const qint64 start = m_latencyClock.elapsed();
   if (projectViewModel_)
     projectViewModel_->newProject();
   if (editorViewModel_)
     editorViewModel_->clearWorkspace();
   setCurrentPage(1);
+  pushLatencySample(QStringLiteral("topbar-new-project"), int(m_latencyClock.elapsed() - start), QString());
 }
 
 bool BackendContext::topbarOpenProject(const QString &filePath)
 {
+  const qint64 start = m_latencyClock.elapsed();
   const QUrl url(filePath);
   const QString localPath = url.isLocalFile() ? url.toLocalFile() : filePath;
   if (localPath.isEmpty())
@@ -133,11 +138,13 @@ bool BackendContext::topbarOpenProject(const QString &filePath)
       projectViewModel_->openProject(localPath);
     setCurrentPage(1);
   }
+  pushLatencySample(QStringLiteral("topbar-open-project"), int(m_latencyClock.elapsed() - start), localPath);
   return loaded;
 }
 
 bool BackendContext::topbarImportModel(const QString &filePath)
 {
+  const qint64 start = m_latencyClock.elapsed();
   const QUrl url(filePath);
   const QString localPath = url.isLocalFile() ? url.toLocalFile() : filePath;
   if (localPath.isEmpty())
@@ -150,11 +157,13 @@ bool BackendContext::topbarImportModel(const QString &filePath)
       projectViewModel_->importModel(QStringList{localPath});
     setCurrentPage(1);
   }
+  pushLatencySample(QStringLiteral("topbar-import-model"), int(m_latencyClock.elapsed() - start), localPath);
   return loaded;
 }
 
 bool BackendContext::topbarSaveProject()
 {
+  const qint64 start = m_latencyClock.elapsed();
   if (!projectViewModel_)
     return false;
 
@@ -162,11 +171,13 @@ bool BackendContext::topbarSaveProject()
     return false;
 
   projectViewModel_->saveProject();
+  pushLatencySample(QStringLiteral("topbar-save-project"), int(m_latencyClock.elapsed() - start), QString());
   return true;
 }
 
 bool BackendContext::topbarSaveProjectAs(const QString &filePath)
 {
+  const qint64 start = m_latencyClock.elapsed();
   if (!projectViewModel_)
     return false;
 
@@ -176,7 +187,104 @@ bool BackendContext::topbarSaveProjectAs(const QString &filePath)
     return false;
 
   projectViewModel_->saveProjectAs(localPath);
+  pushLatencySample(QStringLiteral("topbar-save-project-as"), int(m_latencyClock.elapsed() - start), localPath);
   return true;
+}
+
+int BackendContext::beginLatency(const QString &operation, const QString &detail)
+{
+  if (operation.isEmpty())
+    return -1;
+  const int token = m_latencyNextToken++;
+  m_pendingLatencies.insert(token, PendingLatency{operation, detail, m_latencyClock.elapsed()});
+  return token;
+}
+
+void BackendContext::endLatency(int token)
+{
+  const auto it = m_pendingLatencies.find(token);
+  if (it == m_pendingLatencies.end())
+    return;
+  const PendingLatency pending = it.value();
+  m_pendingLatencies.erase(it);
+  const int elapsedMs = int(m_latencyClock.elapsed() - pending.startMs);
+  pushLatencySample(pending.operation, elapsedMs, pending.detail);
+}
+
+void BackendContext::recordLatency(const QString &operation, int elapsedMs, const QString &detail)
+{
+  pushLatencySample(operation, elapsedMs, detail);
+}
+
+void BackendContext::resetLatency()
+{
+  m_pendingLatencies.clear();
+  m_latencyStats.clear();
+  m_lastLatencyOperation.clear();
+  m_lastLatencyMs = 0;
+  emit latencyChanged();
+}
+
+QString BackendContext::latencyBrief() const
+{
+  const auto tabIt = m_latencyStats.find(QStringLiteral("tab-switch"));
+  if (tabIt == m_latencyStats.end() || tabIt->count == 0)
+    return QStringLiteral("Latency: --");
+
+  const auto &s = tabIt.value();
+  const int avgMs = s.totalMs / s.count;
+  const int p95Ms = percentile95(s.samples);
+  return QStringLiteral("Tab %1ms | Avg %2ms | P95 %3ms")
+      .arg(s.lastMs)
+      .arg(avgMs)
+      .arg(p95Ms);
+}
+
+QString BackendContext::lastLatencyOperation() const
+{
+  return m_lastLatencyOperation;
+}
+
+int BackendContext::lastLatencyMs() const
+{
+  return m_lastLatencyMs;
+}
+
+void BackendContext::pushLatencySample(const QString &operation, int elapsedMs, const QString &detail)
+{
+  if (operation.isEmpty() || elapsedMs < 0)
+    return;
+
+  auto &stats = m_latencyStats[operation];
+  stats.count += 1;
+  stats.totalMs += elapsedMs;
+  stats.lastMs = elapsedMs;
+  stats.maxMs = std::max(stats.maxMs, elapsedMs);
+  stats.samples.push_back(elapsedMs);
+  constexpr int kMaxSamples = 120;
+  if (stats.samples.size() > kMaxSamples)
+    stats.samples.remove(0, stats.samples.size() - kMaxSamples);
+
+  m_lastLatencyOperation = detail.isEmpty() ? operation : QStringLiteral("%1 (%2)").arg(operation, detail);
+  m_lastLatencyMs = elapsedMs;
+
+  if (elapsedMs > 120)
+    qWarning() << "[Latency] slow" << operation << elapsedMs << "ms" << detail;
+  else
+    qInfo() << "[Latency]" << operation << elapsedMs << "ms" << detail;
+
+  emit latencyChanged();
+}
+
+int BackendContext::percentile95(const QVector<int> &samples)
+{
+  if (samples.isEmpty())
+    return 0;
+  QVector<int> sorted = samples;
+  std::sort(sorted.begin(), sorted.end());
+  const int sampleCount = int(sorted.size());
+  const int idx = std::min(sampleCount - 1, int((sampleCount - 1) * 0.95));
+  return sorted[idx];
 }
 
 void BackendContext::postError(const QString &message, int severity)

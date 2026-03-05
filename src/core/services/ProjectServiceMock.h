@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QStringList>
+#include <QList>
 #include <QByteArray>
 #include <atomic>
 #include <memory>
@@ -19,6 +20,7 @@ class ProjectServiceMock final : public QObject
   Q_PROPERTY(QString projectName READ projectName NOTIFY projectChanged)
   Q_PROPERTY(int modelCount READ modelCount NOTIFY projectChanged)
   Q_PROPERTY(int plateCount READ plateCount NOTIFY plateDataLoaded)
+  Q_PROPERTY(int currentPlateIndex READ currentPlateIndex NOTIFY plateSelectionChanged)
   Q_PROPERTY(QString lastError READ lastError NOTIFY projectChanged)
   Q_PROPERTY(int loadProgress READ loadProgress NOTIFY loadProgressChanged)
   Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
@@ -30,6 +32,7 @@ public:
   QString projectName() const;
   int modelCount() const;
   int plateCount() const;
+  int currentPlateIndex() const;
   QString lastError() const;
   int loadProgress() const;
   bool loading() const;
@@ -41,6 +44,10 @@ public:
 
   /// 返回已加载的模型对象名称列表
   Q_INVOKABLE QStringList objectNames() const;
+  Q_INVOKABLE QStringList plateNames() const;
+  Q_INVOKABLE bool setCurrentPlateIndex(int index);
+  Q_INVOKABLE QList<int> currentPlateObjectIndices() const;
+  Q_INVOKABLE bool deleteObject(int index);
 
   /**
    * 提取所有三角面顶点为紧凑 float 数组 (x,y,z per vertex, 3 verts per face)。
@@ -56,6 +63,7 @@ public:
 signals:
   void projectChanged();
   void plateDataLoaded(int plateCount);
+  void plateSelectionChanged();
   void loadingChanged();
   void loadProgressChanged();
   void loadProgressUpdated(int progress, const QString &stageText);
@@ -65,9 +73,12 @@ private:
   QString projectName_ = tr("未命名项目");
   int modelCount_ = 0;
   int plateCount_ = 0;
+  int currentPlateIndex_ = -1;
   QString lastError_;
   QString sourceFilePath_;
   QStringList objectNames_;
+  QStringList plateNames_;
+  QList<QList<int>> plateObjectIndices_;
   int loadProgress_ = 0;
   bool loading_ = false;
 

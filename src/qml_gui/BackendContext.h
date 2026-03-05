@@ -3,6 +3,9 @@
 #include <QObject>
 #include <QColor>
 #include <QTranslator>
+#include <QElapsedTimer>
+#include <QHash>
+#include <QVector>
 
 class SliceService;
 class PresetServiceMock;
@@ -39,6 +42,9 @@ class BackendContext final : public QObject
   Q_PROPERTY(int currentPage READ currentPage NOTIFY currentPageChanged)
   Q_PROPERTY(QString lastErrorMessage READ lastErrorMessage NOTIFY errorChanged)
   Q_PROPERTY(int lastErrorSeverity READ lastErrorSeverity NOTIFY errorChanged)
+  Q_PROPERTY(QString latencyBrief READ latencyBrief NOTIFY latencyChanged)
+  Q_PROPERTY(QString lastLatencyOperation READ lastLatencyOperation NOTIFY latencyChanged)
+  Q_PROPERTY(int lastLatencyMs READ lastLatencyMs NOTIFY latencyChanged)
   // 外观 / 缩放 / 主题颜色
   Q_PROPERTY(double uiScale READ uiScale NOTIFY uiScaleChanged)
   Q_PROPERTY(QColor bgColor READ bgColor NOTIFY themeChanged)
@@ -77,13 +83,21 @@ public:
   Q_INVOKABLE bool topbarImportModel(const QString &filePath);
   Q_INVOKABLE bool topbarSaveProject();
   Q_INVOKABLE bool topbarSaveProjectAs(const QString &filePath);
+  Q_INVOKABLE int beginLatency(const QString &operation, const QString &detail = QString());
+  Q_INVOKABLE void endLatency(int token);
+  Q_INVOKABLE void recordLatency(const QString &operation, int elapsedMs, const QString &detail = QString());
+  Q_INVOKABLE void resetLatency();
 
   QString lastErrorMessage() const;
   int lastErrorSeverity() const;
+  QString latencyBrief() const;
+  QString lastLatencyOperation() const;
+  int lastLatencyMs() const;
 
 signals:
   void currentPageChanged();
   void errorChanged();
+  void latencyChanged();
   void uiScaleChanged();
   void themeChanged();
   void languageChanged();
@@ -119,6 +133,32 @@ private:
   QColor m_surfaceColor{"#0f1217"};
   QColor m_sidebarColor{"#0f1218"};
   QColor m_borderColor{"#242a33"};
+
+  struct PendingLatency
+  {
+    QString operation;
+    QString detail;
+    qint64 startMs = 0;
+  };
+
+  struct OpLatencyStats
+  {
+    int count = 0;
+    int totalMs = 0;
+    int maxMs = 0;
+    int lastMs = 0;
+    QVector<int> samples;
+  };
+
+  QElapsedTimer m_latencyClock;
+  int m_latencyNextToken = 1;
+  QHash<int, PendingLatency> m_pendingLatencies;
+  QHash<QString, OpLatencyStats> m_latencyStats;
+  QString m_lastLatencyOperation;
+  int m_lastLatencyMs = 0;
+
+  void pushLatencySample(const QString &operation, int elapsedMs, const QString &detail);
+  static int percentile95(const QVector<int> &samples);
 
   void applyTheme(int idx);
   void applyLanguage(int idx);

@@ -15,9 +15,11 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(QString projectName READ projectName NOTIFY stateChanged)
   Q_PROPERTY(int modelCount READ modelCount NOTIFY stateChanged)
   Q_PROPERTY(int plateCount READ plateCount NOTIFY stateChanged)
+  Q_PROPERTY(int currentPlateIndex READ currentPlateIndex NOTIFY stateChanged)
   Q_PROPERTY(QString statusText READ statusText NOTIFY stateChanged)
   Q_PROPERTY(int loadProgress READ loadProgress NOTIFY stateChanged)
   Q_PROPERTY(bool loading READ loading NOTIFY stateChanged)
+  Q_PROPERTY(bool showAllObjects READ showAllObjects NOTIFY stateChanged)
   // Object-list panel support
   Q_PROPERTY(int objectCount READ objectCount NOTIFY stateChanged)
   Q_PROPERTY(int selectedObjectIndex READ selectedObjectIndex NOTIFY stateChanged)
@@ -32,9 +34,11 @@ public:
   QString projectName() const;
   int modelCount() const;
   int plateCount() const;
+  int currentPlateIndex() const;
   QString statusText() const;
   int loadProgress() const;
   bool loading() const;
+  bool showAllObjects() const;
   QByteArray meshData() const;
   QVector4D fitHint() const { return m_fitHint; }
 
@@ -46,6 +50,9 @@ public:
   Q_INVOKABLE void setObjectVisible(int i, bool visible);
   Q_INVOKABLE void deleteObject(int i);
   Q_INVOKABLE void selectObject(int i);
+  Q_INVOKABLE QString plateName(int i) const;
+  Q_INVOKABLE bool setCurrentPlateIndex(int i);
+  Q_INVOKABLE void setShowAllObjects(bool showAll);
 
   // Slice-progress bridge (delegates to SliceService)
   Q_INVOKABLE int sliceProgress() const;
@@ -63,6 +70,10 @@ signals:
   void stateChanged();
 
 private:
+  void refreshMeshCacheAndFitHint();
+  int mapFilteredToSourceIndex(int filteredIndex) const;
+  QList<int> visibleObjectIndices() const;
+
   struct ObjectEntry
   {
     QString name;
@@ -74,5 +85,7 @@ private:
   QString statusText_ = tr("就绪");
   QList<ObjectEntry> m_objects;
   int m_selectedObjectIndex = -1;
+  bool m_showAllObjects = false;
   QVector4D m_fitHint; ///< (cx, cy, cz, radius) in GL coords; zero = invalid
+  QByteArray m_cachedMeshData;
 };

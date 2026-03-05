@@ -2,10 +2,14 @@
 
 #include <QFileInfo>
 #include <QDebug>
+#include <QSet>
 #include <algorithm>
 #include <QMetaObject>
 #include <QPointer>
 #include <QtConcurrent/QtConcurrentRun>
+#include <limits>
+#include <cstdint>
+#include <unordered_set>
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Model.hpp>
@@ -48,6 +52,7 @@ namespace
       return QObject::tr("处理文件");
     }
   }
+
 } // namespace
 #endif
 
@@ -79,6 +84,11 @@ int ProjectServiceMock::modelCount() const
 int ProjectServiceMock::plateCount() const
 {
   return plateCount_;
+}
+
+int ProjectServiceMock::currentPlateIndex() const
+{
+  return currentPlateIndex_;
 }
 
 QString ProjectServiceMock::lastError() const
@@ -136,6 +146,8 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
     std::string err;
     int loadedPlateCount = 0;
     Slic3r::PlateDataPtrs plateDataList;
+    QStringList loadedPlateNames;
+    QList<QList<int>> loadedPlateObjectIndices;
 
     Slic3r::Import3mfProgressFn progressFn = [receiver, cancelFlag](int import_stage, int current, int total, bool &cancel) {
       cancel = cancelFlag && cancelFlag->load();
@@ -168,15 +180,55 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
       Slic3r::Model loaded = Slic3r::Model::read_from_file(localPath.toStdString(),
                                                             nullptr,
                                                             nullptr,
-                                                            Slic3r::LoadStrategy::AddDefaultInstances,
+                                                            Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel,
                                                             &plateDataList,
                                                             nullptr,
                                                             nullptr,
                                                             nullptr,
                                                             progressFn);
       *loadedModel = std::move(loaded);
-      loadedPlateCount = int(plateDataList.size());
       ok = true;
+
+      loadedPlateCount = int(plateDataList.size());
+
+      if (!plateDataList.empty())
+      {
+        loadedPlateNames.reserve(loadedPlateCount);
+        loadedPlateObjectIndices.reserve(loadedPlateCount);
+
+        const int modelObjCount = int(loadedModel->objects.size());
+        for (int plateIdx = 0; plateIdx < loadedPlateCount; ++plateIdx)
+        {
+          const auto *plate = plateDataList[size_t(plateIdx)];
+          const QString plateName = (plate && !plate->plate_name.empty())
+                                        ? QString::fromStdString(plate->plate_name)
+                                        : QObject::tr("平板 %1").arg(plateIdx + 1);
+          loadedPlateNames << plateName;
+
+          QSet<int> uniq;
+          QList<int> objList;
+          if (plate)
+          {
+            for (const auto &pair : plate->objects_and_instances)
+            {
+              const int objIndex = pair.first;
+              if (objIndex >= 0 && objIndex < modelObjCount && !uniq.contains(objIndex))
+              {
+                uniq.insert(objIndex);
+                objList.append(objIndex);
+              }
+            }
+          }
+          std::sort(objList.begin(), objList.end());
+          loadedPlateObjectIndices.append(objList);
+        }
+      }
+
+      if (ok && loadedModel->objects.empty())
+      {
+        ok = false;
+        err = "no model objects parsed";
+      }
     }
     catch (const std::exception &ex)
     {
@@ -222,7 +274,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
       return;
     }
 
-    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, errorText, loadedProjectName, loadedPlateCount, localPath]() {
+    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices]() {
       if (!receiver)
       {
         delete loadedModel;
@@ -249,11 +301,29 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         receiver->sourceFilePath_ = localPath;
         receiver->objectNames_ = names;
         receiver->modelCount_ = names.size();
-        receiver->plateCount_ = loadedPlateCount;
+        receiver->plateNames_ = loadedPlateNames;
+        receiver->plateObjectIndices_ = loadedPlateObjectIndices;
+
+        if (receiver->plateObjectIndices_.isEmpty())
+        {
+          receiver->plateNames_.clear();
+          receiver->plateNames_ << QObject::tr("平板 1");
+          QList<int> all;
+          all.reserve(receiver->modelCount_);
+          for (int i = 0; i < receiver->modelCount_; ++i)
+            all.append(i);
+          receiver->plateObjectIndices_.append(all);
+        }
+
+        receiver->plateCount_ = receiver->plateObjectIndices_.size();
+        if (receiver->plateCount_ != loadedPlateCount)
+          receiver->plateCount_ = std::max(receiver->plateCount_, loadedPlateCount);
+        receiver->currentPlateIndex_ = receiver->plateCount_ > 0 ? 0 : -1;
         receiver->lastError_.clear();
 
         emit receiver->projectChanged();
         emit receiver->plateDataLoaded(receiver->plateCount_);
+        emit receiver->plateSelectionChanged();
         emit receiver->loadFinished(true, QObject::tr("加载完成"));
       }
       else
@@ -261,11 +331,15 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         delete loadedModel;
         receiver->modelCount_ = 0;
         receiver->plateCount_ = 0;
+        receiver->currentPlateIndex_ = -1;
         receiver->sourceFilePath_.clear();
         receiver->objectNames_.clear();
+        receiver->plateNames_.clear();
+        receiver->plateObjectIndices_.clear();
         receiver->lastError_ = errorText;
         emit receiver->projectChanged();
         emit receiver->plateDataLoaded(0);
+        emit receiver->plateSelectionChanged();
         emit receiver->loadFinished(false, errorText);
       }
     }, Qt::QueuedConnection); });
@@ -276,7 +350,12 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
   // Fallback mock
   modelCount_++;
   plateCount_ = 1;
+  currentPlateIndex_ = 0;
   objectNames_ << fi.baseName();
+  plateNames_.clear();
+  plateNames_ << tr("平板 1");
+  plateObjectIndices_.clear();
+  plateObjectIndices_.append(QList<int>{0});
   projectName_ = fi.baseName();
   sourceFilePath_ = fi.absoluteFilePath();
   lastError_.clear();
@@ -289,6 +368,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
   qInfo() << "ProjectService (mock): loaded" << filePath;
   emit projectChanged();
   emit plateDataLoaded(plateCount_);
+  emit plateSelectionChanged();
   emit loadFinished(true, tr("加载完成"));
   return true;
 #endif
@@ -306,11 +386,174 @@ QStringList ProjectServiceMock::objectNames() const
   return objectNames_;
 }
 
+QStringList ProjectServiceMock::plateNames() const
+{
+  return plateNames_;
+}
+
+bool ProjectServiceMock::setCurrentPlateIndex(int index)
+{
+  if (index < 0 || index >= plateObjectIndices_.size())
+    return false;
+  if (currentPlateIndex_ == index)
+    return true;
+  currentPlateIndex_ = index;
+  emit plateSelectionChanged();
+  return true;
+}
+
+QList<int> ProjectServiceMock::currentPlateObjectIndices() const
+{
+  if (currentPlateIndex_ < 0 || currentPlateIndex_ >= plateObjectIndices_.size())
+    return {};
+  return plateObjectIndices_[currentPlateIndex_];
+}
+
+bool ProjectServiceMock::deleteObject(int index)
+{
+  if (loading_)
+  {
+    lastError_ = tr("加载中，无法删除对象");
+    emit projectChanged();
+    return false;
+  }
+
+  if (index < 0 || index >= objectNames_.size())
+  {
+    lastError_ = tr("删除失败：对象索引无效");
+    emit projectChanged();
+    return false;
+  }
+
+  try
+  {
+#ifdef HAS_LIBSLIC3R
+    if (!model_)
+    {
+      lastError_ = tr("删除失败：模型未初始化");
+      emit projectChanged();
+      return false;
+    }
+    if (size_t(index) >= model_->objects.size())
+    {
+      lastError_ = tr("删除失败：模型索引无效");
+      emit projectChanged();
+      return false;
+    }
+
+    model_->delete_object(size_t(index));
+
+    objectNames_.clear();
+    objectNames_.reserve(int(model_->objects.size()));
+    for (size_t i = 0; i < model_->objects.size(); ++i)
+    {
+      const auto *obj = model_->objects[i];
+      if (obj && !obj->name.empty())
+        objectNames_ << QString::fromStdString(obj->name);
+      else
+        objectNames_ << tr("对象 %1").arg(int(i + 1));
+    }
+#else
+    objectNames_.removeAt(index);
+#endif
+
+    modelCount_ = objectNames_.size();
+    if (modelCount_ <= 0)
+    {
+      plateCount_ = 0;
+      currentPlateIndex_ = -1;
+      plateNames_.clear();
+      plateObjectIndices_.clear();
+    }
+    else
+    {
+      if (plateObjectIndices_.isEmpty())
+      {
+        QList<int> all;
+        all.reserve(modelCount_);
+        for (int i = 0; i < modelCount_; ++i)
+          all.append(i);
+        plateObjectIndices_.append(all);
+        if (plateNames_.isEmpty())
+          plateNames_ << tr("平板 1");
+      }
+      else
+      {
+        for (auto &plateObjList : plateObjectIndices_)
+        {
+          QSet<int> uniq;
+          QList<int> next;
+          for (int objIndex : plateObjList)
+          {
+            if (objIndex == index)
+              continue;
+            const int adjusted = objIndex > index ? objIndex - 1 : objIndex;
+            if (adjusted >= 0 && adjusted < modelCount_ && !uniq.contains(adjusted))
+            {
+              uniq.insert(adjusted);
+              next.append(adjusted);
+            }
+          }
+          std::sort(next.begin(), next.end());
+          plateObjList = next;
+        }
+      }
+
+      for (int p = plateObjectIndices_.size() - 1; p >= 0; --p)
+      {
+        if (plateObjectIndices_[p].isEmpty() && plateObjectIndices_.size() > 1)
+        {
+          plateObjectIndices_.removeAt(p);
+          if (p < plateNames_.size())
+            plateNames_.removeAt(p);
+          if (currentPlateIndex_ >= p)
+            --currentPlateIndex_;
+        }
+      }
+
+      plateCount_ = plateObjectIndices_.size();
+      if (currentPlateIndex_ < 0)
+        currentPlateIndex_ = 0;
+      if (currentPlateIndex_ >= plateCount_)
+        currentPlateIndex_ = plateCount_ - 1;
+    }
+
+    lastError_.clear();
+    emit projectChanged();
+    emit plateDataLoaded(plateCount_);
+    emit plateSelectionChanged();
+    return true;
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = QString::fromStdString(ex.what());
+    emit projectChanged();
+    return false;
+  }
+  catch (...)
+  {
+    lastError_ = tr("删除失败：未知错误");
+    emit projectChanged();
+    return false;
+  }
+}
+
 void ProjectServiceMock::importMockModel()
 {
   modelCount_++;
   objectNames_ << QString("MockModel_%1").arg(modelCount_);
+  if (plateObjectIndices_.isEmpty())
+  {
+    plateObjectIndices_.append(QList<int>{});
+    plateNames_ << tr("平板 1");
+  }
+  plateObjectIndices_[0].append(modelCount_ - 1);
+  plateCount_ = plateObjectIndices_.size();
+  if (currentPlateIndex_ < 0)
+    currentPlateIndex_ = 0;
   emit projectChanged();
+  emit plateDataLoaded(plateCount_);
+  emit plateSelectionChanged();
 }
 
 void ProjectServiceMock::clearProject()
@@ -321,8 +564,11 @@ void ProjectServiceMock::clearProject()
   projectName_ = tr("未命名项目");
   modelCount_ = 0;
   plateCount_ = 0;
+  currentPlateIndex_ = -1;
   sourceFilePath_.clear();
   objectNames_.clear();
+  plateNames_.clear();
+  plateObjectIndices_.clear();
   lastError_.clear();
   loadProgress_ = 0;
   loading_ = false;
@@ -340,6 +586,7 @@ void ProjectServiceMock::clearProject()
   emit loadProgressChanged();
   emit projectChanged();
   emit plateDataLoaded(0);
+  emit plateSelectionChanged();
 }
 
 QByteArray ProjectServiceMock::meshData() const
@@ -348,122 +595,213 @@ QByteArray ProjectServiceMock::meshData() const
   if (!model_ || model_->objects.empty())
     return {};
 
-  // ── TLV 格式 ─────────────────────────────────────────────────────────────
-  // [int32 objectCount]
-  // per object: [int32 objectId][int32 triangleCount][float * triangleCount*9]
-  // trailer:    [float * 6] bbox (minGLx, minGLy, minGLz, maxGLx, maxGLy, maxGLz)
-  //
-  // 坐标转换: slic3r(X=right, Y=forward, Z=up) → GL(X=right, Y=up, Z=toward)
-  //   GL.x = slic3r.x,  GL.y = slic3r.z,  GL.z = slic3r.y
-  // ──────────────────────────────────────────────────────────────────────────
-
-  struct ObjBatch
+  try
   {
-    int32_t objectId;
-    std::vector<float> verts; // 9 floats per triangle (3 verts × xyz)
-  };
 
-  std::vector<ObjBatch> batches;
-  batches.reserve(8);
+    // ── TLV 格式 ─────────────────────────────────────────────────────────────
+    // [int32 objectCount]
+    // per object: [int32 objectId][int32 triangleCount][float * triangleCount*9]
+    // trailer:    [float * 6] bbox (minGLx, minGLy, minGLz, maxGLx, maxGLy, maxGLz)
+    //
+    // 坐标转换: slic3r(X=right, Y=forward, Z=up) → GL(X=right, Y=up, Z=toward)
+    //   GL.x = slic3r.x,  GL.y = slic3r.z,  GL.z = slic3r.y
+    // ──────────────────────────────────────────────────────────────────────────
 
-  float bminX = 1e30f, bminY = 1e30f, bminZ = 1e30f;
-  float bmaxX = -1e30f, bmaxY = -1e30f, bmaxZ = -1e30f;
-
-  int32_t linearId = 0;
-
-  for (const auto *obj : model_->objects)
-  {
-    for (const auto *inst : obj->instances)
+    struct ObjBatch
     {
-      // 实例变换矩阵 (世界坐标)
-      const Slic3r::Transform3d &instMat = inst->get_transformation().get_matrix();
+      int32_t objectId;
+      std::vector<float> verts; // 9 floats per triangle (3 verts × xyz)
+    };
 
-      ObjBatch batch;
-      batch.objectId = linearId++;
+    std::vector<ObjBatch> batches;
+    batches.reserve(8);
 
-      for (const auto *vol : obj->volumes)
+    float bminX = 1e30f, bminY = 1e30f, bminZ = 1e30f;
+    float bmaxX = -1e30f, bmaxY = -1e30f, bmaxZ = -1e30f;
+
+    std::unordered_set<int32_t> usedObjectIds;
+    usedObjectIds.reserve(model_->objects.size() * 2 + 1);
+
+    auto makeStableObjectId = [&usedObjectIds](const Slic3r::ModelObject *obj,
+                                               const Slic3r::ModelInstance *inst) -> int32_t
+    {
+      const auto objAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(obj));
+      const auto instAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(inst));
+      uint64_t mixed = objAddr ^ (instAddr + 0x9e3779b97f4a7c15ULL + (objAddr << 6) + (objAddr >> 2));
+
+      int32_t id = int32_t(mixed & 0x7fffffffULL);
+      if (id == 0)
+        id = 1;
+
+      while (usedObjectIds.find(id) != usedObjectIds.end())
+        id = (id == std::numeric_limits<int32_t>::max()) ? 1 : (id + 1);
+
+      usedObjectIds.insert(id);
+      return id;
+    };
+
+    for (const auto *obj : model_->objects)
+    {
+      if (!obj)
+        continue;
+
+      auto appendObjectByInstance = [&](const Slic3r::Transform3d &instMat,
+                                        const Slic3r::ModelInstance *inst)
       {
-        // 只渲染实体几何，跳过修改器 / 支撑区域 / 布尔减体
-        if (!vol->is_model_part())
-          continue;
+        ObjBatch batch;
+        batch.objectId = makeStableObjectId(obj, inst);
 
-        // volume 自身的局部变换
-        const Slic3r::Transform3d &volMat = vol->get_transformation().get_matrix();
-        const Slic3r::Transform3d combined = instMat * volMat;
-
-        const auto &its = vol->mesh().its; // const ref — 零拷贝
-
-        for (const auto &face : its.indices)
+        for (const auto *vol : obj->volumes)
         {
-          for (int k = 0; k < 3; ++k)
+          if (!vol)
+            continue;
+
+          // volume 自身的局部变换
+          const Slic3r::Transform3d &volMat = vol->get_transformation().get_matrix();
+          const Slic3r::Transform3d combined = instMat * volMat;
+
+          const auto &its = vol->mesh().its; // const ref — 零拷贝
+          if (its.vertices.empty() || its.indices.empty())
+            continue;
+
+          for (const auto &face : its.indices)
           {
-            const Slic3r::Vec3f &lv = its.vertices[face(k)];
-            // 应用实例+Volume 变换到世界坐标 (slic3r)
-            // Transform3d * Vec3d 直接应用仿射变换（含平移）
-            const Slic3r::Vec3d hw = combined * Slic3r::Vec3d(
-                                                    (double)lv.x(), (double)lv.y(), (double)lv.z());
+            const int idx0 = face(0);
+            const int idx1 = face(1);
+            const int idx2 = face(2);
+            const int vcount = int(its.vertices.size());
+            if (idx0 < 0 || idx0 >= vcount ||
+                idx1 < 0 || idx1 >= vcount ||
+                idx2 < 0 || idx2 >= vcount)
+            {
+              continue;
+            }
 
-            // slic3r → GL 坐标系
-            const float gx = (float)hw.x();
-            const float gy = (float)hw.z(); // slic3r Z → GL Y (高度)
-            const float gz = (float)hw.y(); // slic3r Y → GL Z
+            for (int k = 0; k < 3; ++k)
+            {
+              const Slic3r::Vec3f &lv = its.vertices[face(k)];
+              // 应用实例+Volume 变换到世界坐标 (slic3r)
+              // Transform3d * Vec3d 直接应用仿射变换（含平移）
+              const Slic3r::Vec3d hw = combined * Slic3r::Vec3d(
+                                                      (double)lv.x(), (double)lv.y(), (double)lv.z());
 
-            batch.verts.push_back(gx);
-            batch.verts.push_back(gy);
-            batch.verts.push_back(gz);
+              // slic3r → GL 坐标系
+              const float gx = (float)hw.x();
+              const float gy = (float)hw.z(); // slic3r Z → GL Y (高度)
+              const float gz = (float)hw.y(); // slic3r Y → GL Z
 
-            bminX = std::min(bminX, gx);
-            bmaxX = std::max(bmaxX, gx);
-            bminY = std::min(bminY, gy);
-            bmaxY = std::max(bmaxY, gy);
-            bminZ = std::min(bminZ, gz);
-            bmaxZ = std::max(bmaxZ, gz);
+              batch.verts.push_back(gx);
+              batch.verts.push_back(gy);
+              batch.verts.push_back(gz);
+
+              bminX = std::min(bminX, gx);
+              bmaxX = std::max(bmaxX, gx);
+              bminY = std::min(bminY, gy);
+              bmaxY = std::max(bmaxY, gy);
+              bminZ = std::min(bminZ, gz);
+              bmaxZ = std::max(bmaxZ, gz);
+            }
           }
         }
+
+        if (!batch.verts.empty())
+          batches.push_back(std::move(batch));
+      };
+
+      if (!obj->instances.empty())
+      {
+        for (const auto *inst : obj->instances)
+        {
+          if (!inst)
+            continue;
+          appendObjectByInstance(inst->get_transformation().get_matrix(), inst);
+        }
       }
-
-      if (!batch.verts.empty())
-        batches.push_back(std::move(batch));
+      else
+      {
+        appendObjectByInstance(Slic3r::Transform3d::Identity(), nullptr);
+      }
     }
+
+    if (batches.empty())
+      return {};
+
+    // ── 计算缓冲区大小并写入 ──────────────────────────────────────────────────
+    if (batches.size() > size_t(std::numeric_limits<int32_t>::max()))
+    {
+      qWarning("[ProjectService] meshData aborted: too many batches (%zu)", batches.size());
+      return {};
+    }
+
+    int32_t objCount = static_cast<int32_t>(batches.size());
+    qsizetype totalBytes = static_cast<qsizetype>(sizeof(int32_t)); // objectCount header
+    for (const auto &b : batches)
+    {
+      const qsizetype dataBytes = static_cast<qsizetype>(b.verts.size()) * static_cast<qsizetype>(sizeof(float));
+      if (dataBytes < 0 || dataBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes)
+      {
+        qWarning("[ProjectService] meshData aborted: size overflow while packing vertices");
+        return {};
+      }
+      const qsizetype perObjBytes = static_cast<qsizetype>(2 * sizeof(int32_t));
+      if (perObjBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes - dataBytes)
+      {
+        qWarning("[ProjectService] meshData aborted: size overflow while packing object header");
+        return {};
+      }
+      totalBytes += perObjBytes + dataBytes;
+    }
+    const qsizetype trailerBytes = static_cast<qsizetype>(6 * sizeof(float));
+    if (trailerBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes)
+    {
+      qWarning("[ProjectService] meshData aborted: size overflow while packing bbox");
+      return {};
+    }
+    totalBytes += trailerBytes;
+
+    if (totalBytes <= 0 || totalBytes > (std::numeric_limits<int>::max)())
+    {
+      qWarning("[ProjectService] meshData aborted: invalid total buffer size (%lld)", static_cast<long long>(totalBytes));
+      return {};
+    }
+
+    QByteArray buf;
+    buf.resize(static_cast<int>(totalBytes));
+    char *p = buf.data();
+
+    // objectCount
+    memcpy(p, &objCount, sizeof(int32_t));
+    p += sizeof(int32_t);
+
+    for (const auto &b : batches)
+    {
+      int32_t triCount = static_cast<int32_t>(b.verts.size() / 9);
+      memcpy(p, &b.objectId, sizeof(int32_t));
+      p += sizeof(int32_t);
+      memcpy(p, &triCount, sizeof(int32_t));
+      p += sizeof(int32_t);
+      memcpy(p, b.verts.data(), b.verts.size() * sizeof(float));
+      p += static_cast<ptrdiff_t>(b.verts.size() * sizeof(float));
+    }
+
+    // bbox trailer
+    const float bbox[6] = {bminX, bminY, bminZ, bmaxX, bmaxY, bmaxZ};
+    memcpy(p, bbox, 6 * sizeof(float));
+
+    qInfo("[ProjectService] meshData: %d batches, bbox=[%.1f..%.1f, %.1f..%.1f, %.1f..%.1f]",
+          objCount, bminX, bmaxX, bminY, bmaxY, bminZ, bmaxZ);
+    return buf;
   }
-
-  if (batches.empty())
-    return {};
-
-  // ── 计算缓冲区大小并写入 ──────────────────────────────────────────────────
-  int32_t objCount = static_cast<int32_t>(batches.size());
-  int totalBytes = static_cast<int>(sizeof(int32_t)); // objectCount header
-  for (const auto &b : batches)
-    totalBytes += static_cast<int>(2 * sizeof(int32_t) +            // objectId + triangleCount
-                                   b.verts.size() * sizeof(float)); // vertex data
-  totalBytes += 6 * static_cast<int>(sizeof(float));                // bbox trailer
-
-  QByteArray buf;
-  buf.resize(totalBytes);
-  char *p = buf.data();
-
-  // objectCount
-  memcpy(p, &objCount, sizeof(int32_t));
-  p += sizeof(int32_t);
-
-  for (const auto &b : batches)
+  catch (const std::exception &ex)
   {
-    int32_t triCount = static_cast<int32_t>(b.verts.size() / 9);
-    memcpy(p, &b.objectId, sizeof(int32_t));
-    p += sizeof(int32_t);
-    memcpy(p, &triCount, sizeof(int32_t));
-    p += sizeof(int32_t);
-    memcpy(p, b.verts.data(), b.verts.size() * sizeof(float));
-    p += static_cast<int>(b.verts.size() * sizeof(float));
+    qWarning("[ProjectService] meshData exception: %s", ex.what());
+    return {};
   }
-
-  // bbox trailer
-  const float bbox[6] = {bminX, bminY, bminZ, bmaxX, bmaxY, bmaxZ};
-  memcpy(p, bbox, 6 * sizeof(float));
-
-  qInfo("[ProjectService] meshData: %d batches, bbox=[%.1f..%.1f, %.1f..%.1f, %.1f..%.1f]",
-        objCount, bminX, bmaxX, bminY, bmaxY, bminZ, bmaxZ);
-  return buf;
+  catch (...)
+  {
+    qWarning("[ProjectService] meshData exception: unknown");
+    return {};
+  }
 #else
   return {};
 #endif

@@ -6,8 +6,10 @@
 #include <QFile>
 #include <QTextStream>
 #include <QDateTime>
+#include <QDir>
 #include <QtQml/qqml.h>
 #include "qml_gui/Renderer/GLViewport.h"
+#include "core/debug/CrashHandlerWin.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -79,6 +81,11 @@ int main(int argc, char *argv[])
   QGuiApplication app(argc, argv);
   app.setOrganizationName(QStringLiteral("CrealityDemo"));
   app.setApplicationName(QStringLiteral("Print7Shell"));
+  const QString dumpDir = QCoreApplication::applicationDirPath() + QStringLiteral("/crash_dumps");
+  QDir().mkpath(dumpDir);
+  appendStartupLog(QStringLiteral("Crash dump dir prepared: %1").arg(dumpDir));
+  CrashHandlerWin::install(dumpDir);
+  appendStartupLog(QStringLiteral("Crash handler install requested"));
 
   // E5 — register 3-D viewport type
   qmlRegisterType<GLViewport>("CrealityGL", 1, 0, "GLViewport");
@@ -91,14 +98,16 @@ int main(int argc, char *argv[])
   // VisualRegressionTests. The OS reclaims all memory on process exit.
   auto *engine = new QQmlApplicationEngine;
   QObject::connect(engine, &QQmlEngine::warnings, engine,
-                   [](const QList<QQmlError> &warnings) {
+                   [](const QList<QQmlError> &warnings)
+                   {
                      for (const QQmlError &error : warnings)
                      {
                        appendStartupLog(QStringLiteral("[QML WARNING] %1").arg(error.toString()));
                      }
                    });
   QObject::connect(engine, &QQmlApplicationEngine::objectCreationFailed, engine,
-                   [](const QUrl &url) {
+                   [](const QUrl &url)
+                   {
                      appendStartupLog(QStringLiteral("[QML CREATE FAILED] %1").arg(url.toString()));
                    });
 

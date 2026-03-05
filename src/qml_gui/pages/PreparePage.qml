@@ -102,12 +102,45 @@ Item {
                     anchors.margins: 8
                     spacing: 6
 
-                    Rectangle {
-                        Layout.preferredWidth: 56
-                        Layout.preferredHeight: 56
-                        color: "#3f2b2b"
-                        border.color: "#00d36c"
-                        Text { anchors.left: parent.left; anchors.top: parent.top; anchors.margins: 4; text: "1"; color: "#e8edf4" }
+                    Label { text: qsTr("平板"); color: "#dfe6ef"; font.pixelSize: 12 }
+                    Repeater {
+                        model: root.editorVm ? root.editorVm.plateCount : 0
+                        delegate: Rectangle {
+                            required property int index
+                            Layout.preferredWidth: 72
+                            Layout.preferredHeight: 56
+                            radius: 4
+                            color: root.editorVm && root.editorVm.currentPlateIndex === index ? "#3f2b2b" : "#313743"
+                            border.color: root.editorVm && root.editorVm.currentPlateIndex === index ? "#00d36c" : "#4b5261"
+                            Text {
+                                anchors.left: parent.left
+                                anchors.top: parent.top
+                                anchors.margins: 4
+                                text: (index + 1).toString()
+                                color: "#e8edf4"
+                            }
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: 4
+                                text: root.editorVm ? root.editorVm.plateName(index) : ""
+                                color: "#c8d0dc"
+                                font.pixelSize: 9
+                                elide: Text.ElideRight
+                                width: parent.width - 8
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (root.editorVm) {
+                                        root.editorVm.setCurrentPlateIndex(index)
+                                        root.editorVm.setShowAllObjects(false)
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     Label { text: qsTr("打印机"); color: "#dfe6ef"; font.pixelSize: 12 }
@@ -123,8 +156,26 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 4
-                        Rectangle { width: 28; height: 16; radius: 2; color: "#28be63"; Text { anchors.centerIn: parent; text: qsTr("全部"); color: "white"; font.pixelSize: 10 } }
-                        Rectangle { width: 28; height: 16; radius: 2; color: "#3d434f"; Text { anchors.centerIn: parent; text: qsTr("对象"); color: "#c8d0dc"; font.pixelSize: 10 } }
+                        Rectangle {
+                            width: 28; height: 16; radius: 2
+                            color: root.editorVm && root.editorVm.showAllObjects ? "#28be63" : "#3d434f"
+                            Text { anchors.centerIn: parent; text: qsTr("全部"); color: "white"; font.pixelSize: 10 }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: { if (root.editorVm) root.editorVm.setShowAllObjects(true) }
+                            }
+                        }
+                        Rectangle {
+                            width: 28; height: 16; radius: 2
+                            color: root.editorVm && !root.editorVm.showAllObjects ? "#28be63" : "#3d434f"
+                            Text { anchors.centerIn: parent; text: qsTr("对象"); color: "#c8d0dc"; font.pixelSize: 10 }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: { if (root.editorVm) root.editorVm.setShowAllObjects(false) }
+                            }
+                        }
                         Item { Layout.fillWidth: true }
                     }
 

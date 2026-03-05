@@ -29,6 +29,26 @@ Item {
                 font.pixelSize: 11
                 font.bold: true
             }
+            Rectangle {
+                width: 44; height: 18; radius: 2
+                color: root.editorVm && !root.editorVm.showAllObjects ? "#28be63" : "#3d434f"
+                Text { anchors.centerIn: parent; text: qsTr("当前盘"); color: "white"; font.pixelSize: 9 }
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: { if (root.editorVm) root.editorVm.setShowAllObjects(false) }
+                }
+            }
+            Rectangle {
+                width: 34; height: 18; radius: 2
+                color: root.editorVm && root.editorVm.showAllObjects ? "#28be63" : "#3d434f"
+                Text { anchors.centerIn: parent; text: qsTr("全部"); color: "white"; font.pixelSize: 9 }
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: { if (root.editorVm) root.editorVm.setShowAllObjects(true) }
+                }
+            }
             Item { Layout.fillWidth: true }
             Text {
                 text: root.editorVm ? root.editorVm.objectCount + qsTr(" 个") : "0" + qsTr(" 个")

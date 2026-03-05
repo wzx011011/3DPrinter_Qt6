@@ -31,6 +31,8 @@ ApplicationWindow {
     readonly property color topbarText: "#cdd7e6"
 
     property var workflowTabs: buildWorkflowTabs()
+    property int pendingSwitchToken: -1
+    property int pendingSwitchTargetPage: -1
     function buildWorkflowTabs() {
         return [
             { label: qsTr("在线模型"), page: root.pageOnline },
@@ -54,6 +56,14 @@ ApplicationWindow {
     Connections {
         target: backend
         function onLanguageChanged() { root.workflowTabs = root.buildWorkflowTabs() }
+    }
+
+    onFrameSwapped: {
+        if (root.pendingSwitchToken >= 0 && backend.currentPage === root.pendingSwitchTargetPage) {
+            backend.endLatency(root.pendingSwitchToken)
+            root.pendingSwitchToken = -1
+            root.pendingSwitchTargetPage = -1
+        }
     }
 
     FileDialog {
@@ -160,6 +170,13 @@ ApplicationWindow {
         sequence: "Ctrl+Shift+Z"
         enabled: backend.currentPage === root.pagePrepare
         onActivated: preparePage.redoFromTopbar()
+    }
+    Shortcut {
+        sequence: "Delete"
+        enabled: backend.currentPage === root.pagePrepare
+                 && backend.editorViewModel
+                 && backend.editorViewModel.selectedObjectIndex >= 0
+        onActivated: backend.editorViewModel.deleteObject(backend.editorViewModel.selectedObjectIndex)
     }
 
         readonly property string compareReferenceSource: backend.currentPage === 1
@@ -376,7 +393,15 @@ ApplicationWindow {
                             }
 
                             HoverHandler { id: tabHov }
-                            TapHandler { onTapped: backend.setCurrentPage(parent.modelData.page) }
+                            TapHandler {
+                                onTapped: {
+                                    if (backend.currentPage === parent.modelData.page)
+                                        return
+                                    root.pendingSwitchToken = backend.beginLatency("tab-switch", parent.modelData.label)
+                                    root.pendingSwitchTargetPage = parent.modelData.page
+                                    backend.setCurrentPage(parent.modelData.page)
+                                }
+                            }
                         }
                     }
 
@@ -572,7 +597,7 @@ ApplicationWindow {
             // Status bar
             StatusBar {
                 Layout.fillWidth: true
-                statusText: "就绪  |  Qt 6.10  |  页面 " + (backend.currentPage + 1)
+                statusText: "就绪  |  Qt 6.10  |  页面 " + (backend.currentPage + 1) + "  |  " + backend.latencyBrief
             }
         }
 
