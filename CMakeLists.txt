@@ -89,10 +89,24 @@ if(CREALITY_QML_GUI)
         src/qml_gui/Renderer/GLViewportRenderer.h
         src/qml_gui/Renderer/GCodeRenderer.cpp
         src/qml_gui/Renderer/GCodeRenderer.h
+        src/core/debug/CrashHandlerWin.cpp
+        src/core/debug/CrashHandlerWin.h
         src/qml_gui/qml.qrc
     )
 
     target_link_libraries(FramelessDialogDemo PRIVATE Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent)
+    if(MSVC)
+        target_compile_options(FramelessDialogDemo PRIVATE /Zi)
+        target_link_options(FramelessDialogDemo PRIVATE /DEBUG:FULL)
+    endif()
+    foreach(_runtime_dll freetype.dll libmpfr-4.dll libgmp-10.dll qhull.dll qhull_p.dll qhull_r.dll)
+        if(EXISTS "${DEPS_PREFIX}/bin/${_runtime_dll}")
+            add_custom_command(TARGET FramelessDialogDemo POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${DEPS_PREFIX}/bin/${_runtime_dll}"
+                    "$<TARGET_FILE_DIR:FramelessDialogDemo>/${_runtime_dll}")
+        endif()
+    endforeach()
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
         target_link_libraries(FramelessDialogDemo PRIVATE libslic3r)
         target_compile_definitions(FramelessDialogDemo PRIVATE HAS_LIBSLIC3R=1)
@@ -120,7 +134,10 @@ else()
     target_link_libraries(FramelessDialogDemo PRIVATE Qt6::Widgets)
 endif()
 
-target_include_directories(FramelessDialogDemo PRIVATE src)
+target_include_directories(FramelessDialogDemo PRIVATE
+    src
+    ${CMAKE_SOURCE_DIR}/third_party/CrealityPrint/src
+)
 
 if(WIN32)
     set_target_properties(FramelessDialogDemo PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -184,7 +201,10 @@ if(BUILD_TESTING)
         src/qml_gui/Models/PresetListModel.h
     )
 
-    target_include_directories(ViewModelSmokeTests PRIVATE src)
+    target_include_directories(ViewModelSmokeTests PRIVATE
+        src
+        ${CMAKE_SOURCE_DIR}/third_party/CrealityPrint/src
+    )
     target_link_libraries(ViewModelSmokeTests PRIVATE Qt6::Core Qt6::Gui Qt6::Test)
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
         target_link_libraries(ViewModelSmokeTests PRIVATE libslic3r)

@@ -38,10 +38,7 @@ jobs:
           -DCREALITY_QML_GUI=ON
 
       - name: Build
-        shell: pwsh
-        run: |
-          $env:CL = "/Zm300 /bigobj $env:CL"
-          cmake --build build --config Release --target FramelessDialogDemo --parallel 1 --verbose
+        run: cmake --build build --config Release --target FramelessDialogDemo
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
