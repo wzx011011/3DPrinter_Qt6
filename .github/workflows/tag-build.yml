@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "*"
+  create:
   workflow_dispatch:
 
 permissions:
@@ -11,7 +12,10 @@ permissions:
 
 jobs:
   build-windows:
+    if: github.event_name != 'create' || github.event.ref_type == 'tag'
     runs-on: windows-latest
+    env:
+      TAG_NAME: ${{ github.event_name == 'create' && github.event.ref || github.ref_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -58,7 +62,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: build-diagnostics-${{ github.ref_name }}
+          name: build-diagnostics-${{ env.TAG_NAME }}
           path: |
             build/ninja_log.txt
             build/CMakeError.log
@@ -68,7 +72,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: FramelessDialogDemo-${{ github.ref_name }}-windows
+          name: FramelessDialogDemo-${{ env.TAG_NAME }}-windows
           path: |
             build/FramelessDialogDemo.exe
             build/*.dll
@@ -85,14 +89,14 @@ jobs:
           Copy-Item "build/*.dll" $outDir -Force -ErrorAction SilentlyContinue
           Copy-Item "build/en.qm" $outDir -Force -ErrorAction SilentlyContinue
           Copy-Item "build/zh_CN.qm" $outDir -Force -ErrorAction SilentlyContinue
-          $zipPath = "build/FramelessDialogDemo-${{ github.ref_name }}-windows.zip"
+          $zipPath = "build/FramelessDialogDemo-${{ env.TAG_NAME }}-windows.zip"
           if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
           Compress-Archive -Path "$outDir/*" -DestinationPath $zipPath
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          tag_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.TAG_NAME }}
           files: |
-            build/FramelessDialogDemo-${{ github.ref_name }}-windows.zip
+            build/FramelessDialogDemo-${{ env.TAG_NAME }}-windows.zip
