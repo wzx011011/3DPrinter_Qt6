@@ -89,10 +89,15 @@ if(CREALITY_QML_GUI)
         src/qml_gui/Renderer/GLViewportRenderer.h
         src/qml_gui/Renderer/GCodeRenderer.cpp
         src/qml_gui/Renderer/GCodeRenderer.h
-        src/core/debug/CrashHandlerWin.cpp
-        src/core/debug/CrashHandlerWin.h
         src/qml_gui/qml.qrc
     )
+
+    if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/src/core/debug/CrashHandlerWin.cpp")
+        target_sources(FramelessDialogDemo PRIVATE
+            src/core/debug/CrashHandlerWin.cpp
+            src/core/debug/CrashHandlerWin.h
+        )
+    endif()
 
     target_link_libraries(FramelessDialogDemo PRIVATE Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent)
     if(MSVC)
