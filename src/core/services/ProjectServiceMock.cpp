@@ -3,6 +3,9 @@
 #include <QFileInfo>
 #include <QDebug>
 #include <algorithm>
+#include <QMetaObject>
+#include <QPointer>
+#include <QtConcurrent/QtConcurrentRun>
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Model.hpp>
@@ -11,8 +14,41 @@
 #include <libslic3r/ModelInstance.hpp>
 #include <libslic3r/TriangleMesh.hpp>
 #include <libslic3r/Format/3mf.hpp>
+#include <libslic3r/Format/bbs_3mf.hpp>
 #include <libslic3r/PrintConfig.hpp>
 #include <cstring> // memcpy
+
+namespace
+{
+  QString importStageToText(int stage)
+  {
+    switch (stage)
+    {
+    case 0:
+      return QObject::tr("恢复项目");
+    case 1:
+      return QObject::tr("打开文件");
+    case 2:
+      return QObject::tr("读取数据");
+    case 3:
+      return QObject::tr("解压内容");
+    case 4:
+      return QObject::tr("加载模型");
+    case 5:
+      return QObject::tr("加载平台");
+    case 6:
+      return QObject::tr("完成导入");
+    case 7:
+      return QObject::tr("创建实例");
+    case 8:
+      return QObject::tr("更新 G-code");
+    case 9:
+      return QObject::tr("检查模式");
+    default:
+      return QObject::tr("处理文件");
+    }
+  }
+} // namespace
 #endif
 
 ProjectServiceMock::ProjectServiceMock(QObject *parent)
@@ -40,13 +76,40 @@ int ProjectServiceMock::modelCount() const
   return modelCount_;
 }
 
+int ProjectServiceMock::plateCount() const
+{
+  return plateCount_;
+}
+
 QString ProjectServiceMock::lastError() const
 {
   return lastError_;
 }
 
+int ProjectServiceMock::loadProgress() const
+{
+  return loadProgress_;
+}
+
+bool ProjectServiceMock::loading() const
+{
+  return loading_;
+}
+
+QString ProjectServiceMock::sourceFilePath() const
+{
+  return sourceFilePath_;
+}
+
 bool ProjectServiceMock::loadFile(const QString &filePath)
 {
+  if (loading_)
+  {
+    lastError_ = tr("已有任务正在加载");
+    emit projectChanged();
+    return false;
+  }
+
   QFileInfo fi(filePath);
   if (!fi.exists())
   {
@@ -56,81 +119,186 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
     return false;
   }
 
-  const QString ext = fi.suffix().toLower();
+  loading_ = true;
+  loadProgress_ = 0;
+  activeCancelFlag_ = std::make_shared<std::atomic_bool>(false);
+  emit loadingChanged();
+  emit loadProgressChanged();
 
 #ifdef HAS_LIBSLIC3R
-  qInfo() << "ProjectService: loading" << filePath << "via libslic3r...";
+  const QString localPath = fi.absoluteFilePath();
+  const QPointer<ProjectServiceMock> receiver(this);
+  const auto cancelFlag = activeCancelFlag_;
 
-  // 每次加载前先清空，避免旧对象残留导致崩溃
-  model_->clear_objects();
+  QtConcurrent::run([receiver, localPath, cancelFlag]()
+                    {
+    auto *loadedModel = new Slic3r::Model();
+    std::string err;
+    int loadedPlateCount = 0;
+    Slic3r::PlateDataPtrs plateDataList;
 
-  if (ext == "3mf")
-  {
-    Slic3r::DynamicPrintConfig config;
-    Slic3r::ConfigSubstitutionContext configSubst(
-        Slic3r::ForwardCompatibilitySubstitutionRule::EnableSilent);
+    Slic3r::Import3mfProgressFn progressFn = [receiver, cancelFlag](int import_stage, int current, int total, bool &cancel) {
+      cancel = cancelFlag && cancelFlag->load();
 
-    bool ok = Slic3r::load_3mf(
-        filePath.toUtf8().constData(),
-        config,
-        configSubst,
-        model_,
-        /* check_version */ false);
+      int progress = 0;
+      if (total > 0)
+      {
+        progress = int((double(current) * 100.0) / double(total));
+      }
+      progress = qBound(0, progress, 100);
 
-    if (!ok)
-    {
-      lastError_ = tr("3MF 加载失败: %1").arg(filePath);
-      qWarning() << lastError_;
-      emit projectChanged();
-      return false;
-    }
-  }
-  else
-  {
-    // STL/OBJ/AMF can be loaded via Model::read_from_file
+      if (!receiver)
+        return;
+      const QString stageText = importStageToText(import_stage);
+      QMetaObject::invokeMethod(receiver, [receiver, progress, stageText]() {
+        if (!receiver)
+          return;
+        if (receiver->loadProgress_ != progress)
+        {
+          receiver->loadProgress_ = progress;
+          emit receiver->loadProgressChanged();
+        }
+        emit receiver->loadProgressUpdated(progress, stageText);
+      }, Qt::QueuedConnection);
+    };
+
+    bool ok = false;
     try
     {
-      Slic3r::Model loaded = Slic3r::Model::read_from_file(
-          filePath.toUtf8().constData());
-      // Merge loaded objects into current model
-      for (auto *obj : loaded.objects)
+      Slic3r::Model loaded = Slic3r::Model::read_from_file(localPath.toStdString(),
+                                                            nullptr,
+                                                            nullptr,
+                                                            Slic3r::LoadStrategy::AddDefaultInstances,
+                                                            &plateDataList,
+                                                            nullptr,
+                                                            nullptr,
+                                                            nullptr,
+                                                            progressFn);
+      *loadedModel = std::move(loaded);
+      loadedPlateCount = int(plateDataList.size());
+      ok = true;
+    }
+    catch (const std::exception &ex)
+    {
+      err = ex.what();
+      ok = false;
+    }
+    catch (...)
+    {
+      err = "unknown error";
+      ok = false;
+    }
+
+    if (!plateDataList.empty())
+      Slic3r::release_PlateData_list(plateDataList);
+
+    const bool canceled = cancelFlag && cancelFlag->load();
+
+    QStringList names;
+    QString errorText;
+    QString loadedProjectName;
+    if (ok && !canceled)
+    {
+      loadedProjectName = QFileInfo(localPath).completeBaseName();
+      const auto &objs = loadedModel->objects;
+      names.reserve(int(objs.size()));
+      for (size_t i = 0; i < objs.size(); ++i)
       {
-        model_->add_object(*obj);
+        const auto *obj = objs[i];
+        if (obj && !obj->name.empty())
+          names << QString::fromStdString(obj->name);
+        else
+          names << QObject::tr("对象 %1").arg(int(i + 1));
       }
     }
-    catch (const std::exception &e)
+    else
     {
-      lastError_ = tr("模型加载失败: %1").arg(QString::fromUtf8(e.what()));
-      qWarning() << lastError_;
-      emit projectChanged();
-      return false;
+      errorText = canceled ? QObject::tr("已取消加载") : (err.empty() ? QObject::tr("加载失败") : QString::fromStdString(err));
     }
-  }
 
-  // Update state from model
-  objectNames_.clear();
-  for (const auto *obj : model_->objects)
-  {
-    objectNames_ << QString::fromStdString(obj->name);
-  }
-  modelCount_ = static_cast<int>(model_->objects.size());
-  projectName_ = fi.baseName();
-  lastError_.clear();
+    if (!receiver)
+    {
+      delete loadedModel;
+      return;
+    }
 
-  qInfo() << "ProjectService: loaded" << modelCount_ << "objects from" << fi.fileName();
-  emit projectChanged();
+    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, errorText, loadedProjectName, loadedPlateCount, localPath]() {
+      if (!receiver)
+      {
+        delete loadedModel;
+        return;
+      }
+
+      receiver->loading_ = false;
+      receiver->activeCancelFlag_.reset();
+      emit receiver->loadingChanged();
+
+      receiver->loadProgress_ = (ok && !canceled) ? 100 : 0;
+      emit receiver->loadProgressChanged();
+      if (ok && !canceled)
+      {
+        emit receiver->loadProgressUpdated(100, QObject::tr("完成导入"));
+      }
+
+      if (ok && !canceled)
+      {
+        if (receiver->model_)
+          delete receiver->model_;
+        receiver->model_ = loadedModel;
+        receiver->projectName_ = loadedProjectName;
+        receiver->sourceFilePath_ = localPath;
+        receiver->objectNames_ = names;
+        receiver->modelCount_ = names.size();
+        receiver->plateCount_ = loadedPlateCount;
+        receiver->lastError_.clear();
+
+        emit receiver->projectChanged();
+        emit receiver->plateDataLoaded(receiver->plateCount_);
+        emit receiver->loadFinished(true, QObject::tr("加载完成"));
+      }
+      else
+      {
+        delete loadedModel;
+        receiver->modelCount_ = 0;
+        receiver->plateCount_ = 0;
+        receiver->sourceFilePath_.clear();
+        receiver->objectNames_.clear();
+        receiver->lastError_ = errorText;
+        emit receiver->projectChanged();
+        emit receiver->plateDataLoaded(0);
+        emit receiver->loadFinished(false, errorText);
+      }
+    }, Qt::QueuedConnection); });
+
   return true;
 
 #else
   // Fallback mock
   modelCount_++;
+  plateCount_ = 1;
   objectNames_ << fi.baseName();
   projectName_ = fi.baseName();
+  sourceFilePath_ = fi.absoluteFilePath();
   lastError_.clear();
+  loading_ = false;
+  loadProgress_ = 100;
+  activeCancelFlag_.reset();
+  emit loadingChanged();
+  emit loadProgressChanged();
+  emit loadProgressUpdated(100, tr("完成导入"));
   qInfo() << "ProjectService (mock): loaded" << filePath;
   emit projectChanged();
+  emit plateDataLoaded(plateCount_);
+  emit loadFinished(true, tr("加载完成"));
   return true;
 #endif
+}
+
+void ProjectServiceMock::cancelLoad()
+{
+  if (!loading_ || !activeCancelFlag_)
+    return;
+  activeCancelFlag_->store(true);
 }
 
 QStringList ProjectServiceMock::objectNames() const
@@ -143,6 +311,35 @@ void ProjectServiceMock::importMockModel()
   modelCount_++;
   objectNames_ << QString("MockModel_%1").arg(modelCount_);
   emit projectChanged();
+}
+
+void ProjectServiceMock::clearProject()
+{
+  if (loading_)
+    cancelLoad();
+
+  projectName_ = tr("未命名项目");
+  modelCount_ = 0;
+  plateCount_ = 0;
+  sourceFilePath_.clear();
+  objectNames_.clear();
+  lastError_.clear();
+  loadProgress_ = 0;
+  loading_ = false;
+  activeCancelFlag_.reset();
+
+#ifdef HAS_LIBSLIC3R
+  if (model_)
+  {
+    delete model_;
+    model_ = new Slic3r::Model();
+  }
+#endif
+
+  emit loadingChanged();
+  emit loadProgressChanged();
+  emit projectChanged();
+  emit plateDataLoaded(0);
 }
 
 QByteArray ProjectServiceMock::meshData() const

@@ -130,10 +130,8 @@ target_include_directories(libslic3r SYSTEM INTERFACE
     "${UPSTREAM_SRC}/nlohmann"
     "${UPSTREAM_SRC}/ankerl"
     "${UPSTREAM_SRC}/nanosvg"
-    "${UPSTREAM_SRC}/agg"
     "${UPSTREAM_SRC}/spline"
     "${UPSTREAM_SRC}/stb_dxt"
-    "${UPSTREAM_SRC}/boost"          # nowide headers
     "${UPSTREAM_SRC}/libigl/include" # libigl headers
     "${UPSTREAM_SRC}/clipper2/Clipper2Lib/include"
     "${UPSTREAM_SRC}/miniz"

@@ -4,7 +4,7 @@
 #include <QColor>
 #include <QTranslator>
 
-class SliceServiceMock;
+class SliceService;
 class PresetServiceMock;
 class DeviceServiceMock;
 class ProjectServiceMock;
@@ -72,6 +72,11 @@ public:
   Q_INVOKABLE void postError(const QString &message, int severity = 0);
   Q_INVOKABLE void clearError();
   Q_INVOKABLE void openSettings(); // H3
+  Q_INVOKABLE void topbarNewProject();
+  Q_INVOKABLE bool topbarOpenProject(const QString &filePath);
+  Q_INVOKABLE bool topbarImportModel(const QString &filePath);
+  Q_INVOKABLE bool topbarSaveProject();
+  Q_INVOKABLE bool topbarSaveProjectAs(const QString &filePath);
 
   QString lastErrorMessage() const;
   int lastErrorSeverity() const;
@@ -85,7 +90,7 @@ signals:
 
 private:
   CalibrationServiceMock *calibrationService_ = nullptr;
-  SliceServiceMock *sliceService_ = nullptr;
+  SliceService *sliceService_ = nullptr;
   PresetServiceMock *presetService_ = nullptr;
   DeviceServiceMock *deviceService_ = nullptr;
   ProjectServiceMock *projectService_ = nullptr;

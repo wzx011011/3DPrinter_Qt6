@@ -81,11 +81,11 @@
 
 > 注：先用随机折线 Mock G-code 路径，完成 UI 骨架和组件接口，真实渲染数据由 Phase L 补全。
 
-- [ ] F1 — 新建 `GCodeRenderer.h/.cpp`（GLViewportRenderer 子类，render() 绘制 Mock 层线，预留 `loadResult(GCodeProcessorResult*)` 接口）
-- [ ] F2 — `PreviewViewModel` 补全：`layerCount` / `currentLayerMin` / `currentLayerMax` / `moveCount` / `currentMove` + `setLayerRange()` / `playAnimation()` / `pauseAnimation()`
-- [ ] F3 — 新建 `components/LayerSlider.qml`（垂直双端 RangeSlider，绑定 previewVm 层范围）
-- [ ] F4 — 新建 `components/MoveSlider.qml`（水平 Slider + 播放/暂停按钮）
-- [ ] F5 — `PreviewPage.qml` 替换：占位图 → `GLViewport(CanvasPreview)` + LayerSlider + MoveSlider + 视图模式 CxComboBox（先显示 3 种）
+- [x] F1 — 新建 `GCodeRenderer.h/.cpp`（GLViewportRenderer 子类，render() 绘制 Mock 层线，预留 `loadResult(GCodeProcessorResult*)` 接口）2026-03-05
+- [x] F2 — `PreviewViewModel` 补全：`layerCount` / `currentLayerMin` / `currentLayerMax` / `moveCount` / `currentMove` + `setLayerRange()` / `playAnimation()` / `pauseAnimation()` 2026-03-05
+- [x] F3 — 新建 `components/LayerSlider.qml`（垂直双端 RangeSlider，绑定 previewVm 层范围）2026-03-05
+- [x] F4 — 新建 `components/MoveSlider.qml`（水平 Slider + 播放/暂停按钮）2026-03-05
+- [x] F5 — `PreviewPage.qml` 替换：占位图 → `GLViewport(CanvasPreview)` + LayerSlider + MoveSlider + 视图模式 CxComboBox（先显示 3 种）2026-03-05
 
 ---
 
@@ -99,8 +99,8 @@
   - ✅ 上游 libslic3r 用 `Directory.Build.targets` 重编为 /MD CRT，与 Qt/TBB/Boost 完全兼容
   - ✅ 33 个静态库 + 27 个 OCCT 动态库 + bcrypt/assimp/qhullcpp/cr_tpms_library 全部链接成功
   - ✅ 程序启动正常，QML GUI 正常加载（内存 ~211MB）
-- [ ] J2 — 实现 `ProjectService::loadFile(path)` 真实版本：`QtConcurrent::run` 异步调用 `Model::read_from_archive()`，`Import3mfProgressFn` 回调桥接为 `loadProgress(int, QString)` Qt 信号
-- [ ] J3 — BBS/Creality 格式支持：`load_bbs_3mf()` 接入，解析 `PlateDataPtrs`，`emit plateDataLoaded(n)` 通知 PlateViewModel 更新平板栏
+- [x] J2 — 实现 `ProjectService::loadFile(path)` 真实版本：`QtConcurrent::run` 异步调用 `Model::read_from_archive()`，`Import3mfProgressFn` 回调桥接为 `loadProgress(int, QString)` Qt 信号 2026-03-05
+- [x] J3 — BBS/Creality 格式支持：`load_bbs_3mf()` 接入，解析 `PlateDataPtrs`，`emit plateDataLoaded(n)` 通知 PlateViewModel 更新平板栏 2026-03-05
 - [x] J4 — 对接 `EditorViewModel`：`loadFinished` 信号触发对象列表刷新 + `GLViewport(CanvasView3D)` 重绘，拖拽文件打开端到端联通 2026-03-05
 
 ---
@@ -111,11 +111,11 @@
 > 完成后：点击「切片」按钮能生成 .gcode 文件，进度条实时更新。
 > 关键：`BackgroundSlicingProcess` 中所有 `wxQueueEvent`/`wxGetApp()` 调用替换为 Qt 信号，不修改切片算法本身。
 
-- [ ] K1 — 将 `libslic3r/Print.*`、`PrintObject.*`、`PrintObjectSlice.cpp`、`GCode.*`、`GCode/GCodeProcessor.*` 加入 CMake，补全 TBB/NLopt/CGAL 依赖，确认编译通过
-- [ ] K2 — 实现 `SliceService`（`src/core/services/SliceService.h/.cpp`）：Qt Worker Thread 运行 `m_print.apply() + m_print.process()`，`Print::m_status_callback` 桥接为 `progressUpdated(int percent, QString label)` Qt 信号（替代 `wxQueueEvent` slicing 状态事件）
-- [ ] K3 — 进度回调桥接：`Print::set_status()` 内部通过 `QMetaObject::invokeMethod(Qt::QueuedConnection)` 安全回调至主线程，UI 进度条随切片推进实时更新
-- [ ] K4 — G-code 导出：切片完成后调用 `m_print.export_gcode(path, &m_gcodeResult)`，填充 `GCodeProcessorResult`，`emit slicingFinished(timestamp)` 通知 PreviewViewModel
-- [ ] K5 — 已有 G-code 缓存复用：实现 `loadGCodeFromPrevious(gcodeFile)`，调用 `Print::export_gcode_from_previous_file()`，避免重复切片
+- [x] K1 — 将 `libslic3r/Print.*`、`PrintObject.*`、`PrintObjectSlice.cpp`、`GCode.*`、`GCode/GCodeProcessor.*` 加入 CMake，补全 TBB/NLopt/CGAL 依赖，确认编译通过（采用预编译 `libslic3r` 导入方案统一覆盖）2026-03-05
+- [x] K2 — 实现 `SliceService`（`src/core/services/SliceService.h/.cpp`）：Qt Worker Thread 运行 `m_print.apply() + m_print.process()`，`Print::m_status_callback` 桥接为 `progressUpdated(int percent, QString label)` Qt 信号（替代 `wxQueueEvent` slicing 状态事件）2026-03-05
+- [x] K3 — 进度回调桥接：`Print::set_status()` 内部通过 `QMetaObject::invokeMethod(Qt::QueuedConnection)` 安全回调至主线程，UI 进度条随切片推进实时更新 2026-03-05
+- [x] K4 — G-code 导出：切片完成后调用 `m_print.export_gcode(path, &m_gcodeResult)`，填充 `GCodeProcessorResult`，`emit slicingFinished(timestamp)` 通知 PreviewViewModel 2026-03-05
+- [x] K5 — 已有 G-code 缓存复用：实现 `loadGCodeFromPrevious(gcodeFile)`，调用 `Print::export_gcode_from_previous_file()`，避免重复切片 2026-03-05
 
 ---
 
@@ -124,11 +124,11 @@
 > 前置：Phase K 完成（`GCodeProcessorResult` 已填充），Phase F 已完成（UI 骨架和组件已就位）。
 > 完成后：预览页面渲染真实 G-code 路径，支持层浏览、动画播放、13 种视图着色模式。
 
-- [ ] L1 — `GCodeRenderer::loadResult(const GCodeProcessorResult*)` 实现：解析路径数组，按 `layer_id` 分组构建 VBO/IBO（`QOpenGLBuffer`），存储 `m_layerOffsets[]` 用于范围裁剪
-- [ ] L2 — 基础渲染通道：`render(layerMin, layerMax, moveEnd)` 按范围 `glDrawArrays`，实现 `FeatureType`（外壁/填充/支撑…）、`Height`、`Width`、`Tool` 四种 P0 优先着色模式
-- [ ] L3 — 视图模式完整支持：补全剩余 9 种着色模式（Feedrate / FanSpeed / Temperature / ColorPrint / FilamentId / Chronology / VolumetricRate / LayerTime / Shells 叠加）
-- [ ] L4 — `PreviewViewModel` 对接：`onSlicingFinished()` 读取 `GCodeProcessorResult`，更新 `layerCount` / `moveCount` / `legendItems` / `totalTime` / `filamentUsed` 属性，触发 PreviewPage 刷新
-- [ ] L5 — 图例面板 + 统计信息：新建 `components/Legend.qml`（颜色块 + 标签，绑定 `previewVm.legendItems`）和 `components/StatsPanel.qml`（总时间 / 耗材用量 / 层数）
+- [x] L1 — `GCodeRenderer::loadResult(const GCodeProcessorResult*)` 实现：解析路径数组，按 `layer_id` 分组构建 VBO/IBO（`QOpenGLBuffer`），存储 `m_layerOffsets[]` 用于范围裁剪 2026-03-05
+- [x] L2 — 基础渲染通道：`render(layerMin, layerMax, moveEnd)` 按范围 `glDrawArrays`，实现 `FeatureType`（外壁/填充/支撑…）、`Height`、`Width`、`Tool` 四种 P0 优先着色模式 2026-03-05
+- [x] L3 — 视图模式完整支持：补全剩余 9 种着色模式（Feedrate / FanSpeed / Temperature / ColorPrint / FilamentId / Chronology / VolumetricRate / LayerTime / Shells 叠加）2026-03-05
+- [x] L4 — `PreviewViewModel` 对接：`onSlicingFinished()` 读取 `GCodeProcessorResult`，更新 `layerCount` / `moveCount` / `legendItems` / `totalTime` / `filamentUsed` 属性，触发 PreviewPage 刷新 2026-03-05
+- [x] L5 — 图例面板 + 统计信息：新建 `components/Legend.qml`（颜色块 + 标签，绑定 `previewVm.legendItems`）和 `components/StatsPanel.qml`（总时间 / 耗材用量 / 层数）2026-03-05
 
 ---
 
@@ -162,37 +162,44 @@
 
 ## 进度汇总
 
-| 阶段     | 名称              | 任务数 | 完成   | 状态                  |
-| -------- | ----------------- | ------ | ------ | --------------------- |
-| 基线     | 已完成基线        | 14     | 14     | ✅ 完成               |
-| A        | 服务层补全        | 4      | 4      | ✅ 完成               |
-| B        | 错误处理系统      | 5      | 5      | ✅ 完成               |
-| C        | 面板层 panels/    | 7      | 7      | ✅ 完成               |
-| D        | 对话框层 dialogs/ | 4      | 4      | ✅ 完成               |
-| E        | 3D 渲染桥接骨架   | 6      | 6      | ✅ 完成               |
-| F        | G-code 预览渲染   | 5      | 0      | ⏳ 待开始             |
-| G        | 动态配置 UI       | 5      | 5      | ✅ 完成               |
-| H        | SettingsPage      | 3      | 3      | ✅ 完成               |
-| I        | 国际化            | 3      | 3      | ✅ 完成               |
-| J        | 3MF 文件加载      | 4      | 2      | 🔶 J1/J4完成，J2-J3待做 |
-| K        | 切片引擎接入      | 5      | 0      | ⏳ 待开始（依赖 J）   |
-| L        | 真实 G-code 渲染  | 5      | 0      | ⏳ 待开始（依赖 K+F） |
-| **合计** |                   | **70** | **53** | 🔶 F/J2-3/K/L 待做    |
+| 阶段     | 名称              | 任务数 | 完成   | 状态        |
+| -------- | ----------------- | ------ | ------ | ----------- |
+| 基线     | 已完成基线        | 14     | 14     | ✅ 完成     |
+| A        | 服务层补全        | 4      | 4      | ✅ 完成     |
+| B        | 错误处理系统      | 5      | 5      | ✅ 完成     |
+| C        | 面板层 panels/    | 7      | 7      | ✅ 完成     |
+| D        | 对话框层 dialogs/ | 4      | 4      | ✅ 完成     |
+| E        | 3D 渲染桥接骨架   | 6      | 6      | ✅ 完成     |
+| F        | G-code 预览渲染   | 5      | 5      | ✅ 完成     |
+| G        | 动态配置 UI       | 5      | 5      | ✅ 完成     |
+| H        | SettingsPage      | 3      | 3      | ✅ 完成     |
+| I        | 国际化            | 3      | 3      | ✅ 完成     |
+| J        | 3MF 文件加载      | 4      | 4      | ✅ 完成     |
+| K        | 切片引擎接入      | 5      | 5      | ✅ 完成     |
+| L        | 真实 G-code 渲染  | 5      | 5      | ✅ 完成     |
+| **合计** |                   | **70** | **70** | ✅ 全部完成 |
 
 ---
 
 ## 工作记录
 
-| 日期       | 完成任务                       | 备注                                                                                                                                                                                                                          |
-| ---------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-03-03 | 基线 14 项 + A3 确认           | Qt 6.10 V4 崩溃根因修复（Q_INVOKABLE 逐项访问器方案）                                                                                                                                                                         |
-| 2026-03-03 | A1/A2/A4 + B1-B5 共 8 项       | CalibrationServiceMock、ServiceTypes.h、BackendContext 错误系统、ErrorToast/Banner/main.qml；构建+测试 2/2 ✅                                                                                                                 |
-| 2026-03-03 | C1-C7 共 7 项                  | EditorVM 对象列表 API、ConfigVM 9 个打印参数、ObjectList/PrintSettings/SliceProgress/Sidebar.qml、PreparePage 接入 Sidebar；构建+测试 2/2 ✅                                                                                  |
-| 2026-03-03 | D1-D4 共 4 项                  | PrintDialog/CalibrationDialog/AboutDialog；三个页面接入触发逆辑；构建+测试 2/2 ✅                                                                                                                                             |
-| 2026-03-04 | G1-G5 + H1-H3 + I2-I3 共 13 项 | ConfigOptionModel(30参)/PresetListModel(13预设)；PrintSettings动态ListView+Loader懒加载；Sidebar预设ComboBox+高级设置按钮；SettingsPage三栏全屏编辑；BackendContext.openSettings()；i18n翻译桩；构建+测试 2/2 ✅              |
-| 2026-03-04 | E1-E6 共 6 项                  | GLViewport(QQuickFramebufferObject)+GLViewportRenderer(GLSL 330 core/MSAA×4/坐标轴+网格)+CameraController(orbit/pan/zoom)；PreparePage接入；VisualRegressionTests用GLViewportTestStub避Qt6.10析构堆损坏；构建+测试 2/2 ✅     |
-| 2026-03-04 | I1 共 1 项                     | 25文件~250中文字符串qsTr()/tr()包裹；lupdate提取270条源文本→zh_CN.ts/en.ts；构建82/82+测试 2/2 ✅                                                                                                                             |
-| 2026-03-04 | 架构文档 v3.0 更新             | 研究 CrealityOfficial/CrealityPrint 上游仓库；新增第12章（3MF加载/切片引擎/GCodeRenderer 完整方案）；新增 ADR-09/10/11；新增 Phase J/K/L 实施计划；PROJECT_STRUCTURE.md 同步更新目录树和依赖状态表                            |
-| 2026-03-04 | J1 完成（libslic3r 链接成功）  | 预编译 .lib 导入方案：33 静态库+27 OCCT+assimp+qhullcpp+cr_tpms+bcrypt；CRT /MT→/MD 用 Directory.Build.targets 重编上游；101 个链接错误全部解决；nanosvg_impl.cpp 提供 stb 实现；程序启动正常（211MB 内存，QML GUI 正常加载） |
-| 2026-03-05 | J4 完成（Editor-Viewport 端到端） | EditorViewModel 与 GLViewport 渲染链路联通：对象列表刷新、重绘触发、拖拽文件打开端到端可用；220×220 平台、fitView、多对象颜色与 Gizmo 交互合并验证通过 |
-| 2026-03-05 | CP7 顶栏还原（计划外优化）      | `main.qml` 顶栏改为 Creality Print 7.0 风格（在线模型/准备/预览/设备）；补齐文件菜单/更多菜单、保存、窗口控制、标题截断提示；Prepare 页接入真实撤销/重做（拖拽变换命令栈） |
+| 日期       | 完成任务                          | 备注                                                                                                                                                                                                                                                  |
+| ---------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-03-03 | 基线 14 项 + A3 确认              | Qt 6.10 V4 崩溃根因修复（Q_INVOKABLE 逐项访问器方案）                                                                                                                                                                                                 |
+| 2026-03-03 | A1/A2/A4 + B1-B5 共 8 项          | CalibrationServiceMock、ServiceTypes.h、BackendContext 错误系统、ErrorToast/Banner/main.qml；构建+测试 2/2 ✅                                                                                                                                         |
+| 2026-03-03 | C1-C7 共 7 项                     | EditorVM 对象列表 API、ConfigVM 9 个打印参数、ObjectList/PrintSettings/SliceProgress/Sidebar.qml、PreparePage 接入 Sidebar；构建+测试 2/2 ✅                                                                                                          |
+| 2026-03-03 | D1-D4 共 4 项                     | PrintDialog/CalibrationDialog/AboutDialog；三个页面接入触发逆辑；构建+测试 2/2 ✅                                                                                                                                                                     |
+| 2026-03-04 | G1-G5 + H1-H3 + I2-I3 共 13 项    | ConfigOptionModel(30参)/PresetListModel(13预设)；PrintSettings动态ListView+Loader懒加载；Sidebar预设ComboBox+高级设置按钮；SettingsPage三栏全屏编辑；BackendContext.openSettings()；i18n翻译桩；构建+测试 2/2 ✅                                      |
+| 2026-03-04 | E1-E6 共 6 项                     | GLViewport(QQuickFramebufferObject)+GLViewportRenderer(GLSL 330 core/MSAA×4/坐标轴+网格)+CameraController(orbit/pan/zoom)；PreparePage接入；VisualRegressionTests用GLViewportTestStub避Qt6.10析构堆损坏；构建+测试 2/2 ✅                             |
+| 2026-03-04 | I1 共 1 项                        | 25文件~250中文字符串qsTr()/tr()包裹；lupdate提取270条源文本→zh_CN.ts/en.ts；构建82/82+测试 2/2 ✅                                                                                                                                                     |
+| 2026-03-04 | 架构文档 v3.0 更新                | 研究 CrealityOfficial/CrealityPrint 上游仓库；新增第12章（3MF加载/切片引擎/GCodeRenderer 完整方案）；新增 ADR-09/10/11；新增 Phase J/K/L 实施计划；PROJECT_STRUCTURE.md 同步更新目录树和依赖状态表                                                    |
+| 2026-03-04 | J1 完成（libslic3r 链接成功）     | 预编译 .lib 导入方案：33 静态库+27 OCCT+assimp+qhullcpp+cr_tpms+bcrypt；CRT /MT→/MD 用 Directory.Build.targets 重编上游；101 个链接错误全部解决；nanosvg_impl.cpp 提供 stb 实现；程序启动正常（211MB 内存，QML GUI 正常加载）                         |
+| 2026-03-05 | J4 完成（Editor-Viewport 端到端） | EditorViewModel 与 GLViewport 渲染链路联通：对象列表刷新、重绘触发、拖拽文件打开端到端可用；220×220 平台、fitView、多对象颜色与 Gizmo 交互合并验证通过                                                                                                |
+| 2026-03-05 | J2 完成（异步加载 + 进度桥接）    | ProjectServiceMock 改为 QtConcurrent 异步导入，Import3mfProgressFn 回调桥接进度百分比与阶段文本，EditorViewModel 状态文案改为阶段感知（如“加载模型... 65%”）                                                                                          |
+| 2026-03-05 | J3 完成（BBS 平板数据通知）       | ProjectServiceMock 在导入时解析 `PlateDataPtrs` 并释放资源，新增 `plateCount` + `plateDataLoaded(int)`，EditorViewModel 透传平板数量并在加载成功文案中展示                                                                                            |
+| 2026-03-05 | CP7 顶栏还原（计划外优化）        | `main.qml` 顶栏改为 Creality Print 7.0 风格（在线模型/准备/预览/设备）；补齐文件菜单/更多菜单、保存、窗口控制、标题截断提示；Prepare 页接入真实撤销/重做（拖拽变换命令栈）                                                                            |
+| 2026-03-05 | CP7 顶栏功能闭环（彻底实现）      | 新建/打开项目/导入模型/保存/另存为统一改走 BackendContext 顶栏接口：新建会清空场景，打开会真实触发模型加载，未命名保存自动兜底另存为；最近文件列表去重并限制长度，操作行为与 UI 一致                                                                  |
+| 2026-03-05 | K2/K3/K4 + Smoke 回归             | `SliceServiceMock` 替换为正式 `SliceService`（异步、进度回调、取消、G-code 导出）；修复 libslic3r include 冲突（`agg/version`、`boost` 头污染）；`ViewModelSmokeTests` 改为稳定真实资源路径并通过 1/1 ✅                                              |
+| 2026-03-05 | K5 完成 + 全量回归                | `SliceService` 新增 `loadGCodeFromPrevious()`，真实调用 `Print::export_gcode_from_previous_file()`；新增 smoke 用例覆盖已有 gcode 复用；全量构建通过（先清理被占用的 FramelessDialogDemo.exe）+ ctest 1/1 ✅                                          |
+| 2026-03-05 | K1 收口（导入链路口径统一）       | K1 按“预编译 `libslic3r` 导入”方案确认完成：`SliceService` 已实际使用 `Print`/`GCodeProcessor`，`BuildLibslic3r.cmake` 已覆盖 `TBB/NLopt/CGAL` 依赖，主程序与测试目标全量构建并通过回归 ✅                                                            |
+| 2026-03-05 | F+L 完成（预览链路端到端）        | 新增 `GCodeRenderer` + 预览数据通道（`GLViewport.CanvasPreview`）；`PreviewViewModel` 补齐层/步进/播放/图例/统计并在切片完成后解析 gcode；新增 `LayerSlider`/`MoveSlider`/`Legend`/`StatsPanel`，`PreviewPage` 切换为真实预览布局；构建+ctest 通过 ✅ |

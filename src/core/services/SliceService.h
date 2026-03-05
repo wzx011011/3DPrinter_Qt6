@@ -1,0 +1,54 @@
+#pragma once
+
+#include <QObject>
+#include <QString>
+#include <memory>
+#include <atomic>
+
+class ProjectServiceMock;
+
+#ifdef HAS_LIBSLIC3R
+namespace Slic3r
+{
+  class Print;
+}
+#endif
+
+class SliceService final : public QObject
+{
+  Q_OBJECT
+  Q_PROPERTY(int progress READ progress NOTIFY progressChanged)
+  Q_PROPERTY(bool slicing READ slicing NOTIFY slicingChanged)
+  Q_PROPERTY(QString statusLabel READ statusLabel NOTIFY progressChanged)
+  Q_PROPERTY(QString outputPath READ outputPath NOTIFY sliceFinished)
+
+public:
+  explicit SliceService(ProjectServiceMock *projectService, QObject *parent = nullptr);
+
+  int progress() const;
+  bool slicing() const;
+  QString statusLabel() const;
+  QString outputPath() const;
+
+  Q_INVOKABLE void startSlice(const QString &projectName);
+  Q_INVOKABLE void cancelSlice();
+  Q_INVOKABLE bool loadGCodeFromPrevious(const QString &gcodeFilePath);
+
+signals:
+  void progressChanged();
+  void slicingChanged();
+  void progressUpdated(int percent, const QString &label);
+  void sliceFinished(const QString &estimatedTime);
+  void sliceFailed(const QString &message);
+
+private:
+  ProjectServiceMock *projectService_ = nullptr;
+  int progress_ = 0;
+  bool slicing_ = false;
+  QString statusLabel_ = QStringLiteral("等待切片");
+  QString outputPath_;
+  std::shared_ptr<std::atomic_bool> activeCancelFlag_;
+#ifdef HAS_LIBSLIC3R
+  std::atomic<Slic3r::Print *> activePrint_{nullptr};
+#endif
+};

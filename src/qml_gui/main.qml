@@ -67,9 +67,7 @@ ApplicationWindow {
             qsTr("所有文件 (*)")
         ]
         onAccepted: {
-            if (backend.editorViewModel)
-                backend.editorViewModel.loadFile(selectedFile.toString())
-            backend.setCurrentPage(root.pagePrepare)
+            backend.topbarImportModel(selectedFile.toString())
         }
     }
 
@@ -78,8 +76,7 @@ ApplicationWindow {
         title: qsTr("打开项目")
         nameFilters: [qsTr("项目文件 (*.3mf *.cxprj)"), qsTr("所有文件 (*)")]
         onAccepted: {
-            if (backend.projectViewModel)
-                backend.projectViewModel.openProject(selectedFile.toString())
+            backend.topbarOpenProject(selectedFile.toString())
         }
     }
 
@@ -89,18 +86,23 @@ ApplicationWindow {
         fileMode: FileDialog.SaveFile
         nameFilters: [qsTr("项目文件 (*.3mf *.cxprj)")]
         onAccepted: {
-            if (backend.projectViewModel)
-                backend.projectViewModel.saveProjectAs(selectedFile.toString())
+            backend.topbarSaveProjectAs(selectedFile.toString())
         }
     }
 
     Menu {
         id: fileMenu
-        MenuItem { text: qsTr("新建项目"); onTriggered: backend.projectViewModel && backend.projectViewModel.newProject() }
+        MenuItem { text: qsTr("新建项目"); onTriggered: backend.topbarNewProject() }
         MenuItem { text: qsTr("打开项目..."); onTriggered: openProjectDialog.open() }
         MenuItem { text: qsTr("导入模型..."); onTriggered: openModelDialog.open() }
         MenuSeparator {}
-        MenuItem { text: qsTr("保存项目"); onTriggered: backend.projectViewModel && backend.projectViewModel.saveProject() }
+        MenuItem {
+            text: qsTr("保存项目")
+            onTriggered: {
+                if (!backend.topbarSaveProject())
+                    saveProjectAsDialog.open()
+            }
+        }
         MenuItem { text: qsTr("项目另存为..."); onTriggered: saveProjectAsDialog.open() }
         MenuSeparator {}
         Menu {
@@ -112,8 +114,7 @@ ApplicationWindow {
                     required property string modelData
                     text: modelData
                     onTriggered: {
-                        backend.projectViewModel.openProject(modelData)
-                        backend.setCurrentPage(root.pagePrepare)
+                        backend.topbarOpenProject(modelData)
                     }
                 }
                 onObjectAdded: (index, object) => fileRecentMenu.insertItem(index, object)
@@ -145,7 +146,10 @@ ApplicationWindow {
     }
     Shortcut {
         sequence: StandardKey.Save
-        onActivated: backend.projectViewModel && backend.projectViewModel.saveProject()
+        onActivated: {
+            if (!backend.topbarSaveProject())
+                saveProjectAsDialog.open()
+        }
     }
     Shortcut {
         sequence: StandardKey.Redo
@@ -282,7 +286,10 @@ ApplicationWindow {
                         implicitHeight: 28
                         flat: true
                         hoverEnabled: true
-                        onClicked: backend.projectViewModel && backend.projectViewModel.saveProject()
+                        onClicked: {
+                            if (!backend.topbarSaveProject())
+                                saveProjectAsDialog.open()
+                        }
                         background: Rectangle {
                             radius: 6
                             color: parent.down ? root.topbarPressed : (parent.hovered ? root.topbarHover : "transparent")
