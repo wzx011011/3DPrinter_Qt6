@@ -38,7 +38,7 @@ jobs:
         run: >
           cmake -S . -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release
-          -DBUILD_LIBSLIC3R=OFF
+          -DBUILD_LIBSLIC3R=ON
           -DCREALITY_QML_GUI=ON
 
       - name: Build

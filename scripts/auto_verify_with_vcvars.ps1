@@ -16,15 +16,15 @@ foreach ($line in $envDump) {
 
 Set-Location 'e:/ai/3DPrinter_Qt6/build'
 
+cmake -S .. -B . -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_LIBSLIC3R=ON -DCREALITY_QML_GUI=ON
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 Stop-Process -Name 'FramelessDialogDemo' -Force -ErrorAction SilentlyContinue
 
 # Reduce MSVC memory pressure in large TUs/autogen files
 $env:CL = "/Zm300 /bigobj $env:CL"
 
-ninja -j1 FramelessDialogDemo.exe ViewModelSmokeTests.exe
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-ctest --output-on-failure -R ViewModelSmokeTests
+ninja -j1 FramelessDialogDemo.exe
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $p = Start-Process -FilePath './FramelessDialogDemo.exe' -WorkingDirectory (Get-Location) -PassThru

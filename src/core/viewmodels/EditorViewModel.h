@@ -58,7 +58,6 @@ public:
   Q_INVOKABLE int sliceProgress() const;
   Q_INVOKABLE bool isSlicing() const;
 
-  Q_INVOKABLE void importMockModel();
   Q_INVOKABLE void requestSlice();
   Q_INVOKABLE void cancelSlice();
   /// 加载模型文件 (3MF/STL/OBJ)

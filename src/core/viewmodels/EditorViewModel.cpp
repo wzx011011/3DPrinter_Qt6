@@ -65,12 +65,6 @@ int EditorViewModel::mapFilteredToSourceIndex(int filteredIndex) const
 EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceService *sliceService, QObject *parent)
     : QObject(parent), projectService_(projectService), sliceService_(sliceService)
 {
-  // Pre-load two mock objects for UI demo
-  m_objects = {
-      {QStringLiteral("Benchy.3mf"), true},
-      {QStringLiteral("Support_plate.stl"), true},
-  };
-
   connect(projectService_, &ProjectServiceMock::projectChanged, this, [this]()
           {
         statusText_ = QStringLiteral("已更新项目对象");
@@ -243,6 +237,7 @@ bool EditorViewModel::setCurrentPlateIndex(int i)
   else if (m_selectedObjectIndex < 0 || m_selectedObjectIndex >= count)
     m_selectedObjectIndex = 0;
 
+  refreshMeshCacheAndFitHint();
   emit stateChanged();
   return true;
 }
@@ -259,6 +254,7 @@ void EditorViewModel::setShowAllObjects(bool showAll)
   else if (m_selectedObjectIndex < 0 || m_selectedObjectIndex >= count)
     m_selectedObjectIndex = 0;
 
+  refreshMeshCacheAndFitHint();
   emit stateChanged();
 }
 
@@ -267,13 +263,6 @@ int EditorViewModel::sliceProgress() const { return sliceService_->progress(); }
 bool EditorViewModel::isSlicing() const { return sliceService_->slicing(); }
 
 // ---------- actions ----------
-void EditorViewModel::importMockModel()
-{
-  projectService_->importMockModel();
-  m_objects.append({QString("Model_%1.3mf").arg(m_objects.size() + 1), true});
-  emit stateChanged();
-}
-
 void EditorViewModel::requestSlice()
 {
   sliceService_->startSlice(projectService_->projectName());

@@ -177,6 +177,17 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
     bool ok = false;
     try
     {
+      if (receiver)
+      {
+        QMetaObject::invokeMethod(receiver, [receiver]() {
+          if (!receiver)
+            return;
+          receiver->loadProgress_ = 10;
+          emit receiver->loadProgressChanged();
+          emit receiver->loadProgressUpdated(10, QObject::tr("读取数据"));
+        }, Qt::QueuedConnection);
+      }
+
       Slic3r::Model loaded = Slic3r::Model::read_from_file(localPath.toStdString(),
                                                             nullptr,
                                                             nullptr,
@@ -187,46 +198,97 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                                                             nullptr,
                                                             progressFn);
       *loadedModel = std::move(loaded);
-      ok = true;
 
-      loadedPlateCount = int(plateDataList.size());
-
-      if (!plateDataList.empty())
+      if (!loadedModel->objects.empty())
       {
-        loadedPlateNames.reserve(loadedPlateCount);
-        loadedPlateObjectIndices.reserve(loadedPlateCount);
-
-        const int modelObjCount = int(loadedModel->objects.size());
-        for (int plateIdx = 0; plateIdx < loadedPlateCount; ++plateIdx)
+        bool hasGeometry = false;
+        for (const auto *obj : loadedModel->objects)
         {
-          const auto *plate = plateDataList[size_t(plateIdx)];
-          const QString plateName = (plate && !plate->plate_name.empty())
-                                        ? QString::fromStdString(plate->plate_name)
-                                        : QObject::tr("平板 %1").arg(plateIdx + 1);
-          loadedPlateNames << plateName;
-
-          QSet<int> uniq;
-          QList<int> objList;
-          if (plate)
+          if (!obj)
+            continue;
+          for (const auto *vol : obj->volumes)
           {
-            for (const auto &pair : plate->objects_and_instances)
+            if (!vol)
+              continue;
+            const auto &its = vol->mesh().its;
+            if (!its.vertices.empty() && !its.indices.empty())
             {
-              const int objIndex = pair.first;
-              if (objIndex >= 0 && objIndex < modelObjCount && !uniq.contains(objIndex))
-              {
-                uniq.insert(objIndex);
-                objList.append(objIndex);
-              }
+              hasGeometry = true;
+              break;
             }
           }
-          std::sort(objList.begin(), objList.end());
-          loadedPlateObjectIndices.append(objList);
+          if (hasGeometry)
+            break;
+        }
+
+        if (!hasGeometry)
+        {
+          err = "model has no renderable mesh data";
+          ok = false;
+        }
+        else
+        {
+          ok = true;
+          loadedPlateCount = int(plateDataList.size());
+
+          if (!plateDataList.empty())
+          {
+            loadedPlateNames.reserve(loadedPlateCount);
+            loadedPlateObjectIndices.reserve(loadedPlateCount);
+
+            const int modelObjCount = int(loadedModel->objects.size());
+            for (int plateIdx = 0; plateIdx < loadedPlateCount; ++plateIdx)
+            {
+              const auto *plate = plateDataList[size_t(plateIdx)];
+              const QString plateName = (plate && !plate->plate_name.empty())
+                                            ? QString::fromStdString(plate->plate_name)
+                                            : QObject::tr("平板 %1").arg(plateIdx + 1);
+              loadedPlateNames << plateName;
+
+              QSet<int> uniq;
+              QList<int> objList;
+              if (plate)
+              {
+                for (const auto &pair : plate->objects_and_instances)
+                {
+                  const int objIndex = pair.first;
+                  if (objIndex >= 0 && objIndex < modelObjCount && !uniq.contains(objIndex))
+                  {
+                    uniq.insert(objIndex);
+                    objList.append(objIndex);
+                  }
+                }
+              }
+              std::sort(objList.begin(), objList.end());
+              loadedPlateObjectIndices.append(objList);
+            }
+          }
+          else
+          {
+            loadedPlateCount = 1;
+            loadedPlateNames << QObject::tr("平板 1");
+
+            QList<int> allObjects;
+            allObjects.reserve(int(loadedModel->objects.size()));
+            for (int i = 0; i < int(loadedModel->objects.size()); ++i)
+              allObjects.append(i);
+            loadedPlateObjectIndices.append(allObjects);
+          }
+
+          if (receiver)
+          {
+            QMetaObject::invokeMethod(receiver, [receiver]() {
+              if (!receiver)
+                return;
+              receiver->loadProgress_ = 90;
+              emit receiver->loadProgressChanged();
+              emit receiver->loadProgressUpdated(90, QObject::tr("加载模型"));
+            }, Qt::QueuedConnection);
+          }
         }
       }
-
-      if (ok && loadedModel->objects.empty())
+      else
       {
-        ok = false;
         err = "no model objects parsed";
       }
     }
@@ -266,6 +328,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
     else
     {
       errorText = canceled ? QObject::tr("已取消加载") : (err.empty() ? QObject::tr("加载失败") : QString::fromStdString(err));
+      qWarning() << "[ProjectService] load failed:" << localPath << errorText;
     }
 
     if (!receiver)
@@ -347,30 +410,18 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
   return true;
 
 #else
-  // Fallback mock
-  modelCount_++;
-  plateCount_ = 1;
-  currentPlateIndex_ = 0;
-  objectNames_ << fi.baseName();
-  plateNames_.clear();
-  plateNames_ << tr("平板 1");
-  plateObjectIndices_.clear();
-  plateObjectIndices_.append(QList<int>{0});
-  projectName_ = fi.baseName();
-  sourceFilePath_ = fi.absoluteFilePath();
-  lastError_.clear();
+  Q_UNUSED(fi);
+  lastError_ = tr("当前构建未启用 libslic3r，无法导入模型");
   loading_ = false;
-  loadProgress_ = 100;
+  loadProgress_ = 0;
   activeCancelFlag_.reset();
   emit loadingChanged();
   emit loadProgressChanged();
-  emit loadProgressUpdated(100, tr("完成导入"));
-  qInfo() << "ProjectService (mock): loaded" << filePath;
   emit projectChanged();
-  emit plateDataLoaded(plateCount_);
+  emit plateDataLoaded(0);
   emit plateSelectionChanged();
-  emit loadFinished(true, tr("加载完成"));
-  return true;
+  emit loadFinished(false, lastError_);
+  return false;
 #endif
 }
 
@@ -536,24 +587,6 @@ bool ProjectServiceMock::deleteObject(int index)
     emit projectChanged();
     return false;
   }
-}
-
-void ProjectServiceMock::importMockModel()
-{
-  modelCount_++;
-  objectNames_ << QString("MockModel_%1").arg(modelCount_);
-  if (plateObjectIndices_.isEmpty())
-  {
-    plateObjectIndices_.append(QList<int>{});
-    plateNames_ << tr("平板 1");
-  }
-  plateObjectIndices_[0].append(modelCount_ - 1);
-  plateCount_ = plateObjectIndices_.size();
-  if (currentPlateIndex_ < 0)
-    currentPlateIndex_ = 0;
-  emit projectChanged();
-  emit plateDataLoaded(plateCount_);
-  emit plateSelectionChanged();
 }
 
 void ProjectServiceMock::clearProject()
@@ -725,6 +758,35 @@ QByteArray ProjectServiceMock::meshData() const
 
     if (batches.empty())
       return {};
+
+    // Auto-normalize model placement onto build plate:
+    // keep relative arrangement, move global center to (110, *, 110)
+    // and make lowest Y rest on the plate (Y=0).
+    const float centerX = (bminX + bmaxX) * 0.5f;
+    const float centerZ = (bminZ + bmaxZ) * 0.5f;
+    const float offsetX = 110.0f - centerX;
+    const float offsetZ = 110.0f - centerZ;
+    const float offsetY = (bminY < 0.0f) ? (-bminY) : 0.0f;
+
+    if (offsetX != 0.0f || offsetY != 0.0f || offsetZ != 0.0f)
+    {
+      for (auto &batch : batches)
+      {
+        for (size_t vi = 0; vi + 2 < batch.verts.size(); vi += 3)
+        {
+          batch.verts[vi + 0] += offsetX;
+          batch.verts[vi + 1] += offsetY;
+          batch.verts[vi + 2] += offsetZ;
+        }
+      }
+
+      bminX += offsetX;
+      bmaxX += offsetX;
+      bminY += offsetY;
+      bmaxY += offsetY;
+      bminZ += offsetZ;
+      bmaxZ += offsetZ;
+    }
 
     // ── 计算缓冲区大小并写入 ──────────────────────────────────────────────────
     if (batches.size() > size_t(std::numeric_limits<int32_t>::max()))

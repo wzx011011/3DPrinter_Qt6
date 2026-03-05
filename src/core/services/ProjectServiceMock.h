@@ -55,8 +55,6 @@ public:
    */
   QByteArray meshData() const;
 
-  /// Mock 导入（保留向后兼容）
-  Q_INVOKABLE void importMockModel();
   /// 清空当前项目（新建项目/重置场景）
   Q_INVOKABLE void clearProject();
 

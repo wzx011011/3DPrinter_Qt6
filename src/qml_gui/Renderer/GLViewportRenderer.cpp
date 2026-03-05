@@ -44,16 +44,13 @@ static const char *kMeshVertSrc =
 
 static const char *kMeshFragSrc =
     "#version 330 core\n"
-    "in  vec3 vWorldPos;\n"
+  "in  vec3 vWorldPos;\n"
     "out vec4 fragColor;\n"
     "uniform vec3  uBaseColor;\n"
     "uniform float uBrightness;\n"
     "void main(){\n"
-    "  vec3 dx = dFdx(vWorldPos); vec3 dy = dFdy(vWorldPos);\n"
-    "  vec3 n = normalize(cross(dx,dy));\n"
-    "  float diff = clamp(dot(n,normalize(vec3(0.6,1.0,0.8))),0.0,1.0);\n"
-    "  float l = (0.28 + 0.72*diff) * uBrightness;\n"
-    "  fragColor = vec4(uBaseColor*l, 1.0);\n"
+  "  vec3 col = mix(uBaseColor, vec3(1.0, 1.0, 1.0), 0.18) * uBrightness;\n"
+  "  fragColor = vec4(col, 1.0);\n"
     "}\n";
 
 // Gizmo shader: local verts shifted by uCenter and scaled by uGizmoScale
@@ -450,8 +447,7 @@ void GLViewportRenderer::render()
   }
 
   m_f->glEnable(GL_DEPTH_TEST);
-  m_f->glEnable(GL_CULL_FACE);
-  m_f->glCullFace(GL_BACK);
+  m_f->glDisable(GL_CULL_FACE);
   m_f->glClearColor(0.208f, 0.224f, 0.243f, 1.f);
   m_f->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -489,7 +485,6 @@ void GLViewportRenderer::render()
     renderGizmo(mvp);
 
   // 3. Grid / axes
-  m_f->glDisable(GL_CULL_FACE);
   m_prog.bind();
   m_prog.setUniformValue(m_uMVP, mvp);
   m_vao.bind();
@@ -866,6 +861,30 @@ void GLViewportRenderer::uploadMesh()
 
     if (m_selectedId >= 0 && aliveIds.find(m_selectedId) == aliveIds.end())
       m_selectedId = -1;
+
+    if (!m_meshBatches.empty())
+    {
+      float gmin[3] = {std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max()};
+      float gmax[3] = {-std::numeric_limits<float>::max(), -std::numeric_limits<float>::max(), -std::numeric_limits<float>::max()};
+
+      for (const auto &b : m_meshBatches)
+      {
+        for (int i = 0; i < 3; ++i)
+        {
+          gmin[i] = std::min(gmin[i], b.bboxMin[i]);
+          gmax[i] = std::max(gmax[i], b.bboxMax[i]);
+        }
+      }
+
+      const float cx = (gmin[0] + gmax[0]) * 0.5f;
+      const float cy = (gmin[1] + gmax[1]) * 0.5f;
+      const float cz = (gmin[2] + gmax[2]) * 0.5f;
+      const float dx = gmax[0] - gmin[0];
+      const float dy = gmax[1] - gmin[1];
+      const float dz = gmax[2] - gmin[2];
+      const float radius = std::max(10.0f, std::sqrt(dx * dx + dy * dy + dz * dz) * 0.5f);
+      m_camera.fitView(cx, cy, cz, radius);
+    }
 
     int tt = 0;
     for (const auto &b : m_meshBatches)

@@ -64,6 +64,15 @@ BackendContext::BackendContext(QObject *parent)
   modelMallViewModel_ = new ModelMallViewModel(this);
   multiMachineViewModel_ = new MultiMachineViewModel(this);
 
+  connect(projectService_, &ProjectServiceMock::loadFinished, this,
+          [this](bool success, const QString &message)
+          {
+            if (success)
+              clearError();
+            else
+              postError(message.isEmpty() ? tr("导入失败") : message, 2);
+          });
+
   // 实时监听偏好设置变化
   connect(settingsViewModel_, &SettingsViewModel::themeIndexChanged, this,
           [this]()

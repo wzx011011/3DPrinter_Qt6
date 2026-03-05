@@ -105,14 +105,12 @@ int main(int argc, char *argv[])
                        appendStartupLog(QStringLiteral("[QML WARNING] %1").arg(error.toString()));
                      }
                    });
-  QObject::connect(engine, &QQmlApplicationEngine::objectCreationFailed, engine,
-                   [](const QUrl &url)
+  QObject::connect(engine, &QQmlApplicationEngine::objectCreationFailed, engine, []()
                    {
-                     appendStartupLog(QStringLiteral("[QML CREATE FAILED] %1").arg(url.toString()));
-                   });
+                     appendStartupLog(QStringLiteral("QML object creation failed"));
+                     QCoreApplication::exit(-1); }, Qt::QueuedConnection);
 
   engine->rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
-  appendStartupLog(QStringLiteral("Loading qrc:/qml/main.qml"));
   engine->load(QUrl(QStringLiteral("qrc:/qml/main.qml")));
 
   // Retranslate all QML qsTr() after language switch

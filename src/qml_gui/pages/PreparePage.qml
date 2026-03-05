@@ -12,6 +12,14 @@ Item {
     required property var configVm
     property alias viewport3dRef: viewport3d
 
+    function applyFitHintIfReady() {
+        if (!root.editorVm)
+            return
+        var h = root.editorVm.fitHint
+        if (h && h.w > 0)
+            viewport3d.requestFitView(h.x, h.y, h.z, h.w)
+    }
+
     function undoFromTopbar() {
         viewport3d.undo()
     }
@@ -196,13 +204,16 @@ Item {
                 Connections {
                     target: root.editorVm
                     function onStateChanged() {
-                        if (!root.editorVm) return
-                        var h = root.editorVm.fitHint
-                        // fitHint.w = radius; 非零才有效
-                        if (h && h.w > 0)
-                            viewport3d.requestFitView(h.x, h.y, h.z, h.w)
+                        root.applyFitHintIfReady()
                     }
                 }
+
+                onVisibleChanged: {
+                    if (visible)
+                        Qt.callLater(root.applyFitHintIfReady)
+                }
+
+                Component.onCompleted: Qt.callLater(root.applyFitHintIfReady)
 
                 // Drag-and-drop model files directly onto the viewport
                 DropArea {

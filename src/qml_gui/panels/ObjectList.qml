@@ -160,7 +160,7 @@ Item {
         anchors.centerIn: parent
         anchors.verticalCenterOffset: -20
         visible: !root.editorVm || root.editorVm.objectCount === 0
-        text: qsTr("场景中无对象\n点击下方导入")
+        text: qsTr("场景中无对象\n请从顶部菜单导入模型")
         color: "#566070"
         font.pixelSize: 12
         horizontalAlignment: Text.AlignHCenter
@@ -189,8 +189,8 @@ Item {
             id: importMA
             anchors.fill: parent
             hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: { if (root.editorVm) root.editorVm.importMockModel() }
+            enabled: false
+            cursorShape: Qt.ArrowCursor
         }
     }
 }

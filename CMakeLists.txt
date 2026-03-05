@@ -38,6 +38,9 @@ if(BUILD_LIBSLIC3R)
 endif()
 
 if(CREALITY_QML_GUI)
+    if(NOT BUILD_LIBSLIC3R)
+        message(FATAL_ERROR "CREALITY_QML_GUI requires BUILD_LIBSLIC3R=ON. Mock/fake model loading is disabled.")
+    endif()
     find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent)
 
     qt_add_executable(FramelessDialogDemo
@@ -154,4 +157,4 @@ qt_add_translations(FramelessDialogDemo
         i18n/zh_CN.ts
         i18n/en.ts
 )
-
+

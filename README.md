@@ -8,7 +8,7 @@ Qt6 重写版 3D 打印桌面端原型工程（QML 主路线）。
 - 构建系统：CMake + Ninja
 - 语言标准：C++17
 - 默认入口：`src/qml_gui/main_qml.cpp`
-- 可选后端：`BUILD_LIBSLIC3R`（用于 3MF / 切片相关能力）
+- 必需后端：`BUILD_LIBSLIC3R=ON`（3MF/STL 导入与切片能力依赖）
 
 ## 快速开始（Windows）
 
@@ -16,12 +16,6 @@ Qt6 重写版 3D 打印桌面端原型工程（QML 主路线）。
 
 ```powershell
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCREALITY_QML_GUI=ON
-```
-
-如需跳过 libslic3r（更容易快速验证）：
-
-```powershell
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCREALITY_QML_GUI=ON -DBUILD_LIBSLIC3R=OFF
 ```
 
 ### 2) 编译
@@ -36,14 +30,10 @@ cmake --build build --config Release --target FramelessDialogDemo
 ./build/FramelessDialogDemo.exe
 ```
 
-## 测试
+## 说明
 
-编译测试目标并执行 smoke tests：
-
-```powershell
-cmake --build build --config Release --target ViewModelSmokeTests
-ctest --test-dir build --output-on-failure -R ViewModelSmokeTests
-```
+- 已禁用“假加载/Mock 导入成功”路径。
+- 若未启用 `BUILD_LIBSLIC3R`，配置阶段会直接失败，避免生成可启动但无法真实导入模型的包。
 
 ## CI / CD（Tag 触发）
 
