@@ -1,0 +1,73 @@
+name: Tag Build (Windows)
+
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Install Qt 6.10.0
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.0'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2022_64'
+
+      - name: Configure (CMake)
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_LIBSLIC3R=OFF
+          -DCREALITY_QML_GUI=ON
+
+      - name: Build
+        run: cmake --build build --config Release --target FramelessDialogDemo
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: FramelessDialogDemo-${{ github.ref_name }}-windows
+          path: |
+            build/FramelessDialogDemo.exe
+            build/*.dll
+            build/en.qm
+            build/zh_CN.qm
+          if-no-files-found: warn
+
+      - name: Package release zip
+        shell: pwsh
+        run: |
+          $outDir = "build/release"
+          New-Item -Path $outDir -ItemType Directory -Force | Out-Null
+          Copy-Item "build/FramelessDialogDemo.exe" $outDir -Force -ErrorAction SilentlyContinue
+          Copy-Item "build/*.dll" $outDir -Force -ErrorAction SilentlyContinue
+          Copy-Item "build/en.qm" $outDir -Force -ErrorAction SilentlyContinue
+          Copy-Item "build/zh_CN.qm" $outDir -Force -ErrorAction SilentlyContinue
+          $zipPath = "build/FramelessDialogDemo-${{ github.ref_name }}-windows.zip"
+          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+          Compress-Archive -Path "$outDir/*" -DestinationPath $zipPath
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          files: |
+            build/FramelessDialogDemo-${{ github.ref_name }}-windows.zip
