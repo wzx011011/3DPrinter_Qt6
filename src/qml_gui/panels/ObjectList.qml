@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
 
 // C3 — 对象列表面板
 // 绑定到 EditorViewModel Q_INVOKABLE 访问器，避免 QVariantList 暴露到 QML
@@ -14,8 +15,11 @@ Item {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 30
-        color: "#262b33"
+        height: 36
+        radius: 12
+        color: Theme.bgPanel
+        border.width: 1
+        border.color: Theme.borderSubtle
 
         RowLayout {
             anchors.fill: parent
@@ -25,14 +29,14 @@ Item {
 
             Text {
                 text: qsTr("对象列表")
-                color: "#9daaba"
-                font.pixelSize: 11
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeSM
                 font.bold: true
             }
             Rectangle {
-                width: 44; height: 18; radius: 2
-                color: root.editorVm && !root.editorVm.showAllObjects ? "#28be63" : "#3d434f"
-                Text { anchors.centerIn: parent; text: qsTr("当前盘"); color: "white"; font.pixelSize: 9 }
+                width: 54; height: 22; radius: 7
+                color: root.editorVm && !root.editorVm.showAllObjects ? Theme.accent : Theme.bgElevated
+                Text { anchors.centerIn: parent; text: qsTr("当前盘"); color: root.editorVm && !root.editorVm.showAllObjects ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: 9 }
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
@@ -40,9 +44,9 @@ Item {
                 }
             }
             Rectangle {
-                width: 34; height: 18; radius: 2
-                color: root.editorVm && root.editorVm.showAllObjects ? "#28be63" : "#3d434f"
-                Text { anchors.centerIn: parent; text: qsTr("全部"); color: "white"; font.pixelSize: 9 }
+                width: 42; height: 22; radius: 7
+                color: root.editorVm && root.editorVm.showAllObjects ? Theme.accent : Theme.bgElevated
+                Text { anchors.centerIn: parent; text: qsTr("全部"); color: root.editorVm && root.editorVm.showAllObjects ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: 9 }
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
@@ -52,7 +56,7 @@ Item {
             Item { Layout.fillWidth: true }
             Text {
                 text: root.editorVm ? root.editorVm.objectCount + qsTr(" 个") : "0" + qsTr(" 个")
-                color: "#566070"
+                color: Theme.textDisabled
                 font.pixelSize: 11
             }
         }
@@ -72,7 +76,7 @@ Item {
         delegate: Item {
             id: row
             width: listView.width
-            height: 34
+            height: 40
             required property int index
 
             readonly property bool isSelected: root.editorVm
@@ -83,13 +87,18 @@ Item {
             // 背景
             Rectangle {
                 anchors.fill: parent
-                color: row.isSelected ? "#1e3d2a"
-                     : selMA.containsMouse ? "#232930"
+                radius: 10
+                color: row.isSelected ? Theme.accentSubtle
+                     : selMA.containsMouse ? Theme.bgHover
                      : "transparent"
                 Rectangle {
                     // 左侧选中指示条
-                    width: 3; height: parent.height
-                    color: row.isSelected ? "#22c564" : "transparent"
+                    width: 3; height: parent.height - 10
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.leftMargin: 2
+                    radius: 2
+                    color: row.isSelected ? Theme.accent : "transparent"
                 }
             }
 
@@ -102,7 +111,7 @@ Item {
                 // 可见性切换小圆点
                 Rectangle {
                     width: 9; height: 9; radius: 5
-                    color: row.objVisible ? "#22c564" : "#3a4250"
+                    color: row.objVisible ? Theme.accent : Theme.bgPressed
                     MouseArea {
                         anchors.fill: parent
                         z: 2
@@ -118,19 +127,19 @@ Item {
                 Text {
                     Layout.fillWidth: true
                     text: root.editorVm ? root.editorVm.objectName(row.index) : ""
-                    color: row.isSelected ? "#e8f0ff" : "#bbc7d4"
+                    color: row.isSelected ? Theme.textPrimary : "#bbc7d4"
                     font.pixelSize: 12
                     elide: Text.ElideRight
                 }
 
                 // 删除按钮
                 Rectangle {
-                    width: 20; height: 20; radius: 3
+                    width: 22; height: 22; radius: 7
                     color: delMA.containsMouse ? "#7d2020" : "transparent"
                     Text {
                         anchors.centerIn: parent
                         text: "✕"
-                        color: delMA.containsMouse ? "#ffaaaa" : "#566070"
+                        color: delMA.containsMouse ? "#ffaaaa" : Theme.textDisabled
                         font.pixelSize: 10
                     }
                     MouseArea {
@@ -161,7 +170,7 @@ Item {
         anchors.verticalCenterOffset: -20
         visible: !root.editorVm || root.editorVm.objectCount === 0
         text: qsTr("场景中无对象\n请从顶部菜单导入模型")
-        color: "#566070"
+        color: Theme.textDisabled
         font.pixelSize: 12
         horizontalAlignment: Text.AlignHCenter
         lineHeight: 1.5
@@ -174,15 +183,16 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.margins: 8
-        height: 28
-        radius: 4
-        color: importMA.containsMouse ? "#19a84e" : "#157a39"
+        height: 34
+        radius: 12
+        color: importMA.containsMouse ? Theme.accentLight : Theme.accent
 
         Text {
             anchors.centerIn: parent
             text: qsTr("+ 导入模型")
-            color: "white"
+            color: Theme.textOnAccent
             font.pixelSize: 12
+            font.bold: true
         }
 
         MouseArea {

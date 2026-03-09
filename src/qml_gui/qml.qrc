@@ -45,6 +45,25 @@
         <file>assets/prepare_ref.png</file>
         <file>assets/preview_ref.png</file>
         <file>assets/monitor_ref.png</file>
+        <file>assets/icons/arrow-back-up.svg</file>
+        <file>assets/icons/arrow-forward-up.svg</file>
+        <file>assets/icons/box.svg</file>
+        <file>assets/icons/device-floppy.svg</file>
+        <file>assets/icons/dots.svg</file>
+        <file>assets/icons/folder-plus.svg</file>
+        <file>assets/icons/folder-open.svg</file>
+        <file>assets/icons/layout-grid.svg</file>
+        <file>assets/icons/layout-sidebar-right.svg</file>
+        <file>assets/icons/list-details.svg</file>
+        <file>assets/icons/lock.svg</file>
+        <file>assets/icons/maximize.svg</file>
+        <file>assets/icons/minus.svg</file>
+        <file>assets/icons/printer.svg</file>
+        <file>assets/icons/rotate-2.svg</file>
+        <file>assets/icons/restore.svg</file>
+        <file>assets/icons/send-2.svg</file>
+        <file>assets/icons/settings.svg</file>
+        <file>assets/icons/x.svg</file>
     </qresource>
     <!-- Qt Quick Controls 2 style config must be at root prefix -->
     <qresource prefix="/">

@@ -53,6 +53,84 @@ ApplicationWindow {
         return qsTr("未命名")
     }
 
+    component TitleBarDivider: Rectangle {
+        implicitWidth: 1
+        implicitHeight: 18
+        radius: 1
+        color: "#263040"
+    }
+
+    component TitleIconButton: ToolButton {
+        id: control
+        property url iconSource: ""
+        property string toolTipText: ""
+        property color iconTint: root.topbarText
+
+        implicitWidth: 34
+        implicitHeight: 34
+        flat: true
+        hoverEnabled: true
+
+        background: Rectangle {
+            radius: 8
+            color: control.down ? root.topbarPressed : (control.hovered ? root.topbarHover : "transparent")
+            border.width: 1
+            border.color: control.hovered ? "#2f3d54" : "transparent"
+            opacity: control.enabled ? 1.0 : 0.45
+        }
+
+        contentItem: Item {
+            Image {
+                anchors.centerIn: parent
+                width: 18
+                height: 18
+                source: control.iconSource
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                opacity: control.enabled ? 1.0 : 0.65
+            }
+        }
+
+        ToolTip.visible: control.hovered && control.toolTipText.length > 0
+        ToolTip.text: control.toolTipText
+        ToolTip.delay: 400
+    }
+
+    component TitleWindowButton: ToolButton {
+        id: control
+        property url iconSource: ""
+        property bool danger: false
+        property string toolTipText: ""
+
+        implicitWidth: 34
+        implicitHeight: 34
+        flat: true
+        hoverEnabled: true
+
+        background: Rectangle {
+            radius: 8
+            color: control.danger
+                ? (control.down ? "#aa1f2d" : (control.hovered ? "#d33241" : "transparent"))
+                : (control.down ? root.topbarPressed : (control.hovered ? root.topbarHover : "transparent"))
+        }
+
+        contentItem: Item {
+            Image {
+                anchors.centerIn: parent
+                width: 16
+                height: 16
+                source: control.iconSource
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                opacity: control.enabled ? 1.0 : 0.65
+            }
+        }
+
+        ToolTip.visible: control.hovered && control.toolTipText.length > 0
+        ToolTip.text: control.toolTipText
+        ToolTip.delay: 400
+    }
+
     Connections {
         target: backend
         function onLanguageChanged() { root.workflowTabs = root.buildWorkflowTabs() }
@@ -219,7 +297,7 @@ ApplicationWindow {
             Rectangle {
                 id: titleBar
                 Layout.fillWidth: true
-                Layout.preferredHeight: 44
+                Layout.preferredHeight: 52
                 color: backend.surfaceColor
 
                 MouseArea {
@@ -241,165 +319,216 @@ ApplicationWindow {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 12
+                    anchors.leftMargin: 14
                     anchors.rightMargin: 8
-                    spacing: 6
+                    spacing: 8
 
                     Rectangle {
-                        Layout.preferredWidth: 22
-                        Layout.preferredHeight: 22
-                        radius: 4
-                        color: "#121821"
-                        border.color: "#273040"
-                        Text {
+                        Layout.preferredWidth: 32
+                        Layout.preferredHeight: 32
+                        radius: 9
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: "#152230" }
+                            GradientStop { position: 1.0; color: "#0f161f" }
+                        }
+                        border.color: "#2b394d"
+
+                        Rectangle {
+                            width: 16
+                            height: 16
+                            radius: 5
                             anchors.centerIn: parent
-                            text: "△"
                             color: root.accentColor
-                            font.bold: true
-                            font.pixelSize: 14
+                            opacity: 0.12
                         }
-                    }
 
-                    Rectangle {
-                        id: fileEntry
-                        Layout.preferredHeight: 28
-                        Layout.preferredWidth: 92
-                        radius: 7
-                        border.width: 1
-                        border.color: fileMouse.containsMouse ? "#314058" : "#253043"
-                        color: fileMouse.pressed ? root.topbarPressed : (fileMouse.containsMouse ? root.topbarHover : "#151b25")
-                        Row {
+                        Image {
                             anchors.centerIn: parent
-                            spacing: 6
-                            Text {
-                                text: qsTr("三文件")
-                                color: "#dce5f1"
-                                font.pixelSize: 12
-                                font.bold: true
-                            }
-                            Text {
-                                text: "▾"
-                                color: "#9fb0c7"
-                                font.pixelSize: 11
-                            }
-                        }
-                        MouseArea {
-                            id: fileMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                const p = fileEntry.mapToItem(root.contentItem, 0, fileEntry.height + 4)
-                                fileMenu.popup(p.x, p.y)
-                            }
+                            width: 18
+                            height: 18
+                            source: "qrc:/qml/assets/icons/printer.svg"
+                            fillMode: Image.PreserveAspectFit
+                            smooth: true
                         }
                     }
 
-                    Rectangle { width: 1; height: 18; color: "#2e3444" }
+                    Column {
+                        Layout.alignment: Qt.AlignVCenter
+                        spacing: 0
 
-                    ToolButton {
-                        text: qsTr("保")
-                        implicitWidth: 28
-                        implicitHeight: 28
-                        flat: true
-                        hoverEnabled: true
-                        onClicked: {
-                            if (!backend.topbarSaveProject())
-                                saveProjectAsDialog.open()
-                        }
-                        background: Rectangle {
-                            radius: 6
-                            color: parent.down ? root.topbarPressed : (parent.hovered ? root.topbarHover : "transparent")
-                            border.color: parent.hovered ? "#2f3d54" : "transparent"
-                        }
-                        contentItem: Text {
-                            text: parent.text
-                            color: root.topbarText
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
+                        Text {
+                            text: qsTr("Creality Print")
+                            color: "#edf3fb"
                             font.pixelSize: 12
                             font.bold: true
                         }
-                    }
 
-                    ToolButton {
-                        text: "↶"
-                        implicitWidth: 28
-                        implicitHeight: 28
-                        enabled: backend.currentPage === root.pagePrepare
-                        flat: true
-                        hoverEnabled: true
-                        onClicked: if (backend.currentPage === root.pagePrepare) preparePage.undoFromTopbar()
-                        background: Rectangle {
-                            radius: 6
-                            color: parent.down ? root.topbarPressed : (parent.hovered ? root.topbarHover : "transparent")
-                            border.color: parent.hovered ? "#2f3d54" : "transparent"
-                            opacity: parent.enabled ? 1.0 : 0.45
-                        }
-                        contentItem: Text {
-                            text: parent.text
-                            color: parent.enabled ? root.topbarText : "#78879c"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            font.pixelSize: 13
+                        Text {
+                            text: qsTr("工作区")
+                            color: "#7f90a6"
+                            font.pixelSize: 10
                         }
                     }
 
-                    ToolButton {
-                        text: "↷"
-                        implicitWidth: 28
-                        implicitHeight: 28
-                        enabled: backend.currentPage === root.pagePrepare
-                        flat: true
-                        hoverEnabled: true
-                        onClicked: if (backend.currentPage === root.pagePrepare) preparePage.redoFromTopbar()
-                        background: Rectangle {
-                            radius: 6
-                            color: parent.down ? root.topbarPressed : (parent.hovered ? root.topbarHover : "transparent")
-                            border.color: parent.hovered ? "#2f3d54" : "transparent"
-                            opacity: parent.enabled ? 1.0 : 0.45
-                        }
-                        contentItem: Text {
-                            text: parent.text
-                            color: parent.enabled ? root.topbarText : "#78879c"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            font.pixelSize: 13
-                        }
-                    }
+                    Item { Layout.fillWidth: true }
 
-                    Rectangle { width: 1; height: 18; color: "#2e3444" }
+                    RowLayout {
+                        id: centeredGroups
+                        Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+                        spacing: 8
 
-                    Repeater {
-                        model: root.workflowTabs
-                        delegate: Rectangle {
-                            required property var modelData
+                        Rectangle {
+                            id: fileEntry
                             Layout.preferredHeight: 30
-                            Layout.preferredWidth: Math.max(76, implicitLbl.implicitWidth + 22)
-                            radius: 6
-                            color: backend.currentPage === modelData.page
-                                ? "#1c3828"
-                                : (tabHov.containsMouse ? root.topbarHover : "transparent")
-                            border.color: backend.currentPage === modelData.page ? root.accentColor : "transparent"
+                            Layout.preferredWidth: 104
+                            radius: 9
                             border.width: 1
+                            border.color: fileMouse.containsMouse ? "#314058" : "#253043"
+                            color: fileMouse.pressed ? root.topbarPressed : (fileMouse.containsMouse ? root.topbarHover : "#10161e")
 
-                            Text {
-                                id: implicitLbl
+                            RowLayout {
                                 anchors.centerIn: parent
-                                text: parent.modelData.label
-                                color: backend.currentPage === parent.modelData.page ? root.accentColor : "#a8b5c8"
-                                font.pixelSize: 12
-                                font.bold: backend.currentPage === parent.modelData.page
+                                spacing: 6
+
+                                Image {
+                                    width: 14
+                                    height: 14
+                                    source: "qrc:/qml/assets/icons/folder-open.svg"
+                                    fillMode: Image.PreserveAspectFit
+                                    smooth: true
+                                }
+
+                                Text {
+                                    text: qsTr("文件")
+                                    color: "#dce5f1"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                Text {
+                                    text: "▾"
+                                    color: "#9fb0c7"
+                                    font.pixelSize: 11
+                                }
                             }
 
-                            HoverHandler { id: tabHov }
-                            TapHandler {
-                                onTapped: {
-                                    if (backend.currentPage === parent.modelData.page)
-                                        return
-                                    root.pendingSwitchToken = backend.beginLatency("tab-switch", parent.modelData.label)
-                                    root.pendingSwitchTargetPage = parent.modelData.page
-                                    backend.setCurrentPage(parent.modelData.page)
+                            MouseArea {
+                                id: fileMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    const p = fileEntry.mapToItem(root.contentItem, 0, fileEntry.height + 4)
+                                    fileMenu.popup(p.x, p.y)
+                                }
+                            }
+                        }
+
+                        TitleBarDivider { }
+
+                        Rectangle {
+                            Layout.preferredHeight: 34
+                            Layout.preferredWidth: actionTools.implicitWidth + 16
+                            radius: 10
+                            color: "#0f151d"
+                            border.color: "#253043"
+
+                            RowLayout {
+                                id: actionTools
+                                anchors.fill: parent
+                                anchors.leftMargin: 6
+                                anchors.rightMargin: 6
+                                spacing: 4
+
+                                Rectangle {
+                                    Layout.preferredWidth: 28
+                                    Layout.preferredHeight: 28
+                                    radius: 7
+                                    color: "#14202c"
+                                    border.color: "#223041"
+
+                                    Image {
+                                        anchors.centerIn: parent
+                                        width: 14
+                                        height: 14
+                                        source: "qrc:/qml/assets/icons/layout-grid.svg"
+                                        fillMode: Image.PreserveAspectFit
+                                        smooth: true
+                                    }
+                                }
+
+                                TitleIconButton {
+                                    iconSource: "qrc:/qml/assets/icons/device-floppy.svg"
+                                    toolTipText: qsTr("保存项目")
+                                    onClicked: {
+                                        if (!backend.topbarSaveProject())
+                                            saveProjectAsDialog.open()
+                                    }
+                                }
+
+                                TitleIconButton {
+                                    iconSource: "qrc:/qml/assets/icons/arrow-back-up.svg"
+                                    toolTipText: qsTr("撤销")
+                                    enabled: backend.currentPage === root.pagePrepare
+                                    onClicked: if (backend.currentPage === root.pagePrepare) preparePage.undoFromTopbar()
+                                }
+
+                                TitleIconButton {
+                                    iconSource: "qrc:/qml/assets/icons/arrow-forward-up.svg"
+                                    toolTipText: qsTr("重做")
+                                    enabled: backend.currentPage === root.pagePrepare
+                                    onClicked: if (backend.currentPage === root.pagePrepare) preparePage.redoFromTopbar()
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.preferredHeight: 34
+                            Layout.preferredWidth: tabsRow.implicitWidth + 14
+                            radius: 11
+                            color: "#0f151d"
+                            border.color: "#253043"
+
+                            RowLayout {
+                                id: tabsRow
+                                anchors.fill: parent
+                                anchors.leftMargin: 6
+                                anchors.rightMargin: 6
+                                spacing: 6
+
+                                Repeater {
+                                    model: root.workflowTabs
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        Layout.preferredHeight: 26
+                                        Layout.preferredWidth: Math.max(82, implicitLbl.implicitWidth + 28)
+                                        radius: 8
+                                        color: backend.currentPage === modelData.page
+                                            ? "#183425"
+                                            : (tabHov.containsMouse ? root.topbarHover : "transparent")
+                                        border.color: backend.currentPage === modelData.page ? root.accentColor : "transparent"
+                                        border.width: 1
+
+                                        Text {
+                                            id: implicitLbl
+                                            anchors.centerIn: parent
+                                            text: parent.modelData.label
+                                            color: backend.currentPage === parent.modelData.page ? root.accentColor : "#a8b5c8"
+                                            font.pixelSize: 12
+                                            font.bold: backend.currentPage === parent.modelData.page
+                                        }
+
+                                        HoverHandler { id: tabHov }
+                                        TapHandler {
+                                            onTapped: {
+                                                if (backend.currentPage === parent.modelData.page)
+                                                    return
+                                                root.pendingSwitchToken = backend.beginLatency("tab-switch", parent.modelData.label)
+                                                root.pendingSwitchTargetPage = parent.modelData.page
+                                                backend.setCurrentPage(parent.modelData.page)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -407,99 +536,96 @@ ApplicationWindow {
 
                     Item { Layout.fillWidth: true }
 
-                    Label {
-                        text: root.currentProjectTitle()
-                        color: "#c9d4e4"
-                        font.pixelSize: 12
-                        elide: Text.ElideRight
-                        horizontalAlignment: Text.AlignRight
-                        Layout.preferredWidth: 220
-                        Layout.maximumWidth: 260
-                        ToolTip.visible: titleMouse.containsMouse && text.length > 0
-                        ToolTip.text: text
-                        MouseArea {
-                            id: titleMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            acceptedButtons: Qt.NoButton
-                        }
-                    }
+                    RowLayout {
+                        Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                        spacing: 8
 
-                    ToolButton {
-                        text: "⋯"
-                        implicitWidth: 28
-                        implicitHeight: 28
-                        flat: true
-                        hoverEnabled: true
-                        onClicked: {
-                            const p = this.mapToItem(root.contentItem, 0, this.height + 4)
-                            dropdownMenu.popup(p.x, p.y)
-                        }
-                        background: Rectangle {
-                            radius: 6
-                            color: parent.down ? root.topbarPressed : (parent.hovered ? root.topbarHover : "transparent")
-                            border.color: parent.hovered ? "#2f3d54" : "transparent"
-                        }
-                        contentItem: Text {
-                            text: parent.text
-                            color: root.topbarText
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                    }
+                        Rectangle {
+                            Layout.preferredHeight: 30
+                            Layout.preferredWidth: 224
+                            Layout.maximumWidth: 280
+                            radius: 9
+                            color: "#10161e"
+                            border.color: "#253043"
 
-                    ToolButton {
-                        text: "－"
-                        implicitWidth: 28
-                        implicitHeight: 28
-                        flat: true
-                        hoverEnabled: true
-                        onClicked: root.showMinimized()
-                        background: Rectangle {
-                            radius: 6
-                            color: parent.down ? root.topbarPressed : (parent.hovered ? root.topbarHover : "transparent")
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 10
+                                anchors.rightMargin: 10
+                                spacing: 8
+
+                                Rectangle {
+                                    width: 6
+                                    height: 6
+                                    radius: 3
+                                    color: root.accentColor
+                                }
+
+                                Label {
+                                    id: projectTitleLabel
+                                    Layout.fillWidth: true
+                                    text: root.currentProjectTitle()
+                                    color: "#c9d4e4"
+                                    font.pixelSize: 12
+                                    elide: Text.ElideRight
+                                    verticalAlignment: Text.AlignVCenter
+                                    ToolTip.visible: titleMouse.containsMouse && text.length > 0
+                                    ToolTip.text: text
+                                }
+
+                                MouseArea {
+                                    id: titleMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    acceptedButtons: Qt.NoButton
+                                }
+                            }
                         }
-                        contentItem: Text {
-                            text: parent.text
-                            color: root.topbarText
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
+
+                        TitleIconButton {
+                            iconSource: "qrc:/qml/assets/icons/dots.svg"
+                            toolTipText: qsTr("更多")
+                            onClicked: {
+                                const p = this.mapToItem(root.contentItem, 0, this.height + 4)
+                                dropdownMenu.popup(p.x, p.y)
+                            }
                         }
-                    }
-                    ToolButton {
-                        text: root.visibility === Window.Maximized ? "❐" : "□"
-                        implicitWidth: 28
-                        implicitHeight: 28
-                        flat: true
-                        hoverEnabled: true
-                        onClicked: root.visibility === Window.Maximized ? root.showNormal() : root.showMaximized()
-                        background: Rectangle {
-                            radius: 6
-                            color: parent.down ? root.topbarPressed : (parent.hovered ? root.topbarHover : "transparent")
-                        }
-                        contentItem: Text {
-                            text: parent.text
-                            color: root.topbarText
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                    }
-                    ToolButton {
-                        text: "✕"
-                        implicitWidth: 28
-                        implicitHeight: 28
-                        flat: true
-                        hoverEnabled: true
-                        onClicked: Qt.quit()
-                        background: Rectangle {
-                            radius: 6
-                            color: parent.down ? "#aa1f2d" : (parent.hovered ? "#d33241" : "transparent")
-                        }
-                        contentItem: Text {
-                            text: parent.text
-                            color: parent.hovered ? "#ffffff" : "#d9e2ef"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
+
+                        Rectangle {
+                            Layout.preferredHeight: 34
+                            Layout.preferredWidth: windowControls.implicitWidth + 16
+                            radius: 10
+                            color: "#0f151d"
+                            border.color: "#253043"
+
+                            RowLayout {
+                                id: windowControls
+                                anchors.fill: parent
+                                anchors.leftMargin: 6
+                                anchors.rightMargin: 6
+                                spacing: 4
+
+                                TitleWindowButton {
+                                    iconSource: "qrc:/qml/assets/icons/minus.svg"
+                                    toolTipText: qsTr("最小化")
+                                    onClicked: root.showMinimized()
+                                }
+
+                                TitleWindowButton {
+                                    iconSource: root.visibility === Window.Maximized
+                                        ? "qrc:/qml/assets/icons/restore.svg"
+                                        : "qrc:/qml/assets/icons/maximize.svg"
+                                    toolTipText: root.visibility === Window.Maximized ? qsTr("还原") : qsTr("最大化")
+                                    onClicked: root.visibility === Window.Maximized ? root.showNormal() : root.showMaximized()
+                                }
+
+                                TitleWindowButton {
+                                    iconSource: "qrc:/qml/assets/icons/x.svg"
+                                    toolTipText: qsTr("关闭")
+                                    danger: true
+                                    onClicked: Qt.quit()
+                                }
+                            }
                         }
                     }
                 }

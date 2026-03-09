@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
 
 // G4 — 打印设置面板（动态 ConfigOptionModel，ListView + Q_INVOKABLE 访问器）
 Item {
@@ -13,15 +14,18 @@ Item {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 34
-        color: "#262b33"
+        height: 38
+        radius: 12
+        color: Theme.bgPanel
+        border.width: 1
+        border.color: Theme.borderSubtle
 
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: 8
             anchors.rightMargin: 8
             spacing: 6
-            Text { text: qsTr("质量预设"); color: "#9daaba"; font.pixelSize: 11 }
+            Text { text: qsTr("质量预设"); color: Theme.textSecondary; font.pixelSize: 11 }
             ComboBox {
                 id: presetCombo
                 Layout.fillWidth: true
@@ -68,15 +72,23 @@ Item {
             readonly property bool   oRO:    opts ? opts.optReadonly(index) : false
 
             width:  paramList.width
-            height: (oType === "double" || oType === "int") ? 52 : 36
-            color:  index % 2 === 0 ? "transparent" : "#0a0d12"
+            height: (oType === "double" || oType === "int") ? 56 : 40
+            radius: 10
+            color:  pHover.containsMouse ? Theme.bgHover : (index % 2 === 0 ? "transparent" : "#0a0d12")
+
+            MouseArea {
+                id: pHover
+                anchors.fill: parent
+                hoverEnabled: true
+                acceptedButtons: Qt.NoButton
+            }
 
             RowLayout {
                 anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 8; spacing: 8
 
                 Text {
                     Layout.preferredWidth: 90
-                    text: pRow.oLabel; color: pRow.oRO ? "#4a5668" : "#9daaba"
+                    text: pRow.oLabel; color: pRow.oRO ? Theme.textDisabled : Theme.textSecondary
                     font.pixelSize: 11; elide: Text.ElideRight
                 }
 
@@ -95,7 +107,7 @@ Item {
                         text: typeof pRow.oVal === "number"
                               ? Number(pRow.oVal).toFixed(pRow.oType === "double" ? 2 : 0)
                               : "—"
-                        color: "#e2e8f1"; font.pixelSize: 10; font.bold: true
+                        color: Theme.textPrimary; font.pixelSize: 10; font.bold: true
                         Layout.preferredWidth: 38
                     }
                 }
@@ -134,14 +146,14 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.margins: 8
-        height: 30
-        radius: 4
-        color: sliceMA.containsMouse ? "#1db554" : "#157a39"
+        height: 36
+        radius: 12
+        color: sliceMA.containsMouse ? Theme.accentLight : Theme.accent
 
         Text {
             anchors.centerIn: parent
             text: qsTr("▶ 开始切片")
-            color: "white"; font.pixelSize: 12; font.bold: true
+            color: Theme.textOnAccent; font.pixelSize: 12; font.bold: true
         }
 
         MouseArea {

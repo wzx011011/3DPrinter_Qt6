@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
+import "../controls"
 
 Item {
     id: root
@@ -8,19 +10,19 @@ Item {
 
     RowLayout {
         anchors.fill: parent
-        spacing: 8
+        spacing: Theme.spacingMD
 
-        Button {
+        CxButton {
             text: qsTr("播放")
             onClicked: root.previewVm.playAnimation()
         }
 
-        Button {
+        CxButton {
             text: qsTr("暂停")
             onClicked: root.previewVm.pauseAnimation()
         }
 
-        Slider {
+        CxSlider {
             id: moveSlider
             Layout.fillWidth: true
             from: 0
@@ -32,7 +34,7 @@ Item {
 
         Label {
             text: root.previewVm.currentMove + " / " + root.previewVm.moveCount
-            color: "#dfe6ef"
+            color: Theme.textPrimary
             font.pixelSize: 12
         }
     }

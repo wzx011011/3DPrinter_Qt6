@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
+import "../controls"
 
 Item {
     id: root
@@ -8,11 +10,11 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: 8
+        spacing: Theme.spacingSM
 
-        Label { text: qsTr("层范围"); color: "#dfe6ef" }
+        Label { text: qsTr("层范围"); color: Theme.textPrimary; font.bold: true; font.pixelSize: Theme.fontSizeLG }
 
-        Slider {
+        CxSlider {
             id: minSlider
             Layout.fillWidth: true
             from: 0
@@ -22,7 +24,7 @@ Item {
             onMoved: root.previewVm.setLayerRange(Math.round(value), root.previewVm.currentLayerMax)
         }
 
-        Slider {
+        CxSlider {
             id: maxSlider
             Layout.fillWidth: true
             from: 0
@@ -34,7 +36,7 @@ Item {
 
         Label {
             text: root.previewVm.currentLayerMin + " - " + root.previewVm.currentLayerMax
-            color: "#9aa4b3"
+            color: Theme.textSecondary
             font.pixelSize: 12
         }
     }
