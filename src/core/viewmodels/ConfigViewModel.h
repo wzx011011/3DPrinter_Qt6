@@ -1,9 +1,12 @@
 #pragma once
 
 #include <QObject>
+#include <QHash>
+#include <QSet>
 #include <QStringList>
 
 class PresetServiceMock;
+class ProjectServiceMock;
 class ConfigOptionModel;
 class PresetListModel;
 
@@ -26,9 +29,14 @@ class ConfigViewModel final : public QObject
   // G3 — Dynamic models
   Q_PROPERTY(QObject *printOptions READ printOptions CONSTANT)
   Q_PROPERTY(QObject *presetList READ presetList CONSTANT)
+  Q_PROPERTY(QString settingsScope READ settingsScope NOTIFY stateChanged)
+  Q_PROPERTY(QString settingsTargetType READ settingsTargetType NOTIFY stateChanged)
+  Q_PROPERTY(QString settingsTargetName READ settingsTargetName NOTIFY stateChanged)
+  Q_PROPERTY(int settingsTargetObjectIndex READ settingsTargetObjectIndex NOTIFY stateChanged)
+  Q_PROPERTY(int settingsTargetVolumeIndex READ settingsTargetVolumeIndex NOTIFY stateChanged)
 
 public:
-  explicit ConfigViewModel(PresetServiceMock *presetService, QObject *parent = nullptr);
+  explicit ConfigViewModel(PresetServiceMock *presetService, ProjectServiceMock *projectService, QObject *parent = nullptr);
 
   QStringList presetNames() const;
   QString currentPreset() const;
@@ -43,6 +51,11 @@ public:
   int topLayers() const { return topLayers_; }
   int bottomLayers() const { return bottomLayers_; }
   bool enableBrim() const { return enableBrim_; }
+  QString settingsScope() const { return settingsScope_; }
+  QString settingsTargetType() const { return settingsTargetType_; }
+  QString settingsTargetName() const { return settingsTargetName_; }
+  int settingsTargetObjectIndex() const { return settingsTargetObjectIndex_; }
+  int settingsTargetVolumeIndex() const { return settingsTargetVolumeIndex_; }
 
   QObject *printOptions() const;
   QObject *presetList() const;
@@ -57,14 +70,23 @@ public:
   Q_INVOKABLE void setBedTemp(int v);
   Q_INVOKABLE void setWallCount(int v);
   Q_INVOKABLE void setEnableBrim(bool v);
+  Q_INVOKABLE void activateGlobalScope();
+  Q_INVOKABLE void activateObjectScope(const QString &targetType, const QString &targetName, int objectIndex = -1, int volumeIndex = -1);
 
 signals:
   void stateChanged();
 
 private:
   PresetServiceMock *presetService_ = nullptr;
+  ProjectServiceMock *projectService_ = nullptr;
   ConfigOptionModel *printOptions_ = nullptr;
   PresetListModel *presetList_ = nullptr;
+
+  void applyScopeValues();
+  void handleOptionValueChanged(const QString &key, const QVariant &value);
+  QVariant scopedValueForKey(const QString &key, const QVariant &fallback) const;
+  QHash<QString, QVariant> buildScopeValues() const;
+  QSet<QString> readonlyKeysForCurrentScope() const;
 
   QString currentPreset_;
   double layerHeight_ = 0.2;
@@ -77,4 +99,12 @@ private:
   int topLayers_ = 4;
   int bottomLayers_ = 4;
   bool enableBrim_ = false;
+  QString settingsScope_ = QStringLiteral("global");
+  QString settingsTargetType_;
+  QString settingsTargetName_;
+  int settingsTargetObjectIndex_ = -1;
+  int settingsTargetVolumeIndex_ = -1;
+  bool applyingScopeValues_ = false;
+  QHash<QString, QVariant> globalOptionValues_;
+  QSet<QString> scopedWritableKeys_;
 };

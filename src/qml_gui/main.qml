@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
 import QtQuick.Window
+import "controls"
 import "pages"
 import "components"
 
@@ -58,77 +59,6 @@ ApplicationWindow {
         implicitHeight: 18
         radius: 1
         color: "#263040"
-    }
-
-    component TitleIconButton: ToolButton {
-        id: control
-        property url iconSource: ""
-        property string toolTipText: ""
-        property color iconTint: root.topbarText
-
-        implicitWidth: 34
-        implicitHeight: 34
-        flat: true
-        hoverEnabled: true
-
-        background: Rectangle {
-            radius: 8
-            color: control.down ? root.topbarPressed : (control.hovered ? root.topbarHover : "transparent")
-            border.width: 1
-            border.color: control.hovered ? "#2f3d54" : "transparent"
-            opacity: control.enabled ? 1.0 : 0.45
-        }
-
-        contentItem: Item {
-            Image {
-                anchors.centerIn: parent
-                width: 18
-                height: 18
-                source: control.iconSource
-                fillMode: Image.PreserveAspectFit
-                smooth: true
-                opacity: control.enabled ? 1.0 : 0.65
-            }
-        }
-
-        ToolTip.visible: control.hovered && control.toolTipText.length > 0
-        ToolTip.text: control.toolTipText
-        ToolTip.delay: 400
-    }
-
-    component TitleWindowButton: ToolButton {
-        id: control
-        property url iconSource: ""
-        property bool danger: false
-        property string toolTipText: ""
-
-        implicitWidth: 34
-        implicitHeight: 34
-        flat: true
-        hoverEnabled: true
-
-        background: Rectangle {
-            radius: 8
-            color: control.danger
-                ? (control.down ? "#aa1f2d" : (control.hovered ? "#d33241" : "transparent"))
-                : (control.down ? root.topbarPressed : (control.hovered ? root.topbarHover : "transparent"))
-        }
-
-        contentItem: Item {
-            Image {
-                anchors.centerIn: parent
-                width: 16
-                height: 16
-                source: control.iconSource
-                fillMode: Image.PreserveAspectFit
-                smooth: true
-                opacity: control.enabled ? 1.0 : 0.65
-            }
-        }
-
-        ToolTip.visible: control.hovered && control.toolTipText.length > 0
-        ToolTip.text: control.toolTipText
-        ToolTip.delay: 400
     }
 
     Connections {
@@ -253,8 +183,8 @@ ApplicationWindow {
         sequence: "Delete"
         enabled: backend.currentPage === root.pagePrepare
                  && backend.editorViewModel
-                 && backend.editorViewModel.selectedObjectIndex >= 0
-        onActivated: backend.editorViewModel.deleteObject(backend.editorViewModel.selectedObjectIndex)
+                 && backend.editorViewModel.hasSelection
+        onActivated: backend.editorViewModel.deleteSelection()
     }
 
         readonly property string compareReferenceSource: backend.currentPage === 1
@@ -457,7 +387,10 @@ ApplicationWindow {
                                     }
                                 }
 
-                                TitleIconButton {
+                                CxIconButton {
+                                    cxStyle: CxIconButton.Style.Chrome
+                                    buttonSize: 34
+                                    iconSize: 18
                                     iconSource: "qrc:/qml/assets/icons/device-floppy.svg"
                                     toolTipText: qsTr("保存项目")
                                     onClicked: {
@@ -466,14 +399,20 @@ ApplicationWindow {
                                     }
                                 }
 
-                                TitleIconButton {
+                                CxIconButton {
+                                    cxStyle: CxIconButton.Style.Chrome
+                                    buttonSize: 34
+                                    iconSize: 18
                                     iconSource: "qrc:/qml/assets/icons/arrow-back-up.svg"
                                     toolTipText: qsTr("撤销")
                                     enabled: backend.currentPage === root.pagePrepare
                                     onClicked: if (backend.currentPage === root.pagePrepare) preparePage.undoFromTopbar()
                                 }
 
-                                TitleIconButton {
+                                CxIconButton {
+                                    cxStyle: CxIconButton.Style.Chrome
+                                    buttonSize: 34
+                                    iconSize: 18
                                     iconSource: "qrc:/qml/assets/icons/arrow-forward-up.svg"
                                     toolTipText: qsTr("重做")
                                     enabled: backend.currentPage === root.pagePrepare
@@ -582,11 +521,15 @@ ApplicationWindow {
                             }
                         }
 
-                        TitleIconButton {
+                        CxIconButton {
+                            id: moreActionsButton
+                            cxStyle: CxIconButton.Style.Chrome
+                            buttonSize: 34
+                            iconSize: 18
                             iconSource: "qrc:/qml/assets/icons/dots.svg"
                             toolTipText: qsTr("更多")
                             onClicked: {
-                                const p = this.mapToItem(root.contentItem, 0, this.height + 4)
+                                const p = moreActionsButton.mapToItem(root.contentItem, 0, moreActionsButton.height + 4)
                                 dropdownMenu.popup(p.x, p.y)
                             }
                         }
@@ -605,13 +548,19 @@ ApplicationWindow {
                                 anchors.rightMargin: 6
                                 spacing: 4
 
-                                TitleWindowButton {
+                                CxIconButton {
+                                    cxStyle: CxIconButton.Style.Chrome
+                                    buttonSize: 34
+                                    iconSize: 16
                                     iconSource: "qrc:/qml/assets/icons/minus.svg"
                                     toolTipText: qsTr("最小化")
                                     onClicked: root.showMinimized()
                                 }
 
-                                TitleWindowButton {
+                                CxIconButton {
+                                    cxStyle: CxIconButton.Style.Chrome
+                                    buttonSize: 34
+                                    iconSize: 16
                                     iconSource: root.visibility === Window.Maximized
                                         ? "qrc:/qml/assets/icons/restore.svg"
                                         : "qrc:/qml/assets/icons/maximize.svg"
@@ -619,10 +568,12 @@ ApplicationWindow {
                                     onClicked: root.visibility === Window.Maximized ? root.showNormal() : root.showMaximized()
                                 }
 
-                                TitleWindowButton {
+                                CxIconButton {
+                                    cxStyle: CxIconButton.Style.ChromeDanger
+                                    buttonSize: 34
+                                    iconSize: 16
                                     iconSource: "qrc:/qml/assets/icons/x.svg"
                                     toolTipText: qsTr("关闭")
-                                    danger: true
                                     onClicked: Qt.quit()
                                 }
                             }

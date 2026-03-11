@@ -2,9 +2,11 @@
 
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceService.h"
+#include <QFileInfo>
 #include <QUrl>
 #include <QVector4D>
 #include <algorithm>
+#include <QSet>
 #include <cstring> // memcpy
 #include <cmath>
 
@@ -29,7 +31,99 @@ void EditorViewModel::refreshMeshCacheAndFitHint()
   m_fitHint = QVector4D(cx, cy, cz, std::max(radius, 10.f));
 }
 
-QList<int> EditorViewModel::visibleObjectIndices() const
+void EditorViewModel::rebuildObjectEntriesFromService()
+{
+  m_objects.clear();
+  if (!projectService_)
+    return;
+
+  const QStringList names = projectService_->objectNames();
+  for (int i = 0; i < names.size(); ++i)
+    m_objects.append({names[i], projectService_->objectPrintable(i)});
+}
+
+void EditorViewModel::ensureValidObjectSelection(bool preferFirstVisible)
+{
+  const QList<int> visibleIndices = visibleObjectIndices();
+  QSet<int> visibleSet;
+  visibleSet.reserve(visibleIndices.size());
+  for (int sourceIndex : visibleIndices)
+    visibleSet.insert(sourceIndex);
+
+  QSet<int> filteredSelection;
+  filteredSelection.reserve(m_selectedSourceIndices.size());
+  for (int sourceIndex : m_selectedSourceIndices)
+  {
+    if (visibleSet.contains(sourceIndex))
+      filteredSelection.insert(sourceIndex);
+  }
+  m_selectedSourceIndices = filteredSelection;
+
+  if (visibleIndices.isEmpty())
+  {
+    m_selectedSourceIndices.clear();
+    m_primarySelectedSourceIndex = -1;
+    m_selectedVolumeObjectSourceIndex = -1;
+    m_selectedVolumeIndices.clear();
+    m_selectedVolumeIndex = -1;
+    return;
+  }
+
+  if (m_selectedSourceIndices.isEmpty())
+  {
+    if (preferFirstVisible)
+    {
+      m_primarySelectedSourceIndex = visibleIndices.front();
+      m_selectedSourceIndices.insert(m_primarySelectedSourceIndex);
+    }
+    else
+    {
+      m_primarySelectedSourceIndex = -1;
+    }
+    m_selectedVolumeObjectSourceIndex = -1;
+    m_selectedVolumeIndices.clear();
+    m_selectedVolumeIndex = -1;
+    return;
+  }
+
+  if (m_selectedSourceIndices.contains(m_primarySelectedSourceIndex))
+  {
+    if (!m_selectedSourceIndices.contains(m_selectedVolumeObjectSourceIndex))
+    {
+      m_selectedVolumeObjectSourceIndex = -1;
+      m_selectedVolumeIndices.clear();
+      m_selectedVolumeIndex = -1;
+    }
+    return;
+  }
+
+  for (int sourceIndex : visibleIndices)
+  {
+    if (m_selectedSourceIndices.contains(sourceIndex))
+    {
+      m_primarySelectedSourceIndex = sourceIndex;
+      if (!m_selectedSourceIndices.contains(m_selectedVolumeObjectSourceIndex))
+      {
+        m_selectedVolumeObjectSourceIndex = -1;
+        m_selectedVolumeIndices.clear();
+        m_selectedVolumeIndex = -1;
+      }
+      return;
+    }
+  }
+
+  m_primarySelectedSourceIndex = preferFirstVisible ? visibleIndices.front() : -1;
+  if (preferFirstVisible && m_primarySelectedSourceIndex >= 0)
+    m_selectedSourceIndices.insert(m_primarySelectedSourceIndex);
+  if (!m_selectedSourceIndices.contains(m_selectedVolumeObjectSourceIndex))
+  {
+    m_selectedVolumeObjectSourceIndex = -1;
+    m_selectedVolumeIndices.clear();
+    m_selectedVolumeIndex = -1;
+  }
+}
+
+QList<int> EditorViewModel::baseVisibleObjectIndices() const
 {
   if (!projectService_)
     return {};
@@ -54,6 +148,48 @@ QList<int> EditorViewModel::visibleObjectIndices() const
   return all;
 }
 
+QList<int> EditorViewModel::visibleObjectIndices() const
+{
+  const QList<int> baseIndices = baseVisibleObjectIndices();
+  if (baseIndices.isEmpty() || m_collapsedGroupKeys.isEmpty())
+    return baseIndices;
+
+  QList<int> filtered;
+  filtered.reserve(baseIndices.size());
+  QSet<QString> emittedCollapsedGroups;
+  for (int sourceIndex : baseIndices)
+  {
+    const QString groupKey = sourceObjectGroupKey(sourceIndex);
+    if (!m_collapsedGroupKeys.contains(groupKey))
+    {
+      filtered.append(sourceIndex);
+      continue;
+    }
+
+    if (!emittedCollapsedGroups.contains(groupKey))
+    {
+      filtered.append(sourceIndex);
+      emittedCollapsedGroups.insert(groupKey);
+    }
+  }
+  return filtered;
+}
+
+bool EditorViewModel::currentPlateHasPrintableObjects() const
+{
+  if (!projectService_)
+    return false;
+
+  const QList<int> objectIndices = projectService_->currentPlateObjectIndices();
+  for (int objectIndex : objectIndices)
+  {
+    if (projectService_->objectPrintable(objectIndex))
+      return true;
+  }
+
+  return false;
+}
+
 int EditorViewModel::mapFilteredToSourceIndex(int filteredIndex) const
 {
   const QList<int> indices = visibleObjectIndices();
@@ -67,20 +203,23 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
 {
   connect(projectService_, &ProjectServiceMock::projectChanged, this, [this]()
           {
+    if (!sliceService_ || !sliceService_->slicing())
+      m_sliceResultPlateIndex = -1;
         statusText_ = QStringLiteral("已更新项目对象");
         emit stateChanged(); });
 
   connect(projectService_, &ProjectServiceMock::plateSelectionChanged, this, [this]()
           {
-        const int count = objectCount();
-        if (count <= 0)
-          m_selectedObjectIndex = -1;
-        else if (m_selectedObjectIndex < 0 || m_selectedObjectIndex >= count)
-          m_selectedObjectIndex = 0;
+        ensureValidObjectSelection(true);
         emit stateChanged(); });
 
   connect(sliceService_, &SliceService::slicingChanged, this, [this]()
           {
+    if (sliceService_->slicing())
+    {
+      m_sliceEstimatedTime.clear();
+      m_sliceResultPlateIndex = -1;
+    }
         statusText_ = sliceService_->slicing() ? QStringLiteral("切片中...") : QStringLiteral("切片完成");
         emit stateChanged(); });
 
@@ -91,8 +230,16 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
         emit stateChanged(); });
   connect(sliceService_, &SliceService::sliceFailed, this, [this](const QString &message)
           {
+    m_sliceEstimatedTime.clear();
+      m_sliceResultPlateIndex = -1;
         statusText_ = message;
         emit stateChanged(); });
+  connect(sliceService_, &SliceService::sliceFinished, this, [this](const QString &estimatedTime)
+          {
+    m_sliceEstimatedTime = estimatedTime;
+      m_sliceResultPlateIndex = sliceService_ ? sliceService_->resultPlateIndex() : -1;
+    statusText_ = QStringLiteral("切片完成");
+    emit stateChanged(); });
   connect(projectService_, &ProjectServiceMock::loadProgressUpdated, this, [this](int progress, const QString &stageText)
           {
     if (projectService_->loading())
@@ -106,19 +253,21 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
           {
     if (success)
     {
-      m_objects.clear();
-      const QStringList names = projectService_->objectNames();
-      for (const auto &name : names)
-      {
-        m_objects.append({name, true});
-      }
-      m_selectedObjectIndex = objectCount() > 0 ? 0 : -1;
+    m_collapsedGroupKeys.clear();
+    m_collapsedObjectSourceIndices.clear();
+      rebuildObjectEntriesFromService();
+      ensureValidObjectSelection(true);
       statusText_ = QStringLiteral("已加载 %1 个模型，%2 个平板").arg(m_objects.size()).arg(projectService_->plateCount());
       refreshMeshCacheAndFitHint();
     }
     else
     {
       statusText_ = message;
+      m_selectedSourceIndices.clear();
+      m_primarySelectedSourceIndex = -1;
+      m_selectedVolumeObjectSourceIndex = -1;
+      m_selectedVolumeIndices.clear();
+      m_selectedVolumeIndex = -1;
       m_fitHint = QVector4D();
       m_cachedMeshData.clear();
     }
@@ -133,11 +282,90 @@ QString EditorViewModel::statusText() const { return statusText_; }
 int EditorViewModel::loadProgress() const { return projectService_->loadProgress(); }
 bool EditorViewModel::loading() const { return projectService_->loading(); }
 bool EditorViewModel::showAllObjects() const { return m_showAllObjects; }
+int EditorViewModel::objectOrganizeMode() const { return m_objectOrganizeMode; }
+bool EditorViewModel::hasSelection() const
+{
+  return !m_selectedSourceIndices.isEmpty() || m_selectedVolumeObjectSourceIndex >= 0;
+}
+
+bool EditorViewModel::hasSelectedVolume() const
+{
+  return m_selectedVolumeObjectSourceIndex >= 0 && !m_selectedVolumeIndices.isEmpty();
+}
+
+int EditorViewModel::selectedVolumeCount() const
+{
+  return m_selectedVolumeIndices.size();
+}
+
+bool EditorViewModel::canOpenSelectionSettings() const
+{
+  if (m_selectedVolumeObjectSourceIndex >= 0)
+    return m_selectedVolumeIndices.size() == 1;
+
+  return m_selectedSourceIndices.size() == 1;
+}
+
+QString EditorViewModel::settingsTargetType() const
+{
+  if (!canOpenSelectionSettings())
+    return {};
+
+  return m_selectedVolumeObjectSourceIndex >= 0 ? QStringLiteral("volume")
+                                                : QStringLiteral("object");
+}
+
+QString EditorViewModel::settingsTargetName() const
+{
+  if (!projectService_ || !canOpenSelectionSettings())
+    return {};
+
+  if (m_selectedVolumeObjectSourceIndex >= 0)
+  {
+    const int volumeIndex = m_selectedVolumeIndex >= 0 ? m_selectedVolumeIndex : *m_selectedVolumeIndices.begin();
+    return projectService_->objectVolumeName(m_selectedVolumeObjectSourceIndex, volumeIndex);
+  }
+
+  if (m_primarySelectedSourceIndex >= 0 && m_primarySelectedSourceIndex < m_objects.size())
+    return m_objects[m_primarySelectedSourceIndex].name;
+
+  return {};
+}
+
+int EditorViewModel::settingsTargetObjectIndex() const
+{
+  if (!canOpenSelectionSettings())
+    return -1;
+
+  return m_selectedVolumeObjectSourceIndex >= 0 ? m_selectedVolumeObjectSourceIndex
+                                                : m_primarySelectedSourceIndex;
+}
+
+int EditorViewModel::settingsTargetVolumeIndex() const
+{
+  if (!canOpenSelectionSettings() || m_selectedVolumeObjectSourceIndex < 0)
+    return -1;
+
+  return m_selectedVolumeIndex >= 0 ? m_selectedVolumeIndex
+                                    : *m_selectedVolumeIndices.begin();
+}
+
 QByteArray EditorViewModel::meshData() const { return m_cachedMeshData; }
 
 // ---------- object list ----------
 int EditorViewModel::objectCount() const { return visibleObjectIndices().size(); }
-int EditorViewModel::selectedObjectIndex() const { return m_selectedObjectIndex; }
+int EditorViewModel::selectedObjectIndex() const
+{
+  const QList<int> visibleIndices = visibleObjectIndices();
+  for (int i = 0; i < visibleIndices.size(); ++i)
+  {
+    if (visibleIndices[i] == m_primarySelectedSourceIndex)
+      return i;
+  }
+  return -1;
+}
+
+int EditorViewModel::selectedObjectCount() const { return m_selectedSourceIndices.size(); }
 
 QString EditorViewModel::objectName(int i) const
 {
@@ -145,20 +373,319 @@ QString EditorViewModel::objectName(int i) const
   return (sourceIndex >= 0 && sourceIndex < m_objects.size()) ? m_objects[sourceIndex].name : QString{};
 }
 
-bool EditorViewModel::objectVisible(int i) const
+QString EditorViewModel::objectModuleName(int i) const
 {
+  if (!projectService_)
+    return {};
+
   const int sourceIndex = mapFilteredToSourceIndex(i);
-  return (sourceIndex >= 0 && sourceIndex < m_objects.size()) && m_objects[sourceIndex].visible;
+  return sourceIndex >= 0 ? projectService_->objectModuleName(sourceIndex) : QString{};
 }
 
-void EditorViewModel::setObjectVisible(int i, bool visible)
+QString EditorViewModel::sourceObjectGroupLabel(int sourceIndex) const
+{
+  if (sourceIndex < 0)
+    return {};
+
+  if (m_objectOrganizeMode == 1)
+  {
+    const QString moduleName = projectService_ ? projectService_->objectModuleName(sourceIndex) : QString{};
+    return moduleName.isEmpty() ? QStringLiteral("默认模块") : moduleName;
+  }
+
+  return plateName(projectService_ ? projectService_->plateIndexForObject(sourceIndex) : -1);
+}
+
+QString EditorViewModel::sourceObjectGroupKey(int sourceIndex) const
+{
+  return QStringLiteral("%1:%2").arg(m_objectOrganizeMode).arg(sourceObjectGroupLabel(sourceIndex));
+}
+
+QString EditorViewModel::objectGroupLabel(int i) const
 {
   const int sourceIndex = mapFilteredToSourceIndex(i);
-  if (sourceIndex >= 0 && sourceIndex < m_objects.size())
+  return sourceObjectGroupLabel(sourceIndex);
+}
+
+int EditorViewModel::objectGroupCount(int i) const
+{
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  if (sourceIndex < 0)
+    return 0;
+
+  const QString groupLabel = sourceObjectGroupLabel(sourceIndex);
+  if (groupLabel.isEmpty())
+    return 0;
+
+  int count = 0;
+  const QList<int> visibleIndices = baseVisibleObjectIndices();
+  for (int candidateIndex : visibleIndices)
   {
-    m_objects[sourceIndex].visible = visible;
-    emit stateChanged();
+    if (sourceObjectGroupLabel(candidateIndex) == groupLabel)
+      ++count;
   }
+  return count;
+}
+
+bool EditorViewModel::objectGroupExpanded(int i) const
+{
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  if (sourceIndex < 0)
+    return true;
+
+  return !m_collapsedGroupKeys.contains(sourceObjectGroupKey(sourceIndex));
+}
+
+void EditorViewModel::toggleObjectGroupExpanded(int i)
+{
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  if (sourceIndex < 0)
+    return;
+
+  const QString groupKey = sourceObjectGroupKey(sourceIndex);
+  if (groupKey.isEmpty())
+    return;
+
+  if (m_collapsedGroupKeys.contains(groupKey))
+    m_collapsedGroupKeys.remove(groupKey);
+  else
+    m_collapsedGroupKeys.insert(groupKey);
+
+  ensureValidObjectSelection(true);
+  emit stateChanged();
+}
+
+bool EditorViewModel::objectExpanded(int i) const
+{
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  if (sourceIndex < 0)
+    return false;
+
+  return !m_collapsedObjectSourceIndices.contains(sourceIndex);
+}
+
+void EditorViewModel::toggleObjectExpanded(int i)
+{
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  if (sourceIndex < 0)
+    return;
+
+  if (projectService_->objectVolumeCount(sourceIndex) <= 0)
+    return;
+
+  if (m_collapsedObjectSourceIndices.contains(sourceIndex))
+    m_collapsedObjectSourceIndices.remove(sourceIndex);
+  else
+    m_collapsedObjectSourceIndices.insert(sourceIndex);
+
+  emit stateChanged();
+}
+
+int EditorViewModel::objectVolumeCount(int i) const
+{
+  if (!projectService_)
+    return 0;
+
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  return sourceIndex >= 0 ? projectService_->objectVolumeCount(sourceIndex) : 0;
+}
+
+QString EditorViewModel::objectVolumeName(int i, int volumeIndex) const
+{
+  if (!projectService_)
+    return {};
+
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  return sourceIndex >= 0 ? projectService_->objectVolumeName(sourceIndex, volumeIndex) : QString{};
+}
+
+QString EditorViewModel::objectVolumeTypeLabel(int i, int volumeIndex) const
+{
+  if (!projectService_)
+    return {};
+
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  return sourceIndex >= 0 ? projectService_->objectVolumeTypeLabel(sourceIndex, volumeIndex) : QString{};
+}
+
+bool EditorViewModel::isVolumeSelected(int i, int volumeIndex) const
+{
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  return sourceIndex >= 0 && sourceIndex == m_selectedVolumeObjectSourceIndex && m_selectedVolumeIndices.contains(volumeIndex);
+}
+
+void EditorViewModel::selectVolume(int i, int volumeIndex)
+{
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  if (sourceIndex < 0)
+    return;
+  if (volumeIndex < 0 || projectService_->objectVolumeCount(sourceIndex) <= volumeIndex)
+    return;
+
+  m_selectedSourceIndices.clear();
+  m_selectedSourceIndices.insert(sourceIndex);
+  m_primarySelectedSourceIndex = sourceIndex;
+  m_selectedVolumeObjectSourceIndex = sourceIndex;
+  m_selectedVolumeIndices.clear();
+  m_selectedVolumeIndices.insert(volumeIndex);
+  m_selectedVolumeIndex = volumeIndex;
+  emit stateChanged();
+}
+
+void EditorViewModel::toggleVolumeSelection(int i, int volumeIndex)
+{
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  if (sourceIndex < 0)
+    return;
+  if (volumeIndex < 0 || projectService_->objectVolumeCount(sourceIndex) <= volumeIndex)
+    return;
+
+  if (m_selectedVolumeObjectSourceIndex >= 0 && m_selectedVolumeObjectSourceIndex != sourceIndex)
+  {
+    selectVolume(i, volumeIndex);
+    return;
+  }
+
+  if (m_selectedVolumeObjectSourceIndex < 0)
+  {
+    selectVolume(i, volumeIndex);
+    return;
+  }
+
+  m_selectedSourceIndices.clear();
+  m_selectedSourceIndices.insert(sourceIndex);
+  m_primarySelectedSourceIndex = sourceIndex;
+
+  if (m_selectedVolumeIndices.contains(volumeIndex))
+  {
+    m_selectedVolumeIndices.remove(volumeIndex);
+    if (m_selectedVolumeIndex == volumeIndex)
+      m_selectedVolumeIndex = m_selectedVolumeIndices.isEmpty() ? -1 : *m_selectedVolumeIndices.begin();
+
+    if (m_selectedVolumeIndices.isEmpty())
+      m_selectedVolumeObjectSourceIndex = -1;
+  }
+  else
+  {
+    m_selectedVolumeIndices.insert(volumeIndex);
+    m_selectedVolumeObjectSourceIndex = sourceIndex;
+    m_selectedVolumeIndex = volumeIndex;
+  }
+
+  emit stateChanged();
+}
+
+bool EditorViewModel::deleteSelectedVolumesBySource()
+{
+  if (!projectService_ || m_selectedVolumeObjectSourceIndex < 0 || m_selectedVolumeIndices.isEmpty())
+    return false;
+
+  QList<int> volumeIndices = m_selectedVolumeIndices.values();
+  std::sort(volumeIndices.begin(), volumeIndices.end(), std::greater<int>());
+  volumeIndices.erase(std::unique(volumeIndices.begin(), volumeIndices.end()), volumeIndices.end());
+
+  int deletedCount = 0;
+  for (int volumeIndex : volumeIndices)
+  {
+    if (!projectService_->deleteObjectVolume(m_selectedVolumeObjectSourceIndex, volumeIndex))
+    {
+      statusText_ = projectService_->lastError();
+      emit stateChanged();
+      return deletedCount > 0;
+    }
+    ++deletedCount;
+  }
+
+  m_selectedVolumeObjectSourceIndex = -1;
+  m_selectedVolumeIndices.clear();
+  m_selectedVolumeIndex = -1;
+  rebuildObjectEntriesFromService();
+  ensureValidObjectSelection(true);
+  refreshMeshCacheAndFitHint();
+  statusText_ = deletedCount == 1 ? QStringLiteral("已删除部件")
+                                  : QStringLiteral("已删除 %1 个部件").arg(deletedCount);
+  emit stateChanged();
+  return deletedCount > 0;
+}
+
+void EditorViewModel::deleteVolume(int i, int volumeIndex)
+{
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  if (sourceIndex < 0)
+  {
+    statusText_ = QStringLiteral("删除失败：对象索引无效");
+    emit stateChanged();
+    return;
+  }
+
+  if (!projectService_->deleteObjectVolume(sourceIndex, volumeIndex))
+  {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return;
+  }
+
+  if (m_selectedVolumeObjectSourceIndex == sourceIndex && m_selectedVolumeIndex == volumeIndex)
+  {
+    m_selectedVolumeIndices.remove(volumeIndex);
+    m_selectedVolumeIndex = m_selectedVolumeIndices.isEmpty() ? -1 : *m_selectedVolumeIndices.begin();
+    if (m_selectedVolumeIndices.isEmpty())
+      m_selectedVolumeObjectSourceIndex = -1;
+  }
+  else if (m_selectedVolumeObjectSourceIndex == sourceIndex)
+  {
+    QSet<int> nextSelection;
+    for (int selectedIndex : m_selectedVolumeIndices)
+    {
+      if (selectedIndex == volumeIndex)
+        continue;
+      nextSelection.insert(selectedIndex > volumeIndex ? selectedIndex - 1 : selectedIndex);
+    }
+    m_selectedVolumeIndices = nextSelection;
+    if (m_selectedVolumeIndex > volumeIndex)
+      --m_selectedVolumeIndex;
+    if (m_selectedVolumeIndices.isEmpty())
+    {
+      m_selectedVolumeObjectSourceIndex = -1;
+      m_selectedVolumeIndex = -1;
+    }
+  }
+
+  rebuildObjectEntriesFromService();
+  ensureValidObjectSelection(true);
+  refreshMeshCacheAndFitHint();
+  statusText_ = QStringLiteral("已删除部件");
+  emit stateChanged();
+}
+
+bool EditorViewModel::isObjectSelected(int i) const
+{
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  return sourceIndex >= 0 && m_selectedSourceIndices.contains(sourceIndex);
+}
+
+bool EditorViewModel::objectPrintable(int i) const
+{
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  return (sourceIndex >= 0 && sourceIndex < m_objects.size()) && m_objects[sourceIndex].printable;
+}
+
+void EditorViewModel::setObjectPrintable(int i, bool printable)
+{
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  if (sourceIndex < 0 || sourceIndex >= m_objects.size())
+    return;
+
+  if (!projectService_->setObjectPrintable(sourceIndex, printable))
+  {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return;
+  }
+
+  m_objects[sourceIndex].printable = printable;
+  statusText_ = printable ? QStringLiteral("对象已设为可打印") : QStringLiteral("对象已设为不参与打印");
+  emit stateChanged();
 }
 
 void EditorViewModel::deleteObject(int i)
@@ -173,30 +700,10 @@ void EditorViewModel::deleteObject(int i)
 
   if (projectService_->deleteObject(sourceIndex))
   {
-    const QStringList names = projectService_->objectNames();
-    m_objects.clear();
-    for (const auto &name : names)
-      m_objects.append({name, true});
-
-    if (objectCount() <= 0)
-    {
-      m_selectedObjectIndex = -1;
-    }
-    else
-    {
-      int nextSelected = m_selectedObjectIndex;
-      if (nextSelected == i)
-        nextSelected = i;
-      else if (nextSelected > i)
-        --nextSelected;
-
-      if (nextSelected < 0)
-        nextSelected = 0;
-      if (nextSelected >= objectCount())
-        nextSelected = objectCount() - 1;
-      m_selectedObjectIndex = nextSelected;
-    }
-
+    m_collapsedObjectSourceIndices.clear();
+    rebuildObjectEntriesFromService();
+    m_selectedSourceIndices.clear();
+    ensureValidObjectSelection(true);
     refreshMeshCacheAndFitHint();
     statusText_ = QStringLiteral("已删除对象，剩余 %1 个模型").arg(projectService_->modelCount());
     emit stateChanged();
@@ -208,15 +715,178 @@ void EditorViewModel::deleteObject(int i)
   }
 }
 
+void EditorViewModel::deleteSelectedObjects()
+{
+  if (!projectService_)
+    return;
+
+  QList<int> sourceIndices = m_selectedSourceIndices.values();
+  if (sourceIndices.isEmpty())
+  {
+    const int sourceIndex = mapFilteredToSourceIndex(selectedObjectIndex());
+    if (sourceIndex >= 0)
+      sourceIndices.append(sourceIndex);
+  }
+
+  if (sourceIndices.isEmpty())
+    return;
+
+  std::sort(sourceIndices.begin(), sourceIndices.end(), std::greater<int>());
+  sourceIndices.erase(std::unique(sourceIndices.begin(), sourceIndices.end()), sourceIndices.end());
+
+  int deletedCount = 0;
+  for (int sourceIndex : sourceIndices)
+  {
+    if (!projectService_->deleteObject(sourceIndex))
+    {
+      statusText_ = projectService_->lastError();
+      rebuildObjectEntriesFromService();
+      ensureValidObjectSelection(true);
+      refreshMeshCacheAndFitHint();
+      m_selectedVolumeObjectSourceIndex = -1;
+      m_selectedVolumeIndices.clear();
+      m_selectedVolumeIndex = -1;
+      emit stateChanged();
+      return;
+    }
+    ++deletedCount;
+  }
+
+  m_collapsedObjectSourceIndices.clear();
+  rebuildObjectEntriesFromService();
+  m_selectedSourceIndices.clear();
+  ensureValidObjectSelection(true);
+  refreshMeshCacheAndFitHint();
+  statusText_ = QStringLiteral("已删除 %1 个对象，剩余 %2 个模型").arg(deletedCount).arg(projectService_->modelCount());
+  emit stateChanged();
+}
+
 void EditorViewModel::selectObject(int i)
 {
-  if (i < 0 || i >= objectCount())
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  if (sourceIndex < 0)
     return;
-  if (m_selectedObjectIndex != i)
+
+  if (m_selectedSourceIndices.size() == 1 && m_selectedSourceIndices.contains(sourceIndex) && m_primarySelectedSourceIndex == sourceIndex)
+    return;
+
+  m_selectedSourceIndices.clear();
+  m_selectedSourceIndices.insert(sourceIndex);
+  m_primarySelectedSourceIndex = sourceIndex;
+  m_selectedVolumeObjectSourceIndex = -1;
+  m_selectedVolumeIndices.clear();
+  m_selectedVolumeIndex = -1;
+  emit stateChanged();
+}
+
+void EditorViewModel::toggleObjectSelection(int i)
+{
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  if (sourceIndex < 0)
+    return;
+
+  if (m_selectedSourceIndices.contains(sourceIndex))
   {
-    m_selectedObjectIndex = i;
-    emit stateChanged();
+    m_selectedSourceIndices.remove(sourceIndex);
+    if (m_primarySelectedSourceIndex == sourceIndex)
+      m_primarySelectedSourceIndex = -1;
+    if (m_selectedVolumeObjectSourceIndex == sourceIndex)
+    {
+      m_selectedVolumeObjectSourceIndex = -1;
+      m_selectedVolumeIndices.clear();
+      m_selectedVolumeIndex = -1;
+    }
+    ensureValidObjectSelection(false);
   }
+  else
+  {
+    m_selectedSourceIndices.insert(sourceIndex);
+    m_primarySelectedSourceIndex = sourceIndex;
+    m_selectedVolumeObjectSourceIndex = -1;
+    m_selectedVolumeIndices.clear();
+    m_selectedVolumeIndex = -1;
+  }
+
+  emit stateChanged();
+}
+
+void EditorViewModel::clearObjectSelection()
+{
+  if (m_selectedSourceIndices.isEmpty() && m_primarySelectedSourceIndex < 0)
+    return;
+
+  m_selectedSourceIndices.clear();
+  m_primarySelectedSourceIndex = -1;
+  m_selectedVolumeObjectSourceIndex = -1;
+  m_selectedVolumeIndices.clear();
+  m_selectedVolumeIndex = -1;
+  emit stateChanged();
+}
+
+void EditorViewModel::selectAllVisibleObjects()
+{
+  const QList<int> visibleIndices = visibleObjectIndices();
+  if (visibleIndices.isEmpty())
+    return;
+
+  m_selectedSourceIndices.clear();
+  for (int sourceIndex : visibleIndices)
+    m_selectedSourceIndices.insert(sourceIndex);
+  m_primarySelectedSourceIndex = visibleIndices.front();
+  m_selectedVolumeObjectSourceIndex = -1;
+  m_selectedVolumeIndices.clear();
+  m_selectedVolumeIndex = -1;
+  emit stateChanged();
+}
+
+void EditorViewModel::setSelectedObjectsPrintable(bool printable)
+{
+  if (m_selectedSourceIndices.isEmpty())
+    return;
+
+  for (int sourceIndex : m_selectedSourceIndices)
+  {
+    if (sourceIndex >= 0 && sourceIndex < m_objects.size())
+    {
+      if (!projectService_->setObjectPrintable(sourceIndex, printable))
+      {
+        statusText_ = projectService_->lastError();
+        emit stateChanged();
+        return;
+      }
+      m_objects[sourceIndex].printable = printable;
+    }
+  }
+
+  statusText_ = printable ? QStringLiteral("已将所选对象设为可打印") : QStringLiteral("已将所选对象设为不参与打印");
+  emit stateChanged();
+}
+
+void EditorViewModel::deleteSelection()
+{
+  if (hasSelectedVolume())
+  {
+    deleteSelectedVolumesBySource();
+    return;
+  }
+
+  if (selectedObjectCount() > 1)
+  {
+    deleteSelectedObjects();
+    return;
+  }
+
+  const int index = selectedObjectIndex();
+  if (index >= 0)
+    deleteObject(index);
+}
+
+void EditorViewModel::requestSelectionSettings()
+{
+  if (!canOpenSelectionSettings())
+    return;
+
+  emit selectionSettingsRequested();
 }
 
 QString EditorViewModel::plateName(int i) const
@@ -225,18 +895,38 @@ QString EditorViewModel::plateName(int i) const
   return (i >= 0 && i < names.size()) ? names[i] : QString{};
 }
 
+int EditorViewModel::plateObjectCount(int i) const
+{
+  return projectService_ ? projectService_->plateObjectCount(i) : 0;
+}
+
+int EditorViewModel::objectPlateIndex(int i) const
+{
+  if (!projectService_)
+    return -1;
+
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  if (sourceIndex < 0)
+    return -1;
+
+  return projectService_->plateIndexForObject(sourceIndex);
+}
+
+QString EditorViewModel::objectPlateName(int i) const
+{
+  if (!projectService_)
+    return QString{};
+
+  return plateName(objectPlateIndex(i));
+}
+
 bool EditorViewModel::setCurrentPlateIndex(int i)
 {
   const bool ok = projectService_->setCurrentPlateIndex(i);
   if (!ok)
     return false;
 
-  const int count = objectCount();
-  if (count <= 0)
-    m_selectedObjectIndex = -1;
-  else if (m_selectedObjectIndex < 0 || m_selectedObjectIndex >= count)
-    m_selectedObjectIndex = 0;
-
+  ensureValidObjectSelection(true);
   refreshMeshCacheAndFitHint();
   emit stateChanged();
   return true;
@@ -248,23 +938,121 @@ void EditorViewModel::setShowAllObjects(bool showAll)
     return;
   m_showAllObjects = showAll;
 
-  const int count = objectCount();
-  if (count <= 0)
-    m_selectedObjectIndex = -1;
-  else if (m_selectedObjectIndex < 0 || m_selectedObjectIndex >= count)
-    m_selectedObjectIndex = 0;
-
+  ensureValidObjectSelection(true);
   refreshMeshCacheAndFitHint();
   emit stateChanged();
 }
 
+void EditorViewModel::setObjectOrganizeMode(int mode)
+{
+  const int normalizedMode = mode == 1 ? 1 : 0;
+  if (m_objectOrganizeMode == normalizedMode)
+    return;
+
+  m_objectOrganizeMode = normalizedMode;
+  ensureValidObjectSelection(true);
+  emit stateChanged();
+}
+
 // ---------- slice bridge ----------
-int EditorViewModel::sliceProgress() const { return sliceService_->progress(); }
+int EditorViewModel::sliceProgress() const
+{
+  if (!sliceService_)
+    return 0;
+  if (sliceService_->slicing())
+    return sliceService_->progress();
+
+  return hasSliceResult() ? sliceService_->progress() : 0;
+}
+
 bool EditorViewModel::isSlicing() const { return sliceService_->slicing(); }
+
+QString EditorViewModel::sliceStatusLabel() const
+{
+  if (!sliceService_)
+    return QStringLiteral("等待切片");
+  if (sliceService_->slicing())
+    return sliceService_->statusLabel();
+  if (hasSliceResult())
+    return sliceService_->statusLabel().isEmpty() ? QStringLiteral("切片完成") : sliceService_->statusLabel();
+
+  return QStringLiteral("等待切片");
+}
+
+QString EditorViewModel::sliceEstimatedTime() const
+{
+  return hasSliceResult() ? m_sliceEstimatedTime : QString{};
+}
+
+QString EditorViewModel::sliceOutputPath() const
+{
+  return hasSliceResult() && sliceService_ ? sliceService_->outputPath() : QString{};
+}
+
+QString EditorViewModel::sliceResultWeight() const
+{
+  return hasSliceResult() && sliceService_ ? sliceService_->resultWeightLabel() : QString{};
+}
+
+QString EditorViewModel::sliceResultPlateLabel() const
+{
+  return hasSliceResult() && sliceService_ ? sliceService_->resultPlateLabel() : QString{};
+}
+
+bool EditorViewModel::hasSliceResult() const
+{
+  return sliceService_ && !sliceService_->outputPath().isEmpty() && !isSlicing() && projectService_ && m_sliceResultPlateIndex == projectService_->currentPlateIndex();
+}
+
+bool EditorViewModel::canRequestSlice() const
+{
+  if (!projectService_ || !sliceService_)
+    return false;
+  if (projectService_->loading() || sliceService_->slicing())
+    return false;
+  if (projectService_->sourceFilePath().isEmpty())
+    return false;
+  if (hasSliceResult())
+    return false;
+
+  return currentPlateHasPrintableObjects();
+}
+
+QString EditorViewModel::sliceActionLabel() const
+{
+  return QStringLiteral("▶ 开始切片");
+}
+
+QString EditorViewModel::sliceActionHint() const
+{
+  if (!projectService_)
+    return {};
+  if (sliceService_ && sliceService_->slicing())
+    return QStringLiteral("当前切片任务进行中");
+  if (projectService_->loading())
+    return QStringLiteral("模型导入完成后可开始切片");
+  if (projectService_->sourceFilePath().isEmpty())
+    return QStringLiteral("请先导入模型文件");
+  if (hasSliceResult())
+    return QStringLiteral("当前平板已有有效切片结果；修改对象或参数后将重新启用切片");
+  if (!currentPlateHasPrintableObjects())
+    return QStringLiteral("当前平板没有可切片对象");
+
+  return QStringLiteral("当前平板已满足基础切片条件");
+}
 
 // ---------- actions ----------
 void EditorViewModel::requestSlice()
 {
+  if (!canRequestSlice())
+  {
+    statusText_ = sliceActionHint();
+    emit stateChanged();
+    return;
+  }
+
+  m_sliceEstimatedTime.clear();
+  m_sliceResultPlateIndex = -1;
   sliceService_->startSlice(projectService_->projectName());
 }
 
@@ -278,10 +1066,17 @@ bool EditorViewModel::loadFile(const QString &filePath)
   // Accept both local paths and file:// URLs (from QML FileDialog)
   QUrl url(filePath);
   const QString localPath = url.isLocalFile() ? url.toLocalFile() : filePath;
+  m_sliceEstimatedTime.clear();
+  m_sliceResultPlateIndex = -1;
   const bool started = projectService_->loadFile(localPath);
   if (started)
   {
     statusText_ = QStringLiteral("正在加载...");
+    m_collapsedGroupKeys.clear();
+    m_collapsedObjectSourceIndices.clear();
+    m_selectedVolumeObjectSourceIndex = -1;
+    m_selectedVolumeIndices.clear();
+    m_selectedVolumeIndex = -1;
     m_fitHint = QVector4D();
     m_cachedMeshData.clear();
   }
@@ -299,7 +1094,15 @@ void EditorViewModel::clearWorkspace()
     projectService_->clearProject();
 
   m_objects.clear();
-  m_selectedObjectIndex = -1;
+  m_selectedSourceIndices.clear();
+  m_collapsedGroupKeys.clear();
+  m_collapsedObjectSourceIndices.clear();
+  m_primarySelectedSourceIndex = -1;
+  m_selectedVolumeObjectSourceIndex = -1;
+  m_selectedVolumeIndices.clear();
+  m_selectedVolumeIndex = -1;
+  m_sliceEstimatedTime.clear();
+  m_sliceResultPlateIndex = -1;
   m_fitHint = QVector4D();
   m_cachedMeshData.clear();
   statusText_ = QStringLiteral("已新建项目");

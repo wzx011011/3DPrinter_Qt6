@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
+import "../controls"
 
 Item {
     id: root
@@ -18,66 +20,90 @@ Item {
         _recentProjects = arr
     }
 
-    Rectangle { anchors.fill: parent; color: "#0d0f12" }
+    Rectangle { anchors.fill: parent; color: Theme.bgBase }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 24
-        spacing: 20
+        anchors.margins: Theme.spacingXXL
+        spacing: Theme.spacingXL
 
-        // Header
-        RowLayout {
+        Rectangle {
             Layout.fillWidth: true
-            spacing: 16
+            Layout.preferredHeight: 88
+            radius: 20
+            color: Theme.bgPanel
+            border.width: 1
+            border.color: Theme.borderSubtle
 
-            Column {
-                spacing: 4
-                Text { text: "Creality Print 7.0"; color: "#e8edf6"; font.pixelSize: 22; font.bold: true }
-                Text { text: qsTr("专业级 3D 打印切片软件"); color: "#7a8898"; font.pixelSize: 13 }
-            }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 18
+                anchors.rightMargin: 18
+                spacing: Theme.spacingXL
 
-            Item { Layout.fillWidth: true }
+                Rectangle {
+                    width: 48
+                    height: 48
+                    radius: 14
+                    color: Theme.accentSubtle
+                    border.width: 1
+                    border.color: Theme.accentDark
 
-            // Login state
-            Rectangle {
-                width: 100; height: 30; radius: 15
-                color: "#1c6e42"
-                Text { anchors.centerIn: parent; text: qsTr("登录账号"); color: "white"; font.pixelSize: 12 }
+                    Text {
+                        anchors.centerIn: parent
+                        text: "△"
+                        color: Theme.accentLight
+                        font.pixelSize: 22
+                        font.bold: true
+                    }
+                }
+
+                Column {
+                    spacing: 4
+                    Text { text: "Creality Print 7.0"; color: Theme.textPrimary; font.pixelSize: 24; font.bold: true }
+                    Text { text: qsTr("专业级 3D 打印切片软件"); color: Theme.textSecondary; font.pixelSize: 13 }
+                }
+
+                Item { Layout.fillWidth: true }
+
+                CxButton {
+                    text: qsTr("登录账号")
+                    cxStyle: CxButton.Style.Primary
+                }
             }
         }
 
-        // Recent Projects Section
-        Text { text: qsTr("最近项目"); color: "#a0abbe"; font.pixelSize: 13; font.bold: true }
+        Text { text: qsTr("最近项目"); color: Theme.textSecondary; font.pixelSize: 13; font.bold: true }
 
         ScrollView {
-            Layout.fillWidth: true; Layout.preferredHeight: 160; clip: true
+            Layout.fillWidth: true; Layout.preferredHeight: 188; clip: true
             Flow {
-                width: parent.width; spacing: 10
+                width: parent.width; spacing: Theme.spacingMD
                 Repeater {
                     model: root._recentProjects
                     delegate: Rectangle {
-                        width: 170; height: 140; radius: 6; color: "#1a1e28"; border.color: "#2e3444"; border.width: 1
+                        width: 196; height: 164; radius: 16; color: Theme.bgPanel; border.color: Theme.borderSubtle; border.width: 1
                         Column {
-                            anchors.fill: parent; anchors.margins: 8; spacing: 6
-                            Rectangle { width: parent.width; height: 90; radius: 4; color: "#252b38"
-                                Text { anchors.centerIn: parent; text: "🖨"; font.pixelSize: 32; color: "#566070" }
+                            anchors.fill: parent; anchors.margins: 12; spacing: 8
+                            Rectangle { width: parent.width; height: 102; radius: 12; color: Theme.bgElevated
+                                Text { anchors.centerIn: parent; text: "🖨"; font.pixelSize: 34; color: Theme.textDisabled }
                             }
-                            Text { text: modelData.name || (qsTr("项目 ") + (index + 1)); color: "#c8d4e0"; font.pixelSize: 11; elide: Text.ElideRight; width: parent.width }
-                            Text { text: modelData.date || "—"; color: "#566070"; font.pixelSize: 10 }
+                            Text { text: modelData.name || (qsTr("项目 ") + (index + 1)); color: Theme.textPrimary; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight; width: parent.width }
+                            Text { text: modelData.date || "—"; color: Theme.textSecondary; font.pixelSize: 10 }
+                            Text { text: modelData.path || ""; color: Theme.textDisabled; font.pixelSize: 10; elide: Text.ElideRight; width: parent.width }
                         }
                         HoverHandler { id: recentHover }
-                        Rectangle { anchors.fill: parent; radius: parent.radius; color: recentHover.hovered ? "#0a18c75e" : "transparent" }
+                        Rectangle { anchors.fill: parent; radius: parent.radius; color: recentHover.hovered ? "#1018c75e" : "transparent" }
                     }
                 }
             }
         }
 
-        // Quick actions
-        Text { text: qsTr("快速入口"); color: "#a0abbe"; font.pixelSize: 13; font.bold: true }
+        Text { text: qsTr("快速入口"); color: Theme.textSecondary; font.pixelSize: 13; font.bold: true }
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: 12
+            spacing: Theme.spacingLG
 
             Repeater {
                 model: [
@@ -89,18 +115,19 @@ Item {
                 delegate: Rectangle {
                     required property var modelData
                     Layout.fillWidth: true
-                    height: 80
-                    radius: 6
-                    color: qaHover.hovered ? "#1c2130" : "#131720"
-                    border.color: "#2e3444"
+                    height: 112
+                    radius: 18
+                    color: qaHover.hovered ? Theme.bgHover : Theme.bgPanel
+                    border.color: Theme.borderSubtle
                     border.width: 1
 
                     Column {
-                        anchors.centerIn: parent
-                        spacing: 4
-                        Text { text: parent.parent.modelData.icon; font.pixelSize: 22; horizontalAlignment: Text.AlignHCenter; width: parent.width }
-                        Text { text: parent.parent.modelData.title; color: "#d0dae8"; font.pixelSize: 12; font.bold: true; horizontalAlignment: Text.AlignHCenter; width: parent.width }
-                        Text { text: parent.parent.modelData.sub; color: "#566070"; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                        anchors.fill: parent
+                        anchors.margins: 14
+                        spacing: 8
+                        Text { text: parent.parent.modelData.icon; font.pixelSize: 24; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                        Text { text: parent.parent.modelData.title; color: Theme.textPrimary; font.pixelSize: 13; font.bold: true; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                        Text { text: parent.parent.modelData.sub; color: Theme.textSecondary; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; width: parent.width; wrapMode: Text.WordWrap }
                     }
 
                     HoverHandler { id: qaHover }
@@ -110,7 +137,6 @@ Item {
 
         Item { Layout.fillHeight: true }
 
-        // Version info
-        Text { text: qsTr("版本 7.0.0  |  Qt 6.10  |  ©2026 Creality"); color: "#3a4250"; font.pixelSize: 10 }
+        Text { text: qsTr("版本 7.0.0  |  Qt 6.10  |  ©2026 Creality"); color: Theme.textDisabled; font.pixelSize: 10 }
     }
 }

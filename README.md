@@ -2,6 +2,32 @@
 
 Qt6 重写版 3D 打印桌面端原型工程（QML 主路线）。
 
+## 协作入口
+
+本仓库按“上游源码真值迁移”方式推进。日常继续开发时，优先使用固定入口：
+
+`/continue-source-truth-migration`
+
+该命令会基于当前仓库状态执行以下流程：
+
+- 读取 `docs/TASKS.md`
+- 对照 `third_party/CrealityPrint` 上游源码
+- 选择当前最高优先级、尚未完成的任务
+- 映射到对应 Qt6/QML 承接模块
+- 实施修改并按规则更新任务状态
+
+相关配置位置：
+
+- 工作区规则：`.github/copilot-instructions.md`
+- 专项迁移 agent：`.github/agents/source-truth-migration.agent.md`
+- 可重复执行的 prompt：`.github/prompts/continue-source-truth-migration.prompt.md`
+
+任务状态规则见 `docs/TASKS.md`：
+
+- `[x]` 已完成上游对照并验证
+- `[-]` 已完成基础承接或局部闭环，但未完成完整对照验收
+- `[ ]` 未开始或仅占位
+
 ## 项目说明
 
 - 默认构建目标：`FramelessDialogDemo`（QML GUI）

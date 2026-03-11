@@ -7,6 +7,7 @@
 #include <QtConcurrent/QtConcurrentRun>
 #include <QCoreApplication>
 #include <QDir>
+#include <QStringList>
 #include <QFileInfo>
 #include <QDateTime>
 #include <stdexcept>
@@ -18,9 +19,31 @@
 #include <libslic3r/GCode/GCodeProcessor.hpp>
 #endif
 
+namespace
+{
+  QString formatDurationLabel(double seconds)
+  {
+    const qint64 totalSeconds = std::max<qint64>(0, qRound64(seconds));
+    const qint64 hours = totalSeconds / 3600;
+    const qint64 minutes = (totalSeconds % 3600) / 60;
+    const qint64 secs = totalSeconds % 60;
+    return QStringLiteral("%1:%2:%3")
+        .arg(hours, 2, 10, QChar('0'))
+        .arg(minutes, 2, 10, QChar('0'))
+        .arg(secs, 2, 10, QChar('0'));
+  }
+}
+
 SliceService::SliceService(ProjectServiceMock *projectService, QObject *parent)
     : QObject(parent), projectService_(projectService)
 {
+  if (projectService_)
+  {
+    connect(projectService_, &ProjectServiceMock::projectChanged, this, [this]()
+            {
+      if (!slicing_)
+        clearStoredResult(); });
+  }
 }
 
 int SliceService::progress() const
@@ -43,6 +66,38 @@ QString SliceService::outputPath() const
   return outputPath_;
 }
 
+QString SliceService::estimatedTimeLabel() const
+{
+  return estimatedTimeLabel_;
+}
+
+QString SliceService::resultWeightLabel() const
+{
+  return resultWeightLabel_;
+}
+
+QString SliceService::resultPlateLabel() const
+{
+  return resultPlateLabel_;
+}
+
+int SliceService::resultPlateIndex() const
+{
+  return resultPlateIndex_;
+}
+
+void SliceService::clearStoredResult()
+{
+  progress_ = 0;
+  statusLabel_ = QStringLiteral("等待切片");
+  outputPath_.clear();
+  estimatedTimeLabel_.clear();
+  resultWeightLabel_.clear();
+  resultPlateLabel_.clear();
+  resultPlateIndex_ = -1;
+  emit progressChanged();
+}
+
 void SliceService::startSlice(const QString &projectName)
 {
   Q_UNUSED(projectName);
@@ -50,7 +105,24 @@ void SliceService::startSlice(const QString &projectName)
   if (slicing_)
     return;
 
+  clearStoredResult();
+
   const QString sourcePath = projectService_ ? projectService_->sourceFilePath() : QString{};
+  const int targetPlateIndex = projectService_ ? projectService_->currentPlateIndex() : -1;
+  QString targetPlateLabel;
+  std::unique_ptr<Slic3r::Model> modelForSlice;
+  if (projectService_)
+  {
+    const QStringList plateNames = projectService_->plateNames();
+    if (targetPlateIndex >= 0 && targetPlateIndex < plateNames.size() && !plateNames[targetPlateIndex].isEmpty())
+      targetPlateLabel = plateNames[targetPlateIndex];
+    else if (targetPlateIndex >= 0)
+      targetPlateLabel = QObject::tr("平板 %1").arg(targetPlateIndex + 1);
+#ifdef HAS_LIBSLIC3R
+    modelForSlice = projectService_->cloneCurrentPlateModel();
+#endif
+  }
+
   if (sourcePath.isEmpty())
   {
     statusLabel_ = QStringLiteral("未找到可切片模型");
@@ -58,6 +130,16 @@ void SliceService::startSlice(const QString &projectName)
     emit sliceFailed(statusLabel_);
     return;
   }
+
+#ifdef HAS_LIBSLIC3R
+  if (!modelForSlice || modelForSlice->objects.empty())
+  {
+    statusLabel_ = QStringLiteral("当前平板没有可切片对象");
+    emit progressChanged();
+    emit sliceFailed(statusLabel_);
+    return;
+  }
+#endif
 
   slicing_ = true;
   progress_ = 0;
@@ -71,10 +153,14 @@ void SliceService::startSlice(const QString &projectName)
   const QPointer<SliceService> receiver(this);
   const auto cancelFlag = activeCancelFlag_;
 
-  QtConcurrent::run([receiver, cancelFlag, sourcePath]()
+  QtConcurrent::run([receiver, cancelFlag, sourcePath, targetPlateIndex, targetPlateLabel, modelForSlice = std::move(modelForSlice)]() mutable
                     {
     QString errorText;
     QString outputPath;
+    QString estimatedTimeLabel;
+    QString resultWeightLabel;
+    QString resultPlateLabel;
+    int resultPlateIndex = -1;
 
 #ifdef HAS_LIBSLIC3R
     try
@@ -92,8 +178,9 @@ void SliceService::startSlice(const QString &projectName)
         }, Qt::QueuedConnection);
       };
 
-      notify(2, QObject::tr("加载模型"));
-      Slic3r::Model model = Slic3r::Model::read_from_file(sourcePath.toStdString());
+      notify(2, QObject::tr("准备当前平板模型"));
+      if (!modelForSlice || modelForSlice->objects.empty())
+        throw std::runtime_error("当前平板没有可切片对象");
       if (cancelFlag && cancelFlag->load())
         throw std::runtime_error("切片已取消");
 
@@ -120,7 +207,7 @@ void SliceService::startSlice(const QString &projectName)
       });
 
       notify(18, QObject::tr("应用切片参数"));
-      print.apply(model, config);
+      print.apply(*modelForSlice, config);
       if (cancelFlag && cancelFlag->load())
       {
         print.cancel();
@@ -145,6 +232,13 @@ void SliceService::startSlice(const QString &projectName)
       const QString targetPath = QDir(appDir).filePath(fileName);
       const std::string generated = print.export_gcode(targetPath.toStdString(), &result);
       outputPath = QString::fromStdString(generated);
+      estimatedTimeLabel = formatDurationLabel(result.print_statistics.modes[0].time);
+      const auto &printStats = print.print_statistics();
+      if (printStats.total_weight > 0.0)
+        resultWeightLabel = QStringLiteral("%1 g").arg(QString::number(printStats.total_weight, 'f', 2));
+
+      resultPlateLabel = targetPlateLabel;
+      resultPlateIndex = targetPlateIndex;
 
       receiver->activePrint_.store(nullptr, std::memory_order_release);
     }
@@ -166,7 +260,7 @@ void SliceService::startSlice(const QString &projectName)
     if (!receiver)
       return;
 
-    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText]() {
+    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex]() {
       if (!receiver)
         return;
 
@@ -193,9 +287,13 @@ void SliceService::startSlice(const QString &projectName)
       receiver->progress_ = 100;
       receiver->statusLabel_ = QObject::tr("切片完成");
       receiver->outputPath_ = outputPath;
+      receiver->estimatedTimeLabel_ = estimatedTimeLabel;
+      receiver->resultWeightLabel_ = resultWeightLabel;
+      receiver->resultPlateLabel_ = resultPlateLabel;
+      receiver->resultPlateIndex_ = resultPlateIndex;
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
-      emit receiver->sliceFinished(QStringLiteral("01:42:16"));
+      emit receiver->sliceFinished(receiver->estimatedTimeLabel_);
     }, Qt::QueuedConnection); });
 }
 
@@ -215,6 +313,8 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
 {
   if (slicing_)
     return false;
+
+  clearStoredResult();
 
   const QFileInfo info(gcodeFilePath);
   const QString localPath = info.absoluteFilePath();
@@ -237,8 +337,18 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
 
   const QPointer<SliceService> receiver(this);
   const auto cancelFlag = activeCancelFlag_;
+  const int targetPlateIndex = projectService_ ? projectService_->currentPlateIndex() : -1;
+  QString targetPlateLabel;
+  if (projectService_)
+  {
+    const QStringList plateNames = projectService_->plateNames();
+    if (targetPlateIndex >= 0 && targetPlateIndex < plateNames.size() && !plateNames[targetPlateIndex].isEmpty())
+      targetPlateLabel = plateNames[targetPlateIndex];
+    else if (targetPlateIndex >= 0)
+      targetPlateLabel = QObject::tr("平板 %1").arg(targetPlateIndex + 1);
+  }
 
-  QtConcurrent::run([receiver, cancelFlag, localPath]()
+  QtConcurrent::run([receiver, cancelFlag, localPath, targetPlateIndex, targetPlateLabel]()
                     {
     QString errorText;
 
@@ -265,7 +375,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
     if (!receiver)
       return;
 
-    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, localPath, errorText]() {
+    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, localPath, errorText, targetPlateIndex, targetPlateLabel]() {
       if (!receiver)
         return;
 
@@ -292,9 +402,11 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
       receiver->progress_ = 100;
       receiver->statusLabel_ = QObject::tr("复用已有 G-code 完成");
       receiver->outputPath_ = localPath;
+      receiver->resultPlateLabel_ = targetPlateLabel;
+      receiver->resultPlateIndex_ = targetPlateIndex;
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
-      emit receiver->sliceFinished(QStringLiteral("00:00:00"));
+      emit receiver->sliceFinished(QString{});
     }, Qt::QueuedConnection); });
 
   return true;

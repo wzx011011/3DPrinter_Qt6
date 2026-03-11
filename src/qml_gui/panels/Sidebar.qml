@@ -16,6 +16,20 @@ Item {
 
     implicitWidth: collapsed ? collapsedWidth : expandedWidth
 
+    Connections {
+        target: root.editorVm
+
+        function onSelectionSettingsRequested() {
+            tabBar.currentIndex = 1
+            if (root.configVm && root.editorVm && root.editorVm.canOpenSelectionSettings) {
+                root.configVm.activateObjectScope(root.editorVm.settingsTargetType,
+                                                  root.editorVm.settingsTargetName,
+                                                  root.editorVm.settingsTargetObjectIndex,
+                                                  root.editorVm.settingsTargetVolumeIndex)
+            }
+        }
+    }
+
     Behavior on implicitWidth { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
     // ── 折叠切换按钮 ──────────────────────────────────────────────
@@ -75,41 +89,6 @@ Item {
                     anchors.margins: 10
                     spacing: 8
 
-                    // G5 — 预设快速选择栏 ─────────────────────────────────
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 40
-                        radius: 12
-                        color: Theme.bgPanel
-                        border.width: 1
-                        border.color: Theme.borderSubtle
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 10
-                            anchors.rightMargin: 10
-                            spacing: 8
-                            Text { text: qsTr("预设"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
-                            ComboBox {
-                                id: sidebarPresetCombo
-                                Layout.fillWidth: true
-                                font.pixelSize: 11
-                                model: {
-                                    if (!root.configVm || !root.configVm.presetList) return []
-                                    var pl = root.configVm.presetList
-                                    var cats = [qsTr("打印质量"),qsTr("耗材"),qsTr("打印机")]
-                                    var arr  = []
-                                    for (var ci = 0; ci < cats.length; ++ci) {
-                                        var n = pl.countByCategory(cats[ci])
-                                        for (var pi = 0; pi < n; ++pi)
-                                            arr.push(pl.presetName(pl.globalIndex(cats[ci], pi)))
-                                    }
-                                    return arr
-                                }
-                            }
-                        }
-                    }
-
                     // Tab 标签栏
                     Rectangle {
                         Layout.fillWidth: true
@@ -164,7 +143,7 @@ Item {
                     TabBar {
                         id: tabBar
                         visible: false
-                        currentIndex: 0
+                        currentIndex: 1
                     }
 
                     StackLayout {
@@ -173,53 +152,27 @@ Item {
                         currentIndex: tabBar.currentIndex
 
                         ObjectList {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
                             editorVm: root.editorVm
                         }
 
                         Loader {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
                             active: tabBar.currentIndex === 1
                             sourceComponent: Component {
                                 PrintSettings {
+                                    editorVm: root.editorVm
                                     configVm: root.configVm
                                 }
                             }
                         }
 
                         SliceProgress {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
                             editorVm: root.editorVm
-                        }
-                    }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 34
-                        radius: 12
-                        color: Theme.bgPanel
-                        border.width: 1
-                        border.color: Theme.borderSubtle
-
-                        Rectangle {
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            radius: 9
-                            color: advHov.containsMouse ? Theme.bgHover : "transparent"
-                            border.width: 1
-                            border.color: advHov.containsMouse ? Theme.borderDefault : "transparent"
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: qsTr("⚙  高级设置")
-                                color: Theme.textSecondary
-                                font.pixelSize: Theme.fontSizeMD
-                            }
-
-                            MouseArea {
-                                id: advHov
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: backend.openSettings()
-                            }
                         }
                     }
                 }

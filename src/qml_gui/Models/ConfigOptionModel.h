@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QAbstractListModel>
+#include <QHash>
+#include <QSet>
 #include <QStringList>
 #include <QVariant>
 
@@ -61,6 +63,7 @@ public:
   Q_INVOKABLE QString optEnumLabel(int i, int j) const;
 
   Q_INVOKABLE void setValue(int row, const QVariant &value);
+  Q_INVOKABLE int indexOfKey(const QString &key) const;
 
   // Safe count (avoids QVariantList exposure to QML V4 engine)
   Q_INVOKABLE int countForCategory(const QString &category) const;
@@ -69,10 +72,16 @@ public:
   // NOTE: avoid calling from QML — QVariantList crashes Qt 6.10 V4
   Q_INVOKABLE QVariantList indicesForCategory(const QString &category) const;
 
+  QHash<QString, QVariant> valuesByKey() const;
+  void applyValues(const QHash<QString, QVariant> &values);
+  void setReadonlyKeys(const QSet<QString> &keys);
+
 signals:
   void countChanged();
   void optionValueChanged(const QString &key, const QVariant &value);
 
 private:
+  int findIndex(const QString &key) const;
   QList<ConfigOption> m_options;
+  QSet<QString> m_baseReadonlyKeys;
 };

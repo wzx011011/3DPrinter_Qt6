@@ -56,7 +56,7 @@ BackendContext::BackendContext(QObject *parent)
   editorViewModel_ = new EditorViewModel(projectService_, sliceService_, this);
   previewViewModel_ = new PreviewViewModel(sliceService_, this);
   monitorViewModel_ = new MonitorViewModel(deviceService_, networkService_, this);
-  configViewModel_ = new ConfigViewModel(presetService_, this);
+  configViewModel_ = new ConfigViewModel(presetService_, projectService_, this);
   homeViewModel_ = new HomeViewModel(this);
   settingsViewModel_ = new SettingsViewModel(this);
   projectViewModel_ = new ProjectViewModel(this);

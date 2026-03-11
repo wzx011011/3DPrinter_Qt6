@@ -2,6 +2,7 @@
 
 #include <QFileInfo>
 #include <QDebug>
+#include <QVariant>
 #include <QSet>
 #include <algorithm>
 #include <QMetaObject>
@@ -24,6 +25,8 @@
 
 namespace
 {
+  using ScopedConfig = Slic3r::ModelConfig;
+
   QString importStageToText(int stage)
   {
     switch (stage)
@@ -51,6 +54,182 @@ namespace
     default:
       return QObject::tr("处理文件");
     }
+  }
+
+  QString volumeTypeToLabel(const Slic3r::ModelVolume *volume)
+  {
+    if (!volume)
+      return {};
+    if (volume->is_model_part())
+      return QObject::tr("模型部件");
+    if (volume->is_negative_volume())
+      return QObject::tr("负体积");
+    if (volume->is_modifier())
+      return QObject::tr("参数修改器");
+    if (volume->is_support_enforcer())
+      return QObject::tr("支撑增强");
+    if (volume->is_support_blocker())
+      return QObject::tr("支撑屏蔽");
+    return QObject::tr("体积");
+  }
+
+  std::unique_ptr<Slic3r::DynamicPrintConfig> defaultConfigForKey(const std::string &key)
+  {
+    return std::unique_ptr<Slic3r::DynamicPrintConfig>(Slic3r::DynamicPrintConfig::new_from_defaults_keys({key}));
+  }
+
+  const ScopedConfig *scopedConfigForRead(const Slic3r::Model *model, int objectIndex, int volumeIndex)
+  {
+    if (!model || objectIndex < 0 || size_t(objectIndex) >= model->objects.size())
+      return nullptr;
+
+    const auto *object = model->objects[size_t(objectIndex)];
+    if (!object)
+      return nullptr;
+
+    if (volumeIndex >= 0)
+    {
+      if (size_t(volumeIndex) >= object->volumes.size() || !object->volumes[size_t(volumeIndex)])
+        return nullptr;
+      return &object->volumes[size_t(volumeIndex)]->config;
+    }
+
+    return &object->config;
+  }
+
+  ScopedConfig *scopedConfigForWrite(Slic3r::Model *model, int objectIndex, int volumeIndex)
+  {
+    if (!model || objectIndex < 0 || size_t(objectIndex) >= model->objects.size())
+      return nullptr;
+
+    auto *object = model->objects[size_t(objectIndex)];
+    if (!object)
+      return nullptr;
+
+    if (volumeIndex >= 0)
+    {
+      if (size_t(volumeIndex) >= object->volumes.size() || !object->volumes[size_t(volumeIndex)])
+        return nullptr;
+      return &object->volumes[size_t(volumeIndex)]->config;
+    }
+
+    return &object->config;
+  }
+
+  QString resolvedBedTempKey(const ScopedConfig *config)
+  {
+    Slic3r::BedType bedType = Slic3r::btPEI;
+    if (config && config->option("curr_bed_type"))
+      bedType = config->get().opt_enum<Slic3r::BedType>("curr_bed_type");
+    return QString::fromStdString(Slic3r::get_bed_temp_key(bedType));
+  }
+
+  QVariant readConfigValue(const ScopedConfig *config, const QString &key, const QVariant &fallbackValue)
+  {
+    if (!config)
+      return fallbackValue;
+
+    if (key == QStringLiteral("brim_enable"))
+    {
+      const auto *brimType = config->option("brim_type");
+      const auto *brimWidth = config->option("brim_width");
+      if (!brimType || !brimWidth)
+        return fallbackValue;
+      return brimType->getInt() != int(Slic3r::BrimType::btNoBrim) && brimWidth->getFloat() > 0.0;
+    }
+
+    if (key == QStringLiteral("nozzle_temp"))
+    {
+      const auto *option = config->get().option<Slic3r::ConfigOptionInts>("nozzle_temperature");
+      return option && !option->values.empty() ? QVariant(option->get_at(0)) : fallbackValue;
+    }
+
+    if (key == QStringLiteral("bed_temp"))
+    {
+      const QString bedKey = resolvedBedTempKey(config);
+      const auto *option = config->get().option<Slic3r::ConfigOptionInts>(bedKey.toStdString());
+      return option && !option->values.empty() ? QVariant(option->get_at(0)) : fallbackValue;
+    }
+
+    if (key == QStringLiteral("chamber_temperature"))
+    {
+      const auto *option = config->get().option<Slic3r::ConfigOptionInts>("chamber_temperature");
+      return option && !option->values.empty() ? QVariant(option->get_at(0)) : fallbackValue;
+    }
+
+    const std::string stdKey = key.toStdString();
+    const auto *option = config->option(stdKey);
+    if (!option)
+      return fallbackValue;
+
+    if (key == QStringLiteral("layer_height") || key == QStringLiteral("initial_layer_print_height") || key == QStringLiteral("line_width") || key == QStringLiteral("brim_width") || key == QStringLiteral("travel_speed") || key == QStringLiteral("initial_layer_speed") || key == QStringLiteral("outer_wall_speed"))
+      return option->getFloat();
+
+    return option->getInt();
+  }
+
+  bool writeConfigValue(ScopedConfig *config, const QString &key, const QVariant &value)
+  {
+    if (!config)
+      return false;
+
+    if (key == QStringLiteral("brim_enable"))
+    {
+      if (value.toBool())
+      {
+        config->set_key_value("brim_type", new Slic3r::ConfigOptionEnum<Slic3r::BrimType>(Slic3r::BrimType::btOuterOnly));
+        if (!config->option("brim_width"))
+          config->set_key_value("brim_width", new Slic3r::ConfigOptionFloat(5.0));
+      }
+      else
+      {
+        config->set_key_value("brim_type", new Slic3r::ConfigOptionEnum<Slic3r::BrimType>(Slic3r::BrimType::btNoBrim));
+      }
+      return true;
+    }
+
+    if (key == QStringLiteral("nozzle_temp"))
+    {
+      config->set_key_value("nozzle_temperature", new Slic3r::ConfigOptionInts(1, value.toInt()));
+      return true;
+    }
+
+    if (key == QStringLiteral("bed_temp"))
+    {
+      const QString bedKey = resolvedBedTempKey(config);
+      if (bedKey.isEmpty())
+        return false;
+      config->set_key_value(bedKey.toStdString(), new Slic3r::ConfigOptionInts(1, value.toInt()));
+      return true;
+    }
+
+    if (key == QStringLiteral("chamber_temperature"))
+    {
+      config->set_key_value("chamber_temperature", new Slic3r::ConfigOptionInts(1, value.toInt()));
+      return true;
+    }
+
+    const std::string stdKey = key.toStdString();
+    auto defaults = defaultConfigForKey(stdKey);
+    if (!defaults)
+      return false;
+
+    const auto *defaultOption = defaults->option(stdKey);
+    if (!defaultOption)
+      return false;
+
+    std::unique_ptr<Slic3r::ConfigOption> next(defaultOption->clone());
+    if (auto *boolOption = dynamic_cast<Slic3r::ConfigOptionBool *>(next.get()))
+      boolOption->value = value.toBool();
+    else if (auto *intOption = dynamic_cast<Slic3r::ConfigOptionInt *>(next.get()))
+      intOption->value = value.toInt();
+    else if (auto *floatOption = dynamic_cast<Slic3r::ConfigOptionFloat *>(next.get()))
+      floatOption->value = value.toDouble();
+    else
+      next->setInt(value.toInt());
+
+    config->set_key_value(stdKey, next.release());
+    return true;
   }
 
 } // namespace
@@ -110,6 +289,32 @@ QString ProjectServiceMock::sourceFilePath() const
 {
   return sourceFilePath_;
 }
+
+#ifdef HAS_LIBSLIC3R
+std::unique_ptr<Slic3r::Model> ProjectServiceMock::cloneCurrentPlateModel() const
+{
+  if (!model_ || currentPlateIndex_ < 0 || currentPlateIndex_ >= plateObjectIndices_.size())
+    return {};
+
+  auto clonedModel = std::make_unique<Slic3r::Model>(*model_);
+  const QList<int> plateObjectIndices = currentPlateObjectIndices();
+  QSet<int> allowedObjectIndices;
+  allowedObjectIndices.reserve(plateObjectIndices.size());
+  for (int objectIndex : plateObjectIndices)
+  {
+    if (objectIndex >= 0 && objectIndex < objectPrintableStates_.size() && objectPrintableStates_[objectIndex])
+      allowedObjectIndices.insert(objectIndex);
+  }
+
+  for (int objectIndex = int(clonedModel->objects.size()) - 1; objectIndex >= 0; --objectIndex)
+  {
+    if (!allowedObjectIndices.contains(objectIndex))
+      clonedModel->delete_object(size_t(objectIndex));
+  }
+
+  return clonedModel;
+}
+#endif
 
 bool ProjectServiceMock::loadFile(const QString &filePath)
 {
@@ -309,6 +514,8 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
     const bool canceled = cancelFlag && cancelFlag->load();
 
     QStringList names;
+    QStringList moduleNames;
+    QList<bool> printableStates;
     QString errorText;
     QString loadedProjectName;
     if (ok && !canceled)
@@ -316,6 +523,8 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
       loadedProjectName = QFileInfo(localPath).completeBaseName();
       const auto &objs = loadedModel->objects;
       names.reserve(int(objs.size()));
+      moduleNames.reserve(int(objs.size()));
+      printableStates.reserve(int(objs.size()));
       for (size_t i = 0; i < objs.size(); ++i)
       {
         const auto *obj = objs[i];
@@ -323,6 +532,14 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
           names << QString::fromStdString(obj->name);
         else
           names << QObject::tr("对象 %1").arg(int(i + 1));
+
+        if (obj && !obj->module_name.empty())
+          moduleNames << QString::fromStdString(obj->module_name);
+        else
+          moduleNames << QObject::tr("默认模块");
+
+        const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
+        printableStates.append(printable);
       }
     }
     else
@@ -337,7 +554,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
       return;
     }
 
-    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices]() {
+    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices]() {
       if (!receiver)
       {
         delete loadedModel;
@@ -363,6 +580,8 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         receiver->projectName_ = loadedProjectName;
         receiver->sourceFilePath_ = localPath;
         receiver->objectNames_ = names;
+        receiver->objectModuleNames_ = moduleNames;
+        receiver->objectPrintableStates_ = printableStates;
         receiver->modelCount_ = names.size();
         receiver->plateNames_ = loadedPlateNames;
         receiver->plateObjectIndices_ = loadedPlateObjectIndices;
@@ -397,6 +616,8 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         receiver->currentPlateIndex_ = -1;
         receiver->sourceFilePath_.clear();
         receiver->objectNames_.clear();
+        receiver->objectModuleNames_.clear();
+        receiver->objectPrintableStates_.clear();
         receiver->plateNames_.clear();
         receiver->plateObjectIndices_.clear();
         receiver->lastError_ = errorText;
@@ -442,6 +663,13 @@ QStringList ProjectServiceMock::plateNames() const
   return plateNames_;
 }
 
+QString ProjectServiceMock::objectModuleName(int index) const
+{
+  if (index < 0 || index >= objectModuleNames_.size())
+    return {};
+  return objectModuleNames_[index];
+}
+
 bool ProjectServiceMock::setCurrentPlateIndex(int index)
 {
   if (index < 0 || index >= plateObjectIndices_.size())
@@ -458,6 +686,242 @@ QList<int> ProjectServiceMock::currentPlateObjectIndices() const
   if (currentPlateIndex_ < 0 || currentPlateIndex_ >= plateObjectIndices_.size())
     return {};
   return plateObjectIndices_[currentPlateIndex_];
+}
+
+int ProjectServiceMock::plateObjectCount(int index) const
+{
+  if (index < 0 || index >= plateObjectIndices_.size())
+    return 0;
+  return plateObjectIndices_[index].size();
+}
+
+int ProjectServiceMock::plateIndexForObject(int objectIndex) const
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+    return -1;
+
+  for (int plateIndex = 0; plateIndex < plateObjectIndices_.size(); ++plateIndex)
+  {
+    if (plateObjectIndices_[plateIndex].contains(objectIndex))
+      return plateIndex;
+  }
+
+  if (plateObjectIndices_.size() == 1)
+    return 0;
+  return -1;
+}
+
+bool ProjectServiceMock::objectPrintable(int index) const
+{
+  if (index < 0 || index >= objectPrintableStates_.size())
+    return false;
+  return objectPrintableStates_[index];
+}
+
+bool ProjectServiceMock::setObjectPrintable(int index, bool printable)
+{
+  if (loading_)
+  {
+    lastError_ = tr("加载中，无法更新对象打印状态");
+    emit projectChanged();
+    return false;
+  }
+
+  if (index < 0 || index >= objectPrintableStates_.size())
+  {
+    lastError_ = tr("更新失败：对象索引无效");
+    emit projectChanged();
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || size_t(index) >= model_->objects.size() || !model_->objects[size_t(index)])
+  {
+    lastError_ = tr("更新失败：模型对象无效");
+    emit projectChanged();
+    return false;
+  }
+
+  auto *obj = model_->objects[size_t(index)];
+  for (auto *inst : obj->instances)
+  {
+    if (inst)
+      inst->printable = printable;
+  }
+#endif
+
+  objectPrintableStates_[index] = printable;
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+}
+
+int ProjectServiceMock::objectVolumeCount(int index) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || index < 0 || size_t(index) >= model_->objects.size() || !model_->objects[size_t(index)])
+    return 0;
+  return int(model_->objects[size_t(index)]->volumes.size());
+#else
+  Q_UNUSED(index);
+  return 0;
+#endif
+}
+
+QString ProjectServiceMock::objectVolumeName(int objectIndex, int volumeIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return {};
+
+  const auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || volumeIndex < 0 || size_t(volumeIndex) >= obj->volumes.size() || !obj->volumes[size_t(volumeIndex)])
+    return {};
+
+  const auto *volume = obj->volumes[size_t(volumeIndex)];
+  if (!volume->name.empty())
+    return QString::fromStdString(volume->name);
+  return tr("体积 %1").arg(volumeIndex + 1);
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(volumeIndex);
+  return {};
+#endif
+}
+
+QString ProjectServiceMock::objectVolumeTypeLabel(int objectIndex, int volumeIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return {};
+
+  const auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || volumeIndex < 0 || size_t(volumeIndex) >= obj->volumes.size())
+    return {};
+
+  return volumeTypeToLabel(obj->volumes[size_t(volumeIndex)]);
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(volumeIndex);
+  return {};
+#endif
+}
+
+QVariant ProjectServiceMock::scopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &fallbackValue) const
+{
+#ifdef HAS_LIBSLIC3R
+  return readConfigValue(scopedConfigForRead(model_, objectIndex, volumeIndex), key, fallbackValue);
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(volumeIndex);
+  return fallbackValue;
+#endif
+}
+
+bool ProjectServiceMock::setScopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &value)
+{
+  if (loading_)
+  {
+    lastError_ = tr("加载中，无法更新参数");
+    emit projectChanged();
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  auto *config = scopedConfigForWrite(model_, objectIndex, volumeIndex);
+  if (!config)
+  {
+    lastError_ = tr("更新失败：配置目标无效");
+    emit projectChanged();
+    return false;
+  }
+
+  if (!writeConfigValue(config, key, value))
+  {
+    lastError_ = tr("更新失败：参数 %1 当前未支持写入").arg(key);
+    emit projectChanged();
+    return false;
+  }
+
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(volumeIndex);
+  Q_UNUSED(key);
+  Q_UNUSED(value);
+  lastError_ = tr("当前构建未启用 libslic3r，无法更新参数");
+  emit projectChanged();
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::deleteObjectVolume(int objectIndex, int volumeIndex)
+{
+  if (loading_)
+  {
+    lastError_ = tr("加载中，无法删除部件");
+    emit projectChanged();
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+  {
+    lastError_ = tr("删除失败：对象索引无效");
+    emit projectChanged();
+    return false;
+  }
+
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || volumeIndex < 0 || size_t(volumeIndex) >= obj->volumes.size())
+  {
+    lastError_ = tr("删除失败：部件索引无效");
+    emit projectChanged();
+    return false;
+  }
+
+  auto *volume = obj->volumes[size_t(volumeIndex)];
+  if (!volume)
+  {
+    lastError_ = tr("删除失败：部件无效");
+    emit projectChanged();
+    return false;
+  }
+
+  int solidPartCount = 0;
+  for (const auto *candidate : obj->volumes)
+  {
+    if (candidate && candidate->is_model_part())
+      ++solidPartCount;
+  }
+
+  if (volume->is_model_part() && solidPartCount <= 1)
+  {
+    lastError_ = tr("不能删除最后一个实体部件");
+    emit projectChanged();
+    return false;
+  }
+
+  if (obj->is_cut() && (volume->is_model_part() || volume->is_negative_volume()))
+  {
+    lastError_ = tr("当前切割对象暂不支持删除该部件");
+    emit projectChanged();
+    return false;
+  }
+
+  obj->delete_volume(size_t(volumeIndex));
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(volumeIndex);
+  lastError_ = tr("当前构建未启用 libslic3r，无法删除部件");
+  emit projectChanged();
+  return false;
+#endif
 }
 
 bool ProjectServiceMock::deleteObject(int index)
@@ -496,6 +960,10 @@ bool ProjectServiceMock::deleteObject(int index)
 
     objectNames_.clear();
     objectNames_.reserve(int(model_->objects.size()));
+    objectModuleNames_.clear();
+    objectModuleNames_.reserve(int(model_->objects.size()));
+    objectPrintableStates_.clear();
+    objectPrintableStates_.reserve(int(model_->objects.size()));
     for (size_t i = 0; i < model_->objects.size(); ++i)
     {
       const auto *obj = model_->objects[i];
@@ -503,9 +971,19 @@ bool ProjectServiceMock::deleteObject(int index)
         objectNames_ << QString::fromStdString(obj->name);
       else
         objectNames_ << tr("对象 %1").arg(int(i + 1));
+
+      if (obj && !obj->module_name.empty())
+        objectModuleNames_ << QString::fromStdString(obj->module_name);
+      else
+        objectModuleNames_ << tr("默认模块");
+
+      const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
+      objectPrintableStates_.append(printable);
     }
 #else
     objectNames_.removeAt(index);
+    objectModuleNames_.removeAt(index);
+    objectPrintableStates_.removeAt(index);
 #endif
 
     modelCount_ = objectNames_.size();
@@ -600,6 +1078,8 @@ void ProjectServiceMock::clearProject()
   currentPlateIndex_ = -1;
   sourceFilePath_.clear();
   objectNames_.clear();
+  objectModuleNames_.clear();
+  objectPrintableStates_.clear();
   plateNames_.clear();
   plateObjectIndices_.clear();
   lastError_.clear();

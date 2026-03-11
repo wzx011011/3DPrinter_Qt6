@@ -16,10 +16,42 @@ foreach ($line in $envDump) {
 
 Set-Location 'e:/ai/3DPrinter_Qt6/build'
 
-cmake -S .. -B . -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_LIBSLIC3R=ON -DCREALITY_QML_GUI=ON
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
 Stop-Process -Name 'FramelessDialogDemo' -Force -ErrorAction SilentlyContinue
+Stop-Process -Name 'cmake', 'ninja', 'link' -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 500
+
+$cmakeArgs = @(
+  '-S', '..',
+  '-B', '.',
+  '-G', 'Ninja',
+  '-DCMAKE_BUILD_TYPE=Release',
+  '-DBUILD_LIBSLIC3R=ON',
+  '-DCREALITY_QML_GUI=ON'
+)
+
+$configureSucceeded = $false
+for ($attempt = 1; $attempt -le 3; ++$attempt) {
+  $configureOutput = & cmake @cmakeArgs 2>&1
+  $configureText = ($configureOutput | Out-String)
+  $lastConfigureExitCode = $LASTEXITCODE
+  $configureOutput | Write-Host
+
+  if ($lastConfigureExitCode -eq 0) {
+    $configureSucceeded = $true
+    break
+  }
+
+  if ($configureText -notmatch 'failed recompaction: Permission denied' -or $attempt -eq 3) {
+    exit $lastConfigureExitCode
+  }
+
+  Write-Host ("CMAKE_RETRY_ATTEMPT=" + $attempt)
+  Stop-Process -Name 'FramelessDialogDemo' -Force -ErrorAction SilentlyContinue
+  Stop-Process -Name 'cmake', 'ninja', 'link' -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Seconds 2
+}
+
+if (-not $configureSucceeded) { exit $lastConfigureExitCode }
 
 # Reduce MSVC memory pressure in large TUs/autogen files
 $env:CL = "/Zm300 /bigobj $env:CL"

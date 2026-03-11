@@ -1,6 +1,8 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
+import "../controls"
 
 Item {
     id: root
@@ -16,51 +18,54 @@ Item {
         _fileTree = arr
     }
 
-    Rectangle { anchors.fill: parent; color: "#0d0f12" }
+    Rectangle { anchors.fill: parent; color: Theme.bgBase }
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: 0
+        anchors.margins: Theme.spacingLG
+        spacing: Theme.spacingMD
 
-        // Toolbar row
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 40
-            color: "#131720"
+            Layout.preferredHeight: 48
+            color: Theme.bgPanel
+            radius: 16
+            border.width: 1
+            border.color: Theme.borderSubtle
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
-                spacing: 8
+                anchors.leftMargin: 14
+                anchors.rightMargin: 14
+                spacing: Theme.spacingSM
 
                 Repeater {
                     model: [qsTr("新建项目"),qsTr("打开"),qsTr("保存"),qsTr("另存为"),qsTr("导入模型"),qsTr("导出")]
-                    delegate: Rectangle {
-                        height: 26; width: implicitWidth + 18; radius: 4
-                        color: btnHov.containsMouse ? "#2e3444" : "#1a1e28"
-                        border.color: "#363d4e"; border.width: 1
-                        Text { anchors.centerIn: parent; text: modelData; color: "#c8d4e0"; font.pixelSize: 11 }
-                        HoverHandler { id: btnHov }
+                    delegate: CxButton {
+                        text: modelData
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
                     }
                 }
 
                 Item { Layout.fillWidth: true }
 
-                Text { text: root.projectVm.isDirty ? qsTr("● 未保存") : ""; color: "#f5a623"; font.pixelSize: 11 }
+                Text { text: root.projectVm.isDirty ? qsTr("● 未保存") : ""; color: Theme.statusWarning; font.pixelSize: 11; font.bold: true }
             }
         }
 
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 0
+            spacing: Theme.spacingMD
 
-            // File tree
             Rectangle {
                 Layout.preferredWidth: 220
                 Layout.fillHeight: true
-                color: "#0f1218"
+                color: Theme.bgPanel
+                radius: 16
+                border.width: 1
+                border.color: Theme.borderSubtle
 
                 Column {
                     anchors.fill: parent
@@ -68,24 +73,25 @@ Item {
                     spacing: 0
 
                     Rectangle {
-                        width: parent.width; height: 32; color: "#131720"
+                        width: parent.width; height: 40; color: Theme.bgSurface; radius: 16
                         Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 12
-                               text: qsTr("项目资源"); color: "#a0abbe"; font.pixelSize: 12; font.bold: true }
+                               text: qsTr("项目资源"); color: Theme.textSecondary; font.pixelSize: 12; font.bold: true }
                     }
 
                     Repeater {
                         model: root._fileTree
                         delegate: Rectangle {
                             required property var modelData
-                            width: parent.width; height: 28
-                            color: itemHov.containsMouse ? "#1a1e28" : "transparent"
+                            width: parent.width; height: 32
+                            radius: 8
+                            color: itemHov.containsMouse ? Theme.bgHover : "transparent"
                             Row {
                                 anchors.verticalCenter: parent.verticalCenter
                                 anchors.left: parent.left
                                 anchors.leftMargin: 12 + (modelData.depth || 0) * 16
                                 spacing: 6
                                 Text { text: modelData.isDir ? "📁" : "📄"; font.pixelSize: 12 }
-                                Text { text: modelData.name; color: "#c0cad8"; font.pixelSize: 11 }
+                                Text { text: modelData.name; color: Theme.textPrimary; font.pixelSize: 11 }
                             }
                             HoverHandler { id: itemHov }
                         }
@@ -93,33 +99,37 @@ Item {
                 }
             }
 
-            // Detail panel
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                color: "#0d0f12"
+                color: Theme.bgSurface
+                radius: 18
+                border.width: 1
+                border.color: Theme.borderSubtle
 
                 Column {
                     anchors.centerIn: parent
                     spacing: 12
                     visible: root.projectVm.selectedFile === ""
-                    Text { text: "📋"; font.pixelSize: 48; color: "#3a4250"; horizontalAlignment: Text.AlignHCenter; width: parent.width }
-                    Text { text: qsTr("选择文件查看详情"); color: "#566070"; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                    Text { text: "📋"; font.pixelSize: 48; color: Theme.textDisabled; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                    Text { text: qsTr("选择文件查看详情"); color: Theme.textSecondary; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; width: parent.width }
                 }
             }
 
-            // Properties panel
             Rectangle {
                 Layout.preferredWidth: 260
                 Layout.fillHeight: true
-                color: "#0f1218"
+                color: Theme.bgPanel
+                radius: 16
+                border.width: 1
+                border.color: Theme.borderSubtle
 
                 Column {
                     anchors.fill: parent; anchors.margins: 0
                     Rectangle {
-                        width: parent.width; height: 32; color: "#131720"
+                        width: parent.width; height: 40; color: Theme.bgSurface; radius: 16
                         Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 12
-                               text: qsTr("属性"); color: "#a0abbe"; font.pixelSize: 12; font.bold: true }
+                               text: qsTr("属性"); color: Theme.textSecondary; font.pixelSize: 12; font.bold: true }
                     }
 
                     Column {
@@ -129,11 +139,22 @@ Item {
 
                         Repeater {
                             model: [[qsTr("路径"),"—"],[qsTr("格式"),"—"],[qsTr("大小"),"—"],[qsTr("修改时间"),"—"]]
-                            delegate: Column {
+                            delegate: Rectangle {
                                 required property var modelData
-                                spacing: 2
-                                Text { text: modelData[0]; color: "#566070"; font.pixelSize: 10 }
-                                Text { text: modelData[1]; color: "#c0cad8"; font.pixelSize: 11 }
+                                width: parent.width
+                                height: 52
+                                radius: 10
+                                color: Theme.bgElevated
+                                border.width: 1
+                                border.color: Theme.borderSubtle
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    spacing: 4
+                                    Text { text: modelData[0]; color: Theme.textDisabled; font.pixelSize: 10 }
+                                    Text { text: modelData[1]; color: Theme.textPrimary; font.pixelSize: 11 }
+                                }
                             }
                         }
                     }
@@ -141,12 +162,11 @@ Item {
             }
         }
 
-        // Status bar
         Rectangle {
-            Layout.fillWidth: true; height: 22; color: "#090b0e"
+            Layout.fillWidth: true; height: 28; color: Theme.bgPanel; radius: 12; border.width: 1; border.color: Theme.borderSubtle
             Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 12
                    text: root.projectVm.currentProjectPath !== "" ? root.projectVm.currentProjectPath : qsTr("无项目")
-                   color: "#3a4250"; font.pixelSize: 10 }
+                   color: Theme.textDisabled; font.pixelSize: 10 }
         }
     }
 }

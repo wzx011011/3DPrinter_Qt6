@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QVariant>
 #include <QStringList>
 #include <QList>
 #include <QByteArray>
@@ -38,6 +39,10 @@ public:
   bool loading() const;
   QString sourceFilePath() const;
 
+#ifdef HAS_LIBSLIC3R
+  std::unique_ptr<Slic3r::Model> cloneCurrentPlateModel() const;
+#endif
+
   /// 加载 3MF/STL/OBJ 等模型文件（真正调用 libslic3r）
   Q_INVOKABLE bool loadFile(const QString &filePath);
   Q_INVOKABLE void cancelLoad();
@@ -45,8 +50,19 @@ public:
   /// 返回已加载的模型对象名称列表
   Q_INVOKABLE QStringList objectNames() const;
   Q_INVOKABLE QStringList plateNames() const;
+  Q_INVOKABLE QString objectModuleName(int index) const;
   Q_INVOKABLE bool setCurrentPlateIndex(int index);
   Q_INVOKABLE QList<int> currentPlateObjectIndices() const;
+  Q_INVOKABLE int plateObjectCount(int index) const;
+  Q_INVOKABLE int plateIndexForObject(int objectIndex) const;
+  Q_INVOKABLE bool objectPrintable(int index) const;
+  Q_INVOKABLE bool setObjectPrintable(int index, bool printable);
+  Q_INVOKABLE int objectVolumeCount(int index) const;
+  Q_INVOKABLE QString objectVolumeName(int objectIndex, int volumeIndex) const;
+  Q_INVOKABLE QString objectVolumeTypeLabel(int objectIndex, int volumeIndex) const;
+  QVariant scopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &fallbackValue = QVariant()) const;
+  bool setScopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &value);
+  Q_INVOKABLE bool deleteObjectVolume(int objectIndex, int volumeIndex);
   Q_INVOKABLE bool deleteObject(int index);
 
   /**
@@ -75,6 +91,8 @@ private:
   QString lastError_;
   QString sourceFilePath_;
   QStringList objectNames_;
+  QStringList objectModuleNames_;
+  QList<bool> objectPrintableStates_;
   QStringList plateNames_;
   QList<QList<int>> plateObjectIndices_;
   int loadProgress_ = 0;

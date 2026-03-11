@@ -5,6 +5,7 @@ import QtQuick.Dialogs
 import ".."
 import "../controls"
 import "../panels"
+import "../components"
 import "../dialogs"
 import CrealityGL 1.0
 
@@ -14,102 +15,12 @@ Item {
     required property var configVm
     property alias viewport3dRef: viewport3d
 
-    component QuickToolButton: Rectangle {
-        id: tool
-        property string label: ""
-        property url iconSource: ""
-        property string toolTipText: ""
-        property bool active: false
-        signal clicked()
-
-        width: 32
-        height: 32
-        radius: 9
-        color: active ? Theme.accentSubtle : (toolMouse.containsMouse ? Theme.bgHover : Theme.bgPanel)
-        border.width: 1
-        border.color: active ? Theme.accent : Theme.borderSubtle
-
-        Item {
-            anchors.fill: parent
-
-            Image {
-                anchors.centerIn: parent
-                visible: tool.iconSource !== ""
-                width: 16
-                height: 16
-                source: tool.iconSource
-                fillMode: Image.PreserveAspectFit
-                smooth: true
-                opacity: tool.active ? 1.0 : 0.9
-            }
-
-            Text {
-                anchors.centerIn: parent
-                visible: tool.iconSource === ""
-                text: tool.label
-                color: tool.active ? Theme.accentLight : Theme.textSecondary
-                font.pixelSize: Theme.fontSizeLG
-                font.bold: tool.active
-            }
-        }
-
-        MouseArea {
-            id: toolMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: tool.clicked()
-        }
-
-        ToolTip.visible: toolMouse.containsMouse && tool.toolTipText.length > 0
-        ToolTip.text: tool.toolTipText
-        ToolTip.delay: 400
-    }
-
-    component PillAction: Rectangle {
-        id: chip
-        property string label: ""
-        property url iconSource: ""
-        property bool primary: false
-        signal clicked()
-
-        radius: 16
-        height: 34
-        width: Math.max(96, chipRow.implicitWidth + 28)
-        color: primary ? (chipMouse.containsMouse ? Theme.accentLight : Theme.accent) : (chipMouse.containsMouse ? Theme.bgHover : Theme.bgPanel)
-        border.width: 1
-        border.color: primary ? Theme.accentDark : Theme.borderSubtle
-
-        Row {
-            id: chipRow
-            anchors.centerIn: parent
-            spacing: 6
-
-            Image {
-                visible: chip.iconSource !== ""
-                width: 14
-                height: 14
-                source: chip.iconSource
-                fillMode: Image.PreserveAspectFit
-                smooth: true
-            }
-
-            Text {
-                id: chipLabel
-                text: chip.label
-                color: primary ? Theme.textOnAccent : Theme.textPrimary
-                font.pixelSize: Theme.fontSizeMD
-                font.bold: primary
-            }
-        }
-
-        MouseArea {
-            id: chipMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: chip.clicked()
-        }
+    component ToolStripDivider: Rectangle {
+        width: 1
+        height: 22
+        radius: 1
+        color: Theme.borderSubtle
+        opacity: 0.9
     }
 
     function applyFitHintIfReady() {
@@ -215,51 +126,113 @@ Item {
             }
         }
 
-        Rectangle {
+        CxPanel {
             id: topTools
+            cxSurface: CxPanel.Surface.Floating
             anchors.top: parent.top
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.topMargin: 14
-            width: toolsRow.implicitWidth + 14
-            height: 42
-            radius: 14
-            color: "#191f2acc"
-            border.width: 1
-            border.color: Theme.borderSubtle
+            width: toolsContent.implicitWidth + 22
+            height: 50
+            radius: 16
+            color: "#161c27de"
+            border.color: "#2d3443"
 
-            RowLayout {
-                id: toolsRow
+            Item {
+                id: toolsContent
                 anchors.centerIn: parent
-                spacing: Theme.spacingSM
+                implicitWidth: toolbarRow.implicitWidth
+                implicitHeight: toolbarRow.implicitHeight
 
-                QuickToolButton {
-                    iconSource: "qrc:/qml/assets/icons/folder-plus.svg"
-                    toolTipText: qsTr("导入模型")
-                    active: true
-                    onClicked: openFileDlg.open()
-                }
-                QuickToolButton {
-                    iconSource: "qrc:/qml/assets/icons/box.svg"
-                    toolTipText: qsTr("对象视图")
-                }
-                QuickToolButton {
-                    iconSource: "qrc:/qml/assets/icons/rotate-2.svg"
-                    toolTipText: qsTr("重置视角")
-                    onClicked: root.applyFitHintIfReady()
-                }
-                QuickToolButton {
-                    iconSource: "qrc:/qml/assets/icons/layout-sidebar-right.svg"
-                    toolTipText: sidebar.collapsed ? qsTr("展开侧栏") : qsTr("收起侧栏")
-                    active: !sidebar.collapsed
-                    onClicked: sidebar.collapsed = !sidebar.collapsed
-                }
-                QuickToolButton {
-                    iconSource: "qrc:/qml/assets/icons/list-details.svg"
-                    toolTipText: qsTr("对象列表")
-                }
-                QuickToolButton {
-                    iconSource: "qrc:/qml/assets/icons/settings.svg"
-                    toolTipText: qsTr("准备页设置")
+                Row {
+                    id: toolbarRow
+                    spacing: 10
+
+                    Row {
+                        spacing: 6
+
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: true
+                            iconSource: "qrc:/qml/assets/icons/folder-plus.svg"
+                            toolTipText: qsTr("导入模型")
+                            onClicked: openFileDlg.open()
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/folder-open.svg"
+                            toolTipText: qsTr("打开模型")
+                            onClicked: openFileDlg.open()
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/box.svg"
+                            toolTipText: qsTr("对象视图")
+                        }
+                    }
+
+                    ToolStripDivider { }
+
+                    Row {
+                        spacing: 6
+
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/layout-grid.svg"
+                            toolTipText: qsTr("布局工具")
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/rotate-2.svg"
+                            toolTipText: qsTr("重置视角")
+                            onClicked: root.applyFitHintIfReady()
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/list-details.svg"
+                            toolTipText: qsTr("对象列表")
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/lock.svg"
+                            toolTipText: qsTr("锁定视图")
+                        }
+                    }
+
+                    ToolStripDivider { }
+
+                    Row {
+                        spacing: 6
+
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: !sidebar.collapsed
+                            iconSource: "qrc:/qml/assets/icons/layout-sidebar-right.svg"
+                            toolTipText: sidebar.collapsed ? qsTr("展开侧栏") : qsTr("收起侧栏")
+                            onClicked: sidebar.collapsed = !sidebar.collapsed
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/printer.svg"
+                            toolTipText: qsTr("打印机视图")
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/settings.svg"
+                            toolTipText: qsTr("准备页设置")
+                            onClicked: backend.openSettings()
+                        }
+                    }
                 }
             }
         }
@@ -272,7 +245,7 @@ Item {
             anchors.leftMargin: 14
             anchors.topMargin: 66
             anchors.bottomMargin: 16
-            width: 224
+            width: 296
             radius: 18
             color: "#1a202bd9"
             border.width: 1
@@ -283,89 +256,10 @@ Item {
                 anchors.margins: Theme.spacingLG
                 spacing: Theme.spacingMD
 
-                Text {
-                    text: qsTr("平板")
-                    color: Theme.textPrimary
-                    font.pixelSize: Theme.fontSizeLG
-                    font.bold: true
-                }
-
-                Repeater {
-                    model: root.editorVm ? root.editorVm.plateCount : 0
-                    delegate: Rectangle {
-                        required property int index
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 54
-                        radius: 12
-                        color: root.editorVm && root.editorVm.currentPlateIndex === index ? Theme.accentSubtle : Theme.bgElevated
-                        border.width: 1
-                        border.color: root.editorVm && root.editorVm.currentPlateIndex === index ? Theme.accent : Theme.borderDefault
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 12
-                            anchors.rightMargin: 12
-                            spacing: 10
-
-                            Rectangle {
-                                width: 26
-                                height: 26
-                                radius: 8
-                                color: "#101720"
-                                border.width: 1
-                                border.color: Theme.borderSubtle
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: (index + 1).toString()
-                                    color: Theme.textPrimary
-                                    font.pixelSize: Theme.fontSizeMD
-                                    font.bold: true
-                                }
-                            }
-
-                            Column {
-                                spacing: 2
-
-                                Text {
-                                    text: root.editorVm ? root.editorVm.plateName(index) : ""
-                                    color: Theme.textPrimary
-                                    font.pixelSize: Theme.fontSizeMD
-                                    font.bold: true
-                                }
-
-                                Text {
-                                    text: root.editorVm && root.editorVm.currentPlateIndex === index ? qsTr("当前工作平板") : qsTr("点击切换查看")
-                                    color: Theme.textSecondary
-                                    font.pixelSize: Theme.fontSizeSM
-                                }
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                if (root.editorVm) {
-                                    root.editorVm.setCurrentPlateIndex(index)
-                                    root.editorVm.setShowAllObjects(false)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Rectangle {
+                CxSectionHeader {
                     Layout.fillWidth: true
-                    height: 1
-                    color: Theme.borderSubtle
-                }
-
-                Text {
-                    text: qsTr("打印机")
-                    color: Theme.textPrimary
-                    font.pixelSize: Theme.fontSizeLG
-                    font.bold: true
+                    title: qsTr("打印机")
+                    subtitle: qsTr("对象与平台管理")
                 }
 
                 CxComboBox {
@@ -429,7 +323,123 @@ Item {
                     }
                 }
 
-                Item { Layout.fillHeight: true }
+                CxSectionHeader {
+                    Layout.fillWidth: true
+                    title: qsTr("平板")
+                    subtitle: root.editorVm
+                        ? (root.editorVm.plateCount + qsTr(" 个工作平板"))
+                        : qsTr("0 个工作平板")
+                }
+
+                Repeater {
+                    model: root.editorVm ? root.editorVm.plateCount : 0
+
+                    delegate: Rectangle {
+                        required property int index
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 42
+                        radius: 12
+                        color: root.editorVm && !root.editorVm.showAllObjects && root.editorVm.currentPlateIndex === index
+                            ? Theme.accentSubtle
+                            : Theme.bgElevated
+                        border.width: 1
+                        border.color: root.editorVm && !root.editorVm.showAllObjects && root.editorVm.currentPlateIndex === index
+                            ? Theme.accent
+                            : Theme.borderSubtle
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+                            spacing: 10
+
+                            Rectangle {
+                                width: 22
+                                height: 22
+                                radius: 7
+                                color: "#152033"
+                                border.width: 1
+                                border.color: Theme.borderSubtle
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: (index + 1).toString()
+                                    color: Theme.textPrimary
+                                    font.pixelSize: 11
+                                    font.bold: true
+                                }
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 1
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: root.editorVm ? root.editorVm.plateName(index) : ""
+                                    color: Theme.textPrimary
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: root.editorVm
+                                        ? qsTr("%1 个对象").arg(root.editorVm.plateObjectCount(index))
+                                        : qsTr("0 个对象")
+                                    color: Theme.textSecondary
+                                    font.pixelSize: 10
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            Text {
+                                text: root.editorVm && !root.editorVm.showAllObjects && root.editorVm.currentPlateIndex === index
+                                    ? qsTr("当前")
+                                    : qsTr("查看")
+                                color: root.editorVm && !root.editorVm.showAllObjects && root.editorVm.currentPlateIndex === index
+                                    ? Theme.accent
+                                    : Theme.textDisabled
+                                font.pixelSize: 10
+                                font.bold: true
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (!root.editorVm)
+                                    return
+                                root.editorVm.setCurrentPlateIndex(index)
+                                root.editorVm.setShowAllObjects(false)
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 1
+                    color: Theme.borderSubtle
+                }
+
+                CxSectionHeader {
+                    Layout.fillWidth: true
+                    title: qsTr("对象列表")
+                    subtitle: root.editorVm
+                        ? (root.editorVm.objectCount + qsTr(" 个对象"))
+                        : qsTr("0 个对象")
+                }
+
+                ObjectList {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    editorVm: root.editorVm
+                    showToolbar: false
+                    showImportButton: false
+                }
             }
         }
 
@@ -460,46 +470,25 @@ Item {
                     { icon: "qrc:/qml/assets/icons/lock.svg", tip: qsTr("锁定视图") },
                     { icon: "qrc:/qml/assets/icons/settings.svg", tip: qsTr("准备页设置") }
                 ]
-                delegate: Rectangle {
-                    width: 38
-                    height: 38
-                    radius: 19
-                    color: "#1a202bd9"
-                    border.width: 1
-                    border.color: Theme.borderSubtle
-
-                    Image {
-                        anchors.centerIn: parent
-                        width: 16
-                        height: 16
-                        source: modelData.icon
-                        fillMode: Image.PreserveAspectFit
-                        smooth: true
+                delegate: CxIconButton {
+                    buttonSize: Theme.iconButtonSizeLG
+                    iconSize: 16
+                    iconSource: modelData.icon
+                    toolTipText: modelData.tip
+                    onClicked: {
+                        if (index === 0)
+                            openFileDlg.open()
+                        else if (index === 2)
+                            root.applyFitHintIfReady()
+                        else if (index === 4)
+                            backend.openSettings()
                     }
-
-                    MouseArea {
-                        id: sideToolMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (index === 0)
-                                openFileDlg.open()
-                            else if (index === 2)
-                                root.applyFitHintIfReady()
-                            else if (index === 4)
-                                backend.openSettings()
-                        }
-                    }
-
-                    ToolTip.visible: sideToolMouse.containsMouse
-                    ToolTip.text: modelData.tip
-                    ToolTip.delay: 400
                 }
             }
         }
 
-        Rectangle {
+        CxPanel {
+            cxSurface: CxPanel.Surface.Floating
             anchors.top: parent.top
             anchors.topMargin: 68
             anchors.right: sidebar.left
@@ -507,9 +496,6 @@ Item {
             width: 46
             height: 62
             radius: 14
-            color: "#1a202bd9"
-            border.width: 1
-            border.color: Theme.borderSubtle
 
             Text {
                 anchors.centerIn: parent
@@ -528,14 +514,14 @@ Item {
             anchors.rightMargin: 18
             spacing: 8
 
-            PillAction {
+            CxPillAction {
                 iconSource: "qrc:/qml/assets/icons/settings.svg"
-                label: qsTr("打印配置")
+                text: qsTr("打印配置")
             }
 
-            PillAction {
+            CxPillAction {
                 iconSource: "qrc:/qml/assets/icons/send-2.svg"
-                label: qsTr("发送打印")
+                text: qsTr("发送打印")
                 primary: true
                 onClicked: printDlg.open()
             }

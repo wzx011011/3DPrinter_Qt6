@@ -34,6 +34,8 @@
         <file>components/MoveSlider.qml</file>
         <file>components/Legend.qml</file>
         <file>components/StatsPanel.qml</file>
+        <file>components/CxPanel.qml</file>
+        <file>components/CxSectionHeader.qml</file>
         <!-- Controls -->
         <file>controls/CxButton.qml</file>
         <file>controls/CxComboBox.qml</file>
@@ -41,6 +43,8 @@
         <file>controls/CxSlider.qml</file>
         <file>controls/CxCheckBox.qml</file>
         <file>controls/CxSpinBox.qml</file>
+        <file>controls/CxIconButton.qml</file>
+        <file>controls/CxPillAction.qml</file>
         <!-- Reference assets -->
         <file>assets/prepare_ref.png</file>
         <file>assets/preview_ref.png</file>
