@@ -232,14 +232,32 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
           {
     m_sliceEstimatedTime.clear();
       m_sliceResultPlateIndex = -1;
+      m_sliceAllQueue.clear();
+      m_slicingAll = false;
         statusText_ = message;
         emit stateChanged(); });
   connect(sliceService_, &SliceService::sliceFinished, this, [this](const QString &estimatedTime)
           {
     m_sliceEstimatedTime = estimatedTime;
       m_sliceResultPlateIndex = sliceService_ ? sliceService_->resultPlateIndex() : -1;
-    statusText_ = QStringLiteral("切片完成");
-    emit stateChanged(); });
+    if (m_slicingAll && !m_sliceAllQueue.isEmpty())
+    {
+      statusText_ = QStringLiteral("切片完成，继续下一平板...");
+      emit stateChanged();
+      continueSliceAllQueue();
+    }
+    else if (m_slicingAll)
+    {
+      m_slicingAll = false;
+      statusText_ = QStringLiteral("全部平板切片完成");
+      emit stateChanged();
+    }
+    else
+    {
+      statusText_ = QStringLiteral("切片完成");
+      emit stateChanged();
+    }
+  });
   connect(projectService_, &ProjectServiceMock::loadProgressUpdated, this, [this](int progress, const QString &stageText)
           {
     if (projectService_->loading())
@@ -1105,6 +1123,41 @@ void EditorViewModel::clearWorkspace()
   m_sliceResultPlateIndex = -1;
   m_fitHint = QVector4D();
   m_cachedMeshData.clear();
+  m_sliceAllQueue.clear();
   statusText_ = QStringLiteral("已新建项目");
   emit stateChanged();
+}
+
+void EditorViewModel::requestSliceAll()
+{
+  if (!projectService_ || projectService_->plateCount() <= 0)
+    return;
+
+  m_sliceAllQueue.clear();
+  for (int i = 0; i < projectService_->plateCount(); ++i)
+    m_sliceAllQueue.append(i);
+  m_slicingAll = true;
+  continueSliceAllQueue();
+}
+
+void EditorViewModel::continueSliceAllQueue()
+{
+  if (m_sliceAllQueue.isEmpty())
+  {
+    m_slicingAll = false;
+    statusText_ = tr("全部平板切片完成");
+    emit stateChanged();
+    return;
+  }
+  const int plate = m_sliceAllQueue.takeFirst();
+  statusText_ = tr("正在切片平板 %1/%2...").arg(plate + 1).arg(plate + m_sliceAllQueue.size() + 1);
+  emit stateChanged();
+  sliceService_->startSlicePlate(plate);
+}
+
+bool EditorViewModel::requestExportGCode(const QString &targetPath)
+{
+  QUrl url(targetPath);
+  const QString localPath = url.isLocalFile() ? url.toLocalFile() : targetPath;
+  return sliceService_->exportGCodeToPath(localPath);
 }

@@ -1,5 +1,10 @@
 #include "ConfigOptionModel.h"
 
+#ifdef HAS_LIBSLIC3R
+#include <libslic3r/PrintConfig.hpp>
+#include <libslic3r/Config.hpp>
+#endif
+
 ConfigOptionModel::ConfigOptionModel(QObject *parent)
     : QAbstractListModel(parent)
 {
@@ -217,3 +222,199 @@ int ConfigOptionModel::findIndex(const QString &key) const
   }
   return -1;
 }
+
+#ifdef HAS_LIBSLIC3R
+
+namespace
+{
+  // Map upstream ConfigOptionType to Qt6 type string
+  QString mapType(Slic3r::ConfigOptionType t)
+  {
+    switch (t)
+    {
+    case Slic3r::coFloat:
+    case Slic3r::coFloatOrPercent:
+    case Slic3r::coFloats:
+    case Slic3r::coPercents:
+      return QStringLiteral("double");
+    case Slic3r::coInt:
+    case Slic3r::coInts:
+      return QStringLiteral("int");
+    case Slic3r::coBool:
+    case Slic3r::coBools:
+      return QStringLiteral("bool");
+    case Slic3r::coEnum:
+    case Slic3r::coEnums:
+      return QStringLiteral("enum");
+    case Slic3r::coString:
+    case Slic3r::coStrings:
+      return QStringLiteral("string");
+    default:
+      return QStringLiteral("double");
+    }
+  }
+
+  // Map upstream category to Qt6 display category
+  QString mapCategory(const std::string &upstreamCategory)
+  {
+    const QString cat = QString::fromUtf8(upstreamCategory.c_str());
+    if (cat.contains("Layers", Qt::CaseInsensitive) || cat.contains("Perimeters", Qt::CaseInsensitive))
+      return QObject::tr("质量");
+    if (cat.contains("Infill", Qt::CaseInsensitive))
+      return QObject::tr("填充");
+    if (cat.contains("Speed", Qt::CaseInsensitive))
+      return QObject::tr("速度");
+    if (cat.contains("Temperature", Qt::CaseInsensitive) || cat.contains("Cooling", Qt::CaseInsensitive))
+      return QObject::tr("温度");
+    if (cat.contains("Support", Qt::CaseInsensitive))
+      return QObject::tr("支撑");
+    if (cat.contains("Skirt", Qt::CaseInsensitive) || cat.contains("Brim", Qt::CaseInsensitive) || cat.contains("Raft", Qt::CaseInsensitive))
+      return QObject::tr("底座");
+    if (cat.contains("Fan", Qt::CaseInsensitive))
+      return QObject::tr("冷却");
+    if (cat.contains("Retract", Qt::CaseInsensitive))
+      return QObject::tr("回退");
+    if (cat.contains("Extruder", Qt::CaseInsensitive) || cat.contains("Extrusion", Qt::CaseInsensitive))
+      return QObject::tr("挤出机");
+    if (cat.contains("Adhesion", Qt::CaseInsensitive))
+      return QObject::tr("底座");
+    if (cat.contains("Output", Qt::CaseInsensitive) || cat.contains("G-code", Qt::CaseInsensitive))
+      return QObject::tr("输出");
+    if (cat.contains("Ironing", Qt::CaseInsensitive))
+      return QObject::tr("质量");
+    if (cat.contains("Seam", Qt::CaseInsensitive))
+      return QObject::tr("质量");
+    return QObject::tr("其他");
+  }
+
+  // Extract default value from ConfigOptionDef
+  QVariant extractDefault(const Slic3r::ConfigOptionDef *def)
+  {
+    if (!def || !def->default_value)
+      return {};
+    switch (def->type)
+    {
+    case Slic3r::coFloat:
+      return def->get_default_value<Slic3r::ConfigOptionFloat>()->value;
+    case Slic3r::coInt:
+      return def->get_default_value<Slic3r::ConfigOptionInt>()->value;
+    case Slic3r::coBool:
+      return def->get_default_value<Slic3r::ConfigOptionBool>()->value;
+    case Slic3r::coString:
+      return QString::fromStdString(def->get_default_value<Slic3r::ConfigOptionString>()->value);
+    case Slic3r::coEnum:
+    case Slic3r::coEnums:
+    {
+      const int intVal = def->get_default_value<Slic3r::ConfigOptionEnumGeneric>()->value;
+      // Try to find the enum label for the default value
+      const auto &enumValues = def->enum_values;
+      const auto &enumLabels = def->enum_labels;
+      if (intVal >= 0 && intVal < static_cast<int>(enumValues.size()) && intVal < static_cast<int>(enumLabels.size()))
+        return QString::fromUtf8(enumLabels[intVal].c_str());
+      return intVal;
+    }
+    case Slic3r::coFloatOrPercent:
+      return def->get_default_value<Slic3r::ConfigOptionFloatOrPercent>()->value;
+    case Slic3r::coPercent:
+      return def->get_default_value<Slic3r::ConfigOptionPercent>()->value;
+    default:
+      return {};
+    }
+  }
+}
+
+// Keys we want to expose in the UI (print-related, user-facing)
+static const char *kDesiredKeys[] = {
+  // Layer
+  "layer_height", "initial_layer_print_height", "line_width",
+  // Shell
+  "wall_loops", "top_shell_layers", "bottom_shell_layers",
+  "wall_infill_order", "infill_wall_overlap",
+  // Infill
+  "sparse_infill_density", "sparse_infill_pattern",
+  "top_surface_pattern", "bottom_surface_pattern",
+  "sparse_infill_filament", "wall_filament",
+  // Speed
+  "outer_wall_speed", "inner_wall_speed", "travel_speed", "initial_layer_speed",
+  "sparse_infill_speed", "top_surface_speed", "support_interface_speed",
+  "support_speed", "small_perimeter_speed", "bridge_speed",
+  // Temperature
+  "nozzle_temp", "bed_temp", "chamber_temperature",
+  "nozzle_temperature_range", "bed_temperature_range",
+  // Support
+  "enable_support", "support_density", "support_type",
+  "support_on_build_plate_only", "support_interface_top_layers",
+  "support_interface_bottom_layers", "support_interface_spacing",
+  // Brim / Skirt
+  "brim_enable", "brim_width", "skirt_loops", "skirt_distance",
+  // Cooling / Fan
+  "fan_cooling_layer_time", "default_fan_speed",
+  "min_fan_speed", "max_fan_speed",
+  "overhang_fan_speed", "slow_down_layer_time",
+  "additional_cooling_fan_speed",
+  // Retraction
+  "retract_length", "retract_speed", "retract_before_wipe",
+  "retraction_speed", "deretraction_speed", "retract_restart_extra",
+  "wipe_distance",
+  // Seam
+  "z_seam_type", "z_seam_position", "z_seam_corner",
+  // Quality
+  "reduce_crossing_wall", "detect_overhang_wall",
+  "resolve_multi_overlaps", "max_travel_detour_distance",
+  // Adhesion
+  "adhesion_type", "raft_layers", "raft_interface_layers",
+  // Output
+  "gcode_comments", "gcode_precision_xy", "gcode_precision_z",
+  "max_print_speed", "max_travel_speed",
+  // Extruder
+  "nozzle_diameter", "extruder_offset", "printer_model",
+  // Ironing
+  "ironing_type", "ironing_speed", "ironing_flow",
+  nullptr
+};
+
+void ConfigOptionModel::loadFromUpstreamSchema()
+{
+  beginResetModel();
+  m_options.clear();
+  m_baseReadonlyKeys.clear();
+
+  const auto &def = Slic3r::print_config_def;
+
+  for (int ki = 0; kDesiredKeys[ki] != nullptr; ++ki)
+  {
+    const auto *opt = def.get(kDesiredKeys[ki]);
+    if (!opt)
+      continue;
+
+    ConfigOption entry;
+    entry.key = QString::fromUtf8(opt->opt_key.c_str());
+    entry.label = QString::fromUtf8(opt->label.c_str());
+    entry.type = mapType(opt->type);
+    entry.category = mapCategory(opt->category);
+    entry.readonly = opt->readonly;
+    entry.value = extractDefault(opt);
+
+    // Range
+    entry.min = static_cast<double>(opt->min);
+    entry.max = static_cast<double>(opt->max);
+    if (opt->type == Slic3r::coFloat || opt->type == Slic3r::coFloatOrPercent)
+      entry.max = opt->max_literal;
+
+    // Step
+    entry.step = (opt->type == Slic3r::coFloat || opt->type == Slic3r::coFloatOrPercent) ? 0.01 : 1.0;
+
+    // Enum labels
+    for (size_t i = 0; i < opt->enum_labels.size() && i < opt->enum_values.size(); ++i)
+      entry.enumLabels.append(QString::fromUtf8(opt->enum_labels[i].c_str()));
+
+    m_options.append(entry);
+
+    if (entry.readonly)
+      m_baseReadonlyKeys.insert(entry.key);
+  }
+
+  endResetModel();
+}
+
+#endif // HAS_LIBSLIC3R

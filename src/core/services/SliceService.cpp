@@ -10,6 +10,7 @@
 #include <QStringList>
 #include <QFileInfo>
 #include <QDateTime>
+#include <QFile>
 #include <stdexcept>
 
 #ifdef HAS_LIBSLIC3R
@@ -409,5 +410,46 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
       emit receiver->sliceFinished(QString{});
     }, Qt::QueuedConnection); });
 
+  return true;
+}
+
+void SliceService::startSlicePlate(int plateIndex)
+{
+  if (slicing_)
+    return;
+  if (projectService_)
+    projectService_->setCurrentPlateIndex(plateIndex);
+  startSlice(projectService_ ? projectService_->projectName() : QString{});
+}
+
+bool SliceService::exportGCodeToPath(const QString &targetPath)
+{
+  if (outputPath_.isEmpty())
+  {
+    statusLabel_ = QObject::tr("没有可导出的 G-code，请先切片");
+    emit progressChanged();
+    return false;
+  }
+
+  const QFileInfo srcInfo(outputPath_);
+  if (!srcInfo.exists() || !srcInfo.isFile())
+  {
+    statusLabel_ = QObject::tr("G-code 源文件不存在");
+    emit progressChanged();
+    return false;
+  }
+
+  if (QFile::exists(targetPath))
+    QFile::remove(targetPath);
+
+  if (!QFile::copy(outputPath_, targetPath))
+  {
+    statusLabel_ = QObject::tr("导出 G-code 失败");
+    emit progressChanged();
+    return false;
+  }
+
+  statusLabel_ = QObject::tr("已导出: %1").arg(QFileInfo(targetPath).fileName());
+  emit progressChanged();
   return true;
 }

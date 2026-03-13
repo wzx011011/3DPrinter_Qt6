@@ -26,6 +26,33 @@ void GLViewport::setCanvasType(int t)
   }
 }
 
+void GLViewport::setGizmoMode(int mode)
+{
+  if (m_gizmoMode != mode)
+  {
+    m_gizmoMode = mode;
+    emit gizmoModeChanged();
+    // Post event to renderer
+    QMutexLocker lk(&m_eventMutex);
+    InputEvent e;
+    e.type = InputEvent::SetGizmoMode;
+    e.x = float(mode);
+    m_events.append(e);
+    lk.unlock();
+    update();
+  }
+}
+
+void GLViewport::setWireframeMode(bool on)
+{
+  if (m_wireframeMode != on)
+  {
+    m_wireframeMode = on;
+    emit wireframeModeChanged();
+    update();
+  }
+}
+
 QQuickFramebufferObject::Renderer *GLViewport::createRenderer() const
 {
   if (m_canvasType == CanvasPreview)
@@ -156,6 +183,16 @@ void GLViewport::requestFitView(float cx, float cy, float cz, float r)
   e.fitCY = cy;
   e.fitCZ = cz;
   e.fitRadius = r;
+  m_events.append(e);
+  update();
+}
+
+void GLViewport::requestViewPreset(int preset)
+{
+  QMutexLocker lk(&m_eventMutex);
+  InputEvent e;
+  e.type = InputEvent::ViewPreset;
+  e.x = float(preset);
   m_events.append(e);
   update();
 }

@@ -27,6 +27,7 @@ Pick the next best task from [docs/TASKS.md](../../docs/TASKS.md), ground the wo
 - `[x]` fully aligned and validated against upstream
 - `[-]` partial migration or basic closure only
 - `[ ]` not started or placeholder only
+11. **Continuous execution**: After completing a task and updating TASKS.md, immediately re-read TASKS.md. If there are remaining unfinished tasks, proceed to the next highest-priority task without stopping for user confirmation. Continue this loop until all tasks are marked `[x]` or the context window is exhausted. Print a brief progress summary (completed count / total count) after every task.
 
 ## Preferred Priority Order
 
@@ -47,11 +48,14 @@ At the start of the work, explicitly report:
 - Qt6 target module
 - Why this is the next priority
 
-At the end of the work, explicitly report:
+At the end of each task, explicitly report:
 
 - What was advanced
 - What remains for the task to reach `[x]`
 - Whether [docs/TASKS.md](../../docs/TASKS.md) status changed
+- Running progress: e.g., "Progress: 12/30 tasks complete" (count of `[x]` vs total in section 3)
+
+If continuing to the next task, briefly state the next task ID and module before proceeding.
 
 ## Do Not
 

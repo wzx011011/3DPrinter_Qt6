@@ -34,12 +34,12 @@ static const char *kMeshVertSrc =
     "#version 330 core\n"
     "layout(location = 0) in vec3 aPos;\n"
     "uniform mat4 uMVP;\n"
-    "uniform vec3 uOffset;\n"
+    "uniform mat4 uModel;\n"
     "out vec3 vWorldPos;\n"
     "void main(){\n"
-    "  vec3 p = aPos + uOffset;\n"
-    "  vWorldPos = p;\n"
-    "  gl_Position = uMVP * vec4(p,1.0);\n"
+    "  vec4 p = uModel * vec4(aPos, 1.0);\n"
+    "  vWorldPos = p.xyz;\n"
+    "  gl_Position = uMVP * p;\n"
     "}\n";
 
 static const char *kMeshFragSrc =
@@ -203,10 +203,18 @@ GLViewportRenderer::~GLViewportRenderer()
       if (b.vbo)
         m_f->glDeleteBuffers(1, &b.vbo);
     }
-    if (m_gizmoVao)
-      m_f->glDeleteVertexArrays(1, &m_gizmoVao);
-    if (m_gizmoVbo)
-      m_f->glDeleteBuffers(1, &m_gizmoVbo);
+    if (m_moveGizmoVao)
+      m_f->glDeleteVertexArrays(1, &m_moveGizmoVao);
+    if (m_moveGizmoVbo)
+      m_f->glDeleteBuffers(1, &m_moveGizmoVbo);
+    if (m_rotateGizmoVao)
+      m_f->glDeleteVertexArrays(1, &m_rotateGizmoVao);
+    if (m_rotateGizmoVbo)
+      m_f->glDeleteBuffers(1, &m_rotateGizmoVbo);
+    if (m_scaleGizmoVao)
+      m_f->glDeleteVertexArrays(1, &m_scaleGizmoVao);
+    if (m_scaleGizmoVbo)
+      m_f->glDeleteBuffers(1, &m_scaleGizmoVbo);
   }
 }
 
@@ -243,21 +251,43 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
         // Priority 1: gizmo axis (only if object selected)
         if (m_selectedId >= 0)
         {
-          int ax = pickGizmoAxis(sx, sy);
+          int ax = 0;
+          if (m_gizmoMode == GizmoMove)
+            ax = pickMoveAxis(sx, sy);
+          else if (m_gizmoMode == GizmoRotate)
+            ax = pickRotateAxis(sx, sy);
+          else if (m_gizmoMode == GizmoScale)
+            ax = pickScaleAxis(sx, sy);
+
           if (ax > 0)
           {
             m_gizmoAxis = ax;
-            auto [orig, dir] = computeRay(sx, sy);
-            QVector3D axDir(ax == 1 ? 1 : 0, ax == 2 ? 1 : 0, ax == 3 ? 1 : 0);
-            m_gizmoAxisT = rayToAxisT(orig, dir, axDir);
-            auto it = m_objectOffsets.find(m_selectedId);
-            m_dragStartOffset = (it != m_objectOffsets.end()) ? it->second : QVector3D(0, 0, 0);
             m_dragObjectId = m_selectedId;
+            m_dragStartTransform = m_objectTransforms[m_selectedId];
             m_objectDragActive = true;
             m_freeXZDragging = false;
             m_mouseDragging = false;
             m_lastX = sx;
             m_lastY = sy;
+
+            if (m_gizmoMode == GizmoMove)
+            {
+              auto [orig, dir] = computeRay(sx, sy);
+              QVector3D axDir(ax == 1 ? 1 : 0, ax == 2 ? 1 : 0, ax == 3 ? 1 : 0);
+              m_gizmoAxisT = rayToAxisT(orig, dir, axDir);
+            }
+            else if (m_gizmoMode == GizmoRotate)
+            {
+              // Record initial angle for rotation drag
+              m_rotateStartAngle = computeRotateAngle(sx, sy, ax);
+            }
+            // Scale uses same rayToAxisT as move
+            else if (m_gizmoMode == GizmoScale && ax <= 3)
+            {
+              auto [orig, dir] = computeRay(sx, sy);
+              QVector3D axDir(ax == 1 ? 1 : 0, ax == 2 ? 1 : 0, ax == 3 ? 1 : 0);
+              m_gizmoAxisT = rayToAxisT(orig, dir, axDir);
+            }
             break;
           }
         }
@@ -268,9 +298,8 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
           m_selectedId = hitId;
           m_freeXZDragging = true;
           m_freeXZOrigin = rayXZIntersect(sx, sy);
-          auto it = m_objectOffsets.find(m_selectedId);
-          m_dragStartOffset = (it != m_objectOffsets.end()) ? it->second : QVector3D(0, 0, 0);
           m_dragObjectId = m_selectedId;
+          m_dragStartTransform = m_objectTransforms[m_selectedId];
           m_objectDragActive = true;
           m_mouseDragging = false;
           m_gizmoAxis = 0;
@@ -304,13 +333,55 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
       const float dx = e.x - m_lastX, dy = e.y - m_lastY;
       if (m_gizmoAxis > 0 && m_selectedId >= 0)
       {
-        // Axis-constrained drag
-        QVector3D axDir(m_gizmoAxis == 1 ? 1 : 0, m_gizmoAxis == 2 ? 1 : 0, m_gizmoAxis == 3 ? 1 : 0);
-        auto [orig, dir] = computeRay(e.x, e.y);
-        float newT = rayToAxisT(orig, dir, axDir);
-        float delta = newT - m_gizmoAxisT;
-        m_objectOffsets[m_selectedId] += delta * axDir;
-        m_gizmoAxisT = newT;
+        if (m_gizmoMode == GizmoMove)
+        {
+          // Axis-constrained drag
+          QVector3D axDir(m_gizmoAxis == 1 ? 1 : 0, m_gizmoAxis == 2 ? 1 : 0, m_gizmoAxis == 3 ? 1 : 0);
+          auto [orig, dir] = computeRay(e.x, e.y);
+          float newT = rayToAxisT(orig, dir, axDir);
+          float delta = newT - m_gizmoAxisT;
+          m_objectTransforms[m_selectedId].translation += delta * axDir;
+          m_gizmoAxisT = newT;
+        }
+        else if (m_gizmoMode == GizmoRotate)
+        {
+          // Rotation drag
+          float currentAngle = computeRotateAngle(e.x, e.y, m_gizmoAxis);
+          float deltaAngle = currentAngle - m_rotateStartAngle;
+          m_rotateStartAngle = currentAngle;
+          QVector3D &rot = m_objectTransforms[m_selectedId].rotation;
+          if (m_gizmoAxis == 1) rot.setX(rot.x() + deltaAngle);
+          else if (m_gizmoAxis == 2) rot.setY(rot.y() + deltaAngle);
+          else if (m_gizmoAxis == 3) rot.setZ(rot.z() + deltaAngle);
+        }
+        else if (m_gizmoMode == GizmoScale)
+        {
+          if (m_gizmoAxis <= 3)
+          {
+            // Axis-constrained scale
+            QVector3D axDir(m_gizmoAxis == 1 ? 1 : 0, m_gizmoAxis == 2 ? 1 : 0, m_gizmoAxis == 3 ? 1 : 0);
+            auto [orig, dir] = computeRay(e.x, e.y);
+            float newT = rayToAxisT(orig, dir, axDir);
+            float delta = newT - m_gizmoAxisT;
+            // Scale by 1% per world unit of drag
+            float scaleFactor = 1.0f + delta * 0.01f;
+            if (scaleFactor < 0.01f) scaleFactor = 0.01f;
+            QVector3D &s = m_objectTransforms[m_selectedId].scale;
+            if (m_gizmoAxis == 1) s.setX(s.x() * scaleFactor);
+            else if (m_gizmoAxis == 2) s.setY(s.y() * scaleFactor);
+            else if (m_gizmoAxis == 3) s.setZ(s.z() * scaleFactor);
+            m_gizmoAxisT = newT;
+          }
+          else if (m_gizmoAxis == 4)
+          {
+            // Uniform scale
+            float screenDelta = (e.x - m_lastX) + (e.y - m_lastY);
+            float scaleFactor = 1.0f + screenDelta * 0.005f;
+            if (scaleFactor < 0.01f) scaleFactor = 0.01f;
+            QVector3D &s = m_objectTransforms[m_selectedId].scale;
+            s *= scaleFactor;
+          }
+        }
       }
       else if (m_freeXZDragging && m_selectedId >= 0)
       {
@@ -332,7 +403,7 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
         const float vH = float(m_viewSize.height());
         const float scale = m_camera.distance() * 0.4142f / (vH > 1.f ? vH * 0.5f : 1.f);
         // dx>0 → right, dy>0 (screen down) → toward viewer = -camFwd
-        m_objectOffsets[m_selectedId] += camRight * (dx * scale) - camFwd * (dy * scale);
+        m_objectTransforms[m_selectedId].translation += camRight * (dx * scale) - camFwd * (dy * scale);
       }
       else if (m_mouseDragging)
       {
@@ -349,15 +420,17 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
     {
       if (m_objectDragActive && m_dragObjectId >= 0)
       {
-        QVector3D after(0, 0, 0);
-        auto it = m_objectOffsets.find(m_dragObjectId);
-        if (it != m_objectOffsets.end())
-          after = it->second;
-        if ((after - m_dragStartOffset).lengthSquared() > 1e-8f)
+        ObjectTransform after = m_objectTransforms[m_dragObjectId];
+        // Check if transform actually changed
+        const ObjectTransform &before = m_dragStartTransform;
+        float diff = (after.translation - before.translation).lengthSquared()
+                   + (after.rotation - before.rotation).lengthSquared()
+                   + (after.scale - before.scale).lengthSquared();
+        if (diff > 1e-8f)
         {
-          GLViewportRenderer::TransformCmd cmd;
+          TransformCmd cmd;
           cmd.objectId = m_dragObjectId;
-          cmd.before = m_dragStartOffset;
+          cmd.before = before;
           cmd.after = after;
           m_undoStack.push_back(cmd);
           if (m_undoStack.size() > 100)
@@ -378,12 +451,22 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
     case GLViewport::InputEvent::FitView:
       m_camera.fitView(e.fitCX, e.fitCY, e.fitCZ, e.fitRadius);
       break;
+    case GLViewport::InputEvent::ViewPreset:
+      switch (int(e.x))
+      {
+      case 0: m_camera.viewTop(); break;
+      case 1: m_camera.viewFront(); break;
+      case 2: m_camera.viewRight(); break;
+      case 3: m_camera.viewIso(); break;
+      default: m_camera.viewIso(); break;
+      }
+      break;
     case GLViewport::InputEvent::Undo:
       if (!m_undoStack.empty())
       {
         TransformCmd cmd = m_undoStack.back();
         m_undoStack.pop_back();
-        m_objectOffsets[cmd.objectId] = cmd.before;
+        m_objectTransforms[cmd.objectId] = cmd.before;
         m_redoStack.push_back(cmd);
         m_selectedId = cmd.objectId;
       }
@@ -393,7 +476,7 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
       {
         TransformCmd cmd = m_redoStack.back();
         m_redoStack.pop_back();
-        m_objectOffsets[cmd.objectId] = cmd.after;
+        m_objectTransforms[cmd.objectId] = cmd.after;
         m_undoStack.push_back(cmd);
         m_selectedId = cmd.objectId;
       }
@@ -401,6 +484,10 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
     case GLViewport::InputEvent::ClearHistory:
       m_undoStack.clear();
       m_redoStack.clear();
+      break;
+    case GLViewport::InputEvent::SetGizmoMode:
+      m_gizmoMode = static_cast<GizmoMode>(int(e.x));
+      m_gizmoAxis = 0;
       break;
     }
   }
@@ -411,6 +498,8 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
     m_pendingMesh = std::move(newMesh);
     m_meshDirty = true;
   }
+
+  m_wireframeMode = vp->wireframeMode();
 }
 
 // ===========================================================================
@@ -433,14 +522,11 @@ void GLViewportRenderer::render()
     {
       if (b.objectId == m_selectedId)
       {
-        QVector3D off(0, 0, 0);
-        auto it = m_objectOffsets.find(m_selectedId);
-        if (it != m_objectOffsets.end())
-          off = it->second;
+        const ObjectTransform &t = m_objectTransforms[m_selectedId];
         m_gizmoCenter = QVector3D(
-            (b.bboxMin[0] + b.bboxMax[0]) * 0.5f + off.x(),
-            (b.bboxMin[1] + b.bboxMax[1]) * 0.5f + off.y(),
-            (b.bboxMin[2] + b.bboxMax[2]) * 0.5f + off.z());
+            (b.bboxMin[0] + b.bboxMax[0]) * 0.5f + t.translation.x(),
+            (b.bboxMin[1] + b.bboxMax[1]) * 0.5f + t.translation.y(),
+            (b.bboxMin[2] + b.bboxMax[2]) * 0.5f + t.translation.z());
         break;
       }
     }
@@ -461,27 +547,43 @@ void GLViewportRenderer::render()
   {
     m_meshProg.bind();
     m_meshProg.setUniformValue(m_uMeshMVP, mvp);
+
+    // Wireframe mode: switch to GL_LINE rendering (matching upstream Plater::toggle_show_wireframe)
+    if (m_wireframeMode && m_glPolygonMode)
+      m_glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
     for (auto &b : m_meshBatches)
     {
       if (b.vertexCount <= 0)
         continue;
-      QVector3D off(0, 0, 0);
-      auto it = m_objectOffsets.find(b.objectId);
-      if (it != m_objectOffsets.end())
-        off = it->second;
-      m_meshProg.setUniformValue(m_uMeshOffset, off);
-      m_meshProg.setUniformValue(m_uMeshBaseColor, kObjColors[b.objectId % kNumColors]);
-      float bright = (b.objectId == m_selectedId) ? 1.55f : 1.0f;
-      m_meshProg.setUniformValue(m_uMeshBright, bright);
+      QMatrix4x4 model = computeModelMatrix(b.objectId);
+      m_meshProg.setUniformValue(m_uMeshModel, model);
+      if (m_wireframeMode)
+      {
+        // Upstream uses DARK_GRAY for wireframe rendering
+        m_meshProg.setUniformValue(m_uMeshBaseColor, QVector3D(0.35f, 0.35f, 0.35f));
+        m_meshProg.setUniformValue(m_uMeshBright, 1.0f);
+        m_f->glLineWidth(1.0f);
+      }
+      else
+      {
+        m_meshProg.setUniformValue(m_uMeshBaseColor, kObjColors[b.objectId % kNumColors]);
+        float bright = (b.objectId == m_selectedId) ? 1.55f : 1.0f;
+        m_meshProg.setUniformValue(m_uMeshBright, bright);
+      }
       m_f->glBindVertexArray(b.vao);
       m_f->glDrawArrays(GL_TRIANGLES, 0, b.vertexCount);
       m_f->glBindVertexArray(0);
     }
+
+    if (m_wireframeMode && m_glPolygonMode)
+      m_glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
     m_meshProg.release();
   }
 
   // 2. Gizmo (no depth test fighting with mesh)
-  if (m_selectedId >= 0 && m_gizmoVao)
+  if (m_selectedId >= 0)
     renderGizmo(mvp);
 
   // 3. Grid / axes
@@ -511,13 +613,25 @@ void GLViewportRenderer::render()
 // ===========================================================================
 void GLViewportRenderer::renderGizmo(const QMatrix4x4 &mvp)
 {
-  // Compute scale so arrows are ~15% of camera distance
+  if (m_gizmoMode == GizmoMove)
+    renderMoveGizmo(mvp);
+  else if (m_gizmoMode == GizmoRotate)
+    renderRotateGizmo(mvp);
+  else if (m_gizmoMode == GizmoScale)
+    renderScaleGizmo(mvp);
+}
+
+// ===========================================================================
+// renderMoveGizmo
+// ===========================================================================
+void GLViewportRenderer::renderMoveGizmo(const QMatrix4x4 &mvp)
+{
   float dist = (m_gizmoCenter - m_camera.eye()).length();
   float scale = dist * 0.15f;
   if (scale < 5.f)
     scale = 5.f;
 
-  m_f->glClear(GL_DEPTH_BUFFER_BIT); // draw gizmo on top
+  m_f->glClear(GL_DEPTH_BUFFER_BIT);
   m_f->glDisable(GL_CULL_FACE);
 
   m_gizmoProg.bind();
@@ -525,7 +639,7 @@ void GLViewportRenderer::renderGizmo(const QMatrix4x4 &mvp)
   m_gizmoProg.setUniformValue(m_uGizmoCenter, m_gizmoCenter);
   m_gizmoProg.setUniformValue(m_uGizmoScale, scale);
 
-  m_f->glBindVertexArray(m_gizmoVao);
+  m_f->glBindVertexArray(m_moveGizmoVao);
 
   static constexpr int CONE_VERTS_STATIC = 6 * 3 * 2;
 
@@ -534,11 +648,8 @@ void GLViewportRenderer::renderGizmo(const QMatrix4x4 &mvp)
     bool active = (m_gizmoAxis == ax + 1);
     QVector4D col = active ? kAxisHighlight[ax] : kAxisColors[ax];
     m_gizmoProg.setUniformValue(m_uGizmoColor, col);
-
-    // Shaft (thick lines via point-draw repeated pairs)
-    m_f->glDrawArrays(GL_LINES, m_gizmoShaftBase[ax], 2);
-    // Cone
-    m_f->glDrawArrays(GL_TRIANGLES, m_gizmoConeBase[ax], CONE_VERTS_STATIC);
+    m_f->glDrawArrays(GL_LINES, m_moveShaftBase[ax], 2);
+    m_f->glDrawArrays(GL_TRIANGLES, m_moveConeBase[ax], CONE_VERTS_STATIC);
   }
 
   m_f->glBindVertexArray(0);
@@ -554,6 +665,10 @@ void GLViewportRenderer::initialize()
   m_f = QOpenGLContext::currentContext()->extraFunctions();
   m_f->initializeOpenGLFunctions();
 
+  // Resolve glPolygonMode (not in QOpenGLExtraFunctions on Qt 6.10)
+  m_glPolygonMode = reinterpret_cast<GlPolygonModeFn>(
+      QOpenGLContext::currentContext()->getProcAddress("glPolygonMode"));
+
   m_prog.addShaderFromSourceCode(QOpenGLShader::Vertex, kVertSrc);
   m_prog.addShaderFromSourceCode(QOpenGLShader::Fragment, kFragSrc);
   if (!m_prog.link())
@@ -566,8 +681,8 @@ void GLViewportRenderer::initialize()
   if (!m_meshProg.link())
     qWarning("[GL] mesh: %s", qPrintable(m_meshProg.log()));
   m_uMeshMVP = m_meshProg.uniformLocation("uMVP");
+  m_uMeshModel = m_meshProg.uniformLocation("uModel");
   m_uMeshBaseColor = m_meshProg.uniformLocation("uBaseColor");
-  m_uMeshOffset = m_meshProg.uniformLocation("uOffset");
   m_uMeshBright = m_meshProg.uniformLocation("uBrightness");
 
   m_gizmoProg.addShaderFromSourceCode(QOpenGLShader::Vertex, kGizmoVertSrc);
@@ -594,6 +709,8 @@ void GLViewportRenderer::initialize()
   m_vbo.release();
 
   buildGizmoGeometry();
+  buildRotateGizmoGeometry();
+  buildScaleGizmoGeometry();
   m_initialized = true;
 }
 
@@ -719,17 +836,17 @@ void GLViewportRenderer::buildGizmoGeometry()
       {0.02750f, -0.04763f, 0.78000f},
   };
   static constexpr int kGizmoN = 114;
-  m_gizmoShaftBase[0] = 0;
-  m_gizmoShaftBase[1] = 38;
-  m_gizmoShaftBase[2] = 76;
-  m_gizmoConeBase[0] = 2;
-  m_gizmoConeBase[1] = 40;
-  m_gizmoConeBase[2] = 78;
+  m_moveShaftBase[0] = 0;
+  m_moveShaftBase[1] = 38;
+  m_moveShaftBase[2] = 76;
+  m_moveConeBase[0] = 2;
+  m_moveConeBase[1] = 40;
+  m_moveConeBase[2] = 78;
 
-  m_f->glGenVertexArrays(1, &m_gizmoVao);
-  m_f->glGenBuffers(1, &m_gizmoVbo);
-  m_f->glBindVertexArray(m_gizmoVao);
-  m_f->glBindBuffer(GL_ARRAY_BUFFER, m_gizmoVbo);
+  m_f->glGenVertexArrays(1, &m_moveGizmoVao);
+  m_f->glGenBuffers(1, &m_moveGizmoVbo);
+  m_f->glBindVertexArray(m_moveGizmoVao);
+  m_f->glBindBuffer(GL_ARRAY_BUFFER, m_moveGizmoVbo);
   m_f->glBufferData(GL_ARRAY_BUFFER, sizeof(kGizmoVerts), kGizmoVerts, GL_STATIC_DRAW);
   m_f->glEnableVertexAttribArray(0);
   m_f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
@@ -842,10 +959,10 @@ void GLViewportRenderer::uploadMesh()
     for (const auto &b : m_meshBatches)
       aliveIds.insert(b.objectId);
 
-    for (auto it = m_objectOffsets.begin(); it != m_objectOffsets.end();)
+    for (auto it = m_objectTransforms.begin(); it != m_objectTransforms.end();)
     {
       if (aliveIds.find(it->first) == aliveIds.end())
-        it = m_objectOffsets.erase(it);
+        it = m_objectTransforms.erase(it);
       else
         ++it;
     }
@@ -945,17 +1062,7 @@ int GLViewportRenderer::pickObject(float sx, float sy) const
   for (const auto &b : m_meshBatches)
   {
     float bmin[3], bmax[3];
-    QVector3D off(0, 0, 0);
-    auto it = m_objectOffsets.find(b.objectId);
-    if (it != m_objectOffsets.end())
-      off = it->second;
-    for (int i = 0; i < 3; i++)
-    {
-      float o = (i == 0 ? off.x() : i == 1 ? off.y()
-                                           : off.z());
-      bmin[i] = b.bboxMin[i] + o;
-      bmax[i] = b.bboxMax[i] + o;
-    }
+    transformedAABB(b.objectId, bmin, bmax);
     float t;
     if (rayAABB(orig, dir, bmin, bmax, t) && t < tBest)
     {
@@ -985,9 +1092,9 @@ float GLViewportRenderer::rayToAxisT(const QVector3D &orig, const QVector3D &dir
 }
 
 // ===========================================================================
-// pickGizmoAxis  -- returns 1/2/3 for X/Y/Z, 0 if no hit
+// pickMoveAxis  -- returns 1/2/3 for X/Y/Z, 0 if no hit
 // ===========================================================================
-int GLViewportRenderer::pickGizmoAxis(float sx, float sy) const
+int GLViewportRenderer::pickMoveAxis(float sx, float sy) const
 {
   if (m_meshBatches.empty())
     return 0;
@@ -1037,6 +1144,424 @@ int GLViewportRenderer::pickGizmoAxis(float sx, float sy) const
     if (dist2 < thresh && dist2 < bestDist)
     {
       bestDist = dist2;
+      best = ax + 1;
+    }
+  }
+  return best;
+}
+
+// ===========================================================================
+// computeModelMatrix  -- build T * R * S model matrix for an object
+// ===========================================================================
+QMatrix4x4 GLViewportRenderer::computeModelMatrix(int objectId) const
+{
+  auto it = m_objectTransforms.find(objectId);
+  const ObjectTransform t = (it != m_objectTransforms.end()) ? it->second : ObjectTransform{};
+  QMatrix4x4 model;
+  model.translate(t.translation);
+  model.rotate(t.rotation.x(), 1, 0, 0);
+  model.rotate(t.rotation.y(), 0, 1, 0);
+  model.rotate(t.rotation.z(), 0, 0, 1);
+  model.scale(t.scale);
+  return model;
+}
+
+// ===========================================================================
+// transformedAABB  -- compute world-space AABB for picking
+// ===========================================================================
+void GLViewportRenderer::transformedAABB(int objectId, float outMin[3], float outMax[3]) const
+{
+  // Find original bbox
+  const float *bmin = nullptr, *bmax = nullptr;
+  for (const auto &b : m_meshBatches)
+  {
+    if (b.objectId == objectId)
+    {
+      bmin = b.bboxMin;
+      bmax = b.bboxMax;
+      break;
+    }
+  }
+  if (!bmin)
+  {
+    for (int i = 0; i < 3; i++) { outMin[i] = -FLT_MAX; outMax[i] = FLT_MAX; }
+    return;
+  }
+
+  QMatrix4x4 model = computeModelMatrix(objectId);
+
+  // Transform all 8 corners and find new AABB
+  float corners[8][3];
+  int ci = 0;
+  for (int x = 0; x < 2; x++)
+    for (int y = 0; y < 2; y++)
+      for (int z = 0; z < 2; z++)
+      {
+        QVector4D wp = model * QVector4D(
+            x ? bmax[0] : bmin[0],
+            y ? bmax[1] : bmin[1],
+            z ? bmax[2] : bmin[2], 1.f);
+        corners[ci][0] = wp.x();
+        corners[ci][1] = wp.y();
+        corners[ci][2] = wp.z();
+        ci++;
+      }
+
+  for (int i = 0; i < 3; i++)
+  {
+    outMin[i] = outMax[i] = corners[0][i];
+    for (int j = 1; j < 8; j++)
+    {
+      if (corners[j][i] < outMin[i]) outMin[i] = corners[j][i];
+      if (corners[j][i] > outMax[i]) outMax[i] = corners[j][i];
+    }
+  }
+}
+
+// ===========================================================================
+// computeRotateAngle  -- compute angle for rotate gizmo interaction
+// ===========================================================================
+float GLViewportRenderer::computeRotateAngle(float sx, float sy, int axis) const
+{
+  // Project mouse position onto the rotation plane and compute angle
+  QVector3D planeNormal;
+  if (axis == 1) planeNormal = QVector3D(1, 0, 0);
+  else if (axis == 2) planeNormal = QVector3D(0, 1, 0);
+  else planeNormal = QVector3D(0, 0, 1);
+
+  auto [orig, dir] = computeRay(sx, sy);
+  float denom = QVector3D::dotProduct(dir, planeNormal);
+  if (std::abs(denom) < 1e-6f)
+    return m_rotateStartAngle; // ray parallel to plane
+
+  float t = QVector3D::dotProduct(m_gizmoCenter - orig, planeNormal) / denom;
+  QVector3D hit = orig + t * dir;
+  QVector3D v = hit - m_gizmoCenter;
+
+  // Compute angle on the rotation plane
+  // Reference axis: the "right" direction on this plane
+  QVector3D ref;
+  if (axis == 1) ref = QVector3D(0, 1, 0); // Y-axis as reference for X rotation
+  else if (axis == 2) ref = QVector3D(1, 0, 0); // X-axis as reference for Y rotation
+  else ref = QVector3D(1, 0, 0); // X-axis as reference for Z rotation
+
+  return std::atan2(QVector3D::dotProduct(QVector3D::crossProduct(ref, v).normalized(), planeNormal),
+                    QVector3D::dotProduct(ref, v));
+}
+
+// ===========================================================================
+// buildRotateGizmoGeometry  -- build 3 torus rings for rotation gizmo
+// ===========================================================================
+void GLViewportRenderer::buildRotateGizmoGeometry()
+{
+  const int segments = 48;
+  const int sides = 6;
+  const float majorR = 0.7f; // ring center radius
+  const float minorR = 0.035f; // tube radius
+
+  QVector<float> verts;
+  verts.reserve(3 * segments * sides * 6); // 6 verts per quad
+
+  // Generate a torus ring in a specific plane
+  // axisIndex: 0=X (YZ plane), 1=Y (XZ plane), 2=Z (XY plane)
+  auto addRing = [&](int axisIndex)
+  {
+    int baseVertex = verts.size() / 3;
+    for (int i = 0; i < segments; i++)
+    {
+      float theta1 = 2.f * M_PI * i / segments;
+      float theta2 = 2.f * M_PI * (i + 1) / segments;
+
+      for (int j = 0; j < sides; j++)
+      {
+        float phi1 = 2.f * M_PI * j / sides;
+        float phi2 = 2.f * M_PI * (j + 1) / sides;
+
+        auto point = [&](float theta, float phi) -> QVector3D
+        {
+          float r = majorR + minorR * std::cos(phi);
+          float y = minorR * std::sin(phi);
+          // Base ring in XZ plane
+          float x = r * std::cos(theta);
+          float z = r * std::sin(theta);
+          // Rotate to target plane
+          if (axisIndex == 0) return QVector3D(y, x, z);     // X ring: YZ plane
+          else if (axisIndex == 1) return QVector3D(x, y, z); // Y ring: XZ plane
+          else return QVector3D(x, z, y);                     // Z ring: XY plane
+        };
+
+        QVector3D p00 = point(theta1, phi1);
+        QVector3D p10 = point(theta2, phi1);
+        QVector3D p01 = point(theta1, phi2);
+        QVector3D p11 = point(theta2, phi2);
+
+        // Triangle 1
+        verts.append(p00.x()); verts.append(p00.y()); verts.append(p00.z());
+        verts.append(p10.x()); verts.append(p10.y()); verts.append(p10.z());
+        verts.append(p11.x()); verts.append(p11.y()); verts.append(p11.z());
+        // Triangle 2
+        verts.append(p00.x()); verts.append(p00.y()); verts.append(p00.z());
+        verts.append(p11.x()); verts.append(p11.y()); verts.append(p11.z());
+        verts.append(p01.x()); verts.append(p01.y()); verts.append(p01.z());
+      }
+    }
+    return baseVertex;
+  };
+
+  m_rotateRingBase[0] = addRing(0); // X ring
+  m_rotateRingBase[1] = addRing(1); // Y ring
+  m_rotateRingBase[2] = addRing(2); // Z ring
+  m_rotateRingVertCount = segments * sides * 6; // vertices per ring
+
+  m_f->glGenVertexArrays(1, &m_rotateGizmoVao);
+  m_f->glGenBuffers(1, &m_rotateGizmoVbo);
+  m_f->glBindVertexArray(m_rotateGizmoVao);
+  m_f->glBindBuffer(GL_ARRAY_BUFFER, m_rotateGizmoVbo);
+  m_f->glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.constData(), GL_STATIC_DRAW);
+  m_f->glEnableVertexAttribArray(0);
+  m_f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+  m_f->glBindVertexArray(0);
+  m_f->glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+// ===========================================================================
+// renderRotateGizmo
+// ===========================================================================
+void GLViewportRenderer::renderRotateGizmo(const QMatrix4x4 &mvp)
+{
+  float dist = (m_gizmoCenter - m_camera.eye()).length();
+  float scale = dist * 0.15f;
+  if (scale < 5.f)
+    scale = 5.f;
+
+  m_f->glClear(GL_DEPTH_BUFFER_BIT);
+  m_f->glDisable(GL_CULL_FACE);
+
+  m_gizmoProg.bind();
+  m_gizmoProg.setUniformValue(m_uGizmoMVP, mvp);
+  m_gizmoProg.setUniformValue(m_uGizmoCenter, m_gizmoCenter);
+  m_gizmoProg.setUniformValue(m_uGizmoScale, scale);
+
+  m_f->glBindVertexArray(m_rotateGizmoVao);
+
+  for (int ax = 0; ax < 3; ax++)
+  {
+    bool active = (m_gizmoAxis == ax + 1);
+    QVector4D col = active ? kAxisHighlight[ax] : kAxisColors[ax];
+    m_gizmoProg.setUniformValue(m_uGizmoColor, col);
+    m_f->glDrawArrays(GL_TRIANGLES, m_rotateRingBase[ax], m_rotateRingVertCount);
+  }
+
+  m_f->glBindVertexArray(0);
+  m_gizmoProg.release();
+  m_f->glEnable(GL_CULL_FACE);
+}
+
+// ===========================================================================
+// pickRotateAxis  -- returns 1/2/3 for X/Y/Z ring, 0 if no hit
+// ===========================================================================
+int GLViewportRenderer::pickRotateAxis(float sx, float sy) const
+{
+  if (m_meshBatches.empty())
+    return 0;
+
+  float dist = (m_gizmoCenter - m_camera.eye()).length();
+  float scale = std::max(dist * 0.15f, 5.f);
+  float thresh = scale * 0.10f; // picking tolerance
+
+  auto [orig, dir] = computeRay(sx, sy);
+
+  // For each ring, project ray onto ring plane and check distance to ring
+  static const QVector3D kNormals[3] = {
+      QVector3D(1, 0, 0), QVector3D(0, 1, 0), QVector3D(0, 0, 1)};
+
+  float bestDist = FLT_MAX;
+  int best = 0;
+
+  for (int ax = 0; ax < 3; ax++)
+  {
+    const QVector3D &n = kNormals[ax];
+    float denom = QVector3D::dotProduct(dir, n);
+    if (std::abs(denom) < 1e-6f)
+      continue; // ray parallel to plane
+
+    float t = QVector3D::dotProduct(m_gizmoCenter - orig, n) / denom;
+    if (t < 0)
+      continue; // behind camera
+
+    QVector3D hit = orig + t * dir;
+    float ringDist = (hit - m_gizmoCenter).length();
+    float tubeDist = std::abs(ringDist - scale * 0.7f); // 0.7 = majorR
+
+    if (tubeDist < thresh && tubeDist < bestDist)
+    {
+      bestDist = tubeDist;
+      best = ax + 1;
+    }
+  }
+  return best;
+}
+
+// ===========================================================================
+// buildScaleGizmoGeometry  -- build 3 axis shafts + box handles
+// ===========================================================================
+void GLViewportRenderer::buildScaleGizmoGeometry()
+{
+  QVector<float> verts;
+  const float shaftEnd = 0.7f;
+  const float boxSize = 0.08f;
+  const float boxCenter = 0.78f;
+
+  // Generate a unit cube centered at origin
+  auto addCube = [&](const QVector3D &center, const QVector3D &size)
+  {
+    float hx = size.x() * 0.5f, hy = size.y() * 0.5f, hz = size.z() * 0.5f;
+    float cx = center.x(), cy = center.y(), cz = center.z();
+
+    // 8 corners
+    QVector3D c[8] = {
+        {cx - hx, cy - hy, cz - hz}, {cx + hx, cy - hy, cz - hz},
+        {cx + hx, cy + hy, cz - hz}, {cx - hx, cy + hy, cz - hz},
+        {cx - hx, cy - hy, cz + hz}, {cx + hx, cy - hy, cz + hz},
+        {cx + hx, cy + hy, cz + hz}, {cx - hx, cy + hy, cz + hz}};
+
+    // 12 triangles (6 faces)
+    int faces[6][4] = {
+        {0, 1, 2, 3}, // -Z
+        {4, 6, 5, 7}, // +Z
+        {0, 4, 5, 1}, // -Y
+        {2, 6, 7, 3}, // +Y
+        {0, 3, 7, 4}, // -X
+        {1, 5, 6, 2}, // +X
+    };
+
+    for (auto &f : faces)
+    {
+      auto &a = c[f[0]], &b = c[f[1]], &cc = c[f[2]], &d = c[f[3]];
+      // Tri 1: a b c
+      verts.append(a.x()); verts.append(a.y()); verts.append(a.z());
+      verts.append(b.x()); verts.append(b.y()); verts.append(b.z());
+      verts.append(cc.x()); verts.append(cc.y()); verts.append(cc.z());
+      // Tri 2: a c d
+      verts.append(a.x()); verts.append(a.y()); verts.append(a.z());
+      verts.append(cc.x()); verts.append(cc.y()); verts.append(cc.z());
+      verts.append(d.x()); verts.append(d.y()); verts.append(d.z());
+    }
+  };
+
+  static const QVector3D kAxes[3] = {
+      QVector3D(1, 0, 0), QVector3D(0, 1, 0), QVector3D(0, 0, 1)};
+
+  for (int ax = 0; ax < 3; ax++)
+  {
+    m_scaleShaftBase[ax] = verts.size() / 3;
+    // Shaft line (origin to shaftEnd)
+    QVector3D o(0, 0, 0);
+    QVector3D e = kAxes[ax] * shaftEnd;
+    verts.append(o.x()); verts.append(o.y()); verts.append(o.z());
+    verts.append(e.x()); verts.append(e.y()); verts.append(e.z());
+
+    m_scaleBoxBase[ax] = verts.size() / 3;
+    // Box handle at end of axis
+    addCube(kAxes[ax] * boxCenter, QVector3D(boxSize, boxSize, boxSize));
+  }
+  m_scaleBoxVertCount = 36; // 6 faces * 2 tris * 3 verts
+
+  m_f->glGenVertexArrays(1, &m_scaleGizmoVao);
+  m_f->glGenBuffers(1, &m_scaleGizmoVbo);
+  m_f->glBindVertexArray(m_scaleGizmoVao);
+  m_f->glBindBuffer(GL_ARRAY_BUFFER, m_scaleGizmoVbo);
+  m_f->glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.constData(), GL_STATIC_DRAW);
+  m_f->glEnableVertexAttribArray(0);
+  m_f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+  m_f->glBindVertexArray(0);
+  m_f->glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+// ===========================================================================
+// renderScaleGizmo
+// ===========================================================================
+void GLViewportRenderer::renderScaleGizmo(const QMatrix4x4 &mvp)
+{
+  float dist = (m_gizmoCenter - m_camera.eye()).length();
+  float scale = dist * 0.15f;
+  if (scale < 5.f)
+    scale = 5.f;
+
+  m_f->glClear(GL_DEPTH_BUFFER_BIT);
+  m_f->glDisable(GL_CULL_FACE);
+
+  m_gizmoProg.bind();
+  m_gizmoProg.setUniformValue(m_uGizmoMVP, mvp);
+  m_gizmoProg.setUniformValue(m_uGizmoCenter, m_gizmoCenter);
+  m_gizmoProg.setUniformValue(m_uGizmoScale, scale);
+
+  m_f->glBindVertexArray(m_scaleGizmoVao);
+
+  for (int ax = 0; ax < 3; ax++)
+  {
+    bool active = (m_gizmoAxis == ax + 1);
+    QVector4D col = active ? kAxisHighlight[ax] : kAxisColors[ax];
+    m_gizmoProg.setUniformValue(m_uGizmoColor, col);
+    m_f->glDrawArrays(GL_LINES, m_scaleShaftBase[ax], 2);
+    m_f->glDrawArrays(GL_TRIANGLES, m_scaleBoxBase[ax], m_scaleBoxVertCount);
+  }
+
+  m_f->glBindVertexArray(0);
+  m_gizmoProg.release();
+  m_f->glEnable(GL_CULL_FACE);
+}
+
+// ===========================================================================
+// pickScaleAxis  -- returns 1/2/3 for X/Y/Z, 0 if no hit
+// ===========================================================================
+int GLViewportRenderer::pickScaleAxis(float sx, float sy) const
+{
+  if (m_meshBatches.empty())
+    return 0;
+
+  float dist = (m_gizmoCenter - m_camera.eye()).length();
+  float scale = std::max(dist * 0.15f, 5.f);
+  float thresh = scale * 0.10f;
+
+  auto [orig, dir] = computeRay(sx, sy);
+
+  static const QVector3D kAxes[3] = {
+      QVector3D(1, 0, 0), QVector3D(0, 1, 0), QVector3D(0, 0, 1)};
+
+  float bestDist = FLT_MAX;
+  int best = 0;
+  for (int ax = 0; ax < 3; ax++)
+  {
+    QVector3D axDir = kAxes[ax];
+    QVector3D w = orig - m_gizmoCenter;
+    float b = QVector3D::dotProduct(dir, axDir);
+    float e = QVector3D::dotProduct(axDir, w);
+    float d = QVector3D::dotProduct(dir, w);
+    float denom = 1.f - b * b;
+    float t_ray, s_axis;
+    if (std::abs(denom) < 1e-8f)
+    {
+      t_ray = 0;
+      s_axis = e;
+    }
+    else
+    {
+      t_ray = (b * e - d) / denom;
+      s_axis = (e - b * d) / denom;
+    }
+    if (t_ray < 0)
+      continue;
+    s_axis /= scale;
+    if (s_axis < 0 || s_axis > 1.0f)
+      continue;
+
+    QVector3D p1 = orig + t_ray * dir;
+    QVector3D p2 = m_gizmoCenter + s_axis * scale * axDir;
+    float d2 = (p1 - p2).length();
+    if (d2 < thresh && d2 < bestDist)
+    {
+      bestDist = d2;
       best = ax + 1;
     }
   }

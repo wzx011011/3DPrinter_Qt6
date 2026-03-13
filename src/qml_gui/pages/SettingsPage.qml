@@ -99,7 +99,7 @@ Item {
                                 Text {
                                     anchors.centerIn: parent
                                     text: parent.cnt
-                                    color: root.selectedCategory === parent.parent.parent.parent.modelData ? "#22c564" : "#566070"
+                                    color: root.selectedCategory === parent.parent.parent.modelData ? "#22c564" : "#566070"
                                     font.pixelSize: 10
                                 }
                             }

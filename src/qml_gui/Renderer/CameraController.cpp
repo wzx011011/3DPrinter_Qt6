@@ -80,6 +80,30 @@ void CameraController::resetToDefault()
   m_azimuth   = 45.0f;
 }
 
+void CameraController::viewTop()
+{
+  m_elevation = 89.0f;
+  m_azimuth   = 0.0f;
+}
+
+void CameraController::viewFront()
+{
+  m_elevation = 0.0f;
+  m_azimuth   = 0.0f;
+}
+
+void CameraController::viewRight()
+{
+  m_elevation = 0.0f;
+  m_azimuth   = 90.0f;
+}
+
+void CameraController::viewIso()
+{
+  m_elevation = 35.0f;
+  m_azimuth   = 45.0f;
+}
+
 QMatrix4x4 CameraController::projMatrix(float aspect) const
 {
   QMatrix4x4 mat;

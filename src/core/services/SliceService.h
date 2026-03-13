@@ -35,8 +35,10 @@ public:
   int resultPlateIndex() const;
 
   Q_INVOKABLE void startSlice(const QString &projectName);
+  Q_INVOKABLE void startSlicePlate(int plateIndex);
   Q_INVOKABLE void cancelSlice();
   Q_INVOKABLE bool loadGCodeFromPrevious(const QString &gcodeFilePath);
+  Q_INVOKABLE bool exportGCodeToPath(const QString &targetPath);
 
 signals:
   void progressChanged();

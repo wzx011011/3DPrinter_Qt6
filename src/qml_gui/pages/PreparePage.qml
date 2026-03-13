@@ -14,6 +14,7 @@ Item {
     required property var editorVm
     required property var configVm
     property alias viewport3dRef: viewport3d
+    focus: true
 
     component ToolStripDivider: Rectangle {
         width: 1
@@ -38,6 +39,101 @@ Item {
         viewport3d.redo()
     }
 
+    // Keyboard shortcuts matching upstream CrealityPrint Plater
+    Keys.onPressed: (event) => {
+        if (!root.editorVm)
+            return
+        var key = event.key
+        var mod = event.modifiers
+        switch (key) {
+        case Qt.Key_W:
+            viewport3d.gizmoMode = GLViewport.GizmoMove
+            event.accepted = true
+            break
+        case Qt.Key_E:
+            viewport3d.gizmoMode = GLViewport.GizmoRotate
+            event.accepted = true
+            break
+        case Qt.Key_R:
+            if (!(mod & Qt.ControlModifier)) {
+                viewport3d.gizmoMode = GLViewport.GizmoScale
+                event.accepted = true
+            }
+            break
+        case Qt.Key_Z:
+            if (mod & Qt.ControlModifier) {
+                if (mod & Qt.ShiftModifier)
+                    viewport3d.redo()
+                else
+                    viewport3d.undo()
+                event.accepted = true
+            }
+            break
+        case Qt.Key_Y:
+            if (mod & Qt.ControlModifier) {
+                viewport3d.redo()
+                event.accepted = true
+            }
+            break
+        case Qt.Key_Delete:
+        case Qt.Key_Backspace:
+            root.editorVm.deleteSelectedObjects()
+            event.accepted = true
+            break
+        case Qt.Key_Escape:
+            root.editorVm.clearObjectSelection()
+            event.accepted = true
+            break
+        case Qt.Key_A:
+            if (mod & Qt.ControlModifier) {
+                root.editorVm.selectAllVisibleObjects()
+                event.accepted = true
+            }
+            break
+        case Qt.Key_F:
+            root.applyFitHintIfReady()
+            event.accepted = true
+            break
+        }
+    }
+
+    // Object context menu (right-click)
+    Menu {
+        id: objectContextMenu
+
+        MenuItem {
+            text: qsTr("删除选中")
+            onTriggered: if (root.editorVm) root.editorVm.deleteSelectedObjects()
+        }
+        MenuSeparator { }
+        MenuItem {
+            text: qsTr("全选")
+            shortcut: "Ctrl+A"
+            onTriggered: if (root.editorVm) root.editorVm.selectAllVisibleObjects()
+        }
+        MenuItem {
+            text: qsTr("取消选择")
+            shortcut: "Esc"
+            onTriggered: if (root.editorVm) root.editorVm.clearObjectSelection()
+        }
+        MenuSeparator { }
+        MenuItem {
+            text: qsTr("移动模式")
+            shortcut: "W"
+            onTriggered: viewport3d.gizmoMode = GLViewport.GizmoMove
+        }
+        MenuItem {
+            text: qsTr("旋转模式")
+            shortcut: "E"
+            onTriggered: viewport3d.gizmoMode = GLViewport.GizmoRotate
+        }
+        MenuItem {
+            text: qsTr("缩放模式")
+            shortcut: "R"
+            onTriggered: viewport3d.gizmoMode = GLViewport.GizmoScale
+        }
+    }
+
     PrintDialog {
         id: printDlg
         editorVm: root.editorVm
@@ -59,6 +155,16 @@ Item {
         }
     }
 
+    FileDialog {
+        id: exportGCodeDlg
+        title: qsTr("导出 G-code")
+        nameFilters: [qsTr("G-code 文件 (*.gcode)")]
+        onAccepted: {
+            if (root.editorVm)
+                root.editorVm.requestExportGCode(selectedFile.toString())
+        }
+    }
+
     Rectangle {
         anchors.fill: parent
         color: Theme.bgBase
@@ -68,6 +174,29 @@ Item {
             anchors.fill: parent
             canvasType: GLViewport.CanvasView3D
             meshData: root.editorVm ? root.editorVm.meshData : null
+
+            // Right-click context menu
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.RightButton
+                propagateComposedEvents: true
+                onClicked: (mouse) => {
+                    objectContextMenu.popup(mouse.x, mouse.y)
+                    mouse.accepted = false
+                }
+                onPressed: (mouse) => mouse.accepted = false
+                onReleased: (mouse) => mouse.accepted = false
+            }
+
+            // Undo/Redo shortcuts (QML Shortcuts work better than Keys for Ctrl combos)
+            Shortcut {
+                sequences: ["Ctrl+Z"]
+                onActivated: viewport3d.undo()
+            }
+            Shortcut {
+                sequences: ["Ctrl+Shift+Z", "Ctrl+Y"]
+                onActivated: viewport3d.redo()
+            }
 
             Connections {
                 target: root.editorVm
@@ -171,6 +300,37 @@ Item {
                             iconSize: 16
                             iconSource: "qrc:/qml/assets/icons/box.svg"
                             toolTipText: qsTr("对象视图")
+                        }
+                    }
+
+                    ToolStripDivider { }
+
+                    Row {
+                        spacing: 6
+
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoMove
+                            iconSource: "qrc:/qml/assets/icons/arrow-forward-up.svg"
+                            toolTipText: qsTr("移动 (W)")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoMove
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoRotate
+                            iconSource: "qrc:/qml/assets/icons/rotate-2.svg"
+                            toolTipText: qsTr("旋转 (E)")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoRotate
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoScale
+                            iconSource: "qrc:/qml/assets/icons/maximize.svg"
+                            toolTipText: qsTr("缩放 (R)")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoScale
                         }
                     }
 
@@ -517,6 +677,22 @@ Item {
             CxPillAction {
                 iconSource: "qrc:/qml/assets/icons/settings.svg"
                 text: qsTr("打印配置")
+            }
+
+            CxPillAction {
+                iconSource: "qrc:/qml/assets/icons/download.svg"
+                text: qsTr("导出 G-code")
+                onClicked: exportGCodeDlg.open()
+            }
+
+            CxPillAction {
+                iconSource: "qrc:/qml/assets/icons/layers.svg"
+                text: qsTr("切片全部平板")
+                visible: root.editorVm ? root.editorVm.plateCount > 1 : false
+                onClicked: {
+                    if (root.editorVm)
+                        root.editorVm.requestSliceAll()
+                }
             }
 
             CxPillAction {

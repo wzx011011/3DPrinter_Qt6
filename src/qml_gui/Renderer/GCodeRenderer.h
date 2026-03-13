@@ -8,6 +8,7 @@
 #include <QByteArray>
 #include <QVector3D>
 #include <vector>
+#include "CameraController.h"
 
 class GLViewport;
 namespace Slic3r
@@ -43,6 +44,7 @@ private:
   void initializeIfNeeded();
   void uploadIfNeeded();
   void parsePreviewData(const QByteArray &data);
+  void processInputEvents();
 
   bool initialized_ = false;
   bool dirty_ = false;
@@ -61,4 +63,25 @@ private:
   int layerMin_ = 0;
   int layerMax_ = 0;
   int moveEnd_ = 0;
+
+  // Camera controls
+  CameraController camera_;
+  bool mouseDragging_ = false;
+  Qt::MouseButton dragButton_ = Qt::NoButton;
+  float lastX_ = 0.f;
+  float lastY_ = 0.f;
+
+  // Pending input events (consumed in render thread)
+  struct PendingEvent
+  {
+    enum Type { Press, Move, Release, Wheel, FitView, ViewPreset };
+    Type type;
+    Qt::MouseButton button = Qt::NoButton;
+    Qt::MouseButtons buttons;
+    float x = 0.f;
+    float y = 0.f;
+    float wheelDelta = 0.f;
+    float fitCX = 0.f, fitCY = 0.f, fitCZ = 0.f, fitRadius = 0.f;
+  };
+  std::vector<PendingEvent> pendingEvents_;
 };

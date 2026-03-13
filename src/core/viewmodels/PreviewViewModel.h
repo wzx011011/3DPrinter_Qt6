@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QByteArray>
 #include <QVariantList>
+#include <QHash>
+#include <vector>
 
 class QTimer;
 
@@ -23,6 +25,9 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(QVariantList legendItems READ legendItems NOTIFY stateChanged)
   Q_PROPERTY(QString totalTime READ totalTime NOTIFY stateChanged)
   Q_PROPERTY(QString filamentUsed READ filamentUsed NOTIFY stateChanged)
+  Q_PROPERTY(QString filamentWeight READ filamentWeight NOTIFY stateChanged)
+  Q_PROPERTY(int extrudeMoveCount READ extrudeMoveCount NOTIFY stateChanged)
+  Q_PROPERTY(int travelMoveCount READ travelMoveCount NOTIFY stateChanged)
   Q_PROPERTY(QStringList viewModes READ viewModes CONSTANT)
   Q_PROPERTY(int viewModeIndex READ viewModeIndex WRITE setViewModeIndex NOTIFY stateChanged)
 
@@ -41,6 +46,9 @@ public:
   QVariantList legendItems() const { return legendItems_; }
   QString totalTime() const { return totalTime_; }
   QString filamentUsed() const { return filamentUsed_; }
+  QString filamentWeight() const { return filamentWeight_; }
+  int extrudeMoveCount() const { return extrudeMoveCount_; }
+  int travelMoveCount() const { return travelMoveCount_; }
   QStringList viewModes() const;
   int viewModeIndex() const { return viewModeIndex_; }
 
@@ -55,6 +63,8 @@ signals:
 
 private:
   void rebuildFromGCode(const QString &filePath);
+  void recolorAndPackSegments();
+  void buildLegendItems(int mode, float minV, float maxV);
   QVariantMap legendItem(const QString &label, const QString &color, int count) const;
 
   SliceService *sliceService_ = nullptr;
@@ -68,6 +78,27 @@ private:
   QVariantList legendItems_;
   QString totalTime_ = QStringLiteral("--:--:--");
   QString filamentUsed_ = QStringLiteral("--");
+  QString filamentWeight_ = QStringLiteral("--");
+  int extrudeMoveCount_ = 0;
+  int travelMoveCount_ = 0;
   int viewModeIndex_ = 0;
   QTimer *playTimer_ = nullptr;
+
+  // Stored parsed segments for view-mode recoloring
+  struct StoredSegment
+  {
+    float x1, y1, z1, x2, y2, z2;
+    float baseR, baseG, baseB; // FeatureType colors
+    float feedrate;
+    float fan_speed;
+    float temperature;
+    float width;
+    float layer_time;
+    float acceleration;
+    int extruder_id;
+    int layer;
+    int move;
+  };
+  std::vector<StoredSegment> segments_;
+  QHash<QString, int> featureCount_;
 };

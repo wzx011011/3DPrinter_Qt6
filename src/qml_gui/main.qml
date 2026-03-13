@@ -151,10 +151,33 @@ ApplicationWindow {
 
     Menu {
         id: dropdownMenu
+        // View items (matching upstream View menu)
+        MenuItem { text: qsTr("适应视图"); shortcut: "F"; onTriggered: preparePage.applyFitHintIfReady() }
+        MenuItem { text: preparePage.viewport3dRef.wireframeMode ? qsTr("关闭线框模式") : qsTr("线框模式"); onTriggered: preparePage.viewport3dRef.wireframeMode = !preparePage.viewport3dRef.wireframeMode }
+        MenuSeparator {}
+        // Settings items
         MenuItem { text: qsTr("偏好设置"); onTriggered: backend.setCurrentPage(8) }
         MenuItem { text: qsTr("参数设置"); onTriggered: backend.openSettings() }
         MenuSeparator {}
         MenuItem { text: qsTr("主页"); onTriggered: backend.setCurrentPage(0) }
+    }
+
+    // Edit menu (matching upstream Plater Edit menu)
+    Menu {
+        id: editMenu
+        MenuItem { text: qsTr("全选"); shortcut: "Ctrl+A"; onTriggered: {
+            if (backend.editorViewModel) backend.editorViewModel.selectAllVisibleObjects()
+        } }
+        MenuItem { text: qsTr("取消选择"); shortcut: "Esc"; onTriggered: {
+            if (backend.editorViewModel) backend.editorViewModel.clearObjectSelection()
+        } }
+        MenuSeparator {}
+        MenuItem { text: qsTr("删除选中"); shortcut: "Del"; onTriggered: {
+            if (backend.editorViewModel) backend.editorViewModel.deleteSelectedObjects()
+        } }
+        MenuItem { text: qsTr("清空全部"); onTriggered: {
+            if (backend.editorViewModel) backend.editorViewModel.clearWorkspace()
+        } }
     }
 
     Shortcut {
@@ -186,14 +209,22 @@ ApplicationWindow {
                  && backend.editorViewModel.hasSelection
         onActivated: backend.editorViewModel.deleteSelection()
     }
+    Shortcut {
+        sequence: "Ctrl+I"
+        onActivated: openModelDialog.open()
+    }
+    Shortcut {
+        sequence: "Ctrl+O"
+        onActivated: openProjectDialog.open()
+    }
 
-        readonly property string compareReferenceSource: backend.currentPage === 1
-                                                                                                    ? "qrc:/qml/assets/prepare_ref.png"
-                                                                                                    : backend.currentPage === 2
-                                                                                                        ? "qrc:/qml/assets/preview_ref.png"
-                                                                                                        : backend.currentPage === 3
-                                                                                                            ? "qrc:/qml/assets/monitor_ref.png"
-                                                                                                            : ""
+    readonly property string compareReferenceSource: backend.currentPage === 1
+        ? "qrc:/qml/assets/prepare_ref.png"
+        : backend.currentPage === 2
+            ? "qrc:/qml/assets/preview_ref.png"
+            : backend.currentPage === 3
+                ? "qrc:/qml/assets/monitor_ref.png"
+                : ""
 
     Rectangle {
         id: shell
@@ -350,6 +381,48 @@ ApplicationWindow {
                                 onClicked: {
                                     const p = fileEntry.mapToItem(root.contentItem, 0, fileEntry.height + 4)
                                     fileMenu.popup(p.x, p.y)
+                                }
+                            }
+                        }
+
+                        TitleBarDivider { }
+
+                        // Edit menu button
+                        Rectangle {
+                            id: editEntry
+                            Layout.preferredHeight: 30
+                            Layout.preferredWidth: 104
+                            radius: 9
+                            border.width: 1
+                            border.color: editMouse.containsMouse ? "#314058" : "#253043"
+                            color: editMouse.pressed ? root.topbarPressed : (editMouse.containsMouse ? root.topbarHover : "#10161e")
+
+                            RowLayout {
+                                anchors.centerIn: parent
+                                spacing: 6
+
+                                Text {
+                                    text: qsTr("编辑")
+                                    color: "#dce5f1"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                Text {
+                                    text: "▾"
+                                    color: "#9fb0c7"
+                                    font.pixelSize: 11
+                                }
+                            }
+
+                            MouseArea {
+                                id: editMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    const p = editEntry.mapToItem(root.contentItem, 0, editEntry.height + 4)
+                                    editMenu.popup(p.x, p.y)
                                 }
                             }
                         }

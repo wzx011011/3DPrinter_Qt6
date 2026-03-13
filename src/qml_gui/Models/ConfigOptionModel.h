@@ -76,6 +76,12 @@ public:
   void applyValues(const QHash<QString, QVariant> &values);
   void setReadonlyKeys(const QSet<QString> &keys);
 
+#ifdef HAS_LIBSLIC3R
+  // Populate model from upstream libslic3r print_config_def.
+  // Replaces the hardcoded option list with schema-driven options.
+  void loadFromUpstreamSchema();
+#endif
+
 signals:
   void countChanged();
   void optionValueChanged(const QString &key, const QVariant &value);

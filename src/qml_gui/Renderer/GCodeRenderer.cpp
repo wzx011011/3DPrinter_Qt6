@@ -6,6 +6,7 @@
 #include <QMatrix4x4>
 #include <QVector4D>
 #include <cstring>
+#include <algorithm>
 
 namespace
 {
@@ -34,6 +35,13 @@ namespace
     float r;
     float g;
     float b;
+    float feedrate;
+    float fan_speed;
+    float temperature;
+    float width;
+    float layer_time;
+    float acceleration;
+    int extruder_id;
     int layer;
     int move;
   };
@@ -71,11 +79,109 @@ void GCodeRenderer::synchronize(QQuickFramebufferObject *item)
   layerMin_ = vp->layerMin();
   layerMax_ = vp->layerMax();
   moveEnd_ = vp->moveEnd();
+
+  // Collect input events
+  auto events = vp->takeEvents();
+  for (const auto &e : events)
+  {
+    PendingEvent pe;
+    switch (e.type)
+    {
+    case GLViewport::InputEvent::Press:
+      pe.type = PendingEvent::Press;
+      pe.button = e.button;
+      pe.buttons = e.buttons;
+      pe.x = e.x;
+      pe.y = e.y;
+      break;
+    case GLViewport::InputEvent::Move:
+      pe.type = PendingEvent::Move;
+      pe.buttons = e.buttons;
+      pe.x = e.x;
+      pe.y = e.y;
+      break;
+    case GLViewport::InputEvent::Release:
+      pe.type = PendingEvent::Release;
+      pe.button = e.button;
+      break;
+    case GLViewport::InputEvent::Wheel:
+      pe.type = PendingEvent::Wheel;
+      pe.wheelDelta = e.wheelDelta;
+      break;
+    case GLViewport::InputEvent::FitView:
+      pe.type = PendingEvent::FitView;
+      pe.fitCX = e.fitCX;
+      pe.fitCY = e.fitCY;
+      pe.fitCZ = e.fitCZ;
+      pe.fitRadius = e.fitRadius;
+      break;
+    case GLViewport::InputEvent::ViewPreset:
+      pe.type = PendingEvent::ViewPreset;
+      pe.x = e.x;
+      break;
+    default:
+      continue;
+    }
+    pendingEvents_.push_back(pe);
+  }
+}
+
+void GCodeRenderer::processInputEvents()
+{
+  for (const auto &e : pendingEvents_)
+  {
+    switch (e.type)
+    {
+    case PendingEvent::Press:
+      mouseDragging_ = true;
+      dragButton_ = e.button;
+      lastX_ = e.x;
+      lastY_ = e.y;
+      break;
+    case PendingEvent::Move:
+    {
+      const float dx = e.x - lastX_;
+      const float dy = e.y - lastY_;
+      if (mouseDragging_)
+      {
+        if (dragButton_ == Qt::LeftButton)
+          camera_.orbit(dx * 0.5f, -dy * 0.5f);
+        else if (dragButton_ == Qt::MiddleButton)
+          camera_.pan(dx, dy);
+      }
+      lastX_ = e.x;
+      lastY_ = e.y;
+      break;
+    }
+    case PendingEvent::Release:
+      mouseDragging_ = false;
+      dragButton_ = Qt::NoButton;
+      break;
+    case PendingEvent::Wheel:
+      camera_.zoom(e.wheelDelta);
+      break;
+    case PendingEvent::FitView:
+      camera_.fitView(e.fitCX, e.fitCY, e.fitCZ, e.fitRadius);
+      break;
+    case PendingEvent::ViewPreset:
+      switch (int(e.x))
+      {
+      case 0: camera_.viewTop(); break;
+      case 1: camera_.viewFront(); break;
+      case 2: camera_.viewRight(); break;
+      case 3: camera_.viewIso(); break;
+      default: camera_.viewIso(); break;
+      }
+      break;
+    }
+  }
+  pendingEvents_.clear();
 }
 
 void GCodeRenderer::render()
 {
   initializeIfNeeded();
+  processInputEvents();
   if (dirty_)
     uploadIfNeeded();
 
@@ -84,23 +190,18 @@ void GCodeRenderer::render()
   f_->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   if (vertices_.empty())
-  {
-    update();
     return;
-  }
 
-  QMatrix4x4 proj;
   const float aspect = viewSize_.height() > 0 ? float(viewSize_.width()) / float(viewSize_.height()) : 1.f;
-  proj.perspective(45.f, aspect, 1.f, 5000.f);
-  QMatrix4x4 view;
-  view.lookAt(QVector3D(110.f, 350.f, 360.f), QVector3D(110.f, 0.f, 110.f), QVector3D(0.f, 1.f, 0.f));
-  QMatrix4x4 mvp = proj * view;
+  QMatrix4x4 mvp = camera_.projMatrix(aspect) * camera_.viewMatrix();
 
   prog_.bind();
   prog_.setUniformValue(uMvp_, mvp);
   vao_.bind();
 
-  int drawVertices = 0;
+  // Single-pass filter: count visible segments and build filtered buffer
+  std::vector<SegmentVertex> filtered;
+  filtered.reserve(vertices_.size());
   for (size_t i = 0; i + 1 < vertices_.size(); i += 2)
   {
     const SegmentVertex &a = vertices_[i];
@@ -108,36 +209,19 @@ void GCodeRenderer::render()
       continue;
     if (a.move > moveEnd_)
       continue;
-    drawVertices += 2;
+    filtered.push_back(vertices_[i]);
+    filtered.push_back(vertices_[i + 1]);
   }
 
-  if (drawVertices > 0)
+  if (!filtered.empty())
   {
-    int emitted = 0;
-    std::vector<SegmentVertex> filtered;
-    filtered.reserve(size_t(drawVertices));
-    for (size_t i = 0; i + 1 < vertices_.size(); i += 2)
-    {
-      const SegmentVertex &a = vertices_[i];
-      const SegmentVertex &b = vertices_[i + 1];
-      if (a.layer < layerMin_ || a.layer > layerMax_)
-        continue;
-      if (a.move > moveEnd_)
-        continue;
-      filtered.push_back(a);
-      filtered.push_back(b);
-      emitted += 2;
-    }
-
     vbo_.bind();
     vbo_.allocate(filtered.data(), int(filtered.size() * sizeof(SegmentVertex)));
-    f_->glDrawArrays(GL_LINES, 0, emitted);
+    f_->glDrawArrays(GL_LINES, 0, int(filtered.size()));
   }
 
   vao_.release();
   prog_.release();
-
-  update();
 }
 
 void GCodeRenderer::loadResult(const Slic3r::GCodeProcessorResult *result)
@@ -151,9 +235,12 @@ void GCodeRenderer::initializeIfNeeded()
     return;
 
   f_ = QOpenGLContext::currentContext()->extraFunctions();
+  f_->initializeOpenGLFunctions();
+
   prog_.addShaderFromSourceCode(QOpenGLShader::Vertex, kVert);
   prog_.addShaderFromSourceCode(QOpenGLShader::Fragment, kFrag);
-  prog_.link();
+  if (!prog_.link())
+    qWarning("[GCode] shader link failed: %s", qPrintable(prog_.log()));
   uMvp_ = prog_.uniformLocation("uMVP");
 
   vao_.create();
@@ -201,6 +288,33 @@ void GCodeRenderer::parsePreviewData(const QByteArray &data)
 
   const auto *seg = reinterpret_cast<const PackedSegment *>(data.constData() + 8);
   vertices_.reserve(size_t(count) * 2);
+
+  // Compute bounding box for initial fitView
+  float minX = FLT_MAX, minY = FLT_MAX, minZ = FLT_MAX;
+  float maxX = -FLT_MAX, maxY = -FLT_MAX, maxZ = -FLT_MAX;
+
+  for (int i = 0; i < count; ++i)
+  {
+    const auto &s = seg[i];
+    if (s.x1 < minX) minX = s.x1; if (s.x1 > maxX) maxX = s.x1;
+    if (s.x2 < minX) minX = s.x2; if (s.x2 > maxX) maxX = s.x2;
+    if (s.y1 < minZ) minZ = s.y1; if (s.y1 > maxZ) maxZ = s.y1;
+    if (s.y2 < minZ) minZ = s.y2; if (s.y2 > maxZ) maxZ = s.y2;
+    if (s.z1 < minY) minY = s.z1; if (s.z1 > maxY) maxY = s.z1;
+    if (s.z2 < minY) minY = s.z2; if (s.z2 > maxY) maxY = s.z2;
+  }
+
+  // Auto-fit camera to data bounding box
+  const float cx = (minX + maxX) * 0.5f;
+  const float cy = (minZ + maxZ) * 0.5f; // Y in GL = Z in GCode
+  const float cz = (minY + maxY) * 0.5f; // Z in GL = Y in GCode
+  const float rx = (maxX - minX) * 0.5f;
+  const float ry = (maxZ - minZ) * 0.5f;
+  const float rz = (maxY - minY) * 0.5f;
+  const float radius = std::sqrt(rx * rx + ry * ry + rz * rz);
+  if (radius > 0.001f)
+    camera_.fitView(cx, cy, cz, radius);
+
   for (int i = 0; i < count; ++i)
   {
     SegmentVertex a;

@@ -23,6 +23,12 @@ class GLViewport : public QQuickFramebufferObject
   Q_PROPERTY(int layerMin READ layerMin WRITE setLayerMin)
   Q_PROPERTY(int layerMax READ layerMax WRITE setLayerMax)
   Q_PROPERTY(int moveEnd READ moveEnd WRITE setMoveEnd)
+  Q_PROPERTY(int gizmoMode READ gizmoMode WRITE setGizmoMode NOTIFY gizmoModeChanged)
+  Q_PROPERTY(bool wireframeMode READ wireframeMode WRITE setWireframeMode NOTIFY wireframeModeChanged)
+
+  // GizmoMode constants exposed to QML
+  enum GizmoMode { GizmoMove = 0, GizmoRotate = 1, GizmoScale = 2 };
+  Q_ENUM(GizmoMode)
 
 public:
   enum CanvasType
@@ -40,6 +46,12 @@ public:
   // Property accessors
   int canvasType() const { return m_canvasType; }
   void setCanvasType(int t);
+
+  int gizmoMode() const { return m_gizmoMode; }
+  void setGizmoMode(int mode);
+
+  bool wireframeMode() const { return m_wireframeMode; }
+  void setWireframeMode(bool on);
 
   // --- 网格数据 (GUI 线程写，渲染线程通过 takeMesh 读) ---
   QByteArray meshData() const
@@ -75,10 +87,12 @@ public:
       Move,
       Release,
       Wheel,
-      FitView, ///< 相机自适应 bbox
+      FitView,     ///< 相机自适应 bbox
+      ViewPreset, ///< 相机预设视角 (x=0:top 1:front 2:right 3:iso)
       Undo,
       Redo,
-      ClearHistory
+      ClearHistory,
+      SetGizmoMode
     } type;
     Qt::MouseButton button = Qt::NoButton;
     Qt::MouseButtons buttons = Qt::NoButton;
@@ -94,12 +108,16 @@ public:
 
   /** QML 调用: 令相机自适应包含中心 (cx, cy, cz)、半径 r 的球体 */
   Q_INVOKABLE void requestFitView(float cx, float cy, float cz, float r);
+  /** QML 调用: 切换相机预设视角 (preset: 0=top, 1=front, 2=right, 3=iso) */
+  Q_INVOKABLE void requestViewPreset(int preset);
   Q_INVOKABLE void undo();
   Q_INVOKABLE void redo();
   Q_INVOKABLE void clearHistory();
 
 signals:
   void canvasTypeChanged();
+  void gizmoModeChanged();
+  void wireframeModeChanged();
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;
@@ -109,6 +127,8 @@ protected:
 
 private:
   int m_canvasType = CanvasView3D;
+  int m_gizmoMode = GizmoMove;
+  bool m_wireframeMode = false;
   mutable QMutex m_eventMutex;
   QList<InputEvent> m_events;
   // 网格数据双缓冲

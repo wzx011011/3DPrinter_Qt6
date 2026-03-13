@@ -54,6 +54,42 @@ Item {
 
                     Item { Layout.fillWidth: true }
 
+                    // Camera preset view buttons (matching upstream GCodeViewer)
+                    Row {
+                        spacing: 4
+                        Repeater {
+                            model: [
+                                { label: qsTr("顶"), preset: 0 },
+                                { label: qsTr("前"), preset: 1 },
+                                { label: qsTr("右"), preset: 2 },
+                                { label: qsTr("等轴"), preset: 3 }
+                            ]
+                            delegate: Rectangle {
+                                required property var modelData
+                                width: 26
+                                height: 26
+                                radius: 6
+                                color: viewMA.containsMouse ? "#2a3545" : "#1e2229"
+                                border.color: viewMA.containsMouse ? "#3e5060" : "#2e3540"
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: parent.modelData.label
+                                    color: "#9daaba"
+                                    font.pixelSize: 10
+                                }
+
+                                MouseArea {
+                                    id: viewMA
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: previewViewport.requestViewPreset(parent.modelData.preset)
+                                }
+                            }
+                        }
+                    }
+
                     Rectangle {
                         Layout.preferredHeight: 28
                         Layout.preferredWidth: 118

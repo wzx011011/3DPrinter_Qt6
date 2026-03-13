@@ -9,6 +9,9 @@ ConfigViewModel::ConfigViewModel(PresetServiceMock *presetService, ProjectServic
     : QObject(parent), presetService_(presetService), projectService_(projectService)
 {
   printOptions_ = new ConfigOptionModel(this);
+#ifdef HAS_LIBSLIC3R
+  printOptions_->loadFromUpstreamSchema();
+#endif
   presetList_ = new PresetListModel(this);
 
   scopedWritableKeys_ = {

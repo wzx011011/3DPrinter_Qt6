@@ -124,7 +124,9 @@ public:
   QString sliceActionHint() const;
 
   Q_INVOKABLE void requestSlice();
+  Q_INVOKABLE void requestSliceAll();
   Q_INVOKABLE void cancelSlice();
+  Q_INVOKABLE bool requestExportGCode(const QString &targetPath);
   /// 加载模型文件 (3MF/STL/OBJ)
   Q_INVOKABLE bool loadFile(const QString &filePath);
   /// 清空当前场景与项目状态（用于顶部工具栏新建）
@@ -145,6 +147,7 @@ private:
   int mapFilteredToSourceIndex(int filteredIndex) const;
   QList<int> visibleObjectIndices() const;
   bool currentPlateHasPrintableObjects() const;
+  void continueSliceAllQueue();
 
   struct ObjectEntry
   {
@@ -169,4 +172,6 @@ private:
   int m_sliceResultPlateIndex = -1;
   QVector4D m_fitHint; ///< (cx, cy, cz, radius) in GL coords; zero = invalid
   QByteArray m_cachedMeshData;
+  QList<int> m_sliceAllQueue; ///< plate indices queued for Slice All
+  bool m_slicingAll = false;
 };

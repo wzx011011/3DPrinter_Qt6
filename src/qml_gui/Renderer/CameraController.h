@@ -20,6 +20,12 @@ public:
   /// 重置到 K1C 平台默认视角
   void resetToDefault();
 
+  /// Camera presets (matching upstream GCodeViewer view presets)
+  void viewTop();
+  void viewFront();
+  void viewRight();
+  void viewIso();
+
   QMatrix4x4 viewMatrix() const;
   QMatrix4x4 projMatrix(float aspect) const;
   QVector3D  eye() const;         // world-space camera position
