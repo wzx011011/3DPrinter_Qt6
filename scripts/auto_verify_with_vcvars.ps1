@@ -60,6 +60,17 @@ $env:CL = "/Zm300 /bigobj $env:CL"
 ninja -j1 FramelessDialogDemo.exe
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+# Deploy Qt runtime DLLs if not already present
+if (-not (Test-Path './Qt6Core.dll')) {
+  & 'E:/Qt6.10/bin/windeployqt.exe' --release --qmldir '../src' --no-translations --no-system-d3d-compiler --no-opengl-sw './FramelessDialogDemo.exe' 2>$null
+}
+
+# Remove OCCT DLLs — they cause 0xC0000005 at startup due to /MT vs /MD
+# CRT mismatch between pre-built libslic3r and OCCT DLLs.
+# OCCT is not used by the QML GUI (no STEP/OBJ import yet).
+Remove-Item 'TK*.dll' -ErrorAction SilentlyContinue
+Remove-Item 'cr_tpms_library.dll' -ErrorAction SilentlyContinue
+
 $p = Start-Process -FilePath './FramelessDialogDemo.exe' -WorkingDirectory (Get-Location) -PassThru
 Start-Sleep -Seconds 5
 if ($p.HasExited) {

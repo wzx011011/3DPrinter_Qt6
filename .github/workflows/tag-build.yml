@@ -90,6 +90,10 @@ jobs:
           Copy-Item "build/en.qm" $outDir -Force -ErrorAction SilentlyContinue
           Copy-Item "build/zh_CN.qm" $outDir -Force -ErrorAction SilentlyContinue
           windeployqt --release --qmldir src "$outDir/FramelessDialogDemo.exe"
+          # Remove OCCT DLLs — they cause 0xC0000005 at startup due to /MT vs /MD
+          # CRT mismatch between pre-built libslic3r (static CRT) and OCCT DLLs (dynamic CRT).
+          Remove-Item "$outDir/TK*.dll" -Force -ErrorAction SilentlyContinue
+          Remove-Item "$outDir/cr_tpms_library.dll" -Force -ErrorAction SilentlyContinue
           $zipPath = "build/FramelessDialogDemo-${{ env.TAG_NAME }}-windows.zip"
           if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
           Compress-Archive -Path "$outDir/*" -DestinationPath $zipPath
