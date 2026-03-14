@@ -99,6 +99,22 @@ public:
   void setCutPosition(qreal pos);
   int cutKeepMode() const { return m_cutKeepMode; }
   void setCutKeepMode(int mode);
+  // Cut connector settings (对齐上游 GLGizmoCut connector)
+  int cutMode() const;
+  void setCutMode(int mode);
+  int connectorType() const;
+  void setConnectorType(int v);
+  int connectorStyle() const;
+  void setConnectorStyle(int v);
+  int connectorShape() const;
+  void setConnectorShape(int v);
+  float connectorSize() const;
+  void setConnectorSize(float v);
+  float connectorDepth() const;
+  void setConnectorDepth(float v);
+  // Measure selection (对齐上游 GLGizmoMeasure)
+  int measureSelectionMode() const;
+  void setMeasureSelectionMode(int mode);
   void setObjectPosX(float v);
   void setObjectPosY(float v);
   void setObjectPosZ(float v);
@@ -136,6 +152,14 @@ public:
   Q_INVOKABLE bool addVolumeToObject(int volumeType);
   /// Change volume type (对齐上游 GUI_ObjectList::load_generic_subobject type conversion)
   Q_INVOKABLE bool changeVolumeType(int newVolumeType);
+  /// 从外部文件导入 volume（对齐上游 GUI_ObjectList::load_generic_subobject 文件加载）
+  Q_INVOKABLE bool addVolumeFromFile(int objectIndex, const QString &filePath, int volumeType);
+  /// 添加原始体 volume（对齐上游 create_mesh + add_volume）
+  Q_INVOKABLE bool addPrimitive(int objectIndex, int primitiveType);
+  /// 添加文字浮雕 volume（对齐上游 GLGizmoText）
+  Q_INVOKABLE bool addTextVolume(int objectIndex, const QString &text);
+  /// 添加 SVG 浮雕 volume（对齐上游 GLGizmoSVG）
+  Q_INVOKABLE bool addSvgVolume(int objectIndex, const QString &svgFilePath);
   Q_INVOKABLE bool isObjectSelected(int i) const;
   Q_INVOKABLE bool objectPrintable(int i) const;
   Q_INVOKABLE void setObjectPrintable(int i, bool printable);
@@ -171,6 +195,15 @@ public:
   Q_PROPERTY(int cutAxis READ cutAxis WRITE setCutAxis NOTIFY stateChanged)
   Q_PROPERTY(qreal cutPosition READ cutPosition WRITE setCutPosition NOTIFY stateChanged)
   Q_PROPERTY(int cutKeepMode READ cutKeepMode WRITE setCutKeepMode NOTIFY stateChanged)
+  /// 切割连接器设置（对齐上游 GLGizmoCut connector type/shape/size）
+  Q_PROPERTY(int cutMode READ cutMode WRITE setCutMode NOTIFY stateChanged)
+  Q_PROPERTY(int connectorType READ connectorType WRITE setConnectorType NOTIFY stateChanged)
+  Q_PROPERTY(int connectorStyle READ connectorStyle WRITE setConnectorStyle NOTIFY stateChanged)
+  Q_PROPERTY(int connectorShape READ connectorShape WRITE setConnectorShape NOTIFY stateChanged)
+  Q_PROPERTY(float connectorSize READ connectorSize WRITE setConnectorSize NOTIFY stateChanged)
+  Q_PROPERTY(float connectorDepth READ connectorDepth WRITE setConnectorDepth NOTIFY stateChanged)
+  /// 测量拾取模式（对齐上游 GLGizmoMeasure feature/point selection）
+  Q_PROPERTY(int measureSelectionMode READ measureSelectionMode WRITE setMeasureSelectionMode NOTIFY stateChanged)
   /// 扁平可用面数（对齐上游 GLGizmoFlatten 面）
   Q_PROPERTY(int flattenFaceCount READ flattenFaceCount NOTIFY stateChanged)
   /// 翻转切割平面（对齐上游 GLGizmoCut::flip_cut_plane）
@@ -211,6 +244,27 @@ public:
   Q_INVOKABLE bool setPlatePrintSequence(int plateIndex, int seq);
   Q_INVOKABLE int plateSpiralMode(int plateIndex) const;
   Q_INVOKABLE bool setPlateSpiralMode(int plateIndex, int mode);
+  /// 首层耗材顺序（对齐上游 first_layer_print_sequence）
+  Q_INVOKABLE int plateFirstLayerSeqChoice(int plateIndex) const;
+  Q_INVOKABLE bool setPlateFirstLayerSeqChoice(int plateIndex, int choice);
+  Q_INVOKABLE QVariantList plateFirstLayerSeqOrder(int plateIndex) const;
+  Q_INVOKABLE bool setPlateFirstLayerSeqOrder(int plateIndex, const QVariantList &order);
+  /// 其他层耗材顺序（对齐上游 other_layers_print_sequence）
+  Q_INVOKABLE int plateOtherLayersSeqChoice(int plateIndex) const;
+  Q_INVOKABLE bool setPlateOtherLayersSeqChoice(int plateIndex, int choice);
+  Q_INVOKABLE int plateOtherLayersSeqCount(int plateIndex) const;
+  Q_INVOKABLE int plateOtherLayersSeqBegin(int plateIndex, int entryIndex) const;
+  Q_INVOKABLE int plateOtherLayersSeqEnd(int plateIndex, int entryIndex) const;
+  Q_INVOKABLE QVariantList plateOtherLayersSeqOrder(int plateIndex, int entryIndex) const;
+  Q_INVOKABLE bool addPlateOtherLayersSeqEntry(int plateIndex, int beginLayer, int endLayer);
+  Q_INVOKABLE bool removePlateOtherLayersSeqEntry(int plateIndex, int entryIndex);
+  Q_INVOKABLE bool setPlateOtherLayersSeqRange(int plateIndex, int entryIndex, int beginLayer, int endLayer);
+  Q_INVOKABLE bool setPlateOtherLayersSeqOrder(int plateIndex, int entryIndex, const QVariantList &order);
+  /// 当前平板使用的耗材数（Mock 模式）
+  Q_INVOKABLE int plateExtruderCount(int plateIndex) const;
+  /// 生成平板缩略图（对齐上游 PartPlate::thumbnail_data）
+  /// 返回 base64 PNG 图片供 QML Image 组件使用
+  Q_INVOKABLE QString generatePlateThumbnail(int plateIndex, int size = 64);
   /// 居中选中对象到热床（对齐上游 Plater::priv::on_center / ModelObject::center_instances）
   Q_INVOKABLE void centerSelectedObjects();
   /// 铺满热床副本（对齐上游 Plater::priv::on_fill_bed）
@@ -229,6 +283,20 @@ public:
   Q_PROPERTY(int sliceResultLayerCount READ sliceResultLayerCount NOTIFY stateChanged)
   /// 模型尺寸文本（对齐上游 SliceInfoPanel 模型信息）
   Q_PROPERTY(QString modelSizeText READ modelSizeText NOTIFY stateChanged)
+  /// 平均打印速度（对齐上游 PrintEstimatedStatistics）
+  Q_PROPERTY(QString avgPrintSpeed READ avgPrintSpeed NOTIFY stateChanged)
+  /// 视口告警类型（对齐上游 EWarning）
+  Q_PROPERTY(int viewportWarning READ viewportWarning NOTIFY stateChanged)
+  Q_PROPERTY(QString viewportWarningMessage READ viewportWarningMessage NOTIFY stateChanged)
+  Q_PROPERTY(bool hasViewportWarning READ hasViewportWarning NOTIFY stateChanged)
+  /// 排列设置（对齐上游 ArrangeSettings）
+  Q_PROPERTY(float arrangeDistance READ arrangeDistance WRITE setArrangeDistance NOTIFY stateChanged)
+  Q_PROPERTY(bool arrangeRotation READ arrangeRotation WRITE setArrangeRotation NOTIFY stateChanged)
+  Q_PROPERTY(bool arrangeAlignY READ arrangeAlignY WRITE setArrangeAlignY NOTIFY stateChanged)
+  Q_PROPERTY(bool arrangeMultiMaterial READ arrangeMultiMaterial WRITE setArrangeMultiMaterial NOTIFY stateChanged)
+  Q_PROPERTY(bool arrangeAvoidCalibration READ arrangeAvoidCalibration WRITE setArrangeAvoidCalibration NOTIFY stateChanged)
+  /// 全部平板已切片标记（对齐上游 SliceAll 完成状态）
+  Q_PROPERTY(bool allPlatesSliced READ allPlatesSliced NOTIFY stateChanged)
   /// 挤出机耗材用量（对齐上游 SliceInfoPanel per-extruder filament breakdown）
   Q_PROPERTY(int extruderCount READ extruderCount NOTIFY stateChanged)
   Q_PROPERTY(bool hasSliceResult READ hasSliceResult NOTIFY stateChanged)
@@ -246,6 +314,24 @@ public:
   QString sliceResultCost() const;
   int sliceResultLayerCount() const;
   QString modelSizeText() const;
+  QString avgPrintSpeed() const;
+  int viewportWarning() const;
+  QString viewportWarningMessage() const;
+  bool hasViewportWarning() const;
+  // Arrange settings (对齐上游 ArrangeSettings)
+  float arrangeDistance() const;
+  void setArrangeDistance(float v);
+  bool arrangeRotation() const;
+  void setArrangeRotation(bool v);
+  bool arrangeAlignY() const;
+  void setArrangeAlignY(bool v);
+  bool arrangeMultiMaterial() const;
+  void setArrangeMultiMaterial(bool v);
+  bool arrangeAvoidCalibration() const;
+  void setArrangeAvoidCalibration(bool v);
+  /// 重置排列设置到默认值（对齐上游 ArrangeSettings Reset）
+  Q_INVOKABLE void resetArrangeSettings();
+  bool allPlatesSliced() const;
   int extruderCount() const;
   Q_INVOKABLE QString extruderUsedLength(int extruderId) const;
   Q_INVOKABLE QString extruderUsedWeight(int extruderId) const;
@@ -284,6 +370,7 @@ private:
   int mapFilteredToSourceIndex(int filteredIndex) const;
   QList<int> visibleObjectIndices() const;
   bool currentPlateHasPrintableObjects() const;
+  void checkViewportWarnings();
   void continueSliceAllQueue();
 
   struct ObjectEntry
@@ -316,8 +403,26 @@ private:
   int m_cutAxis = 2;              ///< 0=X, 1=Y, 2=Z (默认沿 Z 轴切割)
   qreal m_cutPosition = 0.0;
   int m_cutKeepMode = 0;          ///< 0=全部保留, 1=保留上半, 2=保留下半
+  // Cut connector (对齐上游 GLGizmoCut connector settings)
+  int m_cutMode = 0;              ///< 0=Planar, 1=TongueAndGroove
+  int m_connectorType = 0;        ///< 0=Plug, 1=Dowel, 2=Snap
+  int m_connectorStyle = 0;       ///< 0=Prism, 1=Frustum
+  int m_connectorShape = 3;       ///< 0=Triangle, 1=Square, 2=Hexagon, 3=Circle
+  float m_connectorSize = 5.0f;   ///< 连接器尺寸 mm
+  float m_connectorDepth = 0.5f;  ///< 深度比 0-1
+  // Measure selection (对齐上游 GLGizmoMeasure)
+  int m_measureSelectionMode = 0; ///< 0=Default point, 1=Feature selection
   QByteArray m_cachedMeshData;
   QList<int> m_sliceAllQueue; ///< plate indices queued for Slice All
   bool m_slicingAll = false;
   QSet<int> m_slicedPlateIndices; ///< tracks which plates have valid slice results
+  // Viewport warnings (对齐上游 EWarning)
+  int m_viewportWarning = 0;    ///< 0=none, 1=ObjectOutside, 2=ObjectClashed
+  QString m_viewportWarningMessage;
+  // Arrange settings (对齐上游 ArrangeSettings)
+  float m_arrangeDistance = 0.f;       ///< 0 = auto spacing
+  bool  m_arrangeRotation = false;    ///< 自动旋转
+  bool  m_arrangeAlignY = false;      ///< 对齐 Y 轴
+  bool  m_arrangeMultiMaterial = true; ///< 允许多耗材同板
+  bool  m_arrangeAvoidCalibration = true; ///< 避免校准区域
 };

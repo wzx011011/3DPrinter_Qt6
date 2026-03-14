@@ -23,6 +23,7 @@ Item {
     readonly property string actionLabel: root.editorVm ? root.editorVm.sliceActionLabel : qsTr("▶ 开始切片")
     readonly property string actionHint: root.editorVm ? root.editorVm.sliceActionHint : ""
     readonly property string modelSize: root.editorVm ? root.editorVm.modelSizeText : ""
+    readonly property string avgSpeed: root.editorVm ? root.editorVm.avgPrintSpeed : ""
 
     ColumnLayout {
         anchors.fill: parent
@@ -103,6 +104,85 @@ Item {
             }
         }
 
+        // ── 全部平板切片完成提示（对齐上游 SliceAll 完成后通知）──
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: allSlicedRow.implicitHeight + 12
+            radius: 6
+            color: "#1a332a"
+            border.width: 1
+            border.color: "#22c564"
+            visible: root.editorVm && root.editorVm.allPlatesSliced && root.editorVm.plateCount > 1 && !root.slicingNow
+
+            RowLayout {
+                id: allSlicedRow
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text {
+                    text: "✓"
+                    color: "#22c564"
+                    font.pixelSize: 14
+                    font.bold: true
+                }
+
+                Text {
+                    text: qsTr("所有平板已切片完成")
+                    color: "#22c564"
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+            }
+        }
+
+        // ── 多平板切片状态摘要（对齐上游 PartPlateList slice status）──
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 4
+            visible: root.editorVm && root.editorVm.plateCount > 1
+
+            Text {
+                text: qsTr("平板切片状态")
+                color: "#9daaba"
+                font.pixelSize: 11
+            }
+
+            Row {
+                spacing: 4
+                Layout.fillWidth: true
+                Repeater {
+                    model: root.editorVm ? root.editorVm.plateCount : 0
+                    delegate: Rectangle {
+                        width: plateStatusRow.implicitWidth + 8
+                        height: 20
+                        radius: 4
+                        color: root.editorVm ? (root.editorVm.isPlateSliced(index) ? "#1a332a" : "#2a2a2a") : "#2a2a2a"
+                        border.width: 1
+                        border.color: root.editorVm && root.editorVm.currentPlateIndex === index ? Theme.accent : Theme.borderSubtle
+
+                        RowLayout {
+                            id: plateStatusRow
+                            anchors.centerIn: parent
+                            spacing: 3
+
+                            Text {
+                                text: root.editorVm ? root.editorVm.plateName(index) : ""
+                                color: root.editorVm && root.editorVm.currentPlateIndex === index ? Theme.accent : Theme.textSecondary
+                                font.pixelSize: 9
+                            }
+
+                            Text {
+                                text: root.editorVm && root.editorVm.isPlateSliced(index) ? "✓" : ""
+                                color: "#22c564"
+                                font.pixelSize: 9
+                                font.bold: true
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // ── 切片结果摘要（对齐上游 SliceInfoPanel）────────────────
         Rectangle {
             Layout.fillWidth: true
@@ -165,6 +245,24 @@ Item {
                         color: Theme.accent
                         font.pixelSize: 12
                         font.bold: true
+                    }
+                }
+
+                // Average print speed (对齐上游 PrintEstimatedStatistics)
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: root.avgSpeed.length > 0
+                    Text {
+                        text: qsTr("平均打印速度")
+                        color: Theme.textTertiary
+                        font.pixelSize: 11
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: root.avgSpeed
+                        color: Theme.textPrimary
+                        font.pixelSize: 11
+                        font.family: "monospace"
                     }
                 }
 

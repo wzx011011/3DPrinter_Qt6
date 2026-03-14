@@ -59,6 +59,12 @@ private:
   // Get transformed AABB for picking
   void transformedAABB(int objectId, float outMin[3], float outMax[3]) const;
 
+  // FBO thumbnail capture (对齐上游 PartPlate::thumbnail_data)
+  void captureThumbnailToFBO(int size);
+  QString m_capturedThumbnail; ///< base64 PNG 结果， synchronize 中传回 GLViewport
+  bool m_pendingCaptureRequested = false;
+  int m_pendingCaptureSize = 128;
+
   bool m_initialized = false;
   QOpenGLExtraFunctions *m_f = nullptr;
 
@@ -107,6 +113,7 @@ private:
     GLuint vao = 0, vbo = 0;
     int vertexCount = 0, objectId = 0;
     float bboxMin[3] = {0, 0, 0}, bboxMax[3] = {0, 0, 0};
+    QVector<float> cpuVerts; ///< CPU-side vertex copy for ray-triangle picking
   };
   std::vector<MeshBatch> m_meshBatches;
   QByteArray m_pendingMesh;

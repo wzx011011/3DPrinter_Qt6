@@ -79,6 +79,14 @@
         <file>assets/icons/send-2.svg</file>
         <file>assets/icons/settings.svg</file>
         <file>assets/icons/x.svg</file>
+        <file>assets/icons/copy.svg</file>
+        <file>assets/icons/clipboard.svg</file>
+        <file>assets/icons/clone.svg</file>
+        <file>assets/icons/trash.svg</file>
+        <file>assets/icons/plus.svg</file>
+        <file>assets/icons/layout-grid-plus.svg</file>
+        <!-- Data files -->
+        <file>data/hints.json</file>
     </qresource>
     <!-- Qt Quick Controls 2 style config must be at root prefix -->
     <qresource prefix="/">

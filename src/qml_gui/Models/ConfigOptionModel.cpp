@@ -224,6 +224,8 @@ QVariant ConfigOptionModel::data(const QModelIndex &index, int role) const
     return m_dirtyKeys.contains(o.key);
   case TooltipRole:
     return o.tooltip;
+  case ModeRole:
+    return o.mode;
   default:
     return {};
   }
@@ -246,6 +248,7 @@ QHash<int, QByteArray> ConfigOptionModel::roleNames() const
       {ReadonlyRole, "optReadonly"},
       {DirtyRole, "optDirty"},
       {TooltipRole, "optTooltip"},
+      {ModeRole, "optMode"},
   };
 }
 
@@ -311,6 +314,11 @@ QString ConfigOptionModel::optUnit(int i) const
 QString ConfigOptionModel::optTooltip(int i) const
 {
   return (i >= 0 && i < m_options.size()) ? m_options[i].tooltip : QString{};
+}
+
+int ConfigOptionModel::optMode(int i) const
+{
+  return (i >= 0 && i < m_options.size()) ? m_options[i].mode : 2; // 2=Both default
 }
 
 bool ConfigOptionModel::optIsDirty(int i) const

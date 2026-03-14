@@ -9,6 +9,9 @@
 #include <QVariant>
 #include <QSet>
 #include <QRegularExpression>
+#include <QImage>
+#include <QPainter>
+#include <QBuffer>
 #include <algorithm>
 #include <QMetaObject>
 #include <QPointer>
@@ -633,6 +636,10 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         receiver->plateNames_.clear();
         receiver->plateObjectIndices_.clear();
         receiver->plateLockedStates_.clear();
+        receiver->plateFirstLayerSeqChoices_.clear();
+        receiver->plateFirstLayerSeqOrders_.clear();
+        receiver->plateOtherLayersSeqChoices_.clear();
+        receiver->plateOtherLayersSeqEntries_.clear();
         receiver->lastError_ = errorText;
         emit receiver->projectChanged();
         emit receiver->plateDataLoaded(0);
@@ -703,6 +710,10 @@ bool ProjectServiceMock::addPlate()
   plateNames_ << tr("平板 %1").arg(newPlateIndex + 1);
   plateObjectIndices_ << QList<int>();
   plateLockedStates_ << false;
+  plateFirstLayerSeqChoices_ << 0;   // Auto
+  plateFirstLayerSeqOrders_ << QList<int>{};
+  plateOtherLayersSeqChoices_ << 0;  // Auto
+  plateOtherLayersSeqEntries_ << QList<MockLayerSeqEntry>{};
   plateCount_ = plateObjectIndices_.size();
 
   emit projectChanged();
@@ -725,6 +736,10 @@ bool ProjectServiceMock::deletePlate(int plateIndex)
   plateObjectIndices_.removeAt(plateIndex);
   if (plateIndex < plateLockedStates_.size())
     plateLockedStates_.removeAt(plateIndex);
+  if (plateIndex < plateFirstLayerSeqChoices_.size()) plateFirstLayerSeqChoices_.removeAt(plateIndex);
+  if (plateIndex < plateFirstLayerSeqOrders_.size()) plateFirstLayerSeqOrders_.removeAt(plateIndex);
+  if (plateIndex < plateOtherLayersSeqChoices_.size()) plateOtherLayersSeqChoices_.removeAt(plateIndex);
+  if (plateIndex < plateOtherLayersSeqEntries_.size()) plateOtherLayersSeqEntries_.removeAt(plateIndex);
   plateCount_ = plateObjectIndices_.size();
 
   if (currentPlateIndex_ >= plateCount_)
@@ -908,7 +923,7 @@ bool ProjectServiceMock::setObjectVisible(int index, bool visible)
   for (auto *inst : model_->objects[size_t(index)]->instances)
   {
     if (inst)
-      inst->set_visible(visible);
+      inst->printable = visible;
   }
 #endif
 
@@ -964,6 +979,8 @@ static QString mockVolumeTypeLabel(MockVolumeType type)
   case MockVolumeType::ParameterModifier:return QObject::tr("参数修改器");
   case MockVolumeType::SupportBlocker:   return QObject::tr("支撑屏蔽");
   case MockVolumeType::SupportEnforcer:  return QObject::tr("支撑增强");
+  case MockVolumeType::TextEmboss:       return QObject::tr("文字浮雕");
+  case MockVolumeType::SvgEmboss:        return QObject::tr("SVG浮雕");
   }
   return QObject::tr("体积");
 }
@@ -1269,7 +1286,7 @@ bool ProjectServiceMock::changeVolumeType(int objectIndex, int volumeIndex, int 
     lastError_ = tr("类型转换失败：对象索引无效");
     return false;
   }
-  if (newVolumeType < 0 || newVolumeType > 4)
+  if (newVolumeType < 0 || newVolumeType > 6)
   {
     lastError_ = tr("类型转换失败：目标类型无效");
     return false;
@@ -1297,13 +1314,138 @@ bool ProjectServiceMock::changeVolumeType(int objectIndex, int volumeIndex, int 
       QT_TRANSLATE_NOOP("ProjectServiceMock", "修改器"),
       QT_TRANSLATE_NOOP("ProjectServiceMock", "支撑屏蔽"),
       QT_TRANSLATE_NOOP("ProjectServiceMock", "支撑增强"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "文字浮雕"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "SVG浮雕"),
   };
   // 保留编号，更新类型名
   QString oldName = it->at(volumeIndex).name;
-  QRegularExpression re(QStringLiteral("^(?:部件|负体积|修改器|支撑屏蔽|支撑增强)\\s+(\\d+)$"));
+  QRegularExpression re(QStringLiteral("^(?:部件|负体积|修改器|支撑屏蔽|支撑增强|文字浮雕|SVG浮雕)\\s+(\\d+)$"));
   auto match = re.match(oldName);
   if (match.hasMatch())
     it->operator[](volumeIndex).name = tr(typeNames[newVolumeType]) + QStringLiteral(" ") + match.captured(1);
+
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+}
+
+// ── Volume 外部文件导入（对齐上游 GUI_ObjectList::load_generic_subobject 文件加载）──
+
+bool ProjectServiceMock::addVolumeFromFile(int objectIndex, const QString &filePath, int volumeType)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+  {
+    lastError_ = tr("导入失败：对象索引无效");
+    return false;
+  }
+  if (volumeType < 0 || volumeType > 6)
+  {
+    lastError_ = tr("导入失败：部件类型无效");
+    return false;
+  }
+
+  // 从文件名生成部件名
+  QFileInfo fi(filePath);
+  const QString baseName = fi.completeBaseName();
+
+  auto &vols = m_mockVolumes[objectIndex];
+  static const char *typeNames[] = {
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "部件"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "负体积"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "修改器"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "支撑屏蔽"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "支撑增强"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "文字浮雕"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "SVG浮雕"),
+  };
+
+  MockVolumeEntry entry;
+  entry.name = baseName;
+  entry.type = static_cast<MockVolumeType>(volumeType);
+  vols.append(entry);
+
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+}
+
+// ── 原始体创建（对齐上游 create_mesh + add_volume）──
+
+bool ProjectServiceMock::addPrimitive(int objectIndex, int primitiveType)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+  {
+    lastError_ = tr("创建原始体失败：对象索引无效");
+    return false;
+  }
+
+  static const char *primNames[] = {
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "立方体"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "球体"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "圆柱体"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "圆环"),
+  };
+  if (primitiveType < 0 || primitiveType > 3)
+  {
+    lastError_ = tr("创建原始体失败：原始体类型无效");
+    return false;
+  }
+
+  auto &vols = m_mockVolumes[objectIndex];
+  MockVolumeEntry entry;
+  entry.name = tr(primNames[primitiveType]);
+  entry.type = MockVolumeType::ModelPart;
+  vols.append(entry);
+
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+}
+
+// ── 文字浮雕 volume（对齐上游 GLGizmoText）──
+
+bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+  {
+    lastError_ = tr("添加文字失败：对象索引无效");
+    return false;
+  }
+  if (text.isEmpty())
+  {
+    lastError_ = tr("添加文字失败：文字内容为空");
+    return false;
+  }
+
+  auto &vols = m_mockVolumes[objectIndex];
+  MockVolumeEntry entry;
+  entry.name = text.length() > 12 ? text.left(12) + "..." : text;
+  entry.type = MockVolumeType::TextEmboss;
+  vols.append(entry);
+
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+}
+
+// ── SVG 浮雕 volume（对齐上游 GLGizmoSVG）──
+
+bool ProjectServiceMock::addSvgVolume(int objectIndex, const QString &svgFilePath)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+  {
+    lastError_ = tr("添加 SVG 失败：对象索引无效");
+    return false;
+  }
+
+  QFileInfo fi(svgFilePath);
+  const QString baseName = fi.completeBaseName();
+
+  auto &vols = m_mockVolumes[objectIndex];
+  MockVolumeEntry entry;
+  entry.name = baseName.length() > 12 ? baseName.left(12) + "..." : baseName;
+  entry.type = MockVolumeType::SvgEmboss;
+  vols.append(entry);
 
   lastError_.clear();
   emit projectChanged();
@@ -1452,6 +1594,10 @@ bool ProjectServiceMock::deleteObject(int index)
       plateNames_.clear();
       plateObjectIndices_.clear();
       plateLockedStates_.clear();
+      plateFirstLayerSeqChoices_.clear();
+      plateFirstLayerSeqOrders_.clear();
+      plateOtherLayersSeqChoices_.clear();
+      plateOtherLayersSeqEntries_.clear();
     }
     else
     {
@@ -1617,6 +1763,291 @@ bool ProjectServiceMock::setPlateSpiralMode(int plateIndex, int mode)
   return true;
 }
 
+// ── 首层耗材顺序（对齐上游 first_layer_print_sequence）──
+
+int ProjectServiceMock::plateFirstLayerSeqChoice(int plateIndex) const
+{
+  return (plateIndex >= 0 && plateIndex < plateFirstLayerSeqChoices_.size()) ? plateFirstLayerSeqChoices_[plateIndex] : 0;
+}
+
+bool ProjectServiceMock::setPlateFirstLayerSeqChoice(int plateIndex, int choice)
+{
+  if (plateIndex < 0 || plateIndex >= plateNames_.size()) return false;
+  while (plateFirstLayerSeqChoices_.size() <= plateIndex) plateFirstLayerSeqChoices_.append(0);
+  plateFirstLayerSeqChoices_[plateIndex] = choice;
+  emit projectChanged();
+  return true;
+}
+
+QVariantList ProjectServiceMock::plateFirstLayerSeqOrder(int plateIndex) const
+{
+  QVariantList result;
+  if (plateIndex >= 0 && plateIndex < plateFirstLayerSeqOrders_.size())
+    for (int v : plateFirstLayerSeqOrders_[plateIndex])
+      result.append(v);
+  return result;
+}
+
+bool ProjectServiceMock::setPlateFirstLayerSeqOrder(int plateIndex, const QVariantList &order)
+{
+  if (plateIndex < 0 || plateIndex >= plateNames_.size()) return false;
+  while (plateFirstLayerSeqOrders_.size() <= plateIndex) plateFirstLayerSeqOrders_.append(QList<int>{});
+  QList<int> intOrder;
+  for (const auto &v : order)
+    intOrder.append(v.toInt());
+  plateFirstLayerSeqOrders_[plateIndex] = intOrder;
+  emit projectChanged();
+  return true;
+}
+
+// ── 其他层耗材顺序（对齐上游 other_layers_print_sequence + LayerPrintSequence）──
+
+int ProjectServiceMock::plateOtherLayersSeqChoice(int plateIndex) const
+{
+  return (plateIndex >= 0 && plateIndex < plateOtherLayersSeqChoices_.size()) ? plateOtherLayersSeqChoices_[plateIndex] : 0;
+}
+
+bool ProjectServiceMock::setPlateOtherLayersSeqChoice(int plateIndex, int choice)
+{
+  if (plateIndex < 0 || plateIndex >= plateNames_.size()) return false;
+  while (plateOtherLayersSeqChoices_.size() <= plateIndex) plateOtherLayersSeqChoices_.append(0);
+  plateOtherLayersSeqChoices_[plateIndex] = choice;
+  emit projectChanged();
+  return true;
+}
+
+int ProjectServiceMock::plateOtherLayersSeqCount(int plateIndex) const
+{
+  return (plateIndex >= 0 && plateIndex < plateOtherLayersSeqEntries_.size()) ? plateOtherLayersSeqEntries_[plateIndex].size() : 0;
+}
+
+int ProjectServiceMock::plateOtherLayersSeqBegin(int plateIndex, int entryIndex) const
+{
+  if (plateIndex < 0 || plateIndex >= plateOtherLayersSeqEntries_.size()) return 2;
+  const auto &entries = plateOtherLayersSeqEntries_[plateIndex];
+  if (entryIndex < 0 || entryIndex >= entries.size()) return 2;
+  return entries[entryIndex].beginLayer;
+}
+
+int ProjectServiceMock::plateOtherLayersSeqEnd(int plateIndex, int entryIndex) const
+{
+  if (plateIndex < 0 || plateIndex >= plateOtherLayersSeqEntries_.size()) return 100;
+  const auto &entries = plateOtherLayersSeqEntries_[plateIndex];
+  if (entryIndex < 0 || entryIndex >= entries.size()) return 100;
+  return entries[entryIndex].endLayer;
+}
+
+QVariantList ProjectServiceMock::plateOtherLayersSeqOrder(int plateIndex, int entryIndex) const
+{
+  QVariantList result;
+  if (plateIndex >= 0 && plateIndex < plateOtherLayersSeqEntries_.size())
+  {
+    const auto &entries = plateOtherLayersSeqEntries_[plateIndex];
+    if (entryIndex >= 0 && entryIndex < entries.size())
+      for (int v : entries[entryIndex].extruderOrder)
+        result.append(v);
+  }
+  return result;
+}
+
+bool ProjectServiceMock::addPlateOtherLayersSeqEntry(int plateIndex, int beginLayer, int endLayer)
+{
+  if (plateIndex < 0 || plateIndex >= plateNames_.size()) return false;
+  if (beginLayer < 2) beginLayer = 2; // 对齐上游：begin_layer 必须 >= 2
+  if (endLayer < beginLayer) endLayer = beginLayer;
+  while (plateOtherLayersSeqEntries_.size() <= plateIndex) plateOtherLayersSeqEntries_.append(QList<MockLayerSeqEntry>{});
+  MockLayerSeqEntry entry;
+  entry.beginLayer = beginLayer;
+  entry.endLayer = endLayer;
+  // 默认顺序：按挤出机编号
+  const int extCount = qMax(1, plateObjectCount(plateIndex));
+  for (int i = 0; i < extCount; ++i)
+    entry.extruderOrder.append(i);
+  plateOtherLayersSeqEntries_[plateIndex].append(entry);
+  // 自动排序（对齐上游 auto-sort）
+  std::sort(plateOtherLayersSeqEntries_[plateIndex].begin(),
+            plateOtherLayersSeqEntries_[plateIndex].end(),
+            [](const MockLayerSeqEntry &a, const MockLayerSeqEntry &b) {
+              return a.beginLayer < b.beginLayer;
+            });
+  emit projectChanged();
+  return true;
+}
+
+bool ProjectServiceMock::removePlateOtherLayersSeqEntry(int plateIndex, int entryIndex)
+{
+  if (plateIndex < 0 || plateIndex >= plateOtherLayersSeqEntries_.size()) return false;
+  auto &entries = plateOtherLayersSeqEntries_[plateIndex];
+  if (entryIndex < 0 || entryIndex >= entries.size()) return false;
+  entries.removeAt(entryIndex);
+  emit projectChanged();
+  return true;
+}
+
+bool ProjectServiceMock::setPlateOtherLayersSeqRange(int plateIndex, int entryIndex, int beginLayer, int endLayer)
+{
+  if (plateIndex < 0 || plateIndex >= plateOtherLayersSeqEntries_.size()) return false;
+  auto &entries = plateOtherLayersSeqEntries_[plateIndex];
+  if (entryIndex < 0 || entryIndex >= entries.size()) return false;
+  if (beginLayer < 2) beginLayer = 2;
+  if (endLayer < beginLayer) endLayer = beginLayer;
+  entries[entryIndex].beginLayer = beginLayer;
+  entries[entryIndex].endLayer = endLayer;
+  // 自动排序
+  std::sort(entries.begin(), entries.end(),
+            [](const MockLayerSeqEntry &a, const MockLayerSeqEntry &b) {
+              return a.beginLayer < b.beginLayer;
+            });
+  emit projectChanged();
+  return true;
+}
+
+bool ProjectServiceMock::setPlateOtherLayersSeqOrder(int plateIndex, int entryIndex, const QVariantList &order)
+{
+  if (plateIndex < 0 || plateIndex >= plateOtherLayersSeqEntries_.size()) return false;
+  auto &entries = plateOtherLayersSeqEntries_[plateIndex];
+  if (entryIndex < 0 || entryIndex >= entries.size()) return false;
+  QList<int> intOrder;
+  for (const auto &v : order)
+    intOrder.append(v.toInt());
+  entries[entryIndex].extruderOrder = intOrder;
+  emit projectChanged();
+  return true;
+}
+
+int ProjectServiceMock::plateExtruderCount(int plateIndex) const
+{
+  // Mock 模式：基于平板上的对象数推断耗材数（上限 4）
+  return qMin(qMax(1, plateObjectCount(plateIndex)), 4);
+}
+
+// ── 平板缩略图生成（对齐上游 PartPlate::thumbnail_data，Mock 模式使用 QPainter 合成）──
+
+namespace
+{
+  // 确定性伪随机（基于种子，避免缩略图每帧抖动）
+  static int seededRand(int &seed)
+  {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed;
+  }
+}
+
+QString ProjectServiceMock::generatePlateThumbnail(int plateIndex, int size)
+{
+  const int count = plateObjectCount(plateIndex);
+  QImage img(size, size, QImage::Format_ARGB32_Premultiplied);
+  img.fill(QColor(42, 42, 46)); // 深色背景
+
+  QPainter p(&img);
+  p.setRenderHint(QPainter::Antialiasing);
+
+  // 绘制热床网格（对齐上游 plate 网格渲染）
+  p.setPen(QPen(QColor(60, 60, 65), 1));
+  const int gridSize = size / 8;
+  for (int i = 1; i < 8; ++i)
+  {
+    p.drawLine(i * gridSize, 0, i * gridSize, size);
+    p.drawLine(0, i * gridSize, size, i * gridSize);
+  }
+
+  if (count == 0)
+  {
+    // 空平板：绘制虚线边框
+    p.setPen(QPen(QColor(100, 100, 100), 1, Qt::DashLine));
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(4, 4, size - 8, size - 8);
+    p.end();
+    QByteArray ba;
+    QBuffer buf(&ba);
+    buf.open(QIODevice::WriteOnly);
+    img.save(&buf, "PNG");
+    return QString::fromLatin1(ba.toBase64());
+  }
+
+  // 为每个对象绘制简化几何体
+  const QColor objColors[] = {
+    QColor(80, 180, 255),   // 蓝色
+    QColor(255, 160, 60),   // 橙色
+    QColor(120, 220, 120),  // 绿色
+    QColor(220, 120, 220),  // 紫色
+    QColor(255, 220, 80),   // 黄色
+    QColor(255, 100, 100),  // 红色
+    QColor(100, 220, 220),  // 青色
+    QColor(200, 180, 160),  // 棕色
+  };
+
+  int randSeed = plateIndex * 1000 + 42;
+  const int margin = 6;
+  const int area = size - margin * 2;
+
+  for (int i = 0; i < count && i < 8; ++i)
+  {
+    const QColor color = objColors[i % 8];
+    // 基于对象位置生成确定性位置
+    QVector3D pos = (plateIndex >= 0 && plateIndex < plateObjectIndices_.size())
+      ? objectPositions_.value(plateObjectIndices_[plateIndex].value(i, 0), QVector3D(0, 0, 0))
+      : QVector3D(0, 0, 0);
+
+    // 简化布局：网格排列
+    const int cols = qMin(count, 3);
+    const int rows = (count + cols - 1) / cols;
+    const int cellW = area / cols;
+    const int cellH = area / rows;
+    const int col = i % cols;
+    const int row = i / cols;
+
+    const int cx = margin + col * cellW + cellW / 2;
+    const int cy = margin + row * cellH + cellH / 2;
+    const int objSize = qMin(cellW, cellH) * 0.6;
+
+    // 绘制阴影
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0, 0, 0, 40));
+    p.drawRoundedRect(cx - objSize / 2 + 2, cy - objSize / 2 + 2, objSize, objSize, 4, 4);
+
+    // 绘制对象轮廓（3D 立方体效果）
+    p.setBrush(color.darker(120));
+    p.drawRoundedRect(cx - objSize / 2, cy - objSize / 2, objSize, objSize, 4, 4);
+
+    // 顶面高光
+    p.setBrush(color);
+    p.drawRoundedRect(cx - objSize / 2 + 2, cy - objSize / 2 + 2, objSize - 4, objSize * 0.5 - 2, 3, 3);
+
+    // 对象序号
+    p.setPen(QColor(255, 255, 255, 180));
+    p.setFont(QFont("Arial", 8, QFont::Bold));
+    p.drawText(QRect(cx - objSize / 2, cy - objSize / 2, objSize, objSize),
+               Qt::AlignCenter, QString::number(i + 1));
+  }
+
+  // 已切片标记：绿色角标
+  if (plateIndex >= 0 && plateIndex < plateObjectIndices_.size())
+  {
+    // Slice status is tracked by EditorViewModel; here we use a mock check
+    bool sliced = false;
+    // We can check if plate has settings that indicate slicing was done
+    if (plateBedTypes_.size() > plateIndex) sliced = true; // simple heuristic for demo
+    if (sliced)
+    {
+      p.setPen(Qt::NoPen);
+      p.setBrush(QColor(40, 200, 80));
+      p.drawEllipse(size - 14, 2, 12, 12);
+      p.setPen(Qt::white);
+      p.setFont(QFont("Arial", 7, QFont::Bold));
+      p.drawText(QRect(size - 14, 2, 12, 12), Qt::AlignCenter, "✓");
+    }
+  }
+
+  p.end();
+
+  QByteArray ba;
+  QBuffer buf(&ba);
+  buf.open(QIODevice::WriteOnly);
+  img.save(&buf, "PNG");
+  return QString::fromLatin1(ba.toBase64());
+}
+
 int ProjectServiceMock::duplicateObject(int sourceIndex)
 {
   if (loading_)
@@ -1657,9 +2088,9 @@ int ProjectServiceMock::duplicateObject(int sourceIndex)
       if (!inst)
         continue;
       inst->set_offset(Slic3r::Vec3d(
-          inst->get_offset(X) + cloneOffset,
-          inst->get_offset(Y),
-          inst->get_offset(Z)));
+          inst->get_offset(Slic3r::X) + cloneOffset,
+          inst->get_offset(Slic3r::Y),
+          inst->get_offset(Slic3r::Z)));
     }
 
     // 重建元数据
@@ -1895,6 +2326,10 @@ void ProjectServiceMock::clearProject()
   plateNames_.clear();
   plateObjectIndices_.clear();
   plateLockedStates_.clear();
+  plateFirstLayerSeqChoices_.clear();
+  plateFirstLayerSeqOrders_.clear();
+  plateOtherLayersSeqChoices_.clear();
+  plateOtherLayersSeqEntries_.clear();
   objectPositions_.clear();
   objectRotations_.clear();
   objectScales_.clear();
@@ -1957,6 +2392,36 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
     QJsonObject plateObj;
     plateObj[QStringLiteral("name")] = plateNames_.value(p, QStringLiteral("Plate %1").arg(p + 1));
     plateObj[QStringLiteral("locked")] = plateLockedStates_.value(p, false);
+    plateObj[QStringLiteral("bedType")] = plateBedTypes_.value(p, 0);
+    plateObj[QStringLiteral("printSequence")] = platePrintSequences_.value(p, 0);
+    plateObj[QStringLiteral("spiralMode")] = plateSpiralModes_.value(p, 0);
+    plateObj[QStringLiteral("firstLayerSeqChoice")] = plateFirstLayerSeqChoices_.value(p, 0);
+    // Save first layer extruder order
+    {
+      QJsonArray seqArr;
+      if (p < plateFirstLayerSeqOrders_.size())
+        for (int v : plateFirstLayerSeqOrders_[p]) seqArr.append(v);
+      plateObj[QStringLiteral("firstLayerSeqOrder")] = seqArr;
+    }
+    plateObj[QStringLiteral("otherLayersSeqChoice")] = plateOtherLayersSeqChoices_.value(p, 0);
+    // Save other layers sequence entries
+    {
+      QJsonArray seqEntriesArr;
+      if (p < plateOtherLayersSeqEntries_.size())
+      {
+        for (const auto &entry : plateOtherLayersSeqEntries_[p])
+        {
+          QJsonObject entryObj;
+          entryObj[QStringLiteral("beginLayer")] = entry.beginLayer;
+          entryObj[QStringLiteral("endLayer")] = entry.endLayer;
+          QJsonArray orderArr;
+          for (int v : entry.extruderOrder) orderArr.append(v);
+          entryObj[QStringLiteral("order")] = orderArr;
+          seqEntriesArr.append(entryObj);
+        }
+      }
+      plateObj[QStringLiteral("otherLayersSeqEntries")] = seqEntriesArr;
+    }
 
     QJsonArray objsArr;
     for (int oi : plateObjectIndices_.value(p, QList<int>{}))
@@ -2065,6 +2530,10 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
   plateNames_.clear();
   plateObjectIndices_.clear();
   plateLockedStates_.clear();
+  plateFirstLayerSeqChoices_.clear();
+  plateFirstLayerSeqOrders_.clear();
+  plateOtherLayersSeqChoices_.clear();
+  plateOtherLayersSeqEntries_.clear();
   m_mockObjectOverrides.clear();
   m_mockVolumeOverrides.clear();
   m_mockPlateOverrides.clear();
@@ -2082,6 +2551,34 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
     plateNames_.append(plateObj.value(QStringLiteral("name")).toString(
                          QStringLiteral("Plate %1").arg(p + 1)));
     plateLockedStates_.append(plateObj.value(QStringLiteral("locked")).toBool(false));
+    plateBedTypes_.append(plateObj.value(QStringLiteral("bedType")).toInt(0));
+    platePrintSequences_.append(plateObj.value(QStringLiteral("printSequence")).toInt(0));
+    plateSpiralModes_.append(plateObj.value(QStringLiteral("spiralMode")).toInt(0));
+    plateFirstLayerSeqChoices_.append(plateObj.value(QStringLiteral("firstLayerSeqChoice")).toInt(0));
+    // Restore first layer extruder order
+    {
+      QList<int> order;
+      const QJsonArray orderArr = plateObj.value(QStringLiteral("firstLayerSeqOrder")).toArray();
+      for (const auto &v : orderArr) order.append(v.toInt());
+      plateFirstLayerSeqOrders_.append(order);
+    }
+    plateOtherLayersSeqChoices_.append(plateObj.value(QStringLiteral("otherLayersSeqChoice")).toInt(0));
+    // Restore other layers sequence entries
+    {
+      QList<MockLayerSeqEntry> entries;
+      const QJsonArray entriesArr = plateObj.value(QStringLiteral("otherLayersSeqEntries")).toArray();
+      for (const auto &entryVal : entriesArr)
+      {
+        const QJsonObject entryObj = entryVal.toObject();
+        MockLayerSeqEntry entry;
+        entry.beginLayer = entryObj.value(QStringLiteral("beginLayer")).toInt(2);
+        entry.endLayer = entryObj.value(QStringLiteral("endLayer")).toInt(100);
+        const QJsonArray orderArr = entryObj.value(QStringLiteral("order")).toArray();
+        for (const auto &v : orderArr) entry.extruderOrder.append(v.toInt());
+        entries.append(entry);
+      }
+      plateOtherLayersSeqEntries_.append(entries);
+    }
 
     QList<int> objIndices;
     const QJsonArray objsArr = plateObj.value(QStringLiteral("objects")).toArray();

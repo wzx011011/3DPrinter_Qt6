@@ -223,6 +223,12 @@ QHash<QString, QVariant> PresetServiceMock::presetValues(const QString &presetNa
   return m_presetStore.value(presetName);
 }
 
+QVariant PresetServiceMock::presetValue(const QString &presetName, const QString &key) const
+{
+  const auto &vals = m_presetStore.value(presetName);
+  return vals.value(key);
+}
+
 void PresetServiceMock::savePresetValues(const QString &presetName, const QHash<QString, QVariant> &values)
 {
   m_presetStore[presetName] = values;

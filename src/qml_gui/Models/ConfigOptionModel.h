@@ -23,6 +23,7 @@ struct ConfigOption
   QString page{};     // 对齐上游 Tab Page — 顶层页面 (Quality/Strength/Speed/Support/Other) (empty = auto-detect)
   bool readonly = false;
   QString tooltip{}; // 帮助文案（对齐上游 ConfigOptionDef::tooltip）
+  int mode = 2;       // 0=Simple only, 1=Advanced only, 2=Both (对齐上游 ConfigOptionMode)
 
   // Constructor for 10-field aggregate init (key, label, type, value, min, max, step, enumLabels, category, group)
   ConfigOption(QString k, QString l, QString t, QVariant v, double mn, double mx, double s,
@@ -37,6 +38,13 @@ struct ConfigOption
     : key(std::move(k)), label(std::move(l)), type(std::move(t)), value(std::move(v)),
       min(mn), max(mx), step(s), enumLabels(std::move(el)),
       category(std::move(c)), group(std::move(g)), readonly(ro) {}
+
+  // Constructor with 12 fields (adds mode)
+  ConfigOption(QString k, QString l, QString t, QVariant v, double mn, double mx, double s,
+                QStringList el, QString c, QString g, bool ro, int m)
+    : key(std::move(k)), label(std::move(l)), type(std::move(t)), value(std::move(v)),
+      min(mn), max(mx), step(s), enumLabels(std::move(el)),
+      category(std::move(c)), group(std::move(g)), readonly(ro), mode(m) {}
 
   ConfigOption() = default;
 };
@@ -63,7 +71,8 @@ public:
     PageRole,
     ReadonlyRole,
     DirtyRole,
-    TooltipRole
+    TooltipRole,
+    ModeRole
   };
   Q_ENUM(Roles)
 
@@ -95,6 +104,8 @@ public:
   Q_INVOKABLE QString optUnit(int i) const;
   /// 返回选项的帮助文案
   Q_INVOKABLE QString optTooltip(int i) const;
+  /// 返回选项的显示模式 (对齐上游 ConfigOptionMode: 0=Simple, 1=Advanced, 2=Both)
+  Q_INVOKABLE int optMode(int i) const;
   /// 返回选项是否被修改（与默认值不同）
   Q_INVOKABLE bool optIsDirty(int i) const;
   /// 重置单个选项到默认值

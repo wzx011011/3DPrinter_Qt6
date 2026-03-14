@@ -166,6 +166,10 @@ public:
   Q_INVOKABLE QString currentHintText() const;
   Q_INVOKABLE QString currentHintHypertext() const;
   Q_INVOKABLE QString currentHintFollowText() const;
+  /// 打开当前提示的文档链接（对齐上游 HintNotification documentation button）
+  Q_INVOKABLE bool openHintDocumentation() const;
+  /// 当前提示是否有文档链接
+  Q_INVOKABLE bool currentHintHasDocumentationLink() const;
 
   Q_INVOKABLE void openSettings(); // H3
   Q_INVOKABLE void topbarNewProject();
@@ -295,6 +299,7 @@ private:
   QSet<QString> m_displayedHintIds;
   QTimer *m_hintTimer = nullptr;      ///< 定期显示提示（对齐上游 30s 间隔）
   void initHintDatabase();
+  void initFallbackHintDatabase();
   int selectNextHint(bool random = true);
 
   struct PendingLatency

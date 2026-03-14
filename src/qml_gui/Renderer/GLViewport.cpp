@@ -234,11 +234,25 @@ void GLViewport::mirrorSelection(int axis)
   update();
 }
 
-void GLViewport::arrangeSelected()
+void GLViewport::arrangeSelected(float spacing, bool rotation, bool alignY)
 {
   QMutexLocker lk(&m_eventMutex);
   InputEvent e;
   e.type = InputEvent::ArrangeSelected;
+  e.arrangeSpacing = spacing;
+  e.arrangeRotation = rotation;
+  e.arrangeAlignY = alignY;
+  m_events.append(e);
+  update();
+}
+
+void GLViewport::requestThumbnailCapture(int plateIndex, int size)
+{
+  QMutexLocker lk(&m_eventMutex);
+  InputEvent e;
+  e.type = InputEvent::CaptureThumbnail;
+  e.capturePlateIndex = plateIndex;
+  e.captureSize = size;
   m_events.append(e);
   update();
 }

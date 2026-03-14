@@ -23,11 +23,12 @@ Item {
 
     // Dynamic width based on content
     readonly property bool hasExtraButtons: root.isHint || root.isSlicingComplete
+    readonly property bool hasDocLink: root.isHint && backend.currentHintHasDocumentationLink
     visible: shouldShow || slideAnim.running
     anchors.bottom: parent.bottom
     anchors.horizontalCenter: parent.horizontalCenter
     anchors.bottomMargin: 44
-    width: Math.max(toastLabel.implicitWidth + 76, hasProgress ? 320 : (root.hasExtraButtons ? 360 : 160))
+    width: Math.max(toastLabel.implicitWidth + 76, hasProgress ? 320 : (root.hasExtraButtons ? (hasDocLink ? 410 : 360) : 160))
     height: {
         var h = 40
         if (root.hasProgress) h = 60
@@ -212,6 +213,21 @@ Item {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: backend.nextHint()
+                    }
+                }
+
+                // Documentation link button (aligns with upstream HintNotification documentation button)
+                Rectangle {
+                    visible: backend.currentHintHasDocumentationLink
+                    width: 40; height: 22; radius: 4
+                    color: docMA.containsMouse ? "#2a4a2a" : "#1e3a1e"
+                    Text { anchors.centerIn: parent; text: qsTr("文档"); color: "#70c070"; font.pixelSize: 10; font.bold: true }
+                    MouseArea {
+                        id: docMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: backend.openHintDocumentation()
                     }
                 }
 

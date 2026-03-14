@@ -16,6 +16,7 @@
 class GLViewport : public QQuickFramebufferObject
 {
   Q_OBJECT
+  friend class GLViewportRenderer;
   Q_PROPERTY(int canvasType READ canvasType WRITE setCanvasType NOTIFY canvasTypeChanged)
   /// 写入属性: QML 侧绑定 editorVm.meshData，触发网格上传 GPU
   Q_PROPERTY(QByteArray meshData READ meshData WRITE setMeshData)
@@ -25,6 +26,8 @@ class GLViewport : public QQuickFramebufferObject
   Q_PROPERTY(int moveEnd READ moveEnd WRITE setMoveEnd)
   Q_PROPERTY(int gizmoMode READ gizmoMode WRITE setGizmoMode NOTIFY gizmoModeChanged)
   Q_PROPERTY(bool wireframeMode READ wireframeMode WRITE setWireframeMode NOTIFY wireframeModeChanged)
+  /// 最近一次 FBO 缩略图捕获结果（base64 PNG，供 QML Image 使用）
+  Q_PROPERTY(QString lastThumbnailData READ lastThumbnailData NOTIFY thumbnailCaptured)
 
   // GizmoMode constants exposed to QML
   enum GizmoMode {
@@ -101,7 +104,8 @@ public:
       ClearHistory,
       SetGizmoMode,
       Mirror,  ///< Mirror selected object along axis (mirrorAxis: 0=X 1=Y 2=Z)
-      ArrangeSelected ///< 自动排列选中对象
+      ArrangeSelected, ///< 自动排列选中对象
+      CaptureThumbnail ///< FBO 缩略图捕获（对齐上游 PartPlate::thumbnail_data）
     } type;
     Qt::MouseButton button = Qt::NoButton;
     Qt::MouseButtons buttons = Qt::NoButton;
@@ -112,6 +116,13 @@ public:
     float fitCX = 0.f, fitCY = 0.f, fitCZ = 0.f, fitRadius = 100.f;
     // Mirror payload
     int mirrorAxis = 0;
+    // ArrangeSelected payload (对齐上游 ArrangeSettings)
+    float arrangeSpacing = 6.0f;      ///< 0 = auto spacing
+    bool  arrangeRotation = false;    ///< 自动旋转
+    bool  arrangeAlignY = false;      ///< 对齐 Y 轴
+    // CaptureThumbnail payload (对齐上游 PartPlate::thumbnail_data)
+    int capturePlateIndex = 0;        ///< 目标平板索引
+    int captureSize = 128;            ///< 缩略图尺寸（宽高相同）
   };
 
   /** Atomically swap out & return all pending events. */
@@ -127,12 +138,19 @@ public:
   /** QML 调用: 镜像选中对象 (axis: 0=X 1=Y 2=Z) */
   Q_INVOKABLE void mirrorSelection(int axis);
   /** QML 调用: 自动排列选中对象（对齐上游 Plater::priv::on_arrange） */
-  Q_INVOKABLE void arrangeSelected();
+  Q_INVOKABLE void arrangeSelected(float spacing = 0.f, bool rotation = false, bool alignY = false);
+  /** QML 调用: 请求 FBO 缩略图捕获（对齐上游 PartPlate::thumbnail_data） */
+  Q_INVOKABLE void requestThumbnailCapture(int plateIndex, int size = 128);
+
+  /// 返回最近一次 FBO 缩略图捕获结果
+  QString lastThumbnailData() const { return m_lastThumbnailData; }
 
 signals:
   void canvasTypeChanged();
   void gizmoModeChanged();
   void wireframeModeChanged();
+  /// FBO 缩略图捕获完成，携带 base64 PNG 数据
+  void thumbnailCaptured();
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;
@@ -154,4 +172,5 @@ private:
   int m_layerMin = 0;
   int m_layerMax = 0;
   int m_moveEnd = 0;
+  QString m_lastThumbnailData; ///< 最近一次 FBO 缩略图（base64 PNG）
 };

@@ -214,6 +214,7 @@ Item {
                     anchors.bottom: parent.bottom
                     anchors.margins: 16
                     previewVm: root.previewVm
+                    visible: root.previewVm ? root.previewVm.showMarker : true
                 }
             }
 

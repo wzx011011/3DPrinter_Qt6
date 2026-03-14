@@ -41,6 +41,11 @@ Item {
         viewport3d.redo()
     }
 
+    // GL FBO 缩略图捕获（对齐上游 PartPlate::thumbnail_data）
+    function requestGLThumbnail() {
+        viewport3d.requestThumbnailCapture(root.editorVm ? root.editorVm.currentPlateIndex : 0, 128)
+    }
+
     // Keyboard shortcuts matching upstream CrealityPrint Plater
     Keys.onPressed: (event) => {
         if (!root.editorVm)
@@ -93,6 +98,27 @@ Item {
                 event.accepted = true
             }
             break
+        case Qt.Key_C:
+            if (mod & Qt.ControlModifier) {
+                root.editorVm.copySelectedObjects()
+                event.accepted = true
+            }
+            break
+        case Qt.Key_V:
+            if (mod & Qt.ControlModifier) {
+                root.editorVm.pasteObjects()
+                event.accepted = true
+            }
+            break
+        case Qt.Key_X:
+            if ((mod & Qt.ControlModifier) && !(mod & Qt.ShiftModifier)) {
+                root.editorVm.cutSelectedObjects()
+                event.accepted = true
+            } else if ((mod & Qt.ControlModifier) && (mod & Qt.ShiftModifier)) {
+                viewport3d.gizmoMode = GLViewport.GizmoCut
+                event.accepted = true
+            }
+            break
         case Qt.Key_F:
             root.applyFitHintIfReady()
             event.accepted = true
@@ -106,12 +132,6 @@ Item {
         case Qt.Key_G:
             viewport3d.gizmoMode = GLViewport.GizmoFlatten
             event.accepted = true
-            break
-        case Qt.Key_X:
-            if ((mod & Qt.ControlModifier) && (mod & Qt.ShiftModifier)) {
-                viewport3d.gizmoMode = GLViewport.GizmoCut
-                event.accepted = true
-            }
             break
         }
     }
@@ -313,7 +333,11 @@ Item {
                      && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
             onTriggered: {
                 if (root.editorVm) root.editorVm.selectAllOnPlate(root.contextPlateIndex)
-                viewport3d.arrangeSelected()
+                viewport3d.arrangeSelected(
+                    root.editorVm ? root.editorVm.arrangeDistance : 0,
+                    root.editorVm ? root.editorVm.arrangeRotation : false,
+                    root.editorVm ? root.editorVm.arrangeAlignY : false
+                )
             }
         }
         MenuItem {
@@ -437,14 +461,18 @@ Item {
             id: settingsDlg
             required property int plateIndex
             property string plateName: ""
+            property int extruderCount: root.editorVm ? root.editorVm.plateExtruderCount(settingsDlg.plateIndex) : 1
             title: qsTr("平板设置") + " — " + settingsDlg.plateName
             modal: true
             anchors.centerIn: parent
-            width: 360
+            width: 420
+
+            // 挤出机颜色数组（对齐上游 DragCanvas extruder colors）
+            property var extruderColors: ["#FF4444", "#44AA44", "#4444FF", "#FF8800"]
 
             ColumnLayout {
                 anchors.fill: parent
-                spacing: 14
+                spacing: 12
 
                 // 平板名称
                 RowLayout {
@@ -454,7 +482,7 @@ Item {
                         text: qsTr("平板名称")
                         color: Theme.textSecondary
                         font.pixelSize: 12
-                        Layout.preferredWidth: 80
+                        Layout.preferredWidth: 100
                     }
                     TextField {
                         id: psNameField
@@ -471,7 +499,7 @@ Item {
                     }
                 }
 
-                // 热床类型（对齐上游 PlateSettingsDialog bed type）
+                // 热床类型（对齐上游 BedType: btDefault/btPC/btEP/btPEI/btPTE/btDEF/btER）
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 10
@@ -479,16 +507,19 @@ Item {
                         text: qsTr("热床类型")
                         color: Theme.textSecondary
                         font.pixelSize: 12
-                        Layout.preferredWidth: 80
+                        Layout.preferredWidth: 100
                     }
                     ComboBox {
                         id: bedTypeCombo
                         Layout.fillWidth: true
                         model: [
-                            qsTr("默认 (PEI)"),
-                            qsTr("EP 热床"),
-                            qsTr("PC 热床"),
+                            qsTr("跟随全局"),
+                            qsTr("光滑 PEI"),
+                            qsTr("高温 PEI"),
                             qsTr("纹理 PEI"),
+                            qsTr("PC 热床"),
+                            qsTr("EP 热床"),
+                            qsTr("环氧树脂板"),
                             qsTr("自定义")
                         ]
                         currentIndex: root.editorVm ? root.editorVm.plateBedType(settingsDlg.plateIndex) : 0
@@ -531,7 +562,7 @@ Item {
                     }
                 }
 
-                // 打印顺序（对齐上游 PlateSettingsDialog print sequence）
+                // 打印顺序（对齐上游 PlateSettingsDialog print sequence: ByDefault/ByLayer/ByObject）
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 10
@@ -539,12 +570,12 @@ Item {
                         text: qsTr("打印顺序")
                         color: Theme.textSecondary
                         font.pixelSize: 12
-                        Layout.preferredWidth: 80
+                        Layout.preferredWidth: 100
                     }
                     ComboBox {
                         id: printSeqCombo
                         Layout.fillWidth: true
-                        model: [qsTr("按层打印"), qsTr("按对象打印")]
+                        model: [qsTr("跟随全局"), qsTr("按层打印"), qsTr("按对象打印")]
                         currentIndex: root.editorVm ? root.editorVm.platePrintSequence(settingsDlg.plateIndex) : 0
                         onActivated: function(index) {
                             if (root.editorVm) root.editorVm.setPlatePrintSequence(settingsDlg.plateIndex, index)
@@ -593,7 +624,7 @@ Item {
                         text: qsTr("螺旋花瓶")
                         color: Theme.textSecondary
                         font.pixelSize: 12
-                        Layout.preferredWidth: 80
+                        Layout.preferredWidth: 100
                     }
                     ComboBox {
                         id: spiralCombo
@@ -639,13 +670,518 @@ Item {
                     }
                 }
 
-                // 提示信息
-                Text {
+                // ── 首层耗材顺序（对齐 upstream first_layer_print_sequence）──
+                Rectangle {
                     Layout.fillWidth: true
-                    text: qsTr("注：首层/其他层耗材顺序高级配置需在真实切片引擎下可用")
-                    color: Theme.textDisabled
-                    font.pixelSize: 10
-                    wrapMode: Text.Wrap
+                    Layout.preferredHeight: firstLayerCol.implicitHeight + 16
+                    radius: 8
+                    color: Theme.bgSurface
+                    border.color: Theme.borderSubtle
+                    border.width: 1
+
+                    ColumnLayout {
+                        id: firstLayerCol
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        spacing: 8
+
+                        Text {
+                            text: qsTr("首层耗材顺序")
+                            color: Theme.textPrimary
+                            font.pixelSize: 12
+                            font.bold: true
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+                            Text {
+                                text: qsTr("模式")
+                                color: Theme.textSecondary
+                                font.pixelSize: 11
+                                Layout.preferredWidth: 60
+                            }
+                            ComboBox {
+                                id: firstLayerSeqChoiceCombo
+                                Layout.fillWidth: true
+                                model: [qsTr("自动"), qsTr("自定义")]
+                                onActivated: function(index) {
+                                    if (root.editorVm) root.editorVm.setPlateFirstLayerSeqChoice(settingsDlg.plateIndex, index)
+                                }
+                                contentItem: Text {
+                                    text: firstLayerSeqChoiceCombo.displayText
+                                    color: Theme.textPrimary
+                                    font.pixelSize: 11
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: 8
+                                }
+                                background: Rectangle { radius: 5; color: Theme.bgElevated; border.color: Theme.borderSubtle }
+                                popup: Popup {
+                                    y: firstLayerSeqChoiceCombo.height
+                                    width: firstLayerSeqChoiceCombo.width
+                                    padding: 4
+                                    background: Rectangle { radius: 6; color: Theme.bgSurface; border.color: Theme.borderSubtle; border.width: 1 }
+                                    contentItem: ListView {
+                                        implicitHeight: contentHeight
+                                        model: firstLayerSeqChoiceCombo.model
+                                        delegate: ItemDelegate {
+                                            width: firstLayerSeqChoiceCombo.width
+                                            height: 28
+                                            contentItem: Text { text: modelData; color: firstLayerSeqChoiceCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: 11 }
+                                            highlighted: firstLayerSeqChoiceCombo.highlightedIndex === index
+                                            background: Rectangle { color: highlighted ? Theme.accent : "transparent"; radius: 4 }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 自定义顺序：拖拽排序的挤出机列表（对齐上游 DragCanvas）
+                        Text {
+                            text: qsTr("挤出机顺序（拖拽调整）")
+                            color: Theme.textSecondary
+                            font.pixelSize: 11
+                            visible: firstLayerSeqChoiceCombo.currentIndex === 1
+                        }
+
+                        // DragCanvas-style 拖拽排序挤出机列表
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: firstLayerCanvas.height + 8
+                            radius: 6
+                            color: Theme.bgElevated
+                            visible: firstLayerSeqChoiceCombo.currentIndex === 1
+                            property var dragData: null
+
+                            // 初始化顺序（首次显示时从 ViewModel 加载）
+                            property var seqOrder: {
+                                if (!visible || !root.editorVm) return []
+                                var order = root.editorVm.plateFirstLayerSeqOrder(settingsDlg.plateIndex)
+                                // order 为空时生成默认顺序 1..N
+                                if (!order || order.length === 0) {
+                                    order = []
+                                    for (var i = 1; i <= settingsDlg.extruderCount; i++) order.push(i)
+                                }
+                                return order
+                            }
+
+                            onSeqOrderChanged: {
+                                // 持久化到 ViewModel
+                                if (visible && root.editorVm && seqOrder.length > 0)
+                                    root.editorVm.setPlateFirstLayerSeqOrder(settingsDlg.plateIndex, seqOrder)
+                            }
+
+                            // 拖拽完成后交换顺序
+                            function swapItems(fromIdx, toIdx) {
+                                var arr = seqOrder.slice()
+                                var tmp = arr[fromIdx]
+                                arr[fromIdx] = arr[toIdx]
+                                arr[toIdx] = tmp
+                                seqOrder = arr
+                            }
+
+                            Flow {
+                                id: firstLayerCanvas
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.margins: 4
+                                spacing: 6
+
+                                Repeater {
+                                    id: firstLayerSeqRepeater
+                                    model: firstLayerCanvas.parent.seqOrder
+
+                                    delegate: Item {
+                                        width: pillRow.implicitWidth + 12
+                                        height: 28
+                                        property int seqIndex: index
+
+                                        // 拖拽源
+                                        Drag.active: pillDragMA.drag.active
+                                        Drag.hotSpot.x: width / 2
+                                        Drag.hotSpot.y: height / 2
+                                        Drag.keys: ["first-layer-seq"]
+
+                                        RowLayout {
+                                            id: pillRow
+                                            anchors.centerIn: parent
+                                            spacing: 4
+
+                                            // 挤出机颜色圆
+                                            Rectangle {
+                                                width: 18; height: 18; radius: 9
+                                                color: settingsDlg.extruderColors[(modelData - 1) % 4]
+                                                border.width: 1
+                                                border.color: parent.parent.pillDropArea.containsDrag ? "white" : "transparent"
+                                            }
+                                            Text {
+                                                text: qsTr("%1").arg(modelData)
+                                                color: "white"
+                                                font.pixelSize: 9
+                                                font.bold: true
+                                                anchors.centerIn: parent
+                                            }
+                                            // 箭头（非最后一个时显示）
+                                            Text {
+                                                text: "›"
+                                                color: Theme.textDisabled
+                                                font.pixelSize: 14
+                                                visible: seqIndex < firstLayerSeqRepeater.count - 1
+                                            }
+                                        }
+
+                                        // 拖拽视觉反馈
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: 6
+                                            color: "transparent"
+                                            border.width: 2
+                                            border.color: pillDropArea.containsDrag ? Theme.accent : (pillDragMA.containsMouse ? Theme.borderActive : "transparent")
+                                            opacity: pillDragMA.drag.active ? 0.3 : (pillDropArea.containsDrag ? 0.15 : 0)
+                                        }
+
+                                        // 拖拽目标区域
+                                        DropArea {
+                                            id: pillDropArea
+                                            anchors.fill: parent
+                                            keys: ["first-layer-seq"]
+                                            onDropped: function(drop) {
+                                                if (drop.source !== pillRow.parent && drop.source.seqIndex !== undefined) {
+                                                    firstLayerCanvas.parent.swapItems(drop.source.seqIndex, seqIndex)
+                                                }
+                                                drop.accepted = true
+                                            }
+                                        }
+
+                                        // 拖拽手势
+                                        MouseArea {
+                                            id: pillDragMA
+                                            anchors.fill: parent
+                                            cursorShape: Qt.OpenHandCursor
+                                            drag.target: parent
+                                            drag.axis: Drag.XAndYAxis
+                                            hoverEnabled: true
+                                            onReleased: function() {
+                                                // 释放时复位位置
+                                                parent.x = 0
+                                                parent.y = 0
+                                                parent.Drag.drop()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── 其他层耗材顺序（对齐 upstream other_layers_print_sequence + OtherLayersSeqPanel）──
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: otherLayerCol.implicitHeight + 16
+                    radius: 8
+                    color: Theme.bgSurface
+                    border.color: Theme.borderSubtle
+                    border.width: 1
+
+                    ColumnLayout {
+                        id: otherLayerCol
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        spacing: 8
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Text {
+                                text: qsTr("其他层耗材顺序")
+                                color: Theme.textPrimary
+                                font.pixelSize: 12
+                                font.bold: true
+                                Layout.fillWidth: true
+                            }
+                            ComboBox {
+                                id: otherLayersSeqChoiceCombo
+                                Layout.preferredWidth: 100
+                                model: [qsTr("自动"), qsTr("自定义")]
+                                onActivated: function(index) {
+                                    if (root.editorVm) root.editorVm.setPlateOtherLayersSeqChoice(settingsDlg.plateIndex, index)
+                                }
+                                contentItem: Text {
+                                    text: otherLayersSeqChoiceCombo.displayText
+                                    color: Theme.textPrimary
+                                    font.pixelSize: 11
+                                    verticalAlignment: Text.AlignVCenter
+                                    leftPadding: 8
+                                }
+                                background: Rectangle { radius: 5; color: Theme.bgElevated; border.color: Theme.borderSubtle }
+                                popup: Popup {
+                                    y: otherLayersSeqChoiceCombo.height
+                                    width: otherLayersSeqChoiceCombo.width
+                                    padding: 4
+                                    background: Rectangle { radius: 6; color: Theme.bgSurface; border.color: Theme.borderSubtle; border.width: 1 }
+                                    contentItem: ListView {
+                                        implicitHeight: contentHeight
+                                        model: otherLayersSeqChoiceCombo.model
+                                        delegate: ItemDelegate {
+                                            width: otherLayersSeqChoiceCombo.width
+                                            height: 28
+                                            contentItem: Text { text: modelData; color: otherLayersSeqChoiceCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: 11 }
+                                            highlighted: otherLayersSeqChoiceCombo.highlightedIndex === index
+                                            background: Rectangle { color: highlighted ? Theme.accent : "transparent"; radius: 4 }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 自定义面板（对齐上游 OtherLayersSeqPanel）
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            visible: otherLayersSeqChoiceCombo.currentIndex === 1
+
+                            // 层范围序列条目列表
+                            Text {
+                                text: qsTr("层范围序列（从第 2 层起，自动排序）")
+                                color: Theme.textSecondary
+                                font.pixelSize: 10
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
+                            }
+
+                            Repeater {
+                                id: otherLayersSeqRepeater
+                                model: otherLayersSeqChoiceCombo.currentIndex === 1
+                                        ? (root.editorVm ? root.editorVm.plateOtherLayersSeqCount(settingsDlg.plateIndex) : 0) : 0
+                                delegate: Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: seqEntryCol.implicitHeight + 8
+                                    radius: 6
+                                    color: Theme.bgElevated
+                                    border.color: Theme.borderSubtle
+                                    property int entryIndex: index
+
+                                    ColumnLayout {
+                                        id: seqEntryCol
+                                        anchors.fill: parent
+                                        anchors.margins: 4
+                                        spacing: 4
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 4
+                                            Text {
+                                                text: qsTr("起始层")
+                                                color: Theme.textSecondary
+                                                font.pixelSize: 10
+                                            }
+                                            TextField {
+                                                id: beginField
+                                                Layout.preferredWidth: 50
+                                                text: root.editorVm ? root.editorVm.plateOtherLayersSeqBegin(settingsDlg.plateIndex, delegateModel.entryIndex) : 2
+                                                font.pixelSize: 10
+                                                color: Theme.textPrimary
+                                                horizontalAlignment: TextInput.AlignHCenter
+                                                background: Rectangle { radius: 4; color: Theme.bgSurface; border.color: Theme.borderSubtle }
+                                                onEditingFinished: {
+                                                    var v = parseInt(text, 10)
+                                                    if (isNaN(v) || v < 2) v = 2
+                                                    if (root.editorVm)
+                                                        root.editorVm.setPlateOtherLayersSeqRange(settingsDlg.plateIndex, delegateModel.entryIndex, v,
+                                                            parseInt(endField.text, 10) || v)
+                                                }
+                                            }
+                                            Text {
+                                                text: "–"
+                                                color: Theme.textDisabled
+                                                font.pixelSize: 10
+                                            }
+                                            Text {
+                                                text: qsTr("结束层")
+                                                color: Theme.textSecondary
+                                                font.pixelSize: 10
+                                            }
+                                            TextField {
+                                                id: endField
+                                                Layout.preferredWidth: 50
+                                                text: root.editorVm ? root.editorVm.plateOtherLayersSeqEnd(settingsDlg.plateIndex, delegateModel.entryIndex) : 100
+                                                font.pixelSize: 10
+                                                color: Theme.textPrimary
+                                                horizontalAlignment: TextInput.AlignHCenter
+                                                background: Rectangle { radius: 4; color: Theme.bgSurface; border.color: Theme.borderSubtle }
+                                                onEditingFinished: {
+                                                    var v = parseInt(text, 10)
+                                                    var bv = parseInt(beginField.text, 10) || 2
+                                                    if (isNaN(v) || v < bv) v = bv
+                                                    if (root.editorVm)
+                                                        root.editorVm.setPlateOtherLayersSeqRange(settingsDlg.plateIndex, delegateModel.entryIndex, bv, v)
+                                                }
+                                            }
+
+                                            Item { Layout.fillWidth: true }
+
+                                            // 删除按钮
+                                            Rectangle {
+                                                width: 20; height: 20; radius: 4
+                                                color: removeBtnMA.containsMouse ? "#FF4444" : Theme.bgSurface
+                                                border.color: Theme.borderSubtle
+                                                Text { anchors.centerIn: parent; text: "✕"; color: removeBtnMA.containsMouse ? "white" : Theme.textDisabled; font.pixelSize: 10 }
+                                                TapHandler { id: removeBtnMA; onTapped: {
+                                                    if (root.editorVm) root.editorVm.removePlateOtherLayersSeqEntry(settingsDlg.plateIndex, delegateModel.entryIndex)
+                                                }}
+                                            }
+                                        }
+
+                                        // DragCanvas-style 拖拽排序挤出机顺序
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: otherLayerCanvas.height + 6
+                                            radius: 4
+                                            color: Theme.bgSurface
+                                            property int entryIdx: delegateModel.entryIndex
+
+                                            // 从 ViewModel 加载此 entry 的挤出机顺序
+                                            property var seqOrder: {
+                                                if (!root.editorVm) return []
+                                                var order = root.editorVm.plateOtherLayersSeqOrder(settingsDlg.plateIndex, entryIdx)
+                                                if (!order || order.length === 0) {
+                                                    order = []
+                                                    for (var i = 1; i <= settingsDlg.extruderCount; i++) order.push(i)
+                                                }
+                                                return order
+                                            }
+
+                                            onSeqOrderChanged: {
+                                                if (root.editorVm && seqOrder.length > 0)
+                                                    root.editorVm.setPlateOtherLayersSeqOrder(settingsDlg.plateIndex, entryIdx, seqOrder)
+                                            }
+
+                                            function swapItems(fromIdx, toIdx) {
+                                                var arr = seqOrder.slice()
+                                                var tmp = arr[fromIdx]
+                                                arr[fromIdx] = arr[toIdx]
+                                                arr[toIdx] = tmp
+                                                seqOrder = arr
+                                            }
+
+                                            Flow {
+                                                id: otherLayerCanvas
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                anchors.top: parent.top
+                                                anchors.margins: 3
+                                                spacing: 4
+
+                                                Repeater {
+                                                    model: otherLayerCanvas.parent.seqOrder
+
+                                                    delegate: Item {
+                                                        width: pillOLRow.implicitWidth + 10
+                                                        height: 24
+                                                        property int seqIndex: index
+
+                                                        Drag.active: pillOLDragMA.drag.active
+                                                        Drag.hotSpot.x: width / 2
+                                                        Drag.hotSpot.y: height / 2
+                                                        Drag.keys: ["other-layer-seq-" + otherLayerCanvas.parent.entryIdx]
+
+                                                        RowLayout {
+                                                            id: pillOLRow
+                                                            anchors.centerIn: parent
+                                                            spacing: 3
+
+                                                            Rectangle {
+                                                                width: 16; height: 16; radius: 8
+                                                                color: settingsDlg.extruderColors[(modelData - 1) % 4]
+                                                                border.width: 1
+                                                                border.color: parent.parent.pillOLDrop.containsDrag ? "white" : "transparent"
+                                                            }
+                                                            Text {
+                                                                text: qsTr("%1").arg(modelData)
+                                                                color: "white"
+                                                                font.pixelSize: 8
+                                                                font.bold: true
+                                                                anchors.centerIn: parent
+                                                            }
+                                                            Text {
+                                                                text: "›"
+                                                                color: Theme.textDisabled
+                                                                font.pixelSize: 12
+                                                                visible: seqIndex < (otherLayerCanvas.parent.seqOrder.length - 1)
+                                                            }
+                                                        }
+
+                                                        Rectangle {
+                                                            anchors.fill: parent
+                                                            radius: 5
+                                                            color: "transparent"
+                                                            border.width: 1
+                                                            border.color: pillOLDrop.containsDrag ? Theme.accent : (pillOLDragMA.containsMouse ? Theme.borderActive : "transparent")
+                                                            opacity: pillOLDragMA.drag.active ? 0.3 : (pillOLDrop.containsDrag ? 0.15 : 0)
+                                                        }
+
+                                                        DropArea {
+                                                            id: pillOLDrop
+                                                            anchors.fill: parent
+                                                            keys: ["other-layer-seq-" + otherLayerCanvas.parent.entryIdx]
+                                                            onDropped: function(drop) {
+                                                                if (drop.source !== pillOLRow.parent && drop.source.seqIndex !== undefined) {
+                                                                    otherLayerCanvas.parent.swapItems(drop.source.seqIndex, seqIndex)
+                                                                }
+                                                                drop.accepted = true
+                                                            }
+                                                        }
+
+                                                        MouseArea {
+                                                            id: pillOLDragMA
+                                                            anchors.fill: parent
+                                                            cursorShape: Qt.OpenHandCursor
+                                                            drag.target: parent
+                                                            drag.axis: Drag.XAndYAxis
+                                                            hoverEnabled: true
+                                                            onReleased: function() {
+                                                                parent.x = 0
+                                                                parent.y = 0
+                                                                parent.Drag.drop()
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 添加层范围条目按钮
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                Item { Layout.fillWidth: true }
+                                Rectangle {
+                                    height: 24
+                                    width: addSeqBtnText.implicitWidth + 16
+                                    radius: 5
+                                    color: addSeqBtnMA.containsMouse ? Theme.accent : Theme.bgElevated
+                                    border.color: Theme.accent
+                                    Text { id: addSeqBtnText; anchors.centerIn: parent; text: qsTr("+ 添加层范围"); color: addSeqBtnMA.containsMouse ? Theme.textOnAccent : Theme.accent; font.pixelSize: 10 }
+                                    TapHandler { id: addSeqBtnMA; onTapped: {
+                                        var count = root.editorVm ? root.editorVm.plateOtherLayersSeqCount(settingsDlg.plateIndex) : 0
+                                        var beginL = 2
+                                        var endL = 100
+                                        // 推断下一个范围的起始层
+                                        if (count > 0) {
+                                            beginL = (root.editorVm.plateOtherLayersSeqEnd(settingsDlg.plateIndex, count - 1) || 99) + 1
+                                            endL = beginL + 100
+                                        }
+                                        if (root.editorVm) root.editorVm.addPlateOtherLayersSeqEntry(settingsDlg.plateIndex, beginL, endL)
+                                    }}
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // 确认按钮
@@ -677,6 +1213,8 @@ Item {
                     bedTypeCombo.currentIndex = root.editorVm.plateBedType(settingsDlg.plateIndex)
                     printSeqCombo.currentIndex = root.editorVm.platePrintSequence(settingsDlg.plateIndex)
                     spiralCombo.currentIndex = root.editorVm.plateSpiralMode(settingsDlg.plateIndex)
+                    firstLayerSeqChoiceCombo.currentIndex = root.editorVm.plateFirstLayerSeqChoice(settingsDlg.plateIndex)
+                    otherLayersSeqChoiceCombo.currentIndex = root.editorVm.plateOtherLayersSeqChoice(settingsDlg.plateIndex)
                 }
                 psNameField.forceActiveFocus()
             }
@@ -687,6 +1225,179 @@ Item {
     PrintDialog {
         id: printDlg
         editorVm: root.editorVm
+    }
+
+    // 排列设置弹出面板（对齐上游 ArrangeSettings popup）
+    Popup {
+        id: arrangeSettingsPopup
+        anchors.centerIn: parent
+        width: 320
+        padding: 20
+        modal: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        background: Rectangle {
+            radius: 10
+            color: Theme.bgElevated
+            border.width: 1
+            border.color: Theme.borderSubtle
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 14
+
+            // 标题行
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    text: qsTr("排列设置")
+                    font.pixelSize: 14
+                    font.bold: true
+                    color: Theme.textPrimary
+                    Layout.fillWidth: true
+                }
+                CxIconButton {
+                    buttonSize: 26
+                    iconSize: 14
+                    iconSource: "qrc:/qml/assets/icons/x.svg"
+                    onClicked: arrangeSettingsPopup.close()
+                }
+            }
+
+            Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
+
+            // 对象间距
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Text {
+                    text: qsTr("对象间距")
+                    color: Theme.textSecondary
+                    font.pixelSize: 12
+                    Layout.preferredWidth: 90
+                }
+                TextField {
+                    id: arrangeDistField
+                    Layout.fillWidth: true
+                    implicitHeight: 28
+                    text: root.editorVm ? (root.editorVm.arrangeDistance > 0 ? root.editorVm.arrangeDistance.toFixed(1) : "0") : "0"
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Theme.textPrimary
+                    font.pixelSize: 12
+                    selectByMouse: true
+                    validator: DoubleValidator { bottom: 0; top: 100 }
+                    background: Rectangle {
+                        radius: 4
+                        color: Theme.bgBase
+                        border.width: 1
+                        border.color: arrangeDistField.activeFocus ? Theme.accent : Theme.borderSubtle
+                    }
+                    onAccepted: {
+                        if (root.editorVm) root.editorVm.arrangeDistance = parseFloat(text) || 0
+                    }
+                    onEditingFinished: {
+                        if (root.editorVm) root.editorVm.arrangeDistance = parseFloat(text) || 0
+                    }
+                }
+                Text {
+                    text: qsTr("mm (0=自动)")
+                    color: Theme.textDisabled
+                    font.pixelSize: 11
+                }
+            }
+
+            // 自动旋转
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Text {
+                    text: qsTr("自动旋转")
+                    color: Theme.textSecondary
+                    font.pixelSize: 12
+                    Layout.fillWidth: true
+                }
+                Switch {
+                    checked: root.editorVm ? root.editorVm.arrangeRotation : false
+                    onToggled: { if (root.editorVm) root.editorVm.arrangeRotation = checked }
+                }
+            }
+
+            // 对齐 Y 轴
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Text {
+                    text: qsTr("对齐 Y 轴")
+                    color: Theme.textSecondary
+                    font.pixelSize: 12
+                    Layout.fillWidth: true
+                }
+                Switch {
+                    checked: root.editorVm ? root.editorVm.arrangeAlignY : false
+                    enabled: root.editorVm ? !root.editorVm.arrangeRotation : true
+                    onToggled: { if (root.editorVm) root.editorVm.arrangeAlignY = checked }
+                }
+            }
+
+            // 允许多耗材同板
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Text {
+                    text: qsTr("允许多耗材")
+                    color: Theme.textSecondary
+                    font.pixelSize: 12
+                    Layout.fillWidth: true
+                }
+                Switch {
+                    checked: root.editorVm ? root.editorVm.arrangeMultiMaterial : true
+                    onToggled: { if (root.editorVm) root.editorVm.arrangeMultiMaterial = checked }
+                }
+            }
+
+            // 避免校准区域
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Text {
+                    text: qsTr("避免校准区域")
+                    color: Theme.textSecondary
+                    font.pixelSize: 12
+                    Layout.fillWidth: true
+                }
+                Switch {
+                    checked: root.editorVm ? root.editorVm.arrangeAvoidCalibration : true
+                    onToggled: { if (root.editorVm) root.editorVm.arrangeAvoidCalibration = checked }
+                }
+            }
+
+            Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
+
+            // 按钮行
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Item { Layout.fillWidth: true }
+                CxButton {
+                    text: qsTr("重置默认")
+                    onClicked: { if (root.editorVm) { root.editorVm.resetArrangeSettings(); arrangeDistField.text = "0"; } }
+                }
+                CxButton {
+                    text: qsTr("排列")
+                    cxStyle: CxButton.Style.Primary
+                    onClicked: {
+                        if (root.editorVm) root.editorVm.arrangeDistance = parseFloat(arrangeDistField.text) || 0
+                        viewport3d.arrangeSelected(
+                            root.editorVm ? root.editorVm.arrangeDistance : 0,
+                            root.editorVm ? root.editorVm.arrangeRotation : false,
+                            root.editorVm ? root.editorVm.arrangeAlignY : false
+                        )
+                        arrangeSettingsPopup.close()
+                    }
+                }
+            }
+        }
     }
 
     FileDialog {
@@ -796,6 +1507,42 @@ Item {
             }
         }
 
+        // ── 视口告警覆盖层（对齐上游 EWarning / Plater::_set_warning_notification）──
+        Rectangle {
+            anchors.bottom: parent.bottom
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottomMargin: 10
+            width: warningContent.implicitWidth + 28
+            height: warningContent.implicitHeight + 16
+            radius: 8
+            color: root.editorVm && root.editorVm.viewportWarning === 2 ? "#4a1c1c" : "#3a3420"
+            border.width: 1
+            border.color: root.editorVm && root.editorVm.viewportWarning === 2 ? "#ef4444" : "#f59e0b"
+            visible: root.editorVm ? root.editorVm.hasViewportWarning : false
+            opacity: visible ? 1.0 : 0.0
+            Behavior on opacity { NumberAnimation { duration: 200 } }
+
+            RowLayout {
+                id: warningContent
+                anchors.centerIn: parent
+                spacing: 8
+
+                Text {
+                    text: root.editorVm && root.editorVm.viewportWarning === 2 ? "⚠" : "⚡"
+                    font.pixelSize: 14
+                    color: root.editorVm && root.editorVm.viewportWarning === 2 ? "#ef4444" : "#f59e0b"
+                }
+
+                Text {
+                    text: root.editorVm ? root.editorVm.viewportWarningMessage : ""
+                    color: "#e2e8f1"
+                    font.pixelSize: 11
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                }
+            }
+        }
+
         Rectangle {
             anchors.fill: parent
             gradient: Gradient {
@@ -841,9 +1588,62 @@ Item {
                         CxIconButton {
                             buttonSize: 34
                             iconSize: 16
-                            iconSource: "qrc:/qml/assets/icons/folder-open.svg"
-                            toolTipText: qsTr("打开模型")
-                            onClicked: openFileDlg.open()
+                            iconSource: "qrc:/qml/assets/icons/layout-grid-plus.svg"
+                            toolTipText: qsTr("添加平板")
+                            enabled: root.editorVm && root.editorVm.plateCount < 10
+                            onClicked: root.editorVm.addPlate()
+                        }
+                    }
+
+                    ToolStripDivider { }
+
+                    Row {
+                        spacing: 6
+
+                        // 删除选中 (对齐上游 GLToolbar delete)
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/trash.svg"
+                            toolTipText: qsTr("删除选中 (Delete)")
+                            enabled: root.editorVm && root.editorVm.hasSelection
+                            onClicked: root.editorVm.deleteSelectedObjects()
+                        }
+                        // 清空全部 (对齐上游 GLToolbar delete_all)
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/x.svg"
+                            toolTipText: qsTr("清空全部")
+                            enabled: root.editorVm && root.editorVm.objectCount > 0
+                            onClicked: root.editorVm.clearWorkspace()
+                        }
+                        // 复制 (对齐上游 GLToolbar copy)
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/copy.svg"
+                            toolTipText: qsTr("复制 (Ctrl+C)")
+                            enabled: root.editorVm && root.editorVm.hasSelection
+                            onClicked: root.editorVm.copySelectedObjects()
+                        }
+                        // 粘贴 (对齐上游 GLToolbar paste)
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/clipboard.svg"
+                            toolTipText: qsTr("粘贴 (Ctrl+V)")
+                            enabled: root.editorVm && root.editorVm.hasClipboardContent
+                            onClicked: root.editorVm.pasteObjects()
+                        }
+                        // 克隆 (对齐上游 GLToolbar clone)
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/clone.svg"
+                            toolTipText: qsTr("克隆 (Ctrl+D)")
+                            enabled: root.editorVm && root.editorVm.hasSelection
+                            onClicked: root.editorVm.duplicateSelectedObjects()
                         }
                     }
 
@@ -911,8 +1711,8 @@ Item {
                             buttonSize: 34
                             iconSize: 16
                             iconSource: "qrc:/qml/assets/icons/layout-grid.svg"
-                            toolTipText: qsTr("自动排列")
-                            onClicked: viewport3d.arrangeSelected()
+                            toolTipText: qsTr("排列设置")
+                            onClicked: arrangeSettingsPopup.open()
                         }
                         CxIconButton {
                             buttonSize: 34
@@ -1059,6 +1859,34 @@ Item {
                 anchors.centerIn: parent
                 spacing: 4
 
+                // 测量拾取模式（对齐上游 GLGizmoMeasure selection mode）
+                Row {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    Repeater {
+                        model: [qsTr("点测量"), qsTr("特征测量")]
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: 60; height: 22; radius: 4
+                            color: root.editorVm && root.editorVm.measureSelectionMode === index ? "#1c2a3e" : "#1a1e28"
+                            border.color: root.editorVm && root.editorVm.measureSelectionMode === index ? "#569cd6" : "#2e3444"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData
+                                color: root.editorVm && root.editorVm.measureSelectionMode === index ? "#569cd6" : "#8a96a8"
+                                font.pixelSize: 10
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.measureSelectionMode = index
+                            }
+                        }
+                    }
+                }
+
                 Row {
                     spacing: 16
                     Label { text: qsTr("X:"); color: "#e066a0"; font.pixelSize: 11; font.bold: true; font.family: "Consolas, monospace" }
@@ -1075,6 +1903,14 @@ Item {
                     color: "#8b949e"
                     font.pixelSize: 10
                     font.family: "Consolas, monospace"
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Label {
+                    text: root.editorVm && root.editorVm.measureSelectionMode === 1
+                        ? qsTr("点击网格面拾取特征 (点/边/圆/平面)")
+                        : qsTr("点测量模式 — 显示选中对象尺寸")
+                    color: "#6b7d94"
+                    font.pixelSize: 9
                     Layout.alignment: Qt.AlignHCenter
                 }
             }
@@ -1194,6 +2030,165 @@ Item {
                                 onClicked: if (root.editorVm) root.editorVm.cutAxis = index
                             }
                         }
+                    }
+                }
+
+                // 切割模式（对齐上游 GLGizmoCut Planar/TongueAndGroove）
+                Row {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    Repeater {
+                        model: [qsTr("平面切割"), qsTr("舌槽模式")]
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: 70; height: 24; radius: 4
+                            color: root.editorVm && root.editorVm.cutMode === index ? "#1c2a3e" : "#1a1e28"
+                            border.color: root.editorVm && root.editorVm.cutMode === index ? "#5b8def" : "#2e3444"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData
+                                color: root.editorVm && root.editorVm.cutMode === index ? "#5b8def" : "#8a96a8"
+                                font.pixelSize: 10
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.cutMode = index
+                            }
+                        }
+                    }
+                }
+
+                // 连接器类型（对齐上游 GLGizmoCut connector type: Plug/Dowel/Snap）
+                Row {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm ? root.editorVm.cutMode === 1 : false
+                    Text { text: qsTr("类型:"); color: "#8b949e"; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                    Repeater {
+                        model: [qsTr("Plug"), qsTr("Dowel"), qsTr("Snap")]
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: 52; height: 22; radius: 4
+                            color: root.editorVm && root.editorVm.connectorType === index ? "#1c2a3e" : "#1a1e28"
+                            border.color: root.editorVm && root.editorVm.connectorType === index ? "#e8a838" : "#2e3444"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData
+                                color: root.editorVm && root.editorVm.connectorType === index ? "#e8a838" : "#8a96a8"
+                                font.pixelSize: 9
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.connectorType = index
+                            }
+                        }
+                    }
+                }
+
+                // 连接器样式（对齐上游 GLGizmoCut connector style: Prism/Frustum）
+                Row {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm ? root.editorVm.cutMode === 1 : false
+                    enabled: root.editorVm ? root.editorVm.connectorType === 0 : false
+                    opacity: enabled ? 1.0 : 0.45
+                    Text { text: qsTr("样式:"); color: "#8b949e"; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                    Repeater {
+                        model: [qsTr("Prism"), qsTr("Frustum")]
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: 56; height: 22; radius: 4
+                            color: root.editorVm && root.editorVm.connectorStyle === index ? "#1c2a3e" : "#1a1e28"
+                            border.color: root.editorVm && root.editorVm.connectorStyle === index ? "#e8a838" : "#2e3444"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData
+                                color: root.editorVm && root.editorVm.connectorStyle === index ? "#e8a838" : "#8a96a8"
+                                font.pixelSize: 9
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: root.editorVm ? root.editorVm.connectorType === 0 : false
+                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                onClicked: if (root.editorVm) root.editorVm.connectorStyle = index
+                            }
+                        }
+                    }
+                }
+
+                // 连接器形状（对齐上游 GLGizmoCut connector shape: Triangle/Square/Hexagon/Circle）
+                Row {
+                    spacing: 3
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm ? root.editorVm.cutMode === 1 : false
+                    enabled: root.editorVm ? root.editorVm.connectorType !== 2 : false
+                    opacity: enabled ? 1.0 : 0.45
+                    Text { text: qsTr("形状:"); color: "#8b949e"; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                    Repeater {
+                        model: ["△", "□", "⬡", "○"]
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: 28; height: 22; radius: 4
+                            color: root.editorVm && root.editorVm.connectorShape === index ? "#1c2a3e" : "#1a1e28"
+                            border.color: root.editorVm && root.editorVm.connectorShape === index ? "#e8a838" : "#2e3444"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData
+                                color: root.editorVm && root.editorVm.connectorShape === index ? "#e8a838" : "#8a96a8"
+                                font.pixelSize: 11
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: root.editorVm ? root.editorVm.connectorType !== 2 : false
+                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                onClicked: if (root.editorVm) root.editorVm.connectorShape = index
+                            }
+                        }
+                    }
+                }
+
+                // 连接器尺寸/深度（对齐上游 connector size/depth_ratio）
+                RowLayout {
+                    spacing: 8
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm ? root.editorVm.cutMode === 1 : false
+                    Text { text: qsTr("尺寸:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Slider {
+                        from: 2; to: 20; stepSize: 0.5
+                        value: root.editorVm ? root.editorVm.connectorSize : 5
+                        implicitWidth: 80
+                        onMoved: if (root.editorVm) root.editorVm.connectorSize = value
+                    }
+                    Text {
+                        text: root.editorVm ? root.editorVm.connectorSize.toFixed(1) : "5.0"
+                        color: "#c8d4e0"
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 30
+                    }
+                    Text { text: qsTr("深度:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Slider {
+                        from: 0.1; to: 1.0; stepSize: 0.05
+                        value: root.editorVm ? root.editorVm.connectorDepth : 0.5
+                        implicitWidth: 60
+                        onMoved: if (root.editorVm) root.editorVm.connectorDepth = value
+                    }
+                    Text {
+                        text: root.editorVm ? (root.editorVm.connectorDepth * 100).toFixed(0) + "%" : "50%"
+                        color: "#c8d4e0"
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 30
                     }
                 }
 
@@ -1456,22 +2451,29 @@ Item {
                             anchors.rightMargin: 12
                             spacing: 10
 
-                            // 平板缩略图（对齐上游 PartPlate thumbnail_data）
+                            // 平板缩略图（对齐上游 PartPlate::thumbnail_data，优先使用 GL FBO 捕获）
                             Rectangle {
-                                width: 32
-                                height: 32
+                                width: 48
+                                height: 48
                                 radius: 6
-                                color: root.editorVm ? root.editorVm.plateThumbnailColor(index) : "#152033"
+                                color: Theme.bgElevated
                                 border.width: 1
                                 border.color: Theme.borderSubtle
+                                clip: true
 
-                                // 对象数量标记
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: root.editorVm ? root.editorVm.plateObjectCount(index).toString() : "0"
-                                    color: "#c8d4e0"
-                                    font.pixelSize: 11
-                                    font.bold: true
+                                Image {
+                                    anchors.fill: parent
+                                    anchors.margins: 2
+                                    fillMode: Image.PreserveAspectFit
+                                    smooth: true
+                                    // 优先使用 GL FBO 缩略图，回退到 QPainter 合成
+                                    source: {
+                                        if (!root.editorVm) return ""
+                                        var glThumb = viewport3d.lastThumbnailData
+                                        if (glThumb.length > 0 && index === root.editorVm.currentPlateIndex)
+                                            return "data:image/png;base64," + glThumb
+                                        return "data:image/png;base64," + root.editorVm.generatePlateThumbnail(index, 96)
+                                    }
                                 }
                             }
 
@@ -1657,6 +2659,14 @@ Item {
         Connections {
             target: root.editorVm
             function onPreviewRequested() { backend.setCurrentPage(2) }
+            // 平板切换或对象变更时请求 GL 缩略图更新（对齐上游 Plater::update_plate_thumbnails）
+            function onCurrentPlateIndexChanged() { root.requestGLThumbnail() }
+        }
+
+        // GL FBO 缩略图捕获完成后刷新平板列表（对齐上游 PartPlate::thumbnail_data 回写）
+        Connections {
+            target: viewport3d
+            function onThumbnailCaptured() { /* plate cards auto-rebind via lastThumbnailData property */ }
         }
 
         // 视角预设按钮（对齐上游 GLCanvas3D 视角预设）

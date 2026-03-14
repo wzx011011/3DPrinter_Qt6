@@ -51,7 +51,10 @@ Item {
 
     function rebuildFilter() {
         if (!root.configVm) { filteredIndices = []; return }
-        filteredIndices = root.configVm.filterOptionIndices("", root.searchText)
+        var indices = root.configVm.filterOptionIndices("", root.searchText, root.advancedEnabled)
+        // 排序以便拖拽排序（对齐上游 DragCanvas 交互）
+        indices.sort(function(a, b) { return a - b; })
+        filteredIndices = indices
     }
 
     function groupedIndices(category) {
@@ -67,6 +70,7 @@ Item {
 
     Component.onCompleted: rebuildFilter()
     onSearchTextChanged: rebuildFilter()
+    onAdvancedEnabledChanged: rebuildFilter()
 
     Connections {
         target: root.configVm ? root.configVm.printOptions : null
@@ -82,6 +86,189 @@ Item {
             // 跳转到指定选项：高亮显示并滚动到可见
             root.highlightedOptionIndex = idx
             highlightTimer.start()
+        }
+    }
+
+    // 值来源层级弹窗（对齐上游 Tab 值来源可视化 + reset_to_level）
+    Popup {
+        id: valueChainPopup
+        property string currentKey: ""
+        property string chainJson: "{}"
+        property string currentLevel: "default"
+        property var chainData: ({})
+
+        function show(key, json, level) {
+            currentKey = key
+            chainJson = json
+            currentLevel = level
+            try { chainData = JSON.parse(json) } catch(e) { chainData = {} }
+            open()
+        }
+
+        function resetToLevel(level) {
+            if (root.configVm)
+                root.configVm.resetOptionToLevel(currentKey, level)
+            close()
+        }
+
+        anchors.centerIn: parent ? parent : undefined
+        width: 260
+        height: 220
+        modal: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        padding: 0
+
+        background: Rectangle {
+            radius: 8
+            color: "#0f1520"
+            border.width: 1
+            border.color: Theme.borderSubtle
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 8
+
+                // 标题行
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("值来源") + " — " + valueChainPopup.currentKey
+                        color: Theme.textPrimary
+                        font.pixelSize: 12
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+                    Rectangle {
+                        width: 20; height: 20; radius: 4
+                        color: closeMA.containsMouse ? "#2a2030" : "#1a1520"
+                        Text { anchors.centerIn: parent; text: "\u2715"; color: "#808090"; font.pixelSize: 10 }
+                        MouseArea { id: closeMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: valueChainPopup.close()
+                        }
+                    }
+                }
+
+                Rectangle { width: parent.width - 24; height: 1; color: Theme.borderSubtle }
+
+                // 继承链层级列表
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    id: lvlContent
+
+                    Column {
+                        anchors.fill: parent
+                        spacing: 0
+                        // Level 0: Default
+                        Rectangle {
+                            width: parent.width; height: 28; color: "#0c1018"
+                            RowLayout {
+                                anchors.fill: parent; anchors.leftMargin: 8; spacing: 8
+                                Rectangle { width: 8; height: 8; radius: 4; color: "#506070" }
+                                Text { text: qsTr("默认值"); color: "#a0a8b0"; font.pixelSize: 11 }
+                                Item { Layout.fillWidth: true }
+                                Text { text: valueChainPopup.chainData.default || "-"; color: "#d0d8e0"; font.pixelSize: 11; font.family: "Consolas, monospace"
+                                    Layout.alignment: Qt.AlignRight; Layout.rightMargin: 8
+                                }
+                                Rectangle {
+                                    visible: valueChainPopup.currentLevel === "default"
+                                    width: 20; height: 20; radius: 4; color: "#1a3a5c"
+                                    Text { anchors.centerIn: parent; text: "\u2713"; color: "#58a6ff"; font.pixelSize: 11 }
+                                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                        onClicked: valueChainPopup.resetToLevel(0)
+                                    }
+                                }
+                            }
+                        }
+                        // Level 1: Print
+                        Rectangle {
+                            width: parent.width; height: 28; color: "#0c1018"
+                            RowLayout {
+                                anchors.fill: parent; anchors.leftMargin: 8; spacing: 8
+                                Rectangle { width: 8; height: 8; radius: 4; color: "#6ed4a0" }
+                                Text { text: qsTr("打印预设"); color: "#a0c8a0"; font.pixelSize: 11 }
+                                Item { Layout.fillWidth: true }
+                                Text { text: valueChainPopup.chainData.print || "-"; color: "#d0d8e0"; font.pixelSize: 11; font.family: "Consolas, monospace"
+                                    Layout.alignment: Qt.AlignRight; Layout.rightMargin: 8
+                                }
+                                Rectangle {
+                                    visible: valueChainPopup.currentLevel === "print"
+                                    width: 20; height: 20; radius: 4; color: "#1a3a2a"
+                                    Text { anchors.centerIn: parent; text: "\u2713"; color: "#6ed4a0"; font.pixelSize: 11 }
+                                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                        onClicked: valueChainPopup.resetToLevel(1)
+                                    }
+                                }
+                            }
+                        }
+                        // Level 2: Filament
+                        Rectangle {
+                            width: parent.width; height: 28; color: "#0c1018"
+                            RowLayout {
+                                anchors.fill: parent; anchors.leftMargin: 8; spacing: 8
+                                Rectangle { width: 8; height: 8; radius: 4; color: "#d4a06e" }
+                                Text { text: qsTr("耗材预设"); color: "#c8b0a0"; font.pixelSize: 11 }
+                                Item { Layout.fillWidth: true }
+                                Text { text: valueChainPopup.chainData.filament || "-"; color: "#d0d8e0"; font.pixelSize: 11; font.family: "Consolas, monospace"
+                                    Layout.alignment: Qt.AlignRight; Layout.rightMargin: 8
+                                }
+                                Rectangle {
+                                    visible: valueChainPopup.currentLevel === "filament"
+                                    width: 20; height: 20; radius: 4; color: "#3a2a1a"
+                                    Text { anchors.centerIn: parent; text: "\u2713"; color: "#d4a06e"; font.pixelSize: 11 }
+                                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                        onClicked: valueChainPopup.resetToLevel(2)
+                                    }
+                                }
+                            }
+                        }
+                        // Level 3: Printer
+                        Rectangle {
+                            width: parent.width; height: 28; color: "#0c1018"
+                            RowLayout {
+                                anchors.fill: parent; anchors.leftMargin: 8; spacing: 8
+                                Rectangle { width: 8; height: 8; radius: 4; color: "#6ea8d4" }
+                                Text { text: qsTr("打印机预设"); color: "#a0b8c8"; font.pixelSize: 11 }
+                                Item { Layout.fillWidth: true }
+                                Text { text: valueChainPopup.chainData.printer || "-"; color: "#d0d8e0"; font.pixelSize: 11; font.family: "Consolas, monospace"
+                                    Layout.alignment: Qt.AlignRight; Layout.rightMargin: 8
+                                }
+                                Rectangle {
+                                    visible: valueChainPopup.currentLevel === "printer"
+                                    width: 20; height: 20; radius: 4; color: "#1a2a3a"
+                                    Text { anchors.centerIn: parent; text: "\u2713"; color: "#6ea8d4"; font.pixelSize: 11 }
+                                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                        onClicked: valueChainPopup.resetToLevel(3)
+                                    }
+                                }
+                            }
+                        }
+                        // Current value
+                        Rectangle { width: parent.width - 24; height: 1; color: "#304050" }
+                        Rectangle {
+                            width: parent.width; height: 28; color: "#142030"
+                            RowLayout {
+                                anchors.fill: parent; anchors.leftMargin: 8; spacing: 8
+                                Text { text: qsTr("当前值"); color: Theme.textPrimary; font.pixelSize: 11; font.bold: true }
+                                Item { Layout.fillWidth: true }
+                                Text { text: valueChainPopup.chainData.current || "-"; color: "#58a6ff"; font.pixelSize: 11; font.bold: true; font.family: "Consolas, monospace"
+                                    Layout.alignment: Qt.AlignRight; Layout.rightMargin: 8
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("点击 \u2713 重置到该层级值")
+                    color: "#506070"
+                    font.pixelSize: 9
+                    horizontalAlignment: Text.AlignHCenter
+                }
+            }
         }
     }
 
@@ -145,7 +332,8 @@ Item {
             Layout.fillWidth: true
 
             content: ColumnLayout {
-                width: parent.width
+                anchors.left: parent.left
+                anchors.right: parent.right
                 spacing: 6
 
                 // 打印机预设选择行
@@ -264,7 +452,8 @@ Item {
             ]
 
             content: ColumnLayout {
-                width: parent.width
+                anchors.left: parent.left
+                anchors.right: parent.right
                 spacing: 6
 
                 // 耗材槽位网格（对齐上游 FilamentPanel FilamentItem 列表）
@@ -273,6 +462,7 @@ Item {
                     rowSpacing: 8
                     columnSpacing: 8
                     Layout.fillWidth: true
+                    Layout.preferredHeight: childrenRect.height
 
                     Repeater {
                         model: 5
@@ -325,7 +515,8 @@ Item {
             expanded: true
 
             content: ColumnLayout {
-                width: parent.width
+                anchors.left: parent.left
+                anchors.right: parent.right
                 spacing: 6
 
                 // 作用域选择器（对齐上游 ParamsPanel scope tabs）
@@ -818,7 +1009,10 @@ Item {
                                                 readonly property string oUnit: opts ? opts.optUnit(optIdx) : ""
                                                 // 值来源层级指示（对齐上游 Tab 预设继承链）
                                                 readonly property string valueSrc: root.configVm ? root.configVm.valueSourceForKey(oKey) : "default"
+                                                readonly property string valueChain: root.configVm ? root.configVm.valueChainForKey(oKey) : "{}"
                                                 readonly property bool isHighlighted: root.highlightedOptionIndex === optIdx
+                                                // 修改状态指示（对齐上游 Tab::Field m_is_modified_value / OptStatus）
+                                                readonly property bool isModified: opts ? opts.optIsDirty(optIdx) : false
 
                                                 width: parent.width
                                                 height: (oType === "double" || oType === "int") ? 44 : 38
@@ -829,10 +1023,10 @@ Item {
                                                 RowLayout {
                                                     anchors.fill: parent
                                                     anchors.leftMargin: 10
-                                                    anchors.rightMargin: 10
+                                                    anchors.rightMargin: isModified ? 8 : 10
                                                     spacing: 6
 
-                                                    // 值来源色点指示器（对齐上游 Tab value source）
+                                                    // 值来源色点指示器（对齐上游 Tab value source）— 点击弹出继承链弹窗
                                                     Rectangle {
                                                         width: 5; height: 5; radius: 2.5
                                                         visible: valueSrc !== "default"
@@ -845,15 +1039,49 @@ Item {
                                                             }
                                                         }
                                                         Layout.alignment: Qt.AlignVCenter
+                                                        MouseArea {
+                                                            anchors.fill: parent
+                                                            anchors.margins: -4
+                                                            hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onClicked: valueChainPopup.show(oKey, valueChain, valueSrc)
+                                                        }
                                                     }
 
                                                     Text {
                                                         Layout.fillWidth: true
                                                         text: oLabel
-                                                        color: isHighlighted ? "#fff" : (oRO ? Theme.textDisabled : Theme.textSecondary)
+                                                        color: isHighlighted ? "#fff" : (isModified ? "#e8864a" : (oRO ? Theme.textDisabled : Theme.textSecondary))
                                                         font.pixelSize: 12
                                                         elide: Text.ElideRight
-                                                        font.bold: isHighlighted
+                                                        font.bold: isHighlighted || isModified
+                                                    }
+
+                                                    // 还原到默认值按钮（对齐上游 Tab::Field m_bmp_value_revert）
+                                                    Rectangle {
+                                                        visible: isModified && !oRO
+                                                        width: 16; height: 16; radius: 3
+                                                        color: revertMA.containsMouse ? "#2e3a1a" : "transparent"
+                                                        border.width: 1
+                                                        border.color: "#5a3a2a"
+                                                        Layout.alignment: Qt.AlignVCenter
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: "↺"
+                                                            color: "#e8864a"
+                                                            font.pixelSize: 10
+                                                            font.bold: true
+                                                        }
+                                                        MouseArea {
+                                                            id: revertMA
+                                                            anchors.fill: parent
+                                                            anchors.margins: -3
+                                                            hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onClicked: {
+                                                                if (opts) opts.resetOption(optIdx)
+                                                            }
+                                                        }
                                                     }
 
                                                     CxSlider {

@@ -7,6 +7,9 @@
 #include <QVector3D>
 #include <QVector4D>
 #include <QMatrix4x4>
+#include <QRandomGenerator>
+#include <QImage>
+#include <QBuffer>
 #include <cstring>
 #include <cfloat>
 #include <algorithm>
@@ -514,7 +517,7 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
     case GLViewport::InputEvent::ArrangeSelected:
     {
       // 自动排列选中对象（对齐上游 Plater::priv::on_arrange）
-      // 简化实现：基于 AABB 的网格排列
+      // 简化实现：基于 AABB 的网格排列，支持上游 ArrangeSettings 参数
       if (m_selectedId >= 0)
       {
         // 收集所有对象及其边界框
@@ -529,8 +532,14 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
         }
         if (items.size() <= 1) break;
 
-        const float spacing = 6.0f;
+        // 读取上游 ArrangeSettings 参数
+        const float spacing = (e.arrangeSpacing <= 0.f) ? 6.0f : e.arrangeSpacing;
+        const bool doRotation = e.arrangeRotation;
+        const bool doAlignY = e.arrangeAlignY;
         int cols = static_cast<int>(std::ceil(std::sqrt(float(items.size()))));
+        // 对齐 Y 轴模式：所有对象排成一列
+        if (doAlignY)
+          cols = 1;
         float curX = 0.f, curY = 0.f, rowMaxH = 0.f;
         int col = 0;
 
@@ -555,6 +564,18 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
           QVector3D t = m_objectTransforms[item.id].translation;
           t.setX(t.x() + dx - cx);
           t.setY(t.y() + dy - cy);
+
+          // 自动旋转模式（Mock：随机旋转 0/90/180/270° 对齐上游 rotation 逻辑）
+          if (doRotation && cols > 1) {
+            int rotStep = QRandomGenerator::global()->bounded(4); // 0,1,2,3 → 0°,90°,180°,270°
+            float newRotZ = rotStep * 90.f;
+            // 交换宽高以匹配旋转后的 AABB
+            if (rotStep == 1 || rotStep == 3)
+              std::swap(w, h);
+            QVector3D &rot = m_objectTransforms[item.id].rotation;
+            rot.setZ(newRotZ);
+          }
+
           m_objectTransforms[item.id].translation = t;
 
           cmd.after = m_objectTransforms[item.id];
@@ -577,6 +598,14 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
       }
       break;
     }
+    case GLViewport::InputEvent::CaptureThumbnail:
+    {
+      // FBO 缩略图捕获请求（对齐上游 PartPlate::thumbnail_data）
+      // 存储请求参数，在 render() 中执行捕获
+      m_pendingCaptureSize = e.captureSize;
+      m_pendingCaptureRequested = true;
+      break;
+    }
     }
   }
 
@@ -588,6 +617,13 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
   }
 
   m_wireframeMode = vp->wireframeMode();
+
+  // 如果有捕获结果，传回 GLViewport
+  if (!m_capturedThumbnail.isEmpty())
+  {
+    vp->m_lastThumbnailData = std::exchange(m_capturedThumbnail, {});
+    QMetaObject::invokeMethod(vp, "thumbnailCaptured", Qt::QueuedConnection);
+  }
 }
 
 // ===========================================================================
@@ -694,6 +730,13 @@ void GLViewportRenderer::render()
   m_prog.release();
 
   m_f->glDisable(GL_DEPTH_TEST);
+
+  // FBO 缩略图捕获（对齐上游 PartPlate::thumbnail_data）
+  if (m_pendingCaptureRequested)
+  {
+    m_pendingCaptureRequested = false;
+    captureThumbnailToFBO(m_pendingCaptureSize);
+  }
 }
 
 // ===========================================================================
@@ -1041,6 +1084,11 @@ void GLViewportRenderer::uploadMesh()
       m_f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
       m_f->glBindVertexArray(0);
       m_f->glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+      // 保留 CPU 侧顶点副本用于 ray-triangle 拾取（对齐上游 mesh face picking）
+      b.cpuVerts.resize(triCount * 9);
+      memcpy(b.cpuVerts.data(), fp, triCount * 9 * sizeof(float));
+
       m_meshBatches.push_back(b);
       p += dataBytes;
     }
@@ -1154,11 +1202,52 @@ int GLViewportRenderer::pickObject(float sx, float sy) const
   {
     float bmin[3], bmax[3];
     transformedAABB(b.objectId, bmin, bmax);
-    float t;
-    if (rayAABB(orig, dir, bmin, bmax, t) && t < tBest)
+    float tAABB;
+    if (!rayAABB(orig, dir, bmin, bmax, tAABB) || tAABB >= tBest)
+      continue;
+
+    // Ray-triangle intersection（对齐上游 mesh face picking / Möller–Trumbore）
+    // 获取对象的 model matrix，将 ray 变换到模型空间
+    QMatrix4x4 model = computeModelMatrix(b.objectId);
+    QMatrix4x4 invModel = model.inverted();
+    QVector3D localOrig = invModel * orig;
+    QVector3D localDir = (invModel * QVector4D(dir, 0.f)).toVector3D().normalized();
+
+    const int triCount = b.vertexCount / 3;
+    for (int t = 0; t < triCount; ++t)
     {
-      tBest = t;
-      hitId = b.objectId;
+      const float *v0 = &b.cpuVerts[t * 9];
+      const float *v1 = &b.cpuVerts[t * 9 + 3];
+      const float *v2 = &b.cpuVerts[t * 9 + 6];
+
+      QVector3D e0(v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]);
+      QVector3D e1(v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]);
+      QVector3D h = QVector3D::crossProduct(localDir, e1);
+      float a = QVector3D::dotProduct(e0, h);
+      if (a > -1e-6f && a < 1e-6f)
+        continue;
+      float f = 1.f / a;
+      QVector3D s(localOrig.x() - v0[0], localOrig.y() - v0[1], localOrig.z() - v0[2]);
+      float u = f * QVector3D::dotProduct(s, h);
+      if (u < 0.f || u > 1.f)
+        continue;
+      QVector3D q = QVector3D::crossProduct(s, e0);
+      float v = f * QVector3D::dotProduct(localDir, q);
+      if (v < 0.f || u + v > 1.f)
+        continue;
+      float tLocal = f * QVector3D::dotProduct(e1, q);
+      if (tLocal < 1e-4f)
+        continue;
+
+      // tLocal 是模型空间的距离，需要变换回世界空间
+      QVector3D hitLocal = localOrig + tLocal * localDir;
+      QVector3D hitWorld = model * hitLocal;
+      float tWorld = (hitWorld - orig).length();
+      if (tWorld < tBest)
+      {
+        tBest = tWorld;
+        hitId = b.objectId;
+      }
     }
   }
   return hitId;
@@ -1657,4 +1746,113 @@ int GLViewportRenderer::pickScaleAxis(float sx, float sy) const
     }
   }
   return best;
+}
+
+// ===========================================================================
+// captureThumbnailToFBO — 对齐上游 GLCanvas3D::render_thumbnail_framebuffer
+// ===========================================================================
+void GLViewportRenderer::captureThumbnailToFBO(int size)
+{
+  if (!m_f || m_meshBatches.empty())
+    return;
+
+  const int w = size, h = size;
+
+  // 1. 创建临时 FBO（对齐上游 render_thumbnail_framebuffer）
+  QOpenGLFramebufferObjectFormat fmt;
+  fmt.setAttachment(QOpenGLFramebufferObject::CombinedDepthStencil);
+  fmt.setInternalTextureFormat(GL_RGBA8);
+  QOpenGLFramebufferObject fbo(w, h, fmt);
+  if (!fbo.isValid())
+    return;
+
+  fbo.bind();
+
+  // 2. 计算场景包围盒（所有 mesh batch 的合并 AABB）
+  float sceneMin[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
+  float sceneMax[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+  for (const auto &b : m_meshBatches)
+  {
+    float mn[3], mx[3];
+    transformedAABB(b.objectId, mn, mx);
+    for (int i = 0; i < 3; ++i)
+    {
+      sceneMin[i] = std::min(sceneMin[i], mn[i]);
+      sceneMax[i] = std::max(sceneMax[i], mx[i]);
+    }
+  }
+
+  float cx = (sceneMin[0] + sceneMax[0]) * 0.5f;
+  float cy = (sceneMin[1] + sceneMax[1]) * 0.5f;
+  float cz = (sceneMin[2] + sceneMax[2]) * 0.5f;
+  float span = std::max({sceneMax[0] - sceneMin[0], sceneMax[1] - sceneMin[1], sceneMax[2] - sceneMin[2]});
+  if (span < 1.f) span = 100.f;
+  float halfSpan = span * 0.6f;
+
+  // 3. 设置正交相机（对齐上游 Camera::EType::Ortho + top-down view）
+  QMatrix4x4 proj;
+  proj.ortho(-halfSpan, halfSpan, -halfSpan, halfSpan, -halfSpan * 10.f, halfSpan * 10.f);
+
+  QMatrix4x4 view;
+  view.lookAt(QVector3D(cx, cy, cz + halfSpan * 5.f),
+              QVector3D(cx, cy, cz),
+              QVector3D(0, 1, 0));
+
+  QMatrix4x4 mvp = proj * view;
+
+  // 4. 渲染场景到 FBO（只渲染 mesh，不渲染 gizmo/grid/axes）
+  m_f->glEnable(GL_DEPTH_TEST);
+  m_f->glDisable(GL_CULL_FACE);
+  m_f->glClearColor(0.12f, 0.14f, 0.18f, 1.f); // 深色背景（对齐上游 thumbnail 背景）
+  m_f->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  if (!m_meshBatches.empty())
+  {
+    m_meshProg.bind();
+    m_meshProg.setUniformValue(m_uMeshMVP, mvp);
+
+    for (const auto &b : m_meshBatches)
+    {
+      if (b.vertexCount <= 0)
+        continue;
+      QMatrix4x4 model = computeModelMatrix(b.objectId);
+      m_meshProg.setUniformValue(m_uMeshModel, model);
+      // 缩略图使用统一亮色（不区分选中态）
+      m_meshProg.setUniformValue(m_uMeshBaseColor, kObjColors[b.objectId % kNumColors]);
+      m_meshProg.setUniformValue(m_uMeshBright, 1.0f);
+      m_f->glBindVertexArray(b.vao);
+      m_f->glDrawArrays(GL_TRIANGLES, 0, b.vertexCount);
+      m_f->glBindVertexArray(0);
+    }
+
+    m_meshProg.release();
+  }
+
+  m_f->glDisable(GL_DEPTH_TEST);
+
+  // 5. 读取像素（对齐上游 glReadPixels）
+  QVector<quint8> pixels(w * h * 4);
+  m_f->glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+
+  fbo.release();
+
+  // 6. 转换为 QImage 并编码为 base64 PNG
+  // flip vertically: OpenGL bottom-left → QImage top-left
+  for (int row = 0; row < h / 2; ++row)
+  {
+    quint8 *lineA = pixels.data() + row * w * 4;
+    quint8 *lineB = pixels.data() + (h - 1 - row) * w * 4;
+    for (int col = 0; col < w * 4; ++col)
+      std::swap(lineA[col], lineB[col]);
+  }
+
+  QImage img(pixels.constData(), w, h, w * 4, QImage::Format_RGBA8888);
+  QByteArray pngData;
+  {
+    QBuffer buf(&pngData);
+    buf.open(QIODevice::WriteOnly);
+    img.save(&buf, "PNG");
+  }
+
+  m_capturedThumbnail = QString::fromLatin1(pngData.toBase64());
 }

@@ -56,7 +56,7 @@ Item {
                 color: "#252b38"
             }
 
-            // Active range track (between two thumbs)
+            // Active range track (between two thumbs, 对齐上游 IMSlider scroll_line)
             Rectangle {
                 x: rangeSliderItem.trackMargin + (root.totalLayers > 0
                      ? (root.previewVm.currentLayerMin / root.totalLayers) * rangeSliderItem.trackWidth
@@ -69,6 +69,32 @@ Item {
                 radius: 3
                 color: Theme.accent
                 opacity: 0.7
+            }
+
+            // Non-selected range dimming (对齐上游 IMSlider groove outside selected range)
+            Rectangle {
+                x: rangeSliderItem.trackMargin
+                y: rangeSliderItem.height / 2 - 3
+                width: root.totalLayers > 0
+                    ? (root.previewVm.currentLayerMin / root.totalLayers) * rangeSliderItem.trackWidth
+                    : 0
+                height: 6
+                radius: 3
+                color: "#1a2030"
+                opacity: 0.5
+            }
+            Rectangle {
+                x: rangeSliderItem.trackMargin + (root.totalLayers > 0
+                     ? (root.previewVm.currentLayerMax / root.totalLayers) * rangeSliderItem.trackWidth
+                     : 0)
+                y: rangeSliderItem.height / 2 - 3
+                width: root.totalLayers > 0
+                    ? ((root.totalLayers - root.previewVm.currentLayerMax) / root.totalLayers) * rangeSliderItem.trackWidth
+                    : 0
+                height: 6
+                radius: 3
+                color: "#1a2030"
+                opacity: 0.5
             }
 
             // Min thumb

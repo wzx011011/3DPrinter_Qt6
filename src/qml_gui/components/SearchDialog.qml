@@ -140,7 +140,6 @@ Popup {
                 readonly property string optKey: modelData.optKey
                 readonly property string optPath: modelData.optPath
                 readonly property string valueSrc: modelData.valueSrc
-                readonly property string matchField: modelData.matchField
 
                 width: ListView.view.width
                 spacing: 0
@@ -197,13 +196,21 @@ Popup {
                             Layout.alignment: Qt.AlignVCenter
                         }
 
-                        // Label
-                        Text {
+                        // Label (matched portion highlighted, 对齐上游 ColorMarkerStart/End)
+                        Row {
                             Layout.fillWidth: true
-                            text: optLabel
-                            color: Theme.textPrimary
-                            font.pixelSize: 11
-                            elide: Text.ElideRight
+                            spacing: 0
+                            Repeater {
+                                id: labelParts
+                                model: root.highlightParts(optLabel, searchField.text)
+                                delegate: Text {
+                                    text: modelData.text
+                                    color: modelData.matched ? "#22c564" : Theme.textPrimary
+                                    font.pixelSize: 11
+                                    font.bold: modelData.matched
+                                    font.weight: modelData.matched ? Font.DemiBold : Font.Normal
+                                }
+                            }
                         }
 
                         // Key (dimmed)
@@ -378,5 +385,33 @@ Popup {
         root.open()
         searchField.forceActiveFocus()
         searchField.selectAll()
+    }
+
+    // 对齐上游 ColorMarkerStart/End：将匹配部分拆分为 [{text, matched}] 数组
+    function highlightParts(text, query) {
+        if (!query || query.length === 0)
+            return [{ text: text, matched: false }]
+
+        const lowerText = text.toLowerCase()
+        const lowerQuery = query.toLowerCase()
+        const parts = []
+        let pos = 0
+
+        while (pos <= lowerText.length - lowerQuery.length) {
+            const idx = lowerText.indexOf(lowerQuery, pos)
+            if (idx === -1) break
+            if (idx > pos)
+                parts.push({ text: text.substring(pos, idx), matched: false })
+            parts.push({ text: text.substring(idx, idx + lowerQuery.length), matched: true })
+            pos = idx + lowerQuery.length
+        }
+
+        if (pos < text.length)
+            parts.push({ text: text.substring(pos), matched: false })
+
+        if (parts.length === 0)
+            parts.push({ text: text, matched: false })
+
+        return parts
     }
 }

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 import ".."
 
 // C3 — 对象列表面板
@@ -365,6 +366,78 @@ Item {
                         text: qsTr("添加支撑增强")
                         onTriggered: {
                             if (root.editorVm) root.editorVm.addVolumeToObject(4)
+                        }
+                    }
+
+                    MenuSeparator { }
+
+                    // 文字浮雕（对齐上游 GLGizmoText）
+                    MenuItem {
+                        text: qsTr("文字浮雕")
+                        onTriggered: {
+                            if (!root.editorVm) return
+                            addTextDialogComp.createObject(root, {
+                                objectIndex: row.index,
+                                editorVm: root.editorVm
+                            }).open()
+                        }
+                    }
+
+                    // SVG 浮雕（对齐上游 GLGizmoSVG）
+                    MenuItem {
+                        text: qsTr("导入 SVG 浮雕...")
+                        onTriggered: {
+                            if (!root.editorVm) return
+                            svgFileDialogComp.createObject(root, {
+                                objectIndex: row.index,
+                                editorVm: root.editorVm
+                            }).open()
+                        }
+                    }
+
+                    MenuSeparator { }
+
+                    // 从文件导入（对齐上游 GUI_ObjectList::load_generic_subobject 文件加载）
+                    MenuItem {
+                        text: qsTr("从文件导入部件...")
+                        onTriggered: {
+                            if (!root.editorVm) return
+                            volumeFileDialogComp.createObject(root, {
+                                objectIndex: row.index,
+                                editorVm: root.editorVm
+                            }).open()
+                        }
+                    }
+
+                    MenuSeparator { }
+
+                    // 原始体创建（对齐上游 create_mesh + add_volume）
+                    Menu {
+                        title: qsTr("添加原始体")
+
+                        MenuItem {
+                            text: qsTr("立方体")
+                            onTriggered: {
+                                if (root.editorVm) root.editorVm.addPrimitive(row.index, 0)
+                            }
+                        }
+                        MenuItem {
+                            text: qsTr("球体")
+                            onTriggered: {
+                                if (root.editorVm) root.editorVm.addPrimitive(row.index, 1)
+                            }
+                        }
+                        MenuItem {
+                            text: qsTr("圆柱体")
+                            onTriggered: {
+                                if (root.editorVm) root.editorVm.addPrimitive(row.index, 2)
+                            }
+                        }
+                        MenuItem {
+                            text: qsTr("圆环")
+                            onTriggered: {
+                                if (root.editorVm) root.editorVm.addPrimitive(row.index, 3)
+                            }
                         }
                     }
                 }
@@ -978,6 +1051,115 @@ Item {
             hoverEnabled: true
             enabled: false
             cursorShape: Qt.ArrowCursor
+        }
+    }
+
+    // ── 从文件导入 volume 对话框（对齐上游 GUI_ObjectList::load_generic_subobject 文件加载）──
+    Component {
+        id: volumeFileDialogComp
+        FileDialog {
+            required property int objectIndex
+            required property var editorVm
+            title: qsTr("选择模型文件导入为部件")
+            nameFilters: ["模型文件 (*.stl *.obj *.3mf)", "STL 文件 (*.stl)", "OBJ 文件 (*.obj)", "所有文件 (*)"]
+            onAccepted: {
+                if (editorVm) {
+                    editorVm.addVolumeFromFile(objectIndex, selectedFile.toString().replace("file:///", ""), 0)
+                }
+                destroy()
+            }
+            onRejected: destroy()
+        }
+    }
+
+    // ── SVG 导入对话框（对齐上游 GLGizmoSVG）──
+    Component {
+        id: svgFileDialogComp
+        FileDialog {
+            required property int objectIndex
+            required property var editorVm
+            title: qsTr("选择 SVG 文件")
+            nameFilters: ["SVG 文件 (*.svg)", "所有文件 (*)"]
+            onAccepted: {
+                if (editorVm) {
+                    editorVm.addSvgVolume(objectIndex, selectedFile.toString().replace("file:///", ""))
+                }
+                destroy()
+            }
+            onRejected: destroy()
+        }
+    }
+
+    // ── 文字浮雕输入对话框（对齐上游 GLGizmoText）──
+    Component {
+        id: addTextDialogComp
+        Dialog {
+            id: textDlg
+            required property int objectIndex
+            required property var editorVm
+            title: qsTr("添加文字浮雕")
+            modal: true
+            anchors.centerIn: parent
+            width: 320
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 12
+
+                Text {
+                    text: qsTr("输入浮雕文字")
+                    color: Theme.textSecondary
+                    font.pixelSize: 12
+                }
+
+                TextField {
+                    id: textField
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("请输入文字...")
+                    font.pixelSize: 13
+                    color: Theme.textPrimary
+                    background: Rectangle {
+                        radius: 6
+                        color: Theme.bgElevated
+                        border.color: textField.activeFocus ? Theme.accent : Theme.borderSubtle
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Item { Layout.fillWidth: true }
+
+                    Rectangle {
+                        height: 28
+                        width: cancelBtnText.implicitWidth + 20
+                        radius: 5
+                        color: Theme.bgElevated
+                        border.color: Theme.borderSubtle
+                        Text { id: cancelBtnText; anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: 11 }
+                        TapHandler { onTapped: textDlg.close() }
+                    }
+
+                    Rectangle {
+                        height: 28
+                        width: okBtnText.implicitWidth + 20
+                        radius: 5
+                        color: Theme.accent
+                        Text { id: okBtnText; anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: 11; font.bold: true }
+                        TapHandler {
+                            onTapped: {
+                                if (editorVm && textField.text.length > 0) {
+                                    editorVm.addTextVolume(textDlg.objectIndex, textField.text)
+                                }
+                                textDlg.close()
+                            }
+                        }
+                    }
+                }
+            }
+
+            onOpened: textField.forceActiveFocus()
+            onClosed: destroy()
         }
     }
 }

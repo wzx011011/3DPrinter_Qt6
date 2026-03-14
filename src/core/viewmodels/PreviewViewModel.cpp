@@ -6,6 +6,7 @@
 #include <QTimer>
 #include <QFileInfo>
 #include <QHash>
+#include <QColor>
 #include <cstring>
 #include <cfloat>
 #include <cmath>
@@ -369,6 +370,30 @@ void PreviewViewModel::setStealthMode(bool enabled)
         ? formatTime(parseTimeSecs(estimatedTime_) * 1.4f)
         : estimatedTime_;
   }
+  emit stateChanged();
+}
+
+void PreviewViewModel::setShowTravelMoves(bool enabled)
+{
+  if (showTravelMoves_ == enabled)
+    return;
+  showTravelMoves_ = enabled;
+  emit stateChanged();
+}
+
+void PreviewViewModel::setShowBed(bool enabled)
+{
+  if (showBed_ == enabled)
+    return;
+  showBed_ = enabled;
+  emit stateChanged();
+}
+
+void PreviewViewModel::setShowMarker(bool enabled)
+{
+  if (showMarker_ == enabled)
+    return;
+  showMarker_ = enabled;
   emit stateChanged();
 }
 
@@ -762,6 +787,23 @@ float PreviewViewModel::layerTimeAt(int layer) const
 }
 float PreviewViewModel::maxLayerTime() const { return m_maxLayerTime; }
 
+float PreviewViewModel::minLayerTime() const
+{
+  if (m_layerTimes.isEmpty()) return 0.f;
+  float minT = m_layerTimes[0];
+  for (float t : m_layerTimes)
+    if (t < minT) minT = t;
+  return minT;
+}
+
+float PreviewViewModel::avgLayerTime() const
+{
+  if (m_layerTimes.isEmpty()) return 0.f;
+  double sum = 0.0;
+  for (float t : m_layerTimes) sum += t;
+  return float(sum / m_layerTimes.size());
+}
+
 float PreviewViewModel::layerZAt(int layer) const
 {
   if (layer < 0 || layer >= m_layerZs.size())
@@ -931,10 +973,15 @@ void PreviewViewModel::recolorAndPackSegments()
 void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
 {
   legendItems_.clear();
+  m_legendType = 0; // default: discrete
+  m_legendGradMinLabel.clear();
+  m_legendGradMaxLabel.clear();
+  m_legendGradMinColor.clear();
+  m_legendGradMaxColor.clear();
 
   if (mode == 0)
   {
-    // FeatureType legend
+    // FeatureType legend (discrete)
     static const QHash<QString, QString> colorMap = {
         {QStringLiteral("外壁"), QStringLiteral("#FF8C3A")},
         {QStringLiteral("填充"), QStringLiteral("#38A4FF")},
@@ -946,7 +993,8 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
   }
   else if (mode == 3 || mode == 7 || mode == 8)
   {
-    // Tool / ColorPrint / FilamentId legend: list used extruders
+    // Tool / ColorPrint / FilamentId legend: extruder palette (对齐上游 extruder_colors)
+    m_legendType = 2; // extruder palette
     QSet<int> usedIds;
     for (const auto &s : segments_)
       if (s.extruder_id > 0 || usedIds.isEmpty())
@@ -977,7 +1025,8 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
   }
   else
   {
-    // Gradient legend: show range endpoints
+    // Gradient legend (对齐上游 Range_Colors 10-stop bluish→reddish gradient)
+    m_legendType = 1; // gradient
     QString label;
     switch (mode)
     {
@@ -995,7 +1044,24 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
 
     const QString minStr = (minV <= FLT_MAX) ? QString::number(minV, 'f', 1) : QStringLiteral("--");
     const QString maxStr = (maxV >= -FLT_MAX) ? QString::number(maxV, 'f', 1) : QStringLiteral("--");
-    legendItems_.append(legendItem(minStr, QStringLiteral("#0b2c7a"), 0));
-    legendItems_.append(legendItem(maxStr, QStringLiteral("#942616"), 0));
+
+    // Upstream Range_Colors endpoints: #0d3264 (bluish) → #c22525 (reddish)
+    static const QColor kGradStart(13, 50, 100);
+    static const QColor kGradEnd(194, 37, 37);
+
+    m_legendGradMinLabel = minStr;
+    m_legendGradMaxLabel = maxStr;
+    m_legendGradMinColor = QStringLiteral("#%1%2%3")
+        .arg(kGradStart.red(), 2, 16, QLatin1Char('0'))
+        .arg(kGradStart.green(), 2, 16, QLatin1Char('0'))
+        .arg(kGradStart.blue(), 2, 16, QLatin1Char('0'));
+    m_legendGradMaxColor = QStringLiteral("#%1%2%3")
+        .arg(kGradEnd.red(), 2, 16, QLatin1Char('0'))
+        .arg(kGradEnd.green(), 2, 16, QLatin1Char('0'))
+        .arg(kGradEnd.blue(), 2, 16, QLatin1Char('0'));
+
+    // Still populate legendItems_ with min/max for backward compat
+    legendItems_.append(legendItem(minStr, m_legendGradMinColor, 0));
+    legendItems_.append(legendItem(maxStr, m_legendGradMaxColor, 0));
   }
 }

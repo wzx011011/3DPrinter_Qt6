@@ -559,7 +559,74 @@ QSet<QString> ConfigViewModel::readonlyKeysForCurrentScope() const
   return {};
 }
 
-QList<int> ConfigViewModel::filterOptionIndices(const QString &category, const QString &searchText) const
+// ── Fuzzy matching helper (对齐上游 OptionsSearcher::search / fts_fuzzy_match) ──
+namespace {
+
+// Subsequence matching with scoring (simplified Möller–Trumbore-style scan)
+static bool fuzzyMatch(const QString &pattern, const QString &text, int &outScore)
+{
+  const int m = pattern.size(), n = text.size();
+  if (m == 0 || n == 0) { outScore = 0; return false; }
+
+  // Quick reject: if all pattern chars must appear in text
+  QVector<bool> charUsed(m, false);
+  for (int pi = 0; pi < m; ++pi)
+  {
+    QChar pc = pattern[pi].toLower();
+    bool found = false;
+    for (int ti = 0; ti < n && !found; ++ti)
+    {
+      if (text[ti].toLower() == pc) found = true;
+    }
+    if (!found) { outScore = 0; return false; }
+  }
+
+  // Dynamic programming: dp[i][j] = best score matching pattern[0..i-1] against text[0..j-1]
+  // dp[i][j].first = score, .second = position of last match in text
+  QVector<QPair<int,int>> prevRow(n + 1, {0, -1}), curRow(n + 1, {0, -1});
+
+  for (int pi = 1; pi <= m; ++pi)
+  {
+    curRow.fill({0, -1});
+    const QChar pc = pattern[pi - 1].toLower();
+
+    for (int ti = 1; ti <= n; ++ti)
+    {
+      // Match at current position
+      if (text[ti - 1].toLower() == pc)
+      {
+        int prevScore = prevRow[ti - 1].first;
+        int prevPos = prevRow[ti - 1].second;
+        int bonus = 15; // sequential bonus (对齐上游 sequential bonus)
+        if (ti > 1 && prevPos == ti - 2) bonus = 25; // consecutive chars
+        int score = prevScore + bonus;
+        if (score > curRow[ti].first)
+        {
+          curRow[ti] = {score, ti - 1};
+        }
+      }
+
+      // Skip (gap penalty = -1)
+      {
+        int score = prevRow[ti].first - 1;
+        if (score > curRow[ti].first)
+        {
+          curRow[ti] = {score, prevRow[ti].second};
+        }
+      }
+    }
+    prevRow = std::move(curRow);
+  }
+
+  int bestScore = prevRow[n].first;
+  int score = qMax(0, bestScore);
+  outScore = score;
+  return score >= 60; // minimum threshold (对齐上游 minimum score)
+}
+
+} // anonymous namespace
+
+QList<int> ConfigViewModel::filterOptionIndices(const QString &category, const QString &searchText, bool advancedMode) const
 {
   if (!printOptions_)
     return {};
@@ -570,6 +637,7 @@ QList<int> ConfigViewModel::filterOptionIndices(const QString &category, const Q
 
   const bool matchAll = category.isEmpty() || category == QStringLiteral("全部") || category == tr("全部");
   const QString needle = searchText.toLower();
+  const bool useFuzzy = needle.length() >= 2; // 启用 fuzzy matching（对齐上游 fts_fuzzy_match）
 
   for (int i = 0; i < n; ++i)
   {
@@ -578,14 +646,45 @@ QList<int> ConfigViewModel::filterOptionIndices(const QString &category, const Q
 
     if (!needle.isEmpty())
     {
-      if (!printOptions_->optLabel(i).toLower().contains(needle) &&
-          !printOptions_->optKey(i).toLower().contains(needle))
+      bool matched = false;
+      if (useFuzzy)
+      {
+        int score = 0;
+        matched = fuzzyMatch(needle, printOptions_->optLabel(i).toLower(), score);
+        if (!matched)
+          matched = fuzzyMatch(needle, printOptions_->optKey(i).toLower(), score);
+      }
+      else
+      {
+        matched = printOptions_->optLabel(i).toLower().contains(needle) ||
+                printOptions_->optKey(i).toLower().contains(needle);
+      }
+      if (!matched)
         continue;
     }
+
+    // Mode filter (对齐上游 ConfigOptionMode: 0=Simple, 1=Advanced, 2=Both)
+    const int optMode = printOptions_->optMode(i);
+    if (optMode == 1 && !advancedMode)
+      continue; // Advanced-only options hidden in simple mode
+    if (optMode == 0 && advancedMode)
+      continue; // Simple-only options hidden in advanced mode (rare)
 
     result.append(i);
   }
   return result;
+}
+
+Q_INVOKABLE QList<int> ConfigViewModel::moveListItem(int fromRow, int toRow) const
+{
+  if (!printOptions_)
+    return {};
+
+  if (fromRow == toRow || fromRow < 0 || fromRow >= printOptions_->rowCount() || toRow < 0 || toRow >= printOptions_->rowCount())
+    return {};
+
+  // Return the swapped row indices for the QML side to handle the visual reorder
+  return {fromRow, toRow};
 }
 
 QList<int> ConfigViewModel::filterIndicesByPage(const QList<int> &indices, const QString &page) const
@@ -717,6 +816,65 @@ QList<int> ConfigViewModel::searchOptions(const QString &query) const
 QString ConfigViewModel::valueSourceForKey(const QString &key) const
 {
   return valueSources_.value(key, QStringLiteral("default"));
+}
+
+QString ConfigViewModel::valueChainForKey(const QString &key) const
+{
+  // 返回 JSON: {"default":v,"printer":v,"filament":v,"print":v}
+  // 对齐上游 PresetBundle value_at_level 可视化
+  if (!printOptions_ || !presetService_)
+    return QStringLiteral("{\"default\":\"\"}");
+
+  QVariant defVal = printOptions_->defaultValuesByKey().value(key);
+  QVariant printerVal = presetService_->presetValue(currentPrinterPreset_, key);
+  QVariant filamentVal = presetService_->presetValue(currentFilamentPreset_, key);
+  QVariant printVal = presetService_->presetValue(currentPrintPreset_, key);
+  QVariant currentVal = globalOptionValues_.value(key, defVal);
+
+  // 构建最终 JSON
+  QString result = "{";
+  result += "\"default\":\"" + defVal.toString() + "\"";
+  result += ",\"printer\":\"" + (printerVal.isValid() ? printerVal.toString() : "-") + "\"";
+  result += ",\"filament\":\"" + (filamentVal.isValid() ? filamentVal.toString() : "-") + "\"";
+  result += ",\"print\":\"" + (printVal.isValid() ? printVal.toString() : "-") + "\"";
+  result += ",\"current\":\"" + currentVal.toString() + "\"";
+  result += "}";
+  return result;
+}
+
+bool ConfigViewModel::resetOptionToLevel(const QString &key, int level)
+{
+  // level: 0=default, 1=print, 2=filament, 3=printer
+  // 对齐上游 Tab reset_to_level
+  if (!printOptions_ || !presetService_)
+    return false;
+
+  QVariant targetVal;
+  switch (level) {
+  case 0: targetVal = printOptions_->defaultValuesByKey().value(key); break;
+  case 1: targetVal = presetService_->presetValue(currentPrintPreset_, key); break;
+  case 2: targetVal = presetService_->presetValue(currentFilamentPreset_, key); break;
+  case 3: targetVal = presetService_->presetValue(currentPrinterPreset_, key); break;
+  default: return false;
+  }
+
+  if (!targetVal.isValid())
+    return false;
+
+  globalOptionValues_[key] = targetVal;
+  savedPresetValues_[key] = targetVal;
+  applyScopeValues();
+
+  // 更新来源层级
+  switch (level) {
+  case 0: valueSources_[key] = QStringLiteral("default"); break;
+  case 1: valueSources_[key] = QStringLiteral("print"); break;
+  case 2: valueSources_[key] = QStringLiteral("filament"); break;
+  case 3: valueSources_[key] = QStringLiteral("printer"); break;
+  }
+
+  emit stateChanged();
+  return true;
 }
 
 QString ConfigViewModel::searchResultSource(int searchIndex) const

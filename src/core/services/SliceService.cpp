@@ -103,6 +103,15 @@ QString SliceService::resultCostLabel() const
   return resultCostLabel_;
 }
 
+double SliceService::resultTotalFilamentMm() const
+{
+  // 从 resultFilamentLabel_ 解析总长度（格式如 "3.45 m"）
+  if (resultFilamentLabel_.isEmpty()) return 0.0;
+  bool ok = false;
+  const double val = resultFilamentLabel_.left(resultFilamentLabel_.indexOf(' ')).toDouble(&ok);
+  return ok ? val * 1000.0 : 0.0; // m → mm
+}
+
 void SliceService::clearStoredResult()
 {
   progress_ = 0;

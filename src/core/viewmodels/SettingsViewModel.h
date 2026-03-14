@@ -29,6 +29,14 @@ class SettingsViewModel : public QObject
   Q_PROPERTY(bool autoBackup READ autoBackup WRITE setAutoBackup NOTIFY settingsChanged)
   /// 撤销栈上限（对齐上游 undo/redo 历史限制）
   Q_PROPERTY(int undoLimit READ undoLimit WRITE setUndoLimit NOTIFY settingsChanged)
+  /// 默认喷嘴直径选择（对齐上游 PreferencesDialog 打印机设置）
+  Q_PROPERTY(int defaultNozzleIndex READ defaultNozzleIndex WRITE setDefaultNozzleIndex NOTIFY settingsChanged)
+  /// 默认热床形状（对齐上游 bed_shape）
+  Q_PROPERTY(int defaultBedShape READ defaultBedShape WRITE setDefaultBedShape NOTIFY settingsChanged)
+  /// 切片完成后自动上传（对齐上游 print host upload after slicing）
+  Q_PROPERTY(bool autoUpload READ autoUpload WRITE setAutoUpload NOTIFY settingsChanged)
+  /// 更新通道（对齐上游 update_channel: 0=Stable, 1=Beta, 2=Dev）
+  Q_PROPERTY(int updateChannel READ updateChannel WRITE setUpdateChannel NOTIFY settingsChanged)
   Q_PROPERTY(QStringList presetNames READ presetNames NOTIFY presetsChanged)
   Q_PROPERTY(QString currentPreset READ currentPreset WRITE setCurrentPreset NOTIFY presetsChanged)
   Q_PROPERTY(double layerHeight READ layerHeight WRITE setLayerHeight NOTIFY configChanged)
@@ -55,6 +63,10 @@ public:
   bool compactMode() const { return m_compactMode; }
   bool autoBackup() const { return m_autoBackup; }
   int undoLimit() const { return m_undoLimit; }
+  int defaultNozzleIndex() const { return m_defaultNozzleIndex; }
+  int defaultBedShape() const { return m_defaultBedShape; }
+  bool autoUpload() const { return m_autoUpload; }
+  int updateChannel() const { return m_updateChannel; }
   QStringList presetNames() const { return m_presetNames; }
   QString currentPreset() const { return m_currentPreset; }
   double layerHeight() const { return m_layerHeight; }
@@ -87,6 +99,10 @@ public slots:
   void setCompactMode(bool v);
   void setAutoBackup(bool v);
   void setUndoLimit(int limit);
+  void setDefaultNozzleIndex(int idx);
+  void setDefaultBedShape(int shape);
+  void setAutoUpload(bool v);
+  void setUpdateChannel(int channel);
   void setCurrentPreset(const QString &preset);
   void setLayerHeight(double h);
   Q_INVOKABLE void resetPreferences();
@@ -112,4 +128,8 @@ private:
   bool m_compactMode = false; // 3D view LOD / compact mode
   bool m_autoBackup = false;  // cloud sync backup
   int m_undoLimit = 100;      // undo stack limit
+  int m_defaultNozzleIndex = 1; // 0=0.2mm, 1=0.4mm, 2=0.6mm, 3=0.8mm
+  int m_defaultBedShape = 0;    // 0=Rectangular, 1=Round
+  bool m_autoUpload = false;    // auto upload after slicing
+  int m_updateChannel = 0;      // 0=Stable, 1=Beta, 2=Dev
 };

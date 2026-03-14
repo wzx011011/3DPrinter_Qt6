@@ -25,6 +25,12 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(QString currentTime READ currentTime NOTIFY stateChanged)
   Q_PROPERTY(QByteArray gcodePreviewData READ gcodePreviewData NOTIFY stateChanged)
   Q_PROPERTY(QVariantList legendItems READ legendItems NOTIFY stateChanged)
+  /// Legend rendering type (对齐上游 GCodeViewer legend): 0=discrete, 1=gradient, 2=extruder
+  Q_PROPERTY(int legendType READ legendType NOTIFY stateChanged)
+  Q_PROPERTY(QString legendGradientMinLabel READ legendGradientMinLabel NOTIFY stateChanged)
+  Q_PROPERTY(QString legendGradientMaxLabel READ legendGradientMaxLabel NOTIFY stateChanged)
+  Q_PROPERTY(QString legendGradientMinColor READ legendGradientMinColor NOTIFY stateChanged)
+  Q_PROPERTY(QString legendGradientMaxColor READ legendGradientMaxColor NOTIFY stateChanged)
   Q_PROPERTY(QString totalTime READ totalTime NOTIFY stateChanged)
   Q_PROPERTY(QString filamentUsed READ filamentUsed NOTIFY stateChanged)
   Q_PROPERTY(QString filamentWeight READ filamentWeight NOTIFY stateChanged)
@@ -37,6 +43,12 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(int viewModeIndex READ viewModeIndex WRITE setViewModeIndex NOTIFY stateChanged)
   /// Normal/Stealth 双模式（对齐上游 PrintEstimatedStatistics modes[0]/modes[1]）
   Q_PROPERTY(bool stealthMode READ stealthMode WRITE setStealthMode NOTIFY stateChanged)
+  /// 显示/隐藏空驶移动（对齐上游 GCodeViewer travel visibility toggle）
+  Q_PROPERTY(bool showTravelMoves READ showTravelMoves WRITE setShowTravelMoves NOTIFY stateChanged)
+  /// 显示/隐藏热床网格（对齐上游 GCodeViewer show_bed）
+  Q_PROPERTY(bool showBed READ showBed WRITE setShowBed NOTIFY stateChanged)
+  /// 显示/隐藏工具位置标记（对齐上游 GCodeViewer show_marker）
+  Q_PROPERTY(bool showMarker READ showMarker WRITE setShowMarker NOTIFY stateChanged)
   /// 工具位置提示框数据（对齐上游 GCodeViewer::Marker::render）
   Q_PROPERTY(bool hasToolPosition READ hasToolPosition NOTIFY stateChanged)
   Q_PROPERTY(double toolX READ toolX NOTIFY stateChanged)
@@ -71,6 +83,11 @@ public:
   Q_INVOKABLE QString timeAtMove(int moveIndex) const;
   const QByteArray &gcodePreviewData() const { return gcodePreviewData_; }
   QVariantList legendItems() const { return legendItems_; }
+  int legendType() const { return m_legendType; }
+  QString legendGradientMinLabel() const { return m_legendGradMinLabel; }
+  QString legendGradientMaxLabel() const { return m_legendGradMaxLabel; }
+  QString legendGradientMinColor() const { return m_legendGradMinColor; }
+  QString legendGradientMaxColor() const { return m_legendGradMaxColor; }
   QString totalTime() const { return totalTime_; }
   QString filamentUsed() const { return filamentUsed_; }
   QString filamentWeight() const { return filamentWeight_; }
@@ -88,6 +105,8 @@ public:
   Q_INVOKABLE int layerTimeCount() const;
   Q_INVOKABLE float layerTimeAt(int layer) const;  // seconds
   Q_INVOKABLE float maxLayerTime() const;
+  Q_INVOKABLE float minLayerTime() const;
+  Q_INVOKABLE float avgLayerTime() const;
   /// Per-layer Z height（对齐上游 IMSlider hover tooltip 显示层高度）
   Q_INVOKABLE float layerZAt(int layer) const;
   /// 工具切换位置（对齐上游 IMSlider colored band / extruder_colors）
@@ -104,6 +123,12 @@ public:
   int viewModeIndex() const { return viewModeIndex_; }
   bool stealthMode() const { return stealthMode_; }
   void setStealthMode(bool enabled);
+  bool showTravelMoves() const { return showTravelMoves_; }
+  void setShowTravelMoves(bool enabled);
+  bool showBed() const { return showBed_; }
+  void setShowBed(bool enabled);
+  bool showMarker() const { return showMarker_; }
+  void setShowMarker(bool enabled);
   bool hasToolPosition() const { return hasToolPosition_; }
   double toolX() const { return toolX_; }
   double toolY() const { return toolY_; }
@@ -149,6 +174,11 @@ private:
   int currentMove_ = 0;
   QByteArray gcodePreviewData_;
   QVariantList legendItems_;
+  int m_legendType = 0;  ///< 0=discrete, 1=gradient, 2=extruder
+  QString m_legendGradMinLabel;
+  QString m_legendGradMaxLabel;
+  QString m_legendGradMinColor;
+  QString m_legendGradMaxColor;
   QString totalTime_ = QStringLiteral("--:--:--");
   QString filamentUsed_ = QStringLiteral("--");
   QString filamentWeight_ = QStringLiteral("--");
@@ -175,6 +205,9 @@ private:
   float m_maxLayerTime = 0.f;
   int viewModeIndex_ = 0;
   bool stealthMode_ = false;
+  bool showTravelMoves_ = true;  ///< 显示空驶移动（对齐上游 GCodeViewer travel toggle）
+  bool showBed_ = true;           ///< 显示热床网格（对齐上游 GCodeViewer show_bed）
+  bool showMarker_ = true;        ///< 显示工具位置标记（对齐上游 GCodeViewer show_marker）
   QTimer *playTimer_ = nullptr;
 
   // Stored parsed segments for view-mode recoloring

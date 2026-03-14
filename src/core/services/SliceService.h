@@ -39,6 +39,8 @@ public:
   int resultLayerCount() const;
   /// 预估成本（对齐上游 PrintEstimatedStatistics）
   QString resultCostLabel() const;
+  /// 总耗材长度（mm，用于平均速度计算）
+  double resultTotalFilamentMm() const;
 
   Q_INVOKABLE void startSlice(const QString &projectName);
   Q_INVOKABLE void startSlicePlate(int plateIndex);

@@ -46,6 +46,57 @@ Item {
             }
         }
 
+        // Show/hide travel moves toggle (对齐上游 GCodeViewer travel visibility)
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spacingSM
+
+            Text {
+                text: qsTr("显示空驶")
+                color: root.previewVm.showTravelMoves ? Theme.textSecondary : Theme.textTertiary
+                font.pixelSize: Theme.fontSizeSM
+            }
+
+            Switch {
+                checked: root.previewVm.showTravelMoves
+                onToggled: if (root.previewVm) root.previewVm.setShowTravelMoves(checked)
+            }
+        }
+
+        // 显示/隐藏热床网格（对齐上游 GCodeViewer show_bed）
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spacingSM
+
+            Text {
+                text: qsTr("显示热床")
+                color: root.previewVm.showBed ? Theme.textSecondary : Theme.textTertiary
+                font.pixelSize: Theme.fontSizeSM
+            }
+
+            Switch {
+                checked: root.previewVm.showBed
+                onToggled: if (root.previewVm) root.previewVm.setShowBed(checked)
+            }
+        }
+
+        // 显示/隐藏工具位置标记（对齐上游 GCodeViewer show_marker）
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spacingSM
+
+            Text {
+                text: qsTr("显示位置标记")
+                color: root.previewVm.showMarker ? Theme.textSecondary : Theme.textTertiary
+                font.pixelSize: Theme.fontSizeSM
+            }
+
+            Switch {
+                checked: root.previewVm.showMarker
+                onToggled: if (root.previewVm) root.previewVm.setShowMarker(checked)
+            }
+        }
+
         Rectangle {
             Layout.fillWidth: true
             radius: 12
@@ -160,6 +211,20 @@ Item {
                     font.bold: true
                     visible: root.previewVm.layerTimeCount() > 1
                     Layout.topMargin: 4
+                }
+
+                // Min/Avg/Max layer time (对齐上游 PrintEstimatedStatistics layer time stats)
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    visible: root.previewVm.layerTimeCount() > 1
+
+                    Label { text: qsTr("最短层: "); color: Theme.textTertiary; font.pixelSize: 10 }
+                    Label { text: root.previewVm.minLayerTime().toFixed(1) + "s"; color: Theme.textPrimary; font.pixelSize: 10; font.family: "monospace" }
+                    Label { text: qsTr("平均: "); color: Theme.textTertiary; font.pixelSize: 10 }
+                    Label { text: root.previewVm.avgLayerTime().toFixed(1) + "s"; color: Theme.textPrimary; font.pixelSize: 10; font.family: "monospace" }
+                    Label { text: qsTr("最长层: "); color: Theme.textTertiary; font.pixelSize: 10 }
+                    Label { text: root.previewVm.maxLayerTime().toFixed(1) + "s"; color: Theme.textPrimary; font.pixelSize: 10; font.family: "monospace" }
                 }
 
                 // Mini bar chart

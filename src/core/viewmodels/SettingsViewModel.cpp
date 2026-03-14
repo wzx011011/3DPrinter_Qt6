@@ -184,3 +184,23 @@ void SettingsViewModel::setUndoLimit(int limit)
 {
   if (m_undoLimit != limit) { m_undoLimit = limit; emit settingsChanged(); }
 }
+
+void SettingsViewModel::setDefaultNozzleIndex(int idx)
+{
+  if (m_defaultNozzleIndex != idx) { m_defaultNozzleIndex = idx; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setDefaultBedShape(int shape)
+{
+  if (m_defaultBedShape != shape) { m_defaultBedShape = shape; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setAutoUpload(bool v)
+{
+  if (m_autoUpload != v) { m_autoUpload = v; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setUpdateChannel(int channel)
+{
+  if (m_updateChannel != channel) { m_updateChannel = channel; emit settingsChanged(); }
+}

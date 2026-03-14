@@ -1,0 +1,230 @@
+[
+  {
+    "id": "hint_layer_height",
+    "text": "层高\n层高越小打印越精细，但耗时越长。常用范围: 0.1mm - 0.3mm。",
+    "weight": 10,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Layer-height"
+  },
+  {
+    "id": "hint_infill",
+    "text": "填充密度\n填充密度影响模型强度和重量。20% 适合大多数场景，100% 为实心。",
+    "weight": 10,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Infill"
+  },
+  {
+    "id": "hint_support",
+    "text": "支撑设置\n悬空角度超过 45° 的部分需要支撑。合理使用支撑可以提升打印质量。",
+    "weight": 8,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Supports"
+  },
+  {
+    "id": "hint_speed",
+    "text": "打印速度\n打印速度越快效率越高，但可能影响表面质量。建议先慢后快测试。",
+    "weight": 7,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Speed"
+  },
+  {
+    "id": "hint_brims",
+    "text": "Brim 裙边\nBrim（裙边）可以增加模型与热床的附着力，防止翘边。",
+    "weight": 6,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Brim-for-better-adhesion"
+  },
+  {
+    "id": "hint_temperature",
+    "text": "喷嘴温度\n喷嘴温度和热床温度需要根据耗材类型调整。PLA 通常 200°C/60°C。",
+    "weight": 9,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Temperature"
+  },
+  {
+    "id": "hint_retract",
+    "text": "回退设置\n回退设置可以减少空驶时的拉丝现象。调整回退距离和速度可改善表面质量。",
+    "weight": 5,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Retraction"
+  },
+  {
+    "id": "hint_perimeters",
+    "text": "壁层数\n外壁层数越多模型表面越光滑。通常 2-3 层即可获得良好效果。",
+    "weight": 6,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Perimeters"
+  },
+  {
+    "id": "hint_adaptive_layer",
+    "text": "自适应层高\n自适应层高根据模型表面角度自动调整层高，在平坦区域使用大层高提高速度，在细节区域使用小层高提升质量。",
+    "weight": 4,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Adaptive-Layer-Height"
+  },
+  {
+    "id": "hint_multi_plate",
+    "text": "多平板打印\n使用多平板功能可以将不同模型安排到不同平板上，方便批量打印。",
+    "weight": 3,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Plates"
+  },
+  {
+    "id": "hint_gcode_preview",
+    "text": "G-code 预览\n预览模式下可以逐层查看 G-code 路径，帮助您在打印前发现潜在问题。",
+    "weight": 5,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Preview"
+  },
+  {
+    "id": "hint_variable_layer",
+    "text": "可变层高\n可变层高功能可以在重要表面区域使用更小的层高，其余区域保持较大层高以节省时间。",
+    "weight": 3,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Variable-Layer-Height"
+  },
+  {
+    "id": "hint_precise_wall",
+    "text": "精确外壁\n开启精确外壁可以提升打印精度和层间一致性。",
+    "weight": 5,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Precise-wall"
+  },
+  {
+    "id": "hint_sandwich_mode",
+    "text": "三明治模式\n使用三明治模式（内-外-内）可以提升精度和层间一致性（适用于无明显悬垂的模型）。",
+    "weight": 4,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_chamber_temperature",
+    "text": "腔体温度\nCrealityPrint 支持腔体温度设置，适用于 ABS/ASA 等需要封闭环境的耗材。",
+    "weight": 4,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Chamber-temperature"
+  },
+  {
+    "id": "hint_calibration",
+    "text": "打印机校准\n校准打印机可以显著提升打印质量。在 CrealityPrint 中可以使用内置校准解决方案。",
+    "weight": 7,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Calibration"
+  },
+  {
+    "id": "hint_auxiliary_fan",
+    "text": "辅助风扇\nCrealityPrint 支持辅助部件冷却风扇设置。",
+    "weight": 3,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Auxiliary-fan"
+  },
+  {
+    "id": "hint_air_filtration",
+    "text": "空气净化/排气风扇\nCrealityPrint 支持空气净化和排气风扇控制。",
+    "weight": 3,
+    "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Air-filtration"
+  },
+  {
+    "id": "hint_keyboard_shortcuts",
+    "text": "键盘快捷键\n按 <b>Tab</b> 键可以在准备和预览工作区之间快速切换。按 <b>C</b> 键可以开关 G-code 窗口。",
+    "weight": 4,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_reverse_on_odd",
+    "text": "奇数层反转\n<b>奇数层反转</b>功能可以显著改善悬垂部分的表面质量。",
+    "weight": 3,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_cut_tool",
+    "text": "切割工具\n您可以使用切割工具在任意角度和位置切割模型。",
+    "weight": 4,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_auto_arrange",
+    "text": "自动排列\n您可以使用自动排列功能一键排列项目中的所有模型。",
+    "weight": 5,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_auto_orient",
+    "text": "自动朝向\n点击即可将模型旋转到最佳打印朝向。",
+    "weight": 4,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_lay_on_face",
+    "text": "面朝下放置\n按 <b>F</b> 键可以快速将模型的某个面放置到热床上。",
+    "weight": 3,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_object_list",
+    "text": "对象列表\n您可以在列表中查看所有对象/部件，并分别设置参数。",
+    "weight": 4,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_search",
+    "text": "搜索功能\n使用搜索工具可以快速找到特定参数设置。",
+    "weight": 4,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_split",
+    "text": "拆分对象\n您可以将一个大模型拆分为多个小对象，方便着色或打印。",
+    "weight": 4,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_step",
+    "text": "STEP 文件\n直接切片 STEP 文件可以获得比 STL 更光滑的结果，推荐尝试！",
+    "weight": 4,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_z_seam",
+    "text": "Z 缝合位置\n您可以自定义 Z 缝合位置，甚至可以在模型上绘制缝合线，使其出现在不显眼的位置。",
+    "weight": 3,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_flow_rate",
+    "text": "流量微调\n根据耗材类型微调流量可以进一步提升打印质量。",
+    "weight": 3,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_support_painting",
+    "text": "支撑绘制\n您可以手动绘制支撑位置，仅在需要支撑的区域放置支撑材料。",
+    "weight": 3,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_support_types",
+    "text": "支撑类型\n您可以选择多种支撑类型。树形支撑非常适合有机模型，可节省耗材并提高打印速度。",
+    "weight": 4,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_silk_filament",
+    "text": "丝绸耗材打印\n丝绸耗材需要特殊设置才能成功打印。建议使用更高的温度和更慢的速度。",
+    "weight": 3,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_warping",
+    "text": "防止翘边\n打印 ABS 等易翘边材料时，适当提高热床温度可以降低翘边概率。",
+    "weight": 4,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_improve_strength",
+    "text": "提升强度\n增加壁层数和提高填充密度可以有效提升模型强度。",
+    "weight": 3,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_multi_object_params",
+    "text": "多对象参数设置\n您可以同时为所有选中对象设置切片参数。",
+    "weight": 3,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_simplify",
+    "text": "简化模型\n右键点击模型并选择简化，可以减少网格中的三角面数。",
+    "weight": 2,
+    "documentation_link": ""
+  },
+  {
+    "id": "hint_flush_into",
+    "text": "刷料回收\n耗材切换时可以将废料刷入支撑/对象/填充中，节省耗材。",
+    "weight": 2,
+    "documentation_link": ""
+  }
+]

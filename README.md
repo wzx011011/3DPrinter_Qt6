@@ -18,7 +18,7 @@ Qt6 重写版 3D 打印桌面端原型工程（QML 主路线）。
 
 该命令会基于当前仓库状态执行以下流程：
 
-- 读取 `docs/TASKS.md`
+- 读取 `docs/源码对照迁移任务追踪.md`
 - 对照 `third_party/CrealityPrint` 上游源码
 - 选择当前最高优先级、尚未完成的任务
 - 映射到对应 Qt6/QML 承接模块
@@ -34,7 +34,7 @@ Qt6 重写版 3D 打印桌面端原型工程（QML 主路线）。
 - Claude Code 项目 skill：`.claude/skills/continue-source-truth-migration/SKILL.md`
 - Claude Code 只读分析 skill：`.claude/skills/analyze-source-truth-gap/SKILL.md`
 
-任务状态规则见 `docs/TASKS.md`：
+任务状态规则见 `docs/源码对照迁移任务追踪.md`：
 
 - `[x]` 已完成上游对照并验证
 - `[-]` 已完成基础承接或局部闭环，但未完成完整对照验收
@@ -88,7 +88,7 @@ git tag v0.1.1
 git push origin v0.1.1
 ```
 
-详细说明见：`CI_TAG_RELEASE.md`
+详细说明见：`docs/标签触发编译与发布.md`
 
 ## 目录入口
 
@@ -102,7 +102,7 @@ git push origin v0.1.1
 
 ## 相关文档
 
-- 架构说明：`CrealityPrint_Qt_GUI_Rewrite_Architecture.md`
-- 目录结构：`PROJECT_STRUCTURE.md`
-- 任务追踪：`TASKS.md`
-- Tag 发布说明：`CI_TAG_RELEASE.md`
+- 架构说明：`docs/CrealityPrint_Qt_GUI重写架构.md`
+- 目录结构：`docs/项目结构.md`
+- 任务追踪：`docs/源码对照迁移任务追踪.md`
+- Tag 发布说明：`docs/标签触发编译与发布.md`

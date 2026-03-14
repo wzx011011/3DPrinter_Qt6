@@ -27,6 +27,8 @@ public:
 
   /// 获取指定预设的值映射（不存在则返回空）
   QHash<QString, QVariant> presetValues(const QString &presetName) const;
+  /// 获取指定预设中单个 key 的值（不存在返回无效 QVariant）
+  QVariant presetValue(const QString &presetName, const QString &key) const;
   /// 保存当前值到指定预设
   void savePresetValues(const QString &presetName, const QHash<QString, QVariant> &values);
   /// 检查指定预设是否存在

@@ -117,12 +117,20 @@ public:
   Q_INVOKABLE void activatePlateScope(int plateIndex);
 
   /// 按分类和搜索文本过滤配置选项（替代 QML 内联 rebuildFilter 逻辑）
-  Q_INVOKABLE QList<int> filterOptionIndices(const QString &category, const QString &searchText) const;
+  Q_INVOKABLE QList<int> filterOptionIndices(const QString &category, const QString &searchText, bool advancedMode = false) const;
+  /// 拖拽排序（对齐上游 DragCanvas 拖拽排序交互）
+  Q_INVOKABLE QList<int> moveListItem(int fromRow, int toRow) const;
   /// 增强搜索（对齐上游 OptionsSearcher）：搜索 key/label/category/group，返回匹配的索引列表
   Q_INVOKABLE QList<int> searchOptions(const QString &query) const;
   /// 获取选项的值来源层级（对齐上游 PresetBundle 继承链）
   /// 返回 "printer"/"filament"/"print"/"default" 字符串
   Q_INVOKABLE QString valueSourceForKey(const QString &key) const;
+  /// 获取选项在继承链各级的值（对齐上游 PresetBundle value_at_level）
+  /// 返回 JSON 字符串: {"default":v,"printer":v,"filament":v,"print":v}
+  Q_INVOKABLE QString valueChainForKey(const QString &key) const;
+  /// 重置选项到指定层级（对齐上游 Tab reset_to_level）
+  /// level: 0=default, 1=print, 2=filament, 3=printer
+  Q_INVOKABLE bool resetOptionToLevel(const QString &key, int level);
   /// 当前搜索结果的值来源（按索引查询）
   Q_INVOKABLE QString searchResultSource(int searchIndex) const;
   /// 当前搜索结果的分类路径（按索引查询）

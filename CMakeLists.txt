@@ -33,14 +33,30 @@ include(CTest)
 
 # ── 构建 libslic3r 后端 ──────────────────────────────────────────────────
 if(BUILD_LIBSLIC3R)
-    include("${CMAKE_SOURCE_DIR}/cmake/BuildLibslic3r.cmake")
+    option(LIBSLIC3R_FROM_SOURCE "Build libslic3r from source (slower but fixes static init crash)" OFF)
+    if(LIBSLIC3R_FROM_SOURCE)
+        message(STATUS "=== Building libslic3r FROM SOURCE ===")
+        include("${CMAKE_SOURCE_DIR}/cmake/BuildLibslic3rFromSource.cmake")
+    else()
+        message(STATUS "=== Importing pre-built libslic3r ===")
+        include("${CMAKE_SOURCE_DIR}/cmake/BuildLibslic3r.cmake")
+    endif()
 endif()
 
 if(CREALITY_QML_GUI)
     if(NOT BUILD_LIBSLIC3R)
         message(WARNING "CREALITY_QML_GUI: BUILD_LIBSLIC3R=OFF — OCCT/model loading will be stubbed out for testing.")
     endif()
-    find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent)
+    if(BUILD_LIBSLIC3R)
+        # BUILD_LIBSLIC3R=ON 时 Boost_ALL_NO_LIB 干扰 Qt 的 auto-link，
+        # 需要跳过低版本检查以避免 Qt 查找失败
+        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent)
+    else()
+        # 低版本 Qt 兼容：允许 Qt 3.21 与 Qt 6.10 配对
+        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent)
+        set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/third_party/Qt6_10")
+        set(QT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT 3.21)
+    endif()
 
     qt_add_executable(FramelessDialogDemo
         src/qml_gui/main_qml.cpp
@@ -102,6 +118,7 @@ if(CREALITY_QML_GUI)
         target_sources(FramelessDialogDemo PRIVATE
             src/core/debug/CrashHandlerWin.cpp
             src/core/debug/CrashHandlerWin.h
+            src/core/debug/EarlyCrashDiag.cpp
         )
     endif()
 
@@ -121,6 +138,21 @@ if(CREALITY_QML_GUI)
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
         target_link_libraries(FramelessDialogDemo PRIVATE libslic3r)
         target_compile_definitions(FramelessDialogDemo PRIVATE HAS_LIBSLIC3R=1)
+        if(MSVC)
+            target_compile_definitions(FramelessDialogDemo PRIVATE
+                BOOST_ALL_NO_LIB
+                BOOST_USE_WINAPI_VERSION=0x602
+                BOOST_SYSTEM_USE_UTF8
+            )
+        endif()
+        # Copy OCCT runtime DLLs (delay-loaded, needed when libslic3r actually calls them)
+        file(GLOB _occt_dlls "${DEPS_PREFIX}/bin/occt/TK*.dll")
+        foreach(_occt_dll ${_occt_dlls})
+            add_custom_command(TARGET FramelessDialogDemo POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${_occt_dll}"
+                    "$<TARGET_FILE_DIR:FramelessDialogDemo>/")
+        endforeach()
     endif()
     target_compile_definitions(FramelessDialogDemo PRIVATE CREALITY_QML_GUI=1)
 else()

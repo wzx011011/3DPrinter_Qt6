@@ -309,7 +309,7 @@ Item {
                                         color: paramRow.oRO ? "#566070" : (paramRow.oDirty ? "#f0883e" : "#c8d4e0")
                                         font.pixelSize: 12
                                         elide: Text.ElideRight
-                                        font.bold: paramRow.oDirty
+                                        font.bold: paramRow.oDirty || root.searchText !== ""
                                         Layout.fillWidth: true
                                     }
                                 }

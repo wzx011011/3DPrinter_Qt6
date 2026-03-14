@@ -22,7 +22,9 @@ enum class MockVolumeType {
   NegativeVolume = 1,
   ParameterModifier = 2,
   SupportBlocker = 3,
-  SupportEnforcer = 4
+  SupportEnforcer = 4,
+  TextEmboss = 5,     ///< 对齐上游 GLGizmoText — 文字浮雕体积
+  SvgEmboss = 6       ///< 对齐上游 GLGizmoSVG — SVG 浮雕体积
 };
 
 /// Mock volume data entry
@@ -110,6 +112,18 @@ public:
   Q_INVOKABLE bool addVolume(int objectIndex, int volumeType);
   /// Change volume type (对齐上游 GUI_ObjectList::load_generic_subobject type conversion)
   Q_INVOKABLE bool changeVolumeType(int objectIndex, int volumeIndex, int newVolumeType);
+  /// 从外部文件导入 volume（对齐上游 GUI_ObjectList::load_generic_subobject 文件加载）
+  /// Mock 模式：创建 volume 条目并命名
+  Q_INVOKABLE bool addVolumeFromFile(int objectIndex, const QString &filePath, int volumeType);
+  /// 添加原始体 volume（对齐上游 create_mesh + add_volume）
+  /// primitiveType: 0=立方体, 1=球体, 2=圆柱体, 3=圆环
+  Q_INVOKABLE bool addPrimitive(int objectIndex, int primitiveType);
+  /// 添加文字浮雕 volume（对齐上游 GLGizmoText）
+  /// Mock 模式：创建 TextEmboss 类型 volume
+  Q_INVOKABLE bool addTextVolume(int objectIndex, const QString &text);
+  /// 添加 SVG 浮雕 volume（对齐上游 GLGizmoSVG）
+  /// Mock 模式：创建 SvgEmboss 类型 volume
+  Q_INVOKABLE bool addSvgVolume(int objectIndex, const QString &svgFilePath);
 
   /// ── Layer range support (对齐上游 ModelObject::layer_config_ranges) ──
   /// Get layer ranges for an object
@@ -146,6 +160,35 @@ public:
   Q_INVOKABLE bool setPlatePrintSequence(int plateIndex, int seq);
   Q_INVOKABLE int plateSpiralMode(int plateIndex) const;
   Q_INVOKABLE bool setPlateSpiralMode(int plateIndex, int mode);
+  /// 首层耗材顺序（对齐上游 first_layer_print_sequence）
+  Q_INVOKABLE int plateFirstLayerSeqChoice(int plateIndex) const;
+  Q_INVOKABLE bool setPlateFirstLayerSeqChoice(int plateIndex, int choice);
+  Q_INVOKABLE QVariantList plateFirstLayerSeqOrder(int plateIndex) const;
+  Q_INVOKABLE bool setPlateFirstLayerSeqOrder(int plateIndex, const QVariantList &order);
+  /// 其他层耗材顺序（对齐上游 other_layers_print_sequence）
+  Q_INVOKABLE int plateOtherLayersSeqChoice(int plateIndex) const;
+  Q_INVOKABLE bool setPlateOtherLayersSeqChoice(int plateIndex, int choice);
+  /// 其他层序列条目数
+  Q_INVOKABLE int plateOtherLayersSeqCount(int plateIndex) const;
+  /// 获取指定条目的 begin_layer
+  Q_INVOKABLE int plateOtherLayersSeqBegin(int plateIndex, int entryIndex) const;
+  /// 获取指定条目的 end_layer
+  Q_INVOKABLE int plateOtherLayersSeqEnd(int plateIndex, int entryIndex) const;
+  /// 获取指定条目的耗材顺序
+  Q_INVOKABLE QVariantList plateOtherLayersSeqOrder(int plateIndex, int entryIndex) const;
+  /// 添加其他层序列条目
+  Q_INVOKABLE bool addPlateOtherLayersSeqEntry(int plateIndex, int beginLayer, int endLayer);
+  /// 删除其他层序列条目
+  Q_INVOKABLE bool removePlateOtherLayersSeqEntry(int plateIndex, int entryIndex);
+  /// 修改其他层序列条目的层范围
+  Q_INVOKABLE bool setPlateOtherLayersSeqRange(int plateIndex, int entryIndex, int beginLayer, int endLayer);
+  /// 修改其他层序列条目的耗材顺序
+  Q_INVOKABLE bool setPlateOtherLayersSeqOrder(int plateIndex, int entryIndex, const QVariantList &order);
+  /// 获取当前平板使用的耗材数（Mock 模式基于对象数推断）
+  Q_INVOKABLE int plateExtruderCount(int plateIndex) const;
+  /// 生成平板缩略图（对齐上游 PartPlate::thumbnail_data，Mock 模式使用 QPainter 合成）
+  /// 返回 base64 编码的 PNG 图片供 QML Image 组件使用
+  Q_INVOKABLE QString generatePlateThumbnail(int plateIndex, int size = 64);
 
   /// 添加新对象到当前平板（对齐上游 Plater 粘贴剪贴板行为）
   /// 返回新对象的索引，失败返回 -1
@@ -203,9 +246,20 @@ private:
   QList<QList<int>> plateObjectIndices_;
   QList<bool> plateLockedStates_;
   /// Per-plate settings (对齐上游 PlateSettingsDialog)
-  QList<int> plateBedTypes_;       // 0=Default/PEI, 1=EP, 2=PC, 3=PEI, 4=Custom
-  QList<int> platePrintSequences_; // 0=ByLayer, 1=ByObject
+  QList<int> plateBedTypes_;       // 对齐上游 BedType: 0=Default, 1=PEI(smooth), 2=PEI(hightemp), 3=PTE, 4=PC, 5=EP, 6=ER, 7=Custom
+  QList<int> platePrintSequences_; // 0=ByDefault, 1=ByLayer, 2=ByObject
   QList<int> plateSpiralModes_;    // 0=Default, 1=On, 2=Off
+  /// 首层耗材顺序（对齐上游 first_layer_print_sequence）
+  QList<int> plateFirstLayerSeqChoices_; // 0=Auto, 1=Custom
+  QList<QList<int>> plateFirstLayerSeqOrders_; // per-plate: ordered extruder indices
+  /// 其他层耗材顺序（对齐上游 other_layers_print_sequence + LayerPrintSequence）
+  QList<int> plateOtherLayersSeqChoices_; // 0=Auto, 1=Custom
+  struct MockLayerSeqEntry {
+    int beginLayer = 2;
+    int endLayer = 100;
+    QList<int> extruderOrder;
+  };
+  QList<QList<MockLayerSeqEntry>> plateOtherLayersSeqEntries_;
   /// Per-object transforms (Mock mode)
   QList<QVector3D> objectPositions_;   // (x, y, z) in mm
   QList<QVector3D> objectRotations_;   // (x, y, z) in degrees

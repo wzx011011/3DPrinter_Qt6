@@ -29,6 +29,10 @@
 #include <algorithm>
 #include <QTimer>
 #include <QRandomGenerator>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QDesktopServices>
 
 // 主题颜色预设
 struct ThemeColors
@@ -693,81 +697,73 @@ void BackendContext::postArrangeOngoing(int percent)
 
 void BackendContext::initHintDatabase()
 {
-  // 对齐上游 HintData，Mock 模式内置一组 "Did you know" 提示
-  auto add = [this](const QString &id, const QString &text, int weight,
-                    const QString &hypertext, const QString &docLink,
-                    const QString &cbType, const QString &cbTarget)
+  // 对齐上游 HintDatabase::load_hints_from_file
+  // 从 Qt 资源中的 hints.json 加载提示数据（替代上游 hints.ini + boost::property_tree）
+  QFile file(QStringLiteral(":/qml/data/hints.json"));
+  if (!file.open(QIODevice::ReadOnly))
+  {
+    qWarning("[Backend] hints.json not found, using fallback hints");
+    initFallbackHintDatabase();
+    return;
+  }
+
+  const QByteArray data = file.readAll();
+  QJsonParseError parseError;
+  const QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
+  if (doc.isNull() || !doc.isArray())
+  {
+    qWarning("[Backend] hints.json parse error: %s", qPrintable(parseError.errorString()));
+    initFallbackHintDatabase();
+    return;
+  }
+
+  const QJsonArray arr = doc.array();
+  m_hints.reserve(arr.size());
+  for (const auto &val : arr)
+  {
+    if (!val.isObject())
+      continue;
+    const QJsonObject obj = val.toObject();
+    HintData h;
+    h.id = obj.value(QLatin1String("id")).toString();
+    h.text = obj.value(QLatin1String("text")).toString();
+    h.weight = obj.value(QLatin1String("weight")).toInt(1);
+    h.documentationLink = obj.value(QLatin1String("documentation_link")).toString();
+    m_hints.append(h);
+  }
+
+  m_currentHintIndex = -1;
+  qInfo("[Backend] Loaded %d hints from hints.json", m_hints.size());
+}
+
+void BackendContext::initFallbackHintDatabase()
+{
+  // 内置最小提示集（当 JSON 加载失败时的兜底）
+  auto add = [this](const QString &id, const QString &text, int weight, const QString &docLink)
   {
     HintData h;
     h.id = id;
     h.text = text;
     h.weight = weight;
-    h.hypertext = hypertext;
     h.documentationLink = docLink;
-    h.callbackType = cbType;
-    h.callbackTarget = cbTarget;
     m_hints.append(h);
   };
 
   add(QStringLiteral("hint_layer_height"),
       tr("层高越小打印越精细，但耗时越长。常用范围: 0.1mm - 0.3mm。"),
-      10, tr("了解层高"), QStringLiteral("layer_height"),
-      QStringLiteral("settings"), QStringLiteral("layer_height"));
-
+      10, QStringLiteral("https://github.com/SoftFever/OrcaSlicer/wiki/Layer-height"));
   add(QStringLiteral("hint_infill"),
       tr("填充密度影响模型强度和重量。20% 适合大多数场景，100% 为实心。"),
-      10, tr("填充设置"), QStringLiteral("infill_density"),
-      QStringLiteral("settings"), QStringLiteral("infill_density"));
-
+      10, QStringLiteral("https://github.com/SoftFever/OrcaSlicer/wiki/Infill"));
   add(QStringLiteral("hint_support"),
       tr("悬空角度超过 45° 的部分需要支撑。合理使用支撑可以提升打印质量。"),
-      8, tr("支撑设置"), QStringLiteral("support"),
-      QStringLiteral("settings"), QStringLiteral("support_type"));
-
+      8, QStringLiteral("https://github.com/SoftFever/OrcaSlicer/wiki/Supports"));
   add(QStringLiteral("hint_speed"),
       tr("打印速度越快效率越高，但可能影响表面质量。建议先慢后快测试。"),
-      7, tr("速度设置"), QStringLiteral("speed"),
-      QStringLiteral("settings"), QStringLiteral("outer_wall_speed"));
-
+      7, {});
   add(QStringLiteral("hint_brims"),
       tr("Brim（裙边）可以增加模型与热床的附着力，防止翘边。"),
-      6, tr("附着力设置"), QStringLiteral("brim"),
-      QStringLiteral("settings"), QStringLiteral("brim_type"));
-
-  add(QStringLiteral("hint_temperature"),
-      tr("喷嘴温度和热床温度需要根据耗材类型调整。PLA 通常 200°C/60°C。"),
-      9, tr("温度设置"), QStringLiteral("temperature"),
-      QStringLiteral("settings"), QStringLiteral("nozzle_temperature"));
-
-  add(QStringLiteral("hint_retract"),
-      tr("回退设置可以减少空驶时的拉丝现象。调整回退距离和速度可改善表面质量。"),
-      5, tr("回退设置"), QStringLiteral("retract"),
-      QStringLiteral("settings"), QStringLiteral("retract_length"));
-
-  add(QStringLiteral("hint_perimeters"),
-      tr("外壁层数越多模型表面越光滑。通常 2-3 层即可获得良好效果。"),
-      6, tr("壁设置"), QStringLiteral("wall_loops"),
-      QStringLiteral("settings"), QStringLiteral("wall_loops"));
-
-  add(QStringLiteral("hint_adaptive_layer"),
-      tr("自适应层高根据模型表面角度自动调整层高，在平坦区域使用大层高提高速度，在细节区域使用小层高提升质量。"),
-      4, tr("了解自适应层高"), QStringLiteral("adaptive_layer_height"),
-      QStringLiteral("settings"), QStringLiteral("adaptive_layer_height"));
-
-  add(QStringLiteral("hint_multi_plate"),
-      tr("使用多平板功能可以将不同模型安排到不同平板上，方便批量打印。"),
-      3, tr("平板管理"), QStringLiteral("plate"),
-      QStringLiteral("settings"), QStringLiteral("default_plate"));
-
-  add(QStringLiteral("hint_gcode_preview"),
-      tr("预览模式下可以逐层查看 G-code 路径，帮助您在打印前发现潜在问题。"),
-      5, tr("预览模式"), QStringLiteral("preview"),
-      QStringLiteral("settings"), QStringLiteral("preview"));
-
-  add(QStringLiteral("hint_variable_layer"),
-      tr("可变层高功能可以在重要表面区域使用更小的层高，其余区域保持较大层高以节省时间。"),
-      3, tr("可变层高"), QStringLiteral("variable_layer_height"),
-      QStringLiteral("settings"), QStringLiteral("variable_layer_height"));
+      6, {});
 
   m_currentHintIndex = -1;
 }
@@ -911,6 +907,24 @@ QString BackendContext::currentHintFollowText() const
   if (m_currentHintIndex >= 0 && m_currentHintIndex < m_hints.size())
     return m_hints[m_currentHintIndex].followText;
   return {};
+}
+
+bool BackendContext::currentHintHasDocumentationLink() const
+{
+  if (m_currentHintIndex >= 0 && m_currentHintIndex < m_hints.size())
+    return !m_hints[m_currentHintIndex].documentationLink.isEmpty();
+  return false;
+}
+
+bool BackendContext::openHintDocumentation() const
+{
+  // 对齐上游 HintNotification hypertext_type=documentation 链接点击
+  if (m_currentHintIndex < 0 || m_currentHintIndex >= m_hints.size())
+    return false;
+  const QString link = m_hints[m_currentHintIndex].documentationLink;
+  if (link.isEmpty())
+    return false;
+  return QDesktopServices::openUrl(QUrl(link));
 }
 
 QString BackendContext::lastErrorMessage() const { return lastErrorMessage_; }

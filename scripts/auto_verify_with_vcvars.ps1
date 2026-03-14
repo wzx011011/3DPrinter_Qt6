@@ -25,7 +25,7 @@ $cmakeArgs = @(
   '-B', '.',
   '-G', 'Ninja',
   '-DCMAKE_BUILD_TYPE=Release',
-  '-DBUILD_LIBSLIC3R=OFF',
+  '-DBUILD_LIBSLIC3R=ON',
   '-DCREALITY_QML_GUI=ON',
   '-DQT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT=3.21'
 )

@@ -82,6 +82,7 @@ Item {
         anchors.topMargin: root.expanded ? 6 : 0
         anchors.left: parent.left
         anchors.right: parent.right
+        implicitHeight: childrenRect.height
         height: root.expanded ? implicitHeight : 0
         clip: true
         visible: root.expanded || heightAnimation.running
