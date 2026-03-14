@@ -27,7 +27,14 @@ class GLViewport : public QQuickFramebufferObject
   Q_PROPERTY(bool wireframeMode READ wireframeMode WRITE setWireframeMode NOTIFY wireframeModeChanged)
 
   // GizmoMode constants exposed to QML
-  enum GizmoMode { GizmoMove = 0, GizmoRotate = 1, GizmoScale = 2 };
+  enum GizmoMode {
+    GizmoMove = 0,
+    GizmoRotate = 1,
+    GizmoScale = 2,
+    GizmoMeasure = 3,
+    GizmoFlatten = 4,   ///< 对齐上游 GLGizmoFlatten — 选择面平放
+    GizmoCut = 5        ///< 对齐上游 GLGizmoCut — 切割对象
+  };
   Q_ENUM(GizmoMode)
 
 public:
@@ -92,7 +99,9 @@ public:
       Undo,
       Redo,
       ClearHistory,
-      SetGizmoMode
+      SetGizmoMode,
+      Mirror,  ///< Mirror selected object along axis (mirrorAxis: 0=X 1=Y 2=Z)
+      ArrangeSelected ///< 自动排列选中对象
     } type;
     Qt::MouseButton button = Qt::NoButton;
     Qt::MouseButtons buttons = Qt::NoButton;
@@ -101,6 +110,8 @@ public:
     float wheelDelta = 0.f;
     // FitView payload
     float fitCX = 0.f, fitCY = 0.f, fitCZ = 0.f, fitRadius = 100.f;
+    // Mirror payload
+    int mirrorAxis = 0;
   };
 
   /** Atomically swap out & return all pending events. */
@@ -113,6 +124,10 @@ public:
   Q_INVOKABLE void undo();
   Q_INVOKABLE void redo();
   Q_INVOKABLE void clearHistory();
+  /** QML 调用: 镜像选中对象 (axis: 0=X 1=Y 2=Z) */
+  Q_INVOKABLE void mirrorSelection(int axis);
+  /** QML 调用: 自动排列选中对象（对齐上游 Plater::priv::on_arrange） */
+  Q_INVOKABLE void arrangeSelected();
 
 signals:
   void canvasTypeChanged();

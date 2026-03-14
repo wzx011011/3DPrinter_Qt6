@@ -19,11 +19,13 @@ void CameraController::pan(float dx, float dy)
       qSin(el),
       qCos(el) * qCos(az));
 
-  QVector3D right = QVector3D::crossProduct(forward, QVector3D(0, 1, 0)).normalized();
-  QVector3D up = QVector3D::crossProduct(right, forward).normalized();
+  QVector3D rightVec = QVector3D::crossProduct(forward, QVector3D(0, 1, 0));
+  if (rightVec.lengthSquared() < 1e-8f) return;
+  rightVec.normalize();
+  QVector3D up = QVector3D::crossProduct(rightVec, forward).normalized();
 
   const float scale = m_distance * 0.001f;
-  m_target -= right * (dx * scale);
+  m_target -= rightVec * (dx * scale);
   m_target += up * (dy * scale);
 }
 
@@ -67,7 +69,8 @@ void CameraController::fitView(float cx, float cy, float cz, float radius)
   m_target = QVector3D(cx, cy, cz);
   // FOV=45°, tan(22.5°)≈0.4142; 加 20% 边距
   const float minDist = 50.f;
-  m_distance = std::max(minDist, radius / 0.4142f * 1.2f);
+  const float safeRadius = std::max(0.1f, radius);
+  m_distance = std::max(minDist, safeRadius / 0.4142f * 1.2f);
   m_elevation = 35.0f;
   m_azimuth   = 45.0f;
 }
@@ -107,6 +110,6 @@ void CameraController::viewIso()
 QMatrix4x4 CameraController::projMatrix(float aspect) const
 {
   QMatrix4x4 mat;
-  mat.perspective(45.0f, aspect, 1.0f, 10000.0f);
+  mat.perspective(45.0f, std::max(0.01f, aspect), 1.0f, 10000.0f);
   return mat;
 }

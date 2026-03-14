@@ -223,3 +223,22 @@ void GLViewport::clearHistory()
   m_events.append(e);
   update();
 }
+
+void GLViewport::mirrorSelection(int axis)
+{
+  QMutexLocker lk(&m_eventMutex);
+  InputEvent e;
+  e.type = InputEvent::Mirror;
+  e.mirrorAxis = axis;
+  m_events.append(e);
+  update();
+}
+
+void GLViewport::arrangeSelected()
+{
+  QMutexLocker lk(&m_eventMutex);
+  InputEvent e;
+  e.type = InputEvent::ArrangeSelected;
+  m_events.append(e);
+  update();
+}

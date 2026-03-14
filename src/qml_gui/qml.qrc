@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/qml">
+        <file>qmldir</file>
         <file>main.qml</file>
         <file>Theme.qml</file>
         <!-- Pages -->
@@ -34,8 +35,12 @@
         <file>components/MoveSlider.qml</file>
         <file>components/Legend.qml</file>
         <file>components/StatsPanel.qml</file>
+        <file>components/ToolPositionTooltip.qml</file>
+        <file>components/NotificationCenter.qml</file>
         <file>components/CxPanel.qml</file>
         <file>components/CxSectionHeader.qml</file>
+        <file>components/CollapsibleSection.qml</file>
+        <file>components/SearchDialog.qml</file>
         <!-- Controls -->
         <file>controls/CxButton.qml</file>
         <file>controls/CxComboBox.qml</file>
@@ -49,6 +54,7 @@
         <file>assets/prepare_ref.png</file>
         <file>assets/preview_ref.png</file>
         <file>assets/monitor_ref.png</file>
+        <file>assets/icons/bell.svg</file>
         <file>assets/icons/arrow-back-up.svg</file>
         <file>assets/icons/arrow-forward-up.svg</file>
         <file>assets/icons/box.svg</file>
@@ -60,7 +66,12 @@
         <file>assets/icons/layout-sidebar-right.svg</file>
         <file>assets/icons/list-details.svg</file>
         <file>assets/icons/lock.svg</file>
+        <file>assets/icons/layers.svg</file>
+        <file>assets/icons/layers-subtract.svg</file>
+        <file>assets/icons/scissors.svg</file>
+        <file>assets/icons/download.svg</file>
         <file>assets/icons/maximize.svg</file>
+        <file>assets/icons/mirror.svg</file>
         <file>assets/icons/minus.svg</file>
         <file>assets/icons/printer.svg</file>
         <file>assets/icons/rotate-2.svg</file>

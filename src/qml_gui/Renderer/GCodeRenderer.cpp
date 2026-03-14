@@ -1,3 +1,6 @@
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include "GCodeRenderer.h"
 
 #include "GLViewport.h"
@@ -6,6 +9,8 @@
 #include <QMatrix4x4>
 #include <QVector4D>
 #include <cstring>
+#include <cfloat>
+#include <cmath>
 #include <algorithm>
 
 namespace
@@ -224,10 +229,12 @@ void GCodeRenderer::render()
   prog_.release();
 }
 
+#ifdef HAS_LIBSLIC3R
 void GCodeRenderer::loadResult(const Slic3r::GCodeProcessorResult *result)
 {
   Q_UNUSED(result);
 }
+#endif
 
 void GCodeRenderer::initializeIfNeeded()
 {

@@ -259,7 +259,7 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
           else if (m_gizmoMode == GizmoScale)
             ax = pickScaleAxis(sx, sy);
 
-          if (ax > 0)
+          if (ax > 0 && m_objectTransforms.count(m_selectedId) > 0)
           {
             m_gizmoAxis = ax;
             m_dragObjectId = m_selectedId;
@@ -293,7 +293,7 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
         }
         // Priority 2: object pick
         int hitId = pickObject(sx, sy);
-        if (hitId >= 0)
+        if (hitId >= 0 && m_objectTransforms.count(hitId) > 0)
         {
           m_selectedId = hitId;
           m_freeXZDragging = true;
@@ -425,7 +425,8 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
         const ObjectTransform &before = m_dragStartTransform;
         float diff = (after.translation - before.translation).lengthSquared()
                    + (after.rotation - before.rotation).lengthSquared()
-                   + (after.scale - before.scale).lengthSquared();
+                   + (after.scale - before.scale).lengthSquared()
+                   + (after.mirror - before.mirror).lengthSquared();
         if (diff > 1e-8f)
         {
           TransformCmd cmd;
@@ -489,6 +490,93 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
       m_gizmoMode = static_cast<GizmoMode>(int(e.x));
       m_gizmoAxis = 0;
       break;
+    case GLViewport::InputEvent::Mirror:
+    {
+      // Mirror selected object along the given axis (0=X, 1=Y, 2=Z)
+      if (m_selectedId >= 0 && m_objectTransforms.count(m_selectedId) > 0)
+      {
+        TransformCmd cmd;
+        cmd.objectId = m_selectedId;
+        cmd.before = m_objectTransforms[m_selectedId];
+        // Flip mirror flag on the specified axis
+        QVector3D &mir = m_objectTransforms[m_selectedId].mirror;
+        if (e.mirrorAxis == 0) mir.setX(-mir.x());
+        else if (e.mirrorAxis == 1) mir.setY(-mir.y());
+        else if (e.mirrorAxis == 2) mir.setZ(-mir.z());
+        cmd.after = m_objectTransforms[m_selectedId];
+        m_undoStack.push_back(cmd);
+        if (m_undoStack.size() > 100)
+          m_undoStack.erase(m_undoStack.begin());
+        m_redoStack.clear();
+      }
+      break;
+    }
+    case GLViewport::InputEvent::ArrangeSelected:
+    {
+      // 自动排列选中对象（对齐上游 Plater::priv::on_arrange）
+      // 简化实现：基于 AABB 的网格排列
+      if (m_selectedId >= 0)
+      {
+        // 收集所有对象及其边界框
+        struct ArrItem { int id; float minX, minY, maxX, maxY; };
+        QList<ArrItem> items;
+        for (auto &[id, xf] : m_objectTransforms)
+        {
+          if (id < 0) continue;
+          float mn[3], mx[3];
+          transformedAABB(id, mn, mx);
+          items.append({id, mn[0], mn[1], mx[0], mx[1]});
+        }
+        if (items.size() <= 1) break;
+
+        const float spacing = 6.0f;
+        int cols = static_cast<int>(std::ceil(std::sqrt(float(items.size()))));
+        float curX = 0.f, curY = 0.f, rowMaxH = 0.f;
+        int col = 0;
+
+        for (auto &item : items)
+        {
+          float w = item.maxX - item.minX;
+          float h = item.maxY - item.minY;
+          if (w < 1.f) w = 30.f;
+          if (h < 1.f) h = 30.f;
+
+          TransformCmd cmd;
+          cmd.objectId = item.id;
+          cmd.before = m_objectTransforms[item.id];
+
+          // AABB 中心 = 当前世界位置
+          float cx = (item.minX + item.maxX) / 2.f;
+          float cy = (item.minY + item.maxY) / 2.f;
+          // 目标中心位置
+          float dx = curX + w / 2.f;
+          float dy = curY + h / 2.f;
+          // 计算偏移并应用到 translation
+          QVector3D t = m_objectTransforms[item.id].translation;
+          t.setX(t.x() + dx - cx);
+          t.setY(t.y() + dy - cy);
+          m_objectTransforms[item.id].translation = t;
+
+          cmd.after = m_objectTransforms[item.id];
+          m_undoStack.push_back(cmd);
+
+          curX += w + spacing;
+          if (h > rowMaxH) rowMaxH = h;
+          col++;
+          if (col >= cols)
+          {
+            col = 0;
+            curX = 0.f;
+            curY += rowMaxH + spacing;
+            rowMaxH = 0.f;
+          }
+        }
+        if (m_undoStack.size() > 200)
+          m_undoStack.erase(m_undoStack.begin(), m_undoStack.begin() + int(m_undoStack.size()) - 200);
+        m_redoStack.clear();
+      }
+      break;
+    }
     }
   }
 
@@ -516,13 +604,13 @@ void GLViewportRenderer::render()
   }
 
   // Update gizmo center to follow selected object
-  if (m_selectedId >= 0)
+  if (m_selectedId >= 0 && m_objectTransforms.count(m_selectedId) > 0)
   {
     for (const auto &b : m_meshBatches)
     {
       if (b.objectId == m_selectedId)
       {
-        const ObjectTransform &t = m_objectTransforms[m_selectedId];
+        const ObjectTransform &t = m_objectTransforms.at(m_selectedId);
         m_gizmoCenter = QVector3D(
             (b.bboxMin[0] + b.bboxMax[0]) * 0.5f + t.translation.x(),
             (b.bboxMin[1] + b.bboxMax[1]) * 0.5f + t.translation.y(),
@@ -662,7 +750,10 @@ void GLViewportRenderer::renderMoveGizmo(const QMatrix4x4 &mvp)
 // ===========================================================================
 void GLViewportRenderer::initialize()
 {
-  m_f = QOpenGLContext::currentContext()->extraFunctions();
+  auto *ctx = QOpenGLContext::currentContext();
+  if (!ctx) return;
+  m_f = ctx->extraFunctions();
+  if (!m_f) return;
   m_f->initializeOpenGLFunctions();
 
   // Resolve glPolygonMode (not in QOpenGLExtraFunctions on Qt 6.10)
@@ -1151,7 +1242,7 @@ int GLViewportRenderer::pickMoveAxis(float sx, float sy) const
 }
 
 // ===========================================================================
-// computeModelMatrix  -- build T * R * S model matrix for an object
+// computeModelMatrix  -- build T * R * S * M model matrix for an object
 // ===========================================================================
 QMatrix4x4 GLViewportRenderer::computeModelMatrix(int objectId) const
 {
@@ -1162,7 +1253,7 @@ QMatrix4x4 GLViewportRenderer::computeModelMatrix(int objectId) const
   model.rotate(t.rotation.x(), 1, 0, 0);
   model.rotate(t.rotation.y(), 0, 1, 0);
   model.rotate(t.rotation.z(), 0, 0, 1);
-  model.scale(t.scale);
+  model.scale(t.scale * t.mirror); // mirror applies as negative scale
   return model;
 }
 

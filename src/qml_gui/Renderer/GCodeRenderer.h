@@ -11,10 +11,12 @@
 #include "CameraController.h"
 
 class GLViewport;
+#ifdef HAS_LIBSLIC3R
 namespace Slic3r
 {
   struct GCodeProcessorResult;
 }
+#endif
 
 class GCodeRenderer : public QQuickFramebufferObject::Renderer
 {
@@ -26,7 +28,9 @@ public:
   void synchronize(QQuickFramebufferObject *item) override;
   void render() override;
 
+#ifdef HAS_LIBSLIC3R
   void loadResult(const Slic3r::GCodeProcessorResult *result);
+#endif
 
 private:
   struct SegmentVertex

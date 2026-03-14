@@ -78,6 +78,19 @@ int main(int argc, char *argv[])
   // Must be called before QGuiApplication is constructed.
   QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
 
+  // Enable QML debugging output for diagnostics
+  qputenv("QT_LOGGING_RULES", "qt.qml.binding=true;qt.qml.connections=true");
+
+  // Redirect all Qt messages to diagnostic log file
+  if (qEnvironmentVariableIsSet("QML_DEBUG_LOG")) {
+    qInstallMessageHandler([](QtMsgType type, const QMessageLogContext &ctx, const QString &msg) {
+      appendStartupLog(QString("[%1] %2: %3")
+        .arg(type == QtWarningMsg ? "WRN" : type == QtCriticalMsg ? "CRI" : type == QtDebugMsg ? "DBG" : "INF",
+             ctx.category ? ctx.category : "",
+             msg));
+    });
+  }
+
   QGuiApplication app(argc, argv);
   app.setOrganizationName(QStringLiteral("CrealityDemo"));
   app.setApplicationName(QStringLiteral("Print7Shell"));

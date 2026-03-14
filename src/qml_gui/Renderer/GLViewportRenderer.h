@@ -148,6 +148,7 @@ private:
     QVector3D translation{0, 0, 0};
     QVector3D rotation{0, 0, 0}; // Euler angles in degrees
     QVector3D scale{1, 1, 1};
+    QVector3D mirror{1, 1, 1}; // per-axis mirror (1 = normal, -1 = flipped)
   };
 
   // Per-drag tracking for transform history
