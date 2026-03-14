@@ -1,6 +1,9 @@
 #include "HomeViewModel.h"
 
-HomeViewModel::HomeViewModel(QObject *parent) : QObject(parent)
+#include "core/services/CloudServiceMock.h"
+
+HomeViewModel::HomeViewModel(CloudServiceMock *cloudService, QObject *parent)
+    : QObject(parent), cloudService_(cloudService)
 {
   // Mock recent projects stored as plain structs (no QVariantList member - prevents V4 GC destructor crash)
   m_entries = {
@@ -10,6 +13,17 @@ HomeViewModel::HomeViewModel(QObject *parent) : QObject(parent)
       {"miniature_figure.3mf", "2026-02-25", "C:/projects/figure.3mf"},
       {"cable_clip.stl", "2026-02-20", "C:/projects/cable_clip.stl"},
   };
+
+  if (cloudService_) {
+    connect(cloudService_, &CloudServiceMock::loginStateChanged,
+            this, &HomeViewModel::cloudStateChanged);
+    connect(cloudService_, &CloudServiceMock::devicesChanged,
+            this, &HomeViewModel::cloudStateChanged);
+    connect(cloudService_, &CloudServiceMock::syncStateChanged,
+            this, &HomeViewModel::cloudStateChanged);
+    connect(cloudService_, &CloudServiceMock::loginFailed,
+            this, [this](const QString &err) { emit cloudLoginFailed(err); });
+  }
 }
 
 QVariantList HomeViewModel::recentProjects() const
@@ -31,3 +45,42 @@ QString HomeViewModel::recentProjectPath(int i) const { return (i >= 0 && i < m_
 void HomeViewModel::openProject(const QString &path) { Q_UNUSED(path) }
 void HomeViewModel::openRecentProject(int index) { Q_UNUSED(index) }
 void HomeViewModel::refreshRecentProjects() { emit recentProjectsChanged(); }
+
+// ── Cloud account ────────────────────────────────────────────
+
+bool HomeViewModel::cloudLoggedIn() const { return cloudService_ ? cloudService_->loggedIn() : false; }
+QString HomeViewModel::cloudUserName() const { return cloudService_ ? cloudService_->userName() : QString(); }
+QString HomeViewModel::cloudUserEmail() const { return cloudService_ ? cloudService_->userEmail() : QString(); }
+int HomeViewModel::cloudBoundDeviceCount() const { return cloudService_ ? cloudService_->boundDeviceCount() : 0; }
+bool HomeViewModel::cloudSyncing() const { return cloudService_ ? cloudService_->syncing() : false; }
+QString HomeViewModel::cloudLastSyncTime() const { return cloudService_ ? cloudService_->lastSyncTime() : QString(); }
+
+void HomeViewModel::cloudLogin(const QString &user, const QString &password)
+{
+  if (cloudService_) cloudService_->login(user, password);
+}
+
+void HomeViewModel::cloudLogout()
+{
+  if (cloudService_) cloudService_->logout();
+}
+
+void HomeViewModel::cloudBindDevice(const QString &name, const QString &pin)
+{
+  if (cloudService_) cloudService_->bindDevice(name, pin);
+}
+
+void HomeViewModel::cloudUnbindDevice(int index)
+{
+  if (cloudService_) cloudService_->unbindDevice(index);
+}
+
+QVariantMap HomeViewModel::cloudBoundDeviceAt(int index) const
+{
+  return cloudService_ ? cloudService_->boundDeviceAt(index) : QVariantMap();
+}
+
+void HomeViewModel::cloudSyncPresets()
+{
+  if (cloudService_) cloudService_->syncPresets();
+}

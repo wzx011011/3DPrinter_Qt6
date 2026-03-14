@@ -8,9 +8,39 @@
 #include <QHash>
 #include <cstring>
 #include <cfloat>
+#include <cmath>
+#include <algorithm>
 
 namespace
 {
+  // 对齐上游 short_and_splitted_time
+  QString formatTime(float totalSecs)
+  {
+    if (totalSecs < 0.f) totalSecs = 0.f;
+    if (totalSecs < 60.f) return QStringLiteral("%1s").arg(totalSecs, 0, 'f', 1);
+    if (totalSecs < 3600.f) return QStringLiteral("%1m%2s").arg(int(totalSecs / 60.f)).arg(int(totalSecs) % 60, 2, 10, QChar('0'));
+    const int h = int(totalSecs / 3600.f);
+    const int m = int((totalSecs - h * 3600.f) / 60.f);
+    return QStringLiteral("%1h%2m").arg(h).arg(m, 2, 10, QChar('0'));
+  }
+
+  // Parse "H:MM:SS" or "HhXXm" time string back to seconds
+  float parseTimeSecs(const QString &time)
+  {
+    const auto parts = time.split(':');
+    if (parts.size() == 3)
+      return parts[0].toFloat() * 3600.f + parts[1].toFloat() * 60.f + parts[2].toFloat();
+    // Try "XhYYm" format
+    const QRegularExpression re(QStringLiteral("(\\d+)h(\\d+)m"));
+    const QRegularExpressionMatch match = re.match(time);
+    if (match.hasMatch())
+      return match.captured(1).toFloat() * 3600.f + match.captured(2).toFloat() * 60.f;
+    // Try "XXs" format
+    if (time.endsWith('s'))
+      return time.left(time.size() - 1).toFloat();
+    return 0.f;
+  }
+
   struct PackedSegment
   {
     float x1;
@@ -164,17 +194,40 @@ PreviewViewModel::PreviewViewModel(SliceService *sliceService, QObject *parent)
 
 int PreviewViewModel::progress() const
 {
-  return sliceService_->progress();
+  return sliceService_ ? sliceService_->progress() : 0;
 }
 
 bool PreviewViewModel::slicing() const
 {
-  return sliceService_->slicing();
+  return sliceService_ ? sliceService_->slicing() : false;
+}
+
+bool PreviewViewModel::isPlaying() const
+{
+  return playTimer_ && playTimer_->isActive();
 }
 
 QString PreviewViewModel::estimatedTime() const
 {
   return estimatedTime_;
+}
+
+QString PreviewViewModel::currentTime() const
+{
+  // Look up accumulated time at current move (对齐上游 IMSlider::get_label)
+  if (m_moveAccumulatedTime.empty() || currentMove_ <= 0)
+    return QStringLiteral("0s");
+  const int idx = qMin(currentMove_, int(m_moveAccumulatedTime.size()) - 1);
+  return formatTime(m_moveAccumulatedTime[idx]);
+}
+
+QString PreviewViewModel::timeAtMove(int moveIndex) const
+{
+  // Look up accumulated time at arbitrary move position (对齐上游 IMSlider hover 提示)
+  if (m_moveAccumulatedTime.empty() || moveIndex <= 0)
+    return QStringLiteral("0s");
+  const int idx = qMin(moveIndex, int(m_moveAccumulatedTime.size()) - 1);
+  return formatTime(m_moveAccumulatedTime[idx]);
 }
 
 QStringList PreviewViewModel::viewModes() const
@@ -208,13 +261,67 @@ void PreviewViewModel::setLayerRange(int minLayer, int maxLayer)
   emit stateChanged();
 }
 
+void PreviewViewModel::jumpToLayer(int oneIndexedLayer)
+{
+  if (layerCount_ <= 0)
+    return;
+  // 上游 IMSlider::do_go_to_layer 接收 1-indexed，内部转为 0-indexed
+  const int zeroBased = qBound(0, oneIndexedLayer - 1, layerCount_ - 1);
+  setLayerRange(zeroBased, zeroBased);
+}
+
+void PreviewViewModel::moveLayerRange(int delta)
+{
+  if (layerCount_ <= 0)
+    return;
+  const int span = currentLayerMax_ - currentLayerMin_;
+  int newMin = currentLayerMin_ + delta;
+  int newMax = currentLayerMax_ + delta;
+  // 钳位：保持 span 不变
+  if (newMin < 0) {
+    newMin = 0;
+    newMax = qMin(span, layerCount_ - 1);
+  }
+  if (newMax >= layerCount_) {
+    newMax = layerCount_ - 1;
+    newMin = qMax(0, newMax - span);
+  }
+  setLayerRange(newMin, newMax);
+}
+
 void PreviewViewModel::setCurrentMove(int move)
 {
   const int clamped = qBound(0, move, moveCount_);
   if (clamped == currentMove_)
     return;
   currentMove_ = clamped;
+  updateToolPositionData();
   emit stateChanged();
+}
+
+void PreviewViewModel::updateToolPositionData()
+{
+  if (segments_.empty() || currentMove_ < 0 || currentMove_ >= static_cast<int>(segments_.size())) {
+    hasToolPosition_ = false;
+    return;
+  }
+  const auto &seg = segments_[currentMove_];
+  // 上游 GCodeViewer::Marker 使用 move 的终点位置
+  hasToolPosition_ = true;
+  toolX_ = seg.x2;
+  toolY_ = seg.y2;
+  toolZ_ = seg.z2;
+  toolFeedrate_ = seg.feedrate;
+  toolFanSpeed_ = seg.fan_speed;
+  toolTemperature_ = seg.temperature;
+  toolWidth_ = seg.width;
+  toolLayerTime_ = seg.layer_time;
+  toolAcceleration_ = seg.acceleration;
+  toolExtruderId_ = seg.extruder_id;
+  toolLayer_ = seg.layer;
+  toolMoveIndex_ = seg.move;
+  // 挤出移动判断：起点和终点不同且有 feedrate
+  toolIsExtrusion_ = (seg.x1 != seg.x2 || seg.y1 != seg.y2 || seg.z1 != seg.z2) && seg.feedrate > 0;
 }
 
 void PreviewViewModel::playAnimation()
@@ -222,11 +329,21 @@ void PreviewViewModel::playAnimation()
   if (moveCount_ <= 0)
     return;
   playTimer_->start();
+  emit stateChanged();
 }
 
 void PreviewViewModel::pauseAnimation()
 {
   playTimer_->stop();
+  emit stateChanged();
+}
+
+void PreviewViewModel::togglePlayPause()
+{
+  if (isPlaying())
+    pauseAnimation();
+  else
+    playAnimation();
 }
 
 void PreviewViewModel::setViewModeIndex(int index)
@@ -236,6 +353,22 @@ void PreviewViewModel::setViewModeIndex(int index)
     return;
   viewModeIndex_ = clamped;
   recolorAndPackSegments();
+  emit stateChanged();
+}
+
+void PreviewViewModel::setStealthMode(bool enabled)
+{
+  if (stealthMode_ == enabled)
+    return;
+  stealthMode_ = enabled;
+  // Recalculate totalTime with stealth multiplier (~1.4x slower due to reduced accel/jerk)
+  // 对齐上游 PrintEstimatedStatistics::modes[1] — stealth mode
+  if (!totalTime_.contains("--"))
+  {
+    totalTime_ = stealthMode_
+        ? formatTime(parseTimeSecs(estimatedTime_) * 1.4f)
+        : estimatedTime_;
+  }
   emit stateChanged();
 }
 
@@ -254,6 +387,12 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   legendItems_.clear();
   segments_.clear();
   featureCount_.clear();
+  m_layerTimes.clear();
+  m_layerZs.clear();
+  m_toolChangePositions.clear();
+  m_extruderUsedLength.clear();
+  m_extruderUsedWeight.clear();
+  m_maxLayerTime = 0.f;
   layerCount_ = 0;
   moveCount_ = 0;
   currentMove_ = 0;
@@ -263,8 +402,11 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   filamentWeight_ = QStringLiteral("--");
   extrudeMoveCount_ = 0;
   travelMoveCount_ = 0;
-
-  if (filePath.isEmpty())
+  toolChangeCount_ = 0;
+  avgSpeed_ = QStringLiteral("--");
+  estimatedCost_ = QStringLiteral("--");
+  m_roleTimes.clear();
+  m_moveAccumulatedTime.clear();
     return;
 
   QFile file(filePath);
@@ -298,6 +440,17 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   float filamentDensity = 1.24f;  // default PLA g/cm3
   int extrudeMoveCount = 0;
   int travelMoveCount = 0;
+  int toolChangeCount = 0;
+  double feedrateSum = 0.0;
+  int feedrateCount = 0;
+
+  // Per-role time tracking (对齐上游 PrintEstimatedStatistics::roles_times)
+  QHash<QString, double> roleTimeAccum; // TYPE label → accumulated time in seconds
+  auto accumulateRoleTime = [&](const QString &role, float dx, float dy, float dz, float feed) {
+    if (feed <= 0.f) return;
+    const float dist = std::sqrt(dx*dx + dy*dy + dz*dz);
+    roleTimeAccum[role] += dist / feed * 60.0; // feed is mm/min, dist is mm → seconds
+  };
 
   while (!file.atEnd())
   {
@@ -364,7 +517,14 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       bool ok = false;
       const int tid = raw.mid(1).toInt(&ok);
       if (ok && tid >= 0)
+      {
+        if (tid != currentExtruder) {
+          ++toolChangeCount;
+          // 记录工具切换位置（对齐上游 IMSlider colored band）
+          m_toolChangePositions.push_back({moveIndex, tid});
+        }
         currentExtruder = tid;
+      }
     }
 
     // Acceleration command: M204 S... X... Y... Z... E...
@@ -384,6 +544,13 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     const float lineF = parseFValue(raw);
     if (lineF > 0.f)
       currentFeedrate = lineF;
+
+    // Track feedrate for average speed calculation (extrusion moves only)
+    if (raw.contains('E') && currentFeedrate > 0.f)
+    {
+      feedrateSum += currentFeedrate;
+      ++feedrateCount;
+    }
 
     float nx = x;
     float ny = y;
@@ -406,7 +573,14 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
 
     if (nz > z + 0.0001f)
     {
+      // Save previous layer's elapsed time
+      if (layer > 0 || m_layerTimes.isEmpty())
+      {
+        m_layerTimes.append(layerTime);
+        m_maxLayerTime = qMax(m_maxLayerTime, layerTime);
+      }
       ++layer;
+      m_layerZs.append(nz); // 对齐上游 IMSlider hover tooltip 显示层 Z 高度
       // Compute layer time from TIME_ELAPSED at layer transitions
       layerTime = 0.f;
       prevLayerZ = nz;
@@ -416,12 +590,17 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     const bool extruding = (ne > e + 0.00001f);
     if (extruding)
     {
-      totalFilamentUsed += (ne - e);
+      const float extrusionDelta = ne - e;
+      totalFilamentUsed += extrusionDelta;
       ++extrudeMoveCount;
+      // 每挤出机耗材追踪（对齐上游 PrintEstimatedStatistics volumes_per_extruder）
+      m_extruderUsedLength[currentExtruder] += extrusionDelta;
+      accumulateRoleTime(currentType, nx - x, ny - y, nz - z, currentFeedrate);
     }
     else
     {
       ++travelMoveCount;
+      accumulateRoleTime(QStringLiteral("TRAVEL"), nx - x, ny - y, nz - z, currentFeedrate);
     }
     const FeatureStyle style = styleFor(extruding ? currentType : QStringLiteral("TRAVEL"));
 
@@ -446,6 +625,14 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     seg.move = moveIndex;
     segments_.push_back(seg);
 
+    // Accumulate elapsed time for move slider (对齐上游 IMSlider m_layers_times)
+    {
+      const float dist = std::sqrt((nx - x) * (nx - x) + (ny - y) * (ny - y) + (nz - z) * (nz - z));
+      const float dt = currentFeedrate > 0.f ? dist / currentFeedrate * 60.f : 0.f;
+      const float prev = m_moveAccumulatedTime.empty() ? 0.f : m_moveAccumulatedTime.back();
+      m_moveAccumulatedTime.push_back(prev + dt);
+    }
+
     featureCount_[style.label] += 1;
 
     x = nx;
@@ -457,16 +644,29 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
 
   moveCount_ = moveIndex;
   layerCount_ = qMax(1, layer + 1);
+
+  // Save last layer's time
+  m_layerTimes.append(layerTime);
+  m_maxLayerTime = qMax(m_maxLayerTime, layerTime);
+
   currentLayerMin_ = 0;
   currentLayerMax_ = layerCount_ - 1;
   currentMove_ = moveCount_;
   extrudeMoveCount_ = extrudeMoveCount;
   travelMoveCount_ = travelMoveCount;
+  toolChangeCount_ = toolChangeCount;
+
+  // Average speed
+  if (feedrateCount > 0)
+    avgSpeed_ = QStringLiteral("%1 mm/s").arg(feedrateSum / feedrateCount, 0, 'f', 1);
+  else
+    avgSpeed_ = QStringLiteral("--");
 
   if (segments_.empty())
   {
     filamentUsed_ = QStringLiteral("--");
     filamentWeight_ = QStringLiteral("--");
+    estimatedCost_ = QStringLiteral("--");
   }
   else
   {
@@ -476,9 +676,141 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     const float volume_mm3 = totalFilamentUsed * 3.14159265f * (filamentDiameter * 0.5f) * (filamentDiameter * 0.5f);
     const float weight_g = volume_mm3 * filamentDensity * 0.001f;
     filamentWeight_ = QStringLiteral("%1 g").arg(weight_g, 0, 'f', 1);
+
+    // 计算每挤出机耗材重量（对齐上游 PrintEstimatedStatistics volumes_per_extruder）
+    m_extruderUsedWeight.clear();
+    for (auto it = m_extruderUsedLength.constBegin(); it != m_extruderUsedLength.constEnd(); ++it)
+    {
+      const float vol = it.value() * 3.14159265f * (filamentDiameter * 0.5f) * (filamentDiameter * 0.5f);
+      m_extruderUsedWeight[it.key()] = vol * filamentDensity * 0.001f;
+    }
+
+    // Estimated cost: weight_kg * price_per_kg (default ~$20/kg PLA)
+    constexpr float pricePerKg = 20.0f; // dollars per kg
+    estimatedCost_ = QStringLiteral("$%1").arg(weight_g / 1000.0f * pricePerKg, 0, 'f', 2);
   }
 
+  // Build role time breakdown (对齐上游 PrintEstimatedStatistics::roles_times)
+  m_roleTimes.clear();
+  // Map upstream TYPE labels to Chinese display names
+  static const QHash<QString, QString> roleLabels = {
+      {QStringLiteral("WALL-INNER"),          tr("内壁")},
+      {QStringLiteral("WALL-OUTER"),          tr("外壁")},
+      {QStringLiteral("WALL"),                tr("墙壁")},
+      {QStringLiteral("SKIN"),                tr("顶面/底面")},
+      {QStringLiteral("FILL"),                tr("填充")},
+      {QStringLiteral("SUPPORT"),             tr("支撑")},
+      {QStringLiteral("SUPPORT-INTERFACE"),   tr("支撑面")},
+      {QStringLiteral("BRIDGE"),              tr("桥接")},
+      {QStringLiteral("PERIMETER"),           tr("轮廓")},
+      {QStringLiteral("EXTERNAL"),            tr("外壁")},
+      {QStringLiteral("INTERNAL"),            tr("内壁")},
+      {QStringLiteral("OVERHANG"),            tr("悬空")},
+      {QStringLiteral("IRONING"),             tr("熨烫")},
+      {QStringLiteral("SKIRT"),               tr("裙边")},
+      {QStringLiteral("BRIM"),                tr("底座")},
+      {QStringLiteral("WIPE"),                tr("擦料")},
+      {QStringLiteral("PRIME-TOWER"),         tr("擦料塔")},
+      {QStringLiteral("CUSTOM"),              tr("自定义")},
+      {QStringLiteral("TRAVEL"),              tr("空驶")},
+  };
+  for (auto it = roleTimeAccum.cbegin(); it != roleTimeAccum.cend(); ++it)
+  {
+    RoleTimeEntry entry;
+    entry.name = roleLabels.value(it.key(), it.key());
+    entry.timeSecs = it.value();
+    m_roleTimes.append(entry);
+  }
+  // Sort by time descending
+  std::sort(m_roleTimes.begin(), m_roleTimes.end(),
+            [](const RoleTimeEntry &a, const RoleTimeEntry &b) { return a.timeSecs > b.timeSecs; });
+
+  updateToolPositionData();
   recolorAndPackSegments();
+}
+
+int PreviewViewModel::roleTimeCount() const { return m_roleTimes.size(); }
+
+QString PreviewViewModel::roleTimeName(int i) const
+{
+  return (i >= 0 && i < m_roleTimes.size()) ? m_roleTimes[i].name : QString{};
+}
+
+QString PreviewViewModel::roleTimeValue(int i) const
+{
+  if (i < 0 || i >= m_roleTimes.size()) return {};
+  const double secs = m_roleTimes[i].timeSecs;
+  if (secs < 60.0) return QStringLiteral("%1s").arg(secs, 0, 'f', 1);
+  if (secs < 3600.0) return QStringLiteral("%1m %2s").arg(int(secs / 60.0)).arg(int(secs) % 60, 2, 10, QChar('0'));
+  const int h = int(secs / 3600.0);
+  const int m = int((secs - h * 3600.0) / 60.0);
+  return QStringLiteral("%1h %2m").arg(h).arg(m, 2, 10, QChar('0'));
+}
+
+double PreviewViewModel::roleTimePercent(int i) const
+{
+  if (i < 0 || i >= m_roleTimes.size()) return 0.0;
+  double totalSecs = 0.0;
+  for (const auto &rt : m_roleTimes) totalSecs += rt.timeSecs;
+  return totalSecs > 0.0 ? (m_roleTimes[i].timeSecs / totalSecs * 100.0) : 0.0;
+}
+
+int PreviewViewModel::layerTimeCount() const { return m_layerTimes.size(); }
+float PreviewViewModel::layerTimeAt(int layer) const
+{
+  return (layer >= 0 && layer < m_layerTimes.size()) ? m_layerTimes[layer] : 0.f;
+}
+float PreviewViewModel::maxLayerTime() const { return m_maxLayerTime; }
+
+float PreviewViewModel::layerZAt(int layer) const
+{
+  if (layer < 0 || layer >= m_layerZs.size())
+    return 0.f;
+  return m_layerZs[layer];
+}
+
+int PreviewViewModel::toolChangePositionCount() const
+{
+  return m_toolChangePositions.size();
+}
+
+int PreviewViewModel::toolChangePositionAt(int i) const
+{
+  if (i < 0 || i >= m_toolChangePositions.size())
+    return 0;
+  return m_toolChangePositions[i].moveIndex;
+}
+
+int PreviewViewModel::toolChangeExtruderIdAt(int i) const
+{
+  if (i < 0 || i >= m_toolChangePositions.size())
+    return 0;
+  return m_toolChangePositions[i].extruderId;
+}
+
+QString PreviewViewModel::extruderColor(int extruderId) const
+{
+  // 上游 extruder_colors: 8 种固定颜色循环
+  static const char *colors[] = {
+    "#009688", "#f44336", "#2196f3", "#ff9800",
+    "#9c27b0", "#4caf50", "#ff5722", "#607d8b"
+  };
+  return QString::fromUtf8(colors[extruderId % 8]);
+}
+
+int PreviewViewModel::extruderCount() const
+{
+  return m_extruderUsedLength.size();
+}
+
+double PreviewViewModel::extruderUsedLength(int extruderId) const
+{
+  return m_extruderUsedLength.value(extruderId, 0.0) / 1000.0; // mm → m
+}
+
+double PreviewViewModel::extruderUsedWeight(int extruderId) const
+{
+  return m_extruderUsedWeight.value(extruderId, 0.0); // grams
 }
 
 void PreviewViewModel::recolorAndPackSegments()
@@ -633,7 +965,9 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
     {
       const auto &tc = toolColors[id % kN];
       const QString col = QStringLiteral("#%1%2%3")
-          .arg(int(tc[0]*255), int(tc[1]*255), int(tc[2]*255));
+          .arg(int(tc[0]*255), 2, 16, QLatin1Char('0'))
+          .arg(int(tc[1]*255), 2, 16, QLatin1Char('0'))
+          .arg(int(tc[2]*255), 2, 16, QLatin1Char('0'));
       const QString label = QStringLiteral("Extruder %1").arg(id);
       int cnt = 0;
       for (const auto &s : segments_)

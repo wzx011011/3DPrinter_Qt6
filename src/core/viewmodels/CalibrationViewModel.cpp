@@ -1,112 +1,211 @@
 #include "CalibrationViewModel.h"
 #include "../services/CalibrationServiceMock.h"
+#include "../services/PresetServiceMock.h"
 
 CalibrationViewModel::CalibrationViewModel(CalibrationServiceMock *service, QObject *parent)
     : QObject(parent), m_service(service)
 {
-  if (m_service)
-  {
-    connect(m_service, &CalibrationServiceMock::progressChanged, this, &CalibrationViewModel::progressChanged);
-    connect(m_service, &CalibrationServiceMock::isRunningChanged, this, &CalibrationViewModel::runningChanged);
-    connect(m_service, &CalibrationServiceMock::calibrationFinished, this, [this](bool)
+    if (m_service)
+    {
+        connect(m_service, &CalibrationServiceMock::progressChanged, this, &CalibrationViewModel::progressChanged);
+        connect(m_service, &CalibrationServiceMock::isRunningChanged, this, &CalibrationViewModel::runningChanged);
+        connect(m_service, &CalibrationServiceMock::stepChanged, this, &CalibrationViewModel::stepChanged);
+        connect(m_service, &CalibrationServiceMock::statusChanged, this, &CalibrationViewModel::statusChanged);
+        connect(m_service, &CalibrationServiceMock::calibrationFinished, this, [this](bool)
             {
-      emit runningChanged();
-      emit progressChanged(); });
-  }
-
-  m_calibItems = {
-      {"🏠", tr("首层校准"), tr("调整首层高度"), tr("精确调整首层打印高度，确保良好附着。"), tr("首层高度预览区")},
-      {"🌡", tr("热床校正"), tr("PID 热床温度校正"), tr("校正热床 PID 参数，稳定床温。"), tr("温度曲线图")},
-      {"🔊", tr("共振补偿"), tr("输入整形/共振测试"), tr("测量并补偿打印机共振以提升质量。"), tr("频率响应图")},
-      {"📏", tr("流量校准"), tr("挤出流量线性校准"), tr("校准挤出机流量，减少欠挤或过挤。"), tr("测试块预览")},
-      {"⚡", tr("速度校准"), tr("最大速度测试"), tr("测试各轴最大速度与加速度边界。"), tr("速度斜坡图")},
-      {"🎯", tr("喷嘴偏移"), tr("XY 喷嘴偏移校准"), tr("多喷头打印机的喷嘴偏移精确对齐。"), tr("偏移测试图案")},
-      {"🔄", tr("压力提前"), tr("Linear Advance 校准"), tr("校准压力提前参数，消除拐角鼓包。"), tr("折线测试图")},
-  };
-  // m_items QVariantList removed - computed on demand in calibrationItems()
+                emit runningChanged();
+                emit progressChanged();
+                emit stepChanged();
+                emit statusChanged(m_selectedIndex, selectedStatus());
+            });
+    }
 }
 
-QVariantList CalibrationViewModel::calibrationItems() const
+void CalibrationViewModel::setPresetService(PresetServiceMock *service)
 {
-  QVariantList result;
-  result.reserve(m_calibItems.size());
-  for (const auto &item : m_calibItems)
-  {
-    result.append(QVariantMap{{"icon", item.icon}, {"name", item.name}, {"desc", item.desc}});
-  }
-  return result;
+    m_presetService = service;
+    m_selectedFilamentPreset = service ? service->defaultPresetForCategory(1) : QString{};
+    emit stateChanged();
 }
 
-int CalibrationViewModel::calibItemCount() const { return m_calibItems.size(); }
-QString CalibrationViewModel::calibItemIcon(int i) const { return (i >= 0 && i < m_calibItems.size()) ? m_calibItems[i].icon : QString{}; }
-QString CalibrationViewModel::calibItemName(int i) const { return (i >= 0 && i < m_calibItems.size()) ? m_calibItems[i].name : QString{}; }
-QString CalibrationViewModel::calibItemDesc(int i) const { return (i >= 0 && i < m_calibItems.size()) ? m_calibItems[i].desc : QString{}; }
+// --- Item accessors (delegated to service) ---
 
-bool CalibrationViewModel::isRunning() const
+int CalibrationViewModel::calibItemCount() const
 {
-  return m_service ? m_service->isRunning() : false;
+    return m_service ? m_service->calibTypeCount() : 0;
 }
 
-int CalibrationViewModel::progress() const
+QString CalibrationViewModel::calibItemIcon(int i) const
 {
-  return m_service ? m_service->progress() : 0;
+    return m_service ? m_service->calibTypeIcon(i) : QString{};
+}
+
+QString CalibrationViewModel::calibItemName(int i) const
+{
+    return m_service ? m_service->calibTypeName(i) : QString{};
+}
+
+QString CalibrationViewModel::calibItemDesc(int i) const
+{
+    return m_service ? m_service->calibTypeDesc(i) : QString{};
+}
+
+int CalibrationViewModel::calibItemStatus(int i) const
+{
+    return m_service ? m_service->calibStatus(i) : 0;
+}
+
+// --- Step accessors for current selection ---
+
+int CalibrationViewModel::stepCount() const
+{
+    if (!m_service || m_selectedIndex < 0) return 0;
+    return m_service->stepCount(m_selectedIndex);
+}
+
+QString CalibrationViewModel::stepTitle(int stepIndex) const
+{
+    if (!m_service || m_selectedIndex < 0) return {};
+    return m_service->stepTitle(m_selectedIndex, stepIndex);
+}
+
+QString CalibrationViewModel::stepDesc(int stepIndex) const
+{
+    if (!m_service || m_selectedIndex < 0) return {};
+    return m_service->stepDesc(m_selectedIndex, stepIndex);
+}
+
+int CalibrationViewModel::stepState(int stepIndex) const
+{
+    if (!m_service || m_selectedIndex < 0) return 0;
+    return m_service->stepState(m_selectedIndex, stepIndex);
+}
+
+// --- Selected item properties ---
+
+void CalibrationViewModel::selectItem(int index)
+{
+    if (m_selectedIndex == index) return;
+    m_selectedIndex = index;
+    emit selectionChanged();
 }
 
 QString CalibrationViewModel::selectedTitle() const
 {
-  if (m_selectedIndex < 0 || m_selectedIndex >= m_calibItems.size())
-    return {};
-  return m_calibItems[m_selectedIndex].name;
+    return m_service ? m_service->calibTypeName(m_selectedIndex) : QString{};
 }
 
 QString CalibrationViewModel::selectedDescription() const
 {
-  if (m_selectedIndex < 0 || m_selectedIndex >= m_calibItems.size())
-    return {};
-  return m_calibItems[m_selectedIndex].longDesc;
+    return m_service ? m_service->calibTypeLongDesc(m_selectedIndex) : QString{};
 }
 
 QString CalibrationViewModel::selectedPreviewLabel() const
 {
-  if (m_selectedIndex < 0 || m_selectedIndex >= m_calibItems.size())
-    return "选择校准项后在此处显示预览";
-  return m_calibItems[m_selectedIndex].previewLabel;
+    return m_service ? m_service->calibTypePreviewLabel(m_selectedIndex) : QString{};
 }
 
-void CalibrationViewModel::selectItem(int index)
+QString CalibrationViewModel::selectedCategory() const
 {
-  if (m_selectedIndex != index)
-  {
-    m_selectedIndex = index;
-    emit selectionChanged();
-  }
+    return m_service ? m_service->calibTypeCategory(m_selectedIndex) : QString{};
 }
+
+bool CalibrationViewModel::isRunning() const
+{
+    return m_service ? m_service->isRunning() : false;
+}
+
+int CalibrationViewModel::progress() const
+{
+    return m_service ? m_service->progress() : 0;
+}
+
+int CalibrationViewModel::currentStepIndex() const
+{
+    return m_service ? m_service->currentStepIndex() : -1;
+}
+
+QString CalibrationViewModel::currentStepTitle() const
+{
+    if (!m_service || m_selectedIndex < 0) return {};
+    int step = m_service->currentStepIndex();
+    return m_service->stepTitle(m_selectedIndex, step);
+}
+
+QString CalibrationViewModel::currentStepDesc() const
+{
+    if (!m_service || m_selectedIndex < 0) return {};
+    int step = m_service->currentStepIndex();
+    return m_service->stepDesc(m_selectedIndex, step);
+}
+
+QString CalibrationViewModel::currentStepId() const
+{
+    if (!m_service || m_selectedIndex < 0) return {};
+    int step = m_service->currentStepIndex();
+    return m_service->stepId(m_selectedIndex, step);
+}
+
+bool CalibrationViewModel::showPresetSelector() const
+{
+    return currentStepId() == QStringLiteral("preset");
+}
+
+int CalibrationViewModel::totalStepCount() const
+{
+    return stepCount();
+}
+
+int CalibrationViewModel::selectedStatus() const
+{
+    return m_service ? m_service->calibStatus(m_selectedIndex) : 0;
+}
+
+QStringList CalibrationViewModel::filamentPresetNames() const
+{
+    return m_presetService ? m_presetService->presetNamesForCategory(1) : QStringList{};
+}
+
+void CalibrationViewModel::setSelectedFilamentPreset(const QString &name)
+{
+    if (m_selectedFilamentPreset == name) return;
+    m_selectedFilamentPreset = name;
+    emit stateChanged();
+}
+
+// --- Actions ---
 
 void CalibrationViewModel::startCalibration()
 {
-  if (m_selectedIndex < 0)
-    return;
-  if (m_service)
-    m_service->startCalibration(m_selectedIndex);
-  else
-  {
-    emit runningChanged();
-    emit progressChanged();
-  }
+    if (m_selectedIndex < 0) return;
+    if (m_service)
+        m_service->startCalibration(m_selectedIndex);
+    else
+    {
+        emit runningChanged();
+        emit progressChanged();
+    }
 }
 
 void CalibrationViewModel::cancelCalibration()
 {
-  if (m_service)
-    m_service->cancelCalibration();
-  else
-  {
-    emit runningChanged();
-    emit progressChanged();
-  }
+    if (m_service)
+        m_service->cancelCalibration();
+    else
+    {
+        emit runningChanged();
+        emit progressChanged();
+    }
+}
+
+void CalibrationViewModel::goToStep(int stepIndex)
+{
+    if (m_service)
+        m_service->goToStep(stepIndex);
 }
 
 void CalibrationViewModel::resetParameters()
 {
-  // Reset to defaults (mock)
+    if (m_service && m_selectedIndex >= 0)
+        m_service->resetCalibration(m_selectedIndex);
 }

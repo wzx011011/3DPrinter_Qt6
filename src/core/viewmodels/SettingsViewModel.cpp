@@ -4,6 +4,7 @@
 static QStringList categoryTitles()
 {
   return {
+      SettingsViewModel::tr("通用"),
       SettingsViewModel::tr("外观"),
       SettingsViewModel::tr("语言"),
       SettingsViewModel::tr("快捷键"),
@@ -110,4 +111,76 @@ void SettingsViewModel::resetPreferences()
   setFontSize(12);
   setUiScaleIndex(0);
   setLanguageIndex(0);
+  setShowHomePage(true);
+  setDefaultPage(1);
+  setUnits(0);
+  setUserRole(0);
+  setAutoSave(true);
+  setAutoSaveInterval(10);
+  setCheckUpdates(true);
+  setReducedMotion(false);
+  setRegion(0);
+  setCompactMode(false);
+  setAutoBackup(false);
+  setUndoLimit(100);
+}
+
+void SettingsViewModel::setShowHomePage(bool v)
+{
+  if (m_showHomePage != v) { m_showHomePage = v; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setDefaultPage(int page)
+{
+  if (m_defaultPage != page) { m_defaultPage = page; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setUnits(int u)
+{
+  if (m_units != u) { m_units = u; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setUserRole(int role)
+{
+  if (m_userRole != role) { m_userRole = role; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setAutoSave(bool v)
+{
+  if (m_autoSave != v) { m_autoSave = v; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setAutoSaveInterval(int minutes)
+{
+  if (m_autoSaveInterval != minutes) { m_autoSaveInterval = minutes; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setCheckUpdates(bool v)
+{
+  if (m_checkUpdates != v) { m_checkUpdates = v; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setReducedMotion(bool v)
+{
+  if (m_reducedMotion != v) { m_reducedMotion = v; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setRegion(int r)
+{
+  if (m_region != r) { m_region = r; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setCompactMode(bool v)
+{
+  if (m_compactMode != v) { m_compactMode = v; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setAutoBackup(bool v)
+{
+  if (m_autoBackup != v) { m_autoBackup = v; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setUndoLimit(int limit)
+{
+  if (m_undoLimit != limit) { m_undoLimit = limit; emit settingsChanged(); }
 }

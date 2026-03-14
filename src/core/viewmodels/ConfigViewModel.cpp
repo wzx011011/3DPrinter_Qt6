@@ -15,26 +15,83 @@ ConfigViewModel::ConfigViewModel(PresetServiceMock *presetService, ProjectServic
   presetList_ = new PresetListModel(this);
 
   scopedWritableKeys_ = {
+      // Layer
       QStringLiteral("layer_height"),
       QStringLiteral("initial_layer_print_height"),
       QStringLiteral("line_width"),
+      QStringLiteral("initial_layer_line_width"),
+      // Shell
       QStringLiteral("wall_loops"),
       QStringLiteral("top_shell_layers"),
       QStringLiteral("bottom_shell_layers"),
+      QStringLiteral("wall_infill_order"),
+      QStringLiteral("infill_wall_overlap"),
+      QStringLiteral("top_bottom_infill_wall_overlap"),
+      QStringLiteral("outer_wall_line_width"),
+      QStringLiteral("inner_wall_line_width"),
+      QStringLiteral("wall_sequence"),
+      // Infill
       QStringLiteral("sparse_infill_density"),
       QStringLiteral("sparse_infill_pattern"),
-      QStringLiteral("infill_wall_overlap"),
+      QStringLiteral("infill_direction"),
+      // Speed
+      QStringLiteral("outer_wall_speed"),
+      QStringLiteral("inner_wall_speed"),
+      QStringLiteral("sparse_infill_speed"),
+      QStringLiteral("top_surface_speed"),
+      QStringLiteral("support_speed"),
       QStringLiteral("travel_speed"),
       QStringLiteral("initial_layer_speed"),
-      QStringLiteral("outer_wall_speed"),
+      QStringLiteral("bridge_speed"),
+      QStringLiteral("internal_bridge_speed"),
+      QStringLiteral("initial_layer_infill_speed"),
+      QStringLiteral("gap_infill_speed"),
+      // Acceleration
+      QStringLiteral("outer_wall_acceleration"),
+      QStringLiteral("inner_wall_acceleration"),
+      QStringLiteral("travel_acceleration"),
+      QStringLiteral("default_acceleration"),
+      // Temperature
       QStringLiteral("nozzle_temp"),
       QStringLiteral("bed_temp"),
       QStringLiteral("chamber_temperature"),
+      QStringLiteral("nozzle_temperature_initial_layer"),
+      // Support
       QStringLiteral("enable_support"),
       QStringLiteral("support_type"),
+      QStringLiteral("support_density"),
+      QStringLiteral("support_on_build_plate_only"),
+      QStringLiteral("support_interface_top_layers"),
+      QStringLiteral("support_interface_bottom_layers"),
+      QStringLiteral("support_speed"),
+      QStringLiteral("support_angle"),
+      // Adhesion
       QStringLiteral("brim_enable"),
       QStringLiteral("brim_width"),
-      QStringLiteral("skirt_loops")};
+      QStringLiteral("brim_type"),
+      QStringLiteral("skirt_loops"),
+      QStringLiteral("skirt_distance"),
+      QStringLiteral("adhesion_type"),
+      // Retraction
+      QStringLiteral("retract_length"),
+      QStringLiteral("retract_speed"),
+      QStringLiteral("deretraction_speed"),
+      QStringLiteral("retract_length_toolchange"),
+      QStringLiteral("z_hop"),
+      // Cooling
+      QStringLiteral("fan_speed"),
+      QStringLiteral("min_fan_speed"),
+      QStringLiteral("overhang_fan_speed"),
+      QStringLiteral("slow_down_layer_time"),
+      QStringLiteral("close_fan_the_first_x_layers"),
+      // Ironing
+      QStringLiteral("ironing_type"),
+      QStringLiteral("ironing_speed"),
+      // Quality
+      QStringLiteral("max_print_speed"),
+      QStringLiteral("reduce_crossing_wall"),
+      QStringLiteral("only_one_wall_top"),
+      QStringLiteral("precise_outer_wall")};
 
   connect(printOptions_, &ConfigOptionModel::optionValueChanged, this, &ConfigViewModel::handleOptionValueChanged);
   loadDefault();
@@ -45,7 +102,7 @@ QObject *ConfigViewModel::presetList() const { return presetList_; }
 
 QStringList ConfigViewModel::presetNames() const
 {
-  return presetService_->presetNames();
+  return presetService_ ? presetService_->presetNames() : QStringList{};
 }
 
 QString ConfigViewModel::currentPreset() const
@@ -60,8 +117,13 @@ double ConfigViewModel::layerHeight() const
 
 void ConfigViewModel::loadDefault()
 {
-  currentPreset_ = presetService_->defaultPreset();
-  layerHeight_ = presetService_->defaultLayerHeight();
+  if (presetService_) {
+    currentPreset_ = presetService_->defaultPreset();
+    currentPrinterPreset_ = presetService_->defaultPresetForCategory(0);
+    currentFilamentPreset_ = presetService_->defaultPresetForCategory(1);
+    currentPrintPreset_ = presetService_->defaultPresetForCategory(2);
+    layerHeight_ = presetService_->defaultLayerHeight();
+  }
   printSpeed_ = 300;
   supportEnabled_ = false;
   infillDensity_ = 15;
@@ -71,7 +133,18 @@ void ConfigViewModel::loadDefault()
   topLayers_ = 4;
   bottomLayers_ = 4;
   enableBrim_ = false;
-  globalOptionValues_ = printOptions_->valuesByKey();
+
+  // Reset to global scope
+  settingsScope_ = QStringLiteral("global");
+  settingsTargetObjectIndex_ = -1;
+  settingsTargetVolumeIndex_ = -1;
+  settingsTargetPlateIndex_ = -1;
+
+  // Reset model values to original defaults, then snapshot global values
+  if (printOptions_)
+    printOptions_->resetToDefaults();
+  globalOptionValues_ = printOptions_ ? printOptions_->valuesByKey() : QHash<QString, QVariant>{};
+  savedPresetValues_ = globalOptionValues_; // 初始化预设快照
   applyScopeValues();
   emit stateChanged();
 }
@@ -79,8 +152,225 @@ void ConfigViewModel::loadDefault()
 void ConfigViewModel::setCurrentPreset(const QString &presetName)
 {
   currentPreset_ = presetName;
+
+  // 加载预设值（如果有保存的值）
+  if (presetService_ && presetService_->hasPreset(presetName))
+  {
+    auto presetVals = presetService_->presetValues(presetName);
+    if (!presetVals.isEmpty())
+    {
+      // 切换到全局作用域
+      settingsScope_ = QStringLiteral("global");
+      settingsTargetObjectIndex_ = -1;
+      settingsTargetVolumeIndex_ = -1;
+
+      if (printOptions_)
+        printOptions_->applyValues(presetVals);
+      globalOptionValues_ = presetVals;
+      applyScopeValues();
+    }
+  }
+
+  // 保存当前预设值的快照（用于脏检测）
+  savedPresetValues_ = globalOptionValues_;
   emit stateChanged();
 }
+
+void ConfigViewModel::saveCurrentPreset()
+{
+  if (!presetService_ || currentPreset_.isEmpty())
+    return;
+
+  presetService_->savePresetValues(currentPreset_, globalOptionValues_);
+  // 更新快照
+  savedPresetValues_ = globalOptionValues_;
+  emit stateChanged();
+}
+
+bool ConfigViewModel::isPresetDirty() const
+{
+  if (savedPresetValues_.isEmpty())
+    return !globalOptionValues_.isEmpty();
+  return savedPresetValues_ != globalOptionValues_;
+}
+
+// ── 3-tier preset inheritance (对齐上游 PresetBundle) ─────────
+
+QStringList ConfigViewModel::printerPresetNames() const
+{
+  return presetService_ ? presetService_->presetNamesForCategory(0) : QStringList{};
+}
+
+QStringList ConfigViewModel::filamentPresetNames() const
+{
+  return presetService_ ? presetService_->presetNamesForCategory(1) : QStringList{};
+}
+
+QStringList ConfigViewModel::printPresetNames() const
+{
+  return presetService_ ? presetService_->presetNamesForCategory(2) : QStringList{};
+}
+
+void ConfigViewModel::setCurrentPrinterPreset(const QString &name)
+{
+  currentPrinterPreset_ = name;
+  mergePresetHierarchy();
+  autoMatchFilament();  // 切换打印机时自动匹配兼容耗材
+  emit stateChanged();
+}
+
+void ConfigViewModel::setCurrentFilamentPreset(const QString &name)
+{
+  currentFilamentPreset_ = name;
+  mergePresetHierarchy();
+  emit stateChanged();
+}
+
+void ConfigViewModel::setCurrentPrintPreset(const QString &name)
+{
+  currentPrintPreset_ = name;
+  currentPreset_ = name; // legacy compat
+  mergePresetHierarchy();
+  emit stateChanged();
+}
+
+void ConfigViewModel::mergePresetHierarchy()
+{
+  if (!printOptions_)
+    return;
+
+  // Start with model defaults
+  printOptions_->resetToDefaults();
+  QHash<QString, QVariant> merged = printOptions_->valuesByKey();
+
+  // 初始化所有 key 的来源为 "default"
+  valueSources_.clear();
+  for (auto it = merged.begin(); it != merged.end(); ++it)
+    valueSources_[it.key()] = QStringLiteral("default");
+
+  if (!presetService_)
+    return;
+
+  // Tier 1: Printer preset (base layer)
+  {
+    const auto vals = presetService_->presetValues(currentPrinterPreset_);
+    for (auto it = vals.begin(); it != vals.end(); ++it) {
+      merged[it.key()] = it.value();
+      valueSources_[it.key()] = QStringLiteral("printer");
+    }
+  }
+
+  // Tier 2: Filament preset (overrides printer where keys overlap)
+  {
+    const auto vals = presetService_->presetValues(currentFilamentPreset_);
+    for (auto it = vals.begin(); it != vals.end(); ++it) {
+      merged[it.key()] = it.value();
+      valueSources_[it.key()] = QStringLiteral("filament");
+    }
+  }
+
+  // Tier 3: Print preset (overrides both where keys overlap)
+  {
+    const auto vals = presetService_->presetValues(currentPrintPreset_);
+    for (auto it = vals.begin(); it != vals.end(); ++it) {
+      merged[it.key()] = it.value();
+      valueSources_[it.key()] = QStringLiteral("print");
+    }
+  }
+
+  globalOptionValues_ = merged;
+  savedPresetValues_ = merged;
+  applyScopeValues();
+}
+
+bool ConfigViewModel::createCustomPreset(int category, const QString &name)
+{
+  if (!presetService_)
+    return false;
+
+  // 使用当前全局值作为新预设的值
+  return presetService_->createCustomPreset(category, name, globalOptionValues_);
+}
+
+bool ConfigViewModel::deletePreset(int category, const QString &name)
+{
+  if (!presetService_)
+    return false;
+
+  // 不允许删除当前正在使用的预设
+  if (name == currentPrinterPreset_ || name == currentFilamentPreset_ || name == currentPrintPreset_)
+    return false;
+
+  bool ok = presetService_->deletePreset(name);
+  if (ok)
+  {
+    // 如果删除的是当前类别中正在使用的预设，切换回默认
+    if (name == currentPrintPreset_)
+      setCurrentPrintPreset(presetService_->defaultPresetForCategory(0));
+    if (name == currentFilamentPreset_)
+      setCurrentFilamentPreset(presetService_->defaultPresetForCategory(1));
+    if (name == currentPrinterPreset_)
+      setCurrentPrinterPreset(presetService_->defaultPresetForCategory(2));
+    emit stateChanged();
+  }
+  return ok;
+}
+
+bool ConfigViewModel::renamePreset(int category, const QString &oldName, const QString &newName)
+{
+  if (!presetService_ || newName.trimmed().isEmpty())
+    return false;
+
+  bool ok = presetService_->renamePreset(oldName, newName.trimmed());
+  if (ok)
+  {
+    // 更新当前活跃预设名引用
+    if (oldName == currentPrintPreset_)
+      currentPrintPreset_ = newName.trimmed();
+    if (oldName == currentFilamentPreset_)
+      currentFilamentPreset_ = newName.trimmed();
+    if (oldName == currentPrinterPreset_)
+      currentPrinterPreset_ = newName.trimmed();
+    emit stateChanged();
+  }
+  return ok;
+}
+
+bool ConfigViewModel::canDeletePreset(const QString &name) const
+{
+  return presetService_ && !presetService_->isBuiltinPreset(name);
+}
+
+void ConfigViewModel::autoMatchFilament()
+{
+  // 对齐上游 PresetBundle::update_compatible
+  // 切换打印机后，自动选择兼容的耗材预设（基于 nozzle diameter / max_temp 匹配）
+  if (!presetService_)
+    return;
+
+  const QString compatible = presetService_->findCompatibleFilament(currentPrinterPreset_);
+  if (!compatible.isEmpty() && compatible != currentFilamentPreset_)
+  {
+    currentFilamentPreset_ = compatible;
+    mergePresetHierarchy();
+  }
+  emit stateChanged();
+}
+
+bool ConfigViewModel::isCurrentFilamentCompatible() const
+{
+  if (!presetService_)
+    return true;
+  return presetService_->isFilamentCompatibleWithPrinter(currentFilamentPreset_, currentPrinterPreset_);
+}
+
+bool ConfigViewModel::isFilamentCompatible(const QString &filamentName) const
+{
+  if (!presetService_)
+    return true;
+  return presetService_->isFilamentCompatibleWithPrinter(filamentName, currentPrinterPreset_);
+}
+
 void ConfigViewModel::setLayerHeight(double v)
 {
   layerHeight_ = v;
@@ -137,7 +427,26 @@ void ConfigViewModel::activateObjectScope(const QString &targetType, const QStri
   settingsTargetName_ = targetName;
   settingsTargetObjectIndex_ = objectIndex;
   settingsTargetVolumeIndex_ = volumeIndex;
-  settingsScope_ = targetName.isEmpty() ? QStringLiteral("global") : QStringLiteral("object");
+  settingsTargetPlateIndex_ = -1;
+  // Distinguish volume scope from object scope (对齐上游 Tab scope semantics)
+  if (targetName.isEmpty())
+    settingsScope_ = QStringLiteral("global");
+  else if (volumeIndex >= 0)
+    settingsScope_ = QStringLiteral("volume");
+  else
+    settingsScope_ = QStringLiteral("object");
+  applyScopeValues();
+  emit stateChanged();
+}
+
+void ConfigViewModel::activatePlateScope(int plateIndex)
+{
+  settingsScope_ = QStringLiteral("plate");
+  settingsTargetPlateIndex_ = plateIndex;
+  settingsTargetObjectIndex_ = -1;
+  settingsTargetVolumeIndex_ = -1;
+  settingsTargetType_ = QStringLiteral("plate");
+  settingsTargetName_ = tr("平板 %1").arg(plateIndex + 1);
   applyScopeValues();
   emit stateChanged();
 }
@@ -158,12 +467,22 @@ void ConfigViewModel::handleOptionValueChanged(const QString &key, const QVarian
   if (applyingScopeValues_)
     return;
 
-  if (settingsScope_ == QStringLiteral("global") || settingsTargetObjectIndex_ < 0)
+  if (settingsScope_ == QStringLiteral("global") || (settingsScope_ != QStringLiteral("plate") && settingsTargetObjectIndex_ < 0))
   {
     globalOptionValues_[key] = value;
     return;
   }
 
+  // Plate scope: route to plate-scoped storage
+  if (settingsScope_ == QStringLiteral("plate") && settingsTargetPlateIndex_ >= 0)
+  {
+    if (!projectService_ || !projectService_->setPlateScopedOptionValue(settingsTargetPlateIndex_, key, value))
+      return;
+    applyScopeValues();
+    return;
+  }
+
+  // Object/volume scope
   if (!scopedWritableKeys_.contains(key))
     return;
 
@@ -184,24 +503,236 @@ QVariant ConfigViewModel::scopedValueForKey(const QString &key, const QVariant &
 QHash<QString, QVariant> ConfigViewModel::buildScopeValues() const
 {
   QHash<QString, QVariant> values = globalOptionValues_;
-  if (settingsScope_ != QStringLiteral("object") || settingsTargetObjectIndex_ < 0)
-    return values;
 
-  for (auto it = values.begin(); it != values.end(); ++it)
-    it.value() = scopedValueForKey(it.key(), it.value());
+  if (settingsScope_ == QStringLiteral("plate") && settingsTargetPlateIndex_ >= 0)
+  {
+    // Apply plate-level overrides on top of global values
+    if (projectService_)
+    {
+      for (auto it = values.begin(); it != values.end(); ++it)
+      {
+        const QVariant plateVal = projectService_->plateScopedOptionValue(settingsTargetPlateIndex_, it.key());
+        if (plateVal.isValid())
+          it.value() = plateVal;
+      }
+    }
+    return values;
+  }
+
+  if ((settingsScope_ == QStringLiteral("object") || settingsScope_ == QStringLiteral("volume")) && settingsTargetObjectIndex_ >= 0)
+  {
+    // Apply object/volume-level overrides on top of global values
+    for (auto it = values.begin(); it != values.end(); ++it)
+      it.value() = scopedValueForKey(it.key(), it.value());
+    return values;
+  }
+
   return values;
 }
 
 QSet<QString> ConfigViewModel::readonlyKeysForCurrentScope() const
 {
-  if (settingsScope_ != QStringLiteral("object"))
+  if (settingsScope_ == QStringLiteral("volume"))
+  {
+    // Volume scope: same writable keys as object scope
+    QSet<QString> readonly;
+    for (auto it = globalOptionValues_.cbegin(); it != globalOptionValues_.cend(); ++it)
+    {
+      if (!scopedWritableKeys_.contains(it.key()))
+        readonly.insert(it.key());
+    }
+    return readonly;
+  }
+
+  if (settingsScope_ == QStringLiteral("object"))
+  {
+    QSet<QString> readonly;
+    for (auto it = globalOptionValues_.cbegin(); it != globalOptionValues_.cend(); ++it)
+    {
+      if (!scopedWritableKeys_.contains(it.key()))
+        readonly.insert(it.key());
+    }
+    return readonly;
+  }
+
+  // Global and plate scope: all keys writable
+  return {};
+}
+
+QList<int> ConfigViewModel::filterOptionIndices(const QString &category, const QString &searchText) const
+{
+  if (!printOptions_)
     return {};
 
-  QSet<QString> readonly;
-  for (auto it = globalOptionValues_.cbegin(); it != globalOptionValues_.cend(); ++it)
+  const int n = printOptions_->rowCount();
+  QList<int> result;
+  result.reserve(n);
+
+  const bool matchAll = category.isEmpty() || category == QStringLiteral("全部") || category == tr("全部");
+  const QString needle = searchText.toLower();
+
+  for (int i = 0; i < n; ++i)
   {
-    if (!scopedWritableKeys_.contains(it.key()))
-      readonly.insert(it.key());
+    if (!matchAll && printOptions_->optCategory(i) != category)
+      continue;
+
+    if (!needle.isEmpty())
+    {
+      if (!printOptions_->optLabel(i).toLower().contains(needle) &&
+          !printOptions_->optKey(i).toLower().contains(needle))
+        continue;
+    }
+
+    result.append(i);
   }
-  return readonly;
+  return result;
+}
+
+QList<int> ConfigViewModel::filterIndicesByPage(const QList<int> &indices, const QString &page) const
+{
+  if (!printOptions_ || page.isEmpty())
+    return indices;
+  QList<int> result;
+  result.reserve(indices.size());
+  for (int idx : indices)
+  {
+    if (printOptions_->optPage(idx) == page)
+      result.append(idx);
+  }
+  return result;
+}
+
+QList<int> ConfigViewModel::filterIndicesByCategory(const QList<int> &indices, const QString &category) const
+{
+  if (!printOptions_ || category.isEmpty())
+    return indices;
+  QList<int> result;
+  result.reserve(indices.size());
+  for (int idx : indices)
+  {
+    if (printOptions_->optCategory(idx) == category)
+      result.append(idx);
+  }
+  return result;
+}
+
+QString ConfigViewModel::materialPresetName(int localIndex) const
+{
+  if (!presetList_ || localIndex < 0)
+    return {};
+  // Use "耗材" to match PresetListModel's category (original QML used "耗材丝" which was a bug)
+  const int globalIdx = presetList_->globalIndex(tr("耗材"), localIndex);
+  return globalIdx >= 0 ? presetList_->presetName(globalIdx) : QString{};
+}
+
+// ── Layer range support (对齐上游 ModelObject::layer_config_ranges) ─────────────────
+
+int ConfigViewModel::layerRangeCount() const
+{
+  if (!projectService_ || settingsTargetObjectIndex_ < 0)
+    return 0;
+  return projectService_->objectLayerRanges(settingsTargetObjectIndex_).size();
+}
+
+double ConfigViewModel::layerRangeMinZ(int rangeIndex) const
+{
+  if (!projectService_ || settingsTargetObjectIndex_ < 0)
+    return 0.0;
+  const auto ranges = projectService_->objectLayerRanges(settingsTargetObjectIndex_);
+  return (rangeIndex >= 0 && rangeIndex < ranges.size()) ? ranges[rangeIndex].minZ : 0.0;
+}
+
+double ConfigViewModel::layerRangeMaxZ(int rangeIndex) const
+{
+  if (!projectService_ || settingsTargetObjectIndex_ < 0)
+    return 0.0;
+  const auto ranges = projectService_->objectLayerRanges(settingsTargetObjectIndex_);
+  return (rangeIndex >= 0 && rangeIndex < ranges.size()) ? ranges[rangeIndex].maxZ : 0.0;
+}
+
+bool ConfigViewModel::addLayerRange(double minZ, double maxZ)
+{
+  if (!projectService_ || settingsTargetObjectIndex_ < 0)
+    return false;
+  if (projectService_->addObjectLayerRange(settingsTargetObjectIndex_, minZ, maxZ))
+  {
+    emit stateChanged();
+    return true;
+  }
+  return false;
+}
+
+bool ConfigViewModel::removeLayerRange(int rangeIndex)
+{
+  if (!projectService_ || settingsTargetObjectIndex_ < 0)
+    return false;
+  if (projectService_->removeObjectLayerRange(settingsTargetObjectIndex_, rangeIndex))
+  {
+    emit stateChanged();
+    return true;
+  }
+  return false;
+}
+
+bool ConfigViewModel::setLayerRangeValue(int rangeIndex, const QString &key, const QVariant &value)
+{
+  if (!projectService_ || settingsTargetObjectIndex_ < 0)
+    return false;
+  return projectService_->setLayerRangeValue(settingsTargetObjectIndex_, rangeIndex, key, value);
+}
+
+QVariant ConfigViewModel::layerRangeValue(int rangeIndex, const QString &key, const QVariant &fallback) const
+{
+  if (!projectService_ || settingsTargetObjectIndex_ < 0)
+    return fallback;
+  return projectService_->layerRangeValue(settingsTargetObjectIndex_, rangeIndex, key, fallback);
+}
+
+// ── Enhanced search (对齐上游 OptionsSearcher) ──────────────────────────────────
+
+QList<int> ConfigViewModel::searchOptions(const QString &query) const
+{
+  if (!printOptions_ || query.isEmpty())
+    return {};
+
+  const QString needle = query.toLower().trimmed();
+  QList<int> result;
+
+  for (int i = 0; i < printOptions_->rowCount(); ++i)
+  {
+    // 搜索 key、label、category、group 四个字段
+    if (printOptions_->optKey(i).toLower().contains(needle) ||
+        printOptions_->optLabel(i).toLower().contains(needle) ||
+        printOptions_->optCategory(i).toLower().contains(needle) ||
+        printOptions_->optGroup(i).toLower().contains(needle))
+    {
+      result.append(i);
+    }
+  }
+
+  m_lastSearchResults_ = result;
+  return result;
+}
+
+QString ConfigViewModel::valueSourceForKey(const QString &key) const
+{
+  return valueSources_.value(key, QStringLiteral("default"));
+}
+
+QString ConfigViewModel::searchResultSource(int searchIndex) const
+{
+  if (searchIndex < 0 || searchIndex >= m_lastSearchResults_.size() || !printOptions_)
+    return QStringLiteral("default");
+  const int idx = m_lastSearchResults_[searchIndex];
+  return valueSources_.value(printOptions_->optKey(idx), QStringLiteral("default"));
+}
+
+QString ConfigViewModel::searchResultPath(int searchIndex) const
+{
+  if (searchIndex < 0 || searchIndex >= m_lastSearchResults_.size() || !printOptions_)
+    return {};
+  const int idx = m_lastSearchResults_[searchIndex];
+  return printOptions_->optPage(idx) + QStringLiteral(" / ") +
+         printOptions_->optCategory(idx) + QStringLiteral(" / ") +
+         printOptions_->optGroup(idx);
 }

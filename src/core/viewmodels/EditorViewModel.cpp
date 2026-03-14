@@ -7,6 +7,7 @@
 #include <QVector4D>
 #include <algorithm>
 #include <QSet>
+#include <QTimer>
 #include <cstring> // memcpy
 #include <cmath>
 
@@ -29,6 +30,194 @@ void EditorViewModel::refreshMeshCacheAndFitHint()
   const float dz = bbox[5] - bbox[2];
   const float radius = std::sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
   m_fitHint = QVector4D(cx, cy, cz, std::max(radius, 10.f));
+
+  // 更新测量尺寸（边界框 X/Y/Z + 体积）
+  m_measureDimensions = QVector4D(dx, dy, dz, dx * dy * dz);
+}
+
+// ── Object manipulation (对齐上游 ObjectManipulation) ──────────────────────
+
+static int primarySelectedSourceIndex(const EditorViewModel *vm)
+{
+  // Use single object selection for manipulation; fall back to primary
+  if (!vm) return -1;
+  if (vm->selectedObjectCount() == 1)
+    return vm->selectedObjectIndex();
+  return -1; // Multi-select: no numeric editing
+}
+
+float EditorViewModel::objectPosX() const { return projectService_ ? projectService_->objectPosition(primarySelectedSourceIndex(this)).x() : 0; }
+float EditorViewModel::objectPosY() const { return projectService_ ? projectService_->objectPosition(primarySelectedSourceIndex(this)).y() : 0; }
+float EditorViewModel::objectPosZ() const { return projectService_ ? projectService_->objectPosition(primarySelectedSourceIndex(this)).z() : 0; }
+float EditorViewModel::objectRotX() const { return projectService_ ? projectService_->objectRotation(primarySelectedSourceIndex(this)).x() : 0; }
+float EditorViewModel::objectRotY() const { return projectService_ ? projectService_->objectRotation(primarySelectedSourceIndex(this)).y() : 0; }
+float EditorViewModel::objectRotZ() const { return projectService_ ? projectService_->objectRotation(primarySelectedSourceIndex(this)).z() : 0; }
+float EditorViewModel::objectScaleX() const { return projectService_ ? projectService_->objectScale(primarySelectedSourceIndex(this)).x() : 1; }
+float EditorViewModel::objectScaleY() const { return projectService_ ? projectService_->objectScale(primarySelectedSourceIndex(this)).y() : 1; }
+float EditorViewModel::objectScaleZ() const { return projectService_ ? projectService_->objectScale(primarySelectedSourceIndex(this)).z() : 1; }
+bool EditorViewModel::uniformScale() const { return m_uniformScale; }
+bool EditorViewModel::hasObjectManipSelection() const { return selectedObjectCount() == 1 && !hasSelectedVolume(); }
+
+void EditorViewModel::setObjectPosX(float v) { const int idx = primarySelectedSourceIndex(this); if (idx >= 0) projectService_->setObjectPosition(idx, v, objectPosY(), objectPosZ()); }
+void EditorViewModel::setObjectPosY(float v) { const int idx = primarySelectedSourceIndex(this); if (idx >= 0) projectService_->setObjectPosition(idx, objectPosX(), v, objectPosZ()); }
+void EditorViewModel::setObjectPosZ(float v) { const int idx = primarySelectedSourceIndex(this); if (idx >= 0) projectService_->setObjectPosition(idx, objectPosX(), objectPosY(), v); }
+void EditorViewModel::setObjectRotX(float v) { const int idx = primarySelectedSourceIndex(this); if (idx >= 0) projectService_->setObjectRotation(idx, v, objectRotY(), objectRotZ()); }
+void EditorViewModel::setObjectRotY(float v) { const int idx = primarySelectedSourceIndex(this); if (idx >= 0) projectService_->setObjectRotation(idx, objectRotX(), v, objectRotZ()); }
+void EditorViewModel::setObjectRotZ(float v) { const int idx = primarySelectedSourceIndex(this); if (idx >= 0) projectService_->setObjectRotation(idx, objectRotX(), objectRotY(), v); }
+void EditorViewModel::setObjectScaleX(float v) {
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0) return;
+  if (m_uniformScale) projectService_->setObjectScaleUniform(idx, v);
+  else projectService_->setObjectScale(idx, v, objectScaleY(), objectScaleZ());
+}
+void EditorViewModel::setObjectScaleY(float v) {
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0) return;
+  if (m_uniformScale) projectService_->setObjectScaleUniform(idx, v);
+  else projectService_->setObjectScale(idx, objectScaleX(), v, objectScaleZ());
+}
+void EditorViewModel::setObjectScaleZ(float v) {
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0) return;
+  if (m_uniformScale) projectService_->setObjectScaleUniform(idx, v);
+  else projectService_->setObjectScale(idx, objectScaleX(), objectScaleY(), v);
+}
+void EditorViewModel::setUniformScale(bool v) { m_uniformScale = v; emit stateChanged(); }
+
+void EditorViewModel::resetObjectTransform()
+{
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0 || !projectService_) return;
+  projectService_->setObjectPosition(idx, 0, 0, 0);
+  projectService_->setObjectRotation(idx, 0, 0, 0);
+  projectService_->setObjectScaleUniform(idx, 1);
+}
+
+void EditorViewModel::applyScaleFactor(float factor)
+{
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0 || !projectService_) return;
+  const QVector3D cur = projectService_->objectScale(idx);
+  projectService_->setObjectScale(idx, cur.x() * factor, cur.y() * factor, cur.z() * factor);
+}
+
+// --- Flatten / Cut (对齐上游 GLGizmoFlatten / GLGizmoCut) ---
+
+void EditorViewModel::setCutAxis(int axis) { m_cutAxis = axis; emit stateChanged(); }
+void EditorViewModel::setCutPosition(double pos) { m_cutPosition = pos; emit stateChanged(); }
+void EditorViewModel::setCutKeepMode(int mode) { m_cutKeepMode = mode; emit stateChanged(); }
+
+void EditorViewModel::flipCutPlane()
+{
+  // 翻转切割位置到对称侧 (对齐上游 GLGizmoCut::flip_cut_plane)
+  m_cutPosition = -m_cutPosition;
+  emit stateChanged();
+}
+
+void EditorViewModel::centerCutPlane()
+{
+  // 将切割位置居中到选中对象中心 (对齐上游 cut plane reset)
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0 || !projectService_) return;
+  const QVector3D pos = projectService_->objectPosition(idx);
+  m_cutPosition = (m_cutAxis == 0) ? pos.x() : (m_cutAxis == 1) ? pos.y() : pos.z();
+  emit stateChanged();
+}
+
+void EditorViewModel::flattenSelected()
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return;
+
+  // 对齐上游 GLGizmoFlatten::set_flattening_data + on_mouse
+  // Flatten 将选中对象旋转使最大面朝下 (Z 平放)
+  // Mock 模式：模拟凸包面计算，重置旋转使最大面法线朝 -Z
+  statusText_ = tr("正在计算最佳平放面...");
+  emit stateChanged();
+
+#ifdef HAS_LIBSLIC3R
+  // TODO: 调用 orientation::orient() 或凸包面选择逻辑
+  // 1. 计算凸包面及其法线
+  // 2. 选择面积最大的面
+  // 3. 计算将该面法线旋转至 -Z 的四元数
+  // 4. 应用旋转到 ModelObject
+#endif
+
+  // Mock mode: 模拟凸包面检测，设置 6 个候选面
+  m_flattenFaceCount = 6;
+
+  QTimer::singleShot(400, this, [this]() {
+    // Mock: 重置旋转到使 Z 面朝下
+    const int idx = *m_selectedSourceIndices.constBegin();
+    if (projectService_)
+      projectService_->setObjectRotation(idx, 0, 0, 0);
+    statusText_ = tr("已平放至最大面（Mock，6 个候选面）");
+    rebuildObjectEntriesFromService();
+    refreshMeshCacheAndFitHint();
+    emit stateChanged();
+  });
+}
+
+void EditorViewModel::cutSelected(int axis, double position)
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return;
+
+  // 对齐上游 GLGizmoCut::perform_cut()
+  // 仅支持单对象切割
+  if (m_selectedSourceIndices.size() != 1)
+  {
+    statusText_ = tr("切割操作仅支持选中单个对象");
+    emit stateChanged();
+    return;
+  }
+
+  const int srcIdx = *m_selectedSourceIndices.constBegin();
+  const QString origName = (srcIdx >= 0 && srcIdx < m_objects.size())
+                               ? m_objects[srcIdx].name
+                               : tr("对象");
+  statusText_ = tr("正在切割对象...");
+  emit stateChanged();
+
+#ifdef HAS_LIBSLIC3R
+  // TODO: 调用 ModelObject::cut() 执行真实网格切割
+  // 1. 构建切割平面 (axis + position)
+  // 2. ModelObject::cut(cut_plane, keep_upper, keep_lower)
+  // 3. 替换原对象为切割后的对象
+  // 4. 设置 undo/redo 快照 "Cut"
+#endif
+
+  // Mock mode: 将对象沿指定轴切割为上下两部分
+  const int newIdx = projectService_->addObject(origName + tr("_upper"));
+  if (newIdx >= 0)
+  {
+    // Mock: 缩放上半部分和下半部分
+    projectService_->setObjectPosition(newIdx,
+      projectService_->objectPosition(srcIdx).x() + 2,
+      projectService_->objectPosition(srcIdx).y(),
+      projectService_->objectPosition(srcIdx).z() + (axis == 2 ? 5 : 0));
+
+    if (m_cutKeepMode != 2)  // 保留上半
+    {
+      m_selectedSourceIndices.clear();
+      m_selectedSourceIndices.insert(srcIdx);
+      m_selectedSourceIndices.insert(newIdx);
+    }
+    else  // 仅保留下半
+    {
+      m_selectedSourceIndices.clear();
+      m_selectedSourceIndices.insert(srcIdx);
+    }
+    statusText_ = tr("已切割为 2 个部分（Mock）");
+  }
+  else
+  {
+    statusText_ = tr("切割失败");
+  }
+
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  emit stateChanged();
 }
 
 void EditorViewModel::rebuildObjectEntriesFromService()
@@ -205,6 +394,8 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
           {
     if (!sliceService_ || !sliceService_->slicing())
       m_sliceResultPlateIndex = -1;
+    // Invalidate slice results for the affected plate
+    m_slicedPlateIndices.remove(projectService_ ? projectService_->currentPlateIndex() : -1);
         statusText_ = QStringLiteral("已更新项目对象");
         emit stateChanged(); });
 
@@ -240,6 +431,9 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
           {
     m_sliceEstimatedTime = estimatedTime;
       m_sliceResultPlateIndex = sliceService_ ? sliceService_->resultPlateIndex() : -1;
+    // Track per-plate slice state
+    if (m_sliceResultPlateIndex >= 0)
+      m_slicedPlateIndices.insert(m_sliceResultPlateIndex);
     if (m_slicingAll && !m_sliceAllQueue.isEmpty())
     {
       statusText_ = QStringLiteral("切片完成，继续下一平板...");
@@ -292,13 +486,13 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
     emit stateChanged(); });
 }
 
-QString EditorViewModel::projectName() const { return projectService_->projectName(); }
-int EditorViewModel::modelCount() const { return projectService_->modelCount(); }
-int EditorViewModel::plateCount() const { return projectService_->plateCount(); }
-int EditorViewModel::currentPlateIndex() const { return projectService_->currentPlateIndex(); }
+QString EditorViewModel::projectName() const { return projectService_ ? projectService_->projectName() : QString(); }
+int EditorViewModel::modelCount() const { return projectService_ ? projectService_->modelCount() : 0; }
+int EditorViewModel::plateCount() const { return projectService_ ? projectService_->plateCount() : 0; }
+int EditorViewModel::currentPlateIndex() const { return projectService_ ? projectService_->currentPlateIndex() : 0; }
 QString EditorViewModel::statusText() const { return statusText_; }
-int EditorViewModel::loadProgress() const { return projectService_->loadProgress(); }
-bool EditorViewModel::loading() const { return projectService_->loading(); }
+int EditorViewModel::loadProgress() const { return projectService_ ? projectService_->loadProgress() : 0; }
+bool EditorViewModel::loading() const { return projectService_ ? projectService_->loading() : false; }
 bool EditorViewModel::showAllObjects() const { return m_showAllObjects; }
 int EditorViewModel::objectOrganizeMode() const { return m_objectOrganizeMode; }
 bool EditorViewModel::hasSelection() const
@@ -488,7 +682,7 @@ void EditorViewModel::toggleObjectExpanded(int i)
   if (sourceIndex < 0)
     return;
 
-  if (projectService_->objectVolumeCount(sourceIndex) <= 0)
+  if (!projectService_ || projectService_->objectVolumeCount(sourceIndex) <= 0)
     return;
 
   if (m_collapsedObjectSourceIndices.contains(sourceIndex))
@@ -505,7 +699,7 @@ int EditorViewModel::objectVolumeCount(int i) const
     return 0;
 
   const int sourceIndex = mapFilteredToSourceIndex(i);
-  return sourceIndex >= 0 ? projectService_->objectVolumeCount(sourceIndex) : 0;
+  return (sourceIndex >= 0 && projectService_) ? projectService_->objectVolumeCount(sourceIndex) : 0;
 }
 
 QString EditorViewModel::objectVolumeName(int i, int volumeIndex) const
@@ -537,7 +731,7 @@ void EditorViewModel::selectVolume(int i, int volumeIndex)
   const int sourceIndex = mapFilteredToSourceIndex(i);
   if (sourceIndex < 0)
     return;
-  if (volumeIndex < 0 || projectService_->objectVolumeCount(sourceIndex) <= volumeIndex)
+  if (volumeIndex < 0 || !projectService_ || projectService_->objectVolumeCount(sourceIndex) <= volumeIndex)
     return;
 
   m_selectedSourceIndices.clear();
@@ -555,7 +749,7 @@ void EditorViewModel::toggleVolumeSelection(int i, int volumeIndex)
   const int sourceIndex = mapFilteredToSourceIndex(i);
   if (sourceIndex < 0)
     return;
-  if (volumeIndex < 0 || projectService_->objectVolumeCount(sourceIndex) <= volumeIndex)
+  if (volumeIndex < 0 || !projectService_ || projectService_->objectVolumeCount(sourceIndex) <= volumeIndex)
     return;
 
   if (m_selectedVolumeObjectSourceIndex >= 0 && m_selectedVolumeObjectSourceIndex != sourceIndex)
@@ -676,6 +870,73 @@ void EditorViewModel::deleteVolume(int i, int volumeIndex)
   emit stateChanged();
 }
 
+bool EditorViewModel::addVolumeToObject(int volumeType)
+{
+  // Require exactly one object selected (对齐上游约束：单对象选中时才可添加部件)
+  if (!projectService_ || selectedObjectCount() != 1 || hasSelectedVolume())
+  {
+    statusText_ = QStringLiteral("请先选中一个对象");
+    emit stateChanged();
+    return false;
+  }
+
+  const int sourceIndex = selectedObjectIndex();
+  if (sourceIndex < 0)
+    return false;
+
+  if (!projectService_->addVolume(sourceIndex, volumeType))
+  {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+
+  // Expand the object to show the new volume
+  m_collapsedObjectSourceIndices.remove(sourceIndex);
+  // Auto-select the newly added volume (last one)
+  int volCount = projectService_->objectVolumeCount(sourceIndex);
+  if (volCount > 0)
+  {
+    m_selectedVolumeObjectSourceIndex = sourceIndex;
+    m_selectedVolumeIndices.clear();
+    m_selectedVolumeIndices.insert(volCount - 1);
+    m_selectedVolumeIndex = volCount - 1;
+  }
+
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  statusText_ = QStringLiteral("已添加部件");
+  emit stateChanged();
+  return true;
+}
+
+bool EditorViewModel::changeVolumeType(int newVolumeType)
+{
+  // Require exactly one volume selected (对齐上游约束：单部件选中时才可转换类型)
+  if (!projectService_ || !hasSelectedVolume())
+  {
+    statusText_ = QStringLiteral("请先选中一个部件");
+    emit stateChanged();
+    return false;
+  }
+
+  const int sourceIndex = m_selectedVolumeObjectSourceIndex;
+  if (sourceIndex < 0)
+    return false;
+
+  if (!projectService_->changeVolumeType(sourceIndex, m_selectedVolumeIndex, newVolumeType))
+  {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+
+  rebuildObjectEntriesFromService();
+  statusText_ = QStringLiteral("已转换部件类型");
+  emit stateChanged();
+  return true;
+}
+
 bool EditorViewModel::isObjectSelected(int i) const
 {
   const int sourceIndex = mapFilteredToSourceIndex(i);
@@ -694,9 +955,9 @@ void EditorViewModel::setObjectPrintable(int i, bool printable)
   if (sourceIndex < 0 || sourceIndex >= m_objects.size())
     return;
 
-  if (!projectService_->setObjectPrintable(sourceIndex, printable))
+  if (!projectService_ || !projectService_->setObjectPrintable(sourceIndex, printable))
   {
-    statusText_ = projectService_->lastError();
+    statusText_ = projectService_ ? projectService_->lastError() : QStringLiteral("服务不可用");
     emit stateChanged();
     return;
   }
@@ -866,9 +1127,9 @@ void EditorViewModel::setSelectedObjectsPrintable(bool printable)
   {
     if (sourceIndex >= 0 && sourceIndex < m_objects.size())
     {
-      if (!projectService_->setObjectPrintable(sourceIndex, printable))
+      if (!projectService_ || !projectService_->setObjectPrintable(sourceIndex, printable))
       {
-        statusText_ = projectService_->lastError();
+        statusText_ = projectService_ ? projectService_->lastError() : QStringLiteral("服务不可用");
         emit stateChanged();
         return;
       }
@@ -899,6 +1160,167 @@ void EditorViewModel::deleteSelection()
     deleteObject(index);
 }
 
+void EditorViewModel::duplicateSelectedObjects()
+{
+  if (!projectService_)
+    return;
+
+  // 收集所有选中的源索引（按从大到小排列，避免插入导致索引偏移问题）
+  QList<int> selected = m_selectedSourceIndices.values();
+  std::sort(selected.begin(), selected.end(), std::greater<int>());
+
+  if (selected.isEmpty())
+    return;
+
+  // 逐个复制（每次调用后元数据会更新，但源索引在首次插入后仍然有效
+  // 因为 duplicateObject 在 sourceIndex+1 插入，不影响 sourceIndex 本身）
+  bool anySuccess = false;
+  for (int srcIdx : selected)
+  {
+    const int newIdx = projectService_->duplicateObject(srcIdx);
+    if (newIdx >= 0)
+      anySuccess = true;
+  }
+
+  if (anySuccess)
+  {
+    rebuildObjectEntriesFromService();
+    refreshMeshCacheAndFitHint();
+    emit stateChanged();
+  }
+}
+
+bool EditorViewModel::hasClipboardContent() const
+{
+  return !m_clipboard.isEmpty();
+}
+
+void EditorViewModel::copySelectedObjects()
+{
+  // 复制选中对象元数据到内部剪贴板（对齐上游 Selection::copy_to_clipboard）
+  m_clipboard.clear();
+  QList<int> sorted = m_selectedSourceIndices.values();
+  std::sort(sorted.begin(), sorted.end());
+  for (int srcIdx : sorted)
+  {
+    if (srcIdx >= 0 && srcIdx < m_objects.size())
+      m_clipboard.append(m_objects[srcIdx]);
+  }
+  emit stateChanged();
+}
+
+void EditorViewModel::pasteObjects()
+{
+  if (!projectService_ || m_clipboard.isEmpty())
+    return;
+  // 粘贴：对每个剪贴板条目添加新对象（对齐上游 Selection::paste_objects_from_clipboard）
+  m_selectedSourceIndices.clear();
+  for (const auto &entry : m_clipboard)
+  {
+    const int newIdx = projectService_->addObject(entry.name);
+    if (newIdx >= 0)
+      m_selectedSourceIndices.insert(newIdx);
+  }
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  emit stateChanged();
+}
+
+void EditorViewModel::cutSelectedObjects()
+{
+  copySelectedObjects();
+  deleteSelectedObjects();
+}
+
+void EditorViewModel::toggleSelectedObjectsVisibility()
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return;
+
+  for (int srcIdx : m_selectedSourceIndices)
+  {
+    bool current = projectService_->objectVisible(srcIdx);
+    projectService_->setObjectVisible(srcIdx, !current);
+  }
+
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  emit stateChanged();
+}
+
+void EditorViewModel::autoOrientSelected()
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return;
+
+  // 对齐上游 Plater::orient() + OrientJob
+  // Mock 模式：对每个选中对象设置朝向标记（上游会在切片时应用最优旋转）
+  // 真实模式：OrientJob 会调用 orientation::orient() 计算最优旋转
+  statusText_ = tr("正在计算最优朝向...");
+  emit stateChanged();
+
+#ifdef HAS_LIBSLIC3R
+  // TODO: 创建 OrientJob 并提交到线程池
+  // wxGetApp().plater()->orient() equivalent
+#endif
+
+  // Mock mode: signal completion after brief delay
+  QTimer::singleShot(300, this, [this]() {
+    statusText_ = tr("自动朝向完成（Mock）");
+    rebuildObjectEntriesFromService();
+    refreshMeshCacheAndFitHint();
+    emit stateChanged();
+  });
+}
+
+void EditorViewModel::splitSelectedObject()
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return;
+
+  // 对齐上游 Plater::priv::split_object()
+  // 仅支持单个选中对象拆分
+  if (m_selectedSourceIndices.size() != 1)
+  {
+    statusText_ = tr("拆分操作仅支持选中单个对象");
+    emit stateChanged();
+    return;
+  }
+
+  const int srcIdx = *m_selectedSourceIndices.constBegin();
+  statusText_ = tr("正在拆分对象...");
+  emit stateChanged();
+
+#ifdef HAS_LIBSLIC3R
+  // TODO: 调用 ModelObject::split() 拆分网格
+  // 1. current_model_object->split(&new_objects)
+  // 2. 如果只有一个结果，提示"无法拆分"
+  // 3. 移除原对象，加载新对象
+  // 4. 设置 undo/redo 快照 "Split to Objects"
+#endif
+
+  // Mock mode: 复制选中对象为 2 个子对象模拟拆分
+  const QString origName = (srcIdx >= 0 && srcIdx < m_objects.size())
+                               ? m_objects[srcIdx].name
+                               : tr("对象");
+  const int newIdx = projectService_->addObject(origName + tr("_part1"));
+  if (newIdx >= 0)
+  {
+    m_selectedSourceIndices.clear();
+    m_selectedSourceIndices.insert(srcIdx);
+    m_selectedSourceIndices.insert(newIdx);
+    statusText_ = tr("已拆分为 2 个部件（Mock）");
+  }
+  else
+  {
+    statusText_ = tr("拆分失败");
+  }
+
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  emit stateChanged();
+}
+
 void EditorViewModel::requestSelectionSettings()
 {
   if (!canOpenSelectionSettings())
@@ -909,6 +1331,7 @@ void EditorViewModel::requestSelectionSettings()
 
 QString EditorViewModel::plateName(int i) const
 {
+  if (!projectService_) return {};
   const QStringList names = projectService_->plateNames();
   return (i >= 0 && i < names.size()) ? names[i] : QString{};
 }
@@ -972,6 +1395,231 @@ void EditorViewModel::setObjectOrganizeMode(int mode)
   emit stateChanged();
 }
 
+bool EditorViewModel::addPlate()
+{
+  if (!projectService_)
+    return false;
+  if (projectService_->addPlate())
+  {
+    rebuildObjectEntriesFromService();
+    emit stateChanged();
+    return true;
+  }
+  return false;
+}
+
+bool EditorViewModel::deletePlate(int plateIndex)
+{
+  if (!projectService_)
+    return false;
+  if (projectService_->deletePlate(plateIndex))
+  {
+    rebuildObjectEntriesFromService();
+    emit stateChanged();
+    return true;
+  }
+  return false;
+}
+
+void EditorViewModel::selectAllOnPlate(int plateIndex)
+{
+  if (!projectService_)
+    return;
+  const QList<int> objs = projectService_->plateObjectIndices(plateIndex);
+  m_selectedSourceIndices.clear();
+  m_primarySelectedSourceIndex = -1;
+  for (int objIdx : objs)
+    m_selectedSourceIndices.insert(objIdx);
+  if (!objs.isEmpty())
+    m_primarySelectedSourceIndex = objs.first();
+  emit stateChanged();
+}
+
+void EditorViewModel::removeAllOnPlate(int plateIndex)
+{
+  if (!projectService_)
+    return;
+  if (projectService_->removeAllOnPlate(plateIndex))
+  {
+    m_selectedSourceIndices.clear();
+    m_primarySelectedSourceIndex = -1;
+    rebuildObjectEntriesFromService();
+    emit stateChanged();
+  }
+}
+
+bool EditorViewModel::renamePlate(int plateIndex, const QString &newName)
+{
+  if (!projectService_)
+    return false;
+  return projectService_->renamePlate(plateIndex, newName);
+}
+
+bool EditorViewModel::isPlateLocked(int plateIndex) const
+{
+  if (!projectService_)
+    return false;
+  return projectService_->isPlateLocked(plateIndex);
+}
+
+void EditorViewModel::togglePlateLocked(int plateIndex)
+{
+  if (!projectService_)
+    return;
+  const bool current = projectService_->isPlateLocked(plateIndex);
+  projectService_->setPlateLocked(plateIndex, !current);
+  emit stateChanged();
+}
+
+bool EditorViewModel::isPlateSliced(int plateIndex) const
+{
+  return m_slicedPlateIndices.contains(plateIndex);
+}
+
+bool EditorViewModel::moveSelectedObjectToPlate(int targetPlateIndex)
+{
+  // 对齐上游 Plater::priv::on_arrange 跨平板拖拽
+  if (!projectService_)
+    return false;
+
+  const int srcPlate = currentPlateIndex();
+  if (srcPlate < 0 || targetPlateIndex < 0 || srcPlate == targetPlateIndex)
+    return false;
+
+  const int selObj = selectedObjectIndex();
+  if (selObj < 0)
+    return false;
+
+  // Mock 模式：更新对象的平板归属
+  projectService_->setObjectPlateForIndex(selObj, targetPlateIndex);
+  emit stateChanged();
+  return true;
+}
+
+QString EditorViewModel::plateThumbnailColor(int plateIndex) const
+{
+  // Mock 模式：基于平板索引生成独特颜色（对齐上游 PartPlate thumbnail 视觉区分）
+  static const char *kColors[] = {
+    "#1a3a5c", "#2a3a2c", "#3a2a3c", "#1c3c3a", "#3c3a1a",
+    "#2a1c3c", "#1c2a3c", "#3c2a1a", "#1a3c2c", "#2c3a1c"
+  };
+  const int count = static_cast<int>(std::size(kColors));
+  return QString::fromUtf8(kColors[plateIndex % count]);
+}
+
+bool EditorViewModel::renameObject(int index, const QString &newName)
+{
+  if (!projectService_ || index < 0)
+    return false;
+  projectService_->renameObject(index, newName);
+  emit stateChanged();
+  return true;
+}
+
+bool EditorViewModel::moveObject(int fromIndex, int toIndex)
+{
+  if (!projectService_ || fromIndex < 0 || toIndex < 0)
+    return false;
+  // Map filtered indices to source indices
+  const int srcFrom = mapFilteredToSourceIndex(fromIndex);
+  const int srcTo = mapFilteredToSourceIndex(toIndex);
+  if (srcFrom < 0 || srcTo < 0)
+    return false;
+  return projectService_->moveObject(srcFrom, srcTo);
+}
+
+int EditorViewModel::plateBedType(int plateIndex) const
+{
+  return projectService_ ? projectService_->plateBedType(plateIndex) : 0;
+}
+
+bool EditorViewModel::setPlateBedType(int plateIndex, int bedType)
+{
+  if (!projectService_) return false;
+  bool ok = projectService_->setPlateBedType(plateIndex, bedType);
+  if (ok) emit stateChanged();
+  return ok;
+}
+
+int EditorViewModel::platePrintSequence(int plateIndex) const
+{
+  return projectService_ ? projectService_->platePrintSequence(plateIndex) : 0;
+}
+
+bool EditorViewModel::setPlatePrintSequence(int plateIndex, int seq)
+{
+  if (!projectService_) return false;
+  bool ok = projectService_->setPlatePrintSequence(plateIndex, seq);
+  if (ok) emit stateChanged();
+  return ok;
+}
+
+int EditorViewModel::plateSpiralMode(int plateIndex) const
+{
+  return projectService_ ? projectService_->plateSpiralMode(plateIndex) : 0;
+}
+
+bool EditorViewModel::setPlateSpiralMode(int plateIndex, int mode)
+{
+  if (!projectService_) return false;
+  bool ok = projectService_->setPlateSpiralMode(plateIndex, mode);
+  if (ok) emit stateChanged();
+  return ok;
+}
+
+void EditorViewModel::centerSelectedObjects()
+{
+  // 对齐上游 Plater::priv::on_center / ModelObject::center_instances
+  // Mock 模式：重置选中对象位置到原点
+  if (!projectService_)
+    return;
+  const int count = objectCount();
+  for (int i = 0; i < count; ++i) {
+    if (isObjectSelected(i)) {
+      projectService_->setObjectPosition(i, 0, 0, 0);
+    }
+  }
+  emit stateChanged();
+}
+
+void EditorViewModel::fillBedWithCopies()
+{
+  // 对齐上游 Plater::priv::on_fill_bed
+  // Mock 模式：生成 9 个副本（3x3 网格）
+  if (!projectService_)
+    return;
+  const int sel = selectedObjectIndex();
+  if (sel < 0)
+    return;
+  const QString name = projectService_->objectNames().value(sel, "Object");
+  for (int r = 0; r < 3; ++r) {
+    for (int c = 0; c < 3; ++c) {
+      if (r == 0 && c == 0)
+        continue;
+      const int idx = projectService_->addObject(name + "_" + QString::number(r * 3 + c + 1));
+      if (idx >= 0)
+        projectService_->setObjectPosition(idx, (c - 1) * 60.0f, (r - 1) * 60.0f, 0);
+    }
+  }
+  emit stateChanged();
+}
+
+void EditorViewModel::exportSelectedAsStl()
+{
+  // 对齐上游 Plater::priv::on_export_stl
+  // Mock 模式：仅通知用户（实际 STL 导出需要 libslic3r mesh 序列化）
+  if (!projectService_)
+    return;
+  const int sel = selectedObjectIndex();
+  if (sel >= 0) {
+    const QString name = projectService_->objectNames().value(sel, "object");
+    emit stateChanged();
+    // 通知通过 BackendContext 显示
+    emit stateChanged(); // 触发 UI 更新
+    // TODO: 实际模式下调用 libslic3r IO::STL::write_ascii 或 store_stl
+  }
+}
+
 // ---------- slice bridge ----------
 int EditorViewModel::sliceProgress() const
 {
@@ -983,7 +1631,7 @@ int EditorViewModel::sliceProgress() const
   return hasSliceResult() ? sliceService_->progress() : 0;
 }
 
-bool EditorViewModel::isSlicing() const { return sliceService_->slicing(); }
+bool EditorViewModel::isSlicing() const { return sliceService_ && sliceService_->slicing(); }
 
 QString EditorViewModel::sliceStatusLabel() const
 {
@@ -1015,6 +1663,51 @@ QString EditorViewModel::sliceResultWeight() const
 QString EditorViewModel::sliceResultPlateLabel() const
 {
   return hasSliceResult() && sliceService_ ? sliceService_->resultPlateLabel() : QString{};
+}
+
+QString EditorViewModel::sliceResultFilament() const
+{
+  return hasSliceResult() && sliceService_ ? sliceService_->resultFilamentLabel() : QString{};
+}
+
+QString EditorViewModel::sliceResultCost() const
+{
+  return hasSliceResult() && sliceService_ ? sliceService_->resultCostLabel() : QString{};
+}
+
+int EditorViewModel::sliceResultLayerCount() const
+{
+  return hasSliceResult() && sliceService_ ? sliceService_->resultLayerCount() : 0;
+}
+
+QString EditorViewModel::modelSizeText() const
+{
+  if (m_measureDimensions.x() > 0)
+    return QStringLiteral("%1 x %2 x %3 mm")
+        .arg(m_measureDimensions.x(), 0, 'f', 1)
+        .arg(m_measureDimensions.y(), 0, 'f', 1)
+        .arg(m_measureDimensions.z(), 0, 'f', 1);
+  return {};
+}
+
+int EditorViewModel::extruderCount() const
+{
+  // Mock mode: return 1 extruder unless slice result has filament data
+  return hasSliceResult() ? 1 : 0;
+}
+
+QString EditorViewModel::extruderUsedLength(int extruderId) const
+{
+  if (!hasSliceResult() || extruderId != 0)
+    return QString();
+  return sliceService_ ? sliceService_->resultFilamentLabel() : QString();
+}
+
+QString EditorViewModel::extruderUsedWeight(int extruderId) const
+{
+  if (!hasSliceResult() || extruderId != 0)
+    return QString();
+  return sliceService_ ? sliceService_->resultWeightLabel() : QString();
 }
 
 bool EditorViewModel::hasSliceResult() const
@@ -1076,7 +1769,7 @@ void EditorViewModel::requestSlice()
 
 void EditorViewModel::cancelSlice()
 {
-  sliceService_->cancelSlice();
+  if (sliceService_) sliceService_->cancelSlice();
 }
 
 bool EditorViewModel::loadFile(const QString &filePath)
@@ -1121,10 +1814,28 @@ void EditorViewModel::clearWorkspace()
   m_selectedVolumeIndex = -1;
   m_sliceEstimatedTime.clear();
   m_sliceResultPlateIndex = -1;
+  m_slicedPlateIndices.clear();
+  m_slicingAll = false;
+  m_sliceAllQueue.clear();
   m_fitHint = QVector4D();
   m_cachedMeshData.clear();
   m_sliceAllQueue.clear();
   statusText_ = QStringLiteral("已新建项目");
+  emit stateChanged();
+}
+
+void EditorViewModel::refreshAfterLoad()
+{
+  m_collapsedGroupKeys.clear();
+  m_collapsedObjectSourceIndices.clear();
+  m_selectedVolumeObjectSourceIndex = -1;
+  m_selectedVolumeIndices.clear();
+  m_selectedVolumeIndex = -1;
+  m_fitHint = QVector4D();
+  m_cachedMeshData.clear();
+  m_slicedPlateIndices.clear();
+  rebuildObjectEntriesFromService();
+  statusText_ = QStringLiteral("项目已加载");
   emit stateChanged();
 }
 
@@ -1152,12 +1863,18 @@ void EditorViewModel::continueSliceAllQueue()
   const int plate = m_sliceAllQueue.takeFirst();
   statusText_ = tr("正在切片平板 %1/%2...").arg(plate + 1).arg(plate + m_sliceAllQueue.size() + 1);
   emit stateChanged();
-  sliceService_->startSlicePlate(plate);
+  if (sliceService_) sliceService_->startSlicePlate(plate);
 }
 
 bool EditorViewModel::requestExportGCode(const QString &targetPath)
 {
+  if (!sliceService_) return false;
   QUrl url(targetPath);
   const QString localPath = url.isLocalFile() ? url.toLocalFile() : targetPath;
   return sliceService_->exportGCodeToPath(localPath);
+}
+
+void EditorViewModel::switchToPreview()
+{
+  emit previewRequested();
 }
