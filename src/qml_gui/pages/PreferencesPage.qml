@@ -2,10 +2,12 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../dialogs"
+import "../controls"
 
 Item {
     id: root
     required property var settingsVm
+    property var backend
 
     AboutDialog {
         id: aboutDlg
@@ -15,7 +17,7 @@ Item {
     Connections {
         target: root.settingsVm
         function onPrefCategoryChanged() {
-            if (root.settingsVm.prefCategory === 7)
+            if (root.settingsVm.prefCategory === 8)
                 aboutDlg.open()
         }
     }
@@ -35,6 +37,7 @@ Item {
 
                 Repeater {
                     model: [
+                        { icon: "⚙",  name: qsTr("通用") },
                         { icon: "🎨", name: qsTr("外观") },
                         { icon: "🌍", name: qsTr("语言") },
                         { icon: "⌨",  name: qsTr("快捷键") },
@@ -80,9 +83,194 @@ Item {
 
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#1e2430" }
 
-                // Appearance settings (shown when index=0)
+                // General settings (对齐上游 PreferencesDialog create_general_page, index=0)
                 ColumnLayout {
                     visible: root.settingsVm.prefCategory === 0
+                    Layout.fillWidth: true; spacing: 16
+
+                    // Show home page on startup
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("启动时显示主页"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Switch {
+                            checked: root.settingsVm.showHomePage
+                            onToggled: root.settingsVm.setShowHomePage(checked)
+                        }
+                    }
+
+                    // Default page
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("默认页面"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Row {
+                            spacing: 4
+                            Repeater {
+                                model: [qsTr("主页"), qsTr("准备")]
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    required property int index
+                                    width: 70; height: 28; radius: 4
+                                    color: root.settingsVm.defaultPage === index ? "#1c2a3e" : "#1a1e28"
+                                    border.color: root.settingsVm.defaultPage === index ? "#18c75e" : "#2e3444"
+                                    border.width: 1
+                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.defaultPage === index ? "#18c75e" : "#8a96a8"; font.pixelSize: 11 }
+                                    MouseArea {
+                                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.settingsVm.setDefaultPage(index)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Units
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("单位"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Row {
+                            spacing: 4
+                            Repeater {
+                                model: [qsTr("公制 (mm)"), qsTr("英制 (inch)")]
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    required property int index
+                                    width: 90; height: 28; radius: 4
+                                    color: root.settingsVm.units === index ? "#1c2a3e" : "#1a1e28"
+                                    border.color: root.settingsVm.units === index ? "#18c75e" : "#2e3444"
+                                    border.width: 1
+                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.units === index ? "#18c75e" : "#8a96a8"; font.pixelSize: 11 }
+                                    MouseArea {
+                                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.settingsVm.setUnits(index)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // User role
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("用户角色"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Row {
+                            spacing: 4
+                            Repeater {
+                                model: [qsTr("基础"), qsTr("专业")]
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    required property int index
+                                    width: 70; height: 28; radius: 4
+                                    color: root.settingsVm.userRole === index ? "#1c2a3e" : "#1a1e28"
+                                    border.color: root.settingsVm.userRole === index ? "#18c75e" : "#2e3444"
+                                    border.width: 1
+                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.userRole === index ? "#18c75e" : "#8a96a8"; font.pixelSize: 11 }
+                                    MouseArea {
+                                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.settingsVm.setUserRole(index)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Auto-save（对齐上游 auto_save 选项）
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("自动保存"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Switch {
+                            checked: root.settingsVm.autoSave
+                            onToggled: root.settingsVm.setAutoSave(checked)
+                        }
+                        Text { text: qsTr("每"); color: "#6b7d94"; font.pixelSize: 11 }
+                        ComboBox {
+                            model: ["5", "10", "15", "30"]
+                            currentIndex: {
+                                var intervals = [5, 10, 15, 30]
+                                return intervals.indexOf(root.settingsVm.autoSaveInterval)
+                            }
+                            implicitWidth: 60
+                            implicitHeight: 28
+                            enabled: root.settingsVm.autoSave
+                            onActivated: root.settingsVm.setAutoSaveInterval(parseInt(model[currentIndex]))
+                        }
+                        Text { text: qsTr("分钟"); color: "#6b7d94"; font.pixelSize: 11 }
+                    }
+
+                    // Check for updates（对齐上游 preset_update/版本检查）
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("启动时检查更新"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Switch {
+                            checked: root.settingsVm.checkUpdates
+                            onToggled: root.settingsVm.setCheckUpdates(checked)
+                        }
+                    }
+
+                    // Reduced motion（对齐上游 enable_reduce_motion）
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("减少动画效果"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Switch {
+                            checked: root.settingsVm.reducedMotion
+                            onToggled: root.settingsVm.setReducedMotion(checked)
+                        }
+                    }
+
+                    // Notification preferences（对齐上游 notification_manager preferences）
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("启用通知"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Switch {
+                            checked: backend.notificationsEnabled
+                            onToggled: backend.setNotificationsEnabled(checked)
+                        }
+                    }
+
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("显示提示"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Switch {
+                            checked: backend.hintsEnabled
+                            enabled: backend.notificationsEnabled
+                            onToggled: backend.setHintsEnabled(checked)
+                        }
+                    }
+
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("自动消失时间"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        CxComboBox {
+                            model: ["3s", "5s", "8s", "10s", "15s"]
+                            currentIndex: {
+                                var secs = backend.autoDismissSec
+                                if (secs <= 3) return 0
+                                if (secs <= 5) return 1
+                                if (secs <= 8) return 2
+                                if (secs <= 10) return 3
+                                return 4
+                            }
+                            onActivated: (index) => {
+                                var values = [3, 5, 8, 10, 15]
+                                backend.setAutoDismissSec(values[index])
+                            }
+                        }
+                    }
+
+                    // Region selection（对齐上游 PreferencesDialog region combo）
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("区域设置"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        CxComboBox {
+                            model: [qsTr("跟随系统"), qsTr("中国"), qsTr("美国"), qsTr("欧洲"), qsTr("日本")]
+                            currentIndex: root.settingsVm.region
+                            onActivated: root.settingsVm.setRegion(currentIndex)
+                        }
+                    }
+                }
+
+                // Appearance settings (shown when index=1)
+                ColumnLayout {
+                    visible: root.settingsVm.prefCategory === 1
                     Layout.fillWidth: true; spacing: 16
 
                     RowLayout {
@@ -132,7 +320,7 @@ Item {
 
                 // Language settings (index=1)
                 ColumnLayout {
-                    visible: root.settingsVm.prefCategory === 1
+                    visible: root.settingsVm.prefCategory === 2
                     Layout.fillWidth: true; spacing: 8
                     Repeater {
                         model: [qsTr("简体中文"),"English","日本語","한국어","Deutsch","Français"]
@@ -164,6 +352,91 @@ Item {
                                 onClicked: root.settingsVm.setLanguageIndex(index)
                             }
                         }
+                    }
+                }
+
+                // Account & Privacy settings (对齐上游 PreferencesDialog 账号与隐私, index=5)
+                ColumnLayout {
+                    visible: root.settingsVm.prefCategory === 5
+                    Layout.fillWidth: true; spacing: 16
+
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("自动备份项目到云端"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 200 }
+                        Switch {
+                            checked: root.settingsVm.autoBackup
+                            onToggled: root.settingsVm.setAutoBackup(checked)
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("启用后，项目文件将自动备份到您的云端账户。需要先登录云端账号。")
+                        color: "#566070"
+                        font.pixelSize: 10
+                        wrapMode: Text.Wrap
+                        Layout.preferredWidth: 400
+                    }
+                }
+
+                // Advanced settings (对齐上游 PreferencesDialog 高级, index=7)
+                ColumnLayout {
+                    visible: root.settingsVm.prefCategory === 7
+                    Layout.fillWidth: true; spacing: 16
+
+                    // Compact/LOD mode（对齐上游 3D view LOD / enable_reduce_detail）
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("低细节模式"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Switch {
+                            checked: root.settingsVm.compactMode
+                            onToggled: root.settingsVm.setCompactMode(checked)
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("启用后，3D 视口将降低渲染细节以提升性能。适合模型较多或硬件性能不足时使用。")
+                        color: "#566070"
+                        font.pixelSize: 10
+                        wrapMode: Text.Wrap
+                        Layout.preferredWidth: 400
+                        visible: root.settingsVm.compactMode
+                    }
+
+                    // Undo stack limit（对齐上游 undo/redo 历史限制）
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("撤销栈上限"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Row {
+                            spacing: 4
+                            Repeater {
+                                model: [20, 50, 100, 200]
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    required property int index
+                                    width: 56; height: 28; radius: 4
+                                    color: root.settingsVm.undoLimit === modelData ? "#1c2a3e" : "#1a1e28"
+                                    border.color: root.settingsVm.undoLimit === modelData ? "#18c75e" : "#2e3444"
+                                    border.width: 1
+                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.undoLimit === modelData ? "#18c75e" : "#8a96a8"; font.pixelSize: 11 }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.settingsVm.setUndoLimit(modelData)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("设置撤销/重做的历史记录上限。值越大可回退的操作越多，但占用更多内存。")
+                        color: "#566070"
+                        font.pixelSize: 10
+                        wrapMode: Text.Wrap
+                        Layout.preferredWidth: 400
                     }
                 }
 

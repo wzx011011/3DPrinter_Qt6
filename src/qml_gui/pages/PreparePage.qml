@@ -14,6 +14,8 @@ Item {
     required property var editorVm
     required property var configVm
     property alias viewport3dRef: viewport3d
+    property string processCategory: ""
+    property bool leftPanelVisible: true
     focus: true
 
     component ToolStripDivider: Rectangle {
@@ -61,19 +63,14 @@ Item {
             }
             break
         case Qt.Key_Z:
-            if (mod & Qt.ControlModifier) {
-                if (mod & Qt.ShiftModifier)
-                    viewport3d.redo()
-                else
-                    viewport3d.undo()
+            // Undo handled by Shortcut below
+            if (mod & Qt.ControlModifier)
                 event.accepted = true
-            }
             break
         case Qt.Key_Y:
-            if (mod & Qt.ControlModifier) {
-                viewport3d.redo()
+            // Redo handled by Shortcut below
+            if (mod & Qt.ControlModifier)
                 event.accepted = true
-            }
             break
         case Qt.Key_Delete:
         case Qt.Key_Backspace:
@@ -90,17 +87,43 @@ Item {
                 event.accepted = true
             }
             break
+        case Qt.Key_D:
+            if (mod & Qt.ControlModifier) {
+                root.editorVm.duplicateSelectedObjects()
+                event.accepted = true
+            }
+            break
         case Qt.Key_F:
             root.applyFitHintIfReady()
             event.accepted = true
             break
+        case Qt.Key_U:
+            if (mod & Qt.ControlModifier) {
+                viewport3d.gizmoMode = GLViewport.GizmoMeasure
+                event.accepted = true
+            }
+            break
+        case Qt.Key_G:
+            viewport3d.gizmoMode = GLViewport.GizmoFlatten
+            event.accepted = true
+            break
+        case Qt.Key_X:
+            if ((mod & Qt.ControlModifier) && (mod & Qt.ShiftModifier)) {
+                viewport3d.gizmoMode = GLViewport.GizmoCut
+                event.accepted = true
+            }
+            break
         }
     }
 
-    // Object context menu (right-click)
+    // Object context menu (right-click, aligns with upstream create_object_menu/create_extra_object_menu)
     Menu {
         id: objectContextMenu
 
+        MenuItem {
+            text: qsTr("复制选中")
+            onTriggered: if (root.editorVm) root.editorVm.duplicateSelectedObjects()
+        }
         MenuItem {
             text: qsTr("删除选中")
             onTriggered: if (root.editorVm) root.editorVm.deleteSelectedObjects()
@@ -108,29 +131,556 @@ Item {
         MenuSeparator { }
         MenuItem {
             text: qsTr("全选")
-            shortcut: "Ctrl+A"
             onTriggered: if (root.editorVm) root.editorVm.selectAllVisibleObjects()
         }
         MenuItem {
             text: qsTr("取消选择")
-            shortcut: "Esc"
             onTriggered: if (root.editorVm) root.editorVm.clearObjectSelection()
+        }
+        MenuSeparator { }
+        // 对齐上游 create_extra_object_menu — Rename
+        MenuItem {
+            text: qsTr("重命名")
+            enabled: root.editorVm && root.editorVm.selectedObjectCount === 1
+            onTriggered: {
+                renameDialog.currentObjIndex = root.editorVm.selectedObjectIndex
+                renameDialog.currentName = root.editorVm.objectName(root.editorVm.selectedObjectIndex)
+                renameDialog.open()
+            }
+        }
+        // 对齐上游 create_extra_object_menu — Center
+        MenuItem {
+            text: qsTr("居中到热床")
+            onTriggered: if (root.editorVm) root.editorVm.centerSelectedObjects()
+        }
+        // 对齐上游 create_extra_object_menu — Fill bed with copies
+        MenuItem {
+            text: qsTr("铺满热床")
+            onTriggered: if (root.editorVm) root.editorVm.fillBedWithCopies()
+        }
+        // 对齐上游 create_extra_object_menu — Export as STL
+        MenuItem {
+            text: qsTr("导出为 STL")
+            enabled: root.editorVm && root.editorVm.selectedObjectCount === 1
+            onTriggered: if (root.editorVm) root.editorVm.exportSelectedAsStl()
         }
         MenuSeparator { }
         MenuItem {
             text: qsTr("移动模式")
-            shortcut: "W"
             onTriggered: viewport3d.gizmoMode = GLViewport.GizmoMove
         }
         MenuItem {
             text: qsTr("旋转模式")
-            shortcut: "E"
             onTriggered: viewport3d.gizmoMode = GLViewport.GizmoRotate
         }
         MenuItem {
             text: qsTr("缩放模式")
-            shortcut: "R"
             onTriggered: viewport3d.gizmoMode = GLViewport.GizmoScale
+        }
+        MenuSeparator { }
+        MenuItem {
+            text: qsTr("自动朝向")
+            onTriggered: if (root.editorVm) root.editorVm.autoOrientSelected()
+        }
+        MenuItem {
+            text: qsTr("拆分对象")
+            enabled: root.editorVm && root.editorVm.selectedObjectCount === 1
+            onTriggered: if (root.editorVm) root.editorVm.splitSelectedObject()
+        }
+        MenuSeparator { }
+        Menu {
+            title: qsTr("镜像")
+            MenuItem {
+                text: qsTr("沿 X 轴镜像")
+                onTriggered: viewport3d.mirrorSelection(0)
+            }
+            MenuItem {
+                text: qsTr("沿 Y 轴镜像")
+                onTriggered: viewport3d.mirrorSelection(1)
+            }
+            MenuItem {
+                text: qsTr("沿 Z 轴镜像")
+                onTriggered: viewport3d.mirrorSelection(2)
+            }
+        }
+        MenuSeparator { }
+        // 对齐上游 set_printable
+        MenuItem {
+            text: root.editorVm && root.editorVm.selectedObjectCount > 0
+                   && root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex)
+                   ? qsTr("设为不参与打印") : qsTr("设为可打印")
+            onTriggered: {
+                if (root.editorVm) {
+                    if (root.editorVm.selectedObjectCount > 1)
+                        root.editorVm.setSelectedObjectsPrintable(!root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex))
+                    else
+                        root.editorVm.setObjectPrintable(root.editorVm.selectedObjectIndex, !root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex))
+                }
+            }
+        }
+        MenuItem {
+            text: qsTr("显示/隐藏")
+            onTriggered: if (root.editorVm) root.editorVm.toggleSelectedObjectsVisibility()
+        }
+        MenuItem {
+            text: qsTr("适应视图")
+            onTriggered: root.applyFitHintIfReady()
+        }
+    }
+
+    // Rename dialog (对齐上游 Plater::rename_object)
+    Dialog {
+        id: renameDialog
+        property int currentObjIndex: -1
+        property string currentName: ""
+        title: qsTr("重命名对象")
+        modal: true
+        anchors.centerIn: parent
+        width: 300
+        padding: 16
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
+
+            Label { text: qsTr("输入新名称:"); color: Theme.textPrimary; font.pixelSize: 12 }
+
+            TextField {
+                id: renameInput
+                Layout.fillWidth: true
+                text: renameDialog.currentName
+                color: Theme.textPrimary
+                placeholderText: qsTr("对象名称")
+                background: Rectangle { color: Theme.bgPanel; border.color: Theme.borderDefault; border.width: 1; radius: 4 }
+                onAccepted: {
+                    if (root.editorVm && renameDialog.currentObjIndex >= 0) {
+                        root.editorVm.renameObject(renameDialog.currentObjIndex, renameInput.text)
+                        renameDialog.close()
+                    }
+                }
+                Component.onCompleted: renameInput.forceActiveFocus()
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Rectangle {
+                    Layout.fillWidth: true; height: 28; radius: 4
+                    color: Theme.bgPressed
+                    Label { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: 11 }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                        onClicked: renameDialog.close() }
+                }
+                Rectangle {
+                    Layout.fillWidth: true; height: 28; radius: 4
+                    color: Theme.accent
+                    Label { anchors.centerIn: parent; text: qsTr("确认"); color: "#fff"; font.pixelSize: 11 }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (root.editorVm && renameDialog.currentObjIndex >= 0) {
+                                root.editorVm.renameObject(renameDialog.currentObjIndex, renameInput.text)
+                                renameDialog.close()
+                            }
+                        } }
+                }
+            }
+        }
+    }
+
+    // Plate context menu (right-click on plate card)
+    property int contextPlateIndex: -1
+
+    Menu {
+        id: plateContextMenu
+
+        MenuItem {
+            text: qsTr("选择全部对象")
+            enabled: root.contextPlateIndex >= 0 && root.editorVm
+                     && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
+            onTriggered: if (root.editorVm) root.editorVm.selectAllOnPlate(root.contextPlateIndex)
+        }
+        MenuItem {
+            text: qsTr("清空平板")
+            enabled: root.contextPlateIndex >= 0 && root.editorVm
+                     && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
+            onTriggered: if (root.editorVm) root.editorVm.removeAllOnPlate(root.contextPlateIndex)
+        }
+        MenuSeparator { }
+        MenuItem {
+            text: qsTr("排列对象")
+            enabled: root.contextPlateIndex >= 0 && root.editorVm
+                     && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
+            onTriggered: {
+                if (root.editorVm) root.editorVm.selectAllOnPlate(root.contextPlateIndex)
+                viewport3d.arrangeSelected()
+            }
+        }
+        MenuItem {
+            text: qsTr("自动朝向")
+            enabled: root.contextPlateIndex >= 0 && root.editorVm
+                     && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
+            onTriggered: {
+                if (root.editorVm) root.editorVm.selectAllOnPlate(root.contextPlateIndex)
+                root.editorVm.autoOrientSelected()
+            }
+        }
+        MenuSeparator { }
+        MenuItem {
+            text: qsTr("重命名")
+            enabled: root.contextPlateIndex >= 0 && root.editorVm
+            onTriggered: {
+                if (!root.editorVm || root.contextPlateIndex < 0) return
+                var dialog = plateRenameDialog.createObject(root)
+                dialog.plateIndex = root.contextPlateIndex
+                dialog.currentName = root.editorVm.plateName(root.contextPlateIndex)
+                dialog.open()
+            }
+        }
+        MenuItem {
+            text: qsTr("平板设置")
+            enabled: root.contextPlateIndex >= 0 && root.editorVm
+            onTriggered: {
+                if (!root.editorVm || root.contextPlateIndex < 0) return
+                var dialog = plateSettingsDialogComp.createObject(root)
+                dialog.plateIndex = root.contextPlateIndex
+                dialog.plateName = root.editorVm.plateName(root.contextPlateIndex)
+                dialog.open()
+            }
+        }
+        MenuItem {
+            text: root.contextPlateIndex >= 0 && root.editorVm
+                  && root.editorVm.isPlateLocked(root.contextPlateIndex)
+                  ? qsTr("解锁平板") : qsTr("锁定平板")
+            enabled: root.contextPlateIndex >= 0 && root.editorVm
+            onTriggered: if (root.editorVm) root.editorVm.togglePlateLocked(root.contextPlateIndex)
+        }
+        MenuSeparator { }
+        MenuItem {
+            text: qsTr("删除平板")
+            enabled: root.contextPlateIndex >= 0 && root.editorVm
+                     && root.editorVm.plateCount > 1
+            onTriggered: if (root.editorVm) root.editorVm.deletePlate(root.contextPlateIndex)
+        }
+    }
+
+    Component {
+        id: plateRenameDialog
+        Dialog {
+            id: dlg
+            required property int plateIndex
+            required property string currentName
+            title: qsTr("重命名平板")
+            modal: true
+            anchors.centerIn: parent
+            width: 320
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 12
+
+                TextField {
+                    id: nameField
+                    Layout.fillWidth: true
+                    text: dlg.currentName
+                    font.pixelSize: 13
+                    color: "#e2e8f1"
+                    background: Rectangle {
+                        radius: 6
+                        color: "#0f1318"
+                        border.color: nameField.activeFocus ? Theme.accent : Theme.borderSubtle
+                    }
+                    onAccepted: dlg.accept()
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Item { Layout.fillWidth: true }
+
+                    Rectangle {
+                        height: 28
+                        width: cancelText.implicitWidth + 20
+                        radius: 6
+                        color: cancelHov.containsMouse ? "#2e3540" : "#1e2535"
+                        Text { id: cancelText; anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: 12 }
+                        HoverHandler { id: cancelHov }
+                        TapHandler { onTapped: dlg.close() }
+                    }
+                    Rectangle {
+                        height: 28
+                        width: okText.implicitWidth + 20
+                        radius: 6
+                        color: Theme.accent
+                        Text { id: okText; anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: 12 }
+                        TapHandler {
+                            onTapped: {
+                                if (root.editorVm && nameField.text.length > 0)
+                                    root.editorVm.renamePlate(dlg.plateIndex, nameField.text)
+                                dlg.close()
+                            }
+                        }
+                    }
+                }
+            }
+
+            onOpened: nameField.forceActiveFocus()
+            onClosed: destroy()
+        }
+    }
+
+    // 平板设置对话框（对齐上游 PlateSettingsDialog）
+    Component {
+        id: plateSettingsDialogComp
+        Dialog {
+            id: settingsDlg
+            required property int plateIndex
+            property string plateName: ""
+            title: qsTr("平板设置") + " — " + settingsDlg.plateName
+            modal: true
+            anchors.centerIn: parent
+            width: 360
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 14
+
+                // 平板名称
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Text {
+                        text: qsTr("平板名称")
+                        color: Theme.textSecondary
+                        font.pixelSize: 12
+                        Layout.preferredWidth: 80
+                    }
+                    TextField {
+                        id: psNameField
+                        Layout.fillWidth: true
+                        text: settingsDlg.plateName
+                        maximumLength: 20
+                        font.pixelSize: 12
+                        color: Theme.textPrimary
+                        background: Rectangle {
+                            radius: 6
+                            color: Theme.bgElevated
+                            border.color: psNameField.activeFocus ? Theme.accent : Theme.borderSubtle
+                        }
+                    }
+                }
+
+                // 热床类型（对齐上游 PlateSettingsDialog bed type）
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Text {
+                        text: qsTr("热床类型")
+                        color: Theme.textSecondary
+                        font.pixelSize: 12
+                        Layout.preferredWidth: 80
+                    }
+                    ComboBox {
+                        id: bedTypeCombo
+                        Layout.fillWidth: true
+                        model: [
+                            qsTr("默认 (PEI)"),
+                            qsTr("EP 热床"),
+                            qsTr("PC 热床"),
+                            qsTr("纹理 PEI"),
+                            qsTr("自定义")
+                        ]
+                        currentIndex: root.editorVm ? root.editorVm.plateBedType(settingsDlg.plateIndex) : 0
+                        onActivated: function(index) {
+                            if (root.editorVm) root.editorVm.setPlateBedType(settingsDlg.plateIndex, index)
+                        }
+                        contentItem: Text {
+                            text: bedTypeCombo.displayText
+                            color: Theme.textPrimary
+                            font.pixelSize: 12
+                            verticalAlignment: Text.AlignVCenter
+                            leftPadding: 8
+                        }
+                        background: Rectangle {
+                            radius: 6
+                            color: Theme.bgElevated
+                            border.color: bedTypeCombo.activeFocus ? Theme.accent : Theme.borderSubtle
+                        }
+                        popup: Popup {
+                            y: bedTypeCombo.height
+                            width: bedTypeCombo.width
+                            padding: 4
+                            background: Rectangle { radius: 6; color: Theme.bgSurface; border.color: Theme.borderSubtle; border.width: 1 }
+                            contentItem: ListView {
+                                implicitHeight: contentHeight
+                                model: bedTypeCombo.model
+                                delegate: ItemDelegate {
+                                    width: bedTypeCombo.width
+                                    height: 30
+                                    contentItem: Text {
+                                        text: modelData
+                                        color: bedTypeCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary
+                                        font.pixelSize: 12
+                                    }
+                                    highlighted: bedTypeCombo.highlightedIndex === index
+                                    background: Rectangle { color: highlighted ? Theme.accent : "transparent"; radius: 4 }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 打印顺序（对齐上游 PlateSettingsDialog print sequence）
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Text {
+                        text: qsTr("打印顺序")
+                        color: Theme.textSecondary
+                        font.pixelSize: 12
+                        Layout.preferredWidth: 80
+                    }
+                    ComboBox {
+                        id: printSeqCombo
+                        Layout.fillWidth: true
+                        model: [qsTr("按层打印"), qsTr("按对象打印")]
+                        currentIndex: root.editorVm ? root.editorVm.platePrintSequence(settingsDlg.plateIndex) : 0
+                        onActivated: function(index) {
+                            if (root.editorVm) root.editorVm.setPlatePrintSequence(settingsDlg.plateIndex, index)
+                        }
+                        contentItem: Text {
+                            text: printSeqCombo.displayText
+                            color: Theme.textPrimary
+                            font.pixelSize: 12
+                            verticalAlignment: Text.AlignVCenter
+                            leftPadding: 8
+                        }
+                        background: Rectangle {
+                            radius: 6
+                            color: Theme.bgElevated
+                            border.color: printSeqCombo.activeFocus ? Theme.accent : Theme.borderSubtle
+                        }
+                        popup: Popup {
+                            y: printSeqCombo.height
+                            width: printSeqCombo.width
+                            padding: 4
+                            background: Rectangle { radius: 6; color: Theme.bgSurface; border.color: Theme.borderSubtle; border.width: 1 }
+                            contentItem: ListView {
+                                implicitHeight: contentHeight
+                                model: printSeqCombo.model
+                                delegate: ItemDelegate {
+                                    width: printSeqCombo.width
+                                    height: 30
+                                    contentItem: Text {
+                                        text: modelData
+                                        color: printSeqCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary
+                                        font.pixelSize: 12
+                                    }
+                                    highlighted: printSeqCombo.highlightedIndex === index
+                                    background: Rectangle { color: highlighted ? Theme.accent : "transparent"; radius: 4 }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 螺旋花瓶模式（对齐上游 PlateSettingsDialog spiral mode）
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Text {
+                        text: qsTr("螺旋花瓶")
+                        color: Theme.textSecondary
+                        font.pixelSize: 12
+                        Layout.preferredWidth: 80
+                    }
+                    ComboBox {
+                        id: spiralCombo
+                        Layout.fillWidth: true
+                        model: [qsTr("跟随全局"), qsTr("开启"), qsTr("关闭")]
+                        currentIndex: root.editorVm ? root.editorVm.plateSpiralMode(settingsDlg.plateIndex) : 0
+                        onActivated: function(index) {
+                            if (root.editorVm) root.editorVm.setPlateSpiralMode(settingsDlg.plateIndex, index)
+                        }
+                        contentItem: Text {
+                            text: spiralCombo.displayText
+                            color: Theme.textPrimary
+                            font.pixelSize: 12
+                            verticalAlignment: Text.AlignVCenter
+                            leftPadding: 8
+                        }
+                        background: Rectangle {
+                            radius: 6
+                            color: Theme.bgElevated
+                            border.color: spiralCombo.activeFocus ? Theme.accent : Theme.borderSubtle
+                        }
+                        popup: Popup {
+                            y: spiralCombo.height
+                            width: spiralCombo.width
+                            padding: 4
+                            background: Rectangle { radius: 6; color: Theme.bgSurface; border.color: Theme.borderSubtle; border.width: 1 }
+                            contentItem: ListView {
+                                implicitHeight: contentHeight
+                                model: spiralCombo.model
+                                delegate: ItemDelegate {
+                                    width: spiralCombo.width
+                                    height: 30
+                                    contentItem: Text {
+                                        text: modelData
+                                        color: spiralCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary
+                                        font.pixelSize: 12
+                                    }
+                                    highlighted: spiralCombo.highlightedIndex === index
+                                    background: Rectangle { color: highlighted ? Theme.accent : "transparent"; radius: 4 }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 提示信息
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("注：首层/其他层耗材顺序高级配置需在真实切片引擎下可用")
+                    color: Theme.textDisabled
+                    font.pixelSize: 10
+                    wrapMode: Text.Wrap
+                }
+
+                // 确认按钮
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Item { Layout.fillWidth: true }
+                    Rectangle {
+                        height: 30
+                        width: psOkText.implicitWidth + 24
+                        radius: 6
+                        color: Theme.accent
+                        Text { id: psOkText; anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: 12; font.bold: true }
+                        TapHandler {
+                            onTapped: {
+                                if (root.editorVm) {
+                                    if (psNameField.text.length > 0)
+                                        root.editorVm.renamePlate(settingsDlg.plateIndex, psNameField.text)
+                                }
+                                settingsDlg.close()
+                            }
+                        }
+                    }
+                }
+            }
+
+            onOpened: {
+                if (root.editorVm) {
+                    bedTypeCombo.currentIndex = root.editorVm.plateBedType(settingsDlg.plateIndex)
+                    printSeqCombo.currentIndex = root.editorVm.platePrintSequence(settingsDlg.plateIndex)
+                    spiralCombo.currentIndex = root.editorVm.plateSpiralMode(settingsDlg.plateIndex)
+                }
+                psNameField.forceActiveFocus()
+            }
+            onClosed: destroy()
         }
     }
 
@@ -295,12 +845,6 @@ Item {
                             toolTipText: qsTr("打开模型")
                             onClicked: openFileDlg.open()
                         }
-                        CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
-                            iconSource: "qrc:/qml/assets/icons/box.svg"
-                            toolTipText: qsTr("对象视图")
-                        }
                     }
 
                     ToolStripDivider { }
@@ -332,6 +876,30 @@ Item {
                             toolTipText: qsTr("缩放 (R)")
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoScale
                         }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoMeasure
+                            iconSource: "qrc:/qml/assets/icons/box.svg"
+                            toolTipText: qsTr("测量 (Ctrl+U)")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoMeasure
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoFlatten
+                            iconSource: "qrc:/qml/assets/icons/layers-subtract.svg"
+                            toolTipText: qsTr("平放 (F)")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoFlatten
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoCut
+                            iconSource: "qrc:/qml/assets/icons/scissors.svg"
+                            toolTipText: qsTr("切割 (Ctrl+Shift+X)")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoCut
+                        }
                     }
 
                     ToolStripDivider { }
@@ -343,26 +911,45 @@ Item {
                             buttonSize: 34
                             iconSize: 16
                             iconSource: "qrc:/qml/assets/icons/layout-grid.svg"
-                            toolTipText: qsTr("布局工具")
+                            toolTipText: qsTr("自动排列")
+                            onClicked: viewport3d.arrangeSelected()
                         }
                         CxIconButton {
                             buttonSize: 34
                             iconSize: 16
-                            iconSource: "qrc:/qml/assets/icons/rotate-2.svg"
+                            iconSource: "qrc:/qml/assets/icons/arrow-back-up.svg"
+                            toolTipText: qsTr("自动朝向")
+                            onClicked: root.editorVm.autoOrientSelected()
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/layers.svg"
+                            toolTipText: qsTr("拆分对象")
+                            onClicked: root.editorVm.splitSelectedObject()
+                            enabled: root.editorVm && root.editorVm.hasSelection
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/mirror.svg"
+                            toolTipText: qsTr("镜像 (沿 X 轴)")
+                            onClicked: viewport3d.mirrorSelection(0)
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/restore.svg"
                             toolTipText: qsTr("重置视角")
                             onClicked: root.applyFitHintIfReady()
                         }
                         CxIconButton {
                             buttonSize: 34
                             iconSize: 16
+                            selected: !root.leftPanelVisible
                             iconSource: "qrc:/qml/assets/icons/list-details.svg"
-                            toolTipText: qsTr("对象列表")
-                        }
-                        CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
-                            iconSource: "qrc:/qml/assets/icons/lock.svg"
-                            toolTipText: qsTr("锁定视图")
+                            toolTipText: root.leftPanelVisible ? qsTr("隐藏对象列表") : qsTr("显示对象列表")
+                            onClicked: root.leftPanelVisible = !root.leftPanelVisible
                         }
                     }
 
@@ -382,12 +969,6 @@ Item {
                         CxIconButton {
                             buttonSize: 34
                             iconSize: 16
-                            iconSource: "qrc:/qml/assets/icons/printer.svg"
-                            toolTipText: qsTr("打印机视图")
-                        }
-                        CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
                             iconSource: "qrc:/qml/assets/icons/settings.svg"
                             toolTipText: qsTr("准备页设置")
                             onClicked: backend.openSettings()
@@ -397,8 +978,340 @@ Item {
             }
         }
 
+        // ProcessBar 对齐上游 ProcessBar::GLToolbar — 分类标签切换右侧 PrintSettings
+        CxPanel {
+            id: processBar
+            cxSurface: CxPanel.Surface.Floating
+            anchors.top: topTools.bottom
+            anchors.topMargin: 4
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: procRow.implicitWidth + 20
+            height: 28
+            radius: 10
+            color: "#161c27de"
+            border.color: "#2d3443"
+
+            Row {
+                id: procRow
+                anchors.centerIn: parent
+                spacing: 2
+
+                Repeater {
+                    model: [
+                        { label: qsTr("全部"), cat: "" },
+                        { label: qsTr("质量"), cat: qsTr("质量") },
+                        { label: qsTr("速度"), cat: qsTr("速度") },
+                        { label: qsTr("支撑"), cat: qsTr("支撑") },
+                        { label: qsTr("温度"), cat: qsTr("温度") },
+                        { label: qsTr("填充"), cat: qsTr("填充") },
+                        { label: qsTr("底座"), cat: qsTr("底座") },
+                        { label: qsTr("其他"), cat: qsTr("其他") }
+                    ]
+                    delegate: Rectangle {
+                        required property var modelData
+                        required property int index
+                        width: procLbl.implicitWidth + 12
+                        height: 20
+                        radius: 5
+                        color: root.processCategory === modelData.cat
+                               ? Theme.accent : (procMA.containsMouse ? "#1e2535" : "transparent")
+                        border.width: 1
+                        border.color: root.processCategory === modelData.cat ? Theme.accent : Theme.borderSubtle
+
+                        Text {
+                            id: procLbl
+                            anchors.centerIn: parent
+                            text: modelData.label
+                            color: root.processCategory === modelData.cat ? Theme.textOnAccent : Theme.textSecondary
+                            font.pixelSize: 10
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            id: procMA
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                root.processCategory = modelData.cat
+                                sidebar.switchToPrintTab()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 测量信息面板（对齐上游 GLGizmoMeasure::on_render_input_window）
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: 104
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: measureContent.implicitWidth + 24
+            height: measureContent.implicitHeight + 16
+            radius: 12
+            color: "#161c27e0"
+            border.color: "#2d3443"
+            visible: viewport3d.gizmoMode === GLViewport.GizmoMeasure && root.editorVm
+
+            ColumnLayout {
+                id: measureContent
+                anchors.centerIn: parent
+                spacing: 4
+
+                Row {
+                    spacing: 16
+                    Label { text: qsTr("X:"); color: "#e066a0"; font.pixelSize: 11; font.bold: true; font.family: "Consolas, monospace" }
+                    Label { text: root.editorVm ? root.editorVm.measureDimensions.x.toFixed(1) : "0.0"; color: "#c8d4e0"; font.pixelSize: 11; font.family: "Consolas, monospace" }
+                    Label { text: qsTr("Y:"); color: "#4ec9b0"; font.pixelSize: 11; font.bold: true; font.family: "Consolas, monospace" }
+                    Label { text: root.editorVm ? root.editorVm.measureDimensions.y.toFixed(1) : "0.0"; color: "#c8d4e0"; font.pixelSize: 11; font.family: "Consolas, monospace" }
+                    Label { text: qsTr("Z:"); color: "#569cd6"; font.pixelSize: 11; font.bold: true; font.family: "Consolas, monospace" }
+                    Label { text: root.editorVm ? root.editorVm.measureDimensions.z.toFixed(1) : "0.0"; color: "#c8d4e0"; font.pixelSize: 11; font.family: "Consolas, monospace" }
+                }
+                Label {
+                    text: root.editorVm
+                        ? (qsTr("体积: ") + root.editorVm.measureDimensions.w.toFixed(0) + qsTr(" mm³"))
+                        : ""
+                    color: "#8b949e"
+                    font.pixelSize: 10
+                    font.family: "Consolas, monospace"
+                    Layout.alignment: Qt.AlignHCenter
+                }
+            }
+        }
+
+        // Flatten 信息面板（对齐上游 GLGizmoFlatten::on_render_input_window）
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: 104
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: flattenContent.implicitWidth + 32
+            height: flattenContent.implicitHeight + 20
+            radius: 12
+            color: "#161c27e0"
+            border.color: "#2d3443"
+            visible: viewport3d.gizmoMode === GLViewport.GizmoFlatten && root.editorVm
+
+            ColumnLayout {
+                id: flattenContent
+                anchors.centerIn: parent
+                spacing: 8
+
+                Text {
+                    text: qsTr("平放至面")
+                    color: "#e8edf6"
+                    font.pixelSize: 12
+                    font.bold: true
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Text {
+                    text: root.editorVm ? (qsTr("候选面: ") + root.editorVm.flattenFaceCount) : ""
+                    color: "#8b949e"
+                    font.pixelSize: 11
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Row {
+                    spacing: 8
+                    Layout.alignment: Qt.AlignHCenter
+                    Rectangle {
+                        width: 80; height: 28; radius: 4
+                        color: "#18c75e"
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("平放")
+                            color: "white"
+                            font.pixelSize: 11
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.editorVm.flattenSelected()
+                        }
+                    }
+                    Text {
+                        text: qsTr("(G)")
+                        color: "#6b7d94"
+                        font.pixelSize: 10
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
+                Text {
+                    text: qsTr("将选中对象最大面朝下平放")
+                    color: "#6b7d94"
+                    font.pixelSize: 9
+                    Layout.alignment: Qt.AlignHCenter
+                }
+            }
+        }
+
+        // Cut 切割控制面板（对齐上游 GLGizmoCut::on_render_input_window）
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: 104
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: cutContent.implicitWidth + 32
+            height: cutContent.implicitHeight + 20
+            radius: 12
+            color: "#161c27e0"
+            border.color: "#2d3443"
+            visible: viewport3d.gizmoMode === GLViewport.GizmoCut && root.editorVm
+
+            ColumnLayout {
+                id: cutContent
+                anchors.centerIn: parent
+                spacing: 8
+
+                Text {
+                    text: qsTr("切割对象")
+                    color: "#e8edf6"
+                    font.pixelSize: 12
+                    font.bold: true
+                    Layout.alignment: Qt.AlignHCenter
+                }
+
+                // 切割轴选择
+                Row {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    Repeater {
+                        model: [qsTr("X 轴"), qsTr("Y 轴"), qsTr("Z 轴")]
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: 58; height: 26; radius: 4
+                            color: root.editorVm && root.editorVm.cutAxis === index ? "#1c2a3e" : "#1a1e28"
+                            border.color: root.editorVm && root.editorVm.cutAxis === index ? "#18c75e" : "#2e3444"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData
+                                color: root.editorVm && root.editorVm.cutAxis === index ? "#18c75e" : "#8a96a8"
+                                font.pixelSize: 10
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.cutAxis = index
+                            }
+                        }
+                    }
+                }
+
+                // 切割位置滑块
+                RowLayout {
+                    spacing: 8
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("位置:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Slider {
+                        from: -50; to: 50; stepSize: 0.5
+                        value: root.editorVm ? root.editorVm.cutPosition : 0
+                        implicitWidth: 120
+                        onMoved: if (root.editorVm) root.editorVm.cutPosition = value
+                    }
+                    Text {
+                        text: root.editorVm ? root.editorVm.cutPosition.toFixed(1) + " mm" : "0.0 mm"
+                        color: "#c8d4e0"
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 50
+                    }
+                }
+
+                // 保留模式
+                Row {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    Repeater {
+                        model: [qsTr("全部保留"), qsTr("保留上半"), qsTr("保留下半")]
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: 70; height: 26; radius: 4
+                            color: root.editorVm && root.editorVm.cutKeepMode === index ? "#1c2a3e" : "#1a1e28"
+                            border.color: root.editorVm && root.editorVm.cutKeepMode === index ? "#18c75e" : "#2e3444"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData
+                                color: root.editorVm && root.editorVm.cutKeepMode === index ? "#18c75e" : "#8a96a8"
+                                font.pixelSize: 10
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.cutKeepMode = index
+                            }
+                        }
+                    }
+                }
+
+                // 操作按钮
+                Row {
+                    spacing: 8
+                    Layout.alignment: Qt.AlignHCenter
+                    Rectangle {
+                        width: 60; height: 28; radius: 4
+                        color: "#252b38"
+                        border.color: "#363d4e"; border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("翻转")
+                            color: "#c8d4e0"
+                            font.pixelSize: 10
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: if (root.editorVm) root.editorVm.flipCutPlane()
+                        }
+                    }
+                    Rectangle {
+                        width: 70; height: 28; radius: 4
+                        color: "#252b38"
+                        border.color: "#363d4e"; border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("居中")
+                            color: "#c8d4e0"
+                            font.pixelSize: 10
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: if (root.editorVm) root.editorVm.centerCutPlane()
+                        }
+                    }
+                    Rectangle {
+                        width: 80; height: 28; radius: 4
+                        color: "#18c75e"
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("执行切割")
+                            color: "white"
+                            font.pixelSize: 10
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (root.editorVm)
+                                    root.editorVm.cutSelected(root.editorVm.cutAxis, root.editorVm.cutPosition)
+                            }
+                        }
+                    }
+                }
+                Text {
+                    text: qsTr("(Ctrl+Shift+X)")
+                    color: "#6b7d94"
+                    font.pixelSize: 9
+                    Layout.alignment: Qt.AlignHCenter
+                }
+            }
+        }
+
         Rectangle {
             id: leftPanel
+            visible: root.leftPanelVisible
             anchors.left: parent.left
             anchors.top: parent.top
             anchors.bottom: parent.bottom
@@ -496,35 +1409,67 @@ Item {
 
                     delegate: Rectangle {
                         required property int index
+                        property bool dragHover: false
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 42
+                        Layout.preferredHeight: 52
                         radius: 12
-                        color: root.editorVm && !root.editorVm.showAllObjects && root.editorVm.currentPlateIndex === index
-                            ? Theme.accentSubtle
+                        readonly property bool isCurrent: root.editorVm && !root.editorVm.showAllObjects && root.editorVm.currentPlateIndex === index
+                        color: dragHover ? Theme.accentSubtle
+                            : isCurrent ? Theme.accentSubtle
                             : Theme.bgElevated
-                        border.width: 1
-                        border.color: root.editorVm && !root.editorVm.showAllObjects && root.editorVm.currentPlateIndex === index
-                            ? Theme.accent
+                        border.width: dragHover ? 2 : 1
+                        border.color: dragHover ? Theme.accent
+                            : isCurrent ? Theme.accent
                             : Theme.borderSubtle
+
+                        // 拖拽悬浮高亮叠加（对齐上游 GUI_ObjectList 拖拽放置指示）
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 12
+                            color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.05)
+                            visible: parent.dragHover
+                        }
+
+                        // 拖拽指示图标（对齐上游拖拽放置反馈）
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 44
+                            height: 28
+                            radius: 6
+                            color: Theme.accent
+                            opacity: parent.dragHover ? 0.9 : 0.0
+                            visible: parent.dragHover
+                            Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: qsTr("+")
+                                color: "#fff"
+                                font.pixelSize: 16
+                                font.bold: true
+                            }
+                        }
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 12
+                            anchors.leftMargin: 10
                             anchors.rightMargin: 12
                             spacing: 10
 
+                            // 平板缩略图（对齐上游 PartPlate thumbnail_data）
                             Rectangle {
-                                width: 22
-                                height: 22
-                                radius: 7
-                                color: "#152033"
+                                width: 32
+                                height: 32
+                                radius: 6
+                                color: root.editorVm ? root.editorVm.plateThumbnailColor(index) : "#152033"
                                 border.width: 1
                                 border.color: Theme.borderSubtle
 
+                                // 对象数量标记
                                 Text {
                                     anchors.centerIn: parent
-                                    text: (index + 1).toString()
-                                    color: Theme.textPrimary
+                                    text: root.editorVm ? root.editorVm.plateObjectCount(index).toString() : "0"
+                                    color: "#c8d4e0"
                                     font.pixelSize: 11
                                     font.bold: true
                                 }
@@ -564,16 +1509,107 @@ Item {
                                 font.pixelSize: 10
                                 font.bold: true
                             }
+
+                            Image {
+                                visible: root.editorVm && root.editorVm.isPlateLocked(index)
+                                source: "qrc:/qml/assets/icons/lock.svg"
+                                sourceSize.width: 12
+                                sourceSize.height: 12
+                                opacity: 0.6
+                            }
+
+                            Rectangle {
+                                visible: root.editorVm && root.editorVm.isPlateSliced(index)
+                                width: 8
+                                height: 8
+                                radius: 4
+                                color: Theme.accent
+                                opacity: 0.8
+                            }
                         }
 
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                if (!root.editorVm)
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            onClicked: function(mouse) {
+                                if (!root.editorVm) return
+                                if (mouse.button === Qt.RightButton) {
+                                    root.contextPlateIndex = index
+                                    plateContextMenu.popup()
+                                    mouse.accepted = true
                                     return
+                                }
                                 root.editorVm.setCurrentPlateIndex(index)
                                 root.editorVm.setShowAllObjects(false)
+                            }
+                        }
+
+                        // 对象拖拽目标（对齐上游跨平板拖拽）
+                        DropArea {
+                            anchors.fill: parent
+                            keys: ["object-drag"]
+                            onEntered: function(drag) { parent.dragHover = true }
+                            onExited: function(drag) { parent.dragHover = false }
+                            onDropped: function(drop) {
+                                parent.dragHover = false
+                                if (!root.editorVm) return
+                                root.editorVm.moveSelectedObjectToPlate(index)
+                                drop.acceptProposedAction()
+                            }
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 30
+                        radius: 8
+                        color: Theme.bgElevated
+                        border.width: 1
+                        border.color: Theme.borderSubtle
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("+ 添加平板")
+                            color: Theme.textSecondary
+                            font.pixelSize: 11
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: if (root.editorVm) root.editorVm.addPlate()
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 30
+                        radius: 8
+                        color: root.editorVm && root.editorVm.plateCount > 1 ? Theme.bgElevated : "transparent"
+                        border.width: root.editorVm && root.editorVm.plateCount > 1 ? 1 : 0
+                        border.color: Theme.borderSubtle
+                        opacity: root.editorVm && root.editorVm.plateCount > 1 ? 1.0 : 0.3
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("- 删除平板")
+                            color: Theme.textSecondary
+                            font.pixelSize: 11
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: root.editorVm && root.editorVm.plateCount > 1 ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            enabled: root.editorVm && root.editorVm.plateCount > 1
+                            onClicked: {
+                                if (root.editorVm && root.editorVm.plateCount > 1)
+                                    root.editorVm.deletePlate(root.editorVm.currentPlateIndex)
                             }
                         }
                     }
@@ -614,56 +1650,130 @@ Item {
             width: implicitWidth
             editorVm: root.editorVm
             configVm: root.configVm
+            processCategory: root.processCategory
         }
 
-        Column {
-            anchors.right: sidebar.left
-            anchors.rightMargin: 14
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 10
-
-            Repeater {
-                model: [
-                    { icon: "qrc:/qml/assets/icons/folder-plus.svg", tip: qsTr("导入模型") },
-                    { icon: "qrc:/qml/assets/icons/list-details.svg", tip: qsTr("对象列表") },
-                    { icon: "qrc:/qml/assets/icons/rotate-2.svg", tip: qsTr("视图重置") },
-                    { icon: "qrc:/qml/assets/icons/lock.svg", tip: qsTr("锁定视图") },
-                    { icon: "qrc:/qml/assets/icons/settings.svg", tip: qsTr("准备页设置") }
-                ]
-                delegate: CxIconButton {
-                    buttonSize: Theme.iconButtonSizeLG
-                    iconSize: 16
-                    iconSource: modelData.icon
-                    toolTipText: modelData.tip
-                    onClicked: {
-                        if (index === 0)
-                            openFileDlg.open()
-                        else if (index === 2)
-                            root.applyFitHintIfReady()
-                        else if (index === 4)
-                            backend.openSettings()
-                    }
-                }
-            }
+        // 转发预览请求到页面导航（对齐上游 Plater::priv::on_preview）
+        Connections {
+            target: root.editorVm
+            function onPreviewRequested() { backend.setCurrentPage(2) }
         }
 
+        // 视角预设按钮（对齐上游 GLCanvas3D 视角预设）
         CxPanel {
+            id: viewPresets
             cxSurface: CxPanel.Surface.Floating
             anchors.top: parent.top
             anchors.topMargin: 68
             anchors.right: sidebar.left
             anchors.rightMargin: 14
             width: 46
-            height: 62
+            height: 186
             radius: 14
 
-            Text {
+            Column {
                 anchors.centerIn: parent
-                text: qsTr("上\n前")
-                color: Theme.textPrimary
-                horizontalAlignment: Text.AlignHCenter
-                font.pixelSize: Theme.fontSizeMD
-                font.bold: true
+                spacing: 0
+
+                Repeater {
+                    model: [
+                        { label: qsTr("俯"), preset: 0, tip: qsTr("俯视图") },
+                        { label: qsTr("前"), preset: 1, tip: qsTr("前视图") },
+                        { label: qsTr("右"), preset: 2, tip: qsTr("右视图") },
+                        { label: qsTr("轴"), preset: 3, tip: qsTr("等轴视图") },
+                        { label: qsTr("适"), preset: -1, tip: qsTr("适应视图") }
+                    ]
+                    delegate: Rectangle {
+                        required property var modelData
+                        required property int index
+                        width: 34
+                        height: 32
+                        radius: 8
+                        color: vpMA.containsMouse ? "#1e2535" : "transparent"
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: modelData.label
+                            color: vpMA.containsMouse ? Theme.accent : Theme.textPrimary
+                            font.pixelSize: 11
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            id: vpMA
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (modelData.preset >= 0)
+                                    viewport3d.requestViewPreset(modelData.preset)
+                                else
+                                    root.applyFitHintIfReady()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Row {
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 18
+            anchors.left: leftPanel.right
+            anchors.leftMargin: 14
+            spacing: 8
+
+            // 状态指示器（对齐上游 PartPlateList 底部状态）
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 8
+
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.editorVm
+                        ? (root.editorVm.hasSelection
+                           ? qsTr("已选 %1 个对象").arg(root.editorVm.selectedObjectCount)
+                           : qsTr("%1 个对象 · %2").arg(root.editorVm.objectCount).arg(root.editorVm.statusText))
+                        : ""
+                    color: root.editorVm && root.editorVm.hasSelection ? Theme.accent : Theme.textSecondary
+                    font.pixelSize: 11
+                }
+
+                // 当前平板切片状态指示（对齐上游 PartPlate::m_slice_result_valid）
+                Rectangle {
+                    visible: root.editorVm && root.editorVm.isPlateSliced(root.editorVm.currentPlateIndex)
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: slicedText.implicitWidth + 12
+                    height: 18
+                    radius: 9
+                    color: "#0e3325"
+
+                    Label {
+                        id: slicedText
+                        anchors.centerIn: parent
+                        text: qsTr("✓ 已切片")
+                        color: "#18c75e"
+                        font.pixelSize: 10
+                    }
+                }
+
+                // 切片中进度
+                Rectangle {
+                    visible: root.editorVm && root.editorVm.isSlicing()
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: slicingText.implicitWidth + 12
+                    height: 18
+                    radius: 9
+                    color: "#2e2510"
+
+                    Label {
+                        id: slicingText
+                        anchors.centerIn: parent
+                        text: root.editorVm ? qsTr("切片中 %1%").arg(root.editorVm.sliceProgress()) : ""
+                        color: "#e8a838"
+                        font.pixelSize: 10
+                    }
+                }
             }
         }
 
@@ -677,6 +1787,7 @@ Item {
             CxPillAction {
                 iconSource: "qrc:/qml/assets/icons/settings.svg"
                 text: qsTr("打印配置")
+                onClicked: sidebar.switchToPrintTab()
             }
 
             CxPillAction {

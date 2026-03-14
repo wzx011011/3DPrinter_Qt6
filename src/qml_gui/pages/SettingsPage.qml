@@ -12,24 +12,18 @@ Item {
     property string searchText:       ""
     property var    filteredIndices:  []
 
-    readonly property var allCategories: [qsTr("质量"),qsTr("填充"),qsTr("速度"),qsTr("温度"),qsTr("支撑"),qsTr("底座"),qsTr("冷却"),qsTr("回退"),qsTr("其他")]
+    readonly property var allCategories: [qsTr("质量"),qsTr("填充"),qsTr("速度"),qsTr("加速度"),qsTr("温度"),qsTr("支撑"),qsTr("底座"),qsTr("冷却"),qsTr("回退"),qsTr("其他")]
 
     Component.onCompleted: rebuildFilter()
 
+    Connections {
+        target: root.configVm ? root.configVm.printOptions : null
+        function onDataVersionChanged() { root.rebuildFilter() }
+    }
+
     function rebuildFilter() {
-        if (!root.configVm || !root.configVm.printOptions) { filteredIndices = []; return }
-        var opts = root.configVm.printOptions
-        var n    = opts.count
-        var result = []
-        var needle = root.searchText.toLowerCase()
-        for (var i = 0; i < n; ++i) {
-            var matchCat  = root.selectedCategory === qsTr("全部") || opts.optCategory(i) === root.selectedCategory
-            var matchText = needle === ""
-                            || opts.optLabel(i).toLowerCase().indexOf(needle) >= 0
-                            || opts.optKey(i).toLowerCase().indexOf(needle) >= 0
-            if (matchCat && matchText) result.push(i)
-        }
-        filteredIndices = result
+        if (!root.configVm) { filteredIndices = []; return }
+        filteredIndices = root.configVm.filterOptionIndices(root.selectedCategory, root.searchText)
     }
 
     onSelectedCategoryChanged: rebuildFilter()
@@ -153,6 +147,28 @@ Item {
                             color: "#e2e8f5"; font.pixelSize: 14; font.bold: true
                         }
                         Item { Layout.fillWidth: true }
+
+                        Rectangle {
+                            height: 28
+                            width: resetBtnText.implicitWidth + 20
+                            radius: 4
+                            color: resetHov.containsMouse ? "#3e2535" : "#2e2030"
+                            border.color: "#5e3040"
+                            Text {
+                                id: resetBtnText
+                                anchors.centerIn: parent
+                                text: qsTr("重置默认")
+                                color: resetHov.containsMouse ? "#e8a0b0" : "#9daaba"
+                                font.pixelSize: 11
+                            }
+                            HoverHandler { id: resetHov }
+                            TapHandler {
+                                onTapped: {
+                                    if (root.configVm && root.configVm.printOptions)
+                                        root.configVm.printOptions.resetToDefaults()
+                                }
+                            }
+                        }
                         TextField {
                             id: searchField
                             placeholderText: qsTr("搜索参数名...")
@@ -164,6 +180,21 @@ Item {
                                 border.color: searchField.activeFocus ? "#22c564" : "#2e3848"
                             }
                             onTextChanged: root.searchText = text
+                        }
+                        // 脏选项计数
+                        Label {
+                            visible: root.configVm && root.configVm.printOptions && root.configVm.printOptions.dirtyCount > 0
+                            text: root.configVm ? (root.configVm.printOptions.dirtyCount + qsTr(" 已修改")) : ""
+                            color: "#f0883e"
+                            font.pixelSize: 10
+                            font.bold: true
+                        }
+                        // 搜索结果计数
+                        Label {
+                            visible: root.searchText !== "" && root.filteredIndices.length >= 0
+                            text: root.filteredIndices.length + qsTr(" 项匹配")
+                            color: "#6b7d94"
+                            font.pixelSize: 10
                         }
                     }
                 }
@@ -189,23 +220,70 @@ Item {
                         color: "#566070"; font.pixelSize: 13
                     }
 
-                    delegate: Rectangle {
-                        id: paramRow
+                    delegate: Item {
+                        id: paramDelegate
                         required property int index
-                        required property var modelData          // optIdx
+                        required property var modelData
 
-                        readonly property int    optIdx:  modelData
-                        readonly property string oType:   root.configVm ? root.configVm.printOptions.optType(optIdx)     : ""
-                        readonly property string oLabel:  root.configVm ? root.configVm.printOptions.optLabel(optIdx)    : ""
-                        readonly property var    oVal:    root.configVm ? root.configVm.printOptions.optValue(optIdx)    : 0
-                        readonly property double oMin:    root.configVm ? root.configVm.printOptions.optMin(optIdx)      : 0
-                        readonly property double oMax:    root.configVm ? root.configVm.printOptions.optMax(optIdx)      : 1
-                        readonly property double oStep:   root.configVm ? root.configVm.printOptions.optStep(optIdx)     : 1
-                        readonly property bool   oRO:     root.configVm ? root.configVm.printOptions.optReadonly(optIdx) : false
+                        readonly property int    optIdx: modelData
+                        readonly property string oGroup: root.configVm ? root.configVm.printOptions.optGroup(optIdx) : ""
+                        readonly property bool   showGroupHeader: oGroup !== "" && (
+                            index === 0
+                            || (root.configVm && root.configVm.printOptions.optGroup(root.filteredIndices[index - 1]) !== oGroup)
+                        )
+                        readonly property int    contentHeight: paramRow.oType === "double" || paramRow.oType === "int" ? 56 : 44
 
                         width: paramList.width
-                        height: (oType === "double" || oType === "int") ? 56 : 44
-                        color: index % 2 === 0 ? "transparent" : "#080b10"
+                        height: (showGroupHeader ? 28 : 0) + contentHeight
+
+                        // Group header (对齐上游 ConfigOptionsGroup)
+                        Rectangle {
+                            visible: paramDelegate.showGroupHeader
+                            anchors.top: parent.top
+                            width: parent.width
+                            height: 28
+                            color: "#131720"
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 20
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: paramDelegate.oGroup
+                                color: "#6b7d94"
+                                font.pixelSize: 11
+                                font.bold: true
+                            }
+
+                            Rectangle {
+                                anchors.bottom: parent.bottom
+                                width: parent.width
+                                height: 1
+                                color: "#1e2430"
+                            }
+                        }
+
+                        // Parameter row
+                        Rectangle {
+                            id: paramRow
+                            y: paramDelegate.showGroupHeader ? 28 : 0
+                            width: parent.width
+                            height: paramDelegate.contentHeight
+                            color: (paramDelegate.index + (paramDelegate.showGroupHeader ? 1 : 0)) % 2 === 0 ? "transparent" : "#080b10"
+
+                            readonly property string oType:  root.configVm ? root.configVm.printOptions.optType(optIdx)     : ""
+                            readonly property string oLabel: root.configVm ? root.configVm.printOptions.optLabel(optIdx)    : ""
+                            readonly property var    oVal:   root.configVm ? root.configVm.printOptions.optValue(optIdx)    : 0
+                            readonly property double oMin:   root.configVm ? root.configVm.printOptions.optMin(optIdx)      : 0
+                            readonly property double oMax:   root.configVm ? root.configVm.printOptions.optMax(optIdx)      : 1
+                            readonly property double oStep:  root.configVm ? root.configVm.printOptions.optStep(optIdx)     : 1
+                            readonly property bool   oRO:    root.configVm ? root.configVm.printOptions.optReadonly(optIdx) : false
+                            readonly property bool   oDirty: root.configVm ? root.configVm.printOptions.optIsDirty(optIdx) : false
+                            readonly property string oTip:   root.configVm ? root.configVm.printOptions.optTooltip(optIdx) : ""
+
+                            // Tooltip (帮助文案)
+                            ToolTip.visible: oTip !== "" && tipMA.containsMouse
+                            ToolTip.text: oTip
+                            ToolTip.delay: 500
 
                         RowLayout {
                             anchors.fill: parent
@@ -217,11 +295,23 @@ Item {
                             ColumnLayout {
                                 Layout.preferredWidth: 180
                                 spacing: 2
-                                Text {
-                                    text: paramRow.oLabel
-                                    color: paramRow.oRO ? "#566070" : "#c8d4e0"
-                                    font.pixelSize: 12
-                                    elide: Text.ElideRight
+                                RowLayout {
+                                    spacing: 4
+                                    // 脏标记（橙色圆点，对齐上游 Tab 的修改指示器）
+                                    Rectangle {
+                                        visible: paramRow.oDirty
+                                        width: 6; height: 6; radius: 3
+                                        color: "#f0883e"
+                                        Layout.alignment: Qt.AlignVCenter
+                                    }
+                                    Text {
+                                        text: paramRow.oLabel
+                                        color: paramRow.oRO ? "#566070" : (paramRow.oDirty ? "#f0883e" : "#c8d4e0")
+                                        font.pixelSize: 12
+                                        elide: Text.ElideRight
+                                        font.bold: paramRow.oDirty
+                                        Layout.fillWidth: true
+                                    }
                                 }
                                 Text {
                                     visible: paramRow.oRO
@@ -297,6 +387,16 @@ Item {
                                     }
                                 }
                             }
+                            }
+                        }
+
+                        // Tooltip hover area
+                        MouseArea {
+                            id: tipMA
+                            anchors.fill: paramRow
+                            hoverEnabled: true
+                            acceptedButtons: Qt.NoButton
+                            z: -1
                         }
                     }
                 }
