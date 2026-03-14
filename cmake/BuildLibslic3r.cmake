@@ -190,9 +190,18 @@ target_link_libraries(libslic3r INTERFACE
 )
 
 # OpenCASCADE (OCCT) — import libs for STEP/SVG/geometry
+# Use /DELAYLOAD to avoid DllMain deadlock at startup: the OCCT DLLs are
+# loaded during PE init, but libslic3r is /MT (static CRT) and the exe is
+# /MD (dynamic CRT), causing a deadlock in the loader lock.  Delay-load
+# removes OCCT from the import table entirely; the DLLs are only loaded on
+# first function call, which the QML GUI never does.
+set(_delayload_libs "")
 foreach(_occt_lib ${OCCT_LIBS})
     target_link_libraries(libslic3r INTERFACE "${OCCT_LIB_DIR}/${_occt_lib}.lib")
+    list(APPEND _delayload_libs "/DELAYLOAD:${_occt_lib}.dll")
 endforeach()
+# Also delay-load cr_tpms_library (scalar TPMS infill, closed-source DLL)
+list(APPEND _delayload_libs "/DELAYLOAD:cr_tpms_library.dll")
 
 if(WIN32)
     target_link_libraries(libslic3r INTERFACE Psapi.lib bcrypt.lib)
@@ -202,12 +211,15 @@ if(OpenCV_FOUND)
     target_link_libraries(libslic3r INTERFACE ${OpenCV_LIBS})
 endif()
 
-# 抑制预编译 libslic3r (/MT) 与我们的 /MD 之间的 CRT 默认库冲突
+# /DELAYLOAD — OCCT DLLs 在 PE 初始化时不加载，避免 /MT 的 libslic3r 与
+# /MD 的 OCCT DLL 在 DllMain 期间产生 CRT 死锁。
 if(MSVC)
     target_link_options(libslic3r INTERFACE
         /NODEFAULTLIB:LIBCMT
         /NODEFAULTLIB:libcpmt
+        ${_delayload_libs}
     )
+    target_link_libraries(libslic3r INTERFACE delayimp.lib)
 endif()
 
 message(STATUS "=== libslic3r: imported pre-built Release libraries ===")

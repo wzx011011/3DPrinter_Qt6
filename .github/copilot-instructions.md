@@ -1,62 +1,64 @@
-# CrealityPrint Qt6 Workspace Instructions
+# CrealityPrint Qt6 工作区指令
 
-This repository is a source-truth migration project.
+> 本文件与 `.cdx2cache/rules/source-truth-migration.md` 保持同步，修改时请同步更新两处。
 
-## Core Rule
+本仓库是一个源码真值迁移项目。
 
-- Treat `third_party/CrealityPrint` as the upstream source of truth for user-visible behavior, workflow, and feature scope.
-- Treat the Qt6/QML code under `src/` as the migration and presentation layer that must inherit upstream behavior.
-- Do not invent new product behavior when an upstream implementation already exists.
+## 核心规则
 
-## Required Workflow
+- 将 `third_party/CrealityPrint` 视为用户可见行为、工作流和功能范围的上游真值源。
+- 将 `src/` 下的 Qt6/QML 代码视为迁移与呈现层，必须继承上游行为。
+- 当上游已有实现时，不得自由设计新的产品行为。
 
-Before making code changes:
+## 必须遵循的工作流程
 
-1. Identify the matching task in [docs/TASKS.md](../docs/TASKS.md).
-2. Identify the upstream source file or module in `third_party/CrealityPrint`.
-3. Confirm the target Qt6 module that should carry the behavior.
+在修改代码前：
 
-If no matching task exists:
+1. 在 [docs/TASKS.md](../docs/TASKS.md) 中识别匹配的任务。
+2. 在 `third_party/CrealityPrint` 中识别上游源码文件或模块。
+3. 确认应承载该行为的 Qt6 目标模块。
 
-- Update [docs/TASKS.md](../docs/TASKS.md) first.
-- Do not start implementation against an undocumented target.
+如果没有匹配的任务：
 
-## Progress Accounting
+- 先更新 [docs/TASKS.md](../docs/TASKS.md)。
+- 不要针对未记录的目标开始实现。
 
-- Do not mark work as complete just because a page exists or a basic chain runs.
-- A task is complete only after upstream behavior has been compared and validated.
-- Use the task status semantics defined in [docs/TASKS.md](../docs/TASKS.md):
-  - `[x]` fully aligned and validated against upstream
-  - `[-]` basic migration or partial closure only
-  - `[ ]` not started or placeholder only
+## 进度记账
 
-## Architecture Boundaries
+- 不要仅因为页面存在或基础链路可运行就标记工作为完成。
+- 只有在与上游行为对照并验证后才算任务完成。
+- 使用 [docs/TASKS.md](../docs/TASKS.md) 中定义的任务状态语义：
+  - `[x]` 已与上游完全对齐并通过验证
+  - `[-]` 部分迁移或仅完成基础闭环
+  - `[ ]` 尚未开始或仅有占位
 
-- Keep architecture aligned with [docs/CrealityPrint_Qt_GUI_Rewrite_Architecture.md](../docs/CrealityPrint_Qt_GUI_Rewrite_Architecture.md).
-- Keep module boundaries aligned with [docs/PROJECT_STRUCTURE.md](../docs/PROJECT_STRUCTURE.md).
-- Prefer adapting upstream behavior into `src/core/services`, `src/core/viewmodels`, and `src/core/rendering` instead of embedding business logic in QML.
-- Keep QML focused on presentation, composition, and interaction wiring.
+## 架构边界
 
-## Preferred Execution Order
+- 保持架构与 [docs/CrealityPrint_Qt_GUI_Rewrite_Architecture.md](../docs/CrealityPrint_Qt_GUI_Rewrite_Architecture.md) 对齐。
+- 保持模块边界与 [docs/PROJECT_STRUCTURE.md](../docs/PROJECT_STRUCTURE.md) 对齐。
+- 优先将上游行为适配到 `src/core/services`、`src/core/viewmodels` 和 `src/core/rendering`，而不是在 QML 中嵌入业务逻辑。
+- QML 应专注于呈现、组合和交互接线。
 
-Prioritize work in this order unless the user explicitly overrides it:
+## 建议的执行顺序
 
-1. P0 source-of-truth versioning and feature matrix
-2. P2 Prepare workspace
-3. P3 Preview workspace
-4. P4 Settings / Preset / override scopes
+除非用户明确覆盖，按以下顺序优先推进：
+
+1. P0 源码真值版本管理与功能矩阵
+2. P2 Prepare 工作区
+3. P3 Preview 工作区
+4. P4 Settings / Preset / 覆盖作用域
 5. P5 Device / Monitor / Network
 6. P6 Calibration / Model Mall / MultiMachine
-7. P7 quality and release closure
+7. P7 质量与发布收尾
 
-## Validation Expectations
+## 验证预期
 
-- Use `scripts/auto_verify_with_vcvars.ps1` as the authoritative full validation path when code changes affect runtime behavior.
-- Prefer root-cause fixes over visual-only patches.
-- When reporting progress, mention both the task ID and the upstream module being migrated.
+- 当代码变更影响运行时行为时，使用 `scripts/auto_verify_with_vcvars.ps1` 作为权威的完整验证路径。
+- 优先根因修复而非仅做视觉层面的修补。
+- 报告进度时，同时提及任务 ID 和正在迁移的上游模块。
 
-## Anti-Patterns
+## 反模式
 
-- Do not continue page-by-page beautification without a mapped upstream target.
-- Do not treat old phase completion notes as proof of feature completeness.
-- Do not add new mock-only behavior if the real upstream path already exists or should exist.
+- 不要在没有上游映射目标的情况下继续逐页美化。
+- 不要将旧的阶段完成记录视为功能完成的证明。
+- 不要在上游真实路径已存在或应该存在时添加新的仅 Mock 行为。

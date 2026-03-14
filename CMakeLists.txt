@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
 # ── CRT 运行库：使用 /MD（动态CRT）匹配 Qt、TBB、Boost deps ────────────
-# 预编译 libslic3r 是 /MT，通过 NODEFAULTLIB 抑制冲突
 cmake_policy(SET CMP0091 NEW)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 
@@ -39,7 +38,7 @@ endif()
 
 if(CREALITY_QML_GUI)
     if(NOT BUILD_LIBSLIC3R)
-        message(FATAL_ERROR "CREALITY_QML_GUI requires BUILD_LIBSLIC3R=ON. Mock/fake model loading is disabled.")
+        message(WARNING "CREALITY_QML_GUI: BUILD_LIBSLIC3R=OFF — OCCT/model loading will be stubbed out for testing.")
     endif()
     find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent)
 
@@ -54,6 +53,10 @@ if(CREALITY_QML_GUI)
         src/core/services/PresetServiceMock.h
         src/core/services/DeviceServiceMock.cpp
         src/core/services/DeviceServiceMock.h
+        src/core/services/CameraServiceMock.cpp
+        src/core/services/CameraServiceMock.h
+        src/core/services/CloudServiceMock.cpp
+        src/core/services/CloudServiceMock.h
         src/core/services/ProjectServiceMock.cpp
         src/core/services/ProjectServiceMock.h
         src/core/services/NetworkServiceMock.cpp
