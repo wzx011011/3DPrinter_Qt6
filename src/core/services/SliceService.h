@@ -33,6 +33,12 @@ public:
   QString resultWeightLabel() const;
   QString resultPlateLabel() const;
   int resultPlateIndex() const;
+  /// 耗材用量（长度，对齐上游 SliceInfoPanel filament used）
+  QString resultFilamentLabel() const;
+  /// 切片层数
+  int resultLayerCount() const;
+  /// 预估成本（对齐上游 PrintEstimatedStatistics）
+  QString resultCostLabel() const;
 
   Q_INVOKABLE void startSlice(const QString &projectName);
   Q_INVOKABLE void startSlicePlate(int plateIndex);
@@ -57,6 +63,9 @@ private:
   QString resultWeightLabel_;
   QString resultPlateLabel_;
   int resultPlateIndex_ = -1;
+  QString resultFilamentLabel_;
+  int resultLayerCount_ = 0;
+  QString resultCostLabel_;
   std::shared_ptr<std::atomic_bool> activeCancelFlag_;
 #ifdef HAS_LIBSLIC3R
   std::atomic<Slic3r::Print *> activePrint_{nullptr};

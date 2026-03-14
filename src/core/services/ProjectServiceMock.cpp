@@ -1,9 +1,14 @@
 #include "ProjectServiceMock.h"
 
 #include <QFileInfo>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 #include <QDebug>
 #include <QVariant>
 #include <QSet>
+#include <QRegularExpression>
 #include <algorithm>
 #include <QMetaObject>
 #include <QPointer>
@@ -516,6 +521,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
     QStringList names;
     QStringList moduleNames;
     QList<bool> printableStates;
+    QList<bool> visibleStates;
     QString errorText;
     QString loadedProjectName;
     if (ok && !canceled)
@@ -525,6 +531,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
       names.reserve(int(objs.size()));
       moduleNames.reserve(int(objs.size()));
       printableStates.reserve(int(objs.size()));
+      visibleStates.reserve(int(objs.size()));
       for (size_t i = 0; i < objs.size(); ++i)
       {
         const auto *obj = objs[i];
@@ -540,6 +547,9 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
 
         const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
         printableStates.append(printable);
+
+        const bool visible = obj && !obj->instances.empty() ? obj->instances.front()->is_printable() : true;
+        visibleStates.append(visible);
       }
     }
     else
@@ -554,7 +564,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
       return;
     }
 
-    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices]() {
+    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices]() {
       if (!receiver)
       {
         delete loadedModel;
@@ -582,6 +592,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         receiver->objectNames_ = names;
         receiver->objectModuleNames_ = moduleNames;
         receiver->objectPrintableStates_ = printableStates;
+        receiver->objectVisibleStates_ = visibleStates;
         receiver->modelCount_ = names.size();
         receiver->plateNames_ = loadedPlateNames;
         receiver->plateObjectIndices_ = loadedPlateObjectIndices;
@@ -618,8 +629,10 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         receiver->objectNames_.clear();
         receiver->objectModuleNames_.clear();
         receiver->objectPrintableStates_.clear();
+        receiver->objectVisibleStates_.clear();
         receiver->plateNames_.clear();
         receiver->plateObjectIndices_.clear();
+        receiver->plateLockedStates_.clear();
         receiver->lastError_ = errorText;
         emit receiver->projectChanged();
         emit receiver->plateDataLoaded(0);
@@ -681,6 +694,106 @@ bool ProjectServiceMock::setCurrentPlateIndex(int index)
   return true;
 }
 
+bool ProjectServiceMock::addPlate()
+{
+  if (loading_)
+    return false;
+
+  const int newPlateIndex = plateCount_;
+  plateNames_ << tr("平板 %1").arg(newPlateIndex + 1);
+  plateObjectIndices_ << QList<int>();
+  plateLockedStates_ << false;
+  plateCount_ = plateObjectIndices_.size();
+
+  emit projectChanged();
+  emit plateDataLoaded(plateCount_);
+  return true;
+}
+
+bool ProjectServiceMock::deletePlate(int plateIndex)
+{
+  if (loading_)
+    return false;
+
+  if (plateObjectIndices_.size() <= 1)
+    return false; // 至少保留 1 个平板
+
+  if (plateIndex < 0 || plateIndex >= plateObjectIndices_.size())
+    return false;
+
+  plateNames_.removeAt(plateIndex);
+  plateObjectIndices_.removeAt(plateIndex);
+  if (plateIndex < plateLockedStates_.size())
+    plateLockedStates_.removeAt(plateIndex);
+  plateCount_ = plateObjectIndices_.size();
+
+  if (currentPlateIndex_ >= plateCount_)
+    currentPlateIndex_ = plateCount_ - 1;
+  if (currentPlateIndex_ < 0)
+    currentPlateIndex_ = 0;
+
+  emit projectChanged();
+  emit plateDataLoaded(plateCount_);
+  emit plateSelectionChanged();
+  return true;
+}
+
+bool ProjectServiceMock::renamePlate(int plateIndex, const QString &newName)
+{
+  if (loading_)
+    return false;
+  if (plateIndex < 0 || plateIndex >= plateNames_.size())
+    return false;
+  plateNames_[plateIndex] = newName;
+  emit projectChanged();
+  return true;
+}
+
+bool ProjectServiceMock::removeAllOnPlate(int plateIndex)
+{
+  if (loading_)
+    return false;
+  if (plateIndex < 0 || plateIndex >= plateObjectIndices_.size())
+    return false;
+
+  const QList<int> objs = plateObjectIndices_[plateIndex];
+  if (objs.isEmpty())
+    return true;
+
+  // Delete objects in reverse order to keep indices stable
+  QList<int> sorted = objs;
+  std::sort(sorted.begin(), sorted.end(), std::greater<int>());
+  for (int objIdx : sorted)
+    deleteObject(objIdx);
+
+  return true;
+}
+
+bool ProjectServiceMock::isPlateLocked(int plateIndex) const
+{
+  if (plateIndex < 0 || plateIndex >= plateLockedStates_.size())
+    return false;
+  return plateLockedStates_[plateIndex];
+}
+
+bool ProjectServiceMock::setPlateLocked(int plateIndex, bool locked)
+{
+  if (plateIndex < 0 || plateIndex >= plateObjectIndices_.size())
+    return false;
+  while (plateLockedStates_.size() < plateObjectIndices_.size())
+    plateLockedStates_.append(false);
+  plateLockedStates_[plateIndex] = locked;
+  emit projectChanged();
+  return true;
+}
+
+QList<int> ProjectServiceMock::plateObjectIndices(int plateIndex) const
+{
+  if (plateIndex < 0 || plateIndex >= plateObjectIndices_.size())
+    return {};
+  return plateObjectIndices_[plateIndex];
+}
+
 QList<int> ProjectServiceMock::currentPlateObjectIndices() const
 {
   if (currentPlateIndex_ < 0 || currentPlateIndex_ >= plateObjectIndices_.size())
@@ -709,6 +822,23 @@ int ProjectServiceMock::plateIndexForObject(int objectIndex) const
   if (plateObjectIndices_.size() == 1)
     return 0;
   return -1;
+}
+
+void ProjectServiceMock::setObjectPlateForIndex(int objectIndex, int plateIndex)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+    return;
+  if (plateIndex < 0 || plateIndex >= plateObjectIndices_.size())
+    return;
+
+  // 从源平板移除
+  for (auto &indices : plateObjectIndices_)
+    indices.removeAll(objectIndex);
+
+  // 添加到目标平板
+  plateObjectIndices_[plateIndex].append(objectIndex);
+  emit projectChanged();
+  emit plateDataLoaded(plateObjectIndices_.size());
 }
 
 bool ProjectServiceMock::objectPrintable(int index) const
@@ -756,6 +886,37 @@ bool ProjectServiceMock::setObjectPrintable(int index, bool printable)
   return true;
 }
 
+bool ProjectServiceMock::objectVisible(int index) const
+{
+  if (index < 0 || index >= objectVisibleStates_.size())
+    return true;
+  return objectVisibleStates_[index];
+}
+
+bool ProjectServiceMock::setObjectVisible(int index, bool visible)
+{
+  if (loading_)
+    return false;
+
+  if (index < 0 || index >= objectVisibleStates_.size())
+    return false;
+
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || size_t(index) >= model_->objects.size() || !model_->objects[size_t(index)])
+    return false;
+
+  for (auto *inst : model_->objects[size_t(index)]->instances)
+  {
+    if (inst)
+      inst->set_visible(visible);
+  }
+#endif
+
+  objectVisibleStates_[index] = visible;
+  emit projectChanged();
+  return true;
+}
+
 int ProjectServiceMock::objectVolumeCount(int index) const
 {
 #ifdef HAS_LIBSLIC3R
@@ -763,8 +924,10 @@ int ProjectServiceMock::objectVolumeCount(int index) const
     return 0;
   return int(model_->objects[size_t(index)]->volumes.size());
 #else
-  Q_UNUSED(index);
-  return 0;
+  if (index < 0)
+    return 0;
+  const auto it = m_mockVolumes.constFind(index);
+  return (it != m_mockVolumes.constEnd()) ? it->size() : 0;
 #endif
 }
 
@@ -783,10 +946,26 @@ QString ProjectServiceMock::objectVolumeName(int objectIndex, int volumeIndex) c
     return QString::fromStdString(volume->name);
   return tr("体积 %1").arg(volumeIndex + 1);
 #else
-  Q_UNUSED(objectIndex);
-  Q_UNUSED(volumeIndex);
-  return {};
+  if (objectIndex < 0)
+    return {};
+  const auto it = m_mockVolumes.constFind(objectIndex);
+  if (it == m_mockVolumes.constEnd() || volumeIndex < 0 || volumeIndex >= it->size())
+    return {};
+  return it->at(volumeIndex).name;
 #endif
+}
+
+/// Mock-mode volume type label (对齐上游 volumeTypeToLabel)
+static QString mockVolumeTypeLabel(MockVolumeType type)
+{
+  switch (type) {
+  case MockVolumeType::ModelPart:        return QObject::tr("模型部件");
+  case MockVolumeType::NegativeVolume:   return QObject::tr("负体积");
+  case MockVolumeType::ParameterModifier:return QObject::tr("参数修改器");
+  case MockVolumeType::SupportBlocker:   return QObject::tr("支撑屏蔽");
+  case MockVolumeType::SupportEnforcer:  return QObject::tr("支撑增强");
+  }
+  return QObject::tr("体积");
 }
 
 QString ProjectServiceMock::objectVolumeTypeLabel(int objectIndex, int volumeIndex) const
@@ -801,9 +980,16 @@ QString ProjectServiceMock::objectVolumeTypeLabel(int objectIndex, int volumeInd
 
   return volumeTypeToLabel(obj->volumes[size_t(volumeIndex)]);
 #else
-  Q_UNUSED(objectIndex);
-  Q_UNUSED(volumeIndex);
-  return {};
+  if (objectIndex < 0)
+    return {};
+  const auto it = m_mockVolumes.constFind(objectIndex);
+  if (it == m_mockVolumes.constEnd() || volumeIndex < 0 || volumeIndex >= it->size())
+    return {};
+  const auto &vol = it->at(volumeIndex);
+  // Only show type label for non-model-part volumes (对齐上游 GUI_ObjectList 行为)
+  if (vol.type == MockVolumeType::ModelPart)
+    return {};
+  return mockVolumeTypeLabel(vol.type);
 #endif
 }
 
@@ -812,8 +998,28 @@ QVariant ProjectServiceMock::scopedOptionValue(int objectIndex, int volumeIndex,
 #ifdef HAS_LIBSLIC3R
   return readConfigValue(scopedConfigForRead(model_, objectIndex, volumeIndex), key, fallbackValue);
 #else
-  Q_UNUSED(objectIndex);
-  Q_UNUSED(volumeIndex);
+  // Mock mode: check volume overrides first, then object overrides
+  if (volumeIndex >= 0)
+  {
+    const int volKey = (objectIndex << 16) | volumeIndex;
+    const auto vit = m_mockVolumeOverrides.constFind(volKey);
+    if (vit != m_mockVolumeOverrides.constEnd())
+    {
+      const auto kv = vit->constFind(key);
+      if (kv != vit->constEnd())
+        return kv.value();
+    }
+  }
+  if (objectIndex >= 0)
+  {
+    const auto oit = m_mockObjectOverrides.constFind(objectIndex);
+    if (oit != m_mockObjectOverrides.constEnd())
+    {
+      const auto kv = oit->constFind(key);
+      if (kv != oit->constEnd())
+        return kv.value();
+    }
+  }
   return fallbackValue;
 #endif
 }
@@ -847,13 +1053,56 @@ bool ProjectServiceMock::setScopedOptionValue(int objectIndex, int volumeIndex, 
   emit projectChanged();
   return true;
 #else
-  Q_UNUSED(objectIndex);
-  Q_UNUSED(volumeIndex);
+  // Mock mode: store per-volume or per-object overrides
+  if (volumeIndex >= 0)
+  {
+    const int volKey = (objectIndex << 16) | volumeIndex;
+    m_mockVolumeOverrides[volKey][key] = value;
+  }
+  else if (objectIndex >= 0)
+  {
+    m_mockObjectOverrides[objectIndex][key] = value;
+  }
+  else
+  {
+    lastError_ = tr("更新失败：配置目标无效（未指定对象或部件）");
+    return false;
+  }
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+#endif
+}
+
+QVariant ProjectServiceMock::plateScopedOptionValue(int plateIndex, const QString &key, const QVariant &fallbackValue) const
+{
+#ifdef HAS_LIBSLIC3R
+  Q_UNUSED(plateIndex);
+  Q_UNUSED(key);
+  return fallbackValue; // TODO: upstream PartPlate config access
+#else
+  const auto it = m_mockPlateOverrides.constFind(plateIndex);
+  if (it != m_mockPlateOverrides.constEnd())
+  {
+    const auto kv = it->constFind(key);
+    if (kv != it->constEnd())
+      return kv.value();
+  }
+  return fallbackValue;
+#endif
+}
+
+bool ProjectServiceMock::setPlateScopedOptionValue(int plateIndex, const QString &key, const QVariant &value)
+{
+#ifdef HAS_LIBSLIC3R
+  Q_UNUSED(plateIndex);
   Q_UNUSED(key);
   Q_UNUSED(value);
-  lastError_ = tr("当前构建未启用 libslic3r，无法更新参数");
+  return false; // TODO: upstream PartPlate config access
+#else
+  m_mockPlateOverrides[plateIndex][key] = value;
   emit projectChanged();
-  return false;
+  return true;
 #endif
 }
 
@@ -916,12 +1165,202 @@ bool ProjectServiceMock::deleteObjectVolume(int objectIndex, int volumeIndex)
   emit projectChanged();
   return true;
 #else
-  Q_UNUSED(objectIndex);
-  Q_UNUSED(volumeIndex);
-  lastError_ = tr("当前构建未启用 libslic3r，无法删除部件");
+  if (objectIndex < 0)
+  {
+    lastError_ = tr("删除失败：对象索引无效");
+    emit projectChanged();
+    return false;
+  }
+  auto it = m_mockVolumes.find(objectIndex);
+  if (it == m_mockVolumes.end() || volumeIndex < 0 || volumeIndex >= it->size())
+  {
+    lastError_ = tr("删除失败：部件索引无效");
+    emit projectChanged();
+    return false;
+  }
+  // Don't allow deleting the last model part (对齐上游约束)
+  if (it->at(volumeIndex).type == MockVolumeType::ModelPart)
+  {
+    int solidPartCount = 0;
+    for (const auto &v : *it)
+      if (v.type == MockVolumeType::ModelPart)
+        ++solidPartCount;
+    if (solidPartCount <= 1)
+    {
+      lastError_ = tr("不能删除最后一个实体部件");
+      emit projectChanged();
+      return false;
+    }
+  }
+  it->removeAt(volumeIndex);
+  if (it->isEmpty())
+    m_mockVolumes.erase(it);
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+#endif
+}
+
+bool ProjectServiceMock::addVolume(int objectIndex, int volumeType)
+{
+  if (loading_)
+  {
+    lastError_ = tr("加载中，无法添加部件");
+    emit projectChanged();
+    return false;
+  }
+
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+  {
+    lastError_ = tr("添加失败：对象索引无效");
+    emit projectChanged();
+    return false;
+  }
+
+  if (volumeType < 0 || volumeType > 4)
+  {
+    lastError_ = tr("添加失败：部件类型无效");
+    emit projectChanged();
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  // TODO: upstream ModelObject::add_volume() integration
+  lastError_ = tr("真实模式添加部件待实现");
   emit projectChanged();
   return false;
+#else
+  auto type = static_cast<MockVolumeType>(volumeType);
+  MockVolumeEntry entry;
+  entry.type = type;
+
+  // Generate name (对齐上游 GUI_ObjectList::load_generic_subobject 命名)
+  static const char *typeNames[] = {
+    QT_TRANSLATE_NOOP("ProjectServiceMock", "部件"),
+    QT_TRANSLATE_NOOP("ProjectServiceMock", "负体积"),
+    QT_TRANSLATE_NOOP("ProjectServiceMock", "修改器"),
+    QT_TRANSLATE_NOOP("ProjectServiceMock", "支撑屏蔽"),
+    QT_TRANSLATE_NOOP("ProjectServiceMock", "支撑增强"),
+  };
+  int count = 0;
+  auto it = m_mockVolumes.find(objectIndex);
+  if (it != m_mockVolumes.end())
+  {
+    for (const auto &v : *it)
+      if (v.type == type)
+        ++count;
+  }
+  entry.name = tr(typeNames[volumeType]) + QString(" %1").arg(count + 1);
+
+  if (it == m_mockVolumes.end())
+    it = m_mockVolumes.insert(objectIndex, {});
+  it->append(entry);
+
+  lastError_.clear();
+  emit projectChanged();
+  return true;
 #endif
+}
+
+bool ProjectServiceMock::changeVolumeType(int objectIndex, int volumeIndex, int newVolumeType)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+  {
+    lastError_ = tr("类型转换失败：对象索引无效");
+    return false;
+  }
+  if (newVolumeType < 0 || newVolumeType > 4)
+  {
+    lastError_ = tr("类型转换失败：目标类型无效");
+    return false;
+  }
+
+  auto it = m_mockVolumes.find(objectIndex);
+  if (it == m_mockVolumes.end() || volumeIndex < 0 || volumeIndex >= it->size())
+  {
+    lastError_ = tr("类型转换失败：部件索引无效");
+    return false;
+  }
+
+  auto oldType = it->at(volumeIndex).type;
+  auto newType = static_cast<MockVolumeType>(newVolumeType);
+  if (oldType == newType)
+    return true; // no change
+
+  // 对齐上游约束：转换时保留部件名，但更新类型
+  it->operator[](volumeIndex).type = newType;
+
+  // 更新部件名称前缀
+  static const char *typeNames[] = {
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "部件"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "负体积"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "修改器"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "支撑屏蔽"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "支撑增强"),
+  };
+  // 保留编号，更新类型名
+  QString oldName = it->at(volumeIndex).name;
+  QRegularExpression re(QStringLiteral("^(?:部件|负体积|修改器|支撑屏蔽|支撑增强)\\s+(\\d+)$"));
+  auto match = re.match(oldName);
+  if (match.hasMatch())
+    it->operator[](volumeIndex).name = tr(typeNames[newVolumeType]) + QStringLiteral(" ") + match.captured(1);
+
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+}
+
+// ── Layer range support (对齐上游 ModelObject::layer_config_ranges) ──
+
+QList<MockLayerRange> ProjectServiceMock::objectLayerRanges(int objectIndex) const
+{
+  return m_mockLayerRanges.value(objectIndex);
+}
+
+bool ProjectServiceMock::addObjectLayerRange(int objectIndex, double minZ, double maxZ)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+    return false;
+  if (minZ >= maxZ)
+    return false;
+
+  MockLayerRange range;
+  range.minZ = minZ;
+  range.maxZ = maxZ;
+  m_mockLayerRanges[objectIndex].append(range);
+  return true;
+}
+
+bool ProjectServiceMock::removeObjectLayerRange(int objectIndex, int rangeIndex)
+{
+  auto it = m_mockLayerRanges.find(objectIndex);
+  if (it == m_mockLayerRanges.end())
+    return false;
+  if (rangeIndex < 0 || rangeIndex >= it->size())
+    return false;
+  it->removeAt(rangeIndex);
+  return true;
+}
+
+bool ProjectServiceMock::setLayerRangeValue(int objectIndex, int rangeIndex, const QString &key, const QVariant &value)
+{
+  auto it = m_mockLayerRanges.find(objectIndex);
+  if (it == m_mockLayerRanges.end())
+    return false;
+  if (rangeIndex < 0 || rangeIndex >= it->size())
+    return false;
+  it->operator[](rangeIndex).overrides[key] = value;
+  return true;
+}
+
+QVariant ProjectServiceMock::layerRangeValue(int objectIndex, int rangeIndex, const QString &key, const QVariant &fallback) const
+{
+  auto it = m_mockLayerRanges.constFind(objectIndex);
+  if (it == m_mockLayerRanges.cend())
+    return fallback;
+  if (rangeIndex < 0 || rangeIndex >= it->size())
+    return fallback;
+  return it->at(rangeIndex).overrides.value(key, fallback);
 }
 
 bool ProjectServiceMock::deleteObject(int index)
@@ -963,7 +1402,9 @@ bool ProjectServiceMock::deleteObject(int index)
     objectModuleNames_.clear();
     objectModuleNames_.reserve(int(model_->objects.size()));
     objectPrintableStates_.clear();
+    objectVisibleStates_.clear();
     objectPrintableStates_.reserve(int(model_->objects.size()));
+    objectVisibleStates_.reserve(int(model_->objects.size()));
     for (size_t i = 0; i < model_->objects.size(); ++i)
     {
       const auto *obj = model_->objects[i];
@@ -979,11 +1420,28 @@ bool ProjectServiceMock::deleteObject(int index)
 
       const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
       objectPrintableStates_.append(printable);
+
+      const bool vis = obj && !obj->instances.empty() ? obj->instances.front()->is_printable() : true;
+      objectVisibleStates_.append(vis);
     }
 #else
+    // Clean up mock volumes and layer ranges for this object
+    m_mockVolumes.remove(index);
+    m_mockLayerRanges.remove(index);
+    // Shift volume keys for objects after deleted one
+    QHash<int, QList<MockVolumeEntry>> shiftedVolumes;
+    for (auto it = m_mockVolumes.constBegin(); it != m_mockVolumes.constEnd(); ++it)
+    {
+      int newObjIndex = (it.key() > index) ? it.key() - 1 : it.key();
+      shiftedVolumes[newObjIndex] = it.value();
+    }
+    m_mockVolumes = shiftedVolumes;
+
     objectNames_.removeAt(index);
     objectModuleNames_.removeAt(index);
     objectPrintableStates_.removeAt(index);
+    if (index < objectVisibleStates_.size())
+      objectVisibleStates_.removeAt(index);
 #endif
 
     modelCount_ = objectNames_.size();
@@ -993,6 +1451,7 @@ bool ProjectServiceMock::deleteObject(int index)
       currentPlateIndex_ = -1;
       plateNames_.clear();
       plateObjectIndices_.clear();
+      plateLockedStates_.clear();
     }
     else
     {
@@ -1067,6 +1526,358 @@ bool ProjectServiceMock::deleteObject(int index)
   }
 }
 
+bool ProjectServiceMock::renameObject(int index, const QString &newName)
+{
+  if (index < 0 || index >= objectNames_.size())
+    return false;
+  objectNames_[index] = newName;
+  emit projectChanged();
+  return true;
+}
+
+bool ProjectServiceMock::moveObject(int fromIndex, int toIndex)
+{
+  if (fromIndex < 0 || fromIndex >= objectNames_.size())
+    return false;
+  if (toIndex < 0 || toIndex >= objectNames_.size())
+    return false;
+  if (fromIndex == toIndex)
+    return true;
+
+  // Swap all parallel arrays at fromIndex ↔ toIndex
+  std::swap(objectNames_[fromIndex], objectNames_[toIndex]);
+  std::swap(objectModuleNames_[fromIndex], objectModuleNames_[toIndex]);
+  std::swap(objectPrintableStates_[fromIndex], objectPrintableStates_[toIndex]);
+  std::swap(objectVisibleStates_[fromIndex], objectVisibleStates_[toIndex]);
+  if (fromIndex < objectPositions_.size() && toIndex < objectPositions_.size()) {
+    std::swap(objectPositions_[fromIndex], objectPositions_[toIndex]);
+    std::swap(objectRotations_[fromIndex], objectRotations_[toIndex]);
+    std::swap(objectScales_[fromIndex], objectScales_[toIndex]);
+  }
+
+  // Update plateObjectIndices_ references
+  for (auto &indices : plateObjectIndices_) {
+    for (int &idx : indices) {
+      if (idx == fromIndex) idx = toIndex;
+      else if (idx == toIndex) idx = fromIndex;
+    }
+  }
+
+  // Swap per-object scoped overrides
+  if (m_mockObjectOverrides.contains(fromIndex) || m_mockObjectOverrides.contains(toIndex)) {
+    auto fromOverrides = m_mockObjectOverrides.take(fromIndex);
+    auto toOverrides = m_mockObjectOverrides.take(toIndex);
+    if (!fromOverrides.isEmpty()) m_mockObjectOverrides[toIndex] = fromOverrides;
+    if (!toOverrides.isEmpty()) m_mockObjectOverrides[fromIndex] = toOverrides;
+  }
+
+  emit projectChanged();
+  return true;
+}
+
+int ProjectServiceMock::plateBedType(int plateIndex) const
+{
+  return (plateIndex >= 0 && plateIndex < plateBedTypes_.size()) ? plateBedTypes_[plateIndex] : 0;
+}
+
+bool ProjectServiceMock::setPlateBedType(int plateIndex, int bedType)
+{
+  if (plateIndex < 0 || plateIndex >= plateNames_.size()) return false;
+  while (plateBedTypes_.size() <= plateIndex) plateBedTypes_.append(0);
+  plateBedTypes_[plateIndex] = bedType;
+  emit projectChanged();
+  return true;
+}
+
+int ProjectServiceMock::platePrintSequence(int plateIndex) const
+{
+  return (plateIndex >= 0 && plateIndex < platePrintSequences_.size()) ? platePrintSequences_[plateIndex] : 0;
+}
+
+bool ProjectServiceMock::setPlatePrintSequence(int plateIndex, int seq)
+{
+  if (plateIndex < 0 || plateIndex >= plateNames_.size()) return false;
+  while (platePrintSequences_.size() <= plateIndex) platePrintSequences_.append(0);
+  platePrintSequences_[plateIndex] = seq;
+  emit projectChanged();
+  return true;
+}
+
+int ProjectServiceMock::plateSpiralMode(int plateIndex) const
+{
+  return (plateIndex >= 0 && plateIndex < plateSpiralModes_.size()) ? plateSpiralModes_[plateIndex] : 0;
+}
+
+bool ProjectServiceMock::setPlateSpiralMode(int plateIndex, int mode)
+{
+  if (plateIndex < 0 || plateIndex >= plateNames_.size()) return false;
+  while (plateSpiralModes_.size() <= plateIndex) plateSpiralModes_.append(0);
+  plateSpiralModes_[plateIndex] = mode;
+  emit projectChanged();
+  return true;
+}
+
+int ProjectServiceMock::duplicateObject(int sourceIndex)
+{
+  if (loading_)
+  {
+    lastError_ = tr("加载中，无法复制对象");
+    emit projectChanged();
+    return -1;
+  }
+
+  if (sourceIndex < 0 || sourceIndex >= objectNames_.size())
+  {
+    lastError_ = tr("复制失败：对象索引无效");
+    emit projectChanged();
+    return -1;
+  }
+
+  try
+  {
+#ifdef HAS_LIBSLIC3R
+    if (!model_ || size_t(sourceIndex) >= model_->objects.size() || !model_->objects[size_t(sourceIndex)])
+    {
+      lastError_ = tr("复制失败：模型对象无效");
+      emit projectChanged();
+      return -1;
+    }
+
+    auto *srcObj = model_->objects[size_t(sourceIndex)];
+
+    // 对齐上游 Plater::clone_selection → Selection::paste_objects_from_clipboard
+    // 深拷贝 ModelObject（含所有 volumes、config），并偏移新实例位置
+    auto *newObj = model_->add_object(*srcObj);
+    newObj->name = srcObj->name + " " + QObject::tr("(副本)").toStdString();
+
+    // 给新对象的所有实例增加 X 偏移（匹配上游 find_displacements 的 20mm 间距）
+    const double cloneOffset = 20.0;
+    for (auto *inst : newObj->instances)
+    {
+      if (!inst)
+        continue;
+      inst->set_offset(Slic3r::Vec3d(
+          inst->get_offset(X) + cloneOffset,
+          inst->get_offset(Y),
+          inst->get_offset(Z)));
+    }
+
+    // 重建元数据
+    objectNames_.clear();
+    objectNames_.reserve(int(model_->objects.size()));
+    objectModuleNames_.clear();
+    objectModuleNames_.reserve(int(model_->objects.size()));
+    objectPrintableStates_.clear();
+    objectVisibleStates_.clear();
+    objectPrintableStates_.reserve(int(model_->objects.size()));
+    objectVisibleStates_.reserve(int(model_->objects.size()));
+    for (size_t i = 0; i < model_->objects.size(); ++i)
+    {
+      const auto *obj = model_->objects[i];
+      if (obj && !obj->name.empty())
+        objectNames_ << QString::fromStdString(obj->name);
+      else
+        objectNames_ << tr("对象 %1").arg(int(i + 1));
+
+      if (obj && !obj->module_name.empty())
+        objectModuleNames_ << QString::fromStdString(obj->module_name);
+      else
+        objectModuleNames_ << tr("默认模块");
+
+      const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
+      objectPrintableStates_.append(printable);
+
+      const bool vis = obj && !obj->instances.empty() ? obj->instances.front()->is_printable() : true;
+      objectVisibleStates_.append(vis);
+    }
+
+    const int newIndex = int(model_->objects.size()) - 1;
+#else
+    Q_UNUSED(sourceIndex);
+
+    // Mock 模式：复制元数据
+    const QString newName = objectNames_[sourceIndex] + " " + tr("(副本)");
+    const QString moduleName = objectModuleNames_[sourceIndex];
+    const bool printable = objectPrintableStates_[sourceIndex];
+    const bool vis = sourceIndex < objectVisibleStates_.size() ? objectVisibleStates_[sourceIndex] : true;
+
+    // 在 sourceIndex+1 处插入
+    const int insertPos = sourceIndex + 1;
+    objectNames_.insert(insertPos, newName);
+    objectModuleNames_.insert(insertPos, moduleName);
+    objectPrintableStates_.insert(insertPos, printable);
+    objectVisibleStates_.insert(insertPos, vis);
+
+    // 更新 plate 对象索引（所有 > sourceIndex 的索引 +1）
+    for (auto &plateObjList : plateObjectIndices_)
+    {
+      for (int j = 0; j < plateObjList.size(); ++j)
+      {
+        if (plateObjList[j] > sourceIndex)
+          ++plateObjList[j];
+      }
+    }
+
+    // 将新对象加入当前 plate
+    if (currentPlateIndex_ >= 0 && currentPlateIndex_ < plateObjectIndices_.size())
+    {
+      plateObjectIndices_[currentPlateIndex_].append(insertPos);
+      std::sort(plateObjectIndices_[currentPlateIndex_].begin(),
+                plateObjectIndices_[currentPlateIndex_].end());
+    }
+
+    const int newIndex = insertPos;
+#endif
+
+    modelCount_ = objectNames_.size();
+    lastError_.clear();
+    emit projectChanged();
+    emit plateDataLoaded(plateCount_);
+    return newIndex;
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = QString::fromStdString(ex.what());
+    emit projectChanged();
+    return -1;
+  }
+  catch (...)
+  {
+    lastError_ = tr("复制失败：未知错误");
+    emit projectChanged();
+    return -1;
+  }
+}
+
+int ProjectServiceMock::addObject(const QString &name)
+{
+  if (loading_)
+  {
+    lastError_ = tr("加载中，无法添加对象");
+    emit projectChanged();
+    return -1;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  // 真实模式：通过 libslic3r Model 添加空对象
+  try
+  {
+    if (!model_)
+    {
+      model_ = new Slic3r::Model();
+      model_->add_default_instances();
+    }
+    auto *obj = model_->add_object();
+    obj->name = name.toStdString();
+    obj->module_name = "default";
+    auto *inst = obj->add_instance();
+    inst->set_offset(Slic3r::Vec3d(0, 0, 0));
+
+    // 重建元数据
+    objectNames_.clear();
+    objectModuleNames_.clear();
+    objectPrintableStates_.clear();
+    objectVisibleStates_.clear();
+    for (size_t i = 0; i < model_->objects.size(); ++i)
+    {
+      const auto *o = model_->objects[i];
+      objectNames_ << (o ? QString::fromStdString(o->name) : tr("对象 %1").arg(int(i + 1)));
+      objectModuleNames_ << (o ? QString::fromStdString(o->module_name) : tr("默认模块"));
+      const bool pr = o && !o->instances.empty() ? o->instances.front()->printable : true;
+      objectPrintableStates_.append(pr);
+      objectVisibleStates_.append(true);
+    }
+
+    const int newIndex = int(model_->objects.size()) - 1;
+    modelCount_ = objectNames_.size();
+    emit projectChanged();
+    return newIndex;
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = QString::fromStdString(ex.what());
+    emit projectChanged();
+    return -1;
+  }
+#else
+  Q_UNUSED(name);
+  // Mock 模式：添加一个空对象到当前平板末尾
+  const QString newName = tr("新对象");
+  const int insertPos = objectNames_.size();
+  objectNames_.append(newName);
+  objectModuleNames_.append(tr("默认模块"));
+  objectPrintableStates_.append(true);
+  objectVisibleStates_.append(true);
+  objectPositions_.append(QVector3D(0, 0, 0));
+  objectRotations_.append(QVector3D(0, 0, 0));
+  objectScales_.append(QVector3D(1, 1, 1));
+
+  if (currentPlateIndex_ >= 0 && currentPlateIndex_ < plateObjectIndices_.size())
+  {
+    plateObjectIndices_[currentPlateIndex_].append(insertPos);
+  }
+
+  modelCount_ = objectNames_.size();
+  lastError_.clear();
+  emit projectChanged();
+  emit plateDataLoaded(plateCount_);
+  return insertPos;
+#endif
+}
+
+QVector3D ProjectServiceMock::objectPosition(int index) const
+{
+  return (index >= 0 && index < objectPositions_.size()) ? objectPositions_[index] : QVector3D(0, 0, 0);
+}
+
+QVector3D ProjectServiceMock::objectRotation(int index) const
+{
+  return (index >= 0 && index < objectRotations_.size()) ? objectRotations_[index] : QVector3D(0, 0, 0);
+}
+
+QVector3D ProjectServiceMock::objectScale(int index) const
+{
+  return (index >= 0 && index < objectScales_.size()) ? objectScales_[index] : QVector3D(1, 1, 1);
+}
+
+bool ProjectServiceMock::setObjectPosition(int index, float x, float y, float z)
+{
+  if (index < 0 || index >= objectNames_.size())
+    return false;
+  while (objectPositions_.size() <= index)
+    objectPositions_.append(QVector3D(0, 0, 0));
+  objectPositions_[index] = QVector3D(x, y, z);
+  emit projectChanged();
+  return true;
+}
+
+bool ProjectServiceMock::setObjectRotation(int index, float x, float y, float z)
+{
+  if (index < 0 || index >= objectNames_.size())
+    return false;
+  while (objectRotations_.size() <= index)
+    objectRotations_.append(QVector3D(0, 0, 0));
+  objectRotations_[index] = QVector3D(x, y, z);
+  emit projectChanged();
+  return true;
+}
+
+bool ProjectServiceMock::setObjectScale(int index, float x, float y, float z)
+{
+  if (index < 0 || index >= objectNames_.size())
+    return false;
+  while (objectScales_.size() <= index)
+    objectScales_.append(QVector3D(1, 1, 1));
+  objectScales_[index] = QVector3D(x, y, z);
+  emit projectChanged();
+  return true;
+}
+
+bool ProjectServiceMock::setObjectScaleUniform(int index, float s)
+{
+  return setObjectScale(index, s, s, s);
+}
+
 void ProjectServiceMock::clearProject()
 {
   if (loading_)
@@ -1080,8 +1891,14 @@ void ProjectServiceMock::clearProject()
   objectNames_.clear();
   objectModuleNames_.clear();
   objectPrintableStates_.clear();
+  objectVisibleStates_.clear();
   plateNames_.clear();
   plateObjectIndices_.clear();
+  plateLockedStates_.clear();
+  objectPositions_.clear();
+  objectRotations_.clear();
+  objectScales_.clear();
+  m_mockVolumes.clear();
   lastError_.clear();
   loadProgress_ = 0;
   loading_ = false;
@@ -1100,6 +1917,229 @@ void ProjectServiceMock::clearProject()
   emit projectChanged();
   emit plateDataLoaded(0);
   emit plateSelectionChanged();
+}
+
+bool ProjectServiceMock::saveProject(const QString &filePath)
+{
+  if (loading_)
+  {
+    lastError_ = tr("加载中，无法保存");
+    emit projectChanged();
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  // TODO: 调用真实 3MF writer (bbs_3mf export)
+  // wxGetApp().plater()->save_project(filePath) equivalent
+  lastError_ = tr("3MF 导出尚未实现");
+  emit projectChanged();
+  return false;
+#else
+  // Mock mode: save project metadata as JSON
+  if (filePath.isEmpty())
+  {
+    lastError_ = tr("保存路径为空");
+    emit projectChanged();
+    return false;
+  }
+
+  QJsonDocument doc;
+  QJsonObject root;
+
+  root[QStringLiteral("name")] = projectName_;
+  root[QStringLiteral("source")] = sourceFilePath_;
+  root[QStringLiteral("currentPlate")] = currentPlateIndex_;
+
+  // Save plates
+  QJsonArray platesArr;
+  for (int p = 0; p < plateCount_; ++p)
+  {
+    QJsonObject plateObj;
+    plateObj[QStringLiteral("name")] = plateNames_.value(p, QStringLiteral("Plate %1").arg(p + 1));
+    plateObj[QStringLiteral("locked")] = plateLockedStates_.value(p, false);
+
+    QJsonArray objsArr;
+    for (int oi : plateObjectIndices_.value(p, QList<int>{}))
+    {
+      QJsonObject objObj;
+      objObj[QStringLiteral("name")] = objectNames_.value(oi, QString());
+      objObj[QStringLiteral("module")] = objectModuleNames_.value(oi, QString());
+      objObj[QStringLiteral("printable")] = objectPrintableStates_.value(oi, true);
+      objObj[QStringLiteral("visible")] = objectVisibleStates_.value(oi, true);
+
+      // Save transforms
+      const QVector3D pos = objectPositions_.value(oi, QVector3D(0, 0, 0));
+      const QVector3D rot = objectRotations_.value(oi, QVector3D(0, 0, 0));
+      const QVector3D scl = objectScales_.value(oi, QVector3D(1, 1, 1));
+      objObj[QStringLiteral("position")] = QJsonArray{pos.x(), pos.y(), pos.z()};
+      objObj[QStringLiteral("rotation")] = QJsonArray{rot.x(), rot.y(), rot.z()};
+      objObj[QStringLiteral("scale")] = QJsonArray{scl.x(), scl.y(), scl.z()};
+
+      // Save per-object overrides
+      const auto oit = m_mockObjectOverrides.constFind(oi);
+      if (oit != m_mockObjectOverrides.constEnd() && !oit->isEmpty())
+      {
+        QJsonObject overrides;
+        for (auto kvIt = oit->constBegin(); kvIt != oit->constEnd(); ++kvIt)
+          overrides[kvIt.key()] = QJsonValue::fromVariant(kvIt.value());
+        objObj[QStringLiteral("overrides")] = overrides;
+      }
+
+      objsArr.append(objObj);
+    }
+    plateObj[QStringLiteral("objects")] = objsArr;
+    platesArr.append(plateObj);
+  }
+  root[QStringLiteral("plates")] = platesArr;
+
+  doc.setObject(root);
+
+  QFile file(filePath);
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+  {
+    lastError_ = tr("无法打开文件: %1").arg(filePath);
+    emit projectChanged();
+    return false;
+  }
+
+  const QByteArray data = doc.toJson(QJsonDocument::Indented);
+  if (file.write(data) != data.size())
+  {
+    lastError_ = tr("写入文件失败");
+    file.close();
+    emit projectChanged();
+    return false;
+  }
+
+  file.close();
+  sourceFilePath_ = filePath;
+  // Derive project name from path
+  QFileInfo fi(filePath);
+  projectName_ = fi.completeBaseName();
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+#endif
+}
+
+bool ProjectServiceMock::loadProject(const QString &filePath)
+{
+  if (filePath.isEmpty())
+  {
+    lastError_ = tr("加载路径为空");
+    return false;
+  }
+
+  QFileInfo fi(filePath);
+  if (!fi.exists())
+  {
+    lastError_ = tr("文件不存在: %1").arg(filePath);
+    return false;
+  }
+
+  QFile file(filePath);
+  if (!file.open(QIODevice::ReadOnly))
+  {
+    lastError_ = tr("无法打开文件: %1").arg(filePath);
+    return false;
+  }
+
+  const QByteArray raw = file.readAll();
+  file.close();
+
+  QJsonParseError parseErr;
+  const QJsonDocument doc = QJsonDocument::fromJson(raw, &parseErr);
+  if (doc.isNull())
+  {
+    lastError_ = tr("JSON 解析失败: %1").arg(parseErr.errorString());
+    return false;
+  }
+
+  const QJsonObject root = doc.object();
+
+  // Clear existing state
+  objectNames_.clear();
+  objectModuleNames_.clear();
+  objectPrintableStates_.clear();
+  objectVisibleStates_.clear();
+  plateNames_.clear();
+  plateObjectIndices_.clear();
+  plateLockedStates_.clear();
+  m_mockObjectOverrides.clear();
+  m_mockVolumeOverrides.clear();
+  m_mockPlateOverrides.clear();
+
+  // Restore project name
+  projectName_ = root.value(QStringLiteral("name")).toString(fi.completeBaseName());
+  sourceFilePath_ = root.value(QStringLiteral("source")).toString(filePath);
+
+  // Restore plates and objects
+  const QJsonArray platesArr = root.value(QStringLiteral("plates")).toArray();
+  int globalObjectIdx = 0;
+  for (int p = 0; p < platesArr.size(); ++p)
+  {
+    const QJsonObject plateObj = platesArr[p].toObject();
+    plateNames_.append(plateObj.value(QStringLiteral("name")).toString(
+                         QStringLiteral("Plate %1").arg(p + 1)));
+    plateLockedStates_.append(plateObj.value(QStringLiteral("locked")).toBool(false));
+
+    QList<int> objIndices;
+    const QJsonArray objsArr = plateObj.value(QStringLiteral("objects")).toArray();
+    for (int oi = 0; oi < objsArr.size(); ++oi)
+    {
+      const QJsonObject objObj = objsArr[oi].toObject();
+      const int idx = globalObjectIdx++;
+
+      objectNames_.append(objObj.value(QStringLiteral("name")).toString(
+                            QStringLiteral("Object %1").arg(idx + 1)));
+      objectModuleNames_.append(objObj.value(QStringLiteral("module")).toString());
+      objectPrintableStates_.append(objObj.value(QStringLiteral("printable")).toBool(true));
+      objectVisibleStates_.append(objObj.value(QStringLiteral("visible")).toBool(true));
+
+      // Restore transforms
+      const QJsonArray posArr = objObj.value(QStringLiteral("position")).toArray();
+      objectPositions_.append(posArr.size() == 3
+        ? QVector3D(float(posArr[0].toDouble()), float(posArr[1].toDouble()), float(posArr[2].toDouble()))
+        : QVector3D(0, 0, 0));
+      const QJsonArray rotArr = objObj.value(QStringLiteral("rotation")).toArray();
+      objectRotations_.append(rotArr.size() == 3
+        ? QVector3D(float(rotArr[0].toDouble()), float(rotArr[1].toDouble()), float(rotArr[2].toDouble()))
+        : QVector3D(0, 0, 0));
+      const QJsonArray sclArr = objObj.value(QStringLiteral("scale")).toArray();
+      objectScales_.append(sclArr.size() == 3
+        ? QVector3D(float(sclArr[0].toDouble()), float(sclArr[1].toDouble()), float(sclArr[2].toDouble()))
+        : QVector3D(1, 1, 1));
+
+      // Restore per-object overrides
+      const QJsonObject overrides = objObj.value(QStringLiteral("overrides")).toObject();
+      if (!overrides.isEmpty())
+      {
+        QHash<QString, QVariant> overrideMap;
+        for (auto it = overrides.constBegin(); it != overrides.constEnd(); ++it)
+          overrideMap[it.key()] = it.value().toVariant();
+        m_mockObjectOverrides[idx] = overrideMap;
+      }
+
+      objIndices.append(idx);
+    }
+    plateObjectIndices_.append(objIndices);
+  }
+
+  plateCount_ = plateNames_.size();
+  modelCount_ = objectNames_.size();
+  currentPlateIndex_ = qBound(0, root.value(QStringLiteral("currentPlate")).toInt(0),
+                              qMax(0, plateCount_ - 1));
+  loadProgress_ = 100;
+  loading_ = false;
+  lastError_.clear();
+
+  emit projectChanged();
+  emit plateDataLoaded(plateCount_);
+  emit plateSelectionChanged();
+  emit loadProgressChanged();
+  emit loadingChanged();
+  emit loadFinished(true, filePath);
+  return true;
 }
 
 QByteArray ProjectServiceMock::meshData() const
