@@ -9,6 +9,12 @@ Dialog {
     id: root
     required property var calibrationVm
 
+    // Hardware calibration options (对齐上游 CalibrationDialog checkboxes)
+    property bool hardwareLidar: true
+    property bool hardwareBedLevel: true
+    property bool hardwareVibration: true
+    property bool hardwareMotor: false
+
     modal: true
     closePolicy: root.calibrationVm && root.calibrationVm.isRunning
                  ? Popup.NoAutoClose          // 校准进行中禁止点外部关闭
@@ -97,6 +103,220 @@ Dialog {
                         color: "#22c564"
                         Behavior on width { NumberAnimation { duration: 200 } }
                     }
+                }
+            }
+        }
+
+        // 分割线
+        Rectangle { Layout.fillWidth: true; height: 1; color: "#1e2535" }
+
+        // 硬件校准选项（对齐上游 CalibrationDialog::create_check_option）
+        // 上游有 4 个 checkbox: xcam_cali, bed_leveling, vibration, motor_noise
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 8
+            visible: !root.calibrationVm || !root.calibrationVm.isRunning
+
+            Text {
+                text: qsTr("硬件校准选项")
+                color: "#9daaba"
+                font.pixelSize: 11
+                font.bold: true
+            }
+
+            // Micro lidar calibration (对齐上游 xcam_cali)
+            Rectangle {
+                Layout.fillWidth: true
+                height: 28
+                radius: 4
+                color: lidarMA.containsMouse ? "#1e2535" : "transparent"
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 4
+                    anchors.rightMargin: 4
+                    spacing: 8
+
+                    Rectangle {
+                        width: 16; height: 16; radius: 3
+                        color: hardwareLidar ? "#22c55e" : "transparent"
+                        border.color: hardwareLidar ? "#22c55e" : "#4a5568"
+                        border.width: 1.5
+                        Text {
+                            anchors.centerIn: parent
+                            text: hardwareLidar ? "\u2713" : ""
+                            color: "white"
+                            font.pixelSize: 10
+                            font.bold: true
+                        }
+                    }
+
+                    Text {
+                        text: qsTr("微型激光雷达校准")
+                        color: "#c8d4e0"
+                        font.pixelSize: 11
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Text {
+                        text: qsTr("AI 监控")
+                        color: "#6b7a8d"
+                        font.pixelSize: 9
+                    }
+                }
+
+                MouseArea {
+                    id: lidarMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: hardwareLidar = !hardwareLidar
+                }
+            }
+
+            // Bed leveling (对齐上游 bed_leveling)
+            Rectangle {
+                Layout.fillWidth: true
+                height: 28
+                radius: 4
+                color: bedMA.containsMouse ? "#1e2535" : "transparent"
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 4
+                    anchors.rightMargin: 4
+                    spacing: 8
+
+                    Rectangle {
+                        width: 16; height: 16; radius: 3
+                        color: hardwareBedLevel ? "#22c55e" : "transparent"
+                        border.color: hardwareBedLevel ? "#22c55e" : "#4a5568"
+                        border.width: 1.5
+                        Text {
+                            anchors.centerIn: parent
+                            text: hardwareBedLevel ? "\u2713" : ""
+                            color: "white"
+                            font.pixelSize: 10
+                            font.bold: true
+                        }
+                    }
+
+                    Text {
+                        text: qsTr("热床调平")
+                        color: "#c8d4e0"
+                        font.pixelSize: 11
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Text {
+                        text: qsTr("自动")
+                        color: "#6b7a8d"
+                        font.pixelSize: 9
+                    }
+                }
+
+                MouseArea {
+                    id: bedMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: hardwareBedLevel = !hardwareBedLevel
+                }
+            }
+
+            // Vibration compensation (对齐上游 vibration, always shown)
+            Rectangle {
+                Layout.fillWidth: true
+                height: 28
+                radius: 4
+                color: vibMA.containsMouse ? "#1e2535" : "transparent"
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 4
+                    anchors.rightMargin: 4
+                    spacing: 8
+
+                    Rectangle {
+                        width: 16; height: 16; radius: 3
+                        color: hardwareVibration ? "#22c55e" : "transparent"
+                        border.color: hardwareVibration ? "#22c55e" : "#4a5568"
+                        border.width: 1.5
+                        Text {
+                            anchors.centerIn: parent
+                            text: hardwareVibration ? "\u2713" : ""
+                            color: "white"
+                            font.pixelSize: 10
+                            font.bold: true
+                        }
+                    }
+
+                    Text {
+                        text: qsTr("振动补偿")
+                        color: "#c8d4e0"
+                        font.pixelSize: 11
+                    }
+                }
+
+                MouseArea {
+                    id: vibMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: hardwareVibration = !hardwareVibration
+                }
+            }
+
+            // Motor noise cancellation (对齐上游 motor_noise)
+            Rectangle {
+                Layout.fillWidth: true
+                height: 28
+                radius: 4
+                color: motorMA.containsMouse ? "#1e2535" : "transparent"
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 4
+                    anchors.rightMargin: 4
+                    spacing: 8
+
+                    Rectangle {
+                        width: 16; height: 16; radius: 3
+                        color: hardwareMotor ? "#22c55e" : "transparent"
+                        border.color: hardwareMotor ? "#22c55e" : "#4a5568"
+                        border.width: 1.5
+                        Text {
+                            anchors.centerIn: parent
+                            text: hardwareMotor ? "\u2713" : ""
+                            color: "white"
+                            font.pixelSize: 10
+                            font.bold: true
+                        }
+                    }
+
+                    Text {
+                        text: qsTr("电机降噪")
+                        color: "#c8d4e0"
+                        font.pixelSize: 11
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Text {
+                        text: qsTr("可选")
+                        color: "#6b7a8d"
+                        font.pixelSize: 9
+                    }
+                }
+
+                MouseArea {
+                    id: motorMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: hardwareMotor = !hardwareMotor
                 }
             }
         }

@@ -32,26 +32,28 @@ ApplicationWindow {
     readonly property color topbarText: "#cdd7e6"
 
     property var workflowTabs: buildWorkflowTabs()
+    property var hiddenTabs: ({})
     property int pendingSwitchToken: -1
     property int pendingSwitchTargetPage: -1
+
+    function toggleTabVisibility(pageIdx) {
+        var copy = Object.assign({}, hiddenTabs)
+        if (copy[pageIdx])
+            delete copy[pageIdx]
+        else
+            copy[pageIdx] = true
+        hiddenTabs = copy
+        workflowTabs = buildWorkflowTabs()
+    }
+
     function buildWorkflowTabs() {
-        return [
+        var allTabs = [
             { label: qsTr("在线模型"), page: root.pageOnline },
             { label: qsTr("准备"), page: root.pagePrepare },
             { label: qsTr("预览"), page: root.pagePreview },
             { label: qsTr("设备"), page: root.pageDevice }
         ]
-    }
-
-    function currentProjectTitle() {
-        if (backend.editorViewModel && backend.editorViewModel.projectName && backend.editorViewModel.projectName.length > 0)
-            return backend.editorViewModel.projectName
-        if (backend.projectViewModel && backend.projectViewModel.currentProjectPath && backend.projectViewModel.currentProjectPath.length > 0) {
-            var p = backend.projectViewModel.currentProjectPath.toString()
-            var parts = p.split(/[\\/]/)
-            return parts.length > 0 ? parts[parts.length - 1] : p
-        }
-        return qsTr("未命名")
+        return allTabs.filter(function(t) { return !hiddenTabs[t.page] })
     }
 
     component TitleBarDivider: Rectangle {
@@ -92,7 +94,7 @@ ApplicationWindow {
     FileDialog {
         id: openProjectDialog
         title: qsTr("打开项目")
-        nameFilters: [qsTr("项目文件 (*.3mf *.cxprj)"), qsTr("所有文件 (*)")]
+        nameFilters: [qsTr("项目文件 (*.3mf *.cxprj *.json)"), qsTr("所有文件 (*)")]
         onAccepted: {
             backend.topbarOpenProject(selectedFile.toString())
         }
@@ -102,7 +104,7 @@ ApplicationWindow {
         id: saveProjectAsDialog
         title: qsTr("项目另存为")
         fileMode: FileDialog.SaveFile
-        nameFilters: [qsTr("项目文件 (*.3mf *.cxprj)")]
+        nameFilters: [qsTr("项目文件 (*.3mf *.cxprj)"), qsTr("项目元数据 (*.json)")]
         onAccepted: {
             backend.topbarSaveProjectAs(selectedFile.toString())
         }
@@ -110,7 +112,10 @@ ApplicationWindow {
 
     Menu {
         id: fileMenu
-        MenuItem { text: qsTr("新建项目"); onTriggered: backend.topbarNewProject() }
+        MenuItem {
+            text: qsTr("新建项目")
+            onTriggered: newProjectDialog.open()
+        }
         MenuItem { text: qsTr("打开项目..."); onTriggered: openProjectDialog.open() }
         MenuItem { text: qsTr("导入模型..."); onTriggered: openModelDialog.open() }
         MenuSeparator {}
@@ -152,7 +157,7 @@ ApplicationWindow {
     Menu {
         id: dropdownMenu
         // View items (matching upstream View menu)
-        MenuItem { text: qsTr("适应视图"); shortcut: "F"; onTriggered: preparePage.applyFitHintIfReady() }
+        MenuItem { text: qsTr("适应视图"); onTriggered: preparePage.applyFitHintIfReady() }
         MenuItem { text: preparePage.viewport3dRef.wireframeMode ? qsTr("关闭线框模式") : qsTr("线框模式"); onTriggered: preparePage.viewport3dRef.wireframeMode = !preparePage.viewport3dRef.wireframeMode }
         MenuSeparator {}
         // Settings items
@@ -162,38 +167,318 @@ ApplicationWindow {
         MenuItem { text: qsTr("主页"); onTriggered: backend.setCurrentPage(0) }
     }
 
-    // Edit menu (matching upstream Plater Edit menu)
+    // Edit menu (对齐上游 MainFrame Edit 菜单)
     Menu {
         id: editMenu
-        MenuItem { text: qsTr("全选"); shortcut: "Ctrl+A"; onTriggered: {
+        MenuItem {
+            text: qsTr("撤销")
+            enabled: backend.currentPage === root.pagePrepare
+            onTriggered: preparePage.undoFromTopbar()
+        }
+        MenuItem {
+            text: qsTr("重做")
+            enabled: backend.currentPage === root.pagePrepare
+            onTriggered: preparePage.redoFromTopbar()
+        }
+        MenuSeparator {}
+        MenuItem {
+            text: qsTr("剪切")
+            enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+            onTriggered: backend.editorViewModel.cutSelectedObjects()
+        }
+        MenuItem {
+            text: qsTr("复制")
+            enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+            onTriggered: backend.editorViewModel.copySelectedObjects()
+        }
+        MenuItem {
+            text: qsTr("粘贴")
+            enabled: backend.editorViewModel && backend.editorViewModel.hasClipboardContent
+            onTriggered: backend.editorViewModel.pasteObjects()
+        }
+        MenuSeparator {}
+        MenuItem {
+            text: qsTr("删除选中")
+            enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+            onTriggered: backend.editorViewModel.deleteSelectedObjects()
+        }
+        MenuItem {
+            text: qsTr("清空全部")
+            onTriggered: {
+                if (backend.editorViewModel) backend.editorViewModel.clearWorkspace()
+            }
+        }
+        MenuSeparator {}
+        MenuItem {
+            text: qsTr("克隆选中")
+            enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+            onTriggered: backend.editorViewModel.duplicateSelectedObjects()
+        }
+        MenuItem { text: qsTr("全选"); onTriggered: {
             if (backend.editorViewModel) backend.editorViewModel.selectAllVisibleObjects()
         } }
-        MenuItem { text: qsTr("取消选择"); shortcut: "Esc"; onTriggered: {
+        MenuItem { text: qsTr("取消选择"); onTriggered: {
             if (backend.editorViewModel) backend.editorViewModel.clearObjectSelection()
-        } }
-        MenuSeparator {}
-        MenuItem { text: qsTr("删除选中"); shortcut: "Del"; onTriggered: {
-            if (backend.editorViewModel) backend.editorViewModel.deleteSelectedObjects()
-        } }
-        MenuItem { text: qsTr("清空全部"); onTriggered: {
-            if (backend.editorViewModel) backend.editorViewModel.clearWorkspace()
         } }
     }
 
+    // View menu (对齐上游 MainFrame View 菜单)
+    Menu {
+        id: viewMenu
+        MenuItem { text: qsTr("默认视图"); onTriggered: preparePage.applyFitHintIfReady() }
+        MenuSeparator {}
+        Menu {
+            title: qsTr("相机预设")
+            MenuItem { text: qsTr("俯视图 (Top)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(0) }
+            MenuItem { text: qsTr("前视图 (Front)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(1) }
+            MenuItem { text: qsTr("右视图 (Right)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(2) }
+            MenuItem { text: qsTr("等轴视图 (Iso)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(3) }
+        }
+        MenuSeparator {}
+        MenuItem { text: preparePage.viewport3dRef.wireframeMode ? qsTr("关闭线框模式") : qsTr("线框模式"); onTriggered: preparePage.viewport3dRef.wireframeMode = !preparePage.viewport3dRef.wireframeMode }
+        MenuSeparator {}
+        Menu {
+            title: qsTr("显示标签")
+            MenuItem {
+                text: hiddenTabs[root.pageOnline] ? qsTr("✗ 在线模型") : qsTr("✓ 在线模型")
+                onTriggered: toggleTabVisibility(root.pageOnline)
+            }
+            MenuItem {
+                text: hiddenTabs[root.pagePrepare] ? qsTr("✗ 准备") : qsTr("✓ 准备")
+                onTriggered: toggleTabVisibility(root.pagePrepare)
+            }
+            MenuItem {
+                text: hiddenTabs[root.pagePreview] ? qsTr("✗ 预览") : qsTr("✓ 预览")
+                onTriggered: toggleTabVisibility(root.pagePreview)
+            }
+            MenuItem {
+                text: hiddenTabs[root.pageDevice] ? qsTr("✗ 设备") : qsTr("✓ 设备")
+                onTriggered: toggleTabVisibility(root.pageDevice)
+            }
+        }
+    }
+
+    // Help menu (对齐上游 Help 菜单)
+    Menu {
+        id: helpMenu
+        MenuItem {
+            text: qsTr("快捷键...")
+            onTriggered: shortcutDialog.open()
+        }
+        MenuSeparator {}
+        MenuItem {
+            text: qsTr("关于 Creality Print")
+            onTriggered: aboutDialog.open()
+        }
+    }
+
+    // Settings menu (对齐上游 MainFrame Settings 菜单)
+    Menu {
+        id: settingsMenu
+        MenuItem {
+            text: qsTr("偏好设置")
+            onTriggered: backend.setCurrentPage(8)
+        }
+        MenuSeparator {}
+        MenuItem {
+            text: qsTr("参数设置")
+            onTriggered: backend.openSettings()
+        }
+    }
+
+    // Keyboard shortcuts dialog
+    Dialog {
+        id: shortcutDialog
+        title: qsTr("快捷键一览")
+        modal: true
+        anchors.centerIn: parent
+        width: 480
+        height: 460
+        padding: 20
+
+        ScrollView {
+            anchors.fill: parent
+            clip: true
+            contentWidth: availableWidth
+            Column {
+                width: parent.width
+                spacing: 4
+                Repeater {
+                    model: [
+                        { key: "Ctrl+Z", desc: qsTr("撤销") },
+                        { key: "Ctrl+Y", desc: qsTr("重做") },
+                        { key: "Ctrl+X", desc: qsTr("剪切选中") },
+                        { key: "Ctrl+C", desc: qsTr("复制选中") },
+                        { key: "Ctrl+V", desc: qsTr("粘贴") },
+                        { key: "Ctrl+D", desc: qsTr("克隆选中") },
+                        { key: "Ctrl+K", desc: qsTr("克隆选中 (备)") },
+                        { key: "Delete", desc: qsTr("删除选中") },
+                        { key: "Escape", desc: qsTr("取消选择") },
+                        { key: "Ctrl+A", desc: qsTr("全选") },
+                        { key: "F", desc: qsTr("适应视图") },
+                        { key: "W", desc: qsTr("移动模式") },
+                        { key: "E", desc: qsTr("旋转模式") },
+                        { key: "R", desc: qsTr("缩放模式") },
+                        { key: "Space", desc: qsTr("播放/暂停预览动画") },
+                        { key: "Ctrl+U", desc: qsTr("测量工具") },
+                        { key: "Ctrl+I", desc: qsTr("导入模型") },
+                        { key: "Ctrl+O", desc: qsTr("打开项目") },
+                        { key: "Ctrl+S", desc: qsTr("保存项目") },
+                        { key: "Ctrl+P", desc: qsTr("偏好设置") },
+                        { key: "←/→", desc: qsTr("预览步进 ±100") },
+                        { key: "Home/End", desc: qsTr("预览跳到头/尾") },
+                        { key: "PgUp/PgDn", desc: qsTr("层范围 ±1 层") },
+                        { key: "Shift+PgUp/Dn", desc: qsTr("层范围 ±10 层") },
+                        { key: "Ctrl+1/3/6", desc: qsTr("预设视角 顶/右/等轴") },
+                        { key: "Ctrl+0", desc: qsTr("预设视角 前视") },
+                    ]
+                    delegate: RowLayout {
+                        width: parent.width
+                        spacing: 16
+                        Rectangle {
+                            width: 80; height: 22; radius: 4
+                            color: "#1a2233"
+                            border.color: Theme.borderSubtle
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.key; color: Theme.accent
+                                font.pixelSize: 11; font.bold: true
+                            }
+                        }
+                        Text {
+                            text: modelData.desc; color: Theme.textSecondary
+                            font.pixelSize: 12
+                        }
+                    }
+                }
+            }
+        }
+
+        footer: Rectangle {
+            width: parent.width; height: 40
+            color: "transparent"
+            Rectangle {
+                anchors.centerIn: parent
+                width: 60; height: 26; radius: 6; color: Theme.accent
+                Text {
+                    anchors.centerIn: parent
+                    text: qsTr("关闭"); color: Theme.textOnAccent
+                    font.pixelSize: 12
+                }
+                MouseArea {
+                    anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                    onClicked: shortcutDialog.close()
+                }
+            }
+        }
+    }
+
+    // About dialog
+    Dialog {
+        id: aboutDialog
+        title: qsTr("关于 Creality Print")
+        modal: true
+        anchors.centerIn: parent
+        width: 360
+        height: 200
+        padding: 20
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 12
+
+            Text {
+                text: "Creality Print 7.0 - QML"
+                color: Theme.textPrimary
+                font.pixelSize: 16
+                font.bold: true
+            }
+            Text {
+                text: qsTr("基于 CrealityPrint v7.0.1 开源版本")
+                color: Theme.textSecondary
+                font.pixelSize: 12
+            }
+            Text {
+                text: qsTr("Qt 6.10 + QML 重写迁移版")
+                color: Theme.textSecondary
+                font.pixelSize: 12
+            }
+            Text {
+                text: qsTr("上游基线: 0d4ac73a6f3224a2bf753d7b9e67d7d515bc8557")
+                color: Theme.textDisabled
+                font.pixelSize: 10
+            }
+            Item { Layout.fillHeight: true }
+            Rectangle {
+                Layout.alignment: Qt.AlignHCenter
+                width: 60; height: 26; radius: 6; color: Theme.accent
+                Text {
+                    anchors.centerIn: parent
+                    text: qsTr("确定"); color: Theme.textOnAccent
+                    font.pixelSize: 12
+                }
+                MouseArea {
+                    anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                    onClicked: aboutDialog.close()
+                }
+            }
+        }
+    }
+
+    // New project confirmation dialog (对齐上游 MainFrame 清空确认)
+    Dialog {
+        id: newProjectDialog
+        title: qsTr("新建项目")
+        modal: true
+        anchors.centerIn: parent
+        width: 360
+        height: 140
+        padding: 20
+
+        Column {
+            anchors.fill: parent
+            spacing: 16
+            Label {
+                text: qsTr("将创建新项目，当前未保存的更改将丢失。\n是否继续？")
+                color: Theme.textPrimary
+                font.pixelSize: 13
+                wrapMode: Text.Wrap
+                width: parent.width
+            }
+            Row {
+                anchors.right: parent.right
+                spacing: 8
+                Rectangle {
+                    width: 80; height: 28; radius: 6
+                    color: "#1e2a38"
+                    border.color: Theme.borderSubtle
+                    Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: 12 }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: newProjectDialog.close() }
+                }
+                Rectangle {
+                    width: 80; height: 28; radius: 6
+                    color: Theme.accent
+                    Text { anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: 12; font.bold: true }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { backend.topbarNewProject(); newProjectDialog.close() } }
+                }
+            }
+        }
+    }
+
     Shortcut {
-        sequence: StandardKey.Undo
+        sequences: [StandardKey.Undo]
         enabled: backend.currentPage === root.pagePrepare
         onActivated: preparePage.undoFromTopbar()
     }
     Shortcut {
-        sequence: StandardKey.Save
+        sequences: [StandardKey.Save]
         onActivated: {
             if (!backend.topbarSaveProject())
                 saveProjectAsDialog.open()
         }
     }
     Shortcut {
-        sequence: StandardKey.Redo
+        sequences: [StandardKey.Redo]
         enabled: backend.currentPage === root.pagePrepare
         onActivated: preparePage.redoFromTopbar()
     }
@@ -216,6 +501,26 @@ ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+O"
         onActivated: openProjectDialog.open()
+    }
+    Shortcut {
+        sequence: "Ctrl+X"
+        enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+        onActivated: backend.editorViewModel.cutSelectedObjects()
+    }
+    Shortcut {
+        sequence: "Ctrl+C"
+        enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+        onActivated: backend.editorViewModel.copySelectedObjects()
+    }
+    Shortcut {
+        sequence: "Ctrl+V"
+        enabled: backend.editorViewModel && backend.editorViewModel.hasClipboardContent
+        onActivated: backend.editorViewModel.pasteObjects()
+    }
+    Shortcut {
+        sequence: "Ctrl+K"
+        enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+        onActivated: backend.editorViewModel.duplicateSelectedObjects()
     }
 
     readonly property string compareReferenceSource: backend.currentPage === 1
@@ -427,6 +732,95 @@ ApplicationWindow {
                             }
                         }
 
+                        // View menu button
+                        Rectangle {
+                            id: viewEntry
+                            Layout.preferredHeight: 30
+                            Layout.preferredWidth: 92
+                            radius: 9
+                            border.width: 1
+                            border.color: viewMouse.containsMouse ? "#314058" : "#253043"
+                            color: viewMouse.pressed ? root.topbarPressed : (viewMouse.containsMouse ? root.topbarHover : "#10161e")
+
+                            RowLayout {
+                                anchors.centerIn: parent
+                                spacing: 6
+                                Text { text: qsTr("视图"); color: "#dce5f1"; font.pixelSize: 12; font.bold: true }
+                                Text { text: "▾"; color: "#9fb0c7"; font.pixelSize: 11 }
+                            }
+
+                            MouseArea {
+                                id: viewMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    const p = viewEntry.mapToItem(root.contentItem, 0, viewEntry.height + 4)
+                                    viewMenu.popup(p.x, p.y)
+                                }
+                            }
+                        }
+
+                        TitleBarDivider { }
+
+                        // Help menu button
+                        Rectangle {
+                            id: helpEntry
+                            Layout.preferredHeight: 30
+                            Layout.preferredWidth: 92
+                            radius: 9
+                            border.width: 1
+                            border.color: helpMouse.containsMouse ? "#314058" : "#253043"
+                            color: helpMouse.pressed ? root.topbarPressed : (helpMouse.containsMouse ? root.topbarHover : "#10161e")
+
+                            RowLayout {
+                                anchors.centerIn: parent
+                                spacing: 6
+                                Text { text: qsTr("帮助"); color: "#dce5f1"; font.pixelSize: 12; font.bold: true }
+                                Text { text: "▾"; color: "#9fb0c7"; font.pixelSize: 11 }
+                            }
+
+                            MouseArea {
+                                id: helpMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    const p = helpEntry.mapToItem(root.contentItem, 0, helpEntry.height + 4)
+                                    helpMenu.popup(p.x, p.y)
+                                }
+                            }
+                        }
+
+                        // Settings menu button
+                        Rectangle {
+                            id: settingsEntry
+                            Layout.preferredHeight: 30
+                            Layout.preferredWidth: 92
+                            radius: 9
+                            border.width: 1
+                            border.color: settingsMouse.containsMouse ? "#314058" : "#253043"
+                            color: settingsMouse.pressed ? root.topbarPressed : (settingsMouse.containsMouse ? root.topbarHover : "#10161e")
+
+                            RowLayout {
+                                anchors.centerIn: parent
+                                spacing: 6
+                                Text { text: qsTr("设置"); color: "#dce5f1"; font.pixelSize: 12; font.bold: true }
+                                Text { text: "▾"; color: "#9fb0c7"; font.pixelSize: 11 }
+                            }
+
+                            MouseArea {
+                                id: settingsMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    const p = settingsEntry.mapToItem(root.contentItem, 0, settingsEntry.height + 4)
+                                    settingsMenu.popup(p.x, p.y)
+                                }
+                            }
+                        }
+
                         TitleBarDivider { }
 
                         Rectangle {
@@ -576,7 +970,7 @@ ApplicationWindow {
                                 Label {
                                     id: projectTitleLabel
                                     Layout.fillWidth: true
-                                    text: root.currentProjectTitle()
+                                    text: backend.displayProjectTitle
                                     color: "#c9d4e4"
                                     font.pixelSize: 12
                                     elide: Text.ElideRight
@@ -587,7 +981,8 @@ ApplicationWindow {
 
                                 MouseArea {
                                     id: titleMouse
-                                    anchors.fill: parent
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
                                     hoverEnabled: true
                                     acceptedButtons: Qt.NoButton
                                 }
@@ -604,6 +999,51 @@ ApplicationWindow {
                             onClicked: {
                                 const p = moreActionsButton.mapToItem(root.contentItem, 0, moreActionsButton.height + 4)
                                 dropdownMenu.popup(p.x, p.y)
+                            }
+                        }
+
+                        // Bell icon — notification center trigger (aligns with upstream notification_manager)
+                        Item {
+                            width: 34; height: 34
+
+                            CxIconButton {
+                                id: bellButton
+                                cxStyle: CxIconButton.Style.Chrome
+                                buttonSize: 34
+                                iconSize: 16
+                                iconSource: "qrc:/qml/assets/icons/bell.svg"
+                                toolTipText: qsTr("通知中心")
+                                onClicked: notificationCenterPopup.open()
+                            }
+
+                            // Unread badge on bell
+                            Rectangle {
+                                visible: backend.unreadHistoryCount > 0
+                                anchors.top: bellButton.top
+                                anchors.topMargin: 2
+                                anchors.left: bellButton.left
+                                anchors.leftMargin: 18
+                                width: 8; height: 8
+                                radius: 4
+                                color: "#f05545"
+                                z: 1
+                            }
+                        }
+
+                        // Notification center popup
+                        Popup {
+                            id: notificationCenterPopup
+                            x: bellButton.x + bellButton.width - 320
+                            y: bellButton.y + bellButton.height + 4
+                            width: 320
+                            height: 420
+                            padding: 0
+                            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                            background: Rectangle { color: "transparent"; border.width: 0 }
+
+                            NotificationCenter {
+                                anchors.fill: parent
+                                onCloseRequested: notificationCenterPopup.close()
                             }
                         }
 
@@ -717,9 +1157,15 @@ ApplicationWindow {
                         DeviceListPage { monitorVm: backend.monitorViewModel }
                     }
                 }
-                // Page 8 — Preferences
-                PreferencesPage {
-                    settingsVm: backend.settingsViewModel
+                // Page 8 — Preferences (Loader: lazy)
+                Loader {
+                    active: backend.currentPage === 8
+                    sourceComponent: Component {
+                        PreferencesPage {
+                            settingsVm: backend.settingsViewModel
+                            backend: backend
+                        }
+                    }
                 }
                 // Page 9 — Model Mall (Loader: lazy)
                 Loader {

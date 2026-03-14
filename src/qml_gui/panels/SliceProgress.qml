@@ -1,8 +1,9 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
 
-// C5 — 切片进度面板（绑定真实 SliceService 状态）
+// SliceProgress — 切片进度与结果面板（对齐上游 SliceInfoPanel）
 Item {
     id: root
     required property var editorVm
@@ -14,10 +15,14 @@ Item {
     readonly property string outputPath: root.editorVm ? root.editorVm.sliceOutputPath : ""
     readonly property string resultWeight: root.editorVm ? root.editorVm.sliceResultWeight : ""
     readonly property string resultPlateLabel: root.editorVm ? root.editorVm.sliceResultPlateLabel : ""
+    readonly property string resultFilament: root.editorVm ? root.editorVm.sliceResultFilament : ""
+    readonly property string resultCost: root.editorVm ? root.editorVm.sliceResultCost : ""
+    readonly property int resultLayerCount: root.editorVm ? root.editorVm.sliceResultLayerCount : 0
     readonly property bool hasSliceResult: root.editorVm ? root.editorVm.hasSliceResult : false
     readonly property bool canRequestSlice: root.editorVm ? root.editorVm.canRequestSlice : false
     readonly property string actionLabel: root.editorVm ? root.editorVm.sliceActionLabel : qsTr("▶ 开始切片")
     readonly property string actionHint: root.editorVm ? root.editorVm.sliceActionHint : ""
+    readonly property string modelSize: root.editorVm ? root.editorVm.modelSizeText : ""
 
     ColumnLayout {
         anchors.fill: parent
@@ -98,87 +103,257 @@ Item {
             }
         }
 
-        // ── 估算用时（完成后显示）────────────────────────────────
+        // ── 切片结果摘要（对齐上游 SliceInfoPanel）────────────────
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: infoColumn.implicitHeight + 20
-            radius: 4
-            color: "#1e2229"
+            radius: Theme.radiusMD
+            color: Theme.bgPanel
             visible: root.hasSliceResult
 
             ColumnLayout {
                 id: infoColumn
                 anchors.fill: parent
                 anchors.margins: 10
-                spacing: 8
+                spacing: 6
 
+                // Section header
+                Text {
+                    text: qsTr("切片结果")
+                    color: Theme.accent
+                    font.pixelSize: 12
+                    font.bold: true
+                    Layout.fillWidth: true
+                }
+
+                // Divider
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: Theme.borderSubtle
+                }
+
+                // Model size (对齐上游 SliceInfoPanel model dimensions)
                 RowLayout {
                     Layout.fillWidth: true
+                    visible: root.modelSize.length > 0
                     Text {
-                        text: qsTr("预计打印时长")
-                        color: "#9daaba"
+                        text: qsTr("模型尺寸")
+                        color: Theme.textTertiary
                         font.pixelSize: 11
                         Layout.fillWidth: true
                     }
                     Text {
-                        text: root.estimatedTime.length > 0 ? root.estimatedTime : qsTr("待补充")
-                        color: "#22c564"
+                        text: root.modelSize
+                        color: Theme.textPrimary
+                        font.pixelSize: 11
+                        font.family: "monospace"
+                    }
+                }
+
+                // Estimated print time
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        text: qsTr("预计打印时长")
+                        color: Theme.textTertiary
+                        font.pixelSize: 11
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: root.estimatedTime.length > 0 ? root.estimatedTime : "--:--:--"
+                        color: Theme.accent
                         font.pixelSize: 12
                         font.bold: true
                     }
                 }
 
+                // Current plate
                 RowLayout {
                     Layout.fillWidth: true
                     visible: root.resultPlateLabel.length > 0
-
                     Text {
                         text: qsTr("当前平板")
-                        color: "#9daaba"
+                        color: Theme.textTertiary
                         font.pixelSize: 11
                         Layout.fillWidth: true
                     }
                     Text {
                         text: root.resultPlateLabel
-                        color: "#dde4ef"
+                        color: Theme.textPrimary
                         font.pixelSize: 12
-                        font.bold: true
                     }
                 }
 
+                // Layer count (对齐上游 SliceInfoPanel)
                 RowLayout {
                     Layout.fillWidth: true
-                    visible: root.resultWeight.length > 0
-
+                    visible: root.resultLayerCount > 0
                     Text {
-                        text: qsTr("耗材重量")
-                        color: "#9daaba"
+                        text: qsTr("切片层数")
+                        color: Theme.textTertiary
                         font.pixelSize: 11
                         Layout.fillWidth: true
                     }
                     Text {
-                        text: root.resultWeight
-                        color: "#dde4ef"
+                        text: root.resultLayerCount + qsTr(" 层")
+                        color: Theme.textPrimary
                         font.pixelSize: 12
                         font.bold: true
                     }
                 }
 
+                // Divider
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: Theme.borderSubtle
+                    visible: root.resultWeight.length > 0 || root.resultFilament.length > 0 || root.resultCost.length > 0
+                }
+
+                // Filament weight (对齐上游 SliceInfoPanel weight display with color chip)
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: root.resultWeight.length > 0
+                    Text {
+                        text: qsTr("耗材重量")
+                        color: Theme.textTertiary
+                        font.pixelSize: 11
+                        Layout.fillWidth: true
+                    }
+                    // Filament color chip (对齐上游 SliceInfoPopup filament color badge)
+                    Rectangle {
+                        width: 10; height: 10; radius: 2
+                        color: "#18c75e"
+                    }
+                    Text {
+                        text: root.resultWeight
+                        color: Theme.textPrimary
+                        font.pixelSize: 12
+                        font.bold: true
+                    }
+                }
+
+                // Filament used (length, 对齐上游 SliceInfoPanel filament)
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: root.resultFilament.length > 0
+                    Text {
+                        text: qsTr("耗材用量")
+                        color: Theme.textTertiary
+                        font.pixelSize: 11
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: root.resultFilament
+                        color: Theme.textPrimary
+                        font.pixelSize: 12
+                        font.bold: true
+                    }
+                }
+
+                // Estimated cost (对齐上游 PrintEstimatedStatistics)
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: root.resultCost.length > 0
+                    Text {
+                        text: qsTr("预估成本")
+                        color: Theme.textTertiary
+                        font.pixelSize: 11
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: root.resultCost
+                        color: Theme.statusWarning
+                        font.pixelSize: 12
+                        font.bold: true
+                    }
+                }
+
+                // Divider
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: Theme.borderSubtle
+                    visible: root.editorVm && root.editorVm.extruderCount > 0
+                }
+
+                // Per-extruder filament breakdown (对齐上游 SliceInfoPanel per-extruder grid)
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 4
+                    visible: root.editorVm && root.editorVm.extruderCount > 0
+                    spacing: 6
+
+                    Text {
+                        text: qsTr("耗材用量明细")
+                        color: Theme.accent
+                        font.pixelSize: 12
+                        font.bold: true
+                        Layout.fillWidth: true
+                    }
+
+                    Repeater {
+                        model: root.editorVm ? root.editorVm.extruderCount : 0
+                        delegate: RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+
+                            // Extruder color chip
+                            Rectangle {
+                                width: 10; height: 10; radius: 2
+                                color: index === 0 ? "#18c75e" : index === 1 ? "#3b82f6" : index === 2 ? "#f59e0b" : "#ef4444"
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+
+                            Text {
+                                text: qsTr("挤出机") + (index + 1)
+                                color: Theme.textTertiary
+                                font.pixelSize: 11
+                                Layout.fillWidth: true
+                            }
+
+                            Text {
+                                text: root.editorVm ? root.editorVm.extruderUsedLength(index) : ""
+                                color: Theme.textPrimary
+                                font.pixelSize: 11
+                                font.family: "monospace"
+                            }
+
+                            Text {
+                                text: root.editorVm ? root.editorVm.extruderUsedWeight(index) : ""
+                                color: Theme.textSecondary
+                                font.pixelSize: 10
+                                font.family: "monospace"
+                            }
+                        }
+                    }
+                }
+
+                // Divider
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: Theme.borderSubtle
+                    visible: root.outputPath.length > 0
+                }
+
+                // Output file path
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
                     visible: root.outputPath.length > 0
 
                     Text {
                         text: qsTr("输出文件")
-                        color: "#9daaba"
+                        color: Theme.textTertiary
                         font.pixelSize: 11
                     }
                     Text {
                         Layout.fillWidth: true
                         text: root.outputPath
-                        color: "#dde4ef"
-                        font.pixelSize: 11
+                        color: Theme.textSecondary
+                        font.pixelSize: 10
+                        font.family: "monospace"
                         wrapMode: Text.WrapAnywhere
                     }
                 }
@@ -188,16 +363,16 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: hintText.implicitHeight + 18
-            radius: 4
-            color: root.canRequestSlice ? "#192128" : "#241d1d"
-            border.color: root.canRequestSlice ? "#2f4c5f" : "#5d2f2f"
+            radius: Theme.radiusMD
+            color: root.canRequestSlice ? Theme.bgPanel : "#241d1d"
+            border.color: root.canRequestSlice ? Theme.borderSubtle : "#5d2f2f"
 
             Text {
                 id: hintText
                 anchors.fill: parent
                 anchors.margins: 9
                 text: root.actionHint
-                color: root.canRequestSlice ? "#9daaba" : "#e7b4b4"
+                color: root.canRequestSlice ? Theme.textTertiary : Theme.statusError
                 font.pixelSize: 11
                 wrapMode: Text.Wrap
             }
@@ -207,8 +382,8 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             height: 30
-            radius: 4
-            color: !root.slicingNow && !root.canRequestSlice ? "#3b4048"
+            radius: Theme.radiusMD
+            color: !root.slicingNow && !root.canRequestSlice ? Theme.bgHover
                    : actionMA.containsMouse
                      ? (root.slicingNow ? "#7d2020" : "#19a84e")
                      : (root.slicingNow ? "#5e1818" : "#157a39")
@@ -216,7 +391,7 @@ Item {
             Text {
                 anchors.centerIn: parent
                 text: root.slicingNow ? qsTr("✕ 取消切片") : root.actionLabel
-                color: !root.slicingNow && !root.canRequestSlice ? "#aab2bf" : "white"
+                color: !root.slicingNow && !root.canRequestSlice ? Theme.textDisabled : "white"
                 font.pixelSize: 12
                 font.bold: true
             }
@@ -233,6 +408,92 @@ Item {
                         root.editorVm.cancelSlice()
                     } else {
                         root.editorVm.requestSlice()
+                    }
+                }
+            }
+        }
+
+        // ── 切片后操作栏（对齐上游 SliceInfoPanel 后续操作）──────────
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 6
+            visible: root.hasSliceResult && !root.slicingNow
+
+            // 预览（对齐上游 Plater::priv::on_preview）
+            Rectangle {
+                Layout.fillWidth: true
+                height: 28
+                radius: Theme.radiusSM
+                color: previewMA.containsMouse ? "#7c3aed" : "#6d28d9"
+                Text {
+                    anchors.centerIn: parent
+                    text: qsTr("预览")
+                    color: "white"
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+                MouseArea {
+                    id: previewMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (root.editorVm)
+                            root.editorVm.switchToPreview()
+                    }
+                }
+            }
+
+            // 导出 G-code（对齐 upstream Plater::export_gcode）
+            Rectangle {
+                Layout.fillWidth: true
+                height: 28
+                radius: Theme.radiusSM
+                color: exportMA.containsMouse ? "#2563eb" : "#1d4ed8"
+                Text {
+                    anchors.centerIn: parent
+                    text: qsTr("导出 G-code")
+                    color: "white"
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+                MouseArea {
+                    id: exportMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (!root.editorVm) return
+                        const path = root.outputPath.length > 0
+                            ? root.outputPath
+                            : "output.gcode"
+                        root.editorVm.requestExportGCode(path)
+                    }
+                }
+            }
+
+            // 切片全部平板
+            Rectangle {
+                Layout.fillWidth: true
+                height: 28
+                radius: Theme.radiusSM
+                color: sliceAllMA.containsMouse ? Theme.bgHover : Theme.bgElevated
+                border.width: 1
+                border.color: Theme.borderSubtle
+                Text {
+                    anchors.centerIn: parent
+                    text: qsTr("全部切片")
+                    color: Theme.textPrimary
+                    font.pixelSize: 11
+                }
+                MouseArea {
+                    id: sliceAllMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (root.editorVm)
+                            root.editorVm.requestSliceAll()
                     }
                 }
             }

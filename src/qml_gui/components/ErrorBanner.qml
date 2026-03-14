@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 
 // Warning-level (severity=1) banner — spans full width below title bar
+// Supports notification queue with pending count badge
 Rectangle {
     id: root
 
@@ -21,6 +22,13 @@ Rectangle {
         spacing: 8
 
         Text { text: "⚠"; color: "#c87840"; font.pixelSize: 13 }
+        Text {
+            visible: backend.lastErrorTitle !== ""
+            text: backend.lastErrorTitle
+            color: "#c87840"
+            font.pixelSize: 10
+            font.bold: true
+        }
 
         Text {
             text:            backend.lastErrorMessage
@@ -28,6 +36,21 @@ Rectangle {
             font.pixelSize:  12
             elide:           Text.ElideRight
             Layout.fillWidth: true
+        }
+
+        // Pending notification count
+        Rectangle {
+            visible: backend.pendingNotificationCount > 0
+            width: 20; height: 20; radius: 10
+            color: "#c87840"
+
+            Text {
+                anchors.centerIn: parent
+                text: backend.pendingNotificationCount > 9 ? "9+" : backend.pendingNotificationCount.toString()
+                color: "#fff"
+                font.pixelSize: 9
+                font.bold: true
+            }
         }
 
         Rectangle {
@@ -42,7 +65,7 @@ Rectangle {
                 font.pixelSize: 11
             }
             HoverHandler { id: closeHov }
-            TapHandler   { onTapped: backend.clearError() }
+            TapHandler   { onTapped: backend.dismissNotification() }
         }
     }
 }

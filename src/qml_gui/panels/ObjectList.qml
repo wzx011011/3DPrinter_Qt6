@@ -207,6 +207,9 @@ Item {
         clip: true
         model: root.editorVm ? root.editorVm.objectCount : 0
 
+        // Drag reorder state (对齐上游 GUI_ObjectList OnBeginDrag/OnDrop)
+        property int dragSourceIndex: -1
+
         delegate: Item {
             id: row
             width: listView.width
@@ -229,6 +232,45 @@ Item {
                                                     && row.groupLabel.length > 0
                                                     && (row.index === 0
                                                         || root.editorVm.objectGroupLabel(row.index - 1) !== row.groupLabel)
+
+            // Inline rename state (对齐上游 GUI_ObjectList rename_item via double-click)
+            property bool renaming: false
+            property string renameText: ""
+
+            // Drag hover state (for insertion line)
+            property bool dragHover: false
+
+            // Drop target highlight during drag (对齐上游 GUI_ObjectList OnBeginDrag 视觉反馈)
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -1
+                radius: 12
+                color: row.dragHover ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.08) : "transparent"
+                border.width: (listView.dragSourceIndex >= 0 && listView.dragSourceIndex !== row.index) ? 2 : 0
+                border.color: row.dragHover ? Theme.accent : Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.4)
+                visible: listView.dragSourceIndex >= 0 && listView.dragSourceIndex !== row.index
+                z: -1
+            }
+
+            // Insertion line indicator during drag (对齐上游拖拽放置位置指示)
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: groupHeader.visible ? groupHeader.top : parent.top
+                height: 2
+                radius: 1
+                color: Theme.accent
+                visible: listView.dragSourceIndex >= 0 && row.dragHover && listView.dragSourceIndex !== row.index
+            }
+
+            // Drag source row opacity reduction
+            states: [
+                State {
+                    name: "dragging"
+                    when: listView.dragSourceIndex === row.index
+                    PropertyChanges { target: row; opacity: 0.4 }
+                }
+            ]
 
             Menu {
                 id: rowMenu
@@ -278,12 +320,122 @@ Item {
                 MenuSeparator { }
 
                 MenuItem {
+                    text: qsTr("重命名")
+                    enabled: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount === 1
+                    onTriggered: {
+                        if (root.editorVm) {
+                            row.renaming = true
+                            row.renameText = root.editorVm.objectName(row.index)
+                        }
+                    }
+                }
+
+                MenuSeparator { }
+
+                // ── Add Volume 子菜单 (对齐上游 GUI_Factories::append_menu_items_add_volume) ──
+                Menu {
+                    title: qsTr("添加部件")
+                    enabled: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount === 1 && !root.editorVm.hasSelectedVolume
+
+                    MenuItem {
+                        text: qsTr("添加部件")
+                        onTriggered: {
+                            if (root.editorVm) root.editorVm.addVolumeToObject(0)
+                        }
+                    }
+                    MenuItem {
+                        text: qsTr("添加负体积")
+                        onTriggered: {
+                            if (root.editorVm) root.editorVm.addVolumeToObject(1)
+                        }
+                    }
+                    MenuItem {
+                        text: qsTr("添加修改器")
+                        onTriggered: {
+                            if (root.editorVm) root.editorVm.addVolumeToObject(2)
+                        }
+                    }
+                    MenuItem {
+                        text: qsTr("添加支撑屏蔽")
+                        onTriggered: {
+                            if (root.editorVm) root.editorVm.addVolumeToObject(3)
+                        }
+                    }
+                    MenuItem {
+                        text: qsTr("添加支撑增强")
+                        onTriggered: {
+                            if (root.editorVm) root.editorVm.addVolumeToObject(4)
+                        }
+                    }
+                }
+
+                // Change volume type submenu (对齐上游 GUI_ObjectList::load_generic_subobject type conversion)
+                Menu {
+                    title: qsTr("转换为")
+                    visible: !!root.editorVm && root.editorVm.hasSelectedVolume
+                    enabled: !!root.editorVm && root.editorVm.hasSelectedVolume
+
+                    MenuItem {
+                        text: qsTr("部件")
+                        onTriggered: { if (root.editorVm) root.editorVm.changeVolumeType(0) }
+                    }
+                    MenuItem {
+                        text: qsTr("负体积")
+                        onTriggered: { if (root.editorVm) root.editorVm.changeVolumeType(1) }
+                    }
+                    MenuItem {
+                        text: qsTr("修改器")
+                        onTriggered: { if (root.editorVm) root.editorVm.changeVolumeType(2) }
+                    }
+                    MenuItem {
+                        text: qsTr("支撑屏蔽")
+                        onTriggered: { if (root.editorVm) root.editorVm.changeVolumeType(3) }
+                    }
+                    MenuItem {
+                        text: qsTr("支撑增强")
+                        onTriggered: { if (root.editorVm) root.editorVm.changeVolumeType(4) }
+                    }
+                }
+
+                MenuSeparator { }
+
+                MenuItem {
                     text: qsTr("在参数表中编辑")
                     enabled: !!root.editorVm && row.isSelected && root.editorVm.canOpenSelectionSettings && !root.editorVm.hasSelectedVolume
                     onTriggered: {
                         if (root.editorVm)
                             root.editorVm.requestSelectionSettings()
                     }
+                }
+
+                MenuSeparator { }
+
+                // 复制/粘贴/克隆/剪切（对齐上游 create_extra_object_menu）
+                MenuItem {
+                    text: qsTr("复制")
+                    enabled: !!root.editorVm && root.editorVm.hasSelection && !root.editorVm.hasSelectedVolume
+                    onTriggered: { if (root.editorVm) root.editorVm.copySelectedObjects() }
+                }
+
+                MenuItem {
+                    text: qsTr("剪切")
+                    enabled: !!root.editorVm && root.editorVm.hasSelection && !root.editorVm.hasSelectedVolume
+                    onTriggered: { if (root.editorVm) root.editorVm.cutSelectedObjects() }
+                }
+
+                MenuItem {
+                    text: qsTr("克隆")
+                    enabled: !!root.editorVm && row.isSelected && !root.editorVm.hasSelectedVolume
+                    onTriggered: { if (root.editorVm) root.editorVm.duplicateSelectedObjects() }
+                }
+
+                MenuSeparator { }
+
+                // 居中/镜像（对齐上游 create_extra_object_menu center/mirror）
+                MenuItem {
+                    text: qsTr("居中到热床")
+                    enabled: !!root.editorVm && root.editorVm.hasSelection
+                    onTriggered: { if (root.editorVm) root.editorVm.centerSelectedObjects() }
                 }
 
                 MenuSeparator { }
@@ -455,8 +607,41 @@ Item {
                     Layout.fillWidth: true
                     spacing: 2
 
+                    // Name display / inline rename (对齐上游 GUI_ObjectList rename_item)
+                    TextField {
+                        id: renameField
+                        Layout.fillWidth: true
+                        visible: row.renaming
+                        text: row.renameText
+                        color: Theme.textPrimary
+                        font.pixelSize: 12
+                        background: Rectangle {
+                            radius: 4
+                            color: Theme.bgElevated
+                            border.color: Theme.accent
+                            border.width: 1
+                        }
+                        onAccepted: {
+                            if (root.editorVm && row.renameText.trim().length > 0) {
+                                root.editorVm.renameObject(row.index, row.renameText.trim())
+                            }
+                            row.renaming = false
+                        }
+                        onTextChanged: row.renameText = text
+                        onActiveFocusChanged: {
+                            if (!activeFocus && row.renaming) {
+                                if (root.editorVm && row.renameText.trim().length > 0) {
+                                    root.editorVm.renameObject(row.index, row.renameText.trim())
+                                }
+                                row.renaming = false
+                            }
+                        }
+                        Component.onCompleted: selectAll()
+                    }
+
                     Text {
                         Layout.fillWidth: true
+                        visible: !row.renaming
                         text: root.editorVm ? root.editorVm.objectName(row.index) : ""
                         color: row.isSelected ? Theme.textPrimary : "#bbc7d4"
                         font.pixelSize: 12
@@ -688,6 +873,55 @@ Item {
                 hoverEnabled: true
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.PointingHandCursor
+
+                Drag.supportedActions: Qt.MoveAction
+                Drag.hotSpot.x: width / 2
+                Drag.hotSpot.y: height / 2
+                Drag.keys: ["object-drag", "object-reorder"]
+
+                Drag.onDragStarted: {
+                    if (!root.editorVm) return
+                    if (!row.isSelected)
+                        root.editorVm.selectObject(row.index)
+                    listView.dragSourceIndex = row.index
+                    Drag.mimeData = {
+                        "object-index": row.index,
+                        "object-name": root.editorVm.objectName(row.index),
+                        "source-reorder": true
+                    }
+                }
+
+                Drag.onDragFinished: {
+                    listView.dragSourceIndex = -1
+                    row.dragHover = false
+                }
+
+                // Drop target for list reorder (对齐上游 GUI_ObjectList OnDrop)
+                DropArea {
+                    anchors.fill: parent
+                    keys: ["object-reorder"]
+                    onEntered: function(drag) { row.dragHover = true }
+                    onExited: function(drag) { row.dragHover = false }
+                    onDropped: function(drop) {
+                        row.dragHover = false
+                        if (!root.editorVm) return
+                        var fromIdx = drop.getDataAsString("object-index")
+                        var fromNum = parseInt(fromIdx)
+                        if (!isNaN(fromNum) && fromNum !== row.index && fromNum >= 0 && row.index >= 0) {
+                            root.editorVm.moveObject(fromNum, row.index)
+                        }
+                    }
+                }
+
+                onDoubleClicked: function(mouse) {
+                    // 对齐上游 GUI_ObjectList rename_item: double-click to inline rename
+                    if (mouse.button === Qt.LeftButton && root.editorVm && root.editorVm.selectedObjectCount <= 1) {
+                        root.editorVm.selectObject(row.index)
+                        row.renaming = true
+                        row.renameText = root.editorVm.objectName(row.index)
+                    }
+                }
+
                 onClicked: function(mouse) {
                     if (!root.editorVm)
                         return
