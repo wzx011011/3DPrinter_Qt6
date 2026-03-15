@@ -1714,6 +1714,22 @@ Item {
                             toolTipText: qsTr("支撑绘制 (P)")
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoSupportPaint
                         }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoSeamPaint
+                            iconSource: "qrc:/qml/assets/icons/scissors.svg"
+                            toolTipText: qsTr("缝线绘制")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoSeamPaint
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoHollow
+                            iconSource: "qrc:/qml/assets/icons/minus-circle.svg"
+                            toolTipText: qsTr("SLA 空洞标记")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoHollow
+                        }
                     }
 
                     ToolStripDivider { }
@@ -2314,6 +2330,233 @@ Item {
                     color: "#6b7d94"
                     font.pixelSize: 9
                     Layout.alignment: Qt.AlignHCenter
+                }
+            }
+        }
+
+        // Seam 缝线绘制控制面板（对齐上游 GLGizmoSeam::on_render_input_window）
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: 104
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: seamContent.implicitWidth + 24
+            height: seamContent.implicitHeight + 16
+            radius: 12
+            color: "#161c27e0"
+            border.color: "#2d3443"
+            visible: viewport3d.gizmoMode === GLViewport.GizmoSeamPaint && root.editorVm
+
+            ColumnLayout {
+                id: seamContent
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text {
+                    text: qsTr("缝线绘制")
+                    color: "#e0e6ed"
+                    font.pixelSize: 11
+                    font.bold: true
+                    Layout.alignment: Qt.AlignHCenter
+                }
+
+                // 工具选择（对齐上游 GLGizmoSeam m_current_tool）
+                Row {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    Repeater {
+                        model: [qsTr("强制缝线"), qsTr("阻止缝线")]
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: 72; height: 24; radius: 4
+                            color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? "#1c2a3e" : "#1a1e28"
+                            border.color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? "#569cd6" : "#2e3444"
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData
+                                color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? "#569cd6" : "#8a96a8"
+                                font.pixelSize: 10
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.seamPaintTool = index + 1
+                            }
+                        }
+                    }
+                }
+
+                // 光标半径
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("半径:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Slider {
+                        from: 0.05; to: 20; stepSize: 0.1
+                        value: root.editorVm ? root.editorVm.seamPaintCursorRadius : 2
+                        implicitWidth: 100
+                        onMoved: if (root.editorVm) root.editorVm.seamPaintCursorRadius = value
+                    }
+                    Text {
+                        text: root.editorVm ? root.editorVm.seamPaintCursorRadius.toFixed(1) : "2.0"
+                        color: "#c8d4e0"
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 30
+                    }
+                }
+
+                // 清除按钮
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    width: 80; height: 24; radius: 4
+                    color: "#252b38"
+                    border.color: "#363d4e"; border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: qsTr("清除全部")
+                        color: "#c8d4e0"
+                        font.pixelSize: 10
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: if (root.editorVm) root.editorVm.clearSeamPaintOnSelection()
+                    }
+                }
+            }
+        }
+
+        // Hollow SLA 空洞标记控制面板（对齐上游 GLGizmoHollow::on_render_input_window）
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: 104
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: hollowContent.implicitWidth + 24
+            height: hollowContent.implicitHeight + 16
+            radius: 12
+            color: "#161c27e0"
+            border.color: "#2d3443"
+            visible: viewport3d.gizmoMode === GLViewport.GizmoHollow && root.editorVm
+
+            ColumnLayout {
+                id: hollowContent
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text {
+                    text: qsTr("SLA 空洞标记")
+                    color: "#e0e6ed"
+                    font.pixelSize: 11
+                    font.bold: true
+                    Layout.alignment: Qt.AlignHCenter
+                }
+
+                // 启用/禁用空洞（对齐上游 GLGizmoHollow m_enable_hollowing）
+                RowLayout {
+                    spacing: 8
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("启用空洞化:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Rectangle {
+                        width: 36; height: 18; radius: 9
+                        color: root.editorVm && root.editorVm.hollowEnabled ? "#18c75e" : "#363d4e"
+                        Rectangle {
+                            width: 14; height: 14; radius: 7
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.left: root.editorVm && root.editorVm.hollowEnabled ? undefined : parent.left
+                            anchors.right: root.editorVm && root.editorVm.hollowEnabled ? parent.right : undefined
+                            anchors.leftMargin: root.editorVm && root.editorVm.hollowEnabled ? 0 : 2
+                            anchors.rightMargin: root.editorVm && root.editorVm.hollowEnabled ? 2 : 0
+                            color: "white"
+                            Behavior on anchors.left { PropertyAnimation { duration: 150 } }
+                            Behavior on anchors.right { PropertyAnimation { duration: 150 } }
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: if (root.editorVm) root.editorVm.hollowEnabled = !root.editorVm.hollowEnabled
+                        }
+                    }
+                }
+
+                // 钻孔半径（对齐上游 m_new_hole_radius）
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("钻孔半径:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Slider {
+                        from: 0.5; to: 10; stepSize: 0.1
+                        value: root.editorVm ? root.editorVm.hollowHoleRadius : 2
+                        implicitWidth: 100
+                        onMoved: if (root.editorVm) root.editorVm.hollowHoleRadius = value
+                    }
+                    Text {
+                        text: root.editorVm ? root.editorVm.hollowHoleRadius.toFixed(1) : "2.0"
+                        color: "#c8d4e0"
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 30
+                    }
+                }
+
+                // 钻孔高度（对齐上游 m_new_hole_height）
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("钻孔高度:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Slider {
+                        from: 1; to: 20; stepSize: 0.5
+                        value: root.editorVm ? root.editorVm.hollowHoleHeight : 6
+                        implicitWidth: 100
+                        onMoved: if (root.editorVm) root.editorVm.hollowHoleHeight = value
+                    }
+                    Text {
+                        text: root.editorVm ? root.editorVm.hollowHoleHeight.toFixed(1) : "6.0"
+                        color: "#c8d4e0"
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 30
+                    }
+                }
+
+                // 空洞偏移（对齐上游 m_offset_stash）
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("偏移:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Slider {
+                        from: 0.5; to: 10; stepSize: 0.1
+                        value: root.editorVm ? root.editorVm.hollowOffset : 3
+                        implicitWidth: 100
+                        onMoved: if (root.editorVm) root.editorVm.hollowOffset = value
+                    }
+                    Text {
+                        text: root.editorVm ? root.editorVm.hollowOffset.toFixed(1) : "3.0"
+                        color: "#c8d4e0"
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 30
+                    }
+                }
+
+                // 删除选中钻孔
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    width: 100; height: 24; radius: 4
+                    color: "#252b38"
+                    border.color: "#363d4e"; border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: qsTr("删除选中 (%1)").arg(root.editorVm ? root.editorVm.hollowSelectedHoleCount : 0)
+                        color: "#c8d4e0"
+                        font.pixelSize: 10
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: if (root.editorVm) root.editorVm.deleteSelectedHollowPoints()
+                    }
                 }
             }
         }

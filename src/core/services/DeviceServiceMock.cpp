@@ -677,14 +677,14 @@ QVariantMap DeviceServiceMock::selectedDeviceAmsSlotAt(int slotIndex) const
   const int realIdx = filteredIndices_[selectedDeviceIndex_];
   if (realIdx < 0 || realIdx >= devices_.size())
     return map;
-  const auto &slots = devices_[realIdx].amsSlots;
-  if (slotIndex < 0 || slotIndex >= slots.size())
+  const auto &amsSlots = devices_[realIdx].amsSlots;
+  if (slotIndex < 0 || slotIndex >= amsSlots.size())
     return map;
-  const auto &slot = slots[slotIndex];
-  map[QStringLiteral("filamentType")] = slot.filamentType;
-  map[QStringLiteral("color")] = slot.color;
-  map[QStringLiteral("remainingWeight")] = slot.remainingWeight;
-  map[QStringLiteral("active")] = slot.active;
+  const auto &amsSlot = amsSlots[slotIndex];
+  map[QStringLiteral("filamentType")] = amsSlot.filamentType;
+  map[QStringLiteral("color")] = amsSlot.color;
+  map[QStringLiteral("remainingWeight")] = amsSlot.remainingWeight;
+  map[QStringLiteral("active")] = amsSlot.active;
   map[QStringLiteral("slotIndex")] = slotIndex;
   return map;
 }
@@ -696,12 +696,12 @@ void DeviceServiceMock::setSelectedDeviceAmsSlot(int slotIndex)
   const int realIdx = filteredIndices_[selectedDeviceIndex_];
   if (realIdx < 0 || realIdx >= devices_.size())
     return;
-  auto &slots = devices_[realIdx].amsSlots;
-  if (slotIndex < 0 || slotIndex >= slots.size())
+  auto &amsSlots = devices_[realIdx].amsSlots;
+  if (slotIndex < 0 || slotIndex >= amsSlots.size())
     return;
-  // Deactivate all slots, then activate the selected one
-  for (int i = 0; i < slots.size(); ++i) {
-    slots[i].active = (i == slotIndex);
+  // Deactivate all amsSlots, then activate the selected one
+  for (int i = 0; i < amsSlots.size(); ++i) {
+    amsSlots[i].active = (i == slotIndex);
   }
   emit selectedDeviceChanged();
 }

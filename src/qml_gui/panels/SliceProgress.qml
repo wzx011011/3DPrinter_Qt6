@@ -24,6 +24,7 @@ Item {
     readonly property string actionHint: root.editorVm ? root.editorVm.sliceActionHint : ""
     readonly property string modelSize: root.editorVm ? root.editorVm.modelSizeText : ""
     readonly property string avgSpeed: root.editorVm ? root.editorVm.avgPrintSpeed : ""
+    readonly property string estimatedPrintTime: root.editorVm ? root.editorVm.estimatedPrintTime : ""
 
     ColumnLayout {
         anchors.fill: parent
@@ -245,6 +246,23 @@ Item {
                         color: Theme.accent
                         font.pixelSize: 12
                         font.bold: true
+                    }
+
+                    // 预估打印时间（对齐上游 PrintEstimatedStatistics::total_time）
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        Text {
+                            text: qsTr("预估时间:")
+                            color: Theme.textTertiary
+                            font.pixelSize: 11
+                        }
+                        Text {
+                            text: root.estimatedPrintTime.length > 0 ? root.estimatedPrintTime : "--:--:--"
+                            color: Theme.textSecondary
+                            font.pixelSize: 11
+                            font.family: "monospace"
+                        }
                     }
                 }
 

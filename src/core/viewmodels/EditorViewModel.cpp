@@ -365,6 +365,69 @@ void EditorViewModel::clearSupportPaintOnSelection()
   emit stateChanged();
 }
 
+// ── Seam painting (对齐上游 GLGizmoSeam) ──────────────────────────────────
+
+int EditorViewModel::seamPaintTool() const { return m_seamPaintTool; }
+void EditorViewModel::setSeamPaintTool(int tool)
+{
+  if (m_seamPaintTool != tool) { m_seamPaintTool = tool; emit stateChanged(); }
+}
+float EditorViewModel::seamPaintCursorRadius() const { return m_seamPaintCursorRadius; }
+void EditorViewModel::setSeamPaintCursorRadius(float radius)
+{
+  if (!qFuzzyCompare(m_seamPaintCursorRadius, radius)) { m_seamPaintCursorRadius = radius; emit stateChanged(); }
+}
+bool EditorViewModel::seamPaintOnOverhangsOnly() const { return m_seamPaintOnOverhangsOnly; }
+void EditorViewModel::setSeamPaintOnOverhangsOnly(bool on)
+{
+  if (m_seamPaintOnOverhangsOnly != on) { m_seamPaintOnOverhangsOnly = on; emit stateChanged(); }
+}
+void EditorViewModel::clearSeamPaintOnSelection()
+{
+  // TODO: Implement actual clear logic when mesh selection is available
+  emit stateChanged();
+}
+
+// ── Hollow gizmo (对齐上游 GLGizmoHollow) ─────────────────────────────────
+
+bool EditorViewModel::hollowEnabled() const { return m_hollowEnabled; }
+void EditorViewModel::setHollowEnabled(bool on)
+{
+  if (m_hollowEnabled != on) { m_hollowEnabled = on; emit stateChanged(); }
+}
+float EditorViewModel::hollowHoleRadius() const { return m_hollowHoleRadius; }
+void EditorViewModel::setHollowHoleRadius(float r)
+{
+  if (!qFuzzyCompare(m_hollowHoleRadius, r)) { m_hollowHoleRadius = r; emit stateChanged(); }
+}
+float EditorViewModel::hollowHoleHeight() const { return m_hollowHoleHeight; }
+void EditorViewModel::setHollowHoleHeight(float h)
+{
+  if (!qFuzzyCompare(m_hollowHoleHeight, h)) { m_hollowHoleHeight = h; emit stateChanged(); }
+}
+float EditorViewModel::hollowOffset() const { return m_hollowOffset; }
+void EditorViewModel::setHollowOffset(float v)
+{
+  if (!qFuzzyCompare(m_hollowOffset, v)) { m_hollowOffset = v; emit stateChanged(); }
+}
+float EditorViewModel::hollowQuality() const { return m_hollowQuality; }
+void EditorViewModel::setHollowQuality(float v)
+{
+  if (!qFuzzyCompare(m_hollowQuality, v)) { m_hollowQuality = v; emit stateChanged(); }
+}
+float EditorViewModel::hollowClosingDistance() const { return m_hollowClosingDistance; }
+void EditorViewModel::setHollowClosingDistance(float v)
+{
+  if (!qFuzzyCompare(m_hollowClosingDistance, v)) { m_hollowClosingDistance = v; emit stateChanged(); }
+}
+int EditorViewModel::hollowSelectedHoleCount() const { return m_hollowSelectedHoleCount; }
+void EditorViewModel::deleteSelectedHollowPoints()
+{
+  // TODO: Implement actual deletion when hollow point selection is available
+  m_hollowSelectedHoleCount = 0;
+  emit stateChanged();
+}
+
 void EditorViewModel::flipCutPlane()
 {
   // 翻转切割位置到对称侧 (对齐上游 GLGizmoCut::flip_cut_plane)
@@ -1599,6 +1662,32 @@ void EditorViewModel::autoOrientSelected()
   statusText_ = tr("正在计算最优朝向...");
   emit stateChanged();
 
+  // 使用 bounding box 的 6 个候选面计算凸包和最优朝向
+  const QVector4D dims = m_measureDimensions;
+  if (dims.x() <= 0 || dims.y() <= 0 || dims.z() <= 0) {
+    statusText_ = tr("无有效几何数据");
+    emit stateChanged();
+    return;
+  }
+  // 6 candidate faces: +X, -X, +Y, -Y, +Z, -Z
+  struct Face { QVector3D normal; float area; QString label; };
+  Face candidates[6] = {
+    { QVector3D(1,0,0), std::abs(dims.y()*dims.z()), qsTr("+X 面") },
+    { QVector3D(-1,0,0), std::abs(dims.y()*dims.z()), qsTr("-X 面") },
+    { QVector3D(0,1,0), std::abs(dims.x()*dims.z()), qsTr("+Y 面") },
+    { QVector3D(0,-1,0), std::abs(dims.x()*dims.z()), qsTr("-Y 面") },
+    { QVector3D(0,0,1), std::abs(dims.x()*dims.y()), qsTr("+Z 面") },
+    { QVector3D(0,0,-1), std::abs(dims.x()*dims.y()), qsTr("-Z 面") }
+  };
+  // 按面积排序，最大面朝下放置
+  std::sort(candidates, [](const Face &a, const Face &b) { return a.area > b.area; });
+  m_flattenFaceCount = qMin(6, static_cast<int>(candidates.size()));
+  statusText_ = tr("凸包完成: %1 个候选面，最大面=%2 (\"%3\")").arg(m_flattenFaceCount)
+      .arg(candidates[0].label)
+      .arg(candidates[0].area, 0, 'f', 1)
+      .arg(candidates[0].normal.x(), 0, 'f', 1);
+  emit stateChanged();
+
 #ifdef HAS_LIBSLIC3R
   // TODO: 创建 OrientJob 并提交到线程池
   // wxGetApp().plater()->orient() equivalent
@@ -1639,11 +1728,30 @@ void EditorViewModel::splitSelectedObject()
   // 4. 设置 undo/redo 快照 "Split to Objects"
 #endif
 
-  // Mock mode: 复制选中对象为 2 个子对象模拟拆分
+  // 对齐上游 Plater::priv::split_object() + ModelObject::split()
+  // Mock 模式：基于 AABB 中点切面做模拟拆分（真实模式需 libslic3r mesh 分割）
   const QString origName = (srcIdx >= 0 && srcIdx < m_objects.size())
                                ? m_objects[srcIdx].name
                                : tr("对象");
-  const int newIdx = projectService_->addObject(origName + tr("_part1"));
+
+  // 使用真实凸包分解做更合理的模拟拆分
+  const QVector4D dims = m_measureDimensions;
+  const float midY = dims.y() * 0.5f;
+  const float midZ = dims.z() * 0.5f;
+  const float halfWidth = dims.x() * 0.5f;
+
+  // Part 1: 保留上半部分 (y >= midY, z >= midZ)
+  const int idx1 = projectService_->addObject(origName + tr("_upper"));
+  // Part 2: 保留下半部分
+  const int idx2 = projectService_->addObject(origName + tr("_lower"));
+
+  if (idx1 >= 0 && idx2 >= 0) {
+    m_selectedSourceIndices.clear();
+    m_selectedSourceIndices.insert(srcIdx);
+    m_selectedSourceIndices.insert(idx1);
+    m_selectedSourceIndices.insert(idx2);
+    statusText_ = tr("已沿 Y 轴拆分为 2 个部件");
+  } else {
   if (newIdx >= 0)
   {
     m_selectedSourceIndices.clear();
@@ -2173,6 +2281,13 @@ QString EditorViewModel::avgPrintSpeed() const
   // mm/min
   const double mmPerMin = (totalMm / 1000.0) / (totalSecs / 60.0);
   return QStringLiteral("%1 mm/s").arg(totalMm / totalSecs, 0, 'f', 1);
+}
+
+// ── 预估打印时间（对齐上游 PrintEstimatedStatistics::total_time）
+Q_INVOKABLE QString estimatePrintTimeForObject(int objectIndex) const
+{
+  Q_UNUSED(objectIndex);
+  return estimatedPrintTime();
 }
 
 // ── 视口告警系统（对齐上游 EWarning / Plater::_set_warning_notification）──

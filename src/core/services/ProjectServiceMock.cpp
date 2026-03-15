@@ -1123,6 +1123,65 @@ bool ProjectServiceMock::setPlateScopedOptionValue(int plateIndex, const QString
 #endif
 }
 
+int ProjectServiceMock::scopedOverrideCount(int objectIndex, int volumeIndex) const
+{
+  if (volumeIndex >= 0) {
+    const int volKey = (objectIndex << 16) | volumeIndex;
+    auto it = m_mockVolumeOverrides.constFind(volKey);
+    return it != m_mockVolumeOverrides.constEnd() ? it.value().size() : 0;
+  }
+  auto it = m_mockObjectOverrides.constFind(objectIndex);
+  return it != m_mockObjectOverrides.constEnd() ? it.value().size() : 0;
+}
+
+QString ProjectServiceMock::scopedOverriddenKey(int objectIndex, int volumeIndex, int index) const
+{
+  const QHash<QString, QVariant> *map = nullptr;
+  if (volumeIndex >= 0) {
+    const int volKey = (objectIndex << 16) | volumeIndex;
+    auto it = m_mockVolumeOverrides.constFind(volKey);
+    if (it != m_mockVolumeOverrides.constEnd()) map = &it.value();
+  } else {
+    auto it = m_mockObjectOverrides.constFind(objectIndex);
+    if (it != m_mockObjectOverrides.constEnd()) map = &it.value();
+  }
+  if (!map || index < 0 || index >= map->size()) return {};
+  return map->keys().value(index);
+}
+
+bool ProjectServiceMock::resetScopedOptionValue(int objectIndex, int volumeIndex, const QString &key)
+{
+  if (volumeIndex >= 0) {
+    const int volKey = (objectIndex << 16) | volumeIndex;
+    auto it = m_mockVolumeOverrides.find(volKey);
+    if (it != m_mockVolumeOverrides.end() && it.value().remove(key)) { emit projectChanged(); return true; }
+  } else {
+    auto it = m_mockObjectOverrides.find(objectIndex);
+    if (it != m_mockObjectOverrides.end() && it.value().remove(key)) { emit projectChanged(); return true; }
+  }
+  return false;
+}
+
+int ProjectServiceMock::plateScopedOverrideCount(int plateIndex) const
+{
+  auto it = m_mockPlateOverrides.find(plateIndex);
+  return it != m_mockPlateOverrides.end() ? it.value().size() : 0;
+}
+
+QString ProjectServiceMock::plateScopedOverriddenKey(int plateIndex, int index) const
+{
+  auto it = m_mockPlateOverrides.find(plateIndex);
+  if (it == m_mockPlateOverrides.end() || index < 0 || index >= it.value().size()) return {};
+  return it.value().keys().value(index);
+}
+
+bool ProjectServiceMock::resetPlateScopedOptionValue(int plateIndex, const QString &key)
+{
+  auto it = m_mockPlateOverrides.find(plateIndex);
+  if (it != m_mockPlateOverrides.end() && it.value().remove(key)) { emit projectChanged(); return true; }
+  return false;
+}
+
 bool ProjectServiceMock::deleteObjectVolume(int objectIndex, int volumeIndex)
 {
   if (loading_)

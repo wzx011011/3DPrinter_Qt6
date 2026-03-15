@@ -140,6 +140,30 @@ public:
   Q_INVOKABLE void setSupportPaintToolFromQml(int tool);
   /// Clear all support painting on selected volumes (aligns with upstream "Erase all painting")
   Q_INVOKABLE void clearSupportPaintOnSelection();
+  // Seam painting (对齐上游 GLGizmoSeam)
+  int seamPaintTool() const;
+  void setSeamPaintTool(int tool);
+  float seamPaintCursorRadius() const;
+  void setSeamPaintCursorRadius(float radius);
+  bool seamPaintOnOverhangsOnly() const;
+  void setSeamPaintOnOverhangsOnly(bool on);
+  /// Clear all seam painting on selected volumes
+  Q_INVOKABLE void clearSeamPaintOnSelection();
+  // Hollow gizmo (对齐上游 GLGizmoHollow)
+  bool hollowEnabled() const;
+  void setHollowEnabled(bool on);
+  float hollowHoleRadius() const;
+  void setHollowHoleRadius(float r);
+  float hollowHoleHeight() const;
+  void setHollowHoleHeight(float h);
+  float hollowOffset() const;
+  void setHollowOffset(float v);
+  float hollowQuality() const;
+  void setHollowQuality(float v);
+  float hollowClosingDistance() const;
+  void setHollowClosingDistance(float v);
+  int hollowSelectedHoleCount() const;
+  Q_INVOKABLE void deleteSelectedHollowPoints();
   void setObjectPosX(float v);
   void setObjectPosY(float v);
   void setObjectPosZ(float v);
@@ -245,6 +269,18 @@ public:
   Q_PROPERTY(bool supportPaintOnOverhangsOnly READ supportPaintOnOverhangsOnly WRITE setSupportPaintOnOverhangsOnly NOTIFY stateChanged)
   Q_PROPERTY(bool supportEnable READ supportEnable WRITE setSupportEnable NOTIFY stateChanged)
   Q_PROPERTY(int supportType READ supportType WRITE setSupportType NOTIFY stateChanged)
+  /// 缝线绘制设置（对齐上游 GLGizmoSeam）
+  Q_PROPERTY(int seamPaintTool READ seamPaintTool WRITE setSeamPaintTool NOTIFY stateChanged)
+  Q_PROPERTY(float seamPaintCursorRadius READ seamPaintCursorRadius WRITE setSeamPaintCursorRadius NOTIFY stateChanged)
+  Q_PROPERTY(bool seamPaintOnOverhangsOnly READ seamPaintOnOverhangsOnly WRITE setSeamPaintOnOverhangsOnly NOTIFY stateChanged)
+  /// SLA 空洞标记设置（对齐上游 GLGizmoHollow）
+  Q_PROPERTY(bool hollowEnabled READ hollowEnabled WRITE setHollowEnabled NOTIFY stateChanged)
+  Q_PROPERTY(float hollowHoleRadius READ hollowHoleRadius WRITE setHollowHoleRadius NOTIFY stateChanged)
+  Q_PROPERTY(float hollowHoleHeight READ hollowHoleHeight WRITE setHollowHoleHeight NOTIFY stateChanged)
+  Q_PROPERTY(float hollowOffset READ hollowOffset WRITE setHollowOffset NOTIFY stateChanged)
+  Q_PROPERTY(float hollowQuality READ hollowQuality WRITE setHollowQuality NOTIFY stateChanged)
+  Q_PROPERTY(float hollowClosingDistance READ hollowClosingDistance WRITE setHollowClosingDistance NOTIFY stateChanged)
+  Q_PROPERTY(int hollowSelectedHoleCount READ hollowSelectedHoleCount NOTIFY stateChanged)
   /// 扁平可用面数（对齐上游 GLGizmoFlatten 面）
   Q_PROPERTY(int flattenFaceCount READ flattenFaceCount NOTIFY stateChanged)
   /// 翻转切割平面（对齐上游 GLGizmoCut::flip_cut_plane）
@@ -326,6 +362,8 @@ public:
   Q_PROPERTY(QString modelSizeText READ modelSizeText NOTIFY stateChanged)
   /// 平均打印速度（对齐上游 PrintEstimatedStatistics）
   Q_PROPERTY(QString avgPrintSpeed READ avgPrintSpeed NOTIFY stateChanged)
+  /// 预估打印时间（对齐上游 PrintEstimatedStatistics）
+  Q_PROPERTY(QString estimatedPrintTime READ estimatedPrintTime NOTIFY stateChanged)
   /// 视口告警类型（对齐上游 EWarning）
   Q_PROPERTY(int viewportWarning READ viewportWarning NOTIFY stateChanged)
   Q_PROPERTY(QString viewportWarningMessage READ viewportWarningMessage NOTIFY stateChanged)
@@ -356,6 +394,7 @@ public:
   int sliceResultLayerCount() const;
   QString modelSizeText() const;
   QString avgPrintSpeed() const;
+  QString estimatedPrintTime() const;
   int viewportWarning() const;
   QString viewportWarningMessage() const;
   bool hasViewportWarning() const;
@@ -477,4 +516,16 @@ private:
   bool m_supportPaintOnOverhangsOnly = false; ///< Restrict painting to overhangs
   bool m_supportEnable = false;            ///< Support enabled flag
   int m_supportType = 0;                   ///< 0=normal, 1=tree
+  // Seam painting (对齐上游 GLGizmoSeam)
+  int m_seamPaintTool = 0;                 ///< 0=None, 1=Enforcer, 2=Blocker
+  float m_seamPaintCursorRadius = 2.0f;
+  bool m_seamPaintOnOverhangsOnly = false;
+  // Hollow gizmo (对齐上游 GLGizmoHollow)
+  bool m_hollowEnabled = true;             ///< m_enable_hollowing
+  float m_hollowHoleRadius = 2.0f;        ///< m_new_hole_radius
+  float m_hollowHoleHeight = 6.0f;        ///< m_new_hole_height
+  float m_hollowOffset = 3.0f;            ///< m_offset_stash
+  float m_hollowQuality = 0.5f;           ///< m_quality_stash
+  float m_hollowClosingDistance = 2.0f;    ///< m_closing_d_stash
+  int m_hollowSelectedHoleCount = 0;      ///< selected drain holes count
 };

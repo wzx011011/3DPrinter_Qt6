@@ -75,4 +75,43 @@ struct SupportPaintClippingPlane {
     bool active = false;
 };
 
+// ── Seam painting types (aligns with upstream GLGizmoSeam) ─────────────────
+
+/**
+ * Seam painting tool mode (aligns with upstream GLGizmoSeam m_current_tool)
+ *
+ * Maps to:
+ * - 0 = Enforcer: Force seam placement on painted area
+ * - 1 = Blocker:  Block seam placement on painted area
+ */
+enum class SeamPaintTool : int8_t {
+    None = 0,
+    Enforcer = 1,
+    Blocker = 2
+};
+
+/**
+ * Seam painting settings (aligns with upstream GLGizmoSeam member variables)
+ */
+struct SeamPaintSettings {
+    SeamPaintTool tool = SeamPaintTool::None;
+    float cursorRadius = 2.0f;           // Cursor radius in mm (min 0.05 upstream)
+    bool paintOnOverhangsOnly = false;   // Restrict painting to overhang areas
+};
+
+// ── Hollow gizmo types (aligns with upstream GLGizmoHollow) ───────────────
+
+/**
+ * Hollow gizmo settings (aligns with upstream GLGizmoHollow member variables)
+ */
+struct HollowGizmoSettings {
+    bool enableHollowing = true;     // m_enable_hollowing
+    float newHoleRadius = 2.0f;      // m_new_hole_radius
+    float newHoleHeight = 6.0f;      // m_new_hole_height
+    float hollowingOffset = 3.0f;    // m_offset_stash (drain hole offset)
+    float hollowingQuality = 0.5f;   // m_quality_stash
+    float closingDistance = 2.0f;    // m_closing_d_stash
+    int selectedHoleCount = 0;       // Number of currently selected drain holes
+};
+
 } // namespace Crality3D

@@ -1426,5 +1426,91 @@ Item {
                 }
             }
         }
+
+        // ── Scope Difference Panel (对齐上游 Tab::is_modified_value per-scope diff) ──
+        Rectangle {
+            Layout.fillWidth: true
+            visible: root.configVm && root.configVm.settingsScope !== "global" && root.configVm.scopeOverrideCount() > 0
+            Layout.preferredHeight: scopeDiffContent.implicitHeight + 16
+            radius: 10
+            color: Theme.bgElevated
+            border.width: 1
+            border.color: Theme.borderSubtle
+
+            ColumnLayout {
+                id: scopeDiffContent
+                anchors.fill: parent
+                anchors.margins: 8
+                spacing: 6
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+                    Text {
+                        text: qsTr("作用域差异 (%1)").arg(root.configVm ? root.configVm.scopeOverrideCount() : 0)
+                        color: Theme.textSecondary
+                        font.pixelSize: 10
+                        font.bold: true
+                    }
+                    Item { Layout.fillWidth: true }
+                    // Reset all overrides button
+                    Text {
+                        text: qsTr("全部重置")
+                        color: Theme.textTertiary
+                        font.pixelSize: 10
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            hoverEnabled: true
+                            onEntered: parent.color = Theme.accent
+                            onExited: parent.color = Theme.textTertiary
+                        }
+                    }
+                }
+
+                // List overridden keys
+                Repeater {
+                    model: root.configVm ? root.configVm.scopeOverrideCount() : 0
+                    delegate: RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        required property int index
+
+                        Rectangle {
+                            width: 6; height: 6; radius: 3
+                            color: "#f59e0b"
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Text {
+                            text: root.configVm ? root.configVm.scopeOverriddenKey(index) : ""
+                            color: Theme.textPrimary
+                            font.pixelSize: 10
+                            elide: Text.ElideMiddle
+                            Layout.fillWidth: true
+                        }
+                        // Reset single override
+                        Rectangle {
+                            width: 22; height: 18; radius: 4
+                            color: scopeResetMA.containsMouse ? "#2e1a1a" : Theme.bgPanel
+                            border.width: 1
+                            border.color: Theme.borderSubtle
+                            Text { anchors.centerIn: parent; text: "\u21BA"; color: "#e06666"; font.pixelSize: 10 }
+                            MouseArea {
+                                id: scopeResetMA
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                hoverEnabled: true
+                                onClicked: {
+                                    if (root.configVm) {
+                                        var key = root.configVm.scopeOverriddenKey(index)
+                                        root.configVm.resetScopeOverride(key)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

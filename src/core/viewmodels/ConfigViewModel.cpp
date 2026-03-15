@@ -1,6 +1,8 @@
 #include "ConfigViewModel.h"
 
 #include <algorithm>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 #include "core/services/PresetServiceMock.h"
 #include "core/services/ProjectServiceMock.h"
@@ -1027,4 +1029,79 @@ QString ConfigViewModel::searchResultPage(int searchIndex) const
   if (searchIndex < 0 || searchIndex >= m_lastSearchResults_.size() || !printOptions_)
     return {};
   return printOptions_->optPage(m_lastSearchResults_[searchIndex]);
+}
+
+// ── Scope difference (对齐上游 Tab::is_modified_value per-scope diff) ──
+
+QString ConfigViewModel::scopeDiffSummary(const QString &key) const
+{
+  // Returns a JSON string: {"global":v,"object":v_or_null,"volume":v_or_null,"plate":v_or_null}
+  // null indicates no override at that scope
+  auto globalVal = globalOptionValues_.value(key);
+  if (!projectService_) return QStringLiteral("{}");
+
+  QJsonObject obj;
+  obj[QStringLiteral("global")] = QJsonValue::fromVariant(globalVal);
+
+  if (settingsTargetObjectIndex_ >= 0) {
+    auto objVal = projectService_->scopedOptionValue(settingsTargetObjectIndex_, -1, key, {});
+    if (objVal.isValid())
+      obj[QStringLiteral("object")] = QJsonValue::fromVariant(objVal);
+    else
+      obj[QStringLiteral("object")] = QJsonValue::Null;
+  }
+  if (settingsTargetObjectIndex_ >= 0 && settingsTargetVolumeIndex_ >= 0) {
+    auto volVal = projectService_->scopedOptionValue(settingsTargetObjectIndex_, settingsTargetVolumeIndex_, key, {});
+    if (volVal.isValid())
+      obj[QStringLiteral("volume")] = QJsonValue::fromVariant(volVal);
+    else
+      obj[QStringLiteral("volume")] = QJsonValue::Null;
+  }
+  if (settingsTargetPlateIndex_ >= 0) {
+    auto plateVal = projectService_->plateScopedOptionValue(settingsTargetPlateIndex_, key, {});
+    if (plateVal.isValid())
+      obj[QStringLiteral("plate")] = QJsonValue::fromVariant(plateVal);
+    else
+      obj[QStringLiteral("plate")] = QJsonValue::Null;
+  }
+  return QString::fromUtf8(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+}
+
+int ConfigViewModel::scopeOverrideCount() const
+{
+  if (!projectService_) return 0;
+  int count = 0;
+  if (settingsScope_ == "object" && settingsTargetObjectIndex_ >= 0)
+    count = projectService_->scopedOverrideCount(settingsTargetObjectIndex_, -1);
+  else if (settingsScope_ == "volume" && settingsTargetObjectIndex_ >= 0 && settingsTargetVolumeIndex_ >= 0)
+    count = projectService_->scopedOverrideCount(settingsTargetObjectIndex_, settingsTargetVolumeIndex_);
+  else if (settingsScope_ == "plate" && settingsTargetPlateIndex_ >= 0)
+    count = projectService_->plateScopedOverrideCount(settingsTargetPlateIndex_);
+  return count;
+}
+
+QString ConfigViewModel::scopeOverriddenKey(int index) const
+{
+  if (!projectService_ || index < 0) return {};
+  if (settingsScope_ == "object" && settingsTargetObjectIndex_ >= 0)
+    return projectService_->scopedOverriddenKey(settingsTargetObjectIndex_, -1, index);
+  if (settingsScope_ == "volume" && settingsTargetObjectIndex_ >= 0 && settingsTargetVolumeIndex_ >= 0)
+    return projectService_->scopedOverriddenKey(settingsTargetObjectIndex_, settingsTargetVolumeIndex_, index);
+  if (settingsScope_ == "plate" && settingsTargetPlateIndex_ >= 0)
+    return projectService_->plateScopedOverriddenKey(settingsTargetPlateIndex_, index);
+  return {};
+}
+
+bool ConfigViewModel::resetScopeOverride(const QString &key)
+{
+  if (!projectService_) return false;
+  bool ok = false;
+  if (settingsScope_ == "object" && settingsTargetObjectIndex_ >= 0)
+    ok = projectService_->resetScopedOptionValue(settingsTargetObjectIndex_, -1, key);
+  else if (settingsScope_ == "volume" && settingsTargetObjectIndex_ >= 0 && settingsTargetVolumeIndex_ >= 0)
+    ok = projectService_->resetScopedOptionValue(settingsTargetObjectIndex_, settingsTargetVolumeIndex_, key);
+  else if (settingsScope_ == "plate" && settingsTargetPlateIndex_ >= 0)
+    ok = projectService_->resetPlateScopedOptionValue(settingsTargetPlateIndex_, key);
+  if (ok) emit stateChanged();
+  return ok;
 }

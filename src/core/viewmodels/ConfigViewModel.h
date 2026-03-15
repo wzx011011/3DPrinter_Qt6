@@ -145,6 +145,15 @@ public:
   Q_INVOKABLE QList<int> filterIndicesByCategory(const QList<int> &indices, const QString &category) const;
   /// 从已有索引列表中按页面过滤（对齐上游 Tab::Page 分组）
   Q_INVOKABLE QList<int> filterIndicesByPage(const QList<int> &indices, const QString &page) const;
+  /// Per-scope 作用域差异对比（对齐上游 Tab::is_modified_value per-scope diff）
+  /// 返回 JSON: {"global":v,"object":v_or_null,"volume":v_or_null,"plate":v_or_null}
+  Q_INVOKABLE QString scopeDiffSummary(const QString &key) const;
+  /// 当前作用域覆盖的选项数量
+  Q_INVOKABLE int scopeOverrideCount() const;
+  /// 获取当前作用域中第 index 个被覆盖的 key
+  Q_INVOKABLE QString scopeOverriddenKey(int index) const;
+  /// 重置当前作用域中指定 key 的覆盖值
+  Q_INVOKABLE bool resetScopeOverride(const QString &key);
   /// 获取耗材丝预设名称（替代 QML inline materialPresetAt，修正分类名"耗材"匹配）
   Q_INVOKABLE QString materialPresetName(int localIndex) const;
 

@@ -114,7 +114,8 @@ $objFiles = @(
     "ModelMallViewModel.cpp.obj",
     "SliceService.cpp.obj",
     "ConfigOptionModel.cpp.obj",
-    "CameraController.cpp.obj"
+    "CameraController.cpp.obj",
+    "GLViewport.cpp.obj"
 )
 foreach ($obj in $objFiles) {
     $found = Get-ChildItem -Path $BuildDir -Filter $obj -Recurse -ErrorAction SilentlyContinue
@@ -158,6 +159,41 @@ $qmlFiles = @(
 foreach ($qml in $qmlFiles) {
     $sourcePath = Join-Path (Join-Path $SourceDir "src\qml_gui") $qml
     Report-Test "$qml source exists" (Test-Path $sourcePath)
+}
+Write-Host ""
+
+# --- Test 7: Standalone startup (no vcvars) ---
+Write-Host "[Phase 7] Standalone startup (deployment check)"
+$exe2 = Join-Path $BuildDir "FramelessDialogDemo.exe"
+$standaloneLog = Join-Path $BuildDir "standalone_test.log"
+Remove-Item $standaloneLog -ErrorAction SilentlyContinue
+try {
+    $proc2 = Start-Process -FilePath $exe2 -WorkingDirectory $BuildDir -PassThru -RedirectStandardError $standaloneLog -WindowStyle Hidden
+    Start-Sleep -Seconds $AppTimeout
+    if ($proc2.HasExited) {
+        $exitCode2 = $proc2.ExitCode
+        # 0xC0000135 = DLL_NOT_FOUND
+        if ($exitCode2 -eq -1073741515) {
+            Report-Test "Standalone DLL dependencies" $false "(0xC0000135 DLL_NOT_FOUND — missing runtime DLLs in build dir)"
+        } else {
+            Report-Test "Standalone startup" $false "(exited with code $exitCode2)"
+        }
+    } else {
+        Report-Test "Standalone startup (no vcvars)" $true "(PID $($proc2.Id), app survives ${AppTimeout}s"
+        Stop-Process -Id $proc2.Id -Force -ErrorAction SilentlyContinue
+    }
+    # Show DLL diagnostics if failed
+    if (Test-Path $standaloneLog) {
+        $missingDlls = [regex]::Matches((Get-Content $standaloneLog -Raw -ErrorAction SilentlyContinue), 'error while loading shared libraries: (.+?\.dll)') | Measure-Object
+        if ($missingDlls.Count -gt 0) {
+            Write-Host "  Missing DLLs:" -ForegroundColor Yellow
+            foreach ($m in $missingDlls | Select-Object -First 5) {
+                Write-Host "    $($m.Value)" -ForegroundColor Yellow
+            }
+        }
+    }
+} catch {
+    Report-Test "Standalone startup (no vcvars)" $false "(exception: $_)"
 }
 Write-Host ""
 

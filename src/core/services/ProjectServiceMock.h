@@ -107,6 +107,13 @@ public:
   /// Plate-level scoped overrides (对齐上游 PartPlate config override)
   QVariant plateScopedOptionValue(int plateIndex, const QString &key, const QVariant &fallbackValue = QVariant()) const;
   bool setPlateScopedOptionValue(int plateIndex, const QString &key, const QVariant &value);
+  /// Count overridden keys for per-scope diff panel
+  int scopedOverrideCount(int objectIndex, int volumeIndex) const;
+  QString scopedOverriddenKey(int objectIndex, int volumeIndex, int index) const;
+  bool resetScopedOptionValue(int objectIndex, int volumeIndex, const QString &key);
+  int plateScopedOverrideCount(int plateIndex) const;
+  QString plateScopedOverriddenKey(int plateIndex, int index) const;
+  bool resetPlateScopedOptionValue(int plateIndex, const QString &key);
   Q_INVOKABLE bool deleteObjectVolume(int objectIndex, int volumeIndex);
   /// Add a new volume to the specified object (对齐上游 GUI_ObjectList::load_subobject / load_generic_subobject)
   /// volumeType: 0=ModelPart, 1=NegativeVolume, 2=ParameterModifier, 3=SupportBlocker, 4=SupportEnforcer
