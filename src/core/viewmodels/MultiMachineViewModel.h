@@ -28,6 +28,9 @@ class MultiMachineViewModel : public QObject
   // -- Task Sent tab --
   Q_PROPERTY(int cloudTaskCount READ cloudTaskCount NOTIFY cloudTasksChanged)
   Q_PROPERTY(bool hasCloudTasks READ hasCloudTasks NOTIFY cloudTasksChanged)
+  Q_PROPERTY(int cloudSelectedCount READ cloudSelectedCount NOTIFY cloudTasksChanged)
+  Q_PROPERTY(int cloudCurrentPage READ cloudCurrentPage WRITE setCloudCurrentPage NOTIFY cloudPaginationChanged)
+  Q_PROPERTY(int cloudTotalPages READ cloudTotalPages NOTIFY cloudPaginationChanged)
 
 public:
   explicit MultiMachineViewModel(QObject *parent = nullptr);
@@ -66,6 +69,7 @@ public:
   Q_INVOKABLE int localTaskProgress(int i) const;
   Q_INVOKABLE QString localTaskSendTime(int i) const;
   Q_INVOKABLE QString localTaskRemaining(int i) const;
+  Q_INVOKABLE int localTaskSendingPercent(int i) const;  // sending progress (aligns with upstream m_sending_percent)
   Q_INVOKABLE bool localTaskSelected(int i) const;
   Q_INVOKABLE bool hasLocalTasks() const;
   Q_INVOKABLE int localSelectedCount() const;
@@ -80,17 +84,32 @@ public:
   Q_INVOKABLE QString cloudTaskSendTime(int i) const;
   Q_INVOKABLE QString cloudTaskRemaining(int i) const;
   Q_INVOKABLE bool hasCloudTasks() const;
+  Q_INVOKABLE bool cloudTaskSelected(int i) const;
+
+  // ── Cloud Task pagination (aligns with upstream CloudTaskManagerPage m_flipping_panel) ──
+  int cloudCurrentPage() const;
+  void setCloudCurrentPage(int page);
+  int cloudTotalPages() const;
+  int cloudSelectedCount() const;
 
   // ── Device actions (aligns with upstream MultiMachineItem EVT_MULTI_DEVICE_VIEW) ──
   Q_INVOKABLE void viewMachine(int index);
 
   // ── Task actions ──
   Q_INVOKABLE void selectLocalTask(int index);
+  Q_INVOKABLE void selectAllLocalTasks();
+  Q_INVOKABLE void unselectAllLocalTasks();
   Q_INVOKABLE void cancelLocalTask(int index);
   Q_INVOKABLE void stopAllLocalTasks();
   Q_INVOKABLE void pauseCloudTask(int index);
   Q_INVOKABLE void resumeCloudTask(int index);
+  Q_INVOKABLE void stopCloudTask(int index);
   Q_INVOKABLE void stopAllCloudTasks();
+  Q_INVOKABLE void pauseAllCloudTasks();
+  Q_INVOKABLE void resumeAllCloudTasks();
+  Q_INVOKABLE void selectCloudTask(int index);
+  Q_INVOKABLE void selectAllCloudTasks();
+  Q_INVOKABLE void unselectAllCloudTasks();
 
   // ── Device management (aligns with upstream MultiMachinePickPage "Edit Printers") ──
   Q_INVOKABLE void editPrinters();
@@ -112,6 +131,7 @@ signals:
   void paginationChanged();
   void localTasksChanged();
   void cloudTasksChanged();
+  void cloudPaginationChanged();
   void messageRequested(QString text);
 
 private:
@@ -130,6 +150,7 @@ private:
     QString projectName, devName, sendTime, remaining;
     int status;     // 0-pending 1-sending 2-finish 3-cancel 4-failed 5-printing 6-success 7-removed 8-idle
     int progress;
+    int sendingPercent;  // sending progress (aligns with upstream m_sending_percent)
     bool selected;
   };
   QList<LocalTaskEntry> m_localTasks;
@@ -139,12 +160,17 @@ private:
     QString projectName, devName, sendTime, remaining;
     int status;     // 0-printing 1-finish 2-failed
     int progress;
+    bool selected;
   };
   QList<CloudTaskEntry> m_cloudTasks;
 
   // Pagination
   int m_currentPage = 0;
   static const int m_pageSize = 10;
+
+  // Cloud task pagination
+  int m_cloudCurrentPage = 0;
+  static const int m_cloudPageSize = 10;
 
   // Sort state
   bool m_sortNameAsc = true;

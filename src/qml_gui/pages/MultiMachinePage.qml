@@ -568,19 +568,24 @@ Item {
 
     // ══════════════════════════════════════════════════════
     // Component: Task Sending Tab (LocalTaskManagerPage)
-    // Aligns with upstream table: Project Name / Printer / Status / Send Time / Actions
+    // Aligns with upstream table: [Checkbox] Project Name / Device Name / Status / Info / Sent Time / Actions
     // ══════════════════════════════════════════════════════
     Component {
         id: localTaskTabComponent
 
         Item {
             property var _vm: root.multiMachineVm
+            // All-selected only considers selectable tasks (status <= 1)
+            property bool _allLocalSelected: _vm.localSelectedCount > 0 && _vm.localSelectedCount === _vm.localTaskCount
 
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: Theme.spacingLG
                 spacing: 0
 
+                // ── Bottom control bar (aligns with upstream m_ctrl_btn_panel) ──
+                // Placed before list so it visually sits below in upstream, but
+                // we keep the toolbar at top for QML convention.
                 // ── Toolbar ──
                 RowLayout {
                     Layout.fillWidth: true
@@ -617,7 +622,7 @@ Item {
                         color: Theme.statusError
                         Text {
                             anchors.centerIn: parent
-                            text: qsTr("Stop All")
+                            text: qsTr("Cancel All")
                             color: Theme.textOnAccent
                             font.pixelSize: Theme.fontSizeSM
                         }
@@ -626,7 +631,7 @@ Item {
                     Item { Layout.fillWidth: true }
                 }
 
-                // ── Table header ──
+                // ── Table header (aligns with upstream m_table_head_panel) ──
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 34
@@ -637,12 +642,38 @@ Item {
                         anchors.leftMargin: Theme.spacingXL
                         anchors.rightMargin: Theme.spacingXL
                         spacing: 0
+                        // Select-all checkbox (aligns with upstream m_select_checkbox)
+                        Rectangle {
+                            width: 16
+                            height: 16
+                            radius: 3
+                            color: _allLocalSelected ? Theme.accent : "transparent"
+                            border.color: _allLocalSelected ? Theme.accent : Theme.borderDefault
+                            border.width: 1
+                            anchors.verticalCenter: parent.verticalCenter
+                            Text {
+                                anchors.centerIn: parent
+                                visible: _allLocalSelected
+                                text: "\u2713"
+                                color: Theme.textOnAccent
+                                font.pixelSize: 10
+                            }
+                            TapHandler {
+                                onTapped: {
+                                    if (_allLocalSelected)
+                                        _vm.unselectAllLocalTasks()
+                                    else
+                                        _vm.selectAllLocalTasks()
+                                }
+                            }
+                        }
+                        Item { width: Theme.spacingMD }
                         Text { text: qsTr("Project Name"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.fillWidth: true }
-                        Text { text: qsTr("Printer"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 130 }
-                        Text { text: qsTr("Status"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 130 }
-                        Text { text: qsTr("Send Time"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 130 }
-                        Text { text: qsTr("Remaining"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 80 }
-                        Text { text: qsTr("Progress"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 90 }
+                        Text { text: qsTr("Device Name"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 130 }
+                        Text { text: qsTr("Task Status"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 130 }
+                        Text { text: qsTr("Info"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 130 }
+                        Text { text: qsTr("Sent Time"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 130 }
+                        Text { text: qsTr("Actions"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 80 }
                     }
                 }
 
@@ -664,7 +695,7 @@ Item {
                     }
                 }
 
-                // ── Empty state ──
+                // ── Empty state (aligns with upstream m_tip_text) ──
                 Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: parent.height * 0.4
@@ -673,10 +704,12 @@ Item {
                         anchors.centerIn: parent
                         spacing: Theme.spacingLG
                         Text {
-                            text: qsTr("No sending tasks")
+                            text: qsTr("There are no tasks to be sent!")
                             color: Theme.textTertiary
                             font.pixelSize: Theme.fontSizeXL
                             horizontalAlignment: Text.AlignHCenter
+                            Layout.preferredWidth: 400
+                            wrapMode: Text.Wrap
                         }
                     }
                 }
@@ -686,6 +719,10 @@ Item {
 
     // ══════════════════════════════════════════════════════
     // Delegate: Local task row
+    // Aligns with upstream MultiTaskItem::doRender (m_task_type=0)
+    // Columns: [Checkbox] Project Name / Device Name / Task Status / Info / Sent Time / Actions
+    // Checkbox enabled only for status <= 1 (pending/sending), disabled otherwise (aligns with upstream)
+    // Cancel button shown only for status <= 1 (aligns with upstream update_info)
     // ══════════════════════════════════════════════════════
     Component {
         id: localTaskRowDelegate
@@ -702,12 +739,24 @@ Item {
             property string _sendTime: _vm.localTaskSendTime(index)
             property string _remaining: _vm.localTaskRemaining(index)
             property bool _selected: _vm.localTaskSelected(index)
+            property int _sendingPercent: _vm.localTaskSendingPercent(index)
+            readonly property bool _selectable: _status <= 1  // pending or sending
+            readonly property bool _cancelable: _status <= 1  // show cancel button
 
             width: localTaskList.width
-            height: 44
+            height: 50
             color: _hovered ? Theme.bgHover : (_selected ? Theme.accentSubtle : Theme.bgSurface)
             radius: Theme.radiusSM
             property bool _hovered: false
+
+            // Hover border (aligns with upstream doRender m_hover rounded rect)
+            Rectangle {
+                anchors.fill: parent
+                radius: Theme.radiusSM
+                color: "transparent"
+                border.color: _hovered ? Theme.accent : "transparent"
+                border.width: 1
+            }
 
             MouseArea {
                 anchors.fill: parent
@@ -723,97 +772,133 @@ Item {
                 anchors.rightMargin: Theme.spacingXL
                 spacing: 0
 
-                // Checkbox + project name
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.spacingMD
-                    // Selection indicator
-                    Rectangle {
-                        width: 16
-                        height: 16
-                        radius: 3
-                        color: _selected ? Theme.accent : "transparent"
-                        border.color: _selected ? Theme.accent : Theme.borderDefault
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            visible: _selected
-                            text: "\u2713"
-                            color: Theme.textOnAccent
-                            font.pixelSize: 10
-                        }
-                    }
+                // Checkbox (aligns with upstream EVT_MULTI_DEVICE_SELECTED / state_selected)
+                Rectangle {
+                    width: 16
+                    height: 16
+                    radius: 3
+                    color: _selected ? Theme.accent : "transparent"
+                    border.color: _selectable ? (_selected ? Theme.accent : Theme.borderDefault) : Theme.borderSubtle
+                    border.width: 1
+                    opacity: _selectable ? 1.0 : 0.4
+                    anchors.verticalCenter: parent.verticalCenter
                     Text {
-                        text: _projectName
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontSizeMD
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
+                        anchors.centerIn: parent
+                        visible: _selected
+                        text: "\u2713"
+                        color: Theme.textOnAccent
+                        font.pixelSize: 10
                     }
                 }
 
+                Item { width: Theme.spacingMD }
+
+                // Project name
+                Text {
+                    Layout.fillWidth: true
+                    text: _projectName
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeMD
+                    elide: Text.ElideRight
+                }
+
+                // Device name
                 Text {
                     Layout.preferredWidth: 130
                     text: _devName
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSizeSM
                     elide: Text.ElideRight
+                    anchors.verticalCenter: parent.verticalCenter
                 }
 
+                // Task status
                 Text {
                     Layout.preferredWidth: 130
                     text: _statusText
                     color: {
                         if (_status === 6) return Theme.statusSuccess;  // success
-                        if (_status === 7 || _status === 4) return Theme.statusError; // failed
+                        if (_status === 3 || _status === 4) return Theme.statusError; // cancel/failed
                         if (_status === 1 || _status === 5) return Theme.statusInfo; // sending/printing
                         return Theme.textSecondary;
                     }
                     font.pixelSize: Theme.fontSizeSM
+                    anchors.verticalCenter: parent.verticalCenter
                 }
 
+                // Info column (aligns with upstream TASK_LEFT_PRO_INFO)
+                // Shows sending progress bar for status=1 (sending)
+                Item {
+                    Layout.preferredWidth: 130
+                    Layout.fillHeight: true
+                    visible: _status === 1  // sending state shows progress
+                    RowLayout {
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Theme.spacingSM
+                        // Sending progress bar (aligns with upstream doRender sending percent)
+                        Rectangle {
+                            width: 80
+                            height: 6
+                            radius: 3
+                            color: Theme.bgElevated
+                            Rectangle {
+                                width: parent.width * (_sendingPercent / 100.0)
+                                height: parent.height
+                                radius: 3
+                                color: Theme.statusInfo
+                            }
+                        }
+                        Text {
+                            text: _sendingPercent + "%"
+                            color: Theme.textTertiary
+                            font.pixelSize: Theme.fontSizeXS
+                            Layout.preferredWidth: 35
+                        }
+                    }
+                }
+
+                // Send time (aligns with upstream TASK_LEFT_SEND_TIME)
                 Text {
                     Layout.preferredWidth: 130
                     text: _sendTime
                     color: Theme.textTertiary
                     font.pixelSize: Theme.fontSizeXS
+                    anchors.verticalCenter: parent.verticalCenter
                 }
 
-                // Remaining time (对齐 upstream get_left_time)
-                Text {
-                    Layout.preferredWidth: 80
-                    text: (_status === 1 || _status === 5) ? _remaining : "--"
-                    color: (_status === 1 || _status === 5) ? Theme.textSecondary : Theme.textDisabled
-                    font.pixelSize: Theme.fontSizeXS
-                    font.family: "monospace"
-                }
+                // Actions column (aligns with upstream m_button_cancel)
+                // Cancel button shown for pending/sending tasks
+                Rectangle {
+                    Layout.preferredWidth: 70
+                    Layout.preferredHeight: 28
+                    radius: 6
+                    color: _cancelable ? (_cancelBtnHovered ? Theme.bgPressed : Theme.bgElevated) : Theme.bgPanel
+                    border.color: _cancelable ? Theme.borderDefault : Theme.borderSubtle
+                    border.width: 1
+                    visible: _cancelable
+                    anchors.verticalCenter: parent.verticalCenter
+                    property bool _cancelBtnHovered: false
 
-                // Progress bar
-                Item {
-                    Layout.preferredWidth: 90
-                    height: parent.height
-                    RowLayout {
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: Theme.spacingSM
-                        Rectangle {
-                            width: 60
-                            height: 6
-                            radius: 3
-                            color: Theme.bgElevated
-                            Rectangle {
-                                width: parent.width * (_progress / 100.0)
-                                height: parent.height
-                                radius: 3
-                                color: Theme.accent
-                            }
-                        }
-                        Text {
-                            text: _progress + "%"
-                            color: Theme.textTertiary
-                            font.pixelSize: Theme.fontSizeXS
-                            Layout.preferredWidth: 30
-                        }
+                    Text {
+                        anchors.centerIn: parent
+                        text: qsTr("Cancel")
+                        color: _cancelable ? Theme.textPrimary : Theme.textDisabled
+                        font.pixelSize: Theme.fontSizeXS
                     }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onEntered: parent._cancelBtnHovered = true
+                        onExited: parent._cancelBtnHovered = false
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: _vm.cancelLocalTask(index)
+                    }
+                }
+                // Non-cancelable placeholder
+                Item {
+                    Layout.preferredWidth: 70
+                    visible: !_cancelable
                 }
             }
         }
@@ -821,12 +906,16 @@ Item {
 
     // ══════════════════════════════════════════════════════
     // Component: Task Sent Tab (CloudTaskManagerPage)
+    // Aligns with upstream: [Checkbox] Task Name / Device Name / Task Status / Info / Sent Time / Actions
+    // Bulk actions: Pause All / Resume All / Stop All (aligns with upstream btn_pause_all/btn_continue_all/btn_stop_all)
+    // Pagination: aligns with upstream m_flipping_panel
     // ══════════════════════════════════════════════════════
     Component {
         id: cloudTaskTabComponent
 
         Item {
             property var _vm: root.multiMachineVm
+            property bool _allCloudSelected: _vm.cloudSelectedCount > 0 && _vm.cloudSelectedCount === _vm.cloudTaskCount
 
             ColumnLayout {
                 anchors.fill: parent
@@ -838,8 +927,46 @@ Item {
                     Layout.fillWidth: true
                     Layout.bottomMargin: Theme.spacingMD
                     Item { Layout.fillWidth: true }
+                    Text {
+                        text: _vm.cloudSelectedCount > 0
+                              ? qsTr("%1 selected").arg(_vm.cloudSelectedCount)
+                              : ""
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeSM
+                    }
+                    // Pause All button (aligns with upstream btn_pause_all)
+                    Rectangle {
+                        visible: _vm.cloudSelectedCount > 0
+                        width: 80
+                        height: Theme.controlHeightSM
+                        radius: Theme.radiusSM
+                        color: Theme.accent
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("Pause All")
+                            color: Theme.textOnAccent
+                            font.pixelSize: Theme.fontSizeSM
+                        }
+                        TapHandler { onTapped: _vm.pauseAllCloudTasks() }
+                    }
+                    // Resume All button (aligns with upstream btn_continue_all)
+                    Rectangle {
+                        visible: _vm.cloudSelectedCount > 0
+                        width: 90
+                        height: Theme.controlHeightSM
+                        radius: Theme.radiusSM
+                        color: Theme.accent
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("Resume All")
+                            color: Theme.textOnAccent
+                            font.pixelSize: Theme.fontSizeSM
+                        }
+                        TapHandler { onTapped: _vm.resumeAllCloudTasks() }
+                    }
                     // Stop All button (aligns with upstream btn_stop_all)
                     Rectangle {
+                        visible: _vm.cloudSelectedCount > 0
                         width: 80
                         height: Theme.controlHeightSM
                         radius: Theme.radiusSM
@@ -855,7 +982,7 @@ Item {
                     Item { Layout.fillWidth: true }
                 }
 
-                // ── Table header ──
+                // ── Table header (aligns with upstream m_table_head_panel) ──
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 34
@@ -866,12 +993,38 @@ Item {
                         anchors.leftMargin: Theme.spacingXL
                         anchors.rightMargin: Theme.spacingXL
                         spacing: 0
-                        Text { text: qsTr("Project Name"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.fillWidth: true }
-                        Text { text: qsTr("Printer"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 130 }
-                        Text { text: qsTr("Status"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 130 }
-                        Text { text: qsTr("Send Time"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 130 }
-                        Text { text: qsTr("Remaining"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 80 }
-                        Text { text: qsTr("Progress"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 90 }
+                        // Select-all checkbox (aligns with upstream m_select_checkbox)
+                        Rectangle {
+                            width: 16
+                            height: 16
+                            radius: 3
+                            color: _allCloudSelected ? Theme.accent : "transparent"
+                            border.color: _allCloudSelected ? Theme.accent : Theme.borderDefault
+                            border.width: 1
+                            anchors.verticalCenter: parent.verticalCenter
+                            Text {
+                                anchors.centerIn: parent
+                                visible: _allCloudSelected
+                                text: "\u2713"
+                                color: Theme.textOnAccent
+                                font.pixelSize: 10
+                            }
+                            TapHandler {
+                                onTapped: {
+                                    if (_allCloudSelected)
+                                        _vm.unselectAllCloudTasks()
+                                    else
+                                        _vm.selectAllCloudTasks()
+                                }
+                            }
+                        }
+                        Item { width: Theme.spacingMD }
+                        Text { text: qsTr("Task Name"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.fillWidth: true }
+                        Text { text: qsTr("Device Name"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 120 }
+                        Text { text: qsTr("Task Status"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 110 }
+                        Text { text: qsTr("Info"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 130 }
+                        Text { text: qsTr("Sent Time"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.preferredWidth: 120 }
+                        Text { text: qsTr("Actions"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; font.bold: true; Layout.fillWidth: true }
                     }
                 }
 
@@ -909,12 +1062,65 @@ Item {
                         }
                     }
                 }
+
+                // ── Pagination controls (aligns with upstream CloudTaskManagerPage m_flipping_panel) ──
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Theme.spacingSM
+                    visible: _vm.cloudTotalPages > 1
+                    Item { Layout.fillWidth: true }
+                    Rectangle {
+                        width: 24
+                        height: 24
+                        radius: Theme.radiusSM
+                        color: _vm.cloudCurrentPage > 0 ? Theme.bgElevated : Theme.bgPanel
+                        Text {
+                            anchors.centerIn: parent
+                            text: "<"
+                            color: _vm.cloudCurrentPage > 0 ? Theme.textPrimary : Theme.textDisabled
+                            font.pixelSize: Theme.fontSizeSM
+                        }
+                        TapHandler {
+                            enabled: _vm.cloudCurrentPage > 0
+                            onTapped: _vm.cloudCurrentPage = _vm.cloudCurrentPage - 1
+                        }
+                    }
+                    Text {
+                        text: (_vm.cloudCurrentPage + 1) + " / " + _vm.cloudTotalPages
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeSM
+                        Layout.leftMargin: Theme.spacingSM
+                        Layout.rightMargin: Theme.spacingSM
+                    }
+                    Rectangle {
+                        width: 24
+                        height: 24
+                        radius: Theme.radiusSM
+                        color: _vm.cloudCurrentPage < _vm.cloudTotalPages - 1 ? Theme.bgElevated : Theme.bgPanel
+                        Text {
+                            anchors.centerIn: parent
+                            text: ">"
+                            color: _vm.cloudCurrentPage < _vm.cloudTotalPages - 1 ? Theme.textPrimary : Theme.textDisabled
+                            font.pixelSize: Theme.fontSizeSM
+                        }
+                        TapHandler {
+                            enabled: _vm.cloudCurrentPage < _vm.cloudTotalPages - 1
+                            onTapped: _vm.cloudCurrentPage = _vm.cloudCurrentPage + 1
+                        }
+                    }
+                    Item { Layout.fillWidth: true }
+                }
             }
         }
     }
 
     // ══════════════════════════════════════════════════════
     // Delegate: Cloud task row
+    // Aligns with upstream MultiTaskItem::doRender (m_task_type=1)
+    // Columns: [Checkbox] Task Name / Device Name / Task Status / Info / Sent Time / Actions
+    // Checkbox enabled only for status == 0 (printing), disabled otherwise (aligns with upstream)
+    // Actions: Pause / Resume / Stop buttons for printing tasks (aligns with upstream m_button_pause/resume/stop)
+    // Info column: progress bar + remaining time for active printing tasks (aligns with upstream TASK_LEFT_PRO_INFO)
     // ══════════════════════════════════════════════════════
     Component {
         id: cloudTaskRowDelegate
@@ -930,18 +1136,33 @@ Item {
             property int _progress: _vm.cloudTaskProgress(index)
             property string _sendTime: _vm.cloudTaskSendTime(index)
             property string _remaining: _vm.cloudTaskRemaining(index)
+            property bool _selected: _vm.cloudTaskSelected(index)
+            readonly property bool _selectable: _status === 0  // only printing tasks selectable
+            readonly property bool _isPrinting: _status === 0
 
             width: cloudTaskList.width
-            height: 44
-            color: _hovered ? Theme.bgHover : Theme.bgSurface
+            height: 50
+            color: _hovered ? Theme.bgHover : (_selected ? Theme.accentSubtle : Theme.bgSurface)
             radius: Theme.radiusSM
             property bool _hovered: false
+            // Track pause/resume toggle state for printing tasks
+            property bool _paused: false
+
+            // Hover border (aligns with upstream doRender m_hover)
+            Rectangle {
+                anchors.fill: parent
+                radius: Theme.radiusSM
+                color: "transparent"
+                border.color: _hovered ? Theme.accent : "transparent"
+                border.width: 1
+            }
 
             MouseArea {
                 anchors.fill: parent
                 hoverEnabled: true
                 onEntered: cloudRow._hovered = true
                 onExited: cloudRow._hovered = false
+                onClicked: _vm.selectCloudTask(index)
             }
 
             RowLayout {
@@ -950,6 +1171,28 @@ Item {
                 anchors.rightMargin: Theme.spacingXL
                 spacing: 0
 
+                // Checkbox (aligns with upstream EVT_MULTI_CLOUD_TASK_SELECTED)
+                Rectangle {
+                    width: 16
+                    height: 16
+                    radius: 3
+                    color: _selected ? Theme.accent : "transparent"
+                    border.color: _selectable ? (_selected ? Theme.accent : Theme.borderDefault) : Theme.borderSubtle
+                    border.width: 1
+                    opacity: _selectable ? 1.0 : 0.4
+                    anchors.verticalCenter: parent.verticalCenter
+                    Text {
+                        anchors.centerIn: parent
+                        visible: _selected
+                        text: "\u2713"
+                        color: Theme.textOnAccent
+                        font.pixelSize: 10
+                    }
+                }
+
+                Item { width: Theme.spacingMD }
+
+                // Task name
                 Text {
                     Layout.fillWidth: true
                     text: _projectName
@@ -958,90 +1201,164 @@ Item {
                     elide: Text.ElideRight
                 }
 
+                // Device name
                 Text {
-                    Layout.preferredWidth: 130
+                    Layout.preferredWidth: 120
                     text: _devName
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSizeSM
                     elide: Text.ElideRight
+                    anchors.verticalCenter: parent.verticalCenter
                 }
 
-                RowLayout {
-                    Layout.preferredWidth: 130
-                    spacing: Theme.spacingMD
-                    Text {
-                        text: _statusText
-                        color: {
-                            if (_status === 1) return Theme.statusSuccess;  // finish
-                            if (_status === 2) return Theme.statusError;    // failed
-                            if (_status === 0) return Theme.statusInfo;    // printing
-                            return Theme.textSecondary;
-                        }
-                        font.pixelSize: Theme.fontSizeSM
-                    }
-                    // Pause/Resume button for printing tasks
-                    Rectangle {
-                        visible: _status === 0
-                        width: 50
-                        height: 22
-                        radius: Theme.radiusSM
-                        color: Theme.bgElevated
-                        border.color: Theme.borderDefault
-                        border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("Pause")
-                            color: Theme.textSecondary
-                            font.pixelSize: 9
-                        }
-                        TapHandler { onTapped: _vm.pauseCloudTask(index) }
-                    }
-                }
-
+                // Task status
                 Text {
+                    Layout.preferredWidth: 110
+                    text: _statusText
+                    color: {
+                        if (_status === 1) return Theme.statusSuccess;  // finish
+                        if (_status === 2) return Theme.statusError;    // failed
+                        if (_status === 0) return Theme.statusInfo;    // printing
+                        return Theme.textSecondary;
+                    }
+                    font.pixelSize: Theme.fontSizeSM
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                // Info column (aligns with upstream TASK_LEFT_PRO_INFO for cloud tasks)
+                // Shows progress bar + remaining time for printing tasks
+                Item {
                     Layout.preferredWidth: 130
+                    Layout.fillHeight: true
+                    visible: _isPrinting
+                    ColumnLayout {
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 2
+                        // Progress bar + percentage + remaining time (aligns with upstream doRender cloud info)
+                        RowLayout {
+                            spacing: Theme.spacingSM
+                            Rectangle {
+                                width: 70
+                                height: 6
+                                radius: 3
+                                color: Theme.bgElevated
+                                Rectangle {
+                                    width: parent.width * (_progress / 100.0)
+                                    height: parent.height
+                                    radius: 3
+                                    color: Theme.statusInfo
+                                }
+                            }
+                            Text {
+                                text: _progress + "%  |  " + _remaining
+                                color: Theme.textTertiary
+                                font.pixelSize: Theme.fontSizeXS
+                            }
+                        }
+                    }
+                }
+
+                // Sent time
+                Text {
+                    Layout.preferredWidth: 120
                     text: _sendTime
                     color: Theme.textTertiary
                     font.pixelSize: Theme.fontSizeXS
+                    anchors.verticalCenter: parent.verticalCenter
                 }
 
-                // Remaining time (对齐 upstream get_left_time)
-                Text {
-                    Layout.preferredWidth: 80
-                    text: _status === 0 ? _remaining : "--"
-                    color: _status === 0 ? Theme.textSecondary : Theme.textDisabled
-                    font.pixelSize: Theme.fontSizeXS
-                    font.family: "monospace"
-                }
+                // Actions column (aligns with upstream m_button_pause / m_button_resume / m_button_stop)
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spacingSM
+                    visible: _isPrinting
 
-                // Progress bar
-                Item {
-                    Layout.preferredWidth: 90
-                    height: parent.height
-                    RowLayout {
+                    // Pause button (aligns with upstream m_button_pause)
+                    Rectangle {
+                        width: 55
+                        height: 28
+                        radius: 6
+                        color: _pauseBtnHover ? Theme.bgPressed : Theme.bgElevated
+                        border.color: Theme.borderDefault
+                        border.width: 1
+                        visible: !cloudRow._paused
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: Theme.spacingSM
-                        Rectangle {
-                            width: 60
-                            height: 6
-                            radius: 3
-                            color: Theme.bgElevated
-                            Rectangle {
-                                width: parent.width * (_progress / 100.0)
-                                height: parent.height
-                                radius: 3
-                                color: {
-                                    if (_status === 1) return Theme.statusSuccess;
-                                    if (_status === 2) return Theme.statusError;
-                                    return Theme.statusInfo;
-                                }
+                        property bool _pauseBtnHover: false
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("Pause")
+                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSizeXS
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onEntered: parent._pauseBtnHover = true
+                            onExited: parent._pauseBtnHover = false
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                _vm.pauseCloudTask(index)
+                                cloudRow._paused = true
                             }
                         }
+                    }
+
+                    // Resume button (aligns with upstream m_button_resume)
+                    Rectangle {
+                        width: 60
+                        height: 28
+                        radius: 6
+                        color: Theme.accent
+                        border.color: Theme.accent
+                        border.width: 1
+                        visible: cloudRow._paused
+                        anchors.verticalCenter: parent.verticalCenter
+                        property bool _resumeBtnHover: false
+
                         Text {
-                            text: _progress + "%"
-                            color: Theme.textTertiary
+                            anchors.centerIn: parent
+                            text: qsTr("Resume")
+                            color: Theme.textOnAccent
                             font.pixelSize: Theme.fontSizeXS
-                            Layout.preferredWidth: 30
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onEntered: parent._resumeBtnHover = true
+                            onExited: parent._resumeBtnHover = false
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                _vm.resumeCloudTask(index)
+                                cloudRow._paused = false
+                            }
+                        }
+                    }
+
+                    // Stop button (aligns with upstream m_button_stop)
+                    Rectangle {
+                        width: 50
+                        height: 28
+                        radius: 6
+                        color: _stopBtnHover ? Theme.bgPressed : Theme.bgElevated
+                        border.color: Theme.borderDefault
+                        border.width: 1
+                        anchors.verticalCenter: parent.verticalCenter
+                        property bool _stopBtnHover: false
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("Stop")
+                            color: Theme.statusError
+                            font.pixelSize: Theme.fontSizeXS
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onEntered: parent._stopBtnHover = true
+                            onExited: parent._stopBtnHover = false
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: _vm.stopCloudTask(index)
                         }
                     }
                 }
@@ -1051,6 +1368,7 @@ Item {
 
     // ══════════════════════════════════════════════════════
     // Dialog: Send Task to Device (对齐上游 MultiMachinePickPage)
+    // Uses Theme tokens instead of hardcoded colors
     // ══════════════════════════════════════════════════════
     Dialog {
         id: sendToDeviceDialog
@@ -1067,7 +1385,7 @@ Item {
             spacing: 12
 
             // Task selector
-            Text { text: qsTr("Task:"); color: Theme.textSecondary; font.pixelSize: 12 }
+            Text { text: qsTr("Task:"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
             ComboBox {
                 id: taskSelector
                 Layout.fillWidth: true
@@ -1079,7 +1397,7 @@ Item {
                     contentItem: Text {
                         text: root.multiMachineVm.localTaskProjectName(index)
                         color: Theme.textPrimary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeXS
                     }
                     highlighted: taskSelector.highlightedIndex === index
                 }
@@ -1088,14 +1406,14 @@ Item {
                           ? root.multiMachineVm.localTaskProjectName(taskSelector.currentIndex)
                           : qsTr("Select task...")
                     color: Theme.textPrimary
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeXS
                     verticalAlignment: Text.AlignVCenter
                     leftPadding: 8
                 }
             }
 
             // Online device list
-            Text { text: qsTr("Online Devices:"); color: Theme.textSecondary; font.pixelSize: 12 }
+            Text { text: qsTr("Online Devices:"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
             ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -1109,9 +1427,9 @@ Item {
                             required property int index
                             width: parent.width
                             height: 36
-                            radius: 4
-                            color: sendToDeviceDialog.selectedDeviceIndex === index ? "#1c2a3e" : "#1a1e28"
-                            border.color: sendToDeviceDialog.selectedDeviceIndex === index ? "#18c75e" : "#2e3444"
+                            radius: Theme.radiusSM
+                            color: sendToDeviceDialog.selectedDeviceIndex === index ? Theme.accentSubtle : Theme.bgSurface
+                            border.color: sendToDeviceDialog.selectedDeviceIndex === index ? Theme.accent : Theme.borderDefault
                             border.width: 1
 
                             Row {
@@ -1120,11 +1438,11 @@ Item {
                                 anchors.leftMargin: 12
                                 spacing: 8
                                 // Online indicator
-                                Rectangle { width: 8; height: 8; radius: 4; color: "#18c75e" }
+                                Rectangle { width: 8; height: 8; radius: 4; color: Theme.statusSuccess }
                                 Text {
                                     text: root.multiMachineVm.onlineMachineName(index)
-                                    color: sendToDeviceDialog.selectedDeviceIndex === index ? "#18c75e" : "#c8d4e0"
-                                    font.pixelSize: 12
+                                    color: sendToDeviceDialog.selectedDeviceIndex === index ? Theme.accent : Theme.textPrimary
+                                    font.pixelSize: Theme.fontSizeSM
                                 }
                             }
                             MouseArea {
@@ -1137,22 +1455,22 @@ Item {
                 }
             }
 
-            // Send button
+            // Send button row
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
                 Item { Layout.fillWidth: true }
                 Rectangle {
-                    width: 80; height: 28; radius: 4
-                    color: "#252b38"
-                    border.color: "#363d4e"; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("Cancel"); color: "#c8d4e0"; font.pixelSize: 11 }
+                    width: 80; height: 28; radius: Theme.radiusSM
+                    color: Theme.bgElevated
+                    border.color: Theme.borderDefault; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("Cancel"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: sendToDeviceDialog.close() }
                 }
                 Rectangle {
-                    width: 80; height: 28; radius: 4
-                    color: "#18c75e"
-                    Text { anchors.centerIn: parent; text: qsTr("Send"); color: "white"; font.pixelSize: 11 }
+                    width: 80; height: 28; radius: Theme.radiusSM
+                    color: Theme.accent
+                    Text { anchors.centerIn: parent; text: qsTr("Send"); color: Theme.textOnAccent; font.pixelSize: Theme.fontSizeXS }
                     MouseArea {
                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: {

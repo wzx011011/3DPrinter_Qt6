@@ -1,5 +1,6 @@
 #include "MultiMachineViewModel.h"
 #include <algorithm>
+#include <QSharedPointer>
 
 // Upstream state maps (from MultiMachine.cpp DeviceItem::sync_state / get_state_device)
 static const char *deviceStatusText(int state) {
@@ -65,16 +66,16 @@ void MultiMachineViewModel::buildMockData()
 
   // 3 mock local tasks (aligns with upstream LocalTaskManagerPage / MultiTaskItem)
   m_localTasks = {
-      {"Benchy.gcode",   "K1C-001",  "2026-03-14 09:30", "01:23:00", 5, 67,  false},  // printing
-      {"Cube.stl",       "K2-Plus-004", "2026-03-14 09:15", "--",        0, 0,   false},  // pending
-      {"Bracket_v2.3mf", "K1-Max-002", "2026-03-14 08:00", "--",        6, 100, false},  // success
+      {"Benchy.gcode",   "K1C-001",  "2026-03-14 09:30", "01:23:00", 5, 67,  0,  false},  // printing
+      {"Cube.stl",       "K2-Plus-004", "2026-03-14 09:15", "--",        0, 0,   0,  false},  // pending
+      {"Bracket_v2.3mf", "K1-Max-002", "2026-03-14 08:00", "--",        6, 100, 0,  false},  // success
   };
 
   // 3 mock cloud tasks (aligns with upstream CloudTaskManagerPage)
   m_cloudTasks = {
-      {"CalibrationCube.gcode", "K1C-001",    "2026-03-13 14:00", "--",        1, 100},
-      {"Gear_Assembly.gcode",   "K1-Max-002", "2026-03-13 16:30", "02:15:30", 0, 42},
-      {"Phone_Stand.stl",       "K2-Plus-004","2026-03-13 10:00", "--",        2, 88},
+      {"CalibrationCube.gcode", "K1C-001",    "2026-03-13 14:00", "--",        1, 100, false},
+      {"Gear_Assembly.gcode",   "K1-Max-002", "2026-03-13 16:30", "02:15:30", 0, 42,  false},
+      {"Phone_Stand.stl",       "K2-Plus-004","2026-03-13 10:00", "--",        2, 88,  false},
   };
 }
 
@@ -243,6 +244,9 @@ QString MultiMachineViewModel::localTaskSendTime(int i) const {
 QString MultiMachineViewModel::localTaskRemaining(int i) const {
   return (i >= 0 && i < m_localTasks.size()) ? m_localTasks[i].remaining : QString{"--"};
 }
+int MultiMachineViewModel::localTaskSendingPercent(int i) const {
+  return (i >= 0 && i < m_localTasks.size()) ? m_localTasks[i].sendingPercent : 0;
+}
 bool MultiMachineViewModel::localTaskSelected(int i) const {
   return (i >= 0 && i < m_localTasks.size()) ? m_localTasks[i].selected : false;
 }
@@ -289,26 +293,52 @@ void MultiMachineViewModel::viewMachine(int index)
 
 void MultiMachineViewModel::selectLocalTask(int index)
 {
+  // Upstream: only pending (0) and sending (1) tasks are selectable (checkbox enabled)
   if (index >= 0 && index < m_localTasks.size()) {
-    m_localTasks[index].selected = !m_localTasks[index].selected;
+    if (m_localTasks[index].status <= 1) {
+      m_localTasks[index].selected = !m_localTasks[index].selected;
+    }
     emit localTasksChanged();
   }
 }
 
+void MultiMachineViewModel::selectAllLocalTasks()
+{
+  // Aligns with upstream m_select_checkbox toggle: select all where status <= 1
+  for (auto &t : m_localTasks) {
+    if (t.status <= 1) t.selected = true;
+  }
+  emit localTasksChanged();
+}
+
+void MultiMachineViewModel::unselectAllLocalTasks()
+{
+  for (auto &t : m_localTasks) {
+    t.selected = false;
+  }
+  emit localTasksChanged();
+}
+
 void MultiMachineViewModel::cancelLocalTask(int index)
 {
+  // Aligns with upstream MultiTaskItem::onCancel: cancel via task_obj->cancel() + command_task_cancel
   if (index >= 0 && index < m_localTasks.size()) {
-    m_localTasks[index].status = 3; // Sending Cancel
-    emit localTasksChanged();
-    emit messageRequested(tr("Task cancelled: %1").arg(m_localTasks[index].projectName));
+    if (m_localTasks[index].status <= 1) {
+      m_localTasks[index].status = 3; // Sending Cancel
+      m_localTasks[index].sendingPercent = 0;
+      emit localTasksChanged();
+      emit messageRequested(tr("Task cancelled: %1").arg(m_localTasks[index].projectName));
+    }
   }
 }
 
 void MultiMachineViewModel::stopAllLocalTasks()
 {
+  // Aligns with upstream LocalTaskManagerPage::cancel_all: cancel selected tasks where button is shown
   for (auto &t : m_localTasks) {
-    if (t.selected && (t.status == 0 || t.status == 1 || t.status == 5)) {
+    if (t.selected && t.status <= 1) {
       t.status = 3; // cancel
+      t.sendingPercent = 0;
     }
   }
   emit localTasksChanged();
@@ -317,21 +347,66 @@ void MultiMachineViewModel::stopAllLocalTasks()
 
 void MultiMachineViewModel::pauseCloudTask(int index)
 {
-  // Cloud tasks: pause printing (mock - change status display)
-  Q_UNUSED(index);
-  emit cloudTasksChanged();
+  // Aligns with upstream MultiTaskItem::onPause: command_task_pause
+  if (index >= 0 && index < m_cloudTasks.size() && m_cloudTasks[index].status == 0) {
+    emit messageRequested(tr("Pause cloud task: %1").arg(m_cloudTasks[index].projectName));
+    emit cloudTasksChanged();
+  }
 }
 
 void MultiMachineViewModel::resumeCloudTask(int index)
 {
-  Q_UNUSED(index);
-  emit cloudTasksChanged();
+  // Aligns with upstream MultiTaskItem::onResume: command_task_resume
+  if (index >= 0 && index < m_cloudTasks.size() && m_cloudTasks[index].status == 0) {
+    emit messageRequested(tr("Resume cloud task: %1").arg(m_cloudTasks[index].projectName));
+    emit cloudTasksChanged();
+  }
+}
+
+void MultiMachineViewModel::stopCloudTask(int index)
+{
+  // Aligns with upstream MultiTaskItem::onStop: command_task_abort
+  if (index >= 0 && index < m_cloudTasks.size()) {
+    if (m_cloudTasks[index].status == 0) {
+      m_cloudTasks[index].status = 2; // failed
+      emit cloudTasksChanged();
+      emit messageRequested(tr("Stop cloud task: %1").arg(m_cloudTasks[index].projectName));
+    }
+  }
 }
 
 void MultiMachineViewModel::stopAllCloudTasks()
 {
+  // Aligns with upstream CloudTaskManagerPage::stop_all
+  for (auto &t : m_cloudTasks) {
+    if (t.selected && t.status == 0) {
+      t.status = 2; // failed
+    }
+  }
   emit cloudTasksChanged();
-  emit messageRequested(tr("All cloud tasks stopped"));
+  emit messageRequested(tr("All selected cloud tasks stopped"));
+}
+
+void MultiMachineViewModel::pauseAllCloudTasks()
+{
+  // Aligns with upstream CloudTaskManagerPage::pause_all
+  for (auto &t : m_cloudTasks) {
+    if (t.selected && t.status == 0) {
+      emit messageRequested(tr("Pause cloud task: %1").arg(t.projectName));
+    }
+  }
+  emit cloudTasksChanged();
+}
+
+void MultiMachineViewModel::resumeAllCloudTasks()
+{
+  // Aligns with upstream CloudTaskManagerPage::resume_all
+  for (auto &t : m_cloudTasks) {
+    if (t.selected && t.status == 0) {
+      emit messageRequested(tr("Resume cloud task: %1").arg(t.projectName));
+    }
+  }
+  emit cloudTasksChanged();
 }
 
 void MultiMachineViewModel::editPrinters()
@@ -413,6 +488,62 @@ void MultiMachineViewModel::recomputePagination()
   emit paginationChanged();
 }
 
+// ── Cloud Task selection (aligns with upstream EVT_MULTI_CLOUD_TASK_SELECTED) ──
+bool MultiMachineViewModel::cloudTaskSelected(int i) const {
+  return (i >= 0 && i < m_cloudTasks.size()) ? m_cloudTasks[i].selected : false;
+}
+
+void MultiMachineViewModel::selectCloudTask(int index)
+{
+  // Upstream: only cloud tasks with status == 0 (printing) are selectable
+  if (index >= 0 && index < m_cloudTasks.size()) {
+    if (m_cloudTasks[index].status == 0) {
+      m_cloudTasks[index].selected = !m_cloudTasks[index].selected;
+    }
+    emit cloudTasksChanged();
+  }
+}
+
+void MultiMachineViewModel::selectAllCloudTasks()
+{
+  // Aligns with upstream m_select_checkbox toggle: select all printing tasks
+  for (auto &t : m_cloudTasks) {
+    if (t.status == 0) t.selected = true;
+  }
+  emit cloudTasksChanged();
+}
+
+void MultiMachineViewModel::unselectAllCloudTasks()
+{
+  for (auto &t : m_cloudTasks) {
+    t.selected = false;
+  }
+  emit cloudTasksChanged();
+}
+
+int MultiMachineViewModel::cloudSelectedCount() const {
+  int c = 0;
+  for (const auto &t : m_cloudTasks) if (t.selected) ++c;
+  return c;
+}
+
+// ── Cloud Task pagination (aligns with upstream CloudTaskManagerPage m_flipping_panel) ──
+int MultiMachineViewModel::cloudCurrentPage() const { return m_cloudCurrentPage; }
+void MultiMachineViewModel::setCloudCurrentPage(int page) {
+  if (page < 0) page = 0;
+  int total = cloudTotalPages();
+  if (total > 0 && page >= total) page = total - 1;
+  if (page != m_cloudCurrentPage) {
+    m_cloudCurrentPage = page;
+    emit cloudPaginationChanged();
+    emit cloudTasksChanged();
+  }
+}
+int MultiMachineViewModel::cloudTotalPages() const {
+  int count = m_cloudTasks.size();
+  return (count == 0) ? 1 : (int)std::ceil((double)count / m_cloudPageSize);
+}
+
 // ── Send task to device (对齐上游 SendMultiMachinePage) ──
 
 int MultiMachineViewModel::onlineMachineCount() const
@@ -448,19 +579,32 @@ bool MultiMachineViewModel::sendTaskToDevice(int localTaskIndex, int onlineMachi
   m_localTasks[localTaskIndex].devName = devName;
   m_localTasks[localTaskIndex].status = 1;  // sending
   m_localTasks[localTaskIndex].progress = 0;
+  m_localTasks[localTaskIndex].sendingPercent = 0;
   emit localTasksChanged();
   emit messageRequested(QObject::tr("正在发送任务到 %1...").arg(devName));
 
-  // Mock: 模拟发送过程（2 秒后变为 printing）
-  QTimer::singleShot(2000, this, [this, localTaskIndex, devName]() {
-    if (localTaskIndex < m_localTasks.size())
-    {
-      m_localTasks[localTaskIndex].status = 5;  // printing
-      m_localTasks[localTaskIndex].progress = 10;
-      emit localTasksChanged();
-      emit messageRequested(QObject::tr("任务已发送到 %1").arg(devName));
+  // Mock: simulate sending progress (aligns with upstream m_sending_percent update)
+  QTimer *progressTimer = new QTimer(this);
+  progressTimer->setInterval(200);
+  QSharedPointer<int> step = QSharedPointer<int>::create(0);
+  connect(progressTimer, &QTimer::timeout, this, [this, progressTimer, localTaskIndex, devName, step]() {
+    if (localTaskIndex >= m_localTasks.size() || *step >= 10) {
+      progressTimer->stop();
+      progressTimer->deleteLater();
+      if (localTaskIndex < m_localTasks.size()) {
+        m_localTasks[localTaskIndex].status = 5;  // printing
+        m_localTasks[localTaskIndex].progress = 10;
+        m_localTasks[localTaskIndex].sendingPercent = 100;
+        emit localTasksChanged();
+        emit messageRequested(QObject::tr("任务已发送到 %1").arg(devName));
+      }
+      return;
     }
+    ++(*step);
+    m_localTasks[localTaskIndex].sendingPercent = (*step) * 10;
+    emit localTasksChanged();
   });
+  progressTimer->start();
 
   return true;
 }
