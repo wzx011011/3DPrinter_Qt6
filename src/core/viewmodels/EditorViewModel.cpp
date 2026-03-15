@@ -1080,6 +1080,35 @@ bool EditorViewModel::changeVolumeType(int newVolumeType)
   return true;
 }
 
+int EditorViewModel::volumeExtruderId(int objectIndex, int volumeIndex) const
+{
+  if (!projectService_)
+    return -1;
+  return projectService_->volumeExtruderId(objectIndex, volumeIndex);
+}
+
+bool EditorViewModel::setVolumeExtruderId(int objectIndex, int volumeIndex, int extruderId)
+{
+  if (!projectService_)
+  {
+    statusText_ = QStringLiteral("无法设置耗材：服务未就绪");
+    emit stateChanged();
+    return false;
+  }
+
+  if (!projectService_->setVolumeExtruderId(objectIndex, volumeIndex, extruderId))
+  {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+
+  rebuildObjectEntriesFromService();
+  statusText_ = QStringLiteral("已设置部件耗材");
+  emit stateChanged();
+  return true;
+}
+
 bool EditorViewModel::addVolumeFromFile(int objectIndex, const QString &filePath, int volumeType)
 {
   if (!projectService_)

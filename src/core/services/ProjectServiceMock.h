@@ -31,6 +31,7 @@ enum class MockVolumeType {
 struct MockVolumeEntry {
   QString name;
   MockVolumeType type = MockVolumeType::ModelPart;
+  int extruderId = -1;  // -1 = inherit from object/parent, 0+ = specific extruder (对齐上游 ModelVolume::extruder_id)
 };
 
 /// Layer range entry (对齐上游 t_layer_height_range → ModelConfig mapping)
@@ -112,6 +113,11 @@ public:
   Q_INVOKABLE bool addVolume(int objectIndex, int volumeType);
   /// Change volume type (对齐上游 GUI_ObjectList::load_generic_subobject type conversion)
   Q_INVOKABLE bool changeVolumeType(int objectIndex, int volumeIndex, int newVolumeType);
+  /// Volume-level extruder assignment (对齐上游 ModelVolume::extruder_id)
+  /// Returns -1 if inherit from object/parent, 0+ for specific extruder
+  Q_INVOKABLE int volumeExtruderId(int objectIndex, int volumeIndex) const;
+  /// Set volume extruder assignment. -1 = inherit, 0+ = specific extruder (1-based in UI, 0-based internally)
+  Q_INVOKABLE bool setVolumeExtruderId(int objectIndex, int volumeIndex, int extruderId);
   /// 从外部文件导入 volume（对齐上游 GUI_ObjectList::load_generic_subobject 文件加载）
   /// Mock 模式：创建 volume 条目并命名
   Q_INVOKABLE bool addVolumeFromFile(int objectIndex, const QString &filePath, int volumeType);

@@ -152,6 +152,11 @@ public:
   Q_INVOKABLE bool addVolumeToObject(int volumeType);
   /// Change volume type (对齐上游 GUI_ObjectList::load_generic_subobject type conversion)
   Q_INVOKABLE bool changeVolumeType(int newVolumeType);
+  /// Volume-level extruder assignment (对齐上游 ModelVolume::extruder_id)
+  /// Returns -1 if inherit from object, 0+ for specific extruder
+  Q_INVOKABLE int volumeExtruderId(int objectIndex, int volumeIndex) const;
+  /// Set volume extruder. -1 = inherit, 0+ = specific extruder
+  Q_INVOKABLE bool setVolumeExtruderId(int objectIndex, int volumeIndex, int extruderId);
   /// 从外部文件导入 volume（对齐上游 GUI_ObjectList::load_generic_subobject 文件加载）
   Q_INVOKABLE bool addVolumeFromFile(int objectIndex, const QString &filePath, int volumeType);
   /// 添加原始体 volume（对齐上游 create_mesh + add_volume）

@@ -139,15 +139,18 @@ Popup {
                 readonly property string optLabel: modelData.optLabel
                 readonly property string optKey: modelData.optKey
                 readonly property string optPath: modelData.optPath
+                readonly property string optCategory: modelData.optCategory
+                readonly property string optGroup: modelData.optGroup
+                readonly property string optPage: modelData.optPage
                 readonly property string valueSrc: modelData.valueSrc
 
                 width: ListView.view.width
                 spacing: 0
 
-                // Category separator
+                // Category separator (对齐上游 SearchDialog 分组标题)
                 Rectangle {
                     width: parent.width
-                    height: 24
+                    height: 22
                     color: "#141a24"
                     visible: index === 0 || resultModel.get(index - 1).optPath !== modelData.optPath
 
@@ -168,7 +171,7 @@ Popup {
                     }
                 }
 
-                // Result item
+                // Result item (对齐上游 SearchDialog: [Icon] Category : Group : Label)
                 Rectangle {
                     width: parent.width
                     height: 36
@@ -179,21 +182,37 @@ Popup {
                         anchors.fill: parent
                         anchors.leftMargin: 10
                         anchors.rightMargin: 10
-                        spacing: 8
+                        spacing: 6
 
-                        // Value source indicator (对齐上游 Tab value source)
-                        Rectangle {
-                            width: 6; height: 6; radius: 3
-                            visible: true
-                            color: {
+                        // Type icon (对齐上游 PrintIconMarker/FilamentIconMarker/PrinterIconMarker)
+                        Text {
+                            text: {
                                 switch (valueSrc) {
-                                case "printer": return "#6ea8d4"  // blue
-                                case "filament": return "#d4a06e"  // orange
-                                case "print": return "#6ed4a0"    // green
-                                default: return "#555"            // gray (default)
+                                case "printer": return "\u2316"    // ⌖
+                                case "filament": return "\u25CE"  // ◎
+                                case "print": return "\u2706"     // ✦
+                                default: return "\u2022"          // •
                                 }
                             }
+                            color: {
+                                switch (valueSrc) {
+                                case "printer": return "#6ea8d4"
+                                case "filament": return "#d4a06e"
+                                case "print": return "#6ed4a0"
+                                default: return "#555"
+                                }
+                            }
+                            font.pixelSize: 10
                             Layout.alignment: Qt.AlignVCenter
+                            Layout.preferredWidth: 12
+                        }
+
+                        // "Category : Group : " prefix (对齐上游 SearchDialog 格式)
+                        Text {
+                            text: optCategory + " : " + optGroup + " : "
+                            color: Theme.textDisabled
+                            font.pixelSize: 10
+                            elide: Text.ElideRight
                         }
 
                         // Label (matched portion highlighted, 对齐上游 ColorMarkerStart/End)
@@ -213,15 +232,7 @@ Popup {
                             }
                         }
 
-                        // Key (dimmed)
-                        Text {
-                            text: optKey
-                            color: Theme.textDisabled
-                            font.pixelSize: 9
-                            font.family: "Consolas, monospace"
-                        }
-
-                        // Source tag
+                        // Source tag (P/F/S)
                         Text {
                             text: {
                                 switch (valueSrc) {
@@ -355,25 +366,19 @@ Popup {
         const indices = root.configVm.searchOptions(query)
         resultModel.clear()
 
-        // Sort by Page > Category > Group
-        const sorted = []
+        // 对齐上游 SearchDialog：按分数排序（C++ 侧已排好序）
+        // 显示 "Category : Group : Label" 格式，带类型图标
         for (let i = 0; i < indices.length; i++) {
-            const idx = indices[i]
-            const opts = root.configVm.printOptions
-            if (!opts) continue
-            sorted.push({
-                optIndex: idx,
-                optLabel: opts.optLabel(idx),
-                optKey: opts.optKey(idx),
-                optPath: opts.optPage(idx) + " / " + opts.optCategory(idx),
+            resultModel.append({
+                optIndex: indices[i],
+                optLabel: root.configVm.printOptions.optLabel(indices[i]),
+                optKey: root.configVm.printOptions.optKey(indices[i]),
+                optCategory: root.configVm.searchResultCategory(i),
+                optGroup: root.configVm.searchResultGroup(i),
+                optPage: root.configVm.searchResultPage(i),
+                optPath: root.configVm.searchResultCategory(i) + " : " + root.configVm.searchResultGroup(i),
                 valueSrc: root.configVm.searchResultSource(i)
             })
-        }
-
-        sorted.sort((a, b) => a.optPath.localeCompare(b.optPath))
-
-        for (let i = 0; i < sorted.length; i++) {
-            resultModel.append(sorted[i])
         }
 
         if (resultModel.count > 0)

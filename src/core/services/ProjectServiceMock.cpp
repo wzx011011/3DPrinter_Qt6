@@ -1329,6 +1329,44 @@ bool ProjectServiceMock::changeVolumeType(int objectIndex, int volumeIndex, int 
   return true;
 }
 
+// ── Volume 级 extruder 分配（对齐上游 ModelVolume::extruder_id）──
+
+int ProjectServiceMock::volumeExtruderId(int objectIndex, int volumeIndex) const
+{
+  auto it = m_mockVolumes.find(objectIndex);
+  if (it == m_mockVolumes.end() || volumeIndex < 0 || volumeIndex >= it->size())
+    return -1; // inherit from object
+  return it->at(volumeIndex).extruderId;
+}
+
+bool ProjectServiceMock::setVolumeExtruderId(int objectIndex, int volumeIndex, int extruderId)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+  {
+    lastError_ = tr("设置耗材失败：对象索引无效");
+    return false;
+  }
+
+  auto it = m_mockVolumes.find(objectIndex);
+  if (it == m_mockVolumes.end() || volumeIndex < 0 || volumeIndex >= it->size())
+  {
+    lastError_ = tr("设置耗材失败：部件索引无效");
+    return false;
+  }
+
+  // -1 means inherit from object, 0+ means specific extruder
+  if (extruderId < -1)
+  {
+    lastError_ = tr("设置耗材失败：耗材索引无效");
+    return false;
+  }
+
+  it->operator[](volumeIndex).extruderId = extruderId;
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+}
+
 // ── Volume 外部文件导入（对齐上游 GUI_ObjectList::load_generic_subobject 文件加载）──
 
 bool ProjectServiceMock::addVolumeFromFile(int objectIndex, const QString &filePath, int volumeType)

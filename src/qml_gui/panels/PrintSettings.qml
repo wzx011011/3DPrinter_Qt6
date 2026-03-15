@@ -916,11 +916,33 @@ Item {
                 // 分类选项列表（对齐上游 ParamsPanel m_page_view）
                 // 双层级: Page > Category > Options（对齐上游 Tab::Page > Group > Option）
                 ScrollView {
+                    id: optionsScrollView
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
 
+                    // 滚动到高亮选项（对齐上游 Tab::activate_option 滚动行为）
+                    function scrollToHighlight(itemY, itemHeight) {
+                        if (!itemY || !contentItem) return
+                        const visibleHeight = height
+                        const targetY = itemY - visibleHeight / 2 + itemHeight / 2
+                        const maxScroll = contentItem.contentHeight - visibleHeight
+                        const newContentY = Math.max(0, Math.min(maxScroll, targetY))
+                        scrollAnimation.from = contentItem.contentY
+                        scrollAnimation.to = newContentY
+                        scrollAnimation.start()
+                    }
+
+                    NumberAnimation {
+                        id: scrollAnimation
+                        target: optionsScrollView.contentItem
+                        property: "contentY"
+                        duration: 300
+                        easing.type: Easing.OutCubic
+                    }
+
                     Column {
+                        id: optionsColumn
                         width: parent.width
                         spacing: 6
 
@@ -1013,6 +1035,17 @@ Item {
                                                 readonly property bool isHighlighted: root.highlightedOptionIndex === optIdx
                                                 // 修改状态指示（对齐上游 Tab::Field m_is_modified_value / OptStatus）
                                                 readonly property bool isModified: opts ? opts.optIsDirty(optIdx) : false
+
+                                                // 滚动到高亮选项（对齐上游 Tab::activate_option ensure_visible）
+                                                onIsHighlightedChanged: {
+                                                    if (isHighlighted && optionsScrollView.contentItem) {
+                                                        // 延迟执行以确保布局完成
+                                                        Qt.callLater(() => {
+                                                            const pos = mapToItem(optionsScrollView.contentItem, 0, 0)
+                                                            optionsScrollView.scrollToHighlight(pos.y, height)
+                                                        })
+                                                    }
+                                                }
 
                                                 width: parent.width
                                                 height: (oType === "double" || oType === "int") ? 44 : 38

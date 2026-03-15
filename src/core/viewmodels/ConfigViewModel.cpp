@@ -1,5 +1,7 @@
 #include "ConfigViewModel.h"
 
+#include <algorithm>
+
 #include "core/services/PresetServiceMock.h"
 #include "core/services/ProjectServiceMock.h"
 #include "qml_gui/Models/ConfigOptionModel.h"
@@ -787,7 +789,95 @@ QVariant ConfigViewModel::layerRangeValue(int rangeIndex, const QString &key, co
   return projectService_->layerRangeValue(settingsTargetObjectIndex_, rangeIndex, key, fallback);
 }
 
-// ── Enhanced search (对齐上游 OptionsSearcher) ──────────────────────────────────
+// ── Enhanced search (对齐上游 OptionsSearcher + fts_fuzzy_match) ─────────────
+
+namespace {
+
+/// 对齐上游 fts_fuzzy_match：轻量级模糊匹配算法
+/// 返回匹配分数（0=无匹配，正值越高匹配度越好），同时输出是否全部字符连续
+/// 算法：贪心字符匹配 + 滑动窗口连续匹配 + 前缀/边界奖励
+int fuzzyMatch(const QString &pattern, const QString &text, bool *outAllConsecutive = nullptr)
+{
+  if (pattern.isEmpty() || text.isEmpty())
+    return 0;
+
+  const QChar *pat = pattern.unicode();
+  const QChar *str = text.unicode();
+  const int patLen = pattern.length();
+  const int strLen = text.length();
+
+  // 贪心匹配：允许字符间跳过（gap），统计匹配得分
+  int score = 0;
+  int patIdx = 0;
+  int consecutiveCount = 0;
+  int lastMatchPos = -2;
+  bool allConsecutive = true;
+
+  for (int i = 0; i < strLen && patIdx < patLen; ++i) {
+    if (str[i].toLower() == pat[patIdx].toLower()) {
+      // 连续匹配奖励（对齐上游 sequential bonus）
+      if (lastMatchPos == i - 1) {
+        consecutiveCount++;
+        score += 15 + consecutiveCount * 2;
+      } else {
+        consecutiveCount = 1;
+        // 非连续匹配时重置 allConsecutive 标志
+        if (lastMatchPos >= 0)
+          allConsecutive = false;
+        score += 10;
+      }
+      // 前缀匹配额外奖励
+      if (patIdx == 0)
+        score += 5;
+      // 单词边界匹配奖励（首字母或前一个字符是分隔符）
+      if (i == 0 || (str[i - 1] == '_' || str[i - 1] == ' ' || str[i - 1] == '-'))
+        score += 10;
+      // 全部字符大写匹配时额外奖励（缩写匹配）
+      if (pat[patIdx].isUpper())
+        score += 5;
+
+      lastMatchPos = i;
+      patIdx++;
+    }
+  }
+
+  if (patIdx < patLen) {
+    // 模式未完全匹配
+    if (outAllConsecutive) *outAllConsecutive = false;
+    return 0;
+  }
+
+  // 惩罚跳过的字符数量（对齐上游 gap penalty）
+  int gaps = strLen - (lastMatchPos - patIdx + 1 + (patLen - consecutiveCount));
+  score -= gaps;
+
+  if (outAllConsecutive)
+    *outAllConsecutive = allConsecutive;
+
+  return score;
+}
+
+/// 在多个字段中搜索，返回最佳分数和匹配的字段索引
+/// fields: 要搜索的文本字段列表
+/// 返回最佳模糊匹配分数
+int bestFuzzyScore(const QString &needle, const QStringList &fields)
+{
+  int best = 0;
+  for (const auto &field : fields) {
+    // 子串完全包含给最高分
+    if (field.toLower().contains(needle))
+      return 1000 + needle.length() * 10;
+
+    // 模糊匹配
+    bool dummy;
+    int s = fuzzyMatch(needle, field, &dummy);
+    if (s > best)
+      best = s;
+  }
+  return best;
+}
+
+} // anonymous namespace
 
 QList<int> ConfigViewModel::searchOptions(const QString &query) const
 {
@@ -795,19 +885,42 @@ QList<int> ConfigViewModel::searchOptions(const QString &query) const
     return {};
 
   const QString needle = query.toLower().trimmed();
-  QList<int> result;
+  // 对齐上游 OptionsSearcher：score > 阈值才返回
+  static constexpr int MIN_SCORE = 10;
+
+  struct ScoredIndex { int index; int score; };
+  QList<ScoredIndex> scored;
 
   for (int i = 0; i < printOptions_->rowCount(); ++i)
   {
-    // 搜索 key、label、category、group 四个字段
-    if (printOptions_->optKey(i).toLower().contains(needle) ||
-        printOptions_->optLabel(i).toLower().contains(needle) ||
-        printOptions_->optCategory(i).toLower().contains(needle) ||
-        printOptions_->optGroup(i).toLower().contains(needle))
-    {
-      result.append(i);
+    QStringList fields = {
+      printOptions_->optKey(i),
+      printOptions_->optLabel(i),
+      printOptions_->optCategory(i),
+      printOptions_->optGroup(i)
+    };
+
+    int score = bestFuzzyScore(needle, fields);
+    if (score >= MIN_SCORE) {
+      scored.append({i, score});
     }
   }
+
+  // 按分数降序排序（对齐上游：高分优先，同分按字母序）
+  QObject *opts = printOptions_;
+  std::sort(scored.begin(), scored.end(), [opts](const ScoredIndex &a, const ScoredIndex &b) {
+    if (a.score != b.score)
+      return a.score > b.score;
+    auto *optModel = qobject_cast<ConfigOptionModel*>(opts);
+    if (optModel)
+      return optModel->optKey(a.index) < optModel->optKey(b.index);
+    return a.index < b.index;
+  });
+
+  QList<int> result;
+  result.reserve(scored.size());
+  for (const auto &s : scored)
+    result.append(s.index);
 
   m_lastSearchResults_ = result;
   return result;
@@ -893,4 +1006,25 @@ QString ConfigViewModel::searchResultPath(int searchIndex) const
   return printOptions_->optPage(idx) + QStringLiteral(" / ") +
          printOptions_->optCategory(idx) + QStringLiteral(" / ") +
          printOptions_->optGroup(idx);
+}
+
+QString ConfigViewModel::searchResultGroup(int searchIndex) const
+{
+  if (searchIndex < 0 || searchIndex >= m_lastSearchResults_.size() || !printOptions_)
+    return {};
+  return printOptions_->optGroup(m_lastSearchResults_[searchIndex]);
+}
+
+QString ConfigViewModel::searchResultCategory(int searchIndex) const
+{
+  if (searchIndex < 0 || searchIndex >= m_lastSearchResults_.size() || !printOptions_)
+    return {};
+  return printOptions_->optCategory(m_lastSearchResults_[searchIndex]);
+}
+
+QString ConfigViewModel::searchResultPage(int searchIndex) const
+{
+  if (searchIndex < 0 || searchIndex >= m_lastSearchResults_.size() || !printOptions_)
+    return {};
+  return printOptions_->optPage(m_lastSearchResults_[searchIndex]);
 }

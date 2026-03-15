@@ -135,6 +135,12 @@ public:
   Q_INVOKABLE QString searchResultSource(int searchIndex) const;
   /// 当前搜索结果的分类路径（按索引查询）
   Q_INVOKABLE QString searchResultPath(int searchIndex) const;
+  /// 当前搜索结果的 Group（按索引查询，对齐上游 OptionsSearcher group 字段）
+  Q_INVOKABLE QString searchResultGroup(int searchIndex) const;
+  /// 当前搜索结果的 Category（按索引查询）
+  Q_INVOKABLE QString searchResultCategory(int searchIndex) const;
+  /// 当前搜索结果的 Page（按索引查询，对齐上游 Tab::Page）
+  Q_INVOKABLE QString searchResultPage(int searchIndex) const;
   /// 从已有索引列表中按分类过滤（替代 QML inline groupedIndices）
   Q_INVOKABLE QList<int> filterIndicesByCategory(const QList<int> &indices, const QString &category) const;
   /// 从已有索引列表中按页面过滤（对齐上游 Tab::Page 分组）
