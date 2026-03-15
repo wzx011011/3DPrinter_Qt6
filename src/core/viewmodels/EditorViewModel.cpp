@@ -1672,16 +1672,17 @@ void EditorViewModel::autoOrientSelected()
   // 6 candidate faces: +X, -X, +Y, -Y, +Z, -Z
   struct Face { QVector3D normal; float area; QString label; };
   Face candidates[6] = {
-    { QVector3D(1,0,0), std::abs(dims.y()*dims.z()), qsTr("+X 面") },
-    { QVector3D(-1,0,0), std::abs(dims.y()*dims.z()), qsTr("-X 面") },
-    { QVector3D(0,1,0), std::abs(dims.x()*dims.z()), qsTr("+Y 面") },
-    { QVector3D(0,-1,0), std::abs(dims.x()*dims.z()), qsTr("-Y 面") },
-    { QVector3D(0,0,1), std::abs(dims.x()*dims.y()), qsTr("+Z 面") },
-    { QVector3D(0,0,-1), std::abs(dims.x()*dims.y()), qsTr("-Z 面") }
+    { QVector3D(1,0,0), std::abs(dims.y()*dims.z()), tr("+X 面") },
+    { QVector3D(-1,0,0), std::abs(dims.y()*dims.z()), tr("-X 面") },
+    { QVector3D(0,1,0), std::abs(dims.x()*dims.z()), tr("+Y 面") },
+    { QVector3D(0,-1,0), std::abs(dims.x()*dims.z()), tr("-Y 面") },
+    { QVector3D(0,0,1), std::abs(dims.x()*dims.y()), tr("+Z 面") },
+    { QVector3D(0,0,-1), std::abs(dims.x()*dims.y()), tr("-Z 面") }
   };
   // 按面积排序，最大面朝下放置
-  std::sort(candidates, [](const Face &a, const Face &b) { return a.area > b.area; });
-  m_flattenFaceCount = qMin(6, static_cast<int>(candidates.size()));
+  std::sort(std::begin(candidates), std::end(candidates),
+            [](const Face &a, const Face &b) { return a.area > b.area; });
+  m_flattenFaceCount = 6;
   statusText_ = tr("凸包完成: %1 个候选面，最大面=%2 (\"%3\")").arg(m_flattenFaceCount)
       .arg(candidates[0].label)
       .arg(candidates[0].area, 0, 'f', 1)
@@ -1752,15 +1753,6 @@ void EditorViewModel::splitSelectedObject()
     m_selectedSourceIndices.insert(idx2);
     statusText_ = tr("已沿 Y 轴拆分为 2 个部件");
   } else {
-  if (newIdx >= 0)
-  {
-    m_selectedSourceIndices.clear();
-    m_selectedSourceIndices.insert(srcIdx);
-    m_selectedSourceIndices.insert(newIdx);
-    statusText_ = tr("已拆分为 2 个部件（Mock）");
-  }
-  else
-  {
     statusText_ = tr("拆分失败");
   }
 
@@ -2284,7 +2276,12 @@ QString EditorViewModel::avgPrintSpeed() const
 }
 
 // ── 预估打印时间（对齐上游 PrintEstimatedStatistics::total_time）
-Q_INVOKABLE QString estimatePrintTimeForObject(int objectIndex) const
+QString EditorViewModel::estimatedPrintTime() const
+{
+  return sliceService_ ? sliceService_->estimatedTimeLabel() : QStringLiteral("--");
+}
+
+QString EditorViewModel::estimatePrintTimeForObject(int objectIndex) const
 {
   Q_UNUSED(objectIndex);
   return estimatedPrintTime();

@@ -395,6 +395,7 @@ public:
   QString modelSizeText() const;
   QString avgPrintSpeed() const;
   QString estimatedPrintTime() const;
+  Q_INVOKABLE QString estimatePrintTimeForObject(int objectIndex) const;
   int viewportWarning() const;
   QString viewportWarningMessage() const;
   bool hasViewportWarning() const;

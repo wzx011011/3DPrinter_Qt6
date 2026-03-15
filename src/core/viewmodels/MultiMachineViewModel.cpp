@@ -357,7 +357,7 @@ void MultiMachineViewModel::recomputeCloudPagination() {
 // Paged cloud task accessors (translate page-local index to global)
 int MultiMachineViewModel::pagedCloudTaskCount() const {
   int start = m_cloudCurrentPage * m_cloudPageSize;
-  int end = std::min(start + m_cloudPageSize, m_cloudTasks.size());
+  int end = std::min(int(start + m_cloudPageSize), int(m_cloudTasks.size()));
   return std::max(0, end - start);
 }
 
@@ -522,7 +522,6 @@ bool MultiMachineViewModel::currentSortAsc() const
   }
 }
 
-void MultiMachineViewModel::recomputePagination()
 void MultiMachineViewModel::stopAllLocalTasks()
 {
   // Aligns with upstream btn_stop_all -> cancel_all
@@ -697,7 +696,7 @@ void MultiMachineViewModel::simulateMockStateUpdate()
 {
   // Aligns with upstream on_timer -> update_page()
   // Simulate state changes for mock data (progress advancement, etc.)
-  bool machinesChanged = false;
+  bool machineChanged = false;
   bool localChanged = false;
   bool cloudChanged = false;
 
@@ -705,14 +704,14 @@ void MultiMachineViewModel::simulateMockStateUpdate()
   for (auto &m : m_machineEntries) {
     if (m.statusInt == 3 && m.progress < 100) { // RUNNING
       m.progress = std::min(100, m.progress + 1);
-      machinesChanged = true;
+      machineChanged = true;
     }
     if (m.statusInt == 5) { // PREPARE -> auto transition to RUNNING
       m.statusInt = 3;
       m.progress = 0;
       m.remaining = "02:00:00";
       m.taskName = m.taskName.isEmpty() ? "AutoTask.gcode" : m.taskName;
-      machinesChanged = true;
+      machineChanged = true;
     }
   }
 
@@ -736,7 +735,7 @@ void MultiMachineViewModel::simulateMockStateUpdate()
     }
   }
 
-  if (machinesChanged) emit machinesChanged();
+  if (machineChanged) emit machinesChanged();
   if (localChanged) emit localTasksChanged();
   if (cloudChanged) emit cloudTasksChanged();
 }
