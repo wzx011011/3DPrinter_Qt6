@@ -10,10 +10,12 @@ import ".."
 ///   - Navigation controls: back, forward, refresh (mall_control_back/forward/refresh)
 ///   - Script message handling: "request_close_publish_window" command
 ///   - go_to_mall() / go_to_publish() for URL navigation
+///   - show_control(bool) toggles navigation panel visibility
+///   - Close behavior: Hide() not destroy
 ///
 /// Current scope (P6.3): Native QML mock preview with grid layout, search,
-/// category filtering, sort tabs, and model cards (thumbnail, name, author,
-/// downloads, rating, price). WebView integration is a placeholder.
+/// category filtering, sort tabs, model cards, navigation history, download
+/// progress, and publish mode toggle. WebView integration is a placeholder.
 Item {
     id: root
     required property var modelMallVm
@@ -27,36 +29,94 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        // ══════════════════════════════════════════════════════════
-        // TOP BAR — Search + sort tabs (aligns with upstream
-        // ModelMallDialog m_web_control_panel navigation area)
-        // ══════════════════════════════════════════════════════════
+        // ================================================================
+        // TOP BAR — Navigation + Search + sort tabs
+        // Aligns with upstream ModelMallDialog m_web_control_panel
+        // ================================================================
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 52
             color: Theme.bgSurface
+            visible: root.modelMallVm.controlPanelVisible
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: Theme.spacingXL
+                anchors.leftMargin: Theme.spacingMD
                 anchors.rightMargin: Theme.spacingXL
-                spacing: Theme.spacingLG
+                spacing: Theme.spacingSM
 
-                // Page title
+                // Back button (aligns with upstream mall_control_back -> m_browser->GoBack())
+                Rectangle {
+                    width: 28
+                    height: 28
+                    radius: Theme.radiusMD
+                    color: backArea.containsMouse ? Theme.bgHover : "transparent"
+                    opacity: root.modelMallVm.canGoBack ? 1.0 : 0.35
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "\u25C0"
+                        font.pixelSize: 12
+                        color: root.modelMallVm.canGoBack
+                               ? (backArea.containsMouse ? Theme.accent : Theme.textSecondary)
+                               : Theme.textDisabled
+                    }
+
+                    HoverHandler { id: backArea }
+                    TapHandler {
+                        enabled: root.modelMallVm.canGoBack
+                        onTapped: root.modelMallVm.goBack()
+                    }
+                }
+
+                // Forward button (aligns with upstream mall_control_forward -> m_browser->GoForward())
+                Rectangle {
+                    width: 28
+                    height: 28
+                    radius: Theme.radiusMD
+                    color: fwdArea.containsMouse ? Theme.bgHover : "transparent"
+                    opacity: root.modelMallVm.canGoForward ? 1.0 : 0.35
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "\u25B6"
+                        font.pixelSize: 12
+                        color: root.modelMallVm.canGoForward
+                               ? (fwdArea.containsMouse ? Theme.accent : Theme.textSecondary)
+                               : Theme.textDisabled
+                    }
+
+                    HoverHandler { id: fwdArea }
+                    TapHandler {
+                        enabled: root.modelMallVm.canGoForward
+                        onTapped: root.modelMallVm.goForward()
+                    }
+                }
+
+                // Separator
+                Rectangle {
+                    width: 1
+                    height: 20
+                    color: Theme.borderDefault
+                }
+
+                // Page title + navigation breadcrumb
                 Text {
-                    text: qsTr("3D Model Mall")
+                    text: root.modelMallVm.navigationTitle
                     color: Theme.textPrimary
                     font.pixelSize: Theme.fontSizeXL
                     font.bold: true
+                    elide: Text.ElideRight
+                    Layout.maximumWidth: 200
                 }
 
-                // Search bar (upstream: URL bar was commented out in ModelMallDialog)
+                // Search bar (upstream URL bar was commented out; we use search instead)
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 32
                     radius: Theme.radiusLG
                     color: Theme.bgPanel
-                    border.color: Theme.borderDefault
+                    border.color: searchField.activeFocus ? Theme.accent : Theme.borderDefault
                     border.width: 1
 
                     RowLayout {
@@ -75,12 +135,12 @@ Item {
                             id: searchField
                             Layout.fillWidth: true
                             text: root.modelMallVm.searchQuery
-                            placeholderText: qsTr("Search models...")
+                            placeholderText: qsTr("Search models, authors, tags...")
                             color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeMD
                             placeholderTextColor: Theme.textTertiary
                             background: Rectangle { color: "transparent" }
-                            onTextChanged: root.modelMallVm.setSearchQuery(text)
+                            onEditingFinished: root.modelMallVm.setSearchQuery(text)
                             onAccepted: root.modelMallVm.setSearchQuery(text)
                         }
 
@@ -89,10 +149,12 @@ Item {
                             visible: searchField.text.length > 0
                             text: "\u2715"
                             font.pixelSize: Theme.fontSizeMD
-                            color: Theme.textTertiary
+                            color: searchClearArea.containsMouse ? Theme.textSecondary : Theme.textTertiary
                             TapHandler {
+                                id: searchClearArea
                                 onTapped: {
                                     searchField.text = ""
+                                    root.modelMallVm.setSearchQuery("")
                                     searchField.forceActiveFocus()
                                 }
                             }
@@ -127,16 +189,17 @@ Item {
                     }
                 }
 
-                // Refresh button (aligns with upstream mall_control_refresh)
+                // Refresh button (aligns with upstream mall_control_refresh -> m_browser->Reload())
                 Rectangle {
                     width: 30
                     height: 30
                     radius: Theme.radiusMD
                     color: refreshBtn.containsMouse ? Theme.bgHover : "transparent"
+                    opacity: root.modelMallVm.isLoading ? 1.0 : 0.8
 
                     Text {
                         anchors.centerIn: parent
-                        text: root.modelMallVm.isLoading ? "\u27F3" : "\u{1F504}"
+                        text: "\u{1F504}"
                         font.pixelSize: 14
                         color: root.modelMallVm.isLoading ? Theme.accent : Theme.textSecondary
                         RotationAnimation on rotation {
@@ -152,16 +215,41 @@ Item {
                         onTapped: root.modelMallVm.refresh()
                     }
                 }
+
+                // Publish button (aligns with upstream go_to_publish / request_close_publish_window)
+                Rectangle {
+                    width: publishBtnText.width + 20
+                    height: 28
+                    radius: 14
+                    color: root.modelMallVm.publishMode ? Theme.accent : (pubArea.containsMouse ? Theme.bgHover : "transparent")
+                    border.color: root.modelMallVm.publishMode ? Theme.accent : Theme.borderDefault
+                    border.width: 1
+
+                    Text {
+                        id: publishBtnText
+                        anchors.centerIn: parent
+                        text: qsTr("Publish")
+                        color: root.modelMallVm.publishMode ? Theme.textOnAccent : Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeSM
+                        font.bold: true
+                    }
+
+                    HoverHandler { id: pubArea }
+                    TapHandler {
+                        onTapped: root.modelMallVm.loadPublishUrl("")
+                    }
+                }
             }
         }
 
-        // ══════════════════════════════════════════════════════════
+        // ================================================================
         // CATEGORY TABS — Horizontal category filter
-        // ══════════════════════════════════════════════════════════
+        // ================================================================
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 38
             color: Theme.bgInset
+            visible: root.modelMallVm.controlPanelVisible
 
             RowLayout {
                 anchors.fill: parent
@@ -177,6 +265,8 @@ Item {
                         width: catText.width + 20
                         radius: 13
                         color: index === root.modelMallVm.categoryIndex ? Theme.accentSubtle : "transparent"
+                        border.color: index === root.modelMallVm.categoryIndex ? Theme.accent : "transparent"
+                        border.width: 1
 
                         Text {
                             id: catText
@@ -206,9 +296,9 @@ Item {
             }
         }
 
-        // ══════════════════════════════════════════════════════════
+        // ================================================================
         // MODEL GRID — Card-based grid layout (Flow wrapping)
-        // ══════════════════════════════════════════════════════════
+        // ================================================================
         ScrollView {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -231,10 +321,10 @@ Item {
                         id: card
                         required property int index
                         width: 192
-                        height: 244
+                        height: 248
                         radius: Theme.radiusLG
                         color: Theme.bgSurface
-                        border.color: cardMouse.containsMouse ? Theme.borderStrong : Theme.borderSubtle
+                        border.color: cardMouseArea.containsMouse ? Theme.borderStrong : Theme.borderSubtle
                         border.width: 1
                         clip: true
 
@@ -242,13 +332,13 @@ Item {
                             anchors.fill: parent
                             spacing: 0
 
-                            // ── Thumbnail area ──
+                            // -- Thumbnail area --
                             Rectangle {
                                 width: parent.width
                                 height: 140
                                 color: root.modelMallVm.modelThumbnailColor(card.index)
 
-                                // Featured badge (aligns with upstream staffpick)
+                                // Featured badge (aligns with upstream SendDesignStaffpick)
                                 Rectangle {
                                     visible: root.modelMallVm.modelFeatured(card.index)
                                     anchors.left: parent.left
@@ -270,7 +360,7 @@ Item {
 
                                 // Free badge
                                 Rectangle {
-                                    visible: root.modelMallVm.modelFree(card.index)
+                                    visible: root.modelMallVm.modelFree(card.index) && !root.modelMallVm.modelFeatured(card.index)
                                     anchors.right: parent.right
                                     anchors.top: parent.top
                                     anchors.margins: 8
@@ -288,6 +378,26 @@ Item {
                                     }
                                 }
 
+                                // Download completed badge
+                                Rectangle {
+                                    visible: root.modelMallVm.downloadCompleted(card.index)
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: 8
+                                    width: 72
+                                    height: 20
+                                    radius: 10
+                                    color: "#0a3d1f"
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: qsTr("Downloaded")
+                                        color: Theme.accent
+                                        font.pixelSize: Theme.fontSizeXS
+                                        font.bold: true
+                                    }
+                                }
+
                                 // Centered thumbnail icon
                                 Text {
                                     anchors.centerIn: parent
@@ -298,6 +408,7 @@ Item {
 
                                 // Downloads count (bottom-right overlay)
                                 Rectangle {
+                                    visible: !root.modelMallVm.downloadCompleted(card.index)
                                     anchors.right: parent.right
                                     anchors.bottom: parent.bottom
                                     anchors.margins: 8
@@ -316,7 +427,7 @@ Item {
                                 }
                             }
 
-                            // ── Card info area ──
+                            // -- Card info area --
                             Column {
                                 anchors.left: parent.left
                                 anchors.right: parent.right
@@ -348,10 +459,9 @@ Item {
                                     }
 
                                     Text {
-                                        text: root.modelMallVm.modelFree(card.index)
-                                              ? qsTr("Free")
-                                              : ("\u00A5" + root.modelMallVm.modelPrice(card.index).toFixed(1))
-                                        color: root.modelMallVm.modelFree(card.index) ? Theme.accent : Theme.statusWarning
+                                        visible: !root.modelMallVm.modelFree(card.index)
+                                        text: "\u00A5" + root.modelMallVm.modelPrice(card.index).toFixed(1)
+                                        color: Theme.statusWarning
                                         font.pixelSize: Theme.fontSizeSM
                                         font.bold: true
                                     }
@@ -380,22 +490,31 @@ Item {
                                     }
                                 }
 
-                                // Download button
+                                // Download button / progress area
                                 Rectangle {
                                     width: parent.width
-                                    height: 28
+                                    height: 30
                                     radius: Theme.radiusMD
                                     color: {
                                         if (root.modelMallVm.isDownloading(card.index))
                                             return Theme.bgPanel
-                                        return dlBtnArea.containsMouse ? Theme.accentDark : Theme.accentSubtle
+                                        if (root.modelMallVm.downloadCompleted(card.index))
+                                            return "#0a3d1f"
+                                        return dlBtnHover.containsMouse ? Theme.accentDark : Theme.accentSubtle
                                     }
-                                    border.color: root.modelMallVm.isDownloading(card.index) ? Theme.borderDefault : Theme.accent
+                                    border.color: {
+                                        if (root.modelMallVm.isDownloading(card.index))
+                                            return Theme.borderDefault
+                                        if (root.modelMallVm.downloadCompleted(card.index))
+                                            return Theme.accent
+                                        return Theme.accent
+                                    }
                                     border.width: 1
 
+                                    // Download in progress: progress bar + percentage
                                     Row {
                                         anchors.centerIn: parent
-                                        spacing: 4
+                                        spacing: 6
                                         visible: root.modelMallVm.isDownloading(card.index)
                                         Text {
                                             text: "\u27F3"
@@ -408,23 +527,34 @@ Item {
                                             }
                                         }
                                         Text {
-                                            text: qsTr("Downloading...")
+                                            text: qsTr("Downloading... %1%").arg(root.modelMallVm.downloadProgress(card.index))
                                             color: Theme.textSecondary
                                             font.pixelSize: Theme.fontSizeSM
                                             anchors.verticalCenter: parent.verticalCenter
                                         }
                                     }
 
+                                    // Download completed
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: qsTr("Downloaded")
+                                        color: Theme.accent
+                                        font.pixelSize: Theme.fontSizeSM
+                                        font.bold: true
+                                        visible: root.modelMallVm.downloadCompleted(card.index) && !root.modelMallVm.isDownloading(card.index)
+                                    }
+
+                                    // Download available
                                     Text {
                                         anchors.centerIn: parent
                                         text: qsTr("Download")
                                         color: Theme.accent
                                         font.pixelSize: Theme.fontSizeSM
                                         font.bold: true
-                                        visible: !root.modelMallVm.isDownloading(card.index)
+                                        visible: !root.modelMallVm.isDownloading(card.index) && !root.modelMallVm.downloadCompleted(card.index)
                                     }
 
-                                    HoverHandler { id: dlBtnArea }
+                                    HoverHandler { id: dlBtnHover }
                                     TapHandler {
                                         enabled: !root.modelMallVm.isDownloading(card.index)
                                         onTapped: root.modelMallVm.downloadModel(card.index)
@@ -433,16 +563,41 @@ Item {
                             }
                         }
 
+                        // Progress bar overlay at bottom of card during download
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.bottom: parent.bottom
+                            height: 3
+                            color: Theme.accent
+                            visible: root.modelMallVm.isDownloading(card.index)
+                            width: parent.width * (root.modelMallVm.downloadProgress(card.index) / 100)
+                        }
+
                         // Hover overlay
-                        HoverHandler { id: cardMouse }
+                        HoverHandler { id: cardMouseArea }
                         Rectangle {
                             anchors.fill: parent
                             radius: Theme.radiusLG
-                            color: cardMouse.hovered ? "#08ffffff" : "transparent"
+                            color: cardMouseArea.hovered ? "#08ffffff" : "transparent"
                         }
 
                         // Click to open detail (aligns with upstream OpenModelDetail -> browser)
+                        // Use MouseArea instead of TapHandler to avoid conflict with download button
+                        MouseArea {
+                            anchors.fill: parent
+                            z: -1  // below download button
+                            propagateComposedEvents: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: function(mouse) {
+                                mouse.accepted = false
+                            }
+                            onPressed: function(mouse) {
+                                mouse.accepted = false
+                            }
+                        }
                         TapHandler {
+                            z: 1
                             onTapped: root.modelMallVm.openModelDetail(card.index)
                         }
                     }
@@ -468,23 +623,51 @@ Item {
                             anchors.horizontalCenter: parent.horizontalCenter
                         }
                         Text {
-                            text: qsTr("Try adjusting your search or category filter")
+                            text: root.modelMallVm.searchQuery.length > 0
+                                  ? qsTr("Try adjusting your search query")
+                                  : qsTr("No models in this category yet")
                             color: Theme.textDisabled
                             font.pixelSize: Theme.fontSizeSM
                             anchors.horizontalCenter: parent.horizontalCenter
+                        }
+                        // Reset filters button
+                        Rectangle {
+                            visible: root.modelMallVm.searchQuery.length > 0 || root.modelMallVm.categoryIndex !== 0
+                            width: resetBtnText.width + 24
+                            height: 30
+                            radius: Theme.radiusMD
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            color: resetBtnHover.containsMouse ? Theme.accentDark : Theme.accentSubtle
+                            border.color: Theme.accent
+                            border.width: 1
+                            Text {
+                                id: resetBtnText
+                                anchors.centerIn: parent
+                                text: qsTr("Clear Filters")
+                                color: Theme.accent
+                                font.pixelSize: Theme.fontSizeSM
+                            }
+                            HoverHandler { id: resetBtnHover }
+                            TapHandler {
+                                onTapped: {
+                                    root.modelMallVm.setSearchQuery("")
+                                    root.modelMallVm.setCategoryIndex(0)
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        // ══════════════════════════════════════════════════════════
+        // ================================================================
         // STATUS BAR — Bottom info bar
-        // ══════════════════════════════════════════════════════════
+        // ================================================================
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: Theme.statusBarHeight
             color: Theme.chromeSurface
+            visible: root.modelMallVm.controlPanelVisible
 
             RowLayout {
                 anchors.fill: parent
@@ -523,7 +706,7 @@ Item {
         }
     }
 
-    // ── Helper functions ──
+    // -- Helper functions --
 
     function formatDownloads(count) {
         if (count >= 10000)
@@ -548,9 +731,10 @@ Item {
         return kb + " KB";
     }
 
-    // ══════════════════════════════════════════════════════════
+    // ================================================================
     // MODEL DETAIL DIALOG (aligns with upstream OpenModelDetail -> WebView)
-    // ══════════════════════════════════════════════════════════
+    // Upstream opens in default browser; mock shows native QML dialog
+    // ================================================================
     Dialog {
         id: detailDialog
         anchors.centerIn: parent
@@ -581,7 +765,7 @@ Item {
                 anchors.margins: Theme.spacingXL
                 spacing: Theme.spacingMD
 
-                // Header: close button
+                // Header: title + close button
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: Theme.spacingSM
@@ -671,7 +855,7 @@ Item {
                             font.pixelSize: Theme.fontSizeMD
                         }
 
-                        // Rating stars + score
+                        // Rating stars + score + downloads
                         Row {
                             spacing: 2
                             Repeater {
@@ -705,12 +889,11 @@ Item {
 
                         // Price
                         Text {
+                            visible: root.modelMallVm && !root.modelMallVm.modelFree(root.modelMallVm.selectedModelIndex)
                             text: root.modelMallVm
-                                  ? (root.modelMallVm.modelFree(root.modelMallVm.selectedModelIndex)
-                                     ? qsTr("Free")
-                                     : ("\u00A5" + root.modelMallVm.modelPrice(root.modelMallVm.selectedModelIndex).toFixed(1)))
+                                  ? ("\u00A5" + root.modelMallVm.modelPrice(root.modelMallVm.selectedModelIndex).toFixed(1))
                                   : ""
-                            color: root.modelMallVm && root.modelMallVm.modelFree(root.modelMallVm.selectedModelIndex) ? Theme.accent : Theme.statusWarning
+                            color: Theme.statusWarning
                             font.pixelSize: Theme.fontSizeLG
                             font.bold: true
                         }
@@ -785,7 +968,11 @@ Item {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 36
                             radius: Theme.radiusMD
-                            color: dlDetailBtn.containsMouse ? Theme.accent : Theme.accentSubtle
+                            color: {
+                                if (root.modelMallVm && root.modelMallVm.downloadCompleted(root.modelMallVm.selectedModelIndex))
+                                    return "#0a3d1f"
+                                return dlDetailBtn.containsMouse ? Theme.accent : Theme.accentSubtle
+                            }
                             border.color: Theme.accent
                             border.width: 1
 
@@ -793,7 +980,15 @@ Item {
                                 anchors.centerIn: parent
                                 spacing: 6
                                 Text {
-                                    text: root.modelMallVm && root.modelMallVm.modelFree(root.modelMallVm.selectedModelIndex)
+                                    visible: root.modelMallVm && root.modelMallVm.downloadCompleted(root.modelMallVm.selectedModelIndex)
+                                    text: qsTr("Downloaded")
+                                    color: Theme.accent
+                                    font.pixelSize: Theme.fontSizeMD
+                                    font.bold: true
+                                }
+                                Text {
+                                    visible: root.modelMallVm && !root.modelMallVm.downloadCompleted(root.modelMallVm.selectedModelIndex)
+                                    text: root.modelMallVm.modelFree(root.modelMallVm.selectedModelIndex)
                                           ? qsTr("\u2B07 Download Free")
                                           : qsTr("\u2B07 Purchase & Download")
                                     color: Theme.accent
@@ -801,9 +996,9 @@ Item {
                                     font.bold: true
                                 }
                                 Text {
-                                    text: root.modelMallVm && !root.modelMallVm.modelFree(root.modelMallVm.selectedModelIndex)
-                                          ? ("\u00A5" + root.modelMallVm.modelPrice(root.modelMallVm.selectedModelIndex).toFixed(1))
-                                          : ""
+                                    visible: root.modelMallVm && !root.modelMallVm.modelFree(root.modelMallVm.selectedModelIndex)
+                                              && !root.modelMallVm.downloadCompleted(root.modelMallVm.selectedModelIndex)
+                                    text: "\u00A5" + root.modelMallVm.modelPrice(root.modelMallVm.selectedModelIndex).toFixed(1)
                                     color: Theme.accent
                                     font.pixelSize: Theme.fontSizeMD
                                     font.bold: true

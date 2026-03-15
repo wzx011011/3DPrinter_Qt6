@@ -7,7 +7,7 @@ ModelMallViewModel::ModelMallViewModel(QObject *parent) : QObject(parent)
 {
   // Categories aligned with upstream CrealityPrint model mall taxonomy
   m_categories = {
-      QT_TRANSLATE_NOOP("ModelMallViewModel", "Home"),
+      QT_TRANSLATE_NOOP("ModelMallViewModel", "All"),
       QT_TRANSLATE_NOOP("ModelMallViewModel", "Toys & Games"),
       QT_TRANSLATE_NOOP("ModelMallViewModel", "Home & Garden"),
       QT_TRANSLATE_NOOP("ModelMallViewModel", "Tools & Utility"),
@@ -16,6 +16,10 @@ ModelMallViewModel::ModelMallViewModel(QObject *parent) : QObject(parent)
   };
 
   loadMockModels();
+
+  // Initialize navigation history with the default state (aligns with upstream browser history)
+  pushNavigationState();
+  updateNavigationTitle();
 }
 
 void ModelMallViewModel::loadMockModels()
@@ -23,7 +27,7 @@ void ModelMallViewModel::loadMockModels()
   m_allEntries.clear();
 
   // 12 mock models across 4 categories (indices 1-4), matching upstream ModelMallDialog scope
-  // Category 0 (Home) is used by featured/pinned items in upstream
+  // Category 0 (All) shows everything (aligns with upstream default view)
   // Upstream loads a web-based mall; here we provide native QML mock for offline preview
   struct RawModel {
     const char *name, *author, *thumbColor, *thumbIcon;
@@ -120,14 +124,16 @@ void ModelMallViewModel::applyFilter()
   for (int i = 0; i < m_allEntries.size(); ++i) {
     const auto &e = m_allEntries[i];
 
-    // Category filter: index 0 = all
+    // Category filter: index 0 = all (aligns with upstream default view)
     if (m_categoryIndex > 0 && e.categoryIndex != m_categoryIndex)
       continue;
 
-    // Search filter: match name or author
+    // Search filter: match name, author, or tags (aligns with upstream search behavior)
     if (!m_searchQuery.isEmpty()) {
       const QString q = m_searchQuery.toLower();
-      if (!e.name.toLower().contains(q) && !e.author.toLower().contains(q))
+      if (!e.name.toLower().contains(q)
+          && !e.author.toLower().contains(q)
+          && !e.tags.toLower().contains(q))
         continue;
     }
 
@@ -150,6 +156,102 @@ void ModelMallViewModel::applyFilter()
   emit filteredCountChanged();
 }
 
+// --- Navigation history (aligns with upstream on_back/on_forward browser history) ---
+
+void ModelMallViewModel::pushNavigationState()
+{
+  NavigationState state;
+  state.categoryIndex = m_categoryIndex;
+  state.sortMode = m_sortMode;
+  state.searchQuery = m_searchQuery;
+
+  // If we navigated back and then changed something, discard forward history
+  if (m_historyIndex >= 0 && m_historyIndex < m_navigationHistory.size() - 1) {
+    m_navigationHistory = m_navigationHistory.mid(0, m_historyIndex + 1);
+  }
+
+  // Cap history to prevent unbounded growth (keep last 50 entries)
+  static const int MAX_HISTORY = 50;
+  if (m_navigationHistory.size() >= MAX_HISTORY) {
+    m_navigationHistory.removeFirst();
+  }
+
+  m_navigationHistory.append(state);
+  m_historyIndex = m_navigationHistory.size() - 1;
+
+  emit canGoBackChanged();
+  emit canGoForwardChanged();
+  updateNavigationTitle();
+}
+
+void ModelMallViewModel::restoreNavigationState(const NavigationState &state)
+{
+  m_categoryIndex = state.categoryIndex;
+  m_sortMode = state.sortMode;
+  m_searchQuery = state.searchQuery;
+  emit categoryIndexChanged();
+  emit sortModeChanged();
+  emit searchQueryChanged();
+  applyFilter();
+  updateNavigationTitle();
+}
+
+void ModelMallViewModel::goBack()
+{
+  // Aligns with upstream ModelMallDialog::on_back -> m_browser->GoBack()
+  if (m_historyIndex > 0) {
+    m_historyIndex--;
+    restoreNavigationState(m_navigationHistory[m_historyIndex]);
+    emit canGoBackChanged();
+    emit canGoForwardChanged();
+  }
+}
+
+void ModelMallViewModel::goForward()
+{
+  // Aligns with upstream ModelMallDialog::on_forward -> m_browser->GoForward()
+  if (m_historyIndex < m_navigationHistory.size() - 1) {
+    m_historyIndex++;
+    restoreNavigationState(m_navigationHistory[m_historyIndex]);
+    emit canGoBackChanged();
+    emit canGoForwardChanged();
+  }
+}
+
+void ModelMallViewModel::updateNavigationTitle()
+{
+  // Build a navigation title showing current category + search (aligns with upstream URL bar concept)
+  QString title;
+  if (m_publishMode) {
+    title = tr("Publish");
+  } else {
+    title = tr("3D Model Mall");
+  }
+
+  if (m_categoryIndex > 0 && m_categoryIndex < m_categories.size()) {
+    title += " / " + m_categories[m_categoryIndex];
+  }
+
+  if (!m_searchQuery.isEmpty()) {
+    title += " / \"" + m_searchQuery + "\"";
+  }
+
+  if (m_navigationTitle != title) {
+    m_navigationTitle = title;
+    emit navigationTitleChanged();
+  }
+}
+
+// --- Control panel visibility (aligns with upstream show_control(bool)) ---
+
+void ModelMallViewModel::setControlPanelVisible(bool visible)
+{
+  if (m_controlPanelVisible != visible) {
+    m_controlPanelVisible = visible;
+    emit controlPanelVisibleChanged();
+  }
+}
+
 // --- Q_PROPERTY accessors ---
 
 QStringList ModelMallViewModel::categories() const { return m_categories; }
@@ -157,10 +259,6 @@ QStringList ModelMallViewModel::categories() const { return m_categories; }
 // --- Q_INVOKABLE accessors (filtered view) ---
 
 int ModelMallViewModel::filteredCount() const { return m_filteredIndices.size(); }
-
-static inline const ModelMallViewModel::ModelEntry &entryAt(const QList<ModelMallViewModel::ModelEntry> &list, const QList<int> &indices, int i) {
-  return list[(i >= 0 && i < indices.size()) ? indices[i] : 0];
-}
 
 QString ModelMallViewModel::modelName(int i) const {
   return (i >= 0 && i < m_filteredIndices.size()) ? m_allEntries[m_filteredIndices[i]].name : QString{};
@@ -211,6 +309,34 @@ QString ModelMallViewModel::modelTags(int i) const {
   return (i >= 0 && i < m_filteredIndices.size()) ? m_allEntries[m_filteredIndices[i]].tags : QString{};
 }
 
+// --- Download progress (aligns with upstream ModelMallDialog download interaction) ---
+
+int ModelMallViewModel::downloadProgress(int index) const
+{
+  if (index < 0 || index >= m_filteredIndices.size()) return 0;
+  int realIdx = m_filteredIndices[index];
+  if (realIdx < 0 || realIdx >= m_allEntries.size()) return 0;
+  return m_allEntries[realIdx].downloadProgress;
+}
+
+bool ModelMallViewModel::downloadCompleted(int index) const
+{
+  if (index < 0 || index >= m_filteredIndices.size()) return false;
+  int realIdx = m_filteredIndices[index];
+  if (realIdx < 0 || realIdx >= m_allEntries.size()) return false;
+  return m_allEntries[realIdx].downloadCompleted;
+}
+
+void ModelMallViewModel::cancelDownload(int index)
+{
+  if (index < 0 || index >= m_filteredIndices.size()) return;
+  int realIdx = m_filteredIndices[index];
+  if (realIdx < 0 || realIdx >= m_allEntries.size()) return;
+  m_allEntries[realIdx].downloading = false;
+  m_allEntries[realIdx].downloadProgress = 0;
+  emit filteredCountChanged();
+}
+
 // --- Slots ---
 
 void ModelMallViewModel::setCategoryIndex(int idx)
@@ -219,6 +345,7 @@ void ModelMallViewModel::setCategoryIndex(int idx)
     m_categoryIndex = idx;
     emit categoryIndexChanged();
     applyFilter();
+    pushNavigationState();
   }
 }
 
@@ -228,6 +355,7 @@ void ModelMallViewModel::setSearchQuery(const QString &q)
     m_searchQuery = q;
     emit searchQueryChanged();
     applyFilter();
+    pushNavigationState();
   }
 }
 
@@ -237,27 +365,44 @@ void ModelMallViewModel::setSortMode(int mode)
     m_sortMode = mode;
     emit sortModeChanged();
     applyFilter();
+    pushNavigationState();
   }
 }
 
 void ModelMallViewModel::downloadModel(int index)
 {
-  // 对齐上游 ModelMallDialog download via script messages
+  // Aligns with upstream ModelMallDialog download via script messages
   if (index < 0 || index >= m_filteredIndices.size()) return;
   int realIdx = m_filteredIndices[index];
   if (realIdx < 0 || realIdx >= m_allEntries.size()) return;
 
-  m_allEntries[realIdx].downloading = true;
+  auto &entry = m_allEntries[realIdx];
+  if (entry.downloading || entry.downloadCompleted) return;
+
+  entry.downloading = true;
+  entry.downloadProgress = 0;
+  entry.downloadCompleted = false;
   emit filteredCountChanged();
 
-  // Mock: simulate 2s download
-  QTimer::singleShot(2000, this, [this, realIdx]() {
-    if (realIdx < m_allEntries.size()) {
-      m_allEntries[realIdx].downloading = false;
-      m_allEntries[realIdx].downloads++;
-      emit filteredCountChanged();
-    }
-  });
+  // Mock: simulate progressive download with data-driven steps (aligns with upstream download progress)
+  static const int stepDelays[] = {200, 400, 600, 900, 1200, 1500, 1800, 2000};
+  static const int stepValues[] = {10, 25, 40, 55, 70, 85, 95, 100};
+
+  for (int s = 0; s < 8; ++s) {
+    QTimer::singleShot(stepDelays[s], this, [this, realIdx, progress = stepValues[s]]() {
+      if (realIdx < m_allEntries.size() && m_allEntries[realIdx].downloading) {
+        if (progress >= 100) {
+          m_allEntries[realIdx].downloading = false;
+          m_allEntries[realIdx].downloadProgress = 100;
+          m_allEntries[realIdx].downloadCompleted = true;
+          m_allEntries[realIdx].downloads++;
+        } else {
+          m_allEntries[realIdx].downloadProgress = progress;
+        }
+        emit filteredCountChanged();
+      }
+    });
+  }
 }
 
 bool ModelMallViewModel::isDownloading(int index) const
@@ -290,7 +435,7 @@ void ModelMallViewModel::refresh()
 {
   m_isLoading = true;
   emit isLoadingChanged();
-  // Simulate async loading delay (对齐上游 wxWebView reload)
+  // Simulate async loading delay (aligns with upstream wxWebView reload)
   QTimer::singleShot(800, this, [this]() {
     loadMockModels();
     m_isLoading = false;
@@ -301,12 +446,17 @@ void ModelMallViewModel::refresh()
 void ModelMallViewModel::loadMallUrl(const QString &url)
 {
   // Upstream alignment: ModelMallDialog::go_to_mall(url) -> WebView::LoadUrl(m_browser, url)
-  // Placeholder: will load url into a QtWebEngine WebView component
   Q_UNUSED(url)
+  m_publishMode = false;
+  emit publishModeChanged();
+  updateNavigationTitle();
 }
 
 void ModelMallViewModel::loadPublishUrl(const QString &url)
 {
   // Upstream alignment: ModelMallDialog::go_to_publish(url) -> WebView::LoadUrl(m_browser, url)
   Q_UNUSED(url)
+  m_publishMode = true;
+  emit publishModeChanged();
+  updateNavigationTitle();
 }
