@@ -20,14 +20,19 @@ Stop-Process -Name 'FramelessDialogDemo' -Force -ErrorAction SilentlyContinue
 Stop-Process -Name 'cmake', 'ninja', 'link' -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
 
+$env:CMAKE_PREFIX_PATH = "E:\Qt6.10"
+$env:Qt6_DIR = "E:\Qt6.10"
+
 $cmakeArgs = @(
   '-S', '..',
   '-B', '.',
   '-G', 'Ninja',
   '-DCMAKE_BUILD_TYPE=Release',
   '-DBUILD_LIBSLIC3R=ON',
+  '-DLIBSLIC3R_FROM_SOURCE=ON',
   '-DCREALITY_QML_GUI=ON',
-  '-DQT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT=3.21'
+  '-DQT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT=3.21',
+  '-DQt6_DIR=E:/Qt6.10'
 )
 
 $configureSucceeded = $false
@@ -57,7 +62,7 @@ if (-not $configureSucceeded) { exit $lastConfigureExitCode }
 # Reduce MSVC memory pressure in large TUs/autogen files
 $env:CL = "/Zm300 /bigobj $env:CL"
 
-ninja -j1 FramelessDialogDemo.exe
+ninja -j16 FramelessDialogDemo.exe
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Deploy Qt runtime DLLs if not already present

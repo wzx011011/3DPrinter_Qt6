@@ -299,8 +299,11 @@ set(ALL_LIBSLIC3R_SOURCES
 # Exclude files that are commented out in the upstream CMakeLists.txt
 list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "GCodeSender\\.")
 list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "SupportSpotsGenerator\\.")
-list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "[Tt]ree[Ss]upport\\.(cpp|hpp)$")
-list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "SupportMaterial\\.(cpp|hpp)$")
+# Only exclude the legacy top-level support sources that remain commented out
+# upstream. Keep support_new/* in the build because PrintObject.cpp depends on
+# their concrete implementations.
+list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX ".*/libslic3r/[Tt]ree[Ss]upport\\.(cpp|hpp)$")
+list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX ".*/libslic3r/SupportMaterial\\.(cpp|hpp)$")
 list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "SLA/SupportTreeIGL\\.")
 list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "Arachne/utils/ExtrusionJunction\\.cpp$")
 list(APPEND ALL_LIBSLIC3R_SOURCES
@@ -374,50 +377,25 @@ find_package(CGAL REQUIRED CONFIG)
 
 find_package(OpenCV QUIET COMPONENTS core)
 
-# ─── 4. Helper: import a pre-built static library ─────────────────────────────
-macro(import_prebuilt_lib _name _lib_path)
-    add_library(${_name} STATIC IMPORTED GLOBAL)
-    set_target_properties(${_name} PROPERTIES
-        IMPORTED_LOCATION "${_lib_path}"
-    )
-    if(NOT EXISTS "${_lib_path}")
-        message(WARNING "Pre-built library not found: ${_lib_path}")
-    endif()
-endmacro()
+# ─── 4. Build embedded deps from source ─────────────────────────────────────
+include("${CMAKE_SOURCE_DIR}/cmake/BuildDepsFromSource.cmake")
 
-# ─── Import all pre-built .lib files (embedded deps) ─────────────────────────
-# These are from the upstream build output directory
-set(UPSTREAM_BUILD "E:/ai/3D-Printer/out/vs2026-x64-release/build/src")
-set(_LIB_DIR "${UPSTREAM_BUILD}")
-
-import_prebuilt_lib(admesh_imported       "${_LIB_DIR}/admesh/Release/admesh.lib")
-import_prebuilt_lib(clipper_imported      "${_LIB_DIR}/clipper/Release/clipper.lib")
-import_prebuilt_lib(clipper2_imported     "${_LIB_DIR}/clipper2/Release/Clipper2.lib")
-import_prebuilt_lib(glu_libtess_imported  "${_LIB_DIR}/glu-libtess/Release/glu-libtess.lib")
-import_prebuilt_lib(libnest2d_imported    "${_LIB_DIR}/libnest2d/Release/libnest2d.lib")
-import_prebuilt_lib(mcut_imported         "${_LIB_DIR}/mcut/Release/mcut.lib")
-import_prebuilt_lib(miniz_imported        "${_LIB_DIR}/miniz/Release/miniz_static.lib")
-import_prebuilt_lib(nowide_imported       "${_LIB_DIR}/boost/Release/nowide.lib")
-import_prebuilt_lib(qoi_imported          "${_LIB_DIR}/qoi/Release/qoi.lib")
-import_prebuilt_lib(semver_imported       "${_LIB_DIR}/semver/Release/semver.lib")
-
-# qhull - from pre-built deps (system-level install, not in upstream build/src)
-import_prebuilt_lib(qhull_imported "${DEPS_PREFIX}/lib/qhullstatic_r.lib")
-import_prebuilt_lib(qhullcpp_imported "${DEPS_PREFIX}/lib/qhullcpp.lib")
-
-# assimp - 3D model import
-import_prebuilt_lib(assimp_imported "${DEPS_PREFIX}/lib/assimp-vc142-mt.lib")
-
-# cr_tpms_library - TPMS infill scalar field (closed-source)
-import_prebuilt_lib(cr_tpms_imported "${DEPS_PREFIX}/lib/cr_tpms_library.lib")
-
-# libigl - geometry processing (header-only or pre-built)
-if(EXISTS "${DEPS_PREFIX}/lib/igl.lib")
-    import_prebuilt_lib(libigl_imported "${DEPS_PREFIX}/lib/igl.lib")
-else()
-    add_library(libigl_imported INTERFACE)
-    target_include_directories(libigl_imported INTERFACE "${UPSTREAM_SRC}/libigl")
-endif()
+# Create aliases with _imported suffix for compatibility
+add_library(admesh_imported ALIAS admesh_from_source)
+add_library(clipper_imported ALIAS clipper_from_source)
+add_library(clipper2_imported ALIAS clipper2_from_source)
+add_library(glu_libtess_imported ALIAS glu_libtess_from_source)
+add_library(libnest2d_imported ALIAS libnest2d_from_source)
+add_library(mcut_imported ALIAS mcut_from_source)
+add_library(miniz_imported ALIAS miniz_from_source)
+add_library(nowide_imported ALIAS nowide_from_source)
+add_library(qoi_imported ALIAS qoi_from_source)
+add_library(semver_imported ALIAS semver_from_source)
+add_library(qhull_imported ALIAS qhull_from_source)
+add_library(qhullcpp_imported ALIAS qhullcpp_from_source)
+add_library(assimp_imported ALIAS assimp_from_source)
+add_library(cr_tpms_imported ALIAS cr_tpms_from_source)
+add_library(libigl_imported ALIAS libigl_from_source)
 
 # tbb_libs - TBB wrapper target (create if not exists)
 if(NOT TARGET tbb_libs)
@@ -572,6 +550,9 @@ target_include_directories(libslic3r_from_source SYSTEM PUBLIC
 )
 
 # ─── 7. OCCT (OpenCASCADE) libraries with delay-load ──────────────────────────
+# NOTE: OCCT delay-load causes 0xC0000005 at startup when TK*.dll are not present.
+# The QML GUI doesn't use OCCT, so we disable delay-load. OCCT symbols are still
+# linked (needed by CGAL compilation) but won't cause runtime load failures.
 set(OCCT_LIBS
     TKXDESTEP    TKSTEP       TKSTEP209    TKSTEPAttr   TKSTEPBase
     TKXCAF       TKXSBase     TKVCAF       TKCAF        TKLCAF
@@ -582,11 +563,9 @@ set(OCCT_LIBS
 )
 set(OCCT_LIB_DIR "${DEPS_PREFIX}/lib/occt")
 
+# Disable delay-load to prevent 0xC0000005 when OCCT DLLs are absent.
+# OCCT is only needed for STEP/OBJ import which the QML GUI doesn't use.
 set(_delayload_libs "")
-foreach(_occt_lib ${OCCT_LIBS})
-    target_link_libraries(libslic3r_from_source PUBLIC "${OCCT_LIB_DIR}/${_occt_lib}.lib")
-    list(APPEND _delayload_libs "/DELAYLOAD:${_occt_lib}.dll")
-endforeach()
 
 # Also delay-load cr_tpms_library (closed-source TPMS infill DLL)
 list(APPEND _delayload_libs "/DELAYLOAD:cr_tpms_library.dll")
@@ -642,6 +621,12 @@ target_link_libraries(libslic3r_from_source PUBLIC
     # CGAL (for main library too)
     ${_cgal_tgt}
 )
+
+# ─── 7.5 OCCT (OpenCASCADE) libraries ────────────────────────────────────────
+# Link OCCT libraries with full paths for STEP/SVG import
+foreach(_occt_lib ${OCCT_LIBS})
+    target_link_libraries(libslic3r_from_source PUBLIC "${OCCT_LIB_DIR}/${_occt_lib}.lib")
+endforeach()
 
 # Platform-specific libraries
 if(WIN32)

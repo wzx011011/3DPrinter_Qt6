@@ -33,7 +33,7 @@ include(CTest)
 
 # ── 构建 libslic3r 后端 ──────────────────────────────────────────────────
 if(BUILD_LIBSLIC3R)
-    option(LIBSLIC3R_FROM_SOURCE "Build libslic3r from source (slower but fixes static init crash)" OFF)
+    option(LIBSLIC3R_FROM_SOURCE "Build libslic3r from source (fixes static init crash from CRT mismatch with pre-built libs)" ON)
     if(LIBSLIC3R_FROM_SOURCE)
         message(STATUS "=== Building libslic3r FROM SOURCE ===")
         include("${CMAKE_SOURCE_DIR}/cmake/BuildLibslic3rFromSource.cmake")
