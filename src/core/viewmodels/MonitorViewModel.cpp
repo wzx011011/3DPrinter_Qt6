@@ -110,6 +110,26 @@ int MonitorViewModel::selectedDeviceSignalStrength() const
   return deviceService_ ? deviceService_->selectedDeviceSignalStrength() : 0;
 }
 
+bool MonitorViewModel::selectedDeviceChamberLightOn() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceChamberLightOn() : false;
+}
+
+bool MonitorViewModel::selectedDeviceWorkLightOn() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceWorkLightOn() : false;
+}
+
+bool MonitorViewModel::selectedDeviceCameraRecording() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceCameraRecording() : false;
+}
+
+bool MonitorViewModel::selectedDeviceCameraTimelapse() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceCameraTimelapse() : false;
+}
+
 // ── Network ───────────────────────────────────────────────────
 
 bool MonitorViewModel::networkOnline() const
@@ -303,4 +323,43 @@ void MonitorViewModel::retryCameraConnection()
 void MonitorViewModel::takeCameraScreenshot()
 {
   if (cameraService_) cameraService_->takeScreenshot();
+}
+
+// ── Device lights and recording (对齐上游 MachineObject lights / camera) ──
+
+void MonitorViewModel::setChamberLight(bool on)
+{
+  if (deviceService_) deviceService_->setChamberLight(on);
+}
+
+void MonitorViewModel::setWorkLight(bool on)
+{
+  if (deviceService_) deviceService_->setWorkLight(on);
+}
+
+void MonitorViewModel::toggleDeviceRecording()
+{
+  if (deviceService_) deviceService_->toggleRecording();
+}
+
+void MonitorViewModel::toggleDeviceTimelapse()
+{
+  if (deviceService_) deviceService_->toggleTimelapse();
+}
+
+// ── AMS 多耗材管理（对齐上游 AMSScreen / AMSModel） ──
+
+int MonitorViewModel::selectedAmsSlotCount() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceAmsSlotCount() : 0;
+}
+
+QVariantMap MonitorViewModel::amsSlotAt(int slotIndex) const
+{
+  return deviceService_ ? deviceService_->selectedDeviceAmsSlotAt(slotIndex) : QVariantMap();
+}
+
+void MonitorViewModel::setActiveAmsSlot(int slotIndex)
+{
+  if (deviceService_) deviceService_->setSelectedDeviceAmsSlot(slotIndex);
 }

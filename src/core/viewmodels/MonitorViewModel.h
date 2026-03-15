@@ -26,6 +26,10 @@ class MonitorViewModel final : public QObject
   Q_PROPERTY(QString selectedDeviceIp READ selectedDeviceIp NOTIFY selectedDeviceChanged)
   Q_PROPERTY(int selectedDeviceTemperature READ selectedDeviceTemperature NOTIFY selectedDeviceChanged)
   Q_PROPERTY(int selectedDeviceSignalStrength READ selectedDeviceSignalStrength NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(bool selectedDeviceChamberLightOn READ selectedDeviceChamberLightOn NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(bool selectedDeviceWorkLightOn READ selectedDeviceWorkLightOn NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(bool selectedDeviceCameraRecording READ selectedDeviceCameraRecording NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(bool selectedDeviceCameraTimelapse READ selectedDeviceCameraTimelapse NOTIFY selectedDeviceChanged)
 
   // ── Network status ──────────────────────────────────────────
   Q_PROPERTY(bool networkOnline READ networkOnline NOTIFY networkChanged)
@@ -49,6 +53,10 @@ public:
   QString selectedDeviceIp() const;
   int selectedDeviceTemperature() const;
   int selectedDeviceSignalStrength() const;
+  bool selectedDeviceChamberLightOn() const;
+  bool selectedDeviceWorkLightOn() const;
+  bool selectedDeviceCameraRecording() const;
+  bool selectedDeviceCameraTimelapse() const;
 
   bool networkOnline() const;
   int latencyMs() const;
@@ -111,6 +119,18 @@ public:
   Q_INVOKABLE void switchCameraView();
   Q_INVOKABLE void retryCameraConnection();
   Q_INVOKABLE void takeCameraScreenshot();
+
+  /// Device lights and recording (对齐上游 MachineObject lights / camera)
+  Q_INVOKABLE void setChamberLight(bool on);
+  Q_INVOKABLE void setWorkLight(bool on);
+  Q_INVOKABLE void toggleDeviceRecording();
+  Q_INVOKABLE void toggleDeviceTimelapse();
+
+  /// AMS 多耗材管理（对齐上游 AMSScreen / AMSModel）
+  Q_PROPERTY(int selectedAmsSlotCount READ selectedAmsSlotCount NOTIFY selectedDeviceChanged)
+  int selectedAmsSlotCount() const;
+  Q_INVOKABLE QVariantMap amsSlotAt(int slotIndex) const;
+  Q_INVOKABLE void setActiveAmsSlot(int slotIndex);
 
 signals:
   void devicesChanged();

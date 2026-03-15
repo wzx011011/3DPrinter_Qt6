@@ -60,18 +60,93 @@ DeviceServiceMock::DeviceServiceMock(QObject *parent)
 
 void DeviceServiceMock::buildMockDevices()
 {
-  devices_ = {
-    {"K1 Max",   "K1 Max",   "CP01001A001", "printing", true, 64,
-     "Benchy_3dbenchy.gcode", "192.168.1.100", 218, 3},
-    {"K1C",      "K1C",      "CP01002B002", "idle",     true, 0,
-     "",                         "192.168.1.101",  25, 3},
-    {"Ender-3 V3", "Ender-3 V3 SE", "CP01003C003", "offline", false, 0,
-     "",                         "192.168.1.102",  22, 0},
-    {"CR-10 SE",  "CR-10 SE",  "CP01004D004", "printing", true, 37,
-     "Calendar_Cat.gcode",      "192.168.1.103", 205, 2},
-    {"K1",        "K1",        "CP01005E005", "connecting", false, 0,
-     "",                         "192.168.1.104",  0, 1},
+  // Build devices with AMS slots (对齐上游 AMSScreen / AMSModel)
+  MockDevice k1Max;
+  k1Max.name = "K1 Max";
+  k1Max.model = "K1 Max";
+  k1Max.sn = "CP01001A001";
+  k1Max.status = "printing";
+  k1Max.online = true;
+  k1Max.progress = 64;
+  k1Max.taskName = "Benchy_3dbenchy.gcode";
+  k1Max.ip = "192.168.1.100";
+  k1Max.temperature = 218;
+  k1Max.signalStrength = 3;
+  k1Max.amsSlots = {
+    {"PLA",   "#FF5733", 850.0f, true},   // Active: orange PLA
+    {"PETG",  "#FFFFFF", 720.0f, false},  // White PETG
+    {"ABS",   "#1E90FF", 0.0f, false},    // Empty slot
+    {"PLA",   "#228B22", 500.0f, false},  // Green PLA
   };
+
+  MockDevice k1c;
+  k1c.name = "K1C";
+  k1c.model = "K1C";
+  k1c.sn = "CP01002B002";
+  k1c.status = "idle";
+  k1c.online = true;
+  k1c.progress = 0;
+  k1c.taskName = "";
+  k1c.ip = "192.168.1.101";
+  k1c.temperature = 25;
+  k1c.signalStrength = 3;
+  k1c.amsSlots = {
+    {"PLA",   "#00CED1", 1000.0f, true},  // Cyan PLA active
+    {"TPU",   "#9370DB", 680.0f, false},  // Purple TPU
+    {"",      "",        0.0f, false},    // Empty
+    {"PLA+",  "#FFD700", 920.0f, false},  // Gold PLA+
+  };
+
+  MockDevice ender3v3;
+  ender3v3.name = "Ender-3 V3";
+  ender3v3.model = "Ender-3 V3 SE";
+  ender3v3.sn = "CP01003C003";
+  ender3v3.status = "offline";
+  ender3v3.online = false;
+  ender3v3.progress = 0;
+  ender3v3.taskName = "";
+  ender3v3.ip = "192.168.1.102";
+  ender3v3.temperature = 22;
+  ender3v3.signalStrength = 0;
+  // No AMS for Ender-3
+
+  MockDevice cr10se;
+  cr10se.name = "CR-10 SE";
+  cr10se.model = "CR-10 SE";
+  cr10se.sn = "CP01004D004";
+  cr10se.status = "printing";
+  cr10se.online = true;
+  cr10se.progress = 37;
+  cr10se.taskName = "Calendar_Cat.gcode";
+  cr10se.ip = "192.168.1.103";
+  cr10se.temperature = 205;
+  cr10se.signalStrength = 2;
+  cr10se.amsSlots = {
+    {"PLA",   "#FF1493", 780.0f, true},   // Deep pink PLA active
+    {"PETG",  "#32CD32", 650.0f, false},  // Lime PETG
+    {"",      "",        0.0f, false},    // Empty
+    {"",      "",        0.0f, false},    // Empty
+  };
+
+  MockDevice k1;
+  k1.name = "K1";
+  k1.model = "K1";
+  k1.sn = "CP01005E005";
+  k1.status = "connecting";
+  k1.online = false;
+  k1.progress = 0;
+  k1.taskName = "";
+  k1.ip = "192.168.1.104";
+  k1.temperature = 0;
+  k1.signalStrength = 1;
+  k1.amsSlots = {
+    {"PLA",   "#8B4513", 420.0f, false},  // Brown PLA
+    {"PLA",   "#4169E1", 890.0f, true},   // Royal blue PLA active
+    {"PETG",  "#FF6347", 710.0f, false},  // Tomato PETG
+    {"",      "",        0.0f, false},    // Empty
+  };
+
+  devices_ = {k1Max, k1c, ender3v3, cr10se, k1};
 
   // Mock HMS data (对齐上游 DeviceManager hms_list)
   hmsLists_[0] = {
@@ -185,6 +260,30 @@ int DeviceServiceMock::selectedDeviceSignalStrength() const
 {
   const int idx = selectedDeviceIndex();
   return (idx >= 0 && idx < devices_.size()) ? devices_[idx].signalStrength : 0;
+}
+
+bool DeviceServiceMock::selectedDeviceChamberLightOn() const
+{
+  const int idx = selectedDeviceIndex();
+  return (idx >= 0 && idx < devices_.size()) ? devices_[idx].chamberLightOn : false;
+}
+
+bool DeviceServiceMock::selectedDeviceWorkLightOn() const
+{
+  const int idx = selectedDeviceIndex();
+  return (idx >= 0 && idx < devices_.size()) ? devices_[idx].workLightOn : false;
+}
+
+bool DeviceServiceMock::selectedDeviceCameraRecording() const
+{
+  const int idx = selectedDeviceIndex();
+  return (idx >= 0 && idx < devices_.size()) ? devices_[idx].cameraRecording : false;
+}
+
+bool DeviceServiceMock::selectedDeviceCameraTimelapse() const
+{
+  const int idx = selectedDeviceIndex();
+  return (idx >= 0 && idx < devices_.size()) ? devices_[idx].cameraTimelapse : false;
 }
 
 QString DeviceServiceMock::searchText() const { return searchText_; }
@@ -502,4 +601,107 @@ void DeviceServiceMock::markHmsRead(int hmsIndex)
     return;
   items[hmsIndex].alreadyRead = true;
   emit hmsChanged();
+}
+
+// ── 灯光和录制控制（对齐上游 MachineObject lights / camera） ──
+
+void DeviceServiceMock::setChamberLight(bool on)
+{
+  if (selectedDeviceIndex_ < 0 || selectedDeviceIndex_ >= filteredIndices_.size())
+    return;
+  const int realIdx = filteredIndices_[selectedDeviceIndex_];
+  if (realIdx < 0 || realIdx >= devices_.size())
+    return;
+  auto &d = devices_[realIdx];
+  if (d.chamberLightOn == on)
+    return;
+  d.chamberLightOn = on;
+  emit selectedDeviceChanged();
+}
+
+void DeviceServiceMock::setWorkLight(bool on)
+{
+  if (selectedDeviceIndex_ < 0 || selectedDeviceIndex_ >= filteredIndices_.size())
+    return;
+  const int realIdx = filteredIndices_[selectedDeviceIndex_];
+  if (realIdx < 0 || realIdx >= devices_.size())
+    return;
+  auto &d = devices_[realIdx];
+  if (d.workLightOn == on)
+    return;
+  d.workLightOn = on;
+  emit selectedDeviceChanged();
+}
+
+void DeviceServiceMock::toggleRecording()
+{
+  if (selectedDeviceIndex_ < 0 || selectedDeviceIndex_ >= filteredIndices_.size())
+    return;
+  const int realIdx = filteredIndices_[selectedDeviceIndex_];
+  if (realIdx < 0 || realIdx >= devices_.size())
+    return;
+  auto &d = devices_[realIdx];
+  d.cameraRecording = !d.cameraRecording;
+  emit selectedDeviceChanged();
+}
+
+void DeviceServiceMock::toggleTimelapse()
+{
+  if (selectedDeviceIndex_ < 0 || selectedDeviceIndex_ >= filteredIndices_.size())
+    return;
+  const int realIdx = filteredIndices_[selectedDeviceIndex_];
+  if (realIdx < 0 || realIdx >= devices_.size())
+    return;
+  auto &d = devices_[realIdx];
+  d.cameraTimelapse = !d.cameraTimelapse;
+  emit selectedDeviceChanged();
+}
+
+// ── AMS 多耗材管理（对齐上游 AMSScreen / AMSModel） ──
+
+int DeviceServiceMock::selectedDeviceAmsSlotCount() const
+{
+  if (selectedDeviceIndex_ < 0 || selectedDeviceIndex_ >= filteredIndices_.size())
+    return 0;
+  const int realIdx = filteredIndices_[selectedDeviceIndex_];
+  if (realIdx < 0 || realIdx >= devices_.size())
+    return 0;
+  return devices_[realIdx].amsSlots.size();
+}
+
+QVariantMap DeviceServiceMock::selectedDeviceAmsSlotAt(int slotIndex) const
+{
+  QVariantMap map;
+  if (selectedDeviceIndex_ < 0 || selectedDeviceIndex_ >= filteredIndices_.size())
+    return map;
+  const int realIdx = filteredIndices_[selectedDeviceIndex_];
+  if (realIdx < 0 || realIdx >= devices_.size())
+    return map;
+  const auto &slots = devices_[realIdx].amsSlots;
+  if (slotIndex < 0 || slotIndex >= slots.size())
+    return map;
+  const auto &slot = slots[slotIndex];
+  map[QStringLiteral("filamentType")] = slot.filamentType;
+  map[QStringLiteral("color")] = slot.color;
+  map[QStringLiteral("remainingWeight")] = slot.remainingWeight;
+  map[QStringLiteral("active")] = slot.active;
+  map[QStringLiteral("slotIndex")] = slotIndex;
+  return map;
+}
+
+void DeviceServiceMock::setSelectedDeviceAmsSlot(int slotIndex)
+{
+  if (selectedDeviceIndex_ < 0 || selectedDeviceIndex_ >= filteredIndices_.size())
+    return;
+  const int realIdx = filteredIndices_[selectedDeviceIndex_];
+  if (realIdx < 0 || realIdx >= devices_.size())
+    return;
+  auto &slots = devices_[realIdx].amsSlots;
+  if (slotIndex < 0 || slotIndex >= slots.size())
+    return;
+  // Deactivate all slots, then activate the selected one
+  for (int i = 0; i < slots.size(); ++i) {
+    slots[i].active = (i == slotIndex);
+  }
+  emit selectedDeviceChanged();
 }

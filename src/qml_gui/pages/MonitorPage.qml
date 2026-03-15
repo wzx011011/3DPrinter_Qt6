@@ -798,6 +798,176 @@ Item {
                                 }
                             }
 
+                            // ── Device lights and recording controls (对齐上游 MachineObject lights / camera) ──
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 72
+                                radius: Theme.radiusXL
+                                color: Theme.bgPanel
+                                border.width: 1; border.color: Theme.borderSubtle
+                                visible: root.monitorVm.selectedDeviceOnline
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Theme.spacingLG
+                                    anchors.rightMargin: Theme.spacingLG
+                                    spacing: Theme.spacingXL
+
+                                    // Chamber light toggle
+                                    Column {
+                                        spacing: 4
+                                        Text {
+                                            text: qsTr("舱室灯")
+                                            color: Theme.textTertiary
+                                            font.pixelSize: Theme.fontSizeSM
+                                        }
+                                        Rectangle {
+                                            width: 56; height: 28; radius: 14
+                                            color: root.monitorVm.selectedDeviceChamberLightOn ? "#22c55e" : "#374151"
+                                            border.width: 1
+                                            border.color: root.monitorVm.selectedDeviceChamberLightOn ? "#16a34a" : "#4b5563"
+
+                                            Rectangle {
+                                                width: 22; height: 22; radius: 11
+                                                color: "white"
+                                                x: root.monitorVm.selectedDeviceChamberLightOn ? parent.width - 25 : 3
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                Behavior on x { NumberAnimation { duration: 150 } }
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.monitorVm.setChamberLight(!root.monitorVm.selectedDeviceChamberLightOn)
+                                            }
+                                        }
+                                    }
+
+                                    // Separator
+                                    Rectangle {
+                                        Layout.fillHeight: true
+                                        Layout.preferredWidth: 1
+                                        color: Theme.borderSubtle
+                                    }
+
+                                    // Work light toggle
+                                    Column {
+                                        spacing: 4
+                                        Text {
+                                            text: qsTr("工作灯")
+                                            color: Theme.textTertiary
+                                            font.pixelSize: Theme.fontSizeSM
+                                        }
+                                        Rectangle {
+                                            width: 56; height: 28; radius: 14
+                                            color: root.monitorVm.selectedDeviceWorkLightOn ? "#22c55e" : "#374151"
+                                            border.width: 1
+                                            border.color: root.monitorVm.selectedDeviceWorkLightOn ? "#16a34a" : "#4b5563"
+
+                                            Rectangle {
+                                                width: 22; height: 22; radius: 11
+                                                color: "white"
+                                                x: root.monitorVm.selectedDeviceWorkLightOn ? parent.width - 25 : 3
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                Behavior on x { NumberAnimation { duration: 150 } }
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.monitorVm.setWorkLight(!root.monitorVm.selectedDeviceWorkLightOn)
+                                            }
+                                        }
+                                    }
+
+                                    // Separator
+                                    Rectangle {
+                                        Layout.fillHeight: true
+                                        Layout.preferredWidth: 1
+                                        color: Theme.borderSubtle
+                                    }
+
+                                    // Camera recording toggle
+                                    Column {
+                                        spacing: 4
+                                        Text {
+                                            text: qsTr("录像")
+                                            color: Theme.textTertiary
+                                            font.pixelSize: Theme.fontSizeSM
+                                        }
+                                        Rectangle {
+                                            width: 56; height: 28; radius: 14
+                                            color: root.monitorVm.selectedDeviceCameraRecording ? "#ef4444" : "#374151"
+                                            border.width: 1
+                                            border.color: root.monitorVm.selectedDeviceCameraRecording ? "#dc2626" : "#4b5563"
+
+                                            // Recording indicator dot
+                                            Rectangle {
+                                                visible: root.monitorVm.selectedDeviceCameraRecording
+                                                width: 8; height: 8; radius: 4
+                                                color: "#ff0000"
+                                                anchors.left: parent.left
+                                                anchors.leftMargin: 8
+                                                anchors.verticalCenter: parent.verticalCenter
+                                            }
+
+                                            Rectangle {
+                                                width: 22; height: 22; radius: 11
+                                                color: "white"
+                                                x: root.monitorVm.selectedDeviceCameraRecording ? parent.width - 25 : 3
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                Behavior on x { NumberAnimation { duration: 150 } }
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.monitorVm.toggleDeviceRecording()
+                                            }
+                                        }
+                                    }
+
+                                    // Separator
+                                    Rectangle {
+                                        Layout.fillHeight: true
+                                        Layout.preferredWidth: 1
+                                        color: Theme.borderSubtle
+                                    }
+
+                                    // Camera timelapse toggle
+                                    Column {
+                                        spacing: 4
+                                        Text {
+                                            text: qsTr("延时摄影")
+                                            color: Theme.textTertiary
+                                            font.pixelSize: Theme.fontSizeSM
+                                        }
+                                        Rectangle {
+                                            width: 56; height: 28; radius: 14
+                                            color: root.monitorVm.selectedDeviceCameraTimelapse ? "#3b82f6" : "#374151"
+                                            border.width: 1
+                                            border.color: root.monitorVm.selectedDeviceCameraTimelapse ? "#2563eb" : "#4b5563"
+
+                                            Rectangle {
+                                                width: 22; height: 22; radius: 11
+                                                color: "white"
+                                                x: root.monitorVm.selectedDeviceCameraTimelapse ? parent.width - 25 : 3
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                Behavior on x { NumberAnimation { duration: 150 } }
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: root.monitorVm.toggleDeviceTimelapse()
+                                            }
+                                        }
+                                    }
+
+                                    Item { Layout.fillWidth: true }
+                                }
+                            }
+
                             // ── Print control row (对齐上游 Monitor StatusPanel 打印控制) ──
                             Rectangle {
                                 Layout.fillWidth: true
@@ -1097,6 +1267,138 @@ Item {
                                             text: qsTr("固件版本: 1.0.0")
                                             color: Theme.textTertiary
                                             font.pixelSize: Theme.fontSizeXS
+                                        }
+                                    }
+                                }
+                            }
+
+                            // ── AMS (Automatic Material System) card ──
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: root.monitorVm.selectedAmsSlotCount > 0 ? 80 : 0
+                                radius: Theme.radiusXL
+                                color: Theme.bgPanel
+                                border.width: 1; border.color: Theme.borderSubtle
+                                visible: root.monitorVm.selectedAmsSlotCount > 0
+                                clip: true
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: Theme.spacingLG
+                                    spacing: Theme.spacingXL
+
+                                    // AMS label
+                                    Text {
+                                        text: qsTr("AMS 耗材")
+                                        color: Theme.textTertiary
+                                        font.pixelSize: Theme.fontSizeSM
+                                    }
+
+                                    // AMS slots
+                                    Row {
+                                        spacing: Theme.spacingSM
+                                        Repeater {
+                                            model: root.monitorVm.selectedAmsSlotCount
+
+                                            Rectangle {
+                                                id: amsSlotRect
+                                                width: 64
+                                                height: 48
+                                                radius: Theme.radiusMD
+                                                color: amsSlotMA.containsMouse ? Theme.bgHover : Theme.bgElevated
+                                                border.width: slotData.active ? 2 : 1
+                                                border.color: slotData.active ? Theme.accent : Theme.borderSubtle
+
+                                                property var slotData: root.monitorVm.amsSlotAt(modelData)
+
+                                                Column {
+                                                    anchors.centerIn: parent
+                                                    spacing: 4
+
+                                                    // Color swatch
+                                                    Rectangle {
+                                                        width: 36
+                                                        height: 20
+                                                        radius: 4
+                                                        color: slotData.color || Theme.borderSubtle
+                                                        border.width: 1
+                                                        border.color: Theme.borderSubtle
+                                                        anchors.horizontalCenter: parent.horizontalCenter
+
+                                                        // Empty indicator
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            text: slotData.filamentType === "" ? qsTr("空") : ""
+                                                            color: Theme.textDisabled
+                                                            font.pixelSize: 9
+                                                        }
+                                                    }
+
+                                                    // Filament type
+                                                    Text {
+                                                        text: slotData.filamentType || "--"
+                                                        color: slotData.active ? Theme.accent : Theme.textSecondary
+                                                        font.pixelSize: 10
+                                                        font.bold: slotData.active
+                                                        anchors.horizontalCenter: parent.horizontalCenter
+                                                    }
+
+                                                    // Remaining weight
+                                                    Text {
+                                                        text: slotData.remainingWeight > 0 ? Math.round(slotData.remainingWeight) + "g" : ""
+                                                        color: Theme.textTertiary
+                                                        font.pixelSize: 8
+                                                        anchors.horizontalCenter: parent.horizontalCenter
+                                                    }
+                                                }
+
+                                                // Active indicator
+                                                Rectangle {
+                                                    visible: slotData.active
+                                                    width: 6
+                                                    height: 6
+                                                    radius: 3
+                                                    color: Theme.accent
+                                                    anchors.top: parent.top
+                                                    anchors.right: parent.right
+                                                    anchors.margins: 4
+                                                }
+
+                                                MouseArea {
+                                                    id: amsSlotMA
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: root.monitorVm.setActiveAmsSlot(modelData)
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Item { Layout.fillWidth: true }
+
+                                    // Active slot info
+                                    Column {
+                                        visible: root.monitorVm.selectedAmsSlotCount > 0
+                                        spacing: 2
+                                        Text {
+                                            text: qsTr("当前活动")
+                                            color: Theme.textTertiary
+                                            font.pixelSize: Theme.fontSizeXS
+                                        }
+                                        Text {
+                                            text: {
+                                                for (var i = 0; i < root.monitorVm.selectedAmsSlotCount; i++) {
+                                                    var slot = root.monitorVm.amsSlotAt(i)
+                                                    if (slot.active) {
+                                                        return slot.filamentType + " " + qsTr("槽") + (i + 1)
+                                                    }
+                                                }
+                                                return qsTr("未选择")
+                                            }
+                                            color: Theme.textPrimary
+                                            font.pixelSize: Theme.fontSizeMD
+                                            font.bold: true
                                         }
                                     }
                                 }

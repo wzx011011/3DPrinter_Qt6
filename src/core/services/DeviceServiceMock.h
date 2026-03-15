@@ -5,6 +5,15 @@
 #include <QString>
 #include <QVariantMap>
 
+/// AMS (Automatic Material System) slot info (对齐上游 AMSScreen / AMSModel)
+struct MockAmsSlot
+{
+  QString filamentType;   // e.g. "PLA", "PETG", "ABS"
+  QString color;          // hex color e.g. "#FF5733"
+  float remainingWeight = 0.0f;  // grams remaining
+  bool active = false;    // currently selected for printing
+};
+
 /// Rich mock device record exposed to QML via QVariantMap.
 /// Roles consumed by MonitorPage device model:
 ///   name, model (printer type), sn, status (string), online (bool),
@@ -21,6 +30,13 @@ struct MockDevice
   QString ip;
   int     temperature = 0;
   int     signalStrength = 0; // 0=none, 1=weak, 2=medium, 3=strong
+  QList<MockAmsSlot> amsSlots; // AMS filament slots (typically 4)
+  // Device lights (对齐上游 MachineObject chamber_light / work_light)
+  bool    chamberLightOn    = false;
+  bool    workLightOn       = false;
+  // Device camera recording (对齐上游 MachineObject camera_recording / timelapse)
+  bool    cameraRecording   = false;
+  bool    cameraTimelapse   = false;
 };
 
 /// HMS notification item (对齐上游 DeviceManager HMSItem / HMSPanel HMSNotifyItem)
@@ -69,6 +85,14 @@ class DeviceServiceMock final : public QObject
   Q_PROPERTY(int selectedDeviceTemperature READ selectedDeviceTemperature NOTIFY selectedDeviceChanged)
   /// Convenience: signal strength of selected device (0-3)
   Q_PROPERTY(int selectedDeviceSignalStrength READ selectedDeviceSignalStrength NOTIFY selectedDeviceChanged)
+  /// Convenience: chamber light on/off of selected device
+  Q_PROPERTY(bool selectedDeviceChamberLightOn READ selectedDeviceChamberLightOn NOTIFY selectedDeviceChanged)
+  /// Convenience: work light on/off of selected device
+  Q_PROPERTY(bool selectedDeviceWorkLightOn READ selectedDeviceWorkLightOn NOTIFY selectedDeviceChanged)
+  /// Convenience: camera recording on/off of selected device
+  Q_PROPERTY(bool selectedDeviceCameraRecording READ selectedDeviceCameraRecording NOTIFY selectedDeviceChanged)
+  /// Convenience: camera timelapse on/off of selected device
+  Q_PROPERTY(bool selectedDeviceCameraTimelapse READ selectedDeviceCameraTimelapse NOTIFY selectedDeviceChanged)
   /// Search/filter text
   Q_PROPERTY(QString searchText READ searchText WRITE setSearchText NOTIFY searchTextChanged)
   /// Number of devices after filtering
@@ -92,6 +116,10 @@ public:
   QString selectedDeviceIp() const;
   int selectedDeviceTemperature() const;
   int selectedDeviceSignalStrength() const;
+  bool selectedDeviceChamberLightOn() const;
+  bool selectedDeviceWorkLightOn() const;
+  bool selectedDeviceCameraRecording() const;
+  bool selectedDeviceCameraTimelapse() const;
 
   QString searchText() const;
   void setSearchText(const QString &text);
@@ -134,6 +162,17 @@ public:
   Q_INVOKABLE int selectedDeviceUnreadHmsCount() const;
   Q_INVOKABLE QVariantMap selectedDeviceHmsAt(int hmsIndex) const;
   Q_INVOKABLE void markHmsRead(int hmsIndex);
+
+  /// 灯光和录制控制（对齐上游 MachineObject lights / camera）
+  Q_INVOKABLE void setChamberLight(bool on);
+  Q_INVOKABLE void setWorkLight(bool on);
+  Q_INVOKABLE void toggleRecording();
+  Q_INVOKABLE void toggleTimelapse();
+
+  /// AMS 多耗材管理（对齐上游 AMSScreen / AMSModel）
+  Q_INVOKABLE int selectedDeviceAmsSlotCount() const;
+  Q_INVOKABLE QVariantMap selectedDeviceAmsSlotAt(int slotIndex) const;
+  Q_INVOKABLE void setSelectedDeviceAmsSlot(int slotIndex);
 
 signals:
   void devicesChanged();
