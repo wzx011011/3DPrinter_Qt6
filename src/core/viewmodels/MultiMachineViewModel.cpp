@@ -16,7 +16,7 @@ static const char *deviceStatusText(int state) {
 }
 
 // Upstream local task states (from MultiMachine.cpp DeviceItem::get_local_state_task)
-static const char *localTaskStatusText(int state) {
+static const char *localTaskStatusTextFn(int state) {
   switch (state) {
     case 0: return "Pending";
     case 1: return "Sending";
@@ -33,7 +33,7 @@ static const char *localTaskStatusText(int state) {
 }
 
 // Upstream cloud task states (from MultiMachine.cpp DeviceItem::get_cloud_state_task)
-static const char *cloudTaskStatusText(int state) {
+static const char *cloudTaskStatusTextFn(int state) {
   switch (state) {
     case 0: return "Printing";
     case 1: return "Printing Finish";
@@ -49,6 +49,10 @@ MultiMachineViewModel::MultiMachineViewModel(QObject *parent)
     : QObject(parent)
 {
   buildMockData();
+
+  // Timer-based refresh (aligns with upstream m_refresh_timer 2s in MultiMachinePage::Show)
+  m_refreshTimer.setInterval(2000);
+  connect(&m_refreshTimer, &QTimer::timeout, this, &MultiMachineViewModel::simulateMockStateUpdate);
 }
 
 void MultiMachineViewModel::buildMockData()
@@ -63,18 +67,30 @@ void MultiMachineViewModel::buildMockData()
       {"CR-10-Smart-005",  "CR-10 Smart Pro", "",                "--",       "--",             "",                "",        false, 7, 0},
   };
 
-  // 3 mock local tasks (aligns with upstream LocalTaskManagerPage / MultiTaskItem)
+  // 5 mock local tasks (more diverse states to exercise all UI paths)
+  // Aligns with upstream LocalTaskManagerPage / MultiTaskItem
   m_localTasks = {
-      {"Benchy.gcode",   "K1C-001",  "2026-03-14 09:30", "01:23:00", 5, 67,  false},  // printing
-      {"Cube.stl",       "K2-Plus-004", "2026-03-14 09:15", "--",        0, 0,   false},  // pending
-      {"Bracket_v2.3mf", "K1-Max-002", "2026-03-14 08:00", "--",        6, 100, false},  // success
+      {"Benchy.gcode",      "K1C-001",      "2026-03-14 09:30", "01:23:00", 5, 67,  false},  // printing
+      {"Cube.stl",          "K2-Plus-004",  "2026-03-14 09:15", "--",        0, 0,   false},  // pending
+      {"Bracket_v2.3mf",    "K1-Max-002",   "2026-03-14 08:00", "--",        6, 100, false},  // success
+      {"CalibrationCube.gcode", "K1C-001",  "2026-03-14 10:00", "--",        1, 45,  false},  // sending (in progress)
+      {"Phone_Stand.stl",   "Ender-3S1-Pro","2026-03-14 07:30", "--",        3, 0,   false},  // cancelled
   };
 
-  // 3 mock cloud tasks (aligns with upstream CloudTaskManagerPage)
+  // 12 mock cloud tasks to exercise pagination (aligns with upstream m_count_page_item=10)
   m_cloudTasks = {
-      {"CalibrationCube.gcode", "K1C-001",    "2026-03-13 14:00", "--",        1, 100},
-      {"Gear_Assembly.gcode",   "K1-Max-002", "2026-03-13 16:30", "02:15:30", 0, 42},
-      {"Phone_Stand.stl",       "K2-Plus-004","2026-03-13 10:00", "--",        2, 88},
+      {"CalibrationCube.gcode",  "K1C-001",      "2026-03-13 14:00", "--",        1, 100},
+      {"Gear_Assembly.gcode",    "K1-Max-002",   "2026-03-13 16:30", "02:15:30", 0, 42},
+      {"Phone_Stand.stl",        "K2-Plus-004",  "2026-03-13 10:00", "--",        2, 88},
+      {"Benchy_Third.gcode",     "K1C-001",      "2026-03-12 09:00", "--",        1, 100},
+      {"Support_Test.gcode",     "K1-Max-002",   "2026-03-12 11:30", "00:45:10", 0, 73},
+      {"Articulated_Dragon.stl", "K2-Plus-004",  "2026-03-11 15:00", "--",        1, 100},
+      {"Miniature_Village.gcode","K1C-001",      "2026-03-11 10:00", "03:20:00", 0, 28},
+      {"Flexi_Rex.stl",          "K1-Max-002",   "2026-03-10 14:30", "--",        2, 65},
+      {"Hollow_Cube.gcode",      "K2-Plus-004",  "2026-03-10 09:00", "--",        1, 100},
+      {"Lithophane_Box.gcode",   "K1C-001",      "2026-03-09 16:00", "--",        1, 100},
+      {"Plant_Pot.stl",          "K1-Max-002",   "2026-03-09 11:00", "01:10:00", 0, 55},
+      {"Wrench_Set.gcode",       "K2-Plus-004",  "2026-03-08 14:00", "--",        1, 100},
   };
 }
 
@@ -83,17 +99,9 @@ void MultiMachineViewModel::buildMockData()
 // ──────────────────────────────────────────────
 int MultiMachineViewModel::machineCount() const {
   // Return filtered count for current page (aligns with upstream pagination)
-  int start = m_currentPage * m_pageSize;
-  int count = 0;
-  int shown = 0;
-  for (const auto &m : m_machineEntries) {
-    if (!m.filteredIn) continue;
-    ++count;
-    if (shown >= start) ++shown;
-  }
-  // Simpler: count filtered items in current page range
   int filteredSoFar = 0;
   int pageStart = m_currentPage * m_pageSize;
+  int shown = 0;
   for (const auto &m : m_machineEntries) {
     if (!m.filteredIn) continue;
     if (filteredSoFar >= pageStart && filteredSoFar < pageStart + m_pageSize)
@@ -189,7 +197,39 @@ QString MultiMachineViewModel::machineTaskName(int i) const {
 }
 
 // ──────────────────────────────────────────────
-// Pagination
+// Sort (aligns with upstream SortItem)
+// ──────────────────────────────────────────────
+int MultiMachineViewModel::sortField() const { return m_sortField; }
+bool MultiMachineViewModel::sortAsc() const {
+  return m_sortField == 1 ? m_sortNameAsc : (m_sortField == 2 ? m_sortStatusAsc : true);
+}
+
+void MultiMachineViewModel::sortDevicesByName()
+{
+  m_sortNameAsc = !m_sortNameAsc;
+  m_sortField = 1;
+  std::sort(m_machineEntries.begin(), m_machineEntries.end(),
+    [this](const MachineEntry &a, const MachineEntry &b) {
+      return m_sortNameAsc ? a.name < b.name : a.name > b.name;
+    });
+  emit sortChanged();
+  emit machinesChanged();
+}
+
+void MultiMachineViewModel::sortDevicesByStatus()
+{
+  m_sortStatusAsc = !m_sortStatusAsc;
+  m_sortField = 2;
+  std::sort(m_machineEntries.begin(), m_machineEntries.end(),
+    [this](const MachineEntry &a, const MachineEntry &b) {
+      return m_sortStatusAsc ? a.statusInt < b.statusInt : a.statusInt > b.statusInt;
+    });
+  emit sortChanged();
+  emit machinesChanged();
+}
+
+// ──────────────────────────────────────────────
+// Pagination (Device)
 // ──────────────────────────────────────────────
 int MultiMachineViewModel::currentPage() const { return m_currentPage; }
 void MultiMachineViewModel::setCurrentPage(int page) {
@@ -209,6 +249,13 @@ int MultiMachineViewModel::pageSize() const { return m_pageSize; }
 QString MultiMachineViewModel::selectedCountText() const {
   // Upstream: "Select Connected Printers (X/6)"
   return QString("Select Connected Printers (%1/%2)").arg(filteredMachineCount()).arg(6);
+}
+
+void MultiMachineViewModel::recomputePagination()
+{
+  int total = totalPages();
+  if (m_currentPage >= total && total > 0) m_currentPage = total - 1;
+  emit paginationChanged();
 }
 
 // ──────────────────────────────────────────────
@@ -232,7 +279,7 @@ int MultiMachineViewModel::localTaskStatus(int i) const {
   return (i >= 0 && i < m_localTasks.size()) ? m_localTasks[i].status : 0;
 }
 QString MultiMachineViewModel::localTaskStatusText(int i) const {
-  return (i >= 0 && i < m_localTasks.size()) ? QString(localTaskStatusText(m_localTasks[i].status)) : QString{};
+  return (i >= 0 && i < m_localTasks.size()) ? QString(localTaskStatusTextFn(m_localTasks[i].status)) : QString{};
 }
 int MultiMachineViewModel::localTaskProgress(int i) const {
   return (i >= 0 && i < m_localTasks.size()) ? m_localTasks[i].progress : 0;
@@ -248,7 +295,7 @@ bool MultiMachineViewModel::localTaskSelected(int i) const {
 }
 
 // ──────────────────────────────────────────────
-// Cloud Task accessors
+// Cloud Task accessors (all, not page-aware)
 // ──────────────────────────────────────────────
 int MultiMachineViewModel::cloudTaskCount() const { return m_cloudTasks.size(); }
 bool MultiMachineViewModel::hasCloudTasks() const { return !m_cloudTasks.isEmpty(); }
@@ -263,7 +310,7 @@ int MultiMachineViewModel::cloudTaskStatus(int i) const {
   return (i >= 0 && i < m_cloudTasks.size()) ? m_cloudTasks[i].status : 0;
 }
 QString MultiMachineViewModel::cloudTaskStatusText(int i) const {
-  return (i >= 0 && i < m_cloudTasks.size()) ? QString(cloudTaskStatusText(m_cloudTasks[i].status)) : QString{};
+  return (i >= 0 && i < m_cloudTasks.size()) ? QString(cloudTaskStatusTextFn(m_cloudTasks[i].status)) : QString{};
 }
 int MultiMachineViewModel::cloudTaskProgress(int i) const {
   return (i >= 0 && i < m_cloudTasks.size()) ? m_cloudTasks[i].progress : 0;
@@ -274,9 +321,85 @@ QString MultiMachineViewModel::cloudTaskSendTime(int i) const {
 QString MultiMachineViewModel::cloudTaskRemaining(int i) const {
   return (i >= 0 && i < m_cloudTasks.size()) ? m_cloudTasks[i].remaining : QString{"--"};
 }
+bool MultiMachineViewModel::cloudTaskSelected(int i) const {
+  return (i >= 0 && i < m_cloudTasks.size()) ? m_cloudTasks[i].selected : false;
+}
+int MultiMachineViewModel::cloudSelectedCount() const {
+  int c = 0;
+  for (const auto &t : m_cloudTasks) if (t.selected) ++c;
+  return c;
+}
 
 // ──────────────────────────────────────────────
-// Actions
+// Cloud Task pagination (aligns with upstream CloudTaskManagerPage)
+// ──────────────────────────────────────────────
+int MultiMachineViewModel::cloudCurrentPage() const { return m_cloudCurrentPage; }
+void MultiMachineViewModel::setCloudCurrentPage(int page) {
+  if (page < 0) page = 0;
+  if (page >= cloudTotalPages()) page = std::max(0, cloudTotalPages() - 1);
+  if (page != m_cloudCurrentPage) {
+    m_cloudCurrentPage = page;
+    emit cloudPaginationChanged();
+    emit cloudTasksChanged();
+  }
+}
+int MultiMachineViewModel::cloudTotalPages() const {
+  int total = m_cloudTasks.size();
+  return (total == 0) ? 1 : (int)std::ceil((double)total / m_cloudPageSize);
+}
+
+void MultiMachineViewModel::recomputeCloudPagination() {
+  int total = cloudTotalPages();
+  if (m_cloudCurrentPage >= total && total > 0) m_cloudCurrentPage = total - 1;
+  emit cloudPaginationChanged();
+}
+
+// Paged cloud task accessors (translate page-local index to global)
+int MultiMachineViewModel::pagedCloudTaskCount() const {
+  int start = m_cloudCurrentPage * m_cloudPageSize;
+  int end = std::min(start + m_cloudPageSize, m_cloudTasks.size());
+  return std::max(0, end - start);
+}
+
+static int pagedCloudIndex(int cloudCurrentPage, int cloudPageSize, int localI) {
+  return cloudCurrentPage * cloudPageSize + localI;
+}
+
+QString MultiMachineViewModel::pagedCloudTaskProjectName(int i) const {
+  int idx = pagedCloudIndex(m_cloudCurrentPage, m_cloudPageSize, i);
+  return cloudTaskProjectName(idx);
+}
+QString MultiMachineViewModel::pagedCloudTaskDevName(int i) const {
+  int idx = pagedCloudIndex(m_cloudCurrentPage, m_cloudPageSize, i);
+  return cloudTaskDevName(idx);
+}
+int MultiMachineViewModel::pagedCloudTaskStatus(int i) const {
+  int idx = pagedCloudIndex(m_cloudCurrentPage, m_cloudPageSize, i);
+  return cloudTaskStatus(idx);
+}
+QString MultiMachineViewModel::pagedCloudTaskStatusText(int i) const {
+  int idx = pagedCloudIndex(m_cloudCurrentPage, m_cloudPageSize, i);
+  return cloudTaskStatusText(idx);
+}
+int MultiMachineViewModel::pagedCloudTaskProgress(int i) const {
+  int idx = pagedCloudIndex(m_cloudCurrentPage, m_cloudPageSize, i);
+  return cloudTaskProgress(idx);
+}
+QString MultiMachineViewModel::pagedCloudTaskSendTime(int i) const {
+  int idx = pagedCloudIndex(m_cloudCurrentPage, m_cloudPageSize, i);
+  return cloudTaskSendTime(idx);
+}
+QString MultiMachineViewModel::pagedCloudTaskRemaining(int i) const {
+  int idx = pagedCloudIndex(m_cloudCurrentPage, m_cloudPageSize, i);
+  return cloudTaskRemaining(idx);
+}
+bool MultiMachineViewModel::pagedCloudTaskSelected(int i) const {
+  int idx = pagedCloudIndex(m_cloudCurrentPage, m_cloudPageSize, i);
+  return cloudTaskSelected(idx);
+}
+
+// ──────────────────────────────────────────────
+// Device actions
 // ──────────────────────────────────────────────
 void MultiMachineViewModel::viewMachine(int index)
 {
@@ -285,53 +408,6 @@ void MultiMachineViewModel::viewMachine(int index)
   if (idx >= 0 && idx < m_machineEntries.size()) {
     emit messageRequested(tr("View device: %1").arg(m_machineEntries[idx].name));
   }
-}
-
-void MultiMachineViewModel::selectLocalTask(int index)
-{
-  if (index >= 0 && index < m_localTasks.size()) {
-    m_localTasks[index].selected = !m_localTasks[index].selected;
-    emit localTasksChanged();
-  }
-}
-
-void MultiMachineViewModel::cancelLocalTask(int index)
-{
-  if (index >= 0 && index < m_localTasks.size()) {
-    m_localTasks[index].status = 3; // Sending Cancel
-    emit localTasksChanged();
-    emit messageRequested(tr("Task cancelled: %1").arg(m_localTasks[index].projectName));
-  }
-}
-
-void MultiMachineViewModel::stopAllLocalTasks()
-{
-  for (auto &t : m_localTasks) {
-    if (t.selected && (t.status == 0 || t.status == 1 || t.status == 5)) {
-      t.status = 3; // cancel
-    }
-  }
-  emit localTasksChanged();
-  emit messageRequested(tr("All selected tasks cancelled"));
-}
-
-void MultiMachineViewModel::pauseCloudTask(int index)
-{
-  // Cloud tasks: pause printing (mock - change status display)
-  Q_UNUSED(index);
-  emit cloudTasksChanged();
-}
-
-void MultiMachineViewModel::resumeCloudTask(int index)
-{
-  Q_UNUSED(index);
-  emit cloudTasksChanged();
-}
-
-void MultiMachineViewModel::stopAllCloudTasks()
-{
-  emit cloudTasksChanged();
-  emit messageRequested(tr("All cloud tasks stopped"));
 }
 
 void MultiMachineViewModel::editPrinters()
@@ -379,42 +455,143 @@ void MultiMachineViewModel::removeDevice(int index)
 
 void MultiMachineViewModel::refreshMachines()
 {
+  // Aligns with upstream clear_page() -> refresh_user_device()
   emit machinesChanged();
   emit localTasksChanged();
   emit cloudTasksChanged();
 }
 
-void MultiMachineViewModel::sortDevicesByName()
+// ──────────────────────────────────────────────
+// Local Task actions (aligns with upstream LocalTaskManagerPage)
+// ──────────────────────────────────────────────
+void MultiMachineViewModel::selectLocalTask(int index)
 {
-  m_sortNameAsc = !m_sortNameAsc;
-  m_sortField = 1;
-  std::sort(m_machineEntries.begin(), m_machineEntries.end(),
-    [this](const MachineEntry &a, const MachineEntry &b) {
-      return m_sortNameAsc ? a.name < b.name : a.name > b.name;
-    });
-  emit machinesChanged();
+  // Aligns with upstream EVT_MULTI_DEVICE_SELECTED for local tasks
+  // Selection only allowed for pending/sending tasks (upstream: state_local_task <= 1)
+  if (index >= 0 && index < m_localTasks.size() && m_localTasks[index].status <= 1) {
+    m_localTasks[index].selected = !m_localTasks[index].selected;
+    emit localTasksChanged();
+  }
 }
 
-void MultiMachineViewModel::sortDevicesByStatus()
+void MultiMachineViewModel::cancelLocalTask(int index)
 {
-  m_sortStatusAsc = !m_sortStatusAsc;
-  m_sortField = 2;
-  std::sort(m_machineEntries.begin(), m_machineEntries.end(),
-    [this](const MachineEntry &a, const MachineEntry &b) {
-      return m_sortStatusAsc ? a.statusInt < b.statusInt : a.statusInt > b.statusInt;
-    });
-  emit machinesChanged();
+  // Aligns with upstream MultiTaskItem::onCancel
+  // Cancel only allowed for pending/sending tasks
+  if (index >= 0 && index < m_localTasks.size()) {
+    if (m_localTasks[index].status == 0 || m_localTasks[index].status == 1) {
+      m_localTasks[index].status = 3; // Sending Cancel
+      m_localTasks[index].selected = false;
+      emit localTasksChanged();
+      emit messageRequested(tr("Task cancelled: %1").arg(m_localTasks[index].projectName));
+    }
+  }
 }
 
-void MultiMachineViewModel::recomputePagination()
+void MultiMachineViewModel::stopAllLocalTasks()
 {
-  int total = totalPages();
-  if (m_currentPage >= total && total > 0) m_currentPage = total - 1;
-  emit paginationChanged();
+  // Aligns with upstream btn_stop_all -> cancel_all
+  for (auto &t : m_localTasks) {
+    if (t.selected && (t.status == 0 || t.status == 1)) {
+      t.status = 3; // cancel
+      t.selected = false;
+    }
+  }
+  emit localTasksChanged();
+  emit messageRequested(tr("All selected tasks cancelled"));
 }
 
-// ── Send task to device (对齐上游 SendMultiMachinePage) ──
+// ──────────────────────────────────────────────
+// Cloud Task actions (aligns with upstream CloudTaskManagerPage)
+// ──────────────────────────────────────────────
+void MultiMachineViewModel::selectCloudTask(int index)
+{
+  // Aligns with upstream EVT_MULTI_DEVICE_SELECTED for cloud tasks
+  // Selection only allowed for printing tasks (upstream: state_cloud_task == 0)
+  if (index >= 0 && index < m_cloudTasks.size() && m_cloudTasks[index].status == 0) {
+    m_cloudTasks[index].selected = !m_cloudTasks[index].selected;
+    emit cloudTasksChanged();
+  }
+}
 
+void MultiMachineViewModel::pauseCloudTask(int index)
+{
+  // Aligns with upstream MultiTaskItem::onPause
+  // Only pause if currently printing (status == 0)
+  if (index >= 0 && index < m_cloudTasks.size()) {
+    if (m_cloudTasks[index].status == 0) {
+      m_cloudTasks[index].status = 4; // paused (local display state, mapped to "Paused")
+      emit cloudTasksChanged();
+      emit messageRequested(tr("Cloud task paused: %1").arg(m_cloudTasks[index].projectName));
+    }
+  }
+}
+
+void MultiMachineViewModel::resumeCloudTask(int index)
+{
+  // Aligns with upstream MultiTaskItem::onResume
+  if (index >= 0 && index < m_cloudTasks.size()) {
+    if (m_cloudTasks[index].status == 4) { // paused
+      m_cloudTasks[index].status = 0; // back to printing
+      emit cloudTasksChanged();
+      emit messageRequested(tr("Cloud task resumed: %1").arg(m_cloudTasks[index].projectName));
+    }
+  }
+}
+
+void MultiMachineViewModel::stopCloudTask(int index)
+{
+  // Aligns with upstream MultiTaskItem::onStop -> command_task_abort
+  if (index >= 0 && index < m_cloudTasks.size()) {
+    if (m_cloudTasks[index].status == 0 || m_cloudTasks[index].status == 4) {
+      m_cloudTasks[index].status = 2; // failed
+      m_cloudTasks[index].selected = false;
+      emit cloudTasksChanged();
+      emit messageRequested(tr("Cloud task stopped: %1").arg(m_cloudTasks[index].projectName));
+    }
+  }
+}
+
+void MultiMachineViewModel::pauseAllCloudTasks()
+{
+  // Aligns with upstream btn_pause_all
+  for (auto &t : m_cloudTasks) {
+    if (t.selected && t.status == 0) {
+      t.status = 4; // paused
+    }
+  }
+  emit cloudTasksChanged();
+  emit messageRequested(tr("All selected cloud tasks paused"));
+}
+
+void MultiMachineViewModel::resumeAllCloudTasks()
+{
+  // Aligns with upstream btn_continue_all
+  for (auto &t : m_cloudTasks) {
+    if (t.selected && t.status == 4) {
+      t.status = 0; // printing
+    }
+  }
+  emit cloudTasksChanged();
+  emit messageRequested(tr("All selected cloud tasks resumed"));
+}
+
+void MultiMachineViewModel::stopAllCloudTasks()
+{
+  // Aligns with upstream btn_stop_all
+  for (auto &t : m_cloudTasks) {
+    if (t.selected && (t.status == 0 || t.status == 4)) {
+      t.status = 2; // failed
+      t.selected = false;
+    }
+  }
+  emit cloudTasksChanged();
+  emit messageRequested(tr("All selected cloud tasks stopped"));
+}
+
+// ──────────────────────────────────────────────
+// Send task to device (aligns with upstream SendMultiMachinePage)
+// ──────────────────────────────────────────────
 int MultiMachineViewModel::onlineMachineCount() const
 {
   int count = 0;
@@ -437,7 +614,6 @@ QString MultiMachineViewModel::onlineMachineName(int i) const
 
 bool MultiMachineViewModel::sendTaskToDevice(int localTaskIndex, int onlineMachineIndex)
 {
-  // 对齐上游 MultiMachinePickPage::on_ok / SendMultiMachinePage
   if (localTaskIndex < 0 || localTaskIndex >= m_localTasks.size())
     return false;
 
@@ -449,18 +625,83 @@ bool MultiMachineViewModel::sendTaskToDevice(int localTaskIndex, int onlineMachi
   m_localTasks[localTaskIndex].status = 1;  // sending
   m_localTasks[localTaskIndex].progress = 0;
   emit localTasksChanged();
-  emit messageRequested(QObject::tr("正在发送任务到 %1...").arg(devName));
+  emit messageRequested(QObject::tr("Sending task to %1...").arg(devName));
 
-  // Mock: 模拟发送过程（2 秒后变为 printing）
+  // Mock: simulate sending process (2s then becomes printing)
   QTimer::singleShot(2000, this, [this, localTaskIndex, devName]() {
     if (localTaskIndex < m_localTasks.size())
     {
       m_localTasks[localTaskIndex].status = 5;  // printing
       m_localTasks[localTaskIndex].progress = 10;
       emit localTasksChanged();
-      emit messageRequested(QObject::tr("任务已发送到 %1").arg(devName));
+      emit messageRequested(QObject::tr("Task sent to %1").arg(devName));
     }
   });
 
   return true;
+}
+
+// ──────────────────────────────────────────────
+// Timer-based refresh (aligns with upstream m_refresh_timer)
+// ──────────────────────────────────────────────
+void MultiMachineViewModel::startRefreshTimer()
+{
+  // Aligns with upstream MultiMachinePage::Show -> m_refresh_timer->Start(2000)
+  if (!m_refreshTimer.isActive()) {
+    m_refreshTimer.start();
+  }
+}
+
+void MultiMachineViewModel::stopRefreshTimer()
+{
+  // Aligns with upstream MultiMachinePage::Show(false) -> m_refresh_timer->Stop()
+  m_refreshTimer.stop();
+}
+
+void MultiMachineViewModel::simulateMockStateUpdate()
+{
+  // Aligns with upstream on_timer -> update_page()
+  // Simulate state changes for mock data (progress advancement, etc.)
+  bool machinesChanged = false;
+  bool localChanged = false;
+  bool cloudChanged = false;
+
+  // Advance printing device progress
+  for (auto &m : m_machineEntries) {
+    if (m.statusInt == 3 && m.progress < 100) { // RUNNING
+      m.progress = std::min(100, m.progress + 1);
+      machinesChanged = true;
+    }
+    if (m.statusInt == 5) { // PREPARE -> auto transition to RUNNING
+      m.statusInt = 3;
+      m.progress = 0;
+      m.remaining = "02:00:00";
+      m.taskName = m.taskName.isEmpty() ? "AutoTask.gcode" : m.taskName;
+      machinesChanged = true;
+    }
+  }
+
+  // Advance local printing tasks
+  for (auto &t : m_localTasks) {
+    if (t.status == 5 && t.progress < 100) { // printing
+      t.progress = std::min(100, t.progress + 1);
+      localChanged = true;
+    }
+    if (t.status == 1 && t.progress < 100) { // sending
+      t.progress = std::min(100, t.progress + 5);
+      localChanged = true;
+    }
+  }
+
+  // Advance cloud printing tasks
+  for (auto &t : m_cloudTasks) {
+    if (t.status == 0 && t.progress < 100) { // printing
+      t.progress = std::min(100, t.progress + 1);
+      cloudChanged = true;
+    }
+  }
+
+  if (machinesChanged) emit machinesChanged();
+  if (localChanged) emit localTasksChanged();
+  if (cloudChanged) emit cloudTasksChanged();
 }
