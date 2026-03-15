@@ -1,5 +1,6 @@
 #include "CalibrationServiceMock.h"
 #include <QTimer>
+#include <QDateTime>
 #include <algorithm>
 
 CalibrationServiceMock::CalibrationServiceMock(QObject *parent)
@@ -301,6 +302,58 @@ void CalibrationServiceMock::resetCalibration(int itemIndex)
     setStatus(itemIndex, CalibrationStatus::NotStarted);
 }
 
+// --- History accessors ---
+
+int CalibrationServiceMock::historyCount() const
+{
+    return m_history.size();
+}
+
+QString CalibrationServiceMock::historyName(int index) const
+{
+    return (index >= 0 && index < m_history.size()) ? m_history[index].name : QString{};
+}
+
+QString CalibrationServiceMock::historyFilamentId(int index) const
+{
+    return (index >= 0 && index < m_history.size()) ? m_history[index].filamentId : QString{};
+}
+
+float CalibrationServiceMock::historyKValue(int index) const
+{
+    return (index >= 0 && index < m_history.size()) ? m_history[index].kValue : 0.0f;
+}
+
+float CalibrationServiceMock::historyNozzleDiameter(int index) const
+{
+    return (index >= 0 && index < m_history.size()) ? m_history[index].nozzleDiameter : 0.4f;
+}
+
+QString CalibrationServiceMock::historyTimestamp(int index) const
+{
+    return (index >= 0 && index < m_history.size()) ? m_history[index].timestamp : QString{};
+}
+
+void CalibrationServiceMock::addHistoryEntry(const QString &name, const QString &filamentId,
+                                              float kValue, float nozzleDiameter, const QString &timestamp)
+{
+    CalibrationHistoryEntry entry;
+    entry.name = name;
+    entry.filamentId = filamentId;
+    entry.kValue = kValue;
+    entry.nozzleDiameter = nozzleDiameter;
+    entry.timestamp = timestamp;
+    m_history.prepend(entry); // Most recent first
+    emit historyChanged();
+}
+
+void CalibrationServiceMock::clearHistory()
+{
+    if (m_history.isEmpty()) return;
+    m_history.clear();
+    emit historyChanged();
+}
+
 void CalibrationServiceMock::advanceStep()
 {
     if (m_currentItem < 0 || m_currentItem >= m_calibTypes.size()) return;
@@ -337,6 +390,15 @@ void CalibrationServiceMock::onTick()
             m_currentStepIndex = m_calibTypes[m_currentItem].steps.size() - 1;
             setStatus(m_currentItem, CalibrationStatus::Completed);
             emit stepChanged();
+
+            // Add history entry (对齐上游 FlowCalibHeaderView)
+            addHistoryEntry(
+                m_calibTypes[m_currentItem].name,
+                QString("filament_%1").arg(m_currentItem), // Mock filament ID
+                0.04f + (m_currentItem * 0.01f),           // Mock K-value
+                0.4f,                                       // Default nozzle diameter
+                QDateTime::currentDateTime().toString(Qt::ISODate)
+            );
         }
 
         emit isRunningChanged();

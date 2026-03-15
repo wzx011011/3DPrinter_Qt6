@@ -19,6 +19,7 @@
         <!-- Dialogs -->
         <file>dialogs/PrintDialog.qml</file>
         <file>dialogs/CalibrationDialog.qml</file>
+        <file>dialogs/CaliHistoryDialog.qml</file>
         <file>dialogs/AboutDialog.qml</file>
         <file>pages/SettingsPage.qml</file>
         <!-- Panels -->

@@ -3,6 +3,7 @@
 #include <QString>
 #include <QStringList>
 #include <QMap>
+#include <QList>
 
 class QTimer;
 
@@ -34,6 +35,16 @@ enum class CalibrationStatus : int
     InProgress  = 1,
     Completed   = 2,
     Failed      = 3
+};
+
+// Calibration history entry (对齐上游 FlowCalibHeaderView 历史记录)
+struct CalibrationHistoryEntry
+{
+    QString name;           // Calibration type name
+    QString filamentId;     // Filament preset identifier
+    float kValue;           // K-value (Pressure Advance)
+    float nozzleDiameter;   // Nozzle diameter used
+    QString timestamp;      // ISO timestamp
 };
 
 // Mock calibration service - simulates calibration wizard flow
@@ -82,12 +93,24 @@ public:
     Q_INVOKABLE void goToStep(int stepIndex);
     Q_INVOKABLE void resetCalibration(int itemIndex);
 
+    // History accessors (对齐上游 FlowCalibHeaderView 历史记录)
+    Q_INVOKABLE int historyCount() const;
+    Q_INVOKABLE QString historyName(int index) const;
+    Q_INVOKABLE QString historyFilamentId(int index) const;
+    Q_INVOKABLE float historyKValue(int index) const;
+    Q_INVOKABLE float historyNozzleDiameter(int index) const;
+    Q_INVOKABLE QString historyTimestamp(int index) const;
+    Q_INVOKABLE void addHistoryEntry(const QString &name, const QString &filamentId,
+                                      float kValue, float nozzleDiameter, const QString &timestamp);
+    Q_INVOKABLE void clearHistory();
+
 signals:
     void progressChanged();
     void isRunningChanged();
     void calibrationFinished(bool success);
     void stepChanged();
     void statusChanged(int typeIndex, int status);
+    void historyChanged();
 
 private slots:
     void onTick();
@@ -99,6 +122,7 @@ private:
 
     QList<CalibrationType> m_calibTypes;
     QMap<int, CalibrationStatus> m_statusMap; // typeIndex -> status
+    QList<CalibrationHistoryEntry> m_history; // Calibration history records
     int m_progress = 0;
     bool m_isRunning = false;
     int m_currentItem = -1;

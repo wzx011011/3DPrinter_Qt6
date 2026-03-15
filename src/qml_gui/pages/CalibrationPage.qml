@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "../dialogs"
 import "../controls"
+import "../components"
 
 // Upstream reference:
 //   CalibrationPanel (CalibrationPanel.hpp/cpp) - left tab panel with tabbook
@@ -64,6 +65,11 @@ Item {
         calibrationVm: root.calibrationVm
     }
 
+    CaliHistoryDialog {
+        id: historyDlg
+        calibrationVm: root.calibrationVm
+    }
+
     // Background
     Rectangle { anchors.fill: parent; color: Theme.bgBase }
 
@@ -91,6 +97,39 @@ Item {
                 }
 
                 Item { Layout.fillWidth: true }
+
+                // History button (对齐上游 FlowCalibHeaderView)
+                Rectangle {
+                    Layout.preferredHeight: 28
+                    Layout.preferredWidth: historyBtnRow.implicitWidth + 20
+                    radius: 4
+                    color: historyBtnHov.containsMouse ? Theme.bgHover : "transparent"
+                    border.color: Theme.borderSubtle
+                    border.width: 1
+
+                    Row {
+                        id: historyBtnRow
+                        anchors.centerIn: parent
+                        spacing: 6
+                        Text {
+                            text: "\u231B" // Clock/history icon
+                            color: Theme.textSecondary
+                            font.pixelSize: 12
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Text {
+                            text: qsTr("历史记录")
+                            color: Theme.textSecondary
+                            font.pixelSize: Theme.fontSizeSM
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+
+                    HoverHandler { id: historyBtnHov }
+                    TapHandler {
+                        onTapped: historyDlg.open()
+                    }
+                }
 
                 // Category filter pills
                 Repeater {

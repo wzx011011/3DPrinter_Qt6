@@ -11,6 +11,7 @@ CalibrationViewModel::CalibrationViewModel(CalibrationServiceMock *service, QObj
         connect(m_service, &CalibrationServiceMock::isRunningChanged, this, &CalibrationViewModel::runningChanged);
         connect(m_service, &CalibrationServiceMock::stepChanged, this, &CalibrationViewModel::stepChanged);
         connect(m_service, &CalibrationServiceMock::statusChanged, this, &CalibrationViewModel::statusChanged);
+        connect(m_service, &CalibrationServiceMock::historyChanged, this, &CalibrationViewModel::historyChanged);
         connect(m_service, &CalibrationServiceMock::calibrationFinished, this, [this](bool)
             {
                 emit runningChanged();
@@ -208,4 +209,42 @@ void CalibrationViewModel::resetParameters()
 {
     if (m_service && m_selectedIndex >= 0)
         m_service->resetCalibration(m_selectedIndex);
+}
+
+// --- History accessors (对齐上游 FlowCalibHeaderView 历史记录) ---
+
+int CalibrationViewModel::historyCount() const
+{
+    return m_service ? m_service->historyCount() : 0;
+}
+
+QString CalibrationViewModel::historyName(int index) const
+{
+    return m_service ? m_service->historyName(index) : QString{};
+}
+
+QString CalibrationViewModel::historyFilamentId(int index) const
+{
+    return m_service ? m_service->historyFilamentId(index) : QString{};
+}
+
+float CalibrationViewModel::historyKValue(int index) const
+{
+    return m_service ? m_service->historyKValue(index) : 0.0f;
+}
+
+float CalibrationViewModel::historyNozzleDiameter(int index) const
+{
+    return m_service ? m_service->historyNozzleDiameter(index) : 0.4f;
+}
+
+QString CalibrationViewModel::historyTimestamp(int index) const
+{
+    return m_service ? m_service->historyTimestamp(index) : QString{};
+}
+
+void CalibrationViewModel::clearHistory()
+{
+    if (m_service)
+        m_service->clearHistory();
 }

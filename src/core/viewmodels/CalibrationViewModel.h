@@ -26,6 +26,8 @@ class CalibrationViewModel : public QObject
     Q_PROPERTY(bool showPresetSelector READ showPresetSelector NOTIFY stepChanged)
     Q_PROPERTY(QStringList filamentPresetNames READ filamentPresetNames CONSTANT)
     Q_PROPERTY(QString selectedFilamentPreset READ selectedFilamentPreset WRITE setSelectedFilamentPreset NOTIFY stateChanged)
+    /// Calibration history (对齐上游 FlowCalibHeaderView 历史记录)
+    Q_PROPERTY(int historyCount READ historyCount NOTIFY historyChanged)
 
 public:
     explicit CalibrationViewModel(CalibrationServiceMock *service, QObject *parent = nullptr);
@@ -68,6 +70,15 @@ public:
     QString selectedFilamentPreset() const { return m_selectedFilamentPreset; }
     void setSelectedFilamentPreset(const QString &name);
 
+    // History accessors (对齐上游 FlowCalibHeaderView 历史记录)
+    int historyCount() const;
+    Q_INVOKABLE QString historyName(int index) const;
+    Q_INVOKABLE QString historyFilamentId(int index) const;
+    Q_INVOKABLE float historyKValue(int index) const;
+    Q_INVOKABLE float historyNozzleDiameter(int index) const;
+    Q_INVOKABLE QString historyTimestamp(int index) const;
+    Q_INVOKABLE void clearHistory();
+
 signals:
     void selectionChanged();
     void runningChanged();
@@ -75,6 +86,7 @@ signals:
     void stepChanged();
     void statusChanged(int typeIndex, int status);
     void stateChanged();
+    void historyChanged();
 
 public slots:
     void startCalibration();
