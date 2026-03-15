@@ -249,6 +249,122 @@ void EditorViewModel::setMeasureSelectionMode(int mode)
   }
 }
 
+// Support painting (对齐上游 GLGizmoFdmSupports)
+int EditorViewModel::supportPaintTool() const { return m_supportPaintTool; }
+void EditorViewModel::setSupportPaintTool(int tool)
+{
+  if (m_supportPaintTool != tool)
+  {
+    m_supportPaintTool = tool;
+    emit stateChanged();
+  }
+}
+
+int EditorViewModel::supportPaintCursorType() const { return m_supportPaintCursorType; }
+void EditorViewModel::setSupportPaintCursorType(int type)
+{
+  if (m_supportPaintCursorType != type)
+  {
+    m_supportPaintCursorType = type;
+    emit stateChanged();
+  }
+}
+
+int EditorViewModel::supportPaintToolType() const { return m_supportPaintToolType; }
+void EditorViewModel::setSupportPaintToolType(int type)
+{
+  if (m_supportPaintToolType != type)
+  {
+    m_supportPaintToolType = type;
+    emit stateChanged();
+  }
+}
+
+float EditorViewModel::supportPaintCursorRadius() const { return m_supportPaintCursorRadius; }
+void EditorViewModel::setSupportPaintCursorRadius(float radius)
+{
+  if (!qFuzzyCompare(m_supportPaintCursorRadius, radius))
+  {
+    m_supportPaintCursorRadius = radius;
+    emit stateChanged();
+  }
+}
+
+float EditorViewModel::supportPaintAngleThreshold() const { return m_supportPaintAngleThreshold; }
+void EditorViewModel::setSupportPaintAngleThreshold(float angle)
+{
+  if (!qFuzzyCompare(m_supportPaintAngleThreshold, angle))
+  {
+    m_supportPaintAngleThreshold = angle;
+    emit stateChanged();
+  }
+}
+
+float EditorViewModel::supportPaintSmartFillAngle() const { return m_supportPaintSmartFillAngle; }
+void EditorViewModel::setSupportPaintSmartFillAngle(float angle)
+{
+  if (!qFuzzyCompare(m_supportPaintSmartFillAngle, angle))
+  {
+    m_supportPaintSmartFillAngle = angle;
+    emit stateChanged();
+  }
+}
+
+float EditorViewModel::supportPaintGapArea() const { return m_supportPaintGapArea; }
+void EditorViewModel::setSupportPaintGapArea(float area)
+{
+  if (!qFuzzyCompare(m_supportPaintGapArea, area))
+  {
+    m_supportPaintGapArea = area;
+    emit stateChanged();
+  }
+}
+
+bool EditorViewModel::supportPaintOnOverhangsOnly() const { return m_supportPaintOnOverhangsOnly; }
+void EditorViewModel::setSupportPaintOnOverhangsOnly(bool on)
+{
+  if (m_supportPaintOnOverhangsOnly != on)
+  {
+    m_supportPaintOnOverhangsOnly = on;
+    emit stateChanged();
+  }
+}
+
+bool EditorViewModel::supportEnable() const { return m_supportEnable; }
+void EditorViewModel::setSupportEnable(bool enable)
+{
+  if (m_supportEnable != enable)
+  {
+    m_supportEnable = enable;
+    emit stateChanged();
+  }
+}
+
+int EditorViewModel::supportType() const { return m_supportType; }
+void EditorViewModel::setSupportType(int type)
+{
+  if (m_supportType != type)
+  {
+    m_supportType = type;
+    emit stateChanged();
+  }
+}
+
+void EditorViewModel::setSupportPaintToolFromQml(int tool)
+{
+  // Map QML tool index to internal tool state
+  // 0 = Enforcer, 1 = Blocker, 2 = Erase (None)
+  int internalTool = (tool == 0) ? 1 : ((tool == 1) ? 2 : 0);
+  setSupportPaintTool(internalTool);
+}
+
+void EditorViewModel::clearSupportPaintOnSelection()
+{
+  // TODO: Implement actual clear logic when mesh selection is available
+  // For now, just emit state changed signal
+  emit stateChanged();
+}
+
 void EditorViewModel::flipCutPlane()
 {
   // 翻转切割位置到对称侧 (对齐上游 GLGizmoCut::flip_cut_plane)

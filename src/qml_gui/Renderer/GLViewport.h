@@ -36,7 +36,8 @@ class GLViewport : public QQuickFramebufferObject
     GizmoScale = 2,
     GizmoMeasure = 3,
     GizmoFlatten = 4,   ///< 对齐上游 GLGizmoFlatten — 选择面平放
-    GizmoCut = 5        ///< 对齐上游 GLGizmoCut — 切割对象
+    GizmoCut = 5,       ///< 对齐上游 GLGizmoCut — 切割对象
+    GizmoSupportPaint = 6 ///< 对齐上游 GLGizmoFdmSupports — 支撑绘制
   };
   Q_ENUM(GizmoMode)
 

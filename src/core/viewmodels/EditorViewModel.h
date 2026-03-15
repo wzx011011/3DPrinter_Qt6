@@ -115,6 +115,31 @@ public:
   // Measure selection (对齐上游 GLGizmoMeasure)
   int measureSelectionMode() const;
   void setMeasureSelectionMode(int mode);
+  // Support painting (对齐上游 GLGizmoFdmSupports)
+  int supportPaintTool() const;
+  void setSupportPaintTool(int tool);
+  int supportPaintCursorType() const;
+  void setSupportPaintCursorType(int type);
+  int supportPaintToolType() const;
+  void setSupportPaintToolType(int type);
+  float supportPaintCursorRadius() const;
+  void setSupportPaintCursorRadius(float radius);
+  float supportPaintAngleThreshold() const;
+  void setSupportPaintAngleThreshold(float angle);
+  float supportPaintSmartFillAngle() const;
+  void setSupportPaintSmartFillAngle(float angle);
+  float supportPaintGapArea() const;
+  void setSupportPaintGapArea(float area);
+  bool supportPaintOnOverhangsOnly() const;
+  void setSupportPaintOnOverhangsOnly(bool on);
+  bool supportEnable() const;
+  void setSupportEnable(bool enable);
+  int supportType() const;
+  void setSupportType(int type);
+  /// Set support paint tool from QML (tool: 0=enforcer, 1=blocker, 2=erase)
+  Q_INVOKABLE void setSupportPaintToolFromQml(int tool);
+  /// Clear all support painting on selected volumes (aligns with upstream "Erase all painting")
+  Q_INVOKABLE void clearSupportPaintOnSelection();
   void setObjectPosX(float v);
   void setObjectPosY(float v);
   void setObjectPosZ(float v);
@@ -209,6 +234,17 @@ public:
   Q_PROPERTY(float connectorDepth READ connectorDepth WRITE setConnectorDepth NOTIFY stateChanged)
   /// 测量拾取模式（对齐上游 GLGizmoMeasure feature/point selection）
   Q_PROPERTY(int measureSelectionMode READ measureSelectionMode WRITE setMeasureSelectionMode NOTIFY stateChanged)
+  /// 支撑绘制设置（对齐上游 GLGizmoFdmSupports）
+  Q_PROPERTY(int supportPaintTool READ supportPaintTool WRITE setSupportPaintTool NOTIFY stateChanged)
+  Q_PROPERTY(int supportPaintCursorType READ supportPaintCursorType WRITE setSupportPaintCursorType NOTIFY stateChanged)
+  Q_PROPERTY(int supportPaintToolType READ supportPaintToolType WRITE setSupportPaintToolType NOTIFY stateChanged)
+  Q_PROPERTY(float supportPaintCursorRadius READ supportPaintCursorRadius WRITE setSupportPaintCursorRadius NOTIFY stateChanged)
+  Q_PROPERTY(float supportPaintAngleThreshold READ supportPaintAngleThreshold WRITE setSupportPaintAngleThreshold NOTIFY stateChanged)
+  Q_PROPERTY(float supportPaintSmartFillAngle READ supportPaintSmartFillAngle WRITE setSupportPaintSmartFillAngle NOTIFY stateChanged)
+  Q_PROPERTY(float supportPaintGapArea READ supportPaintGapArea WRITE setSupportPaintGapArea NOTIFY stateChanged)
+  Q_PROPERTY(bool supportPaintOnOverhangsOnly READ supportPaintOnOverhangsOnly WRITE setSupportPaintOnOverhangsOnly NOTIFY stateChanged)
+  Q_PROPERTY(bool supportEnable READ supportEnable WRITE setSupportEnable NOTIFY stateChanged)
+  Q_PROPERTY(int supportType READ supportType WRITE setSupportType NOTIFY stateChanged)
   /// 扁平可用面数（对齐上游 GLGizmoFlatten 面）
   Q_PROPERTY(int flattenFaceCount READ flattenFaceCount NOTIFY stateChanged)
   /// 翻转切割平面（对齐上游 GLGizmoCut::flip_cut_plane）
@@ -430,4 +466,15 @@ private:
   bool  m_arrangeAlignY = false;      ///< 对齐 Y 轴
   bool  m_arrangeMultiMaterial = true; ///< 允许多耗材同板
   bool  m_arrangeAvoidCalibration = true; ///< 避免校准区域
+  // Support painting (对齐上游 GLGizmoFdmSupports)
+  int m_supportPaintTool = 1;              ///< 0=None, 1=Enforcer, 2=Blocker
+  int m_supportPaintCursorType = 0;        ///< 0=Circle, 1=Sphere, 2=Pointer, 3=HeightRange, 4=GapFill
+  int m_supportPaintToolType = 0;          ///< 0=Brush, 1=BucketFill, 2=SmartFill, 3=GapFill
+  float m_supportPaintCursorRadius = 5.0f; ///< Brush radius in mm
+  float m_supportPaintAngleThreshold = 45.0f; ///< Overhang highlight angle
+  float m_supportPaintSmartFillAngle = 30.0f; ///< Smart fill angle threshold
+  float m_supportPaintGapArea = 1.0f;      ///< Gap fill area threshold
+  bool m_supportPaintOnOverhangsOnly = false; ///< Restrict painting to overhangs
+  bool m_supportEnable = false;            ///< Support enabled flag
+  int m_supportType = 0;                   ///< 0=normal, 1=tree
 };

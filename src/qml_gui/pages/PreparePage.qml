@@ -133,6 +133,12 @@ Item {
             viewport3d.gizmoMode = GLViewport.GizmoFlatten
             event.accepted = true
             break
+        case Qt.Key_P:
+            if (!(mod & Qt.ControlModifier)) {
+                viewport3d.gizmoMode = GLViewport.GizmoSupportPaint
+                event.accepted = true
+            }
+            break
         }
     }
 
@@ -1699,6 +1705,14 @@ Item {
                             iconSource: "qrc:/qml/assets/icons/scissors.svg"
                             toolTipText: qsTr("切割 (Ctrl+Shift+X)")
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoCut
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoSupportPaint
+                            iconSource: "qrc:/qml/assets/icons/layers.svg"
+                            toolTipText: qsTr("支撑绘制 (P)")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoSupportPaint
                         }
                     }
 
