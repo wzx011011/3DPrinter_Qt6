@@ -20,6 +20,10 @@ class MultiMachineViewModel : public QObject
   Q_PROPERTY(QString searchText READ searchText WRITE setSearchText NOTIFY machinesChanged)
   Q_PROPERTY(int filteredMachineCount READ filteredMachineCount NOTIFY machinesChanged)
 
+  // -- Sort direction indicators (aligns with upstream toolbar_double_directional_arrow) --
+  Q_PROPERTY(int sortField READ sortField NOTIFY sortChanged)
+  Q_PROPERTY(bool sortAsc READ sortAsc NOTIFY sortChanged)
+
   // -- Task Sending tab --
   Q_PROPERTY(int localTaskCount READ localTaskCount NOTIFY localTasksChanged)
   Q_PROPERTY(bool hasLocalTasks READ hasLocalTasks NOTIFY localTasksChanged)
@@ -28,6 +32,9 @@ class MultiMachineViewModel : public QObject
   // -- Task Sent tab --
   Q_PROPERTY(int cloudTaskCount READ cloudTaskCount NOTIFY cloudTasksChanged)
   Q_PROPERTY(bool hasCloudTasks READ hasCloudTasks NOTIFY cloudTasksChanged)
+  Q_PROPERTY(int cloudSelectedCount READ cloudSelectedCount NOTIFY cloudTasksChanged)
+  Q_PROPERTY(int cloudCurrentPage READ cloudCurrentPage WRITE setCloudCurrentPage NOTIFY cloudPaginationChanged)
+  Q_PROPERTY(int cloudTotalPages READ cloudTotalPages NOTIFY cloudPaginationChanged)
 
 public:
   explicit MultiMachineViewModel(QObject *parent = nullptr);
@@ -57,6 +64,10 @@ public:
   int pageSize() const;
   QString selectedCountText() const;
 
+  // Sort direction (aligns with upstream SortItem big/sortcb toggle)
+  int sortField() const;
+  bool sortAsc() const;
+
   // ── Local Task (Task Sending) accessors ──
   Q_INVOKABLE int localTaskCount() const;
   Q_INVOKABLE QString localTaskProjectName(int i) const;
@@ -80,17 +91,41 @@ public:
   Q_INVOKABLE QString cloudTaskSendTime(int i) const;
   Q_INVOKABLE QString cloudTaskRemaining(int i) const;
   Q_INVOKABLE bool hasCloudTasks() const;
+  Q_INVOKABLE bool cloudTaskSelected(int i) const;
+  Q_INVOKABLE int cloudSelectedCount() const;
+
+  // Cloud task pagination (aligns with upstream CloudTaskManagerPage m_count_page_item=10)
+  int cloudCurrentPage() const;
+  void setCloudCurrentPage(int page);
+  int cloudTotalPages() const;
+
+  // Cloud task filtered accessors (page-aware)
+  Q_INVOKABLE int pagedCloudTaskCount() const;
+  Q_INVOKABLE QString pagedCloudTaskProjectName(int i) const;
+  Q_INVOKABLE QString pagedCloudTaskDevName(int i) const;
+  Q_INVOKABLE int pagedCloudTaskStatus(int i) const;
+  Q_INVOKABLE QString pagedCloudTaskStatusText(int i) const;
+  Q_INVOKABLE int pagedCloudTaskProgress(int i) const;
+  Q_INVOKABLE QString pagedCloudTaskSendTime(int i) const;
+  Q_INVOKABLE QString pagedCloudTaskRemaining(int i) const;
+  Q_INVOKABLE bool pagedCloudTaskSelected(int i) const;
 
   // ── Device actions (aligns with upstream MultiMachineItem EVT_MULTI_DEVICE_VIEW) ──
   Q_INVOKABLE void viewMachine(int index);
 
-  // ── Task actions ──
+  // ── Local Task actions (aligns with upstream LocalTaskManagerPage) ──
   Q_INVOKABLE void selectLocalTask(int index);
-  Q_INVOKABLE void cancelLocalTask(int index);
-  Q_INVOKABLE void stopAllLocalTasks();
-  Q_INVOKABLE void pauseCloudTask(int index);
-  Q_INVOKABLE void resumeCloudTask(int index);
-  Q_INVOKABLE void stopAllCloudTasks();
+  Q_INVOKABLE void cancelLocalTask(int index);           // per-task Cancel (aligns with MultiTaskItem::onCancel)
+  Q_INVOKABLE void stopAllLocalTasks();                  // aligns with btn_stop_all
+
+  // ── Cloud Task actions (aligns with upstream CloudTaskManagerPage) ──
+  Q_INVOKABLE void selectCloudTask(int index);           // checkbox selection (aligns with EVT_MULTI_DEVICE_SELECTED)
+  Q_INVOKABLE void pauseCloudTask(int index);            // aligns with MultiTaskItem::onPause
+  Q_INVOKABLE void resumeCloudTask(int index);           // aligns with MultiTaskItem::onResume
+  Q_INVOKABLE void stopCloudTask(int index);             // per-task Stop (aligns with MultiTaskItem::onStop)
+  Q_INVOKABLE void pauseAllCloudTasks();                 // aligns with btn_pause_all
+  Q_INVOKABLE void resumeAllCloudTasks();                // aligns with btn_continue_all
+  Q_INVOKABLE void stopAllCloudTasks();                  // aligns with btn_stop_all
 
   // ── Device management (aligns with upstream MultiMachinePickPage "Edit Printers") ──
   Q_INVOKABLE void editPrinters();
@@ -101,17 +136,30 @@ public:
   // ── Sort (aligns with upstream SortItem) ──
   Q_INVOKABLE void sortDevicesByName();    // toggles ascending/descending
   Q_INVOKABLE void sortDevicesByStatus();  // toggles ascending/descending
+  Q_INVOKABLE void sortDevicesByProgress(); // toggles ascending/descending
+  Q_INVOKABLE void sortDevicesByTaskName(); // toggles ascending/descending
+  /// Current sort field: 0=none 1=name 2=status 3=progress 4=taskName
+  Q_PROPERTY(int currentSortField READ currentSortField NOTIFY machinesChanged)
+  Q_PROPERTY(bool currentSortAsc READ currentSortAsc NOTIFY machinesChanged)
+  int currentSortField() const { return m_sortField; }
+  bool currentSortAsc() const;
 
   // ── Send task to device (对齐上游 SendMultiMachinePage / MultiMachinePickPage) ──
   Q_INVOKABLE int onlineMachineCount() const;
   Q_INVOKABLE QString onlineMachineName(int i) const;
   Q_INVOKABLE bool sendTaskToDevice(int localTaskIndex, int onlineMachineIndex);
 
+  // ── Timer-based refresh (aligns with upstream m_refresh_timer 2s) ──
+  Q_INVOKABLE void startRefreshTimer();
+  Q_INVOKABLE void stopRefreshTimer();
+
 signals:
   void machinesChanged();
   void paginationChanged();
   void localTasksChanged();
   void cloudTasksChanged();
+  void cloudPaginationChanged();
+  void sortChanged();
   void messageRequested(QString text);
 
 private:
@@ -139,22 +187,36 @@ private:
     QString projectName, devName, sendTime, remaining;
     int status;     // 0-printing 1-finish 2-failed
     int progress;
+    bool selected;
   };
   QList<CloudTaskEntry> m_cloudTasks;
 
-  // Pagination
+  // Device pagination
   int m_currentPage = 0;
   static const int m_pageSize = 10;
+
+  // Cloud task pagination (aligns with upstream CloudTaskManagerPage m_count_page_item=10)
+  int m_cloudCurrentPage = 0;
+  static const int m_cloudPageSize = 10;
 
   // Sort state
   bool m_sortNameAsc = true;
   bool m_sortStatusAsc = true;
-  int m_sortField = 0;  // 0=none 1=name 2=status
+  int m_sortField = 0;  // 0=none 1=name 2=status 3=progress 4=taskName
+  bool m_sortProgressAsc = true;
+  bool m_sortTaskNameAsc = true;
 
   // Search/filter (aligns with upstream selected_machines / search)
   QString m_searchText;
 
+  // Refresh timer (aligns with upstream m_refresh_timer 2s in MultiMachinePage::Show)
+  QTimer m_refreshTimer;
+
   void buildMockData();
   void recomputePagination();
+  void recomputeCloudPagination();
   static const MachineEntry *filteredMachineAt(const QList<MachineEntry> &list, int page, int pageSize, int i);
+
+  // Mock state update simulation (aligns with upstream on_timer -> update_page)
+  void simulateMockStateUpdate();
 };
