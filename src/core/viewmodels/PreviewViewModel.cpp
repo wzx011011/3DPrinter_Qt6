@@ -432,7 +432,6 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   estimatedCost_ = QStringLiteral("--");
   m_roleTimes.clear();
   m_moveAccumulatedTime.clear();
-    return;
 
   QFile file(filePath);
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
