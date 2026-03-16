@@ -70,10 +70,29 @@ if (-not (Test-Path './Qt6Core.dll')) {
   & 'E:/Qt6.10/bin/windeployqt.exe' --release --qmldir '../src' --no-translations --no-system-d3d-compiler --no-opengl-sw './FramelessDialogDemo.exe' 2>$null
 }
 
-# Remove OCCT DLLs — they cause 0xC0000005 at startup due to /MT vs /MD
-# CRT mismatch between pre-built libslic3r and OCCT DLLs.
-# OCCT is not used by the QML GUI (no STEP/OBJ import yet).
-Remove-Item 'TK*.dll' -ErrorAction SilentlyContinue
+# Deploy MSVC runtime DLLs (vcruntime140, msvcp140, etc.) for standalone execution.
+# windeployqt does NOT copy these — they are only available via vcvars PATH.
+$msvcRedist = 'C:\Program Files\Microsoft Visual Studio\18\Community\VC\Redist\MSVC\14.50.35710\x64\Microsoft.VC145.CRT'
+if (Test-Path $msvcRedist) {
+  Get-ChildItem -Path $msvcRedist -Filter '*.dll' | ForEach-Object {
+    if (-not (Test-Path (Join-Path '.' $_.Name))) {
+      Copy-Item $_.FullName -Destination '.' -Force
+    }
+  }
+}
+
+# Deploy OCCT (OpenCASCADE) DLLs — the exe imports TK*.dll at load time.
+# Source: OrcaSlicer dependency bundle at DEPS_PREFIX/bin/occt/
+$occtBinDir = 'E:\ai\3D-Printer\deps\build\OrcaSlicer_dep\usr\local\bin\occt'
+if (Test-Path $occtBinDir) {
+  Get-ChildItem -Path $occtBinDir -Filter 'TK*.dll' | ForEach-Object {
+    if (-not (Test-Path (Join-Path '.' $_.Name))) {
+      Copy-Item $_.FullName -Destination '.' -Force
+    }
+  }
+}
+
+# cr_tpms_library.dll is delay-loaded and unused; remove to avoid missing DLL warnings.
 Remove-Item 'cr_tpms_library.dll' -ErrorAction SilentlyContinue
 
 $p = Start-Process -FilePath './FramelessDialogDemo.exe' -WorkingDirectory (Get-Location) -PassThru

@@ -563,9 +563,12 @@ set(OCCT_LIBS
 )
 set(OCCT_LIB_DIR "${DEPS_PREFIX}/lib/occt")
 
-# Disable delay-load to prevent 0xC0000005 when OCCT DLLs are absent.
-# OCCT is only needed for STEP/OBJ import which the QML GUI doesn't use.
+# OCCT delay-load: DLLs are only loaded when OCCT code paths are actually called.
+# The QML GUI doesn't use OCCT, so DLLs stay unloaded at runtime.
 set(_delayload_libs "")
+foreach(_occt_lib ${OCCT_LIBS})
+  list(APPEND _delayload_libs "/DELAYLOAD:${_occt_lib}.dll")
+endforeach()
 
 # Also delay-load cr_tpms_library (closed-source TPMS infill DLL)
 list(APPEND _delayload_libs "/DELAYLOAD:cr_tpms_library.dll")
