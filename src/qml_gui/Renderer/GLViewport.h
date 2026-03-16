@@ -24,6 +24,10 @@ class GLViewport : public QQuickFramebufferObject
   Q_PROPERTY(int layerMin READ layerMin WRITE setLayerMin)
   Q_PROPERTY(int layerMax READ layerMax WRITE setLayerMax)
   Q_PROPERTY(int moveEnd READ moveEnd WRITE setMoveEnd)
+  /// 对齐上游 GCodeViewer m_travel_visibility
+  Q_PROPERTY(bool showTravelMoves READ showTravelMoves WRITE setShowTravelMoves)
+  /// 对齐上游 GCodeViewer show_bed
+  Q_PROPERTY(bool showBed READ showBed WRITE setShowBed)
   Q_PROPERTY(int gizmoMode READ gizmoMode WRITE setGizmoMode NOTIFY gizmoModeChanged)
   Q_PROPERTY(bool wireframeMode READ wireframeMode WRITE setWireframeMode NOTIFY wireframeModeChanged)
   /// 最近一次 FBO 缩略图捕获结果（base64 PNG，供 QML Image 使用）
@@ -87,9 +91,13 @@ public:
   int layerMin() const { return m_layerMin; }
   int layerMax() const { return m_layerMax; }
   int moveEnd() const { return m_moveEnd; }
+  bool showTravelMoves() const { return m_showTravelMoves; }
+  bool showBed() const { return m_showBed; }
   void setLayerMin(int v);
   void setLayerMax(int v);
   void setMoveEnd(int v);
+  void setShowTravelMoves(bool on);
+  void setShowBed(bool on);
 
   // --- Input event queue (consumed by GLViewportRenderer::synchronize) ---
   struct InputEvent
@@ -175,5 +183,7 @@ private:
   int m_layerMin = 0;
   int m_layerMax = 0;
   int m_moveEnd = 0;
+  bool m_showTravelMoves = true;  ///< 对齐上游 GCodeViewer m_travel_visibility
+  bool m_showBed = true;          ///< 对齐上游 GCodeViewer show_bed
   QString m_lastThumbnailData; ///< 最近一次 FBO 缩略图（base64 PNG）
 };

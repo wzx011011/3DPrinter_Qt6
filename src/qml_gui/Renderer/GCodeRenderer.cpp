@@ -84,6 +84,8 @@ void GCodeRenderer::synchronize(QQuickFramebufferObject *item)
   layerMin_ = vp->layerMin();
   layerMax_ = vp->layerMax();
   moveEnd_ = vp->moveEnd();
+  showTravelMoves_ = vp->showTravelMoves();
+  showBed_ = vp->showBed();
 
   // Collect input events
   auto events = vp->takeEvents();
@@ -204,7 +206,39 @@ void GCodeRenderer::render()
   prog_.setUniformValue(uMvp_, mvp);
   vao_.bind();
 
+  // --- 热床网格（对齐上游 GCodeViewer show_bed）---
+  if (showBed_)
+  {
+    /// 热床网格：覆盖 -150..150 范围，间距 10mm，颜色 #2a3545
+    static const float kBedExtent = 150.f;
+    static const float kBedStep = 10.f;
+    static const float kBedR = 0.165f;  // #2a3545
+    static const float kBedG = 0.208f;
+    static const float kBedB = 0.271f;
+
+    std::vector<SegmentVertex> gridVerts;
+    const int lineCount = int(kBedExtent / kBedStep);
+    gridVerts.reserve(size_t(lineCount * 2 + lineCount * 2) * 2);
+    for (int i = -lineCount; i <= lineCount; ++i)
+    {
+      const float coord = float(i) * kBedStep;
+      // X 方向线（沿 X 轴，Y 方向偏移）
+      gridVerts.push_back({-kBedExtent, 0.f, coord, kBedR, kBedG, kBedB, 0, 0});
+      gridVerts.push_back({ kBedExtent, 0.f, coord, kBedR, kBedG, kBedB, 0, 0});
+      // Y 方向线（沿 Z 轴，X 方向偏移）
+      gridVerts.push_back({coord, 0.f, -kBedExtent, kBedR, kBedG, kBedB, 0, 0});
+      gridVerts.push_back({coord, 0.f,  kBedExtent, kBedR, kBedG, kBedB, 0, 0});
+    }
+    if (!gridVerts.empty())
+    {
+      vbo_.bind();
+      vbo_.allocate(gridVerts.data(), int(gridVerts.size() * sizeof(SegmentVertex)));
+      f_->glDrawArrays(GL_LINES, 0, int(gridVerts.size()));
+    }
+  }
+
   // Single-pass filter: count visible segments and build filtered buffer
+  /// 过滤逻辑：层范围、移动范围、空驶移动（对齐上游 m_travel_visibility）
   std::vector<SegmentVertex> filtered;
   filtered.reserve(vertices_.size());
   for (size_t i = 0; i + 1 < vertices_.size(); i += 2)
@@ -213,6 +247,12 @@ void GCodeRenderer::render()
     if (a.layer < layerMin_ || a.layer > layerMax_)
       continue;
     if (a.move > moveEnd_)
+      continue;
+    /// 空驶移动颜色：r ~0.43, g ~0.47, b ~0.52（上游 TRAVEL 标识色）
+    if (!showTravelMoves_
+        && a.r >= 0.40f && a.r <= 0.46f
+        && a.g >= 0.44f && a.g <= 0.50f
+        && a.b >= 0.49f && a.b <= 0.55f)
       continue;
     filtered.push_back(vertices_[i]);
     filtered.push_back(vertices_[i + 1]);

@@ -67,6 +67,10 @@ private:
   int layerMin_ = 0;
   int layerMax_ = 0;
   int moveEnd_ = 0;
+  /// 对齐上游 GCodeViewer m_travel_visibility
+  bool showTravelMoves_ = true;
+  /// 对齐上游 GCodeViewer show_bed
+  bool showBed_ = true;
 
   // Camera controls
   CameraController camera_;

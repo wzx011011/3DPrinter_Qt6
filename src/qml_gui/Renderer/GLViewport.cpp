@@ -128,6 +128,22 @@ void GLViewport::setMoveEnd(int v)
   update();
 }
 
+void GLViewport::setShowTravelMoves(bool on)
+{
+  if (m_showTravelMoves == on)
+    return;
+  m_showTravelMoves = on;
+  update();
+}
+
+void GLViewport::setShowBed(bool on)
+{
+  if (m_showBed == on)
+    return;
+  m_showBed = on;
+  update();
+}
+
 // ---- Mouse / wheel handlers ------------------------------------------------
 
 void GLViewport::mousePressEvent(QMouseEvent *event)
