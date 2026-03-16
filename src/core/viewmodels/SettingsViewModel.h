@@ -37,6 +37,18 @@ class SettingsViewModel : public QObject
   Q_PROPERTY(bool autoUpload READ autoUpload WRITE setAutoUpload NOTIFY settingsChanged)
   /// 更新通道（对齐上游 update_channel: 0=Stable, 1=Beta, 2=Dev）
   Q_PROPERTY(int updateChannel READ updateChannel WRITE setUpdateChannel NOTIFY settingsChanged)
+  /// 开发者模式（对齐上游 PreferencesDialog::create_debug_page）
+  Q_PROPERTY(bool developerMode READ developerMode WRITE setDeveloperMode NOTIFY settingsChanged)
+  /// 调试覆盖层
+  Q_PROPERTY(bool showDebugOverlay READ showDebugOverlay WRITE setShowDebugOverlay NOTIFY settingsChanged)
+  /// 日志级别（对齐上游 GUI_App log level）: 0=Error, 1=Warning, 2=Info, 3=Debug, 4=Trace
+  Q_PROPERTY(int logLevel READ logLevel WRITE setLogLevel NOTIFY settingsChanged)
+  /// 详细 G-code（对齐上游 debug verbose gcode）
+  Q_PROPERTY(bool verboseGcode READ verboseGcode WRITE setVerboseGcode NOTIFY settingsChanged)
+  /// OpenGL 调试上下文
+  Q_PROPERTY(bool glDebugContext READ glDebugContext WRITE setGlDebugContext NOTIFY settingsChanged)
+  /// 最大日志大小 MB（对齐上游 log rotation size）
+  Q_PROPERTY(int maxLogSizeMb READ maxLogSizeMb WRITE setMaxLogSizeMb NOTIFY settingsChanged)
   Q_PROPERTY(QStringList presetNames READ presetNames NOTIFY presetsChanged)
   Q_PROPERTY(QString currentPreset READ currentPreset WRITE setCurrentPreset NOTIFY presetsChanged)
   Q_PROPERTY(double layerHeight READ layerHeight WRITE setLayerHeight NOTIFY configChanged)
@@ -67,6 +79,12 @@ public:
   int defaultBedShape() const { return m_defaultBedShape; }
   bool autoUpload() const { return m_autoUpload; }
   int updateChannel() const { return m_updateChannel; }
+  bool developerMode() const { return m_developerMode; }
+  bool showDebugOverlay() const { return m_showDebugOverlay; }
+  int logLevel() const { return m_logLevel; }
+  bool verboseGcode() const { return m_verboseGcode; }
+  bool glDebugContext() const { return m_glDebugContext; }
+  int maxLogSizeMb() const { return m_maxLogSizeMb; }
   QStringList presetNames() const { return m_presetNames; }
   QString currentPreset() const { return m_currentPreset; }
   double layerHeight() const { return m_layerHeight; }
@@ -103,6 +121,12 @@ public slots:
   void setDefaultBedShape(int shape);
   void setAutoUpload(bool v);
   void setUpdateChannel(int channel);
+  void setDeveloperMode(bool v);
+  void setShowDebugOverlay(bool v);
+  void setLogLevel(int v);
+  void setVerboseGcode(bool v);
+  void setGlDebugContext(bool v);
+  void setMaxLogSizeMb(int v);
   void setCurrentPreset(const QString &preset);
   void setLayerHeight(double h);
   Q_INVOKABLE void resetPreferences();
@@ -132,4 +156,10 @@ private:
   int m_defaultBedShape = 0;    // 0=Rectangular, 1=Round
   bool m_autoUpload = false;    // auto upload after slicing
   int m_updateChannel = 0;      // 0=Stable, 1=Beta, 2=Dev
+  bool m_developerMode = false;
+  bool m_showDebugOverlay = false;
+  int m_logLevel = 2;            // Info
+  bool m_verboseGcode = false;
+  bool m_glDebugContext = false;
+  int m_maxLogSizeMb = 50;
 };

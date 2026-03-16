@@ -302,6 +302,23 @@ Item {
                         TapHandler { onTapped: _vm.sortDevicesByTaskName() }
                     }
                     Item { Layout.fillWidth: true }
+                    // Refresh connection status button (对齐上游 refresh_user_device)
+                    Rectangle {
+                        width: 110
+                        height: Theme.controlHeightMD
+                        radius: Theme.radiusMD
+                        color: refreshStatusBtn.containsMouse ? Theme.bgHover : Theme.bgElevated
+                        border.color: Theme.borderDefault
+                        border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("Refresh Status")
+                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSizeSM
+                        }
+                        HoverHandler { id: refreshStatusBtn }
+                        TapHandler { onTapped: _vm.refreshConnectionStatus() }
+                    }
                     // Edit Printers button (aligns with upstream m_button_edit)
                     Rectangle {
                         width: 100
@@ -469,6 +486,7 @@ Item {
             color: _hovered ? Theme.bgHover : Theme.bgSurface
             radius: Theme.radiusSM
             property bool _hovered: false
+            property bool _editingName: false
 
             MouseArea {
                 anchors.fill: parent
@@ -483,7 +501,7 @@ Item {
                 anchors.rightMargin: Theme.spacingXL
                 spacing: 0
 
-                // Column 1: Device name
+                // Column 1: Device name (inline editing on double-click, 对齐上游 MultiMachineManagerPage rename)
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 180
@@ -495,13 +513,49 @@ Item {
                         radius: 4
                         color: _online ? Theme.statusSuccess : Theme.textDisabled
                     }
+                    // Device name text (visible when not editing)
                     Text {
+                        visible: !deviceRow._editingName
                         text: _online ? _name : (_name + " (" + qsTr("Offline") + ")")
                         color: _online ? Theme.textPrimary : Theme.textTertiary
                         font.pixelSize: Theme.fontSizeMD
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
+                    // Inline name editor (visible when editing, 对齐上游 MultiMachineManagerPage rename)
+                    TextField {
+                        id: nameEditor
+                        visible: deviceRow._editingName
+                        Layout.fillWidth: true
+                        text: deviceRow._name
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeMD
+                        selectByMouse: true
+                        background: Rectangle {
+                            radius: Theme.radiusSM
+                            color: Theme.bgPanel
+                            border.color: Theme.accent
+                            border.width: 1
+                        }
+                        onAccepted: {
+                            _vm.setMachineName(index, text)
+                            deviceRow._editingName = false
+                        }
+                        onActiveFocusChanged: {
+                            if (!activeFocus && deviceRow._editingName) {
+                                _vm.setMachineName(index, text)
+                                deviceRow._editingName = false
+                            }
+                        }
+                        Component.onCompleted: if (visible) forceActiveFocus()
+                    }
+                }
+                // Double-click handler to enter name editing mode
+                MouseArea {
+                    anchors.fill: parent
+                    z: -1
+                    acceptedButtons: Qt.LeftButton
+                    onDoubleClicked: deviceRow._editingName = true
                 }
 
                 // Column 2: Task name (aligns with upstream subtask_name / "No task")
@@ -647,6 +701,23 @@ Item {
                         color: Theme.textSecondary
                         font.pixelSize: Theme.fontSizeSM
                     }
+                    // Send All button (对齐上游 SendMultiMachinePage send all)
+                    Rectangle {
+                        visible: _vm.hasLocalTasks && _vm.onlineMachineCount > 0
+                        width: 80
+                        height: Theme.controlHeightSM
+                        radius: Theme.radiusSM
+                        color: sendAllBtnArea.containsMouse ? "#005a3d" : Theme.accent
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("Send All")
+                            color: Theme.textOnAccent
+                            font.pixelSize: Theme.fontSizeSM
+                            font.bold: true
+                        }
+                        HoverHandler { id: sendAllBtnArea }
+                        TapHandler { onTapped: _vm.sendAllTasksToDevice() }
+                    }
                     // Send to Device button (aligns with upstream SendMultiMachinePage)
                     Rectangle {
                         visible: _vm.hasLocalTasks && _vm.onlineMachineCount > 0
@@ -761,6 +832,7 @@ Item {
             property bool _selected: _vm.localTaskSelected(index)
             property bool _canSelect: _status === 0 || _status === 1  // pending or sending
             property bool _canCancel: _status === 0 || _status === 1  // pending or sending
+            property bool _canRetry: _status === 4  // failed (对齐上游 LocalTaskManagerPage retry)
 
             width: localTaskList.width
             height: 44
@@ -894,6 +966,29 @@ Item {
                     TapHandler {
                         enabled: _canCancel
                         onTapped: _vm.cancelLocalTask(index)
+                    }
+                }
+                // Retry button (对齐上游 LocalTaskManagerPage retry, visible for failed tasks)
+                Rectangle {
+                    Layout.preferredWidth: 50
+                    Layout.preferredHeight: 26
+                    radius: Theme.radiusSM
+                    color: retryBtnHover.containsMouse ? "#005a3d" : Theme.accent
+                    border.color: Theme.accent
+                    border.width: 1
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: _canRetry
+                    Text {
+                        anchors.centerIn: parent
+                        text: qsTr("Retry")
+                        color: Theme.textOnAccent
+                        font.pixelSize: Theme.fontSizeXS
+                        font.bold: true
+                    }
+                    HoverHandler { id: retryBtnHover }
+                    TapHandler {
+                        enabled: _canRetry
+                        onTapped: _vm.retryFailedTask(index)
                     }
                 }
             }

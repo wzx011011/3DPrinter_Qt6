@@ -28,6 +28,15 @@ class CalibrationViewModel : public QObject
     Q_PROPERTY(QString selectedFilamentPreset READ selectedFilamentPreset WRITE setSelectedFilamentPreset NOTIFY stateChanged)
     /// Calibration history (对齐上游 FlowCalibHeaderView 历史记录)
     Q_PROPERTY(int historyCount READ historyCount NOTIFY historyChanged)
+    /// K 值参数（对齐上游 CalibrationWizardCaliPage K-value input）
+    Q_PROPERTY(float currentKValue READ currentKValue WRITE setCurrentKValue NOTIFY calibrationParamsChanged)
+    /// N 值参数（对齐上游 CalibrationWizardCaliPage N-value / nozzle diameter input）
+    Q_PROPERTY(float currentNValue READ currentNValue WRITE setCurrentNValue NOTIFY calibrationParamsChanged)
+    /// 当前步骤是否为校准/精调步骤（显示参数输入）
+    Q_PROPERTY(bool showParamInputs READ showParamInputs NOTIFY calibrationParamsChanged)
+    /// 校准结果摘要（对齐上游 CalibrationWizardSavePage）
+    Q_PROPERTY(bool hasCalibrationResult READ hasCalibrationResult NOTIFY calibrationParamsChanged)
+    Q_PROPERTY(QString calibrationResultSummary READ calibrationResultSummary NOTIFY calibrationParamsChanged)
 
 public:
     explicit CalibrationViewModel(CalibrationServiceMock *service, QObject *parent = nullptr);
@@ -70,6 +79,20 @@ public:
     QString selectedFilamentPreset() const { return m_selectedFilamentPreset; }
     void setSelectedFilamentPreset(const QString &name);
 
+    // K/N 参数访问器（对齐上游 CalibrationWizardCaliPage）
+    float currentKValue() const { return m_currentKValue; }
+    void setCurrentKValue(float v);
+    float currentNValue() const { return m_currentNValue; }
+    void setCurrentNValue(float v);
+    bool showParamInputs() const;
+    bool hasCalibrationResult() const { return m_hasResult; }
+    QString calibrationResultSummary() const;
+
+    /// 保存校准结果到历史（对齐上游 CalibrationWizardSavePage save）
+    Q_INVOKABLE void saveCalibrationResult();
+    /// 加载历史记录的 K/N 值（对齐上游 FlowCalibHeaderView load）
+    Q_INVOKABLE void loadHistoryEntry(int index);
+
     // History accessors (对齐上游 FlowCalibHeaderView 历史记录)
     int historyCount() const;
     Q_INVOKABLE QString historyName(int index) const;
@@ -87,6 +110,7 @@ signals:
     void statusChanged(int typeIndex, int status);
     void stateChanged();
     void historyChanged();
+    void calibrationParamsChanged();
 
 public slots:
     void startCalibration();
@@ -99,4 +123,7 @@ private:
     CalibrationServiceMock *m_service = nullptr;
     PresetServiceMock *m_presetService = nullptr;
     QString m_selectedFilamentPreset;
+    float m_currentKValue = 0.0f;
+    float m_currentNValue = 0.4f;
+    bool m_hasResult = false;
 };

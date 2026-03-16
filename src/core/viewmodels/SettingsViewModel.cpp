@@ -12,6 +12,7 @@ static QStringList categoryTitles()
       SettingsViewModel::tr("账号与隐私"),
       SettingsViewModel::tr("更新"),
       SettingsViewModel::tr("高级"),
+      SettingsViewModel::tr("开发者"),
       SettingsViewModel::tr("关于")};
 }
 
@@ -123,6 +124,12 @@ void SettingsViewModel::resetPreferences()
   setCompactMode(false);
   setAutoBackup(false);
   setUndoLimit(100);
+  setDeveloperMode(false);
+  setShowDebugOverlay(false);
+  setLogLevel(2);
+  setVerboseGcode(false);
+  setGlDebugContext(false);
+  setMaxLogSizeMb(50);
 }
 
 void SettingsViewModel::setShowHomePage(bool v)
@@ -203,4 +210,34 @@ void SettingsViewModel::setAutoUpload(bool v)
 void SettingsViewModel::setUpdateChannel(int channel)
 {
   if (m_updateChannel != channel) { m_updateChannel = channel; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setDeveloperMode(bool v)
+{
+  if (m_developerMode != v) { m_developerMode = v; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setShowDebugOverlay(bool v)
+{
+  if (m_showDebugOverlay != v) { m_showDebugOverlay = v; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setLogLevel(int v)
+{
+  if (m_logLevel != v) { m_logLevel = v; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setVerboseGcode(bool v)
+{
+  if (m_verboseGcode != v) { m_verboseGcode = v; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setGlDebugContext(bool v)
+{
+  if (m_glDebugContext != v) { m_glDebugContext = v; emit settingsChanged(); }
+}
+
+void SettingsViewModel::setMaxLogSizeMb(int v)
+{
+  if (m_maxLogSizeMb != v) { m_maxLogSizeMb = v; emit settingsChanged(); }
 }

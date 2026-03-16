@@ -206,6 +206,8 @@ Item {
                     layerMin: root.previewVm.currentLayerMin
                     layerMax: root.previewVm.currentLayerMax
                     moveEnd: root.previewVm.currentMove
+                    showTravelMoves: root.previewVm.showTravelMoves
+                    showBed: root.previewVm.showBed
                 }
 
                 // 工具位置提示框（对齐上游 GCodeViewer::Marker::render）

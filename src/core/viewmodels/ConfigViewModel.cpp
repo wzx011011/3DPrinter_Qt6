@@ -1105,3 +1105,80 @@ bool ConfigViewModel::resetScopeOverride(const QString &key)
   if (ok) emit stateChanged();
   return ok;
 }
+
+// ── Global modified options (对齐上游 Tab::modified_options) ──────────────────
+
+int ConfigViewModel::globalModifiedCount() const
+{
+  if (!printOptions_)
+    return 0;
+  const auto defaults = printOptions_->defaultValuesByKey();
+  int count = 0;
+  for (auto it = globalOptionValues_.cbegin(); it != globalOptionValues_.cend(); ++it)
+  {
+    if (defaults.contains(it.key()) && defaults.value(it.key()) != it.value())
+      ++count;
+  }
+  return count;
+}
+
+QString ConfigViewModel::globalModifiedKey(int index) const
+{
+  if (!printOptions_ || index < 0)
+    return {};
+  const auto defaults = printOptions_->defaultValuesByKey();
+  int pos = 0;
+  for (auto it = globalOptionValues_.cbegin(); it != globalOptionValues_.cend(); ++it)
+  {
+    if (defaults.contains(it.key()) && defaults.value(it.key()) != it.value())
+    {
+      if (pos == index)
+        return it.key();
+      ++pos;
+    }
+  }
+  return {};
+}
+
+QString ConfigViewModel::globalModifiedCurrentValue(const QString &key) const
+{
+  return globalOptionValues_.value(key).toString();
+}
+
+QString ConfigViewModel::globalModifiedDefaultValue(const QString &key) const
+{
+  if (!printOptions_)
+    return {};
+  return printOptions_->defaultValuesByKey().value(key).toString();
+}
+
+bool ConfigViewModel::resetGlobalOption(const QString &key)
+{
+  if (!printOptions_)
+    return false;
+  const auto defaults = printOptions_->defaultValuesByKey();
+  if (!defaults.contains(key))
+    return false;
+  globalOptionValues_[key] = defaults.value(key);
+  savedPresetValues_[key] = defaults.value(key);
+  applyScopeValues();
+  emit stateChanged();
+  return true;
+}
+
+void ConfigViewModel::resetAllGlobalOptions()
+{
+  if (!printOptions_)
+    return;
+  const auto defaults = printOptions_->defaultValuesByKey();
+  for (auto it = globalOptionValues_.begin(); it != globalOptionValues_.end(); ++it)
+  {
+    if (defaults.contains(it.key()))
+    {
+      it.value() = defaults.value(it.key());
+      savedPresetValues_[it.key()] = defaults.value(it.key());
+    }
+  }
+  applyScopeValues();
+  emit stateChanged();
+}

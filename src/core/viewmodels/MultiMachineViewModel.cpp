@@ -67,7 +67,7 @@ void MultiMachineViewModel::buildMockData()
       {"CR-10-Smart-005",  "CR-10 Smart Pro", "",                "--",       "--",             "",                "",        false, 7, 0},
   };
 
-  // 5 mock local tasks (more diverse states to exercise all UI paths)
+  // 6 mock local tasks (more diverse states to exercise all UI paths)
   // Aligns with upstream LocalTaskManagerPage / MultiTaskItem
   m_localTasks = {
       {"Benchy.gcode",      "K1C-001",      "2026-03-14 09:30", "01:23:00", 5, 67,  false},  // printing
@@ -75,6 +75,7 @@ void MultiMachineViewModel::buildMockData()
       {"Bracket_v2.3mf",    "K1-Max-002",   "2026-03-14 08:00", "--",        6, 100, false},  // success
       {"CalibrationCube.gcode", "K1C-001",  "2026-03-14 10:00", "--",        1, 45,  false},  // sending (in progress)
       {"Phone_Stand.stl",   "Ender-3S1-Pro","2026-03-14 07:30", "--",        3, 0,   false},  // cancelled
+      {"Failed_Part.stl",   "K1C-001",      "2026-03-14 11:00", "--",        4, 0,   false},  // failed (for retry)
   };
 
   // 12 mock cloud tasks to exercise pagination (aligns with upstream m_count_page_item=10)
@@ -621,6 +622,90 @@ void MultiMachineViewModel::stopAllCloudTasks()
   }
   emit cloudTasksChanged();
   emit messageRequested(tr("All selected cloud tasks stopped"));
+}
+
+// ──────────────────────────────────────────────
+// Batch operations (对齐上游 SendMultiMachinePage / LocalTaskManagerPage / MultiMachineManagerPage)
+// ──────────────────────────────────────────────
+void MultiMachineViewModel::sendAllTasksToDevice()
+{
+  /// 批量发送任务到所有在线设备（对齐上游 SendMultiMachinePage send all）
+  // Find first online machine
+  const QString devName = onlineMachineName(0);
+  if (devName.isEmpty()) {
+    emit messageRequested(tr("No online devices available"));
+    return;
+  }
+
+  int sent = 0;
+  for (int i = 0; i < m_localTasks.size(); ++i) {
+    if (m_localTasks[i].status == 0 || m_localTasks[i].status == 1) {
+      // pending or sending -> send to first online machine
+      m_localTasks[i].devName = devName;
+      m_localTasks[i].status = 1; // sending
+      m_localTasks[i].progress = 0;
+      m_localTasks[i].selected = false;
+      ++sent;
+
+      // Mock: simulate sending process (2s then becomes printing)
+      const int taskIdx = i;
+      QTimer::singleShot(2000, this, [this, taskIdx, devName]() {
+        if (taskIdx < m_localTasks.size()) {
+          m_localTasks[taskIdx].status = 5; // printing
+          m_localTasks[taskIdx].progress = 10;
+          emit localTasksChanged();
+          emit messageRequested(QObject::tr("Task sent to %1").arg(devName));
+        }
+      });
+    }
+  }
+  emit localTasksChanged();
+  emit messageRequested(tr("Sending %1 tasks to %2...").arg(sent).arg(devName));
+}
+
+void MultiMachineViewModel::retryFailedTask(int index)
+{
+  /// 重试失败任务（对齐上游 LocalTaskManagerPage retry）
+  if (index >= 0 && index < m_localTasks.size()) {
+    if (m_localTasks[index].status == 4) { // failed
+      m_localTasks[index].status = 0; // pending
+      m_localTasks[index].progress = 0;
+      emit localTasksChanged();
+      emit messageRequested(tr("Retry queued: %1").arg(m_localTasks[index].projectName));
+    }
+  }
+}
+
+void MultiMachineViewModel::setMachineName(int index, const QString &name)
+{
+  /// 编辑设备名称（对齐上游 MultiMachineManagerPage rename）
+  int idx = m_currentPage * m_pageSize + index;
+  if (idx >= 0 && idx < m_machineEntries.size() && !name.trimmed().isEmpty()) {
+    m_machineEntries[idx].name = name.trimmed();
+    emit machinesChanged();
+    emit messageRequested(tr("Device renamed to: %1").arg(name.trimmed()));
+  }
+}
+
+void MultiMachineViewModel::refreshConnectionStatus()
+{
+  /// 刷新连接状态（mock: toggle some machines' online status randomly）
+  for (auto &m : m_machineEntries) {
+    if (QRandomGenerator::global()->bounded(100) < 20) { // 20% chance to toggle
+      m.online = !m.online;
+      if (!m.online) {
+        m.statusInt = 7; // unknown
+        m.status = "Syncing";
+        m.progress = 0;
+        m.remaining = "--";
+      } else {
+        m.statusInt = 0; // idle
+        m.status = "Idle";
+      }
+    }
+  }
+  emit machinesChanged();
+  emit messageRequested(tr("Connection status refreshed"));
 }
 
 // ──────────────────────────────────────────────

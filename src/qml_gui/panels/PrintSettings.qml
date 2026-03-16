@@ -323,6 +323,210 @@ Item {
         spacing: 6
 
         // ═══════════════════════════════════════════════════
+        // Modified Options summary bar（对齐上游 Tab::modified_options）
+        // ═══════════════════════════════════════════════════
+        Rectangle {
+            id: modifiedBar
+            Layout.fillWidth: true
+            Layout.leftMargin: 0
+            Layout.rightMargin: 0
+            Layout.topMargin: 2
+            visible: root.configVm ? root.configVm.globalModifiedCount > 0 : false
+            implicitHeight: modifiedContentCol.implicitHeight + 16
+            radius: 16
+            color: Theme.bgPanel
+            border.width: 1
+            border.color: Theme.borderSubtle
+
+            property bool expanded: false
+
+            // Summary row (always visible when count > 0)
+            Rectangle {
+                id: modifiedSummaryRow
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.topMargin: 6
+                height: 28
+                color: "transparent"
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 14
+                    anchors.rightMargin: 10
+                    spacing: 8
+
+                    // Warning dot
+                    Rectangle {
+                        width: 8; height: 8; radius: 4
+                        color: "#f59e0b"
+                    }
+
+                    Text {
+                        text: qsTr("%1 项已修改").arg(root.configVm ? root.configVm.globalModifiedCount : 0)
+                        color: Theme.textPrimary
+                        font.pixelSize: 12
+                        font.bold: true
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // Expand / Collapse toggle
+                    Text {
+                        text: modifiedBar.expanded ? qsTr("收起") : qsTr("展开")
+                        color: Theme.accent
+                        font.pixelSize: 11
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: modifiedBar.expanded = !modifiedBar.expanded
+                        }
+                    }
+
+                    Text {
+                        text: modifiedBar.expanded ? "\u25B2" : "\u25BC"
+                        color: Theme.textDisabled
+                        font.pixelSize: 8
+                    }
+                }
+            }
+
+            // Expanded content: flat list of modified options
+            Column {
+                id: modifiedContentCol
+                anchors.top: modifiedSummaryRow.bottom
+                anchors.topMargin: modifiedBar.expanded ? 6 : 0
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.leftMargin: 10
+                anchors.rightMargin: 10
+                anchors.bottomMargin: modifiedBar.expanded ? 10 : 0
+                spacing: 0
+                clip: true
+                height: modifiedBar.expanded ? implicitHeight : 0
+                visible: modifiedBar.expanded || expandAnim.running
+
+                Behavior on height {
+                    id: expandAnim
+                    NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+                }
+                Behavior on opacity {
+                    NumberAnimation { duration: 150 }
+                }
+                opacity: modifiedBar.expanded ? 1.0 : 0.0
+
+                // Separator line
+                Rectangle {
+                    width: parent.parent.width - 20
+                    height: 1
+                    color: Theme.borderSubtle
+                }
+
+                Repeater {
+                    model: root.configVm ? root.configVm.globalModifiedCount : 0
+
+                    Rectangle {
+                        width: modifiedContentCol.width
+                        height: 30
+                        color: index % 2 === 0 ? "transparent" : "#0e1520"
+
+                        readonly property string optKey: root.configVm ? root.configVm.globalModifiedKey(index) : ""
+                        readonly property string curVal: root.configVm ? root.configVm.globalModifiedCurrentValue(optKey) : ""
+                        readonly property string defVal: root.configVm ? root.configVm.globalModifiedDefaultValue(optKey) : ""
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: 8
+                            spacing: 6
+
+                            Text {
+                                text: parent.parent.optKey
+                                color: "#e8864a"
+                                font.pixelSize: 11
+                                font.family: "Consolas, monospace"
+                                Layout.preferredWidth: 160
+                                elide: Text.ElideRight
+                            }
+
+                            // Arrow indicator
+                            Text {
+                                text: "\u2192"
+                                color: Theme.textDisabled
+                                font.pixelSize: 10
+                            }
+
+                            Text {
+                                text: parent.parent.defVal
+                                color: Theme.textDisabled
+                                font.pixelSize: 11
+                                font.family: "Consolas, monospace"
+                                Layout.preferredWidth: 60
+                                elide: Text.ElideRight
+                                horizontalAlignment: Text.AlignRight
+                            }
+
+                            Text {
+                                text: "\u2192"
+                                color: Theme.textDisabled
+                                font.pixelSize: 10
+                            }
+
+                            Text {
+                                text: parent.parent.curVal
+                                color: Theme.textPrimary
+                                font.pixelSize: 11
+                                font.family: "Consolas, monospace"
+                                font.bold: true
+                                Layout.preferredWidth: 60
+                                elide: Text.ElideRight
+                                horizontalAlignment: Text.AlignRight
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            CxButton {
+                                id: resetOptBtn
+                                text: qsTr("重置")
+                                compact: true
+                                cxStyle: CxButton.Style.Ghost
+                                onClicked: {
+                                    if (root.configVm)
+                                        root.configVm.resetGlobalOption(resetOptBtn.parent.parent.optKey)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Reset All button
+                Rectangle {
+                    width: modifiedContentCol.width
+                    height: 34
+                    color: "transparent"
+
+                    RowLayout {
+                        anchors.fill: parent
+                        spacing: 8
+
+                        Item { Layout.fillWidth: true }
+
+                        CxButton {
+                            text: qsTr("全部重置")
+                            compact: true
+                            cxStyle: CxButton.Style.Secondary
+                            onClicked: {
+                                if (root.configVm)
+                                    root.configVm.resetAllGlobalOptions()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════
         // Section 1: 打印机（对齐上游 Sidebar Printer Section）
         // ═══════════════════════════════════════════════════
         CollapsibleSection {

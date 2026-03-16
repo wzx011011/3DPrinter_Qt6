@@ -8,6 +8,8 @@
 #include <QVector3D>
 #include <QVector4D>
 
+#include "core/rendering/SupportPaintTypes.h"
+
 class ProjectServiceMock;
 class SliceService;
 
@@ -140,6 +142,13 @@ public:
   Q_INVOKABLE void setSupportPaintToolFromQml(int tool);
   /// Clear all support painting on selected volumes (aligns with upstream "Erase all painting")
   Q_INVOKABLE void clearSupportPaintOnSelection();
+  /// 设置三角形支撑状态（对齐上游 TriangleSelector select_triangle）
+  Q_INVOKABLE void setTriangleSupportState(int objectIndex, int triangleIndex, int paintState);
+  /// 清除所有绘制数据（对齐上游 TriangleSelector reset）
+  Q_INVOKABLE void clearAllPaintData();
+  int enforcedSupportCount() const;
+  int blockedSupportCount() const;
+  int totalPaintedTriangleCount() const;
   // Seam painting (对齐上游 GLGizmoSeam)
   int seamPaintTool() const;
   void setSeamPaintTool(int tool);
@@ -269,6 +278,10 @@ public:
   Q_PROPERTY(bool supportPaintOnOverhangsOnly READ supportPaintOnOverhangsOnly WRITE setSupportPaintOnOverhangsOnly NOTIFY stateChanged)
   Q_PROPERTY(bool supportEnable READ supportEnable WRITE setSupportEnable NOTIFY stateChanged)
   Q_PROPERTY(int supportType READ supportType WRITE setSupportType NOTIFY stateChanged)
+  /// 支撑绘制数据（对齐上游 GLGizmoFdmSupports paint state）
+  Q_PROPERTY(int enforcedSupportCount READ enforcedSupportCount NOTIFY paintDataChanged)
+  Q_PROPERTY(int blockedSupportCount READ blockedSupportCount NOTIFY paintDataChanged)
+  Q_PROPERTY(int totalPaintedTriangleCount READ totalPaintedTriangleCount NOTIFY paintDataChanged)
   /// 缝线绘制设置（对齐上游 GLGizmoSeam）
   Q_PROPERTY(int seamPaintTool READ seamPaintTool WRITE setSeamPaintTool NOTIFY stateChanged)
   Q_PROPERTY(float seamPaintCursorRadius READ seamPaintCursorRadius WRITE setSeamPaintCursorRadius NOTIFY stateChanged)
@@ -436,6 +449,7 @@ public:
 
 signals:
   void stateChanged();
+  void paintDataChanged();
   void selectionSettingsRequested();
   /// 请求切换到预览页面（对齐上游 Plater::priv::on_preview）
   void previewRequested();
@@ -517,6 +531,7 @@ private:
   bool m_supportPaintOnOverhangsOnly = false; ///< Restrict painting to overhangs
   bool m_supportEnable = false;            ///< Support enabled flag
   int m_supportType = 0;                   ///< 0=normal, 1=tree
+  QList<Crality3D::ObjectPaintData> m_paintData;  ///< 对齐上游 per-volume paint data
   // Seam painting (对齐上游 GLGizmoSeam)
   int m_seamPaintTool = 0;                 ///< 0=None, 1=Enforcer, 2=Blocker
   float m_seamPaintCursorRadius = 2.0f;

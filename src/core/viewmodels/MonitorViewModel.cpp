@@ -1,5 +1,7 @@
 #include "MonitorViewModel.h"
 
+#include <QTimer>
+
 #include "core/services/DeviceServiceMock.h"
 #include "core/services/NetworkServiceMock.h"
 #include "core/services/CameraServiceMock.h"
@@ -8,9 +10,20 @@ MonitorViewModel::MonitorViewModel(DeviceServiceMock *deviceService, NetworkServ
                                    CameraServiceMock *cameraService, QObject *parent)
     : QObject(parent), deviceService_(deviceService), networkService_(networkService), cameraService_(cameraService)
 {
+  /// 初始化监控状态：根据设备列表是否为空（对齐上游 StatusPanel 状态切换）
+  if (deviceService_ && deviceService_->deviceCount() > 0)
+    monitorState_ = Normal;
+  else
+    monitorState_ = NoPrinter;
+
   if (deviceService_) {
     connect(deviceService_, &DeviceServiceMock::devicesChanged,
             this, &MonitorViewModel::devicesChanged);
+
+    /// 设备列表变化时同步更新状态机（对齐上游 MonitorBasePanel on_devices_changed）
+    connect(deviceService_, &DeviceServiceMock::devicesChanged, this, [this]() {
+      updateMonitorState();
+    });
     connect(deviceService_, &DeviceServiceMock::selectedDeviceChanged,
             this, &MonitorViewModel::selectedDeviceChanged);
     connect(deviceService_, &DeviceServiceMock::searchTextChanged,
@@ -170,12 +183,30 @@ void MonitorViewModel::scanDevices()
 
 void MonitorViewModel::connectDevice(int filteredIndex)
 {
-  if (deviceService_) deviceService_->connectDevice(filteredIndex);
+  /// 模拟连接流程：先设为 Connecting，1.5s 后根据结果切换（对齐上游 DeviceManager connect 逻辑）
+  setMonitorStateValue(Connecting);
+
+  QTimer::singleShot(1500, this, [this, filteredIndex]() {
+    if (deviceService_) {
+      deviceService_->connectDevice(filteredIndex);
+      /// 连接完成后根据设备在线状态决定最终状态（对齐上游 StatusPanel on_connect_result）
+      if (deviceService_->selectedDeviceOnline())
+        setMonitorStateValue(Normal);
+      else
+        setMonitorStateValue(Disconnected);
+    } else {
+      setMonitorStateValue(Disconnected);
+    }
+  });
 }
 
 void MonitorViewModel::disconnectDevice(int filteredIndex)
 {
-  if (deviceService_) deviceService_->disconnectDevice(filteredIndex);
+  if (deviceService_) {
+    deviceService_->disconnectDevice(filteredIndex);
+    /// 断开后进入 Disconnected 状态（对齐上游 StatusPanel on_disconnect）
+    setMonitorStateValue(Disconnected);
+  }
 }
 
 void MonitorViewModel::startPrint(int filteredIndex, const QString &gcodePath)
@@ -362,4 +393,23 @@ QVariantMap MonitorViewModel::amsSlotAt(int slotIndex) const
 void MonitorViewModel::setActiveAmsSlot(int slotIndex)
 {
   if (deviceService_) deviceService_->setSelectedDeviceAmsSlot(slotIndex);
+}
+
+// ── Monitor state machine（对齐上游 StatusPanel / MonitorBasePanel 状态切换） ──
+
+void MonitorViewModel::updateMonitorState()
+{
+  if (!deviceService_ || deviceService_->deviceCount() == 0) {
+    setMonitorStateValue(NoPrinter);
+  } else {
+    setMonitorStateValue(Normal);
+  }
+}
+
+void MonitorViewModel::setMonitorStateValue(int newState)
+{
+  if (monitorState_ == newState)
+    return;
+  monitorState_ = newState;
+  emit monitorStateChanged();
 }

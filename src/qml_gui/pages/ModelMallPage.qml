@@ -264,21 +264,54 @@ Item {
                         height: 26
                         width: catText.width + 20
                         radius: 13
-                        color: index === root.modelMallVm.categoryIndex ? Theme.accentSubtle : "transparent"
-                        border.color: index === root.modelMallVm.categoryIndex ? Theme.accent : "transparent"
+                        color: index === root.modelMallVm.categoryIndex && !root.modelMallVm.showFavoritesOnly ? Theme.accentSubtle : "transparent"
+                        border.color: index === root.modelMallVm.categoryIndex && !root.modelMallVm.showFavoritesOnly ? Theme.accent : "transparent"
                         border.width: 1
 
                         Text {
                             id: catText
                             anchors.centerIn: parent
                             text: parent.modelData
-                            color: index === root.modelMallVm.categoryIndex ? Theme.accent : Theme.textSecondary
+                            color: index === root.modelMallVm.categoryIndex && !root.modelMallVm.showFavoritesOnly ? Theme.accent : Theme.textSecondary
                             font.pixelSize: Theme.fontSizeSM
                         }
 
                         TapHandler {
-                            onTapped: root.modelMallVm.setCategoryIndex(index)
+                            onTapped: {
+                                root.modelMallVm.setShowFavoritesOnly(false)
+                                root.modelMallVm.setCategoryIndex(index)
+                            }
                         }
+                    }
+                }
+
+                // Favorites filter pill (对齐上游 ModelMallDialog favorite filter)
+                Rectangle {
+                    height: 26
+                    width: favPillText.width + 28
+                    radius: 13
+                    color: root.modelMallVm.showFavoritesOnly ? "#3d2a00" : "transparent"
+                    border.color: root.modelMallVm.showFavoritesOnly ? Theme.statusWarning : Theme.borderDefault
+                    border.width: 1
+
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: 4
+                        Text {
+                            text: "\u2605"
+                            color: root.modelMallVm.showFavoritesOnly ? Theme.statusWarning : Theme.textTertiary
+                            font.pixelSize: Theme.fontSizeSM
+                        }
+                        Text {
+                            id: favPillText
+                            text: qsTr("Favorites")
+                            color: root.modelMallVm.showFavoritesOnly ? Theme.statusWarning : Theme.textSecondary
+                            font.pixelSize: Theme.fontSizeSM
+                        }
+                    }
+
+                    TapHandler {
+                        onTapped: root.modelMallVm.setShowFavoritesOnly(!root.modelMallVm.showFavoritesOnly)
                     }
                 }
 
@@ -375,6 +408,31 @@ Item {
                                         color: Theme.accent
                                         font.pixelSize: Theme.fontSizeXS
                                         font.bold: true
+                                    }
+                                }
+
+                                // Favorite star icon (top-right corner, 对齐上游 ModelMallDialog toggle_favorite)
+                                Rectangle {
+                                    visible: !root.modelMallVm.modelFeatured(card.index)
+                                           && !(root.modelMallVm.modelFree(card.index) && !root.modelMallVm.modelFeatured(card.index))
+                                           || root.modelMallVm.isFavorite(card.index)
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: 8
+                                    width: 30
+                                    height: 24
+                                    radius: 12
+                                    color: root.modelMallVm.isFavorite(card.index) ? "#3d2a00" : "#00000060"
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: root.modelMallVm.isFavorite(card.index) ? "\u2605" : "\u2606"
+                                        color: root.modelMallVm.isFavorite(card.index) ? Theme.statusWarning : "#ffffffcc"
+                                        font.pixelSize: 14
+                                    }
+
+                                    TapHandler {
+                                        onTapped: root.modelMallVm.toggleFavorite(card.index)
                                     }
                                 }
 
@@ -597,7 +655,6 @@ Item {
                             }
                         }
                         TapHandler {
-                            z: 1
                             onTapped: root.modelMallVm.openModelDetail(card.index)
                         }
                     }

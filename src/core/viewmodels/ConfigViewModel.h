@@ -89,6 +89,8 @@ public:
   Q_INVOKABLE void saveCurrentPreset();
   /// 当前预设是否被修改
   bool isPresetDirty() const;
+  /// 全局修改选项数量（对齐上游 Tab::modified_options）
+  int globalModifiedCount() const;
   /// 创建自定义预设（对齐上游 PresetBundle::save_current_preset）
   Q_INVOKABLE bool createCustomPreset(int category, const QString &name);
   /// 删除预设（对齐上游 PresetBundle::delete_preset）
@@ -148,12 +150,26 @@ public:
   /// Per-scope 作用域差异对比（对齐上游 Tab::is_modified_value per-scope diff）
   /// 返回 JSON: {"global":v,"object":v_or_null,"volume":v_or_null,"plate":v_or_null}
   Q_INVOKABLE QString scopeDiffSummary(const QString &key) const;
+  /// 全局修改选项数量（对齐上游 Tab::modified_options）
+  Q_PROPERTY(int globalModifiedCount READ globalModifiedCount NOTIFY stateChanged)
+
   /// 当前作用域覆盖的选项数量
   Q_INVOKABLE int scopeOverrideCount() const;
   /// 获取当前作用域中第 index 个被覆盖的 key
   Q_INVOKABLE QString scopeOverriddenKey(int index) const;
   /// 重置当前作用域中指定 key 的覆盖值
   Q_INVOKABLE bool resetScopeOverride(const QString &key);
+
+  /// 获取第 index 个被修改的选项 key（对齐上游 Tab::modified_options）
+  Q_INVOKABLE QString globalModifiedKey(int index) const;
+  /// 获取选项当前值
+  Q_INVOKABLE QString globalModifiedCurrentValue(const QString &key) const;
+  /// 获取选项默认值
+  Q_INVOKABLE QString globalModifiedDefaultValue(const QString &key) const;
+  /// 重置单个选项到默认值（对齐上游 Tab::reset_to_default）
+  Q_INVOKABLE bool resetGlobalOption(const QString &key);
+  /// 重置所有修改的选项（对齐上游 Tab::reset_all_to_default）
+  Q_INVOKABLE void resetAllGlobalOptions();
   /// 获取耗材丝预设名称（替代 QML inline materialPresetAt，修正分类名"耗材"匹配）
   Q_INVOKABLE QString materialPresetName(int localIndex) const;
 

@@ -17,7 +17,7 @@ Item {
     Connections {
         target: root.settingsVm
         function onPrefCategoryChanged() {
-            if (root.settingsVm.prefCategory === 8)
+            if (root.settingsVm.prefCategory === 9)
                 aboutDlg.open()
         }
     }
@@ -45,6 +45,7 @@ Item {
                         { icon: "🔒",  name: qsTr("账号与隐私") },
                         { icon: "📦",  name: qsTr("更新") },
                         { icon: "🛠",  name: qsTr("高级") },
+                        { icon: "🐛",  name: qsTr("开发者") },
                         { icon: "❓",  name: qsTr("关于") }
                     ]
                     delegate: Rectangle {
@@ -688,6 +689,99 @@ Item {
                     Text {
                         Layout.fillWidth: true
                         text: qsTr("设置撤销/重做的历史记录上限。值越大可回退的操作越多，但占用更多内存。")
+                        color: "#566070"
+                        font.pixelSize: 10
+                        wrapMode: Text.Wrap
+                        Layout.preferredWidth: 400
+                    }
+                }
+
+                // Developer settings (对齐上游 PreferencesDialog::create_debug_page, index=8)
+                ColumnLayout {
+                    visible: root.settingsVm.prefCategory === 8
+                    Layout.fillWidth: true; spacing: 16
+
+                    Text {
+                        text: qsTr("开发者选项")
+                        color: "#c8d4e0"; font.pixelSize: 13; font.bold: true
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("这些选项面向开发者调试使用，普通用户无需更改。")
+                        color: "#566070"; font.pixelSize: 10; wrapMode: Text.Wrap
+                        Layout.preferredWidth: 500
+                        Layout.bottomMargin: 8
+                    }
+
+                    // Developer Mode toggle
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("开发者模式"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Switch {
+                            checked: root.settingsVm.developerMode
+                            onToggled: root.settingsVm.setDeveloperMode(checked)
+                        }
+                    }
+
+                    // Debug Overlay toggle
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("调试覆盖层"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Switch {
+                            checked: root.settingsVm.showDebugOverlay
+                            onToggled: root.settingsVm.setShowDebugOverlay(checked)
+                        }
+                    }
+
+                    // Log Level selector
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("日志级别"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        CxComboBox {
+                            model: [qsTr("Error"), qsTr("Warning"), qsTr("Info"), qsTr("Debug"), qsTr("Trace")]
+                            currentIndex: root.settingsVm.logLevel
+                            onActivated: root.settingsVm.setLogLevel(currentIndex)
+                        }
+                    }
+
+                    // Verbose G-code toggle
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("详细 G-code"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Switch {
+                            checked: root.settingsVm.verboseGcode
+                            onToggled: root.settingsVm.setVerboseGcode(checked)
+                        }
+                    }
+
+                    // OpenGL Debug toggle
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("OpenGL 调试上下文"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Switch {
+                            checked: root.settingsVm.glDebugContext
+                            onToggled: root.settingsVm.setGlDebugContext(checked)
+                        }
+                    }
+
+                    // Max Log Size selector
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("最大日志大小 (MB)"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        CxComboBox {
+                            model: ["10", "25", "50", "100", "200"]
+                            currentIndex: {
+                                var sizes = [10, 25, 50, 100, 200]
+                                return sizes.indexOf(root.settingsVm.maxLogSizeMb)
+                            }
+                            onActivated: root.settingsVm.setMaxLogSizeMb(parseInt(model[currentIndex]))
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("日志文件达到指定大小后将自动轮转。增大此值可保留更多历史日志，但占用更多磁盘空间。")
                         color: "#566070"
                         font.pixelSize: 10
                         wrapMode: Text.Wrap

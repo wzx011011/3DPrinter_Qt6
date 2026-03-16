@@ -58,6 +58,7 @@ Item {
         function onSelectionChanged() { reloadSteps() }
         function onStatusChanged() { reloadCalibItems(); reloadSteps() }
         function onStepChanged() { reloadSteps() }
+        function onCalibrationParamsChanged() { reloadSteps() }
     }
 
     CalibrationDialog {
@@ -538,6 +539,191 @@ Item {
                                         font.pixelSize: Theme.fontSizeSM
                                         wrapMode: Text.Wrap
                                         Layout.fillWidth: true
+                                    }
+
+                                    // K/N 参数输入面板（对齐上游 CalibrationWizardCaliPage K-value / N-value input）
+                                    ColumnLayout {
+                                        visible: root.calibrationVm.showParamInputs
+                                        Layout.fillWidth: true
+                                        spacing: Theme.spacingMD
+
+                                        // K 值输入行
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: Theme.spacingMD
+
+                                            Text {
+                                                text: qsTr("K 值")
+                                                color: Theme.textPrimary
+                                                font.pixelSize: Theme.fontSizeSM
+                                                font.bold: true
+                                                Layout.preferredWidth: 50
+                                            }
+
+                                            Text {
+                                                text: qsTr("Pressure Advance")
+                                                color: Theme.textTertiary
+                                                font.pixelSize: Theme.fontSizeXS
+                                                Layout.fillWidth: true
+                                            }
+
+                                            SpinBox {
+                                                id: kSpinBox
+                                                value: Math.round(root.calibrationVm.currentKValue * 1000)
+                                                from: 0
+                                                to: 1000
+                                                stepSize: 1
+                                                editable: true
+                                                property real realValue: value / 1000.0
+                                                textFromValue: function(v, locale) { return (v / 1000.0).toFixed(3) }
+                                                valueFromText: function(text, locale) { return Math.round(parseFloat(text) * 1000) }
+                                                onValueModified: root.calibrationVm.setCurrentKValue(realValue)
+                                            }
+
+                                            // Fine adjustment buttons
+                                            Rectangle {
+                                                width: 24; height: 24
+                                                radius: 4
+                                                color: kFineDec.containsMouse ? Theme.bgHover : Theme.bgPanel
+                                                border.color: Theme.borderSubtle
+                                                border.width: 1
+                                                Text { anchors.centerIn: parent; text: "--"; color: Theme.textSecondary; font.pixelSize: 10 }
+                                                HoverHandler { id: kFineDec }
+                                                TapHandler { onTapped: kSpinBox.value = Math.max(kSpinBox.from, parseFloat((kSpinBox.value - 0.0001).toFixed(4))) }
+                                            }
+                                            Rectangle {
+                                                width: 24; height: 24
+                                                radius: 4
+                                                color: kFineInc.containsMouse ? Theme.bgHover : Theme.bgPanel
+                                                border.color: Theme.borderSubtle
+                                                border.width: 1
+                                                Text { anchors.centerIn: parent; text: "+"; color: Theme.textSecondary; font.pixelSize: 12 }
+                                                HoverHandler { id: kFineInc }
+                                                TapHandler { onTapped: kSpinBox.value = Math.min(kSpinBox.to, parseFloat((kSpinBox.value + 0.0001).toFixed(4))) }
+                                            }
+                                        }
+
+                                        // N 值输入行
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: Theme.spacingMD
+
+                                            Text {
+                                                text: qsTr("N 值")
+                                                color: Theme.textPrimary
+                                                font.pixelSize: Theme.fontSizeSM
+                                                font.bold: true
+                                                Layout.preferredWidth: 50
+                                            }
+
+                                            Text {
+                                                text: qsTr("Nozzle Diameter")
+                                                color: Theme.textTertiary
+                                                font.pixelSize: Theme.fontSizeXS
+                                                Layout.fillWidth: true
+                                            }
+
+                                            SpinBox {
+                                                id: nSpinBox
+                                                value: Math.round(root.calibrationVm.currentNValue * 100)
+                                                from: 10
+                                                to: 200
+                                                stepSize: 5
+                                                editable: true
+                                                property real realValue: value / 100.0
+                                                textFromValue: function(v, locale) { return (v / 100.0).toFixed(2) }
+                                                valueFromText: function(text, locale) { return Math.round(parseFloat(text) * 100) }
+                                                onValueModified: root.calibrationVm.setCurrentNValue(realValue)
+                                            }
+
+                                            // Fine adjustment buttons
+                                            Rectangle {
+                                                width: 24; height: 24
+                                                radius: 4
+                                                color: nFineDec.containsMouse ? Theme.bgHover : Theme.bgPanel
+                                                border.color: Theme.borderSubtle
+                                                border.width: 1
+                                                Text { anchors.centerIn: parent; text: "--"; color: Theme.textSecondary; font.pixelSize: 10 }
+                                                HoverHandler { id: nFineDec }
+                                                TapHandler { onTapped: nSpinBox.value = Math.max(nSpinBox.from, parseFloat((nSpinBox.value - 0.01).toFixed(2))) }
+                                            }
+                                            Rectangle {
+                                                width: 24; height: 24
+                                                radius: 4
+                                                color: nFineInc.containsMouse ? Theme.bgHover : Theme.bgPanel
+                                                border.color: Theme.borderSubtle
+                                                border.width: 1
+                                                Text { anchors.centerIn: parent; text: "+"; color: Theme.textSecondary; font.pixelSize: 12 }
+                                                HoverHandler { id: nFineInc }
+                                                TapHandler { onTapped: nSpinBox.value = Math.min(nSpinBox.to, parseFloat((nSpinBox.value + 0.01).toFixed(2))) }
+                                            }
+                                        }
+                                    }
+
+                                    // 保存结果面板（对齐上游 CalibrationWizardSavePage）
+                                    ColumnLayout {
+                                        visible: root.calibrationVm.currentStepId === "save"
+                                                   || root.calibrationVm.currentStepId === "fine_save"
+                                                   || root.calibrationVm.currentStepId === "coarse_save"
+                                        Layout.fillWidth: true
+                                        spacing: Theme.spacingMD
+
+                                        // Result summary card
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: saveSummaryCol.implicitHeight + 24
+                                            radius: Theme.radiusMD
+                                            color: Theme.bgElevated
+                                            border.width: 1
+                                            border.color: root.calibrationVm.hasCalibrationResult ? Theme.statusSuccess : Theme.borderSubtle
+
+                                            ColumnLayout {
+                                                id: saveSummaryCol
+                                                anchors.fill: parent
+                                                anchors.margins: Theme.spacingLG
+                                                spacing: Theme.spacingSM
+
+                                                Text {
+                                                    text: qsTr("校准结果")
+                                                    color: Theme.textPrimary
+                                                    font.pixelSize: Theme.fontSizeMD
+                                                    font.bold: true
+                                                }
+
+                                                Text {
+                                                    visible: root.calibrationVm.hasCalibrationResult
+                                                    text: root.calibrationVm.calibrationResultSummary
+                                                    color: Theme.textSecondary
+                                                    font.pixelSize: Theme.fontSizeSM
+                                                }
+
+                                                Text {
+                                                    visible: !root.calibrationVm.hasCalibrationResult
+                                                    text: qsTr("尚未获得校准结果，请先完成校准步骤")
+                                                    color: Theme.textDisabled
+                                                    font.pixelSize: Theme.fontSizeSM
+                                                }
+
+                                                RowLayout {
+                                                    Layout.topMargin: Theme.spacingSM
+                                                    spacing: Theme.spacingMD
+
+                                                    CxButton {
+                                                        text: qsTr("保存到预设")
+                                                        cxStyle: CxButton.Style.Primary
+                                                        enabled: root.calibrationVm.hasCalibrationResult
+                                                        onClicked: root.calibrationVm.saveCalibrationResult()
+                                                    }
+
+                                                    CxButton {
+                                                        text: qsTr("保存到历史")
+                                                        cxStyle: CxButton.Style.Secondary
+                                                        enabled: root.calibrationVm.hasCalibrationResult
+                                                        onClicked: root.calibrationVm.saveCalibrationResult()
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
 
                                     // Filament preset selector (对齐上游 CalibrationPresetPage)

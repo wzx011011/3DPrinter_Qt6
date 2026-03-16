@@ -14,6 +14,7 @@ class ModelMallViewModel : public QObject
   Q_PROPERTY(int filteredCount READ filteredCount NOTIFY filteredCountChanged)
   Q_PROPERTY(bool isLoading READ isLoading NOTIFY isLoadingChanged)
   Q_PROPERTY(bool webViewAvailable READ webViewAvailable CONSTANT)
+  Q_PROPERTY(bool showFavoritesOnly READ showFavoritesOnly WRITE setShowFavoritesOnly NOTIFY filteredCountChanged)
   Q_PROPERTY(int selectedModelIndex READ selectedModelIndex NOTIFY selectedModelIndexChanged)
   Q_PROPERTY(bool detailDialogOpen READ detailDialogOpen NOTIFY detailDialogOpenChanged)
 
@@ -52,6 +53,13 @@ public:
   Q_INVOKABLE QString modelMaterialUsage(int i) const;
   Q_INVOKABLE QString modelTags(int i) const;
 
+  /// 收藏筛选（对齐上游 ModelMallDialog favorite filter）
+  Q_INVOKABLE void toggleFavorite(int index);
+  /// 查询是否收藏
+  Q_INVOKABLE bool isFavorite(int index) const;
+  /// 查询收藏数
+  Q_INVOKABLE int favoriteCount(int i) const;
+
   // Download progress (aligns with upstream download interaction)
   Q_INVOKABLE int downloadProgress(int index) const;
   Q_INVOKABLE bool downloadCompleted(int index) const;
@@ -65,6 +73,10 @@ public:
   int sortMode() const { return m_sortMode; }
   bool isLoading() const { return m_isLoading; }
   bool webViewAvailable() const { return false; } // Placeholder: upstream uses wxWebView2
+
+  /// 收藏筛选 getter/setter（对齐上游 ModelMallDialog favorite filter）
+  bool showFavoritesOnly() const { return m_showFavoritesOnly; }
+  void setShowFavoritesOnly(bool v);
 
   // Navigation (aligns with upstream on_back/on_forward)
   bool canGoBack() const { return m_historyIndex > 0; }
@@ -136,6 +148,8 @@ public:
     bool downloading = false;
     int downloadProgress = 0;
     bool downloadCompleted = false;
+    bool favorite = false;
+    int favoriteCount = 42;  // mock
   };
 
   // Navigation history state (aligns with upstream browser history back/forward)
@@ -157,6 +171,7 @@ public:
   int m_categoryIndex = 0; // 0 = all
   QString m_searchQuery;
   int m_sortMode = 0;
+  bool m_showFavoritesOnly = false;
   bool m_isLoading = false;
   int m_selectedModelIndex = -1;
   bool m_detailDialogOpen = false;

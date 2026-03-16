@@ -1,6 +1,7 @@
 #include "CalibrationViewModel.h"
 #include "../services/CalibrationServiceMock.h"
 #include "../services/PresetServiceMock.h"
+#include <QDateTime>
 
 CalibrationViewModel::CalibrationViewModel(CalibrationServiceMock *service, QObject *parent)
     : QObject(parent), m_service(service)
@@ -10,6 +11,7 @@ CalibrationViewModel::CalibrationViewModel(CalibrationServiceMock *service, QObj
         connect(m_service, &CalibrationServiceMock::progressChanged, this, &CalibrationViewModel::progressChanged);
         connect(m_service, &CalibrationServiceMock::isRunningChanged, this, &CalibrationViewModel::runningChanged);
         connect(m_service, &CalibrationServiceMock::stepChanged, this, &CalibrationViewModel::stepChanged);
+        connect(m_service, &CalibrationServiceMock::stepChanged, this, &CalibrationViewModel::calibrationParamsChanged);
         connect(m_service, &CalibrationServiceMock::statusChanged, this, &CalibrationViewModel::statusChanged);
         connect(m_service, &CalibrationServiceMock::historyChanged, this, &CalibrationViewModel::historyChanged);
         connect(m_service, &CalibrationServiceMock::calibrationFinished, this, [this](bool)
@@ -209,6 +211,57 @@ void CalibrationViewModel::resetParameters()
 {
     if (m_service && m_selectedIndex >= 0)
         m_service->resetCalibration(m_selectedIndex);
+}
+
+// --- K/N 参数（对齐上游 CalibrationWizardCaliPage） ---
+
+void CalibrationViewModel::setCurrentKValue(float v)
+{
+    if (qFuzzyCompare(m_currentKValue, v)) return;
+    m_currentKValue = v;
+    emit calibrationParamsChanged();
+}
+
+void CalibrationViewModel::setCurrentNValue(float v)
+{
+    if (qFuzzyCompare(m_currentNValue, v)) return;
+    m_currentNValue = v;
+    emit calibrationParamsChanged();
+}
+
+bool CalibrationViewModel::showParamInputs() const
+{
+    const QString id = currentStepId();
+    return id.contains(QStringLiteral("cali"));
+}
+
+QString CalibrationViewModel::calibrationResultSummary() const
+{
+    if (!m_hasResult) return {};
+    return QStringLiteral("K = %1, N = %2").arg(m_currentKValue, 0, 'f', 4)
+                                         .arg(m_currentNValue, 0, 'f', 2);
+}
+
+void CalibrationViewModel::saveCalibrationResult()
+{
+    if (!m_service || m_selectedIndex < 0) return;
+    m_hasResult = true;
+    m_service->addHistoryEntry(
+        m_service->calibTypeName(m_selectedIndex),
+        m_selectedFilamentPreset.isEmpty() ? QStringLiteral("default") : m_selectedFilamentPreset,
+        m_currentKValue,
+        m_currentNValue,
+        QDateTime::currentDateTime().toString(Qt::ISODate));
+    emit calibrationParamsChanged();
+}
+
+void CalibrationViewModel::loadHistoryEntry(int index)
+{
+    if (!m_service || index < 0 || index >= m_service->historyCount()) return;
+    m_currentKValue = m_service->historyKValue(index);
+    m_currentNValue = m_service->historyNozzleDiameter(index);
+    m_hasResult = true;
+    emit calibrationParamsChanged();
 }
 
 // --- History accessors (对齐上游 FlowCalibHeaderView 历史记录) ---

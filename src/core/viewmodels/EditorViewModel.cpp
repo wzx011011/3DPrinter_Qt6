@@ -365,6 +365,60 @@ void EditorViewModel::clearSupportPaintOnSelection()
   emit stateChanged();
 }
 
+// ── Paint data management (对齐上游 TriangleSelector) ──────────────────────
+
+int EditorViewModel::enforcedSupportCount() const
+{
+  int total = 0;
+  for (const auto &obj : m_paintData)
+    total += obj.enforcedCount();
+  return total;
+}
+
+int EditorViewModel::blockedSupportCount() const
+{
+  int total = 0;
+  for (const auto &obj : m_paintData)
+    total += obj.blockedCount();
+  return total;
+}
+
+int EditorViewModel::totalPaintedTriangleCount() const
+{
+  int total = 0;
+  for (const auto &obj : m_paintData)
+    for (const auto &tri : obj.triangles)
+      if (tri.state != Crality3D::SupportPaintState::None) ++total;
+  return total;
+}
+
+void EditorViewModel::setTriangleSupportState(int objectIndex, int triangleIndex, int paintState)
+{
+  // 查找或创建 ObjectPaintData 条目
+  for (auto &obj : m_paintData) {
+    if (obj.objectIndex == objectIndex) {
+      obj.setTriangleState(triangleIndex,
+                           static_cast<Crality3D::SupportPaintState>(paintState));
+      emit paintDataChanged();
+      return;
+    }
+  }
+  // 新对象条目
+  Crality3D::ObjectPaintData newObj;
+  newObj.objectIndex = objectIndex;
+  newObj.setTriangleState(triangleIndex,
+                           static_cast<Crality3D::SupportPaintState>(paintState));
+  m_paintData.push_back(newObj);
+  emit paintDataChanged();
+}
+
+void EditorViewModel::clearAllPaintData()
+{
+  for (auto &obj : m_paintData)
+    obj.clearAll();
+  emit paintDataChanged();
+}
+
 // ── Seam painting (对齐上游 GLGizmoSeam) ──────────────────────────────────
 
 int EditorViewModel::seamPaintTool() const { return m_seamPaintTool; }

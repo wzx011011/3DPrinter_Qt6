@@ -1872,6 +1872,50 @@ Item {
             }
         }
 
+        // 支撑/缝线绘制信息面板（对齐上游 GLGizmoFdmSupports info panel）
+        Rectangle {
+            anchors.top: processBar.bottom
+            anchors.topMargin: 4
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: paintInfoRow.implicitWidth + 24
+            height: 36
+            radius: 8
+            color: Theme.bgElevated
+            border.width: 1
+            border.color: Theme.borderSubtle
+            visible: (viewport3d.gizmoMode === GLViewport.GizmoSupportPaint
+                      || viewport3d.gizmoMode === GLViewport.GizmoSeamPaint)
+                     && root.editorVm
+
+            RowLayout {
+                id: paintInfoRow
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                spacing: 16
+
+                Text {
+                    text: qsTr("已强制: %1").arg(root.editorVm.enforcedSupportCount)
+                    color: Theme.accent
+                    font.pixelSize: Theme.fontSizeSM
+                }
+                Text {
+                    text: qsTr("已阻止: %1").arg(root.editorVm.blockedSupportCount)
+                    color: Theme.statusWarning
+                    font.pixelSize: Theme.fontSizeSM
+                }
+
+                Item { Layout.fillWidth: true }
+
+                CxButton {
+                    text: qsTr("清除全部")
+                    cxStyle: CxButton.Style.Secondary
+                    compact: true
+                    onClicked: root.editorVm.clearAllPaintData()
+                }
+            }
+        }
+
         // 测量信息面板（对齐上游 GLGizmoMeasure::on_render_input_window）
         Rectangle {
             anchors.top: parent.top

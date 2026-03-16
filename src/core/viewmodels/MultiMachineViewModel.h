@@ -2,6 +2,7 @@
 #include <QObject>
 #include <QVariantList>
 #include <QTimer>
+#include <QRandomGenerator>
 
 // Aligns with upstream MultiMachinePage (3 tabs), MultiMachineManagerPage (device list),
 // MultiTaskManagerPage (task sending/sent), and SendMultiMachinePage.
@@ -132,6 +133,16 @@ public:
   Q_INVOKABLE void addDevice();
   Q_INVOKABLE void removeDevice(int index);
   Q_INVOKABLE void refreshMachines();
+
+  // ── Batch operations (对齐上游 SendMultiMachinePage / LocalTaskManagerPage / MultiMachineManagerPage) ──
+  /// 批量发送任务到所有在线设备（对齐上游 SendMultiMachinePage send all）
+  Q_INVOKABLE void sendAllTasksToDevice();
+  /// 重试失败任务（对齐上游 LocalTaskManagerPage retry）
+  Q_INVOKABLE void retryFailedTask(int index);
+  /// 编辑设备名称（对齐上游 MultiMachineManagerPage rename）
+  Q_INVOKABLE void setMachineName(int index, const QString &name);
+  /// 刷新连接状态
+  Q_INVOKABLE void refreshConnectionStatus();
 
   // ── Sort (aligns with upstream SortItem) ──
   Q_INVOKABLE void sortDevicesByName();    // toggles ascending/descending

@@ -433,15 +433,177 @@ Item {
         // Aligns with upstream MonitorBasePanel right panel (1258px)
         // which hosts StatusPanel, MediaFilePanel, UpgradePanel, HMSPanel
         // via Tabbook tabs (PT_STATUS, PT_MEDIA, PT_UPDATE, PT_HMS)
+        //
+        // State machine（对齐上游 StatusPanel / MonitorBasePanel 状态切换）:
+        //   0=NoPrinter: 未检测到打印机
+        //   1=Connecting: 正在连接...
+        //   2=Disconnected: 连接已断开
+        //   3=Normal: 正常状态，显示详情面板
         // ══════════════════════════════════════════════════════════
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: Theme.bgBase
 
+            // ── NoPrinter state: 未检测到打印机（对齐上游 NoPrinterPanel） ──
+            Column {
+                anchors.centerIn: parent
+                spacing: 16
+                visible: root.monitorVm.monitorState === 0
+
+                Text {
+                    text: "\u{1F5A5}"
+                    font.pixelSize: 64
+                    color: Theme.textDisabled
+                    horizontalAlignment: Text.AlignHCenter
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+
+                Text {
+                    text: qsTr("未检测到打印机")
+                    color: Theme.textTertiary
+                    font.pixelSize: Theme.fontSizeXXL
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+
+                Text {
+                    text: qsTr("请添加打印机或确保打印机已连接到同一局域网")
+                    color: Theme.textDisabled
+                    font.pixelSize: Theme.fontSizeMD
+                    horizontalAlignment: Text.AlignHCenter
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+
+                // Scan button
+                Rectangle {
+                    width: scanPanelMA.containsMouse ? "#2563eb" : "#3b82f6"
+                    height: 36; radius: 8
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    Text {
+                        anchors.centerIn: parent
+                        text: qsTr("\u{1F50D} 扫描设备")
+                        color: "white"
+                        font.pixelSize: Theme.fontSizeLG
+                    }
+                    MouseArea {
+                        id: scanPanelMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.monitorVm.scanDevices()
+                    }
+                }
+            }
+
+            // ── Connecting state: 正在连接...（对齐上游 ConnectingPanel） ──
+            Column {
+                anchors.centerIn: parent
+                spacing: 16
+                visible: root.monitorVm.monitorState === 1
+
+                // Spinner animation
+                Rectangle {
+                    width: 48; height: 48; radius: 24
+                    color: "transparent"
+                    border.width: 3
+                    border.color: Theme.accent
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    opacity: 0.3
+
+                    Rectangle {
+                        width: 48; height: 24; radius: 24
+                        color: "transparent"
+                        border.width: 3
+                        border.color: Theme.accent
+                        anchors.top: parent.top
+                        anchors.left: parent.left
+
+                        RotationAnimation on rotation {
+                            from: 0; to: 360
+                            duration: 1000
+                            loops: Animation.Infinite
+                        }
+                    }
+                }
+
+                Text {
+                    text: qsTr("正在连接...")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeXL
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+
+                Text {
+                    text: qsTr("正在与打印机建立连接，请稍候")
+                    color: Theme.textDisabled
+                    font.pixelSize: Theme.fontSizeMD
+                    horizontalAlignment: Text.AlignHCenter
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+            }
+
+            // ── Disconnected state: 连接已断开（对齐上游 DisconnectedPanel） ──
+            Column {
+                anchors.centerIn: parent
+                spacing: 16
+                visible: root.monitorVm.monitorState === 2
+
+                // Warning icon
+                Text {
+                    text: "\u26A0"
+                    font.pixelSize: 64
+                    color: Theme.statusWarning
+                    horizontalAlignment: Text.AlignHCenter
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+
+                Text {
+                    text: qsTr("连接已断开")
+                    color: Theme.statusWarning
+                    font.pixelSize: Theme.fontSizeXXL
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+
+                Text {
+                    text: qsTr("打印机连接已断开，请重试或检查网络")
+                    color: Theme.textDisabled
+                    font.pixelSize: Theme.fontSizeMD
+                    horizontalAlignment: Text.AlignHCenter
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+
+                // Retry button
+                Rectangle {
+                    width: retryPanelMA.containsMouse ? "#2563eb" : "#3b82f6"
+                    height: 36; radius: 8
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    Text {
+                        anchors.centerIn: parent
+                        text: qsTr("\u21BB 重新连接")
+                        color: "white"
+                        font.pixelSize: Theme.fontSizeLG
+                    }
+                    MouseArea {
+                        id: retryPanelMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.monitorVm.connectDevice(0)
+                    }
+                }
+            }
+
+            // ── Normal state: device header + tabs + detail content ──
             ColumnLayout {
                 anchors.fill: parent
                 spacing: 0
+                visible: root.monitorVm.monitorState === 3
 
                 // ── Device header ──
                 Rectangle {

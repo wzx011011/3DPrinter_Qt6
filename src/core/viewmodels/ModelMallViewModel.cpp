@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <QTimer>
+#include <random>
 
 ModelMallViewModel::ModelMallViewModel(QObject *parent) : QObject(parent)
 {
@@ -103,6 +104,10 @@ void ModelMallViewModel::loadMockModels()
        4560, 5, 4.7, true,  false,  0.0},
   };
 
+  // Random generator for favorite counts (10-500 range, 对齐上游 ModelMallDialog favorite_count)
+  static std::mt19937 rng(42);
+  static std::uniform_int_distribution<int> favDist(10, 500);
+
   for (const auto &r : raw) {
     m_allEntries.append({
         QString::fromUtf8(r.name), QString::fromUtf8(r.author),
@@ -110,7 +115,9 @@ void ModelMallViewModel::loadMockModels()
         QString::fromUtf8(r.description), QString::fromUtf8(r.fileFormat),
         r.fileSizeKB, QString::fromUtf8(r.printTime), QString::fromUtf8(r.materialUsage),
         QString::fromUtf8(r.tags),
-        r.downloads, r.categoryIndex, r.rating, r.free, r.featured, r.price
+        r.downloads, r.categoryIndex, r.rating, r.free, r.featured, r.price,
+        false, 0, false,          // downloading, downloadProgress, downloadCompleted
+        false, favDist(rng)       // favorite, favoriteCount
     });
   }
 
@@ -136,6 +143,10 @@ void ModelMallViewModel::applyFilter()
           && !e.tags.toLower().contains(q))
         continue;
     }
+
+    // Favorites filter (对齐上游 ModelMallDialog favorite filter)
+    if (m_showFavoritesOnly && !e.favorite)
+      continue;
 
     m_filteredIndices.append(i);
   }
@@ -307,6 +318,39 @@ QString ModelMallViewModel::modelMaterialUsage(int i) const {
 }
 QString ModelMallViewModel::modelTags(int i) const {
   return (i >= 0 && i < m_filteredIndices.size()) ? m_allEntries[m_filteredIndices[i]].tags : QString{};
+}
+
+// --- Favorites (对齐上游 ModelMallDialog toggle_favorite / favorite filter) ---
+
+void ModelMallViewModel::toggleFavorite(int index)
+{
+  if (index < 0 || index >= m_filteredIndices.size()) return;
+  int realIdx = m_filteredIndices[index];
+  if (realIdx < 0 || realIdx >= m_allEntries.size()) return;
+  m_allEntries[realIdx].favorite = !m_allEntries[realIdx].favorite;
+  emit filteredCountChanged();
+}
+
+bool ModelMallViewModel::isFavorite(int index) const
+{
+  if (index < 0 || index >= m_filteredIndices.size()) return false;
+  int realIdx = m_filteredIndices[index];
+  if (realIdx < 0 || realIdx >= m_allEntries.size()) return false;
+  return m_allEntries[realIdx].favorite;
+}
+
+int ModelMallViewModel::favoriteCount(int i) const
+{
+  if (i >= 0 && i < m_filteredIndices.size()) return m_allEntries[m_filteredIndices[i]].favoriteCount;
+  return 0;
+}
+
+void ModelMallViewModel::setShowFavoritesOnly(bool v)
+{
+  if (m_showFavoritesOnly != v) {
+    m_showFavoritesOnly = v;
+    applyFilter();
+  }
 }
 
 // --- Download progress (aligns with upstream ModelMallDialog download interaction) ---

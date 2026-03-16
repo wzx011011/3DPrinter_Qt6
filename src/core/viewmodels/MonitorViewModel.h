@@ -7,9 +7,15 @@ class DeviceServiceMock;
 class NetworkServiceMock;
 class CameraServiceMock;
 
+/// 监控状态（对齐上游 StatusPanel 状态）：0=NoPrinter, 1=Connecting, 2=Disconnected, 3=Normal
+enum MonitorState { NoPrinter = 0, Connecting = 1, Disconnected = 2, Normal = 3 };
+
 class MonitorViewModel final : public QObject
 {
   Q_OBJECT
+
+  /// 监控页面状态机（对齐上游 StatusPanel / MonitorBasePanel 状态切换）
+  Q_PROPERTY(int monitorState READ monitorState NOTIFY monitorStateChanged)
 
   // ── Device list (filtered) ──────────────────────────────────
   Q_PROPERTY(int filteredDeviceCount READ filteredDeviceCount NOTIFY devicesChanged)
@@ -38,6 +44,9 @@ class MonitorViewModel final : public QObject
 public:
   explicit MonitorViewModel(DeviceServiceMock *deviceService, NetworkServiceMock *networkService,
                             CameraServiceMock *cameraService, QObject *parent = nullptr);
+
+  /// 监控状态 getter（对齐上游 StatusPanel 状态切换）
+  int monitorState() const { return monitorState_; }
 
   int filteredDeviceCount() const;
   QString searchText() const;
@@ -139,9 +148,18 @@ signals:
   void networkChanged();
   void cameraChanged();
   void hmsChanged();
+  void monitorStateChanged();
 
 private:
   DeviceServiceMock *deviceService_ = nullptr;
   NetworkServiceMock *networkService_ = nullptr;
   CameraServiceMock *cameraService_ = nullptr;
+
+  /// 监控页面状态机（对齐上游 StatusPanel / MonitorBasePanel 状态切换）
+  int monitorState_ = NoPrinter;
+
+  /// 根据设备列表更新监控状态
+  void updateMonitorState();
+  /// 设置状态值并在变化时 emit signal
+  void setMonitorStateValue(int newState);
 };
