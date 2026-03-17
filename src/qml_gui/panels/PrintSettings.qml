@@ -405,7 +405,7 @@ Item {
                 spacing: 0
                 clip: true
                 height: modifiedBar.expanded ? implicitHeight : 0
-                visible: modifiedBar.expanded || expandAnim.running
+                visible: !!modifiedBar.expanded || !!expandAnim.running
 
                 Behavior on height {
                     id: expandAnim
@@ -1668,6 +1668,9 @@ Item {
                             hoverEnabled: true
                             onEntered: parent.color = Theme.accent
                             onExited: parent.color = Theme.textTertiary
+                            onClicked: {
+                                if (root.configVm) root.configVm.resetAllScopeOverrides()
+                            }
                         }
                     }
                 }

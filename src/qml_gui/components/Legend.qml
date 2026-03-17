@@ -46,7 +46,7 @@ Item {
                         radius: 4
                         // 10-stop gradient matching upstream GCodeViewer Range_Colors
                         gradient: Gradient {
-                            GradientStop { position: 0.0; color: "#0d3264" }
+                            GradientStop { position: 0.0; color: "#0b2c7a" }
                             GradientStop { position: 0.12; color: "#154d8a" }
                             GradientStop { position: 0.24; color: "#1a6b8a" }
                             GradientStop { position: 0.36; color: "#1a8a6b" }

@@ -1,6 +1,7 @@
 #pragma once
 #include <QObject>
 #include <QStringList>
+#include <QSettings>
 
 class SettingsViewModel : public QObject
 {
@@ -132,6 +133,8 @@ public slots:
   Q_INVOKABLE void resetPreferences();
 
 private:
+  void loadFromSettings();
+
   int m_prefCategory = 0;
   int m_fontSize = 12;
   int m_themeIndex = 0;

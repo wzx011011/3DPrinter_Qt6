@@ -28,6 +28,11 @@ class GLViewport : public QQuickFramebufferObject
   Q_PROPERTY(bool showTravelMoves READ showTravelMoves WRITE setShowTravelMoves)
   /// 对齐上游 GCodeViewer show_bed
   Q_PROPERTY(bool showBed READ showBed WRITE setShowBed)
+  /// 对齐上游 GCodeViewer::Marker
+  Q_PROPERTY(float markerX READ markerX WRITE setMarkerX)
+  Q_PROPERTY(float markerY READ markerY WRITE setMarkerY)
+  Q_PROPERTY(float markerZ READ markerZ WRITE setMarkerZ)
+  Q_PROPERTY(bool showMarker READ showMarker WRITE setShowMarker)
   Q_PROPERTY(int gizmoMode READ gizmoMode WRITE setGizmoMode NOTIFY gizmoModeChanged)
   Q_PROPERTY(bool wireframeMode READ wireframeMode WRITE setWireframeMode NOTIFY wireframeModeChanged)
   /// 最近一次 FBO 缩略图捕获结果（base64 PNG，供 QML Image 使用）
@@ -93,11 +98,19 @@ public:
   int moveEnd() const { return m_moveEnd; }
   bool showTravelMoves() const { return m_showTravelMoves; }
   bool showBed() const { return m_showBed; }
+  float markerX() const { return m_markerX; }
+  float markerY() const { return m_markerY; }
+  float markerZ() const { return m_markerZ; }
+  bool showMarker() const { return m_showMarker; }
   void setLayerMin(int v);
   void setLayerMax(int v);
   void setMoveEnd(int v);
   void setShowTravelMoves(bool on);
   void setShowBed(bool on);
+  void setMarkerX(float v) { m_markerX = v; }
+  void setMarkerY(float v) { m_markerY = v; }
+  void setMarkerZ(float v) { m_markerZ = v; }
+  void setShowMarker(bool v) { m_showMarker = v; }
 
   // --- Input event queue (consumed by GLViewportRenderer::synchronize) ---
   struct InputEvent
@@ -185,5 +198,9 @@ private:
   int m_moveEnd = 0;
   bool m_showTravelMoves = true;  ///< 对齐上游 GCodeViewer m_travel_visibility
   bool m_showBed = true;          ///< 对齐上游 GCodeViewer show_bed
+  float m_markerX = 0.f;
+  float m_markerY = 0.f;
+  float m_markerZ = 0.f;
+  bool m_showMarker = true;       ///< 对齐上游 GCodeViewer m_show_marker
   QString m_lastThumbnailData; ///< 最近一次 FBO 缩略图（base64 PNG）
 };

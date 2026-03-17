@@ -184,11 +184,14 @@ try {
     }
     # Show DLL diagnostics if failed
     if (Test-Path $standaloneLog) {
-        $missingDlls = [regex]::Matches((Get-Content $standaloneLog -Raw -ErrorAction SilentlyContinue), 'error while loading shared libraries: (.+?\.dll)') | Measure-Object
-        if ($missingDlls.Count -gt 0) {
-            Write-Host "  Missing DLLs:" -ForegroundColor Yellow
-            foreach ($m in $missingDlls | Select-Object -First 5) {
-                Write-Host "    $($m.Value)" -ForegroundColor Yellow
+        $logContent2 = Get-Content $standaloneLog -Raw -ErrorAction SilentlyContinue
+        if ($logContent2) {
+            $missingDlls = [regex]::Matches($logContent2, 'error while loading shared libraries: (.+?\.dll)') | Measure-Object
+            if ($missingDlls.Count -gt 0) {
+                Write-Host "  Missing DLLs:" -ForegroundColor Yellow
+                foreach ($m in $missingDlls | Select-Object -First 5) {
+                    Write-Host "    $($m.Value)" -ForegroundColor Yellow
+                }
             }
         }
     }

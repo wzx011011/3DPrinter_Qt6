@@ -208,6 +208,10 @@ Item {
                     moveEnd: root.previewVm.currentMove
                     showTravelMoves: root.previewVm.showTravelMoves
                     showBed: root.previewVm.showBed
+                    showMarker: root.previewVm.showMarker
+                    markerX: root.previewVm.toolX
+                    markerY: root.previewVm.toolY
+                    markerZ: root.previewVm.toolZ
                 }
 
                 // 工具位置提示框（对齐上游 GCodeViewer::Marker::render）

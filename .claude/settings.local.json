@@ -3,5 +3,19 @@
     "allow": [
       "WebSearch"
     ]
+  },
+  "autoCompact": true,
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo MIGRATION SESSION CONTEXT PRESERVATION: You are in the middle of a source-truth migration session (/migrating-source-truth all batch mode). CRITICAL STATE TO PRESERVE: 1) Read docs/源码对照迁移任务追踪.md to re-establish task queue position. 2) You were executing migration tasks sequentially by priority (P0 > P2 > P3 > P4 > P5 > P6 > P7). 3) After compaction, re-read the tracking doc, identify the last completed task, and continue with the next unfinished [-] or [ ] task. 4) Follow .claude/rules/source-truth-migration.md rules. 5) Batch mode stop conditions are in .claude/skills/migrating-source-truth/reference/stop-conditions.md. 6) Build with: powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1"
+          }
+        ]
+      }
+    ]
   }
 }

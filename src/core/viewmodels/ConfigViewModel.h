@@ -159,6 +159,8 @@ public:
   Q_INVOKABLE QString scopeOverriddenKey(int index) const;
   /// 重置当前作用域中指定 key 的覆盖值
   Q_INVOKABLE bool resetScopeOverride(const QString &key);
+  /// 重置当前作用域中全部覆盖值（对齐上游 Tab::on_roll_back_value）
+  Q_INVOKABLE void resetAllScopeOverrides();
 
   /// 获取第 index 个被修改的选项 key（对齐上游 Tab::modified_options）
   Q_INVOKABLE QString globalModifiedKey(int index) const;

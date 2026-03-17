@@ -49,6 +49,7 @@ private:
   void uploadIfNeeded();
   void parsePreviewData(const QByteArray &data);
   void processInputEvents();
+  void initializeMarker();
 
   bool initialized_ = false;
   bool dirty_ = false;
@@ -71,6 +72,18 @@ private:
   bool showTravelMoves_ = true;
   /// 对齐上游 GCodeViewer show_bed
   bool showBed_ = true;
+
+  /// 3D Marker（对齐上游 GCodeViewer::Marker，使用 gouraud_light 风格渲染）
+  bool showMarker_ = true;
+  float markerX_ = 0.f, markerY_ = 0.f, markerZ_ = 0.f;
+  QOpenGLShaderProgram markerProg_;
+  QOpenGLVertexArrayObject markerVao_;
+  QOpenGLBuffer markerVbo_{QOpenGLBuffer::VertexBuffer};
+  int markerVertexCount_ = 0;
+  int markerU_mvp_ = -1;
+  int markerU_model_ = -1;
+  int markerU_color_ = -1;
+  bool markerInitialized_ = false;
 
   // Camera controls
   CameraController camera_;

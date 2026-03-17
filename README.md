@@ -6,15 +6,19 @@ Qt6 重写版 3D 打印桌面端原型工程（QML 主路线）。
 
 本仓库按“上游源码真值迁移”方式推进。日常继续开发时，优先使用固定入口：
 
-`/continue-source-truth-migration`
+`/migrating-source-truth`
 
 如果使用 Claude Code，本项目也提供同名入口：
 
-`/continue-source-truth-migration`
+`/migrating-source-truth`
+
+追加 `all` 参数可启用连续批量模式：
+
+`/migrating-source-truth all`
 
 如果只想先做只读差距分析，不改代码，可使用：
 
-`/analyze-source-truth-gap <task-or-feature>`
+`/analyzing-source-truth-gap <task-or-feature>`
 
 该命令会基于当前仓库状态执行以下流程：
 
@@ -27,12 +31,10 @@ Qt6 重写版 3D 打印桌面端原型工程（QML 主路线）。
 相关配置位置：
 
 - 工作区规则：`.github/copilot-instructions.md`
-- 专项迁移 agent：`.github/agents/source-truth-migration.agent.md`
-- 可重复执行的 prompt：`.github/prompts/continue-source-truth-migration.prompt.md`
 - Claude Code 项目规则：`CLAUDE.md`
 - Claude Code 路径规则：`.claude/rules/source-truth-migration.md`
-- Claude Code 项目 skill：`.claude/skills/continue-source-truth-migration/SKILL.md`
-- Claude Code 只读分析 skill：`.claude/skills/analyze-source-truth-gap/SKILL.md`
+- Claude Code 迁移 skill：`.claude/skills/migrating-source-truth/SKILL.md`
+- Claude Code 只读分析 skill：`.claude/skills/analyzing-source-truth-gap/SKILL.md`
 
 任务状态规则见 `docs/源码对照迁移任务追踪.md`：
 

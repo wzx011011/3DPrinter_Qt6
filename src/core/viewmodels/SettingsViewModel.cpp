@@ -1,5 +1,9 @@
 #include "SettingsViewModel.h"
 #include <QCoreApplication>
+#include <QSettings>
+
+// Helper: save a setting value and sync
+#define SAVE_SETTING(key, val) do { QSettings s; s.setValue(key, val); } while(0)
 
 static QStringList categoryTitles()
 {
@@ -25,6 +29,38 @@ SettingsViewModel::SettingsViewModel(QObject *parent) : QObject(parent)
 {
   m_presetNames = {tr("0.20mm 标准"), tr("0.20mm 精细"), tr("0.30mm 快速"), tr("0.15mm 超精细")};
   m_currentPreset = m_presetNames.first();
+  loadFromSettings();
+}
+
+void SettingsViewModel::loadFromSettings()
+{
+  QSettings s;
+  m_themeIndex       = s.value("themeIndex", m_themeIndex).toInt();
+  m_fontSize         = s.value("fontSize", m_fontSize).toInt();
+  m_uiScaleIndex     = s.value("uiScaleIndex", m_uiScaleIndex).toInt();
+  m_languageIndex    = s.value("languageIndex", m_languageIndex).toInt();
+  m_showHomePage     = s.value("showHomePage", m_showHomePage).toBool();
+  m_defaultPage      = s.value("defaultPage", m_defaultPage).toInt();
+  m_units            = s.value("units", m_units).toInt();
+  m_userRole         = s.value("userRole", m_userRole).toInt();
+  m_autoSave         = s.value("autoSave", m_autoSave).toBool();
+  m_autoSaveInterval = s.value("autoSaveInterval", m_autoSaveInterval).toInt();
+  m_checkUpdates     = s.value("checkUpdates", m_checkUpdates).toBool();
+  m_reducedMotion    = s.value("reducedMotion", m_reducedMotion).toBool();
+  m_region           = s.value("region", m_region).toInt();
+  m_compactMode      = s.value("compactMode", m_compactMode).toBool();
+  m_autoBackup       = s.value("autoBackup", m_autoBackup).toBool();
+  m_undoLimit        = s.value("undoLimit", m_undoLimit).toInt();
+  m_defaultNozzleIndex = s.value("defaultNozzleIndex", m_defaultNozzleIndex).toInt();
+  m_defaultBedShape  = s.value("defaultBedShape", m_defaultBedShape).toInt();
+  m_autoUpload       = s.value("autoUpload", m_autoUpload).toBool();
+  m_updateChannel    = s.value("updateChannel", m_updateChannel).toInt();
+  m_developerMode    = s.value("developerMode", m_developerMode).toBool();
+  m_showDebugOverlay = s.value("showDebugOverlay", m_showDebugOverlay).toBool();
+  m_logLevel         = s.value("logLevel", m_logLevel).toInt();
+  m_verboseGcode     = s.value("verboseGcode", m_verboseGcode).toBool();
+  m_glDebugContext   = s.value("glDebugContext", m_glDebugContext).toBool();
+  m_maxLogSizeMb     = s.value("maxLogSizeMb", m_maxLogSizeMb).toInt();
 }
 
 QString SettingsViewModel::prefCategoryTitle() const
@@ -57,6 +93,7 @@ void SettingsViewModel::setFontSize(int size)
   if (m_fontSize != size)
   {
     m_fontSize = size;
+    SAVE_SETTING("fontSize", size);
     emit fontSizeChanged();
   }
 }
@@ -66,6 +103,7 @@ void SettingsViewModel::setThemeIndex(int idx)
   if (m_themeIndex != idx)
   {
     m_themeIndex = idx;
+    SAVE_SETTING("themeIndex", idx);
     emit themeIndexChanged();
   }
 }
@@ -75,6 +113,7 @@ void SettingsViewModel::setUiScaleIndex(int idx)
   if (m_uiScaleIndex != idx)
   {
     m_uiScaleIndex = idx;
+    SAVE_SETTING("uiScaleIndex", idx);
     emit uiScaleIndexChanged();
   }
 }
@@ -84,6 +123,7 @@ void SettingsViewModel::setLanguageIndex(int idx)
   if (m_languageIndex != idx)
   {
     m_languageIndex = idx;
+    SAVE_SETTING("languageIndex", idx);
     emit languageIndexChanged();
   }
 }
@@ -108,6 +148,8 @@ void SettingsViewModel::setLayerHeight(double h)
 
 void SettingsViewModel::resetPreferences()
 {
+  QSettings s;
+  s.clear();
   setThemeIndex(0);
   setFontSize(12);
   setUiScaleIndex(0);
@@ -134,110 +176,110 @@ void SettingsViewModel::resetPreferences()
 
 void SettingsViewModel::setShowHomePage(bool v)
 {
-  if (m_showHomePage != v) { m_showHomePage = v; emit settingsChanged(); }
+  if (m_showHomePage != v) { m_showHomePage = v; SAVE_SETTING("showHomePage", v); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setDefaultPage(int page)
 {
-  if (m_defaultPage != page) { m_defaultPage = page; emit settingsChanged(); }
+  if (m_defaultPage != page) { m_defaultPage = page; SAVE_SETTING("defaultPage", page); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setUnits(int u)
 {
-  if (m_units != u) { m_units = u; emit settingsChanged(); }
+  if (m_units != u) { m_units = u; SAVE_SETTING("units", u); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setUserRole(int role)
 {
-  if (m_userRole != role) { m_userRole = role; emit settingsChanged(); }
+  if (m_userRole != role) { m_userRole = role; SAVE_SETTING("userRole", role); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setAutoSave(bool v)
 {
-  if (m_autoSave != v) { m_autoSave = v; emit settingsChanged(); }
+  if (m_autoSave != v) { m_autoSave = v; SAVE_SETTING("autoSave", v); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setAutoSaveInterval(int minutes)
 {
-  if (m_autoSaveInterval != minutes) { m_autoSaveInterval = minutes; emit settingsChanged(); }
+  if (m_autoSaveInterval != minutes) { m_autoSaveInterval = minutes; SAVE_SETTING("autoSaveInterval", minutes); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setCheckUpdates(bool v)
 {
-  if (m_checkUpdates != v) { m_checkUpdates = v; emit settingsChanged(); }
+  if (m_checkUpdates != v) { m_checkUpdates = v; SAVE_SETTING("checkUpdates", v); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setReducedMotion(bool v)
 {
-  if (m_reducedMotion != v) { m_reducedMotion = v; emit settingsChanged(); }
+  if (m_reducedMotion != v) { m_reducedMotion = v; SAVE_SETTING("reducedMotion", v); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setRegion(int r)
 {
-  if (m_region != r) { m_region = r; emit settingsChanged(); }
+  if (m_region != r) { m_region = r; SAVE_SETTING("region", r); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setCompactMode(bool v)
 {
-  if (m_compactMode != v) { m_compactMode = v; emit settingsChanged(); }
+  if (m_compactMode != v) { m_compactMode = v; SAVE_SETTING("compactMode", v); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setAutoBackup(bool v)
 {
-  if (m_autoBackup != v) { m_autoBackup = v; emit settingsChanged(); }
+  if (m_autoBackup != v) { m_autoBackup = v; SAVE_SETTING("autoBackup", v); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setUndoLimit(int limit)
 {
-  if (m_undoLimit != limit) { m_undoLimit = limit; emit settingsChanged(); }
+  if (m_undoLimit != limit) { m_undoLimit = limit; SAVE_SETTING("undoLimit", limit); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setDefaultNozzleIndex(int idx)
 {
-  if (m_defaultNozzleIndex != idx) { m_defaultNozzleIndex = idx; emit settingsChanged(); }
+  if (m_defaultNozzleIndex != idx) { m_defaultNozzleIndex = idx; SAVE_SETTING("defaultNozzleIndex", idx); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setDefaultBedShape(int shape)
 {
-  if (m_defaultBedShape != shape) { m_defaultBedShape = shape; emit settingsChanged(); }
+  if (m_defaultBedShape != shape) { m_defaultBedShape = shape; SAVE_SETTING("defaultBedShape", shape); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setAutoUpload(bool v)
 {
-  if (m_autoUpload != v) { m_autoUpload = v; emit settingsChanged(); }
+  if (m_autoUpload != v) { m_autoUpload = v; SAVE_SETTING("autoUpload", v); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setUpdateChannel(int channel)
 {
-  if (m_updateChannel != channel) { m_updateChannel = channel; emit settingsChanged(); }
+  if (m_updateChannel != channel) { m_updateChannel = channel; SAVE_SETTING("updateChannel", channel); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setDeveloperMode(bool v)
 {
-  if (m_developerMode != v) { m_developerMode = v; emit settingsChanged(); }
+  if (m_developerMode != v) { m_developerMode = v; SAVE_SETTING("developerMode", v); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setShowDebugOverlay(bool v)
 {
-  if (m_showDebugOverlay != v) { m_showDebugOverlay = v; emit settingsChanged(); }
+  if (m_showDebugOverlay != v) { m_showDebugOverlay = v; SAVE_SETTING("showDebugOverlay", v); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setLogLevel(int v)
 {
-  if (m_logLevel != v) { m_logLevel = v; emit settingsChanged(); }
+  if (m_logLevel != v) { m_logLevel = v; SAVE_SETTING("logLevel", v); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setVerboseGcode(bool v)
 {
-  if (m_verboseGcode != v) { m_verboseGcode = v; emit settingsChanged(); }
+  if (m_verboseGcode != v) { m_verboseGcode = v; SAVE_SETTING("verboseGcode", v); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setGlDebugContext(bool v)
 {
-  if (m_glDebugContext != v) { m_glDebugContext = v; emit settingsChanged(); }
+  if (m_glDebugContext != v) { m_glDebugContext = v; SAVE_SETTING("glDebugContext", v); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setMaxLogSizeMb(int v)
 {
-  if (m_maxLogSizeMb != v) { m_maxLogSizeMb = v; emit settingsChanged(); }
+  if (m_maxLogSizeMb != v) { m_maxLogSizeMb = v; SAVE_SETTING("maxLogSizeMb", v); emit settingsChanged(); }
 }

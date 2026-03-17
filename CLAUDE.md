@@ -7,8 +7,8 @@ See @.claude/rules/build-rules.md for the canonical build rules.
 
 ## Project Skills
 
-- Use `/continue-source-truth-migration` to continue the next recorded migration task under the project rules.
-- Use `/analyze-source-truth-gap` to perform a read-only upstream-to-Qt gap analysis before implementation.
+- Use `/migrating-source-truth` to continue the next recorded migration task under the project rules. Append `all` for continuous batch mode.
+- Use `/analyzing-source-truth-gap <task-or-feature>` to perform a read-only upstream-to-Qt gap analysis before implementation.
 
 ## Build
 

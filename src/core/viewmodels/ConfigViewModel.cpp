@@ -1106,6 +1106,18 @@ bool ConfigViewModel::resetScopeOverride(const QString &key)
   return ok;
 }
 
+void ConfigViewModel::resetAllScopeOverrides()
+{
+  if (!projectService_) return;
+  int count = scopeOverrideCount();
+  // Collect keys first since resetting changes the count
+  QStringList keys;
+  for (int i = 0; i < count; ++i)
+    keys.append(scopeOverriddenKey(i));
+  for (const auto &key : keys)
+    resetScopeOverride(key);
+}
+
 // ── Global modified options (对齐上游 Tab::modified_options) ──────────────────
 
 int ConfigViewModel::globalModifiedCount() const

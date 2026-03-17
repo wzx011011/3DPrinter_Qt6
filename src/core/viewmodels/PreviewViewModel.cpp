@@ -378,6 +378,7 @@ void PreviewViewModel::setShowTravelMoves(bool enabled)
   if (showTravelMoves_ == enabled)
     return;
   showTravelMoves_ = enabled;
+  recolorAndPackSegments();
   emit stateChanged();
 }
 
@@ -1044,9 +1045,9 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
     const QString minStr = (minV <= FLT_MAX) ? QString::number(minV, 'f', 1) : QStringLiteral("--");
     const QString maxStr = (maxV >= -FLT_MAX) ? QString::number(maxV, 'f', 1) : QStringLiteral("--");
 
-    // Upstream Range_Colors endpoints: #0d3264 (bluish) → #c22525 (reddish)
-    static const QColor kGradStart(13, 50, 100);
-    static const QColor kGradEnd(194, 37, 37);
+    // Upstream Range_Colors endpoints: #0b2c7a (bluish) → #942616 (reddish)
+    static const QColor kGradStart(11, 44, 122);
+    static const QColor kGradEnd(148, 38, 22);
 
     m_legendGradMinLabel = minStr;
     m_legendGradMaxLabel = maxStr;

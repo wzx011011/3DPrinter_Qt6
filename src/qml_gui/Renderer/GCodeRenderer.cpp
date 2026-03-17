@@ -29,6 +29,40 @@ namespace
       "out vec4 fragColor;\n"
       "void main(){ fragColor = vec4(vColor, 1.0); }\n";
 
+  // 3D Marker shader（对齐上游 gouraud_light）
+  const char *kMarkerVert =
+      "#version 330 core\n"
+      "layout(location = 0) in vec3 aPos;\n"
+      "layout(location = 1) in vec3 aNormal;\n"
+      "uniform mat4 uMVP;\n"
+      "uniform mat4 uModel;\n"
+      "out vec3 vNormal;\n"
+      "out vec3 vWorldPos;\n"
+      "void main(){\n"
+      "  vec4 wp = uModel * vec4(aPos, 1.0);\n"
+      "  vWorldPos = wp.xyz;\n"
+      "  vNormal = mat3(uModel) * aNormal;\n"
+      "  gl_Position = uMVP * wp;\n"
+      "}\n";
+
+  const char *kMarkerFrag =
+      "#version 330 core\n"
+      "in vec3 vNormal;\n"
+      "in vec3 vWorldPos;\n"
+      "out vec4 fragColor;\n"
+      "uniform vec4 uColor;\n"
+      "void main(){\n"
+      "  vec3 n = normalize(vNormal);\n"
+      "  // Two directional lights (对齐上游 gouraud_light: top + front)\n"
+      "  vec3 lightDir1 = normalize(vec3(0.0, 1.0, 0.3));\n"
+      "  vec3 lightDir2 = normalize(vec3(0.0, 0.0, 1.0));\n"
+      "  float diff1 = max(dot(n, lightDir1), 0.0);\n"
+      "  float diff2 = max(dot(n, lightDir2), 0.0);\n"
+      "  float ambient = 0.3;\n"
+      "  float light = ambient + diff1 * 0.5 + diff2 * 0.3;\n"
+      "  fragColor = vec4(uColor.rgb * light, uColor.a);\n"
+      "}\n";
+
   struct PackedSegment
   {
     float x1;
@@ -58,6 +92,8 @@ GCodeRenderer::~GCodeRenderer()
 {
   vao_.destroy();
   vbo_.destroy();
+  markerVao_.destroy();
+  markerVbo_.destroy();
 }
 
 QOpenGLFramebufferObject *GCodeRenderer::createFramebufferObject(const QSize &size)
@@ -86,6 +122,10 @@ void GCodeRenderer::synchronize(QQuickFramebufferObject *item)
   moveEnd_ = vp->moveEnd();
   showTravelMoves_ = vp->showTravelMoves();
   showBed_ = vp->showBed();
+  showMarker_ = vp->showMarker();
+  markerX_ = vp->markerX();
+  markerY_ = vp->markerY();
+  markerZ_ = vp->markerZ();
 
   // Collect input events
   auto events = vp->takeEvents();
@@ -267,6 +307,120 @@ void GCodeRenderer::render()
 
   vao_.release();
   prog_.release();
+
+  // --- 3D Marker（对齐上游 GCodeViewer::Marker，gouraud_light 风格 3D 箭头）---
+  if (showMarker_ && markerX_ != 0.f && markerY_ != 0.f)
+  {
+    initializeMarker();
+
+    QMatrix4x4 model;
+    // G-code → GL 坐标转换（对齐 parsePreviewData 中的 y↔z 互换）
+    model.translate(markerX_, markerZ_, markerY_);
+    // Scale arrow to reasonable size in mm
+    float scale = 1.5f;
+    model.scale(scale, scale, scale);
+
+    markerProg_.bind();
+    markerProg_.setUniformValue(markerU_mvp_, mvp);
+    markerProg_.setUniformValue(markerU_model_, model);
+    // Semi-transparent white (对齐上游 m_model.set_color({ 1.0f, 1.0f, 1.0f, 0.5f }))
+    markerProg_.setUniformValue(markerU_color_, QVector4D(1.0f, 1.0f, 1.0f, 0.75f));
+
+    f_->glEnable(GL_BLEND);
+    f_->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    f_->glDepthMask(GL_FALSE);
+
+    markerVao_.bind();
+    f_->glDrawArrays(GL_TRIANGLES, 0, markerVertexCount_);
+    markerVao_.release();
+
+    f_->glDepthMask(GL_TRUE);
+    f_->glDisable(GL_BLEND);
+    markerProg_.release();
+  }
+}
+
+void GCodeRenderer::initializeMarker()
+{
+  if (markerInitialized_)
+    return;
+
+  markerProg_.addShaderFromSourceCode(QOpenGLShader::Vertex, kMarkerVert);
+  markerProg_.addShaderFromSourceCode(QOpenGLShader::Fragment, kMarkerFrag);
+  if (!markerProg_.link())
+    qWarning("[GCode] marker shader link failed: %s", qPrintable(markerProg_.log()));
+  markerU_mvp_ = markerProg_.uniformLocation("uMVP");
+  markerU_model_ = markerProg_.uniformLocation("uModel");
+  markerU_color_ = markerProg_.uniformLocation("uColor");
+
+  // Generate arrow geometry (对齐上游 stilized_arrow)
+  // Cone + cylinder: simple stylized arrow pointing up (Z axis)
+  struct Vert { float x, y, z, nx, ny, nz; };
+  std::vector<Vert> verts;
+
+  const float coneRadius = 1.0f;
+  const float coneHeight = 2.5f;
+  const float cylRadius = 0.35f;
+  const float cylHeight = 2.0f;
+  const int segments = 16;
+
+  auto pushTri = [&](const Vert &a, const Vert &b, const Vert &c) {
+    verts.push_back(a); verts.push_back(b); verts.push_back(c);
+  };
+
+  // Cone (top part)
+  for (int i = 0; i < segments; ++i) {
+    float a1 = 2.0f * float(M_PI) * float(i) / segments;
+    float a2 = 2.0f * float(M_PI) * float(i + 1) / segments;
+    float x1 = coneRadius * std::cos(a1), z1 = coneRadius * std::sin(a1);
+    float x2 = coneRadius * std::cos(a2), z2 = coneRadius * std::sin(a2);
+    // Normal for cone surface (angled outward)
+    float ny = coneRadius / coneHeight;
+    float nl = std::sqrt(1.0f + ny * ny);
+    // Base of cone is at cylHeight
+    Vert tip = {0.f, cylHeight + coneHeight, 0.f, 0.f, 1.f, 0.f};
+    Vert b1 = {x1, cylHeight, z1, x1/nl, ny/nl, z1/nl};
+    Vert b2 = {x2, cylHeight, z2, x2/nl, ny/nl, z2/nl};
+    pushTri(tip, b1, b2);
+  }
+
+  // Cylinder (bottom part)
+  for (int i = 0; i < segments; ++i) {
+    float a1 = 2.0f * float(M_PI) * float(i) / segments;
+    float a2 = 2.0f * float(M_PI) * float(i + 1) / segments;
+    float x1 = cylRadius * std::cos(a1), z1 = cylRadius * std::sin(a1);
+    float x2 = cylRadius * std::cos(a2), z2 = cylRadius * std::sin(a2);
+    // Side normals
+    float nl = 1.0f / cylRadius;
+    Vert a1t = {x1, cylHeight, z1, x1*nl, 0.f, z1*nl};
+    Vert a2t = {x2, cylHeight, z2, x2*nl, 0.f, z2*nl};
+    Vert a1b = {x1, 0.f, z1, x1*nl, 0.f, z1*nl};
+    Vert a2b = {x2, 0.f, z2, x2*nl, 0.f, z2*nl};
+    pushTri(a1t, a1b, a2b);
+    pushTri(a1t, a2b, a2t);
+    // Bottom cap
+    Vert c1 = {x1, 0.f, z1, 0.f, -1.f, 0.f};
+    Vert c2 = {x2, 0.f, z2, 0.f, -1.f, 0.f};
+    Vert cc = {0.f, 0.f, 0.f, 0.f, -1.f, 0.f};
+    pushTri(cc, c1, c2);
+  }
+
+  markerVertexCount_ = int(verts.size());
+
+  markerVao_.create();
+  markerVao_.bind();
+  markerVbo_.create();
+  markerVbo_.bind();
+  markerVbo_.setUsagePattern(QOpenGLBuffer::StaticDraw);
+  markerVbo_.allocate(verts.data(), int(verts.size() * sizeof(Vert)));
+  f_->glEnableVertexAttribArray(0);
+  f_->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), reinterpret_cast<void *>(0));
+  f_->glEnableVertexAttribArray(1);
+  f_->glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), reinterpret_cast<void *>(3 * sizeof(float)));
+  markerVao_.release();
+  markerVbo_.release();
+
+  markerInitialized_ = true;
 }
 
 #ifdef HAS_LIBSLIC3R
