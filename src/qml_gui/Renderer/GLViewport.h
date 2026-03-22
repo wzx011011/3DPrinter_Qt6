@@ -28,6 +28,13 @@ class GLViewport : public QQuickFramebufferObject
   Q_PROPERTY(bool showTravelMoves READ showTravelMoves WRITE setShowTravelMoves)
   /// 对齐上游 GCodeViewer show_bed
   Q_PROPERTY(bool showBed READ showBed WRITE setShowBed)
+  /// Wipe tower visualization (P2.8.3)
+  Q_PROPERTY(bool showWipeTower READ showWipeTower WRITE setShowWipeTower)
+  Q_PROPERTY(float wipeTowerWidth READ wipeTowerWidth WRITE setWipeTowerWidth)
+  Q_PROPERTY(float wipeTowerDepth READ wipeTowerDepth WRITE setWipeTowerDepth)
+  Q_PROPERTY(float wipeTowerHeight READ wipeTowerHeight WRITE setWipeTowerHeight)
+  Q_PROPERTY(float wipeTowerX READ wipeTowerX WRITE setWipeTowerX)
+  Q_PROPERTY(float wipeTowerZ READ wipeTowerZ WRITE setWipeTowerZ)
   /// 对齐上游 GCodeViewer::Marker
   Q_PROPERTY(float markerX READ markerX WRITE setMarkerX)
   Q_PROPERTY(float markerY READ markerY WRITE setMarkerY)
@@ -48,7 +55,17 @@ class GLViewport : public QQuickFramebufferObject
     GizmoCut = 5,       ///< 对齐上游 GLGizmoCut — 切割对象
     GizmoSupportPaint = 6,  ///< 对齐上游 GLGizmoFdmSupports — 支撑绘制
     GizmoSeamPaint = 7,    ///< 对齐上游 GLGizmoSeam — 缝线绘制
-    GizmoHollow = 8        ///< 对齐上游 GLGizmoHollow — SLA 空洞标记
+    GizmoHollow = 8,       ///< 对齐上游 GLGizmoHollow — SLA 空洞标记
+    GizmoSimplify = 9,     ///< 对齐上游 GLGizmoSimplify — 网格简化
+    GizmoMmuSegmentation = 10,  ///< 对齐上游 GLGizmoMmuSegmentation — MMU 多耗材分段
+    GizmoDrill = 11,            ///< 对齐上游 GLGizmoDrill — 钻孔
+    GizmoEmboss = 12,           ///< 对齐上游 GLGizmoEmboss — 浮雕文字
+    GizmoMeshBoolean = 13,      ///< 对齐上游 GLGizmoMeshBoolean — 布尔运算
+    GizmoAdvancedCut = 14,      ///< 对齐上游 GLGizmoAdvancedCut — 高级切割
+    GizmoFaceDetector = 15,     ///< 对齐上游 GLGizmoFaceDetector — 平面检测
+    GizmoText = 16,             ///< 对齐上游 GLGizmoText — 文字
+    GizmoSVG = 17,              ///< 对齐上游 GLGizmoSVG — SVG 导入
+    GizmoSlaSupports = 18       ///< 对齐上游 GLGizmoSlaSupports — SLA 支撑
   };
   Q_ENUM(GizmoMode)
 
@@ -98,6 +115,12 @@ public:
   int moveEnd() const { return m_moveEnd; }
   bool showTravelMoves() const { return m_showTravelMoves; }
   bool showBed() const { return m_showBed; }
+  bool showWipeTower() const { return m_showWipeTower; }
+  float wipeTowerWidth() const { return m_wipeTowerWidth; }
+  float wipeTowerDepth() const { return m_wipeTowerDepth; }
+  float wipeTowerHeight() const { return m_wipeTowerHeight; }
+  float wipeTowerX() const { return m_wipeTowerX; }
+  float wipeTowerZ() const { return m_wipeTowerZ; }
   float markerX() const { return m_markerX; }
   float markerY() const { return m_markerY; }
   float markerZ() const { return m_markerZ; }
@@ -107,6 +130,12 @@ public:
   void setMoveEnd(int v);
   void setShowTravelMoves(bool on);
   void setShowBed(bool on);
+  void setShowWipeTower(bool on);
+  void setWipeTowerWidth(float v);
+  void setWipeTowerDepth(float v);
+  void setWipeTowerHeight(float v);
+  void setWipeTowerX(float v);
+  void setWipeTowerZ(float v);
   void setMarkerX(float v) { m_markerX = v; }
   void setMarkerY(float v) { m_markerY = v; }
   void setMarkerZ(float v) { m_markerZ = v; }
@@ -198,6 +227,12 @@ private:
   int m_moveEnd = 0;
   bool m_showTravelMoves = true;  ///< 对齐上游 GCodeViewer m_travel_visibility
   bool m_showBed = true;          ///< 对齐上游 GCodeViewer show_bed
+  bool m_showWipeTower = false;   ///< Wipe tower visibility (P2.8.3)
+  float m_wipeTowerWidth = 10.f;  ///< Wipe tower width in mm (default 10)
+  float m_wipeTowerDepth = 10.f;  ///< Wipe tower depth in mm (default 10)
+  float m_wipeTowerHeight = 50.f; ///< Wipe tower height in mm (default 50)
+  float m_wipeTowerX = 100.f;     ///< Wipe tower X position on bed
+  float m_wipeTowerZ = 25.f;      ///< Wipe tower Z position on bed
   float m_markerX = 0.f;
   float m_markerY = 0.f;
   float m_markerZ = 0.f;

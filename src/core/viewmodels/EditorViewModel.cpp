@@ -2,14 +2,18 @@
 
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceService.h"
+#include "core/services/UndoRedoManager.h"
+#include "core/services/UndoCommands.h"
 #include <QFileInfo>
 #include <QUrl>
 #include <QVector4D>
+#include <QSettings>
 #include <algorithm>
 #include <QSet>
 #include <QTimer>
 #include <cstring> // memcpy
 #include <cmath>
+#include <QDebug>
 
 void EditorViewModel::refreshMeshCacheAndFitHint()
 {
@@ -65,68 +69,182 @@ bool EditorViewModel::hasObjectManipSelection() const { return selectedObjectCou
 void EditorViewModel::setObjectPosX(float v)
 {
   const int idx = primarySelectedSourceIndex(this);
-  if (idx >= 0)
-    projectService_->setObjectPosition(idx, v, objectPosY(), objectPosZ());
+  if (idx < 0 || !projectService_)
+    return;
+  const QVector3D oldPos = projectService_->objectPosition(idx);
+  if (qFuzzyCompare(oldPos.x(), v))
+    return;
+  projectService_->setObjectPosition(idx, v, oldPos.y(), oldPos.z());
+  if (m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, oldPos, projectService_->objectRotation(idx),
+                                     projectService_->objectScale(idx), projectService_);
+    cmd->setNewTransform(QVector3D(v, oldPos.y(), oldPos.z()),
+                         projectService_->objectRotation(idx),
+                         projectService_->objectScale(idx));
+    m_undoManager->push(cmd);
+  }
 }
 void EditorViewModel::setObjectPosY(float v)
 {
   const int idx = primarySelectedSourceIndex(this);
-  if (idx >= 0)
-    projectService_->setObjectPosition(idx, objectPosX(), v, objectPosZ());
+  if (idx < 0 || !projectService_)
+    return;
+  const QVector3D oldPos = projectService_->objectPosition(idx);
+  if (qFuzzyCompare(oldPos.y(), v))
+    return;
+  projectService_->setObjectPosition(idx, oldPos.x(), v, oldPos.z());
+  if (m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, oldPos, projectService_->objectRotation(idx),
+                                     projectService_->objectScale(idx), projectService_);
+    cmd->setNewTransform(QVector3D(oldPos.x(), v, oldPos.z()),
+                         projectService_->objectRotation(idx),
+                         projectService_->objectScale(idx));
+    m_undoManager->push(cmd);
+  }
 }
 void EditorViewModel::setObjectPosZ(float v)
 {
   const int idx = primarySelectedSourceIndex(this);
-  if (idx >= 0)
-    projectService_->setObjectPosition(idx, objectPosX(), objectPosY(), v);
+  if (idx < 0 || !projectService_)
+    return;
+  const QVector3D oldPos = projectService_->objectPosition(idx);
+  if (qFuzzyCompare(oldPos.z(), v))
+    return;
+  projectService_->setObjectPosition(idx, oldPos.x(), oldPos.y(), v);
+  if (m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, oldPos, projectService_->objectRotation(idx),
+                                     projectService_->objectScale(idx), projectService_);
+    cmd->setNewTransform(QVector3D(oldPos.x(), oldPos.y(), v),
+                         projectService_->objectRotation(idx),
+                         projectService_->objectScale(idx));
+    m_undoManager->push(cmd);
+  }
 }
 void EditorViewModel::setObjectRotX(float v)
 {
   const int idx = primarySelectedSourceIndex(this);
-  if (idx >= 0)
-    projectService_->setObjectRotation(idx, v, objectRotY(), objectRotZ());
+  if (idx < 0 || !projectService_)
+    return;
+  const QVector3D oldRot = projectService_->objectRotation(idx);
+  if (qFuzzyCompare(oldRot.x(), v))
+    return;
+  projectService_->setObjectRotation(idx, v, oldRot.y(), oldRot.z());
+  if (m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, projectService_->objectPosition(idx),
+                                     oldRot, projectService_->objectScale(idx), projectService_);
+    cmd->setNewTransform(projectService_->objectPosition(idx),
+                         QVector3D(v, oldRot.y(), oldRot.z()),
+                         projectService_->objectScale(idx));
+    m_undoManager->push(cmd);
+  }
 }
 void EditorViewModel::setObjectRotY(float v)
 {
   const int idx = primarySelectedSourceIndex(this);
-  if (idx >= 0)
-    projectService_->setObjectRotation(idx, objectRotX(), v, objectRotZ());
+  if (idx < 0 || !projectService_)
+    return;
+  const QVector3D oldRot = projectService_->objectRotation(idx);
+  if (qFuzzyCompare(oldRot.y(), v))
+    return;
+  projectService_->setObjectRotation(idx, oldRot.x(), v, oldRot.z());
+  if (m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, projectService_->objectPosition(idx),
+                                     oldRot, projectService_->objectScale(idx), projectService_);
+    cmd->setNewTransform(projectService_->objectPosition(idx),
+                         QVector3D(oldRot.x(), v, oldRot.z()),
+                         projectService_->objectScale(idx));
+    m_undoManager->push(cmd);
+  }
 }
 void EditorViewModel::setObjectRotZ(float v)
 {
   const int idx = primarySelectedSourceIndex(this);
-  if (idx >= 0)
-    projectService_->setObjectRotation(idx, objectRotX(), objectRotY(), v);
+  if (idx < 0 || !projectService_)
+    return;
+  const QVector3D oldRot = projectService_->objectRotation(idx);
+  if (qFuzzyCompare(oldRot.z(), v))
+    return;
+  projectService_->setObjectRotation(idx, oldRot.x(), oldRot.y(), v);
+  if (m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, projectService_->objectPosition(idx),
+                                     oldRot, projectService_->objectScale(idx), projectService_);
+    cmd->setNewTransform(projectService_->objectPosition(idx),
+                         QVector3D(oldRot.x(), oldRot.y(), v),
+                         projectService_->objectScale(idx));
+    m_undoManager->push(cmd);
+  }
 }
 void EditorViewModel::setObjectScaleX(float v)
 {
   const int idx = primarySelectedSourceIndex(this);
-  if (idx < 0)
+  if (idx < 0 || !projectService_)
+    return;
+  const QVector3D oldScale = projectService_->objectScale(idx);
+  if (qFuzzyCompare(oldScale.x(), v))
     return;
   if (m_uniformScale)
     projectService_->setObjectScaleUniform(idx, v);
   else
-    projectService_->setObjectScale(idx, v, objectScaleY(), objectScaleZ());
+    projectService_->setObjectScale(idx, v, oldScale.y(), oldScale.z());
+  if (m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, projectService_->objectPosition(idx),
+                                     projectService_->objectRotation(idx), oldScale, projectService_);
+    cmd->setNewTransform(projectService_->objectPosition(idx),
+                         projectService_->objectRotation(idx),
+                         m_uniformScale ? QVector3D(v, v, v) : QVector3D(v, oldScale.y(), oldScale.z()));
+    m_undoManager->push(cmd);
+  }
 }
 void EditorViewModel::setObjectScaleY(float v)
 {
   const int idx = primarySelectedSourceIndex(this);
-  if (idx < 0)
+  if (idx < 0 || !projectService_)
+    return;
+  const QVector3D oldScale = projectService_->objectScale(idx);
+  if (qFuzzyCompare(oldScale.y(), v))
     return;
   if (m_uniformScale)
     projectService_->setObjectScaleUniform(idx, v);
   else
-    projectService_->setObjectScale(idx, objectScaleX(), v, objectScaleZ());
+    projectService_->setObjectScale(idx, oldScale.x(), v, oldScale.z());
+  if (m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, projectService_->objectPosition(idx),
+                                     projectService_->objectRotation(idx), oldScale, projectService_);
+    cmd->setNewTransform(projectService_->objectPosition(idx),
+                         projectService_->objectRotation(idx),
+                         m_uniformScale ? QVector3D(v, v, v) : QVector3D(oldScale.x(), v, oldScale.z()));
+    m_undoManager->push(cmd);
+  }
 }
 void EditorViewModel::setObjectScaleZ(float v)
 {
   const int idx = primarySelectedSourceIndex(this);
-  if (idx < 0)
+  if (idx < 0 || !projectService_)
+    return;
+  const QVector3D oldScale = projectService_->objectScale(idx);
+  if (qFuzzyCompare(oldScale.z(), v))
     return;
   if (m_uniformScale)
     projectService_->setObjectScaleUniform(idx, v);
   else
-    projectService_->setObjectScale(idx, objectScaleX(), objectScaleY(), v);
+    projectService_->setObjectScale(idx, oldScale.x(), oldScale.y(), v);
+  if (m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, projectService_->objectPosition(idx),
+                                     projectService_->objectRotation(idx), oldScale, projectService_);
+    cmd->setNewTransform(projectService_->objectPosition(idx),
+                         projectService_->objectRotation(idx),
+                         m_uniformScale ? QVector3D(v, v, v) : QVector3D(oldScale.x(), oldScale.y(), v));
+    m_undoManager->push(cmd);
+  }
 }
 void EditorViewModel::setUniformScale(bool v)
 {
@@ -139,9 +257,21 @@ void EditorViewModel::resetObjectTransform()
   const int idx = primarySelectedSourceIndex(this);
   if (idx < 0 || !projectService_)
     return;
+
+  const QVector3D oldPos = projectService_->objectPosition(idx);
+  const QVector3D oldRot = projectService_->objectRotation(idx);
+  const QVector3D oldScale = projectService_->objectScale(idx);
+
   projectService_->setObjectPosition(idx, 0, 0, 0);
   projectService_->setObjectRotation(idx, 0, 0, 0);
   projectService_->setObjectScaleUniform(idx, 1);
+
+  if (m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, oldPos, oldRot, oldScale, projectService_);
+    cmd->setNewTransform(QVector3D(0, 0, 0), QVector3D(0, 0, 0), QVector3D(1, 1, 1));
+    m_undoManager->push(cmd);
+  }
 }
 
 void EditorViewModel::applyScaleFactor(float factor)
@@ -149,8 +279,18 @@ void EditorViewModel::applyScaleFactor(float factor)
   const int idx = primarySelectedSourceIndex(this);
   if (idx < 0 || !projectService_)
     return;
-  const QVector3D cur = projectService_->objectScale(idx);
-  projectService_->setObjectScale(idx, cur.x() * factor, cur.y() * factor, cur.z() * factor);
+  const QVector3D oldScale = projectService_->objectScale(idx);
+  const QVector3D newScale(oldScale.x() * factor, oldScale.y() * factor, oldScale.z() * factor);
+  projectService_->setObjectScale(idx, newScale.x(), newScale.y(), newScale.z());
+
+  if (m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, projectService_->objectPosition(idx),
+                                     projectService_->objectRotation(idx), oldScale, projectService_);
+    cmd->setNewTransform(projectService_->objectPosition(idx),
+                         projectService_->objectRotation(idx), newScale);
+    m_undoManager->push(cmd);
+  }
 }
 
 // --- Flatten / Cut (对齐上游 GLGizmoFlatten / GLGizmoCut) ---
@@ -482,6 +622,428 @@ void EditorViewModel::deleteSelectedHollowPoints()
   emit stateChanged();
 }
 
+// ── Simplify gizmo (对齐上游 GLGizmoSimplify) ──
+
+int EditorViewModel::simplifyWantedCount() const { return m_simplifyWantedCount; }
+void EditorViewModel::setSimplifyWantedCount(int count) { m_simplifyWantedCount = count; emit stateChanged(); }
+float EditorViewModel::simplifyMaxError() const { return m_simplifyMaxError; }
+void EditorViewModel::setSimplifyMaxError(float error) { m_simplifyMaxError = error; emit stateChanged(); }
+
+bool EditorViewModel::simplifySelected()
+{
+  if (!projectService_)
+    return false;
+  const int idx = selectedObjectIndex();
+  if (idx < 0)
+    return false;
+
+  // Capture undo snapshot before simplification
+  auto *cmd = new SimplifyCommand(idx, m_simplifyWantedCount, m_simplifyMaxError, projectService_, this);
+
+  bool ok = projectService_->simplifyObject(idx, m_simplifyWantedCount, m_simplifyMaxError);
+  if (ok)
+  {
+    if (m_undoManager)
+      m_undoManager->push(cmd);
+    refreshMeshCacheAndFitHint();
+    rebuildObjectEntriesFromService();
+    emit stateChanged();
+  }
+  else
+  {
+    delete cmd;
+  }
+  return ok;
+}
+
+int EditorViewModel::selectedObjectTriangleCount() const
+{
+  if (!projectService_)
+    return 0;
+  const int idx = selectedObjectIndex();
+  if (idx < 0)
+    return 0;
+#ifdef HAS_LIBSLIC3R
+  return projectService_->objectTriangleCount(idx);
+#else
+  return 0;
+#endif
+}
+
+// ── Object info (对齐上游 Plater::show_object_info) ──
+
+QString EditorViewModel::selectedObjectInfoText() const
+{
+  const int idx = selectedObjectIndex();
+  if (idx < 0 || !projectService_)
+    return {};
+
+  const QString name = objectName(idx);
+  const QVector4D dims = m_measureDimensions;
+
+  if (dims.x() <= 0)
+    return name;
+
+  // 对齐上游格式: "Object name" + "Size: X x Y x Z mm" + "Volume: V mm3" + "Triangles: N"
+  QString info = QStringLiteral("%1 | %2 x %3 x %4 mm")
+      .arg(name)
+      .arg(dims.x(), 0, 'f', 2)
+      .arg(dims.y(), 0, 'f', 2)
+      .arg(dims.z(), 0, 'f', 2);
+
+  const int triangles = selectedObjectTriangles();
+  if (triangles > 0)
+    info += QStringLiteral(" | %1 triangles").arg(triangles);
+
+#ifdef HAS_LIBSLIC3R
+  const float vol = projectService_->objectVolume(idx);
+  if (vol > 0.f)
+    info += QStringLiteral(" | %1 mm\u00B3").arg(QLocale().toString(vol, 'f', 1));
+#else
+  if (dims.w() > 0)
+    info += QStringLiteral(" | %1 mm\u00B3").arg(QLocale().toString(dims.w(), 'f', 1));
+#endif
+
+  return info;
+}
+
+int EditorViewModel::selectedObjectTriangles() const
+{
+  return selectedObjectTriangleCount();
+}
+
+int EditorViewModel::selectedObjectOpenEdges() const
+{
+#ifdef HAS_LIBSLIC3R
+  const int idx = selectedObjectIndex();
+  if (idx < 0 || !projectService_)
+    return 0;
+  return projectService_->objectOpenEdges(idx);
+#else
+  return 0;
+#endif
+}
+
+int EditorViewModel::selectedObjectRepairedErrors() const
+{
+#ifdef HAS_LIBSLIC3R
+  const int idx = selectedObjectIndex();
+  if (idx < 0 || !projectService_)
+    return 0;
+  return projectService_->objectRepairedErrors(idx);
+#else
+  return 0;
+#endif
+}
+
+bool EditorViewModel::selectedObjectIsManifold() const
+{
+  return selectedObjectOpenEdges() == 0;
+}
+
+// ── MMU segmentation gizmo (对齐上游 GLGizmoMmuSegmentation) ──
+
+int EditorViewModel::mmuSelectedExtruder() const { return m_mmuSelectedExtruder; }
+void EditorViewModel::setMmuSelectedExtruder(int idx) { m_mmuSelectedExtruder = idx; emit stateChanged(); }
+int EditorViewModel::mmuExtruderCount() const { return m_mmuExtruderCount; }
+
+bool EditorViewModel::clearMmuSegmentation()
+{
+  // TODO: Clear per-triangle MMU facet data when TriangleSelector is available
+  emit stateChanged();
+  return false;
+}
+
+// ── Drill gizmo (对齐上游 GLGizmoDrill) ──
+
+float EditorViewModel::drillRadius() const { return m_drillRadius; }
+void EditorViewModel::setDrillRadius(float r) { m_drillRadius = r; emit stateChanged(); }
+float EditorViewModel::drillDepth() const { return m_drillDepth; }
+void EditorViewModel::setDrillDepth(float d) { m_drillDepth = d; emit stateChanged(); }
+int EditorViewModel::drillShape() const { return m_drillShape; }
+void EditorViewModel::setDrillShape(int s) { m_drillShape = s; emit stateChanged(); }
+int EditorViewModel::drillDirection() const { return m_drillDirection; }
+void EditorViewModel::setDrillDirection(int d) { m_drillDirection = d; emit stateChanged(); }
+bool EditorViewModel::drillOneLayerOnly() const { return m_drillOneLayerOnly; }
+void EditorViewModel::setDrillOneLayerOnly(bool v) { m_drillOneLayerOnly = v; emit stateChanged(); }
+bool EditorViewModel::drillSelected()
+{
+  if (!projectService_)
+    return false;
+  const int idx = selectedObjectIndex();
+  if (idx < 0)
+    return false;
+
+  // Capture undo snapshot before drilling
+  auto *cmd = new DrillCommand(idx, m_drillRadius, m_drillDepth, m_drillShape, m_drillDirection, m_drillOneLayerOnly, projectService_, this);
+
+  // Delegate to real drillObject API (对齐上游 GLGizmoDrill → sla::hollow_mesh_and_drill)
+  bool ok = projectService_->drillObject(idx, m_drillRadius, m_drillDepth, m_drillShape, m_drillDirection, m_drillOneLayerOnly);
+  if (ok)
+  {
+    if (m_undoManager)
+      m_undoManager->push(cmd);
+    refreshMeshCacheAndFitHint();
+    rebuildObjectEntriesFromService();
+    emit stateChanged();
+  }
+  else
+  {
+    delete cmd;
+  }
+  return ok;
+}
+
+// ── Emboss gizmo (对齐上游 GLGizmoEmboss) ──
+
+QString EditorViewModel::embossText() const { return m_embossText; }
+void EditorViewModel::setEmbossText(const QString &t) { m_embossText = t; emit stateChanged(); }
+float EditorViewModel::embossHeight() const { return m_embossHeight; }
+void EditorViewModel::setEmbossHeight(float h) { m_embossHeight = h; emit stateChanged(); }
+float EditorViewModel::embossDepth() const { return m_embossDepth; }
+void EditorViewModel::setEmbossDepth(float d) { m_embossDepth = d; emit stateChanged(); }
+bool EditorViewModel::embossSelected()
+{
+  if (!projectService_)
+    return false;
+  const int idx = selectedObjectIndex();
+  if (idx < 0 || m_embossText.isEmpty())
+    return false;
+
+  // Capture undo command before adding emboss volume
+  auto *cmd = new AddVolumeCommand(idx, 2 /* emboss */, m_embossText, projectService_, this);
+
+  // Delegate to the real addTextVolume API (对齐上游 GLGizmoEmboss → Emboss::text2shapes)
+  bool ok = projectService_->addTextVolume(idx, m_embossText);
+  if (ok)
+  {
+    if (m_undoManager)
+      m_undoManager->push(cmd);
+    rebuildObjectEntriesFromService();
+    refreshMeshCacheAndFitHint();
+    emit stateChanged();
+  }
+  else
+  {
+    delete cmd;
+  }
+  return ok;
+}
+
+// ── MeshBoolean gizmo (对齐上游 GLGizmoMeshBoolean) ──
+
+int EditorViewModel::booleanOperation() const { return m_booleanOperation; }
+void EditorViewModel::setBooleanOperation(int op) { m_booleanOperation = op; emit stateChanged(); }
+bool EditorViewModel::booleanExecute()
+{
+  if (!projectService_)
+    return false;
+
+  // Need exactly 2 selected objects: primary = source (A), secondary = tool (B)
+  // (对齐上游: select source volume, then tool volume)
+  if (m_selectedSourceIndices.size() != 2)
+  {
+    statusText_ = QStringLiteral("需选中 2 个对象");
+    emit stateChanged();
+    return false;
+  }
+
+  // Primary selected = source, other = tool
+  int srcIndex = m_primarySelectedSourceIndex;
+  int toolIndex = -1;
+  for (int idx : m_selectedSourceIndices)
+  {
+    if (idx != srcIndex)
+    {
+      toolIndex = idx;
+      break;
+    }
+  }
+  if (srcIndex < 0 || toolIndex < 0)
+    return false;
+
+  // Capture undo snapshot before boolean operation
+  auto *cmd = new BooleanCommand(srcIndex, toolIndex, m_booleanOperation, projectService_, this);
+
+  // Delegate to real MeshBoolean API (对齐上游 Slic3r::MeshBoolean::cgal)
+  bool ok = projectService_->meshBoolean(srcIndex, toolIndex, m_booleanOperation);
+  if (ok)
+  {
+    if (m_undoManager)
+      m_undoManager->push(cmd);
+    // Source object was updated and tool was deleted
+    // Update srcIndex if toolIndex < srcIndex (tool removed before source, shifting source index down)
+    if (toolIndex < srcIndex)
+      --srcIndex;
+    m_selectedSourceIndices = {srcIndex};
+    m_primarySelectedSourceIndex = srcIndex;
+    rebuildObjectEntriesFromService();
+    refreshMeshCacheAndFitHint();
+    statusText_ = QStringLiteral("布尔运算完成");
+    emit stateChanged();
+  }
+  else
+  {
+    delete cmd;
+    statusText_ = QStringLiteral("布尔运算失败");
+    emit stateChanged();
+  }
+  return ok;
+}
+
+// ── AdvancedCut gizmo (对齐上游 GLGizmoAdvancedCut) ──
+
+int EditorViewModel::advCutAxis() const { return m_advCutAxis; }
+void EditorViewModel::setAdvCutAxis(int a) { m_advCutAxis = a; emit stateChanged(); }
+float EditorViewModel::advCutPosition() const { return m_advCutPosition; }
+void EditorViewModel::setAdvCutPosition(float p) { m_advCutPosition = p; emit stateChanged(); }
+bool EditorViewModel::advCutKeepBoth() const { return m_advCutKeepBoth; }
+void EditorViewModel::setAdvCutKeepBoth(bool v) { m_advCutKeepBoth = v; emit stateChanged(); }
+bool EditorViewModel::advCutConnectors() const { return m_advCutConnectors; }
+void EditorViewModel::setAdvCutConnectors(bool v) { m_advCutConnectors = v; emit stateChanged(); }
+bool EditorViewModel::advCutSelected()
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return false;
+
+  if (m_selectedSourceIndices.size() != 1)
+  {
+    statusText_ = tr("切割操作仅支持选中单个对象");
+    emit stateChanged();
+    return false;
+  }
+
+  const int srcIdx = *m_selectedSourceIndices.constBegin();
+  const int keepMode = m_advCutKeepBoth ? 0 : 1; // 0=all, 1=upper only
+
+  statusText_ = tr("正在执行切割...");
+  emit stateChanged();
+
+#ifdef HAS_LIBSLIC3R
+  int cutNewIdx = -1;
+
+  if (m_cutMode == 1)
+  {
+    // Tongue and Groove mode (对齐上游 CutMode::cutTongueAndGroove)
+    // Map connector parameters to groove struct
+    // groove.depth = connectorSize (mm), groove.width = connectorSize * 4 (upstream default ratio)
+    // groove.flaps_angle = PI/3 (upstream default), groove.angle = 0 (upstream default)
+    const float grooveDepth = m_connectorSize;                           // depth in mm
+    const float grooveWidth = m_connectorSize * 4.0f;                   // width = 4x depth (upstream default)
+    const float grooveFlapsAngle = float(M_PI) / 3.0f;                 // 60 degrees (upstream default)
+    const float grooveAngle = 0.0f;                                     // 0 degrees (upstream default)
+
+    cutNewIdx = projectService_->cutObjectWithGroove(
+        srcIdx, m_advCutAxis, m_advCutPosition, keepMode,
+        grooveDepth, grooveWidth, grooveFlapsAngle, grooveAngle);
+  }
+  else
+  {
+    // Planar cut mode (对齐上游 CutMode::cutPlanar)
+    cutNewIdx = projectService_->cutObject(srcIdx, m_advCutAxis, m_advCutPosition, keepMode);
+  }
+
+  if (cutNewIdx >= 0)
+  {
+    projectService_->syncTransformsFromModel();
+    m_selectedSourceIndices.clear();
+    if (keepMode == 0) // Keep both: select both parts
+    {
+      m_selectedSourceIndices.insert(srcIdx);
+      if (cutNewIdx != srcIdx)
+        m_selectedSourceIndices.insert(cutNewIdx);
+    }
+    else
+    {
+      m_selectedSourceIndices.insert(srcIdx);
+    }
+    statusText_ = tr("已切割对象");
+    rebuildObjectEntriesFromService();
+    refreshMeshCacheAndFitHint();
+    emit stateChanged();
+    return true;
+  }
+#endif
+
+  statusText_ = tr("切割失败");
+  emit stateChanged();
+  return false;
+}
+
+// ── FaceDetector gizmo (对齐上游 GLGizmoFaceDetector) ──
+
+float EditorViewModel::faceDetectorAngle() const { return m_faceDetectorAngle; }
+void EditorViewModel::setFaceDetectorAngle(float a) { m_faceDetectorAngle = a; emit stateChanged(); }
+bool EditorViewModel::detectFlatFaces() { qWarning() << "detectFlatFaces: mock"; return false; }
+
+// ── Text gizmo (对齐上游 GLGizmoText) ──
+
+QString EditorViewModel::textContent() const { return m_textContent; }
+void EditorViewModel::setTextContent(const QString &t) { m_textContent = t; emit stateChanged(); }
+float EditorViewModel::textSize() const { return m_textSize; }
+void EditorViewModel::setTextSize(float s) { m_textSize = s; emit stateChanged(); }
+bool EditorViewModel::addTextObject()
+{
+  if (!projectService_)
+    return false;
+  const int idx = selectedObjectIndex();
+  if (idx < 0 || m_textContent.isEmpty())
+    return false;
+
+  // Capture undo command before adding text volume
+  auto *cmd = new AddVolumeCommand(idx, 0 /* text */, m_textContent, projectService_, this);
+
+  // Delegate to the real addTextVolume API (对齐上游 GLGizmoText → Emboss::text2shapes)
+  bool ok = projectService_->addTextVolume(idx, m_textContent);
+  if (ok)
+  {
+    if (m_undoManager)
+      m_undoManager->push(cmd);
+    rebuildObjectEntriesFromService();
+    refreshMeshCacheAndFitHint();
+    emit stateChanged();
+  }
+  else
+  {
+    delete cmd;
+  }
+  return ok;
+}
+
+// ── SVG gizmo (对齐上游 GLGizmoSVG) ──
+
+QString EditorViewModel::svgFilePath() const { return m_svgFilePath; }
+void EditorViewModel::setSvgFilePath(const QString &p) { m_svgFilePath = p; emit stateChanged(); }
+float EditorViewModel::svgScale() const { return m_svgScale; }
+void EditorViewModel::setSvgScale(float s) { m_svgScale = s; emit stateChanged(); }
+bool EditorViewModel::importSVG()
+{
+  if (!projectService_)
+    return false;
+  const int idx = selectedObjectIndex();
+  if (idx < 0 || m_svgFilePath.isEmpty())
+    return false;
+
+  // Capture undo command before adding SVG volume
+  auto *cmd = new AddVolumeCommand(idx, 1 /* svg */, m_svgFilePath, projectService_, this);
+
+  // Delegate to the real addSvgVolume API (对齐上游 GLGizmoSVG → Model::read_from_file)
+  bool ok = projectService_->addSvgVolume(idx, m_svgFilePath);
+  if (ok)
+  {
+    if (m_undoManager)
+      m_undoManager->push(cmd);
+    rebuildObjectEntriesFromService();
+    refreshMeshCacheAndFitHint();
+    emit stateChanged();
+  }
+  else
+  {
+    delete cmd;
+  }
+  return ok;
+}
+
 void EditorViewModel::flipCutPlane()
 {
   // 翻转切割位置到对称侧 (对齐上游 GLGizmoCut::flip_cut_plane)
@@ -556,18 +1118,49 @@ void EditorViewModel::cutSelected(int axis, double position)
   statusText_ = tr("正在切割对象...");
   emit stateChanged();
 
+  // Capture undo command before cut (captures source mesh snapshot and object count)
+  auto *cmd = new CutCommand(srcIdx, axis, position, m_cutKeepMode, projectService_, this);
+
 #ifdef HAS_LIBSLIC3R
-  // TODO: 调用 ModelObject::cut() 执行真实网格切割
-  // 1. 构建切割平面 (axis + position)
-  // 2. ModelObject::cut(cut_plane, keep_upper, keep_lower)
-  // 3. 替换原对象为切割后的对象
-  // 4. 设置 undo/redo 快照 "Cut"
+  // 真实网格切割（对齐上游 GLGizmoCut::perform_cut → cut_mesh）
+  {
+    const int cutNewIdx = projectService_->cutObject(srcIdx, axis, position, m_cutKeepMode);
+    if (cutNewIdx >= 0)
+    {
+      // Record result for redo
+      const QStringList namesAfter = projectService_->objectNames();
+      cmd->setResult(cutNewIdx, namesAfter.value(cutNewIdx));
+
+      if (m_undoManager)
+        m_undoManager->push(cmd);
+
+      projectService_->syncTransformsFromModel();
+      m_selectedSourceIndices.clear();
+      if (m_cutKeepMode != 2) // Keep upper: select both parts
+      {
+        m_selectedSourceIndices.insert(srcIdx);
+        m_selectedSourceIndices.insert(cutNewIdx);
+      }
+      else // Keep lower only
+      {
+        m_selectedSourceIndices.insert(srcIdx);
+      }
+      statusText_ = tr("已切割对象");
+      rebuildObjectEntriesFromService();
+      refreshMeshCacheAndFitHint();
+      emit stateChanged();
+      return;
+    }
+  }
 #endif
 
   // Mock mode: 将对象沿指定轴切割为上下两部分
   const int newIdx = projectService_->addObject(origName + tr("_upper"));
   if (newIdx >= 0)
   {
+    if (m_undoManager)
+      m_undoManager->push(cmd);
+
     // Mock: 缩放上半部分和下半部分
     projectService_->setObjectPosition(newIdx,
                                        projectService_->objectPosition(srcIdx).x() + 2,
@@ -589,6 +1182,7 @@ void EditorViewModel::cutSelected(int axis, double position)
   }
   else
   {
+    delete cmd;
     statusText_ = tr("切割失败");
   }
 
@@ -764,6 +1358,69 @@ int EditorViewModel::mapFilteredToSourceIndex(int filteredIndex) const
   return indices[filteredIndex];
 }
 
+// ── Undo/Redo integration (对齐上游 UndoRedo 框架) ──────────────────────────
+
+void EditorViewModel::setUndoRedoManager(UndoRedoManager *manager)
+{
+  if (m_undoManager == manager)
+    return;
+  // Disconnect from old manager
+  if (m_undoManager)
+    disconnect(m_undoManager, nullptr, this, nullptr);
+  m_undoManager = manager;
+  // Forward stateChanged from UndoRedoManager so QML properties update
+  if (m_undoManager)
+    connect(m_undoManager, &UndoRedoManager::stateChanged, this, &EditorViewModel::stateChanged);
+}
+
+void EditorViewModel::undo()
+{
+  if (m_undoManager)
+    m_undoManager->undo();
+}
+
+void EditorViewModel::redo()
+{
+  if (m_undoManager)
+    m_undoManager->redo();
+}
+
+void EditorViewModel::clearUndoStack()
+{
+  if (m_undoManager)
+    m_undoManager->clear();
+}
+
+bool EditorViewModel::canUndo() const
+{
+  return m_undoManager ? m_undoManager->canUndo() : false;
+}
+
+bool EditorViewModel::canRedo() const
+{
+  return m_undoManager ? m_undoManager->canRedo() : false;
+}
+
+void EditorViewModel::restoreSelection(const QSet<int> &sourceIndices, int primaryIndex)
+{
+  m_selectedSourceIndices = sourceIndices;
+  m_primarySelectedSourceIndex = primaryIndex;
+  // Clear volume selection when restoring object-level selection
+  m_selectedVolumeObjectSourceIndex = -1;
+  m_selectedVolumeIndices.clear();
+  m_selectedVolumeIndex = -1;
+  ensureValidObjectSelection(false);
+  emit stateChanged();
+}
+
+void EditorViewModel::rebuildAndNotify()
+{
+  rebuildObjectEntriesFromService();
+  ensureValidObjectSelection(true);
+  refreshMeshCacheAndFitHint();
+  emit stateChanged();
+}
+
 EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceService *sliceService, QObject *parent)
     : QObject(parent), projectService_(projectService), sliceService_(sliceService)
 {
@@ -860,6 +1517,18 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
       m_cachedMeshData.clear();
     }
     emit stateChanged(); });
+
+  // Restore bed shape from QSettings (对齐上游 bed_shape persistence)
+  {
+    QSettings s;
+    m_bedWidth = s.value(QStringLiteral("bed/width"), 220.0f).toFloat();
+    m_bedDepth = s.value(QStringLiteral("bed/depth"), 220.0f).toFloat();
+    m_bedMaxHeight = s.value(QStringLiteral("bed/maxHeight"), 300.0f).toFloat();
+    m_bedOriginX = s.value(QStringLiteral("bed/originX"), 0.0f).toFloat();
+    m_bedOriginY = s.value(QStringLiteral("bed/originY"), 0.0f).toFloat();
+    m_bedShapeType = s.value(QStringLiteral("bed/shapeType"), 0).toInt();
+    m_bedDiameter = s.value(QStringLiteral("bed/diameter"), 220.0f).toFloat();
+  }
 }
 
 QString EditorViewModel::projectName() const { return projectService_ ? projectService_->projectName() : QString(); }
@@ -1434,6 +2103,11 @@ void EditorViewModel::deleteObject(int i)
     return;
   }
 
+  // Create undo command BEFORE deleting (captures snapshots)
+  DeleteObjectsCommand *deleteCmd = nullptr;
+  if (m_undoManager)
+    deleteCmd = new DeleteObjectsCommand({sourceIndex}, projectService_, this);
+
   if (projectService_->deleteObject(sourceIndex))
   {
     m_collapsedObjectSourceIndices.clear();
@@ -1442,10 +2116,15 @@ void EditorViewModel::deleteObject(int i)
     ensureValidObjectSelection(true);
     refreshMeshCacheAndFitHint();
     statusText_ = QStringLiteral("已删除对象，剩余 %1 个模型").arg(projectService_->modelCount());
+
+    if (m_undoManager && deleteCmd)
+      m_undoManager->push(deleteCmd);
+
     emit stateChanged();
   }
   else
   {
+    delete deleteCmd;
     statusText_ = projectService_->lastError();
     emit stateChanged();
   }
@@ -1470,6 +2149,11 @@ void EditorViewModel::deleteSelectedObjects()
   std::sort(sourceIndices.begin(), sourceIndices.end(), std::greater<int>());
   sourceIndices.erase(std::unique(sourceIndices.begin(), sourceIndices.end()), sourceIndices.end());
 
+  // Create undo command BEFORE deleting (captures snapshots)
+  DeleteObjectsCommand *deleteCmd = nullptr;
+  if (m_undoManager)
+    deleteCmd = new DeleteObjectsCommand(sourceIndices, projectService_, this);
+
   int deletedCount = 0;
   for (int sourceIndex : sourceIndices)
   {
@@ -1482,6 +2166,7 @@ void EditorViewModel::deleteSelectedObjects()
       m_selectedVolumeObjectSourceIndex = -1;
       m_selectedVolumeIndices.clear();
       m_selectedVolumeIndex = -1;
+      delete deleteCmd;
       emit stateChanged();
       return;
     }
@@ -1494,6 +2179,10 @@ void EditorViewModel::deleteSelectedObjects()
   ensureValidObjectSelection(true);
   refreshMeshCacheAndFitHint();
   statusText_ = QStringLiteral("已删除 %1 个对象，剩余 %2 个模型").arg(deletedCount).arg(projectService_->modelCount());
+
+  if (m_undoManager && deleteCmd)
+    m_undoManager->push(deleteCmd);
+
   emit stateChanged();
 }
 
@@ -1629,20 +2318,42 @@ void EditorViewModel::duplicateSelectedObjects()
   if (selected.isEmpty())
     return;
 
-  // 逐个复制（每次调用后元数据会更新，但源索引在首次插入后仍然有效
-  // 因为 duplicateObject 在 sourceIndex+1 插入，不影响 sourceIndex 本身）
+  // Track clones for undo commands
+  QList<QPair<int, int>> clonePairs; // (sourceIndex, clonedIndex)
+
+  // 逐个复制
   bool anySuccess = false;
   for (int srcIdx : selected)
   {
     const int newIdx = projectService_->duplicateObject(srcIdx);
     if (newIdx >= 0)
+    {
       anySuccess = true;
+      clonePairs.append({srcIdx, newIdx});
+    }
   }
 
   if (anySuccess)
   {
     rebuildObjectEntriesFromService();
     refreshMeshCacheAndFitHint();
+
+    // Push undo commands (in reverse order so undo restores correctly)
+    if (m_undoManager)
+    {
+      if (clonePairs.size() == 1)
+      {
+        m_undoManager->push(new CloneCommand(clonePairs[0].first, clonePairs[0].second, projectService_));
+      }
+      else if (clonePairs.size() > 1)
+      {
+        m_undoManager->beginMacro(QObject::tr("Clone %1 Objects").arg(clonePairs.size()));
+        for (int i = clonePairs.size() - 1; i >= 0; --i)
+          m_undoManager->push(new CloneCommand(clonePairs[i].first, clonePairs[i].second, projectService_));
+        m_undoManager->endMacro();
+      }
+    }
+
     emit stateChanged();
   }
 }
@@ -1672,14 +2383,52 @@ void EditorViewModel::pasteObjects()
     return;
   // 粘贴：对每个剪贴板条目添加新对象（对齐上游 Selection::paste_objects_from_clipboard）
   m_selectedSourceIndices.clear();
+  QList<QPair<int, QString>> addedPairs; // (newIndex, name)
+
   for (const auto &entry : m_clipboard)
   {
     const int newIdx = projectService_->addObject(entry.name);
     if (newIdx >= 0)
+    {
       m_selectedSourceIndices.insert(newIdx);
+      addedPairs.append({newIdx, entry.name});
+    }
   }
+
+  // Push undo commands
+  if (m_undoManager && !addedPairs.isEmpty())
+  {
+    if (addedPairs.size() == 1)
+    {
+      m_undoManager->push(new AddObjectCommand(addedPairs[0].first, addedPairs[0].second, projectService_));
+    }
+    else
+    {
+      m_undoManager->beginMacro(QObject::tr("Paste %1 Objects").arg(addedPairs.size()));
+      for (const auto &pair : addedPairs)
+        m_undoManager->push(new AddObjectCommand(pair.first, pair.second, projectService_));
+      m_undoManager->endMacro();
+    }
+  }
+
   rebuildObjectEntriesFromService();
   refreshMeshCacheAndFitHint();
+  emit stateChanged();
+}
+
+void EditorViewModel::mirrorSelectedObjects(int axis)
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return;
+
+#ifdef HAS_LIBSLIC3R
+  // Sync real model mirror state
+  for (int srcIdx : m_selectedSourceIndices)
+    projectService_->mirrorObject(srcIdx, axis);
+  projectService_->syncTransformsFromModel();
+#endif
+
+  // GLViewportRenderer handles the visual mirror via InputEvent
   emit stateChanged();
 }
 
@@ -1710,51 +2459,38 @@ void EditorViewModel::autoOrientSelected()
   if (!projectService_ || m_selectedSourceIndices.isEmpty())
     return;
 
-  // 对齐上游 Plater::orient() + OrientJob
-  // Mock 模式：对每个选中对象设置朝向标记（上游会在切片时应用最优旋转）
-  // 真实模式：OrientJob 会调用 orientation::orient() 计算最优旋转
   statusText_ = tr("正在计算最优朝向...");
   emit stateChanged();
 
-  // 使用 bounding box 的 6 个候选面计算凸包和最优朝向
-  const QVector4D dims = m_measureDimensions;
-  if (dims.x() <= 0 || dims.y() <= 0 || dims.z() <= 0) {
-    statusText_ = tr("无有效几何数据");
-    emit stateChanged();
-    return;
+#ifdef HAS_LIBSLIC3R
+  // 对齐上游 Plater::orient() + OrientJob → Slic3r::orientation::orient(ModelObject*)
+  auto indices = m_selectedSourceIndices.values();
+  bool anyOriented = false;
+
+  for (int idx : indices)
+  {
+    if (projectService_->orientObject(idx))
+      anyOriented = true;
   }
-  // 6 candidate faces: +X, -X, +Y, -Y, +Z, -Z
-  struct Face { QVector3D normal; float area; QString label; };
-  Face candidates[6] = {
-    { QVector3D(1,0,0), std::abs(dims.y()*dims.z()), tr("+X 面") },
-    { QVector3D(-1,0,0), std::abs(dims.y()*dims.z()), tr("-X 面") },
-    { QVector3D(0,1,0), std::abs(dims.x()*dims.z()), tr("+Y 面") },
-    { QVector3D(0,-1,0), std::abs(dims.x()*dims.z()), tr("-Y 面") },
-    { QVector3D(0,0,1), std::abs(dims.x()*dims.y()), tr("+Z 面") },
-    { QVector3D(0,0,-1), std::abs(dims.x()*dims.y()), tr("-Z 面") }
-  };
-  // 按面积排序，最大面朝下放置
-  std::sort(std::begin(candidates), std::end(candidates),
-            [](const Face &a, const Face &b) { return a.area > b.area; });
-  m_flattenFaceCount = 6;
-  statusText_ = tr("凸包完成: %1 个候选面，最大面=%2 (\"%3\")").arg(m_flattenFaceCount)
-      .arg(candidates[0].label)
-      .arg(candidates[0].area, 0, 'f', 1)
-      .arg(candidates[0].normal.x(), 0, 'f', 1);
+
+  if (anyOriented)
+    projectService_->syncTransformsFromModel();
+
+  statusText_ = anyOriented ? tr("自动朝向完成") : tr("自动朝向完成（无变更）");
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
   emit stateChanged();
 
-#ifdef HAS_LIBSLIC3R
-  // TODO: 创建 OrientJob 并提交到线程池
-  // wxGetApp().plater()->orient() equivalent
-#endif
-
+#else
   // Mock mode: signal completion after brief delay
   QTimer::singleShot(300, this, [this]()
-                     {
+  {
     statusText_ = tr("自动朝向完成（Mock）");
     rebuildObjectEntriesFromService();
     refreshMeshCacheAndFitHint();
-    emit stateChanged(); });
+    emit stateChanged();
+  });
+#endif
 }
 
 void EditorViewModel::splitSelectedObject()
@@ -1776,28 +2512,28 @@ void EditorViewModel::splitSelectedObject()
   emit stateChanged();
 
 #ifdef HAS_LIBSLIC3R
-  // TODO: 调用 ModelObject::split() 拆分网格
-  // 1. current_model_object->split(&new_objects)
-  // 2. 如果只有一个结果，提示"无法拆分"
-  // 3. 移除原对象，加载新对象
-  // 4. 设置 undo/redo 快照 "Split to Objects"
-#endif
-
-  // 对齐上游 Plater::priv::split_object() + ModelObject::split()
-  // Mock 模式：基于 AABB 中点切面做模拟拆分（真实模式需 libslic3r mesh 分割）
+  // 对齐上游 Plater::priv::split_object() → ModelObject::split()
+  QList<int> newIndices = projectService_->splitObject(srcIdx);
+  if (!newIndices.isEmpty())
+  {
+    m_selectedSourceIndices.clear();
+    for (int newIdx : newIndices)
+      m_selectedSourceIndices.insert(newIdx);
+    statusText_ = tr("已拆分为 %1 个部分").arg(newIndices.size());
+  }
+  else
+  {
+    statusText_ = tr("无法拆分（对象已是最简形式）");
+  }
+#else
+  // Mock 模式：基于 AABB 中点切面做模拟拆分
   const QString origName = (srcIdx >= 0 && srcIdx < m_objects.size())
                                ? m_objects[srcIdx].name
                                : tr("对象");
 
-  // 使用真实凸包分解做更合理的模拟拆分
   const QVector4D dims = m_measureDimensions;
-  const float midY = dims.y() * 0.5f;
-  const float midZ = dims.z() * 0.5f;
-  const float halfWidth = dims.x() * 0.5f;
 
-  // Part 1: 保留上半部分 (y >= midY, z >= midZ)
   const int idx1 = projectService_->addObject(origName + tr("_upper"));
-  // Part 2: 保留下半部分
   const int idx2 = projectService_->addObject(origName + tr("_lower"));
 
   if (idx1 >= 0 && idx2 >= 0) {
@@ -1809,6 +2545,7 @@ void EditorViewModel::splitSelectedObject()
   } else {
     statusText_ = tr("拆分失败");
   }
+#endif
 
   rebuildObjectEntriesFromService();
   refreshMeshCacheAndFitHint();
@@ -2005,7 +2742,16 @@ bool EditorViewModel::renameObject(int index, const QString &newName)
 {
   if (!projectService_ || index < 0)
     return false;
+
+  const QString oldName = projectService_->objectNames().value(index);
+  if (oldName == newName)
+    return true;
+
   projectService_->renameObject(index, newName);
+
+  if (m_undoManager)
+    m_undoManager->push(new RenameCommand(index, oldName, newName, projectService_));
+
   emit stateChanged();
   return true;
 }
@@ -2531,6 +3277,9 @@ void EditorViewModel::clearWorkspace()
   if (projectService_)
     projectService_->clearProject();
 
+  // 新建/清空工作区时清除撤销栈（对齐上游 UndoRedo::reset）
+  clearUndoStack();
+
   m_objects.clear();
   m_selectedSourceIndices.clear();
   m_collapsedGroupKeys.clear();
@@ -2659,7 +3408,93 @@ void EditorViewModel::resetArrangeSettings()
   emit stateChanged();
 }
 
+void EditorViewModel::arrangeAllObjects()
+{
+  if (!projectService_)
+    return;
+  // Use upstream arrange_objects if available, fall back to 6mm default spacing
+  const float spacing = (m_arrangeDistance > 0.f) ? m_arrangeDistance : 6.0f;
+  if (projectService_->arrangeObjects(spacing, m_arrangeRotation, m_arrangeAlignY))
+  {
+    // Real arrange succeeded — sync transforms from model to mock arrays
+    projectService_->syncTransformsFromModel();
+    emit stateChanged();
+  }
+  // If real arrange not available (no HAS_LIBSLIC3R), the GLViewport mock
+  // arrange will still work via the existing ArrangeSelected InputEvent path
+}
+
 void EditorViewModel::switchToPreview()
 {
   emit previewRequested();
+}
+
+// ── Bed shape (对齐上游 BedShapeDialog / bed_shape config) ──────────────────
+
+float EditorViewModel::bedWidth() const { return m_bedWidth; }
+void EditorViewModel::setBedWidth(float v)
+{
+  v = qBound(10.0f, v, 2000.0f);
+  if (qFuzzyCompare(m_bedWidth, v)) return;
+  m_bedWidth = v;
+  QSettings s; s.setValue(QStringLiteral("bed/width"), v);
+  emit bedShapeChanged();
+}
+
+float EditorViewModel::bedDepth() const { return m_bedDepth; }
+void EditorViewModel::setBedDepth(float v)
+{
+  v = qBound(10.0f, v, 2000.0f);
+  if (qFuzzyCompare(m_bedDepth, v)) return;
+  m_bedDepth = v;
+  QSettings s; s.setValue(QStringLiteral("bed/depth"), v);
+  emit bedShapeChanged();
+}
+
+float EditorViewModel::bedMaxHeight() const { return m_bedMaxHeight; }
+void EditorViewModel::setBedMaxHeight(float v)
+{
+  v = qBound(1.0f, v, 5000.0f);
+  if (qFuzzyCompare(m_bedMaxHeight, v)) return;
+  m_bedMaxHeight = v;
+  QSettings s; s.setValue(QStringLiteral("bed/maxHeight"), v);
+  emit bedShapeChanged();
+}
+
+float EditorViewModel::bedOriginX() const { return m_bedOriginX; }
+void EditorViewModel::setBedOriginX(float v)
+{
+  if (qFuzzyCompare(m_bedOriginX, v)) return;
+  m_bedOriginX = v;
+  QSettings s; s.setValue(QStringLiteral("bed/originX"), v);
+  emit bedShapeChanged();
+}
+
+float EditorViewModel::bedOriginY() const { return m_bedOriginY; }
+void EditorViewModel::setBedOriginY(float v)
+{
+  if (qFuzzyCompare(m_bedOriginY, v)) return;
+  m_bedOriginY = v;
+  QSettings s; s.setValue(QStringLiteral("bed/originY"), v);
+  emit bedShapeChanged();
+}
+
+int EditorViewModel::bedShapeType() const { return m_bedShapeType; }
+void EditorViewModel::setBedShapeType(int v)
+{
+  v = qBound(0, v, 2);
+  if (m_bedShapeType == v) return;
+  m_bedShapeType = v;
+  QSettings s; s.setValue(QStringLiteral("bed/shapeType"), v);
+  emit bedShapeChanged();
+}
+
+float EditorViewModel::bedDiameter() const { return m_bedDiameter; }
+void EditorViewModel::setBedDiameter(float v)
+{
+  v = qBound(1.0f, v, 2000.0f);
+  if (qFuzzyCompare(m_bedDiameter, v)) return;
+  m_bedDiameter = v;
+  QSettings s; s.setValue(QStringLiteral("bed/diameter"), v);
+  emit bedShapeChanged();
 }

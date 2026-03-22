@@ -218,15 +218,15 @@ Item {
             title: qsTr("镜像")
             MenuItem {
                 text: qsTr("沿 X 轴镜像")
-                onTriggered: viewport3d.mirrorSelection(0)
+                onTriggered: if (root.editorVm) root.editorVm.mirrorSelectedObjects(0)
             }
             MenuItem {
                 text: qsTr("沿 Y 轴镜像")
-                onTriggered: viewport3d.mirrorSelection(1)
+                onTriggered: if (root.editorVm) root.editorVm.mirrorSelectedObjects(1)
             }
             MenuItem {
                 text: qsTr("沿 Z 轴镜像")
-                onTriggered: viewport3d.mirrorSelection(2)
+                onTriggered: if (root.editorVm) root.editorVm.mirrorSelectedObjects(2)
             }
         }
         MenuSeparator { }
@@ -339,11 +339,7 @@ Item {
                      && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
             onTriggered: {
                 if (root.editorVm) root.editorVm.selectAllOnPlate(root.contextPlateIndex)
-                viewport3d.arrangeSelected(
-                    root.editorVm ? root.editorVm.arrangeDistance : 0,
-                    root.editorVm ? root.editorVm.arrangeRotation : false,
-                    root.editorVm ? root.editorVm.arrangeAlignY : false
-                )
+                if (root.editorVm) root.editorVm.arrangeAllObjects()
             }
         }
         MenuItem {
@@ -1394,11 +1390,7 @@ Item {
                     cxStyle: CxButton.Style.Primary
                     onClicked: {
                         if (root.editorVm) root.editorVm.arrangeDistance = parseFloat(arrangeDistField.text) || 0
-                        viewport3d.arrangeSelected(
-                            root.editorVm ? root.editorVm.arrangeDistance : 0,
-                            root.editorVm ? root.editorVm.arrangeRotation : false,
-                            root.editorVm ? root.editorVm.arrangeAlignY : false
-                        )
+                        if (root.editorVm) root.editorVm.arrangeAllObjects()
                         arrangeSettingsPopup.close()
                     }
                 }
@@ -1730,6 +1722,96 @@ Item {
                             toolTipText: qsTr("SLA 空洞标记")
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoHollow
                         }
+
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoSimplify
+                            iconSource: "qrc:/qml/assets/icons/layers-subtract.svg"
+                            toolTipText: qsTr("简化模型")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoSimplify
+                        }
+
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoMmuSegmentation
+                            iconSource: "qrc:/qml/assets/icons/layers.svg"
+                            toolTipText: qsTr("MMU 分段")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoMmuSegmentation
+                        }
+
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoDrill
+                            iconSource: "qrc:/qml/assets/icons/minus-circle.svg"
+                            toolTipText: qsTr("钻孔")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoDrill
+                        }
+
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoEmboss
+                            iconSource: "qrc:/qml/assets/icons/layers-subtract.svg"
+                            toolTipText: qsTr("文字浮雕")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoEmboss
+                        }
+
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoMeshBoolean
+                            iconSource: "qrc:/qml/assets/icons/plus.svg"
+                            toolTipText: qsTr("布尔运算")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoMeshBoolean
+                        }
+
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoAdvancedCut
+                            iconSource: "qrc:/qml/assets/icons/scissors.svg"
+                            toolTipText: qsTr("高级切割")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoAdvancedCut
+                        }
+
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoFaceDetector
+                            iconSource: "qrc:/qml/assets/icons/layout-grid.svg"
+                            toolTipText: qsTr("面检测")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoFaceDetector
+                        }
+
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoText
+                            iconSource: "qrc:/qml/assets/icons/clipboard.svg"
+                            toolTipText: qsTr("文字工具")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoText
+                        }
+
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoSVG
+                            iconSource: "qrc:/qml/assets/icons/folder-open.svg"
+                            toolTipText: qsTr("SVG 导入")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoSVG
+                        }
+
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            selected: viewport3d.gizmoMode === GLViewport.GizmoSlaSupports
+                            iconSource: "qrc:/qml/assets/icons/layout-grid-plus.svg"
+                            toolTipText: qsTr("SLA 支撑")
+                            onClicked: viewport3d.gizmoMode = GLViewport.GizmoSlaSupports
+                        }
                     }
 
                     ToolStripDivider { }
@@ -1764,7 +1846,7 @@ Item {
                             iconSize: 16
                             iconSource: "qrc:/qml/assets/icons/mirror.svg"
                             toolTipText: qsTr("镜像 (沿 X 轴)")
-                            onClicked: viewport3d.mirrorSelection(0)
+                            onClicked: if (root.editorVm) root.editorVm.mirrorSelectedObjects(0)
                         }
                         CxIconButton {
                             buttonSize: 34
@@ -2605,6 +2687,453 @@ Item {
             }
         }
 
+        // 简化模型控制面板（对齐上游 GLGizmoSimplify）
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: 104
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: simplifyContent.implicitWidth + 24
+            height: simplifyContent.implicitHeight + 16
+            radius: 12
+            color: "#161c27e0"
+            border.color: "#2d3443"
+            visible: viewport3d.gizmoMode === GLViewport.GizmoSimplify && root.editorVm
+
+            ColumnLayout {
+                id: simplifyContent
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text {
+                    text: qsTr("模型简化")
+                    color: "#e0e6ed"
+                    font.pixelSize: 11
+                    font.bold: true
+                    Layout.alignment: Qt.AlignHCenter
+                }
+
+                // 当前三角面数（对齐上游 GLGizmoSimplify m_triangles_count）
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("当前面数:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Text {
+                        text: root.editorVm ? root.editorVm.selectedObjectTriangleCount.toLocaleString() : "0"
+                        color: "#c8d4e0"
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                    }
+                }
+
+                // 目标面数（对齐上游 GLGizmoSimplify wanted_count）
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("目标面数:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Slider {
+                        from: 100; to: 500000; stepSize: 100
+                        value: root.editorVm ? root.editorVm.simplifyWantedCount : 0
+                        implicitWidth: 100
+                        onMoved: if (root.editorVm) root.editorVm.simplifyWantedCount = value
+                    }
+                    Text {
+                        text: root.editorVm ? root.editorVm.simplifyWantedCount.toLocaleString() : "0"
+                        color: "#c8d4e0"
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 50
+                    }
+                }
+
+                // 最大误差（对齐上游 GLGizmoSimplify max_error）
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("最大误差:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Slider {
+                        from: 0.001; to: 1.0; stepSize: 0.001
+                        value: root.editorVm ? root.editorVm.simplifyMaxError : 0
+                        implicitWidth: 100
+                        onMoved: if (root.editorVm) root.editorVm.simplifyMaxError = value
+                    }
+                    Text {
+                        text: root.editorVm ? root.editorVm.simplifyMaxError.toFixed(3) : "0.000"
+                        color: "#c8d4e0"
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 40
+                    }
+                }
+
+                // 执行简化按钮（对齐上游 GLGizmoSimplify apply）
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    width: 100; height: 24; radius: 4
+                    color: "#18c75e"
+                    Text {
+                        anchors.centerIn: parent
+                        text: qsTr("执行简化")
+                        color: "white"
+                        font.pixelSize: 10
+                        font.bold: true
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: if (root.editorVm) root.editorVm.simplifySelected()
+                    }
+                }
+            }
+        }
+
+        // MMU 多耗材分段控制面板（对齐上游 GLGizmoMmuSegmentation）
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: 104
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: mmuContent.implicitWidth + 24
+            height: mmuContent.implicitHeight + 16
+            radius: 12
+            color: "#161c27e0"
+            border.color: "#2d3443"
+            visible: viewport3d.gizmoMode === GLViewport.GizmoMmuSegmentation && root.editorVm
+
+            ColumnLayout {
+                id: mmuContent
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text {
+                    text: qsTr("MMU 分段")
+                    color: "#e0e6ed"
+                    font.pixelSize: 11
+                    font.bold: true
+                    Layout.alignment: Qt.AlignHCenter
+                }
+
+                // 耗材选择器（对齐上游 m_extruders_colors 色块选择）
+                Row {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    Repeater {
+                        model: root.editorVm ? root.editorVm.mmuExtruderCount : 4
+                        Rectangle {
+                            width: 28; height: 28; radius: 4
+                            color: {
+                                var colors = ["#3B82F6", "#EF4444", "#22C55E", "#F59E0B",
+                                             "#8B5CF6", "#EC4899", "#06B6D4", "#F97316",
+                                             "#6366F1", "#14B8A6", "#F43F5E", "#84CC16", "#D946EF",
+                                             "#0EA5E9", "#A855F7", "#FBBF24", "#10B981"];
+                                var c = index < colors.length ? colors[index] : "#888888";
+                                root.editorVm && root.editorVm.mmuSelectedExtruder === index ? c : c + "66"
+                            }
+                            border.width: root.editorVm && root.editorVm.mmuSelectedExtruder === index ? 2 : 0
+                            border.color: "white"
+                            Text {
+                                anchors.centerIn: parent
+                                text: index + 1
+                                color: root.editorVm && root.editorVm.mmuSelectedExtruder === index ? "white" : "#c8d4e0"
+                                font.pixelSize: 11
+                                font.bold: true
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.mmuSelectedExtruder = index
+                            }
+                        }
+                    }
+                }
+
+                // 当前选中耗材提示（对齐上游 m_selected_extruder_idx）
+                Text {
+                    text: qsTr("当前耗材: %1").arg(
+                        root.editorVm ? root.editorVm.mmuSelectedExtruder + 1 : 1)
+                    color: "#8b949e"
+                    font.pixelSize: 10
+                    Layout.alignment: Qt.AlignHCenter
+                }
+
+                // 清除分段按钮（对齐上游 reset triangle painting）
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    width: 80; height: 24; radius: 4
+                    color: "#363d4e"
+                    border.color: "#4d5566"; border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: qsTr("清除分段")
+                        color: "#c8d4e0"
+                        font.pixelSize: 10
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: if (root.editorVm) root.editorVm.clearMmuSegmentation()
+                    }
+                }
+            }
+        }
+
+        // Drill control panel (对齐上游 GLGizmoDrill)
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: 104
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: drillContent.implicitWidth + 24
+            height: drillContent.implicitHeight + 16
+            radius: 12
+            color: "#161c27e0"
+            border.color: "#2d3443"
+            visible: viewport3d.gizmoMode === GLViewport.GizmoDrill && root.editorVm
+
+            ColumnLayout {
+                id: drillContent
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text { text: qsTr("钻孔"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+
+                Text { text: qsTr("半径"); color: "#8b949e"; font.pixelSize: 10 }
+                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.drillRadius : 5; from: 1; to: 50; onValueModified: if (root.editorVm) root.editorVm.drillRadius = value }
+
+                Text { text: qsTr("深度"); color: "#8b949e"; font.pixelSize: 10 }
+                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.drillDepth : 50; from: 1; to: 200; onValueModified: if (root.editorVm) root.editorVm.drillDepth = value }
+
+                Text { text: qsTr("形状"); color: "#8b949e"; font.pixelSize: 10 }
+                CxComboBox { Layout.preferredWidth: 80; model: [qsTr("圆形"), qsTr("三角形"), qsTr("方形")]; currentIndex: root.editorVm ? root.editorVm.drillShape : 0; onActivated: if (root.editorVm) root.editorVm.drillShape = currentIndex }
+
+                Text { text: qsTr("方向"); color: "#8b949e"; font.pixelSize: 10 }
+                CxComboBox { Layout.preferredWidth: 80; model: [qsTr("法线"), qsTr("平行平台"), qsTr("垂直屏幕")]; currentIndex: root.editorVm ? root.editorVm.drillDirection : 0; onActivated: if (root.editorVm) root.editorVm.drillDirection = currentIndex }
+
+                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: "#363d4e"; border.color: "#4d5566"; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("执行钻孔"); color: "#c8d4e0"; font.pixelSize: 10 }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.drillSelected() }
+                }
+            }
+        }
+
+        // Emboss control panel (对齐上游 GLGizmoEmboss)
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: 104
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: embossContent.implicitWidth + 24
+            height: embossContent.implicitHeight + 16
+            radius: 12
+            color: "#161c27e0"
+            border.color: "#2d3443"
+            visible: viewport3d.gizmoMode === GLViewport.GizmoEmboss && root.editorVm
+
+            ColumnLayout {
+                id: embossContent
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text { text: qsTr("文字浮雕"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+
+                Text { text: qsTr("文本"); color: "#8b949e"; font.pixelSize: 10 }
+                CxTextField { Layout.preferredWidth: 120; implicitHeight: 22; font.pixelSize: 10; text: root.editorVm ? root.editorVm.embossText : ""; onEditingFinished: if (root.editorVm) root.editorVm.embossText = text }
+
+                Text { text: qsTr("高度"); color: "#8b949e"; font.pixelSize: 10 }
+                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.embossHeight : 2; from: 1; to: 20; onValueModified: if (root.editorVm) root.editorVm.embossHeight = value }
+
+                Text { text: qsTr("深度"); color: "#8b949e"; font.pixelSize: 10 }
+                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.embossDepth : 1; from: 1; to: 20; onValueModified: if (root.editorVm) root.editorVm.embossDepth = value }
+
+                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: "#363d4e"; border.color: "#4d5566"; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("执行浮雕"); color: "#c8d4e0"; font.pixelSize: 10 }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.embossSelected() }
+                }
+            }
+        }
+
+        // MeshBoolean control panel (对齐上游 GLGizmoMeshBoolean)
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: 104
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: boolContent.implicitWidth + 24
+            height: boolContent.implicitHeight + 16
+            radius: 12
+            color: "#161c27e0"
+            border.color: "#2d3443"
+            visible: viewport3d.gizmoMode === GLViewport.GizmoMeshBoolean && root.editorVm
+
+            ColumnLayout {
+                id: boolContent
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text { text: qsTr("布尔运算"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+
+                Text { text: qsTr("运算类型"); color: "#8b949e"; font.pixelSize: 10 }
+                CxComboBox { Layout.preferredWidth: 100; model: [qsTr("并集 (Union)"), qsTr("差集 (Difference)"), qsTr("交集 (Intersection)")]; currentIndex: root.editorVm ? root.editorVm.booleanOperation : 1; onActivated: if (root.editorVm) root.editorVm.booleanOperation = currentIndex }
+
+                Text { text: qsTr("需选中 2 个以上对象"); color: "#8b949e"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
+
+                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: "#363d4e"; border.color: "#4d5566"; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("执行运算"); color: "#c8d4e0"; font.pixelSize: 10 }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.booleanExecute() }
+                }
+            }
+        }
+
+        // AdvancedCut control panel (对齐上游 GLGizmoAdvancedCut)
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: 104
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: cutContent.implicitWidth + 24
+            height: cutContent.implicitHeight + 16
+            radius: 12
+            color: "#161c27e0"
+            border.color: "#2d3443"
+            visible: viewport3d.gizmoMode === GLViewport.GizmoAdvancedCut && root.editorVm
+
+            ColumnLayout {
+                id: advCutContent
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text { text: qsTr("高级切割"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+
+                Text { text: qsTr("切割轴"); color: "#8b949e"; font.pixelSize: 10 }
+                CxComboBox { Layout.preferredWidth: 80; model: ["X", "Y", "Z"]; currentIndex: root.editorVm ? root.editorVm.cutAxis : 2; onActivated: if (root.editorVm) root.editorVm.cutAxis = currentIndex }
+
+                Text { text: qsTr("位置"); color: "#8b949e"; font.pixelSize: 10 }
+                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.cutPosition : 0; from: -500; to: 500; onValueModified: if (root.editorVm) root.editorVm.cutPosition = value }
+
+                CxCheckBox { text: qsTr("保留两侧"); checked: root.editorVm ? root.editorVm.cutKeepMode === 1 : true; onCheckedChanged: if (root.editorVm) root.editorVm.cutKeepMode = checked ? 1 : 0 }
+                CxCheckBox { text: qsTr("仅上半部"); checked: root.editorVm ? root.editorVm.cutKeepMode === 2 : false; onCheckedChanged: if (root.editorVm) root.editorVm.cutKeepMode = checked ? 2 : 1 }
+
+                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: "#363d4e"; border.color: "#4d5566"; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("执行切割"); color: "#c8d4e0"; font.pixelSize: 10 }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.cutSelected() }
+                }
+            }
+        }
+
+        // FaceDetector control panel (对齐上游 GLGizmoFaceDetector)
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: 104
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: fdContent.implicitWidth + 24
+            height: fdContent.implicitHeight + 16
+            radius: 12
+            color: "#161c27e0"
+            border.color: "#2d3443"
+            visible: viewport3d.gizmoMode === GLViewport.GizmoFaceDetector && root.editorVm
+
+            ColumnLayout {
+                id: fdContent
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text { text: qsTr("面检测"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+
+                Text { text: qsTr("角度阈值"); color: "#8b949e"; font.pixelSize: 10 }
+                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.faceDetectorAngle : 5; from: 1; to: 90; onValueModified: if (root.editorVm) root.editorVm.faceDetectorAngle = value }
+
+                Text { text: qsTr("检测与 Z 轴平行的平面"); color: "#8b949e"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
+
+                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: "#363d4e"; border.color: "#4d5566"; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("执行检测"); color: "#c8d4e0"; font.pixelSize: 10 }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.detectFlatFaces() }
+                }
+            }
+        }
+
+        // Text tool control panel (对齐上游 GLGizmoText)
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: 104
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: txtContent.implicitWidth + 24
+            height: txtContent.implicitHeight + 16
+            radius: 12
+            color: "#161c27e0"
+            border.color: "#2d3443"
+            visible: viewport3d.gizmoMode === GLViewport.GizmoText && root.editorVm
+
+            ColumnLayout {
+                id: txtContent
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text { text: qsTr("文字工具"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+
+                Text { text: qsTr("文本内容"); color: "#8b949e"; font.pixelSize: 10 }
+                CxTextField { Layout.preferredWidth: 120; implicitHeight: 22; font.pixelSize: 10; text: root.editorVm ? root.editorVm.textContent : ""; onEditingFinished: if (root.editorVm) root.editorVm.textContent = text }
+
+                Text { text: qsTr("字号"); color: "#8b949e"; font.pixelSize: 10 }
+                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.textSize : 20; from: 1; to: 200; onValueModified: if (root.editorVm) root.editorVm.textSize = value }
+
+                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: "#363d4e"; border.color: "#4d5566"; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("添加文字"); color: "#c8d4e0"; font.pixelSize: 10 }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.addTextObject() }
+                }
+            }
+        }
+
+        // SVG import control panel (对齐上游 GLGizmoSVG)
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: 104
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: svgContent.implicitWidth + 24
+            height: svgContent.implicitHeight + 16
+            radius: 12
+            color: "#161c27e0"
+            border.color: "#2d3443"
+            visible: viewport3d.gizmoMode === GLViewport.GizmoSVG && root.editorVm
+
+            ColumnLayout {
+                id: svgContent
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text { text: qsTr("SVG 导入"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+
+                Text { text: qsTr("文件路径"); color: "#8b949e"; font.pixelSize: 10 }
+                CxTextField { Layout.preferredWidth: 140; implicitHeight: 22; font.pixelSize: 10; text: root.editorVm ? root.editorVm.svgFilePath : ""; placeholderText: qsTr("选择 SVG 文件..."); enabled: false }
+
+                Text { text: qsTr("缩放"); color: "#8b949e"; font.pixelSize: 10 }
+                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.svgScale : 1; from: 1; to: 100; onValueModified: if (root.editorVm) root.editorVm.svgScale = value }
+
+                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: "#363d4e"; border.color: "#4d5566"; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("导入 SVG"); color: "#c8d4e0"; font.pixelSize: 10 }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.importSVG() }
+                }
+            }
+        }
+
+        // SLA Supports control panel (对齐上游 GLGizmoSlaSupports)
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: 104
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: slaContent.implicitWidth + 24
+            height: slaContent.implicitHeight + 16
+            radius: 12
+            color: "#161c27e0"
+            border.color: "#2d3443"
+            visible: viewport3d.gizmoMode === GLViewport.GizmoSlaSupports && root.editorVm
+
+            ColumnLayout {
+                id: slaContent
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text { text: qsTr("SLA 支撑"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+
+                Text { text: qsTr("点击模型表面添加支撑点"); color: "#8b949e"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter; wrapMode: Text.Wrap; Layout.maximumWidth: 120 }
+                Text { text: qsTr("右键删除单个支撑"); color: "#8b949e"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
+                Text { text: qsTr("（需 SLA 切片配置）"); color: "#F59E0B"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
+            }
+        }
+
         Rectangle {
             id: leftPanel
             visible: root.leftPanelVisible
@@ -2639,6 +3168,14 @@ Item {
                 CxComboBox {
                     Layout.fillWidth: true
                     model: [qsTr("光面PEI板/涂层板"), qsTr("普通PEI板")]
+                }
+
+                // 热床形状设置按钮（对齐上游 BedShapeDialog）
+                CxButton {
+                    Layout.fillWidth: true
+                    cxStyle: CxButton.Style.Secondary
+                    text: qsTr("热床设置...")
+                    onClicked: backend.showBedShapeDialog()
                 }
 
                 RowLayout {
@@ -3023,6 +3560,77 @@ Item {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // 对象信息栏（对齐上游 Plater::show_object_info）
+        Rectangle {
+            id: objectInfoBar
+            visible: root.editorVm && root.editorVm.selectedObjectCount === 1
+                     && root.editorVm.selectedObjectInfoText !== ""
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 44
+            anchors.left: leftPanel.right
+            anchors.leftMargin: 14
+            height: infoRow.implicitHeight + 10
+            width: infoRow.implicitWidth + 16
+            radius: 4
+            color: "#141920"
+
+            property bool hasErrors: root.editorVm
+                && (root.editorVm.selectedObjectOpenEdges > 0
+                    || root.editorVm.selectedObjectRepairedErrors > 0)
+
+            Row {
+                id: infoRow
+                anchors.centerIn: parent
+                spacing: 6
+
+                // 流形状态图标
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 14
+                    height: 14
+                    radius: 7
+                    color: objectInfoBar.hasErrors
+                           ? (root.editorVm.selectedObjectOpenEdges > 0 ? "#c0392b" : "#e67e22")
+                           : "#27ae60"
+
+                    Label {
+                        anchors.centerIn: parent
+                        text: objectInfoBar.hasErrors
+                              ? (root.editorVm.selectedObjectOpenEdges > 0 ? "!" : "~")
+                              : "OK"
+                        color: "#ffffff"
+                        font.pixelSize: 7
+                        font.bold: true
+                    }
+                }
+
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.editorVm ? root.editorVm.selectedObjectInfoText : ""
+                    color: Theme.textPrimary
+                    font.pixelSize: 11
+                }
+
+                // 非流形边警告（对齐上游 get_mesh_errors_info remaining errors）
+                Label {
+                    visible: root.editorVm && root.editorVm.selectedObjectOpenEdges > 0
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr(" | %1 non-manifold edges").arg(root.editorVm.selectedObjectOpenEdges)
+                    color: "#c0392b"
+                    font.pixelSize: 11
+                }
+
+                // 已修复错误计数（对齐 upstream auto-repaired info）
+                Label {
+                    visible: root.editorVm && root.editorVm.selectedObjectRepairedErrors > 0
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr(" | %1 errors repaired").arg(root.editorVm.selectedObjectRepairedErrors)
+                    color: "#e67e22"
+                    font.pixelSize: 11
                 }
             }
         }

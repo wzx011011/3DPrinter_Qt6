@@ -55,6 +55,10 @@ void SettingsViewModel::loadFromSettings()
   m_defaultBedShape  = s.value("defaultBedShape", m_defaultBedShape).toInt();
   m_autoUpload       = s.value("autoUpload", m_autoUpload).toBool();
   m_updateChannel    = s.value("updateChannel", m_updateChannel).toInt();
+  m_notificationsEnabled = s.value("notificationsEnabled", m_notificationsEnabled).toBool();
+  m_hintsEnabled     = s.value("hintsEnabled", m_hintsEnabled).toBool();
+  m_autoDismissSec   = s.value("autoDismissSec", m_autoDismissSec).toInt();
+  m_showProgressNotifications = s.value("showProgressNotifications", m_showProgressNotifications).toBool();
   m_developerMode    = s.value("developerMode", m_developerMode).toBool();
   m_showDebugOverlay = s.value("showDebugOverlay", m_showDebugOverlay).toBool();
   m_logLevel         = s.value("logLevel", m_logLevel).toInt();
@@ -166,6 +170,10 @@ void SettingsViewModel::resetPreferences()
   setCompactMode(false);
   setAutoBackup(false);
   setUndoLimit(100);
+  setNotificationsEnabled(true);
+  setHintsEnabled(true);
+  setAutoDismissSec(5);
+  setShowProgressNotifications(true);
   setDeveloperMode(false);
   setShowDebugOverlay(false);
   setLogLevel(2);
@@ -252,6 +260,26 @@ void SettingsViewModel::setAutoUpload(bool v)
 void SettingsViewModel::setUpdateChannel(int channel)
 {
   if (m_updateChannel != channel) { m_updateChannel = channel; SAVE_SETTING("updateChannel", channel); emit settingsChanged(); }
+}
+
+void SettingsViewModel::setNotificationsEnabled(bool v)
+{
+  if (m_notificationsEnabled != v) { m_notificationsEnabled = v; SAVE_SETTING("notificationsEnabled", v); emit settingsChanged(); }
+}
+
+void SettingsViewModel::setHintsEnabled(bool v)
+{
+  if (m_hintsEnabled != v) { m_hintsEnabled = v; SAVE_SETTING("hintsEnabled", v); emit settingsChanged(); }
+}
+
+void SettingsViewModel::setAutoDismissSec(int sec)
+{
+  if (m_autoDismissSec != sec) { m_autoDismissSec = sec; SAVE_SETTING("autoDismissSec", sec); emit settingsChanged(); }
+}
+
+void SettingsViewModel::setShowProgressNotifications(bool v)
+{
+  if (m_showProgressNotifications != v) { m_showProgressNotifications = v; SAVE_SETTING("showProgressNotifications", v); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setDeveloperMode(bool v)

@@ -44,7 +44,9 @@ static void enableWindowShadowAndRoundedCorner(QWindow *window)
   BOOL compositionEnabled = FALSE;
   if (SUCCEEDED(DwmIsCompositionEnabled(&compositionEnabled)) && compositionEnabled)
   {
-    const MARGINS margins = {1, 1, 1, 1};
+    // Use margins {0,0,0,0} to avoid DWM glass effect making the window transparent.
+    // Rounded corners are provided by DWMWA_WINDOW_CORNER_PREFERENCE below.
+    const MARGINS margins = {0, 0, 0, 0};
     DwmExtendFrameIntoClientArea(hwnd, &margins);
 
     const DwmWindowCornerPreference pref = DwmwcpRound;
@@ -73,7 +75,9 @@ static void appendStartupLog(const QString &line)
 
 int main(int argc, char *argv[])
 {
-  QQuickWindow::setDefaultAlphaBuffer(true);
+  // Do NOT set defaultAlphaBuffer(true) — it causes the window to be
+  // fully transparent on some Windows 10 / GPU driver combinations even
+  // when the window color is explicitly set to an opaque value.
   // Force OpenGL backend — required for QQuickFramebufferObject on Windows.
   // Must be called before QGuiApplication is constructed.
   QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
@@ -139,7 +143,6 @@ int main(int argc, char *argv[])
 #ifdef Q_OS_WIN
   if (auto *window = qobject_cast<QQuickWindow *>(engine->rootObjects().first()))
   {
-    window->setColor(Qt::transparent);
     enableWindowShadowAndRoundedCorner(window);
   }
 #endif

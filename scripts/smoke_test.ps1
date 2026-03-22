@@ -115,7 +115,12 @@ $objFiles = @(
     "SliceService.cpp.obj",
     "ConfigOptionModel.cpp.obj",
     "CameraController.cpp.obj",
-    "GLViewport.cpp.obj"
+    "GLViewport.cpp.obj",
+    "GLShaderUtil.cpp.obj",
+    "UndoCommands.cpp.obj",
+    "JobBase.cpp.obj",
+    "JobManager.cpp.obj",
+    "UndoRedoManager.cpp.obj"
 )
 foreach ($obj in $objFiles) {
     $found = Get-ChildItem -Path $BuildDir -Filter $obj -Recurse -ErrorAction SilentlyContinue

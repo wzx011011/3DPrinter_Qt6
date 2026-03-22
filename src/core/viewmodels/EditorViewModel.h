@@ -12,6 +12,7 @@
 
 class ProjectServiceMock;
 class SliceService;
+class UndoRedoManager;
 
 class EditorViewModel final : public QObject
 {
@@ -43,6 +44,16 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(QVector4D fitHint READ fitHint NOTIFY stateChanged)
   /// 选中对象边界框尺寸 (dx, dy, dz, volume)，全零表示无选中
   Q_PROPERTY(QVector4D measureDimensions READ measureDimensions NOTIFY stateChanged)
+  /// 选中对象详细信息文本（对齐上游 Plater::show_object_info）
+  Q_PROPERTY(QString selectedObjectInfoText READ selectedObjectInfoText NOTIFY stateChanged)
+  /// 选中对象三角面数
+  Q_PROPERTY(int selectedObjectTriangles READ selectedObjectTriangles NOTIFY stateChanged)
+  /// 选中对象未修复的非流形边数（对齐上游 TriangleMeshStats::open_edges）
+  Q_PROPERTY(int selectedObjectOpenEdges READ selectedObjectOpenEdges NOTIFY stateChanged)
+  /// 选中对象已修复错误总数（对齐上游 ModelObject::get_repaired_errors_count）
+  Q_PROPERTY(int selectedObjectRepairedErrors READ selectedObjectRepairedErrors NOTIFY stateChanged)
+  /// 选中对象是否为流形网格（对齐上游 TriangleMeshStats::manifold）
+  Q_PROPERTY(bool selectedObjectIsManifold READ selectedObjectIsManifold NOTIFY stateChanged)
   /// 对象变换（对齐上游 ObjectManipulation）
   Q_PROPERTY(float objectPosX READ objectPosX WRITE setObjectPosX NOTIFY stateChanged)
   Q_PROPERTY(float objectPosY READ objectPosY WRITE setObjectPosY NOTIFY stateChanged)
@@ -55,6 +66,9 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(float objectScaleZ READ objectScaleZ WRITE setObjectScaleZ NOTIFY stateChanged)
   Q_PROPERTY(bool uniformScale READ uniformScale WRITE setUniformScale NOTIFY stateChanged)
   Q_PROPERTY(bool hasObjectManipSelection READ hasObjectManipSelection NOTIFY stateChanged)
+  /// Undo/Redo (对齐上游 UndoRedo 框架)
+  Q_PROPERTY(bool canUndo READ canUndo NOTIFY stateChanged)
+  Q_PROPERTY(bool canRedo READ canRedo NOTIFY stateChanged)
 
 public:
   explicit EditorViewModel(ProjectServiceMock *projectService, SliceService *sliceService, QObject *parent = nullptr);
@@ -79,6 +93,13 @@ public:
   QByteArray meshData() const;
   QVector4D fitHint() const { return m_fitHint; }
   QVector4D measureDimensions() const { return m_measureDimensions; }
+
+  // Object info (对齐上游 Plater::show_object_info)
+  QString selectedObjectInfoText() const;
+  int selectedObjectTriangles() const;
+  int selectedObjectOpenEdges() const;
+  int selectedObjectRepairedErrors() const;
+  bool selectedObjectIsManifold() const;
 
   // Object manipulation (对齐上游 ObjectManipulation)
   float objectPosX() const;
@@ -173,6 +194,76 @@ public:
   void setHollowClosingDistance(float v);
   int hollowSelectedHoleCount() const;
   Q_INVOKABLE void deleteSelectedHollowPoints();
+  // Simplify gizmo (对齐上游 GLGizmoSimplify)
+  int simplifyWantedCount() const;
+  void setSimplifyWantedCount(int count);
+  float simplifyMaxError() const;
+  void setSimplifyMaxError(float error);
+  Q_INVOKABLE bool simplifySelected();
+  Q_INVOKABLE int selectedObjectTriangleCount() const;
+  // MMU segmentation gizmo (对齐上游 GLGizmoMmuSegmentation)
+  int mmuSelectedExtruder() const;
+  void setMmuSelectedExtruder(int idx);
+  int mmuExtruderCount() const;
+  Q_INVOKABLE bool clearMmuSegmentation();
+
+  /// ── Drill gizmo properties (对齐上游 GLGizmoDrill) ──
+  float drillRadius() const;
+  void setDrillRadius(float r);
+  float drillDepth() const;
+  void setDrillDepth(float d);
+  int drillShape() const;
+  void setDrillShape(int s);
+  int drillDirection() const;
+  void setDrillDirection(int d);
+  bool drillOneLayerOnly() const;
+  void setDrillOneLayerOnly(bool v);
+  Q_INVOKABLE bool drillSelected();
+
+  /// ── Emboss gizmo properties (对齐上游 GLGizmoEmboss) ──
+  QString embossText() const;
+  void setEmbossText(const QString &t);
+  float embossHeight() const;
+  void setEmbossHeight(float h);
+  float embossDepth() const;
+  void setEmbossDepth(float d);
+  Q_INVOKABLE bool embossSelected();
+
+  /// ── MeshBoolean gizmo properties (对齐上游 GLGizmoMeshBoolean) ──
+  int booleanOperation() const; // 0=union, 1=diff, 2=intersect
+  void setBooleanOperation(int op);
+  Q_INVOKABLE bool booleanExecute();
+
+  /// ── AdvancedCut gizmo properties (对齐上游 GLGizmoAdvancedCut) ──
+  int advCutAxis() const; // 0=X, 1=Y, 2=Z
+  void setAdvCutAxis(int a);
+  float advCutPosition() const;
+  void setAdvCutPosition(float p);
+  bool advCutKeepBoth() const;
+  void setAdvCutKeepBoth(bool v);
+  bool advCutConnectors() const;
+  void setAdvCutConnectors(bool v);
+  Q_INVOKABLE bool advCutSelected();
+
+  /// ── FaceDetector gizmo properties (对齐上游 GLGizmoFaceDetector) ──
+  float faceDetectorAngle() const;
+  void setFaceDetectorAngle(float a);
+  Q_INVOKABLE bool detectFlatFaces();
+
+  /// ── Text gizmo properties (对齐上游 GLGizmoText) ──
+  QString textContent() const;
+  void setTextContent(const QString &t);
+  float textSize() const;
+  void setTextSize(float s);
+  Q_INVOKABLE bool addTextObject();
+
+  /// ── SVG gizmo properties (对齐上游 GLGizmoSVG) ──
+  QString svgFilePath() const;
+  void setSvgFilePath(const QString &p);
+  float svgScale() const;
+  void setSvgScale(float s);
+  Q_INVOKABLE bool importSVG();
+
   void setObjectPosX(float v);
   void setObjectPosY(float v);
   void setObjectPosZ(float v);
@@ -245,6 +336,8 @@ public:
   bool hasClipboardContent() const;
   /// 切换选中对象可见性（对齐上游 Plater::set_selected_visible）
   Q_INVOKABLE void toggleSelectedObjectsVisibility();
+  /// 镜像选中对象（对齐上游 ModelInstance::set_mirror，同步真实模型）
+  Q_INVOKABLE void mirrorSelectedObjects(int axis);
   /// 自动摆放（对齐上游 Plater::priv::on_arrange）— 委托给 GLViewport::arrangeSelected()
   /// 自动朝向（对齐上游 Plater::orient() / AutoOrienter）
   Q_INVOKABLE void autoOrientSelected();
@@ -294,6 +387,37 @@ public:
   Q_PROPERTY(float hollowQuality READ hollowQuality WRITE setHollowQuality NOTIFY stateChanged)
   Q_PROPERTY(float hollowClosingDistance READ hollowClosingDistance WRITE setHollowClosingDistance NOTIFY stateChanged)
   Q_PROPERTY(int hollowSelectedHoleCount READ hollowSelectedHoleCount NOTIFY stateChanged)
+  /// 网格简化设置（对齐上游 GLGizmoSimplify）
+  Q_PROPERTY(int simplifyWantedCount READ simplifyWantedCount WRITE setSimplifyWantedCount NOTIFY stateChanged)
+  Q_PROPERTY(float simplifyMaxError READ simplifyMaxError WRITE setSimplifyMaxError NOTIFY stateChanged)
+  /// MMU 多耗材分段设置（对齐上游 GLGizmoMmuSegmentation）
+  Q_PROPERTY(int mmuSelectedExtruder READ mmuSelectedExtruder WRITE setMmuSelectedExtruder NOTIFY stateChanged)
+  Q_PROPERTY(int mmuExtruderCount READ mmuExtruderCount NOTIFY stateChanged)
+  /// Drill 设置（对齐上游 GLGizmoDrill）
+  Q_PROPERTY(float drillRadius READ drillRadius WRITE setDrillRadius NOTIFY stateChanged)
+  Q_PROPERTY(float drillDepth READ drillDepth WRITE setDrillDepth NOTIFY stateChanged)
+  Q_PROPERTY(int drillShape READ drillShape WRITE setDrillShape NOTIFY stateChanged)
+  Q_PROPERTY(int drillDirection READ drillDirection WRITE setDrillDirection NOTIFY stateChanged)
+  Q_PROPERTY(bool drillOneLayerOnly READ drillOneLayerOnly WRITE setDrillOneLayerOnly NOTIFY stateChanged)
+  /// Emboss 设置（对齐上游 GLGizmoEmboss）
+  Q_PROPERTY(QString embossText READ embossText WRITE setEmbossText NOTIFY stateChanged)
+  Q_PROPERTY(float embossHeight READ embossHeight WRITE setEmbossHeight NOTIFY stateChanged)
+  Q_PROPERTY(float embossDepth READ embossDepth WRITE setEmbossDepth NOTIFY stateChanged)
+  /// MeshBoolean 设置（对齐上游 GLGizmoMeshBoolean）
+  Q_PROPERTY(int booleanOperation READ booleanOperation WRITE setBooleanOperation NOTIFY stateChanged)
+  /// AdvancedCut 设置（对齐上游 GLGizmoAdvancedCut）
+  Q_PROPERTY(int advCutAxis READ advCutAxis WRITE setAdvCutAxis NOTIFY stateChanged)
+  Q_PROPERTY(float advCutPosition READ advCutPosition WRITE setAdvCutPosition NOTIFY stateChanged)
+  Q_PROPERTY(bool advCutKeepBoth READ advCutKeepBoth WRITE setAdvCutKeepBoth NOTIFY stateChanged)
+  Q_PROPERTY(bool advCutConnectors READ advCutConnectors WRITE setAdvCutConnectors NOTIFY stateChanged)
+  /// FaceDetector 设置（对齐上游 GLGizmoFaceDetector）
+  Q_PROPERTY(float faceDetectorAngle READ faceDetectorAngle WRITE setFaceDetectorAngle NOTIFY stateChanged)
+  /// Text 设置（对齐上游 GLGizmoText）
+  Q_PROPERTY(QString textContent READ textContent WRITE setTextContent NOTIFY stateChanged)
+  Q_PROPERTY(float textSize READ textSize WRITE setTextSize NOTIFY stateChanged)
+  /// SVG 设置（对齐上游 GLGizmoSVG）
+  Q_PROPERTY(QString svgFilePath READ svgFilePath WRITE setSvgFilePath NOTIFY stateChanged)
+  Q_PROPERTY(float svgScale READ svgScale WRITE setSvgScale NOTIFY stateChanged)
   /// 扁平可用面数（对齐上游 GLGizmoFlatten 面）
   Q_PROPERTY(int flattenFaceCount READ flattenFaceCount NOTIFY stateChanged)
   /// 翻转切割平面（对齐上游 GLGizmoCut::flip_cut_plane）
@@ -390,6 +514,14 @@ public:
   /// 全部平板已切片标记（对齐上游 SliceAll 完成状态）
   Q_PROPERTY(bool allPlatesSliced READ allPlatesSliced NOTIFY stateChanged)
   /// 挤出机耗材用量（对齐上游 SliceInfoPanel per-extruder filament breakdown）
+  /// 热床尺寸（对齐上游 BedShapeDialog / bed_shape config）
+  Q_PROPERTY(float bedWidth READ bedWidth WRITE setBedWidth NOTIFY bedShapeChanged)
+  Q_PROPERTY(float bedDepth READ bedDepth WRITE setBedDepth NOTIFY bedShapeChanged)
+  Q_PROPERTY(float bedMaxHeight READ bedMaxHeight WRITE setBedMaxHeight NOTIFY bedShapeChanged)
+  Q_PROPERTY(float bedOriginX READ bedOriginX WRITE setBedOriginX NOTIFY bedShapeChanged)
+  Q_PROPERTY(float bedOriginY READ bedOriginY WRITE setBedOriginY NOTIFY bedShapeChanged)
+  Q_PROPERTY(int bedShapeType READ bedShapeType WRITE setBedShapeType NOTIFY bedShapeChanged)
+  Q_PROPERTY(float bedDiameter READ bedDiameter WRITE setBedDiameter NOTIFY bedShapeChanged)
   Q_PROPERTY(int extruderCount READ extruderCount NOTIFY stateChanged)
   Q_PROPERTY(bool hasSliceResult READ hasSliceResult NOTIFY stateChanged)
   Q_PROPERTY(bool canRequestSlice READ canRequestSlice NOTIFY stateChanged)
@@ -421,10 +553,28 @@ public:
   void setArrangeAlignY(bool v);
   bool arrangeMultiMaterial() const;
   void setArrangeMultiMaterial(bool v);
+  /// 自动排列全部对象（对齐上游 Plater::priv::on_arrange → arrange_objects）
+  Q_INVOKABLE void arrangeAllObjects();
   bool arrangeAvoidCalibration() const;
   void setArrangeAvoidCalibration(bool v);
   /// 重置排列设置到默认值（对齐上游 ArrangeSettings Reset）
   Q_INVOKABLE void resetArrangeSettings();
+  // Bed shape (对齐上游 BedShapeDialog)
+  float bedWidth() const;
+  void setBedWidth(float v);
+  float bedDepth() const;
+  void setBedDepth(float v);
+  float bedMaxHeight() const;
+  void setBedMaxHeight(float v);
+  float bedOriginX() const;
+  void setBedOriginX(float v);
+  float bedOriginY() const;
+  void setBedOriginY(float v);
+  int bedShapeType() const;
+  void setBedShapeType(int v);
+  float bedDiameter() const;
+  void setBedDiameter(float v);
+
   bool allPlatesSliced() const;
   int extruderCount() const;
   Q_INVOKABLE QString extruderUsedLength(int extruderId) const;
@@ -447,9 +597,23 @@ public:
   /// JSON 项目加载后刷新 UI 状态（供 BackendContext 调用）
   void refreshAfterLoad();
 
+  /// Undo/Redo integration (对齐上游 UndoRedo 框架)
+  void setUndoRedoManager(UndoRedoManager *manager);
+  Q_INVOKABLE void undo();
+  Q_INVOKABLE void redo();
+  Q_INVOKABLE void clearUndoStack();
+  bool canUndo() const;
+  bool canRedo() const;
+  /// Restore selection state from undo/redo commands (internal use)
+  Q_INVOKABLE void restoreSelection(const QSet<int> &sourceIndices, int primaryIndex);
+  /// Rebuild object list and notify (called by undo/redo commands after model changes)
+  Q_INVOKABLE void rebuildAndNotify();
+  UndoRedoManager *undoRedoManager() const { return m_undoManager; }
+
 signals:
   void stateChanged();
   void paintDataChanged();
+  void bedShapeChanged();
   void selectionSettingsRequested();
   /// 请求切换到预览页面（对齐上游 Plater::priv::on_preview）
   void previewRequested();
@@ -476,6 +640,7 @@ private:
 
   ProjectServiceMock *projectService_ = nullptr;
   SliceService *sliceService_ = nullptr;
+  UndoRedoManager *m_undoManager = nullptr;
   QString statusText_ = tr("就绪");
   QList<ObjectEntry> m_objects;
   QSet<int> m_selectedSourceIndices;
@@ -544,4 +709,41 @@ private:
   float m_hollowQuality = 0.5f;           ///< m_quality_stash
   float m_hollowClosingDistance = 2.0f;    ///< m_closing_d_stash
   int m_hollowSelectedHoleCount = 0;      ///< selected drain holes count
+  int m_simplifyWantedCount = 0;          ///< target triangle count (0=auto)
+  float m_simplifyMaxError = 0.0f;       ///< max quadric error (0=auto)
+  int m_mmuSelectedExtruder = 0;          ///< currently selected extruder for MMU painting
+  int m_mmuExtruderCount = 4;             ///< number of available extruders
+  // Drill (对齐上游 GLGizmoDrill)
+  float m_drillRadius = 5.0f;
+  float m_drillDepth = 50.0f;
+  int m_drillShape = 0;                  ///< 0=Circle, 1=Triangle, etc.
+  int m_drillDirection = 0;              ///< 0=Top-down, 1=Bottom-up
+  bool m_drillOneLayerOnly = false;
+  // Emboss (对齐上游 GLGizmoEmboss)
+  QString m_embossText;
+  float m_embossHeight = 2.0f;
+  float m_embossDepth = 1.0f;
+  // MeshBoolean (对齐上游 GLGizmoMeshBoolean)
+  int m_booleanOperation = 1;             ///< 0=union, 1=diff, 2=intersect
+  // AdvancedCut (对齐上游 GLGizmoAdvancedCut)
+  int m_advCutAxis = 2;                  ///< 0=X, 1=Y, 2=Z
+  float m_advCutPosition = 0.0f;
+  bool m_advCutKeepBoth = true;
+  bool m_advCutConnectors = false;
+  // FaceDetector (对齐上游 GLGizmoFaceDetector)
+  float m_faceDetectorAngle = 5.0f;
+  // Text (对齐上游 GLGizmoText)
+  QString m_textContent;
+  float m_textSize = 20.0f;
+  // SVG (对齐上游 GLGizmoSVG)
+  QString m_svgFilePath;
+  float m_svgScale = 1.0f;
+  // Bed shape state (对齐上游 BedShapeDialog / bed_shape)
+  float m_bedWidth = 220.0f;
+  float m_bedDepth = 220.0f;
+  float m_bedMaxHeight = 300.0f;
+  float m_bedOriginX = 0.0f;
+  float m_bedOriginY = 0.0f;
+  int m_bedShapeType = 0;                 ///< 0=Rectangle, 1=Circle, 2=Custom
+  float m_bedDiameter = 220.0f;
 };

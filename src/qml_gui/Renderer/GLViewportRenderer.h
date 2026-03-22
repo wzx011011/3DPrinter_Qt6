@@ -44,6 +44,15 @@ private:
   void renderScaleGizmo(const QMatrix4x4 &mvp);
   void renderGizmo(const QMatrix4x4 &mvp);
 
+  // Bed rendering (P2.8.1)
+  void buildBedGeometry();
+  void createBedTexture();
+  void renderBed(const QMatrix4x4 &mvp);
+
+  // Wipe tower rendering (P2.8.3)
+  void buildWipeTowerGeometry();
+  void renderWipeTower(const QMatrix4x4 &mvp);
+
   std::pair<QVector3D, QVector3D> computeRay(float sx, float sy) const;
   QVector3D rayXZIntersect(float sx, float sy) const;
   int pickObject(float sx, float sy) const;
@@ -89,6 +98,27 @@ private:
   // Gizmo shader (local verts shifted by uCenter and scaled by uGizmoScale)
   QOpenGLShaderProgram m_gizmoProg;
   int m_uGizmoMVP = -1, m_uGizmoCenter = -1, m_uGizmoScale = -1, m_uGizmoColor = -1;
+
+  // Bed shader (textured quad — P2.8.1)
+  QOpenGLShaderProgram m_bedProg;
+  int m_uBedMVP = -1, m_uBedTexture = -1;
+  GLuint m_bedVao = 0, m_bedVbo = 0;
+  GLuint m_bedTexture = 0;
+  int m_bedVertCount = 0;
+  bool m_showBed = true;
+
+  // Wipe tower (P2.8.3)
+  QOpenGLShaderProgram m_wipeProg;
+  int m_uWipeMVP = -1, m_uWipeColor = -1;
+  GLuint m_wipeVao = 0, m_wipeVbo = 0;
+  int m_wipeVertCount = 0;
+  bool m_showWipeTower = false;
+  float m_wipeTowerWidth = 10.f;
+  float m_wipeTowerDepth = 10.f;
+  float m_wipeTowerHeight = 50.f;
+  float m_wipeTowerX = 100.f;
+  float m_wipeTowerZ = 25.f;
+  bool m_wipeTowerDirty = true;
 
   // Move gizmo (arrow geometry)
   GLuint m_moveGizmoVao = 0, m_moveGizmoVbo = 0;

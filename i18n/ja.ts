@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE TS>
-<TS version="2.1" language="zh_CN">
+<TS version="2.1" language="ja">
 <context>
     <name>BackendContext</name>
     <message>
@@ -612,6 +612,14 @@ Over-extrusion or under-extrusion at high speeds indicates the need for this cal
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="14"/>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="15"/>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="16"/>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="17"/>
+        <source>层高与线宽</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="15"/>
         <source>首层层高</source>
         <translation type="unfinished"></translation>
@@ -622,107 +630,13 @@ Over-extrusion or under-extrusion at high speeds indicates the need for this cal
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="19"/>
-        <source>壁线圈数</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="20"/>
-        <source>顶层层数</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="21"/>
-        <source>底层层数</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="35"/>
-        <source>填充密度 (%)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="35"/>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="36"/>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="37"/>
-        <source>填充</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="36"/>
-        <source>填充图案</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="36"/>
-        <source>网格</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="36"/>
-        <source>直线</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="36"/>
-        <source>三角</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="36"/>
-        <source>蜂巢</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="36"/>
-        <source>陀螺</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="23"/>
-        <source>填充重叠 (%)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="39"/>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="40"/>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="41"/>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="42"/>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="43"/>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="44"/>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="45"/>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="46"/>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="47"/>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="48"/>
-        <source>速度</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="44"/>
-        <source>空走速度 (mm/s)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="45"/>
-        <source>首层速度 (mm/s)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="39"/>
-        <source>外壁速度 (mm/s)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="14"/>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="15"/>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="16"/>
-        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="17"/>
-        <source>层高与线宽</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="17"/>
         <source>首层线宽</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="19"/>
+        <source>壁线圈数</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -742,6 +656,16 @@ Over-extrusion or under-extrusion at high speeds indicates the need for this cal
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="20"/>
+        <source>顶层层数</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="21"/>
+        <source>底层层数</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="22"/>
         <source>壁/填充顺序</source>
         <translation type="unfinished"></translation>
@@ -754,6 +678,11 @@ Over-extrusion or under-extrusion at high speeds indicates the need for this cal
     <message>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="22"/>
         <source>外壁→填充→内壁</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="23"/>
+        <source>填充重叠 (%)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -846,14 +775,75 @@ Over-extrusion or under-extrusion at high speeds indicates the need for this cal
     </message>
     <message>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="35"/>
+        <source>填充密度 (%)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="35"/>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="36"/>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="37"/>
+        <source>填充</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="35"/>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="36"/>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="37"/>
         <source>填充设置</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="36"/>
+        <source>填充图案</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="36"/>
+        <source>网格</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="36"/>
+        <source>直线</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="36"/>
+        <source>三角</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="36"/>
+        <source>蜂巢</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="36"/>
+        <source>陀螺</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="37"/>
         <source>填充角度 (°)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="39"/>
+        <source>外壁速度 (mm/s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="39"/>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="40"/>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="41"/>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="42"/>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="43"/>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="44"/>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="45"/>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="46"/>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="47"/>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="48"/>
+        <source>速度</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -895,7 +885,17 @@ Over-extrusion or under-extrusion at high speeds indicates the need for this cal
     </message>
     <message>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="44"/>
+        <source>空走速度 (mm/s)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="44"/>
         <source>空走速度</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="45"/>
+        <source>首层速度 (mm/s)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -1464,27 +1464,7 @@ Over-extrusion or under-extrusion at high speeds indicates the need for this cal
     </message>
 </context>
 <context>
-    <name>CrealityPrint</name>
-    <message>
-        <source>Prepare</source>
-        <translation type="vanished">准备</translation>
-    </message>
-    <message>
-        <source>Preview</source>
-        <translation type="vanished">预览</translation>
-    </message>
-    <message>
-        <source>Start Slice</source>
-        <translation type="vanished">开始切片</translation>
-    </message>
-</context>
-<context>
     <name>EditorViewModel</name>
-    <message>
-        <location filename="../src/core/viewmodels/EditorViewModel.h" line="522"/>
-        <source>就绪</source>
-        <translation type="unfinished"></translation>
-    </message>
     <message>
         <location filename="../src/core/viewmodels/EditorViewModel.cpp" line="557"/>
         <source>正在计算最佳平放面...</source>
@@ -1620,6 +1600,11 @@ Over-extrusion or under-extrusion at high speeds indicates the need for this cal
     <message>
         <location filename="../src/core/viewmodels/EditorViewModel.cpp" line="2648"/>
         <source>正在切片平板 %1/%2...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/EditorViewModel.h" line="522"/>
+        <source>就绪</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

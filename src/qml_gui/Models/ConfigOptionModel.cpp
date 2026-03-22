@@ -292,6 +292,10 @@ QString ConfigOptionModel::optUnit(int i) const
 {
   if (i < 0 || i >= m_options.size())
     return {};
+  // Prefer upstream sidetext (对齐上游 ConfigOptionDef::sidetext)
+  if (!m_options[i].sidetext.isEmpty())
+    return m_options[i].sidetext;
+  // Fallback: key-based heuristic
   const QString &key = m_options[i].key;
   if (key.contains("speed") || key.contains("feed"))
     return QStringLiteral("mm/s");
@@ -764,6 +768,17 @@ void ConfigOptionModel::loadFromUpstreamSchema()
     // Enum labels
     for (size_t i = 0; i < opt->enum_labels.size() && i < opt->enum_values.size(); ++i)
       entry.enumLabels.append(QString::fromUtf8(opt->enum_labels[i].c_str()));
+
+    // Tooltip from upstream (对齐上游 ConfigOptionDef::tooltip)
+    if (!opt->tooltip.empty())
+      entry.tooltip = QString::fromUtf8(opt->tooltip.c_str());
+
+    // Sidetext (unit label) from upstream (对齐上游 ConfigOptionDef::sidetext)
+    if (!opt->sidetext.empty())
+      entry.sidetext = QString::fromUtf8(opt->sidetext.c_str());
+
+    // Mode from upstream (对齐上游 ConfigOptionMode: 0=Simple, 1=Advanced, 2=Develop)
+    entry.mode = static_cast<int>(opt->mode);
 
     m_options.append(entry);
 

@@ -8,6 +8,7 @@
 #include <QVector>
 #include <QQueue>
 #include <QDateTime>
+#include <QSettings>
 
 class SliceService;
 class PresetServiceMock;
@@ -105,6 +106,7 @@ class BackendContext final : public QObject
   Q_PROPERTY(bool notificationsEnabled READ notificationsEnabled WRITE setNotificationsEnabled NOTIFY settingsChanged)
   Q_PROPERTY(bool hintsEnabled READ hintsEnabled WRITE setHintsEnabled NOTIFY settingsChanged)
   Q_PROPERTY(int autoDismissSec READ autoDismissSec WRITE setAutoDismissSec NOTIFY settingsChanged)
+  Q_PROPERTY(bool showProgressNotifications READ showProgressNotifications WRITE setShowProgressNotifications NOTIFY settingsChanged)
   Q_PROPERTY(QString latencyBrief READ latencyBrief NOTIFY latencyChanged)
   Q_PROPERTY(QString lastLatencyOperation READ lastLatencyOperation NOTIFY latencyChanged)
   Q_PROPERTY(int lastLatencyMs READ lastLatencyMs NOTIFY latencyChanged)
@@ -116,6 +118,8 @@ class BackendContext final : public QObject
   Q_PROPERTY(QColor borderColor READ borderColor NOTIFY themeChanged)
   /// 项目标题（优先显示 projectName，否则从 projectPath 中提取文件名）
   Q_PROPERTY(QString displayProjectTitle READ displayProjectTitle NOTIFY displayProjectTitleChanged)
+  /// 首次配置向导是否已完成（持久化到 QSettings）
+  Q_PROPERTY(bool configWizardCompleted READ configWizardCompleted WRITE setConfigWizardCompleted NOTIFY configWizardCompletedChanged)
 
 public:
   explicit BackendContext(QObject *parent = nullptr);
@@ -172,6 +176,28 @@ public:
   Q_INVOKABLE bool currentHintHasDocumentationLink() const;
 
   Q_INVOKABLE void openSettings(); // H3
+  /// 请求显示首次配置向导（QML 侧触发）
+  Q_INVOKABLE void showConfigWizard();
+  /// 请求显示热床形状设置对话框（QML 侧触发）
+  Q_INVOKABLE void showBedShapeDialog();
+  /// 请求显示 G-code 编辑对话框（QML 侧触发，对齐上游 EditGCodeDialog）
+  Q_INVOKABLE void showEditGCodeDialog(const QString &key = {}, const QString &value = {});
+  /// 请求显示 AMS 设置对话框（QML 侧触发，对齐上游 AMSMaterialsSetting / AMSSetting）
+  Q_INVOKABLE void showAMSSettingsDialog();
+  /// 请求显示固件升级对话框（QML 侧触发，对齐上游 UpgradePanel / MachineInfoPanel）
+  Q_INVOKABLE void showFirmwareDialog();
+  /// 请求显示速度限制对话框（QML 侧触发，对齐上游 AccelerationAndSpeedLimitDialog）
+  Q_INVOKABLE void showSpeedLimitDialog();
+  /// 请求显示擦料塔设置对话框（QML 侧触发，对齐上游 WipeTowerDialog）
+  Q_INVOKABLE void showWipeTowerDialog();
+  /// 请求显示打印主机设置对话框（QML 侧触发，对齐上游 PhysicalPrinterDialog）
+  Q_INVOKABLE void showPrintHostDialog();
+  /// 请求显示插件管理对话框（QML 侧触发，对齐上游 WebDownPluginDlg）
+  Q_INVOKABLE void showPluginManagerDialog();
+  /// 请求显示精简预览模式对话框（QML 侧触发，对齐上游 EnableLiteModeDialog）
+  Q_INVOKABLE void showEnableLiteModeDialog();
+  bool configWizardCompleted() const;
+  void setConfigWizardCompleted(bool completed);
   Q_INVOKABLE void topbarNewProject();
   Q_INVOKABLE bool topbarOpenProject(const QString &filePath);
   Q_INVOKABLE bool topbarImportModel(const QString &filePath);
@@ -207,6 +233,8 @@ public:
   void setHintsEnabled(bool v);
   int autoDismissSec() const { return m_autoDismissSec; }
   void setAutoDismissSec(int sec);
+  bool showProgressNotifications() const { return m_showProgressNotifications; }
+  void setShowProgressNotifications(bool v);
   QString latencyBrief() const;
   QString lastLatencyOperation() const;
   int lastLatencyMs() const;
@@ -221,6 +249,17 @@ signals:
   void displayProjectTitleChanged();
   void historyChanged();
   void settingsChanged();
+  void configWizardCompletedChanged();
+  void showConfigWizardRequested();
+  void showBedShapeDialogRequested();
+  void showEditGCodeDialogRequested(const QString &key, const QString &value);
+  void showAMSSettingsDialogRequested();
+  void showFirmwareDialogRequested();
+  void showSpeedLimitDialogRequested();
+  void showWipeTowerDialogRequested();
+  void showPrintHostDialogRequested();
+  void showPluginManagerDialogRequested();
+  void showEnableLiteModeDialogRequested();
 
 private:
   CalibrationServiceMock *calibrationService_ = nullptr;
@@ -292,6 +331,10 @@ private:
   bool m_notificationsEnabled = true;
   bool m_hintsEnabled = true;
   int m_autoDismissSec = 5;           ///< 默认自动消失秒数（非 persistent 通知）
+  bool m_showProgressNotifications = true; ///< 显示切片进度通知
+
+  /// 首次配置向导状态（对齐上游 ConfigWizard 首次运行检测）
+  bool m_configWizardCompleted = false;
 
   /// 提示数据库（对齐上游 HintDatabase）
   QVector<HintData> m_hints;

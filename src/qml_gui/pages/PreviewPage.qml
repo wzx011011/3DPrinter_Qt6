@@ -20,14 +20,21 @@ Item {
             root.previewVm.togglePlayPause()
             event.accepted = true
             break
-        case Qt.Key_Left:
-            root.previewVm.setCurrentMove(Math.max(0, root.previewVm.currentMove - 100))
+        // Move navigation（对齐上游 IMSlider Left/Right 单步，Shift 10 步，Ctrl 100 步）
+        case Qt.Key_Left: {
+            var step = event.modifiers & Qt.ControlModifier ? 100
+                     : event.modifiers & Qt.ShiftModifier ? 10 : 1
+            root.previewVm.setCurrentMove(Math.max(0, root.previewVm.currentMove - step))
             event.accepted = true
             break
-        case Qt.Key_Right:
-            root.previewVm.setCurrentMove(Math.min(root.previewVm.moveCount, root.previewVm.currentMove + 100))
+        }
+        case Qt.Key_Right: {
+            var stepR = event.modifiers & Qt.ControlModifier ? 100
+                      : event.modifiers & Qt.ShiftModifier ? 10 : 1
+            root.previewVm.setCurrentMove(Math.min(root.previewVm.moveCount, root.previewVm.currentMove + stepR))
             event.accepted = true
             break
+        }
         case Qt.Key_Home:
             root.previewVm.setCurrentMove(0)
             event.accepted = true
@@ -36,7 +43,7 @@ Item {
             root.previewVm.setCurrentMove(root.previewVm.moveCount)
             event.accepted = true
             break
-        // 层范围导航（对齐上游 IMSlider 鼠标滚轮行为）
+        // Layer navigation（对齐上游 IMSlider Up/Down 导航层滑块）
         case Qt.Key_PageUp:
             root.previewVm.moveLayerRange(event.modifiers & Qt.ShiftModifier ? 10 : 1)
             event.accepted = true
@@ -232,16 +239,46 @@ Item {
                 border.width: 1
                 border.color: Theme.borderSubtle
                 ColumnLayout {
+                    id: rightPanelLayout
                     anchors.fill: parent
                     anchors.margins: Theme.spacingLG
                     spacing: Theme.spacingLG
+                    property bool legendVisible: true
                     Components.StatsPanel {
                         Layout.fillWidth: true
                         previewVm: root.previewVm
                     }
+                    // 图例折叠开关（对齐上游 GCodeViewer m_legend_enabled）
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spacingSM
+                        Text {
+                            text: qsTr("图例")
+                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSizeLG
+                            font.bold: true
+                        }
+                        Item { Layout.fillWidth: true }
+                        // Collapse/expand toggle
+                        Text {
+                            text: rightPanelLayout.legendVisible ? "▾" : "▸"
+                            color: Theme.textTertiary
+                            font.pixelSize: 14
+                            MouseArea {
+                                anchors.fill: parent
+                                anchors.margins: -6
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: rightPanelLayout.legendVisible = !rightPanelLayout.legendVisible
+                            }
+                        }
+                    }
                     Components.Legend {
                         Layout.fillWidth: true
                         previewVm: root.previewVm
+                        visible: rightPanelLayout.legendVisible
+                        Layout.preferredHeight: rightPanelLayout.legendVisible ? implicitHeight : 0
+                        Behavior on Layout.preferredHeight { NumberAnimation { duration: 150; easing.type: Easing.InOutCubic } }
+                        clip: true
                     }
                     Item { Layout.fillHeight: true }
                 }

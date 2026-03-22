@@ -6,6 +6,7 @@ import QtQuick.Window
 import "controls"
 import "pages"
 import "components"
+import "dialogs"
 
 ApplicationWindow {
     id: root
@@ -13,7 +14,7 @@ ApplicationWindow {
     height: 1000
     visible: true
     title: "Creality Print 7.0 - QML"
-    color: "transparent"
+    color: "#0d0f12"
     flags: Qt.Window | Qt.FramelessWindowHint
     minimumWidth: 1100
     minimumHeight: 700
@@ -536,7 +537,7 @@ ApplicationWindow {
         anchors.fill: parent
         anchors.margins: root.frameMargin
         radius: root.frameRadius
-        color: backend.bgColor
+        color: backend ? backend.bgColor : "#0d0f12"
         border.color: backend.borderColor
         border.width: root.visibility === Window.Maximized ? 0 : 1
         clip: true
@@ -1199,6 +1200,87 @@ ApplicationWindow {
 
         // Floating Info toast (severity=0), z-stacked over shell content
         ErrorToast { }
+    }
+
+    // P8.1 — First-run ConfigWizard (auto-shows on first launch)
+    ConfigWizardDialog {
+        id: configWizardDialog
+        onWizardFinished: {
+            // Wizard completed successfully; selections saved to BackendContext
+        }
+    }
+
+    // Auto-show config wizard on first launch
+    Connections {
+        target: backend
+        function onShowConfigWizardRequested() { configWizardDialog.open() }
+        function onShowBedShapeDialogRequested() { bedShapeDialog.open() }
+        function onShowEditGCodeDialogRequested(key, value) {
+            editGCodeDialog.dialogTitle = qsTr("编辑自定义 G-code (%1)").arg(key || "")
+            editGCodeDialog.initialGCode = value || ""
+            editGCodeDialog.open()
+        }
+        function onShowAMSSettingsDialogRequested() { amsSettingsDialog.open() }
+        function onShowFirmwareDialogRequested() { firmwareDialog.open() }
+        function onShowSpeedLimitDialogRequested() { speedLimitDialog.open() }
+        function onShowWipeTowerDialogRequested() { wipeTowerDialog.open() }
+        function onShowPrintHostDialogRequested() { printHostDialog.open() }
+        function onShowPluginManagerDialogRequested() { pluginManagerDialog.open() }
+        function onShowEnableLiteModeDialogRequested() { enableLiteModeDialog.open() }
+    }
+
+    // P8.2 — Bed shape dialog
+    BedShapeDialog {
+        id: bedShapeDialog
+        editorVm: backend.editorViewModel
+    }
+
+    // P8.3 — G-code editor dialog
+    EditGCodeDialog {
+        id: editGCodeDialog
+        onGcodeAccepted: function(gcode) {
+            // Future: forward edited G-code to ConfigViewModel / PresetService
+        }
+    }
+
+    // P8.4 — AMS settings dialog
+    AMSSettingsDialog {
+        id: amsSettingsDialog
+    }
+
+    // P8.5 — Firmware dialog
+    FirmwareDialog {
+        id: firmwareDialog
+    }
+
+    // P8.6a — Speed limit dialog
+    SpeedLimitDialog {
+        id: speedLimitDialog
+    }
+
+    // P8.6b — Wipe tower dialog
+    WipeTowerDialog {
+        id: wipeTowerDialog
+    }
+
+    // P8.6c — Print host dialog
+    PrintHostDialog {
+        id: printHostDialog
+    }
+
+    // P10.1 — Plugin manager dialog
+    PluginManagerDialog {
+        id: pluginManagerDialog
+    }
+
+    // P10.2 — Enable lite mode dialog
+    EnableLiteModeDialog {
+        id: enableLiteModeDialog
+    }
+    Component.onCompleted: {
+        if (!backend.configWizardCompleted) {
+            configWizardDialog.open()
+        }
     }
 
     Rectangle {

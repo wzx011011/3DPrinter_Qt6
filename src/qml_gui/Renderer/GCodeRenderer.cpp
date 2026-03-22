@@ -4,6 +4,7 @@
 #include "GCodeRenderer.h"
 
 #include "GLViewport.h"
+#include "core/rendering/GLShaderUtil.h"
 
 #include <QOpenGLFramebufferObjectFormat>
 #include <QMatrix4x4>
@@ -345,10 +346,7 @@ void GCodeRenderer::initializeMarker()
   if (markerInitialized_)
     return;
 
-  markerProg_.addShaderFromSourceCode(QOpenGLShader::Vertex, kMarkerVert);
-  markerProg_.addShaderFromSourceCode(QOpenGLShader::Fragment, kMarkerFrag);
-  if (!markerProg_.link())
-    qWarning("[GCode] marker shader link failed: %s", qPrintable(markerProg_.log()));
+  GLShaderUtil::compileShaderProgram(markerProg_, "GCode marker", kMarkerVert, kMarkerFrag);
   markerU_mvp_ = markerProg_.uniformLocation("uMVP");
   markerU_model_ = markerProg_.uniformLocation("uModel");
   markerU_color_ = markerProg_.uniformLocation("uColor");
@@ -438,10 +436,7 @@ void GCodeRenderer::initializeIfNeeded()
   f_ = QOpenGLContext::currentContext()->extraFunctions();
   f_->initializeOpenGLFunctions();
 
-  prog_.addShaderFromSourceCode(QOpenGLShader::Vertex, kVert);
-  prog_.addShaderFromSourceCode(QOpenGLShader::Fragment, kFrag);
-  if (!prog_.link())
-    qWarning("[GCode] shader link failed: %s", qPrintable(prog_.log()));
+  GLShaderUtil::compileShaderProgram(prog_, "GCode", kVert, kFrag);
   uMvp_ = prog_.uniformLocation("uMVP");
 
   vao_.create();

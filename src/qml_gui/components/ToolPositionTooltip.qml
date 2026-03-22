@@ -88,6 +88,13 @@ Rectangle {
             Label { text: qsTr("加速度: ") + (root.previewVm ? root.previewVm.toolAcceleration.toFixed(0) : "0"); color: "#8b949e"; font.pixelSize: 11; font.family: "Consolas, monospace" }
         }
 
+        // 对齐上游 Marker::render LayerTime 字段（LayerTime/LayerTimeLog 视图模式）
+        Row {
+            spacing: 10
+            visible: root.previewVm && root.previewVm.toolLayerTime > 0
+            Label { text: qsTr("层耗时: ") + (root.previewVm ? root.previewVm.toolLayerTime.toFixed(1) : "0.0") + "s"; color: "#8b949e"; font.pixelSize: 11; font.family: "Consolas, monospace" }
+        }
+
         Row {
             spacing: 10
             visible: root.previewVm && root.previewVm.toolExtruderId > 0

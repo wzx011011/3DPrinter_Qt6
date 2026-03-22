@@ -1,5 +1,6 @@
 #include "GLViewportRenderer.h"
 #include "GLViewport.h"
+#include "core/rendering/GLShaderUtil.h"
 
 #include <QOpenGLContext>
 #include <QOpenGLFramebufferObjectFormat>
@@ -72,6 +73,40 @@ static const char *kGizmoFragSrc =
     "uniform vec4 uGizmoColor;\n"
     "out vec4 fragColor;\n"
     "void main(){ fragColor = uGizmoColor; }\n";
+
+// Bed shader: textured quad (P2.8.1 — 对齐上游 3DBed)
+static const char *kBedVertSrc =
+    "#version 330 core\n"
+    "layout(location = 0) in vec3 aPos;\n"
+    "layout(location = 1) in vec2 aTexCoord;\n"
+    "uniform mat4 uMVP;\n"
+    "out vec2 vTexCoord;\n"
+    "void main(){\n"
+    "  vTexCoord = aTexCoord;\n"
+    "  gl_Position = uMVP * vec4(aPos, 1.0);\n"
+    "}\n";
+
+static const char *kBedFragSrc =
+    "#version 330 core\n"
+    "in vec2 vTexCoord;\n"
+    "uniform sampler2D uTexture;\n"
+    "out vec4 fragColor;\n"
+    "void main(){\n"
+    "  fragColor = texture(uTexture, vTexCoord);\n"
+    "}\n";
+
+// Wipe tower shader: simple solid-color semi-transparent box (P2.8.3)
+static const char *kWipeVertSrc =
+    "#version 330 core\n"
+    "layout(location = 0) in vec3 aPos;\n"
+    "uniform mat4 uMVP;\n"
+    "void main(){ gl_Position = uMVP * vec4(aPos, 1.0); }\n";
+
+static const char *kWipeFragSrc =
+    "#version 330 core\n"
+    "uniform vec4 uColor;\n"
+    "out vec4 fragColor;\n"
+    "void main(){ fragColor = uColor; }\n";
 
 // ---------------------------------------------------------------------------
 // Colour palette
@@ -218,6 +253,16 @@ GLViewportRenderer::~GLViewportRenderer()
       m_f->glDeleteVertexArrays(1, &m_scaleGizmoVao);
     if (m_scaleGizmoVbo)
       m_f->glDeleteBuffers(1, &m_scaleGizmoVbo);
+    if (m_bedVao)
+      m_f->glDeleteVertexArrays(1, &m_bedVao);
+    if (m_bedVbo)
+      m_f->glDeleteBuffers(1, &m_bedVbo);
+    if (m_bedTexture)
+      m_f->glDeleteTextures(1, &m_bedTexture);
+    if (m_wipeVao)
+      m_f->glDeleteVertexArrays(1, &m_wipeVao);
+    if (m_wipeVbo)
+      m_f->glDeleteBuffers(1, &m_wipeVbo);
   }
 }
 
@@ -617,6 +662,23 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
   }
 
   m_wireframeMode = vp->wireframeMode();
+  m_showBed = vp->showBed();
+
+  // Wipe tower properties (P2.8.3)
+  m_showWipeTower = vp->showWipeTower();
+  if (m_wipeTowerWidth != vp->wipeTowerWidth() ||
+      m_wipeTowerDepth != vp->wipeTowerDepth() ||
+      m_wipeTowerHeight != vp->wipeTowerHeight() ||
+      m_wipeTowerX != vp->wipeTowerX() ||
+      m_wipeTowerZ != vp->wipeTowerZ())
+  {
+    m_wipeTowerWidth = vp->wipeTowerWidth();
+    m_wipeTowerDepth = vp->wipeTowerDepth();
+    m_wipeTowerHeight = vp->wipeTowerHeight();
+    m_wipeTowerX = vp->wipeTowerX();
+    m_wipeTowerZ = vp->wipeTowerZ();
+    m_wipeTowerDirty = true;
+  }
 
   // 如果有捕获结果，传回 GLViewport
   if (!m_capturedThumbnail.isEmpty())
@@ -710,7 +772,22 @@ void GLViewportRenderer::render()
   if (m_selectedId >= 0)
     renderGizmo(mvp);
 
-  // 3. Grid / axes
+  // 3. Bed textured quad (P2.8.1 — 对齐上游 3DBed)
+  if (m_showBed && m_bedVertCount > 0)
+    renderBed(mvp);
+
+  // 4. Wipe tower (P2.8.3 — semi-transparent box on bed)
+  if (m_showBed && m_showWipeTower)
+  {
+    if (m_wipeTowerDirty)
+    {
+      buildWipeTowerGeometry();
+      m_wipeTowerDirty = false;
+    }
+    renderWipeTower(mvp);
+  }
+
+  // 5. Grid / axes
   m_prog.bind();
   m_prog.setUniformValue(m_uMVP, mvp);
   m_vao.bind();
@@ -803,26 +880,17 @@ void GLViewportRenderer::initialize()
   m_glPolygonMode = reinterpret_cast<GlPolygonModeFn>(
       QOpenGLContext::currentContext()->getProcAddress("glPolygonMode"));
 
-  m_prog.addShaderFromSourceCode(QOpenGLShader::Vertex, kVertSrc);
-  m_prog.addShaderFromSourceCode(QOpenGLShader::Fragment, kFragSrc);
-  if (!m_prog.link())
-    qWarning("[GL] base: %s", qPrintable(m_prog.log()));
+  GLShaderUtil::compileShaderProgram(m_prog, "base", kVertSrc, kFragSrc);
   m_uMVP = m_prog.uniformLocation("uMVP");
   m_uColor = m_prog.uniformLocation("uColor");
 
-  m_meshProg.addShaderFromSourceCode(QOpenGLShader::Vertex, kMeshVertSrc);
-  m_meshProg.addShaderFromSourceCode(QOpenGLShader::Fragment, kMeshFragSrc);
-  if (!m_meshProg.link())
-    qWarning("[GL] mesh: %s", qPrintable(m_meshProg.log()));
+  GLShaderUtil::compileShaderProgram(m_meshProg, "mesh", kMeshVertSrc, kMeshFragSrc);
   m_uMeshMVP = m_meshProg.uniformLocation("uMVP");
   m_uMeshModel = m_meshProg.uniformLocation("uModel");
   m_uMeshBaseColor = m_meshProg.uniformLocation("uBaseColor");
   m_uMeshBright = m_meshProg.uniformLocation("uBrightness");
 
-  m_gizmoProg.addShaderFromSourceCode(QOpenGLShader::Vertex, kGizmoVertSrc);
-  m_gizmoProg.addShaderFromSourceCode(QOpenGLShader::Fragment, kGizmoFragSrc);
-  if (!m_gizmoProg.link())
-    qWarning("[GL] gizmo: %s", qPrintable(m_gizmoProg.log()));
+  GLShaderUtil::compileShaderProgram(m_gizmoProg, "gizmo", kGizmoVertSrc, kGizmoFragSrc);
   m_uGizmoMVP = m_gizmoProg.uniformLocation("uMVP");
   m_uGizmoCenter = m_gizmoProg.uniformLocation("uGizmoCenter");
   m_uGizmoScale = m_gizmoProg.uniformLocation("uGizmoScale");
@@ -845,6 +913,19 @@ void GLViewportRenderer::initialize()
   buildGizmoGeometry();
   buildRotateGizmoGeometry();
   buildScaleGizmoGeometry();
+
+  // Bed shader + geometry (P2.8.1)
+  GLShaderUtil::compileShaderProgram(m_bedProg, "bed", kBedVertSrc, kBedFragSrc);
+  m_uBedMVP = m_bedProg.uniformLocation("uMVP");
+  m_uBedTexture = m_bedProg.uniformLocation("uTexture");
+  createBedTexture();
+  buildBedGeometry();
+
+  // Wipe tower shader (P2.8.3)
+  GLShaderUtil::compileShaderProgram(m_wipeProg, "wipe tower", kWipeVertSrc, kWipeFragSrc);
+  m_uWipeMVP = m_wipeProg.uniformLocation("uMVP");
+  m_uWipeColor = m_wipeProg.uniformLocation("uColor");
+
   m_initialized = true;
 }
 
@@ -1855,4 +1936,230 @@ void GLViewportRenderer::captureThumbnailToFBO(int size)
   }
 
   m_capturedThumbnail = QString::fromLatin1(pngData.toBase64());
+}
+
+// ===========================================================================
+// Bed rendering — P2.8.1 (对齐上游 3DBed)
+// ===========================================================================
+
+void GLViewportRenderer::createBedTexture()
+{
+  // Procedural checkered texture matching upstream 3DBed style.
+  // DEFAULT_MODEL_COLOR (0.8157, 0.8314, 0.8706) and
+  // DEFAULT_MODEL_COLOR_DARK (0.2901, 0.2901, 0.3098).
+  // 8x8 checker tiles covering the texture, each tile 64x64 pixels.
+  constexpr int kTiles = 8;
+  constexpr int kTilePx = 64;
+  constexpr int kSize = kTiles * kTilePx; // 512
+
+  QImage img(kSize, kSize, QImage::Format_RGBA8888);
+  // Light: DEFAULT_MODEL_COLOR from upstream
+  const QRgb light = qRgba(208, 212, 222, 255); // 0.8157*255, 0.8314*255, 0.8706*255
+  // Dark: DEFAULT_MODEL_COLOR_DARK from upstream
+  const QRgb dark  = qRgba(74, 74, 79, 255);   // 0.2901*255, 0.2901*255, 0.3098*255
+
+  for (int ty = 0; ty < kTiles; ++ty)
+    for (int tx = 0; tx < kTiles; ++tx)
+    {
+      QRgb c = ((tx + ty) & 1) ? dark : light;
+      for (int py = 0; py < kTilePx; ++py)
+        for (int px = 0; px < kTilePx; ++px)
+          img.setPixel(tx * kTilePx + px, ty * kTilePx + py, c);
+    }
+
+  // Upload to GL texture
+  m_f->glGenTextures(1, &m_bedTexture);
+  m_f->glBindTexture(GL_TEXTURE_2D, m_bedTexture);
+  m_f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  m_f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  m_f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  m_f->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  // QImage is top-down; OpenGL expects bottom-up — flip vertically
+  img = img.mirrored(false, true);
+  m_f->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, kSize, kSize, 0,
+                    GL_RGBA, GL_UNSIGNED_BYTE, img.constBits());
+  m_f->glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void GLViewportRenderer::buildBedGeometry()
+{
+  // Flat quad covering the bed area (220x220mm, matching grid border 'P').
+  // Rendered at y = -0.04 (GROUND_Z from upstream 3DBed) to avoid z-fighting
+  // with grid lines at y=0.
+  // Vertex format: position(3 floats) + texcoord(2 floats) = 5 floats per vert.
+  const float half = 110.f; // half of 220mm
+  const float y = -0.04f;  // upstream GROUND_Z
+
+  // Two triangles forming a quad: xz plane at height y
+  float verts[] = {
+    // pos(x, y, z)              tex(u, v)
+    -half, y, -half,             0.f, 0.f,
+     half, y, -half,             1.f, 0.f,
+     half, y,  half,             1.f, 1.f,
+
+    -half, y, -half,             0.f, 0.f,
+     half, y,  half,             1.f, 1.f,
+    -half, y,  half,             0.f, 1.f,
+  };
+  m_bedVertCount = 6;
+
+  m_f->glGenVertexArrays(1, &m_bedVao);
+  m_f->glGenBuffers(1, &m_bedVbo);
+  m_f->glBindVertexArray(m_bedVao);
+  m_f->glBindBuffer(GL_ARRAY_BUFFER, m_bedVbo);
+  m_f->glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+
+  // location 0 = aPos (vec3), stride = 5 floats = 20 bytes
+  m_f->glEnableVertexAttribArray(0);
+  m_f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
+  // location 1 = aTexCoord (vec2), offset 12 bytes
+  m_f->glEnableVertexAttribArray(1);
+  m_f->glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float),
+                             (void *)(3 * sizeof(float)));
+
+  m_f->glBindVertexArray(0);
+  m_f->glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void GLViewportRenderer::renderBed(const QMatrix4x4 &mvp)
+{
+  m_bedProg.bind();
+  m_bedProg.setUniformValue(m_uBedMVP, mvp);
+
+  m_f->glActiveTexture(GL_TEXTURE0);
+  m_f->glBindTexture(GL_TEXTURE_2D, m_bedTexture);
+  m_bedProg.setUniformValue(m_uBedTexture, 0);
+
+  m_f->glBindVertexArray(m_bedVao);
+  m_f->glDrawArrays(GL_TRIANGLES, 0, m_bedVertCount);
+  m_f->glBindVertexArray(0);
+
+  m_f->glBindTexture(GL_TEXTURE_2D, 0);
+  m_bedProg.release();
+}
+
+// ===========================================================================
+// Wipe tower (P2.8.3) — semi-transparent rectangular prism on the bed
+// ===========================================================================
+void GLViewportRenderer::buildWipeTowerGeometry()
+{
+  // Coordinate system: GL(x, y_up, z). Tower sits on bed at y = GROUND_Z.
+  // The tower is a box with 6 faces (12 triangles, 36 vertices).
+  // Properties: m_wipeTowerX/Z = bed position, Width/Depth/Height = mm.
+  const float y0 = -0.04f; // GROUND_Z, same as bed surface
+  const float hw = m_wipeTowerWidth * 0.5f;
+  const float hd = m_wipeTowerDepth * 0.5f;
+  const float x0 = m_wipeTowerX;
+  const float z0 = m_wipeTowerZ;
+  const float y1 = y0 + m_wipeTowerHeight;
+
+  // Box: 8 corners
+  //   x range: [x0 - hw, x0 + hw]
+  //   y range: [y0, y1]
+  //   z range: [z0 - hd, z0 + hd]
+  const float xMin = x0 - hw, xMax = x0 + hw;
+  const float zMin = z0 - hd, zMax = z0 + hd;
+
+  // 6 faces x 2 triangles x 3 verts = 36 vertices (pos only, 3 floats each)
+  float verts[36 * 3];
+
+  // clang-format off
+  // Bottom face (y = y0) — normal -Y
+  verts[0]  = xMin; verts[1]  = y0; verts[2]  = zMin;
+  verts[3]  = xMax; verts[4]  = y0; verts[5]  = zMin;
+  verts[6]  = xMax; verts[7]  = y0; verts[8]  = zMax;
+  verts[9]  = xMin; verts[10] = y0; verts[11] = zMin;
+  verts[12] = xMax; verts[13] = y0; verts[14] = zMax;
+  verts[15] = xMin; verts[16] = y0; verts[17] = zMax;
+
+  // Top face (y = y1) — normal +Y
+  verts[18] = xMin; verts[19] = y1; verts[20] = zMin;
+  verts[21] = xMax; verts[22] = y1; verts[23] = zMax;
+  verts[24] = xMax; verts[25] = y1; verts[26] = zMin;
+  verts[27] = xMin; verts[28] = y1; verts[29] = zMin;
+  verts[30] = xMin; verts[31] = y1; verts[32] = zMax;
+  verts[33] = xMax; verts[34] = y1; verts[35] = zMax;
+
+  // Front face (z = zMax) — normal +Z
+  verts[36] = xMin; verts[37] = y0; verts[38] = zMax;
+  verts[39] = xMax; verts[40] = y0; verts[41] = zMax;
+  verts[42] = xMax; verts[43] = y1; verts[44] = zMax;
+  verts[45] = xMin; verts[46] = y0; verts[47] = zMax;
+  verts[48] = xMax; verts[49] = y1; verts[50] = zMax;
+  verts[51] = xMin; verts[52] = y1; verts[53] = zMax;
+
+  // Back face (z = zMin) — normal -Z
+  verts[54] = xMax; verts[55] = y0; verts[56] = zMin;
+  verts[57] = xMin; verts[58] = y0; verts[59] = zMin;
+  verts[60] = xMin; verts[61] = y1; verts[62] = zMin;
+  verts[63] = xMax; verts[64] = y0; verts[65] = zMin;
+  verts[66] = xMin; verts[67] = y1; verts[68] = zMin;
+  verts[69] = xMax; verts[70] = y1; verts[71] = zMin;
+
+  // Right face (x = xMax) — normal +X
+  verts[72] = xMax; verts[73] = y0; verts[74] = zMin;
+  verts[75] = xMax; verts[76] = y0; verts[77] = zMax;
+  verts[78] = xMax; verts[79] = y1; verts[80] = zMax;
+  verts[81] = xMax; verts[82] = y0; verts[83] = zMin;
+  verts[84] = xMax; verts[85] = y1; verts[86] = zMax;
+  verts[87] = xMax; verts[88] = y1; verts[89] = zMin;
+
+  // Left face (x = xMin) — normal -X
+  verts[90]  = xMin; verts[91]  = y0; verts[92]  = zMax;
+  verts[93]  = xMin; verts[94]  = y0; verts[95]  = zMin;
+  verts[96]  = xMin; verts[97]  = y1; verts[98]  = zMin;
+  verts[99]  = xMin; verts[100] = y0; verts[101] = zMax;
+  verts[102] = xMin; verts[103] = y1; verts[104] = zMin;
+  verts[105] = xMin; verts[106] = y1; verts[107] = zMax;
+  // clang-format on
+
+  m_wipeVertCount = 36;
+
+  // Clean up old buffers if they exist
+  if (m_wipeVbo)
+  {
+    m_f->glDeleteBuffers(1, &m_wipeVbo);
+    m_wipeVbo = 0;
+  }
+  if (m_wipeVao)
+  {
+    m_f->glDeleteVertexArrays(1, &m_wipeVao);
+    m_wipeVao = 0;
+  }
+
+  m_f->glGenVertexArrays(1, &m_wipeVao);
+  m_f->glGenBuffers(1, &m_wipeVbo);
+  m_f->glBindVertexArray(m_wipeVao);
+  m_f->glBindBuffer(GL_ARRAY_BUFFER, m_wipeVbo);
+  m_f->glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+
+  m_f->glEnableVertexAttribArray(0);
+  m_f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
+
+  m_f->glBindVertexArray(0);
+  m_f->glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void GLViewportRenderer::renderWipeTower(const QMatrix4x4 &mvp)
+{
+  if (m_wipeVertCount <= 0)
+    return;
+
+  m_f->glEnable(GL_BLEND);
+  m_f->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  m_f->glDepthMask(GL_FALSE);
+
+  m_wipeProg.bind();
+  // Semi-transparent accent color (upstream uses 0.66 alpha; we use 0.5 for subtlety)
+  m_wipeProg.setUniformValue(m_uWipeColor, QVector4D(0.35f, 0.60f, 0.85f, 0.50f));
+  m_wipeProg.setUniformValue(m_uWipeMVP, mvp);
+
+  m_f->glBindVertexArray(m_wipeVao);
+  m_f->glDrawArrays(GL_TRIANGLES, 0, m_wipeVertCount);
+  m_f->glBindVertexArray(0);
+
+  m_wipeProg.release();
+
+  m_f->glDepthMask(GL_TRUE);
+  m_f->glDisable(GL_BLEND);
 }

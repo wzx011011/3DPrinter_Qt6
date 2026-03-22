@@ -75,8 +75,18 @@ if(CREALITY_QML_GUI)
         src/core/services/CloudServiceMock.h
         src/core/services/ProjectServiceMock.cpp
         src/core/services/ProjectServiceMock.h
+        src/core/services/UndoRedoManager.cpp
+        src/core/services/UndoRedoManager.h
+        src/core/services/UndoCommands.cpp
+        src/core/services/UndoCommands.h
+        src/core/services/JobBase.h
+        src/core/services/JobBase.cpp
+        src/core/services/JobManager.h
+        src/core/services/JobManager.cpp
         src/core/services/NetworkServiceMock.cpp
         src/core/services/NetworkServiceMock.h
+        src/core/rendering/GLShaderUtil.cpp
+        src/core/rendering/GLShaderUtil.h
         src/core/viewmodels/EditorViewModel.cpp
         src/core/viewmodels/EditorViewModel.h
         src/core/viewmodels/PreviewViewModel.cpp
@@ -186,10 +196,14 @@ if(WIN32)
     set_target_properties(FramelessDialogDemo PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 
-# I2 — i18n 翼译文件
+# I2 — i18n 翻译文件
 qt_add_translations(FramelessDialogDemo
     TS_FILES
         i18n/zh_CN.ts
         i18n/en.ts
+        i18n/ja.ts
+        i18n/ko.ts
+        i18n/de.ts
+        i18n/fr.ts
 )
 

@@ -19,6 +19,7 @@
 #include <limits>
 #include <cstdint>
 #include <unordered_set>
+#include <QtMath>
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Model.hpp>
@@ -26,9 +27,18 @@
 #include <libslic3r/ModelVolume.hpp>
 #include <libslic3r/ModelInstance.hpp>
 #include <libslic3r/TriangleMesh.hpp>
+#include <libslic3r/QuadricEdgeCollapse.hpp>
 #include <libslic3r/Format/3mf.hpp>
 #include <libslic3r/Format/bbs_3mf.hpp>
 #include <libslic3r/PrintConfig.hpp>
+#include <libslic3r/Emboss.hpp>
+#include <libslic3r/TextConfiguration.hpp>
+#include <libslic3r/Orient.hpp>
+#include <libslic3r/ModelArrange.hpp>
+#include <libslic3r/TriangleMeshSlicer.hpp>
+#include <libslic3r/MeshBoolean.hpp>
+#include <libslic3r/Geometry.hpp>
+#include <libslic3r/CutUtils.hpp>
 #include <cstring> // memcpy
 
 namespace
@@ -170,10 +180,32 @@ namespace
     if (!option)
       return fallbackValue;
 
-    if (key == QStringLiteral("layer_height") || key == QStringLiteral("initial_layer_print_height") || key == QStringLiteral("line_width") || key == QStringLiteral("brim_width") || key == QStringLiteral("travel_speed") || key == QStringLiteral("initial_layer_speed") || key == QStringLiteral("outer_wall_speed"))
+    // Use the option's actual type to determine how to read (对齐上游 ConfigOptionType)
+    switch (option->type())
+    {
+    case Slic3r::coFloat:
+    case Slic3r::coPercent:
+    case Slic3r::coFloatOrPercent:
       return option->getFloat();
-
-    return option->getInt();
+    case Slic3r::coInt:
+      return option->getInt();
+    case Slic3r::coBool:
+      return option->getBool();
+    case Slic3r::coString:
+      return QString::fromStdString(static_cast<const Slic3r::ConfigOptionString *>(option)->value);
+    case Slic3r::coEnum:
+    case Slic3r::coEnums:
+    {
+      const int intVal = option->getInt();
+      // Try to find the enum label from print_config_def
+      const auto *def = Slic3r::print_config_def.get(stdKey);
+      if (def && intVal >= 0 && size_t(intVal) < def->enum_labels.size())
+        return QString::fromStdString(def->enum_labels[intVal]);
+      return intVal;
+    }
+    default:
+      return option->getInt();
+    }
   }
 
   bool writeConfigValue(ScopedConfig *config, const QString &key, const QVariant &value)
@@ -227,10 +259,37 @@ namespace
       return false;
 
     std::unique_ptr<Slic3r::ConfigOption> next(defaultOption->clone());
+
+    // Handle string values (enum labels from QML combobox, or string options)
+    if (value.typeId() == QMetaType::QString && !value.toString().isEmpty())
+    {
+      const std::string strVal = value.toString().toStdString();
+      // Check if this is an enum — convert label back to int index
+      const auto *def = Slic3r::print_config_def.get(stdKey);
+      if (def && !def->enum_labels.empty())
+      {
+        for (size_t ei = 0; ei < def->enum_labels.size(); ++ei)
+        {
+          if (strVal == def->enum_labels[ei])
+          {
+            next->setInt(static_cast<int>(ei));
+            config->set_key_value(stdKey, next.release());
+            return true;
+          }
+        }
+      }
+      // String option
+      if (auto *strOption = dynamic_cast<Slic3r::ConfigOptionString *>(next.get()))
+      {
+        strOption->value = strVal;
+        config->set_key_value(stdKey, next.release());
+        return true;
+      }
+    }
+
+    // Handle numeric/bool values
     if (auto *boolOption = dynamic_cast<Slic3r::ConfigOptionBool *>(next.get()))
       boolOption->value = value.toBool();
-    else if (auto *intOption = dynamic_cast<Slic3r::ConfigOptionInt *>(next.get()))
-      intOption->value = value.toInt();
     else if (auto *floatOption = dynamic_cast<Slic3r::ConfigOptionFloat *>(next.get()))
       floatOption->value = value.toDouble();
     else
@@ -597,6 +656,46 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         receiver->objectPrintableStates_ = printableStates;
         receiver->objectVisibleStates_ = visibleStates;
         receiver->modelCount_ = names.size();
+
+        // P0.5.1: 同步 libslic3r 真实变换到 Mock 平行数组（slic3r → GL 坐标转换）
+        {
+          receiver->objectPositions_.clear();
+          receiver->objectRotations_.clear();
+          receiver->objectScales_.clear();
+          const auto &objs = loadedModel->objects;
+          receiver->objectPositions_.reserve(int(objs.size()));
+          receiver->objectRotations_.reserve(int(objs.size()));
+          receiver->objectScales_.reserve(int(objs.size()));
+          for (const auto *obj : objs)
+          {
+            if (!obj || obj->instances.empty() || !obj->instances.front())
+            {
+              receiver->objectPositions_.append(QVector3D(0, 0, 0));
+              receiver->objectRotations_.append(QVector3D(0, 0, 0));
+              receiver->objectScales_.append(QVector3D(1, 1, 1));
+              continue;
+            }
+            const auto *inst = obj->instances.front();
+            const auto off = inst->get_offset();
+            // slic3r(X,Y,Z) → GL(X,Z,Y): GL.x=slic3r.x, GL.y=slic3r.z(高度), GL.z=slic3r.y
+            receiver->objectPositions_.append(QVector3D(
+              static_cast<float>(off.x()),
+              static_cast<float>(off.z()),
+              static_cast<float>(off.y())));
+            const auto rot = inst->get_rotation();
+            // 旋转：弧度 → 角度，不做 Y/Z 互换（分量级操作）
+            receiver->objectRotations_.append(QVector3D(
+              qRadiansToDegrees(static_cast<float>(rot.x())),
+              qRadiansToDegrees(static_cast<float>(rot.y())),
+              qRadiansToDegrees(static_cast<float>(rot.z()))));
+            const auto sc = inst->get_scaling_factor();
+            receiver->objectScales_.append(QVector3D(
+              static_cast<float>(sc.x()),
+              static_cast<float>(sc.y()),
+              static_cast<float>(sc.z())));
+          }
+        }
+
         receiver->plateNames_ = loadedPlateNames;
         receiver->plateObjectIndices_ = loadedPlateObjectIndices;
 
@@ -943,6 +1042,18 @@ int ProjectServiceMock::objectVolumeCount(int index) const
     return 0;
   const auto it = m_mockVolumes.constFind(index);
   return (it != m_mockVolumes.constEnd()) ? it->size() : 0;
+#endif
+}
+
+int ProjectServiceMock::objectInstanceCount(int index) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || index < 0 || size_t(index) >= model_->objects.size() || !model_->objects[size_t(index)])
+    return 0;
+  return int(model_->objects[size_t(index)]->instances.size());
+#else
+  Q_UNUSED(index)
+  return 1; // Mock 模式: 每个 object 有 1 个 instance
 #endif
 }
 
@@ -1301,10 +1412,52 @@ bool ProjectServiceMock::addVolume(int objectIndex, int volumeType)
   }
 
 #ifdef HAS_LIBSLIC3R
-  // TODO: upstream ModelObject::add_volume() integration
-  lastError_ = tr("真实模式添加部件待实现");
-  emit projectChanged();
-  return false;
+  // P0.5.4: 对齐上游 GUI_ObjectList::load_generic_subobject
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
+  {
+    lastError_ = tr("添加失败：模型对象无效");
+    emit projectChanged();
+    return false;
+  }
+
+  auto *obj = model_->objects[size_t(objectIndex)];
+
+  try
+  {
+    // 从第一个实体部件复制网格（对齐上游：modifier/blocker 继承父对象网格）
+    Slic3r::TriangleMesh mesh;
+    for (const auto *vol : obj->volumes)
+    {
+      if (vol && vol->is_model_part())
+      {
+        mesh = vol->mesh();
+        break;
+      }
+    }
+
+    // 计算同类部件数量（对齐上游命名规则）
+    static const char *typeNames[] = {
+      "Part", "Negative Volume", "Modifier", "Support Blocker", "Support Enforcer"};
+    int count = 0;
+    for (const auto *v : obj->volumes)
+    {
+      if (v && v->type() == static_cast<Slic3r::ModelVolumeType>(volumeType))
+        ++count;
+    }
+
+    auto *newVol = obj->add_volume(std::move(mesh), static_cast<Slic3r::ModelVolumeType>(volumeType));
+    newVol->name = std::string(typeNames[volumeType]) + " " + std::to_string(count + 1);
+
+    lastError_.clear();
+    emit projectChanged();
+    return true;
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = tr("添加失败：%1").arg(QString::fromStdString(ex.what()));
+    emit projectChanged();
+    return false;
+  }
 #else
   auto type = static_cast<MockVolumeType>(volumeType);
   MockVolumeEntry entry;
@@ -1363,6 +1516,19 @@ bool ProjectServiceMock::changeVolumeType(int objectIndex, int volumeIndex, int 
   if (oldType == newType)
     return true; // no change
 
+  // P0.5.4: 同步真实 ModelVolume 类型（仅 0-4 映射到上游 ModelVolumeType）
+#ifdef HAS_LIBSLIC3R
+  if (model_ && newVolumeType <= 4 &&
+      size_t(objectIndex) < model_->objects.size() &&
+      model_->objects[size_t(objectIndex)] &&
+      size_t(volumeIndex) < model_->objects[size_t(objectIndex)]->volumes.size())
+  {
+    auto *vol = model_->objects[size_t(objectIndex)]->volumes[size_t(volumeIndex)];
+    if (vol)
+      vol->set_type(static_cast<Slic3r::ModelVolumeType>(newVolumeType));
+  }
+#endif
+
   // 对齐上游约束：转换时保留部件名，但更新类型
   it->operator[](volumeIndex).type = newType;
 
@@ -1392,6 +1558,16 @@ bool ProjectServiceMock::changeVolumeType(int objectIndex, int volumeIndex, int 
 
 int ProjectServiceMock::volumeExtruderId(int objectIndex, int volumeIndex) const
 {
+#ifdef HAS_LIBSLIC3R
+  if (model_ && objectIndex >= 0 && size_t(objectIndex) < model_->objects.size() &&
+      model_->objects[size_t(objectIndex)] &&
+      volumeIndex >= 0 && size_t(volumeIndex) < model_->objects[size_t(objectIndex)]->volumes.size())
+  {
+    const auto *vol = model_->objects[size_t(objectIndex)]->volumes[size_t(volumeIndex)];
+    if (vol)
+      return vol->extruder_id();
+  }
+#endif
   auto it = m_mockVolumes.find(objectIndex);
   if (it == m_mockVolumes.end() || volumeIndex < 0 || volumeIndex >= it->size())
     return -1; // inherit from object
@@ -1420,6 +1596,24 @@ bool ProjectServiceMock::setVolumeExtruderId(int objectIndex, int volumeIndex, i
     return false;
   }
 
+  // P0.5.4: 同步真实 ModelVolume extruder config
+#ifdef HAS_LIBSLIC3R
+  if (model_ && size_t(objectIndex) < model_->objects.size() &&
+      model_->objects[size_t(objectIndex)] &&
+      size_t(volumeIndex) < model_->objects[size_t(objectIndex)]->volumes.size())
+  {
+    auto *vol = model_->objects[size_t(objectIndex)]->volumes[size_t(volumeIndex)];
+    if (vol && extruderId >= 0)
+    {
+      // 对齐上游 GUI_ObjectList::set_extruder_for_selected_items
+      if (vol->config.has("extruder"))
+        vol->config.set("extruder", extruderId);
+      else
+        vol->config.set_key_value("extruder", new Slic3r::ConfigOptionInt(extruderId));
+    }
+  }
+#endif
+
   it->operator[](volumeIndex).extruderId = extruderId;
   lastError_.clear();
   emit projectChanged();
@@ -1445,6 +1639,54 @@ bool ProjectServiceMock::addVolumeFromFile(int objectIndex, const QString &fileP
   QFileInfo fi(filePath);
   const QString baseName = fi.completeBaseName();
 
+#ifdef HAS_LIBSLIC3R
+  // P0.5.4: 对齐上游 GUI_ObjectList::load_generic_subobject 文件加载
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
+  {
+    lastError_ = tr("导入失败：模型对象无效");
+    return false;
+  }
+
+  auto *obj = model_->objects[size_t(objectIndex)];
+
+  try
+  {
+    Slic3r::Model loaded = Slic3r::Model::read_from_file(filePath.toStdString());
+    Slic3r::TriangleMesh mesh;
+
+    for (const auto *loadedObj : loaded.objects)
+    {
+      if (!loadedObj) continue;
+      for (const auto *vol : loadedObj->volumes)
+      {
+        if (vol && !vol->mesh().its.vertices.empty())
+        {
+          mesh = vol->mesh();
+          break;
+        }
+      }
+      if (!mesh.its.vertices.empty()) break;
+    }
+
+    if (mesh.its.vertices.empty())
+    {
+      lastError_ = tr("导入失败：文件中未找到有效网格");
+      return false;
+    }
+
+    auto *newVol = obj->add_volume(std::move(mesh), static_cast<Slic3r::ModelVolumeType>(volumeType));
+    newVol->name = baseName.toStdString();
+
+    lastError_.clear();
+    emit projectChanged();
+    return true;
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = tr("导入失败：%1").arg(QString::fromStdString(ex.what()));
+    return false;
+  }
+#else
   auto &vols = m_mockVolumes[objectIndex];
   static const char *typeNames[] = {
       QT_TRANSLATE_NOOP("ProjectServiceMock", "部件"),
@@ -1464,6 +1706,7 @@ bool ProjectServiceMock::addVolumeFromFile(int objectIndex, const QString &fileP
   lastError_.clear();
   emit projectChanged();
   return true;
+#endif
 }
 
 // ── 原始体创建（对齐上游 create_mesh + add_volume）──
@@ -1488,6 +1731,40 @@ bool ProjectServiceMock::addPrimitive(int objectIndex, int primitiveType)
     return false;
   }
 
+#ifdef HAS_LIBSLIC3R
+  if (model_ && objectIndex >= 0 && size_t(objectIndex) < model_->objects.size() && model_->objects[size_t(objectIndex)])
+  {
+    auto *obj = model_->objects[size_t(objectIndex)];
+    try
+    {
+      static const char *typeNames[] = {"Cube", "Sphere", "Cylinder", "Torus"};
+      indexed_triangle_set its;
+
+      switch (primitiveType)
+      {
+      case 0: its = Slic3r::its_make_cube(20, 20, 20); break;
+      case 1: its = Slic3r::its_make_sphere(10, 2.0 * M_PI / 360.0); break;
+      case 2: its = Slic3r::its_make_cylinder(10, 20, 2.0 * M_PI / 360.0); break;
+      default: its = Slic3r::its_make_sphere(10, 2.0 * M_PI / 360.0); break;
+      }
+
+      auto *newVol = obj->add_volume(Slic3r::TriangleMesh(std::move(its)));
+      newVol->name = std::string(typeNames[primitiveType]);
+
+      lastError_.clear();
+      emit projectChanged();
+      return true;
+    }
+    catch (const std::exception &ex)
+    {
+      lastError_ = tr("创建原始体失败：%1").arg(QString::fromStdString(ex.what()));
+      emit projectChanged();
+      return false;
+    }
+  }
+#endif
+
+  // Mock fallback
   auto &vols = m_mockVolumes[objectIndex];
   MockVolumeEntry entry;
   entry.name = tr(primNames[primitiveType]);
@@ -1514,6 +1791,81 @@ bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
     return false;
   }
 
+#ifdef HAS_LIBSLIC3R
+  // 对齐上游 GLGizmoEmboss → Emboss::text2shapes + polygons2model
+  if (model_ && size_t(objectIndex) < model_->objects.size() &&
+      model_->objects[size_t(objectIndex)])
+  {
+    try
+    {
+      // 1. 加载系统字体（对齐上游 GLGizmoEmboss 使用 wxFont → Emboss::create_font_file）
+      auto font_file = Slic3r::Emboss::create_font_file(
+#ifdef _WIN32
+          "C:/Windows/Fonts/arial.ttf"
+#else
+          "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+#endif
+      );
+      if (!font_file)
+      {
+        lastError_ = tr("添加文字失败：无法加载字体");
+        return false;
+      }
+
+      Slic3r::Emboss::FontFileWithCache font_cache(std::move(font_file));
+
+      // 2. 配置字体属性（对齐上游 FontProp，定义在 TextConfiguration.hpp）
+      Slic3r::FontProp font_prop;
+      font_prop.size_in_mm = 10.0;   // 10mm 字高
+      font_prop.boldness = 0.0f;     // 正常字重
+
+      // 3. 文字 → 2D 多边形
+      auto shapes = Slic3r::Emboss::text2shapes(font_cache, text.toLocal8Bit().constData(), font_prop);
+      if (shapes.expolygons.empty())
+      {
+        lastError_ = tr("添加文字失败：字体渲染返回空结果");
+        return false;
+      }
+
+      // 4. 2D 多边形 → 3D 网格（对齐上游 polygons2model + ProjectZ）
+      const double depth = 2.0; // 2mm 挤出深度
+      Slic3r::Emboss::ProjectZ projection(depth);
+      auto its = Slic3r::Emboss::polygons2model(shapes.expolygons, projection);
+
+      if (its.vertices.empty())
+      {
+        lastError_ = tr("添加文字失败：网格生成失败");
+        return false;
+      }
+
+      // 5. 添加为真实 Volume
+      Slic3r::TriangleMesh mesh(std::move(its));
+      auto *newVol = model_->objects[size_t(objectIndex)]->add_volume(std::move(mesh), Slic3r::ModelVolumeType::MODEL_PART);
+      if (newVol)
+      {
+        const QString volName = text.length() > 12 ? text.left(12) + "..." : text;
+        newVol->name = volName.toStdString();
+        newVol->set_type(Slic3r::ModelVolumeType::MODEL_PART);
+        // 同步 Mock 数据
+        auto &vols = m_mockVolumes[objectIndex];
+        MockVolumeEntry entry;
+        entry.name = volName;
+        entry.type = MockVolumeType::TextEmboss;
+        vols.append(entry);
+        lastError_.clear();
+        emit projectChanged();
+        return true;
+      }
+    }
+    catch (const std::exception &e)
+    {
+      lastError_ = QString::fromUtf8(e.what());
+      return false;
+    }
+  }
+#endif
+
+  // Fallback: Mock 模式
   auto &vols = m_mockVolumes[objectIndex];
   MockVolumeEntry entry;
   entry.name = text.length() > 12 ? text.left(12) + "..." : text;
@@ -1525,7 +1877,7 @@ bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
   return true;
 }
 
-// ── SVG 浮雕 volume（对齐上游 GLGizmoSVG）──
+// ── SVG 浮雕 volume（对齐上游 GLGizmoSVG → Model::read_from_file）──
 
 bool ProjectServiceMock::addSvgVolume(int objectIndex, const QString &svgFilePath)
 {
@@ -1536,8 +1888,55 @@ bool ProjectServiceMock::addSvgVolume(int objectIndex, const QString &svgFilePat
   }
 
   QFileInfo fi(svgFilePath);
+  if (!fi.exists())
+  {
+    lastError_ = tr("添加 SVG 失败：文件不存在");
+    return false;
+  }
+
   const QString baseName = fi.completeBaseName();
 
+#ifdef HAS_LIBSLIC3R
+  // 对齐上游：通过 Model::read_from_file 加载 SVG 为 3D 几何体
+  if (model_ && size_t(objectIndex) < model_->objects.size() &&
+      model_->objects[size_t(objectIndex)])
+  {
+    try
+    {
+      Slic3r::Model svgModel;
+      svgModel.read_from_file(svgFilePath.toLocal8Bit().constData());
+      if (!svgModel.objects.empty() && !svgModel.objects.front()->volumes.empty())
+      {
+        auto *srcVol = svgModel.objects.front()->volumes.front();
+        if (srcVol && !srcVol->mesh().empty())
+        {
+          auto *newVol = model_->objects[size_t(objectIndex)]->add_volume(*srcVol);
+          if (newVol)
+          {
+            newVol->name = baseName.toStdString();
+            newVol->set_type(Slic3r::ModelVolumeType::MODEL_PART);
+            // 同步 Mock 数据
+            auto &vols = m_mockVolumes[objectIndex];
+            MockVolumeEntry entry;
+            entry.name = baseName.length() > 12 ? baseName.left(12) + "..." : baseName;
+            entry.type = MockVolumeType::SvgEmboss;
+            vols.append(entry);
+            lastError_.clear();
+            emit projectChanged();
+            return true;
+          }
+        }
+      }
+    }
+    catch (const std::exception &e)
+    {
+      lastError_ = QString::fromUtf8(e.what());
+      return false;
+    }
+  }
+#endif
+
+  // Fallback: Mock 模式
   auto &vols = m_mockVolumes[objectIndex];
   MockVolumeEntry entry;
   entry.name = baseName.length() > 12 ? baseName.left(12) + "..." : baseName;
@@ -1548,6 +1947,884 @@ bool ProjectServiceMock::addSvgVolume(int objectIndex, const QString &svgFilePat
   emit projectChanged();
   return true;
 }
+
+// ── 网格简化（对齐上游 GLGizmoSimplify → its_quadric_edge_collapse）──
+
+bool ProjectServiceMock::simplifyObject(int objectIndex, int wantedCount, float maxError)
+{
+  if (loading_)
+  {
+    lastError_ = tr("加载中，无法简化");
+    emit projectChanged();
+    return false;
+  }
+
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+  {
+    lastError_ = tr("简化失败：对象索引无效");
+    emit projectChanged();
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
+  {
+    lastError_ = tr("简化失败：模型对象无效");
+    emit projectChanged();
+    return false;
+  }
+
+  auto *obj = model_->objects[size_t(objectIndex)];
+
+  try
+  {
+    for (auto *vol : obj->volumes)
+    {
+      if (!vol || vol->mesh().its.vertices.empty())
+        continue;
+
+      // Copy its (vol->mesh() returns const ref, need mutable copy)
+      auto itsCopy = vol->mesh().its;
+      const uint32_t originalCount = uint32_t(itsCopy.indices.size());
+
+      // 对齐上游 GLGizmoSimplify 参数传递
+      uint32_t targetCount = (wantedCount > 0) ? uint32_t(wantedCount) : 0;
+      float errorVal = (maxError > 0.0f) ? maxError : std::numeric_limits<float>::max();
+
+      Slic3r::its_quadric_edge_collapse(itsCopy, targetCount, &errorVal);
+
+      const uint32_t newCount = uint32_t(itsCopy.indices.size());
+      qInfo("[ProjectService] simplifyObject(%d): %u -> %u triangles",
+            objectIndex, originalCount, newCount);
+
+      // Replace volume mesh with simplified version (对齐上游 GLGizmoSimplify 结果回写)
+      vol->set_mesh(std::move(itsCopy));
+    }
+
+    lastError_.clear();
+    emit projectChanged();
+    return true;
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = tr("简化失败：%1").arg(QString::fromStdString(ex.what()));
+    emit projectChanged();
+    return false;
+  }
+#else
+  Q_UNUSED(wantedCount);
+  Q_UNUSED(maxError);
+  lastError_ = tr("简化功能需要 libslic3r 支持");
+  emit projectChanged();
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::orientObject(int objectIndex)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return false;
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj)
+    return false;
+
+  try
+  {
+    Slic3r::orientation::orient(obj);
+    return true;
+  }
+  catch (const std::exception &e)
+  {
+    qDebug() << "orient failed for object" << objectIndex << ":" << e.what();
+    return false;
+  }
+#else
+  Q_UNUSED(objectIndex);
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool alignY)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || model_->objects.empty())
+    return false;
+
+  try
+  {
+    Slic3r::ArrangeParams params;
+    params.min_obj_distance = static_cast<coord_t>(spacing * 1000.0); // mm → μm
+    params.allow_rotations = allowRotation;
+    params.align_to_y_axis = alignY;
+    params.parallel = false; // Run synchronously in Qt thread
+    params.progressind = [](unsigned, std::string) {}; // Suppress console output
+
+    Slic3r::InfiniteBed bed;
+    Slic3r::arrange_objects(*model_, bed, params);
+    return true;
+  }
+  catch (const std::exception &e)
+  {
+    qDebug() << "arrange failed:" << e.what();
+    return false;
+  }
+#else
+  Q_UNUSED(spacing);
+  Q_UNUSED(allowRotation);
+  Q_UNUSED(alignY);
+  return false;
+#endif
+}
+
+int ProjectServiceMock::cutObject(int objectIndex, int axis, double position, int keepMode)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return -1;
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || obj->volumes.empty())
+    return -1;
+
+  try
+  {
+    // Collect all model_part volumes into a single mesh
+    indexed_triangle_set combined;
+    for (auto *vol : obj->volumes)
+    {
+      if (vol->is_model_part())
+        Slic3r::its_merge(combined, vol->mesh().its);
+    }
+    if (combined.indices.empty())
+      return -1;
+
+    // Transform mesh to align cut axis with Z:
+    // Z axis: no rotation, cut at z=position
+    // X axis: rotate 90° around Y (X→Z), cut at z=position
+    // Y axis: rotate -90° around X (Y→Z), cut at z=position
+    Eigen::Matrix3f rot;
+    float cutZ = float(position);
+    if (axis == 1)
+    {
+      // Y→Z: rotate -90° around X
+      rot = Eigen::AngleAxisf(float(-M_PI / 2.0), Eigen::Vector3f::UnitX()).toRotationMatrix();
+    }
+    else if (axis == 0)
+    {
+      // X→Z: rotate 90° around Y
+      rot = Eigen::AngleAxisf(float(M_PI / 2.0), Eigen::Vector3f::UnitY()).toRotationMatrix();
+    }
+    else
+    {
+      rot = Eigen::Matrix3f::Identity();
+    }
+
+    // Apply rotation to all vertices
+    for (auto &v : combined.vertices)
+    {
+      Eigen::Vector3f p(v.x(), v.y(), v.z());
+      p = rot * p;
+      v.x() = p.x(); v.y() = p.y(); v.z() = p.z();
+    }
+
+    // Perform the cut at the Z height
+    indexed_triangle_set upper, lower;
+    Slic3r::cut_mesh(combined, cutZ, &upper, &lower, true);
+
+    // Rotate results back
+    auto rotInv = rot.transpose();
+    auto rotateBack = [&rotInv](indexed_triangle_set &its)
+    {
+      for (auto &v : its.vertices)
+      {
+        Eigen::Vector3f p(v.x(), v.y(), v.z());
+        p = rotInv * p;
+        v.x() = p.x(); v.y() = p.y(); v.z() = p.z();
+      }
+    };
+
+    // Determine what to keep based on keepMode: 0=all, 1=upper, 2=lower
+    bool keepUpper = (keepMode == 0 || keepMode == 1);
+    bool keepLower = (keepMode == 0 || keepMode == 2);
+
+    if (!keepUpper && !keepLower)
+      return -1;
+
+    // Replace original object's mesh with the lower part
+    if (keepLower && !lower.indices.empty())
+    {
+      rotateBack(lower);
+      // Replace first model_part volume mesh
+      for (auto *vol : obj->volumes)
+      {
+        if (vol->is_model_part())
+        {
+          vol->set_mesh(Slic3r::TriangleMesh(std::move(lower)));
+          break;
+        }
+      }
+    }
+    else if (!keepLower)
+    {
+      // Only keeping upper — delete the original object's mesh (will be replaced by upper)
+    }
+
+    // Add upper part as a new object if keeping it
+    if (keepUpper && !upper.indices.empty())
+    {
+      rotateBack(upper);
+      auto *newObj = model_->add_object();
+      newObj->name = obj->name + "_upper";
+      newObj->add_volume(Slic3r::TriangleMesh(std::move(upper)));
+      // Copy instance transforms from original object
+      for (auto *inst : obj->instances)
+        newObj->add_instance(*inst);
+
+      // Rebuild metadata arrays for the new object
+      objectNames_.append(QString::fromStdString(newObj->name));
+      objectPositions_.append({0, 0, 0});
+      objectRotations_.append({0, 0, 0});
+      objectScales_.append({1, 1, 1});
+      objectPrintableStates_.append(true);
+      objectVisibleStates_.append(true);
+
+      return objectNames_.size() - 1;
+    }
+
+    return -1; // No new object created (only original modified)
+  }
+  catch (const std::exception &e)
+  {
+    qDebug() << "cut failed for object" << objectIndex << ":" << e.what();
+    return -1;
+  }
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(axis);
+  Q_UNUSED(position);
+  Q_UNUSED(keepMode);
+  return -1;
+#endif
+}
+
+int ProjectServiceMock::cutObjectWithGroove(int objectIndex, int axis, double position, int keepMode,
+                                            float grooveDepth, float grooveWidth, float grooveFlapsAngle, float grooveAngle)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return -1;
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || obj->volumes.empty())
+    return -1;
+
+  try
+  {
+    // Build the cut_matrix: translation to cut plane position + rotation aligning cut axis with Z
+    // The Cut class expects a transform that maps the model into a space where the cut
+    // happens at z=0 in the XY plane.
+    // For groove cut: cut_matrix = translation(position along cut axis) * rotation(axis->Z)
+    // rotation_m (second param to perform_with_groove) is just the rotation part.
+
+    using Vec3d = Eigen::Matrix<double, 3, 1, Eigen::DontAlign>;
+
+    // Build rotation: align the cut axis with Z
+    Slic3r::Transform3d rotation_m = Slic3r::Transform3d::Identity();
+    Vec3d cut_translation = Vec3d::Zero();
+
+    if (axis == 0)
+    {
+      // X axis: rotate Y by -90 degrees so X->Z
+      rotation_m = Eigen::AngleAxisd(-M_PI / 2.0, Vec3d::UnitY()) * Slic3r::Transform3d::Identity();
+      cut_translation = Vec3d(position, 0.0, 0.0);
+    }
+    else if (axis == 1)
+    {
+      // Y axis: rotate X by +90 degrees so Y->Z
+      rotation_m = Eigen::AngleAxisd(M_PI / 2.0, Vec3d::UnitX()) * Slic3r::Transform3d::Identity();
+      cut_translation = Vec3d(0.0, position, 0.0);
+    }
+    else
+    {
+      // Z axis: no rotation needed, cut at z=position
+      rotation_m = Slic3r::Transform3d::Identity();
+      cut_translation = Vec3d(0.0, 0.0, position);
+    }
+
+    // cut_matrix = translation to cut position * rotation (aligns cut axis with Z)
+    // This follows upstream: get_cut_matrix() = translation_transform(cut_center_offset) * m_rotation_m
+    Slic3r::Transform3d cut_matrix;
+    cut_matrix = Eigen::Translation3d(cut_translation) * rotation_m;
+
+    // Build attributes based on keepMode: 0=all, 1=upper, 2=lower
+    // Follow upstream pattern: only_if(condition, enum) to build bitmask
+    using MCA = Slic3r::ModelObjectCutAttribute;
+    Slic3r::ModelObjectCutAttributes attributes =
+        Slic3r::only_if(keepMode == 0 || keepMode == 1, MCA::KeepUpper) |
+        Slic3r::only_if(keepMode == 0 || keepMode == 2, MCA::KeepLower) |
+        MCA::KeepAsParts;
+
+    // Build Groove struct (对齐上游 Cut::Groove)
+    Slic3r::Cut::Groove groove;
+    groove.depth = grooveDepth;
+    groove.width = grooveWidth;
+    groove.flaps_angle = grooveFlapsAngle;
+    groove.angle = grooveAngle;
+    groove.depth_init = grooveDepth;
+    groove.width_init = grooveWidth;
+    groove.flaps_angle_init = grooveFlapsAngle;
+    groove.angle_init = grooveAngle;
+    groove.depth_tolerance = 0.1f;
+    groove.width_tolerance = 0.1f;
+
+    // Validate groove: flaps_width must not exceed groove.width
+    // (对齐上游 has_valid_groove check)
+    const float flaps_width = (grooveFlapsAngle > 0.001f)
+        ? -2.0f * grooveDepth / std::tan(grooveFlapsAngle)
+        : 0.0f;
+    if (flaps_width > grooveWidth)
+    {
+      qDebug() << "cutObjectWithGroove: invalid groove - flaps_width" << flaps_width
+               << "> groove.width" << grooveWidth;
+      return -1;
+    }
+
+    // Use instance 0 (single instance model)
+    const int instance_idx = 0;
+
+    // Perform the groove cut (对齐上游 perform_cut → cut.perform_with_groove)
+    Slic3r::Cut cut(obj, instance_idx, cut_matrix, attributes);
+    const Slic3r::ModelObjectPtrs &new_objects = cut.perform_with_groove(groove, rotation_m, false);
+
+    if (new_objects.empty())
+      return -1;
+
+    // Replace original object with the first cut result, add subsequent results as new objects
+    bool firstResult = true;
+    int newObjectIdx = -1;
+
+    for (auto *newObj : new_objects)
+    {
+      if (!newObj || newObj->volumes.empty())
+        continue;
+
+      if (firstResult)
+      {
+        // Replace original object's volumes with the first result
+        // (upper part replaces original, or lower part depending on keep mode)
+        obj->clear_volumes();
+        for (auto *vol : newObj->volumes)
+        {
+          auto *newVol = obj->add_volume(*vol);
+          Q_UNUSED(newVol);
+        }
+        obj->name = newObj->name;
+        firstResult = false;
+        newObjectIdx = objectIndex;
+      }
+      else
+      {
+        // Add subsequent results as new objects
+        auto *addedObj = model_->add_object(*newObj);
+        // Rebuild metadata arrays for the new object
+        objectNames_.append(QString::fromStdString(addedObj->name));
+        objectPositions_.append({0, 0, 0});
+        objectRotations_.append({0, 0, 0});
+        objectScales_.append({1, 1, 1});
+        objectPrintableStates_.append(true);
+        objectVisibleStates_.append(true);
+        newObjectIdx = objectNames_.size() - 1;
+      }
+    }
+
+    return newObjectIdx;
+  }
+  catch (const std::exception &e)
+  {
+    qDebug() << "cutObjectWithGroove failed for object" << objectIndex << ":" << e.what();
+    return -1;
+  }
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(axis);
+  Q_UNUSED(position);
+  Q_UNUSED(keepMode);
+  Q_UNUSED(grooveDepth);
+  Q_UNUSED(grooveWidth);
+  Q_UNUSED(grooveFlapsAngle);
+  Q_UNUSED(grooveAngle);
+  return -1;
+#endif
+}
+
+bool ProjectServiceMock::mirrorObject(int objectIndex, int axis)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return false;
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || obj->instances.empty())
+    return false;
+
+  try
+  {
+    // Toggle mirror on the specified axis (0=X, 1=Y, 2=Z)
+    const Slic3r::Axis axes[] = {Slic3r::X, Slic3r::Y, Slic3r::Z};
+    if (axis < 0 || axis > 2)
+      return false;
+    auto *inst = obj->instances.front();
+    const double current = inst->get_mirror(axes[axis]);
+    inst->set_mirror(axes[axis], -current); // Toggle: 1→-1 or -1→1
+    return true;
+  }
+  catch (const std::exception &e)
+  {
+    qDebug() << "mirror failed for object" << objectIndex << ":" << e.what();
+    return false;
+  }
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(axis);
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::meshBoolean(int srcObjectIndex, int toolObjectIndex, int operation)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_)
+    return false;
+  if (srcObjectIndex < 0 || size_t(srcObjectIndex) >= model_->objects.size())
+    return false;
+  if (toolObjectIndex < 0 || size_t(toolObjectIndex) >= model_->objects.size())
+    return false;
+
+  auto *srcObj = model_->objects[size_t(srcObjectIndex)];
+  auto *toolObj = model_->objects[size_t(toolObjectIndex)];
+  if (!srcObj || !toolObj || srcObj->volumes.empty() || toolObj->volumes.empty())
+    return false;
+
+  try
+  {
+    // Collect source mesh (all model_part volumes, with transform)
+    Slic3r::TriangleMesh srcMesh;
+    for (auto *vol : srcObj->volumes)
+    {
+      if (vol->is_model_part())
+      {
+        auto m = vol->mesh();
+        m.transform(vol->get_matrix());
+        Slic3r::its_merge(srcMesh.its, m.its);
+      }
+    }
+    if (srcMesh.its.indices.empty())
+      return false;
+
+    // Collect tool mesh (all model_part volumes, with transform)
+    Slic3r::TriangleMesh toolMesh;
+    for (auto *vol : toolObj->volumes)
+    {
+      if (vol->is_model_part())
+      {
+        auto m = vol->mesh();
+        m.transform(vol->get_matrix());
+        Slic3r::its_merge(toolMesh.its, m.its);
+      }
+    }
+    if (toolMesh.its.indices.empty())
+      return false;
+
+    // Perform boolean operation (对齐上游 GLGizmoMeshBoolean::execute_mesh_boolean)
+    // operation: 0=union, 1=difference(A-B), 2=intersection
+    // Use CGAL backend directly (对齐上游 Slic3r::MeshBoolean::cgal::plus/minus/intersect)
+    if (operation == 0)
+    {
+      Slic3r::MeshBoolean::cgal::plus(srcMesh, toolMesh);
+    }
+    else if (operation == 1)
+    {
+      Slic3r::MeshBoolean::cgal::minus(srcMesh, toolMesh);
+    }
+    else if (operation == 2)
+    {
+      Slic3r::MeshBoolean::cgal::intersect(srcMesh, toolMesh);
+    }
+    else
+    {
+      return false;
+    }
+
+    // Replace source object's first model_part volume with result mesh
+    // (对齐上游 generate_new_volume behavior: replace src volume, optionally delete tool)
+    bool replaced = false;
+    for (auto *vol : srcObj->volumes)
+    {
+      if (vol->is_model_part())
+      {
+        vol->set_mesh(std::move(srcMesh));
+        vol->set_new_unique_id();
+        replaced = true;
+        break;
+      }
+    }
+
+    // Delete tool object from model (对齐上游: delete_input = true for union)
+    if (replaced)
+    {
+      // Remove tool object from model_ internal list
+      model_->objects.erase(model_->objects.begin() + toolObjectIndex);
+
+      // Sync mock arrays: remove tool object entry
+      if (toolObjectIndex >= 0 && toolObjectIndex < objectNames_.size())
+      {
+        objectNames_.removeAt(toolObjectIndex);
+        objectModuleNames_.removeAt(toolObjectIndex);
+        objectPrintableStates_.removeAt(toolObjectIndex);
+        objectVisibleStates_.removeAt(toolObjectIndex);
+        objectPositions_.removeAt(toolObjectIndex);
+        objectRotations_.removeAt(toolObjectIndex);
+        objectScales_.removeAt(toolObjectIndex);
+        m_mockVolumes.remove(toolObjectIndex);
+        m_mockObjectOverrides.remove(toolObjectIndex);
+        m_mockLayerRanges.remove(toolObjectIndex);
+        modelCount_ = objectNames_.size();
+
+        // Update plate object indices (shift down any index > toolObjectIndex)
+        for (auto &plateObjs : plateObjectIndices_)
+        {
+          for (int i = 0; i < plateObjs.size(); ++i)
+          {
+            if (plateObjs[i] == toolObjectIndex)
+              plateObjs.removeAt(i--);
+            else if (plateObjs[i] > toolObjectIndex)
+              --plateObjs[i];
+          }
+        }
+
+        // Update source index if it shifted
+        if (srcObjectIndex > toolObjectIndex)
+          --srcObjectIndex;
+
+        // Refresh source object name to indicate boolean result
+        if (srcObjectIndex >= 0 && srcObjectIndex < objectNames_.size())
+        {
+          const char *suffix[] = {"_union", "_diff", "_inter"};
+          objectNames_[srcObjectIndex] += QString(suffix[operation]);
+        }
+      }
+
+      emit projectChanged();
+      emit plateDataLoaded(plateCount_);
+    }
+
+    return replaced;
+  }
+  catch (const std::exception &e)
+  {
+    qWarning() << "meshBoolean failed:" << e.what();
+    return false;
+  }
+#else
+  Q_UNUSED(srcObjectIndex);
+  Q_UNUSED(toolObjectIndex);
+  Q_UNUSED(operation);
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::drillObject(int objectIndex, float radius, float depth, int shape, int direction, bool oneLayerOnly)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_)
+    return false;
+  if (objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return false;
+
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || obj->volumes.empty())
+    return false;
+
+  try
+  {
+    // Collect source mesh from first model_part volume (对齐上游 GLGizmoDrill)
+    Slic3r::ModelVolume *srcVol = nullptr;
+    for (auto *vol : obj->volumes)
+    {
+      if (vol->is_model_part())
+      {
+        srcVol = vol;
+        break;
+      }
+    }
+    if (!srcVol)
+      return false;
+
+    // Get the volume's mesh (with its transform applied)
+    Slic3r::TriangleMesh srcMesh(srcVol->mesh().its);
+
+    // Clean up source mesh (对齐上游 its_merge_vertices + its_remove_degenerate_faces)
+    Slic3r::its_merge_vertices(srcMesh.its);
+    Slic3r::its_remove_degenerate_faces(srcMesh.its);
+    Slic3r::its_compactify_vertices(srcMesh.its);
+
+    if (srcMesh.its.indices.empty())
+      return false;
+
+    // Create drill tool mesh (对齐上游 GLGizmoDrill constructor: its_make_cylinder for all shapes)
+    // Upstream uses the same its_make_cylinder with different angular resolution:
+    //   Circle: 2*PI/16, Square: 2*PI/4, Triangle: 2*PI/3
+    double angle = 2.0 * M_PI / 16.0;
+    switch (shape)
+    {
+    case 1: angle = 2.0 * M_PI / 3.0; break;  // Triangle
+    case 2: angle = 2.0 * M_PI / 4.0; break;  // Square
+    default: break; // Circle (16 segments)
+    }
+
+    indexed_triangle_set drill_its = Slic3r::its_make_cylinder(1.0, 1.0, angle);
+    Slic3r::TriangleMesh drillMesh(drill_its);
+
+    // Compute bounding box to determine drill position
+    const auto bb = srcMesh.bounding_box();
+    const double topZ = bb.max.z();
+
+    // Position the drill at top-center of the object, drilling downward (-Z)
+    // (对齐上游 feature_matrix_world construction, simplified without raycasting hit point)
+    const double guard = 100.0; // 对齐上游 depth_scale_factor
+    const double drillDepth = oneLayerOnly ? 2.0 : static_cast<double>(depth);
+
+    // Build feature matrix in local volume space (对齐上游 GLGizmoDrill::gizmo_event)
+    // The drill mesh unit cylinder is 1x1, so we scale by (radius, radius, drillDepth + guard)
+    // and position at (center_x, center_y, topZ + guard) pointing down (-Z)
+    const double cx = (bb.min.x() + bb.max.x()) * 0.5;
+    const double cy = (bb.min.y() + bb.max.y()) * 0.5;
+
+    // Direction handling (对齐上游 GLGizmoDrill::getDirection):
+    // direction 0 = Normal (surface normal, simplified to -Z here)
+    // direction 1 = Parallel to platform (horizontal, simplified to -Y here)
+    // direction 2 = Perpendicular to screen (not applicable without camera, use -Z)
+    Slic3r::Vec3d drillNormal = Slic3r::Vec3d::UnitZ(); // Drill direction (+Z = down into object)
+    Slic3r::Vec3d drillPos(cx, cy, topZ);
+
+    if (direction == 1)
+    {
+      // Parallel to platform: horizontal drill from the side
+      drillNormal = Slic3r::Vec3d::UnitY();
+      drillPos = Slic3r::Vec3d(bb.max.x(), (bb.min.y() + bb.max.y()) * 0.5, (bb.min.z() + bb.max.z()) * 0.5);
+    }
+    // direction 0 and 2 both drill vertically (simplified)
+
+    // The drill mesh is along Z-axis; we rotate it to align with drill direction
+    // (对齐上游 Eigen::Quaternion::FromTwoVectors(Vec3d::UnitZ(), -n_world))
+    Eigen::Quaterniond rot = Eigen::Quaterniond::FromTwoVectors(Eigen::Vector3d::UnitZ(), -drillNormal);
+
+    // Transform: translate to drill position + guard offset along drill direction,
+    // then rotate to align with drill normal, then scale to desired radius/depth
+    // (对齐上游 feature_matrix_world construction)
+    const Slic3r::Transform3d featureMatrix =
+      Slic3r::Geometry::translation_transform(drillPos + drillNormal * guard) *
+      rot *
+      Slic3r::Geometry::scale_transform(Slic3r::Vec3d(static_cast<double>(radius), static_cast<double>(radius), drillDepth + guard));
+
+    // Transform drill mesh by feature matrix (对齐 upstream temp_tool_mesh.transform(feature_matrix_local))
+    drillMesh.transform(featureMatrix);
+
+    // Perform CGAL boolean subtraction (对齐上游 sla::hollow_mesh_and_drill → MeshBoolean::cgal::minus)
+    // Note: hollow_mesh_and_drill internally calls MeshBoolean::cgal::minus too,
+    // but also pulls in OpenVDB (mesh_to_grid/grid_to_mesh/redistance_grid).
+    // We use the CGAL minus directly to avoid the OpenVDB linker dependency.
+    try
+    {
+      Slic3r::MeshBoolean::cgal::minus(srcMesh, drillMesh);
+
+      // Update source volume with drilled mesh (对齐上游 generate_new_volume)
+      srcVol->set_mesh(std::move(srcMesh));
+      srcVol->set_new_unique_id();
+
+      syncTransformsFromModel();
+      emit projectChanged();
+      return true;
+    }
+    catch (const std::exception &e)
+    {
+      qWarning() << "drillObject: CGAL minus failed:" << e.what();
+      return false;
+    }
+  }
+  catch (const std::exception &e)
+  {
+    qWarning() << "drillObject failed for object" << objectIndex << ":" << e.what();
+    return false;
+  }
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(radius);
+  Q_UNUSED(depth);
+  Q_UNUSED(shape);
+  Q_UNUSED(direction);
+  Q_UNUSED(oneLayerOnly);
+  return false;
+#endif
+}
+
+void ProjectServiceMock::syncTransformsFromModel()
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_)
+    return;
+  for (int i = 0; i < objectNames_.size() && i < objectPositions_.size(); ++i)
+  {
+    if (size_t(i) < model_->objects.size() && model_->objects[size_t(i)])
+    {
+      objectPositions_[i] = objectPosition(i);
+      objectRotations_[i] = objectRotation(i);
+      objectScales_[i] = objectScale(i);
+    }
+  }
+#endif
+}
+
+// ── Mesh snapshot for undo/redo ──
+
+QByteArray ProjectServiceMock::captureObjectMeshSnapshot(int objectIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return {};
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj)
+    return {};
+  // Find the first model_part volume
+  Slic3r::ModelVolume *srcVol = nullptr;
+  for (auto *vol : obj->volumes)
+  {
+    if (vol && vol->is_model_part())
+    {
+      srcVol = vol;
+      break;
+    }
+  }
+  if (!srcVol)
+    return {};
+  const auto &its = srcVol->mesh().its;
+  if (its.indices.empty())
+    return {};
+
+  // Serialize: vertex_count(int32) + index_count(int32) + vertices(float*3) + indices(int32*3)
+  const int32_t vCount = int32_t(its.vertices.size());
+  const int32_t iCount = int32_t(its.indices.size());
+  const size_t dataBytes = 2 * sizeof(int32_t)
+      + vCount * 3 * sizeof(float)
+      + iCount * 3 * sizeof(int32_t);
+  QByteArray ba;
+  ba.resize(int(dataBytes));
+  int offset = 0;
+  std::memcpy(ba.data() + offset, &vCount, sizeof(int32_t)); offset += sizeof(int32_t);
+  std::memcpy(ba.data() + offset, &iCount, sizeof(int32_t)); offset += sizeof(int32_t);
+  if (vCount > 0)
+  {
+    std::memcpy(ba.data() + offset, its.vertices.data(), vCount * 3 * sizeof(float));
+    offset += vCount * 3 * sizeof(float);
+  }
+  if (iCount > 0)
+  {
+    std::memcpy(ba.data() + offset, its.indices.data(), iCount * 3 * sizeof(int32_t));
+  }
+  return ba;
+#else
+  Q_UNUSED(objectIndex);
+  return {};
+#endif
+}
+
+bool ProjectServiceMock::restoreObjectMeshSnapshot(int objectIndex, const QByteArray &snapshot)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return false;
+  if (snapshot.size() < int(2 * sizeof(int32_t)))
+    return false;
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj)
+    return false;
+  // Find the first model_part volume
+  Slic3r::ModelVolume *srcVol = nullptr;
+  for (auto *vol : obj->volumes)
+  {
+    if (vol && vol->is_model_part())
+    {
+      srcVol = vol;
+      break;
+    }
+  }
+  if (!srcVol)
+    return false;
+
+  int offset = 0;
+  int32_t vCount = 0, iCount = 0;
+  std::memcpy(&vCount, snapshot.constData() + offset, sizeof(int32_t)); offset += sizeof(int32_t);
+  std::memcpy(&iCount, snapshot.constData() + offset, sizeof(int32_t)); offset += sizeof(int32_t);
+
+  indexed_triangle_set restored;
+  restored.vertices.resize(size_t(vCount));
+  restored.indices.resize(size_t(iCount));
+  if (vCount > 0)
+  {
+    std::memcpy(restored.vertices.data(), snapshot.constData() + offset, vCount * 3 * sizeof(float));
+    offset += vCount * 3 * sizeof(float);
+  }
+  if (iCount > 0)
+  {
+    std::memcpy(restored.indices.data(), snapshot.constData() + offset, iCount * 3 * sizeof(int32_t));
+  }
+
+  srcVol->set_mesh(Slic3r::TriangleMesh(std::move(restored)));
+  srcVol->set_new_unique_id();
+  syncTransformsFromModel();
+  emit projectChanged();
+  return true;
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(snapshot);
+  return false;
+#endif
+}
+
+#ifdef HAS_LIBSLIC3R
+int ProjectServiceMock::objectTriangleCount(int objectIndex) const
+{
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
+    return 0;
+
+  int total = 0;
+  for (const auto *vol : model_->objects[size_t(objectIndex)]->volumes)
+  {
+    if (vol)
+      total += int(vol->mesh().its.indices.size());
+  }
+  return total;
+}
+
+int ProjectServiceMock::objectOpenEdges(int objectIndex) const
+{
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
+    return 0;
+  return model_->objects[size_t(objectIndex)]->get_object_stl_stats().open_edges;
+}
+
+int ProjectServiceMock::objectRepairedErrors(int objectIndex) const
+{
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
+    return 0;
+  return model_->objects[size_t(objectIndex)]->get_repaired_errors_count();
+}
+
+float ProjectServiceMock::objectVolume(int objectIndex) const
+{
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
+    return 0.f;
+  return model_->objects[size_t(objectIndex)]->get_object_stl_stats().volume;
+}
+#endif
 
 // ── Layer range support (对齐上游 ModelObject::layer_config_ranges) ──
 
@@ -1642,6 +2919,9 @@ bool ProjectServiceMock::deleteObject(int index)
     objectModuleNames_.reserve(int(model_->objects.size()));
     objectPrintableStates_.clear();
     objectVisibleStates_.clear();
+    objectPositions_.clear();
+    objectRotations_.clear();
+    objectScales_.clear();
     objectPrintableStates_.reserve(int(model_->objects.size()));
     objectVisibleStates_.reserve(int(model_->objects.size()));
     for (size_t i = 0; i < model_->objects.size(); ++i)
@@ -1662,6 +2942,29 @@ bool ProjectServiceMock::deleteObject(int index)
 
       const bool vis = obj && !obj->instances.empty() ? obj->instances.front()->is_printable() : true;
       objectVisibleStates_.append(vis);
+
+      // P0.5.1: 从真实实例同步变换（slic3r → GL）
+      if (obj && !obj->instances.empty() && obj->instances.front())
+      {
+        const auto *inst = obj->instances.front();
+        const auto off = inst->get_offset();
+        objectPositions_.append(QVector3D(
+          static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y())));
+        const auto rot = inst->get_rotation();
+        objectRotations_.append(QVector3D(
+          qRadiansToDegrees(static_cast<float>(rot.x())),
+          qRadiansToDegrees(static_cast<float>(rot.y())),
+          qRadiansToDegrees(static_cast<float>(rot.z()))));
+        const auto sc = inst->get_scaling_factor();
+        objectScales_.append(QVector3D(
+          static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z())));
+      }
+      else
+      {
+        objectPositions_.append(QVector3D(0, 0, 0));
+        objectRotations_.append(QVector3D(0, 0, 0));
+        objectScales_.append(QVector3D(1, 1, 1));
+      }
     }
 #else
     // Clean up mock volumes and layer ranges for this object
@@ -1773,6 +3076,10 @@ bool ProjectServiceMock::renameObject(int index, const QString &newName)
 {
   if (index < 0 || index >= objectNames_.size())
     return false;
+#ifdef HAS_LIBSLIC3R
+  if (model_ && size_t(index) < model_->objects.size() && model_->objects[size_t(index)])
+    model_->objects[size_t(index)]->name = newName.toStdString();
+#endif
   objectNames_[index] = newName;
   emit projectChanged();
   return true;
@@ -1786,6 +3093,16 @@ bool ProjectServiceMock::moveObject(int fromIndex, int toIndex)
     return false;
   if (fromIndex == toIndex)
     return true;
+
+#ifdef HAS_LIBSLIC3R
+  // P0.5.3: 对齐上游 GUI_ObjectList::OnDrop 迭代 std::swap 实现对象重排序
+  if (model_ && size_t(fromIndex) < model_->objects.size() && size_t(toIndex) < model_->objects.size())
+  {
+    const int delta = fromIndex < toIndex ? 1 : -1;
+    for (int id = fromIndex; id != toIndex; id += delta)
+      std::swap(model_->objects[size_t(id)], model_->objects[size_t(id + delta)]);
+  }
+#endif
 
   // Swap all parallel arrays at fromIndex ↔ toIndex
   std::swap(objectNames_[fromIndex], objectNames_[toIndex]);
@@ -2197,6 +3514,9 @@ int ProjectServiceMock::duplicateObject(int sourceIndex)
     objectModuleNames_.reserve(int(model_->objects.size()));
     objectPrintableStates_.clear();
     objectVisibleStates_.clear();
+    objectPositions_.clear();
+    objectRotations_.clear();
+    objectScales_.clear();
     objectPrintableStates_.reserve(int(model_->objects.size()));
     objectVisibleStates_.reserve(int(model_->objects.size()));
     for (size_t i = 0; i < model_->objects.size(); ++i)
@@ -2217,6 +3537,29 @@ int ProjectServiceMock::duplicateObject(int sourceIndex)
 
       const bool vis = obj && !obj->instances.empty() ? obj->instances.front()->is_printable() : true;
       objectVisibleStates_.append(vis);
+
+      // P0.5.1: 从真实实例同步变换（slic3r → GL）
+      if (obj && !obj->instances.empty() && obj->instances.front())
+      {
+        const auto *inst = obj->instances.front();
+        const auto off = inst->get_offset();
+        objectPositions_.append(QVector3D(
+          static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y())));
+        const auto rot = inst->get_rotation();
+        objectRotations_.append(QVector3D(
+          qRadiansToDegrees(static_cast<float>(rot.x())),
+          qRadiansToDegrees(static_cast<float>(rot.y())),
+          qRadiansToDegrees(static_cast<float>(rot.z()))));
+        const auto sc = inst->get_scaling_factor();
+        objectScales_.append(QVector3D(
+          static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z())));
+      }
+      else
+      {
+        objectPositions_.append(QVector3D(0, 0, 0));
+        objectRotations_.append(QVector3D(0, 0, 0));
+        objectScales_.append(QVector3D(1, 1, 1));
+      }
     }
 
     const int newIndex = int(model_->objects.size()) - 1;
@@ -2277,6 +3620,128 @@ int ProjectServiceMock::duplicateObject(int sourceIndex)
   }
 }
 
+QList<int> ProjectServiceMock::splitObject(int objectIndex)
+{
+  QList<int> newIndices;
+
+  if (loading_)
+  {
+    lastError_ = tr("加载中，无法拆分对象");
+    emit projectChanged();
+    return newIndices;
+  }
+
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+  {
+    lastError_ = tr("拆分失败：对象索引无效");
+    emit projectChanged();
+    return newIndices;
+  }
+
+  try
+  {
+#ifdef HAS_LIBSLIC3R
+    if (!model_ || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
+    {
+      lastError_ = tr("拆分失败：模型对象无效");
+      emit projectChanged();
+      return newIndices;
+    }
+
+    auto *obj = model_->objects[size_t(objectIndex)];
+
+    // 对齐上游 Plater::priv::split_object()
+    // 在模型克隆上执行 split（对齐上游：clone model to avoid duplicate volumes）
+    Slic3r::Model tempModel = *model_;
+    auto *tempObj = tempModel.objects[size_t(objectIndex)];
+
+    Slic3r::ModelObjectPtrs newObjects;
+    tempObj->split(&newObjects);
+
+    // 对齐上游：如果只有一个结果，表示无法拆分
+    if (newObjects.size() <= 1)
+    {
+      lastError_.clear();
+      emit projectChanged();
+      return newIndices;
+    }
+
+    // 对齐上游：移除原对象
+    model_->delete_object(size_t(objectIndex));
+
+    // 将拆分后的新对象添加到真实 model_
+    for (auto *newObj : newObjects)
+    {
+      if (!newObj)
+        continue;
+      model_->add_object(*newObj);
+
+      // 将新对象加入当前 plate
+      if (currentPlateIndex_ >= 0 && currentPlateIndex_ < plateObjectIndices_.size())
+      {
+        plateObjectIndices_[currentPlateIndex_].append(int(model_->objects.size()) - 1);
+      }
+    }
+
+    // 重建元数据
+    objectNames_.clear();
+    objectNames_.reserve(int(model_->objects.size()));
+    objectModuleNames_.clear();
+    objectModuleNames_.reserve(int(model_->objects.size()));
+    objectPrintableStates_.clear();
+    objectPrintableStates_.reserve(int(model_->objects.size()));
+    objectVisibleStates_.clear();
+    objectVisibleStates_.reserve(int(model_->objects.size()));
+    for (size_t i = 0; i < model_->objects.size(); ++i)
+    {
+      const auto *o = model_->objects[i];
+      if (o && !o->name.empty())
+        objectNames_ << QString::fromStdString(o->name);
+      else
+        objectNames_ << tr("对象 %1").arg(int(i + 1));
+
+      if (o && !o->module_name.empty())
+        objectModuleNames_ << QString::fromStdString(o->module_name);
+      else
+        objectModuleNames_ << tr("默认模块");
+
+      const bool printable = o && !o->instances.empty() ? o->instances.front()->printable : true;
+      objectPrintableStates_.append(printable);
+
+      const bool vis = o && !o->instances.empty() ? o->instances.front()->is_printable() : true;
+      objectVisibleStates_.append(vis);
+    }
+
+    // 新对象从 objectIndex 位置开始
+    for (size_t i = size_t(objectIndex); i < model_->objects.size(); ++i)
+      newIndices.append(int(i));
+
+    // 同步变换数组
+    syncTransformsFromModel();
+
+    modelCount_ = objectNames_.size();
+#else
+    Q_UNUSED(objectIndex);
+#endif
+
+    lastError_.clear();
+    emit projectChanged();
+    return newIndices;
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = QString::fromStdString(ex.what());
+    emit projectChanged();
+    return newIndices;
+  }
+  catch (...)
+  {
+    lastError_ = tr("拆分失败：未知错误");
+    emit projectChanged();
+    return newIndices;
+  }
+}
+
 int ProjectServiceMock::addObject(const QString &name)
 {
   if (loading_)
@@ -2306,6 +3771,9 @@ int ProjectServiceMock::addObject(const QString &name)
     objectModuleNames_.clear();
     objectPrintableStates_.clear();
     objectVisibleStates_.clear();
+    objectPositions_.clear();
+    objectRotations_.clear();
+    objectScales_.clear();
     for (size_t i = 0; i < model_->objects.size(); ++i)
     {
       const auto *o = model_->objects[i];
@@ -2314,6 +3782,28 @@ int ProjectServiceMock::addObject(const QString &name)
       const bool pr = o && !o->instances.empty() ? o->instances.front()->printable : true;
       objectPrintableStates_.append(pr);
       objectVisibleStates_.append(true);
+      // P0.5.1: 从真实实例同步变换（slic3r → GL）
+      if (o && !o->instances.empty() && o->instances.front())
+      {
+        const auto *inst = o->instances.front();
+        const auto off = inst->get_offset();
+        objectPositions_.append(QVector3D(
+          static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y())));
+        const auto rot = inst->get_rotation();
+        objectRotations_.append(QVector3D(
+          qRadiansToDegrees(static_cast<float>(rot.x())),
+          qRadiansToDegrees(static_cast<float>(rot.y())),
+          qRadiansToDegrees(static_cast<float>(rot.z()))));
+        const auto sc = inst->get_scaling_factor();
+        objectScales_.append(QVector3D(
+          static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z())));
+      }
+      else
+      {
+        objectPositions_.append(QVector3D(0, 0, 0));
+        objectRotations_.append(QVector3D(0, 0, 0));
+        objectScales_.append(QVector3D(1, 1, 1));
+      }
     }
 
     const int newIndex = int(model_->objects.size()) - 1;
@@ -2355,16 +3845,56 @@ int ProjectServiceMock::addObject(const QString &name)
 
 QVector3D ProjectServiceMock::objectPosition(int index) const
 {
+#ifdef HAS_LIBSLIC3R
+  if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    const auto *inst = model_->objects[size_t(index)]->instances.front();
+    if (inst)
+    {
+      const auto off = inst->get_offset();
+      // slic3r(X,Y,Z) → GL(X,Z,Y): GL.x=slic3r.x, GL.y=slic3r.z, GL.z=slic3r.y
+      return QVector3D(static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y()));
+    }
+  }
+#endif
   return (index >= 0 && index < objectPositions_.size()) ? objectPositions_[index] : QVector3D(0, 0, 0);
 }
 
 QVector3D ProjectServiceMock::objectRotation(int index) const
 {
+#ifdef HAS_LIBSLIC3R
+  if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    const auto *inst = model_->objects[size_t(index)]->instances.front();
+    if (inst)
+    {
+      const auto rot = inst->get_rotation(); // radians in slic3r space
+      return QVector3D(
+        qRadiansToDegrees(static_cast<float>(rot.x())),
+        qRadiansToDegrees(static_cast<float>(rot.y())),
+        qRadiansToDegrees(static_cast<float>(rot.z())));
+    }
+  }
+#endif
   return (index >= 0 && index < objectRotations_.size()) ? objectRotations_[index] : QVector3D(0, 0, 0);
 }
 
 QVector3D ProjectServiceMock::objectScale(int index) const
 {
+#ifdef HAS_LIBSLIC3R
+  if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    const auto *inst = model_->objects[size_t(index)]->instances.front();
+    if (inst)
+    {
+      const auto sc = inst->get_scaling_factor();
+      return QVector3D(static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z()));
+    }
+  }
+#endif
   return (index >= 0 && index < objectScales_.size()) ? objectScales_[index] : QVector3D(1, 1, 1);
 }
 
@@ -2372,6 +3902,19 @@ bool ProjectServiceMock::setObjectPosition(int index, float x, float y, float z)
 {
   if (index < 0 || index >= objectNames_.size())
     return false;
+  // P0.5.1: 写入真实 ModelInstance 并同步 Mock 数组
+#ifdef HAS_LIBSLIC3R
+  if (model_ && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    auto *inst = model_->objects[size_t(index)]->instances.front();
+    if (inst)
+    {
+      // GL(X,Z,Y) → slic3r(X,Y,Z): slic3r.x=GL.x, slic3r.y=GL.z, slic3r.z=GL.y
+      inst->set_offset(Slic3r::Vec3d(x, z, y));
+    }
+  }
+#endif
   while (objectPositions_.size() <= index)
     objectPositions_.append(QVector3D(0, 0, 0));
   objectPositions_[index] = QVector3D(x, y, z);
@@ -2383,6 +3926,19 @@ bool ProjectServiceMock::setObjectRotation(int index, float x, float y, float z)
 {
   if (index < 0 || index >= objectNames_.size())
     return false;
+#ifdef HAS_LIBSLIC3R
+  if (model_ && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    auto *inst = model_->objects[size_t(index)]->instances.front();
+    if (inst)
+    {
+      // 角度 → 弧度
+      inst->set_rotation(Slic3r::Vec3d(
+        qDegreesToRadians(x), qDegreesToRadians(y), qDegreesToRadians(z)));
+    }
+  }
+#endif
   while (objectRotations_.size() <= index)
     objectRotations_.append(QVector3D(0, 0, 0));
   objectRotations_[index] = QVector3D(x, y, z);
@@ -2394,6 +3950,17 @@ bool ProjectServiceMock::setObjectScale(int index, float x, float y, float z)
 {
   if (index < 0 || index >= objectNames_.size())
     return false;
+#ifdef HAS_LIBSLIC3R
+  if (model_ && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    auto *inst = model_->objects[size_t(index)]->instances.front();
+    if (inst)
+    {
+      inst->set_scaling_factor(Slic3r::Vec3d(x, y, z));
+    }
+  }
+#endif
   while (objectScales_.size() <= index)
     objectScales_.append(QVector3D(1, 1, 1));
   objectScales_[index] = QVector3D(x, y, z);
@@ -2624,6 +4191,9 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
   objectModuleNames_.clear();
   objectPrintableStates_.clear();
   objectVisibleStates_.clear();
+  objectPositions_.clear();
+  objectRotations_.clear();
+  objectScales_.clear();
   plateNames_.clear();
   plateObjectIndices_.clear();
   plateLockedStates_.clear();
@@ -2634,6 +4204,15 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
   m_mockObjectOverrides.clear();
   m_mockVolumeOverrides.clear();
   m_mockPlateOverrides.clear();
+
+#ifdef HAS_LIBSLIC3R
+  // JSON 项目加载不包含真实 3D 数据，重置 model_ 避免读取过期对象
+  if (model_)
+  {
+    delete model_;
+    model_ = nullptr;
+  }
+#endif
 
   // Restore project name
   projectName_ = root.value(QStringLiteral("name")).toString(fi.completeBaseName());

@@ -218,12 +218,26 @@ Item {
                     }
 
                     // Notification preferences（对齐上游 notification_manager preferences）
+                    Text {
+                        text: qsTr("通知设置")
+                        color: "#c8d4e0"; font.pixelSize: 13; font.bold: true
+                        Layout.topMargin: 8
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("配置通知的显示方式和自动消失行为。通知将在切片完成、导出等操作时弹出。")
+                        color: "#566070"; font.pixelSize: 10; wrapMode: Text.Wrap
+                        Layout.preferredWidth: 500
+                        Layout.bottomMargin: 4
+                    }
+
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("启用通知"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
                         Switch {
-                            checked: backend.notificationsEnabled
-                            onToggled: backend.setNotificationsEnabled(checked)
+                            checked: root.settingsVm.notificationsEnabled
+                            onToggled: root.settingsVm.setNotificationsEnabled(checked)
                         }
                     }
 
@@ -231,10 +245,28 @@ Item {
                         spacing: 16
                         Text { text: qsTr("显示提示"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
                         Switch {
-                            checked: backend.hintsEnabled
-                            enabled: backend.notificationsEnabled
-                            onToggled: backend.setHintsEnabled(checked)
+                            checked: root.settingsVm.hintsEnabled
+                            enabled: root.settingsVm.notificationsEnabled
+                            onToggled: root.settingsVm.setHintsEnabled(checked)
                         }
+                    }
+
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("显示进度通知"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Switch {
+                            checked: root.settingsVm.showProgressNotifications
+                            enabled: root.settingsVm.notificationsEnabled
+                            onToggled: root.settingsVm.setShowProgressNotifications(checked)
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 196
+                        text: qsTr("关闭后将不再显示切片进度弹窗，切片完成后仍会通知。")
+                        color: "#566070"; font.pixelSize: 10; wrapMode: Text.Wrap
+                        Layout.preferredWidth: 320
                     }
 
                     RowLayout {
@@ -243,7 +275,7 @@ Item {
                         CxComboBox {
                             model: ["3s", "5s", "8s", "10s", "15s"]
                             currentIndex: {
-                                var secs = backend.autoDismissSec
+                                var secs = root.settingsVm.autoDismissSec
                                 if (secs <= 3) return 0
                                 if (secs <= 5) return 1
                                 if (secs <= 8) return 2
@@ -252,7 +284,7 @@ Item {
                             }
                             onActivated: (index) => {
                                 var values = [3, 5, 8, 10, 15]
-                                backend.setAutoDismissSec(values[index])
+                                root.settingsVm.setAutoDismissSec(values[index])
                             }
                         }
                     }

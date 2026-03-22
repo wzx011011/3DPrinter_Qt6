@@ -233,19 +233,20 @@ QString PreviewViewModel::timeAtMove(int moveIndex) const
 
 QStringList PreviewViewModel::viewModes() const
 {
+  // 对齐上游 GCodeViewer get_view_type_string 显示名称
   return {
-      QStringLiteral("FeatureType"),
-      QStringLiteral("Height"),
-      QStringLiteral("Width"),
+      QStringLiteral("Line Type"),
+      QStringLiteral("Layer Height"),
+      QStringLiteral("Line Width"),
       QStringLiteral("Tool"),
-      QStringLiteral("Feedrate"),
-      QStringLiteral("FanSpeed"),
+      QStringLiteral("Speed"),
+      QStringLiteral("Fan Speed"),
       QStringLiteral("Temperature"),
-      QStringLiteral("ColorPrint"),
-      QStringLiteral("FilamentId"),
-      QStringLiteral("VolumetricRate"),
-      QStringLiteral("LayerTime"),
-      QStringLiteral("LayerTimeLog"),
+      QStringLiteral("Filament"),
+      QStringLiteral("Filament ID"),
+      QStringLiteral("Flow"),
+      QStringLiteral("Layer Time"),
+      QStringLiteral("Layer Time (log)"),
       QStringLiteral("Acceleration")};
 }
 

@@ -100,6 +100,8 @@ public:
   Q_INVOKABLE bool objectVisible(int index) const;
   Q_INVOKABLE bool setObjectVisible(int index, bool visible);
   Q_INVOKABLE int objectVolumeCount(int index) const;
+  /// 每个对象的实例数量（对齐上游 ModelObject::instances.size()）
+  Q_INVOKABLE int objectInstanceCount(int index) const;
   Q_INVOKABLE QString objectVolumeName(int objectIndex, int volumeIndex) const;
   Q_INVOKABLE QString objectVolumeTypeLabel(int objectIndex, int volumeIndex) const;
   QVariant scopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &fallbackValue = QVariant()) const;
@@ -137,6 +139,46 @@ public:
   /// 添加 SVG 浮雕 volume（对齐上游 GLGizmoSVG）
   /// Mock 模式：创建 SvgEmboss 类型 volume
   Q_INVOKABLE bool addSvgVolume(int objectIndex, const QString &svgFilePath);
+  /// 简化对象网格（对齐上游 GLGizmoSimplify → its_quadric_edge_collapse）
+  /// wantedCount: 目标三角面数 (0=不限制), maxError: 最大误差 (0=不限制)
+  Q_INVOKABLE bool simplifyObject(int objectIndex, int wantedCount, float maxError);
+  /// 自动朝向指定对象（对齐上游 Slic3r::orientation::orient(ModelObject*)）
+  /// HAS_LIBSLIC3R: 调用真实 orient API；Mock: 返回 false
+  Q_INVOKABLE bool orientObject(int objectIndex);
+  /// 自动排列全部对象（对齐上游 Plater::priv::on_arrange → Slic3r::arrange_objects）
+  /// HAS_LIBSLIC3R: 调用真实 arrange_objects API；Mock: 返回 false
+  Q_INVOKABLE bool arrangeObjects(float spacing, bool allowRotation, bool alignY);
+  /// 切割对象（对齐上游 GLGizmoCut::perform_cut → cut_mesh）
+  /// axis: 0=X, 1=Y, 2=Z; position: 切割平面位置(mm); keepMode: 0=all, 1=upper, 2=lower
+  /// Returns the index of the new object created (≥0 on success, -1 on failure)
+  Q_INVOKABLE int cutObject(int objectIndex, int axis, double position, int keepMode);
+  /// 榫卯切割（对齐上游 GLGizmoCut::perform_cut → Cut::perform_with_groove）
+  /// axis: 0=X, 1=Y, 2=Z; position: 切割平面位置(mm); keepMode: 0=all, 1=upper, 2=lower
+  /// grooveDepth/width/flapsAngle/angle: 榫卯参数（对齐上游 Cut::Groove）
+  /// Returns the index of the new object created (≥0 on success, -1 on failure)
+  Q_INVOKABLE int cutObjectWithGroove(int objectIndex, int axis, double position, int keepMode,
+                                       float grooveDepth, float grooveWidth, float grooveFlapsAngle, float grooveAngle);
+  /// 镜像对象（对齐上游 ModelInstance::set_mirror）
+  Q_INVOKABLE bool mirrorObject(int objectIndex, int axis);
+  /// 布尔运算（对齐上游 GLGizmoMeshBoolean::execute_mesh_boolean）
+  /// operation: 0=union(A+B), 1=difference(A-B), 2=intersection(A∩B)
+  /// Replaces srcObject mesh with the result, deletes toolObject
+  Q_INVOKABLE bool meshBoolean(int srcObjectIndex, int toolObjectIndex, int operation);
+  /// 钻孔操作（对齐上游 GLGizmoDrill → sla::hollow_mesh_and_drill / MeshBoolean::cgal::minus）
+  /// shape: 0=Circle(cylinder), 1=Triangle(triPrism), 2=Square(cube)
+  /// direction: 0=Normal(top-down), 1=Bottom-up, 2=Both
+  /// Simplified: drills from top of bounding box along -Z at object center
+  Q_INVOKABLE bool drillObject(int objectIndex, float radius, float depth, int shape, int direction, bool oneLayerOnly);
+  /// 从真实模型同步变换到 Mock 数组（orient/split/arrange/cut 等 API 变更模型后调用）
+  void syncTransformsFromModel();
+
+  /// ── Mesh snapshot for undo/redo (used by BooleanCommand / DrillCommand) ──
+  /// Serializes the first model_part volume mesh of the given object to a byte array.
+  /// Returns empty QByteArray if the object does not exist or has no model_part volume.
+  QByteArray captureObjectMeshSnapshot(int objectIndex) const;
+  /// Restores the first model_part volume mesh of the given object from a previously captured snapshot.
+  /// Returns true on success.
+  bool restoreObjectMeshSnapshot(int objectIndex, const QByteArray &snapshot);
 
   /// ── Layer range support (对齐上游 ModelObject::layer_config_ranges) ──
   /// Get layer ranges for an object
@@ -161,6 +203,9 @@ public:
   /// 复制指定对象（对齐上游 Plater::clone_selection 行为）
   /// 返回新对象的索引，失败返回 -1
   Q_INVOKABLE int duplicateObject(int sourceIndex);
+  /// 拆分指定对象（对齐上游 ModelObject::split）
+  /// HAS_LIBSLIC3R: 调用真实 split API 返回新对象索引列表；Mock: 返回空列表
+  Q_INVOKABLE QList<int> splitObject(int objectIndex);
   /// 重命名对象（对齐上游 Plater::rename_object）
   Q_INVOKABLE bool renameObject(int index, const QString &newName);
   /// 移动对象位置（对齐上游 GUI_ObjectList 拖拽重排序）
@@ -223,6 +268,17 @@ public:
   /// 保存项目元数据（对齐上游 MainFrame::do_save / Plater::save_project）
   /// Mock 模式保存为 JSON；真实模式调用 3MF writer
   Q_INVOKABLE bool saveProject(const QString &filePath);
+
+#ifdef HAS_LIBSLIC3R
+  /// 获取对象三角面数（HAS_LIBSLIC3R 真实统计）
+  Q_INVOKABLE int objectTriangleCount(int objectIndex) const;
+  /// 获取对象未修复的非流形边数（对齐上游 TriangleMeshStats::open_edges）
+  Q_INVOKABLE int objectOpenEdges(int objectIndex) const;
+  /// 获取对象已修复的错误总数（对齐上游 ModelObject::get_repaired_errors_count）
+  Q_INVOKABLE int objectRepairedErrors(int objectIndex) const;
+  /// 获取对象网格体积 mm^3（对齐上游 TriangleMeshStats::volume，考虑实例变换）
+  Q_INVOKABLE float objectVolume(int objectIndex) const;
+#endif
 
 signals:
   void projectChanged();

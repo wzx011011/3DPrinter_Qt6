@@ -72,6 +72,96 @@ Item {
             }
 
             // Non-selected range dimming (对齐上游 IMSlider groove outside selected range)
+            // Groove hover tooltip (对齐上游 IMSlider::draw_tick_on_mouse_position hover Z-height 提示)
+            Rectangle {
+                id: grooveHoverTooltip
+                x: {
+                    if (!grooveHoverMA.containsMouse || root.totalLayers <= 0) return -200
+                    var relX = grooveHoverMA.mouseX - rangeSliderItem.trackMargin
+                    return grooveHoverMA.mouseX - width / 2
+                }
+                y: -28
+                width: grooveHoverTipCol.implicitWidth + 16
+                height: grooveHoverTipCol.implicitHeight + 10
+                radius: 4
+                color: "#1a2332"
+                border.width: 1
+                border.color: Theme.borderSubtle
+                visible: grooveHoverMA.containsMouse && root.totalLayers > 0
+
+                Column {
+                    id: grooveHoverTipCol
+                    anchors.centerIn: parent
+                    spacing: 1
+                    Text {
+                        id: grooveHoverTipText
+                        text: {
+                            if (!grooveHoverMA.containsMouse || !root.previewVm || root.totalLayers <= 0) return ""
+                            var relX = grooveHoverMA.mouseX - rangeSliderItem.trackMargin
+                            var hoverLayer = Math.round((relX / rangeSliderItem.trackWidth) * root.totalLayers)
+                            hoverLayer = Math.max(0, Math.min(hoverLayer, root.totalLayers))
+                            var zHeight = root.previewVm.layerZAt(hoverLayer).toFixed(2)
+                            return "L" + (hoverLayer + 1) + "  Z:" + zHeight
+                        }
+                        color: Theme.textPrimary
+                        font.pixelSize: 10
+                        font.family: "monospace"
+                    }
+                    // 对齐上游 IMSlider::draw_tick_on_mouse_position — 悬浮显示层时间
+                    Text {
+                        text: {
+                            if (!grooveHoverMA.containsMouse || !root.previewVm || root.totalLayers <= 0) return ""
+                            var relX = grooveHoverMA.mouseX - rangeSliderItem.trackMargin
+                            var hoverLayer = Math.round((relX / rangeSliderItem.trackWidth) * root.totalLayers)
+                            hoverLayer = Math.max(0, Math.min(hoverLayer, root.totalLayers))
+                            var lt = root.previewVm.layerTimeAt(hoverLayer)
+                            if (lt <= 0) return ""
+                            return "~" + lt.toFixed(1) + "s"
+                        }
+                        color: Theme.textSecondary
+                        font.pixelSize: 9
+                        font.family: "monospace"
+                    }
+                }
+
+                // Arrow
+                Rectangle {
+                    anchors.top: parent.bottom
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: 5
+                    height: 5
+                    rotation: 45
+                    color: "#1a2332"
+                }
+            }
+
+            // Groove interaction area: hover tooltip + click-to-jump (对齐上游 IMSlider groove click)
+            MouseArea {
+                id: grooveHoverMA
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                hoverEnabled: true
+                acceptedButtons: Qt.LeftButton
+                // Click on groove: jump nearest thumb to clicked position (对齐上游 IMSlider slider_behavior)
+                onClicked: function(mouse) {
+                    if (!root.previewVm || root.totalLayers <= 0) return
+                    var relX = mouse.x - rangeSliderItem.trackMargin
+                    var clickedLayer = Math.round((relX / rangeSliderItem.trackWidth) * root.totalLayers)
+                    clickedLayer = Math.max(0, Math.min(clickedLayer, root.totalLayers))
+                    // Move the nearest thumb to the clicked position
+                    var distMin = Math.abs(clickedLayer - root.previewVm.currentLayerMin)
+                    var distMax = Math.abs(clickedLayer - root.previewVm.currentLayerMax)
+                    if (distMin <= distMax)
+                        root.previewVm.setLayerRange(clickedLayer, root.previewVm.currentLayerMax)
+                    else
+                        root.previewVm.setLayerRange(root.previewVm.currentLayerMin, clickedLayer)
+                }
+                // Propagate hover to tooltip (prevent blocking thumb drag)
+                z: -1
+            }
+
             Rectangle {
                 x: rangeSliderItem.trackMargin
                 y: rangeSliderItem.height / 2 - 3

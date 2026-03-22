@@ -22,8 +22,9 @@ struct ConfigOption
   QString group{};   // 对齐上游 ConfigOptionsGroup — 子分组标题
   QString page{};     // 对齐上游 Tab Page — 顶层页面 (Quality/Strength/Speed/Support/Other) (empty = auto-detect)
   bool readonly = false;
-  QString tooltip{}; // 帮助文案（对齐上游 ConfigOptionDef::tooltip）
-  int mode = 2;       // 0=Simple only, 1=Advanced only, 2=Both (对齐上游 ConfigOptionMode)
+  QString tooltip{};  // 帮助文案（对齐上游 ConfigOptionDef::tooltip）
+  QString sidetext{}; // 输入框右侧单位文本（对齐上游 ConfigOptionDef::sidetext）
+  int mode = 2;       // 0=comSimple, 1=comAdvanced, 2=comDevelop (对齐上游 ConfigOptionMode)
 
   // Constructor for 10-field aggregate init (key, label, type, value, min, max, step, enumLabels, category, group)
   ConfigOption(QString k, QString l, QString t, QVariant v, double mn, double mx, double s,

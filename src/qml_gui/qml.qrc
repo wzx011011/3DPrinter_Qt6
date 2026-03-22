@@ -21,6 +21,16 @@
         <file>dialogs/CalibrationDialog.qml</file>
         <file>dialogs/CaliHistoryDialog.qml</file>
         <file>dialogs/AboutDialog.qml</file>
+        <file>dialogs/ConfigWizardDialog.qml</file>
+        <file>dialogs/BedShapeDialog.qml</file>
+        <file>dialogs/EditGCodeDialog.qml</file>
+        <file>dialogs/AMSSettingsDialog.qml</file>
+        <file>dialogs/FirmwareDialog.qml</file>
+        <file>dialogs/SpeedLimitDialog.qml</file>
+        <file>dialogs/WipeTowerDialog.qml</file>
+        <file>dialogs/PrintHostDialog.qml</file>
+        <file>dialogs/PluginManagerDialog.qml</file>
+        <file>dialogs/EnableLiteModeDialog.qml</file>
         <file>pages/SettingsPage.qml</file>
         <!-- Panels -->
         <file>panels/ObjectList.qml</file>

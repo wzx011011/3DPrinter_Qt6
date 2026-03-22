@@ -667,10 +667,10 @@ QList<int> ConfigViewModel::filterOptionIndices(const QString &category, const Q
         continue;
     }
 
-    // Mode filter (对齐上游 ConfigOptionMode: 0=Simple, 1=Advanced, 2=Both)
+    // Mode filter (对齐上游 ConfigOptionMode: 0=comSimple, 1=comAdvanced, 2=comDevelop)
     const int optMode = printOptions_->optMode(i);
-    if (optMode == 1 && !advancedMode)
-      continue; // Advanced-only options hidden in simple mode
+    if (optMode >= 1 && !advancedMode)
+      continue; // Advanced/Develop-only options hidden in simple mode
     if (optMode == 0 && advancedMode)
       continue; // Simple-only options hidden in advanced mode (rare)
 

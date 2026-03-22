@@ -10,6 +10,7 @@
 #include "core/services/PresetServiceMock.h"
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceService.h"
+#include "core/services/UndoRedoManager.h"
 #include "core/viewmodels/ConfigViewModel.h"
 #include "core/viewmodels/EditorViewModel.h"
 #include "core/viewmodels/MonitorViewModel.h"
@@ -67,6 +68,10 @@ BackendContext::BackendContext(QObject *parent)
 
   editorViewModel_ = new EditorViewModel(projectService_, sliceService_, this);
   connect(editorViewModel_, &EditorViewModel::stateChanged, this, &BackendContext::displayProjectTitleChanged);
+
+  // Undo/Redo 框架（对齐上游 UndoRedo）：创建管理器并注入到 EditorViewModel
+  auto *undoManager = new UndoRedoManager(this);
+  editorViewModel_->setUndoRedoManager(undoManager);
   previewViewModel_ = new PreviewViewModel(sliceService_, this);
   monitorViewModel_ = new MonitorViewModel(deviceService_, networkService_, cameraService, this);
   configViewModel_ = new ConfigViewModel(presetService_, projectService_, this);
@@ -131,6 +136,27 @@ BackendContext::BackendContext(QObject *parent)
   connect(settingsViewModel_, &SettingsViewModel::languageIndexChanged, this,
           [this]()
           { applyLanguage(settingsViewModel_->languageIndex()); });
+
+  // 同步撤销栈上限设置到 UndoRedoManager（对齐上游 UndoRedo::UndoRedoStackLimit）
+  connect(settingsViewModel_, &SettingsViewModel::settingsChanged, this,
+          [this, undoManager]()
+          { undoManager->setUndoLimit(settingsViewModel_->undoLimit()); });
+  // 初始同步
+  undoManager->setUndoLimit(settingsViewModel_->undoLimit());
+
+  // 同步通知偏好设置到 BackendContext（对齐上游 notification_manager preferences）
+  connect(settingsViewModel_, &SettingsViewModel::settingsChanged, this,
+          [this]()
+          {
+            m_notificationsEnabled = settingsViewModel_->notificationsEnabled();
+            m_hintsEnabled = settingsViewModel_->hintsEnabled();
+            m_autoDismissSec = settingsViewModel_->autoDismissSec();
+            m_showProgressNotifications = settingsViewModel_->showProgressNotifications();
+          });
+
+  // Load config wizard state from QSettings (对齐上游 ConfigWizard 首次运行检测)
+  QSettings settings;
+  m_configWizardCompleted = settings.value(QStringLiteral("wizard/completed"), false).toBool();
 }
 
 QObject *BackendContext::editorViewModel() const { return editorViewModel_; }
@@ -164,6 +190,76 @@ void BackendContext::setCurrentPage(int page)
 void BackendContext::openSettings()
 {
   setCurrentPage(11);
+}
+
+// ── ConfigWizard first-run trigger ──
+
+bool BackendContext::configWizardCompleted() const
+{
+  return m_configWizardCompleted;
+}
+
+void BackendContext::setConfigWizardCompleted(bool completed)
+{
+  if (m_configWizardCompleted == completed)
+    return;
+  m_configWizardCompleted = completed;
+
+  // Persist to QSettings (对齐上游 app_config 首次启动标记)
+  QSettings settings;
+  settings.setValue(QStringLiteral("wizard/completed"), completed);
+
+  emit configWizardCompletedChanged();
+}
+
+void BackendContext::showConfigWizard()
+{
+  emit showConfigWizardRequested();
+}
+
+void BackendContext::showBedShapeDialog()
+{
+  emit showBedShapeDialogRequested();
+}
+
+void BackendContext::showEditGCodeDialog(const QString &key, const QString &value)
+{
+  emit showEditGCodeDialogRequested(key, value);
+}
+
+void BackendContext::showAMSSettingsDialog()
+{
+  emit showAMSSettingsDialogRequested();
+}
+
+void BackendContext::showFirmwareDialog()
+{
+  emit showFirmwareDialogRequested();
+}
+
+void BackendContext::showSpeedLimitDialog()
+{
+  emit showSpeedLimitDialogRequested();
+}
+
+void BackendContext::showWipeTowerDialog()
+{
+  emit showWipeTowerDialogRequested();
+}
+
+void BackendContext::showPrintHostDialog()
+{
+  emit showPrintHostDialogRequested();
+}
+
+void BackendContext::showPluginManagerDialog()
+{
+  emit showPluginManagerDialogRequested();
+}
+
+void BackendContext::showEnableLiteModeDialog()
+{
+  emit showEnableLiteModeDialogRequested();
 }
 
 void BackendContext::topbarNewProject()
@@ -523,7 +619,7 @@ bool BackendContext::currentNotificationShowPreview() const
 
 void BackendContext::postSlicingProgress(int percent, const QString &stage)
 {
-  if (!m_notificationsEnabled)
+  if (!m_notificationsEnabled || !m_showProgressNotifications)
     return;
 
   NotificationEntry entry;
@@ -1006,6 +1102,14 @@ void BackendContext::setAutoDismissSec(int sec)
   if (m_autoDismissSec == sec)
     return;
   m_autoDismissSec = sec;
+  emit settingsChanged();
+}
+
+void BackendContext::setShowProgressNotifications(bool v)
+{
+  if (m_showProgressNotifications == v)
+    return;
+  m_showProgressNotifications = v;
   emit settingsChanged();
 }
 

@@ -144,6 +144,54 @@ void GLViewport::setShowBed(bool on)
   update();
 }
 
+void GLViewport::setShowWipeTower(bool on)
+{
+  if (m_showWipeTower == on)
+    return;
+  m_showWipeTower = on;
+  update();
+}
+
+void GLViewport::setWipeTowerWidth(float v)
+{
+  if (m_wipeTowerWidth == v)
+    return;
+  m_wipeTowerWidth = v;
+  update();
+}
+
+void GLViewport::setWipeTowerDepth(float v)
+{
+  if (m_wipeTowerDepth == v)
+    return;
+  m_wipeTowerDepth = v;
+  update();
+}
+
+void GLViewport::setWipeTowerHeight(float v)
+{
+  if (m_wipeTowerHeight == v)
+    return;
+  m_wipeTowerHeight = v;
+  update();
+}
+
+void GLViewport::setWipeTowerX(float v)
+{
+  if (m_wipeTowerX == v)
+    return;
+  m_wipeTowerX = v;
+  update();
+}
+
+void GLViewport::setWipeTowerZ(float v)
+{
+  if (m_wipeTowerZ == v)
+    return;
+  m_wipeTowerZ = v;
+  update();
+}
+
 // ---- Mouse / wheel handlers ------------------------------------------------
 
 void GLViewport::mousePressEvent(QMouseEvent *event)

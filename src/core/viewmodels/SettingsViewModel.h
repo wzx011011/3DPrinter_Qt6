@@ -38,6 +38,11 @@ class SettingsViewModel : public QObject
   Q_PROPERTY(bool autoUpload READ autoUpload WRITE setAutoUpload NOTIFY settingsChanged)
   /// 更新通道（对齐上游 update_channel: 0=Stable, 1=Beta, 2=Dev）
   Q_PROPERTY(int updateChannel READ updateChannel WRITE setUpdateChannel NOTIFY settingsChanged)
+  /// 通知偏好（对齐上游 notification_manager preferences）
+  Q_PROPERTY(bool notificationsEnabled READ notificationsEnabled WRITE setNotificationsEnabled NOTIFY settingsChanged)
+  Q_PROPERTY(bool hintsEnabled READ hintsEnabled WRITE setHintsEnabled NOTIFY settingsChanged)
+  Q_PROPERTY(int autoDismissSec READ autoDismissSec WRITE setAutoDismissSec NOTIFY settingsChanged)
+  Q_PROPERTY(bool showProgressNotifications READ showProgressNotifications WRITE setShowProgressNotifications NOTIFY settingsChanged)
   /// 开发者模式（对齐上游 PreferencesDialog::create_debug_page）
   Q_PROPERTY(bool developerMode READ developerMode WRITE setDeveloperMode NOTIFY settingsChanged)
   /// 调试覆盖层
@@ -80,6 +85,10 @@ public:
   int defaultBedShape() const { return m_defaultBedShape; }
   bool autoUpload() const { return m_autoUpload; }
   int updateChannel() const { return m_updateChannel; }
+  bool notificationsEnabled() const { return m_notificationsEnabled; }
+  bool hintsEnabled() const { return m_hintsEnabled; }
+  int autoDismissSec() const { return m_autoDismissSec; }
+  bool showProgressNotifications() const { return m_showProgressNotifications; }
   bool developerMode() const { return m_developerMode; }
   bool showDebugOverlay() const { return m_showDebugOverlay; }
   int logLevel() const { return m_logLevel; }
@@ -122,6 +131,10 @@ public slots:
   void setDefaultBedShape(int shape);
   void setAutoUpload(bool v);
   void setUpdateChannel(int channel);
+  void setNotificationsEnabled(bool v);
+  void setHintsEnabled(bool v);
+  void setAutoDismissSec(int sec);
+  void setShowProgressNotifications(bool v);
   void setDeveloperMode(bool v);
   void setShowDebugOverlay(bool v);
   void setLogLevel(int v);
@@ -159,6 +172,10 @@ private:
   int m_defaultBedShape = 0;    // 0=Rectangular, 1=Round
   bool m_autoUpload = false;    // auto upload after slicing
   int m_updateChannel = 0;      // 0=Stable, 1=Beta, 2=Dev
+  bool m_notificationsEnabled = true;
+  bool m_hintsEnabled = true;
+  int m_autoDismissSec = 5;
+  bool m_showProgressNotifications = true;
   bool m_developerMode = false;
   bool m_showDebugOverlay = false;
   int m_logLevel = 2;            // Info
