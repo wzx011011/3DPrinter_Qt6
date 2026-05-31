@@ -39,6 +39,7 @@
 #include <libslic3r/MeshBoolean.hpp>
 #include <libslic3r/Geometry.hpp>
 #include <libslic3r/CutUtils.hpp>
+#include <libslic3r/Semver.hpp>
 #include <cstring> // memcpy
 
 namespace
@@ -4050,13 +4051,47 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
   }
 
 #ifdef HAS_LIBSLIC3R
-  // TODO: 调用真实 3MF writer (bbs_3mf export)
-  // wxGetApp().plater()->save_project(filePath) equivalent
-  lastError_ = tr("3MF 导出尚未实现");
-  emit projectChanged();
-  return false;
-#else
-  // Mock mode: save project metadata as JSON
+  if (!model_)
+  {
+    // No real model — fall through to JSON mock save
+  }
+  else
+  {
+    // Real 3MF export via store_bbs_3mf (对齐上游 Plater::export_3mf → store_bbs_3mf)
+    Slic3r::StoreParams params;
+    params.path = filePath.toUtf8().constData();
+    params.model = model_;
+    params.type_3mf = Slic3r::En3mfType::From_Creality;
+    params.strategy = Slic3r::SaveStrategy::Zip64;
+
+    bool ok = false;
+    try
+    {
+      ok = Slic3r::store_bbs_3mf(params);
+    }
+    catch (const std::exception &ex)
+    {
+      lastError_ = tr("3MF 保存异常: %1").arg(QString::fromStdString(ex.what()));
+      emit projectChanged();
+      return false;
+    }
+
+    if (!ok)
+    {
+      lastError_ = tr("3MF 保存失败");
+      emit projectChanged();
+      return false;
+    }
+
+    sourceFilePath_ = filePath;
+    QFileInfo fi(filePath);
+    projectName_ = fi.completeBaseName();
+    lastError_.clear();
+    emit projectChanged();
+    return true;
+  }
+#endif
+  // JSON mock save (fallback when HAS_LIBSLIC3R is off or model_ is null)
   if (filePath.isEmpty())
   {
     lastError_ = tr("保存路径为空");
@@ -4170,7 +4205,6 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
   lastError_.clear();
   emit projectChanged();
   return true;
-#endif
 }
 
 bool ProjectServiceMock::loadProject(const QString &filePath)
@@ -4188,6 +4222,267 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
     return false;
   }
 
+#ifdef HAS_LIBSLIC3R
+  // 3MF project load (对齐上游 Plater::load_project → Model::read_from_archive)
+  const QString suffix = fi.suffix().toLower();
+  if (suffix == QStringLiteral("3mf") || suffix == QStringLiteral("cxprj"))
+  {
+    if (loading_)
+    {
+      lastError_ = tr("已有任务正在加载");
+      emit projectChanged();
+      return false;
+    }
+
+    loading_ = true;
+    loadProgress_ = 0;
+    activeCancelFlag_ = std::make_shared<std::atomic_bool>(false);
+    emit loadingChanged();
+    emit loadProgressChanged();
+
+    const QString localPath = fi.absoluteFilePath();
+    const QPointer<ProjectServiceMock> receiver(this);
+    const auto cancelFlag = activeCancelFlag_;
+
+    QtConcurrent::run([receiver, localPath, cancelFlag]()
+    {
+      auto *loadedModel = new Slic3r::Model();
+      std::string err;
+      int loadedPlateCount = 0;
+      Slic3r::PlateDataPtrs plateDataList;
+      Slic3r::DynamicPrintConfig loadedConfig;
+      Slic3r::ConfigSubstitutionContext configSubstCtx(Slic3r::ForwardCompatibilitySubstitutionRule::Enable);
+      bool isBbl3mf = false;
+      Slic3r::Semver fileVersion;
+
+      Slic3r::Import3mfProgressFn progressFn = [receiver, cancelFlag](int import_stage, int current, int total, bool &cancel) {
+        cancel = cancelFlag && cancelFlag->load();
+        int progress = (total > 0) ? qBound(0, int(double(current) * 100.0 / double(total)), 100) : 0;
+        if (!receiver) return;
+        const QString stageText = importStageToText(import_stage);
+        QMetaObject::invokeMethod(receiver, [receiver, progress, stageText]() {
+          if (!receiver) return;
+          if (receiver->loadProgress_ != progress)
+          {
+            receiver->loadProgress_ = progress;
+            emit receiver->loadProgressChanged();
+          }
+          emit receiver->loadProgressUpdated(progress, stageText);
+        }, Qt::QueuedConnection);
+      };
+
+      bool ok = false;
+      try
+      {
+        QMetaObject::invokeMethod(receiver, [receiver]() {
+          if (!receiver) return;
+          receiver->loadProgress_ = 10;
+          emit receiver->loadProgressChanged();
+          emit receiver->loadProgressUpdated(10, QObject::tr("读取项目"));
+        }, Qt::QueuedConnection);
+
+        Slic3r::En3mfType fileType = Slic3r::En3mfType::From_Creality;
+        Slic3r::Model loaded = Slic3r::Model::read_from_archive(
+            localPath.toStdString(),
+            &loadedConfig,
+            &configSubstCtx,
+            fileType,
+            Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel | Slic3r::LoadStrategy::LoadConfig,
+            &plateDataList,
+            nullptr,
+            &fileVersion,
+            progressFn);
+        *loadedModel = std::move(loaded);
+
+        if (!loadedModel->objects.empty())
+        {
+          ok = true;
+          loadedPlateCount = int(plateDataList.size());
+        }
+        else
+        {
+          err = "no model objects in project file";
+        }
+      }
+      catch (const std::exception &ex)
+      {
+        err = ex.what();
+        ok = false;
+      }
+      catch (...)
+      {
+        err = "unknown error";
+        ok = false;
+      }
+
+      if (!plateDataList.empty())
+        Slic3r::release_PlateData_list(plateDataList);
+
+      const bool canceled = cancelFlag && cancelFlag->load();
+
+      // Collect object/plate data from loaded model
+      QStringList names;
+      QStringList moduleNames;
+      QList<bool> printableStates;
+      QList<bool> visibleStates;
+      QStringList loadedPlateNames;
+      QList<QList<int>> loadedPlateObjectIndices;
+      QString errorText;
+      QString loadedProjectName;
+
+      if (ok && !canceled)
+      {
+        loadedProjectName = QFileInfo(localPath).completeBaseName();
+        const auto &objs = loadedModel->objects;
+        names.reserve(int(objs.size()));
+        moduleNames.reserve(int(objs.size()));
+        printableStates.reserve(int(objs.size()));
+        visibleStates.reserve(int(objs.size()));
+        for (size_t i = 0; i < objs.size(); ++i)
+        {
+          const auto *obj = objs[i];
+          names << ((obj && !obj->name.empty()) ? QString::fromStdString(obj->name) : QObject::tr("对象 %1").arg(int(i + 1)));
+          moduleNames << ((obj && !obj->module_name.empty()) ? QString::fromStdString(obj->module_name) : QObject::tr("默认模块"));
+          printableStates.append(obj && !obj->instances.empty() ? obj->instances.front()->printable : true);
+          visibleStates.append(obj && !obj->instances.empty() ? obj->instances.front()->is_printable() : true);
+        }
+
+        if (!plateDataList.empty())
+        {
+          // plateDataList was released above; reconstruct from model objects
+          loadedPlateCount = 1;
+          loadedPlateNames << QObject::tr("平板 1");
+          QList<int> allObjects;
+          allObjects.reserve(int(loadedModel->objects.size()));
+          for (int i = 0; i < int(loadedModel->objects.size()); ++i)
+            allObjects.append(i);
+          loadedPlateObjectIndices.append(allObjects);
+        }
+        else
+        {
+          loadedPlateCount = 1;
+          loadedPlateNames << QObject::tr("平板 1");
+          QList<int> allObjects;
+          allObjects.reserve(int(loadedModel->objects.size()));
+          for (int i = 0; i < int(loadedModel->objects.size()); ++i)
+            allObjects.append(i);
+          loadedPlateObjectIndices.append(allObjects);
+        }
+      }
+      else
+      {
+        errorText = canceled ? QObject::tr("已取消加载") : (err.empty() ? QObject::tr("加载失败") : QString::fromStdString(err));
+        qWarning() << "[ProjectService] project load failed:" << localPath << errorText;
+      }
+
+      if (!receiver)
+      {
+        delete loadedModel;
+        return;
+      }
+
+      QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices]() {
+        if (!receiver) { delete loadedModel; return; }
+
+        receiver->loading_ = false;
+        receiver->activeCancelFlag_.reset();
+        emit receiver->loadingChanged();
+        receiver->loadProgress_ = (ok && !canceled) ? 100 : 0;
+        emit receiver->loadProgressChanged();
+
+        if (ok && !canceled)
+        {
+          if (receiver->model_) delete receiver->model_;
+          receiver->model_ = loadedModel;
+          receiver->projectName_ = loadedProjectName;
+          receiver->sourceFilePath_ = localPath;
+          receiver->objectNames_ = names;
+          receiver->objectModuleNames_ = moduleNames;
+          receiver->objectPrintableStates_ = printableStates;
+          receiver->objectVisibleStates_ = visibleStates;
+          receiver->modelCount_ = names.size();
+
+          // Sync transforms from model
+          receiver->objectPositions_.clear();
+          receiver->objectRotations_.clear();
+          receiver->objectScales_.clear();
+          const auto &objs = loadedModel->objects;
+          receiver->objectPositions_.reserve(int(objs.size()));
+          receiver->objectRotations_.reserve(int(objs.size()));
+          receiver->objectScales_.reserve(int(objs.size()));
+          for (const auto *obj : objs)
+          {
+            if (!obj || obj->instances.empty() || !obj->instances.front())
+            {
+              receiver->objectPositions_.append(QVector3D(0, 0, 0));
+              receiver->objectRotations_.append(QVector3D(0, 0, 0));
+              receiver->objectScales_.append(QVector3D(1, 1, 1));
+              continue;
+            }
+            const auto *inst = obj->instances.front();
+            const auto off = inst->get_offset();
+            receiver->objectPositions_.append(QVector3D(
+                static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y())));
+            const auto rot = inst->get_rotation();
+            receiver->objectRotations_.append(QVector3D(
+                qRadiansToDegrees(static_cast<float>(rot.x())),
+                qRadiansToDegrees(static_cast<float>(rot.y())),
+                qRadiansToDegrees(static_cast<float>(rot.z()))));
+            const auto sc = inst->get_scaling_factor();
+            receiver->objectScales_.append(QVector3D(
+                static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z())));
+          }
+
+          receiver->plateNames_ = loadedPlateNames;
+          receiver->plateObjectIndices_ = loadedPlateObjectIndices;
+          if (receiver->plateObjectIndices_.isEmpty())
+          {
+            receiver->plateNames_.clear();
+            receiver->plateNames_ << QObject::tr("平板 1");
+            QList<int> all;
+            all.reserve(receiver->modelCount_);
+            for (int i = 0; i < receiver->modelCount_; ++i) all.append(i);
+            receiver->plateObjectIndices_.append(all);
+          }
+          receiver->plateCount_ = receiver->plateObjectIndices_.size();
+          if (receiver->plateCount_ != loadedPlateCount)
+            receiver->plateCount_ = std::max(receiver->plateCount_, loadedPlateCount);
+          receiver->currentPlateIndex_ = receiver->plateCount_ > 0 ? 0 : -1;
+          receiver->lastError_.clear();
+
+          emit receiver->projectChanged();
+          emit receiver->plateDataLoaded(receiver->plateCount_);
+          emit receiver->plateSelectionChanged();
+          emit receiver->loadFinished(true, QObject::tr("项目加载完成"));
+        }
+        else
+        {
+          delete loadedModel;
+          receiver->modelCount_ = 0;
+          receiver->plateCount_ = 0;
+          receiver->currentPlateIndex_ = -1;
+          receiver->sourceFilePath_.clear();
+          receiver->objectNames_.clear();
+          receiver->objectModuleNames_.clear();
+          receiver->objectPrintableStates_.clear();
+          receiver->objectVisibleStates_.clear();
+          receiver->plateNames_.clear();
+          receiver->plateObjectIndices_.clear();
+          receiver->plateLockedStates_.clear();
+          receiver->lastError_ = errorText;
+          emit receiver->projectChanged();
+          emit receiver->plateDataLoaded(0);
+          emit receiver->plateSelectionChanged();
+          emit receiver->loadFinished(false, errorText);
+        }
+      }, Qt::QueuedConnection);
+    });
+
+    return true;
+  }
+#endif
+
+  // JSON mock project load (fallback for non-3MF files)
   QFile file(filePath);
   if (!file.open(QIODevice::ReadOnly))
   {
