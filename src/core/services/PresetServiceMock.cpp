@@ -206,29 +206,31 @@ void PresetServiceMock::initBuiltinDefaults()
 bool PresetServiceMock::loadVendorPresets()
 {
   // Locate vendor profile directory (对齐上游 PresetBundle data_dir / resource_dir)
+  // Vendor index is at resources/profiles/Creality.json, sub-directories at resources/profiles/Creality/
   QString vendorDir;
   const QStringList searchPaths = {
-      // Relative to executable (build output dir)
-      QDir::currentPath() + QStringLiteral("/third_party/CrealityPrint/resources/profiles/Creality"),
-      // Source tree relative
-      QDir::currentPath() + QStringLiteral("/../CrealityPrint/resources/profiles/Creality"),
+      // Source tree: index at profiles/Creality.json, subdirs at profiles/Creality/
+      QDir::currentPath() + QStringLiteral("/third_party/CrealityPrint/resources/profiles"),
       // Installed resource path
-      QCoreApplication::applicationDirPath() + QStringLiteral("/resources/profiles/Creality"),
+      QCoreApplication::applicationDirPath() + QStringLiteral("/resources/profiles"),
   };
 
+  QString profilesDir;
   for (const auto &path : searchPaths)
   {
     if (QFileInfo::exists(path + QStringLiteral("/Creality.json")))
     {
-      vendorDir = path;
+      profilesDir = path;
       break;
     }
   }
 
-  if (vendorDir.isEmpty())
+  if (profilesDir.isEmpty())
     return false;
 
-  const QString indexFile = vendorDir + QStringLiteral("/Creality.json");
+  // vendorDir points to the Creality/ subdirectory for machine/filament/process sub_path resolution
+  vendorDir = profilesDir + QStringLiteral("/Creality");
+  const QString indexFile = profilesDir + QStringLiteral("/Creality.json");
   QFile f(indexFile);
   if (!f.open(QIODevice::ReadOnly))
     return false;
@@ -451,11 +453,10 @@ QHash<QString, QVariant> PresetServiceMock::resolveInheritance(
   for (auto it = root.begin(); it != root.end(); ++it)
   {
     const QString key = it.key();
-    // Skip metadata keys
+    // Skip metadata keys (but keep compatible_printers/compatible_prints for compatibility filtering)
     if (key == QStringLiteral("type") || key == QStringLiteral("name") ||
         key == QStringLiteral("from") || key == QStringLiteral("inherits") ||
-        key == QStringLiteral("instantiation") || key == QStringLiteral("setting_id") ||
-        key == QStringLiteral("compatible_printers") || key == QStringLiteral("compatible_prints"))
+        key == QStringLiteral("instantiation") || key == QStringLiteral("setting_id"))
       continue;
 
     const QJsonValue val = it.value();
@@ -574,6 +575,46 @@ bool PresetServiceMock::isFilamentCompatibleWithPrinter(const QString &filamentN
 
   const auto &filVals = filIt.value();
   const auto &prnVals = prnIt.value();
+
+  // Primary check: compatible_printers array (对齐上游 Preset::compatible_printers)
+  const QVariant compatVar = filVals.value(QStringLiteral("compatible_printers"));
+  if (compatVar.isValid())
+  {
+    QStringList compatList;
+    if (compatVar.typeId() == QMetaType::Type::QVariantList)
+    {
+      const QVariantList vl = compatVar.toList();
+      for (const auto &v : vl)
+        compatList.append(v.toString());
+    }
+    else if (compatVar.typeId() == QMetaType::Type::QStringList)
+    {
+      compatList = compatVar.toStringList();
+    }
+    else if (compatVar.typeId() == QMetaType::Type::QString)
+    {
+      // Single string: treat as one-element list
+      const QString s = compatVar.toString();
+      if (!s.isEmpty())
+        compatList.append(s);
+    }
+    if (!compatList.isEmpty())
+    {
+      // If compatible_printers is specified, printer must be in the list
+      bool found = false;
+      for (const auto &cp : compatList)
+      {
+        if (cp == printerName)
+        {
+          found = true;
+          break;
+        }
+      }
+      if (!found)
+        return false;
+    }
+    // Empty list → fall through to nozzle/temp range checks
+  }
 
   // Check nozzle diameter compatibility (对齐上游 nozzle_diameter matching)
   const double filNozzleMin = filVals.value(QStringLiteral("compatible_nozzle_min"), 0.15).toDouble();
