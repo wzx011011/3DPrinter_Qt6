@@ -32,7 +32,7 @@ Migrate the CrealityPrint v7.0.1 3D printer slicer GUI from C++/wxWidgets to C++
   3. Right panel parameter sections (print/filament/printer) show real values from the current preset, and arrange settings panel shows real bed dimensions and spacing
   4. Background slicing process state machine correctly transitions through Idle->Slicing->Exporting->Completed with progress, cancel, and error states aligned with upstream BackgroundSlicingProcess
   5. Toolbar and sidebar visual elements (icons, spacing, enabled/disabled states) match upstream toolbar appearance at pixel-level fidelity
-**Plans**: TBD
+**Plans**: CONTEXT.md, PLAN.md
 **UI hint**: yes
 
 ### Phase 2: Settings and Preset Inheritance
@@ -132,7 +132,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Prepare Workspace Alignment | 0/TBD | Not started | - |
+| 1. Prepare Workspace Alignment | 1/1 | Completed | 2026-05-31 |
 | 2. Settings and Preset Inheritance | 0/TBD | Not started | - |
 | 3. Preview Workspace Verification | 0/TBD | Not started | - |
 | 4. Project Workflow | 0/TBD | Not started | - |
