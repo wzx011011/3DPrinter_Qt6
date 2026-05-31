@@ -1598,6 +1598,29 @@ Item {
                     Row {
                         spacing: 6
 
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/arrow-back-up.svg"
+                            toolTipText: qsTr("撤销 (Ctrl+Z)")
+                            enabled: root.editorVm && root.editorVm.canUndo
+                            onClicked: if (root.editorVm) root.editorVm.undo()
+                        }
+                        CxIconButton {
+                            buttonSize: 34
+                            iconSize: 16
+                            iconSource: "qrc:/qml/assets/icons/arrow-forward-up.svg"
+                            toolTipText: qsTr("重做 (Ctrl+Y)")
+                            enabled: root.editorVm && root.editorVm.canRedo
+                            onClicked: if (root.editorVm) root.editorVm.redo()
+                        }
+                    }
+
+                    ToolStripDivider { }
+
+                    Row {
+                        spacing: 6
+
                         // 删除选中 (对齐上游 GLToolbar delete)
                         CxIconButton {
                             buttonSize: 34
@@ -1649,167 +1672,157 @@ Item {
 
                     Row {
                         spacing: 6
+                        property bool hasSelection: root.editorVm && root.editorVm.hasSelection
 
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoMove
                             iconSource: "qrc:/qml/assets/icons/arrow-forward-up.svg"
                             toolTipText: qsTr("移动 (W)")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoMove
                         }
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoRotate
                             iconSource: "qrc:/qml/assets/icons/rotate-2.svg"
                             toolTipText: qsTr("旋转 (E)")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoRotate
                         }
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoScale
                             iconSource: "qrc:/qml/assets/icons/maximize.svg"
                             toolTipText: qsTr("缩放 (R)")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoScale
                         }
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoMeasure
                             iconSource: "qrc:/qml/assets/icons/box.svg"
                             toolTipText: qsTr("测量 (Ctrl+U)")
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoMeasure
                         }
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoFlatten
                             iconSource: "qrc:/qml/assets/icons/layers-subtract.svg"
                             toolTipText: qsTr("平放 (F)")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoFlatten
                         }
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoCut
                             iconSource: "qrc:/qml/assets/icons/scissors.svg"
                             toolTipText: qsTr("切割 (Ctrl+Shift+X)")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoCut
                         }
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoSupportPaint
                             iconSource: "qrc:/qml/assets/icons/layers.svg"
                             toolTipText: qsTr("支撑绘制 (P)")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoSupportPaint
                         }
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoSeamPaint
                             iconSource: "qrc:/qml/assets/icons/scissors.svg"
                             toolTipText: qsTr("缝线绘制")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoSeamPaint
                         }
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoHollow
                             iconSource: "qrc:/qml/assets/icons/minus-circle.svg"
                             toolTipText: qsTr("SLA 空洞标记")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoHollow
                         }
-
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoSimplify
                             iconSource: "qrc:/qml/assets/icons/layers-subtract.svg"
                             toolTipText: qsTr("简化模型")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoSimplify
                         }
-
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoMmuSegmentation
                             iconSource: "qrc:/qml/assets/icons/layers.svg"
                             toolTipText: qsTr("MMU 分段")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoMmuSegmentation
                         }
-
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoDrill
                             iconSource: "qrc:/qml/assets/icons/minus-circle.svg"
                             toolTipText: qsTr("钻孔")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoDrill
                         }
-
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoEmboss
                             iconSource: "qrc:/qml/assets/icons/layers-subtract.svg"
                             toolTipText: qsTr("文字浮雕")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoEmboss
                         }
-
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoMeshBoolean
                             iconSource: "qrc:/qml/assets/icons/plus.svg"
                             toolTipText: qsTr("布尔运算")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoMeshBoolean
                         }
-
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoAdvancedCut
                             iconSource: "qrc:/qml/assets/icons/scissors.svg"
                             toolTipText: qsTr("高级切割")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoAdvancedCut
                         }
-
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoFaceDetector
                             iconSource: "qrc:/qml/assets/icons/layout-grid.svg"
                             toolTipText: qsTr("面检测")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoFaceDetector
                         }
-
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoText
                             iconSource: "qrc:/qml/assets/icons/clipboard.svg"
                             toolTipText: qsTr("文字工具")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoText
                         }
-
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoSVG
                             iconSource: "qrc:/qml/assets/icons/folder-open.svg"
                             toolTipText: qsTr("SVG 导入")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoSVG
                         }
-
                         CxIconButton {
-                            buttonSize: 34
-                            iconSize: 16
+                            buttonSize: 34; iconSize: 16
                             selected: viewport3d.gizmoMode === GLViewport.GizmoSlaSupports
                             iconSource: "qrc:/qml/assets/icons/layout-grid-plus.svg"
                             toolTipText: qsTr("SLA 支撑")
+                            enabled: parent.hasSelection
                             onClicked: viewport3d.gizmoMode = GLViewport.GizmoSlaSupports
                         }
                     }
@@ -1831,6 +1844,7 @@ Item {
                             iconSize: 16
                             iconSource: "qrc:/qml/assets/icons/arrow-back-up.svg"
                             toolTipText: qsTr("自动朝向")
+                            enabled: root.editorVm && root.editorVm.hasSelection
                             onClicked: root.editorVm.autoOrientSelected()
                         }
                         CxIconButton {
@@ -1846,6 +1860,7 @@ Item {
                             iconSize: 16
                             iconSource: "qrc:/qml/assets/icons/mirror.svg"
                             toolTipText: qsTr("镜像 (沿 X 轴)")
+                            enabled: root.editorVm && root.editorVm.hasSelection
                             onClicked: if (root.editorVm) root.editorVm.mirrorSelectedObjects(0)
                         }
                         CxIconButton {

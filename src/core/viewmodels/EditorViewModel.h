@@ -343,6 +343,8 @@ public:
   Q_INVOKABLE void autoOrientSelected();
   /// 拆分选中对象为独立对象（对齐上游 Plater::priv::split_object）
   Q_INVOKABLE void splitSelectedObject();
+  Q_INVOKABLE void fixMeshForObject(int i);
+  Q_INVOKABLE void exportObjectAsStl(int i);
   /// 扁平平放（对齐上游 GLGizmoFlatten）— 将选中对象最大面朝下
   Q_INVOKABLE void flattenSelected();
   /// 切割选中对象（对齐上游 GLGizmoCut）— 沿指定轴/位置切割
@@ -620,6 +622,7 @@ signals:
 
 private:
   void refreshMeshCacheAndFitHint();
+  void invalidateSliceResultsForCurrentPlate();
   void rebuildObjectEntriesFromService();
   bool deleteSelectedVolumesBySource();
   void ensureValidObjectSelection(bool preferFirstVisible);

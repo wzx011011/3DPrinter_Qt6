@@ -15,6 +15,13 @@
 #include <cmath>
 #include <QDebug>
 
+void EditorViewModel::invalidateSliceResultsForCurrentPlate()
+{
+  const int plateIdx = projectService_ ? projectService_->currentPlateIndex() : -1;
+  if (plateIdx >= 0)
+    m_slicedPlateIndices.remove(plateIdx);
+}
+
 void EditorViewModel::refreshMeshCacheAndFitHint()
 {
   m_cachedMeshData = projectService_->meshData();
@@ -2089,6 +2096,7 @@ void EditorViewModel::setObjectPrintable(int i, bool printable)
   }
 
   m_objects[sourceIndex].printable = printable;
+  invalidateSliceResultsForCurrentPlate();
   statusText_ = printable ? QStringLiteral("对象已设为可打印") : QStringLiteral("对象已设为不参与打印");
   emit stateChanged();
 }
@@ -2429,6 +2437,7 @@ void EditorViewModel::mirrorSelectedObjects(int axis)
 #endif
 
   // GLViewportRenderer handles the visual mirror via InputEvent
+  invalidateSliceResultsForCurrentPlate();
   emit stateChanged();
 }
 
@@ -2548,7 +2557,46 @@ void EditorViewModel::splitSelectedObject()
 #endif
 
   rebuildObjectEntriesFromService();
+  invalidateSliceResultsForCurrentPlate();
   refreshMeshCacheAndFitHint();
+  emit stateChanged();
+}
+
+void EditorViewModel::fixMeshForObject(int i)
+{
+  if (!projectService_)
+    return;
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  if (sourceIndex < 0)
+    return;
+
+#ifdef HAS_LIBSLIC3R
+  // Align upstream MeshRepairDialog / fix_mesh via its_quadric_edge_collapse + repair
+  statusText_ = tr("正在修复网格...");
+  emit stateChanged();
+  projectService_->fixMeshForObject(sourceIndex);
+  refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForCurrentPlate();
+  statusText_ = tr("网格修复完成");
+#else
+  statusText_ = tr("网格修复需要 libslic3r 支持");
+#endif
+  emit stateChanged();
+}
+
+void EditorViewModel::exportObjectAsStl(int i)
+{
+  if (!projectService_)
+    return;
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  if (sourceIndex < 0)
+    return;
+
+  statusText_ = tr("STL 导出功能准备中...");
+  emit stateChanged();
+  // Actual file dialog + export is deferred to a dedicated export service
+  // For now, record the intent
+  statusText_ = tr("请使用主菜单 文件 > 导出 STL 功能");
   emit stateChanged();
 }
 
@@ -2778,8 +2826,10 @@ bool EditorViewModel::setPlateBedType(int plateIndex, int bedType)
   if (!projectService_)
     return false;
   bool ok = projectService_->setPlateBedType(plateIndex, bedType);
-  if (ok)
+  if (ok) {
+    m_slicedPlateIndices.remove(plateIndex);
     emit stateChanged();
+  }
   return ok;
 }
 
@@ -2793,8 +2843,10 @@ bool EditorViewModel::setPlatePrintSequence(int plateIndex, int seq)
   if (!projectService_)
     return false;
   bool ok = projectService_->setPlatePrintSequence(plateIndex, seq);
-  if (ok)
+  if (ok) {
+    m_slicedPlateIndices.remove(plateIndex);
     emit stateChanged();
+  }
   return ok;
 }
 
@@ -2808,8 +2860,10 @@ bool EditorViewModel::setPlateSpiralMode(int plateIndex, int mode)
   if (!projectService_)
     return false;
   bool ok = projectService_->setPlateSpiralMode(plateIndex, mode);
-  if (ok)
+  if (ok) {
+    m_slicedPlateIndices.remove(plateIndex);
     emit stateChanged();
+  }
   return ok;
 }
 
@@ -3321,8 +3375,12 @@ void EditorViewModel::requestSliceAll()
     return;
 
   m_sliceAllQueue.clear();
-  for (int i = 0; i < projectService_->plateCount(); ++i)
-    m_sliceAllQueue.append(i);
+  for (int i = 0; i < projectService_->plateCount(); ++i) {
+    if (!isPlateLocked(i))
+      m_sliceAllQueue.append(i);
+  }
+  if (m_sliceAllQueue.isEmpty())
+    return;
   m_slicingAll = true;
   continueSliceAllQueue();
 }

@@ -115,6 +115,7 @@ double SliceService::resultTotalFilamentMm() const
 void SliceService::clearStoredResult()
 {
   progress_ = 0;
+  sliceState_ = State::Idle;
   statusLabel_ = QStringLiteral("等待切片");
   outputPath_.clear();
   estimatedTimeLabel_.clear();
@@ -173,6 +174,7 @@ void SliceService::startSlice(const QString &projectName)
 #endif
 
   slicing_ = true;
+  sliceState_ = State::Slicing;
   progress_ = 0;
   statusLabel_ = QStringLiteral("准备切片");
   outputPath_.clear();
@@ -198,6 +200,7 @@ void SliceService::startSlice(const QString &projectName)
     QString resultCostLabel;
     QString resultPlateLabel;
     int resultPlateIndex = -1;
+    int layerCount = 0;
 
 #ifdef HAS_LIBSLIC3R
     try
@@ -224,7 +227,34 @@ void SliceService::startSlice(const QString &projectName)
       notify(10, QObject::tr("准备切片参数"));
       Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
 
+      // Apply per-plate config overrides (align upstream PartPlate::config)
+      if (receiver && receiver->projectService_) {
+        const int plateIdx = targetPlateIndex >= 0 ? targetPlateIndex
+                             : receiver->projectService_->currentPlateIndex();
+        if (plateIdx >= 0 && plateIdx < receiver->projectService_->plateCount()) {
+          const int bedType = receiver->projectService_->plateBedType(plateIdx);
+          if (bedType > 0) {
+            auto *opt = config.option("curr_bed_type");
+            if (opt) opt->setInt(bedType);
+          }
+          const int printSeq = receiver->projectService_->platePrintSequence(plateIdx);
+          if (printSeq > 0) {
+            auto *opt = config.option("print_sequence");
+            if (opt) opt->setInt(printSeq);
+          }
+          const int spiralMode = receiver->projectService_->plateSpiralMode(plateIdx);
+          if (spiralMode == 1) {
+            auto *opt = config.option("spiral_mode");
+            if (opt) opt->setInt(1);
+          } else if (spiralMode == 2) {
+            auto *opt = config.option("spiral_mode");
+            if (opt) opt->setInt(0);
+          }
+        }
+      }
+
       Slic3r::Print print;
+      print.set_is_CX_printer(true);
       receiver->activePrint_.store(&print, std::memory_order_release);
 
       print.set_status_callback([receiver](const Slic3r::PrintBase::SlicingStatus &st) {
@@ -251,6 +281,13 @@ void SliceService::startSlice(const QString &projectName)
         throw std::runtime_error("切片已取消");
       }
 
+      // Pre-slice validation (align upstream BackgroundSlicingProcess::validate)
+      {
+        Slic3r::StringObjectException validationError = print.validate();
+        if (!validationError.string.empty())
+          throw std::runtime_error("切片验证失败: " + validationError.string);
+      }
+
       notify(25, QObject::tr("执行切片"));
       print.process();
       if (cancelFlag && cancelFlag->load())
@@ -273,6 +310,17 @@ void SliceService::startSlice(const QString &projectName)
       const auto &printStats = print.print_statistics();
       if (printStats.total_weight > 0.0)
         resultWeightLabel = QStringLiteral("%1 g").arg(QString::number(printStats.total_weight, 'f', 2));
+
+      // Filament length
+      if (printStats.total_used_filament > 0.0)
+        resultFilamentLabel = QStringLiteral("%1 m").arg(QString::number(printStats.total_used_filament / 1000.0, 'f', 2));
+
+      // Layer count (captured for main-thread delivery)
+      layerCount = static_cast<int>(printStats.total_layer_count);
+
+      // Cost
+      if (printStats.total_cost > 0.0)
+        resultCostLabel = QStringLiteral("$%1").arg(QString::number(printStats.total_cost, 'f', 2));
 
       resultPlateLabel = targetPlateLabel;
       resultPlateIndex = targetPlateIndex;
@@ -340,7 +388,7 @@ void SliceService::startSlice(const QString &projectName)
     if (!receiver)
       return;
 
-    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, resultFilamentLabel, resultCostLabel]() {
+    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, resultFilamentLabel, resultCostLabel, layerCount]() {
       if (!receiver)
         return;
 
@@ -350,20 +398,25 @@ void SliceService::startSlice(const QString &projectName)
 
       if (cancelFlag && cancelFlag->load())
       {
+        receiver->sliceState_ = State::Cancelled;
         receiver->statusLabel_ = QObject::tr("已取消切片");
         emit receiver->progressChanged();
+        emit receiver->stateChanged();
         emit receiver->sliceFailed(receiver->statusLabel_);
         return;
       }
 
       if (!errorText.isEmpty())
       {
+        receiver->sliceState_ = State::Error;
         receiver->statusLabel_ = errorText;
         emit receiver->progressChanged();
+        emit receiver->stateChanged();
         emit receiver->sliceFailed(errorText);
         return;
       }
 
+      receiver->sliceState_ = State::Completed;
       receiver->progress_ = 100;
       receiver->statusLabel_ = QObject::tr("切片完成");
       receiver->outputPath_ = outputPath;
@@ -373,6 +426,19 @@ void SliceService::startSlice(const QString &projectName)
       receiver->resultPlateIndex_ = resultPlateIndex;
       receiver->resultFilamentLabel_ = resultFilamentLabel;
       receiver->resultCostLabel_ = resultCostLabel;
+      receiver->resultLayerCount_ = layerCount;
+
+      // Store per-plate result for multi-plate tracking
+      if (resultPlateIndex >= 0) {
+        PlateSliceResult pr;
+        pr.estimatedTimeLabel = estimatedTimeLabel;
+        pr.resultWeightLabel = resultWeightLabel;
+        pr.resultFilamentLabel = resultFilamentLabel;
+        pr.resultCostLabel = resultCostLabel;
+        pr.resultLayerCount = receiver->resultLayerCount_;
+        pr.totalFilamentMm = 0.0;
+        receiver->plateResults_[resultPlateIndex] = pr;
+      }
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
       emit receiver->sliceFinished(receiver->estimatedTimeLabel_);
@@ -384,11 +450,13 @@ void SliceService::cancelSlice()
   if (!slicing_ || !activeCancelFlag_)
     return;
 
+  sliceState_ = State::Cancelled;
   activeCancelFlag_->store(true);
 #ifdef HAS_LIBSLIC3R
   if (Slic3r::Print *active = activePrint_.load(std::memory_order_acquire))
     active->cancel();
 #endif
+  emit stateChanged();
 }
 
 bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
@@ -533,4 +601,49 @@ bool SliceService::exportGCodeToPath(const QString &targetPath)
   statusLabel_ = QObject::tr("已导出: %1").arg(QFileInfo(targetPath).fileName());
   emit progressChanged();
   return true;
+}
+
+bool SliceService::hasPlateResult(int plateIndex) const
+{
+  return plateResults_.contains(plateIndex);
+}
+
+QString SliceService::plateEstimatedTime(int plateIndex) const
+{
+  auto it = plateResults_.constFind(plateIndex);
+  return it != plateResults_.constEnd() ? it->estimatedTimeLabel : QString();
+}
+
+QString SliceService::plateWeight(int plateIndex) const
+{
+  auto it = plateResults_.constFind(plateIndex);
+  return it != plateResults_.constEnd() ? it->resultWeightLabel : QString();
+}
+
+QString SliceService::plateFilament(int plateIndex) const
+{
+  auto it = plateResults_.constFind(plateIndex);
+  return it != plateResults_.constEnd() ? it->resultFilamentLabel : QString();
+}
+
+QString SliceService::plateCost(int plateIndex) const
+{
+  auto it = plateResults_.constFind(plateIndex);
+  return it != plateResults_.constEnd() ? it->resultCostLabel : QString();
+}
+
+int SliceService::plateLayerCount(int plateIndex) const
+{
+  auto it = plateResults_.constFind(plateIndex);
+  return it != plateResults_.constEnd() ? it->resultLayerCount : 0;
+}
+
+void SliceService::clearPlateResults()
+{
+  plateResults_.clear();
+}
+
+void SliceService::removePlateResult(int plateIndex)
+{
+  plateResults_.remove(plateIndex);
 }

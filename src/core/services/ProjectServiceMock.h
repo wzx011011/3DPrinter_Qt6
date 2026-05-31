@@ -206,6 +206,8 @@ public:
   /// 拆分指定对象（对齐上游 ModelObject::split）
   /// HAS_LIBSLIC3R: 调用真实 split API 返回新对象索引列表；Mock: 返回空列表
   Q_INVOKABLE QList<int> splitObject(int objectIndex);
+  /// 修复网格（对齐上游 MeshRepairDialog / fix_mesh）
+  void fixMeshForObject(int objectIndex);
   /// 重命名对象（对齐上游 Plater::rename_object）
   Q_INVOKABLE bool renameObject(int index, const QString &newName);
   /// 移动对象位置（对齐上游 GUI_ObjectList 拖拽重排序）

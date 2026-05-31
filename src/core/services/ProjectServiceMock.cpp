@@ -3072,6 +3072,28 @@ bool ProjectServiceMock::deleteObject(int index)
   }
 }
 
+void ProjectServiceMock::fixMeshForObject(int objectIndex)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return;
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj) return;
+  for (auto *vol : obj->volumes) {
+    if (vol) {
+      Slic3r::TriangleMesh m = vol->mesh();
+      m.repair();
+      vol->set_mesh(std::move(m));
+    }
+  }
+  emit projectChanged();
+#else
+  Q_UNUSED(objectIndex);
+  lastError_ = tr("网格修复需要 libslic3r");
+  emit projectChanged();
+#endif
+}
+
 bool ProjectServiceMock::renameObject(int index, const QString &newName)
 {
   if (index < 0 || index >= objectNames_.size())

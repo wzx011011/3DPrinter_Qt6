@@ -513,6 +513,29 @@ Item {
 
                 MenuSeparator { }
 
+                // Split (对齐上游 GUI_ObjectList split_to_objects/split_to_parts)
+                MenuItem {
+                    text: qsTr("拆分为对象")
+                    enabled: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount === 1 && !root.editorVm.hasSelectedVolume
+                    onTriggered: { if (root.editorVm) root.editorVm.splitSelectedObject() }
+                }
+
+                // Fix Mesh (对齐上游 menu_item_fix_mesh)
+                MenuItem {
+                    text: qsTr("修复网格")
+                    enabled: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount === 1
+                    onTriggered: { if (root.editorVm) root.editorVm.fixMeshForObject(row.index) }
+                }
+
+                // Export as STL (对齐上游 export_stl / export_mesh)
+                MenuItem {
+                    text: qsTr("导出为 STL...")
+                    enabled: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount === 1
+                    onTriggered: { if (root.editorVm) root.editorVm.exportObjectAsStl(row.index) }
+                }
+
+                MenuSeparator { }
+
                 MenuItem {
                     text: row.isSelected && root.editorVm && root.editorVm.selectedObjectCount > 1
                           ? qsTr("删除已选对象")
@@ -861,7 +884,16 @@ Item {
                                 width: 6
                                 height: 6
                                 radius: 3
-                                color: isSelected ? Theme.accent : "#7b8794"
+                                color: {
+                                    if (isSelected) return Theme.accent;
+                                    const label = root.editorVm ? root.editorVm.objectVolumeTypeLabel(row.index, index) : "";
+                                    if (label.includes(qsTr("负体积"))) return "#e74c3c";
+                                    if (label.includes(qsTr("参数"))) return "#f39c12";
+                                    if (label.includes(qsTr("屏蔽"))) return "#9b59b6";
+                                    if (label.includes(qsTr("增强"))) return "#2ecc71";
+                                    if (label.includes(qsTr("文字")) || label.includes(qsTr("SVG"))) return "#3498db";
+                                    return "#7b8794";
+                                }
                             }
 
                             Text {

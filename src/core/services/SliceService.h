@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QMap>
 #include <memory>
 #include <atomic>
 
@@ -14,6 +15,15 @@ namespace Slic3r
 }
 #endif
 
+struct PlateSliceResult {
+  QString estimatedTimeLabel;
+  QString resultWeightLabel;
+  QString resultFilamentLabel;
+  QString resultCostLabel;
+  int resultLayerCount = 0;
+  double totalFilamentMm = 0.0;
+};
+
 class SliceService final : public QObject
 {
   Q_OBJECT
@@ -23,6 +33,17 @@ class SliceService final : public QObject
   Q_PROPERTY(QString outputPath READ outputPath NOTIFY sliceFinished)
 
 public:
+  enum class State {
+    Idle,
+    Slicing,
+    Exporting,
+    Completed,
+    Cancelled,
+    Error
+  };
+  Q_ENUM(State)
+
+  State sliceState() const { return sliceState_; }
   explicit SliceService(ProjectServiceMock *projectService, QObject *parent = nullptr);
 
   int progress() const;
@@ -42,13 +63,25 @@ public:
   /// 总耗材长度（mm，用于平均速度计算）
   double resultTotalFilamentMm() const;
 
+  /// Per-plate result accessors
+  Q_INVOKABLE bool hasPlateResult(int plateIndex) const;
+  Q_INVOKABLE QString plateEstimatedTime(int plateIndex) const;
+  Q_INVOKABLE QString plateWeight(int plateIndex) const;
+  Q_INVOKABLE QString plateFilament(int plateIndex) const;
+  Q_INVOKABLE QString plateCost(int plateIndex) const;
+  Q_INVOKABLE int plateLayerCount(int plateIndex) const;
+
   Q_INVOKABLE void startSlice(const QString &projectName);
   Q_INVOKABLE void startSlicePlate(int plateIndex);
   Q_INVOKABLE void cancelSlice();
   Q_INVOKABLE bool loadGCodeFromPrevious(const QString &gcodeFilePath);
   Q_INVOKABLE bool exportGCodeToPath(const QString &targetPath);
 
+  void clearPlateResults();
+  void removePlateResult(int plateIndex);
+
 signals:
+  void stateChanged();
   void progressChanged();
   void slicingChanged();
   void progressUpdated(int percent, const QString &label);
@@ -59,6 +92,7 @@ private:
   ProjectServiceMock *projectService_ = nullptr;
   int progress_ = 0;
   bool slicing_ = false;
+  State sliceState_ = State::Idle;
   QString statusLabel_ = QStringLiteral("等待切片");
   QString outputPath_;
   QString estimatedTimeLabel_;
@@ -72,6 +106,8 @@ private:
 #ifdef HAS_LIBSLIC3R
   std::atomic<Slic3r::Print *> activePrint_{nullptr};
 #endif
+
+  QMap<int, PlateSliceResult> plateResults_;
 
   void clearStoredResult();
 };
