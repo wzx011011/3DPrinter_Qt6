@@ -50,10 +50,10 @@ if(CREALITY_QML_GUI)
     if(BUILD_LIBSLIC3R)
         # BUILD_LIBSLIC3R=ON 时 Boost_ALL_NO_LIB 干扰 Qt 的 auto-link，
         # 需要跳过低版本检查以避免 Qt 查找失败
-        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent)
+        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test)
     else()
         # 低版本 Qt 兼容：允许 Qt 3.21 与 Qt 6.10 配对
-        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent)
+        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test)
         set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/third_party/Qt6_10")
         set(QT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT 3.21)
     endif()
@@ -196,7 +196,100 @@ if(WIN32)
     set_target_properties(FramelessDialogDemo PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 
-# I2 — i18n 翻译文件
+# ── E2E Workflow Tests ──────────────────────────────────────────────────
+if(BUILD_TESTING)
+    qt_add_executable(E2EWorkflowTests
+        tests/E2EWorkflowTests.cpp
+        src/nanosvg_impl.cpp
+        src/core/services/SliceService.cpp
+        src/core/services/SliceService.h
+        src/core/services/PresetServiceMock.cpp
+        src/core/services/PresetServiceMock.h
+        src/core/services/ProjectServiceMock.cpp
+        src/core/services/ProjectServiceMock.h
+        src/core/services/UndoRedoManager.cpp
+        src/core/services/UndoRedoManager.h
+        src/core/services/UndoCommands.cpp
+        src/core/services/UndoCommands.h
+        src/core/services/JobBase.h
+        src/core/services/JobBase.cpp
+        src/core/services/JobManager.h
+        src/core/services/JobManager.cpp
+        src/core/services/DeviceServiceMock.cpp
+        src/core/services/DeviceServiceMock.h
+        src/core/services/NetworkServiceMock.cpp
+        src/core/services/NetworkServiceMock.h
+        src/core/services/CameraServiceMock.cpp
+        src/core/services/CameraServiceMock.h
+        src/core/services/CloudServiceMock.cpp
+        src/core/services/CloudServiceMock.h
+        src/core/services/CalibrationServiceMock.cpp
+        src/core/services/CalibrationServiceMock.h
+        src/core/rendering/GLShaderUtil.cpp
+        src/core/rendering/GLShaderUtil.h
+        src/core/viewmodels/EditorViewModel.cpp
+        src/core/viewmodels/EditorViewModel.h
+        src/core/viewmodels/PreviewViewModel.cpp
+        src/core/viewmodels/PreviewViewModel.h
+        src/core/viewmodels/MonitorViewModel.cpp
+        src/core/viewmodels/MonitorViewModel.h
+        src/core/viewmodels/ConfigViewModel.cpp
+        src/core/viewmodels/ConfigViewModel.h
+        src/core/viewmodels/HomeViewModel.cpp
+        src/core/viewmodels/HomeViewModel.h
+        src/core/viewmodels/SettingsViewModel.cpp
+        src/core/viewmodels/SettingsViewModel.h
+        src/core/viewmodels/ProjectViewModel.cpp
+        src/core/viewmodels/ProjectViewModel.h
+        src/core/viewmodels/CalibrationViewModel.cpp
+        src/core/viewmodels/CalibrationViewModel.h
+        src/core/viewmodels/ModelMallViewModel.cpp
+        src/core/viewmodels/ModelMallViewModel.h
+        src/core/viewmodels/MultiMachineViewModel.cpp
+        src/core/viewmodels/MultiMachineViewModel.h
+        src/qml_gui/BackendContext.cpp
+        src/qml_gui/BackendContext.h
+        src/qml_gui/Models/ConfigOptionModel.cpp
+        src/qml_gui/Models/ConfigOptionModel.h
+        src/qml_gui/Models/PresetListModel.cpp
+        src/qml_gui/Models/PresetListModel.h
+        src/qml_gui/Renderer/CameraController.cpp
+        src/qml_gui/Renderer/CameraController.h
+        src/qml_gui/Renderer/GLViewport.cpp
+        src/qml_gui/Renderer/GLViewport.h
+        src/qml_gui/Renderer/GLViewportRenderer.cpp
+        src/qml_gui/Renderer/GLViewportRenderer.h
+        src/qml_gui/Renderer/GCodeRenderer.cpp
+        src/qml_gui/Renderer/GCodeRenderer.h
+    )
+    if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/src/core/debug/CrashHandlerWin.cpp")
+        target_sources(E2EWorkflowTests PRIVATE
+            src/core/debug/CrashHandlerWin.cpp
+            src/core/debug/CrashHandlerWin.h
+            src/core/debug/EarlyCrashDiag.cpp
+        )
+    endif()
+    target_link_libraries(E2EWorkflowTests PRIVATE Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Test)
+    target_include_directories(E2EWorkflowTests PRIVATE
+        src
+        ${CMAKE_SOURCE_DIR}/third_party/CrealityPrint/src
+    )
+    if(BUILD_LIBSLIC3R AND TARGET libslic3r)
+        target_link_libraries(E2EWorkflowTests PRIVATE libslic3r)
+        target_compile_definitions(E2EWorkflowTests PRIVATE HAS_LIBSLIC3R=1)
+        if(MSVC)
+            target_compile_definitions(E2EWorkflowTests PRIVATE
+                BOOST_ALL_NO_LIB
+                BOOST_USE_WINAPI_VERSION=0x602
+                BOOST_SYSTEM_USE_UTF8
+            )
+        endif()
+    endif()
+    target_compile_definitions(E2EWorkflowTests PRIVATE CREALITY_QML_GUI=1)
+    add_test(NAME E2EWorkflowTests COMMAND E2EWorkflowTests)
+endif()
+
+# I2 -- i18n 翻译文件
 qt_add_translations(FramelessDialogDemo
     TS_FILES
         i18n/zh_CN.ts

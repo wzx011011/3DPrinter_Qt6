@@ -65,6 +65,9 @@ $env:CL = "/Zm300 /bigobj $env:CL"
 ninja -j16 FramelessDialogDemo.exe
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+# Build E2E test target (if BUILD_TESTING is ON)
+ninja -j16 E2EWorkflowTests 2>$null
+
 # Deploy Qt runtime DLLs if not already present
 if (-not (Test-Path './Qt6Core.dll')) {
   & 'E:/Qt6.10/bin/windeployqt.exe' --release --qmldir '../src' --no-translations --no-system-d3d-compiler --no-opengl-sw './FramelessDialogDemo.exe' 2>$null
