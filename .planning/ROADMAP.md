@@ -25,6 +25,7 @@ Complete and verify the full slicing workflow from model import through G-code p
   5. Value source indicators correctly show which tier provides each value
 **Plans**: 1 plan
 Plans:
+- [ ] v11-02-01-PLAN.md — Inject preset config into slice engine, add E2E workflow test coverage
 - [ ] v11-01-01-PLAN.md — Fix vendor path, store compatibility metadata, wire upstream defaults into hierarchy merge
 
 ### Phase 2: E2E Workflow Verification
@@ -40,7 +41,7 @@ Plans:
   5. Auto-switch to Preview renders the G-code with at least Line Type color mapping working
   6. Export G-code dialog saves the file to a user-chosen location
   7. Any data flow breaks between components are identified and fixed
-**Plans**: TBD
+**Plans**: 1 plan
 
 ### Phase 3: UI Polish Pass
 **Mode**: MVP
@@ -53,7 +54,11 @@ Plans:
   3. Slice progress panel: progress bar, result summary, and action buttons are clearly readable
   4. No clipped text, overlapping elements, or broken layouts on any involved page
   5. Consistent theme token usage across all pages (Theme.bgBase, Theme.accent, etc.)
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] v11-03-01-PLAN.md — Add 6 Theme tokens, tokenize SliceProgress + PreviewPage + LayerSlider + StatsPanel + MoveSlider
+- [ ] v11-03-02-PLAN.md — Tokenize PrintSettings + Sidebar
+- [ ] v11-03-03-PLAN.md — Tokenize PreparePage (195 hardcoded colors)
 
 ## Progress
 
@@ -63,5 +68,5 @@ Phases execute in numeric order: 1 -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Preset System Completion | 0/1 | Planning complete | - |
-| 2. E2E Workflow Verification | 0/1 | Not started | - |
-| 3. UI Polish Pass | 0/1 | Not started | - |
+| 2. E2E Workflow Verification | 0/1 | Planning complete | - |
+| 3. UI Polish Pass | 0/3 | Planning complete | - |
