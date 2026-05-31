@@ -23,7 +23,9 @@ Complete and verify the full slicing workflow from model import through G-code p
   3. Filament compatibility filtering works — only filaments matching the selected printer's nozzle diameter and temperature range appear
   4. Selecting a preset updates all parameter values in the right panel (PrintSettings.qml)
   5. Value source indicators correctly show which tier provides each value
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] v11-01-01-PLAN.md — Fix vendor path, store compatibility metadata, wire upstream defaults into hierarchy merge
 
 ### Phase 2: E2E Workflow Verification
 **Mode**: MVP
@@ -60,6 +62,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Preset System Completion | 0/1 | Not started | - |
+| 1. Preset System Completion | 0/1 | Planning complete | - |
 | 2. E2E Workflow Verification | 0/1 | Not started | - |
 | 3. UI Polish Pass | 0/1 | Not started | - |
