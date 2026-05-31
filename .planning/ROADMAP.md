@@ -25,7 +25,6 @@ Complete and verify the full slicing workflow from model import through G-code p
   5. Value source indicators correctly show which tier provides each value
 **Plans**: 1 plan
 Plans:
-- [ ] v11-02-01-PLAN.md — Inject preset config into slice engine, add E2E workflow test coverage
 - [ ] v11-01-01-PLAN.md — Fix vendor path, store compatibility metadata, wire upstream defaults into hierarchy merge
 
 ### Phase 2: E2E Workflow Verification
@@ -42,6 +41,8 @@ Plans:
   6. Export G-code dialog saves the file to a user-chosen location
   7. Any data flow breaks between components are identified and fixed
 **Plans**: 1 plan
+Plans:
+- [ ] v11-02-01-PLAN.md — Inject preset config into slice engine, add E2E workflow test coverage
 
 ### Phase 3: UI Polish Pass
 **Mode**: MVP
