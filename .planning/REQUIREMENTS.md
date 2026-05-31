@@ -1,71 +1,112 @@
-# Requirements: CrealityPrint Qt6/QML Migration
+# Requirements: Milestone v1.1 — End-to-End Slicing Workflow
+
+## Scope
+
+Verify and complete the full slicing workflow: STL/3MF import → machine/filament/process parameter settings → slice execution → G-code export → post-slice preview. Ensure no mock breakpoints remain in the critical path. Polish involved UI pages to usable state.
 
 ## Active Requirements
 
-### Prepare Workspace
+### PRESET-01: Preset Loading Completeness
 
-- [ ] **PREP-01**: Prepare 工作区完整对齐 -- 平板管理真实耗材分配、对象树/侧栏细节、工具栏/侧栏视觉打磨
-- [ ] **PREP-02**: 右侧面板端到端验证 -- 切片结果摘要、参数面板三段式、排列设置全部在有真实数据时正确展示
-- [ ] **PREP-03**: 后台切片状态机对照 -- BackgroundSlicingProcess 状态机与上游对齐
+**Priority:** P0
+**Status:** Partial — real vendor presets load when HAS_LIBSLIC3R; falls back to 8 hardcoded presets
 
-### Preview Workspace
+Real upstream vendor presets (Creality printers, filaments, process settings) must load correctly from `third_party/CrealityPrint/resources/profiles/`. The 3-tier chain (system → user → modified) must resolve correctly. When a user selects a printer, compatible filaments and processes must be filtered and displayed.
 
-- [ ] **PREV-01**: Preview 工作区完整对照 -- 13 种颜色映射端到端验证、StatsPanel 真实 G-code 数据、LayerSlider/MoveSlider 交互验证
+**Acceptance:**
+- Vendor JSON parsed with full machine/filament/process lists
+- Inheritance chains resolved (base → vendor → user overrides)
+- Compatibility filtering works (nozzle diameter, temperature range)
+- Current preset selection persists across model imports
+- All 3 categories populated in parameter panel with real values
 
-### Settings / Preset
+**Upstream reference:** `third_party/CrealityPrint/src/slic3r/GUI/PresetBundle.cpp`, `Tab.cpp`
 
-- [ ] **SETT-01**: Settings/Preset 完整继承链 -- 上游 Tab 真实数据加载、PresetBundle 完整继承、ConfigOptionDef 完整 schema
+### FLOW-01: E2E Workflow Integration
 
-### Project Workflow
+**Priority:** P0
+**Status:** Partial — all components are REAL individually, but the full chain needs verification
 
-- [ ] **PROJ-01**: 项目工作流完善 -- 项目保存/加载完整工作流、文件导入格式支持对齐
+The complete workflow from import to preview must work without any mock breakpoints. Each transition must carry real data.
 
-### Gizmo Rendering
+**Acceptance:**
+- Import STL/3MF → model appears in viewport with correct mesh
+- Select printer → filament → process → all parameter values update
+- Click Slice → libslic3r executes, progress bar updates, no crash
+- Slice completes → G-code file written to disk, result summary shows real stats
+- Auto-switch to Preview → G-code parsed, layer slider works, color mapping renders
+- Export G-code → file dialog saves to user-specified path
 
-- [ ] **GIZM-01**: Gizmo GL 渲染层补全 -- Text/Emboss/SVG/Simplify/Drill/MeshBoolean/AdvancedCut 的 GL 交互渲染
-- [ ] **GIZM-02**: Support Paint / Seam Paint GL 渲染和数据管理层 -- 非 TriangleSelector 方案
-- [ ] **GIZM-03**: Hollow Gizmo GL 渲染和空洞几何生成 -- 非 OpenVDB 方案
-- [ ] **GIZM-04**: MmuSegmentation per-triangle 绘制 -- 非 TriangleSelectorPatch 方案
+**Upstream reference:** `third_party/CrealityPrint/src/slic3r/GUI/Plater.cpp` (on_slice_complete, on_process_completed)
 
-### Device / Monitor
+### FLOW-02: Slice-to-Preview Data Continuity
 
-- [ ] **DEVC-01**: 设备交互层对齐 -- DeviceManager/MachineObject 交互层状态机
+**Priority:** P0
+**Status:** Real — needs verification
 
-### Calibration
+After slicing, the G-code file path must flow to PreviewViewModel, and the preview must render the sliced result without requiring user intervention.
 
-- [ ] **CALI-01**: 校准工作流深度功能 -- 设备连接/预设选择/真实参数编辑/历史记录
+**Acceptance:**
+- sliceFinished signal carries real output path
+- PreviewViewModel.rebuildFromGCode() parses real G-code data
+- Layer count, filament usage, print time match slice result summary
+- Color mapping modes show distinct per-segment colors
+- Stats panel displays real computed statistics
 
-### Model Mall
+**Upstream reference:** `third_party/CrealityPrint/src/slic3r/GUI/GCodeViewer.cpp`
 
-- [ ] **MALL-01**: 商城 WebView 集成 -- QtWebEngine 替代 wxWebView
+### UI-01: Prepare Page Polish
 
-### Multi-Machine
+**Priority:** P1
+**Status:** Polish needed — no TODOs, but needs visual QA pass
 
-- [ ] **MULT-01**: 多机管理真实连接 -- MQTT/SSDP 协议层
+Prepare page must present a professional, usable interface matching upstream appearance. All interactive elements must function correctly.
 
-### Release Readiness
+**Acceptance:**
+- Object list shows correct hierarchy with icons
+- Toolbar buttons have correct enabled/disabled states
+- Right panel sections collapse/expand correctly
+- Slice button is prominent and clearly indicates state (idle/slicing/complete)
+- Parameter search works across all options
+- No visual glitches, overlapping elements, or clipped text
 
-- [ ] **REL-01**: 发布就绪度 -- 上游行为对照回归基线、全页面回归测试自动化、I18N 完整验证
+### UI-02: Preview Page Polish
+
+**Priority:** P1
+**Status:** Polish needed — no TODOs, but needs visual QA pass
+
+Preview page must present sliced results clearly with all interactive controls working.
+
+**Acceptance:**
+- Layer slider snaps to valid layer boundaries
+- Color mode selector shows all modes with correct labels
+- Stats panel aligns data in readable format
+- Legend panel updates correctly for each color mode
+- Camera controls (zoom, rotate, pan) are smooth
+
+### UI-03: Slice Progress and Export Polish
+
+**Priority:** P1
+**Status:** Polish needed — no TODOs, but needs visual QA pass
+
+Slice progress panel must clearly communicate slicing state and results.
+
+**Acceptance:**
+- Progress bar accurately reflects libslic3r status callbacks
+- Result summary shows all statistics in readable format
+- Post-slice actions (Preview, Export) are clearly accessible
+- Error states are displayed with actionable messages
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PREP-01 | Phase 1 | Pending |
-| PREP-02 | Phase 1 | Pending |
-| PREP-03 | Phase 1 | Pending |
-| PREV-01 | Phase 3 | Pending |
-| SETT-01 | Phase 2 | Pending |
-| PROJ-01 | Phase 4 | Pending |
-| GIZM-01 | Phase 5 | Pending |
-| GIZM-02 | Phase 5 | Pending |
-| GIZM-03 | Phase 5 | Pending |
-| GIZM-04 | Phase 5 | Pending |
-| DEVC-01 | Phase 6 | Pending |
-| CALI-01 | Phase 6 | Pending |
-| MALL-01 | Phase 7 | Pending |
-| MULT-01 | Phase 7 | Pending |
-| REL-01 | Phase 8 | Pending |
+| PRESET-01 | Phase 1 | Partial |
+| FLOW-01 | Phase 2 | Partial |
+| FLOW-02 | Phase 2 | Partial |
+| UI-01 | Phase 3 | Polish needed |
+| UI-02 | Phase 3 | Polish needed |
+| UI-03 | Phase 3 | Polish needed |
 
 ---
-*Last updated: 2026-05-31 after roadmap creation*
+*Last updated: 2026-05-31 for milestone v1.1*

@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Ready for Phase 1 planning
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-31 — Milestone v1.1 started
+Status: Milestone initialized, requirements and roadmap created
+Last activity: 2026-05-31 — v1.1 milestone requirements and roadmap written
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -39,12 +39,9 @@ Progress: [░░░░░░░░░░] 0%
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- Roadmap creation: 15 Active requirements grouped into 8 phases by natural delivery boundaries
-- Gizmo phases grouped by rendering capability (GL handles, painting, hollowing) rather than by upstream gizmo class
-- Prepare workspace (Phase 1) prioritized as first phase because right panel and slicing state machine are prerequisites for Preview (Phase 3) and Settings (Phase 2)
+- E2E analysis found all components are REAL individually — milestone focuses on verification, integration testing, and UI polish rather than new feature development
+- Preset system is the only PARTIAL component — vendor presets load under HAS_LIBSLIC3R but fallback to hardcoded when vendor files absent
+- UI pages have zero TODO/FIXME comments but need a visual QA pass
 
 ### Pending Todos
 
@@ -52,26 +49,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 5 (Gizmo GL): GIZM-02/03/04 require non-TriangleSelector and non-OpenVDB alternative implementations -- research needed during planning
-- Phase 6 (Device/Calibration): DEVC-01 requires protocol layer implementation; bambu_networking is closed-source (out of scope), so MQTT/SSDP must be built from scratch
-- Phase 7 (Mall/Multi): MALL-01 requires QtWebEngine dependency availability in build environment
-- God objects: ProjectServiceMock (4,563 lines) and EditorViewModel (3,500 lines) make any modification high-risk -- watch for parallel array sync bugs
-
-## Deferred Items
-
-| Category | Item | Status | Deferred At |
-|----------|------|--------|-------------|
-| Dependency | PartPlateList real integration (wxWidgets dep) | Out of scope | 2026-05-31 |
-| Dependency | TriangleSelector real integration (wxWidgets dep) | Out of scope | 2026-05-31 |
-| Dependency | OpenVDB integration (link failure) | Out of scope | 2026-05-31 |
-| Dependency | FFmpeg/RTSP video streaming (not found) | Out of scope | 2026-05-31 |
-| Dependency | bambu_networking real connection (closed source) | Out of scope | 2026-05-31 |
-| Feature | Shell rendering (libslic3r GCodeViewer dep) | Out of scope | 2026-05-31 |
-| Feature | SLA module full migration | Out of scope | 2026-05-31 |
-| Feature | FaceDetector real implementation (upstream commented out) | Out of scope | 2026-05-31 |
+- Preset vendor files must be present at runtime for real preset loading to work — verify the resource path resolution
+- STEP import not supported by libslic3r natively (assimp dependency) — out of scope for this milestone
 
 ## Session Continuity
 
 Last session: 2026-05-31
-Stopped at: Roadmap created, STATE.md initialized, ready for Phase 1 planning
+Stopped at: Milestone v1.1 initialized with REQUIREMENTS.md and ROADMAP.md
 Resume file: None
+Next step: Run `/gsd-plan-phase 1` to plan Phase 1 (Preset System Completion)

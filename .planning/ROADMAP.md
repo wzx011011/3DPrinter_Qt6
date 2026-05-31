@@ -1,142 +1,65 @@
-# Roadmap: CrealityPrint Qt6/QML Migration
+# Roadmap: Milestone v1.1 — End-to-End Slicing Workflow
 
 ## Overview
 
-Migrate the CrealityPrint v7.0.1 3D printer slicer GUI from C++/wxWidgets to C++/Qt6/QML, closing the remaining gap between the established Qt6 architecture and upstream source-truth behavior. The project has already completed build infrastructure, core rendering, object CRUD, slicing pipeline, and 8 gizmo real APIs. This milestone delivers full workspace alignment, preset inheritance, GL rendering for all gizmos, device interaction, and release readiness.
+Complete and verify the full slicing workflow from model import through G-code preview. The codebase already has real implementations for each component — this milestone focuses on closing the remaining preset gaps, verifying the E2E chain works without mock breaks, and polishing involved UI pages to production quality.
 
 ## Phases
 
-**Phase Numbering:**
-- Integer phases (1-8): Planned milestone work
-- Decimal phases (e.g., 2.1): Urgent insertions (marked with INSERTED)
-
-- [ ] **Phase 1: Prepare Workspace Alignment** -- Plate filament allocation, right panel E2E, slicing state machine
-- [ ] **Phase 2: Settings and Preset Inheritance** -- Upstream Tab data, PresetBundle, ConfigOptionDef schema
-- [ ] **Phase 3: Preview Workspace Verification** -- 13 color mappings, StatsPanel real data, slider interactions
-- [ ] **Phase 4: Project Workflow** -- Save/load complete workflow, file import format alignment
-- [ ] **Phase 5: Gizmo GL Rendering** -- All gizmo interactive GL rendering and painting
-- [ ] **Phase 6: Device and Calibration Depth** -- Device state machine, calibration real workflow
-- [ ] **Phase 7: Mall and Multi-Machine** -- QtWebEngine mall, MQTT/SSDP multi-machine
-- [ ] **Phase 8: Release Readiness** -- Regression baseline, automation, I18N verification
+- [ ] **Phase 1: Preset System Completion** — Ensure real vendor presets load completely and the 3-tier parameter chain flows correctly to the UI
+- [ ] **Phase 2: E2E Workflow Verification** — Run through the complete slice workflow, fix any data flow breaks or crashes
+- [ ] **Phase 3: UI Polish Pass** — Visual QA and polish on Prepare, Preview, and Slice Progress pages
 
 ## Phase Details
 
-### Phase 1: Prepare Workspace Alignment
+### Phase 1: Preset System Completion
 **Mode**: MVP
-**Goal**: Users can operate the Prepare workspace with real data flowing through the right panel, object tree, and slicing pipeline, matching upstream behavior.
-**Depends on**: Nothing (first phase -- builds on validated foundation)
-**Requirements**: PREP-01, PREP-02, PREP-03
-**Success Criteria** (what must be TRUE):
-  1. Object tree shows correct hierarchy (objects, volumes, instances) with real data from ProjectServiceMock, matching upstream Plater object list behavior
-  2. Right panel displays slice result summary with real statistics (time, filament usage, cost) after a successful slice
-  3. Right panel parameter sections (print/filament/printer) show real values from the current preset, and arrange settings panel shows real bed dimensions and spacing
-  4. Background slicing process state machine correctly transitions through Idle->Slicing->Exporting->Completed with progress, cancel, and error states aligned with upstream BackgroundSlicingProcess
-  5. Toolbar and sidebar visual elements (icons, spacing, enabled/disabled states) match upstream toolbar appearance at pixel-level fidelity
-**Plans**: CONTEXT.md, PLAN.md
-**UI hint**: yes
-
-### Phase 2: Settings and Preset Inheritance
-**Mode**: MVP
-**Goal**: Users can browse and modify print settings through the complete upstream preset hierarchy with real data, matching upstream Tab behavior.
-**Depends on**: Phase 1
-**Requirements**: SETT-01
-**Success Criteria** (what must be TRUE):
-  1. Settings page loads real upstream Tab category hierarchy (Quality, Speed, Infill, Support, etc.) with correct page grouping and option visibility rules from upstream Tab.cpp
-  2. PresetBundle loads the 3-tier preset chain (system -> user -> modified) with real inheritance, and switching presets correctly updates all dependent config options
-  3. ConfigOptionDef schema provides complete type info (int, float, enum, string, point, bool), valid ranges, defaults, and tooltip text for all ~110 upstream config keys
-  4. Settings search filters options across all categories and shows matching results with correct labels
+**Goal**: Users can select a real Creality printer, compatible filament, and process preset, and see real parameter values in the right panel.
+**Depends on**: Nothing (builds on validated foundation)
+**Requirements**: PRESET-01
+**Success Criteria**:
+  1. Vendor JSON files from `third_party/CrealityPrint/resources/profiles/Creality/` parse correctly and populate all 3 preset categories (printer, filament, process)
+  2. Inheritance chains resolve: system defaults → vendor overrides → user modifications
+  3. Filament compatibility filtering works — only filaments matching the selected printer's nozzle diameter and temperature range appear
+  4. Selecting a preset updates all parameter values in the right panel (PrintSettings.qml)
+  5. Value source indicators correctly show which tier provides each value
 **Plans**: TBD
-**UI hint**: yes
 
-### Phase 3: Preview Workspace Verification
+### Phase 2: E2E Workflow Verification
 **Mode**: MVP
-**Goal**: Users can inspect sliced G-code in Preview with all 13 color mappings, real statistics, and full slider interaction, matching upstream GCodeViewer behavior.
+**Goal**: The complete import → configure → slice → export → preview workflow runs without any mock breakpoints or data loss.
 **Depends on**: Phase 1
-**Requirements**: PREV-01
-**Success Criteria** (what must be TRUE):
-  1. All 13 G-code color mapping modes (Line Type, Feature Type, Tool, Height, Width, Speed, Fan Speed, Temperature, Volumetric Flow Rate, Layer Time, Layer Height, Extrusion Role, Color Print) render correctly with distinct per-segment colors matching upstream GCodeViewer
-  2. StatsPanel displays real G-code statistics (total time, total filament, layer count, estimated cost) computed from the parsed G-code data
-  3. LayerSlider navigates between layers and shows the correct layer boundary; MoveSlider scrubs through moves within a layer; both update the 3D view in real time
-  4. Legend panel updates to show correct labels and color swatches for the currently selected color mode
+**Requirements**: FLOW-01, FLOW-02
+**Success Criteria**:
+  1. Importing an STL file produces a visible mesh in the Prepare viewport
+  2. Selecting printer/filament/process and clicking Slice triggers libslic3r, progress bar updates in real time, and slice completes without error
+  3. Slice result summary shows real statistics (time, filament, cost) matching libslic3r output
+  4. G-code file is written to disk and can be re-loaded
+  5. Auto-switch to Preview renders the G-code with at least Line Type color mapping working
+  6. Export G-code dialog saves the file to a user-chosen location
+  7. Any data flow breaks between components are identified and fixed
 **Plans**: TBD
-**UI hint**: yes
 
-### Phase 4: Project Workflow
+### Phase 3: UI Polish Pass
 **Mode**: MVP
-**Goal**: Users can save and load complete 3MF projects and import all supported file formats with full fidelity, matching upstream file workflow.
+**Goal**: All pages involved in the slicing workflow present a professional, usable interface with no visual glitches.
 **Depends on**: Phase 2
-**Requirements**: PROJ-01
-**Success Criteria** (what must be TRUE):
-  1. Save project produces a valid 3MF file containing all objects, transforms, plate assignments, config overrides, and metadata; loading that file restores the complete workspace state
-  2. Import supports all upstream formats (STL, OBJ, 3MF, STEP, AMF) with correct mesh loading and coordinate transform application
-  3. Save/load round-trip preserves plate assignments, per-object config overrides, and gizmo-specific volume data (Emboss text, SVG paths, Cut parameters)
-  4. File open dialog filters match upstream supported extensions and the drag-drop import path works for all supported formats
-**Plans**: TBD
-**UI hint**: yes
-
-### Phase 5: Gizmo GL Rendering
-**Mode**: MVP
-**Goal**: Users can interact with all gizmos in the 3D viewport with visual feedback matching upstream GLGizmo behavior -- handles, previews, painting overlays, and real-time mesh updates.
-**Depends on**: Phase 1
-**Requirements**: GIZM-01, GIZM-02, GIZM-03, GIZM-04
-**Success Criteria** (what must be TRUE):
-  1. Text/Emboss/SVG gizmos render interactive GL handles (position, rotation, font size sliders) and show real-time text/shape preview on the mesh surface in the viewport
-  2. Simplify/Drill/MeshBoolean/AdvancedCut gizmos render GL selection handles and show preview geometry (drill cylinder, cut plane, boolean result outline) before applying the operation
-  3. Support Paint and Seam Paint gizmos render per-triangle color overlay on the mesh surface showing painted/unpainted regions, with brush size indicator following the cursor
-  4. Hollow gizmo renders a semi-transparent hollow preview shell around the selected object with draggable drain-hole handles, using CGAL-based offset mesh generation (non-OpenVDB approach)
-  5. MmuSegmentation gizmo renders per-triangle color mapping showing assigned extruders on the mesh surface, with per-face painting via cursor interaction (non-TriangleSelectorPatch approach)
-**Plans**: TBD
-**UI hint**: yes
-
-### Phase 6: Device and Calibration Depth
-**Mode**: MVP
-**Goal**: Users can connect to real printers, monitor print status, and run calibration workflows with real device parameters, matching upstream device interaction.
-**Depends on**: Phase 2
-**Requirements**: DEVC-01, CALI-01
-**Success Criteria** (what must be TRUE):
-  1. DeviceManager state machine transitions through Discovered->Connecting->Connected->Ready->Printing->Completed with correct event handling at each transition, matching upstream DeviceManager
-  2. Monitor page displays real device status (temperature, fan speed, print progress, HMS alerts) when a device is connected via the protocol layer
-  3. Calibration page presents the full workflow (device selection -> preset selection -> real parameter editing -> start calibration -> view results history) with data flowing from DeviceService and PresetService
-  4. Calibration history records are persisted and viewable, showing date, calibration type, parameters used, and results
-**Plans**: TBD
-**UI hint**: yes
-
-### Phase 7: Mall and Multi-Machine
-**Mode**: MVP
-**Goal**: Users can browse the model mall via embedded WebView and manage multiple printers simultaneously, matching upstream multi-device behavior.
-**Depends on**: Phase 6
-**Requirements**: MALL-01, MULT-01
-**Success Criteria** (what must be TRUE):
-  1. Model Mall page renders the upstream mall web content inside a QtWebEngine WebView with working navigation, search, and model download interaction
-  2. Multi-machine page displays a list of discovered printers (via SSDP/MQTT discovery) with connection status, and users can connect to multiple printers simultaneously
-  3. Switching between connected devices in the multi-machine view updates the monitor page to show the selected device's real-time status
-**Plans**: TBD
-**UI hint**: yes
-
-### Phase 8: Release Readiness
-**Mode**: MVP
-**Goal**: The application passes systematic regression verification against upstream behavior across all pages, with automated testing and complete I18N coverage.
-**Depends on**: Phase 7
-**Requirements**: REL-01
-**Success Criteria** (what must be TRUE):
-  1. Upstream behavior regression baseline document exists with pass/fail criteria for every upstream workflow (import, slice, preview, settings, save, gizmo, device, calibration)
-  2. Automated regression tests exercise all pages in both Mock and HAS_LIBSLIC3R modes, and any test failure blocks the build
-  3. All 6 language files (zh_CN, en, ja, ko, de, fr) have complete translations with no missing keys relative to the English source, and language switching applies correctly across all pages without restart
-  4. Full-page regression automation runs as part of the build verification script and reports per-page pass/fail status
+**Requirements**: UI-01, UI-02, UI-03
+**Success Criteria**:
+  1. Prepare page: object list, toolbar, right panel all render correctly with proper spacing, alignment, and theme colors
+  2. Preview page: sliders, stats, legend, and color mode selector all function smoothly
+  3. Slice progress panel: progress bar, result summary, and action buttons are clearly readable
+  4. No clipped text, overlapping elements, or broken layouts on any involved page
+  5. Consistent theme token usage across all pages (Theme.bgBase, Theme.accent, etc.)
 **Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
+Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Prepare Workspace Alignment | 1/1 | Completed | 2026-05-31 |
-| 2. Settings and Preset Inheritance | 1/1 | Completed | 2026-05-31 |
-| 3. Preview Workspace Verification | 1/1 | Completed | 2026-05-31 |
-| 4. Project Workflow | 1/1 | Completed | 2026-05-31 |
-| 5. Gizmo GL Rendering | 1/1 | Completed | 2026-05-31 |
-| 6. Device and Calibration Depth | 0/TBD | Blocked — MQTT/SSDP/REST not linked | - |
-| 7. Mall and Multi-Machine | 0/TBD | Blocked — QtWebEngine/MQTT not linked | - |
-| 8. Release Readiness | 0/TBD | Partial — smoke test 7 phases; I18N 0/491 translated | - |
+| 1. Preset System Completion | 0/1 | Not started | - |
+| 2. E2E Workflow Verification | 0/1 | Not started | - |
+| 3. UI Polish Pass | 0/1 | Not started | - |
