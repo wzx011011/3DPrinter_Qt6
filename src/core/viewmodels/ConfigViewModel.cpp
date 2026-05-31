@@ -244,9 +244,18 @@ void ConfigViewModel::mergePresetHierarchy()
   if (!printOptions_)
     return;
 
-  // Start with model defaults
-  printOptions_->resetToDefaults();
-  QHash<QString, QVariant> merged = printOptions_->valuesByKey();
+  // Start with upstream schema defaults (full ~200 keys from print_config_def)
+  // Falls back to ConfigOptionModel defaults if upstream not available
+  QHash<QString, QVariant> merged;
+  if (presetService_ && presetService_->hasPreset(QStringLiteral("__upstream_defaults__")))
+  {
+    merged = presetService_->presetValues(QStringLiteral("__upstream_defaults__"));
+  }
+  else
+  {
+    printOptions_->resetToDefaults();
+    merged = printOptions_->valuesByKey();
+  }
 
   // 初始化所有 key 的来源为 "default"
   valueSources_.clear();
