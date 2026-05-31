@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-05-31)
 
 **Core value:** Upstream CrealityPrint source is functional truth -- Qt6 code must fully inherit upstream behavior, never freely design new product behavior.
-**Current focus:** Phase 1: Prepare Workspace Alignment
+**Current focus:** Milestone v1.1: End-to-End Slicing Workflow
 
 ## Current Position
 
-Phase: 1 of 8 (Prepare Workspace Alignment)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-05-31 -- Roadmap created
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-31 — Milestone v1.1 started
 
 Progress: [░░░░░░░░░░] 0%
 

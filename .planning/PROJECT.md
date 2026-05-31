@@ -8,6 +8,18 @@
 
 上游 CrealityPrint 源码为功能真值——Qt6 代码必须完整继承上游行为，不得自由设计新的产品行为。
 
+## Current Milestone: v1.1 End-to-End Slicing Workflow
+
+**Goal:** 从导入到预览的完整切片流程完全通畅——STL/3MF 导入 → 机型/耗材/工艺参数设置 → 切片执行 → G-code 导出 → 切片后预览
+
+**Target features:**
+- 模型导入（STL/3MF/OBJ/STEP）完整可用
+- 机型/耗材/工艺参数三段式选择与真实 preset 数据流
+- 切片执行（libslic3r 真实调用）→ G-code 导出完整链路
+- 切片完成后自动切换 Preview 并加载 G-code 预览
+- 全流程中真实数据流验证（无 Mock 断裂点）
+- 切片流程涉及 UI 页面（参数面板、切片进度、预览页）打磨到可用状态
+
 ## Requirements
 
 ### Validated
@@ -74,7 +86,7 @@
 - **上游真值源**：`third_party/CrealityPrint` v7.0.1（commit 0d4ac73），基于 C++ + wxWidgets
 - **迁移目标**：`src/` 下 Qt6 + QML 代码，libslic3r 引擎直接复用
 - **迁移原则**：QML 仅负责呈现、组合和交互接线，不承载业务逻辑；业务逻辑在 core/services 和 core/viewmodels
-- **构建验证**：`scripts/auto_verify_with_vcvars.ps1` 为权威完整验证路径，当前 269/269 编译、66/66 smoke test
+- **构建验证**：`scripts/auto_verify_with_vcvars.ps1` 为权威完整验证路径，当前 274/274 编译、0 QML warnings
 - **已有文档**：`docs/源码对照迁移任务追踪.md`（P0-P7 任务追踪）、`docs/CrealityPrint_Qt_GUI重写架构.md`（架构文档）、`docs/项目结构.md`（模块边界）
 - **19 个上游 Gizmo**：Text/Emboss/SVG/Simplify/Cut/AdvancedCut/MeshBoolean/Drill 已接入真实 API，但 GL 交互渲染层缺失
 - **代码库规模**：~200+ 源文件，覆盖 15+ 页面、20+ 组件、10+ Service/ViewModel
