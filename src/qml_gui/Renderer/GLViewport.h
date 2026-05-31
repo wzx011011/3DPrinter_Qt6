@@ -42,6 +42,9 @@ class GLViewport : public QQuickFramebufferObject
   Q_PROPERTY(bool showMarker READ showMarker WRITE setShowMarker)
   Q_PROPERTY(int gizmoMode READ gizmoMode WRITE setGizmoMode NOTIFY gizmoModeChanged)
   Q_PROPERTY(bool wireframeMode READ wireframeMode WRITE setWireframeMode NOTIFY wireframeModeChanged)
+  /// Cut plane parameters (对齐上游 GLGizmoCut3D cut plane visualization)
+  Q_PROPERTY(int cutAxis READ cutAxis WRITE setCutAxis)
+  Q_PROPERTY(float cutPosition READ cutPosition WRITE setCutPosition)
   /// 最近一次 FBO 缩略图捕获结果（base64 PNG，供 QML Image 使用）
   Q_PROPERTY(QString lastThumbnailData READ lastThumbnailData NOTIFY thumbnailCaptured)
 
@@ -91,6 +94,11 @@ public:
 
   bool wireframeMode() const { return m_wireframeMode; }
   void setWireframeMode(bool on);
+
+  int cutAxis() const { return m_cutAxis; }
+  void setCutAxis(int axis) { m_cutAxis = axis; }
+  float cutPosition() const { return m_cutPosition; }
+  void setCutPosition(float pos) { m_cutPosition = pos; }
 
   // --- 网格数据 (GUI 线程写，渲染线程通过 takeMesh 读) ---
   QByteArray meshData() const
@@ -215,6 +223,8 @@ private:
   int m_canvasType = CanvasView3D;
   int m_gizmoMode = GizmoMove;
   bool m_wireframeMode = false;
+  int m_cutAxis = 2;        // 0=X 1=Y 2=Z (default Z for most cuts)
+  float m_cutPosition = 0.f;
   mutable QMutex m_eventMutex;
   QList<InputEvent> m_events;
   // 网格数据双缓冲

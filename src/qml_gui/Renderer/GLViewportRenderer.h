@@ -42,6 +42,7 @@ private:
   void renderMoveGizmo(const QMatrix4x4 &mvp);
   void renderRotateGizmo(const QMatrix4x4 &mvp);
   void renderScaleGizmo(const QMatrix4x4 &mvp);
+  void renderCutPlane(const QMatrix4x4 &mvp);
   void renderGizmo(const QMatrix4x4 &mvp);
 
   // Bed rendering (P2.8.1)
@@ -155,6 +156,8 @@ private:
 
   // Gizmo mode
   GizmoMode m_gizmoMode = GizmoMove;
+  int m_cutAxis = 2;        // 0=X 1=Y 2=Z
+  float m_cutPosition = 0.f;
 
   // Wireframe mode
   bool m_wireframeMode = false;

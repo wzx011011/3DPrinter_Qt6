@@ -1433,6 +1433,8 @@ Item {
             anchors.fill: parent
             canvasType: GLViewport.CanvasView3D
             meshData: root.editorVm ? root.editorVm.meshData : null
+            cutAxis: root.editorVm ? root.editorVm.cutAxis : 2
+            cutPosition: root.editorVm ? root.editorVm.cutPosition : 0.0
 
             // Right-click context menu
             MouseArea {

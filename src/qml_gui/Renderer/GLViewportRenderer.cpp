@@ -664,6 +664,10 @@ void GLViewportRenderer::synchronize(QQuickFramebufferObject *item)
   m_wireframeMode = vp->wireframeMode();
   m_showBed = vp->showBed();
 
+  // Cut plane parameters (对齐上游 GLGizmoCut3D)
+  m_cutAxis = vp->cutAxis();
+  m_cutPosition = vp->cutPosition();
+
   // Wipe tower properties (P2.8.3)
   m_showWipeTower = vp->showWipeTower();
   if (m_wipeTowerWidth != vp->wipeTowerWidth() ||
@@ -827,6 +831,8 @@ void GLViewportRenderer::renderGizmo(const QMatrix4x4 &mvp)
     renderRotateGizmo(mvp);
   else if (m_gizmoMode == GizmoScale)
     renderScaleGizmo(mvp);
+  else
+    renderCutPlane(mvp);
 }
 
 // ===========================================================================
@@ -1774,7 +1780,121 @@ void GLViewportRenderer::renderScaleGizmo(const QMatrix4x4 &mvp)
 }
 
 // ===========================================================================
-// pickScaleAxis  -- returns 1/2/3 for X/Y/Z, 0 if no hit
+// renderCutPlane — semi-transparent cut plane (对齐上游 GLGizmoCut3D)
+// Only renders when gizmoMode is Cut (5) or AdvancedCut (14).
+// ===========================================================================
+void GLViewportRenderer::renderCutPlane(const QMatrix4x4 &mvp)
+{
+  const int mode = static_cast<int>(m_gizmoMode);
+  if (mode != 5 && mode != 14)
+    return;
+  if (m_selectedId < 0)
+    return;
+
+  // Find selected object's bounding box
+  float bMin[3] = {1e30f, 1e30f, 1e30f};
+  float bMax[3] = {-1e30f, -1e30f, -1e30f};
+  bool found = false;
+  for (const auto &b : m_meshBatches)
+  {
+    if (b.objectId == m_selectedId)
+    {
+      for (int i = 0; i < 3; ++i) { bMin[i] = std::min(bMin[i], b.bboxMin[i]); bMax[i] = std::max(bMax[i], b.bboxMax[i]); }
+      found = true;
+    }
+  }
+  if (!found)
+    return;
+
+  // Build a quad perpendicular to the cut axis at the cut position
+  const int ax = qBound(0, m_cutAxis, 2);
+  const float pos = m_cutPosition;
+
+  // Axis colors: X=red, Y=green, Z=blue (same as upstream)
+  static const QVector4D kCutColors[3] = {
+      QVector4D(1.0f, 0.3f, 0.3f, 0.3f),
+      QVector4D(0.3f, 1.0f, 0.3f, 0.3f),
+      QVector4D(0.3f, 0.3f, 1.0f, 0.3f)};
+
+  // Compute quad extents in the two non-cut axes
+  int a1 = (ax + 1) % 3;
+  int a2 = (ax + 2) % 3;
+  float lo1 = bMin[a1], hi1 = bMax[a1];
+  float lo2 = bMin[a2], hi2 = bMax[a2];
+  // Slightly expand for visibility
+  float e1 = (hi1 - lo1) * 0.05f;
+  float e2 = (hi2 - lo2) * 0.05f;
+  lo1 -= e1; hi1 += e1;
+  lo2 -= e2; hi2 += e2;
+
+  // 4 corners as position(x,y,z) — axis-aligned
+  float verts[12];
+  for (int i = 0; i < 4; ++i)
+  {
+    verts[i * 3 + ax] = pos;
+    verts[i * 3 + a1] = (i < 2) ? lo1 : hi1;
+    verts[i * 3 + a2] = (i % 2 == 0) ? lo2 : hi2;
+  }
+
+  // Use the base shader (simple uniform-color shader)
+  m_f->glClear(GL_DEPTH_BUFFER_BIT);
+  m_f->glDisable(GL_CULL_FACE);
+  m_f->glEnable(GL_BLEND);
+  m_f->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+  m_prog.bind();
+  m_prog.setUniformValue(m_uMVP, mvp);
+  m_prog.setUniformValue(m_uColor, kCutColors[ax]);
+
+  // Upload quad vertices to VBO (reuse m_vbo since grid data is static)
+  // Save and restore VAO binding to avoid corrupting grid geometry
+  m_vbo.bind();
+  m_vbo.write(0, verts, sizeof(verts));
+  m_vbo.release();
+
+  m_vao.bind();
+  // Reconfigure attribute to use these 3-component floats
+  m_prog.enableAttributeArray("position");
+  m_prog.setAttributeBuffer("position", GL_FLOAT, 0, 3);
+  m_f->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+  m_prog.disableAttributeArray("position");
+  m_vao.release();
+
+  m_prog.release();
+
+  // Draw outline edges
+  QVector4D edgeCol = kCutColors[ax];
+  edgeCol.setW(0.9f);
+  m_prog.bind();
+  m_prog.setUniformValue(m_uMVP, mvp);
+  m_prog.setUniformValue(m_uColor, edgeCol);
+
+  // Line loop: 0-1-3-2-0
+  float lineVerts[15];
+  const int order[] = {0, 1, 3, 2, 0};
+  for (int i = 0; i < 5; ++i)
+  {
+    lineVerts[i * 3 + 0] = verts[order[i] * 3 + 0];
+    lineVerts[i * 3 + 1] = verts[order[i] * 3 + 1];
+    lineVerts[i * 3 + 2] = verts[order[i] * 3 + 2];
+  }
+  m_vbo.bind();
+  m_vbo.write(0, lineVerts, sizeof(lineVerts));
+  m_vbo.release();
+
+  m_vao.bind();
+  m_prog.enableAttributeArray("position");
+  m_prog.setAttributeBuffer("position", GL_FLOAT, 0, 3);
+  m_f->glLineWidth(2.0f);
+  m_f->glDrawArrays(GL_LINE_STRIP, 0, 5);
+  m_f->glLineWidth(1.0f);
+  m_prog.disableAttributeArray("position");
+  m_vao.release();
+
+  m_prog.release();
+  m_f->glDisable(GL_BLEND);
+  m_f->glEnable(GL_CULL_FACE);
+}
 // ===========================================================================
 int GLViewportRenderer::pickScaleAxis(float sx, float sy) const
 {
