@@ -17,6 +17,7 @@ ConfigViewModel::ConfigViewModel(PresetServiceMock *presetService, ProjectServic
   printOptions_->loadFromUpstreamSchema();
 #endif
   presetList_ = new PresetListModel(this);
+  presetList_->refreshFromService(presetService_);
 
   scopedWritableKeys_ = {
       // Layer

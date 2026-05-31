@@ -166,6 +166,8 @@ static QString pageForCategory(const QString &cat)
     {QStringLiteral("底座"), QStringLiteral("Base")},
     {QStringLiteral("冷却"), QStringLiteral("Cooling")},
     {QStringLiteral("回退"), QStringLiteral("Retraction")},
+    {QStringLiteral("挤出机"), QStringLiteral("Other")},
+    {QStringLiteral("输出"), QStringLiteral("Other")},
     {QStringLiteral("其他"), QStringLiteral("Other")},
     // English category (for upstream schema mode)
     {QStringLiteral("Quality"), QStringLiteral("Quality")},
@@ -581,13 +583,15 @@ namespace
       return QObject::tr("填充");
     if (cat.contains("Speed", Qt::CaseInsensitive))
       return QObject::tr("速度");
-    if (cat.contains("Temperature", Qt::CaseInsensitive) || cat.contains("Cooling", Qt::CaseInsensitive))
+    if (cat.contains("Acceleration", Qt::CaseInsensitive) || cat.contains("Jerk", Qt::CaseInsensitive))
+      return QObject::tr("加速度");
+    if (cat.contains("Temperature", Qt::CaseInsensitive))
       return QObject::tr("温度");
     if (cat.contains("Support", Qt::CaseInsensitive))
       return QObject::tr("支撑");
     if (cat.contains("Skirt", Qt::CaseInsensitive) || cat.contains("Brim", Qt::CaseInsensitive) || cat.contains("Raft", Qt::CaseInsensitive))
       return QObject::tr("底座");
-    if (cat.contains("Fan", Qt::CaseInsensitive))
+    if (cat.contains("Cooling", Qt::CaseInsensitive) || cat.contains("Fan", Qt::CaseInsensitive))
       return QObject::tr("冷却");
     if (cat.contains("Retract", Qt::CaseInsensitive))
       return QObject::tr("回退");
@@ -601,6 +605,8 @@ namespace
       return QObject::tr("质量");
     if (cat.contains("Seam", Qt::CaseInsensitive))
       return QObject::tr("质量");
+    if (cat.contains("Prime", Qt::CaseInsensitive) || cat.contains("Wipe", Qt::CaseInsensitive))
+      return QObject::tr("底座");
     return QObject::tr("其他");
   }
 
@@ -641,37 +647,56 @@ namespace
 }
 
 // Keys we want to expose in the UI (print-related, user-facing)
+// 对齐上游 print_config_def + Creality vendor process preset keys
 static const char *kDesiredKeys[] = {
   // Layer
   "layer_height", "initial_layer_print_height", "line_width",
-  "initial_layer_line_width",
+  "initial_layer_line_width", "initial_layer_min_bead_width",
+  "min_bead_width", "min_feature_size",
   // Shell
   "wall_loops", "top_shell_layers", "bottom_shell_layers",
+  "top_shell_thickness", "bottom_shell_thickness",
   "wall_infill_order", "infill_wall_overlap",
   "top_bottom_infill_wall_overlap",
   "outer_wall_line_width", "inner_wall_line_width",
+  "top_surface_line_width", "sparse_infill_line_width",
+  "internal_solid_infill_line_width", "support_line_width",
   "wall_sequence", "ensure_vertical_shell_thickness",
   "extra_perimeters_on_overhangs",
+  "wall_generator", "wall_transition_length",
+  "wall_transition_angle", "wall_transition_filter_deviation",
+  "wall_distribution_count", "wall_direction",
+  "detect_thin_wall", "detect_narrow_internal_solid_infill",
+  "staggered_inner_seams",
   // Infill
   "sparse_infill_density", "sparse_infill_pattern",
   "top_surface_pattern", "bottom_surface_pattern",
-  "sparse_infill_filament", "wall_filament",
+  "internal_solid_infill_pattern",
+  "sparse_infill_filament", "wall_filament", "solid_infill_filament",
   "infill_direction", "solid_infill_direction",
   "infill_anchor", "infill_anchor_max",
+  "infill_combination", "minimum_sparse_infill_area",
+  "ai_infill",
   // Speed
   "outer_wall_speed", "inner_wall_speed", "travel_speed", "initial_layer_speed",
   "sparse_infill_speed", "top_surface_speed", "support_interface_speed",
   "support_speed", "small_perimeter_speed", "bridge_speed",
   "internal_bridge_speed", "initial_layer_infill_speed",
   "gap_infill_speed", "internal_solid_infill_speed",
+  "initial_layer_travel_speed", "travel_speed_z",
+  "max_print_speed", "max_travel_speed",
+  "overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed",
+  "enable_overhang_speed",
   // Acceleration
   "outer_wall_acceleration", "inner_wall_acceleration", "travel_acceleration",
   "top_surface_acceleration", "bridge_acceleration",
   "sparse_infill_acceleration", "default_acceleration",
-  "initial_layer_acceleration",
+  "initial_layer_acceleration", "internal_solid_infill_acceleration",
+  "accel_to_decel_enable", "accel_to_decel_factor",
   // Jerk
   "default_jerk", "outer_wall_jerk", "inner_wall_jerk",
   "infill_jerk", "travel_jerk", "initial_layer_jerk",
+  "top_surface_jerk",
   // Temperature
   "nozzle_temp", "bed_temp", "chamber_temperature",
   "nozzle_temperature_range", "bed_temperature_range",
@@ -681,16 +706,33 @@ static const char *kDesiredKeys[] = {
   "enable_support", "support_density", "support_type",
   "support_on_build_plate_only", "support_interface_top_layers",
   "support_interface_bottom_layers", "support_interface_spacing",
+  "support_bottom_interface_spacing",
   "support_object_xy_distance", "support_angle",
   "support_remove_small_overhang",
   "support_top_z_distance", "support_bottom_z_distance",
   "support_speed", "support_line_width",
   "support_interface_speed", "support_filament",
   "support_interface_filament",
-  "support_base_pattern", "support_expansion",
+  "support_base_pattern", "support_base_pattern_spacing",
+  "support_expansion", "support_style",
+  "support_threshold_angle", "support_xy_overrides_z",
+  "support_critical_regions_only",
+  "independent_support_layer_height",
+  "minimum_support_area",
+  // Tree support (对齐上游 tree_support_* config keys)
+  "tree_support_adaptive_layer_height", "tree_support_angle_slow",
+  "tree_support_auto_brim", "tree_support_branch_angle",
+  "tree_support_branch_angle_organic",
+  "tree_support_branch_diameter", "tree_support_branch_diameter_angle",
+  "tree_support_branch_diameter_double_wall",
+  "tree_support_branch_diameter_organic",
+  "tree_support_branch_distance", "tree_support_branch_distance_organic",
+  "tree_support_brim_width", "tree_support_tip_diameter",
+  "tree_support_top_rate", "tree_support_wall_count",
   // Brim / Skirt
   "brim_enable", "brim_width", "brim_type", "brim_object_gap",
   "skirt_loops", "skirt_distance", "skirt_height", "skirt_speed",
+  "brim_ears_detection_length", "brim_ears_max_angle",
   // Cooling / Fan
   "fan_cooling_layer_time", "default_fan_speed",
   "min_fan_speed", "max_fan_speed",
@@ -699,38 +741,91 @@ static const char *kDesiredKeys[] = {
   "close_fan_the_first_x_layers",
   "overhang_fan_threshold", "overhang_bridge_fan",
   "slow_down_for_layer_cooling",
+  "slow_down_layers",
   // Retraction
   "retract_length", "retract_speed", "retract_before_wipe",
   "retraction_speed", "deretraction_speed", "retract_restart_extra",
   "wipe_distance", "wipe_speed",
   "retraction_minimum_travel", "retract_when_changing_layer",
   "z_hop", "reduce_infill_retraction",
-  "retract_length_toolchange",
+  "retract_length_toolchange", "wipe_on_loops",
+  "wipe_before_external_loop",
   // Seam
   "z_seam_type", "z_seam_position", "z_seam_corner",
+  "seam_gap", "seam_slope_type", "seam_slope_steps",
+  "seam_slope_min_length", "seam_slope_entire_loop",
+  "seam_slope_inner_walls", "seam_slope_conditional",
+  "seam_slope_start_height",
   // Quality
   "reduce_crossing_wall", "detect_overhang_wall",
   "resolve_multi_overlaps", "max_travel_detour_distance",
   "only_one_wall_top", "only_one_wall_first_layer",
   "precise_outer_wall",
-  // Adhesion
-  "adhesion_type", "raft_layers", "raft_interface_layers",
-  "raft_contact_distance", "raft_expansion",
-  "draft_shield",
-  // Output
-  "gcode_comments", "gcode_precision_xy", "gcode_precision_z",
-  "max_print_speed", "max_travel_speed",
-  "gcode_flavor", "filename_format",
-  "machine_start_gcode", "machine_end_gcode",
-  "layer_change_gcode", "before_layer_change_gcode",
-  // Extruder
-  "nozzle_diameter", "extruder_offset", "printer_model",
+  "elefant_foot_compensation", "elefant_foot_compensation_layers",
+  "make_overhang_printable", "make_overhang_printable_angle",
+  "make_overhang_printable_hole_size",
+  "xy_contour_compensation", "xy_hole_compensation",
   // Ironing
   "ironing_type", "ironing_speed", "ironing_flow",
+  "ironing_spacing", "ironing_pattern", "ironing_angle",
+  "ironing_support_layer",
   "only_top_surface",
-  // Output advanced
+  // Fuzzy skin
+  "fuzzy_skin", "fuzzy_skin_thickness", "fuzzy_skin_point_distance",
+  "fuzzy_skin_first_layer",
+  // Bridge
+  "bridge_angle", "bridge_density", "bridge_flow",
+  "bridge_no_support", "thick_bridges", "thick_internal_bridges",
+  "internal_bridge_flow", "max_bridge_length",
+  "dont_filter_internal_bridges", "counterbore_hole_bridging",
+  // Arc fitting
+  "enable_arc_fitting",
+  // Spiral mode
+  "spiral_mode", "spiral_mode_smooth", "spiral_mode_max_xy_smoothing",
+  // Prime tower
+  "enable_prime_tower", "prime_tower_width", "prime_volume",
+  "prime_tower_brim_width", "prime_tower_enhance_type",
+  "prime_tower_position_type", "purge_in_prime_tower",
+  "wipe_tower_bridging", "wipe_tower_cone_angle",
+  "wipe_tower_extra_spacing", "wipe_tower_no_sparse_layers",
+  "wipe_tower_rotation_angle", "wiping_volumes_extruders",
+  // Adhesion
+  "adhesion_type", "raft_layers",
+  "raft_contact_distance", "raft_expansion",
+  "raft_first_layer_density", "raft_first_layer_expansion",
+  "draft_shield", "ooze_prevention",
+  // Output
+  "gcode_comments", "gcode_precision_xy", "gcode_precision_z",
+  "gcode_flavor", "filename_format", "gcode_add_line_number",
+  "machine_start_gcode", "machine_end_gcode",
+  "layer_change_gcode", "before_layer_change_gcode",
+  "gcode_label_objects", "exclude_object",
   "time_lapse_gcode", "spaghetti_detector",
-  "scan_first_layer", "gcode_label_objects",
+  "scan_first_layer",
+  // Extruder
+  "nozzle_diameter", "extruder_offset", "printer_model",
+  "printable_area", "printable_height",
+  "single_extruder_multi_material",
+  "machine_max_speed_x", "machine_max_speed_y", "machine_max_speed_z",
+  "machine_max_acceleration_x", "machine_max_acceleration_y",
+  "machine_max_acceleration_z", "machine_max_acceleration_e",
+  "machine_max_jerk_x", "machine_max_jerk_y", "machine_max_jerk_z",
+  "machine_max_jerk_e",
+  // Miscellaneous
+  "resolution", "slice_closing_radius", "slicing_mode",
+  "print_flow_ratio", "top_solid_infill_flow_ratio",
+  "bottom_solid_infill_flow_ratio",
+  "small_area_infill_flow_compensation",
+  "flush_into_infill", "flush_into_objects", "flush_into_support",
+  "print_order", "print_sequence",
+  "alternate_extra_wall",
+  "max_volumetric_extrusion_rate_slope",
+  "max_volumetric_extrusion_rate_slope_segment_length",
+  "hole_to_polyhole", "hole_to_polyhole_threshold", "hole_to_polyhole_twisted",
+  "interface_shells", "filter_out_gap_fill", "gap_fill_target",
+  "standby_temperature_delta",
+  "slowdown_for_curled_perimeters",
+  "is_infill_first",
   nullptr
 };
 

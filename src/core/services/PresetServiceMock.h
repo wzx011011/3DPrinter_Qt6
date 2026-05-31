@@ -47,6 +47,9 @@ public:
   /// 查找第一个兼容的耗材预设（对齐上游 PresetBundle::update_compatible 自动匹配）
   QString findCompatibleFilament(const QString &printerName) const;
 
+  /// 获取预设继承的父预设名（对齐上游 Preset::inherits）
+  QString presetInherits(const QString &presetName) const;
+
 private:
   /// 预设值存储（预设名 → key-value 映射）
   QMap<QString, QHash<QString, QVariant>> m_presetStore;
@@ -54,7 +57,20 @@ private:
   QSet<QString> m_builtinPresetNames;
   /// 按类别存储的预设名列表（category → names）
   QMap<int, QStringList> m_categoryPresets;
+  /// 预设继承关系（预设名 → 父预设名）
+  QMap<QString, QString> m_presetInherits;
 
   /// 初始化内置默认预设值（对齐上游 PresetBundle 默认值）
   void initBuiltinDefaults();
+
+#ifdef HAS_LIBSLIC3R
+  /// 从上游 vendor JSON 预设文件加载真实预设（对齐上游 PresetBundle::load_vendor_configs_from_json）
+  bool loadVendorPresets();
+  /// 加载单个预设 JSON 文件并解析继承链
+  QHash<QString, QVariant> loadPresetJson(const QString &filePath, int category);
+  /// 递归解析继承链，返回合并后的完整配置
+  QHash<QString, QVariant> resolveInheritance(const QString &presetName, const QString &filePath,
+                                               QMap<QString, QHash<QString, QVariant>> &resolvedConfigs,
+                                               QMap<QString, QString> &inheritMap);
+#endif
 };

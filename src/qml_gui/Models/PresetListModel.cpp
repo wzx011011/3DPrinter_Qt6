@@ -1,4 +1,5 @@
 #include "PresetListModel.h"
+#include "core/services/PresetServiceMock.h"
 
 PresetListModel::PresetListModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -81,4 +82,48 @@ int PresetListModel::globalIndex(const QString &category, int localIndex) const
     }
   }
   return -1;
+}
+
+void PresetListModel::refreshFromService(PresetServiceMock *service)
+{
+  if (!service)
+    return;
+
+  beginResetModel();
+  m_presets.clear();
+
+  static const auto catLabels = [](int cat) -> QString {
+    switch (cat)
+    {
+    case PresetServiceMock::PrintCat: return tr("打印质量");
+    case PresetServiceMock::FilamentCat: return tr("耗材");
+    case PresetServiceMock::PrinterCat: return tr("打印机");
+    default: return tr("其他");
+    }
+  };
+
+  const QString defaultPrint = service->defaultPresetForCategory(PresetServiceMock::PrintCat);
+  const QString defaultFilament = service->defaultPresetForCategory(PresetServiceMock::FilamentCat);
+  const QString defaultPrinter = service->defaultPresetForCategory(PresetServiceMock::PrinterCat);
+
+  // Populate in order: printer, filament, print (对齐上游 Tab 页签顺序)
+  const int categories[] = {PresetServiceMock::PrinterCat, PresetServiceMock::FilamentCat, PresetServiceMock::PrintCat};
+  const QString defaults[] = {defaultPrinter, defaultFilament, defaultPrint};
+
+  for (int ci = 0; ci < 3; ++ci)
+  {
+    const QStringList names = service->presetNamesForCategory(categories[ci]);
+    const QString catLabel = catLabels(categories[ci]);
+    for (const QString &name : names)
+    {
+      PresetEntry entry;
+      entry.name = name;
+      entry.category = catLabel;
+      entry.isDefault = (name == defaults[ci]);
+      m_presets.append(entry);
+    }
+  }
+
+  endResetModel();
+  emit countChanged();
 }

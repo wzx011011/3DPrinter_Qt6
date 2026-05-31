@@ -11,6 +11,8 @@ struct PresetEntry
   bool isDefault = false;
 };
 
+class PresetServiceMock;
+
 class PresetListModel final : public QAbstractListModel
 {
   Q_OBJECT
@@ -40,6 +42,9 @@ public:
   // consumer uses index-based accessor to fetch individual names)
   Q_INVOKABLE int countByCategory(const QString &category) const;
   Q_INVOKABLE int globalIndex(const QString &category, int localIndex) const;
+
+  /// Refresh from PresetServiceMock (populates from loaded vendor presets)
+  void refreshFromService(PresetServiceMock *service);
 
 signals:
   void countChanged();

@@ -1,9 +1,26 @@
 #include "PresetServiceMock.h"
 
+#include <QFile>
+#include <QFileInfo>
+#include <QDir>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QCoreApplication>
+
+#ifdef HAS_LIBSLIC3R
+#include <libslic3r/PrintConfig.hpp>
+#endif
+
 PresetServiceMock::PresetServiceMock(QObject *parent)
     : QObject(parent)
 {
+#ifdef HAS_LIBSLIC3R
+  if (!loadVendorPresets())
+    initBuiltinDefaults();
+#else
   initBuiltinDefaults();
+#endif
 }
 
 void PresetServiceMock::initBuiltinDefaults()
@@ -184,17 +201,323 @@ void PresetServiceMock::initBuiltinDefaults()
   }
 }
 
+#ifdef HAS_LIBSLIC3R
+
+bool PresetServiceMock::loadVendorPresets()
+{
+  // Locate vendor profile directory (对齐上游 PresetBundle data_dir / resource_dir)
+  QString vendorDir;
+  const QStringList searchPaths = {
+      // Relative to executable (build output dir)
+      QDir::currentPath() + QStringLiteral("/third_party/CrealityPrint/resources/profiles/Creality"),
+      // Source tree relative
+      QDir::currentPath() + QStringLiteral("/../CrealityPrint/resources/profiles/Creality"),
+      // Installed resource path
+      QCoreApplication::applicationDirPath() + QStringLiteral("/resources/profiles/Creality"),
+  };
+
+  for (const auto &path : searchPaths)
+  {
+    if (QFileInfo::exists(path + QStringLiteral("/Creality.json")))
+    {
+      vendorDir = path;
+      break;
+    }
+  }
+
+  if (vendorDir.isEmpty())
+    return false;
+
+  const QString indexFile = vendorDir + QStringLiteral("/Creality.json");
+  QFile f(indexFile);
+  if (!f.open(QIODevice::ReadOnly))
+    return false;
+
+  QJsonParseError err;
+  const QJsonObject root = QJsonDocument::fromJson(f.readAll(), &err).object();
+  if (err.error != QJsonParseError::NoError)
+    return false;
+
+  // Parse vendor index to get sub-file lists
+  struct SubFileEntry
+  {
+    QString name;
+    QString subPath;
+  };
+  QList<SubFileEntry> machineEntries, processEntries, filamentEntries;
+
+  auto parseSubFileList = [](const QJsonObject &root, const QString &key) -> QList<SubFileEntry> {
+    QList<SubFileEntry> result;
+    const QJsonArray arr = root.value(key).toArray();
+    for (const QJsonValue &val : arr)
+    {
+      const QJsonObject obj = val.toObject();
+      SubFileEntry entry;
+      entry.name = obj.value(QStringLiteral("name")).toString();
+      entry.subPath = obj.value(QStringLiteral("sub_path")).toString();
+      if (!entry.name.isEmpty() && !entry.subPath.isEmpty())
+        result.append(entry);
+    }
+    return result;
+  };
+
+  machineEntries = parseSubFileList(root, QStringLiteral("machine_list"));
+  processEntries = parseSubFileList(root, QStringLiteral("process_list"));
+  filamentEntries = parseSubFileList(root, QStringLiteral("filament_list"));
+
+  // Resolved config cache (preset_name → merged key-values)
+  QMap<QString, QHash<QString, QVariant>> resolvedConfigs;
+  QMap<QString, QString> inheritMap;
+
+  // Load machine (printer) presets
+  for (const auto &entry : machineEntries)
+  {
+    const QString filePath = vendorDir + QStringLiteral("/") + entry.subPath;
+    const QHash<QString, QVariant> resolved = resolveInheritance(entry.name, filePath, resolvedConfigs, inheritMap);
+    if (resolved.isEmpty())
+      continue;
+
+    // Only store presets with instantiation=true (real printer configs, not base templates)
+    const QString instantiation = resolved.value(QStringLiteral("__instantiation__")).toString();
+    if (instantiation == QStringLiteral("false"))
+    {
+      resolvedConfigs[entry.name] = resolved;
+      continue;
+    }
+
+    // Remove internal metadata keys
+    QHash<QString, QVariant> cleanValues = resolved;
+    cleanValues.remove(QStringLiteral("__instantiation__"));
+    cleanValues.remove(QStringLiteral("__inherits__"));
+    cleanValues.remove(QStringLiteral("__type__"));
+    cleanValues.remove(QStringLiteral("__from__"));
+    cleanValues.remove(QStringLiteral("__name__"));
+
+    m_presetStore[entry.name] = cleanValues;
+    m_builtinPresetNames.insert(entry.name);
+    m_categoryPresets[PrinterCat].append(entry.name);
+    if (!inheritMap.value(entry.name).isEmpty())
+      m_presetInherits[entry.name] = inheritMap[entry.name];
+  }
+
+  // Load filament presets
+  for (const auto &entry : filamentEntries)
+  {
+    const QString filePath = vendorDir + QStringLiteral("/") + entry.subPath;
+    const QHash<QString, QVariant> resolved = resolveInheritance(entry.name, filePath, resolvedConfigs, inheritMap);
+    if (resolved.isEmpty())
+      continue;
+
+    const QString instantiation = resolved.value(QStringLiteral("__instantiation__")).toString();
+    if (instantiation == QStringLiteral("false"))
+    {
+      resolvedConfigs[entry.name] = resolved;
+      continue;
+    }
+
+    QHash<QString, QVariant> cleanValues = resolved;
+    cleanValues.remove(QStringLiteral("__instantiation__"));
+    cleanValues.remove(QStringLiteral("__inherits__"));
+    cleanValues.remove(QStringLiteral("__type__"));
+    cleanValues.remove(QStringLiteral("__from__"));
+    cleanValues.remove(QStringLiteral("__name__"));
+
+    m_presetStore[entry.name] = cleanValues;
+    m_builtinPresetNames.insert(entry.name);
+    m_categoryPresets[FilamentCat].append(entry.name);
+    if (!inheritMap.value(entry.name).isEmpty())
+      m_presetInherits[entry.name] = inheritMap[entry.name];
+  }
+
+  // Load process (print) presets
+  for (const auto &entry : processEntries)
+  {
+    const QString filePath = vendorDir + QStringLiteral("/") + entry.subPath;
+    const QHash<QString, QVariant> resolved = resolveInheritance(entry.name, filePath, resolvedConfigs, inheritMap);
+    if (resolved.isEmpty())
+      continue;
+
+    const QString instantiation = resolved.value(QStringLiteral("__instantiation__")).toString();
+    if (instantiation == QStringLiteral("false"))
+    {
+      resolvedConfigs[entry.name] = resolved;
+      continue;
+    }
+
+    QHash<QString, QVariant> cleanValues = resolved;
+    cleanValues.remove(QStringLiteral("__instantiation__"));
+    cleanValues.remove(QStringLiteral("__inherits__"));
+    cleanValues.remove(QStringLiteral("__type__"));
+    cleanValues.remove(QStringLiteral("__from__"));
+    cleanValues.remove(QStringLiteral("__name__"));
+
+    m_presetStore[entry.name] = cleanValues;
+    m_builtinPresetNames.insert(entry.name);
+    m_categoryPresets[PrintCat].append(entry.name);
+    if (!inheritMap.value(entry.name).isEmpty())
+      m_presetInherits[entry.name] = inheritMap[entry.name];
+  }
+
+  // Also load the upstream schema defaults as the base config for value resolution
+  // This ensures all ~200 config keys have defaults even if not overridden by presets
+  {
+    const auto &def = Slic3r::print_config_def;
+    QHash<QString, QVariant> upstreamDefaults;
+    for (const auto &optPair : def.options)
+    {
+      const auto &optDef = optPair.second;
+      if (!optDef.default_value)
+        continue;
+      const QString key = QString::fromUtf8(optPair.first.c_str());
+      if (upstreamDefaults.contains(key))
+        continue;
+      switch (optDef.type)
+      {
+      case Slic3r::coFloat:
+      case Slic3r::coFloatOrPercent:
+        upstreamDefaults[key] = static_cast<const Slic3r::ConfigOptionFloat *>(optDef.default_value.get())->value;
+        break;
+      case Slic3r::coInt:
+        upstreamDefaults[key] = static_cast<const Slic3r::ConfigOptionInt *>(optDef.default_value.get())->value;
+        break;
+      case Slic3r::coBool:
+        upstreamDefaults[key] = static_cast<const Slic3r::ConfigOptionBool *>(optDef.default_value.get())->value != 0;
+        break;
+      case Slic3r::coString:
+        upstreamDefaults[key] = QString::fromStdString(static_cast<const Slic3r::ConfigOptionString *>(optDef.default_value.get())->value);
+        break;
+      default:
+        break;
+      }
+    }
+    // Store upstream defaults as a hidden "template" for ConfigViewModel to use as base tier
+    m_presetStore[QStringLiteral("__upstream_defaults__")] = upstreamDefaults;
+  }
+
+  return !m_presetStore.isEmpty();
+}
+
+QHash<QString, QVariant> PresetServiceMock::resolveInheritance(
+    const QString &presetName, const QString &filePath,
+    QMap<QString, QHash<QString, QVariant>> &resolvedConfigs,
+    QMap<QString, QString> &inheritMap)
+{
+  // Check cache first
+  if (resolvedConfigs.contains(presetName))
+    return resolvedConfigs[presetName];
+
+  QFile f(filePath);
+  if (!f.open(QIODevice::ReadOnly))
+    return {};
+
+  QJsonParseError err;
+  const QJsonObject root = QJsonDocument::fromJson(f.readAll(), &err).object();
+  if (err.error != QJsonParseError::NoError)
+    return {};
+
+  // Get inherits name
+  const QString inherits = root.value(QStringLiteral("inherits")).toString();
+  const QString type = root.value(QStringLiteral("type")).toString();
+  const QString name = root.value(QStringLiteral("name")).toString();
+  const QString instantiation = root.value(QStringLiteral("instantiation")).toString();
+
+  // Start with parent config (if inherits is specified)
+  QHash<QString, QVariant> result;
+  if (!inherits.isEmpty())
+  {
+    inheritMap[presetName] = inherits;
+
+    // Try to resolve parent from cache or load it
+    if (resolvedConfigs.contains(inherits))
+    {
+      result = resolvedConfigs[inherits];
+    }
+    else
+    {
+      // Try to find and load the parent preset file.
+      // Parent files are in the same subdirectory (e.g., machine/fdm_creality_common.json)
+      const QFileInfo fi(filePath);
+      const QDir fileDir = fi.absoluteDir();
+      const QString parentFileName = inherits + QStringLiteral(".json");
+
+      // Same directory as current file
+      const QString candidate = fileDir.filePath(parentFileName);
+      if (QFileInfo::exists(candidate))
+        result = resolveInheritance(inherits, candidate, resolvedConfigs, inheritMap);
+    }
+  }
+
+  // Apply current preset values on top of parent (child overrides parent)
+  for (auto it = root.begin(); it != root.end(); ++it)
+  {
+    const QString key = it.key();
+    // Skip metadata keys
+    if (key == QStringLiteral("type") || key == QStringLiteral("name") ||
+        key == QStringLiteral("from") || key == QStringLiteral("inherits") ||
+        key == QStringLiteral("instantiation") || key == QStringLiteral("setting_id") ||
+        key == QStringLiteral("compatible_printers") || key == QStringLiteral("compatible_prints"))
+      continue;
+
+    const QJsonValue val = it.value();
+    if (val.isString())
+    {
+      const QString str = val.toString();
+      // Try to parse as number
+      bool ok = false;
+      const double dval = str.toDouble(&ok);
+      if (ok && !str.isEmpty())
+      {
+        // Check if it's actually an integer
+        if (str.indexOf('.') < 0 && str.indexOf('%') < 0)
+          result[key] = static_cast<int>(qRound(dval));
+        else
+          result[key] = dval;
+      }
+      else
+      {
+        result[key] = str;
+      }
+    }
+    else if (val.isBool())
+    {
+      result[key] = val.toBool();
+    }
+    else if (val.isDouble())
+    {
+      result[key] = val.toDouble();
+    }
+    else if (val.isArray())
+    {
+      // Store arrays as QVariantList
+      QVariantList list;
+      const QJsonArray arr = val.toArray();
+      for (const QJsonValue &av : arr)
+        list.append(av.toVariant());
+      result[key] = list;
+    }
+  }
+
+  // Store metadata
+  result[QStringLiteral("__type__")] = type;
+  result[QStringLiteral("__name__")] = name;
+  result[QStringLiteral("__instantiation__")] = instantiation;
+  result[QStringLiteral("__inherits__")] = inherits;
+
+  resolvedConfigs[presetName] = result;
+  return result;
+}
+
+#endif // HAS_LIBSLIC3R
+
 QStringList PresetServiceMock::presetNames() const
 {
-  return {
-      QStringLiteral("0.20mm Standard @Creality K1C"),
-      QStringLiteral("0.16mm Fine"),
-      QStringLiteral("0.12mm Ultra")};
+  // Legacy: return print category presets
+  return m_categoryPresets.value(PrintCat);
 }
 
 QString PresetServiceMock::defaultPreset() const
 {
-  return QStringLiteral("0.20mm Standard @Creality K1C");
+  return defaultPresetForCategory(PrintCat);
 }
 
 double PresetServiceMock::defaultLayerHeight() const
@@ -209,13 +532,11 @@ QStringList PresetServiceMock::presetNamesForCategory(int category) const
 
 QString PresetServiceMock::defaultPresetForCategory(int category) const
 {
-  switch (category)
-  {
-  case PrintCat: return QStringLiteral("0.20mm Standard");
-  case FilamentCat: return QStringLiteral("Creality Generic PLA");
-  case PrinterCat: return QStringLiteral("Creality K1C 0.4");
-  default: return {};
-  }
+  const auto names = m_categoryPresets.value(category);
+  if (names.isEmpty())
+    return {};
+  // Return first preset in the category (typically the default)
+  return names.first();
 }
 
 QHash<QString, QVariant> PresetServiceMock::presetValues(const QString &presetName) const
@@ -330,4 +651,9 @@ bool PresetServiceMock::renamePreset(const QString &oldName, const QString &newN
     }
   }
   return true;
+}
+
+QString PresetServiceMock::presetInherits(const QString &presetName) const
+{
+  return m_presetInherits.value(presetName);
 }
