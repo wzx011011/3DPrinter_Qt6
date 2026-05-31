@@ -128,6 +128,79 @@ void SliceService::clearStoredResult()
   emit progressChanged();
 }
 
+void SliceService::setMergedPresetConfig(const QHash<QString, QVariant> &config)
+{
+  mergedPresetConfig_ = config;
+}
+
+namespace
+{
+  /// Type-aware config value injection into DynamicPrintConfig
+  /// Skips keys that don't exist in the config schema
+  void injectPresetConfig(Slic3r::DynamicPrintConfig &config, const QHash<QString, QVariant> &presetValues)
+  {
+#ifdef HAS_LIBSLIC3R
+    for (auto it = presetValues.constBegin(); it != presetValues.constEnd(); ++it)
+    {
+      const std::string key = it.key().toStdString();
+      Slic3r::ConfigOption *opt = config.option(key, false);
+      if (!opt)
+        continue; // Skip UI-only keys not in libslic3r config schema
+
+      const QVariant &value = it.value();
+      switch (static_cast<QMetaType::Type>(value.typeId()))
+      {
+      case QMetaType::Double:
+      {
+        auto *floatOpt = dynamic_cast<Slic3r::ConfigOptionFloat *>(opt);
+        if (floatOpt)
+          floatOpt->value = value.toDouble();
+        else
+          opt->setInt(static_cast<int>(value.toDouble())); // fallback for coFloatOrPercent stored as int
+        break;
+      }
+      case QMetaType::Int:
+      {
+        auto *intOpt = dynamic_cast<Slic3r::ConfigOptionInt *>(opt);
+        if (intOpt)
+          intOpt->value = value.toInt();
+        else
+          opt->setInt(value.toInt()); // covers coBool, coEnum
+        break;
+      }
+      case QMetaType::Bool:
+      {
+        auto *boolOpt = dynamic_cast<Slic3r::ConfigOptionBool *>(opt);
+        if (boolOpt)
+          boolOpt->value = value.toBool() ? 1 : 0;
+        else
+          opt->setInt(value.toBool() ? 1 : 0);
+        break;
+      }
+      case QMetaType::QString:
+      default:
+      {
+        // Use set_deserialize_strict for string/enum/percent types
+        const std::string strVal = value.toString().toStdString();
+        if (!strVal.empty())
+        {
+          try
+          {
+            config.set_deserialize_strict(key, strVal, false);
+          }
+          catch (...)
+          {
+            // Silently skip values that can't be deserialized
+          }
+        }
+        break;
+      }
+      }
+    }
+#endif
+  }
+} // anonymous namespace
+
 void SliceService::startSlice(const QString &projectName)
 {
   Q_UNUSED(projectName);
@@ -226,6 +299,14 @@ void SliceService::startSlice(const QString &projectName)
 
       notify(10, QObject::tr("准备切片参数"));
       Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
+
+      // Inject user-selected preset values into config (对齐上游 PresetBundle::full_fff_config)
+      // This overwrites factory defaults with the 3-tier merged hierarchy (printer→filament→print)
+      if (receiver && !receiver->mergedPresetConfig_.isEmpty())
+      {
+        injectPresetConfig(config, receiver->mergedPresetConfig_);
+        receiver->mergedPresetConfig_.clear(); // one-shot injection per slice
+      }
 
       // Apply per-plate config overrides (align upstream PartPlate::config)
       if (receiver && receiver->projectService_) {

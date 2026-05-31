@@ -162,6 +162,10 @@ public:
   /// 重置当前作用域中全部覆盖值（对齐上游 Tab::on_roll_back_value）
   Q_INVOKABLE void resetAllScopeOverrides();
 
+  /// 获取合并后的 3-tier 预设值（printer→filament→print 层级叠加后的完整配置）
+  /// 用于传递给 SliceService 进行切片参数注入（对齐上游 PresetBundle::full_fff_config）
+  Q_INVOKABLE QHash<QString, QVariant> mergedConfigValues() const;
+
   /// 获取第 index 个被修改的选项 key（对齐上游 Tab::modified_options）
   Q_INVOKABLE QString globalModifiedKey(int index) const;
   /// 获取选项当前值

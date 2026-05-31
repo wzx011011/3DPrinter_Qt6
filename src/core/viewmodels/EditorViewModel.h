@@ -13,6 +13,7 @@
 class ProjectServiceMock;
 class SliceService;
 class UndoRedoManager;
+class ConfigViewModel;
 
 class EditorViewModel final : public QObject
 {
@@ -601,6 +602,8 @@ public:
 
   /// Undo/Redo integration (对齐上游 UndoRedo 框架)
   void setUndoRedoManager(UndoRedoManager *manager);
+  /// Config preset injection (对齐上游 PresetBundle::full_fff_config → BackgroundSlicingProcess)
+  void setConfigViewModel(ConfigViewModel *vm);
   Q_INVOKABLE void undo();
   Q_INVOKABLE void redo();
   Q_INVOKABLE void clearUndoStack();
@@ -643,6 +646,7 @@ private:
 
   ProjectServiceMock *projectService_ = nullptr;
   SliceService *sliceService_ = nullptr;
+  ConfigViewModel *configViewModel_ = nullptr;
   UndoRedoManager *m_undoManager = nullptr;
   QString statusText_ = tr("就绪");
   QList<ObjectEntry> m_objects;

@@ -4,6 +4,7 @@
 #include "core/services/SliceService.h"
 #include "core/services/UndoRedoManager.h"
 #include "core/services/UndoCommands.h"
+#include "core/viewmodels/ConfigViewModel.h"
 #include <QFileInfo>
 #include <QUrl>
 #include <QVector4D>
@@ -1366,6 +1367,11 @@ int EditorViewModel::mapFilteredToSourceIndex(int filteredIndex) const
 }
 
 // ── Undo/Redo integration (对齐上游 UndoRedo 框架) ──────────────────────────
+
+void EditorViewModel::setConfigViewModel(ConfigViewModel *vm)
+{
+  configViewModel_ = vm;
+}
 
 void EditorViewModel::setUndoRedoManager(UndoRedoManager *manager)
 {
@@ -3286,6 +3292,13 @@ void EditorViewModel::requestSlice()
     statusText_ = sliceActionHint();
     emit stateChanged();
     return;
+  }
+
+  // Inject merged preset config into SliceService before slicing
+  // (对齐上游 PresetBundle::full_fff_config → BackgroundSlicingProcess)
+  if (configViewModel_ && sliceService_)
+  {
+    sliceService_->setMergedPresetConfig(configViewModel_->mergedConfigValues());
   }
 
   m_sliceEstimatedTime.clear();

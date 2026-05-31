@@ -75,6 +75,10 @@ BackendContext::BackendContext(QObject *parent)
   previewViewModel_ = new PreviewViewModel(sliceService_, this);
   monitorViewModel_ = new MonitorViewModel(deviceService_, networkService_, cameraService, this);
   configViewModel_ = new ConfigViewModel(presetService_, projectService_, this);
+
+  // Wire ConfigViewModel into EditorViewModel for preset injection at slice time
+  // (对齐上游 PresetBundle::full_fff_config → BackgroundSlicingProcess)
+  editorViewModel_->setConfigViewModel(configViewModel_);
   homeViewModel_ = new HomeViewModel(cloudService, this);
   settingsViewModel_ = new SettingsViewModel(this);
   projectViewModel_ = new ProjectViewModel(this);

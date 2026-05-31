@@ -1144,6 +1144,11 @@ int ConfigViewModel::globalModifiedCount() const
   return count;
 }
 
+QHash<QString, QVariant> ConfigViewModel::mergedConfigValues() const
+{
+  return globalOptionValues_;
+}
+
 QString ConfigViewModel::globalModifiedKey(int index) const
 {
   if (!printOptions_ || index < 0)

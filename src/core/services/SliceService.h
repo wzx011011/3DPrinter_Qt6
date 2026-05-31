@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QString>
 #include <QMap>
+#include <QHash>
+#include <QVariant>
 #include <memory>
 #include <atomic>
 
@@ -77,6 +79,10 @@ public:
   Q_INVOKABLE bool loadGCodeFromPrevious(const QString &gcodeFilePath);
   Q_INVOKABLE bool exportGCodeToPath(const QString &targetPath);
 
+  /// 注入合并后的预设配置（对齐上游 PresetBundle::full_fff_config）
+  /// 在 startSlice() 前调用，将 user-selected preset values 传入 slice engine
+  void setMergedPresetConfig(const QHash<QString, QVariant> &config);
+
   void clearPlateResults();
   void removePlateResult(int plateIndex);
 
@@ -108,6 +114,7 @@ private:
 #endif
 
   QMap<int, PlateSliceResult> plateResults_;
+  QHash<QString, QVariant> mergedPresetConfig_; ///< 从 ConfigViewModel 注入的合并预设值
 
   void clearStoredResult();
 };
