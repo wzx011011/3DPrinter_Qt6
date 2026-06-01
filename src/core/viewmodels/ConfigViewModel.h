@@ -166,6 +166,10 @@ public:
   /// 用于传递给 SliceService 进行切片参数注入（对齐上游 PresetBundle::full_fff_config）
   Q_INVOKABLE QHash<QString, QVariant> mergedConfigValues() const;
 
+  /// Apply config loaded from 3MF project to preset selection and option values
+  /// (对齐上游 Plater::priv::load_config_file preset matching)
+  Q_INVOKABLE void applyProjectConfig(const QHash<QString, QVariant> &config);
+
   /// 获取第 index 个被修改的选项 key（对齐上游 Tab::modified_options）
   Q_INVOKABLE QString globalModifiedKey(int index) const;
   /// 获取选项当前值

@@ -58,8 +58,8 @@ if(CREALITY_QML_GUI)
         set(QT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT 3.21)
     endif()
 
-    qt_add_executable(FramelessDialogDemo
-        src/qml_gui/main_qml.cpp
+    # ── 共享源码 OBJECT 库（主程序和测试共用） ────────────────────────────
+    add_library(creality_app_core OBJECT
         src/nanosvg_impl.cpp
         src/qml_gui/BackendContext.cpp
         src/qml_gui/BackendContext.h
@@ -85,6 +85,8 @@ if(CREALITY_QML_GUI)
         src/core/services/JobManager.cpp
         src/core/services/NetworkServiceMock.cpp
         src/core/services/NetworkServiceMock.h
+        src/core/services/CalibrationServiceMock.cpp
+        src/core/services/CalibrationServiceMock.h
         src/core/rendering/GLShaderUtil.cpp
         src/core/rendering/GLShaderUtil.h
         src/core/viewmodels/EditorViewModel.cpp
@@ -107,8 +109,6 @@ if(CREALITY_QML_GUI)
         src/core/viewmodels/ModelMallViewModel.h
         src/core/viewmodels/MultiMachineViewModel.cpp
         src/core/viewmodels/MultiMachineViewModel.h
-        src/core/services/CalibrationServiceMock.cpp
-        src/core/services/CalibrationServiceMock.h
         src/qml_gui/Models/ConfigOptionModel.cpp
         src/qml_gui/Models/ConfigOptionModel.h
         src/qml_gui/Models/PresetListModel.cpp
@@ -121,18 +121,47 @@ if(CREALITY_QML_GUI)
         src/qml_gui/Renderer/GLViewportRenderer.h
         src/qml_gui/Renderer/GCodeRenderer.cpp
         src/qml_gui/Renderer/GCodeRenderer.h
-        src/qml_gui/qml.qrc
     )
-
     if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/src/core/debug/CrashHandlerWin.cpp")
-        target_sources(FramelessDialogDemo PRIVATE
+        target_sources(creality_app_core PRIVATE
             src/core/debug/CrashHandlerWin.cpp
             src/core/debug/CrashHandlerWin.h
             src/core/debug/EarlyCrashDiag.cpp
         )
     endif()
+    target_include_directories(creality_app_core PUBLIC
+        src
+        ${CMAKE_SOURCE_DIR}/third_party/CrealityPrint/src
+    )
+    target_compile_definitions(creality_app_core PUBLIC CREALITY_QML_GUI=1)
+    if(BUILD_LIBSLIC3R AND TARGET libslic3r)
+        target_compile_definitions(creality_app_core PUBLIC HAS_LIBSLIC3R=1)
+        if(MSVC)
+            target_compile_definitions(creality_app_core PRIVATE
+                BOOST_ALL_NO_LIB
+                BOOST_USE_WINAPI_VERSION=0x602
+                BOOST_SYSTEM_USE_UTF8
+            )
+        endif()
+    endif()
+    # Qt AUTOMOC needs compile definitions and include paths from Qt modules.
+    # libslic3r PUBLIC linkage propagates generated-header dirs (libslic3r_version.h).
+    target_link_libraries(creality_app_core PUBLIC
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent
+    )
+    if(BUILD_LIBSLIC3R AND TARGET libslic3r)
+        target_link_libraries(creality_app_core PUBLIC libslic3r)
+    endif()
 
-    target_link_libraries(FramelessDialogDemo PRIVATE Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent)
+    # ── 主程序 ────────────────────────────────────────────────────────────
+    qt_add_executable(FramelessDialogDemo
+        src/qml_gui/main_qml.cpp
+        src/qml_gui/qml.qrc
+    )
+    target_link_libraries(FramelessDialogDemo PRIVATE creality_app_core)
+    target_link_libraries(FramelessDialogDemo PRIVATE
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent
+    )
     if(MSVC)
         target_compile_options(FramelessDialogDemo PRIVATE /Zi)
         target_link_options(FramelessDialogDemo PRIVATE /DEBUG:FULL)
@@ -146,15 +175,6 @@ if(CREALITY_QML_GUI)
         endif()
     endforeach()
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
-        target_link_libraries(FramelessDialogDemo PRIVATE libslic3r)
-        target_compile_definitions(FramelessDialogDemo PRIVATE HAS_LIBSLIC3R=1)
-        if(MSVC)
-            target_compile_definitions(FramelessDialogDemo PRIVATE
-                BOOST_ALL_NO_LIB
-                BOOST_USE_WINAPI_VERSION=0x602
-                BOOST_SYSTEM_USE_UTF8
-            )
-        endif()
         # Copy OCCT runtime DLLs (delay-loaded, needed when libslic3r actually calls them)
         file(GLOB _occt_dlls "${DEPS_PREFIX}/bin/occt/TK*.dll")
         foreach(_occt_dll ${_occt_dlls})
@@ -164,7 +184,6 @@ if(CREALITY_QML_GUI)
                     "$<TARGET_FILE_DIR:FramelessDialogDemo>/")
         endforeach()
     endif()
-    target_compile_definitions(FramelessDialogDemo PRIVATE CREALITY_QML_GUI=1)
 else()
     find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
@@ -187,106 +206,43 @@ else()
     target_link_libraries(FramelessDialogDemo PRIVATE Qt6::Widgets)
 endif()
 
-target_include_directories(FramelessDialogDemo PRIVATE
-    src
-    ${CMAKE_SOURCE_DIR}/third_party/CrealityPrint/src
-)
-
 if(WIN32)
     set_target_properties(FramelessDialogDemo PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 
-# ── E2E Workflow Tests ──────────────────────────────────────────────────
-if(BUILD_TESTING)
-    qt_add_executable(E2EWorkflowTests
-        tests/E2EWorkflowTests.cpp
-        src/nanosvg_impl.cpp
-        src/core/services/SliceService.cpp
-        src/core/services/SliceService.h
-        src/core/services/PresetServiceMock.cpp
-        src/core/services/PresetServiceMock.h
-        src/core/services/ProjectServiceMock.cpp
-        src/core/services/ProjectServiceMock.h
-        src/core/services/UndoRedoManager.cpp
-        src/core/services/UndoRedoManager.h
-        src/core/services/UndoCommands.cpp
-        src/core/services/UndoCommands.h
-        src/core/services/JobBase.h
-        src/core/services/JobBase.cpp
-        src/core/services/JobManager.h
-        src/core/services/JobManager.cpp
-        src/core/services/DeviceServiceMock.cpp
-        src/core/services/DeviceServiceMock.h
-        src/core/services/NetworkServiceMock.cpp
-        src/core/services/NetworkServiceMock.h
-        src/core/services/CameraServiceMock.cpp
-        src/core/services/CameraServiceMock.h
-        src/core/services/CloudServiceMock.cpp
-        src/core/services/CloudServiceMock.h
-        src/core/services/CalibrationServiceMock.cpp
-        src/core/services/CalibrationServiceMock.h
-        src/core/rendering/GLShaderUtil.cpp
-        src/core/rendering/GLShaderUtil.h
-        src/core/viewmodels/EditorViewModel.cpp
-        src/core/viewmodels/EditorViewModel.h
-        src/core/viewmodels/PreviewViewModel.cpp
-        src/core/viewmodels/PreviewViewModel.h
-        src/core/viewmodels/MonitorViewModel.cpp
-        src/core/viewmodels/MonitorViewModel.h
-        src/core/viewmodels/ConfigViewModel.cpp
-        src/core/viewmodels/ConfigViewModel.h
-        src/core/viewmodels/HomeViewModel.cpp
-        src/core/viewmodels/HomeViewModel.h
-        src/core/viewmodels/SettingsViewModel.cpp
-        src/core/viewmodels/SettingsViewModel.h
-        src/core/viewmodels/ProjectViewModel.cpp
-        src/core/viewmodels/ProjectViewModel.h
-        src/core/viewmodels/CalibrationViewModel.cpp
-        src/core/viewmodels/CalibrationViewModel.h
-        src/core/viewmodels/ModelMallViewModel.cpp
-        src/core/viewmodels/ModelMallViewModel.h
-        src/core/viewmodels/MultiMachineViewModel.cpp
-        src/core/viewmodels/MultiMachineViewModel.h
-        src/qml_gui/BackendContext.cpp
-        src/qml_gui/BackendContext.h
-        src/qml_gui/Models/ConfigOptionModel.cpp
-        src/qml_gui/Models/ConfigOptionModel.h
-        src/qml_gui/Models/PresetListModel.cpp
-        src/qml_gui/Models/PresetListModel.h
-        src/qml_gui/Renderer/CameraController.cpp
-        src/qml_gui/Renderer/CameraController.h
-        src/qml_gui/Renderer/GLViewport.cpp
-        src/qml_gui/Renderer/GLViewport.h
-        src/qml_gui/Renderer/GLViewportRenderer.cpp
-        src/qml_gui/Renderer/GLViewportRenderer.h
-        src/qml_gui/Renderer/GCodeRenderer.cpp
-        src/qml_gui/Renderer/GCodeRenderer.h
+# ── Tests ──────────────────────────────────────────────────────────────────
+if(BUILD_TESTING AND CREALITY_QML_GUI)
+    # Ensure Qt DLLs are on PATH when running tests via ctest
+    get_target_property(_qt6_core_location Qt6::Core LOCATION)
+    get_filename_component(_qt6_bin_dir "${_qt6_core_location}" DIRECTORY)
+
+    qt_add_executable(E2EWorkflowTests tests/E2EWorkflowTests.cpp)
+    target_link_libraries(E2EWorkflowTests PRIVATE creality_app_core
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Test
     )
-    if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/src/core/debug/CrashHandlerWin.cpp")
-        target_sources(E2EWorkflowTests PRIVATE
-            src/core/debug/CrashHandlerWin.cpp
-            src/core/debug/CrashHandlerWin.h
-            src/core/debug/EarlyCrashDiag.cpp
-        )
-    endif()
-    target_link_libraries(E2EWorkflowTests PRIVATE Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Test)
-    target_include_directories(E2EWorkflowTests PRIVATE
-        src
-        ${CMAKE_SOURCE_DIR}/third_party/CrealityPrint/src
-    )
-    if(BUILD_LIBSLIC3R AND TARGET libslic3r)
-        target_link_libraries(E2EWorkflowTests PRIVATE libslic3r)
-        target_compile_definitions(E2EWorkflowTests PRIVATE HAS_LIBSLIC3R=1)
-        if(MSVC)
-            target_compile_definitions(E2EWorkflowTests PRIVATE
-                BOOST_ALL_NO_LIB
-                BOOST_USE_WINAPI_VERSION=0x602
-                BOOST_SYSTEM_USE_UTF8
-            )
-        endif()
-    endif()
-    target_compile_definitions(E2EWorkflowTests PRIVATE CREALITY_QML_GUI=1)
     add_test(NAME E2EWorkflowTests COMMAND E2EWorkflowTests)
+    set_tests_properties(E2EWorkflowTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
+    qt_add_executable(ViewModelSmokeTests tests/ViewModelSmokeTests.cpp)
+    target_link_libraries(ViewModelSmokeTests PRIVATE creality_app_core
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Test
+    )
+    add_test(NAME ViewModelSmokeTests COMMAND ViewModelSmokeTests)
+    set_tests_properties(ViewModelSmokeTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
+    qt_add_executable(E2EPipelineTests tests/E2EPipelineTests.cpp)
+    target_link_libraries(E2EPipelineTests PRIVATE creality_app_core
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Test
+    )
+    add_test(NAME E2EPipelineTests COMMAND E2EPipelineTests)
+    set_tests_properties(E2EPipelineTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+        TIMEOUT 300
+    )
 endif()
 
 # I2 -- i18n 翻译文件
@@ -299,4 +255,3 @@ qt_add_translations(FramelessDialogDemo
         i18n/de.ts
         i18n/fr.ts
 )
-

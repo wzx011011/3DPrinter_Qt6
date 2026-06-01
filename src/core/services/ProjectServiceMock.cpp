@@ -711,11 +711,24 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
           receiver->plateObjectIndices_.append(all);
         }
 
+        // Reset all plate metadata arrays to match new plate count
+        receiver->plateBedTypes_.clear();
+        receiver->plateLockedStates_.clear();
+        receiver->platePrintSequences_.clear();
+        receiver->plateSpiralModes_.clear();
+        receiver->plateFirstLayerSeqChoices_.clear();
+        receiver->plateFirstLayerSeqOrders_.clear();
+        receiver->plateOtherLayersSeqChoices_.clear();
+        receiver->plateOtherLayersSeqEntries_.clear();
+
         receiver->plateCount_ = receiver->plateObjectIndices_.size();
         if (receiver->plateCount_ != loadedPlateCount)
           receiver->plateCount_ = std::max(receiver->plateCount_, loadedPlateCount);
         receiver->currentPlateIndex_ = receiver->plateCount_ > 0 ? 0 : -1;
         receiver->lastError_.clear();
+
+        // Auto-arrange after load (对齐上游 arrange_loaded_object_to_new_position)
+        receiver->arrangeObjects(5.0f, false, false);
 
         emit receiver->projectChanged();
         emit receiver->plateDataLoaded(receiver->plateCount_);
@@ -2046,7 +2059,8 @@ bool ProjectServiceMock::orientObject(int objectIndex)
 #endif
 }
 
-bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool alignY)
+bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool alignY,
+                                          const QString &printableArea)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || model_->objects.empty())
@@ -2061,6 +2075,28 @@ bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool 
     params.parallel = false; // Run synchronously in Qt thread
     params.progressind = [](unsigned, std::string) {}; // Suppress console output
 
+    if (!printableArea.isEmpty())
+    {
+      // Parse "x1,y1;x2,y2;..." or "x1,y1,x2,y2,..." format
+      Slic3r::Points bed_shape;
+      const auto coords = printableArea.split(QLatin1Char(','));
+      for (int i = 0; i + 1 < coords.size(); i += 2)
+      {
+        bool okX = false, okY = false;
+        const coord_t x = static_cast<coord_t>(coords[i].trimmed().toDouble(&okX) * 1000.0); // mm → μm
+        const coord_t y = static_cast<coord_t>(coords[i + 1].trimmed().toDouble(&okY) * 1000.0);
+        if (okX && okY)
+          bed_shape.emplace_back(x, y);
+      }
+      if (bed_shape.size() >= 3)
+      {
+        Slic3r::BoundingBox bed_bb(bed_shape);
+        Slic3r::arrange_objects(*model_, bed_bb, params);
+        return true;
+      }
+    }
+
+    // Fallback to InfiniteBed when no valid bed shape
     Slic3r::InfiniteBed bed;
     Slic3r::arrange_objects(*model_, bed, params);
     return true;
@@ -2073,6 +2109,8 @@ bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool 
 #else
   Q_UNUSED(spacing);
   Q_UNUSED(allowRotation);
+  Q_UNUSED(alignY);
+  Q_UNUSED(printableArea);
   Q_UNUSED(alignY);
   return false;
 #endif
@@ -4315,6 +4353,44 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
         ok = false;
       }
 
+      // Extract plate data BEFORE releasing (matching loadFile() pattern)
+      QStringList loadedPlateNames;
+      QList<QList<int>> loadedPlateObjectIndices;
+
+      if (ok && !plateDataList.empty())
+      {
+        loadedPlateCount = int(plateDataList.size());
+        loadedPlateNames.reserve(loadedPlateCount);
+        loadedPlateObjectIndices.reserve(loadedPlateCount);
+
+        const int modelObjCount = int(loadedModel->objects.size());
+        for (int plateIdx = 0; plateIdx < loadedPlateCount; ++plateIdx)
+        {
+          const auto *plate = plateDataList[size_t(plateIdx)];
+          const QString plateName = (plate && !plate->plate_name.empty())
+                                        ? QString::fromStdString(plate->plate_name)
+                                        : QObject::tr("平板 %1").arg(plateIdx + 1);
+          loadedPlateNames << plateName;
+
+          QSet<int> uniq;
+          QList<int> objList;
+          if (plate)
+          {
+            for (const auto &pair : plate->objects_and_instances)
+            {
+              const int objIndex = pair.first;
+              if (objIndex >= 0 && objIndex < modelObjCount && !uniq.contains(objIndex))
+              {
+                uniq.insert(objIndex);
+                objList.append(objIndex);
+              }
+            }
+          }
+          std::sort(objList.begin(), objList.end());
+          loadedPlateObjectIndices.append(objList);
+        }
+      }
+
       if (!plateDataList.empty())
         Slic3r::release_PlateData_list(plateDataList);
 
@@ -4325,8 +4401,6 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
       QStringList moduleNames;
       QList<bool> printableStates;
       QList<bool> visibleStates;
-      QStringList loadedPlateNames;
-      QList<QList<int>> loadedPlateObjectIndices;
       QString errorText;
       QString loadedProjectName;
 
@@ -4347,18 +4421,7 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           visibleStates.append(obj && !obj->instances.empty() ? obj->instances.front()->is_printable() : true);
         }
 
-        if (!plateDataList.empty())
-        {
-          // plateDataList was released above; reconstruct from model objects
-          loadedPlateCount = 1;
-          loadedPlateNames << QObject::tr("平板 1");
-          QList<int> allObjects;
-          allObjects.reserve(int(loadedModel->objects.size()));
-          for (int i = 0; i < int(loadedModel->objects.size()); ++i)
-            allObjects.append(i);
-          loadedPlateObjectIndices.append(allObjects);
-        }
-        else
+        if (loadedPlateNames.isEmpty())
         {
           loadedPlateCount = 1;
           loadedPlateNames << QObject::tr("平板 1");
@@ -4381,7 +4444,33 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
         return;
       }
 
-      QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices]() {
+      // Convert loadedConfig to QHash for main-thread emission
+      QHash<QString, QVariant> loadedConfigMap;
+#ifdef HAS_LIBSLIC3R
+      if (ok && !canceled)
+      {
+        for (const auto &key_str : loadedConfig.keys())
+        {
+          const QString key = QString::fromStdString(key_str);
+          const auto *opt = loadedConfig.option(key_str);
+          if (!opt) continue;
+
+          if (dynamic_cast<const Slic3r::ConfigOptionFloat*>(opt))
+            loadedConfigMap[key] = dynamic_cast<const Slic3r::ConfigOptionFloat*>(opt)->value;
+          else if (dynamic_cast<const Slic3r::ConfigOptionInt*>(opt))
+            loadedConfigMap[key] = dynamic_cast<const Slic3r::ConfigOptionInt*>(opt)->value;
+          else if (dynamic_cast<const Slic3r::ConfigOptionBool*>(opt))
+            loadedConfigMap[key] = dynamic_cast<const Slic3r::ConfigOptionBool*>(opt)->value != 0;
+          else
+          {
+            try { loadedConfigMap[key] = QString::fromStdString(opt->serialize()); }
+            catch (...) {}
+          }
+        }
+      }
+#endif
+
+      QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, loadedConfigMap]() {
         if (!receiver) { delete loadedModel; return; }
 
         receiver->loading_ = false;
@@ -4444,16 +4533,32 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
             for (int i = 0; i < receiver->modelCount_; ++i) all.append(i);
             receiver->plateObjectIndices_.append(all);
           }
+
+          // Reset all plate metadata arrays to match new plate count
+          receiver->plateBedTypes_.clear();
+          receiver->plateLockedStates_.clear();
+          receiver->platePrintSequences_.clear();
+          receiver->plateSpiralModes_.clear();
+          receiver->plateFirstLayerSeqChoices_.clear();
+          receiver->plateFirstLayerSeqOrders_.clear();
+          receiver->plateOtherLayersSeqChoices_.clear();
+          receiver->plateOtherLayersSeqEntries_.clear();
+
           receiver->plateCount_ = receiver->plateObjectIndices_.size();
           if (receiver->plateCount_ != loadedPlateCount)
             receiver->plateCount_ = std::max(receiver->plateCount_, loadedPlateCount);
           receiver->currentPlateIndex_ = receiver->plateCount_ > 0 ? 0 : -1;
           receiver->lastError_.clear();
 
+          // Auto-arrange after project load (对齐上游 arrange_loaded_object_to_new_position)
+          receiver->arrangeObjects(5.0f, false, false);
+
           emit receiver->projectChanged();
           emit receiver->plateDataLoaded(receiver->plateCount_);
           emit receiver->plateSelectionChanged();
           emit receiver->loadFinished(true, QObject::tr("项目加载完成"));
+          if (!loadedConfigMap.isEmpty())
+            emit receiver->projectConfigLoaded(loadedConfigMap);
         }
         else
         {

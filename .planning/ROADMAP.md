@@ -1,65 +1,58 @@
-# Roadmap: Milestone v1.1 — End-to-End Slicing Workflow
+# Roadmap: Milestone v1.2 — Slicing Pipeline Hardening
 
 ## Overview
 
-Complete and verify the full slicing workflow from model import through G-code preview. The codebase already has real implementations for each component — this milestone focuses on closing the remaining preset gaps, verifying the E2E chain works without mock breaks, and polishing involved UI pages to production quality.
+Fix confirmed bugs in the core model loading and multi-plate pipeline, add auto-arrange on load, and ensure the full load → arrange → config → slice → export → preview chain is robust. The slice engine itself works end-to-end; gaps are in plate management, arrange, and project config propagation.
 
 ## Phases
 
-- [x] **Phase 1: Preset System Completion** — Ensure real vendor presets load completely and the 3-tier parameter chain flows correctly to the UI
-- [x] **Phase 2: E2E Workflow Verification** — Run through the complete slice workflow, fix any data flow breaks or crashes
-- [x] **Phase 3: UI Polish Pass** — Visual QA and polish on Prepare, Preview, and Slice Progress pages
+- [ ] **Phase 1: Multi-Plate Loading Fixes** — Fix loadProject() plate data bug, reset plate metadata on new load, add auto-arrange on load
+- [ ] **Phase 2: Project Config & Arrange Hardening** — Propagate 3MF embedded config to UI, use real bed shape for arrange
+- [ ] **Phase 3: Pipeline Verification** — End-to-end verification with real multi-plate 3MF files, fix any remaining gaps
 
 ## Phase Details
 
-### Phase 1: Preset System Completion
-**Mode**: MVP
-**Goal**: Users can select a real Creality printer, compatible filament, and process preset, and see real parameter values in the right panel.
-**Depends on**: Nothing (builds on validated foundation)
-**Requirements**: PRESET-01
-**Success Criteria**:
-  1. Vendor JSON files from `third_party/CrealityPrint/resources/profiles/Creality/` parse correctly and populate all 3 preset categories (printer, filament, process)
-  2. Inheritance chains resolve: system defaults → vendor overrides → user modifications
-  3. Filament compatibility filtering works — only filaments matching the selected printer's nozzle diameter and temperature range appear
-  4. Selecting a preset updates all parameter values in the right panel (PrintSettings.qml)
-  5. Value source indicators correctly show which tier provides each value
-**Plans**: 1 plan
+### Phase 1: Multi-Plate Loading Fixes
+**Mode:** MVP
+**Goal:** Multi-plate 3MF files load correctly, plate metadata is clean, models auto-arrange after load.
+**Depends on:** Nothing (builds on v1.1 foundation)
+**Requirements:** PIPE-01
+**Success Criteria:**
+  1. loadProject() extracts plate data BEFORE releasing it (matching loadFile() pattern)
+  2. Plate metadata arrays reset when loading a new model/project
+  3. Auto-arrange runs after loadFile() and loadProject() complete
+  4. Multi-plate 3MF (e.g., 城楼.3mf) loads with correct plate count and object distribution
+  5. Loading a new model after a previous one doesn't carry stale plate settings
+**Plans:** 1 plan
 Plans:
-- [ ] v11-01-01-PLAN.md — Fix vendor path, store compatibility metadata, wire upstream defaults into hierarchy merge
+- [ ] v12-01-01-PLAN.md — Fix plate data extraction, reset metadata, add auto-arrange ✅ WRITTEN
 
-### Phase 2: E2E Workflow Verification
-**Mode**: MVP
-**Goal**: The complete import → configure → slice → export → preview workflow runs without any mock breakpoints or data loss.
-**Depends on**: Phase 1
-**Requirements**: FLOW-01, FLOW-02
-**Success Criteria**:
-  1. Importing an STL file produces a visible mesh in the Prepare viewport
-  2. Selecting printer/filament/process and clicking Slice triggers libslic3r, progress bar updates in real time, and slice completes without error
-  3. Slice result summary shows real statistics (time, filament, cost) matching libslic3r output
-  4. G-code file is written to disk and can be re-loaded
-  5. Auto-switch to Preview renders the G-code with at least Line Type color mapping working
-  6. Export G-code dialog saves the file to a user-chosen location
-  7. Any data flow breaks between components are identified and fixed
-**Plans**: 1 plan
+### Phase 2: Project Config & Arrange Hardening
+**Mode:** MVP
+**Goal:** Opening a saved 3MF project restores its settings; arrange uses real bed boundaries.
+**Depends on:** Phase 1
+**Requirements:** PIPE-02
+**Success Criteria:**
+  1. loadProject() propagates embedded DynamicPrintConfig to ConfigViewModel
+  2. arrangeObjects() uses real bed shape from printer preset instead of InfiniteBed
+  3. Opening a previously saved project shows the correct preset values
+**Plans:** 1 plan
 Plans:
-- [ ] v11-02-01-PLAN.md — Inject preset config into slice engine, add E2E workflow test coverage
+- [ ] v12-02-01-PLAN.md — Propagate project config, use real bed for arrange ✅ WRITTEN
 
-### Phase 3: UI Polish Pass
-**Mode**: MVP
-**Goal**: All pages involved in the slicing workflow present a professional, usable interface with no visual glitches.
-**Depends on**: Phase 2
-**Requirements**: UI-01, UI-02, UI-03
-**Success Criteria**:
-  1. Prepare page: object list, toolbar, right panel all render correctly with proper spacing, alignment, and theme colors
-  2. Preview page: sliders, stats, legend, and color mode selector all function smoothly
-  3. Slice progress panel: progress bar, result summary, and action buttons are clearly readable
-  4. No clipped text, overlapping elements, or broken layouts on any involved page
-  5. Consistent theme token usage across all pages (Theme.bgBase, Theme.accent, etc.)
-**Plans**: 3 plans
+### Phase 3: Pipeline Verification
+**Mode:** MVP
+**Goal:** Full pipeline verified with real files — no crashes, no data loss, no stale state.
+**Depends on:** Phase 2
+**Requirements:** PIPE-03
+**Success Criteria:**
+  1. E2E smoke test: load 城楼.3mf → verify plates → arrange → config → slice → export → preview
+  2. STL load → single plate → arrange → slice → export → preview
+  3. Load project A, then load project B — no stale state from A
+  4. All existing E2EWorkflowTests and ViewModelSmokeTests still pass
+**Plans:** 1 plan
 Plans:
-- [ ] v11-03-01-PLAN.md — Add 6 Theme tokens, tokenize SliceProgress + PreviewPage + LayerSlider + StatsPanel + MoveSlider
-- [ ] v11-03-02-PLAN.md — Tokenize PrintSettings + Sidebar
-- [ ] v11-03-03-PLAN.md — Tokenize PreparePage (195 hardcoded colors)
+- [ ] v12-03-01-PLAN.md — E2E pipeline verification with real files ✅ WRITTEN
 
 ## Progress
 
@@ -68,6 +61,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Preset System Completion | 1/1 | Completed | 2026-06-01 |
-| 2. E2E Workflow Verification | 1/1 | Completed | 2026-06-01 |
-| 3. UI Polish Pass | 3/3 | Completed | 2026-06-01 |
+| 1. Multi-Plate Loading Fixes | 0/1 | Not started | — |
+| 2. Project Config & Arrange | 0/1 | Not started | — |
+| 3. Pipeline Verification | 0/1 | Not started | — |

@@ -147,7 +147,8 @@ public:
   Q_INVOKABLE bool orientObject(int objectIndex);
   /// 自动排列全部对象（对齐上游 Plater::priv::on_arrange → Slic3r::arrange_objects）
   /// HAS_LIBSLIC3R: 调用真实 arrange_objects API；Mock: 返回 false
-  Q_INVOKABLE bool arrangeObjects(float spacing, bool allowRotation, bool alignY);
+  Q_INVOKABLE bool arrangeObjects(float spacing, bool allowRotation, bool alignY,
+                                    const QString &printableArea = QString());
   /// 切割对象（对齐上游 GLGizmoCut::perform_cut → cut_mesh）
   /// axis: 0=X, 1=Y, 2=Z; position: 切割平面位置(mm); keepMode: 0=all, 1=upper, 2=lower
   /// Returns the index of the new object created (≥0 on success, -1 on failure)
@@ -290,6 +291,8 @@ signals:
   void loadProgressChanged();
   void loadProgressUpdated(int progress, const QString &stageText);
   void loadFinished(bool success, const QString &message);
+  /// Emitted when a 3MF project loads with embedded config (对齐上游 Plater::priv::load_config_file)
+  void projectConfigLoaded(const QHash<QString, QVariant> &config);
 
 private:
   /// Mock-mode per-object scoped overrides (objectIndex → key-value map)

@@ -125,6 +125,10 @@ BackendContext::BackendContext(QObject *parent)
             {
               postNotification(message, tr("切片失败"), NotiError);
             });
+
+    // Propagate 3MF embedded config to ConfigViewModel on project load
+    connect(projectService_, &ProjectServiceMock::projectConfigLoaded,
+            configViewModel_, &ConfigViewModel::applyProjectConfig);
   }
 
   // 实时监听偏好设置变化

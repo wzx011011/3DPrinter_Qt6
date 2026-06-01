@@ -3485,7 +3485,14 @@ void EditorViewModel::arrangeAllObjects()
     return;
   // Use upstream arrange_objects if available, fall back to 6mm default spacing
   const float spacing = (m_arrangeDistance > 0.f) ? m_arrangeDistance : 6.0f;
-  if (projectService_->arrangeObjects(spacing, m_arrangeRotation, m_arrangeAlignY))
+  // Get real bed shape from printer preset config (对齐上游 ArrangeJob get_bed_shape)
+  QString printableArea;
+  if (configViewModel_)
+  {
+    const auto merged = configViewModel_->mergedConfigValues();
+    printableArea = merged.value(QStringLiteral("printable_area")).toString();
+  }
+  if (projectService_->arrangeObjects(spacing, m_arrangeRotation, m_arrangeAlignY, printableArea))
   {
     // Real arrange succeeded — sync transforms from model to mock arrays
     projectService_->syncTransformsFromModel();
