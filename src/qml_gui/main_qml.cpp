@@ -75,12 +75,16 @@ static void appendStartupLog(const QString &line)
 
 int main(int argc, char *argv[])
 {
-  // Do NOT set defaultAlphaBuffer(true) — it causes the window to be
-  // fully transparent on some Windows 10 / GPU driver combinations even
-  // when the window color is explicitly set to an opaque value.
-  // Force OpenGL backend — required for QQuickFramebufferObject on Windows.
-  // Must be called before QGuiApplication is constructed.
-  QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+  // Force software rendering — OpenGL content is invisible when the
+  // desktop is viewed via RDP, and there is no reliable way to detect
+  // this scenario (SESSIONNAME and SM_REMOTESESSION both return "local"
+  // when RDP takes over the console session).
+  // Users on a local desktop can set CREALITY_OPENGL=1 to opt into OpenGL.
+  if (!qEnvironmentVariableIsSet("CREALITY_OPENGL")) {
+    qputenv("QT_QUICK_BACKEND", "software");
+  } else {
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+  }
 
   // Enable QML debugging output for diagnostics
   qputenv("QT_LOGGING_RULES", "qt.qml.binding=true;qt.qml.connections=true");

@@ -1,8 +1,12 @@
 Set-Location 'E:\ai\3DPrinter_Qt6\build'
-$proc = Start-Process -FilePath '.\FramelessDialogDemo.exe' -PassThru -NoNewWindow -RedirectStandardError 'stderr.txt' -RedirectStandardOutput 'stdout.txt'
-Start-Sleep -Seconds 5
-$proc | Stop-Process -Force -ErrorAction SilentlyContinue
-Write-Host "=== stdout ==="
-Get-Content 'stdout.txt' -Tail 30
-Write-Host "=== stderr ==="
-Get-Content 'stderr.txt' -Tail 30
+
+# RDP does not support OpenGL hardware acceleration
+$sessionName = [System.Environment]::GetEnvironmentVariable('SESSIONNAME')
+if ($sessionName -match 'RDP') {
+    Write-Host "[RDP detected] Using software rendering"
+    $env:QT_QUICK_BACKEND = 'software'
+} else {
+    Write-Host "[Local session] Using hardware rendering"
+}
+
+& ".\FramelessDialogDemo.exe"
