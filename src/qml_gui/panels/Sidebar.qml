@@ -81,7 +81,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 radius: 18
-                color: "#1a202bd9"
+                color: Theme.bgFloating
                 border.width: 1
                 border.color: Theme.borderSubtle
 
@@ -248,9 +248,9 @@ Item {
                                                     Layout.fillWidth: true
                                                     height: 22
                                                     radius: 4
-                                                    color: "#0d1117"
+                                                    color: Theme.bgInset
                                                     border.width: 1
-                                                    border.color: spinMA.containsMouse ? modelData.color : "#2e3848"
+                                                    border.color: spinMA.containsMouse ? modelData.color : Theme.borderInput
                                                     TextInput {
                                                         id: spinInput
                                                         anchors.fill: parent
@@ -320,9 +320,9 @@ Item {
                                                     Layout.fillWidth: true
                                                     height: 22
                                                     radius: 4
-                                                    color: "#0d1117"
+                                                    color: Theme.bgInset
                                                     border.width: 1
-                                                    border.color: rotMA.containsMouse ? modelData.color : "#2e3848"
+                                                    border.color: rotMA.containsMouse ? modelData.color : Theme.borderInput
                                                     TextInput {
                                                         anchors.fill: parent
                                                         anchors.leftMargin: 4
@@ -391,9 +391,9 @@ Item {
                                                     Layout.fillWidth: true
                                                     height: 22
                                                     radius: 4
-                                                    color: "#0d1117"
+                                                    color: Theme.bgInset
                                                     border.width: 1
-                                                    border.color: sclMA.containsMouse ? modelData.color : "#2e3848"
+                                                    border.color: sclMA.containsMouse ? modelData.color : Theme.borderInput
                                                     TextInput {
                                                         anchors.fill: parent
                                                         anchors.leftMargin: 4
@@ -437,7 +437,7 @@ Item {
                                             Layout.fillWidth: true
                                             height: dimRow.implicitHeight + 10
                                             radius: 4
-                                            color: "#0d1117"
+                                            color: Theme.bgInset
                                             visible: root.editorVm && root.editorVm.measureDimensions.x > 0
 
                                             RowLayout {

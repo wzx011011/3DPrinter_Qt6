@@ -36,8 +36,8 @@ Item {
             Layout.fillWidth: true
             height: 80
             radius: 6
-            color: "#1e2229"
-            border.color: root.slicingNow ? "#22c564" : "#2e3540"
+            color: Theme.bgPanel
+            border.color: root.slicingNow ? Theme.accent : Theme.borderSubtle
 
             ColumnLayout {
                 anchors.centerIn: parent
@@ -47,16 +47,16 @@ Item {
                     Layout.alignment: Qt.AlignHCenter
                     text: root.slicingNow ? "⚙" : (root.pct >= 100 ? "✔" : "☁")
                     font.pixelSize: 28
-                    color: root.slicingNow ? "#22c564"
-                         : root.pct >= 100 ? "#1baa52"
-                         : "#566070"
+                    color: root.slicingNow ? Theme.accent
+                         : root.pct >= 100 ? Theme.accentDark
+                         : Theme.textDisabled
                 }
 
                 Text {
                     Layout.alignment: Qt.AlignHCenter
                     text: root.statusLabel
-                    color: root.slicingNow ? "#dde4ef" : "#7a8fa3"
-                    font.pixelSize: 12
+                    color: root.slicingNow ? Theme.textPrimary : Theme.textTertiary
+                    font.pixelSize: Theme.fontSizeMD
                 }
             }
         }
@@ -70,14 +70,14 @@ Item {
                 Layout.fillWidth: true
                 Text {
                     text: qsTr("切片进度")
-                    color: "#9daaba"
-                    font.pixelSize: 11
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeSM
                 }
                 Item { Layout.fillWidth: true }
                 Text {
                     text: root.pct + "%"
-                    color: "#e2e8f1"
-                    font.pixelSize: 11
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
                     font.bold: true
                 }
             }
@@ -91,14 +91,14 @@ Item {
                 background: Rectangle {
                     implicitHeight: 6
                     radius: 3
-                    color: "#2a3040"
+                    color: Theme.borderSubtle
                 }
                 contentItem: Item {
                     Rectangle {
                         width: progressBar.visualPosition * parent.width
                         height: parent.height
                         radius: 3
-                        color: root.slicingNow ? "#22c564" : (root.pct >= 100 ? "#1baa52" : "#405060")
+                        color: root.slicingNow ? Theme.accent : (root.pct >= 100 ? Theme.accentDark : Theme.textDisabled)
                         Behavior on width { NumberAnimation { duration: 150 } }
                     }
                 }
@@ -110,9 +110,9 @@ Item {
             Layout.fillWidth: true
             implicitHeight: allSlicedRow.implicitHeight + 12
             radius: 6
-            color: "#1a332a"
+            color: Theme.accentSubtle
             border.width: 1
-            border.color: "#22c564"
+            border.color: Theme.accent
             visible: root.editorVm && root.editorVm.allPlatesSliced && root.editorVm.plateCount > 1 && !root.slicingNow
 
             RowLayout {
@@ -122,15 +122,14 @@ Item {
 
                 Text {
                     text: "✓"
-                    color: "#22c564"
-                    font.pixelSize: 14
-                    font.bold: true
+                    color: Theme.accent
+                    font.pixelSize: Theme.fontSizeXL
                 }
 
                 Text {
                     text: qsTr("所有平板已切片完成")
-                    color: "#22c564"
-                    font.pixelSize: 11
+                    color: Theme.accent
+                    font.pixelSize: Theme.fontSizeSM
                     font.bold: true
                 }
             }
@@ -144,7 +143,7 @@ Item {
 
             Text {
                 text: qsTr("平板切片状态")
-                color: "#9daaba"
+                color: Theme.textSecondary
                 font.pixelSize: 11
             }
 
@@ -157,7 +156,7 @@ Item {
                         width: plateStatusRow.implicitWidth + 8
                         height: 20
                         radius: 4
-                        color: root.editorVm ? (root.editorVm.isPlateSliced(index) ? "#1a332a" : "#2a2a2a") : "#2a2a2a"
+                        color: root.editorVm ? (root.editorVm.isPlateSliced(index) ? Theme.accentSubtle : Theme.bgElevated) : Theme.bgElevated
                         border.width: 1
                         border.color: root.editorVm && root.editorVm.currentPlateIndex === index ? Theme.accent : Theme.borderSubtle
 
@@ -174,7 +173,7 @@ Item {
 
                             Text {
                                 text: root.editorVm && root.editorVm.isPlateSliced(index) ? "✓" : ""
-                                color: "#22c564"
+                                color: Theme.accent
                                 font.pixelSize: 9
                                 font.bold: true
                             }
@@ -340,7 +339,7 @@ Item {
                     // Filament color chip (对齐上游 SliceInfoPopup filament color badge)
                     Rectangle {
                         width: 10; height: 10; radius: 2
-                        color: "#18c75e"
+                        color: Theme.accent
                     }
                     Text {
                         text: root.resultWeight
@@ -480,8 +479,8 @@ Item {
             Layout.fillWidth: true
             implicitHeight: hintText.implicitHeight + 18
             radius: Theme.radiusMD
-            color: root.canRequestSlice ? Theme.bgPanel : "#241d1d"
-            border.color: root.canRequestSlice ? Theme.borderSubtle : "#5d2f2f"
+            color: root.canRequestSlice ? Theme.bgPanel : Theme.bgErrorSubtle
+            border.color: root.canRequestSlice ? Theme.borderSubtle : Qt.darker(Theme.statusError, 1.5)
 
             Text {
                 id: hintText

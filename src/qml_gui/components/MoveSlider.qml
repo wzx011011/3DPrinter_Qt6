@@ -41,7 +41,7 @@ Item {
                 Rectangle {
                     anchors.fill: parent
                     radius: 3
-                    color: "#2a3040"
+                    color: Theme.borderSubtle
                 }
 
                 Repeater {
@@ -93,7 +93,7 @@ Item {
                 width: hoverTimeText.implicitWidth + 14
                 height: 22
                 radius: 6
-                color: "#1a2332"
+                color: Theme.bgTooltip
                 border.width: 1
                 border.color: Theme.borderSubtle
                 visible: sliderHoverArea.containsMouse && root.totalMoves > 0
@@ -120,7 +120,7 @@ Item {
                     width: 6
                     height: 6
                     rotation: 45
-                    color: "#1a2332"
+                    color: Theme.bgTooltip
                 }
             }
 

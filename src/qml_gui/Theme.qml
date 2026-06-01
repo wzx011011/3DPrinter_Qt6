@@ -12,6 +12,7 @@ QtObject {
     readonly property color bgFloating:  "#1a202bd9"
     readonly property color bgHover:     "#2e3444"
     readonly property color bgPressed:   "#3a4258"
+    readonly property color bgTooltip:   "#1a2332"
 
     // ── Accent / Brand
     readonly property color accent:          "#18c75e"
@@ -24,6 +25,7 @@ QtObject {
     readonly property color textSecondary:   "#a0abbe"
     readonly property color textTertiary:    "#7f90a6"
     readonly property color textDisabled:    "#566070"
+    readonly property color textMuted:       "#8b949e"
     readonly property color textOnAccent:    "#ffffff"
 
     // ── Border
@@ -31,6 +33,7 @@ QtObject {
     readonly property color borderSubtle:    "#2a3040"
     readonly property color borderStrong:    "#454d5e"
     readonly property color borderFocus:     "#18c75e"
+    readonly property color borderInput:     "#2e3848"
 
     // ── Chrome / Title bar
     readonly property color chromeSurface:       "#10161e"
@@ -48,6 +51,8 @@ QtObject {
     readonly property color statusWarning:   "#f5a623"
     readonly property color statusError:     "#e04040"
     readonly property color statusInfo:      "#3b9eff"
+    readonly property color bgErrorSubtle:   "#4a1c1c"
+    readonly property color bgWarningSubtle: "#3a3420"
 
     // ── Typography
     readonly property int fontSizeXS:   10
@@ -70,6 +75,7 @@ QtObject {
     readonly property int radiusMD:   5
     readonly property int radiusLG:   8
     readonly property int radiusXL:   12
+    readonly property int radiusXXL:  16
 
     // ── Control sizing
     readonly property int controlHeightSM:  28

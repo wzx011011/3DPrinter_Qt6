@@ -269,7 +269,7 @@ Item {
             anchors.fill: parent
             spacing: 12
 
-            Label { text: qsTr("输入新名称:"); color: Theme.textPrimary; font.pixelSize: 12 }
+            Label { text: qsTr("输入新名称:"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeMD }
 
             TextField {
                 id: renameInput
@@ -294,14 +294,14 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true; height: 28; radius: 4
                     color: Theme.bgPressed
-                    Label { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: 11 }
+                    Label { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: renameDialog.close() }
                 }
                 Rectangle {
                     Layout.fillWidth: true; height: 28; radius: 4
                     color: Theme.accent
-                    Label { anchors.centerIn: parent; text: qsTr("确认"); color: "#fff"; font.pixelSize: 11 }
+                    Label { anchors.centerIn: parent; text: qsTr("确认"); color: "#fff"; font.pixelSize: Theme.fontSizeSM }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             if (root.editorVm && renameDialog.currentObjIndex >= 0) {
@@ -410,10 +410,10 @@ Item {
                     Layout.fillWidth: true
                     text: dlg.currentName
                     font.pixelSize: 13
-                    color: "#e2e8f1"
+                    color: Theme.textPrimary
                     background: Rectangle {
                         radius: 6
-                        color: "#0f1318"
+                        color: Theme.bgInset
                         border.color: nameField.activeFocus ? Theme.accent : Theme.borderSubtle
                     }
                     onAccepted: dlg.accept()
@@ -429,8 +429,8 @@ Item {
                         height: 28
                         width: cancelText.implicitWidth + 20
                         radius: 6
-                        color: cancelHov.containsMouse ? "#2e3540" : "#1e2535"
-                        Text { id: cancelText; anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: 12 }
+                        color: cancelHov.containsMouse ? Theme.borderSubtle : Theme.bgHover
+                        Text { id: cancelText; anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD }
                         HoverHandler { id: cancelHov }
                         TapHandler { onTapped: dlg.close() }
                     }
@@ -439,7 +439,7 @@ Item {
                         width: okText.implicitWidth + 20
                         radius: 6
                         color: Theme.accent
-                        Text { id: okText; anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: 12 }
+                        Text { id: okText; anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: Theme.fontSizeMD }
                         TapHandler {
                             onTapped: {
                                 if (root.editorVm && nameField.text.length > 0)
@@ -483,7 +483,7 @@ Item {
                     Text {
                         text: qsTr("平板名称")
                         color: Theme.textSecondary
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         Layout.preferredWidth: 100
                     }
                     TextField {
@@ -491,7 +491,7 @@ Item {
                         Layout.fillWidth: true
                         text: settingsDlg.plateName
                         maximumLength: 20
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         color: Theme.textPrimary
                         background: Rectangle {
                             radius: 6
@@ -508,7 +508,7 @@ Item {
                     Text {
                         text: qsTr("热床类型")
                         color: Theme.textSecondary
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         Layout.preferredWidth: 100
                     }
                     ComboBox {
@@ -531,7 +531,7 @@ Item {
                         contentItem: Text {
                             text: bedTypeCombo.displayText
                             color: Theme.textPrimary
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fontSizeMD
                             verticalAlignment: Text.AlignVCenter
                             leftPadding: 8
                         }
@@ -554,7 +554,7 @@ Item {
                                     contentItem: Text {
                                         text: modelData
                                         color: bedTypeCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary
-                                        font.pixelSize: 12
+                                        font.pixelSize: Theme.fontSizeMD
                                     }
                                     highlighted: bedTypeCombo.highlightedIndex === index
                                     background: Rectangle { color: highlighted ? Theme.accent : "transparent"; radius: 4 }
@@ -571,7 +571,7 @@ Item {
                     Text {
                         text: qsTr("打印顺序")
                         color: Theme.textSecondary
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         Layout.preferredWidth: 100
                     }
                     ComboBox {
@@ -585,7 +585,7 @@ Item {
                         contentItem: Text {
                             text: printSeqCombo.displayText
                             color: Theme.textPrimary
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fontSizeMD
                             verticalAlignment: Text.AlignVCenter
                             leftPadding: 8
                         }
@@ -608,7 +608,7 @@ Item {
                                     contentItem: Text {
                                         text: modelData
                                         color: printSeqCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary
-                                        font.pixelSize: 12
+                                        font.pixelSize: Theme.fontSizeMD
                                     }
                                     highlighted: printSeqCombo.highlightedIndex === index
                                     background: Rectangle { color: highlighted ? Theme.accent : "transparent"; radius: 4 }
@@ -625,7 +625,7 @@ Item {
                     Text {
                         text: qsTr("螺旋花瓶")
                         color: Theme.textSecondary
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         Layout.preferredWidth: 100
                     }
                     ComboBox {
@@ -639,7 +639,7 @@ Item {
                         contentItem: Text {
                             text: spiralCombo.displayText
                             color: Theme.textPrimary
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fontSizeMD
                             verticalAlignment: Text.AlignVCenter
                             leftPadding: 8
                         }
@@ -662,7 +662,7 @@ Item {
                                     contentItem: Text {
                                         text: modelData
                                         color: spiralCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary
-                                        font.pixelSize: 12
+                                        font.pixelSize: Theme.fontSizeMD
                                     }
                                     highlighted: spiralCombo.highlightedIndex === index
                                     background: Rectangle { color: highlighted ? Theme.accent : "transparent"; radius: 4 }
@@ -690,7 +690,7 @@ Item {
                         Text {
                             text: qsTr("首层耗材顺序")
                             color: Theme.textPrimary
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fontSizeMD
                             font.bold: true
                         }
 
@@ -700,7 +700,7 @@ Item {
                             Text {
                                 text: qsTr("模式")
                                 color: Theme.textSecondary
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                                 Layout.preferredWidth: 60
                             }
                             ComboBox {
@@ -713,7 +713,7 @@ Item {
                                 contentItem: Text {
                                     text: firstLayerSeqChoiceCombo.displayText
                                     color: Theme.textPrimary
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fontSizeSM
                                     verticalAlignment: Text.AlignVCenter
                                     leftPadding: 8
                                 }
@@ -729,7 +729,7 @@ Item {
                                         delegate: ItemDelegate {
                                             width: firstLayerSeqChoiceCombo.width
                                             height: 28
-                                            contentItem: Text { text: modelData; color: firstLayerSeqChoiceCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: 11 }
+                                            contentItem: Text { text: modelData; color: firstLayerSeqChoiceCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
                                             highlighted: firstLayerSeqChoiceCombo.highlightedIndex === index
                                             background: Rectangle { color: highlighted ? Theme.accent : "transparent"; radius: 4 }
                                         }
@@ -742,7 +742,7 @@ Item {
                         Text {
                             text: qsTr("挤出机顺序（拖拽调整）")
                             color: Theme.textSecondary
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fontSizeSM
                             visible: firstLayerSeqChoiceCombo.currentIndex === 1
                         }
 
@@ -828,7 +828,7 @@ Item {
                                             Text {
                                                 text: "›"
                                                 color: Theme.textDisabled
-                                                font.pixelSize: 14
+                                                font.pixelSize: Theme.fontSizeLG
                                                 visible: seqIndex < firstLayerSeqRepeater.count - 1
                                             }
                                         }
@@ -899,7 +899,7 @@ Item {
                             Text {
                                 text: qsTr("其他层耗材顺序")
                                 color: Theme.textPrimary
-                                font.pixelSize: 12
+                                font.pixelSize: Theme.fontSizeMD
                                 font.bold: true
                                 Layout.fillWidth: true
                             }
@@ -913,7 +913,7 @@ Item {
                                 contentItem: Text {
                                     text: otherLayersSeqChoiceCombo.displayText
                                     color: Theme.textPrimary
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fontSizeSM
                                     verticalAlignment: Text.AlignVCenter
                                     leftPadding: 8
                                 }
@@ -929,7 +929,7 @@ Item {
                                         delegate: ItemDelegate {
                                             width: otherLayersSeqChoiceCombo.width
                                             height: 28
-                                            contentItem: Text { text: modelData; color: otherLayersSeqChoiceCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: 11 }
+                                            contentItem: Text { text: modelData; color: otherLayersSeqChoiceCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
                                             highlighted: otherLayersSeqChoiceCombo.highlightedIndex === index
                                             background: Rectangle { color: highlighted ? Theme.accent : "transparent"; radius: 4 }
                                         }
@@ -1110,7 +1110,7 @@ Item {
                                                             Text {
                                                                 text: "›"
                                                                 color: Theme.textDisabled
-                                                                font.pixelSize: 12
+                                                                font.pixelSize: Theme.fontSizeMD
                                                                 visible: seqIndex < (otherLayerCanvas.parent.seqOrder.length - 1)
                                                             }
                                                         }
@@ -1196,7 +1196,7 @@ Item {
                         width: psOkText.implicitWidth + 24
                         radius: 6
                         color: Theme.accent
-                        Text { id: psOkText; anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: 12; font.bold: true }
+                        Text { id: psOkText; anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: Theme.fontSizeMD; font.bold: true }
                         TapHandler {
                             onTapped: {
                                 if (root.editorVm) {
@@ -1254,7 +1254,7 @@ Item {
                 Layout.fillWidth: true
                 Text {
                     text: qsTr("排列设置")
-                    font.pixelSize: 14
+                    font.pixelSize: Theme.fontSizeLG
                     font.bold: true
                     color: Theme.textPrimary
                     Layout.fillWidth: true
@@ -1276,7 +1276,7 @@ Item {
                 Text {
                     text: qsTr("对象间距")
                     color: Theme.textSecondary
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                     Layout.preferredWidth: 90
                 }
                 TextField {
@@ -1286,7 +1286,7 @@ Item {
                     text: root.editorVm ? (root.editorVm.arrangeDistance > 0 ? root.editorVm.arrangeDistance.toFixed(1) : "0") : "0"
                     horizontalAlignment: Text.AlignHCenter
                     color: Theme.textPrimary
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                     selectByMouse: true
                     validator: DoubleValidator { bottom: 0; top: 100 }
                     background: Rectangle {
@@ -1305,7 +1305,7 @@ Item {
                 Text {
                     text: qsTr("mm (0=自动)")
                     color: Theme.textDisabled
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                 }
             }
 
@@ -1316,7 +1316,7 @@ Item {
                 Text {
                     text: qsTr("自动旋转")
                     color: Theme.textSecondary
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                     Layout.fillWidth: true
                 }
                 Switch {
@@ -1332,7 +1332,7 @@ Item {
                 Text {
                     text: qsTr("对齐 Y 轴")
                     color: Theme.textSecondary
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                     Layout.fillWidth: true
                 }
                 Switch {
@@ -1349,7 +1349,7 @@ Item {
                 Text {
                     text: qsTr("允许多耗材")
                     color: Theme.textSecondary
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                     Layout.fillWidth: true
                 }
                 Switch {
@@ -1365,7 +1365,7 @@ Item {
                 Text {
                     text: qsTr("避免校准区域")
                     color: Theme.textSecondary
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                     Layout.fillWidth: true
                 }
                 Switch {
@@ -1515,9 +1515,9 @@ Item {
             width: warningContent.implicitWidth + 28
             height: warningContent.implicitHeight + 16
             radius: 8
-            color: root.editorVm && root.editorVm.viewportWarning === 2 ? "#4a1c1c" : "#3a3420"
+            color: root.editorVm && root.editorVm.viewportWarning === 2 ? Theme.bgErrorSubtle : Theme.bgWarningSubtle
             border.width: 1
-            border.color: root.editorVm && root.editorVm.viewportWarning === 2 ? "#ef4444" : "#f59e0b"
+            border.color: root.editorVm && root.editorVm.viewportWarning === 2 ? Theme.statusError : Theme.statusWarning
             visible: root.editorVm ? root.editorVm.hasViewportWarning : false
             opacity: visible ? 1.0 : 0.0
             Behavior on opacity { NumberAnimation { duration: 200 } }
@@ -1529,14 +1529,14 @@ Item {
 
                 Text {
                     text: root.editorVm && root.editorVm.viewportWarning === 2 ? "⚠" : "⚡"
-                    font.pixelSize: 14
-                    color: root.editorVm && root.editorVm.viewportWarning === 2 ? "#ef4444" : "#f59e0b"
+                    font.pixelSize: Theme.fontSizeLG
+                    color: root.editorVm && root.editorVm.viewportWarning === 2 ? Theme.statusError : Theme.statusWarning
                 }
 
                 Text {
                     text: root.editorVm ? root.editorVm.viewportWarningMessage : ""
-                    color: "#e2e8f1"
-                    font.pixelSize: 11
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
                 }
@@ -1561,8 +1561,8 @@ Item {
             width: toolsContent.implicitWidth + 22
             height: 50
             radius: 16
-            color: "#161c27de"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
 
             Item {
                 id: toolsContent
@@ -1917,8 +1917,8 @@ Item {
             width: procRow.implicitWidth + 20
             height: 28
             radius: 10
-            color: "#161c27de"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
 
             Row {
                 id: procRow
@@ -1943,7 +1943,7 @@ Item {
                         height: 20
                         radius: 5
                         color: root.processCategory === modelData.cat
-                               ? Theme.accent : (procMA.containsMouse ? "#1e2535" : "transparent")
+                               ? Theme.accent : (procMA.containsMouse ? Theme.bgHover : "transparent")
                         border.width: 1
                         border.color: root.processCategory === modelData.cat ? Theme.accent : Theme.borderSubtle
 
@@ -2023,8 +2023,8 @@ Item {
             width: measureContent.implicitWidth + 24
             height: measureContent.implicitHeight + 16
             radius: 12
-            color: "#161c27e0"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoMeasure && root.editorVm
 
             ColumnLayout {
@@ -2042,13 +2042,13 @@ Item {
                             required property var modelData
                             required property int index
                             width: 60; height: 22; radius: 4
-                            color: root.editorVm && root.editorVm.measureSelectionMode === index ? "#1c2a3e" : "#1a1e28"
-                            border.color: root.editorVm && root.editorVm.measureSelectionMode === index ? "#569cd6" : "#2e3444"
+                            color: root.editorVm && root.editorVm.measureSelectionMode === index ? "#1c2a3e" : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.measureSelectionMode === index ? "#569cd6" : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: root.editorVm && root.editorVm.measureSelectionMode === index ? "#569cd6" : "#8a96a8"
+                                color: root.editorVm && root.editorVm.measureSelectionMode === index ? "#569cd6" : Theme.textTertiary
                                 font.pixelSize: 10
                             }
                             MouseArea {
@@ -2062,18 +2062,18 @@ Item {
 
                 Row {
                     spacing: 16
-                    Label { text: qsTr("X:"); color: "#e066a0"; font.pixelSize: 11; font.bold: true; font.family: "Consolas, monospace" }
-                    Label { text: root.editorVm ? root.editorVm.measureDimensions.x.toFixed(1) : "0.0"; color: "#c8d4e0"; font.pixelSize: 11; font.family: "Consolas, monospace" }
-                    Label { text: qsTr("Y:"); color: "#4ec9b0"; font.pixelSize: 11; font.bold: true; font.family: "Consolas, monospace" }
-                    Label { text: root.editorVm ? root.editorVm.measureDimensions.y.toFixed(1) : "0.0"; color: "#c8d4e0"; font.pixelSize: 11; font.family: "Consolas, monospace" }
-                    Label { text: qsTr("Z:"); color: "#569cd6"; font.pixelSize: 11; font.bold: true; font.family: "Consolas, monospace" }
-                    Label { text: root.editorVm ? root.editorVm.measureDimensions.z.toFixed(1) : "0.0"; color: "#c8d4e0"; font.pixelSize: 11; font.family: "Consolas, monospace" }
+                    Label { text: qsTr("X:"); color: "#e066a0"; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace" }
+                    Label { text: root.editorVm ? root.editorVm.measureDimensions.x.toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace" }
+                    Label { text: qsTr("Y:"); color: "#4ec9b0"; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace" }
+                    Label { text: root.editorVm ? root.editorVm.measureDimensions.y.toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace" }
+                    Label { text: qsTr("Z:"); color: "#569cd6"; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace" }
+                    Label { text: root.editorVm ? root.editorVm.measureDimensions.z.toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace" }
                 }
                 Label {
                     text: root.editorVm
                         ? (qsTr("体积: ") + root.editorVm.measureDimensions.w.toFixed(0) + qsTr(" mm³"))
                         : ""
-                    color: "#8b949e"
+                    color: Theme.textMuted
                     font.pixelSize: 10
                     font.family: "Consolas, monospace"
                     Layout.alignment: Qt.AlignHCenter
@@ -2082,7 +2082,7 @@ Item {
                     text: root.editorVm && root.editorVm.measureSelectionMode === 1
                         ? qsTr("点击网格面拾取特征 (点/边/圆/平面)")
                         : qsTr("点测量模式 — 显示选中对象尺寸")
-                    color: "#6b7d94"
+                    color: Theme.textTertiary
                     font.pixelSize: 9
                     Layout.alignment: Qt.AlignHCenter
                 }
@@ -2097,8 +2097,8 @@ Item {
             width: flattenContent.implicitWidth + 32
             height: flattenContent.implicitHeight + 20
             radius: 12
-            color: "#161c27e0"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoFlatten && root.editorVm
 
             ColumnLayout {
@@ -2108,15 +2108,15 @@ Item {
 
                 Text {
                     text: qsTr("平放至面")
-                    color: "#e8edf6"
-                    font.pixelSize: 12
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeMD
                     font.bold: true
                     Layout.alignment: Qt.AlignHCenter
                 }
                 Text {
                     text: root.editorVm ? (qsTr("候选面: ") + root.editorVm.flattenFaceCount) : ""
-                    color: "#8b949e"
-                    font.pixelSize: 11
+                    color: Theme.textMuted
+                    font.pixelSize: Theme.fontSizeSM
                     Layout.alignment: Qt.AlignHCenter
                 }
                 Row {
@@ -2124,12 +2124,12 @@ Item {
                     Layout.alignment: Qt.AlignHCenter
                     Rectangle {
                         width: 80; height: 28; radius: 4
-                        color: "#18c75e"
+                        color: Theme.accent
                         Text {
                             anchors.centerIn: parent
                             text: qsTr("平放")
                             color: "white"
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fontSizeSM
                         }
                         MouseArea {
                             anchors.fill: parent
@@ -2139,14 +2139,14 @@ Item {
                     }
                     Text {
                         text: qsTr("(G)")
-                        color: "#6b7d94"
+                        color: Theme.textTertiary
                         font.pixelSize: 10
                         anchors.verticalCenter: parent.verticalCenter
                     }
                 }
                 Text {
                     text: qsTr("将选中对象最大面朝下平放")
-                    color: "#6b7d94"
+                    color: Theme.textTertiary
                     font.pixelSize: 9
                     Layout.alignment: Qt.AlignHCenter
                 }
@@ -2161,8 +2161,8 @@ Item {
             width: cutContent.implicitWidth + 32
             height: cutContent.implicitHeight + 20
             radius: 12
-            color: "#161c27e0"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoCut && root.editorVm
 
             ColumnLayout {
@@ -2172,8 +2172,8 @@ Item {
 
                 Text {
                     text: qsTr("切割对象")
-                    color: "#e8edf6"
-                    font.pixelSize: 12
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeMD
                     font.bold: true
                     Layout.alignment: Qt.AlignHCenter
                 }
@@ -2188,13 +2188,13 @@ Item {
                             required property var modelData
                             required property int index
                             width: 58; height: 26; radius: 4
-                            color: root.editorVm && root.editorVm.cutAxis === index ? "#1c2a3e" : "#1a1e28"
-                            border.color: root.editorVm && root.editorVm.cutAxis === index ? "#18c75e" : "#2e3444"
+                            color: root.editorVm && root.editorVm.cutAxis === index ? "#1c2a3e" : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.cutAxis === index ? Theme.accent : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: root.editorVm && root.editorVm.cutAxis === index ? "#18c75e" : "#8a96a8"
+                                color: root.editorVm && root.editorVm.cutAxis === index ? Theme.accent : Theme.textTertiary
                                 font.pixelSize: 10
                             }
                             MouseArea {
@@ -2216,13 +2216,13 @@ Item {
                             required property var modelData
                             required property int index
                             width: 70; height: 24; radius: 4
-                            color: root.editorVm && root.editorVm.cutMode === index ? "#1c2a3e" : "#1a1e28"
-                            border.color: root.editorVm && root.editorVm.cutMode === index ? "#5b8def" : "#2e3444"
+                            color: root.editorVm && root.editorVm.cutMode === index ? "#1c2a3e" : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.cutMode === index ? "#5b8def" : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: root.editorVm && root.editorVm.cutMode === index ? "#5b8def" : "#8a96a8"
+                                color: root.editorVm && root.editorVm.cutMode === index ? "#5b8def" : Theme.textTertiary
                                 font.pixelSize: 10
                             }
                             MouseArea {
@@ -2239,20 +2239,20 @@ Item {
                     spacing: 4
                     Layout.alignment: Qt.AlignHCenter
                     visible: root.editorVm ? root.editorVm.cutMode === 1 : false
-                    Text { text: qsTr("类型:"); color: "#8b949e"; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                    Text { text: qsTr("类型:"); color: Theme.textMuted; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
                     Repeater {
                         model: [qsTr("Plug"), qsTr("Dowel"), qsTr("Snap")]
                         delegate: Rectangle {
                             required property var modelData
                             required property int index
                             width: 52; height: 22; radius: 4
-                            color: root.editorVm && root.editorVm.connectorType === index ? "#1c2a3e" : "#1a1e28"
-                            border.color: root.editorVm && root.editorVm.connectorType === index ? "#e8a838" : "#2e3444"
+                            color: root.editorVm && root.editorVm.connectorType === index ? "#1c2a3e" : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.connectorType === index ? "#e8a838" : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: root.editorVm && root.editorVm.connectorType === index ? "#e8a838" : "#8a96a8"
+                                color: root.editorVm && root.editorVm.connectorType === index ? "#e8a838" : Theme.textTertiary
                                 font.pixelSize: 9
                             }
                             MouseArea {
@@ -2271,20 +2271,20 @@ Item {
                     visible: root.editorVm ? root.editorVm.cutMode === 1 : false
                     enabled: root.editorVm ? root.editorVm.connectorType === 0 : false
                     opacity: enabled ? 1.0 : 0.45
-                    Text { text: qsTr("样式:"); color: "#8b949e"; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                    Text { text: qsTr("样式:"); color: Theme.textMuted; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
                     Repeater {
                         model: [qsTr("Prism"), qsTr("Frustum")]
                         delegate: Rectangle {
                             required property var modelData
                             required property int index
                             width: 56; height: 22; radius: 4
-                            color: root.editorVm && root.editorVm.connectorStyle === index ? "#1c2a3e" : "#1a1e28"
-                            border.color: root.editorVm && root.editorVm.connectorStyle === index ? "#e8a838" : "#2e3444"
+                            color: root.editorVm && root.editorVm.connectorStyle === index ? "#1c2a3e" : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.connectorStyle === index ? "#e8a838" : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: root.editorVm && root.editorVm.connectorStyle === index ? "#e8a838" : "#8a96a8"
+                                color: root.editorVm && root.editorVm.connectorStyle === index ? "#e8a838" : Theme.textTertiary
                                 font.pixelSize: 9
                             }
                             MouseArea {
@@ -2304,21 +2304,21 @@ Item {
                     visible: root.editorVm ? root.editorVm.cutMode === 1 : false
                     enabled: root.editorVm ? root.editorVm.connectorType !== 2 : false
                     opacity: enabled ? 1.0 : 0.45
-                    Text { text: qsTr("形状:"); color: "#8b949e"; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                    Text { text: qsTr("形状:"); color: Theme.textMuted; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
                     Repeater {
                         model: ["△", "□", "⬡", "○"]
                         delegate: Rectangle {
                             required property var modelData
                             required property int index
                             width: 28; height: 22; radius: 4
-                            color: root.editorVm && root.editorVm.connectorShape === index ? "#1c2a3e" : "#1a1e28"
-                            border.color: root.editorVm && root.editorVm.connectorShape === index ? "#e8a838" : "#2e3444"
+                            color: root.editorVm && root.editorVm.connectorShape === index ? "#1c2a3e" : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.connectorShape === index ? "#e8a838" : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: root.editorVm && root.editorVm.connectorShape === index ? "#e8a838" : "#8a96a8"
-                                font.pixelSize: 11
+                                color: root.editorVm && root.editorVm.connectorShape === index ? "#e8a838" : Theme.textTertiary
+                                font.pixelSize: Theme.fontSizeSM
                             }
                             MouseArea {
                                 anchors.fill: parent
@@ -2335,7 +2335,7 @@ Item {
                     spacing: 8
                     Layout.alignment: Qt.AlignHCenter
                     visible: root.editorVm ? root.editorVm.cutMode === 1 : false
-                    Text { text: qsTr("尺寸:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Text { text: qsTr("尺寸:"); color: Theme.textMuted; font.pixelSize: 10 }
                     Slider {
                         from: 2; to: 20; stepSize: 0.5
                         value: root.editorVm ? root.editorVm.connectorSize : 5
@@ -2344,12 +2344,12 @@ Item {
                     }
                     Text {
                         text: root.editorVm ? root.editorVm.connectorSize.toFixed(1) : "5.0"
-                        color: "#c8d4e0"
+                        color: Theme.textPrimary
                         font.pixelSize: 10
                         font.family: "Consolas, monospace"
                         Layout.preferredWidth: 30
                     }
-                    Text { text: qsTr("深度:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Text { text: qsTr("深度:"); color: Theme.textMuted; font.pixelSize: 10 }
                     Slider {
                         from: 0.1; to: 1.0; stepSize: 0.05
                         value: root.editorVm ? root.editorVm.connectorDepth : 0.5
@@ -2358,7 +2358,7 @@ Item {
                     }
                     Text {
                         text: root.editorVm ? (root.editorVm.connectorDepth * 100).toFixed(0) + "%" : "50%"
-                        color: "#c8d4e0"
+                        color: Theme.textPrimary
                         font.pixelSize: 10
                         font.family: "Consolas, monospace"
                         Layout.preferredWidth: 30
@@ -2369,7 +2369,7 @@ Item {
                 RowLayout {
                     spacing: 8
                     Layout.alignment: Qt.AlignHCenter
-                    Text { text: qsTr("位置:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Text { text: qsTr("位置:"); color: Theme.textMuted; font.pixelSize: 10 }
                     Slider {
                         from: -50; to: 50; stepSize: 0.5
                         value: root.editorVm ? root.editorVm.cutPosition : 0
@@ -2378,7 +2378,7 @@ Item {
                     }
                     Text {
                         text: root.editorVm ? root.editorVm.cutPosition.toFixed(1) + " mm" : "0.0 mm"
-                        color: "#c8d4e0"
+                        color: Theme.textPrimary
                         font.pixelSize: 10
                         font.family: "Consolas, monospace"
                         Layout.preferredWidth: 50
@@ -2395,13 +2395,13 @@ Item {
                             required property var modelData
                             required property int index
                             width: 70; height: 26; radius: 4
-                            color: root.editorVm && root.editorVm.cutKeepMode === index ? "#1c2a3e" : "#1a1e28"
-                            border.color: root.editorVm && root.editorVm.cutKeepMode === index ? "#18c75e" : "#2e3444"
+                            color: root.editorVm && root.editorVm.cutKeepMode === index ? "#1c2a3e" : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.cutKeepMode === index ? Theme.accent : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: root.editorVm && root.editorVm.cutKeepMode === index ? "#18c75e" : "#8a96a8"
+                                color: root.editorVm && root.editorVm.cutKeepMode === index ? Theme.accent : Theme.textTertiary
                                 font.pixelSize: 10
                             }
                             MouseArea {
@@ -2419,12 +2419,12 @@ Item {
                     Layout.alignment: Qt.AlignHCenter
                     Rectangle {
                         width: 60; height: 28; radius: 4
-                        color: "#252b38"
-                        border.color: "#363d4e"; border.width: 1
+                        color: Theme.bgElevated
+                        border.color: Theme.borderDefault; border.width: 1
                         Text {
                             anchors.centerIn: parent
                             text: qsTr("翻转")
-                            color: "#c8d4e0"
+                            color: Theme.textPrimary
                             font.pixelSize: 10
                         }
                         MouseArea {
@@ -2435,12 +2435,12 @@ Item {
                     }
                     Rectangle {
                         width: 70; height: 28; radius: 4
-                        color: "#252b38"
-                        border.color: "#363d4e"; border.width: 1
+                        color: Theme.bgElevated
+                        border.color: Theme.borderDefault; border.width: 1
                         Text {
                             anchors.centerIn: parent
                             text: qsTr("居中")
-                            color: "#c8d4e0"
+                            color: Theme.textPrimary
                             font.pixelSize: 10
                         }
                         MouseArea {
@@ -2451,7 +2451,7 @@ Item {
                     }
                     Rectangle {
                         width: 80; height: 28; radius: 4
-                        color: "#18c75e"
+                        color: Theme.accent
                         Text {
                             anchors.centerIn: parent
                             text: qsTr("执行切割")
@@ -2470,7 +2470,7 @@ Item {
                 }
                 Text {
                     text: qsTr("(Ctrl+Shift+X)")
-                    color: "#6b7d94"
+                    color: Theme.textTertiary
                     font.pixelSize: 9
                     Layout.alignment: Qt.AlignHCenter
                 }
@@ -2485,8 +2485,8 @@ Item {
             width: seamContent.implicitWidth + 24
             height: seamContent.implicitHeight + 16
             radius: 12
-            color: "#161c27e0"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoSeamPaint && root.editorVm
 
             ColumnLayout {
@@ -2496,8 +2496,8 @@ Item {
 
                 Text {
                     text: qsTr("缝线绘制")
-                    color: "#e0e6ed"
-                    font.pixelSize: 11
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
                     font.bold: true
                     Layout.alignment: Qt.AlignHCenter
                 }
@@ -2512,13 +2512,13 @@ Item {
                             required property var modelData
                             required property int index
                             width: 72; height: 24; radius: 4
-                            color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? "#1c2a3e" : "#1a1e28"
-                            border.color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? "#569cd6" : "#2e3444"
+                            color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? "#1c2a3e" : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? "#569cd6" : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? "#569cd6" : "#8a96a8"
+                                color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? "#569cd6" : Theme.textTertiary
                                 font.pixelSize: 10
                             }
                             MouseArea {
@@ -2534,7 +2534,7 @@ Item {
                 RowLayout {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
-                    Text { text: qsTr("半径:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Text { text: qsTr("半径:"); color: Theme.textMuted; font.pixelSize: 10 }
                     Slider {
                         from: 0.05; to: 20; stepSize: 0.1
                         value: root.editorVm ? root.editorVm.seamPaintCursorRadius : 2
@@ -2543,7 +2543,7 @@ Item {
                     }
                     Text {
                         text: root.editorVm ? root.editorVm.seamPaintCursorRadius.toFixed(1) : "2.0"
-                        color: "#c8d4e0"
+                        color: Theme.textPrimary
                         font.pixelSize: 10
                         font.family: "Consolas, monospace"
                         Layout.preferredWidth: 30
@@ -2554,12 +2554,12 @@ Item {
                 Rectangle {
                     Layout.alignment: Qt.AlignHCenter
                     width: 80; height: 24; radius: 4
-                    color: "#252b38"
-                    border.color: "#363d4e"; border.width: 1
+                    color: Theme.bgElevated
+                    border.color: Theme.borderDefault; border.width: 1
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("清除全部")
-                        color: "#c8d4e0"
+                        color: Theme.textPrimary
                         font.pixelSize: 10
                     }
                     MouseArea {
@@ -2579,8 +2579,8 @@ Item {
             width: hollowContent.implicitWidth + 24
             height: hollowContent.implicitHeight + 16
             radius: 12
-            color: "#161c27e0"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoHollow && root.editorVm
 
             ColumnLayout {
@@ -2590,8 +2590,8 @@ Item {
 
                 Text {
                     text: qsTr("SLA 空洞标记")
-                    color: "#e0e6ed"
-                    font.pixelSize: 11
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
                     font.bold: true
                     Layout.alignment: Qt.AlignHCenter
                 }
@@ -2600,10 +2600,10 @@ Item {
                 RowLayout {
                     spacing: 8
                     Layout.alignment: Qt.AlignHCenter
-                    Text { text: qsTr("启用空洞化:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Text { text: qsTr("启用空洞化:"); color: Theme.textMuted; font.pixelSize: 10 }
                     Rectangle {
                         width: 36; height: 18; radius: 9
-                        color: root.editorVm && root.editorVm.hollowEnabled ? "#18c75e" : "#363d4e"
+                        color: root.editorVm && root.editorVm.hollowEnabled ? Theme.accent : Theme.borderDefault
                         Rectangle {
                             width: 14; height: 14; radius: 7
                             anchors.verticalCenter: parent.verticalCenter
@@ -2627,7 +2627,7 @@ Item {
                 RowLayout {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
-                    Text { text: qsTr("钻孔半径:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Text { text: qsTr("钻孔半径:"); color: Theme.textMuted; font.pixelSize: 10 }
                     Slider {
                         from: 0.5; to: 10; stepSize: 0.1
                         value: root.editorVm ? root.editorVm.hollowHoleRadius : 2
@@ -2636,7 +2636,7 @@ Item {
                     }
                     Text {
                         text: root.editorVm ? root.editorVm.hollowHoleRadius.toFixed(1) : "2.0"
-                        color: "#c8d4e0"
+                        color: Theme.textPrimary
                         font.pixelSize: 10
                         font.family: "Consolas, monospace"
                         Layout.preferredWidth: 30
@@ -2647,7 +2647,7 @@ Item {
                 RowLayout {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
-                    Text { text: qsTr("钻孔高度:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Text { text: qsTr("钻孔高度:"); color: Theme.textMuted; font.pixelSize: 10 }
                     Slider {
                         from: 1; to: 20; stepSize: 0.5
                         value: root.editorVm ? root.editorVm.hollowHoleHeight : 6
@@ -2656,7 +2656,7 @@ Item {
                     }
                     Text {
                         text: root.editorVm ? root.editorVm.hollowHoleHeight.toFixed(1) : "6.0"
-                        color: "#c8d4e0"
+                        color: Theme.textPrimary
                         font.pixelSize: 10
                         font.family: "Consolas, monospace"
                         Layout.preferredWidth: 30
@@ -2667,7 +2667,7 @@ Item {
                 RowLayout {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
-                    Text { text: qsTr("偏移:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Text { text: qsTr("偏移:"); color: Theme.textMuted; font.pixelSize: 10 }
                     Slider {
                         from: 0.5; to: 10; stepSize: 0.1
                         value: root.editorVm ? root.editorVm.hollowOffset : 3
@@ -2676,7 +2676,7 @@ Item {
                     }
                     Text {
                         text: root.editorVm ? root.editorVm.hollowOffset.toFixed(1) : "3.0"
-                        color: "#c8d4e0"
+                        color: Theme.textPrimary
                         font.pixelSize: 10
                         font.family: "Consolas, monospace"
                         Layout.preferredWidth: 30
@@ -2687,12 +2687,12 @@ Item {
                 Rectangle {
                     Layout.alignment: Qt.AlignHCenter
                     width: 100; height: 24; radius: 4
-                    color: "#252b38"
-                    border.color: "#363d4e"; border.width: 1
+                    color: Theme.bgElevated
+                    border.color: Theme.borderDefault; border.width: 1
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("删除选中 (%1)").arg(root.editorVm ? root.editorVm.hollowSelectedHoleCount : 0)
-                        color: "#c8d4e0"
+                        color: Theme.textPrimary
                         font.pixelSize: 10
                     }
                     MouseArea {
@@ -2712,8 +2712,8 @@ Item {
             width: simplifyContent.implicitWidth + 24
             height: simplifyContent.implicitHeight + 16
             radius: 12
-            color: "#161c27e0"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoSimplify && root.editorVm
 
             ColumnLayout {
@@ -2723,8 +2723,8 @@ Item {
 
                 Text {
                     text: qsTr("模型简化")
-                    color: "#e0e6ed"
-                    font.pixelSize: 11
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
                     font.bold: true
                     Layout.alignment: Qt.AlignHCenter
                 }
@@ -2733,10 +2733,10 @@ Item {
                 RowLayout {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
-                    Text { text: qsTr("当前面数:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Text { text: qsTr("当前面数:"); color: Theme.textMuted; font.pixelSize: 10 }
                     Text {
                         text: root.editorVm ? root.editorVm.selectedObjectTriangleCount.toLocaleString() : "0"
-                        color: "#c8d4e0"
+                        color: Theme.textPrimary
                         font.pixelSize: 10
                         font.family: "Consolas, monospace"
                     }
@@ -2746,7 +2746,7 @@ Item {
                 RowLayout {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
-                    Text { text: qsTr("目标面数:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Text { text: qsTr("目标面数:"); color: Theme.textMuted; font.pixelSize: 10 }
                     Slider {
                         from: 100; to: 500000; stepSize: 100
                         value: root.editorVm ? root.editorVm.simplifyWantedCount : 0
@@ -2755,7 +2755,7 @@ Item {
                     }
                     Text {
                         text: root.editorVm ? root.editorVm.simplifyWantedCount.toLocaleString() : "0"
-                        color: "#c8d4e0"
+                        color: Theme.textPrimary
                         font.pixelSize: 10
                         font.family: "Consolas, monospace"
                         Layout.preferredWidth: 50
@@ -2766,7 +2766,7 @@ Item {
                 RowLayout {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
-                    Text { text: qsTr("最大误差:"); color: "#8b949e"; font.pixelSize: 10 }
+                    Text { text: qsTr("最大误差:"); color: Theme.textMuted; font.pixelSize: 10 }
                     Slider {
                         from: 0.001; to: 1.0; stepSize: 0.001
                         value: root.editorVm ? root.editorVm.simplifyMaxError : 0
@@ -2775,7 +2775,7 @@ Item {
                     }
                     Text {
                         text: root.editorVm ? root.editorVm.simplifyMaxError.toFixed(3) : "0.000"
-                        color: "#c8d4e0"
+                        color: Theme.textPrimary
                         font.pixelSize: 10
                         font.family: "Consolas, monospace"
                         Layout.preferredWidth: 40
@@ -2786,7 +2786,7 @@ Item {
                 Rectangle {
                     Layout.alignment: Qt.AlignHCenter
                     width: 100; height: 24; radius: 4
-                    color: "#18c75e"
+                    color: Theme.accent
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("执行简化")
@@ -2811,8 +2811,8 @@ Item {
             width: mmuContent.implicitWidth + 24
             height: mmuContent.implicitHeight + 16
             radius: 12
-            color: "#161c27e0"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoMmuSegmentation && root.editorVm
 
             ColumnLayout {
@@ -2822,8 +2822,8 @@ Item {
 
                 Text {
                     text: qsTr("MMU 分段")
-                    color: "#e0e6ed"
-                    font.pixelSize: 11
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
                     font.bold: true
                     Layout.alignment: Qt.AlignHCenter
                 }
@@ -2837,7 +2837,7 @@ Item {
                         Rectangle {
                             width: 28; height: 28; radius: 4
                             color: {
-                                var colors = ["#3B82F6", "#EF4444", "#22C55E", "#F59E0B",
+                                var colors = ["#3B82F6", "#EF4444", "#22C55E", Theme.statusWarning,
                                              "#8B5CF6", "#EC4899", "#06B6D4", "#F97316",
                                              "#6366F1", "#14B8A6", "#F43F5E", "#84CC16", "#D946EF",
                                              "#0EA5E9", "#A855F7", "#FBBF24", "#10B981"];
@@ -2849,8 +2849,8 @@ Item {
                             Text {
                                 anchors.centerIn: parent
                                 text: index + 1
-                                color: root.editorVm && root.editorVm.mmuSelectedExtruder === index ? "white" : "#c8d4e0"
-                                font.pixelSize: 11
+                                color: root.editorVm && root.editorVm.mmuSelectedExtruder === index ? "white" : Theme.textPrimary
+                                font.pixelSize: Theme.fontSizeSM
                                 font.bold: true
                             }
                             MouseArea {
@@ -2866,7 +2866,7 @@ Item {
                 Text {
                     text: qsTr("当前耗材: %1").arg(
                         root.editorVm ? root.editorVm.mmuSelectedExtruder + 1 : 1)
-                    color: "#8b949e"
+                    color: Theme.textMuted
                     font.pixelSize: 10
                     Layout.alignment: Qt.AlignHCenter
                 }
@@ -2875,12 +2875,12 @@ Item {
                 Rectangle {
                     Layout.alignment: Qt.AlignHCenter
                     width: 80; height: 24; radius: 4
-                    color: "#363d4e"
-                    border.color: "#4d5566"; border.width: 1
+                    color: Theme.borderDefault
+                    border.color: Theme.borderStrong; border.width: 1
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("清除分段")
-                        color: "#c8d4e0"
+                        color: Theme.textPrimary
                         font.pixelSize: 10
                     }
                     MouseArea {
@@ -2900,8 +2900,8 @@ Item {
             width: drillContent.implicitWidth + 24
             height: drillContent.implicitHeight + 16
             radius: 12
-            color: "#161c27e0"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoDrill && root.editorVm
 
             ColumnLayout {
@@ -2909,22 +2909,22 @@ Item {
                 anchors.centerIn: parent
                 spacing: 6
 
-                Text { text: qsTr("钻孔"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                Text { text: qsTr("钻孔"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true; Layout.alignment: Qt.AlignHCenter }
 
-                Text { text: qsTr("半径"); color: "#8b949e"; font.pixelSize: 10 }
+                Text { text: qsTr("半径"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.drillRadius : 5; from: 1; to: 50; onValueModified: if (root.editorVm) root.editorVm.drillRadius = value }
 
-                Text { text: qsTr("深度"); color: "#8b949e"; font.pixelSize: 10 }
+                Text { text: qsTr("深度"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.drillDepth : 50; from: 1; to: 200; onValueModified: if (root.editorVm) root.editorVm.drillDepth = value }
 
-                Text { text: qsTr("形状"); color: "#8b949e"; font.pixelSize: 10 }
+                Text { text: qsTr("形状"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxComboBox { Layout.preferredWidth: 80; model: [qsTr("圆形"), qsTr("三角形"), qsTr("方形")]; currentIndex: root.editorVm ? root.editorVm.drillShape : 0; onActivated: if (root.editorVm) root.editorVm.drillShape = currentIndex }
 
-                Text { text: qsTr("方向"); color: "#8b949e"; font.pixelSize: 10 }
+                Text { text: qsTr("方向"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxComboBox { Layout.preferredWidth: 80; model: [qsTr("法线"), qsTr("平行平台"), qsTr("垂直屏幕")]; currentIndex: root.editorVm ? root.editorVm.drillDirection : 0; onActivated: if (root.editorVm) root.editorVm.drillDirection = currentIndex }
 
-                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: "#363d4e"; border.color: "#4d5566"; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("执行钻孔"); color: "#c8d4e0"; font.pixelSize: 10 }
+                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("执行钻孔"); color: Theme.textPrimary; font.pixelSize: 10 }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.drillSelected() }
                 }
             }
@@ -2938,8 +2938,8 @@ Item {
             width: embossContent.implicitWidth + 24
             height: embossContent.implicitHeight + 16
             radius: 12
-            color: "#161c27e0"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoEmboss && root.editorVm
 
             ColumnLayout {
@@ -2947,19 +2947,19 @@ Item {
                 anchors.centerIn: parent
                 spacing: 6
 
-                Text { text: qsTr("文字浮雕"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                Text { text: qsTr("文字浮雕"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true; Layout.alignment: Qt.AlignHCenter }
 
-                Text { text: qsTr("文本"); color: "#8b949e"; font.pixelSize: 10 }
+                Text { text: qsTr("文本"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxTextField { Layout.preferredWidth: 120; implicitHeight: 22; font.pixelSize: 10; text: root.editorVm ? root.editorVm.embossText : ""; onEditingFinished: if (root.editorVm) root.editorVm.embossText = text }
 
-                Text { text: qsTr("高度"); color: "#8b949e"; font.pixelSize: 10 }
+                Text { text: qsTr("高度"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.embossHeight : 2; from: 1; to: 20; onValueModified: if (root.editorVm) root.editorVm.embossHeight = value }
 
-                Text { text: qsTr("深度"); color: "#8b949e"; font.pixelSize: 10 }
+                Text { text: qsTr("深度"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.embossDepth : 1; from: 1; to: 20; onValueModified: if (root.editorVm) root.editorVm.embossDepth = value }
 
-                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: "#363d4e"; border.color: "#4d5566"; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("执行浮雕"); color: "#c8d4e0"; font.pixelSize: 10 }
+                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("执行浮雕"); color: Theme.textPrimary; font.pixelSize: 10 }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.embossSelected() }
                 }
             }
@@ -2973,8 +2973,8 @@ Item {
             width: boolContent.implicitWidth + 24
             height: boolContent.implicitHeight + 16
             radius: 12
-            color: "#161c27e0"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoMeshBoolean && root.editorVm
 
             ColumnLayout {
@@ -2982,15 +2982,15 @@ Item {
                 anchors.centerIn: parent
                 spacing: 6
 
-                Text { text: qsTr("布尔运算"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                Text { text: qsTr("布尔运算"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true; Layout.alignment: Qt.AlignHCenter }
 
-                Text { text: qsTr("运算类型"); color: "#8b949e"; font.pixelSize: 10 }
+                Text { text: qsTr("运算类型"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxComboBox { Layout.preferredWidth: 100; model: [qsTr("并集 (Union)"), qsTr("差集 (Difference)"), qsTr("交集 (Intersection)")]; currentIndex: root.editorVm ? root.editorVm.booleanOperation : 1; onActivated: if (root.editorVm) root.editorVm.booleanOperation = currentIndex }
 
-                Text { text: qsTr("需选中 2 个以上对象"); color: "#8b949e"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
+                Text { text: qsTr("需选中 2 个以上对象"); color: Theme.textMuted; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
 
-                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: "#363d4e"; border.color: "#4d5566"; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("执行运算"); color: "#c8d4e0"; font.pixelSize: 10 }
+                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("执行运算"); color: Theme.textPrimary; font.pixelSize: 10 }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.booleanExecute() }
                 }
             }
@@ -3004,8 +3004,8 @@ Item {
             width: cutContent.implicitWidth + 24
             height: cutContent.implicitHeight + 16
             radius: 12
-            color: "#161c27e0"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoAdvancedCut && root.editorVm
 
             ColumnLayout {
@@ -3013,19 +3013,19 @@ Item {
                 anchors.centerIn: parent
                 spacing: 6
 
-                Text { text: qsTr("高级切割"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                Text { text: qsTr("高级切割"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true; Layout.alignment: Qt.AlignHCenter }
 
-                Text { text: qsTr("切割轴"); color: "#8b949e"; font.pixelSize: 10 }
+                Text { text: qsTr("切割轴"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxComboBox { Layout.preferredWidth: 80; model: ["X", "Y", "Z"]; currentIndex: root.editorVm ? root.editorVm.cutAxis : 2; onActivated: if (root.editorVm) root.editorVm.cutAxis = currentIndex }
 
-                Text { text: qsTr("位置"); color: "#8b949e"; font.pixelSize: 10 }
+                Text { text: qsTr("位置"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.cutPosition : 0; from: -500; to: 500; onValueModified: if (root.editorVm) root.editorVm.cutPosition = value }
 
                 CxCheckBox { text: qsTr("保留两侧"); checked: root.editorVm ? root.editorVm.cutKeepMode === 1 : true; onCheckedChanged: if (root.editorVm) root.editorVm.cutKeepMode = checked ? 1 : 0 }
                 CxCheckBox { text: qsTr("仅上半部"); checked: root.editorVm ? root.editorVm.cutKeepMode === 2 : false; onCheckedChanged: if (root.editorVm) root.editorVm.cutKeepMode = checked ? 2 : 1 }
 
-                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: "#363d4e"; border.color: "#4d5566"; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("执行切割"); color: "#c8d4e0"; font.pixelSize: 10 }
+                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("执行切割"); color: Theme.textPrimary; font.pixelSize: 10 }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.cutSelected() }
                 }
             }
@@ -3039,8 +3039,8 @@ Item {
             width: fdContent.implicitWidth + 24
             height: fdContent.implicitHeight + 16
             radius: 12
-            color: "#161c27e0"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoFaceDetector && root.editorVm
 
             ColumnLayout {
@@ -3048,15 +3048,15 @@ Item {
                 anchors.centerIn: parent
                 spacing: 6
 
-                Text { text: qsTr("面检测"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                Text { text: qsTr("面检测"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true; Layout.alignment: Qt.AlignHCenter }
 
-                Text { text: qsTr("角度阈值"); color: "#8b949e"; font.pixelSize: 10 }
+                Text { text: qsTr("角度阈值"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.faceDetectorAngle : 5; from: 1; to: 90; onValueModified: if (root.editorVm) root.editorVm.faceDetectorAngle = value }
 
-                Text { text: qsTr("检测与 Z 轴平行的平面"); color: "#8b949e"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
+                Text { text: qsTr("检测与 Z 轴平行的平面"); color: Theme.textMuted; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
 
-                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: "#363d4e"; border.color: "#4d5566"; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("执行检测"); color: "#c8d4e0"; font.pixelSize: 10 }
+                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("执行检测"); color: Theme.textPrimary; font.pixelSize: 10 }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.detectFlatFaces() }
                 }
             }
@@ -3070,8 +3070,8 @@ Item {
             width: txtContent.implicitWidth + 24
             height: txtContent.implicitHeight + 16
             radius: 12
-            color: "#161c27e0"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoText && root.editorVm
 
             ColumnLayout {
@@ -3079,16 +3079,16 @@ Item {
                 anchors.centerIn: parent
                 spacing: 6
 
-                Text { text: qsTr("文字工具"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                Text { text: qsTr("文字工具"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true; Layout.alignment: Qt.AlignHCenter }
 
-                Text { text: qsTr("文本内容"); color: "#8b949e"; font.pixelSize: 10 }
+                Text { text: qsTr("文本内容"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxTextField { Layout.preferredWidth: 120; implicitHeight: 22; font.pixelSize: 10; text: root.editorVm ? root.editorVm.textContent : ""; onEditingFinished: if (root.editorVm) root.editorVm.textContent = text }
 
-                Text { text: qsTr("字号"); color: "#8b949e"; font.pixelSize: 10 }
+                Text { text: qsTr("字号"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.textSize : 20; from: 1; to: 200; onValueModified: if (root.editorVm) root.editorVm.textSize = value }
 
-                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: "#363d4e"; border.color: "#4d5566"; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("添加文字"); color: "#c8d4e0"; font.pixelSize: 10 }
+                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("添加文字"); color: Theme.textPrimary; font.pixelSize: 10 }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.addTextObject() }
                 }
             }
@@ -3102,8 +3102,8 @@ Item {
             width: svgContent.implicitWidth + 24
             height: svgContent.implicitHeight + 16
             radius: 12
-            color: "#161c27e0"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoSVG && root.editorVm
 
             ColumnLayout {
@@ -3111,16 +3111,16 @@ Item {
                 anchors.centerIn: parent
                 spacing: 6
 
-                Text { text: qsTr("SVG 导入"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                Text { text: qsTr("SVG 导入"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true; Layout.alignment: Qt.AlignHCenter }
 
-                Text { text: qsTr("文件路径"); color: "#8b949e"; font.pixelSize: 10 }
+                Text { text: qsTr("文件路径"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxTextField { Layout.preferredWidth: 140; implicitHeight: 22; font.pixelSize: 10; text: root.editorVm ? root.editorVm.svgFilePath : ""; placeholderText: qsTr("选择 SVG 文件..."); enabled: false }
 
-                Text { text: qsTr("缩放"); color: "#8b949e"; font.pixelSize: 10 }
+                Text { text: qsTr("缩放"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.svgScale : 1; from: 1; to: 100; onValueModified: if (root.editorVm) root.editorVm.svgScale = value }
 
-                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: "#363d4e"; border.color: "#4d5566"; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("导入 SVG"); color: "#c8d4e0"; font.pixelSize: 10 }
+                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("导入 SVG"); color: Theme.textPrimary; font.pixelSize: 10 }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.importSVG() }
                 }
             }
@@ -3134,8 +3134,8 @@ Item {
             width: slaContent.implicitWidth + 24
             height: slaContent.implicitHeight + 16
             radius: 12
-            color: "#161c27e0"
-            border.color: "#2d3443"
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoSlaSupports && root.editorVm
 
             ColumnLayout {
@@ -3143,11 +3143,11 @@ Item {
                 anchors.centerIn: parent
                 spacing: 6
 
-                Text { text: qsTr("SLA 支撑"); color: "#e2e8f5"; font.pixelSize: 11; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                Text { text: qsTr("SLA 支撑"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true; Layout.alignment: Qt.AlignHCenter }
 
-                Text { text: qsTr("点击模型表面添加支撑点"); color: "#8b949e"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter; wrapMode: Text.Wrap; Layout.maximumWidth: 120 }
-                Text { text: qsTr("右键删除单个支撑"); color: "#8b949e"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
-                Text { text: qsTr("（需 SLA 切片配置）"); color: "#F59E0B"; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
+                Text { text: qsTr("点击模型表面添加支撑点"); color: Theme.textMuted; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter; wrapMode: Text.Wrap; Layout.maximumWidth: 120 }
+                Text { text: qsTr("右键删除单个支撑"); color: Theme.textMuted; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
+                Text { text: qsTr("（需 SLA 切片配置）"); color: Theme.statusWarning; font.pixelSize: 9; Layout.alignment: Qt.AlignHCenter }
             }
         }
 
@@ -3162,7 +3162,7 @@ Item {
             anchors.bottomMargin: 16
             width: 296
             radius: 18
-            color: "#1a202bd9"
+            color: Theme.bgFloating
             border.width: 1
             border.color: Theme.borderSubtle
 
@@ -3340,7 +3340,7 @@ Item {
                                     Layout.fillWidth: true
                                     text: root.editorVm ? root.editorVm.plateName(index) : ""
                                     color: Theme.textPrimary
-                                    font.pixelSize: 12
+                                    font.pixelSize: Theme.fontSizeMD
                                     font.bold: true
                                     elide: Text.ElideRight
                                 }
@@ -3434,7 +3434,7 @@ Item {
                             anchors.centerIn: parent
                             text: qsTr("+ 添加平板")
                             color: Theme.textSecondary
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fontSizeSM
                         }
 
                         MouseArea {
@@ -3457,7 +3457,7 @@ Item {
                             anchors.centerIn: parent
                             text: qsTr("- 删除平板")
                             color: Theme.textSecondary
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fontSizeSM
                         }
 
                         MouseArea {
@@ -3554,13 +3554,13 @@ Item {
                         width: 34
                         height: 32
                         radius: 8
-                        color: vpMA.containsMouse ? "#1e2535" : "transparent"
+                        color: vpMA.containsMouse ? Theme.bgHover : "transparent"
 
                         Text {
                             anchors.centerIn: parent
                             text: modelData.label
                             color: vpMA.containsMouse ? Theme.accent : Theme.textPrimary
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fontSizeSM
                             font.bold: true
                         }
 
@@ -3593,7 +3593,7 @@ Item {
             height: infoRow.implicitHeight + 10
             width: infoRow.implicitWidth + 16
             radius: 4
-            color: "#141920"
+            color: Theme.bgInset
 
             property bool hasErrors: root.editorVm
                 && (root.editorVm.selectedObjectOpenEdges > 0
@@ -3629,7 +3629,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.editorVm ? root.editorVm.selectedObjectInfoText : ""
                     color: Theme.textPrimary
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                 }
 
                 // 非流形边警告（对齐上游 get_mesh_errors_info remaining errors）
@@ -3638,7 +3638,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: qsTr(" | %1 non-manifold edges").arg(root.editorVm.selectedObjectOpenEdges)
                     color: "#c0392b"
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                 }
 
                 // 已修复错误计数（对齐 upstream auto-repaired info）
@@ -3647,7 +3647,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: qsTr(" | %1 errors repaired").arg(root.editorVm.selectedObjectRepairedErrors)
                     color: "#e67e22"
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                 }
             }
         }
@@ -3672,7 +3672,7 @@ Item {
                            : qsTr("%1 个对象 · %2").arg(root.editorVm.objectCount).arg(root.editorVm.statusText))
                         : ""
                     color: root.editorVm && root.editorVm.hasSelection ? Theme.accent : Theme.textSecondary
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                 }
 
                 // 当前平板切片状态指示（对齐上游 PartPlate::m_slice_result_valid）
@@ -3682,13 +3682,13 @@ Item {
                     width: slicedText.implicitWidth + 12
                     height: 18
                     radius: 9
-                    color: "#0e3325"
+                    color: Theme.accentSubtle
 
                     Label {
                         id: slicedText
                         anchors.centerIn: parent
                         text: qsTr("✓ 已切片")
-                        color: "#18c75e"
+                        color: Theme.accent
                         font.pixelSize: 10
                     }
                 }
@@ -3700,13 +3700,13 @@ Item {
                     width: slicingText.implicitWidth + 12
                     height: 18
                     radius: 9
-                    color: "#2e2510"
+                    color: Theme.bgWarningSubtle
 
                     Label {
                         id: slicingText
                         anchors.centerIn: parent
                         text: root.editorVm ? qsTr("切片中 %1%").arg(root.editorVm.sliceProgress()) : ""
-                        color: "#e8a838"
+                        color: Theme.statusWarning
                         font.pixelSize: 10
                     }
                 }

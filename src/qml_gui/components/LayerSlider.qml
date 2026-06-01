@@ -53,7 +53,7 @@ Item {
                 width: rangeSliderItem.trackWidth
                 height: 6
                 radius: 3
-                color: "#252b38"
+                color: Theme.bgElevated
             }
 
             // Active range track (between two thumbs, 对齐上游 IMSlider scroll_line)
@@ -84,7 +84,7 @@ Item {
                 width: grooveHoverTipCol.implicitWidth + 16
                 height: grooveHoverTipCol.implicitHeight + 10
                 radius: 4
-                color: "#1a2332"
+                color: Theme.bgTooltip
                 border.width: 1
                 border.color: Theme.borderSubtle
                 visible: grooveHoverMA.containsMouse && root.totalLayers > 0
@@ -131,7 +131,7 @@ Item {
                     width: 5
                     height: 5
                     rotation: 45
-                    color: "#1a2332"
+                    color: Theme.bgTooltip
                 }
             }
 
@@ -170,7 +170,7 @@ Item {
                     : 0
                 height: 6
                 radius: 3
-                color: "#1a2030"
+                color: Theme.bgPanel
                 opacity: 0.5
             }
             Rectangle {
@@ -183,7 +183,7 @@ Item {
                     : 0
                 height: 6
                 radius: 3
-                color: "#1a2030"
+                color: Theme.bgPanel
                 opacity: 0.5
             }
 
@@ -197,16 +197,16 @@ Item {
                 width: rangeSliderItem.thumbWidth
                 height: 20
                 radius: 4
-                color: rangeSliderItem.dragThumb === 0 ? Theme.accent : "#c0d0e0"
+                color: rangeSliderItem.dragThumb === 0 ? Theme.accent : Theme.textSecondary
                 border.width: 1
-                border.color: rangeSliderItem.dragThumb === 0 ? Theme.accent : "#8090a0"
+                border.color: rangeSliderItem.dragThumb === 0 ? Theme.accent : Theme.textTertiary
                 Behavior on x { NumberAnimation { duration: 50 } }
                 Behavior on color { ColorAnimation { duration: 100 } }
 
                 Text {
                     anchors.centerIn: parent
                     text: "|"
-                    color: rangeSliderItem.dragThumb === 0 ? "#fff" : "#506070"
+                    color: rangeSliderItem.dragThumb === 0 ? "#fff" : Theme.textDisabled
                     font.pixelSize: 14
                     font.bold: true
                 }
@@ -248,16 +248,16 @@ Item {
                 width: rangeSliderItem.thumbWidth
                 height: 20
                 radius: 4
-                color: rangeSliderItem.dragThumb === 1 ? Theme.accent : "#c0d0e0"
+                color: rangeSliderItem.dragThumb === 1 ? Theme.accent : Theme.textSecondary
                 border.width: 1
-                border.color: rangeSliderItem.dragThumb === 1 ? Theme.accent : "#8090a0"
+                border.color: rangeSliderItem.dragThumb === 1 ? Theme.accent : Theme.textTertiary
                 Behavior on x { NumberAnimation { duration: 50 } }
                 Behavior on color { ColorAnimation { duration: 100 } }
 
                 Text {
                     anchors.centerIn: parent
                     text: "|"
-                    color: rangeSliderItem.dragThumb === 1 ? "#fff" : "#506070"
+                    color: rangeSliderItem.dragThumb === 1 ? "#fff" : Theme.textDisabled
                     font.pixelSize: 14
                     font.bold: true
                 }
@@ -306,8 +306,8 @@ Item {
                 validator: IntValidator { bottom: 1; top: root.maxDisplay }
                 background: Rectangle {
                     radius: 4
-                    color: "#1e2229"
-                    border.color: minInput.activeFocus ? Theme.accent : "#2e3540"
+                    color: Theme.bgPanel
+                    border.color: minInput.activeFocus ? Theme.accent : Theme.borderSubtle
                     border.width: 1
                 }
                 onEditingFinished: {
@@ -333,8 +333,8 @@ Item {
                 validator: IntValidator { bottom: 1; top: root.maxDisplay }
                 background: Rectangle {
                     radius: 4
-                    color: "#1e2229"
-                    border.color: maxInput.activeFocus ? Theme.accent : "#2e3540"
+                    color: Theme.bgPanel
+                    border.color: maxInput.activeFocus ? Theme.accent : Theme.borderSubtle
                     border.width: 1
                 }
                 onEditingFinished: {
@@ -359,8 +359,8 @@ Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 30
             radius: 6
-            color: jumpMA.containsMouse ? "#2a3545" : "#1e2229"
-            border.color: jumpMA.containsMouse ? Theme.accentDark : "#2e3540"
+            color: jumpMA.containsMouse ? Theme.bgHover : Theme.bgPanel
+            border.color: jumpMA.containsMouse ? Theme.accentDark : Theme.borderSubtle
             border.width: 1
 
             RowLayout {
@@ -446,8 +446,8 @@ Item {
                     validator: IntValidator { bottom: 1; top: root.maxDisplay }
                     background: Rectangle {
                         radius: 6
-                        color: "#1e2229"
-                        border.color: jumpInput.activeFocus ? Theme.accent : "#2e3540"
+                        color: Theme.bgPanel
+                        border.color: jumpInput.activeFocus ? Theme.accent : Theme.borderSubtle
                         border.width: 1
                     }
                     Keys.onReturnPressed: doJump()

@@ -120,7 +120,7 @@ Item {
 
         background: Rectangle {
             radius: 8
-            color: "#0f1520"
+            color: Theme.bgInset
             border.width: 1
             border.color: Theme.borderSubtle
 
@@ -136,14 +136,14 @@ Item {
                         Layout.fillWidth: true
                         text: qsTr("值来源") + " — " + valueChainPopup.currentKey
                         color: Theme.textPrimary
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         font.bold: true
                         elide: Text.ElideRight
                     }
                     Rectangle {
                         width: 20; height: 20; radius: 4
-                        color: closeMA.containsMouse ? "#2a2030" : "#1a1520"
-                        Text { anchors.centerIn: parent; text: "\u2715"; color: "#808090"; font.pixelSize: 10 }
+                        color: closeMA.containsMouse ? Theme.bgHover : Theme.bgPanel
+                        Text { anchors.centerIn: parent; text: "\u2715"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                         MouseArea { id: closeMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                             onClicked: valueChainPopup.close()
                         }
@@ -163,19 +163,19 @@ Item {
                         spacing: 0
                         // Level 0: Default
                         Rectangle {
-                            width: parent.width; height: 28; color: "#0c1018"
+                            width: parent.width; height: 28; color: Theme.bgInset
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 8; spacing: 8
                                 Rectangle { width: 8; height: 8; radius: 4; color: "#506070" }
-                                Text { text: qsTr("默认值"); color: "#a0a8b0"; font.pixelSize: 11 }
+                                Text { text: qsTr("默认值"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                                 Item { Layout.fillWidth: true }
-                                Text { text: valueChainPopup.chainData.default || "-"; color: "#d0d8e0"; font.pixelSize: 11; font.family: "Consolas, monospace"
+                                Text { text: valueChainPopup.chainData.default || "-"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace"
                                     Layout.alignment: Qt.AlignRight; Layout.rightMargin: 8
                                 }
                                 Rectangle {
                                     visible: valueChainPopup.currentLevel === "default"
                                     width: 20; height: 20; radius: 4; color: "#1a3a5c"
-                                    Text { anchors.centerIn: parent; text: "\u2713"; color: "#58a6ff"; font.pixelSize: 11 }
+                                    Text { anchors.centerIn: parent; text: "\u2713"; color: "#58a6ff"; font.pixelSize: Theme.fontSizeSM }
                                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                         onClicked: valueChainPopup.resetToLevel(0)
                                     }
@@ -184,19 +184,19 @@ Item {
                         }
                         // Level 1: Print
                         Rectangle {
-                            width: parent.width; height: 28; color: "#0c1018"
+                            width: parent.width; height: 28; color: Theme.bgInset
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 8; spacing: 8
                                 Rectangle { width: 8; height: 8; radius: 4; color: "#6ed4a0" }
-                                Text { text: qsTr("打印预设"); color: "#a0c8a0"; font.pixelSize: 11 }
+                                Text { text: qsTr("打印预设"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                                 Item { Layout.fillWidth: true }
-                                Text { text: valueChainPopup.chainData.print || "-"; color: "#d0d8e0"; font.pixelSize: 11; font.family: "Consolas, monospace"
+                                Text { text: valueChainPopup.chainData.print || "-"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace"
                                     Layout.alignment: Qt.AlignRight; Layout.rightMargin: 8
                                 }
                                 Rectangle {
                                     visible: valueChainPopup.currentLevel === "print"
                                     width: 20; height: 20; radius: 4; color: "#1a3a2a"
-                                    Text { anchors.centerIn: parent; text: "\u2713"; color: "#6ed4a0"; font.pixelSize: 11 }
+                                    Text { anchors.centerIn: parent; text: "\u2713"; color: "#6ed4a0"; font.pixelSize: Theme.fontSizeSM }
                                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                         onClicked: valueChainPopup.resetToLevel(1)
                                     }
@@ -205,19 +205,19 @@ Item {
                         }
                         // Level 2: Filament
                         Rectangle {
-                            width: parent.width; height: 28; color: "#0c1018"
+                            width: parent.width; height: 28; color: Theme.bgInset
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 8; spacing: 8
                                 Rectangle { width: 8; height: 8; radius: 4; color: "#d4a06e" }
-                                Text { text: qsTr("耗材预设"); color: "#c8b0a0"; font.pixelSize: 11 }
+                                Text { text: qsTr("耗材预设"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                                 Item { Layout.fillWidth: true }
-                                Text { text: valueChainPopup.chainData.filament || "-"; color: "#d0d8e0"; font.pixelSize: 11; font.family: "Consolas, monospace"
+                                Text { text: valueChainPopup.chainData.filament || "-"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace"
                                     Layout.alignment: Qt.AlignRight; Layout.rightMargin: 8
                                 }
                                 Rectangle {
                                     visible: valueChainPopup.currentLevel === "filament"
                                     width: 20; height: 20; radius: 4; color: "#3a2a1a"
-                                    Text { anchors.centerIn: parent; text: "\u2713"; color: "#d4a06e"; font.pixelSize: 11 }
+                                    Text { anchors.centerIn: parent; text: "\u2713"; color: "#d4a06e"; font.pixelSize: Theme.fontSizeSM }
                                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                         onClicked: valueChainPopup.resetToLevel(2)
                                     }
@@ -226,19 +226,19 @@ Item {
                         }
                         // Level 3: Printer
                         Rectangle {
-                            width: parent.width; height: 28; color: "#0c1018"
+                            width: parent.width; height: 28; color: Theme.bgInset
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 8; spacing: 8
                                 Rectangle { width: 8; height: 8; radius: 4; color: "#6ea8d4" }
-                                Text { text: qsTr("打印机预设"); color: "#a0b8c8"; font.pixelSize: 11 }
+                                Text { text: qsTr("打印机预设"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                                 Item { Layout.fillWidth: true }
-                                Text { text: valueChainPopup.chainData.printer || "-"; color: "#d0d8e0"; font.pixelSize: 11; font.family: "Consolas, monospace"
+                                Text { text: valueChainPopup.chainData.printer || "-"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace"
                                     Layout.alignment: Qt.AlignRight; Layout.rightMargin: 8
                                 }
                                 Rectangle {
                                     visible: valueChainPopup.currentLevel === "printer"
                                     width: 20; height: 20; radius: 4; color: "#1a2a3a"
-                                    Text { anchors.centerIn: parent; text: "\u2713"; color: "#6ea8d4"; font.pixelSize: 11 }
+                                    Text { anchors.centerIn: parent; text: "\u2713"; color: "#6ea8d4"; font.pixelSize: Theme.fontSizeSM }
                                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                         onClicked: valueChainPopup.resetToLevel(3)
                                     }
@@ -246,14 +246,14 @@ Item {
                             }
                         }
                         // Current value
-                        Rectangle { width: parent.width - 24; height: 1; color: "#304050" }
+                        Rectangle { width: parent.width - 24; height: 1; color: Theme.borderSubtle }
                         Rectangle {
-                            width: parent.width; height: 28; color: "#142030"
+                            width: parent.width; height: 28; color: Theme.bgSurface
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 8; spacing: 8
-                                Text { text: qsTr("当前值"); color: Theme.textPrimary; font.pixelSize: 11; font.bold: true }
+                                Text { text: qsTr("当前值"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true }
                                 Item { Layout.fillWidth: true }
-                                Text { text: valueChainPopup.chainData.current || "-"; color: "#58a6ff"; font.pixelSize: 11; font.bold: true; font.family: "Consolas, monospace"
+                                Text { text: valueChainPopup.chainData.current || "-"; color: "#58a6ff"; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace"
                                     Layout.alignment: Qt.AlignRight; Layout.rightMargin: 8
                                 }
                             }
@@ -300,7 +300,7 @@ Item {
                 Layout.fillWidth: true
                 text: root.configVm ? root.configVm.currentPrinterPreset : ""
                 color: Theme.textPrimary
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontSizeMD
                 selectByMouse: true
                 onAccepted: renamePrinterDialog.accept()
             }
@@ -365,7 +365,7 @@ Item {
                     Text {
                         text: qsTr("%1 项已修改").arg(root.configVm ? root.configVm.globalModifiedCount : 0)
                         color: Theme.textPrimary
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         font.bold: true
                     }
 
@@ -375,7 +375,7 @@ Item {
                     Text {
                         text: modifiedBar.expanded ? qsTr("收起") : qsTr("展开")
                         color: Theme.accent
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
@@ -429,7 +429,7 @@ Item {
                     Rectangle {
                         width: modifiedContentCol.width
                         height: 30
-                        color: index % 2 === 0 ? "transparent" : "#0e1520"
+                        color: index % 2 === 0 ? "transparent" : Theme.bgInset
 
                         readonly property string optKey: root.configVm ? root.configVm.globalModifiedKey(index) : ""
                         readonly property string curVal: root.configVm ? root.configVm.globalModifiedCurrentValue(optKey) : ""
@@ -444,7 +444,7 @@ Item {
                             Text {
                                 text: parent.parent.optKey
                                 color: "#e8864a"
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                                 font.family: "Consolas, monospace"
                                 Layout.preferredWidth: 160
                                 elide: Text.ElideRight
@@ -454,13 +454,13 @@ Item {
                             Text {
                                 text: "\u2192"
                                 color: Theme.textDisabled
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fontSizeXS
                             }
 
                             Text {
                                 text: parent.parent.defVal
                                 color: Theme.textDisabled
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                                 font.family: "Consolas, monospace"
                                 Layout.preferredWidth: 60
                                 elide: Text.ElideRight
@@ -470,13 +470,13 @@ Item {
                             Text {
                                 text: "\u2192"
                                 color: Theme.textDisabled
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fontSizeXS
                             }
 
                             Text {
                                 text: parent.parent.curVal
                                 color: Theme.textPrimary
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                                 font.family: "Consolas, monospace"
                                 font.bold: true
                                 Layout.preferredWidth: 60
@@ -548,7 +548,7 @@ Item {
                     Text {
                         text: qsTr("预设")
                         color: Theme.textSecondary
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                         font.bold: true
                         Layout.preferredWidth: 30
                     }
@@ -574,7 +574,7 @@ Item {
                     Rectangle {
                         width: 24; height: 24; radius: 4
                         color: savePrinterBtn.containsMouse ? "#1c2a3e" : "transparent"
-                        Text { anchors.centerIn: parent; text: "+"; color: "#8a96a8"; font.pixelSize: 14; font.bold: true }
+                        Text { anchors.centerIn: parent; text: "+"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeLG; font.bold: true }
                         MouseArea { id: savePrinterBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                             onClicked: if (root.configVm) root.configVm.createCustomPreset(2, root.configVm.currentPrinterPreset + " (Custom)")
                         }
@@ -583,7 +583,7 @@ Item {
                         width: 24; height: 24; radius: 4
                         visible: root.configVm ? root.configVm.canDeletePreset(root.configVm.currentPrinterPreset) : false
                         color: renamePrinterBtn2.containsMouse ? "#1c2a3e" : "transparent"
-                        Text { anchors.centerIn: parent; text: "\u270E"; color: "#8a96a8"; font.pixelSize: 12 }
+                        Text { anchors.centerIn: parent; text: "\u270E"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeMD }
                         MouseArea { id: renamePrinterBtn2; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                             onClicked: renamePrinterDialog.open()
                         }
@@ -592,7 +592,7 @@ Item {
                         width: 24; height: 24; radius: 4
                         visible: root.configVm ? root.configVm.canDeletePreset(root.configVm.currentPrinterPreset) : false
                         color: delPrinterBtn.containsMouse ? "#2e1a1a" : "transparent"
-                        Text { anchors.centerIn: parent; text: "\u2715"; color: "#e06666"; font.pixelSize: 11 }
+                        Text { anchors.centerIn: parent; text: "\u2715"; color: "#e06666"; font.pixelSize: Theme.fontSizeSM }
                         MouseArea { id: delPrinterBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                             onClicked: if (root.configVm) root.configVm.deletePreset(2, root.configVm.currentPrinterPreset)
                         }
@@ -607,7 +607,7 @@ Item {
                     Text {
                         text: qsTr("热床")
                         color: Theme.textSecondary
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                         font.bold: true
                         Layout.preferredWidth: 30
                     }
@@ -648,7 +648,7 @@ Item {
                 Rectangle {
                     width: 22; height: 22; radius: 4
                     color: autoMatchBtn.containsMouse ? "#1c2a3e" : "transparent"
-                    Text { anchors.centerIn: parent; text: "\u21BB"; color: "#8a96a8"; font.pixelSize: 13; font.bold: true }
+                    Text { anchors.centerIn: parent; text: "\u21BB"; color: Theme.textMuted; font.pixelSize: 13; font.bold: true }
                     MouseArea { id: autoMatchBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: if (root.configVm) root.configVm.autoMatchFilament()
                     }
@@ -686,7 +686,7 @@ Item {
                                 Text {
                                     text: (index + 1).toString()
                                     color: "#101114"
-                                    font.pixelSize: 12
+                                    font.pixelSize: Theme.fontSizeMD
                                     font.bold: true
                                     horizontalAlignment: Text.AlignHCenter
                                     width: 70
@@ -694,7 +694,7 @@ Item {
                                 Text {
                                     text: root.configVm ? root.configVm.materialPresetName(index) : ""
                                     color: "#101114"
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fontSizeSM
                                     font.bold: true
                                     horizontalAlignment: Text.AlignHCenter
                                     width: 70
@@ -735,7 +735,7 @@ Item {
                         Text {
                             text: root.scopeTitle()
                             color: Theme.textPrimary
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fontSizeMD
                             font.bold: true
                         }
 
@@ -749,7 +749,7 @@ Item {
                                 anchors.centerIn: parent
                                 text: qsTr("Global")
                                 color: root.selectedScope === "global" ? Theme.textOnAccent : Theme.textSecondary
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fontSizeXS
                                 font.bold: true
                             }
 
@@ -773,7 +773,7 @@ Item {
                                 anchors.centerIn: parent
                                 text: root.selectedScope === "volume" ? qsTr("Part") : qsTr("Object")
                                 color: parent.isActive ? Theme.textPrimary : Theme.textSecondary
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fontSizeXS
                                 font.bold: true
                             }
 
@@ -803,7 +803,7 @@ Item {
                                 anchors.centerIn: parent
                                 text: qsTr("Plate")
                                 color: root.selectedScope === "plate" ? Theme.textPrimary : Theme.textSecondary
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fontSizeXS
                                 font.bold: true
                             }
 
@@ -822,7 +822,7 @@ Item {
                         Text {
                             text: qsTr("Advanced")
                             color: Theme.textPrimary
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fontSizeSM
                             font.bold: true
                         }
                         Switch {
@@ -835,7 +835,7 @@ Item {
                         Layout.fillWidth: true
                         text: root.scopeSubtitle()
                         color: Theme.textDisabled
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                         elide: Text.ElideRight
                     }
                 }
@@ -853,7 +853,7 @@ Item {
                         Text {
                             text: qsTr("Print")
                             color: Theme.textSecondary
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fontSizeXS
                             font.bold: true
                             Layout.preferredWidth: 30
                         }
@@ -879,7 +879,7 @@ Item {
                         Rectangle {
                             width: 24; height: 24; radius: 4
                             color: savePrintBtn.containsMouse ? "#1c2a3e" : "transparent"
-                            Text { anchors.centerIn: parent; text: "+"; color: "#8a96a8"; font.pixelSize: 14; font.bold: true }
+                            Text { anchors.centerIn: parent; text: "+"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeLG; font.bold: true }
                             MouseArea { id: savePrintBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                 onClicked: if (root.configVm) root.configVm.createCustomPreset(0, root.configVm.currentPrintPreset + " (Custom)")
                             }
@@ -888,7 +888,7 @@ Item {
                             width: 24; height: 24; radius: 4
                             visible: root.configVm ? root.configVm.canDeletePreset(root.configVm.currentPrintPreset) : false
                             color: renamePrintBtn.containsMouse ? "#1c2a3e" : "transparent"
-                            Text { anchors.centerIn: parent; text: "\u270E"; color: "#8a96a8"; font.pixelSize: 12 }
+                            Text { anchors.centerIn: parent; text: "\u270E"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeMD }
                             MouseArea { id: renamePrintBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                 onClicked: renamePrintDialog.open()
                             }
@@ -897,7 +897,7 @@ Item {
                             width: 24; height: 24; radius: 4
                             visible: root.configVm ? root.configVm.canDeletePreset(root.configVm.currentPrintPreset) : false
                             color: delPrintBtn.containsMouse ? "#2e1a1a" : "transparent"
-                            Text { anchors.centerIn: parent; text: "\u2715"; color: "#e06666"; font.pixelSize: 11 }
+                            Text { anchors.centerIn: parent; text: "\u2715"; color: "#e06666"; font.pixelSize: Theme.fontSizeSM }
                             MouseArea { id: delPrintBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                 onClicked: if (root.configVm) root.configVm.deletePreset(0, root.configVm.currentPrintPreset)
                             }
@@ -916,7 +916,7 @@ Item {
                                     Layout.fillWidth: true
                                     text: root.configVm ? root.configVm.currentPrintPreset : ""
                                     color: Theme.textPrimary
-                                    font.pixelSize: 12
+                                    font.pixelSize: Theme.fontSizeMD
                                     selectByMouse: true
                                     onAccepted: renamePrintDialog.accept()
                                 }
@@ -943,7 +943,7 @@ Item {
                         Text {
                             text: qsTr("Filament")
                             color: Theme.textSecondary
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fontSizeXS
                             font.bold: true
                             Layout.preferredWidth: 30
                         }
@@ -974,7 +974,7 @@ Item {
                             id: filamentPresetCombo
                             Layout.fillWidth: true
                             implicitHeight: 28
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fontSizeMD
                             model: root.configVm ? root.configVm.filamentPresetNames : []
                             currentIndex: {
                                 if (!root.configVm) return -1
@@ -1001,8 +1001,8 @@ Item {
                                         Layout.fillWidth: true
                                         leftPadding: 10
                                         text: modelData
-                                        color: compat ? "#d8e0ec" : "#5a6070"
-                                        font.pixelSize: 12
+                                        color: compat ? Theme.textPrimary : Theme.textDisabled
+                                        font.pixelSize: Theme.fontSizeMD
                                         font.strikeout: !compat
                                         elide: Text.ElideRight
                                         verticalAlignment: Text.AlignVCenter
@@ -1011,7 +1011,7 @@ Item {
                                         visible: !compat
                                         text: "!"
                                         color: "#f05545"
-                                        font.pixelSize: 10
+                                        font.pixelSize: Theme.fontSizeXS
                                         font.bold: true
                                     }
                                 }
@@ -1020,7 +1020,7 @@ Item {
                                 leftPadding: 8
                                 rightPadding: filamentPresetCombo.indicator.width + 4
                                 text: filamentPresetCombo.displayText
-                                color: "#d8e0ec"
+                                color: Theme.textPrimary
                                 font: filamentPresetCombo.font
                                 elide: Text.ElideRight
                                 verticalAlignment: Text.AlignVCenter
@@ -1029,13 +1029,13 @@ Item {
                                 x: filamentPresetCombo.width - width - 8
                                 y: (filamentPresetCombo.height - height) / 2
                                 text: "\u25BE"
-                                color: "#8a96a8"
-                                font.pixelSize: 10
+                                color: Theme.textMuted
+                                font.pixelSize: Theme.fontSizeXS
                             }
                             background: Rectangle {
                                 radius: 4
-                                color: filamentPresetCombo.pressed ? "#3a4050" : filamentPresetCombo.hovered ? "#353c4a" : "#2d3340"
-                                border.color: filamentPresetCombo.activeFocus ? "#18c75e" : "#454d5e"
+                                color: filamentPresetCombo.pressed ? Theme.bgPressed : filamentPresetCombo.hovered ? Theme.bgHover : Theme.bgPanel
+                                border.color: filamentPresetCombo.activeFocus ? Theme.accent : Theme.borderDefault
                                 border.width: 1
                             }
                             popup: Popup {
@@ -1044,8 +1044,8 @@ Item {
                                 implicitHeight: contentItem.implicitHeight
                                 padding: 0
                                 background: Rectangle {
-                                    color: "#252a34"
-                                    border.color: "#454d5e"
+                                    color: Theme.bgElevated
+                                    border.color: Theme.borderDefault
                                     border.width: 1
                                     radius: 4
                                 }
@@ -1060,7 +1060,7 @@ Item {
                         Rectangle {
                             width: 24; height: 24; radius: 4
                             color: saveFilaBtn.containsMouse ? "#1c2a3e" : "transparent"
-                            Text { anchors.centerIn: parent; text: "+"; color: "#8a96a8"; font.pixelSize: 14; font.bold: true }
+                            Text { anchors.centerIn: parent; text: "+"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeLG; font.bold: true }
                             MouseArea { id: saveFilaBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                 onClicked: if (root.configVm) root.configVm.createCustomPreset(1, root.configVm.currentFilamentPreset + " (Custom)")
                             }
@@ -1069,7 +1069,7 @@ Item {
                             width: 24; height: 24; radius: 4
                             visible: root.configVm ? root.configVm.canDeletePreset(root.configVm.currentFilamentPreset) : false
                             color: renameFilaBtn.containsMouse ? "#1c2a3e" : "transparent"
-                            Text { anchors.centerIn: parent; text: "\u270E"; color: "#8a96a8"; font.pixelSize: 12 }
+                            Text { anchors.centerIn: parent; text: "\u270E"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeMD }
                             MouseArea { id: renameFilaBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                 onClicked: renameFilaDialog.open()
                             }
@@ -1078,7 +1078,7 @@ Item {
                             width: 24; height: 24; radius: 4
                             visible: root.configVm ? root.configVm.canDeletePreset(root.configVm.currentFilamentPreset) : false
                             color: delFilaBtn.containsMouse ? "#2e1a1a" : "transparent"
-                            Text { anchors.centerIn: parent; text: "\u2715"; color: "#e06666"; font.pixelSize: 11 }
+                            Text { anchors.centerIn: parent; text: "\u2715"; color: "#e06666"; font.pixelSize: Theme.fontSizeSM }
                             MouseArea { id: delFilaBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                 onClicked: if (root.configVm) root.configVm.deletePreset(1, root.configVm.currentFilamentPreset)
                             }
@@ -1097,7 +1097,7 @@ Item {
                                     Layout.fillWidth: true
                                     text: root.configVm ? root.configVm.currentFilamentPreset : ""
                                     color: Theme.textPrimary
-                                    font.pixelSize: 12
+                                    font.pixelSize: Theme.fontSizeMD
                                     selectByMouse: true
                                     onAccepted: renameFilaDialog.accept()
                                 }
@@ -1165,7 +1165,7 @@ Item {
                                     width: parent.width
                                     height: 28
                                     radius: 6
-                                    color: "#1a2030"
+                                    color: Theme.bgPanel
                                     RowLayout {
                                         anchors.fill: parent
                                         anchors.leftMargin: 10
@@ -1173,7 +1173,7 @@ Item {
                                         Text {
                                             text: modelData
                                             color: Theme.accent
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.fontSizeSM
                                             font.bold: true
                                             Layout.fillWidth: true
                                             elide: Text.ElideRight
@@ -1197,7 +1197,7 @@ Item {
                                             width: parent.width
                                             height: 28
                                             radius: 4
-                                            color: "#161c28"
+                                            color: Theme.bgPanel
                                             border.width: 1
                                             border.color: Theme.borderSubtle
 
@@ -1209,7 +1209,7 @@ Item {
                                                 Text {
                                                     text: modelData
                                                     color: Theme.textPrimary
-                                                    font.pixelSize: 11
+                                                    font.pixelSize: Theme.fontSizeSM
                                                     font.bold: true
                                                 }
                                                 Item { Layout.fillWidth: true }
@@ -1289,7 +1289,7 @@ Item {
                                                         Layout.fillWidth: true
                                                         text: oLabel
                                                         color: isHighlighted ? "#fff" : (isModified ? "#e8864a" : (oRO ? Theme.textDisabled : Theme.textSecondary))
-                                                        font.pixelSize: 12
+                                                        font.pixelSize: Theme.fontSizeMD
                                                         elide: Text.ElideRight
                                                         font.bold: isHighlighted || isModified
                                                     }
@@ -1306,7 +1306,7 @@ Item {
                                                             anchors.centerIn: parent
                                                             text: "↺"
                                                             color: "#e8864a"
-                                                            font.pixelSize: 10
+                                                            font.pixelSize: Theme.fontSizeXS
                                                             font.bold: true
                                                         }
                                                         MouseArea {
@@ -1346,7 +1346,7 @@ Item {
                                                             anchors.centerIn: parent
                                                             text: typeof oVal === "number" ? Number(oVal).toFixed(oType === "double" ? 1 : 0) : "-"
                                                             color: Theme.textPrimary
-                                                            font.pixelSize: 11
+                                                            font.pixelSize: Theme.fontSizeSM
                                                             font.bold: true
                                                         }
                                                     }
@@ -1355,7 +1355,7 @@ Item {
                                                         visible: oType === "double" || oType === "int"
                                                         text: oUnit
                                                         color: Theme.textDisabled
-                                                        font.pixelSize: 10
+                                                        font.pixelSize: Theme.fontSizeXS
                                                     }
 
                                                     CxCheckBox {
@@ -1402,7 +1402,7 @@ Item {
                         width: parent.width
                         height: 24
                         radius: 4
-                        color: "#1a2535"
+                        color: Theme.bgPanel
 
                         RowLayout {
                             anchors.fill: parent
@@ -1413,7 +1413,7 @@ Item {
                             Text {
                                 text: qsTr("Layer Ranges")
                                 color: Theme.accent
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fontSizeXS
                                 font.bold: true
                             }
                             Item { Layout.fillWidth: true }
@@ -1434,7 +1434,7 @@ Item {
                             width: parent.width
                             height: 32
                             radius: 4
-                            color: "#141a24"
+                            color: Theme.bgPanel
                             border.width: 1
                             border.color: Theme.borderSubtle
 
@@ -1447,7 +1447,7 @@ Item {
                                 Text {
                                     text: "#" + (delegateIndex + 1)
                                     color: Theme.textDisabled
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fontSizeXS
                                     font.bold: true
                                     Layout.preferredWidth: 20
                                 }
@@ -1458,7 +1458,7 @@ Item {
                                         root.configVm ? root.configVm.layerRangeMaxZ(delegateIndex).toFixed(1) : "0.0"
                                     )
                                     color: Theme.textPrimary
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fontSizeXS
                                     font.family: "Consolas, monospace"
                                     Layout.fillWidth: true
                                 }
@@ -1494,7 +1494,7 @@ Item {
                             Text {
                                 text: "+ " + qsTr("Add Layer Range")
                                 color: addRangeBtn.containsMouse ? Theme.accent : Theme.textSecondary
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fontSizeXS
                             }
                         }
 
@@ -1537,14 +1537,14 @@ Item {
                             Text {
                                 text: "\uD83D\uDD0D"
                                 color: Theme.textDisabled
-                                font.pixelSize: 12
+                                font.pixelSize: Theme.fontSizeMD
                             }
 
                             TextField {
                                 Layout.fillWidth: true
                                 placeholderText: qsTr("搜索参数...")
                                 color: Theme.textPrimary
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                                 background: null
                                 text: root.searchText
                                 onTextChanged: root.searchText = text
@@ -1554,7 +1554,7 @@ Item {
                                 visible: root.searchText.length > 0
                                 width: 16; height: 16; radius: 8
                                 color: clearSearchMA.containsMouse ? "#2e1a1a" : "#1e2535"
-                                Text { anchors.centerIn: parent; text: "\u2715"; color: "#8a96a8"; font.pixelSize: 8 }
+                                Text { anchors.centerIn: parent; text: "\u2715"; color: Theme.textMuted; font.pixelSize: 8 }
                                 MouseArea {
                                     id: clearSearchMA
                                     anchors.fill: parent
@@ -1571,7 +1571,7 @@ Item {
                                     anchors.centerIn: parent
                                     text: "\uD83D\uDD0E"
                                     color: openSearchBtn.containsMouse ? "#fff" : Theme.textDisabled
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fontSizeXS
                                 }
                                 MouseArea {
                                     id: openSearchBtn
@@ -1589,7 +1589,7 @@ Item {
                         color: saveBtn.containsMouse ? "#1c2a3e" : Theme.bgElevated
                         border.width: 1
                         border.color: Theme.borderSubtle
-                        Text { anchors.centerIn: parent; text: "\uD83D\uDCBE"; font.pixelSize: 12 }
+                        Text { anchors.centerIn: parent; text: "\uD83D\uDCBE"; font.pixelSize: Theme.fontSizeMD }
                         MouseArea { id: saveBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                             onClicked: if (root.configVm) root.configVm.saveCurrentPreset()
                         }
@@ -1600,7 +1600,7 @@ Item {
                         color: resetBtn.containsMouse ? "#2e1a1a" : Theme.bgElevated
                         border.width: 1
                         border.color: Theme.borderSubtle
-                        Text { anchors.centerIn: parent; text: "\u21BA"; color: "#e06666"; font.pixelSize: 12 }
+                        Text { anchors.centerIn: parent; text: "\u21BA"; color: "#e06666"; font.pixelSize: Theme.fontSizeMD }
                         MouseArea { id: resetBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                             onClicked: if (root.configVm && root.configVm.printOptions) root.configVm.printOptions.resetToDefaults()
                         }
@@ -1616,14 +1616,14 @@ Item {
                         visible: root.configVm && root.configVm.printOptions && root.configVm.printOptions.dirtyCount() > 0
                         text: qsTr("%1 项已修改").arg(root.configVm ? root.configVm.printOptions.dirtyCount() : 0)
                         color: "#f59e0b"
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                     }
 
                     Text {
                         visible: root.searchText.length > 0
                         text: qsTr("%1 项匹配").arg(root.filteredIndices.length)
                         color: Theme.textDisabled
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                     }
 
                     Item { Layout.fillWidth: true }
@@ -1653,7 +1653,7 @@ Item {
                     Text {
                         text: qsTr("作用域差异 (%1)").arg(root.configVm ? root.configVm.scopeOverrideCount() : 0)
                         color: Theme.textSecondary
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                         font.bold: true
                     }
                     Item { Layout.fillWidth: true }
@@ -1661,7 +1661,7 @@ Item {
                     Text {
                         text: qsTr("全部重置")
                         color: Theme.textTertiary
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
@@ -1691,7 +1691,7 @@ Item {
                         Text {
                             text: root.configVm ? root.configVm.scopeOverriddenKey(index) : ""
                             color: Theme.textPrimary
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fontSizeXS
                             elide: Text.ElideMiddle
                             Layout.fillWidth: true
                         }
@@ -1701,7 +1701,7 @@ Item {
                             color: scopeResetMA.containsMouse ? "#2e1a1a" : Theme.bgPanel
                             border.width: 1
                             border.color: Theme.borderSubtle
-                            Text { anchors.centerIn: parent; text: "\u21BA"; color: "#e06666"; font.pixelSize: 10 }
+                            Text { anchors.centerIn: parent; text: "\u21BA"; color: "#e06666"; font.pixelSize: Theme.fontSizeXS }
                             MouseArea {
                                 id: scopeResetMA
                                 anchors.fill: parent

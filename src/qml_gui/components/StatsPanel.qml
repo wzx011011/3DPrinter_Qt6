@@ -284,7 +284,7 @@ Item {
                                         visible: barHover.hovered
                                         z: 10
                                         radius: 4
-                                        color: "#1e293b"
+                                        color: Theme.bgElevated
                                         border.width: 1
                                         border.color: Theme.borderSubtle
 

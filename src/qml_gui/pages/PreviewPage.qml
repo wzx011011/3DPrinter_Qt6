@@ -72,7 +72,7 @@ Item {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 48
-                radius: 14
+                radius: Theme.radiusXXL
                 color: Theme.bgPanel
                 border.width: 1
                 border.color: Theme.borderSubtle
@@ -114,13 +114,13 @@ Item {
                                 width: 26
                                 height: 26
                                 radius: 6
-                                color: viewMA.containsMouse ? "#2a3545" : "#1e2229"
-                                border.color: viewMA.containsMouse ? "#3e5060" : "#2e3540"
+                                color: viewMA.containsMouse ? Theme.bgHover : Theme.bgPanel
+                                border.color: viewMA.containsMouse ? Theme.borderDefault : Theme.borderSubtle
 
                                 Text {
                                     anchors.centerIn: parent
                                     text: parent.modelData.label
-                                    color: "#9daaba"
+                                    color: Theme.textSecondary
                                     font.pixelSize: 10
                                 }
 
@@ -157,15 +157,15 @@ Item {
                         Layout.preferredHeight: 28
                         Layout.preferredWidth: 130
                         radius: 10
-                        color: "#1e2229"
+                        color: Theme.bgPanel
                         border.width: 1
-                        border.color: "#2e3540"
+                        border.color: Theme.borderSubtle
 
                         Label {
                             anchors.centerIn: parent
                             text: (root.previewVm ? root.previewVm.layerCount : 0) + " 层 · "
                                   + (root.previewVm ? root.previewVm.moveCount : 0) + " 步"
-                            color: "#7a8a9a"
+                            color: Theme.textTertiary
                             font.pixelSize: 11
                         }
                     }
@@ -182,7 +182,7 @@ Item {
                 Layout.preferredWidth: 240
                 Layout.fillHeight: true
                 color: Theme.bgPanel
-                radius: 16
+                radius: Theme.radiusXXL
                 border.width: 1
                 border.color: Theme.borderSubtle
                 ColumnLayout {
@@ -200,7 +200,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 color: Theme.bgSurface
-                radius: 18
+                radius: Theme.radiusXXL
                 border.width: 1
                 border.color: Theme.borderSubtle
 
@@ -235,7 +235,7 @@ Item {
                 Layout.preferredWidth: 280
                 Layout.fillHeight: true
                 color: Theme.bgPanel
-                radius: 16
+                radius: Theme.radiusXXL
                 border.width: 1
                 border.color: Theme.borderSubtle
                 ColumnLayout {
@@ -289,7 +289,7 @@ Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 56
             color: Theme.bgPanel
-            radius: 16
+            radius: Theme.radiusXXL
             border.width: 1
             border.color: Theme.borderSubtle
             Components.MoveSlider {
