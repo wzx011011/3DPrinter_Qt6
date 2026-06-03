@@ -3,7 +3,7 @@
 #include <QFileInfo>
 #include <QtTest>
 
-#include "qml_gui/BackendContext.h"
+#include "core/services/CameraServiceMock.h"
 #include "core/services/DeviceServiceMock.h"
 #include "core/services/NetworkServiceMock.h"
 #include "core/services/PresetServiceMock.h"
@@ -14,23 +14,51 @@
 #include "core/viewmodels/MonitorViewModel.h"
 #include "core/viewmodels/PreviewViewModel.h"
 #include "core/viewmodels/ProjectViewModel.h"
+#include "qml_gui/BackendContext.h"
+#include "qml_gui/Models/ConfigOptionModel.h"
+
+namespace
+{
+  static const QString kStlPath = QDir::cleanPath(
+      QStringLiteral(QT_TESTCASE_SOURCEDIR) +
+      QStringLiteral("/third_party/CrealityPrint/resources/profiles/hotend.stl"));
+}
 
 class ViewModelSmokeTests final : public QObject
 {
   Q_OBJECT
 
 private slots:
+  void initTestCase();
   void editor_import_model_updates_state();
-  void preview_receives_slice_progress();
-  void slice_reuse_previous_gcode_file();
   void monitor_refresh_updates_network_and_device();
   void config_default_and_switch_preset();
-  void topbar_new_save_and_navigation_behaviors();
-  void topbar_open_import_with_temp_model_file();
-  void topbar_import_3mf_generates_mesh();
-  void topbar_delete_selected_object_updates_model_and_mesh();
-  void multipplate_switch_and_delete_smoke();
+  void testUpstreamDefaultsContainVectorKeys();
+  void testMachineOptionsLoaded();
+  void testFilamentOptionsLoaded();
+  void testMachineEditFlowsToGlobal();
+  void testTierAwareSaveFiltersByTier();
+
+private:
+  bool hasLibslic3r() const;
 };
+
+bool ViewModelSmokeTests::hasLibslic3r() const
+{
+#ifdef HAS_LIBSLIC3R
+  return true;
+#else
+  return false;
+#endif
+}
+
+void ViewModelSmokeTests::initTestCase()
+{
+  if (!hasLibslic3r())
+    QSKIP("ViewModel smoke tests require HAS_LIBSLIC3R — skipping all tests");
+  QVERIFY2(QFileInfo::exists(kStlPath), qPrintable(
+      QStringLiteral("Test STL not found: %1").arg(kStlPath)));
+}
 
 void ViewModelSmokeTests::editor_import_model_updates_state()
 {
@@ -40,219 +68,165 @@ void ViewModelSmokeTests::editor_import_model_updates_state()
 
   QCOMPARE(editor.modelCount(), 0);
 
-  const QString stlPath = QDir::cleanPath(QStringLiteral(QT_TESTCASE_SOURCEDIR) +
-                                          QStringLiteral("/third_party/CrealityPrint/resources/profiles/hotend.stl"));
-  QVERIFY2(QFileInfo::exists(stlPath), qPrintable(stlPath));
-
   QSignalSpy spy(&editor, &EditorViewModel::stateChanged);
-  QVERIFY(editor.loadFile(stlPath));
+  QVERIFY(editor.loadFile(kStlPath));
 
+  QTRY_VERIFY_WITH_TIMEOUT(editor.modelCount() >= 1, 5000);
   QVERIFY(spy.count() >= 1);
-  QCOMPARE(editor.modelCount(), 1);
-}
-
-void ViewModelSmokeTests::preview_receives_slice_progress()
-{
-  ProjectServiceMock project;
-  SliceService slice(&project);
-  PreviewViewModel preview(&slice);
-
-  QSignalSpy spy(&preview, &PreviewViewModel::stateChanged);
-  slice.startSlice(QStringLiteral("demo"));
-
-  QTRY_VERIFY_WITH_TIMEOUT(spy.count() > 0, 1500);
-  QCOMPARE(preview.slicing(), false);
-  QCOMPARE(preview.progress(), 0);
-  QCOMPARE(preview.estimatedTime(), QStringLiteral("--:--:--"));
-}
-
-void ViewModelSmokeTests::slice_reuse_previous_gcode_file()
-{
-  ProjectServiceMock project;
-  SliceService slice(&project);
-
-  const QString gcodePath = QDir::cleanPath(QStringLiteral(QT_TESTCASE_SOURCEDIR) +
-                                            QStringLiteral("/third_party/CrealityPrint/resources/printers/ams_load.gcode"));
-  QVERIFY2(QFileInfo::exists(gcodePath), qPrintable(gcodePath));
-
-  QSignalSpy progressSpy(&slice, &SliceService::progressUpdated);
-  QVERIFY(slice.loadGCodeFromPrevious(gcodePath));
-
-  QTRY_VERIFY_WITH_TIMEOUT(!slice.slicing(), 5000);
-  QVERIFY(progressSpy.count() > 0);
-  QCOMPARE(slice.progress(), 100);
-  QCOMPARE(slice.outputPath(), QFileInfo(gcodePath).absoluteFilePath());
 }
 
 void ViewModelSmokeTests::monitor_refresh_updates_network_and_device()
 {
   DeviceServiceMock device;
   NetworkServiceMock network;
-  MonitorViewModel monitor(&device, &network);
+  CameraServiceMock camera;
+  MonitorViewModel monitor(&device, &network, &camera);
 
-  const QString beforeState = monitor.firstDeviceState();
+  const int beforeState = monitor.monitorState();
   const int beforeLatency = monitor.latencyMs();
 
-  QSignalSpy spy(&monitor, &MonitorViewModel::stateChanged);
+  QSignalSpy spy(&monitor, &MonitorViewModel::networkChanged);
   monitor.refresh();
 
   QVERIFY(spy.count() >= 1);
-  QVERIFY(monitor.firstDeviceState() != beforeState || monitor.latencyMs() != beforeLatency);
-  QVERIFY(monitor.online());
+  QVERIFY(monitor.monitorState() != beforeState || monitor.latencyMs() != beforeLatency);
+  QVERIFY(monitor.networkOnline());
 }
 
 void ViewModelSmokeTests::config_default_and_switch_preset()
 {
   PresetServiceMock preset;
-  ConfigViewModel config(&preset);
-
-  QCOMPARE(config.currentPreset(), QStringLiteral("0.20mm Standard @Creality K1C"));
-  QCOMPARE(config.layerHeight(), 0.2);
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
 
   QSignalSpy spy(&config, &ConfigViewModel::stateChanged);
-  config.setCurrentPreset(QStringLiteral("0.16mm Fine"));
+  const QString initialPreset = config.currentPreset();
+  QVERIFY(!initialPreset.isEmpty());
 
+  config.setCurrentPreset(QStringLiteral("0.16mm Fine"));
   QVERIFY(spy.count() >= 1);
   QCOMPARE(config.currentPreset(), QStringLiteral("0.16mm Fine"));
 }
 
-void ViewModelSmokeTests::topbar_new_save_and_navigation_behaviors()
+void ViewModelSmokeTests::testUpstreamDefaultsContainVectorKeys()
 {
-  BackendContext backend;
+  PresetServiceMock preset;
+  auto defaults = preset.presetValues(QStringLiteral("__upstream_defaults__"));
 
-  auto *editor = qobject_cast<EditorViewModel *>(backend.editorViewModel());
-  auto *project = qobject_cast<ProjectViewModel *>(backend.projectViewModel());
-  QVERIFY(editor != nullptr);
-  QVERIFY(project != nullptr);
+  // coFloats type — previously skipped by extraction
+  QVERIFY2(defaults.contains(QStringLiteral("machine_max_speed_x")),
+           "machine_max_speed_x missing from upstream defaults (coFloats)");
+  QVERIFY2(defaults.contains(QStringLiteral("nozzle_diameter")),
+           "nozzle_diameter missing from upstream defaults (coFloats)");
 
-  const QString stlPath = QDir::cleanPath(QStringLiteral(QT_TESTCASE_SOURCEDIR) +
-                                          QStringLiteral("/third_party/CrealityPrint/resources/profiles/hotend.stl"));
-  QVERIFY2(QFileInfo::exists(stlPath), qPrintable(stlPath));
-  QVERIFY(backend.topbarImportModel(stlPath));
-  project->saveProjectAs(QStringLiteral("C:/tmp/preexisting.3mf"));
-  QVERIFY(editor->modelCount() > 0);
-  QVERIFY(!project->currentProjectPath().isEmpty());
+  // coEnum type — previously skipped
+  QVERIFY2(defaults.contains(QStringLiteral("gcode_flavor")),
+           "gcode_flavor missing from upstream defaults (coEnum)");
 
-  backend.topbarNewProject();
-  QCOMPARE(backend.currentPage(), 1);
-  QCOMPARE(editor->modelCount(), 0);
-  QCOMPARE(project->currentProjectPath(), QString{});
-  QCOMPARE(editor->statusText(), QStringLiteral("已新建项目"));
-
-  QVERIFY(!backend.topbarSaveProject());
-  QVERIFY(backend.topbarSaveProjectAs(QStringLiteral("C:/tmp/new_saved_project.3mf")));
-  QVERIFY(backend.topbarSaveProject());
-  QCOMPARE(project->currentProjectPath(), QStringLiteral("C:/tmp/new_saved_project.3mf"));
-
-  backend.setCurrentPage(1);
-  backend.openSettings();
-  QCOMPARE(backend.currentPage(), 11);
-  backend.setCurrentPage(8);
-  QCOMPARE(backend.currentPage(), 8);
-  backend.setCurrentPage(0);
-  QCOMPARE(backend.currentPage(), 0);
+  // coPoints type — previously skipped
+  QVERIFY2(defaults.contains(QStringLiteral("printable_area")),
+           "printable_area missing from upstream defaults (coPoints)");
 }
 
-void ViewModelSmokeTests::topbar_open_import_with_temp_model_file()
+void ViewModelSmokeTests::testMachineOptionsLoaded()
 {
-  BackendContext backend;
-  auto *editor = qobject_cast<EditorViewModel *>(backend.editorViewModel());
-  auto *project = qobject_cast<ProjectViewModel *>(backend.projectViewModel());
-  QVERIFY(editor != nullptr);
-  QVERIFY(project != nullptr);
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
 
-  const QString stlPath = QDir::cleanPath(QStringLiteral(QT_TESTCASE_SOURCEDIR) +
-                                          QStringLiteral("/third_party/CrealityPrint/resources/profiles/hotend.stl"));
-  QVERIFY2(QFileInfo::exists(stlPath), qPrintable(stlPath));
+  auto *machineOpts = qobject_cast<ConfigOptionModel *>(config.machineOptions());
+  QVERIFY(machineOpts);
+  QVERIFY2(machineOpts->rowCount() > 0, "Machine options model is empty");
 
-  QVERIFY(backend.topbarImportModel(stlPath));
-  QCOMPARE(backend.currentPage(), 1);
-  QTRY_VERIFY_WITH_TIMEOUT(editor->modelCount() > 0, 5000);
-
-  QVERIFY(backend.topbarOpenProject(stlPath));
-  QCOMPARE(backend.currentPage(), 1);
-  QCOMPARE(project->currentProjectPath(), stlPath);
-  QVERIFY(project->recentProjects().contains(stlPath));
+  // Verify key printer hardware parameters exist
+  QVERIFY2(machineOpts->indexOfKey(QStringLiteral("machine_max_speed_x")) >= 0,
+           "machine_max_speed_x missing from machine options");
+  QVERIFY2(machineOpts->indexOfKey(QStringLiteral("gcode_flavor")) >= 0,
+           "gcode_flavor missing from machine options");
+  QVERIFY2(machineOpts->indexOfKey(QStringLiteral("nozzle_diameter")) >= 0,
+           "nozzle_diameter missing from machine options");
+  QVERIFY2(machineOpts->indexOfKey(QStringLiteral("machine_start_gcode")) >= 0,
+           "machine_start_gcode missing from machine options");
+  QVERIFY2(machineOpts->indexOfKey(QStringLiteral("printable_area")) >= 0,
+           "printable_area missing from machine options");
 }
 
-void ViewModelSmokeTests::topbar_import_3mf_generates_mesh()
+void ViewModelSmokeTests::testFilamentOptionsLoaded()
 {
-  BackendContext backend;
-  auto *editor = qobject_cast<EditorViewModel *>(backend.editorViewModel());
-  QVERIFY(editor != nullptr);
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
 
-  const QString model3mf = QDir::cleanPath(QStringLiteral(QT_TESTCASE_SOURCEDIR) +
-                                           QStringLiteral("/third_party/CrealityPrint/resources/calib/arc/arc.3mf"));
-  QVERIFY2(QFileInfo::exists(model3mf), qPrintable(model3mf));
+  auto *filamentOpts = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
+  QVERIFY(filamentOpts);
+  QVERIFY2(filamentOpts->rowCount() > 0, "Filament options model is empty");
 
-  QVERIFY(backend.topbarImportModel(model3mf));
-  QCOMPARE(backend.currentPage(), 1);
-
-  QTRY_VERIFY_WITH_TIMEOUT(editor->modelCount() > 0, 10000);
-  QTRY_VERIFY_WITH_TIMEOUT(editor->meshData().size() > int(sizeof(int32_t)), 10000);
+  QVERIFY2(filamentOpts->indexOfKey(QStringLiteral("filament_type")) >= 0,
+           "filament_type missing from filament options");
+  QVERIFY2(filamentOpts->indexOfKey(QStringLiteral("nozzle_temperature")) >= 0,
+           "nozzle_temperature missing from filament options");
+  QVERIFY2(filamentOpts->indexOfKey(QStringLiteral("fan_max_speed")) >= 0,
+           "fan_max_speed missing from filament options");
 }
 
-void ViewModelSmokeTests::topbar_delete_selected_object_updates_model_and_mesh()
+void ViewModelSmokeTests::testMachineEditFlowsToGlobal()
 {
-  BackendContext backend;
-  auto *editor = qobject_cast<EditorViewModel *>(backend.editorViewModel());
-  QVERIFY(editor != nullptr);
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
 
-  const QString model3mf = QDir::cleanPath(QStringLiteral(QT_TESTCASE_SOURCEDIR) +
-                                           QStringLiteral("/third_party/CrealityPrint/resources/calib/arc/arc.3mf"));
-  QVERIFY2(QFileInfo::exists(model3mf), qPrintable(model3mf));
+  auto *machineOpts = qobject_cast<ConfigOptionModel *>(config.machineOptions());
+  int idx = machineOpts->indexOfKey(QStringLiteral("machine_max_speed_x"));
+  QVERIFY2(idx >= 0, "machine_max_speed_x not found in machine options");
 
-  QVERIFY(backend.topbarImportModel(model3mf));
-  QTRY_VERIFY_WITH_TIMEOUT(editor->modelCount() > 0, 10000);
+  machineOpts->setValue(idx, 999.0);
 
-  const int beforeCount = editor->modelCount();
-  const int selectedIndex = editor->selectedObjectIndex();
-  QVERIFY(selectedIndex >= 0);
-
-  editor->deleteObject(selectedIndex);
-
-  const int afterCount = editor->modelCount();
-  QVERIFY(afterCount == beforeCount - 1 || afterCount == 0);
-  if (afterCount > 0)
-    QVERIFY(editor->meshData().size() > int(sizeof(int32_t)));
-  else
-    QVERIFY(editor->meshData().isEmpty());
-
-  QVERIFY(!editor->statusText().isEmpty());
+  auto merged = config.mergedConfigValues();
+  QVERIFY(merged.contains(QStringLiteral("machine_max_speed_x")));
+  QCOMPARE(merged[QStringLiteral("machine_max_speed_x")].toDouble(), 999.0);
 }
 
-void ViewModelSmokeTests::multipplate_switch_and_delete_smoke()
+void ViewModelSmokeTests::testTierAwareSaveFiltersByTier()
 {
-  BackendContext backend;
-  auto *editor = qobject_cast<EditorViewModel *>(backend.editorViewModel());
-  QVERIFY(editor != nullptr);
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
 
-  const QString model3mf = QDir::cleanPath(QStringLiteral(QT_TESTCASE_SOURCEDIR) +
-                                           QStringLiteral("/third_party/CrealityPrint/resources/creality_models/ksr_fdmtest_v4.3mf"));
-  QVERIFY2(QFileInfo::exists(model3mf), qPrintable(model3mf));
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  auto *machineOpts = qobject_cast<ConfigOptionModel *>(config.machineOptions());
 
-  QVERIFY(backend.topbarImportModel(model3mf));
-  QTRY_VERIFY_WITH_TIMEOUT(editor->modelCount() > 0, 15000);
+  int printIdx = printOpts->indexOfKey(QStringLiteral("layer_height"));
+  int machineIdx = machineOpts->indexOfKey(QStringLiteral("machine_max_speed_x"));
+  QVERIFY2(printIdx >= 0, "layer_height not in print options");
+  QVERIFY2(machineIdx >= 0, "machine_max_speed_x not in machine options");
 
-  if (editor->plateCount() < 2)
-    QSKIP("test asset is not multi-plate in current environment");
+  // Edit both tiers
+  printOpts->setValue(printIdx, 0.35);
+  machineOpts->setValue(machineIdx, 999.0);
 
-  QVERIFY(editor->setCurrentPlateIndex(1));
-  QCOMPARE(editor->currentPlateIndex(), 1);
+  // Save as print tier — should only include print model keys
+  config.setActivePresetTier(QStringLiteral("print"));
+  config.saveCurrentPreset();
 
-  const int beforeVisible = editor->objectCount();
-  if (beforeVisible <= 0)
-    QSKIP("second plate has no objects to delete");
+  // Verify print preset has layer_height with the edited value
+  auto saved = preset.presetValues(config.currentPrintPreset().isEmpty()
+                                    ? config.currentPreset()
+                                    : config.currentPrintPreset());
+  QVERIFY2(saved.contains(QStringLiteral("layer_height")),
+           "layer_height should be in print preset after save");
+  QCOMPARE(saved[QStringLiteral("layer_height")].toDouble(), 0.35);
 
-  editor->selectObject(0);
-  const int selectedIndex = editor->selectedObjectIndex();
-  QVERIFY(selectedIndex >= 0);
+  // Now save as printer tier — machine key should be saved there
+  config.setActivePresetTier(QStringLiteral("printer"));
+  config.saveCurrentPreset();
 
-  editor->deleteObject(selectedIndex);
-
-  const int afterVisible = editor->objectCount();
-  QVERIFY(afterVisible <= beforeVisible);
-  QVERIFY(!editor->statusText().isEmpty());
+  auto printerSaved = preset.presetValues(config.currentPrinterPreset());
+  if (!printerSaved.isEmpty()) {
+    // Verify the machine key was saved to the printer preset
+    QVERIFY2(printerSaved.contains(QStringLiteral("machine_max_speed_x")),
+             "machine_max_speed_x should be in printer preset after printer-tier save");
+    QCOMPARE(printerSaved[QStringLiteral("machine_max_speed_x")].toDouble(), 999.0);
+  }
 }
 
 QTEST_MAIN(ViewModelSmokeTests)

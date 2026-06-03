@@ -1,73 +1,95 @@
-# Roadmap: Milestone v1.1 — End-to-End Slicing Workflow
+# Roadmap: Milestone v1.3 — CLI Port
 
 ## Overview
 
-Complete and verify the full slicing workflow from model import through G-code preview. The codebase already has real implementations for each component — this milestone focuses on closing the remaining preset gaps, verifying the E2E chain works without mock breaks, and polishing involved UI pages to production quality.
+Port upstream CrealityPrint's headless CLI to Qt6, enabling automated slicing, CI/CD integration, and batch processing without a GUI. The Qt6 service layer (ProjectServiceMock, SliceService, PresetServiceMock) is already standalone-capable — the gap is infrastructure: CLI entry point, CMake target, argument parsing, and E2E test coverage.
+
+Upstream reference: `CLI::run()` in `CrealityPrint.cpp` (~6000 lines), supports `--load`, `--slice`, `--export-3mf`, `--load-settings`, `--arrange`, `--orient`.
 
 ## Phases
 
-- [x] **Phase 1: Preset System Completion** — Ensure real vendor presets load completely and the 3-tier parameter chain flows correctly to the UI
-- [x] **Phase 2: E2E Workflow Verification** — Run through the complete slice workflow, fix any data flow breaks or crashes
-- [x] **Phase 3: UI Polish Pass** — Visual QA and polish on Prepare, Preview, and Slice Progress pages
+- [ ] **Phase 1: CMake + CLI Skeleton** — Build `creality-cli.exe`, `--help` runs
+- [ ] **Phase 2: Arg Parsing + Model Loading** — `--load model.stl` prints object/plate info
+- [ ] **Phase 3: Preset Config + Slicing** — Load → config → slice → G-code export pipeline
+- [ ] **Phase 4: 3MF Export + Transforms** — `--export-3mf`, `--arrange`, `--orient`, `--rotate`, `--scale`
 
 ## Phase Details
 
-### Phase 1: Preset System Completion
-**Mode**: MVP
-**Goal**: Users can select a real Creality printer, compatible filament, and process preset, and see real parameter values in the right panel.
-**Depends on**: Nothing (builds on validated foundation)
-**Requirements**: PRESET-01
-**Success Criteria**:
-  1. Vendor JSON files from `third_party/CrealityPrint/resources/profiles/Creality/` parse correctly and populate all 3 preset categories (printer, filament, process)
-  2. Inheritance chains resolve: system defaults → vendor overrides → user modifications
-  3. Filament compatibility filtering works — only filaments matching the selected printer's nozzle diameter and temperature range appear
-  4. Selecting a preset updates all parameter values in the right panel (PrintSettings.qml)
-  5. Value source indicators correctly show which tier provides each value
-**Plans**: 1 plan
+### Phase 1: CMake + CLI Skeleton
+**Mode:** MVP
+**Goal:** `creality-cli.exe --help` runs and prints usage.
+**Depends on:** Nothing (builds on v1.1/v1.2 service layer)
+**Requirements:** CLI-01
+**Success Criteria:**
+  1. `creality_cli_core` OBJECT library compiles without QML/OpenGL deps
+  2. `creality-cli` executable links and runs
+  3. `--help` prints usage with `--load`, `--slice`, `--output-dir` options
+  4. No args prints usage (or exits with help), no crash
+  5. Invalid args produce error messages (not crashes)
+**Plans:** 1 plan
 Plans:
-- [ ] v11-01-01-PLAN.md — Fix vendor path, store compatibility metadata, wire upstream defaults into hierarchy merge
+- [ ] v13-01-01-PLAN.md — CMake skeleton, entry point, CliRunner orchestrator
 
-### Phase 2: E2E Workflow Verification
-**Mode**: MVP
-**Goal**: The complete import → configure → slice → export → preview workflow runs without any mock breakpoints or data loss.
-**Depends on**: Phase 1
-**Requirements**: FLOW-01, FLOW-02
-**Success Criteria**:
-  1. Importing an STL file produces a visible mesh in the Prepare viewport
-  2. Selecting printer/filament/process and clicking Slice triggers libslic3r, progress bar updates in real time, and slice completes without error
-  3. Slice result summary shows real statistics (time, filament, cost) matching libslic3r output
-  4. G-code file is written to disk and can be re-loaded
-  5. Auto-switch to Preview renders the G-code with at least Line Type color mapping working
-  6. Export G-code dialog saves the file to a user-chosen location
-  7. Any data flow breaks between components are identified and fixed
-**Plans**: 1 plan
+### Phase 2: Arg Parsing + Model Loading
+**Mode:** MVP
+**Goal:** `--load model.stl` prints object names, plate count; `--load project.3mf` shows multi-plate layout.
+**Depends on:** Phase 1
+**Requirements:** CLI-02
+**Success Criteria:**
+  1. `--load hotend.stl` loads STL, prints 1 object, plate count = 1
+  2. `--load ksr_fdmtest_v4.3mf` loads 3MF, prints multi-plate layout
+  3. `--load nonexistent.stl` exits with code -3 (CLI_FILE_NOTFOUND)
+  4. Multiple `--load` flags load multiple models
+  5. Exit codes match upstream CLI_* error code macros
+**Plans:** 1 plan
 Plans:
-- [ ] v11-02-01-PLAN.md — Inject preset config into slice engine, add E2E workflow test coverage
+- [ ] v13-02-01-PLAN.md — QCommandLineParser, model loading via ProjectServiceMock
 
-### Phase 3: UI Polish Pass
-**Mode**: MVP
-**Goal**: All pages involved in the slicing workflow present a professional, usable interface with no visual glitches.
-**Depends on**: Phase 2
-**Requirements**: UI-01, UI-02, UI-03
-**Success Criteria**:
-  1. Prepare page: object list, toolbar, right panel all render correctly with proper spacing, alignment, and theme colors
-  2. Preview page: sliders, stats, legend, and color mode selector all function smoothly
-  3. Slice progress panel: progress bar, result summary, and action buttons are clearly readable
-  4. No clipped text, overlapping elements, or broken layouts on any involved page
-  5. Consistent theme token usage across all pages (Theme.bgBase, Theme.accent, etc.)
-**Plans**: 3 plans
+### Phase 3: Preset Config + Slicing
+**Mode:** MVP
+**Goal:** `--load model.stl --load-settings preset.json --slice --output-dir ./out` produces G-code.
+**Depends on:** Phase 2
+**Requirements:** CLI-03
+**Success Criteria:**
+  1. Load STL → slice → G-code file exists and is >1KB
+  2. G-code contains slicer header comments and G0/G1 movement commands
+  3. `--load-settings` JSON overlays onto default preset config
+  4. Multi-plate 3MF produces per-plate G-code files
+  5. Invalid preset exits with code -5 (CLI_CONFIG_FILE_ERROR)
+  6. Slice results (time, weight, filament) emitted to stdout
+**Plans:** 1 plan
 Plans:
-- [ ] v11-03-01-PLAN.md — Add 6 Theme tokens, tokenize SliceProgress + PreviewPage + LayerSlider + StatsPanel + MoveSlider
-- [ ] v11-03-02-PLAN.md — Tokenize PrintSettings + Sidebar
-- [ ] v11-03-03-PLAN.md — Tokenize PreparePage (195 hardcoded colors)
+- [ ] v13-03-01-PLAN.md — PresetServiceMock wiring, SliceService async pipeline, G-code export
+
+### Phase 4: 3MF Export + Transforms
+**Mode:** MVP
+**Goal:** Support `--export-3mf`, `--arrange`, `--orient`, `--rotate`, `--scale`.
+**Depends on:** Phase 3
+**Requirements:** CLI-04
+**Success Criteria:**
+  1. `--export-3mf` produces valid 3MF that round-trips (reload in GUI preserves data)
+  2. `--arrange` repositions objects using real bed boundaries
+  3. `--orient` applies auto-orientation
+  4. `--rotate x,y,z` and `--scale factor` apply transforms before slice
+  5. Arrange failure exits with code -21 (CLI_OBJECT_ARRANGE_FAILED)
+**Plans:** 1 plan
+Plans:
+- [ ] v13-04-01-PLAN.md — store_bbs_3mf export, transform APIs, round-trip verification
+
+## E2E Testing
+
+New CTest target `CliTests` with phase-gated test cases. Uses `QProcess` to invoke CLI as subprocess, validates exit codes, stdout/stderr, and output files. See plan file for full test matrix (22 test cases across 4 phases).
+
+Test models reuse existing: `hotend.stl`, `3DBenchy.stl`, `Block20XY.stl`, `ksr_fdmtest_v4.3mf`.
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Preset System Completion | 1/1 | Completed | 2026-06-01 |
-| 2. E2E Workflow Verification | 1/1 | Completed | 2026-06-01 |
-| 3. UI Polish Pass | 3/3 | Completed | 2026-06-01 |
+| 1. CMake + CLI Skeleton | 0/1 | Executed | 2026-06-02 |
+| 2. Arg Parsing + Model Loading | 0/1 | Executed | 2026-06-02 |
+| 3. Preset Config + Slicing | 0/1 | Blocked | — |
+| 4. 3MF Export + Transforms | 0/1 | Pending | — |

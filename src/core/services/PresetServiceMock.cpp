@@ -16,6 +16,7 @@ PresetServiceMock::PresetServiceMock(QObject *parent)
     : QObject(parent)
 {
 #ifdef HAS_LIBSLIC3R
+  loadUpstreamSchemaDefaults();
   if (!loadVendorPresets())
     initBuiltinDefaults();
 #else
@@ -360,43 +361,92 @@ bool PresetServiceMock::loadVendorPresets()
       m_presetInherits[entry.name] = inheritMap[entry.name];
   }
 
-  // Also load the upstream schema defaults as the base config for value resolution
-  // This ensures all ~200 config keys have defaults even if not overridden by presets
-  {
-    const auto &def = Slic3r::print_config_def;
-    QHash<QString, QVariant> upstreamDefaults;
-    for (const auto &optPair : def.options)
-    {
-      const auto &optDef = optPair.second;
-      if (!optDef.default_value)
-        continue;
-      const QString key = QString::fromUtf8(optPair.first.c_str());
-      if (upstreamDefaults.contains(key))
-        continue;
-      switch (optDef.type)
-      {
-      case Slic3r::coFloat:
-      case Slic3r::coFloatOrPercent:
-        upstreamDefaults[key] = static_cast<const Slic3r::ConfigOptionFloat *>(optDef.default_value.get())->value;
-        break;
-      case Slic3r::coInt:
-        upstreamDefaults[key] = static_cast<const Slic3r::ConfigOptionInt *>(optDef.default_value.get())->value;
-        break;
-      case Slic3r::coBool:
-        upstreamDefaults[key] = static_cast<const Slic3r::ConfigOptionBool *>(optDef.default_value.get())->value != 0;
-        break;
-      case Slic3r::coString:
-        upstreamDefaults[key] = QString::fromStdString(static_cast<const Slic3r::ConfigOptionString *>(optDef.default_value.get())->value);
-        break;
-      default:
-        break;
-      }
-    }
-    // Store upstream defaults as a hidden "template" for ConfigViewModel to use as base tier
-    m_presetStore[QStringLiteral("__upstream_defaults__")] = upstreamDefaults;
-  }
-
   return !m_presetStore.isEmpty();
+}
+
+void PresetServiceMock::loadUpstreamSchemaDefaults()
+{
+  const auto &def = Slic3r::print_config_def;
+  QHash<QString, QVariant> upstreamDefaults;
+  for (const auto &optPair : def.options)
+  {
+    const auto &optDef = optPair.second;
+    if (!optDef.default_value)
+      continue;
+    const QString key = QString::fromUtf8(optPair.first.c_str());
+    if (upstreamDefaults.contains(key))
+      continue;
+    switch (optDef.type)
+    {
+    case Slic3r::coFloat:
+    case Slic3r::coFloatOrPercent:
+      upstreamDefaults[key] = static_cast<const Slic3r::ConfigOptionFloat *>(optDef.default_value.get())->value;
+      break;
+    case Slic3r::coInt:
+      upstreamDefaults[key] = static_cast<const Slic3r::ConfigOptionInt *>(optDef.default_value.get())->value;
+      break;
+    case Slic3r::coBool:
+      upstreamDefaults[key] = static_cast<const Slic3r::ConfigOptionBool *>(optDef.default_value.get())->value != 0;
+      break;
+    case Slic3r::coString:
+      upstreamDefaults[key] = QString::fromStdString(static_cast<const Slic3r::ConfigOptionString *>(optDef.default_value.get())->value);
+      break;
+    case Slic3r::coFloats:
+    {
+      const auto *v = static_cast<const Slic3r::ConfigOptionFloats *>(optDef.default_value.get());
+      if (!v->values.empty())
+      {
+        QVariantList list;
+        for (double val : v->values) list << val;
+        upstreamDefaults[key] = list;
+      }
+      break;
+    }
+    case Slic3r::coEnum:
+    {
+      const auto *enumMap = optDef.enum_keys_map;
+      if (enumMap)
+      {
+        int enumValue = static_cast<const Slic3r::ConfigOptionEnumGeneric *>(optDef.default_value.get())->value;
+        for (const auto &kv : *enumMap)
+        {
+          if (kv.second == enumValue)
+          {
+            upstreamDefaults[key] = QString::fromStdString(kv.first);
+            break;
+          }
+        }
+      }
+      break;
+    }
+    case Slic3r::coPoints:
+    {
+      const auto *v = static_cast<const Slic3r::ConfigOptionPoints *>(optDef.default_value.get());
+      if (!v->values.empty())
+      {
+        QStringList parts;
+        for (const auto &p : v->values)
+          parts << QStringLiteral("%1x%2").arg(p.x()).arg(p.y());
+        upstreamDefaults[key] = parts.join(",");
+      }
+      break;
+    }
+    case Slic3r::coInts:
+    {
+      const auto *v = static_cast<const Slic3r::ConfigOptionInts *>(optDef.default_value.get());
+      if (!v->values.empty())
+      {
+        QVariantList list;
+        for (int val : v->values) list << val;
+        upstreamDefaults[key] = list;
+      }
+      break;
+    }
+    default:
+      break;
+    }
+  }
+  m_presetStore[QStringLiteral("__upstream_defaults__")] = upstreamDefaults;
 }
 
 QHash<QString, QVariant> PresetServiceMock::resolveInheritance(

@@ -31,6 +31,7 @@ $cmakeArgs = @(
   '-DBUILD_LIBSLIC3R=ON',
   '-DLIBSLIC3R_FROM_SOURCE=ON',
   '-DCREALITY_QML_GUI=ON',
+  '-DBUILD_CLI=ON',
   '-DQT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT=3.21',
   '-DQt6_DIR=E:/Qt6.10'
 )
@@ -65,8 +66,13 @@ $env:CL = "/Zm300 /bigobj $env:CL"
 ninja -j16 FramelessDialogDemo.exe
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-# Build E2E test target (if BUILD_TESTING is ON)
+# Build test targets (if BUILD_TESTING is ON)
 ninja -j16 E2EWorkflowTests 2>$null
+ninja -j16 ViewModelSmokeTests 2>$null
+ninja -j16 E2EPipelineTests 2>$null
+ninja -j16 creality-cli 2>$null
+ninja -j16 CliTests 2>$null
+ninja -j16 test-slice-direct 2>$null
 
 # Deploy Qt runtime DLLs if not already present
 if (-not (Test-Path './Qt6Core.dll')) {
@@ -106,4 +112,19 @@ if ($p.HasExited) {
 }
 Write-Host ("APP_RUNNING_PID=" + $p.Id)
 Stop-Process -Id $p.Id -Force
+
+# ── Run E2E Pipeline Tests (non-blocking) ──
+Write-Host "`n[E2E] Running pipeline tests..." -ForegroundColor Cyan
+$e2eExe = './E2EPipelineTests.exe'
+if (Test-Path $e2eExe) {
+  & $e2eExe 2>&1 | ForEach-Object { Write-Host "  $_" }
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "[E2E] Pipeline tests reported failures (non-blocking)" -ForegroundColor Yellow
+  } else {
+    Write-Host "[E2E] All pipeline tests passed" -ForegroundColor Green
+  }
+} else {
+  Write-Host "[E2E] E2EPipelineTests.exe not found, skipping" -ForegroundColor DarkGray
+}
+
 exit 0

@@ -66,6 +66,8 @@ private:
 #ifdef HAS_LIBSLIC3R
   /// 从上游 vendor JSON 预设文件加载真实预设（对齐上游 PresetBundle::load_vendor_configs_from_json）
   bool loadVendorPresets();
+  /// 从上游 print_config_def schema 提取所有默认值到 __upstream_defaults__
+  void loadUpstreamSchemaDefaults();
   /// 加载单个预设 JSON 文件并解析继承链
   QHash<QString, QVariant> loadPresetJson(const QString &filePath, int category);
   /// 递归解析继承链，返回合并后的完整配置
