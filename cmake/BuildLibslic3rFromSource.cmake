@@ -426,6 +426,11 @@ endif()
 
 add_library(libslic3r_cgal_from_source STATIC ${LIBSLIC3R_CGAL_SOURCES})
 
+# Debug info for crash address resolution
+if(MSVC)
+    target_compile_options(libslic3r_cgal_from_source PRIVATE /Zi)
+endif()
+
 # Compile definitions needed by CGAL-dependent sources
 target_compile_definitions(libslic3r_cgal_from_source PRIVATE
     _USE_MATH_DEFINES
@@ -563,14 +568,13 @@ set(OCCT_LIBS
 )
 set(OCCT_LIB_DIR "${DEPS_PREFIX}/lib/occt")
 
-# OCCT delay-load: DLLs are only loaded when OCCT code paths are actually called.
-# The QML GUI doesn't use OCCT, so DLLs stay unloaded at runtime.
+# OCCT DLLs: loaded normally like upstream (no delay-load).
+# Upstream links OCCT directly; DLLs are copied to the output directory.
+# Delay-load was causing TDataStd_GenericEmpty::Paste recursive crash
+# because __pfnDliNotifyHook2 was never linked into the final executable.
 set(_delayload_libs "")
-foreach(_occt_lib ${OCCT_LIBS})
-  list(APPEND _delayload_libs "/DELAYLOAD:${_occt_lib}.dll")
-endforeach()
 
-# Also delay-load cr_tpms_library (closed-source TPMS infill DLL)
+# Only delay-load cr_tpms_library (closed-source TPMS infill DLL)
 list(APPEND _delayload_libs "/DELAYLOAD:cr_tpms_library.dll")
 
 # ─── 8. Link all dependencies to libslic3r_from_source ───────────────────────
@@ -655,16 +659,20 @@ if(APPLE)
     target_link_libraries(libslic3r_from_source PUBLIC ${FOUNDATION} ${MODELIO})
 endif()
 
-# ─── 9. Delay-load linker options (MSVC) ─────────────────────────────────────
-# /DELAYLOAD - OCCT DLLs are not loaded during PE initialization, avoiding
-# CRT deadlock between /MT libslic3r and /MD OCCT DLLs in DllMain.
+# ─── 9. Linker options (MSVC) ─────────────────────────────────────────────
 if(MSVC)
+    # Debug info for crash address resolution (PDB with symbols for all libslic3r code)
+    target_compile_options(libslic3r_from_source PRIVATE /Zi)
     target_link_options(libslic3r_from_source PUBLIC
+        /DEBUG
         /NODEFAULTLIB:LIBCMT
         /NODEFAULTLIB:libcpmt
         ${_delayload_libs}
     )
-    target_link_libraries(libslic3r_from_source PUBLIC delayimp.lib)
+    # Only link delayimp.lib if there are delay-load targets
+    if(_delayload_libs)
+        target_link_libraries(libslic3r_from_source PUBLIC delayimp.lib)
+    endif()
 endif()
 
 # ─── 10. Precompiled header support ──────────────────────────────────────────
@@ -724,14 +732,16 @@ target_include_directories(libslic3r SYSTEM INTERFACE
 # Link to the compiled library
 target_link_libraries(libslic3r INTERFACE libslic3r_from_source)
 
-# Forward the delay-load options
+# Forward the linker options
 if(MSVC)
     target_link_options(libslic3r INTERFACE
         /NODEFAULTLIB:LIBCMT
         /NODEFAULTLIB:libcpmt
         ${_delayload_libs}
     )
-    target_link_libraries(libslic3r INTERFACE delayimp.lib)
+    if(_delayload_libs)
+        target_link_libraries(libslic3r INTERFACE delayimp.lib)
+    endif()
 endif()
 
 # Source group for IDE organization (only files under LIBSLIC3R_SRC_DIR)

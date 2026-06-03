@@ -30,6 +30,8 @@ class ConfigViewModel final : public QObject
   Q_PROPERTY(bool enableBrim READ enableBrim NOTIFY stateChanged)
   // G3 — Dynamic models
   Q_PROPERTY(QObject *printOptions READ printOptions CONSTANT)
+  Q_PROPERTY(QObject *machineOptions READ machineOptions CONSTANT)
+  Q_PROPERTY(QObject *filamentOptions READ filamentOptions CONSTANT)
   Q_PROPERTY(QObject *presetList READ presetList CONSTANT)
   /// 当前预设是否已被修改（与保存时不同）
   Q_PROPERTY(bool isPresetDirty READ isPresetDirty NOTIFY stateChanged)
@@ -38,6 +40,8 @@ class ConfigViewModel final : public QObject
   Q_PROPERTY(QString settingsTargetName READ settingsTargetName NOTIFY stateChanged)
   Q_PROPERTY(int settingsTargetObjectIndex READ settingsTargetObjectIndex NOTIFY stateChanged)
   Q_PROPERTY(int settingsTargetVolumeIndex READ settingsTargetVolumeIndex NOTIFY stateChanged)
+  /// Active preset tier for save routing ("print", "filament", or "printer")
+  Q_PROPERTY(QString activePresetTier READ activePresetTier NOTIFY stateChanged)
   /// 3-tier preset inheritance (对齐上游 PresetBundle)
   Q_PROPERTY(QStringList printerPresetNames READ printerPresetNames NOTIFY stateChanged)
   Q_PROPERTY(QStringList filamentPresetNames READ filamentPresetNames NOTIFY stateChanged)
@@ -67,8 +71,11 @@ public:
   QString settingsTargetName() const { return settingsTargetName_; }
   int settingsTargetObjectIndex() const { return settingsTargetObjectIndex_; }
   int settingsTargetVolumeIndex() const { return settingsTargetVolumeIndex_; }
+  QString activePresetTier() const { return activePresetTier_; }
 
   QObject *printOptions() const;
+  QObject *machineOptions() const;
+  QObject *filamentOptions() const;
   QObject *presetList() const;
 
   // 3-tier preset accessors
@@ -117,6 +124,8 @@ public:
   Q_INVOKABLE void activateObjectScope(const QString &targetType, const QString &targetName, int objectIndex = -1, int volumeIndex = -1);
   /// 激活平板级参数作用域（对齐上游 PartPlate config override）
   Q_INVOKABLE void activatePlateScope(int plateIndex);
+  /// Switch active preset tier for save routing (对齐上游 ParamsPanel tab switch)
+  Q_INVOKABLE void setActivePresetTier(const QString &tier);
 
   /// 按分类和搜索文本过滤配置选项（替代 QML 内联 rebuildFilter 逻辑）
   Q_INVOKABLE QList<int> filterOptionIndices(const QString &category, const QString &searchText, bool advancedMode = false) const;
@@ -206,6 +215,8 @@ private:
   PresetServiceMock *presetService_ = nullptr;
   ProjectServiceMock *projectService_ = nullptr;
   ConfigOptionModel *printOptions_ = nullptr;
+  ConfigOptionModel *machineOptions_ = nullptr;
+  ConfigOptionModel *filamentOptions_ = nullptr;
   PresetListModel *presetList_ = nullptr;
 
   void applyScopeValues();
@@ -227,6 +238,7 @@ private:
   int topLayers_ = 4;
   int bottomLayers_ = 4;
   bool enableBrim_ = false;
+  QString activePresetTier_ = QStringLiteral("print");
   QString settingsScope_ = QStringLiteral("global");
   QString settingsTargetType_;
   QString settingsTargetName_;

@@ -13,8 +13,12 @@ ConfigViewModel::ConfigViewModel(PresetServiceMock *presetService, ProjectServic
     : QObject(parent), presetService_(presetService), projectService_(projectService)
 {
   printOptions_ = new ConfigOptionModel(this);
+  machineOptions_ = new ConfigOptionModel(this);
+  filamentOptions_ = new ConfigOptionModel(this);
 #ifdef HAS_LIBSLIC3R
   printOptions_->loadFromUpstreamSchema();
+  machineOptions_->loadMachineSchema();
+  filamentOptions_->loadFilamentSchema();
 #endif
   presetList_ = new PresetListModel(this);
   presetList_->refreshFromService(presetService_);
@@ -99,11 +103,22 @@ ConfigViewModel::ConfigViewModel(PresetServiceMock *presetService, ProjectServic
       QStringLiteral("precise_outer_wall")};
 
   connect(printOptions_, &ConfigOptionModel::optionValueChanged, this, &ConfigViewModel::handleOptionValueChanged);
+  connect(machineOptions_, &ConfigOptionModel::optionValueChanged, this, &ConfigViewModel::handleOptionValueChanged);
+  connect(filamentOptions_, &ConfigOptionModel::optionValueChanged, this, &ConfigViewModel::handleOptionValueChanged);
   loadDefault();
 }
 
 QObject *ConfigViewModel::printOptions() const { return printOptions_; }
+QObject *ConfigViewModel::machineOptions() const { return machineOptions_; }
+QObject *ConfigViewModel::filamentOptions() const { return filamentOptions_; }
 QObject *ConfigViewModel::presetList() const { return presetList_; }
+
+void ConfigViewModel::setActivePresetTier(const QString &tier)
+{
+  if (activePresetTier_ == tier) return;
+  activePresetTier_ = tier;
+  emit stateChanged();
+}
 
 QStringList ConfigViewModel::presetNames() const
 {
@@ -183,11 +198,40 @@ void ConfigViewModel::setCurrentPreset(const QString &presetName)
 
 void ConfigViewModel::saveCurrentPreset()
 {
-  if (!presetService_ || currentPreset_.isEmpty())
+  if (!presetService_)
     return;
 
-  presetService_->savePresetValues(currentPreset_, globalOptionValues_);
-  // 更新快照
+  // Determine target preset by tier (对齐上游 PresetBundle::save)
+  QString targetPreset;
+  ConfigOptionModel *tierModel = nullptr;
+  if (activePresetTier_ == QStringLiteral("printer")) {
+    targetPreset = currentPrinterPreset_;
+    tierModel = machineOptions_;
+  } else if (activePresetTier_ == QStringLiteral("filament")) {
+    targetPreset = currentFilamentPreset_;
+    tierModel = filamentOptions_;
+  } else {
+    targetPreset = currentPrintPreset_.isEmpty() ? currentPreset_ : currentPrintPreset_;
+    tierModel = printOptions_;
+  }
+
+  if (targetPreset.isEmpty())
+    return;
+
+  // Only save keys belonging to the active tier (防止跨层污染)
+  QHash<QString, QVariant> tierValues;
+  if (tierModel) {
+    const auto modelKeys = tierModel->valuesByKey();
+    for (auto it = globalOptionValues_.constBegin();
+         it != globalOptionValues_.constEnd(); ++it) {
+      if (modelKeys.contains(it.key()))
+        tierValues.insert(it.key(), it.value());
+    }
+  } else {
+    tierValues = globalOptionValues_;
+  }
+
+  presetService_->savePresetValues(targetPreset, tierValues);
   savedPresetValues_ = globalOptionValues_;
   emit stateChanged();
 }
@@ -471,7 +515,10 @@ void ConfigViewModel::applyScopeValues()
     return;
 
   applyingScopeValues_ = true;
-  printOptions_->applyValues(buildScopeValues());
+  const auto values = buildScopeValues();
+  printOptions_->applyValues(values);
+  if (machineOptions_) machineOptions_->applyValues(values);
+  if (filamentOptions_) filamentOptions_->applyValues(values);
   printOptions_->setReadonlyKeys(readonlyKeysForCurrentScope());
   applyingScopeValues_ = false;
 }

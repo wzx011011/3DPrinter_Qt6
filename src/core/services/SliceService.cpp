@@ -19,6 +19,7 @@
 #include <libslic3r/Print.hpp>
 #include <libslic3r/PrintConfig.hpp>
 #include <libslic3r/GCode/GCodeProcessor.hpp>
+#include <libslic3r/Utils.hpp>
 #endif
 
 namespace
@@ -145,42 +146,78 @@ namespace
       const std::string key = it.key().toStdString();
       Slic3r::ConfigOption *opt = config.option(key, false);
       if (!opt)
-        continue; // Skip UI-only keys not in libslic3r config schema
+        continue;
 
       const QVariant &value = it.value();
+      bool setOk = false;
+
       switch (static_cast<QMetaType::Type>(value.typeId()))
       {
       case QMetaType::Double:
       {
         auto *floatOpt = dynamic_cast<Slic3r::ConfigOptionFloat *>(opt);
         if (floatOpt)
+        {
           floatOpt->value = value.toDouble();
-        else
-          opt->setInt(static_cast<int>(value.toDouble())); // fallback for coFloatOrPercent stored as int
+          setOk = true;
+          break;
+        }
         break;
       }
       case QMetaType::Int:
       {
         auto *intOpt = dynamic_cast<Slic3r::ConfigOptionInt *>(opt);
         if (intOpt)
+        {
           intOpt->value = value.toInt();
-        else
-          opt->setInt(value.toInt()); // covers coBool, coEnum
+          setOk = true;
+          break;
+        }
+        auto *boolOpt = dynamic_cast<Slic3r::ConfigOptionBool *>(opt);
+        if (boolOpt)
+        {
+          boolOpt->value = value.toInt() ? 1 : 0;
+          setOk = true;
+          break;
+        }
         break;
       }
       case QMetaType::Bool:
       {
         auto *boolOpt = dynamic_cast<Slic3r::ConfigOptionBool *>(opt);
         if (boolOpt)
+        {
           boolOpt->value = value.toBool() ? 1 : 0;
-        else
-          opt->setInt(value.toBool() ? 1 : 0);
+          setOk = true;
+          break;
+        }
         break;
       }
-      case QMetaType::QString:
-      default:
+      case QMetaType::QVariantList:
       {
-        // Use set_deserialize_strict for string/enum/percent types
+        // coFloats, coInts, coPoints, coStrings — serialize to Slic3r format
+        const auto list = value.toList();
+        if (list.isEmpty())
+          break;
+        QStringList parts;
+        for (const auto &item : list)
+          parts << item.toString();
+        try
+        {
+          config.set_deserialize_strict(key, parts.join(",").toStdString(), false);
+          setOk = true;
+        }
+        catch (...)
+        {
+        }
+        break;
+      }
+      default:
+        break;
+      }
+
+      if (!setOk)
+      {
         const std::string strVal = value.toString().toStdString();
         if (!strVal.empty())
         {
@@ -190,11 +227,8 @@ namespace
           }
           catch (...)
           {
-            // Silently skip values that can't be deserialized
           }
         }
-        break;
-      }
       }
     }
 #endif
@@ -294,6 +328,18 @@ void SliceService::startSlice(const QString &projectName)
       notify(2, QObject::tr("准备当前平板模型"));
       if (!modelForSlice || modelForSlice->objects.empty())
         throw std::runtime_error("当前平板没有可切片对象");
+      {
+        int totalVolumes = 0;
+        int totalInstances = 0;
+        for (const auto *obj : modelForSlice->objects) {
+          if (obj) {
+            totalVolumes += int(obj->volumes.size());
+            totalInstances += int(obj->instances.size());
+          }
+        }
+        if (totalVolumes == 0)
+          throw std::runtime_error("cloned model has 0 volumes (mesh data missing)");
+      }
       if (cancelFlag && cancelFlag->load())
         throw std::runtime_error("切片已取消");
 
@@ -355,7 +401,33 @@ void SliceService::startSlice(const QString &projectName)
       });
 
       notify(18, QObject::tr("应用切片参数"));
+
+      // Set up directories for Print::apply()
+      {
+        const QString tempDir = QDir::tempPath();
+        Slic3r::set_temporary_dir(tempDir.toStdString());
+        Slic3r::set_data_dir(QCoreApplication::applicationDirPath().toStdString(), true);
+        Slic3r::set_resources_dir((QCoreApplication::applicationDirPath() + "/resources").toStdString());
+      }
+
+      config.normalize_fdm();
+
+      // For Marlin with relative E distances, layer_gcode must reset extruder position
+      // (upstream Print::validate enforces this for non-BBL printers)
+      {
+        auto *useRel = config.option<Slic3r::ConfigOptionBool>("use_relative_e_distances", false);
+        auto *gcodeFlavor = config.option<Slic3r::ConfigOptionEnum<Slic3r::GCodeFlavor>>("gcode_flavor", false);
+        auto *layerGcode = config.option<Slic3r::ConfigOptionString>("layer_change_gcode", false);
+        if (useRel && useRel->value && gcodeFlavor &&
+            (gcodeFlavor->value == Slic3r::gcfMarlinLegacy || gcodeFlavor->value == Slic3r::gcfMarlinFirmware) &&
+            layerGcode && layerGcode->value.find("G92 E0") == std::string::npos)
+        {
+          layerGcode->value = "G92 E0\n" + layerGcode->value;
+        }
+      }
+
       print.apply(*modelForSlice, config);
+
       if (cancelFlag && cancelFlag->load())
       {
         print.cancel();

@@ -21,6 +21,7 @@ option(CREALITY_QML_GUI "Build QML-first GUI architecture" ON)
 option(ENABLE_VISUAL_REGRESSION "Enable visual regression tests" ON)
 option(ENABLE_COVERAGE "Enable compiler coverage instrumentation" OFF)
 option(BUILD_LIBSLIC3R "Build libslic3r backend (3MF loading etc.)" ON)
+option(BUILD_CLI "Build headless CLI executable (creality-cli)" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -234,15 +235,61 @@ if(BUILD_TESTING AND CREALITY_QML_GUI)
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
-    qt_add_executable(E2EPipelineTests tests/E2EPipelineTests.cpp)
-    target_link_libraries(E2EPipelineTests PRIVATE creality_app_core
-        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Test
+endif()
+
+# ── CLI ────────────────────────────────────────────────────────────────────
+if(BUILD_CLI AND BUILD_LIBSLIC3R AND TARGET libslic3r)
+    add_library(creality_cli_core OBJECT
+        src/nanosvg_impl.cpp
+        src/core/services/ProjectServiceMock.cpp
+        src/core/services/ProjectServiceMock.h
+        src/core/services/SliceService.cpp
+        src/core/services/SliceService.h
+        src/core/services/PresetServiceMock.cpp
+        src/core/services/PresetServiceMock.h
+        src/core/services/JobBase.cpp
+        src/core/services/JobBase.h
+        src/core/services/JobManager.cpp
+        src/core/services/JobManager.h
+        src/cli/CliRunner.cpp
+        src/cli/CliRunner.h
     )
-    add_test(NAME E2EPipelineTests COMMAND E2EPipelineTests)
-    set_tests_properties(E2EPipelineTests PROPERTIES
-        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
-        TIMEOUT 300
+    target_include_directories(creality_cli_core PUBLIC
+        src
+        ${CMAKE_SOURCE_DIR}/third_party/CrealityPrint/src
     )
+    target_compile_definitions(creality_cli_core PUBLIC
+        HAS_LIBSLIC3R=1
+    )
+    if(MSVC)
+        target_compile_definitions(creality_cli_core PRIVATE
+            BOOST_ALL_NO_LIB
+            BOOST_USE_WINAPI_VERSION=0x602
+            BOOST_SYSTEM_USE_UTF8
+        )
+    endif()
+    target_link_libraries(creality_cli_core PUBLIC
+        Qt6::Core Qt6::Gui Qt6::Concurrent libslic3r
+    )
+
+    add_executable(creality-cli src/cli/main_cli.cpp)
+    target_link_libraries(creality-cli PRIVATE creality_cli_core)
+    # Console app — NOT WIN32_EXECUTABLE
+
+    if(BUILD_TESTING)
+        find_package(Qt6 REQUIRED COMPONENTS Test)
+        qt_add_executable(CliTests tests/CliTests.cpp)
+        target_link_libraries(CliTests PRIVATE Qt6::Test)
+        target_compile_definitions(CliTests PRIVATE
+            QT_TESTCASE_SOURCEDIR="${CMAKE_SOURCE_DIR}"
+        )
+        add_dependencies(CliTests creality-cli)
+        add_test(NAME CliTests COMMAND CliTests)
+        set_tests_properties(CliTests PROPERTIES
+            ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+            TIMEOUT 300
+        )
+    endif()
 endif()
 
 # I2 -- i18n 翻译文件

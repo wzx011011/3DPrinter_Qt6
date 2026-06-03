@@ -67,6 +67,7 @@ public:
 
 #ifdef HAS_LIBSLIC3R
   std::unique_ptr<Slic3r::Model> cloneCurrentPlateModel() const;
+  Slic3r::Model *rawModel() const { return model_; }
 #endif
 
   /// 加载 3MF/STL/OBJ 等模型文件（真正调用 libslic3r）

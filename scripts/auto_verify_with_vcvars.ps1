@@ -31,6 +31,7 @@ $cmakeArgs = @(
   '-DBUILD_LIBSLIC3R=ON',
   '-DLIBSLIC3R_FROM_SOURCE=ON',
   '-DCREALITY_QML_GUI=ON',
+  '-DBUILD_CLI=ON',
   '-DQT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT=3.21',
   '-DQt6_DIR=E:/Qt6.10'
 )
@@ -69,6 +70,9 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 ninja -j16 E2EWorkflowTests 2>$null
 ninja -j16 ViewModelSmokeTests 2>$null
 ninja -j16 E2EPipelineTests 2>$null
+ninja -j16 creality-cli 2>$null
+ninja -j16 CliTests 2>$null
+ninja -j16 test-slice-direct 2>$null
 
 # Deploy Qt runtime DLLs if not already present
 if (-not (Test-Path './Qt6Core.dll')) {

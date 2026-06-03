@@ -138,6 +138,12 @@ public:
   // Populate model from upstream libslic3r print_config_def.
   // Replaces the hardcoded option list with schema-driven options.
   void loadFromUpstreamSchema();
+  // Load machine-specific config keys (printer hardware params).
+  void loadMachineSchema();
+  // Load filament-specific config keys (material params).
+  void loadFilamentSchema();
+  // Generic schema loader driven by a key array.
+  void loadSchemaFromKeys(const char *const keys[]);
 #endif
 
 signals:

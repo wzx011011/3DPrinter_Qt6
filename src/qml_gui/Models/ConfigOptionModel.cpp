@@ -607,6 +607,16 @@ namespace
       return QObject::tr("质量");
     if (cat.contains("Prime", Qt::CaseInsensitive) || cat.contains("Wipe", Qt::CaseInsensitive))
       return QObject::tr("底座");
+    // Machine-specific categories (对齐上游 TabPrinter)
+    if (cat.contains("Printable", Qt::CaseInsensitive) || cat.contains("Bed", Qt::CaseInsensitive))
+      return QObject::tr("打印空间");
+    if (cat.contains("Motion", Qt::CaseInsensitive))
+      return QObject::tr("运动能力");
+    if (cat.contains("Multi", Qt::CaseInsensitive))
+      return QObject::tr("多材料");
+    // Filament-specific categories (对齐上游 TabFilament)
+    if (cat.contains("Filament", Qt::CaseInsensitive))
+      return QObject::tr("耗材");
     return QObject::tr("其他");
   }
 
@@ -829,7 +839,88 @@ static const char *kDesiredKeys[] = {
   nullptr
 };
 
-void ConfigOptionModel::loadFromUpstreamSchema()
+// Machine hardware config keys (对齐上游 TabPrinter::build_fff)
+static const char *kMachineKeys[] = {
+  // Page: 基础信息 — 打印空间
+  "printable_area", "bed_exclude_area", "printable_height",
+  "support_multi_bed_types", "nozzle_volume", "best_object_pos",
+  "z_offset", "preferred_orientation",
+  // Page: 基础信息 — 高级
+  "printer_structure", "gcode_flavor", "use_relative_e_distances",
+  "use_firmware_retraction", "machine_load_filament_time",
+  "machine_unload_filament_time", "nozzle_type", "nozzle_hrc",
+  "disable_m73", "thumbnails", "time_cost",
+  "auxiliary_fan", "support_chamber_temp_control",
+  "support_air_filtration",
+  // Page: 打印机G-code
+  "machine_start_gcode", "machine_end_gcode",
+  "before_layer_change_gcode", "layer_change_gcode",
+  "time_lapse_gcode", "change_filament_gcode",
+  "change_extrusion_role_gcode", "machine_pause_gcode",
+  "template_custom_gcode", "printing_by_object_gcode",
+  // Page: 运动能力
+  "emit_machine_limits_to_gcode",
+  "machine_max_speed_x", "machine_max_speed_y",
+  "machine_max_speed_z", "machine_max_speed_e",
+  "machine_max_acceleration_x", "machine_max_acceleration_y",
+  "machine_max_acceleration_z", "machine_max_acceleration_e",
+  "machine_max_acceleration_extruding",
+  "machine_max_acceleration_retracting",
+  "machine_max_acceleration_travel",
+  "machine_max_jerk_x", "machine_max_jerk_y",
+  "machine_max_jerk_z", "machine_max_jerk_e",
+  // Page: 挤出机
+  "nozzle_diameter", "min_layer_height", "max_layer_height",
+  "extruder_offset", "retraction_length", "retract_restart_extra",
+  "z_hop", "z_hop_types", "retraction_speed", "deretraction_speed",
+  "retraction_minimum_travel", "retract_when_changing_layer",
+  "wipe", "wipe_distance", "retract_before_wipe",
+  "retract_length_toolchange", "retract_restart_extra_toolchange",
+  "long_retractions_when_cut",
+  // Page: 多材料
+  "single_extruder_multi_material", "extruders_count",
+  "manual_filament_change",
+  "cooling_tube_retraction", "cooling_tube_length",
+  "parking_pos_retraction", "extra_loading_move",
+  "enable_filament_ramming",
+  // Page: 注释
+  "printer_notes",
+  nullptr
+};
+
+// Filament config keys (对齐上游 TabFilament)
+static const char *kFilamentKeys[] = {
+  // Basic
+  "filament_type", "filament_vendor", "filament_colour",
+  "filament_density", "filament_cost", "filament_spool_weight",
+  // Temperature
+  "nozzle_temperature", "nozzle_temperature_initial_layer",
+  "hot_plate_temp", "hot_plate_temp_initial_layer",
+  "chamber_temperature", "cool_plate_temp",
+  "nozzle_temperature_range",
+  // Cooling
+  "fan_cooling_layer_time", "slow_down_min_speed",
+  "fan_min_speed", "fan_max_speed", "default_fan_speed",
+  "overhang_fan_speed", "close_fan_the_first_x_layers",
+  // Speed / Quality
+  "filament_max_volumetric_speed", "filament_flow_ratio",
+  "filament_min_speed", "filament_retract_lift_above",
+  "filament_retract_lift_below",
+  // Retraction
+  "filament_retraction_length", "filament_retraction_speed",
+  "filament_deretraction_speed", "filament_z_hop",
+  "filament_retract_restart_extra",
+  "filament_retract_length_toolchange",
+  "filament_retract_restart_extra_toolchange",
+  // G-code
+  "filament_start_gcode", "filament_end_gcode",
+  "filament_change_gcode",
+  // Notes
+  "filament_notes",
+  nullptr
+};
+
+void ConfigOptionModel::loadSchemaFromKeys(const char *const keys[])
 {
   beginResetModel();
   m_options.clear();
@@ -837,9 +928,9 @@ void ConfigOptionModel::loadFromUpstreamSchema()
 
   const auto &def = Slic3r::print_config_def;
 
-  for (int ki = 0; kDesiredKeys[ki] != nullptr; ++ki)
+  for (int ki = 0; keys[ki] != nullptr; ++ki)
   {
-    const auto *opt = def.get(kDesiredKeys[ki]);
+    const auto *opt = def.get(keys[ki]);
     if (!opt)
       continue;
 
@@ -883,6 +974,21 @@ void ConfigOptionModel::loadFromUpstreamSchema()
 
   endResetModel();
   emit countChanged();
+}
+
+void ConfigOptionModel::loadFromUpstreamSchema()
+{
+  loadSchemaFromKeys(kDesiredKeys);
+}
+
+void ConfigOptionModel::loadMachineSchema()
+{
+  loadSchemaFromKeys(kMachineKeys);
+}
+
+void ConfigOptionModel::loadFilamentSchema()
+{
+  loadSchemaFromKeys(kFilamentKeys);
 }
 
 #endif // HAS_LIBSLIC3R
