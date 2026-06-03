@@ -77,6 +77,17 @@ QtObject {
     readonly property int radiusXL:   12
     readonly property int radiusXXL:  16
 
+    // ── Control tokens (aliases where colors match existing tokens)
+    readonly property color switchTrackOff:   "#2a3040"
+    readonly property color switchTrackOn:    accent
+    readonly property color switchKnob:       textPrimary
+    readonly property color progressTrack:    borderSubtle
+    readonly property color progressFill:     accent
+    readonly property color overlayDim:       "#80000000"    // black at 50%
+    readonly property color menuBackground:   "#1a202b"
+    readonly property color selectionColor:   accent
+    readonly property color selectionText:    bgBase
+
     // ── Control sizing
     readonly property int controlHeightSM:  28
     readonly property int controlHeightMD:  34

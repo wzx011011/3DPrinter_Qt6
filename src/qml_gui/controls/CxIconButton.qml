@@ -53,7 +53,7 @@ ToolButton {
         border.width: root.cxStyle === CxIconButton.Style.ChromeDanger ? 0 : 1
         border.color: {
             if (root.cxStyle === CxIconButton.Style.Chrome)
-                return root.hovered ? "#2f3d54" : "transparent"
+                return root.hovered ? Theme.chromeBorder : "transparent"
             if (root.cxStyle === CxIconButton.Style.Ghost)
                 return root.hovered ? Theme.borderDefault : "transparent"
             if (root.selected)
