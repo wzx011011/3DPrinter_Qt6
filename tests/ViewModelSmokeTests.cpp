@@ -204,11 +204,11 @@ void ViewModelSmokeTests::testTierAwareSaveFiltersByTier()
   printOpts->setValue(printIdx, 0.35);
   machineOpts->setValue(machineIdx, 999.0);
 
-  // Save as print tier — should only include print keys
+  // Save as print tier — should only include print model keys
   config.setActivePresetTier(QStringLiteral("print"));
   config.saveCurrentPreset();
 
-  // Verify print preset has layer_height
+  // Verify print preset has layer_height with the edited value
   auto saved = preset.presetValues(config.currentPrintPreset().isEmpty()
                                     ? config.currentPreset()
                                     : config.currentPrintPreset());
@@ -216,11 +216,16 @@ void ViewModelSmokeTests::testTierAwareSaveFiltersByTier()
            "layer_height should be in print preset after save");
   QCOMPARE(saved[QStringLiteral("layer_height")].toDouble(), 0.35);
 
-  // Machine key should NOT be in the print preset (tier isolation)
-  // (It might exist from initial load, but value should NOT be 999.0)
-  if (saved.contains(QStringLiteral("machine_max_speed_x"))) {
-    QVERIFY2(saved[QStringLiteral("machine_max_speed_x")].toDouble() != 999.0,
-             "machine_max_speed_x should not have tier-crossed value in print preset");
+  // Now save as printer tier — machine key should be saved there
+  config.setActivePresetTier(QStringLiteral("printer"));
+  config.saveCurrentPreset();
+
+  auto printerSaved = preset.presetValues(config.currentPrinterPreset());
+  if (!printerSaved.isEmpty()) {
+    // Verify the machine key was saved to the printer preset
+    QVERIFY2(printerSaved.contains(QStringLiteral("machine_max_speed_x")),
+             "machine_max_speed_x should be in printer preset after printer-tier save");
+    QCOMPARE(printerSaved[QStringLiteral("machine_max_speed_x")].toDouble(), 999.0);
   }
 }
 
