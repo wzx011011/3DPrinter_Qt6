@@ -4,21 +4,34 @@
 
 See: .planning/PROJECT.md (updated 2026-05-31)
 
-**Core value:** Upstream CrealityPrint source is functional truth -- Qt6 code must fully inherit upstream behavior, never freely design new product behavior.
-**Current focus:** Milestone v1.2: Slicing Pipeline Hardening
+**Core value:** Up upstream CrealityPrint source is functional truth -- Qt6 code must fully inherit upstream behavior, never freely design new product behavior.
+**Current focus:** Milestone v1.3: CLI Port
 
 ## Current Position
 
-Phase: v12-01 Multi-Plate Loading Fixes
-Plan: v12-01-01-PLAN.md
-Status: Planned, ready for execution
-Last activity: 2026-06-02 — Research complete, Phase 1 planned
+Phase: v13-03 Preset Config + Slicing
+Status: **Blocked** — libslic3r Print::apply() crashes with 0xC0000005 in CLI context
+Last activity: 2026-06-02
 
-Progress: [██░░░░░░░░] 20%
+Progress: [████░░░░] 50%
+
+## Blocker
+
+**libslic3r crash in headless context:** `Print::apply()` crashes with access violation (0xC0000005) when called from CLI/test context. Same crash affects E2EPipelineTests. The GUI app works because it has a different initialization path (OpenGL context, BackendContext, etc.).
+
+Root cause TBD — likely related to CRT mismatch or missing global state initialization that the GUI path provides.
 
 ## Session Continuity
 
 Last session: 2026-06-02
-Stopped at: Milestone v1.2 Phase 1 planned, not yet executed
-Resume file: .planning/phases/v12-01-multi-plate-loading-fixes/v12-01-01-PLAN.md
-Next step: Execute `/gsd-execute-phase` for v12-01
+Stopped at: Phase 3 blocked by libslic3r crash
+Resume file: .planning/ROADMAP.md
+Next step: Debug libslic3r Print::apply() crash in headless context
+
+## Completed This Session
+
+- Phase 1 (CMake + CLI Skeleton): `creality-cli.exe --help` runs, exit codes correct
+- Phase 2 (Arg Parsing + Model Loading): `--load model.stl` prints object/plate info, async loading with QEventLoop, file-not-found error (-3), --quiet mode
+- Phase 2 fix: main_cli.cpp was entering app.exec() on negative exit codes — fixed to return directly
+- Phase 3 code written: preset merge (printer→filament→print), SliceService wiring, G-code export
+- Direct slice diagnostic: confirmed model has valid geometry (1 obj, 1 vol), clone works correctly, crash is inside libslic3r Print::apply()
