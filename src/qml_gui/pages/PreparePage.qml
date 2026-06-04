@@ -40,6 +40,12 @@ Item {
     function redoFromTopbar() {
         viewport3d.redo()
     }
+    function openPrintDialog() {
+        printDlg.open()
+    }
+    function openExportDialog() {
+        exportGCodeDlg.open()
+    }
 
     // GL FBO 缩略图捕获（对齐上游 PartPlate::thumbnail_data）
     function requestGLThumbnail() {
@@ -1374,7 +1380,8 @@ Item {
             id: topTools
             cxSurface: CxPanel.Surface.Floating
             anchors.top: parent.top
-            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.left: leftPanel.right
+            anchors.leftMargin: 14
             anchors.topMargin: 14
             width: toolsContent.implicitWidth + 22
             height: 50
@@ -1725,21 +1732,21 @@ Item {
             }
         }
 
-        // ProcessBar 对齐上游 ProcessBar::GLToolbar — 分类标签切换右侧 PrintSettings
+        // ProcessBar 对齐上游 ProcessBar::GLToolbar — vertical category bar at right edge of viewport
         CxPanel {
             id: processBar
             cxSurface: CxPanel.Surface.Floating
-            anchors.top: topTools.bottom
-            anchors.topMargin: 4
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: procRow.implicitWidth + 20
-            height: 28
-            radius: 10
+            anchors.right: sidebar.left
+            anchors.rightMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
+            width: 46
+            height: procCol.implicitHeight + 16
+            radius: 12
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
 
-            Row {
-                id: procRow
+            Column {
+                id: procCol
                 anchors.centerIn: parent
                 spacing: 2
 
@@ -1757,20 +1764,19 @@ Item {
                     delegate: Rectangle {
                         required property var modelData
                         required property int index
-                        width: procLbl.implicitWidth + 12
-                        height: 20
-                        radius: 5
+                        width: 30
+                        height: 30
+                        radius: 6
                         color: root.processCategory === modelData.cat
                                ? Theme.accent : (procMA.containsMouse ? Theme.bgHover : "transparent")
                         border.width: 1
                         border.color: root.processCategory === modelData.cat ? Theme.accent : Theme.borderSubtle
 
                         Text {
-                            id: procLbl
                             anchors.centerIn: parent
-                            text: modelData.label
+                            text: modelData.label.charAt(0)
                             color: root.processCategory === modelData.cat ? Theme.textOnAccent : Theme.textSecondary
-                            font.pixelSize: 10
+                            font.pixelSize: 11
                             font.bold: true
                         }
 
@@ -1784,6 +1790,10 @@ Item {
                                 sidebar.switchToPrintTab()
                             }
                         }
+
+                        ToolTip.visible: procMA.containsMouse
+                        ToolTip.text: modelData.label
+                        ToolTip.delay: 400
                     }
                 }
             }
@@ -1791,7 +1801,7 @@ Item {
 
         // 支撑/缝线绘制信息面板（对齐上游 GLGizmoFdmSupports info panel）
         Rectangle {
-            anchors.top: processBar.bottom
+            anchors.top: topTools.bottom
             anchors.topMargin: 4
             anchors.horizontalCenter: parent.horizontalCenter
             width: paintInfoRow.implicitWidth + 24
@@ -2978,7 +2988,7 @@ Item {
             anchors.leftMargin: 14
             anchors.topMargin: 66
             anchors.bottomMargin: 16
-            width: 296
+            width: 220
             radius: 18
             color: Theme.bgFloating
             border.width: 1
@@ -3062,238 +3072,6 @@ Item {
                             onClicked: if (root.editorVm) root.editorVm.setShowAllObjects(false)
                         }
                     }
-                }
-
-                CxSectionHeader {
-                    Layout.fillWidth: true
-                    title: qsTr("平板")
-                    subtitle: root.editorVm
-                        ? (root.editorVm.plateCount + qsTr(" 个工作平板"))
-                        : qsTr("0 个工作平板")
-                }
-
-                Repeater {
-                    model: root.editorVm ? root.editorVm.plateCount : 0
-
-                    delegate: Rectangle {
-                        required property int index
-                        property bool dragHover: false
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 52
-                        radius: 12
-                        readonly property bool isCurrent: root.editorVm && !root.editorVm.showAllObjects && root.editorVm.currentPlateIndex === index
-                        color: dragHover ? Theme.accentSubtle
-                            : isCurrent ? Theme.accentSubtle
-                            : Theme.bgElevated
-                        border.width: dragHover ? 2 : 1
-                        border.color: dragHover ? Theme.accent
-                            : isCurrent ? Theme.accent
-                            : Theme.borderSubtle
-
-                        // 拖拽悬浮高亮叠加（对齐上游 GUI_ObjectList 拖拽放置指示）
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: 12
-                            color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.05)
-                            visible: parent.dragHover
-                        }
-
-                        // 拖拽指示图标（对齐上游拖拽放置反馈）
-                        Rectangle {
-                            anchors.centerIn: parent
-                            width: 44
-                            height: 28
-                            radius: 6
-                            color: Theme.accent
-                            opacity: parent.dragHover ? 0.9 : 0.0
-                            visible: parent.dragHover
-                            Behavior on opacity { NumberAnimation { duration: 150 } }
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: qsTr("+")
-                                color: "#fff"
-                                font.pixelSize: 16
-                                font.bold: true
-                            }
-                        }
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 10
-                            anchors.rightMargin: 12
-                            spacing: 10
-
-                            // 平板缩略图（对齐上游 PartPlate::thumbnail_data，优先使用 GL FBO 捕获）
-                            Rectangle {
-                                width: 48
-                                height: 48
-                                radius: 6
-                                color: Theme.bgElevated
-                                border.width: 1
-                                border.color: Theme.borderSubtle
-                                clip: true
-
-                                Image {
-                                    anchors.fill: parent
-                                    anchors.margins: 2
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    // 优先使用 GL FBO 缩略图，回退到 QPainter 合成
-                                    source: {
-                                        if (!root.editorVm) return ""
-                                        var glThumb = viewport3d.lastThumbnailData
-                                        if (glThumb.length > 0 && index === root.editorVm.currentPlateIndex)
-                                            return "data:image/png;base64," + glThumb
-                                        return "data:image/png;base64," + root.editorVm.generatePlateThumbnail(index, 96)
-                                    }
-                                }
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 1
-
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: root.editorVm ? root.editorVm.plateName(index) : ""
-                                    color: Theme.textPrimary
-                                    font.pixelSize: Theme.fontSizeMD
-                                    font.bold: true
-                                    elide: Text.ElideRight
-                                }
-
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: root.editorVm
-                                        ? qsTr("%1 个对象").arg(root.editorVm.plateObjectCount(index))
-                                        : qsTr("0 个对象")
-                                    color: Theme.textSecondary
-                                    font.pixelSize: 10
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            Text {
-                                text: root.editorVm && !root.editorVm.showAllObjects && root.editorVm.currentPlateIndex === index
-                                    ? qsTr("当前")
-                                    : qsTr("查看")
-                                color: root.editorVm && !root.editorVm.showAllObjects && root.editorVm.currentPlateIndex === index
-                                    ? Theme.accent
-                                    : Theme.textDisabled
-                                font.pixelSize: 10
-                                font.bold: true
-                            }
-
-                            Image {
-                                visible: root.editorVm && root.editorVm.isPlateLocked(index)
-                                source: "qrc:/qml/assets/icons/lock.svg"
-                                sourceSize.width: 12
-                                sourceSize.height: 12
-                                opacity: 0.6
-                            }
-
-                            Rectangle {
-                                visible: root.editorVm && root.editorVm.isPlateSliced(index)
-                                width: 8
-                                height: 8
-                                radius: 4
-                                color: Theme.accent
-                                opacity: 0.8
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            acceptedButtons: Qt.LeftButton | Qt.RightButton
-                            onClicked: function(mouse) {
-                                if (!root.editorVm) return
-                                if (mouse.button === Qt.RightButton) {
-                                    root.contextPlateIndex = index
-                                    plateContextMenu.popup()
-                                    mouse.accepted = true
-                                    return
-                                }
-                                root.editorVm.setCurrentPlateIndex(index)
-                                root.editorVm.setShowAllObjects(false)
-                            }
-                        }
-
-                        // 对象拖拽目标（对齐上游跨平板拖拽）
-                        DropArea {
-                            anchors.fill: parent
-                            keys: ["object-drag"]
-                            onEntered: function(drag) { parent.dragHover = true }
-                            onExited: function(drag) { parent.dragHover = false }
-                            onDropped: function(drop) {
-                                parent.dragHover = false
-                                if (!root.editorVm) return
-                                root.editorVm.moveSelectedObjectToPlate(index)
-                                drop.acceptProposedAction()
-                            }
-                        }
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 6
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 30
-                        radius: 8
-                        color: Theme.bgElevated
-                        border.width: 1
-                        border.color: Theme.borderSubtle
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("+ 添加平板")
-                            color: Theme.textSecondary
-                            font.pixelSize: Theme.fontSizeSM
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.editorVm) root.editorVm.addPlate()
-                        }
-                    }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 30
-                        radius: 8
-                        color: root.editorVm && root.editorVm.plateCount > 1 ? Theme.bgElevated : "transparent"
-                        border.width: root.editorVm && root.editorVm.plateCount > 1 ? 1 : 0
-                        border.color: Theme.borderSubtle
-                        opacity: root.editorVm && root.editorVm.plateCount > 1 ? 1.0 : 0.3
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("- 删除平板")
-                            color: Theme.textSecondary
-                            font.pixelSize: Theme.fontSizeSM
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: root.editorVm && root.editorVm.plateCount > 1 ? Qt.PointingHandCursor : Qt.ArrowCursor
-                            enabled: root.editorVm && root.editorVm.plateCount > 1
-                            onClicked: {
-                                if (root.editorVm && root.editorVm.plateCount > 1)
-                                    root.editorVm.deletePlate(root.editorVm.currentPlateIndex)
-                            }
-                        }
-                    }
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 1
-                    color: Theme.borderSubtle
                 }
 
                 CxSectionHeader {
@@ -3399,6 +3177,170 @@ Item {
             }
         }
 
+        // Bottom plate bar (aligned with upstream GLCanvas3D plate thumbnails at viewport bottom)
+        Rectangle {
+            id: plateBar
+            visible: root.editorVm && root.editorVm.plateCount > 0
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 10
+            anchors.left: leftPanel.right
+            anchors.leftMargin: 14
+            anchors.right: sidebar.left
+            anchors.rightMargin: 14
+            height: 62
+            color: "transparent"
+
+            RowLayout {
+                anchors.fill: parent
+                spacing: 6
+
+                ListView {
+                    id: plateListView
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    orientation: ListView.Horizontal
+                    spacing: 6
+                    clip: true
+                    model: root.editorVm ? root.editorVm.plateCount : 0
+
+                    delegate: Rectangle {
+                        required property int index
+                        property bool dragHover: false
+                        width: 120
+                        height: plateListView.height
+                        radius: 8
+                        readonly property bool isCurrent: root.editorVm && !root.editorVm.showAllObjects && root.editorVm.currentPlateIndex === index
+                        color: dragHover ? Theme.accentSubtle
+                            : isCurrent ? Theme.accentSubtle
+                            : Theme.bgElevated
+                        border.width: dragHover ? 2 : 1
+                        border.color: dragHover ? Theme.accent
+                            : isCurrent ? Theme.accent
+                            : Theme.borderSubtle
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 6
+                            anchors.rightMargin: 6
+                            spacing: 6
+
+                            // Thumbnail
+                            Rectangle {
+                                width: 40
+                                height: 40
+                                radius: 4
+                                color: Theme.bgElevated
+                                border.width: 1
+                                border.color: Theme.borderSubtle
+                                clip: true
+
+                                Image {
+                                    anchors.fill: parent
+                                    anchors.margins: 2
+                                    fillMode: Image.PreserveAspectFit
+                                    smooth: true
+                                    source: {
+                                        if (!root.editorVm) return ""
+                                        var glThumb = viewport3d.lastThumbnailData
+                                        if (glThumb.length > 0 && index === root.editorVm.currentPlateIndex)
+                                            return "data:image/png;base64," + glThumb
+                                        return "data:image/png;base64," + root.editorVm.generatePlateThumbnail(index, 80)
+                                    }
+                                }
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 0
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: root.editorVm ? root.editorVm.plateName(index) : ""
+                                    color: isCurrent ? Theme.accent : Theme.textPrimary
+                                    font.pixelSize: 10
+                                    font.bold: isCurrent
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: root.editorVm
+                                        ? qsTr("%1 对象").arg(root.editorVm.plateObjectCount(index))
+                                        : ""
+                                    color: Theme.textSecondary
+                                    font.pixelSize: 9
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            Rectangle {
+                                visible: root.editorVm && root.editorVm.isPlateSliced(index)
+                                width: 6; height: 6; radius: 3
+                                color: Theme.accent
+                                opacity: 0.8
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            onClicked: function(mouse) {
+                                if (!root.editorVm) return
+                                if (mouse.button === Qt.RightButton) {
+                                    root.contextPlateIndex = index
+                                    plateContextMenu.popup()
+                                    mouse.accepted = true
+                                    return
+                                }
+                                root.editorVm.setCurrentPlateIndex(index)
+                                root.editorVm.setShowAllObjects(false)
+                            }
+                        }
+
+                        DropArea {
+                            anchors.fill: parent
+                            keys: ["object-drag"]
+                            onEntered: function(drag) { parent.dragHover = true }
+                            onExited: function(drag) { parent.dragHover = false }
+                            onDropped: function(drop) {
+                                parent.dragHover = false
+                                if (!root.editorVm) return
+                                root.editorVm.moveSelectedObjectToPlate(index)
+                                drop.acceptProposedAction()
+                            }
+                        }
+                    }
+                }
+
+                // Add plate button
+                Rectangle {
+                    visible: root.editorVm && root.editorVm.plateCount < 10
+                    width: 30
+                    height: 30
+                    radius: 6
+                    color: addPlateMA.containsMouse ? Theme.bgHover : Theme.bgElevated
+                    border.width: 1
+                    border.color: Theme.borderSubtle
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "+"
+                        color: Theme.textSecondary
+                        font.pixelSize: 14
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        id: addPlateMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: if (root.editorVm) root.editorVm.addPlate()
+                    }
+                }
+            }
+        }
+
         // 对象信息栏（对齐上游 Plater::show_object_info）
         Rectangle {
             id: objectInfoBar
@@ -3470,102 +3412,5 @@ Item {
             }
         }
 
-        Row {
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 18
-            anchors.left: leftPanel.right
-            anchors.leftMargin: 14
-            spacing: 8
-
-            // 状态指示器（对齐上游 PartPlateList 底部状态）
-            Row {
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 8
-
-                Label {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: root.editorVm
-                        ? (root.editorVm.hasSelection
-                           ? qsTr("已选 %1 个对象").arg(root.editorVm.selectedObjectCount)
-                           : qsTr("%1 个对象 · %2").arg(root.editorVm.objectCount).arg(root.editorVm.statusText))
-                        : ""
-                    color: root.editorVm && root.editorVm.hasSelection ? Theme.accent : Theme.textSecondary
-                    font.pixelSize: Theme.fontSizeSM
-                }
-
-                // 当前平板切片状态指示（对齐上游 PartPlate::m_slice_result_valid）
-                Rectangle {
-                    visible: root.editorVm && root.editorVm.isPlateSliced(root.editorVm.currentPlateIndex)
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: slicedText.implicitWidth + 12
-                    height: 18
-                    radius: 9
-                    color: Theme.accentSubtle
-
-                    Label {
-                        id: slicedText
-                        anchors.centerIn: parent
-                        text: qsTr("✓ 已切片")
-                        color: Theme.accent
-                        font.pixelSize: 10
-                    }
-                }
-
-                // 切片中进度
-                Rectangle {
-                    visible: root.editorVm && root.editorVm.isSlicing()
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: slicingText.implicitWidth + 12
-                    height: 18
-                    radius: 9
-                    color: Theme.bgWarningSubtle
-
-                    Label {
-                        id: slicingText
-                        anchors.centerIn: parent
-                        text: root.editorVm ? qsTr("切片中 %1%").arg(root.editorVm.sliceProgress()) : ""
-                        color: Theme.statusWarning
-                        font.pixelSize: 10
-                    }
-                }
-            }
-        }
-
-        Row {
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 18
-            anchors.right: sidebar.left
-            anchors.rightMargin: 18
-            spacing: 8
-
-            CxPillAction {
-                iconSource: "qrc:/qml/assets/icons/settings.svg"
-                text: qsTr("打印配置")
-                onClicked: sidebar.switchToPrintTab()
-            }
-
-            CxPillAction {
-                iconSource: "qrc:/qml/assets/icons/download.svg"
-                text: qsTr("导出 G-code")
-                onClicked: exportGCodeDlg.open()
-            }
-
-            CxPillAction {
-                iconSource: "qrc:/qml/assets/icons/layers.svg"
-                text: qsTr("切片全部平板")
-                visible: root.editorVm ? root.editorVm.plateCount > 1 : false
-                onClicked: {
-                    if (root.editorVm)
-                        root.editorVm.requestSliceAll()
-                }
-            }
-
-            CxPillAction {
-                iconSource: "qrc:/qml/assets/icons/send-2.svg"
-                text: qsTr("发送打印")
-                primary: true
-                onClicked: printDlg.open()
-            }
-        }
     }
 }

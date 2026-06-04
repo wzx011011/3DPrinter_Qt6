@@ -85,7 +85,7 @@ Item {
         implicitHeight: childrenRect.height
         height: root.expanded ? implicitHeight : 0
         clip: true
-        visible: root.expanded || heightAnimation.running
+        visible: root.expanded || height > 0
 
         Behavior on height {
             id: heightAnimation

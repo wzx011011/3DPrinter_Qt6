@@ -942,6 +942,125 @@ ApplicationWindow {
                         }
                     }
 
+                        // Slice / Print action group (aligned with upstream MainFrame side_tools)
+                        Row {
+                            visible: backend.currentPage === root.pagePrepare
+                            spacing: 6
+
+                            // Slice button with dropdown arrow
+                            Item {
+                                width: sliceBtn.width + 16
+                                height: sliceBtn.height
+
+                                CxPillAction {
+                                    id: sliceBtn
+                                    iconSource: "qrc:/qml/assets/icons/layers.svg"
+                                    text: qsTr("切片")
+                                    onClicked: {
+                                        if (backend.editorViewModel)
+                                            backend.editorViewModel.requestSlice()
+                                    }
+                                }
+
+                                // Dropdown arrow overlay
+                                Rectangle {
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 16
+                                    height: sliceBtn.height
+                                    radius: 0
+                                    color: "transparent"
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "▾"
+                                        color: Theme.textTertiary
+                                        font.pixelSize: 9
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            var p = mapToItem(root.contentItem, 0, sliceBtn.height + 4)
+                                            sliceTopMenu.popup(p.x, p.y)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Print button
+                            Item {
+                                width: printBtn.width + 16
+                                height: printBtn.height
+
+                                CxPillAction {
+                                    id: printBtn
+                                    iconSource: "qrc:/qml/assets/icons/send-2.svg"
+                                    text: qsTr("打印")
+                                    primary: true
+                                    onClicked: preparePage.openPrintDialog()
+                                }
+
+                                Rectangle {
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 16
+                                    height: printBtn.height
+                                    radius: 0
+                                    color: "transparent"
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "▾"
+                                        color: Theme.textTertiary
+                                        font.pixelSize: 9
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            var p = mapToItem(root.contentItem, 0, printBtn.height + 4)
+                                            printTopMenu.popup(p.x, p.y)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Slice dropdown menu
+                        CxMenu {
+                            id: sliceTopMenu
+                            CxMenuItem {
+                                text: qsTr("切片当前平板")
+                                onTriggered: {
+                                    if (backend.editorViewModel)
+                                        backend.editorViewModel.requestSlice()
+                                }
+                            }
+                            CxMenuItem {
+                                text: qsTr("切片全部平板")
+                                onTriggered: {
+                                    if (backend.editorViewModel)
+                                        backend.editorViewModel.requestSliceAll()
+                                }
+                            }
+                        }
+
+                        // Print dropdown menu
+                        CxMenu {
+                            id: printTopMenu
+                            CxMenuItem {
+                                text: qsTr("发送打印")
+                                onTriggered: preparePage.openPrintDialog()
+                            }
+                            CxMenuItem {
+                                text: qsTr("导出 G-code")
+                                onTriggered: preparePage.openExportDialog()
+                            }
+                        }
+
                     Item { Layout.fillWidth: true }
 
                     RowLayout {

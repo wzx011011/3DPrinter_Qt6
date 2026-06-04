@@ -37,6 +37,7 @@
         <file>panels/PrintSettings.qml</file>
         <file>panels/SliceProgress.qml</file>
         <file>panels/Sidebar.qml</file>
+        <file>panels/FilamentPanel.qml</file>
         <!-- Components -->
         <file>components/StatusBar.qml</file>
         <file>components/Toolbar.qml</file>
