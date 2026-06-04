@@ -8,11 +8,13 @@ import "../controls"
 // Speed and acceleration limit configuration by weight/height ranges
 // Usage: SpeedLimitDialog { id: dlg }  ->  dlg.open()
 
-Dialog {
+CxDialog {
     id: root
 
-    modal: true
     closePolicy: Popup.NoAutoClose
+
+    dialogTitle: qsTr("速度与加速度限制")
+
     anchors.centerIn: parent
     width: 440
     height: 360
@@ -24,33 +26,8 @@ Dialog {
         { enabled: false, rangeMin: "0", rangeMax: "10", speedLimit: "100", accelLimit: "2000", type: qsTr("高度") }
     ]
 
-    background: Rectangle {
-        color: "#1a1f28"
-        radius: 8
-        border.color: "#2e3848"
-        border.width: 1
-    }
-
-    ColumnLayout {
-        width: parent.width
-        height: 40
-        spacing: 0
-
-        Item { Layout.fillWidth: true; Layout.fillHeight: true }
-
-        Text {
-            Layout.fillWidth: true
-            Layout.leftMargin: 16
-            Layout.alignment: Qt.AlignVCenter
-            text: qsTr("速度与加速度限制")
-            color: "#e2e8f5"
-            font.pixelSize: 14
-            font.bold: true
-        }
-    }
-
     contentItem: ColumnLayout {
-        width: parent.width
+        width: root.width
         spacing: 8
         anchors.margins: 16
 

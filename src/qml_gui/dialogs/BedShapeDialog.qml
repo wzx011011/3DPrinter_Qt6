@@ -4,66 +4,37 @@ import QtQuick.Layouts
 import ".."
 import "../controls"
 
-// P8.2 — BedShapeDialog: bed shape configuration (aligns with upstream BedShapeDialog)
+// P8.2 -- BedShapeDialog: bed shape configuration (aligns with upstream BedShapeDialog)
 // Shape selection: Rectangle / Circle / Custom
 // Dimension inputs: width, depth, height, origin offset, diameter
 // Preview canvas showing the bed outline
 // Usage: BedShapeDialog { id: dlg }  ->  dlg.open()
 
-Dialog {
+CxDialog {
     id: root
 
-    modal: true
     closePolicy: Popup.NoAutoClose
+
+    dialogTitle: qsTr("热床形状设置")
+
     anchors.centerIn: parent
     width: 400
     height: 380
 
     required property var editorVm
 
-    background: Rectangle {
-        color: "#1a1f28"
-        radius: 8
-        border.color: "#2e3848"
-        border.width: 1
-    }
-
-    header: Rectangle {
-        width: parent.width
-        height: 40
-        color: "#141920"
-        radius: 8
-        Rectangle {
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: 12
-            color: parent.color
-        }
-
-        Text {
-            anchors.left: parent.left
-            anchors.leftMargin: 16
-            anchors.verticalCenter: parent.verticalCenter
-            text: qsTr("热床形状设置")
-            color: "#e2e8f5"
-            font.pixelSize: 14
-            font.bold: true
-        }
-    }
-
     contentItem: RowLayout {
         spacing: 16
         anchors.fill: parent
         anchors.margins: 16
 
-        // ── Left: shape options + dimension inputs ──
+        // -- Left: shape options + dimension inputs --
         ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 10
 
-            // Shape type (对齐上游 BedShape::PageType)
+            // Shape type (aligns with upstream BedShape::PageType)
             Text {
                 text: qsTr("热床形状")
                 color: Theme.textSecondary
@@ -120,7 +91,7 @@ Dialog {
                 topPadding: 4
             }
 
-            // Width (矩形) or Diameter (圆形)
+            // Width (rectangle) or Diameter (circle)
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
@@ -154,7 +125,7 @@ Dialog {
                 }
             }
 
-            // Depth (矩形 only)
+            // Depth (rectangle only)
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 8
@@ -251,7 +222,7 @@ Dialog {
             }
         }
 
-        // ── Right: bed shape preview canvas ──
+        // -- Right: bed shape preview canvas --
         Canvas {
             id: previewCanvas
             Layout.preferredWidth: 130

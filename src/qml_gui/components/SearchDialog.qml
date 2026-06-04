@@ -2,11 +2,12 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import ".."
+import "../controls"
 
 // 搜索对话框（对齐上游 SearchDialog / OptionsSearcher）
 // 弹出式搜索面板，显示结果按 Page > Category > Group 分组
 // 支持搜索 key/label/category/group，点击结果跳转到对应选项
-Popup {
+CxPopup {
     id: root
     required property var configVm
     signal jumpToOption(int optionIndex)
@@ -18,13 +19,6 @@ Popup {
     modal: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     padding: 0
-
-    background: Rectangle {
-        radius: 8
-        color: "#1a2030"
-        border.width: 1
-        border.color: Theme.borderDefault
-    }
 
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 150 }
@@ -68,13 +62,11 @@ Popup {
                     font.pixelSize: 14
                 }
 
-                TextField {
+                CxTextField {
                     id: searchField
                     Layout.fillWidth: true
                     placeholderText: qsTr("搜索配置选项...")
-                    color: Theme.textPrimary
                     font.pixelSize: 12
-                    background: null
                     selectByMouse: true
                     onTextChanged: {
                         searchTimer.restart()

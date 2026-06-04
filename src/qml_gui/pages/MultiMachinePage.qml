@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../controls"
 
 // Aligns with upstream MultiMachinePage (Tabbook with 3 tabs):
 //   Tab 1: "Device"   -> MultiMachineManagerPage
@@ -193,14 +194,11 @@ Item {
                                 font.pixelSize: 13
                             }
 
-                            TextField {
+                            CxTextField {
                                 id: searchField
                                 Layout.fillWidth: true
-                                background: null
-                                color: Theme.textPrimary
                                 font.pixelSize: Theme.fontSizeMD
                                 placeholderText: qsTr("Search devices...")
-                                placeholderTextColor: Theme.textTertiary
                                 selectByMouse: true
                                 onTextChanged: _vm.searchText = text
                             }
@@ -523,20 +521,13 @@ Item {
                         Layout.fillWidth: true
                     }
                     // Inline name editor (visible when editing, 对齐上游 MultiMachineManagerPage rename)
-                    TextField {
+                    CxTextField {
                         id: nameEditor
                         visible: deviceRow._editingName
                         Layout.fillWidth: true
                         text: deviceRow._name
-                        color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeMD
                         selectByMouse: true
-                        background: Rectangle {
-                            radius: Theme.radiusSM
-                            color: Theme.bgPanel
-                            border.color: Theme.accent
-                            border.width: 1
-                        }
                         onAccepted: {
                             _vm.setMachineName(index, text)
                             deviceRow._editingName = false
@@ -1417,10 +1408,9 @@ Item {
 
             // Task selector
             Text { text: qsTr("Task:"); color: Theme.textSecondary; font.pixelSize: 12 }
-            ComboBox {
+            CxComboBox {
                 id: taskSelector
                 Layout.fillWidth: true
-                implicitHeight: 28
                 model: root.multiMachineVm.localTaskCount
                 textRole: ""
                 delegate: ItemDelegate {
@@ -1432,15 +1422,9 @@ Item {
                     }
                     highlighted: taskSelector.highlightedIndex === index
                 }
-                contentItem: Text {
-                    text: taskSelector.currentIndex >= 0
-                          ? root.multiMachineVm.localTaskProjectName(taskSelector.currentIndex)
-                          : qsTr("Select task...")
-                    color: Theme.textPrimary
-                    font.pixelSize: 11
-                    verticalAlignment: Text.AlignVCenter
-                    leftPadding: 8
-                }
+                displayText: taskSelector.currentIndex >= 0
+                              ? root.multiMachineVm.localTaskProjectName(taskSelector.currentIndex)
+                              : qsTr("Select task...")
             }
 
             // Online device list

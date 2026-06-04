@@ -300,19 +300,10 @@ Item {
                     color: Theme.textSecondary
                     font.pixelSize: 12
                 }
-                TextField {
+                CxTextField {
                     id: loginUser
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 32
-                    color: Theme.textPrimary
-                    font.pixelSize: 13
                     placeholderText: qsTr("输入用户名")
-                    background: Rectangle {
-                        radius: 6
-                        color: "#1e2229"
-                        border.color: loginUser.activeFocus ? Theme.accent : "#2e3540"
-                        border.width: 1
-                    }
                 }
 
                 Label {
@@ -320,20 +311,11 @@ Item {
                     color: Theme.textSecondary
                     font.pixelSize: 12
                 }
-                TextField {
+                CxTextField {
                     id: loginPass
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 32
-                    color: Theme.textPrimary
-                    font.pixelSize: 13
                     echoMode: TextInput.Password
                     placeholderText: qsTr("输入密码")
-                    background: Rectangle {
-                        radius: 6
-                        color: "#1e2229"
-                        border.color: loginPass.activeFocus ? Theme.accent : "#2e3540"
-                        border.width: 1
-                    }
                     Keys.onReturnPressed: doLogin()
                     Keys.onEnterPressed: doLogin()
                 }
@@ -414,19 +396,10 @@ Item {
                     color: Theme.textSecondary
                     font.pixelSize: 12
                 }
-                TextField {
+                CxTextField {
                     id: bindDeviceName
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 32
-                    color: Theme.textPrimary
-                    font.pixelSize: 13
                     placeholderText: qsTr("例如：K1 Max")
-                    background: Rectangle {
-                        radius: 6
-                        color: "#1e2229"
-                        border.color: bindDeviceName.activeFocus ? Theme.accent : "#2e3540"
-                        border.width: 1
-                    }
                 }
 
                 Label {
@@ -434,19 +407,10 @@ Item {
                     color: Theme.textSecondary
                     font.pixelSize: 12
                 }
-                TextField {
+                CxTextField {
                     id: bindPinCode
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 32
-                    color: Theme.textPrimary
-                    font.pixelSize: 13
                     placeholderText: qsTr("设备屏幕上显示的 PIN 码")
-                    background: Rectangle {
-                        radius: 6
-                        color: "#1e2229"
-                        border.color: bindPinCode.activeFocus ? Theme.accent : "#2e3540"
-                        border.width: 1
-                    }
                     Keys.onReturnPressed: doBind()
                     Keys.onEnterPressed: doBind()
                 }

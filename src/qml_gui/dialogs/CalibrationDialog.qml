@@ -1,61 +1,39 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../controls"
 
-// D3 — CalibrationDialog：进度 + 状态 + 取消
-// 用法：CalibrationDialog { id: calibDlg; calibrationVm: ... }  →  calibDlg.open()
-// CalibrationPage 的"开始校准"按钮打开此对话框
-Dialog {
+// D3 -- CalibrationDialog: progress + status + cancel
+// Usage: CalibrationDialog { id: calibDlg; calibrationVm: ... }  ->  calibDlg.open()
+// CalibrationPage "Start Calibration" button opens this dialog
+CxDialog {
     id: root
     required property var calibrationVm
 
-    // Hardware calibration options (对齐上游 CalibrationDialog checkboxes)
+    // Hardware calibration options (aligns with upstream CalibrationDialog checkboxes)
     property bool hardwareLidar: true
     property bool hardwareBedLevel: true
     property bool hardwareVibration: true
     property bool hardwareMotor: false
 
-    modal: true
+    dialogTitle: root.calibrationVm ? root.calibrationVm.selectedTitle : qsTr("校准")
+    titleIcon: "⚙"
+    showCloseButton: !root.calibrationVm || !root.calibrationVm.isRunning
+
     closePolicy: root.calibrationVm && root.calibrationVm.isRunning
-                 ? Popup.NoAutoClose          // 校准进行中禁止点外部关闭
+                 ? Popup.NoAutoClose          // Prevent closing outside during calibration
                  : Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     anchors.centerIn: parent
     width:  400
     height: contentCol.implicitHeight + 80
 
-    background: Rectangle {
-        color: "#1a1f28"; radius: 8
-        border.color: "#2e3848"; border.width: 1
-    }
-
-    header: Rectangle {
-        width: parent.width; height: 44
-        color: "#141920"; radius: 8
-        Rectangle { anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right; height: 12; color: parent.color }
-
-        RowLayout {
-            anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 12; spacing: 10
-            Text {
-                text: "⚙  " + (root.calibrationVm ? root.calibrationVm.selectedTitle : qsTr("校准"))
-                color: "#e2e8f5"; font.pixelSize: 14; font.bold: true
-            }
-            Item { Layout.fillWidth: true }
-            Rectangle {
-                width: 24; height: 24; radius: 4; visible: !root.calibrationVm || !root.calibrationVm.isRunning
-                color: xHov.containsMouse ? "#3d2020" : "transparent"
-                Text { anchors.centerIn: parent; text: "✕"; color: "#7a8fa3"; font.pixelSize: 12 }
-                MouseArea { id: xHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.close() }
-            }
-        }
-    }
-
     contentItem: ColumnLayout {
         id: contentCol
         width: root.width - 32
         spacing: 16
 
-        // 状态图标
+        // Status icon
         Rectangle {
             Layout.fillWidth: true; height: 72; radius: 6; color: "#111620"
             border.color: root.calibrationVm && root.calibrationVm.isRunning ? "#22c564" : "#2e3848"
@@ -80,7 +58,7 @@ Dialog {
             }
         }
 
-        // 进度条
+        // Progress bar
         ColumnLayout {
             Layout.fillWidth: true; spacing: 4
             RowLayout {
@@ -92,26 +70,17 @@ Dialog {
                     color: "#e2e8f1"; font.pixelSize: 11; font.bold: true
                 }
             }
-            ProgressBar {
-                id: progressBar
+            CxProgressBar {
                 Layout.fillWidth: true; from: 0; to: 100
                 value: root.calibrationVm ? root.calibrationVm.progress : 0
-                background: Rectangle { implicitHeight: 6; radius: 3; color: "#2a3040" }
-                contentItem: Item {
-                    Rectangle {
-                        width: progressBar.visualPosition * parent.width; height: parent.height; radius: 3
-                        color: "#22c564"
-                        Behavior on width { NumberAnimation { duration: 200 } }
-                    }
-                }
             }
         }
 
-        // 分割线
+        // Divider
         Rectangle { Layout.fillWidth: true; height: 1; color: "#1e2535" }
 
-        // 硬件校准选项（对齐上游 CalibrationDialog::create_check_option）
-        // 上游有 4 个 checkbox: xcam_cali, bed_leveling, vibration, motor_noise
+        // Hardware calibration options (aligns with upstream CalibrationDialog::create_check_option)
+        // Upstream has 4 checkboxes: xcam_cali, bed_leveling, vibration, motor_noise
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 8
@@ -124,7 +93,7 @@ Dialog {
                 font.bold: true
             }
 
-            // Micro lidar calibration (对齐上游 xcam_cali)
+            // Micro lidar calibration (aligns with upstream xcam_cali)
             Rectangle {
                 Layout.fillWidth: true
                 height: 28
@@ -144,7 +113,7 @@ Dialog {
                         border.width: 1.5
                         Text {
                             anchors.centerIn: parent
-                            text: hardwareLidar ? "\u2713" : ""
+                            text: hardwareLidar ? "✓" : ""
                             color: "white"
                             font.pixelSize: 10
                             font.bold: true
@@ -175,7 +144,7 @@ Dialog {
                 }
             }
 
-            // Bed leveling (对齐上游 bed_leveling)
+            // Bed leveling (aligns with upstream bed_leveling)
             Rectangle {
                 Layout.fillWidth: true
                 height: 28
@@ -195,7 +164,7 @@ Dialog {
                         border.width: 1.5
                         Text {
                             anchors.centerIn: parent
-                            text: hardwareBedLevel ? "\u2713" : ""
+                            text: hardwareBedLevel ? "✓" : ""
                             color: "white"
                             font.pixelSize: 10
                             font.bold: true
@@ -226,7 +195,7 @@ Dialog {
                 }
             }
 
-            // Vibration compensation (对齐上游 vibration, always shown)
+            // Vibration compensation (aligns with upstream vibration, always shown)
             Rectangle {
                 Layout.fillWidth: true
                 height: 28
@@ -246,7 +215,7 @@ Dialog {
                         border.width: 1.5
                         Text {
                             anchors.centerIn: parent
-                            text: hardwareVibration ? "\u2713" : ""
+                            text: hardwareVibration ? "✓" : ""
                             color: "white"
                             font.pixelSize: 10
                             font.bold: true
@@ -269,7 +238,7 @@ Dialog {
                 }
             }
 
-            // Motor noise cancellation (对齐上游 motor_noise)
+            // Motor noise cancellation (aligns with upstream motor_noise)
             Rectangle {
                 Layout.fillWidth: true
                 height: 28
@@ -289,7 +258,7 @@ Dialog {
                         border.width: 1.5
                         Text {
                             anchors.centerIn: parent
-                            text: hardwareMotor ? "\u2713" : ""
+                            text: hardwareMotor ? "✓" : ""
                             color: "white"
                             font.pixelSize: 10
                             font.bold: true
@@ -321,15 +290,15 @@ Dialog {
             }
         }
 
-        // 分割线
+        // Divider
         Rectangle { Layout.fillWidth: true; height: 1; color: "#1e2535" }
 
-        // 按钮行
+        // Button row
         RowLayout {
             Layout.fillWidth: true; spacing: 8
             Item { Layout.fillWidth: true }
 
-            // 取消校准（进行中才显示）
+            // Cancel calibration (visible during calibration)
             Rectangle {
                 width: 88; height: 30; radius: 4; visible: root.calibrationVm && root.calibrationVm.isRunning
                 color: stopHov.containsMouse ? "#5e1818" : "#3a1010"
@@ -341,7 +310,7 @@ Dialog {
                 }
             }
 
-            // 关闭（完成后显示）
+            // Close (visible when complete)
             Rectangle {
                 width: 80; height: 30; radius: 4
                 visible: !root.calibrationVm || !root.calibrationVm.isRunning

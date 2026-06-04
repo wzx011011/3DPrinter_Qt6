@@ -143,29 +143,29 @@ Item {
     }
 
     // Object context menu (right-click, aligns with upstream create_object_menu/create_extra_object_menu)
-    Menu {
+    CxMenu {
         id: objectContextMenu
 
-        MenuItem {
+        CxMenuItem {
             text: qsTr("复制选中")
             onTriggered: if (root.editorVm) root.editorVm.duplicateSelectedObjects()
         }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("删除选中")
             onTriggered: if (root.editorVm) root.editorVm.deleteSelectedObjects()
         }
         MenuSeparator { }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("全选")
             onTriggered: if (root.editorVm) root.editorVm.selectAllVisibleObjects()
         }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("取消选择")
             onTriggered: if (root.editorVm) root.editorVm.clearObjectSelection()
         }
         MenuSeparator { }
         // 对齐上游 create_extra_object_menu — Rename
-        MenuItem {
+        CxMenuItem {
             text: qsTr("重命名")
             enabled: root.editorVm && root.editorVm.selectedObjectCount === 1
             onTriggered: {
@@ -175,63 +175,63 @@ Item {
             }
         }
         // 对齐上游 create_extra_object_menu — Center
-        MenuItem {
+        CxMenuItem {
             text: qsTr("居中到热床")
             onTriggered: if (root.editorVm) root.editorVm.centerSelectedObjects()
         }
         // 对齐上游 create_extra_object_menu — Fill bed with copies
-        MenuItem {
+        CxMenuItem {
             text: qsTr("铺满热床")
             onTriggered: if (root.editorVm) root.editorVm.fillBedWithCopies()
         }
         // 对齐上游 create_extra_object_menu — Export as STL
-        MenuItem {
+        CxMenuItem {
             text: qsTr("导出为 STL")
             enabled: root.editorVm && root.editorVm.selectedObjectCount === 1
             onTriggered: if (root.editorVm) root.editorVm.exportSelectedAsStl()
         }
         MenuSeparator { }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("移动模式")
             onTriggered: viewport3d.gizmoMode = GLViewport.GizmoMove
         }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("旋转模式")
             onTriggered: viewport3d.gizmoMode = GLViewport.GizmoRotate
         }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("缩放模式")
             onTriggered: viewport3d.gizmoMode = GLViewport.GizmoScale
         }
         MenuSeparator { }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("自动朝向")
             onTriggered: if (root.editorVm) root.editorVm.autoOrientSelected()
         }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("拆分对象")
             enabled: root.editorVm && root.editorVm.selectedObjectCount === 1
             onTriggered: if (root.editorVm) root.editorVm.splitSelectedObject()
         }
         MenuSeparator { }
-        Menu {
+        CxMenu {
             title: qsTr("镜像")
-            MenuItem {
+            CxMenuItem {
                 text: qsTr("沿 X 轴镜像")
                 onTriggered: if (root.editorVm) root.editorVm.mirrorSelectedObjects(0)
             }
-            MenuItem {
+            CxMenuItem {
                 text: qsTr("沿 Y 轴镜像")
                 onTriggered: if (root.editorVm) root.editorVm.mirrorSelectedObjects(1)
             }
-            MenuItem {
+            CxMenuItem {
                 text: qsTr("沿 Z 轴镜像")
                 onTriggered: if (root.editorVm) root.editorVm.mirrorSelectedObjects(2)
             }
         }
         MenuSeparator { }
         // 对齐上游 set_printable
-        MenuItem {
+        CxMenuItem {
             text: root.editorVm && root.editorVm.selectedObjectCount > 0
                    && root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex)
                    ? qsTr("设为不参与打印") : qsTr("设为可打印")
@@ -244,11 +244,11 @@ Item {
                 }
             }
         }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("显示/隐藏")
             onTriggered: if (root.editorVm) root.editorVm.toggleSelectedObjectsVisibility()
         }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("适应视图")
             onTriggered: root.applyFitHintIfReady()
         }
@@ -271,13 +271,11 @@ Item {
 
             Label { text: qsTr("输入新名称:"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeMD }
 
-            TextField {
+            CxTextField {
                 id: renameInput
                 Layout.fillWidth: true
                 text: renameDialog.currentName
-                color: Theme.textPrimary
                 placeholderText: qsTr("对象名称")
-                background: Rectangle { color: Theme.bgPanel; border.color: Theme.borderDefault; border.width: 1; radius: 4 }
                 onAccepted: {
                     if (root.editorVm && renameDialog.currentObjIndex >= 0) {
                         root.editorVm.renameObject(renameDialog.currentObjIndex, renameInput.text)
@@ -317,23 +315,23 @@ Item {
     // Plate context menu (right-click on plate card)
     property int contextPlateIndex: -1
 
-    Menu {
+    CxMenu {
         id: plateContextMenu
 
-        MenuItem {
+        CxMenuItem {
             text: qsTr("选择全部对象")
             enabled: root.contextPlateIndex >= 0 && root.editorVm
                      && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
             onTriggered: if (root.editorVm) root.editorVm.selectAllOnPlate(root.contextPlateIndex)
         }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("清空平板")
             enabled: root.contextPlateIndex >= 0 && root.editorVm
                      && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
             onTriggered: if (root.editorVm) root.editorVm.removeAllOnPlate(root.contextPlateIndex)
         }
         MenuSeparator { }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("排列对象")
             enabled: root.contextPlateIndex >= 0 && root.editorVm
                      && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
@@ -342,7 +340,7 @@ Item {
                 if (root.editorVm) root.editorVm.arrangeAllObjects()
             }
         }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("自动朝向")
             enabled: root.contextPlateIndex >= 0 && root.editorVm
                      && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
@@ -352,7 +350,7 @@ Item {
             }
         }
         MenuSeparator { }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("重命名")
             enabled: root.contextPlateIndex >= 0 && root.editorVm
             onTriggered: {
@@ -363,7 +361,7 @@ Item {
                 dialog.open()
             }
         }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("平板设置")
             enabled: root.contextPlateIndex >= 0 && root.editorVm
             onTriggered: {
@@ -374,7 +372,7 @@ Item {
                 dialog.open()
             }
         }
-        MenuItem {
+        CxMenuItem {
             text: root.contextPlateIndex >= 0 && root.editorVm
                   && root.editorVm.isPlateLocked(root.contextPlateIndex)
                   ? qsTr("解锁平板") : qsTr("锁定平板")
@@ -382,7 +380,7 @@ Item {
             onTriggered: if (root.editorVm) root.editorVm.togglePlateLocked(root.contextPlateIndex)
         }
         MenuSeparator { }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("删除平板")
             enabled: root.contextPlateIndex >= 0 && root.editorVm
                      && root.editorVm.plateCount > 1
@@ -405,17 +403,11 @@ Item {
                 anchors.fill: parent
                 spacing: 12
 
-                TextField {
+                CxTextField {
                     id: nameField
                     Layout.fillWidth: true
                     text: dlg.currentName
                     font.pixelSize: 13
-                    color: Theme.textPrimary
-                    background: Rectangle {
-                        radius: 6
-                        color: Theme.bgInset
-                        border.color: nameField.activeFocus ? Theme.accent : Theme.borderSubtle
-                    }
                     onAccepted: dlg.accept()
                 }
 
@@ -486,18 +478,12 @@ Item {
                         font.pixelSize: Theme.fontSizeMD
                         Layout.preferredWidth: 100
                     }
-                    TextField {
+                    CxTextField {
                         id: psNameField
                         Layout.fillWidth: true
                         text: settingsDlg.plateName
                         maximumLength: 20
                         font.pixelSize: Theme.fontSizeMD
-                        color: Theme.textPrimary
-                        background: Rectangle {
-                            radius: 6
-                            color: Theme.bgElevated
-                            border.color: psNameField.activeFocus ? Theme.accent : Theme.borderSubtle
-                        }
                     }
                 }
 
@@ -511,7 +497,7 @@ Item {
                         font.pixelSize: Theme.fontSizeMD
                         Layout.preferredWidth: 100
                     }
-                    ComboBox {
+                    CxComboBox {
                         id: bedTypeCombo
                         Layout.fillWidth: true
                         model: [
@@ -528,39 +514,6 @@ Item {
                         onActivated: function(index) {
                             if (root.editorVm) root.editorVm.setPlateBedType(settingsDlg.plateIndex, index)
                         }
-                        contentItem: Text {
-                            text: bedTypeCombo.displayText
-                            color: Theme.textPrimary
-                            font.pixelSize: Theme.fontSizeMD
-                            verticalAlignment: Text.AlignVCenter
-                            leftPadding: 8
-                        }
-                        background: Rectangle {
-                            radius: 6
-                            color: Theme.bgElevated
-                            border.color: bedTypeCombo.activeFocus ? Theme.accent : Theme.borderSubtle
-                        }
-                        popup: Popup {
-                            y: bedTypeCombo.height
-                            width: bedTypeCombo.width
-                            padding: 4
-                            background: Rectangle { radius: 6; color: Theme.bgSurface; border.color: Theme.borderSubtle; border.width: 1 }
-                            contentItem: ListView {
-                                implicitHeight: contentHeight
-                                model: bedTypeCombo.model
-                                delegate: ItemDelegate {
-                                    width: bedTypeCombo.width
-                                    height: 30
-                                    contentItem: Text {
-                                        text: modelData
-                                        color: bedTypeCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary
-                                        font.pixelSize: Theme.fontSizeMD
-                                    }
-                                    highlighted: bedTypeCombo.highlightedIndex === index
-                                    background: Rectangle { color: highlighted ? Theme.accent : "transparent"; radius: 4 }
-                                }
-                            }
-                        }
                     }
                 }
 
@@ -574,46 +527,13 @@ Item {
                         font.pixelSize: Theme.fontSizeMD
                         Layout.preferredWidth: 100
                     }
-                    ComboBox {
+                    CxComboBox {
                         id: printSeqCombo
                         Layout.fillWidth: true
                         model: [qsTr("跟随全局"), qsTr("按层打印"), qsTr("按对象打印")]
                         currentIndex: root.editorVm ? root.editorVm.platePrintSequence(settingsDlg.plateIndex) : 0
                         onActivated: function(index) {
                             if (root.editorVm) root.editorVm.setPlatePrintSequence(settingsDlg.plateIndex, index)
-                        }
-                        contentItem: Text {
-                            text: printSeqCombo.displayText
-                            color: Theme.textPrimary
-                            font.pixelSize: Theme.fontSizeMD
-                            verticalAlignment: Text.AlignVCenter
-                            leftPadding: 8
-                        }
-                        background: Rectangle {
-                            radius: 6
-                            color: Theme.bgElevated
-                            border.color: printSeqCombo.activeFocus ? Theme.accent : Theme.borderSubtle
-                        }
-                        popup: Popup {
-                            y: printSeqCombo.height
-                            width: printSeqCombo.width
-                            padding: 4
-                            background: Rectangle { radius: 6; color: Theme.bgSurface; border.color: Theme.borderSubtle; border.width: 1 }
-                            contentItem: ListView {
-                                implicitHeight: contentHeight
-                                model: printSeqCombo.model
-                                delegate: ItemDelegate {
-                                    width: printSeqCombo.width
-                                    height: 30
-                                    contentItem: Text {
-                                        text: modelData
-                                        color: printSeqCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary
-                                        font.pixelSize: Theme.fontSizeMD
-                                    }
-                                    highlighted: printSeqCombo.highlightedIndex === index
-                                    background: Rectangle { color: highlighted ? Theme.accent : "transparent"; radius: 4 }
-                                }
-                            }
                         }
                     }
                 }
@@ -628,46 +548,13 @@ Item {
                         font.pixelSize: Theme.fontSizeMD
                         Layout.preferredWidth: 100
                     }
-                    ComboBox {
+                    CxComboBox {
                         id: spiralCombo
                         Layout.fillWidth: true
                         model: [qsTr("跟随全局"), qsTr("开启"), qsTr("关闭")]
                         currentIndex: root.editorVm ? root.editorVm.plateSpiralMode(settingsDlg.plateIndex) : 0
                         onActivated: function(index) {
                             if (root.editorVm) root.editorVm.setPlateSpiralMode(settingsDlg.plateIndex, index)
-                        }
-                        contentItem: Text {
-                            text: spiralCombo.displayText
-                            color: Theme.textPrimary
-                            font.pixelSize: Theme.fontSizeMD
-                            verticalAlignment: Text.AlignVCenter
-                            leftPadding: 8
-                        }
-                        background: Rectangle {
-                            radius: 6
-                            color: Theme.bgElevated
-                            border.color: spiralCombo.activeFocus ? Theme.accent : Theme.borderSubtle
-                        }
-                        popup: Popup {
-                            y: spiralCombo.height
-                            width: spiralCombo.width
-                            padding: 4
-                            background: Rectangle { radius: 6; color: Theme.bgSurface; border.color: Theme.borderSubtle; border.width: 1 }
-                            contentItem: ListView {
-                                implicitHeight: contentHeight
-                                model: spiralCombo.model
-                                delegate: ItemDelegate {
-                                    width: spiralCombo.width
-                                    height: 30
-                                    contentItem: Text {
-                                        text: modelData
-                                        color: spiralCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary
-                                        font.pixelSize: Theme.fontSizeMD
-                                    }
-                                    highlighted: spiralCombo.highlightedIndex === index
-                                    background: Rectangle { color: highlighted ? Theme.accent : "transparent"; radius: 4 }
-                                }
-                            }
                         }
                     }
                 }
@@ -703,37 +590,12 @@ Item {
                                 font.pixelSize: Theme.fontSizeSM
                                 Layout.preferredWidth: 60
                             }
-                            ComboBox {
+                            CxComboBox {
                                 id: firstLayerSeqChoiceCombo
                                 Layout.fillWidth: true
                                 model: [qsTr("自动"), qsTr("自定义")]
                                 onActivated: function(index) {
                                     if (root.editorVm) root.editorVm.setPlateFirstLayerSeqChoice(settingsDlg.plateIndex, index)
-                                }
-                                contentItem: Text {
-                                    text: firstLayerSeqChoiceCombo.displayText
-                                    color: Theme.textPrimary
-                                    font.pixelSize: Theme.fontSizeSM
-                                    verticalAlignment: Text.AlignVCenter
-                                    leftPadding: 8
-                                }
-                                background: Rectangle { radius: 5; color: Theme.bgElevated; border.color: Theme.borderSubtle }
-                                popup: Popup {
-                                    y: firstLayerSeqChoiceCombo.height
-                                    width: firstLayerSeqChoiceCombo.width
-                                    padding: 4
-                                    background: Rectangle { radius: 6; color: Theme.bgSurface; border.color: Theme.borderSubtle; border.width: 1 }
-                                    contentItem: ListView {
-                                        implicitHeight: contentHeight
-                                        model: firstLayerSeqChoiceCombo.model
-                                        delegate: ItemDelegate {
-                                            width: firstLayerSeqChoiceCombo.width
-                                            height: 28
-                                            contentItem: Text { text: modelData; color: firstLayerSeqChoiceCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
-                                            highlighted: firstLayerSeqChoiceCombo.highlightedIndex === index
-                                            background: Rectangle { color: highlighted ? Theme.accent : "transparent"; radius: 4 }
-                                        }
-                                    }
                                 }
                             }
                         }
@@ -903,37 +765,12 @@ Item {
                                 font.bold: true
                                 Layout.fillWidth: true
                             }
-                            ComboBox {
+                            CxComboBox {
                                 id: otherLayersSeqChoiceCombo
                                 Layout.preferredWidth: 100
                                 model: [qsTr("自动"), qsTr("自定义")]
                                 onActivated: function(index) {
                                     if (root.editorVm) root.editorVm.setPlateOtherLayersSeqChoice(settingsDlg.plateIndex, index)
-                                }
-                                contentItem: Text {
-                                    text: otherLayersSeqChoiceCombo.displayText
-                                    color: Theme.textPrimary
-                                    font.pixelSize: Theme.fontSizeSM
-                                    verticalAlignment: Text.AlignVCenter
-                                    leftPadding: 8
-                                }
-                                background: Rectangle { radius: 5; color: Theme.bgElevated; border.color: Theme.borderSubtle }
-                                popup: Popup {
-                                    y: otherLayersSeqChoiceCombo.height
-                                    width: otherLayersSeqChoiceCombo.width
-                                    padding: 4
-                                    background: Rectangle { radius: 6; color: Theme.bgSurface; border.color: Theme.borderSubtle; border.width: 1 }
-                                    contentItem: ListView {
-                                        implicitHeight: contentHeight
-                                        model: otherLayersSeqChoiceCombo.model
-                                        delegate: ItemDelegate {
-                                            width: otherLayersSeqChoiceCombo.width
-                                            height: 28
-                                            contentItem: Text { text: modelData; color: otherLayersSeqChoiceCombo.highlightedIndex === index ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
-                                            highlighted: otherLayersSeqChoiceCombo.highlightedIndex === index
-                                            background: Rectangle { color: highlighted ? Theme.accent : "transparent"; radius: 4 }
-                                        }
-                                    }
                                 }
                             }
                         }
@@ -979,14 +816,12 @@ Item {
                                                 color: Theme.textSecondary
                                                 font.pixelSize: 10
                                             }
-                                            TextField {
+                                            CxTextField {
                                                 id: beginField
                                                 Layout.preferredWidth: 50
                                                 text: root.editorVm ? root.editorVm.plateOtherLayersSeqBegin(settingsDlg.plateIndex, delegateModel.entryIndex) : 2
                                                 font.pixelSize: 10
-                                                color: Theme.textPrimary
                                                 horizontalAlignment: TextInput.AlignHCenter
-                                                background: Rectangle { radius: 4; color: Theme.bgSurface; border.color: Theme.borderSubtle }
                                                 onEditingFinished: {
                                                     var v = parseInt(text, 10)
                                                     if (isNaN(v) || v < 2) v = 2
@@ -1005,14 +840,12 @@ Item {
                                                 color: Theme.textSecondary
                                                 font.pixelSize: 10
                                             }
-                                            TextField {
+                                            CxTextField {
                                                 id: endField
                                                 Layout.preferredWidth: 50
                                                 text: root.editorVm ? root.editorVm.plateOtherLayersSeqEnd(settingsDlg.plateIndex, delegateModel.entryIndex) : 100
                                                 font.pixelSize: 10
-                                                color: Theme.textPrimary
                                                 horizontalAlignment: TextInput.AlignHCenter
-                                                background: Rectangle { radius: 4; color: Theme.bgSurface; border.color: Theme.borderSubtle }
                                                 onEditingFinished: {
                                                     var v = parseInt(text, 10)
                                                     var bv = parseInt(beginField.text, 10) || 2
@@ -1230,20 +1063,13 @@ Item {
     }
 
     // 排列设置弹出面板（对齐上游 ArrangeSettings popup）
-    Popup {
+    CxPopup {
         id: arrangeSettingsPopup
         anchors.centerIn: parent
         width: 320
         padding: 20
         modal: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-        background: Rectangle {
-            radius: 10
-            color: Theme.bgElevated
-            border.width: 1
-            border.color: Theme.borderSubtle
-        }
 
         ColumnLayout {
             anchors.fill: parent
@@ -1279,22 +1105,14 @@ Item {
                     font.pixelSize: Theme.fontSizeMD
                     Layout.preferredWidth: 90
                 }
-                TextField {
+                CxTextField {
                     id: arrangeDistField
                     Layout.fillWidth: true
-                    implicitHeight: 28
                     text: root.editorVm ? (root.editorVm.arrangeDistance > 0 ? root.editorVm.arrangeDistance.toFixed(1) : "0") : "0"
                     horizontalAlignment: Text.AlignHCenter
-                    color: Theme.textPrimary
                     font.pixelSize: Theme.fontSizeMD
                     selectByMouse: true
                     validator: DoubleValidator { bottom: 0; top: 100 }
-                    background: Rectangle {
-                        radius: 4
-                        color: Theme.bgBase
-                        border.width: 1
-                        border.color: arrangeDistField.activeFocus ? Theme.accent : Theme.borderSubtle
-                    }
                     onAccepted: {
                         if (root.editorVm) root.editorVm.arrangeDistance = parseFloat(text) || 0
                     }
@@ -1319,7 +1137,7 @@ Item {
                     font.pixelSize: Theme.fontSizeMD
                     Layout.fillWidth: true
                 }
-                Switch {
+                CxSwitch {
                     checked: root.editorVm ? root.editorVm.arrangeRotation : false
                     onToggled: { if (root.editorVm) root.editorVm.arrangeRotation = checked }
                 }
@@ -1335,7 +1153,7 @@ Item {
                     font.pixelSize: Theme.fontSizeMD
                     Layout.fillWidth: true
                 }
-                Switch {
+                CxSwitch {
                     checked: root.editorVm ? root.editorVm.arrangeAlignY : false
                     enabled: root.editorVm ? !root.editorVm.arrangeRotation : true
                     onToggled: { if (root.editorVm) root.editorVm.arrangeAlignY = checked }
@@ -1352,7 +1170,7 @@ Item {
                     font.pixelSize: Theme.fontSizeMD
                     Layout.fillWidth: true
                 }
-                Switch {
+                CxSwitch {
                     checked: root.editorVm ? root.editorVm.arrangeMultiMaterial : true
                     onToggled: { if (root.editorVm) root.editorVm.arrangeMultiMaterial = checked }
                 }
@@ -1368,7 +1186,7 @@ Item {
                     font.pixelSize: Theme.fontSizeMD
                     Layout.fillWidth: true
                 }
-                Switch {
+                CxSwitch {
                     checked: root.editorVm ? root.editorVm.arrangeAvoidCalibration : true
                     onToggled: { if (root.editorVm) root.editorVm.arrangeAvoidCalibration = checked }
                 }
@@ -2336,7 +2154,7 @@ Item {
                     Layout.alignment: Qt.AlignHCenter
                     visible: root.editorVm ? root.editorVm.cutMode === 1 : false
                     Text { text: qsTr("尺寸:"); color: Theme.textMuted; font.pixelSize: 10 }
-                    Slider {
+                    CxSlider {
                         from: 2; to: 20; stepSize: 0.5
                         value: root.editorVm ? root.editorVm.connectorSize : 5
                         implicitWidth: 80
@@ -2350,7 +2168,7 @@ Item {
                         Layout.preferredWidth: 30
                     }
                     Text { text: qsTr("深度:"); color: Theme.textMuted; font.pixelSize: 10 }
-                    Slider {
+                    CxSlider {
                         from: 0.1; to: 1.0; stepSize: 0.05
                         value: root.editorVm ? root.editorVm.connectorDepth : 0.5
                         implicitWidth: 60
@@ -2370,7 +2188,7 @@ Item {
                     spacing: 8
                     Layout.alignment: Qt.AlignHCenter
                     Text { text: qsTr("位置:"); color: Theme.textMuted; font.pixelSize: 10 }
-                    Slider {
+                    CxSlider {
                         from: -50; to: 50; stepSize: 0.5
                         value: root.editorVm ? root.editorVm.cutPosition : 0
                         implicitWidth: 120
@@ -2535,7 +2353,7 @@ Item {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
                     Text { text: qsTr("半径:"); color: Theme.textMuted; font.pixelSize: 10 }
-                    Slider {
+                    CxSlider {
                         from: 0.05; to: 20; stepSize: 0.1
                         value: root.editorVm ? root.editorVm.seamPaintCursorRadius : 2
                         implicitWidth: 100
@@ -2628,7 +2446,7 @@ Item {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
                     Text { text: qsTr("钻孔半径:"); color: Theme.textMuted; font.pixelSize: 10 }
-                    Slider {
+                    CxSlider {
                         from: 0.5; to: 10; stepSize: 0.1
                         value: root.editorVm ? root.editorVm.hollowHoleRadius : 2
                         implicitWidth: 100
@@ -2648,7 +2466,7 @@ Item {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
                     Text { text: qsTr("钻孔高度:"); color: Theme.textMuted; font.pixelSize: 10 }
-                    Slider {
+                    CxSlider {
                         from: 1; to: 20; stepSize: 0.5
                         value: root.editorVm ? root.editorVm.hollowHoleHeight : 6
                         implicitWidth: 100
@@ -2668,7 +2486,7 @@ Item {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
                     Text { text: qsTr("偏移:"); color: Theme.textMuted; font.pixelSize: 10 }
-                    Slider {
+                    CxSlider {
                         from: 0.5; to: 10; stepSize: 0.1
                         value: root.editorVm ? root.editorVm.hollowOffset : 3
                         implicitWidth: 100
@@ -2747,7 +2565,7 @@ Item {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
                     Text { text: qsTr("目标面数:"); color: Theme.textMuted; font.pixelSize: 10 }
-                    Slider {
+                    CxSlider {
                         from: 100; to: 500000; stepSize: 100
                         value: root.editorVm ? root.editorVm.simplifyWantedCount : 0
                         implicitWidth: 100
@@ -2767,7 +2585,7 @@ Item {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
                     Text { text: qsTr("最大误差:"); color: Theme.textMuted; font.pixelSize: 10 }
-                    Slider {
+                    CxSlider {
                         from: 0.001; to: 1.0; stepSize: 0.001
                         value: root.editorVm ? root.editorVm.simplifyMaxError : 0
                         implicitWidth: 100

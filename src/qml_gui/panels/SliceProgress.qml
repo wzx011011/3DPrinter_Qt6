@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import ".."
+import "../controls"
 
 // SliceProgress — 切片进度与结果面板（对齐上游 SliceInfoPanel）
 Item {
@@ -82,26 +83,11 @@ Item {
                 }
             }
 
-            ProgressBar {
+            CxProgressBar {
                 id: progressBar
                 Layout.fillWidth: true
                 from: 0; to: 100
                 value: root.pct
-
-                background: Rectangle {
-                    implicitHeight: 6
-                    radius: 3
-                    color: Theme.borderSubtle
-                }
-                contentItem: Item {
-                    Rectangle {
-                        width: progressBar.visualPosition * parent.width
-                        height: parent.height
-                        radius: 3
-                        color: root.slicingNow ? Theme.accent : (root.pct >= 100 ? Theme.accentDark : Theme.textDisabled)
-                        Behavior on width { NumberAnimation { duration: 150 } }
-                    }
-                }
             }
         }
 

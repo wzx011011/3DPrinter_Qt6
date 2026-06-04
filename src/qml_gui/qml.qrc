@@ -52,6 +52,7 @@
         <file>components/CxSectionHeader.qml</file>
         <file>components/CollapsibleSection.qml</file>
         <file>components/SearchDialog.qml</file>
+        <file>components/ParamsPage.qml</file>
         <!-- Controls -->
         <file>controls/CxButton.qml</file>
         <file>controls/CxComboBox.qml</file>
@@ -61,6 +62,14 @@
         <file>controls/CxSpinBox.qml</file>
         <file>controls/CxIconButton.qml</file>
         <file>controls/CxPillAction.qml</file>
+        <file>controls/CxSwitch.qml</file>
+        <file>controls/CxDialog.qml</file>
+        <file>controls/CxPopup.qml</file>
+        <file>controls/CxMenu.qml</file>
+        <file>controls/CxMenuItem.qml</file>
+        <file>controls/CxScrollView.qml</file>
+        <file>controls/CxProgressBar.qml</file>
+        <file>controls/CxTextArea.qml</file>
         <!-- Reference assets -->
         <file>assets/prepare_ref.png</file>
         <file>assets/preview_ref.png</file>

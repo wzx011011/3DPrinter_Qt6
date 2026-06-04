@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import ".."
+import "../controls"
 
 Item {
     id: root
@@ -25,7 +26,7 @@ Item {
                 font.bold: !root.previewVm.stealthMode
             }
 
-            Switch {
+            CxSwitch {
                 checked: root.previewVm.stealthMode
                 onToggled: if (root.previewVm) root.previewVm.setStealthMode(checked)
             }
@@ -57,7 +58,7 @@ Item {
                 font.pixelSize: Theme.fontSizeSM
             }
 
-            Switch {
+            CxSwitch {
                 checked: root.previewVm.showTravelMoves
                 onToggled: if (root.previewVm) root.previewVm.setShowTravelMoves(checked)
             }
@@ -74,7 +75,7 @@ Item {
                 font.pixelSize: Theme.fontSizeSM
             }
 
-            Switch {
+            CxSwitch {
                 checked: root.previewVm.showBed
                 onToggled: if (root.previewVm) root.previewVm.setShowBed(checked)
             }
@@ -91,7 +92,7 @@ Item {
                 font.pixelSize: Theme.fontSizeSM
             }
 
-            Switch {
+            CxSwitch {
                 checked: root.previewVm.showMarker
                 onToggled: if (root.previewVm) root.previewVm.setShowMarker(checked)
             }

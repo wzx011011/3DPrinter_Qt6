@@ -1,87 +1,30 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../controls"
 
-// D2 — PrintDialog：发送打印 / 导出 G-code
-// 用法：PrintDialog { id: printDlg; editorVm: ... }
-// 触发：printDlg.open()
-Dialog {
+// D2 -- PrintDialog: send print / export G-code
+// Usage: PrintDialog { id: printDlg; editorVm: ... }
+// Trigger: printDlg.open()
+CxDialog {
     id: root
     required property var editorVm
 
-    title: ""
-    modal: true
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    dialogTitle: qsTr("发送打印")
+    titleIcon: "🖨"
 
-    // 居中于父窗口
     anchors.centerIn: parent
 
     width:  480
     height: contentCol.implicitHeight + 80
 
-    // ── 背景样式 ──────────────────────────────────────────────────
-    background: Rectangle {
-        color: "#1a1f28"
-        radius: 8
-        border.color: "#2e3848"
-        border.width: 1
-        layer.enabled: true
-        layer.effect: null   // 避免引入额外模块
-    }
-
-    // ── 自定义标题栏 ─────────────────────────────────────────────
-    header: Rectangle {
-        width: parent.width
-        height: 44
-        color: "#141920"
-        radius: 8
-
-        // 只有上角圆角，下边直角
-        Rectangle {
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: 12
-            color: parent.color
-        }
-
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 16
-            anchors.rightMargin: 12
-            spacing: 10
-
-            Text {
-                text: qsTr("🖨  发送打印")
-                color: "#e2e8f5"
-                font.pixelSize: 14
-                font.bold: true
-            }
-            Item { Layout.fillWidth: true }
-
-            Rectangle {
-                width: 24; height: 24; radius: 4
-                color: closeHov.containsMouse ? "#3d2020" : "transparent"
-                Text {
-                    anchors.centerIn: parent
-                    text: "✕"; color: "#7a8fa3"; font.pixelSize: 12
-                }
-                MouseArea {
-                    id: closeHov; anchors.fill: parent
-                    hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                    onClicked: root.close()
-                }
-            }
-        }
-    }
-
-    // ── 内容区 ────────────────────────────────────────────────────
+    // -- Content area --
     contentItem: ColumnLayout {
         id: contentCol
         width: root.width - 32
         spacing: 14
 
-        // 项目信息行
+        // Project info row
         Rectangle {
             Layout.fillWidth: true
             height: 44
@@ -113,7 +56,7 @@ Dialog {
             }
         }
 
-        // 文件输出路径
+        // File output path
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
@@ -150,7 +93,7 @@ Dialog {
             }
         }
 
-        // 快速选项
+        // Quick options
         RowLayout {
             Layout.fillWidth: true
             spacing: 16
@@ -167,17 +110,17 @@ Dialog {
             }
         }
 
-        // 分割线
+        // Divider
         Rectangle { Layout.fillWidth: true; height: 1; color: "#1e2535" }
 
-        // 按钮行
+        // Button row
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
 
             Item { Layout.fillWidth: true }
 
-            // 导出 G-code
+            // Export G-code
             Rectangle {
                 width: 110; height: 30; radius: 4
                 color: exportHov.containsMouse ? "#2e3848" : "#1e2840"
@@ -190,7 +133,7 @@ Dialog {
                 }
             }
 
-            // 取消
+            // Cancel
             Rectangle {
                 width: 60; height: 30; radius: 4
                 color: cancelHov.containsMouse ? "#2e2e2e" : "#232830"
@@ -202,7 +145,7 @@ Dialog {
                 }
             }
 
-            // 打印
+            // Print
             Rectangle {
                 width: 80; height: 30; radius: 4
                 color: printHov.containsMouse ? "#19a84e" : "#157a39"
@@ -211,7 +154,7 @@ Dialog {
                     id: printHov; anchors.fill: parent
                     hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                        // 触发切片（若未切片）
+                        // Trigger slice (if not sliced)
                         if (root.editorVm) root.editorVm.requestSlice()
                         root.close()
                     }

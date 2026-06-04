@@ -112,30 +112,30 @@ ApplicationWindow {
         }
     }
 
-    Menu {
+    CxMenu {
         id: fileMenu
-        MenuItem {
+        CxMenuItem {
             text: qsTr("新建项目")
             onTriggered: newProjectDialog.open()
         }
-        MenuItem { text: qsTr("打开项目..."); onTriggered: openProjectDialog.open() }
-        MenuItem { text: qsTr("导入模型..."); onTriggered: openModelDialog.open() }
+        CxMenuItem { text: qsTr("打开项目..."); onTriggered: openProjectDialog.open() }
+        CxMenuItem { text: qsTr("导入模型..."); onTriggered: openModelDialog.open() }
         MenuSeparator {}
-        MenuItem {
+        CxMenuItem {
             text: qsTr("保存项目")
             onTriggered: {
                 if (!backend.topbarSaveProject())
                     saveProjectAsDialog.open()
             }
         }
-        MenuItem { text: qsTr("项目另存为..."); onTriggered: saveProjectAsDialog.open() }
+        CxMenuItem { text: qsTr("项目另存为..."); onTriggered: saveProjectAsDialog.open() }
         MenuSeparator {}
-        Menu {
+        CxMenu {
             id: fileRecentMenu
             title: qsTr("最近文件")
             Instantiator {
                 model: backend.projectViewModel ? backend.projectViewModel.recentProjects : []
-                delegate: MenuItem {
+                delegate: CxMenuItem {
                     required property string modelData
                     text: modelData
                     onTriggered: {
@@ -146,114 +146,114 @@ ApplicationWindow {
                 onObjectRemoved: (index, object) => fileRecentMenu.removeItem(object)
             }
             MenuSeparator {}
-            MenuItem {
+            CxMenuItem {
                 text: qsTr("清空最近文件")
                 enabled: backend.projectViewModel && backend.projectViewModel.recentProjects.length > 0
                 onTriggered: backend.projectViewModel && backend.projectViewModel.clearRecentProjects()
             }
         }
         MenuSeparator {}
-        MenuItem { text: qsTr("退出"); onTriggered: Qt.quit() }
+        CxMenuItem { text: qsTr("退出"); onTriggered: Qt.quit() }
     }
 
-    Menu {
+    CxMenu {
         id: dropdownMenu
         // View items (matching upstream View menu)
-        MenuItem { text: qsTr("适应视图"); onTriggered: preparePage.applyFitHintIfReady() }
-        MenuItem { text: preparePage.viewport3dRef.wireframeMode ? qsTr("关闭线框模式") : qsTr("线框模式"); onTriggered: preparePage.viewport3dRef.wireframeMode = !preparePage.viewport3dRef.wireframeMode }
+        CxMenuItem { text: qsTr("适应视图"); onTriggered: preparePage.applyFitHintIfReady() }
+        CxMenuItem { text: preparePage.viewport3dRef.wireframeMode ? qsTr("关闭线框模式") : qsTr("线框模式"); onTriggered: preparePage.viewport3dRef.wireframeMode = !preparePage.viewport3dRef.wireframeMode }
         MenuSeparator {}
         // Settings items
-        MenuItem { text: qsTr("偏好设置"); onTriggered: backend.setCurrentPage(8) }
-        MenuItem { text: qsTr("参数设置"); onTriggered: backend.openSettings() }
+        CxMenuItem { text: qsTr("偏好设置"); onTriggered: backend.setCurrentPage(8) }
+        CxMenuItem { text: qsTr("参数设置"); onTriggered: backend.openSettings() }
         MenuSeparator {}
-        MenuItem { text: qsTr("主页"); onTriggered: backend.setCurrentPage(0) }
+        CxMenuItem { text: qsTr("主页"); onTriggered: backend.setCurrentPage(0) }
     }
 
     // Edit menu (对齐上游 MainFrame Edit 菜单)
-    Menu {
+    CxMenu {
         id: editMenu
-        MenuItem {
+        CxMenuItem {
             text: qsTr("撤销")
             enabled: backend.currentPage === root.pagePrepare
             onTriggered: preparePage.undoFromTopbar()
         }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("重做")
             enabled: backend.currentPage === root.pagePrepare
             onTriggered: preparePage.redoFromTopbar()
         }
         MenuSeparator {}
-        MenuItem {
+        CxMenuItem {
             text: qsTr("剪切")
             enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
             onTriggered: backend.editorViewModel.cutSelectedObjects()
         }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("复制")
             enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
             onTriggered: backend.editorViewModel.copySelectedObjects()
         }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("粘贴")
             enabled: backend.editorViewModel && backend.editorViewModel.hasClipboardContent
             onTriggered: backend.editorViewModel.pasteObjects()
         }
         MenuSeparator {}
-        MenuItem {
+        CxMenuItem {
             text: qsTr("删除选中")
             enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
             onTriggered: backend.editorViewModel.deleteSelectedObjects()
         }
-        MenuItem {
+        CxMenuItem {
             text: qsTr("清空全部")
             onTriggered: {
                 if (backend.editorViewModel) backend.editorViewModel.clearWorkspace()
             }
         }
         MenuSeparator {}
-        MenuItem {
+        CxMenuItem {
             text: qsTr("克隆选中")
             enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
             onTriggered: backend.editorViewModel.duplicateSelectedObjects()
         }
-        MenuItem { text: qsTr("全选"); onTriggered: {
+        CxMenuItem { text: qsTr("全选"); onTriggered: {
             if (backend.editorViewModel) backend.editorViewModel.selectAllVisibleObjects()
         } }
-        MenuItem { text: qsTr("取消选择"); onTriggered: {
+        CxMenuItem { text: qsTr("取消选择"); onTriggered: {
             if (backend.editorViewModel) backend.editorViewModel.clearObjectSelection()
         } }
     }
 
     // View menu (对齐上游 MainFrame View 菜单)
-    Menu {
+    CxMenu {
         id: viewMenu
-        MenuItem { text: qsTr("默认视图"); onTriggered: preparePage.applyFitHintIfReady() }
+        CxMenuItem { text: qsTr("默认视图"); onTriggered: preparePage.applyFitHintIfReady() }
         MenuSeparator {}
-        Menu {
+        CxMenu {
             title: qsTr("相机预设")
-            MenuItem { text: qsTr("俯视图 (Top)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(0) }
-            MenuItem { text: qsTr("前视图 (Front)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(1) }
-            MenuItem { text: qsTr("右视图 (Right)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(2) }
-            MenuItem { text: qsTr("等轴视图 (Iso)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(3) }
+            CxMenuItem { text: qsTr("俯视图 (Top)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(0) }
+            CxMenuItem { text: qsTr("前视图 (Front)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(1) }
+            CxMenuItem { text: qsTr("右视图 (Right)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(2) }
+            CxMenuItem { text: qsTr("等轴视图 (Iso)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(3) }
         }
         MenuSeparator {}
-        MenuItem { text: preparePage.viewport3dRef.wireframeMode ? qsTr("关闭线框模式") : qsTr("线框模式"); onTriggered: preparePage.viewport3dRef.wireframeMode = !preparePage.viewport3dRef.wireframeMode }
+        CxMenuItem { text: preparePage.viewport3dRef.wireframeMode ? qsTr("关闭线框模式") : qsTr("线框模式"); onTriggered: preparePage.viewport3dRef.wireframeMode = !preparePage.viewport3dRef.wireframeMode }
         MenuSeparator {}
-        Menu {
+        CxMenu {
             title: qsTr("显示标签")
-            MenuItem {
+            CxMenuItem {
                 text: hiddenTabs[root.pageOnline] ? qsTr("✗ 在线模型") : qsTr("✓ 在线模型")
                 onTriggered: toggleTabVisibility(root.pageOnline)
             }
-            MenuItem {
+            CxMenuItem {
                 text: hiddenTabs[root.pagePrepare] ? qsTr("✗ 准备") : qsTr("✓ 准备")
                 onTriggered: toggleTabVisibility(root.pagePrepare)
             }
-            MenuItem {
+            CxMenuItem {
                 text: hiddenTabs[root.pagePreview] ? qsTr("✗ 预览") : qsTr("✓ 预览")
                 onTriggered: toggleTabVisibility(root.pagePreview)
             }
-            MenuItem {
+            CxMenuItem {
                 text: hiddenTabs[root.pageDevice] ? qsTr("✗ 设备") : qsTr("✓ 设备")
                 onTriggered: toggleTabVisibility(root.pageDevice)
             }
@@ -261,28 +261,28 @@ ApplicationWindow {
     }
 
     // Help menu (对齐上游 Help 菜单)
-    Menu {
+    CxMenu {
         id: helpMenu
-        MenuItem {
+        CxMenuItem {
             text: qsTr("快捷键...")
             onTriggered: shortcutDialog.open()
         }
         MenuSeparator {}
-        MenuItem {
+        CxMenuItem {
             text: qsTr("关于 Creality Print")
             onTriggered: aboutDialog.open()
         }
     }
 
     // Settings menu (对齐上游 MainFrame Settings 菜单)
-    Menu {
+    CxMenu {
         id: settingsMenu
-        MenuItem {
+        CxMenuItem {
             text: qsTr("偏好设置")
             onTriggered: backend.setCurrentPage(8)
         }
         MenuSeparator {}
-        MenuItem {
+        CxMenuItem {
             text: qsTr("参数设置")
             onTriggered: backend.openSettings()
         }

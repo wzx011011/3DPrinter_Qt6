@@ -8,11 +8,13 @@ import "../controls"
 // Filament slot management (4 slots), mapping rules, filament remaining progress
 // Usage: AMSSettingsDialog { id: dlg }  ->  dlg.open()
 
-Dialog {
+CxDialog {
     id: root
 
-    modal: true
     closePolicy: Popup.NoAutoClose
+
+    dialogTitle: qsTr("AMS 设置")
+
     anchors.centerIn: parent
     width: 500
     height: 440
@@ -39,31 +41,6 @@ Dialog {
     property var editMaterials: []
     property var editAutoSwap: []
 
-    background: Rectangle {
-        color: "#1a1f28"
-        radius: 8
-        border.color: "#2e3848"
-        border.width: 1
-    }
-
-    ColumnLayout {
-        width: parent.width
-        height: 40
-        spacing: 0
-
-        Item { Layout.fillWidth: true; Layout.fillHeight: true }
-
-        Text {
-            Layout.fillWidth: true
-            Layout.leftMargin: 16
-            Layout.alignment: Qt.AlignVCenter
-            text: qsTr("AMS 设置")
-            color: "#e2e8f5"
-            font.pixelSize: 14
-            font.bold: true
-        }
-    }
-
     contentItem: ScrollView {
         id: scrollView
         anchors.fill: parent
@@ -76,7 +53,7 @@ Dialog {
             width: scrollView.availableWidth
             spacing: 10
 
-            // ── Section 1: Filament Slot Management ──
+            // -- Section 1: Filament Slot Management --
             Text {
                 text: qsTr("耗材槽位管理")
                 color: Theme.textSecondary
@@ -217,7 +194,7 @@ Dialog {
                 }
             }
 
-            // ── Section 2: Mapping Configuration ──
+            // -- Section 2: Mapping Configuration --
             Text {
                 text: qsTr("映射配置")
                 color: Theme.textSecondary
@@ -294,7 +271,7 @@ Dialog {
                 enabled: false
             }
 
-            // ── Section 3: Filament Remaining ──
+            // -- Section 3: Filament Remaining --
             Text {
                 text: qsTr("槽位耗材余量")
                 color: Theme.textSecondary

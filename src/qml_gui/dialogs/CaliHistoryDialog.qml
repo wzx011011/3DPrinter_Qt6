@@ -1,17 +1,17 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../controls"
 
-// D4 — CaliHistoryDialog：校准历史记录对话框
-// 用法：CaliHistoryDialog { id: historyDlg; calibrationVm: ... }  →  historyDlg.open()
-// CalibrationPage 的"历史记录"按钮打开此对话框
-// 对齐上游 FlowCalibHeaderView 历史记录列表
-Dialog {
+// D4 -- CaliHistoryDialog: calibration history records dialog
+// Usage: CaliHistoryDialog { id: historyDlg; calibrationVm: ... }  ->  historyDlg.open()
+// CalibrationPage "History" button opens this dialog
+// Aligns with upstream FlowCalibHeaderView history list
+CxDialog {
     id: root
     required property var calibrationVm
 
-    modal: true
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    dialogTitle: qsTr("校准历史记录")
 
     anchors.centerIn: parent
     width: 480
@@ -41,32 +41,6 @@ Dialog {
 
     onOpened: reloadHistory()
 
-    background: Rectangle {
-        color: "#1a1f28"; radius: 8
-        border.color: "#2e3848"; border.width: 1
-    }
-
-    header: Rectangle {
-        width: parent.width; height: 44
-        color: "#141920"; radius: 8
-        Rectangle { anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right; height: 12; color: parent.color }
-
-        RowLayout {
-            anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 12; spacing: 10
-            Text {
-                text: qsTr("校准历史记录")
-                color: "#e2e8f5"; font.pixelSize: 14; font.bold: true
-            }
-            Item { Layout.fillWidth: true }
-            Rectangle {
-                width: 24; height: 24; radius: 4
-                color: xHov.containsMouse ? "#3d2020" : "transparent"
-                Text { anchors.centerIn: parent; text: "\u2715"; color: "#7a8fa3"; font.pixelSize: 12 }
-                MouseArea { id: xHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.close() }
-            }
-        }
-    }
-
     contentItem: ColumnLayout {
         id: contentCol
         width: root.width - 32
@@ -83,7 +57,7 @@ Dialog {
 
             Text {
                 Layout.alignment: Qt.AlignHCenter
-                text: "\u2699"
+                text: "⚙"
                 font.pixelSize: 36
                 color: "#3a4250"
             }
@@ -137,7 +111,7 @@ Dialog {
                         color: "#252d3a"
                         Text {
                             anchors.centerIn: parent
-                            text: "\u2699"
+                            text: "⚙"
                             font.pixelSize: 16
                             color: "#7a8fa3"
                         }
@@ -195,7 +169,7 @@ Dialog {
                     Rectangle {
                         width: 28; height: 28; radius: 4
                         color: exportHov.containsMouse ? "#2a3a4a" : "transparent"
-                        Text { anchors.centerIn: parent; text: "\u2913"; color: "#7a8fa3"; font.pixelSize: 12 }
+                        Text { anchors.centerIn: parent; text: "⤓"; color: "#7a8fa3"; font.pixelSize: 12 }
                         MouseArea { id: exportHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: {} }
                     }
                 }

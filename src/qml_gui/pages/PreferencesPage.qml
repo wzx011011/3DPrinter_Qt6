@@ -93,7 +93,7 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("启动时显示主页"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
-                        Switch {
+                        CxSwitch {
                             checked: root.settingsVm.showHomePage
                             onToggled: root.settingsVm.setShowHomePage(checked)
                         }
@@ -178,19 +178,17 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("自动保存"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
-                        Switch {
+                        CxSwitch {
                             checked: root.settingsVm.autoSave
                             onToggled: root.settingsVm.setAutoSave(checked)
                         }
                         Text { text: qsTr("每"); color: "#6b7d94"; font.pixelSize: 11 }
-                        ComboBox {
+                        CxComboBox {
                             model: ["5", "10", "15", "30"]
                             currentIndex: {
                                 var intervals = [5, 10, 15, 30]
                                 return intervals.indexOf(root.settingsVm.autoSaveInterval)
                             }
-                            implicitWidth: 60
-                            implicitHeight: 28
                             enabled: root.settingsVm.autoSave
                             onActivated: root.settingsVm.setAutoSaveInterval(parseInt(model[currentIndex]))
                         }
@@ -201,7 +199,7 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("启动时检查更新"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
-                        Switch {
+                        CxSwitch {
                             checked: root.settingsVm.checkUpdates
                             onToggled: root.settingsVm.setCheckUpdates(checked)
                         }
@@ -211,7 +209,7 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("减少动画效果"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
-                        Switch {
+                        CxSwitch {
                             checked: root.settingsVm.reducedMotion
                             onToggled: root.settingsVm.setReducedMotion(checked)
                         }
@@ -235,7 +233,7 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("启用通知"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
-                        Switch {
+                        CxSwitch {
                             checked: root.settingsVm.notificationsEnabled
                             onToggled: root.settingsVm.setNotificationsEnabled(checked)
                         }
@@ -244,7 +242,7 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("显示提示"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
-                        Switch {
+                        CxSwitch {
                             checked: root.settingsVm.hintsEnabled
                             enabled: root.settingsVm.notificationsEnabled
                             onToggled: root.settingsVm.setHintsEnabled(checked)
@@ -254,7 +252,7 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("显示进度通知"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
-                        Switch {
+                        CxSwitch {
                             checked: root.settingsVm.showProgressNotifications
                             enabled: root.settingsVm.notificationsEnabled
                             onToggled: root.settingsVm.setShowProgressNotifications(checked)
@@ -330,7 +328,7 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("字体大小"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 140 }
-                        Slider {
+                        CxSlider {
                             from: 10; to: 16; stepSize: 1; value: root.settingsVm.fontSize
                             Layout.preferredWidth: 200
                             onMoved: root.settingsVm.setFontSize(Math.round(value))
@@ -341,11 +339,9 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("界面缩放"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 140 }
-                        ComboBox {
+                        CxComboBox {
                             model: ["100%","125%","150%","175%","200%"]
                             currentIndex: root.settingsVm.uiScaleIndex
-                            implicitWidth: 120
-                            implicitHeight: 28
                             onActivated: root.settingsVm.setUiScaleIndex(currentIndex)
                         }
                     }
@@ -546,7 +542,7 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("切片完成后自动上传"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 200 }
-                        Switch {
+                        CxSwitch {
                             checked: root.settingsVm.autoUpload
                             onToggled: root.settingsVm.setAutoUpload(checked)
                         }
@@ -593,7 +589,7 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("自动检查更新"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
-                        Switch {
+                        CxSwitch {
                             checked: root.settingsVm.checkUpdates
                             onToggled: root.settingsVm.setCheckUpdates(checked)
                         }
@@ -651,7 +647,7 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("自动备份项目到云端"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 200 }
-                        Switch {
+                        CxSwitch {
                             checked: root.settingsVm.autoBackup
                             onToggled: root.settingsVm.setAutoBackup(checked)
                         }
@@ -676,7 +672,7 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("低细节模式"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
-                        Switch {
+                        CxSwitch {
                             checked: root.settingsVm.compactMode
                             onToggled: root.settingsVm.setCompactMode(checked)
                         }
@@ -750,7 +746,7 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("开发者模式"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
-                        Switch {
+                        CxSwitch {
                             checked: root.settingsVm.developerMode
                             onToggled: root.settingsVm.setDeveloperMode(checked)
                         }
@@ -760,7 +756,7 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("调试覆盖层"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
-                        Switch {
+                        CxSwitch {
                             checked: root.settingsVm.showDebugOverlay
                             onToggled: root.settingsVm.setShowDebugOverlay(checked)
                         }
@@ -781,7 +777,7 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("详细 G-code"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
-                        Switch {
+                        CxSwitch {
                             checked: root.settingsVm.verboseGcode
                             onToggled: root.settingsVm.setVerboseGcode(checked)
                         }
@@ -791,7 +787,7 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("OpenGL 调试上下文"); color: "#a0abbe"; font.pixelSize: 12; Layout.preferredWidth: 180 }
-                        Switch {
+                        CxSwitch {
                             checked: root.settingsVm.glDebugContext
                             onToggled: root.settingsVm.setGlDebugContext(checked)
                         }
@@ -838,18 +834,13 @@ Item {
                         Behavior on opacity { NumberAnimation { duration: 300 } }
                     }
 
-                    Button {
+                    CxButton {
                         text: qsTr("恢复默认")
-                        implicitHeight: 30; implicitWidth: 90
-                        background: Rectangle { radius: 4; color: "#252b38"; border.color: "#363d4e"; border.width: 1 }
-                        contentItem: Text { text: parent.text; color: "#c8d4e0"; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         onClicked: root.settingsVm.resetPreferences()
                     }
-                    Button {
+                    CxButton {
                         text: qsTr("应用")
-                        implicitHeight: 30; implicitWidth: 80
-                        background: Rectangle { radius: 4; color: "#18c75e" }
-                        contentItem: Text { text: parent.text; color: "white"; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        cxStyle: CxButton.Style.Primary
                         onClicked: {
                             appliedHint.opacity = 1
                             appliedHintTimer.restart()

@@ -8,11 +8,13 @@ import "../controls"
 // Firmware upgrade management: version display, upgrade check, OTA progress
 // Usage: FirmwareDialog { id: dlg }  ->  dlg.open()
 
-Dialog {
+CxDialog {
     id: root
 
-    modal: true
     closePolicy: Popup.NoAutoClose
+
+    dialogTitle: qsTr("固件升级")
+
     anchors.centerIn: parent
     width: 460
     height: 420
@@ -36,37 +38,12 @@ Dialog {
     property int upgradeState: FirmwareDialog.UpgradeState.UpgradeAvailable
     property real upgradeProgress: 0.0
 
-    background: Rectangle {
-        color: "#1a1f28"
-        radius: 8
-        border.color: "#2e3848"
-        border.width: 1
-    }
-
-    ColumnLayout {
-        width: parent.width
-        height: 40
-        spacing: 0
-
-        Item { Layout.fillWidth: true; Layout.fillHeight: true }
-
-        Text {
-            Layout.fillWidth: true
-            Layout.leftMargin: 16
-            Layout.alignment: Qt.AlignVCenter
-            text: qsTr("固件升级")
-            color: "#e2e8f5"
-            font.pixelSize: 14
-            font.bold: true
-        }
-    }
-
     contentItem: ColumnLayout {
-        width: parent.width
+        width: root.width
         spacing: 12
         anchors.margins: 20
 
-        // ── Printer Info Section ──
+        // -- Printer Info Section --
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: infoCol.implicitHeight + 20
@@ -181,7 +158,7 @@ Dialog {
             }
         }
 
-        // ── Release Notes ──
+        // -- Release Notes --
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -220,7 +197,7 @@ Dialog {
             }
         }
 
-        // ── Progress Bar (visible during upgrade) ──
+        // -- Progress Bar (visible during upgrade) --
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 6
@@ -244,20 +221,10 @@ Dialog {
                 }
             }
 
-            Rectangle {
+            CxProgressBar {
                 Layout.fillWidth: true
-                implicitHeight: 8
-                radius: 4
-                color: "#1e2330"
-                border.color: "#2e3848"
-                border.width: 1
-
-                Rectangle {
-                    width: parent.width * root.upgradeProgress
-                    height: parent.height
-                    radius: 4
-                    color: Theme.accent
-                }
+                from: 0; to: 1
+                value: root.upgradeProgress
             }
 
             Text {
@@ -267,7 +234,7 @@ Dialog {
             }
         }
 
-        // ── Status message (success/fail) ──
+        // -- Status message (success/fail) --
         RowLayout {
             Layout.fillWidth: true
             visible: root.upgradeState === FirmwareDialog.UpgradeState.UpgradeSuccess

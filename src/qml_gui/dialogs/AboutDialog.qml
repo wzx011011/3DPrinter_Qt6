@@ -1,47 +1,28 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../controls"
 
-// D4 — AboutDialog：版本号 + Qt 版本 + 协议 + 确认关闭
-// 用法：AboutDialog { id: aboutDlg }  →  aboutDlg.open()
-// PreferencesPage「关于」分类触发
-Dialog {
+// D4 -- AboutDialog: version + Qt version + license + confirm close
+// Usage: AboutDialog { id: aboutDlg }  ->  aboutDlg.open()
+// PreferencesPage "About" category triggers
+CxDialog {
     id: root
 
-    modal: true
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    dialogTitle: qsTr("关于 Creality Print")
+    titleIcon: "❓"
+    showCloseButton: true
+
     anchors.centerIn: parent
     width:  420
     height: contentCol.implicitHeight + 80
-
-    background: Rectangle {
-        color: "#1a1f28"; radius: 8
-        border.color: "#2e3848"; border.width: 1
-    }
-
-    header: Rectangle {
-        width: parent.width; height: 44; color: "#141920"; radius: 8
-        Rectangle { anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right; height: 12; color: parent.color }
-
-        RowLayout {
-            anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 12; spacing: 10
-            Text { text: qsTr("❓  关于 Creality Print"); color: "#e2e8f5"; font.pixelSize: 14; font.bold: true }
-            Item { Layout.fillWidth: true }
-            Rectangle {
-                width: 24; height: 24; radius: 4
-                color: closeAboutHov.containsMouse ? "#3d2020" : "transparent"
-                Text { anchors.centerIn: parent; text: "✕"; color: "#7a8fa3"; font.pixelSize: 12 }
-                MouseArea { id: closeAboutHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.close() }
-            }
-        }
-    }
 
     contentItem: ColumnLayout {
         id: contentCol
         width: root.width - 32
         spacing: 16
 
-        // Logo + 产品名
+        // Logo + product name
         ColumnLayout {
             Layout.alignment: Qt.AlignHCenter
             spacing: 6
@@ -67,7 +48,7 @@ Dialog {
             }
         }
 
-        // 版本信息表格
+        // Version info table
         Rectangle {
             Layout.fillWidth: true; radius: 6; color: "#111620"; border.color: "#1e2535"; height: infoCols.implicitHeight + 16
 
@@ -93,7 +74,7 @@ Dialog {
             }
         }
 
-        // 协议说明
+        // License note
         Rectangle {
             Layout.fillWidth: true; radius: 5; color: "#0f1318"; height: licText.implicitHeight + 16
             Text {
@@ -107,10 +88,10 @@ Dialog {
             }
         }
 
-        // 分割线
+        // Divider
         Rectangle { Layout.fillWidth: true; height: 1; color: "#1e2535" }
 
-        // 确认按钮
+        // Confirm button
         Rectangle {
             Layout.alignment: Qt.AlignHCenter
             width: 100; height: 30; radius: 4

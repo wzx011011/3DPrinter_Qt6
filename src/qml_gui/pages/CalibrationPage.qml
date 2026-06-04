@@ -567,7 +567,7 @@ Item {
                                                 Layout.fillWidth: true
                                             }
 
-                                            SpinBox {
+                                            CxSpinBox {
                                                 id: kSpinBox
                                                 value: Math.round(root.calibrationVm.currentKValue * 1000)
                                                 from: 0
@@ -623,7 +623,7 @@ Item {
                                                 Layout.fillWidth: true
                                             }
 
-                                            SpinBox {
+                                            CxSpinBox {
                                                 id: nSpinBox
                                                 value: Math.round(root.calibrationVm.currentNValue * 100)
                                                 from: 10
@@ -863,28 +863,12 @@ Item {
                                     }
                                 }
 
-                                ProgressBar {
+                                CxProgressBar {
                                     id: progressBar
                                     Layout.fillWidth: true
                                     from: 0
                                     to: 100
                                     value: root.calibrationVm.progress
-
-                                    background: Rectangle {
-                                        implicitHeight: 6
-                                        radius: 3
-                                        color: Theme.bgHover
-                                    }
-
-                                    contentItem: Item {
-                                        Rectangle {
-                                            width: progressBar.visualPosition * parent.width
-                                            height: parent.height
-                                            radius: 3
-                                            color: Theme.accent
-                                            Behavior on width { NumberAnimation { duration: 200 } }
-                                        }
-                                    }
                                 }
                             }
                         }

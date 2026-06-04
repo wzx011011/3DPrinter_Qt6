@@ -295,21 +295,14 @@ Item {
             spacing: 6
 
             Label { text: qsTr("From"); color: Theme.textSecondary; font.pixelSize: 10 }
-            TextField {
+            CxTextField {
                 id: minInput
                 Layout.preferredWidth: 50
                 Layout.preferredHeight: 24
                 text: root.displayMin
-                color: Theme.textPrimary
                 font.pixelSize: 11
                 horizontalAlignment: TextInput.AlignHCenter
                 validator: IntValidator { bottom: 1; top: root.maxDisplay }
-                background: Rectangle {
-                    radius: 4
-                    color: Theme.bgPanel
-                    border.color: minInput.activeFocus ? Theme.accent : Theme.borderSubtle
-                    border.width: 1
-                }
                 onEditingFinished: {
                     if (root.previewVm) {
                         var v = parseInt(text) || 1
@@ -322,21 +315,14 @@ Item {
             Label { text: "-"; color: Theme.textDisabled; font.pixelSize: 12 }
 
             Label { text: qsTr("To"); color: Theme.textSecondary; font.pixelSize: 10 }
-            TextField {
+            CxTextField {
                 id: maxInput
                 Layout.preferredWidth: 50
                 Layout.preferredHeight: 24
                 text: root.displayMax
-                color: Theme.textPrimary
                 font.pixelSize: 11
                 horizontalAlignment: TextInput.AlignHCenter
                 validator: IntValidator { bottom: 1; top: root.maxDisplay }
-                background: Rectangle {
-                    radius: 4
-                    color: Theme.bgPanel
-                    border.color: maxInput.activeFocus ? Theme.accent : Theme.borderSubtle
-                    border.width: 1
-                }
                 onEditingFinished: {
                     if (root.previewVm) {
                         var v = parseInt(text) || 1
@@ -391,9 +377,9 @@ Item {
                 acceptedButtons: Qt.RightButton
                 onClicked: jumpCtxMenu.popup()
             }
-            Menu {
+            CxMenu {
                 id: jumpCtxMenu
-                MenuItem {
+                CxMenuItem {
                     text: qsTr("Jump to Layer...")
                     onTriggered: {
                         jumpDialog.open()
@@ -436,20 +422,13 @@ Item {
                     font.pixelSize: 12
                 }
 
-                TextField {
+                CxTextField {
                     id: jumpInput
                     Layout.preferredWidth: 120
                     Layout.preferredHeight: 32
-                    color: Theme.textPrimary
                     font.pixelSize: 13
                     horizontalAlignment: TextInput.AlignHCenter
                     validator: IntValidator { bottom: 1; top: root.maxDisplay }
-                    background: Rectangle {
-                        radius: 6
-                        color: Theme.bgPanel
-                        border.color: jumpInput.activeFocus ? Theme.accent : Theme.borderSubtle
-                        border.width: 1
-                    }
                     Keys.onReturnPressed: doJump()
                     Keys.onEnterPressed: doJump()
                     Keys.onEscapePressed: jumpDialog.close()

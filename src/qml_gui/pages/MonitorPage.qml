@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import ".."
+import "../controls"
 
 /// MonitorPage — device monitoring dashboard
 ///
@@ -140,14 +141,11 @@ Item {
                                 font.pixelSize: 13
                             }
 
-                            TextField {
+                            CxTextField {
                                 id: searchField
                                 Layout.fillWidth: true
-                                background: null
-                                color: Theme.textPrimary
                                 font.pixelSize: Theme.fontSizeMD
                                 placeholderText: qsTr("搜索设备...")
-                                placeholderTextColor: Theme.textTertiary
                                 selectByMouse: true
                                 onTextChanged: root.monitorVm.searchText = text
                             }
@@ -1968,20 +1966,13 @@ Item {
                                             color: Theme.textTertiary
                                             font.pixelSize: 11
                                         }
-                                        TextField {
+                                        CxTextField {
                                             Layout.preferredWidth: 180
                                             Layout.preferredHeight: 22
                                             text: root.monitorVm.cameraUrl
                                             placeholderText: "rtsp://..."
-                                            color: Theme.textPrimary
                                             font.pixelSize: 11
                                             onEditingFinished: root.monitorVm.setCameraUrl(text)
-                                            background: Rectangle {
-                                                radius: 4
-                                                color: "#1e2229"
-                                                border.color: parent.activeFocus ? Theme.accent : "#2e3540"
-                                                border.width: 1
-                                            }
                                         }
                                     }
                                 }

@@ -90,7 +90,7 @@ Item {
     }
 
     // 值来源层级弹窗（对齐上游 Tab 值来源可视化 + reset_to_level）
-    Popup {
+    CxPopup {
         id: valueChainPopup
         property string currentKey: ""
         property string chainJson: "{}"
@@ -287,28 +287,24 @@ Item {
     }
 
     // 重命名打印机预设对话框（放在根级避免作用域问题）
-    Dialog {
+    CxDialog {
         id: renamePrinterDialog
-        title: qsTr("重命名预设")
-        modal: true
-        anchors.centerIn: parent
+        dialogTitle: qsTr("重命名预设")
         width: 320
         ColumnLayout {
             spacing: 8
-            TextField {
+            CxTextField {
                 id: renamePrinterField
                 Layout.fillWidth: true
                 text: root.configVm ? root.configVm.currentPrinterPreset : ""
-                color: Theme.textPrimary
-                font.pixelSize: Theme.fontSizeMD
                 selectByMouse: true
                 onAccepted: renamePrinterDialog.accept()
             }
             RowLayout {
                 Layout.alignment: Qt.AlignRight
                 spacing: 8
-                Button { text: qsTr("取消"); onClicked: renamePrinterDialog.reject() }
-                Button { text: qsTr("确认"); highlighted: true; onClicked: renamePrinterDialog.accept() }
+                CxButton { text: qsTr("取消"); cxStyle: CxButton.Style.Ghost; onClicked: renamePrinterDialog.reject() }
+                CxButton { text: qsTr("确认"); onClicked: renamePrinterDialog.accept() }
             }
         }
         onAccepted: {
@@ -825,7 +821,7 @@ Item {
                             font.pixelSize: Theme.fontSizeSM
                             font.bold: true
                         }
-                        Switch {
+                        CxSwitch {
                             checked: root.advancedEnabled
                             onToggled: root.advancedEnabled = checked
                         }
@@ -903,28 +899,24 @@ Item {
                             }
                         }
                         // 重命名打印预设对话框
-                        Dialog {
+                        CxDialog {
                             id: renamePrintDialog
-                            title: qsTr("Rename Preset")
-                            modal: true
-                            anchors.centerIn: parent
+                            dialogTitle: qsTr("Rename Preset")
                             width: 320
                             ColumnLayout {
                                 spacing: 8
-                                TextField {
+                                CxTextField {
                                     id: renamePrintField
                                     Layout.fillWidth: true
                                     text: root.configVm ? root.configVm.currentPrintPreset : ""
-                                    color: Theme.textPrimary
-                                    font.pixelSize: Theme.fontSizeMD
                                     selectByMouse: true
                                     onAccepted: renamePrintDialog.accept()
                                 }
                                 RowLayout {
                                     Layout.alignment: Qt.AlignRight
                                     spacing: 8
-                                    Button { text: qsTr("Cancel"); onClicked: renamePrintDialog.reject() }
-                                    Button { text: qsTr("OK"); highlighted: true; onClicked: renamePrintDialog.accept() }
+                                    CxButton { text: qsTr("Cancel"); cxStyle: CxButton.Style.Ghost; onClicked: renamePrintDialog.reject() }
+                                    CxButton { text: qsTr("OK"); onClicked: renamePrintDialog.accept() }
                                 }
                             }
                             onAccepted: {
@@ -970,11 +962,9 @@ Item {
                             color: "#f59e0b"
                             Layout.alignment: Qt.AlignVCenter
                         }
-                        ComboBox {
+                        CxComboBox {
                             id: filamentPresetCombo
                             Layout.fillWidth: true
-                            implicitHeight: 28
-                            font.pixelSize: Theme.fontSizeMD
                             model: root.configVm ? root.configVm.filamentPresetNames : []
                             currentIndex: {
                                 if (!root.configVm) return -1
@@ -989,17 +979,16 @@ Item {
                                 required property int index
                                 required property string modelData
                                 width: filamentPresetCombo.width
-                                height: 26
                                 highlighted: filamentPresetCombo.highlightedIndex === index
                                 readonly property bool compat: root.configVm ? root.configVm.isFilamentCompatible(modelData) : true
                                 background: Rectangle {
-                                    color: highlighted ? "#1c6e42" : "transparent"
+                                    color: highlighted ? Theme.accentSubtle : "transparent"
                                 }
                                 contentItem: RowLayout {
                                     spacing: 6
                                     Text {
                                         Layout.fillWidth: true
-                                        leftPadding: 10
+                                        leftPadding: Theme.spacingMD
                                         text: modelData
                                         color: compat ? Theme.textPrimary : Theme.textDisabled
                                         font.pixelSize: Theme.fontSizeMD
@@ -1010,50 +999,10 @@ Item {
                                     Text {
                                         visible: !compat
                                         text: "!"
-                                        color: "#f05545"
+                                        color: Theme.statusError
                                         font.pixelSize: Theme.fontSizeXS
                                         font.bold: true
                                     }
-                                }
-                            }
-                            contentItem: Text {
-                                leftPadding: 8
-                                rightPadding: filamentPresetCombo.indicator.width + 4
-                                text: filamentPresetCombo.displayText
-                                color: Theme.textPrimary
-                                font: filamentPresetCombo.font
-                                elide: Text.ElideRight
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            indicator: Text {
-                                x: filamentPresetCombo.width - width - 8
-                                y: (filamentPresetCombo.height - height) / 2
-                                text: "\u25BE"
-                                color: Theme.textMuted
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                            background: Rectangle {
-                                radius: 4
-                                color: filamentPresetCombo.pressed ? Theme.bgPressed : filamentPresetCombo.hovered ? Theme.bgHover : Theme.bgPanel
-                                border.color: filamentPresetCombo.activeFocus ? Theme.accent : Theme.borderDefault
-                                border.width: 1
-                            }
-                            popup: Popup {
-                                y: filamentPresetCombo.height + 2
-                                width: filamentPresetCombo.width
-                                implicitHeight: contentItem.implicitHeight
-                                padding: 0
-                                background: Rectangle {
-                                    color: Theme.bgElevated
-                                    border.color: Theme.borderDefault
-                                    border.width: 1
-                                    radius: 4
-                                }
-                                contentItem: ListView {
-                                    clip: true
-                                    implicitHeight: Math.min(contentHeight, 240)
-                                    model: filamentPresetCombo.visible ? filamentPresetCombo.delegateModel : null
-                                    ScrollIndicator.vertical: ScrollIndicator {}
                                 }
                             }
                         }
@@ -1084,28 +1033,24 @@ Item {
                             }
                         }
                         // 重命名耗材预设对话框
-                        Dialog {
+                        CxDialog {
                             id: renameFilaDialog
-                            title: qsTr("Rename Preset")
-                            modal: true
-                            anchors.centerIn: parent
+                            dialogTitle: qsTr("Rename Preset")
                             width: 320
                             ColumnLayout {
                                 spacing: 8
-                                TextField {
+                                CxTextField {
                                     id: renameFilaField
                                     Layout.fillWidth: true
                                     text: root.configVm ? root.configVm.currentFilamentPreset : ""
-                                    color: Theme.textPrimary
-                                    font.pixelSize: Theme.fontSizeMD
                                     selectByMouse: true
                                     onAccepted: renameFilaDialog.accept()
                                 }
                                 RowLayout {
                                     Layout.alignment: Qt.AlignRight
                                     spacing: 8
-                                    Button { text: qsTr("Cancel"); onClicked: renameFilaDialog.reject() }
-                                    Button { text: qsTr("OK"); highlighted: true; onClicked: renameFilaDialog.accept() }
+                                    CxButton { text: qsTr("Cancel"); cxStyle: CxButton.Style.Ghost; onClicked: renameFilaDialog.reject() }
+                                    CxButton { text: qsTr("OK"); onClicked: renameFilaDialog.accept() }
                                 }
                             }
                             onAccepted: {
@@ -1540,12 +1485,9 @@ Item {
                                 font.pixelSize: Theme.fontSizeMD
                             }
 
-                            TextField {
+                            CxTextField {
                                 Layout.fillWidth: true
                                 placeholderText: qsTr("搜索参数...")
-                                color: Theme.textPrimary
-                                font.pixelSize: Theme.fontSizeSM
-                                background: null
                                 text: root.searchText
                                 onTextChanged: root.searchText = text
                             }

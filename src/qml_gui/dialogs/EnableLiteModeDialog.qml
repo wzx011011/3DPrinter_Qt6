@@ -8,11 +8,13 @@ import "../controls"
 // G-code preview lite mode toggle for low-memory systems
 // Usage: EnableLiteModeDialog { id: dlg }  ->  dlg.open()
 
-Dialog {
+CxDialog {
     id: root
 
-    modal: true
     closePolicy: Popup.NoAutoClose
+
+    dialogTitle: qsTr("预览模式设置")
+
     anchors.centerIn: parent
     width: 400
     height: 280
@@ -20,33 +22,8 @@ Dialog {
     // Lite mode state (aligns with upstream gcode_preview_lite_mode config)
     property bool liteModeEnabled: false
 
-    background: Rectangle {
-        color: "#1a1f28"
-        radius: 8
-        border.color: "#2e3848"
-        border.width: 1
-    }
-
-    ColumnLayout {
-        width: parent.width
-        height: 40
-        spacing: 0
-
-        Item { Layout.fillWidth: true; Layout.fillHeight: true }
-
-        Text {
-            Layout.fillWidth: true
-            Layout.leftMargin: 16
-            Layout.alignment: Qt.AlignVCenter
-            text: qsTr("预览模式设置")
-            color: "#e2e8f5"
-            font.pixelSize: 14
-            font.bold: true
-        }
-    }
-
     contentItem: ColumnLayout {
-        width: parent.width
+        width: root.width
         spacing: 12
         anchors.margins: 20
 

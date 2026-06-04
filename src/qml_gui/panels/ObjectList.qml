@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
 import ".."
+import "../controls"
 
 // C3 — 对象列表面板
 // 绑定到 EditorViewModel Q_INVOKABLE 访问器，避免 QVariantList 暴露到 QML
@@ -273,10 +274,10 @@ Item {
                 }
             ]
 
-            Menu {
+            CxMenu {
                 id: rowMenu
 
-                MenuItem {
+                CxMenuItem {
                     text: qsTr("查看所在平板")
                     enabled: root.editorVm && row.plateIndex >= 0
                     onTriggered: {
@@ -287,7 +288,7 @@ Item {
                     }
                 }
 
-                MenuItem {
+                CxMenuItem {
                     text: row.objPrintable ? qsTr("设为不参与打印") : qsTr("设为可打印")
                     enabled: !!root.editorVm
                     onTriggered: {
@@ -300,7 +301,7 @@ Item {
                     visible: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount > 1
                 }
 
-                MenuItem {
+                CxMenuItem {
                     visible: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount > 1
                     text: qsTr("设为不参与打印")
                     onTriggered: {
@@ -309,7 +310,7 @@ Item {
                     }
                 }
 
-                MenuItem {
+                CxMenuItem {
                     visible: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount > 1
                     text: qsTr("设为可打印")
                     onTriggered: {
@@ -320,7 +321,7 @@ Item {
 
                 MenuSeparator { }
 
-                MenuItem {
+                CxMenuItem {
                     text: qsTr("重命名")
                     enabled: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount === 1
                     onTriggered: {
@@ -334,35 +335,35 @@ Item {
                 MenuSeparator { }
 
                 // ── Add Volume 子菜单 (对齐上游 GUI_Factories::append_menu_items_add_volume) ──
-                Menu {
+                CxMenu {
                     title: qsTr("添加部件")
                     enabled: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount === 1 && !root.editorVm.hasSelectedVolume
 
-                    MenuItem {
+                    CxMenuItem {
                         text: qsTr("添加部件")
                         onTriggered: {
                             if (root.editorVm) root.editorVm.addVolumeToObject(0)
                         }
                     }
-                    MenuItem {
+                    CxMenuItem {
                         text: qsTr("添加负体积")
                         onTriggered: {
                             if (root.editorVm) root.editorVm.addVolumeToObject(1)
                         }
                     }
-                    MenuItem {
+                    CxMenuItem {
                         text: qsTr("添加修改器")
                         onTriggered: {
                             if (root.editorVm) root.editorVm.addVolumeToObject(2)
                         }
                     }
-                    MenuItem {
+                    CxMenuItem {
                         text: qsTr("添加支撑屏蔽")
                         onTriggered: {
                             if (root.editorVm) root.editorVm.addVolumeToObject(3)
                         }
                     }
-                    MenuItem {
+                    CxMenuItem {
                         text: qsTr("添加支撑增强")
                         onTriggered: {
                             if (root.editorVm) root.editorVm.addVolumeToObject(4)
@@ -372,7 +373,7 @@ Item {
                     MenuSeparator { }
 
                     // 文字浮雕（对齐上游 GLGizmoText）
-                    MenuItem {
+                    CxMenuItem {
                         text: qsTr("文字浮雕")
                         onTriggered: {
                             if (!root.editorVm) return
@@ -384,7 +385,7 @@ Item {
                     }
 
                     // SVG 浮雕（对齐上游 GLGizmoSVG）
-                    MenuItem {
+                    CxMenuItem {
                         text: qsTr("导入 SVG 浮雕...")
                         onTriggered: {
                             if (!root.editorVm) return
@@ -398,7 +399,7 @@ Item {
                     MenuSeparator { }
 
                     // 从文件导入（对齐上游 GUI_ObjectList::load_generic_subobject 文件加载）
-                    MenuItem {
+                    CxMenuItem {
                         text: qsTr("从文件导入部件...")
                         onTriggered: {
                             if (!root.editorVm) return
@@ -412,28 +413,28 @@ Item {
                     MenuSeparator { }
 
                     // 原始体创建（对齐上游 create_mesh + add_volume）
-                    Menu {
+                    CxMenu {
                         title: qsTr("添加原始体")
 
-                        MenuItem {
+                        CxMenuItem {
                             text: qsTr("立方体")
                             onTriggered: {
                                 if (root.editorVm) root.editorVm.addPrimitive(row.index, 0)
                             }
                         }
-                        MenuItem {
+                        CxMenuItem {
                             text: qsTr("球体")
                             onTriggered: {
                                 if (root.editorVm) root.editorVm.addPrimitive(row.index, 1)
                             }
                         }
-                        MenuItem {
+                        CxMenuItem {
                             text: qsTr("圆柱体")
                             onTriggered: {
                                 if (root.editorVm) root.editorVm.addPrimitive(row.index, 2)
                             }
                         }
-                        MenuItem {
+                        CxMenuItem {
                             text: qsTr("圆环")
                             onTriggered: {
                                 if (root.editorVm) root.editorVm.addPrimitive(row.index, 3)
@@ -443,28 +444,28 @@ Item {
                 }
 
                 // Change volume type submenu (对齐上游 GUI_ObjectList::load_generic_subobject type conversion)
-                Menu {
+                CxMenu {
                     title: qsTr("转换为")
                     visible: !!root.editorVm && root.editorVm.hasSelectedVolume
                     enabled: !!root.editorVm && root.editorVm.hasSelectedVolume
 
-                    MenuItem {
+                    CxMenuItem {
                         text: qsTr("部件")
                         onTriggered: { if (root.editorVm) root.editorVm.changeVolumeType(0) }
                     }
-                    MenuItem {
+                    CxMenuItem {
                         text: qsTr("负体积")
                         onTriggered: { if (root.editorVm) root.editorVm.changeVolumeType(1) }
                     }
-                    MenuItem {
+                    CxMenuItem {
                         text: qsTr("修改器")
                         onTriggered: { if (root.editorVm) root.editorVm.changeVolumeType(2) }
                     }
-                    MenuItem {
+                    CxMenuItem {
                         text: qsTr("支撑屏蔽")
                         onTriggered: { if (root.editorVm) root.editorVm.changeVolumeType(3) }
                     }
-                    MenuItem {
+                    CxMenuItem {
                         text: qsTr("支撑增强")
                         onTriggered: { if (root.editorVm) root.editorVm.changeVolumeType(4) }
                     }
@@ -472,7 +473,7 @@ Item {
 
                 MenuSeparator { }
 
-                MenuItem {
+                CxMenuItem {
                     text: qsTr("在参数表中编辑")
                     enabled: !!root.editorVm && row.isSelected && root.editorVm.canOpenSelectionSettings && !root.editorVm.hasSelectedVolume
                     onTriggered: {
@@ -484,19 +485,19 @@ Item {
                 MenuSeparator { }
 
                 // 复制/粘贴/克隆/剪切（对齐上游 create_extra_object_menu）
-                MenuItem {
+                CxMenuItem {
                     text: qsTr("复制")
                     enabled: !!root.editorVm && root.editorVm.hasSelection && !root.editorVm.hasSelectedVolume
                     onTriggered: { if (root.editorVm) root.editorVm.copySelectedObjects() }
                 }
 
-                MenuItem {
+                CxMenuItem {
                     text: qsTr("剪切")
                     enabled: !!root.editorVm && root.editorVm.hasSelection && !root.editorVm.hasSelectedVolume
                     onTriggered: { if (root.editorVm) root.editorVm.cutSelectedObjects() }
                 }
 
-                MenuItem {
+                CxMenuItem {
                     text: qsTr("克隆")
                     enabled: !!root.editorVm && row.isSelected && !root.editorVm.hasSelectedVolume
                     onTriggered: { if (root.editorVm) root.editorVm.duplicateSelectedObjects() }
@@ -505,7 +506,7 @@ Item {
                 MenuSeparator { }
 
                 // 居中/镜像（对齐上游 create_extra_object_menu center/mirror）
-                MenuItem {
+                CxMenuItem {
                     text: qsTr("居中到热床")
                     enabled: !!root.editorVm && root.editorVm.hasSelection
                     onTriggered: { if (root.editorVm) root.editorVm.centerSelectedObjects() }
@@ -514,21 +515,21 @@ Item {
                 MenuSeparator { }
 
                 // Split (对齐上游 GUI_ObjectList split_to_objects/split_to_parts)
-                MenuItem {
+                CxMenuItem {
                     text: qsTr("拆分为对象")
                     enabled: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount === 1 && !root.editorVm.hasSelectedVolume
                     onTriggered: { if (root.editorVm) root.editorVm.splitSelectedObject() }
                 }
 
                 // Fix Mesh (对齐上游 menu_item_fix_mesh)
-                MenuItem {
+                CxMenuItem {
                     text: qsTr("修复网格")
                     enabled: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount === 1
                     onTriggered: { if (root.editorVm) root.editorVm.fixMeshForObject(row.index) }
                 }
 
                 // Export as STL (对齐上游 export_stl / export_mesh)
-                MenuItem {
+                CxMenuItem {
                     text: qsTr("导出为 STL...")
                     enabled: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount === 1
                     onTriggered: { if (root.editorVm) root.editorVm.exportObjectAsStl(row.index) }
@@ -536,7 +537,7 @@ Item {
 
                 MenuSeparator { }
 
-                MenuItem {
+                CxMenuItem {
                     text: row.isSelected && root.editorVm && root.editorVm.selectedObjectCount > 1
                           ? qsTr("删除已选对象")
                           : qsTr("删除对象")
@@ -704,19 +705,12 @@ Item {
                     spacing: 2
 
                     // Name display / inline rename (对齐上游 GUI_ObjectList rename_item)
-                    TextField {
+                    CxTextField {
                         id: renameField
                         Layout.fillWidth: true
                         visible: row.renaming
                         text: row.renameText
-                        color: Theme.textPrimary
                         font.pixelSize: 12
-                        background: Rectangle {
-                            radius: 4
-                            color: Theme.bgElevated
-                            border.color: Theme.accent
-                            border.width: 1
-                        }
                         onAccepted: {
                             if (root.editorVm && row.renameText.trim().length > 0) {
                                 root.editorVm.renameObject(row.index, row.renameText.trim())
@@ -848,10 +842,10 @@ Item {
                         border.width: 1
                         border.color: isSelected ? Theme.accent : Theme.borderSubtle
 
-                        Menu {
+                        CxMenu {
                             id: volumeMenu
 
-                            MenuItem {
+                            CxMenuItem {
                                 text: qsTr("在参数表中编辑")
                                 enabled: !!root.editorVm && root.editorVm.canOpenSelectionSettings
                                 onTriggered: {
@@ -862,7 +856,7 @@ Item {
 
                             MenuSeparator { }
 
-                            MenuItem {
+                            CxMenuItem {
                                 text: root.editorVm && root.editorVm.selectedVolumeCount > 1
                                       ? qsTr("删除已选部件")
                                       : qsTr("删除部件")
@@ -1144,17 +1138,11 @@ Item {
                     font.pixelSize: 12
                 }
 
-                TextField {
+                CxTextField {
                     id: textField
                     Layout.fillWidth: true
                     placeholderText: qsTr("请输入文字...")
                     font.pixelSize: 13
-                    color: Theme.textPrimary
-                    background: Rectangle {
-                        radius: 6
-                        color: Theme.bgElevated
-                        border.color: textField.activeFocus ? Theme.accent : Theme.borderSubtle
-                    }
                 }
 
                 RowLayout {

@@ -8,11 +8,13 @@ import "../controls"
 // Plugin download, install, enable/disable management
 // Usage: PluginManagerDialog { id: dlg }  ->  dlg.open()
 
-Dialog {
+CxDialog {
     id: root
 
-    modal: true
     closePolicy: Popup.NoAutoClose
+
+    dialogTitle: qsTr("插件管理")
+
     anchors.centerIn: parent
     width: 440
     height: 340
@@ -48,33 +50,8 @@ Dialog {
         }
     ]
 
-    background: Rectangle {
-        color: "#1a1f28"
-        radius: 8
-        border.color: "#2e3848"
-        border.width: 1
-    }
-
-    ColumnLayout {
-        width: parent.width
-        height: 40
-        spacing: 0
-
-        Item { Layout.fillWidth: true; Layout.fillHeight: true }
-
-        Text {
-            Layout.fillWidth: true
-            Layout.leftMargin: 16
-            Layout.alignment: Qt.AlignVCenter
-            text: qsTr("插件管理")
-            color: "#e2e8f5"
-            font.pixelSize: 14
-            font.bold: true
-        }
-    }
-
     contentItem: ColumnLayout {
-        width: parent.width
+        width: root.width
         spacing: 8
         anchors.margins: 16
 

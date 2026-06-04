@@ -8,11 +8,13 @@ import "../controls"
 // Wipe tower configuration for multi-extruder: ramming, flushing volumes
 // Usage: WipeTowerDialog { id: dlg }  ->  dlg.open()
 
-Dialog {
+CxDialog {
     id: root
 
-    modal: true
     closePolicy: Popup.NoAutoClose
+
+    dialogTitle: qsTr("擦料塔设置")
+
     anchors.centerIn: parent
     width: 420
     height: 380
@@ -39,33 +41,8 @@ Dialog {
     property real flushMultiplier: 1.0
     property real minFlushVolume: 80.0
 
-    background: Rectangle {
-        color: "#1a1f28"
-        radius: 8
-        border.color: "#2e3848"
-        border.width: 1
-    }
-
-    ColumnLayout {
-        width: parent.width
-        height: 40
-        spacing: 0
-
-        Item { Layout.fillWidth: true; Layout.fillHeight: true }
-
-        Text {
-            Layout.fillWidth: true
-            Layout.leftMargin: 16
-            Layout.alignment: Qt.AlignVCenter
-            text: qsTr("擦料塔设置")
-            color: "#e2e8f5"
-            font.pixelSize: 14
-            font.bold: true
-        }
-    }
-
     contentItem: ColumnLayout {
-        width: parent.width
+        width: root.width
         spacing: 10
         anchors.margins: 16
 
@@ -127,7 +104,7 @@ Dialog {
             }
         }
 
-        // ── Ramming Section ──
+        // -- Ramming Section --
         Text {
             text: qsTr("撞击设置")
             color: Theme.textSecondary
@@ -151,7 +128,7 @@ Dialog {
             CxTextField { Layout.fillWidth: true; implicitHeight: 22; font.pixelSize: 10; text: root.rammingStepMulti.toFixed(2) }
         }
 
-        // ── Wiping Section ──
+        // -- Wiping Section --
         Text {
             text: qsTr("擦洗设置")
             color: Theme.textSecondary

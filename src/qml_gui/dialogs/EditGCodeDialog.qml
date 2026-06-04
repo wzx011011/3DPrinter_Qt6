@@ -9,18 +9,16 @@ import "../controls"
 // Layout: Left panel (parameter list) | Center panel (monospace TextArea)
 // Usage: EditGCodeDialog { id: dlg } -> dlg.open()
 
-Dialog {
+CxDialog {
     id: root
 
-    modal: true
     closePolicy: Popup.NoAutoClose
-    anchors.centerIn: parent
-    width: 620
-    height: 400
 
     // Public API -- set before opening
     property string initialGCode: ""
-    property string dialogTitle: qsTr("编辑自定义 G-code")
+    // Note: dialogTitle is used by CxDialog for the header.
+    // This dialog also uses dialogTitle as its title text.
+    dialogTitle: qsTr("编辑自定义 G-code")
     signal gcodeAccepted(string gcode)
 
     // Internal state
@@ -28,43 +26,16 @@ Dialog {
     property string selectedParamLabel: ""
     property string selectedParamDesc: ""
 
-    background: Rectangle {
-        color: "#1a1f28"
-        radius: 8
-        border.color: "#2e3848"
-        border.width: 1
-    }
-
-    header: Rectangle {
-        width: parent.width
-        height: 40
-        color: "#141920"
-        radius: 8
-        Rectangle {
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: 12
-            color: parent.color
-        }
-
-        Text {
-            anchors.left: parent.left
-            anchors.leftMargin: 16
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.dialogTitle
-            color: "#e2e8f5"
-            font.pixelSize: 14
-            font.bold: true
-        }
-    }
+    anchors.centerIn: parent
+    width: 620
+    height: 400
 
     contentItem: ColumnLayout {
         spacing: 0
         anchors.fill: parent
         anchors.margins: 0
 
-        // Top label (对齐上游 "Built-in placeholders (Double click item to add to G-code)")
+        // Top label (aligns with upstream "Built-in placeholders (Double click item to add to G-code)")
         Text {
             Layout.fillWidth: true
             Layout.leftMargin: 16
@@ -141,7 +112,7 @@ Dialog {
 
                                 // Expand/collapse arrow
                                 Text {
-                                    text: modelData.expanded ? "\u25BC" : "\u25B6"
+                                    text: modelData.expanded ? "▼" : "▶"
                                     color: Theme.textTertiary
                                     font.pixelSize: 8
                                 }
@@ -223,7 +194,7 @@ Dialog {
                     }
                 }
 
-                // Parameter description area (对齐上游 m_param_label + m_param_description)
+                // Parameter description area (aligns with upstream m_param_label + m_param_description)
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 2
@@ -376,7 +347,7 @@ Dialog {
             var flat = []
             categoryStates = {}
 
-            // -- Category definitions (对齐 upstream init_params_list) --
+            // -- Category definitions (aligns with upstream init_params_list) --
             var categories = [
                 {
                     id: "slicing_state", label: qsTr("切片状态"),
@@ -520,7 +491,7 @@ Dialog {
         }
     }
 
-    // Proxy model for search filtering (对齐 upstream on_search_update / RefreshSearch)
+    // Proxy model for search filtering (aligns with upstream on_search_update / RefreshSearch)
     ListModel {
         id: paramProxyModel
 
@@ -608,7 +579,7 @@ Dialog {
 
         gcodeEditor.insert(cursorPos, insertText)
 
-        // If code has brackets, place cursor inside them (对齐 upstream add_selected_value_to_gcode)
+        // If code has brackets, place cursor inside them (aligns with upstream add_selected_value_to_gcode)
         if (root.selectedParamCode.indexOf("[") >= 0 && root.selectedParamCode.indexOf("]") >= 0) {
             var openIdx = root.selectedParamCode.indexOf("[")
             var closeIdx = root.selectedParamCode.indexOf("]")

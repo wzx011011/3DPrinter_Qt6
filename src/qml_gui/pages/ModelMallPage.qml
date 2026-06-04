@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import ".."
+import "../controls"
 
 /// ModelMallPage - 3D model mall browsing interface
 ///
@@ -131,15 +132,12 @@ Item {
                             color: Theme.textTertiary
                         }
 
-                        TextField {
+                        CxTextField {
                             id: searchField
                             Layout.fillWidth: true
                             text: root.modelMallVm.searchQuery
                             placeholderText: qsTr("Search models, authors, tags...")
-                            color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeMD
-                            placeholderTextColor: Theme.textTertiary
-                            background: Rectangle { color: "transparent" }
                             onEditingFinished: root.modelMallVm.setSearchQuery(text)
                             onAccepted: root.modelMallVm.setSearchQuery(text)
                         }
