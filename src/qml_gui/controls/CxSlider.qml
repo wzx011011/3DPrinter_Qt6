@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import ".."
 
 Slider {
     id: root
@@ -12,12 +13,13 @@ Slider {
         width: root.availableWidth
         height: 4
         radius: 2
-        color: "#2e3440"
+        color: Theme.borderSubtle
+        opacity: root.enabled ? 1.0 : 0.45
 
         Rectangle {
             width: root.visualPosition * parent.width
             height: parent.height
-            color: "#18c75e"
+            color: root.enabled ? Theme.accent : Theme.textDisabled
             radius: 2
         }
     }
@@ -28,8 +30,12 @@ Slider {
         width: 14
         height: 14
         radius: 7
-        color: root.pressed ? "#1ed36b" : "#18c75e"
-        border.color: "#0a1a0f"
+        color: root.pressed ? Theme.accentLight : Theme.accent
+        border.color: Theme.accentDark
         border.width: 2
+        opacity: root.enabled ? 1.0 : 0.45
+        Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        scale: root.pressed ? 0.95 : 1.0
+        Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
     }
 }

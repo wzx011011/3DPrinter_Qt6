@@ -1,26 +1,30 @@
 import QtQuick
 import QtQuick.Controls
+import ".."
 
 CheckBox {
     id: root
 
-    font.pixelSize: 12
+    font.pixelSize: Theme.fontSizeMD
 
     indicator: Rectangle {
         implicitWidth: 16
         implicitHeight: 16
         x: root.leftPadding
         y: (root.height - height) / 2
-        radius: 3
-        color: root.checked ? "#18c75e" : "#1e2330"
-        border.color: root.checked ? "#18c75e" : (root.hovered ? "#4e5568" : "#3a4050")
+        radius: Theme.radiusSM
+        color: root.checked ? Theme.accent : Theme.bgPanel
+        border.color: root.checked ? Theme.accent : (root.hovered ? Theme.borderStrong : Theme.borderDefault)
         border.width: 1
+        Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        opacity: root.enabled ? 1.0 : 0.45
 
         Text {
             anchors.centerIn: parent
             text: "✓"
-            color: "white"
-            font.pixelSize: 10
+            color: Theme.textOnAccent
+            font.pixelSize: Theme.fontSizeXS
             font.bold: true
             visible: root.checked
         }
@@ -29,7 +33,7 @@ CheckBox {
     contentItem: Text {
         leftPadding: root.indicator.width + root.spacing
         text: root.text
-        color: root.enabled ? "#c8d0dc" : "#566070"
+        color: root.enabled ? Theme.textPrimary : Theme.textDisabled
         font: root.font
         verticalAlignment: Text.AlignVCenter
     }
