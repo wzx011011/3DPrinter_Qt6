@@ -313,6 +313,130 @@ Item {
             text: qsTr("适应视图")
             onTriggered: root.applyFitHintIfReady()
         }
+        MenuSeparator { }
+        // 对齐上游 create_extra_object_menu — Fix Model
+        CxMenuItem {
+            text: qsTr("修复模型")
+            onTriggered: if (root.editorVm) root.editorVm.fixMeshSelected()
+        }
+        // 对齐上游 create_extra_object_menu — Simplify
+        CxMenuItem {
+            text: qsTr("简化模型")
+            onTriggered: if (root.editorVm) root.editorVm.simplifyMeshSelected()
+        }
+        // 对齐上游 create_extra_object_menu — Mesh Boolean
+        CxMenuItem {
+            text: qsTr("网格布尔运算")
+            onTriggered: if (root.editorVm) root.editorVm.meshBooleanSelected()
+        }
+        MenuSeparator { }
+        // 对齐上游 append_menu_item_per_object_settings
+        CxMenuItem {
+            text: qsTr("编辑参数表")
+            enabled: root.editorVm && root.editorVm.selectedObjectCount === 1
+            onTriggered: if (root.editorVm) root.editorVm.requestSelectionSettings()
+        }
+        CxMenuItem {
+            text: qsTr("编辑工艺设置")
+            onTriggered: backend.openSettings()
+        }
+        MenuSeparator { }
+        // 对齐上游 append_menu_item_reload_from_disk
+        CxMenuItem {
+            text: qsTr("从磁盘重新加载")
+            onTriggered: if (root.editorVm) root.editorVm.reloadSelectedFromDisk()
+        }
+        // 对齐上游 append_menu_item_replace_with_stl
+        CxMenuItem {
+            text: qsTr("替换为 STL...")
+            onTriggered: replaceWithStlDlg.open()
+        }
+        // 对齐上游 append_menu_item_change_filament — Change Filament submenu
+        CxMenu {
+            title: qsTr("更换耗材")
+            CxMenuItem {
+                text: qsTr("默认")
+                onTriggered: if (root.editorVm) root.editorVm.setVolumeExtruderId(
+                                 root.editorVm.selectedObjectIndex, 0, -1)
+            }
+            Repeater {
+                model: root.configVm ? root.configVm.filamentPresetNames : []
+                delegate: CxMenuItem {
+                    text: qsTr("T%1 — %2").arg(index + 1).arg(modelData)
+                    onTriggered: if (root.editorVm) root.editorVm.setVolumeExtruderId(
+                                     root.editorVm.selectedObjectIndex, 0, index + 1)
+                }
+            }
+        }
+    }
+
+    // Multi-selection context menu (对齐上游 multi_selection_menu)
+    CxMenu {
+        id: multiContextMenu
+
+        // 对齐上游 append_menu_item_merge_to_multipart_object
+        CxMenuItem {
+            text: qsTr("组合")
+            onTriggered: if (root.editorVm) root.editorVm.assembleSelectedObjects()
+        }
+        CxMenuItem {
+            text: qsTr("克隆")
+            onTriggered: if (root.editorVm) root.editorVm.duplicateSelectedObjects()
+        }
+        MenuSeparator { }
+        CxMenuItem {
+            text: qsTr("居中到热床")
+            onTriggered: if (root.editorVm) root.editorVm.centerSelectedObjects()
+        }
+        CxMenuItem {
+            text: qsTr("修复模型")
+            onTriggered: if (root.editorVm) root.editorVm.fixMeshSelected()
+        }
+        CxMenuItem {
+            text: qsTr("删除")
+            onTriggered: if (root.editorVm) root.editorVm.deleteSelectedObjects()
+        }
+        CxMenuItem {
+            text: qsTr("复制")
+            onTriggered: if (root.editorVm) root.editorVm.copySelectedObjects()
+        }
+        CxMenuItem {
+            text: qsTr("粘贴")
+            onTriggered: if (root.editorVm) root.editorVm.pasteObjects()
+        }
+        MenuSeparator { }
+        // 对齐上游 append_menu_item_set_printable
+        CxMenuItem {
+            text: qsTr("设为可打印")
+            onTriggered: if (root.editorVm) root.editorVm.setSelectedObjectsPrintable(true)
+        }
+        CxMenuItem {
+            text: qsTr("编辑工艺设置")
+            onTriggered: backend.openSettings()
+        }
+        MenuSeparator { }
+        // 对齐上游 append_menu_item_change_filament — Change Filament submenu
+        CxMenu {
+            title: qsTr("更换耗材")
+            CxMenuItem {
+                text: qsTr("默认")
+                onTriggered: if (root.editorVm) root.editorVm.setVolumeExtruderId(
+                                 root.editorVm.selectedObjectIndex, 0, -1)
+            }
+            Repeater {
+                model: root.configVm ? root.configVm.filamentPresetNames : []
+                delegate: CxMenuItem {
+                    text: qsTr("T%1 — %2").arg(index + 1).arg(modelData)
+                    onTriggered: if (root.editorVm) root.editorVm.setVolumeExtruderId(
+                                     root.editorVm.selectedObjectIndex, 0, index + 1)
+                }
+            }
+        }
+        MenuSeparator { }
+        CxMenuItem {
+            text: qsTr("导出为 STL")
+            onTriggered: if (root.editorVm) root.editorVm.exportSelectedAsStl()
+        }
     }
 
     // Rename dialog (对齐上游 Plater::rename_object)
@@ -439,6 +563,65 @@ Item {
                   ? qsTr("解锁平板") : qsTr("锁定平板")
             enabled: root.contextPlateIndex >= 0 && root.editorVm
             onTriggered: if (root.editorVm) root.editorVm.togglePlateLocked(root.contextPlateIndex)
+        }
+        MenuSeparator { }
+        // 对齐上游 create_plate_menu — Reload All
+        CxMenuItem {
+            text: qsTr("全部重新加载")
+            enabled: root.contextPlateIndex >= 0 && root.editorVm
+                     && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
+            onTriggered: if (root.editorVm) root.editorVm.reloadAllOnPlate()
+        }
+        // 对齐上游 create_plate_menu — Paste
+        CxMenuItem {
+            text: qsTr("粘贴")
+            onTriggered: if (root.editorVm) root.editorVm.pasteObjects()
+        }
+        MenuSeparator { }
+        // 对齐上游 create_plate_menu — Add Models
+        CxMenuItem {
+            text: qsTr("添加模型...")
+            onTriggered: openFileDlg.open()
+        }
+        // 对齐上游 create_plate_menu — Add Primitive submenu
+        CxMenu {
+            title: qsTr("添加图元")
+            CxMenuItem {
+                text: qsTr("立方体")
+                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(0)
+            }
+            CxMenuItem {
+                text: qsTr("球体")
+                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(1)
+            }
+            CxMenuItem {
+                text: qsTr("圆柱体")
+                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(2)
+            }
+            CxMenuItem {
+                text: qsTr("圆锥体")
+                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(3)
+            }
+            CxMenuItem {
+                text: qsTr("截锥体")
+                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(4)
+            }
+            CxMenuItem {
+                text: qsTr("圆环体")
+                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(5)
+            }
+            CxMenuItem {
+                text: qsTr("圆盘")
+                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(6)
+            }
+            CxMenuItem {
+                text: qsTr("文字")
+                onTriggered: if (root.editorVm) root.editorVm.addTextObject()
+            }
+            CxMenuItem {
+                text: qsTr("SVG")
+                onTriggered: if (root.editorVm) root.editorVm.importSVG()
+            }
         }
         MenuSeparator { }
         CxMenuItem {
@@ -1303,6 +1486,21 @@ Item {
         }
     }
 
+    // Replace selected object with STL (对齐上游 append_menu_item_replace_with_stl)
+    FileDialog {
+        id: replaceWithStlDlg
+        title: qsTr("替换为 STL")
+        nameFilters: [
+            qsTr("STL 文件 (*.stl)"),
+            qsTr("OBJ 文件 (*.obj)"),
+            qsTr("所有文件 (*)")
+        ]
+        onAccepted: {
+            if (root.editorVm)
+                root.editorVm.replaceWithStl(selectedFile.toString())
+        }
+    }
+
     Rectangle {
         anchors.fill: parent
         color: Theme.bgBase
@@ -1349,8 +1547,8 @@ Item {
                                 // Single object selected → object menu
                                 objectContextMenu.popup(mouse.x, mouse.y)
                             } else if (root.editorVm && root.editorVm.selectedObjectCount > 1) {
-                                // Multiple objects selected → multi-selection menu (Wave 3 placeholder)
-                                objectContextMenu.popup(mouse.x, mouse.y)
+                                // Multiple objects selected → multi-selection menu (对齐上游 multi_selection_menu)
+                                multiContextMenu.popup(mouse.x, mouse.y)
                             } else {
                                 // Nothing selected (empty canvas) → default menu
                                 defaultContextMenu.popup(mouse.x, mouse.y)
