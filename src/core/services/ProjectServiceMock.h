@@ -105,6 +105,8 @@ public:
   Q_INVOKABLE int objectInstanceCount(int index) const;
   Q_INVOKABLE QString objectVolumeName(int objectIndex, int volumeIndex) const;
   Q_INVOKABLE QString objectVolumeTypeLabel(int objectIndex, int volumeIndex) const;
+  /// Get volume type as integer (0=ModelPart, 1=NegativeVolume, etc.) for the given volume
+  Q_INVOKABLE int objectVolumeType(int objectIndex, int volumeIndex) const;
   QVariant scopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &fallbackValue = QVariant()) const;
   bool setScopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &value);
   /// Plate-level scoped overrides (对齐上游 PartPlate config override)
@@ -210,6 +212,19 @@ public:
   Q_INVOKABLE QList<int> splitObject(int objectIndex);
   /// 修复网格（对齐上游 MeshRepairDialog / fix_mesh）
   void fixMeshForObject(int objectIndex);
+  /// 修复网格并返回结果（对齐上游 MeshRepairDialog / fix_mesh）
+  bool fixMesh(int objectIndex);
+  /// 从磁盘重新加载对象源文件（对齐上游 Plater::reload_from_disk）
+  bool reloadFromDisk(int objectIndex);
+  /// 用 STL 文件替换指定 volume 的网格（对齐上游 GUI_ObjectList::load_subobject）
+  bool replaceVolume(int objectIndex, int volumeIndex, const QString &stlPath);
+  /// 合并多个对象为一个多部件对象（对齐上游 GUI_ObjectList::assemble）
+  bool assembleObjects(const QList<int> &objIndices);
+  /// 将指定实例复制为独立对象（对齐上游 GUI_ObjectList::instance_to_object）
+  bool duplicateInstanceAsObject(int objectIndex, int instanceIndex);
+  /// 创建原始几何体到当前平板（对齐上游 create_mesh + add_volume）
+  /// type: 0=Cube, 1=Sphere, 2=Cylinder, 3=Cone, 4=TruncatedCone, 5=Torus, 6=Disc
+  Q_INVOKABLE int addPrimitiveToPlate(int type);
   /// 重命名对象（对齐上游 Plater::rename_object）
   Q_INVOKABLE bool renameObject(int index, const QString &newName);
   /// 移动对象位置（对齐上游 GUI_ObjectList 拖拽重排序）

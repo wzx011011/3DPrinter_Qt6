@@ -2568,6 +2568,250 @@ void EditorViewModel::splitSelectedObject()
   emit stateChanged();
 }
 
+bool EditorViewModel::fixMeshSelected()
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return false;
+
+  bool anyFixed = false;
+  for (int srcIdx : m_selectedSourceIndices)
+  {
+    if (projectService_->fixMesh(srcIdx))
+      anyFixed = true;
+  }
+
+  if (anyFixed)
+  {
+    refreshMeshCacheAndFitHint();
+    invalidateSliceResultsForCurrentPlate();
+    statusText_ = tr("网格修复完成");
+  }
+  else
+  {
+    statusText_ = tr("网格修复失败");
+  }
+  emit stateChanged();
+  return anyFixed;
+}
+
+bool EditorViewModel::simplifyMeshSelected()
+{
+  // Stub — needs simplify dialog (GLGizmoSimplify) integration
+  qWarning("[EditorViewModel] simplifyMeshSelected: not yet implemented (needs simplify dialog)");
+  return false;
+}
+
+bool EditorViewModel::meshBooleanSelected()
+{
+  // Stub — needs boolean dialog (GLGizmoMeshBoolean) integration
+  qWarning("[EditorViewModel] meshBooleanSelected: not yet implemented (needs boolean dialog)");
+  return false;
+}
+
+bool EditorViewModel::changeVolumeTypeByIndex(int objIdx, int volIdx, int newType)
+{
+  if (!projectService_)
+    return false;
+  if (objIdx < 0 || volIdx < 0)
+    return false;
+
+  if (!projectService_->changeVolumeType(objIdx, volIdx, newType))
+  {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+
+  rebuildObjectEntriesFromService();
+  statusText_ = tr("已转换部件类型");
+  emit stateChanged();
+  return true;
+}
+
+bool EditorViewModel::reloadSelectedFromDisk()
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return false;
+
+  bool anyReloaded = false;
+  for (int srcIdx : m_selectedSourceIndices)
+  {
+    if (projectService_->reloadFromDisk(srcIdx))
+      anyReloaded = true;
+  }
+
+  if (anyReloaded)
+  {
+    rebuildObjectEntriesFromService();
+    refreshMeshCacheAndFitHint();
+    invalidateSliceResultsForCurrentPlate();
+    statusText_ = tr("已从磁盘重新加载");
+  }
+  else
+  {
+    statusText_ = tr("重新加载失败");
+  }
+  emit stateChanged();
+  return anyReloaded;
+}
+
+bool EditorViewModel::replaceWithStl(const QString &path)
+{
+  if (!projectService_ || !hasSelectedVolume())
+    return false;
+
+  const int srcIdx = m_selectedVolumeObjectSourceIndex;
+  if (srcIdx < 0)
+    return false;
+
+  if (!projectService_->replaceVolume(srcIdx, m_selectedVolumeIndex, path))
+  {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForCurrentPlate();
+  statusText_ = tr("已替换部件网格");
+  emit stateChanged();
+  return true;
+}
+
+bool EditorViewModel::reloadAllOnPlate()
+{
+  if (!projectService_)
+    return false;
+
+  QList<int> plateObjs = projectService_->currentPlateObjectIndices();
+  bool anyReloaded = false;
+  for (int idx : plateObjs)
+  {
+    if (projectService_->reloadFromDisk(idx))
+      anyReloaded = true;
+  }
+
+  if (anyReloaded)
+  {
+    rebuildObjectEntriesFromService();
+    refreshMeshCacheAndFitHint();
+    invalidateSliceResultsForCurrentPlate();
+    statusText_ = tr("已重新加载当前平板所有对象");
+  }
+  else
+  {
+    statusText_ = tr("重新加载失败");
+  }
+  emit stateChanged();
+  return anyReloaded;
+}
+
+bool EditorViewModel::assembleSelectedObjects()
+{
+  if (!projectService_ || m_selectedSourceIndices.size() < 2)
+  {
+    statusText_ = tr("合并需要至少选中两个对象");
+    emit stateChanged();
+    return false;
+  }
+
+  QList<int> indices = m_selectedSourceIndices.values();
+  if (!projectService_->assembleObjects(indices))
+  {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+
+  m_selectedSourceIndices.clear();
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForCurrentPlate();
+  statusText_ = tr("已合并选中对象");
+  emit stateChanged();
+  return true;
+}
+
+bool EditorViewModel::instanceToObject(int instIdx)
+{
+  if (!projectService_)
+    return false;
+
+  const int srcIdx = selectedObjectIndex();
+  if (srcIdx < 0)
+    return false;
+
+  const int sourceIndex = mapFilteredToSourceIndex(srcIdx);
+  if (sourceIndex < 0)
+    return false;
+
+  if (!projectService_->duplicateInstanceAsObject(sourceIndex, instIdx))
+  {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+
+  rebuildObjectEntriesFromService();
+  statusText_ = tr("已将实例转换为独立对象");
+  emit stateChanged();
+  return true;
+}
+
+int EditorViewModel::getSelectedVolumeType() const
+{
+  if (!projectService_ || m_selectedVolumeObjectSourceIndex < 0)
+    return 0;
+  return projectService_->objectVolumeType(m_selectedVolumeObjectSourceIndex, m_selectedVolumeIndex);
+}
+
+bool EditorViewModel::addPrimitiveToPlate(int type)
+{
+  if (!projectService_)
+    return false;
+
+  int newIdx = projectService_->addPrimitiveToPlate(type);
+  if (newIdx < 0)
+  {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  statusText_ = tr("已添加原始体");
+  emit stateChanged();
+  return true;
+}
+
+bool EditorViewModel::deleteFilamentSlot(int index)
+{
+  // Stub — needs filament management integration
+  qWarning("[EditorViewModel] deleteFilamentSlot(%d): not yet implemented (needs filament management)", index);
+  Q_UNUSED(index);
+  return false;
+}
+
+bool EditorViewModel::mergeFilamentSlots(int from, int to)
+{
+  // Stub — needs filament management integration
+  qWarning("[EditorViewModel] mergeFilamentSlots(%d, %d): not yet implemented (needs filament management)", from, to);
+  Q_UNUSED(from);
+  Q_UNUSED(to);
+  return false;
+}
+
+bool EditorViewModel::showLabels() const { return m_showLabels; }
+
+void EditorViewModel::setShowLabels(bool v)
+{
+  if (m_showLabels == v) return;
+  m_showLabels = v;
+  emit stateChanged();
+}
+
 void EditorViewModel::fixMeshForObject(int i)
 {
   if (!projectService_)
