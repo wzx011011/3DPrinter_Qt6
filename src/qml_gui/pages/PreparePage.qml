@@ -148,7 +148,62 @@ Item {
         }
     }
 
-    // Object context menu (right-click, aligns with upstream create_object_menu/create_extra_object_menu)
+    // Default canvas context menu (right-click on empty space, no selection)
+    // 对齐 upstream Plater::priv::on_right_click → menus.default_menu()
+    CxMenu {
+        id: defaultContextMenu
+
+        CxMenuItem {
+            text: qsTr("添加模型...")
+            onTriggered: openFileDlg.open()
+        }
+        CxMenu {
+            title: qsTr("添加图元")
+            CxMenuItem {
+                text: qsTr("立方体")
+                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(0)
+            }
+            CxMenuItem {
+                text: qsTr("球体")
+                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(1)
+            }
+            CxMenuItem {
+                text: qsTr("圆柱体")
+                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(2)
+            }
+            CxMenuItem {
+                text: qsTr("圆锥体")
+                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(3)
+            }
+            CxMenuItem {
+                text: qsTr("截锥体")
+                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(4)
+            }
+            CxMenuItem {
+                text: qsTr("圆环体")
+                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(5)
+            }
+            CxMenuItem {
+                text: qsTr("圆盘")
+                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(6)
+            }
+            CxMenuItem {
+                text: qsTr("文字")
+                onTriggered: if (root.editorVm) root.editorVm.addTextObject()
+            }
+            CxMenuItem {
+                text: qsTr("SVG")
+                onTriggered: if (root.editorVm) root.editorVm.importSVG()
+            }
+        }
+        MenuSeparator { }
+        CxMenuItem {
+            text: editorVm && editorVm.showLabels ? qsTr("隐藏标签") : qsTr("显示标签")
+            onTriggered: if (root.editorVm) root.editorVm.showLabels = !root.editorVm.showLabels
+        }
+    }
+
+    // Object context menu (right-click on selected object, aligns with upstream create_object_menu/create_extra_object_menu)
     CxMenu {
         id: objectContextMenu
 
@@ -1252,84 +1307,117 @@ Item {
         anchors.fill: parent
         color: Theme.bgBase
 
-        GLViewport {
-            id: viewport3d
+        RowLayout {
             anchors.fill: parent
-            canvasType: GLViewport.CanvasView3D
-            meshData: root.editorVm ? root.editorVm.meshData : null
-            cutAxis: root.editorVm ? root.editorVm.cutAxis : 2
-            cutPosition: root.editorVm ? root.editorVm.cutPosition : 0.0
+            spacing: 0
 
-            // Right-click context menu
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.RightButton
-                propagateComposedEvents: true
-                onClicked: (mouse) => {
-                    objectContextMenu.popup(mouse.x, mouse.y)
-                    mouse.accepted = false
-                }
-                onPressed: (mouse) => mouse.accepted = false
-                onReleased: (mouse) => mouse.accepted = false
+            // ═══ Left sidebar (280px) ═══
+            LeftSidebar {
+                id: leftSidebar
+                Layout.fillHeight: true
+                Layout.preferredWidth: 280
+                Layout.topMargin: 14
+                Layout.bottomMargin: 14
+                editorVm: root.editorVm
+                configVm: root.configVm
+                processCategory: root.processCategory
+                visible: root.leftPanelVisible
             }
 
-            // Undo/Redo shortcuts (QML Shortcuts work better than Keys for Ctrl combos)
-            Shortcut {
-                sequences: ["Ctrl+Z"]
-                onActivated: viewport3d.undo()
-            }
-            Shortcut {
-                sequences: ["Ctrl+Shift+Z", "Ctrl+Y"]
-                onActivated: viewport3d.redo()
-            }
+            // ═══ Center: 3D Viewport + overlays ═══
+            Item {
+                id: viewportArea
+                Layout.fillWidth: true
+                Layout.fillHeight: true
 
-            Connections {
-                target: root.editorVm
-                function onStateChanged() {
-                    root.applyFitHintIfReady()
-                }
-            }
-
-            onVisibleChanged: {
-                if (visible)
-                    Qt.callLater(root.applyFitHintIfReady)
-            }
-
-            Component.onCompleted: Qt.callLater(root.applyFitHintIfReady)
-
-            DropArea {
-                anchors.fill: parent
-                keys: ["text/uri-list"]
-                onDropped: (drop) => {
-                    if (drop.hasUrls && drop.urls.length > 0 && root.editorVm)
-                        root.editorVm.loadFile(drop.urls[0].toString())
-                }
-
-                Rectangle {
+                GLViewport {
+                    id: viewport3d
                     anchors.fill: parent
-                    color: "#4a0b1018"
-                    visible: parent.containsDrag
+                    canvasType: GLViewport.CanvasView3D
+                    meshData: root.editorVm ? root.editorVm.meshData : null
+                    cutAxis: root.editorVm ? root.editorVm.cutAxis : 2
+                    cutPosition: root.editorVm ? root.editorVm.cutPosition : 0.0
 
-                    Rectangle {
-                        anchors.centerIn: parent
-                        width: 260
-                        height: 64
-                        radius: Theme.radiusXL
-                        color: Theme.bgPanel
-                        border.width: 1
-                        border.color: Theme.accent
+                    // Right-click context menu dispatch
+                    // 对齐 upstream Plater::priv::on_right_click (Plater.cpp:9512-9566)
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.RightButton
+                        propagateComposedEvents: true
+                        onClicked: (mouse) => {
+                            if (root.editorVm && root.editorVm.selectedObjectIndex >= 0) {
+                                // Single object selected → object menu
+                                objectContextMenu.popup(mouse.x, mouse.y)
+                            } else if (root.editorVm && root.editorVm.selectedObjectCount > 1) {
+                                // Multiple objects selected → multi-selection menu (Wave 3 placeholder)
+                                objectContextMenu.popup(mouse.x, mouse.y)
+                            } else {
+                                // Nothing selected (empty canvas) → default menu
+                                defaultContextMenu.popup(mouse.x, mouse.y)
+                            }
+                            mouse.accepted = false
+                        }
+                        onPressed: (mouse) => mouse.accepted = false
+                        onReleased: (mouse) => mouse.accepted = false
+                    }
 
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("松开以导入模型")
-                            color: Theme.textPrimary
-                            font.pixelSize: Theme.fontSizeXL
-                            font.bold: true
+                    // Undo/Redo shortcuts (QML Shortcuts work better than Keys for Ctrl combos)
+                    Shortcut {
+                        sequences: ["Ctrl+Z"]
+                        onActivated: viewport3d.undo()
+                    }
+                    Shortcut {
+                        sequences: ["Ctrl+Shift+Z", "Ctrl+Y"]
+                        onActivated: viewport3d.redo()
+                    }
+
+                    Connections {
+                        target: root.editorVm
+                        function onStateChanged() {
+                            root.applyFitHintIfReady()
+                        }
+                    }
+
+                    onVisibleChanged: {
+                        if (visible)
+                            Qt.callLater(root.applyFitHintIfReady)
+                    }
+
+                    Component.onCompleted: Qt.callLater(root.applyFitHintIfReady)
+
+                    DropArea {
+                        anchors.fill: parent
+                        keys: ["text/uri-list"]
+                        onDropped: (drop) => {
+                            if (drop.hasUrls && drop.urls.length > 0 && root.editorVm)
+                                root.editorVm.loadFile(drop.urls[0].toString())
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#4a0b1018"
+                            visible: parent.containsDrag
+
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 260
+                                height: 64
+                                radius: Theme.radiusXL
+                                color: Theme.bgPanel
+                                border.width: 1
+                                border.color: Theme.accent
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: qsTr("松开以导入模型")
+                                    color: Theme.textPrimary
+                                    font.pixelSize: Theme.fontSizeXL
+                                    font.bold: true
+                                }
+                            }
                         }
                     }
                 }
-            }
-        }
 
         // ── 视口告警覆盖层（对齐上游 EWarning / Plater::_set_warning_notification）──
         Rectangle {
@@ -1380,7 +1468,7 @@ Item {
             id: topTools
             cxSurface: CxPanel.Surface.Floating
             anchors.top: parent.top
-            anchors.left: leftPanel.right
+            anchors.left: viewportArea.left
             anchors.leftMargin: 14
             anchors.topMargin: 14
             width: toolsContent.implicitWidth + 22
@@ -1715,10 +1803,10 @@ Item {
                         CxIconButton {
                             buttonSize: 34
                             iconSize: 16
-                            selected: !sidebar.collapsed
+                            selected: true
                             iconSource: "qrc:/qml/assets/icons/layout-sidebar-right.svg"
-                            toolTipText: sidebar.collapsed ? qsTr("展开侧栏") : qsTr("收起侧栏")
-                            onClicked: sidebar.collapsed = !sidebar.collapsed
+                            toolTipText: qsTr("参数面板")
+                            onClicked: { /* TODO: toggle right panel visibility */ }
                         }
                         CxIconButton {
                             buttonSize: 34
@@ -1736,7 +1824,7 @@ Item {
         CxPanel {
             id: processBar
             cxSurface: CxPanel.Surface.Floating
-            anchors.right: sidebar.left
+            anchors.right: viewportArea.right
             anchors.rightMargin: 8
             anchors.verticalCenter: parent.verticalCenter
             width: 46
@@ -1787,7 +1875,6 @@ Item {
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
                                 root.processCategory = modelData.cat
-                                sidebar.switchToPrintTab()
                             }
                         }
 
@@ -2979,132 +3066,20 @@ Item {
             }
         }
 
-        Rectangle {
-            id: leftPanel
-            visible: root.leftPanelVisible
-            anchors.left: parent.left
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            anchors.leftMargin: 14
-            anchors.topMargin: 66
-            anchors.bottomMargin: 16
-            width: 220
-            radius: 18
-            color: Theme.bgFloating
-            border.width: 1
-            border.color: Theme.borderSubtle
+            } // end viewportArea
 
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: Theme.spacingLG
-                spacing: Theme.spacingMD
-
-                CxSectionHeader {
-                    Layout.fillWidth: true
-                    title: qsTr("打印机")
-                    subtitle: qsTr("对象与平台管理")
-                }
-
-                CxComboBox {
-                    Layout.fillWidth: true
-                    model: ["Creality K1C 0.4 nozzle", "K1 Max 0.4 nozzle"]
-                }
-
-                CxComboBox {
-                    Layout.fillWidth: true
-                    model: [qsTr("光面PEI板/涂层板"), qsTr("普通PEI板")]
-                }
-
-                // 热床形状设置按钮（对齐上游 BedShapeDialog）
-                CxButton {
-                    Layout.fillWidth: true
-                    cxStyle: CxButton.Style.Secondary
-                    text: qsTr("热床设置...")
-                    onClicked: backend.showBedShapeDialog()
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.spacingSM
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 30
-                        radius: 10
-                        color: root.editorVm && root.editorVm.showAllObjects ? Theme.accent : Theme.bgElevated
-                        border.width: 1
-                        border.color: root.editorVm && root.editorVm.showAllObjects ? Theme.accentDark : Theme.borderSubtle
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("全部")
-                            color: root.editorVm && root.editorVm.showAllObjects ? Theme.textOnAccent : Theme.textPrimary
-                            font.pixelSize: Theme.fontSizeMD
-                            font.bold: true
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.editorVm) root.editorVm.setShowAllObjects(true)
-                        }
-                    }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 30
-                        radius: 10
-                        color: root.editorVm && !root.editorVm.showAllObjects ? Theme.accent : Theme.bgElevated
-                        border.width: 1
-                        border.color: root.editorVm && !root.editorVm.showAllObjects ? Theme.accentDark : Theme.borderSubtle
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("对象")
-                            color: root.editorVm && !root.editorVm.showAllObjects ? Theme.textOnAccent : Theme.textPrimary
-                            font.pixelSize: Theme.fontSizeMD
-                            font.bold: true
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.editorVm) root.editorVm.setShowAllObjects(false)
-                        }
-                    }
-                }
-
-                CxSectionHeader {
-                    Layout.fillWidth: true
-                    title: qsTr("对象列表")
-                    subtitle: root.editorVm
-                        ? (root.editorVm.objectCount + qsTr(" 个对象"))
-                        : qsTr("0 个对象")
-                }
-
-                ObjectList {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    editorVm: root.editorVm
-                    showToolbar: false
-                    showImportButton: false
-                }
+            // ═══ Right ParamsPanel (340px) ═══
+            RightParamsPanel {
+                id: rightPanel
+                Layout.fillHeight: true
+                Layout.preferredWidth: 340
+                Layout.topMargin: 14
+                Layout.bottomMargin: 14
+                configVm: root.configVm
+                editorVm: root.editorVm
             }
-        }
 
-        Sidebar {
-            id: sidebar
-            anchors.top: parent.top
-            anchors.bottom: parent.bottom
-            anchors.right: parent.right
-            anchors.topMargin: 14
-            anchors.rightMargin: 14
-            anchors.bottomMargin: 14
-            width: implicitWidth
-            editorVm: root.editorVm
-            configVm: root.configVm
-            processCategory: root.processCategory
-        }
+        } // end RowLayout
 
         // 转发预览请求到页面导航（对齐上游 Plater::priv::on_preview）
         Connections {
@@ -3126,7 +3101,7 @@ Item {
             cxSurface: CxPanel.Surface.Floating
             anchors.top: parent.top
             anchors.topMargin: 68
-            anchors.right: sidebar.left
+            anchors.right: viewportArea.right
             anchors.rightMargin: 14
             width: 46
             height: 186
@@ -3183,9 +3158,9 @@ Item {
             visible: root.editorVm && root.editorVm.plateCount > 0
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 10
-            anchors.left: leftPanel.right
+            anchors.left: viewportArea.left
             anchors.leftMargin: 14
-            anchors.right: sidebar.left
+            anchors.right: viewportArea.right
             anchors.rightMargin: 14
             height: 62
             color: "transparent"
@@ -3348,7 +3323,7 @@ Item {
                      && root.editorVm.selectedObjectInfoText !== ""
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 44
-            anchors.left: leftPanel.right
+            anchors.left: viewportArea.left
             anchors.leftMargin: 14
             height: infoRow.implicitHeight + 10
             width: infoRow.implicitWidth + 16
