@@ -410,6 +410,20 @@ Item {
                         }
                     }
 
+                    // ── Section 6: Auxiliary Files (对齐 upstream GUI_AuxiliaryList) ──
+                    CollapsibleSection {
+                        id: auxSection
+                        Layout.fillWidth: true
+                        title: qsTr("辅助文件")
+                        iconText: "📁"
+                        expanded: false
+
+                        AuxiliaryListPanel {
+                            width: parent.width
+                            height: 260
+                        }
+                    }
+
                     Item { Layout.preferredHeight: 20 }
                 }
             }

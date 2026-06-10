@@ -16,6 +16,7 @@ class DeviceServiceMock;
 class ProjectServiceMock;
 class NetworkServiceMock;
 class CalibrationServiceMock;
+class AuxiliaryService;
 
 class EditorViewModel;
 class PreviewViewModel;
@@ -87,6 +88,7 @@ class BackendContext final : public QObject
   Q_PROPERTY(QObject *calibrationViewModel READ calibrationViewModel CONSTANT)
   Q_PROPERTY(QObject *modelMallViewModel READ modelMallViewModel CONSTANT)
   Q_PROPERTY(QObject *multiMachineViewModel READ multiMachineViewModel CONSTANT)
+  Q_PROPERTY(QObject *auxiliaryService READ auxiliaryService CONSTANT)
   Q_PROPERTY(bool visualCompareMode READ visualCompareMode CONSTANT)
   Q_PROPERTY(int currentPage READ currentPage NOTIFY currentPageChanged)
   Q_PROPERTY(QString lastErrorMessage READ lastErrorMessage NOTIFY errorChanged)
@@ -134,6 +136,7 @@ public:
   QObject *calibrationViewModel() const;
   QObject *modelMallViewModel() const;
   QObject *multiMachineViewModel() const;
+  QObject *auxiliaryService() const;
   bool visualCompareMode() const;
 
   int currentPage() const;
@@ -279,6 +282,8 @@ private:
   CalibrationViewModel *calibrationViewModel_ = nullptr;
   ModelMallViewModel *modelMallViewModel_ = nullptr;
   MultiMachineViewModel *multiMachineViewModel_ = nullptr;
+
+  AuxiliaryService *auxiliaryService_ = nullptr;
 
   bool visualCompareMode_ = false;
   int currentPage_ = 1;
