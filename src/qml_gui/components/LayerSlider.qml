@@ -14,6 +14,12 @@ Item {
     property int maxDisplay: root.previewVm ? Math.max(1, root.previewVm.layerCount) : 1
     property int totalLayers: root.previewVm ? Math.max(0, root.previewVm.layerCount - 1) : 0
 
+    // Tick mark editing state (对齐上游 IMSlider::render_edit_menu tick context)
+    property int editMenuTickLayer: -1
+    property int editMenuTickType: -1
+    // Target layer for add menu (computed from right-click position on groove)
+    property int addMenuTargetLayer: -1
+
     // 鼠标滚轮改变层范围（对齐上游 IMSlider::on_mouse_wheel）
     MouseArea {
         anchors.fill: parent
@@ -69,6 +75,52 @@ Item {
                 radius: 3
                 color: Theme.accent
                 opacity: 0.7
+            }
+
+            // ── Tick marks rendered on slider track (对齐上游 IMSlider::draw_ticks) ──
+            Repeater {
+                model: root.previewVm ? root.previewVm.tickMarks : []
+                delegate: Item {
+                    // Tick mark position and interaction
+                    readonly property real tickX: rangeSliderItem.trackMargin
+                        + (root.totalLayers > 0
+                           ? (modelData.tick / root.totalLayers) * rangeSliderItem.trackWidth
+                           : 0)
+                    readonly property int tickType: modelData.type
+                    readonly property int tickLayer: modelData.tick
+
+                    x: tickX - 1
+                    y: rangeSliderItem.height / 2 - 8
+                    width: 2
+                    height: 16
+                    z: 2
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 1
+                        color: {
+                            // TickType: PausePrint=0, CustomGcode=1, Template=2, ToolChange=3, ColorChange=4
+                            switch(tickType) {
+                            case 0: return Theme.statusWarning    // PausePrint - orange
+                            case 3: return Theme.statusInfo       // ToolChange - blue
+                            case 4: return Theme.accent           // ColorChange - green
+                            default: return Theme.textSecondary   // Custom/Template - gray
+                            }
+                        }
+                    }
+
+                    // Right-click on tick mark shows edit menu (对齐上游 IMSlider::render_edit_menu)
+                    MouseArea {
+                        anchors.fill: parent
+                        anchors.margins: -4
+                        acceptedButtons: Qt.RightButton
+                        onClicked: {
+                            root.editMenuTickLayer = tickLayer
+                            root.editMenuTickType = tickType
+                            sliderEditMenu.popup()
+                        }
+                    }
+                }
             }
 
             // Non-selected range dimming (对齐上游 IMSlider groove outside selected range)
@@ -135,7 +187,8 @@ Item {
                 }
             }
 
-            // Groove interaction area: hover tooltip + click-to-jump (对齐上游 IMSlider groove click)
+            // Groove interaction area: hover tooltip + click-to-jump + right-click add menu
+            // (对齐上游 IMSlider groove click + right-click add_menu)
             MouseArea {
                 id: grooveHoverMA
                 anchors.left: parent.left
@@ -143,20 +196,31 @@ Item {
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 hoverEnabled: true
-                acceptedButtons: Qt.LeftButton
-                // Click on groove: jump nearest thumb to clicked position (对齐上游 IMSlider slider_behavior)
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                // Left-click on groove: jump nearest thumb to clicked position (对齐上游 IMSlider slider_behavior)
                 onClicked: function(mouse) {
                     if (!root.previewVm || root.totalLayers <= 0) return
-                    var relX = mouse.x - rangeSliderItem.trackMargin
-                    var clickedLayer = Math.round((relX / rangeSliderItem.trackWidth) * root.totalLayers)
-                    clickedLayer = Math.max(0, Math.min(clickedLayer, root.totalLayers))
-                    // Move the nearest thumb to the clicked position
-                    var distMin = Math.abs(clickedLayer - root.previewVm.currentLayerMin)
-                    var distMax = Math.abs(clickedLayer - root.previewVm.currentLayerMax)
+
+                    if (mouse.button === Qt.RightButton) {
+                        // Compute layer at click position for the add menu
+                        var relX = mouse.x - rangeSliderItem.trackMargin
+                        var clickedLayer = Math.round((relX / rangeSliderItem.trackWidth) * root.totalLayers)
+                        clickedLayer = Math.max(0, Math.min(clickedLayer, root.totalLayers))
+                        addMenuTargetLayer = clickedLayer
+                        sliderAddMenu.popup()
+                        return
+                    }
+
+                    // Left click — move nearest thumb
+                    var relX2 = mouse.x - rangeSliderItem.trackMargin
+                    var clickedLayer2 = Math.round((relX2 / rangeSliderItem.trackWidth) * root.totalLayers)
+                    clickedLayer2 = Math.max(0, Math.min(clickedLayer2, root.totalLayers))
+                    var distMin = Math.abs(clickedLayer2 - root.previewVm.currentLayerMin)
+                    var distMax = Math.abs(clickedLayer2 - root.previewVm.currentLayerMax)
                     if (distMin <= distMax)
-                        root.previewVm.setLayerRange(clickedLayer, root.previewVm.currentLayerMax)
+                        root.previewVm.setLayerRange(clickedLayer2, root.previewVm.currentLayerMax)
                     else
-                        root.previewVm.setLayerRange(root.previewVm.currentLayerMin, clickedLayer)
+                        root.previewVm.setLayerRange(root.previewVm.currentLayerMin, clickedLayer2)
                 }
                 // Propagate hover to tooltip (prevent blocking thumb drag)
                 z: -1
@@ -460,6 +524,119 @@ Item {
                     }
                 }
             }
+        }
+
+        // ── Slider Add Menu (对齐上游 IMSlider::render_add_menu) ──
+        // Shown on right-click on slider groove (empty area)
+        CxMenu {
+            id: sliderAddMenu
+
+            CxMenuItem {
+                text: qsTr("Add Pause")
+                onTriggered: {
+                    if (root.previewVm && root.addMenuTargetLayer >= 0)
+                        root.previewVm.addPauseAtLayer(root.addMenuTargetLayer)
+                }
+            }
+            CxMenuItem {
+                text: qsTr("Add Custom G-code...")
+                onTriggered: {
+                    customGcodeAddDialog.targetLayer = root.addMenuTargetLayer
+                    customGcodeAddDialog.gcodeText = ""
+                    customGcodeAddDialog.open()
+                }
+            }
+            CxMenuItem {
+                text: qsTr("Jump to Layer...")
+                onTriggered: {
+                    jumpDialog.open()
+                    jumpInput.text = ""
+                    jumpInput.forceActiveFocus()
+                }
+            }
+        }
+
+        // ── Slider Edit Menu (对齐上游 IMSlider::render_edit_menu) ──
+        // Shown on right-click on existing tick mark
+        CxMenu {
+            id: sliderEditMenu
+
+            // PausePrint tick (type 0)
+            CxMenuItem {
+                text: qsTr("Delete Pause")
+                visible: root.editMenuTickType === 0
+                onTriggered: {
+                    if (root.previewVm && root.editMenuTickLayer >= 0)
+                        root.previewVm.removeTickAtLayer(root.editMenuTickLayer)
+                }
+            }
+
+            // Template tick (type 2)
+            CxMenuItem {
+                text: qsTr("Delete Custom Template")
+                visible: root.editMenuTickType === 2
+                onTriggered: {
+                    if (root.previewVm && root.editMenuTickLayer >= 0)
+                        root.previewVm.removeTickAtLayer(root.editMenuTickLayer)
+                }
+            }
+
+            // CustomGcode tick (type 1)
+            CxMenuItem {
+                text: qsTr("Edit Custom G-code")
+                visible: root.editMenuTickType === 1
+                onTriggered: {
+                    if (!root.previewVm || root.editMenuTickLayer < 0) return
+                    var existing = root.previewVm.tickAtLayer(root.editMenuTickLayer)
+                    customGcodeEditDialog.targetLayer = root.editMenuTickLayer
+                    customGcodeEditDialog.gcodeText = existing.extra || ""
+                    customGcodeEditDialog.open()
+                }
+            }
+            CxMenuItem {
+                text: qsTr("Delete Custom G-code")
+                visible: root.editMenuTickType === 1
+                onTriggered: {
+                    if (root.previewVm && root.editMenuTickLayer >= 0)
+                        root.previewVm.removeTickAtLayer(root.editMenuTickLayer)
+                }
+            }
+
+            // ToolChange tick (type 3)
+            CxMenuItem {
+                text: qsTr("Delete Filament Change")
+                visible: root.editMenuTickType === 3
+                onTriggered: {
+                    if (root.previewVm && root.editMenuTickLayer >= 0)
+                        root.previewVm.removeTickAtLayer(root.editMenuTickLayer)
+                }
+            }
+
+            // ColorChange tick (type 4)
+            CxMenuItem {
+                text: qsTr("Delete Color Change")
+                visible: root.editMenuTickType === 4
+                onTriggered: {
+                    if (root.previewVm && root.editMenuTickLayer >= 0)
+                        root.previewVm.removeTickAtLayer(root.editMenuTickLayer)
+                }
+            }
+        }
+
+        // ── Custom G-code Add Dialog (对齐上游 IMSlider custom gcode window) ──
+        CustomGcodeDialog {
+            id: customGcodeAddDialog
+            previewVm: root.previewVm
+            anchors.centerIn: parent.parent
+        }
+
+        // ── Custom G-code Edit Dialog ──
+        CustomGcodeDialog {
+            id: customGcodeEditDialog
+            previewVm: root.previewVm
+            dialogTitle: qsTr("Edit Custom G-code")
+            isEditMode: true
+            anchors.centerIn: parent.parent
         }
 
         Item { Layout.fillHeight: true }

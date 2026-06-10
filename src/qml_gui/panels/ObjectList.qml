@@ -535,6 +535,18 @@ Item {
                     onTriggered: { if (root.editorVm) root.editorVm.exportObjectAsStl(row.index) }
                 }
 
+                // Instance to Object (对齐上游 MenuFactory::append_menu_item_instance_to_object)
+                CxMenuItem {
+                    text: root.editorVm && root.editorVm.objectInstanceCount(row.index) > 1
+                          ? qsTr("拆分为独立对象")
+                          : qsTr("设为独立对象")
+                    visible: !!root.editorVm && row.isSelected
+                             && root.editorVm.selectedObjectCount === 1
+                             && !root.editorVm.hasSelectedVolume
+                             && root.editorVm.objectInstanceCount(row.index) > 1
+                    onTriggered: { if (root.editorVm) root.editorVm.instanceToObject(0) }
+                }
+
                 MenuSeparator { }
 
                 CxMenuItem {

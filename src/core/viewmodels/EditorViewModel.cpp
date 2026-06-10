@@ -1760,6 +1760,15 @@ int EditorViewModel::objectVolumeCount(int i) const
   return (sourceIndex >= 0 && projectService_) ? projectService_->objectVolumeCount(sourceIndex) : 0;
 }
 
+int EditorViewModel::objectInstanceCount(int i) const
+{
+  if (!projectService_)
+    return 0;
+
+  const int sourceIndex = mapFilteredToSourceIndex(i);
+  return (sourceIndex >= 0 && projectService_) ? projectService_->objectInstanceCount(sourceIndex) : 0;
+}
+
 QString EditorViewModel::objectVolumeName(int i, int volumeIndex) const
 {
   if (!projectService_)

@@ -293,6 +293,7 @@ public:
   Q_INVOKABLE bool objectExpanded(int i) const;
   Q_INVOKABLE void toggleObjectExpanded(int i);
   Q_INVOKABLE int objectVolumeCount(int i) const;
+  Q_INVOKABLE int objectInstanceCount(int i) const;
   Q_INVOKABLE QString objectVolumeName(int i, int volumeIndex) const;
   Q_INVOKABLE QString objectVolumeTypeLabel(int i, int volumeIndex) const;
   Q_INVOKABLE bool isVolumeSelected(int i, int volumeIndex) const;
