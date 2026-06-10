@@ -14,6 +14,58 @@ Item {
 
     implicitHeight: filamentCol.implicitHeight + 16
 
+    // Right-click context menu for filament slots (aligned with upstream MaterialContextMenu)
+    CxMenu {
+        id: filamentContextMenu
+        property int slotIndex: -1
+
+        CxMenuItem {
+            text: qsTr("编辑")
+            onTriggered: {
+                if (!root.configVm || filamentContextMenu.slotIndex < 0) return
+                var presets = root.configVm.filamentPresetNames
+                var name = filamentContextMenu.slotIndex < presets.length
+                    ? presets[filamentContextMenu.slotIndex] : ""
+                root.configVm.setCurrentFilamentPreset(name)
+            }
+        }
+
+        CxMenuItem {
+            text: qsTr("删除")
+            enabled: root.editorVm && root.editorVm.extruderCount > 1
+            onTriggered: {
+                if (root.editorVm && filamentContextMenu.slotIndex >= 0)
+                    root.editorVm.deleteFilamentSlot(filamentContextMenu.slotIndex)
+            }
+        }
+
+        CxMenu {
+            title: qsTr("合并到...")
+            visible: root.editorVm && root.editorVm.extruderCount > 1
+
+            Repeater {
+                model: root.editorVm ? root.editorVm.extruderCount : 0
+                delegate: CxMenuItem {
+                    required property int index
+                    // Skip the current slot — can't merge with self
+                    visible: index !== filamentContextMenu.slotIndex
+                    text: {
+                        if (!root.configVm) return qsTr("T%1").arg(index)
+                        var presets = root.configVm.filamentPresetNames
+                        var name = index < presets.length ? presets[index] : ""
+                        return name.length > 0
+                            ? qsTr("T%1 — %2").arg(index).arg(name)
+                            : qsTr("T%1").arg(index)
+                    }
+                    onTriggered: {
+                        if (root.editorVm && filamentContextMenu.slotIndex >= 0)
+                            root.editorVm.mergeFilamentSlots(filamentContextMenu.slotIndex, index)
+                    }
+                }
+            }
+        }
+    }
+
     ColumnLayout {
         id: filamentCol
         anchors.fill: parent
@@ -94,10 +146,16 @@ Item {
                     id: slotMA
                     anchors.fill: parent
                     hoverEnabled: true
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        if (root.editorVm)
-                            root.editorVm.setMmuSelectedExtruder(index)
+                    onClicked: function(mouse) {
+                        if (mouse.button === Qt.RightButton) {
+                            filamentContextMenu.slotIndex = index
+                            filamentContextMenu.popup()
+                        } else {
+                            if (root.editorVm)
+                                root.editorVm.setMmuSelectedExtruder(index)
+                        }
                     }
                 }
             }
