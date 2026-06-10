@@ -845,6 +845,110 @@ Item {
                         CxMenu {
                             id: volumeMenu
 
+                            // ── Text/SVG 编辑入口 (Task 2.2, 对齐上游 text_part_menu / svg_part_menu) ──
+                            CxMenuItem {
+                                text: qsTr("编辑文字")
+                                visible: root.editorVm && root.editorVm.getSelectedVolumeType() === 5
+                                onTriggered: {
+                                    addTextDialogComp.createObject(root, {
+                                        objectIndex: row.index,
+                                        editorVm: root.editorVm
+                                    }).open()
+                                }
+                            }
+                            CxMenuItem {
+                                text: qsTr("编辑 SVG")
+                                visible: root.editorVm && root.editorVm.getSelectedVolumeType() === 6
+                                onTriggered: {
+                                    svgFileDialogComp.createObject(root, {
+                                        objectIndex: row.index,
+                                        editorVm: root.editorVm
+                                    }).open()
+                                }
+                            }
+
+                            // ── 克隆 (对齐上游 append_menu_item_clone) ──
+                            CxMenuItem {
+                                text: qsTr("克隆")
+                                onTriggered: { if (root.editorVm) root.editorVm.duplicateSelectedObjects() }
+                            }
+
+                            MenuSeparator { }
+
+                            // ── 删除 (对齐上游 append_menu_item_delete) ──
+                            CxMenuItem {
+                                text: root.editorVm && root.editorVm.selectedVolumeCount > 1
+                                      ? qsTr("删除已选部件")
+                                      : qsTr("删除部件")
+                                onTriggered: { if (root.editorVm) root.editorVm.deleteSelection() }
+                            }
+
+                            // ── 复制/粘贴 (对齐上游 append_menu_item_copy / paste) ──
+                            CxMenuItem {
+                                text: qsTr("复制")
+                                onTriggered: { if (root.editorVm) root.editorVm.copySelectedObjects() }
+                            }
+                            CxMenuItem {
+                                text: qsTr("粘贴")
+                                enabled: !!root.editorVm && root.editorVm.hasClipboardContent
+                                onTriggered: { if (root.editorVm) root.editorVm.pasteObjects() }
+                            }
+
+                            MenuSeparator { }
+
+                            // ── 修复网格 (对齐上游 append_menu_item_fix_through_netfabb) ──
+                            CxMenuItem {
+                                text: qsTr("修复网格")
+                                onTriggered: { if (root.editorVm) root.editorVm.fixMeshSelected() }
+                            }
+
+                            // ── 简化模型 (对齐上游 append_menu_item_simplify) ──
+                            CxMenuItem {
+                                text: qsTr("简化模型")
+                                onTriggered: { if (root.editorVm) root.editorVm.simplifyMeshSelected() }
+                            }
+
+                            // ── 居中 (对齐上游 append_menu_item_center) ──
+                            CxMenuItem {
+                                text: qsTr("居中到热床")
+                                onTriggered: { if (root.editorVm) root.editorVm.centerSelectedObjects() }
+                            }
+
+                            // ── 镜像子菜单 (对齐上游 append_menu_items_mirror) ──
+                            CxMenu {
+                                title: qsTr("镜像")
+
+                                CxMenuItem {
+                                    text: qsTr("沿 X 轴")
+                                    onTriggered: { if (root.editorVm) root.editorVm.mirrorSelectedObjects(0) }
+                                }
+                                CxMenuItem {
+                                    text: qsTr("沿 Y 轴")
+                                    onTriggered: { if (root.editorVm) root.editorVm.mirrorSelectedObjects(1) }
+                                }
+                                CxMenuItem {
+                                    text: qsTr("沿 Z 轴")
+                                    onTriggered: { if (root.editorVm) root.editorVm.mirrorSelectedObjects(2) }
+                                }
+                            }
+
+                            // ── 拆分子菜单 (对齐上游 split_object / split_volume) ──
+                            CxMenu {
+                                title: qsTr("拆分")
+
+                                CxMenuItem {
+                                    text: qsTr("拆分为对象")
+                                    onTriggered: { if (root.editorVm) root.editorVm.splitSelectedObject() }
+                                }
+                                CxMenuItem {
+                                    text: qsTr("拆分为部件")
+                                    onTriggered: { if (root.editorVm) root.editorVm.splitSelectedObject() }
+                                }
+                            }
+
+                            MenuSeparator { }
+
+                            // ── 在参数表中编辑 (对齐上游 append_menu_item_per_object_settings) ──
                             CxMenuItem {
                                 text: qsTr("在参数表中编辑")
                                 enabled: !!root.editorVm && root.editorVm.canOpenSelectionSettings
@@ -854,16 +958,49 @@ Item {
                                 }
                             }
 
+                            // ── 转换类型子菜单 (对齐上游 append_menu_item_change_type) ──
+                            CxMenu {
+                                title: qsTr("转换为")
+
+                                CxMenuItem {
+                                    text: qsTr("部件")
+                                    onTriggered: { if (root.editorVm) root.editorVm.changeVolumeTypeByIndex(row.index, index, 0) }
+                                }
+                                CxMenuItem {
+                                    text: qsTr("负体积")
+                                    onTriggered: { if (root.editorVm) root.editorVm.changeVolumeTypeByIndex(row.index, index, 1) }
+                                }
+                                CxMenuItem {
+                                    text: qsTr("修改器")
+                                    onTriggered: { if (root.editorVm) root.editorVm.changeVolumeTypeByIndex(row.index, index, 2) }
+                                }
+                                CxMenuItem {
+                                    text: qsTr("支撑屏蔽")
+                                    onTriggered: { if (root.editorVm) root.editorVm.changeVolumeTypeByIndex(row.index, index, 3) }
+                                }
+                                CxMenuItem {
+                                    text: qsTr("支撑增强")
+                                    onTriggered: { if (root.editorVm) root.editorVm.changeVolumeTypeByIndex(row.index, index, 4) }
+                                }
+                            }
+
                             MenuSeparator { }
 
+                            // ── 从磁盘重新加载 (对齐上游 append_menu_item_reload_from_disk) ──
                             CxMenuItem {
-                                text: root.editorVm && root.editorVm.selectedVolumeCount > 1
-                                      ? qsTr("删除已选部件")
-                                      : qsTr("删除部件")
-                                enabled: !!root.editorVm
+                                text: qsTr("从磁盘重新加载")
+                                onTriggered: { if (root.editorVm) root.editorVm.reloadSelectedFromDisk() }
+                            }
+
+                            // ── 替换为 STL (对齐上游 append_menu_item_replace_with_stl) ──
+                            CxMenuItem {
+                                text: qsTr("替换为 STL...")
                                 onTriggered: {
-                                    if (root.editorVm)
-                                        root.editorVm.deleteSelection()
+                                    replaceStlDialogComp.createObject(root, {
+                                        objectIndex: row.index,
+                                        volumeIndex: index,
+                                        editorVm: root.editorVm
+                                    }).open()
                                 }
                             }
                         }
@@ -1180,6 +1317,25 @@ Item {
 
             onOpened: textField.forceActiveFocus()
             onClosed: destroy()
+        }
+    }
+
+    // ── 替换为 STL 对话框（对齐上游 append_menu_item_replace_with_stl）──
+    Component {
+        id: replaceStlDialogComp
+        FileDialog {
+            required property int objectIndex
+            required property int volumeIndex
+            required property var editorVm
+            title: qsTr("选择 STL 文件替换部件")
+            nameFilters: ["STL 文件 (*.stl)", "所有文件 (*)"]
+            onAccepted: {
+                if (editorVm) {
+                    editorVm.replaceWithStl(selectedFile.toString().replace("file:///", ""))
+                }
+                destroy()
+            }
+            onRejected: destroy()
         }
     }
 }
