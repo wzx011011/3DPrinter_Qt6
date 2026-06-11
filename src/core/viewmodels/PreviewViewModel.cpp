@@ -1066,3 +1066,120 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
     legendItems_.append(legendItem(maxStr, m_legendGradMaxColor, 0));
   }
 }
+
+QVariantList PreviewViewModel::tickMarks() const
+{
+  QVariantList result;
+  for (const auto& tc : tickMarks_) {
+    QVariantMap m;
+    m[QStringLiteral("tick")] = tc.tick;
+    m[QStringLiteral("type")] = static_cast<int>(tc.type);
+    m[QStringLiteral("extruder")] = tc.extruder;
+    m[QStringLiteral("color")] = tc.color;
+    m[QStringLiteral("extra")] = tc.extra;
+    result.append(m);
+  }
+  return result;
+}
+
+int PreviewViewModel::tickMarkCount() const
+{
+  return tickMarks_.size();
+}
+
+void PreviewViewModel::addPauseAtLayer(int layer)
+{
+  for (const auto& tc : tickMarks_) {
+    if (tc.tick == layer) {
+      qWarning("addPauseAtLayer: tick already exists at layer %d", layer);
+      return;
+    }
+  }
+  Crality3D::TickCode tc;
+  tc.tick = layer;
+  tc.type = Crality3D::TickType::PausePrint;
+  tickMarks_.append(tc);
+  std::sort(tickMarks_.begin(), tickMarks_.end());
+  emit tickMarksChanged();
+}
+
+void PreviewViewModel::addCustomGcodeAtLayer(int layer, const QString& gcode)
+{
+  for (const auto& tc : tickMarks_) {
+    if (tc.tick == layer) {
+      qWarning("addCustomGcodeAtLayer: tick already exists at layer %d", layer);
+      return;
+    }
+  }
+  Crality3D::TickCode tc;
+  tc.tick = layer;
+  tc.type = Crality3D::TickType::CustomGcode;
+  tc.extra = gcode;
+  tickMarks_.append(tc);
+  std::sort(tickMarks_.begin(), tickMarks_.end());
+  emit tickMarksChanged();
+}
+
+void PreviewViewModel::removeTickAtLayer(int layer)
+{
+  for (int i = 0; i < tickMarks_.size(); ++i) {
+    if (tickMarks_[i].tick == layer) {
+      tickMarks_.removeAt(i);
+      emit tickMarksChanged();
+      return;
+    }
+  }
+}
+
+void PreviewViewModel::editCustomGcodeAtLayer(int layer, const QString& newGcode)
+{
+  for (int i = 0; i < tickMarks_.size(); ++i) {
+    if (tickMarks_[i].tick == layer) {
+      tickMarks_[i].extra = newGcode;
+      emit tickMarksChanged();
+      return;
+    }
+  }
+  qWarning("editCustomGcodeAtLayer: no tick at layer %d", layer);
+}
+
+void PreviewViewModel::addFilamentChangeAtLayer(int layer, int extruderId)
+{
+  for (const auto& tc : tickMarks_) {
+    if (tc.tick == layer) {
+      qWarning("addFilamentChangeAtLayer: tick already exists at layer %d", layer);
+      return;
+    }
+  }
+  Crality3D::TickCode tc;
+  tc.tick = layer;
+  tc.type = Crality3D::TickType::ToolChange;
+  tc.extruder = extruderId;
+  tickMarks_.append(tc);
+  std::sort(tickMarks_.begin(), tickMarks_.end());
+  emit tickMarksChanged();
+}
+
+QVariantMap PreviewViewModel::tickAtLayer(int layer) const
+{
+  for (const auto& tc : tickMarks_) {
+    if (tc.tick == layer) {
+      QVariantMap m;
+      m[QStringLiteral("tick")] = tc.tick;
+      m[QStringLiteral("type")] = static_cast<int>(tc.type);
+      m[QStringLiteral("extruder")] = tc.extruder;
+      m[QStringLiteral("color")] = tc.color;
+      m[QStringLiteral("extra")] = tc.extra;
+      return m;
+    }
+  }
+  return QVariantMap();
+}
+
+void PreviewViewModel::clearAllTicks()
+{
+  if (tickMarks_.isEmpty())
+    return;
+  tickMarks_.clear();
+  emit tickMarksChanged();
+}

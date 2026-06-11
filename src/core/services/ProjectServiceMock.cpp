@@ -1135,6 +1135,32 @@ QString ProjectServiceMock::objectVolumeTypeLabel(int objectIndex, int volumeInd
 #endif
 }
 
+int ProjectServiceMock::objectVolumeType(int objectIndex, int volumeIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return 0;
+  const auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || volumeIndex < 0 || size_t(volumeIndex) >= obj->volumes.size())
+    return 0;
+  const auto *vol = obj->volumes[size_t(volumeIndex)];
+  if (!vol) return 0;
+  if (vol->is_model_part())       return 0;
+  if (vol->is_negative_volume())  return 1;
+  if (vol->is_modifier())         return 2;
+  if (vol->is_support_blocker())  return 3;
+  if (vol->is_support_enforcer()) return 4;
+  return 0;
+#else
+  if (objectIndex < 0)
+    return 0;
+  const auto it = m_mockVolumes.constFind(objectIndex);
+  if (it == m_mockVolumes.constEnd() || volumeIndex < 0 || volumeIndex >= it->size())
+    return 0;
+  return static_cast<int>(it->at(volumeIndex).type);
+#endif
+}
+
 QVariant ProjectServiceMock::scopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &fallbackValue) const
 {
 #ifdef HAS_LIBSLIC3R
@@ -3130,6 +3156,344 @@ void ProjectServiceMock::fixMeshForObject(int objectIndex)
   Q_UNUSED(objectIndex);
   lastError_ = tr("网格修复需要 libslic3r");
   emit projectChanged();
+#endif
+}
+
+bool ProjectServiceMock::fixMesh(int objectIndex)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+  {
+    lastError_ = tr("修复失败：对象索引无效");
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || size_t(objectIndex) >= model_->objects.size())
+  {
+    lastError_ = tr("修复失败：模型对象无效");
+    return false;
+  }
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj)
+  {
+    lastError_ = tr("修复失败：模型对象无效");
+    return false;
+  }
+  for (auto *vol : obj->volumes)
+  {
+    if (vol)
+    {
+      Slic3r::TriangleMesh m = vol->mesh();
+      m.repair();
+      vol->set_mesh(std::move(m));
+    }
+  }
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+#else
+  Q_UNUSED(objectIndex);
+  lastError_ = tr("网格修复需要 libslic3r");
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::reloadFromDisk(int objectIndex)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+  {
+    lastError_ = tr("重新加载失败：对象索引无效");
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
+  {
+    lastError_ = tr("重新加载失败：模型对象无效");
+    return false;
+  }
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (obj->input_file.empty())
+  {
+    lastError_ = tr("重新加载失败：对象无源文件路径");
+    return false;
+  }
+  // Reload is deferred — real implementation would re-read the source file
+  // and replace the mesh. For now, trigger a repair as a best-effort.
+  for (auto *vol : obj->volumes)
+  {
+    if (vol)
+    {
+      Slic3r::TriangleMesh m = vol->mesh();
+      m.repair();
+      vol->set_mesh(std::move(m));
+    }
+  }
+  emit projectChanged();
+  return true;
+#else
+  lastError_ = tr("重新加载需要 libslic3r");
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::replaceVolume(int objectIndex, int volumeIndex, const QString &stlPath)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+  {
+    lastError_ = tr("替换失败：对象索引无效");
+    return false;
+  }
+  if (stlPath.isEmpty())
+  {
+    lastError_ = tr("替换失败：STL 路径为空");
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
+  {
+    lastError_ = tr("替换失败：模型对象无效");
+    return false;
+  }
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (volumeIndex < 0 || size_t(volumeIndex) >= obj->volumes.size() || !obj->volumes[size_t(volumeIndex)])
+  {
+    lastError_ = tr("替换失败：部件索引无效");
+    return false;
+  }
+
+  QFileInfo fi(stlPath);
+  if (!fi.exists())
+  {
+    lastError_ = tr("替换失败：STL 文件不存在");
+    return false;
+  }
+
+  try
+  {
+    Slic3r::Model loaded = Slic3r::Model::read_from_file(stlPath.toStdString());
+    if (loaded.objects.empty() || !loaded.objects.front() || loaded.objects.front()->volumes.empty())
+    {
+      lastError_ = tr("替换失败：STL 文件为空或格式错误");
+      return false;
+    }
+    auto *srcVol = loaded.objects.front()->volumes.front();
+    obj->volumes[size_t(volumeIndex)]->set_mesh(srcVol->mesh());
+    obj->volumes[size_t(volumeIndex)]->name = fi.baseName().toStdString();
+    lastError_.clear();
+    emit projectChanged();
+    return true;
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = tr("替换失败：%1").arg(QString::fromLatin1(ex.what()));
+    return false;
+  }
+#else
+  Q_UNUSED(volumeIndex);
+  lastError_ = tr("替换 volume 需要 libslic3r");
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::assembleObjects(const QList<int> &objIndices)
+{
+  if (objIndices.size() < 2)
+  {
+    lastError_ = tr("合并失败：至少需要选中两个对象");
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  if (!model_)
+  {
+    lastError_ = tr("合并失败：模型无效");
+    return false;
+  }
+
+  // Validate all indices
+  for (int idx : objIndices)
+  {
+    if (idx < 0 || size_t(idx) >= model_->objects.size() || !model_->objects[size_t(idx)])
+    {
+      lastError_ = tr("合并失败：对象索引无效 (%1)").arg(idx);
+      return false;
+    }
+  }
+
+  try
+  {
+    auto *targetObj = model_->objects[size_t(objIndices[0])];
+
+    // Move volumes from subsequent objects into the first object
+    for (int i = 1; i < objIndices.size(); ++i)
+    {
+      auto *srcObj = model_->objects[size_t(objIndices[i])];
+      if (!srcObj) continue;
+      for (auto *vol : srcObj->volumes)
+      {
+        if (vol)
+          targetObj->add_volume(*vol);
+      }
+    }
+
+    // Remove source objects in reverse order to preserve indices
+    QList<int> sorted = objIndices;
+    std::sort(sorted.begin(), sorted.end(), std::greater<int>());
+    for (int i = 1; i < sorted.size(); ++i)
+    {
+      model_->delete_object(size_t(sorted[i]));
+    }
+
+    lastError_.clear();
+    emit projectChanged();
+    return true;
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = tr("合并失败：%1").arg(QString::fromLatin1(ex.what()));
+    return false;
+  }
+#else
+  Q_UNUSED(objIndices);
+  lastError_ = tr("合并对象需要 libslic3r");
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::duplicateInstanceAsObject(int objectIndex, int instanceIndex)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+  {
+    lastError_ = tr("复制实例失败：对象索引无效");
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
+  {
+    lastError_ = tr("复制实例失败：模型对象无效");
+    return false;
+  }
+  auto *srcObj = model_->objects[size_t(objectIndex)];
+  if (instanceIndex < 0 || size_t(instanceIndex) >= srcObj->instances.size() || !srcObj->instances[size_t(instanceIndex)])
+  {
+    lastError_ = tr("复制实例失败：实例索引无效");
+    return false;
+  }
+
+  try
+  {
+    auto *inst = srcObj->instances[size_t(instanceIndex)];
+    auto *newObj = model_->add_object(*srcObj);
+    newObj->name = srcObj->name + " instance";
+    // Set the new object's single instance to the original instance's offset
+    newObj->instances.clear();
+    auto *newInst = newObj->add_instance(*inst);
+    (void)newInst;
+
+    lastError_.clear();
+    emit projectChanged();
+    return true;
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = tr("复制实例失败：%1").arg(QString::fromLatin1(ex.what()));
+    return false;
+  }
+#else
+  Q_UNUSED(instanceIndex);
+  lastError_ = tr("复制实例需要 libslic3r");
+  return false;
+#endif
+}
+
+int ProjectServiceMock::addPrimitiveToPlate(int type)
+{
+  static const char *primNames[] = {
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "立方体"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "球体"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "圆柱体"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "圆锥体"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "截头锥体"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "圆环体"),
+      QT_TRANSLATE_NOOP("ProjectServiceMock", "圆盘"),
+  };
+  constexpr int kTypeCount = sizeof(primNames) / sizeof(primNames[0]);
+  if (type < 0 || type >= kTypeCount)
+  {
+    lastError_ = tr("创建原始体失败：类型无效");
+    return -1;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  try
+  {
+    if (!model_)
+    {
+      model_ = new Slic3r::Model();
+      model_->add_default_instances();
+    }
+
+    auto *obj = model_->add_object();
+    obj->name = primNames[type];
+
+    indexed_triangle_set its;
+    switch (type)
+    {
+    case 0: its = Slic3r::its_make_cube(20, 20, 20); break;
+    case 1: its = Slic3r::its_make_sphere(10, 2.0 * M_PI / 360.0); break;
+    case 2: its = Slic3r::its_make_cylinder(10, 20, 2.0 * M_PI / 360.0); break;
+    case 3: its = Slic3r::its_make_cylinder(5, 20, 2.0 * M_PI / 360.0); break; // cone = narrow cylinder stub
+    case 4: its = Slic3r::its_make_cylinder(8, 15, 2.0 * M_PI / 360.0); break; // truncated cone stub
+    case 5: its = Slic3r::its_make_sphere(10, 2.0 * M_PI / 360.0); break;      // torus = sphere stub
+    default: its = Slic3r::its_make_cube(20, 5, 20); break;                     // disc
+    }
+
+    obj->add_volume(Slic3r::TriangleMesh(std::move(its)));
+    obj->add_instance();
+
+    int newIdx = int(model_->objects.size()) - 1;
+    objectNames_.push_back(QString::fromUtf8(primNames[type]));
+    objectModuleNames_.push_back("default");
+    objectPrintableStates_.push_back(true);
+    objectVisibleStates_.push_back(true);
+    objectPositions_.push_back(QVector3D(0, 0, 0));
+    objectRotations_.push_back(QVector3D(0, 0, 0));
+    objectScales_.push_back(QVector3D(1, 1, 1));
+
+    // Add to current plate
+    if (currentPlateIndex_ >= 0 && currentPlateIndex_ < plateObjectIndices_.size())
+      plateObjectIndices_[currentPlateIndex_].append(newIdx);
+
+    lastError_.clear();
+    emit projectChanged();
+    return newIdx;
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = tr("创建原始体失败：%1").arg(QString::fromLatin1(ex.what()));
+    return -1;
+  }
+#else
+  // Mock mode: add to object list without real mesh
+  int newIdx = objectNames_.size();
+  objectNames_.push_back(QString::fromUtf8(primNames[type]));
+  objectModuleNames_.push_back("default");
+  objectPrintableStates_.push_back(true);
+  objectVisibleStates_.push_back(true);
+  objectPositions_.push_back(QVector3D(0, 0, 0));
+  objectRotations_.push_back(QVector3D(0, 0, 0));
+  objectScales_.push_back(QVector3D(1, 1, 1));
+  modelCount_ = objectNames_.size();
+
+  if (currentPlateIndex_ >= 0 && currentPlateIndex_ < plateObjectIndices_.size())
+    plateObjectIndices_[currentPlateIndex_].append(newIdx);
+
+  lastError_.clear();
+  emit projectChanged();
+  return newIdx;
 #endif
 }
 

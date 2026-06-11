@@ -70,6 +70,7 @@ class EditorViewModel final : public QObject
   /// Undo/Redo (对齐上游 UndoRedo 框架)
   Q_PROPERTY(bool canUndo READ canUndo NOTIFY stateChanged)
   Q_PROPERTY(bool canRedo READ canRedo NOTIFY stateChanged)
+  Q_PROPERTY(bool showLabels READ showLabels WRITE setShowLabels NOTIFY stateChanged)
 
 public:
   explicit EditorViewModel(ProjectServiceMock *projectService, SliceService *sliceService, QObject *parent = nullptr);
@@ -82,6 +83,7 @@ public:
   int loadProgress() const;
   bool loading() const;
   bool showAllObjects() const;
+  bool showLabels() const;
   int objectOrganizeMode() const;
   bool hasSelection() const;
   bool hasSelectedVolume() const;
@@ -291,6 +293,7 @@ public:
   Q_INVOKABLE bool objectExpanded(int i) const;
   Q_INVOKABLE void toggleObjectExpanded(int i);
   Q_INVOKABLE int objectVolumeCount(int i) const;
+  Q_INVOKABLE int objectInstanceCount(int i) const;
   Q_INVOKABLE QString objectVolumeName(int i, int volumeIndex) const;
   Q_INVOKABLE QString objectVolumeTypeLabel(int i, int volumeIndex) const;
   Q_INVOKABLE bool isVolumeSelected(int i, int volumeIndex) const;
@@ -344,6 +347,32 @@ public:
   Q_INVOKABLE void autoOrientSelected();
   /// 拆分选中对象为独立对象（对齐上游 Plater::priv::split_object）
   Q_INVOKABLE void splitSelectedObject();
+  /// 修复选中对象网格（对齐上游 MeshRepairDialog / fix_mesh）
+  Q_INVOKABLE bool fixMeshSelected();
+  /// 简化选中对象网格（对齐上游 GLGizmoSimplify — stub, needs simplify dialog）
+  Q_INVOKABLE bool simplifyMeshSelected();
+  /// 布尔运算选中对象（对齐上游 GLGizmoMeshBoolean — stub, needs boolean dialog）
+  Q_INVOKABLE bool meshBooleanSelected();
+  /// 按显式索引修改 volume 类型（对齐上游 GUI_ObjectList::load_generic_subobject）
+  Q_INVOKABLE bool changeVolumeTypeByIndex(int objIdx, int volIdx, int newType);
+  /// 重新从磁盘加载选中对象源文件（对齐上游 Plater::reload_from_disk）
+  Q_INVOKABLE bool reloadSelectedFromDisk();
+  /// 用 STL 文件替换选中 volume 的网格（对齐上游 GUI_ObjectList::load_subobject）
+  Q_INVOKABLE bool replaceWithStl(const QString &path);
+  /// 重新加载当前平板所有对象（对齐上游 Plater::reload_all_from_disk）
+  Q_INVOKABLE bool reloadAllOnPlate();
+  /// 合并选中对象为单一多部件对象（对齐上游 GUI_ObjectList::assemble）
+  Q_INVOKABLE bool assembleSelectedObjects();
+  /// 将指定实例复制为独立对象（对齐上游 GUI_ObjectList::instance_to_object）
+  Q_INVOKABLE bool instanceToObject(int instIdx);
+  /// 获取选中 volume 的类型枚举（对齐上游 ModelVolumeType）
+  Q_INVOKABLE int getSelectedVolumeType() const;
+  /// 添加原始几何体到当前平板（对齐上游 create_mesh + add_volume）
+  Q_INVOKABLE bool addPrimitiveToPlate(int type);
+  /// 删除指定耗材槽位（对齐上游 filament slot management）
+  Q_INVOKABLE bool deleteFilamentSlot(int index);
+  /// 合并两个耗材槽位的预设（对齐上游 filament slot merge）
+  Q_INVOKABLE bool mergeFilamentSlots(int from, int to);
   Q_INVOKABLE void fixMeshForObject(int i);
   Q_INVOKABLE void exportObjectAsStl(int i);
   /// 扁平平放（对齐上游 GLGizmoFlatten）— 将选中对象最大面朝下
@@ -434,6 +463,7 @@ public:
   Q_INVOKABLE QString objectPlateName(int i) const;
   Q_INVOKABLE bool setCurrentPlateIndex(int i);
   Q_INVOKABLE void setShowAllObjects(bool showAll);
+  void setShowLabels(bool v);
   Q_INVOKABLE void setObjectOrganizeMode(int mode);
   /// 平板管理（对齐上游 PartPlateList）
   Q_INVOKABLE bool addPlate();
@@ -659,6 +689,7 @@ private:
   QSet<int> m_selectedVolumeIndices;
   int m_selectedVolumeIndex = -1;
   bool m_showAllObjects = false;
+  bool m_showLabels = false;
   int m_objectOrganizeMode = 0;
   QString m_sliceEstimatedTime;
   int m_sliceResultPlateIndex = -1;

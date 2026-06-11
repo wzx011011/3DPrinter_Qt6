@@ -88,6 +88,8 @@ if(CREALITY_QML_GUI)
         src/core/services/NetworkServiceMock.h
         src/core/services/CalibrationServiceMock.cpp
         src/core/services/CalibrationServiceMock.h
+        src/core/services/AuxiliaryService.cpp
+        src/core/services/AuxiliaryService.h
         src/core/rendering/GLShaderUtil.cpp
         src/core/rendering/GLShaderUtil.h
         src/core/viewmodels/EditorViewModel.cpp

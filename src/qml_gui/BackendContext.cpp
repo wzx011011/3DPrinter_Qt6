@@ -10,6 +10,7 @@
 #include "core/services/PresetServiceMock.h"
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceService.h"
+#include "core/services/AuxiliaryService.h"
 #include "core/services/UndoRedoManager.h"
 #include "core/viewmodels/ConfigViewModel.h"
 #include "core/viewmodels/EditorViewModel.h"
@@ -86,6 +87,7 @@ BackendContext::BackendContext(QObject *parent)
   calibrationViewModel_->setPresetService(presetService_);
   modelMallViewModel_ = new ModelMallViewModel(this);
   multiMachineViewModel_ = new MultiMachineViewModel(this);
+  auxiliaryService_ = new AuxiliaryService(this);
 
   // 初始化提示数据库（对齐上游 HintDatabase::init）
   initHintDatabase();
@@ -177,6 +179,7 @@ QObject *BackendContext::projectViewModel() const { return projectViewModel_; }
 QObject *BackendContext::calibrationViewModel() const { return calibrationViewModel_; }
 QObject *BackendContext::modelMallViewModel() const { return modelMallViewModel_; }
 QObject *BackendContext::multiMachineViewModel() const { return multiMachineViewModel_; }
+QObject *BackendContext::auxiliaryService() const { return auxiliaryService_; }
 
 bool BackendContext::visualCompareMode() const
 {

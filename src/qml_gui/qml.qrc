@@ -38,12 +38,16 @@
         <file>panels/SliceProgress.qml</file>
         <file>panels/Sidebar.qml</file>
         <file>panels/FilamentPanel.qml</file>
+        <file>panels/LeftSidebar.qml</file>
+        <file>panels/RightParamsPanel.qml</file>
+        <file>panels/AuxiliaryListPanel.qml</file>
         <!-- Components -->
         <file>components/StatusBar.qml</file>
         <file>components/Toolbar.qml</file>
         <file>components/ErrorToast.qml</file>
         <file>components/ErrorBanner.qml</file>
         <file>components/LayerSlider.qml</file>
+        <file>components/CustomGcodeDialog.qml</file>
         <file>components/MoveSlider.qml</file>
         <file>components/Legend.qml</file>
         <file>components/StatsPanel.qml</file>
@@ -54,6 +58,7 @@
         <file>components/CollapsibleSection.qml</file>
         <file>components/SearchDialog.qml</file>
         <file>components/ParamsPage.qml</file>
+        <file>components/FilamentSlot.qml</file>
         <!-- Controls -->
         <file>controls/CxButton.qml</file>
         <file>controls/CxComboBox.qml</file>

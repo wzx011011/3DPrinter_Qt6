@@ -5,6 +5,7 @@
 #include <QVariantList>
 #include <QHash>
 #include <vector>
+#include "core/rendering/TickCodeTypes.h"
 
 class QTimer;
 
@@ -64,6 +65,8 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(int toolLayer READ toolLayer NOTIFY stateChanged)
   Q_PROPERTY(int toolMoveIndex READ toolMoveIndex NOTIFY stateChanged)
   Q_PROPERTY(bool toolIsExtrusion READ toolIsExtrusion NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList tickMarks READ tickMarks NOTIFY tickMarksChanged)
+  Q_PROPERTY(int tickMarkCount READ tickMarkCount NOTIFY tickMarksChanged)
 
 public:
   explicit PreviewViewModel(SliceService *sliceService, QObject *parent = nullptr);
@@ -155,8 +158,20 @@ public:
   Q_INVOKABLE void togglePlayPause();
   Q_INVOKABLE void setViewModeIndex(int index);
 
+  /// Tick code management (aligned with upstream TickCode/TickCodeInfo)
+  Q_INVOKABLE void addPauseAtLayer(int layer);
+  Q_INVOKABLE void addCustomGcodeAtLayer(int layer, const QString& gcode);
+  Q_INVOKABLE void removeTickAtLayer(int layer);
+  Q_INVOKABLE void editCustomGcodeAtLayer(int layer, const QString& newGcode);
+  Q_INVOKABLE void addFilamentChangeAtLayer(int layer, int extruderId);
+  Q_INVOKABLE QVariantMap tickAtLayer(int layer) const;
+  Q_INVOKABLE void clearAllTicks();
+  QVariantList tickMarks() const;
+  int tickMarkCount() const;
+
 signals:
   void stateChanged();
+  void tickMarksChanged();
 
 private:
   void rebuildFromGCode(const QString &filePath);
@@ -204,6 +219,7 @@ private:
   QMap<int, double> m_extruderUsedWeight;  ///< extruder_id → total extrusion weight in g
   float m_maxLayerTime = 0.f;
   int viewModeIndex_ = 0;
+  QList<Crality3D::TickCode> tickMarks_;
   bool stealthMode_ = false;
   bool showTravelMoves_ = true;  ///< 显示空驶移动（对齐上游 GCodeViewer travel toggle）
   bool showBed_ = true;           ///< 显示热床网格（对齐上游 GCodeViewer show_bed）
