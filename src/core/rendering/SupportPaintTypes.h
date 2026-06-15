@@ -2,7 +2,7 @@
 
 #include <vector>
 
-namespace Crality3D {
+namespace OWzx {
 
 /**
  * Support painting state enum (aligns with upstream EnforcerBlockerType in TriangleSelector.hpp)
@@ -159,4 +159,4 @@ struct HollowGizmoSettings {
     int selectedHoleCount = 0;       // Number of currently selected drain holes
 };
 
-} // namespace Crality3D
+} // namespace OWzx

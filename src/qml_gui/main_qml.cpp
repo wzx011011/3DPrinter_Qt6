@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
   appendStartupLog(QStringLiteral("Crash handler install requested"));
 
   // E5 — register 3-D viewport type
-  qmlRegisterType<GLViewport>("CrealityGL", 1, 0, "GLViewport");
+  qmlRegisterType<GLViewport>("OWzxGL", 1, 0, "GLViewport");
 
   BackendContext backend;
 

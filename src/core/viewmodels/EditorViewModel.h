@@ -734,7 +734,7 @@ private:
   bool m_supportPaintOnOverhangsOnly = false; ///< Restrict painting to overhangs
   bool m_supportEnable = false;            ///< Support enabled flag
   int m_supportType = 0;                   ///< 0=normal, 1=tree
-  QList<Crality3D::ObjectPaintData> m_paintData;  ///< 对齐上游 per-volume paint data
+  QList<OWzx::ObjectPaintData> m_paintData;  ///< 对齐上游 per-volume paint data
   // Seam painting (对齐上游 GLGizmoSeam)
   int m_seamPaintTool = 0;                 ///< 0=None, 1=Enforcer, 2=Blocker
   float m_seamPaintCursorRadius = 2.0f;

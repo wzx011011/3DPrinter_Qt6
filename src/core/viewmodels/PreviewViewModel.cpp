@@ -1095,9 +1095,9 @@ void PreviewViewModel::addPauseAtLayer(int layer)
       return;
     }
   }
-  Crality3D::TickCode tc;
+  OWzx::TickCode tc;
   tc.tick = layer;
-  tc.type = Crality3D::TickType::PausePrint;
+  tc.type = OWzx::TickType::PausePrint;
   tickMarks_.append(tc);
   std::sort(tickMarks_.begin(), tickMarks_.end());
   emit tickMarksChanged();
@@ -1111,9 +1111,9 @@ void PreviewViewModel::addCustomGcodeAtLayer(int layer, const QString& gcode)
       return;
     }
   }
-  Crality3D::TickCode tc;
+  OWzx::TickCode tc;
   tc.tick = layer;
-  tc.type = Crality3D::TickType::CustomGcode;
+  tc.type = OWzx::TickType::CustomGcode;
   tc.extra = gcode;
   tickMarks_.append(tc);
   std::sort(tickMarks_.begin(), tickMarks_.end());
@@ -1151,9 +1151,9 @@ void PreviewViewModel::addFilamentChangeAtLayer(int layer, int extruderId)
       return;
     }
   }
-  Crality3D::TickCode tc;
+  OWzx::TickCode tc;
   tc.tick = layer;
-  tc.type = Crality3D::TickType::ToolChange;
+  tc.type = OWzx::TickType::ToolChange;
   tc.extruder = extruderId;
   tickMarks_.append(tc);
   std::sort(tickMarks_.begin(), tickMarks_.end());

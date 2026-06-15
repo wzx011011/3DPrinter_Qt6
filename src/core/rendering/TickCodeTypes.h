@@ -2,7 +2,7 @@
 
 #include <QString>
 
-namespace Crality3D {
+namespace OWzx {
 
 enum class TickType {
   PausePrint = 0,
@@ -23,4 +23,4 @@ struct TickCode {
   bool operator==(const TickCode& other) const { return tick == other.tick; }
 };
 
-} // namespace Crality3D
+} // namespace OWzx

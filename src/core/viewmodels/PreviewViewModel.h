@@ -219,7 +219,7 @@ private:
   QMap<int, double> m_extruderUsedWeight;  ///< extruder_id → total extrusion weight in g
   float m_maxLayerTime = 0.f;
   int viewModeIndex_ = 0;
-  QList<Crality3D::TickCode> tickMarks_;
+  QList<OWzx::TickCode> tickMarks_;
   bool stealthMode_ = false;
   bool showTravelMoves_ = true;  ///< 显示空驶移动（对齐上游 GCodeViewer travel toggle）
   bool showBed_ = true;           ///< 显示热床网格（对齐上游 GCodeViewer show_bed）

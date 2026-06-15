@@ -7,7 +7,7 @@ import "../controls"
 import "../panels"
 import "../components"
 import "../dialogs"
-import CrealityGL 1.0
+import OWzxGL 1.0
 
 Item {
     id: root
@@ -1531,6 +1531,7 @@ Item {
                 GLViewport {
                     id: viewport3d
                     anchors.fill: parent
+                    z: 0
                     canvasType: GLViewport.CanvasView3D
                     meshData: root.editorVm ? root.editorVm.meshData : null
                     cutAxis: root.editorVm ? root.editorVm.cutAxis : 2
@@ -1653,14 +1654,7 @@ Item {
             }
         }
 
-        Rectangle {
-            anchors.fill: parent
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: "#1a213018" }
-                GradientStop { position: 0.4; color: "transparent" }
-                GradientStop { position: 1.0; color: "#09101840" }
-            }
-        }
+        // Gradient overlay removed — was blocking GL FBO rendering
 
         CxPanel {
             id: topTools

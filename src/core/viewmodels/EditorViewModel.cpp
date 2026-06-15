@@ -536,7 +536,7 @@ int EditorViewModel::totalPaintedTriangleCount() const
   int total = 0;
   for (const auto &obj : m_paintData)
     for (const auto &tri : obj.triangles)
-      if (tri.state != Crality3D::SupportPaintState::None) ++total;
+      if (tri.state != OWzx::SupportPaintState::None) ++total;
   return total;
 }
 
@@ -546,16 +546,16 @@ void EditorViewModel::setTriangleSupportState(int objectIndex, int triangleIndex
   for (auto &obj : m_paintData) {
     if (obj.objectIndex == objectIndex) {
       obj.setTriangleState(triangleIndex,
-                           static_cast<Crality3D::SupportPaintState>(paintState));
+                           static_cast<OWzx::SupportPaintState>(paintState));
       emit paintDataChanged();
       return;
     }
   }
   // 新对象条目
-  Crality3D::ObjectPaintData newObj;
+  OWzx::ObjectPaintData newObj;
   newObj.objectIndex = objectIndex;
   newObj.setTriangleState(triangleIndex,
-                           static_cast<Crality3D::SupportPaintState>(paintState));
+                           static_cast<OWzx::SupportPaintState>(paintState));
   m_paintData.push_back(newObj);
   emit paintDataChanged();
 }

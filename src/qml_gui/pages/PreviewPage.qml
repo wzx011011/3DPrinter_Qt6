@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import CrealityGL 1.0
+import OWzxGL 1.0
 import ".."
 import "../controls"
 import "../components" as Components

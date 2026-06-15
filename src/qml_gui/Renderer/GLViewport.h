@@ -7,7 +7,7 @@
 /**
  * GLViewport — QML-exposed OpenGL viewport.
  *
- * Registered in QML as: import CrealityGL 1.0 → GLViewport {}
+ * Registered in QML as: import OWzxGL 1.0 → GLViewport {}
  *
  * Supports two roles:
  *   canvasType: GLViewport.CanvasView3D   – 3-D prepare scene
