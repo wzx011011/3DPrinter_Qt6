@@ -2052,21 +2052,6 @@
     </message>
 </context>
 <context>
-    <name>OWzx</name>
-    <message>
-        <source>Prepare</source>
-        <translation type="vanished">准备</translation>
-    </message>
-    <message>
-        <source>Preview</source>
-        <translation type="vanished">预览</translation>
-    </message>
-    <message>
-        <source>Start Slice</source>
-        <translation type="vanished">开始切片</translation>
-    </message>
-</context>
-<context>
     <name>CustomGcodeDialog</name>
     <message>
         <location filename="../src/qml_gui/components/CustomGcodeDialog.qml" line="16"/>
@@ -3993,6 +3978,21 @@
         <location filename="../src/qml_gui/components/NotificationCenter.qml" line="222"/>
         <source>暂无通知记录</source>
         <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>OWzx</name>
+    <message>
+        <source>Prepare</source>
+        <translation type="vanished">准备</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation type="vanished">预览</translation>
+    </message>
+    <message>
+        <source>Start Slice</source>
+        <translation type="vanished">开始切片</translation>
     </message>
 </context>
 <context>
