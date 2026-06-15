@@ -9,4 +9,4 @@ if ($sessionName -match 'RDP') {
     Write-Host "[Local session] Using hardware rendering"
 }
 
-& ".\FramelessDialogDemo.exe"
+& ".\OWzxSlicer.exe"

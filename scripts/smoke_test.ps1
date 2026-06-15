@@ -1,4 +1,4 @@
-# smoke_test.ps1 — Automated smoke test for FramelessDialogDemo
+# smoke_test.ps1 — Automated smoke test for OWzxSlicer
 # Validates: build success, app startup, 0 QML warnings, no crash within timeout
 # Usage: powershell -ExecutionPolicy Bypass -File scripts/smoke_test.ps1
 # Exit codes: 0=pass, 1=build fail, 2=app crash, 3=qml warnings, 4=missing binary
@@ -31,7 +31,7 @@ Write-Host ""
 
 # --- Test 1: Binary exists ---
 Write-Host "[Phase 1] Binary check"
-$exe = Join-Path $BuildDir "FramelessDialogDemo.exe"
+$exe = Join-Path $BuildDir "OWzxSlicer.exe"
 Report-Test "Executable exists" (Test-Path $exe) "(not found at $exe)"
 if (-not (Test-Path $exe)) { exit 4 }
 
@@ -169,7 +169,7 @@ Write-Host ""
 
 # --- Test 7: Standalone startup (no vcvars) ---
 Write-Host "[Phase 7] Standalone startup (deployment check)"
-$exe2 = Join-Path $BuildDir "FramelessDialogDemo.exe"
+$exe2 = Join-Path $BuildDir "OWzxSlicer.exe"
 $standaloneLog = Join-Path $BuildDir "standalone_test.log"
 Remove-Item $standaloneLog -ErrorAction SilentlyContinue
 try {

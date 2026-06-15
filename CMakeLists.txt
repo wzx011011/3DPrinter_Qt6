@@ -15,13 +15,19 @@ list(APPEND CMAKE_PREFIX_PATH
     "${DEPS_PREFIX}/share/cmake"
 )
 
-project(FramelessDialogDemo LANGUAGES C CXX)
+# Eigen3 from vcpkg (header-only, not in DEPS_PREFIX)
+set(VCPKG_INSTALLED_DIR "E:/vcpkg/installed/x64-windows" CACHE PATH "vcpkg installed packages")
+if(EXISTS "${VCPKG_INSTALLED_DIR}/share/eigen3/Eigen3Config.cmake")
+    list(APPEND CMAKE_PREFIX_PATH "${VCPKG_INSTALLED_DIR}/share")
+endif()
 
-option(CREALITY_QML_GUI "Build QML-first GUI architecture" ON)
+project(OWzxSlicer LANGUAGES C CXX)
+
+option(OWZX_QML_GUI "Build QML-first GUI architecture" ON)
 option(ENABLE_VISUAL_REGRESSION "Enable visual regression tests" ON)
 option(ENABLE_COVERAGE "Enable compiler coverage instrumentation" OFF)
 option(BUILD_LIBSLIC3R "Build libslic3r backend (3MF loading etc.)" ON)
-option(BUILD_CLI "Build headless CLI executable (creality-cli)" OFF)
+option(BUILD_CLI "Build headless CLI executable (owzx-cli)" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -44,9 +50,9 @@ if(BUILD_LIBSLIC3R)
     endif()
 endif()
 
-if(CREALITY_QML_GUI)
+if(OWZX_QML_GUI)
     if(NOT BUILD_LIBSLIC3R)
-        message(WARNING "CREALITY_QML_GUI: BUILD_LIBSLIC3R=OFF — OCCT/model loading will be stubbed out for testing.")
+        message(WARNING "OWZX_QML_GUI: BUILD_LIBSLIC3R=OFF — OCCT/model loading will be stubbed out for testing.")
     endif()
     if(BUILD_LIBSLIC3R)
         # BUILD_LIBSLIC3R=ON 时 Boost_ALL_NO_LIB 干扰 Qt 的 auto-link，
@@ -60,7 +66,7 @@ if(CREALITY_QML_GUI)
     endif()
 
     # ── 共享源码 OBJECT 库（主程序和测试共用） ────────────────────────────
-    add_library(creality_app_core OBJECT
+    add_library(owzx_app_core OBJECT
         src/nanosvg_impl.cpp
         src/qml_gui/BackendContext.cpp
         src/qml_gui/BackendContext.h
@@ -126,21 +132,21 @@ if(CREALITY_QML_GUI)
         src/qml_gui/Renderer/GCodeRenderer.h
     )
     if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/src/core/debug/CrashHandlerWin.cpp")
-        target_sources(creality_app_core PRIVATE
+        target_sources(owzx_app_core PRIVATE
             src/core/debug/CrashHandlerWin.cpp
             src/core/debug/CrashHandlerWin.h
             src/core/debug/EarlyCrashDiag.cpp
         )
     endif()
-    target_include_directories(creality_app_core PUBLIC
+    target_include_directories(owzx_app_core PUBLIC
         src
-        ${CMAKE_SOURCE_DIR}/third_party/CrealityPrint/src
+        ${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer/src
     )
-    target_compile_definitions(creality_app_core PUBLIC CREALITY_QML_GUI=1)
+    target_compile_definitions(owzx_app_core PUBLIC OWZX_QML_GUI=1)
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
-        target_compile_definitions(creality_app_core PUBLIC HAS_LIBSLIC3R=1)
+        target_compile_definitions(owzx_app_core PUBLIC HAS_LIBSLIC3R=1)
         if(MSVC)
-            target_compile_definitions(creality_app_core PRIVATE
+            target_compile_definitions(owzx_app_core PRIVATE
                 BOOST_ALL_NO_LIB
                 BOOST_USE_WINAPI_VERSION=0x602
                 BOOST_SYSTEM_USE_UTF8
@@ -149,48 +155,48 @@ if(CREALITY_QML_GUI)
     endif()
     # Qt AUTOMOC needs compile definitions and include paths from Qt modules.
     # libslic3r PUBLIC linkage propagates generated-header dirs (libslic3r_version.h).
-    target_link_libraries(creality_app_core PUBLIC
+    target_link_libraries(owzx_app_core PUBLIC
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent
     )
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
-        target_link_libraries(creality_app_core PUBLIC libslic3r)
+        target_link_libraries(owzx_app_core PUBLIC libslic3r)
     endif()
 
     # ── 主程序 ────────────────────────────────────────────────────────────
-    qt_add_executable(FramelessDialogDemo
+    qt_add_executable(OWzxSlicer
         src/qml_gui/main_qml.cpp
         src/qml_gui/qml.qrc
     )
-    target_link_libraries(FramelessDialogDemo PRIVATE creality_app_core)
-    target_link_libraries(FramelessDialogDemo PRIVATE
+    target_link_libraries(OWzxSlicer PRIVATE owzx_app_core)
+    target_link_libraries(OWzxSlicer PRIVATE
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent
     )
     if(MSVC)
-        target_compile_options(FramelessDialogDemo PRIVATE /Zi)
-        target_link_options(FramelessDialogDemo PRIVATE /DEBUG:FULL)
+        target_compile_options(OWzxSlicer PRIVATE /Zi)
+        target_link_options(OWzxSlicer PRIVATE /DEBUG:FULL)
     endif()
     foreach(_runtime_dll freetype.dll libmpfr-4.dll libgmp-10.dll qhull.dll qhull_p.dll qhull_r.dll)
         if(EXISTS "${DEPS_PREFIX}/bin/${_runtime_dll}")
-            add_custom_command(TARGET FramelessDialogDemo POST_BUILD
+            add_custom_command(TARGET OWzxSlicer POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     "${DEPS_PREFIX}/bin/${_runtime_dll}"
-                    "$<TARGET_FILE_DIR:FramelessDialogDemo>/${_runtime_dll}")
+                    "$<TARGET_FILE_DIR:OWzxSlicer>/${_runtime_dll}")
         endif()
     endforeach()
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
         # Copy OCCT runtime DLLs (delay-loaded, needed when libslic3r actually calls them)
         file(GLOB _occt_dlls "${DEPS_PREFIX}/bin/occt/TK*.dll")
         foreach(_occt_dll ${_occt_dlls})
-            add_custom_command(TARGET FramelessDialogDemo POST_BUILD
+            add_custom_command(TARGET OWzxSlicer POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     "${_occt_dll}"
-                    "$<TARGET_FILE_DIR:FramelessDialogDemo>/")
+                    "$<TARGET_FILE_DIR:OWzxSlicer>/")
         endforeach()
     endif()
 else()
     find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
-    qt_add_executable(FramelessDialogDemo
+    qt_add_executable(OWzxSlicer
         src/main.cpp
         src/MainWindow.cpp
         src/MainWindow.h
@@ -206,21 +212,21 @@ else()
         src/pages/ParameterPage.h
     )
 
-    target_link_libraries(FramelessDialogDemo PRIVATE Qt6::Widgets)
+    target_link_libraries(OWzxSlicer PRIVATE Qt6::Widgets)
 endif()
 
 if(WIN32)
-    set_target_properties(FramelessDialogDemo PROPERTIES WIN32_EXECUTABLE TRUE)
+    set_target_properties(OWzxSlicer PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 
 # ── Tests ──────────────────────────────────────────────────────────────────
-if(BUILD_TESTING AND CREALITY_QML_GUI)
+if(BUILD_TESTING AND OWZX_QML_GUI)
     # Ensure Qt DLLs are on PATH when running tests via ctest
     get_target_property(_qt6_core_location Qt6::Core LOCATION)
     get_filename_component(_qt6_bin_dir "${_qt6_core_location}" DIRECTORY)
 
     qt_add_executable(E2EWorkflowTests tests/E2EWorkflowTests.cpp)
-    target_link_libraries(E2EWorkflowTests PRIVATE creality_app_core
+    target_link_libraries(E2EWorkflowTests PRIVATE owzx_app_core
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Test
     )
     add_test(NAME E2EWorkflowTests COMMAND E2EWorkflowTests)
@@ -229,7 +235,7 @@ if(BUILD_TESTING AND CREALITY_QML_GUI)
     )
 
     qt_add_executable(ViewModelSmokeTests tests/ViewModelSmokeTests.cpp)
-    target_link_libraries(ViewModelSmokeTests PRIVATE creality_app_core
+    target_link_libraries(ViewModelSmokeTests PRIVATE owzx_app_core
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Test
     )
     add_test(NAME ViewModelSmokeTests COMMAND ViewModelSmokeTests)
@@ -241,7 +247,7 @@ endif()
 
 # ── CLI ────────────────────────────────────────────────────────────────────
 if(BUILD_CLI AND BUILD_LIBSLIC3R AND TARGET libslic3r)
-    add_library(creality_cli_core OBJECT
+    add_library(owzx_cli_core OBJECT
         src/nanosvg_impl.cpp
         src/core/services/ProjectServiceMock.cpp
         src/core/services/ProjectServiceMock.h
@@ -256,26 +262,26 @@ if(BUILD_CLI AND BUILD_LIBSLIC3R AND TARGET libslic3r)
         src/cli/CliRunner.cpp
         src/cli/CliRunner.h
     )
-    target_include_directories(creality_cli_core PUBLIC
+    target_include_directories(owzx_cli_core PUBLIC
         src
-        ${CMAKE_SOURCE_DIR}/third_party/CrealityPrint/src
+        ${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer/src
     )
-    target_compile_definitions(creality_cli_core PUBLIC
+    target_compile_definitions(owzx_cli_core PUBLIC
         HAS_LIBSLIC3R=1
     )
     if(MSVC)
-        target_compile_definitions(creality_cli_core PRIVATE
+        target_compile_definitions(owzx_cli_core PRIVATE
             BOOST_ALL_NO_LIB
             BOOST_USE_WINAPI_VERSION=0x602
             BOOST_SYSTEM_USE_UTF8
         )
     endif()
-    target_link_libraries(creality_cli_core PUBLIC
+    target_link_libraries(owzx_cli_core PUBLIC
         Qt6::Core Qt6::Gui Qt6::Concurrent libslic3r
     )
 
-    add_executable(creality-cli src/cli/main_cli.cpp)
-    target_link_libraries(creality-cli PRIVATE creality_cli_core)
+    add_executable(owzx-cli src/cli/main_cli.cpp)
+    target_link_libraries(owzx-cli PRIVATE owzx_cli_core)
     # Console app — NOT WIN32_EXECUTABLE
 
     if(BUILD_TESTING)
@@ -285,7 +291,7 @@ if(BUILD_CLI AND BUILD_LIBSLIC3R AND TARGET libslic3r)
         target_compile_definitions(CliTests PRIVATE
             QT_TESTCASE_SOURCEDIR="${CMAKE_SOURCE_DIR}"
         )
-        add_dependencies(CliTests creality-cli)
+        add_dependencies(CliTests owzx-cli)
         add_test(NAME CliTests COMMAND CliTests)
         set_tests_properties(CliTests PROPERTIES
             ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
@@ -295,7 +301,7 @@ if(BUILD_CLI AND BUILD_LIBSLIC3R AND TARGET libslic3r)
 endif()
 
 # I2 -- i18n 翻译文件
-qt_add_translations(FramelessDialogDemo
+qt_add_translations(OWzxSlicer
     TS_FILES
         i18n/zh_CN.ts
         i18n/en.ts

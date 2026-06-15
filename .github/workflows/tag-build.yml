@@ -39,10 +39,10 @@ jobs:
           cmake -S . -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release
           -DBUILD_LIBSLIC3R=ON
-          -DCREALITY_QML_GUI=ON
+          -DOWZX_QML_GUI=ON
 
       - name: Build
-        run: cmake --build build --config Release --target FramelessDialogDemo --verbose
+        run: cmake --build build --config Release --target OWzxSlicer --verbose
 
       - name: Collect failure diagnostics
         if: failure()
@@ -72,9 +72,9 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: FramelessDialogDemo-${{ env.TAG_NAME }}-windows
+          name: OWzxSlicer-${{ env.TAG_NAME }}-windows
           path: |
-            build/FramelessDialogDemo.exe
+            build/OWzxSlicer.exe
             build/*.dll
             build/en.qm
             build/zh_CN.qm
@@ -85,16 +85,16 @@ jobs:
         run: |
           $outDir = "build/release"
           New-Item -Path $outDir -ItemType Directory -Force | Out-Null
-          Copy-Item "build/FramelessDialogDemo.exe" $outDir -Force -ErrorAction SilentlyContinue
+          Copy-Item "build/OWzxSlicer.exe" $outDir -Force -ErrorAction SilentlyContinue
           Copy-Item "build/*.dll" $outDir -Force -ErrorAction SilentlyContinue
           Copy-Item "build/en.qm" $outDir -Force -ErrorAction SilentlyContinue
           Copy-Item "build/zh_CN.qm" $outDir -Force -ErrorAction SilentlyContinue
-          windeployqt --release --qmldir src "$outDir/FramelessDialogDemo.exe"
+          windeployqt --release --qmldir src "$outDir/OWzxSlicer.exe"
           # Remove OCCT DLLs — they cause 0xC0000005 at startup due to /MT vs /MD
           # CRT mismatch between pre-built libslic3r (static CRT) and OCCT DLLs (dynamic CRT).
           Remove-Item "$outDir/TK*.dll" -Force -ErrorAction SilentlyContinue
           Remove-Item "$outDir/cr_tpms_library.dll" -Force -ErrorAction SilentlyContinue
-          $zipPath = "build/FramelessDialogDemo-${{ env.TAG_NAME }}-windows.zip"
+          $zipPath = "build/OWzxSlicer-${{ env.TAG_NAME }}-windows.zip"
           if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
           Compress-Archive -Path "$outDir/*" -DestinationPath $zipPath
 
@@ -107,4 +107,4 @@ jobs:
           fail_on_unmatched_files: false
           overwrite_files: true
           files: |
-            build/FramelessDialogDemo-${{ env.TAG_NAME }}-windows.zip
+            build/OWzxSlicer-${{ env.TAG_NAME }}-windows.zip

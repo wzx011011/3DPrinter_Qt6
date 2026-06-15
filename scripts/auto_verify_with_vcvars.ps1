@@ -16,7 +16,7 @@ foreach ($line in $envDump) {
 
 Set-Location 'e:/ai/3DPrinter_Qt6/build'
 
-Stop-Process -Name 'FramelessDialogDemo' -Force -ErrorAction SilentlyContinue
+Stop-Process -Name 'OWzxSlicer' -Force -ErrorAction SilentlyContinue
 Stop-Process -Name 'cmake', 'ninja', 'link' -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
 
@@ -30,7 +30,7 @@ $cmakeArgs = @(
   '-DCMAKE_BUILD_TYPE=Release',
   '-DBUILD_LIBSLIC3R=ON',
   '-DLIBSLIC3R_FROM_SOURCE=ON',
-  '-DCREALITY_QML_GUI=ON',
+  '-DOWZX_QML_GUI=ON',
   '-DBUILD_CLI=ON',
   '-DQT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT=3.21',
   '-DQt6_DIR=E:/Qt6.10'
@@ -53,7 +53,7 @@ for ($attempt = 1; $attempt -le 3; ++$attempt) {
   }
 
   Write-Host ("CMAKE_RETRY_ATTEMPT=" + $attempt)
-  Stop-Process -Name 'FramelessDialogDemo' -Force -ErrorAction SilentlyContinue
+  Stop-Process -Name 'OWzxSlicer' -Force -ErrorAction SilentlyContinue
   Stop-Process -Name 'cmake', 'ninja', 'link' -Force -ErrorAction SilentlyContinue
   Start-Sleep -Seconds 2
 }
@@ -63,20 +63,19 @@ if (-not $configureSucceeded) { exit $lastConfigureExitCode }
 # Reduce MSVC memory pressure in large TUs/autogen files
 $env:CL = "/Zm300 /bigobj $env:CL"
 
-ninja -j16 FramelessDialogDemo.exe
+ninja -j16 OWzxSlicer.exe
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Build test targets (if BUILD_TESTING is ON)
 ninja -j16 E2EWorkflowTests 2>$null
 ninja -j16 ViewModelSmokeTests 2>$null
-ninja -j16 E2EPipelineTests 2>$null
-ninja -j16 creality-cli 2>$null
+ninja -j16 owzx-cli 2>$null
 ninja -j16 CliTests 2>$null
 ninja -j16 test-slice-direct 2>$null
 
 # Deploy Qt runtime DLLs if not already present
 if (-not (Test-Path './Qt6Core.dll')) {
-  & 'E:/Qt6.10/bin/windeployqt.exe' --release --qmldir '../src' --no-translations --no-system-d3d-compiler --no-opengl-sw './FramelessDialogDemo.exe' 2>$null
+  & 'E:/Qt6.10/bin/windeployqt.exe' --release --qmldir '../src' --no-translations --no-system-d3d-compiler --no-opengl-sw './OWzxSlicer.exe' 2>$null
 }
 
 # Deploy MSVC runtime DLLs (vcruntime140, msvcp140, etc.) for standalone execution.
@@ -104,7 +103,19 @@ if (Test-Path $occtBinDir) {
 # cr_tpms_library.dll is delay-loaded and unused; remove to avoid missing DLL warnings.
 Remove-Item 'cr_tpms_library.dll' -ErrorAction SilentlyContinue
 
-$p = Start-Process -FilePath './FramelessDialogDemo.exe' -WorkingDirectory (Get-Location) -PassThru
+# Deploy vcpkg runtime DLLs for libs linked via vcpkg (windeployqt doesn't see these).
+# noise.dll (libnoise) and draco.dll are imported by libslic3r_from_source.
+$vcpkgBin = 'E:\vcpkg\installed\x64-windows\bin'
+if (Test-Path $vcpkgBin) {
+  foreach ($dll in @('noise.dll', 'draco.dll')) {
+    $src = Join-Path $vcpkgBin $dll
+    if ((Test-Path $src) -and -not (Test-Path (Join-Path '.' $dll))) {
+      Copy-Item $src -Destination '.' -Force
+    }
+  }
+}
+
+$p = Start-Process -FilePath './OWzxSlicer.exe' -WorkingDirectory (Get-Location) -PassThru
 Start-Sleep -Seconds 5
 if ($p.HasExited) {
   Write-Host ("APP_EXIT_CODE=" + $p.ExitCode)
@@ -115,7 +126,7 @@ Stop-Process -Id $p.Id -Force
 
 # ── Run E2E Pipeline Tests (non-blocking) ──
 Write-Host "`n[E2E] Running pipeline tests..." -ForegroundColor Cyan
-$e2eExe = './E2EPipelineTests.exe'
+$e2eExe = './E2EWorkflowTests.exe'
 if (Test-Path $e2eExe) {
   & $e2eExe 2>&1 | ForEach-Object { Write-Host "  $_" }
   if ($LASTEXITCODE -ne 0) {

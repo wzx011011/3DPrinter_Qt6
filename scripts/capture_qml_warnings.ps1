@@ -16,18 +16,18 @@ foreach ($line in $envDump) {
 
 Set-Location 'e:/ai/3DPrinter_Qt6/build'
 
-Stop-Process -Name 'FramelessDialogDemo' -Force -ErrorAction SilentlyContinue
+Stop-Process -Name 'OWzxSlicer' -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
 
 # Build without extra flags (QML debug log uses env var now)
 $env:CL = "/Zm300 /bigobj $env:CL"
-& cmake -S .. -B . -G Ninja "-DCMAKE_BUILD_TYPE=Release" "-DBUILD_LIBSLIC3R=OFF" "-DCREALITY_QML_GUI=ON" "-DQT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT=3.21" 2>&1 | Write-Host
+& cmake -S .. -B . -G Ninja "-DCMAKE_BUILD_TYPE=Release" "-DBUILD_LIBSLIC3R=OFF" "-DOWZX_QML_GUI=ON" "-DQT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT=3.21" 2>&1 | Write-Host
 if ($LASTEXITCODE -ne 0) {
   Write-Host "CMAKE CONFIGURE FAILED"
   exit 1
 }
 
-ninja -j1 FramelessDialogDemo.exe 2>&1
+ninja -j1 OWzxSlicer.exe 2>&1
 if ($LASTEXITCODE -ne 0) {
   Write-Host "BUILD FAILED"
   exit 1
@@ -36,7 +36,7 @@ Write-Host "BUILD OK"
 
 # Deploy Qt DLLs if needed
 if (-not (Test-Path './Qt6Core.dll')) {
-  & 'E:/Qt6.10/bin/windeployqt.exe' --release --qmldir '../src' --no-translations --no-system-d3d-compiler --no-opengl-sw './FramelessDialogDemo.exe' 2>$null
+  & 'E:/Qt6.10/bin/windeployqt.exe' --release --qmldir '../src' --no-translations --no-system-d3d-compiler --no-opengl-sw './OWzxSlicer.exe' 2>$null
 }
 
 # Remove OCCT DLLs
@@ -49,7 +49,7 @@ Remove-Item './qml_debug.log' -ErrorAction SilentlyContinue
 $env:QML_DEBUG_LOG = "1"
 
 # Start app
-$p = Start-Process -FilePath '.\FramelessDialogDemo.exe' -WorkingDirectory (Get-Location) -PassThru
+$p = Start-Process -FilePath '.\OWzxSlicer.exe' -WorkingDirectory (Get-Location) -PassThru
 
 # Wait for app to run
 for ($i = 1; $i -le 10; $i++) {
