@@ -1,6 +1,6 @@
-# 3DPrinter_Qt6
+# 3DPrinter_Qt6 (OWzx Slicer)
 
-Qt6 重写版 3D 打印桌面端原型工程（QML 主路线）。
+Qt6 重写版 3D 打印桌面端原型工程（QML 主路线），基于 OrcaSlicer 上游。
 
 ## 协作入口
 
@@ -23,7 +23,7 @@ Qt6 重写版 3D 打印桌面端原型工程（QML 主路线）。
 该命令会基于当前仓库状态执行以下流程：
 
 - 读取 `docs/源码对照迁移任务追踪.md`
-- 对照 `third_party/CrealityPrint` 上游源码
+- 对照 `third_party/OrcaSlicer` 上游源码
 - 选择当前最高优先级、尚未完成的任务
 - 映射到对应 Qt6/QML 承接模块
 - 实施修改并按规则更新任务状态
@@ -44,7 +44,7 @@ Qt6 重写版 3D 打印桌面端原型工程（QML 主路线）。
 
 ## 项目说明
 
-- 默认构建目标：`FramelessDialogDemo`（QML GUI）
+- 默认构建目标：`OWzxSlicer`（QML GUI）
 - 构建系统：CMake + Ninja
 - 语言标准：C++17
 - 默认入口：`src/qml_gui/main_qml.cpp`
@@ -55,25 +55,26 @@ Qt6 重写版 3D 打印桌面端原型工程（QML 主路线）。
 ### 1) 配置
 
 ```powershell
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCREALITY_QML_GUI=ON
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DOWZX_QML_GUI=ON
 ```
 
 ### 2) 编译
 
 ```powershell
-cmake --build build --config Release --target FramelessDialogDemo
+cmake --build build --config Release --target OWzxSlicer
 ```
 
 ### 3) 运行
 
 ```powershell
-./build/FramelessDialogDemo.exe
+./build/OWzxSlicer.exe
 ```
 
 ## 说明
 
 - 已禁用“假加载/Mock 导入成功”路径。
 - 若未启用 `BUILD_LIBSLIC3R`，配置阶段会直接失败，避免生成可启动但无法真实导入模型的包。
+- 构建命令（权威）：`powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`
 
 ## CI / CD（Tag 触发）
 

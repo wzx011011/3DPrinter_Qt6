@@ -93,7 +93,7 @@ PreviewPage::PreviewPage(QWidget *parent)
   auto *viewportLayout = new QGridLayout(viewport);
   viewportLayout->setContentsMargins(14, 14, 14, 14);
 
-  auto *viewportText = new QLabel(QStringLiteral("Creality Smooth PEI Plate\n\n"
+  auto *viewportText = new QLabel(QStringLiteral("Smooth PEI Plate\n\n"
                                                  "               01\n\n"
                                                  "          （预览页 3D 视图占位）"),
                                   viewport);

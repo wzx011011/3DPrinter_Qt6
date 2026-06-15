@@ -1,0 +1,9 @@
+#ifndef BUILDINFO_H_
+#define BUILDINFO_H_
+
+#define BUILD_OS "@BUILD_OS@"
+#define SLIC3R_BUILD_ID "@SLIC3R_BUILD_ID@"
+#define SLIC3R_APP_NAME "@SLIC3R_APP_NAME@"
+#define OWZX_VERSION "@OWZX_VERSION@"
+
+#endif

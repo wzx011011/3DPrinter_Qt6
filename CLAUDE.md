@@ -1,6 +1,6 @@
 # 3DPrinter_Qt6 Claude Code Instructions
 
-This repository is a source-truth migration project from CrealityPrint to Qt6/QML.
+This repository is a source-truth migration project from OrcaSlicer to Qt6/QML (brand: OWzx).
 
 See @.claude/rules/source-truth-migration.md for the canonical project migration rules.
 See @.claude/rules/build-rules.md for the canonical build rules.
@@ -21,11 +21,11 @@ See @.claude/rules/build-rules.md for the canonical build rules.
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
 
-**CrealityPrint Qt6/QML Migration**
+**OWzx Slicer — OrcaSlicer Qt6/QML Migration**
 
-将创想三维（Creality）开源 3D 打印切片软件 CrealityPrint v7.0.1 从 C++/wxWidgets 迁移为 C++/Qt6/QML 架构。保留底层切片引擎（libslic3r）不变，重写整个 GUI 层，对齐上游全部用户可见行为和工作流。项目面向创想三维打印机的桌面端用户。
+将 OrcaSlicer 开源 3D 打印切片软件从 C++/wxWidgets 迁移为 C++/Qt6/QML 架构（品牌名 OWzx）。保留底层切片引擎（libslic3r）不变，重写整个 GUI 层，对齐上游全部用户可见行为和工作流。
 
-**Core Value:** 上游 CrealityPrint 源码为功能真值——Qt6 代码必须完整继承上游行为，不得自由设计新的产品行为。
+**Core Value:** 上游 OrcaSlicer 源码为功能真值——Qt6 代码必须完整继承上游行为，不得自由设计新的产品行为。
 
 ### Constraints
 
@@ -41,9 +41,9 @@ See @.claude/rules/build-rules.md for the canonical build rules.
 ## Technology Stack
 
 ## Languages
-- C++17 - All native backend code, viewmodels, services, rendering, and the main Qt application. Used in `src/core/`, `src/qml_gui/`, `third_party/CrealityPrint/src/libslic3r/`.
+- C++17 - All native backend code, viewmodels, services, rendering, and the main Qt application. Used in `src/core/`, `src/qml_gui/`, `third_party/OrcaSlicer/src/libslic3r/`.
 - QML/JavaScript - All UI layer. Used in `src/qml_gui/pages/`, `src/qml_gui/components/`, `src/qml_gui/controls/`, `src/qml_gui/dialogs/`, `src/qml_gui/panels/`.
-- C - Embedded dependencies compiled from source: miniz, qoi, semver, glu-libtess, mcut. Located in `third_party/CrealityPrint/src/`.
+- C - Embedded dependencies compiled from source: miniz, qoi, semver, glu-libtess, mcut. Located in `third_party/OrcaSlicer/deps_src/`.
 - Objective-C++ - macOS-specific sources in upstream (e.g., `MacUtils.mm`, `ModelIO.mm`). Not used in the Qt6 migration on Windows.
 - PowerShell - Build scripts (`scripts/auto_verify_with_vcvars.ps1`, `scripts/smoke_test.ps1`, etc.).
 - CMake - Build system configuration in `CMakeLists.txt`, `cmake/`.
@@ -51,14 +51,14 @@ See @.claude/rules/build-rules.md for the canonical build rules.
 - Target platform: Windows 10/11 (win64), MSVC toolchain (Visual Studio 2022)
 - CRT: Dynamic CRT (`/MD`) for the Qt6 executable; upstream libslic3r static libs use static CRT (`/MT`)
 - MSVC runtime: `MultiThreaded$<$<CONFIG:Debug>:Debug>DLL` (CMP0091 policy)
-- Build output: `build/FramelessDialogDemo.exe`
+- Build output: `build/OWzxSlicer.exe`
 - vcpkg for external dependency resolution (`vcpkg.json`)
 - Lockfile: `vcpkg.json` baseline `6f29f12e82a8293156836ad81cc9bf5af41fe836`
 - Upstream pre-built dependencies consumed from `E:/ai/3D-Printer/deps/build/OrcaSlicer_dep/usr/local` (via `DEPS_PREFIX`)
 - CMake 3.16+ minimum, CMake 3.21+ for Qt 6.10
 - Generator: Ninja
 - Build type: Release
-- CMake options: `BUILD_LIBSLIC3R=ON`, `LIBSLIC3R_FROM_SOURCE=ON`, `CREALITY_QML_GUI=ON`
+- CMake options: `BUILD_LIBSLIC3R=ON`, `LIBSLIC3R_FROM_SOURCE=ON`, `OWZX_QML_GUI=ON`
 - Precompiled headers enabled for libslic3r (`pchheader.hpp`)
 ## Frameworks
 - Qt 6.10 - QML-first GUI architecture. Components used: Qt6::Qml, Qt6::Quick, Qt6::QuickControls2, Qt6::OpenGL, Qt6::Concurrent, Qt6::LinguistTools.
@@ -66,7 +66,7 @@ See @.claude/rules/build-rules.md for the canonical build rules.
 - QSGRendererInterface::OpenGL forced as graphics API (required for `QQuickFramebufferObject`).
 - OpenGL (legacy GL) via Qt OpenGL module and custom `QQuickFramebufferObject` subclass (`src/qml_gui/Renderer/GLViewport`).
 - Custom shader utilities in `src/core/rendering/GLShaderUtil`.
-- wxWidgets 3.x - The original CrealityPrint GUI framework.
+- wxWidgets 3.x - The original OrcaSlicer GUI framework.
 - GLEW - OpenGL extension loading in upstream.
 - ImGui - Immediate mode GUI used in upstream for certain overlays.
 - Qt Test (`QtTest`) - Smoke tests in `tests/ViewModelSmokeTests.cpp`, using `QSignalSpy` for signal verification.
@@ -121,7 +121,7 @@ See @.claude/rules/build-rules.md for the canonical build rules.
 - QML type registration: `src/qml_gui/qmldir`
 - Qt Quick Controls 2 config: `src/qml_gui/qtquickcontrols2.conf`
 - Generated headers: `libslic3r_version.h`, `buildinfo.h` (configured by CMake)
-- `CREALITY_QML_GUI=1` - QML GUI mode
+- `OWZX_QML_GUI=1` - QML GUI mode
 - `HAS_LIBSLIC3R=1` - libslic3r available (when `BUILD_LIBSLIC3R=ON`)
 - `BOOST_ALL_NO_LIB`, `BOOST_USE_WINAPI_VERSION=0x602`, `BOOST_SYSTEM_USE_UTF8` - Static Boost linking on MSVC
 - `USE_TBB`, `TBB_USE_CAPTURED_EXCEPTION=0` - TBB configuration
@@ -301,7 +301,7 @@ See @.claude/rules/build-rules.md for the canonical build rules.
 - `BackendContext` is the **composition root** — it constructs all services and viewmodels, wires dependencies, and exposes them as Q_PROPERTY objects to QML via a single context property named `backend`.
 - QML pages receive viewmodel references as properties (e.g., `editorVm: backend.editorViewModel`) and bind to their Q_PROPERTY signals.
 - Services are injected into viewmodels via constructor pointers. Viewmodels never own services.
-- The upstream `third_party/CrealityPrint/src/slic3r/GUI` is treated as **source truth** — every Qt6 behavior must map to an upstream equivalent.
+- The upstream `third_party/OrcaSlicer/deps_src/slic3r/GUI` is treated as **source truth** — every Qt6 behavior must map to an upstream equivalent.
 - Many services carry a `Mock` suffix but contain real libslic3r code behind `#ifdef HAS_LIBSLIC3R` guards. The name is a legacy artifact from early prototyping.
 ## Layers
 - Purpose: Presentation, layout, interaction wiring, visual composition
@@ -325,7 +325,7 @@ See @.claude/rules/build-rules.md for the canonical build rules.
 - Depends on: Qt OpenGL, QQuickFramebufferObject API, mesh data from EditorViewModel
 - Used by: QML pages (PreparePage, PreviewPage)
 - Purpose: Functional reference for all behavior — the wxWidgets/ImGui code that defines what the Qt6 migration must replicate
-- Location: `third_party/CrealityPrint/src/slic3r/GUI/` (GUI behavior), `third_party/CrealityPrint/src/libslic3r/` (slicing engine)
+- Location: `third_party/OrcaSlicer/src/slic3r/GUI/` (GUI behavior), `third_party/OrcaSlicer/src/libslic3r/` (slicing engine)
 - Contains: 400+ upstream source files (wxWidgets GUI, OpenGL 3D, ImGui overlays)
 - Depends on: wxWidgets 3.1, ImGui, native OpenGL
 - Used by: Migration reference only — not compiled as part of Qt6 GUI target
@@ -354,8 +354,8 @@ See @.claude/rules/build-rules.md for the canonical build rules.
 - Location: `src/qml_gui/main_qml.cpp`
 - Triggers: Process launch
 - Responsibilities: QGuiApplication setup, OpenGL backend selection, GLViewport type registration, BackendContext construction, QQmlApplicationEngine loading of `main.qml`, crash handler installation
-- Location: `src/main.cpp` (not active when CREALITY_QML_GUI=ON)
-- Triggers: Process launch (only when CREALITY_QML_GUI=OFF)
+- Location: `src/main.cpp` (not active when OWZX_QML_GUI=ON)
+- Triggers: Process launch (only when OWZX_QML_GUI=OFF)
 - Responsibilities: Qt Widgets application with PreparePage/PreviewPage/MonitorPage/ParameterPage
 - Location: `src/qml_gui/main.qml`
 - Triggers: QQmlApplicationEngine::load()
@@ -367,7 +367,7 @@ See @.claude/rules/build-rules.md for the canonical build rules.
 - **Threading:** Qt single-threaded GUI with QThread/QConcurrent/Qt Concurrent for background slice operations. SliceService uses `std::atomic_bool` for cancel flags. UndoCommands execute synchronously on the GUI thread.
 - **Global state:** BackendContext is the sole composition root, created on the stack in `main()` and exposed as `backend` context property. No other module-level singletons. ProjectServiceMock holds the `Slic3r::Model*` pointer (conditional on HAS_LIBSLIC3R).
 - **Circular imports:** ViewModels depend on Services (via injected pointers). BackendContext depends on both. No circular C++ includes — all forward-declared in BackendContext.h, concrete includes in BackendContext.cpp.
-- **Conditional compilation:** `HAS_LIBSLIC3R` guard controls all libslic3r API usage across services and viewmodels. `CREALITY_QML_GUI` cmake option toggles between QML and Widgets build paths.
+- **Conditional compilation:** `HAS_LIBSLIC3R` guard controls all libslic3r API usage across services and viewmodels. `OWZX_QML_GUI` cmake option toggles between QML and Widgets build paths.
 - **QML property binding:** QML pages never hold direct references to service objects. All access goes through ViewModel properties exposed via BackendContext. This is enforced by the project rules in `.claude/rules/qml-boundaries.md`.
 - **Delay-loaded OCCT:** OpenCASCADE DLLs are delay-loaded to avoid CRT mismatch deadlocks. `DelayLoadHook.cpp` intercepts and suppresses actual loading. See `src/core/DelayLoadHook.cpp`.
 ## Anti-Patterns
@@ -388,8 +388,8 @@ See @.claude/rules/build-rules.md for the canonical build rules.
 
 | Skill | Description | Path |
 |-------|-------------|------|
-| analyzing-source-truth-gap | "Analyzing an upstream-to-Qt migration gap without making code changes. Triggers when the user asks for a read-only comparison between CrealityPrint upstream behavior and current Qt6 implementation." | `.claude/skills/analyzing-source-truth-gap/SKILL.md` |
-| migrating-source-truth | "Migrating source-truth tasks from CrealityPrint upstream to Qt6/QML. Triggers when the user asks to continue migration, pick up the next task, or run migration in batch mode." | `.claude/skills/migrating-source-truth/SKILL.md` |
+| analyzing-source-truth-gap | "Analyzing an upstream-to-Qt migration gap without making code changes. Triggers when the user asks for a read-only comparison between OrcaSlicer upstream behavior and current Qt6 implementation." | `.claude/skills/analyzing-source-truth-gap/SKILL.md` |
+| migrating-source-truth | "Migrating source-truth tasks from OrcaSlicer upstream to Qt6/QML. Triggers when the user asks to continue migration, pick up the next task, or run migration in batch mode." | `.claude/skills/migrating-source-truth/SKILL.md` |
 <!-- GSD:skills-end -->
 
 <!-- GSD:workflow-start source:GSD defaults -->
