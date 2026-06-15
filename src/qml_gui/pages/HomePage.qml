@@ -60,7 +60,7 @@ Item {
 
                 Column {
                     spacing: 4
-                    Text { text: "Creality Print 7.0"; color: Theme.textPrimary; font.pixelSize: 24; font.bold: true }
+                    Text { text: "OWzx Slicer"; color: Theme.textPrimary; font.pixelSize: 24; font.bold: true }
                     Text { text: qsTr("专业级 3D 打印切片软件"); color: Theme.textSecondary; font.pixelSize: 13 }
                 }
 
@@ -273,7 +273,7 @@ Item {
             id: loginDialog
             anchors.centerIn: parent
             modal: true
-            title: qsTr("登录 Creality 账号")
+            title: qsTr("登录 OWzx 账号")
             padding: 20
 
             background: Rectangle {
@@ -284,7 +284,7 @@ Item {
             }
 
             header: Label {
-                text: qsTr("登录 Creality 账号")
+                text: qsTr("登录 OWzx 账号")
                 color: Theme.textPrimary
                 font.bold: true
                 font.pixelSize: 16
@@ -517,6 +517,6 @@ Item {
 
         Item { Layout.fillHeight: true }
 
-        Text { text: qsTr("版本 7.0.0  |  Qt 6.10  |  ©2026 Creality"); color: Theme.textDisabled; font.pixelSize: 10 }
+        Text { text: qsTr("版本 2.4.0-dev  |  Qt 6.10  |  OWzx"); color: Theme.textDisabled; font.pixelSize: 10 }
     }
 }

@@ -575,11 +575,11 @@ Item {
                             anchors.fill: parent; anchors.margins: 12
                             spacing: 4
                             Text {
-                                text: qsTr("当前版本：v7.0.1 (Qt6 Edition)")
+                                text: qsTr("当前版本：2.4.0-dev (Qt6 Edition)")
                                 color: "#c8d4e0"; font.pixelSize: 12
                             }
                             Text {
-                                text: qsTr("上游基线：CrealityPrint v7.0.1 (0d4ac73)")
+                                text: qsTr("上游基线：OrcaSlicer main branch")
                                 color: "#6b7d94"; font.pixelSize: 10
                             }
                         }
@@ -633,7 +633,7 @@ Item {
 
                     Text {
                         Layout.fillWidth: true
-                        text: qsTr("当前为 Mock 模式，更新检查功能需要连接 Creality 更新服务器后启用。")
+                        text: qsTr("当前为 Mock 模式，更新检查功能需要连接更新服务器后启用。")
                         color: "#566070"; font.pixelSize: 10; wrapMode: Text.Wrap
                         Layout.preferredWidth: 400
                     }

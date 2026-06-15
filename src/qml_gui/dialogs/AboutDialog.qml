@@ -9,7 +9,7 @@ import "../controls"
 CxDialog {
     id: root
 
-    dialogTitle: qsTr("关于 Creality Print")
+    dialogTitle: qsTr("关于 OWzx")
     titleIcon: "❓"
     showCloseButton: true
 
@@ -37,13 +37,13 @@ CxDialog {
 
             Text {
                 Layout.alignment: Qt.AlignHCenter
-                text: "Creality Print"
+                text: "OWzx Slicer"
                 color: "#e2e8f5"; font.pixelSize: 18; font.bold: true
             }
 
             Text {
                 Layout.alignment: Qt.AlignHCenter
-                text: qsTr("版本 7.0.0.0  (Qt6 QML 重写)")
+                text: qsTr("版本 2.4.0-dev  (Qt6 QML)")
                 color: "#22c564"; font.pixelSize: 11
             }
         }
@@ -70,7 +70,7 @@ CxDialog {
                 InfoRow { label: qsTr("目标平台");   value: "Windows x64 (MSVC)" }
                 InfoRow { label: qsTr("构建日期");   value: "2026-03-03" }
                 InfoRow { label: qsTr("开源协议");   value: "GNU LGPL v3" }
-                InfoRow { label: qsTr("官方网站");   value: "www.creality.com" }
+                InfoRow { label: qsTr("官方网站");   value: "www.orcaslicer.org" }
             }
         }
 

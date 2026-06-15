@@ -13,7 +13,7 @@ ApplicationWindow {
     width: 1828
     height: 1000
     visible: true
-    title: "Creality Print 7.0 - QML"
+    title: "OWzx Slicer"
     color: "#0d0f12"
     flags: Qt.Window | Qt.FramelessWindowHint
     minimumWidth: 1100
@@ -61,7 +61,7 @@ ApplicationWindow {
         implicitWidth: 1
         implicitHeight: 18
         radius: 1
-        color: "#263040"
+        color: "#303030"
     }
 
     Connections {
@@ -156,135 +156,160 @@ ApplicationWindow {
         CxMenuItem { text: qsTr("退出"); onTriggered: Qt.quit() }
     }
 
+    // Top dropdown menu (对齐上游 BBLTopbar dropdown → Edit/View/Preferences/Calibration/Help)
     CxMenu {
-        id: dropdownMenu
-        // View items (matching upstream View menu)
-        CxMenuItem { text: qsTr("适应视图"); onTriggered: preparePage.applyFitHintIfReady() }
-        CxMenuItem { text: preparePage.viewport3dRef.wireframeMode ? qsTr("关闭线框模式") : qsTr("线框模式"); onTriggered: preparePage.viewport3dRef.wireframeMode = !preparePage.viewport3dRef.wireframeMode }
-        MenuSeparator {}
-        // Settings items
-        CxMenuItem { text: qsTr("偏好设置"); onTriggered: backend.setCurrentPage(8) }
-        CxMenuItem { text: qsTr("参数设置"); onTriggered: backend.openSettings() }
-        MenuSeparator {}
-        CxMenuItem { text: qsTr("主页"); onTriggered: backend.setCurrentPage(0) }
-    }
+        id: topMenu
 
-    // Edit menu (对齐上游 MainFrame Edit 菜单)
-    CxMenu {
-        id: editMenu
-        CxMenuItem {
-            text: qsTr("撤销")
-            enabled: backend.currentPage === root.pagePrepare
-            onTriggered: preparePage.undoFromTopbar()
-        }
-        CxMenuItem {
-            text: qsTr("重做")
-            enabled: backend.currentPage === root.pagePrepare
-            onTriggered: preparePage.redoFromTopbar()
-        }
-        MenuSeparator {}
-        CxMenuItem {
-            text: qsTr("剪切")
-            enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
-            onTriggered: backend.editorViewModel.cutSelectedObjects()
-        }
-        CxMenuItem {
-            text: qsTr("复制")
-            enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
-            onTriggered: backend.editorViewModel.copySelectedObjects()
-        }
-        CxMenuItem {
-            text: qsTr("粘贴")
-            enabled: backend.editorViewModel && backend.editorViewModel.hasClipboardContent
-            onTriggered: backend.editorViewModel.pasteObjects()
-        }
-        MenuSeparator {}
-        CxMenuItem {
-            text: qsTr("删除选中")
-            enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
-            onTriggered: backend.editorViewModel.deleteSelectedObjects()
-        }
-        CxMenuItem {
-            text: qsTr("清空全部")
-            onTriggered: {
-                if (backend.editorViewModel) backend.editorViewModel.clearWorkspace()
-            }
-        }
-        MenuSeparator {}
-        CxMenuItem {
-            text: qsTr("克隆选中")
-            enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
-            onTriggered: backend.editorViewModel.duplicateSelectedObjects()
-        }
-        CxMenuItem { text: qsTr("全选"); onTriggered: {
-            if (backend.editorViewModel) backend.editorViewModel.selectAllVisibleObjects()
-        } }
-        CxMenuItem { text: qsTr("取消选择"); onTriggered: {
-            if (backend.editorViewModel) backend.editorViewModel.clearObjectSelection()
-        } }
-    }
-
-    // View menu (对齐上游 MainFrame View 菜单)
-    CxMenu {
-        id: viewMenu
-        CxMenuItem { text: qsTr("默认视图"); onTriggered: preparePage.applyFitHintIfReady() }
-        MenuSeparator {}
         CxMenu {
-            title: qsTr("相机预设")
-            CxMenuItem { text: qsTr("俯视图 (Top)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(0) }
-            CxMenuItem { text: qsTr("前视图 (Front)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(1) }
-            CxMenuItem { text: qsTr("右视图 (Right)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(2) }
-            CxMenuItem { text: qsTr("等轴视图 (Iso)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(3) }
+            title: qsTr("编辑")
+            CxMenuItem {
+                text: qsTr("撤销")
+                enabled: backend.currentPage === root.pagePrepare
+                onTriggered: preparePage.undoFromTopbar()
+            }
+            CxMenuItem {
+                text: qsTr("重做")
+                enabled: backend.currentPage === root.pagePrepare
+                onTriggered: preparePage.redoFromTopbar()
+            }
+            MenuSeparator {}
+            CxMenuItem {
+                text: qsTr("剪切")
+                enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+                onTriggered: backend.editorViewModel.cutSelectedObjects()
+            }
+            CxMenuItem {
+                text: qsTr("复制")
+                enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+                onTriggered: backend.editorViewModel.copySelectedObjects()
+            }
+            CxMenuItem {
+                text: qsTr("粘贴")
+                enabled: backend.editorViewModel && backend.editorViewModel.hasClipboardContent
+                onTriggered: backend.editorViewModel.pasteObjects()
+            }
+            MenuSeparator {}
+            CxMenuItem {
+                text: qsTr("删除选中")
+                enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+                onTriggered: backend.editorViewModel.deleteSelectedObjects()
+            }
+            CxMenuItem {
+                text: qsTr("清空全部")
+                onTriggered: {
+                    if (backend.editorViewModel) backend.editorViewModel.clearWorkspace()
+                }
+            }
+            MenuSeparator {}
+            CxMenuItem {
+                text: qsTr("克隆选中")
+                enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+                onTriggered: backend.editorViewModel.duplicateSelectedObjects()
+            }
+            CxMenuItem { text: qsTr("全选"); onTriggered: {
+                if (backend.editorViewModel) backend.editorViewModel.selectAllVisibleObjects()
+            } }
+            CxMenuItem { text: qsTr("取消选择"); onTriggered: {
+                if (backend.editorViewModel) backend.editorViewModel.clearObjectSelection()
+            } }
         }
-        MenuSeparator {}
-        CxMenuItem { text: preparePage.viewport3dRef.wireframeMode ? qsTr("关闭线框模式") : qsTr("线框模式"); onTriggered: preparePage.viewport3dRef.wireframeMode = !preparePage.viewport3dRef.wireframeMode }
-        MenuSeparator {}
+
         CxMenu {
-            title: qsTr("显示标签")
-            CxMenuItem {
-                text: hiddenTabs[root.pageOnline] ? qsTr("✗ 在线模型") : qsTr("✓ 在线模型")
-                onTriggered: toggleTabVisibility(root.pageOnline)
+            title: qsTr("视图")
+            CxMenuItem { text: qsTr("默认视图"); onTriggered: preparePage.applyFitHintIfReady() }
+            MenuSeparator {}
+            CxMenu {
+                title: qsTr("相机预设")
+                CxMenuItem { text: qsTr("俯视图 (Top)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(0) }
+                CxMenuItem { text: qsTr("前视图 (Front)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(1) }
+                CxMenuItem { text: qsTr("右视图 (Right)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(2) }
+                CxMenuItem { text: qsTr("等轴视图 (Iso)"); onTriggered: preparePage.viewport3dRef.requestViewPreset(3) }
             }
-            CxMenuItem {
-                text: hiddenTabs[root.pagePrepare] ? qsTr("✗ 准备") : qsTr("✓ 准备")
-                onTriggered: toggleTabVisibility(root.pagePrepare)
-            }
-            CxMenuItem {
-                text: hiddenTabs[root.pagePreview] ? qsTr("✗ 预览") : qsTr("✓ 预览")
-                onTriggered: toggleTabVisibility(root.pagePreview)
-            }
-            CxMenuItem {
-                text: hiddenTabs[root.pageDevice] ? qsTr("✗ 设备") : qsTr("✓ 设备")
-                onTriggered: toggleTabVisibility(root.pageDevice)
+            MenuSeparator {}
+            CxMenuItem { text: preparePage.viewport3dRef.wireframeMode ? qsTr("关闭线框模式") : qsTr("线框模式"); onTriggered: preparePage.viewport3dRef.wireframeMode = !preparePage.viewport3dRef.wireframeMode }
+            MenuSeparator {}
+            CxMenu {
+                title: qsTr("显示标签")
+                CxMenuItem {
+                    text: hiddenTabs[root.pageOnline] ? qsTr("✗ 在线模型") : qsTr("✓ 在线模型")
+                    onTriggered: toggleTabVisibility(root.pageOnline)
+                }
+                CxMenuItem {
+                    text: hiddenTabs[root.pagePrepare] ? qsTr("✗ 准备") : qsTr("✓ 准备")
+                    onTriggered: toggleTabVisibility(root.pagePrepare)
+                }
+                CxMenuItem {
+                    text: hiddenTabs[root.pagePreview] ? qsTr("✗ 预览") : qsTr("✓ 预览")
+                    onTriggered: toggleTabVisibility(root.pagePreview)
+                }
+                CxMenuItem {
+                    text: hiddenTabs[root.pageDevice] ? qsTr("✗ 设备") : qsTr("✓ 设备")
+                    onTriggered: toggleTabVisibility(root.pageDevice)
+                }
             }
         }
-    }
 
-    // Help menu (对齐上游 Help 菜单)
-    CxMenu {
-        id: helpMenu
-        CxMenuItem {
-            text: qsTr("快捷键...")
-            onTriggered: shortcutDialog.open()
-        }
         MenuSeparator {}
-        CxMenuItem {
-            text: qsTr("关于 Creality Print")
-            onTriggered: aboutDialog.open()
-        }
-    }
 
-    // Settings menu (对齐上游 MainFrame Settings 菜单)
-    CxMenu {
-        id: settingsMenu
         CxMenuItem {
             text: qsTr("偏好设置")
             onTriggered: backend.setCurrentPage(8)
         }
+
         MenuSeparator {}
+
+        CxMenu {
+            title: qsTr("校准")
+            CxMenuItem { text: qsTr("温度校准"); onTriggered: backend.setCurrentPage(5) }
+            CxMenuItem { text: qsTr("流量校准"); onTriggered: backend.setCurrentPage(5) }
+            CxMenuItem { text: qsTr("压力推进校准"); onTriggered: backend.setCurrentPage(5) }
+        }
+
+        MenuSeparator {}
+
+        CxMenu {
+            title: qsTr("帮助")
+            CxMenuItem {
+                text: qsTr("快捷键...")
+                onTriggered: shortcutDialog.open()
+            }
+            MenuSeparator {}
+            CxMenuItem {
+                text: qsTr("关于 OWzx")
+                onTriggered: aboutDialog.open()
+            }
+        }
+    }
+
+    // Slice dropdown menu (title bar)
+    CxMenu {
+        id: sliceTopMenu
         CxMenuItem {
-            text: qsTr("参数设置")
-            onTriggered: backend.openSettings()
+            text: qsTr("切片当前平板")
+            onTriggered: {
+                if (backend.editorViewModel)
+                    backend.editorViewModel.requestSlice()
+            }
+        }
+        CxMenuItem {
+            text: qsTr("切片全部平板")
+            onTriggered: {
+                if (backend.editorViewModel)
+                    backend.editorViewModel.requestSliceAll()
+            }
+        }
+    }
+
+    // Print dropdown menu (title bar)
+    CxMenu {
+        id: printTopMenu
+        CxMenuItem {
+            text: qsTr("发送打印")
+            onTriggered: preparePage.openPrintDialog()
+        }
+        CxMenuItem {
+            text: qsTr("导出 G-code")
+            onTriggered: preparePage.openExportDialog()
         }
     }
 
@@ -378,7 +403,7 @@ ApplicationWindow {
     // About dialog
     Dialog {
         id: aboutDialog
-        title: qsTr("关于 Creality Print")
+        title: qsTr("关于 OWzx")
         modal: true
         anchors.centerIn: parent
         width: 360
@@ -390,13 +415,13 @@ ApplicationWindow {
             spacing: 12
 
             Text {
-                text: "Creality Print 7.0 - QML"
+                text: "OWzx Slicer"
                 color: Theme.textPrimary
                 font.pixelSize: 16
                 font.bold: true
             }
             Text {
-                text: qsTr("基于 CrealityPrint v7.0.1 开源版本")
+                text: qsTr("基于 OrcaSlicer 开源版本")
                 color: Theme.textSecondary
                 font.pixelSize: 12
             }
@@ -543,13 +568,6 @@ ApplicationWindow {
         border.width: root.visibility === Window.Maximized ? 0 : 1
         clip: true
 
-        transform: Scale {
-            xScale: backend.uiScale
-            yScale: backend.uiScale
-            origin.x: 0
-            origin.y: 0
-        }
-
         Image {
             anchors.fill: parent
             visible: backend.visualCompareMode && root.compareReferenceSource !== ""
@@ -565,593 +583,222 @@ ApplicationWindow {
             Rectangle {
                 id: titleBar
                 Layout.fillWidth: true
-                Layout.preferredHeight: 52
-                color: backend.surfaceColor
+                Layout.preferredHeight: 40
+                color: "#181818"
 
                 MouseArea {
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton
                     propagateComposedEvents: true
+                    z: -1
                     onPressed: (mouse) => {
                         if (mouse.button === Qt.LeftButton && root.visibility !== Window.Maximized)
                             root.startSystemMove()
+                        mouse.accepted = false
                     }
                     onDoubleClicked: {
-                        if (root.visibility === Window.Maximized) {
-                            root.showNormal()
-                        } else {
-                            root.showMaximized()
-                        }
+                        if (root.visibility === Window.Maximized) root.showNormal()
+                        else root.showMaximized()
                     }
                 }
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 14
-                    anchors.rightMargin: 8
-                    spacing: 8
+                    anchors.leftMargin: 5
+                    anchors.rightMargin: 0
+                    spacing: 0
 
+                    // Logo button (对齐上游 BBLTopbar ID_LOGO)
                     Rectangle {
-                        Layout.preferredWidth: 32
-                        Layout.preferredHeight: 32
-                        radius: 9
-                        gradient: Gradient {
-                            GradientStop { position: 0.0; color: "#152230" }
-                            GradientStop { position: 1.0; color: "#0f161f" }
-                        }
-                        border.color: "#2b394d"
-
-                        Rectangle {
-                            width: 16
-                            height: 16
-                            radius: 5
-                            anchors.centerIn: parent
-                            color: root.accentColor
-                            opacity: 0.12
-                        }
+                        Layout.preferredWidth: 40
+                        Layout.preferredHeight: 40
+                        color: logoHover.containsMouse ? "#2a2a2a" : "transparent"
 
                         Image {
                             anchors.centerIn: parent
-                            width: 18
-                            height: 18
+                            width: 20; height: 20
                             source: "qrc:/qml/assets/icons/printer.svg"
                             fillMode: Image.PreserveAspectFit
-                            smooth: true
+                        }
+
+                        HoverHandler { id: logoHover }
+                        TapHandler { onTapped: backend.setCurrentPage(0) }
+                    }
+
+                    TitleBarDivider { Layout.leftMargin: 5; Layout.rightMargin: 10 }
+
+                    // File menu button (对齐上游 BBLTopbar ID_TOP_FILE_MENU)
+                    Rectangle {
+                        id: fileBtn
+                        Layout.preferredHeight: 30
+                        Layout.preferredWidth: 60
+                        radius: 3
+                        color: fileBtnMouse.containsMouse ? "#2a2a2a" : "transparent"
+
+                        Row {
+                            anchors.centerIn: parent
+                            spacing: 4
+                            Text { text: qsTr("文件"); color: "#d0d0d0"; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
+                            Text { text: "▾"; color: "#888"; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                        }
+
+                        MouseArea {
+                            id: fileBtnMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: fileMenu.popup()
                         }
                     }
 
-                    Column {
-                        Layout.alignment: Qt.AlignVCenter
-                        spacing: 0
+                    // Dropdown arrow (对齐上游 BBLTopbar ID_TOP_DROPDOWN_MENU)
+                    Rectangle {
+                        id: dropBtn
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 30
+                        radius: 3
+                        color: dropBtnMouse.containsMouse ? "#2a2a2a" : "transparent"
 
                         Text {
-                            text: qsTr("Creality Print")
-                            color: "#edf3fb"
-                            font.pixelSize: 12
-                            font.bold: true
-                        }
-
-                        Text {
-                            text: qsTr("工作区")
-                            color: "#7f90a6"
+                            anchors.centerIn: parent
+                            text: "▾"
+                            color: "#888"
                             font.pixelSize: 10
                         }
+
+                        MouseArea {
+                            id: dropBtnMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: topMenu.popup()
+                        }
                     }
 
-                    Item { Layout.fillWidth: true }
+                    TitleBarDivider { Layout.leftMargin: 5; Layout.rightMargin: 5 }
 
+                    // Save button (对齐上游 BBLTopbar wxID_SAVE)
+                    CxIconButton {
+                        cxStyle: CxIconButton.Style.Chrome
+                        buttonSize: 30
+                        iconSize: 16
+                        iconSource: "qrc:/qml/assets/icons/device-floppy.svg"
+                        toolTipText: qsTr("保存项目")
+                        onClicked: {
+                            if (!backend.topbarSaveProject())
+                                saveProjectAsDialog.open()
+                        }
+                    }
+
+                    // Undo (对齐上游 BBLTopbar wxID_UNDO)
+                    CxIconButton {
+                        cxStyle: CxIconButton.Style.Chrome
+                        buttonSize: 30
+                        iconSize: 16
+                        iconSource: "qrc:/qml/assets/icons/arrow-back-up.svg"
+                        toolTipText: qsTr("撤销")
+                        enabled: backend.currentPage === root.pagePrepare
+                        onClicked: if (backend.currentPage === root.pagePrepare) preparePage.undoFromTopbar()
+                    }
+
+                    // Redo (对齐上游 BBLTopbar wxID_REDO)
+                    CxIconButton {
+                        cxStyle: CxIconButton.Style.Chrome
+                        buttonSize: 30
+                        iconSize: 16
+                        iconSource: "qrc:/qml/assets/icons/arrow-forward-up.svg"
+                        toolTipText: qsTr("重做")
+                        enabled: backend.currentPage === root.pagePrepare
+                        onClicked: if (backend.currentPage === root.pagePrepare) preparePage.redoFromTopbar()
+                    }
+
+                    // Stretch spacer (pushes tabs toward center)
+                    Item { Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumWidth: 20 }
+
+                    // Tab navigation (对齐上游 BBLTopbar ButtonsCtrl)
                     RowLayout {
-                        id: centeredGroups
-                        Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-                        spacing: 8
+                        Layout.alignment: Qt.AlignVCenter
+                        spacing: 2
 
-                        Rectangle {
-                            id: fileEntry
-                            Layout.preferredHeight: 30
-                            Layout.preferredWidth: 104
-                            radius: 9
-                            border.width: 1
-                            border.color: fileMouse.containsMouse ? "#314058" : "#253043"
-                            color: fileMouse.pressed ? root.topbarPressed : (fileMouse.containsMouse ? root.topbarHover : "#10161e")
-
-                            RowLayout {
-                                anchors.centerIn: parent
-                                spacing: 6
-
-                                Image {
-                                    width: 14
-                                    height: 14
-                                    source: "qrc:/qml/assets/icons/folder-open.svg"
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
+                        Repeater {
+                            model: root.workflowTabs
+                            delegate: Rectangle {
+                                required property var modelData
+                                Layout.preferredHeight: 30
+                                Layout.preferredWidth: Math.max(100, tabText.implicitWidth + 24)
+                                radius: 3
+                                color: {
+                                    if (backend.currentPage === modelData.page) return "#15C963"
+                                    if (tabHover.containsMouse) return "#4CD582"
+                                    return "transparent"
                                 }
 
                                 Text {
-                                    text: qsTr("文件")
-                                    color: "#dce5f1"
+                                    id: tabText
+                                    anchors.centerIn: parent
+                                    text: modelData.label
+                                    color: backend.currentPage === modelData.page ? "#ffffff" : "#c0c0c0"
                                     font.pixelSize: 12
-                                    font.bold: true
+                                    font.bold: backend.currentPage === modelData.page
                                 }
 
-                                Text {
-                                    text: "▾"
-                                    color: "#9fb0c7"
-                                    font.pixelSize: 11
-                                }
-                            }
-
-                            MouseArea {
-                                id: fileMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    const p = fileEntry.mapToItem(root.contentItem, 0, fileEntry.height + 4)
-                                    fileMenu.popup(p.x, p.y)
-                                }
-                            }
-                        }
-
-                        TitleBarDivider { }
-
-                        // Edit menu button
-                        Rectangle {
-                            id: editEntry
-                            Layout.preferredHeight: 30
-                            Layout.preferredWidth: 104
-                            radius: 9
-                            border.width: 1
-                            border.color: editMouse.containsMouse ? "#314058" : "#253043"
-                            color: editMouse.pressed ? root.topbarPressed : (editMouse.containsMouse ? root.topbarHover : "#10161e")
-
-                            RowLayout {
-                                anchors.centerIn: parent
-                                spacing: 6
-
-                                Text {
-                                    text: qsTr("编辑")
-                                    color: "#dce5f1"
-                                    font.pixelSize: 12
-                                    font.bold: true
-                                }
-
-                                Text {
-                                    text: "▾"
-                                    color: "#9fb0c7"
-                                    font.pixelSize: 11
-                                }
-                            }
-
-                            MouseArea {
-                                id: editMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    const p = editEntry.mapToItem(root.contentItem, 0, editEntry.height + 4)
-                                    editMenu.popup(p.x, p.y)
-                                }
-                            }
-                        }
-
-                        // View menu button
-                        Rectangle {
-                            id: viewEntry
-                            Layout.preferredHeight: 30
-                            Layout.preferredWidth: 92
-                            radius: 9
-                            border.width: 1
-                            border.color: viewMouse.containsMouse ? "#314058" : "#253043"
-                            color: viewMouse.pressed ? root.topbarPressed : (viewMouse.containsMouse ? root.topbarHover : "#10161e")
-
-                            RowLayout {
-                                anchors.centerIn: parent
-                                spacing: 6
-                                Text { text: qsTr("视图"); color: "#dce5f1"; font.pixelSize: 12; font.bold: true }
-                                Text { text: "▾"; color: "#9fb0c7"; font.pixelSize: 11 }
-                            }
-
-                            MouseArea {
-                                id: viewMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    const p = viewEntry.mapToItem(root.contentItem, 0, viewEntry.height + 4)
-                                    viewMenu.popup(p.x, p.y)
-                                }
-                            }
-                        }
-
-                        TitleBarDivider { }
-
-                        // Help menu button
-                        Rectangle {
-                            id: helpEntry
-                            Layout.preferredHeight: 30
-                            Layout.preferredWidth: 92
-                            radius: 9
-                            border.width: 1
-                            border.color: helpMouse.containsMouse ? "#314058" : "#253043"
-                            color: helpMouse.pressed ? root.topbarPressed : (helpMouse.containsMouse ? root.topbarHover : "#10161e")
-
-                            RowLayout {
-                                anchors.centerIn: parent
-                                spacing: 6
-                                Text { text: qsTr("帮助"); color: "#dce5f1"; font.pixelSize: 12; font.bold: true }
-                                Text { text: "▾"; color: "#9fb0c7"; font.pixelSize: 11 }
-                            }
-
-                            MouseArea {
-                                id: helpMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    const p = helpEntry.mapToItem(root.contentItem, 0, helpEntry.height + 4)
-                                    helpMenu.popup(p.x, p.y)
-                                }
-                            }
-                        }
-
-                        // Settings menu button
-                        Rectangle {
-                            id: settingsEntry
-                            Layout.preferredHeight: 30
-                            Layout.preferredWidth: 92
-                            radius: 9
-                            border.width: 1
-                            border.color: settingsMouse.containsMouse ? "#314058" : "#253043"
-                            color: settingsMouse.pressed ? root.topbarPressed : (settingsMouse.containsMouse ? root.topbarHover : "#10161e")
-
-                            RowLayout {
-                                anchors.centerIn: parent
-                                spacing: 6
-                                Text { text: qsTr("设置"); color: "#dce5f1"; font.pixelSize: 12; font.bold: true }
-                                Text { text: "▾"; color: "#9fb0c7"; font.pixelSize: 11 }
-                            }
-
-                            MouseArea {
-                                id: settingsMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    const p = settingsEntry.mapToItem(root.contentItem, 0, settingsEntry.height + 4)
-                                    settingsMenu.popup(p.x, p.y)
-                                }
-                            }
-                        }
-
-                        TitleBarDivider { }
-
-                        Rectangle {
-                            Layout.preferredHeight: 34
-                            Layout.preferredWidth: actionTools.implicitWidth + 16
-                            radius: 10
-                            color: "#0f151d"
-                            border.color: "#253043"
-
-                            RowLayout {
-                                id: actionTools
-                                anchors.fill: parent
-                                anchors.leftMargin: 6
-                                anchors.rightMargin: 6
-                                spacing: 4
-
-                                Rectangle {
-                                    Layout.preferredWidth: 28
-                                    Layout.preferredHeight: 28
-                                    radius: 7
-                                    color: "#14202c"
-                                    border.color: "#223041"
-
-                                    Image {
-                                        anchors.centerIn: parent
-                                        width: 14
-                                        height: 14
-                                        source: "qrc:/qml/assets/icons/layout-grid.svg"
-                                        fillMode: Image.PreserveAspectFit
-                                        smooth: true
-                                    }
-                                }
-
-                                CxIconButton {
-                                    cxStyle: CxIconButton.Style.Chrome
-                                    buttonSize: 34
-                                    iconSize: 18
-                                    iconSource: "qrc:/qml/assets/icons/device-floppy.svg"
-                                    toolTipText: qsTr("保存项目")
-                                    onClicked: {
-                                        if (!backend.topbarSaveProject())
-                                            saveProjectAsDialog.open()
-                                    }
-                                }
-
-                                CxIconButton {
-                                    cxStyle: CxIconButton.Style.Chrome
-                                    buttonSize: 34
-                                    iconSize: 18
-                                    iconSource: "qrc:/qml/assets/icons/arrow-back-up.svg"
-                                    toolTipText: qsTr("撤销")
-                                    enabled: backend.currentPage === root.pagePrepare
-                                    onClicked: if (backend.currentPage === root.pagePrepare) preparePage.undoFromTopbar()
-                                }
-
-                                CxIconButton {
-                                    cxStyle: CxIconButton.Style.Chrome
-                                    buttonSize: 34
-                                    iconSize: 18
-                                    iconSource: "qrc:/qml/assets/icons/arrow-forward-up.svg"
-                                    toolTipText: qsTr("重做")
-                                    enabled: backend.currentPage === root.pagePrepare
-                                    onClicked: if (backend.currentPage === root.pagePrepare) preparePage.redoFromTopbar()
-                                }
-                            }
-                        }
-
-                        Rectangle {
-                            Layout.preferredHeight: 34
-                            Layout.preferredWidth: tabsRow.implicitWidth + 14
-                            radius: 11
-                            color: "#0f151d"
-                            border.color: "#253043"
-
-                            RowLayout {
-                                id: tabsRow
-                                anchors.fill: parent
-                                anchors.leftMargin: 6
-                                anchors.rightMargin: 6
-                                spacing: 6
-
-                                Repeater {
-                                    model: root.workflowTabs
-                                    delegate: Rectangle {
-                                        required property var modelData
-                                        Layout.preferredHeight: 26
-                                        Layout.preferredWidth: Math.max(82, implicitLbl.implicitWidth + 28)
-                                        radius: 8
-                                        color: backend.currentPage === modelData.page
-                                            ? "#183425"
-                                            : (tabHov.containsMouse ? root.topbarHover : "transparent")
-                                        border.color: backend.currentPage === modelData.page ? root.accentColor : "transparent"
-                                        border.width: 1
-
-                                        Text {
-                                            id: implicitLbl
-                                            anchors.centerIn: parent
-                                            text: parent.modelData.label
-                                            color: backend.currentPage === parent.modelData.page ? root.accentColor : "#a8b5c8"
-                                            font.pixelSize: 12
-                                            font.bold: backend.currentPage === parent.modelData.page
-                                        }
-
-                                        HoverHandler { id: tabHov }
-                                        TapHandler {
-                                            onTapped: {
-                                                if (backend.currentPage === parent.modelData.page)
-                                                    return
-                                                root.pendingSwitchToken = backend.beginLatency("tab-switch", parent.modelData.label)
-                                                root.pendingSwitchTargetPage = parent.modelData.page
-                                                backend.setCurrentPage(parent.modelData.page)
-                                            }
-                                        }
+                                HoverHandler { id: tabHover }
+                                TapHandler {
+                                    onTapped: {
+                                        if (backend.currentPage === modelData.page) return
+                                        root.pendingSwitchToken = backend.beginLatency("tab-switch", modelData.label)
+                                        root.pendingSwitchTargetPage = modelData.page
+                                        backend.setCurrentPage(modelData.page)
                                     }
                                 }
                             }
                         }
                     }
 
-                        // Slice / Print action group (aligned with upstream MainFrame side_tools)
-                        Row {
-                            visible: backend.currentPage === root.pagePrepare
-                            spacing: 6
+                    // Stretch spacer
+                    Item { Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumWidth: 20 }
 
-                            // Slice button with dropdown arrow
-                            Item {
-                                width: sliceBtn.width + 16
-                                height: sliceBtn.height
+                    // Title label (对齐上游 BBLTopbar ID_TITLE)
+                    Text {
+                        id: projectTitleLabel
+                        Layout.alignment: Qt.AlignVCenter
+                        Layout.maximumWidth: Math.max(160, (root.width / 2) - 500)
+                        Layout.minimumWidth: 160
+                        text: backend.displayProjectTitle
+                        color: "#c0c0c0"
+                        font.pixelSize: 12
+                        elide: Text.ElideRight
+                        ToolTip.visible: titleHover.containsMouse
+                        ToolTip.text: text
+                        HoverHandler { id: titleHover }
+                    }
 
-                                CxPillAction {
-                                    id: sliceBtn
-                                    iconSource: "qrc:/qml/assets/icons/layers.svg"
-                                    text: qsTr("切片")
-                                    onClicked: {
-                                        if (backend.editorViewModel)
-                                            backend.editorViewModel.requestSlice()
-                                    }
-                                }
+                    TitleBarDivider { Layout.leftMargin: 10; Layout.rightMargin: 10 }
 
-                                // Dropdown arrow overlay
-                                Rectangle {
-                                    anchors.right: parent.right
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: 16
-                                    height: sliceBtn.height
-                                    radius: 0
-                                    color: "transparent"
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "▾"
-                                        color: Theme.textTertiary
-                                        font.pixelSize: 9
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            var p = mapToItem(root.contentItem, 0, sliceBtn.height + 4)
-                                            sliceTopMenu.popup(p.x, p.y)
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Print button
-                            Item {
-                                width: printBtn.width + 16
-                                height: printBtn.height
-
-                                CxPillAction {
-                                    id: printBtn
-                                    iconSource: "qrc:/qml/assets/icons/send-2.svg"
-                                    text: qsTr("打印")
-                                    primary: true
-                                    onClicked: preparePage.openPrintDialog()
-                                }
-
-                                Rectangle {
-                                    anchors.right: parent.right
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: 16
-                                    height: printBtn.height
-                                    radius: 0
-                                    color: "transparent"
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "▾"
-                                        color: Theme.textTertiary
-                                        font.pixelSize: 9
-                                    }
-
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            var p = mapToItem(root.contentItem, 0, printBtn.height + 4)
-                                            printTopMenu.popup(p.x, p.y)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Slice dropdown menu
-                        CxMenu {
-                            id: sliceTopMenu
-                            CxMenuItem {
-                                text: qsTr("切片当前平板")
-                                onTriggered: {
-                                    if (backend.editorViewModel)
-                                        backend.editorViewModel.requestSlice()
-                                }
-                            }
-                            CxMenuItem {
-                                text: qsTr("切片全部平板")
-                                onTriggered: {
-                                    if (backend.editorViewModel)
-                                        backend.editorViewModel.requestSliceAll()
-                                }
-                            }
-                        }
-
-                        // Print dropdown menu
-                        CxMenu {
-                            id: printTopMenu
-                            CxMenuItem {
-                                text: qsTr("发送打印")
-                                onTriggered: preparePage.openPrintDialog()
-                            }
-                            CxMenuItem {
-                                text: qsTr("导出 G-code")
-                                onTriggered: preparePage.openExportDialog()
-                            }
-                        }
-
-                    Item { Layout.fillWidth: true }
-
-                    RowLayout {
-                        Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                        spacing: 8
-
-                        Rectangle {
-                            Layout.preferredHeight: 30
-                            Layout.preferredWidth: 224
-                            Layout.maximumWidth: 280
-                            radius: 9
-                            color: "#10161e"
-                            border.color: "#253043"
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 10
-                                anchors.rightMargin: 10
-                                spacing: 8
-
-                                Rectangle {
-                                    width: 6
-                                    height: 6
-                                    radius: 3
-                                    color: root.accentColor
-                                }
-
-                                Label {
-                                    id: projectTitleLabel
-                                    Layout.fillWidth: true
-                                    text: backend.displayProjectTitle
-                                    color: "#c9d4e4"
-                                    font.pixelSize: 12
-                                    elide: Text.ElideRight
-                                    verticalAlignment: Text.AlignVCenter
-                                    ToolTip.visible: titleMouse.containsMouse && text.length > 0
-                                    ToolTip.text: text
-                                }
-
-                                MouseArea {
-                                    id: titleMouse
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    hoverEnabled: true
-                                    acceptedButtons: Qt.NoButton
-                                }
-                            }
-                        }
+                    // Bell icon (notification center)
+                    Item {
+                        Layout.alignment: Qt.AlignVCenter
+                        width: 30; height: 30
 
                         CxIconButton {
-                            id: moreActionsButton
+                            id: bellButton
                             cxStyle: CxIconButton.Style.Chrome
-                            buttonSize: 34
-                            iconSize: 18
-                            iconSource: "qrc:/qml/assets/icons/dots.svg"
-                            toolTipText: qsTr("更多")
-                            onClicked: {
-                                const p = moreActionsButton.mapToItem(root.contentItem, 0, moreActionsButton.height + 4)
-                                dropdownMenu.popup(p.x, p.y)
-                            }
+                            buttonSize: 30
+                            iconSize: 14
+                            iconSource: "qrc:/qml/assets/icons/bell.svg"
+                            toolTipText: qsTr("通知中心")
+                            onClicked: notificationCenterPopup.open()
                         }
 
-                        // Bell icon — notification center trigger (aligns with upstream notification_manager)
-                        Item {
-                            width: 34; height: 34
-
-                            CxIconButton {
-                                id: bellButton
-                                cxStyle: CxIconButton.Style.Chrome
-                                buttonSize: 34
-                                iconSize: 16
-                                iconSource: "qrc:/qml/assets/icons/bell.svg"
-                                toolTipText: qsTr("通知中心")
-                                onClicked: notificationCenterPopup.open()
-                            }
-
-                            // Unread badge on bell
-                            Rectangle {
-                                visible: backend.unreadHistoryCount > 0
-                                anchors.top: bellButton.top
-                                anchors.topMargin: 2
-                                anchors.left: bellButton.left
-                                anchors.leftMargin: 18
-                                width: 8; height: 8
-                                radius: 4
-                                color: "#f05545"
-                                z: 1
-                            }
+                        Rectangle {
+                            visible: backend.unreadHistoryCount > 0
+                            anchors.top: bellButton.top; anchors.topMargin: 2
+                            anchors.left: bellButton.left; anchors.leftMargin: 18
+                            width: 8; height: 8; radius: 4
+                            color: "#f05545"
+                            z: 1
                         }
 
-                        // Notification center popup
                         Popup {
                             id: notificationCenterPopup
                             x: bellButton.x + bellButton.width - 320
@@ -1167,51 +814,33 @@ ApplicationWindow {
                                 onCloseRequested: notificationCenterPopup.close()
                             }
                         }
+                    }
 
-                        Rectangle {
-                            Layout.preferredHeight: 34
-                            Layout.preferredWidth: windowControls.implicitWidth + 16
-                            radius: 10
-                            color: "#0f151d"
-                            border.color: "#253043"
+                    // Window controls
+                    CxIconButton {
+                        cxStyle: CxIconButton.Style.Chrome
+                        buttonSize: 30; iconSize: 14
+                        iconSource: "qrc:/qml/assets/icons/minus.svg"
+                        toolTipText: qsTr("最小化")
+                        onClicked: root.showMinimized()
+                    }
 
-                            RowLayout {
-                                id: windowControls
-                                anchors.fill: parent
-                                anchors.leftMargin: 6
-                                anchors.rightMargin: 6
-                                spacing: 4
+                    CxIconButton {
+                        cxStyle: CxIconButton.Style.Chrome
+                        buttonSize: 30; iconSize: 14
+                        iconSource: root.visibility === Window.Maximized
+                            ? "qrc:/qml/assets/icons/restore.svg"
+                            : "qrc:/qml/assets/icons/maximize.svg"
+                        toolTipText: root.visibility === Window.Maximized ? qsTr("还原") : qsTr("最大化")
+                        onClicked: root.visibility === Window.Maximized ? root.showNormal() : root.showMaximized()
+                    }
 
-                                CxIconButton {
-                                    cxStyle: CxIconButton.Style.Chrome
-                                    buttonSize: 34
-                                    iconSize: 16
-                                    iconSource: "qrc:/qml/assets/icons/minus.svg"
-                                    toolTipText: qsTr("最小化")
-                                    onClicked: root.showMinimized()
-                                }
-
-                                CxIconButton {
-                                    cxStyle: CxIconButton.Style.Chrome
-                                    buttonSize: 34
-                                    iconSize: 16
-                                    iconSource: root.visibility === Window.Maximized
-                                        ? "qrc:/qml/assets/icons/restore.svg"
-                                        : "qrc:/qml/assets/icons/maximize.svg"
-                                    toolTipText: root.visibility === Window.Maximized ? qsTr("还原") : qsTr("最大化")
-                                    onClicked: root.visibility === Window.Maximized ? root.showNormal() : root.showMaximized()
-                                }
-
-                                CxIconButton {
-                                    cxStyle: CxIconButton.Style.ChromeDanger
-                                    buttonSize: 34
-                                    iconSize: 16
-                                    iconSource: "qrc:/qml/assets/icons/x.svg"
-                                    toolTipText: qsTr("关闭")
-                                    onClicked: Qt.quit()
-                                }
-                            }
-                        }
+                    CxIconButton {
+                        cxStyle: CxIconButton.Style.ChromeDanger
+                        buttonSize: 30; iconSize: 14
+                        iconSource: "qrc:/qml/assets/icons/x.svg"
+                        toolTipText: qsTr("关闭")
+                        onClicked: Qt.quit()
                     }
                 }
 
@@ -1220,7 +849,7 @@ ApplicationWindow {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     height: 1
-                    color: "#202838"
+                    color: "#303030"
                 }
             }
 
