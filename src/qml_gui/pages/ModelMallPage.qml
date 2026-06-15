@@ -6,7 +6,7 @@ import "../controls"
 
 /// ModelMallPage - 3D model mall browsing interface
 ///
-/// Upstream alignment: third_party/CrealityPrint/src/slic3r/GUI/ModelMall.cpp
+/// Upstream alignment: third_party/OrcaSlicer/src/slic3r/GUI/ModelMall.cpp
 ///   - ModelMallDialog: DPIFrame with wxWebView loading a cloud-hosted mall URL
 ///   - Navigation controls: back, forward, refresh (mall_control_back/forward/refresh)
 ///   - Script message handling: "request_close_publish_window" command
@@ -753,7 +753,7 @@ Item {
                 }
 
                 Text {
-                    text: qsTr("Powered by Creality Cloud")
+                    text: qsTr("Powered by OrcaSlicer Cloud")
                     color: Theme.chromeTextMuted
                     font.pixelSize: Theme.fontSizeXS
                 }

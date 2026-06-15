@@ -85,25 +85,25 @@
   },
   {
     "id": "hint_chamber_temperature",
-    "text": "腔体温度\nCrealityPrint 支持腔体温度设置，适用于 ABS/ASA 等需要封闭环境的耗材。",
+    "text": "腔体温度\nOWzx 支持腔体温度设置，适用于 ABS/ASA 等需要封闭环境的耗材。",
     "weight": 4,
     "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Chamber-temperature"
   },
   {
     "id": "hint_calibration",
-    "text": "打印机校准\n校准打印机可以显著提升打印质量。在 CrealityPrint 中可以使用内置校准解决方案。",
+    "text": "打印机校准\n校准打印机可以显著提升打印质量。可以使用内置校准解决方案。",
     "weight": 7,
     "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Calibration"
   },
   {
     "id": "hint_auxiliary_fan",
-    "text": "辅助风扇\nCrealityPrint 支持辅助部件冷却风扇设置。",
+    "text": "辅助风扇\nOWzx 支持辅助部件冷却风扇设置。",
     "weight": 3,
     "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Auxiliary-fan"
   },
   {
     "id": "hint_air_filtration",
-    "text": "空气净化/排气风扇\nCrealityPrint 支持空气净化和排气风扇控制。",
+    "text": "空气净化/排气风扇\nOWzx 支持空气净化和排气风扇控制。",
     "weight": 3,
     "documentation_link": "https://github.com/SoftFever/OrcaSlicer/wiki/Air-filtration"
   },

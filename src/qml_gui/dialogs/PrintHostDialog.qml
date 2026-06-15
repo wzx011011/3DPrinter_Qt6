@@ -20,9 +20,9 @@ CxDialog {
     height: 340
 
     // Mock print host data
-    property string presetName: "Creality CR-10 SE"
-    property string hostType: "Creality Cloud"
-    property string hostUrl: "https://api.creality.com"
+    property string presetName: "OrcaSlicer Default"
+    property string hostType: "OrcaSlicer Cloud"
+    property string hostUrl: "https://api.orcaslicer.org"
     property int hostPort: 443
     property string apiKey: ""
     property string authType: qsTr("API Key")
@@ -66,7 +66,7 @@ CxDialog {
                 Layout.fillWidth: true
                 implicitHeight: 24
                 font.pixelSize: 11
-                model: ["Creality Cloud", "OctoPrint", "PrusaLink", "Moonraker", "Klipper"]
+                model: ["OrcaSlicer Cloud", "OctoPrint", "PrusaLink", "Moonraker", "Klipper"]
                 currentIndex: 0
             }
         }
