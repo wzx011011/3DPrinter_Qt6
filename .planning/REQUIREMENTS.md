@@ -23,11 +23,11 @@
 
 ### BRAND — OWzx Brand Cleanup
 
-- [ ] **BRAND-01**: 应用窗口标题、关于对话框、shortcut 一览对话框中所有 "Creality Print" / "CrealityPrint" 字符串替换为 "OWzx"
-- [ ] **BRAND-02**: 移除 `third_party/CrealityPrint` submodule 引用与所有相关 CMake/config 路径
+- [x] **BRAND-01**: 应用窗口标题、关于对话框、shortcut 一览对话框中所有 "Creality Print" / "CrealityPrint" 字符串替换为 "OWzx"
+- [x] **BRAND-02**: 移除 `third_party/CrealityPrint` submodule 引用与所有相关 CMake/config 路径
 - [ ] **BRAND-03**: 内部命名空间 `Crality3D` / `creality` 等迁移到 `OWzx` / `owzx`（保持向后兼容的 alias 阶段可省略）
-- [ ] **BRAND-04**: 资源文件（图标、配置）中所有 Creality 品牌资源替换为 OWzx 版本
-- [ ] **BRAND-05**: 启动画面、关于对话框版本号对齐 OrcaSlicer main branch（不再用 v7.0.1）
+- [x] **BRAND-04**: 资源文件（图标、配置）中所有 Creality 品牌资源替换为 OWzx 版本
+- [x] **BRAND-05**: 启动画面、关于对话框版本号对齐 OrcaSlicer main branch（不再用 v7.0.1）
 
 ### ARCH — Top-Level Architecture
 
