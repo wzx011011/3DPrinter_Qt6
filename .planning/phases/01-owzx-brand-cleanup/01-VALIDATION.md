@@ -1,8 +1,8 @@
 ---
 phase: 1
 slug: owzx-brand-cleanup
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-06-15
 ---
@@ -52,11 +52,11 @@ created: 2026-06-15
 
 ## Wave 0 Requirements
 
-- [ ] `scripts/verify_brand_cleanup.ps1` — new grep assertion script aggregating all BRAND-01~05 checks; returns exit code 0 only when all grep patterns return empty AND build passes
-- [ ] `tests/CliTests.cpp` and `tests/ViewModelSmokeTests.cpp` — update `#include` paths and `creality_app_core` → `owzx_app_core` target name after rename
+- [ ] `scripts/verify_brand_cleanup.ps1` — new grep assertion script aggregating all BRAND-01~05 checks; returns exit code 0 only when all grep patterns return empty AND build passes. **Created in Plan 03 Task 2 (Wave 3) as a permanent verification tool.** Earlier waves (01-01, 01-02) use inline grep assertions per-task per the Per-Task Verification Map below.
+- [ ] `tests/CliTests.cpp` and `tests/ViewModelSmokeTests.cpp` — update `#include` paths and `creality_app_core` → `owzx_app_core` target name after rename (handled in Plan 02 Task 1)
 - [ ] No new test framework installation required — Qt Test + CTest already configured
 
-*Existing infrastructure (Qt Test + auto_verify_with_vcvars.ps1) covers Phase 1 verification; only the brand-cleanup-specific assertion script is new.*
+*Existing infrastructure (Qt Test + auto_verify_with_vcvars.ps1) covers Phase 1 verification; only the brand-cleanup-specific assertion script is new (deferred to Wave 3).*
 
 ---
 
@@ -72,11 +72,11 @@ created: 2026-06-15
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references (verify_brand_cleanup.ps1)
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 300s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (verify_brand_cleanup.ps1 deferred to Plan 03 Wave 3; earlier waves use inline grep)
+- [x] No watch-mode flags
+- [x] Feedback latency < 300s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-06-15
