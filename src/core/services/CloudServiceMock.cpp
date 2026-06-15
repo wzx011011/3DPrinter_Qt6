@@ -42,7 +42,7 @@ void CloudServiceMock::login(const QString &user, const QString &password)
   QTimer::singleShot(1200, this, [this, user]() {
     loggedIn_ = true;
     userName_ = user;
-    userEmail_ = user + QStringLiteral("@creality.com");
+    userEmail_ = user + QStringLiteral("@owzx.com");
     lastSyncTime_ = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm"));
 
     // Add some mock bound devices

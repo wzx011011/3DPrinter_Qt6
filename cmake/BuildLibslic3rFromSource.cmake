@@ -3,7 +3,7 @@
 #
 # This cmake file compiles libslic3r from source instead of importing the
 # pre-built library. It mirrors the upstream CMakeLists.txt from:
-#   third_party/CrealityPrint/src/libslic3r/CMakeLists.txt
+#   third_party/OrcaSlicer/src/libslic3r/CMakeLists.txt
 #
 # Strategy:
 #   - Glob all .cpp and .hpp files from the libslic3r directory
@@ -20,9 +20,10 @@
 message(STATUS "=== BuildLibslic3rFromSource: Compiling libslic3r from source ===")
 
 # ─── Path definitions ────────────────────────────────────────────────────────
-set(UPSTREAM_ROOT    "${CMAKE_SOURCE_DIR}/third_party/CrealityPrint")
+set(UPSTREAM_ROOT    "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer")
 set(LIBSLIC3R_SRC_DIR "${UPSTREAM_ROOT}/src/libslic3r")
 set(UPSTREAM_SRC     "${UPSTREAM_ROOT}/src")
+set(UPSTREAM_DEPS    "${UPSTREAM_ROOT}/deps_src")
 set(LIBSLIC3R_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/libslic3r_generated")
 set(LIBSLIC3R_RELATIVE_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/libslic3r")
 
@@ -37,34 +38,40 @@ set(SLIC3R_BUILD_TIME ${COMPILE_TIME})
 # ─── 1. Generate libslic3r_version.h ─────────────────────────────────────────
 # Provide default values for the version template variables
 if(NOT DEFINED SLIC3R_APP_NAME)
-    set(SLIC3R_APP_NAME "CrealityPrint")
+    set(SLIC3R_APP_NAME "OrcaSlicer")
 endif()
 if(NOT DEFINED SLIC3R_APP_KEY)
-    set(SLIC3R_APP_KEY "CrealityPrint")
+    set(SLIC3R_APP_KEY "OrcaSlicer")
 endif()
 if(NOT DEFINED SLIC3R_APP_USE_FORDER)
-    set(SLIC3R_APP_USE_FORDER "Creality")
+    set(SLIC3R_APP_USE_FORDER "OrcaSlicer")
 endif()
 if(NOT DEFINED PROCESS_NAME)
-    set(PROCESS_NAME "CrealityPrint")
+    set(PROCESS_NAME "OrcaSlicer")
 endif()
 if(NOT DEFINED SLIC3R_VERSION)
-    set(SLIC3R_VERSION "1.0.0")
+    set(SLIC3R_VERSION "02.06.00.51")
 endif()
-if(NOT DEFINED CREALITYPRINT_VERSION)
-    set(CREALITYPRINT_VERSION "1.0.0")
+if(NOT DEFINED OWZX_VERSION)
+    set(OWZX_VERSION "2.4.0-dev")
 endif()
-if(NOT DEFINED CREALITYPRINT_VERSION_MAJOR)
-    set(CREALITYPRINT_VERSION_MAJOR "1")
+if(NOT DEFINED OWZX_VERSION_MAJOR)
+    set(OWZX_VERSION_MAJOR "2")
 endif()
-if(NOT DEFINED CREALITYPRINT_VERSION_MINOR)
-    set(CREALITYPRINT_VERSION_MINOR "0")
+if(NOT DEFINED OWZX_VERSION_MINOR)
+    set(OWZX_VERSION_MINOR "4")
 endif()
-if(NOT DEFINED CREALITYPRINT_VERSION_PATCH)
-    set(CREALITYPRINT_VERSION_PATCH "0")
+if(NOT DEFINED OWZX_VERSION_PATCH)
+    set(OWZX_VERSION_PATCH "0")
 endif()
 if(NOT DEFINED SLIC3R_BUILD_ID)
     set(SLIC3R_BUILD_ID "${SLIC3R_VERSION}-${COMPILE_TIME}")
+endif()
+if(NOT DEFINED SoftFever_VERSION)
+    set(SoftFever_VERSION "2.4.0-dev")
+endif()
+if(NOT DEFINED ORCA_CHECK_GCODE_PLACEHOLDERS)
+    set(ORCA_CHECK_GCODE_PLACEHOLDERS 0)
 endif()
 if(NOT DEFINED BBL_RELEASE_TO_PUBLIC)
     set(BBL_RELEASE_TO_PUBLIC 0)
@@ -137,7 +144,7 @@ if(NOT DEFINED MAIN_GIT_HASH)
     # Try to get from git
     execute_process(
         COMMAND git rev-parse HEAD
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party/CrealityPrint"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer"
         OUTPUT_VARIABLE MAIN_GIT_HASH
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
@@ -151,7 +158,7 @@ if(NOT DEFINED SHIPPING_LEVEL)
     set(SHIPPING_LEVEL 0)
 endif()
 if(NOT DEFINED PROJECT_DLL_NAME_WIN32)
-    set(PROJECT_DLL_NAME_WIN32 "CrealityPrint_Slicer")
+    set(PROJECT_DLL_NAME_WIN32 "OrcaSlicer")
 endif()
 if(NOT DEFINED CPACK_ORGANIZATION)
     set(CPACK_ORGANIZATION "")
@@ -166,9 +173,11 @@ set(BUILD_INFO_HEAD "BUILDINFO_H_")
 set(__SUB_BUILD_INFO_DEFINE "")
 # No module_info/build_info cmake files in our simplified build
 
+# OrcaSlicer does not have buildinfo.h.in — generate a minimal stub
 configure_file(
-    "${UPSTREAM_ROOT}/cmake/buildinfo.h.in"
+    "${CMAKE_SOURCE_DIR}/cmake/buildinfo.h.in.stub"
     "${LIBSLIC3R_GEN_DIR}/buildinfo.h"
+    @ONLY
 )
 
 # ─── 2. Glob source files ─────────────────────────────────────────────────────
@@ -264,16 +273,20 @@ file(GLOB LIBSLIC3R_SUPPORT_SOURCES
     "${LIBSLIC3R_SRC_DIR}/support_new/*.hpp"
 )
 
-# FDM subdirectory (Creality-specific FDM features)
-file(GLOB LIBSLIC3R_FDM_SOURCES
-    "${LIBSLIC3R_SRC_DIR}/FDM/*.cpp"
-    "${LIBSLIC3R_SRC_DIR}/FDM/*.hpp"
+# Support subdirectory (OrcaSlicer tree/support material, replaces support_new/)
+file(GLOB LIBSLIC3R_SUPPORT_SOURCES
+    "${LIBSLIC3R_SRC_DIR}/Support/*.cpp"
+    "${LIBSLIC3R_SRC_DIR}/Support/*.hpp"
 )
 
-# common_header subdirectory
-file(GLOB LIBSLIC3R_COMMON_HEADER_SOURCES
-    "${LIBSLIC3R_SRC_DIR}/common_header/*.cpp"
-    "${LIBSLIC3R_SRC_DIR}/common_header/*.h"
+# Feature subdirectory (FuzzySkin, Interlocking)
+file(GLOB LIBSLIC3R_FEATURE_SOURCES
+    "${LIBSLIC3R_SRC_DIR}/Feature/*.cpp"
+    "${LIBSLIC3R_SRC_DIR}/Feature/*.hpp"
+    "${LIBSLIC3R_SRC_DIR}/Feature/FuzzySkin/*.cpp"
+    "${LIBSLIC3R_SRC_DIR}/Feature/FuzzySkin/*.hpp"
+    "${LIBSLIC3R_SRC_DIR}/Feature/Interlocking/*.cpp"
+    "${LIBSLIC3R_SRC_DIR}/Feature/Interlocking/*.hpp"
 )
 
 # Combine all sources
@@ -287,34 +300,38 @@ set(ALL_LIBSLIC3R_SOURCES
     ${LIBSLIC3R_FORMAT_SOURCES}
     ${LIBSLIC3R_GCODE_SOURCES}
     ${LIBSLIC3R_GEOMETRY_SOURCES}
-    ${LIBSLIC3R_INTERLOCKING_SOURCES}
     ${LIBSLIC3R_OPTIMIZE_SOURCES}
     ${LIBSLIC3R_SHAPE_SOURCES}
     ${LIBSLIC3R_SLA_SOURCES}
     ${LIBSLIC3R_SUPPORT_SOURCES}
-    ${LIBSLIC3R_FDM_SOURCES}
-    ${LIBSLIC3R_COMMON_HEADER_SOURCES}
+    ${LIBSLIC3R_FEATURE_SOURCES}
 )
 
-# Exclude files that are commented out in the upstream CMakeLists.txt
+# Exclude files that are not in the upstream CMakeLists.txt source list
 list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "GCodeSender\\.")
-list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "SupportSpotsGenerator\\.")
-# Only exclude the legacy top-level support sources that remain commented out
-# upstream. Keep support_new/* in the build because PrintObject.cpp depends on
-# their concrete implementations.
-list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX ".*/libslic3r/[Tt]ree[Ss]upport\\.(cpp|hpp)$")
-list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX ".*/libslic3r/SupportMaterial\\.(cpp|hpp)$")
+list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "ExPolygonCollection\\.")
+list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "JumpPointSearch\\.")
+list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "TryCatchSignalSEH\\.")
+# CGAL sub-library sources — built separately as libslic3r_cgal_from_source
+list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "/CutSurface\\.")
+list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "/IntersectionPoints\\.")
+list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "/MeshBoolean\\.")
+list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "/TryCatchSignal\\.")
+list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "/Triangulation\\.")
 list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "SLA/SupportTreeIGL\\.")
 list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "Arachne/utils/ExtrusionJunction\\.cpp$")
 list(APPEND ALL_LIBSLIC3R_SOURCES
     "${LIBSLIC3R_GEN_DIR}/libslic3r_version.h"
     "${LIBSLIC3R_GEN_DIR}/buildinfo.h"
+    # Stub for MeshBoolean::mcut — see cmake/stubs/MeshBoolean_mcut_stub.cpp
+    "${CMAKE_SOURCE_DIR}/cmake/stubs/MeshBoolean_mcut_stub.cpp"
 )
 
 # ─── Platform-specific sources ───────────────────────────────────────────────
 if(WIN32)
     # Windows-specific sources (automation, baseline testing)
-    list(APPEND ALL_LIBSLIC3R_SOURCES
+    # Note: OrcaSlicer may not have all of these; only add if they exist
+    set(_WIN32_OPTIONAL_SOURCES
         "${LIBSLIC3R_SRC_DIR}/baseline.hpp"
         "${LIBSLIC3R_SRC_DIR}/baseline.cpp"
         "${LIBSLIC3R_SRC_DIR}/baselineorcinput.hpp"
@@ -324,6 +341,11 @@ if(WIN32)
         "${LIBSLIC3R_SRC_DIR}/AutomationMgr.hpp"
         "${LIBSLIC3R_SRC_DIR}/AutomationMgr.cpp"
     )
+    foreach(_src ${_WIN32_OPTIONAL_SOURCES})
+        if(EXISTS "${_src}")
+            list(APPEND ALL_LIBSLIC3R_SOURCES "${_src}")
+        endif()
+    endforeach()
 endif()
 
 if(APPLE)
@@ -366,6 +388,16 @@ if(TARGET cereal AND NOT TARGET cereal::cereal)
 endif()
 find_package(NLopt CONFIG REQUIRED)
 find_package(EXPAT REQUIRED)
+find_package(draco CONFIG REQUIRED)
+
+# libnoise (vcpkg installs as 'noise', OrcaSlicer includes <libnoise/...>)
+set(LIBNOISE_INCLUDE_DIR "${VCPKG_INSTALLED_DIR}/include" CACHE PATH "")
+set(LIBNOISE_LIBRARIES "${VCPKG_INSTALLED_DIR}/lib/noise.lib" CACHE FILEPATH "")
+add_library(noise::noise INTERFACE IMPORTED GLOBAL)
+set_target_properties(noise::noise PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${LIBNOISE_INCLUDE_DIR}"
+    INTERFACE_LINK_LIBRARIES "${LIBNOISE_LIBRARIES}"
+)
 
 # GMP/MPFR for CGAL
 set(GMP_INCLUDE_DIR "${DEPS_PREFIX}/include" CACHE PATH "")
@@ -416,13 +448,14 @@ set(LIBSLIC3R_CGAL_SOURCES
     "${LIBSLIC3R_SRC_DIR}/Triangulation.cpp"
 )
 
-# MeshBoolean is excluded when BUILD_CLOUD_SLICER is defined
-if(NOT DEFINED BUILD_CLOUD_SLICER OR NOT BUILD_CLOUD_SLICER)
-    list(APPEND LIBSLIC3R_CGAL_SOURCES
-        "${LIBSLIC3R_SRC_DIR}/MeshBoolean.hpp"
-        "${LIBSLIC3R_SRC_DIR}/MeshBoolean.cpp"
-    )
-endif()
+# MeshBoolean requires CGAL 5.6+ (uses CGAL::parameters::default_values).
+# Our pre-built CGAL is 5.4. Exclude until CGAL is upgraded.
+# if(NOT DEFINED BUILD_CLOUD_SLICER OR NOT BUILD_CLOUD_SLICER)
+#     list(APPEND LIBSLIC3R_CGAL_SOURCES
+#         "${LIBSLIC3R_SRC_DIR}/MeshBoolean.hpp"
+#         "${LIBSLIC3R_SRC_DIR}/MeshBoolean.cpp"
+#     )
+# endif()
 
 add_library(libslic3r_cgal_from_source STATIC ${LIBSLIC3R_CGAL_SOURCES})
 
@@ -435,6 +468,9 @@ endif()
 target_compile_definitions(libslic3r_cgal_from_source PRIVATE
     _USE_MATH_DEFINES
     NOMINMAX
+    BOOST_ALL_NO_LIB
+    BOOST_USE_WINAPI_VERSION=0x602
+    BOOST_SYSTEM_USE_UTF8
 )
 
 target_include_directories(libslic3r_cgal_from_source PRIVATE
@@ -477,12 +513,13 @@ endif()
 
 # System include directories needed by CGAL-dependent sources
 target_include_directories(libslic3r_cgal_from_source SYSTEM PRIVATE
-    "${UPSTREAM_SRC}/eigen"
     ${_cgal_inc}
 )
 
 target_link_libraries(libslic3r_cgal_from_source PRIVATE
     ${_cgal_tgt}
+    Eigen3::Eigen
+    admesh_imported          # Provides ${UPSTREAM_DEPS} include (admesh/stl.h, semver/semver.h, etc.)
     libigl_imported
     mcut_imported
     tbb_libs
@@ -534,24 +571,28 @@ target_include_directories(libslic3r_from_source
         "${LIBSLIC3R_GEN_DIR}"     # Generated headers
 )
 
-# System include directories (external dependencies)
+# System include directories (external dependencies found via find_package)
+# Header-only deps (ankerl, nlohmann, fast_float, nanosvg, stb_dxt, libigl)
+# are provided by linking their INTERFACE targets from BuildDepsFromSource.cmake.
+# Eigen3 is provided by find_package(Eigen3) via vcpkg.
+# admesh, clipper include dirs come via their PUBLIC target_include_directories.
 target_include_directories(libslic3r_from_source SYSTEM PUBLIC
     ${Boost_INCLUDE_DIRS}
     ${_cgal_inc}
     ${EXPAT_INCLUDE_DIRS}
-    "${UPSTREAM_SRC}/eigen"
-    "${UPSTREAM_SRC}/fast_float"
-    "${UPSTREAM_SRC}/nlohmann"
-    "${UPSTREAM_SRC}/ankerl"
-    "${UPSTREAM_SRC}/nanosvg"
-    "${UPSTREAM_SRC}/spline"
-    "${UPSTREAM_SRC}/stb_dxt"
-    "${UPSTREAM_SRC}/libigl"
-    "${UPSTREAM_SRC}/clipper2/Clipper2Lib/include"
-    "${UPSTREAM_SRC}/miniz"
-    "${UPSTREAM_SRC}/glu-libtess/include"
-    "${UPSTREAM_SRC}/libnest2d/include"
     "${DEPS_PREFIX}/include/occt"
+)
+
+# Link header-only INTERFACE targets — their SYSTEM INTERFACE include dirs
+# propagate automatically to libslic3r_from_source and all consumers.
+target_link_libraries(libslic3r_from_source PUBLIC
+    ankerl_from_source
+    nlohmann_from_source
+    fast_float_from_source
+    nanosvg_from_source
+    stb_dxt_from_source
+    libigl_from_source
+    Eigen3::Eigen
 )
 
 # ─── 7. OCCT (OpenCASCADE) libraries with delay-load ──────────────────────────
@@ -624,6 +665,8 @@ target_link_libraries(libslic3r_from_source PUBLIC
     ${GMP_LIBRARIES}
     ${MPFR_LIBRARIES}
     NLopt::nlopt
+    draco::draco
+    noise::noise
     ${CMAKE_DL_LIBS}
     # CGAL (for main library too)
     ${_cgal_tgt}
@@ -710,24 +753,8 @@ target_include_directories(libslic3r INTERFACE
     "${UPSTREAM_SRC}"
     "${LIBSLIC3R_GEN_DIR}"
 )
-target_include_directories(libslic3r SYSTEM INTERFACE
-    ${Boost_INCLUDE_DIRS}
-    ${_cgal_inc}
-    "${UPSTREAM_SRC}/eigen"
-    "${UPSTREAM_SRC}/fast_float"
-    "${UPSTREAM_SRC}/nlohmann"
-    "${UPSTREAM_SRC}/ankerl"
-    "${UPSTREAM_SRC}/nanosvg"
-    "${UPSTREAM_SRC}/spline"
-    "${UPSTREAM_SRC}/stb_dxt"
-    "${UPSTREAM_SRC}/libigl"
-    "${UPSTREAM_SRC}/clipper2/Clipper2Lib/include"
-    "${UPSTREAM_SRC}/miniz"
-    "${UPSTREAM_SRC}/glu-libtess/include"
-    "${UPSTREAM_SRC}/libnest2d/include"
-    ${EXPAT_INCLUDE_DIRS}
-    "${DEPS_PREFIX}/include/occt"
-)
+# System includes are forwarded via libslic3r_from_source PUBLIC linkage.
+# No need to duplicate them here — they propagate through target_link_libraries.
 
 # Link to the compiled library
 target_link_libraries(libslic3r INTERFACE libslic3r_from_source)

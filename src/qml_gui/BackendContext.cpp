@@ -55,7 +55,7 @@ BackendContext::BackendContext(QObject *parent)
     : QObject(parent)
 {
   m_latencyClock.start();
-  const QByteArray compareMode = qgetenv("CREALITY_VISUAL_COMPARE_MODE");
+  const QByteArray compareMode = qgetenv("OWZX_VISUAL_COMPARE_MODE");
   visualCompareMode_ = (compareMode == "1" || compareMode.compare("true", Qt::CaseInsensitive) == 0);
 
   calibrationService_ = new CalibrationServiceMock(this);

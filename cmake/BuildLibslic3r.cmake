@@ -3,12 +3,12 @@
 #
 # 方案：直接使用 E:\ai\3D-Printer\out\vs2026-x64-release 构建产物
 #   - .lib 文件来自上游 VS2026 构建输出
-#   - 头文件来自 third_party/CrealityPrint/src（git submodule）
+#   - 头文件来自 third_party/OrcaSlicer/src（git submodule）
 #   - 生成头文件来自上游构建输出目录
 #   - 外部依赖来自上游相同的 deps 目录
 #
 # 优点：
-#   1. 绝不修改/编译 third_party/CrealityPrint/ 下的任何源码
+#   1. 绝不修改/编译 third_party/OrcaSlicer/ 下的任何源码
 #   2. ABI 完全兼容（同一台机器、同一个 VS2026 编译器）
 #   3. 构建速度极快（仅需链接，无需编译 ~480 个源文件）
 # ==============================================================================
@@ -16,8 +16,9 @@
 message(STATUS "=== BuildLibslic3r: importing pre-built libraries ===")
 
 # ─── Path definitions ────────────────────────────────────────────────────────
-set(UPSTREAM_ROOT    "${CMAKE_SOURCE_DIR}/third_party/CrealityPrint")
+set(UPSTREAM_ROOT    "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer")
 set(UPSTREAM_SRC     "${UPSTREAM_ROOT}/src")
+set(UPSTREAM_DEPS    "${UPSTREAM_ROOT}/deps_src")
 set(UPSTREAM_BUILD   "E:/ai/3D-Printer/out/vs2026-x64-release/build/src")
 set(UPSTREAM_GEN_DIR "${UPSTREAM_BUILD}/libslic3r")   # buildinfo.h, libslic3r_version.h
 
@@ -125,20 +126,19 @@ target_include_directories(libslic3r INTERFACE
 target_include_directories(libslic3r SYSTEM INTERFACE
     ${Boost_INCLUDE_DIRS}
     ${_cgal_inc}
-    "${UPSTREAM_SRC}/eigen"
-    "${UPSTREAM_SRC}/fast_float"
-    "${UPSTREAM_SRC}/nlohmann"
-    "${UPSTREAM_SRC}/ankerl"
-    "${UPSTREAM_SRC}/nanosvg"
-    "${UPSTREAM_SRC}/spline"
-    "${UPSTREAM_SRC}/stb_dxt"
-    "${UPSTREAM_SRC}/libigl/include" # libigl headers
-    "${UPSTREAM_SRC}/clipper2/Clipper2Lib/include"
-    "${UPSTREAM_SRC}/miniz"
-    "${UPSTREAM_SRC}/glu-libtess/include"
-    "${UPSTREAM_SRC}/libnest2d/include"
+    "${UPSTREAM_DEPS}/eigen"
+    "${UPSTREAM_DEPS}/fast_float"
+    "${UPSTREAM_DEPS}/nlohmann"
+    "${UPSTREAM_DEPS}/ankerl"
+    "${UPSTREAM_DEPS}/nanosvg"
+    "${UPSTREAM_DEPS}/stb_dxt"
+    "${UPSTREAM_DEPS}/libigl"
+    "${UPSTREAM_DEPS}/clipper2/Clipper2Lib/include"
+    "${UPSTREAM_DEPS}/miniz"
+    "${UPSTREAM_DEPS}/glu-libtess/include"
+    "${UPSTREAM_DEPS}/libnest2d/include"
     ${EXPAT_INCLUDE_DIRS}
-    "${DEPS_PREFIX}/include/occt"    # OpenCASCADE headers
+    "${DEPS_PREFIX}/include/occt"
 )
 
 # Link all pre-built static libs

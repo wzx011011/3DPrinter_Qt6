@@ -11,7 +11,7 @@
 AuxiliaryService::AuxiliaryService(QObject *parent)
     : QObject(parent)
     , basePath_(QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
-                QStringLiteral("/creality_auxiliary"))
+                QStringLiteral("/owzx_auxiliary"))
 {
   ensureBasePathExists();
   loadFiles();

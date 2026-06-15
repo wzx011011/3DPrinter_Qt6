@@ -195,7 +195,7 @@ void MainWindow::refreshNavState()
 
 void MainWindow::loadWindowState()
 {
-  QSettings settings(QStringLiteral("CrealityDemo"), QStringLiteral("Print7Shell"));
+  QSettings settings(QStringLiteral("OWzx"), QStringLiteral("OWzxSlicer"));
   const QRect geometry = settings.value(QStringLiteral("window/geometry")).toRect();
   if (geometry.isValid())
   {
@@ -211,7 +211,7 @@ void MainWindow::loadWindowState()
 
 void MainWindow::saveWindowState() const
 {
-  QSettings settings(QStringLiteral("CrealityDemo"), QStringLiteral("Print7Shell"));
+  QSettings settings(QStringLiteral("OWzx"), QStringLiteral("OWzxSlicer"));
   settings.setValue(QStringLiteral("window/geometry"), geometry());
   settings.setValue(QStringLiteral("window/pageIndex"), currentIndex_);
 }

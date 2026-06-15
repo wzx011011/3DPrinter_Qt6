@@ -79,8 +79,8 @@ int main(int argc, char *argv[])
   // desktop is viewed via RDP, and there is no reliable way to detect
   // this scenario (SESSIONNAME and SM_REMOTESESSION both return "local"
   // when RDP takes over the console session).
-  // Users on a local desktop can set CREALITY_OPENGL=1 to opt into OpenGL.
-  if (!qEnvironmentVariableIsSet("CREALITY_OPENGL")) {
+  // Users on a local desktop can set OWZX_OPENGL=1 to opt into OpenGL.
+  if (!qEnvironmentVariableIsSet("OWZX_OPENGL")) {
     qputenv("QT_QUICK_BACKEND", "software");
   } else {
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
@@ -100,8 +100,8 @@ int main(int argc, char *argv[])
   }
 
   QGuiApplication app(argc, argv);
-  app.setOrganizationName(QStringLiteral("CrealityDemo"));
-  app.setApplicationName(QStringLiteral("Print7Shell"));
+  app.setOrganizationName(QStringLiteral("OWzx"));
+  app.setApplicationName(QStringLiteral("OWzxSlicer"));
   const QString dumpDir = QCoreApplication::applicationDirPath() + QStringLiteral("/crash_dumps");
   QDir().mkpath(dumpDir);
   appendStartupLog(QStringLiteral("Crash dump dir prepared: %1").arg(dumpDir));
