@@ -323,7 +323,10 @@ Item {
                             if (backend.currentPage === modelData.pos) return
                             // Latency 跟踪：beginLatency token 通过 lastTabSwitchToken 暴露给 main.qml
                             root.lastTabSwitchToken = backend.beginLatency("tab-switch", modelData.label)
-                            backend.requestSelectTab(modelData.pos)
+                            // 单一派发源 (WR-01): 不在此处直接调用 requestSelectTab，避免与
+                            // onCurrentIndexChanged 双发 tabSelectRequested。设置 currentIndex 触发
+                            // 上方 onCurrentIndexChanged，由其统一调用 requestSelectTab。
+                            navTabBar.currentIndex = modelData.pos
                         }
                     }
                 }
