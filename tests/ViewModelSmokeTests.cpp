@@ -1,6 +1,7 @@
 #include <QSignalSpy>
 #include <QDir>
 #include <QFileInfo>
+#include <QMetaEnum>
 #include <QtTest>
 
 #include "core/services/CameraServiceMock.h"
@@ -21,7 +22,7 @@ namespace
 {
   static const QString kStlPath = QDir::cleanPath(
       QStringLiteral(QT_TESTCASE_SOURCEDIR) +
-      QStringLiteral("/third_party/CrealityPrint/resources/profiles/hotend.stl"));
+      QStringLiteral("/third_party/OrcaSlicer/resources/profiles/hotend.stl"));
 }
 
 class ViewModelSmokeTests final : public QObject
@@ -30,6 +31,10 @@ class ViewModelSmokeTests final : public QObject
 
 private slots:
   void initTestCase();
+  // Phase 02-01: pure-Qt enum/signal tests — do NOT depend on HAS_LIBSLIC3R
+  void testTabPositionEnumValues();
+  void testRequestSelectTabSignal();
+  void testRequestSelectTabOutOfRange();
   void editor_import_model_updates_state();
   void monitor_refresh_updates_network_and_device();
   void config_default_and_switch_preset();
@@ -227,6 +232,77 @@ void ViewModelSmokeTests::testTierAwareSaveFiltersByTier()
              "machine_max_speed_x should be in printer preset after printer-tier save");
     QCOMPARE(printerSaved[QStringLiteral("machine_max_speed_x")].toDouble(), 999.0);
   }
+}
+
+// ── Phase 02-01: TabPosition Q_ENUM + requestSelectTab unit tests ──
+// These tests construct BackendContext standalone. They do NOT touch any
+// libslic3r-dependent method, so they run regardless of the HAS_LIBSLIC3R
+// define (the initTestCase() QSKIP gate only applies to the other slots).
+
+void ViewModelSmokeTests::testTabPositionEnumValues()
+{
+  BackendContext ctx;
+
+  // 1:1 numeric alignment with upstream MainFrame.hpp:218-229
+  QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpHome), 0);
+  QCOMPARE(static_cast<int>(BackendContext::TabPosition::tp3DEditor), 1);
+  QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpPreview), 2);
+  QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpDevice), 3);
+  QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpMultiDevice), 4);
+  QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpProject), 5);
+  QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpCalibration), 6);
+  QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpPlaceholder1), 7);
+  QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpPlaceholder2), 8);
+
+  // Confirm Q_ENUM registration — proves QML can read backend.TabPosition.tpX
+  const QMetaEnum meta = QMetaEnum::fromType<BackendContext::TabPosition>();
+  QVERIFY(meta.isValid());
+  QCOMPARE(meta.keyToValue("tpHome"), 0);
+  QCOMPARE(meta.keyToValue("tp3DEditor"), 1);
+  QCOMPARE(meta.keyToValue("tpPreview"), 2);
+  QCOMPARE(meta.keyToValue("tpDevice"), 3);
+  QCOMPARE(meta.keyToValue("tpMultiDevice"), 4);
+  QCOMPARE(meta.keyToValue("tpProject"), 5);
+  QCOMPARE(meta.keyToValue("tpCalibration"), 6);
+  QCOMPARE(meta.keyToValue("tpPlaceholder1"), 7);
+  QCOMPARE(meta.keyToValue("tpPlaceholder2"), 8);
+}
+
+void ViewModelSmokeTests::testRequestSelectTabSignal()
+{
+  BackendContext ctx;
+
+  // Default currentPage must remain 1 (Prepare tab) — no regression from Phase 1
+  QCOMPARE(ctx.currentPage(), 1);
+
+  QSignalSpy spy(&ctx, &BackendContext::tabSelectRequested);
+  QVERIFY(spy.isValid());
+
+  ctx.requestSelectTab(2);
+
+  // Signal emitted exactly once with argument 2 (emit-first ordering)
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(spy.takeFirst().at(0).toInt(), 2);
+
+  // currentPage updated to requested position
+  QCOMPARE(ctx.currentPage(), 2);
+}
+
+void ViewModelSmokeTests::testRequestSelectTabOutOfRange()
+{
+  BackendContext ctx;
+
+  QSignalSpy spy(&ctx, &BackendContext::tabSelectRequested);
+  QVERIFY(spy.isValid());
+
+  const int before = ctx.currentPage();
+
+  // Out-of-range positions must be silently rejected (Pitfall A3)
+  ctx.requestSelectTab(-1);
+  ctx.requestSelectTab(9);
+
+  QCOMPARE(spy.count(), 0);
+  QCOMPARE(ctx.currentPage(), before);
 }
 
 QTEST_MAIN(ViewModelSmokeTests)
