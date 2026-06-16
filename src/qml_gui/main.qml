@@ -263,7 +263,7 @@ ApplicationWindow {
     Shortcut {
         sequences: [StandardKey.Undo]
         enabled: backend.currentPage === backend.tp3DEditor
-        onActivated: preparePage.undoFromTopbar()
+            onActivated: plater.preparePageRef.undoFromTopbar()
     }
     Shortcut {
         sequences: [StandardKey.Save]
@@ -275,12 +275,12 @@ ApplicationWindow {
     Shortcut {
         sequences: [StandardKey.Redo]
         enabled: backend.currentPage === backend.tp3DEditor
-        onActivated: preparePage.redoFromTopbar()
+        onActivated: plater.preparePageRef.redoFromTopbar()
     }
     Shortcut {
         sequence: "Ctrl+Shift+Z"
         enabled: backend.currentPage === backend.tp3DEditor
-        onActivated: preparePage.redoFromTopbar()
+        onActivated: plater.preparePageRef.redoFromTopbar()
     }
     Shortcut {
         sequence: "Delete"
@@ -354,7 +354,8 @@ ApplicationWindow {
             // 无需显式 property 传递（避免 required property 在构造期求值产生 undefined 误报）
             BBLTopbar {
                 id: bblTopbar
-                preparePageRef: preparePage
+                // Phase 3: preparePage 现在是 Plater 内部子组件，通过 plater.preparePageRef 访问
+                preparePageRef: plater.preparePageRef
                 Layout.fillWidth: true
                 Layout.preferredHeight: 40
                 windowVisibility: root.visibility
@@ -366,11 +367,11 @@ ApplicationWindow {
                     openModelDialog.nameFilters = [nameFilter, qsTr("所有文件 (*)")]
                     openModelDialog.open()
                 }
-                onExportGcodeRequested: preparePage.openExportDialog()
+                onExportGcodeRequested: plater.preparePageRef.openExportDialog()
                 onExportProjectRequested: { /* TODO: backend.topbarExport3MF */ }
                 onExportModelRequested: { /* TODO: backend.topbarExportModel */ }
-                onUndoRequested: if (backend.currentPage === backend.tp3DEditor) preparePage.undoFromTopbar()
-                onRedoRequested: if (backend.currentPage === backend.tp3DEditor) preparePage.redoFromTopbar()
+                onUndoRequested: if (backend.currentPage === backend.tp3DEditor) plater.preparePageRef.undoFromTopbar()
+                onRedoRequested: if (backend.currentPage === backend.tp3DEditor) plater.preparePageRef.redoFromTopbar()
                 onCalibrationRequested: backend.requestSelectTab(backend.tpCalibration)
                 onPreferencesRequested: { /* TODO: open PreferencesDialog — Phase 3 */ }
                 onAboutRequested: aboutDialog.open()
@@ -411,11 +412,11 @@ ApplicationWindow {
                 id: printTopMenuExternal
                 CxMenuItem {
                     text: qsTr("发送打印")
-                    onTriggered: preparePage.openPrintDialog()
+                    onTriggered: plater.preparePageRef.openPrintDialog()
                 }
                 CxMenuItem {
                     text: qsTr("导出 G-code")
-                    onTriggered: preparePage.openExportDialog()
+                    onTriggered: plater.preparePageRef.openExportDialog()
                 }
             }
 
@@ -442,7 +443,15 @@ ApplicationWindow {
             StackLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                currentIndex: backend.currentPage
+                // Phase 3: Plater 单实例共享 —— tp3DEditor 和 tpPreview 都映射到 slot 1（Plater）。
+                // viewMode 由 BackendContext::requestSelectTab 联动（tpPreview→Preview, tp3DEditor→View3D），
+                // Plater 内部通过 viewMode 切 PreparePage/PreviewPage 可见性。
+                // 上游契约：third_party/OrcaSlicer/src/slic3r/GUI/Plater.cpp 单一 wxPanel 实例
+                // 被 Prepare/Preview tab 共享（ARCH-05）。
+                currentIndex: (backend.currentPage === backend.tp3DEditor
+                               || backend.currentPage === backend.tpPreview)
+                              ? backend.tp3DEditor   // 两 tab 都落到 slot 1 (Plater)
+                              : backend.currentPage
 
                 // Page 0 (tpHome) — Home
                 Loader {
@@ -451,15 +460,22 @@ ApplicationWindow {
                         HomePage { homeVm: backend.homeViewModel }
                     }
                 }
-                // Page 1 (tp3DEditor) — Prepare (eager: undo/redo 访问)
-                PreparePage {
-                    id: preparePage
+                // Page 1 (tp3DEditor) + Page 2 (tpPreview) — Plater 单实例共享
+                // PreparePage 和 PreviewPage 作为 Plater 内部常驻子组件，由 viewMode 切可见性（ARCH-05/06/07）。
+                Plater {
+                    id: plater
                     editorVm: backend.editorViewModel
-                    configVm: backend.configViewModel
-                }
-                // Page 2 (tpPreview) — Preview (eager)
-                PreviewPage {
                     previewVm: backend.previewViewModel
+                    configVm: backend.configViewModel
+                    viewMode: backend.currentViewMode
+                    // Phase 4 (Sidebar Dockable) 会在此接 BBLTopbar 折叠按钮；当前默认展开
+                    leftPanelVisible: true
+                }
+                // Page 2 slot 占位 —— 实际内容由 slot 1 的 Plater 承载（viewMode=Preview 时显示）
+                // 此 Item 仅占位以满足 StackLayout 9-slot 结构，不可见（visible 绑定 false）。
+                Item {
+                    visible: false
+                    anchors.fill: parent
                 }
                 // Page 3 (tpDevice) — Monitor
                 MonitorPage {
