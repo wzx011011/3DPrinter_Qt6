@@ -1193,6 +1193,9 @@ void BackendContext::applyLanguage(int idx)
     m_translator = nullptr;
   }
   emit languageChanged();
+  // WR-06: tr("未命名") 占位符在 displayProjectTitle 内惰性求值，需要显式 emit
+  // displayProjectTitleChanged 让 QML 绑定重新求值并刷新本地化占位符。
+  emit displayProjectTitleChanged();
 }
 
 void BackendContext::applyFontSize(int size)
