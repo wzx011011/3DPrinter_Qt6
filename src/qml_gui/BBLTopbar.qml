@@ -490,6 +490,9 @@ Item {
                 delegate: CxMenuItem {
                     required property string modelData
                     text: modelData
+                    // WR-04: modelData is a local QString path (ProjectViewModel::recentProjects),
+                    // not QUrl-encoded. topbarOpenProject tolerates both via QUrl::isLocalFile()
+                    // fallback — see BackendContext::topbarOpenProject.
                     onTriggered: backend.topbarOpenProject(modelData)
                 }
                 onObjectAdded: (index, object) => fileRecentMenu.insertItem(index, object)
