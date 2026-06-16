@@ -198,6 +198,19 @@ void BackendContext::setCurrentPage(int page)
   currentPage_ = page;
   emit currentPageChanged();
 }
+
+void BackendContext::requestSelectTab(int position)
+{
+  // 越界拒绝（对齐 Pitfall A3 — 防止 StackLayout currentIndex 越界破坏绑定）
+  if (position < 0 || position > 8) {
+    qWarning("[Backend] requestSelectTab: invalid position %d", position);
+    return;
+  }
+  // 先广播信号（对齐上游 wxQueueEvent 语义：消费者在 tab 实际切换前看到事件）
+  emit tabSelectRequested(position);
+  // 再切换页面（setCurrentPage 已含去重 + emit currentPageChanged）
+  setCurrentPage(position);
+}
 void BackendContext::openSettings()
 {
   setCurrentPage(11);

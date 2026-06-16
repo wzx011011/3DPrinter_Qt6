@@ -124,6 +124,23 @@ class BackendContext final : public QObject
   Q_PROPERTY(bool configWizardCompleted READ configWizardCompleted WRITE setConfigWizardCompleted NOTIFY configWizardCompletedChanged)
 
 public:
+  /// 上游对齐 TabPosition 枚举（1:1 数值对齐 third_party/OrcaSlicer/src/slic3r/GUI/MainFrame.hpp:218-229）。
+  /// OWzx 重命名：tpMonitor→tpDevice, tpAuxiliary→tpPlaceholder1, toDebugTool→tpPlaceholder2。
+  /// 数值不变以保持与上游 Notebook.cpp / EVT_SELECT_TAB 完全兼容。
+  enum class TabPosition
+  {
+    tpHome = 0,
+    tp3DEditor = 1,
+    tpPreview = 2,
+    tpDevice = 3,         // upstream: tpMonitor — OWzx rename (CONTEXT.md D-ARCH-02)
+    tpMultiDevice = 4,
+    tpProject = 5,
+    tpCalibration = 6,
+    tpPlaceholder1 = 7,   // upstream: tpAuxiliary — reserved for future use
+    tpPlaceholder2 = 8,   // upstream: toDebugTool — reserved for future use
+  };
+  Q_ENUM(TabPosition)
+
   explicit BackendContext(QObject *parent = nullptr);
 
   QObject *editorViewModel() const;
@@ -148,6 +165,10 @@ public:
   QString displayProjectTitle() const;
 
   Q_INVOKABLE void setCurrentPage(int page);
+  /// 请求切换到指定 tab（对齐上游 MainFrame::request_select_tab，MainFrame.cpp:3943-3948）。
+  /// 先广播 tabSelectRequested 信号（让监听者在页面切换前响应），再调用 setCurrentPage。
+  /// 越界位置静默拒绝并 qWarning（Pitfall A3 — 防止 StackLayout currentIndex 越界）。
+  Q_INVOKABLE void requestSelectTab(int position);
   Q_INVOKABLE void postError(const QString &message, int severity = 0);
   Q_INVOKABLE void postNotification(const QString &message, const QString &title = {}, int severity = 0);
   Q_INVOKABLE void clearError();
@@ -244,6 +265,9 @@ public:
 
 signals:
   void currentPageChanged();
+  /// 广播 tab 切换请求（对齐上游 EVT_SELECT_TAB）。
+  /// 在 currentPage 改变之前发出，便于监听者先于页面切换做出响应。
+  void tabSelectRequested(int position);
   void errorChanged();
   void latencyChanged();
   void uiScaleChanged();
