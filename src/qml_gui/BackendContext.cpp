@@ -212,6 +212,40 @@ void BackendContext::requestSelectTab(int position)
   emit tabSelectRequested(position);
   // 再切换页面（setCurrentPage 已含去重 + emit currentPageChanged）
   setCurrentPage(position);
+  // Phase 3: tab 联动 viewMode（对齐上游 Plater 在 Notebook 切 tab 时自动切 view3D/preview）
+  // tp3DEditor → View3D；tpPreview → Preview；其他 tab 不改 viewMode（切回 Plater 时维持上次视图）
+  if (position == static_cast<int>(TabPosition::tp3DEditor))
+    setCurrentViewMode(static_cast<int>(ViewMode::View3D));
+  else if (position == static_cast<int>(TabPosition::tpPreview))
+    setCurrentViewMode(static_cast<int>(ViewMode::Preview));
+}
+
+void BackendContext::setCurrentViewMode(int mode)
+{
+  // 内联 setter：供 requestSelectTab 联动 + requestChangeViewMode 复用
+  // 越界拒绝（对齐 Pitfall A3）
+  constexpr int kLastVm = static_cast<int>(ViewMode::AssembleView);
+  if (mode < 0 || mode > kLastVm) {
+    qWarning("[Backend] setCurrentViewMode: invalid mode %d (valid 0..%d)", mode, kLastVm);
+    return;
+  }
+  if (static_cast<int>(currentViewMode_) == mode)
+    return;
+  currentViewMode_ = static_cast<ViewMode>(mode);
+  emit currentViewModeChanged();
+}
+
+void BackendContext::requestChangeViewMode(int mode)
+{
+  // 越界拒绝
+  constexpr int kLastVm = static_cast<int>(ViewMode::AssembleView);
+  if (mode < 0 || mode > kLastVm) {
+    qWarning("[Backend] requestChangeViewMode: invalid mode %d (valid 0..%d)", mode, kLastVm);
+    return;
+  }
+  // 先广播（对齐 tabSelectRequested 语义）
+  emit viewModeChangeRequested(mode);
+  setCurrentViewMode(mode);
 }
 void BackendContext::openSettings()
 {

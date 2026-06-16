@@ -135,6 +135,13 @@ class BackendContext final : public QObject
   Q_PROPERTY(int tpCalibration READ tpCalibration CONSTANT)
   Q_PROPERTY(int tpPlaceholder1 READ tpPlaceholder1 CONSTANT)
   Q_PROPERTY(int tpPlaceholder2 READ tpPlaceholder2 CONSTANT)
+  // ── Phase 3: ViewMode 枚举（Plater 内部视图切换，对齐上游 view3D/preview/assemble_view 三 canvas）
+  // 同 TabPosition 模式：Q_PROPERTY(int) 暴露每个枚举值，Q_ENUM 供 C++ 元对象使用。
+  Q_PROPERTY(int vmView3D READ vmView3D CONSTANT)
+  Q_PROPERTY(int vmPreview READ vmPreview CONSTANT)
+  Q_PROPERTY(int vmAssembleView READ vmAssembleView CONSTANT)
+  /// 当前 Plater 视图模式（由 currentPage 联动：tp3DEditor→View3D，tpPreview→Preview）
+  Q_PROPERTY(int currentViewMode READ currentViewMode NOTIFY currentViewModeChanged)
 
 public:
   /// 上游对齐 TabPosition 枚举（1:1 数值对齐 third_party/OrcaSlicer/src/slic3r/GUI/MainFrame.hpp:218-229）。
@@ -154,6 +161,17 @@ public:
   };
   Q_ENUM(TabPosition)
 
+  /// Plater 视图模式（对齐上游 Plater.cpp view3D / preview / assemble_view 三 canvas 设计）。
+  /// 切换只改可见性，不销毁/重建组件（ARCH-07 状态保留契约）。
+  /// AssembleView 在 v2.0 为 Out of Scope，仅留占位。
+  enum class ViewMode
+  {
+    View3D = 0,        ///< Prepare 视图（对象编辑/3D 场景）
+    Preview = 1,       ///< G-code 预览（切片结果）
+    AssembleView = 2,  ///< 多板装配视图（v2.0 占位）
+  };
+  Q_ENUM(ViewMode)
+
   // QML-friendly accessors returning the enum value as int (Q_PROPERTY constants)
   int tpHome() const { return static_cast<int>(TabPosition::tpHome); }
   int tp3DEditor() const { return static_cast<int>(TabPosition::tp3DEditor); }
@@ -164,6 +182,12 @@ public:
   int tpCalibration() const { return static_cast<int>(TabPosition::tpCalibration); }
   int tpPlaceholder1() const { return static_cast<int>(TabPosition::tpPlaceholder1); }
   int tpPlaceholder2() const { return static_cast<int>(TabPosition::tpPlaceholder2); }
+
+  // QML-friendly ViewMode accessors (Q_PROPERTY constants)
+  int vmView3D() const { return static_cast<int>(ViewMode::View3D); }
+  int vmPreview() const { return static_cast<int>(ViewMode::Preview); }
+  int vmAssembleView() const { return static_cast<int>(ViewMode::AssembleView); }
+  int currentViewMode() const { return static_cast<int>(currentViewMode_); }
 
   explicit BackendContext(QObject *parent = nullptr);
 
@@ -181,6 +205,8 @@ public:
   bool visualCompareMode() const;
 
   int currentPage() const;
+  /// Phase 3: 设置当前 Plater 视图模式（去重 + emit currentViewModeChanged）。供 requestSelectTab 联动 + requestChangeViewMode 复用。
+  void setCurrentViewMode(int mode);
   double uiScale() const { return m_uiScale; }
   QColor bgColor() const { return m_bgColor; }
   QColor surfaceColor() const { return m_surfaceColor; }
@@ -193,6 +219,9 @@ public:
   /// 先广播 tabSelectRequested 信号（让监听者在页面切换前响应），再调用 setCurrentPage。
   /// 越界位置静默拒绝并 qWarning（Pitfall A3 — 防止 StackLayout currentIndex 越界）。
   Q_INVOKABLE void requestSelectTab(int position);
+  /// 请求切换 Plater 视图模式（对齐上游 Plater show_view3D / show_preview）。
+  /// 越界/同值静默拒绝。先广播 viewModeChangeRequested，再 setCurrentViewMode。
+  Q_INVOKABLE void requestChangeViewMode(int mode);
   Q_INVOKABLE void postError(const QString &message, int severity = 0);
   Q_INVOKABLE void postNotification(const QString &message, const QString &title = {}, int severity = 0);
   Q_INVOKABLE void clearError();
@@ -292,6 +321,10 @@ signals:
   /// 广播 tab 切换请求（对齐上游 EVT_SELECT_TAB）。
   /// 在 currentPage 改变之前发出，便于监听者先于页面切换做出响应。
   void tabSelectRequested(int position);
+  /// 广播 Plater 视图模式切换请求（对齐上游 view3D/preview 可见性切换）。
+  void viewModeChangeRequested(int mode);
+  /// 当前视图模式已改变（currentViewMode Q_PROPERTY NOTIFY）。
+  void currentViewModeChanged();
   void errorChanged();
   void latencyChanged();
   void uiScaleChanged();
@@ -335,6 +368,8 @@ private:
 
   bool visualCompareMode_ = false;
   int currentPage_ = 1;
+  /// Phase 3: 当前 Plater 视图模式（默认 View3D，对齐上游 Plater 默认显示 view3D）
+  ViewMode currentViewMode_ = ViewMode::View3D;
   QString lastErrorMessage_;
   QString lastErrorTitle_;
   int lastErrorSeverity_ = -1;

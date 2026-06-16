@@ -35,6 +35,11 @@ private slots:
   void testTabPositionEnumValues();
   void testRequestSelectTabSignal();
   void testRequestSelectTabOutOfRange();
+  // Phase 03-01: ViewMode enum + requestChangeViewMode + tab 联动
+  void testViewModeEnumValues();
+  void testCurrentViewModeDefault();
+  void testRequestChangeViewModeSignal();
+  void testTabSelectDrivesViewMode();
   void editor_import_model_updates_state();
   void monitor_refresh_updates_network_and_device();
   void config_default_and_switch_preset();
@@ -303,6 +308,97 @@ void ViewModelSmokeTests::testRequestSelectTabOutOfRange()
 
   QCOMPARE(spy.count(), 0);
   QCOMPARE(ctx.currentPage(), before);
+}
+
+// ── Phase 03-01: ViewMode enum + requestChangeViewMode unit tests ──
+
+void ViewModelSmokeTests::testViewModeEnumValues()
+{
+  BackendContext ctx;
+
+  // 1:1 numeric alignment with upstream Plater view3D/preview/assemble_view
+  QCOMPARE(static_cast<int>(BackendContext::ViewMode::View3D), 0);
+  QCOMPARE(static_cast<int>(BackendContext::ViewMode::Preview), 1);
+  QCOMPARE(static_cast<int>(BackendContext::ViewMode::AssembleView), 2);
+
+  // Q_PROPERTY constant accessors (QML-side vmView3D / vmPreview / vmAssembleView)
+  QCOMPARE(ctx.vmView3D(), 0);
+  QCOMPARE(ctx.vmPreview(), 1);
+  QCOMPARE(ctx.vmAssembleView(), 2);
+
+  // Q_ENUM registration — proves C++ meta-object and future QML introspection
+  const QMetaEnum meta = QMetaEnum::fromType<BackendContext::ViewMode>();
+  QVERIFY(meta.isValid());
+  QCOMPARE(meta.keyToValue("View3D"), 0);
+  QCOMPARE(meta.keyToValue("Preview"), 1);
+  QCOMPARE(meta.keyToValue("AssembleView"), 2);
+}
+
+void ViewModelSmokeTests::testCurrentViewModeDefault()
+{
+  BackendContext ctx;
+
+  // Default must be View3D (aligns with upstream Plater defaulting to view3D on startup)
+  QCOMPARE(ctx.currentViewMode(), static_cast<int>(BackendContext::ViewMode::View3D));
+}
+
+void ViewModelSmokeTests::testRequestChangeViewModeSignal()
+{
+  BackendContext ctx;
+
+  QSignalSpy reqSpy(&ctx, &BackendContext::viewModeChangeRequested);
+  QSignalSpy chgSpy(&ctx, &BackendContext::currentViewModeChanged);
+  QVERIFY(reqSpy.isValid());
+  QVERIFY(chgSpy.isValid());
+
+  // Switch View3D → Preview
+  ctx.requestChangeViewMode(static_cast<int>(BackendContext::ViewMode::Preview));
+
+  // viewModeChangeRequested emitted first (pre-state broadcast semantics, aligns with tabSelectRequested)
+  QCOMPARE(reqSpy.count(), 1);
+  QCOMPARE(reqSpy.takeFirst().at(0).toInt(), static_cast<int>(BackendContext::ViewMode::Preview));
+  // currentViewModeChanged emitted once
+  QCOMPARE(chgSpy.count(), 1);
+  // State updated
+  QCOMPARE(ctx.currentViewMode(), static_cast<int>(BackendContext::ViewMode::Preview));
+
+  // Same-value request must be de-duplicated (no signal, no state churn)
+  chgSpy.clear();
+  reqSpy.clear();
+  ctx.requestChangeViewMode(static_cast<int>(BackendContext::ViewMode::Preview));
+  QCOMPARE(chgSpy.count(), 0);
+
+  // Out-of-range must be silently rejected (Pitfall A3 mirror)
+  reqSpy.clear();
+  const int before = ctx.currentViewMode();
+  ctx.requestChangeViewMode(-1);
+  ctx.requestChangeViewMode(99);
+  QCOMPARE(reqSpy.count(), 0);
+  QCOMPARE(ctx.currentViewMode(), before);
+}
+
+void ViewModelSmokeTests::testTabSelectDrivesViewMode()
+{
+  BackendContext ctx;
+
+  // Start at default: currentPage=1 (tp3DEditor), viewMode=View3D
+  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tp3DEditor));
+  QCOMPARE(ctx.currentViewMode(), static_cast<int>(BackendContext::ViewMode::View3D));
+
+  // Selecting tpPreview must drive viewMode → Preview (Phase 3 tab/viewMode 联动)
+  ctx.requestSelectTab(static_cast<int>(BackendContext::TabPosition::tpPreview));
+  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tpPreview));
+  QCOMPARE(ctx.currentViewMode(), static_cast<int>(BackendContext::ViewMode::Preview));
+
+  // Selecting tp3DEditor again must drive viewMode back to View3D
+  ctx.requestSelectTab(static_cast<int>(BackendContext::TabPosition::tp3DEditor));
+  QCOMPARE(ctx.currentViewMode(), static_cast<int>(BackendContext::ViewMode::View3D));
+
+  // Selecting a non-Plater tab (tpProject) must NOT change viewMode (stays View3D)
+  const int vmBefore = ctx.currentViewMode();
+  ctx.requestSelectTab(static_cast<int>(BackendContext::TabPosition::tpProject));
+  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tpProject));
+  QCOMPARE(ctx.currentViewMode(), vmBefore);
 }
 
 QTEST_MAIN(ViewModelSmokeTests)
