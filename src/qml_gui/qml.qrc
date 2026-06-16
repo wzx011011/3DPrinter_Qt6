@@ -2,6 +2,7 @@
     <qresource prefix="/qml">
         <file>qmldir</file>
         <file>main.qml</file>
+        <file>BBLTopbar.qml</file>
         <file>Theme.qml</file>
         <!-- Pages -->
         <file>pages/HomePage.qml</file>
