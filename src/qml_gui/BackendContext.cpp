@@ -215,7 +215,9 @@ void BackendContext::requestSelectTab(int position)
 }
 void BackendContext::openSettings()
 {
-  setCurrentPage(11);
+  // WR-07: 旧 12 页 StackLayout 中 index 11 对应 Settings，已废弃；新 9 页 StackLayout
+  // 中 Settings 内嵌于 Project 页（index 5 = tpProject），直接跳转该页。
+  setCurrentPage(static_cast<int>(TabPosition::tpProject));
 }
 
 // ── ConfigWizard first-run trigger ──
