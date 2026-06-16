@@ -122,6 +122,19 @@ class BackendContext final : public QObject
   Q_PROPERTY(QString displayProjectTitle READ displayProjectTitle NOTIFY displayProjectTitleChanged)
   /// 首次配置向导是否已完成（持久化到 QSettings）
   Q_PROPERTY(bool configWizardCompleted READ configWizardCompleted WRITE setConfigWizardCompleted NOTIFY configWizardCompletedChanged)
+  // ── TabPosition 枚举值暴露给 QML 作为只读 int 属性
+  // 解决：Q_ENUM 在 Qt 6.10 QML 中通过 context-property 实例访问不稳定（"of undefined"），
+  // 改用 Q_PROPERTY(int) 直接暴露每个枚举值。Q_ENUM 仍保留供 C++ 侧元对象使用。
+  // 对齐 third_party/OrcaSlicer/src/slic3r/GUI/MainFrame.hpp:218-229 TabPosition 枚举。
+  Q_PROPERTY(int tpHome READ tpHome CONSTANT)
+  Q_PROPERTY(int tp3DEditor READ tp3DEditor CONSTANT)
+  Q_PROPERTY(int tpPreview READ tpPreview CONSTANT)
+  Q_PROPERTY(int tpDevice READ tpDevice CONSTANT)
+  Q_PROPERTY(int tpMultiDevice READ tpMultiDevice CONSTANT)
+  Q_PROPERTY(int tpProject READ tpProject CONSTANT)
+  Q_PROPERTY(int tpCalibration READ tpCalibration CONSTANT)
+  Q_PROPERTY(int tpPlaceholder1 READ tpPlaceholder1 CONSTANT)
+  Q_PROPERTY(int tpPlaceholder2 READ tpPlaceholder2 CONSTANT)
 
 public:
   /// 上游对齐 TabPosition 枚举（1:1 数值对齐 third_party/OrcaSlicer/src/slic3r/GUI/MainFrame.hpp:218-229）。
@@ -140,6 +153,17 @@ public:
     tpPlaceholder2 = 8,   // upstream: toDebugTool — reserved for future use
   };
   Q_ENUM(TabPosition)
+
+  // QML-friendly accessors returning the enum value as int (Q_PROPERTY constants)
+  int tpHome() const { return static_cast<int>(TabPosition::tpHome); }
+  int tp3DEditor() const { return static_cast<int>(TabPosition::tp3DEditor); }
+  int tpPreview() const { return static_cast<int>(TabPosition::tpPreview); }
+  int tpDevice() const { return static_cast<int>(TabPosition::tpDevice); }
+  int tpMultiDevice() const { return static_cast<int>(TabPosition::tpMultiDevice); }
+  int tpProject() const { return static_cast<int>(TabPosition::tpProject); }
+  int tpCalibration() const { return static_cast<int>(TabPosition::tpCalibration); }
+  int tpPlaceholder1() const { return static_cast<int>(TabPosition::tpPlaceholder1); }
+  int tpPlaceholder2() const { return static_cast<int>(TabPosition::tpPlaceholder2); }
 
   explicit BackendContext(QObject *parent = nullptr);
 

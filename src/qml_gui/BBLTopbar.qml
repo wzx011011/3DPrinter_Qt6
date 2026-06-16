@@ -23,7 +23,9 @@ Item {
     id: root
 
     // ── 外部依赖 ──────────────────────────────────────────────────────────
-    required property var backend            // ApplicationWindow 注入的 BackendContext
+    // `backend` 是 rootContext 的 context property（main_qml.cpp:134 注入），
+    // 因此 BBLTopbar 内部直接通过 `backend` 引用，无需重复声明为 required property
+    // （QML required property 在构造时绑定求值会先于 main.qml 的属性赋值，导致 undefined 误报）。
     property var preparePageRef: null        // PreparePage 引用（用于 undo/redo dispatch）
     property int windowVisibility: Window.Windowed  // 用于 Maximize/Restore 图标切换
 
@@ -63,7 +65,7 @@ Item {
                 title: qsTr("文件")
                 MenuItem { text: qsTr("新建项目"); onTriggered: root.newProjectRequested() }
                 MenuItem { text: qsTr("打开项目..."); onTriggered: root.openProjectRequested() }
-                MenuItem { text: qsTr("保存项目"); onTriggered: if (!root.backend.topbarSaveProject()) root.saveAsRequested() }
+                MenuItem { text: qsTr("保存项目"); onTriggered: if (!backend.topbarSaveProject()) root.saveAsRequested() }
                 MenuItem { text: qsTr("退出"); onTriggered: Qt.quit() }
             }
             Menu {
@@ -118,7 +120,7 @@ Item {
                 }
                 HoverHandler { id: logoHover }
                 TapHandler {
-                    onTapped: root.backend.requestSelectTab(root.backend.TabPosition.tpHome)
+                    onTapped: backend.requestSelectTab(backend.tpHome)
                 }
             }
 
@@ -182,7 +184,7 @@ Item {
                 iconSource: "qrc:/qml/assets/icons/device-floppy.svg"
                 toolTipText: qsTr("保存项目")
                 onClicked: {
-                    if (!root.backend.topbarSaveProject())
+                    if (!backend.topbarSaveProject())
                         root.saveAsRequested()
                 }
             }
@@ -194,8 +196,8 @@ Item {
                 iconSize: 16
                 iconSource: "qrc:/qml/assets/icons/arrow-back-up.svg"
                 toolTipText: qsTr("撤销")
-                enabled: root.backend.currentPage === root.backend.TabPosition.tp3DEditor
-                onClicked: if (root.backend.currentPage === root.backend.TabPosition.tp3DEditor) root.undoRequested()
+                enabled: backend.currentPage === backend.tp3DEditor
+                onClicked: if (backend.currentPage === backend.tp3DEditor) root.undoRequested()
             }
 
             // Redo (对齐上游 wxID_REDO)
@@ -205,8 +207,8 @@ Item {
                 iconSize: 16
                 iconSource: "qrc:/qml/assets/icons/arrow-forward-up.svg"
                 toolTipText: qsTr("重做")
-                enabled: root.backend.currentPage === root.backend.TabPosition.tp3DEditor
-                onClicked: if (root.backend.currentPage === root.backend.TabPosition.tp3DEditor) root.redoRequested()
+                enabled: backend.currentPage === backend.tp3DEditor
+                onClicked: if (backend.currentPage === backend.tp3DEditor) root.redoRequested()
             }
 
             // Calibration 快捷按钮 (对齐上游 ID_CALIB)
@@ -256,14 +258,14 @@ Item {
             TabBar {
                 id: navTabBar
                 Layout.alignment: Qt.AlignVCenter
-                currentIndex: root.backend.currentPage
+                currentIndex: backend.currentPage
 
                 // 反馈环保护 (Pitfall 2 in 02-RESEARCH.md)：
                 // 仅当 currentIndex 与 backend.currentPage 不同时才发请求
                 onCurrentIndexChanged: {
-                    if (currentIndex !== root.backend.currentPage
+                    if (currentIndex !== backend.currentPage
                             && currentIndex >= 0 && currentIndex <= 8) {
-                        root.backend.requestSelectTab(currentIndex)
+                        backend.requestSelectTab(currentIndex)
                     }
                 }
 
@@ -272,15 +274,15 @@ Item {
                 // 9-tab 模型：标签 + TabPosition 枚举引用 + 启用状态 + 提示
                 Repeater {
                     model: [
-                        { label: qsTr("首页"),     pos: root.backend.TabPosition.tpHome },
-                        { label: qsTr("准备"),     pos: root.backend.TabPosition.tp3DEditor },
-                        { label: qsTr("预览"),     pos: root.backend.TabPosition.tpPreview },
-                        { label: qsTr("设备"),     pos: root.backend.TabPosition.tpDevice },
-                        { label: qsTr("多设备"),   pos: root.backend.TabPosition.tpMultiDevice },
-                        { label: qsTr("项目"),     pos: root.backend.TabPosition.tpProject },
-                        { label: qsTr("校准"),     pos: root.backend.TabPosition.tpCalibration },
-                        { label: qsTr("占位"),     pos: root.backend.TabPosition.tpPlaceholder1, disabled: true, tooltip: qsTr("v2.1 实现") },
-                        { label: qsTr("占位"),     pos: root.backend.TabPosition.tpPlaceholder2, disabled: true, tooltip: qsTr("v2.1 实现") }
+                        { label: qsTr("首页"),     pos: backend.tpHome },
+                        { label: qsTr("准备"),     pos: backend.tp3DEditor },
+                        { label: qsTr("预览"),     pos: backend.tpPreview },
+                        { label: qsTr("设备"),     pos: backend.tpDevice },
+                        { label: qsTr("多设备"),   pos: backend.tpMultiDevice },
+                        { label: qsTr("项目"),     pos: backend.tpProject },
+                        { label: qsTr("校准"),     pos: backend.tpCalibration },
+                        { label: qsTr("占位"),     pos: backend.tpPlaceholder1, disabled: true, tooltip: qsTr("v2.1 实现") },
+                        { label: qsTr("占位"),     pos: backend.tpPlaceholder2, disabled: true, tooltip: qsTr("v2.1 实现") }
                     ]
 
                     delegate: TabButton {
@@ -318,10 +320,10 @@ Item {
                         ToolTip.text: tabBtn.modelData.tooltip || ""
                         ToolTip.delay: 400
                         onClicked: {
-                            if (root.backend.currentPage === modelData.pos) return
+                            if (backend.currentPage === modelData.pos) return
                             // Latency 跟踪：beginLatency token 通过 lastTabSwitchToken 暴露给 main.qml
-                            root.lastTabSwitchToken = root.backend.beginLatency("tab-switch", modelData.label)
-                            root.backend.requestSelectTab(modelData.pos)
+                            root.lastTabSwitchToken = backend.beginLatency("tab-switch", modelData.label)
+                            backend.requestSelectTab(modelData.pos)
                         }
                     }
                 }
@@ -377,14 +379,14 @@ Item {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.maximumWidth: Math.max(160, (root.width / 2) - 500)
                 Layout.minimumWidth: 160
-                text: root.backend.displayProjectTitle
+                text: backend.displayProjectTitle
                 color: "#c0c0c0"
                 font.pixelSize: 12
                 elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
-                ToolTip.visible: titleHover.containsMouse
-                ToolTip.text: text
                 HoverHandler { id: titleHover }
+                ToolTip.visible: titleHover.hovered
+                ToolTip.text: projectTitleLabel.text
             }
 
             TitleBarDivider { Layout.leftMargin: 10; Layout.rightMargin: 10 }
@@ -405,7 +407,7 @@ Item {
                 }
 
                 Rectangle {
-                    visible: root.backend.unreadHistoryCount > 0
+                    visible: backend.unreadHistoryCount > 0
                     anchors.top: bellButton.top; anchors.topMargin: 2
                     anchors.left: bellButton.left; anchors.leftMargin: 18
                     width: 8; height: 8; radius: 4
@@ -481,11 +483,11 @@ Item {
             id: fileRecentMenu
             title: qsTr("最近文件")
             Instantiator {
-                model: root.backend.projectViewModel ? root.backend.projectViewModel.recentProjects : []
+                model: backend.projectViewModel ? backend.projectViewModel.recentProjects : []
                 delegate: CxMenuItem {
                     required property string modelData
                     text: modelData
-                    onTriggered: root.backend.topbarOpenProject(modelData)
+                    onTriggered: backend.topbarOpenProject(modelData)
                 }
                 onObjectAdded: (index, object) => fileRecentMenu.insertItem(index, object)
                 onObjectRemoved: (index, object) => fileRecentMenu.removeItem(object)
@@ -493,8 +495,8 @@ Item {
             MenuSeparator {}
             CxMenuItem {
                 text: qsTr("清空最近文件")
-                enabled: root.backend.projectViewModel && root.backend.projectViewModel.recentProjects.length > 0
-                onTriggered: root.backend.projectViewModel && root.backend.projectViewModel.clearRecentProjects()
+                enabled: backend.projectViewModel && backend.projectViewModel.recentProjects.length > 0
+                onTriggered: backend.projectViewModel && backend.projectViewModel.clearRecentProjects()
             }
         }
 
@@ -503,7 +505,7 @@ Item {
         CxMenuItem {
             text: qsTr("保存项目")
             onTriggered: {
-                if (!root.backend.topbarSaveProject())
+                if (!backend.topbarSaveProject())
                     root.saveAsRequested()
             }
         }
@@ -573,43 +575,43 @@ Item {
             title: qsTr("编辑")
             CxMenuItem {
                 text: qsTr("撤销")
-                enabled: root.backend.currentPage === root.backend.TabPosition.tp3DEditor
-                onTriggered: if (root.backend.currentPage === root.backend.TabPosition.tp3DEditor) root.undoRequested()
+                enabled: backend.currentPage === backend.tp3DEditor
+                onTriggered: if (backend.currentPage === backend.tp3DEditor) root.undoRequested()
             }
             CxMenuItem {
                 text: qsTr("重做")
-                enabled: root.backend.currentPage === root.backend.TabPosition.tp3DEditor
-                onTriggered: if (root.backend.currentPage === root.backend.TabPosition.tp3DEditor) root.redoRequested()
+                enabled: backend.currentPage === backend.tp3DEditor
+                onTriggered: if (backend.currentPage === backend.tp3DEditor) root.redoRequested()
             }
             MenuSeparator {}
             CxMenuItem {
                 text: qsTr("剪切")
-                enabled: root.backend.editorViewModel && root.backend.editorViewModel.hasSelection
-                onTriggered: root.backend.editorViewModel.cutSelectedObjects()
+                enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+                onTriggered: backend.editorViewModel.cutSelectedObjects()
             }
             CxMenuItem {
                 text: qsTr("复制")
-                enabled: root.backend.editorViewModel && root.backend.editorViewModel.hasSelection
-                onTriggered: root.backend.editorViewModel.copySelectedObjects()
+                enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+                onTriggered: backend.editorViewModel.copySelectedObjects()
             }
             CxMenuItem {
                 text: qsTr("粘贴")
-                enabled: root.backend.editorViewModel && root.backend.editorViewModel.hasClipboardContent
-                onTriggered: root.backend.editorViewModel.pasteObjects()
+                enabled: backend.editorViewModel && backend.editorViewModel.hasClipboardContent
+                onTriggered: backend.editorViewModel.pasteObjects()
             }
             MenuSeparator {}
             CxMenuItem {
                 text: qsTr("删除选中")
-                enabled: root.backend.editorViewModel && root.backend.editorViewModel.hasSelection
-                onTriggered: root.backend.editorViewModel.deleteSelectedObjects()
+                enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+                onTriggered: backend.editorViewModel.deleteSelectedObjects()
             }
             CxMenuItem {
                 text: qsTr("全选")
-                onTriggered: if (root.backend.editorViewModel) root.backend.editorViewModel.selectAllVisibleObjects()
+                onTriggered: if (backend.editorViewModel) backend.editorViewModel.selectAllVisibleObjects()
             }
             CxMenuItem {
                 text: qsTr("取消选择")
-                onTriggered: if (root.backend.editorViewModel) root.backend.editorViewModel.clearObjectSelection()
+                onTriggered: if (backend.editorViewModel) backend.editorViewModel.clearObjectSelection()
             }
             MenuSeparator {}
             CxMenuItem {

@@ -319,6 +319,388 @@
     </message>
 </context>
 <context>
+    <name>BBLTopbar</name>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="65"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="140"/>
+        <source>文件</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="66"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="473"/>
+        <source>新建项目</source>
+        <translation type="unfinished">New Project</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="67"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="477"/>
+        <source>打开项目...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="68"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="185"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="506"/>
+        <source>保存项目</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="69"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="564"/>
+        <source>退出</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="72"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="575"/>
+        <source>编辑</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="73"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="198"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="577"/>
+        <source>撤销</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="74"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="209"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="582"/>
+        <source>重做</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="77"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="683"/>
+        <source>帮助</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="78"/>
+        <source>关于 OWzx</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="220"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="283"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="665"/>
+        <source>校准</source>
+        <translation type="unfinished">Calibration</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="230"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="240"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="250"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="284"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="285"/>
+        <source>v2.1 实现</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="277"/>
+        <source>首页</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="278"/>
+        <source>准备</source>
+        <translation type="unfinished">Prepare</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="279"/>
+        <source>预览</source>
+        <translation type="unfinished">Preview</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="280"/>
+        <source>设备</source>
+        <translation type="unfinished">Devices</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="281"/>
+        <source>多设备</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="282"/>
+        <source>项目</source>
+        <translation type="unfinished">Project</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="284"/>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="285"/>
+        <source>占位</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="349"/>
+        <source>切片</source>
+        <translation type="unfinished">Slice</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="359"/>
+        <source>打印</source>
+        <translation type="unfinished">Print</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="370"/>
+        <source>多耗材分组切片 (v2.1 实现)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="405"/>
+        <source>通知中心</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="425"/>
+        <source>最小化</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="436"/>
+        <source>还原</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="436"/>
+        <source>最大化</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="445"/>
+        <source>关闭</source>
+        <translation type="unfinished">Close</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="484"/>
+        <source>最近文件</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="497"/>
+        <source>清空最近文件</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="513"/>
+        <source>项目另存为...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="521"/>
+        <source>导入</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="523"/>
+        <source>Import 3MF</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="524"/>
+        <source>3MF 文件 (*.3mf)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="527"/>
+        <source>Import STL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="528"/>
+        <source>STL 文件 (*.stl)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="531"/>
+        <source>Import OBJ</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="532"/>
+        <source>OBJ 文件 (*.obj)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="535"/>
+        <source>Import STEP</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="536"/>
+        <source>STEP 文件 (*.step *.stp)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="539"/>
+        <source>Import AMF</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="540"/>
+        <source>AMF 文件 (*.amf)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="546"/>
+        <source>导出</source>
+        <translation type="unfinished">Export</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="548"/>
+        <source>Export G-code</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="552"/>
+        <source>Export 3MF</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="556"/>
+        <source>Export Model</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="588"/>
+        <source>剪切</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="593"/>
+        <source>复制</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="598"/>
+        <source>粘贴</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="604"/>
+        <source>删除选中</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="609"/>
+        <source>全选</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="613"/>
+        <source>取消选择</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="618"/>
+        <source>反向选择</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="626"/>
+        <source>视图</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="628"/>
+        <source>显示/隐藏 Gizmo</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="634"/>
+        <source>重置视图</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="640"/>
+        <source>显示层</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="645"/>
+        <source>隐藏层</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="655"/>
+        <source>偏好设置</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="666"/>
+        <source>Temperature</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="667"/>
+        <source>Max flowrate</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="668"/>
+        <source>Pressure advance</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="669"/>
+        <source>Flow ratio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="670"/>
+        <source>Retraction</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="671"/>
+        <source>Cornering</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="672"/>
+        <source>Input Shaping Freq</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="673"/>
+        <source>Input Shaping Damp</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="674"/>
+        <source>VFA</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="676"/>
+        <source>Calibration Guide</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="684"/>
+        <source>Documentation</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="685"/>
+        <source>Check for Updates</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="687"/>
+        <source>About</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/BBLTopbar.qml" line="688"/>
+        <source>Shortcut Overview</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>BackendContext</name>
     <message>
         <location filename="../src/qml_gui/BackendContext.cpp" line="110"/>
@@ -331,122 +713,122 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="355"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="368"/>
         <source>项目已保存</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="380"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="393"/>
         <source>项目已保存到: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="642"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="655"/>
         <source>切片中</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="644"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="657"/>
         <source>正在切片... %1%</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="645"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="658"/>
         <source>%1... %2%</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="683"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="696"/>
         <source>切片完成</source>
         <translation type="unfinished">Slice Complete</translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="684"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="697"/>
         <source>切片已完成，可以预览或导出 G-code</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="710"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="723"/>
         <source>已导出到: %1</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="711"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="724"/>
         <source>导出完成</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="719"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="732"/>
         <source>导出中</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="720"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="733"/>
         <source>正在导出 G-code...</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="750"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="763"/>
         <source>工作区警告</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="756"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="769"/>
         <source>工作区错误</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="762"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="775"/>
         <source>验证错误</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="767"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="780"/>
         <source>验证警告</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="775"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="788"/>
         <source>排列中</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="776"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="789"/>
         <source>正在自动排列... %1%</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="860"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="873"/>
         <source>层高越小打印越精细，但耗时越长。常用范围: 0.1mm - 0.3mm。</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="863"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="876"/>
         <source>填充密度影响模型强度和重量。20% 适合大多数场景，100% 为实心。</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="866"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="879"/>
         <source>悬空角度超过 45° 的部分需要支撑。合理使用支撑可以提升打印质量。</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="869"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="882"/>
         <source>打印速度越快效率越高，但可能影响表面质量。建议先慢后快测试。</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="872"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="885"/>
         <source>Brim（裙边）可以增加模型与热床的附着力，防止翘边。</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="942"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="955"/>
         <source>你知道吗</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/BackendContext.cpp" line="1156"/>
+        <location filename="../src/qml_gui/BackendContext.cpp" line="1169"/>
         <source>未命名</source>
         <translation type="unfinished"></translation>
     </message>
@@ -8675,491 +9057,289 @@
         <translation type="vanished">Home</translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="52"/>
-        <source>在线模型</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="53"/>
         <source>准备</source>
-        <translation>Prepare</translation>
+        <translation type="vanished">Prepare</translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="54"/>
         <source>预览</source>
-        <translation>Preview</translation>
+        <translation type="vanished">Preview</translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="55"/>
         <source>设备</source>
-        <translation>Devices</translation>
+        <translation type="vanished">Devices</translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="82"/>
+        <location filename="../src/qml_gui/main.qml" line="39"/>
         <source>打开模型文件</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="84"/>
+        <location filename="../src/qml_gui/main.qml" line="41"/>
         <source>3MF 文件 (*.3mf)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="85"/>
+        <location filename="../src/qml_gui/main.qml" line="42"/>
         <source>STL 文件 (*.stl)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="86"/>
+        <location filename="../src/qml_gui/main.qml" line="43"/>
         <source>OBJ 文件 (*.obj)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="87"/>
+        <location filename="../src/qml_gui/main.qml" line="44"/>
         <source>STEP 文件 (*.step *.stp)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="88"/>
+        <location filename="../src/qml_gui/main.qml" line="45"/>
         <source>AMF 文件 (*.amf)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="89"/>
-        <location filename="../src/qml_gui/main.qml" line="99"/>
+        <location filename="../src/qml_gui/main.qml" line="46"/>
+        <location filename="../src/qml_gui/main.qml" line="56"/>
+        <location filename="../src/qml_gui/main.qml" line="366"/>
         <source>所有文件 (*)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="98"/>
-        <location filename="../src/qml_gui/main.qml" line="352"/>
+        <location filename="../src/qml_gui/main.qml" line="55"/>
+        <location filename="../src/qml_gui/main.qml" line="120"/>
         <source>打开项目</source>
         <translation type="unfinished">Open Project</translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="99"/>
+        <location filename="../src/qml_gui/main.qml" line="56"/>
         <source>项目文件 (*.3mf *.cxprj *.json)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="107"/>
+        <location filename="../src/qml_gui/main.qml" line="64"/>
         <source>项目另存为</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="109"/>
+        <location filename="../src/qml_gui/main.qml" line="66"/>
         <source>项目文件 (*.3mf *.cxprj)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="109"/>
+        <location filename="../src/qml_gui/main.qml" line="66"/>
         <source>项目元数据 (*.json)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="118"/>
-        <location filename="../src/qml_gui/main.qml" line="458"/>
+        <location filename="../src/qml_gui/main.qml" line="226"/>
         <source>新建项目</source>
         <translation type="unfinished">New Project</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/main.qml" line="121"/>
-        <source>打开项目...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="122"/>
-        <source>导入模型...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="125"/>
-        <location filename="../src/qml_gui/main.qml" line="353"/>
-        <location filename="../src/qml_gui/main.qml" line="686"/>
         <source>保存项目</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="131"/>
-        <source>项目另存为...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="135"/>
-        <source>最近文件</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="150"/>
-        <source>清空最近文件</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="156"/>
-        <source>退出</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="164"/>
-        <source>编辑</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="166"/>
-        <location filename="../src/qml_gui/main.qml" line="335"/>
-        <location filename="../src/qml_gui/main.qml" line="699"/>
+        <location filename="../src/qml_gui/main.qml" line="103"/>
         <source>撤销</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="171"/>
-        <location filename="../src/qml_gui/main.qml" line="336"/>
-        <location filename="../src/qml_gui/main.qml" line="710"/>
+        <location filename="../src/qml_gui/main.qml" line="104"/>
         <source>重做</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="177"/>
-        <source>剪切</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="182"/>
-        <source>复制</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="187"/>
-        <location filename="../src/qml_gui/main.qml" line="339"/>
+        <location filename="../src/qml_gui/main.qml" line="107"/>
         <source>粘贴</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="193"/>
-        <location filename="../src/qml_gui/main.qml" line="342"/>
+        <location filename="../src/qml_gui/main.qml" line="110"/>
         <source>删除选中</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="198"/>
-        <source>清空全部</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="205"/>
-        <location filename="../src/qml_gui/main.qml" line="340"/>
+        <location filename="../src/qml_gui/main.qml" line="108"/>
         <source>克隆选中</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="209"/>
-        <location filename="../src/qml_gui/main.qml" line="344"/>
+        <location filename="../src/qml_gui/main.qml" line="112"/>
         <source>全选</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="212"/>
-        <location filename="../src/qml_gui/main.qml" line="343"/>
+        <location filename="../src/qml_gui/main.qml" line="111"/>
         <source>取消选择</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="218"/>
-        <source>视图</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="219"/>
-        <source>默认视图</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="222"/>
-        <source>相机预设</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="223"/>
-        <source>俯视图 (Top)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="224"/>
-        <source>前视图 (Front)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="225"/>
-        <source>右视图 (Right)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="226"/>
-        <source>等轴视图 (Iso)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="229"/>
-        <source>关闭线框模式</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="229"/>
-        <source>线框模式</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="232"/>
-        <source>显示标签</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="234"/>
-        <source>✗ 在线模型</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="234"/>
-        <source>✓ 在线模型</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="238"/>
-        <source>✗ 准备</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="238"/>
-        <source>✓ 准备</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="242"/>
-        <source>✗ 预览</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="242"/>
-        <source>✓ 预览</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="246"/>
-        <source>✗ 设备</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="246"/>
-        <source>✓ 设备</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="255"/>
-        <location filename="../src/qml_gui/main.qml" line="354"/>
+        <location filename="../src/qml_gui/main.qml" line="122"/>
         <source>偏好设置</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="263"/>
-        <source>温度校准</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="264"/>
         <source>流量校准</source>
-        <translation type="unfinished">Flow Calibration</translation>
+        <translation type="obsolete">Flow Calibration</translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="265"/>
-        <source>压力推进校准</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="271"/>
-        <source>帮助</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="273"/>
-        <source>快捷键...</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="278"/>
-        <location filename="../src/qml_gui/main.qml" line="406"/>
+        <location filename="../src/qml_gui/main.qml" line="174"/>
         <source>关于 OWzx</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="288"/>
+        <location filename="../src/qml_gui/main.qml" line="400"/>
         <source>切片当前平板</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="295"/>
+        <location filename="../src/qml_gui/main.qml" line="404"/>
         <source>切片全部平板</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="307"/>
+        <location filename="../src/qml_gui/main.qml" line="413"/>
         <source>发送打印</source>
         <translation type="unfinished">Send to Print</translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="311"/>
+        <location filename="../src/qml_gui/main.qml" line="417"/>
         <source>导出 G-code</source>
         <translation type="unfinished">Export G-code</translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="319"/>
+        <location filename="../src/qml_gui/main.qml" line="87"/>
         <source>快捷键一览</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="337"/>
+        <location filename="../src/qml_gui/main.qml" line="105"/>
         <source>剪切选中</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="338"/>
+        <location filename="../src/qml_gui/main.qml" line="106"/>
         <source>复制选中</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="341"/>
+        <location filename="../src/qml_gui/main.qml" line="109"/>
         <source>克隆选中 (备)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="345"/>
+        <location filename="../src/qml_gui/main.qml" line="113"/>
         <source>适应视图</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="346"/>
+        <location filename="../src/qml_gui/main.qml" line="114"/>
         <source>移动模式</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="347"/>
+        <location filename="../src/qml_gui/main.qml" line="115"/>
         <source>旋转模式</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="348"/>
+        <location filename="../src/qml_gui/main.qml" line="116"/>
         <source>缩放模式</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="349"/>
+        <location filename="../src/qml_gui/main.qml" line="117"/>
         <source>播放/暂停预览动画</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="350"/>
+        <location filename="../src/qml_gui/main.qml" line="118"/>
         <source>测量工具</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="351"/>
+        <location filename="../src/qml_gui/main.qml" line="119"/>
         <source>导入模型</source>
         <translation type="unfinished">Import Model</translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="355"/>
+        <location filename="../src/qml_gui/main.qml" line="123"/>
         <source>预览步进 ±100</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="356"/>
+        <location filename="../src/qml_gui/main.qml" line="124"/>
         <source>预览跳到头/尾</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="357"/>
+        <location filename="../src/qml_gui/main.qml" line="125"/>
         <source>层范围 ±1 层</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="358"/>
+        <location filename="../src/qml_gui/main.qml" line="126"/>
         <source>层范围 ±10 层</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="359"/>
+        <location filename="../src/qml_gui/main.qml" line="127"/>
         <source>预设视角 顶/右/等轴</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="360"/>
+        <location filename="../src/qml_gui/main.qml" line="128"/>
         <source>预设视角 前视</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="392"/>
-        <location filename="../src/qml_gui/main.qml" line="842"/>
+        <location filename="../src/qml_gui/main.qml" line="160"/>
         <source>关闭</source>
         <translation type="unfinished">Close</translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="424"/>
+        <location filename="../src/qml_gui/main.qml" line="192"/>
         <source>基于 OrcaSlicer 开源版本</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="429"/>
+        <location filename="../src/qml_gui/main.qml" line="197"/>
         <source>Qt 6.10 + QML 重写迁移版</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="434"/>
+        <location filename="../src/qml_gui/main.qml" line="202"/>
         <source>上游基线: 0d4ac73a6f3224a2bf753d7b9e67d7d515bc8557</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="444"/>
-        <location filename="../src/qml_gui/main.qml" line="488"/>
+        <location filename="../src/qml_gui/main.qml" line="212"/>
+        <location filename="../src/qml_gui/main.qml" line="256"/>
         <source>确定</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="469"/>
+        <location filename="../src/qml_gui/main.qml" line="237"/>
         <source>将创建新项目，当前未保存的更改将丢失。
 是否继续？</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="482"/>
+        <location filename="../src/qml_gui/main.qml" line="250"/>
         <source>取消</source>
         <translation type="unfinished">Cancel</translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="641"/>
-        <source>文件</source>
+        <location filename="../src/qml_gui/main.qml" line="497"/>
+        <location filename="../src/qml_gui/main.qml" line="511"/>
+        <source>占位 Tab (v2.1 实现)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="789"/>
-        <source>通知中心</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="824"/>
-        <source>最小化</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="834"/>
-        <source>还原</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="834"/>
-        <source>最大化</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../src/qml_gui/main.qml" line="968"/>
+        <location filename="../src/qml_gui/main.qml" line="544"/>
         <source>编辑自定义 G-code (%1)</source>
         <translation type="unfinished"></translation>
     </message>
@@ -9168,9 +9348,8 @@
         <translation type="vanished">Project</translation>
     </message>
     <message>
-        <location filename="../src/qml_gui/main.qml" line="262"/>
         <source>校准</source>
-        <translation>Calibration</translation>
+        <translation type="vanished">Calibration</translation>
     </message>
     <message>
         <source>辅助</source>

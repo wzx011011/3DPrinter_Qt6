@@ -262,7 +262,7 @@ ApplicationWindow {
 
     Shortcut {
         sequences: [StandardKey.Undo]
-        enabled: backend.currentPage === backend.TabPosition.tp3DEditor
+        enabled: backend.currentPage === backend.tp3DEditor
         onActivated: preparePage.undoFromTopbar()
     }
     Shortcut {
@@ -274,17 +274,17 @@ ApplicationWindow {
     }
     Shortcut {
         sequences: [StandardKey.Redo]
-        enabled: backend.currentPage === backend.TabPosition.tp3DEditor
+        enabled: backend.currentPage === backend.tp3DEditor
         onActivated: preparePage.redoFromTopbar()
     }
     Shortcut {
         sequence: "Ctrl+Shift+Z"
-        enabled: backend.currentPage === backend.TabPosition.tp3DEditor
+        enabled: backend.currentPage === backend.tp3DEditor
         onActivated: preparePage.redoFromTopbar()
     }
     Shortcut {
         sequence: "Delete"
-        enabled: backend.currentPage === backend.TabPosition.tp3DEditor
+        enabled: backend.currentPage === backend.tp3DEditor
                  && backend.editorViewModel
                  && backend.editorViewModel.hasSelection
         onActivated: backend.editorViewModel.deleteSelection()
@@ -319,11 +319,11 @@ ApplicationWindow {
     }
 
     // Visual compare reference PNG 映射 — 使用 TabPosition 枚举替代整数（Pitfall 1）
-    readonly property string compareReferenceSource: backend.currentPage === backend.TabPosition.tp3DEditor
+    readonly property string compareReferenceSource: backend.currentPage === backend.tp3DEditor
         ? "qrc:/qml/assets/prepare_ref.png"
-        : backend.currentPage === backend.TabPosition.tpPreview
+        : backend.currentPage === backend.tpPreview
             ? "qrc:/qml/assets/preview_ref.png"
-            : backend.currentPage === backend.TabPosition.tpDevice
+            : backend.currentPage === backend.tpDevice
                 ? "qrc:/qml/assets/monitor_ref.png"
                 : ""
 
@@ -350,9 +350,10 @@ ApplicationWindow {
             spacing: 0
 
             // ── BBLTopbar 完整标题栏（替代旧的 titleBar Rectangle）──────────
+            // `backend` 由 rootContext 注入（main_qml.cpp:134），BBLTopbar 内部直接读取，
+            // 无需显式 property 传递（避免 required property 在构造期求值产生 undefined 误报）
             BBLTopbar {
                 id: bblTopbar
-                backend: backend
                 preparePageRef: preparePage
                 Layout.fillWidth: true
                 Layout.preferredHeight: 40
@@ -368,9 +369,9 @@ ApplicationWindow {
                 onExportGcodeRequested: preparePage.openExportDialog()
                 onExportProjectRequested: { /* TODO: backend.topbarExport3MF */ }
                 onExportModelRequested: { /* TODO: backend.topbarExportModel */ }
-                onUndoRequested: if (backend.currentPage === backend.TabPosition.tp3DEditor) preparePage.undoFromTopbar()
-                onRedoRequested: if (backend.currentPage === backend.TabPosition.tp3DEditor) preparePage.redoFromTopbar()
-                onCalibrationRequested: backend.requestSelectTab(backend.TabPosition.tpCalibration)
+                onUndoRequested: if (backend.currentPage === backend.tp3DEditor) preparePage.undoFromTopbar()
+                onRedoRequested: if (backend.currentPage === backend.tp3DEditor) preparePage.redoFromTopbar()
+                onCalibrationRequested: backend.requestSelectTab(backend.tpCalibration)
                 onPreferencesRequested: { /* TODO: open PreferencesDialog — Phase 3 */ }
                 onAboutRequested: aboutDialog.open()
                 onShortcutOverviewRequested: shortcutDialog.open()
@@ -445,7 +446,7 @@ ApplicationWindow {
 
                 // Page 0 (tpHome) — Home
                 Loader {
-                    active: backend.currentPage === backend.TabPosition.tpHome
+                    active: backend.currentPage === backend.tpHome
                     sourceComponent: Component {
                         HomePage { homeVm: backend.homeViewModel }
                     }
@@ -466,21 +467,21 @@ ApplicationWindow {
                 }
                 // Page 4 (tpMultiDevice) — Multi-machine
                 Loader {
-                    active: backend.currentPage === backend.TabPosition.tpMultiDevice
+                    active: backend.currentPage === backend.tpMultiDevice
                     sourceComponent: Component {
                         MultiMachinePage { multiMachineVm: backend.multiMachineViewModel }
                     }
                 }
                 // Page 5 (tpProject) — Project
                 Loader {
-                    active: backend.currentPage === backend.TabPosition.tpProject
+                    active: backend.currentPage === backend.tpProject
                     sourceComponent: Component {
                         ProjectPage { projectVm: backend.projectViewModel }
                     }
                 }
                 // Page 6 (tpCalibration) — Calibration
                 Loader {
-                    active: backend.currentPage === backend.TabPosition.tpCalibration
+                    active: backend.currentPage === backend.tpCalibration
                     sourceComponent: Component {
                         CalibrationPage { calibrationVm: backend.calibrationViewModel }
                     }
