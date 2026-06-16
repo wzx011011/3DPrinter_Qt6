@@ -264,7 +264,7 @@ Item {
                 // 仅当 currentIndex 与 backend.currentPage 不同时才发请求
                 onCurrentIndexChanged: {
                     if (currentIndex !== backend.currentPage
-                            && currentIndex >= 0 && currentIndex <= 8) {
+                            && currentIndex >= 0 && currentIndex <= backend.tpPlaceholder2) {
                         backend.requestSelectTab(currentIndex)
                     }
                 }
