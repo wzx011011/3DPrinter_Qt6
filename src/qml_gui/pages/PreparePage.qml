@@ -27,14 +27,6 @@ Item {
     property var sidebarWidthChanged: null
     focus: true
 
-    component ToolStripDivider: Rectangle {
-        width: 1
-        height: 22
-        radius: 1
-        color: Theme.borderSubtle
-        opacity: 0.9
-    }
-
     function applyFitHintIfReady() {
         if (!root.editorVm)
             return

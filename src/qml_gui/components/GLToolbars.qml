@@ -76,8 +76,8 @@ Item {
                 onClicked: if (root.editorVm) root.editorVm.arrangeAllObjects()
             }
 
-            // 分隔线
-            Rectangle { width: 1; height: 22; color: Theme.borderSubtle; anchors.verticalCenter: parent.verticalCenter }
+            // 分隔线 (Row 子项不能用 anchors，靠 Row 默认垂直居中)
+            Rectangle { width: 1; height: 22; color: Theme.borderSubtle }
 
             // 第二组: 更多/拆分/层编辑
             // More (复制选中，对齐上游 "More" — 实际是复制/克隆)
@@ -268,7 +268,7 @@ Item {
             }
             // Fit/Reset (适应视图)
             GizmoButton {
-                glyph: "⤢"; tip: qsTr("适应视图 (Fit)")
+                glyph: "⊡"; tip: qsTr("适应视图 (Fit)")
                 onClicked: fitViewRequested()
             }
         }

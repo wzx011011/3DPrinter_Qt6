@@ -16,7 +16,9 @@ Rectangle {
     // G3: Printer 折叠状态（由 CollapsibleSection 管理）
     property bool printerExpanded: true
 
-    color: "transparent"  // 外观由 DockableSidebar 容器负责（避免双层边框）`r`n    radius: 0`r`n    border.width: 0
+    color: "transparent"
+    radius: 0
+    border.width: 0
 
     CxScrollView {
         anchors.fill: parent
