@@ -62,6 +62,7 @@
         <file>components/SearchDialog.qml</file>
         <file>components/ParamsPage.qml</file>
         <file>components/FilamentSlot.qml</file>
+        <file>components/GLToolbars.qml</file>
         <!-- Controls -->
         <file>controls/CxButton.qml</file>
         <file>controls/CxComboBox.qml</file>

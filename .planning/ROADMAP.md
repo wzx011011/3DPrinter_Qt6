@@ -1,235 +1,153 @@
-# Roadmap: Milestone v2.0 — OrcaSlicer UI Architecture & Core Restoration
+# Roadmap: Milestone v2.0 — OrcaSlicer UI Full Restoration
 
 ## Overview
 
-把 Qt6/QML 项目的 UI 从 CrealityPrint 时代的 12 页 StackLayout 架构,全面迁移对齐到 OrcaSlicer 上游的 9 页 Notebook + Plater 共享实例 + Sidebar Dockable 布局。v2.0 聚焦 **P0 架构对齐 + P1 核心可见功能**;P2 高级页面留给 v2.1,P3 Dialog 补全与 i18n 留给 v2.2。
+把 Qt6/QML 项目的 UI 从 CrealityPrint 时代全面迁移对齐到 OrcaSlicer 上游。
 
-**Upstream reference:**
-
-- 主框架: `third_party/OrcaSlicer/src/slic3r/GUI/MainFrame.cpp`
-- Plater: `.../GUI/Plater.cpp` (18601 行)
-- 顶部栏: `.../GUI/BBLTopbar.cpp`
-- Notebook: `.../GUI/Notebook.cpp`
-- Sidebar: 嵌入 `Plater.cpp` (class Sidebar @1597)
-- 参数面板: `.../GUI/ParamsPanel.cpp`
-
-**Phase numbering mode:** Reset (从 Phase 01 开始,与 v1.x 完全分离)
+**⚠️ 工作方式变更（2026-06-17）：** 废弃 Phase 线性推进。改为**差距清单驱动**——以"页面 × 区域"的视觉差距为工作单元，每个差距有上游截图真值 + 用户截图验收，做完一项用户确认消除才算完成。
 
 ---
 
-## Phases
+## 为什么废弃 Phase 推进
 
-### Phase 1: OWzx Brand Cleanup
+旧方式（Phase 1-7 线性推进）的三个致命问题：
+1. **验收标准太弱**——编译通过 + 不崩就标记完成，导致 Phase 3/4/5 虚报完成（用户截图后才发现"差很多"）
+2. **Phase 划分割裂视觉**——Prepare 页的差距横跨多个 Phase，按 Phase 切反而难验收
+3. **缺少视觉真值**——Success Criteria 是文字，没有上游截图对照，agent 按文字理解做，做出来和上游观感差十万八千里
 
-**Mode:** Standard
-**Goal:** 移除所有 CrealityPrint 残留品牌字符串/资源/路径,统一为 OWzx,为后续架构重构扫清干扰。
-**Depends on:** Nothing (前置清扫任务)
-**Requirements:** BRAND-01, BRAND-02, BRAND-03, BRAND-04, BRAND-05
-**Plans:** 3/3 plans complete
-Plans:
-
-- [x] 01-01-PLAN.md — QML UI 品牌字符串替换 (BRAND-01, BRAND-04) — DONE 2026-06-15
-- [x] 01-02-PLAN.md — CMake 目标/选项重命名 + Crality3D 命名空间/CrealityGL 模块迁移 (BRAND-02, BRAND-03)
-- [x] 01-03-PLAN.md — C++ 源字符串 + 子模块移除 + 版本对齐 + 验证脚本 (BRAND-01, BRAND-02, BRAND-04, BRAND-05)
-
-**Success Criteria:**
-
-  1. `grep -ri "creality" src/` 仅保留历史注释和 third_party 引用,无品牌字符串
-  2. 应用启动后窗口标题显示 "OWzx",关于对话框显示 OWzx 品牌
-  3. shortcut 一览对话框、tooltip、error message 全部 OWzx 化
-  4. `third_party/CrealityPrint` submodule 引用从 `.gitmodules` 和 CMake 中移除
-  5. 构建仍然通过 (`scripts/auto_verify_with_vcvars.ps1`)
-
-### Phase 2: 9-Page Notebook + BBLTopbar
-
-**Mode:** Standard
-**Goal:** 重写 `main.qml` 顶层框架,从 12 页 StackLayout 迁移到上游 9 页 TabBar + StackLayout 架构,并完成 BBLTopbar 完整菜单系统。
-**Depends on:** Phase 1 (品牌清理后框架重构)
-**Requirements:** ARCH-01, ARCH-02, ARCH-03, ARCH-04, TOPBAR-01, TOPBAR-02, TOPBAR-03, TOPBAR-04, TOPBAR-05, TOPBAR-06, TOPBAR-07
-**Plans:** 2/2 plans complete
-Plans:
-**Wave 1**
-
-- [x] 02-01-PLAN.md — BackendContext TabPosition Q_ENUM + requestSelectTab signal/slot + unit tests (ARCH-02, ARCH-03)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 02-02-PLAN.md — BBLTopbar.qml + main.qml 9-page rewrite + Import/Export menus + side_tools + i18n (ARCH-01, ARCH-04, TOPBAR-01..07)
-
-**Success Criteria:**
-
-  1. `main.qml` 顶层为 TabBar + StackLayout,9 个 tab 按 Home/Prepare/Preview/Device/MultiDevice/Project/Calibration + 2 占位 顺序
-  2. Tab 切换通过 `request_select_tab(TabPosition)` 事件广播,跨组件响应一致
-  3. BBLTopbar 含 [File ▾]、[▾]、Save/Undo/Redo/Calibration 工具按钮、CenteredTitle、Min/Max/Close
-  4. [File ▾] 下拉菜单完整 (New/Open/Recent/Save/Save As/Import 系列/Export 系列/Quit)
-  5. [▾] 二级下拉含 Edit/View/Preferences/Calibration/Help 完整子菜单
-  6. Notebook 右侧 side_tools 区有 Slice/Print 下拉按钮占位
-  7. macOS 系统菜单栏 / Win+Linux BBLTopbar 条件分支生效
-
-### Phase 3: Plater Shared Instance
-
-**Mode:** Standard
-**Goal:** 把 PreparePage 和 PreviewPage 合并为单一 `Plater.qml` 组件,通过 viewMode 切换 View3D↔Preview 内部视图,确保切换 tab 时 Plater 状态完整保留。
-**Depends on:** Phase 2 (新框架提供 tab 切换基础设施)
-**Requirements:** ARCH-05, ARCH-06, ARCH-07
-**Plans:** 2/2 plans complete
-Plans:
-
-- [x] 03-01-PLAN.md — BackendContext ViewMode Q_ENUM + Plater.qml skeleton + unit tests (ARCH-06, ARCH-07 准备) — DONE 2026-06-17
-- [x] 03-02-PLAN.md — Plater.qml wrapper (PreparePage + PreviewPage 常驻) + main.qml 单实例 StackLayout 重构 (ARCH-05, ARCH-06, ARCH-07) — DONE 2026-06-17
-
-**Success Criteria:**
-
-  1. `Plater.qml` 单一组件实例,被 Prepare tab 和 Preview tab 共享
-  2. viewMode 属性 (View3D/Preview/AssembleView) 切换内部 wxAui-like 三选一显示
-  3. 切换 Prepare→Preview→Prepare 后:对象列表、选择状态、切片结果、gizmo 状态全部保留
-  4. 切换不触发 Plater 重建 (QML Loader 共享 + 属性切换,非 Loader source 切换)
-  5. 切片完成后切到 Preview 自动加载 G-code 数据,无需手动刷新
-  6. 单元测试:QSignalSpy 验证 viewMode 切换不触发 modelChanged
-
-### Phase 4: Sidebar Dockable Layout
-
-**Plans:** 2/2 plans complete
-Plans:
-
-- [x] 04-01-PLAN.md — BackendContext sidebar 三态 (collapsed/width/dockArea) + 持久化 + DockableSidebar 容器 + 4 单测 (ARCH-08, ARCH-09, ARCH-10 准备) — DONE 2026-06-17
-- [x] 04-02-PLAN.md — PreparePage/Plater/main.qml 接入 DockableSidebar 三态透传链路 + 响应式布局 (ARCH-08, ARCH-09, ARCH-10) — DONE 2026-06-17
-
-**Mode:** Standard
-**Goal:** Sidebar 从固定 LeftSidebar (280px 死宽) 升级为 Dockable,支持拖动到 Left/Right/浮动/折叠,对齐上游 wxAui Dockable 行为。
-**Depends on:** Phase 3 (Plater 共享后布局基础稳定)
-**Requirements:** ARCH-08, ARCH-09, ARCH-10
-**Success Criteria:**
-
-  1. Sidebar 可拖动到窗口左侧、右侧、浮出窗口
-  2. Sidebar 折叠按钮 (对齐上游 `collapse_toolbar`),点击隐藏让 3D 区独占
-  3. 折叠状态持久化 (app_config 中 `sidebar_collapsed` 字段)
-  4. 窗口缩放/最大化时 Sidebar 与 3D 区比例正确
-  5. Sidebar 宽度可拖拽调整 (|min_width, max_width| 区间)
-  6. 多屏/DPI 缩放下布局不破
-
-### Phase 5: Prepare Sidebar Eight Sections
-
-**Plans:** 1 plan complete (合并 Wave 1+2 单次落地)
-Plans:
-
-- [x] 05-01-PLAN.md — 八大区块顺序布局 + Process 顶部条/Search/ObjectSettings/ObjectLayers/ParamsPanel 7Tab 插入 LeftSidebar (SIDEBAR-01~15, 部分 [-] 骨架) — DONE 2026-06-17
-
-
-
-**Mode:** Standard
-**Goal:** Sidebar 滚动区按上游八大区块顺序完整实现:Printer → Filament → Process 顶部条 → Search → ObjectList → ObjectSettings → ObjectLayers → ParamsPanel page_view。
-**Depends on:** Phase 4 (Dockable 布局完成后填充内容)
-**Requirements:** SIDEBAR-01 ~ SIDEBAR-15
-**Success Criteria:**
-
-  1. 八大区块按固定顺序布局 (Printer → Filament → Process 顶条 → Search → ObjectList → ObjectSettings → ObjectLayers → ParamsPanel)
-  2. Printer 标题栏可折叠,内容含 preset combo + 喷嘴 + Bed type + extruders
-  3. Filament 标题栏可折叠,双列耗材列表 + 颜色 + edit
-  4. Process 顶部条含 SwitchButton(Global/Objects) + ModeIcon + ModeSwitchButton + Compare + Setting
-  5. Global/Objects 作用域切换正确过滤参数列表
-  6. Simple/Advanced 模式切换正确控制参数可见性
-  7. Search bar 输入跳转到对应参数 (复用现有 SearchDialog)
-  8. ObjectList 树完整 (对象/部件/设置/层),支持拖拽/右键/重命名
-  9. ObjectSettings 在选中对象时显示快速设置,无选中时隐藏
-  10. ObjectLayers 仅打印对象时显示变量层高编辑器
-  11. ParamsPanel page_view 含 7 个子 Tab (Print/PrintPlate/PrintObject/PrintPart/PrintLayer/Filament/Printer)
-
-### Phase 6: GLCanvas Toolbar System
-
-**Mode:** Standard
-**Goal:** 把上游 ImGui 在 GL canvas 上绘制的工具栏 (MainToolbar/Gizmos/ViewToolbar/Separator/Collapse) 用 QML overlay 等价实现,并接入 Plater.qml。
-**Depends on:** Phase 3 (Plater 共享后工具栏挂载点稳定)
-**Requirements:** GLUI-01 ~ GLUI-09
-**Success Criteria:**
-
-  1. MainToolbar (顶部 overlay): [+Add][+Plate][⟳Orient][⇲Arrange] | [More/Fewer][SplitOptions][SplitParts][LayersEditing]
-  2. Gizmos 竖向条 (左侧 overlay): Move/Rotate/Scale/Flatten/Cut/MeshBoolean/FdmSupports/Seam/Emboss/Svg/Measure/Simplify
-  3. ViewToolbar (右侧 overlay): Top/Front/Right/Back/ISO/Reset 视角预设
-  4. SeparatorToolbar 分隔条 + CollapseToolbar 折叠按钮 (与 Sidebar 联动)
-  5. Preview 模式下显示 IMSlider/IMToolbar (QML 浮层)
-  6. 工具栏使用 QML overlay (非 ImGui GL 渲染),与 Theme 令牌一致
-  7. PartPlateList (底部 overlay): 多板列表条 + [+Add] 按钮
-  8. NotificationManager 浮层 (3D canvas 右上角),与 BackendContext 通知系统集成
-  9. 工具栏按钮悬停 tooltip + 禁用态正确显示
-
-### Phase 7: Calibration Menu & Dialogs
-
-**Mode:** Standard
-**Goal:** 实现 Calibration 顶级菜单 + 11 个校准 Dialog,完整对齐上游校准工作流。
-**Depends on:** Phase 2 (BBLTopbar 提供菜单入口)
-**Requirements:** CALIB-01 ~ CALIB-11
-**Success Criteria:**
-
-  1. Calibration 顶级菜单含 9 个子项 (Temperature/Max flowrate/Pressure advance/Flow ratio/Retraction/Cornering/Input Shaping Freq+Damp/VFA/Calibration Guide)
-  2. PA_Calibration_Dlg 压力推进校准参数输入 + 启动
-  3. FlowRateCalibrationDialog 含完整向导 (多步骤)
-  4. Temp_Calibration_Dlg 温度校准
-  5. MaxVolumetricSpeed_Test_Dlg 最大流量测试
-  6. VFA_Test_Dlg VFA 测试
-  7. Retraction_Test_Dlg 回抽测试
-  8. Input_Shaping_Freq/Damp 两个输入整形测试 Dialog
-  9. Cornering_Test_Dlg 拐角测试
-  10. 校准历史持久化 (EditCalibrationHistoryDialog)
-  11. CalibrationWizard 系列 (PA/Flow/MaxVS) 嵌入 CalibrationPanel
+新方式（差距清单驱动）：
+1. **工作单元 = 消除一个差距**（如"左侧栏卡片背景""3D 视口 MainToolbar"）
+2. **每个差距有上游截图真值**（`docs/upstream-reference/`）
+3. **验收 = 用户截图 + analyze_image 对比**，不再凭"编译通过"
 
 ---
 
-## Execution Order
+## 已沉淀的架构基础（Phase 1-5，作为后续地基）
+
+这些架构改动保留，作为视觉对齐的地基：
+
+| 已就绪 | 说明 | 视觉状态 |
+|---|---|---|
+| 品牌清理（Phase 1） | Creality→OWzx 全替换 | ✅ 视觉生效 |
+| 9-Page Notebook + BBLTopbar（Phase 2） | 顶部 tab 框架 | 🟡 框架在，样式待打磨 |
+| Plater 共享实例（Phase 3） | Prepare/Preview 共享单 Plater | ✅ 架构就绪 |
+| Sidebar Dockable（Phase 4） | 折叠/宽度/dockArea + 持久化 | 🟡 功能在，视觉待对齐 |
+| 八大区块骨架（Phase 5） | Printer/Filament/Process/Search/Objects/Settings/Layers/Params | 🟡 骨架在，视觉层次差 |
+
+**这些不算"白做"**——架构是对的，只是视觉层没对齐上游。后续差距消除建立在这些地基上。
+
+---
+
+## 差距清单（真值驱动，按页面组织）
+
+### Prepare 页（优先级最高）
+
+**上游真值截图：** `docs/upstream-reference/prepare_page.png`（待用户提供）
+**差距清单详情：** `docs/差距清单_Prepare页.md`
+
+| ID | 差距 | 优先级 | 状态 | 验收方式 |
+|---|---|---|---|---|
+| **G1** | Filament 耗材区块默认折叠（应展开） | P0 | 🔴 待修 | 截图确认 Filament 可见 |
+| **G2** | 左侧栏区块无统一卡片背景，元素揉一起 | P1 | 🔴 待修 | 截图确认卡片式层次 |
+| **G3** | Printer 区块内部裸 Rectangle 堆叠，无统一容器 | P1 | 🔴 待修 | 截图确认 Printer 卡片 |
+| **G4** | 3D 视口完全空旷，无 MainToolbar/Gizmos/ViewToolbar/PartPlateList overlay | P1 | 🔴 待修（大工作量） | 截图确认工具栏 overlay |
+| **G5** | 右侧 Gizmo 竖条（processBar）样式老旧 | P2 | 🔴 待修 | 截图确认样式对齐 |
+| **G6** | 顶部 BBLTopbar tab 样式与上游有差距 | P2 | 🔴 待修 | 截图确认 |
+| **G7** | 左侧栏滚动条/边距问题 | P2 | 🔴 待修 | 截图确认 |
+| **G8** | 整体配色对比度（区块层次不明显） | P2 | 🔴 待修 | 截图确认 |
+
+### Preview 页
+
+**上游真值截图：** `docs/upstream-reference/preview_page.png`（待用户提供）
+**差距清单：** 待生成（用户截图后对比）
+
+### Device/Monitor 页
+
+**上游真值截图：** `docs/upstream-reference/device_page.png`（待用户提供）
+**差距清单：** 待生成
+
+### 其他页面（Project/Calibration/MultiDevice/Home）
+
+待用户截图后逐页生成差距清单。
+
+---
+
+## 工作流程（新）
 
 ```
-Phase 1 (Brand Cleanup)
-    ↓
-Phase 2 (9-Page Notebook + BBLTopbar)
-    ↓
-Phase 3 (Plater Shared Instance) ───┐
-    ↓                                │
-Phase 4 (Sidebar Dockable)          │
-    ↓                                │
-Phase 5 (Sidebar 8 Sections)         │
-                                     │
-Phase 6 (GLCanvas Toolbars) ←────────┘
-    ↓
-Phase 7 (Calibration Menu + Dialogs) ←─ Phase 2 (BBLTopbar)
+1. 选一个差距（如 G1）
+2. 实现/修复
+3. 构建 + 冒烟（编译通过 + 不崩）
+4. 启动程序 → 用户截图
+5. analyze_image 对比上游真值 + 差距清单
+6. 用户确认"消除" → 标记 ✅
+7. 用户确认"未消除/有新问题" → 回到步骤 2
 ```
 
-Phase 3 完成后,Phase 4/5/6 可部分并行 (各自独立组件工作),但建议按依赖顺序推进避免合并冲突。
+**关键约束（agent 自律）：**
+- 我（agent）**不得自行标记视觉类差距为"完成"**
+- 视觉类差距必须用户截图确认后才标记 ✅
+- 只有纯 C++ 逻辑/架构类工作（无视觉影响）可由 agent 标记完成（仍需构建+单测通过）
 
 ---
 
-## Out of Scope (Defer to v2.1 / v2.2)
+## "对齐"的验收定义（重要，避免误判）
 
-### v2.1 — High-value Pages
+**目标不是"像素级 1:1 还原"**（上游 wxWidgets+ImGui 与我们的 Qt6/QML 是不同框架，像素级复制不现实）。
+**目标是"功能等价 + 视觉不违和"**。具体验收标准：
 
-- Home WebView (QtWebEngine)
-- Device 双形态 (MonitorPanel + PrinterWebView)
-- Multi-device 页
-- Project 页 5 子 Tab
-- ConfigWizard 完整版
-- PreferencesDialog 完整版
+### ✅ 算"对齐"的标准（达标）
+- **结构对齐**：区块顺序、元素组成、按钮列表与上游一致（有什么元素、怎么排列）
+- **功能等价**：点击有正确反应、该跳转的跳转、状态切换正确
+- **配色与层次协调**：主色调接近、区块层次清晰、无明显拥挤/违和
+- **用户指出的差距已消除**：截图指出的具体问题得到解决
 
-### v2.2 — Dialogs & i18n
+### ❌ 不追求的标准（明确放弃，避免无谓消耗）
+- 像素级完全一致（跨框架做不到）
+- 完全相同的字体渲染/抗锯齿
+- 完全相同的 3D 渲染质感（取决于 GL 渲染层，独立工作）
+- 完全相同的动画/过渡手感
+- ImGui 特有的逐像素绘制效果
 
-- AMS 系列 Dialog (~10 个)
-- 预设管理 Dialog (SavePreset/DiffPreset/CreatePreset)
-- Print/PrintHost Dialog
-- 绑定/网络 Dialog
-- 更新/隐私 Dialog
-- i18n 21 语言接入
+### 验收流程
+1. agent 实现差距修复 → 构建 + 冒烟通过
+2. agent 启动程序 → 用户截图
+3. agent 用 analyze_image 对比上游截图 + 差距清单
+4. **用户判断**："结构对齐了、不违和" → 标记 ✅；"还是乱/缺东西" → 回到步骤 1
+
+**决策权在用户**：agent 只负责实现和构建，"是否达标"由用户拍板。
+
+---
+
+## 优先级排序（当前）
+
+**第一波（Prepare 页左侧栏，见效快）：**
+1. G1 — Filament 默认展开（1 行改动）
+2. G2 — 左侧栏统一卡片背景 + 间距
+3. G3 — Printer 区块包卡片容器
+
+**第二波（Prepare 页 3D 视口，大工作量）：**
+4. G4 — 3D 视口工具栏 overlay（MainToolbar/Gizmos/ViewToolbar/PartPlateList）
+5. G5 — Gizmo 竖条重做
+
+**第三波（打磨 + 其他页面）：**
+6. G6/G7/G8 — Prepare 页细节
+7. Preview/Device/其他页 — 待截图生成清单
 
 ---
 
-## Progress
+## Out of Scope（沿用 v2.1/v2.2 划分）
 
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. OWzx Brand Cleanup | 3/3 | Complete   | 2026-06-15 |
-| 2. 9-Page Notebook + BBLTopbar | 2/2 | Complete   | 2026-06-16 |
-| 3. Plater Shared Instance | 2/2 | Complete   | 2026-06-17 |
-| 4. Sidebar Dockable Layout | 2/2 | Complete   | 2026-06-17 |
-| 5. Prepare Sidebar 8 Sections | 1/1 | Complete   | 2026-06-17 |
-| 6. GLCanvas Toolbar System | 0/0 | Pending | — |
-| 7. Calibration Menu & Dialogs | 0/0 | Pending | — |
+- **v2.1**：Home WebView / Device 双形态 / Multi-device / Project 5 子 Tab / ConfigWizard 完整版 / PreferencesDialog 完整版
+- **v2.2**：AMS Dialog / 预设管理 Dialog / Print/PrintHost Dialog / 网络 Dialog / i18n 21 语言
 
 ---
-*Last updated: 2026-06-17 — Phase 5 complete (八大区块骨架; 部分 SIDEBAR 标 [-] 待 VM 扩展)*
+
+## 历史归档说明
+
+旧的 Phase 1-7 计划文档保留在 `.planning/phases/01-05` 作为历史参考（记录了架构改动的来龙去脉），但**不再作为工作驱动**。新的驱动是本文件的差距清单 + `docs/差距清单_*.md`。
+
+旧 ROADMAP 的 Phase 6（GLCanvas Toolbar）和 Phase 7（Calibration Dialog）的 Success Criteria 仍可参考，但会转化为差距清单条目（如 G4 对应旧 Phase 6 的 GLUI-01~08）。
+
+---
+*Last updated: 2026-06-17 — 废弃 Phase 推进，改为差距清单驱动；Prepare 页 G1-G8 首批差距已生成；验收方式变更（视觉类必须用户截图确认）*

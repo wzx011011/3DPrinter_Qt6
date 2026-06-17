@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import ".."
@@ -13,11 +13,10 @@ Rectangle {
     required property var editorVm
     required property var configVm
     property string processCategory: ""
+    // G3: Printer 折叠状态（由 CollapsibleSection 管理）
+    property bool printerExpanded: true
 
-    color: Theme.bgPanel
-    radius: 18
-    border.width: 1
-    border.color: Theme.borderSubtle
+    color: "transparent"  // 外观由 DockableSidebar 容器负责（避免双层边框）`r`n    radius: 0`r`n    border.width: 0
 
     CxScrollView {
         anchors.fill: parent
@@ -25,94 +24,43 @@ Rectangle {
 
         ColumnLayout {
             width: parent.width
-            spacing: 4
+            spacing: 10  // 区块间距增大（对齐上游 OrcaSlicer 卡片层次）
 
             // -- Section 1: Printer panel (对齐上游 SiderBar SidebarPrinter) --
-            ColumnLayout {
+            // G3: 用 CollapsibleSection 统一卡片风格（与 Filament/Objects 一致）
+            CollapsibleSection {
                 id: printerSection
                 Layout.fillWidth: true
-                spacing: 0
-
-                // Title bar: printer icon + label + gear (对齐上游 m_panel_printer_title)
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 32
-                    radius: 6
-                    color: Theme.bgElevated
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 8
-                        anchors.rightMargin: 6
-                        spacing: 6
-
+                title: qsTr("打印机")
+                iconText: "🖨"
+                expanded: printerExpanded
+                rightActions: [
+                    // Settings gear → ConfigWizard (对齐上游 m_printer_setting)
+                    Rectangle {
+                        width: 22; height: 22; radius: 4
+                        color: printerGearBtn.containsMouse ? Theme.bgHover : "transparent"
                         Image {
-                            width: 16; height: 16
-                            source: "qrc:/qml/assets/icons/printer.svg"
+                            anchors.centerIn: parent
+                            width: 14; height: 14
+                            source: "qrc:/qml/assets/icons/settings.svg"
                             fillMode: Image.PreserveAspectFit
                         }
-
-                        Text {
-                            text: qsTr("打印机")
-                            color: Theme.textPrimary
-                            font.pixelSize: 12
-                            font.bold: true
-                            Layout.fillWidth: true
-                        }
-
-                        // Settings gear → ConfigWizard (对齐上游 m_printer_setting)
-                        Rectangle {
-                            width: 22; height: 22; radius: 4
-                            color: printerGearBtn.containsMouse ? Theme.bgHover : "transparent"
-                            Image {
-                                anchors.centerIn: parent
-                                width: 14; height: 14
-                                source: "qrc:/qml/assets/icons/settings.svg"
-                                fillMode: Image.PreserveAspectFit
-                            }
-                            MouseArea {
-                                id: printerGearBtn
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: backend.showConfigWizard()
-                            }
-                        }
-
-                        // Expand/collapse arrow
-                        Text {
-                            text: printerExpanded ? "▾" : "▸"
-                            color: Theme.textDisabled
-                            font.pixelSize: 10
+                        MouseArea {
+                            id: printerGearBtn
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: backend.showConfigWizard()
                         }
                     }
+                ]
 
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: printerExpanded = !printerExpanded
-                    }
+                // 展开/折叠状态由 CollapsibleSection 管理（点击标题栏切换）
+                onExpandedChanged: printerExpanded = expanded
 
-                    property bool printerExpanded: true
-                }
-
-                // Separator (对齐上游 StaticLine #CECECE)
-                Rectangle {
+                content: ColumnLayout {
                     Layout.fillWidth: true
-                    Layout.leftMargin: 4; Layout.rightMargin: 4
-                    height: 1
-                    color: Theme.borderSubtle
-                    visible: printerExpanded
-                }
-
-                // Content panel (对齐上游 m_panel_printer_content)
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Layout.topMargin: 8
-                    Layout.leftMargin: 4
-                    Layout.rightMargin: 4
                     spacing: 8
-                    visible: printerExpanded
 
                     // Row 1: Printer preset combo + edit + connection (对齐上游 hsizer_printer)
                     RowLayout {
@@ -185,17 +133,6 @@ Rectangle {
                         }
                     }
                 }
-
-                // Bottom separator (对齐上游 #A6A9AA)
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.topMargin: 4
-                    Layout.bottomMargin: 2
-                    height: 1
-                    color: Theme.borderSubtle
-                }
-
-                property bool printerExpanded: true
             }
 
             // -- Section 2: Filament (from PrintSettings.qml lines 626-704) --
@@ -204,7 +141,7 @@ Rectangle {
                 Layout.fillWidth: true
                 title: qsTr("耗材")
                 iconText: "F"
-                expanded: false
+                expanded: true  // G1: 默认展开（对齐上游，耗材列表可见）
 
                 rightActions: [
                     Rectangle {
@@ -654,283 +591,6 @@ Rectangle {
                 QtObject {
                     id: paramsTabBar
                     property string currentTab: "print"
-                }
-            }
-
-            // ── v1.x 残留区块（Phase 6 迁移到 Gizmo 浮层时清理）──
-            // -- Section 4: Transform (from Sidebar.qml lines 108-362) --
-            CollapsibleSection {
-                Layout.fillWidth: true
-                title: qsTr("变换")
-                iconText: "✥"
-                expanded: true
-                visible: root.editorVm && root.editorVm.hasObjectManipSelection
-
-                content: ColumnLayout {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    spacing: 6
-
-                    // Title row with uniform scale + reset buttons
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Item { Layout.fillWidth: true }
-                        Rectangle {
-                            width: uniformMA.containsMouse ? 56 : 50
-                            height: 20
-                            radius: 5
-                            color: root.editorVm && root.editorVm.uniformScale ? Theme.accentSubtle : Theme.bgElevated
-                            border.width: 1
-                            border.color: root.editorVm && root.editorVm.uniformScale ? Theme.accent : Theme.borderSubtle
-                            Text { anchors.centerIn: parent; text: qsTr("统一"); color: root.editorVm && root.editorVm.uniformScale ? Theme.accent : Theme.textDisabled; font.pixelSize: 9 }
-                            MouseArea {
-                                id: uniformMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: { if (root.editorVm) root.editorVm.uniformScale = !root.editorVm.uniformScale }
-                            }
-                        }
-                        Rectangle {
-                            width: resetMA.containsMouse ? 48 : 42
-                            height: 20
-                            radius: 5
-                            color: Theme.bgElevated
-                            border.width: 1
-                            border.color: Theme.borderSubtle
-                            Text { anchors.centerIn: parent; text: qsTr("重置"); color: Theme.textSecondary; font.pixelSize: 9 }
-                            MouseArea {
-                                id: resetMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: { if (root.editorVm) root.editorVm.resetObjectTransform() }
-                            }
-                        }
-                    }
-
-                    // Position
-                    Repeater {
-                        model: [
-                            {label: "X", color: "#ef4444", px: "objectPosX"},
-                            {label: "Y", color: "#22c55e", px: "objectPosY"},
-                            {label: "Z", color: "#3b82f6", px: "objectPosZ"}
-                        ]
-                        delegate: RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 4
-                            required property var modelData
-
-                            Text {
-                                text: modelData.label
-                                color: modelData.color
-                                font.pixelSize: 10
-                                font.bold: true
-                                Layout.preferredWidth: 14
-                            }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                height: 22
-                                radius: 4
-                                color: Theme.bgInset
-                                border.width: 1
-                                border.color: spinMA.containsMouse ? modelData.color : Theme.borderInput
-                                TextInput {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 4
-                                    anchors.rightMargin: 4
-                                    verticalAlignment: Text.AlignVCenter
-                                    horizontalAlignment: Text.AlignRight
-                                    color: Theme.textPrimary
-                                    font.pixelSize: 10
-                                    font.family: "monospace"
-                                    selectByMouse: true
-                                    validator: DoubleValidator { decimals: 2; notation: DoubleValidator.StandardNotation }
-                                    text: {
-                                        if (!root.editorVm) return "0"
-                                        return Number(root.editorVm[modelData.px]).toFixed(2)
-                                    }
-                                    onEditingFinished: {
-                                        if (!root.editorVm) return
-                                        const val = parseFloat(text)
-                                        if (isNaN(val)) return
-                                        root.editorVm[modelData.px] = val
-                                    }
-                                }
-                                MouseArea {
-                                    id: spinMA
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    acceptedButtons: Qt.NoButton
-                                }
-                            }
-                            Text { text: "mm"; color: Theme.textDisabled; font.pixelSize: 9; Layout.preferredWidth: 18 }
-                        }
-                    }
-
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
-
-                    // Rotation
-                    Text { text: qsTr("旋转 (°)"); color: Theme.textTertiary; font.pixelSize: 9 }
-                    Repeater {
-                        model: [
-                            {label: "X", color: "#ef4444", px: "objectRotX"},
-                            {label: "Y", color: "#22c55e", px: "objectRotY"},
-                            {label: "Z", color: "#3b82f6", px: "objectRotZ"}
-                        ]
-                        delegate: RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 4
-                            required property var modelData
-
-                            Text {
-                                text: modelData.label
-                                color: modelData.color
-                                font.pixelSize: 10
-                                font.bold: true
-                                Layout.preferredWidth: 14
-                            }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                height: 22
-                                radius: 4
-                                color: Theme.bgInset
-                                border.width: 1
-                                border.color: rotMA.containsMouse ? modelData.color : Theme.borderInput
-                                TextInput {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 4
-                                    anchors.rightMargin: 4
-                                    verticalAlignment: Text.AlignVCenter
-                                    horizontalAlignment: Text.AlignRight
-                                    color: Theme.textPrimary
-                                    font.pixelSize: 10
-                                    font.family: "monospace"
-                                    selectByMouse: true
-                                    validator: DoubleValidator { decimals: 1; bottom: -360; top: 360 }
-                                    text: {
-                                        if (!root.editorVm) return "0"
-                                        return Number(root.editorVm[modelData.px]).toFixed(1)
-                                    }
-                                    onEditingFinished: {
-                                        if (!root.editorVm) return
-                                        const val = parseFloat(text)
-                                        if (isNaN(val)) return
-                                        root.editorVm[modelData.px] = val
-                                    }
-                                }
-                                MouseArea {
-                                    id: rotMA
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    acceptedButtons: Qt.NoButton
-                                }
-                            }
-                            Text { text: "°"; color: Theme.textDisabled; font.pixelSize: 9; Layout.preferredWidth: 18 }
-                        }
-                    }
-
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
-
-                    // Scale
-                    Text { text: qsTr("缩放 (%)"); color: Theme.textTertiary; font.pixelSize: 9 }
-                    Repeater {
-                        model: [
-                            {label: "X", color: "#ef4444", px: "objectScaleX"},
-                            {label: "Y", color: "#22c55e", px: "objectScaleY"},
-                            {label: "Z", color: "#3b82f6", px: "objectScaleZ"}
-                        ]
-                        delegate: RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 4
-                            required property var modelData
-
-                            Text {
-                                text: modelData.label
-                                color: modelData.color
-                                font.pixelSize: 10
-                                font.bold: true
-                                Layout.preferredWidth: 14
-                            }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                height: 22
-                                radius: 4
-                                color: Theme.bgInset
-                                border.width: 1
-                                border.color: sclMA.containsMouse ? modelData.color : Theme.borderInput
-                                TextInput {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 4
-                                    anchors.rightMargin: 4
-                                    verticalAlignment: Text.AlignVCenter
-                                    horizontalAlignment: Text.AlignRight
-                                    color: Theme.textPrimary
-                                    font.pixelSize: 10
-                                    font.family: "monospace"
-                                    selectByMouse: true
-                                    validator: DoubleValidator { decimals: 1; bottom: 0.01 }
-                                    text: {
-                                        if (!root.editorVm) return "100"
-                                        return (Number(root.editorVm[modelData.px]) * 100).toFixed(1)
-                                    }
-                                    onEditingFinished: {
-                                        if (!root.editorVm) return
-                                        const val = parseFloat(text)
-                                        if (isNaN(val) || val <= 0) return
-                                        root.editorVm[modelData.px] = val / 100.0
-                                    }
-                                }
-                                MouseArea {
-                                    id: sclMA
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    acceptedButtons: Qt.NoButton
-                                }
-                            }
-                            Text { text: "%"; color: Theme.textDisabled; font.pixelSize: 9; Layout.preferredWidth: 18 }
-                        }
-                    }
-
-                    // Dimensions info (read-only)
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: dimRow.implicitHeight + 10
-                        radius: 4
-                        color: Theme.bgInset
-                        visible: root.editorVm && root.editorVm.measureDimensions.x > 0
-
-                        RowLayout {
-                            id: dimRow
-                            anchors.fill: parent
-                            anchors.leftMargin: 8
-                            anchors.rightMargin: 8
-                            spacing: 6
-                            Text { text: "W:"; color: "#ef4444"; font.pixelSize: 9; font.bold: true }
-                            Text { text: root.editorVm ? root.editorVm.measureDimensions.x.toFixed(1) : "--"; color: Theme.textSecondary; font.pixelSize: 9; font.family: "monospace" }
-                            Text { text: "D:"; color: "#22c55e"; font.pixelSize: 9; font.bold: true }
-                            Text { text: root.editorVm ? root.editorVm.measureDimensions.y.toFixed(1) : "--"; color: Theme.textSecondary; font.pixelSize: 9; font.family: "monospace" }
-                            Text { text: "H:"; color: "#3b82f6"; font.pixelSize: 9; font.bold: true }
-                            Text { text: root.editorVm ? root.editorVm.measureDimensions.z.toFixed(1) : "--"; color: Theme.textSecondary; font.pixelSize: 9; font.family: "monospace" }
-                        }
-                    }
-                }
-            }
-
-            // -- Section 5: Slice Progress (from Sidebar.qml lines 398-411) --
-            CollapsibleSection {
-                id: sliceSection
-                Layout.fillWidth: true
-                title: qsTr("切片")
-                iconText: "☰"
-                expanded: true
-                visible: root.editorVm ? root.editorVm.isSlicing() : false
-
-                content: SliceProgress {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    height: 120
-                    editorVm: root.editorVm
                 }
             }
 
