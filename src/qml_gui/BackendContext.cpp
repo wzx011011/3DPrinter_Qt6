@@ -167,6 +167,18 @@ BackendContext::BackendContext(QObject *parent)
   // Load config wizard state from QSettings (对齐上游 ConfigWizard 首次运行检测)
   QSettings settings;
   m_configWizardCompleted = settings.value(QStringLiteral("wizard/completed"), false).toBool();
+
+  // Phase 4: Load sidebar dockable state from QSettings
+  // 对齐上游 app_config collapsed_sidebar；width/dockArea 为增强（上游无）
+  // 命名空间 owzx/sidebar/* 避免与其它 key 冲突
+  sidebarCollapsed_ = settings.value(QStringLiteral("owzx/sidebar/collapsed"), false).toBool();
+  const int savedWidth = settings.value(QStringLiteral("owzx/sidebar/width"), kSidebarDefaultWidth).toInt();
+  sidebarWidth_ = qBound(kSidebarMinWidth, savedWidth, kSidebarMaxWidth);  // clamp 防御损坏的存储值
+  const int savedArea = settings.value(QStringLiteral("owzx/sidebar/dockArea"),
+                                       static_cast<int>(SidebarDockArea::Left)).toInt();
+  sidebarDockArea_ = (savedArea == static_cast<int>(SidebarDockArea::Right))
+                       ? SidebarDockArea::Right
+                       : SidebarDockArea::Left;  // 防御：非 Right 一律按 Left
 }
 
 QObject *BackendContext::editorViewModel() const { return editorViewModel_; }
@@ -246,6 +258,52 @@ void BackendContext::requestChangeViewMode(int mode)
   // 先广播（对齐 tabSelectRequested 语义）
   emit viewModeChangeRequested(mode);
   setCurrentViewMode(mode);
+}
+
+// ── Phase 4: Sidebar Dockable 操作（对齐上游 collapse_sidebar + 持久化增强）──
+// 设计：所有 request 方法去重 + emit NOTIFY + 持久化到 QSettings owzx/sidebar/*。
+// 对齐上游 Plater.cpp:4452 collapse_sidebar(bool) 的显隐语义。
+
+void BackendContext::requestToggleSidebar()
+{
+  // 对齐上游 EVT_GLCANVAS_COLLAPSE_SIDEBAR 触发的 toggle 语义
+  requestSetSidebarCollapsed(!sidebarCollapsed_);
+}
+
+void BackendContext::requestSetSidebarCollapsed(bool c)
+{
+  if (sidebarCollapsed_ == c)
+    return;  // 去重
+  sidebarCollapsed_ = c;
+  QSettings settings;
+  settings.setValue(QStringLiteral("owzx/sidebar/collapsed"), c);  // 持久化（对齐上游 app_config）
+  emit sidebarCollapsedChanged();
+}
+
+void BackendContext::requestSetSidebarWidth(int w)
+{
+  // clamp 到 [min, max]，防御 QML 传入越界值
+  const int clamped = qBound(kSidebarMinWidth, w, kSidebarMaxWidth);
+  if (sidebarWidth_ == clamped)
+    return;  // 去重（含 clamp 后相等）
+  sidebarWidth_ = clamped;
+  QSettings settings;
+  settings.setValue(QStringLiteral("owzx/sidebar/width"), clamped);  // 持久化
+  emit sidebarWidthChanged();
+}
+
+void BackendContext::requestSetSidebarDockArea(int area)
+{
+  // 防御：非 Right 一律按 Left（避免越界枚举值破坏 QML 绑定）
+  const SidebarDockArea newArea = (area == static_cast<int>(SidebarDockArea::Right))
+                                    ? SidebarDockArea::Right
+                                    : SidebarDockArea::Left;
+  if (sidebarDockArea_ == newArea)
+    return;  // 去重
+  sidebarDockArea_ = newArea;
+  QSettings settings;
+  settings.setValue(QStringLiteral("owzx/sidebar/dockArea"), static_cast<int>(newArea));  // 持久化
+  emit sidebarDockAreaChanged();
 }
 void BackendContext::openSettings()
 {

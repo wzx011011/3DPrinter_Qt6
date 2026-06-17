@@ -40,6 +40,11 @@ private slots:
   void testCurrentViewModeDefault();
   void testRequestChangeViewModeSignal();
   void testTabSelectDrivesViewMode();
+  // Phase 04-01: Sidebar Dockable 状态 + 持久化
+  void testSidebarCollapsedDefault();
+  void testRequestToggleSidebar();
+  void testSidebarWidthClamp();
+  void testSidebarDockArea();
   void editor_import_model_updates_state();
   void monitor_refresh_updates_network_and_device();
   void config_default_and_switch_preset();
@@ -399,6 +404,140 @@ void ViewModelSmokeTests::testTabSelectDrivesViewMode()
   ctx.requestSelectTab(static_cast<int>(BackendContext::TabPosition::tpProject));
   QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tpProject));
   QCOMPARE(ctx.currentViewMode(), vmBefore);
+}
+
+// ── Phase 04-01: Sidebar Dockable 状态 + 持久化 unit tests ──
+// 注意：QSettings 持久化在测试进程内可验证（同 QSettings 默认 ini 路径）。
+// 为隔离，每个测试先 reset 三个 key，验证后再 reset。
+
+static void resetSidebarSettings()
+{
+  QSettings s;
+  s.remove(QStringLiteral("owzx/sidebar/collapsed"));
+  s.remove(QStringLiteral("owzx/sidebar/width"));
+  s.remove(QStringLiteral("owzx/sidebar/dockArea"));
+  s.sync();
+}
+
+void ViewModelSmokeTests::testSidebarCollapsedDefault()
+{
+  resetSidebarSettings();
+  BackendContext ctx;
+
+  // 默认未折叠（对齐上游 Plater 默认显示 sidebar）
+  QCOMPARE(ctx.sidebarCollapsed(), false);
+  QCOMPARE(ctx.sidebarMinWidth(), 240);
+  QCOMPARE(ctx.sidebarMaxWidth(), 480);
+  QCOMPARE(ctx.sidebarWidth(), 280);  // 默认宽度
+  QCOMPARE(ctx.sidebarDockArea(), static_cast<int>(BackendContext::SidebarDockArea::Left));
+}
+
+void ViewModelSmokeTests::testRequestToggleSidebar()
+{
+  resetSidebarSettings();
+  BackendContext ctx;
+
+  QSignalSpy spy(&ctx, &BackendContext::sidebarCollapsedChanged);
+  QVERIFY(spy.isValid());
+  QCOMPARE(ctx.sidebarCollapsed(), false);
+
+  // 折叠
+  ctx.requestToggleSidebar();
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(ctx.sidebarCollapsed(), true);
+
+  // 再 toggle 展开
+  ctx.requestToggleSidebar();
+  QCOMPARE(spy.count(), 2);
+  QCOMPARE(ctx.sidebarCollapsed(), false);
+
+  // 显式设置同值必须去重（无信号）
+  spy.clear();
+  ctx.requestSetSidebarCollapsed(false);
+  QCOMPARE(spy.count(), 0);
+  QCOMPARE(ctx.sidebarCollapsed(), false);
+
+  // 持久化验证：新构造的 ctx 应读到已保存的折叠状态
+  ctx.requestSetSidebarCollapsed(true);
+  BackendContext ctx2;
+  QCOMPARE(ctx2.sidebarCollapsed(), true);  // 从 QSettings 恢复
+
+  resetSidebarSettings();
+}
+
+void ViewModelSmokeTests::testSidebarWidthClamp()
+{
+  resetSidebarSettings();
+  BackendContext ctx;
+
+  QSignalSpy spy(&ctx, &BackendContext::sidebarWidthChanged);
+  QVERIFY(spy.isValid());
+
+  // 越小值 clamp 到 min
+  ctx.requestSetSidebarWidth(100);
+  QCOMPARE(ctx.sidebarWidth(), 240);  // clamp 到 min
+  QCOMPARE(spy.count(), 1);
+
+  // 越大值 clamp 到 max
+  spy.clear();
+  ctx.requestSetSidebarWidth(9999);
+  QCOMPARE(ctx.sidebarWidth(), 480);  // clamp 到 max
+  QCOMPARE(spy.count(), 1);
+
+  // 正常值原样存
+  spy.clear();
+  ctx.requestSetSidebarWidth(320);
+  QCOMPARE(ctx.sidebarWidth(), 320);
+  QCOMPARE(spy.count(), 1);
+
+  // clamp 后同值去重（设置 320 再设置 350 才变）
+  spy.clear();
+  ctx.requestSetSidebarWidth(320);  // 同值
+  QCOMPARE(spy.count(), 0);
+
+  // 持久化验证
+  BackendContext ctx2;
+  QCOMPARE(ctx2.sidebarWidth(), 320);  // 从 QSettings 恢复
+
+  resetSidebarSettings();
+}
+
+void ViewModelSmokeTests::testSidebarDockArea()
+{
+  resetSidebarSettings();
+  BackendContext ctx;
+
+  // 枚举值对齐
+  QCOMPARE(static_cast<int>(BackendContext::SidebarDockArea::Left), 0);
+  QCOMPARE(static_cast<int>(BackendContext::SidebarDockArea::Right), 1);
+  QCOMPARE(ctx.sdaLeft(), 0);
+  QCOMPARE(ctx.sdaRight(), 1);
+
+  QSignalSpy spy(&ctx, &BackendContext::sidebarDockAreaChanged);
+  QVERIFY(spy.isValid());
+
+  // 切到 Right
+  ctx.requestSetSidebarDockArea(static_cast<int>(BackendContext::SidebarDockArea::Right));
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(ctx.sidebarDockArea(), static_cast<int>(BackendContext::SidebarDockArea::Right));
+
+  // 同值去重
+  spy.clear();
+  ctx.requestSetSidebarDockArea(static_cast<int>(BackendContext::SidebarDockArea::Right));
+  QCOMPARE(spy.count(), 0);
+
+  // 越界值防御：非 Right 一律按 Left
+  spy.clear();
+  ctx.requestSetSidebarDockArea(99);
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(ctx.sidebarDockArea(), static_cast<int>(BackendContext::SidebarDockArea::Left));
+
+  // 持久化验证
+  ctx.requestSetSidebarDockArea(static_cast<int>(BackendContext::SidebarDockArea::Right));
+  BackendContext ctx2;
+  QCOMPARE(ctx2.sidebarDockArea(), static_cast<int>(BackendContext::SidebarDockArea::Right));
+
+  resetSidebarSettings();
 }
 
 QTEST_MAIN(ViewModelSmokeTests)

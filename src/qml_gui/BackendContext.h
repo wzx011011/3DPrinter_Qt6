@@ -143,6 +143,17 @@ class BackendContext final : public QObject
   /// 当前 Plater 视图模式（由 currentPage 联动：tp3DEditor→View3D，tpPreview→Preview）
   Q_PROPERTY(int currentViewMode READ currentViewMode NOTIFY currentViewModeChanged)
 
+  // ── Phase 4: Sidebar Dockable 状态（对齐上游 collapse_sidebar + 增强 dockArea/width）──
+  // 持久化到 QSettings owzx/sidebar/* （对齐上游 app_config collapsed_sidebar）
+  Q_PROPERTY(bool sidebarCollapsed READ sidebarCollapsed NOTIFY sidebarCollapsedChanged)
+  Q_PROPERTY(int sidebarWidth READ sidebarWidth NOTIFY sidebarWidthChanged)
+  Q_PROPERTY(int sidebarDockArea READ sidebarDockArea NOTIFY sidebarDockAreaChanged)
+  // 常量 accessors（QML 用，避免魔法数）
+  Q_PROPERTY(int sidebarMinWidth READ sidebarMinWidth CONSTANT)
+  Q_PROPERTY(int sidebarMaxWidth READ sidebarMaxWidth CONSTANT)
+  Q_PROPERTY(int sdaLeft READ sdaLeft CONSTANT)
+  Q_PROPERTY(int sdaRight READ sdaRight CONSTANT)
+
 public:
   /// 上游对齐 TabPosition 枚举（1:1 数值对齐 third_party/OrcaSlicer/src/slic3r/GUI/MainFrame.hpp:218-229）。
   /// OWzx 重命名：tpMonitor→tpDevice, tpAuxiliary→tpPlaceholder1, toDebugTool→tpPlaceholder2。
@@ -172,6 +183,16 @@ public:
   };
   Q_ENUM(ViewMode)
 
+  /// Sidebar dock 区域（Phase 4 增强，上游只有 collapse 无 dock 切换）。
+  /// Left=0 默认（对齐上游 Plater 左侧固定）；Right=1（增强：可切到右侧）。
+  /// 浮动窗口 dock Out of Scope（上游也没有）。
+  enum class SidebarDockArea
+  {
+    Left = 0,
+    Right = 1,
+  };
+  Q_ENUM(SidebarDockArea)
+
   // QML-friendly accessors returning the enum value as int (Q_PROPERTY constants)
   int tpHome() const { return static_cast<int>(TabPosition::tpHome); }
   int tp3DEditor() const { return static_cast<int>(TabPosition::tp3DEditor); }
@@ -188,6 +209,15 @@ public:
   int vmPreview() const { return static_cast<int>(ViewMode::Preview); }
   int vmAssembleView() const { return static_cast<int>(ViewMode::AssembleView); }
   int currentViewMode() const { return static_cast<int>(currentViewMode_); }
+
+  // Phase 4: Sidebar Dockable accessors
+  bool sidebarCollapsed() const { return sidebarCollapsed_; }
+  int sidebarWidth() const { return sidebarWidth_; }
+  int sidebarDockArea() const { return static_cast<int>(sidebarDockArea_); }
+  int sidebarMinWidth() const { return kSidebarMinWidth; }
+  int sidebarMaxWidth() const { return kSidebarMaxWidth; }
+  int sdaLeft() const { return static_cast<int>(SidebarDockArea::Left); }
+  int sdaRight() const { return static_cast<int>(SidebarDockArea::Right); }
 
   explicit BackendContext(QObject *parent = nullptr);
 
@@ -222,6 +252,11 @@ public:
   /// 请求切换 Plater 视图模式（对齐上游 Plater show_view3D / show_preview）。
   /// 越界/同值静默拒绝。先广播 viewModeChangeRequested，再 setCurrentViewMode。
   Q_INVOKABLE void requestChangeViewMode(int mode);
+  // Phase 4: Sidebar Dockable 操作（对齐上游 collapse_sidebar + 持久化）
+  Q_INVOKABLE void requestToggleSidebar();           ///< 折叠/展开切换（对齐上游 collapse_sidebar）
+  Q_INVOKABLE void requestSetSidebarCollapsed(bool c);  ///< 显式设置折叠状态
+  Q_INVOKABLE void requestSetSidebarWidth(int w);       ///< 设置宽度（clamp [min,max]，持久化）
+  Q_INVOKABLE void requestSetSidebarDockArea(int area); ///< 设置 dock 区域（Left/Right）
   Q_INVOKABLE void postError(const QString &message, int severity = 0);
   Q_INVOKABLE void postNotification(const QString &message, const QString &title = {}, int severity = 0);
   Q_INVOKABLE void clearError();
@@ -325,6 +360,10 @@ signals:
   void viewModeChangeRequested(int mode);
   /// 当前视图模式已改变（currentViewMode Q_PROPERTY NOTIFY）。
   void currentViewModeChanged();
+  // Phase 4: Sidebar Dockable 状态变更信号
+  void sidebarCollapsedChanged();
+  void sidebarWidthChanged();
+  void sidebarDockAreaChanged();
   void errorChanged();
   void latencyChanged();
   void uiScaleChanged();
@@ -370,6 +409,13 @@ private:
   int currentPage_ = 1;
   /// Phase 3: 当前 Plater 视图模式（默认 View3D，对齐上游 Plater 默认显示 view3D）
   ViewMode currentViewMode_ = ViewMode::View3D;
+  // Phase 4: Sidebar Dockable 状态（构造时从 QSettings load，setter 时 save）
+  static constexpr int kSidebarMinWidth = 240;   ///< 最小宽度（对齐上游 sidebar 不可窄于此）
+  static constexpr int kSidebarMaxWidth = 480;   ///< 最大宽度（避免独占过多 3D 区）
+  static constexpr int kSidebarDefaultWidth = 280; ///< 默认宽度（对齐上游 LeftSidebar 280px）
+  bool sidebarCollapsed_ = false;
+  int sidebarWidth_ = kSidebarDefaultWidth;
+  SidebarDockArea sidebarDockArea_ = SidebarDockArea::Left;
   QString lastErrorMessage_;
   QString lastErrorTitle_;
   int lastErrorSeverity_ = -1;
