@@ -58,21 +58,21 @@
 
 ### SIDEBAR — Prepare Plater Sidebar
 
-- [ ] **SIDEBAR-01**: Sidebar 滚动区按八大区块顺序布局：Printer → Filament → Process 顶部条 → Search → ObjectList → ObjectSettings → ObjectLayers → ParamsPanel page_view
-- [ ] **SIDEBAR-02**: Printer 标题栏（icon + "Printer" + connect/sync/settings 按钮）+ 内容（preset combo + 喷嘴 diameter + Bed type + extruders 数）
-- [ ] **SIDEBAR-03**: Printer 标题栏可折叠（点击切换内容显隐）
-- [ ] **SIDEBAR-04**: Filament 标题栏 + 双列耗材列表（每个 extruder 一个 PlaterPresetComboBox + 颜色 + edit）
-- [ ] **SIDEBAR-05**: Filament 标题栏可折叠
-- [ ] **SIDEBAR-06**: Process 顶部条（ParamsPanel.m_top_panel）：Process icon + "Process" + SwitchButton(Global/Objects) + ModeIcon + ModeSwitchButton(Simple/Advanced) + Compare + Setting
-- [ ] **SIDEBAR-07**: Global/Objects 作用域切换正确反映到参数列表显示
-- [ ] **SIDEBAR-08**: Simple/Advanced 模式切换正确过滤参数可见性
-- [ ] **SIDEBAR-09**: Compare 按钮打开 DiffPresetDialog（v2.0 占位，正式实现延后到 v2.2）
-- [ ] **SIDEBAR-10**: Setting 按钮弹出 ObjectTableDialog（查看对象全部设置）
-- [ ] **SIDEBAR-11**: Search bar（StaticBox + TextInput + search icon），输入跳转到对应参数
-- [ ] **SIDEBAR-12**: ObjectList 树完整（对象/部件/设置/层），支持拖拽/右键菜单/重命名
-- [ ] **SIDEBAR-13**: ObjectSettings 区块（选中对象的快速设置），无选中时隐藏
-- [ ] **SIDEBAR-14**: ObjectLayers 区块（变量层高编辑器），仅打印对象时显示
-- [ ] **SIDEBAR-15**: ParamsPanel page_view（参数列表）+ 左侧 7 个子 Tab 按钮（Print/PrintPlate/PrintObject/PrintPart/PrintLayer/Filament/Printer）
+- [x] **SIDEBAR-01**: Sidebar 滚动区按八大区块顺序布局：Printer → Filament → Process 顶部条 → Search → ObjectList → ObjectSettings → ObjectLayers → ParamsPanel page_view *(Phase 5)*
+- [x] **SIDEBAR-02**: Printer 标题栏（icon + "Printer" + connect/sync/settings 按钮）+ 内容（preset combo + 喷嘴 diameter + Bed type + extruders 数） *(Phase 5, 已有)*
+- [x] **SIDEBAR-03**: Printer 标题栏可折叠（点击切换内容显隐） *(Phase 5, 已有)*
+- [x] **SIDEBAR-04**: Filament 标题栏 + 双列耗材列表（每个 extruder 一个 PlaterPresetComboBox + 颜色 + edit） *(Phase 5, 已有)*
+- [x] **SIDEBAR-05**: Filament 标题栏可折叠 *(Phase 5, 已有)*
+- [-] **SIDEBAR-06**: Process 顶部条（ParamsPanel.m_top_panel）：Process icon + "Process" + SwitchButton(Global/Objects) + ModeIcon + ModeSwitchButton(Simple/Advanced) + Compare + Setting *(Phase 5 骨架; UI 完成, ModeSwitch 待 VM)*
+- [x] **SIDEBAR-07**: Global/Objects 作用域切换正确反映到参数列表显示 *(Phase 5; 绑 activateGlobalScope/activateObjectScope)*
+- [-] **SIDEBAR-08**: Simple/Advanced 模式切换正确过滤参数可见性 *(Phase 5 占位; 需 ConfigViewModel configMode)*
+- [-] **SIDEBAR-09**: Compare 按钮打开 DiffPresetDialog（v2.0 占位，正式实现延后到 v2.2） *(Phase 5 占位)*
+- [-] **SIDEBAR-10**: Setting 按钮弹出 ObjectTableDialog（查看对象全部设置） *(Phase 5 占位)*
+- [x] **SIDEBAR-11**: Search bar（StaticBox + TextInput + search icon），输入跳转到对应参数 *(Phase 5)*
+- [-] **SIDEBAR-12**: ObjectList 树完整（对象/部件/设置/层），支持拖拽/右键菜单/重命名 *(Phase 5 部分; 现有 ObjectList 组件, 拖拽待 VM 扩展)*
+- [x] **SIDEBAR-13**: ObjectSettings 区块（选中对象的快速设置），无选中时隐藏 *(Phase 5)*
+- [-] **SIDEBAR-14**: ObjectLayers 区块（变量层高编辑器），仅打印对象时显示 *(Phase 5 占位; 完整编辑器延后)*
+- [-] **SIDEBAR-15**: ParamsPanel page_view（参数列表）+ 左侧 7 个子 Tab 按钮（Print/PrintPlate/PrintObject/PrintPart/PrintLayer/Filament/Printer） *(Phase 5 骨架; 7 Tab UI 完成, 参数列表待 pageView 扩展)*
 
 ### GLUI — GLCanvas Toolbar System
 
