@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "model": "hotend.stl",
+  "totalElapsedMs": 0,
+  "stages": {
+    "model_prep": 0,
+    "mesh_slicing": 0,
+    "perimeters": 0,
+    "infill": 0,
+    "support": 0,
+    "wipe_tower_overhang": 0,
+    "skirt_brim": 0,
+    "overhang_detection": 0,
+    "path_optimization": 0,
+    "gcode_export": 0
+  },
+  "gcodeSizeBytes": 0,
+  "layerCount": 0
+}

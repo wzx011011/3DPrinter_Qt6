@@ -11,6 +11,4 @@ Menu {
         border.width: 1
         radius: Theme.radiusSM
     }
-
-    delegate: CxMenuItem {}
 }

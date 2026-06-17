@@ -30,6 +30,7 @@ MenuItem {
         contextType: "2d"
         visible: root.subMenu
         onPaint: {
+            if (!context) return
             context.reset()
             context.fillStyle = Theme.textMuted
             context.moveTo(0, 0)

@@ -381,7 +381,6 @@ void SliceService::startSlice(const QString &projectName)
       }
 
       Slic3r::Print print;
-      print.set_is_CX_printer(true);
       receiver->activePrint_.store(&print, std::memory_order_release);
 
       print.set_status_callback([receiver](const Slic3r::PrintBase::SlicingStatus &st) {
@@ -406,7 +405,7 @@ void SliceService::startSlice(const QString &projectName)
       {
         const QString tempDir = QDir::tempPath();
         Slic3r::set_temporary_dir(tempDir.toStdString());
-        Slic3r::set_data_dir(QCoreApplication::applicationDirPath().toStdString(), true);
+        Slic3r::set_data_dir(QCoreApplication::applicationDirPath().toStdString());
         Slic3r::set_resources_dir((QCoreApplication::applicationDirPath() + "/resources").toStdString());
       }
 
@@ -469,7 +468,9 @@ void SliceService::startSlice(const QString &projectName)
         resultFilamentLabel = QStringLiteral("%1 m").arg(QString::number(printStats.total_used_filament / 1000.0, 'f', 2));
 
       // Layer count (captured for main-thread delivery)
-      layerCount = static_cast<int>(printStats.total_layer_count);
+      layerCount = 0;
+      for (const Slic3r::PrintObject *obj : print.objects())
+          layerCount += static_cast<int>(obj->total_layer_count());
 
       // Cost
       if (printStats.total_cost > 0.0)

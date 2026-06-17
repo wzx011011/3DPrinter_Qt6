@@ -42,7 +42,6 @@
         <file>panels/FilamentPanel.qml</file>
         <file>panels/LeftSidebar.qml</file>
         <file>panels/DockableSidebar.qml</file>
-        <file>panels/RightParamsPanel.qml</file>
         <file>panels/AuxiliaryListPanel.qml</file>
         <!-- Components -->
         <file>components/StatusBar.qml</file>

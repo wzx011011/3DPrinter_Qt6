@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
-  "name": "creality-print-qt6",
+  "name": "owzx-slicer",
   "version-string": "1.0.0",
-  "description": "CrealityPrint Qt6 GUI with libslic3r backend",
+  "description": "OWzx Slicer - Qt6/QML GUI with libslic3r backend (based on OrcaSlicer)",
   "builtin-baseline": "6f29f12e82a8293156836ad81cc9bf5af41fe836",
   "dependencies": [
     "boost-filesystem",
@@ -43,6 +43,7 @@
     "cereal",
     "nlopt",
     "expat",
-    "cgal"
+    "cgal",
+    "eigen3"
   ]
 }

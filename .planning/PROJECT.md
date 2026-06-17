@@ -123,4 +123,42 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-12 — Milestone v2.0 (OrcaSlicer UI Full Restoration) started after upstream switch from CrealityPrint to OrcaSlicer*
+*Last updated: 2026-06-17 — Milestone v2.0 (OrcaSlicer UI Full Restoration) 核心架构完成（Prepare 页 G1-G5 + GLToolbars）；启动 v2.1 (切片/预览深化)*
+
+---
+
+## Milestone v2.0 — Shipped (2026-06-17, 架构层)
+
+v2.0 的**架构层**已完成，作为 v2.1 的地基：
+- ✅ 9-Page Notebook + BBLTopbar 框架（Phase 1-2）
+- ✅ Plater 共享实例（Prepare/Preview 共享，viewMode 联动，Phase 3）
+- ✅ Sidebar Dockable（折叠/宽度/dockArea + 持久化，Phase 4）
+- ✅ 八大区块骨架 + 卡片化（Phase 5 + G1-G3）
+- ✅ GLToolbars overlay（MainToolbar/Gizmos竖条/ViewToolbar，G4）
+- ✅ v1.x 残留清理（RightParamsPanel/topTools/viewPresets/processBar）
+
+**v2.0 未完成的部分**（转入 v2.1 或更后）：
+- Calibration 菜单/Dialog（需 CalibrationService 真实化 → 未来 milestone）
+- 90+ Dialog 补全（分散到各 milestone）
+- Home WebView（需 QtWebEngine，未来 milestone）
+- i18n 21 语言（未来 milestone）
+
+---
+
+## Milestone v2.1 — Slice & Preview Deep Dive（当前，2026-06-17 启动）
+
+**Goal:** 深化切片预览体验 + 完善预设管理。集中在 Prepare/Preview/Settings 已有页面深化，不碰 Mock 服务。
+
+**Target features:**
+
+- **Preview TickCode/IMSlider 系统**（核心）：G-code 着色模式切换（Feature/Speed/Extruder/LayerHeight/Pressure/Pixel）+ 自定义刻度插入（change filament/pause/custom gcode）
+- **Preset 管理 Dialog 套件**：SavePresetDialog + UnsavedChangesDialog + ExportPresetBundleDialog
+- **Prepare 页打磨收尾**：G6 BBLTopbar 样式 + G8 配色对比度（v2.0 遗留）
+- **Settings Search 集成**：SearchDialog 接入 SettingsPage tier
+
+**Out of Scope (v2.1 不做)**：
+- Device/Cloud/Network 真实化（v2.2+）
+- Calibration 真实化（v2.2+）
+- AssembleView（v2.2+）
+- ModelMall WebView（v2.2+）
+- i18n 翻译内容（v2.2+）

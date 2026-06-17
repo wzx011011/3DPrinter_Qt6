@@ -1,17 +1,24 @@
 # 源码真值迁移规则
 
-本仓库是一个以上游源码为真值的迁移项目。
+本仓库是基于 OrcaSlicer 上游的迁移项目（品牌名 OWzx）。
 
 ## 核心策略
 
-- 将 `third_party/CrealityPrint` 视为用户可见行为、工作流和功能范围的上游真值源。
+- 将 `third_party/OrcaSlicer` 视为用户可见行为、工作流和功能范围的上游真值源。
 - 将 `src/` 下的 Qt6/QML 代码视为迁移与承接层，必须继承上游行为。
 - 当上游已有实现时，不得自由设计新的产品行为。
+
+## 上游差异
+
+- OrcaSlicer 将嵌入式依赖放在 `deps_src/` 而非 `src/`（与 CrealityPrint 不同）
+- OrcaSlicer 使用 `find_package(Eigen3)` 获取 Eigen，不捆绑在源码中
+- OrcaSlicer 没有 `cmake/buildinfo.h.in`，使用 `cmake/buildinfo.h.in.stub` 替代
+- OrcaSlicer 的 GUI 层在 `src/slic3r/GUI/`，与 CrealityPrint 结构一致
 
 ## 必须遵循的工作流
 
 - 在修改代码前，先在 `docs/源码对照迁移任务追踪.md` 中识别匹配任务。
-- 在 `third_party/CrealityPrint` 中定位对应的上游源码文件或模块。
+- 在 `third_party/OrcaSlicer` 中定位对应的上游源码文件或模块。
 - 确认承载该行为的 Qt6 目标模块。
 - 如果没有匹配任务，先更新 `docs/源码对照迁移任务追踪.md`，再开始实现。
 

@@ -1,108 +1,139 @@
 # ==============================================================================
-# BuildDepsFromSource.cmake - Compile ALL embedded dependencies from source
+# BuildDepsFromSource.cmake - Compile embedded dependencies from upstream source
 #
-# This cmake file compiles ALL embedded dependencies from upstream source
-# to align with the upstream build strategy.
+# Aligned with OrcaSlicer's deps_src/CMakeLists.txt target definitions.
+# OrcaSlicer places deps in deps_src/ and uses find_package(Eigen3) for Eigen.
 # ==============================================================================
 
-message(STATUS "=== BuildDepsFromSource: Compiling ALL deps from source ===")
+message(STATUS "=== BuildDepsFromSource: Compiling deps from source ===")
 
 # ─── Path definitions ────────────────────────────────────────────────────────
-set(UPSTREAM_ROOT    "${CMAKE_SOURCE_DIR}/third_party/CrealityPrint")
+set(UPSTREAM_ROOT    "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer")
 set(UPSTREAM_SRC     "${UPSTREAM_ROOT}/src")
+set(UPSTREAM_DEPS    "${UPSTREAM_ROOT}/deps_src")
 set(DEPS_GEN_DIR     "${CMAKE_CURRENT_BINARY_DIR}/deps_generated")
 set(UPSTREAM_BUILD_DIR "E:/ai/3D-Printer/out/vs2026-x64-release/build/src")
 
 file(MAKE_DIRECTORY "${DEPS_GEN_DIR}")
 
-# ─── Common include paths ─────────────────────────────────────────────────────
-set(_COMMON_INCLUDES
-    "${UPSTREAM_SRC}"
-    "${UPSTREAM_SRC}/libslic3r"
-    "${UPSTREAM_SRC}/eigen"
-    ${Boost_INCLUDE_DIRS}
-)
+# ─── Eigen3 (external, same as OrcaSlicer upstream) ──────────────────────────
+find_package(Eigen3 5.0 CONFIG REQUIRED)
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SECTION A: Simple standalone deps (no dependencies)
+# SECTION A: Header-only INTERFACE libraries (matching upstream CMakeLists)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# ─── A1. miniz - zlib replacement (standalone C code) ─────────────────────────
-file(GLOB MINIZ_SOURCES "${UPSTREAM_SRC}/miniz/*.c")
+add_library(ankerl_from_source INTERFACE)
+target_include_directories(ankerl_from_source SYSTEM INTERFACE "${UPSTREAM_DEPS}/ankerl")
+
+add_library(fast_float_from_source INTERFACE)
+target_include_directories(fast_float_from_source SYSTEM INTERFACE "${UPSTREAM_DEPS}/fast_float")
+
+add_library(nlohmann_from_source INTERFACE)
+target_include_directories(nlohmann_from_source SYSTEM INTERFACE "${UPSTREAM_DEPS}/nlohmann")
+
+add_library(nanosvg_from_source INTERFACE)
+target_include_directories(nanosvg_from_source SYSTEM INTERFACE "${UPSTREAM_DEPS}/nanosvg")
+
+add_library(stb_dxt_from_source INTERFACE)
+target_include_directories(stb_dxt_from_source SYSTEM INTERFACE "${UPSTREAM_DEPS}/stb_dxt")
+
+add_library(libigl_from_source INTERFACE)
+target_include_directories(libigl_from_source SYSTEM INTERFACE "${UPSTREAM_DEPS}/libigl")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION B: Simple standalone deps (C/C++ static libs)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ─── miniz ────────────────────────────────────────────────────────────────────
+file(GLOB MINIZ_SOURCES "${UPSTREAM_DEPS}/miniz/miniz.c")
 add_library(miniz_from_source STATIC ${MINIZ_SOURCES})
-target_include_directories(miniz_from_source PUBLIC "${UPSTREAM_SRC}/miniz")
+target_include_directories(miniz_from_source SYSTEM PUBLIC "${UPSTREAM_DEPS}/miniz")
 if(MSVC)
     target_compile_definitions(miniz_from_source PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 
-# ─── A2. qoi - image format (standalone C code) ───────────────────────────────
-file(GLOB QOI_SOURCES "${UPSTREAM_SRC}/qoi/*.c")
+# ─── qoi ──────────────────────────────────────────────────────────────────────
+file(GLOB QOI_SOURCES "${UPSTREAM_DEPS}/qoi/qoilib.c")
 add_library(qoi_from_source STATIC ${QOI_SOURCES})
-target_include_directories(qoi_from_source PUBLIC "${UPSTREAM_SRC}/qoi")
+target_include_directories(qoi_from_source SYSTEM PUBLIC "${UPSTREAM_DEPS}/qoi")
 
-# ─── A3. semver - version parsing (standalone C code) ─────────────────────────
-file(GLOB SEMVER_SOURCES "${UPSTREAM_SRC}/semver/*.c")
+# ─── semver ───────────────────────────────────────────────────────────────────
+file(GLOB SEMVER_SOURCES "${UPSTREAM_DEPS}/semver/semver.c")
 add_library(semver_from_source STATIC ${SEMVER_SOURCES})
-target_include_directories(semver_from_source PUBLIC "${UPSTREAM_SRC}/semver")
+target_include_directories(semver_from_source SYSTEM
+    PUBLIC
+        $<BUILD_INTERFACE:${UPSTREAM_DEPS}/semver>
+        $<INSTALL_INTERFACE:include>
+)
+set_target_properties(semver_from_source PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(MSVC)
     target_compile_definitions(semver_from_source PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 
-# ─── A4. glu-libtess - tessellation (standalone C code) ───────────────────────
-file(GLOB GLU_LIBTESS_SOURCES "${UPSTREAM_SRC}/glu-libtess/src/*.c")
+# ─── glu-libtess ──────────────────────────────────────────────────────────────
+file(GLOB GLU_LIBTESS_SOURCES "${UPSTREAM_DEPS}/glu-libtess/src/*.c")
 add_library(glu_libtess_from_source STATIC ${GLU_LIBTESS_SOURCES})
-target_include_directories(glu_libtess_from_source PUBLIC "${UPSTREAM_SRC}/glu-libtess/include")
+target_include_directories(glu_libtess_from_source SYSTEM
+    PRIVATE "${UPSTREAM_DEPS}/glu-libtess"
+    PUBLIC  "${UPSTREAM_DEPS}/glu-libtess/include"
+)
 if(MSVC)
     target_compile_definitions(glu_libtess_from_source PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 
-# ─── A5. mcut - mesh cutting ─────────────────────────────────────────────────
+# ─── mcut ─────────────────────────────────────────────────────────────────────
 file(GLOB MCUT_SOURCES
-    "${UPSTREAM_SRC}/mcut/source/*.cpp"
-    "${UPSTREAM_SRC}/mcut/source/*.c"
+    "${UPSTREAM_DEPS}/mcut/source/*.cpp"
+    "${UPSTREAM_DEPS}/mcut/source/*.c"
 )
 add_library(mcut_from_source STATIC ${MCUT_SOURCES})
-target_include_directories(mcut_from_source PUBLIC "${UPSTREAM_SRC}/mcut/include")
+target_include_directories(mcut_from_source SYSTEM PRIVATE "${UPSTREAM_DEPS}/mcut/include")
 if(MSVC)
-    target_compile_definitions(mcut_from_source PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_definitions(mcut_from_source PRIVATE
+        _CRT_SECURE_NO_WARNINGS
+        MCUT_WITH_COMPUTE_HELPER_THREADPOOL=1
+    )
+    target_compile_options(mcut_from_source PRIVATE /W4 /wd26812 /wd4131 /wd4704 /wd4245 /wd4297 /wd4505 /wd4701 /bigobj)
 endif()
 
-# ─── A6. clipper2 - polygon clipping v2 ──────────────────────────────────────
+# ─── clipper2 ─────────────────────────────────────────────────────────────────
 file(GLOB CLIPPER2_SOURCES
-    "${UPSTREAM_SRC}/clipper2/Clipper2Lib/src/clipper.engine.cpp"
-    "${UPSTREAM_SRC}/clipper2/Clipper2Lib/src/clipper.offset.cpp"
-    "${UPSTREAM_SRC}/clipper2/Clipper2Lib/src/clipper.rectclip.cpp"
+    "${UPSTREAM_DEPS}/clipper2/Clipper2Lib/src/clipper.engine.cpp"
+    "${UPSTREAM_DEPS}/clipper2/Clipper2Lib/src/clipper.offset.cpp"
+    "${UPSTREAM_DEPS}/clipper2/Clipper2Lib/src/clipper.rectclip.cpp"
+    "${UPSTREAM_DEPS}/clipper2/Clipper2Lib/src/clipper2_z.cpp"
 )
 add_library(clipper2_from_source STATIC ${CLIPPER2_SOURCES})
-target_include_directories(clipper2_from_source PUBLIC
-    "${UPSTREAM_SRC}/clipper2/Clipper2Lib/include"
+target_include_directories(clipper2_from_source SYSTEM
+    PUBLIC "${UPSTREAM_DEPS}/clipper2/Clipper2Lib/include"
 )
 target_compile_definitions(clipper2_from_source PRIVATE CLIPPER2UtilsNamespace=clipper2utils)
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SECTION B: Coupled deps (need libslic3r headers / Boost)
+# SECTION C: Coupled deps (need Eigen3 / TBB / Boost — matching upstream)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# ─── B1. admesh - STL mesh processing (needs Boost + Eigen + Boost.Locale) ─────
-# NOTE: boost::nowide::freopen is inline but depends on boost::locale::utf symbols
-#       which require linking to Boost::locale library.
+# ─── admesh (links Eigen3::Eigen, PUBLIC include = self + parent) ──────────────
 file(GLOB ADMESH_SOURCES
-    "${UPSTREAM_SRC}/admesh/connect.cpp"
-    "${UPSTREAM_SRC}/admesh/normals.cpp"
-    "${UPSTREAM_SRC}/admesh/shared.cpp"
-    "${UPSTREAM_SRC}/admesh/stl_io.cpp"
-    "${UPSTREAM_SRC}/admesh/stlinit.cpp"
-    "${UPSTREAM_SRC}/admesh/util.cpp"
+    "${UPSTREAM_DEPS}/admesh/connect.cpp"
+    "${UPSTREAM_DEPS}/admesh/normals.cpp"
+    "${UPSTREAM_DEPS}/admesh/shared.cpp"
+    "${UPSTREAM_DEPS}/admesh/stl_io.cpp"
+    "${UPSTREAM_DEPS}/admesh/stlinit.cpp"
+    "${UPSTREAM_DEPS}/admesh/util.cpp"
 )
 add_library(admesh_from_source STATIC ${ADMESH_SOURCES})
-target_include_directories(admesh_from_source
-    PUBLIC "${UPSTREAM_SRC}/admesh"
-    SYSTEM PRIVATE
-        ${Boost_INCLUDE_DIRS}
-        "${UPSTREAM_SRC}/eigen"
-        "${UPSTREAM_SRC}"
-        "${UPSTREAM_SRC}/libslic3r"
-        "${UPSTREAM_SRC}/boost"
+target_include_directories(admesh_from_source SYSTEM
+    PUBLIC
+        "${UPSTREAM_DEPS}/admesh"
+        "${UPSTREAM_DEPS}"           # For #include <admesh/stl.h> from consumers
+    PRIVATE
+        "${UPSTREAM_SRC}"            # For #include <libslic3r/xxx> (shared.cpp, stlinit.cpp)
+)
+target_link_libraries(admesh_from_source
+    PUBLIC Eigen3::Eigen
+    PRIVATE Boost::locale
 )
 if(MSVC)
     target_compile_definitions(admesh_from_source PRIVATE
@@ -110,20 +141,20 @@ if(MSVC)
         BOOST_ALL_NO_LIB
         _USE_MATH_DEFINES
     )
-    # boost::nowide::freopen depends on boost::locale::utf which is in Boost::locale
-    # Link Boost::locale to resolve the nowide symbols
-    target_link_libraries(admesh_from_source PUBLIC Boost::locale)
 endif()
 
-# ─── B2. clipper (1.x) - polygon clipping (needs libslic3r Int128) ───────────
+# ─── clipper v1 (links Eigen3::Eigen + TBB, matching upstream) ───────────────
 file(GLOB CLIPPER_SOURCES
-    "${UPSTREAM_SRC}/clipper/clipper.cpp"
-    "${UPSTREAM_SRC}/clipper/clipper_z.cpp"
+    "${UPSTREAM_DEPS}/clipper/clipper_z.cpp"
 )
 add_library(clipper_from_source STATIC ${CLIPPER_SOURCES})
-target_include_directories(clipper_from_source
-    PUBLIC "${UPSTREAM_SRC}/clipper"
-    SYSTEM PRIVATE ${_COMMON_INCLUDES}
+target_include_directories(clipper_from_source SYSTEM
+    PUBLIC "${UPSTREAM_DEPS}/clipper"
+    PRIVATE "${UPSTREAM_SRC}"        # For #include <libslic3r/Int128.hpp> (via clipper_z.cpp → clipper.cpp)
+)
+target_link_libraries(clipper_from_source
+    PUBLIC Eigen3::Eigen
+    PRIVATE TBB::tbb TBB::tbbmalloc
 )
 if(MSVC)
     target_compile_definitions(clipper_from_source PRIVATE
@@ -133,39 +164,42 @@ if(MSVC)
     )
 endif()
 
-# ─── B3. nowide (boost) - Windows UTF-8 (complex, use pre-built) ──────────────
-# nowide depends on Boost.Locale internals - use pre-built from upstream build
-set(UPSTREAM_BUILD_DIR "E:/ai/3D-Printer/out/vs2026-x64-release/build/src")
-if(EXISTS "${UPSTREAM_BUILD_DIR}/boost/Release/nowide.lib")
+# ─── nowide (pre-built from upstream deps) ─────────────────────────────────────
+# Use the pre-built Boost nowide lib which contains the nowide::detail symbols
+set(NOWIDE_LIB "${DEPS_PREFIX}/lib/libboost_nowide-vc142-mt-x64-1_84.lib")
+if(EXISTS "${NOWIDE_LIB}")
     add_library(nowide_from_source STATIC IMPORTED GLOBAL)
     set_target_properties(nowide_from_source PROPERTIES
-        IMPORTED_LOCATION "${UPSTREAM_BUILD_DIR}/boost/Release/nowide.lib"
+        IMPORTED_LOCATION "${NOWIDE_LIB}"
+        INTERFACE_LINK_LIBRARIES "Boost::locale"
     )
 else()
-    message(WARNING "nowide pre-built lib not found, using stub")
+    message(WARNING "nowide pre-built lib not found at ${NOWIDE_LIB}, using stub")
     add_library(nowide_from_source INTERFACE)
 endif()
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SECTION C: Complex deps (circular dependencies - use pre-built)
+# SECTION D: Pre-built external deps (cannot compile from source)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# ─── C1. libnest2d - 2D bin packing (circular dep with libslic3r, use pre-built) ───
+# libnest2d (circular dep with libslic3r, use pre-built)
+# Set INTERFACE_INCLUDE_DIRECTORIES so consumers get the header path
+# (matches upstream's target_include_directories(libnest2d SYSTEM PUBLIC include))
 if(EXISTS "${UPSTREAM_BUILD_DIR}/libnest2d/Release/libnest2d.lib")
     add_library(libnest2d_from_source STATIC IMPORTED GLOBAL)
     set_target_properties(libnest2d_from_source PROPERTIES
         IMPORTED_LOCATION "${UPSTREAM_BUILD_DIR}/libnest2d/Release/libnest2d.lib"
+        INTERFACE_INCLUDE_DIRECTORIES "${UPSTREAM_DEPS}/libnest2d/include"
+        INTERFACE_COMPILE_DEFINITIONS "LIBNEST2D_THREADING_tbb;LIBNEST2D_STATIC;LIBNEST2D_OPTIMIZER_nlopt;LIBNEST2D_GEOMETRIES_libslic3r"
     )
 else()
     message(WARNING "libnest2d pre-built lib not found")
     add_library(libnest2d_from_source INTERFACE)
+    target_include_directories(libnest2d_from_source SYSTEM INTERFACE "${UPSTREAM_DEPS}/libnest2d/include")
+    target_compile_definitions(libnest2d_from_source INTERFACE LIBNEST2D_THREADING_tbb LIBNEST2D_STATIC LIBNEST2D_OPTIMIZER_nlopt LIBNEST2D_GEOMETRIES_libslic3r)
 endif()
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SECTION D: External pre-built deps (cannot compile from source)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# ─── D1. qhull - convex hull (external, use pre-built) ────────────────────────
+# qhull
 add_library(qhull_from_source STATIC IMPORTED GLOBAL)
 set_target_properties(qhull_from_source PROPERTIES
     IMPORTED_LOCATION "${DEPS_PREFIX}/lib/qhullstatic_r.lib"
@@ -175,24 +209,20 @@ set_target_properties(qhullcpp_from_source PROPERTIES
     IMPORTED_LOCATION "${DEPS_PREFIX}/lib/qhullcpp.lib"
 )
 
-# ─── D2. assimp - 3D model import (external, use pre-built) ───────────────────
+# assimp
 add_library(assimp_from_source STATIC IMPORTED GLOBAL)
 set_target_properties(assimp_from_source PROPERTIES
     IMPORTED_LOCATION "${DEPS_PREFIX}/lib/assimp-vc142-mt.lib"
 )
 
-# ─── D3. cr_tpms_library - TPMS infill (closed source, must use pre-built) ────
+# cr_tpms_library (closed source)
 add_library(cr_tpms_from_source STATIC IMPORTED GLOBAL)
 set_target_properties(cr_tpms_from_source PROPERTIES
     IMPORTED_LOCATION "${DEPS_PREFIX}/lib/cr_tpms_library.lib"
 )
 
-# ─── D4. libigl - geometry processing (header-only) ───────────────────────────
-add_library(libigl_from_source INTERFACE)
-target_include_directories(libigl_from_source INTERFACE "${UPSTREAM_SRC}/libigl")
-
 # ═══════════════════════════════════════════════════════════════════════════════
-# ALIAS targets for compatibility
+# ALIAS targets
 # ═══════════════════════════════════════════════════════════════════════════════
 
 add_library(deps_admesh ALIAS admesh_from_source)
@@ -211,4 +241,4 @@ add_library(deps_assimp ALIAS assimp_from_source)
 add_library(deps_cr_tpms ALIAS cr_tpms_from_source)
 add_library(deps_libigl ALIAS libigl_from_source)
 
-message(STATUS "=== BuildDepsFromSource: ALL deps configured (full source build) ===")
+message(STATUS "=== BuildDepsFromSource: ALL deps configured ===")

@@ -152,4 +152,45 @@
 | CALIB-01 ~ CALIB-11 | Phase 7 | — |
 
 ---
-*Last updated: 2026-06-12 — Initial requirements for v2.0 milestone*
+*Last updated: 2026-06-17 — v2.0 架构层完成；追加 v2.1 (Slice & Preview Deep Dive) 需求*
+
+---
+
+## v2.1 Requirements — Slice & Preview Deep Dive (2026-06-17 启动)
+
+**Goal:** 深化切片预览体验 + 完善预设管理。集中在 Prepare/Preview/Settings 已有页面深化，不碰 Mock 服务。
+
+### SLICE — Preview TickCode/IMSlider 系统
+
+- [ ] **SLICE-01 [P0]**: G-code 着色模式切换（Feature/Speed/Extruder/LayerHeight/Pressure/Pixel 6 种，对齐上游 GCodeViewer EViewType）
+- [ ] **SLICE-02 [P0]**: IMSlider 层滑块增强（刻度标记 + 拖拽手感，对齐上游 IMSlider.cpp 1828 行）
+- [ ] **SLICE-03 [P1]**: TickCode 自定义刻度插入（change filament/pause/custom gcode，对齐上游 TickCode.cpp）
+- [ ] **SLICE-04 [P1]**: CustomGcodeDialog 联动 slider（dialog 已存在，接入刻度点击）
+- [ ] **SLICE-05 [P2]**: 切片冲突热区点击（占位，评估后定）
+- [ ] **SLICE-06 [P2]**: Legend 动态更新（跟随着色模式）
+- [ ] **SLICE-07 [P2]**: ToolPositionTooltip 增强
+- [ ] **SLICE-08 [P2]**: 键盘导航对齐上游 IMSlider 语义
+
+### PRESET — Preset 管理 Dialog 套件
+
+- [ ] **PRESET-01 [P0]**: SavePresetDialog（保存当前参数为预设，对齐上游 18KB）
+- [ ] **PRESET-02 [P1]**: UnsavedChangesDialog（切换守卫，对齐上游 95KB）
+- [ ] **PRESET-03 [P2]**: ExportPresetBundleDialog（导出预设包，对齐上游 23KB）
+- [ ] **PRESET-04 [P2]**: CreatePresetsDialog（批量创建，对齐上游 264KB——评估后可能延后）
+
+### PREPARE — Prepare 页打磨收尾（v2.0 遗留 G6/G8）
+
+- [ ] **PREPARE-01 [P1]**: BBLTopbar 样式打磨（G6，图标+文字/间距/配色）
+- [ ] **PREPARE-02 [P2]**: 配色对比度（G8，Theme 令牌调整）
+
+### SEARCH — Settings Search 集成
+
+- [ ] **SEARCH-01 [P1]**: SearchDialog 接入 SettingsPage tier（dialog 已存在，未集成）
+
+### Out of Scope (v2.1 明确不做)
+
+- Device/Cloud/Network/Calibration 真实化（v2.2+）
+- AssembleView / PartPlate 完整（v2.2+）
+- ModelMall WebView / Home WebView（v2.2+，需 QtWebEngine）
+- i18n 翻译内容填充（v2.2+）
+- 90+ Dialog 补全的剩余部分（分散）

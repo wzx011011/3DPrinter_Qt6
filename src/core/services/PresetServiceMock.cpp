@@ -211,7 +211,7 @@ bool PresetServiceMock::loadVendorPresets()
   QString vendorDir;
   const QStringList searchPaths = {
       // Source tree: index at profiles/Creality.json, subdirs at profiles/Creality/
-      QDir::currentPath() + QStringLiteral("/third_party/CrealityPrint/resources/profiles"),
+      QDir::currentPath() + QStringLiteral("/third_party/OrcaSlicer/resources/profiles"),
       // Installed resource path
       QCoreApplication::applicationDirPath() + QStringLiteral("/resources/profiles"),
   };

@@ -29,10 +29,10 @@
 - **修复方向：** 把 Printer section 包进一个卡片 Rectangle
 
 ### G4. 3D 视口工具栏 overlay ✅ 已消除（2026-06-17 用户确认"都有"）
-- **状态：** ✅ 已达标
+- **状态：** ✅ 已达标（含 G4-d PartPlateList）
 - **实现：** GLToolbars.qml（MainToolbar + Gizmos 竖条 + ViewToolbar 三合一 overlay）
 - **验收：** 用户截图确认三个工具栏都显示
-- **遗留：** G4-d PartPlateList（底部多板列表）未做
+- **G4-d PartPlateList：** 经查 PreparePage.qml:2880 plateBar 已实现（ListView + 缩略图 + 名称 + 对象数 + 切片状态 + 当前选中高亮），已达标
 
 ### G5. 右侧 Gizmo 竖条（processBar）样式老旧 ✅ 已消除
 - **状态：** ✅ 已达标（processBar 已删，由 GLToolbars 的 Gizmos 竖条取代）

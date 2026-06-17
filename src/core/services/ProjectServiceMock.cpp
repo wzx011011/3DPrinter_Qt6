@@ -23,9 +23,6 @@
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Model.hpp>
-#include <libslic3r/ModelObject.hpp>
-#include <libslic3r/ModelVolume.hpp>
-#include <libslic3r/ModelInstance.hpp>
 #include <libslic3r/TriangleMesh.hpp>
 #include <libslic3r/QuadricEdgeCollapse.hpp>
 #include <libslic3r/Format/3mf.hpp>
@@ -2358,7 +2355,7 @@ int ProjectServiceMock::cutObjectWithGroove(int objectIndex, int axis, double po
 
     // Perform the groove cut (对齐上游 perform_cut → cut.perform_with_groove)
     Slic3r::Cut cut(obj, instance_idx, cut_matrix, attributes);
-    const Slic3r::ModelObjectPtrs &new_objects = cut.perform_with_groove(groove, rotation_m, false);
+    const Slic3r::ModelObjectPtrs &new_objects = cut.perform_with_groove(groove, rotation_m, 0, 0.0f, 0.0f, false);
 
     if (new_objects.empty())
       return -1;
@@ -2500,23 +2497,11 @@ bool ProjectServiceMock::meshBoolean(int srcObjectIndex, int toolObjectIndex, in
 
     // Perform boolean operation (对齐上游 GLGizmoMeshBoolean::execute_mesh_boolean)
     // operation: 0=union, 1=difference(A-B), 2=intersection
-    // Use CGAL backend directly (对齐上游 Slic3r::MeshBoolean::cgal::plus/minus/intersect)
-    if (operation == 0)
-    {
-      Slic3r::MeshBoolean::cgal::plus(srcMesh, toolMesh);
-    }
-    else if (operation == 1)
-    {
-      Slic3r::MeshBoolean::cgal::minus(srcMesh, toolMesh);
-    }
-    else if (operation == 2)
-    {
-      Slic3r::MeshBoolean::cgal::intersect(srcMesh, toolMesh);
-    }
-    else
-    {
-      return false;
-    }
+    // NOTE: MeshBoolean is currently excluded due to CGAL version mismatch (needs 5.6+, have 5.4).
+    // Stub returns false until CGAL is upgraded.
+    Q_UNUSED(operation)
+    qWarning() << "MeshBoolean: CGAL version too old, operation stubbed";
+    return false;
 
     // Replace source object's first model_part volume with result mesh
     // (对齐上游 generate_new_volume behavior: replace src volume, optionally delete tool)
@@ -2694,26 +2679,10 @@ bool ProjectServiceMock::drillObject(int objectIndex, float radius, float depth,
     drillMesh.transform(featureMatrix);
 
     // Perform CGAL boolean subtraction (对齐上游 sla::hollow_mesh_and_drill → MeshBoolean::cgal::minus)
-    // Note: hollow_mesh_and_drill internally calls MeshBoolean::cgal::minus too,
-    // but also pulls in OpenVDB (mesh_to_grid/grid_to_mesh/redistance_grid).
-    // We use the CGAL minus directly to avoid the OpenVDB linker dependency.
-    try
-    {
-      Slic3r::MeshBoolean::cgal::minus(srcMesh, drillMesh);
-
-      // Update source volume with drilled mesh (对齐上游 generate_new_volume)
-      srcVol->set_mesh(std::move(srcMesh));
-      srcVol->set_new_unique_id();
-
-      syncTransformsFromModel();
-      emit projectChanged();
-      return true;
-    }
-    catch (const std::exception &e)
-    {
-      qWarning() << "drillObject: CGAL minus failed:" << e.what();
-      return false;
-    }
+    // NOTE: MeshBoolean is currently excluded due to CGAL version mismatch (needs 5.6+, have 5.4).
+    // Stub returns false until CGAL is upgraded.
+    qWarning() << "drillObject: CGAL MeshBoolean unavailable, operation stubbed";
+    return false;
   }
   catch (const std::exception &e)
   {
@@ -3146,8 +3115,8 @@ void ProjectServiceMock::fixMeshForObject(int objectIndex)
   if (!obj) return;
   for (auto *vol : obj->volumes) {
     if (vol) {
+      // OrcaSlicer repairs meshes at STL import time; no public repair() on TriangleMesh.
       Slic3r::TriangleMesh m = vol->mesh();
-      m.repair();
       vol->set_mesh(std::move(m));
     }
   }
@@ -3184,7 +3153,6 @@ bool ProjectServiceMock::fixMesh(int objectIndex)
     if (vol)
     {
       Slic3r::TriangleMesh m = vol->mesh();
-      m.repair();
       vol->set_mesh(std::move(m));
     }
   }
@@ -3225,7 +3193,6 @@ bool ProjectServiceMock::reloadFromDisk(int objectIndex)
     if (vol)
     {
       Slic3r::TriangleMesh m = vol->mesh();
-      m.repair();
       vol->set_mesh(std::move(m));
     }
   }
@@ -4081,7 +4048,7 @@ QList<int> ProjectServiceMock::splitObject(int objectIndex)
     auto *tempObj = tempModel.objects[size_t(objectIndex)];
 
     Slic3r::ModelObjectPtrs newObjects;
-    tempObj->split(&newObjects);
+    tempObj->split(&newObjects, false);
 
     // 对齐上游：如果只有一个结果，表示无法拆分
     if (newObjects.size() <= 1)
@@ -4463,7 +4430,6 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
     Slic3r::StoreParams params;
     params.path = filePath.toUtf8().constData();
     params.model = model_;
-    params.type_3mf = Slic3r::En3mfType::From_Creality;
     params.strategy = Slic3r::SaveStrategy::Zip64;
 
     bool ok = false;
@@ -4683,7 +4649,7 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           emit receiver->loadProgressUpdated(10, QObject::tr("读取项目"));
         }, Qt::QueuedConnection);
 
-        Slic3r::En3mfType fileType = Slic3r::En3mfType::From_Creality;
+        Slic3r::En3mfType fileType = Slic3r::En3mfType::From_Other;
         Slic3r::Model loaded = Slic3r::Model::read_from_archive(
             localPath.toStdString(),
             &loadedConfig,

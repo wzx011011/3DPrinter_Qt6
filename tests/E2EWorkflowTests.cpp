@@ -15,7 +15,7 @@ namespace
 {
   static const QString kStlPath = QDir::cleanPath(
       QStringLiteral(QT_TESTCASE_SOURCEDIR) +
-      QStringLiteral("/third_party/CrealityPrint/resources/profiles/hotend.stl"));
+      QStringLiteral("/third_party/OrcaSlicer/resources/profiles/hotend.stl"));
 }
 
 class E2EWorkflowTests final : public QObject

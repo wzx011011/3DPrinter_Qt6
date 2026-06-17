@@ -106,6 +106,8 @@ public:
   Q_INVOKABLE bool renamePreset(int category, const QString &oldName, const QString &newName);
   /// 检查预设是否可删除（内置预设不可删除）
   Q_INVOKABLE bool canDeletePreset(const QString &name) const;
+  /// Compare two presets, returning a list of diff strings "key: valueA → valueB"
+  Q_INVOKABLE QStringList comparePresets(const QString &presetA, const QString &presetB) const;
   /// 切换打印机时自动匹配兼容耗材（对齐上游 PresetBundle::update_compatible）
   Q_INVOKABLE void autoMatchFilament();
   /// 检查当前耗材是否与当前打印机兼容（对齐上游 PresetBundle::is_compatible）

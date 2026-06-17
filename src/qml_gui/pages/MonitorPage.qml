@@ -6,7 +6,7 @@ import "../controls"
 
 /// MonitorPage — device monitoring dashboard
 ///
-/// Upstream alignment: third_party/CrealityPrint/src/slic3r/GUI/Monitor.cpp
+/// Upstream alignment: third_party/OrcaSlicer/src/slic3r/GUI/Monitor.cpp
 ///   - Left sidebar: device list with printer name, type, online indicator, signal
 ///   - Right content: status panel, media files, update, HMS tabs
 ///   - 1-second refresh timer (REFRESH_INTERVAL = 1000)

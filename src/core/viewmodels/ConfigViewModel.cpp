@@ -399,6 +399,29 @@ bool ConfigViewModel::canDeletePreset(const QString &name) const
   return presetService_ && !presetService_->isBuiltinPreset(name);
 }
 
+QStringList ConfigViewModel::comparePresets(const QString &presetA, const QString &presetB) const
+{
+  QStringList diffs;
+  if (!presetService_)
+    return diffs;
+
+  auto valsA = presetService_->presetValues(presetA);
+  auto valsB = presetService_->presetValues(presetB);
+
+  QSet<QString> allKeys;
+  for (auto it = valsA.constBegin(); it != valsA.constEnd(); ++it) allKeys.insert(it.key());
+  for (auto it = valsB.constBegin(); it != valsB.constEnd(); ++it) allKeys.insert(it.key());
+
+  for (const auto &key : allKeys) {
+    QVariant valA = valsA.value(key);
+    QVariant valB = valsB.value(key);
+    if (valA != valB)
+      diffs.append(QStringLiteral("%1: %2 → %3").arg(key, valA.toString(), valB.toString()));
+  }
+
+  return diffs;
+}
+
 void ConfigViewModel::autoMatchFilament()
 {
   // 对齐上游 PresetBundle::update_compatible
