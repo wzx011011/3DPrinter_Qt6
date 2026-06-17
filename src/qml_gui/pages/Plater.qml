@@ -49,6 +49,15 @@ Item {
     /// 处理流程分类透传（PreparePage 原有属性）
     property string processCategory: ""
 
+    // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage)
+    property bool sidebarCollapsed: false
+    property int sidebarWidth: 280
+    property int sidebarMinWidth: 240
+    property int sidebarMaxWidth: 480
+    property int sidebarDockArea: 0
+    property var sidebarToggleRequested: null
+    property var sidebarWidthChanged: null
+
     focus: true
 
     // vm 常量（与 BackendContext::ViewMode 数值对齐：View3D=0/Preview=1/AssembleView=2）
@@ -67,6 +76,14 @@ Item {
         configVm: root.configVm
         leftPanelVisible: root.leftPanelVisible
         processCategory: root.processCategory
+        // Phase 4: sidebar 三态透传
+        sidebarCollapsed: root.sidebarCollapsed
+        sidebarWidth: root.sidebarWidth
+        sidebarMinWidth: root.sidebarMinWidth
+        sidebarMaxWidth: root.sidebarMaxWidth
+        sidebarDockArea: root.sidebarDockArea
+        sidebarToggleRequested: root.sidebarToggleRequested
+        sidebarWidthChanged: root.sidebarWidthChanged
     }
 
     // ═══ Preview slot（G-code 预览，常驻不销毁）═══════════════════════════════

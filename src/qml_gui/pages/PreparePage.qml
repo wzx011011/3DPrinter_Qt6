@@ -16,6 +16,15 @@ Item {
     property alias viewport3dRef: viewport3d
     property string processCategory: ""
     property bool leftPanelVisible: true
+    // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage → DockableSidebar)
+    property bool sidebarCollapsed: false
+    property int sidebarWidth: 280
+    property int sidebarMinWidth: 240
+    property int sidebarMaxWidth: 480
+    property int sidebarDockArea: 0   // 0=Left, 1=Right
+    // sidebar 操作回调 (转发到 backend, 由 main.qml 注入)
+    property var sidebarToggleRequested: null
+    property var sidebarWidthChanged: null
     focus: true
 
     component ToolStripDivider: Rectangle {
@@ -1510,15 +1519,26 @@ Item {
             spacing: 0
 
             // ═══ Left sidebar (280px) ═══
-            LeftSidebar {
+            // Phase 4: DockableSidebar 替代固定 LeftSidebar
+            // 折叠/宽度/dockArea 由 backend 统一管理 + 持久化 (ARCH-08/09/10)
+            // dockArea=Right 时通过 Layout 顺序镜像 (见下方 RowLayout 逻辑)
+            DockableSidebar {
                 id: leftSidebar
                 Layout.fillHeight: true
-                Layout.preferredWidth: 280
+                Layout.preferredWidth: root.sidebarCollapsed ? 0 : root.sidebarWidth
                 Layout.topMargin: 14
                 Layout.bottomMargin: 14
+                // 折叠时完全收起 (宽度 0 + 隐藏), viewportArea 独占
+                collapsed: root.sidebarCollapsed
+                sidebarWidth: root.sidebarWidth
+                minWidth: root.sidebarMinWidth
+                maxWidth: root.sidebarMaxWidth
                 editorVm: root.editorVm
                 configVm: root.configVm
                 processCategory: root.processCategory
+                _isRightDocked: root.sidebarDockArea === 1   // sdaRight
+                toggleRequested: root.sidebarToggleRequested
+                widthChanged: root.sidebarWidthChanged
                 visible: root.leftPanelVisible
             }
 

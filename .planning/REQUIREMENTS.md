@@ -38,9 +38,9 @@
 - [ ] **ARCH-05**: Prepare 与 Preview 共享同一 `Plater` QML 组件实例（通过 Loader + `viewMode` 属性切换 View3D↔Preview）
 - [ ] **ARCH-06**: Plater 内部三选一显示 View3D/Preview/AssembleView（按 viewMode 切换）
 - [ ] **ARCH-07**: 切换 Prepare→Preview 时保留所有 Plater 状态（对象/选择/切片结果/gizmo 状态），无需重建
-- [ ] **ARCH-08**: Sidebar 支持 Dockable（可拖到 Left/Right/浮动/折叠），用 QDockWidget 或 QML 等价机制
-- [ ] **ARCH-09**: Sidebar 折叠按钮（对齐上游 `collapse_toolbar`），点击隐藏 Sidebar 让 3D 区独占
-- [ ] **ARCH-10**: Plater 与 Sidebar 之间布局响应式（窗口缩放/最大化正确处理）
+- [x] **ARCH-08**: Sidebar 支持 Dockable（可拖到 Left/Right/浮动/折叠），用 QDockWidget 或 QML 等价机制 *(Phase 4; Left/Right + 折叠完成，浮动 Out of Scope 记为已知限制)*
+- [x] **ARCH-09**: Sidebar 折叠按钮（对齐上游 `collapse_toolbar`），点击隐藏 Sidebar 让 3D 区独占 *(Phase 4)*
+- [x] **ARCH-10**: Plater 与 Sidebar 之间布局响应式（窗口缩放/最大化正确处理） *(Phase 4; RowLayout fillWidth + 逻辑像素)*
 
 ### TOPBAR — BBLTopbar Menu System
 

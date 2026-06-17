@@ -468,6 +468,14 @@ ApplicationWindow {
                     previewVm: backend.previewViewModel
                     configVm: backend.configViewModel
                     viewMode: backend.currentViewMode
+                    // Phase 4: sidebar dockable 三态绑定 backend (统一管理 + 持久化)
+                    sidebarCollapsed: backend.sidebarCollapsed
+                    sidebarWidth: backend.sidebarWidth
+                    sidebarMinWidth: backend.sidebarMinWidth
+                    sidebarMaxWidth: backend.sidebarMaxWidth
+                    sidebarDockArea: backend.sidebarDockArea
+                    sidebarToggleRequested: function() { backend.requestToggleSidebar() }
+                    sidebarWidthChanged: function(w) { backend.requestSetSidebarWidth(w) }
                     // Phase 4 (Sidebar Dockable) 会在此接 BBLTopbar 折叠按钮；当前默认展开
                     leftPanelVisible: true
                 }
