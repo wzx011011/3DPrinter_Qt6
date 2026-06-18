@@ -619,6 +619,9 @@ public:
 
   Q_INVOKABLE void requestSlice();
   Q_INVOKABLE void requestSliceAll();
+  // v2.4 IO: 项目保存/导出转发（EditorVM 持有 projectService_）
+  Q_INVOKABLE bool saveProjectAs(const QString &filePath) const;
+  Q_INVOKABLE bool exportModel(const QString &filePath, const QString &format) const;
   Q_INVOKABLE void cancelSlice();
   Q_INVOKABLE bool requestExportGCode(const QString &targetPath);
   /// 请求切换到预览页面（对齐上游 Plater::priv::on_preview）

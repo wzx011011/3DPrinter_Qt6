@@ -33,6 +33,9 @@ public:
   void savePresetValues(const QString &presetName, const QHash<QString, QVariant> &values);
   /// 检查指定预设是否存在
   bool hasPreset(const QString &presetName) const;
+  // v2.4 IO-04/05: 预设包导入导出（JSON 格式，简化版）
+  Q_INVOKABLE bool exportBundle(const QString &filePath) const;
+  Q_INVOKABLE bool importBundle(const QString &filePath);
 
   /// 创建自定义预设（对齐上游 PresetBundle::save_current_preset）
   bool createCustomPreset(int category, const QString &name, const QHash<QString, QVariant> &values);

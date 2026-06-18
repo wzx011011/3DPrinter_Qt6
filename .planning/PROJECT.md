@@ -14,18 +14,19 @@
 
 详见 `.planning-v1-crealityprint-archive/` 与 `MILESTONES.md`。
 
-## Current Milestone: v2.3 UI Completion Polish
+## Current Milestone: v2.4 Project & Preset Real IO
 
-**Goal:** 把 UI 完整度收尾到"无明显缺失"状态——补齐缺失对话框、挂载孤儿页面、完善 Gizmo UI、建立 i18n 基础。
+**Goal:** 补全项目/Preset 的真实文件 IO——saveProject/exportProject（.3mf 读写）+ PresetBundle 导入导出，让文件操作不再是占位。
 
 **Target features:**
-- KBShortcutsDialog（快捷键总览，信号已有无 dialog）
-- AuxiliaryPage 挂载到 main.qml（v2.2 孤儿页面）
-- 剩余 Gizmo UI（Hollow/BrimEars/FuzzySkin/MmuSegmentation 交互面板）
-- i18n 基础（zh_CN 翻译填充 + 翻译流程文档）
-- 视觉打磨收尾（代码层面准备，待本机验收）
+- ProjectService saveProjectAs（调用 libslic3r 3mf.cpp 导出 .3mf）
+- ProjectService exportProject（导出 G-code + 模型）
+- PresetService exportBundle（导出预设包 .zip）
+- PresetService importBundle（导入预设包）
+- ConfigViewModel/PresetService 接通真实 PresetBundle
+- 自回归测试扩展（项目保存 + 预设导出）
 
-**工作方式：** Phase 模式（用户明确要求，回归 Phase 线性推进）
+**工作方式：** Phase 模式（沿用 v2.3）
 
 **Target features:**
 

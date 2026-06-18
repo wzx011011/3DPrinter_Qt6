@@ -196,6 +196,19 @@ void ConfigViewModel::setCurrentPreset(const QString &presetName)
   emit stateChanged();
 }
 
+// v2.4 IO: 预设包导入导出转发
+bool ConfigViewModel::exportBundle(const QString &filePath) const
+{
+    if (!presetService_) return false;
+    return presetService_->exportBundle(filePath);
+}
+
+bool ConfigViewModel::importBundle(const QString &filePath)
+{
+    if (!presetService_) return false;
+    return presetService_->importBundle(filePath);
+}
+
 void ConfigViewModel::saveCurrentPreset()
 {
   if (!presetService_)

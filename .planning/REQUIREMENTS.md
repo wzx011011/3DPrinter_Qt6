@@ -273,3 +273,40 @@ v2.2 的 10 项中 8 项达标（80%），2 项评估延后 v2.3。详见 commit
 - PartPlate/AssembleView（v2.4+）
 - ModelMall/Home WebView（v2.4+，需 QtWebEngine）
 - CreatePresetsDialog 264KB（v2.4+）
+
+---
+
+## v2.3 完成状态（2026-06-18）
+
+v2.3 的 10 项中 Phase 1（4 项）+ Phase 3（3 项）完成，Phase 2（3 项）评估延后 v2.4+。详见 commit 3b4f2db。
+
+---
+
+## v2.4 Requirements — Project & Preset Real IO（2026-06-18 启动，Phase 模式）
+
+**Goal:** 补全项目/Preset 的真实文件 IO，让文件操作不再是占位。
+
+### Phase 1: ProjectService 真实 .3mf 导出
+
+- [ ] **IO-01 [P0]**: ProjectService.saveProjectAs(path) — 调 libslic3r 3mf.cpp 导出 .3mf（含 model + config + plate）
+- [ ] **IO-02 [P0]**: ProjectService.exportModel(path, format) — 导出 STL/3MF/OBJ
+- [ ] **IO-03 [P1]**: ProjectPage 保存/另存按钮接 saveProjectAs（替换 v2.2 FileDialog 占位）
+
+### Phase 2: PresetBundle 导入导出
+
+- [ ] **IO-04 [P0]**: PresetService.exportBundle(path) — 导出预设包（对齐上游 export_config_bundle）
+- [ ] **IO-05 [P1]**: PresetService.importBundle(path) — 导入预设包
+- [ ] **IO-06 [P1]**: ExportPresetBundleDialog 接 exportBundle（替换 v2.2 占位）
+
+### Phase 3: 集成 + 自回归
+
+- [ ] **IO-07 [P0]**: 自回归测试扩展（saveProject + exportBundle，防止 IO 回归）
+- [ ] **IO-08 [P1]**: ProjectPage"导出"按钮接 exportModel（区分 G-code/3mf）
+- [ ] **IO-09 [P2]**: ConfigViewModel 接通真实 PresetBundle（preset 增删改链路完整）
+
+### Out of Scope (v2.4)
+
+- Device/Cloud/Network 真实化（v2.5+，需 MQTT）
+- Calibration 真实化（v2.5+，需 CalibMode）
+- PartPlate/AssembleView（v2.5+）
+- Gizmo UI 完善（v2.5+，需 GLViewport 扩展）

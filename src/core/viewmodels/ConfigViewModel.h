@@ -94,6 +94,9 @@ public:
   Q_INVOKABLE void setCurrentPrintPreset(const QString &name);
   /// 保存当前值为预设（对齐上游 PresetBundle::save）
   Q_INVOKABLE void saveCurrentPreset();
+  // v2.4 IO: 预设包导入导出转发（configVm 持有 presetService_）
+  Q_INVOKABLE bool exportBundle(const QString &filePath) const;
+  Q_INVOKABLE bool importBundle(const QString &filePath);
   /// 当前预设是否被修改
   bool isPresetDirty() const;
   /// 全局修改选项数量（对齐上游 Tab::modified_options）

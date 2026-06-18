@@ -72,12 +72,15 @@ CxDialog {
         id: exportFileDialog
         title: qsTr("导出预设包")
         fileMode: FileDialog.SaveFile
-        nameFilters: [qsTr("预设包 (*.zip)")]
-        defaultSuffix: "zip"
+        nameFilters: [qsTr("预设包 (*.json)")]
+        defaultSuffix: "json"
         onAccepted: {
-            // V21-02: 真实导出需 PresetService.exportBundle(path) 扩展
-            // 当前占位：记录路径（预设导出逻辑待 service 实现）
-            console.log("[ExportPresetBundle] target: " + currentFile)
+            // v2.4 IO-06: 真实导出（configVm.exportBundle → PresetService.exportBundle → JSON）
+            var path = currentFile.toString().replace("file:///", "")
+            if (root.configVm) {
+                var ok = root.configVm.exportBundle(path)
+                console.log("[ExportPresetBundle] export to: " + path + " result=" + ok)
+            }
             root.accept()
         }
     }

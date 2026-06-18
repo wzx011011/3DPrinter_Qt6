@@ -776,6 +776,71 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
 #endif
 }
 
+// v2.4 IO-01: 项目保存（调用 libslic3r store_3mf 真实导出 .3mf）
+// 对齐上游 Plater::save_project → export_3mf (Plater.cpp:12165)
+bool ProjectServiceMock::saveProjectAs(const QString &filePath)
+{
+#ifdef HAS_LIBSLIC3R
+    if (!model_) {
+        qWarning("[Project] saveProjectAs: no model loaded");
+        return false;
+    }
+    // 构建 config（从当前 model 的 default config）
+    Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
+    // 调用 libslic3r store_3mf（Format/3mf.hpp:60）
+    // model_ 是裸指针 Slic3r::Model*（非 unique_ptr）
+    bool ok = Slic3r::store_3mf(filePath.toStdString().c_str(),
+                                model_,
+                                &config,
+                                false,   // fullpath_sources=false
+                                nullptr, // thumbnail=nullptr
+                                true);   // zip64=true
+    if (ok) {
+        qDebug("[Project] saved project to: %s", filePath.toUtf8().constData());
+        currentProjectPath_ = filePath;
+    } else {
+        qWarning("[Project] store_3mf failed for: %s", filePath.toUtf8().constData());
+    }
+    return ok;
+#else
+    qWarning("[Project] saveProjectAs: HAS_LIBSLIC3R not enabled");
+    return false;
+#endif
+}
+
+// v2.4 IO-02: 导出模型（STL/3MF/OBJ）
+bool ProjectServiceMock::exportModel(const QString &filePath, const QString &format)
+{
+#ifdef HAS_LIBSLIC3R
+    if (!model_) {
+        qWarning("[Project] exportModel: no model loaded");
+        return false;
+    }
+    auto ext = format.toLower().toStdString();
+    if (ext == "stl") {
+        // 导出 STL（write_binary，简化：第一个对象）
+        if (!model_->objects.empty()) {
+            return model_->objects.front()->mesh().write_binary(filePath.toUtf8().constData());
+        }
+        return false;
+    } else if (ext == "3mf") {
+        // 导出 3MF（复用 store_3mf）
+        return saveProjectAs(filePath);
+    } else if (ext == "obj") {
+        // 导出 OBJ（TriangleMesh::WriteOBJFile 接受 const char*）
+        if (!model_->objects.empty()) {
+            model_->objects.front()->mesh().WriteOBJFile(filePath.toUtf8().constData());
+            return true;
+        }
+        return false;
+    }
+    qWarning("[Project] exportModel: unsupported format %s", format.toUtf8().constData());
+    return false;
+#else
+    return false;
+#endif
+}
+
 void ProjectServiceMock::cancelLoad()
 {
   if (!loading_ || !activeCancelFlag_)

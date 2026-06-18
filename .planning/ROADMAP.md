@@ -1,83 +1,56 @@
-# Roadmap: Milestone v2.3 — UI Completion Polish
+# Roadmap: Milestone v2.4 — Project & Preset Real IO
 
 ## Overview
 
-把 UI 完整度收尾到"无明显缺失"——补齐缺失对话框、挂载孤儿页面、完善 Gizmo UI、建立 i18n 基础。
+补全项目/Preset 的真实文件 IO——.3mf 读写 + PresetBundle 导入导出，让文件操作不再是占位。
 
-**工作方式：** Phase 模式（回归传统 Phase 线性推进，每个 Phase 有明确 deliverable + 验收）
-
----
-
-## v2.0-v2.2 已完成（地基）
-
-- v2.0: UI 架构对齐（Plater/Sidebar/GLToolbars/八大区块）
-- v2.1: 切片/预览深化（着色/TickCode/Preset Dialog/Search）+ 切片崩溃修复
-- v2.2: 页面补全（ProjectPage/DeviceList/HomePage/ExportBundle）+ 审计 80%
+**工作方式：** Phase 模式（沿用 v2.3）
 
 ---
 
-## Phase 结构（v2.3）
+## Phase 结构
 
-### Phase 1: 缺失对话框 + 孤儿页面挂载
-
-**目标：** 补齐信号已发但无接收的 Dialog + 挂载孤儿页面
+### Phase 1: ProjectService 真实 .3mf 导出
 
 | Task | 内容 | 验收 |
 |---|---|---|
-| UI-01 | KBShortcutsDialog（快捷键总览）| 打开显示快捷键列表 |
-| UI-02 | AuxiliaryPage 挂载 main.qml | tab 切换能看到 Auxiliary 页 |
-| UI-03 | NetworkTestDialog | 对话框能打开 |
-| UI-04 | TroubleshootDialog | 对话框能打开 |
+| IO-01 | saveProjectAs(path) 调 libslic3r 3mf.cpp | 保存后文件存在 + 可重新 loadFile |
+| IO-02 | exportModel(path, format) STL/3MF/OBJ | 导出文件可被其他切片软件打开 |
+| IO-03 | ProjectPage 保存/另存接 saveProjectAs | 点击保存→选路径→文件生成 |
 
-**Phase 1 出口：** 所有已有信号都有 dialog 接收 + 无孤儿页面
-
----
-
-### Phase 2: 剩余 Gizmo UI 交互面板
-
-**目标：** 完善 Gizmo 的交互面板（按钮已有，交互 UI 缺）
+### Phase 2: PresetBundle 导入导出
 
 | Task | 内容 | 验收 |
 |---|---|---|
-| UI-05 | MmuSegmentation 多色分区 UI | 多色绘制面板可交互 |
-| UI-06 | Hollow/BrimEars/FuzzySkin 占位 | Gizmo 按钮有基础面板 |
-| UI-07 | Emboss UI 完善 | 文字输入 + 3D 预览 |
+| IO-04 | exportBundle(path) 导出预设包 | 生成 .zip 含 print/filament/printer |
+| IO-05 | importBundle(path) 导入预设包 | 导入后预设列表更新 |
+| IO-06 | ExportPresetBundleDialog 接 exportBundle | 对话框确认→文件生成 |
 
-**Phase 2 出口：** 所有 GLToolbars 的 Gizmo 按钮都有对应交互面板
-
----
-
-### Phase 3: i18n 基础 + 视觉打磨
-
-**目标：** 建立 i18n 翻译基础 + 视觉打磨收尾
+### Phase 3: 集成 + 自回归
 
 | Task | 内容 | 验收 |
 |---|---|---|
-| UI-08 | zh_CN 翻译填充（80%+ 常用串）| lrelease 后中文显示 |
-| UI-09 | i18n 流程文档 | docs 有 lupdate/lrelease 工作流 |
-| UI-10 | 视觉打磨（图标/配色微调）| 待本机验收 |
-
-**Phase 3 出口：** i18n 基础建立 + 视觉无明显缺失
+| IO-07 | 自回归扩展（saveProject + exportBundle） | 脚本跑通 0=PASS |
+| IO-08 | ProjectPage 导出按钮接 exportModel | 区分 G-code/3mf 导出 |
+| IO-09 | ConfigViewModel 接通真实 PresetBundle | preset 增删改链路完整 |
 
 ---
 
-## 工作流程（每个 Phase）
+## 上游参考
 
-```
-1. 按 Phase 顺序执行 Task
-2. 每个 Task: 实现 → 构建 → 冒烟
-3. Phase 所有 Task 完成 → Phase 验收（构建 + 冒烟 + 用户确认）
-4. Phase 验收通过 → 进入下一 Phase
-```
+- **.3mf 导出**：`libslic3r/3mf.cpp` (147KB) — `store_3mf()` / `export_3mf()`
+- **项目保存**：`Plater::save_project()` → `export_3mf()` (Plater.cpp:12165)
+- **PresetBundle**：`PresetBundle::export_config_bundle()` / `load_config_bundle()`
+- **导出模型**：`Plater::export_model()` — STL/3MF/OBJ/AMF
 
 ---
 
-## Out of Scope (v2.3)
+## Out of Scope (v2.4)
 
-- Device/Cloud/Network/Calibration 真实化（v2.4+）
-- PartPlate/AssembleView（v2.4+）
-- ModelMall/Home WebView（v2.4+）
-- CreatePresetsDialog 264KB（v2.4+）
+- Device/Cloud/Network 真实化（v2.5+）
+- Calibration 真实化（v2.5+）
+- PartPlate/AssembleView（v2.5+）
+- Gizmo UI 完善（v2.5+）
 
 ---
-*Last updated: 2026-06-18 — v2.3 (UI Completion Polish) 启动；Phase 模式；10 Tasks 分 3 Phase*
+*Last updated: 2026-06-18 — v2.4 (Project & Preset Real IO) 启动；Phase 模式；9 Tasks 分 3 Phase*

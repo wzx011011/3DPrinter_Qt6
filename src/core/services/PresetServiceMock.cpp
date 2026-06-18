@@ -6,6 +6,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QDateTime>
 #include <QCoreApplication>
 
 #ifdef HAS_LIBSLIC3R
@@ -609,6 +610,67 @@ void PresetServiceMock::savePresetValues(const QString &presetName, const QHash<
 bool PresetServiceMock::hasPreset(const QString &presetName) const
 {
   return m_presetStore.contains(presetName);
+}
+
+// v2.4 IO-04: 导出预设包（JSON 格式，简化版）
+bool PresetServiceMock::exportBundle(const QString &filePath) const
+{
+    QJsonObject root;
+    QJsonArray presets;
+    for (auto it = m_presetStore.constBegin(); it != m_presetStore.constEnd(); ++it) {
+        QJsonObject presetObj;
+        presetObj["name"] = it.key();
+        QJsonObject values;
+        for (auto vit = it.value().constBegin(); vit != it.value().constEnd(); ++vit)
+            values[vit.key()] = QJsonValue::fromVariant(vit.value());
+        presetObj["values"] = values;
+        presets.append(presetObj);
+    }
+    root["presets"] = presets;
+    root["version"] = "1.0";
+    root["exported"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+
+    QJsonDocument doc(root);
+    QFile f(filePath);
+    if (!f.open(QIODevice::WriteOnly)) {
+        qWarning("[Preset] exportBundle: cannot open %s", filePath.toUtf8().constData());
+        return false;
+    }
+    f.write(doc.toJson(QJsonDocument::Indented));
+    f.close();
+    qDebug("[Preset] exported %d presets to: %s", int(m_presetStore.size()), filePath.toUtf8().constData());
+    return true;
+}
+
+// v2.4 IO-05: 导入预设包（JSON 格式）
+bool PresetServiceMock::importBundle(const QString &filePath)
+{
+    QFile f(filePath);
+    if (!f.open(QIODevice::ReadOnly)) {
+        qWarning("[Preset] importBundle: cannot open %s", filePath.toUtf8().constData());
+        return false;
+    }
+    QJsonParseError err;
+    QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &err);
+    f.close();
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        qWarning("[Preset] importBundle: invalid JSON: %s", err.errorString().toUtf8().constData());
+        return false;
+    }
+    QJsonArray presets = doc.object()["presets"].toArray();
+    int imported = 0;
+    for (const auto &p : presets) {
+        QJsonObject presetObj = p.toObject();
+        QString name = presetObj["name"].toString();
+        QHash<QString, QVariant> values;
+        QJsonObject valuesObj = presetObj["values"].toObject();
+        for (auto vit = valuesObj.constBegin(); vit != valuesObj.constEnd(); ++vit)
+            values[vit.key()] = vit.value().toVariant();
+        m_presetStore[name] = values;
+        ++imported;
+    }
+    qDebug("[Preset] imported %d presets from: %s", imported, filePath.toUtf8().constData());
+    return true;
 }
 
 bool PresetServiceMock::isBuiltinPreset(const QString &presetName) const

@@ -52,9 +52,29 @@ Item {
         nameFilters: [qsTr("3MF 项目 (*.3mf)")]
         defaultSuffix: "3mf"
         onAccepted: {
-            // TODO PAGE-01: ProjectService 无 saveProject API, 当前占位（需 service 扩展）
-            // 真实实现需 ProjectServiceMock.saveProjectAs(path)
-            console.log("[ProjectPage] save to: " + currentFile)
+            // v2.4 IO-03: 真实保存（editorVm.saveProjectAs → ProjectService → libslic3r store_3mf）
+            var path = currentFile.toString().replace("file:///", "")
+            if (root.editorVm) {
+                var ok = root.editorVm.saveProjectAs(path)
+                console.log("[ProjectPage] save to: " + path + " result=" + ok)
+            }
+        }
+    }
+
+    // v2.4 IO-03: 导出模型 FileDialog（STL/3MF/OBJ）
+    FileDialog {
+        id: exportModelDlg
+        title: qsTr("导出模型")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("STL (*.stl)"), qsTr("3MF (*.3mf)"), qsTr("OBJ (*.obj)")]
+        onAccepted: {
+            var path = currentFile.toString().replace("file:///", "")
+            // 从文件扩展名推断格式
+            var ext = path.split('.').pop().toLowerCase()
+            if (root.editorVm) {
+                var ok = root.editorVm.exportModel(path, ext)
+                console.log("[ProjectPage] export to: " + path + " format=" + ext + " result=" + ok)
+            }
         }
     }
 
@@ -108,8 +128,8 @@ Item {
                                     importModelDlg.open()
                                     break
                                 case "export":
-                                    // 导出 = 同 saveAs（TODO: 区分 G-code/3mf 导出）
-                                    saveProjectDlg.open()
+                                    // v2.4 IO-03: 导出模型（选格式 → exportModel）
+                                    exportModelDlg.open()
                                     break
                             }
                         }

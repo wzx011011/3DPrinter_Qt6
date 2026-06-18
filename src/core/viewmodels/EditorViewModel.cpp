@@ -3538,6 +3538,19 @@ QString EditorViewModel::sliceActionHint() const
 }
 
 // ---------- actions ----------
+// v2.4 IO: 项目保存/导出转发到 ProjectService
+bool EditorViewModel::saveProjectAs(const QString &filePath) const
+{
+    if (!projectService_) return false;
+    return projectService_->saveProjectAs(filePath);
+}
+
+bool EditorViewModel::exportModel(const QString &filePath, const QString &format) const
+{
+    if (!projectService_) return false;
+    return projectService_->exportModel(filePath, format);
+}
+
 void EditorViewModel::requestSlice()
 {
   if (!canRequestSlice())

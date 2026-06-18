@@ -74,6 +74,13 @@ public:
   Q_INVOKABLE bool loadFile(const QString &filePath);
   Q_INVOKABLE void cancelLoad();
 
+  // v2.4 IO-01: 项目保存（调用 libslic3r store_3mf 真实导出 .3mf）
+  Q_INVOKABLE bool saveProjectAs(const QString &filePath);
+  // v2.4 IO-02: 导出模型（STL/3MF/OBJ 格式）
+  Q_INVOKABLE bool exportModel(const QString &filePath, const QString &format);
+  /// v2.4: 当前项目路径（saveProjectAs 后更新）
+  QString currentProjectPath() const { return currentProjectPath_; }
+
   /// 返回已加载的模型对象名称列表
   Q_INVOKABLE QStringList objectNames() const;
   Q_INVOKABLE QStringList plateNames() const;
@@ -311,6 +318,8 @@ signals:
   void projectConfigLoaded(const QHash<QString, QVariant> &config);
 
 private:
+  /// v2.4: 当前项目保存路径（saveProjectAs 后更新）
+  QString currentProjectPath_;
   /// Mock-mode per-object scoped overrides (objectIndex → key-value map)
   QHash<int, QHash<QString, QVariant>> m_mockObjectOverrides;
   /// Mock-mode per-volume scoped overrides ((objectIndex << 16 | volumeIndex) → key-value map)
