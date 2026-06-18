@@ -33,6 +33,8 @@
         <file>dialogs/PrintHostDialog.qml</file>
         <file>dialogs/PluginManagerDialog.qml</file>
         <file>dialogs/EnableLiteModeDialog.qml</file>
+        <file>dialogs/SavePresetDialog.qml</file>
+        <file>dialogs/UnsavedChangesDialog.qml</file>
         <file>pages/SettingsPage.qml</file>
         <!-- Panels -->
         <file>panels/ObjectList.qml</file>

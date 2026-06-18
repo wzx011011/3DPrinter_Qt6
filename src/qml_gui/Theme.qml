@@ -5,9 +5,9 @@ QtObject {
     // ── Background palette
     readonly property color bgBase:      "#0d0f12"
     readonly property color bgSurface:   "#131720"
-    readonly property color bgPanel:     "#1a1e28"
+    readonly property color bgPanel:     "#161a23"
     readonly property color bgCard:      "#21263200"
-    readonly property color bgElevated:  "#252b38"
+    readonly property color bgElevated:  "#2a3140"
     readonly property color bgInset:     "#10141c"
     readonly property color bgFloating:  "#1a202bd9"
     readonly property color bgHover:     "#2e3444"
@@ -30,7 +30,7 @@ QtObject {
 
     // ── Border
     readonly property color borderDefault:   "#363d4e"
-    readonly property color borderSubtle:    "#2a3040"
+    readonly property color borderSubtle:    "#333b4e"
     readonly property color borderStrong:    "#454d5e"
     readonly property color borderFocus:     "#18c75e"
     readonly property color borderInput:     "#2e3848"

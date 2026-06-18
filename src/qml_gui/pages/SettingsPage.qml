@@ -86,6 +86,58 @@ Item {
                     topPadding: 2; bottomPadding: 2
                     background: Rectangle { radius: 3; color: "#3a2e1a" }
                 }
+                // PRESET-01: 另存为预设按钮（对齐上游 SavePresetDialog 入口）
+                CxButton {
+                    text: qsTr("另存为...")
+                    implicitHeight: 24
+                    compact: true
+                    enabled: configVm && configVm.isPresetDirty
+                    onClicked: savePresetDialog.open()
+                }
+                // SEARCH-01: 搜索参数按钮（对齐上游 SearchCtrl）
+                CxButton {
+                    text: qsTr("🔍 搜索")
+                    implicitHeight: 24
+                    compact: true
+                    enabled: !!configVm
+                    onClicked: searchDialog.open()
+                }
+            }
+        }
+
+        // PRESET-01: SavePresetDialog 实例
+        SavePresetDialog {
+            id: savePresetDialog
+            configVm: root.configVm
+            presetTier: {
+                var tiers = ["print", "filament", "printer"]
+                return tiers[tierBar.currentIndex] || "print"
+            }
+        }
+
+        // PRESET-02: UnsavedChangesDialog 实例（切换 preset 守卫）
+        UnsavedChangesDialog {
+            id: unsavedChangesDialog
+            configVm: root.configVm
+            onAccepted: {
+                if (action === "save") savePresetDialog.open()
+                else if (action === "discard") { if (root.configVm) root.configVm.resetAllGlobalOptions() }
+                // cancel: 不做任何事, 守卫由调用方判断
+            }
+        }
+
+        // SEARCH-01: SearchDialog 实例（对齐上游 SearchCtrl）
+        SearchDialog {
+            id: searchDialog
+            configVm: root.configVm
+            onJumpToOption: function(optionIndex) {
+                // 跳转到对应 tier + 滚动到该选项（简化：切换 tier）
+                if (root.configVm) {
+                    var page = root.configVm.searchResultPage(optionIndex)
+                    if (page === "print") tierBar.currentIndex = 0
+                    else if (page === "filament") tierBar.currentIndex = 1
+                    else if (page === "machine") tierBar.currentIndex = 2
+                }
             }
         }
 

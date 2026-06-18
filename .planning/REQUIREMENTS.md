@@ -162,7 +162,7 @@
 
 ### SLICE — Preview TickCode/IMSlider 系统
 
-- [ ] **SLICE-01 [P0]**: G-code 着色模式切换（Feature/Speed/Extruder/LayerHeight/Pressure/Pixel 6 种，对齐上游 GCodeViewer EViewType）
+- [x] **SLICE-01 [P0]**: G-code 着色模式切换（13 种模式，对齐上游 viewModeIndex，代码完成 + 切片链路通；视觉验收待本机 3D）— DONE 2026-06-18
 - [ ] **SLICE-02 [P0]**: IMSlider 层滑块增强（刻度标记 + 拖拽手感，对齐上游 IMSlider.cpp 1828 行）
 - [ ] **SLICE-03 [P1]**: TickCode 自定义刻度插入（change filament/pause/custom gcode，对齐上游 TickCode.cpp）
 - [ ] **SLICE-04 [P1]**: CustomGcodeDialog 联动 slider（dialog 已存在，接入刻度点击）
