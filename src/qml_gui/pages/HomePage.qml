@@ -453,6 +453,45 @@ Item {
             onOpened: { bindDeviceName.text = ""; bindPinCode.text = ""; bindError = ""; bindDeviceName.forceActiveFocus() }
         }
 
+        // PAGE-04: Daily Tips（对齐上游 MarkdownTip / DailyTips.cpp）
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 60
+            radius: 10
+            color: Theme.bgElevated
+            border.width: 1
+            border.color: Theme.borderSubtle
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: 14
+                spacing: 10
+
+                Text {
+                    text: "💡"
+                    font.pixelSize: 20
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    Text {
+                        text: qsTr("每日提示")
+                        color: Theme.accent
+                        font.pixelSize: 11
+                        font.bold: true
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("切片前确保模型已平放在热床上。使用 W/E/R 切换移动/旋转/缩放工具。")
+                        color: Theme.textSecondary
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        elide: Text.ElideRight
+                    }
+                }
+            }
+        }
+
         Text { text: qsTr("最近项目"); color: Theme.textSecondary; font.pixelSize: 13; font.bold: true }
 
         ScrollView {

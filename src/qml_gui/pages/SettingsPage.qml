@@ -102,6 +102,14 @@ Item {
                     enabled: !!configVm
                     onClicked: searchDialog.open()
                 }
+                // V21-02: 导出预设包按钮（对齐上游 ExportPresetBundleDialog）
+                CxButton {
+                    text: qsTr("导出预设...")
+                    implicitHeight: 24
+                    compact: true
+                    enabled: !!configVm
+                    onClicked: exportBundleDialog.open()
+                }
             }
         }
 
@@ -139,6 +147,12 @@ Item {
                     else if (page === "machine") tierBar.currentIndex = 2
                 }
             }
+        }
+
+        // V21-02: ExportPresetBundleDialog 实例
+        ExportPresetBundleDialog {
+            id: exportBundleDialog
+            configVm: root.configVm
         }
 
         Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }

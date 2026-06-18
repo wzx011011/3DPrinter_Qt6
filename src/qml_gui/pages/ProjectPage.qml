@@ -1,12 +1,15 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 import ".."
 import "../controls"
 
 Item {
     id: root
     required property var projectVm
+    /// editorVm 注入（用于 loadFile 导入模型；由 main.qml 透传）
+    property var editorVm: null
     property var _fileTree: []
 
     Component.onCompleted: {
@@ -19,6 +22,41 @@ Item {
     }
 
     Rectangle { anchors.fill: parent; color: Theme.bgBase }
+
+    // PAGE-01: 项目操作 FileDialog（打开/导入用）
+    FileDialog {
+        id: openProjectDlg
+        title: qsTr("打开项目")
+        nameFilters: [qsTr("3MF 项目 (*.3mf)"), qsTr("所有文件 (*)")]
+        onAccepted: {
+            // 打开 .3mf 项目 = 加载到 editorVm（ProjectService.loadFile）
+            if (root.editorVm)
+                root.editorVm.loadFile(currentFile.toString().replace("file:///", ""))
+        }
+    }
+
+    FileDialog {
+        id: importModelDlg
+        title: qsTr("导入模型")
+        nameFilters: [qsTr("模型 (*.stl *.3mf *.obj *.step *.stp)"), qsTr("所有文件 (*)")]
+        onAccepted: {
+            if (root.editorVm)
+                root.editorVm.loadFile(currentFile.toString().replace("file:///", ""))
+        }
+    }
+
+    FileDialog {
+        id: saveProjectDlg
+        title: qsTr("保存项目")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("3MF 项目 (*.3mf)")]
+        defaultSuffix: "3mf"
+        onAccepted: {
+            // TODO PAGE-01: ProjectService 无 saveProject API, 当前占位（需 service 扩展）
+            // 真实实现需 ProjectServiceMock.saveProjectAs(path)
+            console.log("[ProjectPage] save to: " + currentFile)
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -39,12 +77,42 @@ Item {
                 anchors.rightMargin: 14
                 spacing: Theme.spacingSM
 
+                // PAGE-01: 6 按钮接线（对齐上游 MainFrame 项目操作）
                 Repeater {
-                    model: [qsTr("新建项目"),qsTr("打开"),qsTr("保存"),qsTr("另存为"),qsTr("导入模型"),qsTr("导出")]
+                    model: [
+                        { label: qsTr("新建项目"), action: "new" },
+                        { label: qsTr("打开"), action: "open" },
+                        { label: qsTr("保存"), action: "save" },
+                        { label: qsTr("另存为"), action: "saveAs" },
+                        { label: qsTr("导入模型"), action: "import" },
+                        { label: qsTr("导出"), action: "export" }
+                    ]
                     delegate: CxButton {
-                        text: modelData
+                        text: modelData.label
                         compact: true
                         cxStyle: CxButton.Style.Secondary
+                        onClicked: {
+                            switch (modelData.action) {
+                                case "new":
+                                    // 新建 = 清空当前（TODO: ProjectService.clearProject）
+                                    console.log("[ProjectPage] new project")
+                                    break
+                                case "open":
+                                    openProjectDlg.open()
+                                    break
+                                case "save":
+                                case "saveAs":
+                                    saveProjectDlg.open()
+                                    break
+                                case "import":
+                                    importModelDlg.open()
+                                    break
+                                case "export":
+                                    // 导出 = 同 saveAs（TODO: 区分 G-code/3mf 导出）
+                                    saveProjectDlg.open()
+                                    break
+                            }
+                        }
                     }
                 }
 

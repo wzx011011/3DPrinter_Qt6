@@ -194,3 +194,44 @@
 - ModelMall WebView / Home WebView（v2.2+，需 QtWebEngine）
 - i18n 翻译内容填充（v2.2+）
 - 90+ Dialog 补全的剩余部分（分散）
+
+---
+
+## v2.1 完成状态（2026-06-18）
+
+v2.1 的 15 项中 12 项完成，3 项评估后延后 v2.2。详见 commit 346c450 + 85e2b5c。
+
+**延后到 v2.2 的**：SLICE-05（冲突热区）/ PRESET-03（ExportBundle）/ PRESET-04（CreatePresets）
+
+---
+
+## v2.2 Requirements — Page Completion & Cleanup（2026-06-18 启动）
+
+**Goal:** 把低完成度页面提到可用状态 + 清理冗余 + 收尾 v2.1 延后项。集中在 UI 补全，不引入新的复杂集成（MQTT/真实打印留 v2.3+）。
+
+### PAGE — 页面补全
+
+- [ ] **PAGE-01 [P0]**: ProjectPage 按钮接线（新建/打开/保存/另存/导入/导出 6 按钮全空壳 → 接 ProjectService 真实 IO）
+- [ ] **PAGE-02 [P0]**: DeviceListPage 修复强制写空 bug（line 13-14）+ 完整设备对象展示（SSDP 发现占位）
+- [ ] **PAGE-03 [P1]**: AuxiliaryPage 9 张卡片接线（onClicked 全空 → 接 AuxiliaryService 真实分析：模型分析/支撑预览/重量估算）
+- [ ] **PAGE-04 [P1]**: HomePage 完善（DailyTips 占位 + 最近项目真实数据 + 登录入口接线）
+- [ ] **PAGE-05 [P2]**: ConfigPage 清理（冗余死代码，被 SettingsPage 取代 → 删除或重定向）
+
+### V21DEFER — v2.1 延后项收尾
+
+- [ ] **V21-01 [P2]**: SLICE-05 切片冲突热区点击（GCodeViewer 碰撞检测，评估实现复杂度）
+- [ ] **V21-02 [P2]**: PRESET-03 ExportPresetBundleDialog（简化版：导出全部预设为 zip）
+- [ ] **V21-03 [P2]**: PRESET-04 CreatePresetsDialog（264KB 巨型，评估最小可用版）
+
+### TECH — 技术债
+
+- [ ] **TECH-01 [P1]**: cgal/libslic3r 每次构建全量重编问题（时间戳/依赖追踪修复，节省 10+ 分钟/次）
+- [ ] **TECH-02 [P2]**: review 遗留 Warning（W2 enabled 遮蔽 / W4 写环 / W7 Theme 令牌）
+
+### Out of Scope (v2.2 明确不做)
+
+- Device/Cloud/Network 真实化（v2.3+，需 MQTT/HTTP 集成）
+- Calibration 真实化（v2.3+，需 libslic3r CalibMode）
+- AssembleView（v2.3+）
+- ModelMall/Home WebView（v2.3+，需 QtWebEngine）
+- i18n 翻译内容（v2.3+）

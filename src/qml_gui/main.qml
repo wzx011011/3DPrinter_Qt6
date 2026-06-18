@@ -500,7 +500,7 @@ ApplicationWindow {
                 Loader {
                     active: backend.currentPage === backend.tpProject
                     sourceComponent: Component {
-                        ProjectPage { projectVm: backend.projectViewModel }
+                        ProjectPage { projectVm: backend.projectViewModel; editorVm: backend.editorViewModel }
                     }
                 }
                 // Page 6 (tpCalibration) — Calibration

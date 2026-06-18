@@ -8,9 +8,25 @@ Item {
     property var _devices: []
 
     Component.onCompleted: {
-        // MonitorViewModel exposes deviceNames (QStringList) but no full device objects.
-        // DeviceListPage shows empty state when no devices are available.
-        _devices = []
+        // PAGE-02 修复: 从 monitorVm 读设备名（之前强制写空导致永远显示空状态）
+        refreshDevices()
+    }
+
+    // PAGE-02: 从 MonitorViewModel 读设备列表（用 deviceAt + filteredDeviceCount）
+    function refreshDevices() {
+        if (!root.monitorVm) { _devices = []; return }
+        var count = root.monitorVm.filteredDeviceCount || 0
+        var arr = []
+        for (var i = 0; i < count; ++i) {
+            var d = root.monitorVm.deviceAt(i)
+            arr.push({
+                name: d.name || d.model || ("Device " + i),
+                status: d.online ? "online" : "offline",
+                ip: d.ip || "—",
+                type: d.model || "—"
+            })
+        }
+        _devices = arr
     }
 
     Rectangle { anchors.fill: parent; color: "#0d0f12" }
@@ -29,7 +45,7 @@ Item {
                 Rectangle { width: 26; height: 26; radius: 13; color: refreshHov.containsMouse ? "#2e3444" : "transparent"
                     Text { anchors.centerIn: parent; text: "↻"; color: "#a0abbe"; font.pixelSize: 16 }
                     HoverHandler { id: refreshHov }
-                    TapHandler { onTapped: root.monitorVm.refreshDeviceList() }
+                    TapHandler { onTapped: { root.monitorVm.refreshDeviceList(); root.refreshDevices() } }
                 }
                 Rectangle {
                     height: 28; width: 80; radius: 4; color: "#1c6e42"
