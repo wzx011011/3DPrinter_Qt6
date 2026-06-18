@@ -38,6 +38,7 @@
         <file>dialogs/ExportPresetBundleDialog.qml</file>
         <file>dialogs/NetworkTestDialog.qml</file>
         <file>dialogs/TroubleshootDialog.qml</file>
+        <file>dialogs/SelectMachineDialog.qml</file>
         <file>pages/SettingsPage.qml</file>
         <!-- Panels -->
         <file>panels/ObjectList.qml</file>

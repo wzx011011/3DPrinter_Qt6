@@ -5,6 +5,9 @@
 #include <QString>
 #include <QVariantMap>
 
+// v2.5 DEV-02: MqttClient 集成（替代 mock 数据）
+namespace owzx { class MqttClient; }
+
 /// AMS (Automatic Material System) slot info (对齐上游 AMSScreen / AMSModel)
 struct MockAmsSlot
 {
@@ -145,6 +148,10 @@ public:
   /// 连接/断开设备（对齐上游 DeviceManager connect / disconnect）
   Q_INVOKABLE void connectDevice(int filteredIndex);
   Q_INVOKABLE void disconnectDevice(int filteredIndex);
+  // v2.5 DEV-02: MQTT 真实连接（替代 mock 模拟）
+  Q_INVOKABLE void connectViaMqtt(const QString &host, int port, const QString &accessCode);
+  Q_INVOKABLE void disconnectMqtt();
+  Q_INVOKABLE bool isMqttConnected() const;
 
   /// 打印任务控制（对齐上游 Plater print/pause/resume/stop）
   Q_INVOKABLE void startPrint(int filteredIndex, const QString &gcodePath);
@@ -203,6 +210,10 @@ private:
   };
   QMap<int, PrintJobState> printJobs_; ///< device filteredIndex → print state
   QTimer *printSimTimer_ = nullptr;
+
+  // v2.5 DEV-02: MqttClient 实例（真实 MQTT 通信）
+  owzx::MqttClient *mqttClient_ = nullptr;
+  int mqttConnectedDeviceIndex_ = -1;  ///< MQTT 连接的设备 filteredIndex
 
   /// HMS 通知列表（对齐上游 DeviceManager hms_list）
   /// key = device realIndex, value = list of HMS items

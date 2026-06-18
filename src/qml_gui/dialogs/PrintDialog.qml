@@ -9,6 +9,7 @@ import "../controls"
 CxDialog {
     id: root
     required property var editorVm
+    property var monitorVm: null  // v2.5 DEV-05: SelectMachineDialog 需要
 
     dialogTitle: qsTr("发送打印")
     titleIcon: "🖨"
@@ -154,12 +155,22 @@ CxDialog {
                     id: printHov; anchors.fill: parent
                     hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                        // Trigger slice (if not sliced)
+                        // v2.5 DEV-05: 切片后弹 SelectMachine 发送（对齐上游 SelectMachinePop）
                         if (root.editorVm) root.editorVm.requestSlice()
+                        // 弹 SelectMachineDialog 选择设备发送（gcodePath 待 SliceService 完成后填充）
+                        selectMachineDialog.gcodePath = root.editorVm ? (root.editorVm.lastGcodePath || "") : ""
+                        selectMachineDialog.open()
                         root.close()
                     }
                 }
             }
         }
+    }
+
+    // v2.5 DEV-05: SelectMachineDialog 实例（发送打印到真机）
+    SelectMachineDialog {
+        id: selectMachineDialog
+        deviceVm: root.monitorVm
+        gcodePath: ""
     }
 }

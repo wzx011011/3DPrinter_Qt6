@@ -1,4 +1,5 @@
 #include "DeviceServiceMock.h"
+#include "MqttClient.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -401,6 +402,82 @@ void DeviceServiceMock::connectDevice(int filteredIndex)
     emit devicesChanged();
     emit selectedDeviceChanged();
   });
+}
+
+// v2.5 DEV-02: MQTT 真实连接（替代 mock 模拟）
+void DeviceServiceMock::connectViaMqtt(const QString &host, int port, const QString &accessCode)
+{
+    // 创建 MqttClient（如果还没有）
+    if (!mqttClient_) {
+        mqttClient_ = new owzx::MqttClient(this);
+        connect(mqttClient_, &owzx::MqttClient::stateChanged, this, [this](int state) {
+            // MQTT 连接状态变化 → 更新设备状态
+            if (state == owzx::MqttClient::Connected) {
+                qDebug("[Device] MQTT connected, subscribing to device status...");
+                // 订阅 Bambu 协议: device/<serial>/report
+                // 简化: 用通配 topic
+                mqttClient_->subscribe("device/+/report");
+            } else if (state == owzx::MqttClient::Disconnected) {
+                qDebug("[Device] MQTT disconnected");
+                if (mqttConnectedDeviceIndex_ >= 0 && mqttConnectedDeviceIndex_ < devices_.size()) {
+                    devices_[mqttConnectedDeviceIndex_].online = false;
+                    devices_[mqttConnectedDeviceIndex_].status = "offline";
+                    emit devicesChanged();
+                    emit selectedDeviceChanged();
+                }
+            }
+        });
+        connect(mqttClient_, &owzx::MqttClient::messageReceived, this, [this](const QString &topic, const QString &payload) {
+            // 解析 MQTT 消息 → 更新设备状态（温度/进度/stage 等）
+            QJsonDocument doc = QJsonDocument::fromJson(payload.toUtf8());
+            if (!doc.isObject()) return;
+            QJsonObject obj = doc.object();
+
+            // Bambu 协议: 打印信息在 print->msg
+            QJsonObject printObj = obj.value("print").toObject();
+            if (printObj.isEmpty()) return;
+            QJsonObject msgObj = printObj.value("msg").toObject();
+            if (msgObj.isEmpty()) return;
+
+            // 更新选中设备状态
+            int idx = mqttConnectedDeviceIndex_;
+            if (idx < 0 || idx >= devices_.size()) return;
+            auto &d = devices_[idx];
+
+            // gcode_state: IDLE/SLICING/RUNNING/PAUSE/FINISH/FAIL
+            QString state = msgObj.value("gcode_state").toString();
+            if (!state.isEmpty()) {
+                d.status = state.toLower();
+                d.online = true;
+            }
+            // 进度
+            int pct = msgObj.value("mc_percent").toInt();
+            if (pct > 0) d.progress = pct;
+            // 温度（MockDevice 只有 temperature 字段，用喷嘴温度）
+            int nozzleTemp = msgObj.value("nozzle_temper").toInt();
+            if (nozzleTemp > 0) d.temperature = nozzleTemp;
+
+            emit devicesChanged();
+            emit selectedDeviceChanged();
+        });
+    }
+
+    // 发起连接
+    mqttClient_->connectToHost(host, port, accessCode);
+    qDebug("[Device] connecting MQTT to %s:%d", host.toUtf8().constData(), port);
+}
+
+void DeviceServiceMock::disconnectMqtt()
+{
+    if (mqttClient_) {
+        mqttClient_->disconnectFromHost();
+        mqttConnectedDeviceIndex_ = -1;
+    }
+}
+
+bool DeviceServiceMock::isMqttConnected() const
+{
+    return mqttClient_ && mqttClient_->isConnected();
 }
 
 void DeviceServiceMock::disconnectDevice(int filteredIndex)
