@@ -1,7 +1,13 @@
 #include "CalibrationServiceMock.h"
 #include <QTimer>
 #include <QDateTime>
+#include <QDebug>
 #include <algorithm>
+
+#ifdef HAS_LIBSLIC3R
+#include <libslic3r/Calib.hpp>
+#include <libslic3r/PrintConfig.hpp>
+#endif
 
 CalibrationServiceMock::CalibrationServiceMock(QObject *parent)
     : QObject(parent), m_timer(new QTimer(this))
@@ -258,6 +264,32 @@ void CalibrationServiceMock::startCalibration(int itemIndex)
     emit isRunningChanged();
     emit progressChanged();
     emit stepChanged();
+
+#ifdef HAS_LIBSLIC3R
+    // v2.5 CAL-01: 真实校准（调 libslic3r Calib 类生成测试 G-code）
+    // 对齐上游 calib.cpp: CalibPressureAdvance::generate_test
+    const auto &calibType = m_calibTypes[itemIndex];
+    qDebug("[Calib] starting real calibration: %s", calibType.id.toUtf8().constData());
+
+    if (calibType.id == "pa_line" || calibType.id == "pa_pattern" || calibType.id == "pa_tower") {
+        // Pressure Advance 校准
+        // CalibPressureAdvance 是抽象基类（protected ctor），需用派生类 CalibPressureAdvanceLine/Pattern
+        // Slic3r::CalibPressureAdvanceLine calibPA(gcodegen);
+        // std::string testGcode = calibPA.generate_test(0, 0.002, 50);
+        // TODO CAL-02: 需 GCode generator 上下文，留完整实现
+        qDebug("[Calib] PA calibration skeleton (needs CalibPressureAdvanceLine + GCode context)");
+    } else if (calibType.id == "flow_rate") {
+        // Flow Rate 校准（对齐上游 CalibFlowRate, 需扩展）
+        qDebug("[Calib] Flow Rate calibration (skeleton, needs CalibFlowRate impl)");
+    } else if (calibType.id == "temp_tower") {
+        // Temp Tower 校准
+        qDebug("[Calib] Temp Tower calibration (skeleton)");
+    }
+    // 其他模式（Vol_speed/VFA/Retraction）类似
+
+    // 当前仍用 mock timer 模拟进度（真实切片校准需 SliceService 集成）
+#endif
+
     m_timer->start();
 }
 
