@@ -14,9 +14,18 @@
 
 详见 `.planning-v1-crealityprint-archive/` 与 `MILESTONES.md`。
 
-## Current Milestone: v2.0 OrcaSlicer UI Full Restoration
+## Current Milestone: v2.3 UI Completion Polish
 
-**Goal:** 把当前 Qt6/QML 项目的 UI 全面对齐到 OrcaSlicer 上游——从 12 页 StackLayout 架构迁移到上游 9 页 Notebook + Plater 共享实例 + Sidebar Dockable 布局，并补齐 90+ Dialog 与上游一致的菜单/工具栏系统。
+**Goal:** 把 UI 完整度收尾到"无明显缺失"状态——补齐缺失对话框、挂载孤儿页面、完善 Gizmo UI、建立 i18n 基础。
+
+**Target features:**
+- KBShortcutsDialog（快捷键总览，信号已有无 dialog）
+- AuxiliaryPage 挂载到 main.qml（v2.2 孤儿页面）
+- 剩余 Gizmo UI（Hollow/BrimEars/FuzzySkin/MmuSegmentation 交互面板）
+- i18n 基础（zh_CN 翻译填充 + 翻译流程文档）
+- 视觉打磨收尾（代码层面准备，待本机验收）
+
+**工作方式：** Phase 模式（用户明确要求，回归 Phase 线性推进）
 
 **Target features:**
 

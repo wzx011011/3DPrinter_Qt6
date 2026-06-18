@@ -1,42 +1,37 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.2
-milestone_name: Page Completion & Cleanup
-status: gap_driven
-last_updated: 2026-06-18T00:00:00.000Z
-last_activity: 2026-06-18 -- v2.2 milestone 启动（页面补全+收尾）
+milestone: v2.3
+milestone_name: UI Completion Polish
+status: phase_mode
+last_updated: 2026-06-18
+last_activity: 2026-06-18 -- v2.3 milestone 启动（Phase 模式，UI 完整度收尾）
 progress:
-  total_gaps: 10
-  resolved_gaps: 0
-  pending_gaps: 10
-stopped_at: v2.2 启动 — 待开始 PAGE-01 (ProjectPage 按钮接线)
+  total_phases: 3
+  completed_phases: 0
+  total_tasks: 10
+  completed_tasks: 0
+stopped_at: v2.3 启动 — 待开始 Phase 1 (缺失对话框 + 孤儿页面挂载)
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone:** v2.2 Page Completion & Cleanup
-**当前焦点：** PAGE-01 ProjectPage 按钮接线
-**下一步：** PAGE-01 → PAGE-02 (DeviceListPage bug) → PAGE-03/04 → TECH-01
+**Milestone:** v2.3 UI Completion Polish
+**模式：** Phase 线性推进（用户明确要求回归 Phase 模式）
+**当前 Phase：** 1（缺失对话框 + 孤儿页面挂载）
+**下一步：** UI-01 KBShortcutsDialog
 
-## v2.1 已完成（2026-06-18）
+## v2.0-v2.2 已完成
 
-- ✅ SLICE-01 G-code 着色模式切换
-- ✅ SLICE-02/03/04 IMSlider + TickCode + Dialog 联动（已实现）
-- ✅ SLICE-06 Legend 动态 / SLICE-07 Tooltip / SLICE-08 键盘导航（已实现）
-- ✅ PRESET-01 SavePresetDialog / PRESET-02 UnsavedChangesDialog
-- ✅ SEARCH-01 SearchDialog 接入
-- ✅ PREPARE-01 BBLTopbar 框架 / PREPARE-02 配色对比度
-- ✅ 切片崩溃修复（Config.hpp 4 patch）+ 自回归脚本
-- 延后 v2.2: SLICE-05 / PRESET-03 / PRESET-04
+- v2.0: UI 架构对齐（Plater/Sidebar/GLToolbars/八大区块）✅
+- v2.1: 切片/预览深化 + 切片崩溃修复 ✅
+- v2.2: 页面补全 + 审计 80% ✅
 
-详见 commit 346c450 + 85e2b5c。
+## v2.3 Phase 进度
 
-## v2.2 差距清单进度
-
-| 需求域 | 差距数 | 已消除 |
+| Phase | 内容 | 状态 |
 |---|---|---|
-| PAGE（页面补全）| 5 | 0 |
-| V21DEFER（v2.1 延后）| 3 | 0 |
-| TECH（技术债）| 2 | 0 |
+| Phase 1 | 缺失对话框 + 孤儿页面挂载（UI-01~04） | 🔴 待做 |
+| Phase 2 | 剩余 Gizmo UI 交互面板（UI-05~07） | 🔴 待做 |
+| Phase 3 | i18n 基础 + 视觉打磨（UI-08~10） | 🔴 待做 |

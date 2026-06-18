@@ -235,3 +235,41 @@ v2.1 的 15 项中 12 项完成，3 项评估后延后 v2.2。详见 commit 346c
 - AssembleView（v2.3+）
 - ModelMall/Home WebView（v2.3+，需 QtWebEngine）
 - i18n 翻译内容（v2.3+）
+
+---
+
+## v2.2 完成状态（2026-06-18）
+
+v2.2 的 10 项中 8 项达标（80%），2 项评估延后 v2.3。详见 commit 05dfed7 + `.planning/audits/v2.2-AUDIT.md`。
+
+---
+
+## v2.3 Requirements — UI Completion Polish（2026-06-18 启动，Phase 模式）
+
+**Goal:** UI 完整度收尾到"无明显缺失"——补齐缺失对话框、挂载孤儿页面、完善 Gizmo UI、建立 i18n 基础。
+
+### Phase 1: 缺失对话框 + 孤儿页面挂载
+
+- [ ] **UI-01 [P0]**: KBShortcutsDialog（快捷键总览，接 BBLTopbar.shortcutOverviewRequested 信号）
+- [ ] **UI-02 [P0]**: AuxiliaryPage 挂载到 main.qml StackLayout（v2.2 孤儿页面）
+- [ ] **UI-03 [P1]**: NetworkTestDialog（网络测试，对齐上游）
+- [ ] **UI-04 [P1]**: TroubleshootDialog（设备排错，对齐上游）
+
+### Phase 2: 剩余 Gizmo UI 交互面板
+
+- [ ] **UI-05 [P1]**: MmuSegmentation 多色分区绘制 UI（多色打印核心，对齐上游 GLGizmoMmuSegmentation）
+- [ ] **UI-06 [P2]**: Hollow/BrimEars/FuzzySkin Gizmo UI 占位（SLA/特殊工艺）
+- [ ] **UI-07 [P2]**: Emboss 文字浮雕 UI 完善（按钮有，交互面板缺）
+
+### Phase 3: i18n 基础 + 视觉打磨
+
+- [ ] **UI-08 [P1]**: zh_CN 翻译填充（当前 ~0%，目标 80%+ 常用串）
+- [ ] **UI-09 [P2]**: i18n 翻译流程文档（lupdate/lrelease 工作流）
+- [ ] **UI-10 [P2]**: 视觉打磨收尾（BBLTopbar 图标 + 配色微调 + 待本机验收项准备）
+
+### Out of Scope (v2.3)
+
+- Device/Cloud/Network/Calibration 真实化（v2.4+）
+- PartPlate/AssembleView（v2.4+）
+- ModelMall/Home WebView（v2.4+，需 QtWebEngine）
+- CreatePresetsDialog 264KB（v2.4+）

@@ -510,17 +510,13 @@ ApplicationWindow {
                         CalibrationPage { calibrationVm: backend.calibrationViewModel }
                     }
                 }
-                // Page 7 (tpPlaceholder1) — 占位 (v2.1 实现)
-                Item {
-                    visible: false
-                    Rectangle {
-                        anchors.fill: parent
-                        color: backend.bgColor
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("占位 Tab (v2.1 实现)")
-                            color: Theme.textSecondary
-                            font.pixelSize: 14
+                // Page 7 (tpPlaceholder1) — AuxiliaryPage（v2.3 UI-02 挂载，原占位替换）
+                Loader {
+                    active: backend.currentPage === backend.tpPlaceholder1
+                    sourceComponent: Component {
+                        AuxiliaryPage {
+                            projectVm: backend.projectViewModel
+                            backend: backend
                         }
                     }
                 }

@@ -1,71 +1,83 @@
-# Roadmap: Milestone v2.2 — Page Completion & Cleanup
+# Roadmap: Milestone v2.3 — UI Completion Polish
 
 ## Overview
 
-把低完成度页面提到可用状态 + 清理冗余 + 收尾 v2.1 延后项。集中在 UI 补全，不引入新的复杂集成。
+把 UI 完整度收尾到"无明显缺失"——补齐缺失对话框、挂载孤儿页面、完善 Gizmo UI、建立 i18n 基础。
 
-**工作方式**（沿用）：差距清单驱动 + 视觉类用户截图验收 + 功能类构建+冒烟通过。
-
----
-
-## v2.1 已完成（地基）
-
-v2.1 完成了切片/预览深化 + 预设管理 + 搜索 + 配色。详见 commit 346c450 + 85e2b5c。
+**工作方式：** Phase 模式（回归传统 Phase 线性推进，每个 Phase 有明确 deliverable + 验收）
 
 ---
 
-## v2.2 差距清单
+## v2.0-v2.2 已完成（地基）
 
-### PAGE — 页面补全（核心）
-
-| ID | 差距 | 优先级 | 状态 | 验收 |
-|---|---|---|---|---|
-| **PAGE-01** | ProjectPage 6 按钮接线（新建/打开/保存/另存/导入/导出） | P0 | 🔴 待做 | 操作确认每个按钮有效 |
-| **PAGE-02** | DeviceListPage 修复强制写空 bug + 完整设备展示 | P0 | 🔴 待做 | 设备列表非空 |
-| **PAGE-03** | AuxiliaryPage 9 卡片接线（模型分析/支撑预览/重量估算） | P1 | 🔴 待做 | 操作确认卡片可点 |
-| **PAGE-04** | HomePage 完善（DailyTips + 最近项目 + 登录入口） | P1 | 🔴 待做 | 截图确认 |
-| **PAGE-05** | ConfigPage 清理（冗余死代码） | P2 | 🔴 待做 | 删除后无引用 |
-
-### V21DEFER — v2.1 延后项收尾
-
-| ID | 差距 | 优先级 | 状态 |
-|---|---|---|---|
-| **V21-01** | SLICE-05 切片冲突热区 | P2 | 🔴 待评估 |
-| **V21-02** | PRESET-03 ExportPresetBundleDialog | P2 | 🔴 待做 |
-| **V21-03** | PRESET-04 CreatePresetsDialog | P2 | 🔴 待评估 |
-
-### TECH — 技术债
-
-| ID | 差距 | 优先级 | 状态 |
-|---|---|---|---|
-| **TECH-01** | cgal/libslic3r 每次全量重编（节省 10+ 分钟/次） | P1 | 🔴 待做 |
-| **TECH-02** | review 遗留 Warning | P2 | 🔴 待做 |
+- v2.0: UI 架构对齐（Plater/Sidebar/GLToolbars/八大区块）
+- v2.1: 切片/预览深化（着色/TickCode/Preset Dialog/Search）+ 切片崩溃修复
+- v2.2: 页面补全（ProjectPage/DeviceList/HomePage/ExportBundle）+ 审计 80%
 
 ---
 
-## 优先级排序
+## Phase 结构（v2.3）
 
-**第一波（P0 页面补全）：**
-1. PAGE-01 ProjectPage 按钮接线（影响项目工作流）
-2. PAGE-02 DeviceListPage bug 修复（已知 bug）
+### Phase 1: 缺失对话框 + 孤儿页面挂载
 
-**第二波（P1）：**
-3. PAGE-03 AuxiliaryPage 卡片接线
-4. PAGE-04 HomePage 完善
-5. TECH-01 cgal 重编问题（工程效率）
+**目标：** 补齐信号已发但无接收的 Dialog + 挂载孤儿页面
 
-**第三波（P2 收尾）：**
-6. PAGE-05 ConfigPage 清理
-7. V21-01/02/03 延后项
-8. TECH-02 Warning
+| Task | 内容 | 验收 |
+|---|---|---|
+| UI-01 | KBShortcutsDialog（快捷键总览）| 打开显示快捷键列表 |
+| UI-02 | AuxiliaryPage 挂载 main.qml | tab 切换能看到 Auxiliary 页 |
+| UI-03 | NetworkTestDialog | 对话框能打开 |
+| UI-04 | TroubleshootDialog | 对话框能打开 |
+
+**Phase 1 出口：** 所有已有信号都有 dialog 接收 + 无孤儿页面
+
+---
+
+### Phase 2: 剩余 Gizmo UI 交互面板
+
+**目标：** 完善 Gizmo 的交互面板（按钮已有，交互 UI 缺）
+
+| Task | 内容 | 验收 |
+|---|---|---|
+| UI-05 | MmuSegmentation 多色分区 UI | 多色绘制面板可交互 |
+| UI-06 | Hollow/BrimEars/FuzzySkin 占位 | Gizmo 按钮有基础面板 |
+| UI-07 | Emboss UI 完善 | 文字输入 + 3D 预览 |
+
+**Phase 2 出口：** 所有 GLToolbars 的 Gizmo 按钮都有对应交互面板
 
 ---
 
-## Out of Scope (v2.2)
+### Phase 3: i18n 基础 + 视觉打磨
 
-- Device/Cloud/Network 真实化（v2.3+）
-- Calibration 真实化（v2.3+）
-- AssembleView / ModelMall WebView / i18n（v2.3+）
+**目标：** 建立 i18n 翻译基础 + 视觉打磨收尾
+
+| Task | 内容 | 验收 |
+|---|---|---|
+| UI-08 | zh_CN 翻译填充（80%+ 常用串）| lrelease 后中文显示 |
+| UI-09 | i18n 流程文档 | docs 有 lupdate/lrelease 工作流 |
+| UI-10 | 视觉打磨（图标/配色微调）| 待本机验收 |
+
+**Phase 3 出口：** i18n 基础建立 + 视觉无明显缺失
 
 ---
-*Last updated: 2026-06-18 — v2.2 (Page Completion & Cleanup) 启动；10 项差距*
+
+## 工作流程（每个 Phase）
+
+```
+1. 按 Phase 顺序执行 Task
+2. 每个 Task: 实现 → 构建 → 冒烟
+3. Phase 所有 Task 完成 → Phase 验收（构建 + 冒烟 + 用户确认）
+4. Phase 验收通过 → 进入下一 Phase
+```
+
+---
+
+## Out of Scope (v2.3)
+
+- Device/Cloud/Network/Calibration 真实化（v2.4+）
+- PartPlate/AssembleView（v2.4+）
+- ModelMall/Home WebView（v2.4+）
+- CreatePresetsDialog 264KB（v2.4+）
+
+---
+*Last updated: 2026-06-18 — v2.3 (UI Completion Polish) 启动；Phase 模式；10 Tasks 分 3 Phase*
