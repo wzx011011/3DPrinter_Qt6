@@ -1,56 +1,60 @@
-# Roadmap: Milestone v2.4 — Project & Preset Real IO
+# Roadmap: Milestone v2.5 — Real Device Integration
 
 ## Overview
 
-补全项目/Preset 的真实文件 IO——.3mf 读写 + PresetBundle 导入导出，让文件操作不再是占位。
+三大底层集成——真机打印闭环 + Calibration 真实化 + PartPlate 多板系统。
 
-**工作方式：** Phase 模式（沿用 v2.3）
+**工作方式：** Phase 模式（沿用）
 
 ---
 
 ## Phase 结构
 
-### Phase 1: ProjectService 真实 .3mf 导出
+### Phase 1: MQTT 真机通信基础
+- DEV-01 MQTT 客户端封装（paho-mqtt）
+- DEV-02 DeviceService 真实化（MQTT 订阅设备状态）
+- DEV-03 SSDP 局域网设备发现
 
-| Task | 内容 | 验收 |
-|---|---|---|
-| IO-01 | saveProjectAs(path) 调 libslic3r 3mf.cpp | 保存后文件存在 + 可重新 loadFile |
-| IO-02 | exportModel(path, format) STL/3MF/OBJ | 导出文件可被其他切片软件打开 |
-| IO-03 | ProjectPage 保存/另存接 saveProjectAs | 点击保存→选路径→文件生成 |
+### Phase 2: 打印发送链路
+- DEV-04 SelectMachineDialog（选目标打印机 + 发送）
+- DEV-05 PrintDialog 接通 SelectMachine
+- DEV-06 打印进度实时更新
 
-### Phase 2: PresetBundle 导入导出
+### Phase 3: Calibration 真实化
+- CAL-01 CalibrationService 接 libslic3r calib.cpp
+- CAL-02 9 种 CalibMode 实现
+- CAL-03 结果回写 preset
+- CAL-04 CalibrationPage 菜单激活
 
-| Task | 内容 | 验收 |
-|---|---|---|
-| IO-04 | exportBundle(path) 导出预设包 | 生成 .zip 含 print/filament/printer |
-| IO-05 | importBundle(path) 导入预设包 | 导入后预设列表更新 |
-| IO-06 | ExportPresetBundleDialog 接 exportBundle | 对话框确认→文件生成 |
+### Phase 4: PartPlate 多板系统
+- PLATE-01 PartPlate 数据结构
+- PLATE-02 多板编辑 UI
+- PLATE-03 独立板切片配置
+- PLATE-04 AssembleView（占位）
 
-### Phase 3: 集成 + 自回归
-
-| Task | 内容 | 验收 |
-|---|---|---|
-| IO-07 | 自回归扩展（saveProject + exportBundle） | 脚本跑通 0=PASS |
-| IO-08 | ProjectPage 导出按钮接 exportModel | 区分 G-code/3mf 导出 |
-| IO-09 | ConfigViewModel 接通真实 PresetBundle | preset 增删改链路完整 |
-
----
-
-## 上游参考
-
-- **.3mf 导出**：`libslic3r/3mf.cpp` (147KB) — `store_3mf()` / `export_3mf()`
-- **项目保存**：`Plater::save_project()` → `export_3mf()` (Plater.cpp:12165)
-- **PresetBundle**：`PresetBundle::export_config_bundle()` / `load_config_bundle()`
-- **导出模型**：`Plater::export_model()` — STL/3MF/OBJ/AMF
+### Phase 5: 集成 + 自回归
+- INT-01 设备自回归
+- INT-02 校准自回归
+- INT-03 多板自回归
 
 ---
 
-## Out of Scope (v2.4)
+## 依赖与外部库
 
-- Device/Cloud/Network 真实化（v2.5+）
-- Calibration 真实化（v2.5+）
-- PartPlate/AssembleView（v2.5+）
-- Gizmo UI 完善（v2.5+）
+| 模块 | 依赖 | 状态 |
+|---|---|---|
+| MQTT | paho-mqtt | ✅ deps 目录已有 |
+| Calibration | libslic3r calib.cpp (40KB) | ✅ 上游已有 |
+| PartPlate | PartPlate.cpp (258KB) | ✅ 上游已有 |
 
 ---
-*Last updated: 2026-06-18 — v2.4 (Project & Preset Real IO) 启动；Phase 模式；9 Tasks 分 3 Phase*
+
+## Out of Scope (v2.5)
+
+- ModelMall/Home WebView（v2.6+）
+- i18n 外语翻译（v2.6+）
+- CreatePresetsDialog（v2.6+）
+- 摄像头视频流（v2.6+）
+
+---
+*Last updated: 2026-06-19 — v2.5 (Real Device Integration) 启动；5 Phase, 16 Tasks*

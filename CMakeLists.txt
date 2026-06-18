@@ -138,6 +138,21 @@ if(OWZX_QML_GUI)
             src/core/debug/EarlyCrashDiag.cpp
         )
     endif()
+
+    # v2.5 DEV-01: MQTT 客户端（paho-mqtt C 异步接口）
+    target_sources(owzx_app_core PRIVATE
+        src/core/services/MqttClient.h
+        src/core/services/MqttClient.cpp
+    )
+    # 链接 paho-mqtt 静态库（DEPS_PREFIX/lib/paho-mqtt3a-static.lib）
+    find_library(PAHO_MQTT_LIB NAMES paho-mqtt3a-static paho-mqtt3as-static
+                 PATHS "${DEPS_PREFIX}/lib" NO_DEFAULT_PATH)
+    if(PAHO_MQTT_LIB)
+        target_link_libraries(owzx_app_core PUBLIC ${PAHO_MQTT_LIB})
+    else()
+        message(WARNING "paho-mqtt not found in DEPS_PREFIX, MQTT features disabled")
+    endif()
+
     target_include_directories(owzx_app_core PUBLIC
         src
         ${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer/src

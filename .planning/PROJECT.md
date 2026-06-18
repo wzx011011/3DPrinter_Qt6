@@ -14,19 +14,16 @@
 
 详见 `.planning-v1-crealityprint-archive/` 与 `MILESTONES.md`。
 
-## Current Milestone: v2.4 Project & Preset Real IO
+## Current Milestone: v2.5 Real Device Integration
 
-**Goal:** 补全项目/Preset 的真实文件 IO——saveProject/exportProject（.3mf 读写）+ PresetBundle 导入导出，让文件操作不再是占位。
+**Goal:** 三大底层集成——真机打印闭环（MQTT）+ Calibration 真实化（libslic3r Calib）+ PartPlate 多板系统。从"UI 可用"升级到"核心功能可用"。
 
 **Target features:**
-- ProjectService saveProjectAs（调用 libslic3r 3mf.cpp 导出 .3mf）
-- ProjectService exportProject（导出 G-code + 模型）
-- PresetService exportBundle（导出预设包 .zip）
-- PresetService importBundle（导入预设包）
-- ConfigViewModel/PresetService 接通真实 PresetBundle
-- 自回归测试扩展（项目保存 + 预设导出）
+- 真机打印链路（paho-mqtt + SSDP + SelectMachine + 打印发送）
+- Calibration 真实化（9 种 CalibMode + 结果回写 preset）
+- PartPlate 多板编辑（拖拽/独立配置/跨板移动）
 
-**工作方式：** Phase 模式（沿用 v2.3）
+**工作方式：** Phase 模式（沿用）
 
 **Target features:**
 
