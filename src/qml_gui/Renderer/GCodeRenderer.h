@@ -43,6 +43,12 @@ private:
     float b = 1.f;
     int layer = 0;
     int move = 0;
+    // SLICE-01: 着色模式切换所需原始数据（重新着色时不重新解析 G-code）
+    float feedrate = 0.f;       ///< 速度（Speed 模式）
+    float layerTime = 0.f;      ///< 层时间（Pressure 模式估算）
+    float origR = 1.f;          ///< 原始 Feature 颜色（切换回 Feature 用）
+    float origG = 1.f;
+    float origB = 1.f;
   };
 
   void initializeIfNeeded();
@@ -50,6 +56,8 @@ private:
   void parsePreviewData(const QByteArray &data);
   void processInputEvents();
   void initializeMarker();
+  /// SLICE-01: 根据 viewMode 重新计算所有 vertex 颜色
+  void applyViewMode(int mode);
 
   bool initialized_ = false;
   bool dirty_ = false;
@@ -68,6 +76,9 @@ private:
   int layerMin_ = 0;
   int layerMax_ = 0;
   int moveEnd_ = 0;
+  /// SLICE-01: 当前 G-code 着色模式（对齐上游 GCodeViewer EViewType）
+  int viewMode_ = 0;  // 默认 Feature
+  int prevViewMode_ = -1;  ///< 用于检测 synchronize 后是否需重新着色
   /// 对齐上游 GCodeViewer m_travel_visibility
   bool showTravelMoves_ = true;
   /// 对齐上游 GCodeViewer show_bed

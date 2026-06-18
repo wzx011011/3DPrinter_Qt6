@@ -52,15 +52,16 @@ Item {
 
             // 第一组: 导入/平板/朝向/排列
             // +Add (导入模型，对齐上游 "Add" — 弹出文件对话框由 PreparePage 处理)
+            // 始终可用（点击弹 FileDialog，选文件后才需 editorVm.loadFile）
             GlyphButton {
                 glyph: "＋"; tip: qsTr("导入模型 (Add)")
-                enabled: root.editorVm
+                enabled: true
                 onClicked: addModelRequested()
             }
             // +Plate (添加平板，对齐上游 "Add plate")
             GlyphButton {
                 glyph: "⊞"; tip: qsTr("添加平板 (Add Plate)")
-                enabled: root.editorVm && root.editorVm.plateCount < 10
+                enabled: root.editorVm ? root.editorVm.plateCount < 10 : false
                 onClicked: if (root.editorVm) root.editorVm.addPlate()
             }
             // Orient (自动朝向，对齐上游 "Orient")
@@ -274,10 +275,55 @@ Item {
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // 4. Slice 按钮（右侧显眼位置，对齐上游 OrcaSlicer 右侧竖排 Slice）
+    // 上游 MainFrame::slice_to_file / Plater::reslice — 触发切片
+    // ═══════════════════════════════════════════════════════════════════════
+    Rectangle {
+        id: sliceButton
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.rightMargin: 70  // 让出 ViewToolbar 的位置（ViewToolbar 在最右 14px）
+        width: 44
+        height: 80
+        radius: 12
+        color: sliceMa.containsMouse ? Theme.accentLight : Theme.accent
+        border.width: 1
+        border.color: Theme.accentDark
+
+        Column {
+            anchors.centerIn: parent
+            spacing: 4
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "⚙"
+                color: Theme.textOnAccent
+                font.pixelSize: 18
+                font.bold: true
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("切片")
+                color: Theme.textOnAccent
+                font.pixelSize: 11
+                font.bold: true
+            }
+        }
+
+        MouseArea {
+            id: sliceMa
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: sliceRequested()
+        }
+    }
+
     // ── 对外信号/回调（由 Plater 接线）──
     // +Add 按钮需要弹文件对话框（PreparePage 持有 FileDialog）
     signal addModelRequested()
     signal fitViewRequested()
+    signal sliceRequested()  // SLICE: 切片按钮（接 PreparePage → editorVm.requestSlice）
 
     // ── 内联按钮组件（MainToolbar 用的水平按钮）──
     component GlyphButton: Item {

@@ -1550,6 +1550,7 @@ Item {
                     viewport3d: viewport3d
                     onAddModelRequested: openFileDlg.open()
                     onFitViewRequested: root.applyFitHintIfReady()
+                    onSliceRequested: if (root.editorVm) root.editorVm.requestSlice()
                 }
                 GLViewport {
                     id: viewport3d

@@ -42,6 +42,8 @@ class GLViewport : public QQuickFramebufferObject
   Q_PROPERTY(bool showMarker READ showMarker WRITE setShowMarker)
   Q_PROPERTY(int gizmoMode READ gizmoMode WRITE setGizmoMode NOTIFY gizmoModeChanged)
   Q_PROPERTY(bool wireframeMode READ wireframeMode WRITE setWireframeMode NOTIFY wireframeModeChanged)
+  /// G-code 着色模式（SLICE-01，对齐上游 EViewType）
+  Q_PROPERTY(int gcodeViewMode READ gcodeViewMode WRITE setGcodeViewMode NOTIFY gcodeViewModeChanged)
   /// Cut plane parameters (对齐上游 GLGizmoCut3D cut plane visualization)
   Q_PROPERTY(int cutAxis READ cutAxis WRITE setCutAxis)
   Q_PROPERTY(float cutPosition READ cutPosition WRITE setCutPosition)
@@ -80,6 +82,19 @@ public:
   };
   Q_ENUM(CanvasType)
 
+  /// G-code 着色模式（对齐上游 GCodeViewer EViewType，SLICE-01）
+  /// 切换时 GCodeRenderer 根据此模式重新计算每段颜色
+  enum GCodeViewMode
+  {
+    GCodeFeature = 0,      ///< 按 Feature 类型（OuterWall/InnerWall/Infill 等）
+    GCodeExtruder = 1,     ///< 按挤出机编号
+    GCodeSpeed = 2,        ///< 按打印速度（feedrate，渐变色）
+    GCodeLayerHeight = 3,  ///< 按层高（渐变色）
+    GCodePressure = 4,     ///< 按 MSNP 压力（layer_time 估算，渐变色）
+    GCodePixel = 5         ///< 按像素（特殊渲染，v2.1 占位降级为 Feature）
+  };
+  Q_ENUM(GCodeViewMode)
+
   explicit GLViewport(QQuickItem *parent = nullptr);
 
   // QQuickFramebufferObject interface
@@ -94,6 +109,10 @@ public:
 
   bool wireframeMode() const { return m_wireframeMode; }
   void setWireframeMode(bool on);
+
+  // SLICE-01: G-code 着色模式（对齐上游 EViewType）
+  int gcodeViewMode() const { return m_gcodeViewMode; }
+  void setGcodeViewMode(int mode);
 
   int cutAxis() const { return m_cutAxis; }
   void setCutAxis(int axis) { m_cutAxis = axis; }
@@ -210,6 +229,7 @@ signals:
   void canvasTypeChanged();
   void gizmoModeChanged();
   void wireframeModeChanged();
+  void gcodeViewModeChanged();  // SLICE-01
   /// FBO 缩略图捕获完成，携带 base64 PNG 数据
   void thumbnailCaptured();
 
@@ -223,6 +243,7 @@ private:
   int m_canvasType = CanvasView3D;
   int m_gizmoMode = GizmoMove;
   bool m_wireframeMode = false;
+  int m_gcodeViewMode = GCodeFeature;  // SLICE-01: 默认 Feature 着色
   int m_cutAxis = 2;        // 0=X 1=Y 2=Z (default Z for most cuts)
   float m_cutPosition = 0.f;
   mutable QMutex m_eventMutex;

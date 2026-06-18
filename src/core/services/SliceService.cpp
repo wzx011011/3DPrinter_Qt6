@@ -1,4 +1,4 @@
-#include "SliceService.h"
+﻿#include "SliceService.h"
 
 #include "core/services/ProjectServiceMock.h"
 
@@ -448,7 +448,6 @@ void SliceService::startSlice(const QString &projectName)
         throw std::runtime_error("切片已取消");
       }
 
-      notify(92, QObject::tr("导出 G-code"));
       Slic3r::GCodeProcessorResult result;
       const QString appDir = QCoreApplication::applicationDirPath();
       const QString baseName = QFileInfo(sourcePath).completeBaseName();

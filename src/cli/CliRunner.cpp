@@ -1,4 +1,4 @@
-#include "CliRunner.h"
+﻿#include "CliRunner.h"
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceService.h"
 #include "core/services/PresetServiceMock.h"

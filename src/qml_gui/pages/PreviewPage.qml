@@ -216,6 +216,8 @@ Item {
                     showTravelMoves: root.previewVm.showTravelMoves
                     showBed: root.previewVm.showBed
                     showMarker: root.previewVm.showMarker
+                    // SLICE-01: 着色模式绑定（previewVm.viewModeIndex ↔ GLViewport.gcodeViewMode）
+                    gcodeViewMode: root.previewVm.viewModeIndex
                     markerX: root.previewVm.toolX
                     markerY: root.previewVm.toolY
                     markerZ: root.previewVm.toolZ

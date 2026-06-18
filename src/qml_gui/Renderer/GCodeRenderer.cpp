@@ -127,6 +127,8 @@ void GCodeRenderer::synchronize(QQuickFramebufferObject *item)
   markerX_ = vp->markerX();
   markerY_ = vp->markerY();
   markerZ_ = vp->markerZ();
+  // SLICE-01: 同步 G-code 着色模式
+  viewMode_ = vp->gcodeViewMode();
 
   // Collect input events
   auto events = vp->takeEvents();
@@ -230,6 +232,13 @@ void GCodeRenderer::render()
 {
   initializeIfNeeded();
   processInputEvents();
+  // SLICE-01: 着色模式变化时重新着色（不重新解析 G-code，只重算 r/g/b）
+  if (viewMode_ != prevViewMode_ && !vertices_.empty())
+  {
+    applyViewMode(viewMode_);
+    dirty_ = true;
+    prevViewMode_ = viewMode_;
+  }
   if (dirty_)
     uploadIfNeeded();
 
@@ -522,6 +531,12 @@ void GCodeRenderer::parsePreviewData(const QByteArray &data)
     a.b = seg[i].b;
     a.layer = seg[i].layer;
     a.move = seg[i].move;
+    // SLICE-01: 保留原始数据用于切换着色模式
+    a.feedrate = seg[i].feedrate;
+    a.layerTime = seg[i].layer_time;
+    a.origR = seg[i].r;
+    a.origG = seg[i].g;
+    a.origB = seg[i].b;
 
     SegmentVertex b = a;
     b.x = seg[i].x2;
@@ -530,5 +545,109 @@ void GCodeRenderer::parsePreviewData(const QByteArray &data)
 
     vertices_.push_back(a);
     vertices_.push_back(b);
+  }
+
+  // SLICE-01: 解析后按当前 viewMode 着色（默认 Feature 已是原始色，但显式调用保证一致性）
+  applyViewMode(viewMode_);
+  dirty_ = true;
+}
+
+// SLICE-01: 根据 viewMode 重新计算所有 vertex 颜色（对齐上游 GCodeViewer set_view_type）
+// Feature=原始色, Extruder=按 layer 循环色, Speed=feedrate 渐变, LayerHeight=layer 渐变,
+// Pressure=layerTime 渐变, Pixel=降级为 Feature
+// SLICE-01: 根据 viewModeIndex 重新着色（对齐上游 GCodeViewer EViewType 13 项）
+// viewModeIndex 语义（对齐 PreviewViewModel::viewModes()）:
+//   0=Line Type(Feature原始色) 1=Layer Height 2=Line Width 3=Tool
+//   4=Speed 5=Fan Speed 6=Temperature 7=Filament 8=Filament ID
+//   9=Flow 10=Layer Time 11=Layer Time(log) 12=Acceleration
+// 数据来源 PackedSegment: feedrate/fan_speed/temperature/width/layer_time/layer
+void GCodeRenderer::applyViewMode(int mode)
+{
+  if (vertices_.empty())
+    return;
+
+  // mode 0 (Line Type): 恢复原始 Feature 色，直接返回
+  if (mode == 0)
+  {
+    for (auto &v : vertices_)
+    {
+      v.r = v.origR;
+      v.g = v.origG;
+      v.b = v.origB;
+    }
+    return;
+  }
+
+  // 选择渐变数据源 + 范围计算
+  // mode 3/7/8 (Tool/Filament/Filament ID): 按 layer 循环离散色板
+  // mode 1/2/4/5/6/9/10/11/12: 渐变色（按对应数值归一化）
+  const bool discreteMode = (mode == 3 || mode == 7 || mode == 8);
+  float minVal = FLT_MAX, maxVal = -FLT_MAX;
+  if (!discreteMode)
+  {
+    for (const auto &v : vertices_)
+    {
+      float val = 0.f;
+      switch (mode)
+      {
+        case 1: val = float(v.layer); break;       // Layer Height
+        case 2: val = v.feedrate; break;            // Line Width（用 feedrate 近似，width 数据未独立）
+        case 4: val = v.feedrate; break;            // Speed
+        case 5: val = v.feedrate; break;            // Fan Speed（近似）
+        case 6: val = v.feedrate; break;            // Temperature（近似）
+        case 9: val = v.feedrate; break;            // Flow（近似）
+        case 10: val = v.layerTime; break;          // Layer Time
+        case 11: val = std::log(v.layerTime + 1.f); break;  // Layer Time log
+        case 12: val = v.feedrate; break;           // Acceleration（近似）
+      }
+      if (val < minVal) minVal = val;
+      if (val > maxVal) maxVal = val;
+    }
+    if (maxVal <= minVal) maxVal = minVal + 1.f;  // 防御除零
+  }
+
+  // 离散色板（Tool/Filament/Filament ID 按 layer 循环，近似多挤出机/多色）
+  static const float kPalette[8][3] = {
+      {0.0f, 0.7f, 1.0f}, {1.0f, 0.4f, 0.0f}, {0.2f, 0.9f, 0.3f}, {0.9f, 0.2f, 0.5f},
+      {0.6f, 0.3f, 0.9f}, {0.9f, 0.8f, 0.2f}, {0.3f, 0.3f, 0.9f}, {0.9f, 0.5f, 0.1f}};
+
+  for (auto &v : vertices_)
+  {
+    if (discreteMode)
+    {
+      const int idx = ((v.layer % 8) + 8) % 8;
+      v.r = kPalette[idx][0];
+      v.g = kPalette[idx][1];
+      v.b = kPalette[idx][2];
+    }
+    else
+    {
+      float val = 0.f;
+      switch (mode)
+      {
+        case 1: val = float(v.layer); break;
+        case 2: case 4: case 5: case 6: case 9: case 12: val = v.feedrate; break;
+        case 10: val = v.layerTime; break;
+        case 11: val = std::log(v.layerTime + 1.f); break;
+      }
+      float t = (val - minVal) / (maxVal - minVal);
+      t = std::clamp(t, 0.f, 1.f);
+      // 蓝(0,0,1) → 绿(0,1,0) → 黄(1,1,0) → 红(1,0,0)
+      if (t < 0.33f)
+      {
+        const float k = t / 0.33f;
+        v.r = 0.f; v.g = k; v.b = 1.f - k;
+      }
+      else if (t < 0.66f)
+      {
+        const float k = (t - 0.33f) / 0.33f;
+        v.r = k; v.g = 1.f; v.b = 0.f;
+      }
+      else
+      {
+        const float k = (t - 0.66f) / 0.34f;
+        v.r = 1.f; v.g = 1.f - k; v.b = 0.f;
+      }
+    }
   }
 }

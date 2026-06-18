@@ -53,6 +53,17 @@ void GLViewport::setWireframeMode(bool on)
   }
 }
 
+// SLICE-01: G-code 着色模式切换（对齐上游 GCodeViewer set_view_type）
+void GLViewport::setGcodeViewMode(int mode)
+{
+  if (m_gcodeViewMode != mode)
+  {
+    m_gcodeViewMode = mode;
+    emit gcodeViewModeChanged();
+    update();  // 触发 GCodeRenderer::synchronize + 重新着色
+  }
+}
+
 QQuickFramebufferObject::Renderer *GLViewport::createRenderer() const
 {
   if (m_canvasType == CanvasPreview)
