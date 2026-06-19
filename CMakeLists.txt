@@ -149,6 +149,21 @@ if(OWZX_QML_GUI)
         src/core/services/SsdpDiscovery.h
         src/core/services/SsdpDiscovery.cpp
     )
+    # v2.6 CAM-01: 摄像头视频流（FFmpeg RTSP 解码）
+    target_sources(owzx_app_core PRIVATE
+        src/core/services/CameraStream.h
+        src/core/services/CameraStream.cpp
+    )
+    # 链接 FFmpeg 库（avcodec/avformat/avutil/swscale）
+    foreach(ffmpeg_lib avcodec avformat avutil swscale)
+        find_library(FFMPEG_${ffmpeg_lib}_LIB NAMES ${ffmpeg_lib}
+                     PATHS "${DEPS_PREFIX}/lib" NO_DEFAULT_PATH)
+        if(FFMPEG_${ffmpeg_lib}_LIB)
+            target_link_libraries(owzx_app_core PUBLIC ${FFMPEG_${ffmpeg_lib}_LIB})
+        else()
+            message(WARNING "FFmpeg ${ffmpeg_lib} not found in DEPS_PREFIX")
+        endif()
+    endforeach()
     # 链接 paho-mqtt 静态库（DEPS_PREFIX/lib/paho-mqtt3a-static.lib）
     find_library(PAHO_MQTT_LIB NAMES paho-mqtt3a-static paho-mqtt3as-static
                  PATHS "${DEPS_PREFIX}/lib" NO_DEFAULT_PATH)
