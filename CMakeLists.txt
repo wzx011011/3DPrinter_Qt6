@@ -154,6 +154,11 @@ if(OWZX_QML_GUI)
         src/core/services/CameraStream.h
         src/core/services/CameraStream.cpp
     )
+    # v2.6 CAM-03: 摄像头图像提供者（QQuickImageProvider → QML Image）
+    target_sources(owzx_app_core PRIVATE
+        src/qml_gui/CameraImageProvider.h
+        src/qml_gui/CameraImageProvider.cpp
+    )
     # 链接 FFmpeg 库（avcodec/avformat/avutil/swscale）
     foreach(ffmpeg_lib avcodec avformat avutil swscale)
         find_library(FFMPEG_${ffmpeg_lib}_LIB NAMES ${ffmpeg_lib}
@@ -228,6 +233,17 @@ if(OWZX_QML_GUI)
                     "$<TARGET_FILE_DIR:OWzxSlicer>/")
         endforeach()
     endif()
+    # v2.6 CAM: Copy FFmpeg runtime DLLs (avcodec/avformat/avutil/swscale + deps)
+    # FFmpeg is linked via import libs (.lib) but DLLs are version-suffixed in bin/ffmpeg/.
+    # Without these the EXE fails to launch with STATUS_DLL_NOT_FOUND (0xC0000135).
+    file(GLOB _ffmpeg_dlls "${DEPS_PREFIX}/bin/ffmpeg/*.dll")
+    foreach(_ffmpeg_dll ${_ffmpeg_dlls})
+        add_custom_command(TARGET OWzxSlicer POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${_ffmpeg_dll}"
+                "$<TARGET_FILE_DIR:OWzxSlicer>/")
+    endforeach()
+    # Note: paho-mqtt is linked statically (paho-mqtt3a-static.lib), no runtime DLL needed.
 else()
     find_package(Qt6 REQUIRED COMPONENTS Widgets)
 

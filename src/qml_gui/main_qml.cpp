@@ -59,6 +59,7 @@ static void enableWindowShadowAndRoundedCorner(QWindow *window)
 #endif
 
 #include "BackendContext.h"
+#include "qml_gui/CameraImageProvider.h"
 
 static void appendStartupLog(const QString &line)
 {
@@ -132,6 +133,12 @@ int main(int argc, char *argv[])
                      QCoreApplication::exit(-1); }, Qt::QueuedConnection);
 
   engine->rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+
+  // v2.6 CAM-03：注册摄像头图像提供者（image://camera/live），供 MonitorPage 实时视频显示
+  // provider 归 engine 所有，engine 在进程退出时被故意 leak（见上方注释），故不手动释放。
+  engine->addImageProvider(QStringLiteral("camera"),
+                           new CameraImageProvider(backend.cameraService()));
+
   engine->load(QUrl(QStringLiteral("qrc:/qml/main.qml")));
 
   // Retranslate all QML qsTr() after language switch

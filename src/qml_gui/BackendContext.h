@@ -16,6 +16,7 @@ class DeviceServiceMock;
 class ProjectServiceMock;
 class NetworkServiceMock;
 class CalibrationServiceMock;
+class CameraServiceMock;
 class AuxiliaryService;
 
 class EditorViewModel;
@@ -232,6 +233,8 @@ public:
   QObject *modelMallViewModel() const;
   QObject *multiMachineViewModel() const;
   QObject *auxiliaryService() const;
+  /// v2.6 CAM-03：暴露 CameraServiceMock（供 CameraImageProvider 注册使用）
+  CameraServiceMock *cameraService() const { return cameraService_; }
   bool visualCompareMode() const;
 
   int currentPage() const;
@@ -391,6 +394,8 @@ private:
   DeviceServiceMock *deviceService_ = nullptr;
   ProjectServiceMock *projectService_ = nullptr;
   NetworkServiceMock *networkService_ = nullptr;
+  /// v2.6 CAM-03：摄像头服务（RTSP 解码代理）
+  CameraServiceMock *cameraService_ = nullptr;
 
   EditorViewModel *editorViewModel_ = nullptr;
   PreviewViewModel *previewViewModel_ = nullptr;

@@ -1695,17 +1695,58 @@ Item {
                                     anchors.margins: Theme.spacingLG
                                     spacing: Theme.spacingMD
 
-                                    // Video viewport (mock placeholder)
+                                    // Video viewport — live RTSP frames + mock placeholder
                                     Rectangle {
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true
                                         radius: Theme.radiusMD
                                         color: "#0a0e14"
                                         border.width: 1; border.color: "#1e2836"
+                                        clip: true
 
+                                        // ── v2.6 CAM-03: 实时 RTSP 视频帧 ──
+                                        // 仅当 streaming 且帧 token > 0（已收到至少一帧）时显示
+                                        // source 带 cache-buster（frameToken），每帧重新拉取
+                                        Image {
+                                            id: liveVideo
+                                            anchors.fill: parent
+                                            fillMode: Image.PreserveAspectCrop
+                                            smooth: true
+                                            visible: root.monitorVm.cameraStreamStatus === 3
+                                                     && root.monitorVm.cameraFrameToken > 0
+                                            // image://camera/live?<token> — token 变化触发重新加载
+                                            source: visible
+                                                    ? "image://camera/live?" + root.monitorVm.cameraFrameToken
+                                                    : ""
+                                            asynchronous: true
+                                            cache: false
+
+                                            // 加载状态指示器（对齐上游 MediaPlayCtrl 加载动画）
+                                            Rectangle {
+                                                anchors.centerIn: parent
+                                                width: 40; height: 40; radius: 20
+                                                color: "#80000000"
+                                                visible: liveVideo.status === Image.Loading
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "\u21BB"
+                                                    color: "white"
+                                                    font.pixelSize: 20
+                                                    RotationAnimation on rotation {
+                                                        from: 0; to: 360
+                                                        duration: 1000
+                                                        loops: Animation.Infinite
+                                                        running: liveVideo.status === Image.Loading
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // ── Mock placeholder（无设备 / 连接中 / 错误） ──
                                         Column {
                                             anchors.centerIn: parent
                                             spacing: 12
+                                            visible: liveVideo.visible === false
 
                                             // Stream status icon
                                             Text {
@@ -1713,7 +1754,7 @@ Item {
                                                     var s = root.monitorVm.cameraStreamStatus
                                                     if (s === 1) return "\u{1F50C}" // connecting
                                                     if (s === 2) return "\u2705"     // connected
-                                                    if (s === 3) return "\u{1F3A5}" // streaming
+                                                    if (s === 3) return "\u{1F3A5}" // streaming (但尚无帧)
                                                     if (s === 4) return "\u274C"     // error
                                                     return "\u{1F4F7}"              // disconnected
                                                 }
@@ -1728,7 +1769,7 @@ Item {
                                                     if (s === 0) return qsTr("摄像头未连接")
                                                     if (s === 1) return qsTr("正在连接...")
                                                     if (s === 2) return qsTr("已连接，等待视频流")
-                                                    if (s === 3) return qsTr("视频流传输中")
+                                                    if (s === 3) return qsTr("视频流传输中，等待首帧...")
                                                     return qsTr("连接失败")
                                                 }
                                                 color: Theme.textSecondary

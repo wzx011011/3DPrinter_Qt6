@@ -64,7 +64,7 @@ BackendContext::BackendContext(QObject *parent)
   projectService_ = new ProjectServiceMock(this);
   sliceService_ = new SliceService(projectService_, this);
   networkService_ = new NetworkServiceMock(this);
-  auto *cameraService = new CameraServiceMock(this);
+  cameraService_ = new CameraServiceMock(this);
   auto *cloudService = new CloudServiceMock(this);
 
   editorViewModel_ = new EditorViewModel(projectService_, sliceService_, this);
@@ -74,7 +74,7 @@ BackendContext::BackendContext(QObject *parent)
   auto *undoManager = new UndoRedoManager(this);
   editorViewModel_->setUndoRedoManager(undoManager);
   previewViewModel_ = new PreviewViewModel(sliceService_, this);
-  monitorViewModel_ = new MonitorViewModel(deviceService_, networkService_, cameraService, this);
+  monitorViewModel_ = new MonitorViewModel(deviceService_, networkService_, cameraService_, this);
   configViewModel_ = new ConfigViewModel(presetService_, projectService_, this);
 
   // Wire ConfigViewModel into EditorViewModel for preset injection at slice time

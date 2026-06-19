@@ -50,6 +50,9 @@ MonitorViewModel::MonitorViewModel(DeviceServiceMock *deviceService, NetworkServ
             this, &MonitorViewModel::cameraChanged);
     connect(cameraService_, &CameraServiceMock::cameraAvailableChanged,
             this, &MonitorViewModel::cameraChanged);
+    // v2.6 CAM-03：帧令牌变化 → cameraChanged（驱动 QML Image 重新拉取 image://camera/live）
+    connect(cameraService_, &CameraServiceMock::frameTokenChanged,
+            this, &MonitorViewModel::cameraChanged);
   }
 }
 
@@ -316,6 +319,11 @@ QString MonitorViewModel::cameraErrorMessage() const
 bool MonitorViewModel::cameraAvailable() const
 {
   return cameraService_ ? cameraService_->cameraAvailable() : false;
+}
+
+int MonitorViewModel::cameraFrameToken() const
+{
+  return cameraService_ ? cameraService_->frameToken() : 0;
 }
 
 void MonitorViewModel::startCameraStream()

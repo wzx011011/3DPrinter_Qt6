@@ -112,6 +112,8 @@ public:
   Q_PROPERTY(QString cameraUrl READ cameraUrl WRITE setCameraUrl NOTIFY cameraChanged)
   Q_PROPERTY(QString cameraErrorMessage READ cameraErrorMessage NOTIFY cameraChanged)
   Q_PROPERTY(bool cameraAvailable READ cameraAvailable NOTIFY cameraChanged)
+  /// v2.6 CAM-03：帧令牌（每帧 +1，QML Image cache-buster）
+  Q_PROPERTY(int cameraFrameToken READ cameraFrameToken NOTIFY cameraChanged)
   int cameraStreamStatus() const;
   int cameraRecordingStatus() const;
   int cameraTimelapseStatus() const;
@@ -121,6 +123,8 @@ public:
   void setCameraUrl(const QString &url);
   QString cameraErrorMessage() const;
   bool cameraAvailable() const;
+  /// v2.6 CAM-03：帧令牌（转发 CameraServiceMock::frameToken）
+  int cameraFrameToken() const;
   Q_INVOKABLE void startCameraStream();
   Q_INVOKABLE void stopCameraStream();
   Q_INVOKABLE void toggleCameraRecording();
