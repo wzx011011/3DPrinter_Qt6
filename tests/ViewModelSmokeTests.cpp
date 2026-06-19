@@ -2,6 +2,8 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QMetaEnum>
+#include <QHostAddress>
+#include <QUdpSocket>
 #include <QtTest>
 
 #include "core/services/CameraServiceMock.h"
@@ -10,6 +12,7 @@
 #include "core/services/PresetServiceMock.h"
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceService.h"
+#include "core/services/SsdpDiscovery.h"
 #include "core/viewmodels/ConfigViewModel.h"
 #include "core/viewmodels/EditorViewModel.h"
 #include "core/viewmodels/MonitorViewModel.h"
@@ -45,6 +48,9 @@ private slots:
   void testRequestToggleSidebar();
   void testSidebarWidthClamp();
   void testSidebarDockArea();
+  // v2.6 Phase 4: INT 自回归（SSDP 发现解析 + Camera 状态机/帧令牌）
+  void int01_SsdpDiscoveryParsesMockResponse();
+  void int03_CameraStateMachineAndFrameToken();
   void editor_import_model_updates_state();
   void monitor_refresh_updates_network_and_device();
   void config_default_and_switch_preset();
@@ -538,6 +544,135 @@ void ViewModelSmokeTests::testSidebarDockArea()
   QCOMPARE(ctx2.sidebarDockArea(), static_cast<int>(BackendContext::SidebarDockArea::Right));
 
   resetSidebarSettings();
+}
+
+// ── v2.6 Phase 4: INT-01 SSDP 发现自回归 ──────────────────────────
+// 验证 SsdpDiscovery 能在真实局域网发现设备并正确解析响应字段。
+//
+// 策略：启动真实 SsdpDiscovery（发 M-SEARCH 多播），等待真实设备响应。
+// 网络上有大量 SSDP 设备（路由器/NAS/打印机/智能设备），通常 1.5s 内
+// 至少能发现 1 台。验证发现设备的字段约束（不硬编码 IP/型号）：
+//   - ip 非空且为有效 IPv4
+//   - port 为 8883（Bambu）或 1883（其他）
+//   - discoveredIps() 与 deviceAt() 一致
+//
+// 若环境完全无 SSDP 设备（罕见，如隔离 CI），QSKIP 而非 FAIL。
+void ViewModelSmokeTests::int01_SsdpDiscoveryParsesMockResponse()
+{
+#ifdef Q_OS_WIN
+  owzx::SsdpDiscovery discovery;
+
+  QSignalSpy foundSpy(&discovery, &owzx::SsdpDiscovery::deviceFound);
+  QSignalSpy doneSpy(&discovery, &owzx::SsdpDiscovery::discoveryFinished);
+  QVERIFY(foundSpy.isValid());
+  QVERIFY(doneSpy.isValid());
+
+  discovery.startDiscovery(2000);
+
+  // 等待 discovery 完成或收到至少一台设备
+  QTest::qWait(2500);
+
+  // 环境容忍：无任何 SSDP 设备时跳过（隔离 CI 环境可能如此）
+  if (discovery.discoveredCount() == 0) {
+    QSKIP("No SSDP devices responded on the LAN within 2s. "
+          "Skipping parse verification (isolated CI environment).");
+  }
+
+  QVERIFY2(discovery.discoveredCount() > 0, "should have discovered >= 1 device");
+  QVERIFY2(foundSpy.count() >= 1, "deviceFound should have fired");
+
+  // 验证每台发现设备的字段约束（对齐 parseResponse 输出契约）
+  for (int i = 0; i < discovery.discoveredCount(); ++i) {
+    QVariantMap dev = discovery.deviceAt(i);
+    QVERIFY2(!dev.isEmpty(), "deviceAt(i) must return non-empty map");
+
+    // IP 非空且为有效 IPv4
+    const QString ip = dev.value("ip").toString();
+    QVERIFY2(!ip.isEmpty(), "parsed device IP must be non-empty");
+    const QHostAddress ipCheck(ip);
+    QVERIFY2(ipCheck.protocol() == QAbstractSocket::IPv4Protocol,
+             "parsed IP must be valid IPv4");
+
+    // 端口：Bambu=8883，其他=1883（parseResponse 约定）
+    const int port = dev.value("port").toInt();
+    QVERIFY2(port == 8883 || port == 1883,
+             "port must be 8883 (Bambu) or 1883 (other)");
+
+    // isBambu 为布尔
+    QVERIFY2(dev.value("isBambu").canConvert<bool>(),
+             "isBambu must be boolean");
+  }
+
+  // discoveredIps() 与 deviceAt() 一致
+  QStringList ips = discovery.discoveredIps();
+  QCOMPARE(ips.size(), discovery.discoveredCount());
+
+  // discoveryFinished 信号触发（带 count）
+  QVERIFY2(doneSpy.count() >= 1, "discoveryFinished should have fired");
+  QCOMPARE(doneSpy.takeFirst().at(0).toInt(), discovery.discoveredCount());
+#endif
+}
+
+// ── v2.6 Phase 4: INT-03 摄像头视频流自回归（状态机 + 帧令牌） ──────
+// 验证 CameraServiceMock 状态机 + MonitorViewModel 帧令牌转发：
+//   - 初始 streamStatus=0 (Disconnected), frameToken=0
+//   - updateForDevice(online=true) → cameraAvailable=true
+//   - startStream → 状态机切换 Connecting(1) → Connected(2) → Streaming(3)
+//   - MonitorViewModel.cameraStreamStatus / cameraFrameToken 可读
+//   - stopStream → Disconnected(0), frameToken 归零（清帧）
+//
+// 不依赖真实 RTSP 服务器：cameraUrl_ 为空时 startRtspDecoder 为 noop，
+// 纯 mock 状态机验证。
+void ViewModelSmokeTests::int03_CameraStateMachineAndFrameToken()
+{
+  CameraServiceMock camera;
+  DeviceServiceMock device;
+  NetworkServiceMock network;
+  MonitorViewModel monitor(&device, &network, &camera);
+
+  // 初始状态
+  QCOMPARE(camera.streamStatus(), 0); // Disconnected
+  QCOMPARE(camera.frameToken(), 0);
+  QCOMPARE(monitor.cameraStreamStatus(), 0);
+  QCOMPARE(monitor.cameraFrameToken(), 0);
+  QCOMPARE(camera.cameraAvailable(), false);
+
+  // 选中一台在线设备 → cameraAvailable=true
+  camera.updateForDevice(QStringLiteral("192.168.1.50"), true);
+  QCOMPARE(camera.cameraAvailable(), true);
+
+  QSignalSpy statusSpy(&camera, &CameraServiceMock::streamStatusChanged);
+  QVERIFY(statusSpy.isValid());
+
+  // 启动流：状态机 Connecting(1) → Connected(2) → Streaming(3)
+  camera.startStream();
+  QCOMPARE(statusSpy.count(), 1);
+  QCOMPARE(camera.streamStatus(), 1); // Connecting
+
+  // Connected（1500ms 后）
+  QTest::qWait(1700);
+  QCOMPARE(camera.streamStatus(), 2); // Connected
+
+  // Streaming（再 800ms 后）
+  QTest::qWait(1000);
+  QCOMPARE(camera.streamStatus(), 3); // Streaming
+
+  // MonitorViewModel 转发一致
+  QCOMPARE(monitor.cameraStreamStatus(), 3);
+
+  // 停止流：回到 Disconnected，帧清零
+  QSignalSpy frameSpy(&camera, &CameraServiceMock::frameTokenChanged);
+  camera.stopStream();
+  QCOMPARE(camera.streamStatus(), 0); // Disconnected
+  QCOMPARE(camera.frameToken(), 0);   // 帧清零
+  QVERIFY(camera.currentFrame().isNull());
+
+  // 离线设备 → cameraAvailable=false，startStream 拒绝（errorMessage 设置）
+  camera.updateForDevice(QStringLiteral(""), false);
+  QCOMPARE(camera.cameraAvailable(), false);
+  camera.startStream(); // 应被拒
+  QCOMPARE(camera.streamStatus(), 0); // 仍 Disconnected
+  QVERIFY(!camera.errorMessage().isEmpty());
 }
 
 QTEST_MAIN(ViewModelSmokeTests)

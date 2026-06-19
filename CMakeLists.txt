@@ -196,7 +196,7 @@ if(OWZX_QML_GUI)
     # Qt AUTOMOC needs compile definitions and include paths from Qt modules.
     # libslic3r PUBLIC linkage propagates generated-header dirs (libslic3r_version.h).
     target_link_libraries(owzx_app_core PUBLIC
-        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network
     )
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
         target_link_libraries(owzx_app_core PUBLIC libslic3r)
@@ -287,7 +287,7 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
 
     qt_add_executable(ViewModelSmokeTests tests/ViewModelSmokeTests.cpp)
     target_link_libraries(ViewModelSmokeTests PRIVATE owzx_app_core
-        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Test
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
     )
     add_test(NAME ViewModelSmokeTests COMMAND ViewModelSmokeTests)
     set_tests_properties(ViewModelSmokeTests PROPERTIES
