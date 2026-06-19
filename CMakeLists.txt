@@ -278,7 +278,7 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
 
     qt_add_executable(E2EWorkflowTests tests/E2EWorkflowTests.cpp)
     target_link_libraries(E2EWorkflowTests PRIVATE owzx_app_core
-        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Test
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
     )
     add_test(NAME E2EWorkflowTests COMMAND E2EWorkflowTests)
     set_tests_properties(E2EWorkflowTests PROPERTIES
