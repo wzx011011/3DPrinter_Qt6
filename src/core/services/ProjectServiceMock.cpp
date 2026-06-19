@@ -725,7 +725,12 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         receiver->lastError_.clear();
 
         // Auto-arrange after load (对齐上游 arrange_loaded_object_to_new_position)
-        receiver->arrangeObjects(5.0f, false, false);
+        // 传入默认 220x220 热床（与 CLI bed_shape 一致）：ProjectServiceMock 不持有
+        // 打印机预设，但导入后自动摆放需要有效热床；InfiniteBed 路径在当前 OrcaSlicer
+        // 源码下 libnest2d remove_unpackable_items 会让某些几何 bed_idx=-1，
+        // 传具体热床 + 容错 vfn（见 arrangeObjects）保证导入后模型在床内且不抛异常。
+        receiver->arrangeObjects(5.0f, false, false,
+                                 QStringLiteral("0,0,220,0,220,220,0,220"));
 
         emit receiver->projectChanged();
         emit receiver->plateDataLoaded(receiver->plateCount_);
@@ -2163,6 +2168,14 @@ bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool 
     params.parallel = false; // Run synchronously in Qt thread
     params.progressind = [](unsigned, std::string) {}; // Suppress console output
 
+    // 容错 vfn：对齐上游 ArrangeJob::process() (ArrangeJob.cpp:585) 的处理方式 ——
+    // arrange 失败的 item（bed_idx<0，即 BIN_ID_UNFIT）不抛异常，而是保留原坐标。
+    // 默认 vfn 是 throw_if_out_of_bed（ModelArrange.hpp:20），会在任意 item 不可
+    // 摆放时抛 RuntimeError，使整个 arrange 失败。这里改为 no-op，让 arrange_objects
+    // 返回 false（apply_arrange_polys 检测到 bed_idx!=0 即返回 false），调用方据此
+    // 决定后续行为（保留模型当前坐标），而非崩溃/挂起切片 worker。
+    Slic3r::VirtualBedFn tolerantVfn = [](Slic3r::arrangement::ArrangePolygon &) {};
+
     if (!printableArea.isEmpty())
     {
       // Parse "x1,y1;x2,y2;..." or "x1,y1,x2,y2,..." format
@@ -2179,15 +2192,15 @@ bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool 
       if (bed_shape.size() >= 3)
       {
         Slic3r::BoundingBox bed_bb(bed_shape);
-        Slic3r::arrange_objects(*model_, bed_bb, params);
-        return true;
+        // 传入容错 vfn：失败 item 不抛，arrange_objects 返回 false 表示有 item 未摆放。
+        // 即使部分 item 未摆放，已成功摆放的 item 坐标已被 apply_arrange_polys 写回模型实例。
+        return Slic3r::arrange_objects(*model_, bed_bb, params, tolerantVfn);
       }
     }
 
-    // Fallback to InfiniteBed when no valid bed shape
+    // Fallback to InfiniteBed when no valid bed shape（同样用容错 vfn）
     Slic3r::InfiniteBed bed;
-    Slic3r::arrange_objects(*model_, bed, params);
-    return true;
+    return Slic3r::arrange_objects(*model_, bed, params, tolerantVfn);
   }
   catch (const std::exception &e)
   {
@@ -4946,7 +4959,10 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           receiver->lastError_.clear();
 
           // Auto-arrange after project load (对齐上游 arrange_loaded_object_to_new_position)
-          receiver->arrangeObjects(5.0f, false, false);
+          // 同 loadFile：传入默认 220x220 热床 + 容错 vfn，避免 InfiniteBed 路径抛
+          // bed_idx==-1（详见 arrangeObjects 注释）。
+          receiver->arrangeObjects(5.0f, false, false,
+                                   QStringLiteral("0,0,220,0,220,220,0,220"));
 
           emit receiver->projectChanged();
           emit receiver->plateDataLoaded(receiver->plateCount_);

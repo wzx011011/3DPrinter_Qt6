@@ -150,11 +150,9 @@ void E2EWorkflowTests::test_slice_produces_gcode_file()
   QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
 
   applyMinimalPrinterConfig(slice, project);
-  // v2.6 已知问题：上游 arrange_objects 在 multi-plate 路径抛 bed_idx==-1
-  // （即便几何在热床内，生产 bug 待修）。arrange 失败时 SliceService 切片 worker 会
-  // 挂起，故在此快速 QSKIP 而非等待 120s QTRY 超时。
-  if (!ensureModelOnBed(project))
-    QSKIP("Model arrange failed (upstream bed_idx==-1 bug) — slice cannot proceed");
+  // 模型摆放（容错 vfn 已使 arrange 不抛异常；失败时模型保留原坐标，切片引擎
+  // 仍可处理 —— CLI 自回归已证明 Prusa.stl 在自然坐标下可切片成功）。
+  ensureModelOnBed(project);
   slice.startSlice(QStringLiteral("e2e_test"));
 
   // Wait up to 120 seconds for real slicing
@@ -203,10 +201,13 @@ void E2EWorkflowTests::test_slice_results_propagate_to_editor_vm()
   QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
 
   applyMinimalPrinterConfig(slice, project);
-  // v2.6 已知问题：见 test_slice_produces_gcode_file 注释
-  if (!ensureModelOnBed(project))
-    QSKIP("Model arrange failed (upstream bed_idx==-1 bug) — slice cannot proceed");
-  editor.requestSlice();
+  ensureModelOnBed(project);
+  // 直接调用 SliceService::startSlice（而非 editor.requestSlice()）：
+  // requestSlice() 的 canRequestSlice() 守卫检查 sourceFilePath/printable objects 等
+  // GUI 前置条件，在无完整 BackendContext 的单元测试中可能 early-return（不切片，
+  // 不发信号 → QTRY 超时挂起）。本测试验证的是切片结果→EditorViewModel 的传播，
+  // EditorViewModel 监听 SliceService 信号，与切片如何启动无关，故直接 startSlice。
+  slice.startSlice(QStringLiteral("editor_vm_test"));
 
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
 
@@ -239,9 +240,7 @@ void E2EWorkflowTests::test_export_gcode_to_path()
   QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
 
   applyMinimalPrinterConfig(slice, project);
-  // v2.6 已知问题：见 test_slice_produces_gcode_file 注释
-  if (!ensureModelOnBed(project))
-    QSKIP("Model arrange failed (upstream bed_idx==-1 bug) — slice cannot proceed");
+  ensureModelOnBed(project);
   slice.startSlice(QStringLiteral("export_test"));
 
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
@@ -287,9 +286,7 @@ void E2EWorkflowTests::test_preview_receives_gcode_data()
   QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
 
   applyMinimalPrinterConfig(slice, project);
-  // v2.6 已知问题：见 test_slice_produces_gcode_file 注释
-  if (!ensureModelOnBed(project))
-    QSKIP("Model arrange failed (upstream bed_idx==-1 bug) — slice cannot proceed");
+  ensureModelOnBed(project);
   slice.startSlice(QStringLiteral("preview_test"));
 
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
@@ -328,10 +325,10 @@ void E2EWorkflowTests::test_model_change_invalidates_slice_result()
   QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
 
   applyMinimalPrinterConfig(slice, project);
-  // v2.6 已知问题：见 test_slice_produces_gcode_file 注释
-  if (!ensureModelOnBed(project))
-    QSKIP("Model arrange failed (upstream bed_idx==-1 bug) — slice cannot proceed");
-  editor.requestSlice();
+  ensureModelOnBed(project);
+  // 直接 startSlice（见 test_slice_results_propagate_to_editor_vm 注释：
+  // editor.requestSlice() 的 canRequestSlice 守卫在测试环境 early-return → 挂起）
+  slice.startSlice(QStringLiteral("invalidate_test"));
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
 
   if (failedSpy.count() > 0)
