@@ -5,11 +5,14 @@ import QtQuick.Layouts
 Item {
     id: root
     required property var monitorVm  // DeviceListPage reuses MonitorViewModel
+    property var networkVm: null  // v2.6 SSDP-03: NetworkService for device discovery
     property var _devices: []
 
     Component.onCompleted: {
-        // PAGE-02 修复: 从 monitorVm 读设备名（之前强制写空导致永远显示空状态）
+        // PAGE-02: 从 monitorVm 读设备 + v2.6 SSDP-03: 自动发现
         refreshDevices()
+        // v2.6 SSDP-03: 启动时自动发现局域网设备
+        if (root.networkVm) root.networkVm.discoverDevices()
     }
 
     // PAGE-02: 从 MonitorViewModel 读设备列表（用 deviceAt + filteredDeviceCount）
@@ -45,7 +48,12 @@ Item {
                 Rectangle { width: 26; height: 26; radius: 13; color: refreshHov.containsMouse ? "#2e3444" : "transparent"
                     Text { anchors.centerIn: parent; text: "↻"; color: "#a0abbe"; font.pixelSize: 16 }
                     HoverHandler { id: refreshHov }
-                    TapHandler { onTapped: { root.monitorVm.refreshDeviceList(); root.refreshDevices() } }
+                    TapHandler { onTapped: {
+                        root.monitorVm.refreshDeviceList()
+                        root.refreshDevices()
+                        // v2.6 SSDP-03: 也启动 SSDP 发现
+                        if (root.networkVm) root.networkVm.discoverDevices()
+                    } }
                 }
                 Rectangle {
                     height: 28; width: 80; radius: 4; color: "#1c6e42"
