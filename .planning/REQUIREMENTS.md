@@ -361,3 +361,48 @@ v2.4 的 9 项全部完成。详见 commit f80127f。
 - i18n 外语翻译（v2.6+，zh_CN 已 88.5%）
 - CreatePresetsDialog 264KB（v2.6+）
 - 摄像头视频流 FFmpeg（v2.6+）
+
+---
+
+## v2.5 完成状态（2026-06-19）
+
+v2.5 Phase 1+2（MQTT 通信 + 打印发送链路）完成，Phase 3 Calibration 骨架，Phase 4 PartPlate 评估延后。详见 commit e804c1e/7337788/dda2581。
+
+---
+
+## v2.6 Requirements — v2.5 Remaining Completion（2026-06-19 启动）
+
+**Goal:** 完成 v2.5 的三块遗留。
+
+### Phase 1: SSDP/mDNS 设备发现
+
+- [ ] **SSDP-01 [P0]**: QUdpSocket SSDP M-SEARCH 发送 + 响应解析（发现局域网 Bambu/Creality 打印机）
+- [ ] **SSDP-02 [P0]**: NetworkService 真实化（替代 NetworkServiceMock 的 probe 假数据）
+- [ ] **SSDP-03 [P1]**: DeviceListPage 自动发现设备（替代手动 IP 输入）
+
+### Phase 2: Calibration 完整实现
+
+- [ ] **CAL-01 [P0]**: CalibPressureAdvanceLine 实例化（GCode generator context 构建）
+- [ ] **CAL-02 [P0]**: PA 校准 G-code 生成 + 切片流程接入
+- [ ] **CAL-03 [P1]**: FlowRate/TempTower 校准实现
+- [ ] **CAL-04 [P1]**: 校准结果回写 preset + CalibrationPage 菜单激活
+
+### Phase 3: 摄像头视频流
+
+- [ ] **CAM-01 [P0]**: FFmpeg 集成（CMake 链接 + 头文件）
+- [ ] **CAM-02 [P0]**: CameraService 真实化（RTSP/RTMP 流接收 + FFmpeg 解码 → QVideoFrame）
+- [ ] **CAM-03 [P1]**: MonitorPage 视频显示（QML VideoOutput 接解码帧）
+- [ ] **CAM-04 [P2]**: 延时摄影（定时截图 + 合成视频）
+
+### Phase 4: 集成 + 自回归
+
+- [ ] **INT-01 [P0]**: SSDP 发现自回归（模拟响应验证解析）
+- [ ] **INT-02 [P0]**: Calibration 自回归（PA 校准 G-code 生成验证）
+- [ ] **INT-03 [P1]**: 视频流自回归（RTSP 连接模拟）
+
+### Out of Scope (v2.6)
+
+- PartPlate 多板（v2.7+，258KB 上游）
+- ModelMall/Home WebView（v2.7+）
+- i18n 外语翻译（v2.7+）
+- CreatePresetsDialog（v2.7+）

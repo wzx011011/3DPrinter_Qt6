@@ -14,14 +14,14 @@
 
 详见 `.planning-v1-crealityprint-archive/` 与 `MILESTONES.md`。
 
-## Current Milestone: v2.5 Real Device Integration
+## Current Milestone: v2.6 v2.5 Remaining Completion
 
-**Goal:** 三大底层集成——真机打印闭环（MQTT）+ Calibration 真实化（libslic3r Calib）+ PartPlate 多板系统。从"UI 可用"升级到"核心功能可用"。
+**Goal:** 完成 v2.5 的三块遗留——SSDP 设备发现 + Calibration 完整实现 + 摄像头视频流。
 
 **Target features:**
-- 真机打印链路（paho-mqtt + SSDP + SelectMachine + 打印发送）
-- Calibration 真实化（9 种 CalibMode + 结果回写 preset）
-- PartPlate 多板编辑（拖拽/独立配置/跨板移动）
+- SSDP/mDNS 局域网设备自动发现（替代手动输入 IP）
+- Calibration 完整实现（CalibPressureAdvanceLine + GCode 生成 + 结果回写）
+- 摄像头视频流（FFmpeg 解码 + 实时显示 + 延时摄影）
 
 **工作方式：** Phase 模式（沿用）
 

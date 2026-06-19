@@ -144,6 +144,11 @@ if(OWZX_QML_GUI)
         src/core/services/MqttClient.h
         src/core/services/MqttClient.cpp
     )
+    # v2.6 SSDP-01: SSDP 设备发现
+    target_sources(owzx_app_core PRIVATE
+        src/core/services/SsdpDiscovery.h
+        src/core/services/SsdpDiscovery.cpp
+    )
     # 链接 paho-mqtt 静态库（DEPS_PREFIX/lib/paho-mqtt3a-static.lib）
     find_library(PAHO_MQTT_LIB NAMES paho-mqtt3a-static paho-mqtt3as-static
                  PATHS "${DEPS_PREFIX}/lib" NO_DEFAULT_PATH)
