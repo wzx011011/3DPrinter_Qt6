@@ -345,6 +345,16 @@ void SliceService::startSlice(const QString &projectName)
 
       notify(10, QObject::tr("准备切片参数"));
       Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
+      // v2.7 P0: bed_shape injection (mirror CLI CliRunner.cpp:397-399)
+      if (receiver && !receiver->bedShape_.isEmpty())
+      {
+        auto *bedPts = new Slic3r::ConfigOptionPoints();
+        for (const QPointF &p : receiver->bedShape_)
+          bedPts->values.emplace_back(
+              static_cast<coord_t>(p.x() * 1000.0),
+              static_cast<coord_t>(p.y() * 1000.0));
+        config.set_key_value("bed_shape", bedPts);
+      }
 
       // Inject user-selected preset values into config (对齐上游 PresetBundle::full_fff_config)
       // This overwrites factory defaults with the 3-tier merged hierarchy (printer→filament→print)
@@ -800,3 +810,10 @@ void SliceService::removePlateResult(int plateIndex)
 {
   plateResults_.remove(plateIndex);
 }
+
+
+void SliceService::setBedShape(const QVector<QPointF> &pointsMm)
+{
+  bedShape_ = pointsMm;
+}
+

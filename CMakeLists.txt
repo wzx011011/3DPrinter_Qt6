@@ -244,6 +244,14 @@ if(OWZX_QML_GUI)
                 "$<TARGET_FILE_DIR:OWzxSlicer>/")
     endforeach()
     # Note: paho-mqtt is linked statically (paho-mqtt3a-static.lib), no runtime DLL needed.
+    # v2.7 P0: Copy libslic3r runtime resources (nozzle_info.json etc.) — the slice
+    # engine reads resources/info/nozzle_info.json at runtime; missing it causes
+    # get_hrc_by_nozzle_type parse errors and slice failures.
+    add_custom_command(TARGET OWzxSlicer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:OWzxSlicer>/resources/info"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer/resources/info"
+            "$<TARGET_FILE_DIR:OWzxSlicer>/resources/info")
 else()
     find_package(Qt6 REQUIRED COMPONENTS Widgets)
 

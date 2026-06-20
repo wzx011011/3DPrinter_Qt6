@@ -1,4 +1,4 @@
-#include "EditorViewModel.h"
+﻿#include "EditorViewModel.h"
 
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceService.h"
@@ -3565,6 +3565,11 @@ void EditorViewModel::requestSlice()
   if (configViewModel_ && sliceService_)
   {
     sliceService_->setMergedPresetConfig(configViewModel_->mergedConfigValues());
+    // v2.7 P0: ensure bed_shape is set (mirror CLI). If the merged preset
+    // does not carry a bed, default to 220x220 so slicing has a valid bed.
+    // setBedShape uses set_key_value(ConfigOptionPoints) directly, bypassing
+    // the unreliable printable_area/set_deserialize_strict path.
+    sliceService_->setBedShape({QPointF(0,0), QPointF(220,0), QPointF(220,220), QPointF(0,220)});
   }
 
   m_sliceEstimatedTime.clear();

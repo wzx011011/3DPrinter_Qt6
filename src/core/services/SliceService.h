@@ -5,6 +5,8 @@
 #include <QMap>
 #include <QHash>
 #include <QVariant>
+#include <QVector>
+#include <QPointF>
 #include <memory>
 #include <atomic>
 
@@ -83,6 +85,12 @@ public:
   /// 在 startSlice() 前调用，将 user-selected preset values 传入 slice engine
   void setMergedPresetConfig(const QHash<QString, QVariant> &config);
 
+  /// v2.7 P0：设置热床形状（对齐 CLI 成功路径 CliRunner.cpp:397-399）。
+  /// 用 set_key_value + ConfigOptionPoints 直接创建 option，绕过 injectPresetConfig
+  /// 的 set_deserialize_strict 路径（后者对 bed_shape/printable_area 别名不可靠）。
+  /// 坐标单位 mm，内部 ×1000 转 μm（coord_t）。
+  void setBedShape(const QVector<QPointF> &pointsMm);
+
   void clearPlateResults();
   void removePlateResult(int plateIndex);
 
@@ -115,6 +123,9 @@ private:
 
   QMap<int, PlateSliceResult> plateResults_;
   QHash<QString, QVariant> mergedPresetConfig_; ///< 从 ConfigViewModel 注入的合并预设值
+  /// v2.7 P0：热床形状（mm，由 setBedShape 设置）。空表示用 full_print_config 默认。
+  /// startSlice 时通过 set_key_value("bed_shape", ConfigOptionPoints) 注入（镜像 CLI）。
+  QVector<QPointF> bedShape_;
 
   void clearStoredResult();
 };

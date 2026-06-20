@@ -1,4 +1,4 @@
-#include <QSignalSpy>
+﻿#include <QSignalSpy>
 #include <QDir>
 #include <QFileInfo>
 #include <QTemporaryFile>
@@ -72,12 +72,16 @@ bool E2EWorkflowTests::hasLibslic3r() const
 
 void E2EWorkflowTests::applyMinimalPrinterConfig(SliceService &slice, ProjectServiceMock &project) const
 {
+  Q_UNUSED(project)
+  // v2.7 P0：用 setBedShape 直接注入 bed_shape（镜像 CLI CliRunner.cpp:397-399 成功路径）。
+  // 之前用 printable_area 经 injectPresetConfig 的 set_deserialize_strict 路径不可靠
+  // （printable_area 别名不在 full_print_config 注册表 → option() 返回 null → bed 未设置
+  // → slice 失败）。setBedShape 内部用 set_key_value + ConfigOptionPoints 直接创建 option。
+  // 220x220 矩形热床（与 CLI bed_shape 一致）。
+  slice.setBedShape({QPointF(0, 0), QPointF(220, 0), QPointF(220, 220), QPointF(0, 220)});
+
+  // printable_height + nozzle_diameter 仍走 preset 注入（这两个 key 在注册表里，正常生效）
   QHash<QString, QVariant> cfg;
-  // 热床：220x220 矩形（对齐 CliRunner.cpp:397-399 bed_shape）
-  // printable_area 为 ConfigOptionPoints，Slic3r 序列化格式 "XxY,XxY,..."
-  cfg.insert(QStringLiteral("printable_area"),
-             QVariantList{QStringLiteral("0x0"), QStringLiteral("220x0"),
-                          QStringLiteral("220x220"), QStringLiteral("0x220")});
   cfg.insert(QStringLiteral("printable_height"), 250.0);
   cfg.insert(QStringLiteral("nozzle_diameter"), QVariantList{0.4});
   slice.setMergedPresetConfig(cfg);
@@ -145,6 +149,15 @@ void E2EWorkflowTests::test_slice_produces_gcode_file()
   // Load model
   QVERIFY(project.loadFile(kStlPath));
 
+  // v2.7 P0: wait for async loadFile to finish (queued model/plate assignment)
+  QSignalSpy _loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(_loadSpy.isValid());
+  QTRY_VERIFY_WITH_TIMEOUT(_loadSpy.count() > 0, 10000);
+
+  // v2.7 P0: loadFile 异步（Qt::QueuedConnection），模型/plate 状态在 queued
+  // invoke 里赋值。必须等 loadFinished 信号 + pump event loop，否则 startSlice
+  // 时模型未就绪 → "未找到可切片模型"。
+
   // Start slice and wait for completion
   QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
   QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
@@ -160,7 +173,9 @@ void E2EWorkflowTests::test_slice_produces_gcode_file()
 
   if (failedSpy.count() > 0)
   {
-    QSKIP("Slice failed — may be expected without full config setup");
+    // v2.7 P0 调试：打印实际切片失败原因以便定位
+    const QString failReason = failedSpy.first().at(0).toString();
+    QSKIP(QString("Slice failed: %1").arg(failReason).toUtf8().constData());
   }
 
   // Verify output path
@@ -195,6 +210,11 @@ void E2EWorkflowTests::test_slice_results_propagate_to_editor_vm()
 
   // Load model
   QVERIFY(project.loadFile(kStlPath));
+
+  // v2.7 P0: wait for async loadFile to finish (queued model/plate assignment)
+  QSignalSpy _loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(_loadSpy.isValid());
+  QTRY_VERIFY_WITH_TIMEOUT(_loadSpy.count() > 0, 10000);
 
   // Start slice
   QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
@@ -235,6 +255,11 @@ void E2EWorkflowTests::test_export_gcode_to_path()
   // Load model
   QVERIFY(project.loadFile(kStlPath));
 
+  // v2.7 P0: wait for async loadFile to finish (queued model/plate assignment)
+  QSignalSpy _loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(_loadSpy.isValid());
+  QTRY_VERIFY_WITH_TIMEOUT(_loadSpy.count() > 0, 10000);
+
   // Slice first
   QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
   QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
@@ -253,11 +278,9 @@ void E2EWorkflowTests::test_export_gcode_to_path()
   QVERIFY2(QFileInfo::exists(srcPath),
            qPrintable(QStringLiteral("source G-code file should exist: %1").arg(srcPath)));
 
-  // Export to a temporary file
-  QTemporaryFile tempFile(QStringLiteral("XXXXXX_export_test.gcode"));
-  QVERIFY(tempFile.open());
-  const QString exportPath = tempFile.fileName();
-  tempFile.close();
+  // Export to a temporary file (use system temp dir; QTemporaryFile in CWD may lock on Windows)
+  const QString exportPath = QDir::tempPath() + QStringLiteral("/owzx_export_test_XXXXXX.gcode");
+  QFile::remove(exportPath);
 
   const bool exported = slice.exportGCodeToPath(exportPath);
   QVERIFY2(exported, "exportGCodeToPath should succeed");
@@ -280,6 +303,11 @@ void E2EWorkflowTests::test_preview_receives_gcode_data()
 
   // Load model
   QVERIFY(project.loadFile(kStlPath));
+
+  // v2.7 P0: wait for async loadFile to finish (queued model/plate assignment)
+  QSignalSpy _loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(_loadSpy.isValid());
+  QTRY_VERIFY_WITH_TIMEOUT(_loadSpy.count() > 0, 10000);
 
   // Start slice
   QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
@@ -319,6 +347,11 @@ void E2EWorkflowTests::test_model_change_invalidates_slice_result()
 
   // Load model
   QVERIFY(project.loadFile(kStlPath));
+
+  // v2.7 P0: wait for async loadFile to finish (queued model/plate assignment)
+  QSignalSpy _loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(_loadSpy.isValid());
+  QTRY_VERIFY_WITH_TIMEOUT(_loadSpy.count() > 0, 10000);
 
   // Slice
   QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
