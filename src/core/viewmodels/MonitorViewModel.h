@@ -30,6 +30,17 @@ class MonitorViewModel final : public QObject
   Q_PROPERTY(int selectedDeviceProgress READ selectedDeviceProgress NOTIFY selectedDeviceChanged)
   Q_PROPERTY(QString selectedDeviceTaskName READ selectedDeviceTaskName NOTIFY selectedDeviceChanged)
   Q_PROPERTY(QString selectedDeviceIp READ selectedDeviceIp NOTIFY selectedDeviceChanged)
+  /// v2.7 P2-A: MQTT 连接参数（连接对话框读取/设置）
+  Q_PROPERTY(QString selectedDeviceAccessCode READ selectedDeviceAccessCode NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(int selectedDeviceMqttPort READ selectedDeviceMqttPort NOTIFY selectedDeviceChanged)
+  /// v2.7 P2-A: 实时遥测（由 MQTT 解析填充，转发 DeviceServiceMock）
+  Q_PROPERTY(int selectedDeviceBedTemperature READ selectedDeviceBedTemperature NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(int selectedDeviceNozzleTargetTemp READ selectedDeviceNozzleTargetTemp NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(int selectedDeviceBedTargetTemp READ selectedDeviceBedTargetTemp NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(int selectedDeviceCurrentLayerNum READ selectedDeviceCurrentLayerNum NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(int selectedDeviceTotalLayerNum READ selectedDeviceTotalLayerNum NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(int selectedDeviceRemainingTime READ selectedDeviceRemainingTime NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(bool mqttConnected READ mqttConnected NOTIFY selectedDeviceChanged)
   Q_PROPERTY(int selectedDeviceTemperature READ selectedDeviceTemperature NOTIFY selectedDeviceChanged)
   Q_PROPERTY(int selectedDeviceSignalStrength READ selectedDeviceSignalStrength NOTIFY selectedDeviceChanged)
   Q_PROPERTY(bool selectedDeviceChamberLightOn READ selectedDeviceChamberLightOn NOTIFY selectedDeviceChanged)
@@ -60,6 +71,18 @@ public:
   int selectedDeviceProgress() const;
   QString selectedDeviceTaskName() const;
   QString selectedDeviceIp() const;
+  /// v2.7 P2-A: MQTT 连接参数转发
+  QString selectedDeviceAccessCode() const;
+  int selectedDeviceMqttPort() const;
+  Q_INVOKABLE void setSelectedDeviceAccessCode(const QString &code, int port = 8883);
+  /// v2.7 P2-A: 实时遥测转发
+  int selectedDeviceBedTemperature() const;
+  int selectedDeviceNozzleTargetTemp() const;
+  int selectedDeviceBedTargetTemp() const;
+  int selectedDeviceCurrentLayerNum() const;
+  int selectedDeviceTotalLayerNum() const;
+  int selectedDeviceRemainingTime() const;
+  bool mqttConnected() const;
   int selectedDeviceTemperature() const;
   int selectedDeviceSignalStrength() const;
   bool selectedDeviceChamberLightOn() const;

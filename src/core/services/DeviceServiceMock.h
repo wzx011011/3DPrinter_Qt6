@@ -40,6 +40,16 @@ struct MockDevice
   // Device camera recording (对齐上游 MachineObject camera_recording / timelapse)
   bool    cameraRecording   = false;
   bool    cameraTimelapse   = false;
+  // v2.7 P2-A: MQTT 连接参数（Bambu LAN 协议）。access code 在加设备或连接时录入。
+  QString accessCode;        ///< Bambu LAN access code（MQTT/FTP 密码，username=bblp）
+  int     mqttPort    = 8883; ///< Bambu MQTT 端口（默认 8883）
+  // v2.7 P2-A: 实时遥测（由 MQTT messageReceived 解析填充）
+  int     bedTemperature      = 0;  ///< bed_temper（当前热床温度）
+  int     nozzleTargetTemp    = 0;  ///< nozzle_target_temper（喷嘴目标温度）
+  int     bedTargetTemp       = 0;  ///< bed_target_temper（热床目标温度）
+  int     totalLayerNum       = 0;  ///< total_layer_num（总层数）
+  int     currentLayerNum     = 0;  ///< layer_num（当前层）
+  int     remainingTime       = 0;  ///< mc_remaining_time（剩余分钟）
 };
 
 /// HMS notification item (对齐上游 DeviceManager HMSItem / HMSPanel HMSNotifyItem)
@@ -86,6 +96,17 @@ class DeviceServiceMock final : public QObject
   Q_PROPERTY(QString selectedDeviceIp READ selectedDeviceIp NOTIFY selectedDeviceChanged)
   /// Convenience: temperature of selected device
   Q_PROPERTY(int selectedDeviceTemperature READ selectedDeviceTemperature NOTIFY selectedDeviceChanged)
+  /// v2.7 P2-A: 实时遥测（由 MQTT 解析填充）
+  Q_PROPERTY(int selectedDeviceBedTemperature READ selectedDeviceBedTemperature NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(int selectedDeviceNozzleTargetTemp READ selectedDeviceNozzleTargetTemp NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(int selectedDeviceBedTargetTemp READ selectedDeviceBedTargetTemp NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(int selectedDeviceTotalLayerNum READ selectedDeviceTotalLayerNum NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(int selectedDeviceCurrentLayerNum READ selectedDeviceCurrentLayerNum NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(int selectedDeviceRemainingTime READ selectedDeviceRemainingTime NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(bool mqttConnected READ isMqttConnected NOTIFY selectedDeviceChanged)
+  /// v2.7 P2-A: MQTT 连接参数（连接打印机时读取）
+  Q_PROPERTY(QString selectedDeviceAccessCode READ selectedDeviceAccessCode NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(int selectedDeviceMqttPort READ selectedDeviceMqttPort NOTIFY selectedDeviceChanged)
   /// Convenience: signal strength of selected device (0-3)
   Q_PROPERTY(int selectedDeviceSignalStrength READ selectedDeviceSignalStrength NOTIFY selectedDeviceChanged)
   /// Convenience: chamber light on/off of selected device
@@ -118,6 +139,18 @@ public:
   QString selectedDeviceTaskName() const;
   QString selectedDeviceIp() const;
   int selectedDeviceTemperature() const;
+  /// v2.7 P2-A: 新遥测字段 getter
+  int selectedDeviceBedTemperature() const;
+  int selectedDeviceNozzleTargetTemp() const;
+  int selectedDeviceBedTargetTemp() const;
+  int selectedDeviceTotalLayerNum() const;
+  int selectedDeviceCurrentLayerNum() const;
+  int selectedDeviceRemainingTime() const;
+  /// v2.7 P2-A: MQTT 连接参数 getter
+  QString selectedDeviceAccessCode() const;
+  int selectedDeviceMqttPort() const;
+  /// v2.7 P2-A: 设置选中设备的 access code + 端口（连接对话框录入后调用）
+  Q_INVOKABLE void setSelectedDeviceAccessCode(const QString &accessCode, int port = 8883);
   int selectedDeviceSignalStrength() const;
   bool selectedDeviceChamberLightOn() const;
   bool selectedDeviceWorkLightOn() const;
@@ -214,6 +247,9 @@ private:
   // v2.5 DEV-02: MqttClient 实例（真实 MQTT 通信）
   owzx::MqttClient *mqttClient_ = nullptr;
   int mqttConnectedDeviceIndex_ = -1;  ///< MQTT 连接的设备 filteredIndex
+  // v2.7 P2-A: MQTT 连接参数缓存（连接重试 + topic 构造用）
+  QString pendingMqttHost_;
+  int pendingMqttPort_ = 8883;
 
   /// HMS 通知列表（对齐上游 DeviceManager hms_list）
   /// key = device realIndex, value = list of HMS items

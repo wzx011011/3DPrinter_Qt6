@@ -1,4 +1,4 @@
-#include "MonitorViewModel.h"
+﻿#include "MonitorViewModel.h"
 
 #include <QTimer>
 
@@ -111,6 +111,47 @@ QString MonitorViewModel::selectedDeviceTaskName() const
   return deviceService_ ? deviceService_->selectedDeviceTaskName() : QString();
 }
 
+// v2.7 P2-A: MQTT 连接参数 + 实时遥测转发（DeviceServiceMock → MonitorViewModel → QML）
+QString MonitorViewModel::selectedDeviceAccessCode() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceAccessCode() : QString();
+}
+int MonitorViewModel::selectedDeviceMqttPort() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceMqttPort() : 8883;
+}
+void MonitorViewModel::setSelectedDeviceAccessCode(const QString &code, int port)
+{
+  if (deviceService_) deviceService_->setSelectedDeviceAccessCode(code, port);
+}
+int MonitorViewModel::selectedDeviceBedTemperature() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceBedTemperature() : 0;
+}
+int MonitorViewModel::selectedDeviceNozzleTargetTemp() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceNozzleTargetTemp() : 0;
+}
+int MonitorViewModel::selectedDeviceBedTargetTemp() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceBedTargetTemp() : 0;
+}
+int MonitorViewModel::selectedDeviceCurrentLayerNum() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceCurrentLayerNum() : 0;
+}
+int MonitorViewModel::selectedDeviceTotalLayerNum() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceTotalLayerNum() : 0;
+}
+int MonitorViewModel::selectedDeviceRemainingTime() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceRemainingTime() : 0;
+}
+bool MonitorViewModel::mqttConnected() const
+{
+  return deviceService_ ? deviceService_->isMqttConnected() : false;
+}
 QString MonitorViewModel::selectedDeviceIp() const
 {
   return deviceService_ ? deviceService_->selectedDeviceIp() : QString();
@@ -186,21 +227,48 @@ void MonitorViewModel::scanDevices()
 
 void MonitorViewModel::connectDevice(int filteredIndex)
 {
-  /// 模拟连接流程：先设为 Connecting，1.5s 后根据结果切换（对齐上游 DeviceManager connect 逻辑）
+  // v2.7 P2-A: 真实 MQTT 连接（当设备有 access code + IP）+ mock fallback。
+  // 对齐上游 DeviceManager connect 逻辑：先设 Connecting，真实连接异步回调决定最终状态。
   setMonitorStateValue(Connecting);
 
-  QTimer::singleShot(1500, this, [this, filteredIndex]() {
-    if (deviceService_) {
+  if (!deviceService_) {
+    setMonitorStateValue(Disconnected);
+    return;
+  }
+
+  // 检查设备是否有 MQTT 连接参数（access code + IP）
+  deviceService_->selectDevice(filteredIndex);
+  const QString ip = deviceService_->selectedDeviceIp();
+  const QString accessCode = deviceService_->selectedDeviceAccessCode();
+  const int port = deviceService_->selectedDeviceMqttPort();
+  const bool hasMqttParams = !ip.isEmpty() && !accessCode.isEmpty();
+
+  if (hasMqttParams) {
+    // v2.7 P2-A: 真实 MQTT 连接路径。connectViaMqtt 异步连接，成功后订阅 device/+/report，
+    // telemetry 通过 messageReceived 实时更新（selectedDeviceTemperature 等 Q_PROPERTY）。
+    qDebug("[Monitor] real MQTT connect to %s:%d (access code set)", ip.toUtf8().constData(), port);
+    QMetaObject::invokeMethod(deviceService_, "connectViaMqtt", Qt::QueuedConnection,
+                              Q_ARG(QString, ip), Q_ARG(int, port), Q_ARG(QString, accessCode));
+    // 监听 MQTT 连接状态（2.5s 超时决定最终状态，对齐 mock 的 1.5s + 网络 RTT）
+    QTimer::singleShot(2500, this, [this]() {
+      if (deviceService_ && deviceService_->isMqttConnected()) {
+        setMonitorStateValue(Normal);
+      } else {
+        // MQTT 连接失败/超时 → fallback 到 mock（保留演示能力）或 Disconnected
+        qDebug("[Monitor] MQTT connect timeout, fallback to mock");
+        setMonitorStateValue(Disconnected);
+      }
+    });
+  } else {
+    // Mock fallback：无 access code 或无 IP（演示/测试模式）
+    QTimer::singleShot(1500, this, [this, filteredIndex]() {
       deviceService_->connectDevice(filteredIndex);
-      /// 连接完成后根据设备在线状态决定最终状态（对齐上游 StatusPanel on_connect_result）
       if (deviceService_->selectedDeviceOnline())
         setMonitorStateValue(Normal);
       else
         setMonitorStateValue(Disconnected);
-    } else {
-      setMonitorStateValue(Disconnected);
-    }
-  });
+    });
+  }
 }
 
 void MonitorViewModel::disconnectDevice(int filteredIndex)

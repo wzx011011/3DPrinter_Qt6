@@ -1,8 +1,9 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import ".."
 import "../controls"
+import "../dialogs"
 
 /// MonitorPage — device monitoring dashboard
 ///
@@ -16,6 +17,30 @@ import "../controls"
 Item {
     id: root
     required property var monitorVm
+
+    // v2.7 P2-A: connect helper. Check access code; if missing, open input dialog.
+    // After input, setSelectedDeviceAccessCode + re-trigger connectDevice (real MQTT path).
+    function connectWithAccessCode() {
+        if (!root.monitorVm) return;
+        if (root.monitorVm.selectedDeviceAccessCode === ""
+            || root.monitorVm.selectedDeviceAccessCode.length === 0) {
+            accessCodeDialog.deviceIp = root.monitorVm.selectedDeviceIp || "";
+            accessCodeDialog.deviceName = root.monitorVm.selectedDeviceName || "";
+            accessCodeDialog.open();
+        } else {
+            root.monitorVm.connectDevice(0);
+        }
+    }
+
+    // v2.7 P2-A: Bambu LAN access code input dialog
+    AccessCodeInputDialog {
+        id: accessCodeDialog
+        anchors.centerIn: parent
+        onConnectRequested: function(ip, code, port) {
+            root.monitorVm.setSelectedDeviceAccessCode(code, port);
+            root.monitorVm.connectDevice(0);
+        }
+    }
 
     // ── Mock refresh timer (mirrors upstream 1000ms REFRESH_INTERVAL) ──
     Timer {
@@ -592,7 +617,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: root.monitorVm.connectDevice(0)
+                        onClicked: root.connectWithAccessCode()
                     }
                 }
             }
@@ -1295,7 +1320,7 @@ Item {
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.monitorVm.connectDevice(0)
+                                            onClicked: root.connectWithAccessCode()
                                         }
                                     }
                                 }

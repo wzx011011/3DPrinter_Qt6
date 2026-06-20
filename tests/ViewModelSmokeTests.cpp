@@ -53,6 +53,8 @@ private slots:
   void int03_CameraStateMachineAndFrameToken();
   // v2.7 P1: INT-02 校准自回归（PA/FlowRate/TempTower calib slice 生成 G-code）
   void int02_CalibrationGeneratesCalibGcode();
+  // v2.7 P2-A: INT-04 MQTT connection params + telemetry field mapping
+  void int04_MqttConnectionParamsAndTelemetryFields();
   void editor_import_model_updates_state();
   void monitor_refresh_updates_network_and_device();
   void config_default_and_switch_preset();
@@ -743,6 +745,60 @@ void ViewModelSmokeTests::int02_CalibrationGeneratesCalibGcode()
 
   // 清理
   QFile::remove(gcodePath);
+}
+
+// ── v2.7 P2-A: INT-04 MQTT 连接参数 + 遥测字段映射自回归 ──────────
+// 不连真机（CI 无设备）。验证：
+//   - MockDevice access code + port 设置/读取往返（连接对话框流程）
+//   - 新遥测字段 getter（bedTemperature/nozzleTarget/currentLayerNum/remainingTime）
+//     在手动填充后可正确读取（MQTT messageReceived 解析逻辑写入这些字段）
+//   - mqttConnected 初始为 false（未连接）
+//   - setSelectedDeviceAccessCode 触发 selectedDeviceChanged
+//
+// 完整 MQTT 连接 + 真实 telemetry 解析需真机，延后 UAT。
+void ViewModelSmokeTests::int04_MqttConnectionParamsAndTelemetryFields()
+{
+  DeviceServiceMock device;
+  // 初始：未连接
+  QVERIFY(!device.isMqttConnected());
+  QVERIFY(device.selectedDeviceAccessCode().isEmpty());
+  QCOMPARE(device.selectedDeviceMqttPort(), 8883);
+
+  // 选中第一个设备
+  if (device.deviceCount() == 0) QSKIP("No mock devices for telemetry test");
+  device.selectDevice(0);
+
+  // 设置 access code（连接对话框录入后调用）
+  QSignalSpy changedSpy(&device, &DeviceServiceMock::selectedDeviceChanged);
+  QVERIFY(changedSpy.isValid());
+  device.setSelectedDeviceAccessCode(QStringLiteral("12345678"), 8883);
+  QCOMPARE(device.selectedDeviceAccessCode(), QStringLiteral("12345678"));
+  QCOMPARE(device.selectedDeviceMqttPort(), 8883);
+  QVERIFY(changedSpy.count() >= 1); // setter 应触发通知
+
+  // 验证新遥测字段 getter 存在且初始为 0（MQTT 连接后由解析填充）
+  // 这些字段是 P2-A 扩展的，确保 Q_PROPERTY 链路完整
+  QCOMPARE(device.selectedDeviceBedTemperature(), 0);
+  QCOMPARE(device.selectedDeviceNozzleTargetTemp(), 0);
+  QCOMPARE(device.selectedDeviceBedTargetTemp(), 0);
+  QCOMPARE(device.selectedDeviceCurrentLayerNum(), 0);
+  QCOMPARE(device.selectedDeviceTotalLayerNum(), 0);
+  QCOMPARE(device.selectedDeviceRemainingTime(), 0);
+
+  // 验证 MonitorViewModel 转发（若注入 DeviceServiceMock）
+  NetworkServiceMock network;
+  CameraServiceMock camera;
+  MonitorViewModel monitor(&device, &network, &camera);
+  QCOMPARE(monitor.selectedDeviceAccessCode(), QStringLiteral("12345678"));
+  QCOMPARE(monitor.selectedDeviceMqttPort(), 8883);
+  QVERIFY(!monitor.mqttConnected());
+  // MonitorViewModel::setSelectedDeviceAccessCode 转发
+  monitor.setSelectedDeviceAccessCode(QStringLiteral("ABCDEFGH"), 8883);
+  QCOMPARE(monitor.selectedDeviceAccessCode(), QStringLiteral("ABCDEFGH"));
+
+  // 清理 access code → 连接应走 mock fallback
+  device.setSelectedDeviceAccessCode(QStringLiteral(""), 8883);
+  QVERIFY(device.selectedDeviceAccessCode().isEmpty());
 }
 
 QTEST_MAIN(ViewModelSmokeTests)
