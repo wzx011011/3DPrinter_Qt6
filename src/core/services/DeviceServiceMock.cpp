@@ -46,6 +46,7 @@ DeviceServiceMock::DeviceServiceMock(QObject *parent)
 
       if (job.progress >= 100) {
         job.active = false;
+  if (isMqttConnected()) publishPrintCommand("stop");
         d.taskName.clear();
       }
       ++it;
@@ -649,6 +650,42 @@ void DeviceServiceMock::startPrint(int filteredIndex, const QString &gcodePath)
   emit selectedDeviceChanged();
 }
 
+// v2.7 P2-B: MQTT print control command publish.
+// Constructs Bambu JSON envelope {"print":{"sequence_id":N,"command":"<cmd>",...}}
+// and publishes to device/<serial>/request. Serial from connected device's sn.
+bool DeviceServiceMock::publishPrintCommand(const QString &command, const QString &param)
+{
+    if (!isMqttConnected()) {
+        qDebug("[Device] publishPrintCommand('%s') skipped - MQTT not connected", command.toUtf8().constData());
+        return false;
+    }
+    const int idx = mqttConnectedDeviceIndex_;
+    if (idx < 0 || idx >= devices_.size()) return false;
+    const QString serial = devices_[idx].sn;
+    if (serial.isEmpty()) {
+        qDebug("[Device] publishPrintCommand('%s') - no serial for device idx=%d", command.toUtf8().constData(), idx);
+        return false;
+    }
+
+    // Build Bambu print command JSON envelope
+    QJsonObject cmdObj;
+    cmdObj["sequence_id"] = QString::number(++mqttSequenceId_);
+    cmdObj["command"] = command;
+    if (!param.isEmpty()) cmdObj["param"] = param;
+    QJsonObject envelope;
+    envelope["print"] = cmdObj;
+    const QString payload = QString::fromUtf8(QJsonDocument(envelope).toJson(QJsonDocument::Compact));
+    const QString topic = QStringLiteral("device/%1/request").arg(serial);
+
+    lastPublishPayload_ = payload;
+    lastPublishTopic_ = topic;
+
+    const bool ok = mqttClient_->publish(topic, payload);
+    qDebug("[Device] MQTT publish: %s => %s (ok=%d)", topic.toUtf8().constData(),
+           payload.toUtf8().constData(), ok);
+    return ok;
+}
+
 void DeviceServiceMock::pausePrint(int filteredIndex)
 {
   if (filteredIndex < 0 || filteredIndex >= filteredIndices_.size())
@@ -660,6 +697,7 @@ void DeviceServiceMock::pausePrint(int filteredIndex)
   if (!job.active || job.paused) return;
 
   job.paused = true;
+  if (isMqttConnected()) publishPrintCommand("pause");
   devices_[realIdx].status = "paused";
 
   emit devicesChanged();
@@ -677,6 +715,7 @@ void DeviceServiceMock::resumePrint(int filteredIndex)
   if (!job.active || !job.paused) return;
 
   job.paused = false;
+  if (isMqttConnected()) publishPrintCommand("resume");
   devices_[realIdx].status = "printing";
 
   emit devicesChanged();

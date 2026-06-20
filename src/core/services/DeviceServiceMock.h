@@ -192,6 +192,16 @@ public:
   Q_INVOKABLE void resumePrint(int filteredIndex);
   Q_INVOKABLE void stopPrint(int filteredIndex);
 
+  /// v2.7 P2-B: 通过 MQTT 发布 Bambu 打印控制命令。
+  /// 构造 {"print":{"sequence_id":N,"command":"<cmd>",...}} 信封，
+  /// 发布到 device/<serial>/request（序列号取自连接设备的 sn）。
+  /// command 如 "pause"/"resume"/"stop"/"gcode_line" 等。
+  /// 仅当 MQTT 已连接时实际发布；返回是否发布成功。
+  /// lastPublishPayload() 暴露最后构造的 JSON（供 INT-05 测试断言）。
+  Q_INVOKABLE bool publishPrintCommand(const QString &command, const QString &param = QString());
+  QString lastPublishPayload() const { return lastPublishPayload_; }
+  QString lastPublishTopic() const { return lastPublishTopic_; }
+
   /// 获取设备打印状态信息（对齐上游 MachineObject 打印状态）
   Q_INVOKABLE QString devicePrintStage(int filteredIndex) const;
   Q_INVOKABLE int devicePrintLayer(int filteredIndex) const;
@@ -250,6 +260,10 @@ private:
   // v2.7 P2-A: MQTT 连接参数缓存（连接重试 + topic 构造用）
   QString pendingMqttHost_;
   int pendingMqttPort_ = 8883;
+  // v2.7 P2-B: MQTT publish 调试（供 INT-05 断言 payload/topic）
+  QString lastPublishPayload_;
+  QString lastPublishTopic_;
+  int mqttSequenceId_ = 0;
 
   /// HMS 通知列表（对齐上游 DeviceManager hms_list）
   /// key = device realIndex, value = list of HMS items
