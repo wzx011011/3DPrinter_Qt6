@@ -6,6 +6,7 @@
 #include <QList>
 
 class QTimer;
+class SliceService;
 
 // Calibration step in a wizard flow
 struct CalibrationStep
@@ -60,6 +61,10 @@ class CalibrationServiceMock final : public QObject
 public:
     explicit CalibrationServiceMock(QObject *parent = nullptr);
     ~CalibrationServiceMock() override;
+
+    /// v2.7 P1：注入 SliceService 引用。校准时通过它设 calib_params + 触发切片导出，
+    /// 生成真实 PA/FlowRate/TempTower G-code（路径 B，镜像上游 CalibUtils::send_to_print）。
+    void setSliceService(SliceService *slice) { m_sliceService = slice; }
 
     // Calibration type list
     Q_INVOKABLE int calibTypeCount() const;
@@ -128,4 +133,6 @@ private:
     int m_currentItem = -1;
     int m_currentStepIndex = -1;
     QTimer *m_timer = nullptr;
+    /// v2.7 P1：SliceService 引用（由 setSliceService 注入，校准时触发 calib slice）
+    SliceService *m_sliceService = nullptr;
 };

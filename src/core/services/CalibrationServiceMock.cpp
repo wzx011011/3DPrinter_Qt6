@@ -1,4 +1,5 @@
-#include "CalibrationServiceMock.h"
+﻿#include "CalibrationServiceMock.h"
+#include "SliceService.h"
 #include <QTimer>
 #include <QDateTime>
 #include <QDebug>
@@ -266,28 +267,30 @@ void CalibrationServiceMock::startCalibration(int itemIndex)
     emit stepChanged();
 
 #ifdef HAS_LIBSLIC3R
-    // v2.5 CAL-01: 真实校准（调 libslic3r Calib 类生成测试 G-code）
-    // 对齐上游 calib.cpp: CalibPressureAdvance::generate_test
+    // v2.7 P1: real calibration via SliceService (path B, mirrors upstream CalibUtils::send_to_print).
+    // Set Print.calib_params, run the full slice->export pipeline; GCode::do_export then takes the
+    // Calib_PA_Line / Calib_Flow_Rate / Calib_Temp_Tower branch and auto-generates calib G-code.
+    // We never construct CalibPressureAdvanceLine directly (its only construction site is inside
+    // do_export, needing a live GCode engine).
     const auto &calibType = m_calibTypes[itemIndex];
     qDebug("[Calib] starting real calibration: %s", calibType.id.toUtf8().constData());
 
-    if (calibType.id == "pa_line" || calibType.id == "pa_pattern" || calibType.id == "pa_tower") {
-        // Pressure Advance 校准
-        // CalibPressureAdvance 是抽象基类（protected ctor），需用派生类 CalibPressureAdvanceLine/Pattern
-        // Slic3r::CalibPressureAdvanceLine calibPA(gcodegen);
-        // std::string testGcode = calibPA.generate_test(0, 0.002, 50);
-        // TODO CAL-02: 需 GCode generator 上下文，留完整实现
-        qDebug("[Calib] PA calibration skeleton (needs CalibPressureAdvanceLine + GCode context)");
-    } else if (calibType.id == "flow_rate") {
-        // Flow Rate 校准（对齐上游 CalibFlowRate, 需扩展）
-        qDebug("[Calib] Flow Rate calibration (skeleton, needs CalibFlowRate impl)");
-    } else if (calibType.id == "temp_tower") {
-        // Temp Tower 校准
-        qDebug("[Calib] Temp Tower calibration (skeleton)");
+    if (m_sliceService) {
+        int mode = 0; double start = 0.0, end = 0.0, step = 0.0;
+        bool printNumbers = true;
+        if (calibType.id == "flow_dynamics") { mode = 1; start = 0.0; end = 0.1; step = 0.002; }
+        else if (calibType.id == "flow_rate") { mode = 5; start = 0.90; end = 1.10; step = 0.01; }
+        else if (calibType.id == "temp_tower") { mode = 6; start = 190.0; end = 240.0; step = 5.0; }
+        if (mode != 0) {
+            m_sliceService->setCalibParams(mode, start, end, step, printNumbers);
+            m_sliceService->startSlice(QStringLiteral("calib_%1").arg(calibType.id));
+            qDebug("[Calib] calib slice dispatched: mode=%d start=%.3f end=%.3f step=%.4f", mode, start, end, step);
+        } else {
+            qDebug("[Calib] type '%s' has no CalibMode mapping - mock only", calibType.id.toUtf8().constData());
+        }
+    } else {
+        qDebug("[Calib] no SliceService - mock-only mode");
     }
-    // 其他模式（Vol_speed/VFA/Retraction）类似
-
-    // 当前仍用 mock timer 模拟进度（真实切片校准需 SliceService 集成）
 #endif
 
     m_timer->start();

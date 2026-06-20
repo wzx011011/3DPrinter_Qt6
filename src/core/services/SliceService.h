@@ -91,6 +91,16 @@ public:
   /// 坐标单位 mm，内部 ×1000 转 μm（coord_t）。
   void setBedShape(const QVector<QPointF> &pointsMm);
 
+  /// v2.7 P1：设置校准参数（对齐上游 Print::set_calib_params）。
+  /// 在 startSlice() 前调用。worker 在 print.apply() 后、process() 前注入，
+  /// 使 GCode::do_export 走 Calib_PA_Line / Calib_Flow_Rate / Calib_Temp_Tower 分支，
+  /// 自动生成校准 G-code。mode=Calib_None 表示普通切片。
+  /// 路径 B（镜像上游 CalibUtils::send_to_print）：不直接构造 CalibPressureAdvanceLine
+  /// （其唯一构造点在 GCode.cpp:3250 do_export 内部），而是设 Print.calib_params
+  /// 跑完整 slice→export 流水线。
+  void setCalibParams(int mode, double start, double end, double step,
+                      bool printNumbers = false, int testModel = 0);
+
   void clearPlateResults();
   void removePlateResult(int plateIndex);
 
@@ -126,6 +136,18 @@ private:
   /// v2.7 P0：热床形状（mm，由 setBedShape 设置）。空表示用 full_print_config 默认。
   /// startSlice 时通过 set_key_value("bed_shape", ConfigOptionPoints) 注入（镜像 CLI）。
   QVector<QPointF> bedShape_;
+
+  /// v2.7 P1：校准参数（由 setCalibParams 设置）。mode=0(Calib_None) 表示普通切片。
+  /// worker 在 print.apply() 后注入到 Print，使 GCode::do_export 走校准分支。
+  struct CalibConfig
+  {
+    int mode = 0;        ///< CalibMode (0=None, 1=PA_Line, 5=Flow_Rate, 6=Temp_Tower)
+    double start = 0.0;
+    double end = 0.0;
+    double step = 0.0;
+    bool printNumbers = false;
+    int testModel = 0;
+  } calibConfig_;
 
   void clearStoredResult();
 };

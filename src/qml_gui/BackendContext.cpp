@@ -63,6 +63,8 @@ BackendContext::BackendContext(QObject *parent)
   deviceService_ = new DeviceServiceMock(this);
   projectService_ = new ProjectServiceMock(this);
   sliceService_ = new SliceService(projectService_, this);
+  // v2.7 P1：注入 SliceService 到 CalibrationService（校准时触发 calib slice）
+  calibrationService_->setSliceService(sliceService_);
   networkService_ = new NetworkServiceMock(this);
   cameraService_ = new CameraServiceMock(this);
   auto *cloudService = new CloudServiceMock(this);

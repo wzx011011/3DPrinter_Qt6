@@ -436,6 +436,23 @@ void SliceService::startSlice(const QString &projectName)
       }
 
       print.apply(*modelForSlice, config);
+      print.apply(*modelForSlice, config);
+
+      // v2.7 P1: 校准参数注入（路径 B，镜像上游 CalibUtils::send_to_print）。
+      // 在 apply 后、process 前设 Print.calib_params，GCode::do_export 会据此
+      // 走 Calib_PA_Line / Calib_Flow_Rate / Calib_Temp_Tower 分支生成校准 G-code。
+      if (receiver && receiver->calibConfig_.mode != 0)
+      {
+        Slic3r::Calib_Params cp;
+        cp.mode = static_cast<Slic3r::CalibMode>(receiver->calibConfig_.mode);
+        cp.start = receiver->calibConfig_.start;
+        cp.end = receiver->calibConfig_.end;
+        cp.step = receiver->calibConfig_.step;
+        cp.print_numbers = receiver->calibConfig_.printNumbers;
+        cp.test_model = receiver->calibConfig_.testModel;
+        print.set_calib_params(cp);
+      }
+
 
       if (cancelFlag && cancelFlag->load())
       {
@@ -815,5 +832,12 @@ void SliceService::removePlateResult(int plateIndex)
 void SliceService::setBedShape(const QVector<QPointF> &pointsMm)
 {
   bedShape_ = pointsMm;
+}
+
+
+void SliceService::setCalibParams(int mode, double start, double end, double step,
+                                  bool printNumbers, int testModel)
+{
+  calibConfig_ = {mode, start, end, step, printNumbers, testModel};
 }
 
