@@ -76,6 +76,10 @@ private:
     // broker 地址
     QString m_host;
     int m_port = 8883;
+    // v2.8 review C2: credentials stored as members (lifetime tied to MqttClient,
+    // safe across async paho callbacks). Was static buffer → race/UAF on reconnect.
+    QByteArray m_username = "bblp";
+    QByteArray m_password;  ///< access code (set before connect, kept alive until disconnect)
 
     // paho-mqtt C 回调（static, 转发到 Qt 信号）
     static void onConnect(void *context, MQTTAsync_successData *response);

@@ -436,7 +436,6 @@ void SliceService::startSlice(const QString &projectName)
       }
 
       print.apply(*modelForSlice, config);
-      print.apply(*modelForSlice, config);
 
       // v2.7 P1: 校准参数注入（路径 B，镜像上游 CalibUtils::send_to_print）。
       // 在 apply 后、process 前设 Print.calib_params，GCode::do_export 会据此
@@ -474,6 +473,10 @@ void SliceService::startSlice(const QString &projectName)
         print.cancel();
         throw std::runtime_error("切片已取消");
       }
+
+      // v2.8 review W2: reset calibConfig (avoid sticking after calibration slice).
+      if (receiver) receiver->calibConfig_.mode = 0;
+
 
       Slic3r::GCodeProcessorResult result;
       const QString appDir = QCoreApplication::applicationDirPath();

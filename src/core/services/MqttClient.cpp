@@ -43,13 +43,12 @@ void MqttClient::connectToHost(const QString &host, int port, const QString &acc
     opts.connectTimeout = 5;  // 5 秒超时
 
     // 如果有访问码，设为 username/password（Bambu 协议: username="bblp", password=accessCode）
+    // v2.8 review C2: credentials stored as members (was static → race on reconnect)
     if (!accessCode.isEmpty())
     {
-        static QByteArray username = "bblp";
-        static QByteArray password;  // static 防止析构
-        password = accessCode.toUtf8();
-        opts.username = username.constData();
-        opts.password = password.constData();
+        m_password = accessCode.toUtf8();
+        opts.username = m_username.constData();
+        opts.password = m_password.constData();
     }
 
     // 创建 MQTT 客户端
@@ -205,6 +204,10 @@ void MqttClient::onDisconnect(void *context, MQTTAsync_successData *response)
 
 int MqttClient::onMessageArrived(void *context, char *topicName, int topicLen, MQTTAsync_message *message)
 {
+    // v2.8 review C3: 此回调在 paho 内部线程执行。emit 跨线程到 UI 线程的 slot
+    // 时，Qt AutoConnection 自动选择 QueuedConnection（self 的 thread affinity 是 UI
+    // 线程，当前线程是 paho 线程 → 自动队列化）。因此 messageReceived 的 slot 在
+    // UI 线程执行，写 devices_/printJobs_ 无竞态。确认安全。
     auto *self = static_cast<MqttClient *>(context);
     if (!self || !message)
         return 1;

@@ -646,15 +646,14 @@ bool DeviceServiceMock::sendPrintViaFtp(int filteredIndex, const QString &gcodeP
     if (!ftpUploader_) {
         ftpUploader_ = new FtpUploader(this);
         connect(ftpUploader_, &FtpUploader::uploadFinished, this,
-                [this, remotePath, idx](bool success, const QString &error) {
+                [this](bool success, const QString &error) {
             if (success) {
                 qDebug("[Device] FTP upload complete, sending print command...");
-                // 上传成功 → 发 MQTT print 命令（gcode_file 指向上传的远程文件）
-                publishPrintCommand("gcode_file", remotePath);
-                // 更新设备状态
-                if (idx >= 0 && idx < devices_.size()) {
-                    devices_[idx].status = "printing";
-                    devices_[idx].taskName = QFileInfo(remotePath).completeBaseName();
+                publishPrintCommand("gcode_file", lastPrintRemotePath_);
+                const int devIdx = mqttConnectedDeviceIndex_;
+                if (devIdx >= 0 && devIdx < devices_.size()) {
+                    devices_[devIdx].status = "printing";
+                    devices_[devIdx].taskName = QFileInfo(lastPrintRemotePath_).completeBaseName();
                     emit devicesChanged();
                     emit selectedDeviceChanged();
                 }
