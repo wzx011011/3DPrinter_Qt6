@@ -1,5 +1,8 @@
 ﻿#include "DeviceServiceMock.h"
 #include "MqttClient.h"
+#include "FtpUploader.h"
+#include <QFileInfo>
+
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -615,6 +618,58 @@ void DeviceServiceMock::disconnectDevice(int filteredIndex)
   emit selectedDeviceChanged();
 }
 
+// v2.8 P2-C: Send print job via FTP upload + MQTT print command.
+// Uploads .gcode to the printer via FTPS (port 990, TLS), then publishes
+// {"print":{"command":"gcode_file","param":"<remote_path>"}} to start printing.
+bool DeviceServiceMock::sendPrintViaFtp(int filteredIndex, const QString &gcodePath)
+{
+    if (!isMqttConnected()) {
+        qDebug("[Device] sendPrintViaFtp: MQTT not connected, cannot send print");
+        return false;
+    }
+    if (gcodePath.isEmpty() || !QFileInfo::exists(gcodePath)) {
+        qDebug("[Device] sendPrintViaFtp: invalid gcode path: %s", gcodePath.toUtf8().constData());
+        return false;
+    }
+
+    // 获取连接设备参数
+    const int idx = mqttConnectedDeviceIndex_;
+    if (idx < 0 || idx >= devices_.size()) return false;
+    const QString host = devices_[idx].ip;
+    const QString accessCode = devices_[idx].accessCode;
+    const QString baseName = QFileInfo(gcodePath).completeBaseName();
+    // Bambu 打印机 FTP 目录：/mnt/sdcard/（或 /userdata/）
+    const QString remotePath = QStringLiteral("/mnt/sdcard/%1.gcode").arg(baseName);
+    lastPrintRemotePath_ = remotePath;
+
+    // 创建 FtpUploader（惰性）
+    if (!ftpUploader_) {
+        ftpUploader_ = new FtpUploader(this);
+        connect(ftpUploader_, &FtpUploader::uploadFinished, this,
+                [this, remotePath, idx](bool success, const QString &error) {
+            if (success) {
+                qDebug("[Device] FTP upload complete, sending print command...");
+                // 上传成功 → 发 MQTT print 命令（gcode_file 指向上传的远程文件）
+                publishPrintCommand("gcode_file", remotePath);
+                // 更新设备状态
+                if (idx >= 0 && idx < devices_.size()) {
+                    devices_[idx].status = "printing";
+                    devices_[idx].taskName = QFileInfo(remotePath).completeBaseName();
+                    emit devicesChanged();
+                    emit selectedDeviceChanged();
+                }
+            } else {
+                qDebug("[Device] FTP upload failed: %s", error.toUtf8().constData());
+            }
+        });
+    }
+
+    // 启动 FTP 上传（Bambu FTPS 端口 990）
+    qDebug("[Device] starting FTP upload to %s:990 (file=%s)", host.toUtf8().constData(),
+           gcodePath.toUtf8().constData());
+    return ftpUploader_->uploadFile(host, 990, accessCode, gcodePath, remotePath);
+}
+
 void DeviceServiceMock::startPrint(int filteredIndex, const QString &gcodePath)
 {
   if (filteredIndex < 0 || filteredIndex >= filteredIndices_.size())
@@ -624,6 +679,13 @@ void DeviceServiceMock::startPrint(int filteredIndex, const QString &gcodePath)
 
   if (!d.online || d.status == "printing")
     return;
+
+  // v2.8 P2-C: real print path 鈥?FTP upload + MQTT command (when connected)
+  if (isMqttConnected() && !gcodePath.isEmpty()) {
+    if (sendPrintViaFtp(filteredIndex, gcodePath))
+      return; // FTP upload started 鈥?async result via uploadFinished
+    // FTP start failed 鈫?fall through to mock
+  }
 
   // Create print job state
   PrintJobState job;

@@ -12,6 +12,7 @@
 #include "core/services/PresetServiceMock.h"
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceService.h"
+#include "core/services/FtpUploader.h"
 #include "core/services/SsdpDiscovery.h"
 #include "core/viewmodels/ConfigViewModel.h"
 #include "core/viewmodels/EditorViewModel.h"
@@ -57,6 +58,8 @@ private slots:
   void int04_MqttConnectionParamsAndTelemetryFields();
   // v2.7 P2-B: INT-05 MQTT command construction + control flow
   void int05_MqttCommandConstructionAndControlFlow();
+  // v2.8 P2-C: INT-06 FTP URL construction + send-print routing
+  void int06_FtpUrlAndSendPrintRouting();
   void editor_import_model_updates_state();
   void monitor_refresh_updates_network_and_device();
   void config_default_and_switch_preset();
@@ -842,6 +845,41 @@ void ViewModelSmokeTests::int05_MqttCommandConstructionAndControlFlow()
   // 验证 publishPrintCommand 可被 MonitorViewModel 间接调用（Q_INVOKABLE）
   // 且 MQTT 连接状态查询正常
   QVERIFY(!device.isMqttConnected());
+}
+
+// ── v2.8 P2-C: INT-06 FTP URL 构造 + send-print 路由自回归 ──────────
+// 不连真机。验证：
+//   - FtpUploader::buildFtpUrl 生成正确的 Bambu FTP URL 格式
+//   - sendPrintViaFtp 在未连接时安全返回 false
+//   - startPrint 在未连接时走 mock fallback（不崩溃）
+//   - DeviceServiceMock 的 FTP + MQTT 接线（sendPrintViaFtp 存在且 Q_INVOKABLE）
+void ViewModelSmokeTests::int06_FtpUrlAndSendPrintRouting()
+{
+  // 1. FtpUploader URL 构造（对齐 Bambu FTPS 格式）
+  const QString url = FtpUploader::buildFtpUrl(
+      QStringLiteral("192.168.1.100"), 990,
+      QStringLiteral("ABC12345"), QStringLiteral("/mnt/sdcard/test.gcode"));
+  QVERIFY2(url.startsWith("ftp://"), "FTP URL should start with ftp://");
+  QVERIFY2(url.contains("bblp:"), "FTP URL should contain bblp username");
+  QVERIFY2(url.contains("ABC12345"), "FTP URL should contain access code");
+  QVERIFY2(url.contains("192.168.1.100"), "FTP URL should contain host");
+  QVERIFY2(url.contains("990"), "FTP URL should contain port 990");
+  QVERIFY2(url.contains("/mnt/sdcard/test.gcode"),
+           "FTP URL should contain remote path");
+
+  // 2. DeviceServiceMock sendPrintViaFtp 在未连接时安全返回 false
+  DeviceServiceMock device;
+  QVERIFY(!device.isMqttConnected());
+  QVERIFY(!device.sendPrintViaFtp(0, QStringLiteral("/tmp/test.gcode")));
+
+  // 3. sendPrintViaFtp 对空 gcode 路径安全返回 false
+  QVERIFY(!device.sendPrintViaFtp(0, QString()));
+
+  // 4. startPrint 在未连接时走 mock fallback（不崩溃，到达此处即通过）
+  if (device.deviceCount() > 0) {
+    device.selectDevice(0);
+    device.startPrint(0, QString()); // mock path, no crash
+  }
 }
 
 QTEST_MAIN(ViewModelSmokeTests)

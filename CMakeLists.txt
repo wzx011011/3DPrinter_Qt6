@@ -159,6 +159,23 @@ if(OWZX_QML_GUI)
         src/qml_gui/CameraImageProvider.h
         src/qml_gui/CameraImageProvider.cpp
     )
+    # v2.8 P2-C: FTP 上传服务（libcurl FTPS，发送打印任务到 Bambu 打印机）
+    target_sources(owzx_app_core PRIVATE
+        src/core/services/FtpUploader.h
+        src/core/services/FtpUploader.cpp
+    )
+    # 链接 libcurl 静态库（DEPS_PREFIX/lib/libcurl.lib）
+    # CURL_STATICLIB 必须定义，否则 curl.h 用 __declspec(dllimport) 声明符号
+    # （静态库不提供 __imp_ 存根 → 链接错误 __imp_curl_easy_*）
+    find_library(CURL_LIB NAMES libcurl curl
+                 PATHS "${DEPS_PREFIX}/lib" NO_DEFAULT_PATH)
+    if(CURL_LIB)
+        target_compile_definitions(owzx_app_core PUBLIC CURL_STATICLIB)
+        target_link_libraries(owzx_app_core PUBLIC ${CURL_LIB})
+        target_include_directories(owzx_app_core PUBLIC "${DEPS_PREFIX}/include")
+    else()
+        message(WARNING "libcurl not found in DEPS_PREFIX, FTP upload disabled")
+    endif()
     # 链接 FFmpeg 库（avcodec/avformat/avutil/swscale）
     foreach(ffmpeg_lib avcodec avformat avutil swscale)
         find_library(FFMPEG_${ffmpeg_lib}_LIB NAMES ${ffmpeg_lib}
@@ -214,6 +231,9 @@ if(OWZX_QML_GUI)
     if(MSVC)
         target_compile_options(OWzxSlicer PRIVATE /Zi)
         target_link_options(OWzxSlicer PRIVATE /DEBUG:FULL)
+    # v2.8 P2-C: libcurl(OpenSSL) 与 paho-mqtt 都带静态 SHA1 实现 → LNK2005。
+    # /FORCE:MULTIPLE 让链接器取第一个定义（paho 的 SHA1 先链接），忽略后续重复。
+    target_link_options(OWzxSlicer PRIVATE /FORCE:MULTIPLE)
     endif()
     foreach(_runtime_dll freetype.dll libmpfr-4.dll libgmp-10.dll qhull.dll qhull_p.dll qhull_r.dll)
         if(EXISTS "${DEPS_PREFIX}/bin/${_runtime_dll}")
@@ -288,6 +308,7 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     target_link_libraries(E2EWorkflowTests PRIVATE owzx_app_core
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
     )
+    target_link_options(E2EWorkflowTests PRIVATE /FORCE:MULTIPLE)
     add_test(NAME E2EWorkflowTests COMMAND E2EWorkflowTests)
     set_tests_properties(E2EWorkflowTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
@@ -297,6 +318,7 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     target_link_libraries(ViewModelSmokeTests PRIVATE owzx_app_core
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
     )
+    target_link_options(ViewModelSmokeTests PRIVATE /FORCE:MULTIPLE)
     add_test(NAME ViewModelSmokeTests COMMAND ViewModelSmokeTests)
     set_tests_properties(ViewModelSmokeTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"

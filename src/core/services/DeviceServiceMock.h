@@ -7,6 +7,7 @@
 
 // v2.5 DEV-02: MqttClient 集成（替代 mock 数据）
 namespace owzx { class MqttClient; }
+class FtpUploader;  // v2.8 P2-C: FTP 上传服务
 
 /// AMS (Automatic Material System) slot info (对齐上游 AMSScreen / AMSModel)
 struct MockAmsSlot
@@ -188,6 +189,12 @@ public:
 
   /// 打印任务控制（对齐上游 Plater print/pause/resume/stop）
   Q_INVOKABLE void startPrint(int filteredIndex, const QString &gcodePath);
+
+  /// v2.8 P2-C: 通过 FTP 上传 .gcode 到打印机，然后发 MQTT print 命令启动打印。
+  /// 仅在 MQTT 已连接时启用（需要 IP + access code）。
+  /// uploadProgress 信号反馈上传百分比，uploadFinished 反馈结果。
+  /// 返回 true 表示上传已启动（结果异步通知）。
+  Q_INVOKABLE bool sendPrintViaFtp(int filteredIndex, const QString &gcodePath);
   Q_INVOKABLE void pausePrint(int filteredIndex);
   Q_INVOKABLE void resumePrint(int filteredIndex);
   Q_INVOKABLE void stopPrint(int filteredIndex);
@@ -260,6 +267,9 @@ private:
   // v2.7 P2-A: MQTT 连接参数缓存（连接重试 + topic 构造用）
   QString pendingMqttHost_;
   int pendingMqttPort_ = 8883;
+  // v2.8 P2-C: FTP 上传服务（发送打印任务时用于上传 .gcode）
+  FtpUploader *ftpUploader_ = nullptr;
+  QString lastPrintRemotePath_;  ///< 最后一次上传的 FTP 远程路径（供测试）
   // v2.7 P2-B: MQTT publish 调试（供 INT-05 断言 payload/topic）
   QString lastPublishPayload_;
   QString lastPublishTopic_;
