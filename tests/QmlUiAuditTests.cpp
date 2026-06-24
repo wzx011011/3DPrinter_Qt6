@@ -13,6 +13,7 @@ private slots:
   void topLevelUiHasNoVisiblePlaceholdersOrNoopActions();
   void mainChromeUsesThemeTokens();
   void sidebarCopyIsLocalizedAndOperationalTextIsReadable();
+  void mainRegistersSoftwareViewportByDefault();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -101,6 +102,23 @@ void QmlUiAuditTests::sidebarCopyIsLocalizedAndOperationalTextIsReadable()
   const QRegularExpression tinyFont(QStringLiteral("font\\.pixelSize:\\s*(?:7|8|9)\\b"));
   QVERIFY2(!tinyFont.match(sidebar).hasMatch(),
            "LeftSidebar operational controls should not use sub-10px text");
+}
+
+void QmlUiAuditTests::mainRegistersSoftwareViewportByDefault()
+{
+  const QString mainCpp = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
+  const QString verifyScript = readSource(QStringLiteral("scripts/auto_verify_with_vcvars.ps1"));
+  QVERIFY2(!mainCpp.isEmpty(), "Unable to read main_qml.cpp");
+  QVERIFY2(!verifyScript.isEmpty(), "Unable to read auto_verify_with_vcvars.ps1");
+
+  QVERIFY2(mainCpp.contains(QStringLiteral("qEnvironmentVariableIsSet(\"OWZX_OPENGL\")")),
+           "main_qml.cpp must gate OpenGL viewport selection on OWZX_OPENGL");
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+           "default GLViewport registration must use SoftwareViewport");
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<GLViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+           "OpenGL GLViewport registration must remain available behind OWZX_OPENGL");
+  QVERIFY2(!verifyScript.contains(QStringLiteral("OWZX_OPENGL")),
+           "canonical startup smoke should cover the default software viewport path");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

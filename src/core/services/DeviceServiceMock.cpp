@@ -469,8 +469,7 @@ void DeviceServiceMock::connectViaMqtt(const QString &host, int port, const QStr
     // 调用方（MonitorViewModel::connectDevice）传入要连接的设备 filteredIndex。
     // 注意：连接是异步的，这里先记录 index，连接成功后 stateChanged/messageReceived
     // 用此 index 更新 devices_[idx]。
-    const int connectingIndex = (selectedDeviceIndex_ >= 0 && selectedDeviceIndex_ < devices_.size())
-                                    ? selectedDeviceIndex_ : -1;
+    const int connectingIndex = selectedDeviceIndex();
     mqttConnectedDeviceIndex_ = connectingIndex;
     pendingMqttHost_ = host;
     pendingMqttPort_ = port;
@@ -503,66 +502,8 @@ void DeviceServiceMock::connectViaMqtt(const QString &host, int port, const QStr
             }
         });
         connect(mqttClient_, &owzx::MqttClient::messageReceived, this, [this](const QString &topic, const QString &payload) {
-            // 解析 Bambu MQTT 遥测 → 更新设备状态
-            // v2.7 P2-A: 扩展解析（原只解析 3 字段，现补 bed/target/layer/remaining）
-            QJsonDocument doc = QJsonDocument::fromJson(payload.toUtf8());
-            if (!doc.isObject()) return;
-            QJsonObject obj = doc.object();
-
-            // Bambu 协议: 打印信息在 print 对象（两种形态：print.msg 嵌套 或 print 直接字段）
-            QJsonObject printObj = obj.value("print").toObject();
-            if (printObj.isEmpty()) return;
-            // telemetry 推送：print 内含 msg__: {...} 或直接字段
-            QJsonObject msgObj = printObj.value("msg").toObject();
-            if (msgObj.isEmpty()) {
-                // 部分 payload 直接在 print 下放字段
-                msgObj = printObj;
-            }
-
-            int idx = mqttConnectedDeviceIndex_;
-            if (idx < 0 || idx >= devices_.size()) return;
-            auto &d = devices_[idx];
-
-            bool changed = false;
-
-            // gcode_state: IDLE/SLICING/RUNNING/PAUSE/FINISH/FAIL
-            QString gstate = msgObj.value("gcode_state").toString();
-            if (!gstate.isEmpty()) {
-                d.online = true;
-                QString s = gstate.toLower();
-                if (s == "running") { d.status = "printing"; d.taskName = d.taskName.isEmpty() ? "Print" : d.taskName; }
-                else if (s == "pause") d.status = "paused";
-                else if (s == "finish") d.status = "idle";
-                else if (s == "fail") d.status = "error";
-                else d.status = s;
-                changed = true;
-            }
-            // 进度
-            int pct = msgObj.value("mc_percent").toInt(-1);
-            if (pct >= 0) { d.progress = pct; changed = true; }
-            // 喷嘴温度（当前 + 目标）
-            int nozzleTemp = msgObj.value("nozzle_temper").toInt(-1);
-            if (nozzleTemp >= 0) { d.temperature = nozzleTemp; changed = true; }
-            int nozzleTarget = msgObj.value("nozzle_target_temper").toInt(-1);
-            if (nozzleTarget >= 0) { d.nozzleTargetTemp = nozzleTarget; changed = true; }
-            // 热床温度（当前 + 目标）
-            int bedTemp = msgObj.value("bed_temper").toInt(-1);
-            if (bedTemp >= 0) { d.bedTemperature = bedTemp; changed = true; }
-            int bedTarget = msgObj.value("bed_target_temper").toInt(-1);
-            if (bedTarget >= 0) { d.bedTargetTemp = bedTarget; changed = true; }
-            // 层数（当前 + 总数）
-            int layerNum = msgObj.value("layer_num").toInt(-1);
-            if (layerNum >= 0) { d.currentLayerNum = layerNum; changed = true; }
-            int totalLayers = msgObj.value("total_layer_num").toInt(-1);
-            if (totalLayers >= 0) { d.totalLayerNum = totalLayers; changed = true; }
-            // 剩余时间（分钟）
-            int remaining = msgObj.value("mc_remaining_time").toInt(-1);
-            if (remaining >= 0) { d.remainingTime = remaining; changed = true; }
-
-            if (changed) {
-                emit devicesChanged();
-                emit selectedDeviceChanged();
-            }
+            Q_UNUSED(topic);
+            applyMqttReportPayload(payload, mqttConnectedDeviceIndex_);
         });
     }
 
@@ -591,6 +532,90 @@ void DeviceServiceMock::disconnectMqtt()
 bool DeviceServiceMock::isMqttConnected() const
 {
     return mqttClient_ && mqttClient_->isConnected();
+}
+
+bool DeviceServiceMock::applyMqttReportPayload(const QString &payload, int deviceIndex)
+{
+    QJsonDocument doc = QJsonDocument::fromJson(payload.toUtf8());
+    if (!doc.isObject()) return false;
+    QJsonObject obj = doc.object();
+
+    QJsonObject printObj = obj.value(QStringLiteral("print")).toObject();
+    if (printObj.isEmpty()) return false;
+
+    QJsonObject msgObj = printObj.value(QStringLiteral("msg")).toObject();
+    if (msgObj.isEmpty())
+        msgObj = printObj;
+
+    int idx = deviceIndex >= 0 ? deviceIndex : mqttConnectedDeviceIndex_;
+    if (idx < 0 || idx >= devices_.size()) return false;
+    auto &d = devices_[idx];
+
+    bool changed = false;
+
+    const QString gstate = msgObj.value(QStringLiteral("gcode_state")).toString();
+    if (!gstate.isEmpty()) {
+        d.online = true;
+        const QString s = gstate.toLower();
+        if (s == QStringLiteral("running")) {
+            d.status = QStringLiteral("printing");
+            d.taskName = d.taskName.isEmpty() ? QStringLiteral("Print") : d.taskName;
+        }
+        else if (s == QStringLiteral("pause")) d.status = QStringLiteral("paused");
+        else if (s == QStringLiteral("finish")) d.status = QStringLiteral("idle");
+        else if (s == QStringLiteral("fail")) d.status = QStringLiteral("error");
+        else d.status = s;
+        changed = true;
+    }
+
+    const int pct = msgObj.value(QStringLiteral("mc_percent")).toInt(-1);
+    if (pct >= 0) { d.progress = pct; changed = true; }
+    const int nozzleTemp = msgObj.value(QStringLiteral("nozzle_temper")).toInt(-1);
+    if (nozzleTemp >= 0) { d.temperature = nozzleTemp; changed = true; }
+    const int nozzleTarget = msgObj.value(QStringLiteral("nozzle_target_temper")).toInt(-1);
+    if (nozzleTarget >= 0) { d.nozzleTargetTemp = nozzleTarget; changed = true; }
+    const int bedTemp = msgObj.value(QStringLiteral("bed_temper")).toInt(-1);
+    if (bedTemp >= 0) { d.bedTemperature = bedTemp; changed = true; }
+    const int bedTarget = msgObj.value(QStringLiteral("bed_target_temper")).toInt(-1);
+    if (bedTarget >= 0) { d.bedTargetTemp = bedTarget; changed = true; }
+    const int layerNum = msgObj.value(QStringLiteral("layer_num")).toInt(-1);
+    if (layerNum >= 0) { d.currentLayerNum = layerNum; changed = true; }
+    const int totalLayers = msgObj.value(QStringLiteral("total_layer_num")).toInt(-1);
+    if (totalLayers >= 0) { d.totalLayerNum = totalLayers; changed = true; }
+    const int remaining = msgObj.value(QStringLiteral("mc_remaining_time")).toInt(-1);
+    if (remaining >= 0) { d.remainingTime = remaining; changed = true; }
+
+    if (changed) {
+        emit devicesChanged();
+        emit selectedDeviceChanged();
+    }
+    return changed;
+}
+
+QString DeviceServiceMock::buildPrintCommandEnvelope(const QString &command,
+                                                     const QString &param,
+                                                     int sequenceId)
+{
+    QJsonObject cmdObj;
+    cmdObj[QStringLiteral("sequence_id")] = QString::number(sequenceId);
+    cmdObj[QStringLiteral("command")] = command;
+    if (!param.isEmpty())
+        cmdObj[QStringLiteral("param")] = param;
+
+    QJsonObject envelope;
+    envelope[QStringLiteral("print")] = cmdObj;
+    return QString::fromUtf8(QJsonDocument(envelope).toJson(QJsonDocument::Compact));
+}
+
+QString DeviceServiceMock::buildPrintCommandTopic(const QString &serial)
+{
+    return QStringLiteral("device/%1/request").arg(serial);
+}
+
+QString DeviceServiceMock::buildPrintRemotePath(const QString &gcodePath)
+{
+    const QString baseName = QFileInfo(gcodePath).completeBaseName();
+    return QStringLiteral("/mnt/sdcard/%1.gcode").arg(baseName);
 }
 
 void DeviceServiceMock::disconnectDevice(int filteredIndex)
@@ -637,9 +662,8 @@ bool DeviceServiceMock::sendPrintViaFtp(int filteredIndex, const QString &gcodeP
     if (idx < 0 || idx >= devices_.size()) return false;
     const QString host = devices_[idx].ip;
     const QString accessCode = devices_[idx].accessCode;
-    const QString baseName = QFileInfo(gcodePath).completeBaseName();
     // Bambu 打印机 FTP 目录：/mnt/sdcard/（或 /userdata/）
-    const QString remotePath = QStringLiteral("/mnt/sdcard/%1.gcode").arg(baseName);
+    const QString remotePath = buildPrintRemotePath(gcodePath);
     lastPrintRemotePath_ = remotePath;
 
     // 创建 FtpUploader（惰性）
@@ -728,15 +752,8 @@ bool DeviceServiceMock::publishPrintCommand(const QString &command, const QStrin
         return false;
     }
 
-    // Build Bambu print command JSON envelope
-    QJsonObject cmdObj;
-    cmdObj["sequence_id"] = QString::number(++mqttSequenceId_);
-    cmdObj["command"] = command;
-    if (!param.isEmpty()) cmdObj["param"] = param;
-    QJsonObject envelope;
-    envelope["print"] = cmdObj;
-    const QString payload = QString::fromUtf8(QJsonDocument(envelope).toJson(QJsonDocument::Compact));
-    const QString topic = QStringLiteral("device/%1/request").arg(serial);
+    const QString payload = buildPrintCommandEnvelope(command, param, ++mqttSequenceId_);
+    const QString topic = buildPrintCommandTopic(serial);
 
     lastPublishPayload_ = payload;
     lastPublishTopic_ = topic;
@@ -752,13 +769,15 @@ void DeviceServiceMock::pausePrint(int filteredIndex)
   if (filteredIndex < 0 || filteredIndex >= filteredIndices_.size())
     return;
   const int realIdx = filteredIndices_[filteredIndex];
-  if (!printJobs_.contains(realIdx)) return;
+  if (isMqttConnected()) publishPrintCommand("pause");
 
-  auto &job = printJobs_[realIdx];
+  auto it = printJobs_.find(realIdx);
+  if (it == printJobs_.end()) return;
+
+  auto &job = it.value();
   if (!job.active || job.paused) return;
 
   job.paused = true;
-  if (isMqttConnected()) publishPrintCommand("pause");
   devices_[realIdx].status = "paused";
 
   emit devicesChanged();
@@ -770,13 +789,15 @@ void DeviceServiceMock::resumePrint(int filteredIndex)
   if (filteredIndex < 0 || filteredIndex >= filteredIndices_.size())
     return;
   const int realIdx = filteredIndices_[filteredIndex];
-  if (!printJobs_.contains(realIdx)) return;
+  if (isMqttConnected()) publishPrintCommand("resume");
 
-  auto &job = printJobs_[realIdx];
+  auto it = printJobs_.find(realIdx);
+  if (it == printJobs_.end()) return;
+
+  auto &job = it.value();
   if (!job.active || !job.paused) return;
 
   job.paused = false;
-  if (isMqttConnected()) publishPrintCommand("resume");
   devices_[realIdx].status = "printing";
 
   emit devicesChanged();
@@ -788,9 +809,12 @@ void DeviceServiceMock::stopPrint(int filteredIndex)
   if (filteredIndex < 0 || filteredIndex >= filteredIndices_.size())
     return;
   const int realIdx = filteredIndices_[filteredIndex];
-  if (!printJobs_.contains(realIdx)) return;
+  if (isMqttConnected()) publishPrintCommand("stop");
 
-  auto &job = printJobs_[realIdx];
+  auto it = printJobs_.find(realIdx);
+  if (it == printJobs_.end()) return;
+
+  auto &job = it.value();
   job.active = false;
   job.paused = false;
 

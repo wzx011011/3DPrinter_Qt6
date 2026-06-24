@@ -1,11 +1,16 @@
 ﻿#include <QSignalSpy>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMetaEnum>
+#include <QSettings>
 #include <QHostAddress>
 #include <QUdpSocket>
 #include <QtTest>
 
+#include "core/services/AppSettingsService.h"
 #include "core/services/CameraServiceMock.h"
 #include "core/services/CalibrationServiceMock.h"
 #include "core/services/DeviceServiceMock.h"
@@ -38,6 +43,48 @@ namespace
     double end;
     double step;
     bool printNumbers;
+  };
+
+  struct ScopedSettingsSnapshot
+  {
+    explicit ScopedSettingsSnapshot(const QStringList &trackedKeys)
+        : keys(trackedKeys)
+    {
+      QSettings settings;
+      for (const QString &key : keys)
+      {
+        if (settings.contains(key))
+        {
+          existingKeys.append(key);
+          originalValues.insert(key, settings.value(key));
+        }
+      }
+    }
+
+    ~ScopedSettingsSnapshot()
+    {
+      QSettings settings;
+      for (const QString &key : keys)
+      {
+        if (existingKeys.contains(key))
+          settings.setValue(key, originalValues.value(key));
+        else
+          settings.remove(key);
+      }
+      settings.sync();
+    }
+
+    void clear() const
+    {
+      QSettings settings;
+      for (const QString &key : keys)
+        settings.remove(key);
+      settings.sync();
+    }
+
+    QStringList keys;
+    QStringList existingKeys;
+    QVariantMap originalValues;
   };
 }
 
@@ -77,6 +124,7 @@ private slots:
   void int05_MqttCommandConstructionAndControlFlow();
   // v2.8 P2-C: INT-06 FTP URL construction + send-print routing
   void int06_FtpUrlAndSendPrintRouting();
+  void appSettingsAndEditorBedShapePersistDeterministically();
   void editor_import_model_updates_state();
   void monitor_refresh_updates_network_and_device();
   void config_default_and_switch_preset();
@@ -574,69 +622,47 @@ void ViewModelSmokeTests::testSidebarDockArea()
   resetSidebarSettings();
 }
 
-// ── v2.6 Phase 4: INT-01 SSDP 发现自回归 ──────────────────────────
-// 验证 SsdpDiscovery 能在真实局域网发现设备并正确解析响应字段。
-//
-// 策略：启动真实 SsdpDiscovery（发 M-SEARCH 多播），等待真实设备响应。
-// 网络上有大量 SSDP 设备（路由器/NAS/打印机/智能设备），通常 1.5s 内
-// 至少能发现 1 台。验证发现设备的字段约束（不硬编码 IP/型号）：
-//   - ip 非空且为有效 IPv4
-//   - port 为 8883（Bambu）或 1883（其他）
-//   - discoveredIps() 与 deviceAt() 一致
-//
-// 若环境完全无 SSDP 设备（罕见，如隔离 CI），QSKIP 而非 FAIL。
+// Phase 13 INT-01: deterministic SSDP parser fixtures.
+// No multicast, LAN device, or printer is required.
 void ViewModelSmokeTests::int01_SsdpDiscoveryParsesMockResponse()
 {
 #ifdef Q_OS_WIN
+  const QByteArray bambuResponse =
+      "HTTP/1.1 200 OK\r\n"
+      "LOCATION: http://192.168.1.55:80/info\r\n"
+      "ST: urn:bambu:device:3dprinter:1\r\n"
+      "USN: uuid:abc123::urn:bambu:device:3dprinter:1\r\n"
+      "SERVER: Bambu Lab X1\r\n"
+      "\r\n";
+  const owzx::DiscoveredDevice bambu =
+      owzx::SsdpDiscovery::parseResponseDatagram(bambuResponse, QHostAddress(QStringLiteral("10.0.0.5")));
+  QCOMPARE(bambu.ip, QStringLiteral("192.168.1.55"));
+  QCOMPARE(bambu.serial, QStringLiteral("ABC123"));
+  QCOMPARE(bambu.model, QStringLiteral("3D Printer"));
+  QCOMPARE(bambu.name, QStringLiteral("Bambu Lab X1"));
+  QCOMPARE(bambu.port, 8883);
+  QVERIFY(bambu.isBambu);
+
+  const QByteArray crealityResponse =
+      "HTTP/1.1 200 OK\r\n"
+      "ST: urn:creality:device:3dprinter:1\r\n"
+      "USN: uuid:k1c-001::urn:creality:device:3dprinter:1\r\n"
+      "SERVER: Creality K1C\r\n"
+      "\r\n";
+  const owzx::DiscoveredDevice creality =
+      owzx::SsdpDiscovery::parseResponseDatagram(crealityResponse, QHostAddress(QStringLiteral("192.168.1.60")));
+  QCOMPARE(creality.ip, QStringLiteral("192.168.1.60"));
+  QCOMPARE(creality.serial, QStringLiteral("K1C-001"));
+  QCOMPARE(creality.model, QStringLiteral("3D Printer"));
+  QCOMPARE(creality.name, QStringLiteral("Creality K1C"));
+  QCOMPARE(creality.port, 1883);
+  QVERIFY(!creality.isBambu);
+
   owzx::SsdpDiscovery discovery;
-
-  QSignalSpy foundSpy(&discovery, &owzx::SsdpDiscovery::deviceFound);
   QSignalSpy doneSpy(&discovery, &owzx::SsdpDiscovery::discoveryFinished);
-  QVERIFY(foundSpy.isValid());
   QVERIFY(doneSpy.isValid());
-
-  discovery.startDiscovery(2000);
-
-  // 等待 discovery 完成或收到至少一台设备
-  QTest::qWait(2500);
-
-  // 环境容忍：无任何 SSDP 设备时跳过（隔离 CI 环境可能如此）
-  if (discovery.discoveredCount() == 0) {
-    QSKIP("No SSDP devices responded on the LAN within 2s. "
-          "Skipping parse verification (isolated CI environment).");
-  }
-
-  QVERIFY2(discovery.discoveredCount() > 0, "should have discovered >= 1 device");
-  QVERIFY2(foundSpy.count() >= 1, "deviceFound should have fired");
-
-  // 验证每台发现设备的字段约束（对齐 parseResponse 输出契约）
-  for (int i = 0; i < discovery.discoveredCount(); ++i) {
-    QVariantMap dev = discovery.deviceAt(i);
-    QVERIFY2(!dev.isEmpty(), "deviceAt(i) must return non-empty map");
-
-    // IP 非空且为有效 IPv4
-    const QString ip = dev.value("ip").toString();
-    QVERIFY2(!ip.isEmpty(), "parsed device IP must be non-empty");
-    const QHostAddress ipCheck(ip);
-    QVERIFY2(ipCheck.protocol() == QAbstractSocket::IPv4Protocol,
-             "parsed IP must be valid IPv4");
-
-    // 端口：Bambu=8883，其他=1883（parseResponse 约定）
-    const int port = dev.value("port").toInt();
-    QVERIFY2(port == 8883 || port == 1883,
-             "port must be 8883 (Bambu) or 1883 (other)");
-
-    // isBambu 为布尔
-    QVERIFY2(dev.value("isBambu").canConvert<bool>(),
-             "isBambu must be boolean");
-  }
-
-  // discoveredIps() 与 deviceAt() 一致
-  QStringList ips = discovery.discoveredIps();
-  QCOMPARE(ips.size(), discovery.discoveredCount());
-
-  // discoveryFinished 信号触发（带 count）
-  QVERIFY2(doneSpy.count() >= 1, "discoveryFinished should have fired");
+  QVERIFY(QMetaObject::invokeMethod(&discovery, "onTimeout", Qt::DirectConnection));
+  QCOMPARE(doneSpy.count(), 1);
   QCOMPARE(doneSpy.takeFirst().at(0).toInt(), discovery.discoveredCount());
 #endif
 }
@@ -659,6 +685,9 @@ void ViewModelSmokeTests::int03_CameraStateMachineAndFrameToken()
   MonitorViewModel monitor(&device, &network, &camera);
 
   // 初始状态
+  QCOMPARE(CameraServiceMock::defaultRtspUrlForDevice(QStringLiteral("192.168.1.50")),
+           QStringLiteral("rtsp://192.168.1.50:8554/streaming/live/1"));
+  QVERIFY(CameraServiceMock::defaultRtspUrlForDevice(QString()).isEmpty());
   QCOMPARE(camera.streamStatus(), 0); // Disconnected
   QCOMPARE(camera.frameToken(), 0);
   QCOMPARE(monitor.cameraStreamStatus(), 0);
@@ -674,6 +703,8 @@ void ViewModelSmokeTests::int03_CameraStateMachineAndFrameToken()
 
   // 启动流：状态机 Connecting(1) → Connected(2) → Streaming(3)
   camera.startStream();
+  QCOMPARE(camera.cameraUrl(),
+           QStringLiteral("rtsp://192.168.1.50:8554/streaming/live/1"));
   QCOMPARE(statusSpy.count(), 1);
   QCOMPARE(camera.streamStatus(), 1); // Connecting
 
@@ -951,6 +982,41 @@ void ViewModelSmokeTests::int04_MqttConnectionParamsAndTelemetryFields()
   QCOMPARE(device.selectedDeviceTotalLayerNum(), 0);
   QCOMPARE(device.selectedDeviceRemainingTime(), 0);
 
+  const QString nestedPayload = QStringLiteral(
+      R"({"print":{"msg":{"gcode_state":"RUNNING","mc_percent":42,"nozzle_temper":215,"nozzle_target_temper":220,"bed_temper":62,"bed_target_temper":65,"layer_num":3,"total_layer_num":200,"mc_remaining_time":71}}})");
+  QVERIFY(device.applyMqttReportPayload(nestedPayload, device.selectedDeviceIndex()));
+  QCOMPARE(device.selectedDeviceStatus(), QStringLiteral("printing"));
+  QCOMPARE(device.selectedDeviceProgress(), 42);
+  QCOMPARE(device.selectedDeviceTemperature(), 215);
+  QCOMPARE(device.selectedDeviceNozzleTargetTemp(), 220);
+  QCOMPARE(device.selectedDeviceBedTemperature(), 62);
+  QCOMPARE(device.selectedDeviceBedTargetTemp(), 65);
+  QCOMPARE(device.selectedDeviceCurrentLayerNum(), 3);
+  QCOMPARE(device.selectedDeviceTotalLayerNum(), 200);
+  QCOMPARE(device.selectedDeviceRemainingTime(), 71);
+
+  const QString directPayload = QStringLiteral(
+      R"({"print":{"gcode_state":"PAUSE","mc_percent":43}})");
+  QVERIFY(device.applyMqttReportPayload(directPayload, device.selectedDeviceIndex()));
+  QCOMPARE(device.selectedDeviceStatus(), QStringLiteral("paused"));
+  QCOMPARE(device.selectedDeviceProgress(), 43);
+
+  QVERIFY(!device.applyMqttReportPayload(QStringLiteral("{}"), device.selectedDeviceIndex()));
+  QVERIFY(!device.applyMqttReportPayload(QStringLiteral("{"), device.selectedDeviceIndex()));
+
+  device.setSearchText(QStringLiteral("CR-10"));
+  QCOMPARE(device.filteredDeviceCount(), 1);
+  device.selectDevice(0);
+  QCOMPARE(device.selectedDeviceIndex(), 3);
+  const QString filteredPayload = QStringLiteral(
+      R"({"print":{"gcode_state":"RUNNING","mc_percent":77,"nozzle_temper":208}})");
+  QVERIFY(device.applyMqttReportPayload(filteredPayload, device.selectedDeviceIndex()));
+  QCOMPARE(device.selectedDeviceStatus(), QStringLiteral("printing"));
+  QCOMPARE(device.selectedDeviceProgress(), 77);
+  QCOMPARE(device.selectedDeviceTemperature(), 208);
+  device.setSearchText(QString());
+  QCOMPARE(device.selectedDeviceIndex(), 0);
+
   // 验证 MonitorViewModel 转发（若注入 DeviceServiceMock）
   NetworkServiceMock network;
   CameraServiceMock camera;
@@ -986,6 +1052,48 @@ void ViewModelSmokeTests::int05_MqttCommandConstructionAndControlFlow()
   QVERIFY(!device.publishPrintCommand("resume"));
   QVERIFY(!device.publishPrintCommand("stop"));
   QVERIFY(!device.publishPrintCommand("gcode_line", "G28"));
+
+  const QString pausePayload = DeviceServiceMock::buildPrintCommandEnvelope(
+      QStringLiteral("pause"), QString(), 7);
+  const QJsonObject pausePrint = QJsonDocument::fromJson(pausePayload.toUtf8())
+                                     .object()
+                                     .value(QStringLiteral("print"))
+                                     .toObject();
+  QCOMPARE(pausePrint.value(QStringLiteral("sequence_id")).toString(), QStringLiteral("7"));
+  QCOMPARE(pausePrint.value(QStringLiteral("command")).toString(), QStringLiteral("pause"));
+  QVERIFY(!pausePrint.contains(QStringLiteral("param")));
+
+  const QString resumePayload = DeviceServiceMock::buildPrintCommandEnvelope(
+      QStringLiteral("resume"), QString(), 8);
+  const QJsonObject resumePrint = QJsonDocument::fromJson(resumePayload.toUtf8())
+                                      .object()
+                                      .value(QStringLiteral("print"))
+                                      .toObject();
+  QCOMPARE(resumePrint.value(QStringLiteral("sequence_id")).toString(), QStringLiteral("8"));
+  QCOMPARE(resumePrint.value(QStringLiteral("command")).toString(), QStringLiteral("resume"));
+  QVERIFY(!resumePrint.contains(QStringLiteral("param")));
+
+  const QString stopPayload = DeviceServiceMock::buildPrintCommandEnvelope(
+      QStringLiteral("stop"), QString(), 9);
+  const QJsonObject stopPrint = QJsonDocument::fromJson(stopPayload.toUtf8())
+                                    .object()
+                                    .value(QStringLiteral("print"))
+                                    .toObject();
+  QCOMPARE(stopPrint.value(QStringLiteral("sequence_id")).toString(), QStringLiteral("9"));
+  QCOMPARE(stopPrint.value(QStringLiteral("command")).toString(), QStringLiteral("stop"));
+  QVERIFY(!stopPrint.contains(QStringLiteral("param")));
+
+  const QString gcodePayload = DeviceServiceMock::buildPrintCommandEnvelope(
+      QStringLiteral("gcode_file"), QStringLiteral("/mnt/sdcard/test.gcode"), 10);
+  const QJsonObject gcodePrint = QJsonDocument::fromJson(gcodePayload.toUtf8())
+                                     .object()
+                                     .value(QStringLiteral("print"))
+                                     .toObject();
+  QCOMPARE(gcodePrint.value(QStringLiteral("sequence_id")).toString(), QStringLiteral("10"));
+  QCOMPARE(gcodePrint.value(QStringLiteral("command")).toString(), QStringLiteral("gcode_file"));
+  QCOMPARE(gcodePrint.value(QStringLiteral("param")).toString(), QStringLiteral("/mnt/sdcard/test.gcode"));
+  QCOMPARE(DeviceServiceMock::buildPrintCommandTopic(QStringLiteral("CP01001A001")),
+           QStringLiteral("device/CP01001A001/request"));
 
   if (device.deviceCount() == 0) QSKIP("No mock devices for control flow test");
   device.selectDevice(0);
@@ -1028,6 +1136,26 @@ void ViewModelSmokeTests::int06_FtpUrlAndSendPrintRouting()
   QVERIFY2(url.contains("/mnt/sdcard/test.gcode"),
            "FTP URL should contain remote path");
 
+  const QString encodedUrl = FtpUploader::buildFtpUrl(
+      QStringLiteral("192.168.1.100"), 990,
+      QStringLiteral("A B/1"), QStringLiteral("/mnt/sdcard/test.gcode"));
+  QVERIFY2(encodedUrl.contains(QStringLiteral("A%20B%2F1"), Qt::CaseInsensitive),
+           "FTP URL should percent-encode access code");
+  QCOMPARE(DeviceServiceMock::buildPrintRemotePath(QStringLiteral("C:/tmp/plate one.gcode")),
+           QStringLiteral("/mnt/sdcard/plate one.gcode"));
+
+  FtpUploader uploader;
+  QSignalSpy uploadDone(&uploader, &FtpUploader::uploadFinished);
+  QVERIFY(uploadDone.isValid());
+  const QString missingPath = QDir::temp().filePath(QStringLiteral("owzx_phase13_missing.gcode"));
+  QFile::remove(missingPath);
+  QVERIFY(!uploader.uploadFile(QStringLiteral("192.0.2.10"), 990, QStringLiteral("ACCESS"),
+                               missingPath, QStringLiteral("/mnt/sdcard/missing.gcode")));
+  QCOMPARE(uploadDone.count(), 1);
+  const QList<QVariant> uploadArgs = uploadDone.takeFirst();
+  QCOMPARE(uploadArgs.at(0).toBool(), false);
+  QVERIFY(uploadArgs.at(1).toString().contains(QStringLiteral("local file not found")));
+
   // 2. DeviceServiceMock sendPrintViaFtp 在未连接时安全返回 false
   DeviceServiceMock device;
   QVERIFY(!device.isMqttConnected());
@@ -1040,6 +1168,68 @@ void ViewModelSmokeTests::int06_FtpUrlAndSendPrintRouting()
   if (device.deviceCount() > 0) {
     device.selectDevice(0);
     device.startPrint(0, QString()); // mock path, no crash
+  }
+}
+
+void ViewModelSmokeTests::appSettingsAndEditorBedShapePersistDeterministically()
+{
+  ScopedSettingsSnapshot appSettingsKeys({
+      QStringLiteral("Bed/Width"),
+      QStringLiteral("Bed/Depth"),
+  });
+  appSettingsKeys.clear();
+
+  {
+    AppSettingsService settings;
+    QCOMPARE(settings.bedWidth(), 220.0);
+    QCOMPARE(settings.bedDepth(), 220.0);
+    settings.setBedSize(QSizeF(32.0, 2500.0));
+    QCOMPARE(settings.bedWidth(), 50.0);
+    QCOMPARE(settings.bedDepth(), 2000.0);
+  }
+  {
+    AppSettingsService settings;
+    QCOMPARE(settings.bedWidth(), 50.0);
+    QCOMPARE(settings.bedDepth(), 2000.0);
+    settings.resetToDefaults();
+    QCOMPARE(settings.bedWidth(), 220.0);
+    QCOMPARE(settings.bedDepth(), 220.0);
+  }
+
+  ScopedSettingsSnapshot editorBedKeys({
+      QStringLiteral("bed/width"),
+      QStringLiteral("bed/depth"),
+      QStringLiteral("bed/maxHeight"),
+      QStringLiteral("bed/originX"),
+      QStringLiteral("bed/originY"),
+      QStringLiteral("bed/shapeType"),
+      QStringLiteral("bed/diameter"),
+  });
+  editorBedKeys.clear();
+
+  {
+    ProjectServiceMock project;
+    SliceService slice(&project);
+    EditorViewModel editor(&project, &slice);
+    editor.setBedWidth(333.0f);
+    editor.setBedDepth(444.0f);
+    editor.setBedMaxHeight(555.0f);
+    editor.setBedOriginX(-12.5f);
+    editor.setBedOriginY(13.5f);
+    editor.setBedShapeType(1);
+    editor.setBedDiameter(222.0f);
+  }
+  {
+    ProjectServiceMock project;
+    SliceService slice(&project);
+    EditorViewModel editor(&project, &slice);
+    QCOMPARE(editor.bedWidth(), 333.0f);
+    QCOMPARE(editor.bedDepth(), 444.0f);
+    QCOMPARE(editor.bedMaxHeight(), 555.0f);
+    QCOMPARE(editor.bedOriginX(), -12.5f);
+    QCOMPARE(editor.bedOriginY(), 13.5f);
+    QCOMPARE(editor.bedShapeType(), 1);
+    QCOMPARE(editor.bedDiameter(), 222.0f);
   }
 }
 

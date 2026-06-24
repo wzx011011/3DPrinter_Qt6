@@ -152,6 +152,12 @@ public:
   int selectedDeviceMqttPort() const;
   /// v2.7 P2-A: 设置选中设备的 access code + 端口（连接对话框录入后调用）
   Q_INVOKABLE void setSelectedDeviceAccessCode(const QString &accessCode, int port = 8883);
+  Q_INVOKABLE bool applyMqttReportPayload(const QString &payload, int deviceIndex = -1);
+  static QString buildPrintCommandEnvelope(const QString &command,
+                                           const QString &param,
+                                           int sequenceId);
+  static QString buildPrintCommandTopic(const QString &serial);
+  static QString buildPrintRemotePath(const QString &gcodePath);
   int selectedDeviceSignalStrength() const;
   bool selectedDeviceChamberLightOn() const;
   bool selectedDeviceWorkLightOn() const;

@@ -67,6 +67,14 @@ bool CameraServiceMock::cameraAvailable() const
   return cameraAvailable_;
 }
 
+QString CameraServiceMock::defaultRtspUrlForDevice(const QString &deviceIp)
+{
+  if (deviceIp.isEmpty())
+    return QString();
+  const QString url = QStringLiteral("rtsp://%1:8554/streaming/live/1").arg(deviceIp);
+  return url;
+}
+
 void CameraServiceMock::startStream()
 {
   if (!cameraAvailable_) {
@@ -262,5 +270,5 @@ QString CameraServiceMock::buildRtspUrl(const QString &deviceIp) const
   if (deviceIp.isEmpty())
     return QString();
   // Bambu 打印机摄像头默认 RTSP 端点（对齐上游 MediaPlayCtrl Bambu RTSP）
-  return QStringLiteral("rtsp://%1:8554/streaming/live/1").arg(deviceIp);
+  return defaultRtspUrlForDevice(deviceIp);
 }

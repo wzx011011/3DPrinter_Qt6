@@ -41,6 +41,8 @@ public:
     Q_INVOKABLE int discoveredCount() const { return m_devices.size(); }
     Q_INVOKABLE QVariantMap deviceAt(int index) const;
     Q_INVOKABLE QStringList discoveredIps() const;
+    static DiscoveredDevice parseResponseDatagram(const QByteArray &data,
+                                                  const QHostAddress &sender);
 
 signals:
     /// 发现新设备
@@ -66,7 +68,6 @@ private:
     static const int SSDP_PORT = 1900;
 
     // 解析 SSDP 响应
-    DiscoveredDevice parseResponse(const QByteArray &data, const QHostAddress &sender);
 };
 
 } // namespace owzx

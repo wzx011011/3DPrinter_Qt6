@@ -73,6 +73,7 @@ public:
   void setCameraUrl(const QString &url);
   QString errorMessage() const;
   bool cameraAvailable() const;
+  static QString defaultRtspUrlForDevice(const QString &deviceIp);
 
   /// 帧令牌（v2.6 CAM-03）：当前帧序号，每次新帧递增
   int frameToken() const { return frameToken_; }

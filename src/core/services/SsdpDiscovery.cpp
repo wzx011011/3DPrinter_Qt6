@@ -3,6 +3,7 @@
 #include <QNetworkInterface>
 #include <QVariant>
 #include <QDebug>
+#include <QUrl>
 
 namespace owzx {
 
@@ -84,7 +85,7 @@ void SsdpDiscovery::onReadyRead()
         if (m_seenIps.contains(ip))
             continue;
 
-        DiscoveredDevice dev = parseResponse(data, sender);
+        DiscoveredDevice dev = parseResponseDatagram(data, sender);
         if (!dev.ip.isEmpty())
         {
             m_seenIps[ip] = true;
@@ -114,7 +115,7 @@ void SsdpDiscovery::onTimeout()
     emit discoveryFinished(m_devices.size());
 }
 
-DiscoveredDevice SsdpDiscovery::parseResponse(const QByteArray &data, const QHostAddress &sender)
+DiscoveredDevice SsdpDiscovery::parseResponseDatagram(const QByteArray &data, const QHostAddress &sender)
 {
     DiscoveredDevice dev;
     dev.ip = sender.toString();
@@ -129,9 +130,10 @@ DiscoveredDevice SsdpDiscovery::parseResponse(const QByteArray &data, const QHos
         if (lower.startsWith("location:"))
         {
             // Location: http://192.168.1.100:80/info
-            dev.ip = line.mid(9).trimmed();
+            const QUrl location(line.mid(9).trimmed());
             // 提取 IP（去掉 http:// 和端口）
-            dev.ip = dev.ip.replace("http://", "").section(":", 0, 0);
+            if (location.isValid() && !location.host().isEmpty())
+                dev.ip = location.host();
         }
         else if (lower.startsWith("st:"))
         {

@@ -31,9 +31,9 @@ QString FtpUploader::buildFtpUrl(const QString &host, int port,
 {
   // Bambu FTP URL：ftp://bblp:<accessCode>@<host>:<port><remotePath>
   // access code 需 URL 编码（可能含特殊字符，但 Bambu access code 是字母数字+空格）
-  QString encodedCode = QString::fromUtf8(QUrl::toPercentEncoding(accessCode));
-  return QStringLiteral("ftp://bblp:%1@%2:%3%4")
-      .arg(encodedCode, host).arg(port).arg(remotePath);
+  QString encodedCode = QString::fromUtf8(QUrl::toPercentEncoding(accessCode, QByteArray(), QByteArrayLiteral("/")));
+  return QStringLiteral("ftp://bblp:") + encodedCode + QStringLiteral("@") +
+         host + QStringLiteral(":") + QString::number(port) + remotePath;
 }
 
 int FtpUploader::progressCallback(void *clientp, double dltotal, double dlnow,
