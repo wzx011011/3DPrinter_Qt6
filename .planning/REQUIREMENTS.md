@@ -1,408 +1,157 @@
-# Requirements — Milestone v2.0: OrcaSlicer UI Full Restoration
+# Requirements: OWzx Slicer
 
-**Scope:** 把 Qt6/QML 项目的 UI 全面对齐到 OrcaSlicer 上游。v2.0 聚焦 P0（架构对齐）+ P1（核心可见功能），P2-P3 推迟到 v2.1/v2.2。
+**Defined:** 2026-06-24
+**Core Value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-**Reference:** 调研报告见会话历史；上游 GUI 源码 `third_party/OrcaSlicer/src/slic3r/GUI/`。
+## Requirement Status Terms
 
----
+- **Real:** source-truth behavior is implemented and verified with deterministic evidence.
+- **Hybrid:** a real path exists, but fallback/mock behavior remains or verification is incomplete.
+- **Mock:** local simulation only.
+- **Blocked:** requires an unavailable dependency, protocol, credential, or product decision.
+- **Placeholder:** visible UI or enum exists but has no meaningful backend behavior.
 
-## Categories
+## Current Baseline Classification
 
-| ID Prefix | Category | Phase Mapping |
-|-----------|----------|---------------|
-| `BRAND` | 品牌清理 | Phase 01 |
-| `ARCH` | 顶层架构（Notebook + Plater 共享 + Sidebar Dockable） | Phase 02-04 |
-| `SIDEBAR` | Prepare 左侧 Sidebar 八大区块 | Phase 05 |
-| `GLUI` | GLCanvas 工具栏系统（Main/Gizmos/View） | Phase 06 |
-| `CALIB` | Calibration 菜单 + 校准 Dialog | Phase 07 |
-| `TOPBAR` | BBLTopbar 完整菜单系统 | Phase 02 |
+| Area | Status | Evidence / Notes |
+|---|---|---|
+| Model/project load | Hybrid/Real | Real libslic3r paths exist; workflow edges still need source-truth parity checks when touched. |
+| Basic slicing and G-code export | Real | Canonical verify passed on 2026-06-24, including E2E pipeline tests. |
+| Preview rendering | Hybrid/Real | Rendering path exists; detailed upstream preview behavior remains a separate parity topic. |
+| Calibration | Hybrid | PA, Flow Rate, and Temp Tower dispatch through `SliceService`; topbar menu and deterministic tests are incomplete. |
+| SSDP discovery | Hybrid | Real UDP discovery exists; device state remains mock-heavy. |
+| MQTT/FTP/send print | Hybrid | Real transport wrappers exist; tests and UI still lean on fallback/mock behavior. |
+| Camera stream | Hybrid | FFmpeg/RTSP code path exists; test coverage mostly validates no-stream/fallback behavior. |
+| Preset bundle | Partial | Current bundle IO is simplified JSON, not upstream-compatible preset bundle behavior. |
+| PartPlate / plate-scoped config | Hybrid/Placeholder | Multi-plate APIs exist, but upstream PartPlate config behavior and AssembleView are incomplete. |
+| ModelMall / WebView | Blocked/Placeholder | WebView availability is hardcoded false. |
+| Visible top-level UI actions | Partial/Placeholder | Several export, preference, calibration, layer editing, account/store/publish actions are disabled or TODO. |
+| Planning docs | Drifted | v2.6 planning state was stale relative to v2.7/v2.8 git history and dirty local implementation. |
 
----
+## v2.9 Requirements - Implementation Realignment and Stabilization
 
-## P0 — Architecture Alignment (Phase 01-04)
+### Planning Realignment
 
-### BRAND — OWzx Brand Cleanup
+- [ ] **PLAN-01**: Maintainer can read `.planning/INDEX.md`, `PROJECT.md`, `STATE.md`, `REQUIREMENTS.md`, and `ROADMAP.md` and see the same active milestone, baseline status, and next phase.
+- [ ] **PLAN-02**: Current git history through v2.8 is reflected in planning as shipped history, not as future v2.7/v2.8 scope.
+- [ ] **PLAN-03**: Every active service/workflow surface is classified as Real, Hybrid, Mock, Blocked, or Placeholder with evidence.
+- [ ] **PLAN-04**: Missing rule-file references from AGENTS are either restored or redirected to existing canonical rules.
+- [ ] **PLAN-05**: Old CrealityPrint-era references outside historical evidence are classified as intentional history, vendor data, or cleanup debt.
 
-- [x] **BRAND-01**: 应用窗口标题、关于对话框、shortcut 一览对话框中所有 "Creality Print" / "CrealityPrint" 字符串替换为 "OWzx"
-- [x] **BRAND-02**: 移除 `third_party/CrealityPrint` submodule 引用与所有相关 CMake/config 路径
-- [ ] **BRAND-03**: 内部命名空间 `Crality3D` / `creality` 等迁移到 `OWzx` / `owzx`（保持向后兼容的 alias 阶段可省略）
-- [x] **BRAND-04**: 资源文件（图标、配置）中所有 Creality 品牌资源替换为 OWzx 版本
-- [x] **BRAND-05**: 启动画面、关于对话框版本号对齐 OrcaSlicer main branch（不再用 v7.0.1）
+### Source Hygiene
 
-### ARCH — Top-Level Architecture
+- [ ] **HYGIENE-01**: Literal escape artifacts such as `\r\n` inside source comments are removed or converted to real line breaks where they affect behavior.
+- [ ] **HYGIENE-02**: Encoding-damaged source comments and user-visible strings in active files are repaired or explicitly scoped for follow-up.
+- [ ] **HYGIENE-03**: Residual backup/source artifacts under `src/`, including `SliceService.cpp.backup`, are removed or moved to an explicit archive after ownership is confirmed.
+- [ ] **HYGIENE-04**: Untracked baseline files introduced by recent implementation work are either committed as intentional work, ignored intentionally, or documented as external artifacts.
 
-- [ ] **ARCH-01**: `main.qml` 从 12 页 `StackLayout` 重构为 9 页 `TabBar + StackLayout`（Home/Prepare/Preview/Device/MultiDevice/Project/Calibration + 2 占位）
-- [ ] **ARCH-02**: Notebook tab 支持上游 `tp3DEditor=1` / `tpPreview=2` 等位置常量语义
-- [ ] **ARCH-03**: Tab 切换通过 `request_select_tab(TabPosition)` 事件广播（对齐上游 `EVT_SELECT_TAB`）
-- [ ] **ARCH-04**: Notebook 右侧 `side_tools` 区支持 Slice/Print 下拉按钮 + FilamentGroupPopup（多耗材分组切片）
-- [ ] **ARCH-05**: Prepare 与 Preview 共享同一 `Plater` QML 组件实例（通过 Loader + `viewMode` 属性切换 View3D↔Preview）
-- [ ] **ARCH-06**: Plater 内部三选一显示 View3D/Preview/AssembleView（按 viewMode 切换）
-- [ ] **ARCH-07**: 切换 Prepare→Preview 时保留所有 Plater 状态（对象/选择/切片结果/gizmo 状态），无需重建
-- [x] **ARCH-08**: Sidebar 支持 Dockable（可拖到 Left/Right/浮动/折叠），用 QDockWidget 或 QML 等价机制 *(Phase 4; Left/Right + 折叠完成，浮动 Out of Scope 记为已知限制)*
-- [x] **ARCH-09**: Sidebar 折叠按钮（对齐上游 `collapse_toolbar`），点击隐藏 Sidebar 让 3D 区独占 *(Phase 4)*
-- [x] **ARCH-10**: Plater 与 Sidebar 之间布局响应式（窗口缩放/最大化正确处理） *(Phase 4; RowLayout fillWidth + 逻辑像素)*
+### Calibration Stabilization
 
-### TOPBAR — BBLTopbar Menu System
+- [ ] **CAL-01**: User can launch implemented calibration modes from visible UI paths rather than only through backend/internal wiring.
+- [ ] **CAL-02**: PA, Flow Rate, and Temp Tower calibration paths have deterministic regression coverage for job creation or generated slice requests.
+- [ ] **CAL-03**: Calibration mock fallback behavior still works when `SliceService` is unavailable.
+- [ ] **CAL-04**: Calibration modes not implemented in Qt6 are explicitly marked Pending or Blocked with upstream references.
+- [ ] **CAL-05**: Calibration progress and completion reporting are driven by the real slice path when slicing is active and by the fallback timer only in mock mode.
 
-- [ ] **TOPBAR-01**: BBLTopbar 重构为标题栏 + 菜单 + 工具按钮合体（对齐上游 `BBLTopbar.cpp`）
-- [ ] **TOPBAR-02**: `[File ▾]` 下拉菜单（New/Open/Recent/Save/Save As/Import 系列/Export 系列/Quit）
-- [ ] **TOPBAR-03**: `[▾]` 二级下拉（Edit/View/Preferences/Calibration/Help 完整子菜单）
-- [ ] **TOPBAR-04**: 工具按钮（Save/Undo/Redo/Calibration）+ 条件按钮（Account/ModelStore/Publish）
-- [ ] **TOPBAR-05**: CenteredTitle 显示项目名（居中）
-- [ ] **TOPBAR-06**: 窗口控制按钮（Min/Max/Close），Linux 自绘风格可选
-- [ ] **TOPBAR-07**: macOS 走系统菜单栏，Win/Linux 走 BBLTopbar（条件编译）
+### Hybrid Integration Verification
 
----
+- [ ] **INT-01**: SSDP discovery parsing and timeout/error paths are covered by deterministic tests or fixtures.
+- [ ] **INT-02**: MQTT status parsing and pause/resume/stop publish payloads are covered without requiring a live printer.
+- [ ] **INT-03**: FTP send-print path has deterministic success/error-path coverage without requiring a live printer.
+- [ ] **INT-04**: Camera stream behavior has deterministic no-stream/error-path coverage and an explicit note for real RTSP verification requirements.
+- [ ] **INT-05**: Software viewport / OpenGL fallback behavior is documented and covered by startup smoke evidence.
+- [ ] **INT-06**: App settings and bed-shape persistence introduced by recent work are verified or explicitly deferred.
 
-## P1 — Core Visible Features (Phase 05-07)
+### Visible Placeholder Triage
 
-### SIDEBAR — Prepare Plater Sidebar
+- [ ] **UI-01**: Export project and export model menu actions either call real backend behavior or are visibly classified as deferred/blocked in planning.
+- [ ] **UI-02**: Preferences menu action opens a real Preferences workflow or is explicitly deferred without silent no-op behavior.
+- [ ] **UI-03**: BBLTopbar calibration entries for implemented modes are enabled and routed to calibration viewmodel actions.
+- [ ] **UI-04**: Placeholder account, model store, publish, layer editing, AssembleView, and ModelMall/WebView surfaces are reclassified so broad UI presence is not counted as feature completion.
+- [ ] **UI-05**: QML-side logic that affects durable behavior is identified and moved to C++ viewmodels/services or documented as presentation-only.
 
-- [x] **SIDEBAR-01**: Sidebar 滚动区按八大区块顺序布局：Printer → Filament → Process 顶部条 → Search → ObjectList → ObjectSettings → ObjectLayers → ParamsPanel page_view *(Phase 5)*
-- [x] **SIDEBAR-02**: Printer 标题栏（icon + "Printer" + connect/sync/settings 按钮）+ 内容（preset combo + 喷嘴 diameter + Bed type + extruders 数） *(Phase 5, 已有)*
-- [x] **SIDEBAR-03**: Printer 标题栏可折叠（点击切换内容显隐） *(Phase 5, 已有)*
-- [x] **SIDEBAR-04**: Filament 标题栏 + 双列耗材列表（每个 extruder 一个 PlaterPresetComboBox + 颜色 + edit） *(Phase 5, 已有)*
-- [x] **SIDEBAR-05**: Filament 标题栏可折叠 *(Phase 5, 已有)*
-- [-] **SIDEBAR-06**: Process 顶部条（ParamsPanel.m_top_panel）：Process icon + "Process" + SwitchButton(Global/Objects) + ModeIcon + ModeSwitchButton(Simple/Advanced) + Compare + Setting *(Phase 5 骨架; UI 完成, ModeSwitch 待 VM)*
-- [x] **SIDEBAR-07**: Global/Objects 作用域切换正确反映到参数列表显示 *(Phase 5; 绑 activateGlobalScope/activateObjectScope)*
-- [-] **SIDEBAR-08**: Simple/Advanced 模式切换正确过滤参数可见性 *(Phase 5 占位; 需 ConfigViewModel configMode)*
-- [-] **SIDEBAR-09**: Compare 按钮打开 DiffPresetDialog（v2.0 占位，正式实现延后到 v2.2） *(Phase 5 占位)*
-- [-] **SIDEBAR-10**: Setting 按钮弹出 ObjectTableDialog（查看对象全部设置） *(Phase 5 占位)*
-- [x] **SIDEBAR-11**: Search bar（StaticBox + TextInput + search icon），输入跳转到对应参数 *(Phase 5)*
-- [-] **SIDEBAR-12**: ObjectList 树完整（对象/部件/设置/层），支持拖拽/右键菜单/重命名 *(Phase 5 部分; 现有 ObjectList 组件, 拖拽待 VM 扩展)*
-- [x] **SIDEBAR-13**: ObjectSettings 区块（选中对象的快速设置），无选中时隐藏 *(Phase 5)*
-- [-] **SIDEBAR-14**: ObjectLayers 区块（变量层高编辑器），仅打印对象时显示 *(Phase 5 占位; 完整编辑器延后)*
-- [-] **SIDEBAR-15**: ParamsPanel page_view（参数列表）+ 左侧 7 个子 Tab 按钮（Print/PrintPlate/PrintObject/PrintPart/PrintLayer/Filament/Printer） *(Phase 5 骨架; 7 Tab UI 完成, 参数列表待 pageView 扩展)*
+### Verification Gate
 
-### GLUI — GLCanvas Toolbar System
+- [ ] **VERIFY-01**: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` passes after v2.9 planning and implementation stabilization.
+- [ ] **VERIFY-02**: `ViewModelSmokeTests.exe` is either run explicitly or documented as built-only with a reason.
+- [ ] **VERIFY-03**: The final v2.9 evidence links each completed requirement to build/test output, source references, or an explicit manual verification note.
 
-- [ ] **GLUI-01**: MainToolbar（顶部 GL overlay）：[+Add][+Plate][⟳Orient][⇲Arrange] | [More/Fewer][SplitOptions][SplitParts][LayersEditing]
-- [ ] **GLUI-02**: Gizmos 竖向条（左侧 GL overlay）：Move/Rotate/Scale/Flatten/Cut/MeshBoolean/FdmSupports/Seam/Emboss/Svg/Measure/Simplify
-- [ ] **GLUI-03**: ViewToolbar（右侧 GL overlay）：[Top][Front][Right][Back][ISO][Reset] 视角预设
-- [ ] **GLUI-04**: SeparatorToolbar（分隔条）
-- [ ] **GLUI-05**: CollapseToolbar（折叠 Sidebar 按钮）
-- [ ] **GLUI-06**: Preview 模式下显示 IMSlider/IMToolbar（层/G-code 滑块与工具条），用 QML 浮层实现
-- [ ] **GLUI-07**: 工具栏 QML overlay 替代 ImGui GL 渲染（保持与 QML 主题一致）
-- [ ] **GLUI-08**: PartPlateList（底部 GL overlay）：多板 plate 列表条 + [+Add] 按钮
-- [ ] **GLUI-09**: NotificationManager 浮层通知（3D canvas 右上角），与全局通知系统集成
+## Future Requirements
 
-### CALIB — Calibration Menu & Dialogs
+### v3.0 Candidate - PartPlate and AssembleView
 
-- [ ] **CALIB-01**: Calibration 顶级菜单（Temperature/Max flowrate/Pressure advance/Flow ratio/Retraction/Cornering/Input Shaping Freq+Damp/VFA/Calibration Guide）
-- [ ] **CALIB-02**: PA_Calibration_Dlg（压力推进校准）
-- [ ] **CALIB-03**: FlowRateCalibrationDialog（流量校准，含向导）
-- [ ] **CALIB-04**: Temp_Calibration_Dlg（温度校准）
-- [ ] **CALIB-05**: MaxVolumetricSpeed_Test_Dlg（最大流量测试）
-- [ ] **CALIB-06**: VFA_Test_Dlg（VFA 测试）
-- [ ] **CALIB-07**: Retraction_Test_Dlg（回抽测试）
-- [ ] **CALIB-08**: Input_Shaping_Freq_Test_Dlg + Input_Shaping_Damp_Test_Dlg（输入整形）
-- [ ] **CALIB-09**: Cornering_Test_Dlg（拐角测试）
-- [ ] **CALIB-10**: 校准历史记录持久化（EditCalibrationHistoryDialog）
-- [ ] **CALIB-11**: CalibrationWizard 系列（PA/Flow/MaxVS 嵌入 CalibrationPanel）
+- **PLATE-01**: User can manage upstream-equivalent multi-plate ownership, object assignment, reorder, duplicate, delete, rename, and slicing.
+- **PLATE-02**: User can save and reload per-plate configuration overrides.
+- **PLATE-03**: User can use a non-placeholder AssembleView for multi-plate assembly workflows.
 
----
+### v3.1 Candidate - Preset System Completion
 
-## Future Requirements (Deferred to v2.1 / v2.2)
+- **PRESET-01**: User can import/export upstream-compatible preset bundles, not only simplified JSON.
+- **PRESET-02**: User can create presets through a source-truth CreatePresetsDialog workflow.
+- **PRESET-03**: User receives correct dirty-state and unsaved-change prompts across preset/page switches.
 
-### P2 — High-value Pages (v2.1 candidate)
+### v3.2 Candidate - Web, Cloud, Multi-Machine
 
-- Home WebView（QtWebEngine 替代 wxWebView，Makezilla 模型商店）
-- Device 双形态（MonitorPanel for BBL / PrinterWebView for 非 BBL）
-- Multi-device 页（条件显示，多打印机批量管理）
-- Project 页 5 子 Tab（Basic Info/Pictures/BOM/Assembly Guide/Others）
-- ConfigWizard 完整版（Welcome→Printer→Filament→Done）
-- PreferencesDialog 完整版（几十个偏好选项）
+- **WEB-01**: User can access ModelMall/Home WebView when QtWebEngine and product policy allow it.
+- **CLOUD-01**: Cloud and multi-machine workflows are moved from mock/local state to verified integration or explicit blocked state.
 
-### P3 — Dialog & Polish (v2.2 candidate)
+### Later Candidates
 
-- AMS 系列 Dialog（~10 个：AmsMappingPopup 全家、AMSMaterialsSetting、SyncAmsInfoDialog 等）
-- 预设管理 Dialog（SavePreset/DiffPreset/CreatePreset 系列）
-- Print/PrintHost 系列（SelectMachine/SendToPrinter/PrintHostQueue）
-- 绑定/网络 Dialog（Bind/UnBind/Bonjour/OAuth/PrinterCloudAuth）
-- 更新/隐私 Dialog（ReleaseNote/UpdateVersion/PrivacyUpdate）
-- i18n 21 种语言接入（迁移 OrcaSlicer .po 到 Qt .ts/.qm）
-- 图标主题 `_dark` 后缀约定（Qt 等价机制）
-- NotificationManager 浮层细节完善
+- Full i18n translation coverage beyond infrastructure.
+- Full calibration mode coverage beyond PA, Flow Rate, and Temp Tower.
+- OpenVDB-dependent hollow/support paint workflows when dependency status changes.
+- WebRTC/MetaRTC camera workflows when dependencies and protocols are available.
 
----
+## Out of Scope for v2.9
 
-## Out of Scope (v2.0)
-
-- **TriangleSelector 真实集成** — 上游依赖 wxWidgets GL 交互，阻塞 SupportPaint/SeamPaint/MmuSegmentation
-- **OpenVDB 集成** — 链接失败，阻塞 Hollow Gizmo
-- **FFmpeg/RTSP 视频流** — 未找到，阻塞 Monitor 摄像头
-- **bambu_networking 真实连接** — 闭源，阻塞真实设备连接/MQTT
-- **Shell 渲染** — 依赖上游 GCodeViewer shell 集成
-- **SLA 模块完整迁移** — 上游 SLA 专用功能
-- **AssembleView 真实功能** — 多板装配视图（v2.0 仅保留入口，正式实现延后）
-
----
+| Feature | Reason |
+|---|---|
+| Full PartPlate/AssembleView implementation | Large source-truth module; v2.9 first makes the baseline trustworthy. |
+| Full upstream preset bundle compatibility | Requires dedicated preset-system milestone. |
+| ModelMall/Home WebView | QtWebEngine/product integration remains a separate blocked or future scope. |
+| Full i18n content migration | Not required to stabilize current implementation/planning drift. |
+| New product behavior unrelated to OrcaSlicer upstream | Violates the source-truth migration constraint. |
+| Alternate build scripts or build directories | Project rules allow only the canonical script and `build/`. |
 
 ## Traceability
 
-| REQ-ID | Phase | Verified By |
-|--------|-------|-------------|
-| BRAND-01 ~ BRAND-05 | Phase 1 | — |
-| ARCH-01 ~ ARCH-04 | Phase 2 | — |
-| ARCH-05 ~ ARCH-07 | Phase 3 | — |
-| ARCH-08 ~ ARCH-10 | Phase 4 | — |
-| TOPBAR-01 ~ TOPBAR-07 | Phase 2 | — |
-| SIDEBAR-01 ~ SIDEBAR-15 | Phase 5 | — |
-| GLUI-01 ~ GLUI-09 | Phase 6 | — |
-| CALIB-01 ~ CALIB-11 | Phase 7 | — |
+| Requirement | Phase | Status |
+|---|---|---|
+| PLAN-01 | Phase 10 | Pending |
+| PLAN-02 | Phase 10 | Pending |
+| PLAN-03 | Phase 10 | Pending |
+| PLAN-04 | Phase 10 | Pending |
+| PLAN-05 | Phase 10 | Pending |
+| HYGIENE-01 | Phase 11 | Pending |
+| HYGIENE-02 | Phase 11 | Pending |
+| HYGIENE-03 | Phase 11 | Pending |
+| HYGIENE-04 | Phase 11 | Pending |
+| CAL-01 | Phase 12 | Pending |
+| CAL-02 | Phase 12 | Pending |
+| CAL-03 | Phase 12 | Pending |
+| CAL-04 | Phase 12 | Pending |
+| CAL-05 | Phase 12 | Pending |
+| INT-01 | Phase 13 | Pending |
+| INT-02 | Phase 13 | Pending |
+| INT-03 | Phase 13 | Pending |
+| INT-04 | Phase 13 | Pending |
+| INT-05 | Phase 13 | Pending |
+| INT-06 | Phase 13 | Pending |
+| UI-01 | Phase 14 | Pending |
+| UI-02 | Phase 14 | Pending |
+| UI-03 | Phase 14 | Pending |
+| UI-04 | Phase 14 | Pending |
+| UI-05 | Phase 14 | Pending |
+| VERIFY-01 | Phase 15 | Pending |
+| VERIFY-02 | Phase 15 | Pending |
+| VERIFY-03 | Phase 15 | Pending |
 
----
-*Last updated: 2026-06-17 — v2.0 架构层完成；追加 v2.1 (Slice & Preview Deep Dive) 需求*
-
----
-
-## v2.1 Requirements — Slice & Preview Deep Dive (2026-06-17 启动)
-
-**Goal:** 深化切片预览体验 + 完善预设管理。集中在 Prepare/Preview/Settings 已有页面深化，不碰 Mock 服务。
-
-### SLICE — Preview TickCode/IMSlider 系统
-
-- [x] **SLICE-01 [P0]**: G-code 着色模式切换（13 种模式，对齐上游 viewModeIndex，代码完成 + 切片链路通；视觉验收待本机 3D）— DONE 2026-06-18
-- [ ] **SLICE-02 [P0]**: IMSlider 层滑块增强（刻度标记 + 拖拽手感，对齐上游 IMSlider.cpp 1828 行）
-- [ ] **SLICE-03 [P1]**: TickCode 自定义刻度插入（change filament/pause/custom gcode，对齐上游 TickCode.cpp）
-- [ ] **SLICE-04 [P1]**: CustomGcodeDialog 联动 slider（dialog 已存在，接入刻度点击）
-- [ ] **SLICE-05 [P2]**: 切片冲突热区点击（占位，评估后定）
-- [ ] **SLICE-06 [P2]**: Legend 动态更新（跟随着色模式）
-- [ ] **SLICE-07 [P2]**: ToolPositionTooltip 增强
-- [ ] **SLICE-08 [P2]**: 键盘导航对齐上游 IMSlider 语义
-
-### PRESET — Preset 管理 Dialog 套件
-
-- [ ] **PRESET-01 [P0]**: SavePresetDialog（保存当前参数为预设，对齐上游 18KB）
-- [ ] **PRESET-02 [P1]**: UnsavedChangesDialog（切换守卫，对齐上游 95KB）
-- [ ] **PRESET-03 [P2]**: ExportPresetBundleDialog（导出预设包，对齐上游 23KB）
-- [ ] **PRESET-04 [P2]**: CreatePresetsDialog（批量创建，对齐上游 264KB——评估后可能延后）
-
-### PREPARE — Prepare 页打磨收尾（v2.0 遗留 G6/G8）
-
-- [ ] **PREPARE-01 [P1]**: BBLTopbar 样式打磨（G6，图标+文字/间距/配色）
-- [ ] **PREPARE-02 [P2]**: 配色对比度（G8，Theme 令牌调整）
-
-### SEARCH — Settings Search 集成
-
-- [ ] **SEARCH-01 [P1]**: SearchDialog 接入 SettingsPage tier（dialog 已存在，未集成）
-
-### Out of Scope (v2.1 明确不做)
-
-- Device/Cloud/Network/Calibration 真实化（v2.2+）
-- AssembleView / PartPlate 完整（v2.2+）
-- ModelMall WebView / Home WebView（v2.2+，需 QtWebEngine）
-- i18n 翻译内容填充（v2.2+）
-- 90+ Dialog 补全的剩余部分（分散）
+**Coverage:**
+- v2.9 requirements: 28 total
+- Mapped to phases: 28
+- Unmapped: 0
 
 ---
 
-## v2.1 完成状态（2026-06-18）
-
-v2.1 的 15 项中 12 项完成，3 项评估后延后 v2.2。详见 commit 346c450 + 85e2b5c。
-
-**延后到 v2.2 的**：SLICE-05（冲突热区）/ PRESET-03（ExportBundle）/ PRESET-04（CreatePresets）
-
----
-
-## v2.2 Requirements — Page Completion & Cleanup（2026-06-18 启动）
-
-**Goal:** 把低完成度页面提到可用状态 + 清理冗余 + 收尾 v2.1 延后项。集中在 UI 补全，不引入新的复杂集成（MQTT/真实打印留 v2.3+）。
-
-### PAGE — 页面补全
-
-- [ ] **PAGE-01 [P0]**: ProjectPage 按钮接线（新建/打开/保存/另存/导入/导出 6 按钮全空壳 → 接 ProjectService 真实 IO）
-- [ ] **PAGE-02 [P0]**: DeviceListPage 修复强制写空 bug（line 13-14）+ 完整设备对象展示（SSDP 发现占位）
-- [ ] **PAGE-03 [P1]**: AuxiliaryPage 9 张卡片接线（onClicked 全空 → 接 AuxiliaryService 真实分析：模型分析/支撑预览/重量估算）
-- [ ] **PAGE-04 [P1]**: HomePage 完善（DailyTips 占位 + 最近项目真实数据 + 登录入口接线）
-- [ ] **PAGE-05 [P2]**: ConfigPage 清理（冗余死代码，被 SettingsPage 取代 → 删除或重定向）
-
-### V21DEFER — v2.1 延后项收尾
-
-- [ ] **V21-01 [P2]**: SLICE-05 切片冲突热区点击（GCodeViewer 碰撞检测，评估实现复杂度）
-- [ ] **V21-02 [P2]**: PRESET-03 ExportPresetBundleDialog（简化版：导出全部预设为 zip）
-- [ ] **V21-03 [P2]**: PRESET-04 CreatePresetsDialog（264KB 巨型，评估最小可用版）
-
-### TECH — 技术债
-
-- [ ] **TECH-01 [P1]**: cgal/libslic3r 每次构建全量重编问题（时间戳/依赖追踪修复，节省 10+ 分钟/次）
-- [ ] **TECH-02 [P2]**: review 遗留 Warning（W2 enabled 遮蔽 / W4 写环 / W7 Theme 令牌）
-
-### Out of Scope (v2.2 明确不做)
-
-- Device/Cloud/Network 真实化（v2.3+，需 MQTT/HTTP 集成）
-- Calibration 真实化（v2.3+，需 libslic3r CalibMode）
-- AssembleView（v2.3+）
-- ModelMall/Home WebView（v2.3+，需 QtWebEngine）
-- i18n 翻译内容（v2.3+）
-
----
-
-## v2.2 完成状态（2026-06-18）
-
-v2.2 的 10 项中 8 项达标（80%），2 项评估延后 v2.3。详见 commit 05dfed7 + `.planning/audits/v2.2-AUDIT.md`。
-
----
-
-## v2.3 Requirements — UI Completion Polish（2026-06-18 启动，Phase 模式）
-
-**Goal:** UI 完整度收尾到"无明显缺失"——补齐缺失对话框、挂载孤儿页面、完善 Gizmo UI、建立 i18n 基础。
-
-### Phase 1: 缺失对话框 + 孤儿页面挂载
-
-- [ ] **UI-01 [P0]**: KBShortcutsDialog（快捷键总览，接 BBLTopbar.shortcutOverviewRequested 信号）
-- [ ] **UI-02 [P0]**: AuxiliaryPage 挂载到 main.qml StackLayout（v2.2 孤儿页面）
-- [ ] **UI-03 [P1]**: NetworkTestDialog（网络测试，对齐上游）
-- [ ] **UI-04 [P1]**: TroubleshootDialog（设备排错，对齐上游）
-
-### Phase 2: 剩余 Gizmo UI 交互面板
-
-- [ ] **UI-05 [P1]**: MmuSegmentation 多色分区绘制 UI（多色打印核心，对齐上游 GLGizmoMmuSegmentation）
-- [ ] **UI-06 [P2]**: Hollow/BrimEars/FuzzySkin Gizmo UI 占位（SLA/特殊工艺）
-- [ ] **UI-07 [P2]**: Emboss 文字浮雕 UI 完善（按钮有，交互面板缺）
-
-### Phase 3: i18n 基础 + 视觉打磨
-
-- [ ] **UI-08 [P1]**: zh_CN 翻译填充（当前 ~0%，目标 80%+ 常用串）
-- [ ] **UI-09 [P2]**: i18n 翻译流程文档（lupdate/lrelease 工作流）
-- [ ] **UI-10 [P2]**: 视觉打磨收尾（BBLTopbar 图标 + 配色微调 + 待本机验收项准备）
-
-### Out of Scope (v2.3)
-
-- Device/Cloud/Network/Calibration 真实化（v2.4+）
-- PartPlate/AssembleView（v2.4+）
-- ModelMall/Home WebView（v2.4+，需 QtWebEngine）
-- CreatePresetsDialog 264KB（v2.4+）
-
----
-
-## v2.3 完成状态（2026-06-18）
-
-v2.3 的 10 项中 Phase 1（4 项）+ Phase 3（3 项）完成，Phase 2（3 项）评估延后 v2.4+。详见 commit 3b4f2db。
-
----
-
-## v2.4 Requirements — Project & Preset Real IO（2026-06-18 启动，Phase 模式）
-
-**Goal:** 补全项目/Preset 的真实文件 IO，让文件操作不再是占位。
-
-### Phase 1: ProjectService 真实 .3mf 导出
-
-- [ ] **IO-01 [P0]**: ProjectService.saveProjectAs(path) — 调 libslic3r 3mf.cpp 导出 .3mf（含 model + config + plate）
-- [ ] **IO-02 [P0]**: ProjectService.exportModel(path, format) — 导出 STL/3MF/OBJ
-- [ ] **IO-03 [P1]**: ProjectPage 保存/另存按钮接 saveProjectAs（替换 v2.2 FileDialog 占位）
-
-### Phase 2: PresetBundle 导入导出
-
-- [ ] **IO-04 [P0]**: PresetService.exportBundle(path) — 导出预设包（对齐上游 export_config_bundle）
-- [ ] **IO-05 [P1]**: PresetService.importBundle(path) — 导入预设包
-- [ ] **IO-06 [P1]**: ExportPresetBundleDialog 接 exportBundle（替换 v2.2 占位）
-
-### Phase 3: 集成 + 自回归
-
-- [ ] **IO-07 [P0]**: 自回归测试扩展（saveProject + exportBundle，防止 IO 回归）
-- [ ] **IO-08 [P1]**: ProjectPage"导出"按钮接 exportModel（区分 G-code/3mf）
-- [ ] **IO-09 [P2]**: ConfigViewModel 接通真实 PresetBundle（preset 增删改链路完整）
-
-### Out of Scope (v2.4)
-
-- Device/Cloud/Network 真实化（v2.5+，需 MQTT）
-- Calibration 真实化（v2.5+，需 CalibMode）
-- PartPlate/AssembleView（v2.5+）
-- Gizmo UI 完善（v2.5+，需 GLViewport 扩展）
-
----
-
-## v2.4 完成状态（2026-06-18）
-
-v2.4 的 9 项全部完成。详见 commit f80127f。
-
----
-
-## v2.5 Requirements — Real Device Integration（2026-06-19 启动）
-
-**Goal:** 三大底层集成——真机打印 + Calibration 真实化 + PartPlate 多板。
-
-### Phase 1: MQTT 真机通信基础
-
-- [ ] **DEV-01 [P0]**: MQTT 客户端封装（paho-mqtt，连接/订阅/发布）
-- [ ] **DEV-02 [P0]**: DeviceService 真实化（MQTT 状态订阅 → 设备温度/进度/状态）
-- [ ] **DEV-03 [P1]**: SSDP 局域网设备发现（替代 Mock buildMockDevices）
-
-### Phase 2: 打印发送链路
-
-- [ ] **DEV-04 [P0]**: SelectMachineDialog（选择目标打印机 + 发送）
-- [ ] **DEV-05 [P0]**: PrintDialog 接通 SelectMachine（发送 G-code 到真机）
-- [ ] **DEV-06 [P1]**: 打印进度实时更新（MQTT 订阅打印状态）
-
-### Phase 3: Calibration 真实化
-
-- [ ] **CAL-01 [P0]**: CalibrationService 真实化（接 libslic3r calib.cpp）
-- [ ] **CAL-02 [P0]**: 9 种 CalibMode 实现（FlowRate/PA/TempTower/VolumetricRate/MaxVolumetricSpeed/RetractionTune/FlowRateProxy/Bucket/ManualLeveling）
-- [ ] **CAL-03 [P1]**: 校准结果回写 preset（calib 结果保存为新预设）
-- [ ] **CAL-04 [P1]**: CalibrationPage 菜单激活（BBLTopbar 校准菜单 enable）
-
-### Phase 4: PartPlate 多板系统
-
-- [ ] **PLATE-01 [P0]**: PartPlate 数据结构（多板 + 独立配置 + 对象归属）
-- [ ] **PLATE-02 [P0]**: 多板编辑 UI（添加/删除/重命名/切换 + 拖拽对象跨板）
-- [ ] **PLATE-03 [P1]**: 独立板切片配置（每个 plate 可有不同 preset）
-- [ ] **PLATE-04 [P2]**: AssembleView 多板装配视图（占位 → 完整实现延后）
-
-### Phase 5: 集成 + 自回归
-
-- [ ] **INT-01 [P0]**: 设备自回归测试（MQTT 连接/断开模拟）
-- [ ] **INT-02 [P0]**: 校准自回归测试（至少 1 种 CalibMode 跑通）
-- [ ] **INT-03 [P1]**: 多板自回归测试（saveProject 含多板 → reload 验证）
-
-### Out of Scope (v2.5)
-
-- ModelMall/Home WebView（v2.6+，需 QtWebEngine）
-- i18n 外语翻译（v2.6+，zh_CN 已 88.5%）
-- CreatePresetsDialog 264KB（v2.6+）
-- 摄像头视频流 FFmpeg（v2.6+）
-
----
-
-## v2.5 完成状态（2026-06-19）
-
-v2.5 Phase 1+2（MQTT 通信 + 打印发送链路）完成，Phase 3 Calibration 骨架，Phase 4 PartPlate 评估延后。详见 commit e804c1e/7337788/dda2581。
-
----
-
-## v2.6 Requirements — v2.5 Remaining Completion（2026-06-19 启动）
-
-**Goal:** 完成 v2.5 的三块遗留。
-
-### Phase 1: SSDP/mDNS 设备发现
-
-- [ ] **SSDP-01 [P0]**: QUdpSocket SSDP M-SEARCH 发送 + 响应解析（发现局域网 Bambu/Creality 打印机）
-- [ ] **SSDP-02 [P0]**: NetworkService 真实化（替代 NetworkServiceMock 的 probe 假数据）
-- [ ] **SSDP-03 [P1]**: DeviceListPage 自动发现设备（替代手动 IP 输入）
-
-### Phase 2: Calibration 完整实现
-
-- [ ] **CAL-01 [P0]**: CalibPressureAdvanceLine 实例化（GCode generator context 构建）
-- [ ] **CAL-02 [P0]**: PA 校准 G-code 生成 + 切片流程接入
-- [ ] **CAL-03 [P1]**: FlowRate/TempTower 校准实现
-- [ ] **CAL-04 [P1]**: 校准结果回写 preset + CalibrationPage 菜单激活
-
-### Phase 3: 摄像头视频流
-
-- [ ] **CAM-01 [P0]**: FFmpeg 集成（CMake 链接 + 头文件）
-- [ ] **CAM-02 [P0]**: CameraService 真实化（RTSP/RTMP 流接收 + FFmpeg 解码 → QVideoFrame）
-- [ ] **CAM-03 [P1]**: MonitorPage 视频显示（QML VideoOutput 接解码帧）
-- [ ] **CAM-04 [P2]**: 延时摄影（定时截图 + 合成视频）
-
-### Phase 4: 集成 + 自回归
-
-- [ ] **INT-01 [P0]**: SSDP 发现自回归（模拟响应验证解析）
-- [ ] **INT-02 [P0]**: Calibration 自回归（PA 校准 G-code 生成验证）
-- [ ] **INT-03 [P1]**: 视频流自回归（RTSP 连接模拟）
-
-### Out of Scope (v2.6)
-
-- PartPlate 多板（v2.7+，258KB 上游）
-- ModelMall/Home WebView（v2.7+）
-- i18n 外语翻译（v2.7+）
-- CreatePresetsDialog（v2.7+）
+*Requirements defined: 2026-06-24*
+*Last updated: 2026-06-24 after v2.9 plan/implementation realignment audit.*

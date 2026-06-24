@@ -1,65 +1,133 @@
 # Milestones History
 
-## v1.x Series — CrealityPrint Era (2026-05 to 2026-06-11)
+This file summarizes milestone-level history. Detailed phase evidence stays in `.planning/phases/`, audits, git commits, and verification logs.
 
-历史里程碑基于 **CrealityPrint v7.0.1** 上游推进，完成了核心切片管线、基础 GUI 框架、CLI 入口。所有历史 artifacts 已归档至 `.planning-v1-crealityprint-archive/`。
+## v1.x Series - CrealityPrint Era
 
-### v1.0 — Initial Migration Foundation ✓
+Historical migration foundation based on CrealityPrint-era work. These artifacts remain as evidence and were superseded by the active OrcaSlicer/OWzx direction.
 
-**Goal:** 把 CrealityPrint C++/wxWidgets 项目初始化为 Qt6/QML 项目骨架。
-
-**Shipped:**
-- CMake + Qt6.10 + QML 构建链路
-- BackendContext composition root + 基础 ViewModel 注入
-- Theme 设计令牌 + 基础 Cx* 控件
-- GLViewport 3D 视口骨架
-
-### v1.1 — End-to-End Slicing Workflow ✓
-
-**Goal:** STL/3MF 导入 → 机型/耗材/工艺参数 → 切片 → G-code 导出 → Preview 完整闭环。
+### v1.0 - Initial Migration Foundation
 
 **Shipped:**
-- 真实 3MF/BBS 3MF 导入导出主链路
-- 真实切片与 G-code 导出（SliceService → libslic3r）
-- G-code 预览渲染（GCodeRenderer，13 色彩模式）
-- PreparePage/PreviewPage 完整工作流
-- 通知系统（9 级 severity + Hint + 队列）
+- CMake + Qt6 + QML application foundation.
+- BackendContext composition root and initial viewmodel/service injection.
+- Theme tokens and base QML controls.
+- GL viewport foundation.
 
-### v1.2 — Project Workflow & Preset System ✓
-
-**Goal:** 项目工作流（保存/加载）+ 预设三段式继承链。
+### v1.1 - End-to-End Slicing Workflow
 
 **Shipped:**
-- 项目 3MF 完整保存/加载（含多平板、配置、缩略图）
-- 真实上游 preset 加载（PresetServiceMock::loadVendorPresets）
-- ConfigOptionDef 完整 schema + 配置继承链
-- 14 个对话框骨架
+- Basic model load to slice to G-code export workflow.
+- G-code preview rendering.
+- Prepare/Preview workflow shell.
+- Notification infrastructure.
 
-### v1.3 — CLI Port (Partial)
-
-**Goal:** 把上游 CrealityPrint CLI 移植到 Qt6，支持 headless 切片。
+### v1.2 - Project Workflow and Preset Foundation
 
 **Shipped:**
-- `creality-cli.exe` CMake 目标 + CliRunner 编排器
-- `--load`/`--slice`/`--load-settings`/`--output-dir` 参数支持
-- 真实 preset 配置注入（printer→filament→print 三 tier 合并）
+- Project save/load foundation.
+- Initial upstream preset loading and config inheritance.
+- Dialog skeletons for common workflows.
+
+### v1.3 - CLI Port (Partial)
+
+**Shipped:**
+- CLI target and argument parsing for headless workflows.
+- Partial preset and slicing orchestration.
 
 **Incomplete:**
-- Phase 3: libslic3r Print::apply() 在 CLI 上下文偶发崩溃（GUI 上下文无此问题）
-- Phase 4: 3MF 导出 + transforms（--arrange/--orient/--rotate/--scale）
+- Some headless libslic3r contexts remained unstable.
 
-**Status:** Blocked on libslic3r headless crash root cause; CLI 流程已通但偶发崩溃。
+## v2.x Series - OrcaSlicer / OWzx Era
+
+### v2.0 - OrcaSlicer UI Full Restoration
+
+**Shipped:**
+- 9-page notebook-style shell and BBLTopbar foundation.
+- Prepare/Preview shared Plater-style structure.
+- Sidebar and Prepare page section skeletons.
+- GL toolbar overlays.
+- Initial brand cleanup from legacy UI.
+
+### v2.1 - Slice and Preview Deep Dive
+
+**Shipped:**
+- Slice/preview workflow improvements.
+- Preset and settings dialog improvements.
+- Crash and E2E workflow fixes.
+
+### v2.2 - Page Completion and Cleanup
+
+**Shipped:**
+- Broader page/dialog coverage.
+- Continued UI parity and cleanup work.
+
+### v2.3 - UI Completion Polish
+
+**Shipped:**
+- UI finishing work and i18n infrastructure improvements.
+- Additional dialog/page polish.
+
+### v2.4 - Project and Preset Real IO
+
+**Shipped:**
+- Project IO improvements.
+- Preset IO foundation improvements.
+
+### v2.5 - Real Device Integration
+
+**Shipped:**
+- Initial real/hybrid device integration work.
+- MQTT and print-send foundations.
+
+### v2.6 - v2.5 Remaining Completion
+
+**Shipped:**
+- SSDP discovery work.
+- Camera stream work with FFmpeg/RTSP path.
+- E2E pipeline and arrange bug fixes.
+
+**Deferred:**
+- Full calibration completion.
+- Some camera/timelapse and broader integration regressions.
+
+### v2.7 - Slice and Calibration Real Path Follow-up
+
+**Evidence:** git history on `main`.
+
+**Shipped:**
+- `fix(slice,v2.7 P0)`: bed_shape and loadFinished wait fixes; slice E2E pipeline works.
+- `feat(calib,v2.7 P1)`: Calibration PA/Flow/Temp G-code generation through the slice pipeline.
+- `feat(mqtt,v2.7 P2-A)`: real MQTT connect, live telemetry, and access-code UI.
+- `feat(mqtt,v2.7 P2-B)`: print control commands through MQTT publish.
+
+**Status:** Landed in code, but planning artifacts were not fully synchronized until v2.9.
+
+### v2.8 - FTP Send Print and Review Fixes
+
+**Evidence:** git history on `main`.
+
+**Shipped:**
+- `feat(ftp,v2.8 P2-C)`: send print job via FTPS upload and MQTT print command.
+- `fix(review,v2.8)`: critical and warning fixes from code review.
+
+**Status:** Landed in code, but planning artifacts were not fully synchronized until v2.9.
+
+### v2.9 - Implementation Realignment and Stabilization
+
+**Started:** 2026-06-24
+**Status:** Planning
+
+**Goal:** Reconcile planning with real implementation, stabilize the current dirty baseline, and close the most visible hybrid/placeholder workflows before starting the next large source-truth migration module.
+
+**Planned phases:**
+- Phase 10: Planning Truth Reset
+- Phase 11: Source Hygiene Stabilization
+- Phase 12: Calibration Closure for Implemented Modes
+- Phase 13: Hybrid Integration Verification
+- Phase 14: Visible Placeholder Triage
+- Phase 15: Verification and Handoff
 
 ---
 
-## v2.0 Series — OrcaSlicer Era (2026-06-12 onwards)
-
-### v2.0 — OrcaSlicer UI Full Restoration (In Progress)
-
-**Started:** 2026-06-11 (upstream switch from CrealityPrint to OrcaSlicer)
-
-**Goal:** 把 Qt6/QML 项目的 UI 全面对齐到 OrcaSlicer 上游——架构、布局、菜单、工具栏、Dialog、品牌。
-
-**Trigger:** 上游切换为 OrcaSlicer，CrealityPrint 时代的 12 页 StackLayout 架构与上游 9 页 Notebook + Plater 共享实例设计严重错位。
-
-**See:** `.planning/ROADMAP.md` (待生成)
+*Last updated: 2026-06-24 after v2.9 milestone initialization.*
