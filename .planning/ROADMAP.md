@@ -139,13 +139,13 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 Start with:
 
 ```text
-$gsd-discuss-phase 10
+$gsd-discuss-phase 11
 ```
 
 or, for a direct execution plan:
 
 ```text
-$gsd-plan-phase 10
+$gsd-plan-phase 11
 ```
 
 ---
