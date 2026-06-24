@@ -92,6 +92,9 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 3. Startup smoke evidence covers the selected viewport mode.
 4. Canonical verification remains green.
 
+**Plans:**
+- Wave 1: `13-01` - Add deterministic hybrid integration evidence.
+
 ## Phase 14: Visible Placeholder Triage
 
 - [ ] Phase 14: Visible Placeholder Triage
