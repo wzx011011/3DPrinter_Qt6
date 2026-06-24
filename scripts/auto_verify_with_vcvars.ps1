@@ -22,6 +22,7 @@ Start-Sleep -Milliseconds 500
 
 $env:CMAKE_PREFIX_PATH = "E:\Qt6.10"
 $env:Qt6_DIR = "E:\Qt6.10"
+$env:PATH = "E:\Qt6.10\bin;$env:PATH"
 
 $cmakeArgs = @(
   '-S', '..',
@@ -69,6 +70,8 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # Build test targets (if BUILD_TESTING is ON)
 ninja -j16 E2EWorkflowTests 2>$null
 ninja -j16 ViewModelSmokeTests 2>$null
+ninja -j16 QmlUiAuditTests 2>$null
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 ninja -j16 owzx-cli 2>$null
 ninja -j16 CliTests 2>$null
 ninja -j16 test-slice-direct 2>$null
@@ -102,6 +105,21 @@ if (Test-Path $occtBinDir) {
 
 # cr_tpms_library.dll is delay-loaded and unused; remove to avoid missing DLL warnings.
 Remove-Item 'cr_tpms_library.dll' -ErrorAction SilentlyContinue
+
+# Run static UI audit tests before launching the app.
+Write-Host "`n[UI] Running QML UI audit tests..." -ForegroundColor Cyan
+$uiAuditExe = './QmlUiAuditTests.exe'
+if (Test-Path $uiAuditExe) {
+  & $uiAuditExe 2>&1 | ForEach-Object { Write-Host "  $_" }
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "[UI] QML UI audit tests failed" -ForegroundColor Red
+    exit $LASTEXITCODE
+  }
+  Write-Host "[UI] QML UI audit tests passed" -ForegroundColor Green
+} else {
+  Write-Host "[UI] QmlUiAuditTests.exe not found" -ForegroundColor Red
+  exit 1
+}
 
 # Deploy vcpkg runtime DLLs for libs linked via vcpkg (windeployqt doesn't see these).
 # noise.dll (libnoise) and draco.dll are imported by libslic3r_from_source.

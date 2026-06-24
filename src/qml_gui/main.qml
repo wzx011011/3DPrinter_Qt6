@@ -69,6 +69,20 @@ ApplicationWindow {
         }
     }
 
+    FileDialog {
+        id: exportModelDialog
+        title: qsTr("导出模型")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("STL (*.stl)"), qsTr("3MF (*.3mf)"), qsTr("OBJ (*.obj)")]
+        defaultSuffix: "stl"
+        onAccepted: {
+            var path = selectedFile.toString().replace("file:///", "")
+            var ext = path.split(".").pop().toLowerCase()
+            if (backend.editorViewModel)
+                backend.editorViewModel.exportModel(path, ext)
+        }
+    }
+
     // Latency 跟踪迁移：endLatency 在 currentPage 改变后触发
     // (替代旧 onFrameSwapped + pendingSwitchTargetPage 逻辑 — Pitfall 3)
     Connections {
@@ -368,12 +382,12 @@ ApplicationWindow {
                     openModelDialog.open()
                 }
                 onExportGcodeRequested: plater.preparePageRef.openExportDialog()
-                onExportProjectRequested: { /* TODO: backend.topbarExport3MF */ }
-                onExportModelRequested: { /* TODO: backend.topbarExportModel */ }
+                onExportProjectRequested: saveProjectAsDialog.open()
+                onExportModelRequested: exportModelDialog.open()
                 onUndoRequested: if (backend.currentPage === backend.tp3DEditor) plater.preparePageRef.undoFromTopbar()
                 onRedoRequested: if (backend.currentPage === backend.tp3DEditor) plater.preparePageRef.redoFromTopbar()
                 onCalibrationRequested: backend.requestSelectTab(backend.tpCalibration)
-                onPreferencesRequested: { /* TODO: open PreferencesDialog — Phase 3 */ }
+                onPreferencesRequested: backend.openSettings()
                 onAboutRequested: aboutDialog.open()
                 onShortcutOverviewRequested: shortcutDialog.open()
                 onSliceRequested: sliceTopMenuExternal.popup()
@@ -520,19 +534,9 @@ ApplicationWindow {
                         }
                     }
                 }
-                // Page 8 (tpPlaceholder2) — 占位 (v2.1 实现)
+                // Page 8 (tpPlaceholder2) — reserved by upstream debug tooling; not exposed in navigation.
                 Item {
                     visible: false
-                    Rectangle {
-                        anchors.fill: parent
-                        color: backend.bgColor
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("占位 Tab (v2.1 实现)")
-                            color: Theme.textSecondary
-                            font.pixelSize: 14
-                        }
-                    }
                 }
             }
 

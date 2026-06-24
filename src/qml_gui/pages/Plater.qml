@@ -105,8 +105,8 @@ Item {
 
         Text {
             anchors.centerIn: parent
-            text: qsTr("AssembleView — reserved (v2.0 placeholder)")
-            color: "#9aa7b5"
+            text: qsTr("装配视图暂不可用")
+            color: Theme.textSecondary
             font.pixelSize: 14
         }
     }

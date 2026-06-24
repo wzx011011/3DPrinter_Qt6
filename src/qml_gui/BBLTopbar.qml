@@ -75,7 +75,7 @@ Item {
             }
             Menu {
                 title: qsTr("帮助")
-                MenuItem { text: qsTr("关于 OWzx"); onTriggered: {} }
+                MenuItem { text: qsTr("关于 OWzx"); onTriggered: root.aboutRequested() }
             }
         }
     }
@@ -83,7 +83,7 @@ Item {
     Rectangle {
         id: topbarBackground
         anchors.fill: parent
-        color: "#181818"
+        color: Theme.chromeSurface
 
         // Title bar drag for frameless window (与上游 BBLTopbar forwardMouseEvent 等价)
         MouseArea {
@@ -110,7 +110,7 @@ Item {
             Rectangle {
                 Layout.preferredWidth: 40
                 Layout.preferredHeight: 40
-                color: logoHover.containsMouse ? "#2a2a2a" : "transparent"
+                color: logoHover.containsMouse ? Theme.chromeHover : "transparent"
 
                 Image {
                     anchors.centerIn: parent
@@ -132,13 +132,13 @@ Item {
                 Layout.preferredHeight: 30
                 Layout.preferredWidth: 60
                 radius: 3
-                color: fileBtnMouse.containsMouse ? "#2a2a2a" : "transparent"
+                color: fileBtnMouse.containsMouse ? Theme.chromeHover : "transparent"
 
                 Row {
                     anchors.centerIn: parent
                     spacing: 4
-                    Text { text: qsTr("文件"); color: "#d0d0d0"; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
-                    Text { text: "▾"; color: "#888"; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                    Text { text: qsTr("文件"); color: Theme.chromeText; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
+                    Text { text: "▾"; color: Theme.chromeTextMuted; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
                 }
 
                 MouseArea {
@@ -156,12 +156,12 @@ Item {
                 Layout.preferredWidth: 24
                 Layout.preferredHeight: 30
                 radius: 3
-                color: dropBtnMouse.containsMouse ? "#2a2a2a" : "transparent"
+                color: dropBtnMouse.containsMouse ? Theme.chromeHover : "transparent"
 
                 Text {
                     anchors.centerIn: parent
                     text: "▾"
-                    color: "#888"
+                    color: Theme.chromeTextMuted
                     font.pixelSize: 10
                 }
 
@@ -227,8 +227,9 @@ Item {
                 buttonSize: 30
                 iconSize: 16
                 iconSource: "qrc:/qml/assets/icons/printer.svg"
-                toolTipText: qsTr("v2.1 实现")
+                toolTipText: ""
                 enabled: false
+                visible: false
             }
 
             // ModelStore 占位按钮 (对齐上游 ID_MODEL_STORE)
@@ -237,8 +238,9 @@ Item {
                 buttonSize: 30
                 iconSize: 16
                 iconSource: "qrc:/qml/assets/icons/layout-grid.svg"
-                toolTipText: qsTr("v2.1 实现")
+                toolTipText: ""
                 enabled: false
+                visible: false
             }
 
             // Publish 占位按钮 (对齐上游 ID_PUBLISH)
@@ -247,8 +249,9 @@ Item {
                 buttonSize: 30
                 iconSize: 16
                 iconSource: "qrc:/qml/assets/icons/send-2.svg"
-                toolTipText: qsTr("v2.1 实现")
+                toolTipText: ""
                 enabled: false
+                visible: false
             }
 
             // Stretch spacer (pushes tabs toward center)
@@ -271,7 +274,7 @@ Item {
 
                 background: Rectangle { color: "transparent" }
 
-                // 9-tab 模型：标签 + TabPosition 枚举引用 + 启用状态 + 提示
+                // 可见页签模型：标签 + TabPosition 枚举引用 + 启用状态 + 提示
                 Repeater {
                     model: [
                         { label: qsTr("首页"),     pos: backend.tpHome },
@@ -281,8 +284,7 @@ Item {
                         { label: qsTr("多设备"),   pos: backend.tpMultiDevice },
                         { label: qsTr("项目"),     pos: backend.tpProject },
                         { label: qsTr("校准"),     pos: backend.tpCalibration },
-                        { label: qsTr("占位"),     pos: backend.tpPlaceholder1, disabled: true, tooltip: qsTr("v2.1 实现") },
-                        { label: qsTr("占位"),     pos: backend.tpPlaceholder2, disabled: true, tooltip: qsTr("v2.1 实现") }
+                        { label: qsTr("辅助"),     pos: backend.tpPlaceholder1 }
                     ]
 
                     delegate: TabButton {
@@ -298,7 +300,7 @@ Item {
                             color: {
                                 if (!tabBtn.enabled) return "transparent"
                                 if (tabBtn.checked) return Theme.accent
-                                if (tabBtn.hovered) return "#4CD582"
+                                if (tabBtn.hovered) return Theme.accentLight
                                 return "transparent"
                             }
                             Behavior on color { ColorAnimation { duration: 100 } }
@@ -307,9 +309,9 @@ Item {
                             id: tabBtnText
                             text: tabBtn.text
                             color: !tabBtn.enabled ? Theme.textDisabled
-                                  : tabBtn.checked ? "#ffffff"
-                                  : tabBtn.hovered ? "#ffffff"
-                                  : "#c0c0c0"
+                                  : tabBtn.checked ? Theme.textOnAccent
+                                  : tabBtn.hovered ? Theme.textOnAccent
+                                  : Theme.chromeText
                             font.pixelSize: 12
                             font.bold: tabBtn.checked
                             horizontalAlignment: Text.AlignHCenter
@@ -370,8 +372,9 @@ Item {
                     buttonSize: 30
                     iconSize: 16
                     iconSource: "qrc:/qml/assets/icons/box.svg"
-                    toolTipText: qsTr("多耗材分组切片 (v2.1 实现)")
+                    toolTipText: ""
                     enabled: false
+                    visible: false
                     opacity: 0.4
                 }
             }
@@ -383,7 +386,7 @@ Item {
                 Layout.maximumWidth: Math.max(160, (root.width / 2) - 500)
                 Layout.minimumWidth: 160
                 text: backend.displayProjectTitle
-                color: "#c0c0c0"
+                color: Theme.chromeText
                 font.pixelSize: 12
                 elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
@@ -414,7 +417,7 @@ Item {
                     anchors.top: bellButton.top; anchors.topMargin: 2
                     anchors.left: bellButton.left; anchors.leftMargin: 18
                     width: 8; height: 8; radius: 4
-                    color: "#f05545"
+                    color: Theme.statusError
                     z: 1
                 }
             }
@@ -455,7 +458,7 @@ Item {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             height: 1
-            color: "#303030"
+            color: Theme.chromeBorder
         }
     }
 
@@ -464,7 +467,7 @@ Item {
         implicitWidth: 1
         implicitHeight: 18
         radius: 1
-        color: "#303030"
+        color: Theme.chromeBorder
     }
 
     // ── [File ▾] 菜单 — 完整覆盖 CONTEXT.md 锁定结构 ───────────────────
@@ -622,8 +625,8 @@ Item {
             MenuSeparator {}
             CxMenuItem {
                 text: qsTr("反向选择")
-                enabled: false  // 反向选择功能 v2.1 实现
-                onTriggered: {}
+                enabled: false
+                visible: false
             }
         }
 
@@ -632,8 +635,8 @@ Item {
             title: qsTr("视图")
             CxMenuItem {
                 text: qsTr("显示/隐藏 Gizmo")
-                enabled: false  // Phase 3: Plater 共享实例时实现
-                onTriggered: {}
+                enabled: false
+                visible: false
             }
             MenuSeparator {}
             CxMenuItem {
@@ -645,12 +648,12 @@ Item {
             CxMenuItem {
                 text: qsTr("显示层")
                 enabled: false
-                onTriggered: {}
+                visible: false
             }
             CxMenuItem {
                 text: qsTr("隐藏层")
                 enabled: false
-                onTriggered: {}
+                visible: false
             }
         }
 
@@ -664,22 +667,51 @@ Item {
 
         MenuSeparator {}
 
-        // Calibration 子菜单 — 9 entries + Guide (Phase 7 占位，全部 disabled)
-        // 对齐上游 CALIB-01: Temperature / Max flowrate / Pressure advance / Flow ratio /
-        //                     Retraction / Cornering / Input Shaping Freq / Input Shaping Damp / VFA
+        // Calibration 子菜单：跳转到已接入的校准中心条目。
         CxMenu {
             title: qsTr("校准")
-            CxMenuItem { text: qsTr("Temperature");              enabled: false; onTriggered: {} }  // Phase 7: wire to actual calibration dialog
-            CxMenuItem { text: qsTr("Max flowrate");             enabled: false; onTriggered: {} }  // Phase 7: wire to actual calibration dialog
-            CxMenuItem { text: qsTr("Pressure advance");         enabled: false; onTriggered: {} }  // Phase 7: wire to actual calibration dialog
-            CxMenuItem { text: qsTr("Flow ratio");               enabled: false; onTriggered: {} }  // Phase 7: wire to actual calibration dialog
-            CxMenuItem { text: qsTr("Retraction");               enabled: false; onTriggered: {} }  // Phase 7: wire to actual calibration dialog
-            CxMenuItem { text: qsTr("Cornering");                enabled: false; onTriggered: {} }  // Phase 7: wire to actual calibration dialog
-            CxMenuItem { text: qsTr("Input Shaping Freq");       enabled: false; onTriggered: {} }  // Phase 7: wire to actual calibration dialog
-            CxMenuItem { text: qsTr("Input Shaping Damp");       enabled: false; onTriggered: {} }  // Phase 7: wire to actual calibration dialog
-            CxMenuItem { text: qsTr("VFA");                      enabled: false; onTriggered: {} }  // Phase 7: wire to actual calibration dialog
+            CxMenuItem {
+                text: qsTr("校准中心")
+                onTriggered: root.calibrationRequested()
+            }
             MenuSeparator {}
-            CxMenuItem { text: qsTr("Calibration Guide");        enabled: false; onTriggered: {} }  // Phase 7: wire to actual calibration dialog
+            CxMenuItem {
+                text: qsTr("压力提前")
+                onTriggered: {
+                    backend.calibrationViewModel.selectedIndex = 0
+                    root.calibrationRequested()
+                }
+            }
+            CxMenuItem {
+                text: qsTr("流量比例")
+                onTriggered: {
+                    backend.calibrationViewModel.selectedIndex = 1
+                    root.calibrationRequested()
+                }
+            }
+            CxMenuItem {
+                text: qsTr("热床调平")
+                onTriggered: {
+                    backend.calibrationViewModel.selectedIndex = 2
+                    root.calibrationRequested()
+                }
+            }
+            CxMenuItem {
+                text: qsTr("振动补偿")
+                onTriggered: {
+                    backend.calibrationViewModel.selectedIndex = 3
+                    root.calibrationRequested()
+                }
+            }
+            CxMenuItem {
+                text: qsTr("最大体积速度")
+                onTriggered: {
+                    backend.calibrationViewModel.selectedIndex = 4
+                    root.calibrationRequested()
+                }
+            }
+            MenuSeparator {}
+            CxMenuItem { text: qsTr("校准指南"); enabled: false; visible: false }
         }
 
         MenuSeparator {}
@@ -687,8 +719,8 @@ Item {
         // Help 子菜单
         CxMenu {
             title: qsTr("帮助")
-            CxMenuItem { text: qsTr("Documentation"); onTriggered: {} }
-            CxMenuItem { text: qsTr("Check for Updates"); enabled: false; onTriggered: {} }  // v2.1 实现
+            CxMenuItem { text: qsTr("Documentation"); enabled: false }
+            CxMenuItem { text: qsTr("Check for Updates"); enabled: false }
             MenuSeparator {}
             CxMenuItem { text: qsTr("About"); onTriggered: root.aboutRequested() }
             CxMenuItem { text: qsTr("Shortcut Overview"); onTriggered: root.shortcutOverviewRequested() }

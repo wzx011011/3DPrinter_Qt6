@@ -324,6 +324,16 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
+    qt_add_executable(QmlUiAuditTests tests/QmlUiAuditTests.cpp)
+    target_link_libraries(QmlUiAuditTests PRIVATE Qt6::Test)
+    target_compile_definitions(QmlUiAuditTests PRIVATE
+        QT_TESTCASE_SOURCEDIR="${CMAKE_SOURCE_DIR}"
+    )
+    add_test(NAME QmlUiAuditTests COMMAND QmlUiAuditTests)
+    set_tests_properties(QmlUiAuditTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
 endif()
 
 # ── CLI ────────────────────────────────────────────────────────────────────

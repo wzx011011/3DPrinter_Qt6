@@ -150,7 +150,7 @@ Rectangle {
                         width: 8; height: 8; radius: 4
                         visible: !!root.configVm && !root.configVm.isCurrentFilamentCompatible()
                         color: "#f05545"
-                        ToolTip.text: qsTr("Current filament may be incompatible with printer")
+                        ToolTip.text: qsTr("当前耗材可能与打印机不兼容")
                         ToolTip.visible: compMA2.containsMouse
                         ToolTip.delay: 500
                         MouseArea { id: compMA2; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
@@ -214,7 +214,7 @@ Rectangle {
                         font.pixelSize: 14
                     }
                     Text {
-                        text: qsTr("Process")
+                        text: qsTr("工艺")
                         color: Theme.textPrimary
                         font.pixelSize: 12
                         font.weight: Font.Medium
@@ -225,21 +225,21 @@ Rectangle {
                     // SwitchButton(Global/Objects) → 绑 settingsScope (SIDEBAR-07 做实)
                     // 对齐上游 m_scope_switch (ParamsPanel.cpp)
                     CxButton {
-                        implicitWidth: 52
+                        implicitWidth: 44
                         implicitHeight: 24
                         compact: true
                         cxStyle: root.configVm && root.configVm.settingsScope === "global"
                                  ? CxButton.Style.Primary : CxButton.Style.Ghost
-                        text: qsTr("Global")
+                        text: qsTr("全局")
                         onClicked: if (root.configVm) root.configVm.activateGlobalScope()
                     }
                     CxButton {
-                        implicitWidth: 56
+                        implicitWidth: 44
                         implicitHeight: 24
                         compact: true
                         cxStyle: root.configVm && root.configVm.settingsScope !== "global"
                                  ? CxButton.Style.Primary : CxButton.Style.Ghost
-                        text: qsTr("Objects")
+                        text: qsTr("对象")
                         onClicked: {
                             // SIDEBAR-07: 切到对象作用域（用当前选中对象，无选中则提示）
                             if (root.editorVm && root.editorVm.selectedObjectIndex >= 0 && root.configVm) {
@@ -251,11 +251,11 @@ Rectangle {
 
                     // ModeSwitchButton(Simple/Advanced) — SIDEBAR-08 骨架 (configMode 待 VM 扩展)
                     CxButton {
-                        implicitWidth: 60
+                        implicitWidth: 44
                         implicitHeight: 24
                         compact: true
                         cxStyle: CxButton.Style.Ghost
-                        text: qsTr("Advanced")  // 占位: Simple/Advanced 切换
+                        text: qsTr("高级")  // 占位: Simple/Advanced 切换
                         onClicked: {
                             // TODO SIDEBAR-08: 需 ConfigViewModel configMode 属性 + 参数过滤
                         }
@@ -310,7 +310,7 @@ Rectangle {
                     TextField {
                         id: searchField
                         Layout.fillWidth: true
-                        placeholderText: qsTr("Search settings...")
+                        placeholderText: qsTr("搜索设置...")
                         color: Theme.textPrimary
                         font.pixelSize: 11
                         background: Item {}  // 透明背景（外框由 searchBox 提供）
@@ -417,7 +417,7 @@ Rectangle {
             CollapsibleSection {
                 id: objectSettingsSection
                 Layout.fillWidth: true
-                title: qsTr("Object Settings")
+                title: qsTr("对象设置")
                 iconText: "☰"
                 expanded: true
                 // 无选中对象时隐藏整个区块
@@ -431,8 +431,8 @@ Rectangle {
                     Text {
                         Layout.fillWidth: true
                         text: root.editorVm && root.editorVm.selectedObjectIndex >= 0
-                              ? qsTr("Editing object #") + (root.editorVm.selectedObjectIndex + 1)
-                              : qsTr("(no selection)")
+                              ? qsTr("正在编辑对象 #") + (root.editorVm.selectedObjectIndex + 1)
+                              : qsTr("未选择对象")
                         color: Theme.textSecondary
                         font.pixelSize: 10
                         wrapMode: Text.WordWrap
@@ -444,7 +444,7 @@ Rectangle {
                         Layout.fillWidth: true
                         spacing: 6
                         visible: !!root.configVm
-                        Text { text: qsTr("Layer Height"); color: Theme.textTertiary; font.pixelSize: 10; Layout.preferredWidth: 90 }
+                        Text { text: qsTr("层高"); color: Theme.textTertiary; font.pixelSize: 10; Layout.preferredWidth: 90 }
                         TextField {
                             Layout.fillWidth: true
                             text: root.configVm ? root.configVm.layerHeight : ""
@@ -460,7 +460,7 @@ Rectangle {
                         Layout.fillWidth: true
                         spacing: 6
                         visible: !!root.configVm
-                        Text { text: qsTr("Infill Density"); color: Theme.textTertiary; font.pixelSize: 10; Layout.preferredWidth: 90 }
+                        Text { text: qsTr("填充密度"); color: Theme.textTertiary; font.pixelSize: 10; Layout.preferredWidth: 90 }
                         TextField {
                             Layout.fillWidth: true
                             text: root.configVm ? (root.configVm.infillDensity + "%") : ""
@@ -476,7 +476,7 @@ Rectangle {
                         Layout.fillWidth: true
                         spacing: 6
                         visible: !!root.configVm
-                        Text { text: qsTr("Print Speed"); color: Theme.textTertiary; font.pixelSize: 10; Layout.preferredWidth: 90 }
+                        Text { text: qsTr("打印速度"); color: Theme.textTertiary; font.pixelSize: 10; Layout.preferredWidth: 90 }
                         TextField {
                             Layout.fillWidth: true
                             text: root.configVm ? (root.configVm.printSpeed + " mm/s") : ""
@@ -495,7 +495,7 @@ Rectangle {
             CollapsibleSection {
                 id: objectLayersSection
                 Layout.fillWidth: true
-                title: qsTr("Variable Layer Height")
+                title: qsTr("可变层高")
                 iconText: "≣"
                 expanded: false  // 默认折叠（占位）
                 // 仅打印对象时显示
@@ -508,7 +508,7 @@ Rectangle {
 
                     Text {
                         Layout.fillWidth: true
-                        text: qsTr("Variable layer height editor (reserved)")
+                        text: qsTr("可变层高编辑器暂不可用")
                         color: Theme.textTertiary
                         font.pixelSize: 10
                         wrapMode: Text.WordWrap
@@ -524,7 +524,7 @@ Rectangle {
             CollapsibleSection {
                 id: paramsPanelSection
                 Layout.fillWidth: true
-                title: qsTr("Parameters")
+                title: qsTr("参数")
                 iconText: "▽"
                 expanded: true
 
@@ -542,13 +542,13 @@ Rectangle {
                         Repeater {
                             // 7 子 Tab: Print/PrintPlate/PrintObject/PrintPart/PrintLayer/Filament/Printer
                             model: [
-                                { key: "print", label: qsTr("Print") },
-                                { key: "printPlate", label: qsTr("Plate") },
-                                { key: "printObject", label: qsTr("Object") },
-                                { key: "printPart", label: qsTr("Part") },
-                                { key: "printLayer", label: qsTr("Layer") },
-                                { key: "filament", label: qsTr("Filam.") },
-                                { key: "printer", label: qsTr("Printer") }
+                                { key: "print", label: qsTr("打印") },
+                                { key: "printPlate", label: qsTr("盘") },
+                                { key: "printObject", label: qsTr("对象") },
+                                { key: "printPart", label: qsTr("部件") },
+                                { key: "printLayer", label: qsTr("层") },
+                                { key: "filament", label: qsTr("耗材") },
+                                { key: "printer", label: qsTr("打印机") }
                             ]
                             delegate: Rectangle {
                                 Layout.fillWidth: true
@@ -564,7 +564,7 @@ Rectangle {
                                     text: modelData.label
                                     color: modelData.key === paramsTabBar.currentTab
                                            ? Theme.textOnAccent : Theme.textSecondary
-                                    font.pixelSize: 8
+                                    font.pixelSize: Theme.fontSizeXS
                                 }
                                 MouseArea {
                                     anchors.fill: parent
@@ -582,7 +582,7 @@ Rectangle {
                     Text {
                         Layout.fillWidth: true
                         Layout.leftMargin: 4
-                        text: qsTr("(parameter list — reserved)")
+                        text: qsTr("参数列表暂不可用")
                         color: Theme.textTertiary
                         font.pixelSize: 10
                         wrapMode: Text.WordWrap
@@ -603,7 +603,7 @@ Rectangle {
     // -- Rename printer preset dialog --
     CxDialog {
         id: renamePrinterDialog
-        dialogTitle: qsTr("Rename Preset")
+        dialogTitle: qsTr("重命名预设")
         width: 320
         ColumnLayout {
             spacing: 8
