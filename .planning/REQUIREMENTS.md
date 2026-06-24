@@ -18,14 +18,14 @@
 | Model/project load | Hybrid/Real | Real libslic3r paths exist; workflow edges still need source-truth parity checks when touched. |
 | Basic slicing and G-code export | Real | Canonical verify passed on 2026-06-24, including E2E pipeline tests. |
 | Preview rendering | Hybrid/Real | Rendering path exists; detailed upstream preview behavior remains a separate parity topic. |
-| Calibration | Hybrid | PA, Flow Rate, and Temp Tower dispatch through `SliceService`; topbar menu and deterministic tests are incomplete. |
+| Calibration | Hybrid | PA, Flow Rate, and Temp Tower dispatch through `SliceService`, are reachable from visible topbar paths, and have deterministic ViewModel coverage. Hardware calibration and Max Volumetric Speed remain blocked/pending. |
 | SSDP discovery | Hybrid | Real UDP discovery exists; device state remains mock-heavy. |
 | MQTT/FTP/send print | Hybrid | Real transport wrappers exist; tests and UI still lean on fallback/mock behavior. |
 | Camera stream | Hybrid | FFmpeg/RTSP code path exists; test coverage mostly validates no-stream/fallback behavior. |
 | Preset bundle | Partial | Current bundle IO is simplified JSON, not upstream-compatible preset bundle behavior. |
 | PartPlate / plate-scoped config | Hybrid/Placeholder | Multi-plate APIs exist, but upstream PartPlate config behavior and AssembleView are incomplete. |
 | ModelMall / WebView | Blocked/Placeholder | WebView availability is hardcoded false. |
-| Visible top-level UI actions | Partial/Placeholder | Several export, preference, calibration, layer editing, account/store/publish actions are disabled or TODO. |
+| Visible top-level UI actions | Partial/Placeholder | Implemented calibration entries are wired; several export, preference, layer editing, account/store/publish actions remain disabled or TODO. |
 | Planning docs | Drifted | v2.6 planning state was stale relative to v2.7/v2.8 git history and dirty local implementation. |
 
 ## v2.9 Requirements - Implementation Realignment and Stabilization
@@ -47,11 +47,11 @@
 
 ### Calibration Stabilization
 
-- [ ] **CAL-01**: User can launch implemented calibration modes from visible UI paths rather than only through backend/internal wiring.
-- [ ] **CAL-02**: PA, Flow Rate, and Temp Tower calibration paths have deterministic regression coverage for job creation or generated slice requests.
-- [ ] **CAL-03**: Calibration mock fallback behavior still works when `SliceService` is unavailable.
-- [ ] **CAL-04**: Calibration modes not implemented in Qt6 are explicitly marked Pending or Blocked with upstream references.
-- [ ] **CAL-05**: Calibration progress and completion reporting are driven by the real slice path when slicing is active and by the fallback timer only in mock mode.
+- [x] **CAL-01**: User can launch implemented calibration modes from visible UI paths rather than only through backend/internal wiring.
+- [x] **CAL-02**: PA, Flow Rate, and Temp Tower calibration paths have deterministic regression coverage for job creation or generated slice requests.
+- [x] **CAL-03**: Calibration mock fallback behavior still works when `SliceService` is unavailable.
+- [x] **CAL-04**: Calibration modes not implemented in Qt6 are explicitly marked Pending or Blocked with upstream references.
+- [x] **CAL-05**: Calibration progress and completion reporting are driven by the real slice path when slicing is active and by the fallback timer only in mock mode.
 
 ### Hybrid Integration Verification
 
@@ -126,11 +126,11 @@
 | HYGIENE-02 | Phase 11 | Complete |
 | HYGIENE-03 | Phase 11 | Complete |
 | HYGIENE-04 | Phase 11 | Complete |
-| CAL-01 | Phase 12 | Pending |
-| CAL-02 | Phase 12 | Pending |
-| CAL-03 | Phase 12 | Pending |
-| CAL-04 | Phase 12 | Pending |
-| CAL-05 | Phase 12 | Pending |
+| CAL-01 | Phase 12 | Complete |
+| CAL-02 | Phase 12 | Complete |
+| CAL-03 | Phase 12 | Complete |
+| CAL-04 | Phase 12 | Complete |
+| CAL-05 | Phase 12 | Complete |
 | INT-01 | Phase 13 | Pending |
 | INT-02 | Phase 13 | Pending |
 | INT-03 | Phase 13 | Pending |
@@ -154,4 +154,4 @@
 ---
 
 *Requirements defined: 2026-06-24*
-*Last updated: 2026-06-25 after Phase 10 planning truth reset.*
+*Last updated: 2026-06-25 after Phase 12 calibration closure.*

@@ -3,7 +3,7 @@ phase: 12
 phase_name: Calibration Closure for Implemented Modes
 plan_id: 12-01
 title: Close implemented calibration mode workflow
-status: ready
+status: complete
 wave: 1
 type: standard
 autonomous: true
@@ -19,8 +19,8 @@ files_modified:
   - src/core/viewmodels/CalibrationViewModel.cpp
   - src/core/viewmodels/CalibrationViewModel.h
   - src/qml_gui/BBLTopbar.qml
+  - src/qml_gui/BackendContext.cpp
   - src/qml_gui/pages/CalibrationPage.qml
-  - src/qml_gui/dialogs/CalibrationDialog.qml
   - tests/ViewModelSmokeTests.cpp
   - .planning/phases/12-calibration-closure-for-implemented-modes/12-SUMMARY.md
   - .planning/phases/12-calibration-closure-for-implemented-modes/12-VERIFICATION.md

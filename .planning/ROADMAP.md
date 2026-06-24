@@ -4,7 +4,7 @@
 
 v2.9 is a stabilization and truth-reset milestone. Its job is to make the project plan, current implementation, visible UI, and verification evidence agree before the next large source-truth migration module starts.
 
-**Status:** Planning
+**Status:** Executing
 **Started:** 2026-06-24
 **Phase numbering:** continues from prior milestone artifacts, starting at Phase 10.
 
@@ -52,9 +52,10 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 
 ## Phase 12: Calibration Closure for Implemented Modes
 
-- [ ] Phase 12: Calibration Closure for Implemented Modes
+- [x] Phase 12: Calibration Closure for Implemented Modes (completed 2026-06-25)
 
 **Goal:** Turn the existing hybrid PA/Flow/Temp calibration work into visible, deterministic, verified behavior.
+**Completed:** 2026-06-25
 
 **Requirements:** CAL-01, CAL-02, CAL-03, CAL-04, CAL-05
 
@@ -137,7 +138,7 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 |---|---|---|---:|
 | 10 | Planning Truth Reset | PLAN-01..PLAN-05 | 5 (Complete) |
 | 11 | Source Hygiene Stabilization | HYGIENE-01..HYGIENE-04 | 4 (Complete) |
-| 12 | Calibration Closure for Implemented Modes | CAL-01..CAL-05 | 5 |
+| 12 | Calibration Closure for Implemented Modes | CAL-01..CAL-05 | 5 (Complete) |
 | 13 | Hybrid Integration Verification | INT-01..INT-06 | 6 |
 | 14 | Visible Placeholder Triage | UI-01..UI-05 | 5 |
 | 15 | Verification and Handoff | VERIFY-01..VERIFY-03 | 3 |
@@ -148,18 +149,18 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 
 ## Next Step
 
-Start with:
+Continue with:
 
 ```text
-$gsd-discuss-phase 11
+$gsd-discuss-phase 13
 ```
 
 or, for a direct execution plan:
 
 ```text
-$gsd-plan-phase 11
+$gsd-plan-phase 13
 ```
 
 ---
 
-*Last updated: 2026-06-25 after Phase 10 completion.*
+*Last updated: 2026-06-25 after Phase 12 completion.*
