@@ -8,9 +8,10 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 **Started:** 2026-06-24
 **Phase numbering:** continues from prior milestone artifacts, starting at Phase 10.
 
-## Phase 10: Planning Truth Reset
+## Phase 10: Planning Truth Reset - Complete
 
 **Goal:** Make `.planning` a trustworthy entry point again.
+**Completed:** 2026-06-25
 
 **Requirements:** PLAN-01, PLAN-02, PLAN-03, PLAN-04, PLAN-05
 
@@ -25,7 +26,7 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 1. All active planning entry files name v2.9 as the current milestone.
 2. Every v2.9 requirement maps to exactly one roadmap phase.
 3. Service/workflow classification is present and evidence-based.
-4. AGENTS rule references no longer point at missing canonical files without a fallback.
+4. AGENTS rule references resolve to `.Codex/rules/*`.
 
 ## Phase 11: Source Hygiene Stabilization
 
@@ -122,7 +123,7 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 
 | Phase | Name | Requirements | Count |
 |---|---|---|---:|
-| 10 | Planning Truth Reset | PLAN-01..PLAN-05 | 5 |
+| 10 | Planning Truth Reset | PLAN-01..PLAN-05 | 5 (Complete) |
 | 11 | Source Hygiene Stabilization | HYGIENE-01..HYGIENE-04 | 4 |
 | 12 | Calibration Closure for Implemented Modes | CAL-01..CAL-05 | 5 |
 | 13 | Hybrid Integration Verification | INT-01..INT-06 | 6 |
@@ -149,4 +150,4 @@ $gsd-plan-phase 10
 
 ---
 
-*Last updated: 2026-06-24 after v2.9 milestone initialization.*
+*Last updated: 2026-06-25 after Phase 10 completion.*

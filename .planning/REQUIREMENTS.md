@@ -32,11 +32,11 @@
 
 ### Planning Realignment
 
-- [ ] **PLAN-01**: Maintainer can read `.planning/INDEX.md`, `PROJECT.md`, `STATE.md`, `REQUIREMENTS.md`, and `ROADMAP.md` and see the same active milestone, baseline status, and next phase.
-- [ ] **PLAN-02**: Current git history through v2.8 is reflected in planning as shipped history, not as future v2.7/v2.8 scope.
-- [ ] **PLAN-03**: Every active service/workflow surface is classified as Real, Hybrid, Mock, Blocked, or Placeholder with evidence.
-- [ ] **PLAN-04**: Missing rule-file references from AGENTS are either restored or redirected to existing canonical rules.
-- [ ] **PLAN-05**: Old CrealityPrint-era references outside historical evidence are classified as intentional history, vendor data, or cleanup debt.
+- [x] **PLAN-01**: Maintainer can read `.planning/INDEX.md`, `PROJECT.md`, `STATE.md`, `REQUIREMENTS.md`, and `ROADMAP.md` and see the same active milestone, baseline status, and next phase. *(Phase 10)*
+- [x] **PLAN-02**: Current git history through v2.8 is reflected in planning as shipped history, not as future v2.7/v2.8 scope. *(Phase 10)*
+- [x] **PLAN-03**: Every active service/workflow surface is classified as Real, Hybrid, Mock, Blocked, or Placeholder with evidence. *(Phase 10)*
+- [x] **PLAN-04**: Missing rule-file references from AGENTS are either restored or redirected to existing canonical rules. *(Phase 10)*
+- [x] **PLAN-05**: Old CrealityPrint-era references outside historical evidence are classified as intentional history, vendor data, or cleanup debt. *(Phase 10)*
 
 ### Source Hygiene
 
@@ -117,11 +117,11 @@
 
 | Requirement | Phase | Status |
 |---|---|---|
-| PLAN-01 | Phase 10 | Pending |
-| PLAN-02 | Phase 10 | Pending |
-| PLAN-03 | Phase 10 | Pending |
-| PLAN-04 | Phase 10 | Pending |
-| PLAN-05 | Phase 10 | Pending |
+| PLAN-01 | Phase 10 | Complete |
+| PLAN-02 | Phase 10 | Complete |
+| PLAN-03 | Phase 10 | Complete |
+| PLAN-04 | Phase 10 | Complete |
+| PLAN-05 | Phase 10 | Complete |
 | HYGIENE-01 | Phase 11 | Pending |
 | HYGIENE-02 | Phase 11 | Pending |
 | HYGIENE-03 | Phase 11 | Pending |
@@ -154,4 +154,4 @@
 ---
 
 *Requirements defined: 2026-06-24*
-*Last updated: 2026-06-24 after v2.9 plan/implementation realignment audit.*
+*Last updated: 2026-06-25 after Phase 10 planning truth reset.*
