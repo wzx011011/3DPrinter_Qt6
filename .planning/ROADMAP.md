@@ -10,6 +10,8 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 
 ## Phase 10: Planning Truth Reset - Complete
 
+- [x] Phase 10: Planning Truth Reset (completed 2026-06-25)
+
 **Goal:** Make `.planning` a trustworthy entry point again.
 **Completed:** 2026-06-25
 
@@ -30,6 +32,8 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 
 ## Phase 11: Source Hygiene Stabilization
 
+- [ ] Phase 11: Source Hygiene Stabilization
+
 **Goal:** Remove source-level ambiguity introduced by dirty local work and encoding damage.
 
 **Requirements:** HYGIENE-01, HYGIENE-02, HYGIENE-03, HYGIENE-04
@@ -47,6 +51,8 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 4. Canonical verification still builds after hygiene changes.
 
 ## Phase 12: Calibration Closure for Implemented Modes
+
+- [ ] Phase 12: Calibration Closure for Implemented Modes
 
 **Goal:** Turn the existing hybrid PA/Flow/Temp calibration work into visible, deterministic, verified behavior.
 
@@ -67,6 +73,8 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 
 ## Phase 13: Hybrid Integration Verification
 
+- [ ] Phase 13: Hybrid Integration Verification
+
 **Goal:** Replace transport fallback confidence with deterministic evidence.
 
 **Requirements:** INT-01, INT-02, INT-03, INT-04, INT-05, INT-06
@@ -85,6 +93,8 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 
 ## Phase 14: Visible Placeholder Triage
 
+- [ ] Phase 14: Visible Placeholder Triage
+
 **Goal:** Stop counting visible placeholders as completed product workflows.
 
 **Requirements:** UI-01, UI-02, UI-03, UI-04, UI-05
@@ -102,6 +112,8 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 4. Any QML business-logic extraction needed for v2.9 is either done or scoped to a future phase with evidence.
 
 ## Phase 15: Verification and Handoff
+
+- [ ] Phase 15: Verification and Handoff
 
 **Goal:** Produce the final v2.9 evidence bundle and prepare the next source-truth milestone.
 
