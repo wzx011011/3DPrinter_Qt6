@@ -2,29 +2,30 @@
 gsd_state_version: 1.0
 milestone: v2.9
 milestone_name: Implementation Realignment and Stabilization
-status: executing
-last_updated: "2026-06-24T17:07:04.374Z"
-last_activity: 2026-06-24 -- Phase 11 planning complete
+status: ready_to_plan
+last_updated: "2026-06-25T00:00:00+08:00"
+last_activity: 2026-06-25 -- Phase 11 complete; ready to discuss Phase 12
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 2
-  completed_plans: 1
-  percent: 17
+  completed_plans: 2
+  percent: 33
+stopped_at: Phase 11 complete (1/1) - ready to discuss Phase 12
 ---
 
 # Project State
 
 **Milestone:** v2.9 - Implementation Realignment and Stabilization
-**Status:** Ready to execute
-**Next step:** `$gsd-autonomous --only 11` or `$gsd-plan-phase 11`
+**Status:** Ready to plan
+**Next step:** `$gsd-autonomous --only 12` or `$gsd-plan-phase 12`
 
 ## Current Position
 
-Phase: 11
+Phase: 12
 Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-24 -- Phase 11 planning complete
+Status: Ready to discuss/plan
+Last activity: 2026-06-25 -- Phase 11 complete
 
 ## Why This Milestone Exists
 
@@ -43,15 +44,15 @@ v2.9 exists to make the baseline trustworthy before starting the next large sour
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
 | 10 | Planning Truth Reset | Complete | PLAN-01..PLAN-05 |
-| 11 | Source Hygiene Stabilization | Pending | HYGIENE-01..HYGIENE-04 |
+| 11 | Source Hygiene Stabilization | Complete | HYGIENE-01..HYGIENE-04 |
 | 12 | Calibration Closure for Implemented Modes | Pending | CAL-01..CAL-05 |
 | 13 | Hybrid Integration Verification | Pending | INT-01..INT-06 |
 | 14 | Visible Placeholder Triage | Pending | UI-01..UI-05 |
 | 15 | Verification and Handoff | Pending | VERIFY-01..VERIFY-03 |
 
-## Baseline Verification
+## Latest Verification
 
-The canonical command was run on 2026-06-24:
+The canonical command was run on 2026-06-25 after Phase 11:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1
@@ -61,19 +62,20 @@ Observed result:
 
 - Build completed successfully.
 - `OWzxSlicer.exe` startup smoke passed.
+- QML UI audit tests passed.
 - E2E pipeline tests passed.
 - `ViewModelSmokeTests.exe` was built but not run by the script.
 
 ## Known Open Issues
 
 - `.Codex/rules/source-truth-migration.md`, `.Codex/rules/build-rules.md`, and `.Codex/rules/qml-boundaries.md` now exist and are the canonical Codex rule files.
-- `src/core/services/CalibrationServiceMock.cpp` contains a literal `\r\n` artifact near fallback timer logic.
-- Several active files show encoding-damaged comments or strings.
-- `src/core/services/SliceService.cpp.backup` is present as an untracked source-adjacent backup file.
+- Phase 11 removed the targeted literal `\r\n` artifact, repaired the targeted active source encoding/string damage, and removed `src/core/services/SliceService.cpp.backup`.
+- `AppSettingsService.*` and `SoftwareViewport.*` are now tracked intentional implementation files because active CMake/source code references them.
+- `.agents/`, root `AGENTS.md`, and `IMPLEMENTATION_SUMMARY.md` remain untracked external artifacts.
 - BBLTopbar calibration menu entries are disabled even though several calibration modes have backend wiring.
 - Export project/model/preferences handlers in `main.qml` are TODO/no-op.
 - AssembleView and ModelMall/WebView remain placeholder or blocked.
 
 ## Handoff
 
-Start Phase 11 by fixing active source hygiene issues without reverting unrelated local implementation changes.
+Start Phase 12 by closing visible, deterministic calibration behavior for the implemented PA, Flow Rate, and Temp Tower modes.

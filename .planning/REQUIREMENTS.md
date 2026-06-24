@@ -40,10 +40,10 @@
 
 ### Source Hygiene
 
-- [ ] **HYGIENE-01**: Literal escape artifacts such as `\r\n` inside source comments are removed or converted to real line breaks where they affect behavior.
-- [ ] **HYGIENE-02**: Encoding-damaged source comments and user-visible strings in active files are repaired or explicitly scoped for follow-up.
-- [ ] **HYGIENE-03**: Residual backup/source artifacts under `src/`, including `SliceService.cpp.backup`, are removed or moved to an explicit archive after ownership is confirmed.
-- [ ] **HYGIENE-04**: Untracked baseline files introduced by recent implementation work are either committed as intentional work, ignored intentionally, or documented as external artifacts.
+- [x] **HYGIENE-01**: Literal escape artifacts such as `\r\n` inside source comments are removed or converted to real line breaks where they affect behavior.
+- [x] **HYGIENE-02**: Encoding-damaged source comments and user-visible strings in active files are repaired or explicitly scoped for follow-up.
+- [x] **HYGIENE-03**: Residual backup/source artifacts under `src/`, including `SliceService.cpp.backup`, are removed or moved to an explicit archive after ownership is confirmed.
+- [x] **HYGIENE-04**: Untracked baseline files introduced by recent implementation work are either committed as intentional work, ignored intentionally, or documented as external artifacts.
 
 ### Calibration Stabilization
 
@@ -122,10 +122,10 @@
 | PLAN-03 | Phase 10 | Complete |
 | PLAN-04 | Phase 10 | Complete |
 | PLAN-05 | Phase 10 | Complete |
-| HYGIENE-01 | Phase 11 | Pending |
-| HYGIENE-02 | Phase 11 | Pending |
-| HYGIENE-03 | Phase 11 | Pending |
-| HYGIENE-04 | Phase 11 | Pending |
+| HYGIENE-01 | Phase 11 | Complete |
+| HYGIENE-02 | Phase 11 | Complete |
+| HYGIENE-03 | Phase 11 | Complete |
+| HYGIENE-04 | Phase 11 | Complete |
 | CAL-01 | Phase 12 | Pending |
 | CAL-02 | Phase 12 | Pending |
 | CAL-03 | Phase 12 | Pending |

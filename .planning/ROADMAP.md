@@ -32,7 +32,7 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 
 ## Phase 11: Source Hygiene Stabilization
 
-- [ ] Phase 11: Source Hygiene Stabilization
+- [x] Phase 11: Source Hygiene Stabilization (completed 2026-06-25)
 
 **Goal:** Remove source-level ambiguity introduced by dirty local work and encoding damage.
 
@@ -136,7 +136,7 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 | Phase | Name | Requirements | Count |
 |---|---|---|---:|
 | 10 | Planning Truth Reset | PLAN-01..PLAN-05 | 5 (Complete) |
-| 11 | Source Hygiene Stabilization | HYGIENE-01..HYGIENE-04 | 4 |
+| 11 | Source Hygiene Stabilization | HYGIENE-01..HYGIENE-04 | 4 (Complete) |
 | 12 | Calibration Closure for Implemented Modes | CAL-01..CAL-05 | 5 |
 | 13 | Hybrid Integration Verification | INT-01..INT-06 | 6 |
 | 14 | Visible Placeholder Triage | UI-01..UI-05 | 5 |
