@@ -50,6 +50,10 @@ public:
     Q_INVOKABLE QString calibItemName(int i) const;
     Q_INVOKABLE QString calibItemDesc(int i) const;
     Q_INVOKABLE int calibItemStatus(int i) const;
+    Q_INVOKABLE QString calibItemId(int i) const;
+    Q_INVOKABLE bool calibItemImplemented(int i) const;
+    Q_INVOKABLE bool calibItemStartable(int i) const;
+    Q_INVOKABLE QString calibItemUnavailableReason(int i) const;
 
     // Step accessors for current selection
     Q_INVOKABLE int stepCount() const;
@@ -60,6 +64,7 @@ public:
 
     int selectedIndex() const { return m_selectedIndex; }
     void selectItem(int index);
+    Q_INVOKABLE bool selectItemById(const QString &id);
 
     QString selectedTitle() const;
     QString selectedDescription() const;

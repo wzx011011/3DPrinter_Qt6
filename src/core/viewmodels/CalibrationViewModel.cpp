@@ -58,6 +58,26 @@ int CalibrationViewModel::calibItemStatus(int i) const
     return m_service ? m_service->calibStatus(i) : 0;
 }
 
+QString CalibrationViewModel::calibItemId(int i) const
+{
+    return m_service ? m_service->calibTypeId(i) : QString{};
+}
+
+bool CalibrationViewModel::calibItemImplemented(int i) const
+{
+    return m_service ? m_service->calibTypeImplemented(i) : false;
+}
+
+bool CalibrationViewModel::calibItemStartable(int i) const
+{
+    return m_service ? m_service->calibTypeStartable(i) : false;
+}
+
+QString CalibrationViewModel::calibItemUnavailableReason(int i) const
+{
+    return m_service ? m_service->calibTypeUnavailableReason(i) : QString{};
+}
+
 // --- Step accessors for current selection ---
 
 int CalibrationViewModel::stepCount() const
@@ -91,6 +111,17 @@ void CalibrationViewModel::selectItem(int index)
     if (m_selectedIndex == index) return;
     m_selectedIndex = index;
     emit selectionChanged();
+}
+
+bool CalibrationViewModel::selectItemById(const QString &id)
+{
+    if (!m_service)
+        return false;
+    const int index = m_service->calibTypeIndexById(id);
+    if (index < 0)
+        return false;
+    selectItem(index);
+    return true;
 }
 
 QString CalibrationViewModel::selectedTitle() const
@@ -181,7 +212,7 @@ void CalibrationViewModel::setSelectedFilamentPreset(const QString &name)
 void CalibrationViewModel::startCalibration()
 {
     if (m_selectedIndex < 0) return;
-    if (m_service)
+    if (m_service && m_service->calibTypeStartable(m_selectedIndex))
         m_service->startCalibration(m_selectedIndex);
     else
     {

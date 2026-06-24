@@ -30,11 +30,15 @@ Item {
         var n = calibrationVm.calibItemCount()
         for (var i = 0; i < n; ++i)
             arr.push({
+                         id: calibrationVm.calibItemId(i),
                          icon: calibrationVm.calibItemIcon(i),
                          name: calibrationVm.calibItemName(i),
                          desc: calibrationVm.calibItemDesc(i),
-                         status: calibrationVm.calibItemStatus(i)
-                     })
+                         status: calibrationVm.calibItemStatus(i),
+                         implemented: calibrationVm.calibItemImplemented(i),
+                         startable: calibrationVm.calibItemStartable(i),
+                         unavailableReason: calibrationVm.calibItemUnavailableReason(i)
+                      })
         _calibItems = arr
     }
 
@@ -235,7 +239,7 @@ Item {
                                 delegate: Rectangle {
                                     width: parent.width - 8
                                     x: 4
-                                    height: 52
+                                    height: modelData.startable ? 52 : 66
                                     radius: Theme.radiusMD
                                     color: {
                                         if (root.calibrationVm.selectedIndex === index)
@@ -252,6 +256,7 @@ Item {
                                         if (modelData.status === 1) return Theme.statusInfo    // InProgress
                                         if (modelData.status === 2) return Theme.statusSuccess  // Completed
                                         if (modelData.status === 3) return Theme.statusError    // Failed
+                                        if (!modelData.startable) return Theme.statusWarning
                                         return Theme.textDisabled                            // NotStarted
                                     }
 
@@ -268,13 +273,13 @@ Item {
                                             radius: 3
                                             anchors.verticalCenter: parent.verticalCenter
                                             color: parent.parent.parent.statusColor
-                                            visible: modelData.status !== 0
+                                            visible: modelData.status !== 0 || !modelData.startable
                                         }
 
                                         Text {
                                             text: modelData.icon || "\u2699"
                                             font.pixelSize: 18
-                                            color: Theme.textSecondary
+                                            color: modelData.startable ? Theme.textSecondary : Theme.textDisabled
                                             anchors.verticalCenter: parent.verticalCenter
                                         }
 
@@ -283,13 +288,21 @@ Item {
                                             anchors.verticalCenter: parent.verticalCenter
                                             Text {
                                                 text: modelData.name
-                                                color: Theme.textPrimary
+                                                color: modelData.startable ? Theme.textPrimary : Theme.textDisabled
                                                 font.pixelSize: Theme.fontSizeMD
                                             }
                                             Text {
                                                 text: modelData.desc || ""
                                                 color: Theme.textDisabled
                                                 font.pixelSize: Theme.fontSizeXS
+                                            }
+                                            Text {
+                                                text: modelData.unavailableReason || ""
+                                                color: Theme.statusWarning
+                                                font.pixelSize: Theme.fontSizeXS
+                                                visible: !modelData.startable && modelData.unavailableReason !== ""
+                                                width: 190
+                                                elide: Text.ElideRight
                                             }
                                         }
                                     }
@@ -408,6 +421,27 @@ Item {
                         wrapMode: Text.Wrap
                         Layout.fillWidth: true
                         Layout.preferredHeight: implicitHeight
+                    }
+
+                    Rectangle {
+                        visible: root.calibrationVm.selectedIndex >= 0
+                                 && !root.calibrationVm.calibItemStartable(root.calibrationVm.selectedIndex)
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: unavailableText.implicitHeight + 20
+                        color: Qt.rgba(0.96, 0.65, 0.14, 0.12)
+                        radius: Theme.radiusMD
+                        border.color: Theme.statusWarning
+                        border.width: 1
+
+                        Text {
+                            id: unavailableText
+                            anchors.fill: parent
+                            anchors.margins: Theme.spacingMD
+                            text: root.calibrationVm.calibItemUnavailableReason(root.calibrationVm.selectedIndex)
+                            color: Theme.statusWarning
+                            font.pixelSize: Theme.fontSizeSM
+                            wrapMode: Text.Wrap
+                        }
                     }
 
                     // === Wizard step indicator (aligned with upstream CalibrationWizard step chain) ===
@@ -914,15 +948,21 @@ Item {
                             text: {
                                 if (root.calibrationVm.isRunning)
                                     return qsTr("Cancel Calibration")
+                                if (root.calibrationVm.selectedIndex >= 0
+                                        && !root.calibrationVm.calibItemStartable(root.calibrationVm.selectedIndex))
+                                    return qsTr("Unavailable")
                                 if (root.calibrationVm.selectedStatus === 2)
                                     return qsTr("Recalibrate")
                                 return qsTr("Start Calibration")
                             }
                             cxStyle: root.calibrationVm.isRunning ? CxButton.Style.Danger : CxButton.Style.Primary
+                            enabled: root.calibrationVm.selectedIndex >= 0
+                                     && (root.calibrationVm.isRunning
+                                         || root.calibrationVm.calibItemStartable(root.calibrationVm.selectedIndex))
                             onClicked: {
                                 if (root.calibrationVm.isRunning)
                                     root.calibrationVm.cancelCalibration()
-                                else
+                                else if (root.calibrationVm.calibItemStartable(root.calibrationVm.selectedIndex))
                                     calibDlg.open()
                             }
                         }

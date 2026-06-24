@@ -49,6 +49,13 @@ void CalibrationServiceMock::buildMockData()
         "The calibration results have about 10 percent jitter, which may cause the result "
         "not exactly the same in each calibration.");
     flowDynamics.previewLabel = tr("Pressure Advance test pattern");
+    flowDynamics.implemented = true;
+    flowDynamics.startable = true;
+    flowDynamics.calibMode = 1;
+    flowDynamics.calibStart = 0.0;
+    flowDynamics.calibEnd = 0.1;
+    flowDynamics.calibStep = 0.002;
+    flowDynamics.printNumbers = true;
     flowDynamics.steps = {
         {"start",   tr("Introduction"), tr("Learn when and why to perform Flow Dynamics calibration.")},
         {"preset",  tr("Select Filament"), tr("Choose the filament preset and nozzle diameter for calibration.")},
@@ -70,6 +77,13 @@ void CalibrationServiceMock::buildMockData()
         "4. Weak Structural Integrity: Prints break easily.\n\n"
         "Flow Rate Calibration is crucial for foaming materials like LW-PLA.");
     flowRate.previewLabel = tr("Flow rate test pattern");
+    flowRate.implemented = true;
+    flowRate.startable = true;
+    flowRate.calibMode = 5;
+    flowRate.calibStart = 0.90;
+    flowRate.calibEnd = 1.10;
+    flowRate.calibStep = 0.01;
+    flowRate.printNumbers = true;
     flowRate.steps = {
         {"start",        tr("Introduction"), tr("Learn when to use Flow Rate calibration.")},
         {"preset",       tr("Select Filament"), tr("Choose filament, bed type, and nozzle diameter.")},
@@ -77,6 +91,30 @@ void CalibrationServiceMock::buildMockData()
         {"coarse_save",  tr("Coarse Result"), tr("Review coarse calibration result.")},
         {"fine_cali",    tr("Fine Calibration"), tr("Run fine flow rate calibration pass.")},
         {"fine_save",    tr("Save Result"), tr("Review and save fine calibration result.")}
+    };
+
+    CalibrationType tempTower;
+    tempTower.id = "temp_tower";
+    tempTower.name = tr("Temp Tower");
+    tempTower.icon = "T";
+    tempTower.category = "slice";
+    tempTower.description = tr("Temperature tower calibration");
+    tempTower.longDesc = tr(
+        "Temp Tower calibration prints a tower across a temperature range so you can "
+        "choose a stable nozzle temperature for the selected filament.");
+    tempTower.previewLabel = tr("Temperature tower test pattern");
+    tempTower.implemented = true;
+    tempTower.startable = true;
+    tempTower.calibMode = 6;
+    tempTower.calibStart = 190.0;
+    tempTower.calibEnd = 240.0;
+    tempTower.calibStep = 5.0;
+    tempTower.printNumbers = true;
+    tempTower.steps = {
+        {"start",  tr("Introduction"), tr("Learn when to use Temp Tower calibration.")},
+        {"preset", tr("Select Filament"), tr("Choose filament and temperature range.")},
+        {"cali",   tr("Calibrate"), tr("Send temperature tower calibration to slicer.")},
+        {"save",   tr("Save Result"), tr("Review selected temperature and save result.")}
     };
 
     CalibrationType bedLeveling;
@@ -92,6 +130,7 @@ void CalibrationServiceMock::buildMockData()
         "measuring the distance at each point to create a height map.\n\n"
         "Ensure the build plate is clean and free of debris before starting.");
     bedLeveling.previewLabel = tr("Bed height map");
+    bedLeveling.unavailableReason = tr("Blocked: requires live printer hardware calibration support.");
     bedLeveling.steps = {
         {"start",  tr("Introduction"), tr("Ensure build plate is clean and clear.")},
         {"cali",   tr("Leveling"), tr("Printer probes multiple points on the build plate.")},
@@ -111,6 +150,7 @@ void CalibrationServiceMock::buildMockData()
         "This calibration involves accelerating the print head at various frequencies "
         "to measure the structural response of the printer.");
     vibration.previewLabel = tr("Frequency response chart");
+    vibration.unavailableReason = tr("Blocked: requires live printer resonance measurement support.");
     vibration.steps = {
         {"start",  tr("Introduction"), tr("Learn about vibration compensation calibration.")},
         {"cali",   tr("Measure"), tr("Printer performs resonance measurement.")},
@@ -130,6 +170,7 @@ void CalibrationServiceMock::buildMockData()
         "Over-extrusion or under-extrusion at high speeds indicates the need "
         "for this calibration.");
     maxVolSpeed.previewLabel = tr("Speed tower test pattern");
+    maxVolSpeed.unavailableReason = tr("Pending: max volumetric speed generation is outside Phase 12.");
     maxVolSpeed.steps = {
         {"start",  tr("Introduction"), tr("Learn about max volumetric speed calibration.")},
         {"preset", tr("Select Parameters"), tr("Set calibration range parameters.")},
@@ -137,7 +178,7 @@ void CalibrationServiceMock::buildMockData()
         {"save",   tr("Save Result"), tr("Review result and save to filament preset.")}
     };
 
-    m_calibTypes = {flowDynamics, flowRate, bedLeveling, vibration, maxVolSpeed};
+    m_calibTypes = {flowDynamics, flowRate, tempTower, bedLeveling, vibration, maxVolSpeed};
 
     // Initialize all statuses as NotStarted
     for (int i = 0; i < m_calibTypes.size(); ++i)
@@ -181,6 +222,30 @@ QString CalibrationServiceMock::calibTypeLongDesc(int index) const
 QString CalibrationServiceMock::calibTypePreviewLabel(int index) const
 {
     return (index >= 0 && index < m_calibTypes.size()) ? m_calibTypes[index].previewLabel : QString{};
+}
+
+int CalibrationServiceMock::calibTypeIndexById(const QString &id) const
+{
+    for (int i = 0; i < m_calibTypes.size(); ++i) {
+        if (m_calibTypes[i].id == id)
+            return i;
+    }
+    return -1;
+}
+
+bool CalibrationServiceMock::calibTypeImplemented(int index) const
+{
+    return (index >= 0 && index < m_calibTypes.size()) ? m_calibTypes[index].implemented : false;
+}
+
+bool CalibrationServiceMock::calibTypeStartable(int index) const
+{
+    return (index >= 0 && index < m_calibTypes.size()) ? m_calibTypes[index].startable : false;
+}
+
+QString CalibrationServiceMock::calibTypeUnavailableReason(int index) const
+{
+    return (index >= 0 && index < m_calibTypes.size()) ? m_calibTypes[index].unavailableReason : QString{};
 }
 
 // --- Step accessors ---
@@ -255,6 +320,12 @@ void CalibrationServiceMock::startCalibration(int itemIndex)
 {
     if (m_isRunning) return;
     if (itemIndex < 0 || itemIndex >= m_calibTypes.size()) return;
+    if (!m_calibTypes[itemIndex].startable) {
+        qInfo("[Calib] '%s' is not startable: %s",
+              m_calibTypes[itemIndex].id.toUtf8().constData(),
+              m_calibTypes[itemIndex].unavailableReason.toUtf8().constData());
+        return;
+    }
 
     m_currentItem = itemIndex;
     m_progress = 0;
@@ -277,16 +348,16 @@ void CalibrationServiceMock::startCalibration(int itemIndex)
     qDebug("[Calib] starting real calibration: %s", calibType.id.toUtf8().constData());
 
     if (m_sliceService) {
-        int mode = 0; double start = 0.0, end = 0.0, step = 0.0;
-        bool printNumbers = true;
-        if (calibType.id == "flow_dynamics") { mode = 1; start = 0.0; end = 0.1; step = 0.002; }
-        else if (calibType.id == "flow_rate") { mode = 5; start = 0.90; end = 1.10; step = 0.01; }
-        else if (calibType.id == "temp_tower") { mode = 6; start = 190.0; end = 240.0; step = 5.0; }
-        if (mode != 0) {
-            m_sliceService->setCalibParams(mode, start, end, step, printNumbers);
-            m_sliceService->startSlice(QStringLiteral("calib_%1").arg(calibType.id));
+        const QString projectName = QStringLiteral("calib_%1").arg(calibType.id);
+        if (calibType.calibMode != 0) {
+            emit calibrationSliceRequested(calibType.calibMode, calibType.calibStart, calibType.calibEnd,
+                                           calibType.calibStep, calibType.printNumbers, projectName);
+            m_sliceService->setCalibParams(calibType.calibMode, calibType.calibStart, calibType.calibEnd,
+                                           calibType.calibStep, calibType.printNumbers);
+            m_sliceService->startSlice(projectName);
             dispatchedRealSlice = true;
-            qDebug("[Calib] calib slice dispatched: mode=%d start=%.3f end=%.3f step=%.4f", mode, start, end, step);
+            qDebug("[Calib] calib slice dispatched: mode=%d start=%.3f end=%.3f step=%.4f",
+                   calibType.calibMode, calibType.calibStart, calibType.calibEnd, calibType.calibStep);
         } else {
             qDebug("[Calib] type '%s' has no CalibMode mapping - mock only", calibType.id.toUtf8().constData());
         }

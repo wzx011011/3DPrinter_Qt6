@@ -7,6 +7,7 @@
 #include <QtTest>
 
 #include "core/services/CameraServiceMock.h"
+#include "core/services/CalibrationServiceMock.h"
 #include "core/services/DeviceServiceMock.h"
 #include "core/services/NetworkServiceMock.h"
 #include "core/services/PresetServiceMock.h"
@@ -15,6 +16,7 @@
 #include "core/services/FtpUploader.h"
 #include "core/services/SsdpDiscovery.h"
 #include "core/viewmodels/ConfigViewModel.h"
+#include "core/viewmodels/CalibrationViewModel.h"
 #include "core/viewmodels/EditorViewModel.h"
 #include "core/viewmodels/MonitorViewModel.h"
 #include "core/viewmodels/PreviewViewModel.h"
@@ -27,6 +29,16 @@ namespace
   static const QString kStlPath = QDir::cleanPath(
       QStringLiteral(QT_TESTCASE_SOURCEDIR) +
       QStringLiteral("/third_party/OrcaSlicer/resources/profiles/hotend.stl"));
+
+  struct ExpectedCalibRequest
+  {
+    const char *id;
+    int mode;
+    double start;
+    double end;
+    double step;
+    bool printNumbers;
+  };
 }
 
 class ViewModelSmokeTests final : public QObject
@@ -54,6 +66,11 @@ private slots:
   void int03_CameraStateMachineAndFrameToken();
   // v2.7 P1: INT-02 校准自回归（PA/FlowRate/TempTower calib slice 生成 G-code）
   void int02_CalibrationGeneratesCalibGcode();
+  // v2.9 Phase 12: deterministic calibration closure tests
+  void calibrationImplementedModesExposeStableRouting();
+  void calibrationImplementedModesEmitSliceRequests();
+  void calibrationUnsupportedModesAreExplicitlyUnavailable();
+  void calibrationFallbackAndSliceCallbacksDriveProgress();
   // v2.7 P2-A: INT-04 MQTT connection params + telemetry field mapping
   void int04_MqttConnectionParamsAndTelemetryFields();
   // v2.7 P2-B: INT-05 MQTT command construction + control flow
@@ -84,6 +101,8 @@ bool ViewModelSmokeTests::hasLibslic3r() const
 
 void ViewModelSmokeTests::initTestCase()
 {
+  QCoreApplication::setOrganizationName(QStringLiteral("OWzx"));
+  QCoreApplication::setApplicationName(QStringLiteral("OWzxSlicer"));
   if (!hasLibslic3r())
     QSKIP("ViewModel smoke tests require HAS_LIBSLIC3R — skipping all tests");
   QVERIFY2(QFileInfo::exists(kStlPath), qPrintable(
@@ -118,7 +137,7 @@ void ViewModelSmokeTests::monitor_refresh_updates_network_and_device()
   QSignalSpy spy(&monitor, &MonitorViewModel::networkChanged);
   monitor.refresh();
 
-  QVERIFY(spy.count() >= 1);
+  QTRY_VERIFY_WITH_TIMEOUT(spy.count() >= 1, 5000);
   QVERIFY(monitor.monitorState() != beforeState || monitor.latencyMs() != beforeLatency);
   QVERIFY(monitor.networkOnline());
 }
@@ -750,6 +769,148 @@ void ViewModelSmokeTests::int02_CalibrationGeneratesCalibGcode()
 
   // 清理
   QFile::remove(gcodePath);
+}
+
+void ViewModelSmokeTests::calibrationImplementedModesExposeStableRouting()
+{
+  CalibrationServiceMock service;
+  CalibrationViewModel vm(&service);
+
+  const ExpectedCalibRequest expected[] = {
+      {"flow_dynamics", 1, 0.0, 0.1, 0.002, true},
+      {"flow_rate", 5, 0.90, 1.10, 0.01, true},
+      {"temp_tower", 6, 190.0, 240.0, 5.0, true},
+  };
+
+  for (const auto &item : expected)
+  {
+    const QString id = QString::fromLatin1(item.id);
+    const int index = service.calibTypeIndexById(id);
+    QVERIFY2(index >= 0, qPrintable(QStringLiteral("Missing calibration id %1").arg(id)));
+    QCOMPARE(service.calibTypeId(index), id);
+    QVERIFY(service.calibTypeImplemented(index));
+    QVERIFY(service.calibTypeStartable(index));
+    QVERIFY(service.calibTypeUnavailableReason(index).isEmpty());
+
+    QVERIFY(vm.selectItemById(id));
+    QCOMPARE(vm.selectedIndex(), index);
+    QCOMPARE(vm.calibItemId(index), id);
+    QVERIFY(vm.calibItemImplemented(index));
+    QVERIFY(vm.calibItemStartable(index));
+    QVERIFY(vm.calibItemUnavailableReason(index).isEmpty());
+  }
+}
+
+void ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  CalibrationServiceMock service;
+  service.setSliceService(&slice);
+
+  QSignalSpy requestSpy(&service, &CalibrationServiceMock::calibrationSliceRequested);
+  QVERIFY(requestSpy.isValid());
+
+  const ExpectedCalibRequest expected[] = {
+      {"flow_dynamics", 1, 0.0, 0.1, 0.002, true},
+      {"flow_rate", 5, 0.90, 1.10, 0.01, true},
+      {"temp_tower", 6, 190.0, 240.0, 5.0, true},
+  };
+
+  for (const auto &item : expected)
+  {
+    const QString id = QString::fromLatin1(item.id);
+    const int index = service.calibTypeIndexById(id);
+    QVERIFY(index >= 0);
+
+    service.startCalibration(index);
+    QCOMPARE(requestSpy.count(), 1);
+    const QList<QVariant> args = requestSpy.takeFirst();
+    QCOMPARE(args.at(0).toInt(), item.mode);
+    QCOMPARE(args.at(1).toDouble(), item.start);
+    QCOMPARE(args.at(2).toDouble(), item.end);
+    QCOMPARE(args.at(3).toDouble(), item.step);
+    QCOMPARE(args.at(4).toBool(), item.printNumbers);
+    QCOMPARE(args.at(5).toString(), QStringLiteral("calib_%1").arg(id));
+  }
+}
+
+void ViewModelSmokeTests::calibrationUnsupportedModesAreExplicitlyUnavailable()
+{
+  CalibrationServiceMock service;
+  CalibrationViewModel vm(&service);
+
+  const QStringList unsupportedIds = {
+      QStringLiteral("bed_leveling"),
+      QStringLiteral("vibration"),
+      QStringLiteral("max_volumetric_speed"),
+  };
+
+  for (const QString &id : unsupportedIds)
+  {
+    const int index = service.calibTypeIndexById(id);
+    QVERIFY2(index >= 0, qPrintable(QStringLiteral("Missing calibration id %1").arg(id)));
+    QVERIFY(!service.calibTypeImplemented(index));
+    QVERIFY(!service.calibTypeStartable(index));
+    QVERIFY(!service.calibTypeUnavailableReason(index).isEmpty());
+
+    QVERIFY(vm.selectItemById(id));
+    QVERIFY(!vm.calibItemImplemented(index));
+    QVERIFY(!vm.calibItemStartable(index));
+    QVERIFY(!vm.calibItemUnavailableReason(index).isEmpty());
+
+    QSignalSpy requestSpy(&service, &CalibrationServiceMock::calibrationSliceRequested);
+    service.startCalibration(index);
+    QCOMPARE(requestSpy.count(), 0);
+    QCOMPARE(service.isRunning(), false);
+    QCOMPARE(service.calibStatus(index), static_cast<int>(CalibrationStatus::NotStarted));
+  }
+}
+
+void ViewModelSmokeTests::calibrationFallbackAndSliceCallbacksDriveProgress()
+{
+  CalibrationServiceMock service;
+  const int flowIndex = service.calibTypeIndexById(QStringLiteral("flow_dynamics"));
+  QVERIFY(flowIndex >= 0);
+
+  QSignalSpy finishedSpy(&service, &CalibrationServiceMock::calibrationFinished);
+  QVERIFY(finishedSpy.isValid());
+
+  service.startCalibration(flowIndex);
+  QVERIFY(service.isRunning());
+  for (int i = 0; i < 50 && service.isRunning(); ++i)
+  {
+    QVERIFY(QMetaObject::invokeMethod(&service, "onTick", Qt::DirectConnection));
+  }
+  QCOMPARE(finishedSpy.count(), 1);
+  QCOMPARE(finishedSpy.takeFirst().at(0).toBool(), true);
+  QCOMPARE(service.isRunning(), false);
+  QCOMPARE(service.progress(), 100);
+  QCOMPARE(service.calibStatus(flowIndex), static_cast<int>(CalibrationStatus::Completed));
+
+  service.resetCalibration(flowIndex);
+  service.startCalibration(flowIndex);
+  QVERIFY(service.isRunning());
+  QVERIFY(QMetaObject::invokeMethod(&service, "onSliceProgressUpdated",
+                                    Qt::DirectConnection,
+                                    Q_ARG(int, 42),
+                                    Q_ARG(QString, QStringLiteral("Running slice"))));
+  QCOMPARE(service.progress(), 42);
+  QVERIFY(QMetaObject::invokeMethod(&service, "onSliceFinished",
+                                    Qt::DirectConnection,
+                                    Q_ARG(QString, QStringLiteral("done"))));
+  QCOMPARE(service.isRunning(), false);
+  QCOMPARE(service.progress(), 100);
+  QCOMPARE(service.calibStatus(flowIndex), static_cast<int>(CalibrationStatus::Completed));
+
+  service.resetCalibration(flowIndex);
+  service.startCalibration(flowIndex);
+  QVERIFY(service.isRunning());
+  QVERIFY(QMetaObject::invokeMethod(&service, "onSliceFailed",
+                                    Qt::DirectConnection,
+                                    Q_ARG(QString, QStringLiteral("failed"))));
+  QCOMPARE(service.isRunning(), false);
+  QCOMPARE(service.calibStatus(flowIndex), static_cast<int>(CalibrationStatus::Failed));
 }
 
 // ── v2.7 P2-A: INT-04 MQTT 连接参数 + 遥测字段映射自回归 ──────────

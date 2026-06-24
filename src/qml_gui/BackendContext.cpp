@@ -285,6 +285,7 @@ void BackendContext::requestSetSidebarCollapsed(bool c)
   sidebarCollapsed_ = c;
   QSettings settings;
   settings.setValue(QStringLiteral("owzx/sidebar/collapsed"), c);  // 持久化（对齐上游 app_config）
+  settings.sync();
   emit sidebarCollapsedChanged();
 }
 
@@ -297,6 +298,7 @@ void BackendContext::requestSetSidebarWidth(int w)
   sidebarWidth_ = clamped;
   QSettings settings;
   settings.setValue(QStringLiteral("owzx/sidebar/width"), clamped);  // 持久化
+  settings.sync();
   emit sidebarWidthChanged();
 }
 
@@ -311,6 +313,7 @@ void BackendContext::requestSetSidebarDockArea(int area)
   sidebarDockArea_ = newArea;
   QSettings settings;
   settings.setValue(QStringLiteral("owzx/sidebar/dockArea"), static_cast<int>(newArea));  // 持久化
+  settings.sync();
   emit sidebarDockAreaChanged();
 }
 void BackendContext::openSettings()

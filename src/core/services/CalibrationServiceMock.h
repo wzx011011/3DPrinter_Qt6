@@ -27,6 +27,14 @@ struct CalibrationType
     QString     longDesc;     // Detailed guidance
     QString     previewLabel; // Preview area label
     QList<CalibrationStep> steps;
+    bool        implemented = false;
+    bool        startable = false;
+    QString     unavailableReason;
+    int         calibMode = 0;
+    double      calibStart = 0.0;
+    double      calibEnd = 0.0;
+    double      calibStep = 0.0;
+    bool        printNumbers = false;
 };
 
 // Status of a calibration type
@@ -75,6 +83,10 @@ public:
     Q_INVOKABLE QString calibTypeDesc(int index) const;
     Q_INVOKABLE QString calibTypeLongDesc(int index) const;
     Q_INVOKABLE QString calibTypePreviewLabel(int index) const;
+    Q_INVOKABLE int calibTypeIndexById(const QString &id) const;
+    Q_INVOKABLE bool calibTypeImplemented(int index) const;
+    Q_INVOKABLE bool calibTypeStartable(int index) const;
+    Q_INVOKABLE QString calibTypeUnavailableReason(int index) const;
 
     // Steps for a given calibration type
     Q_INVOKABLE int stepCount(int typeIndex) const;
@@ -116,6 +128,8 @@ signals:
     void stepChanged();
     void statusChanged(int typeIndex, int status);
     void historyChanged();
+    void calibrationSliceRequested(int mode, double start, double end, double step,
+                                   bool printNumbers, const QString &projectName);
 
 private slots:
     void onTick();

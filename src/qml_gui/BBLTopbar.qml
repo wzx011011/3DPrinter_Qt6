@@ -667,51 +667,37 @@ Item {
 
         MenuSeparator {}
 
-        // Calibration 子菜单：跳转到已接入的校准中心条目。
+        // Calibration submenu aligned with upstream BBLTopbar::GetCalibMenu.
         CxMenu {
-            title: qsTr("校准")
+            title: qsTr("Calibration")
             CxMenuItem {
-                text: qsTr("校准中心")
+                text: qsTr("Calibration Center")
                 onTriggered: root.calibrationRequested()
             }
             MenuSeparator {}
             CxMenuItem {
-                text: qsTr("压力提前")
+                text: qsTr("Flow Dynamics")
                 onTriggered: {
-                    backend.calibrationViewModel.selectedIndex = 0
+                    backend.calibrationViewModel.selectItemById("flow_dynamics")
                     root.calibrationRequested()
                 }
             }
             CxMenuItem {
-                text: qsTr("流量比例")
+                text: qsTr("Flow Rate")
                 onTriggered: {
-                    backend.calibrationViewModel.selectedIndex = 1
+                    backend.calibrationViewModel.selectItemById("flow_rate")
                     root.calibrationRequested()
                 }
             }
             CxMenuItem {
-                text: qsTr("热床调平")
+                text: qsTr("Temp Tower")
                 onTriggered: {
-                    backend.calibrationViewModel.selectedIndex = 2
-                    root.calibrationRequested()
-                }
-            }
-            CxMenuItem {
-                text: qsTr("振动补偿")
-                onTriggered: {
-                    backend.calibrationViewModel.selectedIndex = 3
-                    root.calibrationRequested()
-                }
-            }
-            CxMenuItem {
-                text: qsTr("最大体积速度")
-                onTriggered: {
-                    backend.calibrationViewModel.selectedIndex = 4
+                    backend.calibrationViewModel.selectItemById("temp_tower")
                     root.calibrationRequested()
                 }
             }
             MenuSeparator {}
-            CxMenuItem { text: qsTr("校准指南"); enabled: false; visible: false }
+            CxMenuItem { text: qsTr("Hardware calibration pending"); enabled: false }
         }
 
         MenuSeparator {}
