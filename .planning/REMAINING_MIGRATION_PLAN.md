@@ -1,6 +1,6 @@
 # Remaining Feature Migration Plan
 
-Last updated: 2026-06-24
+Last updated: 2026-06-25
 
 This is the ordered backlog after reconciling planning with current implementation. If older milestone wording conflicts with the dated audits or current code evidence, the code evidence and latest audit win.
 
@@ -22,9 +22,9 @@ Code-verified baseline:
 |---|---|---|
 | Model/project load and basic slicing | Hybrid/Real | Real libslic3r paths exist; E2E pipeline passed in canonical verify. |
 | Calibration | Hybrid | PA/Flow/Temp slice dispatch exists, but topbar UI and deterministic tests are incomplete. |
-| SSDP/device discovery | Hybrid | Real discovery exists, but device state remains mock-heavy. |
-| MQTT/FTP/send print | Hybrid | Real transport wrappers exist, but fallback/mock paths dominate tests. |
-| Camera | Hybrid | FFmpeg/RTSP path exists, but real-stream verification remains environment dependent. |
+| SSDP/device discovery | Hybrid | Real discovery exists with deterministic Phase 13 parser/timeout fixture coverage, but device state remains mock-heavy. |
+| MQTT/FTP/send print | Hybrid | Real transport wrappers exist with Phase 13 deterministic telemetry, command, FTP URL, and error-path coverage; live printer publish/upload remains manual. |
+| Camera | Hybrid | FFmpeg/RTSP path exists with Phase 13 no-stream/default-URL coverage, but real-stream verification remains environment dependent. |
 | Preset bundle | Partial | Current bundle IO is simplified JSON, not upstream-compatible bundle behavior. |
 | PartPlate/AssembleView | Hybrid/Placeholder | Plate APIs exist; upstream PartPlate config and AssembleView are not source-truth complete. |
 | Web/model mall/cloud/multi-machine | Mock/Blocked | Pages exist, but WebView is unavailable and state is largely mock/local. |
@@ -37,10 +37,10 @@ Goal: make planning, implementation, visible UI status, and verification evidenc
 
 Tasks:
 
-- [ ] **PLAN** Reconcile `.planning` entry files and reflect v2.7/v2.8 git history as already landed.
-- [ ] **HYGIENE** Fix encoding damage, literal escape artifacts, residual backup files, and unclassified untracked implementation files.
-- [ ] **CAL** Close implemented PA/Flow/Temp calibration paths with UI wiring and deterministic tests.
-- [ ] **INT** Add deterministic verification for SSDP, MQTT, FTP, camera, software viewport, and app settings behavior.
+- [x] **PLAN** Reconcile `.planning` entry files and reflect v2.7/v2.8 git history as already landed.
+- [x] **HYGIENE** Fix encoding damage, literal escape artifacts, residual backup files, and unclassified untracked implementation files.
+- [x] **CAL** Close implemented PA/Flow/Temp calibration paths with UI wiring and deterministic tests.
+- [x] **INT** Add deterministic verification for SSDP, MQTT, FTP, camera, software viewport, and app settings behavior.
 - [ ] **UI** Reclassify or wire visible disabled/no-op UI workflows.
 - [ ] **VERIFY** Run canonical verification and account for built-only tests.
 

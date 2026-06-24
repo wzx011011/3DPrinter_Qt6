@@ -35,8 +35,8 @@ These are current baseline capabilities inferred from implementation, git histor
 - G-code preview rendering path.
 - Undo/redo infrastructure for common object operations.
 - Project save/load paths with thumbnails and partial multi-plate support.
-- SSDP discovery, MQTT control, FTP print upload, and camera streaming code paths exist, but are classified as Hybrid until deterministic source-truth verification is complete.
-- Calibration PA, Flow Rate, and Temp Tower slice dispatch paths exist, but are classified as Hybrid until UI and regression coverage are complete.
+- SSDP discovery, MQTT control, FTP print upload, and camera streaming code paths exist and have Phase 13 deterministic protocol/fallback evidence, but remain Hybrid until live printer/broker/upload/RTSP verification is performed.
+- Calibration PA, Flow Rate, and Temp Tower slice dispatch paths are visible and covered by deterministic Phase 12 regression tests, but broader calibration hardware modes remain pending or blocked.
 
 ### Active
 
@@ -65,7 +65,7 @@ The active scope is defined in `.planning/REQUIREMENTS.md` under `v2.9 Requireme
 - Historical CrealityPrint-era notes remain evidence only; new work must cite OrcaSlicer upstream paths unless the task is explicitly cleaning historical compatibility.
 - Several `*Mock` services now contain real production-like paths plus fallback/mock behavior. The name alone does not describe implementation status.
 - Planning before v2.9 overstated or understated several areas: v2.7/v2.8 code landed on `main`, while `.planning` still described v2.6 as the current milestone.
-- Current verification evidence: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` passed on 2026-06-24, including build, app smoke launch, and E2E pipeline tests. `ViewModelSmokeTests.exe` was built but not run by that script.
+- Current verification evidence: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` passed on 2026-06-25 after Phase 13, including build, app smoke launch, QML UI audit, CLI/E2E targets, and E2E pipeline tests. `ViewModelSmokeTests.exe` was run explicitly and reported 32 passed, 0 failed.
 
 ## Constraints
 
@@ -105,4 +105,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-24 after v2.9 milestone initialization and plan/implementation realignment audit.*
+*Last updated: 2026-06-25 after Phase 13 hybrid integration verification.*

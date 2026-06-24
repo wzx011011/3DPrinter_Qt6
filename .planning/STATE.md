@@ -2,29 +2,29 @@
 gsd_state_version: 1.0
 milestone: v2.9
 milestone_name: Implementation Realignment and Stabilization
-status: ready_to_execute
-last_updated: "2026-06-25T04:18:00+08:00"
-last_activity: 2026-06-25 -- Phase 13 planned
+status: ready_to_plan
+last_updated: "2026-06-25T04:04:08+08:00"
+last_activity: 2026-06-25 -- Phase 13 completed
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 50
+  completed_plans: 4
+  percent: 67
 ---
 
 # Project State
 
 **Milestone:** v2.9 - Implementation Realignment and Stabilization
-**Status:** Ready to execute
-**Next step:** `$gsd-execute-phase 13 --no-transition`
+**Status:** Ready to plan
+**Next step:** `$gsd-discuss-phase 14`
 
 ## Current Position
 
-Phase: 13
-Plan: 13-01
-Status: Ready to execute
-Last activity: 2026-06-25 -- Phase 13 planned
+Phase: 14
+Plan: none
+Status: Ready to plan
+Last activity: 2026-06-25 -- Phase 13 completed
 
 ## Why This Milestone Exists
 
@@ -45,13 +45,13 @@ v2.9 exists to make the baseline trustworthy before starting the next large sour
 | 10 | Planning Truth Reset | Complete | PLAN-01..PLAN-05 |
 | 11 | Source Hygiene Stabilization | Complete | HYGIENE-01..HYGIENE-04 |
 | 12 | Calibration Closure for Implemented Modes | Complete | CAL-01..CAL-05 |
-| 13 | Hybrid Integration Verification | Pending | INT-01..INT-06 |
+| 13 | Hybrid Integration Verification | Complete | INT-01..INT-06 |
 | 14 | Visible Placeholder Triage | Pending | UI-01..UI-05 |
 | 15 | Verification and Handoff | Pending | VERIFY-01..VERIFY-03 |
 
 ## Latest Verification
 
-The canonical command was run on 2026-06-25 after Phase 12:
+The canonical command was run on 2026-06-25 after Phase 13:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1
@@ -63,7 +63,7 @@ Observed result:
 - `OWzxSlicer.exe` startup smoke passed.
 - QML UI audit tests passed.
 - E2E pipeline tests passed.
-- `ViewModelSmokeTests.exe` also passed when run explicitly: 31 passed, 0 failed.
+- `ViewModelSmokeTests.exe` also passed when run explicitly: 32 passed, 0 failed.
 
 ## Known Open Issues
 
@@ -73,9 +73,10 @@ Observed result:
 - `.agents/`, root `AGENTS.md`, and `IMPLEMENTATION_SUMMARY.md` remain untracked external artifacts.
 - BBLTopbar calibration menu entries for Flow Dynamics, Flow Rate, and Temp Tower are wired by stable ids.
 - Unsupported calibration modes remain explicit Pending/Blocked items.
+- Phase 13 added deterministic SSDP, MQTT, FTP, camera, software viewport, and AppSettings/bed-shape evidence. Live MQTT publish, FTP upload, and RTSP decode still require hardware or controlled fixtures.
 - Export project/model/preferences handlers in `main.qml` are TODO/no-op.
 - AssembleView and ModelMall/WebView remain placeholder or blocked.
 
 ## Handoff
 
-Start Phase 13 by turning hybrid SSDP/MQTT/FTP/camera/settings/viewport confidence into deterministic integration evidence.
+Start Phase 14 by triaging visible placeholder and no-op UI workflows.

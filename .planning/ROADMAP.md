@@ -74,9 +74,10 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 
 ## Phase 13: Hybrid Integration Verification
 
-- [ ] Phase 13: Hybrid Integration Verification
+- [x] Phase 13: Hybrid Integration Verification (completed 2026-06-25)
 
 **Goal:** Replace transport fallback confidence with deterministic evidence.
+**Completed:** 2026-06-25
 
 **Requirements:** INT-01, INT-02, INT-03, INT-04, INT-05, INT-06
 
@@ -142,7 +143,7 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 | 10 | Planning Truth Reset | PLAN-01..PLAN-05 | 5 (Complete) |
 | 11 | Source Hygiene Stabilization | HYGIENE-01..HYGIENE-04 | 4 (Complete) |
 | 12 | Calibration Closure for Implemented Modes | CAL-01..CAL-05 | 5 (Complete) |
-| 13 | Hybrid Integration Verification | INT-01..INT-06 | 6 |
+| 13 | Hybrid Integration Verification | INT-01..INT-06 | 6 (Complete) |
 | 14 | Visible Placeholder Triage | UI-01..UI-05 | 5 |
 | 15 | Verification and Handoff | VERIFY-01..VERIFY-03 | 3 |
 
@@ -155,15 +156,15 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 Continue with:
 
 ```text
-$gsd-discuss-phase 13
+$gsd-discuss-phase 14
 ```
 
 or, for a direct execution plan:
 
 ```text
-$gsd-plan-phase 13
+$gsd-plan-phase 14
 ```
 
 ---
 
-*Last updated: 2026-06-25 after Phase 12 completion.*
+*Last updated: 2026-06-25 after Phase 13 completion.*

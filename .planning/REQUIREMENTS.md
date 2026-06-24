@@ -19,9 +19,9 @@
 | Basic slicing and G-code export | Real | Canonical verify passed on 2026-06-24, including E2E pipeline tests. |
 | Preview rendering | Hybrid/Real | Rendering path exists; detailed upstream preview behavior remains a separate parity topic. |
 | Calibration | Hybrid | PA, Flow Rate, and Temp Tower dispatch through `SliceService`, are reachable from visible topbar paths, and have deterministic ViewModel coverage. Hardware calibration and Max Volumetric Speed remain blocked/pending. |
-| SSDP discovery | Hybrid | Real UDP discovery exists; device state remains mock-heavy. |
-| MQTT/FTP/send print | Hybrid | Real transport wrappers exist; tests and UI still lean on fallback/mock behavior. |
-| Camera stream | Hybrid | FFmpeg/RTSP code path exists; test coverage mostly validates no-stream/fallback behavior. |
+| SSDP discovery | Hybrid | Real UDP discovery exists; Phase 13 added deterministic Bambu/Creality parser and timeout fixture coverage. Device state remains mock-heavy. |
+| MQTT/FTP/send print | Hybrid | Real transport wrappers exist; Phase 13 added deterministic telemetry, command-envelope, topic, FTP URL, remote-path, and error-path coverage. Live printer publish/upload still requires manual hardware verification. |
+| Camera stream | Hybrid | FFmpeg/RTSP code path exists; Phase 13 added deterministic default RTSP URL and no-stream/state-machine coverage. Real RTSP decode still requires hardware or a controlled fixture. |
 | Preset bundle | Partial | Current bundle IO is simplified JSON, not upstream-compatible preset bundle behavior. |
 | PartPlate / plate-scoped config | Hybrid/Placeholder | Multi-plate APIs exist, but upstream PartPlate config behavior and AssembleView are incomplete. |
 | ModelMall / WebView | Blocked/Placeholder | WebView availability is hardcoded false. |
@@ -55,12 +55,12 @@
 
 ### Hybrid Integration Verification
 
-- [ ] **INT-01**: SSDP discovery parsing and timeout/error paths are covered by deterministic tests or fixtures.
-- [ ] **INT-02**: MQTT status parsing and pause/resume/stop publish payloads are covered without requiring a live printer.
-- [ ] **INT-03**: FTP send-print path has deterministic success/error-path coverage without requiring a live printer.
-- [ ] **INT-04**: Camera stream behavior has deterministic no-stream/error-path coverage and an explicit note for real RTSP verification requirements.
-- [ ] **INT-05**: Software viewport / OpenGL fallback behavior is documented and covered by startup smoke evidence.
-- [ ] **INT-06**: App settings and bed-shape persistence introduced by recent work are verified or explicitly deferred.
+- [x] **INT-01**: SSDP discovery parsing and timeout/error paths are covered by deterministic tests or fixtures. *(Phase 13)*
+- [x] **INT-02**: MQTT status parsing and pause/resume/stop publish payloads are covered without requiring a live printer. *(Phase 13)*
+- [x] **INT-03**: FTP send-print path has deterministic success/error-path coverage without requiring a live printer. *(Phase 13)*
+- [x] **INT-04**: Camera stream behavior has deterministic no-stream/error-path coverage and an explicit note for real RTSP verification requirements. *(Phase 13)*
+- [x] **INT-05**: Software viewport / OpenGL fallback behavior is documented and covered by startup smoke evidence. *(Phase 13)*
+- [x] **INT-06**: App settings and bed-shape persistence introduced by recent work are verified or explicitly deferred. *(Phase 13)*
 
 ### Visible Placeholder Triage
 
@@ -131,12 +131,12 @@
 | CAL-03 | Phase 12 | Complete |
 | CAL-04 | Phase 12 | Complete |
 | CAL-05 | Phase 12 | Complete |
-| INT-01 | Phase 13 | Pending |
-| INT-02 | Phase 13 | Pending |
-| INT-03 | Phase 13 | Pending |
-| INT-04 | Phase 13 | Pending |
-| INT-05 | Phase 13 | Pending |
-| INT-06 | Phase 13 | Pending |
+| INT-01 | Phase 13 | Complete |
+| INT-02 | Phase 13 | Complete |
+| INT-03 | Phase 13 | Complete |
+| INT-04 | Phase 13 | Complete |
+| INT-05 | Phase 13 | Complete |
+| INT-06 | Phase 13 | Complete |
 | UI-01 | Phase 14 | Pending |
 | UI-02 | Phase 14 | Pending |
 | UI-03 | Phase 14 | Pending |
@@ -154,4 +154,4 @@
 ---
 
 *Requirements defined: 2026-06-24*
-*Last updated: 2026-06-25 after Phase 12 calibration closure.*
+*Last updated: 2026-06-25 after Phase 13 hybrid integration verification.*

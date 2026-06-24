@@ -1,6 +1,6 @@
 # Planning Index
 
-Last updated: 2026-06-24
+Last updated: 2026-06-25
 
 This is the canonical entry point for `.planning/`. Historical phase files are evidence; current work starts from the files below.
 
@@ -59,14 +59,14 @@ Do not treat phase completion as product completion unless the exact workflow is
 
 ## Next Step
 
-Start Phase 10:
+Start Phase 14:
 
 ```text
-$gsd-discuss-phase 10
+$gsd-discuss-phase 14
 ```
 
 or skip discussion and create an implementation plan:
 
 ```text
-$gsd-plan-phase 10
+$gsd-plan-phase 14
 ```
