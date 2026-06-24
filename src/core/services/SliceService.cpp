@@ -1,6 +1,7 @@
-﻿#include "SliceService.h"
+#include "SliceService.h"
 
 #include "core/services/ProjectServiceMock.h"
+#include "core/services/AppSettingsService.h"
 
 #include <QMetaObject>
 #include <QPointer>
@@ -106,18 +107,18 @@ QString SliceService::resultCostLabel() const
 
 double SliceService::resultTotalFilamentMm() const
 {
-  // 从 resultFilamentLabel_ 解析总长度（格式如 "3.45 m"）
+  // Parse total filament length from resultFilamentLabel_, for example "3.45 m".
   if (resultFilamentLabel_.isEmpty()) return 0.0;
   bool ok = false;
   const double val = resultFilamentLabel_.left(resultFilamentLabel_.indexOf(' ')).toDouble(&ok);
-  return ok ? val * 1000.0 : 0.0; // m → mm
+  return ok ? val * 1000.0 : 0.0; // m to mm
 }
 
 void SliceService::clearStoredResult()
 {
   progress_ = 0;
   sliceState_ = State::Idle;
-  statusLabel_ = QStringLiteral("等待切片");
+  statusLabel_ = QStringLiteral("Waiting to slice");
   outputPath_.clear();
   estimatedTimeLabel_.clear();
   resultWeightLabel_.clear();
@@ -195,7 +196,7 @@ namespace
       }
       case QMetaType::QVariantList:
       {
-        // coFloats, coInts, coPoints, coStrings — serialize to Slic3r format
+        // coFloats, coInts, coPoints, coStrings serialize to Slic3r format.
         const auto list = value.toList();
         if (list.isEmpty())
           break;
@@ -256,7 +257,7 @@ void SliceService::startSlice(const QString &projectName)
     if (targetPlateIndex >= 0 && targetPlateIndex < plateNames.size() && !plateNames[targetPlateIndex].isEmpty())
       targetPlateLabel = plateNames[targetPlateIndex];
     else if (targetPlateIndex >= 0)
-      targetPlateLabel = QObject::tr("平板 %1").arg(targetPlateIndex + 1);
+      targetPlateLabel = QObject::tr("Plate %1").arg(targetPlateIndex + 1);
 #ifdef HAS_LIBSLIC3R
     modelForSlice = projectService_->cloneCurrentPlateModel();
 #endif
@@ -264,7 +265,7 @@ void SliceService::startSlice(const QString &projectName)
 
   if (sourcePath.isEmpty())
   {
-    statusLabel_ = QStringLiteral("未找到可切片模型");
+    statusLabel_ = QStringLiteral("No sliceable model found");
     emit progressChanged();
     emit sliceFailed(statusLabel_);
     return;
@@ -273,7 +274,7 @@ void SliceService::startSlice(const QString &projectName)
 #ifdef HAS_LIBSLIC3R
   if (!modelForSlice || modelForSlice->objects.empty())
   {
-    statusLabel_ = QStringLiteral("当前平板没有可切片对象");
+    statusLabel_ = QStringLiteral("Current plate has no sliceable objects");
     emit progressChanged();
     emit sliceFailed(statusLabel_);
     return;
@@ -283,7 +284,7 @@ void SliceService::startSlice(const QString &projectName)
   slicing_ = true;
   sliceState_ = State::Slicing;
   progress_ = 0;
-  statusLabel_ = QStringLiteral("准备切片");
+  statusLabel_ = QStringLiteral("Preparing slice");
   outputPath_.clear();
   activeCancelFlag_ = std::make_shared<std::atomic_bool>(false);
   emit slicingChanged();
@@ -325,9 +326,9 @@ void SliceService::startSlice(const QString &projectName)
         }, Qt::QueuedConnection);
       };
 
-      notify(2, QObject::tr("准备当前平板模型"));
+      notify(2, QObject::tr("Preparing current plate model"));
       if (!modelForSlice || modelForSlice->objects.empty())
-        throw std::runtime_error("当前平板没有可切片对象");
+        throw std::runtime_error("Current plate has no sliceable objects");
       {
         int totalVolumes = 0;
         int totalInstances = 0;
@@ -341,23 +342,34 @@ void SliceService::startSlice(const QString &projectName)
           throw std::runtime_error("cloned model has 0 volumes (mesh data missing)");
       }
       if (cancelFlag && cancelFlag->load())
-        throw std::runtime_error("切片已取消");
+        throw std::runtime_error("Slicing cancelled");
 
-      notify(10, QObject::tr("准备切片参数"));
+      notify(10, QObject::tr("Preparing slice parameters"));
       Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
       // v2.7 P0: bed_shape injection (mirror CLI CliRunner.cpp:397-399)
-      if (receiver && !receiver->bedShape_.isEmpty())
+      // v2.8 W3: use persisted bed size when bedShape_ was not set explicitly.
+      QVector<QPointF> bedPoints = receiver->bedShape_;
+      if (bedPoints.isEmpty() && receiver->appSettings_) {
+        const QSizeF bedSize = receiver->appSettings_->bedSize();
+        bedPoints = {
+          QPointF(0, 0),
+          QPointF(bedSize.width(), 0),
+          QPointF(bedSize.width(), bedSize.height()),
+          QPointF(0, bedSize.height())
+        };
+      }
+      if (!bedPoints.isEmpty())
       {
         auto *bedPts = new Slic3r::ConfigOptionPoints();
-        for (const QPointF &p : receiver->bedShape_)
+        for (const QPointF &p : bedPoints)
           bedPts->values.emplace_back(
               static_cast<coord_t>(p.x() * 1000.0),
               static_cast<coord_t>(p.y() * 1000.0));
         config.set_key_value("bed_shape", bedPts);
       }
 
-      // Inject user-selected preset values into config (对齐上游 PresetBundle::full_fff_config)
-      // This overwrites factory defaults with the 3-tier merged hierarchy (printer→filament→print)
+      // Inject user-selected preset values into config, aligned with PresetBundle::full_fff_config.
+      // This overwrites factory defaults with the 3-tier merged hierarchy.
       if (receiver && !receiver->mergedPresetConfig_.isEmpty())
       {
         injectPresetConfig(config, receiver->mergedPresetConfig_);
@@ -397,7 +409,7 @@ void SliceService::startSlice(const QString &projectName)
         if (!receiver)
           return;
         const int p = qBound(0, st.percent, 100);
-        const QString label = st.text.empty() ? QObject::tr("切片中") : QString::fromStdString(st.text);
+        const QString label = st.text.empty() ? QObject::tr("Slicing") : QString::fromStdString(st.text);
         QMetaObject::invokeMethod(receiver, [receiver, p, label]() {
           if (!receiver)
             return;
@@ -409,7 +421,7 @@ void SliceService::startSlice(const QString &projectName)
         }, Qt::QueuedConnection);
       });
 
-      notify(18, QObject::tr("应用切片参数"));
+      notify(18, QObject::tr("Applying slice parameters"));
 
       // Set up directories for Print::apply()
       {
@@ -437,9 +449,9 @@ void SliceService::startSlice(const QString &projectName)
 
       print.apply(*modelForSlice, config);
 
-      // v2.7 P1: 校准参数注入（路径 B，镜像上游 CalibUtils::send_to_print）。
-      // 在 apply 后、process 前设 Print.calib_params，GCode::do_export 会据此
-      // 走 Calib_PA_Line / Calib_Flow_Rate / Calib_Temp_Tower 分支生成校准 G-code。
+      // v2.7 P1: inject calibration parameters after apply() and before process().
+      // GCode::do_export then enters Calib_PA_Line / Calib_Flow_Rate / Calib_Temp_Tower.
+
       if (receiver && receiver->calibConfig_.mode != 0)
       {
         Slic3r::Calib_Params cp;
@@ -456,22 +468,22 @@ void SliceService::startSlice(const QString &projectName)
       if (cancelFlag && cancelFlag->load())
       {
         print.cancel();
-        throw std::runtime_error("切片已取消");
+        throw std::runtime_error("Slicing cancelled");
       }
 
       // Pre-slice validation (align upstream BackgroundSlicingProcess::validate)
       {
         Slic3r::StringObjectException validationError = print.validate();
         if (!validationError.string.empty())
-          throw std::runtime_error("切片验证失败: " + validationError.string);
+          throw std::runtime_error("Slice validation failed: " + validationError.string);
       }
 
-      notify(25, QObject::tr("执行切片"));
+      notify(25, QObject::tr("Running slice"));
       print.process();
       if (cancelFlag && cancelFlag->load())
       {
         print.cancel();
-        throw std::runtime_error("切片已取消");
+        throw std::runtime_error("Slicing cancelled");
       }
 
       // v2.8 review W2: reset calibConfig (avoid sticking after calibration slice).
@@ -518,7 +530,7 @@ void SliceService::startSlice(const QString &projectName)
     catch (...)
     {
       receiver->activePrint_.store(nullptr, std::memory_order_release);
-      errorText = QObject::tr("切片失败");
+      errorText = QObject::tr("Slicing failed");
     }
 #else
     // Mock mode: simulate slicing progress with fake results
@@ -551,16 +563,16 @@ void SliceService::startSlice(const QString &projectName)
         break;
       const int pct = step * 100 / totalSteps;
       const QStringList labels = {
-        QObject::tr("准备切片参数"),
-        QObject::tr("生成层切片"),
-        QObject::tr("生成支撑"),
-        QObject::tr("计算路径"),
-        QObject::tr("导出 G-code")
+        QObject::tr("Preparing slice parameters"),
+        QObject::tr("Generating layers"),
+        QObject::tr("Generating supports"),
+        QObject::tr("Calculating paths"),
+        QObject::tr("Exporting G-code")
       };
       QMetaObject::invokeMethod(receiver, [receiver, pct, labels, step]() {
         if (!receiver) return;
         receiver->progress_ = pct;
-        receiver->statusLabel_ = labels.value(step - 1, QObject::tr("切片中"));
+        receiver->statusLabel_ = labels.value(step - 1, QObject::tr("Slicing"));
         emit receiver->progressChanged();
         emit receiver->progressUpdated(pct, receiver->statusLabel_);
       }, Qt::BlockingQueuedConnection);
@@ -582,7 +594,7 @@ void SliceService::startSlice(const QString &projectName)
       if (cancelFlag && cancelFlag->load())
       {
         receiver->sliceState_ = State::Cancelled;
-        receiver->statusLabel_ = QObject::tr("已取消切片");
+        receiver->statusLabel_ = QObject::tr("Slicing cancelled");
         emit receiver->progressChanged();
         emit receiver->stateChanged();
         emit receiver->sliceFailed(receiver->statusLabel_);
@@ -601,7 +613,7 @@ void SliceService::startSlice(const QString &projectName)
 
       receiver->sliceState_ = State::Completed;
       receiver->progress_ = 100;
-      receiver->statusLabel_ = QObject::tr("切片完成");
+      receiver->statusLabel_ = QObject::tr("Slice complete");
       receiver->outputPath_ = outputPath;
       receiver->estimatedTimeLabel_ = estimatedTimeLabel;
       receiver->resultWeightLabel_ = resultWeightLabel;
@@ -653,7 +665,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
   const QString localPath = info.absoluteFilePath();
   if (!info.exists() || !info.isFile())
   {
-    statusLabel_ = QObject::tr("G-code 文件不存在");
+    statusLabel_ = QObject::tr("G-code file does not exist");
     emit progressChanged();
     emit sliceFailed(statusLabel_);
     return false;
@@ -661,7 +673,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
 
   slicing_ = true;
   progress_ = 0;
-  statusLabel_ = QObject::tr("复用已有 G-code");
+  statusLabel_ = QObject::tr("Reusing existing G-code");
   outputPath_.clear();
   activeCancelFlag_ = std::make_shared<std::atomic_bool>(false);
   emit slicingChanged();
@@ -678,7 +690,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
     if (targetPlateIndex >= 0 && targetPlateIndex < plateNames.size() && !plateNames[targetPlateIndex].isEmpty())
       targetPlateLabel = plateNames[targetPlateIndex];
     else if (targetPlateIndex >= 0)
-      targetPlateLabel = QObject::tr("平板 %1").arg(targetPlateIndex + 1);
+      targetPlateLabel = QObject::tr("Plate %1").arg(targetPlateIndex + 1);
   }
 
   QtConcurrent::run([receiver, cancelFlag, localPath, targetPlateIndex, targetPlateLabel]()
@@ -698,11 +710,11 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
     }
     catch (...)
     {
-      errorText = QObject::tr("复用 G-code 失败");
+      errorText = QObject::tr("Failed to reuse G-code");
     }
 #else
     Q_UNUSED(localPath);
-    errorText = QObject::tr("当前构建未启用 libslic3r");
+    errorText = QObject::tr("Current build does not enable libslic3r");
 #endif
 
     if (!receiver)
@@ -718,7 +730,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
 
       if (cancelFlag && cancelFlag->load())
       {
-        receiver->statusLabel_ = QObject::tr("已取消切片");
+        receiver->statusLabel_ = QObject::tr("Slicing cancelled");
         emit receiver->progressChanged();
         emit receiver->sliceFailed(receiver->statusLabel_);
         return;
@@ -733,7 +745,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
       }
 
       receiver->progress_ = 100;
-      receiver->statusLabel_ = QObject::tr("复用已有 G-code 完成");
+      receiver->statusLabel_ = QObject::tr("Existing G-code reuse complete");
       receiver->outputPath_ = localPath;
       receiver->resultPlateLabel_ = targetPlateLabel;
       receiver->resultPlateIndex_ = targetPlateIndex;
@@ -758,7 +770,7 @@ bool SliceService::exportGCodeToPath(const QString &targetPath)
 {
   if (outputPath_.isEmpty())
   {
-    statusLabel_ = QObject::tr("没有可导出的 G-code，请先切片");
+    statusLabel_ = QObject::tr("No G-code to export; slice first");
     emit progressChanged();
     return false;
   }
@@ -766,7 +778,7 @@ bool SliceService::exportGCodeToPath(const QString &targetPath)
   const QFileInfo srcInfo(outputPath_);
   if (!srcInfo.exists() || !srcInfo.isFile())
   {
-    statusLabel_ = QObject::tr("G-code 源文件不存在");
+    statusLabel_ = QObject::tr("G-code source file does not exist");
     emit progressChanged();
     return false;
   }
@@ -776,12 +788,12 @@ bool SliceService::exportGCodeToPath(const QString &targetPath)
 
   if (!QFile::copy(outputPath_, targetPath))
   {
-    statusLabel_ = QObject::tr("导出 G-code 失败");
+    statusLabel_ = QObject::tr("Failed to export G-code");
     emit progressChanged();
     return false;
   }
 
-  statusLabel_ = QObject::tr("已导出: %1").arg(QFileInfo(targetPath).fileName());
+  statusLabel_ = QObject::tr("Exported: %1").arg(QFileInfo(targetPath).fileName());
   emit progressChanged();
   return true;
 }

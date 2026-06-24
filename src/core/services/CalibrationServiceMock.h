@@ -38,7 +38,7 @@ enum class CalibrationStatus : int
     Failed      = 3
 };
 
-// Calibration history entry (对齐上游 FlowCalibHeaderView 历史记录)
+// Calibration history entry aligned with upstream FlowCalibHeaderView.
 struct CalibrationHistoryEntry
 {
     QString name;           // Calibration type name
@@ -62,9 +62,9 @@ public:
     explicit CalibrationServiceMock(QObject *parent = nullptr);
     ~CalibrationServiceMock() override;
 
-    /// v2.7 P1：注入 SliceService 引用。校准时通过它设 calib_params + 触发切片导出，
-    /// 生成真实 PA/FlowRate/TempTower G-code（路径 B，镜像上游 CalibUtils::send_to_print）。
-    void setSliceService(SliceService *slice) { m_sliceService = slice; }
+    /// Inject SliceService for real calibration slices.
+    /// It sets calib_params and runs the slice/export pipeline for PA, Flow Rate, and Temp Tower.
+    void setSliceService(SliceService *slice);
 
     // Calibration type list
     Q_INVOKABLE int calibTypeCount() const;
@@ -81,7 +81,7 @@ public:
     Q_INVOKABLE QString stepId(int typeIndex, int stepIndex) const;
     Q_INVOKABLE QString stepTitle(int typeIndex, int stepIndex) const;
     Q_INVOKABLE QString stepDesc(int typeIndex, int stepIndex) const;
-    /// Step state: 0=pending, 1=active, 2=completed (对齐上游 StepCtrl state)
+    /// Step state: 0=pending, 1=active, 2=completed, aligned with upstream StepCtrl.
     Q_INVOKABLE int stepState(int typeIndex, int stepIndex) const;
 
     // Status of a calibration type
@@ -98,7 +98,7 @@ public:
     Q_INVOKABLE void goToStep(int stepIndex);
     Q_INVOKABLE void resetCalibration(int itemIndex);
 
-    // History accessors (对齐上游 FlowCalibHeaderView 历史记录)
+    // History accessors aligned with upstream FlowCalibHeaderView.
     Q_INVOKABLE int historyCount() const;
     Q_INVOKABLE QString historyName(int index) const;
     Q_INVOKABLE QString historyFilamentId(int index) const;
@@ -119,6 +119,11 @@ signals:
 
 private slots:
     void onTick();
+    /// Receive real progress from SliceService instead of the mock timer.
+    void onSliceProgressUpdated(int percent, const QString &label);
+    /// Slice finished/failed callbacks.
+    void onSliceFinished(const QString &estimatedTime);
+    void onSliceFailed(const QString &message);
 
 private:
     void buildMockData();
@@ -133,6 +138,6 @@ private:
     int m_currentItem = -1;
     int m_currentStepIndex = -1;
     QTimer *m_timer = nullptr;
-    /// v2.7 P1：SliceService 引用（由 setSliceService 注入，校准时触发 calib slice）
+    /// SliceService reference injected by setSliceService for calibration slices.
     SliceService *m_sliceService = nullptr;
 };

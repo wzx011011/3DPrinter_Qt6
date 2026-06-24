@@ -11,6 +11,7 @@
 #include <atomic>
 
 class ProjectServiceMock;
+class AppSettingsService;
 
 #ifdef HAS_LIBSLIC3R
 namespace Slic3r
@@ -58,13 +59,13 @@ public:
   QString resultWeightLabel() const;
   QString resultPlateLabel() const;
   int resultPlateIndex() const;
-  /// 耗材用量（长度，对齐上游 SliceInfoPanel filament used）
+  /// Filament usage length, aligned with upstream SliceInfoPanel filament used.
   QString resultFilamentLabel() const;
-  /// 切片层数
+  /// Sliced layer count.
   int resultLayerCount() const;
-  /// 预估成本（对齐上游 PrintEstimatedStatistics）
+  /// Estimated print cost, aligned with upstream PrintEstimatedStatistics.
   QString resultCostLabel() const;
-  /// 总耗材长度（mm，用于平均速度计算）
+  /// Total filament length in millimeters, used by average speed calculations.
   double resultTotalFilamentMm() const;
 
   /// Per-plate result accessors
@@ -81,25 +82,25 @@ public:
   Q_INVOKABLE bool loadGCodeFromPrevious(const QString &gcodeFilePath);
   Q_INVOKABLE bool exportGCodeToPath(const QString &targetPath);
 
-  /// 注入合并后的预设配置（对齐上游 PresetBundle::full_fff_config）
-  /// 在 startSlice() 前调用，将 user-selected preset values 传入 slice engine
+  /// Inject merged preset config before startSlice(), aligned with upstream PresetBundle::full_fff_config.
+  /// Values come from the current user-selected printer, filament, and print presets.
   void setMergedPresetConfig(const QHash<QString, QVariant> &config);
 
-  /// v2.7 P0：设置热床形状（对齐 CLI 成功路径 CliRunner.cpp:397-399）。
-  /// 用 set_key_value + ConfigOptionPoints 直接创建 option，绕过 injectPresetConfig
-  /// 的 set_deserialize_strict 路径（后者对 bed_shape/printable_area 别名不可靠）。
-  /// 坐标单位 mm，内部 ×1000 转 μm（coord_t）。
+  /// v2.7 P0: set bed shape in millimeters, aligned with CLI path CliRunner.cpp:397-399.
+  /// Uses ConfigOptionPoints directly because bed_shape is not suitable for the generic preset path.
+  /// Coordinates are millimeters and converted to internal coord_t units during injection.
+
   void setBedShape(const QVector<QPointF> &pointsMm);
 
-  /// v2.7 P1：设置校准参数（对齐上游 Print::set_calib_params）。
-  /// 在 startSlice() 前调用。worker 在 print.apply() 后、process() 前注入，
-  /// 使 GCode::do_export 走 Calib_PA_Line / Calib_Flow_Rate / Calib_Temp_Tower 分支，
-  /// 自动生成校准 G-code。mode=Calib_None 表示普通切片。
-  /// 路径 B（镜像上游 CalibUtils::send_to_print）：不直接构造 CalibPressureAdvanceLine
-  /// （其唯一构造点在 GCode.cpp:3250 do_export 内部），而是设 Print.calib_params
-  /// 跑完整 slice→export 流水线。
+  /// v2.7 P1: set calibration params, aligned with upstream Print::set_calib_params.
+  /// Called before startSlice(); the worker injects params after print.apply() and before process().
+  /// GCode::do_export then generates calibration G-code for supported calibration modes.
+  /// mode=0 means normal slicing.
   void setCalibParams(int mode, double start, double end, double step,
                       bool printNumbers = false, int testModel = 0);
+
+  /// v2.8 W3: inject AppSettingsService for persisted bed size lookup.
+  void setAppSettings(AppSettingsService *appSettings) { appSettings_ = appSettings; }
 
   void clearPlateResults();
   void removePlateResult(int plateIndex);
@@ -117,7 +118,7 @@ private:
   int progress_ = 0;
   bool slicing_ = false;
   State sliceState_ = State::Idle;
-  QString statusLabel_ = QStringLiteral("等待切片");
+  QString statusLabel_ = QStringLiteral("Waiting to slice");
   QString outputPath_;
   QString estimatedTimeLabel_;
   QString resultWeightLabel_;
@@ -132,13 +133,13 @@ private:
 #endif
 
   QMap<int, PlateSliceResult> plateResults_;
-  QHash<QString, QVariant> mergedPresetConfig_; ///< 从 ConfigViewModel 注入的合并预设值
-  /// v2.7 P0：热床形状（mm，由 setBedShape 设置）。空表示用 full_print_config 默认。
-  /// startSlice 时通过 set_key_value("bed_shape", ConfigOptionPoints) 注入（镜像 CLI）。
+  QHash<QString, QVariant> mergedPresetConfig_; ///< Merged preset values injected from ConfigViewModel.
+  /// Bed shape in millimeters. Empty means using full_print_config defaults.
+  /// startSlice injects it via set_key_value("bed_shape", ConfigOptionPoints).
   QVector<QPointF> bedShape_;
 
-  /// v2.7 P1：校准参数（由 setCalibParams 设置）。mode=0(Calib_None) 表示普通切片。
-  /// worker 在 print.apply() 后注入到 Print，使 GCode::do_export 走校准分支。
+  /// Calibration params set by setCalibParams. mode=0 means normal slicing.
+  /// The worker injects these params after print.apply() so GCode::do_export uses calibration branches.
   struct CalibConfig
   {
     int mode = 0;        ///< CalibMode (0=None, 1=PA_Line, 5=Flow_Rate, 6=Temp_Tower)
@@ -148,6 +149,9 @@ private:
     bool printNumbers = false;
     int testModel = 0;
   } calibConfig_;
+
+  /// App settings service for persisted bed size.
+  AppSettingsService *appSettings_ = nullptr;
 
   void clearStoredResult();
 };

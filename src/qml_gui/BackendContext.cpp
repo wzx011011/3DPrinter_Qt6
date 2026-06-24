@@ -12,6 +12,7 @@
 #include "core/services/SliceService.h"
 #include "core/services/AuxiliaryService.h"
 #include "core/services/UndoRedoManager.h"
+#include "core/services/AppSettingsService.h"
 #include "core/viewmodels/ConfigViewModel.h"
 #include "core/viewmodels/EditorViewModel.h"
 #include "core/viewmodels/MonitorViewModel.h"
@@ -90,6 +91,10 @@ BackendContext::BackendContext(QObject *parent)
   modelMallViewModel_ = new ModelMallViewModel(this);
   multiMachineViewModel_ = new MultiMachineViewModel(this);
   auxiliaryService_ = new AuxiliaryService(this);
+  // v2.8 W3: application-level persisted settings.
+  appSettings_ = new AppSettingsService(this);
+  // v2.8 W3: inject settings into SliceService for persisted bed size lookup.
+  sliceService_->setAppSettings(appSettings_);
 
   // 初始化提示数据库（对齐上游 HintDatabase::init）
   initHintDatabase();
@@ -194,6 +199,7 @@ QObject *BackendContext::calibrationViewModel() const { return calibrationViewMo
 QObject *BackendContext::modelMallViewModel() const { return modelMallViewModel_; }
 QObject *BackendContext::multiMachineViewModel() const { return multiMachineViewModel_; }
 QObject *BackendContext::auxiliaryService() const { return auxiliaryService_; }
+QObject *BackendContext::appSettings() const { return appSettings_; }
 
 bool BackendContext::visualCompareMode() const
 {

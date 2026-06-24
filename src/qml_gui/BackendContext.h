@@ -18,6 +18,7 @@ class NetworkServiceMock;
 class CalibrationServiceMock;
 class CameraServiceMock;
 class AuxiliaryService;
+class AppSettingsService;
 
 class EditorViewModel;
 class PreviewViewModel;
@@ -90,6 +91,7 @@ class BackendContext final : public QObject
   Q_PROPERTY(QObject *modelMallViewModel READ modelMallViewModel CONSTANT)
   Q_PROPERTY(QObject *multiMachineViewModel READ multiMachineViewModel CONSTANT)
   Q_PROPERTY(QObject *auxiliaryService READ auxiliaryService CONSTANT)
+  Q_PROPERTY(QObject *appSettings READ appSettings CONSTANT)
   Q_PROPERTY(bool visualCompareMode READ visualCompareMode CONSTANT)
   Q_PROPERTY(int currentPage READ currentPage NOTIFY currentPageChanged)
   Q_PROPERTY(QString lastErrorMessage READ lastErrorMessage NOTIFY errorChanged)
@@ -233,6 +235,7 @@ public:
   QObject *modelMallViewModel() const;
   QObject *multiMachineViewModel() const;
   QObject *auxiliaryService() const;
+  QObject *appSettings() const;
   /// v2.6 CAM-03：暴露 CameraServiceMock（供 CameraImageProvider 注册使用）
   CameraServiceMock *cameraService() const { return cameraService_; }
   bool visualCompareMode() const;
@@ -396,6 +399,8 @@ private:
   NetworkServiceMock *networkService_ = nullptr;
   /// v2.6 CAM-03：摄像头服务（RTSP 解码代理）
   CameraServiceMock *cameraService_ = nullptr;
+  /// v2.8 W3: application-level persisted settings, including bed size.
+  AppSettingsService *appSettings_ = nullptr;
 
   EditorViewModel *editorViewModel_ = nullptr;
   PreviewViewModel *previewViewModel_ = nullptr;

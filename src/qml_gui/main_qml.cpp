@@ -9,6 +9,7 @@
 #include <QDir>
 #include <QtQml/qqml.h>
 #include "qml_gui/Renderer/GLViewport.h"
+#include "qml_gui/Renderer/SoftwareViewport.h"
 #include "core/debug/CrashHandlerWin.h"
 
 #ifdef Q_OS_WIN
@@ -76,12 +77,8 @@ static void appendStartupLog(const QString &line)
 
 int main(int argc, char *argv[])
 {
-  // Force software rendering — OpenGL content is invisible when the
-  // desktop is viewed via RDP, and there is no reliable way to detect
-  // this scenario (SESSIONNAME and SM_REMOTESESSION both return "local"
-  // when RDP takes over the console session).
-  // Users on a local desktop can set OWZX_OPENGL=1 to opt into OpenGL.
-  if (!qEnvironmentVariableIsSet("OWZX_OPENGL")) {
+  const bool useOpenGLViewport = qEnvironmentVariableIsSet("OWZX_OPENGL");
+  if (!useOpenGLViewport) {
     qputenv("QT_QUICK_BACKEND", "software");
   } else {
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
@@ -109,8 +106,13 @@ int main(int argc, char *argv[])
   CrashHandlerWin::install(dumpDir);
   appendStartupLog(QStringLiteral("Crash handler install requested"));
 
-  // E5 — register 3-D viewport type
-  qmlRegisterType<GLViewport>("OWzxGL", 1, 0, "GLViewport");
+  // E5 — register 3-D viewport type. The OpenGL implementation is available
+  // via OWZX_OPENGL=1; the default software viewport keeps QML visible on
+  // remote/display-driver sessions where Qt Quick OpenGL renders a blank window.
+  if (useOpenGLViewport)
+    qmlRegisterType<GLViewport>("OWzxGL", 1, 0, "GLViewport");
+  else
+    qmlRegisterType<SoftwareViewport>("OWzxGL", 1, 0, "GLViewport");
 
   BackendContext backend;
 
@@ -133,6 +135,8 @@ int main(int argc, char *argv[])
                      QCoreApplication::exit(-1); }, Qt::QueuedConnection);
 
   engine->rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+  engine->rootContext()->setContextProperty(QStringLiteral("owzxUseFramelessShell"),
+                                            qEnvironmentVariableIsSet("OWZX_FRAMELESS"));
 
   // v2.6 CAM-03：注册摄像头图像提供者（image://camera/live），供 MonitorPage 实时视频显示
   // provider 归 engine 所有，engine 在进程退出时被故意 leak（见上方注释），故不手动释放。
@@ -152,9 +156,12 @@ int main(int argc, char *argv[])
   }
 
 #ifdef Q_OS_WIN
-  if (auto *window = qobject_cast<QQuickWindow *>(engine->rootObjects().first()))
+  if (qEnvironmentVariableIsSet("OWZX_FRAMELESS"))
   {
-    enableWindowShadowAndRoundedCorner(window);
+    if (auto *window = qobject_cast<QQuickWindow *>(engine->rootObjects().first()))
+    {
+      enableWindowShadowAndRoundedCorner(window);
+    }
   }
 #endif
 

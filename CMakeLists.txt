@@ -96,6 +96,8 @@ if(OWZX_QML_GUI)
         src/core/services/CalibrationServiceMock.h
         src/core/services/AuxiliaryService.cpp
         src/core/services/AuxiliaryService.h
+        src/core/services/AppSettingsService.cpp
+        src/core/services/AppSettingsService.h
         src/core/rendering/GLShaderUtil.cpp
         src/core/rendering/GLShaderUtil.h
         src/core/viewmodels/EditorViewModel.cpp
@@ -128,6 +130,8 @@ if(OWZX_QML_GUI)
         src/qml_gui/Renderer/GLViewport.h
         src/qml_gui/Renderer/GLViewportRenderer.cpp
         src/qml_gui/Renderer/GLViewportRenderer.h
+        src/qml_gui/Renderer/SoftwareViewport.cpp
+        src/qml_gui/Renderer/SoftwareViewport.h
         src/qml_gui/Renderer/GCodeRenderer.cpp
         src/qml_gui/Renderer/GCodeRenderer.h
     )

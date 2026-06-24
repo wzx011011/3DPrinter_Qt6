@@ -22,13 +22,13 @@ ApplicationWindow {
     visible: true
     title: "OWzx Slicer"
     color: "#0d0f12"
-    flags: Qt.Window | Qt.FramelessWindowHint
+    flags: owzxUseFramelessShell ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
     minimumWidth: 1100
     minimumHeight: 700
 
     readonly property int resizeMargin: 6
-    readonly property int frameMargin: (backend.visualCompareMode || root.visibility === Window.Maximized) ? 0 : 10
-    readonly property int frameRadius: (backend.visualCompareMode || root.visibility === Window.Maximized) ? 0 : 18
+    readonly property int frameMargin: (!owzxUseFramelessShell || backend.visualCompareMode || root.visibility === Window.Maximized) ? 0 : 10
+    readonly property int frameRadius: (!owzxUseFramelessShell || backend.visualCompareMode || root.visibility === Window.Maximized) ? 0 : 18
 
     // 当前 tab-switch latency token (BBLTopbar 写入, Connections onCurrentPageChanged 收尾)
     // 替代旧的 pendingSwitchToken / pendingSwitchTargetPage（Plan 02-02 Pitfall 3 迁移）

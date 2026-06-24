@@ -1,4 +1,4 @@
-﻿#include "CalibrationServiceMock.h"
+#include "CalibrationServiceMock.h"
 #include "SliceService.h"
 #include <QTimer>
 #include <QDateTime>
@@ -214,7 +214,7 @@ QString CalibrationServiceMock::stepDesc(int typeIndex, int stepIndex) const
 
 int CalibrationServiceMock::stepState(int typeIndex, int stepIndex) const
 {
-    // 对齐上游 StepCtrl: 0=pending, 1=active, 2=completed
+    // Align upstream StepCtrl: 0=pending, 1=active, 2=completed
     if (typeIndex < 0 || typeIndex >= m_calibTypes.size()) return 0;
     if (stepIndex < 0) return 0;
     const auto &steps = m_calibTypes[typeIndex].steps;
@@ -267,6 +267,7 @@ void CalibrationServiceMock::startCalibration(int itemIndex)
     emit stepChanged();
 
 #ifdef HAS_LIBSLIC3R
+    bool dispatchedRealSlice = false;
     // v2.7 P1: real calibration via SliceService (path B, mirrors upstream CalibUtils::send_to_print).
     // Set Print.calib_params, run the full slice->export pipeline; GCode::do_export then takes the
     // Calib_PA_Line / Calib_Flow_Rate / Calib_Temp_Tower branch and auto-generates calib G-code.
@@ -284,6 +285,7 @@ void CalibrationServiceMock::startCalibration(int itemIndex)
         if (mode != 0) {
             m_sliceService->setCalibParams(mode, start, end, step, printNumbers);
             m_sliceService->startSlice(QStringLiteral("calib_%1").arg(calibType.id));
+            dispatchedRealSlice = true;
             qDebug("[Calib] calib slice dispatched: mode=%d start=%.3f end=%.3f step=%.4f", mode, start, end, step);
         } else {
             qDebug("[Calib] type '%s' has no CalibMode mapping - mock only", calibType.id.toUtf8().constData());
@@ -293,7 +295,16 @@ void CalibrationServiceMock::startCalibration(int itemIndex)
     }
 #endif
 
-    m_timer->start();
+    // v2.8 W7: only skip the mock timer when a real SliceService job was dispatched.
+    // Unsupported calibration modes keep the fallback timer behavior.
+#ifdef HAS_LIBSLIC3R
+    if (!dispatchedRealSlice)
+#else
+    if (true)
+#endif
+    {
+        m_timer->start();
+    }
 }
 
 void CalibrationServiceMock::cancelCalibration()
@@ -426,7 +437,7 @@ void CalibrationServiceMock::onTick()
             setStatus(m_currentItem, CalibrationStatus::Completed);
             emit stepChanged();
 
-            // Add history entry (对齐上游 FlowCalibHeaderView)
+            // Add history entry aligned with upstream FlowCalibHeaderView
             addHistoryEntry(
                 m_calibTypes[m_currentItem].name,
                 QString("filament_%1").arg(m_currentItem), // Mock filament ID
@@ -438,5 +449,84 @@ void CalibrationServiceMock::onTick()
 
         emit isRunningChanged();
         emit calibrationFinished(true);
+    }
+}
+
+// v2.8 W7: receive real progress from SliceService
+void CalibrationServiceMock::onSliceProgressUpdated(int percent, const QString &label)
+{
+    Q_UNUSED(label);
+    if (!m_isRunning) return;
+    m_progress = qBound(0, percent, 100);
+    emit progressChanged();
+
+    // Advance wizard step based on progress
+    if (m_currentItem >= 0 && m_currentItem < m_calibTypes.size()) {
+        int totalSteps = m_calibTypes[m_currentItem].steps.size();
+        int newStep = qMin(totalSteps - 1, (int)((double)m_progress / 100.0 * totalSteps));
+        if (newStep != m_currentStepIndex) {
+            m_currentStepIndex = newStep;
+            emit stepChanged();
+        }
+    }
+}
+
+// v2.8 W7: slice finished callback
+void CalibrationServiceMock::onSliceFinished(const QString &estimatedTime)
+{
+    Q_UNUSED(estimatedTime);
+    if (!m_isRunning) return;
+    m_progress = 100;
+    m_isRunning = false;
+    m_timer->stop();
+
+    if (m_currentItem >= 0) {
+        m_currentStepIndex = m_calibTypes[m_currentItem].steps.size() - 1;
+        setStatus(m_currentItem, CalibrationStatus::Completed);
+        emit stepChanged();
+
+        addHistoryEntry(
+            m_calibTypes[m_currentItem].name,
+            QString("filament_%1").arg(m_currentItem),
+            0.04f + (m_currentItem * 0.01f),
+            0.4f,
+            QDateTime::currentDateTime().toString(Qt::ISODate)
+        );
+    }
+
+    emit isRunningChanged();
+    emit calibrationFinished(true);
+}
+
+// v2.8 W7: slice failed callback
+void CalibrationServiceMock::onSliceFailed(const QString &message)
+{
+    Q_UNUSED(message);
+    if (!m_isRunning) return;
+    m_isRunning = false;
+    m_timer->stop();
+
+    if (m_currentItem >= 0) {
+        setStatus(m_currentItem, CalibrationStatus::Failed);
+    }
+
+    emit isRunningChanged();
+    emit calibrationFinished(false);
+}
+
+void CalibrationServiceMock::setSliceService(SliceService *slice)
+{
+    if (m_sliceService == slice) return;
+    if (m_sliceService) {
+        disconnect(m_sliceService, nullptr, this, nullptr);
+    }
+    m_sliceService = slice;
+    if (m_sliceService) {
+        connect(m_sliceService, &SliceService::progressUpdated,
+                this, &CalibrationServiceMock::onSliceProgressUpdated);
+        connect(m_sliceService, &SliceService::sliceFinished,
+                this, &CalibrationServiceMock::onSliceFinished);
+        connect(m_sliceService, &SliceService::sliceFailed,
+                this, &CalibrationServiceMock::onSliceFailed);
     }
 }

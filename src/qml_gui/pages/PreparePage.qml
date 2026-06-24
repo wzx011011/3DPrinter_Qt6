@@ -1540,7 +1540,6 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
 
-
                 // ── Phase G4: 3D 视口工具栏 overlay ──
                 GLToolbars {
                     id: glToolbars
