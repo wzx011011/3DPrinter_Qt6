@@ -368,6 +368,15 @@ private:
 
   std::shared_ptr<std::atomic_bool> activeCancelFlag_;
 
+  // v3.0 Phase 18 (D-12): staging buffers for per-plate state captured during async
+  // 3MF load (PlateData lives in the read lambda; m_plateList is rebuilt in a later
+  // lambda). These carry locked/bed-type/print-seq/spiral across the two lambdas so
+  // the rebuild restores ALL plate state. Cleared before each load, applied during rebuild.
+  QList<bool> pendingPlateLocked_;
+  QList<int> pendingPlateBedType_;
+  QList<int> pendingPlatePrintSeq_;
+  QList<int> pendingPlateSpiral_;
+
 #ifdef HAS_LIBSLIC3R
   Slic3r::Model *model_ = nullptr;
 #endif

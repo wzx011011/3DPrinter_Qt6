@@ -503,6 +503,13 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
           ok = true;
           loadedPlateCount = int(plateDataList.size());
 
+          // v3.0 Phase 18 (D-12): capture locked + bed-type + print-seq + spiral from
+          // PlateData onto the receiver so the later rebuild lambda can restore them.
+          receiver->pendingPlateLocked_.clear();
+          receiver->pendingPlateBedType_.clear();
+          receiver->pendingPlatePrintSeq_.clear();
+          receiver->pendingPlateSpiral_.clear();
+
           if (!plateDataList.empty())
           {
             loadedPlateNames.reserve(loadedPlateCount);
@@ -516,6 +523,20 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                                             ? QString::fromStdString(plate->plate_name)
                                             : QObject::tr("平板 %1").arg(plateIdx + 1);
               loadedPlateNames << plateName;
+
+              receiver->pendingPlateLocked_.append(plate ? plate->locked : false);
+              int bedType = 0, printSeq = 0, spiral = 0;
+              if (plate) {
+                if (auto *opt = plate->config.option("curr_bed_type"))
+                  bedType = int(opt->getInt());
+                if (auto *opt = plate->config.option("print_sequence"))
+                  printSeq = int(opt->getInt());
+                if (auto *opt = plate->config.option("spiral_mode"))
+                  spiral = int(opt->getInt());
+              }
+              receiver->pendingPlateBedType_.append(bedType);
+              receiver->pendingPlatePrintSeq_.append(printSeq);
+              receiver->pendingPlateSpiral_.append(spiral);
 
               QSet<int> uniq;
               QList<int> objList;
@@ -539,6 +560,10 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
           {
             loadedPlateCount = 1;
             loadedPlateNames << QObject::tr("平板 1");
+            receiver->pendingPlateLocked_.append(false);
+            receiver->pendingPlateBedType_.append(0);
+            receiver->pendingPlatePrintSeq_.append(0);
+            receiver->pendingPlateSpiral_.append(0);
 
             QList<int> allObjects;
             allObjects.reserve(int(loadedModel->objects.size()));
@@ -729,6 +754,12 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
             p->clearInstances();
             for (int objIdx : plateObjs[pi])
               p->addInstance(objIdx, 0);
+            // v3.0 Phase 18 (D-12): restore locked + bed-type/print-seq/spiral captured
+            // from PlateData so multi-plate state round-trips.
+            if (pi < receiver->pendingPlateLocked_.size()) p->setLocked(receiver->pendingPlateLocked_[pi]);
+            if (pi < receiver->pendingPlateBedType_.size()) p->setBedType(receiver->pendingPlateBedType_[pi]);
+            if (pi < receiver->pendingPlatePrintSeq_.size()) p->setPrintSequence(receiver->pendingPlatePrintSeq_[pi]);
+            if (pi < receiver->pendingPlateSpiral_.size()) p->setSpiralMode(receiver->pendingPlateSpiral_[pi]);
           }
           // loadedPlateCount may exceed the reconstructed list (multi-plate 3MF whose
           // object membership wasn't fully parsed) — pad with empty plates to match.
@@ -4607,6 +4638,48 @@ void ProjectServiceMock::clearProject()
   emit plateSelectionChanged();
 }
 
+// v3.0 Phase 18 (D-10): build a PlateData list from a PartPlateList so multi-plate
+// state round-trips through store_bbs_3mf. The caller (saveProject) must
+// release_PlateData_list() after use to free the heap PlateData objects.
+// File-local free function (not a member) to keep libslic3r/Format/bbs_3mf.hpp
+// out of the public header.
+// Source truth: upstream PartPlate::store_to_3mf_structure (PartPlate.cpp:6160).
+static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plateList)
+{
+  Slic3r::PlateDataPtrs result;
+  if (!plateList) return result;
+  for (int i = 0; i < plateList->plateCount(); ++i) {
+    const OWzx::PartPlate *p = plateList->plate(i);
+    Slic3r::PlateData *pd = new Slic3r::PlateData();
+    pd->plate_index = i;
+    pd->plate_name = p ? p->name() : std::string();
+    pd->locked = p ? p->isLocked() : false;
+
+    // Instance-level membership → objects_and_instances (vector<pair<int,int>>).
+    if (p) {
+      for (const auto &pr : p->objToInstanceSet())
+        pd->objects_and_instances.emplace_back(pr.first, pr.second);
+    }
+
+    // Per-plate config (DynamicPrintConfig) — copy the PartPlate config (D-04 truth).
+    if (p) {
+      pd->config = p->config();
+      // Bed-type / print-sequence / spiral live inside config (PlateData has no
+      // standalone fields). Write them as config keys so they round-trip; these
+      // are the same keys SliceService reads (SliceService.cpp:379-403).
+      if (auto *opt = pd->config.option("curr_bed_type", true))
+        opt->setInt(p->bedType());
+      if (auto *opt = pd->config.option("print_sequence", true))
+        opt->setInt(p->printSequence());
+      if (auto *opt = pd->config.option("spiral_mode", true))
+        opt->setInt(p->spiralMode());
+    }
+
+    result.push_back(pd);
+  }
+  return result;
+}
+
 bool ProjectServiceMock::saveProject(const QString &filePath)
 {
   if (loading_)
@@ -4629,6 +4702,11 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
     params.model = model_;
     params.strategy = Slic3r::SaveStrategy::Zip64;
 
+    // v3.0 Phase 18 (D-10): populate plate_data_list so multi-plate state round-trips.
+    // Fixes the v2.9 blocker where save lost all plate names/locked/objects/config.
+    Slic3r::PlateDataPtrs plateData = buildPlateDataList(m_plateList.get());
+    params.plate_data_list = plateData;
+
     bool ok = false;
     try
     {
@@ -4636,10 +4714,14 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
     }
     catch (const std::exception &ex)
     {
+      Slic3r::release_PlateData_list(plateData);  // free heap PlateData even on throw
       lastError_ = tr("3MF 保存异常: %1").arg(QString::fromStdString(ex.what()));
       emit projectChanged();
       return false;
     }
+
+    // Free the heap PlateData objects after store (success or failure).
+    Slic3r::release_PlateData_list(plateData);
 
     if (!ok)
     {
@@ -4891,6 +4973,13 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
       QStringList loadedPlateNames;
       QList<QList<int>> loadedPlateObjectIndices;
 
+      // v3.0 Phase 18 (D-12): capture locked + bed-type/print-seq/spiral onto the
+      // receiver so the rebuild lambda restores ALL plate state.
+      receiver->pendingPlateLocked_.clear();
+      receiver->pendingPlateBedType_.clear();
+      receiver->pendingPlatePrintSeq_.clear();
+      receiver->pendingPlateSpiral_.clear();
+
       if (ok && !plateDataList.empty())
       {
         loadedPlateCount = int(plateDataList.size());
@@ -4905,6 +4994,20 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
                                         ? QString::fromStdString(plate->plate_name)
                                         : QObject::tr("平板 %1").arg(plateIdx + 1);
           loadedPlateNames << plateName;
+
+          receiver->pendingPlateLocked_.append(plate ? plate->locked : false);
+          int bedType = 0, printSeq = 0, spiral = 0;
+          if (plate) {
+            if (auto *opt = plate->config.option("curr_bed_type"))
+              bedType = int(opt->getInt());
+            if (auto *opt = plate->config.option("print_sequence"))
+              printSeq = int(opt->getInt());
+            if (auto *opt = plate->config.option("spiral_mode"))
+              spiral = int(opt->getInt());
+          }
+          receiver->pendingPlateBedType_.append(bedType);
+          receiver->pendingPlatePrintSeq_.append(printSeq);
+          receiver->pendingPlateSpiral_.append(spiral);
 
           QSet<int> uniq;
           QList<int> objList;
@@ -5080,6 +5183,11 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
               p->clearInstances();
               for (int objIdx : plateObjs[pi])
                 p->addInstance(objIdx, 0);
+              // v3.0 Phase 18 (D-12): restore locked + bed-type/print-seq/spiral.
+              if (pi < receiver->pendingPlateLocked_.size()) p->setLocked(receiver->pendingPlateLocked_[pi]);
+              if (pi < receiver->pendingPlateBedType_.size()) p->setBedType(receiver->pendingPlateBedType_[pi]);
+              if (pi < receiver->pendingPlatePrintSeq_.size()) p->setPrintSequence(receiver->pendingPlatePrintSeq_[pi]);
+              if (pi < receiver->pendingPlateSpiral_.size()) p->setSpiralMode(receiver->pendingPlateSpiral_[pi]);
             }
             const int reconstructed = receiver->m_plateList->plateCount();
             const int target = std::max(reconstructed, loadedPlateCount);
