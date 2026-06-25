@@ -1,9 +1,9 @@
-# 3DPrinter_Qt6 Claude Code Instructions
+# 3DPrinter_Qt6 Codex Instructions
 
 This repository is a source-truth migration project from OrcaSlicer to Qt6/QML (brand: OWzx).
 
-See @.claude/rules/source-truth-migration.md for the canonical project migration rules.
-See @.claude/rules/build-rules.md for the canonical build rules.
+See @.Codex/rules/source-truth-migration.md for the canonical project migration rules.
+See @.Codex/rules/build-rules.md for the canonical build rules.
 
 ## Project Skills
 
@@ -16,7 +16,7 @@ See @.claude/rules/build-rules.md for the canonical build rules.
 
 **唯一构建目录：** `build/`
 
-不得创建其他构建目录，不得使用其他构建脚本。详见 `.claude/rules/build-rules.md`。
+不得创建其他构建目录，不得使用其他构建脚本。详见 `.Codex/rules/build-rules.md`。
 
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
@@ -368,7 +368,7 @@ See @.claude/rules/build-rules.md for the canonical build rules.
 - **Global state:** BackendContext is the sole composition root, created on the stack in `main()` and exposed as `backend` context property. No other module-level singletons. ProjectServiceMock holds the `Slic3r::Model*` pointer (conditional on HAS_LIBSLIC3R).
 - **Circular imports:** ViewModels depend on Services (via injected pointers). BackendContext depends on both. No circular C++ includes — all forward-declared in BackendContext.h, concrete includes in BackendContext.cpp.
 - **Conditional compilation:** `HAS_LIBSLIC3R` guard controls all libslic3r API usage across services and viewmodels. `OWZX_QML_GUI` cmake option toggles between QML and Widgets build paths.
-- **QML property binding:** QML pages never hold direct references to service objects. All access goes through ViewModel properties exposed via BackendContext. This is enforced by the project rules in `.claude/rules/qml-boundaries.md`.
+- **QML property binding:** QML pages never hold direct references to service objects. All access goes through ViewModel properties exposed via BackendContext. This is enforced by the project rules in `.Codex/rules/qml-boundaries.md`.
 - **OCCT linkage:** OpenCASCADE (OCCT) libraries are linked statically (load-time import) in the FromSource build, NOT delay-loaded. `src/core/DelayLoadHook.cpp` exists on disk but is dead code (not compiled/linked; `__pfnDliNotifyHook2` was never linked into the exe). OCCT is available at runtime for STEP/SVG/text-shape import; mesh boolean / cut surface are excluded due to CGAL version (not OCCT). See `cmake/BuildLibslic3rFromSource.cmake:599-679`.
 ## Anti-Patterns
 ### QML pages directly accessing service internals
@@ -388,8 +388,8 @@ See @.claude/rules/build-rules.md for the canonical build rules.
 
 | Skill | Description | Path |
 |-------|-------------|------|
-| analyzing-source-truth-gap | "Analyzing an upstream-to-Qt migration gap without making code changes. Triggers when the user asks for a read-only comparison between OrcaSlicer upstream behavior and current Qt6 implementation." | `.claude/skills/analyzing-source-truth-gap/SKILL.md` |
-| migrating-source-truth | "Migrating source-truth tasks from OrcaSlicer upstream to Qt6/QML. Triggers when the user asks to continue migration, pick up the next task, or run migration in batch mode." | `.claude/skills/migrating-source-truth/SKILL.md` |
+| analyzing-source-truth-gap | "Analyzing an upstream-to-Qt migration gap without making code changes. Triggers when the user asks for a read-only comparison between OrcaSlicer upstream behavior and current Qt6 implementation." | `.Codex/skills/analyzing-source-truth-gap/SKILL.md` |
+| migrating-source-truth | "Migrating source-truth tasks from OrcaSlicer upstream to Qt6/QML. Triggers when the user asks to continue migration, pick up the next task, or run migration in batch mode." | `.Codex/skills/migrating-source-truth/SKILL.md` |
 <!-- GSD:skills-end -->
 
 <!-- GSD:workflow-start source:GSD defaults -->
@@ -409,5 +409,5 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 ## Developer Profile
 
 > Profile not yet configured. Run `/gsd-profile-user` to generate your developer profile.
-> This section is managed by `generate-claude-profile` -- do not edit manually.
+> This section is managed by `generate-Codex-profile` -- do not edit manually.
 <!-- GSD:profile-end -->
