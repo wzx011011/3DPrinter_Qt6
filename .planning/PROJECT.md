@@ -10,11 +10,21 @@ The project currently has a usable Qt6/QML shell, real model/project IO, real sl
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current State: v2.9 Shipped — Planning Next Milestone
+## Current Milestone: v3.0 PartPlate Core
 
-**Last shipped:** v2.9 Implementation Realignment and Stabilization (2026-06-25) — 6 phases, 6 plans, 28/28 requirements satisfied. See `.planning/milestones/v2.9-ROADMAP.md`.
+**Goal:** Replace the mock plate shell (`int plateCount_` + parallel vectors) with a real PartPlate-equivalent data model that fully round-trips multi-plate state through 3MF and supports upstream-equivalent multi-plate slice scheduling.
 
-**Next milestone goal:** v3.0 PartPlate and AssembleView — start with a source-truth gap analysis (`$analyzing-source-truth-gap PartPlate and AssembleView`), then run `$gsd-new-milestone`.
+**Status:** Defining requirements (started 2026-06-25).
+
+**Target features:**
+- Real `PartPlate` value object (geometry, instance-pair membership, per-plate config, slice state machine) replacing the parallel-vector shell.
+- Complete plate lifecycle (add the missing clone/duplicate, reorder, per-plate printable).
+- 3MF multi-plate round-trip (save path writes plate state — the v2.9-identified blocker).
+- Per-plate slice scheduling using per-plate `Print` + full config merge (replacing the "clone global model + hand-patch 3 keys" loop).
+
+**Scope decision:** AssembleView deferred to v3.1 (from-scratch implementation that depends on the PartPlate data model landing first; separating it keeps v3.0 focused and lower-risk).
+
+**Key context:** See `.planning/audits/2026-06-25-partplate-assembleview-gap.md` — upstream PartPlate is ~7700 LOC (~2700 must migrate, ~65% is GL/wx rendering Qt6 doesn't need); Qt6 plate surface is shell-with-real-API but mock-backed; OCCT is NOT a blocker (PartPlate has zero OCCT symbols).
 
 **Baseline capabilities validated by v2.9:**
 - Planning truth reset: `.planning` now agrees with git history, current code, and verification evidence.
