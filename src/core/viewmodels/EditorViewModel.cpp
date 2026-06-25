@@ -3010,6 +3010,43 @@ void EditorViewModel::togglePlateLocked(int plateIndex)
   emit stateChanged();
 }
 
+// ── v3.0 Phase 17: plate lifecycle completion (PLATE-03/04/05) ──
+
+bool EditorViewModel::clonePlate(int sourceIndex)
+{
+  if (!projectService_)
+    return false;
+  const bool ok = projectService_->clonePlate(sourceIndex);
+  if (ok)
+    emit stateChanged();
+  return ok;
+}
+
+bool EditorViewModel::movePlate(int oldIndex, int newIndex)
+{
+  if (!projectService_)
+    return false;
+  const bool ok = projectService_->movePlate(oldIndex, newIndex);
+  if (ok)
+    emit stateChanged();
+  return ok;
+}
+
+bool EditorViewModel::setPlatePrintable(int plateIndex, bool printable)
+{
+  if (!projectService_)
+    return false;
+  const bool ok = projectService_->setPlatePrintable(plateIndex, printable);
+  if (ok)
+    emit stateChanged();
+  return ok;
+}
+
+bool EditorViewModel::isPlatePrintable(int plateIndex) const
+{
+  return projectService_ ? projectService_->isPlatePrintable(plateIndex) : false;
+}
+
 bool EditorViewModel::isPlateSliced(int plateIndex) const
 {
   return m_slicedPlateIndices.contains(plateIndex);
@@ -3660,7 +3697,8 @@ void EditorViewModel::requestSliceAll()
 
   m_sliceAllQueue.clear();
   for (int i = 0; i < projectService_->plateCount(); ++i) {
-    if (!isPlateLocked(i))
+    // D-08 (Phase 17): exclude locked AND non-printable plates from slice-all.
+    if (!isPlateLocked(i) && projectService_->isPlatePrintable(i))
       m_sliceAllQueue.append(i);
   }
   if (m_sliceAllQueue.isEmpty())

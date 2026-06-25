@@ -982,6 +982,93 @@ bool ProjectServiceMock::setPlateLocked(int plateIndex, bool locked)
   return true;
 }
 
+// ── v3.0 Phase 17: plate lifecycle completion (PLATE-03/04/05) ──────────
+
+bool ProjectServiceMock::isPlatePrintable(int plateIndex) const
+{
+  if (!m_plateList) return false;
+  const OWzx::PartPlate *p = m_plateList->plate(plateIndex);
+  return p ? p->isPrintable() : false;
+}
+
+bool ProjectServiceMock::setPlatePrintable(int plateIndex, bool printable)
+{
+  if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())
+    return false;
+  m_plateList->setPlatePrintable(plateIndex, printable);
+  emit projectChanged();
+  return true;
+}
+
+bool ProjectServiceMock::movePlate(int oldIndex, int newIndex)
+{
+  if (loading_ || !m_plateList) return false;
+  const int prevCurrent = m_plateList->currentPlateIndex();
+  if (!m_plateList->movePlate(oldIndex, newIndex)) return false;
+  emit projectChanged();
+  emit plateDataLoaded(m_plateList->plateCount());
+  if (m_plateList->currentPlateIndex() != prevCurrent)
+    emit plateSelectionChanged();
+  return true;
+}
+
+bool ProjectServiceMock::clonePlate(int sourceIndex)
+{
+  // D-06: deep copy including ModelObjects (upstream duplicate_plate).
+  if (loading_ || !m_plateList) return false;
+  if (sourceIndex < 0 || sourceIndex >= m_plateList->plateCount()) return false;
+
+  const OWzx::PartPlate *src = m_plateList->plate(sourceIndex);
+  if (!src) return false;
+
+  // Create the destination plate.
+  OWzx::PartPlate *dst = m_plateList->createPlate();
+  if (!dst) return false;  // kMaxPlateCount reached
+
+  // Copy plate metadata from source.
+  std::string newName = src->name();
+  if (newName.empty()) newName = "Plate";
+  newName += " (copy)";
+  dst->setName(newName);
+  dst->setLocked(src->isLocked());
+  dst->setPrintable(src->isPrintable());
+  dst->setBedType(src->bedType());
+  dst->setPrintSequence(src->printSequence());
+  dst->setSpiralMode(src->spiralMode());
+  dst->setFirstLayerSeqChoice(src->firstLayerSeqChoice());
+  dst->setFirstLayerSeqOrder(src->firstLayerSeqOrder());
+  dst->setOtherLayersSeqChoice(src->otherLayersSeqChoice());
+  dst->setOtherLayersSeqEntries(src->otherLayersSeqEntries());
+#ifdef HAS_LIBSLIC3R
+  dst->config() = src->config();
+#endif
+
+  // Deep-copy the objects onto the destination plate. Reuse duplicateObject to
+  // clone the ModelObject + parallel-array metadata. duplicateObject inserts the
+  // new object at sourceIndex+1 (shifting higher indices up), so iterate the
+  // source object indices DESCENDING to keep unprocessed lower indices valid.
+  // After each duplicate, assign the new object index to the destination plate
+  // (duplicateObject itself does not assign plate membership in the HAS path).
+  QList<int> srcObjs = m_plateList->objectIndicesOnPlate(sourceIndex);
+  std::sort(srcObjs.begin(), srcObjs.end(), std::greater<int>());
+  for (int srcObjIdx : srcObjs) {
+    const int modelCountBefore = int(model_ ? model_->objects.size() : 0);
+    const int dupIdx = duplicateObject(srcObjIdx);  // returns new object index
+    if (dupIdx >= 0) {
+      dst->addInstance(dupIdx, 0);
+    } else {
+      // Fallback: derive new index from model object-count growth.
+      const int modelCountAfter = int(model_ ? model_->objects.size() : 0);
+      if (modelCountAfter > modelCountBefore)
+        dst->addInstance(modelCountAfter - 1, 0);
+    }
+  }
+
+  emit projectChanged();
+  emit plateDataLoaded(m_plateList->plateCount());
+  return true;
+}
+
 QList<int> ProjectServiceMock::plateObjectIndices(int plateIndex) const
 {
   if (!m_plateList)

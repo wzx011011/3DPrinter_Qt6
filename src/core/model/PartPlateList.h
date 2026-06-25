@@ -60,6 +60,15 @@ class PartPlateList {
 
   void setPlateLocked(int index, bool locked);
 
+  // ── v3.0 Phase 17: lifecycle completion ────────────────────────────────
+  /// Reorders plate oldIndex to newIndex (pure metadata shift + reindex).
+  /// Adjusts m_current_plate if it was in the shifted range. Returns false on
+  /// invalid indices or old==new. (D-07; upstream move_plate_to_index sans geometry.)
+  bool movePlate(int oldIndex, int newIndex);
+
+  /// Sets the per-plate printable flag (D-08). No-op if index invalid.
+  void setPlatePrintable(int index, bool printable);
+
   // ── Derived queries (bridge instance-level truth to per-object API) ────
   /// Returns the index of the first plate whose membership set contains objIdx,
   /// or -1 if no plate holds the object.

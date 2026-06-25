@@ -565,6 +565,37 @@ Item {
             enabled: root.contextPlateIndex >= 0 && root.editorVm
             onTriggered: if (root.editorVm) root.editorVm.togglePlateLocked(root.contextPlateIndex)
         }
+        // ── v3.0 Phase 17: plate lifecycle completion (PLATE-03/04/05) ──
+        // 对齐上游 create_plate_menu — 切换 per-plate printable（D-08）
+        CxMenuItem {
+            text: root.contextPlateIndex >= 0 && root.editorVm
+                  && root.editorVm.isPlatePrintable(root.contextPlateIndex)
+                  ? qsTr("设为不打印") : qsTr("设为可打印")
+            enabled: root.contextPlateIndex >= 0 && root.editorVm
+            onTriggered: if (root.editorVm) {
+                var cur = root.editorVm.isPlatePrintable(root.contextPlateIndex)
+                root.editorVm.setPlatePrintable(root.contextPlateIndex, !cur)
+            }
+        }
+        // 对齐上游 duplicate_plate — 克隆平板（D-06，深拷贝含对象）
+        CxMenuItem {
+            text: qsTr("克隆平板")
+            enabled: root.contextPlateIndex >= 0 && root.editorVm
+                     && root.editorVm.plateCount < 36
+            onTriggered: if (root.editorVm) root.editorVm.clonePlate(root.contextPlateIndex)
+        }
+        // 对齐上游 move_plate_to_index — 左移/右移重排（D-07）
+        CxMenuItem {
+            text: qsTr("左移平板")
+            enabled: root.contextPlateIndex > 0 && root.editorVm
+            onTriggered: if (root.editorVm) root.editorVm.movePlate(root.contextPlateIndex, root.contextPlateIndex - 1)
+        }
+        CxMenuItem {
+            text: qsTr("右移平板")
+            enabled: root.contextPlateIndex >= 0 && root.editorVm
+                     && root.contextPlateIndex < root.editorVm.plateCount - 1
+            onTriggered: if (root.editorVm) root.editorVm.movePlate(root.contextPlateIndex, root.contextPlateIndex + 1)
+        }
         MenuSeparator { }
         // 对齐上游 create_plate_menu — Reload All
         CxMenuItem {

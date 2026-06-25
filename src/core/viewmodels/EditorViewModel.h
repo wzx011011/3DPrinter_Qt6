@@ -474,6 +474,13 @@ public:
   Q_INVOKABLE bool renamePlate(int plateIndex, const QString &newName);
   Q_INVOKABLE bool isPlateLocked(int plateIndex) const;
   Q_INVOKABLE void togglePlateLocked(int plateIndex);
+  // ── v3.0 Phase 17: plate lifecycle completion (PLATE-03/04/05) ──
+  /// 克隆平板（深拷贝含 ModelObject，对齐上游 duplicate_plate）
+  Q_INVOKABLE bool clonePlate(int sourceIndex);
+  /// 重排平板（oldIndex → newIndex）
+  Q_INVOKABLE bool movePlate(int oldIndex, int newIndex);
+  Q_INVOKABLE bool setPlatePrintable(int plateIndex, bool printable);
+  Q_INVOKABLE bool isPlatePrintable(int plateIndex) const;
   /// 查询指定平板是否有有效切片结果
   Q_INVOKABLE bool isPlateSliced(int plateIndex) const;
   /// 移动选中对象到指定平板（对齐上游 Plater::priv::on_arrange 跨平板拖拽）

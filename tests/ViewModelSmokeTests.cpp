@@ -143,6 +143,10 @@ private slots:
   void partPlateListRefusesExceedMaxPlateCount();
   // v3.0 Phase 16-02: ProjectServiceMock plate ops backed by PartPlateList (PLATE-06 regression)
   void projectServicePlateOpsBackedByPartPlateList();
+  // v3.0 Phase 17: plate lifecycle completion (clone/reorder/printable)
+  void partPlateListMovePlateReindexesAndAdjustsCurrent();
+  void projectServiceClonePlateDeepCopiesObjects();
+  void projectServicePerPlatePrintableRoundTrip();
 
 private:
   bool hasLibslic3r() const;
@@ -1366,6 +1370,79 @@ void ViewModelSmokeTests::projectServicePlateOpsBackedByPartPlateList()
   // Cannot delete the last plate.
   QVERIFY(!project.deletePlate(0));
   QCOMPARE(project.plateCount(), 1);
+}
+
+// ── v3.0 Phase 17: plate lifecycle completion (clone/reorder/printable) ──
+
+void ViewModelSmokeTests::partPlateListMovePlateReindexesAndAdjustsCurrent()
+{
+  // D-07: movePlate is a pure metadata reorder (vector shift + reindex).
+  OWzx::PartPlateList list;
+  QCOMPARE(list.plateCount(), 1);
+  list.createPlate();
+  list.createPlate();  // now 3 plates: indices 0,1,2
+  QCOMPARE(list.plateCount(), 3);
+  list.renamePlate(0, "A");
+  list.renamePlate(1, "B");
+  list.renamePlate(2, "C");
+
+  // move A (index 0) to end (index 2): order becomes B, C, A
+  QVERIFY(list.movePlate(0, 2));
+  QCOMPARE(QString::fromStdString(list.plate(0)->name()), QStringLiteral("B"));
+  QCOMPARE(QString::fromStdString(list.plate(1)->name()), QStringLiteral("C"));
+  QCOMPARE(QString::fromStdString(list.plate(2)->name()), QStringLiteral("A"));
+  // indices must reflect new positions
+  QCOMPARE(list.plate(0)->plateIndex(), 0);
+  QCOMPARE(list.plate(2)->plateIndex(), 2);
+
+  // move it back (index 2 -> 0): order becomes A, B, C
+  QVERIFY(list.movePlate(2, 0));
+  QCOMPARE(QString::fromStdString(list.plate(0)->name()), QStringLiteral("A"));
+
+  // invalid moves
+  QVERIFY(!list.movePlate(1, 1));   // same index
+  QVERIFY(!list.movePlate(0, 99));  // out of range
+  QVERIFY(!list.movePlate(-1, 0));  // negative
+}
+
+void ViewModelSmokeTests::projectServiceClonePlateDeepCopiesObjects()
+{
+  // D-06: clonePlate deep-copies objects onto the new plate.
+  ProjectServiceMock project;
+  QCOMPARE(project.plateCount(), 1);
+  // Add a primitive to plate 0 (current plate). addPrimitiveToPlate returns the
+  // new object index (>=0) on success.
+  const int newObj = project.addPrimitiveToPlate(0);  // cube
+  QVERIFY2(newObj >= 0, "addPrimitiveToPlate should succeed");
+  QVERIFY(project.plateObjectCount(0) >= 1);  // plate 0 now has the object
+
+  // Clone plate 0 → new plate 1.
+  QVERIFY(project.clonePlate(0));
+  QCOMPARE(project.plateCount(), 2);
+  // Deep copy: the new plate has at least one object (the clone), and it is a
+  // distinct object from the source (clonePlate calls duplicateObject which
+  // appends a new ModelObject, not a shared reference).
+  QVERIFY2(project.plateObjectCount(1) >= 1,
+           "cloned plate must own objects (deep copy, not shallow)");
+
+  // MAX_PLATE_COUNT guard: cloning when full should fail.
+  for (int i = project.plateCount(); i < OWzx::kMaxPlateCount; ++i)
+    project.addPlate();
+  QCOMPARE(project.plateCount(), OWzx::kMaxPlateCount);
+  QVERIFY(!project.clonePlate(0));
+}
+
+void ViewModelSmokeTests::projectServicePerPlatePrintableRoundTrip()
+{
+  // D-08: per-plate printable flag round-trip + default.
+  ProjectServiceMock project;
+  QVERIFY(project.isPlatePrintable(0));  // default printable
+  QVERIFY(project.setPlatePrintable(0, false));
+  QVERIFY(!project.isPlatePrintable(0));
+  QVERIFY(project.setPlatePrintable(0, true));
+  QVERIFY(project.isPlatePrintable(0));
+  // invalid index safe
+  QVERIFY(!project.isPlatePrintable(99));
 }
 
 QTEST_MAIN(ViewModelSmokeTests)

@@ -63,6 +63,45 @@ void PartPlateList::setPlateLocked(int index, bool locked) {
   if (p) p->setLocked(locked);
 }
 
+bool PartPlateList::movePlate(int oldIndex, int newIndex) {
+  // D-07: pure metadata reorder (vector shift + reindex). No geometry recompute
+  // (Qt6 doesn't compute plate origins yet — deferred per Phase 17 CONTEXT).
+  if (oldIndex < 0 || oldIndex >= plateCount()) return false;
+  if (newIndex < 0 || newIndex >= plateCount()) return false;
+  if (oldIndex == newIndex) return false;
+
+  // Extract the plate, shift the in-between elements, reinsert at newIndex.
+  std::unique_ptr<PartPlate> moved = std::move(m_plate_list[oldIndex]);
+  if (oldIndex < newIndex) {
+    for (int i = oldIndex; i < newIndex; ++i)
+      m_plate_list[i] = std::move(m_plate_list[i + 1]);
+  } else {
+    for (int i = oldIndex; i > newIndex; --i)
+      m_plate_list[i] = std::move(m_plate_list[i - 1]);
+  }
+  m_plate_list[newIndex] = std::move(moved);
+  reindex();
+
+  // Track the current plate through the shift.
+  if (m_current_plate == oldIndex) {
+    m_current_plate = newIndex;
+  } else if (oldIndex < newIndex) {
+    // shift was [old+1..new] -> [old..new-1]; current in (old, new] decrements
+    if (m_current_plate > oldIndex && m_current_plate <= newIndex)
+      --m_current_plate;
+  } else {  // oldIndex > newIndex
+    // shift was [new..old-1] -> [new+1..old]; current in [new, old) increments
+    if (m_current_plate >= newIndex && m_current_plate < oldIndex)
+      ++m_current_plate;
+  }
+  return true;
+}
+
+void PartPlateList::setPlatePrintable(int index, bool printable) {
+  PartPlate* p = plate(index);
+  if (p) p->setPrintable(printable);
+}
+
 int PartPlateList::plateIndexForObject(int objIdx) const {
   for (int i = 0; i < plateCount(); ++i) {
     if (m_plate_list[i]->hasObject(objIdx)) return i;

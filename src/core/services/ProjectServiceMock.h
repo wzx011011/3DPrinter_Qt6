@@ -99,6 +99,13 @@ public:
   /// 平板锁定状态
   Q_INVOKABLE bool isPlateLocked(int plateIndex) const;
   Q_INVOKABLE bool setPlateLocked(int plateIndex, bool locked);
+  // ── v3.0 Phase 17: plate lifecycle completion (PLATE-03/04/05) ──
+  /// Deep-copy a plate including its ModelObjects (D-06, upstream duplicate_plate).
+  Q_INVOKABLE bool clonePlate(int sourceIndex);
+  /// Reorder plate oldIndex to newIndex (D-07).
+  Q_INVOKABLE bool movePlate(int oldIndex, int newIndex);
+  Q_INVOKABLE bool setPlatePrintable(int plateIndex, bool printable);
+  Q_INVOKABLE bool isPlatePrintable(int plateIndex) const;
   Q_INVOKABLE QList<int> plateObjectIndices(int plateIndex) const;
   Q_INVOKABLE QList<int> currentPlateObjectIndices() const;
   Q_INVOKABLE int plateObjectCount(int index) const;
