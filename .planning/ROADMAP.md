@@ -87,7 +87,7 @@
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |---|---|---|---|---|
-| 16. PartPlate Data Model Foundation | v3.0 | 0/? | Not started | — |
+| 16. PartPlate Data Model Foundation | v3.0 | 2/2 | Complete   | 2026-06-25 |
 | 17. Plate Lifecycle Completion | v3.0 | 0/? | Not started | — |
 | 18. 3MF Multi-Plate Persistence | v3.0 | 0/? | Not started | — |
 | 19. Per-Plate Slice Scheduling | v3.0 | 0/? | Not started | — |
