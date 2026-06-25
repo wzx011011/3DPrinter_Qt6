@@ -1,172 +1,61 @@
-# Roadmap: Milestone v2.9 - Implementation Realignment and Stabilization
+# Roadmap: OWzx Slicer
 
-## Overview
+## Milestones
 
-v2.9 is a stabilization and truth-reset milestone. Its job is to make the project plan, current implementation, visible UI, and verification evidence agree before the next large source-truth migration module starts.
+- ✅ **v2.9 Implementation Realignment and Stabilization** — Phases 10-15 (shipped 2026-06-25)
+- 📋 **v3.0 PartPlate and AssembleView** — candidate (not started; awaiting `$analyzing-source-truth-gap PartPlate and AssembleView` then `$gsd-new-milestone`)
+- 📋 **v3.1 Preset System Completion** — candidate (not started)
+- 📋 **v3.2 Web, Cloud, Multi-Machine** — candidate (not started; several sub-items Blocked)
 
-**Status:** Complete
-**Started:** 2026-06-24
-**Phase numbering:** continues from prior milestone artifacts, starting at Phase 10.
+## Phases
 
-## Phase 10: Planning Truth Reset - Complete
+<details>
+<summary>✅ v2.9 Implementation Realignment and Stabilization (Phases 10-15) — SHIPPED 2026-06-25</summary>
 
-- [x] Phase 10: Planning Truth Reset (completed 2026-06-25)
+- [x] Phase 10: Planning Truth Reset (1/1 plan) — completed 2026-06-25
+- [x] Phase 11: Source Hygiene Stabilization (1/1 plan) — completed 2026-06-25
+- [x] Phase 12: Calibration Closure for Implemented Modes (1/1 plan) — completed 2026-06-25
+- [x] Phase 13: Hybrid Integration Verification (1/1 plan) — completed 2026-06-25
+- [x] Phase 14: Visible Placeholder Triage (1/1 plan) — completed 2026-06-25
+- [x] Phase 15: Verification and Handoff (1/1 plan) — completed 2026-06-25
 
-**Goal:** Make `.planning` a trustworthy entry point again.
-**Completed:** 2026-06-25
+**Requirements:** 28/28 satisfied. **Audit:** `tech_debt` (no blockers).
+**Full details:** [.planning/milestones/v2.9-ROADMAP.md](milestones/v2.9-ROADMAP.md) · [v2.9-REQUIREMENTS.md](milestones/v2.9-REQUIREMENTS.md) · [v2.9-MILESTONE-AUDIT.md](milestones/v2.9-MILESTONE-AUDIT.md)
 
-**Requirements:** PLAN-01, PLAN-02, PLAN-03, PLAN-04, PLAN-05
+</details>
 
-**Scope:**
-- Reconcile `PROJECT.md`, `STATE.md`, `REQUIREMENTS.md`, `ROADMAP.md`, `INDEX.md`, and `REMAINING_MIGRATION_PLAN.md`.
-- Reflect v2.7/v2.8 git history as already-landed work rather than future scope.
-- Add and maintain the Real/Hybrid/Mock/Blocked/Placeholder classification matrix.
-- Resolve or redirect missing `.Codex/rules/*` references used by AGENTS.
-- Classify legacy CrealityPrint references as historical evidence, vendor data, or cleanup debt.
+## Progress
 
-**Success criteria:**
-1. All active planning entry files name v2.9 as the current milestone.
-2. Every v2.9 requirement maps to exactly one roadmap phase.
-3. Service/workflow classification is present and evidence-based.
-4. AGENTS rule references resolve to `.Codex/rules/*`.
-
-## Phase 11: Source Hygiene Stabilization
-
-- [x] Phase 11: Source Hygiene Stabilization (completed 2026-06-25)
-
-**Goal:** Remove source-level ambiguity introduced by dirty local work and encoding damage.
-
-**Requirements:** HYGIENE-01, HYGIENE-02, HYGIENE-03, HYGIENE-04
-
-**Scope:**
-- Fix literal escape artifacts such as `\r\n` inside active source comments when they affect behavior.
-- Repair encoding-damaged comments and user-visible strings in active files touched by recent implementation work.
-- Confirm ownership of `src/core/services/SliceService.cpp.backup`, then remove it or move it outside active source.
-- Classify untracked baseline files such as `AppSettingsService.*` and `SoftwareViewport.*` as intentional implementation, external artifact, or deferred cleanup.
-
-**Success criteria:**
-1. Broad source searches no longer surface behavior-affecting literal escape damage in active files.
-2. No unexplained backup source file remains under `src/`.
-3. The dirty baseline is reduced to intentional tracked changes or documented external files.
-4. Canonical verification still builds after hygiene changes.
-
-## Phase 12: Calibration Closure for Implemented Modes
-
-- [x] Phase 12: Calibration Closure for Implemented Modes (completed 2026-06-25)
-
-**Goal:** Turn the existing hybrid PA/Flow/Temp calibration work into visible, deterministic, verified behavior.
-**Completed:** 2026-06-25
-
-**Requirements:** CAL-01, CAL-02, CAL-03, CAL-04, CAL-05
-
-**Scope:**
-- Wire implemented calibration modes from BBLTopbar or equivalent visible UI paths to `CalibrationViewModel`.
-- Add deterministic coverage for PA, Flow Rate, and Temp Tower job creation or slice request generation.
-- Preserve mock fallback behavior when `SliceService` is not available.
-- Ensure progress comes from `SliceService` in real mode and only from the timer in mock mode.
-- Mark remaining calibration modes Pending or Blocked with upstream references.
-
-**Success criteria:**
-1. Implemented calibration modes are no longer disabled placeholders in the topbar path.
-2. Three implemented calibration modes have deterministic regression coverage.
-3. Mock fallback and real slice progress paths are separately verified.
-4. Unimplemented calibration modes are explicit future work, not silent gaps.
-
-## Phase 13: Hybrid Integration Verification
-
-- [x] Phase 13: Hybrid Integration Verification (completed 2026-06-25)
-
-**Goal:** Replace transport fallback confidence with deterministic evidence.
-**Completed:** 2026-06-25
-
-**Requirements:** INT-01, INT-02, INT-03, INT-04, INT-05, INT-06
-
-**Scope:**
-- Add or update tests/fixtures for SSDP response parsing, MQTT status/control payloads, FTP send-print success/error handling, and camera no-stream/error paths.
-- Document real-printer/manual verification requirements where live hardware is unavoidable.
-- Verify software viewport and OpenGL fallback startup behavior.
-- Verify or defer AppSettings and bed-shape persistence behavior introduced by recent local work.
-
-**Success criteria:**
-1. Network/device tests do not require a live printer for protocol-level coverage.
-2. Real hardware requirements are documented separately from automated regression checks.
-3. Startup smoke evidence covers the selected viewport mode.
-4. Canonical verification remains green.
-
-**Plans:**
-- Wave 1: `13-01` - Add deterministic hybrid integration evidence.
-
-## Phase 14: Visible Placeholder Triage
-
-- [x] Phase 14: Visible Placeholder Triage (completed 2026-06-25)
-
-**Goal:** Stop counting visible placeholders as completed product workflows.
-**Completed:** 2026-06-25
-
-**Requirements:** UI-01, UI-02, UI-03, UI-04, UI-05
-
-**Scope:**
-- Wire export project/model and preferences menu actions to real backend behavior where feasible.
-- Enable and route calibration menu entries for implemented modes.
-- Reclassify account, model store, publish, layer editing, AssembleView, and ModelMall/WebView surfaces as Real, Hybrid, Placeholder, or Blocked.
-- Identify QML-side durable behavior that should move into C++ viewmodels/services.
-
-**Success criteria:**
-1. Top-level menu actions are not silent no-ops.
-2. Implemented calibration entries are visible and functional from the topbar path.
-3. Placeholder surfaces are documented as such in requirements/planning.
-4. Any QML business-logic extraction needed for v2.9 is either done or scoped to a future phase with evidence.
-
-## Phase 15: Verification and Handoff
-
-- [x] Phase 15: Verification and Handoff (completed 2026-06-25)
-
-**Goal:** Produce the final v2.9 evidence bundle and prepare the next source-truth milestone.
-**Completed:** 2026-06-25
-
-**Requirements:** VERIFY-01, VERIFY-02, VERIFY-03
-
-**Scope:**
-- Run the canonical full verification command.
-- Run `ViewModelSmokeTests.exe` explicitly or document why it remains built-only.
-- Update traceability statuses and final evidence.
-- Propose the next major milestone based on the stabilized baseline, likely PartPlate/AssembleView or Preset System Completion.
-
-**Success criteria:**
-1. Canonical verification passes after all v2.9 work.
-2. Built-only tests are explicitly accounted for.
-3. Each completed v2.9 requirement has source, test, or manual verification evidence.
-4. The next milestone starts from a clean, aligned planning baseline.
-
-## Coverage
-
-| Phase | Name | Requirements | Count |
-|---|---|---|---:|
-| 10 | Planning Truth Reset | PLAN-01..PLAN-05 | 5 (Complete) |
-| 11 | Source Hygiene Stabilization | HYGIENE-01..HYGIENE-04 | 4 (Complete) |
-| 12 | Calibration Closure for Implemented Modes | CAL-01..CAL-05 | 5 (Complete) |
-| 13 | Hybrid Integration Verification | INT-01..INT-06 | 6 (Complete) |
-| 14 | Visible Placeholder Triage | UI-01..UI-05 | 5 (Complete) |
-| 15 | Verification and Handoff | VERIFY-01..VERIFY-03 | 3 (Complete) |
-
-**Total requirements:** 28
-**Mapped:** 28
-**Unmapped:** 0
+| Phase | Milestone | Plans Complete | Status | Completed |
+|---|---|---|---|---|
+| 10. Planning Truth Reset | v2.9 | 1/1 | Complete | 2026-06-25 |
+| 11. Source Hygiene Stabilization | v2.9 | 1/1 | Complete | 2026-06-25 |
+| 12. Calibration Closure for Implemented Modes | v2.9 | 1/1 | Complete | 2026-06-25 |
+| 13. Hybrid Integration Verification | v2.9 | 1/1 | Complete | 2026-06-25 |
+| 14. Visible Placeholder Triage | v2.9 | 1/1 | Complete | 2026-06-25 |
+| 15. Verification and Handoff | v2.9 | 1/1 | Complete | 2026-06-25 |
 
 ## Next Step
 
-v2.9 is complete. Continue with next-milestone preparation:
+v2.9 is shipped. Prepare the next milestone:
 
 ```text
 $analyzing-source-truth-gap PartPlate and AssembleView
 ```
 
-Then start the next milestone:
+Then create the next milestone:
 
 ```text
 $gsd-new-milestone
 ```
 
+Candidate future scope (from `.planning/milestones/v2.9-REQUIREMENTS.md` "Future Requirements" + v2.9 deferred items):
+- **v3.0** — PLATE-01..03: upstream multi-plate ownership, per-plate config overrides, non-placeholder AssembleView.
+- **v3.1** — PRESET-01..03: upstream-compatible preset bundles, CreatePresetsDialog, dirty-state prompts.
+- **v3.2** — WEB-01 ModelMall/Home WebView (Blocked on QtWebEngine/policy); CLOUD-01 cloud/multi-machine verified-or-blocked state.
+
+Also consider before v3.0 (non-blocking v2.9 tech debt): normalize `.Codex` → `.codex` path casing for case-sensitive-FS/CI safety.
+
 ---
 
-*Last updated: 2026-06-25 after Phase 15 final verification and handoff.*
+*Last updated: 2026-06-25 via `/gsd-complete-milestone v2.9`.*

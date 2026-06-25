@@ -4,19 +4,20 @@
 
 OWzx Slicer is a Windows desktop slicer migrating OrcaSlicer from its upstream C++/wxWidgets GUI to a C++17, Qt 6.10, and QML architecture. The GUI layer is being rewritten while preserving libslic3r and upstream user-visible behavior as the functional source of truth.
 
-The project currently has a usable Qt6/QML shell, real model/project IO, real slicing and G-code export paths, preview rendering, partial preset IO, and hybrid device/camera/network integrations. Milestone v2.9 realigned planning, implementation status, visible UI classifications, and verification evidence. The next recommended work is source-truth gap analysis for PartPlate and AssembleView before starting v3.0.
+The project currently has a usable Qt6/QML shell, real model/project IO, real slicing and G-code export paths, preview rendering, partial preset IO, and hybrid device/camera/network integrations. Milestone v2.9 (shipped 2026-06-25) realigned planning, implementation status, visible UI classifications, and verification evidence. The next recommended work is source-truth gap analysis for PartPlate and AssembleView before starting v3.0.
 
 ## Core Value
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current Milestone: v2.9 Implementation Realignment and Stabilization
+## Current State: v2.9 Shipped — Planning Next Milestone
 
-**Goal:** Reconcile the planning ledger with the real implementation, stabilize the current dirty baseline, and close the most visible hybrid/placeholder workflows before starting the next major migration module.
-**Status:** Complete as of 2026-06-25.
+**Last shipped:** v2.9 Implementation Realignment and Stabilization (2026-06-25) — 6 phases, 6 plans, 28/28 requirements satisfied. See `.planning/milestones/v2.9-ROADMAP.md`.
 
-**Target features:**
-- Planning truth reset: `.planning` must agree with git history, current code, and verification evidence.
+**Next milestone goal:** v3.0 PartPlate and AssembleView — start with a source-truth gap analysis (`$analyzing-source-truth-gap PartPlate and AssembleView`), then run `$gsd-new-milestone`.
+
+**Baseline capabilities validated by v2.9:**
+- Planning truth reset: `.planning` now agrees with git history, current code, and verification evidence.
 - Source hygiene: encoding damage, literal escape artifacts, residual backup files, and untracked baseline files are classified and handled.
 - Service classification: each active service surface is marked Real, Hybrid, Mock, Blocked, or Placeholder.
 - Calibration closure for implemented modes: PA, Flow Rate, and Temp Tower are wired, verified, and separated from still-pending calibration modes.
@@ -67,6 +68,8 @@ No implementation phase is currently active. The next recommended planning actio
 - Several `*Mock` services now contain real production-like paths plus fallback/mock behavior. The name alone does not describe implementation status.
 - Planning before v2.9 overstated or understated several areas: v2.7/v2.8 code landed on `main`, while `.planning` still described v2.6 as the current milestone.
 - Current verification evidence: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` passed on 2026-06-25 after Phase 15, including build, app smoke launch, QML UI audit, CLI/E2E targets, and E2E pipeline tests. `ViewModelSmokeTests.exe` was run explicitly and reported 32 passed, 0 failed; `QmlUiAuditTests.exe` was run explicitly and reported 7 passed, 0 failed.
+- v2.9 audit: `.planning/milestones/v2.9-MILESTONE-AUDIT.md` — 28/28 requirements satisfied, 14/14 integration checks, 4/4 E2E flows, 0 orphans, `tech_debt` status (no blockers).
+- Known non-blocking tech debt carried into v3.0: `.Codex` (capital C) path references diverge from git-tracked lowercase `.codex` (Windows-safe only); normalize before any case-sensitive CI.
 
 ## Constraints
 
@@ -84,10 +87,13 @@ No implementation phase is currently active. The next recommended planning actio
 |---|---|---|
 | Use OrcaSlicer as active source truth | The product is an OrcaSlicer Qt6/QML migration, not a free-form slicer redesign. | Good |
 | Keep libslic3r as the slicing engine | Rewriting slicing algorithms is outside GUI migration scope and high risk. | Good |
-| Classify services as Real/Hybrid/Mock/Blocked/Placeholder | `*Mock` class names no longer reflect implementation reality. | Active in v2.9 |
-| Treat visible disabled/no-op UI as migration debt | Broad UI coverage is not the same as source-truth workflow completion. | Active in v2.9 |
-| Start the next milestone as v2.9 | Git history already contains v2.7 and v2.8 work; planning must not reuse stale version labels. | Active |
+| Classify services as Real/Hybrid/Mock/Blocked/Placeholder | `*Mock` class names no longer reflect implementation reality. | Good — v2.9 shipped; vocabulary adopted across planning |
+| Treat visible disabled/no-op UI as migration debt | Broad UI coverage is not the same as source-truth workflow completion. | Good — v2.9 triage shipped (Phase 14) |
+| Start the next milestone as v2.9 | Git history already contains v2.7 and v2.8 work; planning must not reuse stale version labels. | Good — v2.9 shipped 2026-06-25 |
 | Skip new domain research for v2.9 | This milestone is a local code/planning realignment, not discovery of a new product domain. | Good |
+| Default to SoftwareViewport, gate OpenGL behind `OWZX_OPENGL` | Software viewport startup is the safer default; OpenGL path preserved for opt-in. | Good — enforced by QmlUiAuditTests (INT-05) |
+| Route calibration by stable ids, not list indexes | List-index routing is fragile across menu reordering. | Good — Phase 12 stable routing shipped |
+| Defer PartPlate/AssembleView to v3.0, preset bundle to v3.1 | Large source-truth modules need dedicated milestones after the baseline is trustworthy. | Pending — v3.0/v3.1 scope |
 
 ## Evolution
 
@@ -106,4 +112,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-25 after Phase 15 final verification and handoff.*
+*Last updated: 2026-06-25 after v2.9 milestone completion.*

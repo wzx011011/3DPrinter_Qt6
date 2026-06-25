@@ -8,23 +8,22 @@ This is the canonical entry point for `.planning/`. Historical phase files are e
 
 - Project framing: [PROJECT.md](PROJECT.md)
 - Current state: [STATE.md](STATE.md)
-- Current requirements: [REQUIREMENTS.md](REQUIREMENTS.md)
 - Current roadmap: [ROADMAP.md](ROADMAP.md)
 - Remaining migration plan: [REMAINING_MIGRATION_PLAN.md](REMAINING_MIGRATION_PLAN.md)
 - Milestone history: [MILESTONES.md](MILESTONES.md)
-- Latest alignment audit: [audits/2026-06-24-plan-implementation-alignment.md](audits/2026-06-24-plan-implementation-alignment.md)
+- Latest milestone audit: [milestones/v2.9-MILESTONE-AUDIT.md](milestones/v2.9-MILESTONE-AUDIT.md)
+- Retrospective: [RETROSPECTIVE.md](RETROSPECTIVE.md)
+- Prior alignment audit: [audits/2026-06-24-plan-implementation-alignment.md](audits/2026-06-24-plan-implementation-alignment.md)
 - Prior implementation audit: [audits/2026-06-23-implementation-audit.md](audits/2026-06-23-implementation-audit.md)
 - Prior code drift audit: [audits/2026-06-23-code-drift-audit.md](audits/2026-06-23-code-drift-audit.md)
 
+> Note: v2.9 requirements were archived to [milestones/v2.9-REQUIREMENTS.md](milestones/v2.9-REQUIREMENTS.md) at milestone close. The active `REQUIREMENTS.md` will be recreated by the next `$gsd-new-milestone`.
+
 ## Active Milestone
 
-**v2.9 - Implementation Realignment and Stabilization**
+**None active.** v2.9 shipped 2026-06-25 and is archived.
 
-Status: Complete
-
-Goal: reconcile planning with real implementation, stabilize the current dirty baseline, and close the most visible hybrid/placeholder workflows before starting the next major source-truth module.
-
-Recommended next milestone: v3.0 PartPlate and AssembleView.
+Recommended next milestone: **v3.0 PartPlate and AssembleView**. Start with `$analyzing-source-truth-gap PartPlate and AssembleView`, then `$gsd-new-milestone`.
 
 ## Directory Map
 
