@@ -25,8 +25,8 @@
 | Preset bundle | Partial | Current bundle IO is simplified JSON, not upstream-compatible preset bundle behavior. |
 | PartPlate / plate-scoped config | Hybrid/Placeholder | Multi-plate APIs exist, but upstream PartPlate config behavior and AssembleView are incomplete. |
 | ModelMall / WebView | Blocked/Placeholder | WebView availability is hardcoded false. |
-| Visible top-level UI actions | Partial/Placeholder | Implemented calibration entries are wired; several export, preference, layer editing, account/store/publish actions remain disabled or TODO. |
-| Planning docs | Drifted | v2.6 planning state was stale relative to v2.7/v2.8 git history and dirty local implementation. |
+| Visible top-level UI actions | Hybrid/Placeholder | Implemented calibration, export, and preferences routes are wired where supported; unavailable account/store/publish/layer/AssembleView/ModelMall surfaces are hidden, disabled, or documented as blocked/future scope. |
+| Planning docs | Realigned | v2.9 entry files, requirements, roadmap, and evidence agree after Phase 15 verification. |
 
 ## v2.9 Requirements - Implementation Realignment and Stabilization
 
@@ -72,9 +72,9 @@
 
 ### Verification Gate
 
-- [ ] **VERIFY-01**: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` passes after v2.9 planning and implementation stabilization.
-- [ ] **VERIFY-02**: `ViewModelSmokeTests.exe` is either run explicitly or documented as built-only with a reason.
-- [ ] **VERIFY-03**: The final v2.9 evidence links each completed requirement to build/test output, source references, or an explicit manual verification note.
+- [x] **VERIFY-01**: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` passes after v2.9 planning and implementation stabilization. *(Phase 15)*
+- [x] **VERIFY-02**: `ViewModelSmokeTests.exe` is either run explicitly or documented as built-only with a reason. *(Phase 15)*
+- [x] **VERIFY-03**: The final v2.9 evidence links each completed requirement to build/test output, source references, or an explicit manual verification note. *(Phase 15)*
 
 ## Future Requirements
 
@@ -142,9 +142,9 @@
 | UI-03 | Phase 14 | Complete |
 | UI-04 | Phase 14 | Complete |
 | UI-05 | Phase 14 | Complete |
-| VERIFY-01 | Phase 15 | Pending |
-| VERIFY-02 | Phase 15 | Pending |
-| VERIFY-03 | Phase 15 | Pending |
+| VERIFY-01 | Phase 15 | Complete |
+| VERIFY-02 | Phase 15 | Complete |
+| VERIFY-03 | Phase 15 | Complete |
 
 **Coverage:**
 - v2.9 requirements: 28 total
@@ -154,4 +154,4 @@
 ---
 
 *Requirements defined: 2026-06-24*
-*Last updated: 2026-06-25 after Phase 14 visible placeholder triage.*
+*Last updated: 2026-06-25 after Phase 15 final verification and handoff.*

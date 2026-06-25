@@ -4,7 +4,7 @@
 
 OWzx Slicer is a Windows desktop slicer migrating OrcaSlicer from its upstream C++/wxWidgets GUI to a C++17, Qt 6.10, and QML architecture. The GUI layer is being rewritten while preserving libslic3r and upstream user-visible behavior as the functional source of truth.
 
-The project currently has a usable Qt6/QML shell, real model/project IO, real slicing and G-code export paths, preview rendering, partial preset IO, and hybrid device/camera/network integrations. The next work is not a greenfield feature push; it is a planning and implementation realignment milestone that makes the current baseline trustworthy before larger source-truth migrations continue.
+The project currently has a usable Qt6/QML shell, real model/project IO, real slicing and G-code export paths, preview rendering, partial preset IO, and hybrid device/camera/network integrations. Milestone v2.9 realigned planning, implementation status, visible UI classifications, and verification evidence. The next recommended work is source-truth gap analysis for PartPlate and AssembleView before starting v3.0.
 
 ## Core Value
 
@@ -13,6 +13,7 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 ## Current Milestone: v2.9 Implementation Realignment and Stabilization
 
 **Goal:** Reconcile the planning ledger with the real implementation, stabilize the current dirty baseline, and close the most visible hybrid/placeholder workflows before starting the next major migration module.
+**Status:** Complete as of 2026-06-25.
 
 **Target features:**
 - Planning truth reset: `.planning` must agree with git history, current code, and verification evidence.
@@ -40,7 +41,7 @@ These are current baseline capabilities inferred from implementation, git histor
 
 ### Active
 
-The active scope is defined in `.planning/REQUIREMENTS.md` under `v2.9 Requirements`.
+No implementation phase is currently active. The next recommended planning action is a source-truth gap analysis for PartPlate and AssembleView.
 
 ### Future
 
@@ -65,7 +66,7 @@ The active scope is defined in `.planning/REQUIREMENTS.md` under `v2.9 Requireme
 - Historical CrealityPrint-era notes remain evidence only; new work must cite OrcaSlicer upstream paths unless the task is explicitly cleaning historical compatibility.
 - Several `*Mock` services now contain real production-like paths plus fallback/mock behavior. The name alone does not describe implementation status.
 - Planning before v2.9 overstated or understated several areas: v2.7/v2.8 code landed on `main`, while `.planning` still described v2.6 as the current milestone.
-- Current verification evidence: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` passed on 2026-06-25 after Phase 13, including build, app smoke launch, QML UI audit, CLI/E2E targets, and E2E pipeline tests. `ViewModelSmokeTests.exe` was run explicitly and reported 32 passed, 0 failed.
+- Current verification evidence: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` passed on 2026-06-25 after Phase 15, including build, app smoke launch, QML UI audit, CLI/E2E targets, and E2E pipeline tests. `ViewModelSmokeTests.exe` was run explicitly and reported 32 passed, 0 failed; `QmlUiAuditTests.exe` was run explicitly and reported 7 passed, 0 failed.
 
 ## Constraints
 
@@ -105,4 +106,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-25 after Phase 13 hybrid integration verification.*
+*Last updated: 2026-06-25 after Phase 15 final verification and handoff.*

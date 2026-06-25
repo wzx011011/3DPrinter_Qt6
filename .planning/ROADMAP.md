@@ -4,7 +4,7 @@
 
 v2.9 is a stabilization and truth-reset milestone. Its job is to make the project plan, current implementation, visible UI, and verification evidence agree before the next large source-truth migration module starts.
 
-**Status:** Executing
+**Status:** Complete
 **Started:** 2026-06-24
 **Phase numbering:** continues from prior milestone artifacts, starting at Phase 10.
 
@@ -119,9 +119,10 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 
 ## Phase 15: Verification and Handoff
 
-- [ ] Phase 15: Verification and Handoff
+- [x] Phase 15: Verification and Handoff (completed 2026-06-25)
 
 **Goal:** Produce the final v2.9 evidence bundle and prepare the next source-truth milestone.
+**Completed:** 2026-06-25
 
 **Requirements:** VERIFY-01, VERIFY-02, VERIFY-03
 
@@ -146,7 +147,7 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 | 12 | Calibration Closure for Implemented Modes | CAL-01..CAL-05 | 5 (Complete) |
 | 13 | Hybrid Integration Verification | INT-01..INT-06 | 6 (Complete) |
 | 14 | Visible Placeholder Triage | UI-01..UI-05 | 5 (Complete) |
-| 15 | Verification and Handoff | VERIFY-01..VERIFY-03 | 3 |
+| 15 | Verification and Handoff | VERIFY-01..VERIFY-03 | 3 (Complete) |
 
 **Total requirements:** 28
 **Mapped:** 28
@@ -154,18 +155,18 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 
 ## Next Step
 
-Continue with:
+v2.9 is complete. Continue with next-milestone preparation:
 
 ```text
-$gsd-discuss-phase 15
+$analyzing-source-truth-gap PartPlate and AssembleView
 ```
 
-or, for a direct execution plan:
+Then start the next milestone:
 
 ```text
-$gsd-plan-phase 15
+$gsd-new-milestone
 ```
 
 ---
 
-*Last updated: 2026-06-25 after Phase 14 completion.*
+*Last updated: 2026-06-25 after Phase 15 final verification and handoff.*

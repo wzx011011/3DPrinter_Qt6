@@ -116,18 +116,27 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 ### v2.9 - Implementation Realignment and Stabilization
 
 **Started:** 2026-06-24
-**Status:** Planning
+**Status:** Complete
 
 **Goal:** Reconcile planning with real implementation, stabilize the current dirty baseline, and close the most visible hybrid/placeholder workflows before starting the next large source-truth migration module.
 
 **Planned phases:**
-- Phase 10: Planning Truth Reset
-- Phase 11: Source Hygiene Stabilization
-- Phase 12: Calibration Closure for Implemented Modes
-- Phase 13: Hybrid Integration Verification
-- Phase 14: Visible Placeholder Triage
-- Phase 15: Verification and Handoff
+- Phase 10: Planning Truth Reset - complete
+- Phase 11: Source Hygiene Stabilization - complete
+- Phase 12: Calibration Closure for Implemented Modes - complete
+- Phase 13: Hybrid Integration Verification - complete
+- Phase 14: Visible Placeholder Triage - complete
+- Phase 15: Verification and Handoff - complete
+
+**Final verification:** Passed on 2026-06-25.
+
+**Evidence:**
+- `build\ViewModelSmokeTests.exe -o build\ViewModelSmokeTests.phase15.txt,txt`: 32 passed, 0 failed.
+- `build\QmlUiAuditTests.exe -o build\QmlUiAuditTests.phase15.txt,txt`: 7 passed, 0 failed.
+- `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`: exited 0, QML UI audit passed, E2E pipeline passed.
+
+**Handoff:** Recommended next milestone is v3.0 PartPlate and AssembleView.
 
 ---
 
-*Last updated: 2026-06-24 after v2.9 milestone initialization.*
+*Last updated: 2026-06-25 after v2.9 final verification.*

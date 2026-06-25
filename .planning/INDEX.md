@@ -20,7 +20,11 @@ This is the canonical entry point for `.planning/`. Historical phase files are e
 
 **v2.9 - Implementation Realignment and Stabilization**
 
+Status: Complete
+
 Goal: reconcile planning with real implementation, stabilize the current dirty baseline, and close the most visible hybrid/placeholder workflows before starting the next major source-truth module.
+
+Recommended next milestone: v3.0 PartPlate and AssembleView.
 
 ## Directory Map
 
@@ -59,14 +63,14 @@ Do not treat phase completion as product completion unless the exact workflow is
 
 ## Next Step
 
-Start Phase 14:
+Start next-milestone preparation:
 
 ```text
-$gsd-discuss-phase 14
+$analyzing-source-truth-gap PartPlate and AssembleView
 ```
 
-or skip discussion and create an implementation plan:
+Then create the next milestone:
 
 ```text
-$gsd-plan-phase 14
+$gsd-new-milestone
 ```

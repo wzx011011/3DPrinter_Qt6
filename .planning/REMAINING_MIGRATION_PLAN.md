@@ -41,16 +41,16 @@ Tasks:
 - [x] **HYGIENE** Fix encoding damage, literal escape artifacts, residual backup files, and unclassified untracked implementation files.
 - [x] **CAL** Close implemented PA/Flow/Temp calibration paths with UI wiring and deterministic tests.
 - [x] **INT** Add deterministic verification for SSDP, MQTT, FTP, camera, software viewport, and app settings behavior.
-- [ ] **UI** Reclassify or wire visible disabled/no-op UI workflows.
-- [ ] **VERIFY** Run canonical verification and account for built-only tests.
+- [x] **UI** Reclassify or wire visible disabled/no-op UI workflows.
+- [x] **VERIFY** Run canonical verification and account for built-only tests.
 
 Exit criteria:
 
-- `.planning/INDEX.md`, `PROJECT.md`, `STATE.md`, `ROADMAP.md`, and `REQUIREMENTS.md` agree on current status.
-- No unexplained backup source files remain under `src/`.
-- Every active service has an explicit migration status.
-- Visible placeholder workflows are not counted as complete.
-- Canonical verification passes after stabilization.
+- [x] `.planning/INDEX.md`, `PROJECT.md`, `STATE.md`, `ROADMAP.md`, and `REQUIREMENTS.md` agree on current status.
+- [x] No unexplained backup source files remain under `src/`.
+- [x] Every active service has an explicit migration status.
+- [x] Visible placeholder workflows are not counted as complete.
+- [x] Canonical verification passes after stabilization.
 
 ### v3.0 Candidate: PartPlate and AssembleView
 
@@ -123,6 +123,8 @@ Candidate tasks:
 - SLA-specific GUI modules and gizmos.
 
 ## Backlog Rule
+
+Next recommended promotion candidate: v3.0 PartPlate and AssembleView.
 
 Do not promote a future candidate into an active milestone until:
 
