@@ -11,6 +11,8 @@
 #include <QtTest>
 
 #include "core/services/AppSettingsService.h"
+#include "core/model/PartPlate.h"
+#include "core/model/PartPlateList.h"
 #include "core/services/CameraServiceMock.h"
 #include "core/services/CalibrationServiceMock.h"
 #include "core/services/DeviceServiceMock.h"
@@ -133,6 +135,12 @@ private slots:
   void testFilamentOptionsLoaded();
   void testMachineEditFlowsToGlobal();
   void testTierAwareSaveFiltersByTier();
+  // v3.0 Phase 16-01: PartPlate/PartPlateList domain model (pure-data, no libslic3r dep)
+  void partPlateInstanceMembershipTracksObjectInstancePairs();
+  void partPlateSliceStateMachineGatesCanSlice();
+  void partPlateListCreateDeleteRenameLockReindexesAndKeepsAtLeastOne();
+  void partPlateListInstanceMembershipDerivesObjectIndices();
+  void partPlateListRefusesExceedMaxPlateCount();
 
 private:
   bool hasLibslic3r() const;
@@ -1231,6 +1239,100 @@ void ViewModelSmokeTests::appSettingsAndEditorBedShapePersistDeterministically()
     QCOMPARE(editor.bedShapeType(), 1);
     QCOMPARE(editor.bedDiameter(), 222.0f);
   }
+}
+
+// ── v3.0 Phase 16-01: PartPlate/PartPlateList domain-model unit tests ──
+// Pure-domain tests (no libslic3r dependency, no ProjectServiceMock). They exercise
+// the new src/core/model/ classes directly to lock in the data structure before the
+// big-bang migration in plan 16-02.
+
+void ViewModelSmokeTests::partPlateInstanceMembershipTracksObjectInstancePairs()
+{
+  // D-03: instance-level membership (std::set<pair<int,int>>) can represent
+  // "some instances of one object on this plate, others elsewhere."
+  OWzx::PartPlate plate(0);
+  plate.addInstance(0, 0);
+  plate.addInstance(0, 1);
+  plate.addInstance(2, 0);
+  QCOMPARE(static_cast<int>(plate.objToInstanceSet().size()), 3);
+  QVERIFY(plate.hasObject(0));
+  QVERIFY(!plate.hasObject(1));
+  QVERIFY(plate.hasObject(2));
+  plate.removeInstance(0, 1);
+  QCOMPARE(static_cast<int>(plate.objToInstanceSet().size()), 2);
+  QVERIFY(plate.hasObject(0));  // instance (0,0) still present
+}
+
+void ViewModelSmokeTests::partPlateSliceStateMachineGatesCanSlice()
+{
+  // Slice state machine (upstream canSlice semantics): slice allowed only when
+  // ready_for_slice && !apply_invalid.
+  OWzx::PartPlate plate(0);
+  plate.setReadyForSlice(true);
+  plate.setApplyInvalid(false);
+  QVERIFY(plate.canSlice());
+  plate.setApplyInvalid(true);
+  QVERIFY(!plate.canSlice());
+  plate.setApplyInvalid(false);
+  plate.setReadyForSlice(false);
+  QVERIFY(!plate.canSlice());
+}
+
+void ViewModelSmokeTests::partPlateListCreateDeleteRenameLockReindexesAndKeepsAtLeastOne()
+{
+  // PLATE-02 + PLATE-06: PartPlateList owns plates, reindexes on delete, keeps >= 1.
+  OWzx::PartPlateList list;
+  QCOMPARE(list.plateCount(), 1);  // constructor starts with 1 plate
+  OWzx::PartPlate* second = list.createPlate();
+  QVERIFY(second != nullptr);
+  QCOMPARE(list.plateCount(), 2);
+  QCOMPARE(second->plateIndex(), 1);  // auto-incremented index
+  QVERIFY(list.renamePlate(1, "Second"));
+  QCOMPARE(QString::fromStdString(list.plate(1)->name()), QStringLiteral("Second"));
+  list.setPlateLocked(0, true);
+  QVERIFY(list.plate(0)->isLocked());
+  // delete plate 0 → survivor (was index 1) reindexes to 0
+  QVERIFY(list.deletePlate(0));
+  QCOMPARE(list.plateCount(), 1);
+  QCOMPARE(list.plate(0)->plateIndex(), 0);  // reindexed
+  QCOMPARE(QString::fromStdString(list.plate(0)->name()), QStringLiteral("Second"));
+  // cannot delete the last plate
+  QVERIFY(!list.deletePlate(0));
+  QCOMPARE(list.plateCount(), 1);
+}
+
+void ViewModelSmokeTests::partPlateListInstanceMembershipDerivesObjectIndices()
+{
+  // Bridge query: instance-pair membership collapses to distinct object indices.
+  OWzx::PartPlateList list;
+  OWzx::PartPlate* p = list.plate(0);
+  QVERIFY(p != nullptr);
+  p->addInstance(0, 0);
+  p->addInstance(0, 1);
+  p->addInstance(5, 0);
+  QList<int> objs = list.objectIndicesOnPlate(0);
+  QCOMPARE(objs.size(), 2);
+  QVERIFY(objs.contains(0));
+  QVERIFY(objs.contains(5));
+  // plateIndexForObject finds the first plate holding the object
+  QCOMPARE(list.plateIndexForObject(0), 0);
+  QCOMPARE(list.plateIndexForObject(5), 0);
+  QCOMPARE(list.plateIndexForObject(99), -1);  // not on any plate
+}
+
+void ViewModelSmokeTests::partPlateListRefusesExceedMaxPlateCount()
+{
+  // MAX_PLATE_COUNT=36 enforced — upstream create_plate guard.
+  OWzx::PartPlateList list;
+  QCOMPARE(list.plateCount(), 1);
+  // create 35 more to reach 36 total
+  for (int i = 0; i < 35; ++i) {
+    QVERIFY2(list.createPlate() != nullptr, "plate creation should succeed up to max");
+  }
+  QCOMPARE(list.plateCount(), OWzx::kMaxPlateCount);
+  // 37th creation must be refused
+  QVERIFY(list.createPlate() == nullptr);
+  QCOMPARE(list.plateCount(), OWzx::kMaxPlateCount);
 }
 
 QTEST_MAIN(ViewModelSmokeTests)

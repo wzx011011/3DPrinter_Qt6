@@ -100,6 +100,10 @@ if(OWZX_QML_GUI)
         src/core/services/AppSettingsService.h
         src/core/rendering/GLShaderUtil.cpp
         src/core/rendering/GLShaderUtil.h
+        src/core/model/PartPlate.cpp
+        src/core/model/PartPlate.h
+        src/core/model/PartPlateList.cpp
+        src/core/model/PartPlateList.h
         src/core/viewmodels/EditorViewModel.cpp
         src/core/viewmodels/EditorViewModel.h
         src/core/viewmodels/PreviewViewModel.cpp
