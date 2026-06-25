@@ -104,19 +104,19 @@
 
 | Requirement | Phase | Status |
 |---|---|---|
-| PLATE-01 | (pending) | Not started |
-| PLATE-02 | (pending) | Not started |
-| PLATE-03 | (pending) | Not started |
-| PLATE-04 | (pending) | Not started |
-| PLATE-05 | (pending) | Not started |
-| PLATE-06 | (pending) | Not started |
-| PLATE-07 | (pending) | Not started |
-| PLATE-08 | (pending) | Not started |
-| PLATE-09 | (pending) | Not started |
-| PLATE-10 | (pending) | Not started |
-| PLATE-11 | (pending) | Not started |
-| PLATE-12 | (pending) | Not started |
-| PLATE-13 | (pending) | Not started |
-| PLATE-14 | (pending) | Not started |
+| PLATE-01 | Phase 16 | Not started |
+| PLATE-02 | Phase 16 | Not started |
+| PLATE-03 | Phase 17 | Not started |
+| PLATE-04 | Phase 17 | Not started |
+| PLATE-05 | Phase 17 | Not started |
+| PLATE-06 | Phase 16 | Not started |
+| PLATE-07 | Phase 18 | Not started |
+| PLATE-08 | Phase 18 | Not started |
+| PLATE-09 | Phase 18 | Not started |
+| PLATE-10 | Phase 19 | Not started |
+| PLATE-11 | Phase 19 | Not started |
+| PLATE-12 | Phase 20 | Not started |
+| PLATE-13 | Phase 20 | Not started |
+| PLATE-14 | Phase 20 | Not started |
 
-**Coverage:** 14 total · 14 mapped (after roadmap) · 14 to complete · 0 unmapped.
+**Coverage:** 14 total · 14 mapped · 14 to complete · 0 unmapped.
