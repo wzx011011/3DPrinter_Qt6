@@ -141,6 +141,8 @@ private slots:
   void partPlateListCreateDeleteRenameLockReindexesAndKeepsAtLeastOne();
   void partPlateListInstanceMembershipDerivesObjectIndices();
   void partPlateListRefusesExceedMaxPlateCount();
+  // v3.0 Phase 16-02: ProjectServiceMock plate ops backed by PartPlateList (PLATE-06 regression)
+  void projectServicePlateOpsBackedByPartPlateList();
 
 private:
   bool hasLibslic3r() const;
@@ -1333,6 +1335,37 @@ void ViewModelSmokeTests::partPlateListRefusesExceedMaxPlateCount()
   // 37th creation must be refused
   QVERIFY(list.createPlate() == nullptr);
   QCOMPARE(list.plateCount(), OWzx::kMaxPlateCount);
+}
+
+void ViewModelSmokeTests::projectServicePlateOpsBackedByPartPlateList()
+{
+  // PLATE-06 regression: after the big-bang migration to PartPlateList, the existing
+  // plate Q_INVOKABLE surface (add/delete/rename/lock/select) must still work.
+  ProjectServiceMock project;
+  // A freshly-constructed service has one plate (the PartPlateList invariant).
+  QCOMPARE(project.plateCount(), 1);
+
+  QVERIFY(project.addPlate());
+  QCOMPARE(project.plateCount(), 2);
+
+  QVERIFY(project.renamePlate(1, QStringLiteral("Second")));
+  QCOMPARE(project.plateNames().last(), QStringLiteral("Second"));
+
+  QVERIFY(project.setPlateLocked(0, true));
+  QVERIFY(project.isPlateLocked(0));
+  QVERIFY(!project.isPlateLocked(1));
+
+  QVERIFY(project.setCurrentPlateIndex(1));
+  QCOMPARE(project.currentPlateIndex(), 1);
+
+  // Delete the current plate; count drops and current index stays valid.
+  QVERIFY(project.deletePlate(1));
+  QCOMPARE(project.plateCount(), 1);
+  QVERIFY(project.currentPlateIndex() >= 0 && project.currentPlateIndex() < project.plateCount());
+
+  // Cannot delete the last plate.
+  QVERIFY(!project.deletePlate(0));
+  QCOMPARE(project.plateCount(), 1);
 }
 
 QTEST_MAIN(ViewModelSmokeTests)

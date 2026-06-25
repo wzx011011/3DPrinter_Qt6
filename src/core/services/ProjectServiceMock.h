@@ -9,6 +9,8 @@
 #include <atomic>
 #include <memory>
 
+#include "core/model/PartPlateList.h"
+
 #ifdef HAS_LIBSLIC3R
 namespace Slic3r
 {
@@ -324,7 +326,10 @@ private:
   QHash<int, QHash<QString, QVariant>> m_mockObjectOverrides;
   /// Mock-mode per-volume scoped overrides ((objectIndex << 16 | volumeIndex) → key-value map)
   QHash<int, QHash<QString, QVariant>> m_mockVolumeOverrides;
-  /// Mock-mode per-plate scoped overrides (plateIndex → key-value map)
+  /// QVariant adaptation layer for per-plate scoped overrides (plateIndex → key→value).
+  /// The plate config truth (D-04) is the native DynamicPrintConfig on PartPlate; this map
+  /// is the QML/QVariant-facing view ProjectServiceMock exposes (setPlateScopedOptionValue etc.).
+  /// Phase 18 (3MF persistence) and Phase 19 (slice merge) bridge this with PartPlate::config().
   QHash<int, QHash<QString, QVariant>> m_mockPlateOverrides;
   /// Mock-mode per-object volume data (objectIndex → list of MockVolumeEntry)
   QHash<int, QList<MockVolumeEntry>> m_mockVolumes;
@@ -333,32 +338,20 @@ private:
 
   QString projectName_ = tr("未命名项目");
   int modelCount_ = 0;
-  int plateCount_ = 0;
-  int currentPlateIndex_ = -1;
   QString lastError_;
   QString sourceFilePath_;
   QStringList objectNames_;
   QStringList objectModuleNames_;
   QList<bool> objectPrintableStates_;
   QList<bool> objectVisibleStates_;
-  QStringList plateNames_;
-  QList<QList<int>> plateObjectIndices_;
-  QList<bool> plateLockedStates_;
-  /// Per-plate settings (对齐上游 PlateSettingsDialog)
-  QList<int> plateBedTypes_;       // 对齐上游 BedType: 0=Default, 1=PEI(smooth), 2=PEI(hightemp), 3=PTE, 4=PC, 5=EP, 6=ER, 7=Custom
-  QList<int> platePrintSequences_; // 0=ByDefault, 1=ByLayer, 2=ByObject
-  QList<int> plateSpiralModes_;    // 0=Default, 1=On, 2=Off
-  /// 首层耗材顺序（对齐上游 first_layer_print_sequence）
-  QList<int> plateFirstLayerSeqChoices_; // 0=Auto, 1=Custom
-  QList<QList<int>> plateFirstLayerSeqOrders_; // per-plate: ordered extruder indices
-  /// 其他层耗材顺序（对齐上游 other_layers_print_sequence + LayerPrintSequence）
-  QList<int> plateOtherLayersSeqChoices_; // 0=Auto, 1=Custom
-  struct MockLayerSeqEntry {
-    int beginLayer = 2;
-    int endLayer = 100;
-    QList<int> extruderOrder;
-  };
-  QList<QList<MockLayerSeqEntry>> plateOtherLayersSeqEntries_;
+  /// v3.0 Phase 16 (D-05): single source of truth for ALL plate state.
+  /// Replaces the previous parallel QList vectors (plateCount_, plateNames_,
+  /// plateObjectIndices_, plateLockedStates_, plateBedTypes_, platePrintSequences_,
+  /// plateSpiralModes_, plateFirstLayerSeq*, plateOtherLayersSeq*, m_mockPlateOverrides).
+  std::unique_ptr<OWzx::PartPlateList> m_plateList;
+  /// Source-compat alias for the layer-sequence entry (now defined in PartPlate.h as
+  /// OWzx::LayerSeqEntry). Kept so untouched .cpp call sites compile.
+  using MockLayerSeqEntry = OWzx::LayerSeqEntry;
   /// Per-object transforms (Mock mode)
   QList<QVector3D> objectPositions_;   // (x, y, z) in mm
   QList<QVector3D> objectRotations_;   // (x, y, z) in degrees

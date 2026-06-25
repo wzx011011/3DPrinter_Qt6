@@ -302,6 +302,7 @@ namespace
 
 ProjectServiceMock::ProjectServiceMock(QObject *parent)
     : QObject(parent)
+    , m_plateList(std::make_unique<OWzx::PartPlateList>())
 {
 #ifdef HAS_LIBSLIC3R
   model_ = new Slic3r::Model();
@@ -327,12 +328,12 @@ int ProjectServiceMock::modelCount() const
 
 int ProjectServiceMock::plateCount() const
 {
-  return plateCount_;
+  return m_plateList ? m_plateList->plateCount() : 0;
 }
 
 int ProjectServiceMock::currentPlateIndex() const
 {
-  return currentPlateIndex_;
+  return m_plateList ? m_plateList->currentPlateIndex() : -1;
 }
 
 QString ProjectServiceMock::lastError() const
@@ -358,7 +359,8 @@ QString ProjectServiceMock::sourceFilePath() const
 #ifdef HAS_LIBSLIC3R
 std::unique_ptr<Slic3r::Model> ProjectServiceMock::cloneCurrentPlateModel() const
 {
-  if (!model_ || currentPlateIndex_ < 0 || currentPlateIndex_ >= plateObjectIndices_.size())
+  if (!model_ || !m_plateList || m_plateList->currentPlateIndex() < 0 ||
+      m_plateList->currentPlateIndex() >= m_plateList->plateCount())
     return {};
 
   auto clonedModel = std::make_unique<Slic3r::Model>(*model_);
@@ -694,34 +696,53 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
           }
         }
 
-        receiver->plateNames_ = loadedPlateNames;
-        receiver->plateObjectIndices_ = loadedPlateObjectIndices;
-
-        if (receiver->plateObjectIndices_.isEmpty())
+        // v3.0 Phase 16 (D-05): rebuild m_plateList from the loaded plate data.
+        // loadedPlateNames / loadedPlateObjectIndices are local QStringLists / QList<QList<int>>
+        // built earlier in this callback from the 3MF plate list (or model objects).
         {
-          receiver->plateNames_.clear();
-          receiver->plateNames_ << QObject::tr("平板 1");
-          QList<int> all;
-          all.reserve(receiver->modelCount_);
-          for (int i = 0; i < receiver->modelCount_; ++i)
-            all.append(i);
-          receiver->plateObjectIndices_.append(all);
+          QStringList plateNames = loadedPlateNames;
+          QList<QList<int>> plateObjs = loadedPlateObjectIndices;
+
+          if (plateObjs.isEmpty())
+          {
+            plateNames.clear();
+            plateNames << QObject::tr("平板 1");
+            QList<int> all;
+            all.reserve(receiver->modelCount_);
+            for (int i = 0; i < receiver->modelCount_; ++i)
+              all.append(i);
+            plateObjs.append(all);
+          }
+
+          // Reconstruct the PartPlateList from the per-plate object-index lists.
+          // (Instance-level membership is added as (objectIndex, 0) per object — the
+          // previous per-object representation. Phase 18 will populate true instance
+          // pairs from PlateData::objects_and_instances.)
+          receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
+          receiver->m_plateList->resetToSinglePlate();
+          for (int pi = 0; pi < plateObjs.size(); ++pi) {
+            OWzx::PartPlate *p = (pi == 0) ? receiver->m_plateList->plate(0)
+                                           : receiver->m_plateList->createPlate();
+            if (!p) continue;
+            if (pi < plateNames.size())
+              p->setName(plateNames[pi].toStdString());
+            p->clearInstances();
+            for (int objIdx : plateObjs[pi])
+              p->addInstance(objIdx, 0);
+          }
+          // loadedPlateCount may exceed the reconstructed list (multi-plate 3MF whose
+          // object membership wasn't fully parsed) — pad with empty plates to match.
+          const int reconstructed = receiver->m_plateList->plateCount();
+          const int target = std::max(reconstructed, loadedPlateCount);
+          for (int pi = reconstructed; pi < target; ++pi)
+            receiver->m_plateList->createPlate();
+
+          receiver->m_plateList->setCurrentPlateIndex(
+              receiver->m_plateList->plateCount() > 0 ? 0 : -1);
+          if (receiver->m_plateList->currentPlateIndex() < 0 &&
+              receiver->m_plateList->plateCount() > 0)
+            receiver->m_plateList->setCurrentPlateIndex(0);
         }
-
-        // Reset all plate metadata arrays to match new plate count
-        receiver->plateBedTypes_.clear();
-        receiver->plateLockedStates_.clear();
-        receiver->platePrintSequences_.clear();
-        receiver->plateSpiralModes_.clear();
-        receiver->plateFirstLayerSeqChoices_.clear();
-        receiver->plateFirstLayerSeqOrders_.clear();
-        receiver->plateOtherLayersSeqChoices_.clear();
-        receiver->plateOtherLayersSeqEntries_.clear();
-
-        receiver->plateCount_ = receiver->plateObjectIndices_.size();
-        if (receiver->plateCount_ != loadedPlateCount)
-          receiver->plateCount_ = std::max(receiver->plateCount_, loadedPlateCount);
-        receiver->currentPlateIndex_ = receiver->plateCount_ > 0 ? 0 : -1;
         receiver->lastError_.clear();
 
         // Auto-arrange after load (对齐上游 arrange_loaded_object_to_new_position)
@@ -733,7 +754,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                                  QStringLiteral("0,0,220,0,220,220,0,220"));
 
         emit receiver->projectChanged();
-        emit receiver->plateDataLoaded(receiver->plateCount_);
+        emit receiver->plateDataLoaded(receiver->m_plateList ? receiver->m_plateList->plateCount() : 0);
         emit receiver->plateSelectionChanged();
         emit receiver->loadFinished(true, QObject::tr("加载完成"));
       }
@@ -741,20 +762,14 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
       {
         delete loadedModel;
         receiver->modelCount_ = 0;
-        receiver->plateCount_ = 0;
-        receiver->currentPlateIndex_ = -1;
+        // Reset plate storage to a fresh single-plate list (D-05).
+        receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
+        receiver->m_plateList->setCurrentPlateIndex(-1);
         receiver->sourceFilePath_.clear();
         receiver->objectNames_.clear();
         receiver->objectModuleNames_.clear();
         receiver->objectPrintableStates_.clear();
         receiver->objectVisibleStates_.clear();
-        receiver->plateNames_.clear();
-        receiver->plateObjectIndices_.clear();
-        receiver->plateLockedStates_.clear();
-        receiver->plateFirstLayerSeqChoices_.clear();
-        receiver->plateFirstLayerSeqOrders_.clear();
-        receiver->plateOtherLayersSeqChoices_.clear();
-        receiver->plateOtherLayersSeqEntries_.clear();
         receiver->lastError_ = errorText;
         emit receiver->projectChanged();
         emit receiver->plateDataLoaded(0);
@@ -860,7 +875,14 @@ QStringList ProjectServiceMock::objectNames() const
 
 QStringList ProjectServiceMock::plateNames() const
 {
-  return plateNames_;
+  QStringList names;
+  if (!m_plateList)
+    return names;
+  for (int i = 0; i < m_plateList->plateCount(); ++i) {
+    const OWzx::PartPlate *p = m_plateList->plate(i);
+    names << QString::fromStdString(p ? p->name() : std::string());
+  }
+  return names;
 }
 
 QString ProjectServiceMock::objectModuleName(int index) const
@@ -872,86 +894,65 @@ QString ProjectServiceMock::objectModuleName(int index) const
 
 bool ProjectServiceMock::setCurrentPlateIndex(int index)
 {
-  if (index < 0 || index >= plateObjectIndices_.size())
+  if (!m_plateList || index < 0 || index >= m_plateList->plateCount())
     return false;
-  if (currentPlateIndex_ == index)
+  if (m_plateList->currentPlateIndex() == index)
     return true;
-  currentPlateIndex_ = index;
+  m_plateList->setCurrentPlateIndex(index);
   emit plateSelectionChanged();
   return true;
 }
 
 bool ProjectServiceMock::addPlate()
 {
-  if (loading_)
+  if (loading_ || !m_plateList)
     return false;
 
-  const int newPlateIndex = plateCount_;
-  plateNames_ << tr("平板 %1").arg(newPlateIndex + 1);
-  plateObjectIndices_ << QList<int>();
-  plateLockedStates_ << false;
-  plateFirstLayerSeqChoices_ << 0;   // Auto
-  plateFirstLayerSeqOrders_ << QList<int>{};
-  plateOtherLayersSeqChoices_ << 0;  // Auto
-  plateOtherLayersSeqEntries_ << QList<MockLayerSeqEntry>{};
-  plateCount_ = plateObjectIndices_.size();
+  OWzx::PartPlate *p = m_plateList->createPlate();
+  if (!p)
+    return false;  // kMaxPlateCount reached
+  // Default name mirrors the previous behavior ("平板 N" 1-based).
+  p->setName(tr("平板 %1").arg(p->plateIndex() + 1).toStdString());
 
   emit projectChanged();
-  emit plateDataLoaded(plateCount_);
+  emit plateDataLoaded(m_plateList->plateCount());
   return true;
 }
 
 bool ProjectServiceMock::deletePlate(int plateIndex)
 {
-  if (loading_)
+  if (loading_ || !m_plateList)
     return false;
 
-  if (plateObjectIndices_.size() <= 1)
-    return false; // 至少保留 1 个平板
-
-  if (plateIndex < 0 || plateIndex >= plateObjectIndices_.size())
-    return false;
-
-  plateNames_.removeAt(plateIndex);
-  plateObjectIndices_.removeAt(plateIndex);
-  if (plateIndex < plateLockedStates_.size())
-    plateLockedStates_.removeAt(plateIndex);
-  if (plateIndex < plateFirstLayerSeqChoices_.size()) plateFirstLayerSeqChoices_.removeAt(plateIndex);
-  if (plateIndex < plateFirstLayerSeqOrders_.size()) plateFirstLayerSeqOrders_.removeAt(plateIndex);
-  if (plateIndex < plateOtherLayersSeqChoices_.size()) plateOtherLayersSeqChoices_.removeAt(plateIndex);
-  if (plateIndex < plateOtherLayersSeqEntries_.size()) plateOtherLayersSeqEntries_.removeAt(plateIndex);
-  plateCount_ = plateObjectIndices_.size();
-
-  if (currentPlateIndex_ >= plateCount_)
-    currentPlateIndex_ = plateCount_ - 1;
-  if (currentPlateIndex_ < 0)
-    currentPlateIndex_ = 0;
+  const int prevCurrent = m_plateList->currentPlateIndex();
+  if (!m_plateList->deletePlate(plateIndex))
+    return false;  // refuses last plate / invalid index
 
   emit projectChanged();
-  emit plateDataLoaded(plateCount_);
-  emit plateSelectionChanged();
+  emit plateDataLoaded(m_plateList->plateCount());
+  if (m_plateList->currentPlateIndex() != prevCurrent)
+    emit plateSelectionChanged();
   return true;
 }
 
 bool ProjectServiceMock::renamePlate(int plateIndex, const QString &newName)
 {
-  if (loading_)
+  if (loading_ || !m_plateList)
     return false;
-  if (plateIndex < 0 || plateIndex >= plateNames_.size())
+  if (!m_plateList->renamePlate(plateIndex, newName.toStdString()))
     return false;
-  plateNames_[plateIndex] = newName;
   emit projectChanged();
   return true;
 }
 
 bool ProjectServiceMock::removeAllOnPlate(int plateIndex)
 {
-  if (loading_)
+  if (loading_ || !m_plateList)
     return false;
-  if (plateIndex < 0 || plateIndex >= plateObjectIndices_.size())
+  if (plateIndex < 0 || plateIndex >= m_plateList->plateCount())
     return false;
 
-  const QList<int> objs = plateObjectIndices_[plateIndex];
+  const QList<int> objs = m_plateList->objectIndicesOnPlate(plateIndex);
   if (objs.isEmpty())
     return true;
 
@@ -966,55 +967,54 @@ bool ProjectServiceMock::removeAllOnPlate(int plateIndex)
 
 bool ProjectServiceMock::isPlateLocked(int plateIndex) const
 {
-  if (plateIndex < 0 || plateIndex >= plateLockedStates_.size())
+  if (!m_plateList)
     return false;
-  return plateLockedStates_[plateIndex];
+  const OWzx::PartPlate *p = m_plateList->plate(plateIndex);
+  return p ? p->isLocked() : false;
 }
 
 bool ProjectServiceMock::setPlateLocked(int plateIndex, bool locked)
 {
-  if (plateIndex < 0 || plateIndex >= plateObjectIndices_.size())
+  if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())
     return false;
-  while (plateLockedStates_.size() < plateObjectIndices_.size())
-    plateLockedStates_.append(false);
-  plateLockedStates_[plateIndex] = locked;
+  m_plateList->setPlateLocked(plateIndex, locked);
   emit projectChanged();
   return true;
 }
 
 QList<int> ProjectServiceMock::plateObjectIndices(int plateIndex) const
 {
-  if (plateIndex < 0 || plateIndex >= plateObjectIndices_.size())
+  if (!m_plateList)
     return {};
-  return plateObjectIndices_[plateIndex];
+  return m_plateList->objectIndicesOnPlate(plateIndex);
 }
 
 QList<int> ProjectServiceMock::currentPlateObjectIndices() const
 {
-  if (currentPlateIndex_ < 0 || currentPlateIndex_ >= plateObjectIndices_.size())
+  if (!m_plateList)
     return {};
-  return plateObjectIndices_[currentPlateIndex_];
+  return m_plateList->objectIndicesOnPlate(m_plateList->currentPlateIndex());
 }
 
 int ProjectServiceMock::plateObjectCount(int index) const
 {
-  if (index < 0 || index >= plateObjectIndices_.size())
+  if (!m_plateList || index < 0 || index >= m_plateList->plateCount())
     return 0;
-  return plateObjectIndices_[index].size();
+  return m_plateList->objectIndicesOnPlate(index).size();
 }
 
 int ProjectServiceMock::plateIndexForObject(int objectIndex) const
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
     return -1;
-
-  for (int plateIndex = 0; plateIndex < plateObjectIndices_.size(); ++plateIndex)
-  {
-    if (plateObjectIndices_[plateIndex].contains(objectIndex))
-      return plateIndex;
-  }
-
-  if (plateObjectIndices_.size() == 1)
+  if (!m_plateList)
+    return -1;
+  const int found = m_plateList->plateIndexForObject(objectIndex);
+  if (found >= 0)
+    return found;
+  // Preserve previous single-plate fallback behavior: an unassigned object on a
+  // single-plate project is considered to be on plate 0.
+  if (m_plateList->plateCount() == 1)
     return 0;
   return -1;
 }
@@ -1023,17 +1023,33 @@ void ProjectServiceMock::setObjectPlateForIndex(int objectIndex, int plateIndex)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
     return;
-  if (plateIndex < 0 || plateIndex >= plateObjectIndices_.size())
+  if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())
     return;
 
-  // 从源平板移除
-  for (auto &indices : plateObjectIndices_)
-    indices.removeAll(objectIndex);
+  // Remove the object from every plate it currently belongs to (whole-object move,
+  // preserving the previous per-object semantics). Instance-level model: erase all
+  // (obj, inst) pairs for this object across all plates.
+  for (int i = 0; i < m_plateList->plateCount(); ++i) {
+    OWzx::PartPlate *p = m_plateList->plate(i);
+    if (!p)
+      continue;
+    // Collect then erase (cannot mutate set while iterating it).
+    std::vector<std::pair<int, int>> toErase;
+    for (const auto &pair : p->objToInstanceSet())
+      if (pair.first == objectIndex)
+        toErase.push_back(pair);
+    for (const auto &pair : toErase)
+      p->removeInstance(pair.first, pair.second);
+  }
 
-  // 添加到目标平板
-  plateObjectIndices_[plateIndex].append(objectIndex);
+  // Add the object to the target plate (instance 0 — single-instance representation
+  // matching the previous per-object behavior).
+  OWzx::PartPlate *target = m_plateList->plate(plateIndex);
+  if (target)
+    target->addInstance(objectIndex, 0);
+
   emit projectChanged();
-  emit plateDataLoaded(plateObjectIndices_.size());
+  emit plateDataLoaded(m_plateList->plateCount());
 }
 
 bool ProjectServiceMock::objectPrintable(int index) const
@@ -2616,15 +2632,21 @@ bool ProjectServiceMock::meshBoolean(int srcObjectIndex, int toolObjectIndex, in
         m_mockLayerRanges.remove(toolObjectIndex);
         modelCount_ = objectNames_.size();
 
-        // Update plate object indices (shift down any index > toolObjectIndex)
-        for (auto &plateObjs : plateObjectIndices_)
-        {
-          for (int i = 0; i < plateObjs.size(); ++i)
-          {
-            if (plateObjs[i] == toolObjectIndex)
-              plateObjs.removeAt(i--);
-            else if (plateObjs[i] > toolObjectIndex)
-              --plateObjs[i];
+        // Update plate instance membership: drop tool object, shift higher indices down.
+        if (m_plateList) {
+          for (int pi = 0; pi < m_plateList->plateCount(); ++pi) {
+            OWzx::PartPlate *p = m_plateList->plate(pi);
+            if (!p) continue;
+            std::set<std::pair<int,int>> rebuilt;
+            for (const auto &pair : p->objToInstanceSet()) {
+              if (pair.first == toolObjectIndex) continue;  // dropped
+              int adj = pair.first > toolObjectIndex ? pair.first - 1 : pair.first;
+              if (adj >= 0 && adj < modelCount_)
+                rebuilt.insert({adj, pair.second});
+            }
+            p->clearInstances();
+            for (const auto &pair : rebuilt)
+              p->addInstance(pair.first, pair.second);
           }
         }
 
@@ -2641,7 +2663,7 @@ bool ProjectServiceMock::meshBoolean(int srcObjectIndex, int toolObjectIndex, in
       }
 
       emit projectChanged();
-      emit plateDataLoaded(plateCount_);
+      emit plateDataLoaded(m_plateList ? m_plateList->plateCount() : 0);
     }
 
     return replaced;
@@ -3101,72 +3123,50 @@ bool ProjectServiceMock::deleteObject(int index)
     modelCount_ = objectNames_.size();
     if (modelCount_ <= 0)
     {
-      plateCount_ = 0;
-      currentPlateIndex_ = -1;
-      plateNames_.clear();
-      plateObjectIndices_.clear();
-      plateLockedStates_.clear();
-      plateFirstLayerSeqChoices_.clear();
-      plateFirstLayerSeqOrders_.clear();
-      plateOtherLayersSeqChoices_.clear();
-      plateOtherLayersSeqEntries_.clear();
+      // No objects left: reset to a single empty plate, current unset.
+      m_plateList = std::make_unique<OWzx::PartPlateList>();
+      m_plateList->setCurrentPlateIndex(-1);
     }
     else
     {
-      if (plateObjectIndices_.isEmpty())
-      {
-        QList<int> all;
-        all.reserve(modelCount_);
-        for (int i = 0; i < modelCount_; ++i)
-          all.append(i);
-        plateObjectIndices_.append(all);
-        if (plateNames_.isEmpty())
-          plateNames_ << tr("平板 1");
-      }
-      else
-      {
-        for (auto &plateObjList : plateObjectIndices_)
-        {
-          QSet<int> uniq;
-          QList<int> next;
-          for (int objIndex : plateObjList)
-          {
-            if (objIndex == index)
-              continue;
-            const int adjusted = objIndex > index ? objIndex - 1 : objIndex;
-            if (adjusted >= 0 && adjusted < modelCount_ && !uniq.contains(adjusted))
-            {
-              uniq.insert(adjusted);
-              next.append(adjusted);
-            }
+      // Rebuild per-plate instance membership: drop the deleted object index and
+      // decrement every higher index. Empty plates are pruned (keep >= 1).
+      if (m_plateList && m_plateList->plateCount() > 0) {
+        // If the single plate has no membership, seed it with all current objects.
+        OWzx::PartPlate *first = m_plateList->plate(0);
+        if (first && first->objToInstanceSet().empty()) {
+          for (int i = 0; i < modelCount_; ++i)
+            first->addInstance(i, 0);
+          if (first->name().empty())
+            first->setName(tr("平板 1").toStdString());
+        }
+        for (int pi = 0; pi < m_plateList->plateCount(); ++pi) {
+          OWzx::PartPlate *p = m_plateList->plate(pi);
+          if (!p) continue;
+          std::set<std::pair<int,int>> rebuilt;
+          for (const auto &pair : p->objToInstanceSet()) {
+            if (pair.first == index) continue;  // deleted object
+            int adjusted = pair.first > index ? pair.first - 1 : pair.first;
+            if (adjusted >= 0 && adjusted < modelCount_)
+              rebuilt.insert({adjusted, pair.second});
           }
-          std::sort(next.begin(), next.end());
-          plateObjList = next;
+          p->clearInstances();
+          for (const auto &pair : rebuilt)
+            p->addInstance(pair.first, pair.second);
         }
-      }
-
-      for (int p = plateObjectIndices_.size() - 1; p >= 0; --p)
-      {
-        if (plateObjectIndices_[p].isEmpty() && plateObjectIndices_.size() > 1)
-        {
-          plateObjectIndices_.removeAt(p);
-          if (p < plateNames_.size())
-            plateNames_.removeAt(p);
-          if (currentPlateIndex_ >= p)
-            --currentPlateIndex_;
+        // Prune empty plates (keep >= 1), highest index first.
+        for (int p = m_plateList->plateCount() - 1; p >= 0; --p) {
+          if (m_plateList->objectIndicesOnPlate(p).isEmpty() && m_plateList->plateCount() > 1)
+            m_plateList->deletePlate(p);
         }
+        if (m_plateList->currentPlateIndex() < 0 && m_plateList->plateCount() > 0)
+          m_plateList->setCurrentPlateIndex(0);
       }
-
-      plateCount_ = plateObjectIndices_.size();
-      if (currentPlateIndex_ < 0)
-        currentPlateIndex_ = 0;
-      if (currentPlateIndex_ >= plateCount_)
-        currentPlateIndex_ = plateCount_ - 1;
     }
 
     lastError_.clear();
     emit projectChanged();
-    emit plateDataLoaded(plateCount_);
+    emit plateDataLoaded(m_plateList ? m_plateList->plateCount() : 0);
     emit plateSelectionChanged();
     return true;
   }
@@ -3509,8 +3509,10 @@ int ProjectServiceMock::addPrimitiveToPlate(int type)
     objectScales_.push_back(QVector3D(1, 1, 1));
 
     // Add to current plate
-    if (currentPlateIndex_ >= 0 && currentPlateIndex_ < plateObjectIndices_.size())
-      plateObjectIndices_[currentPlateIndex_].append(newIdx);
+    if (m_plateList) {
+      OWzx::PartPlate *cur = m_plateList->currentPlate();
+      if (cur) cur->addInstance(newIdx, 0);
+    }
 
     lastError_.clear();
     emit projectChanged();
@@ -3533,8 +3535,10 @@ int ProjectServiceMock::addPrimitiveToPlate(int type)
   objectScales_.push_back(QVector3D(1, 1, 1));
   modelCount_ = objectNames_.size();
 
-  if (currentPlateIndex_ >= 0 && currentPlateIndex_ < plateObjectIndices_.size())
-    plateObjectIndices_[currentPlateIndex_].append(newIdx);
+  if (m_plateList) {
+    OWzx::PartPlate *cur = m_plateList->currentPlate();
+    if (cur) cur->addInstance(newIdx, 0);
+  }
 
   lastError_.clear();
   emit projectChanged();
@@ -3585,11 +3589,22 @@ bool ProjectServiceMock::moveObject(int fromIndex, int toIndex)
     std::swap(objectScales_[fromIndex], objectScales_[toIndex]);
   }
 
-  // Update plateObjectIndices_ references
-  for (auto &indices : plateObjectIndices_) {
-    for (int &idx : indices) {
-      if (idx == fromIndex) idx = toIndex;
-      else if (idx == toIndex) idx = fromIndex;
+  // Update per-plate instance membership: swap fromIndex ↔ toIndex in every plate.
+  if (m_plateList) {
+    for (int pi = 0; pi < m_plateList->plateCount(); ++pi) {
+      OWzx::PartPlate *p = m_plateList->plate(pi);
+      if (!p) continue;
+      // Snapshot then rebuild the swapped membership (cannot mutate set in place).
+      std::set<std::pair<int,int>> rebuilt;
+      for (const auto &pair : p->objToInstanceSet()) {
+        std::pair<int,int> swapped = pair;
+        if (pair.first == fromIndex) swapped.first = toIndex;
+        else if (pair.first == toIndex) swapped.first = fromIndex;
+        rebuilt.insert(swapped);
+      }
+      p->clearInstances();
+      for (const auto &pair : rebuilt)
+        p->addInstance(pair.first, pair.second);
     }
   }
 
@@ -3605,44 +3620,49 @@ bool ProjectServiceMock::moveObject(int fromIndex, int toIndex)
   return true;
 }
 
+// ── v3.0 Phase 16 (D-05): per-plate settings re-backed on PartPlate ──
+
 int ProjectServiceMock::plateBedType(int plateIndex) const
 {
-  return (plateIndex >= 0 && plateIndex < plateBedTypes_.size()) ? plateBedTypes_[plateIndex] : 0;
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  return p ? p->bedType() : 0;
 }
 
 bool ProjectServiceMock::setPlateBedType(int plateIndex, int bedType)
 {
-  if (plateIndex < 0 || plateIndex >= plateNames_.size()) return false;
-  while (plateBedTypes_.size() <= plateIndex) plateBedTypes_.append(0);
-  plateBedTypes_[plateIndex] = bedType;
+  OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return false;
+  p->setBedType(bedType);
   emit projectChanged();
   return true;
 }
 
 int ProjectServiceMock::platePrintSequence(int plateIndex) const
 {
-  return (plateIndex >= 0 && plateIndex < platePrintSequences_.size()) ? platePrintSequences_[plateIndex] : 0;
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  return p ? p->printSequence() : 0;
 }
 
 bool ProjectServiceMock::setPlatePrintSequence(int plateIndex, int seq)
 {
-  if (plateIndex < 0 || plateIndex >= plateNames_.size()) return false;
-  while (platePrintSequences_.size() <= plateIndex) platePrintSequences_.append(0);
-  platePrintSequences_[plateIndex] = seq;
+  OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return false;
+  p->setPrintSequence(seq);
   emit projectChanged();
   return true;
 }
 
 int ProjectServiceMock::plateSpiralMode(int plateIndex) const
 {
-  return (plateIndex >= 0 && plateIndex < plateSpiralModes_.size()) ? plateSpiralModes_[plateIndex] : 0;
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  return p ? p->spiralMode() : 0;
 }
 
 bool ProjectServiceMock::setPlateSpiralMode(int plateIndex, int mode)
 {
-  if (plateIndex < 0 || plateIndex >= plateNames_.size()) return false;
-  while (plateSpiralModes_.size() <= plateIndex) plateSpiralModes_.append(0);
-  plateSpiralModes_[plateIndex] = mode;
+  OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return false;
+  p->setSpiralMode(mode);
   emit projectChanged();
   return true;
 }
@@ -3651,14 +3671,15 @@ bool ProjectServiceMock::setPlateSpiralMode(int plateIndex, int mode)
 
 int ProjectServiceMock::plateFirstLayerSeqChoice(int plateIndex) const
 {
-  return (plateIndex >= 0 && plateIndex < plateFirstLayerSeqChoices_.size()) ? plateFirstLayerSeqChoices_[plateIndex] : 0;
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  return p ? p->firstLayerSeqChoice() : 0;
 }
 
 bool ProjectServiceMock::setPlateFirstLayerSeqChoice(int plateIndex, int choice)
 {
-  if (plateIndex < 0 || plateIndex >= plateNames_.size()) return false;
-  while (plateFirstLayerSeqChoices_.size() <= plateIndex) plateFirstLayerSeqChoices_.append(0);
-  plateFirstLayerSeqChoices_[plateIndex] = choice;
+  OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return false;
+  p->setFirstLayerSeqChoice(choice);
   emit projectChanged();
   return true;
 }
@@ -3666,20 +3687,22 @@ bool ProjectServiceMock::setPlateFirstLayerSeqChoice(int plateIndex, int choice)
 QVariantList ProjectServiceMock::plateFirstLayerSeqOrder(int plateIndex) const
 {
   QVariantList result;
-  if (plateIndex >= 0 && plateIndex < plateFirstLayerSeqOrders_.size())
-    for (int v : plateFirstLayerSeqOrders_[plateIndex])
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (p)
+    for (int v : p->firstLayerSeqOrder())
       result.append(v);
   return result;
 }
 
 bool ProjectServiceMock::setPlateFirstLayerSeqOrder(int plateIndex, const QVariantList &order)
 {
-  if (plateIndex < 0 || plateIndex >= plateNames_.size()) return false;
-  while (plateFirstLayerSeqOrders_.size() <= plateIndex) plateFirstLayerSeqOrders_.append(QList<int>{});
-  QList<int> intOrder;
+  OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return false;
+  std::vector<int> intOrder;
+  intOrder.reserve(order.size());
   for (const auto &v : order)
-    intOrder.append(v.toInt());
-  plateFirstLayerSeqOrders_[plateIndex] = intOrder;
+    intOrder.push_back(v.toInt());
+  p->setFirstLayerSeqOrder(std::move(intOrder));
   emit projectChanged();
   return true;
 }
@@ -3688,113 +3711,124 @@ bool ProjectServiceMock::setPlateFirstLayerSeqOrder(int plateIndex, const QVaria
 
 int ProjectServiceMock::plateOtherLayersSeqChoice(int plateIndex) const
 {
-  return (plateIndex >= 0 && plateIndex < plateOtherLayersSeqChoices_.size()) ? plateOtherLayersSeqChoices_[plateIndex] : 0;
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  return p ? p->otherLayersSeqChoice() : 0;
 }
 
 bool ProjectServiceMock::setPlateOtherLayersSeqChoice(int plateIndex, int choice)
 {
-  if (plateIndex < 0 || plateIndex >= plateNames_.size()) return false;
-  while (plateOtherLayersSeqChoices_.size() <= plateIndex) plateOtherLayersSeqChoices_.append(0);
-  plateOtherLayersSeqChoices_[plateIndex] = choice;
+  OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return false;
+  p->setOtherLayersSeqChoice(choice);
   emit projectChanged();
   return true;
 }
 
 int ProjectServiceMock::plateOtherLayersSeqCount(int plateIndex) const
 {
-  return (plateIndex >= 0 && plateIndex < plateOtherLayersSeqEntries_.size()) ? plateOtherLayersSeqEntries_[plateIndex].size() : 0;
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  return p ? int(p->otherLayersSeqEntries().size()) : 0;
 }
 
 int ProjectServiceMock::plateOtherLayersSeqBegin(int plateIndex, int entryIndex) const
 {
-  if (plateIndex < 0 || plateIndex >= plateOtherLayersSeqEntries_.size()) return 2;
-  const auto &entries = plateOtherLayersSeqEntries_[plateIndex];
-  if (entryIndex < 0 || entryIndex >= entries.size()) return 2;
-  return entries[entryIndex].beginLayer;
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return 2;
+  const auto &entries = p->otherLayersSeqEntries();
+  if (entryIndex < 0 || entryIndex >= int(entries.size())) return 2;
+  return entries[size_t(entryIndex)].beginLayer;
 }
 
 int ProjectServiceMock::plateOtherLayersSeqEnd(int plateIndex, int entryIndex) const
 {
-  if (plateIndex < 0 || plateIndex >= plateOtherLayersSeqEntries_.size()) return 100;
-  const auto &entries = plateOtherLayersSeqEntries_[plateIndex];
-  if (entryIndex < 0 || entryIndex >= entries.size()) return 100;
-  return entries[entryIndex].endLayer;
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return 100;
+  const auto &entries = p->otherLayersSeqEntries();
+  if (entryIndex < 0 || entryIndex >= int(entries.size())) return 100;
+  return entries[size_t(entryIndex)].endLayer;
 }
 
 QVariantList ProjectServiceMock::plateOtherLayersSeqOrder(int plateIndex, int entryIndex) const
 {
   QVariantList result;
-  if (plateIndex >= 0 && plateIndex < plateOtherLayersSeqEntries_.size())
-  {
-    const auto &entries = plateOtherLayersSeqEntries_[plateIndex];
-    if (entryIndex >= 0 && entryIndex < entries.size())
-      for (int v : entries[entryIndex].extruderOrder)
-        result.append(v);
-  }
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return result;
+  const auto &entries = p->otherLayersSeqEntries();
+  if (entryIndex >= 0 && entryIndex < int(entries.size()))
+    for (int v : entries[size_t(entryIndex)].extruderOrder)
+      result.append(v);
   return result;
 }
 
 bool ProjectServiceMock::addPlateOtherLayersSeqEntry(int plateIndex, int beginLayer, int endLayer)
 {
-  if (plateIndex < 0 || plateIndex >= plateNames_.size()) return false;
+  OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return false;
   if (beginLayer < 2) beginLayer = 2; // 对齐上游：begin_layer 必须 >= 2
   if (endLayer < beginLayer) endLayer = beginLayer;
-  while (plateOtherLayersSeqEntries_.size() <= plateIndex) plateOtherLayersSeqEntries_.append(QList<MockLayerSeqEntry>{});
-  MockLayerSeqEntry entry;
+  OWzx::LayerSeqEntry entry;
   entry.beginLayer = beginLayer;
   entry.endLayer = endLayer;
   // 默认顺序：按挤出机编号
   const int extCount = qMax(1, plateObjectCount(plateIndex));
   for (int i = 0; i < extCount; ++i)
-    entry.extruderOrder.append(i);
-  plateOtherLayersSeqEntries_[plateIndex].append(entry);
+    entry.extruderOrder.push_back(i);
+  auto entries = p->otherLayersSeqEntries();  // copy (setter replaces)
+  entries.push_back(std::move(entry));
   // 自动排序（对齐上游 auto-sort）
-  std::sort(plateOtherLayersSeqEntries_[plateIndex].begin(),
-            plateOtherLayersSeqEntries_[plateIndex].end(),
-            [](const MockLayerSeqEntry &a, const MockLayerSeqEntry &b) {
+  std::sort(entries.begin(), entries.end(),
+            [](const OWzx::LayerSeqEntry &a, const OWzx::LayerSeqEntry &b) {
               return a.beginLayer < b.beginLayer;
             });
+  p->setOtherLayersSeqEntries(std::move(entries));
   emit projectChanged();
   return true;
 }
 
 bool ProjectServiceMock::removePlateOtherLayersSeqEntry(int plateIndex, int entryIndex)
 {
-  if (plateIndex < 0 || plateIndex >= plateOtherLayersSeqEntries_.size()) return false;
-  auto &entries = plateOtherLayersSeqEntries_[plateIndex];
-  if (entryIndex < 0 || entryIndex >= entries.size()) return false;
-  entries.removeAt(entryIndex);
+  OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return false;
+  auto entries = p->otherLayersSeqEntries();
+  if (entryIndex < 0 || entryIndex >= int(entries.size())) return false;
+  entries.erase(entries.begin() + entryIndex);
+  p->setOtherLayersSeqEntries(std::move(entries));
   emit projectChanged();
   return true;
 }
 
 bool ProjectServiceMock::setPlateOtherLayersSeqRange(int plateIndex, int entryIndex, int beginLayer, int endLayer)
 {
-  if (plateIndex < 0 || plateIndex >= plateOtherLayersSeqEntries_.size()) return false;
-  auto &entries = plateOtherLayersSeqEntries_[plateIndex];
-  if (entryIndex < 0 || entryIndex >= entries.size()) return false;
+  OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return false;
+  auto entries = p->otherLayersSeqEntries();
+  if (entryIndex < 0 || entryIndex >= int(entries.size())) return false;
   if (beginLayer < 2) beginLayer = 2;
   if (endLayer < beginLayer) endLayer = beginLayer;
-  entries[entryIndex].beginLayer = beginLayer;
-  entries[entryIndex].endLayer = endLayer;
+  entries[size_t(entryIndex)].beginLayer = beginLayer;
+  entries[size_t(entryIndex)].endLayer = endLayer;
   // 自动排序
   std::sort(entries.begin(), entries.end(),
-            [](const MockLayerSeqEntry &a, const MockLayerSeqEntry &b) {
+            [](const OWzx::LayerSeqEntry &a, const OWzx::LayerSeqEntry &b) {
               return a.beginLayer < b.beginLayer;
             });
+  p->setOtherLayersSeqEntries(std::move(entries));
   emit projectChanged();
   return true;
 }
 
 bool ProjectServiceMock::setPlateOtherLayersSeqOrder(int plateIndex, int entryIndex, const QVariantList &order)
 {
-  if (plateIndex < 0 || plateIndex >= plateOtherLayersSeqEntries_.size()) return false;
-  auto &entries = plateOtherLayersSeqEntries_[plateIndex];
-  if (entryIndex < 0 || entryIndex >= entries.size()) return false;
-  QList<int> intOrder;
+  OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return false;
+  auto entries = p->otherLayersSeqEntries();
+  if (entryIndex < 0 || entryIndex >= int(entries.size())) return false;
+  std::vector<int> intOrder;
+  intOrder.reserve(order.size());
   for (const auto &v : order)
-    intOrder.append(v.toInt());
-  entries[entryIndex].extruderOrder = intOrder;
+    intOrder.push_back(v.toInt());
+  entries[size_t(entryIndex)].extruderOrder = std::move(intOrder);
+  p->setOtherLayersSeqEntries(std::move(entries));
   emit projectChanged();
   return true;
 }
@@ -3869,8 +3903,10 @@ QString ProjectServiceMock::generatePlateThumbnail(int plateIndex, int size)
   {
     const QColor color = objColors[i % 8];
     // 基于对象位置生成确定性位置
-    QVector3D pos = (plateIndex >= 0 && plateIndex < plateObjectIndices_.size())
-      ? objectPositions_.value(plateObjectIndices_[plateIndex].value(i, 0), QVector3D(0, 0, 0))
+    const QList<int> plateObjs = (m_plateList && plateIndex >= 0 && plateIndex < m_plateList->plateCount())
+      ? m_plateList->objectIndicesOnPlate(plateIndex) : QList<int>{};
+    QVector3D pos = (!plateObjs.isEmpty())
+      ? objectPositions_.value(plateObjs.value(i, 0), QVector3D(0, 0, 0))
       : QVector3D(0, 0, 0);
 
     // 简化布局：网格排列
@@ -3906,12 +3942,11 @@ QString ProjectServiceMock::generatePlateThumbnail(int plateIndex, int size)
   }
 
   // 已切片标记：绿色角标
-  if (plateIndex >= 0 && plateIndex < plateObjectIndices_.size())
+  if (m_plateList && plateIndex >= 0 && plateIndex < m_plateList->plateCount())
   {
-    // Slice status is tracked by EditorViewModel; here we use a mock check
-    bool sliced = false;
-    // We can check if plate has settings that indicate slicing was done
-    if (plateBedTypes_.size() > plateIndex) sliced = true; // simple heuristic for demo
+    // Slice status is tracked by EditorViewModel; here we use a mock check.
+    // Heuristic: any plate that exists is considered "has settings" for the demo marker.
+    bool sliced = (m_plateList->plate(plateIndex) != nullptr);
     if (sliced)
     {
       p.setPen(Qt::NoPen);
@@ -4050,21 +4085,23 @@ int ProjectServiceMock::duplicateObject(int sourceIndex)
     objectVisibleStates_.insert(insertPos, vis);
 
     // 更新 plate 对象索引（所有 > sourceIndex 的索引 +1）
-    for (auto &plateObjList : plateObjectIndices_)
-    {
-      for (int j = 0; j < plateObjList.size(); ++j)
-      {
-        if (plateObjList[j] > sourceIndex)
-          ++plateObjList[j];
+    if (m_plateList) {
+      for (int pi = 0; pi < m_plateList->plateCount(); ++pi) {
+        OWzx::PartPlate *p = m_plateList->plate(pi);
+        if (!p) continue;
+        std::set<std::pair<int,int>> rebuilt;
+        for (const auto &pair : p->objToInstanceSet()) {
+          std::pair<int,int> adj = pair;
+          if (pair.first > sourceIndex) ++adj.first;
+          rebuilt.insert(adj);
+        }
+        p->clearInstances();
+        for (const auto &pair : rebuilt)
+          p->addInstance(pair.first, pair.second);
       }
-    }
-
-    // 将新对象加入当前 plate
-    if (currentPlateIndex_ >= 0 && currentPlateIndex_ < plateObjectIndices_.size())
-    {
-      plateObjectIndices_[currentPlateIndex_].append(insertPos);
-      std::sort(plateObjectIndices_[currentPlateIndex_].begin(),
-                plateObjectIndices_[currentPlateIndex_].end());
+      // 将新对象加入当前 plate
+      OWzx::PartPlate *cur = m_plateList->currentPlate();
+      if (cur) cur->addInstance(insertPos, 0);
     }
 
     const int newIndex = insertPos;
@@ -4073,7 +4110,7 @@ int ProjectServiceMock::duplicateObject(int sourceIndex)
     modelCount_ = objectNames_.size();
     lastError_.clear();
     emit projectChanged();
-    emit plateDataLoaded(plateCount_);
+    emit plateDataLoaded(m_plateList ? m_plateList->plateCount() : 0);
     return newIndex;
   }
   catch (const std::exception &ex)
@@ -4147,9 +4184,9 @@ QList<int> ProjectServiceMock::splitObject(int objectIndex)
       model_->add_object(*newObj);
 
       // 将新对象加入当前 plate
-      if (currentPlateIndex_ >= 0 && currentPlateIndex_ < plateObjectIndices_.size())
-      {
-        plateObjectIndices_[currentPlateIndex_].append(int(model_->objects.size()) - 1);
+      if (m_plateList) {
+        OWzx::PartPlate *cur = m_plateList->currentPlate();
+        if (cur) cur->addInstance(int(model_->objects.size()) - 1, 0);
       }
     }
 
@@ -4300,15 +4337,15 @@ int ProjectServiceMock::addObject(const QString &name)
   objectRotations_.append(QVector3D(0, 0, 0));
   objectScales_.append(QVector3D(1, 1, 1));
 
-  if (currentPlateIndex_ >= 0 && currentPlateIndex_ < plateObjectIndices_.size())
-  {
-    plateObjectIndices_[currentPlateIndex_].append(insertPos);
+  if (m_plateList) {
+    OWzx::PartPlate *cur = m_plateList->currentPlate();
+    if (cur) cur->addInstance(insertPos, 0);
   }
 
   modelCount_ = objectNames_.size();
   lastError_.clear();
   emit projectChanged();
-  emit plateDataLoaded(plateCount_);
+  emit plateDataLoaded(m_plateList ? m_plateList->plateCount() : 0);
   return insertPos;
 #endif
 }
@@ -4450,20 +4487,15 @@ void ProjectServiceMock::clearProject()
 
   projectName_ = tr("未命名项目");
   modelCount_ = 0;
-  plateCount_ = 0;
-  currentPlateIndex_ = -1;
+  // Reset plate storage to a fresh single-plate list (current unset), matching the
+  // previous "no project loaded" state (plateCount=0, currentPlateIndex=-1).
+  m_plateList = std::make_unique<OWzx::PartPlateList>();
+  m_plateList->setCurrentPlateIndex(-1);
   sourceFilePath_.clear();
   objectNames_.clear();
   objectModuleNames_.clear();
   objectPrintableStates_.clear();
   objectVisibleStates_.clear();
-  plateNames_.clear();
-  plateObjectIndices_.clear();
-  plateLockedStates_.clear();
-  plateFirstLayerSeqChoices_.clear();
-  plateFirstLayerSeqOrders_.clear();
-  plateOtherLayersSeqChoices_.clear();
-  plateOtherLayersSeqEntries_.clear();
   objectPositions_.clear();
   objectRotations_.clear();
   objectScales_.clear();
@@ -4550,33 +4582,39 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
 
   root[QStringLiteral("name")] = projectName_;
   root[QStringLiteral("source")] = sourceFilePath_;
-  root[QStringLiteral("currentPlate")] = currentPlateIndex_;
+  root[QStringLiteral("currentPlate")] = m_plateList ? m_plateList->currentPlateIndex() : -1;
 
   // Save plates
   QJsonArray platesArr;
-  for (int p = 0; p < plateCount_; ++p)
+  const int plateCount = m_plateList ? m_plateList->plateCount() : 0;
+  for (int p = 0; p < plateCount; ++p)
   {
+    const OWzx::PartPlate *pp = m_plateList->plate(p);
     QJsonObject plateObj;
-    plateObj[QStringLiteral("name")] = plateNames_.value(p, QStringLiteral("Plate %1").arg(p + 1));
-    plateObj[QStringLiteral("locked")] = plateLockedStates_.value(p, false);
-    plateObj[QStringLiteral("bedType")] = plateBedTypes_.value(p, 0);
-    plateObj[QStringLiteral("printSequence")] = platePrintSequences_.value(p, 0);
-    plateObj[QStringLiteral("spiralMode")] = plateSpiralModes_.value(p, 0);
-    plateObj[QStringLiteral("firstLayerSeqChoice")] = plateFirstLayerSeqChoices_.value(p, 0);
+    plateObj[QStringLiteral("name")] = pp
+        ? QString::fromStdString(pp->name().empty() ? std::string() : pp->name())
+        : QStringLiteral("Plate %1").arg(p + 1);
+    if (pp && pp->name().empty())
+      plateObj[QStringLiteral("name")] = QStringLiteral("Plate %1").arg(p + 1);
+    plateObj[QStringLiteral("locked")] = pp ? pp->isLocked() : false;
+    plateObj[QStringLiteral("bedType")] = pp ? pp->bedType() : 0;
+    plateObj[QStringLiteral("printSequence")] = pp ? pp->printSequence() : 0;
+    plateObj[QStringLiteral("spiralMode")] = pp ? pp->spiralMode() : 0;
+    plateObj[QStringLiteral("firstLayerSeqChoice")] = pp ? pp->firstLayerSeqChoice() : 0;
     // Save first layer extruder order
     {
       QJsonArray seqArr;
-      if (p < plateFirstLayerSeqOrders_.size())
-        for (int v : plateFirstLayerSeqOrders_[p]) seqArr.append(v);
+      if (pp)
+        for (int v : pp->firstLayerSeqOrder()) seqArr.append(v);
       plateObj[QStringLiteral("firstLayerSeqOrder")] = seqArr;
     }
-    plateObj[QStringLiteral("otherLayersSeqChoice")] = plateOtherLayersSeqChoices_.value(p, 0);
+    plateObj[QStringLiteral("otherLayersSeqChoice")] = pp ? pp->otherLayersSeqChoice() : 0;
     // Save other layers sequence entries
     {
       QJsonArray seqEntriesArr;
-      if (p < plateOtherLayersSeqEntries_.size())
+      if (pp)
       {
-        for (const auto &entry : plateOtherLayersSeqEntries_[p])
+        for (const auto &entry : pp->otherLayersSeqEntries())
         {
           QJsonObject entryObj;
           entryObj[QStringLiteral("beginLayer")] = entry.beginLayer;
@@ -4591,7 +4629,8 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
     }
 
     QJsonArray objsArr;
-    for (int oi : plateObjectIndices_.value(p, QList<int>{}))
+    const QList<int> plateObjs = pp ? m_plateList->objectIndicesOnPlate(p) : QList<int>{};
+    for (int oi : plateObjs)
     {
       QJsonObject objObj;
       objObj[QStringLiteral("name")] = objectNames_.value(oi, QString());
@@ -4930,32 +4969,41 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
                 static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z())));
           }
 
-          receiver->plateNames_ = loadedPlateNames;
-          receiver->plateObjectIndices_ = loadedPlateObjectIndices;
-          if (receiver->plateObjectIndices_.isEmpty())
+          // v3.0 Phase 16 (D-05): rebuild m_plateList from loaded plate data.
           {
-            receiver->plateNames_.clear();
-            receiver->plateNames_ << QObject::tr("平板 1");
-            QList<int> all;
-            all.reserve(receiver->modelCount_);
-            for (int i = 0; i < receiver->modelCount_; ++i) all.append(i);
-            receiver->plateObjectIndices_.append(all);
+            QStringList plateNames = loadedPlateNames;
+            QList<QList<int>> plateObjs = loadedPlateObjectIndices;
+            if (plateObjs.isEmpty())
+            {
+              plateNames.clear();
+              plateNames << QObject::tr("平板 1");
+              QList<int> all;
+              all.reserve(receiver->modelCount_);
+              for (int i = 0; i < receiver->modelCount_; ++i) all.append(i);
+              plateObjs.append(all);
+            }
+            receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
+            receiver->m_plateList->resetToSinglePlate();
+            for (int pi = 0; pi < plateObjs.size(); ++pi) {
+              OWzx::PartPlate *p = (pi == 0) ? receiver->m_plateList->plate(0)
+                                             : receiver->m_plateList->createPlate();
+              if (!p) continue;
+              if (pi < plateNames.size())
+                p->setName(plateNames[pi].toStdString());
+              p->clearInstances();
+              for (int objIdx : plateObjs[pi])
+                p->addInstance(objIdx, 0);
+            }
+            const int reconstructed = receiver->m_plateList->plateCount();
+            const int target = std::max(reconstructed, loadedPlateCount);
+            for (int pi = reconstructed; pi < target; ++pi)
+              receiver->m_plateList->createPlate();
+            receiver->m_plateList->setCurrentPlateIndex(
+                receiver->m_plateList->plateCount() > 0 ? 0 : -1);
+            if (receiver->m_plateList->currentPlateIndex() < 0 &&
+                receiver->m_plateList->plateCount() > 0)
+              receiver->m_plateList->setCurrentPlateIndex(0);
           }
-
-          // Reset all plate metadata arrays to match new plate count
-          receiver->plateBedTypes_.clear();
-          receiver->plateLockedStates_.clear();
-          receiver->platePrintSequences_.clear();
-          receiver->plateSpiralModes_.clear();
-          receiver->plateFirstLayerSeqChoices_.clear();
-          receiver->plateFirstLayerSeqOrders_.clear();
-          receiver->plateOtherLayersSeqChoices_.clear();
-          receiver->plateOtherLayersSeqEntries_.clear();
-
-          receiver->plateCount_ = receiver->plateObjectIndices_.size();
-          if (receiver->plateCount_ != loadedPlateCount)
-            receiver->plateCount_ = std::max(receiver->plateCount_, loadedPlateCount);
-          receiver->currentPlateIndex_ = receiver->plateCount_ > 0 ? 0 : -1;
           receiver->lastError_.clear();
 
           // Auto-arrange after project load (对齐上游 arrange_loaded_object_to_new_position)
@@ -4965,7 +5013,7 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
                                    QStringLiteral("0,0,220,0,220,220,0,220"));
 
           emit receiver->projectChanged();
-          emit receiver->plateDataLoaded(receiver->plateCount_);
+          emit receiver->plateDataLoaded(receiver->m_plateList ? receiver->m_plateList->plateCount() : 0);
           emit receiver->plateSelectionChanged();
           emit receiver->loadFinished(true, QObject::tr("项目加载完成"));
           if (!loadedConfigMap.isEmpty())
@@ -4975,16 +5023,13 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
         {
           delete loadedModel;
           receiver->modelCount_ = 0;
-          receiver->plateCount_ = 0;
-          receiver->currentPlateIndex_ = -1;
+          receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
+          receiver->m_plateList->setCurrentPlateIndex(-1);
           receiver->sourceFilePath_.clear();
           receiver->objectNames_.clear();
           receiver->objectModuleNames_.clear();
           receiver->objectPrintableStates_.clear();
           receiver->objectVisibleStates_.clear();
-          receiver->plateNames_.clear();
-          receiver->plateObjectIndices_.clear();
-          receiver->plateLockedStates_.clear();
           receiver->lastError_ = errorText;
           emit receiver->projectChanged();
           emit receiver->plateDataLoaded(0);
@@ -5027,13 +5072,6 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
   objectPositions_.clear();
   objectRotations_.clear();
   objectScales_.clear();
-  plateNames_.clear();
-  plateObjectIndices_.clear();
-  plateLockedStates_.clear();
-  plateFirstLayerSeqChoices_.clear();
-  plateFirstLayerSeqOrders_.clear();
-  plateOtherLayersSeqChoices_.clear();
-  plateOtherLayersSeqEntries_.clear();
   m_mockObjectOverrides.clear();
   m_mockVolumeOverrides.clear();
   m_mockPlateOverrides.clear();
@@ -5051,43 +5089,51 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
   projectName_ = root.value(QStringLiteral("name")).toString(fi.completeBaseName());
   sourceFilePath_ = root.value(QStringLiteral("source")).toString(filePath);
 
+  // v3.0 Phase 16 (D-05): rebuild m_plateList from the JSON plates array.
+  m_plateList = std::make_unique<OWzx::PartPlateList>();
+  m_plateList->resetToSinglePlate();
+
   // Restore plates and objects
   const QJsonArray platesArr = root.value(QStringLiteral("plates")).toArray();
   int globalObjectIdx = 0;
   for (int p = 0; p < platesArr.size(); ++p)
   {
     const QJsonObject plateObj = platesArr[p].toObject();
-    plateNames_.append(plateObj.value(QStringLiteral("name")).toString(
-                         QStringLiteral("Plate %1").arg(p + 1)));
-    plateLockedStates_.append(plateObj.value(QStringLiteral("locked")).toBool(false));
-    plateBedTypes_.append(plateObj.value(QStringLiteral("bedType")).toInt(0));
-    platePrintSequences_.append(plateObj.value(QStringLiteral("printSequence")).toInt(0));
-    plateSpiralModes_.append(plateObj.value(QStringLiteral("spiralMode")).toInt(0));
-    plateFirstLayerSeqChoices_.append(plateObj.value(QStringLiteral("firstLayerSeqChoice")).toInt(0));
+    OWzx::PartPlate *pp = (p == 0) ? m_plateList->plate(0) : m_plateList->createPlate();
+    if (!pp) continue;  // kMaxPlateCount exceeded
+    pp->setName(plateObj.value(QStringLiteral("name")).toString(
+                  QStringLiteral("Plate %1").arg(p + 1)).toStdString());
+    pp->setLocked(plateObj.value(QStringLiteral("locked")).toBool(false));
+    pp->setBedType(plateObj.value(QStringLiteral("bedType")).toInt(0));
+    pp->setPrintSequence(plateObj.value(QStringLiteral("printSequence")).toInt(0));
+    pp->setSpiralMode(plateObj.value(QStringLiteral("spiralMode")).toInt(0));
+    pp->setFirstLayerSeqChoice(plateObj.value(QStringLiteral("firstLayerSeqChoice")).toInt(0));
     // Restore first layer extruder order
     {
-      QList<int> order;
+      std::vector<int> order;
       const QJsonArray orderArr = plateObj.value(QStringLiteral("firstLayerSeqOrder")).toArray();
-      for (const auto &v : orderArr) order.append(v.toInt());
-      plateFirstLayerSeqOrders_.append(order);
+      order.reserve(orderArr.size());
+      for (const auto &v : orderArr) order.push_back(v.toInt());
+      pp->setFirstLayerSeqOrder(std::move(order));
     }
-    plateOtherLayersSeqChoices_.append(plateObj.value(QStringLiteral("otherLayersSeqChoice")).toInt(0));
+    pp->setOtherLayersSeqChoice(plateObj.value(QStringLiteral("otherLayersSeqChoice")).toInt(0));
     // Restore other layers sequence entries
     {
-      QList<MockLayerSeqEntry> entries;
+      std::vector<OWzx::LayerSeqEntry> entries;
       const QJsonArray entriesArr = plateObj.value(QStringLiteral("otherLayersSeqEntries")).toArray();
       for (const auto &entryVal : entriesArr)
       {
         const QJsonObject entryObj = entryVal.toObject();
-        MockLayerSeqEntry entry;
+        OWzx::LayerSeqEntry entry;
         entry.beginLayer = entryObj.value(QStringLiteral("beginLayer")).toInt(2);
         entry.endLayer = entryObj.value(QStringLiteral("endLayer")).toInt(100);
         const QJsonArray orderArr = entryObj.value(QStringLiteral("order")).toArray();
-        for (const auto &v : orderArr) entry.extruderOrder.append(v.toInt());
-        entries.append(entry);
+        for (const auto &v : orderArr) entry.extruderOrder.push_back(v.toInt());
+        entries.push_back(std::move(entry));
       }
-      plateOtherLayersSeqEntries_.append(entries);
+      pp->setOtherLayersSeqEntries(std::move(entries));
     }
+    pp->clearInstances();
 
     QList<int> objIndices;
     const QJsonArray objsArr = plateObj.value(QStringLiteral("objects")).toArray();
@@ -5127,20 +5173,20 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
       }
 
       objIndices.append(idx);
+      pp->addInstance(idx, 0);  // instance-level membership (single instance per object)
     }
-    plateObjectIndices_.append(objIndices);
   }
 
-  plateCount_ = plateNames_.size();
   modelCount_ = objectNames_.size();
-  currentPlateIndex_ = qBound(0, root.value(QStringLiteral("currentPlate")).toInt(0),
-                              qMax(0, plateCount_ - 1));
+  m_plateList->setCurrentPlateIndex(
+      qBound(0, root.value(QStringLiteral("currentPlate")).toInt(0),
+             qMax(0, m_plateList->plateCount() - 1)));
   loadProgress_ = 100;
   loading_ = false;
   lastError_.clear();
 
   emit projectChanged();
-  emit plateDataLoaded(plateCount_);
+  emit plateDataLoaded(m_plateList ? m_plateList->plateCount() : 0);
   emit plateSelectionChanged();
   emit loadProgressChanged();
   emit loadingChanged();

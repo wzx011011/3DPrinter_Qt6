@@ -348,6 +348,10 @@ endif()
 if(BUILD_CLI AND BUILD_LIBSLIC3R AND TARGET libslic3r)
     add_library(owzx_cli_core OBJECT
         src/nanosvg_impl.cpp
+        src/core/model/PartPlate.cpp
+        src/core/model/PartPlate.h
+        src/core/model/PartPlateList.cpp
+        src/core/model/PartPlateList.h
         src/core/services/ProjectServiceMock.cpp
         src/core/services/ProjectServiceMock.h
         src/core/services/SliceService.cpp
