@@ -623,11 +623,12 @@ Item {
                     // Check now button
                     Rectangle {
                         Layout.preferredWidth: 140; Layout.preferredHeight: 32; radius: 6
+                        enabled: false
                         color: updateBtnMA.containsMouse ? "#19a84e" : "#157a39"
                         Text { anchors.centerIn: parent; text: qsTr("检查更新"); color: "white"; font.pixelSize: 12; font.bold: true }
                         MouseArea {
                             id: updateBtnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                            onClicked: {} // Mock: no real update check
+                            acceptedButtons: Qt.NoButton
                         }
                     }
 

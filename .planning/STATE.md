@@ -3,28 +3,28 @@ gsd_state_version: 1.0
 milestone: v2.9
 milestone_name: Implementation Realignment and Stabilization
 status: ready_to_plan
-last_updated: "2026-06-25T04:04:08+08:00"
-last_activity: 2026-06-25 -- Phase 13 completed
+last_updated: "2026-06-25T09:31:06+08:00"
+last_activity: 2026-06-25 -- Phase 14 completed
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 67
+  completed_phases: 5
+  total_plans: 5
+  completed_plans: 5
+  percent: 83
 ---
 
 # Project State
 
 **Milestone:** v2.9 - Implementation Realignment and Stabilization
 **Status:** Ready to plan
-**Next step:** `$gsd-discuss-phase 14`
+**Next step:** `$gsd-discuss-phase 15`
 
 ## Current Position
 
-Phase: 14
+Phase: 15
 Plan: none
 Status: Ready to plan
-Last activity: 2026-06-25 -- Phase 13 completed
+Last activity: 2026-06-25 -- Phase 14 completed
 
 ## Why This Milestone Exists
 
@@ -46,12 +46,12 @@ v2.9 exists to make the baseline trustworthy before starting the next large sour
 | 11 | Source Hygiene Stabilization | Complete | HYGIENE-01..HYGIENE-04 |
 | 12 | Calibration Closure for Implemented Modes | Complete | CAL-01..CAL-05 |
 | 13 | Hybrid Integration Verification | Complete | INT-01..INT-06 |
-| 14 | Visible Placeholder Triage | Pending | UI-01..UI-05 |
+| 14 | Visible Placeholder Triage | Complete | UI-01..UI-05 |
 | 15 | Verification and Handoff | Pending | VERIFY-01..VERIFY-03 |
 
 ## Latest Verification
 
-The canonical command was run on 2026-06-25 after Phase 13:
+The canonical command was run on 2026-06-25 after Phase 14:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1
@@ -74,9 +74,9 @@ Observed result:
 - BBLTopbar calibration menu entries for Flow Dynamics, Flow Rate, and Temp Tower are wired by stable ids.
 - Unsupported calibration modes remain explicit Pending/Blocked items.
 - Phase 13 added deterministic SSDP, MQTT, FTP, camera, software viewport, and AppSettings/bed-shape evidence. Live MQTT publish, FTP upload, and RTSP decode still require hardware or controlled fixtures.
-- Export project/model/preferences handlers in `main.qml` are TODO/no-op.
+- Phase 14 removed targeted visible no-op placeholder controls and added QML audit coverage for UI honesty.
 - AssembleView and ModelMall/WebView remain placeholder or blocked.
 
 ## Handoff
 
-Start Phase 14 by triaging visible placeholder and no-op UI workflows.
+Start Phase 15 by producing final v2.9 verification and handoff evidence.

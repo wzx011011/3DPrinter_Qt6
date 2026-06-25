@@ -256,9 +256,8 @@ Rectangle {
                         compact: true
                         cxStyle: CxButton.Style.Ghost
                         text: qsTr("高级")  // 占位: Simple/Advanced 切换
-                        onClicked: {
-                            // TODO SIDEBAR-08: 需 ConfigViewModel configMode 属性 + 参数过滤
-                        }
+                        enabled: false
+                        visible: false
                     }
 
                     // Compare 按钮 (SIDEBAR-09 占位, v2.2 DiffPresetDialog)
@@ -268,9 +267,8 @@ Rectangle {
                         compact: true
                         cxStyle: CxButton.Style.Ghost
                         text: "⇄"
-                        onClicked: {
-                            // TODO SIDEBAR-09: 打开 DiffPresetDialog (v2.2)
-                        }
+                        enabled: false
+                        visible: false
                     }
 
                     // Setting 按钮 (SIDEBAR-10 占位, ObjectTableDialog)
@@ -280,9 +278,8 @@ Rectangle {
                         compact: true
                         cxStyle: CxButton.Style.Ghost
                         text: "☰"
-                        onClicked: {
-                            // TODO SIDEBAR-10: 打开 ObjectTableDialog
-                        }
+                        enabled: false
+                        visible: false
                     }
                 }
             }
@@ -513,7 +510,6 @@ Rectangle {
                         font.pixelSize: 10
                         wrapMode: Text.WordWrap
                     }
-                    // TODO SIDEBAR-14: 完整变量层高编辑器（层高曲线 + 拖拽编辑）
                 }
             }
 
@@ -573,9 +569,6 @@ Rectangle {
                                 }
                             }
                         }
-
-                        // currentTab 状态（7 子 Tab 切换）
-                        // TODO SIDEBAR-15: 切换时按 pageView 分组加载参数列表（需 ConfigViewModel 扩展）
                     }
 
                     // 参数列表占位

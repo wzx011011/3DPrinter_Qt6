@@ -64,11 +64,11 @@
 
 ### Visible Placeholder Triage
 
-- [ ] **UI-01**: Export project and export model menu actions either call real backend behavior or are visibly classified as deferred/blocked in planning.
-- [ ] **UI-02**: Preferences menu action opens a real Preferences workflow or is explicitly deferred without silent no-op behavior.
-- [ ] **UI-03**: BBLTopbar calibration entries for implemented modes are enabled and routed to calibration viewmodel actions.
-- [ ] **UI-04**: Placeholder account, model store, publish, layer editing, AssembleView, and ModelMall/WebView surfaces are reclassified so broad UI presence is not counted as feature completion.
-- [ ] **UI-05**: QML-side logic that affects durable behavior is identified and moved to C++ viewmodels/services or documented as presentation-only.
+- [x] **UI-01**: Export project and export model menu actions either call real backend behavior or are visibly classified as deferred/blocked in planning. *(Phase 14)*
+- [x] **UI-02**: Preferences menu action opens a real Preferences workflow or is explicitly deferred without silent no-op behavior. *(Phase 14)*
+- [x] **UI-03**: BBLTopbar calibration entries for implemented modes are enabled and routed to calibration viewmodel actions. *(Phase 14)*
+- [x] **UI-04**: Placeholder account, model store, publish, layer editing, AssembleView, and ModelMall/WebView surfaces are reclassified so broad UI presence is not counted as feature completion. *(Phase 14)*
+- [x] **UI-05**: QML-side logic that affects durable behavior is identified and moved to C++ viewmodels/services or documented as presentation-only. *(Phase 14)*
 
 ### Verification Gate
 
@@ -137,11 +137,11 @@
 | INT-04 | Phase 13 | Complete |
 | INT-05 | Phase 13 | Complete |
 | INT-06 | Phase 13 | Complete |
-| UI-01 | Phase 14 | Pending |
-| UI-02 | Phase 14 | Pending |
-| UI-03 | Phase 14 | Pending |
-| UI-04 | Phase 14 | Pending |
-| UI-05 | Phase 14 | Pending |
+| UI-01 | Phase 14 | Complete |
+| UI-02 | Phase 14 | Complete |
+| UI-03 | Phase 14 | Complete |
+| UI-04 | Phase 14 | Complete |
+| UI-05 | Phase 14 | Complete |
 | VERIFY-01 | Phase 15 | Pending |
 | VERIFY-02 | Phase 15 | Pending |
 | VERIFY-03 | Phase 15 | Pending |
@@ -154,4 +154,4 @@
 ---
 
 *Requirements defined: 2026-06-24*
-*Last updated: 2026-06-25 after Phase 13 hybrid integration verification.*
+*Last updated: 2026-06-25 after Phase 14 visible placeholder triage.*

@@ -14,6 +14,7 @@ private slots:
   void mainChromeUsesThemeTokens();
   void sidebarCopyIsLocalizedAndOperationalTextIsReadable();
   void mainRegistersSoftwareViewportByDefault();
+  void visiblePlaceholderSurfacesAreHonest();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -119,6 +120,55 @@ void QmlUiAuditTests::mainRegistersSoftwareViewportByDefault()
            "OpenGL GLViewport registration must remain available behind OWZX_OPENGL");
   QVERIFY2(!verifyScript.contains(QStringLiteral("OWZX_OPENGL")),
            "canonical startup smoke should cover the default software viewport path");
+}
+
+void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()
+{
+  const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  const QString sidebar = readSource(QStringLiteral("src/qml_gui/panels/LeftSidebar.qml"));
+  const QString modelMall = readSource(QStringLiteral("src/qml_gui/pages/ModelMallPage.qml"));
+  const QString preferences = readSource(QStringLiteral("src/qml_gui/pages/PreferencesPage.qml"));
+  QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+  QVERIFY2(!sidebar.isEmpty(), "Unable to read LeftSidebar.qml");
+  QVERIFY2(!modelMall.isEmpty(), "Unable to read ModelMallPage.qml");
+  QVERIFY2(!preferences.isEmpty(), "Unable to read PreferencesPage.qml");
+
+  const QRegularExpression emptyClick(QStringLiteral("\\bon(?:Clicked|Triggered):\\s*\\{\\s*\\}"));
+  QVERIFY2(!emptyClick.match(topbar).hasMatch(), "Topbar must not contain empty click/trigger handlers");
+  QVERIFY2(!emptyClick.match(mainQml).hasMatch(), "main.qml must not contain empty click/trigger handlers");
+  QVERIFY2(!emptyClick.match(sidebar).hasMatch(), "LeftSidebar must not contain empty click/trigger handlers");
+  QVERIFY2(!emptyClick.match(preferences).hasMatch(), "PreferencesPage must not contain empty click/trigger handlers");
+
+  const QStringList forbiddenRuntimeCopy = {
+    QStringLiteral("qsTr(\"Search models, authors, tags...\")"),
+    QStringLiteral("qsTr(\"Publish\")"),
+    QStringLiteral("qsTr(\"Recommended\")"),
+    QStringLiteral("qsTr(\"Popular\")"),
+    QStringLiteral("qsTr(\"Newest\")"),
+    QStringLiteral("qsTr(\"Free\")"),
+    QStringLiteral("qsTr(\"Favorites\")")
+  };
+  for (const QString &copy : forbiddenRuntimeCopy) {
+    QVERIFY2(!modelMall.contains(copy),
+             qPrintable(QStringLiteral("ModelMall must not expose fake marketplace copy: %1").arg(copy)));
+  }
+
+  const QStringList forbiddenSidebarMarkers = {
+    QStringLiteral("TODO SIDEBAR-08"),
+    QStringLiteral("TODO SIDEBAR-09"),
+    QStringLiteral("TODO SIDEBAR-10"),
+    QStringLiteral("TODO SIDEBAR-14"),
+    QStringLiteral("TODO SIDEBAR-15")
+  };
+  for (const QString &marker : forbiddenSidebarMarkers) {
+    QVERIFY2(!sidebar.contains(marker),
+             qPrintable(QStringLiteral("LeftSidebar runtime placeholder marker remains: %1").arg(marker)));
+  }
+
+  QVERIFY2(preferences.contains(QStringLiteral("enabled: false")),
+           "Unavailable Preferences update check must be visibly disabled");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

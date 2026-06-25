@@ -14,9 +14,8 @@ import "../controls"
 ///   - show_control(bool) toggles navigation panel visibility
 ///   - Close behavior: Hide() not destroy
 ///
-/// Current scope (P6.3): Native QML mock preview with grid layout, search,
-/// category filtering, sort tabs, model cards, navigation history, download
-/// progress, and publish mode toggle. WebView integration is a placeholder.
+/// Current scope: blocked WebView preview. Real mall/publish workflows remain
+/// future integration work.
 Item {
     id: root
     required property var modelMallVm
@@ -136,7 +135,7 @@ Item {
                             id: searchField
                             Layout.fillWidth: true
                             text: root.modelMallVm.searchQuery
-                            placeholderText: qsTr("Search models, authors, tags...")
+                            placeholderText: qsTr("功能暂不可用")
                             font.pixelSize: Theme.fontSizeMD
                             onEditingFinished: root.modelMallVm.setSearchQuery(text)
                             onAccepted: root.modelMallVm.setSearchQuery(text)
@@ -162,7 +161,7 @@ Item {
 
                 // Sort tabs (aligns with upstream Recommended/Popular/Newest/Free)
                 Repeater {
-                    model: [qsTr("Recommended"), qsTr("Popular"), qsTr("Newest"), qsTr("Free")]
+                    model: [qsTr("本地预览"), qsTr("暂不可用"), qsTr("待接入"), qsTr("已阻止")]
                     delegate: Rectangle {
                         required property int index
                         required property string modelData
@@ -226,16 +225,14 @@ Item {
                     Text {
                         id: publishBtnText
                         anchors.centerIn: parent
-                        text: qsTr("Publish")
+                        text: qsTr("功能暂不可用")
                         color: root.modelMallVm.publishMode ? Theme.textOnAccent : Theme.textSecondary
                         font.pixelSize: Theme.fontSizeSM
                         font.bold: true
                     }
 
                     HoverHandler { id: pubArea }
-                    TapHandler {
-                        onTapped: root.modelMallVm.loadPublishUrl("")
-                    }
+                    TapHandler { enabled: false }
                 }
             }
         }
@@ -302,7 +299,7 @@ Item {
                         }
                         Text {
                             id: favPillText
-                            text: qsTr("Favorites")
+                            text: qsTr("收藏暂不可用")
                             color: root.modelMallVm.showFavoritesOnly ? Theme.statusWarning : Theme.textSecondary
                             font.pixelSize: Theme.fontSizeSM
                         }
@@ -320,7 +317,7 @@ Item {
                     anchors.right: parent.right
                     anchors.rightMargin: Theme.spacingXL
                     anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("%1 models").arg(root.modelMallVm.filteredCount)
+                    text: qsTr("%1 个本地预览").arg(root.modelMallVm.filteredCount)
                     color: Theme.textTertiary
                     font.pixelSize: Theme.fontSizeXS
                 }
@@ -382,7 +379,7 @@ Item {
 
                                     Text {
                                         anchors.centerIn: parent
-                                        text: qsTr("Featured")
+                                        text: qsTr("预览")
                                         color: Theme.textOnAccent
                                         font.pixelSize: Theme.fontSizeXS
                                         font.bold: true
@@ -402,7 +399,7 @@ Item {
 
                                     Text {
                                         anchors.centerIn: parent
-                                        text: qsTr("Free")
+                                        text: qsTr("预览")
                                         color: Theme.accent
                                         font.pixelSize: Theme.fontSizeXS
                                         font.bold: true
@@ -447,7 +444,7 @@ Item {
 
                                     Text {
                                         anchors.centerIn: parent
-                                        text: qsTr("Downloaded")
+                                        text: qsTr("本地")
                                         color: Theme.accent
                                         font.pixelSize: Theme.fontSizeXS
                                         font.bold: true

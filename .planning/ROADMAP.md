@@ -98,9 +98,10 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 
 ## Phase 14: Visible Placeholder Triage
 
-- [ ] Phase 14: Visible Placeholder Triage
+- [x] Phase 14: Visible Placeholder Triage (completed 2026-06-25)
 
 **Goal:** Stop counting visible placeholders as completed product workflows.
+**Completed:** 2026-06-25
 
 **Requirements:** UI-01, UI-02, UI-03, UI-04, UI-05
 
@@ -144,7 +145,7 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 | 11 | Source Hygiene Stabilization | HYGIENE-01..HYGIENE-04 | 4 (Complete) |
 | 12 | Calibration Closure for Implemented Modes | CAL-01..CAL-05 | 5 (Complete) |
 | 13 | Hybrid Integration Verification | INT-01..INT-06 | 6 (Complete) |
-| 14 | Visible Placeholder Triage | UI-01..UI-05 | 5 |
+| 14 | Visible Placeholder Triage | UI-01..UI-05 | 5 (Complete) |
 | 15 | Verification and Handoff | VERIFY-01..VERIFY-03 | 3 |
 
 **Total requirements:** 28
@@ -156,15 +157,15 @@ v2.9 is a stabilization and truth-reset milestone. Its job is to make the projec
 Continue with:
 
 ```text
-$gsd-discuss-phase 14
+$gsd-discuss-phase 15
 ```
 
 or, for a direct execution plan:
 
 ```text
-$gsd-plan-phase 14
+$gsd-plan-phase 15
 ```
 
 ---
 
-*Last updated: 2026-06-25 after Phase 13 completion.*
+*Last updated: 2026-06-25 after Phase 14 completion.*
