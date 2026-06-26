@@ -344,6 +344,20 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
 
 endif()
 
+if(BUILD_TESTING)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(
+            NAME ParamRegressionComparatorTests
+            COMMAND ${Python3_EXECUTABLE} -m unittest
+                tests.param_regression.test_gcode_compare
+                tests.param_regression.test_param_regression_runner
+                -v
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        )
+    endif()
+endif()
+
 # ── CLI ────────────────────────────────────────────────────────────────────
 if(BUILD_CLI AND BUILD_LIBSLIC3R AND TARGET libslic3r)
     add_library(owzx_cli_core OBJECT
