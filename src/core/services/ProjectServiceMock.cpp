@@ -1075,11 +1075,19 @@ bool ProjectServiceMock::clonePlate(int sourceIndex)
 #endif
 
   // Deep-copy the objects onto the destination plate. Reuse duplicateObject to
-  // clone the ModelObject + parallel-array metadata. duplicateObject inserts the
-  // new object at sourceIndex+1 (shifting higher indices up), so iterate the
-  // source object indices DESCENDING to keep unprocessed lower indices valid.
-  // After each duplicate, assign the new object index to the destination plate
-  // (duplicateObject itself does not assign plate membership in the HAS path).
+  // clone the ModelObject + parallel-array metadata. duplicateObject's two
+  // branches differ: the HAS branch appends a new ModelObject (no plate
+  // membership set), while the mock branch INSERTS at sourceIndex+1 (shifting
+  // higher indices up) AND adds the new object to currentPlate(). To make the
+  // mock branch target dst (not whatever current happens to be), temporarily
+  // switch current to dst for the duration of the loop. Iterate source indices
+  // DESCENDING so the mock branch's index-shift doesn't invalidate unprocessed
+  // lower indices. (HAS appends to the end, so descending is a no-op there but
+  // harmless.) After each duplicate, dst->addInstance(dupIdx, 0) ensures the
+  // HAS path assigns membership (the mock path already added it via the
+  // currentPlate() route; the std::set membership dedupes the duplicate pair).
+  const int savedCurrent = m_plateList->currentPlateIndex();
+  m_plateList->setCurrentPlateIndex(dst->plateIndex());
   QList<int> srcObjs = m_plateList->objectIndicesOnPlate(sourceIndex);
   std::sort(srcObjs.begin(), srcObjs.end(), std::greater<int>());
   for (int srcObjIdx : srcObjs) {
@@ -1094,6 +1102,7 @@ bool ProjectServiceMock::clonePlate(int sourceIndex)
         dst->addInstance(modelCountAfter - 1, 0);
     }
   }
+  m_plateList->setCurrentPlateIndex(savedCurrent);
 
   emit projectChanged();
   emit plateDataLoaded(m_plateList->plateCount());
@@ -1485,7 +1494,14 @@ bool ProjectServiceMock::setPlateScopedOptionValue(int plateIndex, const QString
   Slic3r::DynamicPrintConfig &cfg = p->config();
   const std::string k = key.toUtf8().constData();
   auto *opt = cfg.option(k, true);  // create=true so missing keys are created
-  if (!opt) return false;
+  if (!opt) {
+    // DynamicPrintConfig can only instantiate options registered in the config
+    // schema; unknown keys (typo, upstream-unregistered) return null. Warn so
+    // the dropped override is diagnosable rather than silent.
+    qWarning("[PartPlate] unknown config key '%s' for plate %d; override dropped",
+             k.c_str(), plateIndex);
+    return false;
+  }
   // Dispatch by QVariant type → matching ConfigOption .value write (no setters in
   // libslic3r; ConfigOptionSingle<T> exposes a public `value` member).
   if (value.typeId() == QMetaType::Bool) {

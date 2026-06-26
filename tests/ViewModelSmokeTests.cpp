@@ -156,6 +156,8 @@ private slots:
   // v3.0 Phase 19: per-plate config merge + scoped-value stub fix
   void projectServicePerPlateConfigOverrideRoundTrips();
   void sliceServicePerPlateConfigMergeHonorsOverrides();
+  // Phase 21 review-fix: verify DynamicPrintConfig::apply merge direction
+  void sliceServiceConfigMergeDirectionPlateWins();
 
 private:
   bool hasLibslic3r() const;
@@ -1424,6 +1426,8 @@ void ViewModelSmokeTests::projectServiceClonePlateDeepCopiesObjects()
   const int newObj = project.addPrimitiveToPlate(0);  // cube
   QVERIFY2(newObj >= 0, "addPrimitiveToPlate should succeed");
   QVERIFY(project.plateObjectCount(0) >= 1);  // plate 0 now has the object
+  const int sourceCountBefore = project.plateObjectCount(0);
+  QVERIFY(project.setCurrentPlateIndex(0));  // current=0 so current != dst(1) after clone
 
   // Clone plate 0 → new plate 1.
   QVERIFY(project.clonePlate(0));
@@ -1433,6 +1437,14 @@ void ViewModelSmokeTests::projectServiceClonePlateDeepCopiesObjects()
   // appends a new ModelObject, not a shared reference).
   QVERIFY2(project.plateObjectCount(1) >= 1,
            "cloned plate must own objects (deep copy, not shallow)");
+  // Phase 21 review-fix BUG-1 regression guard: cloning plate 0 must NOT alter
+  // the source plate's objects, AND must NOT leak the clone onto the current
+  // plate (clonePlate temporarily sets current=dst so duplicateObject's mock
+  // branch targets dst). Source unchanged:
+  QCOMPARE(project.plateObjectCount(0), sourceCountBefore);
+  // Current (0) must not have gained the clone either (regression: pre-fix the
+  // mock branch added the clone to currentPlate() which was 0 here).
+  QCOMPARE(project.plateObjectCount(project.currentPlateIndex()), sourceCountBefore);
 
   // MAX_PLATE_COUNT guard: cloning when full should fail.
   for (int i = project.plateCount(); i < OWzx::kMaxPlateCount; ++i)
@@ -1549,6 +1561,34 @@ void ViewModelSmokeTests::sliceServicePerPlateConfigMergeHonorsOverrides()
   QVERIFY2(opt != nullptr, "plate config must carry the override key after setPlateScopedOptionValue");
   // layer_height is a Float; read via getFloat.
   QCOMPARE(dynamic_cast<const Slic3r::ConfigOptionFloat *>(opt)->getFloat(), 0.3);
+#endif
+}
+
+void ViewModelSmokeTests::sliceServiceConfigMergeDirectionPlateWins()
+{
+  // Phase 21 review-fix TEST-2: verify DynamicPrintConfig::apply(other) makes
+  // `other` (the per-plate config) win over `this` (the preset config). This is
+  // the D-15 correctness assumption SliceService.cpp:393 relies on. If this
+  // test shows preset-wins, SliceService must flip the apply direction.
+#ifndef HAS_LIBSLIC3R
+  QSKIP("DynamicPrintConfig merge-direction test requires libslic3r");
+#else
+  Slic3r::DynamicPrintConfig base;   // preset-like config
+  Slic3r::DynamicPrintConfig plate;  // per-plate overrides
+  // layer_height is a real registered config key (Float).
+  if (auto *o = base.option("layer_height", true)) {
+    if (auto *f = dynamic_cast<Slic3r::ConfigOptionFloat *>(o)) f->value = 0.2;  // preset
+  }
+  if (auto *o = plate.option("layer_height", true)) {
+    if (auto *f = dynamic_cast<Slic3r::ConfigOptionFloat *>(o)) f->value = 0.4;  // plate override
+  }
+  // SliceService does: config.apply(*plateCfg)  →  base.apply(plate)
+  base.apply(plate);
+  const auto *merged = base.option("layer_height");
+  QVERIFY2(merged != nullptr, "merged config must retain layer_height");
+  // Plate (0.4) must win over preset (0.2) — confirms apply(other) makes other win.
+  // Compare as double (getFloat is double) to avoid float-literal precision mismatch.
+  QCOMPARE(double(dynamic_cast<const Slic3r::ConfigOptionFloat *>(merged)->getFloat()), 0.4);
 #endif
 }
 
