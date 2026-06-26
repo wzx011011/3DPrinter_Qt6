@@ -28,6 +28,7 @@ option(ENABLE_VISUAL_REGRESSION "Enable visual regression tests" ON)
 option(ENABLE_COVERAGE "Enable compiler coverage instrumentation" OFF)
 option(BUILD_LIBSLIC3R "Build libslic3r backend (3MF loading etc.)" ON)
 option(BUILD_CLI "Build headless CLI executable (owzx-cli)" OFF)
+option(OWZX_RENDER_BENCH "Build experimental Qt RHI render benchmark" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -345,6 +346,32 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
 endif()
 
 # ── CLI ────────────────────────────────────────────────────────────────────
+if(OWZX_RENDER_BENCH AND OWZX_QML_GUI)
+    find_package(Qt6 REQUIRED COMPONENTS Core Gui GuiPrivate ShaderTools)
+
+    qt_add_executable(owzx-render-bench
+        tools/render_bench/main.cpp
+    )
+    target_include_directories(owzx-render-bench PRIVATE
+        tools/render_bench
+    )
+    set_target_properties(owzx-render-bench PROPERTIES WIN32_EXECUTABLE FALSE)
+    target_link_libraries(owzx-render-bench PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::GuiPrivate
+    )
+    qt_add_shaders(owzx-render-bench "render_bench_shaders"
+        PREFIX
+            "/render_bench/shaders"
+        BASE
+            "tools/render_bench/shaders"
+        FILES
+            tools/render_bench/shaders/segment.vert
+            tools/render_bench/shaders/segment.frag
+    )
+endif()
+
 if(BUILD_CLI AND BUILD_LIBSLIC3R AND TARGET libslic3r)
     add_library(owzx_cli_core OBJECT
         src/nanosvg_impl.cpp

@@ -24,6 +24,11 @@ $env:CMAKE_PREFIX_PATH = "E:\Qt6.10"
 $env:Qt6_DIR = "E:\Qt6.10"
 $env:PATH = "E:\Qt6.10\bin;$env:PATH"
 
+$renderBenchEnabled = $env:OWZX_RENDER_BENCH -match '^(1|ON|TRUE|YES)$'
+$renderBenchSegments = if ($env:OWZX_RENDER_BENCH_SEGMENTS) { $env:OWZX_RENDER_BENCH_SEGMENTS } else { '1000000' }
+$renderBenchFrames = if ($env:OWZX_RENDER_BENCH_FRAMES) { $env:OWZX_RENDER_BENCH_FRAMES } else { '240' }
+$renderBenchBackend = if ($env:OWZX_RENDER_BENCH_BACKEND) { $env:OWZX_RENDER_BENCH_BACKEND } else { 'auto' }
+
 $cmakeArgs = @(
   '-S', '..',
   '-B', '.',
@@ -33,6 +38,7 @@ $cmakeArgs = @(
   '-DLIBSLIC3R_FROM_SOURCE=ON',
   '-DOWZX_QML_GUI=ON',
   '-DBUILD_CLI=ON',
+  "-DOWZX_RENDER_BENCH=$(if ($renderBenchEnabled) { 'ON' } else { 'OFF' })",
   '-DQT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT=3.21',
   '-DQt6_DIR=E:/Qt6.10'
 )
@@ -75,6 +81,10 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 ninja -j16 owzx-cli 2>$null
 ninja -j16 CliTests 2>$null
 ninja -j16 test-slice-direct 2>$null
+if ($renderBenchEnabled) {
+  ninja -j16 owzx-render-bench
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
 
 # Deploy Qt runtime DLLs if not already present
 if (-not (Test-Path './Qt6Core.dll')) {
@@ -105,6 +115,22 @@ if (Test-Path $occtBinDir) {
 
 # cr_tpms_library.dll is delay-loaded and unused; remove to avoid missing DLL warnings.
 Remove-Item 'cr_tpms_library.dll' -ErrorAction SilentlyContinue
+
+if ($renderBenchEnabled) {
+  Write-Host "`n[RenderBench] Running Qt RHI render benchmark..." -ForegroundColor Cyan
+  $benchExe = './owzx-render-bench.exe'
+  if (Test-Path $benchExe) {
+    & $benchExe --segments $renderBenchSegments --frames $renderBenchFrames --backend $renderBenchBackend 2>&1 | ForEach-Object { Write-Host "  $_" }
+    if ($LASTEXITCODE -ne 0) {
+      Write-Host "[RenderBench] Benchmark failed" -ForegroundColor Red
+      exit $LASTEXITCODE
+    }
+    Write-Host "[RenderBench] Benchmark completed" -ForegroundColor Green
+  } else {
+    Write-Host "[RenderBench] owzx-render-bench.exe not found" -ForegroundColor Red
+    exit 1
+  }
+}
 
 # Run static UI audit tests before launching the app.
 Write-Host "`n[UI] Running QML UI audit tests..." -ForegroundColor Cyan
