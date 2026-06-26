@@ -1,18 +1,10 @@
 ---
 gsd_state_version: 1.0
-<<<<<<< HEAD
-milestone: v3.0
-milestone_name: PartPlate Core
-status: milestone_archived
-last_updated: "2026-06-26T18:00:00+08:00"
-last_activity: 2026-06-26 -- v3.0 archived via /gsd-complete-milestone; awaiting next milestone
-=======
 milestone: v3.1
 milestone_name: QRhi High-Performance Prepare/Preview Rendering
 status: planning
 last_updated: "2026-06-27T00:00:00+08:00"
 last_activity: 2026-06-27 -- v3.1 requirements and roadmap created
->>>>>>> 998c6fb (docs: start milestone v3.1 qrhi rendering)
 progress:
   total_phases: 6
   completed_phases: 0
@@ -100,12 +92,9 @@ Or skip discussion and plan directly:
 ```text
 $gsd-plan-phase 23
 ```
-<<<<<<< HEAD
-=======
 
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
 |---|---|---|---|---|
 | 260627-04s | Document upstream OrcaSlicer issue avoidance constraints | 2026-06-27 | pending | [260627-04s-document-upstream-orcaslicer-issue-avoid](./quick/260627-04s-document-upstream-orcaslicer-issue-avoid/) |
->>>>>>> 998c6fb (docs: start milestone v3.1 qrhi rendering)
