@@ -4,57 +4,52 @@
 
 OWzx Slicer is a Windows desktop slicer migrating OrcaSlicer from its upstream C++/wxWidgets GUI to a C++17, Qt 6.10, and QML architecture. The GUI layer is being rewritten while preserving libslic3r and upstream user-visible behavior as the functional source of truth.
 
-The project currently has a usable Qt6/QML shell, real model/project IO, real slicing and G-code export paths, preview rendering, partial preset IO, and hybrid device/camera/network integrations. Milestone v2.9 (shipped 2026-06-25) realigned planning, implementation status, visible UI classifications, and verification evidence. The next recommended work is source-truth gap analysis for PartPlate and AssembleView before starting v3.0.
+The project currently has a usable Qt6/QML shell, real model/project IO, real slicing and G-code export paths, preview rendering, partial preset IO, and hybrid device/camera/network integrations. Milestone v3.0 shipped the PartPlate core migration. The active v3.1 milestone establishes a QRhi high-performance rendering foundation for Prepare and Preview before continuing AssembleView and preset completion work.
 
 ## Core Value
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current State: v3.0 Shipped — Planning Next Milestone
+## Current Milestone: v3.1 QRhi High-Performance Prepare/Preview Rendering
 
-**Last shipped:** v3.0 PartPlate Core (2026-06-26) — 7 phases (16-22), 14/14 requirements satisfied, 2 review cycles (code+UI) all P0/P1 fixed. See `.planning/milestones/v3.0-ROADMAP.md`.
+**Goal:** Establish the Qt-native high-performance rendering foundation for Prepare and Preview using QRhi with D3D12-first/D3D11 fallback, while keeping upstream-visible behavior aligned and preserving the current stable fallback path.
 
-**Next milestone goal:** v3.1 — AssembleView (PLATE-15) + Preset System completion + multi-plate arrangement/wipe-tower/thumbnail polish (PLATE-16..19). Start with `$analyzing-source-truth-gap AssembleView`, then `$gsd-new-milestone`.
-
-**Baseline capabilities validated by v3.0:**
-- Real PartPlate/PartPlateList domain model (src/core/model/) replacing the parallel-vector shell; instance-level membership, native DynamicPrintConfig, slice state machine.
-- 3MF multi-plate round-trip (write path + full load restore); v2.9 blocker fixed.
-- Per-plate config fully honored during slicing (config.apply full merge).
-- Clone/reorder/printable lifecycle ops with QML context-menu UI + failure feedback.
-- Code review + UI review passed (Phase 21/22); QmlUiAuditTests guards Phase 17 wiring.
-
-**Baseline capabilities validated by v2.9:**
-- Planning truth reset: `.planning` now agrees with git history, current code, and verification evidence.
-- Source hygiene: encoding damage, literal escape artifacts, residual backup files, and untracked baseline files are classified and handled.
-- Service classification: each active service surface is marked Real, Hybrid, Mock, Blocked, or Placeholder.
-- Calibration closure for implemented modes: PA, Flow Rate, and Temp Tower are wired, verified, and separated from still-pending calibration modes.
-- Hybrid integration verification: MQTT, FTP, SSDP, camera, software viewport, and app settings have deterministic checks or explicit block notes.
-- Visible placeholder triage: top-level disabled/no-op UI paths are either wired to real viewmodel/service behavior or documented as deferred/blocked.
+**Target features:**
+- Gated QRhi renderer infrastructure, shader build pipeline, backend selection, and benchmark evidence.
+- Prepare QRhi rendering for bed/plate, loaded model meshes, plate switching, camera interaction, selection, and hover feedback.
+- Preview QRhi rendering for G-code segment buffers, layer-range scrubbing, color modes, visibility toggles, playback, and synchronized legend/statistics.
+- Performance instrumentation and verification gates proving GPU-resident data paths and fallback safety.
+- Vulkan documented as a future SDK prerequisite, not a v3.1 blocker, because the installed Qt 6.10 SDK has QtGui Vulkan disabled.
 
 ## Requirements
 
 ### Validated
 
-These are current baseline capabilities inferred from implementation, git history, and the latest canonical verification command. They remain subject to upstream parity audits when touched.
+These are current baseline capabilities inferred from implementation, git history, and the latest milestone evidence. They remain subject to upstream parity audits when touched.
 
 - Qt6/QML application shell with `BackendContext` as the composition root.
 - QML Prepare/Preview/Monitor/Settings-style surfaces with C++ viewmodels and services behind them.
 - Real 3MF/STL/OBJ model loading through libslic3r-backed project paths.
 - Real slicing and G-code export path through `SliceService` and libslic3r.
-- G-code preview rendering path.
+- Existing G-code preview rendering path.
 - Undo/redo infrastructure for common object operations.
 - Project save/load paths with thumbnails and partial multi-plate support.
-- SSDP discovery, MQTT control, FTP print upload, and camera streaming code paths exist and have Phase 13 deterministic protocol/fallback evidence, but remain Hybrid until live printer/broker/upload/RTSP verification is performed.
-- Calibration PA, Flow Rate, and Temp Tower slice dispatch paths are visible and covered by deterministic Phase 12 regression tests, but broader calibration hardware modes remain pending or blocked.
+- v3.0 PartPlate/PartPlateList domain model, plate lifecycle operations, 3MF multi-plate persistence, and per-plate slice scheduling.
+- SSDP discovery, MQTT control, FTP print upload, and camera streaming code paths exist with deterministic protocol/fallback evidence, but remain Hybrid until live printer/broker/upload/RTSP verification is performed.
+- Calibration PA, Flow Rate, and Temp Tower slice dispatch paths are visible and covered by deterministic regression tests; broader calibration hardware modes remain pending or blocked.
 
 ### Active
 
-No implementation phase is currently active. The next recommended planning action is a source-truth gap analysis for PartPlate and AssembleView.
+- [ ] Gated QRhi renderer infrastructure with D3D12-first/D3D11 fallback and stable default viewport unchanged.
+- [ ] Prepare QRhi rendering for bed/plate, model meshes, camera interaction, selection, and plate switching.
+- [ ] Preview QRhi rendering for G-code segment buffers, layer-range draw control, color modes, toggles, playback, and legend/statistics sync.
+- [ ] Performance and verification gates for GPU-resident data, benchmark evidence, fallback safety, code review, and UI review.
 
 ### Future
 
-- PartPlate and AssembleView source-truth completion.
+- AssembleView source-truth completion and multi-plate polish after the QRhi rendering foundation is stable.
 - Upstream-compatible preset bundle and CreatePresetsDialog workflows.
+- Vulkan backend evaluation after replacing or rebuilding Qt 6.10 with public QtGui Vulkan support enabled.
 - ModelMall/Home WebView and cloud-related workflows.
 - Full i18n translation coverage beyond the current basic Qt translation infrastructure.
 - Full calibration mode coverage beyond PA, Flow Rate, and Temp Tower.
@@ -65,7 +60,8 @@ No implementation phase is currently active. The next recommended planning actio
 - Changing libslic3r algorithms as part of GUI migration work.
 - Adding product behavior that is not mapped to OrcaSlicer upstream or explicitly documented as an OWzx-only decision.
 - Creating alternate build directories or using non-canonical build scripts.
-- Completing blocked dependency areas such as OpenVDB and WebRTC in v2.9 unless the dependency block is independently resolved.
+- Completing blocked dependency areas such as OpenVDB and WebRTC in v3.1 unless the dependency block is independently resolved.
+- Promoting Vulkan as default backend with the current Qt SDK.
 
 ## Context
 
@@ -73,10 +69,11 @@ No implementation phase is currently active. The next recommended planning actio
 - Active product brand: OWzx.
 - Historical CrealityPrint-era notes remain evidence only; new work must cite OrcaSlicer upstream paths unless the task is explicitly cleaning historical compatibility.
 - Several `*Mock` services now contain real production-like paths plus fallback/mock behavior. The name alone does not describe implementation status.
-- Planning before v2.9 overstated or understated several areas: v2.7/v2.8 code landed on `main`, while `.planning` still described v2.6 as the current milestone.
-- Current verification evidence: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` passed on 2026-06-25 after Phase 15, including build, app smoke launch, QML UI audit, CLI/E2E targets, and E2E pipeline tests. `ViewModelSmokeTests.exe` was run explicitly and reported 32 passed, 0 failed; `QmlUiAuditTests.exe` was run explicitly and reported 7 passed, 0 failed.
-- v2.9 audit: `.planning/milestones/v2.9-MILESTONE-AUDIT.md` — 28/28 requirements satisfied, 14/14 integration checks, 4/4 E2E flows, 0 orphans, `tech_debt` status (no blockers).
-- Known non-blocking tech debt carried into v3.0: `.Codex` (capital C) path references diverge from git-tracked lowercase `.codex` (Windows-safe only); normalize before any case-sensitive CI.
+- v2.9 realigned planning with implementation history and verification evidence.
+- v3.0 shipped PartPlate Core: phases 16-22, 14/14 requirements satisfied, code/UI review P0/P1 findings fixed, canonical verification passed.
+- Rendering spike evidence: `.planning/spikes/001-rendering-performance-architecture/README.md` selected QRhi as the high-performance architecture, and `.planning/spikes/002-render-bench-qrhi-backend/README.md` validated the current Windows backend reality.
+- Current Qt SDK reality: `E:/Qt6.10/lib/cmake/Qt6Gui/Qt6GuiTargets.cmake` lists `vulkan` under `QT_DISABLED_PUBLIC_FEATURES`, so Vulkan cannot be a valid v3.1 backend until the Qt SDK changes.
+- Known carry-forward tech debt: `.Codex` path casing diverges from git-tracked lowercase `.codex` on Windows; normalize before case-sensitive CI.
 
 ## Constraints
 
@@ -86,6 +83,7 @@ No implementation phase is currently active. The next recommended planning actio
 - **Architecture:** durable business rules, validation, persistence, and upstream behavior mapping belong in C++ services/viewmodels; QML is presentation and wiring.
 - **Source Truth:** user-visible behavior must be mapped to OrcaSlicer upstream before being considered complete.
 - **Dependencies:** CGAL is available; OpenVDB, FFmpeg-related runtime availability, WebRTC/MetaRTC, and closed device protocols must be handled according to the local dependency state and current build rules.
+- **Rendering Backend:** v3.1 performance path uses QRhi with D3D12 first and D3D11 fallback on Windows; Vulkan is future work until a Vulkan-enabled Qt SDK is available and benchmarked.
 - **Worktree Safety:** unrelated local code changes must not be reverted or cleaned during planning updates.
 
 ## Key Decisions
@@ -94,13 +92,12 @@ No implementation phase is currently active. The next recommended planning actio
 |---|---|---|
 | Use OrcaSlicer as active source truth | The product is an OrcaSlicer Qt6/QML migration, not a free-form slicer redesign. | Good |
 | Keep libslic3r as the slicing engine | Rewriting slicing algorithms is outside GUI migration scope and high risk. | Good |
-| Classify services as Real/Hybrid/Mock/Blocked/Placeholder | `*Mock` class names no longer reflect implementation reality. | Good — v2.9 shipped; vocabulary adopted across planning |
-| Treat visible disabled/no-op UI as migration debt | Broad UI coverage is not the same as source-truth workflow completion. | Good — v2.9 triage shipped (Phase 14) |
-| Start the next milestone as v2.9 | Git history already contains v2.7 and v2.8 work; planning must not reuse stale version labels. | Good — v2.9 shipped 2026-06-25 |
-| Skip new domain research for v2.9 | This milestone is a local code/planning realignment, not discovery of a new product domain. | Good |
-| Default to SoftwareViewport, gate OpenGL behind `OWZX_OPENGL` | Software viewport startup is the safer default; OpenGL path preserved for opt-in. | Good — enforced by QmlUiAuditTests (INT-05) |
-| Route calibration by stable ids, not list indexes | List-index routing is fragile across menu reordering. | Good — Phase 12 stable routing shipped |
-| Defer PartPlate/AssembleView to v3.0, preset bundle to v3.1 | Large source-truth modules need dedicated milestones after the baseline is trustworthy. | Pending — v3.0/v3.1 scope |
+| Classify services as Real/Hybrid/Mock/Blocked/Placeholder | `*Mock` class names no longer reflect implementation reality. | Good - v2.9 vocabulary adopted |
+| Default to SoftwareViewport, gate OpenGL behind `OWZX_OPENGL` | Software viewport startup is the safer default; OpenGL path preserved for opt-in. | Good - enforced by QmlUiAuditTests |
+| Use QRhi as the high-performance rendering architecture | `QQuickFramebufferObject` is OpenGL-only; QRhi supports modern GPU backends and keeps rendering inside Qt. | Pending - v3.1 implementation |
+| Use D3D12-first/D3D11 fallback for v3.1 on Windows | Current Qt SDK disables Vulkan, while QRhi D3D12/D3D11 benchmark initializes and renders successfully. | Pending - v3.1 implementation |
+| Keep QRhi behind an explicit gate until validated | Stable default startup must not regress while the new renderer is built and verified. | Pending - v3.1 implementation |
+| Defer AssembleView/preset completion behind the rendering foundation | Prepare/Preview rendering performance is foundational for AssembleView and large Preview workloads. | Pending - v3.2+ scope |
 
 ## Evolution
 
@@ -119,4 +116,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-26 after v3.0 milestone completion.*
+*Last updated: 2026-06-27 after v3.1 milestone definition.*

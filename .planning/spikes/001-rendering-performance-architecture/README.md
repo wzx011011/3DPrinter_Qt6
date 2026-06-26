@@ -112,3 +112,5 @@ Minimum success criteria:
 ## Result
 
 Verdict is `PARTIAL` because research strongly selects `QQuickRhiItem + QRhi + Vulkan` as the best feasible Qt-native route, but no empirical benchmark has been run yet. The next implementation step should be a small renderer prototype and benchmark, not a full feature migration.
+
+Update 2026-06-27: Spike 002 supersedes the default backend choice for the current Windows Qt 6.10 environment. Keep QRhi as the renderer architecture, but use QRhi/D3D12 first and QRhi/D3D11 fallback on Windows. The installed Qt SDK has QtGui Vulkan disabled, so Vulkan requires a different Qt build before it can be benchmarked as a real candidate.

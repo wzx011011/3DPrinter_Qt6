@@ -207,7 +207,7 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 
 **Known deferred items at close:** AssembleView (PLATE-15), m_print_list caching, per-plate wipe-tower geometry, PLATE-09 real-model fixture, multi-plate arrangement/thumbnail/filament-map UI, `.Codex` path casing (v2.9 carry-forward).
 
-**Handoff:** Recommended next milestone is v3.1 (AssembleView + Preset System + multi-plate arrangement polish).
+**Handoff:** Recommended next milestone was revised after rendering spike evidence: v3.1 is now QRhi High-Performance Prepare/Preview Rendering. AssembleView and preset completion move to v3.2+ behind the rendering foundation.
 
 **Archives:**
 - `.planning/milestones/v3.0-ROADMAP.md`
@@ -216,4 +216,32 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 
 ---
 
-*Last updated: 2026-06-26 via `/gsd-complete-milestone v3.0`.*
+*Last updated: 2026-06-27 via `$gsd-new-milestone` planning for v3.1.*
+
+---
+
+### v3.1 - QRhi High-Performance Prepare/Preview Rendering
+
+**Started:** 2026-06-27
+**Status:** Planning
+**Phases:** 23-28 (planned)
+
+**Goal:** Establish the Qt-native high-performance rendering foundation for Prepare and Preview using QRhi with D3D12-first/D3D11 fallback, while keeping upstream-visible behavior aligned and preserving the current stable fallback path.
+
+**Planned phases:**
+- Phase 23: QRhi Renderer Foundation And Backend Gate
+- Phase 24: Prepare Scene Data And Plate Rendering
+- Phase 25: Prepare Model Mesh Rendering And Camera Interaction
+- Phase 26: Preview G-Code GPU Pipeline
+- Phase 27: Preview Interaction And Performance Gate
+- Phase 28: Fallback, Verification, Reviews, And Handoff
+
+**Requirements:** 26 active requirements in `.planning/REQUIREMENTS.md`, all mapped in `.planning/ROADMAP.md`.
+
+**Key decisions:**
+1. Use QRhi as the rendering architecture instead of extending the legacy OpenGL/FBO path.
+2. Use D3D12-first with D3D11 fallback on Windows for v3.1.
+3. Keep QRhi explicitly gated until the milestone proves fallback safety and performance.
+4. Treat Vulkan as a future SDK prerequisite because the installed Qt 6.10 SDK has QtGui Vulkan disabled.
+
+**Next step:** `$gsd-discuss-phase 23` or `$gsd-plan-phase 23`.
