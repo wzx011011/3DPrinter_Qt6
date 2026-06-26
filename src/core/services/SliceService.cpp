@@ -376,28 +376,22 @@ void SliceService::startSlice(const QString &projectName)
         receiver->mergedPresetConfig_.clear(); // one-shot injection per slice
       }
 
-      // Apply per-plate config overrides (align upstream PartPlate::config)
+      // v3.0 Phase 19 (D-15): merge the FULL per-plate config (not just 3 hardcoded
+      // keys), aligning with upstream update_slice_context_to_current_plate.
+      // DynamicPrintConfig::apply(other) merges other's keys into this with other
+      // winning — so plate overrides take precedence over the preset config.
+      // This honors ALL per-plate overrides (filament_maps, print_compatible_*,
+      // layer sequences, curr_bed_type, print_sequence, spiral_mode, etc.), fixing
+      // the gap-analysis issue where arbitrary per-plate overrides were dropped.
       if (receiver && receiver->projectService_) {
         const int plateIdx = targetPlateIndex >= 0 ? targetPlateIndex
                              : receiver->projectService_->currentPlateIndex();
-        if (plateIdx >= 0 && plateIdx < receiver->projectService_->plateCount()) {
-          const int bedType = receiver->projectService_->plateBedType(plateIdx);
-          if (bedType > 0) {
-            auto *opt = config.option("curr_bed_type");
-            if (opt) opt->setInt(bedType);
-          }
-          const int printSeq = receiver->projectService_->platePrintSequence(plateIdx);
-          if (printSeq > 0) {
-            auto *opt = config.option("print_sequence");
-            if (opt) opt->setInt(printSeq);
-          }
-          const int spiralMode = receiver->projectService_->plateSpiralMode(plateIdx);
-          if (spiralMode == 1) {
-            auto *opt = config.option("spiral_mode");
-            if (opt) opt->setInt(1);
-          } else if (spiralMode == 2) {
-            auto *opt = config.option("spiral_mode");
-            if (opt) opt->setInt(0);
+        if (plateIdx >= 0) {
+          if (const Slic3r::DynamicPrintConfig *plateCfg =
+                  receiver->projectService_->plateDynamicConfig(plateIdx)) {
+            if (!plateCfg->empty()) {
+              config.apply(*plateCfg);
+            }
           }
         }
       }

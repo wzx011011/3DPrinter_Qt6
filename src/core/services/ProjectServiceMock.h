@@ -106,6 +106,11 @@ public:
   Q_INVOKABLE bool movePlate(int oldIndex, int newIndex);
   Q_INVOKABLE bool setPlatePrintable(int plateIndex, bool printable);
   Q_INVOKABLE bool isPlatePrintable(int plateIndex) const;
+#ifdef HAS_LIBSLIC3R
+  // v3.0 Phase 19 (D-15): per-plate DynamicPrintConfig for slice config merge.
+  // Returns Slic3r::DynamicPrintConfig* (forward-declared in the HAS_LIBSLIC3R block).
+  const ::Slic3r::DynamicPrintConfig *plateDynamicConfig(int plateIndex) const;
+#endif
   Q_INVOKABLE QList<int> plateObjectIndices(int plateIndex) const;
   Q_INVOKABLE QList<int> currentPlateObjectIndices() const;
   Q_INVOKABLE int plateObjectCount(int index) const;
@@ -378,6 +383,8 @@ private:
   QList<int> pendingPlateSpiral_;
 
 #ifdef HAS_LIBSLIC3R
+  // Forward-declared to keep libslic3r/Config.hpp out of the header (header pollution).
+  class DynamicPrintConfig;
   Slic3r::Model *model_ = nullptr;
 #endif
 };

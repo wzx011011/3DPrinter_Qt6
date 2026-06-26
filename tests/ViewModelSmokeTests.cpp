@@ -10,6 +10,10 @@
 #include <QUdpSocket>
 #include <QtTest>
 
+#ifdef HAS_LIBSLIC3R
+#include <libslic3r/PrintConfig.hpp>
+#endif
+
 #include "core/services/AppSettingsService.h"
 #include "core/model/PartPlate.h"
 #include "core/model/PartPlateList.h"
@@ -149,6 +153,9 @@ private slots:
   void projectServicePerPlatePrintableRoundTrip();
   // v3.0 Phase 18: 3MF multi-plate persistence round-trip (PLATE-09, the v2.9 blocker)
   void multiPlate3mfRoundTripPreservesState();
+  // v3.0 Phase 19: per-plate config merge + scoped-value stub fix
+  void projectServicePerPlateConfigOverrideRoundTrips();
+  void sliceServicePerPlateConfigMergeHonorsOverrides();
 
 private:
   bool hasLibslic3r() const;
@@ -1504,6 +1511,44 @@ void ViewModelSmokeTests::multiPlate3mfRoundTripPreservesState()
   QVERIFY2(!loader.isPlateLocked(0), "plate 0 locked state must round-trip");
   QVERIFY2(loader.isPlateLocked(1), "plate 1 locked state must round-trip");
   QCOMPARE(loader.plateBedType(0), 3);
+#endif
+}
+
+// ── v3.0 Phase 19: per-plate config merge + scoped-value stub fix ──
+
+void ViewModelSmokeTests::projectServicePerPlateConfigOverrideRoundTrips()
+{
+  // D-16: plateScopedOptionValue/setPlateScopedOptionValue must read/write the real
+  // PartPlate::config() under HAS_LIBSLIC3R (previously a `return fallbackValue` stub).
+#ifndef HAS_LIBSLIC3R
+  QSKIP("per-plate config round-trip requires libslic3r (DynamicPrintConfig)");
+#else
+  ProjectServiceMock project;
+  // Write a float override on a real config key, read it back.
+  QVERIFY(project.setPlateScopedOptionValue(0, QStringLiteral("layer_height"), 0.25));
+  QCOMPARE(project.plateScopedOptionValue(0, QStringLiteral("layer_height"), 0.0).toDouble(), 0.25);
+  // A key never set returns the fallback.
+  QCOMPARE(project.plateScopedOptionValue(0, QStringLiteral("never_set_key"), -1).toInt(), -1);
+#endif
+}
+
+void ViewModelSmokeTests::sliceServicePerPlateConfigMergeHonorsOverrides()
+{
+  // D-15: the per-plate DynamicPrintConfig (the config SliceService merges via
+  // config.apply) must actually carry the override after setPlateScopedOptionValue.
+  // Full slice-path verification needs a real-model fixture (same gap as Phase 18
+  // PLATE-09); this unit-level test asserts the merge SOURCE is correct.
+#ifndef HAS_LIBSLIC3R
+  QSKIP("per-plate config merge source check requires libslic3r");
+#else
+  ProjectServiceMock project;
+  QVERIFY(project.setPlateScopedOptionValue(0, QStringLiteral("layer_height"), 0.3));
+  const Slic3r::DynamicPrintConfig *cfg = project.plateDynamicConfig(0);
+  QVERIFY2(cfg != nullptr, "plateDynamicConfig must return the plate's config");
+  const auto *opt = cfg->option("layer_height");
+  QVERIFY2(opt != nullptr, "plate config must carry the override key after setPlateScopedOptionValue");
+  // layer_height is a Float; read via getFloat.
+  QCOMPARE(dynamic_cast<const Slic3r::ConfigOptionFloat *>(opt)->getFloat(), 0.3);
 #endif
 }
 

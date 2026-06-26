@@ -1446,9 +1446,24 @@ bool ProjectServiceMock::setScopedOptionValue(int objectIndex, int volumeIndex, 
 QVariant ProjectServiceMock::plateScopedOptionValue(int plateIndex, const QString &key, const QVariant &fallbackValue) const
 {
 #ifdef HAS_LIBSLIC3R
-  Q_UNUSED(plateIndex);
-  Q_UNUSED(key);
-  return fallbackValue; // TODO: upstream PartPlate config access
+  // v3.0 Phase 19 (D-16): read from PartPlate::config() (replaces the TODO stub).
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return fallbackValue;
+  const Slic3r::DynamicPrintConfig &cfg = p->config();
+  const auto *opt = cfg.option(key.toUtf8().constData());
+  if (!opt) return fallbackValue;
+  // Dispatch by concrete ConfigOption type (Config.hpp: ConfigOptionInt/Float/Bool/String).
+  if (const auto *o = dynamic_cast<const Slic3r::ConfigOptionInt *>(opt))
+    return o->getInt();
+  if (const auto *o = dynamic_cast<const Slic3r::ConfigOptionFloat *>(opt))
+    return o->getFloat();
+  if (const auto *o = dynamic_cast<const Slic3r::ConfigOptionBool *>(opt))
+    return o->getBool();
+  if (const auto *o = dynamic_cast<const Slic3r::ConfigOptionString *>(opt))
+    return QString::fromStdString(o->value);
+  // Percent/enum/etc. expose via getInt as a fallback.
+  try { return opt->getInt(); }
+  catch (...) { return fallbackValue; }
 #else
   const auto it = m_mockPlateOverrides.constFind(plateIndex);
   if (it != m_mockPlateOverrides.constEnd())
@@ -1464,14 +1479,46 @@ QVariant ProjectServiceMock::plateScopedOptionValue(int plateIndex, const QStrin
 bool ProjectServiceMock::setPlateScopedOptionValue(int plateIndex, const QString &key, const QVariant &value)
 {
 #ifdef HAS_LIBSLIC3R
-  Q_UNUSED(plateIndex);
-  Q_UNUSED(key);
-  Q_UNUSED(value);
-  return false; // TODO: upstream PartPlate config access
+  // v3.0 Phase 19 (D-16): write into PartPlate::config() (replaces the TODO stub).
+  OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return false;
+  Slic3r::DynamicPrintConfig &cfg = p->config();
+  const std::string k = key.toUtf8().constData();
+  auto *opt = cfg.option(k, true);  // create=true so missing keys are created
+  if (!opt) return false;
+  // Dispatch by QVariant type → matching ConfigOption .value write (no setters in
+  // libslic3r; ConfigOptionSingle<T> exposes a public `value` member).
+  if (value.typeId() == QMetaType::Bool) {
+    if (auto *b = dynamic_cast<Slic3r::ConfigOptionBool *>(opt)) b->value = value.toBool();
+    else opt->setInt(value.toBool() ? 1 : 0);
+  } else if (value.typeId() == QMetaType::Double) {
+    if (auto *f = dynamic_cast<Slic3r::ConfigOptionFloat *>(opt)) f->value = value.toDouble();
+    else opt->setInt(int(value.toDouble()));
+  } else if (value.typeId() == QMetaType::Int || value.typeId() == QMetaType::LongLong) {
+    opt->setInt(value.toInt());
+  } else {
+    if (auto *s = dynamic_cast<Slic3r::ConfigOptionString *>(opt))
+      s->value = value.toString().toStdString();
+    else
+      opt->setInt(value.toInt());
+  }
+  emit projectChanged();
+  return true;
 #else
   m_mockPlateOverrides[plateIndex][key] = value;
   emit projectChanged();
   return true;
+#endif
+}
+
+const Slic3r::DynamicPrintConfig *ProjectServiceMock::plateDynamicConfig(int plateIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  return p ? &p->config() : nullptr;
+#else
+  Q_UNUSED(plateIndex);
+  return nullptr;
 #endif
 }
 
