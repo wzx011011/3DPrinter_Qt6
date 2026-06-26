@@ -91,7 +91,7 @@
 | 17. Plate Lifecycle Completion | v3.0 | 1/1 | Complete   | 2026-06-25 |
 | 18. 3MF Multi-Plate Persistence | v3.0 | 1/1 | Complete   | 2026-06-25 |
 | 19. Per-Plate Slice Scheduling | v3.0 | 1/1 | Complete   | 2026-06-26 |
-| 20. Verification and Handoff | v3.0 | 0/? | Not started | — |
+| 20. Verification and Handoff | v3.0 | 1/1 | Complete   | 2026-06-26 |
 
 ## Past Milestones
 

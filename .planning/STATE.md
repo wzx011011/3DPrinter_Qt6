@@ -16,15 +16,15 @@ progress:
 # Project State
 
 **Milestone:** v3.0 - PartPlate Core
-**Status:** Phase 19 complete (4/5 phases); ready for Phase 20 (final)
-**Next step:** `/gsd-discuss-phase 20` (Verification and Handoff — final v3.0 phase)
+**Status:** Phase 20 complete (5/5 phases); v3.0 milestone complete
+**Next step:** `/gsd-audit-milestone v3.0` (milestone audit) → then `/gsd-complete-milestone v3.0`
 
 ## Current Position
 
-Phase: 19 (Per-Plate Slice Scheduling) — COMPLETE (verified: passed)
-Plan: 19-01 (last)
-Status: Phase 19 done; ready for Phase 20
-Last activity: 2026-06-25 — Phase 19 executed + verified (autonomous --only 19)
+Phase: 20 (Verification and Handoff) — COMPLETE (verified: passed); v3.0 MILESTONE COMPLETE
+Plan: 20-01 (last)
+Status: v3.0 complete (5/5 phases); ready for audit
+Last activity: 2026-06-25 — Phase 20 executed + verified (autonomous --only 20); v3.0 milestone complete
 
 ## Project Reference
 

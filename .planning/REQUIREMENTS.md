@@ -100,23 +100,29 @@
 
 ---
 
-## Traceability (filled by roadmap)
+## Traceability (filled by roadmap + Phase 20)
 
-| Requirement | Phase | Status |
-|---|---|---|
-| PLATE-01 | Phase 16 | Not started |
-| PLATE-02 | Phase 16 | Not started |
-| PLATE-03 | Phase 17 | Not started |
-| PLATE-04 | Phase 17 | Not started |
-| PLATE-05 | Phase 17 | Not started |
-| PLATE-06 | Phase 16 | Not started |
-| PLATE-07 | Phase 18 | Not started |
-| PLATE-08 | Phase 18 | Not started |
-| PLATE-09 | Phase 18 | Not started |
-| PLATE-10 | Phase 19 | Not started |
-| PLATE-11 | Phase 19 | Not started |
-| PLATE-12 | Phase 20 | Not started |
-| PLATE-13 | Phase 20 | Not started |
-| PLATE-14 | Phase 20 | Not started |
+| Requirement | Phase | Status | Evidence |
+|---|---|---|---|
+| PLATE-01 | Phase 16 | Complete | `src/core/model/PartPlate.h` value object (instance membership, DynamicPrintConfig, state machine); 5 unit tests in 16-01 |
+| PLATE-02 | Phase 16 | Complete | `src/core/model/PartPlateList.h` single source of truth; ProjectServiceMock re-backed (16-02, 9 vectors deleted) |
+| PLATE-03 | Phase 17 | Complete | `ProjectServiceMock::clonePlate` deep-copies ModelObjects via duplicateObject + dst->addInstance; test projectServiceClonePlateDeepCopiesObjects |
+| PLATE-04 | Phase 17 | Complete | `PartPlateList::movePlate` reorder+reindex; test partPlateListMovePlateReindexesAndAdjustsCurrent |
+| PLATE-05 | Phase 17 | Complete | setPlatePrintable/isPlatePrintable; requestSliceAll excludes non-printable; test projectServicePerPlatePrintableRoundTrip |
+| PLATE-06 | Phase 16 | Complete | 32 baseline tests + projectServicePlateOpsBackedByPartPlateList regression pass unchanged |
+| PLATE-07 | Phase 18 | Complete | `saveProject` builds PlateDataPtrs via buildPlateDataList + StoreParams.plate_data_list + store_bbs_3mf + release_PlateData_list |
+| PLATE-08 | Phase 18 | Complete | load lambdas capture locked/bed-type/sequence/spiral from PlateData into pendingPlate* + apply in rebuild |
+| PLATE-09 | Phase 18 | Complete (partial test) | write/load code verified by build + code inspection (mirrors upstream PartPlate.cpp:6160); full round-trip test QSKIP'd — store_bbs_3mf needs valid model geometry the test harness can't synthesize (fixture gap) |
+| PLATE-10 | Phase 19 | Complete | SliceService config.apply(*plateCfg) full merge replaces 3-key patch; tests projectServicePerPlateConfigOverrideRoundTrips + sliceServicePerPlateConfigMergeHonorsOverrides |
+| PLATE-11 | Phase 19 | Complete (documented) | D-14: stack-local Slic3r::Print per startSlicePlate = per-plate isolation; requestSliceAll iterates non-locked+printable plates |
+| PLATE-12 | Phase 20 | Complete | canonical auto_verify_with_vcvars.ps1 exit 0; E2E pipeline passed |
+| PLATE-13 | Phase 20 | Complete | ViewModelSmokeTests 43 passed (5 model + 1 regression + 3 lifecycle + 1 round-trip-QSKIP + 2 config + 32 baseline); QmlUiAudit 7 passed |
+| PLATE-14 | Phase 20 | Complete | this traceability table — all 14 PLATE requirements mapped to evidence |
 
-**Coverage:** 14 total · 14 mapped · 14 to complete · 0 unmapped.
+**Coverage:** 14 total · 14 mapped · 14 complete · 0 unmapped.
+
+### Phase 20 Final Verification Evidence
+
+- `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`: **exit 0**; QML UI audit passed; E2E pipeline passed.
+- `build/ViewModelSmokeTests.exe`: **Totals: 43 passed, 0 failed, 1 skipped, 0 blacklisted** (1 skipped = PLATE-09 round-trip, test-fixture limitation, documented).
+- `build/QmlUiAuditTests.exe`: **7 passed, 0 failed** (Phase 17's new plate-menu controls don't trip honest-UI rules).
