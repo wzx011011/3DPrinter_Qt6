@@ -15,6 +15,8 @@ private slots:
   void sidebarCopyIsLocalizedAndOperationalTextIsReadable();
   void mainRegistersSoftwareViewportByDefault();
   void visiblePlaceholderSurfacesAreHonest();
+  // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
+  void plateContextMenuItemsWiredAndNonEmpty();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -169,6 +171,29 @@ void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()
 
   QVERIFY2(preferences.contains(QStringLiteral("enabled: false")),
            "Unavailable Preferences update check must be visibly disabled");
+}
+
+void QmlUiAuditTests::plateContextMenuItemsWiredAndNonEmpty()
+{
+  // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring.
+  // Without this, a regression (deleted menu item / empty onTriggered / broken
+  // enabled) would pass the other 7 audit tests, since they only check generic
+  // honest-UI rules, not the specific Phase 17 items.
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+
+  // The three Phase 17 operations must be wired to real menu actions.
+  QVERIFY2(preparePage.contains(QStringLiteral("clonePlate(")),
+           "PreparePage must wire a clonePlate plate-context-menu action (PLATE-03)");
+  QVERIFY2(preparePage.contains(QStringLiteral("movePlate(")),
+           "PreparePage must wire a movePlate plate-context-menu action (PLATE-04)");
+  QVERIFY2(preparePage.contains(QStringLiteral("setPlatePrintable(")),
+           "PreparePage must wire a setPlatePrintable plate-context-menu action (PLATE-05)");
+
+  // Strengthen the honest-UI contract: no empty onTriggered handlers anywhere in
+  // PreparePage (Phase 14 forbade these; Phase 22 extends the guard here).
+  QVERIFY2(!preparePage.contains(QStringLiteral("onTriggered: {}")),
+           "PreparePage must not contain empty onTriggered: {} handlers");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

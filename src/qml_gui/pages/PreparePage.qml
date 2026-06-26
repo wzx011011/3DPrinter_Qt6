@@ -574,7 +574,8 @@ Item {
             enabled: root.contextPlateIndex >= 0 && root.editorVm
             onTriggered: if (root.editorVm) {
                 var cur = root.editorVm.isPlatePrintable(root.contextPlateIndex)
-                root.editorVm.setPlatePrintable(root.contextPlateIndex, !cur)
+                if (!root.editorVm.setPlatePrintable(root.contextPlateIndex, !cur))
+                    backend.postNotification(qsTr("设置打印状态失败"), qsTr("操作失败"), 1)
             }
         }
         // 对齐上游 duplicate_plate — 克隆平板（D-06，深拷贝含对象）
@@ -582,19 +583,28 @@ Item {
             text: qsTr("克隆平板")
             enabled: root.contextPlateIndex >= 0 && root.editorVm
                      && root.editorVm.plateCount < 36
-            onTriggered: if (root.editorVm) root.editorVm.clonePlate(root.contextPlateIndex)
+            onTriggered: if (root.editorVm) {
+                if (!root.editorVm.clonePlate(root.contextPlateIndex))
+                    backend.postNotification(qsTr("克隆平板失败：可能已达到最大平板数（36）"), qsTr("克隆失败"), 1)
+            }
         }
         // 对齐上游 move_plate_to_index — 左移/右移重排（D-07）
         CxMenuItem {
             text: qsTr("左移平板")
             enabled: root.contextPlateIndex > 0 && root.editorVm
-            onTriggered: if (root.editorVm) root.editorVm.movePlate(root.contextPlateIndex, root.contextPlateIndex - 1)
+            onTriggered: if (root.editorVm) {
+                if (!root.editorVm.movePlate(root.contextPlateIndex, root.contextPlateIndex - 1))
+                    backend.postNotification(qsTr("移动平板失败"), qsTr("操作失败"), 1)
+            }
         }
         CxMenuItem {
             text: qsTr("右移平板")
             enabled: root.contextPlateIndex >= 0 && root.editorVm
                      && root.contextPlateIndex < root.editorVm.plateCount - 1
-            onTriggered: if (root.editorVm) root.editorVm.movePlate(root.contextPlateIndex, root.contextPlateIndex + 1)
+            onTriggered: if (root.editorVm) {
+                if (!root.editorVm.movePlate(root.contextPlateIndex, root.contextPlateIndex + 1))
+                    backend.postNotification(qsTr("移动平板失败"), qsTr("操作失败"), 1)
+            }
         }
         MenuSeparator { }
         // 对齐上游 create_plate_menu — Reload All
