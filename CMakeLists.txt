@@ -787,6 +787,20 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
 
 endif()
 
+if(BUILD_TESTING)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(
+            NAME ParamRegressionComparatorTests
+            COMMAND ${Python3_EXECUTABLE} -m unittest
+                tests.param_regression.test_gcode_compare
+                tests.param_regression.test_param_regression_runner
+                -v
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        )
+    endif()
+endif()
+
 # ── CLI ────────────────────────────────────────────────────────────────────
 if(OWZX_RENDER_BENCH AND OWZX_QML_GUI)
     find_package(Qt6 REQUIRED COMPONENTS Core Gui GuiPrivate ShaderTools)
