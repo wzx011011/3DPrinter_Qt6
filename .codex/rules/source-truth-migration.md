@@ -8,6 +8,7 @@ This repository is an OrcaSlicer-to-Qt6/QML migration project for OWzx Slicer.
 - Qt6/QML code must match upstream user-visible behavior and workflow semantics.
 - Do not invent product behavior unless it is explicitly documented as an OWzx-only decision.
 - Historical CrealityPrint-era documents are evidence only. New source-truth work must cite OrcaSlicer upstream paths unless the task is explicitly about legacy compatibility cleanup.
+- Upstream issue-derived design constraints are tracked in `.codex/rules/upstream-issue-avoidance.md` and `.planning/quality/orcaslicer_issue_risk_register.md`.
 
 ## Implementation Boundaries
 

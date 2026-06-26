@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: PartPlate Core
 status: milestone_archived
-last_updated: "2026-06-26T18:00:00+08:00"
-last_activity: 2026-06-26 -- v3.0 archived via /gsd-complete-milestone; awaiting next milestone
+last_updated: "2026-06-27T00:05:45+08:00"
+last_activity: 2026-06-27 -- Completed quick task 260627-04s: Document upstream OrcaSlicer issue avoidance constraints
 progress:
   total_phases: 7
   completed_phases: 7
@@ -74,3 +74,9 @@ v3.0 is shipped and archived. Start the next milestone with a source-truth gap a
 $analyzing-source-truth-gap AssembleView
 $gsd-new-milestone
 ```
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260627-04s | Document upstream OrcaSlicer issue avoidance constraints | 2026-06-27 | pending | [260627-04s-document-upstream-orcaslicer-issue-avoid](./quick/260627-04s-document-upstream-orcaslicer-issue-avoid/) |

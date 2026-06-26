@@ -4,6 +4,7 @@ This repository is a source-truth migration project from OrcaSlicer to Qt6/QML (
 
 See @.codex/rules/source-truth-migration.md for the canonical project migration rules.
 See @.codex/rules/build-rules.md for the canonical build rules.
+See @.codex/rules/upstream-issue-avoidance.md for upstream OrcaSlicer issue-derived design constraints.
 
 ## Project Skills
 
