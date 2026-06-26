@@ -57,7 +57,7 @@ Items acknowledged and deferred at v3.0 milestone close (2026-06-26). Full detai
 | test_debt | PLATE-09 full round-trip test — needs a real-model fixture (test .3mf/.stl) so store_bbs_3mf has geometry | v3.1 priority |
 | code_quality | canSlice() state-machine field unused (review note — wire or remove) | v3.1 |
 | code_quality | bed-type dual-source (PartPlate field + config key) — document or consolidate | v3.1 |
-| perf | Canonical full-verify slow (8+ min); ninja incremental-miss on test Q_OBJECT changes | investigate before v3.1 |
+| perf | Canonical full-verify slow (8+ min); ninja incremental-miss on test Q_OBJECT changes | v3.1 (root cause diagnosed: cpp-internal Q_OBJECT in single-file test + AUTOMOC weak dependency tracking; fix = split test class into header) |
 | perf | m_print_list caching (upstream Print reuse-map; Qt6 stack-local Print equivalent, caching is perf-only) | future |
 | portability | `.Codex` (capital C) path casing diverges from git-tracked lowercase `.codex` — Windows-safe only | normalize (v2.9 carry-forward) |
 | feature | ModelMall/Home WebView + publish (Blocked on QtWebEngine/policy) | v3.3 |
