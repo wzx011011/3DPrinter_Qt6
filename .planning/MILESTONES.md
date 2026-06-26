@@ -163,3 +163,57 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 ---
 
 *Last updated: 2026-06-25 via `/gsd-complete-milestone v2.9`.*
+
+---
+
+### v3.0 - PartPlate Core
+
+**Started:** 2026-06-26
+**Shipped:** 2026-06-26
+**Status:** ✅ Complete
+**Phases:** 16-22 (5 mainline + 2 review-driven)
+**Git range:** `v2.9..v3.0` (21 commits, 49 files, +5520/-502)
+
+**Goal:** Replace the mock plate shell (`int plateCount_` + 9 parallel `QList` vectors) with a real PartPlate/PartPlateList domain model that fully round-trips multi-plate state through 3MF and supports upstream-equivalent multi-plate slice scheduling. Fixes all 5 problems from the v2.9 gap analysis.
+
+**Phases shipped:**
+- Phase 16: PartPlate Data Model Foundation — complete (2 plans: model+tests, big-bang migration)
+- Phase 17: Plate Lifecycle Completion — complete (clone/reorder/printable + QML)
+- Phase 18: 3MF Multi-Plate Persistence — complete (store_to_3mf_structure write path)
+- Phase 19: Per-Plate Slice Scheduling — complete (config.apply full merge)
+- Phase 20: Verification and Handoff — complete
+- Phase 21: Review-Driven Bug Fixes — complete (code review: BUG-1/BUG-2 + merge-direction test)
+- Phase 22: UI Review-Driven Fixes — complete (failure feedback + audit guards)
+
+**Requirements:** 14/14 satisfied (PLATE-01..14). PLATE-09 partial (round-trip test QSKIP'd, fixture gap). PLATE-11 documented (stack-local Print = per-plate isolation).
+
+**Key accomplishments:**
+1. New `src/core/model/` domain layer: PartPlate (instance-level membership, native DynamicPrintConfig, slice state machine) + PartPlateList (single source of truth, MAX_PLATE_COUNT=36).
+2. Big-bang migration deleted all 9 parallel vectors from ProjectServiceMock; PartPlateList is the sole plate storage.
+3. 3MF multi-plate round-trip: write path populates PlateDataPtrs into StoreParams; load path restores locked/bed-type/sequence/spiral via pendingPlate* staging.
+4. Per-plate config fully honored during slicing via `config.apply(*plateCfg)` (replaces 3-hardcoded-key patch).
+5. Clone/reorder/printable lifecycle ops work end-to-end with QML context-menu UI.
+6. Two review cycles (code + UI): 4 P0/P1 findings all fixed + regression-guarded; QmlUiAuditTests extended to guard Phase 17 wiring.
+
+**Final verification:** Passed on 2026-06-26.
+
+**Evidence:**
+- `build/ViewModelSmokeTests`: **44 passed, 0 failed, 1 skipped** (32 baseline + 12 v3.0).
+- `build/QmlUiAuditTests`: **8 passed, 0 failed** (7 + 1 plate-wiring guard).
+- `scripts/auto_verify_with_vcvars.ps1`: exited 0; QML UI audit + E2E pipeline passed.
+- `.planning/milestones/v3.0-MILESTONE-AUDIT.md`: 14/14 requirements, 6/6 integration, 5/5 E2E; status `tech_debt`; review-clean (Phase 21+22).
+
+**Audit status:** `tech_debt` — all requirements satisfied; 1 non-blocking gap (PLATE-09 fixture), documented v3.1-deferred items, review-clean.
+
+**Known deferred items at close:** AssembleView (PLATE-15), m_print_list caching, per-plate wipe-tower geometry, PLATE-09 real-model fixture, multi-plate arrangement/thumbnail/filament-map UI, `.Codex` path casing (v2.9 carry-forward).
+
+**Handoff:** Recommended next milestone is v3.1 (AssembleView + Preset System + multi-plate arrangement polish).
+
+**Archives:**
+- `.planning/milestones/v3.0-ROADMAP.md`
+- `.planning/milestones/v3.0-REQUIREMENTS.md`
+- `.planning/milestones/v3.0-MILESTONE-AUDIT.md`
+
+---
+
+*Last updated: 2026-06-26 via `/gsd-complete-milestone v3.0`.*

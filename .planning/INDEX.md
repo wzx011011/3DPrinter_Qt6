@@ -17,13 +17,13 @@ This is the canonical entry point for `.planning/`. Historical phase files are e
 - Prior implementation audit: [audits/2026-06-23-implementation-audit.md](audits/2026-06-23-implementation-audit.md)
 - Prior code drift audit: [audits/2026-06-23-code-drift-audit.md](audits/2026-06-23-code-drift-audit.md)
 
-> Note: v2.9 requirements were archived to [milestones/v2.9-REQUIREMENTS.md](milestones/v2.9-REQUIREMENTS.md) at milestone close. The active `REQUIREMENTS.md` will be recreated by the next `$gsd-new-milestone`.
+> Note: v3.0 requirements were archived to [milestones/v3.0-REQUIREMENTS.md](milestones/v3.0-REQUIREMENTS.md) at milestone close. The active `REQUIREMENTS.md` will be recreated by the next `$gsd-new-milestone`.
 
 ## Active Milestone
 
-**None active.** v2.9 shipped 2026-06-25 and is archived.
+**None active.** v3.0 PartPlate Core shipped 2026-06-26 and is archived.
 
-Recommended next milestone: **v3.0 PartPlate and AssembleView**. Start with `$analyzing-source-truth-gap PartPlate and AssembleView`, then `$gsd-new-milestone`.
+Recommended next milestone: **v3.1 AssembleView + Polish**. Start with `$analyzing-source-truth-gap AssembleView`, then `$gsd-new-milestone`.
 
 ## Directory Map
 

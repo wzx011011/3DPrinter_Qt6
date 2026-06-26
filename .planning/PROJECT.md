@@ -10,21 +10,18 @@ The project currently has a usable Qt6/QML shell, real model/project IO, real sl
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current Milestone: v3.0 PartPlate Core
+## Current State: v3.0 Shipped — Planning Next Milestone
 
-**Goal:** Replace the mock plate shell (`int plateCount_` + parallel vectors) with a real PartPlate-equivalent data model that fully round-trips multi-plate state through 3MF and supports upstream-equivalent multi-plate slice scheduling.
+**Last shipped:** v3.0 PartPlate Core (2026-06-26) — 7 phases (16-22), 14/14 requirements satisfied, 2 review cycles (code+UI) all P0/P1 fixed. See `.planning/milestones/v3.0-ROADMAP.md`.
 
-**Status:** Defining requirements (started 2026-06-25).
+**Next milestone goal:** v3.1 — AssembleView (PLATE-15) + Preset System completion + multi-plate arrangement/wipe-tower/thumbnail polish (PLATE-16..19). Start with `$analyzing-source-truth-gap AssembleView`, then `$gsd-new-milestone`.
 
-**Target features:**
-- Real `PartPlate` value object (geometry, instance-pair membership, per-plate config, slice state machine) replacing the parallel-vector shell.
-- Complete plate lifecycle (add the missing clone/duplicate, reorder, per-plate printable).
-- 3MF multi-plate round-trip (save path writes plate state — the v2.9-identified blocker).
-- Per-plate slice scheduling using per-plate `Print` + full config merge (replacing the "clone global model + hand-patch 3 keys" loop).
-
-**Scope decision:** AssembleView deferred to v3.1 (from-scratch implementation that depends on the PartPlate data model landing first; separating it keeps v3.0 focused and lower-risk).
-
-**Key context:** See `.planning/audits/2026-06-25-partplate-assembleview-gap.md` — upstream PartPlate is ~7700 LOC (~2700 must migrate, ~65% is GL/wx rendering Qt6 doesn't need); Qt6 plate surface is shell-with-real-API but mock-backed; OCCT is NOT a blocker (PartPlate has zero OCCT symbols).
+**Baseline capabilities validated by v3.0:**
+- Real PartPlate/PartPlateList domain model (src/core/model/) replacing the parallel-vector shell; instance-level membership, native DynamicPrintConfig, slice state machine.
+- 3MF multi-plate round-trip (write path + full load restore); v2.9 blocker fixed.
+- Per-plate config fully honored during slicing (config.apply full merge).
+- Clone/reorder/printable lifecycle ops with QML context-menu UI + failure feedback.
+- Code review + UI review passed (Phase 21/22); QmlUiAuditTests guards Phase 17 wiring.
 
 **Baseline capabilities validated by v2.9:**
 - Planning truth reset: `.planning` now agrees with git history, current code, and verification evidence.
@@ -122,4 +119,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-25 after v2.9 milestone completion.*
+*Last updated: 2026-06-26 after v3.0 milestone completion.*

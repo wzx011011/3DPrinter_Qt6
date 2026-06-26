@@ -2,77 +2,75 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: PartPlate Core
-status: executing
-last_updated: "2026-06-25T06:34:23.367Z"
-last_activity: 2026-06-25 -- Phase 16 planning complete
+status: milestone_archived
+last_updated: "2026-06-26T18:00:00+08:00"
+last_activity: 2026-06-26 -- v3.0 archived via /gsd-complete-milestone; awaiting next milestone
 progress:
-  total_phases: 5
-  completed_phases: 0
-  total_plans: 2
-  completed_plans: 0
-  percent: 0
+  total_phases: 7
+  completed_phases: 7
+  total_plans: 7
+  completed_plans: 7
+  percent: 100
 ---
 
 # Project State
 
-**Milestone:** v3.0 - PartPlate Core
-**Status:** Phase 20 complete (5/5 phases); v3.0 milestone complete
-**Next step:** `/gsd-audit-milestone v3.0` (milestone audit) → then `/gsd-complete-milestone v3.0`
+**Milestone:** v3.0 - PartPlate Core (**archived/shipped**)
+**Status:** Archived 2026-06-26
+**Next step:** `$analyzing-source-truth-gap AssembleView`, then `$gsd-new-milestone` (v3.1)
 
 ## Current Position
 
-Phase: 20 (Verification and Handoff) — COMPLETE (verified: passed); v3.0 MILESTONE COMPLETE
-Plan: 20-01 (last)
-Status: v3.0 complete (5/5 phases); ready for audit
-Last activity: 2026-06-25 — Phase 20 executed + verified (autonomous --only 20); v3.0 milestone complete
+Phase: 22 (last in v3.0, review-driven)
+Plan: 22-01
+Status: Milestone archived
+Last activity: 2026-06-26 — v3.0 archived via `/gsd-complete-milestone`
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-06-25)
+See: `.planning/PROJECT.md` (updated 2026-06-26)
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
-**Current focus:** Replace the mock plate shell with a real PartPlate-equivalent data model that round-trips multi-plate state through 3MF and supports upstream-equivalent multi-plate slice scheduling.
+**Current focus:** Planning the next milestone. Recommended v3.1 = AssembleView (PLATE-15) + Preset System + multi-plate polish.
 
 ## Latest Shipped Milestone
 
-**v2.9 Implementation Realignment and Stabilization** — shipped 2026-06-25.
+**v3.0 PartPlate Core** — shipped 2026-06-26.
 
-- Phases 10-15, 6/6 plans complete, 28/28 requirements satisfied.
+- Phases 16-22 (5 mainline + 2 review-driven), 7/7 plans complete, 14/14 requirements satisfied.
 - Canonical verification: `auto_verify_with_vcvars.ps1` exited 0; QML UI audit + E2E pipeline passed.
-- Explicit smoke: `ViewModelSmokeTests.exe` → 32 passed; `QmlUiAuditTests.exe` → 7 passed.
-- Archives: `.planning/milestones/v2.9-{ROADMAP,REQUIREMENTS,MILESTONE-AUDIT}.md`.
-- Git tag: `v2.9`.
-
-## v3.0 Context (carried from v2.9 + gap analysis)
-
-- **Gap analysis:** `.planning/audits/2026-06-25-partplate-assembleview-gap.md` — quantified 5 gap categories (data model, lifecycle, 3MF round-trip, slice scheduling, AssembleView).
-- **Key finding:** Qt6 plate surface is "shell-with-real-API but mock-backed". Biggest blocker: 3MF save path serializes only `model_`, losing all plate state (PLATE-07/09).
-- **OCCT correction (2026-06-25):** AGENTS.md/CLAUDE.md were updated — OCCT is statically imported (not delay-loaded), `DelayLoadHook.cpp` is dead code, 38 TK*.dll deployed normally. PartPlate does NOT need OCCT.
-- **Scope decision:** AssembleView deferred to v3.1 (depends on PartPlate data model landing first).
+- Explicit smoke: `ViewModelSmokeTests.exe` → 44 passed, 0 failed, 1 skipped (Phase 18 round-trip QSKIP); `QmlUiAuditTests.exe` → 8 passed (7 + plate-wiring guard).
+- Two review cycles (code Phase 21 + UI Phase 22): 4 P0/P1 findings all fixed + regression-guarded.
+- Audit: `.planning/milestones/v3.0-MILESTONE-AUDIT.md` — `tech_debt` status (review-clean), 14/14 requirements, 6/6 integration, 5/5 E2E flows.
+- Archives: `.planning/milestones/v3.0-{ROADMAP,REQUIREMENTS,MILESTONE-AUDIT}.md`.
+- Git tag: `v3.0`.
 
 ## Deferred Items
 
-Items acknowledged and deferred at v2.9 milestone close (2026-06-25). Full detail in `.planning/milestones/v2.9-MILESTONE-AUDIT.md`.
+Items acknowledged and deferred at v3.0 milestone close (2026-06-26). Full detail in `.planning/milestones/v3.0-MILESTONE-AUDIT.md`.
 
 | Category | Item | Target |
 |---|---|---|
 | **v3.1** | AssembleView non-placeholder (bird's-eye multi-plate layout) | v3.1 PLATE-15 |
-| **v3.1+** | Multi-plate arrangement, wipe-tower geometry, multi-thumbnail kinds, filament map UI | v3.1 PLATE-16..19 |
-| live_verification | MQTT live publish / FTP live upload / RTSP live decode (hardware fixtures) | manual, future |
-| calibration | Bed Leveling, Vibration Compensation, Max Volumetric Speed | future milestone |
-| feature | ModelMall/Home WebView + publish (Blocked on QtWebEngine/policy) | v3.2 WEB-01 |
-| feature | Cloud account/login (Blocked/future) | v3.2 CLOUD-01 |
-| feature | Upstream-compatible preset bundle (simplified JSON today) | v3.1 PRESET |
-| source_hygiene | Repo-wide mojibake scan (v2.9 Phase 11 scoped to touched files) | one-shot sweep, future |
-| source_hygiene | Repo-root build cruft (`resolve_addr.obj`, `test_msc.obj`, `vc140.pdb`) | cleanup, future |
-| ui | BBLTopbar Account/ModelStore/Publish buttons kept hidden/disabled | revisit when features land |
+| **v3.1+** | Multi-plate arrangement, wipe-tower geometry, multi-thumbnail kinds, filament-map UI | v3.1 PLATE-16..19 |
+| **v3.2** | Preset System completion (upstream-compatible bundles, CreatePresetsDialog) | v3.2 |
+| test_debt | PLATE-09 full round-trip test — needs a real-model fixture (test .3mf/.stl) so store_bbs_3mf has geometry | v3.1 priority |
+| code_quality | canSlice() state-machine field unused (review note — wire or remove) | v3.1 |
+| code_quality | bed-type dual-source (PartPlate field + config key) — document or consolidate | v3.1 |
+| perf | Canonical full-verify slow (8+ min); ninja incremental-miss on test Q_OBJECT changes | investigate before v3.1 |
+| perf | m_print_list caching (upstream Print reuse-map; Qt6 stack-local Print equivalent, caching is perf-only) | future |
+| portability | `.Codex` (capital C) path casing diverges from git-tracked lowercase `.codex` — Windows-safe only | normalize (v2.9 carry-forward) |
+| feature | ModelMall/Home WebView + publish (Blocked on QtWebEngine/policy) | v3.3 |
+| feature | Cloud account/login (Blocked/future) | v3.3 |
+| live_verification | MQTT/FTP/RTSP live (hardware fixtures; carry-forward from v2.9) | manual, future |
 
-**Note:** The `.Codex` (capital C) path-casing gap from v2.9 was NOT yet normalized — still Windows-safe, would 404 on case-sensitive FS. Can be picked up opportunistically in v3.0.
+**Known deferred items at close: 12** (recorded in MILESTONES.md entry).
 
 ## Handoff
 
-v3.0 requirements defined (`.planning/REQUIREMENTS.md`, 14 requirements PLATE-01..14). Roadmap pending. After roadmap approval:
+v3.0 is shipped and archived. Start the next milestone with a source-truth gap analysis for AssembleView, then create the next milestone:
 
 ```text
-/gsd-discuss-phase 16
+$analyzing-source-truth-gap AssembleView
+$gsd-new-milestone
 ```
