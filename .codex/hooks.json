@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo OWZX SLICER CONTEXT PRESERVATION: Active project is OrcaSlicer-to-Qt6/QML migration. Re-read AGENTS.md, .planning/INDEX.md, .planning/STATE.md, .planning/ROADMAP.md, .Codex/rules/source-truth-migration.md, .Codex/rules/build-rules.md, and .Codex/rules/qml-boundaries.md. Use third_party/OrcaSlicer as source truth. Do not use .claude rules as canonical. Full verification command: powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1. Build directory: build/."
+            "command": "echo OWZX SLICER CONTEXT PRESERVATION: Active project is OrcaSlicer-to-Qt6/QML migration. Re-read AGENTS.md, .planning/INDEX.md, .planning/STATE.md, .planning/ROADMAP.md, .codex/rules/source-truth-migration.md, .codex/rules/build-rules.md, and .codex/rules/qml-boundaries.md. Use third_party/OrcaSlicer as source truth. Do not use .claude rules as canonical. Full verification command: powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1. Build directory: build/."
           }
         ]
       }

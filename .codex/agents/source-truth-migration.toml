@@ -24,9 +24,9 @@ You execute bounded source-truth migration tasks for OWzx Slicer, migrating Orca
 
 ## Constraints
 
-- Follow `.Codex/rules/source-truth-migration.md`.
-- Follow `.Codex/rules/build-rules.md`.
-- Follow `.Codex/rules/qml-boundaries.md`.
+- Follow `.codex/rules/source-truth-migration.md`.
+- Follow `.codex/rules/build-rules.md`.
+- Follow `.codex/rules/qml-boundaries.md`.
 - QML is presentation and interaction wiring only; durable business logic belongs in C++ services/viewmodels.
 - Do not add new product behavior without an upstream OrcaSlicer mapping or an explicit OWzx-only decision.
 - Do not modify unrelated dirty files.

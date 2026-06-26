@@ -2,8 +2,8 @@
 
 This repository is a source-truth migration project from OrcaSlicer to Qt6/QML (brand: OWzx).
 
-See @.Codex/rules/source-truth-migration.md for the canonical project migration rules.
-See @.Codex/rules/build-rules.md for the canonical build rules.
+See @.codex/rules/source-truth-migration.md for the canonical project migration rules.
+See @.codex/rules/build-rules.md for the canonical build rules.
 
 ## Project Skills
 
@@ -16,7 +16,7 @@ See @.Codex/rules/build-rules.md for the canonical build rules.
 
 **唯一构建目录：** `build/`
 
-不得创建其他构建目录，不得使用其他构建脚本。详见 `.Codex/rules/build-rules.md`。
+不得创建其他构建目录，不得使用其他构建脚本。详见 `.codex/rules/build-rules.md`。
 
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
@@ -368,7 +368,7 @@ See @.Codex/rules/build-rules.md for the canonical build rules.
 - **Global state:** BackendContext is the sole composition root, created on the stack in `main()` and exposed as `backend` context property. No other module-level singletons. ProjectServiceMock holds the `Slic3r::Model*` pointer (conditional on HAS_LIBSLIC3R).
 - **Circular imports:** ViewModels depend on Services (via injected pointers). BackendContext depends on both. No circular C++ includes — all forward-declared in BackendContext.h, concrete includes in BackendContext.cpp.
 - **Conditional compilation:** `HAS_LIBSLIC3R` guard controls all libslic3r API usage across services and viewmodels. `OWZX_QML_GUI` cmake option toggles between QML and Widgets build paths.
-- **QML property binding:** QML pages never hold direct references to service objects. All access goes through ViewModel properties exposed via BackendContext. This is enforced by the project rules in `.Codex/rules/qml-boundaries.md`.
+- **QML property binding:** QML pages never hold direct references to service objects. All access goes through ViewModel properties exposed via BackendContext. This is enforced by the project rules in `.codex/rules/qml-boundaries.md`.
 - **OCCT linkage:** OpenCASCADE (OCCT) libraries are linked statically (load-time import) in the FromSource build, NOT delay-loaded. `src/core/DelayLoadHook.cpp` exists on disk but is dead code (not compiled/linked; `__pfnDliNotifyHook2` was never linked into the exe). OCCT is available at runtime for STEP/SVG/text-shape import; mesh boolean / cut surface are excluded due to CGAL version (not OCCT). See `cmake/BuildLibslic3rFromSource.cmake:599-679`.
 ## Anti-Patterns
 ### QML pages directly accessing service internals

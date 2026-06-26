@@ -57,7 +57,7 @@ Do not treat phase completion as product completion unless the exact workflow is
 - Planning previously named v2.6 as current while git history already contained v2.7/v2.8 work.
 - Calibration, MQTT, FTP, camera, SSDP, and software viewport areas have real paths plus fallback/mock behavior.
 - Some visible UI actions remain disabled or no-op.
-- Missing `.Codex/rules/*` references need restoration or redirection.
+- Missing `.codex/rules/*` references need restoration or redirection.
 - Some active files show encoding damage, literal escape artifacts, or residual backup files.
 
 ## Next Step
