@@ -12,7 +12,7 @@
 - [x] **RHI-03**: Developer can build QRhi renderer shaders through Qt Shader Tools as `.qsb` resources using the canonical `build/` directory and canonical verification script.
 - [ ] **RHI-04**: Renderer can keep Prepare mesh data and Preview G-code segment data in GPU-resident buffers and update only dirty ranges.
 - [x] **RHI-05**: QML can host the QRhi viewport and overlays without moving rendering business logic or source-truth behavior into QML scripts.
-- [ ] **RHI-06**: Developer can run the optional `owzx-render-bench` benchmark to compare available QRhi backends and capture JSON performance metrics.
+- [x] **RHI-06**: Developer can run the optional `owzx-render-bench` benchmark to compare available QRhi backends and capture JSON performance metrics.
 
 ### Prepare Rendering
 
@@ -81,7 +81,7 @@ Explicitly excluded from v3.1.
 | RHI-03 | Phase 23 | Complete |
 | RHI-04 | Phase 24 | Pending |
 | RHI-05 | Phase 23 | Complete |
-| RHI-06 | Phase 23 | Pending |
+| RHI-06 | Phase 23 | Complete |
 | PREP-01 | Phase 24 | Pending |
 | PREP-02 | Phase 25 | Pending |
 | PREP-03 | Phase 25 | Pending |

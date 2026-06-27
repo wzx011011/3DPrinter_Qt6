@@ -19,11 +19,13 @@
 
 ### Phase 23: QRhi Renderer Foundation And Backend Gate
 
+- [x] Phase 23: QRhi Renderer Foundation And Backend Gate (completed 2026-06-27)
+
 **Goal:** Introduce the gated QRhi renderer infrastructure, shader pipeline, backend selection policy, and benchmark evidence without changing the default stable viewport startup.
 
 **Requirements:** RHI-01, RHI-02, RHI-03, RHI-05, RHI-06, PERF-05
 
-**Plans:** 3
+**Plans:** 3/3 plans complete
 - `23-01-PLAN.md` - QRhi backend gate and startup fallback
 - `23-02-PLAN.md` - QQuickRhiItem viewport host and shader pipeline
 - `23-03-PLAN.md` - benchmark evidence, verification, and requirement traceability
@@ -148,11 +150,11 @@
 
 ## Next Step
 
-Execute Phase 23:
+Discuss Phase 24:
 
 ```text
-$gsd-execute-phase 23
+$gsd-discuss-phase 24
 ```
 
 ---
-*Last updated: 2026-06-27 after Phase 23 planning.*
+*Last updated: 2026-06-27 after Phase 23 completion.*
