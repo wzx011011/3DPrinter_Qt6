@@ -10,6 +10,7 @@
 #include <QtQml/qqml.h>
 #include "qml_gui/Renderer/GLViewport.h"
 #include "qml_gui/Renderer/RhiBackendSelector.h"
+#include "qml_gui/Renderer/RhiViewport.h"
 #include "qml_gui/Renderer/SoftwareViewport.h"
 #include "core/debug/CrashHandlerWin.h"
 
@@ -122,6 +123,8 @@ int main(int argc, char *argv[])
   // remote/display-driver sessions where Qt Quick OpenGL renders a blank window.
   if (useOpenGLViewport)
     qmlRegisterType<GLViewport>("OWzxGL", 1, 0, "GLViewport");
+  else if (rhiSelection.canUseRhi)
+    qmlRegisterType<RhiViewport>("OWzxGL", 1, 0, "GLViewport");
   else
     qmlRegisterType<SoftwareViewport>("OWzxGL", 1, 0, "GLViewport");
 

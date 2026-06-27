@@ -58,10 +58,10 @@ if(OWZX_QML_GUI)
     if(BUILD_LIBSLIC3R)
         # BUILD_LIBSLIC3R=ON 时 Boost_ALL_NO_LIB 干扰 Qt 的 auto-link，
         # 需要跳过低版本检查以避免 Qt 查找失败
-        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate)
+        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools)
     else()
         # 低版本 Qt 兼容：允许 Qt 3.21 与 Qt 6.10 配对
-        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate)
+        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools)
         set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/third_party/Qt6_10")
         set(QT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT 3.21)
     endif()
@@ -139,6 +139,10 @@ if(OWZX_QML_GUI)
         src/qml_gui/Renderer/SoftwareViewport.h
         src/qml_gui/Renderer/RhiBackendSelector.cpp
         src/qml_gui/Renderer/RhiBackendSelector.h
+        src/qml_gui/Renderer/RhiViewport.cpp
+        src/qml_gui/Renderer/RhiViewport.h
+        src/qml_gui/Renderer/RhiViewportRenderer.cpp
+        src/qml_gui/Renderer/RhiViewportRenderer.h
         src/qml_gui/Renderer/GCodeRenderer.cpp
         src/qml_gui/Renderer/GCodeRenderer.h
     )
@@ -238,6 +242,15 @@ if(OWZX_QML_GUI)
     target_link_libraries(OWzxSlicer PRIVATE owzx_app_core)
     target_link_libraries(OWzxSlicer PRIVATE
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent
+    )
+    qt_add_shaders(OWzxSlicer "rhi_viewport_shaders"
+        PREFIX
+            "/rhi_viewport/shaders"
+        BASE
+            "src/qml_gui/Renderer/shaders"
+        FILES
+            src/qml_gui/Renderer/shaders/rhi_viewport.vert
+            src/qml_gui/Renderer/shaders/rhi_viewport.frag
     )
     if(MSVC)
         target_compile_options(OWzxSlicer PRIVATE /Zi)

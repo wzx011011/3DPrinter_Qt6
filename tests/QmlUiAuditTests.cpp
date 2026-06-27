@@ -131,10 +131,22 @@ void QmlUiAuditTests::mainRegistersRhiViewportOnlyBehindExplicitGate()
   const QString verifyScript = readSource(QStringLiteral("scripts/auto_verify_with_vcvars.ps1"));
   const QString selectorHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiBackendSelector.h"));
   const QString selectorSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiBackendSelector.cpp"));
+  const QString rhiViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString rhiViewportRendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rhiViewportRenderer = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString rhiVertexShader = readSource(QStringLiteral("src/qml_gui/Renderer/shaders/rhi_viewport.vert"));
+  const QString rhiFragmentShader = readSource(QStringLiteral("src/qml_gui/Renderer/shaders/rhi_viewport.frag"));
+  const QString cmake = readSource(QStringLiteral("CMakeLists.txt"));
   QVERIFY2(!mainCpp.isEmpty(), "Unable to read main_qml.cpp");
   QVERIFY2(!verifyScript.isEmpty(), "Unable to read auto_verify_with_vcvars.ps1");
   QVERIFY2(!selectorHeader.isEmpty(), "Unable to read RhiBackendSelector.h");
   QVERIFY2(!selectorSource.isEmpty(), "Unable to read RhiBackendSelector.cpp");
+  QVERIFY2(!rhiViewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!rhiViewportRendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!rhiViewportRenderer.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!rhiVertexShader.isEmpty(), "Unable to read rhi_viewport.vert");
+  QVERIFY2(!rhiFragmentShader.isEmpty(), "Unable to read rhi_viewport.frag");
+  QVERIFY2(!cmake.isEmpty(), "Unable to read CMakeLists.txt");
 
   QVERIFY2(mainCpp.contains(QStringLiteral("OWZX_RHI_RENDERER")),
            "QRhi viewport selection must be behind OWZX_RHI_RENDERER");
@@ -142,6 +154,8 @@ void QmlUiAuditTests::mainRegistersRhiViewportOnlyBehindExplicitGate()
            "legacy OWZX_OPENGL path must stay independent from QRhi");
   QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
            "SoftwareViewport must remain the default/fallback GLViewport registration");
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+           "RhiViewport must be registered under the existing OWzxGL.GLViewport type behind QRhi gate");
   QVERIFY2(!verifyScript.contains(QStringLiteral("OWZX_RHI_RENDERER")),
            "canonical verification must not enable QRhi by default");
 
@@ -153,6 +167,18 @@ void QmlUiAuditTests::mainRegistersRhiViewportOnlyBehindExplicitGate()
            "QRhi app selector must keep Direct3D11 fallback on Windows");
   QVERIFY2(!selectorSource.contains(QStringLiteral("QRhi::Vulkan")),
            "Vulkan must not be part of the default app selector while QtGui Vulkan is disabled");
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("QQuickRhiItem")),
+           "RhiViewport must use Qt Quick's QRhi item host");
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("Q_PROPERTY(QByteArray meshData")),
+           "RhiViewport must expose GLViewport-compatible meshData binding");
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("CanvasPreview")),
+           "RhiViewport must expose GLViewport-compatible canvas enum values");
+  QVERIFY2(rhiViewportRendererHeader.contains(QStringLiteral("QQuickRhiItemRenderer")),
+           "RhiViewportRenderer must use QQuickRhiItemRenderer");
+  QVERIFY2(rhiViewportRenderer.contains(QStringLiteral(":/rhi_viewport/shaders/rhi_viewport.vert.qsb")),
+           "RhiViewportRenderer must load app .qsb shader resources");
+  QVERIFY2(cmake.contains(QStringLiteral("qt_add_shaders(OWzxSlicer \"rhi_viewport_shaders\"")),
+           "OWzxSlicer must compile RhiViewport shaders through qt_add_shaders");
 }
 
 void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()
