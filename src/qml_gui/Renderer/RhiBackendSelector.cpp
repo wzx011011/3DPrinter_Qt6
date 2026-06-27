@@ -36,9 +36,12 @@ QString normalizeRequestedBackend(const QByteArray &value)
 
 QVector<RhiBackendCandidate> defaultWindowsCandidates()
 {
+  // D3D11-first: D3D12 has a rendering crash on startup (Phase 26 isolation:
+  // prepare render Segfault under D3D12, D3D11 works). Make D3D11 the safe
+  // default for "auto", and D3D12 only via explicit OWZX_RHI_RENDERER=d3d12.
   return {
-      {QStringLiteral("d3d12"), QSGRendererInterface::Direct3D12, QRhi::D3D12},
       {QStringLiteral("d3d11"), QSGRendererInterface::Direct3D11, QRhi::D3D11},
+      {QStringLiteral("d3d12"), QSGRendererInterface::Direct3D12, QRhi::D3D12},
   };
 }
 
