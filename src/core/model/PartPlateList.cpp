@@ -8,6 +8,11 @@
 
 namespace OWzx {
 
+// Source truth: PartPlate.cpp:55. File-private; not exported.
+namespace {
+constexpr double LOGICAL_PART_PLATE_GAP = 1.0 / 5.0;
+}  // namespace
+
 PartPlateList::PartPlateList() {
   // Upstream starts with a single default plate; Qt6 preserves the same invariant
   // (a project always has >= 1 plate). createPlate handles index assignment.
@@ -36,6 +41,9 @@ PartPlate* PartPlateList::createPlate() {
   auto p = std::make_unique<PartPlate>(plateCount());
   PartPlate* raw = p.get();
   m_plate_list.push_back(std::move(p));
+  // Keep grid geometry consistent with the new count (Phase 29 D-29-4).
+  updatePlateCols();
+  updatePlateOrigins();
   return raw;
 }
 
@@ -48,6 +56,9 @@ bool PartPlateList::deletePlate(int index) {
   if (m_current_plate >= plateCount()) {
     m_current_plate = plateCount() - 1;
   }
+  // Keep grid geometry consistent with the new count (Phase 29 D-29-4).
+  updatePlateCols();
+  updatePlateOrigins();
   return true;
 }
 
@@ -64,8 +75,8 @@ void PartPlateList::setPlateLocked(int index, bool locked) {
 }
 
 bool PartPlateList::movePlate(int oldIndex, int newIndex) {
-  // D-07: pure metadata reorder (vector shift + reindex). No geometry recompute
-  // (Qt6 doesn't compute plate origins yet — deferred per Phase 17 CONTEXT).
+  // Geometry recompute via updatePlateCols() + updatePlateOrigins()
+  // (Phase 29 D-29-14, closes Phase 17 D-07 deferral).
   if (oldIndex < 0 || oldIndex >= plateCount()) return false;
   if (newIndex < 0 || newIndex >= plateCount()) return false;
   if (oldIndex == newIndex) return false;
@@ -81,6 +92,9 @@ bool PartPlateList::movePlate(int oldIndex, int newIndex) {
   }
   m_plate_list[newIndex] = std::move(moved);
   reindex();
+  // Recompute grid geometry for the new plate order (Phase 29 D-29-14).
+  updatePlateCols();
+  updatePlateOrigins();
 
   // Track the current plate through the shift.
   if (m_current_plate == oldIndex) {
@@ -145,6 +159,80 @@ void PartPlateList::reindex() {
   for (int i = 0; i < plateCount(); ++i) {
     m_plate_list[i]->setPlateIndex(i);
   }
+}
+
+// ── Plate-grid geometry (v3.2 Phase 29) ────────────────────────────────────
+// Mirrors upstream PartPlate.cpp:4836-4870 (stride + update_plate_cols),
+// :3905-3964 (compute_shape_position + compute_origin),
+// :4872-4892 (update_all_plates_pos_and_size core loop),
+// :5365-5376 (compute_plate_index).
+
+void PartPlateList::setPlateSize(int width, int depth, int height) {
+  m_plate_width = width;
+  m_plate_depth = depth;
+  m_plate_height = height;
+  updatePlateOrigins();
+}
+
+double PartPlateList::plateStrideX() const {
+  return m_plate_width * (1.0 + LOGICAL_PART_PLATE_GAP);  // PartPlate.cpp:4841
+}
+
+double PartPlateList::plateStrideY() const {
+  return m_plate_depth * (1.0 + LOGICAL_PART_PLATE_GAP);  // PartPlate.cpp:4849
+}
+
+#ifdef HAS_LIBSLIC3R
+Slic3r::Vec2d PartPlateList::computeShapePosition(int index, int cols) const {
+  int row = index / cols;
+  int col = index % cols;
+  Slic3r::Vec2d pos;
+  pos.x() = col * plateStrideX();   // +X to the right
+  pos.y() = -row * plateStrideY();  // NEGATIVE Y downward (PartPlate.cpp:3960-3961)
+  return pos;
+}
+
+Slic3r::Vec3d PartPlateList::computeOrigin(int index, int cols) const {
+  Slic3r::Vec2d pos = computeShapePosition(index, cols);
+  return Slic3r::Vec3d(pos.x(), pos.y(), 0.0);
+}
+#endif
+
+int PartPlateList::computePlateIndex(double translationX_mm, double translationY_mm) const {
+  // Decodes the negative-Y-row encoding of computeShapePosition (PartPlate.cpp:5365-5376).
+  float col_value = static_cast<float>(translationX_mm / plateStrideX());
+  // SIGN-FLIP: row decodes via (stride_y - translation_y)/stride_y,
+  // NOT translation_y/stride_y. PartPlate.cpp:5370.
+  float row_value = static_cast<float>((plateStrideY() - translationY_mm) / plateStrideY());
+  int row = static_cast<int>(std::round(row_value));
+  int col = static_cast<int>(std::round(col_value));
+  return row * m_plate_cols + col;
+}
+
+void PartPlateList::updatePlateCols() {
+  // PartPlate.cpp:4863-4870 (BOOST_LOG dropped).
+  m_plate_count = static_cast<int>(m_plate_list.size());
+  m_plate_cols = compute_colum_count(m_plate_count);
+}
+
+void PartPlateList::updatePlateOrigins() {
+  // Mirrors update_all_plates_pos_and_size core loop (PartPlate.cpp:4872-4892);
+  // wipe-tower and unprintable branches stripped (out of Phase 29 scope).
+#ifdef HAS_LIBSLIC3R
+  for (int i = 0; i < plateCount(); ++i) {
+    PartPlate* p = plate(i);
+    if (p) p->setOrigin(computeOrigin(i, m_plate_cols));
+  }
+#else
+  // Non-HAS_LIBSLIC3R fallback: write via the 3-double setOrigin overload.
+  for (int i = 0; i < plateCount(); ++i) {
+    PartPlate* p = plate(i);
+    if (!p) continue;
+    const int row = (m_plate_cols > 0) ? i / m_plate_cols : 0;
+    const int col = (m_plate_cols > 0) ? i % m_plate_cols : 0;
+    p->setOrigin(col * plateStrideX(), -row * plateStrideY(), 0.0);
+  }
+#endif
 }
 
 }  // namespace OWzx

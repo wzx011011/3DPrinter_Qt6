@@ -13,6 +13,7 @@
 // This container owns the PartPlate objects and is the single source of truth that
 // ProjectServiceMock re-backs its plate Q_PROPERTY/Q_INVOKABLE API onto (D-05 big-bang).
 
+#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -25,6 +26,22 @@ namespace OWzx {
 /// Maximum number of plates, mirroring upstream MAX_PLATE_COUNT (PartPlate.hpp:36).
 inline constexpr int kMaxPlateCount = 36;
 
+/// Compute the grid column count for a given plate count.
+// Source truth: third_party/OrcaSlicer/src/slic3r/GUI/PartPlate.hpp:38-50.
+// cols = ceil(sqrt(count)) implemented via float comparison (NOT integer ceil).
+// Kept snake_case to mirror upstream exactly (it is NOT a member).
+inline int compute_colum_count(int count) {
+  float value = sqrt((float)count);
+  float round_value = round(value);
+  int cols;
+  if (value > round_value)
+    cols = round_value + 1;
+  else
+    cols = round_value;
+  return cols;
+}
+
+// Geometry mirrors upstream PartPlate.cpp:3905-3964,4836-4870,5365-5376 (PartPlate.hpp:38-50).
 class PartPlateList {
  public:
   PartPlateList();
@@ -45,6 +62,31 @@ class PartPlateList {
 
   int currentPlateIndex() const { return m_current_plate; }
   void setCurrentPlateIndex(int index);
+
+  // ── Plate-grid geometry (v3.0 Phase 16 deferred, v3.2 Phase 29 lands it) ──
+  // Mirrors upstream PartPlate.cpp:3905-3964,4836-4870,5365-5376.
+  int plateCols() const { return m_plate_cols; }
+  int plateWidth() const { return m_plate_width; }
+  int plateDepth() const { return m_plate_depth; }
+  double plateStrideX() const;  // size * (1 + LOGICAL_PART_PLATE_GAP)
+  double plateStrideY() const;
+
+#ifdef HAS_LIBSLIC3R
+  /// 2D shape position for plate index in a grid of `cols` columns.
+  /// y goes NEGATIVE for rows below the first (PartPlate.cpp:3952-3964).
+  Slic3r::Vec2d computeShapePosition(int index, int cols) const;
+  /// 3D world origin for plate index in a grid of `cols` columns (z=0).
+  Slic3r::Vec3d computeOrigin(int index, int cols) const;
+#endif
+
+  /// Decode the plate index from a world-space (mm) translation.
+  /// Pure-double API so PartPlateList stays free of ArrangePolygon (libslic3r).
+  /// SIGN-FLIP decode: row_value = (stride_y - translation_y) / stride_y
+  /// (PartPlate.cpp:5365-5376).
+  int computePlateIndex(double translationX_mm, double translationY_mm) const;
+
+  /// Sets plate width/depth/height (mm) and refreshes origins. Test seam.
+  void setPlateSize(int width, int depth, int height);
 
   // ── Lifecycle (re-backing targets for ProjectServiceMock, PLATE-06) ────
   /// Creates a new plate with an auto-incremented index. Returns nullptr if
@@ -87,6 +129,19 @@ class PartPlateList {
   /// Owns the plates (mirrors upstream m_plate_list ownership).
   std::vector<std::unique_ptr<PartPlate>> m_plate_list;
   int m_current_plate = 0;
+
+  /// Plate-grid geometry (mirrors upstream PartPlate.hpp:569-576).
+  int m_plate_count = 0;
+  int m_plate_cols = 0;
+  int m_plate_width = 0;
+  int m_plate_depth = 0;
+  int m_plate_height = 0;
+
+  /// Refresh m_plate_count + m_plate_cols from the list size (PartPlate.cpp:4862-4870).
+  void updatePlateCols();
+
+  /// Write the computed origin to every plate (PartPlate.cpp:4872-4892 core loop).
+  void updatePlateOrigins();
 
   /// Reindexes m_plate_index on every plate to match its vector position.
   /// Called after any structural change (create/delete/reorder).

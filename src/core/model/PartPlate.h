@@ -155,6 +155,10 @@ class PartPlate {
   /// Clears all instance membership (upstream clear()).
   void clearInstances() { m_obj_to_instance_set.clear(); }
 
+  /// True if no instances belong to this plate.
+  // Mirrors upstream PartPlate::empty() (PartPlate.hpp:387).
+  bool empty() const { return m_obj_to_instance_set.empty(); }
+
   // ── Per-plate config (D-04, upstream DynamicPrintConfig m_config) ──────
 #ifdef HAS_LIBSLIC3R
   Slic3r::DynamicPrintConfig& config() { return m_config; }
