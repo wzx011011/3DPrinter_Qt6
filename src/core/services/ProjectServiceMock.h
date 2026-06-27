@@ -50,6 +50,11 @@ class ProjectServiceMock final : public QObject
   Q_PROPERTY(int modelCount READ modelCount NOTIFY projectChanged)
   Q_PROPERTY(int plateCount READ plateCount NOTIFY plateDataLoaded)
   Q_PROPERTY(int currentPlateIndex READ currentPlateIndex NOTIFY plateSelectionChanged)
+  // v3.2 Phase 29 D-29-15: read-only plate-grid geometry for debug/QML.
+  // cols/stride derive from plateCount, so NOTIFY reuses plateDataLoaded.
+  Q_PROPERTY(int plateCols READ plateCols NOTIFY plateDataLoaded)
+  Q_PROPERTY(double plateStrideX READ plateStrideX NOTIFY plateDataLoaded)
+  Q_PROPERTY(double plateStrideY READ plateStrideY NOTIFY plateDataLoaded)
   Q_PROPERTY(QString lastError READ lastError NOTIFY projectChanged)
   Q_PROPERTY(int loadProgress READ loadProgress NOTIFY loadProgressChanged)
   Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
@@ -62,6 +67,11 @@ public:
   int modelCount() const;
   int plateCount() const;
   int currentPlateIndex() const;
+  // v3.2 Phase 29 D-29-15: plate-grid geometry (read-only, derived from
+  // PartPlateList). Null-guarded for safety before m_plateList is constructed.
+  int plateCols() const { return m_plateList ? m_plateList->plateCols() : 0; }
+  double plateStrideX() const { return m_plateList ? m_plateList->plateStrideX() : 0.0; }
+  double plateStrideY() const { return m_plateList ? m_plateList->plateStrideY() : 0.0; }
   QString lastError() const;
   int loadProgress() const;
   bool loading() const;

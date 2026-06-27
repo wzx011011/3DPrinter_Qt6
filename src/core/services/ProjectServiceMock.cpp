@@ -2453,15 +2453,49 @@ bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool 
       if (bed_shape.size() >= 3)
       {
         Slic3r::BoundingBox bed_bb(bed_shape);
+        // D-29-3 (RESEARCH §5): derive plate width/depth from the SAME bed_bb
+        // arrange uses (μm→mm via /1000.0), so the grid decode (computePlateIndex)
+        // and the arrange coordinate space are identical — zero drift.
+        if (m_plateList)
+        {
+          const double width_mm = bed_bb.size().x() / 1000.0;
+          const double depth_mm = bed_bb.size().y() / 1000.0;
+          m_plateList->setModel(model_);  // backref for rebuildPlatesAfterArrangement
+          m_plateList->setPlateSize(static_cast<int>(width_mm), static_cast<int>(depth_mm), 0);
+        }
+        // Locked exclusion (D-29-10/D-29-9): upstream pins ArrangePolygon.bed_idx
+        // to locked plate index before arrange (PartPlate.cpp:5388-5396). Qt6's
+        // arrange_objects overload operates on the whole model without exposing
+        // the ArrangePolygon list, so the minimal-determinism path preserves
+        // locked membership via rebuildPlatesAfterArrangement(exceptLocked=true)
+        // instead. Full preprocess_arrange_polygon (fixed-item/non-selected
+        // branches) deferred per CONTEXT.
         // 传入容错 vfn：失败 item 不抛，arrange_objects 返回 false 表示有 item 未摆放。
         // 即使部分 item 未摆放，已成功摆放的 item 坐标已被 apply_arrange_polys 写回模型实例。
-        return Slic3r::arrange_objects(*model_, bed_bb, params, tolerantVfn);
+        const bool arranged = Slic3r::arrange_objects(*model_, bed_bb, params, tolerantVfn);
+        // D-29-12: only rebuild plate membership when arrange succeeded
+        // (all-locked returns false → no rebuild, no membership changes).
+        if (arranged && m_plateList)
+        {
+          m_plateList->rebuildPlatesAfterArrangement(/*exceptLocked=*/true, /*recyclePlates=*/true);
+          emit plateDataLoaded(m_plateList->plateCount());
+        }
+        return arranged;
       }
     }
 
     // Fallback to InfiniteBed when no valid bed shape（同样用容错 vfn）
     Slic3r::InfiniteBed bed;
-    return Slic3r::arrange_objects(*model_, bed, params, tolerantVfn);
+    const bool arranged = Slic3r::arrange_objects(*model_, bed, params, tolerantVfn);
+    // InfiniteBed arrange won't overflow to multiple plates typically, but the
+    // rebuild keeps membership consistent and is idempotent.
+    if (arranged && m_plateList)
+    {
+      m_plateList->setModel(model_);
+      m_plateList->rebuildPlatesAfterArrangement(/*exceptLocked=*/true, /*recyclePlates=*/true);
+      emit plateDataLoaded(m_plateList->plateCount());
+    }
+    return arranged;
   }
   catch (const std::exception &e)
   {
