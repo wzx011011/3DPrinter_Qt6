@@ -23,6 +23,11 @@
 
 **Requirements:** RHI-01, RHI-02, RHI-03, RHI-05, RHI-06, PERF-05
 
+**Plans:** 3
+- `23-01-PLAN.md` - QRhi backend gate and startup fallback
+- `23-02-PLAN.md` - QQuickRhiItem viewport host and shader pipeline
+- `23-03-PLAN.md` - benchmark evidence, verification, and requirement traceability
+
 **Success criteria:**
 1. `OWZX_RHI_RENDERER` or equivalent runtime/build gate can enable the QRhi path while default startup remains stable.
 2. QRhi backend selection attempts D3D12 first and D3D11 fallback on Windows; Vulkan is not default with the current SDK.
@@ -143,17 +148,11 @@
 
 ## Next Step
 
-Start Phase 23:
+Execute Phase 23:
 
 ```text
-$gsd-discuss-phase 23
-```
-
-Or skip discussion and plan directly:
-
-```text
-$gsd-plan-phase 23
+$gsd-execute-phase 23
 ```
 
 ---
-*Last updated: 2026-06-27 after v3.1 milestone roadmap creation.*
+*Last updated: 2026-06-27 after Phase 23 planning.*

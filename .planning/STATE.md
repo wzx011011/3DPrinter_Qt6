@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: QRhi High-Performance Prepare/Preview Rendering
-status: planning
-last_updated: "2026-06-27T00:00:00+08:00"
-last_activity: 2026-06-27 -- v3.1 requirements and roadmap created
+status: executing
+last_updated: "2026-06-27T00:39:14.452Z"
+last_activity: 2026-06-27 -- Phase 23 planning complete
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
+  total_plans: 3
   completed_plans: 0
   percent: 0
 ---
@@ -16,15 +16,15 @@ progress:
 # Project State
 
 **Milestone:** v3.1 - QRhi High-Performance Prepare/Preview Rendering
-**Status:** Planning
-**Next step:** `$gsd-discuss-phase 23` or `$gsd-plan-phase 23`
+**Status:** Ready to execute
+**Next step:** `$gsd-execute-phase 23`
 
 ## Current Position
 
 Phase: 23 (next) - QRhi Renderer Foundation And Backend Gate
 Plan: Not started
-Status: Roadmap created; ready for phase discussion/planning
-Last activity: 2026-06-27 - v3.1 milestone requirements and roadmap created
+Status: Ready to execute
+Last activity: 2026-06-27 -- Phase 23 planning complete
 
 ## Project Reference
 
@@ -38,6 +38,7 @@ See: `.planning/PROJECT.md` (updated 2026-06-27)
 **Goal:** Establish the Qt-native high-performance rendering foundation for Prepare and Preview using QRhi with D3D12-first/D3D11 fallback.
 
 **Phases:**
+
 - Phase 23: QRhi Renderer Foundation And Backend Gate
 - Phase 24: Prepare Scene Data And Plate Rendering
 - Phase 25: Prepare Model Mesh Rendering And Camera Interaction
@@ -81,16 +82,10 @@ Items acknowledged and deferred at v3.0/v3.1 planning.
 
 ## Handoff
 
-Start the first v3.1 phase:
+Execute the first v3.1 phase:
 
 ```text
-$gsd-discuss-phase 23
-```
-
-Or skip discussion and plan directly:
-
-```text
-$gsd-plan-phase 23
+$gsd-execute-phase 23
 ```
 
 ### Quick Tasks Completed
