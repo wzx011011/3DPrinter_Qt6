@@ -238,6 +238,10 @@ void QmlUiAuditTests::prepareViewportBindsBedAndPlateContext()
 
   QVERIFY2(editorHeader.contains(QStringLiteral("activePlateObjectIndices")),
            "EditorViewModel must expose renderer-facing activePlateObjectIndices");
+  QVERIFY2(editorHeader.contains(QStringLiteral("meshBatchSourceObjectIndices")),
+           "EditorViewModel must expose renderer-facing meshBatchSourceObjectIndices");
+  QVERIFY2(editorHeader.contains(QStringLiteral("selectedSourceObjectIndex")),
+           "EditorViewModel must expose renderer-facing selectedSourceObjectIndex");
   const QStringList requiredBindings = {
     QStringLiteral("bedWidth: root.editorVm ? root.editorVm.bedWidth"),
     QStringLiteral("bedDepth: root.editorVm ? root.editorVm.bedDepth"),
@@ -247,7 +251,9 @@ void QmlUiAuditTests::prepareViewportBindsBedAndPlateContext()
     QStringLiteral("bedDiameter: root.editorVm ? root.editorVm.bedDiameter"),
     QStringLiteral("currentPlateIndex: root.editorVm ? root.editorVm.currentPlateIndex"),
     QStringLiteral("plateCount: root.editorVm ? root.editorVm.plateCount"),
-    QStringLiteral("activePlateObjectIndices: root.editorVm ? root.editorVm.activePlateObjectIndices")
+    QStringLiteral("activePlateObjectIndices: root.editorVm ? root.editorVm.activePlateObjectIndices"),
+    QStringLiteral("meshBatchSourceObjectIndices: root.editorVm ? root.editorVm.meshBatchSourceObjectIndices"),
+    QStringLiteral("selectedSourceObjectIndex: root.editorVm ? root.editorVm.selectedSourceObjectIndex")
   };
   for (const QString &binding : requiredBindings) {
     QVERIFY2(preparePage.contains(binding),
@@ -258,16 +264,36 @@ void QmlUiAuditTests::prepareViewportBindsBedAndPlateContext()
            "RhiViewport must expose bedWidth");
   QVERIFY2(rhiViewportHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList activePlateObjectIndices")),
            "RhiViewport must expose activePlateObjectIndices");
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList meshBatchSourceObjectIndices")),
+           "RhiViewport must expose meshBatchSourceObjectIndices");
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("Q_PROPERTY(int selectedSourceObjectIndex")),
+           "RhiViewport must expose selectedSourceObjectIndex");
   QVERIFY2(softwareViewportHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList activePlateObjectIndices")),
            "SoftwareViewport must expose activePlateObjectIndices for the default QML registration path");
+  QVERIFY2(softwareViewportHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList meshBatchSourceObjectIndices")),
+           "SoftwareViewport must expose meshBatchSourceObjectIndices for the default QML registration path");
+  QVERIFY2(softwareViewportHeader.contains(QStringLiteral("Q_PROPERTY(int selectedSourceObjectIndex")),
+           "SoftwareViewport must expose selectedSourceObjectIndex for the default QML registration path");
   QVERIFY2(glViewportHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList activePlateObjectIndices")),
            "GLViewport must expose activePlateObjectIndices for the legacy OpenGL registration path");
+  QVERIFY2(glViewportHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList meshBatchSourceObjectIndices")),
+           "GLViewport must expose meshBatchSourceObjectIndices for the legacy OpenGL registration path");
+  QVERIFY2(glViewportHeader.contains(QStringLiteral("Q_PROPERTY(int selectedSourceObjectIndex")),
+           "GLViewport must expose selectedSourceObjectIndex for the legacy OpenGL registration path");
   QVERIFY2(rhiViewportSource.contains(QStringLiteral("setActivePlateObjectIndices")),
            "RhiViewport must store activePlateObjectIndices through a setter");
+  QVERIFY2(rhiViewportSource.contains(QStringLiteral("setMeshBatchSourceObjectIndices")),
+           "RhiViewport must store meshBatchSourceObjectIndices through a setter");
+  QVERIFY2(rhiViewportSource.contains(QStringLiteral("setSelectedSourceObjectIndex")),
+           "RhiViewport must store selectedSourceObjectIndex through a setter");
   QVERIFY2(!preparePage.contains(QStringLiteral("activePlateObjectIndices.filter")),
            "PreparePage must not filter renderer object membership in QML");
   QVERIFY2(!preparePage.contains(QStringLiteral("activePlateObjectIndices.map")),
            "PreparePage must not transform renderer object membership in QML");
+  QVERIFY2(!preparePage.contains(QStringLiteral("meshBatchSourceObjectIndices.filter")),
+           "PreparePage must not filter renderer batch source metadata in QML");
+  QVERIFY2(!preparePage.contains(QStringLiteral("meshBatchSourceObjectIndices.map")),
+           "PreparePage must not transform renderer batch source metadata in QML");
 }
 
 void QmlUiAuditTests::rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads()
