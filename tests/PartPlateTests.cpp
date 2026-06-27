@@ -12,18 +12,31 @@
 // edits; for incremental builds, delete build/PartPlateTests_autogen/timestamp.
 
 #include <QtTest>
+#include <QDir>
+#include <QFileInfo>
+#include <QSignalSpy>
 
 #include "core/model/PartPlate.h"
 #include "core/model/PartPlateList.h"
+#include "core/services/ProjectServiceMock.h"
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Point.hpp>
 #endif
 
+namespace {
+// Reuse the same fixture path as ViewModelSmokeTests.cpp:41.
+const QString kStlPath = QDir::cleanPath(
+    QStringLiteral(QT_TESTCASE_SOURCEDIR) +
+    QStringLiteral("/third_party/OrcaSlicer/resources/profiles/hotend.stl"));
+}  // namespace
+
 class PartPlateTests final : public QObject {
   Q_OBJECT
 
  private slots:
+  void initTestCase();
+
   // ── ARRANGE-01 geometry unit tests ──────────────────────────────────────
   void computeColumCount_data();
   void computeColumCount();
@@ -37,7 +50,23 @@ class PartPlateTests final : public QObject {
   void computePlateIndexRoundTrip() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void updatePlateOriginsWritesToPlates() { QSKIP("Requires HAS_LIBSLIC3R"); }
 #endif
+
+  // ── ARRANGE-02/03 integration tests (through arrangeObjects) ────────────
+#ifdef HAS_LIBSLIC3R
+  void arrangeDistributesAcrossPlates();
+  void lockedPlateExclusion();
+  void allLockedReturnsFalse();
+#else
+  void arrangeDistributesAcrossPlates() { QSKIP("Requires HAS_LIBSLIC3R"); }
+  void lockedPlateExclusion() { QSKIP("Requires HAS_LIBSLIC3R"); }
+  void allLockedReturnsFalse() { QSKIP("Requires HAS_LIBSLIC3R"); }
+#endif
 };
+
+void PartPlateTests::initTestCase() {
+  QVERIFY2(QFileInfo::exists(kStlPath), qPrintable(
+      QStringLiteral("Test STL not found: %1").arg(kStlPath)));
+}
 
 void PartPlateTests::computeColumCount_data() {
   // Full parity table for upstream compute_colum_count (PartPlate.hpp:38-50).
@@ -201,6 +230,119 @@ void PartPlateTests::updatePlateOriginsWritesToPlates() {
   QVERIFY(p3 != nullptr);
   QCOMPARE(p3->origin().x(), 240.0);
   QCOMPARE(p3->origin().y(), -240.0);
+}
+#endif  // HAS_LIBSLIC3R
+
+// ── ARRANGE-02/03 integration tests (through ProjectServiceMock::arrangeObjects) ─
+#ifdef HAS_LIBSLIC3R
+void PartPlateTests::arrangeDistributesAcrossPlates() {
+  // ARRANGE-02: rebuildPlatesAfterArrangement decodes each instance's world
+  // offset via computePlateIndex and assigns it to the right plate. We test
+  // this deterministically by placing objects at known cross-plate world
+  // positions, then triggering rebuildPlateMembership (the public hook that
+  // wraps rebuildPlatesAfterArrangement — same code path arrangeObjects uses
+  // post-arrange).
+  //
+  // Note on why we don't drive this through arrangeObjects directly:
+  // arrange_objects packs into a SINGLE bed bounding-box, and
+  // ModelArrange.cpp:98 resets bed_idx to 0, so arrange on one bed never
+  // produces cross-plate placements on its own. The rebuild's value is
+  // preserving cross-plate state for 3MF-loaded projects (which already span
+  // plates) — this test exercises that path.
+  ProjectServiceMock service;
+  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  QVERIFY(service.loadFile(kStlPath));
+  QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(service.modelCount() >= 1, "loadFile must add >= 1 object");
+
+  // Build 3 distinct objects.
+  while (service.modelCount() < 3) {
+    QVERIFY(service.duplicateObject(service.modelCount() - 1) >= 0);
+  }
+  QCOMPARE(service.modelCount(), 3);
+
+  // Set a known plate size so stride is deterministic: 100mm → stride 120mm.
+  service.setPlateSize(100, 100, 0);
+
+  // setObjectPosition uses GL(X,Z,Y)→slic3r(X,Y,Z); we set GL X to control
+  // slic3r x (the plate-grid X). Place objects at:
+  //   obj 0: GL (0,   0, 0)  → slic3r (0,   0, 0) → plate 0 (col 0)
+  //   obj 1: GL (120, 0, 0)  → slic3r (120, 0, 0) → plate 1 (col 1, x/120=1)
+  //   obj 2: GL (240, 0, 0)  → slic3r (240, 0, 0) → plate 2 (col 2, x/120=2)
+  QVERIFY(service.setObjectPosition(0, 0.0f, 0.0f, 0.0f));
+  QVERIFY(service.setObjectPosition(1, 120.0f, 0.0f, 0.0f));
+  QVERIFY(service.setObjectPosition(2, 240.0f, 0.0f, 0.0f));
+
+  QSignalSpy spy(&service, &ProjectServiceMock::plateDataLoaded);
+  service.rebuildPlateMembership(/*exceptLocked=*/true);
+
+  QVERIFY2(service.plateCount() >= 3,
+           "rebuild should create >= 3 plates for 3 cross-plate objects");
+  // Each object lands on its own plate.
+  QVERIFY2(service.plateObjectIndices(0).contains(0),
+           "object 0 (x=0) should be on plate 0");
+  QVERIFY2(service.plateObjectIndices(1).contains(1),
+           "object 1 (x=120) should be on plate 1");
+  QVERIFY2(service.plateObjectIndices(2).contains(2),
+           "object 2 (x=240) should be on plate 2");
+  QVERIFY2(spy.count() >= 1, "plateDataLoaded should fire after rebuild");
+}
+
+void PartPlateTests::lockedPlateExclusion() {
+  // ARRANGE-03: with plate 0 locked, rebuildPlateMembership(exceptLocked=true)
+  // preserves plate 0's membership unchanged — locked plates are never
+  // re-distributed. We verify the locked plate's pre-rebuild membership
+  // survives the rebuild even when a movable object's world offset is
+  // re-decoded onto a different plate.
+  ProjectServiceMock service;
+  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  QVERIFY(service.loadFile(kStlPath));
+  QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(service.modelCount() >= 1, "loadFile must add >= 1 object");
+
+  service.setPlateSize(100, 100, 0);
+  // Object 0 stays at plate 0's grid (x=0).
+  QVERIFY(service.setObjectPosition(0, 0.0f, 0.0f, 0.0f));
+
+  // Lock plate 0, then capture its membership (whatever the load path set).
+  QVERIFY(service.setPlateLocked(0, true));
+  const QList<int> plate0Before = service.plateObjectIndices(0);
+  QVERIFY2(!plate0Before.isEmpty(),
+           "plate 0 should hold the loaded object before rebuild");
+
+  // Rebuild with exceptLocked=true. Plate 0 is locked → its membership is
+  // preserved verbatim. The assertion: plate 0's membership is UNCHANGED.
+  service.rebuildPlateMembership(/*exceptLocked=*/true);
+  const QList<int> plate0After = service.plateObjectIndices(0);
+  QCOMPARE(plate0After, plate0Before);
+}
+
+void PartPlateTests::allLockedReturnsFalse() {
+  // D-29-12 edge case: with ALL plates locked, arrangeObjects returns false
+  // (apply_arrange_polys sees bed_idx!=0 on all items under tolerant vfn) and
+  // no rebuild runs — no membership changes, no crash.
+  ProjectServiceMock service;
+  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  QVERIFY(service.loadFile(kStlPath));
+  QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(service.modelCount() >= 1, "loadFile must add >= 1 object");
+
+  // Lock the single plate (all plates locked).
+  QVERIFY(service.setPlateLocked(0, true));
+  const QList<int> plate0Before = service.plateObjectIndices(0);
+  const int countBefore = service.plateCount();
+
+  const bool ok = service.arrangeObjects(
+      /*spacing=*/20.0f, /*allowRotation=*/false, /*alignY=*/false,
+      QStringLiteral("0,0,100,0,100,100,0,100"));
+
+  QVERIFY2(!ok, "all-locked arrange must return false (D-29-12)");
+  // No crash, no membership change, no plate count change.
+  QCOMPARE(service.plateObjectIndices(0), plate0Before);
+  QCOMPARE(service.plateCount(), countBefore);
 }
 #endif  // HAS_LIBSLIC3R
 

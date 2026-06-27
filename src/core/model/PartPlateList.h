@@ -92,6 +92,13 @@ class PartPlateList {
   /// Sets plate width/depth/height (mm) and refreshes origins. Test seam.
   void setPlateSize(int width, int depth, int height);
 
+  /// Public maintenance hook (v3.2 Phase 29): recompute every plate's origin
+  /// from its current grid index. Called automatically by createPlate/
+  /// deletePlate/movePlate/setPlateSize/rebuildPlatesAfterArrangement, but
+  /// exposed so callers that reconstruct the plate list out-of-band (e.g. the
+  /// 3MF load path) can refresh origins defensively.
+  void refreshPlateOrigins() { updatePlateOrigins(); }
+
   // ── Multi-plate arrangement rebuild (v3.2 Phase 29, ARRANGE-02/03) ──────
   // rebuildPlatesAfterArrangement mirrors upstream rebuild_plates_after_arrangement
   // (PartPlate.cpp:6096-6139), but decodes plate index from each instance's

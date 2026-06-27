@@ -72,6 +72,25 @@ public:
   int plateCols() const { return m_plateList ? m_plateList->plateCols() : 0; }
   double plateStrideX() const { return m_plateList ? m_plateList->plateStrideX() : 0.0; }
   double plateStrideY() const { return m_plateList ? m_plateList->plateStrideY() : 0.0; }
+
+  /// Sets plate width/depth/height (mm) and refreshes origins. Test seam.
+  void setPlateSize(int width, int depth, int height) {
+    if (m_plateList) m_plateList->setPlateSize(width, depth, height);
+  }
+
+  /// Reconstruct per-plate instance membership from current model world offsets
+  /// (v3.2 Phase 29, ARRANGE-02). Public test/load-path hook: useful for
+  /// 3MF-loaded projects that already span multiple plates (their instance
+  /// offsets were parsed from the archive), and for deterministic tests.
+  /// exceptLocked=true preserves locked-plate membership.
+  Q_INVOKABLE void rebuildPlateMembership(bool exceptLocked = true) {
+    if (!m_plateList) return;
+#ifdef HAS_LIBSLIC3R
+    m_plateList->setModel(model_);
+#endif
+    m_plateList->rebuildPlatesAfterArrangement(exceptLocked, /*recyclePlates=*/false);
+    emit plateDataLoaded(m_plateList->plateCount());
+  }
   QString lastError() const;
   int loadProgress() const;
   bool loading() const;

@@ -5354,6 +5354,13 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
             const int target = std::max(reconstructed, loadedPlateCount);
             for (int pi = reconstructed; pi < target; ++pi)
               receiver->m_plateList->createPlate();
+            // v3.2 Phase 29 (RESEARCH §6): defensive origin recompute so plate
+            // origins are consistent even if the auto-arrange-on-load below is
+            // later conditioned out. Note: m_plate_width/depth default to 0 at
+            // load time (no bed parse before arrange), so computeOrigin yields
+            // (0,0,0) for a 1-plate load — correct. The auto-arrange at line
+            // ~5368 re-derives real sizes via setPlateSize.
+            receiver->m_plateList->refreshPlateOrigins();
             receiver->m_plateList->setCurrentPlateIndex(
                 receiver->m_plateList->plateCount() > 0 ? 0 : -1);
             if (receiver->m_plateList->currentPlateIndex() < 0 &&
