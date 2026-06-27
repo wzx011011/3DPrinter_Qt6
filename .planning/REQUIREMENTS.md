@@ -10,17 +10,17 @@
 - [x] **RHI-01**: User can start OWzx with the existing stable viewport path unchanged by default while the new QRhi renderer is gated behind an explicit build/runtime switch.
 - [x] **RHI-02**: User can enable the QRhi renderer on Windows and get D3D12 as the first attempted backend with D3D11 fallback when D3D12 is unavailable.
 - [x] **RHI-03**: Developer can build QRhi renderer shaders through Qt Shader Tools as `.qsb` resources using the canonical `build/` directory and canonical verification script.
-- [ ] **RHI-04**: Renderer can keep Prepare mesh data and Preview G-code segment data in GPU-resident buffers and update only dirty ranges.
+- [x] **RHI-04**: Renderer can keep Prepare mesh data and Preview G-code segment data in GPU-resident buffers and update only dirty ranges. Phase 24 completes the Prepare scene/cache side with dirty-gated QRhi bed/plate buffers; Preview G-code segment buffers remain tracked by PREV-01/PREV-02/PREV-05 in Phases 26-27.
 - [x] **RHI-05**: QML can host the QRhi viewport and overlays without moving rendering business logic or source-truth behavior into QML scripts.
 - [x] **RHI-06**: Developer can run the optional `owzx-render-bench` benchmark to compare available QRhi backends and capture JSON performance metrics.
 
 ### Prepare Rendering
 
-- [ ] **PREP-01**: User can see the active bed/plate rendered through the QRhi path with correct bed dimensions, grid, origin cues, and plate selection context.
+- [x] **PREP-01**: User can see the active bed/plate rendered through the QRhi path with correct bed dimensions, grid, origin cues, and plate selection context.
 - [ ] **PREP-02**: User can load STL/OBJ/3MF models and see model meshes rendered from ProjectService/PartPlate data with correct transform, scale, orientation, and material color.
 - [ ] **PREP-03**: User can rotate, pan, zoom, and fit the Prepare camera in the QRhi viewport with interaction behavior aligned to the existing source-truth mapped viewport controls.
 - [ ] **PREP-04**: User can select and hover models in the QRhi viewport and receive visible highlight/outline feedback consistent with current editor selection state.
-- [ ] **PREP-05**: User can switch plates and see the QRhi viewport update to the selected plate without leaking objects from inactive plates.
+- [x] **PREP-05**: User can switch plates and see the QRhi viewport update to the selected plate without leaking objects from inactive plates. Phase 24 verifies active plate context isolation before Phase 25 adds full model mesh drawing.
 - [ ] **PREP-06**: User is returned to the stable fallback viewport when QRhi initialization fails, with a diagnostic notification instead of a crash or blank view.
 - [ ] **PREP-07**: Developer can trace each implemented Prepare viewport behavior to the corresponding OrcaSlicer upstream behavior or an explicit documented performance-only implementation difference.
 
@@ -79,14 +79,14 @@ Explicitly excluded from v3.1.
 | RHI-01 | Phase 23 | Complete |
 | RHI-02 | Phase 23 | Complete |
 | RHI-03 | Phase 23 | Complete |
-| RHI-04 | Phase 24 | Pending |
+| RHI-04 | Phase 24 | Complete |
 | RHI-05 | Phase 23 | Complete |
 | RHI-06 | Phase 23 | Complete |
-| PREP-01 | Phase 24 | Pending |
+| PREP-01 | Phase 24 | Complete |
 | PREP-02 | Phase 25 | Pending |
 | PREP-03 | Phase 25 | Pending |
 | PREP-04 | Phase 25 | Pending |
-| PREP-05 | Phase 24 | Pending |
+| PREP-05 | Phase 24 | Complete |
 | PREP-06 | Phase 28 | Pending |
 | PREP-07 | Phase 25 | Pending |
 | PREV-01 | Phase 26 | Pending |
@@ -110,4 +110,4 @@ Explicitly excluded from v3.1.
 
 ---
 *Requirements defined: 2026-06-27*
-*Last updated: 2026-06-27 after v3.1 milestone definition*
+*Last updated: 2026-06-27 after Phase 24 verification*

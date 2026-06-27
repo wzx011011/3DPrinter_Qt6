@@ -47,8 +47,8 @@ created: 2026-06-27
 | 24-03-T1 | 03 | 3 | PREP-01, RHI-04 | T-24-01 | QRhi buffer size follows scene geometry counts | static/build | `build/QmlUiAuditTests.exe` | yes | green |
 | 24-03-T2 | 03 | 3 | PREP-01 | N/A | Bed/grid/origin render path replaces diagnostic triangle | static/build | `build/QmlUiAuditTests.exe` | yes | green |
 | 24-03-T3 | 03 | 3 | PREP-05 | T-24-02 | Active plate switch triggers plate dirty upload path | static/unit | `build/PrepareSceneDataTests.exe`; `build/QmlUiAuditTests.exe` | yes | green |
-| 24-04-T1 | 04 | 4 | RHI-04, PREP-01, PREP-05 | N/A | Canonical full verification remains default-safe | full | `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` | yes | pending |
-| 24-04-T2 | 04 | 4 | RHI-04 | N/A | Verification records dirty upload evidence honestly | static/docs | `rg -n "RHI-04|PREP-01|PREP-05|24-VERIFICATION" .planning` | new | pending |
+| 24-04-T1 | 04 | 4 | RHI-04, PREP-01, PREP-05 | N/A | Canonical full verification remains default-safe | full | `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` | yes | green |
+| 24-04-T2 | 04 | 4 | RHI-04 | N/A | Verification records dirty upload evidence honestly | static/docs | `rg -n "RHI-04|PREP-01|PREP-05|24-VERIFICATION" .planning` | yes | green |
 
 *Status: pending / green / red / flaky*
 
