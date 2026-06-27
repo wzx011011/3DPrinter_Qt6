@@ -18,6 +18,7 @@ private slots:
   void renderBenchmarkMatchesRhiBackendPolicy();
   void prepareViewportBindsBedAndPlateContext();
   void rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads();
+  void rhiViewportRendererUsesModelBuffersAndCameraUniforms();
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
   void plateContextMenuItemsWiredAndNonEmpty();
@@ -329,6 +330,68 @@ void QmlUiAuditTests::rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads()
            "Renderer must upload fill and line buffers explicitly");
   QVERIFY2(!rendererSource.contains(QStringLiteral("kDiagnosticVertices")),
            "Prepare QRhi path must not remain diagnostic-triangle only");
+}
+
+void QmlUiAuditTests::rhiViewportRendererUsesModelBuffersAndCameraUniforms()
+{
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString vertexShader = readSource(QStringLiteral("src/qml_gui/Renderer/shaders/rhi_viewport.vert"));
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!rendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!vertexShader.isEmpty(), "Unable to read rhi_viewport.vert");
+
+  QVERIFY2(rendererHeader.contains(QStringLiteral("float z")),
+           "RhiViewportRenderer vertex format must carry 3D positions");
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_modelVertexBuffer")),
+           "RhiViewportRenderer must own a persistent model vertex buffer");
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_modelVertexBufferBytes"))
+               && rendererHeader.contains(QStringLiteral("m_modelVertexCount")),
+           "RhiViewportRenderer must track model buffer size and draw count");
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_cameraUniformBuffer")),
+           "RhiViewportRenderer must own a camera MVP uniform buffer");
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_cameraUniformBufferUploaded")),
+           "RhiViewportRenderer must track camera uniform upload state separately");
+  QVERIFY2(rendererHeader.contains(QStringLiteral("QMatrix4x4 m_cameraMvp")),
+           "RhiViewportRenderer must receive a render-ready camera MVP matrix");
+  QVERIFY2(rendererSource.contains(QStringLiteral("setModelMeshData(")),
+           "RhiViewportRenderer synchronization must feed mesh data into PrepareSceneData");
+  QVERIFY2(rendererSource.contains(QStringLiteral("uploadModelBuffer")),
+           "RhiViewportRenderer must isolate model buffer upload logic");
+  QVERIFY2(rendererSource.contains(QStringLiteral("uploadCameraUniform")),
+           "RhiViewportRenderer must isolate camera uniform upload logic");
+  QVERIFY2(rendererSource.contains(QStringLiteral("m_modelVertexBuffer.get()")),
+           "RhiViewportRenderer must bind and draw the model vertex buffer");
+  QVERIFY2(rendererSource.contains(QStringLiteral("PrepareSceneData::DirtyMesh"))
+               && rendererSource.contains(QStringLiteral("PrepareSceneData::DirtyCamera")),
+           "Renderer dirty logic must distinguish model uploads from camera uniform updates");
+  QVERIFY2(!rendererSource.contains(QStringLiteral("DirtyCamera | PrepareSceneData::DirtyMesh")),
+           "Camera dirty state must not be ORed into full model mesh upload conditions");
+
+  QVERIFY2(viewportHeader.contains(QStringLiteral("#include \"CameraController.h\"")),
+           "RhiViewport must use the shared CameraController");
+  QVERIFY2(viewportHeader.contains(QStringLiteral("CameraController m_camera")),
+           "RhiViewport must own CameraController state on the GUI item side");
+  QVERIFY2(viewportHeader.contains(QStringLiteral("mousePressEvent(QMouseEvent *event) override"))
+               && viewportHeader.contains(QStringLiteral("wheelEvent(QWheelEvent *event) override")),
+           "RhiViewport must override mouse and wheel events for camera interaction");
+  QVERIFY2(viewportSource.contains(QStringLiteral("m_camera.orbit"))
+               && viewportSource.contains(QStringLiteral("m_camera.pan"))
+               && viewportSource.contains(QStringLiteral("m_camera.zoom")),
+           "RhiViewport input handling must route orbit, pan, and zoom through CameraController");
+  QVERIFY2(viewportSource.contains(QStringLiteral("m_camera.fitView"))
+               && viewportSource.contains(QStringLiteral("m_camera.viewIso")),
+           "RhiViewport must route fit and preset changes through CameraController");
+
+  QVERIFY2(vertexShader.contains(QStringLiteral("layout(location = 0) in vec3 position")),
+           "RhiViewport vertex shader must consume 3D positions");
+  QVERIFY2(vertexShader.contains(QStringLiteral("layout(std140, binding = 0) uniform CameraBlock"))
+               && vertexShader.contains(QStringLiteral("mvp")),
+           "RhiViewport vertex shader must use a camera MVP uniform");
 }
 
 void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()
