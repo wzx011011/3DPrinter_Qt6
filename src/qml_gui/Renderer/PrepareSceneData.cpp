@@ -164,8 +164,7 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     }
 
     const int sourceObjectIndex = batchSourceObjectIndices.at(objectIndex);
-    const bool active = activeSourceObjectIndices.isEmpty()
-        || activeSourceContains(activeSourceObjectIndices, sourceObjectIndex);
+    const bool active = activeSourceContains(activeSourceObjectIndices, sourceObjectIndex);
     ModelBatch batch;
     batch.renderObjectId = renderObjectId;
     batch.sourceObjectIndex = sourceObjectIndex;
