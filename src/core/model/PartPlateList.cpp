@@ -242,4 +242,69 @@ void PartPlateList::updatePlateOrigins() {
 #endif
 }
 
+void PartPlateList::rebuildPlatesAfterArrangement(bool exceptLocked, bool recyclePlates) {
+#ifdef HAS_LIBSLIC3R
+  // Mirrors upstream rebuild_plates_after_arrangement (PartPlate.cpp:6096-6139),
+  // but decodes plate index from each instance's world translation via
+  // computePlateIndex instead of bbox intersection (D-29-5/D-29-7), because
+  // ModelArrange.cpp:98 resets bed_idx to 0 so the per-bed split must be
+  // reconstructed from the arranged translations.
+  if (!m_model) return;
+
+  // 1. CLEAR non-locked memberships (preserve locked when exceptLocked=true).
+  //    Mirrors upstream clear(false,false,except_locked,...) at PartPlate.cpp:5261.
+  for (int i = 0; i < plateCount(); ++i) {
+    PartPlate* p = plate(i);
+    if (!p) continue;
+    if (!(exceptLocked && p->isLocked())) p->clearInstances();
+  }
+
+  // 2. RE-DISTRIBUTE via computePlateIndex on each instance's world offset.
+  //    Upstream sorts by arrange_order before reload (PartPlate.cpp:6103); Qt6
+  //    decodes plate index from each instance's translation directly, so
+  //    ordering is irrelevant (D-29-5 divergence).
+  for (int objIdx = 0; objIdx < int(m_model->objects.size()); ++objIdx) {
+    const auto& obj = m_model->objects[size_t(objIdx)];
+    if (!obj) continue;
+    for (int instIdx = 0; instIdx < int(obj->instances.size()); ++instIdx) {
+      const auto& inst = obj->instances[size_t(instIdx)];
+      if (!inst) continue;
+      const Slic3r::Vec3d offset = inst->get_offset();  // world translation in mm
+      int plateIdx = computePlateIndex(offset.x(), offset.y());
+      if (plateIdx < 0) plateIdx = 0;  // clamp negative (objects left/above grid)
+      // Create plates up to plateIdx if needed (up to kMaxPlateCount).
+      while (plateCount() <= plateIdx && plateCount() < kMaxPlateCount) {
+        createPlate();  // createPlate keeps cols/origins consistent
+      }
+      if (plateIdx < plateCount()) plate(plateIdx)->addInstance(objIdx, instIdx);
+    }
+  }
+
+  // 3. RECYCLE trailing empty non-locked plates (recyclePlates=true).
+  //    Mirrors PartPlate.cpp:6111-6127 EXACTLY: reverse iteration, stops at
+  //    i==1 (plate 0 NEVER deleted), `break` on first non-empty/non-locked so
+  //    only a CONTIGUOUS trailing run is recycled. Locked plates never deleted.
+  if (recyclePlates) {
+    for (int i = plateCount() - 1; i > 0; --i) {
+      PartPlate* p = plate(i);
+      if (!p) continue;
+      if (p->empty()) {
+        deletePlate(i);  // deletePlate guards keep>=1; Plan 01 wired reindex+update
+      } else if (p->isLocked()) {
+        continue;
+      } else {
+        break;  // contiguous trailing run only
+      }
+    }
+  }
+
+  // 4. Refresh origins for all surviving plates' new grid positions.
+  updatePlateCols();
+  updatePlateOrigins();
+#else
+  (void)exceptLocked;
+  (void)recyclePlates;
+#endif
+}
+
 }  // namespace OWzx

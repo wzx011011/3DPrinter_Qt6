@@ -19,6 +19,10 @@
 
 #include <QList>  // for objectIndicesOnPlate bridge query (matches downstream Qt6 API shape)
 
+#ifdef HAS_LIBSLIC3R
+#include <libslic3r/Model.hpp>  // for setModel backref used by rebuildPlatesAfterArrangement
+#endif
+
 #include "PartPlate.h"
 
 namespace OWzx {
@@ -88,6 +92,25 @@ class PartPlateList {
   /// Sets plate width/depth/height (mm) and refreshes origins. Test seam.
   void setPlateSize(int width, int depth, int height);
 
+  // ── Multi-plate arrangement rebuild (v3.2 Phase 29, ARRANGE-02/03) ──────
+  // rebuildPlatesAfterArrangement mirrors upstream rebuild_plates_after_arrangement
+  // (PartPlate.cpp:6096-6139), but decodes plate index from each instance's
+  // world translation via computePlateIndex instead of bbox intersection
+  // (D-29-5/D-29-7) because ModelArrange.cpp:98 resets bed_idx to 0.
+  //
+  // exceptLocked: when true, locked plates' instance memberships are preserved
+  //   (cleared only on non-locked plates) — ARRANGE-03 locked exclusion.
+  // recyclePlates: when true, trailing empty non-locked plates are deleted
+  //   (upstream recycle_plates default). Plate 0 and locked plates are never
+  //   deleted. Requires setModel() to have been called.
+  void rebuildPlatesAfterArrangement(bool exceptLocked, bool recyclePlates);
+
+#ifdef HAS_LIBSLIC3R
+  /// Sets the libslic3r Model backref used by rebuildPlatesAfterArrangement to
+  /// enumerate model_->objects[*].instances[*] world translations.
+  void setModel(Slic3r::Model* model) { m_model = model; }
+#endif
+
   // ── Lifecycle (re-backing targets for ProjectServiceMock, PLATE-06) ────
   /// Creates a new plate with an auto-incremented index. Returns nullptr if
   /// kMaxPlateCount would be exceeded (mirrors upstream create_plate guard).
@@ -136,6 +159,11 @@ class PartPlateList {
   int m_plate_width = 0;
   int m_plate_depth = 0;
   int m_plate_height = 0;
+
+#ifdef HAS_LIBSLIC3R
+  /// libslic3r Model backref for rebuildPlatesAfterArrangement (set via setModel).
+  Slic3r::Model* m_model = nullptr;
+#endif
 
   /// Refresh m_plate_count + m_plate_cols from the list size (PartPlate.cpp:4862-4870).
   void updatePlateCols();
