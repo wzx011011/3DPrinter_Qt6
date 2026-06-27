@@ -341,6 +341,15 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     )
 
     qt_add_executable(ViewModelSmokeTests tests/ViewModelSmokeTests.cpp)
+    # AUTOMOC fix (v3.0 retrospective): single-file tests with cpp-internal
+    # Q_OBJECT have weak moc dependency tracking — adding a new slot to the
+    # .cpp doesn't reliably re-run AUTOMOC, so the test binary uses stale moc
+    # metadata and the new test silently doesn't execute. CMake's
+    # CMAKE_AUTOMOC_DEPEND_FILTERS doesn't cover cpp-internal Q_OBJECT; the
+    # robust fix is to re-run cmake configure (which re-scans AUTOMOC) after
+    # editing the test class. The canonical verify script does this; for
+    # incremental builds, delete the autogen timestamp before building:
+    #   rm build/ViewModelSmokeTests_autogen/timestamp
     target_link_libraries(ViewModelSmokeTests PRIVATE owzx_app_core
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
     )
