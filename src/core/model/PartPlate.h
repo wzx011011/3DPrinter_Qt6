@@ -25,6 +25,8 @@
 #include <utility>
 #include <vector>
 
+#include <QImage>  // v3.2 Phase 30: cached plate thumbnail (Qt-native).
+
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/PrintConfig.hpp>
 #include <libslic3r/Point.hpp>
@@ -109,7 +111,17 @@ class PartPlate {
 
   // ── Lock / printable / slice state machine ─────────────────────────────
   bool isLocked() const { return m_locked; }
-  void setLocked(bool locked) { m_locked = locked; }
+  void setLocked(bool locked) {
+    m_locked = locked;
+    m_thumbnail = QImage();  // v3.2 Phase 30 D-30-10: invalidate cache
+  }
+
+  // ── Thumbnail cache (v3.2 Phase 30) ────────────────────────────────────
+  // Qt-native cached plate thumbnail. Invalidated on every content change so
+  // the next access regenerates (mirrors upstream cache-invalidation pattern).
+  QImage thumbnail() const { return m_thumbnail; }
+  void setThumbnail(const QImage& img) { m_thumbnail = img; }
+  bool hasThumbnail() const { return !m_thumbnail.isNull(); }
 
   bool isPrintable() const { return m_printable; }
   void setPrintable(bool printable) { m_printable = printable; }
@@ -142,18 +154,23 @@ class PartPlate {
   /// Adds (objIdx, instIdx) to the plate's instance membership.
   void addInstance(int objIdx, int instIdx) {
     m_obj_to_instance_set.insert({objIdx, instIdx});
+    m_thumbnail = QImage();  // v3.2 Phase 30 D-30-10: invalidate cache
   }
 
   /// Removes (objIdx, instIdx) from the plate's instance membership.
   void removeInstance(int objIdx, int instIdx) {
     m_obj_to_instance_set.erase({objIdx, instIdx});
+    m_thumbnail = QImage();  // v3.2 Phase 30 D-30-10: invalidate cache
   }
 
   /// Returns true if ANY instance of objIdx is on this plate.
   bool hasObject(int objIdx) const;
 
   /// Clears all instance membership (upstream clear()).
-  void clearInstances() { m_obj_to_instance_set.clear(); }
+  void clearInstances() {
+    m_obj_to_instance_set.clear();
+    m_thumbnail = QImage();  // v3.2 Phase 30 D-30-10: invalidate cache
+  }
 
   /// True if no instances belong to this plate.
   // Mirrors upstream PartPlate::empty() (PartPlate.hpp:387).
@@ -225,6 +242,10 @@ class PartPlate {
 
   /// (objectIndex, instanceIndex) pairs — upstream obj_to_instance_set.
   std::set<std::pair<int, int>> m_obj_to_instance_set;
+
+  /// Cached plate thumbnail (v3.2 Phase 30). Qt-native; invalidated on content
+  /// change. Converted to Slic3r::ThumbnailData at the 3MF save boundary.
+  QImage m_thumbnail;
 
 #ifdef HAS_LIBSLIC3R
   /// Per-plate config override (upstream m_config, DynamicPrintConfig).

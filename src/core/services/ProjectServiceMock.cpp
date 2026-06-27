@@ -573,6 +573,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
           receiver->pendingPlateBedType_.clear();
           receiver->pendingPlatePrintSeq_.clear();
           receiver->pendingPlateSpiral_.clear();
+          receiver->pendingPlateThumbnails_.clear();  // v3.2 Phase 30 (THUMB-02)
 
           if (!plateDataList.empty())
           {
@@ -4244,6 +4245,140 @@ QString ProjectServiceMock::generatePlateThumbnail(int plateIndex, int size)
   return QString::fromLatin1(ba.toBase64());
 }
 
+// ── 缩略图变体生成（v3.2 Phase 30, THUMB-01）─────────────────────────────
+// variant=0: 主视角（delegates to generatePlateThumbnail — flat-color 3D-ish）
+// variant=1: 俯视图（top-down 2D footprint via QPainter）
+// 对齐上游 thumbnail_data(主) / top_thumbnail_data(俯视) 的语义区分。
+QString ProjectServiceMock::generatePlateThumbnailVariant(int plateIndex, int size, int variant)
+{
+  // variant=0 (主) 直接复用现有生成器，保持向后兼容。
+  if (variant == 0) return generatePlateThumbnail(plateIndex, size);
+  // variant=1 (俯视) 走 generateTopDownThumbnail。
+  if (variant == 1) return generateTopDownThumbnail(plateIndex, size);
+  // 未知 variant 默认回退到主视角。
+  return generatePlateThumbnail(plateIndex, size);
+}
+
+QString ProjectServiceMock::generateTopDownThumbnail(int plateIndex, int size)
+{
+  const int count = plateObjectCount(plateIndex);
+  QImage img(size, size, QImage::Format_ARGB32_Premultiplied);
+  img.fill(QColor(42, 42, 46));  // 深色背景，与主视角一致
+
+  QPainter p(&img);
+  p.setRenderHint(QPainter::Antialiasing);
+
+  // 热床网格（与主视角一致的视觉锚点）
+  p.setPen(QPen(QColor(60, 60, 65), 1));
+  const int gridSize = size / 8;
+  for (int i = 1; i < 8; ++i)
+  {
+    p.drawLine(i * gridSize, 0, i * gridSize, size);
+    p.drawLine(0, i * gridSize, size, i * gridSize);
+  }
+
+  if (count == 0)
+  {
+    p.setPen(QPen(QColor(100, 100, 100), 1, Qt::DashLine));
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(4, 4, size - 8, size - 8);
+    p.end();
+    QByteArray ba;
+    QBuffer buf(&ba);
+    buf.open(QIODevice::WriteOnly);
+    img.save(&buf, "PNG");
+    return QString::fromLatin1(ba.toBase64());
+  }
+
+  // 调色板（与主视角一致）
+  const QColor objColors[] = {
+    QColor(80, 180, 255), QColor(255, 160, 60), QColor(120, 220, 120),
+    QColor(220, 120, 220), QColor(255, 220, 80), QColor(255, 100, 100),
+    QColor(100, 220, 220), QColor(200, 180, 160),
+  };
+
+  // 俯视图：对象按其在板上的相对位置绘制为 bounding-box 矩形。
+  // 使用 objectPositions_（X,Z,Y GL 空间）映射到缩略图坐标。
+  const QList<int> plateObjs =
+      (m_plateList && plateIndex >= 0 && plateIndex < m_plateList->plateCount())
+      ? m_plateList->objectIndicesOnPlate(plateIndex)
+      : QList<int>{};
+
+  const int margin = 6;
+  const int area = size - margin * 2;
+
+  // 计算对象位置的范围，以便归一化到缩略图区域。
+  float minX = std::numeric_limits<float>::max();
+  float maxX = std::numeric_limits<float>::lowest();
+  float minZ = std::numeric_limits<float>::max();
+  float maxZ = std::numeric_limits<float>::lowest();
+  for (int i = 0; i < plateObjs.size() && i < 8; ++i)
+  {
+    const QVector3D pos =
+        objectPositions_.value(plateObjs.value(i, 0), QVector3D(0, 0, 0));
+    minX = std::min(minX, pos.x());
+    maxX = std::max(maxX, pos.x());
+    minZ = std::min(minZ, pos.z());
+    maxZ = std::max(maxZ, pos.z());
+  }
+  // 退化情况（所有对象同位置或无数据）：居中网格排列兜底。
+  const bool usePositions =
+      (maxX - minX) > 0.001f || (maxZ - minZ) > 0.001f;
+
+  int i = 0;
+  for (; i < plateObjs.size() && i < 8; ++i)
+  {
+    const QColor color = objColors[i % 8];
+    const QVector3D pos =
+        objectPositions_.value(plateObjs.value(i, 0), QVector3D(0, 0, 0));
+
+    int cx, cy, objSize;
+    if (usePositions)
+    {
+      // 归一化世界坐标到 [margin, size-margin] 区间。
+      const float rangeX = std::max(maxX - minX, 0.001f);
+      const float rangeZ = std::max(maxZ - minZ, 0.001f);
+      const float nx = (pos.x() - minX) / rangeX;
+      const float nz = (pos.z() - minZ) / rangeZ;
+      cx = margin + static_cast<int>(nx * area);
+      cy = margin + static_cast<int>(nz * area);
+      objSize = qMax(8, area / 8);  // 固定尺寸 footprint 矩形
+    }
+    else
+    {
+      // 兜底：网格排列（与主视角相同的简化布局）
+      const int cols = qMin(plateObjs.size(), 3);
+      const int rows = (plateObjs.size() + cols - 1) / cols;
+      const int cellW = area / cols;
+      const int cellH = area / rows;
+      const int col = i % cols;
+      const int row = i / cols;
+      cx = margin + col * cellW + cellW / 2;
+      cy = margin + row * cellH + cellH / 2;
+      objSize = qMin(cellW, cellH) * 0.5;
+    }
+
+    // footprint 矩形（俯视 bounding-box 概念）
+    p.setPen(QPen(color.lighter(130), 1));
+    p.setBrush(color);
+    p.drawRoundedRect(cx - objSize / 2, cy - objSize / 2, objSize, objSize, 3, 3);
+
+    // 对象序号
+    p.setPen(QColor(255, 255, 255, 200));
+    p.setFont(QFont("Arial", 7, QFont::Bold));
+    p.drawText(QRect(cx - objSize / 2, cy - objSize / 2, objSize, objSize),
+               Qt::AlignCenter, QString::number(i + 1));
+  }
+
+  p.end();
+
+  QByteArray ba;
+  QBuffer buf(&ba);
+  buf.open(QIODevice::WriteOnly);
+  img.save(&buf, "PNG");
+  return QString::fromLatin1(ba.toBase64());
+}
+
 int ProjectServiceMock::duplicateObject(int sourceIndex)
 {
   if (loading_)
@@ -4832,6 +4967,10 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
         opt->setInt(p->printSequence());
       if (auto *opt = pd->config.option("spiral_mode", true))
         opt->setInt(p->spiralMode());
+      // v3.2 Phase 30 (THUMB-02): plate_thumbnail pixel population deferred to
+      // THUMB-03 (v3.3+) — the writer's PNG encoding path is coupled to real
+      // GL capture. The per-plate QImage cache + variant generation (THUMB-01)
+      // are implemented; persistence follows in THUMB-03.
     }
 
     result.push_back(pd);
@@ -4865,6 +5004,16 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
     // Fixes the v2.9 blocker where save lost all plate names/locked/objects/config.
     Slic3r::PlateDataPtrs plateData = buildPlateDataList(m_plateList.get());
     params.plate_data_list = plateData;
+
+    // v3.2 Phase 30 (THUMB-02 partial): the 3MF writer reads per-plate
+    // thumbnails from store_params.thumbnail_data (bbs_3mf.cpp:6133). Populating
+    // it here would persist thumbnails, but the upstream writer's PNG pixel
+    // encoding path (_add_thumbnail_file_to_archive) is coupled to real GL
+    // capture and throws a non-std exception on the Qt6 mock pipeline.
+    // Per-plate thumbnail CACHE (PartPlate::m_thumbnail) + variant generation
+    // (THUMB-01) are implemented and tested; the write-side pixel persistence +
+    // full save→reload round-trip is deferred to THUMB-03 (v3.3+, needs real
+    // GL capture + validated writer pixel format).
 
     bool ok = false;
     try
@@ -5138,6 +5287,7 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
       receiver->pendingPlateBedType_.clear();
       receiver->pendingPlatePrintSeq_.clear();
       receiver->pendingPlateSpiral_.clear();
+      receiver->pendingPlateThumbnails_.clear();  // v3.2 Phase 30 (THUMB-02)
 
       if (ok && !plateDataList.empty())
       {
@@ -5167,6 +5317,19 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           receiver->pendingPlateBedType_.append(bedType);
           receiver->pendingPlatePrintSeq_.append(printSeq);
           receiver->pendingPlateSpiral_.append(spiral);
+
+          // v3.2 Phase 30 (THUMB-02): extract plate_thumbnail back into a QImage
+          // so it survives save→reload (D-30-8 round-trip). The pixels were read
+          // by bbs_3mf.cpp:1640 (_extract_from_archive) into plate->plate_thumbnail.pixels.
+          QImage loadedThumb;
+          if (plate && plate->plate_thumbnail.is_valid()) {
+            const Slic3r::ThumbnailData &td = plate->plate_thumbnail;
+            QImage raw(reinterpret_cast<const uchar *>(td.pixels.data()),
+                       static_cast<int>(td.width), static_cast<int>(td.height),
+                       static_cast<int>(td.width) * 4, QImage::Format_RGBA8888);
+            if (!raw.isNull()) loadedThumb = raw.copy();  // detach from the buffer
+          }
+          receiver->pendingPlateThumbnails_.append(loadedThumb);
 
           QSet<int> uniq;
           QList<int> objList;
@@ -5347,6 +5510,13 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
               if (pi < receiver->pendingPlateBedType_.size()) p->setBedType(receiver->pendingPlateBedType_[pi]);
               if (pi < receiver->pendingPlatePrintSeq_.size()) p->setPrintSequence(receiver->pendingPlatePrintSeq_[pi]);
               if (pi < receiver->pendingPlateSpiral_.size()) p->setSpiralMode(receiver->pendingPlateSpiral_[pi]);
+              // v3.2 Phase 30 (THUMB-02): restore the persisted thumbnail so it
+              // survives save→reload (D-30-8 round-trip). Note: addInstance above
+              // invalidated the cache; setThumbnail repopulates it without
+              // triggering regeneration on next access.
+              if (pi < receiver->pendingPlateThumbnails_.size() &&
+                  !receiver->pendingPlateThumbnails_[pi].isNull())
+                p->setThumbnail(receiver->pendingPlateThumbnails_[pi]);
             }
             const int reconstructed = receiver->m_plateList->plateCount();
             const int target = std::max(reconstructed, loadedPlateCount);

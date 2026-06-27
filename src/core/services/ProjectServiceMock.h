@@ -73,6 +73,12 @@ public:
   double plateStrideX() const { return m_plateList ? m_plateList->plateStrideX() : 0.0; }
   double plateStrideY() const { return m_plateList ? m_plateList->plateStrideY() : 0.0; }
 
+  // v3.2 Phase 30: read-only access to the plate list (for tests / inspection).
+  const OWzx::PartPlateList *plateListConst() const { return m_plateList.get(); }
+  // v3.2 Phase 30: mutable access for tests (cache manipulation). Production
+  // code should go through the Q_INVOKABLE API; this is a test seam.
+  OWzx::PartPlateList *plateListMut() { return m_plateList.get(); }
+
   /// Sets plate width/depth/height (mm) and refreshes origins. Test seam.
   void setPlateSize(int width, int depth, int height) {
     if (m_plateList) m_plateList->setPlateSize(width, depth, height);
@@ -318,6 +324,11 @@ public:
   /// 返回 base64 编码的 PNG 图片供 QML Image 组件使用
   Q_INVOKABLE QString generatePlateThumbnail(int plateIndex, int size = 64);
 
+  // v3.2 Phase 30, THUMB-01: 缩略图变体生成。
+  // variant=0: 主视角（delegates to generatePlateThumbnail）
+  // variant=1: 俯视图（top-down 2D footprint）
+  Q_INVOKABLE QString generatePlateThumbnailVariant(int plateIndex, int size = 64, int variant = 0);
+
   /// 添加新对象到当前平板（对齐上游 Plater 粘贴剪贴板行为）
   /// 返回新对象的索引，失败返回 -1
   Q_INVOKABLE int addObject(const QString &name);
@@ -362,6 +373,9 @@ signals:
   void projectConfigLoaded(const QHash<QString, QVariant> &config);
 
 private:
+  // v3.2 Phase 30: top-down 2D footprint thumbnail generator (variant=1).
+  QString generateTopDownThumbnail(int plateIndex, int size);
+
   /// v2.4: 当前项目保存路径（saveProjectAs 后更新）
   QString currentProjectPath_;
   /// Mock-mode per-object scoped overrides (objectIndex → key-value map)
@@ -411,6 +425,9 @@ private:
   QList<int> pendingPlateBedType_;
   QList<int> pendingPlatePrintSeq_;
   QList<int> pendingPlateSpiral_;
+  // v3.2 Phase 30 (THUMB-02): per-plate thumbnails extracted from 3MF
+  // PlateData::plate_thumbnail during load; applied to PartPlate in the rebuild.
+  QList<QImage> pendingPlateThumbnails_;
 
 #ifdef HAS_LIBSLIC3R
   // Forward-declared to keep libslic3r/Config.hpp out of the header (header pollution).
