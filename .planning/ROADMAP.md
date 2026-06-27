@@ -63,6 +63,12 @@
 
 **Requirements:** PREP-02, PREP-03, PREP-04, PREP-07
 
+**Plans:** 0/4 plans complete
+- [ ] `25-01-PLAN.md` - model batch contract and source mapping
+- [ ] `25-02-PLAN.md` - QRhi model mesh rendering and camera uniforms
+- [ ] `25-03-PLAN.md` - selection, hover, and picking bridge
+- [ ] `25-04-PLAN.md` - verification traceability and handoff
+
 **Success criteria:**
 1. STL/OBJ/3MF models render from ProjectService/PartPlate data with correct transform, scale, orientation, and material color.
 2. Rotate, pan, zoom, and fit camera operations work in the QRhi viewport without per-frame mesh rebuild.
@@ -158,11 +164,11 @@
 
 ## Next Step
 
-Discuss Phase 25:
+Execute Phase 25:
 
 ```text
-$gsd-discuss-phase 25
+$gsd-execute-phase 25
 ```
 
 ---
-*Last updated: 2026-06-27 after Phase 24 verification.*
+*Last updated: 2026-06-27 after Phase 25 planning.*
