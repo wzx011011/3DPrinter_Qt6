@@ -21,27 +21,27 @@
 - [x] **PREP-03**: User can rotate, pan, zoom, and fit the Prepare camera in the QRhi viewport with interaction behavior aligned to the existing source-truth mapped viewport controls. Phase 25 routes QRhi camera interaction through `CameraController` and audits camera uniform updates separately from model buffer uploads.
 - [x] **PREP-04**: User can select and hover models in the QRhi viewport and receive visible highlight/outline feedback consistent with current editor selection state. Phase 25 adds C++ projected-bounds picking, source-index selection bridging, and a dedicated QRhi highlight buffer.
 - [x] **PREP-05**: User can switch plates and see the QRhi viewport update to the selected plate without leaking objects from inactive plates. Phase 24 verifies active plate context isolation before Phase 25 adds full model mesh drawing.
-- [ ] **PREP-06**: User is returned to the stable fallback viewport when QRhi initialization fails, with a diagnostic notification instead of a crash or blank view.
+- [x] **PREP-06**: User is returned to the stable fallback viewport when QRhi initialization fails, with a diagnostic notification instead of a crash or blank view.
 - [x] **PREP-07**: Developer can trace each implemented Prepare viewport behavior to the corresponding OrcaSlicer upstream behavior or an explicit documented performance-only implementation difference. Phase 25 summaries and verification map model rendering, camera, selection, and PartPlate filtering behavior to upstream Prepare concepts.
 
 ### Preview Rendering
 
-- [ ] **PREV-01**: User can slice a model and see G-code extrusion/travel segments rendered through the QRhi preview path.
-- [ ] **PREV-02**: User can scrub layer range controls without forcing a full G-code CPU reparse or full GPU buffer rebuild on every interaction.
-- [ ] **PREV-03**: User can switch core Preview color modes for the QRhi path, including at least feature/move type, filament/tool, and speed-based coloring where data is available.
-- [ ] **PREV-04**: User can toggle visibility for extrusion/travel categories in the QRhi path with behavior matching the existing Preview controls.
-- [ ] **PREV-05**: User can use Preview playback/current-layer navigation and see the rendered range/toolhead state update without full-buffer reupload.
-- [ ] **PREV-06**: User can read Preview legend/statistics that remain synchronized with the QRhi color mode and visible layer range.
-- [ ] **PREV-07**: Developer can load a large synthetic or real Preview workload and verify interactive QRhi rendering without UI hangs from per-frame CPU filtering.
+- [x] **PREV-01**: User can slice a model and see G-code extrusion/travel segments rendered through the QRhi preview path.
+- [x] **PREV-02**: User can scrub layer range controls without forcing a full G-code CPU reparse or full GPU buffer rebuild on every interaction.
+- [x] **PREV-03**: User can switch core Preview color modes for the QRhi path, including at least feature/move type, filament/tool, and speed-based coloring where data is available.
+- [x] **PREV-04**: User can toggle visibility for extrusion/travel categories in the QRhi path with behavior matching the existing Preview controls.
+- [x] **PREV-05**: User can use Preview playback/current-layer navigation and see the rendered range/toolhead state update without full-buffer reupload.
+- [x] **PREV-06**: User can read Preview legend/statistics that remain synchronized with the QRhi color mode and visible layer range.
+- [x] **PREV-07**: Developer can load a large synthetic or real Preview workload and verify interactive QRhi rendering without UI hangs from per-frame CPU filtering.
 
 ### Performance And Verification
 
-- [ ] **PERF-01**: Developer can capture Prepare and Preview frame timing, first-frame timing, upload timing, and selected backend in structured logs or benchmark JSON.
-- [ ] **PERF-02**: QRhi Prepare and Preview paths avoid per-frame full geometry upload for steady camera movement and layer scrubbing.
-- [ ] **PERF-03**: Canonical verification still passes with QRhi code present, and the optional benchmark can be enabled without changing the default app startup path.
-- [ ] **PERF-04**: UI audit or smoke coverage guards that the stable fallback path remains available and that QRhi remains explicitly gated until promoted.
+- [x] **PERF-01**: Developer can capture Prepare and Preview frame timing, first-frame timing, upload timing, and selected backend in structured logs or benchmark JSON.
+- [x] **PERF-02**: QRhi Prepare and Preview paths avoid per-frame full geometry upload for steady camera movement and layer scrubbing.
+- [x] **PERF-03**: Canonical verification still passes with QRhi code present, and the optional benchmark can be enabled without changing the default app startup path.
+- [x] **PERF-04**: UI audit or smoke coverage guards that the stable fallback path remains available and that QRhi remains explicitly gated until promoted.
 - [x] **PERF-05**: Vulkan is documented as non-blocking for v3.1 because the installed Qt 6.10 SDK has QtGui Vulkan disabled; Vulkan may only be reconsidered after a Vulkan-enabled Qt SDK benchmark.
-- [ ] **PERF-06**: Code review and UI review findings for the QRhi renderer are fixed or explicitly deferred before the milestone is considered complete.
+- [x] **PERF-06**: Code review and UI review findings for the QRhi renderer are fixed or explicitly deferred before the milestone is considered complete.
 
 ## Future Requirements
 
@@ -87,21 +87,21 @@ Explicitly excluded from v3.1.
 | PREP-03 | Phase 25 | Complete |
 | PREP-04 | Phase 25 | Complete |
 | PREP-05 | Phase 24 | Complete |
-| PREP-06 | Phase 28 | Pending |
+| PREP-06 | Phase 28 | Complete |
 | PREP-07 | Phase 25 | Complete |
-| PREV-01 | Phase 26 | Pending |
-| PREV-02 | Phase 26 | Pending |
-| PREV-03 | Phase 26 | Pending |
-| PREV-04 | Phase 26 | Pending |
-| PREV-05 | Phase 27 | Pending |
-| PREV-06 | Phase 26 | Pending |
-| PREV-07 | Phase 27 | Pending |
-| PERF-01 | Phase 27 | Pending |
-| PERF-02 | Phase 27 | Pending |
-| PERF-03 | Phase 28 | Pending |
-| PERF-04 | Phase 28 | Pending |
+| PREV-01 | Phase 26 | Complete |
+| PREV-02 | Phase 26 | Complete |
+| PREV-03 | Phase 26 | Complete |
+| PREV-04 | Phase 26 | Complete |
+| PREV-05 | Phase 27 | Complete |
+| PREV-06 | Phase 26 | Complete |
+| PREV-07 | Phase 27 | Complete |
+| PERF-01 | Phase 27 | Complete |
+| PERF-02 | Phase 27 | Complete |
+| PERF-03 | Phase 28 | Complete |
+| PERF-04 | Phase 28 | Complete |
 | PERF-05 | Phase 23 | Complete |
-| PERF-06 | Phase 28 | Pending |
+| PERF-06 | Phase 28 | Complete |
 
 **Coverage:**
 - v3.1 requirements: 26 total

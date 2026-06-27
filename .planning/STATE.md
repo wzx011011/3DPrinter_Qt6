@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: QRhi High-Performance Prepare/Preview Rendering
-status: executing
+status: milestone_archived
 last_updated: "2026-06-27T14:39:00.000Z"
-last_activity: 2026-06-27
+last_activity: 2026-06-28 -- v3.1 archived via /gsd-complete-milestone
 progress:
   total_phases: 6
   completed_phases: 3
