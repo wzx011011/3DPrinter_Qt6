@@ -19,6 +19,7 @@ private slots:
   void prepareViewportBindsBedAndPlateContext();
   void rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads();
   void rhiViewportRendererUsesModelBuffersAndCameraUniforms();
+  void rhiViewportSelectionPickingBridgeStaysCppOwned();
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
   void plateContextMenuItemsWiredAndNonEmpty();
@@ -400,6 +401,73 @@ void QmlUiAuditTests::rhiViewportRendererUsesModelBuffersAndCameraUniforms()
   QVERIFY2(vertexShader.contains(QStringLiteral("layout(std140, binding = 0) uniform CameraBlock"))
                && vertexShader.contains(QStringLiteral("mvp")),
            "RhiViewport vertex shader must use a camera MVP uniform");
+}
+
+void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString softwareViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.h"));
+  const QString glViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/GLViewport.h"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!rendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!softwareViewportHeader.isEmpty(), "Unable to read SoftwareViewport.h");
+  QVERIFY2(!glViewportHeader.isEmpty(), "Unable to read GLViewport.h");
+
+  QVERIFY2(editorHeader.contains(QStringLiteral("selectSourceObject(int sourceIndex)")),
+           "EditorViewModel must expose a source-index selection bridge for renderer picking");
+  QVERIFY2(preparePage.contains(QStringLiteral("onObjectPickedSource: function(sourceIndex)"))
+               && preparePage.contains(QStringLiteral("root.editorVm.selectSourceObject(sourceIndex)")),
+           "PreparePage must only forward QRhi source-object picks to EditorViewModel");
+  QVERIFY2(!preparePage.contains(QStringLiteral("pickSourceObjectAt"))
+               && !preparePage.contains(QStringLiteral("intersect"))
+               && !preparePage.contains(QStringLiteral("ray")),
+           "PreparePage must not own picking or geometry-hit logic");
+
+  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_PROPERTY(int hoveredSourceObjectIndex")),
+           "RhiViewport must expose hover state independently from selection");
+  QVERIFY2(viewportHeader.contains(QStringLiteral("void objectPickedSource(int sourceIndex);")),
+           "RhiViewport must emit source-object pick signals");
+  QVERIFY2(softwareViewportHeader.contains(QStringLiteral("Q_PROPERTY(int hoveredSourceObjectIndex"))
+               && softwareViewportHeader.contains(QStringLiteral("void objectPickedSource(int sourceIndex);")),
+           "SoftwareViewport fallback must keep QML signal/property compatibility");
+  QVERIFY2(glViewportHeader.contains(QStringLiteral("Q_PROPERTY(int hoveredSourceObjectIndex"))
+               && glViewportHeader.contains(QStringLiteral("void objectPickedSource(int sourceIndex);")),
+           "GLViewport fallback must keep QML signal/property compatibility");
+
+  QVERIFY2(viewportSource.contains(QStringLiteral("pickSourceObjectAt"))
+               && viewportSource.contains(QStringLiteral("projectBoundsToScreenRect"))
+               && viewportSource.contains(QStringLiteral("emit objectPickedSource")),
+           "RhiViewport picking must stay in C++ with camera/projected bounds");
+  QVERIFY2(viewportSource.contains(QStringLiteral("setHoveredSourceObjectIndex"))
+               && viewportSource.contains(QStringLiteral("hoverMoveEvent(QHoverEvent *event)")),
+           "RhiViewport must maintain hover state from C++ pointer motion");
+
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_highlightVertexBuffer"))
+               && rendererHeader.contains(QStringLiteral("m_highlightVertexBufferUploaded")),
+           "RhiViewportRenderer must own a separate selection/hover highlight buffer");
+  QVERIFY2(rendererSource.contains(QStringLiteral("buildHighlightVertices"))
+               && rendererSource.contains(QStringLiteral("uploadHighlightBuffer"))
+               && rendererSource.contains(QStringLiteral("setHoveredSourceObjectIndex")),
+           "RhiViewportRenderer must update visual feedback through highlight uploads");
+  QVERIFY2(rendererSource.contains(QStringLiteral("PrepareSceneData::DirtySelection")),
+           "Selection/hover updates must be tracked with DirtySelection");
+
+  const int uploadModelStart = rendererSource.indexOf(QStringLiteral("bool RhiViewportRenderer::uploadModelBuffer"));
+  const int uploadHighlightStart = rendererSource.indexOf(QStringLiteral("bool RhiViewportRenderer::uploadHighlightBuffer"));
+  QVERIFY2(uploadModelStart >= 0 && uploadHighlightStart > uploadModelStart,
+           "RhiViewportRenderer uploadModelBuffer boundaries changed; update selection upload audit");
+  QVERIFY2(!rendererSource.mid(uploadModelStart, uploadHighlightStart - uploadModelStart)
+               .contains(QStringLiteral("DirtySelection")),
+           "Selection/hover changes must not reupload the full model vertex buffer");
 }
 
 void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()

@@ -160,6 +160,8 @@ private slots:
   void sliceServiceConfigMergeDirectionPlateWins();
   // v3.1 Phase 24: renderer-facing active plate context must not use UI fallback
   void activePlateObjectIndicesFollowCurrentPlateWithoutFallback();
+  // v3.2 Phase 25-03: QRhi picking selects source objects through the ViewModel
+  void rendererPickingSelectsSourceObjectThroughEditorViewModel();
 
 private:
   bool hasLibslic3r() const;
@@ -1491,6 +1493,36 @@ void ViewModelSmokeTests::activePlateObjectIndicesFollowCurrentPlateWithoutFallb
   const QVariantList showAllStillEmpty = editor.activePlateObjectIndices();
   QVERIFY2(showAllStillEmpty.isEmpty(),
            "Renderer-facing active plate context must not inherit show-all object-list fallback");
+}
+
+void ViewModelSmokeTests::rendererPickingSelectsSourceObjectThroughEditorViewModel()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPrimitiveToPlate(1));
+  QCOMPARE(editor.objectCount(), 2);
+
+  QSignalSpy spy(&editor, &EditorViewModel::stateChanged);
+  QVERIFY(editor.selectSourceObject(1));
+  QCOMPARE(editor.selectedSourceObjectIndex(), 1);
+  QCOMPARE(editor.selectedObjectIndex(), 1);
+  QVERIFY(editor.isObjectSelected(1));
+  QVERIFY(spy.count() >= 1);
+
+  const int signalCountAfterValidPick = spy.count();
+  QVERIFY(!editor.selectSourceObject(999));
+  QCOMPARE(editor.selectedSourceObjectIndex(), 1);
+  QCOMPARE(editor.selectedObjectIndex(), 1);
+  QCOMPARE(spy.count(), signalCountAfterValidPick);
+
+  QVERIFY(editor.addPlate());
+  QVERIFY(editor.setCurrentPlateIndex(1));
+  QVERIFY(editor.activePlateObjectIndices().isEmpty());
+  QVERIFY(!editor.selectSourceObject(0));
+  QCOMPARE(editor.selectedSourceObjectIndex(), -1);
 }
 
 void ViewModelSmokeTests::multiPlate3mfRoundTripPreservesState()
