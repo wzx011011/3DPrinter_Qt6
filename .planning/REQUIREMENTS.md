@@ -1,113 +1,68 @@
-# Requirements: OWzx Slicer v3.1 QRhi High-Performance Prepare/Preview Rendering
+# Requirements: OWzx Slicer v3.2 Multi-Plate Data Polish
 
-**Defined:** 2026-06-27
+**Defined:** 2026-06-28
 **Core Value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## v3.1 Requirements
+## Status Terms (per `.codex/rules/source-truth-migration.md`)
 
-### RHI Infrastructure
+- **Real:** source-truth behavior is implemented and verified with deterministic evidence.
+- **Hybrid:** a real path exists, but fallback/mock behavior remains or verification is incomplete.
+- **Mock:** local simulation only.
+- **Blocked:** requires an unavailable dependency, protocol, credential, or product decision.
+- **Placeholder:** visible UI or enum exists but has no meaningful backend behavior.
 
-- [x] **RHI-01**: User can start OWzx with the existing stable viewport path unchanged by default while the new QRhi renderer is gated behind an explicit build/runtime switch.
-- [x] **RHI-02**: User can enable the QRhi renderer on Windows and get D3D12 as the first attempted backend with D3D11 fallback when D3D12 is unavailable.
-- [x] **RHI-03**: Developer can build QRhi renderer shaders through Qt Shader Tools as `.qsb` resources using the canonical `build/` directory and canonical verification script.
-- [x] **RHI-04**: Renderer can keep Prepare mesh data and Preview G-code segment data in GPU-resident buffers and update only dirty ranges. Phase 24 completes the Prepare scene/cache side with dirty-gated QRhi bed/plate buffers; Preview G-code segment buffers remain tracked by PREV-01/PREV-02/PREV-05 in Phases 26-27.
-- [x] **RHI-05**: QML can host the QRhi viewport and overlays without moving rendering business logic or source-truth behavior into QML scripts.
-- [x] **RHI-06**: Developer can run the optional `owzx-render-bench` benchmark to compare available QRhi backends and capture JSON performance metrics.
+## v3.2 Requirements
 
-### Prepare Rendering
+### Multi-Plate Arrangement Data Layer
 
-- [x] **PREP-01**: User can see the active bed/plate rendered through the QRhi path with correct bed dimensions, grid, origin cues, and plate selection context.
-- [x] **PREP-02**: User can load STL/OBJ/3MF models and see model meshes rendered from ProjectService/PartPlate data with correct transform, scale, orientation, and material color. Phase 25 completes source-index model batch parsing and QRhi persistent model buffer rendering evidence in `25-VERIFICATION.md`.
-- [x] **PREP-03**: User can rotate, pan, zoom, and fit the Prepare camera in the QRhi viewport with interaction behavior aligned to the existing source-truth mapped viewport controls. Phase 25 routes QRhi camera interaction through `CameraController` and audits camera uniform updates separately from model buffer uploads.
-- [x] **PREP-04**: User can select and hover models in the QRhi viewport and receive visible highlight/outline feedback consistent with current editor selection state. Phase 25 adds C++ projected-bounds picking, source-index selection bridging, and a dedicated QRhi highlight buffer.
-- [x] **PREP-05**: User can switch plates and see the QRhi viewport update to the selected plate without leaking objects from inactive plates. Phase 24 verifies active plate context isolation before Phase 25 adds full model mesh drawing.
-- [x] **PREP-06**: User is returned to the stable fallback viewport when QRhi initialization fails, with a diagnostic notification instead of a crash or blank view.
-- [x] **PREP-07**: Developer can trace each implemented Prepare viewport behavior to the corresponding OrcaSlicer upstream behavior or an explicit documented performance-only implementation difference. Phase 25 summaries and verification map model rendering, camera, selection, and PartPlate filtering behavior to upstream Prepare concepts.
+- [ ] **ARRANGE-01**: PartPlateList has plate-grid geometry (`m_plate_cols`, `plate_stride_x/y`, `compute_plate_index`) matching upstream `PartPlateList:4836-4870`, enabling bed_idx → plate index → 2D world offset mapping.
+- [ ] **ARRANGE-02**: `arrangeObjects` distributes models across multiple plates using the plate-grid, matching upstream `rebuild_plates_after_arrangement` (`PartPlate.cpp:6096-6139`). Objects arranged into correct plates, not all on plate 0.
+- [ ] **ARRANGE-03**: Locked plates are excluded from arrangement (objects skip locked plates during auto-arrange).
 
-### Preview Rendering
+### Thumbnail Persistence
 
-- [x] **PREV-01**: User can slice a model and see G-code extrusion/travel segments rendered through the QRhi preview path.
-- [x] **PREV-02**: User can scrub layer range controls without forcing a full G-code CPU reparse or full GPU buffer rebuild on every interaction.
-- [x] **PREV-03**: User can switch core Preview color modes for the QRhi path, including at least feature/move type, filament/tool, and speed-based coloring where data is available.
-- [x] **PREV-04**: User can toggle visibility for extrusion/travel categories in the QRhi path with behavior matching the existing Preview controls.
-- [x] **PREV-05**: User can use Preview playback/current-layer navigation and see the rendered range/toolhead state update without full-buffer reupload.
-- [x] **PREV-06**: User can read Preview legend/statistics that remain synchronized with the QRhi color mode and visible layer range.
-- [x] **PREV-07**: Developer can load a large synthetic or real Preview workload and verify interactive QRhi rendering without UI hangs from per-frame CPU filtering.
+- [ ] **THUMB-01**: `generatePlateThumbnail` produces at least 2 kinds (main flat-color + top-down 2D footprint), replacing the single flat-color kind.
+- [ ] **THUMB-02**: Plate thumbnails are written to 3MF via `buildPlateDataList` (`PlateData::plate_thumbnail`), so round-trip preserves thumbnail data.
 
-### Performance And Verification
+### Filament Map (Manual Mode)
 
-- [x] **PERF-01**: Developer can capture Prepare and Preview frame timing, first-frame timing, upload timing, and selected backend in structured logs or benchmark JSON.
-- [x] **PERF-02**: QRhi Prepare and Preview paths avoid per-frame full geometry upload for steady camera movement and layer scrubbing.
-- [x] **PERF-03**: Canonical verification still passes with QRhi code present, and the optional benchmark can be enabled without changing the default app startup path.
-- [x] **PERF-04**: UI audit or smoke coverage guards that the stable fallback path remains available and that QRhi remains explicitly gated until promoted.
-- [x] **PERF-05**: Vulkan is documented as non-blocking for v3.1 because the installed Qt 6.10 SDK has QtGui Vulkan disabled; Vulkan may only be reconsidered after a Vulkan-enabled Qt SDK benchmark.
-- [x] **PERF-06**: Code review and UI review findings for the QRhi renderer are fixed or explicitly deferred before the milestone is considered complete.
+- [ ] **FMAP-01**: PartPlate has `filament_maps` (`std::vector<int>`) and `filament_map_mode` fields, matching upstream `PartPlate.hpp:262-263`.
+- [ ] **FMAP-02**: Filament map data round-trips through 3MF (`PlateData::filament_maps` already structured in bbs_3mf.hpp).
+- [ ] **FMAP-03**: User can manually assign extruder→filament mapping per plate via a simple QML UI (Manual mode only; Auto recommendation deferred).
 
-## Future Requirements
+### Test Fixture
 
-Deferred to future releases. Tracked but not in the v3.1 roadmap.
+- [ ] **FIXTURE-01**: A real-model test fixture (STL or 3MF) is committed under `tests/data/`.
+- [ ] **FIXTURE-02**: The PLATE-09 multi-plate 3MF round-trip test runs with the fixture (no QSKIP) and asserts plate state preservation.
 
-### Vulkan Backend
+## Future Requirements (deferred to v3.3+)
 
-- **VK-01**: Developer can install or build a Qt 6.10 SDK with QtGui public Vulkan support enabled.
-- **VK-02**: Developer can run the same `owzx-render-bench --backend all` workload against D3D12, Vulkan, and D3D11 on the target machine.
-- **VK-03**: OWzx can promote Vulkan to first-choice backend only if same-machine benchmark data proves Vulkan initializes reliably and outperforms D3D12 for representative Prepare/Preview workloads.
-
-### Advanced Viewport Features
-
-- **ADV-01**: User can use all upstream gizmo overlays in the QRhi Prepare viewport.
-- **ADV-02**: User can use support/seam/paint-style tools in QRhi once their data pipelines are migrated.
-- **ADV-03**: User can use full AssembleView bird's-eye multi-plate editing after the QRhi plate rendering foundation is stable.
-- **ADV-04**: User can use full preset bundle/CreatePresetsDialog workflows in a later preset-focused milestone.
+- **ASSEMBLE-01** (v3.3+): Non-placeholder AssembleView (XL, ~3000-4000 LOC, needs second GL canvas).
+- **THUMB-03** (v3.3+): Real GL-capture thumbnails (4 variants, blocked on QRhi framebuffer).
+- **FMAP-04** (v3.3+): Auto filament-map recommendation (blocked on ToolOrdering).
+- **WT-01** (v3.3+): Wipe-tower geometry + rendering.
+- **D3D12-01** (opportunistic): D3D12 crash root cause (v3.1 carry-forward).
 
 ## Out of Scope
 
-Explicitly excluded from v3.1.
+- AssembleView (XL, needs second GL canvas — v3.3+).
+- Wipe-tower GL rendering (needs GL framebuffer — v3.3+).
+- Real GL-capture thumbnails (blocked on QRhi framebuffer — v3.3+).
+- Auto filament-map (blocked on ToolOrdering — v3.3+).
 
-| Feature | Reason |
-|---|---|
-| Replacing libslic3r slicing algorithms | Rendering milestone only; slicing engine remains source-truth backend. |
-| Making Vulkan the default backend | Current Qt 6.10 SDK disables QtGui Vulkan; no valid local Vulkan QRhi backend exists. |
-| Full AssembleView workflow completion | Deferred behind the QRhi plate/model rendering foundation. |
-| Full preset system completion | Separate large source-truth area; not required to validate rendering performance. |
-| OpenVDB/HMS-dependent rendering tools | Dependency block remains outside this rendering foundation milestone. |
-
-## Traceability
+## Traceability (filled by roadmap)
 
 | Requirement | Phase | Status |
-|---|---:|---|
-| RHI-01 | Phase 23 | Complete |
-| RHI-02 | Phase 23 | Complete |
-| RHI-03 | Phase 23 | Complete |
-| RHI-04 | Phase 24 | Complete |
-| RHI-05 | Phase 23 | Complete |
-| RHI-06 | Phase 23 | Complete |
-| PREP-01 | Phase 24 | Complete |
-| PREP-02 | Phase 25 | Complete |
-| PREP-03 | Phase 25 | Complete |
-| PREP-04 | Phase 25 | Complete |
-| PREP-05 | Phase 24 | Complete |
-| PREP-06 | Phase 28 | Complete |
-| PREP-07 | Phase 25 | Complete |
-| PREV-01 | Phase 26 | Complete |
-| PREV-02 | Phase 26 | Complete |
-| PREV-03 | Phase 26 | Complete |
-| PREV-04 | Phase 26 | Complete |
-| PREV-05 | Phase 27 | Complete |
-| PREV-06 | Phase 26 | Complete |
-| PREV-07 | Phase 27 | Complete |
-| PERF-01 | Phase 27 | Complete |
-| PERF-02 | Phase 27 | Complete |
-| PERF-03 | Phase 28 | Complete |
-| PERF-04 | Phase 28 | Complete |
-| PERF-05 | Phase 23 | Complete |
-| PERF-06 | Phase 28 | Complete |
+|---|---|---|
+| ARRANGE-01 | Phase 29 | Not started |
+| ARRANGE-02 | Phase 29 | Not started |
+| ARRANGE-03 | Phase 29 | Not started |
+| THUMB-01 | Phase 30 | Not started |
+| THUMB-02 | Phase 30 | Not started |
+| FMAP-01 | Phase 31 | Not started |
+| FMAP-02 | Phase 31 | Not started |
+| FMAP-03 | Phase 31 | Not started |
+| FIXTURE-01 | Phase 32 | Not started |
+| FIXTURE-02 | Phase 32 | Not started |
 
-**Coverage:**
-- v3.1 requirements: 26 total
-- Mapped to phases: 26
-- Unmapped: 0
-
----
-*Requirements defined: 2026-06-27*
-*Last updated: 2026-06-27 after Phase 25 verification*
+**Coverage:** 10 total · 10 to map · 0 unmapped.
