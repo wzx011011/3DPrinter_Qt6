@@ -63,9 +63,9 @@
 
 **Requirements:** PREP-02, PREP-03, PREP-04, PREP-07
 
-**Plans:** 1/4 plans executed
+**Plans:** 2/4 plans executed
 - [x] `25-01-PLAN.md` - model batch contract and source mapping
-- [ ] `25-02-PLAN.md` - QRhi model mesh rendering and camera uniforms
+- [x] `25-02-PLAN.md` - QRhi model mesh rendering and camera uniforms
 - [ ] `25-03-PLAN.md` - selection, hover, and picking bridge
 - [ ] `25-04-PLAN.md` - verification traceability and handoff
 
@@ -171,4 +171,4 @@ $gsd-execute-phase 25
 ```
 
 ---
-*Last updated: 2026-06-27 after Phase 25 plan 25-01 execution.*
+*Last updated: 2026-06-27 after Phase 25 plan 25-02 execution.*
