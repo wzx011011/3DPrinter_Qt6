@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QQuickRhiItem>
+#include <QVector>
 
 #include <memory>
 
@@ -33,16 +34,26 @@ protected:
 
 private:
   void releaseResources();
-  bool ensurePipeline();
-  bool uploadVertices();
+  bool ensurePipelines();
+  bool ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &pipeline,
+                      QRhiGraphicsPipeline::Topology topology);
+  bool uploadSceneBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
+  bool ensureBuffer(std::unique_ptr<QRhiBuffer> &buffer, quint32 byteSize);
+  QVector<Vertex> buildSceneVertices(const QList<PrepareSceneData::Vertex> &source) const;
   QShader loadShader(const QString &path) const;
 
-  std::unique_ptr<QRhiBuffer> m_vertexBuffer;
+  std::unique_ptr<QRhiBuffer> m_bedFillBuffer;
+  std::unique_ptr<QRhiBuffer> m_bedLineBuffer;
   std::unique_ptr<QRhiShaderResourceBindings> m_srb;
-  std::unique_ptr<QRhiGraphicsPipeline> m_pipeline;
+  std::unique_ptr<QRhiGraphicsPipeline> m_fillPipeline;
+  std::unique_ptr<QRhiGraphicsPipeline> m_linePipeline;
   QRhiRenderPassDescriptor *m_renderPassDescriptor = nullptr;
-  bool m_verticesUploaded = false;
+  bool m_sceneBuffersUploaded = false;
   bool m_pipelineFailed = false;
+  quint32 m_bedFillBufferBytes = 0;
+  quint32 m_bedLineBufferBytes = 0;
+  quint32 m_bedFillVertexCount = 0;
+  quint32 m_bedLineVertexCount = 0;
   int m_canvasType = 0;
   int m_meshBytes = 0;
   int m_previewBytes = 0;

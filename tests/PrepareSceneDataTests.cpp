@@ -10,6 +10,7 @@ private slots:
   void bedGeometryUsesDimensionsAndGridIntervals();
   void dirtyFlagsAreConsumedOnlyOnRequest();
   void activePlateContextDoesNotLeakInactiveObjects();
+  void plateContextDirtyFlagsOnlyChangeOnPlateDifferences();
   void invalidBedDimensionsDoNotGenerateUnboundedBuffers();
 };
 
@@ -63,6 +64,28 @@ void PrepareSceneDataTests::activePlateContextDoesNotLeakInactiveObjects()
   QCOMPARE(scene.currentPlateIndex(), -1);
   QCOMPARE(scene.plateCount(), 3);
   QVERIFY(scene.activeObjectIndices().isEmpty());
+}
+
+void PrepareSceneDataTests::plateContextDirtyFlagsOnlyChangeOnPlateDifferences()
+{
+  PrepareSceneData scene;
+  scene.takeDirtyFlags();
+
+  scene.setPlateContext(0, 2, QList<int>{1});
+  quint32 dirtyFlags = scene.peekDirtyFlags();
+  QVERIFY((dirtyFlags & PrepareSceneData::DirtyPlate) != 0);
+  QVERIFY((dirtyFlags & PrepareSceneData::DirtyGpu) != 0);
+
+  scene.takeDirtyFlags();
+  scene.setPlateContext(0, 2, QList<int>{1});
+  QCOMPARE(scene.peekDirtyFlags(), quint32(PrepareSceneData::DirtyNone));
+
+  scene.setPlateContext(1, 2, QList<int>{3, 4});
+  dirtyFlags = scene.peekDirtyFlags();
+  QVERIFY((dirtyFlags & PrepareSceneData::DirtyPlate) != 0);
+  QVERIFY((dirtyFlags & PrepareSceneData::DirtyGpu) != 0);
+  QCOMPARE(scene.currentPlateIndex(), 1);
+  QCOMPARE(scene.activeObjectIndices(), (QList<int>{3, 4}));
 }
 
 void PrepareSceneDataTests::invalidBedDimensionsDoNotGenerateUnboundedBuffers()

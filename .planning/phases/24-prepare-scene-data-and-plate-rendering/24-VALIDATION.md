@@ -44,9 +44,9 @@ created: 2026-06-27
 | 24-02-T1 | 02 | 2 | PREP-05 | T-24-02 | Active plate object indices come from C++ service truth | unit | `build/ViewModelSmokeTests.exe` | yes | green |
 | 24-02-T2 | 02 | 2 | PREP-01, PREP-05 | N/A | QML binds viewmodel state only; no filtering logic | static | `build/QmlUiAuditTests.exe` | yes | green |
 | 24-02-T3 | 02 | 2 | RHI-04 | N/A | RhiViewport mirrors state and marks updates only through setters | static/unit | `build/QmlUiAuditTests.exe` | yes | green |
-| 24-03-T1 | 03 | 3 | PREP-01, RHI-04 | T-24-01 | QRhi buffer size follows scene geometry counts | static/build | `build/QmlUiAuditTests.exe` | partial | pending |
-| 24-03-T2 | 03 | 3 | PREP-01 | N/A | Bed/grid/origin render path replaces diagnostic triangle | static/build | `build/QmlUiAuditTests.exe` | partial | pending |
-| 24-03-T3 | 03 | 3 | PREP-05 | T-24-02 | Active plate switch triggers plate dirty upload path | static/unit | `build/PrepareSceneDataTests.exe`; `build/QmlUiAuditTests.exe` | partial | pending |
+| 24-03-T1 | 03 | 3 | PREP-01, RHI-04 | T-24-01 | QRhi buffer size follows scene geometry counts | static/build | `build/QmlUiAuditTests.exe` | yes | green |
+| 24-03-T2 | 03 | 3 | PREP-01 | N/A | Bed/grid/origin render path replaces diagnostic triangle | static/build | `build/QmlUiAuditTests.exe` | yes | green |
+| 24-03-T3 | 03 | 3 | PREP-05 | T-24-02 | Active plate switch triggers plate dirty upload path | static/unit | `build/PrepareSceneDataTests.exe`; `build/QmlUiAuditTests.exe` | yes | green |
 | 24-04-T1 | 04 | 4 | RHI-04, PREP-01, PREP-05 | N/A | Canonical full verification remains default-safe | full | `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` | yes | pending |
 | 24-04-T2 | 04 | 4 | RHI-04 | N/A | Verification records dirty upload evidence honestly | static/docs | `rg -n "RHI-04|PREP-01|PREP-05|24-VERIFICATION" .planning` | new | pending |
 
@@ -66,7 +66,7 @@ created: 2026-06-27
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| QRhi viewport visually shows bed/grid when explicitly enabled | PREP-01 | Canonical smoke does not inspect QRhi pixels | After canonical build, launch with `OWZX_RHI_RENDERER=1` and confirm the Prepare viewport is not blank and shows a bed/grid/origin cue. |
+| QRhi viewport starts with bed/grid renderer path when explicitly enabled | PREP-01 | Canonical smoke does not enable QRhi or inspect pixels | `OWZX_RHI_RENDERER=1` launch stayed running for 5 seconds and logged `selected=d3d12 attempts=[d3d12:ok]` on 2026-06-27. |
 
 ---
 

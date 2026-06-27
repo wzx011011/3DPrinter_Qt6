@@ -3,17 +3,8 @@
 
 #include <QFile>
 
-#include <cstring>
-
-namespace {
-
-constexpr RhiViewportRenderer::Vertex kDiagnosticVertices[] = {
-    {-0.72f, -0.62f, 0.08f, 0.78f, 0.42f, 1.0f},
-    { 0.72f, -0.62f, 0.12f, 0.48f, 0.92f, 1.0f},
-    { 0.00f,  0.64f, 0.98f, 0.58f, 0.24f, 1.0f},
-};
-
-} // namespace
+#include <algorithm>
+#include <cstddef>
 
 RhiViewportRenderer::RhiViewportRenderer() = default;
 
@@ -27,7 +18,7 @@ void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
   Q_UNUSED(cb);
   releaseResources();
   m_pipelineFailed = false;
-  m_verticesUploaded = false;
+  m_sceneBuffersUploaded = false;
 }
 
 void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
@@ -66,53 +57,87 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   }
 
   QRhiResourceUpdateBatch *updates = nullptr;
-  if (!m_verticesUploaded && !m_pipelineFailed) {
-    if (uploadVertices())
+  quint32 dirtyFlags = m_prepareScene.peekDirtyFlags();
+  if (m_canvasType == RhiViewport::CanvasView3D && m_prepareScene.showBed()) {
+    const bool sceneDirty = (dirtyFlags & (PrepareSceneData::DirtyBed
+                                           | PrepareSceneData::DirtyPlate
+                                           | PrepareSceneData::DirtyGpu)) != 0;
+    if ((sceneDirty || !m_sceneBuffersUploaded) && !m_pipelineFailed) {
       updates = rhi()->nextResourceUpdateBatch();
+      if (!uploadSceneBuffers(updates, dirtyFlags)) {
+        delete updates;
+        updates = nullptr;
+      } else {
+        m_prepareScene.takeDirtyFlags();
+      }
+    }
   }
 
-  if (updates != nullptr)
-    updates->uploadStaticBuffer(m_vertexBuffer.get(), kDiagnosticVertices);
-
   cb->beginPass(renderTarget(), m_clearColor, {1.0f, 0}, updates);
-  if (ensurePipeline()) {
-    cb->setGraphicsPipeline(m_pipeline.get());
+  if (m_canvasType == RhiViewport::CanvasView3D && m_prepareScene.showBed() && ensurePipelines()) {
     cb->setViewport(QRhiViewport(0, 0, float(renderTarget()->pixelSize().width()),
                                  float(renderTarget()->pixelSize().height())));
     cb->setShaderResources(m_srb.get());
-    const QRhiCommandBuffer::VertexInput binding(m_vertexBuffer.get(), 0);
-    cb->setVertexInput(0, 1, &binding);
-    cb->draw(3);
+    if (m_bedFillBuffer && m_bedFillVertexCount > 0) {
+      cb->setGraphicsPipeline(m_fillPipeline.get());
+      const QRhiCommandBuffer::VertexInput fillBinding(m_bedFillBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &fillBinding);
+      cb->draw(m_bedFillVertexCount);
+    }
+    if (m_bedLineBuffer && m_bedLineVertexCount > 0) {
+      cb->setGraphicsPipeline(m_linePipeline.get());
+      const QRhiCommandBuffer::VertexInput lineBinding(m_bedLineBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &lineBinding);
+      cb->draw(m_bedLineVertexCount);
+    }
   }
   cb->endPass();
 }
 
 void RhiViewportRenderer::releaseResources()
 {
-  m_pipeline.reset();
+  m_linePipeline.reset();
+  m_fillPipeline.reset();
   m_srb.reset();
-  m_vertexBuffer.reset();
+  m_bedLineBuffer.reset();
+  m_bedFillBuffer.reset();
   m_renderPassDescriptor = nullptr;
-  m_verticesUploaded = false;
+  m_sceneBuffersUploaded = false;
+  m_bedFillBufferBytes = 0;
+  m_bedLineBufferBytes = 0;
+  m_bedFillVertexCount = 0;
+  m_bedLineVertexCount = 0;
 }
 
-bool RhiViewportRenderer::ensurePipeline()
+bool RhiViewportRenderer::ensurePipelines()
 {
-  if (m_pipeline)
+  if (m_fillPipeline && m_linePipeline)
     return true;
   if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr)
+    return false;
+
+  m_srb.reset(rhi()->newShaderResourceBindings());
+  m_srb->setBindings({});
+  if (!m_srb->create()) {
+    m_pipelineFailed = true;
+    return false;
+  }
+
+  return ensurePipeline(m_fillPipeline, QRhiGraphicsPipeline::Triangles)
+      && ensurePipeline(m_linePipeline, QRhiGraphicsPipeline::Lines);
+}
+
+bool RhiViewportRenderer::ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &pipeline,
+                                         QRhiGraphicsPipeline::Topology topology)
+{
+  if (pipeline)
+    return true;
+  if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr || m_srb == nullptr)
     return false;
 
   QShader vertexShader = loadShader(QStringLiteral(":/rhi_viewport/shaders/rhi_viewport.vert.qsb"));
   QShader fragmentShader = loadShader(QStringLiteral(":/rhi_viewport/shaders/rhi_viewport.frag.qsb"));
   if (!vertexShader.isValid() || !fragmentShader.isValid()) {
-    m_pipelineFailed = true;
-    return false;
-  }
-
-  m_srb.reset(rhi()->newShaderResourceBindings());
-  m_srb->setBindings({});
-  if (!m_srb->create()) {
     m_pipelineFailed = true;
     return false;
   }
@@ -125,17 +150,17 @@ bool RhiViewportRenderer::ensurePipeline()
   });
 
   m_renderPassDescriptor = renderTarget()->renderPassDescriptor();
-  m_pipeline.reset(rhi()->newGraphicsPipeline());
-  m_pipeline->setTopology(QRhiGraphicsPipeline::Triangles);
-  m_pipeline->setShaderStages({
+  pipeline.reset(rhi()->newGraphicsPipeline());
+  pipeline->setTopology(topology);
+  pipeline->setShaderStages({
       QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
       QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
   });
-  m_pipeline->setShaderResourceBindings(m_srb.get());
-  m_pipeline->setVertexInputLayout(inputLayout);
-  m_pipeline->setRenderPassDescriptor(m_renderPassDescriptor);
-  if (!m_pipeline->create()) {
-    m_pipeline.reset();
+  pipeline->setShaderResourceBindings(m_srb.get());
+  pipeline->setVertexInputLayout(inputLayout);
+  pipeline->setRenderPassDescriptor(m_renderPassDescriptor);
+  if (!pipeline->create()) {
+    pipeline.reset();
     m_pipelineFailed = true;
     return false;
   }
@@ -143,28 +168,91 @@ bool RhiViewportRenderer::ensurePipeline()
   return true;
 }
 
-bool RhiViewportRenderer::uploadVertices()
+bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags)
 {
-  if (m_vertexBuffer)
-  {
-    m_verticesUploaded = true;
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+
+  const bool uploadScene = !m_sceneBuffersUploaded
+      || (dirtyFlags & (PrepareSceneData::DirtyBed
+                        | PrepareSceneData::DirtyPlate
+                        | PrepareSceneData::DirtyGpu)) != 0;
+  if (!uploadScene)
+    return true;
+
+  const QVector<Vertex> fillVertices = buildSceneVertices(m_prepareScene.bedFillVertices());
+  const QVector<Vertex> lineVertices = buildSceneVertices(m_prepareScene.bedLineVertices());
+  const quint32 fillBytes = quint32(fillVertices.size() * int(sizeof(Vertex)));
+  const quint32 lineBytes = quint32(lineVertices.size() * int(sizeof(Vertex)));
+
+  if (!ensureBuffer(m_bedFillBuffer, fillBytes) || !ensureBuffer(m_bedLineBuffer, lineBytes))
+    return false;
+
+  m_bedFillVertexCount = quint32(fillVertices.size());
+  m_bedLineVertexCount = quint32(lineVertices.size());
+  if (m_bedFillBuffer && fillBytes > 0) {
+    updates->uploadStaticBuffer(m_bedFillBuffer.get(),
+                                0,
+                                fillBytes,
+                                fillVertices.constData());
+  }
+  if (m_bedLineBuffer && lineBytes > 0) {
+    updates->uploadStaticBuffer(m_bedLineBuffer.get(),
+                                0,
+                                lineBytes,
+                                lineVertices.constData());
+  }
+
+  m_sceneBuffersUploaded = true;
+  return true;
+}
+
+bool RhiViewportRenderer::ensureBuffer(std::unique_ptr<QRhiBuffer> &buffer, quint32 byteSize)
+{
+  quint32 &storedSize = (&buffer == &m_bedFillBuffer) ? m_bedFillBufferBytes : m_bedLineBufferBytes;
+  if (byteSize == 0) {
+    buffer.reset();
+    storedSize = 0;
     return true;
   }
 
-  if (rhi() == nullptr)
-    return false;
+  if (buffer && storedSize == byteSize)
+    return true;
 
-  m_vertexBuffer.reset(rhi()->newBuffer(QRhiBuffer::Static,
-                                        QRhiBuffer::VertexBuffer,
-                                        quint32(sizeof(kDiagnosticVertices))));
-  if (!m_vertexBuffer->create()) {
-    m_vertexBuffer.reset();
+  buffer.reset(rhi()->newBuffer(QRhiBuffer::Static, QRhiBuffer::VertexBuffer, byteSize));
+  if (!buffer->create()) {
+    buffer.reset();
+    storedSize = 0;
     m_pipelineFailed = true;
     return false;
   }
 
-  m_verticesUploaded = true;
+  storedSize = byteSize;
   return true;
+}
+
+QVector<RhiViewportRenderer::Vertex> RhiViewportRenderer::buildSceneVertices(const QList<PrepareSceneData::Vertex> &source) const
+{
+  QVector<Vertex> vertices;
+  vertices.reserve(source.size());
+
+  const float width = std::max(m_prepareScene.bedWidth(), 1.0f);
+  const float depth = std::max(m_prepareScene.bedDepth(), 1.0f);
+  const float left = m_prepareScene.bedOriginX();
+  const float top = m_prepareScene.bedOriginY();
+
+  for (const PrepareSceneData::Vertex &sourceVertex : source) {
+    const float normalizedX = ((sourceVertex.x - left) / width) * 1.74f - 0.87f;
+    const float normalizedY = 0.87f - ((sourceVertex.y - top) / depth) * 1.74f;
+    vertices.append(Vertex{normalizedX,
+                           normalizedY,
+                           sourceVertex.r,
+                           sourceVertex.g,
+                           sourceVertex.b,
+                           sourceVertex.a});
+  }
+
+  return vertices;
 }
 
 QShader RhiViewportRenderer::loadShader(const QString &path) const

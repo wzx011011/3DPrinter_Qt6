@@ -17,6 +17,7 @@ private slots:
   void mainRegistersRhiViewportOnlyBehindExplicitGate();
   void renderBenchmarkMatchesRhiBackendPolicy();
   void prepareViewportBindsBedAndPlateContext();
+  void rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads();
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
   void plateContextMenuItemsWiredAndNonEmpty();
@@ -267,6 +268,41 @@ void QmlUiAuditTests::prepareViewportBindsBedAndPlateContext()
            "PreparePage must not filter renderer object membership in QML");
   QVERIFY2(!preparePage.contains(QStringLiteral("activePlateObjectIndices.map")),
            "PreparePage must not transform renderer object membership in QML");
+}
+
+void QmlUiAuditTests::rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads()
+{
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!rendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+
+  QVERIFY2(rendererHeader.contains(QStringLiteral("PrepareSceneData")),
+           "RhiViewportRenderer must own PrepareSceneData");
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_bedFillBuffer")),
+           "RhiViewportRenderer must own a bed fill vertex buffer");
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_bedLineBuffer")),
+           "RhiViewportRenderer must own a bed/grid line vertex buffer");
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_fillPipeline"))
+               && rendererHeader.contains(QStringLiteral("m_linePipeline")),
+           "RhiViewportRenderer must keep separate fill and line pipelines");
+  QVERIFY2(rendererSource.contains(QStringLiteral("QRhiGraphicsPipeline::Triangles")),
+           "Prepare bed fill must use a triangle draw path");
+  QVERIFY2(rendererSource.contains(QStringLiteral("QRhiGraphicsPipeline::Lines")),
+           "Prepare bed grid/origin overlay must use a line draw path");
+  QVERIFY2(rendererSource.contains(QStringLiteral("takeDirtyFlags()")),
+           "Renderer upload logic must consume PrepareSceneData dirty flags");
+  QVERIFY2(rendererSource.contains(QStringLiteral("} else {\n        m_prepareScene.takeDirtyFlags();")),
+           "Renderer must consume dirty flags only after scene upload scheduling succeeds");
+  QVERIFY2(rendererSource.contains(QStringLiteral("DirtyBed"))
+               && rendererSource.contains(QStringLiteral("DirtyPlate"))
+               && rendererSource.contains(QStringLiteral("DirtyGpu")),
+           "Renderer uploads must be gated by PrepareSceneData dirty state");
+  QVERIFY2(rendererSource.contains(QStringLiteral("uploadStaticBuffer(m_bedFillBuffer.get()"))
+               && rendererSource.contains(QStringLiteral("uploadStaticBuffer(m_bedLineBuffer.get()")),
+           "Renderer must upload fill and line buffers explicitly");
+  QVERIFY2(!rendererSource.contains(QStringLiteral("kDiagnosticVertices")),
+           "Prepare QRhi path must not remain diagnostic-triangle only");
 }
 
 void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()
