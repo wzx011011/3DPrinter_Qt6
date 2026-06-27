@@ -209,8 +209,12 @@ int PartPlateList::computePlateIndex(double translationX_mm, double translationY
   //   col_value = world_x / stride_x        (computeShapePosition used  col*stride_x)
   //   row_value = -world_y / stride_y       (computeShapePosition used -row*stride_y)
   // This keeps plate 0 (world origin) decoding to row 0 / col 0.
-  float col_value = static_cast<float>(translationX_mm / plateStrideX());
-  float row_value = static_cast<float>(-translationY_mm / plateStrideY());
+  const double strideX = plateStrideX();
+  const double strideY = plateStrideY();
+  // Defensive: if plate size was never set (stride 0), everything is on plate 0.
+  if (strideX <= 0.0 || strideY <= 0.0) return 0;
+  float col_value = static_cast<float>(translationX_mm / strideX);
+  float row_value = static_cast<float>(-translationY_mm / strideY);
   int row = static_cast<int>(std::round(row_value));
   int col = static_cast<int>(std::round(col_value));
   return row * m_plate_cols + col;

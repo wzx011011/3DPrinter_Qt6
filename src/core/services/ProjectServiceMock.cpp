@@ -2487,14 +2487,12 @@ bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool 
     // Fallback to InfiniteBed when no valid bed shape（同样用容错 vfn）
     Slic3r::InfiniteBed bed;
     const bool arranged = Slic3r::arrange_objects(*model_, bed, params, tolerantVfn);
-    // InfiniteBed arrange won't overflow to multiple plates typically, but the
-    // rebuild keeps membership consistent and is idempotent.
-    if (arranged && m_plateList)
-    {
-      m_plateList->setModel(model_);
-      m_plateList->rebuildPlatesAfterArrangement(/*exceptLocked=*/true, /*recyclePlates=*/true);
-      emit plateDataLoaded(m_plateList->plateCount());
-    }
+    // InfiniteBed has no bounding box, so we cannot derive a plate size and
+    // multi-plate distribution is not meaningful here (arrange packs onto one
+    // infinite bed). Skip the rebuild to avoid a divide-by-zero in
+    // computePlateIndex (plateStrideX/Y would be 0). The bed_bb path above
+    // handles the multi-plate case.
+    (void)arranged;
     return arranged;
   }
   catch (const std::exception &e)
