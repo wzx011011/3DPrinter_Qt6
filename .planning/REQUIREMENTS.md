@@ -17,12 +17,12 @@
 ### Prepare Rendering
 
 - [x] **PREP-01**: User can see the active bed/plate rendered through the QRhi path with correct bed dimensions, grid, origin cues, and plate selection context.
-- [ ] **PREP-02**: User can load STL/OBJ/3MF models and see model meshes rendered from ProjectService/PartPlate data with correct transform, scale, orientation, and material color.
-- [ ] **PREP-03**: User can rotate, pan, zoom, and fit the Prepare camera in the QRhi viewport with interaction behavior aligned to the existing source-truth mapped viewport controls.
-- [ ] **PREP-04**: User can select and hover models in the QRhi viewport and receive visible highlight/outline feedback consistent with current editor selection state.
+- [x] **PREP-02**: User can load STL/OBJ/3MF models and see model meshes rendered from ProjectService/PartPlate data with correct transform, scale, orientation, and material color. Phase 25 completes source-index model batch parsing and QRhi persistent model buffer rendering evidence in `25-VERIFICATION.md`.
+- [x] **PREP-03**: User can rotate, pan, zoom, and fit the Prepare camera in the QRhi viewport with interaction behavior aligned to the existing source-truth mapped viewport controls. Phase 25 routes QRhi camera interaction through `CameraController` and audits camera uniform updates separately from model buffer uploads.
+- [x] **PREP-04**: User can select and hover models in the QRhi viewport and receive visible highlight/outline feedback consistent with current editor selection state. Phase 25 adds C++ projected-bounds picking, source-index selection bridging, and a dedicated QRhi highlight buffer.
 - [x] **PREP-05**: User can switch plates and see the QRhi viewport update to the selected plate without leaking objects from inactive plates. Phase 24 verifies active plate context isolation before Phase 25 adds full model mesh drawing.
 - [ ] **PREP-06**: User is returned to the stable fallback viewport when QRhi initialization fails, with a diagnostic notification instead of a crash or blank view.
-- [ ] **PREP-07**: Developer can trace each implemented Prepare viewport behavior to the corresponding OrcaSlicer upstream behavior or an explicit documented performance-only implementation difference.
+- [x] **PREP-07**: Developer can trace each implemented Prepare viewport behavior to the corresponding OrcaSlicer upstream behavior or an explicit documented performance-only implementation difference. Phase 25 summaries and verification map model rendering, camera, selection, and PartPlate filtering behavior to upstream Prepare concepts.
 
 ### Preview Rendering
 
@@ -83,12 +83,12 @@ Explicitly excluded from v3.1.
 | RHI-05 | Phase 23 | Complete |
 | RHI-06 | Phase 23 | Complete |
 | PREP-01 | Phase 24 | Complete |
-| PREP-02 | Phase 25 | Pending |
-| PREP-03 | Phase 25 | Pending |
-| PREP-04 | Phase 25 | Pending |
+| PREP-02 | Phase 25 | Complete |
+| PREP-03 | Phase 25 | Complete |
+| PREP-04 | Phase 25 | Complete |
 | PREP-05 | Phase 24 | Complete |
 | PREP-06 | Phase 28 | Pending |
-| PREP-07 | Phase 25 | Pending |
+| PREP-07 | Phase 25 | Complete |
 | PREV-01 | Phase 26 | Pending |
 | PREV-02 | Phase 26 | Pending |
 | PREV-03 | Phase 26 | Pending |
@@ -110,4 +110,4 @@ Explicitly excluded from v3.1.
 
 ---
 *Requirements defined: 2026-06-27*
-*Last updated: 2026-06-27 after Phase 24 verification*
+*Last updated: 2026-06-27 after Phase 25 verification*

@@ -3,7 +3,7 @@ phase: 25
 slug: prepare-model-mesh-rendering-and-camera-interaction
 status: approved
 nyquist_compliant: true
-wave_0_complete: false
+wave_0_complete: true
 created: 2026-06-27
 ---
 
@@ -38,17 +38,17 @@ created: 2026-06-27
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 25-01-T1 | 01 | 1 | PREP-02, PREP-04 | T-25-01 | Malformed mesh bytes do not create unsafe model batches | unit | `build/PrepareSceneDataTests.exe` | yes | pending |
-| 25-01-T2 | 01 | 1 | PREP-02, PREP-04 | T-25-02 | Source-object mapping is explicit and not inferred from render IDs | unit/static | `build/PrepareSceneDataTests.exe`; `build/QmlUiAuditTests.exe` | yes | pending |
-| 25-01-T3 | 01 | 1 | PREP-02, PREP-07 | T-25-03 | Active plate filtering excludes inactive source objects | unit | `build/PrepareSceneDataTests.exe` | yes | pending |
-| 25-02-T1 | 02 | 2 | PREP-02 | T-25-01 | QRhi model buffers are allocated from validated scene data | static/build | `build/QmlUiAuditTests.exe` | yes | pending |
-| 25-02-T2 | 02 | 2 | PREP-03 | T-25-04 | Camera movement updates uniforms and leaves full model buffers resident | static/build | `build/QmlUiAuditTests.exe` | yes | pending |
-| 25-02-T3 | 02 | 2 | PREP-02, PREP-07 | N/A | Rendered models use deterministic colors and source-truth mapping comments | static/build | `build/QmlUiAuditTests.exe`; `rg -n "GLCanvas3D|Camera|PartPlate|Selection" src/qml_gui/Renderer` | yes | pending |
-| 25-03-T1 | 03 | 3 | PREP-04 | T-25-02 | `EditorViewModel` owns selected source object state | unit | `build/ViewModelSmokeTests.exe` | yes | pending |
-| 25-03-T2 | 03 | 3 | PREP-04 | T-25-05 | QML forwards C++ picked-source signal without filtering or parsing | static | `build/QmlUiAuditTests.exe` | yes | pending |
-| 25-03-T3 | 03 | 3 | PREP-03, PREP-04 | T-25-04 | Hover/selection feedback updates lightweight state only | static/build | `build/QmlUiAuditTests.exe` | yes | pending |
-| 25-04-T1 | 04 | 4 | PREP-02, PREP-03, PREP-04, PREP-07 | N/A | Canonical full verification remains default-safe | full | `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` | yes | pending |
-| 25-04-T2 | 04 | 4 | PREP-02, PREP-03, PREP-04, PREP-07 | N/A | Verification and requirement traceability record QRhi behavior honestly | docs/static | `rg -n "PREP-02|PREP-03|PREP-04|PREP-07|25-VERIFICATION" .planning` | yes | pending |
+| 25-01-T1 | 01 | 1 | PREP-02, PREP-04 | T-25-01 | Malformed mesh bytes do not create unsafe model batches | unit | `build/PrepareSceneDataTests.exe` | yes | green |
+| 25-01-T2 | 01 | 1 | PREP-02, PREP-04 | T-25-02 | Source-object mapping is explicit and not inferred from render IDs | unit/static | `build/PrepareSceneDataTests.exe`; `build/QmlUiAuditTests.exe` | yes | green |
+| 25-01-T3 | 01 | 1 | PREP-02, PREP-07 | T-25-03 | Active plate filtering excludes inactive source objects | unit | `build/PrepareSceneDataTests.exe` | yes | green |
+| 25-02-T1 | 02 | 2 | PREP-02 | T-25-01 | QRhi model buffers are allocated from validated scene data | static/build | `build/QmlUiAuditTests.exe` | yes | green |
+| 25-02-T2 | 02 | 2 | PREP-03 | T-25-04 | Camera movement updates uniforms and leaves full model buffers resident | static/build | `build/QmlUiAuditTests.exe` | yes | green |
+| 25-02-T3 | 02 | 2 | PREP-02, PREP-07 | N/A | Rendered models use deterministic colors and source-truth mapping comments | static/build | `build/QmlUiAuditTests.exe`; `rg -n "GLCanvas3D|Camera|PartPlate|Selection" src/qml_gui/Renderer` | yes | green |
+| 25-03-T1 | 03 | 3 | PREP-04 | T-25-02 | `EditorViewModel` owns selected source object state | unit | `build/ViewModelSmokeTests.exe` | yes | green |
+| 25-03-T2 | 03 | 3 | PREP-04 | T-25-05 | QML forwards C++ picked-source signal without filtering or parsing | static | `build/QmlUiAuditTests.exe` | yes | green |
+| 25-03-T3 | 03 | 3 | PREP-03, PREP-04 | T-25-04 | Hover/selection feedback updates lightweight state only | static/build | `build/QmlUiAuditTests.exe` | yes | green |
+| 25-04-T1 | 04 | 4 | PREP-02, PREP-03, PREP-04, PREP-07 | N/A | Canonical full verification remains default-safe | full | `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` | yes | green |
+| 25-04-T2 | 04 | 4 | PREP-02, PREP-03, PREP-04, PREP-07 | N/A | Verification and requirement traceability record QRhi behavior honestly | docs/static | `rg -n "PREP-02|PREP-03|PREP-04|PREP-07|25-VERIFICATION" .planning` | yes | green |
 
 *Status: pending / green / red / flaky*
 
@@ -56,10 +56,10 @@ created: 2026-06-27
 
 ## Wave 0 Requirements
 
-- [ ] Add packed model parser tests before renderer model buffer implementation.
-- [ ] Add QML/static audit checks before adding new viewport bindings.
-- [ ] Preserve Phase 23 default SoftwareViewport startup checks.
-- [ ] Preserve Phase 24 active-plate bed/plate dirty-flag tests.
+- [x] Add packed model parser tests before renderer model buffer implementation.
+- [x] Add QML/static audit checks before adding new viewport bindings.
+- [x] Preserve Phase 23 default SoftwareViewport startup checks.
+- [x] Preserve Phase 24 active-plate bed/plate dirty-flag tests.
 
 ---
 

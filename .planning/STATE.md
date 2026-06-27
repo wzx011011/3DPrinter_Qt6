@@ -3,26 +3,26 @@ gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: QRhi High-Performance Prepare/Preview Rendering
 status: executing
-last_updated: "2026-06-27T14:15:00.000Z"
+last_updated: "2026-06-27T14:39:00.000Z"
 last_activity: 2026-06-27
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 11
-  completed_plans: 10
-  percent: 33
+  completed_plans: 11
+  percent: 50
 ---
 
 # Project State
 
 **Milestone:** v3.1 - QRhi High-Performance Prepare/Preview Rendering
 **Status:** Ready to execute
-**Next step:** `$gsd-discuss-phase 25`
+**Next step:** `$gsd-execute-phase 26`
 
 ## Current Position
 
-Phase: 25 (Prepare Model Mesh Rendering And Camera Interaction) — EXECUTING
-Plan: 4 of 4
+Phase: 26 (Preview G-Code GPU Pipeline) - READY
+Plan: not started
 Status: Ready to execute
 Last activity: 2026-06-27
 
@@ -31,7 +31,7 @@ Last activity: 2026-06-27
 See: `.planning/PROJECT.md` (updated 2026-06-27)
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
-**Current focus:** Phase 25 — Prepare Model Mesh Rendering And Camera Interaction
+**Current focus:** Phase 26 - Preview G-Code GPU Pipeline
 
 ## Active Milestone Summary
 
@@ -82,10 +82,10 @@ Items acknowledged and deferred at v3.0/v3.1 planning.
 
 ## Handoff
 
-Discuss the next v3.1 phase:
+Execute the next v3.1 phase:
 
 ```text
-$gsd-discuss-phase 25
+$gsd-execute-phase 26
 ```
 
 ### Quick Tasks Completed
