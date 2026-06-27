@@ -1,0 +1,152 @@
+#include "RhiBackendSelector.h"
+
+#include <QByteArray>
+
+#include <memory>
+
+#include <rhi/qrhi.h>
+#include <rhi/qrhi_platform.h>
+
+namespace {
+
+struct RhiBackendCandidate
+{
+  QString name;
+  QSGRendererInterface::GraphicsApi graphicsApi = QSGRendererInterface::Unknown;
+  QRhi::Implementation implementation = QRhi::Null;
+};
+
+struct RhiProbeOwner
+{
+  std::unique_ptr<QRhi> rhi;
+  QRhiD3D12InitParams d3d12Params;
+  QRhiD3D11InitParams d3d11Params;
+};
+
+QString normalizeRequestedBackend(const QByteArray &value)
+{
+  const QString requested = QString::fromLocal8Bit(value).trimmed().toLower();
+  if (requested == QLatin1String("1")
+      || requested == QLatin1String("true")
+      || requested == QLatin1String("on")
+      || requested == QLatin1String("yes"))
+    return QStringLiteral("auto");
+  return requested;
+}
+
+QVector<RhiBackendCandidate> defaultWindowsCandidates()
+{
+  return {
+      {QStringLiteral("d3d12"), QSGRendererInterface::Direct3D12, QRhi::D3D12},
+      {QStringLiteral("d3d11"), QSGRendererInterface::Direct3D11, QRhi::D3D11},
+  };
+}
+
+QVector<RhiBackendCandidate> candidatesForRequest(const QString &requested, QStringList *failures)
+{
+  const QVector<RhiBackendCandidate> candidates = defaultWindowsCandidates();
+  if (requested == QLatin1String("auto"))
+    return candidates;
+
+  for (const RhiBackendCandidate &candidate : candidates) {
+    if (candidate.name == requested)
+      return {candidate};
+  }
+
+  failures->append(QStringLiteral("unsupported OWZX_RHI_RENDERER value '%1'").arg(requested));
+  return {};
+}
+
+bool probeBackend(const RhiBackendCandidate &candidate, QString *failure)
+{
+  RhiProbeOwner owner;
+  QRhiInitParams *params = nullptr;
+
+  switch (candidate.implementation) {
+    case QRhi::D3D12:
+      params = &owner.d3d12Params;
+      break;
+    case QRhi::D3D11:
+      params = &owner.d3d11Params;
+      break;
+    default:
+      *failure = QStringLiteral("unsupported QRhi implementation");
+      return false;
+  }
+
+  owner.rhi.reset(QRhi::create(candidate.implementation, params));
+  if (!owner.rhi) {
+    *failure = QStringLiteral("QRhi::create failed");
+    return false;
+  }
+
+  return true;
+}
+
+} // namespace
+
+QString RhiBackendSelection::diagnostics() const
+{
+  QStringList parts;
+  parts.append(QStringLiteral("enabled=%1").arg(enabled ? QStringLiteral("true") : QStringLiteral("false")));
+  parts.append(QStringLiteral("requested=%1").arg(requested.isEmpty() ? QStringLiteral("<unset>") : requested));
+  parts.append(QStringLiteral("selected=%1").arg(selectedBackend.isEmpty() ? QStringLiteral("<none>") : selectedBackend));
+
+  QStringList attemptParts;
+  for (const RhiBackendAttempt &attempt : attempts) {
+    if (attempt.success)
+      attemptParts.append(QStringLiteral("%1:ok").arg(attempt.name));
+    else
+      attemptParts.append(QStringLiteral("%1:failed(%2)").arg(attempt.name, attempt.failureReason));
+  }
+  if (!attemptParts.isEmpty())
+    parts.append(QStringLiteral("attempts=[%1]").arg(attemptParts.join(QStringLiteral(", "))));
+
+  if (!failureReasons.isEmpty())
+    parts.append(QStringLiteral("failures=[%1]").arg(failureReasons.join(QStringLiteral("; "))));
+
+  return parts.join(QStringLiteral(" "));
+}
+
+RhiBackendSelection selectRhiBackendFromEnvironment()
+{
+  RhiBackendSelection selection;
+  if (!qEnvironmentVariableIsSet("OWZX_RHI_RENDERER"))
+    return selection;
+
+  const QByteArray value = qgetenv("OWZX_RHI_RENDERER");
+  selection.enabled = true;
+  selection.requested = normalizeRequestedBackend(value);
+  if (selection.requested.isEmpty()) {
+    selection.failureReasons.append(QStringLiteral("OWZX_RHI_RENDERER is set but empty"));
+    return selection;
+  }
+
+#ifndef Q_OS_WIN
+  selection.failureReasons.append(QStringLiteral("QRhi renderer gate is currently implemented for Windows only"));
+  return selection;
+#else
+  const QVector<RhiBackendCandidate> candidates = candidatesForRequest(selection.requested, &selection.failureReasons);
+  for (const RhiBackendCandidate &candidate : candidates) {
+    RhiBackendAttempt attempt;
+    attempt.name = candidate.name;
+    attempt.graphicsApi = candidate.graphicsApi;
+
+    QString failure;
+    attempt.success = probeBackend(candidate, &failure);
+    attempt.failureReason = failure;
+    selection.attempts.append(attempt);
+
+    if (attempt.success) {
+      selection.selectedBackend = candidate.name;
+      selection.selectedGraphicsApi = candidate.graphicsApi;
+      selection.canUseRhi = true;
+      return selection;
+    }
+
+    selection.failureReasons.append(QStringLiteral("%1: %2").arg(candidate.name, failure));
+  }
+
+  return selection;
+#endif
+}

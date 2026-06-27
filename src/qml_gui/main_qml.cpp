@@ -9,6 +9,7 @@
 #include <QDir>
 #include <QtQml/qqml.h>
 #include "qml_gui/Renderer/GLViewport.h"
+#include "qml_gui/Renderer/RhiBackendSelector.h"
 #include "qml_gui/Renderer/SoftwareViewport.h"
 #include "core/debug/CrashHandlerWin.h"
 
@@ -78,10 +79,18 @@ static void appendStartupLog(const QString &line)
 int main(int argc, char *argv[])
 {
   const bool useOpenGLViewport = qEnvironmentVariableIsSet("OWZX_OPENGL");
-  if (!useOpenGLViewport) {
-    qputenv("QT_QUICK_BACKEND", "software");
-  } else {
+  RhiBackendSelection rhiSelection;
+  if (!useOpenGLViewport && qEnvironmentVariableIsSet("OWZX_RHI_RENDERER")) {
+    // RhiBackendSelector owns Direct3D12-first / Direct3D11-fallback policy.
+    rhiSelection = selectRhiBackendFromEnvironment();
+  }
+
+  if (useOpenGLViewport) {
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+  } else if (rhiSelection.canUseRhi) {
+    QQuickWindow::setGraphicsApi(rhiSelection.selectedGraphicsApi);
+  } else {
+    qputenv("QT_QUICK_BACKEND", "software");
   }
 
   // Enable QML debugging output for diagnostics
@@ -105,6 +114,8 @@ int main(int argc, char *argv[])
   appendStartupLog(QStringLiteral("Crash dump dir prepared: %1").arg(dumpDir));
   CrashHandlerWin::install(dumpDir);
   appendStartupLog(QStringLiteral("Crash handler install requested"));
+  if (rhiSelection.enabled)
+    appendStartupLog(QStringLiteral("QRhi backend selection: %1").arg(rhiSelection.diagnostics()));
 
   // E5 — register 3-D viewport type. The OpenGL implementation is available
   // via OWZX_OPENGL=1; the default software viewport keeps QML visible on

@@ -58,10 +58,10 @@ if(OWZX_QML_GUI)
     if(BUILD_LIBSLIC3R)
         # BUILD_LIBSLIC3R=ON 时 Boost_ALL_NO_LIB 干扰 Qt 的 auto-link，
         # 需要跳过低版本检查以避免 Qt 查找失败
-        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test)
+        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate)
     else()
         # 低版本 Qt 兼容：允许 Qt 3.21 与 Qt 6.10 配对
-        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test)
+        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate)
         set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/third_party/Qt6_10")
         set(QT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT 3.21)
     endif()
@@ -137,6 +137,8 @@ if(OWZX_QML_GUI)
         src/qml_gui/Renderer/GLViewportRenderer.h
         src/qml_gui/Renderer/SoftwareViewport.cpp
         src/qml_gui/Renderer/SoftwareViewport.h
+        src/qml_gui/Renderer/RhiBackendSelector.cpp
+        src/qml_gui/Renderer/RhiBackendSelector.h
         src/qml_gui/Renderer/GCodeRenderer.cpp
         src/qml_gui/Renderer/GCodeRenderer.h
     )
@@ -222,7 +224,7 @@ if(OWZX_QML_GUI)
     # Qt AUTOMOC needs compile definitions and include paths from Qt modules.
     # libslic3r PUBLIC linkage propagates generated-header dirs (libslic3r_version.h).
     target_link_libraries(owzx_app_core PUBLIC
-        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::GuiPrivate
     )
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
         target_link_libraries(owzx_app_core PUBLIC libslic3r)

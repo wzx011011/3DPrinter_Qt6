@@ -14,6 +14,7 @@ private slots:
   void mainChromeUsesThemeTokens();
   void sidebarCopyIsLocalizedAndOperationalTextIsReadable();
   void mainRegistersSoftwareViewportByDefault();
+  void mainRegistersRhiViewportOnlyBehindExplicitGate();
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
   void plateContextMenuItemsWiredAndNonEmpty();
@@ -122,6 +123,36 @@ void QmlUiAuditTests::mainRegistersSoftwareViewportByDefault()
            "OpenGL GLViewport registration must remain available behind OWZX_OPENGL");
   QVERIFY2(!verifyScript.contains(QStringLiteral("OWZX_OPENGL")),
            "canonical startup smoke should cover the default software viewport path");
+}
+
+void QmlUiAuditTests::mainRegistersRhiViewportOnlyBehindExplicitGate()
+{
+  const QString mainCpp = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
+  const QString verifyScript = readSource(QStringLiteral("scripts/auto_verify_with_vcvars.ps1"));
+  const QString selectorHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiBackendSelector.h"));
+  const QString selectorSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiBackendSelector.cpp"));
+  QVERIFY2(!mainCpp.isEmpty(), "Unable to read main_qml.cpp");
+  QVERIFY2(!verifyScript.isEmpty(), "Unable to read auto_verify_with_vcvars.ps1");
+  QVERIFY2(!selectorHeader.isEmpty(), "Unable to read RhiBackendSelector.h");
+  QVERIFY2(!selectorSource.isEmpty(), "Unable to read RhiBackendSelector.cpp");
+
+  QVERIFY2(mainCpp.contains(QStringLiteral("OWZX_RHI_RENDERER")),
+           "QRhi viewport selection must be behind OWZX_RHI_RENDERER");
+  QVERIFY2(mainCpp.contains(QStringLiteral("qEnvironmentVariableIsSet(\"OWZX_OPENGL\")")),
+           "legacy OWZX_OPENGL path must stay independent from QRhi");
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+           "SoftwareViewport must remain the default/fallback GLViewport registration");
+  QVERIFY2(!verifyScript.contains(QStringLiteral("OWZX_RHI_RENDERER")),
+           "canonical verification must not enable QRhi by default");
+
+  QVERIFY2(selectorHeader.contains(QStringLiteral("RhiBackendSelection")),
+           "RhiBackendSelector must expose structured backend diagnostics");
+  QVERIFY2(selectorSource.contains(QStringLiteral("Direct3D12")),
+           "QRhi app selector must try Direct3D12 on Windows");
+  QVERIFY2(selectorSource.contains(QStringLiteral("Direct3D11")),
+           "QRhi app selector must keep Direct3D11 fallback on Windows");
+  QVERIFY2(!selectorSource.contains(QStringLiteral("QRhi::Vulkan")),
+           "Vulkan must not be part of the default app selector while QtGui Vulkan is disabled");
 }
 
 void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()
