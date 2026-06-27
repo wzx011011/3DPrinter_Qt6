@@ -200,10 +200,17 @@ Slic3r::Vec3d PartPlateList::computeOrigin(int index, int cols) const {
 
 int PartPlateList::computePlateIndex(double translationX_mm, double translationY_mm) const {
   // Decodes the negative-Y-row encoding of computeShapePosition (PartPlate.cpp:5365-5376).
+  //
+  // Source truth (PartPlate.cpp:5369-5370) operates on the ArrangePolygon
+  // translation space, which is already shifted by one stride relative to the
+  // raw world offset (the row decode `(stride_y - t_y)/stride_y` reflects that
+  // shifted space). Qt6 reads the raw world offset from ModelInstance::get_offset()
+  // directly, so the correct decode is the unshifted inverse of computeShapePosition:
+  //   col_value = world_x / stride_x        (computeShapePosition used  col*stride_x)
+  //   row_value = -world_y / stride_y       (computeShapePosition used -row*stride_y)
+  // This keeps plate 0 (world origin) decoding to row 0 / col 0.
   float col_value = static_cast<float>(translationX_mm / plateStrideX());
-  // SIGN-FLIP: row decodes via (stride_y - translation_y)/stride_y,
-  // NOT translation_y/stride_y. PartPlate.cpp:5370.
-  float row_value = static_cast<float>((plateStrideY() - translationY_mm) / plateStrideY());
+  float row_value = static_cast<float>(-translationY_mm / plateStrideY());
   int row = static_cast<int>(std::round(row_value));
   int col = static_cast<int>(std::round(col_value));
   return row * m_plate_cols + col;

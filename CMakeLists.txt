@@ -381,6 +381,25 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
+    # PartPlate geometry + multi-plate arrangement tests (v3.2 Phase 29).
+    # Links owzx_app_core (same pattern as ViewModelSmokeTests) so PartPlate/
+    # PartPlateList sources + libslic3r (HAS_LIBSLIC3R) are available.
+    # AUTOMOC note: same weak-moc caveat as ViewModelSmokeTests — the canonical
+    # verify script re-runs cmake configure after slot edits; for incremental
+    # builds, delete build/PartPlateTests_autogen/timestamp.
+    qt_add_executable(PartPlateTests tests/PartPlateTests.cpp)
+    target_link_libraries(PartPlateTests PRIVATE owzx_app_core
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
+    )
+    target_compile_definitions(PartPlateTests PRIVATE
+        QT_TESTCASE_SOURCEDIR="${CMAKE_SOURCE_DIR}"
+    )
+    target_link_options(PartPlateTests PRIVATE /FORCE:MULTIPLE)
+    add_test(NAME PartPlateTests COMMAND PartPlateTests)
+    set_tests_properties(PartPlateTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
 endif()
 
 # ── CLI ────────────────────────────────────────────────────────────────────

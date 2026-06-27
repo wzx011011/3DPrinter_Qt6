@@ -101,6 +101,7 @@ Invoke-NinjaTarget 'E2EWorkflowTests'
 Invoke-NinjaTarget 'ViewModelSmokeTests'
 Invoke-NinjaTarget 'PrepareSceneDataTests'
 Invoke-NinjaTarget 'QmlUiAuditTests'
+Invoke-NinjaTarget 'PartPlateTests'
 Invoke-NinjaTarget 'owzx-cli'
 Invoke-NinjaTarget 'CliTests'
 Invoke-NinjaTarget 'test-slice-direct' $false
@@ -166,6 +167,20 @@ if (Test-Path $prepareSceneDataExe) {
   Write-Host "[PrepareScene] Prepare scene data tests passed" -ForegroundColor Green
 } else {
   Write-Host "[PrepareScene] PrepareSceneDataTests.exe not found" -ForegroundColor Red
+  exit 1
+}
+
+Write-Host "`n[PartPlate] Running PartPlate geometry + arrangement tests..." -ForegroundColor Cyan
+$partPlateExe = './PartPlateTests.exe'
+if (Test-Path $partPlateExe) {
+  & $partPlateExe 2>&1 | ForEach-Object { Write-Host "  $_" }
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "[PartPlate] PartPlate tests failed" -ForegroundColor Red
+    exit $LASTEXITCODE
+  }
+  Write-Host "[PartPlate] PartPlate tests passed" -ForegroundColor Green
+} else {
+  Write-Host "[PartPlate] PartPlateTests.exe not found" -ForegroundColor Red
   exit 1
 }
 
