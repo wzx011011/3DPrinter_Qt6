@@ -39,6 +39,21 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   m_canvasType = viewport->m_canvasType;
   m_meshBytes = viewport->m_meshData.size();
   m_previewBytes = viewport->m_previewData.size();
+  QList<int> activeObjectIndices;
+  activeObjectIndices.reserve(viewport->m_activePlateObjectIndices.size());
+  for (const QVariant &value : viewport->m_activePlateObjectIndices)
+    activeObjectIndices.append(value.toInt());
+  m_prepareScene.setBed(viewport->m_bedWidth,
+                        viewport->m_bedDepth,
+                        viewport->m_bedOriginX,
+                        viewport->m_bedOriginY,
+                        viewport->m_bedShapeType,
+                        viewport->m_bedDiameter);
+  m_prepareScene.setShowBed(viewport->m_showBed);
+  m_prepareScene.setPlateContext(viewport->m_currentPlateIndex,
+                                 viewport->m_plateCount,
+                                 activeObjectIndices);
+  m_prepareScene.setMeshGeneration(m_meshBytes);
   m_clearColor = (m_canvasType == RhiViewport::CanvasPreview)
       ? QColor(8, 12, 20)
       : QColor(13, 18, 24);

@@ -108,6 +108,78 @@ void SoftwareViewport::setShowBed(bool value)
   update();
 }
 
+void SoftwareViewport::setBedWidth(float value)
+{
+  if (qFuzzyCompare(m_bedWidth, value))
+    return;
+  m_bedWidth = value;
+  update();
+}
+
+void SoftwareViewport::setBedDepth(float value)
+{
+  if (qFuzzyCompare(m_bedDepth, value))
+    return;
+  m_bedDepth = value;
+  update();
+}
+
+void SoftwareViewport::setBedOriginX(float value)
+{
+  if (qFuzzyCompare(m_bedOriginX, value))
+    return;
+  m_bedOriginX = value;
+  update();
+}
+
+void SoftwareViewport::setBedOriginY(float value)
+{
+  if (qFuzzyCompare(m_bedOriginY, value))
+    return;
+  m_bedOriginY = value;
+  update();
+}
+
+void SoftwareViewport::setBedShapeType(int value)
+{
+  if (m_bedShapeType == value)
+    return;
+  m_bedShapeType = value;
+  update();
+}
+
+void SoftwareViewport::setBedDiameter(float value)
+{
+  if (qFuzzyCompare(m_bedDiameter, value))
+    return;
+  m_bedDiameter = value;
+  update();
+}
+
+void SoftwareViewport::setCurrentPlateIndex(int value)
+{
+  if (m_currentPlateIndex == value)
+    return;
+  m_currentPlateIndex = value;
+  update();
+}
+
+void SoftwareViewport::setPlateCount(int value)
+{
+  if (m_plateCount == value)
+    return;
+  m_plateCount = value;
+  update();
+}
+
+void SoftwareViewport::setActivePlateObjectIndices(const QVariantList &value)
+{
+  if (m_activePlateObjectIndices == value)
+    return;
+  m_activePlateObjectIndices = value;
+  update();
+}
+
 void SoftwareViewport::setShowWipeTower(bool value)
 {
   if (m_showWipeTower == value)

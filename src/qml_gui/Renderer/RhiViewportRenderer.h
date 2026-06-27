@@ -5,6 +5,8 @@
 
 #include <memory>
 
+#include "PrepareSceneData.h"
+
 #include <rhi/qrhi.h>
 #include <rhi/qshader.h>
 
@@ -44,5 +46,6 @@ private:
   int m_canvasType = 0;
   int m_meshBytes = 0;
   int m_previewBytes = 0;
+  PrepareSceneData m_prepareScene;
   QColor m_clearColor = QColor(14, 20, 28);
 };

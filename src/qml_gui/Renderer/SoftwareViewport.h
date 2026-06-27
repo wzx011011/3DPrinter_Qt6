@@ -5,6 +5,7 @@
 #include <QList>
 #include <QPointF>
 #include <QQuickPaintedItem>
+#include <QVariant>
 #include <QVector>
 #include <QVector3D>
 
@@ -19,6 +20,15 @@ class SoftwareViewport : public QQuickPaintedItem
   Q_PROPERTY(int moveEnd READ moveEnd WRITE setMoveEnd)
   Q_PROPERTY(bool showTravelMoves READ showTravelMoves WRITE setShowTravelMoves)
   Q_PROPERTY(bool showBed READ showBed WRITE setShowBed)
+  Q_PROPERTY(float bedWidth READ bedWidth WRITE setBedWidth)
+  Q_PROPERTY(float bedDepth READ bedDepth WRITE setBedDepth)
+  Q_PROPERTY(float bedOriginX READ bedOriginX WRITE setBedOriginX)
+  Q_PROPERTY(float bedOriginY READ bedOriginY WRITE setBedOriginY)
+  Q_PROPERTY(int bedShapeType READ bedShapeType WRITE setBedShapeType)
+  Q_PROPERTY(float bedDiameter READ bedDiameter WRITE setBedDiameter)
+  Q_PROPERTY(int currentPlateIndex READ currentPlateIndex WRITE setCurrentPlateIndex)
+  Q_PROPERTY(int plateCount READ plateCount WRITE setPlateCount)
+  Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices WRITE setActivePlateObjectIndices)
   Q_PROPERTY(bool showWipeTower READ showWipeTower WRITE setShowWipeTower)
   Q_PROPERTY(float wipeTowerWidth READ wipeTowerWidth WRITE setWipeTowerWidth)
   Q_PROPERTY(float wipeTowerDepth READ wipeTowerDepth WRITE setWipeTowerDepth)
@@ -86,6 +96,24 @@ public:
   void setShowTravelMoves(bool value);
   bool showBed() const { return m_showBed; }
   void setShowBed(bool value);
+  float bedWidth() const { return m_bedWidth; }
+  void setBedWidth(float value);
+  float bedDepth() const { return m_bedDepth; }
+  void setBedDepth(float value);
+  float bedOriginX() const { return m_bedOriginX; }
+  void setBedOriginX(float value);
+  float bedOriginY() const { return m_bedOriginY; }
+  void setBedOriginY(float value);
+  int bedShapeType() const { return m_bedShapeType; }
+  void setBedShapeType(int value);
+  float bedDiameter() const { return m_bedDiameter; }
+  void setBedDiameter(float value);
+  int currentPlateIndex() const { return m_currentPlateIndex; }
+  void setCurrentPlateIndex(int value);
+  int plateCount() const { return m_plateCount; }
+  void setPlateCount(int value);
+  QVariantList activePlateObjectIndices() const { return m_activePlateObjectIndices; }
+  void setActivePlateObjectIndices(const QVariantList &value);
   bool showWipeTower() const { return m_showWipeTower; }
   void setShowWipeTower(bool value);
   float wipeTowerWidth() const { return m_wipeTowerWidth; }
@@ -178,6 +206,15 @@ private:
   int m_moveEnd = 0;
   bool m_showTravelMoves = true;
   bool m_showBed = true;
+  float m_bedWidth = 220.f;
+  float m_bedDepth = 220.f;
+  float m_bedOriginX = 0.f;
+  float m_bedOriginY = 0.f;
+  int m_bedShapeType = 0;
+  float m_bedDiameter = 220.f;
+  int m_currentPlateIndex = 0;
+  int m_plateCount = 1;
+  QVariantList m_activePlateObjectIndices;
   bool m_showWipeTower = true;
   float m_wipeTowerWidth = 0.f;
   float m_wipeTowerDepth = 0.f;

@@ -1598,6 +1598,15 @@ Item {
                     z: 0
                     canvasType: GLViewport.CanvasView3D
                     meshData: root.editorVm ? root.editorVm.meshData : null
+                    bedWidth: root.editorVm ? root.editorVm.bedWidth : 220
+                    bedDepth: root.editorVm ? root.editorVm.bedDepth : 220
+                    bedOriginX: root.editorVm ? root.editorVm.bedOriginX : 0
+                    bedOriginY: root.editorVm ? root.editorVm.bedOriginY : 0
+                    bedShapeType: root.editorVm ? root.editorVm.bedShapeType : 0
+                    bedDiameter: root.editorVm ? root.editorVm.bedDiameter : 220
+                    currentPlateIndex: root.editorVm ? root.editorVm.currentPlateIndex : 0
+                    plateCount: root.editorVm ? root.editorVm.plateCount : 0
+                    activePlateObjectIndices: root.editorVm ? root.editorVm.activePlateObjectIndices : []
                     cutAxis: root.editorVm ? root.editorVm.cutAxis : 2
                     cutPosition: root.editorVm ? root.editorVm.cutPosition : 0.0
 

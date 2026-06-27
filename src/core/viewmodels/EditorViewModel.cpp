@@ -1548,6 +1548,18 @@ QString EditorViewModel::projectName() const { return projectService_ ? projectS
 int EditorViewModel::modelCount() const { return projectService_ ? projectService_->modelCount() : 0; }
 int EditorViewModel::plateCount() const { return projectService_ ? projectService_->plateCount() : 0; }
 int EditorViewModel::currentPlateIndex() const { return projectService_ ? projectService_->currentPlateIndex() : 0; }
+QVariantList EditorViewModel::activePlateObjectIndices() const
+{
+  QVariantList indices;
+  if (!projectService_)
+    return indices;
+
+  const QList<int> plateIndices = projectService_->currentPlateObjectIndices();
+  indices.reserve(plateIndices.size());
+  for (int objectIndex : plateIndices)
+    indices.append(objectIndex);
+  return indices;
+}
 QString EditorViewModel::statusText() const { return statusText_; }
 int EditorViewModel::loadProgress() const { return projectService_ ? projectService_->loadProgress() : 0; }
 bool EditorViewModel::loading() const { return projectService_ ? projectService_->loading() : false; }

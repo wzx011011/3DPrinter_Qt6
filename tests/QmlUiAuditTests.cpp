@@ -16,6 +16,7 @@ private slots:
   void mainRegistersSoftwareViewportByDefault();
   void mainRegistersRhiViewportOnlyBehindExplicitGate();
   void renderBenchmarkMatchesRhiBackendPolicy();
+  void prepareViewportBindsBedAndPlateContext();
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
   void plateContextMenuItemsWiredAndNonEmpty();
@@ -217,6 +218,55 @@ void QmlUiAuditTests::renderBenchmarkMatchesRhiBackendPolicy()
                && cmake.contains(QStringLiteral("qt_add_executable(owzx-render-bench"))
                && cmake.contains(QStringLiteral("qt_add_shaders(owzx-render-bench \"render_bench_shaders\"")),
            "Render benchmark target and shaders must remain build-gated in CMake");
+}
+
+void QmlUiAuditTests::prepareViewportBindsBedAndPlateContext()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString rhiViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString rhiViewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString softwareViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.h"));
+  const QString glViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/GLViewport.h"));
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!rhiViewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!rhiViewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!softwareViewportHeader.isEmpty(), "Unable to read SoftwareViewport.h");
+  QVERIFY2(!glViewportHeader.isEmpty(), "Unable to read GLViewport.h");
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+
+  QVERIFY2(editorHeader.contains(QStringLiteral("activePlateObjectIndices")),
+           "EditorViewModel must expose renderer-facing activePlateObjectIndices");
+  const QStringList requiredBindings = {
+    QStringLiteral("bedWidth: root.editorVm ? root.editorVm.bedWidth"),
+    QStringLiteral("bedDepth: root.editorVm ? root.editorVm.bedDepth"),
+    QStringLiteral("bedOriginX: root.editorVm ? root.editorVm.bedOriginX"),
+    QStringLiteral("bedOriginY: root.editorVm ? root.editorVm.bedOriginY"),
+    QStringLiteral("bedShapeType: root.editorVm ? root.editorVm.bedShapeType"),
+    QStringLiteral("bedDiameter: root.editorVm ? root.editorVm.bedDiameter"),
+    QStringLiteral("currentPlateIndex: root.editorVm ? root.editorVm.currentPlateIndex"),
+    QStringLiteral("plateCount: root.editorVm ? root.editorVm.plateCount"),
+    QStringLiteral("activePlateObjectIndices: root.editorVm ? root.editorVm.activePlateObjectIndices")
+  };
+  for (const QString &binding : requiredBindings) {
+    QVERIFY2(preparePage.contains(binding),
+             qPrintable(QStringLiteral("Prepare GLViewport must bind %1").arg(binding)));
+  }
+
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("Q_PROPERTY(float bedWidth")),
+           "RhiViewport must expose bedWidth");
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList activePlateObjectIndices")),
+           "RhiViewport must expose activePlateObjectIndices");
+  QVERIFY2(softwareViewportHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList activePlateObjectIndices")),
+           "SoftwareViewport must expose activePlateObjectIndices for the default QML registration path");
+  QVERIFY2(glViewportHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList activePlateObjectIndices")),
+           "GLViewport must expose activePlateObjectIndices for the legacy OpenGL registration path");
+  QVERIFY2(rhiViewportSource.contains(QStringLiteral("setActivePlateObjectIndices")),
+           "RhiViewport must store activePlateObjectIndices through a setter");
+  QVERIFY2(!preparePage.contains(QStringLiteral("activePlateObjectIndices.filter")),
+           "PreparePage must not filter renderer object membership in QML");
+  QVERIFY2(!preparePage.contains(QStringLiteral("activePlateObjectIndices.map")),
+           "PreparePage must not transform renderer object membership in QML");
 }
 
 void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()

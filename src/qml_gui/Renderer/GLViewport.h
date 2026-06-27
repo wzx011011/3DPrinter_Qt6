@@ -3,6 +3,7 @@
 #include <QMutex>
 #include <QList>
 #include <QByteArray>
+#include <QVariant>
 
 /**
  * GLViewport — QML-exposed OpenGL viewport.
@@ -28,6 +29,15 @@ class GLViewport : public QQuickFramebufferObject
   Q_PROPERTY(bool showTravelMoves READ showTravelMoves WRITE setShowTravelMoves)
   /// 对齐上游 GCodeViewer show_bed
   Q_PROPERTY(bool showBed READ showBed WRITE setShowBed)
+  Q_PROPERTY(float bedWidth READ bedWidth WRITE setBedWidth)
+  Q_PROPERTY(float bedDepth READ bedDepth WRITE setBedDepth)
+  Q_PROPERTY(float bedOriginX READ bedOriginX WRITE setBedOriginX)
+  Q_PROPERTY(float bedOriginY READ bedOriginY WRITE setBedOriginY)
+  Q_PROPERTY(int bedShapeType READ bedShapeType WRITE setBedShapeType)
+  Q_PROPERTY(float bedDiameter READ bedDiameter WRITE setBedDiameter)
+  Q_PROPERTY(int currentPlateIndex READ currentPlateIndex WRITE setCurrentPlateIndex)
+  Q_PROPERTY(int plateCount READ plateCount WRITE setPlateCount)
+  Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices WRITE setActivePlateObjectIndices)
   /// Wipe tower visualization (P2.8.3)
   Q_PROPERTY(bool showWipeTower READ showWipeTower WRITE setShowWipeTower)
   Q_PROPERTY(float wipeTowerWidth READ wipeTowerWidth WRITE setWipeTowerWidth)
@@ -142,6 +152,15 @@ public:
   int moveEnd() const { return m_moveEnd; }
   bool showTravelMoves() const { return m_showTravelMoves; }
   bool showBed() const { return m_showBed; }
+  float bedWidth() const { return m_bedWidth; }
+  float bedDepth() const { return m_bedDepth; }
+  float bedOriginX() const { return m_bedOriginX; }
+  float bedOriginY() const { return m_bedOriginY; }
+  int bedShapeType() const { return m_bedShapeType; }
+  float bedDiameter() const { return m_bedDiameter; }
+  int currentPlateIndex() const { return m_currentPlateIndex; }
+  int plateCount() const { return m_plateCount; }
+  QVariantList activePlateObjectIndices() const { return m_activePlateObjectIndices; }
   bool showWipeTower() const { return m_showWipeTower; }
   float wipeTowerWidth() const { return m_wipeTowerWidth; }
   float wipeTowerDepth() const { return m_wipeTowerDepth; }
@@ -157,6 +176,15 @@ public:
   void setMoveEnd(int v);
   void setShowTravelMoves(bool on);
   void setShowBed(bool on);
+  void setBedWidth(float v);
+  void setBedDepth(float v);
+  void setBedOriginX(float v);
+  void setBedOriginY(float v);
+  void setBedShapeType(int v);
+  void setBedDiameter(float v);
+  void setCurrentPlateIndex(int v);
+  void setPlateCount(int v);
+  void setActivePlateObjectIndices(const QVariantList &v);
   void setShowWipeTower(bool on);
   void setWipeTowerWidth(float v);
   void setWipeTowerDepth(float v);
@@ -258,6 +286,15 @@ private:
   int m_moveEnd = 0;
   bool m_showTravelMoves = true;  ///< 对齐上游 GCodeViewer m_travel_visibility
   bool m_showBed = true;          ///< 对齐上游 GCodeViewer show_bed
+  float m_bedWidth = 220.f;
+  float m_bedDepth = 220.f;
+  float m_bedOriginX = 0.f;
+  float m_bedOriginY = 0.f;
+  int m_bedShapeType = 0;
+  float m_bedDiameter = 220.f;
+  int m_currentPlateIndex = 0;
+  int m_plateCount = 1;
+  QVariantList m_activePlateObjectIndices;
   bool m_showWipeTower = false;   ///< Wipe tower visibility (P2.8.3)
   float m_wipeTowerWidth = 10.f;  ///< Wipe tower width in mm (default 10)
   float m_wipeTowerDepth = 10.f;  ///< Wipe tower depth in mm (default 10)

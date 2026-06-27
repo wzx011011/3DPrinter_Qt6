@@ -5,6 +5,7 @@
 #include <QSet>
 #include <QString>
 #include <QByteArray>
+#include <QVariant>
 #include <QVector3D>
 #include <QVector4D>
 
@@ -22,6 +23,7 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(int modelCount READ modelCount NOTIFY stateChanged)
   Q_PROPERTY(int plateCount READ plateCount NOTIFY stateChanged)
   Q_PROPERTY(int currentPlateIndex READ currentPlateIndex NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices NOTIFY stateChanged)
   Q_PROPERTY(QString statusText READ statusText NOTIFY stateChanged)
   Q_PROPERTY(int loadProgress READ loadProgress NOTIFY stateChanged)
   Q_PROPERTY(bool loading READ loading NOTIFY stateChanged)
@@ -79,6 +81,7 @@ public:
   int modelCount() const;
   int plateCount() const;
   int currentPlateIndex() const;
+  QVariantList activePlateObjectIndices() const;
   QString statusText() const;
   int loadProgress() const;
   bool loading() const;

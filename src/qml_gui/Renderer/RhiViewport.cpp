@@ -85,6 +85,78 @@ void RhiViewport::setShowBed(bool value)
   update();
 }
 
+void RhiViewport::setBedWidth(float value)
+{
+  if (qFuzzyCompare(m_bedWidth, value))
+    return;
+  m_bedWidth = value;
+  update();
+}
+
+void RhiViewport::setBedDepth(float value)
+{
+  if (qFuzzyCompare(m_bedDepth, value))
+    return;
+  m_bedDepth = value;
+  update();
+}
+
+void RhiViewport::setBedOriginX(float value)
+{
+  if (qFuzzyCompare(m_bedOriginX, value))
+    return;
+  m_bedOriginX = value;
+  update();
+}
+
+void RhiViewport::setBedOriginY(float value)
+{
+  if (qFuzzyCompare(m_bedOriginY, value))
+    return;
+  m_bedOriginY = value;
+  update();
+}
+
+void RhiViewport::setBedShapeType(int value)
+{
+  if (m_bedShapeType == value)
+    return;
+  m_bedShapeType = value;
+  update();
+}
+
+void RhiViewport::setBedDiameter(float value)
+{
+  if (qFuzzyCompare(m_bedDiameter, value))
+    return;
+  m_bedDiameter = value;
+  update();
+}
+
+void RhiViewport::setCurrentPlateIndex(int value)
+{
+  if (m_currentPlateIndex == value)
+    return;
+  m_currentPlateIndex = value;
+  update();
+}
+
+void RhiViewport::setPlateCount(int value)
+{
+  if (m_plateCount == value)
+    return;
+  m_plateCount = value;
+  update();
+}
+
+void RhiViewport::setActivePlateObjectIndices(const QVariantList &value)
+{
+  if (m_activePlateObjectIndices == value)
+    return;
+  m_activePlateObjectIndices = value;
+  update();
+}
+
 void RhiViewport::setShowWipeTower(bool value)
 {
   if (m_showWipeTower == value)

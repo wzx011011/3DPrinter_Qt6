@@ -158,6 +158,8 @@ private slots:
   void sliceServicePerPlateConfigMergeHonorsOverrides();
   // Phase 21 review-fix: verify DynamicPrintConfig::apply merge direction
   void sliceServiceConfigMergeDirectionPlateWins();
+  // v3.1 Phase 24: renderer-facing active plate context must not use UI fallback
+  void activePlateObjectIndicesFollowCurrentPlateWithoutFallback();
 
 private:
   bool hasLibslic3r() const;
@@ -1464,6 +1466,31 @@ void ViewModelSmokeTests::projectServicePerPlatePrintableRoundTrip()
   QVERIFY(project.isPlatePrintable(0));
   // invalid index safe
   QVERIFY(!project.isPlatePrintable(99));
+}
+
+void ViewModelSmokeTests::activePlateObjectIndicesFollowCurrentPlateWithoutFallback()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  const int sourceObject = project.addPrimitiveToPlate(0);
+  QVERIFY(sourceObject >= 0);
+  QVERIFY(editor.addPlate());
+  QVERIFY(editor.setCurrentPlateIndex(0));
+
+  const QVariantList plate0Objects = editor.activePlateObjectIndices();
+  QCOMPARE(plate0Objects.size(), 1);
+  QCOMPARE(plate0Objects.first().toInt(), sourceObject);
+
+  QVERIFY(editor.setCurrentPlateIndex(1));
+  const QVariantList emptyPlateObjects = editor.activePlateObjectIndices();
+  QVERIFY(emptyPlateObjects.isEmpty());
+
+  editor.setShowAllObjects(true);
+  const QVariantList showAllStillEmpty = editor.activePlateObjectIndices();
+  QVERIFY2(showAllStillEmpty.isEmpty(),
+           "Renderer-facing active plate context must not inherit show-all object-list fallback");
 }
 
 void ViewModelSmokeTests::multiPlate3mfRoundTripPreservesState()

@@ -155,6 +155,78 @@ void GLViewport::setShowBed(bool on)
   update();
 }
 
+void GLViewport::setBedWidth(float v)
+{
+  if (qFuzzyCompare(m_bedWidth, v))
+    return;
+  m_bedWidth = v;
+  update();
+}
+
+void GLViewport::setBedDepth(float v)
+{
+  if (qFuzzyCompare(m_bedDepth, v))
+    return;
+  m_bedDepth = v;
+  update();
+}
+
+void GLViewport::setBedOriginX(float v)
+{
+  if (qFuzzyCompare(m_bedOriginX, v))
+    return;
+  m_bedOriginX = v;
+  update();
+}
+
+void GLViewport::setBedOriginY(float v)
+{
+  if (qFuzzyCompare(m_bedOriginY, v))
+    return;
+  m_bedOriginY = v;
+  update();
+}
+
+void GLViewport::setBedShapeType(int v)
+{
+  if (m_bedShapeType == v)
+    return;
+  m_bedShapeType = v;
+  update();
+}
+
+void GLViewport::setBedDiameter(float v)
+{
+  if (qFuzzyCompare(m_bedDiameter, v))
+    return;
+  m_bedDiameter = v;
+  update();
+}
+
+void GLViewport::setCurrentPlateIndex(int v)
+{
+  if (m_currentPlateIndex == v)
+    return;
+  m_currentPlateIndex = v;
+  update();
+}
+
+void GLViewport::setPlateCount(int v)
+{
+  if (m_plateCount == v)
+    return;
+  m_plateCount = v;
+  update();
+}
+
+void GLViewport::setActivePlateObjectIndices(const QVariantList &v)
+{
+  if (m_activePlateObjectIndices == v)
+    return;
+  m_activePlateObjectIndices = v;
+  update();
+}
+
 void GLViewport::setShowWipeTower(bool on)
 {
   if (m_showWipeTower == on)
