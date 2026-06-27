@@ -4,16 +4,22 @@
 #include <QBuffer>
 #include <QByteArray>
 #include <QColor>
+#include <QHoverEvent>
 #include <QImage>
 #include <QMouseEvent>
+#include <QVector4D>
 #include <QWheelEvent>
 #include <QtGlobal>
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
 
 RhiViewport::RhiViewport(QQuickItem *parent)
     : QQuickRhiItem(parent)
 {
   setAcceptedMouseButtons(Qt::AllButtons);
-  setAcceptHoverEvents(false);
+  setAcceptHoverEvents(true);
   setMirrorVertically(true);
 }
 
@@ -189,6 +195,14 @@ void RhiViewport::setSelectedSourceObjectIndex(int value)
   if (m_selectedSourceObjectIndex == value)
     return;
   m_selectedSourceObjectIndex = value;
+  update();
+}
+
+void RhiViewport::setHoveredSourceObjectIndex(int value)
+{
+  if (m_hoveredSourceObjectIndex == value)
+    return;
+  m_hoveredSourceObjectIndex = value;
   update();
 }
 
@@ -375,8 +389,19 @@ void RhiViewport::requestThumbnailCapture(int plateIndex, int size)
 
 void RhiViewport::mousePressEvent(QMouseEvent *event)
 {
+  if (event->button() == Qt::RightButton) {
+    event->ignore();
+    return;
+  }
+
   m_lastMousePosition = event->position();
+  m_pressPosition = event->position();
   m_dragButton = event->button();
+  m_pressPickedSourceObjectIndex = -1;
+  if (event->button() == Qt::LeftButton) {
+    m_pressPickedSourceObjectIndex = pickSourceObjectAt(event->position());
+    setHoveredSourceObjectIndex(m_pressPickedSourceObjectIndex);
+  }
   event->accept();
 }
 
@@ -384,9 +409,13 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
 {
   const QPointF delta = event->position() - m_lastMousePosition;
   if (m_dragButton == Qt::LeftButton) {
-    m_camera.orbit(float(delta.x()) * 0.5f, -float(delta.y()) * 0.5f);
-    m_cameraDirty = true;
-    update();
+    if (m_pressPickedSourceObjectIndex >= 0) {
+      setHoveredSourceObjectIndex(m_pressPickedSourceObjectIndex);
+    } else {
+      m_camera.orbit(float(delta.x()) * 0.5f, -float(delta.y()) * 0.5f);
+      m_cameraDirty = true;
+      update();
+    }
   } else if (m_dragButton == Qt::MiddleButton) {
     m_camera.pan(float(delta.x()), float(delta.y()));
     m_cameraDirty = true;
@@ -398,7 +427,26 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
 
 void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
 {
+  if (event->button() == Qt::LeftButton && m_pressPickedSourceObjectIndex >= 0) {
+    const QPointF releaseDelta = event->position() - m_pressPosition;
+    const bool isClick = std::hypot(releaseDelta.x(), releaseDelta.y()) <= 4.0;
+    if (isClick && pickSourceObjectAt(event->position()) == m_pressPickedSourceObjectIndex)
+      emit objectPickedSource(m_pressPickedSourceObjectIndex);
+  }
   m_dragButton = Qt::NoButton;
+  m_pressPickedSourceObjectIndex = -1;
+  event->accept();
+}
+
+void RhiViewport::hoverMoveEvent(QHoverEvent *event)
+{
+  setHoveredSourceObjectIndex(pickSourceObjectAt(event->position()));
+  event->accept();
+}
+
+void RhiViewport::hoverLeaveEvent(QHoverEvent *event)
+{
+  setHoveredSourceObjectIndex(-1);
   event->accept();
 }
 
@@ -413,4 +461,110 @@ void RhiViewport::wheelEvent(QWheelEvent *event)
 QMatrix4x4 RhiViewport::cameraMvp(float aspect) const
 {
   return m_camera.projMatrix(aspect) * m_camera.viewMatrix();
+}
+
+void RhiViewport::updatePickingScene()
+{
+  if (m_pickModelGeneration == m_modelGeneration)
+    return;
+
+  QList<int> activeObjectIndices;
+  activeObjectIndices.reserve(m_activePlateObjectIndices.size());
+  for (const QVariant &value : m_activePlateObjectIndices)
+    activeObjectIndices.append(value.toInt());
+
+  QList<int> batchSourceObjectIndices;
+  batchSourceObjectIndices.reserve(m_meshBatchSourceObjectIndices.size());
+  for (const QVariant &value : m_meshBatchSourceObjectIndices)
+    batchSourceObjectIndices.append(value.toInt());
+
+  m_pickScene.setPlateContext(m_currentPlateIndex, m_plateCount, activeObjectIndices);
+  m_pickScene.setModelMeshData(m_meshData, batchSourceObjectIndices, activeObjectIndices);
+  m_pickScene.clearDirtyFlags();
+  m_pickModelGeneration = m_modelGeneration;
+}
+
+int RhiViewport::pickSourceObjectAt(const QPointF &position)
+{
+  updatePickingScene();
+  if (width() <= 1.0 || height() <= 1.0)
+    return -1;
+
+  int pickedSourceObjectIndex = -1;
+  float nearestDepth = std::numeric_limits<float>::max();
+  for (const PrepareSceneData::ModelBatch &batch : m_pickScene.modelBatches()) {
+    if (batch.sourceObjectIndex < 0)
+      continue;
+
+    float depth = 0.0f;
+    const QRectF screenRect = projectBoundsToScreenRect(batch.bounds, &depth);
+    if (!screenRect.isValid() || !screenRect.contains(position))
+      continue;
+
+    if (depth < nearestDepth) {
+      nearestDepth = depth;
+      pickedSourceObjectIndex = batch.sourceObjectIndex;
+    }
+  }
+
+  return pickedSourceObjectIndex;
+}
+
+QRectF RhiViewport::projectBoundsToScreenRect(const PrepareSceneData::ModelBounds &bounds,
+                                              float *depth) const
+{
+  const float w = float(width());
+  const float h = float(height());
+  if (w <= 1.0f || h <= 1.0f)
+    return {};
+
+  const float aspect = w / h;
+  const QMatrix4x4 mvp = cameraMvp(aspect);
+  const QVector4D corners[] = {
+      QVector4D(bounds.minX, bounds.minY, bounds.minZ, 1.0f),
+      QVector4D(bounds.maxX, bounds.minY, bounds.minZ, 1.0f),
+      QVector4D(bounds.minX, bounds.maxY, bounds.minZ, 1.0f),
+      QVector4D(bounds.maxX, bounds.maxY, bounds.minZ, 1.0f),
+      QVector4D(bounds.minX, bounds.minY, bounds.maxZ, 1.0f),
+      QVector4D(bounds.maxX, bounds.minY, bounds.maxZ, 1.0f),
+      QVector4D(bounds.minX, bounds.maxY, bounds.maxZ, 1.0f),
+      QVector4D(bounds.maxX, bounds.maxY, bounds.maxZ, 1.0f),
+  };
+
+  bool hasPoint = false;
+  float left = std::numeric_limits<float>::max();
+  float top = std::numeric_limits<float>::max();
+  float right = std::numeric_limits<float>::lowest();
+  float bottom = std::numeric_limits<float>::lowest();
+  float nearestDepth = std::numeric_limits<float>::max();
+
+  for (const QVector4D &corner : corners) {
+    const QVector4D clip = mvp * corner;
+    if (clip.w() <= 0.0001f)
+      continue;
+
+    const float invW = 1.0f / clip.w();
+    const float ndcX = clip.x() * invW;
+    const float ndcY = clip.y() * invW;
+    const float ndcZ = clip.z() * invW;
+    if (!std::isfinite(ndcX) || !std::isfinite(ndcY) || !std::isfinite(ndcZ))
+      continue;
+
+    const float screenX = (ndcX * 0.5f + 0.5f) * w;
+    const float screenY = (1.0f - (ndcY * 0.5f + 0.5f)) * h;
+    left = std::min(left, screenX);
+    right = std::max(right, screenX);
+    top = std::min(top, screenY);
+    bottom = std::max(bottom, screenY);
+    nearestDepth = std::min(nearestDepth, ndcZ);
+    hasPoint = true;
+  }
+
+  if (!hasPoint)
+    return {};
+
+  if (depth)
+    *depth = nearestDepth;
+
+  return QRectF(QPointF(left, top), QPointF(right, bottom)).normalized().adjusted(-3.0, -3.0, 3.0, 3.0);
 }

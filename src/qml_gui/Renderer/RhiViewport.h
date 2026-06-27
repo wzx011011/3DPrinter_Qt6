@@ -1,12 +1,15 @@
 #pragma once
 
 #include <QByteArray>
+#include <QHoverEvent>
 #include <QPointF>
 #include <QQuickRhiItem>
+#include <QRectF>
 #include <QString>
 #include <QVariant>
 
 #include "CameraController.h"
+#include "PrepareSceneData.h"
 
 class RhiViewportRenderer;
 
@@ -32,6 +35,7 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices WRITE setActivePlateObjectIndices)
   Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices WRITE setMeshBatchSourceObjectIndices)
   Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex WRITE setSelectedSourceObjectIndex)
+  Q_PROPERTY(int hoveredSourceObjectIndex READ hoveredSourceObjectIndex WRITE setHoveredSourceObjectIndex)
   Q_PROPERTY(bool showWipeTower READ showWipeTower WRITE setShowWipeTower)
   Q_PROPERTY(float wipeTowerWidth READ wipeTowerWidth WRITE setWipeTowerWidth)
   Q_PROPERTY(float wipeTowerDepth READ wipeTowerDepth WRITE setWipeTowerDepth)
@@ -136,6 +140,8 @@ public:
   void setMeshBatchSourceObjectIndices(const QVariantList &value);
   int selectedSourceObjectIndex() const { return m_selectedSourceObjectIndex; }
   void setSelectedSourceObjectIndex(int value);
+  int hoveredSourceObjectIndex() const { return m_hoveredSourceObjectIndex; }
+  void setHoveredSourceObjectIndex(int value);
   bool showWipeTower() const { return m_showWipeTower; }
   void setShowWipeTower(bool value);
   float wipeTowerWidth() const { return m_wipeTowerWidth; }
@@ -189,6 +195,7 @@ signals:
   void wireframeModeChanged();
   void gcodeViewModeChanged();
   void thumbnailCaptured();
+  void objectPickedSource(int sourceIndex);
 
 private:
   friend class RhiViewportRenderer;
@@ -196,8 +203,14 @@ private:
   void mousePressEvent(QMouseEvent *event) override;
   void mouseMoveEvent(QMouseEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *event) override;
+  void hoverMoveEvent(QHoverEvent *event) override;
+  void hoverLeaveEvent(QHoverEvent *event) override;
   void wheelEvent(QWheelEvent *event) override;
   QMatrix4x4 cameraMvp(float aspect) const;
+  void updatePickingScene();
+  int pickSourceObjectAt(const QPointF &position);
+  QRectF projectBoundsToScreenRect(const PrepareSceneData::ModelBounds &bounds,
+                                   float *depth) const;
 
   int m_canvasType = CanvasView3D;
   QByteArray m_meshData;
@@ -218,6 +231,7 @@ private:
   QVariantList m_activePlateObjectIndices;
   QVariantList m_meshBatchSourceObjectIndices;
   int m_selectedSourceObjectIndex = -1;
+  int m_hoveredSourceObjectIndex = -1;
   bool m_showWipeTower = false;
   float m_wipeTowerWidth = 10.f;
   float m_wipeTowerDepth = 10.f;
@@ -238,8 +252,12 @@ private:
   int m_viewPreset = 3;
   qint64 m_sceneGeneration = 1;
   qint64 m_modelGeneration = 1;
+  qint64 m_pickModelGeneration = 0;
   CameraController m_camera;
+  PrepareSceneData m_pickScene;
   QPointF m_lastMousePosition;
+  QPointF m_pressPosition;
   Qt::MouseButton m_dragButton = Qt::NoButton;
+  int m_pressPickedSourceObjectIndex = -1;
   bool m_cameraDirty = true;
 };

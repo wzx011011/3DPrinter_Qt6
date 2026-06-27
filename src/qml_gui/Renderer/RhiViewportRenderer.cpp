@@ -58,6 +58,7 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
                                     activeObjectIndices);
   }
   m_prepareScene.setSelectedSourceObjectIndex(viewport->m_selectedSourceObjectIndex);
+  m_prepareScene.setHoveredSourceObjectIndex(viewport->m_hoveredSourceObjectIndex);
   const QSize pixelSize = renderTarget() ? renderTarget()->pixelSize() : QSize(int(viewport->width()), int(viewport->height()));
   const float aspect = pixelSize.height() > 0
       ? float(std::max(1, pixelSize.width())) / float(std::max(1, pixelSize.height()))
@@ -84,6 +85,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     const bool sceneDirty = (dirtyFlags & (PrepareSceneData::DirtyBed
                                            | PrepareSceneData::DirtyPlate
                                            | PrepareSceneData::DirtyMesh
+                                           | PrepareSceneData::DirtySelection
                                            | PrepareSceneData::DirtyCamera
                                            | PrepareSceneData::DirtyGpu)) != 0;
     if ((sceneDirty || !m_sceneBuffersUploaded) && !m_pipelineFailed) {
@@ -120,6 +122,12 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->setVertexInput(0, 1, &modelBinding);
       cb->draw(m_modelVertexCount);
     }
+    if (m_highlightVertexBuffer && m_highlightVertexCount > 0) {
+      cb->setGraphicsPipeline(m_fillPipeline.get());
+      const QRhiCommandBuffer::VertexInput highlightBinding(m_highlightVertexBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &highlightBinding);
+      cb->draw(m_highlightVertexCount);
+    }
   }
   cb->endPass();
 }
@@ -130,20 +138,24 @@ void RhiViewportRenderer::releaseResources()
   m_fillPipeline.reset();
   m_srb.reset();
   m_cameraUniformBuffer.reset();
+  m_highlightVertexBuffer.reset();
   m_modelVertexBuffer.reset();
   m_bedLineBuffer.reset();
   m_bedFillBuffer.reset();
   m_renderPassDescriptor = nullptr;
   m_sceneBuffersUploaded = false;
   m_modelVertexBufferUploaded = false;
+  m_highlightVertexBufferUploaded = false;
   m_cameraUniformBufferUploaded = false;
   m_bedFillBufferBytes = 0;
   m_bedLineBufferBytes = 0;
   m_modelVertexBufferBytes = 0;
+  m_highlightVertexBufferBytes = 0;
   m_cameraUniformBufferBytes = 0;
   m_bedFillVertexCount = 0;
   m_bedLineVertexCount = 0;
   m_modelVertexCount = 0;
+  m_highlightVertexCount = 0;
   m_sceneGeneration = 0;
   m_modelGeneration = 0;
 }
@@ -232,6 +244,8 @@ bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, q
     return false;
   if (!uploadModelBuffer(updates, dirtyFlags))
     return false;
+  if (!uploadHighlightBuffer(updates, dirtyFlags))
+    return false;
 
   m_sceneBuffersUploaded = true;
   return true;
@@ -302,6 +316,35 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
                                 modelVertices.constData());
   }
   m_modelVertexBufferUploaded = true;
+  return true;
+}
+
+bool RhiViewportRenderer::uploadHighlightBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+
+  const bool uploadHighlight = !m_highlightVertexBufferUploaded
+      || (dirtyFlags & (PrepareSceneData::DirtySelection
+                        | PrepareSceneData::DirtyMesh
+                        | PrepareSceneData::DirtyPlate
+                        | PrepareSceneData::DirtyGpu)) != 0;
+  if (!uploadHighlight)
+    return true;
+
+  const QVector<Vertex> highlightVertices = buildHighlightVertices();
+  const quint32 highlightBytes = quint32(highlightVertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_highlightVertexBuffer, highlightBytes, m_highlightVertexBufferBytes, QRhiBuffer::VertexBuffer))
+    return false;
+
+  m_highlightVertexCount = quint32(highlightVertices.size());
+  if (m_highlightVertexBuffer && highlightBytes > 0) {
+    updates->uploadStaticBuffer(m_highlightVertexBuffer.get(),
+                                0,
+                                highlightBytes,
+                                highlightVertices.constData());
+  }
+  m_highlightVertexBufferUploaded = true;
   return true;
 }
 
@@ -387,6 +430,41 @@ QVector<RhiViewportRenderer::Vertex> RhiViewportRenderer::buildModelVertices(con
                            sourceVertex.g,
                            sourceVertex.b,
                            sourceVertex.a});
+  }
+
+  return vertices;
+}
+
+QVector<RhiViewportRenderer::Vertex> RhiViewportRenderer::buildHighlightVertices() const
+{
+  QVector<Vertex> vertices;
+  const int selectedSourceObjectIndex = m_prepareScene.selectedSourceObjectIndex();
+  const int hoveredSourceObjectIndex = m_prepareScene.hoveredSourceObjectIndex();
+  if (selectedSourceObjectIndex < 0 && hoveredSourceObjectIndex < 0)
+    return vertices;
+
+  const QList<PrepareSceneData::ModelVertex> &source = m_prepareScene.modelVertices();
+  for (const PrepareSceneData::ModelBatch &batch : m_prepareScene.modelBatches()) {
+    const bool selected = batch.sourceObjectIndex == selectedSourceObjectIndex;
+    const bool hovered = batch.sourceObjectIndex == hoveredSourceObjectIndex;
+    if (!selected && !hovered)
+      continue;
+
+    const float r = selected ? 1.0f : 0.35f;
+    const float g = selected ? 0.78f : 0.75f;
+    const float b = selected ? 0.22f : 1.0f;
+    const float a = selected ? 0.62f : 0.38f;
+    const int endVertex = std::min(batch.firstVertex + batch.vertexCount, int(source.size()));
+    for (int i = std::max(0, batch.firstVertex); i < endVertex; ++i) {
+      const PrepareSceneData::ModelVertex &sourceVertex = source.at(i);
+      vertices.append(Vertex{sourceVertex.x,
+                             sourceVertex.y,
+                             sourceVertex.z,
+                             r,
+                             g,
+                             b,
+                             a});
+    }
   }
 
   return vertices;

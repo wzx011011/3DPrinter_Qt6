@@ -1609,6 +1609,10 @@ Item {
                     activePlateObjectIndices: root.editorVm ? root.editorVm.activePlateObjectIndices : []
                     meshBatchSourceObjectIndices: root.editorVm ? root.editorVm.meshBatchSourceObjectIndices : []
                     selectedSourceObjectIndex: root.editorVm ? root.editorVm.selectedSourceObjectIndex : -1
+                    onObjectPickedSource: function(sourceIndex) {
+                        if (root.editorVm)
+                            root.editorVm.selectSourceObject(sourceIndex)
+                    }
                     cutAxis: root.editorVm ? root.editorVm.cutAxis : 2
                     cutPosition: root.editorVm ? root.editorVm.cutPosition : 0.0
 

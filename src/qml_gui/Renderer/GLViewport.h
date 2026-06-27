@@ -40,6 +40,7 @@ class GLViewport : public QQuickFramebufferObject
   Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices WRITE setActivePlateObjectIndices)
   Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices WRITE setMeshBatchSourceObjectIndices)
   Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex WRITE setSelectedSourceObjectIndex)
+  Q_PROPERTY(int hoveredSourceObjectIndex READ hoveredSourceObjectIndex WRITE setHoveredSourceObjectIndex)
   /// Wipe tower visualization (P2.8.3)
   Q_PROPERTY(bool showWipeTower READ showWipeTower WRITE setShowWipeTower)
   Q_PROPERTY(float wipeTowerWidth READ wipeTowerWidth WRITE setWipeTowerWidth)
@@ -165,6 +166,7 @@ public:
   QVariantList activePlateObjectIndices() const { return m_activePlateObjectIndices; }
   QVariantList meshBatchSourceObjectIndices() const { return m_meshBatchSourceObjectIndices; }
   int selectedSourceObjectIndex() const { return m_selectedSourceObjectIndex; }
+  int hoveredSourceObjectIndex() const { return m_hoveredSourceObjectIndex; }
   bool showWipeTower() const { return m_showWipeTower; }
   float wipeTowerWidth() const { return m_wipeTowerWidth; }
   float wipeTowerDepth() const { return m_wipeTowerDepth; }
@@ -191,6 +193,7 @@ public:
   void setActivePlateObjectIndices(const QVariantList &v);
   void setMeshBatchSourceObjectIndices(const QVariantList &v);
   void setSelectedSourceObjectIndex(int v);
+  void setHoveredSourceObjectIndex(int v);
   void setShowWipeTower(bool on);
   void setWipeTowerWidth(float v);
   void setWipeTowerDepth(float v);
@@ -266,6 +269,7 @@ signals:
   void gcodeViewModeChanged();  // SLICE-01
   /// FBO 缩略图捕获完成，携带 base64 PNG 数据
   void thumbnailCaptured();
+  void objectPickedSource(int sourceIndex);
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;
@@ -303,6 +307,7 @@ private:
   QVariantList m_activePlateObjectIndices;
   QVariantList m_meshBatchSourceObjectIndices;
   int m_selectedSourceObjectIndex = -1;
+  int m_hoveredSourceObjectIndex = -1;
   bool m_showWipeTower = false;   ///< Wipe tower visibility (P2.8.3)
   float m_wipeTowerWidth = 10.f;  ///< Wipe tower width in mm (default 10)
   float m_wipeTowerDepth = 10.f;  ///< Wipe tower depth in mm (default 10)

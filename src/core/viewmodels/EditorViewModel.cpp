@@ -2255,6 +2255,39 @@ void EditorViewModel::selectObject(int i)
   emit stateChanged();
 }
 
+bool EditorViewModel::selectSourceObject(int sourceIndex)
+{
+  if (!projectService_ || sourceIndex < 0 || sourceIndex >= m_objects.size())
+    return false;
+
+  const QList<int> activePlateObjects = projectService_->currentPlateObjectIndices();
+  if (!activePlateObjects.contains(sourceIndex)) {
+    if (m_primarySelectedSourceIndex >= 0) {
+      m_selectedSourceIndices.clear();
+      m_primarySelectedSourceIndex = -1;
+      m_selectedVolumeObjectSourceIndex = -1;
+      m_selectedVolumeIndices.clear();
+      m_selectedVolumeIndex = -1;
+      emit stateChanged();
+    }
+    return false;
+  }
+
+  if (m_selectedSourceIndices.size() == 1
+      && m_selectedSourceIndices.contains(sourceIndex)
+      && m_primarySelectedSourceIndex == sourceIndex)
+    return true;
+
+  m_selectedSourceIndices.clear();
+  m_selectedSourceIndices.insert(sourceIndex);
+  m_primarySelectedSourceIndex = sourceIndex;
+  m_selectedVolumeObjectSourceIndex = -1;
+  m_selectedVolumeIndices.clear();
+  m_selectedVolumeIndex = -1;
+  emit stateChanged();
+  return true;
+}
+
 void EditorViewModel::toggleObjectSelection(int i)
 {
   const int sourceIndex = mapFilteredToSourceIndex(i);

@@ -196,6 +196,14 @@ void SoftwareViewport::setSelectedSourceObjectIndex(int value)
   update();
 }
 
+void SoftwareViewport::setHoveredSourceObjectIndex(int value)
+{
+  if (m_hoveredSourceObjectIndex == value)
+    return;
+  m_hoveredSourceObjectIndex = value;
+  update();
+}
+
 void SoftwareViewport::setShowWipeTower(bool value)
 {
   if (m_showWipeTower == value)

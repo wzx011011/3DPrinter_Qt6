@@ -31,6 +31,7 @@ class SoftwareViewport : public QQuickPaintedItem
   Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices WRITE setActivePlateObjectIndices)
   Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices WRITE setMeshBatchSourceObjectIndices)
   Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex WRITE setSelectedSourceObjectIndex)
+  Q_PROPERTY(int hoveredSourceObjectIndex READ hoveredSourceObjectIndex WRITE setHoveredSourceObjectIndex)
   Q_PROPERTY(bool showWipeTower READ showWipeTower WRITE setShowWipeTower)
   Q_PROPERTY(float wipeTowerWidth READ wipeTowerWidth WRITE setWipeTowerWidth)
   Q_PROPERTY(float wipeTowerDepth READ wipeTowerDepth WRITE setWipeTowerDepth)
@@ -120,6 +121,8 @@ public:
   void setMeshBatchSourceObjectIndices(const QVariantList &value);
   int selectedSourceObjectIndex() const { return m_selectedSourceObjectIndex; }
   void setSelectedSourceObjectIndex(int value);
+  int hoveredSourceObjectIndex() const { return m_hoveredSourceObjectIndex; }
+  void setHoveredSourceObjectIndex(int value);
   bool showWipeTower() const { return m_showWipeTower; }
   void setShowWipeTower(bool value);
   float wipeTowerWidth() const { return m_wipeTowerWidth; }
@@ -177,6 +180,7 @@ signals:
   void wireframeModeChanged();
   void gcodeViewModeChanged();
   void thumbnailCaptured();
+  void objectPickedSource(int sourceIndex);
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;
@@ -223,6 +227,7 @@ private:
   QVariantList m_activePlateObjectIndices;
   QVariantList m_meshBatchSourceObjectIndices;
   int m_selectedSourceObjectIndex = -1;
+  int m_hoveredSourceObjectIndex = -1;
   bool m_showWipeTower = true;
   float m_wipeTowerWidth = 0.f;
   float m_wipeTowerDepth = 0.f;

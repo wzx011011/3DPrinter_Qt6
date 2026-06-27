@@ -243,6 +243,14 @@ void GLViewport::setSelectedSourceObjectIndex(int v)
   update();
 }
 
+void GLViewport::setHoveredSourceObjectIndex(int v)
+{
+  if (m_hoveredSourceObjectIndex == v)
+    return;
+  m_hoveredSourceObjectIndex = v;
+  update();
+}
+
 void GLViewport::setShowWipeTower(bool on)
 {
   if (m_showWipeTower == on)

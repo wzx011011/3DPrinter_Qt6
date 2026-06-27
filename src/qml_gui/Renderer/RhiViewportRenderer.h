@@ -42,6 +42,7 @@ private:
   bool uploadSceneBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadBedBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadModelBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
+  bool uploadHighlightBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadCameraUniform(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool ensureBuffer(std::unique_ptr<QRhiBuffer> &buffer,
                     quint32 byteSize,
@@ -49,11 +50,13 @@ private:
                     QRhiBuffer::UsageFlags usage);
   QVector<Vertex> buildSceneVertices(const QList<PrepareSceneData::Vertex> &source) const;
   QVector<Vertex> buildModelVertices(const QList<PrepareSceneData::ModelVertex> &source) const;
+  QVector<Vertex> buildHighlightVertices() const;
   QShader loadShader(const QString &path) const;
 
   std::unique_ptr<QRhiBuffer> m_bedFillBuffer;
   std::unique_ptr<QRhiBuffer> m_bedLineBuffer;
   std::unique_ptr<QRhiBuffer> m_modelVertexBuffer;
+  std::unique_ptr<QRhiBuffer> m_highlightVertexBuffer;
   std::unique_ptr<QRhiBuffer> m_cameraUniformBuffer;
   std::unique_ptr<QRhiShaderResourceBindings> m_srb;
   std::unique_ptr<QRhiGraphicsPipeline> m_fillPipeline;
@@ -61,15 +64,18 @@ private:
   QRhiRenderPassDescriptor *m_renderPassDescriptor = nullptr;
   bool m_sceneBuffersUploaded = false;
   bool m_modelVertexBufferUploaded = false;
+  bool m_highlightVertexBufferUploaded = false;
   bool m_cameraUniformBufferUploaded = false;
   bool m_pipelineFailed = false;
   quint32 m_bedFillBufferBytes = 0;
   quint32 m_bedLineBufferBytes = 0;
   quint32 m_modelVertexBufferBytes = 0;
+  quint32 m_highlightVertexBufferBytes = 0;
   quint32 m_cameraUniformBufferBytes = 0;
   quint32 m_bedFillVertexCount = 0;
   quint32 m_bedLineVertexCount = 0;
   quint32 m_modelVertexCount = 0;
+  quint32 m_highlightVertexCount = 0;
   int m_canvasType = 0;
   int m_meshBytes = 0;
   int m_previewBytes = 0;

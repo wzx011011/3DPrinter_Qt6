@@ -331,6 +331,7 @@ public:
   Q_INVOKABLE void deleteObject(int i);
   Q_INVOKABLE void deleteSelectedObjects();
   Q_INVOKABLE void selectObject(int i);
+  Q_INVOKABLE bool selectSourceObject(int sourceIndex);
   Q_INVOKABLE void toggleObjectSelection(int i);
   Q_INVOKABLE void clearObjectSelection();
   Q_INVOKABLE void selectAllVisibleObjects();
