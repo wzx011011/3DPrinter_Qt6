@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <limits>
 
 namespace
 {
@@ -24,6 +26,22 @@ namespace
   constexpr float kAxisR = 0.12f;
   constexpr float kAxisG = 0.78f;
   constexpr float kAxisB = 0.37f;
+
+  constexpr qsizetype kPackedBatchHeaderBytes = qsizetype(sizeof(qint32) * 2);
+  constexpr qsizetype kPackedTrailerBytes = qsizetype(sizeof(float) * 6);
+  constexpr qsizetype kPackedVertexBytes = qsizetype(sizeof(float) * 3);
+  constexpr qint32 kMaxPackedObjects = 100000;
+  constexpr qint32 kMaxPackedTrianglesPerBatch = 20000000;
+
+  template <typename T>
+  bool readValue(const QByteArray &bytes, qsizetype &offset, T &value)
+  {
+    if (offset < 0 || bytes.size() - offset < qsizetype(sizeof(T)))
+      return false;
+    std::memcpy(&value, bytes.constData() + offset, sizeof(T));
+    offset += sizeof(T);
+    return true;
+  }
 }
 
 bool PrepareSceneData::Vertex::operator==(const Vertex &other) const
@@ -109,6 +127,131 @@ void PrepareSceneData::setMeshGeneration(qint64 generation)
 
   m_meshGeneration = generation;
   markDirty(DirtyMesh | DirtyGpu);
+}
+
+void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
+                                        const QList<int> &batchSourceObjectIndices,
+                                        const QList<int> &activeSourceObjectIndices)
+{
+  clearModelGeometry();
+
+  qint32 objectCount = 0;
+  qsizetype offset = 0;
+  bool valid = readValue(meshData, offset, objectCount)
+      && objectCount >= 0
+      && objectCount <= kMaxPackedObjects
+      && batchSourceObjectIndices.size() == objectCount;
+
+  if (valid) {
+    m_modelVertices.reserve(std::min<qsizetype>(meshData.size() / kPackedVertexBytes, 1000000));
+  }
+
+  for (qint32 objectIndex = 0; valid && objectIndex < objectCount; ++objectIndex) {
+    qint32 renderObjectId = 0;
+    qint32 triangleCount = 0;
+    valid = readValue(meshData, offset, renderObjectId)
+        && readValue(meshData, offset, triangleCount)
+        && triangleCount >= 0
+        && triangleCount <= kMaxPackedTrianglesPerBatch;
+    if (!valid)
+      break;
+
+    const qsizetype vertexCount = qsizetype(triangleCount) * 3;
+    const qsizetype payloadBytes = vertexCount * kPackedVertexBytes;
+    if (payloadBytes < 0 || meshData.size() - offset < payloadBytes) {
+      valid = false;
+      break;
+    }
+
+    const int sourceObjectIndex = batchSourceObjectIndices.at(objectIndex);
+    const bool active = activeSourceObjectIndices.isEmpty()
+        || activeSourceContains(activeSourceObjectIndices, sourceObjectIndex);
+    ModelBatch batch;
+    batch.renderObjectId = renderObjectId;
+    batch.sourceObjectIndex = sourceObjectIndex;
+    batch.firstVertex = m_modelVertices.size();
+    batch.vertexCount = int(vertexCount);
+    bool batchHasBounds = false;
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
+    colorForSourceObject(sourceObjectIndex, r, g, b);
+
+    for (qsizetype vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
+      float x = 0.0f;
+      float y = 0.0f;
+      float z = 0.0f;
+      valid = readValue(meshData, offset, x)
+          && readValue(meshData, offset, y)
+          && readValue(meshData, offset, z)
+          && std::isfinite(x)
+          && std::isfinite(y)
+          && std::isfinite(z);
+      if (!valid)
+        break;
+
+      if (!active)
+        continue;
+
+      const ModelVertex vertex{x, y, z, r, g, b, 1.0f};
+      m_modelVertices.append(vertex);
+      if (!batchHasBounds) {
+        batch.bounds = ModelBounds{x, y, z, x, y, z};
+        batchHasBounds = true;
+      } else {
+        batch.bounds.minX = std::min(batch.bounds.minX, x);
+        batch.bounds.minY = std::min(batch.bounds.minY, y);
+        batch.bounds.minZ = std::min(batch.bounds.minZ, z);
+        batch.bounds.maxX = std::max(batch.bounds.maxX, x);
+        batch.bounds.maxY = std::max(batch.bounds.maxY, y);
+        batch.bounds.maxZ = std::max(batch.bounds.maxZ, z);
+      }
+      updateModelBounds(vertex);
+    }
+
+    if (valid && active) {
+      batch.vertexCount = m_modelVertices.size() - batch.firstVertex;
+      if (batch.vertexCount > 0)
+        m_modelBatches.append(batch);
+    }
+  }
+
+  if (valid) {
+    if (meshData.size() - offset < kPackedTrailerBytes)
+      valid = false;
+    else
+      offset += kPackedTrailerBytes;
+  }
+
+  if (!valid) {
+    clearModelGeometry();
+  }
+
+  m_meshGeneration = meshData.size();
+  // Functional source-truth mapping: upstream GLCanvas3D/PartPlate render only
+  // current plate model volumes. QRhi keeps transport-specific buffers separate
+  // from this source-object-aware scene contract.
+  markDirty(DirtyMesh | DirtyGpu);
+}
+
+void PrepareSceneData::setSelectedSourceObjectIndex(int sourceObjectIndex)
+{
+  if (m_selectedSourceObjectIndex == sourceObjectIndex)
+    return;
+
+  m_selectedSourceObjectIndex = sourceObjectIndex;
+  // Selection is an upstream Selection/GLCanvas3D state change. It affects a
+  // small highlight path, not the resident model vertex buffer.
+  markDirty(DirtySelection);
+}
+
+void PrepareSceneData::setHoveredSourceObjectIndex(int sourceObjectIndex)
+{
+  if (m_hoveredSourceObjectIndex == sourceObjectIndex)
+    return;
+
+  m_hoveredSourceObjectIndex = sourceObjectIndex;
+  markDirty(DirtySelection);
 }
 
 quint32 PrepareSceneData::peekDirtyFlags() const
@@ -203,6 +346,36 @@ const QList<PrepareSceneData::Vertex> &PrepareSceneData::bedLineVertices() const
   return m_bedLineVertices;
 }
 
+const QList<PrepareSceneData::ModelVertex> &PrepareSceneData::modelVertices() const
+{
+  return m_modelVertices;
+}
+
+const QList<PrepareSceneData::ModelBatch> &PrepareSceneData::modelBatches() const
+{
+  return m_modelBatches;
+}
+
+const PrepareSceneData::ModelBounds &PrepareSceneData::modelBounds() const
+{
+  return m_modelBounds;
+}
+
+bool PrepareSceneData::hasModelBounds() const
+{
+  return m_hasModelBounds;
+}
+
+int PrepareSceneData::selectedSourceObjectIndex() const
+{
+  return m_selectedSourceObjectIndex;
+}
+
+int PrepareSceneData::hoveredSourceObjectIndex() const
+{
+  return m_hoveredSourceObjectIndex;
+}
+
 float PrepareSceneData::sanitizeExtent(float value, float fallback)
 {
   if (!std::isfinite(value))
@@ -268,6 +441,52 @@ void PrepareSceneData::rebuildBedGeometry()
   const float originY = std::clamp(m_bedOriginY, top, bottom);
   appendLine(originX, top, originX, bottom, kAxisR, kAxisG, kAxisB, 0.95f);
   appendLine(left, originY, right, originY, kAxisR, kAxisG, kAxisB, 0.95f);
+}
+
+void PrepareSceneData::clearModelGeometry()
+{
+  m_modelVertices.clear();
+  m_modelBatches.clear();
+  m_modelBounds = ModelBounds{};
+  m_hasModelBounds = false;
+}
+
+void PrepareSceneData::updateModelBounds(const ModelVertex &vertex)
+{
+  if (!m_hasModelBounds) {
+    m_modelBounds = ModelBounds{vertex.x, vertex.y, vertex.z, vertex.x, vertex.y, vertex.z};
+    m_hasModelBounds = true;
+    return;
+  }
+
+  m_modelBounds.minX = std::min(m_modelBounds.minX, vertex.x);
+  m_modelBounds.minY = std::min(m_modelBounds.minY, vertex.y);
+  m_modelBounds.minZ = std::min(m_modelBounds.minZ, vertex.z);
+  m_modelBounds.maxX = std::max(m_modelBounds.maxX, vertex.x);
+  m_modelBounds.maxY = std::max(m_modelBounds.maxY, vertex.y);
+  m_modelBounds.maxZ = std::max(m_modelBounds.maxZ, vertex.z);
+}
+
+bool PrepareSceneData::activeSourceContains(const QList<int> &activeSourceObjectIndices, int sourceObjectIndex)
+{
+  return activeSourceObjectIndices.contains(sourceObjectIndex);
+}
+
+quint32 PrepareSceneData::colorForSourceObject(int sourceObjectIndex, float &r, float &g, float &b)
+{
+  static constexpr float kPalette[][3] = {
+    {0.48f, 0.68f, 0.95f},
+    {0.70f, 0.58f, 0.88f},
+    {0.95f, 0.64f, 0.38f},
+    {0.42f, 0.76f, 0.58f},
+    {0.88f, 0.54f, 0.58f},
+    {0.62f, 0.72f, 0.42f}
+  };
+  const quint32 index = quint32(std::abs(sourceObjectIndex)) % (sizeof(kPalette) / sizeof(kPalette[0]));
+  r = kPalette[index][0];
+  g = kPalette[index][1];
+  b = kPalette[index][2];
+  return index;
 }
 
 void PrepareSceneData::appendLine(float x1, float y1, float x2, float y2, float r, float g, float b, float a)

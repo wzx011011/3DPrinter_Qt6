@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QList>
 #include <QtGlobal>
 
@@ -18,6 +19,36 @@ public:
     bool operator==(const Vertex &other) const;
   };
 
+  struct ModelVertex
+  {
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
+    float a = 1.0f;
+  };
+
+  struct ModelBounds
+  {
+    float minX = 0.0f;
+    float minY = 0.0f;
+    float minZ = 0.0f;
+    float maxX = 0.0f;
+    float maxY = 0.0f;
+    float maxZ = 0.0f;
+  };
+
+  struct ModelBatch
+  {
+    int renderObjectId = -1;
+    int sourceObjectIndex = -1;
+    int firstVertex = 0;
+    int vertexCount = 0;
+    ModelBounds bounds;
+  };
+
   enum DirtyFlag : quint32
   {
     DirtyNone = 0,
@@ -25,7 +56,9 @@ public:
     DirtyPlate = 1u << 1,
     DirtyMesh = 1u << 2,
     DirtyVisibility = 1u << 3,
-    DirtyGpu = 1u << 4
+    DirtyGpu = 1u << 4,
+    DirtySelection = 1u << 5,
+    DirtyCamera = 1u << 6
   };
 
   PrepareSceneData();
@@ -39,6 +72,11 @@ public:
   void setShowBed(bool showBed);
   void setPlateContext(int currentPlateIndex, int plateCount, const QList<int> &activeObjectIndices);
   void setMeshGeneration(qint64 generation);
+  void setModelMeshData(const QByteArray &meshData,
+                        const QList<int> &batchSourceObjectIndices,
+                        const QList<int> &activeSourceObjectIndices);
+  void setSelectedSourceObjectIndex(int sourceObjectIndex);
+  void setHoveredSourceObjectIndex(int sourceObjectIndex);
 
   quint32 peekDirtyFlags() const;
   quint32 takeDirtyFlags();
@@ -62,6 +100,12 @@ public:
 
   const QList<Vertex> &bedFillVertices() const;
   const QList<Vertex> &bedLineVertices() const;
+  const QList<ModelVertex> &modelVertices() const;
+  const QList<ModelBatch> &modelBatches() const;
+  const ModelBounds &modelBounds() const;
+  bool hasModelBounds() const;
+  int selectedSourceObjectIndex() const;
+  int hoveredSourceObjectIndex() const;
 
 private:
   static float sanitizeExtent(float value, float fallback);
@@ -70,6 +114,10 @@ private:
 
   void markDirty(quint32 flags);
   void rebuildBedGeometry();
+  void clearModelGeometry();
+  void updateModelBounds(const ModelVertex &vertex);
+  static bool activeSourceContains(const QList<int> &activeSourceObjectIndices, int sourceObjectIndex);
+  static quint32 colorForSourceObject(int sourceObjectIndex, float &r, float &g, float &b);
   void appendLine(float x1, float y1, float x2, float y2, float r, float g, float b, float a);
   void appendRectFill(float left, float top, float right, float bottom);
   void appendRectBorder(float left, float top, float right, float bottom);
@@ -89,5 +137,11 @@ private:
 
   QList<Vertex> m_bedFillVertices;
   QList<Vertex> m_bedLineVertices;
+  QList<ModelVertex> m_modelVertices;
+  QList<ModelBatch> m_modelBatches;
+  ModelBounds m_modelBounds;
+  bool m_hasModelBounds = false;
+  int m_selectedSourceObjectIndex = -1;
+  int m_hoveredSourceObjectIndex = -1;
   quint32 m_dirtyFlags = DirtyNone;
 };
