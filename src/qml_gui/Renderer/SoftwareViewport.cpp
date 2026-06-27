@@ -180,6 +180,22 @@ void SoftwareViewport::setActivePlateObjectIndices(const QVariantList &value)
   update();
 }
 
+void SoftwareViewport::setMeshBatchSourceObjectIndices(const QVariantList &value)
+{
+  if (m_meshBatchSourceObjectIndices == value)
+    return;
+  m_meshBatchSourceObjectIndices = value;
+  update();
+}
+
+void SoftwareViewport::setSelectedSourceObjectIndex(int value)
+{
+  if (m_selectedSourceObjectIndex == value)
+    return;
+  m_selectedSourceObjectIndex = value;
+  update();
+}
+
 void SoftwareViewport::setShowWipeTower(bool value)
 {
   if (m_showWipeTower == value)

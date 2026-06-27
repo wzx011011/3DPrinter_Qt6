@@ -157,6 +157,22 @@ void RhiViewport::setActivePlateObjectIndices(const QVariantList &value)
   update();
 }
 
+void RhiViewport::setMeshBatchSourceObjectIndices(const QVariantList &value)
+{
+  if (m_meshBatchSourceObjectIndices == value)
+    return;
+  m_meshBatchSourceObjectIndices = value;
+  update();
+}
+
+void RhiViewport::setSelectedSourceObjectIndex(int value)
+{
+  if (m_selectedSourceObjectIndex == value)
+    return;
+  m_selectedSourceObjectIndex = value;
+  update();
+}
+
 void RhiViewport::setShowWipeTower(bool value)
 {
   if (m_showWipeTower == value)

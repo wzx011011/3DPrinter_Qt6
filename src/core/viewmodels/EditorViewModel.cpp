@@ -26,6 +26,7 @@ void EditorViewModel::invalidateSliceResultsForCurrentPlate()
 void EditorViewModel::refreshMeshCacheAndFitHint()
 {
   m_cachedMeshData = projectService_->meshData();
+  m_cachedMeshBatchSourceObjectIndices = projectService_->meshBatchSourceObjectIndices();
   m_fitHint = QVector4D();
 
   constexpr int kBboxBytes = 6 * int(sizeof(float));
@@ -1528,6 +1529,7 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
       m_selectedVolumeIndex = -1;
       m_fitHint = QVector4D();
       m_cachedMeshData.clear();
+      m_cachedMeshBatchSourceObjectIndices.clear();
     }
     emit stateChanged(); });
 
@@ -1557,6 +1559,15 @@ QVariantList EditorViewModel::activePlateObjectIndices() const
   const QList<int> plateIndices = projectService_->currentPlateObjectIndices();
   indices.reserve(plateIndices.size());
   for (int objectIndex : plateIndices)
+    indices.append(objectIndex);
+  return indices;
+}
+
+QVariantList EditorViewModel::meshBatchSourceObjectIndices() const
+{
+  QVariantList indices;
+  indices.reserve(m_cachedMeshBatchSourceObjectIndices.size());
+  for (int objectIndex : m_cachedMeshBatchSourceObjectIndices)
     indices.append(objectIndex);
   return indices;
 }
@@ -1645,6 +1656,11 @@ int EditorViewModel::selectedObjectIndex() const
       return i;
   }
   return -1;
+}
+
+int EditorViewModel::selectedSourceObjectIndex() const
+{
+  return m_primarySelectedSourceIndex;
 }
 
 int EditorViewModel::selectedObjectCount() const { return m_selectedSourceIndices.size(); }
@@ -3650,6 +3666,7 @@ bool EditorViewModel::loadFile(const QString &filePath)
     m_selectedVolumeIndex = -1;
     m_fitHint = QVector4D();
     m_cachedMeshData.clear();
+    m_cachedMeshBatchSourceObjectIndices.clear();
   }
   else
   {
@@ -3682,6 +3699,7 @@ void EditorViewModel::clearWorkspace()
   m_sliceAllQueue.clear();
   m_fitHint = QVector4D();
   m_cachedMeshData.clear();
+  m_cachedMeshBatchSourceObjectIndices.clear();
   m_sliceAllQueue.clear();
   statusText_ = QStringLiteral("已新建项目");
   emit stateChanged();
@@ -3696,6 +3714,7 @@ void EditorViewModel::refreshAfterLoad()
   m_selectedVolumeIndex = -1;
   m_fitHint = QVector4D();
   m_cachedMeshData.clear();
+  m_cachedMeshBatchSourceObjectIndices.clear();
   m_slicedPlateIndices.clear();
   rebuildObjectEntriesFromService();
   statusText_ = QStringLiteral("项目已加载");

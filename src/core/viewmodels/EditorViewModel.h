@@ -24,6 +24,7 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(int plateCount READ plateCount NOTIFY stateChanged)
   Q_PROPERTY(int currentPlateIndex READ currentPlateIndex NOTIFY stateChanged)
   Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices NOTIFY stateChanged)
   Q_PROPERTY(QString statusText READ statusText NOTIFY stateChanged)
   Q_PROPERTY(int loadProgress READ loadProgress NOTIFY stateChanged)
   Q_PROPERTY(bool loading READ loading NOTIFY stateChanged)
@@ -40,6 +41,7 @@ class EditorViewModel final : public QObject
   // Object-list panel support
   Q_PROPERTY(int objectCount READ objectCount NOTIFY stateChanged)
   Q_PROPERTY(int selectedObjectIndex READ selectedObjectIndex NOTIFY stateChanged)
+  Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex NOTIFY stateChanged)
   Q_PROPERTY(int selectedObjectCount READ selectedObjectCount NOTIFY stateChanged)
   /// 模型网格数据（TLV 格式，用于 GLViewport 渲染）
   Q_PROPERTY(QByteArray meshData READ meshData NOTIFY stateChanged)
@@ -82,6 +84,7 @@ public:
   int plateCount() const;
   int currentPlateIndex() const;
   QVariantList activePlateObjectIndices() const;
+  QVariantList meshBatchSourceObjectIndices() const;
   QString statusText() const;
   int loadProgress() const;
   bool loading() const;
@@ -286,6 +289,7 @@ public:
   // Object list accessors (safe Q_INVOKABLE — no QVariantList)
   int objectCount() const;
   int selectedObjectIndex() const;
+  int selectedSourceObjectIndex() const;
   int selectedObjectCount() const;
   Q_INVOKABLE QString objectName(int i) const;
   Q_INVOKABLE QString objectModuleName(int i) const;
@@ -724,6 +728,7 @@ private:
   // Measure selection (对齐上游 GLGizmoMeasure)
   int m_measureSelectionMode = 0; ///< 0=Default point, 1=Feature selection
   QByteArray m_cachedMeshData;
+  QList<int> m_cachedMeshBatchSourceObjectIndices;
   QList<int> m_sliceAllQueue; ///< plate indices queued for Slice All
   bool m_slicingAll = false;
   QSet<int> m_slicedPlateIndices; ///< tracks which plates have valid slice results

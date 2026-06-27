@@ -224,6 +224,7 @@ public:
    * 坐标系转换：libslic3r Z-up → GL Y-up：GL(x,z,y)
    */
   QByteArray meshData() const;
+  QList<int> meshBatchSourceObjectIndices() const;
 
   /// 复制指定对象（对齐上游 Plater::clone_selection 行为）
   /// 返回新对象的索引，失败返回 -1

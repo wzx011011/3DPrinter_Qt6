@@ -227,6 +227,22 @@ void GLViewport::setActivePlateObjectIndices(const QVariantList &v)
   update();
 }
 
+void GLViewport::setMeshBatchSourceObjectIndices(const QVariantList &v)
+{
+  if (m_meshBatchSourceObjectIndices == v)
+    return;
+  m_meshBatchSourceObjectIndices = v;
+  update();
+}
+
+void GLViewport::setSelectedSourceObjectIndex(int v)
+{
+  if (m_selectedSourceObjectIndex == v)
+    return;
+  m_selectedSourceObjectIndex = v;
+  update();
+}
+
 void GLViewport::setShowWipeTower(bool on)
 {
   if (m_showWipeTower == on)

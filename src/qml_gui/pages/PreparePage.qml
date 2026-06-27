@@ -1607,6 +1607,8 @@ Item {
                     currentPlateIndex: root.editorVm ? root.editorVm.currentPlateIndex : 0
                     plateCount: root.editorVm ? root.editorVm.plateCount : 0
                     activePlateObjectIndices: root.editorVm ? root.editorVm.activePlateObjectIndices : []
+                    meshBatchSourceObjectIndices: root.editorVm ? root.editorVm.meshBatchSourceObjectIndices : []
+                    selectedSourceObjectIndex: root.editorVm ? root.editorVm.selectedSourceObjectIndex : -1
                     cutAxis: root.editorVm ? root.editorVm.cutAxis : 2
                     cutPosition: root.editorVm ? root.editorVm.cutPosition : 0.0
 

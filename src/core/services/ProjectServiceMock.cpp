@@ -309,6 +309,70 @@ ProjectServiceMock::ProjectServiceMock(QObject *parent)
 #endif
 }
 
+QList<int> ProjectServiceMock::meshBatchSourceObjectIndices() const
+{
+#ifdef HAS_LIBSLIC3R
+  QList<int> indices;
+  if (!model_ || model_->objects.empty())
+    return indices;
+
+  auto hasRenderableTriangles = [](const Slic3r::ModelObject *obj) -> bool
+  {
+    if (!obj)
+      return false;
+
+    for (const auto *vol : obj->volumes)
+    {
+      if (!vol)
+        continue;
+      const auto &its = vol->mesh().its;
+      const int vcount = int(its.vertices.size());
+      if (vcount <= 0 || its.indices.empty())
+        continue;
+
+      for (const auto &face : its.indices)
+      {
+        const int idx0 = face(0);
+        const int idx1 = face(1);
+        const int idx2 = face(2);
+        if (idx0 >= 0 && idx0 < vcount
+            && idx1 >= 0 && idx1 < vcount
+            && idx2 >= 0 && idx2 < vcount)
+          return true;
+      }
+    }
+    return false;
+  };
+
+  for (int objectIndex = 0; objectIndex < int(model_->objects.size()); ++objectIndex)
+  {
+    const Slic3r::ModelObject *obj = model_->objects[objectIndex];
+    if (!obj)
+      continue;
+
+    if (!hasRenderableTriangles(obj))
+      continue;
+
+    if (!obj->instances.empty())
+    {
+      for (const auto *inst : obj->instances)
+      {
+        if (inst)
+          indices.append(objectIndex);
+      }
+    }
+    else
+    {
+      indices.append(objectIndex);
+    }
+  }
+
+  return indices;
+#else
+  return {};
+#endif
+}
+
 ProjectServiceMock::~ProjectServiceMock()
 {
 #ifdef HAS_LIBSLIC3R

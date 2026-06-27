@@ -38,6 +38,8 @@ class GLViewport : public QQuickFramebufferObject
   Q_PROPERTY(int currentPlateIndex READ currentPlateIndex WRITE setCurrentPlateIndex)
   Q_PROPERTY(int plateCount READ plateCount WRITE setPlateCount)
   Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices WRITE setActivePlateObjectIndices)
+  Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices WRITE setMeshBatchSourceObjectIndices)
+  Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex WRITE setSelectedSourceObjectIndex)
   /// Wipe tower visualization (P2.8.3)
   Q_PROPERTY(bool showWipeTower READ showWipeTower WRITE setShowWipeTower)
   Q_PROPERTY(float wipeTowerWidth READ wipeTowerWidth WRITE setWipeTowerWidth)
@@ -161,6 +163,8 @@ public:
   int currentPlateIndex() const { return m_currentPlateIndex; }
   int plateCount() const { return m_plateCount; }
   QVariantList activePlateObjectIndices() const { return m_activePlateObjectIndices; }
+  QVariantList meshBatchSourceObjectIndices() const { return m_meshBatchSourceObjectIndices; }
+  int selectedSourceObjectIndex() const { return m_selectedSourceObjectIndex; }
   bool showWipeTower() const { return m_showWipeTower; }
   float wipeTowerWidth() const { return m_wipeTowerWidth; }
   float wipeTowerDepth() const { return m_wipeTowerDepth; }
@@ -185,6 +189,8 @@ public:
   void setCurrentPlateIndex(int v);
   void setPlateCount(int v);
   void setActivePlateObjectIndices(const QVariantList &v);
+  void setMeshBatchSourceObjectIndices(const QVariantList &v);
+  void setSelectedSourceObjectIndex(int v);
   void setShowWipeTower(bool on);
   void setWipeTowerWidth(float v);
   void setWipeTowerDepth(float v);
@@ -295,6 +301,8 @@ private:
   int m_currentPlateIndex = 0;
   int m_plateCount = 1;
   QVariantList m_activePlateObjectIndices;
+  QVariantList m_meshBatchSourceObjectIndices;
+  int m_selectedSourceObjectIndex = -1;
   bool m_showWipeTower = false;   ///< Wipe tower visibility (P2.8.3)
   float m_wipeTowerWidth = 10.f;  ///< Wipe tower width in mm (default 10)
   float m_wipeTowerDepth = 10.f;  ///< Wipe tower depth in mm (default 10)

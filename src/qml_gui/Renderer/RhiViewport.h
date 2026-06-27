@@ -27,6 +27,8 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(int currentPlateIndex READ currentPlateIndex WRITE setCurrentPlateIndex)
   Q_PROPERTY(int plateCount READ plateCount WRITE setPlateCount)
   Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices WRITE setActivePlateObjectIndices)
+  Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices WRITE setMeshBatchSourceObjectIndices)
+  Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex WRITE setSelectedSourceObjectIndex)
   Q_PROPERTY(bool showWipeTower READ showWipeTower WRITE setShowWipeTower)
   Q_PROPERTY(float wipeTowerWidth READ wipeTowerWidth WRITE setWipeTowerWidth)
   Q_PROPERTY(float wipeTowerDepth READ wipeTowerDepth WRITE setWipeTowerDepth)
@@ -127,6 +129,10 @@ public:
   void setPlateCount(int value);
   QVariantList activePlateObjectIndices() const { return m_activePlateObjectIndices; }
   void setActivePlateObjectIndices(const QVariantList &value);
+  QVariantList meshBatchSourceObjectIndices() const { return m_meshBatchSourceObjectIndices; }
+  void setMeshBatchSourceObjectIndices(const QVariantList &value);
+  int selectedSourceObjectIndex() const { return m_selectedSourceObjectIndex; }
+  void setSelectedSourceObjectIndex(int value);
   bool showWipeTower() const { return m_showWipeTower; }
   void setShowWipeTower(bool value);
   float wipeTowerWidth() const { return m_wipeTowerWidth; }
@@ -201,6 +207,8 @@ private:
   int m_currentPlateIndex = 0;
   int m_plateCount = 1;
   QVariantList m_activePlateObjectIndices;
+  QVariantList m_meshBatchSourceObjectIndices;
+  int m_selectedSourceObjectIndex = -1;
   bool m_showWipeTower = false;
   float m_wipeTowerWidth = 10.f;
   float m_wipeTowerDepth = 10.f;
