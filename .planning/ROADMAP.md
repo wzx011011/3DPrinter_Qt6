@@ -45,8 +45,8 @@
 
 **Requirements:** RHI-04, PREP-01, PREP-05
 
-**Plans:** 0/4 plans complete
-- `24-01-PLAN.md` - Prepare scene data contract and dirty flags
+**Plans:** 1/4 plans complete
+- [x] `24-01-PLAN.md` - Prepare scene data contract and dirty flags
 - `24-02-PLAN.md` - Prepare bed and plate context binding
 - `24-03-PLAN.md` - QRhi bed grid and plate rendering
 - `24-04-PLAN.md` - verification traceability and handoff

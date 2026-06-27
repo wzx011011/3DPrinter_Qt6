@@ -70,20 +70,42 @@ if (-not $configureSucceeded) { exit $lastConfigureExitCode }
 # Reduce MSVC memory pressure in large TUs/autogen files
 $env:CL = "/Zm300 /bigobj $env:CL"
 
-ninja -j16 OWzxSlicer.exe
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+function Invoke-NinjaTarget([string]$Target, [bool]$Required = $true) {
+  $knownTargets = ninja -t targets all 2>$null
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  $targetPrefix = $Target + ':'
+  $targetExists = $false
+  foreach ($knownTarget in $knownTargets) {
+    if ($knownTarget.StartsWith($targetPrefix)) {
+      $targetExists = $true
+      break
+    }
+  }
+  if (-not $targetExists) {
+    if ($Required) {
+      Write-Host ("[Build] Required target not found: " + $Target) -ForegroundColor Red
+      exit 1
+    }
+    Write-Host ("[Build] Optional target not found, skipping: " + $Target) -ForegroundColor DarkGray
+    return
+  }
+
+  ninja -j16 $Target
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
+Invoke-NinjaTarget 'OWzxSlicer.exe'
 
 # Build test targets (if BUILD_TESTING is ON)
-ninja -j16 E2EWorkflowTests 2>$null
-ninja -j16 ViewModelSmokeTests 2>$null
-ninja -j16 QmlUiAuditTests 2>$null
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-ninja -j16 owzx-cli 2>$null
-ninja -j16 CliTests 2>$null
-ninja -j16 test-slice-direct 2>$null
+Invoke-NinjaTarget 'E2EWorkflowTests'
+Invoke-NinjaTarget 'ViewModelSmokeTests'
+Invoke-NinjaTarget 'PrepareSceneDataTests'
+Invoke-NinjaTarget 'QmlUiAuditTests'
+Invoke-NinjaTarget 'owzx-cli'
+Invoke-NinjaTarget 'CliTests'
+Invoke-NinjaTarget 'test-slice-direct' $false
 if ($renderBenchEnabled) {
-  ninja -j16 owzx-render-bench
-  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  Invoke-NinjaTarget 'owzx-render-bench'
 }
 
 # Deploy Qt runtime DLLs if not already present
@@ -133,6 +155,20 @@ if ($renderBenchEnabled) {
 }
 
 # Run static UI audit tests before launching the app.
+Write-Host "`n[PrepareScene] Running Prepare scene data tests..." -ForegroundColor Cyan
+$prepareSceneDataExe = './PrepareSceneDataTests.exe'
+if (Test-Path $prepareSceneDataExe) {
+  & $prepareSceneDataExe 2>&1 | ForEach-Object { Write-Host "  $_" }
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "[PrepareScene] Prepare scene data tests failed" -ForegroundColor Red
+    exit $LASTEXITCODE
+  }
+  Write-Host "[PrepareScene] Prepare scene data tests passed" -ForegroundColor Green
+} else {
+  Write-Host "[PrepareScene] PrepareSceneDataTests.exe not found" -ForegroundColor Red
+  exit 1
+}
+
 Write-Host "`n[UI] Running QML UI audit tests..." -ForegroundColor Cyan
 $uiAuditExe = './QmlUiAuditTests.exe'
 if (Test-Path $uiAuditExe) {

@@ -38,9 +38,9 @@ created: 2026-06-27
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 24-01-T1 | 01 | 1 | RHI-04, PREP-01 | T-24-01 | Invalid bed dimensions do not generate unbounded buffers | unit | `build/PrepareSceneDataTests.exe` | new | pending |
-| 24-01-T2 | 01 | 1 | RHI-04, PREP-05 | T-24-02 | Out-of-range active plate becomes empty context | unit | `build/PrepareSceneDataTests.exe` | new | pending |
-| 24-01-T3 | 01 | 1 | PREP-01 | N/A | Generated bed geometry has deterministic counts | unit/static | `build/PrepareSceneDataTests.exe` | new | pending |
+| 24-01-T1 | 01 | 1 | RHI-04, PREP-01 | T-24-01 | Invalid bed dimensions do not generate unbounded buffers | unit | `build/PrepareSceneDataTests.exe` | new | green |
+| 24-01-T2 | 01 | 1 | RHI-04, PREP-05 | T-24-02 | Out-of-range active plate becomes empty context | unit | `build/PrepareSceneDataTests.exe` | new | green |
+| 24-01-T3 | 01 | 1 | PREP-01 | N/A | Generated bed geometry has deterministic counts | unit/static | `build/PrepareSceneDataTests.exe` | new | green |
 | 24-02-T1 | 02 | 2 | PREP-05 | T-24-02 | Active plate object indices come from C++ service truth | unit | `build/ViewModelSmokeTests.exe` | partial | pending |
 | 24-02-T2 | 02 | 2 | PREP-01, PREP-05 | N/A | QML binds viewmodel state only; no filtering logic | static | `build/QmlUiAuditTests.exe` | partial | pending |
 | 24-02-T3 | 02 | 2 | RHI-04 | N/A | RhiViewport mirrors state and marks updates only through setters | static/unit | `build/QmlUiAuditTests.exe` | partial | pending |
@@ -56,7 +56,7 @@ created: 2026-06-27
 
 ## Wave 0 Requirements
 
-- [ ] Add `PrepareSceneDataTests.cpp` and test target before implementing scene data.
+- [x] Add `PrepareSceneDataTests.cpp` and test target before implementing scene data.
 - [ ] Add QML/static audit checks before wiring Prepare bindings.
 - [ ] Preserve Phase 23 default SoftwareViewport startup checks.
 

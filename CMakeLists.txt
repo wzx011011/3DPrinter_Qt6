@@ -143,6 +143,8 @@ if(OWZX_QML_GUI)
         src/qml_gui/Renderer/RhiViewport.h
         src/qml_gui/Renderer/RhiViewportRenderer.cpp
         src/qml_gui/Renderer/RhiViewportRenderer.h
+        src/qml_gui/Renderer/PrepareSceneData.cpp
+        src/qml_gui/Renderer/PrepareSceneData.h
         src/qml_gui/Renderer/GCodeRenderer.cpp
         src/qml_gui/Renderer/GCodeRenderer.h
     )
@@ -355,6 +357,18 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     )
     add_test(NAME QmlUiAuditTests COMMAND QmlUiAuditTests)
     set_tests_properties(QmlUiAuditTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
+    qt_add_executable(PrepareSceneDataTests
+        tests/PrepareSceneDataTests.cpp
+        src/qml_gui/Renderer/PrepareSceneData.cpp
+        src/qml_gui/Renderer/PrepareSceneData.h
+    )
+    target_include_directories(PrepareSceneDataTests PRIVATE src)
+    target_link_libraries(PrepareSceneDataTests PRIVATE Qt6::Test Qt6::Core)
+    add_test(NAME PrepareSceneDataTests COMMAND PrepareSceneDataTests)
+    set_tests_properties(PrepareSceneDataTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
