@@ -7,8 +7,8 @@
 
 ### RHI Infrastructure
 
-- [ ] **RHI-01**: User can start OWzx with the existing stable viewport path unchanged by default while the new QRhi renderer is gated behind an explicit build/runtime switch.
-- [ ] **RHI-02**: User can enable the QRhi renderer on Windows and get D3D12 as the first attempted backend with D3D11 fallback when D3D12 is unavailable.
+- [x] **RHI-01**: User can start OWzx with the existing stable viewport path unchanged by default while the new QRhi renderer is gated behind an explicit build/runtime switch.
+- [x] **RHI-02**: User can enable the QRhi renderer on Windows and get D3D12 as the first attempted backend with D3D11 fallback when D3D12 is unavailable.
 - [ ] **RHI-03**: Developer can build QRhi renderer shaders through Qt Shader Tools as `.qsb` resources using the canonical `build/` directory and canonical verification script.
 - [ ] **RHI-04**: Renderer can keep Prepare mesh data and Preview G-code segment data in GPU-resident buffers and update only dirty ranges.
 - [ ] **RHI-05**: QML can host the QRhi viewport and overlays without moving rendering business logic or source-truth behavior into QML scripts.
@@ -40,7 +40,7 @@
 - [ ] **PERF-02**: QRhi Prepare and Preview paths avoid per-frame full geometry upload for steady camera movement and layer scrubbing.
 - [ ] **PERF-03**: Canonical verification still passes with QRhi code present, and the optional benchmark can be enabled without changing the default app startup path.
 - [ ] **PERF-04**: UI audit or smoke coverage guards that the stable fallback path remains available and that QRhi remains explicitly gated until promoted.
-- [ ] **PERF-05**: Vulkan is documented as non-blocking for v3.1 because the installed Qt 6.10 SDK has QtGui Vulkan disabled; Vulkan may only be reconsidered after a Vulkan-enabled Qt SDK benchmark.
+- [x] **PERF-05**: Vulkan is documented as non-blocking for v3.1 because the installed Qt 6.10 SDK has QtGui Vulkan disabled; Vulkan may only be reconsidered after a Vulkan-enabled Qt SDK benchmark.
 - [ ] **PERF-06**: Code review and UI review findings for the QRhi renderer are fixed or explicitly deferred before the milestone is considered complete.
 
 ## Future Requirements
@@ -76,8 +76,8 @@ Explicitly excluded from v3.1.
 
 | Requirement | Phase | Status |
 |---|---:|---|
-| RHI-01 | Phase 23 | Pending |
-| RHI-02 | Phase 23 | Pending |
+| RHI-01 | Phase 23 | Complete |
+| RHI-02 | Phase 23 | Complete |
 | RHI-03 | Phase 23 | Pending |
 | RHI-04 | Phase 24 | Pending |
 | RHI-05 | Phase 23 | Pending |
@@ -100,7 +100,7 @@ Explicitly excluded from v3.1.
 | PERF-02 | Phase 27 | Pending |
 | PERF-03 | Phase 28 | Pending |
 | PERF-04 | Phase 28 | Pending |
-| PERF-05 | Phase 23 | Pending |
+| PERF-05 | Phase 23 | Complete |
 | PERF-06 | Phase 28 | Pending |
 
 **Coverage:**

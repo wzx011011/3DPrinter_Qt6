@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: QRhi High-Performance Prepare/Preview Rendering
 status: executing
-last_updated: "2026-06-27T00:39:14.452Z"
-last_activity: 2026-06-27 -- Phase 23 planning complete
+last_updated: "2026-06-27T01:16:06.716Z"
+last_activity: 2026-06-27
 progress:
   total_phases: 6
   completed_phases: 0
@@ -16,22 +16,22 @@ progress:
 # Project State
 
 **Milestone:** v3.1 - QRhi High-Performance Prepare/Preview Rendering
-**Status:** Ready to execute
+**Status:** Executing Phase 23
 **Next step:** `$gsd-execute-phase 23`
 
 ## Current Position
 
-Phase: 23 (next) - QRhi Renderer Foundation And Backend Gate
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-27 -- Phase 23 planning complete
+Phase: 23 (QRhi Renderer Foundation And Backend Gate) — EXECUTING
+Plan: 2 of 3
+Status: Executing Plan 2 of 3
+Last activity: 2026-06-27
 
 ## Project Reference
 
 See: `.planning/PROJECT.md` (updated 2026-06-27)
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
-**Current focus:** v3.1 QRhi high-performance Prepare/Preview rendering using D3D12-first/D3D11 fallback, with stable default fallback preserved.
+**Current focus:** Phase 23 — QRhi Renderer Foundation And Backend Gate
 
 ## Active Milestone Summary
 
