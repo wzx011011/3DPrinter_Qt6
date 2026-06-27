@@ -39,9 +39,17 @@
 
 ### Phase 24: Prepare Scene Data And Plate Rendering
 
+- [ ] Phase 24: Prepare Scene Data And Plate Rendering (planned 2026-06-27)
+
 **Goal:** Build the GPU scene/cache layer and render active bed/plate state through QRhi, including plate switching and dirty-range data updates.
 
 **Requirements:** RHI-04, PREP-01, PREP-05
+
+**Plans:** 0/4 plans complete
+- `24-01-PLAN.md` - Prepare scene data contract and dirty flags
+- `24-02-PLAN.md` - Prepare bed and plate context binding
+- `24-03-PLAN.md` - QRhi bed grid and plate rendering
+- `24-04-PLAN.md` - verification traceability and handoff
 
 **Success criteria:**
 1. Active bed/plate dimensions, grid, origin cues, and selected plate context render through QRhi.
@@ -157,4 +165,4 @@ $gsd-discuss-phase 24
 ```
 
 ---
-*Last updated: 2026-06-27 after Phase 23 completion.*
+*Last updated: 2026-06-27 after Phase 24 planning.*
