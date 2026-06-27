@@ -91,6 +91,8 @@ int main(int argc, char *argv[])
   } else if (rhiSelection.canUseRhi) {
     QQuickWindow::setGraphicsApi(rhiSelection.selectedGraphicsApi);
   } else {
+    if (rhiSelection.enabled)
+      appendStartupLog(QStringLiteral("QRhi requested but unavailable; falling back to software viewport"));
     qputenv("QT_QUICK_BACKEND", "software");
   }
 
