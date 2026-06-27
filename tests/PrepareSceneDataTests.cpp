@@ -55,6 +55,7 @@ private slots:
   void modelBatchesParsePackedMeshWithSourceIndices();
   void modelBatchesRejectMalformedPayloads();
   void activePlateFilteringKeepsOnlyCurrentPlateSources();
+  void emptyActivePlateDoesNotFallbackToAllModelBatches();
   void selectionAndHoverDoNotDirtyModelGeometry();
 };
 
@@ -226,6 +227,25 @@ void PrepareSceneDataTests::activePlateFilteringKeepsOnlyCurrentPlateSources()
   QVERIFY(scene.hasModelBounds());
   QCOMPARE(scene.modelBounds().minX, 5.0f);
   QCOMPARE(scene.modelBounds().maxX, 6.0f);
+}
+
+void PrepareSceneDataTests::emptyActivePlateDoesNotFallbackToAllModelBatches()
+{
+  PrepareSceneData scene;
+  scene.clearDirtyFlags();
+
+  const QByteArray mesh = packedMeshWithBatches(
+      QList<int>{10, 20},
+      QList<QList<float>>{
+          QList<float>{0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f},
+          QList<float>{5.0f, 0.0f, 0.0f, 6.0f, 0.0f, 0.0f, 5.0f, 1.0f, 0.0f}});
+
+  scene.setModelMeshData(mesh, QList<int>{0, 1}, QList<int>{});
+
+  QVERIFY(scene.modelVertices().isEmpty());
+  QVERIFY(scene.modelBatches().isEmpty());
+  QVERIFY(!scene.hasModelBounds());
+  QVERIFY((scene.peekDirtyFlags() & PrepareSceneData::DirtyMesh) != 0);
 }
 
 void PrepareSceneDataTests::selectionAndHoverDoNotDirtyModelGeometry()
