@@ -15,6 +15,7 @@ private slots:
   void sidebarCopyIsLocalizedAndOperationalTextIsReadable();
   void mainRegistersSoftwareViewportByDefault();
   void mainRegistersRhiViewportOnlyBehindExplicitGate();
+  void renderBenchmarkMatchesRhiBackendPolicy();
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
   void plateContextMenuItemsWiredAndNonEmpty();
@@ -179,6 +180,43 @@ void QmlUiAuditTests::mainRegistersRhiViewportOnlyBehindExplicitGate()
            "RhiViewportRenderer must load app .qsb shader resources");
   QVERIFY2(cmake.contains(QStringLiteral("qt_add_shaders(OWzxSlicer \"rhi_viewport_shaders\"")),
            "OWzxSlicer must compile RhiViewport shaders through qt_add_shaders");
+}
+
+void QmlUiAuditTests::renderBenchmarkMatchesRhiBackendPolicy()
+{
+  const QString benchmark = readSource(QStringLiteral("tools/render_bench/main.cpp"));
+  const QString verifyScript = readSource(QStringLiteral("scripts/auto_verify_with_vcvars.ps1"));
+  const QString cmake = readSource(QStringLiteral("CMakeLists.txt"));
+  QVERIFY2(!benchmark.isEmpty(), "Unable to read render_bench/main.cpp");
+  QVERIFY2(!verifyScript.isEmpty(), "Unable to read auto_verify_with_vcvars.ps1");
+  QVERIFY2(!cmake.isEmpty(), "Unable to read CMakeLists.txt");
+
+  QVERIFY2(benchmark.contains(QStringLiteral("selectedBackend")),
+           "Render benchmark JSON must use the same selectedBackend diagnostic name as app QRhi selection");
+  QVERIFY2(benchmark.contains(QStringLiteral("attemptedBackends")),
+           "Render benchmark JSON must report attemptedBackends for fallback traceability");
+  QVERIFY2(benchmark.contains(QStringLiteral("fallbackFailures")),
+           "Render benchmark JSON must preserve fallback failure diagnostics");
+  QVERIFY2(benchmark.contains(QStringLiteral("QStringLiteral(\"d3d12\"), QRhi::D3D12"))
+               && benchmark.contains(QStringLiteral("QStringLiteral(\"d3d11\"), QRhi::D3D11")),
+           "Render benchmark auto policy must include D3D12 and D3D11");
+  QVERIFY2(benchmark.contains(QStringLiteral("stableAuto"))
+               && !benchmark.mid(benchmark.indexOf(QStringLiteral("stableAuto")),
+                                  benchmark.indexOf(QStringLiteral("if (requested == QLatin1String(\"auto\""))
+                                      - benchmark.indexOf(QStringLiteral("stableAuto")))
+                       .contains(QStringLiteral("vulkan")),
+           "Render benchmark auto policy must not include Vulkan");
+  QVERIFY2(benchmark.contains(QStringLiteral("QtGui was built without public Vulkan support")),
+           "Render benchmark all-mode must report Vulkan disabled status when QtGui lacks Vulkan");
+  QVERIFY2(verifyScript.contains(QStringLiteral("OWZX_RENDER_BENCH"))
+               && verifyScript.contains(QStringLiteral("-DOWZX_RENDER_BENCH=$(if ($renderBenchEnabled) { 'ON' } else { 'OFF' })")),
+           "Canonical verification must keep render benchmark optional behind OWZX_RENDER_BENCH");
+  QVERIFY2(!verifyScript.contains(QStringLiteral("$env:OWZX_RHI_RENDERER")),
+           "Canonical verification must not enable the app QRhi viewport while running benchmark checks");
+  QVERIFY2(cmake.contains(QStringLiteral("option(OWZX_RENDER_BENCH"))
+               && cmake.contains(QStringLiteral("qt_add_executable(owzx-render-bench"))
+               && cmake.contains(QStringLiteral("qt_add_shaders(owzx-render-bench \"render_bench_shaders\"")),
+           "Render benchmark target and shaders must remain build-gated in CMake");
 }
 
 void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()

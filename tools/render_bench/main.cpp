@@ -357,13 +357,16 @@ int main(int argc, char **argv)
   const Options options = parseOptions(app.arguments());
   const bool collectAll = options.backend == QLatin1String("all")
       || options.backend == QLatin1String("compare");
+  const QVector<BackendCandidate> candidates = backendCandidates(options.backend);
 
   const QVector<RenderBenchVertex> vertices = generateSegments(options.segments);
   QJsonObject result;
   QJsonObject failures;
   QJsonArray results;
+  QJsonArray attemptedBackends;
 
-  for (const auto &candidate : backendCandidates(options.backend)) {
+  for (const auto &candidate : candidates) {
+    attemptedBackends.append(candidate.name);
     QString error;
     std::unique_ptr<RhiOwner> owner = createRhi(candidate, &error);
     if (!owner) {
@@ -379,6 +382,8 @@ int main(int argc, char **argv)
 
     result = statsToJson(stats, options, candidate.name);
     result.insert(QStringLiteral("requestedBackend"), options.backend);
+    result.insert(QStringLiteral("selectedBackend"), candidate.name);
+    result.insert(QStringLiteral("attemptedBackends"), attemptedBackends);
     if (collectAll) {
       results.append(result);
       continue;
@@ -392,6 +397,7 @@ int main(int argc, char **argv)
   if (collectAll) {
     result = {};
     result.insert(QStringLiteral("requestedBackend"), options.backend);
+    result.insert(QStringLiteral("attemptedBackends"), attemptedBackends);
     result.insert(QStringLiteral("segments"), options.segments);
     result.insert(QStringLiteral("frames"), options.frames);
     result.insert(QStringLiteral("results"), results);
@@ -403,6 +409,7 @@ int main(int argc, char **argv)
 
   result.insert(QStringLiteral("error"), QStringLiteral("no QRhi backend initialized"));
   result.insert(QStringLiteral("requestedBackend"), options.backend);
+  result.insert(QStringLiteral("attemptedBackends"), attemptedBackends);
   result.insert(QStringLiteral("failures"), failures);
   result.insert(QStringLiteral("segments"), options.segments);
   result.insert(QStringLiteral("frames"), options.frames);
