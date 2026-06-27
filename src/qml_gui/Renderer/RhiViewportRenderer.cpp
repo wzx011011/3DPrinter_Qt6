@@ -153,9 +153,10 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     }
   }
 
-  // ── Phase 26: Preview segment rendering (CanvasPreview branch) ──
+  // ── Phase 26/27: Preview segment rendering + timing (CanvasPreview branch) ──
   if (m_canvasType == RhiViewport::CanvasPreview && ensurePipelines()
       && m_previewSegmentBuffer && m_previewSegmentVertexCount > 0) {
+    m_previewFrameTimer.start();
     // Upload camera uniform for Preview (same uniform as Prepare).
     QRhiResourceUpdateBatch *camUpdates = rhi()->nextResourceUpdateBatch();
     if (uploadCameraUniform(camUpdates, PrepareSceneData::DirtyCamera)) {
@@ -176,6 +177,16 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->setVertexInput(0, 1, &segBinding);
       cb->draw(drawVertexCount, 1, firstVertex);
     }
+
+    // Phase 27 (PERF-01): capture Preview frame timing.
+    m_previewLastFrameMs = m_previewFrameTimer.elapsed();
+    if (!m_previewFirstFrameDone) {
+      m_previewFirstFrameMs = m_previewLastFrameMs;
+      m_previewFirstFrameDone = true;
+    }
+    qInfo("[RHI-PERF] preview frame=%lldms first=%lldms upload=%lldms segments=%u",
+          m_previewLastFrameMs, m_previewFirstFrameMs,
+          m_previewLastUploadMs, m_previewSegmentVertexCount / 2);
   }
 
   cb->endPass();
@@ -627,6 +638,8 @@ bool RhiViewportRenderer::uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *up
 
   updates->uploadStaticBuffer(m_previewSegmentBuffer.get(), 0, byteSize,
                               m_previewVertices.constData());
+  // Phase 27 (PERF-01): capture upload timing.
+  m_previewLastUploadMs = 0; // uploadStaticBuffer is deferred; actual timing measured at frame level
   return true;
 }
 

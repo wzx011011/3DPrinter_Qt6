@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QColor>
+#include <QElapsedTimer>
 #include <QMatrix4x4>
 #include <QQuickRhiItem>
 #include <QVector>
@@ -110,4 +111,11 @@ private:
   quint32 m_previewSegmentBufferBytes = 0;
   quint32 m_previewSegmentVertexCount = 0;
   bool m_previewSegmentBufferUploaded = false;
+
+  // ── Phase 27: Preview performance instrumentation (PERF-01) ──
+  QElapsedTimer m_previewFrameTimer;
+  qint64 m_previewLastUploadMs = -1;
+  qint64 m_previewLastFrameMs = -1;
+  qint64 m_previewFirstFrameMs = -1;
+  bool m_previewFirstFrameDone = false;
 };
