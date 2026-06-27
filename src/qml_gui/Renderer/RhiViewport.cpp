@@ -5,6 +5,8 @@
 #include <QByteArray>
 #include <QColor>
 #include <QImage>
+#include <QMouseEvent>
+#include <QWheelEvent>
 #include <QtGlobal>
 
 RhiViewport::RhiViewport(QQuickItem *parent)
@@ -34,6 +36,8 @@ void RhiViewport::setMeshData(const QByteArray &data)
   if (m_meshData == data)
     return;
   m_meshData = data;
+  ++m_sceneGeneration;
+  ++m_modelGeneration;
   update();
 }
 
@@ -82,6 +86,7 @@ void RhiViewport::setShowBed(bool value)
   if (m_showBed == value)
     return;
   m_showBed = value;
+  ++m_sceneGeneration;
   update();
 }
 
@@ -90,6 +95,7 @@ void RhiViewport::setBedWidth(float value)
   if (qFuzzyCompare(m_bedWidth, value))
     return;
   m_bedWidth = value;
+  ++m_sceneGeneration;
   update();
 }
 
@@ -98,6 +104,7 @@ void RhiViewport::setBedDepth(float value)
   if (qFuzzyCompare(m_bedDepth, value))
     return;
   m_bedDepth = value;
+  ++m_sceneGeneration;
   update();
 }
 
@@ -106,6 +113,7 @@ void RhiViewport::setBedOriginX(float value)
   if (qFuzzyCompare(m_bedOriginX, value))
     return;
   m_bedOriginX = value;
+  ++m_sceneGeneration;
   update();
 }
 
@@ -114,6 +122,7 @@ void RhiViewport::setBedOriginY(float value)
   if (qFuzzyCompare(m_bedOriginY, value))
     return;
   m_bedOriginY = value;
+  ++m_sceneGeneration;
   update();
 }
 
@@ -122,6 +131,7 @@ void RhiViewport::setBedShapeType(int value)
   if (m_bedShapeType == value)
     return;
   m_bedShapeType = value;
+  ++m_sceneGeneration;
   update();
 }
 
@@ -130,6 +140,7 @@ void RhiViewport::setBedDiameter(float value)
   if (qFuzzyCompare(m_bedDiameter, value))
     return;
   m_bedDiameter = value;
+  ++m_sceneGeneration;
   update();
 }
 
@@ -138,6 +149,8 @@ void RhiViewport::setCurrentPlateIndex(int value)
   if (m_currentPlateIndex == value)
     return;
   m_currentPlateIndex = value;
+  ++m_sceneGeneration;
+  ++m_modelGeneration;
   update();
 }
 
@@ -146,6 +159,8 @@ void RhiViewport::setPlateCount(int value)
   if (m_plateCount == value)
     return;
   m_plateCount = value;
+  ++m_sceneGeneration;
+  ++m_modelGeneration;
   update();
 }
 
@@ -154,6 +169,8 @@ void RhiViewport::setActivePlateObjectIndices(const QVariantList &value)
   if (m_activePlateObjectIndices == value)
     return;
   m_activePlateObjectIndices = value;
+  ++m_sceneGeneration;
+  ++m_modelGeneration;
   update();
 }
 
@@ -162,6 +179,8 @@ void RhiViewport::setMeshBatchSourceObjectIndices(const QVariantList &value)
   if (m_meshBatchSourceObjectIndices == value)
     return;
   m_meshBatchSourceObjectIndices = value;
+  ++m_sceneGeneration;
+  ++m_modelGeneration;
   update();
 }
 
@@ -298,10 +317,8 @@ void RhiViewport::setCutPosition(float value)
 
 void RhiViewport::requestFitView(float cx, float cy, float cz, float r)
 {
-  Q_UNUSED(cx);
-  Q_UNUSED(cy);
-  Q_UNUSED(cz);
-  Q_UNUSED(r);
+  m_camera.fitView(cx, cy, cz, r);
+  m_cameraDirty = true;
   ++m_fitRequestCount;
   update();
 }
@@ -309,6 +326,22 @@ void RhiViewport::requestFitView(float cx, float cy, float cz, float r)
 void RhiViewport::requestViewPreset(int preset)
 {
   m_viewPreset = preset;
+  switch (preset)
+  {
+  case 0:
+    m_camera.viewTop();
+    break;
+  case 1:
+    m_camera.viewFront();
+    break;
+  case 2:
+    m_camera.viewRight();
+    break;
+  default:
+    m_camera.viewIso();
+    break;
+  }
+  m_cameraDirty = true;
   update();
 }
 
@@ -338,4 +371,46 @@ void RhiViewport::requestThumbnailCapture(int plateIndex, int size)
   image.save(&buffer, "PNG");
   m_lastThumbnailData = QStringLiteral("data:image/png;base64,") + QString::fromLatin1(bytes.toBase64());
   emit thumbnailCaptured();
+}
+
+void RhiViewport::mousePressEvent(QMouseEvent *event)
+{
+  m_lastMousePosition = event->position();
+  m_dragButton = event->button();
+  event->accept();
+}
+
+void RhiViewport::mouseMoveEvent(QMouseEvent *event)
+{
+  const QPointF delta = event->position() - m_lastMousePosition;
+  if (m_dragButton == Qt::LeftButton) {
+    m_camera.orbit(float(delta.x()) * 0.5f, -float(delta.y()) * 0.5f);
+    m_cameraDirty = true;
+    update();
+  } else if (m_dragButton == Qt::MiddleButton) {
+    m_camera.pan(float(delta.x()), float(delta.y()));
+    m_cameraDirty = true;
+    update();
+  }
+  m_lastMousePosition = event->position();
+  event->accept();
+}
+
+void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
+{
+  m_dragButton = Qt::NoButton;
+  event->accept();
+}
+
+void RhiViewport::wheelEvent(QWheelEvent *event)
+{
+  m_camera.zoom(float(event->angleDelta().y()));
+  m_cameraDirty = true;
+  event->accept();
+  update();
+}
+
+QMatrix4x4 RhiViewport::cameraMvp(float aspect) const
+{
+  return m_camera.projMatrix(aspect) * m_camera.viewMatrix();
 }

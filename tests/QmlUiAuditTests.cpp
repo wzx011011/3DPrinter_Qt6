@@ -386,6 +386,14 @@ void QmlUiAuditTests::rhiViewportRendererUsesModelBuffersAndCameraUniforms()
   QVERIFY2(viewportSource.contains(QStringLiteral("m_camera.fitView"))
                && viewportSource.contains(QStringLiteral("m_camera.viewIso")),
            "RhiViewport must route fit and preset changes through CameraController");
+  const int bedSetterStart = viewportSource.indexOf(QStringLiteral("void RhiViewport::setBedWidth"));
+  const int plateSetterStart = viewportSource.indexOf(QStringLiteral("void RhiViewport::setCurrentPlateIndex"));
+  QVERIFY2(bedSetterStart >= 0 && plateSetterStart > bedSetterStart,
+           "RhiViewport bed/plate setter order changed; update model-generation audit");
+  QVERIFY2(!viewportSource.mid(bedSetterStart, plateSetterStart - bedSetterStart).contains(QStringLiteral("m_modelGeneration")),
+           "Bed-only changes must not increment modelGeneration or reupload model buffers");
+  QVERIFY2(viewportSource.contains(QStringLiteral("++m_modelGeneration")),
+           "Mesh or active-plate changes must explicitly increment modelGeneration");
 
   QVERIFY2(vertexShader.contains(QStringLiteral("layout(location = 0) in vec3 position")),
            "RhiViewport vertex shader must consume 3D positions");

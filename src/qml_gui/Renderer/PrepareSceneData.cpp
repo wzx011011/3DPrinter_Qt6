@@ -253,6 +253,11 @@ void PrepareSceneData::setHoveredSourceObjectIndex(int sourceObjectIndex)
   markDirty(DirtySelection);
 }
 
+void PrepareSceneData::markCameraDirty()
+{
+  markDirty(DirtyCamera);
+}
+
 quint32 PrepareSceneData::peekDirtyFlags() const
 {
   return m_dirtyFlags;

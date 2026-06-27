@@ -77,6 +77,7 @@ public:
                         const QList<int> &activeSourceObjectIndices);
   void setSelectedSourceObjectIndex(int sourceObjectIndex);
   void setHoveredSourceObjectIndex(int sourceObjectIndex);
+  void markCameraDirty();
 
   quint32 peekDirtyFlags() const;
   quint32 takeDirtyFlags();

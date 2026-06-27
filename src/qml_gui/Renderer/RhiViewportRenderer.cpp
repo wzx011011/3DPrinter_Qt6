@@ -23,7 +23,7 @@ void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
 
 void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
 {
-  const auto *viewport = qobject_cast<RhiViewport *>(item);
+  auto *viewport = qobject_cast<RhiViewport *>(item);
   if (viewport == nullptr)
     return;
 
@@ -34,17 +34,39 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   activeObjectIndices.reserve(viewport->m_activePlateObjectIndices.size());
   for (const QVariant &value : viewport->m_activePlateObjectIndices)
     activeObjectIndices.append(value.toInt());
-  m_prepareScene.setBed(viewport->m_bedWidth,
-                        viewport->m_bedDepth,
-                        viewport->m_bedOriginX,
-                        viewport->m_bedOriginY,
-                        viewport->m_bedShapeType,
-                        viewport->m_bedDiameter);
-  m_prepareScene.setShowBed(viewport->m_showBed);
-  m_prepareScene.setPlateContext(viewport->m_currentPlateIndex,
-                                 viewport->m_plateCount,
-                                 activeObjectIndices);
-  m_prepareScene.setMeshGeneration(m_meshBytes);
+  QList<int> batchSourceObjectIndices;
+  batchSourceObjectIndices.reserve(viewport->m_meshBatchSourceObjectIndices.size());
+  for (const QVariant &value : viewport->m_meshBatchSourceObjectIndices)
+    batchSourceObjectIndices.append(value.toInt());
+  if (m_sceneGeneration != viewport->m_sceneGeneration) {
+    m_sceneGeneration = viewport->m_sceneGeneration;
+    m_prepareScene.setBed(viewport->m_bedWidth,
+                          viewport->m_bedDepth,
+                          viewport->m_bedOriginX,
+                          viewport->m_bedOriginY,
+                          viewport->m_bedShapeType,
+                          viewport->m_bedDiameter);
+    m_prepareScene.setShowBed(viewport->m_showBed);
+  }
+  if (m_modelGeneration != viewport->m_modelGeneration) {
+    m_modelGeneration = viewport->m_modelGeneration;
+    m_prepareScene.setPlateContext(viewport->m_currentPlateIndex,
+                                   viewport->m_plateCount,
+                                   activeObjectIndices);
+    m_prepareScene.setModelMeshData(viewport->m_meshData,
+                                    batchSourceObjectIndices,
+                                    activeObjectIndices);
+  }
+  m_prepareScene.setSelectedSourceObjectIndex(viewport->m_selectedSourceObjectIndex);
+  const QSize pixelSize = renderTarget() ? renderTarget()->pixelSize() : QSize(int(viewport->width()), int(viewport->height()));
+  const float aspect = pixelSize.height() > 0
+      ? float(std::max(1, pixelSize.width())) / float(std::max(1, pixelSize.height()))
+      : 1.0f;
+  m_cameraMvp = viewport->cameraMvp(aspect);
+  if (viewport->m_cameraDirty) {
+    m_prepareScene.markCameraDirty();
+    viewport->m_cameraDirty = false;
+  }
   m_clearColor = (m_canvasType == RhiViewport::CanvasPreview)
       ? QColor(8, 12, 20)
       : QColor(13, 18, 24);
@@ -58,9 +80,11 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
 
   QRhiResourceUpdateBatch *updates = nullptr;
   quint32 dirtyFlags = m_prepareScene.peekDirtyFlags();
-  if (m_canvasType == RhiViewport::CanvasView3D && m_prepareScene.showBed()) {
+  if (m_canvasType == RhiViewport::CanvasView3D) {
     const bool sceneDirty = (dirtyFlags & (PrepareSceneData::DirtyBed
                                            | PrepareSceneData::DirtyPlate
+                                           | PrepareSceneData::DirtyMesh
+                                           | PrepareSceneData::DirtyCamera
                                            | PrepareSceneData::DirtyGpu)) != 0;
     if ((sceneDirty || !m_sceneBuffersUploaded) && !m_pipelineFailed) {
       updates = rhi()->nextResourceUpdateBatch();
@@ -74,21 +98,27 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   }
 
   cb->beginPass(renderTarget(), m_clearColor, {1.0f, 0}, updates);
-  if (m_canvasType == RhiViewport::CanvasView3D && m_prepareScene.showBed() && ensurePipelines()) {
+  if (m_canvasType == RhiViewport::CanvasView3D && ensurePipelines()) {
     cb->setViewport(QRhiViewport(0, 0, float(renderTarget()->pixelSize().width()),
                                  float(renderTarget()->pixelSize().height())));
     cb->setShaderResources(m_srb.get());
-    if (m_bedFillBuffer && m_bedFillVertexCount > 0) {
+    if (m_prepareScene.showBed() && m_bedFillBuffer && m_bedFillVertexCount > 0) {
       cb->setGraphicsPipeline(m_fillPipeline.get());
       const QRhiCommandBuffer::VertexInput fillBinding(m_bedFillBuffer.get(), 0);
       cb->setVertexInput(0, 1, &fillBinding);
       cb->draw(m_bedFillVertexCount);
     }
-    if (m_bedLineBuffer && m_bedLineVertexCount > 0) {
+    if (m_prepareScene.showBed() && m_bedLineBuffer && m_bedLineVertexCount > 0) {
       cb->setGraphicsPipeline(m_linePipeline.get());
       const QRhiCommandBuffer::VertexInput lineBinding(m_bedLineBuffer.get(), 0);
       cb->setVertexInput(0, 1, &lineBinding);
       cb->draw(m_bedLineVertexCount);
+    }
+    if (m_modelVertexBuffer && m_modelVertexCount > 0) {
+      cb->setGraphicsPipeline(m_fillPipeline.get());
+      const QRhiCommandBuffer::VertexInput modelBinding(m_modelVertexBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &modelBinding);
+      cb->draw(m_modelVertexCount);
     }
   }
   cb->endPass();
@@ -99,14 +129,23 @@ void RhiViewportRenderer::releaseResources()
   m_linePipeline.reset();
   m_fillPipeline.reset();
   m_srb.reset();
+  m_cameraUniformBuffer.reset();
+  m_modelVertexBuffer.reset();
   m_bedLineBuffer.reset();
   m_bedFillBuffer.reset();
   m_renderPassDescriptor = nullptr;
   m_sceneBuffersUploaded = false;
+  m_modelVertexBufferUploaded = false;
+  m_cameraUniformBufferUploaded = false;
   m_bedFillBufferBytes = 0;
   m_bedLineBufferBytes = 0;
+  m_modelVertexBufferBytes = 0;
+  m_cameraUniformBufferBytes = 0;
   m_bedFillVertexCount = 0;
   m_bedLineVertexCount = 0;
+  m_modelVertexCount = 0;
+  m_sceneGeneration = 0;
+  m_modelGeneration = 0;
 }
 
 bool RhiViewportRenderer::ensurePipelines()
@@ -116,8 +155,22 @@ bool RhiViewportRenderer::ensurePipelines()
   if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr)
     return false;
 
+  if (!m_cameraUniformBuffer
+      && !ensureBuffer(m_cameraUniformBuffer,
+                       64,
+                       m_cameraUniformBufferBytes,
+                       QRhiBuffer::UniformBuffer)) {
+    m_cameraUniformBufferBytes = 0;
+    m_pipelineFailed = true;
+    return false;
+  }
+
   m_srb.reset(rhi()->newShaderResourceBindings());
-  m_srb->setBindings({});
+  m_srb->setBindings({
+      QRhiShaderResourceBinding::uniformBuffer(0,
+                                               QRhiShaderResourceBinding::VertexStage,
+                                               m_cameraUniformBuffer.get())
+  });
   if (!m_srb->create()) {
     m_pipelineFailed = true;
     return false;
@@ -145,7 +198,7 @@ bool RhiViewportRenderer::ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &
   QRhiVertexInputLayout inputLayout;
   inputLayout.setBindings({QRhiVertexInputBinding(sizeof(Vertex))});
   inputLayout.setAttributes({
-      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float2, offsetof(Vertex, x)),
+      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, offsetof(Vertex, x)),
       QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float4, offsetof(Vertex, r)),
   });
 
@@ -173,6 +226,22 @@ bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, q
   if (updates == nullptr || rhi() == nullptr)
     return false;
 
+  if (!uploadCameraUniform(updates, dirtyFlags))
+    return false;
+  if (!uploadBedBuffers(updates, dirtyFlags))
+    return false;
+  if (!uploadModelBuffer(updates, dirtyFlags))
+    return false;
+
+  m_sceneBuffersUploaded = true;
+  return true;
+}
+
+bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+
   const bool uploadScene = !m_sceneBuffersUploaded
       || (dirtyFlags & (PrepareSceneData::DirtyBed
                         | PrepareSceneData::DirtyPlate
@@ -185,7 +254,8 @@ bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, q
   const quint32 fillBytes = quint32(fillVertices.size() * int(sizeof(Vertex)));
   const quint32 lineBytes = quint32(lineVertices.size() * int(sizeof(Vertex)));
 
-  if (!ensureBuffer(m_bedFillBuffer, fillBytes) || !ensureBuffer(m_bedLineBuffer, lineBytes))
+  if (!ensureBuffer(m_bedFillBuffer, fillBytes, m_bedFillBufferBytes, QRhiBuffer::VertexBuffer)
+      || !ensureBuffer(m_bedLineBuffer, lineBytes, m_bedLineBufferBytes, QRhiBuffer::VertexBuffer))
     return false;
 
   m_bedFillVertexCount = quint32(fillVertices.size());
@@ -203,13 +273,62 @@ bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, q
                                 lineVertices.constData());
   }
 
-  m_sceneBuffersUploaded = true;
   return true;
 }
 
-bool RhiViewportRenderer::ensureBuffer(std::unique_ptr<QRhiBuffer> &buffer, quint32 byteSize)
+bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags)
 {
-  quint32 &storedSize = (&buffer == &m_bedFillBuffer) ? m_bedFillBufferBytes : m_bedLineBufferBytes;
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+
+  const bool uploadModel = !m_modelVertexBufferUploaded
+      || (dirtyFlags & (PrepareSceneData::DirtyMesh
+                        | PrepareSceneData::DirtyPlate
+                        | PrepareSceneData::DirtyVisibility
+                        | PrepareSceneData::DirtyGpu)) != 0;
+  if (!uploadModel)
+    return true;
+
+  const QVector<Vertex> modelVertices = buildModelVertices(m_prepareScene.modelVertices());
+  const quint32 modelBytes = quint32(modelVertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_modelVertexBuffer, modelBytes, m_modelVertexBufferBytes, QRhiBuffer::VertexBuffer))
+    return false;
+
+  m_modelVertexCount = quint32(modelVertices.size());
+  if (m_modelVertexBuffer && modelBytes > 0) {
+    updates->uploadStaticBuffer(m_modelVertexBuffer.get(),
+                                0,
+                                modelBytes,
+                                modelVertices.constData());
+  }
+  m_modelVertexBufferUploaded = true;
+  return true;
+}
+
+bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+
+  const bool uploadCamera = !m_cameraUniformBufferUploaded
+      || (dirtyFlags & (PrepareSceneData::DirtyCamera | PrepareSceneData::DirtyGpu)) != 0;
+  if (!uploadCamera)
+    return true;
+
+  if (!ensureBuffer(m_cameraUniformBuffer, 64, m_cameraUniformBufferBytes, QRhiBuffer::UniformBuffer))
+    return false;
+
+  const QMatrix4x4 corrected = rhi()->clipSpaceCorrMatrix() * m_cameraMvp;
+  updates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 0, 64, corrected.constData());
+  m_cameraUniformBufferUploaded = true;
+  return true;
+}
+
+bool RhiViewportRenderer::ensureBuffer(std::unique_ptr<QRhiBuffer> &buffer,
+                                       quint32 byteSize,
+                                       quint32 &storedSize,
+                                       QRhiBuffer::UsageFlags usage)
+{
   if (byteSize == 0) {
     buffer.reset();
     storedSize = 0;
@@ -219,7 +338,10 @@ bool RhiViewportRenderer::ensureBuffer(std::unique_ptr<QRhiBuffer> &buffer, quin
   if (buffer && storedSize == byteSize)
     return true;
 
-  buffer.reset(rhi()->newBuffer(QRhiBuffer::Static, QRhiBuffer::VertexBuffer, byteSize));
+  const QRhiBuffer::Type type = (usage & QRhiBuffer::UniformBuffer) != 0
+      ? QRhiBuffer::Dynamic
+      : QRhiBuffer::Static;
+  buffer.reset(rhi()->newBuffer(type, usage, byteSize));
   if (!buffer->create()) {
     buffer.reset();
     storedSize = 0;
@@ -236,16 +358,31 @@ QVector<RhiViewportRenderer::Vertex> RhiViewportRenderer::buildSceneVertices(con
   QVector<Vertex> vertices;
   vertices.reserve(source.size());
 
-  const float width = std::max(m_prepareScene.bedWidth(), 1.0f);
-  const float depth = std::max(m_prepareScene.bedDepth(), 1.0f);
-  const float left = m_prepareScene.bedOriginX();
-  const float top = m_prepareScene.bedOriginY();
-
   for (const PrepareSceneData::Vertex &sourceVertex : source) {
-    const float normalizedX = ((sourceVertex.x - left) / width) * 1.74f - 0.87f;
-    const float normalizedY = 0.87f - ((sourceVertex.y - top) / depth) * 1.74f;
-    vertices.append(Vertex{normalizedX,
-                           normalizedY,
+    vertices.append(Vertex{sourceVertex.x,
+                           0.0f,
+                           sourceVertex.y,
+                           sourceVertex.r,
+                           sourceVertex.g,
+                           sourceVertex.b,
+                           sourceVertex.a});
+  }
+
+  return vertices;
+}
+
+QVector<RhiViewportRenderer::Vertex> RhiViewportRenderer::buildModelVertices(const QList<PrepareSceneData::ModelVertex> &source) const
+{
+  QVector<Vertex> vertices;
+  vertices.reserve(source.size());
+
+  // Functional source-truth mapping: upstream GLCanvas3D draws transformed
+  // PartPlate-filtered model triangles in world coordinates. The QRhi path keeps
+  // the same source-space contract and only changes the GPU transport.
+  for (const PrepareSceneData::ModelVertex &sourceVertex : source) {
+    vertices.append(Vertex{sourceVertex.x,
+                           sourceVertex.y,
+                           sourceVertex.z,
                            sourceVertex.r,
                            sourceVertex.g,
                            sourceVertex.b,

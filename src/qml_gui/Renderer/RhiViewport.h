@@ -1,9 +1,12 @@
 #pragma once
 
 #include <QByteArray>
+#include <QPointF>
 #include <QQuickRhiItem>
 #include <QString>
 #include <QVariant>
+
+#include "CameraController.h"
 
 class RhiViewportRenderer;
 
@@ -190,6 +193,12 @@ signals:
 private:
   friend class RhiViewportRenderer;
 
+  void mousePressEvent(QMouseEvent *event) override;
+  void mouseMoveEvent(QMouseEvent *event) override;
+  void mouseReleaseEvent(QMouseEvent *event) override;
+  void wheelEvent(QWheelEvent *event) override;
+  QMatrix4x4 cameraMvp(float aspect) const;
+
   int m_canvasType = CanvasView3D;
   QByteArray m_meshData;
   QByteArray m_previewData;
@@ -227,4 +236,10 @@ private:
   QString m_lastThumbnailData;
   int m_fitRequestCount = 0;
   int m_viewPreset = 3;
+  qint64 m_sceneGeneration = 1;
+  qint64 m_modelGeneration = 1;
+  CameraController m_camera;
+  QPointF m_lastMousePosition;
+  Qt::MouseButton m_dragButton = Qt::NoButton;
+  bool m_cameraDirty = true;
 };
