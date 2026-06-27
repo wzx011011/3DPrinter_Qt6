@@ -71,6 +71,18 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   m_clearColor = (m_canvasType == RhiViewport::CanvasPreview)
       ? QColor(8, 12, 20)
       : QColor(13, 18, 24);
+
+  // ── Phase 26: Preview segment pipeline — store preview data + control props ──
+  if (m_previewData != viewport->m_previewData) {
+    m_previewData = viewport->m_previewData;
+    m_previewSegmentBufferUploaded = false;
+    parsePreviewSegments();
+  }
+  m_layerMin = viewport->m_layerMin;
+  m_layerMax = viewport->m_layerMax;
+  m_moveEnd = viewport->m_moveEnd;
+  m_showTravelMoves = viewport->m_showTravelMoves;
+  m_gcodeViewMode = viewport->m_gcodeViewMode;
 }
 
 void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
@@ -96,6 +108,17 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       } else {
         m_prepareScene.takeDirtyFlags();
       }
+    }
+  }
+
+  // ── Phase 26: Preview segment buffer upload (before beginPass) ──
+  if (m_canvasType == RhiViewport::CanvasPreview
+      && !m_previewSegmentBufferUploaded
+      && !m_previewVertices.isEmpty()) {
+    if (!updates)
+      updates = rhi()->nextResourceUpdateBatch();
+    if (uploadPreviewSegmentBuffer(updates)) {
+      m_previewSegmentBufferUploaded = true;
     }
   }
 
@@ -129,6 +152,32 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->draw(m_highlightVertexCount);
     }
   }
+
+  // ── Phase 26: Preview segment rendering (CanvasPreview branch) ──
+  if (m_canvasType == RhiViewport::CanvasPreview && ensurePipelines()
+      && m_previewSegmentBuffer && m_previewSegmentVertexCount > 0) {
+    // Upload camera uniform for Preview (same uniform as Prepare).
+    QRhiResourceUpdateBatch *camUpdates = rhi()->nextResourceUpdateBatch();
+    if (uploadCameraUniform(camUpdates, PrepareSceneData::DirtyCamera)) {
+      cb->resourceUpdate(camUpdates);
+    } else {
+      delete camUpdates;
+    }
+
+    cb->setViewport(QRhiViewport(0, 0, float(renderTarget()->pixelSize().width()),
+                                 float(renderTarget()->pixelSize().height())));
+    cb->setShaderResources(m_srb.get());
+    cb->setGraphicsPipeline(m_linePipeline.get());
+
+    quint32 firstVertex = 0, drawVertexCount = 0;
+    computePreviewDrawRange(firstVertex, drawVertexCount);
+    if (drawVertexCount > 0) {
+      const QRhiCommandBuffer::VertexInput segBinding(m_previewSegmentBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &segBinding);
+      cb->draw(drawVertexCount, 1, firstVertex);
+    }
+  }
+
   cb->endPass();
 }
 
@@ -142,6 +191,7 @@ void RhiViewportRenderer::releaseResources()
   m_modelVertexBuffer.reset();
   m_bedLineBuffer.reset();
   m_bedFillBuffer.reset();
+  m_previewSegmentBuffer.reset();
   m_renderPassDescriptor = nullptr;
   m_sceneBuffersUploaded = false;
   m_modelVertexBufferUploaded = false;
@@ -477,3 +527,147 @@ QShader RhiViewportRenderer::loadShader(const QString &path) const
     return {};
   return QShader::fromSerialized(file.readAll());
 }
+
+// ── Phase 26: Preview segment pipeline ──────────────────────────────────────
+// GCV1 wire format from PreviewViewModel: "GCV1" magic + int count +
+// count * PackedSegment (80 bytes each). Each segment → 2 Line vertices
+// (start xyz + end xyz, sharing RGBA), with GCode y↔z axis swap to GL space.
+// Layer ranges are indexed per-layer for GPU draw-range filtering (D-26-02).
+// Color is CPU-pre-baked by PreviewViewModel (D-26-03); renderer is opaque RGBA.
+
+namespace {
+struct GcvPackedSegment
+{
+  float x1, y1, z1, x2, y2, z2;
+  float r, g, b;
+  float feedrate, fan_speed, temperature, width, layer_time, acceleration;
+  int extruder_id, layer, move;
+};
+// PackedSegment is 72 bytes on most compilers (15 floats + 3 ints, packed);
+// if the platform adds padding the parse logic uses sizeof explicitly.
+} // namespace
+
+void RhiViewportRenderer::parsePreviewSegments()
+{
+  m_previewVertices.clear();
+  m_previewLayerRanges.clear();
+  m_previewSegmentVertexCount = 0;
+
+  if (m_previewData.size() < 8)
+    return;
+  if (std::memcmp(m_previewData.constData(), "GCV1", 4) != 0)
+    return;
+
+  int count = 0;
+  std::memcpy(&count, m_previewData.constData() + 4, 4);
+  if (count <= 0)
+    return;
+
+  const qsizetype payloadSize = qsizetype(count) * sizeof(GcvPackedSegment);
+  if (m_previewData.size() < 8 + payloadSize)
+    return;
+
+  const auto *seg = reinterpret_cast<const GcvPackedSegment *>(m_previewData.constData() + 8);
+  m_previewVertices.reserve(int(count) * 2);
+
+  int currentLayer = -1;
+  quint32 layerStartOffset = 0;
+  quint32 layerVertexCount = 0;
+
+  for (int i = 0; i < count; ++i)
+  {
+    // Axis swap: GCode (x, y, z) → GL (x, z, y) — mirror GCodeRenderer.cpp:527-528.
+    Vertex a;
+    a.x = seg[i].x1;
+    a.y = seg[i].z1;
+    a.z = seg[i].y1;
+    a.r = seg[i].r;
+    a.g = seg[i].g;
+    a.b = seg[i].b;
+    a.a = 1.0f;
+
+    Vertex b = a;
+    b.x = seg[i].x2;
+    b.y = seg[i].z2;
+    b.z = seg[i].y2;
+
+    m_previewVertices.append(a);
+    m_previewVertices.append(b);
+
+    // Track layer ranges for GPU draw-range filtering (D-26-02).
+    // Segments are typically layer-sequential; detect layer transitions.
+    if (seg[i].layer != currentLayer) {
+      if (currentLayer >= 0) {
+        m_previewLayerRanges.append({currentLayer, layerStartOffset, layerVertexCount, false});
+      }
+      currentLayer = seg[i].layer;
+      layerStartOffset = m_previewVertices.size() - 2;
+      layerVertexCount = 2;
+    } else {
+      layerVertexCount += 2;
+    }
+  }
+  // Flush the last layer range.
+  if (currentLayer >= 0) {
+    m_previewLayerRanges.append({currentLayer, layerStartOffset, layerVertexCount, false});
+  }
+
+  m_previewSegmentVertexCount = quint32(m_previewVertices.size());
+}
+
+bool RhiViewportRenderer::uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *updates)
+{
+  if (m_previewVertices.isEmpty())
+    return false;
+
+  const quint32 byteSize = m_previewSegmentVertexCount * sizeof(Vertex);
+  if (!ensureBuffer(m_previewSegmentBuffer, byteSize, m_previewSegmentBufferBytes,
+                    QRhiBuffer::VertexBuffer))
+    return false;
+
+  updates->uploadStaticBuffer(m_previewSegmentBuffer.get(), 0, byteSize,
+                              m_previewVertices.constData());
+  return true;
+}
+
+void RhiViewportRenderer::computePreviewDrawRange(quint32 &firstVertex, quint32 &vertexCount) const
+{
+  firstVertex = 0;
+  vertexCount = 0;
+
+  if (m_previewLayerRanges.isEmpty())
+    return;
+
+  // Find the draw range for [m_layerMin, m_layerMax] from the layer-offset index.
+  quint32 startOffset = 0;
+  quint32 endOffset = 0;
+  bool foundStart = false;
+
+  for (const auto &lr : m_previewLayerRanges) {
+    if (lr.layer >= m_layerMin && lr.layer <= m_layerMax) {
+      if (!foundStart) {
+        startOffset = lr.vertexOffset;
+        foundStart = true;
+      }
+      endOffset = lr.vertexOffset + lr.vertexCount;
+    }
+  }
+
+  if (!foundStart)
+    return;
+
+  firstVertex = startOffset;
+  vertexCount = endOffset - startOffset;
+
+  // Playback: if m_moveEnd is set (> 0), clamp to the playback position.
+  // m_moveEnd is a move index; we approximate by clamping vertex count
+  // proportionally (segments are in order). A precise per-move offset
+  // can be added if needed; for now, proportional is sufficient for Phase 26.
+  if (m_moveEnd > 0 && m_previewSegmentVertexCount > 0) {
+    const quint32 moveCutoff = quint32(
+        quint64(firstVertex + vertexCount) * quint64(m_moveEnd) / quint64(m_previewSegmentVertexCount));
+    if (moveCutoff < firstVertex + vertexCount)
+      vertexCount = moveCutoff - firstVertex;
+  }
+}
+

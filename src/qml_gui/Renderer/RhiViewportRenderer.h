@@ -48,6 +48,12 @@ private:
                     quint32 byteSize,
                     quint32 &storedSize,
                     QRhiBuffer::UsageFlags usage);
+
+  // ── Phase 26: Preview segment pipeline (D-26-01..04) ──
+  void parsePreviewSegments();
+  bool uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *updates);
+  void computePreviewDrawRange(quint32 &firstVertex, quint32 &vertexCount) const;
+
   QVector<Vertex> buildSceneVertices(const QList<PrepareSceneData::Vertex> &source) const;
   QVector<Vertex> buildModelVertices(const QList<PrepareSceneData::ModelVertex> &source) const;
   QVector<Vertex> buildHighlightVertices() const;
@@ -84,4 +90,24 @@ private:
   PrepareSceneData m_prepareScene;
   QMatrix4x4 m_cameraMvp;
   QColor m_clearColor = QColor(14, 20, 28);
+
+  // ── Phase 26: Preview segment pipeline state ──
+  QByteArray m_previewData;              // GCV1 blob from RhiViewport
+  int m_layerMin = 0;
+  int m_layerMax = 0;
+  int m_moveEnd = 0;
+  bool m_showTravelMoves = true;
+  int m_gcodeViewMode = 0;
+  QVector<Vertex> m_previewVertices;     // expanded Line vertices (CPU staging)
+  struct LayerRange {
+    int layer;
+    quint32 vertexOffset;
+    quint32 vertexCount;
+    bool isTravel;
+  };
+  QVector<LayerRange> m_previewLayerRanges;
+  std::unique_ptr<QRhiBuffer> m_previewSegmentBuffer;
+  quint32 m_previewSegmentBufferBytes = 0;
+  quint32 m_previewSegmentVertexCount = 0;
+  bool m_previewSegmentBufferUploaded = false;
 };
