@@ -111,15 +111,21 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     }
   }
 
-  // ── Phase 26: Preview segment buffer upload (before beginPass) ──
-  if (m_canvasType == RhiViewport::CanvasPreview
-      && !m_previewSegmentBufferUploaded
-      && !m_previewVertices.isEmpty()) {
+  // ── Phase 26/28: Preview segment buffer + camera uniform upload (before beginPass) ──
+  // BUG-V31-1 fix: camera uniform MUST be uploaded before beginPass, not after.
+  // beginPass-after-resourceUpdate is undefined in QRhi; D3D12 strictly enforces
+  // command buffer ordering and segfaults on this pattern (root cause of the
+  // D3D12 crash that was worked around with D3D11-first in RhiBackendSelector).
+  if (m_canvasType == RhiViewport::CanvasPreview) {
     if (!updates)
       updates = rhi()->nextResourceUpdateBatch();
-    if (uploadPreviewSegmentBuffer(updates)) {
-      m_previewSegmentBufferUploaded = true;
+    // Segment buffer upload
+    if (!m_previewSegmentBufferUploaded && !m_previewVertices.isEmpty()) {
+      if (uploadPreviewSegmentBuffer(updates))
+        m_previewSegmentBufferUploaded = true;
     }
+    // Camera uniform upload (merged into the same pre-beginPass batch)
+    uploadCameraUniform(updates, PrepareSceneData::DirtyCamera);
   }
 
   cb->beginPass(renderTarget(), m_clearColor, {1.0f, 0}, updates);
@@ -157,14 +163,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   if (m_canvasType == RhiViewport::CanvasPreview && ensurePipelines()
       && m_previewSegmentBuffer && m_previewSegmentVertexCount > 0) {
     m_previewFrameTimer.start();
-    // Upload camera uniform for Preview (same uniform as Prepare).
-    QRhiResourceUpdateBatch *camUpdates = rhi()->nextResourceUpdateBatch();
-    if (uploadCameraUniform(camUpdates, PrepareSceneData::DirtyCamera)) {
-      cb->resourceUpdate(camUpdates);
-    } else {
-      delete camUpdates;
-    }
-
+    // Camera uniform was already uploaded before beginPass (BUG-V31-1 fix).
     cb->setViewport(QRhiViewport(0, 0, float(renderTarget()->pixelSize().width()),
                                  float(renderTarget()->pixelSize().height())));
     cb->setShaderResources(m_srb.get());
@@ -582,6 +581,7 @@ void RhiViewportRenderer::parsePreviewSegments()
   m_previewVertices.reserve(int(count) * 2);
 
   int currentLayer = -1;
+  bool currentIsTravel = false;
   quint32 layerStartOffset = 0;
   quint32 layerVertexCount = 0;
 
@@ -607,11 +607,14 @@ void RhiViewportRenderer::parsePreviewSegments()
 
     // Track layer ranges for GPU draw-range filtering (D-26-02).
     // Segments are typically layer-sequential; detect layer transitions.
-    if (seg[i].layer != currentLayer) {
+    // DESIGN-V31-4 fix: mark travel segments (move==0) for visibility toggle.
+    const bool isTravel = (seg[i].move == 0);
+    if (seg[i].layer != currentLayer || isTravel != currentIsTravel) {
       if (currentLayer >= 0) {
-        m_previewLayerRanges.append({currentLayer, layerStartOffset, layerVertexCount, false});
+        m_previewLayerRanges.append({currentLayer, layerStartOffset, layerVertexCount, currentIsTravel});
       }
       currentLayer = seg[i].layer;
+      currentIsTravel = isTravel;
       layerStartOffset = m_previewVertices.size() - 2;
       layerVertexCount = 2;
     } else {
@@ -620,7 +623,7 @@ void RhiViewportRenderer::parsePreviewSegments()
   }
   // Flush the last layer range.
   if (currentLayer >= 0) {
-    m_previewLayerRanges.append({currentLayer, layerStartOffset, layerVertexCount, false});
+    m_previewLayerRanges.append({currentLayer, layerStartOffset, layerVertexCount, currentIsTravel});
   }
 
   m_previewSegmentVertexCount = quint32(m_previewVertices.size());
@@ -657,6 +660,9 @@ void RhiViewportRenderer::computePreviewDrawRange(quint32 &firstVertex, quint32 
   bool foundStart = false;
 
   for (const auto &lr : m_previewLayerRanges) {
+    // DESIGN-V31-4: skip travel segments when showTravelMoves is false.
+    if (!m_showTravelMoves && lr.isTravel)
+      continue;
     if (lr.layer >= m_layerMin && lr.layer <= m_layerMax) {
       if (!foundStart) {
         startOffset = lr.vertexOffset;
