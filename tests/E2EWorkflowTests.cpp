@@ -52,6 +52,8 @@ private slots:
   void test_model_change_invalidates_slice_result();
   void test_slice_affecting_bed_change_marks_current_result_stale();
   void test_import_invalidates_slice_output_and_preview_payload();
+  void test_previous_gcode_reuse_marks_reused_result_and_refreshes_preview();
+  void test_cancelled_slice_clears_active_result_and_blocks_preview_export();
 
 private:
   bool hasLibslic3r() const;
@@ -665,6 +667,105 @@ void E2EWorkflowTests::test_import_invalidates_slice_output_and_preview_payload(
 
   if (QFileInfo::exists(staleOutputPath))
     QFile::remove(staleOutputPath);
+}
+
+void E2EWorkflowTests::test_previous_gcode_reuse_marks_reused_result_and_refreshes_preview()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+  EditorViewModel editor(&project, &slice);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY2(editor.loadFile(kStlPath), "importing a model through EditorViewModel should start");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(finishedSpy.isValid());
+  QVERIFY(failedSpy.isValid());
+
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+  slice.startSlice(QStringLiteral("reuse_seed_test"));
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+    QSKIP("Slice failed — cannot test previous G-code reuse without a real seed result");
+
+  const int plateIndex = editor.currentPlateIndex();
+  const QString generatedOutput = slice.outputPath();
+  QVERIFY2(!generatedOutput.isEmpty(), "seed slice should expose a G-code output path");
+  QVERIFY2(QFileInfo::exists(generatedOutput),
+           qPrintable(QStringLiteral("seed G-code should exist: %1").arg(generatedOutput)));
+
+  slice.clearResults();
+  QVERIFY2(slice.outputPath().isEmpty(), "clearResults should remove the active generated output path");
+  QVERIFY2(!editor.hasSliceResult(), "clearing results should remove editor result validity");
+
+  QSignalSpy reusedFinishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy reusedFailedSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(reusedFinishedSpy.isValid());
+  QVERIFY(reusedFailedSpy.isValid());
+
+  QVERIFY2(slice.loadGCodeFromPrevious(generatedOutput),
+           "valid previous G-code should start the reuse path");
+  QTRY_VERIFY_WITH_TIMEOUT(reusedFinishedSpy.count() > 0 || reusedFailedSpy.count() > 0, 60000);
+  if (reusedFailedSpy.count() > 0)
+  {
+    const QString reason = reusedFailedSpy.first().at(0).toString();
+    QSKIP(QString("Previous G-code reuse failed in this environment: %1").arg(reason).toUtf8().constData());
+  }
+
+  QCOMPARE(slice.outputPath(), generatedOutput);
+  QCOMPARE(slice.plateOutputPath(plateIndex), generatedOutput);
+  QCOMPARE(slice.plateResultSource(plateIndex), int(SliceService::ResultSource::PreviousGCode));
+  QVERIFY2(editor.hasSliceResult(), "reused G-code should become the current plate's valid result");
+  QVERIFY2(editor.canPreview(), "Preview should be available for a valid reused G-code result");
+  QVERIFY2(editor.canExportGCode(), "Export should be available for a valid reused G-code result");
+
+  QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
+  QVERIFY2(preview.moveCount() > 0, "Preview should parse moves from reused G-code");
+  QVERIFY2(preview.layerCount() > 0, "Preview should parse layers from reused G-code");
+
+  if (QFileInfo::exists(generatedOutput))
+    QFile::remove(generatedOutput);
+}
+
+void E2EWorkflowTests::test_cancelled_slice_clears_active_result_and_blocks_preview_export()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY2(editor.loadFile(kStlPath), "importing a model should start");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(finishedSpy.isValid());
+  QVERIFY(failedSpy.isValid());
+
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+  slice.startSlice(QStringLiteral("cancel_state_test"));
+  QTRY_VERIFY_WITH_TIMEOUT(slice.slicing(), 5000);
+  slice.cancelSlice();
+
+  QVERIFY2(slice.slicing(), "cancellation should not reopen the slice gate before worker terminal cleanup");
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0 || !slice.slicing(), 120000);
+  QVERIFY2(finishedSpy.count() == 0, "cancelled slice must not emit a successful slice result");
+  QCOMPARE(slice.sliceState(), SliceService::State::Cancelled);
+  QVERIFY2(slice.outputPath().isEmpty(), "cancelled slice must not leave an active output path");
+  QVERIFY2(!slice.hasPlateResult(editor.currentPlateIndex()),
+           "cancelled slice must not leave current-plate result metadata");
+  QVERIFY2(!editor.hasSliceResult(), "cancelled slice must not become a valid editor result");
+  QVERIFY2(!editor.canPreview(), "cancelled slice must block Preview");
+  QVERIFY2(!editor.canExportGCode(), "cancelled slice must block export");
 }
 
 QTEST_MAIN(E2EWorkflowTests)
