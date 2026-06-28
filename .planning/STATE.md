@@ -1,37 +1,37 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.3
-milestone_name: Slice Preview Main Flow MVP
-status: ready_for_audit
-last_updated: "2026-06-28T08:20:00.000Z"
-last_activity: 2026-06-28 -- Phase 36 verification and handoff complete
+milestone: v3.4
+milestone_name: Import to G-code Complete Workflow
+status: planning
+last_updated: "2026-06-28T15:02:05.845Z"
+last_activity: 2026-06-28
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
-**Milestone:** v3.3 - Slice Preview Main Flow MVP
-**Status:** Ready for milestone audit after manual UAT
-**Next step:** test the running app, then run the v3.3 milestone audit/complete lifecycle.
+**Milestone:** v3.4 - Import to G-code Complete Workflow
+**Status:** Planning complete; ready to plan Phase 37
+**Next step:** start Phase 37 to complete import and project restore for the full local workflow.
 
 ## Current Position
 
-Phase: 36 - Complete
-Plan: final verification, UAT notes, review, and handoff
-Status: Complete
-Last activity: 2026-06-28 -- Phase 36 verification and handoff complete
+Phase: Not started (defining requirements)
+Plan: -
+Status: Defining requirements
+Last activity: 2026-06-28 - Milestone v3.4 started
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
-**Current focus:** Load model -> slice -> enter Preview -> render non-empty D3D11 QRhi G-code preview.
+**Current focus:** Import model/project -> Prepare readiness -> slice/reslice -> D3D11 Preview -> local G-code export.
 
 ## Latest Shipped Milestone
 
@@ -45,51 +45,43 @@ See: `.planning/PROJECT.md`
 
 | Phase | Name | Status |
 |---|---|---|
-| 33 | Slice-to-Preview Navigation Gate | Complete |
-| 34 | G-code Preview Parser MVP | Complete |
-| 35 | D3D11 Preview Rendering Interaction | Complete |
-| 36 | Verification and Handoff | Complete |
+| 37 | Complete Import and Project Restore | Pending |
+| 38 | Prepare Readiness and Slice Invalidation | Pending |
+| 39 | Complete Slicing and Reslicing State Machine | Pending |
+| 40 | Complete Preview Data and Upstream View Semantics | Pending |
+| 41 | D3D11 Preview Rendering and Interaction Stability | Pending |
+| 42 | Local G-code Export and Finalization | Pending |
+| 43 | End-to-End Verification and Handoff | Pending |
 
-## Phase 33 Evidence
+## v3.4 Scope
 
-- Commit: `5a4d37f feat: switch to preview after slicing completes`.
-- Runtime behavior: `BackendContext` now handles `SliceService::sliceFinished` by posting the slicing-complete notification and calling `requestSelectTab(tpPreview)`, reusing the existing tab/viewMode linkage.
-- Regression: `E2EWorkflowTests::test_backend_switches_to_preview_after_slice` first failed with `ctx.currentPage() == 1`, then passed after the implementation.
-- Canonical verification: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` exited 0; PrepareScene, PartPlate, QML UI audit, and E2E pipeline tests passed.
+This milestone completes the local main workflow:
 
-## Phase 34 Evidence
+```text
+Import model/project -> Prepare readiness -> Slice/reslice -> Preview -> Export local G-code
+```
 
-- Commit: `bda6cee feat: harden gcode preview parser`.
-- Runtime behavior: `PreviewViewModel` now handles `G0`/`G1`, `M82`, `M83`, `G92 E`, Z layers, tool changes, and travel-hidden `GCV1` payload filtering.
-- Regression: `E2EWorkflowTests::test_preview_parser_handles_extrusion_modes_and_travel_filter` first failed because the preview parser entry point did not exist, then passed after implementation.
-- Canonical verification: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` exited 0; PrepareScene, PartPlate, QML UI audit, and E2E pipeline tests passed.
-
-## Phase 35 Evidence
-
-- Commits: `3c34615 test(35-01): add failing audit for preview rhi draw range`, `f8af356 feat(35-01): use exact preview draw spans`.
-- Runtime behavior: `RhiViewportRenderer` now builds per-segment draw spans from packed layer/move indices and clamps Preview draw range exactly instead of scaling by vertex count.
-- Regression: `QmlUiAuditTests::previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans` first failed under the canonical command, then passed after implementation.
-- Canonical verification: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` exited 0; PrepareScene, PartPlate, QML UI audit, and E2E pipeline tests passed.
-- Startup diagnostics: latest QRhi auto startup selected D3D11 (`selected=d3d11`).
+It intentionally does not include device send/upload/cloud printing or Monitor print-job lifecycle. Those workflows depend on a trustworthy local G-code result and remain future scope.
 
 ## Deferred Items
 
 | Category | Item | Target |
 |---|---|---|
-| future | THUMB-03 real GL/QRhi-capture thumbnails and 3MF pixel round-trip | v3.4+ |
-| future | FIXTURE-02 full PLATE-09 save/reload assertions after writer integration fix | v3.4+ |
-| future | AssembleView | v3.4+ |
-| future | Auto filament-map recommendation | v3.4+ |
-| future | Wipe-tower geometry + rendering | v3.4+ |
+| future | Device send/upload/cloud print and Monitor print-job lifecycle | v3.5+ |
+| future | Full preset authoring and CreatePresetsDialog workflows | v3.5+ |
+| future | THUMB-03 real GL/QRhi-capture thumbnails and 3MF pixel round-trip | v3.5+ |
+| future | FIXTURE-02 full PLATE-09 save/reload assertions after writer integration fix | v3.5+ |
+| future | AssembleView | v3.5+ |
+| future | Auto filament-map recommendation | v3.5+ |
+| future | Wipe-tower geometry + rendering | v3.5+ |
 | future | Missing CLI test fixtures (`hotend.stl`, `Block20XY.stl`) | TBD |
 | opportunistic | D3D12 crash root cause | TBD |
-| polish | Preview marker at exact final move position | v3.4+ |
+| polish | Preview marker at exact final move position | v3.4 |
 
 ## Handoff
 
-v3.3 phases are complete and ready for user UAT in the launched app. After UAT, run the milestone lifecycle:
+v3.4 planning is ready. Start Phase 37:
 
 ```text
-$gsd-audit-milestone
-$gsd-complete-milestone v3.3
+$gsd-plan-phase 37
 ```

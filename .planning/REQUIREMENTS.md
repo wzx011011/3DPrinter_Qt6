@@ -1,84 +1,149 @@
-# Requirements: OWzx Slicer v3.3 Slice Preview Main Flow MVP
+# Requirements: OWzx Slicer v3.4 Import to G-code Complete Workflow
 
 **Defined:** 2026-06-28
-**Status:** Complete - ready for v3.3 milestone audit after manual UAT
+**Status:** Active - requirements defined, roadmap ready
 **Core Value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
+
+## Scope Contract
+
+v3.4 is not an MVP milestone. It is the complete local main workflow from model/project import through local G-code export:
+
+```text
+Import model/project -> Prepare readiness -> Slice/reslice -> Preview -> Export local G-code
+```
+
+Every user-visible behavior in this path must either be implemented, verified, or explicitly classified as blocked by an unavailable dependency. Device sending, cloud printing, Monitor print jobs, ModelMall, and full application-wide preset authoring remain separate workflows.
 
 ## Status Terms
 
 - **Real:** source-truth behavior is implemented and verified with deterministic evidence.
 - **Hybrid:** a real path exists, but fallback/mock behavior remains or verification is incomplete.
 - **Mock:** local simulation only.
-- **Blocked:** requires an unavailable dependency, protocol, credential, or product decision.
+- **Blocked:** requires an unavailable dependency, credential, protocol, or product decision.
 - **Placeholder:** visible UI or enum exists but has no meaningful backend behavior.
 
-## v3.3 Requirements
+## v3.4 Requirements
 
-### Main Flow
+### Import and Project Restore
 
-- [x] **FLOW-01:** A user-facing Prepare page slice request can complete with the committed real STL fixture or an equivalent loaded model, producing a real G-code output path.
-- [x] **FLOW-02:** After slicing succeeds, the app switches to Preview automatically or presents Preview as the immediate completion action without requiring hidden/debug steps.
-- [x] **FLOW-03:** The Preview page shows current sliced G-code state instead of an empty placeholder when G-code preview data exists.
+- [ ] **IMP-01:** User can import the locally supported model/project formats exposed by the UI (`.stl`, `.obj`, `.amf`, `.3mf`, Orca/BBS `.3mf`, and `.step/.stp` when OCCT is available) through the normal topbar, Prepare page, drag/drop, and Project page paths.
+- [ ] **IMP-02:** Import progress, cancellation, success, and failure states are surfaced through Qt signals and user-visible notifications without leaving stale loading state.
+- [ ] **IMP-03:** Imported geometry populates the Prepare object list, active plate membership, printable flags, mesh render payload, selection state, and fit-view hint consistently.
+- [ ] **IMP-04:** Orca/BBS 3MF project import restores plate names, current plate, locked/printable state, bed type, print sequence, spiral mode, filament map mode, manual filament maps, and embedded plate thumbnails when present.
+- [ ] **IMP-05:** 3MF version/config compatibility outcomes are visible to the user and never silently turn project import into partial geometry-only import without a warning.
+- [ ] **IMP-06:** Importing a new model/project invalidates stale slice and preview state for affected plates while preserving unrelated valid plate state where upstream semantics allow it.
 
-### G-code Preview Data
+### Prepare Readiness and Invalidation
 
-- [x] **GCODE-01:** The parser handles G0/G1 travel and extrusion moves, absolute and relative extrusion modes (`M82`/`M83`), extrusion reset (`G92 E`), layer Z detection, and tool changes (`Tn`).
-- [x] **GCODE-02:** PreviewViewModel builds non-empty preview payload, layer count, move count, layer range, and move range from sliced G-code.
-- [x] **GCODE-03:** MVP color classification supports at least line type and tool/extruder distinctions, with travel visibility honored.
+- [ ] **PREP-01:** Prepare page exposes accurate slice readiness for the current plate, including loading state, object count, printable object state, current plate validity, and active slicing/export jobs.
+- [ ] **PREP-02:** Object, volume, plate, transform, printable flag, arrangement, bed-shape, filament-map, and relevant preset/config changes invalidate affected slice results and Preview data immediately.
+- [ ] **PREP-03:** Switching plates shows the correct per-plate slice status, Preview availability, output path, filament/time/cost/layer statistics, and export availability.
+- [ ] **PREP-04:** User-facing actions are enabled/disabled with source-truth-aligned reasons instead of allowing hidden no-ops, stale exports, or Preview of invalid results.
 
-### Rendering and Interaction
+### Slicing and Reslicing
 
-- [x] **RENDER-01:** Default Windows Preview uses the D3D11 QRhi viewport on capable systems and renders nonblank G-code segments after slicing.
-- [x] **RENDER-02:** Layer and move controls update the rendered range without crashing, freezing, or resizing the layout unexpectedly.
-- [x] **RENDER-03:** Preview remains responsive on the committed STL fixture and a larger generated or fixture G-code sample.
+- [ ] **SLICE-01:** Normal slicing uses the current plate model, merged presets, bed shape, per-plate config, filament map state, and calibration-neutral state consistently with upstream `BackgroundSlicingProcess`.
+- [ ] **SLICE-02:** Slice progress, completion, cancellation, and failure states remain coherent across `SliceService`, `EditorViewModel`, `PreviewViewModel`, notifications, and QML controls.
+- [ ] **SLICE-03:** Reslicing is triggered or required when imported data or slice-affecting settings change, and stale `outputPath` values cannot be treated as current results.
+- [ ] **SLICE-04:** Existing G-code reuse (`export_gcode_from_previous_file` equivalent) is supported when loading/reprocessing a valid previous G-code result, with Preview refreshed from the reused file.
+- [ ] **SLICE-05:** Multi-plate slicing covers current plate and all printable unlocked plates, stores per-plate output paths/statistics, and excludes locked or non-printable plates.
+- [ ] **SLICE-06:** Slice warnings and validation failures are surfaced as user-visible errors/warnings and block Preview/export when the generated result is invalid.
 
-### Verification
+### Preview Data and Semantics
 
-- [x] **TEST-01:** Regression coverage exercises the UI-facing slice-to-preview path and asserts output path, preview data, layer count, and move count.
-- [x] **TEST-02:** Parser fixture tests cover absolute extrusion, relative extrusion, `G92 E`, layer Z, travel/extrude split, and tool changes.
-- [x] **TEST-03:** QML/UI audit or smoke coverage guards D3D11 default Preview bindings and prevents silent fallback to `SoftwareViewport` as the normal path.
+- [ ] **PREVIEW-01:** Preview state is built from the current valid G-code result and exposes output path, layer count, move count, layer range, move range, tool position, and per-plate association without stale data.
+- [ ] **PREVIEW-02:** G-code parsing covers common OrcaSlicer output semantics required by Preview: travel/extrusion moves, extrusion modes, `G92 E`, Z/layer markers, feature/role tags, width, height, feedrate, fan speed, temperature, acceleration, tool changes, and elapsed time.
+- [ ] **PREVIEW-03:** Preview view modes align with upstream `GCodeViewer` for the local workflow: feature type, height, width, feedrate, fan speed, temperature, tool/extruder, filament/color where data is available, and chronology/layer-time modes when derivable from the result.
+- [ ] **PREVIEW-04:** Legend, statistics, per-extruder usage, layer-time chart data, move-time labels, tick/custom-code markers, and marker tooltip values match the active Preview data.
 
-## Deferred From v3.2
+### Preview Rendering and Interaction
 
-- **THUMB-03:** Real GL/QRhi-capture thumbnails and 3MF pixel round-trip.
-- **FIXTURE-02:** Full PLATE-09 save/reload assertions after shared 3MF writer integration is fixed.
-- **ASSEMBLE-01:** Non-placeholder AssembleView.
-- **FMAP-04:** Auto filament-map recommendation.
-- **WT-01:** Wipe-tower geometry and rendering.
-- **D3D12-01:** D3D12 crash root cause.
-- **CLI-FIXTURE-01:** Restore missing CLI fixtures (`tests/profiles/hotend.stl`, `tests/test_models/Block20XY.stl`).
+- [ ] **PREVIEW-05:** Default Windows Preview rendering uses D3D11 QRhi on capable systems and does not fall back to `SoftwareViewport` as the normal path.
+- [ ] **PREVIEW-06:** Layer slider, move slider, travel visibility, bed visibility, marker visibility, color mode, play/pause, and camera controls update the same rendered toolpath without blanking, disappearing, freezing, or corrupting buffers.
+- [ ] **PREVIEW-07:** Preview camera fit, orbit, pan, zoom, reset, plate switching, and resize preserve a visible valid toolpath for small and large G-code files.
+- [ ] **PREVIEW-08:** Preview performance remains within the v3.1 D3D11 QRhi expectation for large toolpath payloads, with no avoidable full-buffer rebuilds on pure range/camera changes.
+
+### Local G-code Export
+
+- [ ] **EXPORT-01:** Export availability follows upstream semantics: export is blocked when there is no valid current slice, when slicing/export is running, or when the result is stale.
+- [ ] **EXPORT-02:** Export uses upstream-style default file naming, including project/object name and plate name/index for multi-plate projects.
+- [ ] **EXPORT-03:** Export finalizes the current valid temporary/generated G-code to the user-selected target path, protects same-path/self-copy cases, and verifies the target file exists and is non-empty.
+- [ ] **EXPORT-04:** Export can trigger required reslice/finalization before writing, rather than only copying a previously generated path when upstream would update the background process.
+- [ ] **EXPORT-05:** Export progress, success, failure, cancellation, and destination path notifications are visible and consistent across Prepare, topbar menu, and notification actions.
+- [ ] **EXPORT-06:** Export current plate and export all printable plates are supported for local `.gcode` output, with deterministic per-plate paths and failures reported per plate.
+
+### End-to-End Verification
+
+- [ ] **VERIFY-01:** Automated tests cover the full local path: import fixture, verify Prepare readiness, slice, enter Preview, interact with layer/move/camera controls, export G-code, and validate output.
+- [ ] **VERIFY-02:** Format coverage tests exercise at least real STL and real 3MF fixtures; OBJ/AMF/STEP support is tested or explicitly classified based on available dependencies.
+- [ ] **VERIFY-03:** QML/UI audits prevent normal-path Preview fallback to `SoftwareViewport` and catch Preview binding regressions for controls used in the main workflow.
+- [ ] **VERIFY-04:** Runtime diagnostics record selected renderer backend, import/slice/export state transitions, and Preview payload/render range enough to debug blank-preview regressions.
+- [ ] **VERIFY-05:** Manual UAT checklist matches the complete local workflow and must pass before v3.4 is marked complete.
+
+## Future Requirements
+
+- Full device send/print workflows, including upload to printer, cloud printing, and Monitor task lifecycle.
+- Full preset authoring and CreatePresetsDialog workflows beyond the preset data needed for local slicing correctness.
+- AssembleView source-truth completion.
+- Auto filament-map recommendation and wipe-tower geometry/rendering beyond what is required to preserve imported state.
+- Real GL/QRhi-capture thumbnails and 3MF pixel round-trip if not required by local G-code export.
+- D3D12 or Vulkan default promotion after separate backend feasibility and stability work.
+- ModelMall/Home WebView and cloud-related workflows.
+- Full i18n translation coverage beyond strings touched by the local workflow.
 
 ## Out of Scope
 
-- AssembleView implementation.
-- Real thumbnail capture and 3MF pixel round-trip.
-- Auto filament-map recommendation.
-- Wipe-tower geometry/rendering.
-- D3D12 default promotion or Vulkan backend promotion.
-- Full upstream Preview parity beyond the MVP motion, layer, tool, travel, and range behavior listed above.
+| Feature | Reason |
+|---|---|
+| Device send, upload, cloud print, and Monitor print-job workflow | Separate device workflow after local G-code export is complete. |
+| Changing libslic3r slicing algorithms | GUI migration preserves libslic3r behavior. |
+| Making D3D12 or Vulkan the default backend | D3D11 QRhi is the known stable Qt-native Windows backend; D3D12/Vulkan remain separate performance/backend work. |
+| Full application-wide preset editing parity | v3.4 only includes preset/config behavior required by import, slicing, preview, and export correctness. |
+| OpenVDB/WebRTC/FFmpeg-dependent workflows | Unavailable dependency areas unrelated to local G-code export. |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |---|---|---|
-| FLOW-01 | Phase 33 | Complete |
-| FLOW-02 | Phase 33 | Complete |
-| FLOW-03 | Phase 33 | Complete |
-| GCODE-01 | Phase 34 | Complete |
-| GCODE-02 | Phase 34 | Complete |
-| GCODE-03 | Phase 34 | Complete |
-| RENDER-01 | Phase 35 | Complete |
-| RENDER-02 | Phase 35 | Complete |
-| RENDER-03 | Phase 35 | Complete |
-| TEST-01 | Phase 33, Phase 36 | Complete |
-| TEST-02 | Phase 34, Phase 36 | Complete |
-| TEST-03 | Phase 35, Phase 36 | Complete |
+| IMP-01 | Phase 37 | Pending |
+| IMP-02 | Phase 37 | Pending |
+| IMP-03 | Phase 37 | Pending |
+| IMP-04 | Phase 37 | Pending |
+| IMP-05 | Phase 37 | Pending |
+| IMP-06 | Phase 37 | Pending |
+| PREP-01 | Phase 38 | Pending |
+| PREP-02 | Phase 38 | Pending |
+| PREP-03 | Phase 38 | Pending |
+| PREP-04 | Phase 38 | Pending |
+| SLICE-01 | Phase 39 | Pending |
+| SLICE-02 | Phase 39 | Pending |
+| SLICE-03 | Phase 39 | Pending |
+| SLICE-04 | Phase 39 | Pending |
+| SLICE-05 | Phase 39 | Pending |
+| SLICE-06 | Phase 39 | Pending |
+| PREVIEW-01 | Phase 40 | Pending |
+| PREVIEW-02 | Phase 40 | Pending |
+| PREVIEW-03 | Phase 40 | Pending |
+| PREVIEW-04 | Phase 40 | Pending |
+| PREVIEW-05 | Phase 41 | Pending |
+| PREVIEW-06 | Phase 41 | Pending |
+| PREVIEW-07 | Phase 41 | Pending |
+| PREVIEW-08 | Phase 41 | Pending |
+| EXPORT-01 | Phase 42 | Pending |
+| EXPORT-02 | Phase 42 | Pending |
+| EXPORT-03 | Phase 42 | Pending |
+| EXPORT-04 | Phase 42 | Pending |
+| EXPORT-05 | Phase 42 | Pending |
+| EXPORT-06 | Phase 42 | Pending |
+| VERIFY-01 | Phase 43 | Pending |
+| VERIFY-02 | Phase 43 | Pending |
+| VERIFY-03 | Phase 43 | Pending |
+| VERIFY-04 | Phase 43 | Pending |
+| VERIFY-05 | Phase 43 | Pending |
 
-**Coverage:** 12 total; 12 complete; 0 partial; final milestone handoff complete.
+**Coverage:** 35 total; 35 mapped; 0 unmapped.
 
-## Final Evidence
+---
 
-- Phase 36 canonical verification passed on 2026-06-28.
-- Phase 36 code review found no critical or warning-level issues.
-- Startup diagnostics confirmed QRhi auto selected D3D11 for the current Preview path.
-- Manual UAT path is recorded in `.planning/phases/36-verification-and-handoff/36-SUMMARY.md`.
+*Requirements defined: 2026-06-28*
+*Last updated: 2026-06-28 after v3.4 milestone definition.*

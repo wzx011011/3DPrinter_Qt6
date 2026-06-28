@@ -4,22 +4,24 @@
 
 OWzx Slicer is a Windows desktop slicer migrating OrcaSlicer from its upstream C++/wxWidgets GUI to a C++17, Qt 6.10, and QML architecture. The GUI layer is being rewritten while preserving libslic3r and upstream user-visible behavior as the functional source of truth.
 
-The project currently has a usable Qt6/QML shell, real model/project IO, real slicing and G-code export paths, Prepare and Preview renderers, partial preset IO, and hybrid device/camera/network integrations. Milestone v3.1 shipped the Qt-native QRhi rendering foundation with D3D11 as the stable default. Milestone v3.2 shipped multi-plate data polish with documented thumbnail and writer-integration tech debt. The active v3.3 milestone is scoped to getting the slice preview main flow running end to end.
+The project currently has a usable Qt6/QML shell, real model/project IO, real slicing and G-code export paths, Prepare and Preview renderers, partial preset IO, and hybrid device/camera/network integrations. Milestone v3.1 shipped the Qt-native QRhi rendering foundation with D3D11 as the stable default. Milestone v3.2 shipped multi-plate data polish with documented thumbnail and writer-integration tech debt. Milestone v3.3 proved the slice-to-Preview MVP, but user UAT showed the full local import-to-G-code workflow still needs a complete source-truth pass.
 
 ## Core Value
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current Milestone: v3.3 Slice Preview Main Flow MVP
+## Current Milestone: v3.4 Import to G-code Complete Workflow
 
-**Goal:** Make the main user workflow work quickly and reliably: load a model, slice it, enter Preview, and see a non-empty D3D11 QRhi-rendered G-code preview with basic layer and move controls.
+**Goal:** Complete the full local user workflow from importing a model/project through local G-code export, with source-truth-aligned Prepare readiness, slicing/reslicing, D3D11 QRhi Preview, and export finalization.
 
 **Target features:**
-- UI-facing Prepare -> Slice -> Preview navigation path after successful slicing.
-- Preview state populated from the sliced G-code output path, with non-empty layer and move data.
-- G-code parser MVP for G0/G1 travel/extrude moves, extrusion modes, extrusion reset, layer Z, and tool changes.
-- D3D11 QRhi Preview rendering for the sliced toolpath, including layer/move range interaction and travel visibility.
-- Focused regression tests and canonical verification for the main flow.
+- Complete import and project-restore behavior for locally supported model/project formats exposed by the UI.
+- Prepare page readiness, per-plate result state, and slice/Preview/export invalidation after all slice-affecting edits.
+- Complete local slicing/reslicing state machine, including current plate, all printable plates, cancellation, failure, and previous G-code reuse.
+- Complete Preview data semantics for the local workflow, including view modes, statistics, legend, marker, tick/custom-code data, and stale-state prevention.
+- Stable D3D11 QRhi Preview rendering under layer/move/camera interactions without normal-path `SoftwareViewport` fallback.
+- Complete local G-code export and finalization for current plate and all printable plates, with safe naming, progress, errors, and output validation.
+- End-to-end automated and manual verification for import -> Prepare -> slice -> Preview -> export.
 
 ## Requirements
 
@@ -40,12 +42,13 @@ These are current baseline capabilities inferred from implementation, git histor
 
 ### Active
 
-- [ ] Prepare slicing completion switches the UI to Preview or otherwise makes Preview the immediate next visible workflow step.
-- [ ] PreviewViewModel receives the sliced G-code output and exposes non-empty preview data, layer count, move count, and current layer/move range.
-- [ ] G-code parsing covers the MVP motion semantics required by common slicer output: G0/G1, M82/M83, G92 E reset, layer Z, travel/extrude classification, and tool changes.
-- [ ] D3D11 QRhi Preview renders the sliced toolpath without falling back to `SoftwareViewport` on capable Windows systems.
-- [ ] Layer/move sliders and travel visibility update the rendered range without crashing or freezing.
-- [ ] Regression tests cover the UI-facing slice-to-preview path and parser edge cases.
+- [ ] Import and project restore are complete for the local import-to-G-code workflow.
+- [ ] Prepare accurately gates slicing, Preview, and export based on current per-plate validity.
+- [ ] Slicing/reslicing and previous-G-code reuse follow upstream local workflow semantics.
+- [ ] Preview data and controls are complete enough for source-truth local G-code inspection.
+- [ ] D3D11 QRhi Preview remains visible and responsive under real layer/move/camera interaction.
+- [ ] Local G-code export finalizes current/all printable plates safely and validates the written files.
+- [ ] End-to-end tests and manual UAT cover the complete local workflow.
 
 ### Future
 
@@ -53,7 +56,8 @@ These are current baseline capabilities inferred from implementation, git histor
 - Full PLATE-09 save/reload state assertions after shared 3MF writer integration is fixed (`FIXTURE-02` carry-forward).
 - AssembleView source-truth completion and multi-plate polish.
 - Auto filament-map recommendation and wipe-tower geometry/rendering.
-- Full upstream Preview parity: all color modes, retractions/seams/wipe tower markers, multi-plate preview polish, thumbnail capture, and G-code processor result parity.
+- Full device send/print workflows, including upload to printer, cloud printing, and Monitor task lifecycle.
+- Full upstream Preview parity outside the local G-code inspection workflow.
 - D3D12 crash root cause and Vulkan evaluation after the SDK/runtime path is ready.
 - Upstream-compatible preset bundle and CreatePresetsDialog workflows.
 - ModelMall/Home WebView and cloud-related workflows.
@@ -65,9 +69,10 @@ These are current baseline capabilities inferred from implementation, git histor
 - Changing libslic3r algorithms as part of GUI migration work.
 - Adding product behavior that is not mapped to OrcaSlicer upstream or explicitly documented as an OWzx-only decision.
 - Creating alternate build directories or using non-canonical build scripts.
-- Completing blocked dependency areas such as OpenVDB and WebRTC in v3.3 unless the dependency block is independently resolved.
-- Making D3D12 or Vulkan the default backend in v3.3.
-- Solving AssembleView, real thumbnail capture, auto filament mapping, and wipe-tower rendering before the slice preview main flow is usable.
+- Completing blocked dependency areas such as OpenVDB and WebRTC in v3.4 unless the dependency block is independently resolved.
+- Making D3D12 or Vulkan the default backend in v3.4.
+- Device send/upload/cloud print and Monitor print-job workflows.
+- Full application-wide preset authoring outside the preset/config behavior needed for local import, slicing, Preview, and export correctness.
 
 ## Context
 
@@ -79,7 +84,8 @@ These are current baseline capabilities inferred from implementation, git histor
 - v3.0 shipped PartPlate Core: phases 16-22, 14/14 requirements satisfied, code/UI review P0/P1 findings fixed, canonical verification passed.
 - v3.1 shipped the QRhi rendering path. The current default on Windows is D3D11 QRhi; D3D12 remains explicit opt-in until the crash root cause is understood.
 - v3.2 shipped Multi-Plate Data Polish with 8/10 requirements complete and 2 deferred integration gaps (`THUMB-02`, `FIXTURE-02`).
-- Current Qt SDK reality: `E:/Qt6.10/lib/cmake/Qt6Gui/Qt6GuiTargets.cmake` lists `vulkan` under `QT_DISABLED_PUBLIC_FEATURES`, so Vulkan is not a v3.3 default backend candidate.
+- v3.3 shipped the slice-to-Preview MVP at code/test level, but user UAT exposed Preview disappearing under layer/camera interactions and confirmed the need for a complete local workflow milestone.
+- Current Qt SDK reality: `E:/Qt6.10/lib/cmake/Qt6Gui/Qt6GuiTargets.cmake` lists `vulkan` under `QT_DISABLED_PUBLIC_FEATURES`, so Vulkan is not a v3.4 default backend candidate.
 - Known carry-forward tech debt: `.Codex` path casing diverges from git-tracked lowercase `.codex` on Windows; normalize before case-sensitive CI.
 
 ## Constraints
@@ -104,7 +110,7 @@ These are current baseline capabilities inferred from implementation, git histor
 | Default to D3D11 QRhi on Windows | D3D11 initializes reliably in the local Qt 6.10 runtime and avoids the known D3D12 startup crash. | Good - default changed after v3.2 audit |
 | Keep D3D12 explicit opt-in | D3D12 has demonstrated crashes in the app path; it remains available only for focused debugging. | Open tech debt |
 | Defer Vulkan default evaluation | Current Qt SDK disables public Vulkan support, so Vulkan cannot be the known-good default backend yet. | Future |
-| Prioritize slice preview main flow before AssembleView | A visible slice result is the highest-leverage workflow blocker for user testing. | Active - v3.3 |
+| Prioritize complete local import-to-G-code workflow before device/cloud workflows | A trustworthy local G-code output is the prerequisite for meaningful device send and print workflow testing. | Active - v3.4 |
 
 ## Evolution
 
@@ -123,4 +129,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-06-28 for v3.3 milestone definition.*
+*Last updated: 2026-06-28 for v3.4 milestone definition.*
