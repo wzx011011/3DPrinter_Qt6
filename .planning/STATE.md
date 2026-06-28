@@ -2,36 +2,37 @@
 gsd_state_version: 1.0
 milestone: v3.4
 milestone_name: Import to G-code Complete Workflow
-status: executing
-last_updated: 2026-06-29T03:41:40+08:00
-last_activity: 2026-06-29 -- Phase 40 planning complete
+status: ready_to_plan
+last_updated: 2026-06-29T05:33:03+08:00
+last_activity: 2026-06-29 -- Phase 40 execution complete
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 43
+  completed_plans: 4
+  percent: 57
+stopped_at: Phase 40 complete (1/1) -- ready to discuss Phase 41
 ---
 
 # Project State
 
 **Milestone:** v3.4 - Import to G-code Complete Workflow
-**Status:** Ready to execute
-**Next step:** execute Phase 40 to complete Preview data and upstream view semantics.
+**Status:** Ready to plan
+**Next step:** plan Phase 41 to stabilize D3D11 Preview rendering and interaction.
 
 ## Current Position
 
-Phase: 40
+Phase: 41
 Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-29 -- Phase 40 planning complete
+Status: Ready to plan
+Last activity: 2026-06-29 -- Phase 40 execution complete
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
-**Current focus:** Phase 40 -- complete preview data and upstream view semantics
+**Current focus:** Phase 41 -- D3D11 preview rendering and interaction stability
 
 ## Latest Shipped Milestone
 
@@ -48,7 +49,7 @@ See: `.planning/PROJECT.md`
 | 37 | Complete Import and Project Restore | Complete |
 | 38 | Prepare Readiness and Slice Invalidation | Complete |
 | 39 | Complete Slicing and Reslicing State Machine | Complete |
-| 40 | Complete Preview Data and Upstream View Semantics | Pending |
+| 40 | Complete Preview Data and Upstream View Semantics | Complete |
 | 41 | D3D11 Preview Rendering and Interaction Stability | Pending |
 | 42 | Local G-code Export and Finalization | Pending |
 | 43 | End-to-End Verification and Handoff | Pending |
@@ -67,7 +68,7 @@ It intentionally does not include device send/upload/cloud printing or Monitor p
 
 | Category | Item | Target |
 |---|---|---|
-| future | Device send/upload/cloud print and Monitor print-job lifecycle | v3.5+ |
+| future | Device send/upload/cloud print and Monitor job lifecycle | v3.5+ |
 | future | Full preset authoring and CreatePresetsDialog workflows | v3.5+ |
 | future | THUMB-03 real GL/QRhi-capture thumbnails and 3MF pixel round-trip | v3.5+ |
 | future | FIXTURE-02 full PLATE-09 save/reload assertions after writer integration fix | v3.5+ |
@@ -76,12 +77,11 @@ It intentionally does not include device send/upload/cloud printing or Monitor p
 | future | Wipe-tower geometry + rendering | v3.5+ |
 | future | Missing CLI test fixtures (`hotend.stl`, `Block20XY.stl`) | TBD |
 | opportunistic | D3D12 crash root cause | TBD |
-| polish | Preview marker at exact final move position | v3.4 |
 
 ## Handoff
 
-Phase 40 is planned. Execute the Phase 40 plan:
+Phase 40 is complete. Plan Phase 41:
 
 ```text
-$gsd-execute-phase 40
+$gsd-autonomous --from 41
 ```

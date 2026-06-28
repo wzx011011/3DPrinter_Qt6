@@ -51,10 +51,10 @@ Every user-visible behavior in this path must either be implemented, verified, o
 
 ### Preview Data and Semantics
 
-- [ ] **PREVIEW-01:** Preview state is built from the current valid G-code result and exposes output path, layer count, move count, layer range, move range, tool position, and per-plate association without stale data.
-- [ ] **PREVIEW-02:** G-code parsing covers common OrcaSlicer output semantics required by Preview: travel/extrusion moves, extrusion modes, `G92 E`, Z/layer markers, feature/role tags, width, height, feedrate, fan speed, temperature, acceleration, tool changes, and elapsed time.
-- [ ] **PREVIEW-03:** Preview view modes align with upstream `GCodeViewer` for the local workflow: feature type, height, width, feedrate, fan speed, temperature, tool/extruder, filament/color where data is available, and chronology/layer-time modes when derivable from the result.
-- [ ] **PREVIEW-04:** Legend, statistics, per-extruder usage, layer-time chart data, move-time labels, tick/custom-code markers, and marker tooltip values match the active Preview data.
+- [x] **PREVIEW-01:** Preview state is built from the current valid G-code result and exposes output path, layer count, move count, layer range, move range, tool position, and per-plate association without stale data.
+- [x] **PREVIEW-02:** G-code parsing covers common OrcaSlicer output semantics required by Preview: travel/extrusion moves, extrusion modes, `G92 E`, Z/layer markers, feature/role tags, width, height, feedrate, fan speed, temperature, acceleration, tool changes, and elapsed time.
+- [x] **PREVIEW-03:** Preview view modes align with upstream `GCodeViewer` for the local workflow: feature type, height, width, feedrate, fan speed, temperature, tool/extruder, filament/color where data is available, and chronology/layer-time modes when derivable from the result.
+- [x] **PREVIEW-04:** Legend, statistics, per-extruder usage, layer-time chart data, move-time labels, tick/custom-code markers, and marker tooltip values match the active Preview data.
 
 ### Preview Rendering and Interaction
 
@@ -121,10 +121,10 @@ Every user-visible behavior in this path must either be implemented, verified, o
 | SLICE-04 | Phase 39 | Satisfied |
 | SLICE-05 | Phase 39 | Satisfied |
 | SLICE-06 | Phase 39 | Satisfied |
-| PREVIEW-01 | Phase 40 | Pending |
-| PREVIEW-02 | Phase 40 | Pending |
-| PREVIEW-03 | Phase 40 | Pending |
-| PREVIEW-04 | Phase 40 | Pending |
+| PREVIEW-01 | Phase 40 | Satisfied |
+| PREVIEW-02 | Phase 40 | Satisfied |
+| PREVIEW-03 | Phase 40 | Satisfied |
+| PREVIEW-04 | Phase 40 | Satisfied |
 | PREVIEW-05 | Phase 41 | Pending |
 | PREVIEW-06 | Phase 41 | Pending |
 | PREVIEW-07 | Phase 41 | Pending |
@@ -141,9 +141,9 @@ Every user-visible behavior in this path must either be implemented, verified, o
 | VERIFY-04 | Phase 43 | Pending |
 | VERIFY-05 | Phase 43 | Pending |
 
-**Coverage:** 35 total; 35 mapped; 0 unmapped; 16 satisfied.
+**Coverage:** 35 total; 35 mapped; 0 unmapped; 20 satisfied.
 
 ---
 
 *Requirements defined: 2026-06-28*
-*Last updated: 2026-06-29 after Phase 39 execution.*
+*Last updated: 2026-06-29 after Phase 40 execution.*
