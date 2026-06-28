@@ -10,6 +10,7 @@ Item {
     id: root
     required property var editorVm
     required property var configVm
+    signal exportRequested()
 
     property bool collapsed: false
     property string processCategory: ""
@@ -407,6 +408,7 @@ Item {
                             width: parent.width
                             height: 120
                             editorVm: root.editorVm
+                            onExportRequested: root.exportRequested()
                         }
                     }
 

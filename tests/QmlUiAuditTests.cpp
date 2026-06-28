@@ -371,9 +371,15 @@ void QmlUiAuditTests::exportUiUsesSaveDialogAndAvoidsSourcePathTarget()
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString sliceProgress = readSource(QStringLiteral("src/qml_gui/panels/SliceProgress.qml"));
   const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
+  const QString errorToast = readSource(QStringLiteral("src/qml_gui/components/ErrorToast.qml"));
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
   QVERIFY2(!sliceProgress.isEmpty(), "Unable to read SliceProgress.qml");
   QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+  QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
+  QVERIFY2(!errorToast.isEmpty(), "Unable to read ErrorToast.qml");
 
   const int dialogStart = preparePage.indexOf(QStringLiteral("id: exportGCodeDlg"));
   QVERIFY2(dialogStart >= 0, "PreparePage exportGCodeDlg missing");
@@ -393,6 +399,15 @@ void QmlUiAuditTests::exportUiUsesSaveDialogAndAvoidsSourcePathTarget()
                && !sliceProgress.contains(QStringLiteral("requestExportGCode(root.outputPath)"))
                && !sliceProgress.contains(QStringLiteral("? root.outputPath")),
            "SliceProgress must not export directly to the generated source outputPath");
+  QVERIFY2(!errorToast.contains(QStringLiteral("requestExportGCode(\"output.gcode\")")),
+           "Notification export button must open the export dialog instead of writing output.gcode");
+  QVERIFY2(errorToast.contains(QStringLiteral("exportGCodeRequested")),
+           "Notification export button must route through the page export dialog");
+  QVERIFY2(topbar.contains(QStringLiteral("exportAllGcodeRequested")),
+           "Topbar must expose an all-plate G-code export action");
+  QVERIFY2(mainQml.contains(QStringLiteral("FolderDialog"))
+               && mainQml.contains(QStringLiteral("requestExportAllGCode")),
+           "All-plate export must ask for a destination directory and call the backend all-plate API");
 }
 
 void QmlUiAuditTests::rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads()

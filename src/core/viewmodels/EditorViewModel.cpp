@@ -3722,6 +3722,7 @@ bool EditorViewModel::canExportGCode() const
   return hasSliceResult()
       && sliceService_
       && !sliceService_->outputPath().isEmpty()
+      && sliceService_->sliceState() != SliceService::State::Exporting
       && !sliceService_->slicing();
 }
 
@@ -3847,6 +3848,11 @@ void EditorViewModel::cancelSlice()
 {
   if (sliceService_)
     sliceService_->cancelSlice();
+}
+
+QString EditorViewModel::defaultExportGCodeFileName(int plateIndex) const
+{
+  return sliceService_ ? sliceService_->defaultExportGCodeFileName(plateIndex) : QStringLiteral("output.gcode");
 }
 
 bool EditorViewModel::loadFile(const QString &filePath)
@@ -3977,7 +3983,29 @@ bool EditorViewModel::requestExportGCode(const QString &targetPath)
   }
   QUrl url(targetPath);
   const QString localPath = url.isLocalFile() ? url.toLocalFile() : targetPath;
-  return sliceService_->exportGCodeToPath(localPath);
+  const bool ok = sliceService_->exportGCodeToPath(localPath);
+  statusText_ = sliceService_->statusLabel();
+  emit stateChanged();
+  return ok;
+}
+
+bool EditorViewModel::requestExportAllGCode(const QString &directoryPath, const QString &baseName)
+{
+  if (!sliceService_)
+    return false;
+  if (sliceService_->slicing())
+  {
+    statusText_ = exportActionHint();
+    emit stateChanged();
+    return false;
+  }
+
+  QUrl url(directoryPath);
+  const QString localPath = url.isLocalFile() ? url.toLocalFile() : directoryPath;
+  const bool ok = sliceService_->exportAllPlateGCodeToDirectory(localPath, baseName);
+  statusText_ = sliceService_->statusLabel();
+  emit stateChanged();
+  return ok;
 }
 
 // --- Arrange settings (对齐上游 ArrangeSettings) ---

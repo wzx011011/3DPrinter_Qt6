@@ -389,6 +389,7 @@ signals:
   void showPrintHostDialogRequested();
   void showPluginManagerDialogRequested();
   void showEnableLiteModeDialogRequested();
+  void exportGCodeRequested();
 
 private:
   CalibrationServiceMock *calibrationService_ = nullptr;

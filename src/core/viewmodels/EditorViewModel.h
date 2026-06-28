@@ -656,7 +656,9 @@ public:
   Q_INVOKABLE bool saveProjectAs(const QString &filePath) const;
   Q_INVOKABLE bool exportModel(const QString &filePath, const QString &format) const;
   Q_INVOKABLE void cancelSlice();
+  Q_INVOKABLE QString defaultExportGCodeFileName(int plateIndex = -1) const;
   Q_INVOKABLE bool requestExportGCode(const QString &targetPath);
+  Q_INVOKABLE bool requestExportAllGCode(const QString &directoryPath, const QString &baseName = QString());
   /// 请求切换到预览页面（对齐上游 Plater::priv::on_preview）
   Q_INVOKABLE void switchToPreview();
   /// 加载模型文件 (3MF/STL/OBJ)

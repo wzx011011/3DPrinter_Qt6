@@ -35,6 +35,7 @@ Item {
     signal saveAsRequested()
     signal importModelRequested(string nameFilter)
     signal exportGcodeRequested()
+    signal exportAllGcodeRequested()
     signal exportProjectRequested()
     signal exportModelRequested()
     signal undoRequested()
@@ -556,6 +557,10 @@ Item {
             CxMenuItem {
                 text: qsTr("Export G-code")
                 onTriggered: root.exportGcodeRequested()
+            }
+            CxMenuItem {
+                text: qsTr("Export All Plate G-code")
+                onTriggered: root.exportAllGcodeRequested()
             }
             CxMenuItem {
                 text: qsTr("Export 3MF")

@@ -136,6 +136,16 @@ BackendContext::BackendContext(QObject *parent)
               postNotification(message, tr("切片失败"), NotiError);
             });
 
+    connect(sliceService_, &SliceService::exportStarted, this,
+            [this](const QString &stage)
+            { postExportOngoing(stage); });
+    connect(sliceService_, &SliceService::exportFinished, this,
+            [this](const QString &filePath)
+            { postExportFinished(filePath); });
+    connect(sliceService_, &SliceService::exportFailed, this,
+            [this](const QString &message)
+            { postNotification(message, tr("瀵煎嚭澶辫触"), NotiError); });
+
     // Propagate 3MF embedded config to ConfigViewModel on project load
     connect(projectService_, &ProjectServiceMock::projectConfigLoaded,
             configViewModel_, &ConfigViewModel::applyProjectConfig);

@@ -1082,6 +1082,22 @@ void E2EWorkflowTests::test_slice_all_stores_outputs_for_printable_unlocked_plat
   QVERIFY2(QFileInfo::exists(slice.plateOutputPath(1)),
            qPrintable(QStringLiteral("plate 1 output should exist: %1").arg(slice.plateOutputPath(1))));
 
+  QTemporaryDir exportDir(QDir::tempPath() + QStringLiteral("/owzx_export_all_XXXXXX"));
+  QVERIFY2(exportDir.isValid(), "temporary all-plate export directory should be available");
+  QVERIFY2(editor.requestExportAllGCode(exportDir.path(), QStringLiteral("allplates")),
+           "all printable valid plate results should export to a directory");
+  const QString exportedPlate0 = exportDir.filePath(QStringLiteral("allplates_plate1.gcode"));
+  const QString exportedPlate1 = exportDir.filePath(QStringLiteral("allplates_plate2.gcode"));
+  const QString skippedPlate2 = exportDir.filePath(QStringLiteral("allplates_plate3.gcode"));
+  QVERIFY2(QFileInfo::exists(exportedPlate0),
+           qPrintable(QStringLiteral("plate 0 export should exist: %1").arg(exportedPlate0)));
+  QVERIFY2(QFileInfo::exists(exportedPlate1),
+           qPrintable(QStringLiteral("plate 1 export should exist: %1").arg(exportedPlate1)));
+  QCOMPARE(QFileInfo(exportedPlate0).size(), QFileInfo(slice.plateOutputPath(0)).size());
+  QCOMPARE(QFileInfo(exportedPlate1).size(), QFileInfo(slice.plateOutputPath(1)).size());
+  QVERIFY2(!QFileInfo::exists(skippedPlate2),
+           "locked skipped plate must not create an all-plate export file");
+
   QVERIFY(editor.setCurrentPlateIndex(0));
   QCOMPARE(editor.sliceOutputPath(), slice.plateOutputPath(0));
   QVERIFY(editor.setCurrentPlateIndex(1));

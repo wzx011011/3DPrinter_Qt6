@@ -288,9 +288,7 @@ Item {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             backend.dismissNotification()
-                            // Trigger export through editor viewmodel
-                            var evm = backend.editorViewModel
-                            if (evm) evm.requestExportGCode("output.gcode")
+                            backend.exportGCodeRequested()
                         }
                     }
                 }

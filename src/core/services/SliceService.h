@@ -92,7 +92,10 @@ public:
   Q_INVOKABLE void startSlicePlate(int plateIndex);
   Q_INVOKABLE void cancelSlice();
   Q_INVOKABLE bool loadGCodeFromPrevious(const QString &gcodeFilePath);
+  Q_INVOKABLE QString defaultExportGCodeFileName(int plateIndex = -1) const;
   Q_INVOKABLE bool exportGCodeToPath(const QString &targetPath);
+  Q_INVOKABLE bool exportPlateGCodeToPath(int plateIndex, const QString &targetPath);
+  Q_INVOKABLE bool exportAllPlateGCodeToDirectory(const QString &directoryPath, const QString &baseName = QString());
   Q_INVOKABLE void clearResults();
 
   /// Inject merged preset config before startSlice(), aligned with upstream PresetBundle::full_fff_config.
@@ -127,6 +130,9 @@ signals:
   void sliceResultCleared();
   void sliceFinished(const QString &estimatedTime);
   void sliceFailed(const QString &message);
+  void exportStarted(const QString &stage);
+  void exportFinished(const QString &filePath);
+  void exportFailed(const QString &message);
 
 private:
   ProjectServiceMock *projectService_ = nullptr;
@@ -172,4 +178,6 @@ private:
   void clearStoredResult();
   void clearActiveTargetResult();
   void storePlateResult(int plateIndex, const PlateSliceResult &result);
+  void setExportStatus(State state, int progress, const QString &label);
+  bool exportSourceToPath(const QString &sourcePath, const QString &targetPath, const QString &displayName);
 };

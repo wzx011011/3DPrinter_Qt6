@@ -85,6 +85,15 @@ ApplicationWindow {
 
     // Latency 跟踪迁移：endLatency 在 currentPage 改变后触发
     // (替代旧 onFrameSwapped + pendingSwitchTargetPage 逻辑 — Pitfall 3)
+    FolderDialog {
+        id: exportAllGcodeDialog
+        title: qsTr("导出全部平板 G-code")
+        onAccepted: {
+            if (backend.editorViewModel)
+                backend.editorViewModel.requestExportAllGCode(selectedFolder.toString())
+        }
+    }
+
     Connections {
         target: backend
         function onCurrentPageChanged() {
@@ -92,6 +101,9 @@ ApplicationWindow {
                 backend.endLatency(root.activeTabSwitchToken)
                 root.activeTabSwitchToken = -1
             }
+        }
+        function onExportGCodeRequested() {
+            plater.preparePageRef.openExportDialog()
         }
     }
 
@@ -382,6 +394,7 @@ ApplicationWindow {
                     openModelDialog.open()
                 }
                 onExportGcodeRequested: plater.preparePageRef.openExportDialog()
+                onExportAllGcodeRequested: exportAllGcodeDialog.open()
                 onExportProjectRequested: saveProjectAsDialog.open()
                 onExportModelRequested: exportModelDialog.open()
                 onUndoRequested: if (backend.currentPage === backend.tp3DEditor) plater.preparePageRef.undoFromTopbar()

@@ -8,6 +8,7 @@ import "../controls"
 Item {
     id: root
     required property var editorVm
+    signal exportRequested()
 
     readonly property int pct: root.editorVm ? root.editorVm.sliceProgress() : 0
     readonly property bool slicingNow: root.editorVm ? root.editorVm.isSlicing() : false
@@ -578,11 +579,7 @@ Item {
                     enabled: root.canExportGCode
                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ForbiddenCursor
                     onClicked: {
-                        if (!root.editorVm) return
-                        const path = root.outputPath.length > 0
-                            ? root.outputPath
-                            : "output.gcode"
-                        root.editorVm.requestExportGCode(path)
+                        root.exportRequested()
                     }
                 }
             }

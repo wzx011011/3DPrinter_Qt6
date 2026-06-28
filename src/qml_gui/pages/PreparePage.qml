@@ -50,6 +50,7 @@ Item {
                 root.editorVm.requestExportGCode("")
             return
         }
+        exportGCodeDlg.currentFile = root.editorVm.defaultExportGCodeFileName()
         exportGCodeDlg.open()
     }
 
@@ -1527,7 +1528,10 @@ Item {
     FileDialog {
         id: exportGCodeDlg
         title: qsTr("导出 G-code")
+        fileMode: FileDialog.SaveFile
         nameFilters: [qsTr("G-code 文件 (*.gcode)")]
+        defaultSuffix: "gcode"
+        currentFile: root.editorVm ? root.editorVm.defaultExportGCodeFileName() : "output.gcode"
         onAccepted: {
             if (root.editorVm)
                 root.editorVm.requestExportGCode(selectedFile.toString())
