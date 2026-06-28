@@ -100,13 +100,13 @@ private:
   bool m_showTravelMoves = true;
   int m_gcodeViewMode = 0;
   QVector<Vertex> m_previewVertices;     // expanded Line vertices (CPU staging)
-  struct LayerRange {
+  struct PreviewDrawSpan {
     int layer;
+    int move;
     quint32 vertexOffset;
     quint32 vertexCount;
-    bool isTravel;
   };
-  QVector<LayerRange> m_previewLayerRanges;
+  QVector<PreviewDrawSpan> m_previewDrawSpans;
   std::unique_ptr<QRhiBuffer> m_previewSegmentBuffer;
   quint32 m_previewSegmentBufferBytes = 0;
   quint32 m_previewSegmentVertexCount = 0;

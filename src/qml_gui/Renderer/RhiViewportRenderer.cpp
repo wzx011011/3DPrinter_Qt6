@@ -560,7 +560,7 @@ struct GcvPackedSegment
 void RhiViewportRenderer::parsePreviewSegments()
 {
   m_previewVertices.clear();
-  m_previewLayerRanges.clear();
+  m_previewDrawSpans.clear();
   m_previewSegmentVertexCount = 0;
 
   if (m_previewData.size() < 8)
@@ -579,11 +579,7 @@ void RhiViewportRenderer::parsePreviewSegments()
 
   const auto *seg = reinterpret_cast<const GcvPackedSegment *>(m_previewData.constData() + 8);
   m_previewVertices.reserve(int(count) * 2);
-
-  int currentLayer = -1;
-  bool currentIsTravel = false;
-  quint32 layerStartOffset = 0;
-  quint32 layerVertexCount = 0;
+  m_previewDrawSpans.reserve(int(count));
 
   for (int i = 0; i < count; ++i)
   {
@@ -605,25 +601,8 @@ void RhiViewportRenderer::parsePreviewSegments()
     m_previewVertices.append(a);
     m_previewVertices.append(b);
 
-    // Track layer ranges for GPU draw-range filtering (D-26-02).
-    // Segments are typically layer-sequential; detect layer transitions.
-    // DESIGN-V31-4 fix: mark travel segments (move==0) for visibility toggle.
-    const bool isTravel = (seg[i].move == 0);
-    if (seg[i].layer != currentLayer || isTravel != currentIsTravel) {
-      if (currentLayer >= 0) {
-        m_previewLayerRanges.append({currentLayer, layerStartOffset, layerVertexCount, currentIsTravel});
-      }
-      currentLayer = seg[i].layer;
-      currentIsTravel = isTravel;
-      layerStartOffset = m_previewVertices.size() - 2;
-      layerVertexCount = 2;
-    } else {
-      layerVertexCount += 2;
-    }
-  }
-  // Flush the last layer range.
-  if (currentLayer >= 0) {
-    m_previewLayerRanges.append({currentLayer, layerStartOffset, layerVertexCount, currentIsTravel});
+    const quint32 vertexOffset = quint32(m_previewVertices.size() - 2);
+    m_previewDrawSpans.append({seg[i].layer, seg[i].move, vertexOffset, 2});
   }
 
   m_previewSegmentVertexCount = quint32(m_previewVertices.size());
@@ -651,25 +630,29 @@ void RhiViewportRenderer::computePreviewDrawRange(quint32 &firstVertex, quint32 
   firstVertex = 0;
   vertexCount = 0;
 
-  if (m_previewLayerRanges.isEmpty())
+  if (m_previewDrawSpans.isEmpty())
+    return;
+  if (m_moveEnd <= 0)
     return;
 
-  // Find the draw range for [m_layerMin, m_layerMax] from the layer-offset index.
+  // PreviewViewModel already repacks the GCV1 payload for travel visibility
+  // and color mode changes. Renderer range selection only applies layer and
+  // playback cutoff against exact packed segment metadata.
   quint32 startOffset = 0;
   quint32 endOffset = 0;
   bool foundStart = false;
 
-  for (const auto &lr : m_previewLayerRanges) {
-    // DESIGN-V31-4: skip travel segments when showTravelMoves is false.
-    if (!m_showTravelMoves && lr.isTravel)
+  for (const auto &span : m_previewDrawSpans) {
+    if (span.layer < m_layerMin || span.layer > m_layerMax)
       continue;
-    if (lr.layer >= m_layerMin && lr.layer <= m_layerMax) {
-      if (!foundStart) {
-        startOffset = lr.vertexOffset;
-        foundStart = true;
-      }
-      endOffset = lr.vertexOffset + lr.vertexCount;
+    if (span.move >= m_moveEnd)
+      continue;
+
+    if (!foundStart) {
+      startOffset = span.vertexOffset;
+      foundStart = true;
     }
+    endOffset = span.vertexOffset + span.vertexCount;
   }
 
   if (!foundStart)
@@ -677,16 +660,5 @@ void RhiViewportRenderer::computePreviewDrawRange(quint32 &firstVertex, quint32 
 
   firstVertex = startOffset;
   vertexCount = endOffset - startOffset;
-
-  // Playback: if m_moveEnd is set (> 0), clamp to the playback position.
-  // m_moveEnd is a move index; we approximate by clamping vertex count
-  // proportionally (segments are in order). A precise per-move offset
-  // can be added if needed; for now, proportional is sufficient for Phase 26.
-  if (m_moveEnd > 0 && m_previewSegmentVertexCount > 0) {
-    const quint32 moveCutoff = quint32(
-        quint64(firstVertex + vertexCount) * quint64(m_moveEnd) / quint64(m_previewSegmentVertexCount));
-    if (moveCutoff < firstVertex + vertexCount)
-      vertexCount = moveCutoff - firstVertex;
-  }
 }
 
