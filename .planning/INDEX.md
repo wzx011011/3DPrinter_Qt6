@@ -21,11 +21,22 @@ This is the canonical entry point for `.planning/`. Historical phase files are e
 
 ## Active Milestone
 
-**None active.** v3.2 Multi-Plate Data Polish has been audited as `tech_debt`.
+**v3.3 Slice Preview Main Flow MVP** is active.
 
-Next milestone should be created from the v3.2 carry-forward backlog:
+Primary objective:
 
-- `THUMB-03` real GL-capture thumbnails and 3MF pixel round-trip
+- Load model -> slice -> enter Preview -> render a non-empty D3D11 QRhi G-code preview with basic layer/move controls.
+
+Active phases:
+
+- Phase 33: Slice-to-Preview Navigation Gate
+- Phase 34: G-code Preview Parser MVP
+- Phase 35: D3D11 Preview Rendering Interaction
+- Phase 36: Verification and Handoff
+
+Deferred until after the main flow:
+
+- `THUMB-03` real GL/QRhi-capture thumbnails and 3MF pixel round-trip
 - `FIXTURE-02` full PLATE-09 save/reload assertions after writer integration fix
 - AssembleView
 - Auto filament-map recommendation
@@ -62,8 +73,9 @@ Do not treat phase completion as product completion unless the exact workflow is
 
 ## Next Step
 
-Create the next milestone:
+Start Phase 33:
 
 ```text
-$gsd-new-milestone
+$gsd-plan-phase 33
+$gsd-execute-phase 33 --interactive
 ```
