@@ -21,6 +21,11 @@
 
 ## Phases
 
+- [x] **Phase 33:** Slice-to-Preview Navigation Gate
+- [ ] **Phase 34:** G-code Preview Parser MVP
+- [ ] **Phase 35:** D3D11 Preview Rendering Interaction
+- [ ] **Phase 36:** Verification and Handoff
+
 ### Phase 33: Slice-to-Preview Navigation Gate - Complete
 
 **Goal:** Wire the real slice completion path to Preview so the first visible main flow is usable.
