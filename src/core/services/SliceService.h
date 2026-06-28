@@ -35,7 +35,7 @@ class SliceService final : public QObject
   Q_PROPERTY(int progress READ progress NOTIFY progressChanged)
   Q_PROPERTY(bool slicing READ slicing NOTIFY slicingChanged)
   Q_PROPERTY(QString statusLabel READ statusLabel NOTIFY progressChanged)
-  Q_PROPERTY(QString outputPath READ outputPath NOTIFY sliceFinished)
+  Q_PROPERTY(QString outputPath READ outputPath NOTIFY resultChanged)
 
 public:
   enum class State {
@@ -81,6 +81,7 @@ public:
   Q_INVOKABLE void cancelSlice();
   Q_INVOKABLE bool loadGCodeFromPrevious(const QString &gcodeFilePath);
   Q_INVOKABLE bool exportGCodeToPath(const QString &targetPath);
+  Q_INVOKABLE void clearResults();
 
   /// Inject merged preset config before startSlice(), aligned with upstream PresetBundle::full_fff_config.
   /// Values come from the current user-selected printer, filament, and print presets.
@@ -110,6 +111,8 @@ signals:
   void progressChanged();
   void slicingChanged();
   void progressUpdated(int percent, const QString &label);
+  void resultChanged();
+  void sliceResultCleared();
   void sliceFinished(const QString &estimatedTime);
   void sliceFailed(const QString &message);
 

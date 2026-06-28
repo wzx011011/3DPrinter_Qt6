@@ -175,6 +175,7 @@ signals:
   void tickMarksChanged();
 
 private:
+  void resetPreviewState();
   void rebuildFromGCode(const QString &filePath);
   void recolorAndPackSegments();
   void buildLegendItems(int mode, float minV, float maxV);

@@ -3686,11 +3686,14 @@ bool EditorViewModel::loadFile(const QString &filePath)
   // Accept both local paths and file:// URLs (from QML FileDialog)
   QUrl url(filePath);
   const QString localPath = url.isLocalFile() ? url.toLocalFile() : filePath;
-  m_sliceEstimatedTime.clear();
-  m_sliceResultPlateIndex = -1;
   const bool started = projectService_->loadFile(localPath);
   if (started)
   {
+    if (sliceService_)
+      sliceService_->clearResults();
+    m_sliceEstimatedTime.clear();
+    m_sliceResultPlateIndex = -1;
+    m_slicedPlateIndices.clear();
     statusText_ = QStringLiteral("正在加载...");
     m_collapsedGroupKeys.clear();
     m_collapsedObjectSourceIndices.clear();
@@ -3713,6 +3716,8 @@ void EditorViewModel::clearWorkspace()
 {
   if (projectService_)
     projectService_->clearProject();
+  if (sliceService_)
+    sliceService_->clearResults();
 
   // 新建/清空工作区时清除撤销栈（对齐上游 UndoRedo::reset）
   clearUndoStack();
@@ -3749,6 +3754,8 @@ void EditorViewModel::refreshAfterLoad()
   m_cachedMeshData.clear();
   m_cachedMeshBatchSourceObjectIndices.clear();
   m_slicedPlateIndices.clear();
+  if (sliceService_)
+    sliceService_->clearResults();
   rebuildObjectEntriesFromService();
   statusText_ = QStringLiteral("项目已加载");
   emit stateChanged();

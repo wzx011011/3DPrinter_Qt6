@@ -191,6 +191,10 @@ PreviewViewModel::PreviewViewModel(SliceService *sliceService, QObject *parent)
         totalTime_ = time;
         rebuildFromGCode(sliceService_->outputPath());
         emit stateChanged(); });
+  connect(sliceService_, &SliceService::sliceResultCleared, this, [this]()
+          {
+    resetPreviewState();
+    emit stateChanged(); });
   connect(sliceService_, &SliceService::sliceFailed, this, [this](const QString &)
           {
     playTimer_->stop();
@@ -424,8 +428,10 @@ QVariantMap PreviewViewModel::legendItem(const QString &label, const QString &co
   return item;
 }
 
-void PreviewViewModel::rebuildFromGCode(const QString &filePath)
+void PreviewViewModel::resetPreviewState()
 {
+  if (playTimer_)
+    playTimer_->stop();
   gcodePreviewData_.clear();
   legendItems_.clear();
   segments_.clear();
@@ -435,12 +441,16 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   m_toolChangePositions.clear();
   m_extruderUsedLength.clear();
   m_extruderUsedWeight.clear();
+  m_roleTimes.clear();
+  m_moveAccumulatedTime.clear();
   m_maxLayerTime = 0.f;
   layerCount_ = 0;
   moveCount_ = 0;
   currentMove_ = 0;
   currentLayerMin_ = 0;
   currentLayerMax_ = 0;
+  estimatedTime_ = QStringLiteral("--:--:--");
+  totalTime_ = QStringLiteral("--:--:--");
   filamentUsed_ = QStringLiteral("--");
   filamentWeight_ = QStringLiteral("--");
   extrudeMoveCount_ = 0;
@@ -448,8 +458,34 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   toolChangeCount_ = 0;
   avgSpeed_ = QStringLiteral("--");
   estimatedCost_ = QStringLiteral("--");
-  m_roleTimes.clear();
-  m_moveAccumulatedTime.clear();
+  m_legendType = 0;
+  m_legendGradMinLabel.clear();
+  m_legendGradMaxLabel.clear();
+  m_legendGradMinColor.clear();
+  m_legendGradMaxColor.clear();
+  hasToolPosition_ = false;
+  toolX_ = 0;
+  toolY_ = 0;
+  toolZ_ = 0;
+  toolFeedrate_ = 0;
+  toolFanSpeed_ = 0;
+  toolTemperature_ = 0;
+  toolWidth_ = 0;
+  toolLayerTime_ = 0;
+  toolAcceleration_ = 0;
+  toolExtruderId_ = 0;
+  toolLayer_ = 0;
+  toolMoveIndex_ = 0;
+  toolIsExtrusion_ = false;
+}
+
+void PreviewViewModel::rebuildFromGCode(const QString &filePath)
+{
+  const QString preservedEstimatedTime = estimatedTime_;
+  const QString preservedTotalTime = totalTime_;
+  resetPreviewState();
+  estimatedTime_ = preservedEstimatedTime;
+  totalTime_ = preservedTotalTime;
 
   QFile file(filePath);
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text))

@@ -46,7 +46,7 @@ SliceService::SliceService(ProjectServiceMock *projectService, QObject *parent)
     connect(projectService_, &ProjectServiceMock::projectChanged, this, [this]()
             {
       if (!slicing_)
-        clearStoredResult(); });
+        clearResults(); });
   }
 }
 
@@ -128,6 +128,25 @@ void SliceService::clearStoredResult()
   resultLayerCount_ = 0;
   resultCostLabel_.clear();
   emit progressChanged();
+}
+
+void SliceService::clearResults()
+{
+  const bool wasSlicing = slicing_;
+  if (wasSlicing && activeCancelFlag_)
+  {
+    activeCancelFlag_->store(true);
+#ifdef HAS_LIBSLIC3R
+    if (Slic3r::Print *active = activePrint_.load(std::memory_order_acquire))
+      active->cancel();
+#endif
+  }
+
+  clearStoredResult();
+  plateResults_.clear();
+  emit resultChanged();
+  emit sliceResultCleared();
+  emit stateChanged();
 }
 
 void SliceService::setMergedPresetConfig(const QHash<QString, QVariant> &config)
@@ -244,6 +263,8 @@ void SliceService::startSlice(const QString &projectName)
     return;
 
   clearStoredResult();
+  emit resultChanged();
+  emit sliceResultCleared();
 
   const QString sourcePath = projectService_ ? projectService_->sourceFilePath() : QString{};
   const int targetPlateIndex = projectService_ ? projectService_->currentPlateIndex() : -1;
@@ -630,6 +651,7 @@ void SliceService::startSlice(const QString &projectName)
       }
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
+      emit receiver->resultChanged();
       emit receiver->sliceFinished(receiver->estimatedTimeLabel_);
     }, Qt::QueuedConnection); });
 }
@@ -654,6 +676,8 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
     return false;
 
   clearStoredResult();
+  emit resultChanged();
+  emit sliceResultCleared();
 
   const QFileInfo info(gcodeFilePath);
   const QString localPath = info.absoluteFilePath();
@@ -745,6 +769,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
       receiver->resultPlateIndex_ = targetPlateIndex;
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
+      emit receiver->resultChanged();
       emit receiver->sliceFinished(QString{});
     }, Qt::QueuedConnection); });
 
@@ -830,11 +855,13 @@ int SliceService::plateLayerCount(int plateIndex) const
 void SliceService::clearPlateResults()
 {
   plateResults_.clear();
+  emit resultChanged();
 }
 
 void SliceService::removePlateResult(int plateIndex)
 {
   plateResults_.remove(plateIndex);
+  emit resultChanged();
 }
 
 

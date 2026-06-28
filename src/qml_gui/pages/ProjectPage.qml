@@ -38,7 +38,7 @@ Item {
     FileDialog {
         id: importModelDlg
         title: qsTr("导入模型")
-        nameFilters: [qsTr("模型 (*.stl *.3mf *.obj *.step *.stp)"), qsTr("所有文件 (*)")]
+        nameFilters: [qsTr("模型 (*.stl *.3mf *.obj *.amf *.step *.stp)"), qsTr("所有文件 (*)")]
         onAccepted: {
             if (root.editorVm)
                 root.editorVm.loadFile(currentFile.toString().replace("file:///", ""))

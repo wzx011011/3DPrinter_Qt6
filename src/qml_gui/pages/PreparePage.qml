@@ -1509,6 +1509,7 @@ Item {
             qsTr("3MF 文件 (*.3mf)"),
             qsTr("STL 文件 (*.stl)"),
             qsTr("OBJ 文件 (*.obj)"),
+            qsTr("STEP 文件 (*.step *.stp)"),
             qsTr("AMF 文件 (*.amf)"),
             qsTr("所有文件 (*)")
         ]

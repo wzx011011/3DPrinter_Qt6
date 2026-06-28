@@ -17,6 +17,7 @@ private slots:
   void mainRegistersRhiViewportOnlyBehindExplicitGate();
   void renderBenchmarkMatchesRhiBackendPolicy();
   void prepareViewportBindsBedAndPlateContext();
+  void importEntryPointsAdvertiseConsistentModelFormats();
   void rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads();
   void rhiViewportRendererUsesModelBuffersAndCameraUniforms();
   void previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans();
@@ -430,6 +431,41 @@ void QmlUiAuditTests::rhiViewportRendererUsesModelBuffersAndCameraUniforms()
   QVERIFY2(vertexShader.contains(QStringLiteral("layout(std140, binding = 0) uniform CameraBlock"))
                && vertexShader.contains(QStringLiteral("mvp")),
            "RhiViewport vertex shader must use a camera MVP uniform");
+}
+
+void QmlUiAuditTests::importEntryPointsAdvertiseConsistentModelFormats()
+{
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString projectPage = readSource(QStringLiteral("src/qml_gui/pages/ProjectPage.qml"));
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!projectPage.isEmpty(), "Unable to read ProjectPage.qml");
+
+  const QStringList requiredExtensions = {
+    QStringLiteral("*.3mf"),
+    QStringLiteral("*.stl"),
+    QStringLiteral("*.obj"),
+    QStringLiteral("*.amf"),
+    QStringLiteral("*.step"),
+    QStringLiteral("*.stp")
+  };
+
+  for (const QString &ext : requiredExtensions) {
+    QVERIFY2(mainQml.contains(ext),
+             qPrintable(QStringLiteral("Topbar import dialog must advertise %1").arg(ext)));
+    QVERIFY2(preparePage.contains(ext),
+             qPrintable(QStringLiteral("Prepare import dialog must advertise %1").arg(ext)));
+    QVERIFY2(projectPage.contains(ext),
+             qPrintable(QStringLiteral("Project import dialog must advertise %1").arg(ext)));
+  }
+
+  QVERIFY2(mainQml.contains(QStringLiteral("backend.topbarImportModel(selectedFile.toString())")),
+           "Topbar import dialog must route through BackendContext::topbarImportModel");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.loadFile(selectedFile.toString())")),
+           "Prepare import dialog must route through EditorViewModel::loadFile");
+  QVERIFY2(projectPage.contains(QStringLiteral("root.editorVm.loadFile(currentFile.toString().replace(\"file:///\", \"\"))")),
+           "Project import dialog must route through EditorViewModel::loadFile");
 }
 
 void QmlUiAuditTests::previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans()

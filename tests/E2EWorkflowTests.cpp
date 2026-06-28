@@ -50,6 +50,7 @@ private slots:
   void test_preview_parser_handles_extrusion_modes_and_travel_filter();
   void test_preview_parser_ignores_z_hop_travel_as_layer();
   void test_model_change_invalidates_slice_result();
+  void test_import_invalidates_slice_output_and_preview_payload();
 
 private:
   bool hasLibslic3r() const;
@@ -552,6 +553,55 @@ void E2EWorkflowTests::test_model_change_invalidates_slice_result()
   const QString outputPath = slice.outputPath();
   if (!outputPath.isEmpty() && QFileInfo::exists(outputPath))
     QFile::remove(outputPath);
+}
+
+void E2EWorkflowTests::test_import_invalidates_slice_output_and_preview_payload()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+  EditorViewModel editor(&project, &slice);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY2(editor.loadFile(kStlPath), "importing a model through EditorViewModel should start");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(finishedSpy.isValid());
+  QVERIFY(failedSpy.isValid());
+
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+  slice.startSlice(QStringLiteral("import_invalidate_test"));
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+    QSKIP("Slice failed — cannot test import invalidation without a real G-code result");
+
+  QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
+  const QString staleOutputPath = slice.outputPath();
+  QVERIFY2(!staleOutputPath.isEmpty(), "slice should expose a G-code output path before import");
+  QVERIFY2(QFileInfo::exists(staleOutputPath),
+           qPrintable(QStringLiteral("G-code file should exist before import: %1").arg(staleOutputPath)));
+  QVERIFY2(preview.moveCount() > 0, "preview should contain parsed moves before import");
+  QVERIFY2(preview.layerCount() > 0, "preview should contain parsed layers before import");
+
+  QSignalSpy reloadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(reloadSpy.isValid());
+  QVERIFY2(editor.loadFile(kStlPath), "reimporting a model should start");
+  QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);
+  QVERIFY2(reloadSpy.takeFirst().at(0).toBool(), "model reimport should complete successfully");
+
+  QVERIFY2(slice.outputPath().isEmpty(), "new import must clear stale G-code output path");
+  QVERIFY2(!editor.hasSliceResult(), "new import must invalidate EditorViewModel slice result");
+  QVERIFY2(preview.gcodePreviewData().isEmpty(), "new import must clear stale packed preview payload");
+  QCOMPARE(preview.moveCount(), 0);
+  QCOMPARE(preview.layerCount(), 0);
+
+  if (QFileInfo::exists(staleOutputPath))
+    QFile::remove(staleOutputPath);
 }
 
 QTEST_MAIN(E2EWorkflowTests)
