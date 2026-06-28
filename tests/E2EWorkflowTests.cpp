@@ -10,6 +10,7 @@
 #include "core/viewmodels/ConfigViewModel.h"
 #include "core/viewmodels/EditorViewModel.h"
 #include "core/viewmodels/PreviewViewModel.h"
+#include "qml_gui/BackendContext.h"
 
 namespace
 {
@@ -35,6 +36,7 @@ private slots:
   void test_slice_results_propagate_to_editor_vm();
   void test_export_gcode_to_path();
   void test_preview_receives_gcode_data();
+  void test_backend_switches_to_preview_after_slice();
   void test_model_change_invalidates_slice_result();
 
 private:
@@ -336,6 +338,48 @@ void E2EWorkflowTests::test_preview_receives_gcode_data()
 
   // Clean up
   if (QFileInfo::exists(outputPath))
+    QFile::remove(outputPath);
+}
+
+void E2EWorkflowTests::test_backend_switches_to_preview_after_slice()
+{
+  BackendContext ctx;
+  auto *editor = qobject_cast<EditorViewModel *>(ctx.editorViewModel());
+  auto *preview = qobject_cast<PreviewViewModel *>(ctx.previewViewModel());
+  QVERIFY(editor);
+  QVERIFY(preview);
+
+  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tp3DEditor));
+  QCOMPARE(ctx.currentViewMode(), static_cast<int>(BackendContext::ViewMode::View3D));
+
+  QSignalSpy loadSpy(editor, &EditorViewModel::stateChanged);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY(editor->loadFile(kStlPath));
+  QTRY_VERIFY_WITH_TIMEOUT(editor->modelCount() >= 1, 10000);
+
+  QSignalSpy pageSpy(&ctx, &BackendContext::currentPageChanged);
+  QVERIFY(pageSpy.isValid());
+
+  QVERIFY2(editor->canRequestSlice(),
+           qPrintable(QStringLiteral("editor should be slice-ready: %1").arg(editor->sliceActionHint())));
+  editor->requestSlice();
+
+  QTRY_VERIFY_WITH_TIMEOUT(editor->hasSliceResult(), 120000);
+  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tpPreview));
+  QCOMPARE(ctx.currentViewMode(), static_cast<int>(BackendContext::ViewMode::Preview));
+  QVERIFY2(pageSpy.count() >= 1, "slice completion should emit currentPageChanged");
+  QVERIFY2(!editor->sliceOutputPath().isEmpty(), "slice should expose a G-code output path");
+  QVERIFY2(QFileInfo::exists(editor->sliceOutputPath()),
+           qPrintable(QStringLiteral("G-code file should exist: %1").arg(editor->sliceOutputPath())));
+  QVERIFY2(preview->layerCount() > 0,
+           qPrintable(QStringLiteral("preview layer count should be > 0, got %1").arg(preview->layerCount())));
+  QVERIFY2(preview->moveCount() > 0,
+           qPrintable(QStringLiteral("preview move count should be > 0, got %1").arg(preview->moveCount())));
+  QVERIFY2(preview->gcodePreviewData().startsWith("GCV1"),
+           "preview payload should use the GCV1 segment format");
+
+  const QString outputPath = editor->sliceOutputPath();
+  if (!outputPath.isEmpty() && QFileInfo::exists(outputPath))
     QFile::remove(outputPath);
 }
 

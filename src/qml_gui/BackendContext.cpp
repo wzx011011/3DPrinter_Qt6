@@ -128,6 +128,7 @@ BackendContext::BackendContext(QObject *parent)
             {
               Q_UNUSED(estimatedTime)
               postSlicingComplete();
+              requestSelectTab(static_cast<int>(TabPosition::tpPreview));
             });
     connect(sliceService_, &SliceService::sliceFailed, this,
             [this](const QString &message)
