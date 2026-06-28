@@ -126,7 +126,7 @@ namespace
 
   bool parseAxis(const QString &line, QChar axis, float &value)
   {
-    const QRegularExpression re(QStringLiteral("(?:^|\\s)%1(-?\\d+(?:\\.\\d+)?)").arg(axis));
+    const QRegularExpression re(QStringLiteral("(?:^|\\s)%1([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))").arg(axis));
     const auto m = re.match(line);
     if (!m.hasMatch())
       return false;
@@ -250,6 +250,17 @@ QStringList PreviewViewModel::viewModes() const
       QStringLiteral("Acceleration")};
 }
 
+bool PreviewViewModel::loadGCodeForPreview(const QString &filePath)
+{
+  const QFileInfo info(filePath);
+  if (!info.exists() || !info.isFile())
+    return false;
+
+  rebuildFromGCode(info.absoluteFilePath());
+  emit stateChanged();
+  return !gcodePreviewData_.isEmpty();
+}
+
 void PreviewViewModel::setLayerRange(int minLayer, int maxLayer)
 {
   if (layerCount_ <= 0)
@@ -323,7 +334,7 @@ void PreviewViewModel::updateToolPositionData()
   toolLayer_ = seg.layer;
   toolMoveIndex_ = seg.move;
   // 挤出移动判断：起点和终点不同且有 feedrate
-  toolIsExtrusion_ = (seg.x1 != seg.x2 || seg.y1 != seg.y2 || seg.z1 != seg.z2) && seg.feedrate > 0;
+  toolIsExtrusion_ = !seg.isTravel;
 }
 
 void PreviewViewModel::playAnimation()
@@ -455,6 +466,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   float currentTemp = 0.f;
   float currentAccel = 0.f;
   int currentExtruder = 0;
+  bool relativeExtrusion = false;
   float currentWidth = 0.f;
   float layerTime = 0.f;
   float prevLayerZ = 0.f;
@@ -537,11 +549,40 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       continue;
     }
 
+    QString command = raw;
+    const int commentPos = command.indexOf(QLatin1Char(';'));
+    if (commentPos >= 0)
+      command = command.left(commentPos).trimmed();
+    if (command.isEmpty())
+      continue;
+
+    const QString upper = command.toUpper();
+
+    if (upper == QStringLiteral("M82") || upper.startsWith(QStringLiteral("M82 ")))
+    {
+      relativeExtrusion = false;
+      continue;
+    }
+
+    if (upper == QStringLiteral("M83") || upper.startsWith(QStringLiteral("M83 ")))
+    {
+      relativeExtrusion = true;
+      continue;
+    }
+
+    if (upper.startsWith(QStringLiteral("G92")))
+    {
+      float resetE = e;
+      if (parseAxis(upper, 'E', resetE))
+        e = resetE;
+      continue;
+    }
+
     // Tool change command
-    if (raw.startsWith('T') && raw.length() >= 2)
+    if (upper.startsWith('T') && upper.length() >= 2)
     {
       bool ok = false;
-      const int tid = raw.mid(1).toInt(&ok);
+      const int tid = upper.mid(1).section(QLatin1Char(' '), 0, 0).toInt(&ok);
       if (ok && tid >= 0)
       {
         if (tid != currentExtruder) {
@@ -554,38 +595,49 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     }
 
     // Acceleration command: M204 S... X... Y... Z... E...
-    if (raw.startsWith(QStringLiteral("M204")))
+    if (upper.startsWith(QStringLiteral("M204")))
     {
       float val = 0.f;
-      if (parseAxis(raw, 'X', val) && val > 0.f) currentAccel = val;
-      else if (parseAxis(raw, 'Y', val) && val > 0.f) currentAccel = val;
-      else if (parseAxis(raw, 'Z', val) && val > 0.f) currentAccel = val;
-      else if (parseAxis(raw, 'E', val) && val > 0.f) currentAccel = val;
-      else if (parseAxis(raw, 'S', val) && val > 0.f) currentAccel = val;
+      if (parseAxis(upper, 'X', val) && val > 0.f) currentAccel = val;
+      else if (parseAxis(upper, 'Y', val) && val > 0.f) currentAccel = val;
+      else if (parseAxis(upper, 'Z', val) && val > 0.f) currentAccel = val;
+      else if (parseAxis(upper, 'E', val) && val > 0.f) currentAccel = val;
+      else if (parseAxis(upper, 'S', val) && val > 0.f) currentAccel = val;
     }
 
-    if (!raw.startsWith("G0") && !raw.startsWith("G1"))
+    const bool isG0 = upper == QStringLiteral("G0") || upper.startsWith(QStringLiteral("G0 "));
+    const bool isG1 = upper == QStringLiteral("G1") || upper.startsWith(QStringLiteral("G1 "));
+    if (!isG0 && !isG1)
       continue;
 
-    const float lineF = parseFValue(raw);
+    const float lineF = parseFValue(upper);
     if (lineF > 0.f)
       currentFeedrate = lineF;
-
-    // Track feedrate for average speed calculation (extrusion moves only)
-    if (raw.contains('E') && currentFeedrate > 0.f)
-    {
-      feedrateSum += currentFeedrate;
-      ++feedrateCount;
-    }
 
     float nx = x;
     float ny = y;
     float nz = z;
     float ne = e;
-    parseAxis(raw, 'X', nx);
-    parseAxis(raw, 'Y', ny);
-    parseAxis(raw, 'Z', nz);
-    parseAxis(raw, 'E', ne);
+    parseAxis(upper, 'X', nx);
+    parseAxis(upper, 'Y', ny);
+    parseAxis(upper, 'Z', nz);
+
+    float parsedE = 0.f;
+    float extrusionDelta = 0.f;
+    const bool hasE = parseAxis(upper, 'E', parsedE);
+    if (hasE)
+    {
+      if (relativeExtrusion)
+      {
+        extrusionDelta = parsedE;
+        ne = e + parsedE;
+      }
+      else
+      {
+        ne = parsedE;
+        extrusionDelta = ne - e;
+      }
+    }
 
     const bool moved = (nx != x) || (ny != y) || (nz != z);
     if (!moved)
@@ -593,7 +645,8 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       x = nx;
       y = ny;
       z = nz;
-      e = ne;
+      if (hasE)
+        e = ne;
       continue;
     }
 
@@ -613,12 +666,16 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       layerStartSeg = int(segments_.size());
     }
 
-    const bool extruding = (ne > e + 0.00001f);
+    const bool extruding = hasE && extrusionDelta > 0.00001f;
     if (extruding)
     {
-      const float extrusionDelta = ne - e;
       totalFilamentUsed += extrusionDelta;
       ++extrudeMoveCount;
+      if (currentFeedrate > 0.f)
+      {
+        feedrateSum += currentFeedrate;
+        ++feedrateCount;
+      }
       // 每挤出机耗材追踪（对齐上游 PrintEstimatedStatistics volumes_per_extruder）
       m_extruderUsedLength[currentExtruder] += extrusionDelta;
       accumulateRoleTime(currentType, nx - x, ny - y, nz - z, currentFeedrate);
@@ -649,6 +706,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     seg.extruder_id = currentExtruder;
     seg.layer = layer;
     seg.move = moveIndex;
+    seg.isTravel = !extruding;
     segments_.push_back(seg);
 
     // Accumulate elapsed time for move slider (对齐上游 IMSlider m_layers_times)
@@ -664,7 +722,8 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     x = nx;
     y = ny;
     z = nz;
-    e = ne;
+    if (hasE)
+      e = ne;
     ++moveIndex;
   }
 
@@ -864,13 +923,25 @@ void PreviewViewModel::recolorAndPackSegments()
   if (segments_.empty())
     return;
 
-  const int count = int(segments_.size());
   const int mode = viewModeIndex_;
+  std::vector<int> visibleIndices;
+  visibleIndices.reserve(segments_.size());
+  for (int i = 0; i < int(segments_.size()); ++i)
+  {
+    if (showTravelMoves_ || !segments_[i].isTravel)
+      visibleIndices.push_back(i);
+  }
+
+  if (visibleIndices.empty())
+    return;
+
+  const int count = int(visibleIndices.size());
 
   // Determine value range for gradient modes
   float minV = FLT_MAX, maxV = -FLT_MAX;
-  for (const auto &s : segments_)
+  for (const int idx : visibleIndices)
   {
+    const auto &s = segments_[idx];
     float v = 0.f;
     switch (mode)
     {
@@ -911,7 +982,7 @@ void PreviewViewModel::recolorAndPackSegments()
 
   for (int i = 0; i < count; ++i)
   {
-    const auto &s = segments_[i];
+    const auto &s = segments_[visibleIndices[i]];
     auto &p = packed[i];
 
     p.x1 = s.x1; p.y1 = s.y1; p.z1 = s.z1;

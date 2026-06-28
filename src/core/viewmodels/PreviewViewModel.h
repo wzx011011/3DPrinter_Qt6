@@ -122,6 +122,7 @@ public:
   Q_INVOKABLE int extruderCount() const;
   Q_INVOKABLE double extruderUsedLength(int extruderId) const;  // meters
   Q_INVOKABLE double extruderUsedWeight(int extruderId) const;  // grams
+  Q_INVOKABLE bool loadGCodeForPreview(const QString &filePath);
   QStringList viewModes() const;
   int viewModeIndex() const { return viewModeIndex_; }
   bool stealthMode() const { return stealthMode_; }
@@ -240,6 +241,7 @@ private:
     int extruder_id;
     int layer;
     int move;
+    bool isTravel;
   };
   std::vector<StoredSegment> segments_;
   QHash<QString, int> featureCount_;
