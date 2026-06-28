@@ -20,6 +20,7 @@ private slots:
   void rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads();
   void rhiViewportRendererUsesModelBuffersAndCameraUniforms();
   void previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans();
+  void previewRhiViewportFitsCameraToPreviewDataBeforeOrbit();
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
@@ -474,6 +475,36 @@ void QmlUiAuditTests::previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans()
            "Renderer must not treat move index zero as a travel marker");
   QVERIFY2(!rendererSource.contains(QStringLiteral("quint64(firstVertex + vertexCount) * quint64(m_moveEnd) / quint64(m_previewSegmentVertexCount)")),
            "Renderer must not approximate Preview playback by proportional vertex-count clipping");
+}
+
+void QmlUiAuditTests::previewRhiViewportFitsCameraToPreviewDataBeforeOrbit()
+{
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
+
+  QVERIFY2(previewPage.contains(QStringLiteral("canvasType: GLViewport.CanvasPreview")),
+           "PreviewPage must route G-code preview through the GLViewport-compatible RhiViewport path");
+  QVERIFY2(viewportHeader.contains(QStringLiteral("fitPreviewCameraToData")),
+           "RhiViewport must keep a Preview-data driven camera fit hook before user orbit");
+  QVERIFY2(viewportHeader.contains(QStringLiteral("m_previewCameraFitted")),
+           "RhiViewport must remember whether Preview camera has already been fitted");
+  QVERIFY2(viewportHeader.contains(QStringLiteral("m_previewFitHint")),
+           "RhiViewport must cache the Preview fit bounds to avoid resetting orbit on recolor-only updates");
+  QVERIFY2(viewportSource.contains(QStringLiteral("fitPreviewCameraToData();")),
+           "setPreviewData/setCanvasType must invoke Preview fit when G-code preview data enters the viewport");
+  QVERIFY2(viewportSource.contains(QStringLiteral("std::memcmp(m_previewData.constData(), \"GCV1\", 4)")),
+           "Preview camera fit must parse the same GCV1 packed data consumed by the RHI preview renderer");
+  QVERIFY2(viewportSource.contains(QStringLiteral("includePoint(seg[i].x1, seg[i].z1, seg[i].y1)"))
+               && viewportSource.contains(QStringLiteral("includePoint(seg[i].x2, seg[i].z2, seg[i].y2)")),
+           "Preview camera fit must use the renderer axis mapping: G-code Z is viewport Y and G-code Y is viewport Z");
+  QVERIFY2(viewportSource.contains(QStringLiteral("m_camera.fitView(cx, cy, cz, radius)")),
+           "Preview camera fit must update CameraController target/distance before orbit");
+  QVERIFY2(viewportSource.contains(QStringLiteral("m_cameraDirty = true")),
+           "Preview camera fit must mark the camera uniform dirty for the next RHI sync");
 }
 
 void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()

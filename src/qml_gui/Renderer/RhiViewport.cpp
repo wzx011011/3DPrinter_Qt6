@@ -13,7 +13,18 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <limits>
+
+namespace {
+struct GcvPackedSegment
+{
+  float x1, y1, z1, x2, y2, z2;
+  float r, g, b;
+  float feedrate, fan_speed, temperature, width, layer_time, acceleration;
+  int extruder_id, layer, move;
+};
+}
 
 RhiViewport::RhiViewport(QQuickItem *parent)
     : QQuickRhiItem(parent)
@@ -33,6 +44,8 @@ void RhiViewport::setCanvasType(int value)
   if (m_canvasType == value)
     return;
   m_canvasType = value;
+  if (m_canvasType == CanvasPreview)
+    fitPreviewCameraToData();
   emit canvasTypeChanged();
   update();
 }
@@ -52,6 +65,7 @@ void RhiViewport::setPreviewData(const QByteArray &data)
   if (m_previewData == data)
     return;
   m_previewData = data;
+  fitPreviewCameraToData();
   update();
 }
 
@@ -461,6 +475,80 @@ void RhiViewport::wheelEvent(QWheelEvent *event)
 QMatrix4x4 RhiViewport::cameraMvp(float aspect) const
 {
   return m_camera.projMatrix(aspect) * m_camera.viewMatrix();
+}
+
+void RhiViewport::fitPreviewCameraToData()
+{
+  if (m_canvasType != CanvasPreview)
+    return;
+
+  if (m_previewData.size() < 8) {
+    m_previewCameraFitted = false;
+    m_previewFitHint = {};
+    return;
+  }
+  if (std::memcmp(m_previewData.constData(), "GCV1", 4) != 0)
+    return;
+
+  int count = 0;
+  std::memcpy(&count, m_previewData.constData() + 4, 4);
+  if (count <= 0)
+    return;
+
+  const qsizetype payloadSize = qsizetype(count) * sizeof(GcvPackedSegment);
+  if (m_previewData.size() < 8 + payloadSize)
+    return;
+
+  const auto *seg = reinterpret_cast<const GcvPackedSegment *>(m_previewData.constData() + 8);
+  bool hasPoint = false;
+  float minX = std::numeric_limits<float>::max();
+  float minY = std::numeric_limits<float>::max();
+  float minZ = std::numeric_limits<float>::max();
+  float maxX = std::numeric_limits<float>::lowest();
+  float maxY = std::numeric_limits<float>::lowest();
+  float maxZ = std::numeric_limits<float>::lowest();
+
+  const auto includePoint = [&](float x, float y, float z) {
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+      return;
+    minX = std::min(minX, x);
+    minY = std::min(minY, y);
+    minZ = std::min(minZ, z);
+    maxX = std::max(maxX, x);
+    maxY = std::max(maxY, y);
+    maxZ = std::max(maxZ, z);
+    hasPoint = true;
+  };
+
+  for (int i = 0; i < count; ++i) {
+    includePoint(seg[i].x1, seg[i].z1, seg[i].y1);
+    includePoint(seg[i].x2, seg[i].z2, seg[i].y2);
+  }
+
+  if (!hasPoint)
+    return;
+
+  const float cx = (minX + maxX) * 0.5f;
+  const float cy = (minY + maxY) * 0.5f;
+  const float cz = (minZ + maxZ) * 0.5f;
+  const float rx = (maxX - minX) * 0.5f;
+  const float ry = (maxY - minY) * 0.5f;
+  const float rz = (maxZ - minZ) * 0.5f;
+  const float radius = std::max(10.0f, std::sqrt(rx * rx + ry * ry + rz * rz));
+  const QVector4D fitHint(cx, cy, cz, radius);
+
+  const bool sameFit = m_previewCameraFitted
+      && std::fabs(m_previewFitHint.x() - fitHint.x()) <= 0.001f
+      && std::fabs(m_previewFitHint.y() - fitHint.y()) <= 0.001f
+      && std::fabs(m_previewFitHint.z() - fitHint.z()) <= 0.001f
+      && std::fabs(m_previewFitHint.w() - fitHint.w()) <= 0.001f;
+  if (sameFit)
+    return;
+
+  m_previewFitHint = fitHint;
+  m_previewCameraFitted = true;
+  m_camera.fitView(cx, cy, cz, radius);
+  m_cameraDirty = true;
 }
 
 void RhiViewport::updatePickingScene()

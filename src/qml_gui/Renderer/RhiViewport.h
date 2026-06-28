@@ -7,6 +7,7 @@
 #include <QRectF>
 #include <QString>
 #include <QVariant>
+#include <QVector4D>
 
 #include "CameraController.h"
 #include "PrepareSceneData.h"
@@ -207,6 +208,7 @@ private:
   void hoverLeaveEvent(QHoverEvent *event) override;
   void wheelEvent(QWheelEvent *event) override;
   QMatrix4x4 cameraMvp(float aspect) const;
+  void fitPreviewCameraToData();
   void updatePickingScene();
   int pickSourceObjectAt(const QPointF &position);
   QRectF projectBoundsToScreenRect(const PrepareSceneData::ModelBounds &bounds,
@@ -250,6 +252,8 @@ private:
   QString m_lastThumbnailData;
   int m_fitRequestCount = 0;
   int m_viewPreset = 3;
+  bool m_previewCameraFitted = false;
+  QVector4D m_previewFitHint;
   qint64 m_sceneGeneration = 1;
   qint64 m_modelGeneration = 1;
   qint64 m_pickModelGeneration = 0;
