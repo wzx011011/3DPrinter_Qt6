@@ -2,30 +2,29 @@
 gsd_state_version: 1.0
 milestone: v3.4
 milestone_name: Import to G-code Complete Workflow
-status: ready_to_plan
-last_updated: 2026-06-29T00:16:02+08:00
-last_activity: 2026-06-29 -- Phase 37 completed and verified
+status: executing
+last_updated: 2026-06-29T00:24:39+08:00
+last_activity: 2026-06-29 -- Phase 38 planning complete
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 1
+  total_plans: 2
   completed_plans: 1
   percent: 14
-stopped_at: Phase 37 complete (1/1) - ready to discuss Phase 38
 ---
 
 # Project State
 
 **Milestone:** v3.4 - Import to G-code Complete Workflow
-**Status:** Ready to plan
-**Next step:** start Phase 38 to complete Prepare readiness and slice invalidation.
+**Status:** Ready to execute
+**Next step:** execute Phase 38 plan 01 to complete Prepare readiness and slice invalidation.
 
 ## Current Position
 
 Phase: 38
-Plan: Not started
-Status: Ready to plan Phase 38
-Last activity: 2026-06-29 -- Phase 37 completed and verified
+Plan: 01 ready to execute
+Status: Ready to execute
+Last activity: 2026-06-29 -- Phase 38 planning complete
 
 ## Project Reference
 
@@ -47,7 +46,7 @@ See: `.planning/PROJECT.md`
 | Phase | Name | Status |
 |---|---|---|
 | 37 | Complete Import and Project Restore | Complete |
-| 38 | Prepare Readiness and Slice Invalidation | Pending |
+| 38 | Prepare Readiness and Slice Invalidation | Planned |
 | 39 | Complete Slicing and Reslicing State Machine | Pending |
 | 40 | Complete Preview Data and Upstream View Semantics | Pending |
 | 41 | D3D11 Preview Rendering and Interaction Stability | Pending |
@@ -81,8 +80,8 @@ It intentionally does not include device send/upload/cloud printing or Monitor p
 
 ## Handoff
 
-Phase 37 is complete. Start Phase 38:
+Phase 38 planning is complete. Execute Phase 38:
 
 ```text
-$gsd-autonomous --from 38
+$gsd-execute-phase 38 --no-transition
 ```
