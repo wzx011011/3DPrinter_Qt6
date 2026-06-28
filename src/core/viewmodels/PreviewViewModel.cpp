@@ -159,6 +159,11 @@ namespace
     const float v = m.captured(1).toFloat(&ok);
     return ok ? v : -1.f;
   }
+
+  bool isSameZ(float a, float b)
+  {
+    return std::fabs(a - b) <= 0.0001f;
+  }
 }
 
 PreviewViewModel::PreviewViewModel(SliceService *sliceService, QObject *parent)
@@ -469,8 +474,8 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   bool relativeExtrusion = false;
   float currentWidth = 0.f;
   float layerTime = 0.f;
-  float prevLayerZ = 0.f;
-  int layerStartSeg = 0;
+  float printLayerZ = 0.f;
+  bool hasPrintLayerZ = false;
 
   // Filament tracking
   float totalFilamentUsed = 0.f; // mm of filament extruded
@@ -650,23 +655,28 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       continue;
     }
 
-    if (nz > z + 0.0001f)
+    const bool extruding = hasE && extrusionDelta > 0.00001f;
+    if (extruding)
     {
-      // Save previous layer's elapsed time
-      if (layer > 0 || m_layerTimes.isEmpty())
+      // Upstream Preview layers are printed extrusion layers. Z-hop/travel
+      // lifts move the nozzle but must not create empty selectable layers.
+      if (!hasPrintLayerZ)
+      {
+        printLayerZ = nz;
+        hasPrintLayerZ = true;
+        m_layerZs.append(printLayerZ);
+      }
+      else if (!isSameZ(nz, printLayerZ))
       {
         m_layerTimes.append(layerTime);
         m_maxLayerTime = qMax(m_maxLayerTime, layerTime);
+        ++layer;
+        printLayerZ = nz;
+        m_layerZs.append(printLayerZ);
+        layerTime = 0.f;
       }
-      ++layer;
-      m_layerZs.append(nz); // 对齐上游 IMSlider hover tooltip 显示层 Z 高度
-      // Compute layer time from TIME_ELAPSED at layer transitions
-      layerTime = 0.f;
-      prevLayerZ = nz;
-      layerStartSeg = int(segments_.size());
     }
 
-    const bool extruding = hasE && extrusionDelta > 0.00001f;
     if (extruding)
     {
       totalFilamentUsed += extrusionDelta;
@@ -728,7 +738,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   }
 
   moveCount_ = moveIndex;
-  layerCount_ = qMax(1, layer + 1);
+  layerCount_ = qMax(1, hasPrintLayerZ ? layer + 1 : 1);
 
   // Save last layer's time
   m_layerTimes.append(layerTime);

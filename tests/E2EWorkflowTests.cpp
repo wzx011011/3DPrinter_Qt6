@@ -48,6 +48,7 @@ private slots:
   void test_preview_receives_gcode_data();
   void test_backend_switches_to_preview_after_slice();
   void test_preview_parser_handles_extrusion_modes_and_travel_filter();
+  void test_preview_parser_ignores_z_hop_travel_as_layer();
   void test_model_change_invalidates_slice_result();
 
 private:
@@ -461,6 +462,46 @@ G1 X50 Y20 E0.60
 
   preview.setShowTravelMoves(true);
   QCOMPARE(gcv1SegmentCount(preview.gcodePreviewData()), preview.moveCount());
+}
+
+void E2EWorkflowTests::test_preview_parser_ignores_z_hop_travel_as_layer()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+
+  QTemporaryFile gcode(QDir::tempPath() + QStringLiteral("/owzx_preview_zhop_XXXXXX.gcode"));
+  QVERIFY2(gcode.open(), "temporary G-code fixture should be writable");
+
+  const QByteArray fixture = R"gcode(
+; Z-hop regression: travel lift inside one printed layer must not become a selectable empty layer
+M82
+G1 F1200 X0 Y0 Z0.20
+;TYPE:WALL-OUTER
+G1 X10 Y0 E0.50 F1200
+G1 Z0.80 F600
+G0 X20 Y0 F3000
+G1 Z0.20 F600
+G1 X30 Y0 E1.00 F1200
+G1 Z0.40 F600
+G1 X30 Y10 E1.50 F1200
+)gcode";
+
+  QCOMPARE(gcode.write(fixture), qint64(fixture.size()));
+  QVERIFY(gcode.flush());
+  gcode.close();
+
+  QVERIFY2(preview.loadGCodeForPreview(gcode.fileName()),
+           "PreviewViewModel should parse a standalone G-code file");
+
+  QCOMPARE(preview.extrudeMoveCount(), 3);
+  QCOMPARE(preview.travelMoveCount(), 5);
+  QCOMPARE(preview.moveCount(), 8);
+  QCOMPARE(preview.layerCount(), 2);
+
+  preview.setLayerRange(1, 1);
+  QCOMPARE(preview.currentLayerMin(), 1);
+  QCOMPARE(preview.currentLayerMax(), 1);
 }
 
 void E2EWorkflowTests::test_model_change_invalidates_slice_result()
