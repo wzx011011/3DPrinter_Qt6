@@ -1,7 +1,7 @@
 # Requirements: OWzx Slicer v3.3 Slice Preview Main Flow MVP
 
 **Defined:** 2026-06-28
-**Status:** Planning
+**Status:** In progress - Phase 33 complete
 **Core Value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
 ## Status Terms
@@ -16,9 +16,9 @@
 
 ### Main Flow
 
-- [ ] **FLOW-01:** A user-facing Prepare page slice request can complete with the committed real STL fixture or an equivalent loaded model, producing a real G-code output path.
-- [ ] **FLOW-02:** After slicing succeeds, the app switches to Preview automatically or presents Preview as the immediate completion action without requiring hidden/debug steps.
-- [ ] **FLOW-03:** The Preview page shows current sliced G-code state instead of an empty placeholder when G-code preview data exists.
+- [x] **FLOW-01:** A user-facing Prepare page slice request can complete with the committed real STL fixture or an equivalent loaded model, producing a real G-code output path.
+- [x] **FLOW-02:** After slicing succeeds, the app switches to Preview automatically or presents Preview as the immediate completion action without requiring hidden/debug steps.
+- [x] **FLOW-03:** The Preview page shows current sliced G-code state instead of an empty placeholder when G-code preview data exists.
 
 ### G-code Preview Data
 
@@ -34,7 +34,7 @@
 
 ### Verification
 
-- [ ] **TEST-01:** Regression coverage exercises the UI-facing slice-to-preview path and asserts output path, preview data, layer count, and move count.
+- [x] **TEST-01:** Regression coverage exercises the UI-facing slice-to-preview path and asserts output path, preview data, layer count, and move count.
 - [ ] **TEST-02:** Parser fixture tests cover absolute extrusion, relative extrusion, `G92 E`, layer Z, travel/extrude split, and tool changes.
 - [ ] **TEST-03:** QML/UI audit or smoke coverage guards D3D11 default Preview bindings and prevents silent fallback to `SoftwareViewport` as the normal path.
 
@@ -61,17 +61,17 @@
 
 | Requirement | Phase | Status |
 |---|---|---|
-| FLOW-01 | Phase 33 | Planned |
-| FLOW-02 | Phase 33 | Planned |
-| FLOW-03 | Phase 33 | Planned |
+| FLOW-01 | Phase 33 | Complete |
+| FLOW-02 | Phase 33 | Complete |
+| FLOW-03 | Phase 33 | Complete |
 | GCODE-01 | Phase 34 | Planned |
 | GCODE-02 | Phase 34 | Planned |
 | GCODE-03 | Phase 34 | Planned |
 | RENDER-01 | Phase 35 | Planned |
 | RENDER-02 | Phase 35 | Planned |
 | RENDER-03 | Phase 35 | Planned |
-| TEST-01 | Phase 33, Phase 36 | Planned |
+| TEST-01 | Phase 33, Phase 36 | Complete for Phase 33; final coverage review in Phase 36 |
 | TEST-02 | Phase 34, Phase 36 | Planned |
 | TEST-03 | Phase 35, Phase 36 | Planned |
 
-**Coverage:** 12 total; 0 complete; 0 partial; 12 planned.
+**Coverage:** 12 total; 4 complete; 0 partial; 8 planned.

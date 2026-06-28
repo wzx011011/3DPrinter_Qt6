@@ -2,29 +2,29 @@
 gsd_state_version: 1.0
 milestone: v3.3
 milestone_name: Slice Preview Main Flow MVP
-status: planning
-last_updated: "2026-06-28T04:47:46.980Z"
-last_activity: 2026-06-28 -- v3.3 milestone defined
+status: in_progress
+last_updated: "2026-06-28T05:27:00.000Z"
+last_activity: 2026-06-28 -- Phase 33 slice-to-preview navigation gate implemented
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 25
 ---
 
 # Project State
 
 **Milestone:** v3.3 - Slice Preview Main Flow MVP
-**Status:** Planning
-**Next step:** execute Phase 33, the slice-to-preview navigation gate.
+**Status:** In progress
+**Next step:** execute Phase 34, the G-code Preview parser MVP.
 
 ## Current Position
 
-Phase: 33 - Not started
-Plan: define and execute the first slice-to-preview path
-Status: Ready for implementation
-Last activity: 2026-06-28 -- Milestone v3.3 started and scoped to the Preview main flow.
+Phase: 34 - Not started
+Plan: add parser fixture coverage for extrusion modes, reset, layers, travel/extrude split, and tool changes
+Status: Phase 33 complete; parser MVP next
+Last activity: 2026-06-28 -- Phase 33 implemented automatic Preview navigation after slice completion and added E2E coverage.
 
 ## Project Reference
 
@@ -45,10 +45,17 @@ See: `.planning/PROJECT.md`
 
 | Phase | Name | Status |
 |---|---|---|
-| 33 | Slice-to-Preview Navigation Gate | Not started |
+| 33 | Slice-to-Preview Navigation Gate | Complete |
 | 34 | G-code Preview Parser MVP | Not started |
 | 35 | D3D11 Preview Rendering Interaction | Not started |
 | 36 | Verification and Handoff | Not started |
+
+## Phase 33 Evidence
+
+- Commit: `5a4d37f feat: switch to preview after slicing completes`.
+- Runtime behavior: `BackendContext` now handles `SliceService::sliceFinished` by posting the slicing-complete notification and calling `requestSelectTab(tpPreview)`, reusing the existing tab/viewMode linkage.
+- Regression: `E2EWorkflowTests::test_backend_switches_to_preview_after_slice` first failed with `ctx.currentPage() == 1`, then passed after the implementation.
+- Canonical verification: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` exited 0; PrepareScene, PartPlate, QML UI audit, and E2E pipeline tests passed.
 
 ## Deferred Items
 
@@ -64,9 +71,9 @@ See: `.planning/PROJECT.md`
 
 ## Handoff
 
-Start Phase 33 with a narrow TDD loop:
+Start Phase 34 with a narrow TDD loop:
 
 ```text
-$gsd-plan-phase 33
-$gsd-execute-phase 33 --interactive
+$gsd-plan-phase 34
+$gsd-execute-phase 34 --interactive
 ```

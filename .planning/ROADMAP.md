@@ -21,7 +21,7 @@
 
 ## Phases
 
-### Phase 33: Slice-to-Preview Navigation Gate
+### Phase 33: Slice-to-Preview Navigation Gate - Complete
 
 **Goal:** Wire the real slice completion path to Preview so the first visible main flow is usable.
 
@@ -36,6 +36,11 @@
 - Slicing the committed fixture produces an output path and non-empty PreviewViewModel data.
 - The app switches to Preview, or Preview is the immediate visible completion action.
 - Focused tests pass before canonical verification.
+
+**Evidence:**
+- Commit: `5a4d37f feat: switch to preview after slicing completes`.
+- Regression: `E2EWorkflowTests::test_backend_switches_to_preview_after_slice` covers BackendContext, EditorViewModel, PreviewViewModel, output path, layer count, move count, GCV1 payload, and Preview tab/viewMode switch.
+- Verification: canonical build command exited 0 on 2026-06-28.
 
 ### Phase 34: G-code Preview Parser MVP
 
@@ -97,11 +102,11 @@
 
 ## Next Step
 
-Start Phase 33:
+Start Phase 34:
 
 ```text
-$gsd-plan-phase 33
-$gsd-execute-phase 33 --interactive
+$gsd-plan-phase 34
+$gsd-execute-phase 34 --interactive
 ```
 
 ---
