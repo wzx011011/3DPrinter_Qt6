@@ -21,8 +21,12 @@ Item {
     readonly property int resultLayerCount: root.editorVm ? root.editorVm.sliceResultLayerCount : 0
     readonly property bool hasSliceResult: root.editorVm ? root.editorVm.hasSliceResult : false
     readonly property bool canRequestSlice: root.editorVm ? root.editorVm.canRequestSlice : false
+    readonly property bool canPreview: root.editorVm ? root.editorVm.canPreview : false
+    readonly property bool canExportGCode: root.editorVm ? root.editorVm.canExportGCode : false
     readonly property string actionLabel: root.editorVm ? root.editorVm.sliceActionLabel : qsTr("▶ 开始切片")
     readonly property string actionHint: root.editorVm ? root.editorVm.sliceActionHint : ""
+    readonly property string previewHint: root.editorVm ? root.editorVm.previewActionHint : ""
+    readonly property string exportHint: root.editorVm ? root.editorVm.exportActionHint : ""
     readonly property string modelSize: root.editorVm ? root.editorVm.modelSizeText : ""
     readonly property string avgSpeed: root.editorVm ? root.editorVm.avgPrintSpeed : ""
     readonly property string estimatedPrintTime: root.editorVm ? root.editorVm.estimatedPrintTime : ""
@@ -139,12 +143,18 @@ Item {
                 Repeater {
                     model: root.editorVm ? root.editorVm.plateCount : 0
                     delegate: Rectangle {
+                        readonly property int sliceResultStatus: root.editorVm ? root.editorVm.plateSliceResultStatus(index) : 0
                         width: plateStatusRow.implicitWidth + 8
                         height: 20
                         radius: 4
-                        color: root.editorVm ? (root.editorVm.isPlateSliced(index) ? Theme.accentSubtle : Theme.bgElevated) : Theme.bgElevated
+                        color: !root.editorVm ? Theme.bgElevated
+                             : sliceResultStatus === 1 ? Theme.accentSubtle
+                             : sliceResultStatus === 2 ? Theme.bgWarningSubtle
+                             : Theme.bgElevated
                         border.width: 1
-                        border.color: root.editorVm && root.editorVm.currentPlateIndex === index ? Theme.accent : Theme.borderSubtle
+                        border.color: root.editorVm && root.editorVm.currentPlateIndex === index ? Theme.accent
+                                      : sliceResultStatus === 2 ? Theme.statusWarning
+                                      : Theme.borderSubtle
 
                         RowLayout {
                             id: plateStatusRow
@@ -518,18 +528,19 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             spacing: 6
-            visible: root.hasSliceResult && !root.slicingNow
+            visible: !root.slicingNow
 
             // 预览（对齐上游 Plater::priv::on_preview）
             Rectangle {
                 Layout.fillWidth: true
                 height: 28
                 radius: Theme.radiusSM
-                color: previewMA.containsMouse ? "#7c3aed" : "#6d28d9"
+                color: !root.canPreview ? Theme.bgHover
+                       : previewMA.containsMouse ? "#7c3aed" : "#6d28d9"
                 Text {
                     anchors.centerIn: parent
                     text: qsTr("预览")
-                    color: "white"
+                    color: root.canPreview ? "white" : Theme.textDisabled
                     font.pixelSize: 11
                     font.bold: true
                 }
@@ -537,7 +548,8 @@ Item {
                     id: previewMA
                     anchors.fill: parent
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
+                    enabled: root.canPreview
+                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ForbiddenCursor
                     onClicked: {
                         if (root.editorVm)
                             root.editorVm.switchToPreview()
@@ -550,11 +562,12 @@ Item {
                 Layout.fillWidth: true
                 height: 28
                 radius: Theme.radiusSM
-                color: exportMA.containsMouse ? "#2563eb" : "#1d4ed8"
+                color: !root.canExportGCode ? Theme.bgHover
+                       : exportMA.containsMouse ? "#2563eb" : "#1d4ed8"
                 Text {
                     anchors.centerIn: parent
                     text: qsTr("导出 G-code")
-                    color: "white"
+                    color: root.canExportGCode ? "white" : Theme.textDisabled
                     font.pixelSize: 11
                     font.bold: true
                 }
@@ -562,7 +575,8 @@ Item {
                     id: exportMA
                     anchors.fill: parent
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
+                    enabled: root.canExportGCode
+                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ForbiddenCursor
                     onClicked: {
                         if (!root.editorVm) return
                         const path = root.outputPath.length > 0
@@ -598,6 +612,15 @@ Item {
                     }
                 }
             }
+        }
+
+        Text {
+            Layout.fillWidth: true
+            visible: !root.slicingNow && (!root.canPreview || !root.canExportGCode)
+            text: !root.canPreview ? root.previewHint : root.exportHint
+            color: Theme.textTertiary
+            font.pixelSize: 10
+            wrapMode: Text.Wrap
         }
 
         Item { Layout.fillHeight: true }

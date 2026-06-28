@@ -17,6 +17,7 @@ private slots:
   void mainRegistersRhiViewportOnlyBehindExplicitGate();
   void renderBenchmarkMatchesRhiBackendPolicy();
   void prepareViewportBindsBedAndPlateContext();
+  void prepareReadinessControlsBindBackendAvailability();
   void importEntryPointsAdvertiseConsistentModelFormats();
   void rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads();
   void rhiViewportRendererUsesModelBuffersAndCameraUniforms();
@@ -326,6 +327,40 @@ void QmlUiAuditTests::prepareViewportBindsBedAndPlateContext()
            "PreparePage must not filter renderer batch source metadata in QML");
   QVERIFY2(!preparePage.contains(QStringLiteral("meshBatchSourceObjectIndices.map")),
            "PreparePage must not transform renderer batch source metadata in QML");
+}
+
+void QmlUiAuditTests::prepareReadinessControlsBindBackendAvailability()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString sliceProgress = readSource(QStringLiteral("src/qml_gui/panels/SliceProgress.qml"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!sliceProgress.isEmpty(), "Unable to read SliceProgress.qml");
+
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.canExportGCode")),
+           "Prepare export dialog must be guarded by EditorViewModel::canExportGCode");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.requestExportGCode(\"\"")),
+           "Prepare export guard must route blocked attempts through the backend for a reason");
+  QVERIFY2(preparePage.contains(QStringLiteral("plateSliceResultStatus(index)")),
+           "Prepare plate cards must render explicit valid/stale/missing result status");
+
+  const QStringList backendBindings = {
+    QStringLiteral("root.editorVm.canPreview"),
+    QStringLiteral("root.editorVm.canExportGCode"),
+    QStringLiteral("root.editorVm.previewActionHint"),
+    QStringLiteral("root.editorVm.exportActionHint"),
+    QStringLiteral("root.editorVm.plateSliceResultStatus(index)")
+  };
+  for (const QString &binding : backendBindings) {
+    QVERIFY2(sliceProgress.contains(binding),
+             qPrintable(QStringLiteral("SliceProgress must bind backend readiness property: %1").arg(binding)));
+  }
+
+  QVERIFY2(sliceProgress.contains(QStringLiteral("enabled: root.canPreview")),
+           "Preview action must be disabled through backend availability");
+  QVERIFY2(sliceProgress.contains(QStringLiteral("enabled: root.canExportGCode")),
+           "Export action must be disabled through backend availability");
+  QVERIFY2(!sliceProgress.contains(QStringLiteral("visible: root.hasSliceResult && !root.slicingNow")),
+           "Preview/export action row must not disappear solely because the current result is missing or stale");
 }
 
 void QmlUiAuditTests::rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads()

@@ -45,6 +45,11 @@ Item {
         printDlg.open()
     }
     function openExportDialog() {
+        if (!root.editorVm || !root.editorVm.canExportGCode) {
+            if (root.editorVm)
+                root.editorVm.requestExportGCode("")
+            return
+        }
         exportGCodeDlg.open()
     }
 
@@ -2963,6 +2968,7 @@ Item {
                     delegate: Rectangle {
                         required property int index
                         property bool dragHover: false
+                        readonly property int sliceResultStatus: root.editorVm ? root.editorVm.plateSliceResultStatus(index) : 0
                         width: 120
                         height: plateListView.height
                         radius: 8
@@ -3030,9 +3036,9 @@ Item {
                             }
 
                             Rectangle {
-                                visible: root.editorVm && root.editorVm.isPlateSliced(index)
+                                visible: sliceResultStatus !== 0
                                 width: 6; height: 6; radius: 3
-                                color: Theme.accent
+                                color: sliceResultStatus === 1 ? Theme.accent : Theme.statusWarning
                                 opacity: 0.8
                             }
                         }
