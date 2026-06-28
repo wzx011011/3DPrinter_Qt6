@@ -54,6 +54,7 @@ private slots:
   void test_import_invalidates_slice_output_and_preview_payload();
   void test_previous_gcode_reuse_marks_reused_result_and_refreshes_preview();
   void test_cancelled_slice_clears_active_result_and_blocks_preview_export();
+  void test_slice_all_stores_outputs_for_printable_unlocked_plates_only();
 
 private:
   bool hasLibslic3r() const;
@@ -766,6 +767,71 @@ void E2EWorkflowTests::test_cancelled_slice_clears_active_result_and_blocks_prev
   QVERIFY2(!editor.hasSliceResult(), "cancelled slice must not become a valid editor result");
   QVERIFY2(!editor.canPreview(), "cancelled slice must block Preview");
   QVERIFY2(!editor.canExportGCode(), "cancelled slice must block export");
+}
+
+void E2EWorkflowTests::test_slice_all_stores_outputs_for_printable_unlocked_plates_only()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY2(editor.loadFile(kStlPath), "importing a model should start");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
+
+  QVERIFY2(editor.clonePlate(0), "clonePlate should create a printable second plate with copied objects");
+  QVERIFY2(editor.clonePlate(0), "clonePlate should create a third plate that can be locked and skipped");
+  QCOMPARE(project.plateCount(), 3);
+  QVERIFY(project.setCurrentPlateIndex(0));
+  QVERIFY(project.setPlateLocked(2, true));
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(finishedSpy.isValid());
+  QVERIFY(failedSpy.isValid());
+
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+  editor.requestSliceAll();
+
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() >= 2 || failedSpy.count() > 0, 240000);
+  if (failedSpy.count() > 0)
+  {
+    const QString reason = failedSpy.first().at(0).toString();
+    QSKIP(QString("Slice-all failed in this environment: %1").arg(reason).toUtf8().constData());
+  }
+
+  QCOMPARE(editor.plateSliceResultStatus(0), int(EditorViewModel::SliceResultValid));
+  QCOMPARE(editor.plateSliceResultStatus(1), int(EditorViewModel::SliceResultValid));
+  QCOMPARE(editor.plateSliceResultStatus(2), int(EditorViewModel::SliceResultMissing));
+  QVERIFY2(slice.hasPlateResult(0), "plate 0 should store a generated result");
+  QVERIFY2(slice.hasPlateResult(1), "plate 1 should store a generated result");
+  QVERIFY2(!slice.hasPlateResult(2), "locked plate 2 must be skipped");
+  QCOMPARE(slice.plateResultSource(0), int(SliceService::ResultSource::ModelSlice));
+  QCOMPARE(slice.plateResultSource(1), int(SliceService::ResultSource::ModelSlice));
+  QVERIFY2(QFileInfo::exists(slice.plateOutputPath(0)),
+           qPrintable(QStringLiteral("plate 0 output should exist: %1").arg(slice.plateOutputPath(0))));
+  QVERIFY2(QFileInfo::exists(slice.plateOutputPath(1)),
+           qPrintable(QStringLiteral("plate 1 output should exist: %1").arg(slice.plateOutputPath(1))));
+
+  QVERIFY(editor.setCurrentPlateIndex(0));
+  QCOMPARE(editor.sliceOutputPath(), slice.plateOutputPath(0));
+  QVERIFY(editor.setCurrentPlateIndex(1));
+  QCOMPARE(editor.sliceOutputPath(), slice.plateOutputPath(1));
+  QVERIFY(editor.setCurrentPlateIndex(2));
+  QVERIFY2(editor.sliceOutputPath().isEmpty(), "locked skipped plate must not activate a stale output");
+  QVERIFY2(slice.outputPath().isEmpty(), "switching to a skipped plate must clear the active service output path");
+  QVERIFY2(!editor.canPreview(), "locked skipped plate must not be previewable");
+  QVERIFY2(!editor.canExportGCode(), "locked skipped plate must not be exportable");
+
+  const QString plate0Path = slice.plateOutputPath(0);
+  const QString plate1Path = slice.plateOutputPath(1);
+  if (QFileInfo::exists(plate0Path))
+    QFile::remove(plate0Path);
+  if (QFileInfo::exists(plate1Path))
+    QFile::remove(plate1Path);
 }
 
 QTEST_MAIN(E2EWorkflowTests)

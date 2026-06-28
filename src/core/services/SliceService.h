@@ -25,8 +25,10 @@ struct PlateSliceResult {
   QString resultWeightLabel;
   QString resultFilamentLabel;
   QString resultCostLabel;
+  QString outputPath;
   int resultLayerCount = 0;
   double totalFilamentMm = 0.0;
+  int source = 0;
 };
 
 class SliceService final : public QObject
@@ -47,6 +49,13 @@ public:
     Error
   };
   Q_ENUM(State)
+
+  enum class ResultSource {
+    None = 0,
+    ModelSlice = 1,
+    PreviousGCode = 2
+  };
+  Q_ENUM(ResultSource)
 
   State sliceState() const { return sliceState_; }
   explicit SliceService(ProjectServiceMock *projectService, QObject *parent = nullptr);
@@ -75,6 +84,9 @@ public:
   Q_INVOKABLE QString plateFilament(int plateIndex) const;
   Q_INVOKABLE QString plateCost(int plateIndex) const;
   Q_INVOKABLE int plateLayerCount(int plateIndex) const;
+  Q_INVOKABLE QString plateOutputPath(int plateIndex) const;
+  Q_INVOKABLE int plateResultSource(int plateIndex) const;
+  Q_INVOKABLE bool activatePlateResult(int plateIndex);
 
   Q_INVOKABLE void startSlice(const QString &projectName);
   Q_INVOKABLE void startSlicePlate(int plateIndex);
@@ -130,6 +142,7 @@ private:
   QString resultFilamentLabel_;
   int resultLayerCount_ = 0;
   QString resultCostLabel_;
+  int activeTargetPlateIndex_ = -1;
   std::shared_ptr<std::atomic_bool> activeCancelFlag_;
 #ifdef HAS_LIBSLIC3R
   std::atomic<Slic3r::Print *> activePrint_{nullptr};
@@ -157,4 +170,6 @@ private:
   AppSettingsService *appSettings_ = nullptr;
 
   void clearStoredResult();
+  void clearActiveTargetResult();
+  void storePlateResult(int plateIndex, const PlateSliceResult &result);
 };

@@ -123,6 +123,20 @@ void SliceService::clearStoredResult()
   emit progressChanged();
 }
 
+void SliceService::clearActiveTargetResult()
+{
+  if (activeTargetPlateIndex_ >= 0)
+    plateResults_.remove(activeTargetPlateIndex_);
+  if (resultPlateIndex_ == activeTargetPlateIndex_)
+    clearStoredResult();
+}
+
+void SliceService::storePlateResult(int plateIndex, const PlateSliceResult &result)
+{
+  if (plateIndex >= 0)
+    plateResults_[plateIndex] = result;
+}
+
 void SliceService::clearResults()
 {
   const bool wasSlicing = slicing_;
@@ -136,6 +150,7 @@ void SliceService::clearResults()
   }
 
   clearStoredResult();
+  activeTargetPlateIndex_ = -1;
   plateResults_.clear();
   emit resultChanged();
   emit sliceResultCleared();
@@ -255,12 +270,14 @@ void SliceService::startSlice(const QString &projectName)
   if (slicing_)
     return;
 
+  const QString sourcePath = projectService_ ? projectService_->sourceFilePath() : QString{};
+  const int targetPlateIndex = projectService_ ? projectService_->currentPlateIndex() : -1;
+  activeTargetPlateIndex_ = targetPlateIndex;
+  plateResults_.remove(targetPlateIndex);
   clearStoredResult();
   emit resultChanged();
   emit sliceResultCleared();
 
-  const QString sourcePath = projectService_ ? projectService_->sourceFilePath() : QString{};
-  const int targetPlateIndex = projectService_ ? projectService_->currentPlateIndex() : -1;
   QString targetPlateLabel;
 #ifdef HAS_LIBSLIC3R
   std::unique_ptr<Slic3r::Model> modelForSlice;
@@ -279,18 +296,24 @@ void SliceService::startSlice(const QString &projectName)
 
   if (sourcePath.isEmpty())
   {
+    sliceState_ = State::Error;
     statusLabel_ = QStringLiteral("No sliceable model found");
     emit progressChanged();
+    emit stateChanged();
     emit sliceFailed(statusLabel_);
+    activeTargetPlateIndex_ = -1;
     return;
   }
 
 #ifdef HAS_LIBSLIC3R
   if (!modelForSlice || modelForSlice->objects.empty())
   {
+    sliceState_ = State::Error;
     statusLabel_ = QStringLiteral("Current plate has no sliceable objects");
     emit progressChanged();
+    emit stateChanged();
     emit sliceFailed(statusLabel_);
+    activeTargetPlateIndex_ = -1;
     return;
   }
 #endif
@@ -603,9 +626,13 @@ void SliceService::startSlice(const QString &projectName)
       {
         receiver->sliceState_ = State::Cancelled;
         receiver->statusLabel_ = QObject::tr("Slicing cancelled");
+        receiver->clearActiveTargetResult();
         emit receiver->progressChanged();
+        emit receiver->resultChanged();
+        emit receiver->sliceResultCleared();
         emit receiver->stateChanged();
         emit receiver->sliceFailed(receiver->statusLabel_);
+        receiver->activeTargetPlateIndex_ = -1;
         return;
       }
 
@@ -613,9 +640,13 @@ void SliceService::startSlice(const QString &projectName)
       {
         receiver->sliceState_ = State::Error;
         receiver->statusLabel_ = errorText;
+        receiver->clearActiveTargetResult();
         emit receiver->progressChanged();
+        emit receiver->resultChanged();
+        emit receiver->sliceResultCleared();
         emit receiver->stateChanged();
         emit receiver->sliceFailed(errorText);
+        receiver->activeTargetPlateIndex_ = -1;
         return;
       }
 
@@ -638,10 +669,13 @@ void SliceService::startSlice(const QString &projectName)
         pr.resultWeightLabel = resultWeightLabel;
         pr.resultFilamentLabel = resultFilamentLabel;
         pr.resultCostLabel = resultCostLabel;
+        pr.outputPath = outputPath;
         pr.resultLayerCount = receiver->resultLayerCount_;
-        pr.totalFilamentMm = 0.0;
-        receiver->plateResults_[resultPlateIndex] = pr;
+        pr.totalFilamentMm = receiver->resultTotalFilamentMm();
+        pr.source = int(ResultSource::ModelSlice);
+        receiver->storePlateResult(resultPlateIndex, pr);
       }
+      receiver->activeTargetPlateIndex_ = -1;
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
       emit receiver->resultChanged();
@@ -654,12 +688,13 @@ void SliceService::cancelSlice()
   if (!slicing_ || !activeCancelFlag_)
     return;
 
-  sliceState_ = State::Cancelled;
   activeCancelFlag_->store(true);
+  statusLabel_ = QObject::tr("Cancelling slice");
 #ifdef HAS_LIBSLIC3R
   if (Slic3r::Print *active = activePrint_.load(std::memory_order_acquire))
     active->cancel();
 #endif
+  emit progressChanged();
   emit stateChanged();
 }
 
@@ -668,17 +703,23 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
   if (slicing_)
     return false;
 
+  const QFileInfo info(gcodeFilePath);
+  const QString localPath = info.absoluteFilePath();
+  const int targetPlateIndex = projectService_ ? projectService_->currentPlateIndex() : -1;
+  activeTargetPlateIndex_ = targetPlateIndex;
+  plateResults_.remove(targetPlateIndex);
   clearStoredResult();
   emit resultChanged();
   emit sliceResultCleared();
 
-  const QFileInfo info(gcodeFilePath);
-  const QString localPath = info.absoluteFilePath();
   if (!info.exists() || !info.isFile())
   {
+    sliceState_ = State::Error;
     statusLabel_ = QObject::tr("G-code file does not exist");
     emit progressChanged();
+    emit stateChanged();
     emit sliceFailed(statusLabel_);
+    activeTargetPlateIndex_ = -1;
     return false;
   }
 
@@ -693,7 +734,6 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
 
   const QPointer<SliceService> receiver(this);
   const auto cancelFlag = activeCancelFlag_;
-  const int targetPlateIndex = projectService_ ? projectService_->currentPlateIndex() : -1;
   QString targetPlateLabel;
   if (projectService_)
   {
@@ -741,20 +781,33 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
 
       if (cancelFlag && cancelFlag->load())
       {
+        receiver->sliceState_ = State::Cancelled;
         receiver->statusLabel_ = QObject::tr("Slicing cancelled");
+        receiver->clearActiveTargetResult();
         emit receiver->progressChanged();
+        emit receiver->resultChanged();
+        emit receiver->sliceResultCleared();
+        emit receiver->stateChanged();
         emit receiver->sliceFailed(receiver->statusLabel_);
+        receiver->activeTargetPlateIndex_ = -1;
         return;
       }
 
       if (!errorText.isEmpty())
       {
+        receiver->sliceState_ = State::Error;
         receiver->statusLabel_ = errorText;
+        receiver->clearActiveTargetResult();
         emit receiver->progressChanged();
+        emit receiver->resultChanged();
+        emit receiver->sliceResultCleared();
+        emit receiver->stateChanged();
         emit receiver->sliceFailed(errorText);
+        receiver->activeTargetPlateIndex_ = -1;
         return;
       }
 
+      receiver->sliceState_ = State::Completed;
       receiver->progress_ = 100;
       receiver->statusLabel_ = QObject::tr("Existing G-code reuse complete");
       receiver->outputPath_ = localPath;
@@ -767,10 +820,13 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
         pr.resultWeightLabel = QString{};
         pr.resultFilamentLabel = QString{};
         pr.resultCostLabel = QString{};
+        pr.outputPath = localPath;
         pr.resultLayerCount = 0;
         pr.totalFilamentMm = 0.0;
-        receiver->plateResults_[targetPlateIndex] = pr;
+        pr.source = int(ResultSource::PreviousGCode);
+        receiver->storePlateResult(targetPlateIndex, pr);
       }
+      receiver->activeTargetPlateIndex_ = -1;
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
       emit receiver->resultChanged();
@@ -823,7 +879,10 @@ bool SliceService::exportGCodeToPath(const QString &targetPath)
 
 bool SliceService::hasPlateResult(int plateIndex) const
 {
-  return plateResults_.contains(plateIndex);
+  const auto it = plateResults_.constFind(plateIndex);
+  if (it == plateResults_.constEnd() || it->outputPath.isEmpty())
+    return false;
+  return QFileInfo::exists(it->outputPath);
 }
 
 QString SliceService::plateEstimatedTime(int plateIndex) const
@@ -856,10 +915,73 @@ int SliceService::plateLayerCount(int plateIndex) const
   return it != plateResults_.constEnd() ? it->resultLayerCount : 0;
 }
 
+QString SliceService::plateOutputPath(int plateIndex) const
+{
+  auto it = plateResults_.constFind(plateIndex);
+  return it != plateResults_.constEnd() ? it->outputPath : QString();
+}
+
+int SliceService::plateResultSource(int plateIndex) const
+{
+  auto it = plateResults_.constFind(plateIndex);
+  return it != plateResults_.constEnd() ? it->source : int(ResultSource::None);
+}
+
+bool SliceService::activatePlateResult(int plateIndex)
+{
+  if (slicing_)
+    return false;
+
+  const auto it = plateResults_.constFind(plateIndex);
+  if (it == plateResults_.constEnd() || it->outputPath.isEmpty() || !QFileInfo::exists(it->outputPath))
+  {
+    if (resultPlateIndex_ != -1 || !outputPath_.isEmpty())
+    {
+      clearStoredResult();
+      emit resultChanged();
+      emit sliceResultCleared();
+      emit stateChanged();
+    }
+    return false;
+  }
+
+  sliceState_ = State::Completed;
+  progress_ = 100;
+  statusLabel_ = it->source == int(ResultSource::PreviousGCode)
+      ? QObject::tr("Existing G-code reuse complete")
+      : QObject::tr("Slice complete");
+  outputPath_ = it->outputPath;
+  estimatedTimeLabel_ = it->estimatedTimeLabel;
+  resultWeightLabel_ = it->resultWeightLabel;
+  resultPlateIndex_ = plateIndex;
+  resultFilamentLabel_ = it->resultFilamentLabel;
+  resultLayerCount_ = it->resultLayerCount;
+  resultCostLabel_ = it->resultCostLabel;
+
+  if (projectService_)
+  {
+    const QStringList plateNames = projectService_->plateNames();
+    if (plateIndex >= 0 && plateIndex < plateNames.size() && !plateNames[plateIndex].isEmpty())
+      resultPlateLabel_ = plateNames[plateIndex];
+    else if (plateIndex >= 0)
+      resultPlateLabel_ = QObject::tr("Plate %1").arg(plateIndex + 1);
+    else
+      resultPlateLabel_.clear();
+  }
+
+  emit progressChanged();
+  emit resultChanged();
+  emit stateChanged();
+  return true;
+}
+
 void SliceService::clearPlateResults()
 {
+  clearStoredResult();
   plateResults_.clear();
   emit resultChanged();
+  emit sliceResultCleared();
+  emit stateChanged();
 }
 
 void SliceService::removePlateResult(int plateIndex)

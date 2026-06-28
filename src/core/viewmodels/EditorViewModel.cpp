@@ -1406,8 +1406,7 @@ bool EditorViewModel::hasValidSliceResultForPlate(int plateIndex) const
     return false;
   return m_slicedPlateIndices.contains(plateIndex)
       && sliceService_->hasPlateResult(plateIndex)
-      && !sliceService_->outputPath().isEmpty()
-      && sliceService_->resultPlateIndex() == plateIndex;
+      && !m_stalePlateIndices.contains(plateIndex);
 }
 
 int EditorViewModel::mapFilteredToSourceIndex(int filteredIndex) const
@@ -1497,6 +1496,8 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
 
   connect(projectService_, &ProjectServiceMock::plateSelectionChanged, this, [this]()
           {
+        if (sliceService_ && projectService_)
+          sliceService_->activatePlateResult(projectService_->currentPlateIndex());
         ensureValidObjectSelection(true);
         emit stateChanged(); });
 
@@ -1531,6 +1532,8 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
     if (m_sliceResultPlateIndex >= 0) {
       m_slicedPlateIndices.insert(m_sliceResultPlateIndex);
       m_stalePlateIndices.remove(m_sliceResultPlateIndex);
+      if (projectService_ && projectService_->currentPlateIndex() == m_sliceResultPlateIndex)
+        sliceService_->activatePlateResult(m_sliceResultPlateIndex);
     }
     if (m_slicingAll && !m_sliceAllQueue.isEmpty())
     {
