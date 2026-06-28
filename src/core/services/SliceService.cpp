@@ -41,13 +41,6 @@ namespace
 SliceService::SliceService(ProjectServiceMock *projectService, QObject *parent)
     : QObject(parent), projectService_(projectService)
 {
-  if (projectService_)
-  {
-    connect(projectService_, &ProjectServiceMock::projectChanged, this, [this]()
-            {
-      if (!slicing_)
-        clearResults(); });
-  }
 }
 
 int SliceService::progress() const
@@ -767,6 +760,17 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
       receiver->outputPath_ = localPath;
       receiver->resultPlateLabel_ = targetPlateLabel;
       receiver->resultPlateIndex_ = targetPlateIndex;
+      if (targetPlateIndex >= 0)
+      {
+        PlateSliceResult pr;
+        pr.estimatedTimeLabel = QString{};
+        pr.resultWeightLabel = QString{};
+        pr.resultFilamentLabel = QString{};
+        pr.resultCostLabel = QString{};
+        pr.resultLayerCount = 0;
+        pr.totalFilamentMm = 0.0;
+        receiver->plateResults_[targetPlateIndex] = pr;
+      }
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
       emit receiver->resultChanged();
@@ -860,8 +864,21 @@ void SliceService::clearPlateResults()
 
 void SliceService::removePlateResult(int plateIndex)
 {
-  plateResults_.remove(plateIndex);
-  emit resultChanged();
+  const bool removedPlateMetadata = plateResults_.remove(plateIndex) > 0;
+  bool clearedCurrentOutput = false;
+  if (resultPlateIndex_ == plateIndex)
+  {
+    clearStoredResult();
+    clearedCurrentOutput = true;
+  }
+
+  if (removedPlateMetadata || clearedCurrentOutput)
+  {
+    emit resultChanged();
+    if (clearedCurrentOutput)
+      emit sliceResultCleared();
+    emit stateChanged();
+  }
 }
 
 

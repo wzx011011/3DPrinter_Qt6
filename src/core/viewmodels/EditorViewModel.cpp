@@ -19,8 +19,49 @@
 void EditorViewModel::invalidateSliceResultsForCurrentPlate()
 {
   const int plateIdx = projectService_ ? projectService_->currentPlateIndex() : -1;
-  if (plateIdx >= 0)
-    m_slicedPlateIndices.remove(plateIdx);
+  invalidateSliceResultsForPlate(plateIdx);
+}
+
+void EditorViewModel::invalidateSliceResultsForPlate(int plateIndex)
+{
+  if (plateIndex < 0)
+    return;
+
+  const bool hadKnownResult = m_slicedPlateIndices.remove(plateIndex) > 0
+      || (sliceService_ && sliceService_->hasPlateResult(plateIndex))
+      || m_sliceResultPlateIndex == plateIndex;
+  if (hadKnownResult)
+    m_stalePlateIndices.insert(plateIndex);
+
+  if (sliceService_)
+    sliceService_->removePlateResult(plateIndex);
+
+  if (m_sliceResultPlateIndex == plateIndex)
+  {
+    m_sliceEstimatedTime.clear();
+    m_sliceResultPlateIndex = -1;
+  }
+}
+
+void EditorViewModel::invalidateAllSliceResults()
+{
+  QSet<int> knownPlates = m_slicedPlateIndices;
+  if (sliceService_ && sliceService_->resultPlateIndex() >= 0)
+    knownPlates.insert(sliceService_->resultPlateIndex());
+  if (m_sliceResultPlateIndex >= 0)
+    knownPlates.insert(m_sliceResultPlateIndex);
+
+  for (int plateIndex : knownPlates)
+  {
+    if (plateIndex >= 0)
+      m_stalePlateIndices.insert(plateIndex);
+  }
+
+  m_slicedPlateIndices.clear();
+  m_sliceEstimatedTime.clear();
+  m_sliceResultPlateIndex = -1;
+  if (sliceService_)
+    sliceService_->clearResults();
 }
 
 void EditorViewModel::refreshMeshCacheAndFitHint()
@@ -1359,6 +1400,16 @@ bool EditorViewModel::currentPlateHasPrintableObjects() const
   return false;
 }
 
+bool EditorViewModel::hasValidSliceResultForPlate(int plateIndex) const
+{
+  if (!sliceService_ || !projectService_ || plateIndex < 0 || sliceService_->slicing())
+    return false;
+  return m_slicedPlateIndices.contains(plateIndex)
+      && sliceService_->hasPlateResult(plateIndex)
+      && !sliceService_->outputPath().isEmpty()
+      && sliceService_->resultPlateIndex() == plateIndex;
+}
+
 int EditorViewModel::mapFilteredToSourceIndex(int filteredIndex) const
 {
   const QList<int> indices = visibleObjectIndices();
@@ -1432,6 +1483,7 @@ void EditorViewModel::rebuildAndNotify()
   rebuildObjectEntriesFromService();
   ensureValidObjectSelection(true);
   refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForCurrentPlate();
   emit stateChanged();
 }
 
@@ -1440,10 +1492,6 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
 {
   connect(projectService_, &ProjectServiceMock::projectChanged, this, [this]()
           {
-    if (!sliceService_ || !sliceService_->slicing())
-      m_sliceResultPlateIndex = -1;
-    // Invalidate slice results for the affected plate
-    m_slicedPlateIndices.remove(projectService_ ? projectService_->currentPlateIndex() : -1);
         statusText_ = QStringLiteral("已更新项目对象");
         emit stateChanged(); });
 
@@ -1480,8 +1528,10 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
     m_sliceEstimatedTime = estimatedTime;
       m_sliceResultPlateIndex = sliceService_ ? sliceService_->resultPlateIndex() : -1;
     // Track per-plate slice state
-    if (m_sliceResultPlateIndex >= 0)
+    if (m_sliceResultPlateIndex >= 0) {
       m_slicedPlateIndices.insert(m_sliceResultPlateIndex);
+      m_stalePlateIndices.remove(m_sliceResultPlateIndex);
+    }
     if (m_slicingAll && !m_sliceAllQueue.isEmpty())
     {
       statusText_ = QStringLiteral("切片完成，继续下一平板...");
@@ -2131,6 +2181,7 @@ void EditorViewModel::setObjectPrintable(int i, bool printable)
   if (sourceIndex < 0 || sourceIndex >= m_objects.size())
     return;
 
+  const int plateIndex = projectService_ ? projectService_->plateIndexForObject(sourceIndex) : -1;
   if (!projectService_ || !projectService_->setObjectPrintable(sourceIndex, printable))
   {
     statusText_ = projectService_ ? projectService_->lastError() : QStringLiteral("服务不可用");
@@ -2139,7 +2190,7 @@ void EditorViewModel::setObjectPrintable(int i, bool printable)
   }
 
   m_objects[sourceIndex].printable = printable;
-  invalidateSliceResultsForCurrentPlate();
+  invalidateSliceResultsForPlate(plateIndex);
   statusText_ = printable ? QStringLiteral("对象已设为可打印") : QStringLiteral("对象已设为不参与打印");
   emit stateChanged();
 }
@@ -2159,6 +2210,7 @@ void EditorViewModel::deleteObject(int i)
   if (m_undoManager)
     deleteCmd = new DeleteObjectsCommand({sourceIndex}, projectService_, this);
 
+  const int plateIndex = projectService_ ? projectService_->plateIndexForObject(sourceIndex) : -1;
   if (projectService_->deleteObject(sourceIndex))
   {
     m_collapsedObjectSourceIndices.clear();
@@ -2171,6 +2223,7 @@ void EditorViewModel::deleteObject(int i)
     if (m_undoManager && deleteCmd)
       m_undoManager->push(deleteCmd);
 
+    invalidateSliceResultsForPlate(plateIndex);
     emit stateChanged();
   }
   else
@@ -2199,6 +2252,13 @@ void EditorViewModel::deleteSelectedObjects()
 
   std::sort(sourceIndices.begin(), sourceIndices.end(), std::greater<int>());
   sourceIndices.erase(std::unique(sourceIndices.begin(), sourceIndices.end()), sourceIndices.end());
+  QSet<int> affectedPlates;
+  for (int sourceIndex : sourceIndices)
+  {
+    const int plateIndex = projectService_->plateIndexForObject(sourceIndex);
+    if (plateIndex >= 0)
+      affectedPlates.insert(plateIndex);
+  }
 
   // Create undo command BEFORE deleting (captures snapshots)
   DeleteObjectsCommand *deleteCmd = nullptr;
@@ -2234,6 +2294,8 @@ void EditorViewModel::deleteSelectedObjects()
   if (m_undoManager && deleteCmd)
     m_undoManager->push(deleteCmd);
 
+  for (int plateIndex : affectedPlates)
+    invalidateSliceResultsForPlate(plateIndex);
   emit stateChanged();
 }
 
@@ -2353,10 +2415,12 @@ void EditorViewModel::setSelectedObjectsPrintable(bool printable)
   if (m_selectedSourceIndices.isEmpty())
     return;
 
+  QSet<int> affectedPlates;
   for (int sourceIndex : m_selectedSourceIndices)
   {
     if (sourceIndex >= 0 && sourceIndex < m_objects.size())
     {
+      const int plateIndex = projectService_ ? projectService_->plateIndexForObject(sourceIndex) : -1;
       if (!projectService_ || !projectService_->setObjectPrintable(sourceIndex, printable))
       {
         statusText_ = projectService_ ? projectService_->lastError() : QStringLiteral("服务不可用");
@@ -2364,9 +2428,13 @@ void EditorViewModel::setSelectedObjectsPrintable(bool printable)
         return;
       }
       m_objects[sourceIndex].printable = printable;
+      if (plateIndex >= 0)
+        affectedPlates.insert(plateIndex);
     }
   }
 
+  for (int plateIndex : affectedPlates)
+    invalidateSliceResultsForPlate(plateIndex);
   statusText_ = printable ? QStringLiteral("已将所选对象设为可打印") : QStringLiteral("已将所选对象设为不参与打印");
   emit stateChanged();
 }
@@ -2421,6 +2489,7 @@ void EditorViewModel::duplicateSelectedObjects()
   {
     rebuildObjectEntriesFromService();
     refreshMeshCacheAndFitHint();
+    invalidateSliceResultsForCurrentPlate();
 
     // Push undo commands (in reverse order so undo restores correctly)
     if (m_undoManager)
@@ -2497,6 +2566,7 @@ void EditorViewModel::pasteObjects()
 
   rebuildObjectEntriesFromService();
   refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForCurrentPlate();
   emit stateChanged();
 }
 
@@ -3014,6 +3084,7 @@ bool EditorViewModel::deletePlate(int plateIndex)
     return false;
   if (projectService_->deletePlate(plateIndex))
   {
+    invalidateAllSliceResults();
     rebuildObjectEntriesFromService();
     emit stateChanged();
     return true;
@@ -3041,6 +3112,7 @@ void EditorViewModel::removeAllOnPlate(int plateIndex)
     return;
   if (projectService_->removeAllOnPlate(plateIndex))
   {
+    invalidateSliceResultsForPlate(plateIndex);
     m_selectedSourceIndices.clear();
     m_primarySelectedSourceIndex = -1;
     rebuildObjectEntriesFromService();
@@ -3068,6 +3140,7 @@ void EditorViewModel::togglePlateLocked(int plateIndex)
     return;
   const bool current = projectService_->isPlateLocked(plateIndex);
   projectService_->setPlateLocked(plateIndex, !current);
+  invalidateSliceResultsForPlate(plateIndex);
   emit stateChanged();
 }
 
@@ -3078,8 +3151,10 @@ bool EditorViewModel::clonePlate(int sourceIndex)
   if (!projectService_)
     return false;
   const bool ok = projectService_->clonePlate(sourceIndex);
-  if (ok)
+  if (ok) {
+    invalidateAllSliceResults();
     emit stateChanged();
+  }
   return ok;
 }
 
@@ -3088,8 +3163,10 @@ bool EditorViewModel::movePlate(int oldIndex, int newIndex)
   if (!projectService_)
     return false;
   const bool ok = projectService_->movePlate(oldIndex, newIndex);
-  if (ok)
+  if (ok) {
+    invalidateAllSliceResults();
     emit stateChanged();
+  }
   return ok;
 }
 
@@ -3098,8 +3175,10 @@ bool EditorViewModel::setPlatePrintable(int plateIndex, bool printable)
   if (!projectService_)
     return false;
   const bool ok = projectService_->setPlatePrintable(plateIndex, printable);
-  if (ok)
+  if (ok) {
+    invalidateSliceResultsForPlate(plateIndex);
     emit stateChanged();
+  }
   return ok;
 }
 
@@ -3129,6 +3208,8 @@ bool EditorViewModel::moveSelectedObjectToPlate(int targetPlateIndex)
 
   // Mock 模式：更新对象的平板归属
   projectService_->setObjectPlateForIndex(selObj, targetPlateIndex);
+  invalidateSliceResultsForPlate(srcPlate);
+  invalidateSliceResultsForPlate(targetPlateIndex);
   emit stateChanged();
   return true;
 }
@@ -3184,7 +3265,7 @@ bool EditorViewModel::setPlateBedType(int plateIndex, int bedType)
     return false;
   bool ok = projectService_->setPlateBedType(plateIndex, bedType);
   if (ok) {
-    m_slicedPlateIndices.remove(plateIndex);
+    invalidateSliceResultsForPlate(plateIndex);
     emit stateChanged();
   }
   return ok;
@@ -3201,7 +3282,7 @@ bool EditorViewModel::setPlatePrintSequence(int plateIndex, int seq)
     return false;
   bool ok = projectService_->setPlatePrintSequence(plateIndex, seq);
   if (ok) {
-    m_slicedPlateIndices.remove(plateIndex);
+    invalidateSliceResultsForPlate(plateIndex);
     emit stateChanged();
   }
   return ok;
@@ -3218,7 +3299,7 @@ bool EditorViewModel::setPlateSpiralMode(int plateIndex, int mode)
     return false;
   bool ok = projectService_->setPlateSpiralMode(plateIndex, mode);
   if (ok) {
-    m_slicedPlateIndices.remove(plateIndex);
+    invalidateSliceResultsForPlate(plateIndex);
     emit stateChanged();
   }
   return ok;
@@ -3236,8 +3317,10 @@ bool EditorViewModel::setPlateFirstLayerSeqChoice(int plateIndex, int choice)
   if (!projectService_)
     return false;
   bool ok = projectService_->setPlateFirstLayerSeqChoice(plateIndex, choice);
-  if (ok)
+  if (ok) {
+    invalidateSliceResultsForPlate(plateIndex);
     emit stateChanged();
+  }
   return ok;
 }
 
@@ -3251,8 +3334,10 @@ bool EditorViewModel::setPlateFirstLayerSeqOrder(int plateIndex, const QVariantL
   if (!projectService_)
     return false;
   bool ok = projectService_->setPlateFirstLayerSeqOrder(plateIndex, order);
-  if (ok)
+  if (ok) {
+    invalidateSliceResultsForPlate(plateIndex);
     emit stateChanged();
+  }
   return ok;
 }
 
@@ -3268,8 +3353,10 @@ bool EditorViewModel::setPlateOtherLayersSeqChoice(int plateIndex, int choice)
   if (!projectService_)
     return false;
   bool ok = projectService_->setPlateOtherLayersSeqChoice(plateIndex, choice);
-  if (ok)
+  if (ok) {
+    invalidateSliceResultsForPlate(plateIndex);
     emit stateChanged();
+  }
   return ok;
 }
 
@@ -3298,8 +3385,10 @@ bool EditorViewModel::addPlateOtherLayersSeqEntry(int plateIndex, int beginLayer
   if (!projectService_)
     return false;
   bool ok = projectService_->addPlateOtherLayersSeqEntry(plateIndex, beginLayer, endLayer);
-  if (ok)
+  if (ok) {
+    invalidateSliceResultsForPlate(plateIndex);
     emit stateChanged();
+  }
   return ok;
 }
 
@@ -3308,8 +3397,10 @@ bool EditorViewModel::removePlateOtherLayersSeqEntry(int plateIndex, int entryIn
   if (!projectService_)
     return false;
   bool ok = projectService_->removePlateOtherLayersSeqEntry(plateIndex, entryIndex);
-  if (ok)
+  if (ok) {
+    invalidateSliceResultsForPlate(plateIndex);
     emit stateChanged();
+  }
   return ok;
 }
 
@@ -3318,8 +3409,10 @@ bool EditorViewModel::setPlateOtherLayersSeqRange(int plateIndex, int entryIndex
   if (!projectService_)
     return false;
   bool ok = projectService_->setPlateOtherLayersSeqRange(plateIndex, entryIndex, beginLayer, endLayer);
-  if (ok)
+  if (ok) {
+    invalidateSliceResultsForPlate(plateIndex);
     emit stateChanged();
+  }
   return ok;
 }
 
@@ -3328,8 +3421,10 @@ bool EditorViewModel::setPlateOtherLayersSeqOrder(int plateIndex, int entryIndex
   if (!projectService_)
     return false;
   bool ok = projectService_->setPlateOtherLayersSeqOrder(plateIndex, entryIndex, order);
-  if (ok)
+  if (ok) {
+    invalidateSliceResultsForPlate(plateIndex);
     emit stateChanged();
+  }
   return ok;
 }
 
@@ -3357,6 +3452,7 @@ void EditorViewModel::centerSelectedObjects()
       projectService_->setObjectPosition(i, 0, 0, 0);
     }
   }
+  invalidateSliceResultsForCurrentPlate();
   emit stateChanged();
 }
 
@@ -3381,6 +3477,7 @@ void EditorViewModel::fillBedWithCopies()
         projectService_->setObjectPosition(idx, (c - 1) * 60.0f, (r - 1) * 60.0f, 0);
     }
   }
+  invalidateSliceResultsForCurrentPlate();
   emit stateChanged();
 }
 
@@ -3595,7 +3692,7 @@ QString EditorViewModel::extruderUsedWeight(int extruderId) const
 
 bool EditorViewModel::hasSliceResult() const
 {
-  return sliceService_ && !sliceService_->outputPath().isEmpty() && !isSlicing() && projectService_ && m_sliceResultPlateIndex == projectService_->currentPlateIndex();
+  return projectService_ && hasValidSliceResultForPlate(projectService_->currentPlateIndex());
 }
 
 bool EditorViewModel::canRequestSlice() const
@@ -3612,12 +3709,20 @@ bool EditorViewModel::canRequestSlice() const
   return currentPlateHasPrintableObjects();
 }
 
-QString EditorViewModel::sliceActionLabel() const
+bool EditorViewModel::canPreview() const
 {
-  return QStringLiteral("▶ 开始切片");
+  return hasSliceResult();
 }
 
-QString EditorViewModel::sliceActionHint() const
+bool EditorViewModel::canExportGCode() const
+{
+  return hasSliceResult()
+      && sliceService_
+      && !sliceService_->outputPath().isEmpty()
+      && !sliceService_->slicing();
+}
+
+QString EditorViewModel::sliceReadinessReason() const
 {
   if (!projectService_)
     return {};
@@ -3631,8 +3736,68 @@ QString EditorViewModel::sliceActionHint() const
     return QStringLiteral("当前平板已有有效切片结果；修改对象或参数后将重新启用切片");
   if (!currentPlateHasPrintableObjects())
     return QStringLiteral("当前平板没有可切片对象");
-
+  if (plateSliceResultStatus(projectService_->currentPlateIndex()) == SliceResultStale)
+    return QStringLiteral("当前平板切片结果已过期，请重新切片");
   return QStringLiteral("当前平板已满足基础切片条件");
+}
+
+QString EditorViewModel::previewActionHint() const
+{
+  if (!projectService_)
+    return {};
+  if (canPreview())
+    return QStringLiteral("可预览当前平板切片结果");
+  if (sliceService_ && sliceService_->slicing())
+    return QStringLiteral("当前切片任务进行中");
+  if (projectService_->loading())
+    return QStringLiteral("模型导入完成后可预览");
+  if (projectService_->sourceFilePath().isEmpty())
+    return QStringLiteral("请先导入模型文件");
+  if (!currentPlateHasPrintableObjects())
+    return QStringLiteral("当前平板没有可预览的可打印对象");
+  if (plateSliceResultStatus(projectService_->currentPlateIndex()) == SliceResultStale)
+    return QStringLiteral("当前平板切片结果已过期，请重新切片");
+  return QStringLiteral("当前平板尚未切片");
+}
+
+QString EditorViewModel::exportActionHint() const
+{
+  if (!projectService_)
+    return {};
+  if (canExportGCode())
+    return QStringLiteral("可导出当前平板 G-code");
+  if (sliceService_ && sliceService_->slicing())
+    return QStringLiteral("当前切片任务进行中");
+  if (projectService_->loading())
+    return QStringLiteral("模型导入完成后可导出");
+  if (projectService_->sourceFilePath().isEmpty())
+    return QStringLiteral("请先导入模型文件");
+  if (!currentPlateHasPrintableObjects())
+    return QStringLiteral("当前平板没有可导出的可打印对象");
+  if (plateSliceResultStatus(projectService_->currentPlateIndex()) == SliceResultStale)
+    return QStringLiteral("当前平板切片结果已过期，请重新切片");
+  if (hasSliceResult() && (!sliceService_ || sliceService_->outputPath().isEmpty()))
+    return QStringLiteral("没有可导出的 G-code 输出路径");
+  return QStringLiteral("当前平板尚未切片");
+}
+
+QString EditorViewModel::sliceActionLabel() const
+{
+  return QStringLiteral("▶ 开始切片");
+}
+
+QString EditorViewModel::sliceActionHint() const
+{
+  return sliceReadinessReason();
+}
+
+int EditorViewModel::plateSliceResultStatus(int plateIndex) const
+{
+  if (hasValidSliceResultForPlate(plateIndex))
+    return SliceResultValid;
+  if (m_stalePlateIndices.contains(plateIndex))
+    return SliceResultStale;
+  return SliceResultMissing;
 }
 
 // ---------- actions ----------
@@ -3694,6 +3859,7 @@ bool EditorViewModel::loadFile(const QString &filePath)
     m_sliceEstimatedTime.clear();
     m_sliceResultPlateIndex = -1;
     m_slicedPlateIndices.clear();
+    m_stalePlateIndices.clear();
     statusText_ = QStringLiteral("正在加载...");
     m_collapsedGroupKeys.clear();
     m_collapsedObjectSourceIndices.clear();
@@ -3733,6 +3899,7 @@ void EditorViewModel::clearWorkspace()
   m_sliceEstimatedTime.clear();
   m_sliceResultPlateIndex = -1;
   m_slicedPlateIndices.clear();
+  m_stalePlateIndices.clear();
   m_slicingAll = false;
   m_sliceAllQueue.clear();
   m_fitHint = QVector4D();
@@ -3754,6 +3921,7 @@ void EditorViewModel::refreshAfterLoad()
   m_cachedMeshData.clear();
   m_cachedMeshBatchSourceObjectIndices.clear();
   m_slicedPlateIndices.clear();
+  m_stalePlateIndices.clear();
   if (sliceService_)
     sliceService_->clearResults();
   rebuildObjectEntriesFromService();
@@ -3798,6 +3966,12 @@ bool EditorViewModel::requestExportGCode(const QString &targetPath)
 {
   if (!sliceService_)
     return false;
+  if (!canExportGCode())
+  {
+    statusText_ = exportActionHint();
+    emit stateChanged();
+    return false;
+  }
   QUrl url(targetPath);
   const QString localPath = url.isLocalFile() ? url.toLocalFile() : targetPath;
   return sliceService_->exportGCodeToPath(localPath);
@@ -3876,6 +4050,7 @@ void EditorViewModel::arrangeAllObjects()
   {
     // Real arrange succeeded — sync transforms from model to mock arrays
     projectService_->syncTransformsFromModel();
+    invalidateAllSliceResults();
     emit stateChanged();
   }
   // If real arrange not available (no HAS_LIBSLIC3R), the GLViewport mock
@@ -3884,6 +4059,12 @@ void EditorViewModel::arrangeAllObjects()
 
 void EditorViewModel::switchToPreview()
 {
+  if (!canPreview())
+  {
+    statusText_ = previewActionHint();
+    emit stateChanged();
+    return;
+  }
   emit previewRequested();
 }
 
@@ -3896,7 +4077,9 @@ void EditorViewModel::setBedWidth(float v)
   if (qFuzzyCompare(m_bedWidth, v)) return;
   m_bedWidth = v;
   QSettings s; s.setValue(QStringLiteral("bed/width"), v);
+  invalidateAllSliceResults();
   emit bedShapeChanged();
+  emit stateChanged();
 }
 
 float EditorViewModel::bedDepth() const { return m_bedDepth; }
@@ -3906,7 +4089,9 @@ void EditorViewModel::setBedDepth(float v)
   if (qFuzzyCompare(m_bedDepth, v)) return;
   m_bedDepth = v;
   QSettings s; s.setValue(QStringLiteral("bed/depth"), v);
+  invalidateAllSliceResults();
   emit bedShapeChanged();
+  emit stateChanged();
 }
 
 float EditorViewModel::bedMaxHeight() const { return m_bedMaxHeight; }
@@ -3916,7 +4101,9 @@ void EditorViewModel::setBedMaxHeight(float v)
   if (qFuzzyCompare(m_bedMaxHeight, v)) return;
   m_bedMaxHeight = v;
   QSettings s; s.setValue(QStringLiteral("bed/maxHeight"), v);
+  invalidateAllSliceResults();
   emit bedShapeChanged();
+  emit stateChanged();
 }
 
 float EditorViewModel::bedOriginX() const { return m_bedOriginX; }
@@ -3925,7 +4112,9 @@ void EditorViewModel::setBedOriginX(float v)
   if (qFuzzyCompare(m_bedOriginX, v)) return;
   m_bedOriginX = v;
   QSettings s; s.setValue(QStringLiteral("bed/originX"), v);
+  invalidateAllSliceResults();
   emit bedShapeChanged();
+  emit stateChanged();
 }
 
 float EditorViewModel::bedOriginY() const { return m_bedOriginY; }
@@ -3934,7 +4123,9 @@ void EditorViewModel::setBedOriginY(float v)
   if (qFuzzyCompare(m_bedOriginY, v)) return;
   m_bedOriginY = v;
   QSettings s; s.setValue(QStringLiteral("bed/originY"), v);
+  invalidateAllSliceResults();
   emit bedShapeChanged();
+  emit stateChanged();
 }
 
 int EditorViewModel::bedShapeType() const { return m_bedShapeType; }
@@ -3944,7 +4135,9 @@ void EditorViewModel::setBedShapeType(int v)
   if (m_bedShapeType == v) return;
   m_bedShapeType = v;
   QSettings s; s.setValue(QStringLiteral("bed/shapeType"), v);
+  invalidateAllSliceResults();
   emit bedShapeChanged();
+  emit stateChanged();
 }
 
 float EditorViewModel::bedDiameter() const { return m_bedDiameter; }
@@ -3954,5 +4147,7 @@ void EditorViewModel::setBedDiameter(float v)
   if (qFuzzyCompare(m_bedDiameter, v)) return;
   m_bedDiameter = v;
   QSettings s; s.setValue(QStringLiteral("bed/diameter"), v);
+  invalidateAllSliceResults();
   emit bedShapeChanged();
+  emit stateChanged();
 }

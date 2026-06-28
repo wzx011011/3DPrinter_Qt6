@@ -77,6 +77,13 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(bool showLabels READ showLabels WRITE setShowLabels NOTIFY stateChanged)
 
 public:
+  enum SliceResultStatus {
+    SliceResultMissing = 0,
+    SliceResultValid = 1,
+    SliceResultStale = 2
+  };
+  Q_ENUM(SliceResultStatus)
+
   explicit EditorViewModel(ProjectServiceMock *projectService, SliceService *sliceService, QObject *parent = nullptr);
 
   QString projectName() const;
@@ -573,6 +580,11 @@ public:
   Q_PROPERTY(int extruderCount READ extruderCount NOTIFY stateChanged)
   Q_PROPERTY(bool hasSliceResult READ hasSliceResult NOTIFY stateChanged)
   Q_PROPERTY(bool canRequestSlice READ canRequestSlice NOTIFY stateChanged)
+  Q_PROPERTY(bool canPreview READ canPreview NOTIFY stateChanged)
+  Q_PROPERTY(bool canExportGCode READ canExportGCode NOTIFY stateChanged)
+  Q_PROPERTY(QString sliceReadinessReason READ sliceReadinessReason NOTIFY stateChanged)
+  Q_PROPERTY(QString previewActionHint READ previewActionHint NOTIFY stateChanged)
+  Q_PROPERTY(QString exportActionHint READ exportActionHint NOTIFY stateChanged)
   Q_PROPERTY(QString sliceActionLabel READ sliceActionLabel NOTIFY stateChanged)
   Q_PROPERTY(QString sliceActionHint READ sliceActionHint NOTIFY stateChanged)
   Q_INVOKABLE int sliceProgress() const;
@@ -629,8 +641,14 @@ public:
   Q_INVOKABLE QString extruderUsedWeight(int extruderId) const;
   bool hasSliceResult() const;
   bool canRequestSlice() const;
+  bool canPreview() const;
+  bool canExportGCode() const;
+  QString sliceReadinessReason() const;
+  QString previewActionHint() const;
+  QString exportActionHint() const;
   QString sliceActionLabel() const;
   QString sliceActionHint() const;
+  Q_INVOKABLE int plateSliceResultStatus(int plateIndex) const;
 
   Q_INVOKABLE void requestSlice();
   Q_INVOKABLE void requestSliceAll();
@@ -674,6 +692,8 @@ signals:
 private:
   void refreshMeshCacheAndFitHint();
   void invalidateSliceResultsForCurrentPlate();
+  void invalidateSliceResultsForPlate(int plateIndex);
+  void invalidateAllSliceResults();
   void rebuildObjectEntriesFromService();
   bool deleteSelectedVolumesBySource();
   void ensureValidObjectSelection(bool preferFirstVisible);
@@ -683,6 +703,7 @@ private:
   int mapFilteredToSourceIndex(int filteredIndex) const;
   QList<int> visibleObjectIndices() const;
   bool currentPlateHasPrintableObjects() const;
+  bool hasValidSliceResultForPlate(int plateIndex) const;
   void checkViewportWarnings();
   void continueSliceAllQueue();
 
@@ -733,6 +754,7 @@ private:
   QList<int> m_sliceAllQueue; ///< plate indices queued for Slice All
   bool m_slicingAll = false;
   QSet<int> m_slicedPlateIndices; ///< tracks which plates have valid slice results
+  QSet<int> m_stalePlateIndices; ///< tracks plates whose previous slice result no longer matches current inputs
   // Viewport warnings (对齐上游 EWarning)
   int m_viewportWarning = 0;    ///< 0=none, 1=ObjectOutside, 2=ObjectClashed
   QString m_viewportWarningMessage;
