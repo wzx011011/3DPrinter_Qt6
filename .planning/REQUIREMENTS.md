@@ -35,10 +35,10 @@ Every user-visible behavior in this path must either be implemented, verified, o
 
 ### Prepare Readiness and Invalidation
 
-- [ ] **PREP-01:** Prepare page exposes accurate slice readiness for the current plate, including loading state, object count, printable object state, current plate validity, and active slicing/export jobs.
-- [ ] **PREP-02:** Object, volume, plate, transform, printable flag, arrangement, bed-shape, filament-map, and relevant preset/config changes invalidate affected slice results and Preview data immediately.
-- [ ] **PREP-03:** Switching plates shows the correct per-plate slice status, Preview availability, output path, filament/time/cost/layer statistics, and export availability.
-- [ ] **PREP-04:** User-facing actions are enabled/disabled with source-truth-aligned reasons instead of allowing hidden no-ops, stale exports, or Preview of invalid results.
+- [x] **PREP-01:** Prepare page exposes accurate slice readiness for the current plate, including loading state, object count, printable object state, current plate validity, and active slicing/export jobs.
+- [x] **PREP-02:** Object, volume, plate, transform, printable flag, arrangement, bed-shape, filament-map, and relevant preset/config changes invalidate affected slice results and Preview data immediately.
+- [x] **PREP-03:** Switching plates shows the correct per-plate slice status, Preview availability, output path, filament/time/cost/layer statistics, and export availability.
+- [x] **PREP-04:** User-facing actions are enabled/disabled with source-truth-aligned reasons instead of allowing hidden no-ops, stale exports, or Preview of invalid results.
 
 ### Slicing and Reslicing
 
@@ -111,10 +111,10 @@ Every user-visible behavior in this path must either be implemented, verified, o
 | IMP-04 | Phase 37 | Satisfied |
 | IMP-05 | Phase 37 | Satisfied |
 | IMP-06 | Phase 37 | Satisfied |
-| PREP-01 | Phase 38 | Pending |
-| PREP-02 | Phase 38 | Pending |
-| PREP-03 | Phase 38 | Pending |
-| PREP-04 | Phase 38 | Pending |
+| PREP-01 | Phase 38 | Satisfied |
+| PREP-02 | Phase 38 | Satisfied |
+| PREP-03 | Phase 38 | Satisfied |
+| PREP-04 | Phase 38 | Satisfied |
 | SLICE-01 | Phase 39 | Pending |
 | SLICE-02 | Phase 39 | Pending |
 | SLICE-03 | Phase 39 | Pending |
@@ -146,4 +146,4 @@ Every user-visible behavior in this path must either be implemented, verified, o
 ---
 
 *Requirements defined: 2026-06-28*
-*Last updated: 2026-06-29 after Phase 37 verification.*
+*Last updated: 2026-06-29 after Phase 39 planning.*
