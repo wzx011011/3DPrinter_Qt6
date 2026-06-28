@@ -2,36 +2,37 @@
 gsd_state_version: 1.0
 milestone: v3.4
 milestone_name: Import to G-code Complete Workflow
-status: executing
-last_updated: "2026-06-28T15:16:29.530Z"
-last_activity: 2026-06-28 -- Phase 37 planning complete
+status: ready_to_plan
+last_updated: 2026-06-29T00:16:02+08:00
+last_activity: 2026-06-29 -- Phase 37 completed and verified
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 1
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 14
+stopped_at: Phase 37 complete (1/1) - ready to discuss Phase 38
 ---
 
 # Project State
 
 **Milestone:** v3.4 - Import to G-code Complete Workflow
-**Status:** Ready to execute
-**Next step:** start Phase 37 to complete import and project restore for the full local workflow.
+**Status:** Ready to plan
+**Next step:** start Phase 38 to complete Prepare readiness and slice invalidation.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: -
-Status: Ready to execute
-Last activity: 2026-06-28 -- Phase 37 planning complete
+Phase: 38
+Plan: Not started
+Status: Ready to plan Phase 38
+Last activity: 2026-06-29 -- Phase 37 completed and verified
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
-**Current focus:** Import model/project -> Prepare readiness -> slice/reslice -> D3D11 Preview -> local G-code export.
+**Current focus:** Phase 38 - prepare readiness and slice invalidation
 
 ## Latest Shipped Milestone
 
@@ -45,7 +46,7 @@ See: `.planning/PROJECT.md`
 
 | Phase | Name | Status |
 |---|---|---|
-| 37 | Complete Import and Project Restore | Pending |
+| 37 | Complete Import and Project Restore | Complete |
 | 38 | Prepare Readiness and Slice Invalidation | Pending |
 | 39 | Complete Slicing and Reslicing State Machine | Pending |
 | 40 | Complete Preview Data and Upstream View Semantics | Pending |
@@ -80,8 +81,8 @@ It intentionally does not include device send/upload/cloud printing or Monitor p
 
 ## Handoff
 
-v3.4 planning is ready. Start Phase 37:
+Phase 37 is complete. Start Phase 38:
 
 ```text
-$gsd-plan-phase 37
+$gsd-autonomous --from 38
 ```

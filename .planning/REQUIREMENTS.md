@@ -26,12 +26,12 @@ Every user-visible behavior in this path must either be implemented, verified, o
 
 ### Import and Project Restore
 
-- [ ] **IMP-01:** User can import the locally supported model/project formats exposed by the UI (`.stl`, `.obj`, `.amf`, `.3mf`, Orca/BBS `.3mf`, and `.step/.stp` when OCCT is available) through the normal topbar, Prepare page, drag/drop, and Project page paths.
-- [ ] **IMP-02:** Import progress, cancellation, success, and failure states are surfaced through Qt signals and user-visible notifications without leaving stale loading state.
-- [ ] **IMP-03:** Imported geometry populates the Prepare object list, active plate membership, printable flags, mesh render payload, selection state, and fit-view hint consistently.
-- [ ] **IMP-04:** Orca/BBS 3MF project import restores plate names, current plate, locked/printable state, bed type, print sequence, spiral mode, filament map mode, manual filament maps, and embedded plate thumbnails when present.
-- [ ] **IMP-05:** 3MF version/config compatibility outcomes are visible to the user and never silently turn project import into partial geometry-only import without a warning.
-- [ ] **IMP-06:** Importing a new model/project invalidates stale slice and preview state for affected plates while preserving unrelated valid plate state where upstream semantics allow it.
+- [x] **IMP-01:** User can import the locally supported model/project formats exposed by the UI (`.stl`, `.obj`, `.amf`, `.3mf`, Orca/BBS `.3mf`, and `.step/.stp` when OCCT is available) through the normal topbar, Prepare page, drag/drop, and Project page paths.
+- [x] **IMP-02:** Import progress, cancellation, success, and failure states are surfaced through Qt signals and user-visible notifications without leaving stale loading state.
+- [x] **IMP-03:** Imported geometry populates the Prepare object list, active plate membership, printable flags, mesh render payload, selection state, and fit-view hint consistently.
+- [x] **IMP-04:** Orca/BBS 3MF project import restores plate names, current plate, locked/printable state, bed type, print sequence, spiral mode, filament map mode, manual filament maps, and embedded plate thumbnails when present.
+- [x] **IMP-05:** 3MF version/config compatibility outcomes are visible to the user and never silently turn project import into partial geometry-only import without a warning.
+- [x] **IMP-06:** Importing a new model/project invalidates stale slice and preview state for affected plates while preserving unrelated valid plate state where upstream semantics allow it.
 
 ### Prepare Readiness and Invalidation
 
@@ -105,12 +105,12 @@ Every user-visible behavior in this path must either be implemented, verified, o
 
 | Requirement | Phase | Status |
 |---|---|---|
-| IMP-01 | Phase 37 | Pending |
-| IMP-02 | Phase 37 | Pending |
-| IMP-03 | Phase 37 | Pending |
-| IMP-04 | Phase 37 | Pending |
-| IMP-05 | Phase 37 | Pending |
-| IMP-06 | Phase 37 | Pending |
+| IMP-01 | Phase 37 | Satisfied |
+| IMP-02 | Phase 37 | Satisfied |
+| IMP-03 | Phase 37 | Satisfied |
+| IMP-04 | Phase 37 | Satisfied |
+| IMP-05 | Phase 37 | Satisfied |
+| IMP-06 | Phase 37 | Satisfied |
 | PREP-01 | Phase 38 | Pending |
 | PREP-02 | Phase 38 | Pending |
 | PREP-03 | Phase 38 | Pending |
@@ -141,9 +141,9 @@ Every user-visible behavior in this path must either be implemented, verified, o
 | VERIFY-04 | Phase 43 | Pending |
 | VERIFY-05 | Phase 43 | Pending |
 
-**Coverage:** 35 total; 35 mapped; 0 unmapped.
+**Coverage:** 35 total; 35 mapped; 0 unmapped; 6 satisfied.
 
 ---
 
 *Requirements defined: 2026-06-28*
-*Last updated: 2026-06-28 after v3.4 milestone definition.*
+*Last updated: 2026-06-29 after Phase 37 verification.*

@@ -23,7 +23,7 @@
 
 ## Phases
 
-- [ ] **Phase 37:** Complete Import and Project Restore
+- [x] **Phase 37:** Complete Import and Project Restore (completed 2026-06-28)
 - [ ] **Phase 38:** Prepare Readiness and Slice Invalidation
 - [ ] **Phase 39:** Complete Slicing and Reslicing State Machine
 - [ ] **Phase 40:** Complete Preview Data and Upstream View Semantics
@@ -172,12 +172,12 @@
 
 ## Next Step
 
-Start Phase 37:
+Start Phase 38:
 
 ```text
-$gsd-plan-phase 37
+$gsd-autonomous --from 38
 ```
 
 ---
 
-*Last updated: 2026-06-28 after v3.4 milestone definition.*
+*Last updated: 2026-06-29 after Phase 37 completion.*
