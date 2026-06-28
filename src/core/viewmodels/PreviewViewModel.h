@@ -177,6 +177,7 @@ signals:
 private:
   void resetPreviewState();
   void rebuildFromGCode(const QString &filePath);
+  void syncPreviewWithActiveResult();
   void recolorAndPackSegments();
   void buildLegendItems(int mode, float minV, float maxV);
   QVariantMap legendItem(const QString &label, const QString &color, int count) const;
@@ -237,8 +238,10 @@ private:
     float fan_speed;
     float temperature;
     float width;
+    float height;
     float layer_time;
     float acceleration;
+    float volumetric_rate;
     int extruder_id;
     int layer;
     int move;

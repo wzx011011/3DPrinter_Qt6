@@ -160,6 +160,48 @@ namespace
     return ok ? v : -1.f;
   }
 
+  bool parseTaggedValue(const QString &line, const QString &tag, float &value)
+  {
+    const QRegularExpression re(QStringLiteral("%1\\s*[:=]\\s*([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))")
+                                     .arg(QRegularExpression::escape(tag)),
+                                 QRegularExpression::CaseInsensitiveOption);
+    const auto m = re.match(line);
+    if (!m.hasMatch())
+      return false;
+    bool ok = false;
+    const float v = m.captured(1).toFloat(&ok);
+    if (!ok)
+      return false;
+    value = v;
+    return true;
+  }
+
+  float normalizeFanSpeed(float raw)
+  {
+    if (raw < 0.f)
+      return 100.f;
+    return qBound(0.f, raw / 255.f * 100.f, 100.f);
+  }
+
+  int parseToolToken(const QString &line, int fallback)
+  {
+    const QRegularExpression re(QStringLiteral("\\bT(\\d+)\\b"),
+                                QRegularExpression::CaseInsensitiveOption);
+    const auto m = re.match(line);
+    if (!m.hasMatch())
+      return fallback;
+    bool ok = false;
+    const int tool = m.captured(1).toInt(&ok);
+    return ok ? tool : fallback;
+  }
+
+  QString parseColorToken(const QString &line)
+  {
+    const QRegularExpression re(QStringLiteral("#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?"));
+    const auto m = re.match(line);
+    return m.hasMatch() ? m.captured(0) : QString{};
+  }
+
   bool isSameZ(float a, float b)
   {
     return std::fabs(a - b) <= 0.0001f;
@@ -181,24 +223,31 @@ PreviewViewModel::PreviewViewModel(SliceService *sliceService, QObject *parent)
       return;
     }
     currentMove_ = qMin(currentMove_ + 12, moveCount_);
+    updateToolPositionData();
     emit stateChanged(); });
 
   connect(sliceService_, &SliceService::progressChanged, this, &PreviewViewModel::stateChanged);
   connect(sliceService_, &SliceService::slicingChanged, this, &PreviewViewModel::stateChanged);
+  connect(sliceService_, &SliceService::resultChanged, this, [this]()
+          {
+    syncPreviewWithActiveResult();
+    emit stateChanged(); });
   connect(sliceService_, &SliceService::sliceFinished, this, [this](const QString &time)
           {
-        estimatedTime_ = time;
-        totalTime_ = time;
-        rebuildFromGCode(sliceService_->outputPath());
-        emit stateChanged(); });
+    if (!time.isEmpty())
+    {
+      estimatedTime_ = time;
+      totalTime_ = time;
+    }
+    syncPreviewWithActiveResult();
+    emit stateChanged(); });
   connect(sliceService_, &SliceService::sliceResultCleared, this, [this]()
           {
     resetPreviewState();
     emit stateChanged(); });
   connect(sliceService_, &SliceService::sliceFailed, this, [this](const QString &)
           {
-    playTimer_->stop();
-    currentMove_ = 0;
+    resetPreviewState();
     emit stateChanged(); });
 }
 
@@ -263,11 +312,37 @@ bool PreviewViewModel::loadGCodeForPreview(const QString &filePath)
 {
   const QFileInfo info(filePath);
   if (!info.exists() || !info.isFile())
+  {
+    resetPreviewState();
+    emit stateChanged();
     return false;
+  }
 
   rebuildFromGCode(info.absoluteFilePath());
   emit stateChanged();
   return !gcodePreviewData_.isEmpty();
+}
+
+void PreviewViewModel::syncPreviewWithActiveResult()
+{
+  const QString activePath = sliceService_ ? sliceService_->outputPath() : QString{};
+  if (activePath.isEmpty())
+  {
+    resetPreviewState();
+    return;
+  }
+
+  const QFileInfo info(activePath);
+  if (!info.exists() || !info.isFile())
+  {
+    resetPreviewState();
+    return;
+  }
+
+  const QString activeTime = sliceService_->estimatedTimeLabel();
+  estimatedTime_ = activeTime.isEmpty() ? QStringLiteral("--:--:--") : activeTime;
+  totalTime_ = estimatedTime_;
+  rebuildFromGCode(info.absoluteFilePath());
 }
 
 void PreviewViewModel::setLayerRange(int minLayer, int maxLayer)
@@ -323,11 +398,12 @@ void PreviewViewModel::setCurrentMove(int move)
 
 void PreviewViewModel::updateToolPositionData()
 {
-  if (segments_.empty() || currentMove_ < 0 || currentMove_ >= static_cast<int>(segments_.size())) {
+  if (segments_.empty() || currentMove_ < 0) {
     hasToolPosition_ = false;
     return;
   }
-  const auto &seg = segments_[currentMove_];
+  const int idx = qMin(currentMove_, static_cast<int>(segments_.size()) - 1);
+  const auto &seg = segments_[idx];
   // 上游 GCodeViewer::Marker 使用 move 的终点位置
   hasToolPosition_ = true;
   toolX_ = seg.x2;
@@ -443,6 +519,8 @@ void PreviewViewModel::resetPreviewState()
   m_extruderUsedWeight.clear();
   m_roleTimes.clear();
   m_moveAccumulatedTime.clear();
+  const bool hadTicks = !tickMarks_.isEmpty();
+  tickMarks_.clear();
   m_maxLayerTime = 0.f;
   layerCount_ = 0;
   moveCount_ = 0;
@@ -477,6 +555,8 @@ void PreviewViewModel::resetPreviewState()
   toolLayer_ = 0;
   toolMoveIndex_ = 0;
   toolIsExtrusion_ = false;
+  if (hadTicks)
+    emit tickMarksChanged();
 }
 
 void PreviewViewModel::rebuildFromGCode(const QString &filePath)
@@ -509,7 +589,10 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   int currentExtruder = 0;
   bool relativeExtrusion = false;
   float currentWidth = 0.f;
-  float layerTime = 0.f;
+  float currentHeight = 0.f;
+  float elapsedTime = 0.f;
+  float layerStartElapsed = 0.f;
+  float currentLayerTime = 0.f;
   float printLayerZ = 0.f;
   bool hasPrintLayerZ = false;
 
@@ -541,29 +624,63 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     {
       if (raw.startsWith(QStringLiteral(";TYPE:")))
         currentType = raw.mid(6).trimmed();
-      if (raw.contains(QStringLiteral("M106")))
-        currentFanSpeed = parseSValue(raw);
-      else if (raw.contains(QStringLiteral("M104")))
-        currentTemp = parseSValue(raw);
-      if (raw.contains(QStringLiteral("TIME_ELAPSED")))
+      else
       {
-        const QRegularExpression re(QStringLiteral("TIME_ELAPSED[=:]\\s*(\\d+(?:\\.\\d+)?)"));
-        const auto m = re.match(raw);
-        if (m.hasMatch())
-        {
-          bool ok = false;
-          layerTime = m.captured(1).toFloat(&ok);
-        }
+        const QRegularExpression featureRe(QStringLiteral("^;\\s*FEATURE\\s*:\\s*(.+)$"),
+                                           QRegularExpression::CaseInsensitiveOption);
+        const auto featureMatch = featureRe.match(raw);
+        if (featureMatch.hasMatch())
+          currentType = featureMatch.captured(1).trimmed();
       }
-      if (raw.contains(QStringLiteral("WIDTH")))
+
+      const QString upperComment = raw.toUpper();
+      auto appendTick = [&](OWzx::TickType type, const QString &extra = QString{}) {
+        OWzx::TickCode tick;
+        tick.tick = qMax(0, layer);
+        tick.type = type;
+        tick.extruder = parseToolToken(raw, currentExtruder);
+        tick.color = parseColorToken(raw);
+        tick.extra = extra;
+        tickMarks_.append(tick);
+      };
+      if (upperComment.contains(QStringLiteral("COLOR_CHANGE")))
       {
-        const QRegularExpression re(QStringLiteral("WIDTH[=:]\\s*(\\d+(?:\\.\\d+)?)"));
-        const auto m = re.match(raw);
-        if (m.hasMatch())
-        {
-          bool ok = false;
-          currentWidth = m.captured(1).toFloat(&ok);
-        }
+        appendTick(OWzx::TickType::ColorChange);
+      }
+      else if (upperComment.contains(QStringLiteral("PAUSE_PRINT")))
+      {
+        appendTick(OWzx::TickType::PausePrint);
+      }
+      else if (upperComment.contains(QStringLiteral("CUSTOM_GCODE")))
+      {
+        const int tagPos = upperComment.indexOf(QStringLiteral("CUSTOM_GCODE"));
+        QString extra = tagPos >= 0 ? raw.mid(tagPos + int(QStringLiteral("CUSTOM_GCODE").size())).trimmed() : QString{};
+        if (extra.startsWith(QLatin1Char(':')))
+          extra = extra.mid(1).trimmed();
+        appendTick(OWzx::TickType::CustomGcode, extra);
+      }
+      else if (upperComment.contains(QStringLiteral("MANUAL_TOOL_CHANGE")))
+      {
+        appendTick(OWzx::TickType::ToolChange);
+      }
+
+      float taggedValue = 0.f;
+      if (parseTaggedValue(raw, QStringLiteral("TIME_ELAPSED"), taggedValue))
+      {
+        elapsedTime = taggedValue;
+        currentLayerTime = qMax(0.f, elapsedTime - layerStartElapsed);
+      }
+      if (parseTaggedValue(raw, QStringLiteral("LINE_WIDTH"), taggedValue)
+          || parseTaggedValue(raw, QStringLiteral("WIDTH"), taggedValue))
+      {
+        if (taggedValue > 0.f)
+          currentWidth = taggedValue;
+      }
+      if (parseTaggedValue(raw, QStringLiteral("LAYER_HEIGHT"), taggedValue)
+          || parseTaggedValue(raw, QStringLiteral("HEIGHT"), taggedValue))
+      {
+        if (taggedValue > 0.f)
+          currentHeight = taggedValue;
       }
       if (raw.contains(QStringLiteral("filament_diameter")))
       {
@@ -598,6 +715,26 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       continue;
 
     const QString upper = command.toUpper();
+
+    if (upper.startsWith(QStringLiteral("M106")))
+    {
+      currentFanSpeed = normalizeFanSpeed(parseSValue(upper));
+      continue;
+    }
+
+    if (upper.startsWith(QStringLiteral("M107")))
+    {
+      currentFanSpeed = 0.f;
+      continue;
+    }
+
+    if (upper.startsWith(QStringLiteral("M104")) || upper.startsWith(QStringLiteral("M109")))
+    {
+      const float temp = parseSValue(upper);
+      if (temp >= 0.f)
+        currentTemp = temp;
+      continue;
+    }
 
     if (upper == QStringLiteral("M82") || upper.startsWith(QStringLiteral("M82 ")))
     {
@@ -643,6 +780,8 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       else if (parseAxis(upper, 'Y', val) && val > 0.f) currentAccel = val;
       else if (parseAxis(upper, 'Z', val) && val > 0.f) currentAccel = val;
       else if (parseAxis(upper, 'E', val) && val > 0.f) currentAccel = val;
+      else if (parseAxis(upper, 'P', val) && val > 0.f) currentAccel = val;
+      else if (parseAxis(upper, 'T', val) && val > 0.f) currentAccel = val;
       else if (parseAxis(upper, 'S', val) && val > 0.f) currentAccel = val;
     }
 
@@ -704,13 +843,26 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       }
       else if (!isSameZ(nz, printLayerZ))
       {
-        m_layerTimes.append(layerTime);
-        m_maxLayerTime = qMax(m_maxLayerTime, layerTime);
+        m_layerTimes.append(currentLayerTime);
+        m_maxLayerTime = qMax(m_maxLayerTime, currentLayerTime);
         ++layer;
         printLayerZ = nz;
         m_layerZs.append(printLayerZ);
-        layerTime = 0.f;
+        layerStartElapsed = elapsedTime;
+        currentLayerTime = 0.f;
       }
+    }
+
+    const float dx = nx - x;
+    const float dy = ny - y;
+    const float dz = nz - z;
+    const float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+    float volumetricRate = 0.f;
+    if (extruding && dist > 0.f && currentFeedrate > 0.f && extrusionDelta > 0.f)
+    {
+      const float filamentArea = 3.14159265f * (filamentDiameter * 0.5f) * (filamentDiameter * 0.5f);
+      const float mm3PerMm = extrusionDelta * filamentArea / dist;
+      volumetricRate = currentFeedrate / 60.f * mm3PerMm;
     }
 
     if (extruding)
@@ -724,12 +876,12 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       }
       // 每挤出机耗材追踪（对齐上游 PrintEstimatedStatistics volumes_per_extruder）
       m_extruderUsedLength[currentExtruder] += extrusionDelta;
-      accumulateRoleTime(currentType, nx - x, ny - y, nz - z, currentFeedrate);
+      accumulateRoleTime(currentType, dx, dy, dz, currentFeedrate);
     }
     else
     {
       ++travelMoveCount;
-      accumulateRoleTime(QStringLiteral("TRAVEL"), nx - x, ny - y, nz - z, currentFeedrate);
+      accumulateRoleTime(QStringLiteral("TRAVEL"), dx, dy, dz, currentFeedrate);
     }
     const FeatureStyle style = styleFor(extruding ? currentType : QStringLiteral("TRAVEL"));
 
@@ -747,8 +899,10 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     seg.fan_speed = currentFanSpeed;
     seg.temperature = currentTemp;
     seg.width = currentWidth;
-    seg.layer_time = layerTime;
+    seg.height = currentHeight > 0.f ? currentHeight : nz;
+    seg.layer_time = currentLayerTime;
     seg.acceleration = currentAccel;
+    seg.volumetric_rate = volumetricRate;
     seg.extruder_id = currentExtruder;
     seg.layer = layer;
     seg.move = moveIndex;
@@ -757,7 +911,6 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
 
     // Accumulate elapsed time for move slider (对齐上游 IMSlider m_layers_times)
     {
-      const float dist = std::sqrt((nx - x) * (nx - x) + (ny - y) * (ny - y) + (nz - z) * (nz - z));
       const float dt = currentFeedrate > 0.f ? dist / currentFeedrate * 60.f : 0.f;
       const float prev = m_moveAccumulatedTime.empty() ? 0.f : m_moveAccumulatedTime.back();
       m_moveAccumulatedTime.push_back(prev + dt);
@@ -777,8 +930,8 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   layerCount_ = qMax(1, hasPrintLayerZ ? layer + 1 : 1);
 
   // Save last layer's time
-  m_layerTimes.append(layerTime);
-  m_maxLayerTime = qMax(m_maxLayerTime, layerTime);
+  m_layerTimes.append(currentLayerTime);
+  m_maxLayerTime = qMax(m_maxLayerTime, currentLayerTime);
 
   currentLayerMin_ = 0;
   currentLayerMax_ = layerCount_ - 1;
@@ -858,6 +1011,11 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
 
   updateToolPositionData();
   recolorAndPackSegments();
+  if (!tickMarks_.isEmpty())
+  {
+    std::stable_sort(tickMarks_.begin(), tickMarks_.end());
+    emit tickMarksChanged();
+  }
 }
 
 int PreviewViewModel::roleTimeCount() const { return m_roleTimes.size(); }
@@ -991,7 +1149,7 @@ void PreviewViewModel::recolorAndPackSegments()
     float v = 0.f;
     switch (mode)
     {
-    case 1:  v = s.z1; break;         // Height (Z position)
+    case 1:  v = s.height; break;      // Layer height
     case 2:  v = s.width; break;      // Width
     case 4:  v = s.feedrate; break;    // Feedrate
     case 5:  v = qMax(0.f, s.fan_speed); break; // FanSpeed
@@ -999,7 +1157,7 @@ void PreviewViewModel::recolorAndPackSegments()
     case 3:  v = float(s.extruder_id); break; // Tool
     case 7:  v = float(s.extruder_id); break; // ColorPrint (via extruder)
     case 8:  v = float(s.extruder_id); break; // FilamentId
-    case 9:  v = s.feedrate * s.width; break;   // VolumetricRate (proxy)
+    case 9:  v = s.volumetric_rate; break;      // VolumetricRate
     case 10: v = s.layer_time; break;   // LayerTime
     case 11: v = s.layer_time > 0.f ? std::log(s.layer_time) : 0.f; break; // LayerTimeLog
     case 12: v = s.acceleration; break;  // Acceleration
@@ -1043,9 +1201,9 @@ void PreviewViewModel::recolorAndPackSegments()
     p.layer = s.layer;
     p.move = s.move;
 
-    if (mode == 0 || maxV <= minV)
+    if (mode == 0)
     {
-      // FeatureType or no valid range: use base colors
+      // FeatureType: use parsed role colors.
       p.r = s.baseR;
       p.g = s.baseG;
       p.b = s.baseB;
@@ -1061,12 +1219,12 @@ void PreviewViewModel::recolorAndPackSegments()
       float value = 0.f;
       switch (mode)
       {
-      case 1:  value = s.z1; break;
+      case 1:  value = s.height; break;
       case 2:  value = s.width; break;
       case 4:  value = s.feedrate; break;
       case 5:  value = qMax(0.f, s.fan_speed); break;
       case 6:  value = s.temperature; break;
-      case 9:  value = s.feedrate * s.width; break;
+      case 9:  value = s.volumetric_rate; break;
       case 10: value = s.layer_time; break;
       case 11: value = s.layer_time > 0.f ? std::log(s.layer_time) : 0.f; break;
       case 12: value = s.acceleration; break;
@@ -1115,8 +1273,9 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
     m_legendType = 2; // extruder palette
     QSet<int> usedIds;
     for (const auto &s : segments_)
-      if (s.extruder_id > 0 || usedIds.isEmpty())
-        usedIds.insert(s.extruder_id);
+      usedIds.insert(s.extruder_id);
+    QList<int> sortedIds = usedIds.values();
+    std::sort(sortedIds.begin(), sortedIds.end());
     static const float toolColors[][3] = {
         {0.95f, 0.55f, 0.22f},
         {0.22f, 0.55f, 0.87f},
@@ -1127,7 +1286,7 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
         {0.95f, 0.77f, 0.06f},
         {0.91f, 0.12f, 0.55f}};
     static constexpr int kN = int(sizeof(toolColors) / sizeof(toolColors[0]));
-    for (int id : usedIds)
+    for (int id : sortedIds)
     {
       const auto &tc = toolColors[id % kN];
       const QString col = QStringLiteral("#%1%2%3")
