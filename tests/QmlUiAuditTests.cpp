@@ -23,6 +23,8 @@ private slots:
   void rhiViewportRendererUsesModelBuffersAndCameraUniforms();
   void previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans();
   void previewRhiViewportFitsCameraToPreviewDataBeforeOrbit();
+  void previewRhiRendererResetsGpuStateAfterResourceRelease();
+  void previewRhiInteractionSettersPreservePreviewPayload();
   void previewStatsPanelCallsOnlyQmlInvokableSetters();
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
   void visiblePlaceholderSurfacesAreHonest();
@@ -577,6 +579,89 @@ void QmlUiAuditTests::previewRhiViewportFitsCameraToPreviewDataBeforeOrbit()
            "Preview camera fit must update CameraController target/distance before orbit");
   QVERIFY2(viewportSource.contains(QStringLiteral("m_cameraDirty = true")),
            "Preview camera fit must mark the camera uniform dirty for the next RHI sync");
+}
+
+void QmlUiAuditTests::previewRhiRendererResetsGpuStateAfterResourceRelease()
+{
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!rendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+
+  QVERIFY2(rendererHeader.contains(QStringLiteral("resetPreviewGpuState")),
+           "RhiViewportRenderer must centralize Preview GPU state reset for QRhi resource rebuilds");
+  QVERIFY2(rendererSource.contains(QStringLiteral("resetPreviewGpuState(true)")),
+           "releaseResources/initialize must reset Preview GPU upload state while keeping CPU staging data");
+  QVERIFY2(rendererSource.contains(QStringLiteral("resetPreviewGpuState(false)")),
+           "Preview payload changes must clear stale GPU upload state and CPU staging together");
+
+  const int helperStart = rendererSource.indexOf(QStringLiteral("void RhiViewportRenderer::resetPreviewGpuState"));
+  QVERIFY2(helperStart >= 0, "resetPreviewGpuState implementation missing");
+  const int nextFunction = rendererSource.indexOf(QStringLiteral("\nbool RhiViewportRenderer::ensurePipelines"), helperStart);
+  QVERIFY2(nextFunction > helperStart,
+           "resetPreviewGpuState must live before ensurePipelines; update audit boundaries if moved");
+  const QString helper = rendererSource.mid(helperStart, nextFunction - helperStart);
+  const QStringList requiredResets = {
+    QStringLiteral("m_previewSegmentBuffer.reset()"),
+    QStringLiteral("m_previewSegmentBufferBytes = 0"),
+    QStringLiteral("m_previewSegmentBufferUploaded = false"),
+    QStringLiteral("m_previewLastUploadMs = -1"),
+    QStringLiteral("m_previewLastFrameMs = -1"),
+    QStringLiteral("m_previewFirstFrameMs = -1"),
+    QStringLiteral("m_previewFirstFrameDone = false")
+  };
+  for (const QString &reset : requiredResets) {
+    QVERIFY2(helper.contains(reset),
+             qPrintable(QStringLiteral("Preview GPU reset helper must include: %1").arg(reset)));
+  }
+  QVERIFY2(helper.contains(QStringLiteral("if (!keepCpuStaging)"))
+               && helper.contains(QStringLiteral("m_previewVertices.clear()"))
+               && helper.contains(QStringLiteral("m_previewDrawSpans.clear()"))
+               && helper.contains(QStringLiteral("m_previewSegmentVertexCount = 0")),
+           "Preview GPU reset helper must optionally clear CPU staging and vertex count for payload changes");
+
+  const int rangeStart = rendererSource.indexOf(QStringLiteral("void RhiViewportRenderer::computePreviewDrawRange"));
+  QVERIFY2(rangeStart >= 0, "computePreviewDrawRange implementation missing");
+  const QString drawRange = rendererSource.mid(rangeStart);
+  QVERIFY2(drawRange.contains(QStringLiteral("const int layerLow = std::min(m_layerMin, m_layerMax)"))
+               && drawRange.contains(QStringLiteral("const int layerHigh = std::max(m_layerMin, m_layerMax)")),
+           "Preview draw range must normalize transient inverted layer bounds instead of blanking valid data");
+}
+
+void QmlUiAuditTests::previewRhiInteractionSettersPreservePreviewPayload()
+{
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+
+  const QStringList setters = {
+    QStringLiteral("void RhiViewport::setLayerMin"),
+    QStringLiteral("void RhiViewport::setLayerMax"),
+    QStringLiteral("void RhiViewport::setMoveEnd"),
+    QStringLiteral("void RhiViewport::setShowTravelMoves"),
+    QStringLiteral("void RhiViewport::setShowBed"),
+    QStringLiteral("void RhiViewport::setShowMarker"),
+    QStringLiteral("void RhiViewport::setGcodeViewMode")
+  };
+  for (int i = 0; i < setters.size(); ++i) {
+    const int start = viewportSource.indexOf(setters.at(i));
+    QVERIFY2(start >= 0,
+             qPrintable(QStringLiteral("Missing Preview interaction setter: %1").arg(setters.at(i))));
+    int end = viewportSource.size();
+    for (int j = 0; j < setters.size(); ++j) {
+      if (i == j)
+        continue;
+      const int candidate = viewportSource.indexOf(setters.at(j), start + 1);
+      if (candidate > start)
+        end = std::min(end, candidate);
+    }
+    const QString body = viewportSource.mid(start, end - start);
+    QVERIFY2(body.contains(QStringLiteral("update();")),
+             qPrintable(QStringLiteral("%1 must schedule a redraw").arg(setters.at(i))));
+    QVERIFY2(!body.contains(QStringLiteral("m_previewData =")),
+             qPrintable(QStringLiteral("%1 must not mutate the Preview payload during interaction").arg(setters.at(i))));
+    QVERIFY2(!body.contains(QStringLiteral("fitPreviewCameraToData();")),
+             qPrintable(QStringLiteral("%1 must not refit camera or rebuild payload on pure interaction").arg(setters.at(i))));
+  }
 }
 
 void QmlUiAuditTests::previewStatsPanelCallsOnlyQmlInvokableSetters()
