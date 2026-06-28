@@ -126,13 +126,13 @@ public:
   QStringList viewModes() const;
   int viewModeIndex() const { return viewModeIndex_; }
   bool stealthMode() const { return stealthMode_; }
-  void setStealthMode(bool enabled);
+  Q_INVOKABLE void setStealthMode(bool enabled);
   bool showTravelMoves() const { return showTravelMoves_; }
-  void setShowTravelMoves(bool enabled);
+  Q_INVOKABLE void setShowTravelMoves(bool enabled);
   bool showBed() const { return showBed_; }
-  void setShowBed(bool enabled);
+  Q_INVOKABLE void setShowBed(bool enabled);
   bool showMarker() const { return showMarker_; }
-  void setShowMarker(bool enabled);
+  Q_INVOKABLE void setShowMarker(bool enabled);
   bool hasToolPosition() const { return hasToolPosition_; }
   double toolX() const { return toolX_; }
   double toolY() const { return toolY_; }

@@ -21,6 +21,7 @@ private slots:
   void rhiViewportRendererUsesModelBuffersAndCameraUniforms();
   void previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans();
   void previewRhiViewportFitsCameraToPreviewDataBeforeOrbit();
+  void previewStatsPanelCallsOnlyQmlInvokableSetters();
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
@@ -505,6 +506,29 @@ void QmlUiAuditTests::previewRhiViewportFitsCameraToPreviewDataBeforeOrbit()
            "Preview camera fit must update CameraController target/distance before orbit");
   QVERIFY2(viewportSource.contains(QStringLiteral("m_cameraDirty = true")),
            "Preview camera fit must mark the camera uniform dirty for the next RHI sync");
+}
+
+void QmlUiAuditTests::previewStatsPanelCallsOnlyQmlInvokableSetters()
+{
+  const QString statsPanel = readSource(QStringLiteral("src/qml_gui/components/StatsPanel.qml"));
+  const QString previewHeader = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.h"));
+  QVERIFY2(!statsPanel.isEmpty(), "Unable to read StatsPanel.qml");
+  QVERIFY2(!previewHeader.isEmpty(), "Unable to read PreviewViewModel.h");
+
+  const QStringList requiredSetters = {
+    QStringLiteral("setStealthMode"),
+    QStringLiteral("setShowTravelMoves"),
+    QStringLiteral("setShowBed"),
+    QStringLiteral("setShowMarker")
+  };
+  for (const QString &setter : requiredSetters) {
+    QVERIFY2(statsPanel.contains(QStringLiteral("root.previewVm.%1(checked)").arg(setter)),
+             qPrintable(QStringLiteral("StatsPanel must still route %1 through PreviewViewModel").arg(setter)));
+    const QRegularExpression invokablePattern(
+        QStringLiteral("Q_INVOKABLE\\s+void\\s+%1\\s*\\(\\s*bool\\s+enabled\\s*\\)").arg(setter));
+    QVERIFY2(invokablePattern.match(previewHeader).hasMatch(),
+             qPrintable(QStringLiteral("%1 must be Q_INVOKABLE because StatsPanel calls it as a QML method").arg(setter)));
+  }
 }
 
 void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
