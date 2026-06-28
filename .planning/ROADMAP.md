@@ -6,7 +6,7 @@
 - Complete: **v3.0 PartPlate Core** - Phases 16-22 (shipped 2026-06-26)
 - Complete: **v3.1 QRhi Rendering** - Phases 23-28 (shipped 2026-06-28)
 - Complete with tech debt: **v3.2 Multi-Plate Data Polish** - Phases 29-32 (audited 2026-06-28)
-- Active: **v3.3 Slice Preview Main Flow MVP** - Phases 33-36
+- Active, ready for audit: **v3.3 Slice Preview Main Flow MVP** - Phases 33-36
 
 ## Active Milestone: v3.3 Slice Preview Main Flow MVP
 
@@ -24,7 +24,7 @@
 - [x] **Phase 33:** Slice-to-Preview Navigation Gate
 - [x] **Phase 34:** G-code Preview Parser MVP
 - [x] **Phase 35:** D3D11 Preview Rendering Interaction
-- [ ] **Phase 36:** Verification and Handoff
+- [x] **Phase 36:** Verification and Handoff
 
 ### Phase 33: Slice-to-Preview Navigation Gate - Complete
 
@@ -88,7 +88,7 @@
 - Regression: `QmlUiAuditTests::previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans`.
 - Verification: canonical build command exited 0 on 2026-06-28; startup diagnostics show `selected=d3d11`.
 
-### Phase 36: Verification and Handoff
+### Phase 36: Verification and Handoff - Complete
 
 **Goal:** Close v3.3 with deterministic evidence and a clear next backlog.
 
@@ -105,6 +105,12 @@
 - No active process or build artifact confusion remains after verification.
 - User can test the main flow in the launched app.
 
+**Evidence:**
+- Review: `.planning/phases/36-verification-and-handoff/36-REVIEW.md` reports no critical or warning findings.
+- Verification: `.planning/phases/36-verification-and-handoff/36-VERIFICATION.md` records canonical command exit 0, passing PrepareScene, PartPlate, QML UI audit, and E2E tests.
+- Startup diagnostics show QRhi auto selected D3D11: `selected=d3d11`.
+- Handoff: `.planning/phases/36-verification-and-handoff/36-SUMMARY.md` records UAT steps and deferred backlog.
+
 ## Deferred Backlog
 
 - `THUMB-03` real GL/QRhi-capture thumbnails and 3MF pixel round-trip.
@@ -117,13 +123,13 @@
 
 ## Next Step
 
-Start Phase 36:
+Run user UAT in the launched app, then complete the v3.3 lifecycle:
 
 ```text
-$gsd-plan-phase 36
-$gsd-execute-phase 36 --interactive
+$gsd-audit-milestone
+$gsd-complete-milestone v3.3
 ```
 
 ---
 
-*Last updated: 2026-06-28 after Phase 35 D3D11 Preview rendering interaction completion.*
+*Last updated: 2026-06-28 after Phase 36 verification and handoff completion.*

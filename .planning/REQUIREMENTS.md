@@ -1,7 +1,7 @@
 # Requirements: OWzx Slicer v3.3 Slice Preview Main Flow MVP
 
 **Defined:** 2026-06-28
-**Status:** In progress - Phase 35 complete
+**Status:** Complete - ready for v3.3 milestone audit after manual UAT
 **Core Value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
 ## Status Terms
@@ -70,8 +70,15 @@
 | RENDER-01 | Phase 35 | Complete |
 | RENDER-02 | Phase 35 | Complete |
 | RENDER-03 | Phase 35 | Complete |
-| TEST-01 | Phase 33, Phase 36 | Complete for Phase 33; final coverage review in Phase 36 |
-| TEST-02 | Phase 34, Phase 36 | Complete for Phase 34; final coverage review in Phase 36 |
-| TEST-03 | Phase 35, Phase 36 | Complete for Phase 35; final coverage review in Phase 36 |
+| TEST-01 | Phase 33, Phase 36 | Complete |
+| TEST-02 | Phase 34, Phase 36 | Complete |
+| TEST-03 | Phase 35, Phase 36 | Complete |
 
-**Coverage:** 12 total; 12 complete; 0 partial; final milestone handoff still planned.
+**Coverage:** 12 total; 12 complete; 0 partial; final milestone handoff complete.
+
+## Final Evidence
+
+- Phase 36 canonical verification passed on 2026-06-28.
+- Phase 36 code review found no critical or warning-level issues.
+- Startup diagnostics confirmed QRhi auto selected D3D11 for the current Preview path.
+- Manual UAT path is recorded in `.planning/phases/36-verification-and-handoff/36-SUMMARY.md`.

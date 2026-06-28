@@ -2,29 +2,29 @@
 gsd_state_version: 1.0
 milestone: v3.3
 milestone_name: Slice Preview Main Flow MVP
-status: executing
-last_updated: "2026-06-28T07:49:38.256Z"
-last_activity: 2026-06-28 -- Phase 36 planning complete
+status: ready_for_audit
+last_updated: "2026-06-28T08:20:00.000Z"
+last_activity: 2026-06-28 -- Phase 36 verification and handoff complete
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
 
 **Milestone:** v3.3 - Slice Preview Main Flow MVP
-**Status:** Ready to execute
-**Next step:** execute Phase 36, final verification and handoff.
+**Status:** Ready for milestone audit after manual UAT
+**Next step:** test the running app, then run the v3.3 milestone audit/complete lifecycle.
 
 ## Current Position
 
-Phase: 36 - Not started
+Phase: 36 - Complete
 Plan: final verification, UAT notes, review, and handoff
-Status: Ready to execute
-Last activity: 2026-06-28 -- Phase 36 planning complete
+Status: Complete
+Last activity: 2026-06-28 -- Phase 36 verification and handoff complete
 
 ## Project Reference
 
@@ -48,7 +48,7 @@ See: `.planning/PROJECT.md`
 | 33 | Slice-to-Preview Navigation Gate | Complete |
 | 34 | G-code Preview Parser MVP | Complete |
 | 35 | D3D11 Preview Rendering Interaction | Complete |
-| 36 | Verification and Handoff | Not started |
+| 36 | Verification and Handoff | Complete |
 
 ## Phase 33 Evidence
 
@@ -83,12 +83,13 @@ See: `.planning/PROJECT.md`
 | future | Wipe-tower geometry + rendering | v3.4+ |
 | future | Missing CLI test fixtures (`hotend.stl`, `Block20XY.stl`) | TBD |
 | opportunistic | D3D12 crash root cause | TBD |
+| polish | Preview marker at exact final move position | v3.4+ |
 
 ## Handoff
 
-Start Phase 36 with final verification and user-visible handoff:
+v3.3 phases are complete and ready for user UAT in the launched app. After UAT, run the milestone lifecycle:
 
 ```text
-$gsd-plan-phase 36
-$gsd-execute-phase 36 --interactive
+$gsd-audit-milestone
+$gsd-complete-milestone v3.3
 ```
