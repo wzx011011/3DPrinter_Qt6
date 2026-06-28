@@ -2,29 +2,29 @@
 gsd_state_version: 1.0
 milestone: v3.3
 milestone_name: Slice Preview Main Flow MVP
-status: executing
-last_updated: "2026-06-28T07:13:19.351Z"
-last_activity: 2026-06-28 -- Phase 35 planning complete
+status: in_progress
+last_updated: "2026-06-28T16:00:00.000Z"
+last_activity: 2026-06-28 -- Phase 35 D3D11 Preview rendering interaction implemented and verified
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 3
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
 
 **Milestone:** v3.3 - Slice Preview Main Flow MVP
 **Status:** Ready to execute
-**Next step:** execute Phase 35, the D3D11 Preview rendering interaction pass.
+**Next step:** execute Phase 36, final verification and handoff.
 
 ## Current Position
 
-Phase: 35 - Not started
-Plan: verify and harden D3D11 Preview rendering interaction with the parsed G-code payload
-Status: Ready to execute
-Last activity: 2026-06-28 -- Phase 35 planning complete
+Phase: 36 - Not started
+Plan: final verification, UAT notes, review, and handoff
+Status: Phase 35 complete; final handoff next
+Last activity: 2026-06-28 -- Phase 35 replaced proportional Preview playback with exact RHI draw spans and added QML UI audit coverage.
 
 ## Project Reference
 
@@ -47,7 +47,7 @@ See: `.planning/PROJECT.md`
 |---|---|---|
 | 33 | Slice-to-Preview Navigation Gate | Complete |
 | 34 | G-code Preview Parser MVP | Complete |
-| 35 | D3D11 Preview Rendering Interaction | Not started |
+| 35 | D3D11 Preview Rendering Interaction | Complete |
 | 36 | Verification and Handoff | Not started |
 
 ## Phase 33 Evidence
@@ -64,6 +64,14 @@ See: `.planning/PROJECT.md`
 - Regression: `E2EWorkflowTests::test_preview_parser_handles_extrusion_modes_and_travel_filter` first failed because the preview parser entry point did not exist, then passed after implementation.
 - Canonical verification: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` exited 0; PrepareScene, PartPlate, QML UI audit, and E2E pipeline tests passed.
 
+## Phase 35 Evidence
+
+- Commits: `3c34615 test(35-01): add failing audit for preview rhi draw range`, `f8af356 feat(35-01): use exact preview draw spans`.
+- Runtime behavior: `RhiViewportRenderer` now builds per-segment draw spans from packed layer/move indices and clamps Preview draw range exactly instead of scaling by vertex count.
+- Regression: `QmlUiAuditTests::previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans` first failed under the canonical command, then passed after implementation.
+- Canonical verification: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` exited 0; PrepareScene, PartPlate, QML UI audit, and E2E pipeline tests passed.
+- Startup diagnostics: latest QRhi auto startup selected D3D11 (`selected=d3d11`).
+
 ## Deferred Items
 
 | Category | Item | Target |
@@ -78,9 +86,9 @@ See: `.planning/PROJECT.md`
 
 ## Handoff
 
-Start Phase 35 with a narrow renderer interaction loop:
+Start Phase 36 with final verification and user-visible handoff:
 
 ```text
-$gsd-plan-phase 35
-$gsd-execute-phase 35 --interactive
+$gsd-plan-phase 36
+$gsd-execute-phase 36 --interactive
 ```

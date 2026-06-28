@@ -23,7 +23,7 @@
 
 - [x] **Phase 33:** Slice-to-Preview Navigation Gate
 - [x] **Phase 34:** G-code Preview Parser MVP
-- [ ] **Phase 35:** D3D11 Preview Rendering Interaction
+- [x] **Phase 35:** D3D11 Preview Rendering Interaction
 - [ ] **Phase 36:** Verification and Handoff
 
 ### Phase 33: Slice-to-Preview Navigation Gate - Complete
@@ -67,7 +67,7 @@
 - Regression: `E2EWorkflowTests::test_preview_parser_handles_extrusion_modes_and_travel_filter`.
 - Verification: canonical build command exited 0 on 2026-06-28.
 
-### Phase 35: D3D11 Preview Rendering Interaction
+### Phase 35: D3D11 Preview Rendering Interaction - Complete
 
 **Goal:** Ensure the default high-performance Preview renderer is visibly useful and interactive.
 
@@ -82,6 +82,11 @@
 - Manual launch log reports D3D11 QRhi selection.
 - Preview canvas is nonblank after slicing.
 - Layer/move/travel interactions remain responsive on the committed fixture and a larger sample.
+
+**Evidence:**
+- Commits: `3c34615 test(35-01): add failing audit for preview rhi draw range`, `f8af356 feat(35-01): use exact preview draw spans`.
+- Regression: `QmlUiAuditTests::previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans`.
+- Verification: canonical build command exited 0 on 2026-06-28; startup diagnostics show `selected=d3d11`.
 
 ### Phase 36: Verification and Handoff
 
@@ -112,13 +117,13 @@
 
 ## Next Step
 
-Start Phase 35:
+Start Phase 36:
 
 ```text
-$gsd-plan-phase 35
-$gsd-execute-phase 35 --interactive
+$gsd-plan-phase 36
+$gsd-execute-phase 36 --interactive
 ```
 
 ---
 
-*Last updated: 2026-06-28 after Phase 34 parser MVP completion.*
+*Last updated: 2026-06-28 after Phase 35 D3D11 Preview rendering interaction completion.*
