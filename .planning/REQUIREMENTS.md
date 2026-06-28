@@ -58,10 +58,10 @@ Every user-visible behavior in this path must either be implemented, verified, o
 
 ### Preview Rendering and Interaction
 
-- [ ] **PREVIEW-05:** Default Windows Preview rendering uses D3D11 QRhi on capable systems and does not fall back to `SoftwareViewport` as the normal path.
-- [ ] **PREVIEW-06:** Layer slider, move slider, travel visibility, bed visibility, marker visibility, color mode, play/pause, and camera controls update the same rendered toolpath without blanking, disappearing, freezing, or corrupting buffers.
-- [ ] **PREVIEW-07:** Preview camera fit, orbit, pan, zoom, reset, plate switching, and resize preserve a visible valid toolpath for small and large G-code files.
-- [ ] **PREVIEW-08:** Preview performance remains within the v3.1 D3D11 QRhi expectation for large toolpath payloads, with no avoidable full-buffer rebuilds on pure range/camera changes.
+- [x] **PREVIEW-05:** Default Windows Preview rendering uses D3D11 QRhi on capable systems and does not fall back to `SoftwareViewport` as the normal path.
+- [x] **PREVIEW-06:** Layer slider, move slider, travel visibility, bed visibility, marker visibility, color mode, play/pause, and camera controls update the same rendered toolpath without blanking, disappearing, freezing, or corrupting buffers.
+- [x] **PREVIEW-07:** Preview camera fit, orbit, pan, zoom, reset, plate switching, and resize preserve a visible valid toolpath for small and large G-code files.
+- [x] **PREVIEW-08:** Preview performance remains within the v3.1 D3D11 QRhi expectation for large toolpath payloads, with no avoidable full-buffer rebuilds on pure range/camera changes.
 
 ### Local G-code Export
 
@@ -125,10 +125,10 @@ Every user-visible behavior in this path must either be implemented, verified, o
 | PREVIEW-02 | Phase 40 | Satisfied |
 | PREVIEW-03 | Phase 40 | Satisfied |
 | PREVIEW-04 | Phase 40 | Satisfied |
-| PREVIEW-05 | Phase 41 | Pending |
-| PREVIEW-06 | Phase 41 | Pending |
-| PREVIEW-07 | Phase 41 | Pending |
-| PREVIEW-08 | Phase 41 | Pending |
+| PREVIEW-05 | Phase 41 | Satisfied |
+| PREVIEW-06 | Phase 41 | Satisfied |
+| PREVIEW-07 | Phase 41 | Satisfied |
+| PREVIEW-08 | Phase 41 | Satisfied |
 | EXPORT-01 | Phase 42 | Pending |
 | EXPORT-02 | Phase 42 | Pending |
 | EXPORT-03 | Phase 42 | Pending |
@@ -141,9 +141,9 @@ Every user-visible behavior in this path must either be implemented, verified, o
 | VERIFY-04 | Phase 43 | Pending |
 | VERIFY-05 | Phase 43 | Pending |
 
-**Coverage:** 35 total; 35 mapped; 0 unmapped; 20 satisfied.
+**Coverage:** 35 total; 35 mapped; 0 unmapped; 24 satisfied.
 
 ---
 
 *Requirements defined: 2026-06-28*
-*Last updated: 2026-06-29 after Phase 40 execution.*
+*Last updated: 2026-06-29 after Phase 41 execution.*

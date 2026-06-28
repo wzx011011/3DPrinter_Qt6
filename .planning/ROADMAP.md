@@ -27,7 +27,7 @@
 - [x] **Phase 38:** Prepare Readiness and Slice Invalidation (completed 2026-06-28)
 - [x] **Phase 39:** Complete Slicing and Reslicing State Machine (completed 2026-06-28)
 - [x] **Phase 40:** Complete Preview Data and Upstream View Semantics (completed 2026-06-29)
-- [ ] **Phase 41:** D3D11 Preview Rendering and Interaction Stability
+- [x] **Phase 41:** D3D11 Preview Rendering and Interaction Stability (completed 2026-06-29)
 - [ ] **Phase 42:** Local G-code Export and Finalization
 - [ ] **Phase 43:** End-to-End Verification and Handoff
 
@@ -172,12 +172,12 @@
 
 ## Next Step
 
-Execute Phase 41:
+Plan Phase 42:
 
 ```text
-$gsd-autonomous --from 41 --execute
+$gsd-autonomous --from 42
 ```
 
 ---
 
-*Last updated: 2026-06-29 after Phase 41 planning.*
+*Last updated: 2026-06-29 after Phase 41 execution.*
