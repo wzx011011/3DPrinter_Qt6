@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v3.3
 milestone_name: Slice Preview Main Flow MVP
-status: in_progress
-last_updated: "2026-06-28T16:00:00.000Z"
-last_activity: 2026-06-28 -- Phase 35 D3D11 Preview rendering interaction implemented and verified
+status: executing
+last_updated: "2026-06-28T07:49:38.256Z"
+last_activity: 2026-06-28 -- Phase 36 planning complete
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 3
+  total_plans: 4
   completed_plans: 3
   percent: 75
 ---
@@ -23,8 +23,8 @@ progress:
 
 Phase: 36 - Not started
 Plan: final verification, UAT notes, review, and handoff
-Status: Phase 35 complete; final handoff next
-Last activity: 2026-06-28 -- Phase 35 replaced proportional Preview playback with exact RHI draw spans and added QML UI audit coverage.
+Status: Ready to execute
+Last activity: 2026-06-28 -- Phase 36 planning complete
 
 ## Project Reference
 
