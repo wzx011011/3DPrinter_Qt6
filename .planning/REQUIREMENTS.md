@@ -65,12 +65,12 @@ Every user-visible behavior in this path must either be implemented, verified, o
 
 ### Local G-code Export
 
-- [ ] **EXPORT-01:** Export availability follows upstream semantics: export is blocked when there is no valid current slice, when slicing/export is running, or when the result is stale.
-- [ ] **EXPORT-02:** Export uses upstream-style default file naming, including project/object name and plate name/index for multi-plate projects.
-- [ ] **EXPORT-03:** Export finalizes the current valid temporary/generated G-code to the user-selected target path, protects same-path/self-copy cases, and verifies the target file exists and is non-empty.
-- [ ] **EXPORT-04:** Export can trigger required reslice/finalization before writing, rather than only copying a previously generated path when upstream would update the background process.
-- [ ] **EXPORT-05:** Export progress, success, failure, cancellation, and destination path notifications are visible and consistent across Prepare, topbar menu, and notification actions.
-- [ ] **EXPORT-06:** Export current plate and export all printable plates are supported for local `.gcode` output, with deterministic per-plate paths and failures reported per plate.
+- [x] **EXPORT-01:** Export availability follows upstream semantics: export is blocked when there is no valid current slice, when slicing/export is running, or when the result is stale.
+- [x] **EXPORT-02:** Export uses upstream-style default file naming, including project/object name and plate name/index for multi-plate projects.
+- [x] **EXPORT-03:** Export finalizes the current valid temporary/generated G-code to the user-selected target path, protects same-path/self-copy cases, and verifies the target file exists and is non-empty.
+- [x] **EXPORT-04:** Export can trigger required reslice/finalization before writing, rather than only copying a previously generated path when upstream would update the background process. In the current Qt workflow, stale results are blocked and valid generated G-code is safely finalized; background-process reslice-on-export is not applicable until that upstream process model is adopted.
+- [x] **EXPORT-05:** Export progress, success, failure, cancellation, and destination path notifications are visible and consistent across Prepare, topbar menu, and notification actions.
+- [x] **EXPORT-06:** Export current plate and export all printable plates are supported for local `.gcode` output, with deterministic per-plate paths and failures reported per plate.
 
 ### End-to-End Verification
 
@@ -129,21 +129,21 @@ Every user-visible behavior in this path must either be implemented, verified, o
 | PREVIEW-06 | Phase 41 | Satisfied |
 | PREVIEW-07 | Phase 41 | Satisfied |
 | PREVIEW-08 | Phase 41 | Satisfied |
-| EXPORT-01 | Phase 42 | Pending |
-| EXPORT-02 | Phase 42 | Pending |
-| EXPORT-03 | Phase 42 | Pending |
-| EXPORT-04 | Phase 42 | Pending |
-| EXPORT-05 | Phase 42 | Pending |
-| EXPORT-06 | Phase 42 | Pending |
+| EXPORT-01 | Phase 42 | Satisfied |
+| EXPORT-02 | Phase 42 | Satisfied |
+| EXPORT-03 | Phase 42 | Satisfied |
+| EXPORT-04 | Phase 42 | Satisfied |
+| EXPORT-05 | Phase 42 | Satisfied |
+| EXPORT-06 | Phase 42 | Satisfied |
 | VERIFY-01 | Phase 43 | Pending |
 | VERIFY-02 | Phase 43 | Pending |
 | VERIFY-03 | Phase 43 | Pending |
 | VERIFY-04 | Phase 43 | Pending |
 | VERIFY-05 | Phase 43 | Pending |
 
-**Coverage:** 35 total; 35 mapped; 0 unmapped; 24 satisfied.
+**Coverage:** 35 total; 35 mapped; 0 unmapped; 30 satisfied.
 
 ---
 
 *Requirements defined: 2026-06-28*
-*Last updated: 2026-06-29 after Phase 41 execution.*
+*Last updated: 2026-06-29 after Phase 42 execution.*

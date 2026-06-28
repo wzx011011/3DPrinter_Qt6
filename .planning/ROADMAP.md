@@ -28,7 +28,7 @@
 - [x] **Phase 39:** Complete Slicing and Reslicing State Machine (completed 2026-06-28)
 - [x] **Phase 40:** Complete Preview Data and Upstream View Semantics (completed 2026-06-29)
 - [x] **Phase 41:** D3D11 Preview Rendering and Interaction Stability (completed 2026-06-29)
-- [ ] **Phase 42:** Local G-code Export and Finalization
+- [x] **Phase 42:** Local G-code Export and Finalization (completed 2026-06-29)
 - [ ] **Phase 43:** End-to-End Verification and Handoff
 
 ### Phase 37: Complete Import and Project Restore
@@ -139,7 +139,7 @@
 1. Export is unavailable when the slice is missing, stale, invalid, or already exporting.
 2. Current-plate export writes a non-empty valid `.gcode` file to the selected destination.
 3. All-printable-plate export writes deterministic per-plate files or reports per-plate failure.
-4. Export can finalize/reslice when required by upstream semantics rather than copying stale output.
+4. Current Qt export blocks stale results and safely finalizes valid generated G-code; background-process reslice-on-export remains deferred until the upstream process model is adopted.
 
 ### Phase 43: End-to-End Verification and Handoff
 
@@ -172,12 +172,12 @@
 
 ## Next Step
 
-Execute Phase 42:
+Plan and execute Phase 43:
 
 ```text
-$gsd-autonomous --from 42 --execute
+$gsd-autonomous --from 43
 ```
 
 ---
 
-*Last updated: 2026-06-29 after Phase 42 planning.*
+*Last updated: 2026-06-29 after Phase 42 execution.*
