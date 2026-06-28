@@ -19,6 +19,7 @@ private slots:
   void prepareViewportBindsBedAndPlateContext();
   void rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads();
   void rhiViewportRendererUsesModelBuffersAndCameraUniforms();
+  void previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans();
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
@@ -427,6 +428,52 @@ void QmlUiAuditTests::rhiViewportRendererUsesModelBuffersAndCameraUniforms()
   QVERIFY2(vertexShader.contains(QStringLiteral("layout(std140, binding = 0) uniform CameraBlock"))
                && vertexShader.contains(QStringLiteral("mvp")),
            "RhiViewport vertex shader must use a camera MVP uniform");
+}
+
+void QmlUiAuditTests::previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans()
+{
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  const QString mainCpp = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
+  QVERIFY2(!mainCpp.isEmpty(), "Unable to read main_qml.cpp");
+  QVERIFY2(!rendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+
+  const QStringList requiredBindings = {
+    QStringLiteral("canvasType: GLViewport.CanvasPreview"),
+    QStringLiteral("previewData: root.previewVm.gcodePreviewData"),
+    QStringLiteral("layerMin: root.previewVm.currentLayerMin"),
+    QStringLiteral("layerMax: root.previewVm.currentLayerMax"),
+    QStringLiteral("moveEnd: root.previewVm.currentMove"),
+    QStringLiteral("showTravelMoves: root.previewVm.showTravelMoves"),
+    QStringLiteral("gcodeViewMode: root.previewVm.viewModeIndex")
+  };
+  for (const QString &binding : requiredBindings) {
+    QVERIFY2(previewPage.contains(binding),
+             qPrintable(QStringLiteral("Preview GLViewport must bind %1").arg(binding)));
+  }
+
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+           "Preview normal path must keep RhiViewport registered as GLViewport");
+  QVERIFY2(!previewPage.contains(QStringLiteral("SoftwareViewport")),
+           "PreviewPage must not instantiate SoftwareViewport directly as the normal path");
+
+  QVERIFY2(rendererHeader.contains(QStringLiteral("struct PreviewDrawSpan")),
+           "RhiViewportRenderer must keep explicit per-segment preview draw spans");
+  QVERIFY2(rendererHeader.contains(QStringLiteral("int move;")),
+           "Preview draw spans must store the packed segment move index");
+  QVERIFY2(rendererSource.contains(QStringLiteral("m_previewDrawSpans.append({seg[i].layer, seg[i].move")),
+           "Preview parse must index draw spans by packed layer and move");
+  QVERIFY2(rendererSource.contains(QStringLiteral("if (m_moveEnd <= 0)")),
+           "Preview move playback must draw zero segments at moveEnd <= 0");
+  QVERIFY2(rendererSource.contains(QStringLiteral("span.move >= m_moveEnd")),
+           "Preview draw range must clamp by exact packed segment move index");
+  QVERIFY2(!rendererSource.contains(QStringLiteral("const bool isTravel = (seg[i].move == 0)")),
+           "Renderer must not treat move index zero as a travel marker");
+  QVERIFY2(!rendererSource.contains(QStringLiteral("quint64(firstVertex + vertexCount) * quint64(m_moveEnd) / quint64(m_previewSegmentVertexCount)")),
+           "Renderer must not approximate Preview playback by proportional vertex-count clipping");
 }
 
 void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
