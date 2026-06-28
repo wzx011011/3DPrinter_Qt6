@@ -13,7 +13,7 @@ private slots:
   void topLevelUiHasNoVisiblePlaceholdersOrNoopActions();
   void mainChromeUsesThemeTokens();
   void sidebarCopyIsLocalizedAndOperationalTextIsReadable();
-  void mainRegistersSoftwareViewportByDefault();
+  void mainRegistersRhiViewportByDefaultWithSoftwareFallback();
   void mainRegistersRhiViewportOnlyBehindExplicitGate();
   void renderBenchmarkMatchesRhiBackendPolicy();
   void prepareViewportBindsBedAndPlateContext();
@@ -113,21 +113,38 @@ void QmlUiAuditTests::sidebarCopyIsLocalizedAndOperationalTextIsReadable()
            "LeftSidebar operational controls should not use sub-10px text");
 }
 
-void QmlUiAuditTests::mainRegistersSoftwareViewportByDefault()
+void QmlUiAuditTests::mainRegistersRhiViewportByDefaultWithSoftwareFallback()
 {
   const QString mainCpp = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
   const QString verifyScript = readSource(QStringLiteral("scripts/auto_verify_with_vcvars.ps1"));
+  const QString selectorSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiBackendSelector.cpp"));
   QVERIFY2(!mainCpp.isEmpty(), "Unable to read main_qml.cpp");
   QVERIFY2(!verifyScript.isEmpty(), "Unable to read auto_verify_with_vcvars.ps1");
+  QVERIFY2(!selectorSource.isEmpty(), "Unable to read RhiBackendSelector.cpp");
 
   QVERIFY2(mainCpp.contains(QStringLiteral("qEnvironmentVariableIsSet(\"OWZX_OPENGL\")")),
-           "main_qml.cpp must gate OpenGL viewport selection on OWZX_OPENGL");
+            "main_qml.cpp must gate OpenGL viewport selection on OWZX_OPENGL");
+  QVERIFY2(mainCpp.contains(QStringLiteral("qputenv(\"OWZX_RHI_RENDERER\", \"auto\")")),
+            "default startup must enable QRhi auto instead of the software viewport");
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+            "default GLViewport registration must use RhiViewport when QRhi initializes");
   QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
-           "default GLViewport registration must use SoftwareViewport");
+           "SoftwareViewport must remain registered as the QRhi fallback");
   QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<GLViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
-           "OpenGL GLViewport registration must remain available behind OWZX_OPENGL");
+            "OpenGL GLViewport registration must remain available behind OWZX_OPENGL");
+  const int defaultCandidatesStart = selectorSource.indexOf(QStringLiteral("QVector<RhiBackendCandidate> defaultWindowsCandidates()"));
+  const int candidatesForRequestStart = selectorSource.indexOf(QStringLiteral("QVector<RhiBackendCandidate> candidatesForRequest"));
+  QVERIFY2(defaultCandidatesStart >= 0 && candidatesForRequestStart > defaultCandidatesStart,
+           "RhiBackendSelector default candidate boundaries changed; update app QRhi policy audit");
+  const QString defaultCandidates = selectorSource.mid(defaultCandidatesStart,
+                                                       candidatesForRequestStart - defaultCandidatesStart);
+  QVERIFY2(defaultCandidates.indexOf(QStringLiteral("Direct3D11"))
+               < defaultCandidates.indexOf(QStringLiteral("Direct3D12")),
+           "default QRhi auto policy must prefer stable D3D11 before D3D12");
   QVERIFY2(!verifyScript.contains(QStringLiteral("OWZX_OPENGL")),
-           "canonical startup smoke should cover the default software viewport path");
+           "canonical startup smoke should cover the default QRhi/D3D11 path");
+  QVERIFY2(!verifyScript.contains(QStringLiteral("$env:OWZX_RHI_RENDERER")),
+           "canonical startup smoke should not force a non-default QRhi backend");
 }
 
 void QmlUiAuditTests::mainRegistersRhiViewportOnlyBehindExplicitGate()
@@ -154,11 +171,11 @@ void QmlUiAuditTests::mainRegistersRhiViewportOnlyBehindExplicitGate()
   QVERIFY2(!cmake.isEmpty(), "Unable to read CMakeLists.txt");
 
   QVERIFY2(mainCpp.contains(QStringLiteral("OWZX_RHI_RENDERER")),
-           "QRhi viewport selection must be behind OWZX_RHI_RENDERER");
+           "QRhi viewport selection must keep OWZX_RHI_RENDERER override support");
   QVERIFY2(mainCpp.contains(QStringLiteral("qEnvironmentVariableIsSet(\"OWZX_OPENGL\")")),
            "legacy OWZX_OPENGL path must stay independent from QRhi");
   QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
-           "SoftwareViewport must remain the default/fallback GLViewport registration");
+           "SoftwareViewport must remain the fallback GLViewport registration");
   QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
            "RhiViewport must be registered under the existing OWzxGL.GLViewport type behind QRhi gate");
   QVERIFY2(!verifyScript.contains(QStringLiteral("OWZX_RHI_RENDERER")),

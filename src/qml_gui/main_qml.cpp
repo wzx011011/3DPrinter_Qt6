@@ -80,9 +80,12 @@ static void appendStartupLog(const QString &line)
 int main(int argc, char *argv[])
 {
   const bool useOpenGLViewport = qEnvironmentVariableIsSet("OWZX_OPENGL");
+  if (!useOpenGLViewport && !qEnvironmentVariableIsSet("OWZX_RHI_RENDERER"))
+    qputenv("OWZX_RHI_RENDERER", "auto");
+
   RhiBackendSelection rhiSelection;
-  if (!useOpenGLViewport && qEnvironmentVariableIsSet("OWZX_RHI_RENDERER")) {
-    // RhiBackendSelector owns Direct3D12-first / Direct3D11-fallback policy.
+  if (!useOpenGLViewport) {
+    // RhiBackendSelector owns D3D11-first / D3D12 explicit opt-in policy.
     rhiSelection = selectRhiBackendFromEnvironment();
   }
 
@@ -121,8 +124,8 @@ int main(int argc, char *argv[])
     appendStartupLog(QStringLiteral("QRhi backend selection: %1").arg(rhiSelection.diagnostics()));
 
   // E5 — register 3-D viewport type. The OpenGL implementation is available
-  // via OWZX_OPENGL=1; the default software viewport keeps QML visible on
-  // remote/display-driver sessions where Qt Quick OpenGL renders a blank window.
+  // via OWZX_OPENGL=1; QRhi/D3D11 is the default high-performance path on
+  // Windows, with SoftwareViewport retained as a driver/init fallback.
   if (useOpenGLViewport)
     qmlRegisterType<GLViewport>("OWzxGL", 1, 0, "GLViewport");
   else if (rhiSelection.canUseRhi)
