@@ -37,6 +37,7 @@ protected:
 
 private:
   void releaseResources();
+  void resetPreviewGpuState(bool keepCpuStaging);
   bool ensurePipelines();
   bool ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &pipeline,
                       QRhiGraphicsPipeline::Topology topology);

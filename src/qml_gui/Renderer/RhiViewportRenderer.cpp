@@ -75,7 +75,7 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // ── Phase 26: Preview segment pipeline — store preview data + control props ──
   if (m_previewData != viewport->m_previewData) {
     m_previewData = viewport->m_previewData;
-    m_previewSegmentBufferUploaded = false;
+    resetPreviewGpuState(false);
     parsePreviewSegments();
   }
   m_layerMin = viewport->m_layerMin;
@@ -201,7 +201,7 @@ void RhiViewportRenderer::releaseResources()
   m_modelVertexBuffer.reset();
   m_bedLineBuffer.reset();
   m_bedFillBuffer.reset();
-  m_previewSegmentBuffer.reset();
+  resetPreviewGpuState(true);
   m_renderPassDescriptor = nullptr;
   m_sceneBuffersUploaded = false;
   m_modelVertexBufferUploaded = false;
@@ -218,6 +218,23 @@ void RhiViewportRenderer::releaseResources()
   m_highlightVertexCount = 0;
   m_sceneGeneration = 0;
   m_modelGeneration = 0;
+}
+
+void RhiViewportRenderer::resetPreviewGpuState(bool keepCpuStaging)
+{
+  m_previewSegmentBuffer.reset();
+  m_previewSegmentBufferBytes = 0;
+  m_previewSegmentBufferUploaded = false;
+  m_previewLastUploadMs = -1;
+  m_previewLastFrameMs = -1;
+  m_previewFirstFrameMs = -1;
+  m_previewFirstFrameDone = false;
+
+  if (!keepCpuStaging) {
+    m_previewVertices.clear();
+    m_previewDrawSpans.clear();
+    m_previewSegmentVertexCount = 0;
+  }
 }
 
 bool RhiViewportRenderer::ensurePipelines()
@@ -559,9 +576,7 @@ struct GcvPackedSegment
 
 void RhiViewportRenderer::parsePreviewSegments()
 {
-  m_previewVertices.clear();
-  m_previewDrawSpans.clear();
-  m_previewSegmentVertexCount = 0;
+  resetPreviewGpuState(false);
 
   if (m_previewData.size() < 8)
     return;
@@ -635,6 +650,9 @@ void RhiViewportRenderer::computePreviewDrawRange(quint32 &firstVertex, quint32 
   if (m_moveEnd <= 0)
     return;
 
+  const int layerLow = std::min(m_layerMin, m_layerMax);
+  const int layerHigh = std::max(m_layerMin, m_layerMax);
+
   // PreviewViewModel already repacks the GCV1 payload for travel visibility
   // and color mode changes. Renderer range selection only applies layer and
   // playback cutoff against exact packed segment metadata.
@@ -643,7 +661,7 @@ void RhiViewportRenderer::computePreviewDrawRange(quint32 &firstVertex, quint32 
   bool foundStart = false;
 
   for (const auto &span : m_previewDrawSpans) {
-    if (span.layer < m_layerMin || span.layer > m_layerMax)
+    if (span.layer < layerLow || span.layer > layerHigh)
       continue;
     if (span.move >= m_moveEnd)
       continue;
