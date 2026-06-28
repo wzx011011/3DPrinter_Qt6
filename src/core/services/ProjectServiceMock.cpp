@@ -574,6 +574,10 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
           receiver->pendingPlatePrintSeq_.clear();
           receiver->pendingPlateSpiral_.clear();
           receiver->pendingPlateThumbnails_.clear();  // v3.2 Phase 30 (THUMB-02)
+      receiver->pendingPlateFilamentMaps_.clear();   // v3.2 Phase 31 (FMAP-02)
+      receiver->pendingPlateFilamentMapMode_.clear(); // v3.2 Phase 31 (FMAP-02)
+          receiver->pendingPlateFilamentMaps_.clear();   // v3.2 Phase 31 (FMAP-02)
+          receiver->pendingPlateFilamentMapMode_.clear(); // v3.2 Phase 31 (FMAP-02)
 
           if (!plateDataList.empty())
           {
@@ -1094,6 +1098,40 @@ bool ProjectServiceMock::setPlatePrintable(int plateIndex, bool printable)
   m_plateList->setPlatePrintable(plateIndex, printable);
   emit projectChanged();
   return true;
+}
+
+// v3.2 Phase 31 (FMAP-03, Manual mode): per-plate filament→extruder mapping.
+bool ProjectServiceMock::setPlateFilamentMap(int plateIndex, int mode, const QList<int>& maps)
+{
+  if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())
+    return false;
+  OWzx::PartPlate *p = m_plateList->plate(plateIndex);
+  if (!p) return false;
+  std::vector<int> vmaps(maps.begin(), maps.end());
+  p->setFilamentMapMode(mode);
+  p->setFilamentMaps(vmaps);
+  emit projectChanged();
+  return true;
+}
+
+int ProjectServiceMock::plateFilamentMapMode(int plateIndex) const
+{
+  if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())
+    return 0;  // Auto
+  const OWzx::PartPlate *p = m_plateList->plate(plateIndex);
+  return p ? p->filamentMapMode() : 0;
+}
+
+QList<int> ProjectServiceMock::plateFilamentMaps(int plateIndex) const
+{
+  QList<int> result;
+  if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())
+    return result;
+  const OWzx::PartPlate *p = m_plateList->plate(plateIndex);
+  if (!p) return result;
+  const std::vector<int> &v = p->filamentMaps();
+  for (int m : v) result.append(m);
+  return result;
 }
 
 bool ProjectServiceMock::movePlate(int oldIndex, int newIndex)
@@ -4967,6 +5005,15 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
         opt->setInt(p->printSequence());
       if (auto *opt = pd->config.option("spiral_mode", true))
         opt->setInt(p->spiralMode());
+
+      // v3.2 Phase 31 (FMAP-01/02): populate filament_maps from the plate's
+      // manual mapping (1-based, matching upstream PlateData::filament_maps at
+      // bbs_3mf.hpp:98). filament_map_mode is written as a config key so it
+      // round-trips (the writer persists filament_maps via PlateData).
+      pd->filament_maps = p->filamentMaps();
+      if (auto *opt = pd->config.option("filament_map_mode", true))
+        opt->setInt(p->filamentMapMode());
+
       // v3.2 Phase 30 (THUMB-02): plate_thumbnail pixel population deferred to
       // THUMB-03 (v3.3+) — the writer's PNG encoding path is coupled to real
       // GL capture. The per-plate QImage cache + variant generation (THUMB-01)
@@ -5288,6 +5335,8 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
       receiver->pendingPlatePrintSeq_.clear();
       receiver->pendingPlateSpiral_.clear();
       receiver->pendingPlateThumbnails_.clear();  // v3.2 Phase 30 (THUMB-02)
+      receiver->pendingPlateFilamentMaps_.clear();   // v3.2 Phase 31 (FMAP-02)
+      receiver->pendingPlateFilamentMapMode_.clear(); // v3.2 Phase 31 (FMAP-02)
 
       if (ok && !plateDataList.empty())
       {
@@ -5317,6 +5366,19 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           receiver->pendingPlateBedType_.append(bedType);
           receiver->pendingPlatePrintSeq_.append(printSeq);
           receiver->pendingPlateSpiral_.append(spiral);
+
+          // v3.2 Phase 31 (FMAP-02): extract filament maps + mode (Manual mode).
+          QList<int> fmap;
+          if (plate) {
+            for (int m : plate->filament_maps) fmap.append(m);
+          }
+          int fmapMode = 0;
+          if (plate) {
+            if (auto *opt = plate->config.option("filament_map_mode"))
+              fmapMode = int(opt->getInt());
+          }
+          receiver->pendingPlateFilamentMaps_.append(fmap);
+          receiver->pendingPlateFilamentMapMode_.append(fmapMode);
 
           // v3.2 Phase 30 (THUMB-02): extract plate_thumbnail back into a QImage
           // so it survives save→reload (D-30-8 round-trip). The pixels were read
@@ -5510,6 +5572,13 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
               if (pi < receiver->pendingPlateBedType_.size()) p->setBedType(receiver->pendingPlateBedType_[pi]);
               if (pi < receiver->pendingPlatePrintSeq_.size()) p->setPrintSequence(receiver->pendingPlatePrintSeq_[pi]);
               if (pi < receiver->pendingPlateSpiral_.size()) p->setSpiralMode(receiver->pendingPlateSpiral_[pi]);
+              // v3.2 Phase 31 (FMAP-02): restore filament maps + mode (Manual).
+              if (pi < receiver->pendingPlateFilamentMaps_.size()) {
+                const QList<int> &fm = receiver->pendingPlateFilamentMaps_[pi];
+                p->setFilamentMaps(std::vector<int>(fm.begin(), fm.end()));
+              }
+              if (pi < receiver->pendingPlateFilamentMapMode_.size())
+                p->setFilamentMapMode(receiver->pendingPlateFilamentMapMode_[pi]);
               // v3.2 Phase 30 (THUMB-02): restore the persisted thumbnail so it
               // survives save→reload (D-30-8 round-trip). Note: addInstance above
               // invalidated the cache; setThumbnail repopulates it without

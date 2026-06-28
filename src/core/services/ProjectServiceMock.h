@@ -141,6 +141,14 @@ public:
   Q_INVOKABLE bool movePlate(int oldIndex, int newIndex);
   Q_INVOKABLE bool setPlatePrintable(int plateIndex, bool printable);
   Q_INVOKABLE bool isPlatePrintable(int plateIndex) const;
+
+  // v3.2 Phase 31 (FMAP-03, Manual mode): per-plate filament→extruder mapping.
+  // mode: 0 = Auto (deferred to v3.3+ FMAP-04), 1 = Manual.
+  // maps[i] = the extruder index that filament i maps to (1-based, matching
+  // upstream PlateData::filament_maps at bbs_3mf.hpp:98).
+  Q_INVOKABLE bool setPlateFilamentMap(int plateIndex, int mode, const QList<int>& maps);
+  Q_INVOKABLE int plateFilamentMapMode(int plateIndex) const;
+  Q_INVOKABLE QList<int> plateFilamentMaps(int plateIndex) const;
 #ifdef HAS_LIBSLIC3R
   // v3.0 Phase 19 (D-15): per-plate DynamicPrintConfig for slice config merge.
   // Returns Slic3r::DynamicPrintConfig* (forward-declared in the HAS_LIBSLIC3R block).
@@ -425,6 +433,10 @@ private:
   QList<int> pendingPlateBedType_;
   QList<int> pendingPlatePrintSeq_;
   QList<int> pendingPlateSpiral_;
+  // v3.2 Phase 31 (FMAP-02): per-plate filament maps + mode extracted from 3MF
+  // PlateData during load; applied to PartPlate in the rebuild.
+  QList<QList<int>> pendingPlateFilamentMaps_;
+  QList<int> pendingPlateFilamentMapMode_;
   // v3.2 Phase 30 (THUMB-02): per-plate thumbnails extracted from 3MF
   // PlateData::plate_thumbnail during load; applied to PartPlate in the rebuild.
   QList<QImage> pendingPlateThumbnails_;

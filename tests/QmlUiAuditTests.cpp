@@ -167,9 +167,18 @@ void QmlUiAuditTests::mainRegistersRhiViewportOnlyBehindExplicitGate()
   QVERIFY2(selectorHeader.contains(QStringLiteral("RhiBackendSelection")),
            "RhiBackendSelector must expose structured backend diagnostics");
   QVERIFY2(selectorSource.contains(QStringLiteral("Direct3D12")),
-           "QRhi app selector must try Direct3D12 on Windows");
+           "QRhi app selector must keep Direct3D12 available for explicit opt-in");
   QVERIFY2(selectorSource.contains(QStringLiteral("Direct3D11")),
            "QRhi app selector must keep Direct3D11 fallback on Windows");
+  const int defaultCandidatesStart = selectorSource.indexOf(QStringLiteral("QVector<RhiBackendCandidate> defaultWindowsCandidates()"));
+  const int candidatesForRequestStart = selectorSource.indexOf(QStringLiteral("QVector<RhiBackendCandidate> candidatesForRequest"));
+  QVERIFY2(defaultCandidatesStart >= 0 && candidatesForRequestStart > defaultCandidatesStart,
+           "RhiBackendSelector default candidate boundaries changed; update app QRhi policy audit");
+  const QString defaultCandidates = selectorSource.mid(defaultCandidatesStart,
+                                                       candidatesForRequestStart - defaultCandidatesStart);
+  QVERIFY2(defaultCandidates.indexOf(QStringLiteral("Direct3D11"))
+               < defaultCandidates.indexOf(QStringLiteral("Direct3D12")),
+           "QRhi app auto policy must prefer stable D3D11 before D3D12 opt-in fallback");
   QVERIFY2(!selectorSource.contains(QStringLiteral("QRhi::Vulkan")),
            "Vulkan must not be part of the default app selector while QtGui Vulkan is disabled");
   QVERIFY2(rhiViewportHeader.contains(QStringLiteral("QQuickRhiItem")),

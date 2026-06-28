@@ -71,6 +71,9 @@ class PartPlateTests final : public QObject {
   void thumbnailVariantsProduceValidData() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void thumbnailRoundTrip() { QSKIP("Requires HAS_LIBSLIC3R"); }
 #endif
+
+  // ── FMAP-01/03 tests (v3.2 Phase 31) ────────────────────────────────────
+  void filamentMapManualAssignment();  // PartPlate + service (no libslic3r needed)
 };
 
 void PartPlateTests::initTestCase() {
@@ -456,6 +459,38 @@ void PartPlateTests::thumbnailRoundTrip() {
            "cache must be invalidated by content change");
 }
 #endif  // HAS_LIBSLIC3R
+
+// ── FMAP-01/03 tests (v3.2 Phase 31) ───────────────────────────────────────
+
+void PartPlateTests::filamentMapManualAssignment() {
+  // FMAP-01: PartPlate has filament_maps + filament_map_mode fields.
+  // FMAP-03: ProjectServiceMock exposes setPlateFilamentMap / plateFilamentMaps.
+  OWzx::PartPlate plate(0);
+  QCOMPARE(plate.filamentMapMode(), 0);  // default Auto
+  QVERIFY(plate.filamentMaps().empty());
+
+  plate.setFilamentMapMode(1);  // Manual
+  QCOMPARE(plate.filamentMapMode(), 1);
+  plate.setFilamentMaps({2, 1, 3});  // filament 0→extruder2, 1→1, 2→3 (1-based)
+  QCOMPARE(int(plate.filamentMaps().size()), 3);
+  QCOMPARE(plate.filamentMaps()[0], 2);
+  QCOMPARE(plate.filamentMaps()[1], 1);
+  QCOMPARE(plate.filamentMaps()[2], 3);
+
+  // FMAP-03 via the service (needs a constructed PartPlateList).
+  ProjectServiceMock service;
+  QVERIFY(service.plateCount() >= 1);
+  QVERIFY2(service.setPlateFilamentMap(0, /*mode=*/1, QList<int>{2, 1, 3}),
+           "setPlateFilamentMap must succeed on a valid plate");
+  QCOMPARE(service.plateFilamentMapMode(0), 1);
+  QCOMPARE(service.plateFilamentMaps(0), QList<int>({2, 1, 3}));
+
+  // Invalid plate index returns Auto + empty.
+  QCOMPARE(service.plateFilamentMapMode(999), 0);
+  QVERIFY(service.plateFilamentMaps(999).isEmpty());
+  QVERIFY2(!service.setPlateFilamentMap(999, 1, QList<int>{1}),
+           "setPlateFilamentMap must fail on invalid plate index");
+}
 
 QTEST_MAIN(PartPlateTests)
 #include "PartPlateTests.moc"

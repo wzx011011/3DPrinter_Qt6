@@ -195,6 +195,13 @@ class PartPlate {
   int spiralMode() const { return m_spiral_mode; }
   void setSpiralMode(int mode) { m_spiral_mode = mode; }
 
+  // v3.2 Phase 31 (FMAP-01/03): manual filament→extruder mapping per plate.
+  // Mirrors upstream PartPlate.hpp:262-263.
+  std::vector<int> filamentMaps() const { return m_filament_maps; }
+  void setFilamentMaps(const std::vector<int>& maps) { m_filament_maps = maps; }
+  int filamentMapMode() const { return m_filament_map_mode; }  // 0=Auto, 1=Manual
+  void setFilamentMapMode(int mode) { m_filament_map_mode = mode; }
+
   int firstLayerSeqChoice() const { return m_first_layer_seq_choice; }
   void setFirstLayerSeqChoice(int choice) { m_first_layer_seq_choice = choice; }
 
@@ -256,6 +263,14 @@ class PartPlate {
   int m_bed_type = 0;                  // PlateBedType
   int m_print_sequence = 0;            // PlatePrintSequence
   int m_spiral_mode = 0;               // PlateSpiralMode
+
+  // v3.2 Phase 31 (FMAP-01): manual filament→extruder mapping per plate.
+  // Mirrors upstream PartPlate.hpp:262-263 (m_filament_maps, m_filament_map_mode).
+  // filament_maps[i] = the extruder index that filament i maps to (1-based,
+  // matching upstream PlateData::filament_maps at bbs_3mf.hpp:98).
+  // filament_map_mode: 0 = Auto (deferred to v3.3+, FMAP-04), 1 = Manual.
+  std::vector<int> m_filament_maps;
+  int m_filament_map_mode = 0;  // 0=Auto, 1=Manual (upstream FilamentMapMode)
   int m_first_layer_seq_choice = 0;    // LayerSeqChoice
   std::vector<int> m_first_layer_seq_order;
   int m_other_layers_seq_choice = 0;   // LayerSeqChoice
