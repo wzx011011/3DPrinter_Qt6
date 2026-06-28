@@ -50,6 +50,7 @@ private slots:
   void test_preview_parser_handles_extrusion_modes_and_travel_filter();
   void test_preview_parser_ignores_z_hop_travel_as_layer();
   void test_model_change_invalidates_slice_result();
+  void test_slice_affecting_bed_change_marks_current_result_stale();
   void test_import_invalidates_slice_output_and_preview_payload();
 
 private:
@@ -553,6 +554,68 @@ void E2EWorkflowTests::test_model_change_invalidates_slice_result()
   const QString outputPath = slice.outputPath();
   if (!outputPath.isEmpty() && QFileInfo::exists(outputPath))
     QFile::remove(outputPath);
+}
+
+void E2EWorkflowTests::test_slice_affecting_bed_change_marks_current_result_stale()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY2(editor.loadFile(kStlPath), "importing a model through EditorViewModel should start");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(finishedSpy.isValid());
+  QVERIFY(failedSpy.isValid());
+
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+  slice.startSlice(QStringLiteral("readiness_stale_test"));
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+    QSKIP("Slice failed — cannot test stale result readiness without a real G-code result");
+
+  const int plateIndex = editor.currentPlateIndex();
+  const QString slicedOutputPath = slice.outputPath();
+  QVERIFY2(!slicedOutputPath.isEmpty(), "slice should expose a G-code output path");
+  QVERIFY2(QFileInfo::exists(slicedOutputPath),
+           qPrintable(QStringLiteral("G-code file should exist before invalidation: %1").arg(slicedOutputPath)));
+  QVERIFY2(editor.hasSliceResult(), "EditorViewModel should expose the fresh slice result");
+  QVERIFY2(editor.canPreview(), "Preview should be available for a fresh current-plate result");
+  QVERIFY2(editor.canExportGCode(), "Export should be available for a fresh current-plate result");
+  QCOMPARE(editor.plateSliceResultStatus(plateIndex),
+           int(EditorViewModel::SliceResultValid));
+
+  editor.setBedWidth(editor.bedWidth() + 1.0f);
+
+  QVERIFY2(!editor.hasSliceResult(), "bed shape changes must invalidate the current slice result");
+  QVERIFY2(!editor.canPreview(), "Preview must be disabled for a stale current-plate result");
+  QVERIFY2(!editor.canExportGCode(), "Export must be disabled for a stale current-plate result");
+  QVERIFY2(editor.canRequestSlice(), "stale current-plate results should reopen slicing");
+  QCOMPARE(editor.plateSliceResultStatus(plateIndex),
+           int(EditorViewModel::SliceResultStale));
+  QVERIFY2(editor.previewActionHint().contains(QStringLiteral("已过期")),
+           qPrintable(editor.previewActionHint()));
+  QVERIFY2(editor.exportActionHint().contains(QStringLiteral("已过期")),
+           qPrintable(editor.exportActionHint()));
+
+  editor.switchToPreview();
+  QVERIFY2(editor.statusText().contains(QStringLiteral("已过期")),
+           qPrintable(editor.statusText()));
+
+  const QString exportPath = QDir::tempPath() + QStringLiteral("/owzx_stale_export_blocked.gcode");
+  QFile::remove(exportPath);
+  QVERIFY2(!editor.requestExportGCode(exportPath),
+           "stale current-plate results must not export the previous G-code path");
+  QVERIFY2(!QFileInfo::exists(exportPath), "blocked stale export must not create a file");
+
+  if (QFileInfo::exists(slicedOutputPath))
+    QFile::remove(slicedOutputPath);
 }
 
 void E2EWorkflowTests::test_import_invalidates_slice_output_and_preview_payload()

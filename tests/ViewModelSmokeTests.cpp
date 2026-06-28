@@ -132,6 +132,7 @@ private slots:
   void int06_FtpUrlAndSendPrintRouting();
   void appSettingsAndEditorBedShapePersistDeterministically();
   void editor_import_model_updates_state();
+  void editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid();
   void monitor_refresh_updates_network_and_device();
   void config_default_and_switch_preset();
   void testUpstreamDefaultsContainVectorKeys();
@@ -199,6 +200,34 @@ void ViewModelSmokeTests::editor_import_model_updates_state()
 
   QTRY_VERIFY_WITH_TIMEOUT(editor.modelCount() >= 1, 5000);
   QVERIFY(spy.count() >= 1);
+}
+
+void ViewModelSmokeTests::editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY2(editor.loadFile(kStlPath), "importing a model should start");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
+
+  QVERIFY2(editor.modelCount() >= 1, "imported model should be present");
+  QVERIFY2(editor.canRequestSlice(), "current plate should be sliceable before a result exists");
+  QVERIFY2(!editor.canPreview(), "Preview must require a valid current-plate slice result");
+  QVERIFY2(!editor.canExportGCode(), "G-code export must require a valid current-plate result");
+  QCOMPARE(editor.plateSliceResultStatus(editor.currentPlateIndex()),
+           int(EditorViewModel::SliceResultMissing));
+  QVERIFY2(editor.previewActionHint().contains(QStringLiteral("尚未切片")),
+           qPrintable(editor.previewActionHint()));
+  QVERIFY2(editor.exportActionHint().contains(QStringLiteral("尚未切片")),
+           qPrintable(editor.exportActionHint()));
+
+  editor.switchToPreview();
+  QVERIFY2(editor.statusText().contains(QStringLiteral("尚未切片")),
+           qPrintable(editor.statusText()));
 }
 
 void ViewModelSmokeTests::monitor_refresh_updates_network_and_device()
