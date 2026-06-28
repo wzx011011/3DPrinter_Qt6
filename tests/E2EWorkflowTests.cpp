@@ -46,6 +46,7 @@ private slots:
   void test_slice_produces_gcode_file();
   void test_slice_results_propagate_to_editor_vm();
   void test_export_gcode_to_path();
+  void test_export_gcode_rejects_unsafe_targets();
   void test_preview_receives_gcode_data();
   void test_backend_switches_to_preview_after_slice();
   void test_preview_parser_handles_extrusion_modes_and_travel_filter();
@@ -313,6 +314,74 @@ void E2EWorkflowTests::test_export_gcode_to_path()
 
   // Clean up
   QFile::remove(exportPath);
+  if (QFileInfo::exists(srcPath))
+    QFile::remove(srcPath);
+}
+
+void E2EWorkflowTests::test_export_gcode_rejects_unsafe_targets()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+
+  QVERIFY(project.loadFile(kStlPath));
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(finishedSpy.isValid());
+  QVERIFY(failedSpy.isValid());
+
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+  slice.startSlice(QStringLiteral("export_safety_test"));
+
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+
+  if (failedSpy.count() > 0)
+    QSKIP("Slice failed - cannot test export safety without successful slice");
+
+  const QString srcPath = slice.outputPath();
+  QVERIFY2(!srcPath.isEmpty(), "source G-code path should exist after slice");
+  QFileInfo srcInfo(srcPath);
+  QVERIFY2(srcInfo.exists() && srcInfo.isFile(),
+           qPrintable(QStringLiteral("source G-code should exist: %1").arg(srcPath)));
+  const qint64 sourceSize = srcInfo.size();
+  QVERIFY2(sourceSize > 0, "source G-code should be non-empty");
+
+  QVERIFY2(!slice.exportGCodeToPath(QString{}),
+           "empty export target must be rejected");
+  QVERIFY2(QFileInfo::exists(srcPath), "empty-target export must not delete source");
+  QCOMPARE(QFileInfo(srcPath).size(), sourceSize);
+
+  QVERIFY2(!slice.exportGCodeToPath(srcPath),
+           "same source/target export must be rejected");
+  QVERIFY2(QFileInfo::exists(srcPath), "same-path export must not delete source");
+  QCOMPARE(QFileInfo(srcPath).size(), sourceSize);
+
+  QTemporaryDir exportDir(QDir::tempPath() + QStringLiteral("/owzx_export_safety_XXXXXX"));
+  QVERIFY2(exportDir.isValid(), "temporary export directory should be available");
+  QVERIFY2(!slice.exportGCodeToPath(exportDir.path()),
+           "directory export target must be rejected");
+  QVERIFY2(QFileInfo::exists(srcPath), "directory-target export must not delete source");
+
+  const QString existingTarget = exportDir.filePath(QStringLiteral("existing.gcode"));
+  {
+    QFile existing(existingTarget);
+    QVERIFY2(existing.open(QIODevice::WriteOnly | QIODevice::Truncate),
+             "existing target should be writable");
+    existing.write("stale");
+  }
+  QVERIFY2(slice.exportGCodeToPath(existingTarget),
+           "different existing target should be safely replaced");
+  QFileInfo exportedInfo(existingTarget);
+  QVERIFY2(exportedInfo.exists() && exportedInfo.isFile(), "exported file should exist");
+  QVERIFY2(exportedInfo.size() == sourceSize,
+           qPrintable(QStringLiteral("exported size %1 should match source size %2")
+                          .arg(exportedInfo.size()).arg(sourceSize)));
+  QVERIFY2(QFileInfo::exists(srcPath), "successful export must preserve source");
+
   if (QFileInfo::exists(srcPath))
     QFile::remove(srcPath);
 }

@@ -18,6 +18,7 @@ private slots:
   void renderBenchmarkMatchesRhiBackendPolicy();
   void prepareViewportBindsBedAndPlateContext();
   void prepareReadinessControlsBindBackendAvailability();
+  void exportUiUsesSaveDialogAndAvoidsSourcePathTarget();
   void importEntryPointsAdvertiseConsistentModelFormats();
   void rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads();
   void rhiViewportRendererUsesModelBuffersAndCameraUniforms();
@@ -363,6 +364,35 @@ void QmlUiAuditTests::prepareReadinessControlsBindBackendAvailability()
            "Export action must be disabled through backend availability");
   QVERIFY2(!sliceProgress.contains(QStringLiteral("visible: root.hasSliceResult && !root.slicingNow")),
            "Preview/export action row must not disappear solely because the current result is missing or stale");
+}
+
+void QmlUiAuditTests::exportUiUsesSaveDialogAndAvoidsSourcePathTarget()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString sliceProgress = readSource(QStringLiteral("src/qml_gui/panels/SliceProgress.qml"));
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!sliceProgress.isEmpty(), "Unable to read SliceProgress.qml");
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+
+  const int dialogStart = preparePage.indexOf(QStringLiteral("id: exportGCodeDlg"));
+  QVERIFY2(dialogStart >= 0, "PreparePage exportGCodeDlg missing");
+  const int nextDialog = preparePage.indexOf(QStringLiteral("FileDialog {"), dialogStart + 1);
+  const QString exportDialog = preparePage.mid(dialogStart,
+                                               nextDialog > dialogStart ? nextDialog - dialogStart : preparePage.size() - dialogStart);
+  QVERIFY2(exportDialog.contains(QStringLiteral("fileMode: FileDialog.SaveFile")),
+           "G-code export must use a SaveFile dialog, not an open-file dialog");
+  QVERIFY2(exportDialog.contains(QStringLiteral("defaultExportGCodeFileName")),
+           "G-code export dialog must use a backend-provided default filename");
+
+  QVERIFY2(editorHeader.contains(QStringLiteral("defaultExportGCodeFileName")),
+           "EditorViewModel must expose a default G-code export filename to QML");
+  QVERIFY2(sliceProgress.contains(QStringLiteral("exportRequested")),
+           "SliceProgress export button must ask the page to open a save dialog");
+  QVERIFY2(!sliceProgress.contains(QStringLiteral("requestExportGCode(path)"))
+               && !sliceProgress.contains(QStringLiteral("requestExportGCode(root.outputPath)"))
+               && !sliceProgress.contains(QStringLiteral("? root.outputPath")),
+           "SliceProgress must not export directly to the generated source outputPath");
 }
 
 void QmlUiAuditTests::rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads()
