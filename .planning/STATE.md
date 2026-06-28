@@ -3,28 +3,28 @@ gsd_state_version: 1.0
 milestone: v3.3
 milestone_name: Slice Preview Main Flow MVP
 status: in_progress
-last_updated: "2026-06-28T05:27:00.000Z"
-last_activity: 2026-06-28 -- Phase 33 slice-to-preview navigation gate implemented
+last_updated: "2026-06-28T14:52:00.000Z"
+last_activity: 2026-06-28 -- Phase 34 G-code preview parser MVP implemented and verified
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 25
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
 
 **Milestone:** v3.3 - Slice Preview Main Flow MVP
 **Status:** In progress
-**Next step:** execute Phase 34, the G-code Preview parser MVP.
+**Next step:** execute Phase 35, the D3D11 Preview rendering interaction pass.
 
 ## Current Position
 
-Phase: 34 - Not started
-Plan: add parser fixture coverage for extrusion modes, reset, layers, travel/extrude split, and tool changes
-Status: Phase 33 complete; parser MVP next
-Last activity: 2026-06-28 -- Phase 33 implemented automatic Preview navigation after slice completion and added E2E coverage.
+Phase: 35 - Not started
+Plan: verify and harden D3D11 Preview rendering interaction with the parsed G-code payload
+Status: Phase 34 complete; renderer interaction next
+Last activity: 2026-06-28 -- Phase 34 implemented parser support for extrusion modes, reset, travel filtering, layers, and tool changes with E2E fixture coverage.
 
 ## Project Reference
 
@@ -46,7 +46,7 @@ See: `.planning/PROJECT.md`
 | Phase | Name | Status |
 |---|---|---|
 | 33 | Slice-to-Preview Navigation Gate | Complete |
-| 34 | G-code Preview Parser MVP | Not started |
+| 34 | G-code Preview Parser MVP | Complete |
 | 35 | D3D11 Preview Rendering Interaction | Not started |
 | 36 | Verification and Handoff | Not started |
 
@@ -55,6 +55,13 @@ See: `.planning/PROJECT.md`
 - Commit: `5a4d37f feat: switch to preview after slicing completes`.
 - Runtime behavior: `BackendContext` now handles `SliceService::sliceFinished` by posting the slicing-complete notification and calling `requestSelectTab(tpPreview)`, reusing the existing tab/viewMode linkage.
 - Regression: `E2EWorkflowTests::test_backend_switches_to_preview_after_slice` first failed with `ctx.currentPage() == 1`, then passed after the implementation.
+- Canonical verification: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` exited 0; PrepareScene, PartPlate, QML UI audit, and E2E pipeline tests passed.
+
+## Phase 34 Evidence
+
+- Commit: `bda6cee feat: harden gcode preview parser`.
+- Runtime behavior: `PreviewViewModel` now handles `G0`/`G1`, `M82`, `M83`, `G92 E`, Z layers, tool changes, and travel-hidden `GCV1` payload filtering.
+- Regression: `E2EWorkflowTests::test_preview_parser_handles_extrusion_modes_and_travel_filter` first failed because the preview parser entry point did not exist, then passed after implementation.
 - Canonical verification: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` exited 0; PrepareScene, PartPlate, QML UI audit, and E2E pipeline tests passed.
 
 ## Deferred Items
@@ -71,9 +78,9 @@ See: `.planning/PROJECT.md`
 
 ## Handoff
 
-Start Phase 34 with a narrow TDD loop:
+Start Phase 35 with a narrow renderer interaction loop:
 
 ```text
-$gsd-plan-phase 34
-$gsd-execute-phase 34 --interactive
+$gsd-plan-phase 35
+$gsd-execute-phase 35 --interactive
 ```

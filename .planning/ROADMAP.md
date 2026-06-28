@@ -22,7 +22,7 @@
 ## Phases
 
 - [x] **Phase 33:** Slice-to-Preview Navigation Gate
-- [ ] **Phase 34:** G-code Preview Parser MVP
+- [x] **Phase 34:** G-code Preview Parser MVP
 - [ ] **Phase 35:** D3D11 Preview Rendering Interaction
 - [ ] **Phase 36:** Verification and Handoff
 
@@ -47,7 +47,7 @@
 - Regression: `E2EWorkflowTests::test_backend_switches_to_preview_after_slice` covers BackendContext, EditorViewModel, PreviewViewModel, output path, layer count, move count, GCV1 payload, and Preview tab/viewMode switch.
 - Verification: canonical build command exited 0 on 2026-06-28.
 
-### Phase 34: G-code Preview Parser MVP
+### Phase 34: G-code Preview Parser MVP - Complete
 
 **Goal:** Make Preview data parsing robust enough for common slicer output.
 
@@ -61,6 +61,11 @@
 **Success criteria:**
 - Parser fixture tests prove absolute/relative extrusion, reset, travel/extrude split, Z layers, and tool changes.
 - Real sliced fixture produces non-empty preview payload and sane layer/move statistics.
+
+**Evidence:**
+- Commit: `bda6cee feat: harden gcode preview parser`.
+- Regression: `E2EWorkflowTests::test_preview_parser_handles_extrusion_modes_and_travel_filter`.
+- Verification: canonical build command exited 0 on 2026-06-28.
 
 ### Phase 35: D3D11 Preview Rendering Interaction
 
@@ -107,13 +112,13 @@
 
 ## Next Step
 
-Start Phase 34:
+Start Phase 35:
 
 ```text
-$gsd-plan-phase 34
-$gsd-execute-phase 34 --interactive
+$gsd-plan-phase 35
+$gsd-execute-phase 35 --interactive
 ```
 
 ---
 
-*Last updated: 2026-06-28 for v3.3 milestone definition.*
+*Last updated: 2026-06-28 after Phase 34 parser MVP completion.*
