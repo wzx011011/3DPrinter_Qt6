@@ -42,12 +42,12 @@ Every user-visible behavior in this path must either be implemented, verified, o
 
 ### Slicing and Reslicing
 
-- [ ] **SLICE-01:** Normal slicing uses the current plate model, merged presets, bed shape, per-plate config, filament map state, and calibration-neutral state consistently with upstream `BackgroundSlicingProcess`.
-- [ ] **SLICE-02:** Slice progress, completion, cancellation, and failure states remain coherent across `SliceService`, `EditorViewModel`, `PreviewViewModel`, notifications, and QML controls.
-- [ ] **SLICE-03:** Reslicing is triggered or required when imported data or slice-affecting settings change, and stale `outputPath` values cannot be treated as current results.
-- [ ] **SLICE-04:** Existing G-code reuse (`export_gcode_from_previous_file` equivalent) is supported when loading/reprocessing a valid previous G-code result, with Preview refreshed from the reused file.
-- [ ] **SLICE-05:** Multi-plate slicing covers current plate and all printable unlocked plates, stores per-plate output paths/statistics, and excludes locked or non-printable plates.
-- [ ] **SLICE-06:** Slice warnings and validation failures are surfaced as user-visible errors/warnings and block Preview/export when the generated result is invalid.
+- [x] **SLICE-01:** Normal slicing uses the current plate model, merged presets, bed shape, per-plate config, filament map state, and calibration-neutral state consistently with upstream `BackgroundSlicingProcess`.
+- [x] **SLICE-02:** Slice progress, completion, cancellation, and failure states remain coherent across `SliceService`, `EditorViewModel`, `PreviewViewModel`, notifications, and QML controls.
+- [x] **SLICE-03:** Reslicing is triggered or required when imported data or slice-affecting settings change, and stale `outputPath` values cannot be treated as current results.
+- [x] **SLICE-04:** Existing G-code reuse (`export_gcode_from_previous_file` equivalent) is supported when loading/reprocessing a valid previous G-code result, with Preview refreshed from the reused file.
+- [x] **SLICE-05:** Multi-plate slicing covers current plate and all printable unlocked plates, stores per-plate output paths/statistics, and excludes locked or non-printable plates.
+- [x] **SLICE-06:** Slice warnings and validation failures are surfaced as user-visible errors/warnings and block Preview/export when the generated result is invalid.
 
 ### Preview Data and Semantics
 
@@ -115,12 +115,12 @@ Every user-visible behavior in this path must either be implemented, verified, o
 | PREP-02 | Phase 38 | Satisfied |
 | PREP-03 | Phase 38 | Satisfied |
 | PREP-04 | Phase 38 | Satisfied |
-| SLICE-01 | Phase 39 | Pending |
-| SLICE-02 | Phase 39 | Pending |
-| SLICE-03 | Phase 39 | Pending |
-| SLICE-04 | Phase 39 | Pending |
-| SLICE-05 | Phase 39 | Pending |
-| SLICE-06 | Phase 39 | Pending |
+| SLICE-01 | Phase 39 | Satisfied |
+| SLICE-02 | Phase 39 | Satisfied |
+| SLICE-03 | Phase 39 | Satisfied |
+| SLICE-04 | Phase 39 | Satisfied |
+| SLICE-05 | Phase 39 | Satisfied |
+| SLICE-06 | Phase 39 | Satisfied |
 | PREVIEW-01 | Phase 40 | Pending |
 | PREVIEW-02 | Phase 40 | Pending |
 | PREVIEW-03 | Phase 40 | Pending |
@@ -141,9 +141,9 @@ Every user-visible behavior in this path must either be implemented, verified, o
 | VERIFY-04 | Phase 43 | Pending |
 | VERIFY-05 | Phase 43 | Pending |
 
-**Coverage:** 35 total; 35 mapped; 0 unmapped; 6 satisfied.
+**Coverage:** 35 total; 35 mapped; 0 unmapped; 16 satisfied.
 
 ---
 
 *Requirements defined: 2026-06-28*
-*Last updated: 2026-06-29 after Phase 39 planning.*
+*Last updated: 2026-06-29 after Phase 39 execution.*

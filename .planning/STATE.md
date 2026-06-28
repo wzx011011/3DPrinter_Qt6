@@ -2,36 +2,37 @@
 gsd_state_version: 1.0
 milestone: v3.4
 milestone_name: Import to G-code Complete Workflow
-status: executing
-last_updated: "2026-06-28T17:56:02.904Z"
-last_activity: 2026-06-28 -- Phase 39 planning complete
+status: ready_to_plan
+last_updated: 2026-06-29T03:29:41+08:00
+last_activity: 2026-06-29 -- Phase 39 execution complete
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 3
-  completed_plans: 2
-  percent: 29
+  completed_plans: 3
+  percent: 43
+stopped_at: Phase 39 complete (1/1) -- ready to discuss Phase 40
 ---
 
 # Project State
 
 **Milestone:** v3.4 - Import to G-code Complete Workflow
-**Status:** Ready to execute
-**Next step:** execute Phase 39 plan 01 to complete slicing and reslicing state-machine semantics.
+**Status:** Ready to plan
+**Next step:** plan Phase 40 to complete Preview data and upstream view semantics.
 
 ## Current Position
 
-Phase: 39
+Phase: 40
 Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-28 -- Phase 39 planning complete
+Status: Ready to plan
+Last activity: 2026-06-29 -- Phase 39 execution complete
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
-**Current focus:** Phase 39 — complete slicing and reslicing state machine
+**Current focus:** Phase 40 -- complete preview data and upstream view semantics
 
 ## Latest Shipped Milestone
 
@@ -47,7 +48,7 @@ See: `.planning/PROJECT.md`
 |---|---|---|
 | 37 | Complete Import and Project Restore | Complete |
 | 38 | Prepare Readiness and Slice Invalidation | Complete |
-| 39 | Complete Slicing and Reslicing State Machine | Planned |
+| 39 | Complete Slicing and Reslicing State Machine | Complete |
 | 40 | Complete Preview Data and Upstream View Semantics | Pending |
 | 41 | D3D11 Preview Rendering and Interaction Stability | Pending |
 | 42 | Local G-code Export and Finalization | Pending |
@@ -80,8 +81,8 @@ It intentionally does not include device send/upload/cloud printing or Monitor p
 
 ## Handoff
 
-Phase 39 planning is complete. Execute Phase 39:
+Phase 39 is complete. Plan Phase 40:
 
 ```text
-$gsd-execute-phase 39 --no-transition
+$gsd-autonomous --from 40
 ```
