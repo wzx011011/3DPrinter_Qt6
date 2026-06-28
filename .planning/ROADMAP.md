@@ -172,12 +172,12 @@
 
 ## Next Step
 
-Plan Phase 41:
+Execute Phase 41:
 
 ```text
-$gsd-autonomous --from 41
+$gsd-autonomous --from 41 --execute
 ```
 
 ---
 
-*Last updated: 2026-06-29 after Phase 40 execution.*
+*Last updated: 2026-06-29 after Phase 41 planning.*
