@@ -465,6 +465,10 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
     return false;
   }
 
+  qInfo("[ProjectService] import start path=%s ext=%s",
+        fi.absoluteFilePath().toUtf8().constData(),
+        fi.suffix().toUtf8().constData());
+
   loading_ = true;
   loadProgress_ = 0;
   activeCancelFlag_ = std::make_shared<std::atomic_bool>(false);
@@ -844,6 +848,11 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
             receiver->m_plateList->setCurrentPlateIndex(0);
         }
         receiver->lastError_.clear();
+        qInfo("[ProjectService] import success path=%s ext=%s objects=%d plates=%d",
+              localPath.toUtf8().constData(),
+              QFileInfo(localPath).suffix().toUtf8().constData(),
+              receiver->modelCount_,
+              receiver->m_plateList ? receiver->m_plateList->plateCount() : 0);
 
         // Auto-arrange after load (对齐上游 arrange_loaded_object_to_new_position)
         // 传入默认 220x220 热床（与 CLI bed_shape 一致）：ProjectServiceMock 不持有
@@ -871,6 +880,9 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         receiver->objectPrintableStates_.clear();
         receiver->objectVisibleStates_.clear();
         receiver->lastError_ = errorText;
+        qWarning("[ProjectService] import failed path=%s reason=%s",
+                 localPath.toUtf8().constData(),
+                 errorText.toUtf8().constData());
         emit receiver->projectChanged();
         emit receiver->plateDataLoaded(0);
         emit receiver->plateSelectionChanged();

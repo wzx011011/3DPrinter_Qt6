@@ -1,6 +1,7 @@
 #include "RhiViewportRenderer.h"
 #include "RhiViewport.h"
 
+#include <QDebug>
 #include <QFile>
 
 #include <algorithm>
@@ -77,6 +78,10 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
     m_previewData = viewport->m_previewData;
     resetPreviewGpuState(false);
     parsePreviewSegments();
+    qInfo("[RHI] preview payload bytes=%d vertices=%u spans=%d",
+          int(m_previewData.size()),
+          m_previewSegmentVertexCount,
+          int(m_previewDrawSpans.size()));
   }
   m_layerMin = viewport->m_layerMin;
   m_layerMax = viewport->m_layerMax;
@@ -645,10 +650,34 @@ void RhiViewportRenderer::computePreviewDrawRange(quint32 &firstVertex, quint32 
   firstVertex = 0;
   vertexCount = 0;
 
-  if (m_previewDrawSpans.isEmpty())
+  const auto logRangeIfChanged = [this](quint32 first, quint32 count, int layerLow, int layerHigh) {
+    if (m_lastLoggedPreviewFirstVertex == first
+        && m_lastLoggedPreviewVertexCount == count
+        && m_lastLoggedPreviewLayerLow == layerLow
+        && m_lastLoggedPreviewLayerHigh == layerHigh
+        && m_lastLoggedPreviewMoveEnd == m_moveEnd)
+      return;
+    m_lastLoggedPreviewFirstVertex = first;
+    m_lastLoggedPreviewVertexCount = count;
+    m_lastLoggedPreviewLayerLow = layerLow;
+    m_lastLoggedPreviewLayerHigh = layerHigh;
+    m_lastLoggedPreviewMoveEnd = m_moveEnd;
+    qInfo("[RHI] preview range first=%u count=%u layers=%d..%d moveEnd=%d",
+          first,
+          count,
+          layerLow,
+          layerHigh,
+          m_moveEnd);
+  };
+
+  if (m_previewDrawSpans.isEmpty()) {
+    logRangeIfChanged(0, 0, m_layerMin, m_layerMax);
     return;
-  if (m_moveEnd <= 0)
+  }
+  if (m_moveEnd <= 0) {
+    logRangeIfChanged(0, 0, m_layerMin, m_layerMax);
     return;
+  }
 
   const int layerLow = std::min(m_layerMin, m_layerMax);
   const int layerHigh = std::max(m_layerMin, m_layerMax);
@@ -673,10 +702,13 @@ void RhiViewportRenderer::computePreviewDrawRange(quint32 &firstVertex, quint32 
     endOffset = span.vertexOffset + span.vertexCount;
   }
 
-  if (!foundStart)
+  if (!foundStart) {
+    logRangeIfChanged(0, 0, layerLow, layerHigh);
     return;
+  }
 
   firstVertex = startOffset;
   vertexCount = endOffset - startOffset;
+  logRangeIfChanged(firstVertex, vertexCount, layerLow, layerHigh);
 }
 

@@ -1,6 +1,7 @@
 #include "PreviewViewModel.h"
 
 #include "core/services/SliceService.h"
+#include <QDebug>
 #include <QFile>
 #include <QRegularExpression>
 #include <QTimer>
@@ -1011,6 +1012,13 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
 
   updateToolPositionData();
   recolorAndPackSegments();
+  qInfo("[PreviewViewModel] payload file=%s bytes=%lld layers=%d moves=%d segments=%d travelVisible=%d",
+        filePath.toUtf8().constData(),
+        static_cast<long long>(QFileInfo(filePath).size()),
+        layerCount_,
+        moveCount_,
+        int(segments_.size()),
+        showTravelMoves_ ? 1 : 0);
   if (!tickMarks_.isEmpty())
   {
     std::stable_sort(tickMarks_.begin(), tickMarks_.end());

@@ -7,6 +7,7 @@
 #include <QPointer>
 #include <QtConcurrent/QtConcurrentRun>
 #include <QCoreApplication>
+#include <QDebug>
 #include <QDir>
 #include <QStringList>
 #include <QFileInfo>
@@ -370,6 +371,10 @@ void SliceService::startSlice(const QString &projectName)
   statusLabel_ = QStringLiteral("Preparing slice");
   outputPath_.clear();
   activeCancelFlag_ = std::make_shared<std::atomic_bool>(false);
+  qInfo("[SliceService] slice start source=%s plate=%d label=%s",
+        sourcePath.toUtf8().constData(),
+        targetPlateIndex,
+        targetPlateLabel.toUtf8().constData());
   emit slicingChanged();
   emit progressChanged();
   emit progressUpdated(progress_, statusLabel_);
@@ -722,6 +727,10 @@ void SliceService::startSlice(const QString &projectName)
         receiver->storePlateResult(resultPlateIndex, pr);
       }
       receiver->activeTargetPlateIndex_ = -1;
+      qInfo("[SliceService] slice finished plate=%d output=%s layers=%d",
+            resultPlateIndex,
+            outputPath.toUtf8().constData(),
+            layerCount);
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
       emit receiver->resultChanged();
@@ -973,6 +982,10 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
   }
 
   bool exportedAny = false;
+  qInfo("[SliceService] export all start dir=%s base=%s storedPlates=%d",
+        dir.absolutePath().toUtf8().constData(),
+        stem.toUtf8().constData(),
+        int(plateResults_.size()));
   for (auto it = plateResults_.constBegin(); it != plateResults_.constEnd(); ++it)
   {
     const int plateIndex = it.key();
@@ -1130,6 +1143,10 @@ bool SliceService::exportSourceToPath(const QString &sourcePath, const QString &
 
   const QString exportedName = finalInfo.fileName().isEmpty() ? displayName : finalInfo.fileName();
   setExportStatus(State::Completed, 100, QObject::tr("Exported: %1").arg(exportedName));
+  qInfo("[SliceService] export finished source=%s target=%s bytes=%lld",
+        srcInfo.absoluteFilePath().toUtf8().constData(),
+        finalInfo.absoluteFilePath().toUtf8().constData(),
+        static_cast<long long>(finalInfo.size()));
   emit exportFinished(finalInfo.absoluteFilePath());
   return true;
 }

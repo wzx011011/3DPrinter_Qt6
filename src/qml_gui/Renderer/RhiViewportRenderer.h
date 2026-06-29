@@ -6,6 +6,7 @@
 #include <QQuickRhiItem>
 #include <QVector>
 
+#include <limits>
 #include <memory>
 
 #include "PrepareSceneData.h"
@@ -112,6 +113,11 @@ private:
   quint32 m_previewSegmentBufferBytes = 0;
   quint32 m_previewSegmentVertexCount = 0;
   bool m_previewSegmentBufferUploaded = false;
+  mutable quint32 m_lastLoggedPreviewFirstVertex = std::numeric_limits<quint32>::max();
+  mutable quint32 m_lastLoggedPreviewVertexCount = std::numeric_limits<quint32>::max();
+  mutable int m_lastLoggedPreviewLayerLow = std::numeric_limits<int>::min();
+  mutable int m_lastLoggedPreviewLayerHigh = std::numeric_limits<int>::min();
+  mutable int m_lastLoggedPreviewMoveEnd = std::numeric_limits<int>::min();
 
   // ── Phase 27: Preview performance instrumentation (PERF-01) ──
   QElapsedTimer m_previewFrameTimer;
