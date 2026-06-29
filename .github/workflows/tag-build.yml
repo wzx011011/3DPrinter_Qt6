@@ -47,12 +47,18 @@ jobs:
           target: "desktop"
           arch: "win64_msvc2022_64"
 
+      - name: Compute OrcaSlicer deps cache key
+        shell: pwsh
+        run: |
+          $hash = git -C third_party/OrcaSlicer ls-files deps | git -C third_party/OrcaSlicer hash-object --stdin
+          "ORCA_DEPS_CACHE_KEY=windows-orcaslicer-deps-$hash" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Restore OrcaSlicer deps cache
         id: restore-orca-deps
         uses: actions/cache/restore@v4
         with:
           path: third_party/OrcaSlicer/deps/build/OrcaSlicer_dep
-          key: windows-orcaslicer-deps-${{ hashFiles('third_party/OrcaSlicer/deps/**') }}
+          key: ${{ env.ORCA_DEPS_CACHE_KEY }}
 
       - name: Build OrcaSlicer deps
         if: steps.restore-orca-deps.outputs.cache-hit != 'true'
@@ -64,10 +70,11 @@ jobs:
 
       - name: Save OrcaSlicer deps cache
         if: steps.restore-orca-deps.outputs.cache-hit != 'true'
+        continue-on-error: true
         uses: actions/cache/save@v4
         with:
           path: third_party/OrcaSlicer/deps/build/OrcaSlicer_dep
-          key: windows-orcaslicer-deps-${{ hashFiles('third_party/OrcaSlicer/deps/**') }}
+          key: ${{ env.ORCA_DEPS_CACHE_KEY }}
 
       - name: Verify dependency prefix
         shell: pwsh
