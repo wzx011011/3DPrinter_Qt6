@@ -74,10 +74,10 @@ Every user-visible behavior in this path must either be implemented, verified, o
 
 ### End-to-End Verification
 
-- [ ] **VERIFY-01:** Automated tests cover the full local path: import fixture, verify Prepare readiness, slice, enter Preview, interact with layer/move/camera controls, export G-code, and validate output.
-- [ ] **VERIFY-02:** Format coverage tests exercise at least real STL and real 3MF fixtures; OBJ/AMF/STEP support is tested or explicitly classified based on available dependencies.
-- [ ] **VERIFY-03:** QML/UI audits prevent normal-path Preview fallback to `SoftwareViewport` and catch Preview binding regressions for controls used in the main workflow.
-- [ ] **VERIFY-04:** Runtime diagnostics record selected renderer backend, import/slice/export state transitions, and Preview payload/render range enough to debug blank-preview regressions.
+- [x] **VERIFY-01:** Automated tests cover the full local path: import fixture, verify Prepare readiness, slice, enter Preview, interact with layer/move/camera controls, export G-code, and validate output.
+- [x] **VERIFY-02:** Format coverage tests exercise at least real STL and real 3MF fixtures; OBJ/AMF/STEP support is tested or explicitly classified based on available dependencies.
+- [x] **VERIFY-03:** QML/UI audits prevent normal-path Preview fallback to `SoftwareViewport` and catch Preview binding regressions for controls used in the main workflow.
+- [x] **VERIFY-04:** Runtime diagnostics record selected renderer backend, import/slice/export state transitions, and Preview payload/render range enough to debug blank-preview regressions.
 - [ ] **VERIFY-05:** Manual UAT checklist matches the complete local workflow and must pass before v3.4 is marked complete.
 
 ## Future Requirements
@@ -135,15 +135,15 @@ Every user-visible behavior in this path must either be implemented, verified, o
 | EXPORT-04 | Phase 42 | Satisfied |
 | EXPORT-05 | Phase 42 | Satisfied |
 | EXPORT-06 | Phase 42 | Satisfied |
-| VERIFY-01 | Phase 43 | Pending |
-| VERIFY-02 | Phase 43 | Pending |
-| VERIFY-03 | Phase 43 | Pending |
-| VERIFY-04 | Phase 43 | Pending |
+| VERIFY-01 | Phase 43 | Satisfied |
+| VERIFY-02 | Phase 43 | Satisfied |
+| VERIFY-03 | Phase 43 | Satisfied |
+| VERIFY-04 | Phase 43 | Satisfied |
 | VERIFY-05 | Phase 43 | Pending |
 
-**Coverage:** 35 total; 35 mapped; 0 unmapped; 30 satisfied.
+**Coverage:** 35 total; 35 mapped; 0 unmapped; 34 satisfied.
 
 ---
 
 *Requirements defined: 2026-06-28*
-*Last updated: 2026-06-29 after Phase 42 execution.*
+*Last updated: 2026-06-29 after Phase 43 automated verification; VERIFY-05 awaits manual UAT.*

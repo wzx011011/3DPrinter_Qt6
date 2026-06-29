@@ -1,10 +1,10 @@
----
+﻿---
 gsd_state_version: 1.0
 milestone: v3.4
 milestone_name: Import to G-code Complete Workflow
-status: executing
-last_updated: "2026-06-29T01:11:08.620Z"
-last_activity: 2026-06-29 -- Phase 43 execution started
+status: Awaiting Phase 43 manual UAT
+last_updated: "2026-06-29T02:40:56.438Z"
+last_activity: 2026-06-29 -- Phase 43 automated verification passed; manual UAT pending
 progress:
   total_phases: 7
   completed_phases: 6
@@ -16,22 +16,22 @@ progress:
 # Project State
 
 **Milestone:** v3.4 - Import to G-code Complete Workflow
-**Status:** Executing Phase 43
-**Next step:** execute Phase 43 end-to-end verification and handoff.
+**Status:** Awaiting Phase 43 manual UAT
+**Next step:** Run build/OWzxSlicer.exe and complete Phase 43 manual UAT checklist.
 
 ## Current Position
 
-Phase: 43 (End-to-End Verification and Handoff) — EXECUTING
+Phase: 43 (End-to-End Verification and Handoff) - AWAITING MANUAL UAT
 Plan: 1 of 1
-Status: Executing Phase 43
-Last activity: 2026-06-29 -- Phase 43 execution started
+Status: Awaiting Phase 43 manual UAT
+Last activity: 2026-06-29 -- Phase 43 automated verification passed; manual UAT pending
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
-**Current focus:** Phase 43 — End-to-End Verification and Handoff
+**Current focus:** Phase 43 鈥?End-to-End Verification and Handoff
 
 ## Latest Shipped Milestone
 
@@ -51,7 +51,7 @@ See: `.planning/PROJECT.md`
 | 40 | Complete Preview Data and Upstream View Semantics | Complete |
 | 41 | D3D11 Preview Rendering and Interaction Stability | Complete |
 | 42 | Local G-code Export and Finalization | Complete |
-| 43 | End-to-End Verification and Handoff | Pending |
+| 43 | End-to-End Verification and Handoff | Awaiting manual UAT |
 
 ## v3.4 Scope
 
@@ -79,8 +79,8 @@ It intentionally does not include device send/upload/cloud printing or Monitor p
 
 ## Handoff
 
-Phase 43 is planned. Execute Phase 43:
+Phase 43 automated verification passed. Complete manual UAT:
 
 ```text
-$gsd-execute-phase 43
+Run build/OWzxSlicer.exe and complete .planning/phases/43-end-to-end-verification-and-handoff/43-UAT.md
 ```

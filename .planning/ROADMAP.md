@@ -29,7 +29,7 @@
 - [x] **Phase 40:** Complete Preview Data and Upstream View Semantics (completed 2026-06-29)
 - [x] **Phase 41:** D3D11 Preview Rendering and Interaction Stability (completed 2026-06-29)
 - [x] **Phase 42:** Local G-code Export and Finalization (completed 2026-06-29)
-- [ ] **Phase 43:** End-to-End Verification and Handoff
+- [ ] **Phase 43:** End-to-End Verification and Handoff (automated verification passed; manual UAT pending)
 
 ### Phase 37: Complete Import and Project Restore
 
@@ -155,7 +155,7 @@
 - Manual UAT checklist and code review.
 
 **Plans:**
-- [ ] `43-PLAN.md` - End-to-end verification, diagnostics, review, manual UAT, and handoff.
+- [ ] `43-PLAN.md` - End-to-end verification, diagnostics, review, manual UAT, and handoff. Automated verification, diagnostics, and review are complete; manual UAT remains pending.
 
 **Success criteria:**
 1. Canonical verification passes with the required E2E coverage.
@@ -175,12 +175,12 @@
 
 ## Next Step
 
-Execute Phase 43:
+Complete Phase 43 manual UAT:
 
 ```text
-$gsd-execute-phase 43
+Run build/OWzxSlicer.exe and complete .planning/phases/43-end-to-end-verification-and-handoff/43-UAT.md
 ```
 
 ---
 
-*Last updated: 2026-06-29 after Phase 43 planning.*
+*Last updated: 2026-06-29 after Phase 43 automated verification; manual UAT pending.*
