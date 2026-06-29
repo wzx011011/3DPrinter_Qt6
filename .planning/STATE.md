@@ -2,30 +2,30 @@
 gsd_state_version: 1.0
 milestone: v3.4
 milestone_name: Import to G-code Complete Workflow
-status: ready_to_plan
-last_updated: 2026-06-29T07:52:58+08:00
-last_activity: 2026-06-29 -- Phase 42 completed
+status: ready_to_execute
+last_updated: 2026-06-29T09:04:04+08:00
+last_activity: 2026-06-29 -- Phase 43 planned
 progress:
   total_phases: 7
   completed_phases: 6
-  total_plans: 6
+  total_plans: 7
   completed_plans: 6
   percent: 86
-stopped_at: Phase 42 completed -- ready to plan Phase 43
+stopped_at: Phase 43 planned -- ready to execute
 ---
 
 # Project State
 
 **Milestone:** v3.4 - Import to G-code Complete Workflow
-**Status:** Ready to plan
-**Next step:** plan Phase 43 end-to-end verification and handoff.
+**Status:** Ready to execute
+**Next step:** execute Phase 43 end-to-end verification and handoff.
 
 ## Current Position
 
 Phase: 43
-Plan: pending
-Status: Ready to plan
-Last activity: 2026-06-29 -- Phase 42 completed
+Plan: 1 of 1 pending
+Status: Ready to execute
+Last activity: 2026-06-29 -- Phase 43 planned
 
 ## Project Reference
 
@@ -80,8 +80,8 @@ It intentionally does not include device send/upload/cloud printing or Monitor p
 
 ## Handoff
 
-Phase 42 is complete. Plan Phase 43:
+Phase 43 is planned. Execute Phase 43:
 
 ```text
-$gsd-autonomous --from 43
+$gsd-execute-phase 43
 ```

@@ -154,6 +154,9 @@
 - Runtime diagnostics for backend, state transitions, and Preview payload/range.
 - Manual UAT checklist and code review.
 
+**Plans:**
+- [ ] `43-PLAN.md` - End-to-end verification, diagnostics, review, manual UAT, and handoff.
+
 **Success criteria:**
 1. Canonical verification passes with the required E2E coverage.
 2. Manual UAT passes for the full local workflow on a running app.
@@ -172,12 +175,12 @@
 
 ## Next Step
 
-Plan and execute Phase 43:
+Execute Phase 43:
 
 ```text
-$gsd-autonomous --from 43
+$gsd-execute-phase 43
 ```
 
 ---
 
-*Last updated: 2026-06-29 after Phase 42 execution.*
+*Last updated: 2026-06-29 after Phase 43 planning.*
