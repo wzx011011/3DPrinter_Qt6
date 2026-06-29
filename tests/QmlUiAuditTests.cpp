@@ -794,8 +794,12 @@ void QmlUiAuditTests::previewNormalPathCoversFullWorkflowBindingsAndDiagnostics(
                && projectSource.contains(QStringLiteral("sourceFilePath_ = localPath")),
            "ProjectServiceMock must log import path/status and preserve source path diagnostics");
   QVERIFY2(sliceSource.contains(QStringLiteral("[SliceService] slice"))
+               && sliceSource.contains(QStringLiteral("[SliceService] slice failed"))
+               && sliceSource.contains(QStringLiteral("[SliceService] slice cancelled"))
                && sliceSource.contains(QStringLiteral("[SliceService] export")),
-           "SliceService must log slice and export state diagnostics");
+           "SliceService must log slice/export success, failure, and cancellation diagnostics");
+  QVERIFY2(sliceSource.contains(QStringLiteral("logExportFailure")),
+           "SliceService export failures must pass through a deterministic diagnostic helper");
   QVERIFY2(previewVmSource.contains(QStringLiteral("[PreviewViewModel] payload")),
            "PreviewViewModel must log payload size/range diagnostics after parsing");
 }

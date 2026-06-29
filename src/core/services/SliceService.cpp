@@ -83,6 +83,18 @@ namespace
       fileName += QStringLiteral(".gcode");
     return fileName;
   }
+
+  void logExportFailure(const QString &operation,
+                        const QString &sourcePath,
+                        const QString &targetPath,
+                        const QString &reason)
+  {
+    qWarning("[SliceService] export failed op=%s source=%s target=%s reason=%s",
+             operation.toUtf8().constData(),
+             sourcePath.toUtf8().constData(),
+             targetPath.toUtf8().constData(),
+             reason.toUtf8().constData());
+  }
 }
 
 SliceService::SliceService(ProjectServiceMock *projectService, QObject *parent)
@@ -345,6 +357,10 @@ void SliceService::startSlice(const QString &projectName)
   {
     sliceState_ = State::Error;
     statusLabel_ = QStringLiteral("No sliceable model found");
+    qWarning("[SliceService] slice failed source=%s plate=%d reason=%s",
+             sourcePath.toUtf8().constData(),
+             targetPlateIndex,
+             statusLabel_.toUtf8().constData());
     emit progressChanged();
     emit stateChanged();
     emit sliceFailed(statusLabel_);
@@ -357,6 +373,10 @@ void SliceService::startSlice(const QString &projectName)
   {
     sliceState_ = State::Error;
     statusLabel_ = QStringLiteral("Current plate has no sliceable objects");
+    qWarning("[SliceService] slice failed source=%s plate=%d reason=%s",
+             sourcePath.toUtf8().constData(),
+             targetPlateIndex,
+             statusLabel_.toUtf8().constData());
     emit progressChanged();
     emit stateChanged();
     emit sliceFailed(statusLabel_);
@@ -678,6 +698,9 @@ void SliceService::startSlice(const QString &projectName)
         receiver->sliceState_ = State::Cancelled;
         receiver->statusLabel_ = QObject::tr("Slicing cancelled");
         receiver->clearActiveTargetResult();
+        qInfo("[SliceService] slice cancelled plate=%d reason=%s",
+              resultPlateIndex,
+              receiver->statusLabel_.toUtf8().constData());
         emit receiver->progressChanged();
         emit receiver->resultChanged();
         emit receiver->sliceResultCleared();
@@ -692,6 +715,9 @@ void SliceService::startSlice(const QString &projectName)
         receiver->sliceState_ = State::Error;
         receiver->statusLabel_ = errorText;
         receiver->clearActiveTargetResult();
+        qWarning("[SliceService] slice failed plate=%d reason=%s",
+                 resultPlateIndex,
+                 errorText.toUtf8().constData());
         emit receiver->progressChanged();
         emit receiver->resultChanged();
         emit receiver->sliceResultCleared();
@@ -771,6 +797,10 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
   {
     sliceState_ = State::Error;
     statusLabel_ = QObject::tr("G-code file does not exist");
+    qWarning("[SliceService] slice failed source=%s plate=%d reason=%s",
+             localPath.toUtf8().constData(),
+             targetPlateIndex,
+             statusLabel_.toUtf8().constData());
     emit progressChanged();
     emit stateChanged();
     emit sliceFailed(statusLabel_);
@@ -839,6 +869,9 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
         receiver->sliceState_ = State::Cancelled;
         receiver->statusLabel_ = QObject::tr("Slicing cancelled");
         receiver->clearActiveTargetResult();
+        qInfo("[SliceService] slice cancelled plate=%d reason=%s",
+              targetPlateIndex,
+              receiver->statusLabel_.toUtf8().constData());
         emit receiver->progressChanged();
         emit receiver->resultChanged();
         emit receiver->sliceResultCleared();
@@ -853,6 +886,10 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
         receiver->sliceState_ = State::Error;
         receiver->statusLabel_ = errorText;
         receiver->clearActiveTargetResult();
+        qWarning("[SliceService] slice failed source=%s plate=%d reason=%s",
+                 localPath.toUtf8().constData(),
+                 targetPlateIndex,
+                 errorText.toUtf8().constData());
         emit receiver->progressChanged();
         emit receiver->resultChanged();
         emit receiver->sliceResultCleared();
@@ -943,6 +980,10 @@ bool SliceService::exportPlateGCodeToPath(int plateIndex, const QString &targetP
   if (it == plateResults_.constEnd())
   {
     setExportStatus(State::Completed, progress_, QObject::tr("No G-code result for plate %1").arg(plateIndex + 1));
+    logExportFailure(QStringLiteral("plate"),
+                     QString{},
+                     targetPath,
+                     statusLabel_);
     emit exportFailed(statusLabel_);
     return false;
   }
@@ -955,6 +996,10 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
   if (cleanDirectory.isEmpty())
   {
     setExportStatus(State::Completed, progress_, QObject::tr("Choose a G-code export directory"));
+    logExportFailure(QStringLiteral("all"),
+                     QString{},
+                     directoryPath,
+                     statusLabel_);
     emit exportFailed(statusLabel_);
     return false;
   }
@@ -963,12 +1008,20 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
   if (!dir.exists() && !dir.mkpath(QStringLiteral(".")))
   {
     setExportStatus(State::Completed, progress_, QObject::tr("Failed to create export directory"));
+    logExportFailure(QStringLiteral("all"),
+                     QString{},
+                     cleanDirectory,
+                     statusLabel_);
     emit exportFailed(statusLabel_);
     return false;
   }
   if (!QFileInfo(cleanDirectory).isDir())
   {
     setExportStatus(State::Completed, progress_, QObject::tr("G-code export target is not a directory"));
+    logExportFailure(QStringLiteral("all"),
+                     QString{},
+                     cleanDirectory,
+                     statusLabel_);
     emit exportFailed(statusLabel_);
     return false;
   }
@@ -1003,6 +1056,10 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
   if (!exportedAny)
   {
     setExportStatus(State::Completed, progress_, QObject::tr("No sliced plates to export"));
+    logExportFailure(QStringLiteral("all"),
+                     QString{},
+                     cleanDirectory,
+                     statusLabel_);
     emit exportFailed(statusLabel_);
     return false;
   }
@@ -1022,65 +1079,56 @@ void SliceService::setExportStatus(State state, int progress, const QString &lab
 
 bool SliceService::exportSourceToPath(const QString &sourcePath, const QString &targetPath, const QString &displayName)
 {
-  if (sourcePath.isEmpty())
-  {
-    setExportStatus(State::Completed, progress_, QObject::tr("No G-code to export; slice first"));
+  const auto failExport = [this, &sourcePath, &targetPath](const QString &reason) {
+    setExportStatus(State::Completed, progress_, reason);
+    logExportFailure(QStringLiteral("single"), sourcePath, targetPath, statusLabel_);
     emit exportFailed(statusLabel_);
     return false;
+  };
+
+  if (sourcePath.isEmpty())
+  {
+    return failExport(QObject::tr("No G-code to export; slice first"));
   }
 
   const QFileInfo srcInfo(localPathFromDialogValue(sourcePath));
   if (!srcInfo.exists() || !srcInfo.isFile())
   {
-    setExportStatus(State::Completed, progress_, QObject::tr("G-code source file does not exist"));
-    emit exportFailed(statusLabel_);
-    return false;
+    return failExport(QObject::tr("G-code source file does not exist"));
   }
   if (srcInfo.size() <= 0)
   {
-    setExportStatus(State::Completed, progress_, QObject::tr("G-code source file is empty"));
-    emit exportFailed(statusLabel_);
-    return false;
+    return failExport(QObject::tr("G-code source file is empty"));
   }
 
   const QString cleanTarget = QDir::cleanPath(localPathFromDialogValue(targetPath).trimmed());
   if (cleanTarget.isEmpty())
   {
-    setExportStatus(State::Completed, progress_, QObject::tr("Choose a G-code export path"));
-    emit exportFailed(statusLabel_);
-    return false;
+    return failExport(QObject::tr("Choose a G-code export path"));
   }
 
   QFileInfo targetInfo(cleanTarget);
   if (targetInfo.exists() && targetInfo.isDir())
   {
-    setExportStatus(State::Completed, progress_, QObject::tr("G-code export target is a directory"));
-    emit exportFailed(statusLabel_);
-    return false;
+    return failExport(QObject::tr("G-code export target is a directory"));
   }
 
   QDir targetDir = targetInfo.absoluteDir();
   if (!targetDir.exists() && !targetDir.mkpath(QStringLiteral(".")))
   {
-    setExportStatus(State::Completed, progress_, QObject::tr("Failed to create G-code export directory"));
-    emit exportFailed(statusLabel_);
-    return false;
+    return failExport(QObject::tr("Failed to create G-code export directory"));
   }
 
   targetInfo = QFileInfo(cleanTarget);
   if (comparablePath(srcInfo) == comparablePath(targetInfo))
   {
-    setExportStatus(State::Completed, progress_, QObject::tr("Choose a different G-code export path"));
-    emit exportFailed(statusLabel_);
-    return false;
+    return failExport(QObject::tr("Choose a different G-code export path"));
   }
 
   QFile input(srcInfo.absoluteFilePath());
   if (!input.open(QIODevice::ReadOnly))
   {
-    setExportStatus(State::Completed, progress_, QObject::tr("Failed to read G-code source file"));
-    emit exportFailed(statusLabel_);
-    return false;
+    return failExport(QObject::tr("Failed to read G-code source file"));
   }
 
   setExportStatus(State::Exporting, 95, QObject::tr("Exporting G-code"));
@@ -1089,9 +1137,7 @@ bool SliceService::exportSourceToPath(const QString &sourcePath, const QString &
   QSaveFile output(targetInfo.absoluteFilePath());
   if (!output.open(QIODevice::WriteOnly))
   {
-    setExportStatus(State::Completed, progress_, QObject::tr("Failed to open G-code export target"));
-    emit exportFailed(statusLabel_);
-    return false;
+    return failExport(QObject::tr("Failed to open G-code export target"));
   }
 
   constexpr qint64 kChunkSize = 1024 * 1024;
@@ -1104,16 +1150,12 @@ bool SliceService::exportSourceToPath(const QString &sourcePath, const QString &
     if (readBytes < 0)
     {
       output.cancelWriting();
-      setExportStatus(State::Completed, progress_, QObject::tr("Failed to read G-code source file"));
-      emit exportFailed(statusLabel_);
-      return false;
+      return failExport(QObject::tr("Failed to read G-code source file"));
     }
     if (output.write(buffer.constData(), readBytes) != readBytes)
     {
       output.cancelWriting();
-      setExportStatus(State::Completed, progress_, QObject::tr("Failed to write G-code export target"));
-      emit exportFailed(statusLabel_);
-      return false;
+      return failExport(QObject::tr("Failed to write G-code export target"));
     }
     copiedBytes += readBytes;
   }
@@ -1121,24 +1163,18 @@ bool SliceService::exportSourceToPath(const QString &sourcePath, const QString &
   if (copiedBytes != srcInfo.size())
   {
     output.cancelWriting();
-    setExportStatus(State::Completed, progress_, QObject::tr("G-code export byte count mismatch"));
-    emit exportFailed(statusLabel_);
-    return false;
+    return failExport(QObject::tr("G-code export byte count mismatch"));
   }
 
   if (!output.commit())
   {
-    setExportStatus(State::Completed, progress_, QObject::tr("Failed to finalize G-code export"));
-    emit exportFailed(statusLabel_);
-    return false;
+    return failExport(QObject::tr("Failed to finalize G-code export"));
   }
 
   const QFileInfo finalInfo(targetInfo.absoluteFilePath());
   if (!finalInfo.exists() || !finalInfo.isFile() || finalInfo.size() != srcInfo.size())
   {
-    setExportStatus(State::Completed, progress_, QObject::tr("G-code export verification failed"));
-    emit exportFailed(statusLabel_);
-    return false;
+    return failExport(QObject::tr("G-code export verification failed"));
   }
 
   const QString exportedName = finalInfo.fileName().isEmpty() ? displayName : finalInfo.fileName();
