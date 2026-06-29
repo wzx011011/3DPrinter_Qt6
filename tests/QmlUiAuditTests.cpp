@@ -26,6 +26,7 @@ private slots:
   void previewRhiViewportFitsCameraToPreviewDataBeforeOrbit();
   void previewRhiRendererResetsGpuStateAfterResourceRelease();
   void previewRhiInteractionSettersPreservePreviewPayload();
+  void previewNormalPathCoversFullWorkflowBindingsAndDiagnostics();
   void previewStatsPanelCallsOnlyQmlInvokableSetters();
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
   void visiblePlaceholderSurfacesAreHonest();
@@ -707,6 +708,96 @@ void QmlUiAuditTests::previewRhiInteractionSettersPreservePreviewPayload()
     QVERIFY2(!body.contains(QStringLiteral("fitPreviewCameraToData();")),
              qPrintable(QStringLiteral("%1 must not refit camera or rebuild payload on pure interaction").arg(setters.at(i))));
   }
+}
+
+void QmlUiAuditTests::previewNormalPathCoversFullWorkflowBindingsAndDiagnostics()
+{
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  const QString mainCpp = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
+  const QString selectorSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiBackendSelector.cpp"));
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString projectSource = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString sliceSource = readSource(QStringLiteral("src/core/services/SliceService.cpp"));
+  const QString previewVmSource = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.cpp"));
+  QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
+  QVERIFY2(!mainCpp.isEmpty(), "Unable to read main_qml.cpp");
+  QVERIFY2(!selectorSource.isEmpty(), "Unable to read RhiBackendSelector.cpp");
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!projectSource.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!sliceSource.isEmpty(), "Unable to read SliceService.cpp");
+  QVERIFY2(!previewVmSource.isEmpty(), "Unable to read PreviewViewModel.cpp");
+
+  QVERIFY2(previewPage.contains(QStringLiteral("GLViewport {")),
+           "PreviewPage must use the registered GLViewport type for the normal path");
+  QVERIFY2(!previewPage.contains(QStringLiteral("SoftwareViewport")),
+           "PreviewPage normal path must never instantiate SoftwareViewport directly");
+
+  const QStringList workflowBindings = {
+    QStringLiteral("canvasType: GLViewport.CanvasPreview"),
+    QStringLiteral("previewData: root.previewVm.gcodePreviewData"),
+    QStringLiteral("layerMin: root.previewVm.currentLayerMin"),
+    QStringLiteral("layerMax: root.previewVm.currentLayerMax"),
+    QStringLiteral("moveEnd: root.previewVm.currentMove"),
+    QStringLiteral("showTravelMoves: root.previewVm.showTravelMoves"),
+    QStringLiteral("showBed: root.previewVm.showBed"),
+    QStringLiteral("showMarker: root.previewVm.showMarker"),
+    QStringLiteral("gcodeViewMode: root.previewVm.viewModeIndex"),
+    QStringLiteral("markerX: root.previewVm.toolX"),
+    QStringLiteral("markerY: root.previewVm.toolY"),
+    QStringLiteral("markerZ: root.previewVm.toolZ")
+  };
+  for (const QString &binding : workflowBindings) {
+    QVERIFY2(previewPage.contains(binding),
+             qPrintable(QStringLiteral("Preview normal path must keep binding: %1").arg(binding)));
+  }
+
+  QVERIFY2(mainCpp.contains(QStringLiteral("qputenv(\"OWZX_RHI_RENDERER\", \"auto\")")),
+           "Default startup must select the QRhi auto policy");
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+           "QRhi startup path must register RhiViewport as the GLViewport QML type");
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+           "SoftwareViewport must stay fallback-only behind failed QRhi initialization");
+  const int defaultCandidatesStart = selectorSource.indexOf(QStringLiteral("QVector<RhiBackendCandidate> defaultWindowsCandidates()"));
+  const int candidatesForRequestStart = selectorSource.indexOf(QStringLiteral("QVector<RhiBackendCandidate> candidatesForRequest"));
+  QVERIFY2(defaultCandidatesStart >= 0 && candidatesForRequestStart > defaultCandidatesStart,
+           "RhiBackendSelector default candidate boundaries changed; update Phase 43 audit");
+  const QString defaultCandidates = selectorSource.mid(defaultCandidatesStart,
+                                                       candidatesForRequestStart - defaultCandidatesStart);
+  QVERIFY2(defaultCandidates.indexOf(QStringLiteral("Direct3D11"))
+               < defaultCandidates.indexOf(QStringLiteral("Direct3D12")),
+           "Normal Windows Preview path must keep D3D11 before D3D12");
+  QVERIFY2(!defaultCandidates.contains(QStringLiteral("Vulkan")),
+           "Vulkan must not become the normal Preview path during v3.4 closeout");
+
+  const QStringList interactionSetters = {
+    QStringLiteral("void RhiViewport::setLayerMin"),
+    QStringLiteral("void RhiViewport::setLayerMax"),
+    QStringLiteral("void RhiViewport::setMoveEnd")
+  };
+  for (const QString &setter : interactionSetters) {
+    const int start = viewportSource.indexOf(setter);
+    QVERIFY2(start >= 0, qPrintable(QStringLiteral("Missing interaction setter: %1").arg(setter)));
+    const int end = viewportSource.indexOf(QStringLiteral("\nvoid RhiViewport::"), start + 1);
+    const QString body = viewportSource.mid(start, end > start ? end - start : viewportSource.size() - start);
+    QVERIFY2(body.contains(QStringLiteral("update();")),
+             qPrintable(QStringLiteral("%1 must schedule a redraw").arg(setter)));
+    QVERIFY2(!body.contains(QStringLiteral("m_previewData =")),
+             qPrintable(QStringLiteral("%1 must not clear Preview payload").arg(setter)));
+  }
+
+  QVERIFY2(rendererSource.contains(QStringLiteral("qInfo(\"[RHI] preview payload"))
+               && rendererSource.contains(QStringLiteral("qInfo(\"[RHI] preview range")),
+           "RhiViewportRenderer must log Preview payload and draw-range diagnostics");
+  QVERIFY2(projectSource.contains(QStringLiteral("[ProjectService] import"))
+               && projectSource.contains(QStringLiteral("sourceFilePath_ = localPath")),
+           "ProjectServiceMock must log import path/status and preserve source path diagnostics");
+  QVERIFY2(sliceSource.contains(QStringLiteral("[SliceService] slice"))
+               && sliceSource.contains(QStringLiteral("[SliceService] export")),
+           "SliceService must log slice and export state diagnostics");
+  QVERIFY2(previewVmSource.contains(QStringLiteral("[PreviewViewModel] payload")),
+           "PreviewViewModel must log payload size/range diagnostics after parsing");
 }
 
 void QmlUiAuditTests::previewStatsPanelCallsOnlyQmlInvokableSetters()

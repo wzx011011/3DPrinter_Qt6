@@ -1,5 +1,6 @@
 ﻿#include <QSignalSpy>
 #include <QDir>
+#include <QDirIterator>
 #include <QFileInfo>
 #include <QTemporaryFile>
 #include <QTemporaryDir>
@@ -25,6 +26,12 @@ namespace
   static const QString kStlPath = QDir::cleanPath(
       QStringLiteral(QT_TESTCASE_SOURCEDIR) +
       QStringLiteral("/third_party/OrcaSlicer/tests/data/test_3mf/Prusa.stl"));
+  static const QString k3mfPath = QDir::cleanPath(
+      QStringLiteral(QT_TESTCASE_SOURCEDIR) +
+      QString::fromUtf8("/third_party/OrcaSlicer/tests/data/test_3mf/Ger\303\244te/B\303\274chse.3mf"));
+  static const QString kObjPath = QDir::cleanPath(
+      QStringLiteral(QT_TESTCASE_SOURCEDIR) +
+      QStringLiteral("/third_party/OrcaSlicer/tests/data/20mm_cube.obj"));
 
   int gcv1SegmentCount(const QByteArray &payload)
   {
@@ -33,6 +40,16 @@ namespace
     int count = 0;
     std::memcpy(&count, payload.constData() + 4, sizeof(count));
     return count;
+  }
+
+  QStringList recursiveFixtureMatches(const QString &root, const QStringList &patterns)
+  {
+    QStringList matches;
+    QDirIterator it(root, patterns, QDir::Files, QDirIterator::Subdirectories);
+    while (it.hasNext())
+      matches.append(QDir::toNativeSeparators(it.next()));
+    matches.sort(Qt::CaseInsensitive);
+    return matches;
   }
 }
 
@@ -43,10 +60,12 @@ class E2EWorkflowTests final : public QObject
 private slots:
   void initTestCase();
   void test_config_injection_applies_preset_values();
+  void test_import_format_coverage_matrix_real_fixtures();
   void test_slice_produces_gcode_file();
   void test_slice_results_propagate_to_editor_vm();
   void test_export_gcode_to_path();
   void test_export_gcode_rejects_unsafe_targets();
+  void test_local_import_slice_preview_export_workflow();
   void test_preview_receives_gcode_data();
   void test_backend_switches_to_preview_after_slice();
   void test_preview_parser_handles_extrusion_modes_and_travel_filter();
@@ -162,6 +181,68 @@ void E2EWorkflowTests::test_config_injection_applies_preset_values()
                "layer_height should reflect the selected preset, not factory default 0.2");
     }
   }
+}
+
+void E2EWorkflowTests::test_import_format_coverage_matrix_real_fixtures()
+{
+  struct FormatCase
+  {
+    const char *label;
+    QString path;
+    bool requiredRealFixture;
+  };
+
+  const QList<FormatCase> testedFormats = {
+    {"STL", kStlPath, true},
+    {"3MF", k3mfPath, true},
+    {"OBJ", kObjPath, false},
+  };
+
+  for (const FormatCase &format : testedFormats)
+  {
+    QVERIFY2(QFileInfo::exists(format.path),
+             qPrintable(QStringLiteral("%1 fixture must exist: %2")
+                            .arg(QString::fromLatin1(format.label), format.path)));
+
+    ProjectServiceMock project;
+    QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+    QVERIFY(loadSpy.isValid());
+    QVERIFY2(project.loadFile(format.path),
+             qPrintable(QStringLiteral("%1 import should start through ProjectServiceMock::loadFile")
+                            .arg(QString::fromLatin1(format.label))));
+    QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 20000);
+
+    const QList<QVariant> args = loadSpy.takeFirst();
+    const bool ok = args.at(0).toBool();
+    const QString message = args.at(1).toString();
+    QVERIFY2(ok,
+             qPrintable(QStringLiteral("%1 fixture should load successfully: %2")
+                            .arg(QString::fromLatin1(format.label), message)));
+    QVERIFY2(project.modelCount() >= 1,
+             qPrintable(QStringLiteral("%1 import should create at least one model")
+                            .arg(QString::fromLatin1(format.label))));
+    QVERIFY2(project.plateCount() >= 1,
+             qPrintable(QStringLiteral("%1 import should expose at least one plate")
+                            .arg(QString::fromLatin1(format.label))));
+    QVERIFY2(!project.sourceFilePath().isEmpty(),
+             qPrintable(QStringLiteral("%1 import should record the source path")
+                            .arg(QString::fromLatin1(format.label))));
+    if (format.requiredRealFixture)
+      QVERIFY2(project.lastError().isEmpty(),
+               qPrintable(QStringLiteral("%1 required fixture must not leave a warning/error: %2")
+                              .arg(QString::fromLatin1(format.label), project.lastError())));
+  }
+
+  const QString root = QStringLiteral(QT_TESTCASE_SOURCEDIR);
+  const QStringList amfFixtures = recursiveFixtureMatches(root, QStringList{QStringLiteral("*.amf")});
+  QVERIFY2(amfFixtures.isEmpty(),
+           "AMF is expected to be classified in Phase 43 verification because no committed AMF fixture is available");
+
+  const auto stepFiles = recursiveFixtureMatches(root,
+                                                 QStringList{QStringLiteral("*.step"),
+                                                             QStringLiteral("*.stp")});
+  QVERIFY2(stepFiles.isEmpty(),
+           "STEP/STP is expected to be classified in Phase 43 verification unless a committed fixture is added");
 }
 
 void E2EWorkflowTests::test_slice_produces_gcode_file()
@@ -384,6 +465,99 @@ void E2EWorkflowTests::test_export_gcode_rejects_unsafe_targets()
 
   if (QFileInfo::exists(srcPath))
     QFile::remove(srcPath);
+}
+
+void E2EWorkflowTests::test_local_import_slice_preview_export_workflow()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+  EditorViewModel editor(&project, &slice);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
+
+  QVERIFY2(editor.modelCount() >= 1, "imported workflow fixture should expose at least one model");
+  QVERIFY2(editor.canRequestSlice(),
+           qPrintable(QStringLiteral("Prepare should be slice-ready: %1").arg(editor.sliceActionHint())));
+  QVERIFY2(!editor.canPreview(), "Preview must stay disabled before the first valid slice");
+  QVERIFY2(!editor.canExportGCode(), "G-code export must stay disabled before the first valid slice");
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(finishedSpy.isValid());
+  QVERIFY(failedSpy.isValid());
+
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+  editor.requestSlice();
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+  {
+    const QString reason = failedSpy.first().at(0).toString();
+    QSKIP(QString("Slice failed in local workflow test: %1").arg(reason).toUtf8().constData());
+  }
+
+  QVERIFY2(editor.hasSliceResult(), "completed slice should create a valid Prepare result");
+  QVERIFY2(editor.canPreview(), "Preview should be available after a valid slice");
+  QVERIFY2(editor.canExportGCode(), "current-plate G-code export should be available after a valid slice");
+  const QString generatedOutput = editor.sliceOutputPath();
+  QVERIFY2(!generatedOutput.isEmpty(), "slice should expose the generated G-code output path");
+  QVERIFY2(QFileInfo::exists(generatedOutput),
+           qPrintable(QStringLiteral("generated G-code should exist: %1").arg(generatedOutput)));
+  QVERIFY2(QFileInfo(generatedOutput).size() > 0, "generated G-code should be non-empty");
+
+  QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
+  QVERIFY2(preview.layerCount() > 0,
+           qPrintable(QStringLiteral("Preview should expose layers, got %1").arg(preview.layerCount())));
+  QVERIFY2(preview.moveCount() > 0,
+           qPrintable(QStringLiteral("Preview should expose moves, got %1").arg(preview.moveCount())));
+  QVERIFY2(gcv1SegmentCount(preview.gcodePreviewData()) > 0,
+           "Preview renderer payload should contain packed segments");
+
+  const QByteArray payloadBeforeInteraction = preview.gcodePreviewData();
+  const int maxLayer = qMax(0, preview.layerCount() - 1);
+  preview.setLayerRange(0, qMin(1, maxLayer));
+  preview.moveLayerRange(1);
+  preview.setCurrentMove(qMin(2, preview.moveCount()));
+  preview.setViewModeIndex(3);
+  preview.setShowTravelMoves(false);
+  QVERIFY2(preview.gcodePreviewData().startsWith("GCV1"),
+           "Preview payload must survive layer/move/view interactions");
+  QVERIFY2(gcv1SegmentCount(preview.gcodePreviewData()) > 0,
+           "Preview segment payload must remain non-empty after travel filtering");
+  preview.setShowTravelMoves(true);
+  QVERIFY2(preview.gcodePreviewData().startsWith("GCV1"),
+           "Preview payload must survive restoring travel moves");
+  QVERIFY2(gcv1SegmentCount(preview.gcodePreviewData()) >= gcv1SegmentCount(payloadBeforeInteraction),
+           "restoring travel moves should not lose the original Preview segment payload");
+
+  QTemporaryDir exportDir(QDir::tempPath() + QStringLiteral("/owzx_workflow_export_XXXXXX"));
+  QVERIFY2(exportDir.isValid(), "temporary workflow export directory should be available");
+
+  const QString currentExportPath = exportDir.filePath(QStringLiteral("workflow_current.gcode"));
+  QVERIFY2(editor.requestExportGCode(currentExportPath),
+           "current-plate export should succeed after the workflow slice");
+  QVERIFY2(QFileInfo::exists(currentExportPath),
+           qPrintable(QStringLiteral("current export should exist: %1").arg(currentExportPath)));
+  QVERIFY2(QFileInfo(currentExportPath).size() == QFileInfo(generatedOutput).size(),
+           "current export should match the generated G-code byte size");
+  QVERIFY2(QFileInfo::exists(generatedOutput),
+           "current export must preserve the generated source G-code");
+
+  QVERIFY2(editor.requestExportAllGCode(exportDir.path(), QStringLiteral("workflow_all")),
+           "all-valid-plate export should succeed for the sliced workflow result");
+  const QString allExportPath = exportDir.filePath(QStringLiteral("workflow_all_plate1.gcode"));
+  QVERIFY2(QFileInfo::exists(allExportPath),
+           qPrintable(QStringLiteral("all-plate export should include plate 1: %1").arg(allExportPath)));
+  QVERIFY2(QFileInfo(allExportPath).size() == QFileInfo(generatedOutput).size(),
+           "all-plate export should match the generated G-code byte size");
+
+  if (QFileInfo::exists(generatedOutput))
+    QFile::remove(generatedOutput);
 }
 
 void E2EWorkflowTests::test_preview_receives_gcode_data()
