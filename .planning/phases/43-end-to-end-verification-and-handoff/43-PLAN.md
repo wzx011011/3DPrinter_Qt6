@@ -3,7 +3,7 @@ phase: 43
 plan: 01
 type: verification
 wave: 1
-depends_on: [37, 38, 39, 40, 41, 42]
+depends_on: []
 files_modified:
   - tests/E2EWorkflowTests.cpp
   - tests/QmlUiAuditTests.cpp
