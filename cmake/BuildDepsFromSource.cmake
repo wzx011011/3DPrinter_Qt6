@@ -200,26 +200,42 @@ else()
 endif()
 
 # qhull
-add_library(qhull_from_source STATIC IMPORTED GLOBAL)
-set_target_properties(qhull_from_source PROPERTIES
-    IMPORTED_LOCATION "${DEPS_PREFIX}/lib/qhullstatic_r.lib"
-)
-add_library(qhullcpp_from_source STATIC IMPORTED GLOBAL)
-set_target_properties(qhullcpp_from_source PROPERTIES
-    IMPORTED_LOCATION "${DEPS_PREFIX}/lib/qhullcpp.lib"
-)
+if(EXISTS "${DEPS_PREFIX}/lib/qhullstatic_r.lib")
+    add_library(qhull_from_source STATIC IMPORTED GLOBAL)
+    set_target_properties(qhull_from_source PROPERTIES
+        IMPORTED_LOCATION "${DEPS_PREFIX}/lib/qhullstatic_r.lib"
+    )
+    if(EXISTS "${DEPS_PREFIX}/lib/qhullcpp.lib")
+        add_library(qhullcpp_from_source STATIC IMPORTED GLOBAL)
+        set_target_properties(qhullcpp_from_source PROPERTIES
+            IMPORTED_LOCATION "${DEPS_PREFIX}/lib/qhullcpp.lib"
+        )
+    endif()
+else()
+    add_subdirectory("${UPSTREAM_DEPS}/qhull" "${DEPS_GEN_DIR}/qhull")
+    add_library(qhull_from_source INTERFACE)
+    target_link_libraries(qhull_from_source INTERFACE qhull)
+endif()
 
 # assimp
-add_library(assimp_from_source STATIC IMPORTED GLOBAL)
-set_target_properties(assimp_from_source PROPERTIES
-    IMPORTED_LOCATION "${DEPS_PREFIX}/lib/assimp-vc142-mt.lib"
-)
+if(EXISTS "${DEPS_PREFIX}/lib/assimp-vc142-mt.lib")
+    add_library(assimp_from_source STATIC IMPORTED GLOBAL)
+    set_target_properties(assimp_from_source PROPERTIES
+        IMPORTED_LOCATION "${DEPS_PREFIX}/lib/assimp-vc142-mt.lib"
+    )
+else()
+    message(WARNING "assimp pre-built lib not found at ${DEPS_PREFIX}/lib/assimp-vc142-mt.lib")
+endif()
 
 # cr_tpms_library (closed source)
-add_library(cr_tpms_from_source STATIC IMPORTED GLOBAL)
-set_target_properties(cr_tpms_from_source PROPERTIES
-    IMPORTED_LOCATION "${DEPS_PREFIX}/lib/cr_tpms_library.lib"
-)
+if(EXISTS "${DEPS_PREFIX}/lib/cr_tpms_library.lib")
+    add_library(cr_tpms_from_source STATIC IMPORTED GLOBAL)
+    set_target_properties(cr_tpms_from_source PROPERTIES
+        IMPORTED_LOCATION "${DEPS_PREFIX}/lib/cr_tpms_library.lib"
+    )
+else()
+    message(WARNING "cr_tpms_library pre-built lib not found at ${DEPS_PREFIX}/lib/cr_tpms_library.lib")
+endif()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ALIAS targets
@@ -236,9 +252,15 @@ add_library(deps_nowide ALIAS nowide_from_source)
 add_library(deps_qoi ALIAS qoi_from_source)
 add_library(deps_semver ALIAS semver_from_source)
 add_library(deps_qhull ALIAS qhull_from_source)
-add_library(deps_qhullcpp ALIAS qhullcpp_from_source)
-add_library(deps_assimp ALIAS assimp_from_source)
-add_library(deps_cr_tpms ALIAS cr_tpms_from_source)
+if(TARGET qhullcpp_from_source)
+    add_library(deps_qhullcpp ALIAS qhullcpp_from_source)
+endif()
+if(TARGET assimp_from_source)
+    add_library(deps_assimp ALIAS assimp_from_source)
+endif()
+if(TARGET cr_tpms_from_source)
+    add_library(deps_cr_tpms ALIAS cr_tpms_from_source)
+endif()
 add_library(deps_libigl ALIAS libigl_from_source)
 
 message(STATUS "=== BuildDepsFromSource: ALL deps configured ===")

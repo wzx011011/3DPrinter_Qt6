@@ -388,16 +388,30 @@ if(TARGET cereal AND NOT TARGET cereal::cereal)
 endif()
 find_package(NLopt CONFIG REQUIRED)
 find_package(EXPAT REQUIRED)
-find_package(draco CONFIG REQUIRED)
+find_package(draco CONFIG QUIET)
+if(NOT draco_FOUND)
+    list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer/cmake/modules")
+    find_package(draco REQUIRED)
+endif()
+if(TARGET draco AND NOT TARGET draco::draco)
+    add_library(draco::draco ALIAS draco)
+endif()
 
-# libnoise (vcpkg installs as 'noise', OrcaSlicer includes <libnoise/...>)
-set(LIBNOISE_INCLUDE_DIR "${VCPKG_INSTALLED_DIR}/include" CACHE PATH "")
-set(LIBNOISE_LIBRARIES "${VCPKG_INSTALLED_DIR}/lib/noise.lib" CACHE FILEPATH "")
-add_library(noise::noise INTERFACE IMPORTED GLOBAL)
-set_target_properties(noise::noise PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "${LIBNOISE_INCLUDE_DIR}"
-    INTERFACE_LINK_LIBRARIES "${LIBNOISE_LIBRARIES}"
-)
+# libnoise: prefer OrcaSlicer's deps prefix; fall back to the local vcpkg layout.
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer/cmake/modules")
+find_package(libnoise QUIET)
+if(NOT libnoise_FOUND)
+    set(LIBNOISE_INCLUDE_DIR "${VCPKG_INSTALLED_DIR}/include" CACHE PATH "")
+    set(LIBNOISE_LIBRARIES "${VCPKG_INSTALLED_DIR}/lib/noise.lib" CACHE FILEPATH "")
+    if(NOT EXISTS "${LIBNOISE_LIBRARIES}")
+        message(FATAL_ERROR "libnoise not found in DEPS_PREFIX or VCPKG_INSTALLED_DIR")
+    endif()
+    add_library(noise::noise INTERFACE IMPORTED GLOBAL)
+    set_target_properties(noise::noise PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${LIBNOISE_INCLUDE_DIR}"
+        INTERFACE_LINK_LIBRARIES "${LIBNOISE_LIBRARIES}"
+    )
+endif()
 
 # GMP/MPFR for CGAL
 set(GMP_INCLUDE_DIR "${DEPS_PREFIX}/include" CACHE PATH "")
@@ -424,9 +438,15 @@ add_library(nowide_imported ALIAS nowide_from_source)
 add_library(qoi_imported ALIAS qoi_from_source)
 add_library(semver_imported ALIAS semver_from_source)
 add_library(qhull_imported ALIAS qhull_from_source)
-add_library(qhullcpp_imported ALIAS qhullcpp_from_source)
-add_library(assimp_imported ALIAS assimp_from_source)
-add_library(cr_tpms_imported ALIAS cr_tpms_from_source)
+if(TARGET qhullcpp_from_source)
+    add_library(qhullcpp_imported ALIAS qhullcpp_from_source)
+endif()
+if(TARGET assimp_from_source)
+    add_library(assimp_imported ALIAS assimp_from_source)
+endif()
+if(TARGET cr_tpms_from_source)
+    add_library(cr_tpms_imported ALIAS cr_tpms_from_source)
+endif()
 add_library(libigl_imported ALIAS libigl_from_source)
 
 # tbb_libs - TBB wrapper target (create if not exists)
@@ -616,7 +636,9 @@ set(OCCT_LIB_DIR "${DEPS_PREFIX}/lib/occt")
 set(_delayload_libs "")
 
 # Only delay-load cr_tpms_library (closed-source TPMS infill DLL)
-list(APPEND _delayload_libs "/DELAYLOAD:cr_tpms_library.dll")
+if(TARGET cr_tpms_imported)
+    list(APPEND _delayload_libs "/DELAYLOAD:cr_tpms_library.dll")
+endif()
 
 # ─── 8. Link all dependencies to libslic3r_from_source ───────────────────────
 target_link_libraries(libslic3r_from_source PUBLIC
@@ -632,9 +654,6 @@ target_link_libraries(libslic3r_from_source PUBLIC
     qoi_imported
     semver_imported
     qhull_imported
-    qhullcpp_imported
-    assimp_imported
-    cr_tpms_imported
     libigl_imported
     # CGAL-dependent sources
     libslic3r_cgal_from_source
@@ -671,6 +690,15 @@ target_link_libraries(libslic3r_from_source PUBLIC
     # CGAL (for main library too)
     ${_cgal_tgt}
 )
+if(TARGET qhullcpp_imported)
+    target_link_libraries(libslic3r_from_source PUBLIC qhullcpp_imported)
+endif()
+if(TARGET assimp_imported)
+    target_link_libraries(libslic3r_from_source PUBLIC assimp_imported)
+endif()
+if(TARGET cr_tpms_imported)
+    target_link_libraries(libslic3r_from_source PUBLIC cr_tpms_imported)
+endif()
 
 # ─── 7.5 OCCT (OpenCASCADE) libraries ────────────────────────────────────────
 # Link OCCT libraries with full paths for STEP/SVG import

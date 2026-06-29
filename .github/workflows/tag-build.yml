@@ -14,14 +14,27 @@ jobs:
     runs-on: windows-latest
     env:
       TAG_NAME: ${{ github.ref_name }}
+      ORCA_DEPS_ROOT: ${{ github.workspace }}/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep
+      DEPS_PREFIX: ${{ github.workspace }}/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local
+      VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed/x64-windows
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "~4.3.0"
+          useLocalCache: true
+          useCloudCache: true
+
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
 
       - name: Setup Ninja
         uses: seanmiddleditch/gha-setup-ninja@v5
@@ -34,12 +47,53 @@ jobs:
           target: "desktop"
           arch: "win64_msvc2022_64"
 
+      - name: Restore OrcaSlicer deps cache
+        id: restore-orca-deps
+        uses: actions/cache/restore@v4
+        with:
+          path: third_party/OrcaSlicer/deps/build/OrcaSlicer_dep
+          key: windows-orcaslicer-deps-${{ hashFiles('third_party/OrcaSlicer/deps/**') }}
+
+      - name: Build OrcaSlicer deps
+        if: steps.restore-orca-deps.outputs.cache-hit != 'true'
+        shell: pwsh
+        working-directory: third_party/OrcaSlicer
+        run: |
+          choco install strawberryperl -y --no-progress
+          .\build_release_vs.bat deps
+
+      - name: Save OrcaSlicer deps cache
+        if: steps.restore-orca-deps.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: third_party/OrcaSlicer/deps/build/OrcaSlicer_dep
+          key: windows-orcaslicer-deps-${{ hashFiles('third_party/OrcaSlicer/deps/**') }}
+
+      - name: Verify dependency prefix
+        shell: pwsh
+        run: |
+          $required = @(
+            "$env:DEPS_PREFIX/lib/cmake/Boost-1.84.0",
+            "$env:DEPS_PREFIX/lib/libgmp-10.lib",
+            "$env:DEPS_PREFIX/lib/libmpfr-4.lib",
+            "$env:DEPS_PREFIX/include/libnoise/noise.h"
+          )
+          foreach ($path in $required) {
+            if (-not (Test-Path $path)) {
+              throw "Missing dependency path: $path"
+            }
+          }
+
       - name: Configure (CMake)
-        run: >
-          cmake -S . -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DBUILD_LIBSLIC3R=ON
-          -DOWZX_QML_GUI=ON
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_LIBSLIC3R=ON `
+            -DLIBSLIC3R_FROM_SOURCE=ON `
+            -DOWZX_QML_GUI=ON `
+            -DDEPS_PREFIX="$env:DEPS_PREFIX" `
+            -DVCPKG_INSTALLED_DIR="$env:VCPKG_INSTALLED_DIR"
 
       - name: Build
         run: cmake --build build --config Release --target OWzxSlicer --verbose
@@ -90,15 +144,21 @@ jobs:
           Copy-Item "build/en.qm" $outDir -Force -ErrorAction SilentlyContinue
           Copy-Item "build/zh_CN.qm" $outDir -Force -ErrorAction SilentlyContinue
           windeployqt --release --qmldir src "$outDir/OWzxSlicer.exe"
-          # Remove OCCT DLLs — they cause 0xC0000005 at startup due to /MT vs /MD
-          # CRT mismatch between pre-built libslic3r (static CRT) and OCCT DLLs (dynamic CRT).
           Remove-Item "$outDir/TK*.dll" -Force -ErrorAction SilentlyContinue
           Remove-Item "$outDir/cr_tpms_library.dll" -Force -ErrorAction SilentlyContinue
           $zipPath = "build/OWzxSlicer-${{ env.TAG_NAME }}-windows.zip"
           if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
           Compress-Archive -Path "$outDir/*" -DestinationPath $zipPath
 
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: OWzxSlicer-${{ env.TAG_NAME }}-windows-zip
+          path: build/OWzxSlicer-${{ env.TAG_NAME }}-windows.zip
+          if-no-files-found: error
+
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
