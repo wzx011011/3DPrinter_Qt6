@@ -166,6 +166,10 @@ private slots:
   void presetServiceSelectionPersistsAcrossInstances();
   void presetServiceImportRejectsMalformedBundleWithoutMutation();
   void presetServiceExportsAndImportsUserBundleWithMetadata();
+  void presetCompatibilityFiltersFilamentsAndProcessesForPrinter();
+  void configPrinterChangeRepairsIncompatibleSelections();
+  void configKeepsInvalidSelectionWhenNoCompatibleFallback();
+  void presetReadOnlyActionBlockerReasons();
   // v3.0 Phase 16-01: PartPlate/PartPlateList domain model (pure-data, no libslic3r dep)
   void partPlateInstanceMembershipTracksObjectInstancePairs();
   void partPlateSliceStateMachineGatesCanSlice();
@@ -632,6 +636,248 @@ void ViewModelSmokeTests::presetServiceExportsAndImportsUserBundleWithMetadata()
   QCOMPARE(target.presetValue(QStringLiteral("Unit Test Exported Print Preset"),
                               QStringLiteral("wall_loops")).toInt(), 4);
   QFile::remove(tempPath);
+}
+
+void ViewModelSmokeTests::presetCompatibilityFiltersFilamentsAndProcessesForPrinter()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("PresetCompatibilityFilters"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  QHash<QString, QVariant> printerA;
+  printerA.insert(QStringLiteral("nozzle_diameter"), 0.4);
+  printerA.insert(QStringLiteral("max_nozzle_temp"), 300);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+                                    QStringLiteral("Unit Test Compat Printer A"),
+                                    printerA));
+  QHash<QString, QVariant> printerB;
+  printerB.insert(QStringLiteral("nozzle_diameter"), 0.4);
+  printerB.insert(QStringLiteral("max_nozzle_temp"), 300);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+                                    QStringLiteral("Unit Test Compat Printer B"),
+                                    printerB));
+
+  QHash<QString, QVariant> filamentA;
+  filamentA.insert(QStringLiteral("compatible_printers"),
+                   QStringList{QStringLiteral("Unit Test Compat Printer A")});
+  filamentA.insert(QStringLiteral("compatible_nozzle_min"), 0.2);
+  filamentA.insert(QStringLiteral("compatible_nozzle_max"), 0.8);
+  filamentA.insert(QStringLiteral("nozzle_temp_range_max"), 260);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::FilamentCat,
+                                    QStringLiteral("Unit Test Compat Filament A"),
+                                    filamentA));
+  QHash<QString, QVariant> filamentB;
+  filamentB.insert(QStringLiteral("compatible_printers"),
+                   QVariantList{QStringLiteral("Unit Test Compat Printer B")});
+  filamentB.insert(QStringLiteral("compatible_nozzle_min"), 0.2);
+  filamentB.insert(QStringLiteral("compatible_nozzle_max"), 0.8);
+  filamentB.insert(QStringLiteral("nozzle_temp_range_max"), 260);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::FilamentCat,
+                                    QStringLiteral("Unit Test Compat Filament B"),
+                                    filamentB));
+
+  QHash<QString, QVariant> processA;
+  processA.insert(QStringLiteral("layer_height"), 0.2);
+  processA.insert(QStringLiteral("compatible_printers"), QStringLiteral("Unit Test Compat Printer A"));
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("Unit Test Compat Process A"),
+                                    processA));
+  QHash<QString, QVariant> processB;
+  processB.insert(QStringLiteral("layer_height"), 0.28);
+  processB.insert(QStringLiteral("compatible_printers"),
+                  QStringList{QStringLiteral("Unit Test Compat Printer B")});
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("Unit Test Compat Process B"),
+                                    processB));
+
+  const QStringList filamentForA =
+      preset.compatiblePresetNamesForCategory(PresetServiceMock::FilamentCat,
+                                              QStringLiteral("Unit Test Compat Printer A"));
+  QVERIFY(filamentForA.contains(QStringLiteral("Unit Test Compat Filament A")));
+  QVERIFY(!filamentForA.contains(QStringLiteral("Unit Test Compat Filament B")));
+
+  const QStringList processForA =
+      preset.compatiblePresetNamesForCategory(PresetServiceMock::PrintCat,
+                                              QStringLiteral("Unit Test Compat Printer A"));
+  QVERIFY(processForA.contains(QStringLiteral("Unit Test Compat Process A")));
+  QVERIFY(!processForA.contains(QStringLiteral("Unit Test Compat Process B")));
+  QVERIFY(preset.isPresetCompatibleWithPrinter(PresetServiceMock::PrintCat,
+                                               QStringLiteral("Unit Test Compat Process A"),
+                                               QStringLiteral("Unit Test Compat Printer A")));
+  QVERIFY(!preset.isPresetCompatibleWithPrinter(PresetServiceMock::PrintCat,
+                                                QStringLiteral("Unit Test Compat Process A"),
+                                                QStringLiteral("Unit Test Compat Printer B")));
+  QVERIFY(!preset.presetCompatibilityMessage(PresetServiceMock::PrintCat,
+                                             QStringLiteral("Unit Test Compat Process A"),
+                                             QStringLiteral("Unit Test Compat Printer B")).isEmpty());
+}
+
+void ViewModelSmokeTests::configPrinterChangeRepairsIncompatibleSelections()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("PresetCompatibilityRepair"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+
+  QHash<QString, QVariant> printerA;
+  printerA.insert(QStringLiteral("nozzle_diameter"), 0.4);
+  printerA.insert(QStringLiteral("max_nozzle_temp"), 300);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+                                    QStringLiteral("Unit Test Repair Printer A"),
+                                    printerA));
+  QHash<QString, QVariant> printerB;
+  printerB.insert(QStringLiteral("nozzle_diameter"), 0.4);
+  printerB.insert(QStringLiteral("max_nozzle_temp"), 300);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+                                    QStringLiteral("Unit Test Repair Printer B"),
+                                    printerB));
+
+  QHash<QString, QVariant> filamentA;
+  filamentA.insert(QStringLiteral("compatible_printers"),
+                   QStringList{QStringLiteral("Unit Test Repair Printer A")});
+  filamentA.insert(QStringLiteral("compatible_nozzle_min"), 0.2);
+  filamentA.insert(QStringLiteral("compatible_nozzle_max"), 0.8);
+  filamentA.insert(QStringLiteral("nozzle_temp_range_max"), 260);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::FilamentCat,
+                                    QStringLiteral("Unit Test Repair Filament A"),
+                                    filamentA));
+  QHash<QString, QVariant> filamentB;
+  filamentB.insert(QStringLiteral("compatible_printers"),
+                   QStringList{QStringLiteral("Unit Test Repair Printer B")});
+  filamentB.insert(QStringLiteral("compatible_nozzle_min"), 0.2);
+  filamentB.insert(QStringLiteral("compatible_nozzle_max"), 0.8);
+  filamentB.insert(QStringLiteral("nozzle_temp_range_max"), 260);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::FilamentCat,
+                                    QStringLiteral("Unit Test Repair Filament B"),
+                                    filamentB));
+
+  QHash<QString, QVariant> processA;
+  processA.insert(QStringLiteral("layer_height"), 0.2);
+  processA.insert(QStringLiteral("compatible_printers"),
+                  QStringList{QStringLiteral("Unit Test Repair Printer A")});
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("Unit Test Repair Process A"),
+                                    processA));
+  QHash<QString, QVariant> processB;
+  processB.insert(QStringLiteral("layer_height"), 0.28);
+  processB.insert(QStringLiteral("compatible_printers"),
+                  QStringList{QStringLiteral("Unit Test Repair Printer B")});
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("Unit Test Repair Process B"),
+                                    processB));
+
+  ConfigViewModel config(&preset, &project);
+  config.setCurrentPrinterPreset(QStringLiteral("Unit Test Repair Printer A"));
+  config.setCurrentFilamentPreset(QStringLiteral("Unit Test Repair Filament A"));
+  config.setCurrentPrintPreset(QStringLiteral("Unit Test Repair Process A"));
+  QVERIFY(config.currentPresetCombinationValid());
+
+  config.setCurrentPrinterPreset(QStringLiteral("Unit Test Repair Printer B"));
+  QCOMPARE(config.currentPrinterPreset(), QStringLiteral("Unit Test Repair Printer B"));
+  QCOMPARE(config.currentFilamentPreset(), QStringLiteral("Unit Test Repair Filament B"));
+  QCOMPARE(config.currentPrintPreset(), QStringLiteral("Unit Test Repair Process B"));
+  QVERIFY(config.currentPresetCombinationValid());
+  QVERIFY(config.currentPresetCompatibilityMessage().isEmpty());
+  QCOMPARE(preset.selectedPresetForCategory(PresetServiceMock::FilamentCat),
+           QStringLiteral("Unit Test Repair Filament B"));
+  QCOMPARE(preset.selectedPresetForCategory(PresetServiceMock::PrintCat),
+           QStringLiteral("Unit Test Repair Process B"));
+}
+
+void ViewModelSmokeTests::configKeepsInvalidSelectionWhenNoCompatibleFallback()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("PresetCompatibilityInvalid"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+
+  QHash<QString, QVariant> printerA;
+  printerA.insert(QStringLiteral("nozzle_diameter"), 0.4);
+  printerA.insert(QStringLiteral("max_nozzle_temp"), 300);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+                                    QStringLiteral("Unit Test Invalid Printer A"),
+                                    printerA));
+  QHash<QString, QVariant> printerNoFallback;
+  printerNoFallback.insert(QStringLiteral("nozzle_diameter"), 2.0);
+  printerNoFallback.insert(QStringLiteral("max_nozzle_temp"), 300);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+                                    QStringLiteral("Unit Test Invalid Printer 2.0"),
+                                    printerNoFallback));
+
+  QHash<QString, QVariant> filamentA;
+  filamentA.insert(QStringLiteral("compatible_printers"),
+                   QStringList{QStringLiteral("Unit Test Invalid Printer A")});
+  filamentA.insert(QStringLiteral("compatible_nozzle_min"), 0.2);
+  filamentA.insert(QStringLiteral("compatible_nozzle_max"), 0.8);
+  filamentA.insert(QStringLiteral("nozzle_temp_range_max"), 260);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::FilamentCat,
+                                    QStringLiteral("Unit Test Invalid Filament A"),
+                                    filamentA));
+
+  QHash<QString, QVariant> processA;
+  processA.insert(QStringLiteral("layer_height"), 0.2);
+  processA.insert(QStringLiteral("compatible_printers"),
+                  QStringList{QStringLiteral("Unit Test Invalid Printer A")});
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("Unit Test Invalid Process A"),
+                                    processA));
+
+  ConfigViewModel config(&preset, &project);
+  config.setCurrentPrinterPreset(QStringLiteral("Unit Test Invalid Printer A"));
+  config.setCurrentFilamentPreset(QStringLiteral("Unit Test Invalid Filament A"));
+  config.setCurrentPrintPreset(QStringLiteral("Unit Test Invalid Process A"));
+  QVERIFY(config.currentPresetCombinationValid());
+
+  config.setCurrentPrinterPreset(QStringLiteral("Unit Test Invalid Printer 2.0"));
+  QCOMPARE(config.currentPrinterPreset(), QStringLiteral("Unit Test Invalid Printer 2.0"));
+  QCOMPARE(config.currentFilamentPreset(), QStringLiteral("Unit Test Invalid Filament A"));
+  QCOMPARE(config.currentPrintPreset(), QStringLiteral("Unit Test Invalid Process A"));
+  QVERIFY(!config.currentPresetCombinationValid());
+  QVERIFY(!config.canUseCurrentPresetCombination());
+  QVERIFY(!config.currentPresetCompatibilityMessage().isEmpty());
+}
+
+void ViewModelSmokeTests::presetReadOnlyActionBlockerReasons()
+{
+  PresetServiceMock preset;
+  const QString builtinPrint = preset.defaultPresetForCategory(PresetServiceMock::PrintCat);
+  QVERIFY(!builtinPrint.isEmpty());
+
+  const QString deleteBlocker =
+      preset.presetActionBlocker(PresetServiceMock::PrintCat, builtinPrint, QStringLiteral("delete"));
+  const QString renameBlocker =
+      preset.presetActionBlocker(PresetServiceMock::PrintCat, builtinPrint, QStringLiteral("rename"));
+  QVERIFY(!deleteBlocker.isEmpty());
+  QVERIFY(!renameBlocker.isEmpty());
+
+  QHash<QString, QVariant> customValues;
+  customValues.insert(QStringLiteral("layer_height"), 0.22);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("Unit Test Action User Print"),
+                                    customValues));
+  QVERIFY(preset.presetActionBlocker(PresetServiceMock::PrintCat,
+                                     QStringLiteral("Unit Test Action User Print"),
+                                     QStringLiteral("delete")).isEmpty());
+  QVERIFY(!preset.presetActionBlocker(PresetServiceMock::FilamentCat,
+                                      QStringLiteral("Unit Test Action User Print"),
+                                      QStringLiteral("delete")).isEmpty());
 }
 
 // ── Phase 02-01: TabPosition Q_ENUM + requestSelectTab unit tests ──
