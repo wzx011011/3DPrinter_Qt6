@@ -1,3 +1,4 @@
+#ifdef OWZX_HAS_FFMPEG
 // FFmpeg C 接口（必须先于 Qt 头文件 include，避免宏冲突）
 extern "C" {
 #include <libavformat/avformat.h>
@@ -12,6 +13,7 @@ extern "C" {
 #undef signals
 #undef emit
 #undef foreach
+#endif
 
 #include "CameraStream.h"
 #include <QDebug>
@@ -55,6 +57,10 @@ void CameraStream::stopStream()
 
 bool CameraStream::openStream()
 {
+#ifndef OWZX_HAS_FFMPEG
+    m_error = "FFmpeg support is not available in this build";
+    return false;
+#else
     // 打开 RTSP 流（低延迟模式）
     AVDictionary *opts = nullptr;
     av_dict_set(&opts, "rtsp_transport", "tcp", 0);      // TCP 传输（比 UDP 稳定）
@@ -121,20 +127,33 @@ bool CameraStream::openStream()
 
     qDebug("[Camera] stream opened: %dx%d", m_width, m_height);
     return true;
+#endif
 }
 
 void CameraStream::closeStream()
 {
+#ifdef OWZX_HAS_FFMPEG
     if (m_swsCtx) { sws_freeContext(m_swsCtx); m_swsCtx = nullptr; }
     if (m_rgbBuffer) { av_free(m_rgbBuffer); m_rgbBuffer = nullptr; }
     if (m_rgbFrame) { av_frame_free(&m_rgbFrame); }
     if (m_frame) { av_frame_free(&m_frame); }
     if (m_decCtx) { avcodec_free_context(&m_decCtx); }
     if (m_fmtCtx) { avformat_close_input(&m_fmtCtx); }
+#else
+    m_fmtCtx = nullptr;
+    m_decCtx = nullptr;
+    m_frame = nullptr;
+    m_rgbFrame = nullptr;
+    m_swsCtx = nullptr;
+    m_rgbBuffer = nullptr;
+#endif
 }
 
 bool CameraStream::decodeFrame()
 {
+#ifndef OWZX_HAS_FFMPEG
+    return false;
+#else
     AVPacket *pkt = av_packet_alloc();
     bool gotFrame = false;
 
@@ -162,6 +181,7 @@ bool CameraStream::decodeFrame()
 
     av_packet_free(&pkt);
     return gotFrame;
+#endif
 }
 
 void CameraStream::run()

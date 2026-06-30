@@ -195,16 +195,32 @@ if(OWZX_QML_GUI)
     else()
         message(WARNING "libcurl not found in DEPS_PREFIX, FTP upload disabled")
     endif()
-    # 链接 FFmpeg 库（avcodec/avformat/avutil/swscale）
-    foreach(ffmpeg_lib avcodec avformat avutil swscale)
+    # FFmpeg is optional in this migration build. Compile the RTSP decoder only
+    # when headers and all required libraries are present.
+    set(OWZX_FFMPEG_COMPONENTS avcodec avformat avutil swscale)
+    find_path(FFMPEG_INCLUDE_DIR NAMES libavformat/avformat.h
+              PATHS "${DEPS_PREFIX}/include" "${VCPKG_INSTALLED_DIR}/include"
+              NO_DEFAULT_PATH)
+    set(OWZX_FFMPEG_LIBS "")
+    set(OWZX_FFMPEG_AVAILABLE TRUE)
+    foreach(ffmpeg_lib IN LISTS OWZX_FFMPEG_COMPONENTS)
         find_library(FFMPEG_${ffmpeg_lib}_LIB NAMES ${ffmpeg_lib}
-                     PATHS "${DEPS_PREFIX}/lib" NO_DEFAULT_PATH)
+                     PATHS "${DEPS_PREFIX}/lib" "${VCPKG_INSTALLED_DIR}/lib"
+                     NO_DEFAULT_PATH)
         if(FFMPEG_${ffmpeg_lib}_LIB)
-            target_link_libraries(owzx_app_core PUBLIC ${FFMPEG_${ffmpeg_lib}_LIB})
+            list(APPEND OWZX_FFMPEG_LIBS ${FFMPEG_${ffmpeg_lib}_LIB})
         else()
-            message(WARNING "FFmpeg ${ffmpeg_lib} not found in DEPS_PREFIX")
+            set(OWZX_FFMPEG_AVAILABLE FALSE)
+            message(WARNING "FFmpeg ${ffmpeg_lib} not found")
         endif()
     endforeach()
+    if(FFMPEG_INCLUDE_DIR AND OWZX_FFMPEG_AVAILABLE)
+        target_compile_definitions(owzx_app_core PUBLIC OWZX_HAS_FFMPEG=1)
+        target_include_directories(owzx_app_core PUBLIC "${FFMPEG_INCLUDE_DIR}")
+        target_link_libraries(owzx_app_core PUBLIC ${OWZX_FFMPEG_LIBS})
+    else()
+        message(WARNING "FFmpeg headers/libs not found; RTSP camera stream decoding disabled")
+    endif()
     # 链接 paho-mqtt 静态库（DEPS_PREFIX/lib/paho-mqtt3a-static.lib）
     find_library(PAHO_MQTT_LIB NAMES paho-mqtt3a-static paho-mqtt3as-static
                  PATHS "${DEPS_PREFIX}/lib" "${PAHO_MQTT_PREFIX}/lib" "${VCPKG_STATIC_MD_INSTALLED_DIR}/lib" "${VCPKG_INSTALLED_DIR}/lib"
