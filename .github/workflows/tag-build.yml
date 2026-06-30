@@ -96,7 +96,7 @@ jobs:
       - name: Install Paho MQTT dependency
         shell: pwsh
         run: |
-          vcpkg install paho-mqtt:x64-windows-static-md --x-install-root="$env:GITHUB_WORKSPACE/vcpkg_installed"
+          vcpkg install --triplet x64-windows-static-md --x-install-root="$env:GITHUB_WORKSPACE/vcpkg_installed"
           if (-not (Test-Path "$env:VCPKG_STATIC_MD_INSTALLED_DIR/include/MQTTAsync.h")) {
             throw "Missing Paho MQTT header after vcpkg install"
           }
