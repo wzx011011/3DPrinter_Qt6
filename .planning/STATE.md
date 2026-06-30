@@ -2,36 +2,37 @@
 gsd_state_version: 1.0
 milestone: v3.6
 milestone_name: Screenshot-Driven OrcaSlicer UI Restoration
-status: executing
-last_updated: "2026-06-30T18:51:37.801Z"
-last_activity: 2026-06-30 -- Phase 50 planning complete
+status: ready_to_plan
+last_updated: 2026-06-30T19:35:50.694Z
+last_activity: 2026-06-30 -- Phase 50 execution started
 progress:
   total_phases: 9
   completed_phases: 0
   total_plans: 2
-  completed_plans: 0
+  completed_plans: 59
   percent: 0
+stopped_at: Phase 50 complete (2/2) — ready to discuss Phase 51
 ---
 
 # Project State
 
 **Milestone:** v3.6 - Screenshot-Driven OrcaSlicer UI Restoration
-**Status:** Ready to execute
+**Status:** Ready to plan
 **Next step:** Start Phase 50, `Screenshot and Source-Truth Inventory`.
 
 ## Current Position
 
-Phase: 50
+Phase: 51
 Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-30 -- Phase 50 planning complete
+Status: Executing Phase 50
+Last activity: 2026-06-30
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth; screenshot-driven UI milestones also use screenshots as the visual/layout source of truth.
-**Current focus:** Restore Prepare, Preview, and parameter settings as complete OrcaSlicer-equivalent workflows, using screenshots for visual parity and upstream source for behavior.
+**Current focus:** Phase 51 — shell and navigation restoration
 
 ## Superseded Milestone Status
 
