@@ -17,6 +17,7 @@ jobs:
       ORCA_DEPS_ROOT: ${{ github.workspace }}/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep
       DEPS_PREFIX: ${{ github.workspace }}/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed/x64-windows
+      VCPKG_STATIC_MD_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed/x64-windows-static-md
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,6 +93,14 @@ jobs:
             }
           }
 
+      - name: Install Paho MQTT dependency
+        shell: pwsh
+        run: |
+          vcpkg install paho-mqtt:x64-windows-static-md --x-install-root="$env:GITHUB_WORKSPACE/vcpkg_installed"
+          if (-not (Test-Path "$env:VCPKG_STATIC_MD_INSTALLED_DIR/include/MQTTAsync.h")) {
+            throw "Missing Paho MQTT header after vcpkg install"
+          }
+
       - name: Configure (CMake)
         shell: pwsh
         run: |
@@ -101,7 +110,8 @@ jobs:
             -DLIBSLIC3R_FROM_SOURCE=ON `
             -DOWZX_QML_GUI=ON `
             -DDEPS_PREFIX="$env:DEPS_PREFIX" `
-            -DVCPKG_INSTALLED_DIR="$env:VCPKG_INSTALLED_DIR"
+            -DVCPKG_INSTALLED_DIR="$env:VCPKG_INSTALLED_DIR" `
+            -DVCPKG_STATIC_MD_INSTALLED_DIR="$env:VCPKG_STATIC_MD_INSTALLED_DIR"
 
       - name: Build
         run: cmake --build build --config Release --target OWzxSlicer --verbose

@@ -20,6 +20,7 @@ set(VCPKG_INSTALLED_DIR "E:/vcpkg/installed/x64-windows" CACHE PATH "vcpkg insta
 if(EXISTS "${VCPKG_INSTALLED_DIR}/share/eigen3/Eigen3Config.cmake")
     list(APPEND CMAKE_PREFIX_PATH "${VCPKG_INSTALLED_DIR}/share")
 endif()
+set(VCPKG_STATIC_MD_INSTALLED_DIR "E:/vcpkg/installed/x64-windows-static-md" CACHE PATH "vcpkg static-md installed packages")
 
 project(OWzxSlicer LANGUAGES C CXX)
 
@@ -205,9 +206,15 @@ if(OWZX_QML_GUI)
     endforeach()
     # 链接 paho-mqtt 静态库（DEPS_PREFIX/lib/paho-mqtt3a-static.lib）
     find_library(PAHO_MQTT_LIB NAMES paho-mqtt3a-static paho-mqtt3as-static
-                 PATHS "${DEPS_PREFIX}/lib" NO_DEFAULT_PATH)
+                 PATHS "${DEPS_PREFIX}/lib" "${VCPKG_STATIC_MD_INSTALLED_DIR}/lib" "${VCPKG_INSTALLED_DIR}/lib"
+                 NO_DEFAULT_PATH)
     if(PAHO_MQTT_LIB)
         target_link_libraries(owzx_app_core PUBLIC ${PAHO_MQTT_LIB})
+        if(EXISTS "${VCPKG_STATIC_MD_INSTALLED_DIR}/include/MQTTAsync.h")
+            target_include_directories(owzx_app_core PUBLIC "${VCPKG_STATIC_MD_INSTALLED_DIR}/include")
+        elseif(EXISTS "${VCPKG_INSTALLED_DIR}/include/MQTTAsync.h")
+            target_include_directories(owzx_app_core PUBLIC "${VCPKG_INSTALLED_DIR}/include")
+        endif()
     else()
         message(WARNING "paho-mqtt not found in DEPS_PREFIX, MQTT features disabled")
     endif()

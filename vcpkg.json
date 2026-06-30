@@ -37,6 +37,7 @@
     "boost-uuid",
     "tbb",
     "openssl",
+    "paho-mqtt",
     "zlib",
     "libpng",
     "libjpeg-turbo",
