@@ -165,17 +165,33 @@ if(MSVC)
 endif()
 
 # ─── nowide (pre-built from upstream deps) ─────────────────────────────────────
-# Use the pre-built Boost nowide lib which contains the nowide::detail symbols
-set(NOWIDE_LIB "${DEPS_PREFIX}/lib/libboost_nowide-vc142-mt-x64-1_84.lib")
-if(EXISTS "${NOWIDE_LIB}")
-    add_library(nowide_from_source STATIC IMPORTED GLOBAL)
-    set_target_properties(nowide_from_source PROPERTIES
-        IMPORTED_LOCATION "${NOWIDE_LIB}"
-        INTERFACE_LINK_LIBRARIES "Boost::locale"
-    )
-else()
-    message(WARNING "nowide pre-built lib not found at ${NOWIDE_LIB}, using stub")
+# Use the Boost nowide package/lib from the active deps prefix. CI may build it
+# with a newer MSVC toolset suffix than local development machines.
+find_package(boost_nowide CONFIG QUIET)
+if(TARGET Boost::nowide)
     add_library(nowide_from_source INTERFACE)
+    target_link_libraries(nowide_from_source INTERFACE Boost::nowide Boost::locale)
+else()
+    find_library(NOWIDE_LIB
+        NAMES
+            libboost_nowide-vc145-mt-x64-1_84
+            libboost_nowide-vc144-mt-x64-1_84
+            libboost_nowide-vc143-mt-x64-1_84
+            libboost_nowide-vc142-mt-x64-1_84
+            boost_nowide
+        PATHS "${DEPS_PREFIX}/lib"
+        NO_DEFAULT_PATH
+    )
+    if(NOWIDE_LIB)
+        add_library(nowide_from_source STATIC IMPORTED GLOBAL)
+        set_target_properties(nowide_from_source PROPERTIES
+            IMPORTED_LOCATION "${NOWIDE_LIB}"
+            INTERFACE_LINK_LIBRARIES "Boost::locale"
+        )
+    else()
+        message(WARNING "nowide pre-built lib not found in ${DEPS_PREFIX}/lib, using header-only fallback")
+        add_library(nowide_from_source INTERFACE)
+    endif()
 endif()
 
 # ═══════════════════════════════════════════════════════════════════════════════
