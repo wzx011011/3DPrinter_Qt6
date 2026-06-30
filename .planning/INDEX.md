@@ -1,6 +1,6 @@
 # Planning Index
 
-Last updated: 2026-06-28
+Last updated: 2026-06-30
 
 This is the canonical entry point for `.planning/`. Historical phase files are evidence; current work starts from the files below.
 
@@ -21,27 +21,34 @@ This is the canonical entry point for `.planning/`. Historical phase files are e
 
 ## Active Milestone
 
-**v3.3 Slice Preview Main Flow MVP** is active.
+**v3.5 Preset Authoring Complete Workflow** is active.
 
 Primary objective:
 
-- Load model -> slice -> enter Preview -> render a non-empty D3D11 QRhi G-code preview with basic layer/move controls.
+- Load preset bundle -> select compatible printer/filament/process presets -> edit config -> save/create/import/export presets -> slice/export with the edited config.
 
 Active phases:
 
-- Phase 33: Slice-to-Preview Navigation Gate
-- Phase 34: G-code Preview Parser MVP
-- Phase 35: D3D11 Preview Rendering Interaction
-- Phase 36: Verification and Handoff
+- Phase 44: Preset Bundle Service Foundation
+- Phase 45: Compatibility and Selection State
+- Phase 46: Config Editing, Dirty State, and Reset Semantics
+- Phase 47: Preset Lifecycle Actions
+- Phase 48: Create Presets and Bundle Workflows
+- Phase 49: Slice Integration, Verification, and Handoff
 
-Deferred until after the main flow:
+Carry-forward:
 
-- `THUMB-03` real GL/QRhi-capture thumbnails and 3MF pixel round-trip
-- `FIXTURE-02` full PLATE-09 save/reload assertions after writer integration fix
+- v3.4 Phase 43 manual UAT remains pending because the user cannot verify it right now. Do not mark v3.4 fully complete without running `.planning/phases/43-end-to-end-verification-and-handoff/43-UAT.md`.
+
+Deferred until after preset authoring:
+
+- Device send/upload/cloud print and Monitor task workflow
 - AssembleView
 - Auto filament-map recommendation
 - Wipe-tower geometry/rendering
-- D3D12 crash root cause
+- `THUMB-03` real GL/QRhi-capture thumbnails and 3MF pixel round-trip
+- `FIXTURE-02` full PLATE-09 save/reload assertions after writer integration fix
+- D3D12 crash root cause and future Vulkan/D3D12 backend promotion
 - Missing CLI test fixtures
 
 ## Directory Map
@@ -73,9 +80,9 @@ Do not treat phase completion as product completion unless the exact workflow is
 
 ## Next Step
 
-Start Phase 33:
+Start Phase 44:
 
 ```text
-$gsd-plan-phase 33
-$gsd-execute-phase 33 --interactive
+$gsd-plan-phase 44
+$gsd-execute-phase 44
 ```

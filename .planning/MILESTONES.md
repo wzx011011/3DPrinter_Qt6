@@ -314,3 +314,64 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 ---
 
 *Last updated: 2026-06-28 after v3.2 audit correction.*
+
+---
+
+### v3.3 - Slice Preview Main Flow MVP
+
+**Started:** 2026-06-28
+**Status:** Complete at MVP level, superseded by v3.4 for completeness
+**Phases:** 33-36
+
+**Goal:** Prove the basic local transition from slicing into a D3D11 QRhi G-code Preview with layer and move controls.
+
+**Outcome:** The MVP path was implemented and verified at code/test level, but user UAT exposed Preview disappearing under layer/camera interaction. v3.4 superseded this milestone with a complete local import-to-G-code workflow pass.
+
+**Known follow-up:** Do not use v3.3 as the final Preview completion evidence; use v3.4 Phase 40-43 artifacts instead.
+
+---
+
+### v3.4 - Import to G-code Complete Workflow
+
+**Started:** 2026-06-28
+**Status:** Automated verification passed; manual UAT pending
+**Phases:** 37-43
+
+**Goal:** Complete the full local user workflow from importing a model/project through local G-code export, with source-truth-aligned Prepare readiness, slicing/reslicing, D3D11 QRhi Preview, and export finalization.
+
+**Phases reached:**
+- Phase 37: Complete Import and Project Restore - complete
+- Phase 38: Prepare Readiness and Slice Invalidation - complete
+- Phase 39: Complete Slicing and Reslicing State Machine - complete
+- Phase 40: Complete Preview Data and Upstream View Semantics - complete
+- Phase 41: D3D11 Preview Rendering and Interaction Stability - complete
+- Phase 42: Local G-code Export and Finalization - complete
+- Phase 43: End-to-End Verification and Handoff - automated verification complete, manual UAT pending
+
+**Current status:** The user cannot manually verify the app right now, so v3.4 is not marked fully complete. The pending manual checklist is `.planning/phases/43-end-to-end-verification-and-handoff/43-UAT.md`.
+
+**Planning transition:** v3.5 starts while v3.4 manual UAT remains a carry-forward release/handoff fact.
+
+---
+
+### v3.5 - Preset Authoring Complete Workflow
+
+**Started:** 2026-06-30
+**Status:** Planned
+**Phases:** 44-49
+
+**Goal:** Complete the source-truth-aligned preset authoring workflow so users can load, select, edit, validate, save, create, import/export, and apply printer, filament, and process presets through the Qt UI, with the resulting configuration feeding Prepare, Slice, Preview, Export, and CLI paths.
+
+**Planned phases:**
+- Phase 44: Preset Bundle Service Foundation
+- Phase 45: Compatibility and Selection State
+- Phase 46: Config Editing, Dirty State, and Reset Semantics
+- Phase 47: Preset Lifecycle Actions
+- Phase 48: Create Presets and Bundle Workflows
+- Phase 49: Slice Integration, Verification, and Handoff
+
+**Next step:** Plan and execute Phase 44.
+
+---
+
+*Last updated: 2026-06-30 after v3.5 planning.*

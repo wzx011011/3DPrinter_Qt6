@@ -1,149 +1,161 @@
-# Requirements: OWzx Slicer v3.4 Import to G-code Complete Workflow
+# Requirements: OWzx Slicer v3.5 Preset Authoring Complete Workflow
 
-**Defined:** 2026-06-28
+**Defined:** 2026-06-30
 **Status:** Active - requirements defined, roadmap ready
 **Core Value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
 ## Scope Contract
 
-v3.4 is not an MVP milestone. It is the complete local main workflow from model/project import through local G-code export:
+v3.5 is not an MVP milestone. It is the complete preset authoring workflow for the local application:
 
 ```text
-Import model/project -> Prepare readiness -> Slice/reslice -> Preview -> Export local G-code
+Load preset bundle -> select compatible printer/filament/process presets -> edit config -> save/create/import/export presets -> slice/export with the edited config
 ```
 
-Every user-visible behavior in this path must either be implemented, verified, or explicitly classified as blocked by an unavailable dependency. Device sending, cloud printing, Monitor print jobs, ModelMall, and full application-wide preset authoring remain separate workflows.
+Every user-visible behavior in this path must either be implemented, verified, or explicitly classified as blocked by an unavailable dependency or upstream mismatch. Device sending, cloud printing, Monitor print jobs, AssembleView, and rendering backend promotion remain separate workflows.
+
+v3.4 Phase 43 manual UAT is still pending because it cannot be run right now. v3.5 may proceed, but that pending UAT must remain visible and must not be marked complete without evidence.
 
 ## Status Terms
 
 - **Real:** source-truth behavior is implemented and verified with deterministic evidence.
 - **Hybrid:** a real path exists, but fallback/mock behavior remains or verification is incomplete.
 - **Mock:** local simulation only.
-- **Blocked:** requires an unavailable dependency, credential, protocol, or product decision.
+- **Blocked:** requires an unavailable dependency, credential, protocol, product decision, or upstream feature that is not locally available.
 - **Placeholder:** visible UI or enum exists but has no meaningful backend behavior.
 
-## v3.4 Requirements
+## v3.5 Requirements
 
-### Import and Project Restore
+### Preset Data and Persistence
 
-- [x] **IMP-01:** User can import the locally supported model/project formats exposed by the UI (`.stl`, `.obj`, `.amf`, `.3mf`, Orca/BBS `.3mf`, and `.step/.stp` when OCCT is available) through the normal topbar, Prepare page, drag/drop, and Project page paths.
-- [x] **IMP-02:** Import progress, cancellation, success, and failure states are surfaced through Qt signals and user-visible notifications without leaving stale loading state.
-- [x] **IMP-03:** Imported geometry populates the Prepare object list, active plate membership, printable flags, mesh render payload, selection state, and fit-view hint consistently.
-- [x] **IMP-04:** Orca/BBS 3MF project import restores plate names, current plate, locked/printable state, bed type, print sequence, spiral mode, filament map mode, manual filament maps, and embedded plate thumbnails when present.
-- [x] **IMP-05:** 3MF version/config compatibility outcomes are visible to the user and never silently turn project import into partial geometry-only import without a warning.
-- [x] **IMP-06:** Importing a new model/project invalidates stale slice and preview state for affected plates while preserving unrelated valid plate state where upstream semantics allow it.
+- [ ] **PSET-01:** User can load printer, filament, and process presets from upstream-compatible system/vendor/user preset locations without relying on hardcoded mock-only defaults.
+- [ ] **PSET-02:** User can see and select preset category metadata including built-in vs user preset, read-only state, inheritance parent, vendor/model/nozzle/material identity, and current dirty/modified state.
+- [ ] **PSET-03:** User preset selections for printer, filament, and process persist through app settings and are restored on restart or normal project load where upstream semantics allow it.
+- [ ] **PSET-04:** User can import and export preset bundles through a real service path with validation of category, format, duplicate names, and incompatible or corrupt entries.
+- [ ] **PSET-05:** Missing, corrupt, unsupported, or version-incompatible preset files produce user-visible errors or warnings and cannot silently fall back to stale selections.
+- [ ] **PSET-06:** Preset data is exposed through deterministic C++ service APIs used by `ConfigViewModel`, slicing, project restore, CLI, and existing calibration integration instead of divergent local copies.
 
-### Prepare Readiness and Invalidation
+### Compatibility and Validation
 
-- [x] **PREP-01:** Prepare page exposes accurate slice readiness for the current plate, including loading state, object count, printable object state, current plate validity, and active slicing/export jobs.
-- [x] **PREP-02:** Object, volume, plate, transform, printable flag, arrangement, bed-shape, filament-map, and relevant preset/config changes invalidate affected slice results and Preview data immediately.
-- [x] **PREP-03:** Switching plates shows the correct per-plate slice status, Preview availability, output path, filament/time/cost/layer statistics, and export availability.
-- [x] **PREP-04:** User-facing actions are enabled/disabled with source-truth-aligned reasons instead of allowing hidden no-ops, stale exports, or Preview of invalid results.
+- [ ] **COMP-01:** User sees printer, filament, and process preset compatibility state aligned with upstream `PresetBundle::update_compatible` behavior for the local FFF workflow.
+- [ ] **COMP-02:** Changing the selected printer updates compatible filament and process choices, preserves a valid selection where possible, and prompts or auto-matches only where upstream does.
+- [ ] **COMP-03:** Incompatible or invalid preset combinations are clearly marked and cannot produce a silent stale slice, invalid Preview, or exportable G-code.
+- [ ] **COMP-04:** Built-in/system presets are protected from destructive edits, rename, and delete; attempts route to Save As or produce a clear blocked action reason.
+- [ ] **COMP-05:** Config value validation uses upstream option definitions for type, enum, min/max, nullable state, unit, and dependency rules where available.
+- [ ] **COMP-06:** Preset validation warnings, compatibility warnings, and blocking errors are surfaced through the same notification/error system used by Prepare, Slice, and Export.
 
-### Slicing and Reslicing
+### Editing, Dirty State, and Reset
 
-- [x] **SLICE-01:** Normal slicing uses the current plate model, merged presets, bed shape, per-plate config, filament map state, and calibration-neutral state consistently with upstream `BackgroundSlicingProcess`.
-- [x] **SLICE-02:** Slice progress, completion, cancellation, and failure states remain coherent across `SliceService`, `EditorViewModel`, `PreviewViewModel`, notifications, and QML controls.
-- [x] **SLICE-03:** Reslicing is triggered or required when imported data or slice-affecting settings change, and stale `outputPath` values cannot be treated as current results.
-- [x] **SLICE-04:** Existing G-code reuse (`export_gcode_from_previous_file` equivalent) is supported when loading/reprocessing a valid previous G-code result, with Preview refreshed from the reused file.
-- [x] **SLICE-05:** Multi-plate slicing covers current plate and all printable unlocked plates, stores per-plate output paths/statistics, and excludes locked or non-printable plates.
-- [x] **SLICE-06:** Slice warnings and validation failures are surfaced as user-visible errors/warnings and block Preview/export when the generated result is invalid.
+- [ ] **EDIT-01:** User can edit printer, filament, and process options through model-driven Qt controls that expose typed values, labels, units, choices, categories, and advanced/basic filtering.
+- [ ] **EDIT-02:** Edited options update dirty state, modified option counts, modified suffix/display state, and value source metadata for the active preset tier.
+- [ ] **EDIT-03:** User can reset one option, all modified options, or a scoped override back to the correct inherited/default level with the resulting value shown immediately.
+- [ ] **EDIT-04:** User can inspect enough value-source and difference information to understand whether a value came from printer, filament, process, project, plate, object, volume, or default config.
+- [ ] **EDIT-05:** Switching preset, page, scope, or project while unsaved edits exist prompts Save, Discard, or Cancel and never silently loses changes.
+- [ ] **EDIT-06:** QML pages and dialogs do not own preset business rules; validation, dirty state, save routing, and reset semantics live in C++ services/viewmodels.
 
-### Preview Data and Semantics
+### Preset Lifecycle Actions
 
-- [x] **PREVIEW-01:** Preview state is built from the current valid G-code result and exposes output path, layer count, move count, layer range, move range, tool position, and per-plate association without stale data.
-- [x] **PREVIEW-02:** G-code parsing covers common OrcaSlicer output semantics required by Preview: travel/extrusion moves, extrusion modes, `G92 E`, Z/layer markers, feature/role tags, width, height, feedrate, fan speed, temperature, acceleration, tool changes, and elapsed time.
-- [x] **PREVIEW-03:** Preview view modes align with upstream `GCodeViewer` for the local workflow: feature type, height, width, feedrate, fan speed, temperature, tool/extruder, filament/color where data is available, and chronology/layer-time modes when derivable from the result.
-- [x] **PREVIEW-04:** Legend, statistics, per-extruder usage, layer-time chart data, move-time labels, tick/custom-code markers, and marker tooltip values match the active Preview data.
+- [ ] **LIFE-01:** User can Save edits to a writable user preset and the saved values persist to disk and reload correctly.
+- [ ] **LIFE-02:** User can Save As from a built-in or user preset with upstream-compatible name validation, duplicate handling, modified suffix handling, and category routing.
+- [ ] **LIFE-03:** User can rename a user preset and dependent selections, current UI labels, project references, and compatibility state update coherently.
+- [ ] **LIFE-04:** User can delete a user preset only when deletion is valid; current selections and dependent presets repair to a valid fallback or show a clear blocker.
+- [ ] **LIFE-05:** User can compare or review modified preset values before saving when upstream would show an unsaved-changes/diff workflow.
 
-### Preview Rendering and Interaction
+### Create Presets and Bundle Workflows
 
-- [x] **PREVIEW-05:** Default Windows Preview rendering uses D3D11 QRhi on capable systems and does not fall back to `SoftwareViewport` as the normal path.
-- [x] **PREVIEW-06:** Layer slider, move slider, travel visibility, bed visibility, marker visibility, color mode, play/pause, and camera controls update the same rendered toolpath without blanking, disappearing, freezing, or corrupting buffers.
-- [x] **PREVIEW-07:** Preview camera fit, orbit, pan, zoom, reset, plate switching, and resize preserve a visible valid toolpath for small and large G-code files.
-- [x] **PREVIEW-08:** Preview performance remains within the v3.1 D3D11 QRhi expectation for large toolpath payloads, with no avoidable full-buffer rebuilds on pure range/camera changes.
+- [ ] **CREATE-01:** User can create printer presets through a CreatePresetsDialog-equivalent workflow using vendor/model/variant/nozzle inputs supported by the local upstream bundle data.
+- [ ] **CREATE-02:** User can create filament presets through a CreatePresetsDialog-equivalent workflow using vendor/material/profile inputs and compatible printer context.
+- [ ] **CREATE-03:** User can create process presets with the correct printer technology and compatibility metadata for the selected printer/profile context.
+- [ ] **CREATE-04:** Newly created presets appear immediately in the correct selector, can be selected, saved, reloaded, and used for slicing without restarting the app.
+- [ ] **CREATE-05:** Create/import/export flows clearly classify unsupported vendor data, blocked cloud-only behavior, duplicate profiles, invalid names, and partial imports.
 
-### Local G-code Export
+### Slice, Project, and CLI Integration
 
-- [x] **EXPORT-01:** Export availability follows upstream semantics: export is blocked when there is no valid current slice, when slicing/export is running, or when the result is stale.
-- [x] **EXPORT-02:** Export uses upstream-style default file naming, including project/object name and plate name/index for multi-plate projects.
-- [x] **EXPORT-03:** Export finalizes the current valid temporary/generated G-code to the user-selected target path, protects same-path/self-copy cases, and verifies the target file exists and is non-empty.
-- [x] **EXPORT-04:** Export can trigger required reslice/finalization before writing, rather than only copying a previously generated path when upstream would update the background process. In the current Qt workflow, stale results are blocked and valid generated G-code is safely finalized; background-process reslice-on-export is not applicable until that upstream process model is adopted.
-- [x] **EXPORT-05:** Export progress, success, failure, cancellation, and destination path notifications are visible and consistent across Prepare, topbar menu, and notification actions.
-- [x] **EXPORT-06:** Export current plate and export all printable plates are supported for local `.gcode` output, with deterministic per-plate paths and failures reported per plate.
+- [ ] **FLOW-01:** Slicing receives a merged FFF config aligned with upstream precedence for printer, filament, process, project, plate, object, volume, and layer-range overrides.
+- [ ] **FLOW-02:** Any slice-affecting preset edit or preset selection change invalidates affected Prepare, Preview, and Export state immediately with a visible reason.
+- [ ] **FLOW-03:** 3MF project import restores embedded config and preset matching without clobbering user preset files or hiding partial-match warnings.
+- [ ] **FLOW-04:** 3MF project save/export preserves project-scoped preset/config data needed to reopen the project with equivalent local slicing behavior.
+- [ ] **FLOW-05:** CLI slicing and UI slicing use the same preset service and merged-config semantics for supported local workflows.
+- [ ] **FLOW-06:** Existing implemented calibration paths that read or write preset values continue to work with the real preset service or are explicitly classified as blocked/future.
 
-### End-to-End Verification
+### Verification and Handoff
 
-- [x] **VERIFY-01:** Automated tests cover the full local path: import fixture, verify Prepare readiness, slice, enter Preview, interact with layer/move/camera controls, export G-code, and validate output.
-- [x] **VERIFY-02:** Format coverage tests exercise at least real STL and real 3MF fixtures; OBJ/AMF/STEP support is tested or explicitly classified based on available dependencies.
-- [x] **VERIFY-03:** QML/UI audits prevent normal-path Preview fallback to `SoftwareViewport` and catch Preview binding regressions for controls used in the main workflow.
-- [x] **VERIFY-04:** Runtime diagnostics record selected renderer backend, import/slice/export state transitions, and Preview payload/render range enough to debug blank-preview regressions.
-- [ ] **VERIFY-05:** Manual UAT checklist matches the complete local workflow and must pass before v3.4 is marked complete.
+- [ ] **VERIFY-01:** Automated tests cover preset load, inheritance, selection persistence, save, Save As, rename, delete, import, export, and reload.
+- [ ] **VERIFY-02:** Automated tests cover compatibility filtering, validation failures, dirty state, reset, unsaved-change decisions, and blocked built-in preset edits.
+- [ ] **VERIFY-03:** Automated tests prove edited presets affect merged slicing config, Prepare invalidation, generated G-code metadata where observable, and local export availability.
+- [ ] **VERIFY-04:** QML/UI audits prove preset dialogs and config pages are bound to C++ APIs and no visible preset workflow remains placeholder-only.
+- [ ] **VERIFY-05:** Manual UAT covers create/edit/save/reload/select/slice/export for printer, filament, and process presets, and records the still-pending v3.4 manual UAT separately if it remains unavailable.
 
 ## Future Requirements
 
-- Full device send/print workflows, including upload to printer, cloud printing, and Monitor task lifecycle.
-- Full preset authoring and CreatePresetsDialog workflows beyond the preset data needed for local slicing correctness.
+- Device send/print workflows, including upload to printer, cloud printing, and Monitor task lifecycle.
 - AssembleView source-truth completion.
-- Auto filament-map recommendation and wipe-tower geometry/rendering beyond what is required to preserve imported state.
-- Real GL/QRhi-capture thumbnails and 3MF pixel round-trip if not required by local G-code export.
+- Auto filament-map recommendation and wipe-tower geometry/rendering.
+- Real GL/QRhi-capture thumbnails and 3MF pixel round-trip.
+- Full PLATE-09 save/reload assertions after shared 3MF writer integration is fixed.
 - D3D12 or Vulkan default promotion after separate backend feasibility and stability work.
 - ModelMall/Home WebView and cloud-related workflows.
-- Full i18n translation coverage beyond strings touched by the local workflow.
+- Full i18n translation coverage beyond strings touched by this milestone.
+- Full hardware calibration completion beyond preserving existing implemented preset read/write paths.
 
 ## Out of Scope
 
 | Feature | Reason |
 |---|---|
-| Device send, upload, cloud print, and Monitor print-job workflow | Separate device workflow after local G-code export is complete. |
+| Device send, upload, cloud print, and Monitor print-job workflow | Separate workflow after trustworthy local config and G-code output are in place. |
 | Changing libslic3r slicing algorithms | GUI migration preserves libslic3r behavior. |
-| Making D3D12 or Vulkan the default backend | D3D11 QRhi is the known stable Qt-native Windows backend; D3D12/Vulkan remain separate performance/backend work. |
-| Full application-wide preset editing parity | v3.4 only includes preset/config behavior required by import, slicing, preview, and export correctness. |
-| OpenVDB/WebRTC/FFmpeg-dependent workflows | Unavailable dependency areas unrelated to local G-code export. |
+| Making D3D12 or Vulkan the default backend | D3D11 QRhi remains the known stable Qt-native Windows backend. |
+| AssembleView, auto filament-map, and wipe-tower rendering | Separate multi-plate/product workflow, not preset authoring. |
+| Claiming v3.4 manual UAT completion | User cannot verify it right now; it remains pending until evidence exists. |
+| Cloud-only vendor account workflows | Preset authoring must work locally; cloud account workflows belong to future cloud/device milestones. |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |---|---|---|
-| IMP-01 | Phase 37 | Satisfied |
-| IMP-02 | Phase 37 | Satisfied |
-| IMP-03 | Phase 37 | Satisfied |
-| IMP-04 | Phase 37 | Satisfied |
-| IMP-05 | Phase 37 | Satisfied |
-| IMP-06 | Phase 37 | Satisfied |
-| PREP-01 | Phase 38 | Satisfied |
-| PREP-02 | Phase 38 | Satisfied |
-| PREP-03 | Phase 38 | Satisfied |
-| PREP-04 | Phase 38 | Satisfied |
-| SLICE-01 | Phase 39 | Satisfied |
-| SLICE-02 | Phase 39 | Satisfied |
-| SLICE-03 | Phase 39 | Satisfied |
-| SLICE-04 | Phase 39 | Satisfied |
-| SLICE-05 | Phase 39 | Satisfied |
-| SLICE-06 | Phase 39 | Satisfied |
-| PREVIEW-01 | Phase 40 | Satisfied |
-| PREVIEW-02 | Phase 40 | Satisfied |
-| PREVIEW-03 | Phase 40 | Satisfied |
-| PREVIEW-04 | Phase 40 | Satisfied |
-| PREVIEW-05 | Phase 41 | Satisfied |
-| PREVIEW-06 | Phase 41 | Satisfied |
-| PREVIEW-07 | Phase 41 | Satisfied |
-| PREVIEW-08 | Phase 41 | Satisfied |
-| EXPORT-01 | Phase 42 | Satisfied |
-| EXPORT-02 | Phase 42 | Satisfied |
-| EXPORT-03 | Phase 42 | Satisfied |
-| EXPORT-04 | Phase 42 | Satisfied |
-| EXPORT-05 | Phase 42 | Satisfied |
-| EXPORT-06 | Phase 42 | Satisfied |
-| VERIFY-01 | Phase 43 | Satisfied |
-| VERIFY-02 | Phase 43 | Satisfied |
-| VERIFY-03 | Phase 43 | Satisfied |
-| VERIFY-04 | Phase 43 | Satisfied |
-| VERIFY-05 | Phase 43 | Pending |
+| PSET-01 | Phase 44 | Pending |
+| PSET-02 | Phase 44 | Pending |
+| PSET-03 | Phase 44 | Pending |
+| PSET-04 | Phase 44 | Pending |
+| PSET-05 | Phase 44 | Pending |
+| PSET-06 | Phase 44 | Pending |
+| COMP-01 | Phase 45 | Pending |
+| COMP-02 | Phase 45 | Pending |
+| COMP-03 | Phase 45 | Pending |
+| COMP-04 | Phase 45 | Pending |
+| COMP-05 | Phase 45 | Pending |
+| COMP-06 | Phase 45 | Pending |
+| EDIT-01 | Phase 46 | Pending |
+| EDIT-02 | Phase 46 | Pending |
+| EDIT-03 | Phase 46 | Pending |
+| EDIT-04 | Phase 46 | Pending |
+| EDIT-05 | Phase 46 | Pending |
+| EDIT-06 | Phase 46 | Pending |
+| LIFE-01 | Phase 47 | Pending |
+| LIFE-02 | Phase 47 | Pending |
+| LIFE-03 | Phase 47 | Pending |
+| LIFE-04 | Phase 47 | Pending |
+| LIFE-05 | Phase 47 | Pending |
+| CREATE-01 | Phase 48 | Pending |
+| CREATE-02 | Phase 48 | Pending |
+| CREATE-03 | Phase 48 | Pending |
+| CREATE-04 | Phase 48 | Pending |
+| CREATE-05 | Phase 48 | Pending |
+| FLOW-01 | Phase 49 | Pending |
+| FLOW-02 | Phase 49 | Pending |
+| FLOW-03 | Phase 49 | Pending |
+| FLOW-04 | Phase 49 | Pending |
+| FLOW-05 | Phase 49 | Pending |
+| FLOW-06 | Phase 49 | Pending |
+| VERIFY-01 | Phase 49 | Pending |
+| VERIFY-02 | Phase 49 | Pending |
+| VERIFY-03 | Phase 49 | Pending |
+| VERIFY-04 | Phase 49 | Pending |
+| VERIFY-05 | Phase 49 | Pending |
 
-**Coverage:** 35 total; 35 mapped; 0 unmapped; 34 satisfied.
+**Coverage:** 39 total; 39 mapped; 0 unmapped; 0 satisfied.
 
 ---
 
-*Requirements defined: 2026-06-28*
-*Last updated: 2026-06-29 after Phase 43 automated verification; VERIFY-05 awaits manual UAT.*
+*Requirements defined: 2026-06-30*
+*Last updated: 2026-06-30 after v3.5 roadmap creation.*
