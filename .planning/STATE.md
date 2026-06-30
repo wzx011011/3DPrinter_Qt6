@@ -1,50 +1,55 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.5
-milestone_name: Preset Authoring Complete Workflow
-status: ready_to_plan
-last_updated: 2026-06-30T20:45:00+08:00
-last_activity: 2026-06-30 -- Phase 46 config editing dirty state and reset semantics complete
+milestone: v3.6
+milestone_name: Screenshot-Driven OrcaSlicer UI Restoration
+status: planning
+last_updated: 2026-07-01T02:00:40+08:00
+last_activity: 2026-07-01 -- v3.6 milestone started; v3.5 unfinished phases superseded
 progress:
-  total_phases: 6
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
-  percent: 50
-stopped_at: Phase 46 complete (1/1) -- ready to discuss Phase 47
+  total_phases: 9
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+stopped_at: New milestone planned; ready to discuss Phase 50
 ---
 
 # Project State
 
-**Milestone:** v3.5 - Preset Authoring Complete Workflow
-**Status:** Ready to plan
-**Next step:** Discuss Phase 47, `Preset Lifecycle Actions`.
+**Milestone:** v3.6 - Screenshot-Driven OrcaSlicer UI Restoration
+**Status:** Planning
+**Next step:** Start Phase 50, `Screenshot and Source-Truth Inventory`.
 
 ## Current Position
 
-Phase: 47
+Phase: 50
 Plan: Not started
 Status: Ready to discuss
-Last activity: 2026-06-30 -- Phase 46 complete
+Last activity: 2026-07-01 -- v3.6 milestone started; v3.5 unfinished phases superseded
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
-**Core value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
-**Current focus:** Phase 47 - preset lifecycle actions
+**Core value:** OrcaSlicer upstream behavior is the product source of truth; screenshot-driven UI milestones also use screenshots as the visual/layout source of truth.
+**Current focus:** Restore Prepare, Preview, and parameter settings as complete OrcaSlicer-equivalent workflows, using screenshots for visual parity and upstream source for behavior.
 
-## Latest Verified Shipped Milestone
+## Superseded Milestone Status
 
-**v3.2 Multi-Plate Data Polish** - audited 2026-06-28, status `tech_debt`.
+**v3.5 Preset Authoring Complete Workflow** is no longer the active milestone.
 
-- Phases 29-32 complete.
-- Requirements: 8/10 complete; `THUMB-02` and `FIXTURE-02` partial because the shared 3MF writer integration path is deferred.
-- Details: `.planning/v3.2-MILESTONE-AUDIT.md` and `.planning/milestones/v3.2-MILESTONE-AUDIT.md`.
+- Phase 44: Preset Bundle Service Foundation - complete historical evidence.
+- Phase 45: Compatibility and Selection State - complete historical evidence.
+- Phase 46: Config Editing, Dirty State, and Reset Semantics - complete historical evidence.
+- Phase 47: Preset Lifecycle Actions - superseded by v3.6 Settings and full UI restoration.
+- Phase 48: Create Presets and Bundle Workflows - superseded by v3.6 Settings and full UI restoration.
+- Phase 49: Slice Integration, Verification, and Handoff - superseded by v3.6 end-to-end restoration.
+
+Do not resume v3.5 Phase 47-49 unless the user explicitly reopens that milestone.
 
 ## Carry-Forward Status
 
-**v3.4 Import to G-code Complete Workflow** reached Phase 43 with automated verification passing, but manual UAT is still pending because the user cannot verify it right now.
+**v3.4 Import to G-code Complete Workflow** reached Phase 43 with automated verification passing, but manual UAT is still pending because the user could not verify it at the time.
 
 Do not mark v3.4 as fully complete until this checklist is actually run:
 
@@ -52,47 +57,57 @@ Do not mark v3.4 as fully complete until this checklist is actually run:
 Run build/OWzxSlicer.exe and complete .planning/phases/43-end-to-end-verification-and-handoff/43-UAT.md
 ```
 
-This does not block v3.5 planning, but it remains a release/handoff fact.
-
 ## Active Milestone Plan
 
 | Phase | Name | Status |
 |---|---|---|
-| 44 | Preset Bundle Service Foundation | Complete |
-| 45 | Compatibility and Selection State | Complete |
-| 46 | Config Editing, Dirty State, and Reset Semantics | Complete |
-| 47 | Preset Lifecycle Actions | Pending |
-| 48 | Create Presets and Bundle Workflows | Pending |
-| 49 | Slice Integration, Verification, and Handoff | Pending |
+| 50 | Screenshot and Source-Truth Inventory | Pending |
+| 51 | Shell and Navigation Restoration | Pending |
+| 52 | Prepare Sidebar and Preset Controls | Pending |
+| 53 | Prepare Object, Plate, and Viewport Workflow | Pending |
+| 54 | Preview Layout, Sliders, and Right Panels | Pending |
+| 55 | G-code Preview Semantics and Rendering Stability | Pending |
+| 56 | Parameter Settings Dialogs Restoration | Pending |
+| 57 | Deprecated UI Removal and Architecture Cleanup | Pending |
+| 58 | End-to-End Visual and Functional Verification | Pending |
 
-## v3.5 Scope
+## v3.6 Scope
 
-This milestone completes the preset authoring workflow:
+This milestone restores the user-visible Prepare page, Preview page, and parameter settings workflows as complete source-truth-aligned UI flows:
 
 ```text
-Load preset bundle -> select compatible printer/filament/process presets -> edit config -> save/create/import/export presets -> slice/export with the edited config
+Import model -> select/edit printer/material/process settings -> prepare model/plate -> slice -> inspect G-code preview -> export G-code
 ```
 
-It intentionally does not include device send/upload/cloud printing, Monitor print-job lifecycle, AssembleView, auto filament-map recommendation, wipe-tower rendering, or renderer backend promotion.
+Screenshots under `shotScreen/` are visual/layout truth. OrcaSlicer upstream source under `third_party/OrcaSlicer` is behavior truth.
+
+If an existing Qt page is materially off-design and expensive to repair, replace it and remove the old files, routes, resource entries, registrations, imports, and tests in the same milestone.
 
 ## Deferred Items
 
 | Category | Item | Target |
 |---|---|---|
 | carry-forward | v3.4 Phase 43 manual UAT | Before claiming v3.4 complete |
-| future | Device send/upload/cloud print and Monitor job lifecycle | v3.6+ |
-| future | AssembleView | v3.6+ |
-| future | Auto filament-map recommendation | v3.6+ |
-| future | Wipe-tower geometry + rendering | v3.6+ |
-| future | THUMB-03 real GL/QRhi-capture thumbnails and 3MF pixel round-trip | v3.6+ |
-| future | FIXTURE-02 full PLATE-09 save/reload assertions after writer integration fix | v3.6+ |
+| superseded | v3.5 Phase 47-49 | Do not resume unless explicitly reopened |
+| future | Device send/upload/cloud print and Monitor job lifecycle | After local workflow restoration |
+| future | AssembleView | Future source-truth milestone |
+| future | Auto filament-map recommendation | Future source-truth milestone |
+| future | Wipe-tower geometry and rendering | Future source-truth milestone |
+| future | THUMB-03 real GL/QRhi-capture thumbnails and 3MF pixel round-trip | Future renderer/project milestone |
+| future | FIXTURE-02 full PLATE-09 save/reload assertions after writer integration fix | Future fixture milestone |
 | future | Missing CLI test fixtures (`hotend.stl`, `Block20XY.stl`) | Future fixture milestone |
 | opportunistic | D3D12 crash root cause | Dedicated backend investigation milestone |
 
 ## Handoff
 
-Continue with Phase 47:
+Start with Phase 50:
 
 ```text
-$gsd-autonomous --from 47
+$gsd-plan-phase 50
+```
+
+or run the milestone autonomously:
+
+```text
+$gsd-autonomous --from 50
 ```

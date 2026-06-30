@@ -1,6 +1,6 @@
 # Planning Index
 
-Last updated: 2026-06-30
+Last updated: 2026-07-01
 
 This is the canonical entry point for `.planning/`. Historical phase files are evidence; current work starts from the files below.
 
@@ -10,9 +10,10 @@ This is the canonical entry point for `.planning/`. Historical phase files are e
 - Current state: [STATE.md](STATE.md)
 - Current roadmap: [ROADMAP.md](ROADMAP.md)
 - Current requirements: [REQUIREMENTS.md](REQUIREMENTS.md)
+- v3.6 starting inventory: [research/v3.6-SCREENSHOT-SOURCE-TRUTH.md](research/v3.6-SCREENSHOT-SOURCE-TRUTH.md)
 - Remaining migration plan: [REMAINING_MIGRATION_PLAN.md](REMAINING_MIGRATION_PLAN.md)
 - Milestone history: [MILESTONES.md](MILESTONES.md)
-- Latest milestone audit: [v3.2-MILESTONE-AUDIT.md](v3.2-MILESTONE-AUDIT.md)
+- Latest completed milestone audit: [v3.2-MILESTONE-AUDIT.md](v3.2-MILESTONE-AUDIT.md)
 - Archived milestone audit: [milestones/v3.2-MILESTONE-AUDIT.md](milestones/v3.2-MILESTONE-AUDIT.md)
 - Retrospective: [RETROSPECTIVE.md](RETROSPECTIVE.md)
 - Prior alignment audit: [audits/2026-06-24-plan-implementation-alignment.md](audits/2026-06-24-plan-implementation-alignment.md)
@@ -21,26 +22,30 @@ This is the canonical entry point for `.planning/`. Historical phase files are e
 
 ## Active Milestone
 
-**v3.5 Preset Authoring Complete Workflow** is active.
+**v3.6 Screenshot-Driven OrcaSlicer UI Restoration** is active.
 
 Primary objective:
 
-- Load preset bundle -> select compatible printer/filament/process presets -> edit config -> save/create/import/export presets -> slice/export with the edited config.
+- Restore the Prepare page, Preview page, and parameter settings workflows as complete OrcaSlicer-equivalent user flows, using screenshots as visual/layout truth and OrcaSlicer source as behavior truth.
 
 Active phases:
 
-- Phase 44: Preset Bundle Service Foundation
-- Phase 45: Compatibility and Selection State
-- Phase 46: Config Editing, Dirty State, and Reset Semantics
-- Phase 47: Preset Lifecycle Actions
-- Phase 48: Create Presets and Bundle Workflows
-- Phase 49: Slice Integration, Verification, and Handoff
+- Phase 50: Screenshot and Source-Truth Inventory
+- Phase 51: Shell and Navigation Restoration
+- Phase 52: Prepare Sidebar and Preset Controls
+- Phase 53: Prepare Object, Plate, and Viewport Workflow
+- Phase 54: Preview Layout, Sliders, and Right Panels
+- Phase 55: G-code Preview Semantics and Rendering Stability
+- Phase 56: Parameter Settings Dialogs Restoration
+- Phase 57: Deprecated UI Removal and Architecture Cleanup
+- Phase 58: End-to-End Visual and Functional Verification
 
 Carry-forward:
 
-- v3.4 Phase 43 manual UAT remains pending because the user cannot verify it right now. Do not mark v3.4 fully complete without running `.planning/phases/43-end-to-end-verification-and-handoff/43-UAT.md`.
+- v3.4 Phase 43 manual UAT remains pending because the user could not verify it earlier. Do not mark v3.4 fully complete without running `.planning/phases/43-end-to-end-verification-and-handoff/43-UAT.md`.
+- v3.5 Phase 47-49 are superseded by v3.6 and should not be resumed as standalone work unless explicitly reopened.
 
-Deferred until after preset authoring:
+Deferred until after v3.6:
 
 - Device send/upload/cloud print and Monitor task workflow
 - AssembleView
@@ -61,6 +66,7 @@ Deferred until after preset authoring:
 | `ROADMAP.md` | Active/latest milestone phase plan | Keep focused on the active or most recently audited milestone |
 | `REMAINING_MIGRATION_PLAN.md` | Ordered post-v2.9 backlog | Update when a milestone changes backlog order |
 | `MILESTONES.md` | Historical shipped milestone summary | Append milestone-level summaries only |
+| `research/` | Current milestone research and inventory inputs | Link files from requirements/roadmap when they are execution inputs |
 | `audits/` | Dated read-only audit and gap reports | New dated files; do not mix execution work here |
 | `details/` | Focused module research notes | Keep only if linked from requirements or audits |
 | `phases/` | Executed phase artifacts | Treat as historical evidence after phase close |
@@ -75,14 +81,20 @@ Use these status terms in requirements, audits, and handoffs:
 - **Mock:** local simulation only.
 - **Blocked:** unavailable dependency, credential, protocol, or product decision.
 - **Placeholder:** visible UI or enum exists but no meaningful backend behavior.
+- **Superseded:** previous scope intentionally abandoned in favor of the active milestone.
 
-Do not treat phase completion as product completion unless the exact workflow is implemented and verified against upstream behavior.
+Do not treat phase completion as product completion unless the exact workflow is implemented and verified against upstream behavior and screenshot visual truth where applicable.
 
 ## Next Step
 
-Start Phase 44:
+Start Phase 50:
 
 ```text
-$gsd-plan-phase 44
-$gsd-execute-phase 44
+$gsd-plan-phase 50
+```
+
+or execute the milestone autonomously:
+
+```text
+$gsd-autonomous --from 50
 ```

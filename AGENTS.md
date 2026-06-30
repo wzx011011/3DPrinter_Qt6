@@ -5,6 +5,8 @@ This repository is a source-truth migration project from OrcaSlicer to Qt6/QML (
 See @.codex/rules/source-truth-migration.md for the canonical project migration rules.
 See @.codex/rules/build-rules.md for the canonical build rules.
 
+Screenshot-driven UI milestones use screenshots as visual/layout truth and OrcaSlicer source as behavior truth. If an existing page is materially off-design, replace it and remove the old files, routes, registrations, tests, imports, and resources instead of keeping deprecated UI code.
+
 ## Project Skills
 
 - Use `/migrating-source-truth` to continue the next recorded migration task under the project rules. Append `all` for continuous batch mode.
@@ -239,7 +241,8 @@ See @.codex/rules/build-rules.md for the canonical build rules.
 - Used on classes and important methods: `/// Description here`
 - Constructor documentation with usage examples (see `JobBase.h`)
 - Struct field comments where not self-evident
-- Format: `// TODO: description` or `// TODO: 中文描述`
+- All new or modified source comments must be English and ASCII-only.
+- Format: `// TODO: description`
 - Used sparingly for deferred implementation: ~10 total across codebase
 - Example: `// TODO: Implement actual clear logic when mesh selection is available`
 ## Class Design Patterns

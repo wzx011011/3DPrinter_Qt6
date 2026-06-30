@@ -8,7 +8,7 @@ import "../controls"
 Item {
     id: root
     required property var projectVm
-    /// editorVm 注入（用于 loadFile 导入模型；由 main.qml 透传）
+    /// Viewmodel used by project import/save actions. Passed through from main.qml.
     property var editorVm: null
     property var _fileTree: []
 
@@ -23,13 +23,13 @@ Item {
 
     Rectangle { anchors.fill: parent; color: Theme.bgBase }
 
-    // PAGE-01: 项目操作 FileDialog（打开/导入用）
+    // PAGE-01: Project operation file dialogs.
     FileDialog {
         id: openProjectDlg
         title: qsTr("打开项目")
         nameFilters: [qsTr("3MF 项目 (*.3mf)"), qsTr("所有文件 (*)")]
         onAccepted: {
-            // 打开 .3mf 项目 = 加载到 editorVm（ProjectService.loadFile）
+            // Opening a .3mf project loads it through EditorViewModel.
             if (root.editorVm)
                 root.editorVm.loadFile(currentFile.toString().replace("file:///", ""))
         }
@@ -52,7 +52,7 @@ Item {
         nameFilters: [qsTr("3MF 项目 (*.3mf)")]
         defaultSuffix: "3mf"
         onAccepted: {
-            // v2.4 IO-03: 真实保存（editorVm.saveProjectAs → ProjectService → libslic3r store_3mf）
+            // v2.4 IO-03: Save through EditorViewModel and ProjectService.
             var path = currentFile.toString().replace("file:///", "")
             if (root.editorVm) {
                 var ok = root.editorVm.saveProjectAs(path)
@@ -61,7 +61,7 @@ Item {
         }
     }
 
-    // v2.4 IO-03: 导出模型 FileDialog（STL/3MF/OBJ）
+    // v2.4 IO-03: Model export dialog for STL/3MF/OBJ.
     FileDialog {
         id: exportModelDlg
         title: qsTr("导出模型")
@@ -69,7 +69,7 @@ Item {
         nameFilters: [qsTr("STL (*.stl)"), qsTr("3MF (*.3mf)"), qsTr("OBJ (*.obj)")]
         onAccepted: {
             var path = currentFile.toString().replace("file:///", "")
-            // 从文件扩展名推断格式
+            // Infer the export format from the file extension.
             var ext = path.split('.').pop().toLowerCase()
             if (root.editorVm) {
                 var ok = root.editorVm.exportModel(path, ext)
@@ -97,7 +97,7 @@ Item {
                 anchors.rightMargin: 14
                 spacing: Theme.spacingSM
 
-                // PAGE-01: 6 按钮接线（对齐上游 MainFrame 项目操作）
+                // PAGE-01: Project action buttons mapped to upstream MainFrame project actions.
                 Repeater {
                     model: [
                         { label: qsTr("新建项目"), action: "new" },
@@ -114,7 +114,7 @@ Item {
                         onClicked: {
                             switch (modelData.action) {
                                 case "new":
-                                    // 新建 = 清空当前（TODO: ProjectService.clearProject）
+                                    // TODO: Route New Project through ProjectService once clearProject is available.
                                     console.log("[ProjectPage] new project")
                                     break
                                 case "open":
@@ -128,7 +128,7 @@ Item {
                                     importModelDlg.open()
                                     break
                                 case "export":
-                                    // v2.4 IO-03: 导出模型（选格式 → exportModel）
+                                    // v2.4 IO-03: Export the model with the selected format.
                                     exportModelDlg.open()
                                     break
                             }

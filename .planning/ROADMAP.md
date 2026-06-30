@@ -8,149 +8,211 @@
 - Complete with tech debt: **v3.2 Multi-Plate Data Polish** - Phases 29-32 (audited 2026-06-28)
 - Complete at MVP level, superseded for completeness: **v3.3 Slice Preview Main Flow MVP** - Phases 33-36
 - Automated verification passed, manual UAT deferred: **v3.4 Import to G-code Complete Workflow** - Phases 37-43
-- Active: **v3.5 Preset Authoring Complete Workflow** - Phases 44-49
+- Superseded after Phase 46: **v3.5 Preset Authoring Complete Workflow** - Phases 44-49
+- Active: **v3.6 Screenshot-Driven OrcaSlicer UI Restoration** - Phases 50-58
 
-## Active Milestone: v3.5 Preset Authoring Complete Workflow
+## Active Milestone: v3.6 Screenshot-Driven OrcaSlicer UI Restoration
 
-**Goal:** Complete the source-truth-aligned preset authoring workflow so users can load, select, edit, validate, save, create, import/export, and apply printer, filament, and process presets through the Qt UI, with the resulting configuration feeding Prepare, Slice, Preview, Export, and CLI paths.
+**Goal:** Restore the Prepare page, Preview page, and parameter settings workflows as complete OrcaSlicer-equivalent user flows, using screenshots as visual/layout truth and OrcaSlicer source as behavior truth.
 
 **Success criteria:**
-- A user can load upstream-compatible printer, filament, and process presets and understand built-in/user, inheritance, compatibility, and dirty state.
-- A user can edit typed config options, see modified values and value sources, reset changes, and avoid silent loss through unsaved-change prompts.
-- A user can Save, Save As, rename, delete, create, import, and export presets through real C++ service paths, not placeholder QML-only flows.
-- Preset compatibility and validation prevent invalid combinations from producing stale Preview/export state or silent bad G-code.
-- Edited presets drive Prepare invalidation, SliceService merged config, generated G-code behavior where observable, local export availability, and CLI slicing.
-- Automated and manual UAT cover the complete preset-authoring-to-slice workflow before the milestone is marked complete.
+- Every visible screenshot module has a recorded mapping to Qt target files and upstream OrcaSlicer source files.
+- Prepare page layout and behavior support import, preset selection, object/plate actions, viewport controls, and gizmo entry points without placeholder-only workflows.
+- Preview page layout and behavior support G-code inspection, layer/move sliders, camera interaction, right-side legend/stat panels, and G-code text sync without disappearing-render regressions.
+- Printer, material, and process settings are restored as independent source-truth-aligned dialogs/pages with typed option editing, dirty state, validation, save/reset, and compatibility behavior.
+- Replaced pages/components leave no abandoned files, routes, resource entries, registrations, imports, or tests behind.
+- The full local workflow import -> configure -> prepare -> slice -> preview -> export is verified with automated checks and manual visual/UAT evidence.
 
 ## Phases
 
-- [x] **Phase 44:** Preset Bundle Service Foundation (completed 2026-06-30)
-- [x] **Phase 45:** Compatibility and Selection State (completed 2026-06-30)
-- [x] **Phase 46:** Config Editing, Dirty State, and Reset Semantics (completed 2026-06-30)
-- [ ] **Phase 47:** Preset Lifecycle Actions
-- [ ] **Phase 48:** Create Presets and Bundle Workflows
-- [ ] **Phase 49:** Slice Integration, Verification, and Handoff
+- [ ] **Phase 50:** Screenshot and Source-Truth Inventory
+- [ ] **Phase 51:** Shell and Navigation Restoration
+- [ ] **Phase 52:** Prepare Sidebar and Preset Controls
+- [ ] **Phase 53:** Prepare Object, Plate, and Viewport Workflow
+- [ ] **Phase 54:** Preview Layout, Sliders, and Right Panels
+- [ ] **Phase 55:** G-code Preview Semantics and Rendering Stability
+- [ ] **Phase 56:** Parameter Settings Dialogs Restoration
+- [ ] **Phase 57:** Deprecated UI Removal and Architecture Cleanup
+- [ ] **Phase 58:** End-to-End Visual and Functional Verification
 
-### Phase 44: Preset Bundle Service Foundation
+### Phase 50: Screenshot and Source-Truth Inventory
 
-**Goal:** Replace mock-only preset assumptions with a deterministic C++ preset service aligned with upstream `PresetBundle`, `PresetCollection`, and `Preset` semantics.
+**Goal:** Build the detailed visual/behavior contract before modifying UI code.
 
-**Requirements:** `PSET-01`, `PSET-02`, `PSET-03`, `PSET-04`, `PSET-05`, `PSET-06`.
-
-**Deliverables:**
-- Source-truth comparison against upstream `libslic3r/Preset.*`, `libslic3r/PresetBundle.*`, and Qt local `PresetServiceMock`.
-- Service model for printer, filament, and process presets, including category, inheritance, built-in/user, read-only, vendor/model/nozzle/material metadata, and selected state.
-- Real load path for upstream-compatible system/vendor/user presets with deterministic fallback classification.
-- Real import/export service contract or explicit source-truth-compatible local format when upstream archive behavior cannot be used directly.
-- Failure and diagnostics path for missing/corrupt/version-incompatible preset data.
-
-**Success criteria:**
-1. Preset lists are populated from real upstream-compatible data when available and never silently degrade to stale mock defaults.
-2. Preset metadata and selection state are visible through C++ APIs used by `ConfigViewModel`.
-3. Preset selections persist across restart or simulated app reload in deterministic tests.
-4. Bundle import/export validates data and reports failures without corrupting existing presets.
-
-### Phase 45: Compatibility and Selection State
-
-**Goal:** Make printer, filament, and process selection behavior match upstream compatibility expectations for the local FFF workflow.
-
-**Requirements:** `COMP-01`, `COMP-02`, `COMP-03`, `COMP-04`, `COMP-05`, `COMP-06`.
+**Requirements:** `INV-01`, `INV-02`, `INV-03`, `INV-04`, `INV-05`.
 
 **Deliverables:**
-- Source-truth comparison against upstream `PresetBundle::update_compatible`, `PresetComboBoxes`, `ConfigWizard`, and related selection flows.
-- Compatibility model for the current printer, filament, and process selection.
-- Selection repair/auto-match behavior for printer changes, with clear user-facing reasons for blocked or incompatible choices.
-- Validation coverage for option type, enum, min/max, nullable state, unit, and dependency constraints.
-- Read-only and built-in preset protection surfaced through action enablement and errors.
+- Inventory table for `shotScreen/准备页.png`, `shotScreen/预览页.png`, `shotScreen/打印机参数设置页.png`, and `shotScreen/材料参数设置页.png`.
+- Prepare module mapping against upstream `Plater.*`, `GLCanvas3D.*`, `GUI_ObjectList.*`, `GUI_ObjectSettings.*`, and `Gizmos/*`.
+- Preview module mapping against upstream `GUI_Preview.*`, `GCodeViewer.*`, `GLCanvas3D.*`, and `libslic3r/GCode/*`.
+- Settings module mapping against upstream `Tab.*`, `PresetComboBoxes.*`, `ConfigManipulation.*`, `UnsavedChangesDialog.*`, `CreatePresetsDialog.*`, `PrintConfig.*`, `Preset.*`, and `PresetBundle.*`.
+- Modify-vs-replace decision per module, including cleanup checklist for each replacement.
 
 **Success criteria:**
-1. Changing printer updates compatible filament/process options and preserves or repairs selections according to documented upstream mapping.
-2. Incompatible combinations cannot produce a silent stale slice, invalid Preview, or exportable result.
-3. Built-in/system presets are protected from destructive actions.
-4. Validation warnings and blocking errors are visible through the normal notification/error path.
+1. Every screenshot-visible region has a Qt target, upstream source target, status, and verification method.
+2. No implementation phase starts with unmapped screenshot-visible controls in its scope.
+3. Replacement decisions explicitly identify old files, routes, resources, registrations, imports, and tests to remove.
+4. Open behavior gaps are classified as Real, Hybrid, Mock, Blocked, Placeholder, or Superseded.
 
-### Phase 46: Config Editing, Dirty State, and Reset Semantics
+### Phase 51: Shell and Navigation Restoration
 
-**Goal:** Make configuration editing model-driven, type-aware, and safe under preset/scope changes.
+**Goal:** Restore the application-level shell and workflow actions so Prepare, Preview, and settings sit inside the right OrcaSlicer-like frame.
 
-**Requirements:** `EDIT-01`, `EDIT-02`, `EDIT-03`, `EDIT-04`, `EDIT-05`, `EDIT-06`.
+**Requirements:** `SHELL-01`, `SHELL-02`, `SHELL-03`, `SHELL-04`, `SHELL-05`.
 
 **Deliverables:**
-- Source-truth comparison against upstream config tabs, `ConfigManipulation`, option metadata, and unsaved-change triggers.
-- C++ model support for typed option values, labels, units, choices, categories, search, and basic/advanced filtering.
-- Dirty-state and modified-option tracking per active preset tier.
-- Value-source and difference APIs for inherited/default/project/plate/object/volume/layer-range values.
-- Reset-one, reset-all, and reset-scope override behavior.
-- Unsaved-change decision flow for switching preset, scope, page, or project.
+- Source-truth comparison for top navigation, menus, page switching, and high-priority actions.
+- Restored top shell and navigation QML structure, replacing off-design routes where needed.
+- C++ viewmodel state for action enablement, loading, error, and blocked states.
+- Notification/error placement that does not block critical viewport/sidebar controls.
+- Removal plan for shell-level legacy pages/routes that conflict with the restored workflow.
 
 **Success criteria:**
-1. Editing options updates C++ state, modified counts, displayed values, and dirty indicators immediately.
-2. Reset operations restore the correct inherited/default/scoped value and refresh UI models.
-3. Switching context with unsaved edits prompts Save, Discard, or Cancel and cannot silently lose changes.
-4. QML config pages contain presentation wiring only; business rules remain in C++.
+1. User can navigate Prepare, Preview, Device/Monitor, Project, and settings actions through a screenshot-aligned shell.
+2. Import, slice, preview, export, save, undo/redo, and settings actions are driven by C++ state.
+3. Page switching preserves relevant Prepare and Preview state.
+4. No obsolete placeholder route remains in the restored local workflow.
 
-### Phase 47: Preset Lifecycle Actions
+### Phase 52: Prepare Sidebar and Preset Controls
 
-**Goal:** Complete the user preset lifecycle: Save, Save As, rename, delete, and diff/unsaved review.
+**Goal:** Restore the Prepare left sidebar and preset/settings controls as the main configuration entry point.
 
-**Requirements:** `LIFE-01`, `LIFE-02`, `LIFE-03`, `LIFE-04`, `LIFE-05`.
+**Requirements:** `PREPSB-01`, `PREPSB-02`, `PREPSB-03`, `PREPSB-04`, `PREPSB-05`.
 
 **Deliverables:**
-- Source-truth comparison against upstream `SavePresetDialog`, `UnsavedChangesDialog`, and preset delete/rename behavior.
-- Save path for writable user presets with disk persistence and reload verification.
-- Save As path for built-in or user presets with name validation, duplicate handling, category routing, and modified suffix handling.
-- Rename and delete behavior with dependent selection repair and clear blocker reasons.
-- Difference/review data for modified preset values before saving.
+- Screenshot-aligned Prepare left sidebar structure for printer, material/filament, and process selections.
+- Sidebar-to-settings dialog entry points for printer, material, and process categories.
+- Compatibility, dirty, read-only, warning, and modified-state viewmodel bindings.
+- Basic/advanced and search/filter behavior backed by C++ option/config models.
+- Slice invalidation and merged-config integration for sidebar changes.
 
 **Success criteria:**
-1. Saving a writable user preset persists edited values and reloads them correctly.
-2. Saving from a built-in/read-only preset routes to Save As or reports an actionable blocker.
-3. Rename/delete update selectors, active selections, compatibility state, and dependent references coherently.
-4. Unsaved/diff information is sufficient for the user to decide whether to save or discard changes.
+1. User can select and inspect printer/material/process state from the Prepare sidebar.
+2. Settings buttons open the correct restored parameter settings category.
+3. Sidebar warning/dirty/compatibility state updates without placeholder text.
+4. Sidebar changes invalidate stale slice/preview/export state through C++ paths.
 
-### Phase 48: Create Presets and Bundle Workflows
+### Phase 53: Prepare Object, Plate, and Viewport Workflow
 
-**Goal:** Implement CreatePresetsDialog-equivalent creation plus real preset bundle import/export UI.
+**Goal:** Restore the Prepare workspace around object operations, plate operations, viewport controls, and gizmo entry points.
 
-**Requirements:** `CREATE-01`, `CREATE-02`, `CREATE-03`, `CREATE-04`, `CREATE-05`.
+**Requirements:** `PREPWF-01`, `PREPWF-02`, `PREPWF-03`, `PREPWF-04`, `PREPWF-05`, `PREPWF-06`.
 
 **Deliverables:**
-- Source-truth comparison against upstream `CreatePresetsDialog`, `ConfigWizard`, `PresetBundleDialog`, and `ExportPresetBundleDialog`.
-- Qt dialog/viewmodel flow for creating printer presets from vendor/model/variant/nozzle inputs available in local preset data.
-- Qt dialog/viewmodel flow for creating filament and process presets with compatibility metadata.
-- Bundle import/export UI backed by Phase 44 service APIs, including duplicate and partial-import handling.
-- User-visible classification of unsupported vendor data, blocked cloud-only behavior, invalid names, and partial imports.
+- Source-truth comparison for object list/actions, plate controls, context menus, camera controls, and gizmos.
+- Import/project load wiring from restored Prepare flow to object list, plate state, and renderer state.
+- Object actions for select, rename, duplicate, delete, arrange, lock/unlock, printable state, and volume inspection where supported.
+- Plate switching/management UI aligned with screenshot and current PartPlate behavior.
+- View controls for camera orientation, zoom, bed/grid, vertical tools, and supported gizmo entry points.
+- Renderer stability checks for selection, camera movement, plate switching, page return, and tool changes.
 
 **Success criteria:**
-1. Newly created printer, filament, and process presets appear immediately in selectors and survive reload.
-2. Created presets can be selected and used for a real local slice without app restart.
-3. Import/export flows no longer operate as placeholder-only QML paths.
-4. Unsupported or partial preset data is classified and reported without corrupting existing presets.
+1. User can import a model and immediately see consistent object, plate, and viewport state.
+2. Object and plate actions either work through source-truth behavior or are honestly classified and gated.
+3. Viewport controls do not overlap, resize unexpectedly, or leave stale selected/tool state.
+4. Prepare renderer remains visible through the core interaction sequence.
 
-### Phase 49: Slice Integration, Verification, and Handoff
+### Phase 54: Preview Layout, Sliders, and Right Panels
 
-**Goal:** Prove edited presets drive the real local slicing/export workflow and regression-guard the milestone.
+**Goal:** Restore the Preview page layout and interaction surfaces around the existing G-code preview workflow.
 
-**Requirements:** `FLOW-01`, `FLOW-02`, `FLOW-03`, `FLOW-04`, `FLOW-05`, `FLOW-06`, `VERIFY-01`, `VERIFY-02`, `VERIFY-03`, `VERIFY-04`, `VERIFY-05`.
+**Requirements:** `PREVLAY-01`, `PREVLAY-02`, `PREVLAY-03`, `PREVLAY-04`, `PREVLAY-05`.
 
 **Deliverables:**
-- Source-truth comparison against upstream `PresetBundle::full_fff_config`, `BackgroundSlicingProcess`, project config restore/save, and CLI preset usage.
-- Merged-config integration for UI slicing, export, project import/save, per-plate/object/volume/layer overrides, and CLI slicing.
-- Slice invalidation hooks for every relevant preset selection or edit.
-- Automated tests for preset lifecycle, compatibility, dirty/reset state, merged slicing config, import/export, QML binding, and local slice/export output.
-- Manual UAT checklist for create/edit/save/reload/select/slice/export.
-- Handoff note that preserves v3.4 manual UAT status if still unavailable.
+- Screenshot-aligned Preview layout with left summary, center viewport, vertical layer slider, bottom move slider, and right panels.
+- Layer and move slider viewmodel bindings that preserve camera and renderer state.
+- Preview camera interaction handling for rotate, pan, and zoom.
+- Plate thumbnail/summary, current layer/move, print time, filament usage, and warning displays.
+- Panel collapse/resize behavior where supported by screenshot/source truth.
 
 **Success criteria:**
-1. Edited preset values reach `SliceService` through the same merged-config path used by UI and CLI workflows.
-2. Preset edits and selection changes invalidate stale Prepare, Preview, and Export state immediately.
-3. 3MF project load/save preserves the config data needed for equivalent local slicing behavior.
-4. Canonical verification passes with preset authoring coverage.
-5. Manual UAT covers the complete preset-authoring-to-G-code flow before v3.5 is marked complete.
+1. User sees the same major Preview structure shown in the screenshot.
+2. Dragging the layer slider does not clear or hide the preview.
+3. Dragging the camera after slicing does not clear or hide the preview.
+4. Right-side panels display real preview/print statistics where data is available.
+
+### Phase 55: G-code Preview Semantics and Rendering Stability
+
+**Goal:** Complete the G-code preview behavior behind the restored Preview UI and prevent renderer regressions.
+
+**Requirements:** `GCODE-01`, `GCODE-02`, `GCODE-03`, `GCODE-04`, `GCODE-05`.
+
+**Deliverables:**
+- Source-truth comparison for G-code viewer data, color modes, line-type filters, layer/move semantics, and current-line sync.
+- Real G-code segment/layer metadata path from slicing/export into Preview for normal local workflows.
+- Color-mode and line-type filter APIs and UI bindings.
+- Layer/move filtering integration with GPU draw ranges, legend values, and G-code text/current-line state.
+- D3D11 QRhi path verification and regression tests for camera drag, layer drag, move drag, page switch, reslice, and export.
+
+**Success criteria:**
+1. Normal Preview does not rely on placeholder segment data after a real local slice.
+2. Color modes and line-type filters update visible rendering and legend state coherently.
+3. Layer/move filters update draw ranges and text/current-line state together.
+4. Restored Preview does not regress to `SoftwareViewport` unless explicitly classified as fallback.
+
+### Phase 56: Parameter Settings Dialogs Restoration
+
+**Goal:** Restore printer, material, and process settings as independent OrcaSlicer-like settings workflows.
+
+**Requirements:** `SETTINGS-01`, `SETTINGS-02`, `SETTINGS-03`, `SETTINGS-04`, `SETTINGS-05`, `SETTINGS-06`, `SETTINGS-07`.
+
+**Deliverables:**
+- Screenshot-aligned settings dialog/page structure for printer and material screenshots, plus process settings by upstream parity.
+- Top tabs, option groups, scroll behavior, labels, controls, and density matched to the screenshots.
+- C++ typed option model coverage for boolean, numeric, enum, string, unit, nullable, and multi-value fields where supported.
+- Dirty state, modified indicators, value source, read-only state, validation warnings, and blocking errors.
+- Save, Save As, reset option/group/all, discard, cancel, and unsaved-change behavior.
+- Search and basic/advanced filtering.
+- Integration with Prepare sidebar, slice invalidation, merged slicing config, and project save/restore.
+
+**Success criteria:**
+1. User opens printer/material/process settings from the restored workflow without Project-page embedding.
+2. Settings dialogs visually match the supplied screenshots at the module and density level.
+3. Edits are model-driven and update dirty, validation, and sidebar state.
+4. Save/reset/unsaved-change actions follow upstream-compatible behavior.
+
+### Phase 57: Deprecated UI Removal and Architecture Cleanup
+
+**Goal:** Remove replaced/off-design UI code and enforce clean architecture boundaries after restoration work.
+
+**Requirements:** `CLEAN-01`, `CLEAN-02`, `CLEAN-03`, `CLEAN-04`.
+
+**Deliverables:**
+- Audit of all replaced Prepare, Preview, Settings, shell, sidebar, dialog, and renderer files.
+- Deletion or update of obsolete QML/C++ files, `qml.qrc` entries, type registrations, routes, imports, tests, docs, and references.
+- QML business-logic audit with migration of durable behavior into C++ services/viewmodels.
+- Encoding and comment cleanup for changed files.
+
+**Success criteria:**
+1. No active UI path retains old/deprecated/disconnected copies of replaced components.
+2. Resource files and type registrations contain only live components.
+3. Workflow behavior, validation, settings state, preset state, and preview filtering live in C++.
+4. Encoding guard and diff checks show no new BOM/mojibake/comment-rule issues.
+
+### Phase 58: End-to-End Visual and Functional Verification
+
+**Goal:** Prove the restored workflow works visually and functionally from import through G-code export.
+
+**Requirements:** `VERIFY-01`, `VERIFY-02`, `VERIFY-03`, `VERIFY-04`, `VERIFY-05`.
+
+**Deliverables:**
+- Automated tests for inventory completeness, viewmodel state, QML route/resource registration, and cleanup guards.
+- Automated tests for import -> configure -> prepare -> slice -> preview -> export state transitions.
+- Regression tests or deterministic harnesses for Preview layer/move/camera disappearing bugs.
+- Manual UAT checklist comparing Prepare, Preview, printer settings, and material settings against screenshots and upstream behavior.
+- Canonical verification run or classified failure report.
+
+**Success criteria:**
+1. Requirements traceability shows 47/47 requirements mapped and verified or honestly classified.
+2. The restored app can run the full local workflow without using deprecated UI paths.
+3. Preview remains visible through layer slider, move slider, and camera interaction.
+4. Manual visual/UAT checklist is ready for the user and records exact remaining gaps if any.
+5. `scripts/auto_verify_with_vcvars.ps1` passes, or failure is documented with root cause and owner.
 
 ## Deferred Backlog
 
 - v3.4 Phase 43 manual UAT for import -> Prepare -> slice -> Preview -> export remains pending until the user can verify it.
+- v3.5 Phase 47-49 are superseded by v3.6 and should not be resumed as standalone work unless explicitly reopened.
 - Device send/upload/cloud print and Monitor task workflow.
 - AssembleView.
 - Auto filament-map recommendation and wipe-tower geometry/rendering.
@@ -161,12 +223,18 @@
 
 ## Next Step
 
-Continue with Phase 47:
+Start Phase 50:
 
 ```text
-$gsd-autonomous --from 47
+$gsd-plan-phase 50
+```
+
+or execute the milestone autonomously:
+
+```text
+$gsd-autonomous --from 50
 ```
 
 ---
 
-*Last updated: 2026-06-30 after Phase 46 completion.*
+*Last updated: 2026-07-01 for v3.6 milestone definition.*

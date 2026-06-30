@@ -357,21 +357,53 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 ### v3.5 - Preset Authoring Complete Workflow
 
 **Started:** 2026-06-30
-**Status:** Planned
+**Superseded:** 2026-07-01
+**Status:** Superseded after Phase 46
 **Phases:** 44-49
 
 **Goal:** Complete the source-truth-aligned preset authoring workflow so users can load, select, edit, validate, save, create, import/export, and apply printer, filament, and process presets through the Qt UI, with the resulting configuration feeding Prepare, Slice, Preview, Export, and CLI paths.
 
-**Planned phases:**
-- Phase 44: Preset Bundle Service Foundation
-- Phase 45: Compatibility and Selection State
-- Phase 46: Config Editing, Dirty State, and Reset Semantics
-- Phase 47: Preset Lifecycle Actions
-- Phase 48: Create Presets and Bundle Workflows
-- Phase 49: Slice Integration, Verification, and Handoff
+**Phases reached:**
+- Phase 44: Preset Bundle Service Foundation - complete historical evidence
+- Phase 45: Compatibility and Selection State - complete historical evidence
+- Phase 46: Config Editing, Dirty State, and Reset Semantics - complete historical evidence
+- Phase 47: Preset Lifecycle Actions - superseded by v3.6 settings restoration
+- Phase 48: Create Presets and Bundle Workflows - superseded by v3.6 settings restoration
+- Phase 49: Slice Integration, Verification, and Handoff - superseded by v3.6 end-to-end restoration
 
-**Next step:** Plan and execute Phase 44.
+**Outcome:** User rejected continuing the partial preset-only milestone and requested full screenshot/source-truth restoration of Prepare, Preview, and parameter settings. Phase 47-49 are intentionally abandoned as standalone work. Reusable Phase 44-46 code may be folded into v3.6 only when it supports the restored UI and does not preserve off-design behavior.
+
+**Next step:** Continue with v3.6.
 
 ---
 
-*Last updated: 2026-06-30 after v3.5 planning.*
+### v3.6 - Screenshot-Driven OrcaSlicer UI Restoration
+
+**Started:** 2026-07-01
+**Status:** Active planning
+**Phases:** 50-58
+
+**Goal:** Restore the Prepare page, Preview page, and parameter settings workflows as complete OrcaSlicer-equivalent user flows, using screenshots as visual/layout truth and OrcaSlicer source as behavior truth.
+
+**Planned phases:**
+- Phase 50: Screenshot and Source-Truth Inventory
+- Phase 51: Shell and Navigation Restoration
+- Phase 52: Prepare Sidebar and Preset Controls
+- Phase 53: Prepare Object, Plate, and Viewport Workflow
+- Phase 54: Preview Layout, Sliders, and Right Panels
+- Phase 55: G-code Preview Semantics and Rendering Stability
+- Phase 56: Parameter Settings Dialogs Restoration
+- Phase 57: Deprecated UI Removal and Architecture Cleanup
+- Phase 58: End-to-End Visual and Functional Verification
+
+**Key rules:**
+- Screenshots under `shotScreen/` are visual/layout truth.
+- OrcaSlicer source under `third_party/OrcaSlicer` is behavior truth.
+- If an existing page is materially off-design, replace it and remove obsolete files, routes, registrations, resources, imports, tests, and disconnected code paths.
+- New or modified source comments must be English and ASCII-only.
+
+**Next step:** Plan and execute Phase 50.
+
+---
+
+*Last updated: 2026-07-01 after v3.6 planning.*

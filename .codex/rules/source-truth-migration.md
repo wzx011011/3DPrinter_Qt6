@@ -9,12 +9,21 @@ This repository is an OrcaSlicer-to-Qt6/QML migration project for OWzx Slicer.
 - Do not invent product behavior unless it is explicitly documented as an OWzx-only decision.
 - Historical CrealityPrint-era documents are evidence only. New source-truth work must cite OrcaSlicer upstream paths unless the task is explicitly about legacy compatibility cleanup.
 
+## Screenshot And Source Dual Truth
+
+- When a milestone is screenshot-driven, screenshots under `shotScreen/` define visual layout truth, while OrcaSlicer source defines behavior truth.
+- Screenshot-visible controls are not complete until their upstream behavior, Qt target surface, status, and verification path are mapped.
+- Every restored module must record the screenshot region, upstream source files, Qt/QML targets, required behavior list, remaining gaps, and verification method.
+- If screenshot evidence and upstream behavior appear to disagree, stop and classify the gap before implementing product behavior.
+
 ## Completeness Over Legacy Compatibility
 
 - Future milestones must implement the complete target behavior for their declared scope, not an MVP or partial compatibility layer unless the user explicitly asks for an MVP.
 - If an existing Qt implementation is simplified, mock, legacy, or semantically wrong for the milestone target, replace or rewrite it instead of preserving the old behavior for compatibility.
 - Keep old behavior only when it is still source-truth-correct, or when it is explicitly documented as a temporary fallback with a status classification, removal condition, and follow-up owner.
 - Do not build parallel old/new logic paths merely to avoid changing callers. Update callers to the correct source-truth contract.
+- If a page or component is materially off-design and not worth repairing, create a replacement and remove the old files, registrations, routes, tests, imports, and resource entries in the same milestone.
+- Do not keep `legacy`, `old`, `unused`, `deprecated`, or disconnected UI code paths after a replacement lands.
 - Tests should lock the intended complete behavior, including rejecting the old incorrect behavior when that behavior previously existed.
 
 ## Implementation Boundaries
@@ -23,6 +32,14 @@ This repository is an OrcaSlicer-to-Qt6/QML migration project for OWzx Slicer.
 - Business logic, validation, persistence, and upstream behavior mapping belong in C++ services/viewmodels under `src/core/`.
 - QML is for presentation, layout, state binding, and interaction wiring.
 - If QML logic becomes durable business behavior, move it into C++ or document it as migration debt.
+
+## Text Encoding And Comments
+
+- New or modified source comments must be English and ASCII-only.
+- Do not add Chinese text to comments, planning-facing source annotations, TODOs, or inline migration notes.
+- User-visible Chinese belongs in `qsTr()` strings and translation files, not in comments.
+- When touching a file that already contains mojibake comments, replace only the comments whose intent is clear from code or source-truth context; do not guess lost text.
+- Preserve UTF-8 without BOM for all text files.
 
 ## Upstream Mapping
 
