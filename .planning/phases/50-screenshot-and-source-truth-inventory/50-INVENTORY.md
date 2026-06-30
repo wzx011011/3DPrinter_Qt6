@@ -284,3 +284,33 @@ on disk, the sign-off remains PASS. This observation is flagged so the
 discrepancy can be reconciled (either by updating the §1.3/§1.4 region-table
 `modify_or_replace` cells to `replace`, or by confirming the per-table intent)
 when Phase 56 plans its work; it does not block Phase 50 close.
+
+## 3. INV-01..INV-05 Traceability
+
+Maps each INV requirement to where it is satisfied in this frozen snapshot, with
+real evidence counts measured by the §2 verification pass (no placeholders).
+
+| Requirement | Where satisfied | Evidence |
+|---|---|---|
+| INV-01 | §1.1–§1.4 excerpts | 34 total region rows across all 4 screenshots (Prepare 9 + Preview 9 + Printer 8 + Material 8). Every visible region is cataloged with region name, visible controls, Qt target, upstream source, behavior status, and verification method (all 9 cells populated per row). |
+| INV-02 | §1.1 Prepare excerpt + INV-02 coverage anchor | All 5 Prepare cluster globs referenced (`Plater.*`, `GLCanvas3D.*`, `GUI_ObjectList.*`, `GUI_ObjectSettings.*`, `Gizmos/*`); 9 Prepare rows. Every PREP- row's `upstream_source` cites at least one cluster member. |
+| INV-03 | §1.2 Preview excerpt + INV-03 coverage anchor | All 4 Preview cluster globs referenced (`GUI_Preview.*`, `GCodeViewer.*`, `GLCanvas3D.*`, `libslic3r/GCode/*`); 9 Preview rows. Every PREV- row's `upstream_source` cites at least one cluster member. |
+| INV-04 | §1.3 + §1.4 Settings excerpts + INV-04 coverage anchors | All 8 Settings cluster globs referenced across printer + material (`Tab.*`, `PresetComboBoxes.*`, `ConfigManipulation.*`, `UnsavedChangesDialog.*`, `CreatePresetsDialog.*`, `PrintConfig.*`, `Preset.*`, `PresetBundle.*`); 8 printer rows + 8 material rows = 16 Settings rows. Coverage anchor appears once per screenshot (×2). |
+| INV-05 | §1.5 modify-vs-replace summary + §1.6 cleanup checklist | §1.5 records 18 modify / 14 replace / 2 missing-target decisions (one per region_id). §1.6 aggregate cleanup checklist uses the six grep tags — `file:`×4, `qrc:`×3, `route:`×3, `import:`×2, `doc:`×2 (`test:`×0, no Settings test to remove) — and every `file:` entry exists on disk (4/4 verified). |
+
+INV-01 → §1.1–§1.4 completeness (every visible region across all 4 screenshots cataloged — 34 rows).
+INV-02 → §1.1 coverage assertion (Prepare mapped against Plater.*/GLCanvas3D.*/GUI_ObjectList.*/GUI_ObjectSettings.*/Gizmos/*).
+INV-03 → §1.2 coverage assertion (Preview mapped against GUI_Preview.*/GCodeViewer.*/GLCanvas3D.*/libslic3r/GCode/*).
+INV-04 → §1.3–§1.4 coverage assertion (Settings mapped against Tab.*/PresetComboBoxes.*/ConfigManipulation.*/UnsavedChangesDialog.*/CreatePresetsDialog.*/PrintConfig.*/Preset.*/PresetBundle.*).
+INV-05 → §1.5 (modify-vs-replace per region) + §1.6 (cleanup checklist per replacement).
+
+## 4. Phase 50 → Phase 51 handoff
+
+The canonical `docs/v3.6-ui-inventory.md` is the live copy Phases 51–57 will
+update statuses in; region IDs are immutable (frozen at Phase 50 close). This
+frozen `50-INVENTORY.md` is the verified snapshot consumed by Phase 58 (VERIFY-01),
+which will encode the §2 deterministic checks (presence, region counts, 9-column
+schema, status/verification enums, region-ID format, coverage anchors, cleanup
+format, file existence) as `tests/InventoryAuditTests.cpp`. The §2 Observation
+(modify-vs-replace cross-table discrepancy in the Settings regions) should be
+reconciled when Phase 56 plans its dialog work.
