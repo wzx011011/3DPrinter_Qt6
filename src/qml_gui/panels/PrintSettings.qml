@@ -5,10 +5,10 @@ import ".."
 import "../controls"
 import "../components"
 
-// 打印设置面板 — 三段式可折叠布局（对齐上游 Sidebar 结构）
-// Section 1: 打印机（打印机预设 + 热床类型）
-// Section 2: 耗材（耗材槽位 + 兼容性指示 + 自动匹配）
-// Section 3: 打印设置（作用域选择 + 预设选择 + 选项列表）
+// 鎵撳嵃璁剧疆闈㈡澘 鈥?涓夋寮忓彲鎶樺彔甯冨眬锛堝榻愪笂娓?Sidebar 缁撴瀯锛?
+// Section 1: 鎵撳嵃鏈猴紙鎵撳嵃鏈洪璁?+ 鐑簥绫诲瀷锛?
+// Section 2: 鑰楁潗锛堣€楁潗妲戒綅 + 鍏煎鎬ф寚绀?+ 鑷姩鍖归厤锛?
+// Section 3: 鎵撳嵃璁剧疆锛堜綔鐢ㄥ煙閫夋嫨 + 棰勮閫夋嫨 + 閫夐」鍒楄〃锛?
 Item {
     id: root
     required property var configVm
@@ -18,7 +18,7 @@ Item {
     property string searchText: ""
     property string processCategory: ""
     property var filteredIndices: []
-    readonly property var visibleCategories: [qsTr("质量"), qsTr("接缝"), qsTr("精度"), qsTr("墙壁和表面"), qsTr("填充"), qsTr("支撑"), qsTr("底座"), qsTr("速度"), qsTr("温度"), qsTr("其他")]
+    readonly property var visibleCategories: [qsTr("Quality"), qsTr("Strength"), qsTr("Speed"), qsTr("Support"), qsTr("Adhesion"), qsTr("Material"), qsTr("Cooling"), qsTr("Advanced"), qsTr("Experimental"), qsTr("G-code")]
     readonly property var activeCategories: root.processCategory !== ""
         ? [root.processCategory]
         : root.visibleCategories
@@ -30,29 +30,29 @@ Item {
 
     function scopeTitle() {
         switch (root.selectedScope) {
-        case "volume": return qsTr("部件打印参数")
-        case "object": return qsTr("对象打印参数")
-        case "plate":  return qsTr("平板打印参数")
-        default:       return qsTr("全局打印参数")
+        case "volume": return qsTr("閮ㄤ欢鎵撳嵃鍙傛暟")
+        case "object": return qsTr("瀵硅薄鎵撳嵃鍙傛暟")
+        case "plate":  return qsTr("骞虫澘鎵撳嵃鍙傛暟")
+        default:       return qsTr("鍏ㄥ眬鎵撳嵃鍙傛暟")
         }
     }
 
     function scopeSubtitle() {
         if (root.selectedScope === "global")
-            return qsTr("当前预设作用于整个工程")
+            return qsTr("Global settings affect the entire print profile.")
         if (root.settingsTargetName.length === 0)
-            return qsTr("未选择目标")
+            return qsTr("鏈€夋嫨鐩爣")
         if (root.selectedScope === "volume")
-            return qsTr("当前目标：部件 . %1").arg(root.settingsTargetName)
+            return qsTr("褰撳墠鐩爣锛氶儴浠?. %1").arg(root.settingsTargetName)
         if (root.selectedScope === "plate")
-            return qsTr("当前目标：平板 . %1").arg(root.settingsTargetName)
-        return qsTr("当前目标：对象 . %1").arg(root.settingsTargetName)
+            return qsTr("褰撳墠鐩爣锛氬钩鏉?. %1").arg(root.settingsTargetName)
+        return qsTr("褰撳墠鐩爣锛氬璞?. %1").arg(root.settingsTargetName)
     }
 
     function rebuildFilter() {
         if (!root.configVm) { filteredIndices = []; return }
         var indices = root.configVm.filterOptionIndices("", root.searchText, root.advancedEnabled)
-        // 排序以便拖拽排序（对齐上游 DragCanvas 交互）
+        // 鎺掑簭浠ヤ究鎷栨嫿鎺掑簭锛堝榻愪笂娓?DragCanvas 浜や簰锛?
         indices.sort(function(a, b) { return a - b; })
         filteredIndices = indices
     }
@@ -81,19 +81,19 @@ Item {
         function onDataVersionChanged() { root.rebuildFilter() }
     }
 
-    // 搜索对话框（对齐上游 SearchDialog / OptionsSearcher）
+    // 鎼滅储瀵硅瘽妗嗭紙瀵归綈涓婃父 SearchDialog / OptionsSearcher锛?
     SearchDialog {
         id: searchDialog
         configVm: root.configVm
         parent: root
         onJumpToOption: (idx) => {
-            // 跳转到指定选项：高亮显示并滚动到可见
+            // 璺宠浆鍒版寚瀹氶€夐」锛氶珮浜樉绀哄苟婊氬姩鍒板彲瑙?
             root.highlightedOptionIndex = idx
             highlightTimer.start()
         }
     }
 
-    // 值来源层级弹窗（对齐上游 Tab 值来源可视化 + reset_to_level）
+    // 鍊兼潵婧愬眰绾у脊绐楋紙瀵归綈涓婃父 Tab 鍊兼潵婧愬彲瑙嗗寲 + reset_to_level锛?
     CxPopup {
         id: valueChainPopup
         property string currentKey: ""
@@ -133,12 +133,12 @@ Item {
                 anchors.margins: 12
                 spacing: 8
 
-                // 标题行
+                // 鏍囬琛?
                 RowLayout {
                     Layout.fillWidth: true
                     Text {
                         Layout.fillWidth: true
-                        text: qsTr("值来源") + " — " + valueChainPopup.currentKey
+                        text: qsTr("Value Chain") + " - " + valueChainPopup.currentKey
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeMD
                         font.bold: true
@@ -156,7 +156,7 @@ Item {
 
                 Rectangle { width: parent.width - 24; height: 1; color: Theme.borderSubtle }
 
-                // 继承链层级列表
+                // 缁ф壙閾惧眰绾у垪琛?
                 Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -171,7 +171,7 @@ Item {
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 8; spacing: 8
                                 Rectangle { width: 8; height: 8; radius: 4; color: "#506070" }
-                                Text { text: qsTr("默认值"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
+                                Text { text: qsTr("Default"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                                 Item { Layout.fillWidth: true }
                                 Text { text: valueChainPopup.chainData.default || "-"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace"
                                     Layout.alignment: Qt.AlignRight; Layout.rightMargin: 8
@@ -192,7 +192,7 @@ Item {
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 8; spacing: 8
                                 Rectangle { width: 8; height: 8; radius: 4; color: "#6ed4a0" }
-                                Text { text: qsTr("打印预设"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
+                                Text { text: qsTr("鎵撳嵃棰勮"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                                 Item { Layout.fillWidth: true }
                                 Text { text: valueChainPopup.chainData.print || "-"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace"
                                     Layout.alignment: Qt.AlignRight; Layout.rightMargin: 8
@@ -213,7 +213,7 @@ Item {
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 8; spacing: 8
                                 Rectangle { width: 8; height: 8; radius: 4; color: "#d4a06e" }
-                                Text { text: qsTr("耗材预设"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
+                                Text { text: qsTr("鑰楁潗棰勮"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                                 Item { Layout.fillWidth: true }
                                 Text { text: valueChainPopup.chainData.filament || "-"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace"
                                     Layout.alignment: Qt.AlignRight; Layout.rightMargin: 8
@@ -234,7 +234,7 @@ Item {
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 8; spacing: 8
                                 Rectangle { width: 8; height: 8; radius: 4; color: "#6ea8d4" }
-                                Text { text: qsTr("打印机预设"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
+                                Text { text: qsTr("Printer"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                                 Item { Layout.fillWidth: true }
                                 Text { text: valueChainPopup.chainData.printer || "-"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace"
                                     Layout.alignment: Qt.AlignRight; Layout.rightMargin: 8
@@ -255,7 +255,7 @@ Item {
                             width: parent.width; height: 28; color: Theme.bgSurface
                             RowLayout {
                                 anchors.fill: parent; anchors.leftMargin: 8; spacing: 8
-                                Text { text: qsTr("当前值"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true }
+                                Text { text: qsTr("Current"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true }
                                 Item { Layout.fillWidth: true }
                                 Text { text: valueChainPopup.chainData.current || "-"; color: "#58a6ff"; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace"
                                     Layout.alignment: Qt.AlignRight; Layout.rightMargin: 8
@@ -267,7 +267,7 @@ Item {
 
                 Text {
                     Layout.fillWidth: true
-                    text: qsTr("点击 \u2713 重置到该层级值")
+                    text: qsTr("Use the checkmark to restore a value to the selected level.")
                     color: "#506070"
                     font.pixelSize: 9
                     horizontalAlignment: Text.AlignHCenter
@@ -276,13 +276,13 @@ Item {
         }
     }
 
-    // Ctrl+F 快捷键打开搜索对话框
+    // Ctrl+F 蹇嵎閿墦寮€鎼滅储瀵硅瘽妗?
     Shortcut {
         sequence: "Ctrl+F"
         onActivated: searchDialog.openWithQuery(root.searchText)
     }
 
-    // 高亮跳转目标选项
+    // 楂樹寒璺宠浆鐩爣閫夐」
     property int highlightedOptionIndex: -1
     Timer {
         id: highlightTimer
@@ -290,10 +290,10 @@ Item {
         onTriggered: root.highlightedOptionIndex = -1
     }
 
-    // 重命名打印机预设对话框（放在根级避免作用域问题）
+    // 閲嶅懡鍚嶆墦鍗版満棰勮瀵硅瘽妗嗭紙鏀惧湪鏍圭骇閬垮厤浣滅敤鍩熼棶棰橈級
     CxDialog {
         id: renamePrinterDialog
-        dialogTitle: qsTr("重命名预设")
+        dialogTitle: qsTr("Rename Printer Preset")
         width: 320
         ColumnLayout {
             spacing: 8
@@ -307,8 +307,8 @@ Item {
             RowLayout {
                 Layout.alignment: Qt.AlignRight
                 spacing: 8
-                CxButton { text: qsTr("取消"); cxStyle: CxButton.Style.Ghost; onClicked: renamePrinterDialog.reject() }
-                CxButton { text: qsTr("确认"); onClicked: renamePrinterDialog.accept() }
+                CxButton { text: qsTr("鍙栨秷"); cxStyle: CxButton.Style.Ghost; onClicked: renamePrinterDialog.reject() }
+                CxButton { text: qsTr("纭"); onClicked: renamePrinterDialog.accept() }
             }
         }
         onAccepted: {
@@ -322,9 +322,9 @@ Item {
         anchors.fill: parent
         spacing: 6
 
-        // ═══════════════════════════════════════════════════
-        // Modified Options summary bar（对齐上游 Tab::modified_options）
-        // ═══════════════════════════════════════════════════
+        // 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
+        // Modified Options summary bar锛堝榻愪笂娓?Tab::modified_options锛?
+        // 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
         Rectangle {
             id: modifiedBar
             Layout.fillWidth: true
@@ -363,7 +363,7 @@ Item {
                     }
 
                     Text {
-                        text: qsTr("%1 项已修改").arg(root.configVm ? root.configVm.globalModifiedCount : 0)
+                        text: qsTr("%1 椤瑰凡淇敼").arg(root.configVm ? root.configVm.globalModifiedCount : 0)
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeMD
                         font.bold: true
@@ -373,7 +373,7 @@ Item {
 
                     // Expand / Collapse toggle
                     Text {
-                        text: modifiedBar.expanded ? qsTr("收起") : qsTr("展开")
+                        text: modifiedBar.expanded ? qsTr("鏀惰捣") : qsTr("灞曞紑")
                         color: Theme.accent
                         font.pixelSize: Theme.fontSizeSM
                         MouseArea {
@@ -488,7 +488,7 @@ Item {
 
                             CxButton {
                                 id: resetOptBtn
-                                text: qsTr("重置")
+                                text: qsTr("閲嶇疆")
                                 compact: true
                                 cxStyle: CxButton.Style.Ghost
                                 onClicked: {
@@ -513,7 +513,7 @@ Item {
                         Item { Layout.fillWidth: true }
 
                         CxButton {
-                            text: qsTr("全部重置")
+                            text: qsTr("鍏ㄩ儴閲嶇疆")
                             compact: true
                             cxStyle: CxButton.Style.Secondary
                             onClicked: {
@@ -526,12 +526,12 @@ Item {
             }
         }
 
-        // ═══════════════════════════════════════════════════
-        // Section 1: 打印机（对齐上游 Sidebar Printer Section）
-        // ═══════════════════════════════════════════════════
+        // 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
+        // Section 1: 鎵撳嵃鏈猴紙瀵归綈涓婃父 Sidebar Printer Section锛?
+        // 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
         CollapsibleSection {
             id: printerSection
-            title: qsTr("打印机")
+            title: qsTr("Printer")
             iconText: "P"
             Layout.fillWidth: true
 
@@ -540,13 +540,13 @@ Item {
                 anchors.right: parent.right
                 spacing: 6
 
-                // 打印机预设选择行
+                // 鎵撳嵃鏈洪璁鹃€夋嫨琛?
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 6
 
                     Text {
-                        text: qsTr("预设")
+                        text: qsTr("棰勮")
                         color: Theme.textSecondary
                         font.pixelSize: Theme.fontSizeXS
                         font.bold: true
@@ -568,7 +568,7 @@ Item {
                         }
                         onActivated: (i) => {
                             if (root.configVm && i >= 0)
-                                root.configVm.setCurrentPrinterPreset(model[i])
+                                root.configVm.requestCurrentPrinterPreset(model[i])
                         }
                     }
                     Rectangle {
@@ -599,13 +599,13 @@ Item {
                     }
                 }
 
-                // 热床类型选择行（对齐上游 Sidebar Printer Section bed_type combo）
+                // 鐑簥绫诲瀷閫夋嫨琛岋紙瀵归綈涓婃父 Sidebar Printer Section bed_type combo锛?
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 6
 
                     Text {
-                        text: qsTr("热床")
+                        text: qsTr("鐑簥")
                         color: Theme.textSecondary
                         font.pixelSize: Theme.fontSizeXS
                         font.bold: true
@@ -624,17 +624,17 @@ Item {
             }
         }
 
-        // ═══════════════════════════════════════════════════
-        // Section 2: 耗材（对齐上游 Sidebar Material/Filament Section）
-        // ═══════════════════════════════════════════════════
+        // 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
+        // Section 2: 鑰楁潗锛堝榻愪笂娓?Sidebar Material/Filament Section锛?
+        // 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
         CollapsibleSection {
             id: filamentSection
-            title: qsTr("耗材")
+            title: qsTr("鑰楁潗")
             iconText: "F"
             Layout.fillWidth: true
 
             rightActions: [
-                // 兼容性警告指示器
+                // 鍏煎鎬ц鍛婃寚绀哄櫒
                 Rectangle {
                     width: 8; height: 8; radius: 4
                     visible: !!root.configVm && !root.configVm.isCurrentFilamentCompatible()
@@ -644,7 +644,7 @@ Item {
                     ToolTip.delay: 500
                     MouseArea { id: compMA2; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
                 },
-                // 自动匹配按钮（对齐上游 Sidebar m_auto_mapping_btn）
+                // 鑷姩鍖归厤鎸夐挳锛堝榻愪笂娓?Sidebar m_auto_mapping_btn锛?
                 Rectangle {
                     width: 22; height: 22; radius: 4
                     color: autoMatchBtn.containsMouse ? "#1c2a3e" : "transparent"
@@ -660,7 +660,7 @@ Item {
                 anchors.right: parent.right
                 spacing: 6
 
-                // 耗材槽位网格（对齐上游 FilamentPanel FilamentItem 列表）
+                // 鑰楁潗妲戒綅缃戞牸锛堝榻愪笂娓?FilamentPanel FilamentItem 鍒楄〃锛?
                 GridLayout {
                     columns: 3
                     rowSpacing: 8
@@ -707,12 +707,12 @@ Item {
             }
         }
 
-        // ═══════════════════════════════════════════════════
-        // Section 3: 打印设置（对齐上游 Sidebar ParamsPanel Section）
-        // ═══════════════════════════════════════════════════
+        // 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
+        // Section 3: 鎵撳嵃璁剧疆锛堝榻愪笂娓?Sidebar ParamsPanel Section锛?
+        // 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
         CollapsibleSection {
             id: settingsSection
-            title: qsTr("打印设置")
+            title: qsTr("鎵撳嵃璁剧疆")
             iconText: "S"
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -723,7 +723,7 @@ Item {
                 anchors.right: parent.right
                 spacing: 6
 
-                // 作用域选择器（对齐上游 ParamsPanel scope tabs）
+                // 浣滅敤鍩熼€夋嫨鍣紙瀵归綈涓婃父 ParamsPanel scope tabs锛?
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 6
@@ -756,7 +756,7 @@ Item {
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: { if (root.configVm) root.configVm.activateGlobalScope() }
+                                onClicked: { if (root.configVm) root.configVm.requestGlobalScope() }
                             }
                         }
 
@@ -783,10 +783,10 @@ Item {
                                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                 onClicked: {
                                     if (root.configVm && root.settingsTargetName.length > 0)
-                                        root.configVm.activateObjectScope(root.settingsTargetType,
-                                                                          root.settingsTargetName,
-                                                                          root.settingsTargetObjectIndex,
-                                                                          root.settingsTargetVolumeIndex)
+                                        root.configVm.requestObjectScope(root.settingsTargetType,
+                                                                         root.settingsTargetName,
+                                                                         root.settingsTargetObjectIndex,
+                                                                         root.settingsTargetVolumeIndex)
                                 }
                             }
                         }
@@ -812,7 +812,7 @@ Item {
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
                                     if (root.configVm && root.editorVm)
-                                        root.configVm.activatePlateScope(root.editorVm.currentPlateIndex)
+                                        root.configVm.requestPlateScope(root.editorVm.currentPlateIndex)
                                 }
                             }
                         }
@@ -840,12 +840,12 @@ Item {
                     }
                 }
 
-                // 打印/耗材预设选择行（对齐上游 PresetBundle 2-tier in ParamsPanel）
+                // 鎵撳嵃/鑰楁潗棰勮閫夋嫨琛岋紙瀵归綈涓婃父 PresetBundle 2-tier in ParamsPanel锛?
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 6
 
-                    // 打印预设行
+                    // 鎵撳嵃棰勮琛?
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 6
@@ -873,7 +873,7 @@ Item {
                             }
                             onActivated: (i) => {
                                 if (root.configVm && i >= 0)
-                                    root.configVm.setCurrentPrintPreset(model[i])
+                                    root.configVm.requestCurrentPrintPreset(model[i])
                             }
                         }
                         Rectangle {
@@ -902,7 +902,7 @@ Item {
                                 onClicked: if (root.configVm) root.configVm.deletePreset(0, root.configVm.currentPrintPreset)
                             }
                         }
-                        // 重命名打印预设对话框
+                        // 閲嶅懡鍚嶆墦鍗伴璁惧璇濇
                         CxDialog {
                             id: renamePrintDialog
                             dialogTitle: qsTr("Rename Preset")
@@ -931,7 +931,7 @@ Item {
                         }
                     }
 
-                    // 耗材预设行
+                    // 鑰楁潗棰勮琛?
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 6
@@ -976,9 +976,9 @@ Item {
                             }
                             onActivated: (i) => {
                                 if (root.configVm && i >= 0)
-                                    root.configVm.setCurrentFilamentPreset(model[i])
+                                    root.configVm.requestCurrentFilamentPreset(model[i])
                             }
-                            // 对齐上游 Tab: 不兼容耗材灰化显示
+                            // 瀵归綈涓婃父 Tab: 涓嶅吋瀹硅€楁潗鐏板寲鏄剧ず
                             delegate: ItemDelegate {
                                 required property int index
                                 required property string modelData
@@ -1036,7 +1036,7 @@ Item {
                                 onClicked: if (root.configVm) root.configVm.deletePreset(1, root.configVm.currentFilamentPreset)
                             }
                         }
-                        // 重命名耗材预设对话框
+                        // 閲嶅懡鍚嶈€楁潗棰勮瀵硅瘽妗?
                         CxDialog {
                             id: renameFilaDialog
                             dialogTitle: qsTr("Rename Preset")
@@ -1066,8 +1066,8 @@ Item {
                     }
                 }
 
-                // 分类选项列表（对齐上游 ParamsPanel m_page_view）
-                // 双层级: Page > Category > Options（对齐上游 Tab::Page > Group > Option）
+                // 鍒嗙被閫夐」鍒楄〃锛堝榻愪笂娓?ParamsPanel m_page_view锛?
+                // 鍙屽眰绾? Page > Category > Options锛堝榻愪笂娓?Tab::Page > Group > Option锛?
                 Text {
                     Layout.fillWidth: true
                     visible: !!root.configVm && !root.configVm.currentPresetCombinationValid
@@ -1083,7 +1083,7 @@ Item {
                     Layout.fillHeight: true
                     clip: true
 
-                    // 滚动到高亮选项（对齐上游 Tab::activate_option 滚动行为）
+                    // 婊氬姩鍒伴珮浜€夐」锛堝榻愪笂娓?Tab::activate_option 婊氬姩琛屼负锛?
                     function scrollToHighlight(itemY, itemHeight) {
                         if (!itemY || !contentItem) return
                         const visibleHeight = height
@@ -1108,7 +1108,7 @@ Item {
                         width: parent.width
                         spacing: 6
 
-                        // Page-level Repeater (对齐上游 Tab::Page)
+                        // Page-level Repeater (瀵归綈涓婃父 Tab::Page)
                         Repeater {
                             id: pageRepeater
                             model: root.configVm && root.configVm.printOptions
@@ -1118,7 +1118,7 @@ Item {
                                 width: parent.width
                                 spacing: 6
 
-                                // Page header (对齐上游 Page title bar)
+                                // Page header (瀵归綈涓婃父 Page title bar)
                                 Rectangle {
                                     width: parent.width
                                     height: 28
@@ -1139,7 +1139,7 @@ Item {
                                     }
                                 }
 
-                                // Category-level Repeater (对齐上游 ConfigOptionsGroup)
+                                // Category-level Repeater (瀵归綈涓婃父 ConfigOptionsGroup)
                                 Repeater {
                                     model: root.activeCategories
 
@@ -1191,17 +1191,17 @@ Item {
                                                 readonly property double oStep: opts ? opts.optStep(optIdx) : 1
                                                 readonly property bool oRO: opts ? opts.optReadonly(optIdx) : false
                                                 readonly property string oUnit: opts ? opts.optUnit(optIdx) : ""
-                                                // 值来源层级指示（对齐上游 Tab 预设继承链）
+                                                // 鍊兼潵婧愬眰绾ф寚绀猴紙瀵归綈涓婃父 Tab 棰勮缁ф壙閾撅級
                                                 readonly property string valueSrc: root.configVm ? root.configVm.valueSourceForKey(oKey) : "default"
                                                 readonly property string valueChain: root.configVm ? root.configVm.valueChainForKey(oKey) : "{}"
                                                 readonly property bool isHighlighted: root.highlightedOptionIndex === optIdx
-                                                // 修改状态指示（对齐上游 Tab::Field m_is_modified_value / OptStatus）
+                                                // 淇敼鐘舵€佹寚绀猴紙瀵归綈涓婃父 Tab::Field m_is_modified_value / OptStatus锛?
                                                 readonly property bool isModified: opts ? opts.optIsDirty(optIdx) : false
 
-                                                // 滚动到高亮选项（对齐上游 Tab::activate_option ensure_visible）
+                                                // 婊氬姩鍒伴珮浜€夐」锛堝榻愪笂娓?Tab::activate_option ensure_visible锛?
                                                 onIsHighlightedChanged: {
                                                     if (isHighlighted && optionsScrollView.contentItem) {
-                                                        // 延迟执行以确保布局完成
+                                                        // 寤惰繜鎵ц浠ョ‘淇濆竷灞€瀹屾垚
                                                         Qt.callLater(() => {
                                                             const pos = mapToItem(optionsScrollView.contentItem, 0, 0)
                                                             optionsScrollView.scrollToHighlight(pos.y, height)
@@ -1221,7 +1221,7 @@ Item {
                                                     anchors.rightMargin: isModified ? 8 : 10
                                                     spacing: 6
 
-                                                    // 值来源色点指示器（对齐上游 Tab value source）— 点击弹出继承链弹窗
+                                                    // 鍊兼潵婧愯壊鐐规寚绀哄櫒锛堝榻愪笂娓?Tab value source锛夆€?鐐瑰嚮寮瑰嚭缁ф壙閾惧脊绐?
                                                     Rectangle {
                                                         width: 5; height: 5; radius: 2.5
                                                         visible: valueSrc !== "default"
@@ -1252,7 +1252,7 @@ Item {
                                                         font.bold: isHighlighted || isModified
                                                     }
 
-                                                    // 还原到默认值按钮（对齐上游 Tab::Field m_bmp_value_revert）
+                                                    // 杩樺師鍒伴粯璁ゅ€兼寜閽紙瀵归綈涓婃父 Tab::Field m_bmp_value_revert锛?
                                                     Rectangle {
                                                         visible: isModified && !oRO
                                                         width: 16; height: 16; radius: 3
@@ -1347,8 +1347,8 @@ Item {
                     }
                 }
 
-                // Layer range section (对齐上游 ModelObject::layer_config_ranges)
-                // 仅在 object/volume 作用域下显示
+                // Layer range section (瀵归綈涓婃父 ModelObject::layer_config_ranges)
+                // 浠呭湪 object/volume 浣滅敤鍩熶笅鏄剧ず
                 Column {
                     Layout.fillWidth: true
                     spacing: 4
@@ -1411,7 +1411,7 @@ Item {
                                 }
 
                                 Text {
-                                    text: qsTr("Z %1 – %2 mm").arg(
+                                    text: qsTr("Z %1 鈥?%2 mm").arg(
                                         root.configVm ? root.configVm.layerRangeMinZ(delegateIndex).toFixed(1) : "0.0",
                                         root.configVm ? root.configVm.layerRangeMaxZ(delegateIndex).toFixed(1) : "0.0"
                                     )
@@ -1473,7 +1473,7 @@ Item {
                     }
                 }
 
-                // 搜索框 + 保存按钮
+                // 鎼滅储妗?+ 淇濆瓨鎸夐挳
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 6
@@ -1500,7 +1500,7 @@ Item {
 
                             CxTextField {
                                 Layout.fillWidth: true
-                                placeholderText: qsTr("搜索参数...")
+                                placeholderText: qsTr("鎼滅储鍙傛暟...")
                                 text: root.searchText
                                 onTextChanged: root.searchText = text
                             }
@@ -1518,7 +1518,7 @@ Item {
                                 }
                             }
 
-                            // 搜索对话框按钮（对齐上游 SearchDialog）
+                            // 鎼滅储瀵硅瘽妗嗘寜閽紙瀵归綈涓婃父 SearchDialog锛?
                             Rectangle {
                                 width: 18; height: 18; radius: 3
                                 color: openSearchBtn.containsMouse ? "#1c6e42" : "transparent"
@@ -1546,7 +1546,7 @@ Item {
                         border.color: Theme.borderSubtle
                         Text { anchors.centerIn: parent; text: "\uD83D\uDCBE"; font.pixelSize: Theme.fontSizeMD }
                         MouseArea { id: saveBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.configVm) root.configVm.saveCurrentPreset()
+                            onClicked: if (root.configVm) root.configVm.requestSavePendingChanges()
                         }
                     }
 
@@ -1557,26 +1557,26 @@ Item {
                         border.color: Theme.borderSubtle
                         Text { anchors.centerIn: parent; text: "\u21BA"; color: "#e06666"; font.pixelSize: Theme.fontSizeMD }
                         MouseArea { id: resetBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.configVm && root.configVm.printOptions) root.configVm.printOptions.resetToDefaults()
+                            onClicked: if (root.configVm) root.configVm.resetAllGlobalOptions()
                         }
                     }
                 }
 
-                // 脏计数 + 匹配计数
+                // 鑴忚鏁?+ 鍖归厤璁℃暟
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 8
 
                     Text {
                         visible: root.configVm && root.configVm.printOptions && root.configVm.printOptions.dirtyCount() > 0
-                        text: qsTr("%1 项已修改").arg(root.configVm ? root.configVm.printOptions.dirtyCount() : 0)
+                        text: qsTr("%1 椤瑰凡淇敼").arg(root.configVm ? root.configVm.printOptions.dirtyCount() : 0)
                         color: "#f59e0b"
                         font.pixelSize: Theme.fontSizeXS
                     }
 
                     Text {
                         visible: root.searchText.length > 0
-                        text: qsTr("%1 项匹配").arg(root.filteredIndices.length)
+                        text: qsTr("%1 results").arg(root.filteredIndices.length)
                         color: Theme.textDisabled
                         font.pixelSize: Theme.fontSizeXS
                     }
@@ -1586,7 +1586,7 @@ Item {
             }
         }
 
-        // ── Scope Difference Panel (对齐上游 Tab::is_modified_value per-scope diff) ──
+        // 鈹€鈹€ Scope Difference Panel (瀵归綈涓婃父 Tab::is_modified_value per-scope diff) 鈹€鈹€
         Rectangle {
             Layout.fillWidth: true
             visible: root.configVm && root.configVm.settingsScope !== "global" && root.configVm.scopeOverrideCount() > 0
@@ -1606,7 +1606,7 @@ Item {
                     Layout.fillWidth: true
                     spacing: 6
                     Text {
-                        text: qsTr("作用域差异 (%1)").arg(root.configVm ? root.configVm.scopeOverrideCount() : 0)
+                        text: qsTr("浣滅敤鍩熷樊寮?(%1)").arg(root.configVm ? root.configVm.scopeOverrideCount() : 0)
                         color: Theme.textSecondary
                         font.pixelSize: Theme.fontSizeXS
                         font.bold: true
@@ -1614,7 +1614,7 @@ Item {
                     Item { Layout.fillWidth: true }
                     // Reset all overrides button
                     Text {
-                        text: qsTr("全部重置")
+                        text: qsTr("鍏ㄩ儴閲嶇疆")
                         color: Theme.textTertiary
                         font.pixelSize: Theme.fontSizeXS
                         MouseArea {

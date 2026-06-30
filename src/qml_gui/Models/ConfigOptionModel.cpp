@@ -339,14 +339,16 @@ void ConfigOptionModel::resetOption(int row)
   if (row < 0 || row >= m_options.size())
     return;
   const auto &key = m_options[row].key;
-  const auto it = m_defaultValues.constFind(key);
-  if (it == m_defaultValues.cend())
+  const QVariant targetValue = m_referenceValues.contains(key)
+      ? m_referenceValues.value(key)
+      : m_defaultValues.value(key);
+  if (!targetValue.isValid())
     return;
-  m_options[row].value = it.value();
+  m_options[row].value = targetValue;
   m_dirtyKeys.remove(key);
   const QModelIndex idx = index(row);
   emit dataChanged(idx, idx, {ValueRole, DirtyRole});
-  emit optionValueChanged(key, it.value());
+  emit optionValueChanged(key, targetValue);
   ++m_dataVersion;
   emit dataVersionChanged();
 }
@@ -363,8 +365,11 @@ void ConfigOptionModel::setValue(int row, const QVariant &value)
   const auto &key = m_options[row].key;
   m_options[row].value = value;
   // 更新脏状态：与默认值比较
+  const QVariant referenceValue = m_referenceValues.contains(key)
+      ? m_referenceValues.value(key)
+      : m_defaultValues.value(key);
   const bool wasDirty = m_dirtyKeys.contains(key);
-  const bool nowDirty = (m_defaultValues.value(key) != value);
+  const bool nowDirty = (referenceValue != value);
   if (nowDirty)
     m_dirtyKeys.insert(key);
   else
@@ -493,7 +498,10 @@ void ConfigOptionModel::applyValues(const QHash<QString, QVariant> &values)
       continue;
     m_options[i].value = it.value();
     // 更新脏状态
-    const bool nowDirty = (m_defaultValues.value(m_options[i].key) != it.value());
+    const QVariant referenceValue = m_referenceValues.contains(m_options[i].key)
+        ? m_referenceValues.value(m_options[i].key)
+        : m_defaultValues.value(m_options[i].key);
+    const bool nowDirty = (referenceValue != it.value());
     if (nowDirty)
       m_dirtyKeys.insert(m_options[i].key);
     else
@@ -504,6 +512,36 @@ void ConfigOptionModel::applyValues(const QHash<QString, QVariant> &values)
   if (changed)
   {
     emit dataChanged(index(0), index(m_options.size() - 1), {ValueRole, DirtyRole});
+    ++m_dataVersion;
+    emit dataVersionChanged();
+  }
+}
+
+void ConfigOptionModel::setReferenceValues(const QHash<QString, QVariant> &values)
+{
+  m_referenceValues = values;
+  if (m_options.isEmpty())
+    return;
+
+  bool changed = false;
+  for (int i = 0; i < m_options.size(); ++i)
+  {
+    const QString &key = m_options[i].key;
+    const QVariant referenceValue = m_referenceValues.contains(key)
+        ? m_referenceValues.value(key)
+        : m_defaultValues.value(key);
+    const bool wasDirty = m_dirtyKeys.contains(key);
+    const bool nowDirty = (referenceValue != m_options[i].value);
+    if (nowDirty)
+      m_dirtyKeys.insert(key);
+    else
+      m_dirtyKeys.remove(key);
+    changed = changed || (wasDirty != nowDirty);
+  }
+
+  if (changed)
+  {
+    emit dataChanged(index(0), index(m_options.size() - 1), {DirtyRole});
     ++m_dataVersion;
     emit dataVersionChanged();
   }
@@ -925,6 +963,9 @@ void ConfigOptionModel::loadSchemaFromKeys(const char *const keys[])
   beginResetModel();
   m_options.clear();
   m_baseReadonlyKeys.clear();
+  m_defaultValues.clear();
+  m_referenceValues.clear();
+  m_dirtyKeys.clear();
 
   const auto &def = Slic3r::print_config_def;
 
@@ -967,6 +1008,7 @@ void ConfigOptionModel::loadSchemaFromKeys(const char *const keys[])
     entry.mode = static_cast<int>(opt->mode);
 
     m_options.append(entry);
+    m_defaultValues.insert(entry.key, entry.value);
 
     if (entry.readonly)
       m_baseReadonlyKeys.insert(entry.key);

@@ -155,7 +155,10 @@ Item {
                             }
                             HoverHandler { id: resetHov }
                             TapHandler {
-                                onTapped: root.optionModel.resetToDefaults()
+                                onTapped: {
+                                    if (root.configVm)
+                                        root.configVm.resetAllGlobalOptions()
+                                }
                             }
                         }
                         CxTextField {

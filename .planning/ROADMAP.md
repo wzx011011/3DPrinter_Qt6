@@ -26,7 +26,7 @@
 
 - [x] **Phase 44:** Preset Bundle Service Foundation (completed 2026-06-30)
 - [x] **Phase 45:** Compatibility and Selection State (completed 2026-06-30)
-- [ ] **Phase 46:** Config Editing, Dirty State, and Reset Semantics
+- [x] **Phase 46:** Config Editing, Dirty State, and Reset Semantics (completed 2026-06-30)
 - [ ] **Phase 47:** Preset Lifecycle Actions
 - [ ] **Phase 48:** Create Presets and Bundle Workflows
 - [ ] **Phase 49:** Slice Integration, Verification, and Handoff
@@ -161,12 +161,12 @@
 
 ## Next Step
 
-Continue with Phase 46:
+Continue with Phase 47:
 
 ```text
-$gsd-autonomous --from 46
+$gsd-autonomous --from 47
 ```
 
 ---
 
-*Last updated: 2026-06-30 after Phase 45 completion.*
+*Last updated: 2026-06-30 after Phase 46 completion.*

@@ -125,12 +125,12 @@ v3.4 Phase 43 manual UAT is still pending because it cannot be run right now. v3
 | COMP-04 | Phase 45 | Satisfied |
 | COMP-05 | Phase 45 | Partial - compatibility constraints covered; full config option validation remains Phase 46. |
 | COMP-06 | Phase 45 | Partial - panel warning state covered; broader notification/error integration remains Phase 49. |
-| EDIT-01 | Phase 46 | Pending |
-| EDIT-02 | Phase 46 | Pending |
-| EDIT-03 | Phase 46 | Pending |
-| EDIT-04 | Phase 46 | Pending |
-| EDIT-05 | Phase 46 | Pending |
-| EDIT-06 | Phase 46 | Pending |
+| EDIT-01 | Phase 46 | Satisfied |
+| EDIT-02 | Phase 46 | Satisfied |
+| EDIT-03 | Phase 46 | Satisfied |
+| EDIT-04 | Phase 46 | Satisfied for Phase 46 value-source APIs; Phase 47 may expand diff/review presentation. |
+| EDIT-05 | Phase 46 | Satisfied |
+| EDIT-06 | Phase 46 | Satisfied |
 | LIFE-01 | Phase 47 | Pending |
 | LIFE-02 | Phase 47 | Pending |
 | LIFE-03 | Phase 47 | Pending |
@@ -153,9 +153,9 @@ v3.4 Phase 43 manual UAT is still pending because it cannot be run right now. v3
 | VERIFY-04 | Phase 49 | Pending |
 | VERIFY-05 | Phase 49 | Pending |
 
-**Coverage:** 39 total; 39 mapped; 0 unmapped; 3 satisfied; 3 partial.
+**Coverage:** 39 total; 39 mapped; 0 unmapped; 8 satisfied; 4 partial.
 
 ---
 
 *Requirements defined: 2026-06-30*
-*Last updated: 2026-06-30 after Phase 45 completion.*
+*Last updated: 2026-06-30 after Phase 46 completion.*

@@ -3,36 +3,36 @@ gsd_state_version: 1.0
 milestone: v3.5
 milestone_name: Preset Authoring Complete Workflow
 status: ready_to_plan
-last_updated: 2026-06-30T11:10:37.447Z
-last_activity: 2026-06-30 -- Phase 45 compatibility and selection state complete
+last_updated: 2026-06-30T20:45:00+08:00
+last_activity: 2026-06-30 -- Phase 46 config editing dirty state and reset semantics complete
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 33
-stopped_at: Phase 45 complete (1/1) -- ready to discuss Phase 46
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 50
+stopped_at: Phase 46 complete (1/1) -- ready to discuss Phase 47
 ---
 
 # Project State
 
 **Milestone:** v3.5 - Preset Authoring Complete Workflow
 **Status:** Ready to plan
-**Next step:** Discuss Phase 46, `Config Editing, Dirty State, and Reset Semantics`.
+**Next step:** Discuss Phase 47, `Preset Lifecycle Actions`.
 
 ## Current Position
 
-Phase: 46
+Phase: 47
 Plan: Not started
 Status: Ready to discuss
-Last activity: 2026-06-30 -- Phase 45 complete
+Last activity: 2026-06-30 -- Phase 46 complete
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
-**Current focus:** Phase 46 — config editing, dirty state, and reset semantics
+**Current focus:** Phase 47 - preset lifecycle actions
 
 ## Latest Verified Shipped Milestone
 
@@ -60,7 +60,7 @@ This does not block v3.5 planning, but it remains a release/handoff fact.
 |---|---|---|
 | 44 | Preset Bundle Service Foundation | Complete |
 | 45 | Compatibility and Selection State | Complete |
-| 46 | Config Editing, Dirty State, and Reset Semantics | Pending |
+| 46 | Config Editing, Dirty State, and Reset Semantics | Complete |
 | 47 | Preset Lifecycle Actions | Pending |
 | 48 | Create Presets and Bundle Workflows | Pending |
 | 49 | Slice Integration, Verification, and Handoff | Pending |
@@ -91,8 +91,8 @@ It intentionally does not include device send/upload/cloud printing, Monitor pri
 
 ## Handoff
 
-Continue with Phase 46:
+Continue with Phase 47:
 
 ```text
-$gsd-autonomous --from 46
+$gsd-autonomous --from 47
 ```

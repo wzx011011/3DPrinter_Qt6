@@ -113,10 +113,297 @@ QObject *ConfigViewModel::machineOptions() const { return machineOptions_; }
 QObject *ConfigViewModel::filamentOptions() const { return filamentOptions_; }
 QObject *ConfigViewModel::presetList() const { return presetList_; }
 
+QString ConfigViewModel::normalizedTier(const QString &tier) const
+{
+  if (tier == QStringLiteral("printer"))
+    return QStringLiteral("printer");
+  if (tier == QStringLiteral("filament"))
+    return QStringLiteral("filament");
+  return QStringLiteral("print");
+}
+
+ConfigOptionModel *ConfigViewModel::optionModelForTier(const QString &tier) const
+{
+  const QString normalized = normalizedTier(tier);
+  if (normalized == QStringLiteral("printer"))
+    return machineOptions_;
+  if (normalized == QStringLiteral("filament"))
+    return filamentOptions_;
+  return printOptions_;
+}
+
+QHash<QString, QVariant> ConfigViewModel::editableValuesForTier(const QString &tier) const
+{
+  const QString normalized = normalizedTier(tier);
+  if (normalized == QStringLiteral("printer"))
+    return printerPresetValues_;
+  if (normalized == QStringLiteral("filament"))
+    return filamentPresetValues_;
+  return printPresetValues_;
+}
+
+QHash<QString, QVariant> ConfigViewModel::referenceValuesForTier(const QString &tier) const
+{
+  const QString normalized = normalizedTier(tier);
+  if (normalized == QStringLiteral("printer"))
+    return persistedEffectiveValuesForTier(QStringLiteral("printer"));
+  if (normalized == QStringLiteral("filament"))
+    return persistedEffectiveValuesForTier(QStringLiteral("filament"));
+  return persistedEffectiveValuesForTier(QStringLiteral("print"));
+}
+
+QHash<QString, QVariant> ConfigViewModel::selectedPresetValuesForTier(const QString &tier) const
+{
+  if (!presetService_)
+    return {};
+
+  const QString normalized = normalizedTier(tier);
+  if (normalized == QStringLiteral("printer"))
+    return presetService_->presetValues(currentPrinterPreset_);
+  if (normalized == QStringLiteral("filament"))
+    return presetService_->presetValues(currentFilamentPreset_);
+  return presetService_->presetValues(currentPrintPreset_);
+}
+
+QHash<QString, QVariant> ConfigViewModel::persistedEffectiveValuesForTier(const QString &tier) const
+{
+  const QString normalized = normalizedTier(tier);
+  QHash<QString, QVariant> values;
+
+  if (printOptions_)
+    values = printOptions_->defaultValuesByKey();
+
+  if (normalized == QStringLiteral("printer"))
+  {
+    const auto printerValues = selectedPresetValuesForTier(QStringLiteral("printer"));
+    for (auto it = printerValues.cbegin(); it != printerValues.cend(); ++it)
+      values.insert(it.key(), it.value());
+    return values;
+  }
+
+  values = persistedEffectiveValuesForTier(QStringLiteral("printer"));
+  if (normalized == QStringLiteral("filament"))
+  {
+    const auto filamentValues = selectedPresetValuesForTier(QStringLiteral("filament"));
+    for (auto it = filamentValues.cbegin(); it != filamentValues.cend(); ++it)
+      values.insert(it.key(), it.value());
+    return values;
+  }
+
+  values = persistedEffectiveValuesForTier(QStringLiteral("filament"));
+  const auto printValues = selectedPresetValuesForTier(QStringLiteral("print"));
+  for (auto it = printValues.cbegin(); it != printValues.cend(); ++it)
+    values.insert(it.key(), it.value());
+  return values;
+}
+
+QHash<QString, QVariant> ConfigViewModel::effectivePresetValuesForTier(const QString &tier) const
+{
+  const QString normalized = normalizedTier(tier);
+  QHash<QString, QVariant> values;
+
+  if (printOptions_)
+    values = printOptions_->defaultValuesByKey();
+
+  if (normalized == QStringLiteral("printer"))
+  {
+    for (auto it = printerPresetValues_.cbegin(); it != printerPresetValues_.cend(); ++it)
+      values.insert(it.key(), it.value());
+    return values;
+  }
+
+  values = effectivePresetValuesForTier(QStringLiteral("printer"));
+  if (normalized == QStringLiteral("filament"))
+  {
+    for (auto it = filamentPresetValues_.cbegin(); it != filamentPresetValues_.cend(); ++it)
+      values.insert(it.key(), it.value());
+    return values;
+  }
+
+  values = effectivePresetValuesForTier(QStringLiteral("filament"));
+  for (auto it = printPresetValues_.cbegin(); it != printPresetValues_.cend(); ++it)
+    values.insert(it.key(), it.value());
+  return values;
+}
+
+void ConfigViewModel::setCurrentPresetTierValue(const QString &tier, const QString &presetName)
+{
+  const QString normalized = normalizedTier(tier);
+  if (normalized == QStringLiteral("printer"))
+  {
+    if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetServiceMock::PrinterCat, presetName))
+      return;
+    currentPrinterPreset_ = presetName;
+    if (presetService_) {
+      if (!presetService_->isPresetCompatibleWithPrinter(PresetServiceMock::FilamentCat,
+                                                         currentFilamentPreset_,
+                                                         currentPrinterPreset_)) {
+        const QString compatibleFilament =
+            presetService_->findCompatiblePresetForCategory(PresetServiceMock::FilamentCat,
+                                                            currentPrinterPreset_);
+        if (!compatibleFilament.isEmpty()) {
+          currentFilamentPreset_ = compatibleFilament;
+          presetService_->setSelectedPresetForCategory(PresetServiceMock::FilamentCat, compatibleFilament);
+          filamentPresetValues_ = presetService_->presetValues(currentFilamentPreset_);
+        }
+      }
+
+      if (!presetService_->isPresetCompatibleWithPrinter(PresetServiceMock::PrintCat,
+                                                         currentPrintPreset_,
+                                                         currentPrinterPreset_)) {
+        const QString compatiblePrint =
+            presetService_->findCompatiblePresetForCategory(PresetServiceMock::PrintCat,
+                                                            currentPrinterPreset_);
+        QString nextPrint = compatiblePrint;
+        if (nextPrint.isEmpty())
+          nextPrint = presetService_->defaultPresetForCategory(PresetServiceMock::PrintCat);
+        if (!nextPrint.isEmpty() && nextPrint != currentPrintPreset_) {
+          currentPrintPreset_ = nextPrint;
+          currentPreset_ = nextPrint;
+          presetService_->setSelectedPresetForCategory(PresetServiceMock::PrintCat, nextPrint);
+          printPresetValues_ = presetService_->presetValues(currentPrintPreset_);
+        }
+      }
+    }
+    printerPresetValues_ = presetService_ ? presetService_->presetValues(currentPrinterPreset_)
+                                          : QHash<QString, QVariant>{};
+    return;
+  }
+
+  if (normalized == QStringLiteral("filament"))
+  {
+    if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetServiceMock::FilamentCat, presetName))
+      return;
+    currentFilamentPreset_ = presetName;
+    filamentPresetValues_ = presetService_ ? presetService_->presetValues(currentFilamentPreset_)
+                                           : QHash<QString, QVariant>{};
+    return;
+  }
+
+  if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetServiceMock::PrintCat, presetName))
+    return;
+  currentPrintPreset_ = presetName;
+  currentPreset_ = presetName;
+  printPresetValues_ = presetService_ ? presetService_->presetValues(currentPrintPreset_)
+                                      : QHash<QString, QVariant>{};
+}
+
+void ConfigViewModel::updateMergedPresetValues()
+{
+  globalOptionValues_ = effectivePresetValuesForTier(QStringLiteral("print"));
+
+  valueSources_.clear();
+  const auto defaults = printOptions_ ? printOptions_->defaultValuesByKey() : QHash<QString, QVariant>{};
+  for (auto it = globalOptionValues_.cbegin(); it != globalOptionValues_.cend(); ++it)
+    valueSources_.insert(it.key(), QStringLiteral("default"));
+
+  for (auto it = printerPresetValues_.cbegin(); it != printerPresetValues_.cend(); ++it)
+    valueSources_.insert(it.key(), QStringLiteral("printer"));
+  for (auto it = filamentPresetValues_.cbegin(); it != filamentPresetValues_.cend(); ++it)
+    valueSources_.insert(it.key(), QStringLiteral("filament"));
+  for (auto it = printPresetValues_.cbegin(); it != printPresetValues_.cend(); ++it)
+    valueSources_.insert(it.key(), QStringLiteral("print"));
+
+  for (auto it = defaults.cbegin(); it != defaults.cend(); ++it)
+  {
+    if (!globalOptionValues_.contains(it.key()))
+      globalOptionValues_.insert(it.key(), it.value());
+    if (!valueSources_.contains(it.key()))
+      valueSources_.insert(it.key(), QStringLiteral("default"));
+  }
+}
+
+void ConfigViewModel::refreshOptionModelReferences()
+{
+  if (printOptions_) {
+    printOptions_->setReferenceValues(referenceValuesForTier(QStringLiteral("print")));
+    printOptions_->applyValues(buildScopeValues());
+  }
+  if (filamentOptions_) {
+    filamentOptions_->setReferenceValues(referenceValuesForTier(QStringLiteral("filament")));
+    filamentOptions_->applyValues(buildScopeValues());
+  }
+  if (machineOptions_) {
+    machineOptions_->setReferenceValues(referenceValuesForTier(QStringLiteral("printer")));
+    machineOptions_->applyValues(buildScopeValues());
+  }
+}
+
+bool ConfigViewModel::queuePendingAction(const QString &action, const QString &target)
+{
+  if (!isPresetDirty()) {
+    pendingUnsavedAction_.clear();
+    pendingUnsavedTarget_.clear();
+    return true;
+  }
+
+  pendingUnsavedAction_ = action;
+  pendingUnsavedTarget_ = target;
+  emit stateChanged();
+  emit pendingUnsavedChangesRequested();
+  return false;
+}
+
+void ConfigViewModel::clearPendingAction()
+{
+  if (pendingUnsavedAction_.isEmpty() && pendingUnsavedTarget_.isEmpty())
+    return;
+  pendingUnsavedAction_.clear();
+  pendingUnsavedTarget_.clear();
+  emit stateChanged();
+  emit pendingActionCleared();
+}
+
+bool ConfigViewModel::applyPendingAction()
+{
+  if (pendingUnsavedAction_.isEmpty())
+    return true;
+
+  const QString action = pendingUnsavedAction_;
+  const QString target = pendingUnsavedTarget_;
+  pendingUnsavedAction_.clear();
+  pendingUnsavedTarget_.clear();
+  emit stateChanged();
+  emit pendingActionApplied(action, target);
+
+  if (action == QStringLiteral("switch-print-preset")) {
+    setCurrentPrintPreset(target);
+    return true;
+  }
+  if (action == QStringLiteral("switch-filament-preset")) {
+    setCurrentFilamentPreset(target);
+    return true;
+  }
+  if (action == QStringLiteral("switch-printer-preset")) {
+    setCurrentPrinterPreset(target);
+    return true;
+  }
+  if (action == QStringLiteral("leave-settings-page"))
+    return true;
+  if (action == QStringLiteral("scope-global")) {
+    activateGlobalScope();
+    return true;
+  }
+  if (action == QStringLiteral("scope-plate")) {
+    activatePlateScope(target.toInt());
+    return true;
+  }
+  if (action.startsWith(QStringLiteral("scope-object:"))) {
+    const QStringList parts = action.split(QLatin1Char(':'));
+    if (parts.size() == 5)
+      activateObjectScope(parts[1], parts[2], parts[3].toInt(), parts[4].toInt());
+    return true;
+  }
+  return true;
+}
+
 void ConfigViewModel::setActivePresetTier(const QString &tier)
 {
-  if (activePresetTier_ == tier) return;
-  activePresetTier_ = tier;
+  const QString normalized = normalizedTier(tier);
+  if (activePresetTier_ == normalized)
+    return;
+  activePresetTier_ = normalized;
+  refreshOptionModelReferences();
   emit stateChanged();
 }
 
@@ -143,6 +430,9 @@ void ConfigViewModel::loadDefault()
     currentPrintPreset_ = presetService_->selectedPresetForCategory(PresetServiceMock::PrintCat);
     currentPreset_ = currentPrintPreset_;
     layerHeight_ = presetService_->defaultLayerHeight();
+    printerPresetValues_ = presetService_->presetValues(currentPrinterPreset_);
+    filamentPresetValues_ = presetService_->presetValues(currentFilamentPreset_);
+    printPresetValues_ = presetService_->presetValues(currentPrintPreset_);
   }
   printSpeed_ = 300;
   supportEnabled_ = false;
@@ -169,7 +459,6 @@ void ConfigViewModel::loadDefault()
     emit stateChanged();
     return;
   }
-  savedPresetValues_ = globalOptionValues_; // 初始化预设快照
   applyScopeValues();
   emit stateChanged();
 }
@@ -188,8 +477,7 @@ void ConfigViewModel::setCurrentPreset(const QString &presetName)
   if (!presetService_->setSelectedPresetForCategory(PresetServiceMock::PrintCat, presetName))
     return;
 
-  currentPrintPreset_ = presetName;
-  currentPreset_ = presetName;
+  setCurrentPresetTierValue(QStringLiteral("print"), presetName);
   settingsScope_ = QStringLiteral("global");
   settingsTargetObjectIndex_ = -1;
   settingsTargetVolumeIndex_ = -1;
@@ -197,7 +485,7 @@ void ConfigViewModel::setCurrentPreset(const QString &presetName)
   emit stateChanged();
 }
 
-// v2.4 IO: 预设包导入导出转发
+// v2.4 IO: 棰勮鍖呭鍏ュ鍑鸿浆鍙?
 bool ConfigViewModel::exportBundle(const QString &filePath) const
 {
     if (!presetService_) return false;
@@ -221,51 +509,42 @@ void ConfigViewModel::saveCurrentPreset()
   if (!presetService_)
     return;
 
-  // Determine target preset by tier (对齐上游 PresetBundle::save)
+  const QString tier = normalizedTier(activePresetTier_);
   QString targetPreset;
-  ConfigOptionModel *tierModel = nullptr;
-  if (activePresetTier_ == QStringLiteral("printer")) {
+  if (tier == QStringLiteral("printer")) {
     targetPreset = currentPrinterPreset_;
-    tierModel = machineOptions_;
-  } else if (activePresetTier_ == QStringLiteral("filament")) {
+  } else if (tier == QStringLiteral("filament")) {
     targetPreset = currentFilamentPreset_;
-    tierModel = filamentOptions_;
   } else {
     targetPreset = currentPrintPreset_.isEmpty() ? currentPreset_ : currentPrintPreset_;
-    tierModel = printOptions_;
   }
 
   if (targetPreset.isEmpty())
     return;
 
-  // Only save keys belonging to the active tier (防止跨层污染)
-  QHash<QString, QVariant> tierValues;
-  if (tierModel) {
-    const auto modelKeys = tierModel->valuesByKey();
-    for (auto it = globalOptionValues_.constBegin();
-         it != globalOptionValues_.constEnd(); ++it) {
-      if (modelKeys.contains(it.key()))
-        tierValues.insert(it.key(), it.value());
-    }
-  } else {
-    tierValues = globalOptionValues_;
-  }
+  const QHash<QString, QVariant> tierValues = editableValuesForTier(tier);
 
   if (!presetService_->savePresetValues(targetPreset, tierValues))
     return;
 
-  savedPresetValues_ = globalOptionValues_;
+  if (tier == QStringLiteral("printer"))
+    printerPresetValues_ = tierValues;
+  else if (tier == QStringLiteral("filament"))
+    filamentPresetValues_ = tierValues;
+  else
+    printPresetValues_ = tierValues;
+  updateMergedPresetValues();
+  applyScopeValues();
   emit stateChanged();
 }
 
 bool ConfigViewModel::isPresetDirty() const
 {
-  if (savedPresetValues_.isEmpty())
-    return !globalOptionValues_.isEmpty();
-  return savedPresetValues_ != globalOptionValues_;
+  const QString tier = normalizedTier(activePresetTier_);
+  return effectivePresetValuesForTier(tier) != persistedEffectiveValuesForTier(tier);
 }
 
-// ── 3-tier preset inheritance (对齐上游 PresetBundle) ─────────
+// 鈹€鈹€ 3-tier preset inheritance (瀵归綈涓婃父 PresetBundle) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 QStringList ConfigViewModel::printerPresetNames() const
 {
@@ -319,115 +598,28 @@ QString ConfigViewModel::currentPresetCompatibilityMessage() const
 
 void ConfigViewModel::setCurrentPrinterPreset(const QString &name)
 {
-  if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetServiceMock::PrinterCat, name))
-    return;
-  currentPrinterPreset_ = name;
-  if (presetService_) {
-    if (!presetService_->isPresetCompatibleWithPrinter(PresetServiceMock::FilamentCat,
-                                                       currentFilamentPreset_,
-                                                       currentPrinterPreset_)) {
-      const QString compatibleFilament =
-          presetService_->findCompatiblePresetForCategory(PresetServiceMock::FilamentCat,
-                                                          currentPrinterPreset_);
-      if (!compatibleFilament.isEmpty()) {
-        currentFilamentPreset_ = compatibleFilament;
-        presetService_->setSelectedPresetForCategory(PresetServiceMock::FilamentCat,
-                                                     compatibleFilament);
-      }
-    }
-
-    if (!presetService_->isPresetCompatibleWithPrinter(PresetServiceMock::PrintCat,
-                                                       currentPrintPreset_,
-                                                       currentPrinterPreset_)) {
-      const QString compatiblePrint =
-          presetService_->findCompatiblePresetForCategory(PresetServiceMock::PrintCat,
-                                                          currentPrinterPreset_);
-      if (!compatiblePrint.isEmpty()) {
-        currentPrintPreset_ = compatiblePrint;
-        currentPreset_ = compatiblePrint;
-        presetService_->setSelectedPresetForCategory(PresetServiceMock::PrintCat,
-                                                     compatiblePrint);
-      }
-    }
-  }
+  setCurrentPresetTierValue(QStringLiteral("printer"), name);
   mergePresetHierarchy();
   emit stateChanged();
 }
 
 void ConfigViewModel::setCurrentFilamentPreset(const QString &name)
 {
-  if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetServiceMock::FilamentCat, name))
-    return;
-  currentFilamentPreset_ = name;
+  setCurrentPresetTierValue(QStringLiteral("filament"), name);
   mergePresetHierarchy();
   emit stateChanged();
 }
 
 void ConfigViewModel::setCurrentPrintPreset(const QString &name)
 {
-  if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetServiceMock::PrintCat, name))
-    return;
-  currentPrintPreset_ = name;
-  currentPreset_ = name; // legacy compat
+  setCurrentPresetTierValue(QStringLiteral("print"), name);
   mergePresetHierarchy();
   emit stateChanged();
 }
 
 void ConfigViewModel::mergePresetHierarchy()
 {
-  if (!printOptions_)
-    return;
-
-  // Start with upstream schema defaults (full ~200 keys from print_config_def)
-  // Falls back to ConfigOptionModel defaults if upstream not available
-  QHash<QString, QVariant> merged;
-  if (presetService_ && presetService_->hasPreset(QStringLiteral("__upstream_defaults__")))
-  {
-    merged = presetService_->presetValues(QStringLiteral("__upstream_defaults__"));
-  }
-  else
-  {
-    printOptions_->resetToDefaults();
-    merged = printOptions_->valuesByKey();
-  }
-
-  // 初始化所有 key 的来源为 "default"
-  valueSources_.clear();
-  for (auto it = merged.begin(); it != merged.end(); ++it)
-    valueSources_[it.key()] = QStringLiteral("default");
-
-  if (!presetService_)
-    return;
-
-  // Tier 1: Printer preset (base layer)
-  {
-    const auto vals = presetService_->presetValues(currentPrinterPreset_);
-    for (auto it = vals.begin(); it != vals.end(); ++it) {
-      merged[it.key()] = it.value();
-      valueSources_[it.key()] = QStringLiteral("printer");
-    }
-  }
-
-  // Tier 2: Filament preset (overrides printer where keys overlap)
-  {
-    const auto vals = presetService_->presetValues(currentFilamentPreset_);
-    for (auto it = vals.begin(); it != vals.end(); ++it) {
-      merged[it.key()] = it.value();
-      valueSources_[it.key()] = QStringLiteral("filament");
-    }
-  }
-
-  // Tier 3: Print preset (overrides both where keys overlap)
-  {
-    const auto vals = presetService_->presetValues(currentPrintPreset_);
-    for (auto it = vals.begin(); it != vals.end(); ++it) {
-      merged[it.key()] = it.value();
-      valueSources_[it.key()] = QStringLiteral("print");
-    }
-  }
-
-  globalOptionValues_ = merged;
-  savedPresetValues_ = merged;
+  updateMergedPresetValues();
   applyScopeValues();
 }
 
@@ -436,42 +628,30 @@ bool ConfigViewModel::createCustomPreset(int category, const QString &name)
   if (!presetService_)
     return false;
 
-  // 使用当前全局值作为新预设的值
-  ConfigOptionModel *tierModel = nullptr;
+  QString tier;
   if (category == PresetServiceMock::PrinterCat)
-    tierModel = machineOptions_;
+    tier = QStringLiteral("printer");
   else if (category == PresetServiceMock::FilamentCat)
-    tierModel = filamentOptions_;
+    tier = QStringLiteral("filament");
   else if (category == PresetServiceMock::PrintCat)
-    tierModel = printOptions_;
+    tier = QStringLiteral("print");
   else
     return false;
 
-  QHash<QString, QVariant> tierValues;
-  const auto modelKeys = tierModel ? tierModel->valuesByKey() : QHash<QString, QVariant>{};
-  for (auto it = globalOptionValues_.constBegin(); it != globalOptionValues_.constEnd(); ++it)
-  {
-    if (modelKeys.contains(it.key()))
-      tierValues.insert(it.key(), it.value());
-  }
+  const QHash<QString, QVariant> tierValues = editableValuesForTier(tier);
 
   const QString trimmedName = name.trimmed();
   if (!presetService_->createCustomPreset(category, trimmedName, tierValues))
     return false;
 
-  if (category == PresetServiceMock::PrinterCat)
-    currentPrinterPreset_ = trimmedName;
-  else if (category == PresetServiceMock::FilamentCat)
-    currentFilamentPreset_ = trimmedName;
-  else {
-    currentPrintPreset_ = trimmedName;
-    currentPreset_ = trimmedName;
-  }
+  setCurrentPresetTierValue(tier, trimmedName);
 
   if (presetList_)
     presetList_->refreshFromService(presetService_);
   mergePresetHierarchy();
   emit stateChanged();
+  if (hasPendingUnsavedChanges())
+    return applyPendingAction();
   return true;
 }
 
@@ -482,14 +662,14 @@ bool ConfigViewModel::deletePreset(int category, const QString &name)
   if (presetService_->presetCategory(name) != category)
     return false;
 
-  // 不允许删除当前正在使用的预设
+  // 涓嶅厑璁稿垹闄ゅ綋鍓嶆鍦ㄤ娇鐢ㄧ殑棰勮
   if (name == currentPrinterPreset_ || name == currentFilamentPreset_ || name == currentPrintPreset_)
     return false;
 
   bool ok = presetService_->deletePreset(name);
   if (ok)
   {
-    // 如果删除的是当前类别中正在使用的预设，切换回默认
+    // 濡傛灉鍒犻櫎鐨勬槸褰撳墠绫诲埆涓鍦ㄤ娇鐢ㄧ殑棰勮锛屽垏鎹㈠洖榛樿
     if (name == currentPrintPreset_)
       setCurrentPrintPreset(presetService_->defaultPresetForCategory(PresetServiceMock::PrintCat));
     if (name == currentFilamentPreset_)
@@ -513,7 +693,7 @@ bool ConfigViewModel::renamePreset(int category, const QString &oldName, const Q
   bool ok = presetService_->renamePreset(oldName, newName.trimmed());
   if (ok)
   {
-    // 更新当前活跃预设名引用
+    // 鏇存柊褰撳墠娲昏穬棰勮鍚嶅紩鐢?
     if (oldName == currentPrintPreset_)
       currentPrintPreset_ = newName.trimmed();
     if (oldName == currentPreset_)
@@ -551,7 +731,7 @@ QStringList ConfigViewModel::comparePresets(const QString &presetA, const QStrin
     QVariant valA = valsA.value(key);
     QVariant valB = valsB.value(key);
     if (valA != valB)
-      diffs.append(QStringLiteral("%1: %2 → %3").arg(key, valA.toString(), valB.toString()));
+      diffs.append(QStringLiteral("%1: %2 鈫?%3").arg(key, valA.toString(), valB.toString()));
   }
 
   return diffs;
@@ -559,8 +739,8 @@ QStringList ConfigViewModel::comparePresets(const QString &presetA, const QStrin
 
 void ConfigViewModel::autoMatchFilament()
 {
-  // 对齐上游 PresetBundle::update_compatible
-  // 切换打印机后，自动选择兼容的耗材预设（基于 nozzle diameter / max_temp 匹配）
+  // 瀵归綈涓婃父 PresetBundle::update_compatible
+  // 鍒囨崲鎵撳嵃鏈哄悗锛岃嚜鍔ㄩ€夋嫨鍏煎鐨勮€楁潗棰勮锛堝熀浜?nozzle diameter / max_temp 鍖归厤锛?
   if (!presetService_)
     return;
 
@@ -659,7 +839,7 @@ void ConfigViewModel::activateObjectScope(const QString &targetType, const QStri
   settingsTargetObjectIndex_ = objectIndex;
   settingsTargetVolumeIndex_ = volumeIndex;
   settingsTargetPlateIndex_ = -1;
-  // Distinguish volume scope from object scope (对齐上游 Tab scope semantics)
+  // Distinguish volume scope from object scope (瀵归綈涓婃父 Tab scope semantics)
   if (targetName.isEmpty())
     settingsScope_ = QStringLiteral("global");
   else if (volumeIndex >= 0)
@@ -677,9 +857,116 @@ void ConfigViewModel::activatePlateScope(int plateIndex)
   settingsTargetObjectIndex_ = -1;
   settingsTargetVolumeIndex_ = -1;
   settingsTargetType_ = QStringLiteral("plate");
-  settingsTargetName_ = tr("平板 %1").arg(plateIndex + 1);
+  settingsTargetName_ = tr("骞虫澘 %1").arg(plateIndex + 1);
   applyScopeValues();
   emit stateChanged();
+}
+
+bool ConfigViewModel::requestCurrentPrinterPreset(const QString &name)
+{
+  if (queuePendingAction(QStringLiteral("switch-printer-preset"), name))
+  {
+    setCurrentPrinterPreset(name);
+    return true;
+  }
+  return false;
+}
+
+bool ConfigViewModel::requestCurrentFilamentPreset(const QString &name)
+{
+  if (queuePendingAction(QStringLiteral("switch-filament-preset"), name))
+  {
+    setCurrentFilamentPreset(name);
+    return true;
+  }
+  return false;
+}
+
+bool ConfigViewModel::requestCurrentPrintPreset(const QString &name)
+{
+  if (queuePendingAction(QStringLiteral("switch-print-preset"), name))
+  {
+    setCurrentPrintPreset(name);
+    return true;
+  }
+  return false;
+}
+
+bool ConfigViewModel::requestGlobalScope()
+{
+  if (queuePendingAction(QStringLiteral("scope-global"), QString()))
+  {
+    activateGlobalScope();
+    return true;
+  }
+  return false;
+}
+
+bool ConfigViewModel::requestObjectScope(const QString &targetType, const QString &targetName, int objectIndex, int volumeIndex)
+{
+  const QString action = QStringLiteral("scope-object:%1:%2:%3:%4")
+      .arg(targetType, targetName)
+      .arg(objectIndex)
+      .arg(volumeIndex);
+  if (queuePendingAction(action, QString()))
+  {
+    activateObjectScope(targetType, targetName, objectIndex, volumeIndex);
+    return true;
+  }
+  return false;
+}
+
+bool ConfigViewModel::requestPlateScope(int plateIndex)
+{
+  if (queuePendingAction(QStringLiteral("scope-plate"), QString::number(plateIndex)))
+  {
+    activatePlateScope(plateIndex);
+    return true;
+  }
+  return false;
+}
+
+bool ConfigViewModel::requestSavePendingChanges()
+{
+  const QString tier = normalizedTier(activePresetTier_);
+  const QString currentPresetName =
+      tier == QStringLiteral("printer") ? currentPrinterPreset_ :
+      tier == QStringLiteral("filament") ? currentFilamentPreset_ :
+      currentPrintPreset_;
+  if (presetService_ && presetService_->isReadOnlyPreset(currentPresetName)) {
+    emit saveAsRequired();
+    return false;
+  }
+
+  saveCurrentPreset();
+  return applyPendingAction();
+}
+
+bool ConfigViewModel::requestDiscardPendingChanges()
+{
+  const QString tier = normalizedTier(activePresetTier_);
+  if (tier == QStringLiteral("printer"))
+    printerPresetValues_ = selectedPresetValuesForTier(tier);
+  else if (tier == QStringLiteral("filament"))
+    filamentPresetValues_ = selectedPresetValuesForTier(tier);
+  else
+    printPresetValues_ = selectedPresetValuesForTier(tier);
+
+  updateMergedPresetValues();
+  applyScopeValues();
+  emit stateChanged();
+  return applyPendingAction();
+}
+
+bool ConfigViewModel::requestCancelPendingChanges()
+{
+  clearPendingAction();
+  return true;
+}
+
+bool ConfigViewModel::requestLeaveSettingsPage()
+{
+  return queuePendingAction(QStringLiteral("leave-settings-page"), QString());
 }
 
 void ConfigViewModel::applyScopeValues()
@@ -689,9 +976,16 @@ void ConfigViewModel::applyScopeValues()
 
   applyingScopeValues_ = true;
   const auto values = buildScopeValues();
+  printOptions_->setReferenceValues(referenceValuesForTier(QStringLiteral("print")));
   printOptions_->applyValues(values);
-  if (machineOptions_) machineOptions_->applyValues(values);
-  if (filamentOptions_) filamentOptions_->applyValues(values);
+  if (machineOptions_) {
+    machineOptions_->setReferenceValues(referenceValuesForTier(QStringLiteral("printer")));
+    machineOptions_->applyValues(machineOptions_->valuesByKey().isEmpty() ? values : effectivePresetValuesForTier(QStringLiteral("printer")));
+  }
+  if (filamentOptions_) {
+    filamentOptions_->setReferenceValues(referenceValuesForTier(QStringLiteral("filament")));
+    filamentOptions_->applyValues(filamentOptions_->valuesByKey().isEmpty() ? values : effectivePresetValuesForTier(QStringLiteral("filament")));
+  }
   printOptions_->setReadonlyKeys(readonlyKeysForCurrentScope());
   applyingScopeValues_ = false;
 }
@@ -703,7 +997,22 @@ void ConfigViewModel::handleOptionValueChanged(const QString &key, const QVarian
 
   if (settingsScope_ == QStringLiteral("global") || (settingsScope_ != QStringLiteral("plate") && settingsTargetObjectIndex_ < 0))
   {
-    globalOptionValues_[key] = value;
+    QString tier = activePresetTier_.isEmpty() ? QStringLiteral("print") : activePresetTier_;
+    if (sender() == machineOptions_)
+      tier = QStringLiteral("printer");
+    else if (sender() == filamentOptions_)
+      tier = QStringLiteral("filament");
+    else if (sender() == printOptions_)
+      tier = QStringLiteral("print");
+    if (tier == QStringLiteral("printer"))
+      printerPresetValues_.insert(key, value);
+    else if (tier == QStringLiteral("filament"))
+      filamentPresetValues_.insert(key, value);
+    else
+      printPresetValues_.insert(key, value);
+    updateMergedPresetValues();
+    applyScopeValues();
+    emit stateChanged();
     return;
   }
 
@@ -793,10 +1102,10 @@ QSet<QString> ConfigViewModel::readonlyKeysForCurrentScope() const
   return {};
 }
 
-// ── Fuzzy matching helper (对齐上游 OptionsSearcher::search / fts_fuzzy_match) ──
+// 鈹€鈹€ Fuzzy matching helper (瀵归綈涓婃父 OptionsSearcher::search / fts_fuzzy_match) 鈹€鈹€
 namespace {
 
-// Subsequence matching with scoring (simplified Möller–Trumbore-style scan)
+// Subsequence matching with scoring (simplified M枚ller鈥揟rumbore-style scan)
 static bool fuzzyMatch(const QString &pattern, const QString &text, int &outScore)
 {
   const int m = pattern.size(), n = text.size();
@@ -831,7 +1140,7 @@ static bool fuzzyMatch(const QString &pattern, const QString &text, int &outScor
       {
         int prevScore = prevRow[ti - 1].first;
         int prevPos = prevRow[ti - 1].second;
-        int bonus = 15; // sequential bonus (对齐上游 sequential bonus)
+        int bonus = 15; // sequential bonus (瀵归綈涓婃父 sequential bonus)
         if (ti > 1 && prevPos == ti - 2) bonus = 25; // consecutive chars
         int score = prevScore + bonus;
         if (score > curRow[ti].first)
@@ -855,7 +1164,7 @@ static bool fuzzyMatch(const QString &pattern, const QString &text, int &outScor
   int bestScore = prevRow[n].first;
   int score = qMax(0, bestScore);
   outScore = score;
-  return score >= 60; // minimum threshold (对齐上游 minimum score)
+  return score >= 60; // minimum threshold (瀵归綈涓婃父 minimum score)
 }
 
 } // anonymous namespace
@@ -869,9 +1178,9 @@ QList<int> ConfigViewModel::filterOptionIndices(const QString &category, const Q
   QList<int> result;
   result.reserve(n);
 
-  const bool matchAll = category.isEmpty() || category == QStringLiteral("全部") || category == tr("全部");
+  const bool matchAll = category.isEmpty() || category == QStringLiteral("鍏ㄩ儴") || category == tr("鍏ㄩ儴");
   const QString needle = searchText.toLower();
-  const bool useFuzzy = needle.length() >= 2; // 启用 fuzzy matching（对齐上游 fts_fuzzy_match）
+  const bool useFuzzy = needle.length() >= 2; // 鍚敤 fuzzy matching锛堝榻愪笂娓?fts_fuzzy_match锛?
 
   for (int i = 0; i < n; ++i)
   {
@@ -897,7 +1206,7 @@ QList<int> ConfigViewModel::filterOptionIndices(const QString &category, const Q
         continue;
     }
 
-    // Mode filter (对齐上游 ConfigOptionMode: 0=comSimple, 1=comAdvanced, 2=comDevelop)
+    // Mode filter (瀵归綈涓婃父 ConfigOptionMode: 0=comSimple, 1=comAdvanced, 2=comDevelop)
     const int optMode = printOptions_->optMode(i);
     if (optMode >= 1 && !advancedMode)
       continue; // Advanced/Develop-only options hidden in simple mode
@@ -953,12 +1262,12 @@ QString ConfigViewModel::materialPresetName(int localIndex) const
 {
   if (!presetList_ || localIndex < 0)
     return {};
-  // Use "耗材" to match PresetListModel's category (original QML used "耗材丝" which was a bug)
-  const int globalIdx = presetList_->globalIndex(tr("耗材"), localIndex);
+  // Use "鑰楁潗" to match PresetListModel's category (original QML used "鑰楁潗涓? which was a bug)
+  const int globalIdx = presetList_->globalIndex(tr("鑰楁潗"), localIndex);
   return globalIdx >= 0 ? presetList_->presetName(globalIdx) : QString{};
 }
 
-// ── Layer range support (对齐上游 ModelObject::layer_config_ranges) ─────────────────
+// 鈹€鈹€ Layer range support (瀵归綈涓婃父 ModelObject::layer_config_ranges) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 int ConfigViewModel::layerRangeCount() const
 {
@@ -1021,13 +1330,13 @@ QVariant ConfigViewModel::layerRangeValue(int rangeIndex, const QString &key, co
   return projectService_->layerRangeValue(settingsTargetObjectIndex_, rangeIndex, key, fallback);
 }
 
-// ── Enhanced search (对齐上游 OptionsSearcher + fts_fuzzy_match) ─────────────
+// 鈹€鈹€ Enhanced search (瀵归綈涓婃父 OptionsSearcher + fts_fuzzy_match) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 namespace {
 
-/// 对齐上游 fts_fuzzy_match：轻量级模糊匹配算法
-/// 返回匹配分数（0=无匹配，正值越高匹配度越好），同时输出是否全部字符连续
-/// 算法：贪心字符匹配 + 滑动窗口连续匹配 + 前缀/边界奖励
+/// 瀵归綈涓婃父 fts_fuzzy_match锛氳交閲忕骇妯＄硦鍖归厤绠楁硶
+/// 杩斿洖鍖归厤鍒嗘暟锛?=鏃犲尮閰嶏紝姝ｅ€艰秺楂樺尮閰嶅害瓒婂ソ锛夛紝鍚屾椂杈撳嚭鏄惁鍏ㄩ儴瀛楃杩炵画
+/// 绠楁硶锛氳椽蹇冨瓧绗﹀尮閰?+ 婊戝姩绐楀彛杩炵画鍖归厤 + 鍓嶇紑/杈圭晫濂栧姳
 int fuzzyMatch(const QString &pattern, const QString &text, bool *outAllConsecutive = nullptr)
 {
   if (pattern.isEmpty() || text.isEmpty())
@@ -1038,7 +1347,7 @@ int fuzzyMatch(const QString &pattern, const QString &text, bool *outAllConsecut
   const int patLen = pattern.length();
   const int strLen = text.length();
 
-  // 贪心匹配：允许字符间跳过（gap），统计匹配得分
+  // 璐績鍖归厤锛氬厑璁稿瓧绗﹂棿璺宠繃锛坓ap锛夛紝缁熻鍖归厤寰楀垎
   int score = 0;
   int patIdx = 0;
   int consecutiveCount = 0;
@@ -1047,24 +1356,24 @@ int fuzzyMatch(const QString &pattern, const QString &text, bool *outAllConsecut
 
   for (int i = 0; i < strLen && patIdx < patLen; ++i) {
     if (str[i].toLower() == pat[patIdx].toLower()) {
-      // 连续匹配奖励（对齐上游 sequential bonus）
+      // 杩炵画鍖归厤濂栧姳锛堝榻愪笂娓?sequential bonus锛?
       if (lastMatchPos == i - 1) {
         consecutiveCount++;
         score += 15 + consecutiveCount * 2;
       } else {
         consecutiveCount = 1;
-        // 非连续匹配时重置 allConsecutive 标志
+        // 闈炶繛缁尮閰嶆椂閲嶇疆 allConsecutive 鏍囧織
         if (lastMatchPos >= 0)
           allConsecutive = false;
         score += 10;
       }
-      // 前缀匹配额外奖励
+      // 鍓嶇紑鍖归厤棰濆濂栧姳
       if (patIdx == 0)
         score += 5;
-      // 单词边界匹配奖励（首字母或前一个字符是分隔符）
+      // 鍗曡瘝杈圭晫鍖归厤濂栧姳锛堥瀛楁瘝鎴栧墠涓€涓瓧绗︽槸鍒嗛殧绗︼級
       if (i == 0 || (str[i - 1] == '_' || str[i - 1] == ' ' || str[i - 1] == '-'))
         score += 10;
-      // 全部字符大写匹配时额外奖励（缩写匹配）
+      // 鍏ㄩ儴瀛楃澶у啓鍖归厤鏃堕澶栧鍔憋紙缂╁啓鍖归厤锛?
       if (pat[patIdx].isUpper())
         score += 5;
 
@@ -1074,12 +1383,12 @@ int fuzzyMatch(const QString &pattern, const QString &text, bool *outAllConsecut
   }
 
   if (patIdx < patLen) {
-    // 模式未完全匹配
+    // 妯″紡鏈畬鍏ㄥ尮閰?
     if (outAllConsecutive) *outAllConsecutive = false;
     return 0;
   }
 
-  // 惩罚跳过的字符数量（对齐上游 gap penalty）
+  // 鎯╃綒璺宠繃鐨勫瓧绗︽暟閲忥紙瀵归綈涓婃父 gap penalty锛?
   int gaps = strLen - (lastMatchPos - patIdx + 1 + (patLen - consecutiveCount));
   score -= gaps;
 
@@ -1089,18 +1398,18 @@ int fuzzyMatch(const QString &pattern, const QString &text, bool *outAllConsecut
   return score;
 }
 
-/// 在多个字段中搜索，返回最佳分数和匹配的字段索引
-/// fields: 要搜索的文本字段列表
-/// 返回最佳模糊匹配分数
+/// 鍦ㄥ涓瓧娈典腑鎼滅储锛岃繑鍥炴渶浣冲垎鏁板拰鍖归厤鐨勫瓧娈电储寮?
+/// fields: 瑕佹悳绱㈢殑鏂囨湰瀛楁鍒楄〃
+/// 杩斿洖鏈€浣虫ā绯婂尮閰嶅垎鏁?
 int bestFuzzyScore(const QString &needle, const QStringList &fields)
 {
   int best = 0;
   for (const auto &field : fields) {
-    // 子串完全包含给最高分
+    // 瀛愪覆瀹屽叏鍖呭惈缁欐渶楂樺垎
     if (field.toLower().contains(needle))
       return 1000 + needle.length() * 10;
 
-    // 模糊匹配
+    // 妯＄硦鍖归厤
     bool dummy;
     int s = fuzzyMatch(needle, field, &dummy);
     if (s > best)
@@ -1117,7 +1426,7 @@ QList<int> ConfigViewModel::searchOptions(const QString &query) const
     return {};
 
   const QString needle = query.toLower().trimmed();
-  // 对齐上游 OptionsSearcher：score > 阈值才返回
+  // 瀵归綈涓婃父 OptionsSearcher锛歴core > 闃堝€兼墠杩斿洖
   static constexpr int MIN_SCORE = 10;
 
   struct ScoredIndex { int index; int score; };
@@ -1138,7 +1447,7 @@ QList<int> ConfigViewModel::searchOptions(const QString &query) const
     }
   }
 
-  // 按分数降序排序（对齐上游：高分优先，同分按字母序）
+  // 鎸夊垎鏁伴檷搴忔帓搴忥紙瀵归綈涓婃父锛氶珮鍒嗕紭鍏堬紝鍚屽垎鎸夊瓧姣嶅簭锛?
   QObject *opts = printOptions_;
   std::sort(scored.begin(), scored.end(), [opts](const ScoredIndex &a, const ScoredIndex &b) {
     if (a.score != b.score)
@@ -1165,18 +1474,18 @@ QString ConfigViewModel::valueSourceForKey(const QString &key) const
 
 QString ConfigViewModel::valueChainForKey(const QString &key) const
 {
-  // 返回 JSON: {"default":v,"printer":v,"filament":v,"print":v}
-  // 对齐上游 PresetBundle value_at_level 可视化
+  // 杩斿洖 JSON: {"default":v,"printer":v,"filament":v,"print":v}
+  // 瀵归綈涓婃父 PresetBundle value_at_level 鍙鍖?
   if (!printOptions_ || !presetService_)
     return QStringLiteral("{\"default\":\"\"}");
 
   QVariant defVal = printOptions_->defaultValuesByKey().value(key);
-  QVariant printerVal = presetService_->presetValue(currentPrinterPreset_, key);
-  QVariant filamentVal = presetService_->presetValue(currentFilamentPreset_, key);
-  QVariant printVal = presetService_->presetValue(currentPrintPreset_, key);
+  QVariant printerVal = printerPresetValues_.value(key, presetService_->presetValue(currentPrinterPreset_, key));
+  QVariant filamentVal = filamentPresetValues_.value(key, presetService_->presetValue(currentFilamentPreset_, key));
+  QVariant printVal = printPresetValues_.value(key, presetService_->presetValue(currentPrintPreset_, key));
   QVariant currentVal = globalOptionValues_.value(key, defVal);
 
-  // 构建最终 JSON
+  // 鏋勫缓鏈€缁?JSON
   QString result = "{";
   result += "\"default\":\"" + defVal.toString() + "\"";
   result += ",\"printer\":\"" + (printerVal.isValid() ? printerVal.toString() : "-") + "\"";
@@ -1190,7 +1499,7 @@ QString ConfigViewModel::valueChainForKey(const QString &key) const
 bool ConfigViewModel::resetOptionToLevel(const QString &key, int level)
 {
   // level: 0=default, 1=print, 2=filament, 3=printer
-  // 对齐上游 Tab reset_to_level
+  // 瀵归綈涓婃父 Tab reset_to_level
   if (!printOptions_ || !presetService_)
     return false;
 
@@ -1206,11 +1515,17 @@ bool ConfigViewModel::resetOptionToLevel(const QString &key, int level)
   if (!targetVal.isValid())
     return false;
 
-  globalOptionValues_[key] = targetVal;
-  savedPresetValues_[key] = targetVal;
+  const QString tier = normalizedTier(activePresetTier_);
+  if (tier == QStringLiteral("printer"))
+    printerPresetValues_.insert(key, targetVal);
+  else if (tier == QStringLiteral("filament"))
+    filamentPresetValues_.insert(key, targetVal);
+  else
+    printPresetValues_.insert(key, targetVal);
+  updateMergedPresetValues();
   applyScopeValues();
 
-  // 更新来源层级
+  // 鏇存柊鏉ユ簮灞傜骇
   switch (level) {
   case 0: valueSources_[key] = QStringLiteral("default"); break;
   case 1: valueSources_[key] = QStringLiteral("print"); break;
@@ -1261,7 +1576,7 @@ QString ConfigViewModel::searchResultPage(int searchIndex) const
   return printOptions_->optPage(m_lastSearchResults_[searchIndex]);
 }
 
-// ── Scope difference (对齐上游 Tab::is_modified_value per-scope diff) ──
+// 鈹€鈹€ Scope difference (瀵归綈涓婃父 Tab::is_modified_value per-scope diff) 鈹€鈹€
 
 QString ConfigViewModel::scopeDiffSummary(const QString &key) const
 {
@@ -1332,7 +1647,10 @@ bool ConfigViewModel::resetScopeOverride(const QString &key)
     ok = projectService_->resetScopedOptionValue(settingsTargetObjectIndex_, settingsTargetVolumeIndex_, key);
   else if (settingsScope_ == "plate" && settingsTargetPlateIndex_ >= 0)
     ok = projectService_->resetPlateScopedOptionValue(settingsTargetPlateIndex_, key);
-  if (ok) emit stateChanged();
+  if (ok) {
+    applyScopeValues();
+    emit stateChanged();
+  }
   return ok;
 }
 
@@ -1348,17 +1666,17 @@ void ConfigViewModel::resetAllScopeOverrides()
     resetScopeOverride(key);
 }
 
-// ── Global modified options (对齐上游 Tab::modified_options) ──────────────────
+// 鈹€鈹€ Global modified options (瀵归綈涓婃父 Tab::modified_options) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 int ConfigViewModel::globalModifiedCount() const
 {
-  if (!printOptions_)
-    return 0;
-  const auto defaults = printOptions_->defaultValuesByKey();
+  const QString tier = normalizedTier(activePresetTier_);
+  const auto effective = effectivePresetValuesForTier(tier);
+  const auto reference = referenceValuesForTier(tier);
   int count = 0;
-  for (auto it = globalOptionValues_.cbegin(); it != globalOptionValues_.cend(); ++it)
+  for (auto it = effective.cbegin(); it != effective.cend(); ++it)
   {
-    if (defaults.contains(it.key()) && defaults.value(it.key()) != it.value())
+    if (reference.value(it.key()) != it.value())
       ++count;
   }
   return count;
@@ -1374,7 +1692,7 @@ void ConfigViewModel::applyProjectConfig(const QHash<QString, QVariant> &config)
   if (config.isEmpty()) return;
 
   // Try to match printer/filament/print presets from loaded config
-  // Upstream maps: printer_preset_id → PresetBundle printer, etc.
+  // Upstream maps: printer_preset_id 鈫?PresetBundle printer, etc.
   const auto printerIt = config.find(QStringLiteral("printer_preset_id"));
   if (printerIt != config.end() && !printerIt.value().toString().isEmpty())
   {
@@ -1399,7 +1717,7 @@ void ConfigViewModel::applyProjectConfig(const QHash<QString, QVariant> &config)
       setCurrentPrintPreset(name);
   }
 
-  // Merge remaining config keys into globalOptionValues_
+  // Apply remaining config keys into the editable print-tier state.
   for (auto it = config.constBegin(); it != config.constEnd(); ++it)
   {
     const QString &key = it.key();
@@ -1410,8 +1728,11 @@ void ConfigViewModel::applyProjectConfig(const QHash<QString, QVariant> &config)
         key == QStringLiteral("print_sequence") ||
         key == QStringLiteral("total_filament_names"))
       continue;
-    globalOptionValues_[key] = it.value();
+    printPresetValues_[key] = it.value();
   }
+
+  updateMergedPresetValues();
+  applyScopeValues();
 
   // Sync individual Q_PROPERTY values from merged config
   if (globalOptionValues_.contains(QStringLiteral("layer_height")))
@@ -1440,13 +1761,15 @@ void ConfigViewModel::applyProjectConfig(const QHash<QString, QVariant> &config)
 
 QString ConfigViewModel::globalModifiedKey(int index) const
 {
-  if (!printOptions_ || index < 0)
+  if (index < 0)
     return {};
-  const auto defaults = printOptions_->defaultValuesByKey();
+  const QString tier = normalizedTier(activePresetTier_);
+  const auto effective = effectivePresetValuesForTier(tier);
+  const auto reference = referenceValuesForTier(tier);
   int pos = 0;
-  for (auto it = globalOptionValues_.cbegin(); it != globalOptionValues_.cend(); ++it)
+  for (auto it = effective.cbegin(); it != effective.cend(); ++it)
   {
-    if (defaults.contains(it.key()) && defaults.value(it.key()) != it.value())
+    if (reference.value(it.key()) != it.value())
     {
       if (pos == index)
         return it.key();
@@ -1458,25 +1781,29 @@ QString ConfigViewModel::globalModifiedKey(int index) const
 
 QString ConfigViewModel::globalModifiedCurrentValue(const QString &key) const
 {
-  return globalOptionValues_.value(key).toString();
+  return effectivePresetValuesForTier(activePresetTier_).value(key).toString();
 }
 
 QString ConfigViewModel::globalModifiedDefaultValue(const QString &key) const
 {
-  if (!printOptions_)
-    return {};
-  return printOptions_->defaultValuesByKey().value(key).toString();
+  return referenceValuesForTier(activePresetTier_).value(key).toString();
 }
 
 bool ConfigViewModel::resetGlobalOption(const QString &key)
 {
-  if (!printOptions_)
+  const QString tier = normalizedTier(activePresetTier_);
+  const auto presetValues = selectedPresetValuesForTier(tier);
+  const auto fallbackValues = referenceValuesForTier(tier);
+  if (!presetValues.contains(key) && !fallbackValues.contains(key))
     return false;
-  const auto defaults = printOptions_->defaultValuesByKey();
-  if (!defaults.contains(key))
-    return false;
-  globalOptionValues_[key] = defaults.value(key);
-  savedPresetValues_[key] = defaults.value(key);
+  const QVariant target = presetValues.contains(key) ? presetValues.value(key) : fallbackValues.value(key);
+  if (tier == QStringLiteral("printer"))
+    printerPresetValues_.insert(key, target);
+  else if (tier == QStringLiteral("filament"))
+    filamentPresetValues_.insert(key, target);
+  else
+    printPresetValues_.insert(key, target);
+  updateMergedPresetValues();
   applyScopeValues();
   emit stateChanged();
   return true;
@@ -1484,17 +1811,15 @@ bool ConfigViewModel::resetGlobalOption(const QString &key)
 
 void ConfigViewModel::resetAllGlobalOptions()
 {
-  if (!printOptions_)
-    return;
-  const auto defaults = printOptions_->defaultValuesByKey();
-  for (auto it = globalOptionValues_.begin(); it != globalOptionValues_.end(); ++it)
-  {
-    if (defaults.contains(it.key()))
-    {
-      it.value() = defaults.value(it.key());
-      savedPresetValues_[it.key()] = defaults.value(it.key());
-    }
-  }
+  const QString tier = normalizedTier(activePresetTier_);
+  const auto presetValues = selectedPresetValuesForTier(tier);
+  if (tier == QStringLiteral("printer"))
+    printerPresetValues_ = presetValues;
+  else if (tier == QStringLiteral("filament"))
+    filamentPresetValues_ = presetValues;
+  else
+    printPresetValues_ = presetValues;
+  updateMergedPresetValues();
   applyScopeValues();
   emit stateChanged();
 }

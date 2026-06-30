@@ -1,4 +1,4 @@
-﻿import QtQuick
+import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import ".."
@@ -79,7 +79,7 @@ Rectangle {
                             }
                             onActivated: (i) => {
                                 if (root.configVm && i >= 0)
-                                    root.configVm.setCurrentPrinterPreset(model[i])
+                                    root.configVm.requestCurrentPrinterPreset(model[i])
                             }
                         }
 
@@ -231,7 +231,7 @@ Rectangle {
                         cxStyle: root.configVm && root.configVm.settingsScope === "global"
                                  ? CxButton.Style.Primary : CxButton.Style.Ghost
                         text: qsTr("全局")
-                        onClicked: if (root.configVm) root.configVm.activateGlobalScope()
+                        onClicked: if (root.configVm) root.configVm.requestGlobalScope()
                     }
                     CxButton {
                         implicitWidth: 44
@@ -243,7 +243,7 @@ Rectangle {
                         onClicked: {
                             // SIDEBAR-07: 切到对象作用域（用当前选中对象，无选中则提示）
                             if (root.editorVm && root.editorVm.selectedObjectIndex >= 0 && root.configVm) {
-                                root.configVm.activateObjectScope("object", "",
+                                root.configVm.requestObjectScope("object", "",
                                     root.editorVm.selectedObjectIndex, -1)
                             }
                         }

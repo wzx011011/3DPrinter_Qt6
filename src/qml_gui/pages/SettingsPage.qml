@@ -2,14 +2,18 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// SettingsPage — 3-tier preset tab host (工艺参数 / 耗材参数 / 打印机参数)
+// SettingsPage - 3-tier preset tab host
 Item {
     id: root
     required property var configVm
 
-    readonly property var printCategories: [qsTr("质量"),qsTr("填充"),qsTr("速度"),qsTr("加速度"),qsTr("温度"),qsTr("支撑"),qsTr("底座"),qsTr("冷却"),qsTr("回退"),qsTr("其他")]
-    readonly property var filamentCategories: [qsTr("基本"),qsTr("温度"),qsTr("冷却"),qsTr("速度"),qsTr("回退"),qsTr("G-code")]
-    readonly property var machineCategories: [qsTr("打印空间"),qsTr("G-code"),qsTr("运动能力"),qsTr("挤出机"),qsTr("多材料"),qsTr("注释")]
+    function requestBackToPrepare() {
+        backend.setCurrentPage(1)
+    }
+
+    readonly property var printCategories: [qsTr("Quality"), qsTr("Strength"), qsTr("Speed"), qsTr("Support"), qsTr("Filament"), qsTr("Cooling"), qsTr("Infill"), qsTr("Skirt"), qsTr("Advanced"), qsTr("G-code")]
+    readonly property var filamentCategories: [qsTr("Filament"), qsTr("Temperature"), qsTr("Cooling"), qsTr("Retraction"), qsTr("Advanced"), qsTr("G-code")]
+    readonly property var machineCategories: [qsTr("Machine"), qsTr("G-code"), qsTr("Motion"), qsTr("Extruder"), qsTr("Cooling"), qsTr("General")]
 
     Rectangle { anchors.fill: parent; color: Theme.bgBase }
 
@@ -17,7 +21,7 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        // ── Tab bar ──
+        // Tab bar
         Rectangle {
             Layout.fillWidth: true
             height: 44
@@ -32,9 +36,9 @@ Item {
                 Rectangle {
                     Layout.preferredWidth: 70; Layout.preferredHeight: 28; radius: 4
                     color: backHov.containsMouse ? Theme.bgHover : Theme.bgElevated
-                    Text { anchors.centerIn: parent; text: qsTr("← 返回"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
+                    Text { anchors.centerIn: parent; text: qsTr("Back"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                     HoverHandler { id: backHov }
-                    TapHandler { onTapped: backend.setCurrentPage(1) }
+                    TapHandler { onTapped: root.requestBackToPrepare() }
                 }
 
                 Item { Layout.preferredWidth: Theme.spacingLG }
@@ -44,7 +48,7 @@ Item {
                     spacing: 24
 
                     Repeater {
-                        model: [qsTr("工艺参数"), qsTr("耗材参数"), qsTr("打印机参数")]
+                        model: [qsTr("Print"), qsTr("Filament"), qsTr("Printer")]
                         delegate: Rectangle {
                             required property string modelData
                             required property int index
@@ -80,31 +84,31 @@ Item {
                 }
                 Label {
                     visible: configVm && configVm.isPresetDirty
-                    text: qsTr("已修改")
+                    text: qsTr("Modified")
                     color: Theme.statusWarning; font.pixelSize: Theme.fontSizeXS; font.bold: true
                     leftPadding: Theme.spacingSM; rightPadding: Theme.spacingSM
                     topPadding: 2; bottomPadding: 2
                     background: Rectangle { radius: 3; color: "#3a2e1a" }
                 }
-                // PRESET-01: 另存为预设按钮（对齐上游 SavePresetDialog 入口）
+                // PRESET-01: save preset entry
                 CxButton {
-                    text: qsTr("另存为...")
+                    text: qsTr("Save As...")
                     implicitHeight: 24
                     compact: true
                     enabled: configVm && configVm.isPresetDirty
                     onClicked: savePresetDialog.open()
                 }
-                // SEARCH-01: 搜索参数按钮（对齐上游 SearchCtrl）
+                // SEARCH-01: search dialog entry
                 CxButton {
-                    text: qsTr("🔍 搜索")
+                    text: qsTr("Search")
                     implicitHeight: 24
                     compact: true
                     enabled: !!configVm
                     onClicked: searchDialog.open()
                 }
-                // V21-02: 导出预设包按钮（对齐上游 ExportPresetBundleDialog）
+                // V21-02: export preset bundle dialog
                 CxButton {
-                    text: qsTr("导出预设...")
+                    text: qsTr("Export...")
                     implicitHeight: 24
                     compact: true
                     enabled: !!configVm
@@ -113,7 +117,7 @@ Item {
             }
         }
 
-        // PRESET-01: SavePresetDialog 实例
+        // PRESET-01: save preset dialog
         SavePresetDialog {
             id: savePresetDialog
             configVm: root.configVm
@@ -123,23 +127,30 @@ Item {
             }
         }
 
-        // PRESET-02: UnsavedChangesDialog 实例（切换 preset 守卫）
+        // PRESET-02: unsaved changes dialog
         UnsavedChangesDialog {
             id: unsavedChangesDialog
             configVm: root.configVm
             onAccepted: {
-                if (action === "save") savePresetDialog.open()
-                else if (action === "discard") { if (root.configVm) root.configVm.resetAllGlobalOptions() }
-                // cancel: 不做任何事, 守卫由调用方判断
+                if (!root.configVm)
+                    return
+                if (action === "save") {
+                    if (!root.configVm.requestSavePendingChanges())
+                        savePresetDialog.open()
+                } else if (action === "discard") {
+                    root.configVm.requestDiscardPendingChanges()
+                } else {
+                    root.configVm.requestCancelPendingChanges()
+                }
             }
+            onRejected: if (root.configVm) root.configVm.requestCancelPendingChanges()
         }
 
-        // SEARCH-01: SearchDialog 实例（对齐上游 SearchCtrl）
+        // SEARCH-01: search dialog
         SearchDialog {
             id: searchDialog
             configVm: root.configVm
             onJumpToOption: function(optionIndex) {
-                // 跳转到对应 tier + 滚动到该选项（简化：切换 tier）
                 if (root.configVm) {
                     var page = root.configVm.searchResultPage(optionIndex)
                     if (page === "print") tierBar.currentIndex = 0
@@ -149,7 +160,7 @@ Item {
             }
         }
 
-        // V21-02: ExportPresetBundleDialog 实例
+        // V21-02: export bundle dialog
         ExportPresetBundleDialog {
             id: exportBundleDialog
             configVm: root.configVm

@@ -1655,6 +1655,10 @@ const Slic3r::DynamicPrintConfig *ProjectServiceMock::plateDynamicConfig(int pla
 
 int ProjectServiceMock::scopedOverrideCount(int objectIndex, int volumeIndex) const
 {
+#ifdef HAS_LIBSLIC3R
+  const auto *config = scopedConfigForRead(model_, objectIndex, volumeIndex);
+  return config ? int(config->keys().size()) : 0;
+#else
   if (volumeIndex >= 0) {
     const int volKey = (objectIndex << 16) | volumeIndex;
     auto it = m_mockVolumeOverrides.constFind(volKey);
@@ -1662,10 +1666,20 @@ int ProjectServiceMock::scopedOverrideCount(int objectIndex, int volumeIndex) co
   }
   auto it = m_mockObjectOverrides.constFind(objectIndex);
   return it != m_mockObjectOverrides.constEnd() ? it.value().size() : 0;
+#endif
 }
 
 QString ProjectServiceMock::scopedOverriddenKey(int objectIndex, int volumeIndex, int index) const
 {
+#ifdef HAS_LIBSLIC3R
+  const auto *config = scopedConfigForRead(model_, objectIndex, volumeIndex);
+  if (!config || index < 0 || index >= int(config->keys().size()))
+    return {};
+  const auto &keys = config->keys();
+  auto it = keys.begin();
+  std::advance(it, index);
+  return QString::fromStdString(*it);
+#else
   const QHash<QString, QVariant> *map = nullptr;
   if (volumeIndex >= 0) {
     const int volKey = (objectIndex << 16) | volumeIndex;
@@ -1677,10 +1691,22 @@ QString ProjectServiceMock::scopedOverriddenKey(int objectIndex, int volumeIndex
   }
   if (!map || index < 0 || index >= map->size()) return {};
   return map->keys().value(index);
+#endif
 }
 
 bool ProjectServiceMock::resetScopedOptionValue(int objectIndex, int volumeIndex, const QString &key)
 {
+#ifdef HAS_LIBSLIC3R
+  auto *config = scopedConfigForWrite(model_, objectIndex, volumeIndex);
+  if (!config)
+    return false;
+  const std::string stdKey = key.toUtf8().constData();
+  if (!config->option(stdKey))
+    return false;
+  config->erase(stdKey);
+  emit projectChanged();
+  return true;
+#else
   if (volumeIndex >= 0) {
     const int volKey = (objectIndex << 16) | volumeIndex;
     auto it = m_mockVolumeOverrides.find(volKey);
@@ -1690,26 +1716,54 @@ bool ProjectServiceMock::resetScopedOptionValue(int objectIndex, int volumeIndex
     if (it != m_mockObjectOverrides.end() && it.value().remove(key)) { emit projectChanged(); return true; }
   }
   return false;
+#endif
 }
 
 int ProjectServiceMock::plateScopedOverrideCount(int plateIndex) const
 {
+#ifdef HAS_LIBSLIC3R
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  return p ? int(p->config().keys().size()) : 0;
+#else
   auto it = m_mockPlateOverrides.find(plateIndex);
   return it != m_mockPlateOverrides.end() ? it.value().size() : 0;
+#endif
 }
 
 QString ProjectServiceMock::plateScopedOverriddenKey(int plateIndex, int index) const
 {
+#ifdef HAS_LIBSLIC3R
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p || index < 0 || index >= int(p->config().keys().size()))
+    return {};
+  const auto &keys = p->config().keys();
+  auto it = keys.begin();
+  std::advance(it, index);
+  return QString::fromStdString(*it);
+#else
   auto it = m_mockPlateOverrides.find(plateIndex);
   if (it == m_mockPlateOverrides.end() || index < 0 || index >= it.value().size()) return {};
   return it.value().keys().value(index);
+#endif
 }
 
 bool ProjectServiceMock::resetPlateScopedOptionValue(int plateIndex, const QString &key)
 {
+#ifdef HAS_LIBSLIC3R
+  OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p)
+    return false;
+  const std::string stdKey = key.toUtf8().constData();
+  if (!p->config().option(stdKey))
+    return false;
+  p->config().erase(stdKey);
+  emit projectChanged();
+  return true;
+#else
   auto it = m_mockPlateOverrides.find(plateIndex);
   if (it != m_mockPlateOverrides.end() && it.value().remove(key)) { emit projectChanged(); return true; }
   return false;
+#endif
 }
 
 bool ProjectServiceMock::deleteObjectVolume(int objectIndex, int volumeIndex)

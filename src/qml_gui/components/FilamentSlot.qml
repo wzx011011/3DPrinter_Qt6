@@ -129,7 +129,7 @@ Item {
                     if (!root.configVm) return
                     var names = root.configVm.filamentPresetNames
                     if (index >= 0 && index < names.length)
-                        root.configVm.setCurrentFilamentPreset(names[index])
+                        root.configVm.requestCurrentFilamentPreset(names[index])
                 }
             }
         }

@@ -5,7 +5,7 @@ import ".."
 import "../controls"
 import "../components"
 
-// FilamentPanel — per-extruder filament slot management
+// FilamentPanel 鈥?per-extruder filament slot management
 // Aligned with upstream Plater filament management section
 Item {
     id: root
@@ -20,18 +20,18 @@ Item {
         property int slotIndex: -1
 
         CxMenuItem {
-            text: qsTr("编辑")
+            text: qsTr("缂栬緫")
             onTriggered: {
                 if (!root.configVm || filamentContextMenu.slotIndex < 0) return
                 var presets = root.configVm.filamentPresetNames
                 var name = filamentContextMenu.slotIndex < presets.length
                     ? presets[filamentContextMenu.slotIndex] : ""
-                root.configVm.setCurrentFilamentPreset(name)
+                root.configVm.requestCurrentFilamentPreset(name)
             }
         }
 
         CxMenuItem {
-            text: qsTr("删除")
+            text: qsTr("鍒犻櫎")
             enabled: root.editorVm && root.editorVm.extruderCount > 1
             onTriggered: {
                 if (root.editorVm && filamentContextMenu.slotIndex >= 0)
@@ -40,21 +40,21 @@ Item {
         }
 
         CxMenu {
-            title: qsTr("合并到...")
+            title: qsTr("鍚堝苟鍒?..")
             visible: root.editorVm && root.editorVm.extruderCount > 1
 
             Repeater {
                 model: root.editorVm ? root.editorVm.extruderCount : 0
                 delegate: CxMenuItem {
                     required property int index
-                    // Skip the current slot — can't merge with self
+                    // Skip the current slot 鈥?can't merge with self
                     visible: index !== filamentContextMenu.slotIndex
                     text: {
                         if (!root.configVm) return qsTr("T%1").arg(index)
                         var presets = root.configVm.filamentPresetNames
                         var name = index < presets.length ? presets[index] : ""
                         return name.length > 0
-                            ? qsTr("T%1 — %2").arg(index).arg(name)
+                            ? qsTr("T%1 鈥?%2").arg(index).arg(name)
                             : qsTr("T%1").arg(index)
                     }
                     onTriggered: {
@@ -73,9 +73,9 @@ Item {
 
         CxSectionHeader {
             Layout.fillWidth: true
-            title: qsTr("耗材")
+            title: qsTr("鑰楁潗")
             subtitle: root.editorVm
-                ? qsTr("%1 个挤出机").arg(root.editorVm.extruderCount)
+                ? qsTr("%1 涓尋鍑烘満").arg(root.editorVm.extruderCount)
                 : ""
         }
 
@@ -167,20 +167,20 @@ Item {
             spacing: 6
 
             CxButton {
-                text: qsTr("+ 耗材")
+                text: qsTr("+ 鑰楁潗")
                 cxStyle: CxButton.Style.Secondary
                 implicitHeight: 24
                 font.pixelSize: Theme.fontSizeXS
                 onClicked: {
                     if (root.configVm)
-                        root.configVm.setCurrentFilamentPreset("")
+                        root.configVm.requestCurrentFilamentPreset("")
                 }
             }
 
             Item { Layout.fillWidth: true }
 
             Text {
-                text: qsTr("自动匹配")
+                text: qsTr("鑷姩鍖归厤")
                 color: autoMatchMA.containsMouse ? Theme.accent : Theme.textSecondary
                 font.pixelSize: 9
                 font.bold: true

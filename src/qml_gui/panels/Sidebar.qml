@@ -26,10 +26,10 @@ Item {
         function onSelectionSettingsRequested() {
             printSection.expanded = true
             if (root.configVm && root.editorVm && root.editorVm.canOpenSelectionSettings) {
-                root.configVm.activateObjectScope(root.editorVm.settingsTargetType,
-                                                  root.editorVm.settingsTargetName,
-                                                  root.editorVm.settingsTargetObjectIndex,
-                                                  root.editorVm.settingsTargetVolumeIndex)
+                root.configVm.requestObjectScope(root.editorVm.settingsTargetType,
+                                                 root.editorVm.settingsTargetName,
+                                                 root.editorVm.settingsTargetObjectIndex,
+                                                 root.editorVm.settingsTargetVolumeIndex)
             }
         }
     }

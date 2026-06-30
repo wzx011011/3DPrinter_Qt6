@@ -124,6 +124,7 @@ private slots:
   void testTabPositionEnumValues();
   void testRequestSelectTabSignal();
   void testRequestSelectTabOutOfRange();
+  void configExternalTransitionDefersAndResumesNavigation();
   // Phase 03-01: ViewMode enum + requestChangeViewMode + tab 联动
   void testViewModeEnumValues();
   void testCurrentViewModeDefault();
@@ -160,6 +161,13 @@ private slots:
   void testFilamentOptionsLoaded();
   void testMachineEditFlowsToGlobal();
   void testTierAwareSaveFiltersByTier();
+  void configPresetDirtyTracksActiveTierAgainstSelectedPreset();
+  void configResetRestoresSelectedPresetValues();
+  void configOptionModelDirtyUsesPresetReferenceValues();
+  void configScopeResetRevealsInheritedValue();
+  void configUnsavedTransitionsQueueAndCancelPendingChanges();
+  void configWritableSaveAppliesPendingTransition();
+  void configReadOnlySaveAsAppliesPendingTransition();
   void configPresetCategoryMappingUsesServiceEnums();
   void configPresetMutationsRejectWrongCategory();
   void presetServiceMetadataClassifiesBuiltinAndCustomPresets();
@@ -450,6 +458,339 @@ void ViewModelSmokeTests::testTierAwareSaveFiltersByTier()
              "machine_max_speed_x should be in printer preset after printer-tier save");
     QCOMPARE(printerSaved[QStringLiteral("machine_max_speed_x")].toDouble(), 999.0);
   }
+}
+
+void ViewModelSmokeTests::configPresetDirtyTracksActiveTierAgainstSelectedPreset()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("ConfigDirtyByTier"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("UT Dirty Print A"),
+                                    {{QStringLiteral("layer_height"), 0.16},
+                                     {QStringLiteral("top_shell_layers"), 5}}));
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+                                    QStringLiteral("UT Dirty Printer A"),
+                                    {{QStringLiteral("machine_max_speed_x"), 333.0}}));
+
+  ConfigViewModel config(&preset, &project);
+  config.setCurrentPrintPreset(QStringLiteral("UT Dirty Print A"));
+  config.setCurrentPrinterPreset(QStringLiteral("UT Dirty Printer A"));
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  auto *machineOpts = qobject_cast<ConfigOptionModel *>(config.machineOptions());
+  QVERIFY(printOpts);
+  QVERIFY(machineOpts);
+
+  const int layerIdx = printOpts->indexOfKey(QStringLiteral("layer_height"));
+  const int speedIdx = machineOpts->indexOfKey(QStringLiteral("machine_max_speed_x"));
+  QVERIFY(layerIdx >= 0);
+  QVERIFY(speedIdx >= 0);
+
+  config.setActivePresetTier(QStringLiteral("print"));
+  QVERIFY(!config.isPresetDirty());
+  QCOMPARE(config.globalModifiedCount(), 0);
+
+  printOpts->setValue(layerIdx, 0.22);
+  QVERIFY(config.isPresetDirty());
+  QCOMPARE(config.globalModifiedCount(), 1);
+  QCOMPARE(config.globalModifiedKey(0), QStringLiteral("layer_height"));
+  QCOMPARE(config.globalModifiedDefaultValue(QStringLiteral("layer_height")), QStringLiteral("0.16"));
+
+  config.setActivePresetTier(QStringLiteral("printer"));
+  QVERIFY(!config.isPresetDirty());
+  QCOMPARE(config.globalModifiedCount(), 0);
+
+  machineOpts->setValue(speedIdx, 555.0);
+  QVERIFY(config.isPresetDirty());
+  QCOMPARE(config.globalModifiedCount(), 1);
+  QCOMPARE(config.globalModifiedKey(0), QStringLiteral("machine_max_speed_x"));
+  QCOMPARE(config.globalModifiedDefaultValue(QStringLiteral("machine_max_speed_x")), QStringLiteral("333"));
+
+  config.setActivePresetTier(QStringLiteral("print"));
+  QVERIFY(printOpts->optIsDirty(layerIdx));
+}
+
+void ViewModelSmokeTests::configResetRestoresSelectedPresetValues()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("ConfigResetSelectedPreset"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("UT Reset Print A"),
+                                    {{QStringLiteral("layer_height"), 0.16},
+                                     {QStringLiteral("top_shell_layers"), 5}}));
+  ConfigViewModel config(&preset, &project);
+  config.setCurrentPrintPreset(QStringLiteral("UT Reset Print A"));
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  const int layerIdx = printOpts->indexOfKey(QStringLiteral("layer_height"));
+  QVERIFY(layerIdx >= 0);
+
+  config.setActivePresetTier(QStringLiteral("print"));
+  printOpts->setValue(layerIdx, 0.24);
+  QVERIFY(config.isPresetDirty());
+  QVERIFY(config.resetGlobalOption(QStringLiteral("layer_height")));
+  QCOMPARE(printOpts->optValue(layerIdx).toDouble(), 0.16);
+  QVERIFY(!config.isPresetDirty());
+
+  printOpts->setValue(layerIdx, 0.28);
+  QVERIFY(config.isPresetDirty());
+  config.resetAllGlobalOptions();
+  QCOMPARE(printOpts->optValue(layerIdx).toDouble(), 0.16);
+  QVERIFY(!config.isPresetDirty());
+}
+
+void ViewModelSmokeTests::configOptionModelDirtyUsesPresetReferenceValues()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("ConfigOptionDirtyReference"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("UT Dirty Marker Print A"),
+                                    {{QStringLiteral("layer_height"), 0.16}}));
+  ConfigViewModel config(&preset, &project);
+  config.setCurrentPrintPreset(QStringLiteral("UT Dirty Marker Print A"));
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  const int layerIdx = printOpts->indexOfKey(QStringLiteral("layer_height"));
+  QVERIFY(layerIdx >= 0);
+
+  QCOMPARE(printOpts->optValue(layerIdx).toDouble(), 0.16);
+  QVERIFY(!printOpts->optIsDirty(layerIdx));
+  QCOMPARE(printOpts->dirtyCount(), 0);
+
+  printOpts->setValue(layerIdx, 0.20);
+  QVERIFY(printOpts->optIsDirty(layerIdx));
+  QCOMPARE(printOpts->dirtyCount(), 1);
+
+  printOpts->setValue(layerIdx, 0.16);
+  QVERIFY(!printOpts->optIsDirty(layerIdx));
+  QCOMPARE(printOpts->dirtyCount(), 0);
+}
+
+void ViewModelSmokeTests::configScopeResetRevealsInheritedValue()
+{
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  const int layerIdx = printOpts->indexOfKey(QStringLiteral("layer_height"));
+  QVERIFY(layerIdx >= 0);
+
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  config.activateObjectScope(QStringLiteral("object"), QStringLiteral("Object 1"), 0, -1);
+  printOpts->setValue(layerIdx, 0.30);
+  QCOMPARE(printOpts->optValue(layerIdx).toDouble(), 0.30);
+  QCOMPARE(config.scopeOverrideCount(), 1);
+
+  QVERIFY(config.resetScopeOverride(QStringLiteral("layer_height")));
+  QCOMPARE(config.scopeOverrideCount(), 0);
+  QCOMPARE(printOpts->optValue(layerIdx).toDouble(), config.mergedConfigValues().value(QStringLiteral("layer_height")).toDouble());
+}
+
+void ViewModelSmokeTests::configUnsavedTransitionsQueueAndCancelPendingChanges()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("ConfigUnsavedTransitions"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("UT Guard Print A"),
+                                    {{QStringLiteral("layer_height"), 0.16}}));
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("UT Guard Print B"),
+                                    {{QStringLiteral("layer_height"), 0.28}}));
+
+  ConfigViewModel config(&preset, &project);
+  config.setCurrentPrintPreset(QStringLiteral("UT Guard Print A"));
+  config.setActivePresetTier(QStringLiteral("print"));
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  const int layerIdx = printOpts->indexOfKey(QStringLiteral("layer_height"));
+  QVERIFY(layerIdx >= 0);
+
+  printOpts->setValue(layerIdx, 0.22);
+  QVERIFY(config.isPresetDirty());
+
+  bool ok = false;
+  QVERIFY(QMetaObject::invokeMethod(&config, "requestCurrentPrintPreset",
+                                    Q_RETURN_ARG(bool, ok),
+                                    Q_ARG(QString, QStringLiteral("UT Guard Print B"))));
+  QVERIFY(!ok);
+  QCOMPARE(config.currentPrintPreset(), QStringLiteral("UT Guard Print A"));
+  QCOMPARE(config.property("pendingUnsavedAction").toString(), QStringLiteral("switch-print-preset"));
+  QCOMPARE(config.property("pendingUnsavedTarget").toString(), QStringLiteral("UT Guard Print B"));
+  QVERIFY(config.property("hasPendingUnsavedChanges").toBool());
+
+  bool cancelOk = false;
+  QVERIFY(QMetaObject::invokeMethod(&config, "requestCancelPendingChanges",
+                                    Q_RETURN_ARG(bool, cancelOk)));
+  QVERIFY(cancelOk);
+  QCOMPARE(config.currentPrintPreset(), QStringLiteral("UT Guard Print A"));
+  QVERIFY(config.isPresetDirty());
+  QVERIFY(config.property("pendingUnsavedAction").toString().isEmpty());
+
+  bool leaveOk = false;
+  QVERIFY(QMetaObject::invokeMethod(&config, "requestLeaveSettingsPage",
+                                    Q_RETURN_ARG(bool, leaveOk)));
+  QVERIFY(!leaveOk);
+  QCOMPARE(config.property("pendingUnsavedAction").toString(), QStringLiteral("leave-settings-page"));
+}
+
+void ViewModelSmokeTests::configWritableSaveAppliesPendingTransition()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("ConfigUnsavedWritableSave"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("UT Writable Save Print A"),
+                                    {{QStringLiteral("layer_height"), 0.18}}));
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("UT Writable Save Print B"),
+                                    {{QStringLiteral("layer_height"), 0.30}}));
+
+  ConfigViewModel config(&preset, &project);
+  config.setCurrentPrintPreset(QStringLiteral("UT Writable Save Print A"));
+  config.setActivePresetTier(QStringLiteral("print"));
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  const int layerIdx = printOpts->indexOfKey(QStringLiteral("layer_height"));
+  QVERIFY(layerIdx >= 0);
+
+  printOpts->setValue(layerIdx, 0.26);
+  QVERIFY(config.isPresetDirty());
+
+  bool switchOk = false;
+  QVERIFY(QMetaObject::invokeMethod(&config, "requestCurrentPrintPreset",
+                                    Q_RETURN_ARG(bool, switchOk),
+                                    Q_ARG(QString, QStringLiteral("UT Writable Save Print B"))));
+  QVERIFY(!switchOk);
+  QCOMPARE(config.currentPrintPreset(), QStringLiteral("UT Writable Save Print A"));
+
+  bool saveOk = false;
+  QVERIFY(QMetaObject::invokeMethod(&config, "requestSavePendingChanges",
+                                    Q_RETURN_ARG(bool, saveOk)));
+  QVERIFY(saveOk);
+  QCOMPARE(config.currentPrintPreset(), QStringLiteral("UT Writable Save Print B"));
+
+  const auto savedValues = preset.presetValues(QStringLiteral("UT Writable Save Print A"));
+  QVERIFY(savedValues.contains(QStringLiteral("layer_height")));
+  QCOMPARE(savedValues.value(QStringLiteral("layer_height")).toDouble(), 0.26);
+}
+
+void ViewModelSmokeTests::configReadOnlySaveAsAppliesPendingTransition()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("ConfigUnsavedSaveAs"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  config.setActivePresetTier(QStringLiteral("print"));
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  const int layerIdx = printOpts->indexOfKey(QStringLiteral("layer_height"));
+  QVERIFY(layerIdx >= 0);
+
+  const QString builtinPreset = config.currentPrintPreset();
+  QVERIFY(!builtinPreset.isEmpty());
+  QVERIFY(preset.isReadOnlyPreset(builtinPreset));
+  QString targetPreset;
+  const QStringList printPresets = preset.presetNamesForCategory(PresetServiceMock::PrintCat);
+  for (const QString &candidate : printPresets)
+  {
+    if (candidate != builtinPreset)
+    {
+      targetPreset = candidate;
+      break;
+    }
+  }
+  QVERIFY(!targetPreset.isEmpty());
+
+  printOpts->setValue(layerIdx, 0.24);
+  QVERIFY(config.isPresetDirty());
+
+  bool switchOk = false;
+  QVERIFY(QMetaObject::invokeMethod(&config, "requestCurrentPrintPreset",
+                                    Q_RETURN_ARG(bool, switchOk),
+                                    Q_ARG(QString, targetPreset)));
+  QVERIFY(!switchOk);
+  QCOMPARE(config.currentPrintPreset(), builtinPreset);
+  QCOMPARE(config.property("pendingUnsavedAction").toString(), QStringLiteral("switch-print-preset"));
+  QCOMPARE(config.property("pendingUnsavedTarget").toString(), targetPreset);
+
+  QSignalSpy saveAsSpy(&config, &ConfigViewModel::saveAsRequired);
+  QVERIFY(saveAsSpy.isValid());
+
+  bool savePendingOk = true;
+  QVERIFY(QMetaObject::invokeMethod(&config, "requestSavePendingChanges",
+                                    Q_RETURN_ARG(bool, savePendingOk)));
+  QVERIFY(!savePendingOk);
+  QCOMPARE(saveAsSpy.count(), 1);
+  QCOMPARE(config.currentPrintPreset(), builtinPreset);
+  QVERIFY(config.property("hasPendingUnsavedChanges").toBool());
+
+  QVERIFY(config.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("UT SaveAs Pending Print")));
+  QCOMPARE(config.currentPrintPreset(), targetPreset);
+  QVERIFY(!config.property("hasPendingUnsavedChanges").toBool());
+
+  const auto savedValues = preset.presetValues(QStringLiteral("UT SaveAs Pending Print"));
+  QVERIFY(savedValues.contains(QStringLiteral("layer_height")));
+  QCOMPARE(savedValues.value(QStringLiteral("layer_height")).toDouble(), 0.24);
 }
 
 void ViewModelSmokeTests::configPresetCategoryMappingUsesServiceEnums()
@@ -953,6 +1294,41 @@ void ViewModelSmokeTests::testRequestSelectTabOutOfRange()
 
   QCOMPARE(spy.count(), 0);
   QCOMPARE(ctx.currentPage(), before);
+}
+
+void ViewModelSmokeTests::configExternalTransitionDefersAndResumesNavigation()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("ConfigExternalTransition"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  BackendContext ctx;
+  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tp3DEditor));
+
+  ctx.setCurrentPage(static_cast<int>(BackendContext::TabPosition::tpProject));
+  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tpProject));
+
+  auto *config = qobject_cast<ConfigViewModel *>(ctx.configViewModel());
+  QVERIFY(config);
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config->printOptions());
+  QVERIFY(printOpts);
+
+  config->setActivePresetTier(QStringLiteral("print"));
+  const int layerIdx = printOpts->indexOfKey(QStringLiteral("layer_height"));
+  QVERIFY(layerIdx >= 0);
+  printOpts->setValue(layerIdx, 0.23);
+  QVERIFY(config->isPresetDirty());
+
+  ctx.setCurrentPage(static_cast<int>(BackendContext::TabPosition::tp3DEditor));
+  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tpProject));
+  QCOMPARE(config->property("pendingUnsavedAction").toString(), QStringLiteral("leave-settings-page"));
+
+  QVERIFY(config->requestDiscardPendingChanges());
+  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tp3DEditor));
 }
 
 // ── Phase 03-01: ViewMode enum + requestChangeViewMode unit tests ──

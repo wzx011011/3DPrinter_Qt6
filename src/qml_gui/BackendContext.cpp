@@ -79,6 +79,10 @@ BackendContext::BackendContext(QObject *parent)
   previewViewModel_ = new PreviewViewModel(sliceService_, this);
   monitorViewModel_ = new MonitorViewModel(deviceService_, networkService_, cameraService_, this);
   configViewModel_ = new ConfigViewModel(presetService_, projectService_, this);
+  connect(configViewModel_, &ConfigViewModel::pendingActionApplied,
+          this, &BackendContext::handleConfigPendingActionApplied);
+  connect(configViewModel_, &ConfigViewModel::pendingActionCleared,
+          this, &BackendContext::clearDeferredConfigExit);
 
   // Wire ConfigViewModel into EditorViewModel for preset injection at slice time
   // (对齐上游 PresetBundle::full_fff_config → BackgroundSlicingProcess)
@@ -222,10 +226,118 @@ int BackendContext::currentPage() const
   return currentPage_;
 }
 
+void BackendContext::clearDeferredConfigExit()
+{
+  deferredConfigExitKind_ = DeferredConfigExitKind::None;
+  deferredConfigExitPage_ = -1;
+  deferredConfigExitPath_.clear();
+}
+
+bool BackendContext::executeDeferredConfigExit()
+{
+  const DeferredConfigExitKind kind = deferredConfigExitKind_;
+  const int page = deferredConfigExitPage_;
+  const QString path = deferredConfigExitPath_;
+  clearDeferredConfigExit();
+
+  switch (kind) {
+  case DeferredConfigExitKind::PageChange:
+    if (page >= 0) {
+      currentPage_ = page;
+      emit currentPageChanged();
+    }
+    return true;
+  case DeferredConfigExitKind::NewProject:
+    if (projectViewModel_)
+      projectViewModel_->newProject();
+    if (editorViewModel_)
+      editorViewModel_->clearWorkspace();
+    currentPage_ = static_cast<int>(TabPosition::tp3DEditor);
+    emit currentPageChanged();
+    return true;
+  case DeferredConfigExitKind::OpenProject:
+  {
+    const QUrl url(path);
+    const QString localPath = url.isLocalFile() ? url.toLocalFile() : path;
+    if (localPath.isEmpty())
+      return false;
+
+    bool loaded = editorViewModel_ ? editorViewModel_->loadFile(localPath) : false;
+    if (!loaded && projectService_)
+    {
+      loaded = projectService_->loadProject(localPath);
+      if (loaded && editorViewModel_)
+      {
+        editorViewModel_->refreshAfterLoad();
+        currentPage_ = static_cast<int>(TabPosition::tp3DEditor);
+        emit currentPageChanged();
+      }
+    }
+
+    if (loaded)
+    {
+      if (projectViewModel_)
+        projectViewModel_->openProject(localPath);
+      currentPage_ = static_cast<int>(TabPosition::tp3DEditor);
+      emit currentPageChanged();
+    }
+    return loaded;
+  }
+  case DeferredConfigExitKind::ImportModel:
+  {
+    const QUrl url(path);
+    const QString localPath = url.isLocalFile() ? url.toLocalFile() : path;
+    if (localPath.isEmpty())
+      return false;
+
+    const bool loaded = editorViewModel_ ? editorViewModel_->loadFile(localPath) : false;
+    if (loaded)
+    {
+      if (projectViewModel_)
+        projectViewModel_->importModel(QStringList{localPath});
+      currentPage_ = static_cast<int>(TabPosition::tp3DEditor);
+      emit currentPageChanged();
+    }
+    return loaded;
+  }
+  case DeferredConfigExitKind::None:
+  default:
+    return true;
+  }
+}
+
+void BackendContext::handleConfigPendingActionApplied(const QString &action, const QString &target)
+{
+  Q_UNUSED(action)
+  Q_UNUSED(target)
+  executeDeferredConfigExit();
+}
+
+bool BackendContext::canLeaveSettingsPage() const
+{
+  return currentPage_ != static_cast<int>(TabPosition::tpProject);
+}
+
+bool BackendContext::requestConfigPageExitIfNeeded()
+{
+  if (currentPage_ != static_cast<int>(TabPosition::tpProject) || !configViewModel_)
+    return true;
+  if (deferredConfigExitKind_ == DeferredConfigExitKind::None)
+    deferredConfigExitKind_ = DeferredConfigExitKind::PageChange;
+  return configViewModel_->requestLeaveSettingsPage();
+}
+
 void BackendContext::setCurrentPage(int page)
 {
   if (currentPage_ == page)
     return;
+  if (page != static_cast<int>(TabPosition::tpProject)) {
+    deferredConfigExitKind_ = DeferredConfigExitKind::PageChange;
+    deferredConfigExitPage_ = page;
+    if (!requestConfigPageExitIfNeeded())
+      return;
+    clearDeferredConfigExit();
+  }
   currentPage_ = page;
   emit currentPageChanged();
 }
@@ -407,6 +519,11 @@ void BackendContext::showEnableLiteModeDialog()
 void BackendContext::topbarNewProject()
 {
   const qint64 start = m_latencyClock.elapsed();
+  deferredConfigExitKind_ = DeferredConfigExitKind::NewProject;
+  deferredConfigExitPage_ = static_cast<int>(TabPosition::tp3DEditor);
+  if (!requestConfigPageExitIfNeeded())
+    return;
+  clearDeferredConfigExit();
   if (projectViewModel_)
     projectViewModel_->newProject();
   if (editorViewModel_)
@@ -418,6 +535,12 @@ void BackendContext::topbarNewProject()
 bool BackendContext::topbarOpenProject(const QString &filePath)
 {
   const qint64 start = m_latencyClock.elapsed();
+  deferredConfigExitKind_ = DeferredConfigExitKind::OpenProject;
+  deferredConfigExitPage_ = static_cast<int>(TabPosition::tp3DEditor);
+  deferredConfigExitPath_ = filePath;
+  if (!requestConfigPageExitIfNeeded())
+    return false;
+  clearDeferredConfigExit();
   const QUrl url(filePath);
   const QString localPath = url.isLocalFile() ? url.toLocalFile() : filePath;
   if (localPath.isEmpty())
@@ -449,6 +572,12 @@ bool BackendContext::topbarOpenProject(const QString &filePath)
 bool BackendContext::topbarImportModel(const QString &filePath)
 {
   const qint64 start = m_latencyClock.elapsed();
+  deferredConfigExitKind_ = DeferredConfigExitKind::ImportModel;
+  deferredConfigExitPage_ = static_cast<int>(TabPosition::tp3DEditor);
+  deferredConfigExitPath_ = filePath;
+  if (!requestConfigPageExitIfNeeded())
+    return false;
+  clearDeferredConfigExit();
   const QUrl url(filePath);
   const QString localPath = url.isLocalFile() ? url.toLocalFile() : filePath;
   if (localPath.isEmpty())

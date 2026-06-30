@@ -132,6 +132,7 @@ public:
   QHash<QString, QVariant> defaultValuesByKey() const;
   void resetToDefaults();
   void applyValues(const QHash<QString, QVariant> &values);
+  void setReferenceValues(const QHash<QString, QVariant> &values);
   void setReadonlyKeys(const QSet<QString> &keys);
 
 #ifdef HAS_LIBSLIC3R
@@ -156,6 +157,7 @@ private:
   QList<ConfigOption> m_options;
   QSet<QString> m_baseReadonlyKeys;
   QHash<QString, QVariant> m_defaultValues;
+  QHash<QString, QVariant> m_referenceValues;
   QSet<QString> m_dirtyKeys; ///< 被修改过的选项 key
   int m_dataVersion = 0;
 };
