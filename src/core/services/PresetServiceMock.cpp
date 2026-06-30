@@ -8,6 +8,7 @@
 #include <QJsonArray>
 #include <QDateTime>
 #include <QCoreApplication>
+#include <QSettings>
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/PrintConfig.hpp>
@@ -23,6 +24,89 @@ PresetServiceMock::PresetServiceMock(QObject *parent)
 #else
   initBuiltinDefaults();
 #endif
+  loadSelectedPresets();
+}
+
+bool PresetServiceMock::isValidCategory(int category) const
+{
+  return category == PrintCat || category == FilamentCat || category == PrinterCat;
+}
+
+void PresetServiceMock::registerPresetMetadata(const QString &name, int category, bool builtin,
+                                               bool readOnly, const QString &vendor,
+                                               const QString &settingId)
+{
+  if (name.trimmed().isEmpty() || !isValidCategory(category))
+    return;
+
+  PresetMetadata metadata;
+  metadata.category = category;
+  metadata.builtin = builtin;
+  metadata.readOnly = readOnly || builtin;
+  metadata.vendor = vendor;
+  metadata.settingId = settingId;
+  m_presetMetadata[name] = metadata;
+
+  if (builtin)
+    m_builtinPresetNames.insert(name);
+  else
+    m_builtinPresetNames.remove(name);
+
+  QStringList &names = m_categoryPresets[category];
+  if (!names.contains(name))
+    names.append(name);
+}
+
+QString PresetServiceMock::selectionSettingsKey(int category)
+{
+  switch (category)
+  {
+  case PrintCat: return QStringLiteral("presets/selectedPrint");
+  case FilamentCat: return QStringLiteral("presets/selectedFilament");
+  case PrinterCat: return QStringLiteral("presets/selectedPrinter");
+  default: return {};
+  }
+}
+
+QString PresetServiceMock::bundleCategoryName(int category)
+{
+  switch (category)
+  {
+  case PrintCat: return QStringLiteral("print");
+  case FilamentCat: return QStringLiteral("filament");
+  case PrinterCat: return QStringLiteral("printer");
+  default: return {};
+  }
+}
+
+void PresetServiceMock::loadSelectedPresets()
+{
+  QSettings settings;
+  for (int category : {PrintCat, FilamentCat, PrinterCat})
+  {
+    const QString savedName = settings.value(selectionSettingsKey(category)).toString();
+    if (!savedName.isEmpty() && presetCategory(savedName) == category)
+      m_selectedPresets[category] = savedName;
+    else
+      updateSelectedPresetFallback(category);
+  }
+}
+
+void PresetServiceMock::updateSelectedPresetFallback(int category)
+{
+  if (!isValidCategory(category))
+    return;
+
+  const QStringList names = m_categoryPresets.value(category);
+  if (names.isEmpty())
+  {
+    m_selectedPresets.remove(category);
+    return;
+  }
+
+  const QString current = m_selectedPresets.value(category);
+  if (!names.contains(current))
+    m_selectedPresets[category] = names.first();
 }
 
 void PresetServiceMock::initBuiltinDefaults()
@@ -45,8 +129,7 @@ void PresetServiceMock::initBuiltinDefaults()
     vals[QStringLiteral("machine_max_speed")] = 600;
     const QString name = QStringLiteral("Creality K1C 0.4");
     m_presetStore[name] = vals;
-    m_builtinPresetNames.insert(name);
-    m_categoryPresets[PrinterCat].append(name);
+    registerPresetMetadata(name, PrinterCat, true, true, QStringLiteral("OWzx Builtin"));
   }
   {
     QHash<QString, QVariant> vals;
@@ -65,8 +148,7 @@ void PresetServiceMock::initBuiltinDefaults()
     vals[QStringLiteral("machine_max_speed")] = 500;
     const QString name = QStringLiteral("Creality Ender-3 S1");
     m_presetStore[name] = vals;
-    m_builtinPresetNames.insert(name);
-    m_categoryPresets[PrinterCat].append(name);
+    registerPresetMetadata(name, PrinterCat, true, true, QStringLiteral("OWzx Builtin"));
   }
 
   // --- Filament presets (对齐上游 filament preset) ---
@@ -86,8 +168,7 @@ void PresetServiceMock::initBuiltinDefaults()
     vals[QStringLiteral("compatible_nozzle_max")] = 0.8;
     const QString name = QStringLiteral("Creality Generic PLA");
     m_presetStore[name] = vals;
-    m_builtinPresetNames.insert(name);
-    m_categoryPresets[FilamentCat].append(name);
+    registerPresetMetadata(name, FilamentCat, true, true, QStringLiteral("OWzx Builtin"));
   }
   {
     QHash<QString, QVariant> vals;
@@ -105,8 +186,7 @@ void PresetServiceMock::initBuiltinDefaults()
     vals[QStringLiteral("compatible_nozzle_max")] = 0.8;
     const QString name = QStringLiteral("Creality Generic ABS");
     m_presetStore[name] = vals;
-    m_builtinPresetNames.insert(name);
-    m_categoryPresets[FilamentCat].append(name);
+    registerPresetMetadata(name, FilamentCat, true, true, QStringLiteral("OWzx Builtin"));
   }
   {
     QHash<QString, QVariant> vals;
@@ -124,8 +204,7 @@ void PresetServiceMock::initBuiltinDefaults()
     vals[QStringLiteral("compatible_nozzle_max")] = 0.8;
     const QString name = QStringLiteral("Creality Generic PETG");
     m_presetStore[name] = vals;
-    m_builtinPresetNames.insert(name);
-    m_categoryPresets[FilamentCat].append(name);
+    registerPresetMetadata(name, FilamentCat, true, true, QStringLiteral("OWzx Builtin"));
   }
 
   // --- Print presets (对齐上游 print preset) ---
@@ -150,8 +229,7 @@ void PresetServiceMock::initBuiltinDefaults()
     vals[QStringLiteral("brim_type")] = 0;
     const QString name = QStringLiteral("0.20mm Standard");
     m_presetStore[name] = vals;
-    m_builtinPresetNames.insert(name);
-    m_categoryPresets[PrintCat].append(name);
+    registerPresetMetadata(name, PrintCat, true, true, QStringLiteral("OWzx Builtin"));
   }
   {
     QHash<QString, QVariant> vals;
@@ -174,8 +252,7 @@ void PresetServiceMock::initBuiltinDefaults()
     vals[QStringLiteral("brim_type")] = 0;
     const QString name = QStringLiteral("0.16mm Fine");
     m_presetStore[name] = vals;
-    m_builtinPresetNames.insert(name);
-    m_categoryPresets[PrintCat].append(name);
+    registerPresetMetadata(name, PrintCat, true, true, QStringLiteral("OWzx Builtin"));
   }
   {
     QHash<QString, QVariant> vals;
@@ -198,8 +275,7 @@ void PresetServiceMock::initBuiltinDefaults()
     vals[QStringLiteral("brim_type")] = 0;
     const QString name = QStringLiteral("0.28mm Draft");
     m_presetStore[name] = vals;
-    m_builtinPresetNames.insert(name);
-    m_categoryPresets[PrintCat].append(name);
+    registerPresetMetadata(name, PrintCat, true, true, QStringLiteral("OWzx Builtin"));
   }
 }
 
@@ -241,6 +317,7 @@ bool PresetServiceMock::loadVendorPresets()
   const QJsonObject root = QJsonDocument::fromJson(f.readAll(), &err).object();
   if (err.error != QJsonParseError::NoError)
     return false;
+  const QString vendorName = root.value(QStringLiteral("name")).toString(QStringLiteral("Creality"));
 
   // Parse vendor index to get sub-file lists
   struct SubFileEntry
@@ -298,8 +375,7 @@ bool PresetServiceMock::loadVendorPresets()
     cleanValues.remove(QStringLiteral("__name__"));
 
     m_presetStore[entry.name] = cleanValues;
-    m_builtinPresetNames.insert(entry.name);
-    m_categoryPresets[PrinterCat].append(entry.name);
+    registerPresetMetadata(entry.name, PrinterCat, true, true, vendorName);
     if (!inheritMap.value(entry.name).isEmpty())
       m_presetInherits[entry.name] = inheritMap[entry.name];
   }
@@ -327,8 +403,7 @@ bool PresetServiceMock::loadVendorPresets()
     cleanValues.remove(QStringLiteral("__name__"));
 
     m_presetStore[entry.name] = cleanValues;
-    m_builtinPresetNames.insert(entry.name);
-    m_categoryPresets[FilamentCat].append(entry.name);
+    registerPresetMetadata(entry.name, FilamentCat, true, true, vendorName);
     if (!inheritMap.value(entry.name).isEmpty())
       m_presetInherits[entry.name] = inheritMap[entry.name];
   }
@@ -356,8 +431,7 @@ bool PresetServiceMock::loadVendorPresets()
     cleanValues.remove(QStringLiteral("__name__"));
 
     m_presetStore[entry.name] = cleanValues;
-    m_builtinPresetNames.insert(entry.name);
-    m_categoryPresets[PrintCat].append(entry.name);
+    registerPresetMetadata(entry.name, PrintCat, true, true, vendorName);
     if (!inheritMap.value(entry.name).isEmpty())
       m_presetInherits[entry.name] = inheritMap[entry.name];
   }
@@ -579,16 +653,86 @@ double PresetServiceMock::defaultLayerHeight() const
 
 QStringList PresetServiceMock::presetNamesForCategory(int category) const
 {
-  return m_categoryPresets.value(category);
+  return isValidCategory(category) ? m_categoryPresets.value(category) : QStringList{};
 }
 
 QString PresetServiceMock::defaultPresetForCategory(int category) const
 {
+  if (!isValidCategory(category))
+    return {};
   const auto names = m_categoryPresets.value(category);
   if (names.isEmpty())
     return {};
   // Return first preset in the category (typically the default)
   return names.first();
+}
+
+int PresetServiceMock::presetCategory(const QString &presetName) const
+{
+  const auto it = m_presetMetadata.constFind(presetName);
+  if (it != m_presetMetadata.constEnd())
+    return it->category;
+
+  for (auto catIt = m_categoryPresets.constBegin(); catIt != m_categoryPresets.constEnd(); ++catIt)
+  {
+    if (catIt.value().contains(presetName))
+      return catIt.key();
+  }
+  return -1;
+}
+
+bool PresetServiceMock::isReadOnlyPreset(const QString &presetName) const
+{
+  const auto it = m_presetMetadata.constFind(presetName);
+  if (it != m_presetMetadata.constEnd())
+    return it->readOnly || it->builtin;
+  return m_builtinPresetNames.contains(presetName);
+}
+
+bool PresetServiceMock::isUserPreset(const QString &presetName) const
+{
+  const auto it = m_presetMetadata.constFind(presetName);
+  return it != m_presetMetadata.constEnd() && !it->builtin && !it->readOnly;
+}
+
+int PresetServiceMock::presetValueCount(const QString &presetName) const
+{
+  return m_presetStore.value(presetName).size();
+}
+
+QString PresetServiceMock::presetVendor(const QString &presetName) const
+{
+  const auto it = m_presetMetadata.constFind(presetName);
+  return it == m_presetMetadata.constEnd() ? QString() : it->vendor;
+}
+
+QString PresetServiceMock::presetSettingId(const QString &presetName) const
+{
+  const auto it = m_presetMetadata.constFind(presetName);
+  return it == m_presetMetadata.constEnd() ? QString() : it->settingId;
+}
+
+bool PresetServiceMock::setSelectedPresetForCategory(int category, const QString &presetName)
+{
+  if (!isValidCategory(category) || presetCategory(presetName) != category)
+    return false;
+
+  m_selectedPresets[category] = presetName;
+  QSettings settings;
+  settings.setValue(selectionSettingsKey(category), presetName);
+  settings.sync();
+  return true;
+}
+
+QString PresetServiceMock::selectedPresetForCategory(int category) const
+{
+  if (!isValidCategory(category))
+    return {};
+
+  const QString selected = m_selectedPresets.value(category);
+  if (!selected.isEmpty() && presetCategory(selected) == category)
+    return selected;
+  return defaultPresetForCategory(category);
 }
 
 QHash<QString, QVariant> PresetServiceMock::presetValues(const QString &presetName) const
@@ -602,9 +746,13 @@ QVariant PresetServiceMock::presetValue(const QString &presetName, const QString
   return vals.value(key);
 }
 
-void PresetServiceMock::savePresetValues(const QString &presetName, const QHash<QString, QVariant> &values)
+bool PresetServiceMock::savePresetValues(const QString &presetName, const QHash<QString, QVariant> &values)
 {
+  if (!m_presetStore.contains(presetName) || isReadOnlyPreset(presetName))
+    return false;
+
   m_presetStore[presetName] = values;
+  return true;
 }
 
 bool PresetServiceMock::hasPreset(const QString &presetName) const
@@ -615,62 +763,154 @@ bool PresetServiceMock::hasPreset(const QString &presetName) const
 // v2.4 IO-04: 导出预设包（JSON 格式，简化版）
 bool PresetServiceMock::exportBundle(const QString &filePath) const
 {
-    QJsonObject root;
-    QJsonArray presets;
-    for (auto it = m_presetStore.constBegin(); it != m_presetStore.constEnd(); ++it) {
-        QJsonObject presetObj;
-        presetObj["name"] = it.key();
-        QJsonObject values;
-        for (auto vit = it.value().constBegin(); vit != it.value().constEnd(); ++vit)
-            values[vit.key()] = QJsonValue::fromVariant(vit.value());
-        presetObj["values"] = values;
-        presets.append(presetObj);
-    }
-    root["presets"] = presets;
-    root["version"] = "1.0";
-    root["exported"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+  QJsonObject root;
+  QJsonArray presets;
+  int exported = 0;
 
-    QJsonDocument doc(root);
-    QFile f(filePath);
-    if (!f.open(QIODevice::WriteOnly)) {
-        qWarning("[Preset] exportBundle: cannot open %s", filePath.toUtf8().constData());
-        return false;
-    }
-    f.write(doc.toJson(QJsonDocument::Indented));
-    f.close();
-    qDebug("[Preset] exported %d presets to: %s", int(m_presetStore.size()), filePath.toUtf8().constData());
-    return true;
+  for (auto it = m_presetStore.constBegin(); it != m_presetStore.constEnd(); ++it)
+  {
+    const QString &name = it.key();
+    const auto metaIt = m_presetMetadata.constFind(name);
+    if (metaIt == m_presetMetadata.constEnd() || metaIt->builtin)
+      continue;
+
+    QJsonObject presetObj;
+    presetObj[QStringLiteral("name")] = name;
+    presetObj[QStringLiteral("category")] = metaIt->category;
+    presetObj[QStringLiteral("categoryName")] = bundleCategoryName(metaIt->category);
+    presetObj[QStringLiteral("readOnly")] = metaIt->readOnly;
+    if (!metaIt->vendor.isEmpty())
+      presetObj[QStringLiteral("vendor")] = metaIt->vendor;
+    if (!metaIt->settingId.isEmpty())
+      presetObj[QStringLiteral("settingId")] = metaIt->settingId;
+    const QString inherits = m_presetInherits.value(name);
+    if (!inherits.isEmpty())
+      presetObj[QStringLiteral("inherits")] = inherits;
+
+    QJsonObject values;
+    for (auto vit = it.value().constBegin(); vit != it.value().constEnd(); ++vit)
+      values[vit.key()] = QJsonValue::fromVariant(vit.value());
+    presetObj[QStringLiteral("values")] = values;
+    presets.append(presetObj);
+    ++exported;
+  }
+
+  root[QStringLiteral("kind")] = QStringLiteral("owzx-preset-bundle");
+  root[QStringLiteral("version")] = QStringLiteral("1.0");
+  root[QStringLiteral("exported")] = QDateTime::currentDateTime().toString(Qt::ISODate);
+  root[QStringLiteral("presets")] = presets;
+
+  QFile f(filePath);
+  if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+  {
+    qWarning("[Preset] exportBundle: cannot open %s", filePath.toUtf8().constData());
+    return false;
+  }
+  f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+  f.close();
+  qDebug("[Preset] exported %d user presets to: %s", exported, filePath.toUtf8().constData());
+  return true;
 }
 
 // v2.4 IO-05: 导入预设包（JSON 格式）
 bool PresetServiceMock::importBundle(const QString &filePath)
 {
-    QFile f(filePath);
-    if (!f.open(QIODevice::ReadOnly)) {
-        qWarning("[Preset] importBundle: cannot open %s", filePath.toUtf8().constData());
-        return false;
+  QFile f(filePath);
+  if (!f.open(QIODevice::ReadOnly))
+  {
+    qWarning("[Preset] importBundle: cannot open %s", filePath.toUtf8().constData());
+    return false;
+  }
+
+  QJsonParseError err;
+  const QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &err);
+  f.close();
+  if (err.error != QJsonParseError::NoError || !doc.isObject())
+  {
+    qWarning("[Preset] importBundle: invalid JSON: %s", err.errorString().toUtf8().constData());
+    return false;
+  }
+
+  const QJsonObject root = doc.object();
+  if (root.value(QStringLiteral("kind")).toString() != QStringLiteral("owzx-preset-bundle") ||
+      root.value(QStringLiteral("version")).toString() != QStringLiteral("1.0"))
+  {
+    qWarning("[Preset] importBundle: unsupported bundle kind or version");
+    return false;
+  }
+
+  const QJsonValue presetsValue = root.value(QStringLiteral("presets"));
+  if (!presetsValue.isArray())
+  {
+    qWarning("[Preset] importBundle: presets array missing");
+    return false;
+  }
+
+  struct ImportPreset
+  {
+    QString name;
+    int category = -1;
+    bool readOnly = false;
+    QString vendor;
+    QString settingId;
+    QString inherits;
+    QHash<QString, QVariant> values;
+  };
+
+  QList<ImportPreset> pending;
+  QSet<QString> bundleNames;
+  const QJsonArray presets = presetsValue.toArray();
+  for (const QJsonValue &presetValue : presets)
+  {
+    if (!presetValue.isObject())
+    {
+      qWarning("[Preset] importBundle: preset entry must be an object");
+      return false;
     }
-    QJsonParseError err;
-    QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &err);
-    f.close();
-    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
-        qWarning("[Preset] importBundle: invalid JSON: %s", err.errorString().toUtf8().constData());
-        return false;
+
+    const QJsonObject presetObj = presetValue.toObject();
+    ImportPreset item;
+    item.name = presetObj.value(QStringLiteral("name")).toString().trimmed();
+    item.category = presetObj.value(QStringLiteral("category")).toInt(-1);
+    item.readOnly = false;
+    item.vendor = presetObj.value(QStringLiteral("vendor")).toString();
+    item.settingId = presetObj.value(QStringLiteral("settingId")).toString();
+    item.inherits = presetObj.value(QStringLiteral("inherits")).toString();
+
+    if (item.name.isEmpty() || !isValidCategory(item.category))
+    {
+      qWarning("[Preset] importBundle: invalid preset name or category");
+      return false;
     }
-    QJsonArray presets = doc.object()["presets"].toArray();
-    int imported = 0;
-    for (const auto &p : presets) {
-        QJsonObject presetObj = p.toObject();
-        QString name = presetObj["name"].toString();
-        QHash<QString, QVariant> values;
-        QJsonObject valuesObj = presetObj["values"].toObject();
-        for (auto vit = valuesObj.constBegin(); vit != valuesObj.constEnd(); ++vit)
-            values[vit.key()] = vit.value().toVariant();
-        m_presetStore[name] = values;
-        ++imported;
+    if (m_presetStore.contains(item.name) || bundleNames.contains(item.name))
+    {
+      qWarning("[Preset] importBundle: duplicate preset %s", item.name.toUtf8().constData());
+      return false;
     }
-    qDebug("[Preset] imported %d presets from: %s", imported, filePath.toUtf8().constData());
-    return true;
+    if (!presetObj.value(QStringLiteral("values")).isObject())
+    {
+      qWarning("[Preset] importBundle: values object missing for %s", item.name.toUtf8().constData());
+      return false;
+    }
+
+    const QJsonObject valuesObj = presetObj.value(QStringLiteral("values")).toObject();
+    for (auto vit = valuesObj.constBegin(); vit != valuesObj.constEnd(); ++vit)
+      item.values[vit.key()] = vit.value().toVariant();
+
+    bundleNames.insert(item.name);
+    pending.append(item);
+  }
+
+  for (const ImportPreset &item : pending)
+  {
+    m_presetStore[item.name] = item.values;
+    registerPresetMetadata(item.name, item.category, false, item.readOnly, item.vendor, item.settingId);
+    if (!item.inherits.isEmpty())
+      m_presetInherits[item.name] = item.inherits;
+  }
+
+  qDebug("[Preset] imported %d presets from: %s", int(pending.size()), filePath.toUtf8().constData());
+  return true;
 }
 
 bool PresetServiceMock::isBuiltinPreset(const QString &presetName) const
@@ -764,45 +1004,66 @@ QString PresetServiceMock::findCompatibleFilament(const QString &printerName) co
 
 bool PresetServiceMock::createCustomPreset(int category, const QString &name, const QHash<QString, QVariant> &values)
 {
-  if (name.isEmpty() || m_presetStore.contains(name))
+  const QString trimmedName = name.trimmed();
+  if (!isValidCategory(category) || trimmedName.isEmpty() || m_presetStore.contains(trimmedName))
     return false;
 
-  m_presetStore[name] = values;
-  m_categoryPresets[category].append(name);
+  m_presetStore[trimmedName] = values;
+  registerPresetMetadata(trimmedName, category, false, false);
+  setSelectedPresetForCategory(category, trimmedName);
   return true;
 }
 
 bool PresetServiceMock::deletePreset(const QString &presetName)
 {
-  if (m_builtinPresetNames.contains(presetName) || !m_presetStore.contains(presetName))
+  if (!m_presetStore.contains(presetName) || isReadOnlyPreset(presetName))
     return false;
 
+  const int category = presetCategory(presetName);
   m_presetStore.remove(presetName);
+  m_presetMetadata.remove(presetName);
+  m_builtinPresetNames.remove(presetName);
+  m_presetInherits.remove(presetName);
   // 从所有分类中移除
   for (auto it = m_categoryPresets.begin(); it != m_categoryPresets.end(); ++it)
     it->removeAll(presetName);
+  updateSelectedPresetFallback(category);
+  if (isValidCategory(category))
+  {
+    QSettings settings;
+    settings.setValue(selectionSettingsKey(category), m_selectedPresets.value(category));
+    settings.sync();
+  }
   return true;
 }
 
 bool PresetServiceMock::renamePreset(const QString &oldName, const QString &newName)
 {
   // 内置预设和不存在预设不可重命名
-  if (m_builtinPresetNames.contains(oldName) || !m_presetStore.contains(oldName))
+  if (!m_presetStore.contains(oldName) || isReadOnlyPreset(oldName))
     return false;
-  if (newName.trimmed().isEmpty() || m_presetStore.contains(newName))
+  const QString trimmedNewName = newName.trimmed();
+  if (trimmedNewName.isEmpty() || m_presetStore.contains(trimmedNewName))
     return false;
 
+  const int category = presetCategory(oldName);
   // 移动预设值
-  m_presetStore.insert(newName, m_presetStore.take(oldName));
+  m_presetStore.insert(trimmedNewName, m_presetStore.take(oldName));
+  if (m_presetMetadata.contains(oldName))
+    m_presetMetadata.insert(trimmedNewName, m_presetMetadata.take(oldName));
+  if (m_presetInherits.contains(oldName))
+    m_presetInherits.insert(trimmedNewName, m_presetInherits.take(oldName));
   // 更新分类列表中的名称
   for (auto it = m_categoryPresets.begin(); it != m_categoryPresets.end(); ++it)
   {
     for (int i = 0; i < it->size(); ++i)
     {
       if (it->at(i) == oldName)
-        (*it)[i] = newName;
+        (*it)[i] = trimmedNewName;
     }
   }
+  if (isValidCategory(category) && m_selectedPresets.value(category) == oldName)
+    setSelectedPresetForCategory(category, trimmedNewName);
   return true;
 }
 

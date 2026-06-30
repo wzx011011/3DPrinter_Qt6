@@ -27,7 +27,7 @@ CalibrationViewModel::CalibrationViewModel(CalibrationServiceMock *service, QObj
 void CalibrationViewModel::setPresetService(PresetServiceMock *service)
 {
     m_presetService = service;
-    m_selectedFilamentPreset = service ? service->defaultPresetForCategory(1) : QString{};
+    m_selectedFilamentPreset = service ? service->defaultPresetForCategory(PresetServiceMock::FilamentCat) : QString{};
     emit stateChanged();
 }
 
@@ -197,7 +197,7 @@ int CalibrationViewModel::selectedStatus() const
 
 QStringList CalibrationViewModel::filamentPresetNames() const
 {
-    return m_presetService ? m_presetService->presetNamesForCategory(1) : QStringList{};
+    return m_presetService ? m_presetService->presetNamesForCategory(PresetServiceMock::FilamentCat) : QStringList{};
 }
 
 void CalibrationViewModel::setSelectedFilamentPreset(const QString &name)

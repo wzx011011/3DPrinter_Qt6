@@ -138,10 +138,10 @@ double ConfigViewModel::layerHeight() const
 void ConfigViewModel::loadDefault()
 {
   if (presetService_) {
-    currentPreset_ = presetService_->defaultPreset();
-    currentPrinterPreset_ = presetService_->defaultPresetForCategory(0);
-    currentFilamentPreset_ = presetService_->defaultPresetForCategory(1);
-    currentPrintPreset_ = presetService_->defaultPresetForCategory(2);
+    currentPrinterPreset_ = presetService_->selectedPresetForCategory(PresetServiceMock::PrinterCat);
+    currentFilamentPreset_ = presetService_->selectedPresetForCategory(PresetServiceMock::FilamentCat);
+    currentPrintPreset_ = presetService_->selectedPresetForCategory(PresetServiceMock::PrintCat);
+    currentPreset_ = currentPrintPreset_;
     layerHeight_ = presetService_->defaultLayerHeight();
   }
   printSpeed_ = 300;
@@ -164,6 +164,11 @@ void ConfigViewModel::loadDefault()
   if (printOptions_)
     printOptions_->resetToDefaults();
   globalOptionValues_ = printOptions_ ? printOptions_->valuesByKey() : QHash<QString, QVariant>{};
+  if (presetService_) {
+    mergePresetHierarchy();
+    emit stateChanged();
+    return;
+  }
   savedPresetValues_ = globalOptionValues_; // 初始化预设快照
   applyScopeValues();
   emit stateChanged();
@@ -171,28 +176,24 @@ void ConfigViewModel::loadDefault()
 
 void ConfigViewModel::setCurrentPreset(const QString &presetName)
 {
-  currentPreset_ = presetName;
-
-  // 加载预设值（如果有保存的值）
-  if (presetService_ && presetService_->hasPreset(presetName))
+  if (!presetService_)
   {
-    auto presetVals = presetService_->presetValues(presetName);
-    if (!presetVals.isEmpty())
-    {
-      // 切换到全局作用域
-      settingsScope_ = QStringLiteral("global");
-      settingsTargetObjectIndex_ = -1;
-      settingsTargetVolumeIndex_ = -1;
-
-      if (printOptions_)
-        printOptions_->applyValues(presetVals);
-      globalOptionValues_ = presetVals;
-      applyScopeValues();
-    }
+    currentPreset_ = presetName;
+    emit stateChanged();
+    return;
   }
 
-  // 保存当前预设值的快照（用于脏检测）
-  savedPresetValues_ = globalOptionValues_;
+  if (presetService_->presetCategory(presetName) != PresetServiceMock::PrintCat)
+    return;
+  if (!presetService_->setSelectedPresetForCategory(PresetServiceMock::PrintCat, presetName))
+    return;
+
+  currentPrintPreset_ = presetName;
+  currentPreset_ = presetName;
+  settingsScope_ = QStringLiteral("global");
+  settingsTargetObjectIndex_ = -1;
+  settingsTargetVolumeIndex_ = -1;
+  mergePresetHierarchy();
   emit stateChanged();
 }
 
@@ -206,7 +207,13 @@ bool ConfigViewModel::exportBundle(const QString &filePath) const
 bool ConfigViewModel::importBundle(const QString &filePath)
 {
     if (!presetService_) return false;
-    return presetService_->importBundle(filePath);
+    const bool ok = presetService_->importBundle(filePath);
+    if (ok) {
+      if (presetList_)
+        presetList_->refreshFromService(presetService_);
+      emit stateChanged();
+    }
+    return ok;
 }
 
 void ConfigViewModel::saveCurrentPreset()
@@ -244,7 +251,9 @@ void ConfigViewModel::saveCurrentPreset()
     tierValues = globalOptionValues_;
   }
 
-  presetService_->savePresetValues(targetPreset, tierValues);
+  if (!presetService_->savePresetValues(targetPreset, tierValues))
+    return;
+
   savedPresetValues_ = globalOptionValues_;
   emit stateChanged();
 }
@@ -260,21 +269,23 @@ bool ConfigViewModel::isPresetDirty() const
 
 QStringList ConfigViewModel::printerPresetNames() const
 {
-  return presetService_ ? presetService_->presetNamesForCategory(0) : QStringList{};
+  return presetService_ ? presetService_->presetNamesForCategory(PresetServiceMock::PrinterCat) : QStringList{};
 }
 
 QStringList ConfigViewModel::filamentPresetNames() const
 {
-  return presetService_ ? presetService_->presetNamesForCategory(1) : QStringList{};
+  return presetService_ ? presetService_->presetNamesForCategory(PresetServiceMock::FilamentCat) : QStringList{};
 }
 
 QStringList ConfigViewModel::printPresetNames() const
 {
-  return presetService_ ? presetService_->presetNamesForCategory(2) : QStringList{};
+  return presetService_ ? presetService_->presetNamesForCategory(PresetServiceMock::PrintCat) : QStringList{};
 }
 
 void ConfigViewModel::setCurrentPrinterPreset(const QString &name)
 {
+  if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetServiceMock::PrinterCat, name))
+    return;
   currentPrinterPreset_ = name;
   mergePresetHierarchy();
   autoMatchFilament();  // 切换打印机时自动匹配兼容耗材
@@ -283,6 +294,8 @@ void ConfigViewModel::setCurrentPrinterPreset(const QString &name)
 
 void ConfigViewModel::setCurrentFilamentPreset(const QString &name)
 {
+  if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetServiceMock::FilamentCat, name))
+    return;
   currentFilamentPreset_ = name;
   mergePresetHierarchy();
   emit stateChanged();
@@ -290,6 +303,8 @@ void ConfigViewModel::setCurrentFilamentPreset(const QString &name)
 
 void ConfigViewModel::setCurrentPrintPreset(const QString &name)
 {
+  if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetServiceMock::PrintCat, name))
+    return;
   currentPrintPreset_ = name;
   currentPreset_ = name; // legacy compat
   mergePresetHierarchy();
@@ -360,12 +375,49 @@ bool ConfigViewModel::createCustomPreset(int category, const QString &name)
     return false;
 
   // 使用当前全局值作为新预设的值
-  return presetService_->createCustomPreset(category, name, globalOptionValues_);
+  ConfigOptionModel *tierModel = nullptr;
+  if (category == PresetServiceMock::PrinterCat)
+    tierModel = machineOptions_;
+  else if (category == PresetServiceMock::FilamentCat)
+    tierModel = filamentOptions_;
+  else if (category == PresetServiceMock::PrintCat)
+    tierModel = printOptions_;
+  else
+    return false;
+
+  QHash<QString, QVariant> tierValues;
+  const auto modelKeys = tierModel ? tierModel->valuesByKey() : QHash<QString, QVariant>{};
+  for (auto it = globalOptionValues_.constBegin(); it != globalOptionValues_.constEnd(); ++it)
+  {
+    if (modelKeys.contains(it.key()))
+      tierValues.insert(it.key(), it.value());
+  }
+
+  const QString trimmedName = name.trimmed();
+  if (!presetService_->createCustomPreset(category, trimmedName, tierValues))
+    return false;
+
+  if (category == PresetServiceMock::PrinterCat)
+    currentPrinterPreset_ = trimmedName;
+  else if (category == PresetServiceMock::FilamentCat)
+    currentFilamentPreset_ = trimmedName;
+  else {
+    currentPrintPreset_ = trimmedName;
+    currentPreset_ = trimmedName;
+  }
+
+  if (presetList_)
+    presetList_->refreshFromService(presetService_);
+  mergePresetHierarchy();
+  emit stateChanged();
+  return true;
 }
 
 bool ConfigViewModel::deletePreset(int category, const QString &name)
 {
   if (!presetService_)
+    return false;
+  if (presetService_->presetCategory(name) != category)
     return false;
 
   // 不允许删除当前正在使用的预设
@@ -377,11 +429,13 @@ bool ConfigViewModel::deletePreset(int category, const QString &name)
   {
     // 如果删除的是当前类别中正在使用的预设，切换回默认
     if (name == currentPrintPreset_)
-      setCurrentPrintPreset(presetService_->defaultPresetForCategory(0));
+      setCurrentPrintPreset(presetService_->defaultPresetForCategory(PresetServiceMock::PrintCat));
     if (name == currentFilamentPreset_)
-      setCurrentFilamentPreset(presetService_->defaultPresetForCategory(1));
+      setCurrentFilamentPreset(presetService_->defaultPresetForCategory(PresetServiceMock::FilamentCat));
     if (name == currentPrinterPreset_)
-      setCurrentPrinterPreset(presetService_->defaultPresetForCategory(2));
+      setCurrentPrinterPreset(presetService_->defaultPresetForCategory(PresetServiceMock::PrinterCat));
+    if (presetList_)
+      presetList_->refreshFromService(presetService_);
     emit stateChanged();
   }
   return ok;
@@ -391,6 +445,8 @@ bool ConfigViewModel::renamePreset(int category, const QString &oldName, const Q
 {
   if (!presetService_ || newName.trimmed().isEmpty())
     return false;
+  if (presetService_->presetCategory(oldName) != category)
+    return false;
 
   bool ok = presetService_->renamePreset(oldName, newName.trimmed());
   if (ok)
@@ -398,10 +454,14 @@ bool ConfigViewModel::renamePreset(int category, const QString &oldName, const Q
     // 更新当前活跃预设名引用
     if (oldName == currentPrintPreset_)
       currentPrintPreset_ = newName.trimmed();
+    if (oldName == currentPreset_)
+      currentPreset_ = newName.trimmed();
     if (oldName == currentFilamentPreset_)
       currentFilamentPreset_ = newName.trimmed();
     if (oldName == currentPrinterPreset_)
       currentPrinterPreset_ = newName.trimmed();
+    if (presetList_)
+      presetList_->refreshFromService(presetService_);
     emit stateChanged();
   }
   return ok;
@@ -409,7 +469,7 @@ bool ConfigViewModel::renamePreset(int category, const QString &oldName, const Q
 
 bool ConfigViewModel::canDeletePreset(const QString &name) const
 {
-  return presetService_ && !presetService_->isBuiltinPreset(name);
+  return presetService_ && presetService_->isUserPreset(name);
 }
 
 QStringList ConfigViewModel::comparePresets(const QString &presetA, const QString &presetB) const
@@ -446,6 +506,7 @@ void ConfigViewModel::autoMatchFilament()
   if (!compatible.isEmpty() && compatible != currentFilamentPreset_)
   {
     currentFilamentPreset_ = compatible;
+    presetService_->setSelectedPresetForCategory(PresetServiceMock::FilamentCat, compatible);
     mergePresetHierarchy();
   }
   emit stateChanged();

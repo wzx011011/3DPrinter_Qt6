@@ -24,13 +24,21 @@ public:
   /// Category-aware preset lists
   Q_INVOKABLE QStringList presetNamesForCategory(int category) const;
   Q_INVOKABLE QString defaultPresetForCategory(int category) const;
+  Q_INVOKABLE int presetCategory(const QString &presetName) const;
+  Q_INVOKABLE bool isReadOnlyPreset(const QString &presetName) const;
+  Q_INVOKABLE bool isUserPreset(const QString &presetName) const;
+  Q_INVOKABLE int presetValueCount(const QString &presetName) const;
+  Q_INVOKABLE QString presetVendor(const QString &presetName) const;
+  Q_INVOKABLE QString presetSettingId(const QString &presetName) const;
+  Q_INVOKABLE bool setSelectedPresetForCategory(int category, const QString &presetName);
+  Q_INVOKABLE QString selectedPresetForCategory(int category) const;
 
   /// 获取指定预设的值映射（不存在则返回空）
   QHash<QString, QVariant> presetValues(const QString &presetName) const;
   /// 获取指定预设中单个 key 的值（不存在返回无效 QVariant）
   QVariant presetValue(const QString &presetName, const QString &key) const;
   /// 保存当前值到指定预设
-  void savePresetValues(const QString &presetName, const QHash<QString, QVariant> &values);
+  bool savePresetValues(const QString &presetName, const QHash<QString, QVariant> &values);
   /// 检查指定预设是否存在
   bool hasPreset(const QString &presetName) const;
   // v2.4 IO-04/05: 预设包导入导出（JSON 格式，简化版）
@@ -54,6 +62,15 @@ public:
   QString presetInherits(const QString &presetName) const;
 
 private:
+  struct PresetMetadata
+  {
+    int category = -1;
+    bool builtin = false;
+    bool readOnly = false;
+    QString vendor;
+    QString settingId;
+  };
+
   /// 预设值存储（预设名 → key-value 映射）
   QMap<QString, QHash<QString, QVariant>> m_presetStore;
   /// 内置预设名集合（不可删除）
@@ -62,9 +79,18 @@ private:
   QMap<int, QStringList> m_categoryPresets;
   /// 预设继承关系（预设名 → 父预设名）
   QMap<QString, QString> m_presetInherits;
+  QMap<QString, PresetMetadata> m_presetMetadata;
+  QMap<int, QString> m_selectedPresets;
 
   /// 初始化内置默认预设值（对齐上游 PresetBundle 默认值）
   void initBuiltinDefaults();
+  bool isValidCategory(int category) const;
+  void registerPresetMetadata(const QString &name, int category, bool builtin, bool readOnly,
+                              const QString &vendor = QString(), const QString &settingId = QString());
+  void loadSelectedPresets();
+  void updateSelectedPresetFallback(int category);
+  static QString selectionSettingsKey(int category);
+  static QString bundleCategoryName(int category);
 
 #ifdef HAS_LIBSLIC3R
   /// 从上游 vendor JSON 预设文件加载真实预设（对齐上游 PresetBundle::load_vendor_configs_from_json）

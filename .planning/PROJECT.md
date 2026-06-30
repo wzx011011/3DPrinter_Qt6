@@ -93,6 +93,7 @@ These are current baseline capabilities inferred from implementation, git histor
 - **Build Directory:** the only build directory is `build/`.
 - **Architecture:** durable business rules, validation, persistence, and upstream behavior mapping belong in C++ services/viewmodels; QML is presentation and wiring.
 - **Source Truth:** user-visible behavior must be mapped to OrcaSlicer upstream before being considered complete.
+- **Completeness Rule:** each milestone must implement the complete declared target behavior. If old Qt behavior is simplified, mock, legacy, or semantically wrong for that target, replace it instead of preserving compatibility with the wrong behavior. Temporary fallbacks require explicit status classification, removal conditions, and follow-up ownership.
 - **Preset Rule:** preset behavior must be implemented against upstream `PresetBundle`/`PresetCollection` semantics where feasible; simplified JSON/mock behavior must be removed or explicitly classified as fallback.
 - **Dependencies:** CGAL is available; OpenVDB, FFmpeg-related runtime availability, WebRTC/MetaRTC, and closed device protocols must be handled according to the local dependency state and current build rules.
 - **Rendering Backend:** QRhi/D3D11 is the default high-performance Windows path. D3D12 is explicit opt-in pending root-cause work. Vulkan is future work until a Vulkan-enabled Qt SDK/runtime is available and benchmarked.
@@ -110,6 +111,7 @@ These are current baseline capabilities inferred from implementation, git histor
 | Keep D3D12 explicit opt-in | D3D12 has demonstrated crashes in the app path; it remains available only for focused debugging. | Open tech debt |
 | Defer Vulkan default evaluation | Current Qt SDK disables public Vulkan support, so Vulkan cannot be the known-good default backend yet. | Future |
 | Prioritize complete preset authoring for v3.5 | Local G-code can be produced, but real daily use needs trustworthy printer, filament, and process configuration authoring before device workflow work. | Active - v3.5 |
+| Prefer replacement over compatibility with wrong legacy Qt behavior | The migration target is complete upstream-aligned behavior, not maintaining simplified interim implementations. | Active rule for all future milestones |
 | Keep v3.4 manual UAT visible | Automated verification passed, but user cannot manually verify right now; the project must not claim full manual completion. | Active carry-forward |
 
 ## Evolution

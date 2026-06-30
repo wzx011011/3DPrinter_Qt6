@@ -92,6 +92,26 @@ namespace
     QStringList existingKeys;
     QVariantMap originalValues;
   };
+
+  struct ScopedApplicationIdentity
+  {
+    ScopedApplicationIdentity(const QString &org, const QString &app)
+        : oldOrg(QCoreApplication::organizationName()),
+          oldApp(QCoreApplication::applicationName())
+    {
+      QCoreApplication::setOrganizationName(org);
+      QCoreApplication::setApplicationName(app);
+    }
+
+    ~ScopedApplicationIdentity()
+    {
+      QCoreApplication::setOrganizationName(oldOrg);
+      QCoreApplication::setApplicationName(oldApp);
+    }
+
+    QString oldOrg;
+    QString oldApp;
+  };
 }
 
 class ViewModelSmokeTests final : public QObject
@@ -140,6 +160,12 @@ private slots:
   void testFilamentOptionsLoaded();
   void testMachineEditFlowsToGlobal();
   void testTierAwareSaveFiltersByTier();
+  void configPresetCategoryMappingUsesServiceEnums();
+  void configPresetMutationsRejectWrongCategory();
+  void presetServiceMetadataClassifiesBuiltinAndCustomPresets();
+  void presetServiceSelectionPersistsAcrossInstances();
+  void presetServiceImportRejectsMalformedBundleWithoutMutation();
+  void presetServiceExportsAndImportsUserBundleWithMetadata();
   // v3.0 Phase 16-01: PartPlate/PartPlateList domain model (pure-data, no libslic3r dep)
   void partPlateInstanceMembershipTracksObjectInstancePairs();
   void partPlateSliceStateMachineGatesCanSlice();
@@ -250,6 +276,14 @@ void ViewModelSmokeTests::monitor_refresh_updates_network_and_device()
 
 void ViewModelSmokeTests::config_default_and_switch_preset()
 {
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("ConfigSwitchPreset"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
   PresetServiceMock preset;
   ProjectServiceMock project;
   ConfigViewModel config(&preset, &project);
@@ -258,9 +292,15 @@ void ViewModelSmokeTests::config_default_and_switch_preset()
   const QString initialPreset = config.currentPreset();
   QVERIFY(!initialPreset.isEmpty());
 
-  config.setCurrentPreset(QStringLiteral("0.16mm Fine"));
+  QHash<QString, QVariant> values;
+  values.insert(QStringLiteral("layer_height"), 0.16);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("Unit Test Switch Print Preset"),
+                                    values));
+  config.setCurrentPreset(QStringLiteral("Unit Test Switch Print Preset"));
   QVERIFY(spy.count() >= 1);
-  QCOMPARE(config.currentPreset(), QStringLiteral("0.16mm Fine"));
+  QCOMPARE(config.currentPreset(), QStringLiteral("Unit Test Switch Print Preset"));
+  QCOMPARE(config.currentPrintPreset(), QStringLiteral("Unit Test Switch Print Preset"));
 }
 
 void ViewModelSmokeTests::testUpstreamDefaultsContainVectorKeys()
@@ -343,6 +383,14 @@ void ViewModelSmokeTests::testMachineEditFlowsToGlobal()
 
 void ViewModelSmokeTests::testTierAwareSaveFiltersByTier()
 {
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("TierAwareSave"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
   PresetServiceMock preset;
   ProjectServiceMock project;
   ConfigViewModel config(&preset, &project);
@@ -355,11 +403,23 @@ void ViewModelSmokeTests::testTierAwareSaveFiltersByTier()
   QVERIFY2(printIdx >= 0, "layer_height not in print options");
   QVERIFY2(machineIdx >= 0, "machine_max_speed_x not in machine options");
 
+  const QString builtinPrint = config.currentPrintPreset();
+  const auto builtinBefore = preset.presetValues(builtinPrint);
+
   // Edit both tiers
   printOpts->setValue(printIdx, 0.35);
   machineOpts->setValue(machineIdx, 999.0);
 
-  // Save as print tier — should only include print model keys
+  // Built-in/vendor presets are read-only and must not be overwritten.
+  config.setActivePresetTier(QStringLiteral("print"));
+  config.saveCurrentPreset();
+  QCOMPARE(preset.presetValues(builtinPrint), builtinBefore);
+
+  QVERIFY(config.createCustomPreset(PresetServiceMock::PrintCat, QStringLiteral("Unit Test Save Print Preset")));
+  config.setCurrentPrintPreset(QStringLiteral("Unit Test Save Print Preset"));
+  printOpts->setValue(printIdx, 0.35);
+
+  // Save as print tier — should only include print model keys.
   config.setActivePresetTier(QStringLiteral("print"));
   config.saveCurrentPreset();
 
@@ -371,7 +431,11 @@ void ViewModelSmokeTests::testTierAwareSaveFiltersByTier()
            "layer_height should be in print preset after save");
   QCOMPARE(saved[QStringLiteral("layer_height")].toDouble(), 0.35);
 
-  // Now save as printer tier — machine key should be saved there
+  QVERIFY(config.createCustomPreset(PresetServiceMock::PrinterCat, QStringLiteral("Unit Test Save Printer Preset")));
+  config.setCurrentPrinterPreset(QStringLiteral("Unit Test Save Printer Preset"));
+  machineOpts->setValue(machineIdx, 999.0);
+
+  // Now save as printer tier — machine key should be saved there.
   config.setActivePresetTier(QStringLiteral("printer"));
   config.saveCurrentPreset();
 
@@ -382,6 +446,192 @@ void ViewModelSmokeTests::testTierAwareSaveFiltersByTier()
              "machine_max_speed_x should be in printer preset after printer-tier save");
     QCOMPARE(printerSaved[QStringLiteral("machine_max_speed_x")].toDouble(), 999.0);
   }
+}
+
+void ViewModelSmokeTests::configPresetCategoryMappingUsesServiceEnums()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("PresetCategoryMapping"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  QVERIFY2(preset.presetNamesForCategory(PresetServiceMock::PrinterCat).contains(config.currentPrinterPreset()),
+           qPrintable(QStringLiteral("currentPrinterPreset has wrong category: %1").arg(config.currentPrinterPreset())));
+  QVERIFY2(preset.presetNamesForCategory(PresetServiceMock::FilamentCat).contains(config.currentFilamentPreset()),
+           qPrintable(QStringLiteral("currentFilamentPreset has wrong category: %1").arg(config.currentFilamentPreset())));
+  QVERIFY2(preset.presetNamesForCategory(PresetServiceMock::PrintCat).contains(config.currentPrintPreset()),
+           qPrintable(QStringLiteral("currentPrintPreset has wrong category: %1").arg(config.currentPrintPreset())));
+
+  QVERIFY2(preset.presetValues(config.currentPrinterPreset()).contains(QStringLiteral("nozzle_diameter")),
+           "printer preset should expose printer machine keys");
+  const auto filamentValues = preset.presetValues(config.currentFilamentPreset());
+  QVERIFY2(filamentValues.contains(QStringLiteral("nozzle_temperature")) ||
+               filamentValues.contains(QStringLiteral("nozzle_temp")) ||
+               filamentValues.contains(QStringLiteral("fan_max_speed")) ||
+               filamentValues.contains(QStringLiteral("filament_type")),
+           "filament preset should expose filament material keys");
+  QVERIFY2(preset.presetValues(config.currentPrintPreset()).contains(QStringLiteral("layer_height")),
+           "print preset should expose process keys");
+
+  const QString printBefore = config.currentPreset();
+  const QString filamentBefore = config.currentFilamentPreset();
+  config.setCurrentPreset(filamentBefore);
+  QCOMPARE(config.currentPreset(), printBefore);
+  QCOMPARE(config.currentPrintPreset(), printBefore);
+}
+
+void ViewModelSmokeTests::configPresetMutationsRejectWrongCategory()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("PresetMutationCategory"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  QHash<QString, QVariant> values;
+  values.insert(QStringLiteral("layer_height"), 0.21);
+  const QString printName = QStringLiteral("Unit Test Mutation Print Preset");
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat, printName, values));
+
+  QVERIFY(!config.renamePreset(PresetServiceMock::FilamentCat,
+                               printName,
+                               QStringLiteral("Unit Test Mutation Renamed")));
+  QVERIFY(preset.hasPreset(printName));
+  QVERIFY(!preset.hasPreset(QStringLiteral("Unit Test Mutation Renamed")));
+
+  QVERIFY(!config.deletePreset(PresetServiceMock::FilamentCat, printName));
+  QVERIFY(preset.hasPreset(printName));
+
+  QVERIFY(config.renamePreset(PresetServiceMock::PrintCat,
+                              printName,
+                              QStringLiteral("Unit Test Mutation Renamed")));
+  QVERIFY(!preset.hasPreset(printName));
+  QVERIFY(preset.hasPreset(QStringLiteral("Unit Test Mutation Renamed")));
+}
+
+void ViewModelSmokeTests::presetServiceMetadataClassifiesBuiltinAndCustomPresets()
+{
+  PresetServiceMock preset;
+
+  const QString builtin = preset.defaultPresetForCategory(PresetServiceMock::PrintCat);
+  QVERIFY(!builtin.isEmpty());
+  QCOMPARE(preset.presetCategory(builtin), int(PresetServiceMock::PrintCat));
+  QVERIFY(preset.isBuiltinPreset(builtin));
+  QVERIFY(preset.isReadOnlyPreset(builtin));
+  QVERIFY(!preset.isUserPreset(builtin));
+  QVERIFY(preset.presetValueCount(builtin) > 0);
+
+  QHash<QString, QVariant> values;
+  values.insert(QStringLiteral("layer_height"), 0.23);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat, QStringLiteral("Unit Test Print Preset"), values));
+  QCOMPARE(preset.presetCategory(QStringLiteral("Unit Test Print Preset")), int(PresetServiceMock::PrintCat));
+  QVERIFY(!preset.isBuiltinPreset(QStringLiteral("Unit Test Print Preset")));
+  QVERIFY(!preset.isReadOnlyPreset(QStringLiteral("Unit Test Print Preset")));
+  QVERIFY(preset.isUserPreset(QStringLiteral("Unit Test Print Preset")));
+  QCOMPARE(preset.presetValueCount(QStringLiteral("Unit Test Print Preset")), 1);
+}
+
+void ViewModelSmokeTests::presetServiceSelectionPersistsAcrossInstances()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("PresetSelectionPersistence"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  QString printName;
+  QString filamentName;
+  QString printerName;
+  {
+    PresetServiceMock preset;
+    const auto printPresets = preset.presetNamesForCategory(PresetServiceMock::PrintCat);
+    const auto filamentPresets = preset.presetNamesForCategory(PresetServiceMock::FilamentCat);
+    const auto printerPresets = preset.presetNamesForCategory(PresetServiceMock::PrinterCat);
+    QVERIFY(printPresets.size() >= 1);
+    QVERIFY(filamentPresets.size() >= 1);
+    QVERIFY(printerPresets.size() >= 1);
+    printName = printPresets.last();
+    filamentName = filamentPresets.last();
+    printerName = printerPresets.last();
+    QVERIFY(preset.setSelectedPresetForCategory(PresetServiceMock::PrintCat, printName));
+    QVERIFY(preset.setSelectedPresetForCategory(PresetServiceMock::FilamentCat, filamentName));
+    QVERIFY(preset.setSelectedPresetForCategory(PresetServiceMock::PrinterCat, printerName));
+  }
+
+  PresetServiceMock reloaded;
+  QCOMPARE(reloaded.selectedPresetForCategory(PresetServiceMock::PrintCat), printName);
+  QCOMPARE(reloaded.selectedPresetForCategory(PresetServiceMock::FilamentCat), filamentName);
+  QCOMPARE(reloaded.selectedPresetForCategory(PresetServiceMock::PrinterCat), printerName);
+}
+
+void ViewModelSmokeTests::presetServiceImportRejectsMalformedBundleWithoutMutation()
+{
+  PresetServiceMock preset;
+  const int beforeCount = preset.presetNamesForCategory(PresetServiceMock::PrintCat).size() +
+                          preset.presetNamesForCategory(PresetServiceMock::FilamentCat).size() +
+                          preset.presetNamesForCategory(PresetServiceMock::PrinterCat).size();
+
+  const QString tempPath = QDir::temp().filePath(QStringLiteral("owzx_bad_preset_bundle.json"));
+  QFile f(tempPath);
+  QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+  f.write(R"({"kind":"owzx-preset-bundle","version":"1.0","presets":[{"name":"","category":0,"values":{}}]})");
+  f.close();
+
+  QVERIFY(!preset.importBundle(tempPath));
+  const int afterCount = preset.presetNamesForCategory(PresetServiceMock::PrintCat).size() +
+                         preset.presetNamesForCategory(PresetServiceMock::FilamentCat).size() +
+                         preset.presetNamesForCategory(PresetServiceMock::PrinterCat).size();
+  QCOMPARE(afterCount, beforeCount);
+
+  QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+  f.write(R"({"kind":"owzx-preset-bundle","version":"999.0","presets":[]})");
+  f.close();
+  QVERIFY(!preset.importBundle(tempPath));
+  const int incompatibleVersionCount = preset.presetNamesForCategory(PresetServiceMock::PrintCat).size() +
+                                       preset.presetNamesForCategory(PresetServiceMock::FilamentCat).size() +
+                                       preset.presetNamesForCategory(PresetServiceMock::PrinterCat).size();
+  QCOMPARE(incompatibleVersionCount, beforeCount);
+  QFile::remove(tempPath);
+}
+
+void ViewModelSmokeTests::presetServiceExportsAndImportsUserBundleWithMetadata()
+{
+  PresetServiceMock source;
+  QHash<QString, QVariant> values;
+  values.insert(QStringLiteral("layer_height"), 0.24);
+  values.insert(QStringLiteral("wall_loops"), 4);
+  QVERIFY(source.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("Unit Test Exported Print Preset"),
+                                    values));
+
+  const QString tempPath = QDir::temp().filePath(QStringLiteral("owzx_good_preset_bundle.json"));
+  QFile::remove(tempPath);
+  QVERIFY(source.exportBundle(tempPath));
+
+  PresetServiceMock target;
+  QVERIFY(target.importBundle(tempPath));
+  QCOMPARE(target.presetCategory(QStringLiteral("Unit Test Exported Print Preset")), int(PresetServiceMock::PrintCat));
+  QVERIFY(target.isUserPreset(QStringLiteral("Unit Test Exported Print Preset")));
+  QCOMPARE(target.presetValue(QStringLiteral("Unit Test Exported Print Preset"),
+                              QStringLiteral("layer_height")).toDouble(), 0.24);
+  QCOMPARE(target.presetValue(QStringLiteral("Unit Test Exported Print Preset"),
+                              QStringLiteral("wall_loops")).toInt(), 4);
+  QFile::remove(tempPath);
 }
 
 // ── Phase 02-01: TabPosition Q_ENUM + requestSelectTab unit tests ──

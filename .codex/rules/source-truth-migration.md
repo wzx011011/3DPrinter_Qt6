@@ -9,6 +9,14 @@ This repository is an OrcaSlicer-to-Qt6/QML migration project for OWzx Slicer.
 - Do not invent product behavior unless it is explicitly documented as an OWzx-only decision.
 - Historical CrealityPrint-era documents are evidence only. New source-truth work must cite OrcaSlicer upstream paths unless the task is explicitly about legacy compatibility cleanup.
 
+## Completeness Over Legacy Compatibility
+
+- Future milestones must implement the complete target behavior for their declared scope, not an MVP or partial compatibility layer unless the user explicitly asks for an MVP.
+- If an existing Qt implementation is simplified, mock, legacy, or semantically wrong for the milestone target, replace or rewrite it instead of preserving the old behavior for compatibility.
+- Keep old behavior only when it is still source-truth-correct, or when it is explicitly documented as a temporary fallback with a status classification, removal condition, and follow-up owner.
+- Do not build parallel old/new logic paths merely to avoid changing callers. Update callers to the correct source-truth contract.
+- Tests should lock the intended complete behavior, including rejecting the old incorrect behavior when that behavior previously existed.
+
 ## Implementation Boundaries
 
 - Preserve libslic3r slicing behavior. Do not modify slicing algorithms as part of GUI migration work unless a task explicitly authorizes it.
