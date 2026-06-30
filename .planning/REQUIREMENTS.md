@@ -119,12 +119,12 @@ v3.4 Phase 43 manual UAT is still pending because it cannot be run right now. v3
 | PSET-04 | Phase 44 | Pending |
 | PSET-05 | Phase 44 | Pending |
 | PSET-06 | Phase 44 | Pending |
-| COMP-01 | Phase 45 | Pending |
-| COMP-02 | Phase 45 | Pending |
-| COMP-03 | Phase 45 | Pending |
-| COMP-04 | Phase 45 | Pending |
-| COMP-05 | Phase 45 | Pending |
-| COMP-06 | Phase 45 | Pending |
+| COMP-01 | Phase 45 | Satisfied |
+| COMP-02 | Phase 45 | Satisfied |
+| COMP-03 | Phase 45 | Partial - Phase 45 exposes blocking state; Phase 49 must wire Slice/Preview/Export hard gating. |
+| COMP-04 | Phase 45 | Satisfied |
+| COMP-05 | Phase 45 | Partial - compatibility constraints covered; full config option validation remains Phase 46. |
+| COMP-06 | Phase 45 | Partial - panel warning state covered; broader notification/error integration remains Phase 49. |
 | EDIT-01 | Phase 46 | Pending |
 | EDIT-02 | Phase 46 | Pending |
 | EDIT-03 | Phase 46 | Pending |
@@ -153,9 +153,9 @@ v3.4 Phase 43 manual UAT is still pending because it cannot be run right now. v3
 | VERIFY-04 | Phase 49 | Pending |
 | VERIFY-05 | Phase 49 | Pending |
 
-**Coverage:** 39 total; 39 mapped; 0 unmapped; 0 satisfied.
+**Coverage:** 39 total; 39 mapped; 0 unmapped; 3 satisfied; 3 partial.
 
 ---
 
 *Requirements defined: 2026-06-30*
-*Last updated: 2026-06-30 after v3.5 roadmap creation.*
+*Last updated: 2026-06-30 after Phase 45 completion.*
