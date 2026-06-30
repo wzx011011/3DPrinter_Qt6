@@ -166,3 +166,121 @@ import:  components/SearchDialog.qml
 doc:     docs/源码真值功能矩阵.md  (rewrite third_party/CrealityPrint/ paths to third_party/OrcaSlicer/)
 doc:     docs/源码真值基线.md  (rewrite third_party/CrealityPrint/ paths to third_party/OrcaSlicer/)
 ```
+
+## 2. Verification & Sign-Off
+
+This section re-states exactly what the Phase 50 deterministic harness checked
+against both `docs/v3.6-ui-inventory.md` (canonical) and this `50-INVENTORY.md`
+(snapshot) at Phase 50 close. Each check was run via Bash/grep and the literal
+command + numeric result is recorded. The 9 checks below are the deterministic
+assertions a future `tests/InventoryAuditTests.cpp` (Phase 58 VERIFY-01) will
+encode.
+
+> Note on the GNU grep 3.1 quirk in this Windows/Git Bash environment: `grep -cE`
+> with bracket alternation (e.g. `^| (PREP|PREV|...)-`) errors with "conflicting
+> matchers specified". The checks below use plain per-prefix `grep "^| PREP-"`
+> plus `awk -F'|' 'NF==11'` to select the 9-column region-table rows (a row with
+> 9 cells splits into 11 fields under `-F'|'`), which is the correct and
+> deterministic way to count. The data is correct; only the `-cE` flag is
+> unavailable here. Phase 58's compiled harness should use `ripgrep` or per-prefix
+> greps.
+
+**How region rows are counted.** Each region-table row (§2–§5 of the canonical
+doc / §1.1–§1.4 here) has exactly 9 pipe-delimited cells (10 pipes → 11 fields
+under `awk -F'|'`). The §6 modify-vs-replace summary rows have 3 cells (4 pipes
+→ 5 fields) and share the same `| PREP-…` prefix, so the region count must
+filter on `NF==11`. The per-prefix counts below use that filter.
+
+1. **Presence — both files exist and are non-empty.**
+   `test -s docs/v3.6-ui-inventory.md && echo PASS` → `PASS`.
+   `test -s .planning/.../50-INVENTORY.md && echo PASS` → `PASS`.
+   → **PASS**
+
+2. **Per-screenshot region count: 6 ≤ count ≤ 12 per screenshot, 30 ≤ total ≤ 40.**
+   Canonical doc region-table rows (`grep "^| PREP-" … | awk -F'|' 'NF==11' | wc -l`, per prefix):
+   Prepare `9`, Preview `9`, Printer `8`, Material `8`; total `34`.
+   50-INVENTORY.md region-table rows (same command against the snapshot):
+   Prepare `9`, Preview `9`, Printer `8`, Material `8`; total `34`.
+   Each screenshot is within 6–12 and the total 34 is within 30–40.
+   → **PASS**
+
+3. **Column schema: every region row has exactly 9 pipe-delimited cells and the header matches the fixed 9-column string.**
+   Header occurrences of `| region_id | region_name | visible_controls | qt_target | upstream_source | status | verification | modify_or_replace | cleanup |`:
+   canonical `6` (4 region tables + the schema block in §0 + the self-check prose),
+   snapshot `4` (the four excerpted tables). Both ≥ 4 actual table headers.
+   Rows with exactly 9 cells (`NF==11`): canonical `34`, snapshot `34` (all
+   region rows pass the cell-count check; no `NF≠11` region rows).
+   → **PASS**
+
+4. **Status enum: every `status` cell ∈ the 7-term vocabulary**
+   (`Real|Hybrid|Mock|Blocked|Placeholder|Superseded|Missing`).
+   Canonical status distribution: `Real 8, Hybrid 16, Mock 0, Blocked 0,
+   Placeholder 8, Superseded 0, Missing 2` (sum 34); out-of-vocab `0`.
+   Snapshot status distribution: identical (`Real 8, Hybrid 16, Placeholder 8,
+   Missing 2`); out-of-vocab `0`.
+   → **PASS**
+
+5. **Verification enum: every `verification` cell ∈ the 6-term vocabulary**
+   (`automated-test|deterministic-harness|manual-visual|manual-uat-checklist|build-only|upstream-parity-audit`).
+   Canonical verification distribution: `manual-visual 28, manual-uat-checklist
+   3, build-only 1, upstream-parity-audit 2` (sum 34); out-of-vocab `0`.
+   Snapshot: identical; out-of-vocab `0`.
+   → **PASS**
+
+6. **Region ID format: every `region_id` matches `^[A-Z]+-[A-Z0-9]+$`, ASCII-only, unique across the doc.**
+   Canonical: `34` IDs, `34` unique, `0` non-matching. Snapshot: `34` IDs, `34`
+   unique, `0` non-matching. No multi-dash, no slash, no unicode in any ID.
+   → **PASS**
+
+7. **Upstream coverage (INV-02/03/04): each coverage anchor present and lists all required cluster globs.**
+   Canonical anchors: `<!-- INV-02 coverage … -->` ×1 (Prepare: `Plater.*
+   GLCanvas3D.* GUI_ObjectList.* GUI_ObjectSettings.* Gizmos/*` — all 5
+   required), `<!-- INV-03 coverage … -->` ×1 (Preview: `GUI_Preview.*
+   GCodeViewer.* GLCanvas3D.* libslic3r/GCode/*` — all 4 required),
+   `<!-- INV-04 coverage … -->` ×2 (Printer + Material: `Tab.*
+   PresetComboBoxes.* ConfigManipulation.* UnsavedChangesDialog.*
+   CreatePresetsDialog.* PrintConfig.* Preset.* PresetBundle.*` — all 8
+   required). Snapshot anchors: identical, INV-02 ×1, INV-03 ×1, INV-04 ×2.
+   → **PASS**
+
+8. **Cleanup format: every `cleanup` cell in a `replace` row is `n/a` or contains ≥1 `file:`/`qrc:`/`route:`/`import:`/`test:`/`doc:` item; every `file:` item exists on disk.**
+   Per-region-table `cleanup` cells are all `n/a` / `n/a (no prior Qt target)`
+   (no inline replace-cleanup lists — the aggregate lives in §7). The §7
+   aggregate checklist uses one-item-per-line tag format with only the 6 allowed
+   tags: `file:`×4, `qrc:`×3, `route:`×3, `import:`×2, `test:`×0, `doc:`×2; no
+   line uses a tag outside the 6-term set. All 4 `file:` paths verified to exist
+   on disk: `src/qml_gui/pages/SettingsPage.qml` ✓,
+   `src/qml_gui/pages/ConfigPage.qml` ✓,
+   `src/qml_gui/components/ParamsPage.qml` ✓,
+   `src/qml_gui/components/SearchDialog.qml` ✓.
+   → **PASS**
+
+9. **No blank upstream: no `upstream_source` cell is empty — blank must be `none-mapped (Owzx-only)`.**
+   Canonical empty upstream cells: `[]` (0). Snapshot empty upstream cells: `[]`
+   (0). No `upstream_source` cell is blank. (`none-mapped (Owzx-only)` is
+   documented in the schema but not required by any row — every region has a
+   real upstream citation.)
+   → **PASS**
+
+**Sign-Off: PASS** — all 9 deterministic checks PASS on both the canonical
+`docs/v3.6-ui-inventory.md` and this `50-INVENTORY.md` snapshot. Total region
+count `34` (Prepare 9, Preview 9, Printer 8, Material 8). Date 2026-07-01.
+
+### Observation (not a check failure, recorded for transparency)
+
+The 9 deterministic checks above verify schema/format/enum/coverage invariants.
+They do **not** assert cross-table semantic consistency between a region's
+per-table `modify_or_replace` cell (§1.1–§1.4) and its §1.5 summary row. A
+discrepancy exists in the Settings regions: the per-region tables (§1.3/§1.4)
+mark the 14 non-shell Settings sub-regions (`SETPRINT-PRESETBAR…DIRTY`,
+`SETMAT-PRESETBAR…DIRTY`) as `modify`, whereas the §1.5 modify-vs-replace
+summary marks those same 14 regions as `replace` (aggregate counts: 18 modify /
+14 replace / 2 missing). The canonical `docs/v3.6-ui-inventory.md` carries the
+same discrepancy (it is inherited verbatim from Plan 50-01). Because (a) the
+plan's 9 checks do not test this cross-table invariant, (b) the §1.5 summary is
+the decision-of-record consumed by Phase 56 (build independent dialogs) and
+Phase 57 (cleanup removal), and (c) every `file:` removal target in §1.6 exists
+on disk, the sign-off remains PASS. This observation is flagged so the
+discrepancy can be reconciled (either by updating the §1.3/§1.4 region-table
+`modify_or_replace` cells to `replace`, or by confirming the per-table intent)
+when Phase 56 plans its work; it does not block Phase 50 close.
