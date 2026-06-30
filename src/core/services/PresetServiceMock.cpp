@@ -9,10 +9,81 @@
 #include <QDateTime>
 #include <QCoreApplication>
 #include <QSettings>
+#include <cmath>
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/PrintConfig.hpp>
 #endif
+
+namespace
+{
+QStringList variantStringList(const QVariant &value)
+{
+  QStringList result;
+  if (!value.isValid())
+    return result;
+
+  if (value.typeId() == QMetaType::Type::QStringList)
+  {
+    result = value.toStringList();
+  }
+  else if (value.typeId() == QMetaType::Type::QVariantList)
+  {
+    const QVariantList list = value.toList();
+    for (const QVariant &item : list)
+    {
+      const QString text = item.toString().trimmed();
+      if (!text.isEmpty())
+        result.append(text);
+    }
+  }
+  else
+  {
+    const QString text = value.toString().trimmed();
+    if (!text.isEmpty())
+      result.append(text);
+  }
+  return result;
+}
+
+double scalarOrFirstDouble(const QVariant &value, double fallback)
+{
+  if (!value.isValid())
+    return fallback;
+  if (value.typeId() == QMetaType::Type::QVariantList)
+  {
+    const QVariantList list = value.toList();
+    return list.isEmpty() ? fallback : list.first().toDouble();
+  }
+  if (value.typeId() == QMetaType::Type::QStringList)
+  {
+    const QStringList list = value.toStringList();
+    return list.isEmpty() ? fallback : list.first().toDouble();
+  }
+  return value.toDouble();
+}
+
+bool isDestructivePresetAction(const QString &action)
+{
+  const QString normalized = action.trimmed().toLower();
+  return normalized == QStringLiteral("delete") ||
+         normalized == QStringLiteral("rename") ||
+         normalized == QStringLiteral("save") ||
+         normalized == QStringLiteral("overwrite");
+}
+
+bool hasCompatiblePrinterConstraint(const QHash<QString, QVariant> &values)
+{
+  return !variantStringList(values.value(QStringLiteral("compatible_printers"))).isEmpty();
+}
+
+bool explicitlyMatchesPrinter(const QHash<QString, QVariant> &values, const QString &printerName, const QString &parentPrinter)
+{
+  const QStringList compatiblePrinters = variantStringList(values.value(QStringLiteral("compatible_printers")));
+  return compatiblePrinters.contains(printerName) ||
+         (!parentPrinter.isEmpty() && compatiblePrinters.contains(parentPrinter));
+}
+}
 
 PresetServiceMock::PresetServiceMock(QObject *parent)
     : QObject(parent)
@@ -920,86 +991,154 @@ bool PresetServiceMock::isBuiltinPreset(const QString &presetName) const
 
 bool PresetServiceMock::isFilamentCompatibleWithPrinter(const QString &filamentName, const QString &printerName) const
 {
-  const auto filIt = m_presetStore.find(filamentName);
-  const auto prnIt = m_presetStore.find(printerName);
-  if (filIt == m_presetStore.end() || prnIt == m_presetStore.end())
-    return true; // unknown presets → assume compatible
-
-  const auto &filVals = filIt.value();
-  const auto &prnVals = prnIt.value();
-
-  // Primary check: compatible_printers array (对齐上游 Preset::compatible_printers)
-  const QVariant compatVar = filVals.value(QStringLiteral("compatible_printers"));
-  if (compatVar.isValid())
-  {
-    QStringList compatList;
-    if (compatVar.typeId() == QMetaType::Type::QVariantList)
-    {
-      const QVariantList vl = compatVar.toList();
-      for (const auto &v : vl)
-        compatList.append(v.toString());
-    }
-    else if (compatVar.typeId() == QMetaType::Type::QStringList)
-    {
-      compatList = compatVar.toStringList();
-    }
-    else if (compatVar.typeId() == QMetaType::Type::QString)
-    {
-      // Single string: treat as one-element list
-      const QString s = compatVar.toString();
-      if (!s.isEmpty())
-        compatList.append(s);
-    }
-    if (!compatList.isEmpty())
-    {
-      // If compatible_printers is specified, printer must be in the list
-      bool found = false;
-      for (const auto &cp : compatList)
-      {
-        if (cp == printerName)
-        {
-          found = true;
-          break;
-        }
-      }
-      if (!found)
-        return false;
-    }
-    // Empty list → fall through to nozzle/temp range checks
-  }
-
-  // Check nozzle diameter compatibility (对齐上游 nozzle_diameter matching)
-  const double filNozzleMin = filVals.value(QStringLiteral("compatible_nozzle_min"), 0.15).toDouble();
-  const double filNozzleMax = filVals.value(QStringLiteral("compatible_nozzle_max"), 1.0).toDouble();
-  const double prnNozzle = prnVals.value(QStringLiteral("nozzle_diameter"), 0.4).toDouble();
-
-  if (prnNozzle < filNozzleMin || prnNozzle > filNozzleMax)
-    return false;
-
-  // Check max nozzle temperature compatibility (对齐上游 max_temp matching)
-  const double filTempMax = filVals.value(QStringLiteral("nozzle_temp_range_max"), 300).toDouble();
-  const double prnMaxTemp = prnVals.value(QStringLiteral("max_nozzle_temp"), 300).toDouble();
-
-  if (filTempMax > prnMaxTemp)
-    return false;
-
-  return true;
+  return isPresetCompatibleWithPrinter(FilamentCat, filamentName, printerName);
 }
 
 QString PresetServiceMock::findCompatibleFilament(const QString &printerName) const
 {
-  const auto prnIt = m_presetStore.find(printerName);
-  if (prnIt == m_presetStore.end())
+  return findCompatiblePresetForCategory(FilamentCat, printerName);
+}
+
+QStringList PresetServiceMock::compatiblePresetNamesForCategory(int category, const QString &printerName) const
+{
+  if (!isValidCategory(category))
     return {};
 
-  const auto filList = m_categoryPresets.value(FilamentCat);
-  // Prefer the first compatible filament in the list
-  for (const auto &filName : filList)
+  QStringList result;
+  const QStringList names = m_categoryPresets.value(category);
+  for (const QString &name : names)
   {
-    if (isFilamentCompatibleWithPrinter(filName, printerName))
-      return filName;
+    if (isPresetCompatibleWithPrinter(category, name, printerName))
+      result.append(name);
   }
-  return filList.isEmpty() ? QString() : filList.first();
+  return result;
+}
+
+bool PresetServiceMock::isPresetCompatibleWithPrinter(int category, const QString &presetName, const QString &printerName) const
+{
+  return presetCompatibilityMessage(category, presetName, printerName).isEmpty();
+}
+
+QString PresetServiceMock::presetCompatibilityMessage(int category, const QString &presetName, const QString &printerName) const
+{
+  if (!isValidCategory(category))
+    return tr("Unknown preset category.");
+
+  const int actualCategory = presetCategory(presetName);
+  if (actualCategory < 0 || !m_presetStore.contains(presetName))
+    return tr("Preset \"%1\" does not exist.").arg(presetName);
+  if (actualCategory != category)
+    return tr("Preset \"%1\" belongs to another category.").arg(presetName);
+
+  const int printerCategory = presetCategory(printerName);
+  if (printerCategory < 0 || !m_presetStore.contains(printerName))
+    return tr("Printer preset \"%1\" does not exist.").arg(printerName);
+  if (printerCategory != PrinterCat)
+    return tr("\"%1\" is not a printer preset.").arg(printerName);
+
+  if (category == PrinterCat)
+    return presetName == printerName ? QString() :
+        tr("Printer preset \"%1\" is not the active printer.").arg(presetName);
+
+  const QHash<QString, QVariant> &values = m_presetStore[presetName];
+  const QHash<QString, QVariant> &printerValues = m_presetStore[printerName];
+
+  const QString condition = values.value(QStringLiteral("compatible_printers_condition")).toString().trimmed();
+  if (!condition.isEmpty())
+    return tr("Preset \"%1\" uses unsupported printer compatibility expression.").arg(presetName);
+
+  const QStringList compatiblePrinters = variantStringList(values.value(QStringLiteral("compatible_printers")));
+  if (!compatiblePrinters.isEmpty())
+  {
+    const QString parentPrinter = m_presetInherits.value(printerName);
+    if (!compatiblePrinters.contains(printerName) &&
+        (parentPrinter.isEmpty() || !compatiblePrinters.contains(parentPrinter)))
+    {
+      return tr("Preset \"%1\" is not compatible with printer \"%2\".").arg(presetName, printerName);
+    }
+  }
+
+  if (category == FilamentCat)
+  {
+    const double nozzleMin = values.value(QStringLiteral("compatible_nozzle_min"), 0.15).toDouble();
+    const double nozzleMax = values.value(QStringLiteral("compatible_nozzle_max"), 1.0).toDouble();
+    const double printerNozzle = scalarOrFirstDouble(printerValues.value(QStringLiteral("nozzle_diameter")), 0.4);
+    if (printerNozzle < nozzleMin || printerNozzle > nozzleMax)
+      return tr("Filament \"%1\" requires nozzle %2-%3 mm; active printer uses %4 mm.")
+          .arg(presetName)
+          .arg(nozzleMin)
+          .arg(nozzleMax)
+          .arg(printerNozzle);
+
+    const double filamentMaxTemp = values.value(QStringLiteral("nozzle_temp_range_max"), 300).toDouble();
+    const double printerMaxTemp = printerValues.value(QStringLiteral("max_nozzle_temp"), 300).toDouble();
+    if (filamentMaxTemp > printerMaxTemp)
+      return tr("Filament \"%1\" requires nozzle temperature up to %2 C; active printer max is %3 C.")
+          .arg(presetName)
+          .arg(filamentMaxTemp)
+          .arg(printerMaxTemp);
+  }
+
+  return {};
+}
+
+bool PresetServiceMock::isCurrentSelectionCompatible(const QString &printerName, const QString &filamentName, const QString &printName) const
+{
+  return currentSelectionCompatibilityMessage(printerName, filamentName, printName).isEmpty();
+}
+
+QString PresetServiceMock::currentSelectionCompatibilityMessage(const QString &printerName, const QString &filamentName, const QString &printName) const
+{
+  const QString printerMessage = presetCompatibilityMessage(PrinterCat, printerName, printerName);
+  if (!printerMessage.isEmpty())
+    return printerMessage;
+
+  const QString printMessage = presetCompatibilityMessage(PrintCat, printName, printerName);
+  if (!printMessage.isEmpty())
+    return printMessage;
+
+  const QString filamentMessage = presetCompatibilityMessage(FilamentCat, filamentName, printerName);
+  if (!filamentMessage.isEmpty())
+    return filamentMessage;
+
+  return {};
+}
+
+QString PresetServiceMock::presetActionBlocker(int category, const QString &presetName, const QString &action) const
+{
+  if (!isValidCategory(category))
+    return tr("Unknown preset category.");
+  if (!m_presetStore.contains(presetName))
+    return tr("Preset \"%1\" does not exist.").arg(presetName);
+  if (presetCategory(presetName) != category)
+    return tr("Preset \"%1\" belongs to another category.").arg(presetName);
+  if (isDestructivePresetAction(action) && isReadOnlyPreset(presetName))
+    return tr("Preset \"%1\" is built-in or read-only. Use Save As to create an editable copy.").arg(presetName);
+  return {};
+}
+
+QString PresetServiceMock::findCompatiblePresetForCategory(int category, const QString &printerName) const
+{
+  if (!isValidCategory(category))
+    return {};
+
+  const QString parentPrinter = m_presetInherits.value(printerName);
+  QString firstGeneric;
+  const QStringList names = m_categoryPresets.value(category);
+  for (const QString &name : names)
+  {
+    if (!isPresetCompatibleWithPrinter(category, name, printerName))
+      continue;
+
+    const QHash<QString, QVariant> values = m_presetStore.value(name);
+    if (hasCompatiblePrinterConstraint(values) &&
+        explicitlyMatchesPrinter(values, printerName, parentPrinter))
+      return name;
+
+    if (firstGeneric.isEmpty())
+      firstGeneric = name;
+  }
+  return firstGeneric;
 }
 
 bool PresetServiceMock::createCustomPreset(int category, const QString &name, const QHash<QString, QVariant> &values)

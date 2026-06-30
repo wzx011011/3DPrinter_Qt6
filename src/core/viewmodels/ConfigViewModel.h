@@ -46,9 +46,13 @@ class ConfigViewModel final : public QObject
   Q_PROPERTY(QStringList printerPresetNames READ printerPresetNames NOTIFY stateChanged)
   Q_PROPERTY(QStringList filamentPresetNames READ filamentPresetNames NOTIFY stateChanged)
   Q_PROPERTY(QStringList printPresetNames READ printPresetNames NOTIFY stateChanged)
+  Q_PROPERTY(QStringList compatibleFilamentPresetNames READ compatibleFilamentPresetNames NOTIFY stateChanged)
+  Q_PROPERTY(QStringList compatiblePrintPresetNames READ compatiblePrintPresetNames NOTIFY stateChanged)
   Q_PROPERTY(QString currentPrinterPreset READ currentPrinterPreset NOTIFY stateChanged)
   Q_PROPERTY(QString currentFilamentPreset READ currentFilamentPreset NOTIFY stateChanged)
   Q_PROPERTY(QString currentPrintPreset READ currentPrintPreset NOTIFY stateChanged)
+  Q_PROPERTY(bool currentPresetCombinationValid READ currentPresetCombinationValid NOTIFY stateChanged)
+  Q_PROPERTY(QString currentPresetCompatibilityMessage READ currentPresetCompatibilityMessage NOTIFY stateChanged)
 
 public:
   explicit ConfigViewModel(PresetServiceMock *presetService, ProjectServiceMock *projectService, QObject *parent = nullptr);
@@ -82,9 +86,13 @@ public:
   QStringList printerPresetNames() const;
   QStringList filamentPresetNames() const;
   QStringList printPresetNames() const;
+  QStringList compatibleFilamentPresetNames() const;
+  QStringList compatiblePrintPresetNames() const;
   QString currentPrinterPreset() const { return currentPrinterPreset_; }
   QString currentFilamentPreset() const { return currentFilamentPreset_; }
   QString currentPrintPreset() const { return currentPrintPreset_; }
+  bool currentPresetCombinationValid() const;
+  QString currentPresetCompatibilityMessage() const;
 
   Q_INVOKABLE void loadDefault();
   Q_INVOKABLE void setCurrentPreset(const QString &presetName);
@@ -117,6 +125,8 @@ public:
   Q_INVOKABLE bool isCurrentFilamentCompatible() const;
   /// 检查指定耗材是否与当前打印机兼容（用于灰化不兼容耗材列表项）
   Q_INVOKABLE bool isFilamentCompatible(const QString &filamentName) const;
+  Q_INVOKABLE bool canUseCurrentPresetCombination() const;
+  Q_INVOKABLE QString presetActionBlocker(int category, const QString &presetName, const QString &action) const;
   Q_INVOKABLE void setLayerHeight(double v);
   Q_INVOKABLE void setPrintSpeed(int v);
   Q_INVOKABLE void setSupportEnabled(bool v);

@@ -55,6 +55,13 @@ public:
   bool isBuiltinPreset(const QString &presetName) const;
   /// 检查耗材预设是否与打印机预设兼容（对齐上游 PresetBundle::update_compatible）
   bool isFilamentCompatibleWithPrinter(const QString &filamentName, const QString &printerName) const;
+  Q_INVOKABLE QStringList compatiblePresetNamesForCategory(int category, const QString &printerName) const;
+  Q_INVOKABLE bool isPresetCompatibleWithPrinter(int category, const QString &presetName, const QString &printerName) const;
+  Q_INVOKABLE QString presetCompatibilityMessage(int category, const QString &presetName, const QString &printerName) const;
+  Q_INVOKABLE bool isCurrentSelectionCompatible(const QString &printerName, const QString &filamentName, const QString &printName) const;
+  Q_INVOKABLE QString currentSelectionCompatibilityMessage(const QString &printerName, const QString &filamentName, const QString &printName) const;
+  Q_INVOKABLE QString presetActionBlocker(int category, const QString &presetName, const QString &action) const;
+  QString findCompatiblePresetForCategory(int category, const QString &printerName) const;
   /// 查找第一个兼容的耗材预设（对齐上游 PresetBundle::update_compatible 自动匹配）
   QString findCompatibleFilament(const QString &printerName) const;
 

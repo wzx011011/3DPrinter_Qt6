@@ -68,6 +68,10 @@ Item {
         return root.configVm.filterIndicesByPage(catIndices, page)
     }
 
+    function presetActionAllowed(category, presetName, action) {
+        return !!root.configVm && root.configVm.presetActionBlocker(category, presetName, action) === ""
+    }
+
     Component.onCompleted: rebuildFilter()
     onSearchTextChanged: rebuildFilter()
     onAdvancedEnabledChanged: rebuildFilter()
@@ -577,7 +581,7 @@ Item {
                     }
                     Rectangle {
                         width: 24; height: 24; radius: 4
-                        visible: root.configVm ? root.configVm.canDeletePreset(root.configVm.currentPrinterPreset) : false
+                        visible: root.presetActionAllowed(2, root.configVm ? root.configVm.currentPrinterPreset : "", "rename")
                         color: renamePrinterBtn2.containsMouse ? "#1c2a3e" : "transparent"
                         Text { anchors.centerIn: parent; text: "\u270E"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeMD }
                         MouseArea { id: renamePrinterBtn2; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -586,7 +590,7 @@ Item {
                     }
                     Rectangle {
                         width: 24; height: 24; radius: 4
-                        visible: root.configVm ? root.configVm.canDeletePreset(root.configVm.currentPrinterPreset) : false
+                        visible: root.presetActionAllowed(2, root.configVm ? root.configVm.currentPrinterPreset : "", "delete")
                         color: delPrinterBtn.containsMouse ? "#2e1a1a" : "transparent"
                         Text { anchors.centerIn: parent; text: "\u2715"; color: "#e06666"; font.pixelSize: Theme.fontSizeSM }
                         MouseArea { id: delPrinterBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -862,10 +866,10 @@ Item {
                         CxComboBox {
                             id: printPresetCombo
                             Layout.fillWidth: true
-                            model: root.configVm ? root.configVm.printPresetNames : []
+                            model: root.configVm ? root.configVm.compatiblePrintPresetNames : []
                             currentIndex: {
                                 if (!root.configVm) return -1
-                                return root.configVm.printPresetNames.indexOf(root.configVm.currentPrintPreset)
+                                return model.indexOf(root.configVm.currentPrintPreset)
                             }
                             onActivated: (i) => {
                                 if (root.configVm && i >= 0)
@@ -882,7 +886,7 @@ Item {
                         }
                         Rectangle {
                             width: 24; height: 24; radius: 4
-                            visible: root.configVm ? root.configVm.canDeletePreset(root.configVm.currentPrintPreset) : false
+                            visible: root.presetActionAllowed(0, root.configVm ? root.configVm.currentPrintPreset : "", "rename")
                             color: renamePrintBtn.containsMouse ? "#1c2a3e" : "transparent"
                             Text { anchors.centerIn: parent; text: "\u270E"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeMD }
                             MouseArea { id: renamePrintBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -891,7 +895,7 @@ Item {
                         }
                         Rectangle {
                             width: 24; height: 24; radius: 4
-                            visible: root.configVm ? root.configVm.canDeletePreset(root.configVm.currentPrintPreset) : false
+                            visible: root.presetActionAllowed(0, root.configVm ? root.configVm.currentPrintPreset : "", "delete")
                             color: delPrintBtn.containsMouse ? "#2e1a1a" : "transparent"
                             Text { anchors.centerIn: parent; text: "\u2715"; color: "#e06666"; font.pixelSize: Theme.fontSizeSM }
                             MouseArea { id: delPrintBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -965,10 +969,10 @@ Item {
                         CxComboBox {
                             id: filamentPresetCombo
                             Layout.fillWidth: true
-                            model: root.configVm ? root.configVm.filamentPresetNames : []
+                            model: root.configVm ? root.configVm.compatibleFilamentPresetNames : []
                             currentIndex: {
                                 if (!root.configVm) return -1
-                                return root.configVm.filamentPresetNames.indexOf(root.configVm.currentFilamentPreset)
+                                return model.indexOf(root.configVm.currentFilamentPreset)
                             }
                             onActivated: (i) => {
                                 if (root.configVm && i >= 0)
@@ -1016,7 +1020,7 @@ Item {
                         }
                         Rectangle {
                             width: 24; height: 24; radius: 4
-                            visible: root.configVm ? root.configVm.canDeletePreset(root.configVm.currentFilamentPreset) : false
+                            visible: root.presetActionAllowed(1, root.configVm ? root.configVm.currentFilamentPreset : "", "rename")
                             color: renameFilaBtn.containsMouse ? "#1c2a3e" : "transparent"
                             Text { anchors.centerIn: parent; text: "\u270E"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeMD }
                             MouseArea { id: renameFilaBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -1025,7 +1029,7 @@ Item {
                         }
                         Rectangle {
                             width: 24; height: 24; radius: 4
-                            visible: root.configVm ? root.configVm.canDeletePreset(root.configVm.currentFilamentPreset) : false
+                            visible: root.presetActionAllowed(1, root.configVm ? root.configVm.currentFilamentPreset : "", "delete")
                             color: delFilaBtn.containsMouse ? "#2e1a1a" : "transparent"
                             Text { anchors.centerIn: parent; text: "\u2715"; color: "#e06666"; font.pixelSize: Theme.fontSizeSM }
                             MouseArea { id: delFilaBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -1064,6 +1068,15 @@ Item {
 
                 // 分类选项列表（对齐上游 ParamsPanel m_page_view）
                 // 双层级: Page > Category > Options（对齐上游 Tab::Page > Group > Option）
+                Text {
+                    Layout.fillWidth: true
+                    visible: !!root.configVm && !root.configVm.currentPresetCombinationValid
+                    text: root.configVm ? root.configVm.currentPresetCompatibilityMessage : ""
+                    color: Theme.statusError
+                    font.pixelSize: Theme.fontSizeXS
+                    wrapMode: Text.WordWrap
+                }
+
                 ScrollView {
                     id: optionsScrollView
                     Layout.fillWidth: true

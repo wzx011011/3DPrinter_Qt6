@@ -848,7 +848,11 @@ void ViewModelSmokeTests::configKeepsInvalidSelectionWhenNoCompatibleFallback()
   config.setCurrentPrinterPreset(QStringLiteral("Unit Test Invalid Printer 2.0"));
   QCOMPARE(config.currentPrinterPreset(), QStringLiteral("Unit Test Invalid Printer 2.0"));
   QCOMPARE(config.currentFilamentPreset(), QStringLiteral("Unit Test Invalid Filament A"));
-  QCOMPARE(config.currentPrintPreset(), QStringLiteral("Unit Test Invalid Process A"));
+  QVERIFY(!preset.compatiblePresetNamesForCategory(PresetServiceMock::FilamentCat,
+                                                   QStringLiteral("Unit Test Invalid Printer 2.0"))
+              .contains(QStringLiteral("Unit Test Invalid Filament A")));
+  QVERIFY(config.compatibleFilamentPresetNames().contains(QStringLiteral("Unit Test Invalid Filament A")));
+  QVERIFY(config.currentPrintPreset() != QStringLiteral("Unit Test Invalid Process A"));
   QVERIFY(!config.currentPresetCombinationValid());
   QVERIFY(!config.canUseCurrentPresetCombination());
   QVERIFY(!config.currentPresetCompatibilityMessage().isEmpty());

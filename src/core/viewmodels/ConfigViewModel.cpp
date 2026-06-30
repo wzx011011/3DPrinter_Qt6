@@ -282,13 +282,75 @@ QStringList ConfigViewModel::printPresetNames() const
   return presetService_ ? presetService_->presetNamesForCategory(PresetServiceMock::PrintCat) : QStringList{};
 }
 
+QStringList ConfigViewModel::compatibleFilamentPresetNames() const
+{
+  if (!presetService_)
+    return {};
+  QStringList names =
+      presetService_->compatiblePresetNamesForCategory(PresetServiceMock::FilamentCat, currentPrinterPreset_);
+  if (!currentFilamentPreset_.isEmpty() && !names.contains(currentFilamentPreset_))
+    names.prepend(currentFilamentPreset_);
+  return names;
+}
+
+QStringList ConfigViewModel::compatiblePrintPresetNames() const
+{
+  if (!presetService_)
+    return {};
+  QStringList names =
+      presetService_->compatiblePresetNamesForCategory(PresetServiceMock::PrintCat, currentPrinterPreset_);
+  if (!currentPrintPreset_.isEmpty() && !names.contains(currentPrintPreset_))
+    names.prepend(currentPrintPreset_);
+  return names;
+}
+
+bool ConfigViewModel::currentPresetCombinationValid() const
+{
+  return !presetService_ ||
+      presetService_->isCurrentSelectionCompatible(currentPrinterPreset_, currentFilamentPreset_, currentPrintPreset_);
+}
+
+QString ConfigViewModel::currentPresetCompatibilityMessage() const
+{
+  return presetService_ ?
+      presetService_->currentSelectionCompatibilityMessage(currentPrinterPreset_, currentFilamentPreset_, currentPrintPreset_) :
+      QString();
+}
+
 void ConfigViewModel::setCurrentPrinterPreset(const QString &name)
 {
   if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetServiceMock::PrinterCat, name))
     return;
   currentPrinterPreset_ = name;
+  if (presetService_) {
+    if (!presetService_->isPresetCompatibleWithPrinter(PresetServiceMock::FilamentCat,
+                                                       currentFilamentPreset_,
+                                                       currentPrinterPreset_)) {
+      const QString compatibleFilament =
+          presetService_->findCompatiblePresetForCategory(PresetServiceMock::FilamentCat,
+                                                          currentPrinterPreset_);
+      if (!compatibleFilament.isEmpty()) {
+        currentFilamentPreset_ = compatibleFilament;
+        presetService_->setSelectedPresetForCategory(PresetServiceMock::FilamentCat,
+                                                     compatibleFilament);
+      }
+    }
+
+    if (!presetService_->isPresetCompatibleWithPrinter(PresetServiceMock::PrintCat,
+                                                       currentPrintPreset_,
+                                                       currentPrinterPreset_)) {
+      const QString compatiblePrint =
+          presetService_->findCompatiblePresetForCategory(PresetServiceMock::PrintCat,
+                                                          currentPrinterPreset_);
+      if (!compatiblePrint.isEmpty()) {
+        currentPrintPreset_ = compatiblePrint;
+        currentPreset_ = compatiblePrint;
+        presetService_->setSelectedPresetForCategory(PresetServiceMock::PrintCat,
+                                                     compatiblePrint);
+      }
+    }
+  }
   mergePresetHierarchy();
-  autoMatchFilament();  // 切换打印机时自动匹配兼容耗材
   emit stateChanged();
 }
 
@@ -516,14 +578,28 @@ bool ConfigViewModel::isCurrentFilamentCompatible() const
 {
   if (!presetService_)
     return true;
-  return presetService_->isFilamentCompatibleWithPrinter(currentFilamentPreset_, currentPrinterPreset_);
+  return presetService_->isPresetCompatibleWithPrinter(PresetServiceMock::FilamentCat,
+                                                       currentFilamentPreset_,
+                                                       currentPrinterPreset_);
 }
 
 bool ConfigViewModel::isFilamentCompatible(const QString &filamentName) const
 {
   if (!presetService_)
     return true;
-  return presetService_->isFilamentCompatibleWithPrinter(filamentName, currentPrinterPreset_);
+  return presetService_->isPresetCompatibleWithPrinter(PresetServiceMock::FilamentCat,
+                                                       filamentName,
+                                                       currentPrinterPreset_);
+}
+
+bool ConfigViewModel::canUseCurrentPresetCombination() const
+{
+  return currentPresetCombinationValid();
+}
+
+QString ConfigViewModel::presetActionBlocker(int category, const QString &presetName, const QString &action) const
+{
+  return presetService_ ? presetService_->presetActionBlocker(category, presetName, action) : QString();
 }
 
 void ConfigViewModel::setLayerHeight(double v)
