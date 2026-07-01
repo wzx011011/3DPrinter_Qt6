@@ -3679,6 +3679,27 @@ int EditorViewModel::extruderCount() const
   return hasSliceResult() ? 1 : 0;
 }
 
+QVariantList EditorViewModel::stalePlateIndices() const
+{
+  // Phase 52 PREPSB-05: surface the stale-plate set to QML so Preview/Export
+  // can show a "stale -- reslice" indicator and disable export of stale results.
+  // m_stalePlateIndices is maintained by invalidateSliceResultsForPlate /
+  // invalidateAllSliceResults and cleared on a successful reslice.
+  QVariantList list;
+  for (int plateIndex : m_stalePlateIndices)
+    list.append(plateIndex);
+  return list;
+}
+
+bool EditorViewModel::hasStaleSliceResults() const
+{
+  // True when any previously-sliced plate result no longer matches current
+  // inputs (a preset/scope/option changed after slicing). Kept SEPARATE from
+  // canSlice: canSlice = "is there something to slice"; staleness = "is the
+  // existing result out of date".
+  return !m_stalePlateIndices.isEmpty();
+}
+
 QString EditorViewModel::extruderUsedLength(int extruderId) const
 {
   if (!hasSliceResult() || extruderId != 0)
