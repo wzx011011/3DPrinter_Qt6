@@ -42,6 +42,15 @@ Item {
         color: "transparent"           // G2: 透明，用卡片背景
         radius: 8
 
+        // 折叠切换点击区：置于 RowLayout 之下（z 更低），避免吞掉 rightActions 按钮点击。
+        // RowLayout 内 action 按钮自带 MouseArea（在上层）接收自身点击；
+        // 标题文字 / 空白区域无 MouseArea，事件穿透到本层完成折叠切换。
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.expanded = !root.expanded
+        }
+
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: 10
@@ -79,12 +88,6 @@ Item {
                 rotation: root.expanded ? 0 : -90
                 Behavior on rotation { NumberAnimation { duration: 200 } }
             }
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.expanded = !root.expanded
         }
     }
 
