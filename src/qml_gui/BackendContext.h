@@ -93,6 +93,20 @@ class BackendContext final : public QObject
   Q_PROPERTY(QObject *auxiliaryService READ auxiliaryService CONSTANT)
   Q_PROPERTY(QObject *appSettings READ appSettings CONSTANT)
   Q_PROPERTY(bool visualCompareMode READ visualCompareMode CONSTANT)
+  // Phase 51: shell-level action gate properties (SHELL-03) — forward to EditorViewModel/PreviewViewModel.
+  Q_PROPERTY(bool canImport READ canImport NOTIFY stateChanged)
+  Q_PROPERTY(bool canSlice READ canSlice NOTIFY stateChanged)
+  Q_PROPERTY(bool isSlicing READ isSlicing NOTIFY stateChanged)
+  Q_PROPERTY(bool canExport READ canExport NOTIFY stateChanged)
+  Q_PROPERTY(bool canSave READ canSave NOTIFY stateChanged)
+  Q_PROPERTY(bool canUndo READ canUndo NOTIFY stateChanged)
+  Q_PROPERTY(bool canRedo READ canRedo NOTIFY stateChanged)
+  Q_PROPERTY(bool isBusy READ isBusy NOTIFY stateChanged)
+  // Phase 51: state-dependent blocked-reason labels (mirror sliceActionLabel pattern).
+  Q_PROPERTY(QString exportActionLabel READ exportActionLabel NOTIFY stateChanged)
+  Q_PROPERTY(QString exportActionHint READ exportActionHint NOTIFY stateChanged)
+  Q_PROPERTY(QString saveActionLabel READ saveActionLabel NOTIFY stateChanged)
+  Q_PROPERTY(QString saveActionHint READ saveActionHint NOTIFY stateChanged)
   Q_PROPERTY(int currentPage READ currentPage NOTIFY currentPageChanged)
   Q_PROPERTY(QString lastErrorMessage READ lastErrorMessage NOTIFY errorChanged)
   Q_PROPERTY(int lastErrorSeverity READ lastErrorSeverity NOTIFY errorChanged)
@@ -360,6 +374,8 @@ public:
 
 signals:
   void currentPageChanged();
+  /// Phase 51 SHELL-03: bulk shell-state refresh signal for action gates + labels.
+  void stateChanged();
   /// 骞挎挱 tab 鍒囨崲璇锋眰锛堝榻愪笂娓?EVT_SELECT_TAB锛夈€?
   /// 鍦?currentPage 鏀瑰彉涔嬪墠鍙戝嚭锛屼究浜庣洃鍚€呭厛浜庨〉闈㈠垏鎹㈠仛鍑哄搷搴斻€?
   void tabSelectRequested(int position);
