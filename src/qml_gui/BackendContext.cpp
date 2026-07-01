@@ -92,6 +92,17 @@ BackendContext::BackendContext(QObject *parent)
           this, &BackendContext::handleConfigPendingActionApplied);
   connect(configViewModel_, &ConfigViewModel::pendingActionCleared,
           this, &BackendContext::clearDeferredConfigExit);
+  // Phase 52 PREPSB-05 (CRITICAL): a config/preset/scope/option change makes any
+  // previously-sliced/previewed/exported result stale. Invalidate ALL plates
+  // (a preset change affects every plate's result) and refresh the editor so the
+  // new stalePlateIndices / hasStaleSliceResults Q_PROPERTYs reach QML. This
+  // closes the gap where changing a preset did not invalidate a prior result,
+  // which could let a user export G-code based on the OLD preset.
+  connect(configViewModel_, &ConfigViewModel::stateChanged, editorViewModel_,
+          [this]() {
+            editorViewModel_->invalidateAllSliceResults();
+            emit editorViewModel_->stateChanged();
+          });
 
   // Wire ConfigViewModel into EditorViewModel for preset injection at slice time
   // (对齐上游 PresetBundle::full_fff_config → BackgroundSlicingProcess)
@@ -553,6 +564,17 @@ void BackendContext::setConfigWizardCompleted(bool completed)
 void BackendContext::showConfigWizard()
 {
   emit showConfigWizardRequested();
+}
+
+void BackendContext::forwardSettingsRequest(const QString &category)
+{
+  // Phase 52 PREPSB-02: forward the sidebar "Setting" entry point. The
+  // independent settings dialog is Phase 56 work; until then this is an honest
+  // no-op log so the entry point is visible but explicitly deferred (not silent
+  // dead UI). Phase 56 connects the dialog and removes this interim log.
+  qInfo("[Backend] settingsRequested(%s) -- settings dialog pending Phase 56",
+        qPrintable(category));
+  emit settingsRequested(category);
 }
 
 void BackendContext::showBedShapeDialog()
