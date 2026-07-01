@@ -177,15 +177,16 @@ Item {
 
             TitleBarDivider { Layout.leftMargin: 5; Layout.rightMargin: 5 }
 
-            // Save 按钮 (对齐上游 wxID_SAVE)
+            // Save 按钮 (对齐上游 wxID_SAVE) — Phase 51 SHELL-03: canSave gate (disabled while slicing)
             CxIconButton {
                 cxStyle: CxIconButton.Style.Chrome
                 buttonSize: 30
                 iconSize: 16
                 iconSource: "qrc:/qml/assets/icons/device-floppy.svg"
                 toolTipText: qsTr("保存项目")
+                enabled: backend.canSave
                 onClicked: {
-                    if (!backend.topbarSaveProject())
+                    if (backend.canSave && !backend.topbarSaveProject())
                         root.saveAsRequested()
                 }
             }
