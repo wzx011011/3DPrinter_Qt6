@@ -133,6 +133,11 @@ private slots:
   // Phase 51-03: SHELL-02 + SHELL-03 — shell gates registered, round-trip
   // preserves state, stateChanged forwarding wired from the editor viewmodel.
   void shellStateGatesForwardToEditorViewModelAndPreserveRoundTrip();
+  // Phase 52-03 (PREPSB-05): config/preset change invalidates prior slice
+  // results; staleness Q_PROPERTYs reach QML.
+  void sidebarPresetChangeInvalidatesSliceResults();
+  // Phase 52-03 (PREPSB-02): settings signal forward is honest (emits + logs).
+  void sidebarSettingsForwardEmitsRequestedSignal();
   // Phase 04-01: Sidebar Dockable 状态 + 持久化
   void testSidebarCollapsedDefault();
   void testRequestToggleSidebar();
