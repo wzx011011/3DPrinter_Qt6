@@ -589,13 +589,13 @@ Item {
             title: qsTr("编辑")
             CxMenuItem {
                 text: qsTr("撤销")
-                enabled: backend.currentPage === backend.tp3DEditor
-                onTriggered: if (backend.currentPage === backend.tp3DEditor) root.undoRequested()
+                enabled: backend.currentPage === backend.tp3DEditor && backend.canUndo
+                onTriggered: if (backend.currentPage === backend.tp3DEditor && backend.canUndo) root.undoRequested()
             }
             CxMenuItem {
                 text: qsTr("重做")
-                enabled: backend.currentPage === backend.tp3DEditor
-                onTriggered: if (backend.currentPage === backend.tp3DEditor) root.redoRequested()
+                enabled: backend.currentPage === backend.tp3DEditor && backend.canRedo
+                onTriggered: if (backend.currentPage === backend.tp3DEditor && backend.canRedo) root.redoRequested()
             }
             MenuSeparator {}
             CxMenuItem {
