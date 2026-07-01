@@ -77,6 +77,15 @@ BackendContext::BackendContext(QObject *parent)
   auto *undoManager = new UndoRedoManager(this);
   editorViewModel_->setUndoRedoManager(undoManager);
   previewViewModel_ = new PreviewViewModel(sliceService_, this);
+  // Phase 51 SHELL-02/SHELL-03: forward viewmodel stateChanged so shell gates
+  // (canImport/canSlice/isSlicing/canExport/canSave/canUndo/canRedo/isBusy) and
+  // Prepare/Preview state stay live across page round-trips.
+  connect(editorViewModel_, &EditorViewModel::stateChanged, this, [this]() {
+    emit stateChanged();
+  });
+  connect(previewViewModel_, &PreviewViewModel::stateChanged, this, [this]() {
+    emit stateChanged();
+  });
   monitorViewModel_ = new MonitorViewModel(deviceService_, networkService_, cameraService_, this);
   configViewModel_ = new ConfigViewModel(presetService_, projectService_, this);
   connect(configViewModel_, &ConfigViewModel::pendingActionApplied,
