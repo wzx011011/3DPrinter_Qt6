@@ -130,6 +130,9 @@ private slots:
   void testCurrentViewModeDefault();
   void testRequestChangeViewModeSignal();
   void testTabSelectDrivesViewMode();
+  // Phase 51-03: SHELL-02 + SHELL-03 — shell gates registered, round-trip
+  // preserves state, stateChanged forwarding wired from the editor viewmodel.
+  void shellStateGatesForwardToEditorViewModelAndPreserveRoundTrip();
   // Phase 04-01: Sidebar Dockable 状态 + 持久化
   void testSidebarCollapsedDefault();
   void testRequestToggleSidebar();
@@ -1420,6 +1423,96 @@ void ViewModelSmokeTests::testTabSelectDrivesViewMode()
   ctx.requestSelectTab(static_cast<int>(BackendContext::TabPosition::tpProject));
   QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tpProject));
   QCOMPARE(ctx.currentViewMode(), vmBefore);
+}
+
+// ── Phase 51-03: SHELL-02 + SHELL-03 shell gate viewmodel-state test ──
+// Verifies the 8 BackendContext shell gate Q_PROPERTY are registered, that
+// canUndo/canRedo reflect the empty undo stack, that the Prepare -> Preview ->
+// Prepare round-trip preserves page/view state without reset, and that the
+// editor viewmodel stateChanged signal forwards to BackendContext::stateChanged
+// (the SHELL-02 forwarding mechanism from Plan 51-01 task 4). This slot mirrors
+// the standalone BackendContext construction of testTabSelectDrivesViewMode.
+
+void ViewModelSmokeTests::shellStateGatesForwardToEditorViewModelAndPreserveRoundTrip()
+{
+  BackendContext ctx;
+  const QMetaObject *meta = ctx.metaObject();
+
+  // 8 gate Q_PROPERTY must be registered on the meta-object so QML can resolve
+  // backend.canImport / canSave / isBusy etc. (Plan 51-01).
+  QVERIFY2(meta->indexOfProperty("canImport") >= 0, "canImport gate must be a Q_PROPERTY");
+  QVERIFY2(meta->indexOfProperty("canSlice") >= 0, "canSlice gate must be a Q_PROPERTY");
+  QVERIFY2(meta->indexOfProperty("isSlicing") >= 0, "isSlicing gate must be a Q_PROPERTY");
+  QVERIFY2(meta->indexOfProperty("canExport") >= 0, "canExport gate must be a Q_PROPERTY");
+  QVERIFY2(meta->indexOfProperty("canSave") >= 0, "canSave gate must be a Q_PROPERTY");
+  QVERIFY2(meta->indexOfProperty("canUndo") >= 0, "canUndo gate must be a Q_PROPERTY");
+  QVERIFY2(meta->indexOfProperty("canRedo") >= 0, "canRedo gate must be a Q_PROPERTY");
+  QVERIFY2(meta->indexOfProperty("isBusy") >= 0, "isBusy gate must be a Q_PROPERTY");
+
+  // 4 state-dependent label Q_PROPERTY must also be registered.
+  QVERIFY2(meta->indexOfProperty("exportActionLabel") >= 0, "exportActionLabel must be a Q_PROPERTY");
+  QVERIFY2(meta->indexOfProperty("exportActionHint") >= 0, "exportActionHint must be a Q_PROPERTY");
+  QVERIFY2(meta->indexOfProperty("saveActionLabel") >= 0, "saveActionLabel must be a Q_PROPERTY");
+  QVERIFY2(meta->indexOfProperty("saveActionHint") >= 0, "saveActionHint must be a Q_PROPERTY");
+
+  // On a fresh idle BackendContext the undo/redo stack is empty, so the gate
+  // getters must report false (this is the fix for the "Undo clickable when the
+  // stack is empty" UX bug from CONTEXT).
+  QVERIFY2(!ctx.property("canUndo").toBool(),
+           "canUndo must be false on a fresh BackendContext (empty undo stack)");
+  QVERIFY2(!ctx.property("canRedo").toBool(),
+           "canRedo must be false on a fresh BackendContext (empty undo stack)");
+
+  // canSave forwards to !isSlicing() && !isBusy() — true while idle, so the
+  // project can be mutated. The slicing-disable path is unit-covered by the
+  // canSave() body (Plan 51-01 acceptance); a full isSlicing=true assertion
+  // would require a running slice and is out of scope here.
+  QVERIFY2(ctx.property("canSave").toBool(),
+           "canSave must be true on a fresh idle BackendContext (not slicing)");
+
+  // SHELL-02 round-trip: Prepare(1) -> Preview(2) -> Prepare(1). The page/view
+  // state must return to the original values without a reset, proving the
+  // Prepare <-> Preview navigation preserves state (ARCH-05/06/07).
+  ctx.setCurrentPage(static_cast<int>(BackendContext::TabPosition::tp3DEditor));
+  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tp3DEditor));
+  QCOMPARE(ctx.currentViewMode(), static_cast<int>(BackendContext::ViewMode::View3D));
+
+  ctx.requestSelectTab(static_cast<int>(BackendContext::TabPosition::tpPreview));
+  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tpPreview));
+  QCOMPARE(ctx.currentViewMode(), static_cast<int>(BackendContext::ViewMode::Preview));
+
+  ctx.requestSelectTab(static_cast<int>(BackendContext::TabPosition::tp3DEditor));
+  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tp3DEditor));
+  QCOMPARE(ctx.currentViewMode(), static_cast<int>(BackendContext::ViewMode::View3D));
+
+  // Gate properties stay readable and the round-trip did not mutate the undo
+  // stack (still empty).
+  QVERIFY2(!ctx.property("canUndo").toBool(),
+           "canUndo must remain false after the Prepare -> Preview -> Prepare round-trip");
+  QVERIFY2(!ctx.property("canRedo").toBool(),
+           "canRedo must remain false after the round-trip");
+  QVERIFY2(ctx.property("canSave").toBool(),
+           "canSave must remain true (still idle) after the round-trip");
+
+  // SHELL-02 forwarding: the editor viewmodel stateChanged signal must
+  // propagate to BackendContext::stateChanged (Plan 51-01 task 4). Loading a
+  // model flips modelCount and fires the editor stateChanged; the
+  // BackendContext bulk-refresh signal should fire in response. Requires
+  // libslic3r (a real model load); skip otherwise.
+  if (!hasLibslic3r())
+    QSKIP("stateChanged forwarding assertion requires HAS_LIBSLIC3R (real model load)");
+
+  QSignalSpy spy(&ctx, &BackendContext::stateChanged);
+  QVERIFY(spy.isValid());
+  auto *editor = qobject_cast<EditorViewModel *>(ctx.editorViewModel());
+  QVERIFY(editor);
+  // Driving a real model load flips modelCount and fires editor stateChanged.
+  // Waiting for modelCount >= 1 (not just for stateChanged) ensures the
+  // QtConcurrent import worker thread fully completes before the BackendContext
+  // destructor runs, avoiding a dangling-thread crash at teardown.
+  QVERIFY2(editor->loadFile(kStlPath), "importing a model should start");
+  QTRY_VERIFY_WITH_TIMEOUT(spy.count() >= 1, 10000);
+  QTRY_VERIFY_WITH_TIMEOUT(editor->modelCount() >= 1, 10000);
 }
 
 // ── Phase 04-01: Sidebar Dockable 状态 + 持久化 unit tests ──
