@@ -226,6 +226,81 @@ int BackendContext::currentPage() const
   return currentPage_;
 }
 
+// ── Phase 51: shell action gates (forward to EditorViewModel/PreviewViewModel) ──
+// These gates aggregate upstream-aligned viewmodel state so the shell binds a
+// single property per action (SHELL-03: action states live in C++, not QML-only).
+
+bool BackendContext::isSlicing() const
+{
+  // Aggregate slice state across both viewmodels (editor prepares, preview renders).
+  return (editorViewModel_ && editorViewModel_->isSlicing())
+      || (previewViewModel_ && previewViewModel_->slicing());
+}
+
+bool BackendContext::isBusy() const
+{
+  // Any blocking operation in flight: slicing or mid-load.
+  return isSlicing() || (editorViewModel_ && editorViewModel_->loading());
+}
+
+bool BackendContext::canImport() const
+{
+  // Import available whenever no blocking op is in flight (mirrors upstream File menu).
+  return !isBusy();
+}
+
+bool BackendContext::canSlice() const
+{
+  return editorViewModel_ && editorViewModel_->canRequestSlice() && !isSlicing();
+}
+
+bool BackendContext::canExport() const
+{
+  return editorViewModel_ && editorViewModel_->canExportGCode() && !isSlicing();
+}
+
+bool BackendContext::canSave() const
+{
+  // Mutating the project mid-slice is unsafe (CONTEXT safety decision).
+  return !isSlicing() && !isBusy();
+}
+
+bool BackendContext::canUndo() const
+{
+  // Raw undo-stack availability; the page gate (currentPage === tp3DEditor)
+  // is applied in QML in Plan 51-02.
+  return editorViewModel_ && editorViewModel_->canUndo();
+}
+
+bool BackendContext::canRedo() const
+{
+  return editorViewModel_ && editorViewModel_->canRedo();
+}
+
+QString BackendContext::exportActionLabel() const
+{
+  // Stable label; exportActionHint() carries the blocked reason.
+  return tr("Export G-code");
+}
+
+QString BackendContext::exportActionHint() const
+{
+  // No hint once a slice result exists; otherwise forward the viewmodel reason.
+  if (editorViewModel_ && editorViewModel_->hasSliceResult())
+    return {};
+  return editorViewModel_ ? editorViewModel_->exportActionHint() : QString{};
+}
+
+QString BackendContext::saveActionLabel() const
+{
+  return tr("Save Project");
+}
+
+QString BackendContext::saveActionHint() const
+{
+  return (isSlicing() || isBusy()) ? tr("busy") : QString{};
+}
+
 void BackendContext::clearDeferredConfigExit()
 {
   deferredConfigExitKind_ = DeferredConfigExitKind::None;
