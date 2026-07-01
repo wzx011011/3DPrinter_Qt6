@@ -347,13 +347,14 @@ Item {
                 Layout.alignment: Qt.AlignVCenter
                 spacing: 2
 
-                // Slice 下拉 (复用 main.qml sliceTopMenu 语义)
+                // Slice 下拉 (复用 main.qml sliceTopMenu 语义) — Phase 51 SHELL-03: canSlice gate
                 CxIconButton {
                     cxStyle: CxIconButton.Style.Chrome
                     buttonSize: 30
                     iconSize: 16
                     iconSource: "qrc:/qml/assets/icons/layers.svg"
                     toolTipText: qsTr("切片")
+                    enabled: backend.canSlice
                     onClicked: root.sliceRequested()
                 }
 
