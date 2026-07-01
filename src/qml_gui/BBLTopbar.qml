@@ -528,47 +528,56 @@ Item {
 
         MenuSeparator {}
 
-        // Import 子菜单 — TOPBAR-02 完整覆盖
+        // Import 子菜单 — TOPBAR-02 完整覆盖 — Phase 51 SHELL-03: canImport gate (!isBusy)
         CxMenu {
             title: qsTr("导入")
             CxMenuItem {
+                enabled: backend.canImport
                 text: qsTr("Import 3MF")
                 onTriggered: root.importModelRequested(qsTr("3MF 文件 (*.3mf)"))
             }
             CxMenuItem {
+                enabled: backend.canImport
                 text: qsTr("Import STL")
                 onTriggered: root.importModelRequested(qsTr("STL 文件 (*.stl)"))
             }
             CxMenuItem {
+                enabled: backend.canImport
                 text: qsTr("Import OBJ")
                 onTriggered: root.importModelRequested(qsTr("OBJ 文件 (*.obj)"))
             }
             CxMenuItem {
+                enabled: backend.canImport
                 text: qsTr("Import STEP")
                 onTriggered: root.importModelRequested(qsTr("STEP 文件 (*.step *.stp)"))
             }
             CxMenuItem {
+                enabled: backend.canImport
                 text: qsTr("Import AMF")
                 onTriggered: root.importModelRequested(qsTr("AMF 文件 (*.amf)"))
             }
         }
 
-        // Export 子菜单 — TOPBAR-02 完整覆盖
+        // Export 子菜单 — TOPBAR-02 完整覆盖 — Phase 51 SHELL-03: canExport gate
         CxMenu {
             title: qsTr("导出")
             CxMenuItem {
+                enabled: backend.canExport
                 text: qsTr("Export G-code")
                 onTriggered: root.exportGcodeRequested()
             }
             CxMenuItem {
+                enabled: backend.canExport
                 text: qsTr("Export All Plate G-code")
                 onTriggered: root.exportAllGcodeRequested()
             }
             CxMenuItem {
+                enabled: backend.canExport
                 text: qsTr("Export 3MF")
                 onTriggered: root.exportProjectRequested()
             }
             CxMenuItem {
+                enabled: backend.canExport
                 text: qsTr("Export Model")
                 onTriggered: root.exportModelRequested()
             }
