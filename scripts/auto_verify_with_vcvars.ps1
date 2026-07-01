@@ -184,6 +184,20 @@ if (Test-Path $partPlateExe) {
   exit 1
 }
 
+Write-Host "`n[ViewModel] Running viewmodel smoke tests..." -ForegroundColor Cyan
+$viewModelSmokeExe = './ViewModelSmokeTests.exe'
+if (Test-Path $viewModelSmokeExe) {
+  & $viewModelSmokeExe 2>&1 | ForEach-Object { Write-Host "  $_" }
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ViewModel] ViewModel smoke tests failed" -ForegroundColor Red
+    exit $LASTEXITCODE
+  }
+  Write-Host "[ViewModel] ViewModel smoke tests passed" -ForegroundColor Green
+} else {
+  Write-Host "[ViewModel] ViewModelSmokeTests.exe not found" -ForegroundColor Red
+  exit 1
+}
+
 Write-Host "`n[UI] Running QML UI audit tests..." -ForegroundColor Cyan
 $uiAuditExe = './QmlUiAuditTests.exe'
 if (Test-Path $uiAuditExe) {

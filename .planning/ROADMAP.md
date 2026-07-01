@@ -28,7 +28,7 @@
 - [x] **Phase 50:** Screenshot and Source-Truth Inventory (completed 2026-06-30)
 - [x] **Phase 51:** Shell and Navigation Restoration (completed 2026-07-01)
 - [x] **Phase 52:** Prepare Sidebar and Preset Controls (completed 2026-07-01)
-- [ ] **Phase 53:** Prepare Object, Plate, and Viewport Workflow
+- [x] **Phase 53:** Prepare Object, Plate, and Viewport Workflow (completed 2026-07-01)
 - [ ] **Phase 54:** Preview Layout, Sliders, and Right Panels
 - [ ] **Phase 55:** G-code Preview Semantics and Rendering Stability
 - [ ] **Phase 56:** Parameter Settings Dialogs Restoration
@@ -223,16 +223,16 @@
 
 ## Next Step
 
-Start Phase 50:
+Start Phase 54:
 
 ```text
-$gsd-plan-phase 50
+$gsd-plan-phase 54
 ```
 
 or execute the milestone autonomously:
 
 ```text
-$gsd-autonomous --from 50
+$gsd-autonomous --from 54
 ```
 
 ---

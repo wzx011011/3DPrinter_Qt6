@@ -39,6 +39,8 @@ private slots:
   // Phase 52-03 (PREPSB-01..04): LeftSidebar + FilamentSlot bindings are
   // present and there is no silent dead UI or empty handler.
   void leftSidebarPresetControlsAreWiredAndHonest();
+  // Phase 53: Prepare object, plate, and viewport actions bind to C++ gates.
+  void prepareWorkflowActionsBindCppGates();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -1113,6 +1115,53 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
            "LeftSidebar must have an Object scope toggle");
   QVERIFY2(sidebar.contains(QStringLiteral("requestPlateScope")),
            "LeftSidebar must have a Plate scope toggle");
+}
+
+void QmlUiAuditTests::prepareWorkflowActionsBindCppGates()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
+  const QString objectList = readSource(QStringLiteral("src/qml_gui/panels/ObjectList.qml"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
+  QVERIFY2(!objectList.isEmpty(), "Unable to read ObjectList.qml");
+
+  QVERIFY2(!preparePage.contains(QStringLiteral("plateCount < 10"))
+               && !preparePage.contains(QStringLiteral("plateCount < 36"))
+               && !glToolbars.contains(QStringLiteral("plateCount < 10"))
+               && !glToolbars.contains(QStringLiteral("plateCount < 36")),
+           "Prepare plate add/clone controls must not hard-code the upstream plate limit");
+  QVERIFY2(!preparePage.contains(QStringLiteral("canAddPlate()"))
+               && !glToolbars.contains(QStringLiteral("canAddPlate()")),
+           "QML must bind canAddPlate as a NOTIFY property, not call it as a function");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.canAddPlate"))
+               && glToolbars.contains(QStringLiteral("root.editorVm.canAddPlate")),
+           "Prepare plate controls must bind to EditorViewModel::canAddPlate");
+
+  QVERIFY2(!preparePage.contains(QStringLiteral("canActivateGizmo("))
+               && !glToolbars.contains(QStringLiteral("canActivateGizmo("))
+               && !objectList.contains(QStringLiteral("canActivateGizmo(")),
+           "QML gizmo controls must bind to availableGizmoMask for reactive updates");
+  QVERIFY2(preparePage.contains(QStringLiteral("availableGizmoMask"))
+               && glToolbars.contains(QStringLiteral("availableGizmoMask"))
+               && objectList.contains(QStringLiteral("availableGizmoMask")),
+           "Prepare gizmo controls must bind to EditorViewModel::availableGizmoMask");
+  QVERIFY2(!preparePage.contains(QStringLiteral("deleteSelectedObjects("))
+               && !objectList.contains(QStringLiteral("deleteSelectedObjects("))
+               && !objectList.contains(QStringLiteral("deleteObject(")),
+           "Prepare delete actions must route through EditorViewModel::deleteSelection");
+
+  const QStringList requiredObjectGates = {
+    QStringLiteral("canRenameSelectedObject"),
+    QStringLiteral("canDuplicateSelectedObjects"),
+    QStringLiteral("canDeleteSelection"),
+    QStringLiteral("canSetSelectionPrintable"),
+    QStringLiteral("canTransformSelection")
+  };
+  for (const QString &gate : requiredObjectGates) {
+    QVERIFY2(preparePage.contains(gate) || objectList.contains(gate),
+             qPrintable(QStringLiteral("Prepare object actions must bind to %1").arg(gate)));
+  }
 }
 
 QTEST_MAIN(QmlUiAuditTests)

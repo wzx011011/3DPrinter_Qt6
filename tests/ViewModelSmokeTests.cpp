@@ -1,4 +1,4 @@
-﻿#include <QSignalSpy>
+#include <QSignalSpy>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -209,6 +209,10 @@ private slots:
   void activePlateObjectIndicesFollowCurrentPlateWithoutFallback();
   // v3.2 Phase 25-03: QRhi picking selects source objects through the ViewModel
   void rendererPickingSelectsSourceObjectThroughEditorViewModel();
+  // Phase 53-01: Prepare object/plate/gizmo gates live in C++, not QML.
+  void prepareWorkflowGatesExposeSourceTruthState();
+  void prepareMoveSelectionToPlateUsesSourceSelection();
+  void prepareVisibleObjectActionsMapToSourceObjects();
 
 private:
   bool hasLibslic3r() const;
@@ -2625,6 +2629,155 @@ void ViewModelSmokeTests::rendererPickingSelectsSourceObjectThroughEditorViewMod
   QVERIFY(editor.activePlateObjectIndices().isEmpty());
   QVERIFY(!editor.selectSourceObject(0));
   QCOMPARE(editor.selectedSourceObjectIndex(), -1);
+}
+
+void ViewModelSmokeTests::prepareWorkflowGatesExposeSourceTruthState()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  const QMetaObject *meta = editor.metaObject();
+  QVERIFY2(meta->indexOfProperty("maxPlateCount") >= 0,
+           "Prepare QML must read the upstream plate limit from EditorViewModel");
+  QVERIFY2(meta->indexOfProperty("canRenameSelectedObject") >= 0,
+           "Object-list rename gating must live in EditorViewModel");
+  QVERIFY2(meta->indexOfProperty("canDuplicateSelectedObjects") >= 0,
+           "Object-list duplicate gating must live in EditorViewModel");
+  QVERIFY2(meta->indexOfProperty("canDeleteSelection") >= 0,
+           "Object-list delete gating must live in EditorViewModel");
+  QVERIFY2(meta->indexOfProperty("canSetSelectionPrintable") >= 0,
+           "Object printable gating must live in EditorViewModel");
+  QVERIFY2(meta->indexOfProperty("canTransformSelection") >= 0,
+           "Object transform gating must live in EditorViewModel");
+  QVERIFY2(meta->indexOfProperty("canArrangeObjects") >= 0,
+           "Arrange gating must live in EditorViewModel");
+  QVERIFY2(meta->indexOfProperty("canAddPlate") >= 0,
+           "Plate add gating must be a NOTIFY property for QML");
+  QVERIFY2(meta->indexOfProperty("availableGizmoMask") >= 0,
+           "Gizmo gating must be a NOTIFY property for QML");
+
+  QCOMPARE(editor.maxPlateCount(), OWzx::kMaxPlateCount);
+  QVERIFY(editor.canAddPlate());
+  QVERIFY(!editor.canDeletePlate(0));
+  QVERIFY(!editor.canRenameSelectedObject());
+  QVERIFY(!editor.canDuplicateSelectedObjects());
+  QVERIFY(!editor.canDeleteSelection());
+  QVERIFY(!editor.canSetSelectionPrintable());
+  QVERIFY(!editor.canTransformSelection());
+  QVERIFY(!editor.canArrangeObjects());
+  QCOMPARE(editor.availableGizmoMask(), 0);
+  QVERIFY(!editor.canActivateGizmo(0));
+  QCOMPARE(editor.gizmoStatusText(0), QStringLiteral("Requires one selected object"));
+  QVERIFY(!editor.canActivateGizmo(13));
+  QCOMPARE(editor.gizmoStatusText(13), QStringLiteral("Requires two selected objects"));
+  QVERIFY(!editor.canActivateGizmo(8));
+  QCOMPARE(editor.gizmoStatusText(8), QStringLiteral("Blocked: OpenVDB unavailable"));
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QCOMPARE(editor.objectCount(), 1);
+  QVERIFY(editor.canArrangeObjects());
+  editor.selectObject(0);
+  QVERIFY(editor.canRenameSelectedObject());
+  QVERIFY(editor.canDuplicateSelectedObjects());
+  QVERIFY(editor.canDeleteSelection());
+  QVERIFY(editor.canSetSelectionPrintable());
+  QVERIFY(editor.canTransformSelection());
+  QVERIFY(editor.canActivateGizmo(0));
+  QVERIFY(editor.canActivateGizmo(5));
+  QVERIFY(editor.canActivateGizmo(12));
+  QVERIFY((editor.availableGizmoMask() & (1 << 0)) != 0);
+  QVERIFY((editor.availableGizmoMask() & (1 << 5)) != 0);
+  QVERIFY((editor.availableGizmoMask() & (1 << 12)) != 0);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  editor.clearObjectSelection();
+  editor.selectObject(0);
+  editor.toggleObjectSelection(1);
+  QCOMPARE(editor.selectedObjectCount(), 2);
+  QVERIFY(!editor.canRenameSelectedObject());
+  QVERIFY(editor.canDuplicateSelectedObjects());
+  QVERIFY(editor.canDeleteSelection());
+  QVERIFY(editor.canActivateGizmo(13));
+  QVERIFY((editor.availableGizmoMask() & (1 << 13)) != 0);
+}
+
+void ViewModelSmokeTests::prepareMoveSelectionToPlateUsesSourceSelection()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  const int plate0Object = project.currentPlateObjectIndices().value(0, -1);
+  QVERIFY(plate0Object >= 0);
+  QVERIFY(editor.addPlate());
+  QVERIFY(editor.setCurrentPlateIndex(1));
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  const int plate1Object = project.currentPlateObjectIndices().value(0, -1);
+  QVERIFY(plate1Object >= 0);
+
+  QCOMPARE(project.plateObjectCount(0), 1);
+  QCOMPARE(project.plateObjectCount(1), 1);
+  QCOMPARE(editor.objectCount(), 1);
+  editor.selectObject(0);
+  QCOMPARE(editor.selectedSourceObjectIndex(), plate1Object);
+  QVERIFY(editor.canMoveSelectionToPlate(0));
+  QVERIFY(editor.moveSelectedObjectToPlate(0));
+
+  QCOMPARE(project.plateIndexForObject(plate0Object), 0);
+  QCOMPARE(project.plateIndexForObject(plate1Object), 0);
+  QCOMPARE(project.plateObjectCount(0), 2);
+  QCOMPARE(project.plateObjectCount(1), 0);
+  QVERIFY(!editor.canMoveSelectionToPlate(0));
+
+  QVERIFY(editor.setCurrentPlateIndex(0));
+  editor.clearObjectSelection();
+  editor.selectObject(0);
+  editor.toggleObjectSelection(1);
+  QCOMPARE(editor.selectedObjectCount(), 2);
+  QVERIFY(editor.canMoveSelectionToPlate(1));
+  QVERIFY(editor.moveSelectedObjectToPlate(1));
+  QCOMPARE(project.plateObjectCount(0), 0);
+  QCOMPARE(project.plateObjectCount(1), 2);
+}
+
+void ViewModelSmokeTests::prepareVisibleObjectActionsMapToSourceObjects()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  const int plate0Object = project.currentPlateObjectIndices().value(0, -1);
+  QVERIFY(plate0Object >= 0);
+  const QString plate0InitialName = project.objectNames().value(plate0Object);
+  const int plate0InitialExtruder = project.volumeExtruderId(plate0Object, 0);
+  QVERIFY(editor.addPlate());
+  QVERIFY(editor.setCurrentPlateIndex(1));
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  const int plate1Object = project.currentPlateObjectIndices().value(0, -1);
+  QVERIFY(plate1Object >= 0);
+
+  QCOMPARE(editor.objectCount(), 1);
+  QCOMPARE(editor.selectedObjectIndex(), -1);
+  QVERIFY(editor.renameObject(0, QStringLiteral("Visible plate 1 object")));
+  QCOMPARE(project.objectNames().value(plate0Object), plate0InitialName);
+  QCOMPARE(project.objectNames().value(plate1Object), QStringLiteral("Visible plate 1 object"));
+
+  QVERIFY(editor.setVolumeExtruderId(0, 0, 2));
+  QCOMPARE(project.volumeExtruderId(plate1Object, 0), 2);
+  QCOMPARE(project.volumeExtruderId(plate0Object, 0), plate0InitialExtruder);
+
+  QVERIFY(project.setObjectPosition(plate0Object, 11.0f, 12.0f, 13.0f));
+  QVERIFY(project.setObjectPosition(plate1Object, 21.0f, 22.0f, 23.0f));
+  editor.selectObject(0);
+  QVERIFY(editor.canTransformSelection());
+  editor.centerSelectedObjects();
+  const QVector3D plate0Pos = project.objectPosition(plate0Object);
+  const QVector3D plate1Pos = project.objectPosition(plate1Object);
+  QCOMPARE(plate0Pos, QVector3D(11.0f, 12.0f, 13.0f));
+  QCOMPARE(plate1Pos, QVector3D());
 }
 
 void ViewModelSmokeTests::multiPlate3mfRoundTripPreservesState()

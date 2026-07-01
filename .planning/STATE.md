@@ -3,28 +3,28 @@ gsd_state_version: 1.0
 milestone: v3.6
 milestone_name: Screenshot-Driven OrcaSlicer UI Restoration
 status: ready_to_plan
-last_updated: 2026-07-01T05:14:44.668Z
-last_activity: 2026-07-01 -- Phase 52 execution started
+last_updated: 2026-07-01T07:44:07.550Z
+last_activity: 2026-07-01 -- Phase 53 completed and verified
 progress:
   total_phases: 9
-  completed_phases: 2
-  total_plans: 8
-  completed_plans: 65
-  percent: 22
-stopped_at: Phase 52 complete (3/3) — ready to discuss Phase 53
+  completed_phases: 4
+  total_plans: 11
+  completed_plans: 68
+  percent: 44
+stopped_at: Phase 53 complete (3/3) - ready to discuss Phase 54
 ---
 
 # Project State
 
 **Milestone:** v3.6 - Screenshot-Driven OrcaSlicer UI Restoration
 **Status:** Ready to plan
-**Next step:** Start Phase 50, `Screenshot and Source-Truth Inventory`.
+**Next step:** Start Phase 54, `Preview Layout, Sliders, and Right Panels`.
 
 ## Current Position
 
-Phase: 53
+Phase: 54
 Plan: Not started
-Status: Executing Phase 52
+Status: Ready to plan
 Last activity: 2026-07-01
 
 ## Project Reference
@@ -32,7 +32,7 @@ Last activity: 2026-07-01
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth; screenshot-driven UI milestones also use screenshots as the visual/layout source of truth.
-**Current focus:** Phase 53 — prepare object, plate, and viewport workflow
+**Current focus:** Phase 54 - preview layout, sliders, and right panels
 
 ## Superseded Milestone Status
 
@@ -61,10 +61,10 @@ Run build/OWzxSlicer.exe and complete .planning/phases/43-end-to-end-verificatio
 
 | Phase | Name | Status |
 |---|---|---|
-| 50 | Screenshot and Source-Truth Inventory | Pending |
-| 51 | Shell and Navigation Restoration | Pending |
-| 52 | Prepare Sidebar and Preset Controls | Pending |
-| 53 | Prepare Object, Plate, and Viewport Workflow | Pending |
+| 50 | Screenshot and Source-Truth Inventory | Complete |
+| 51 | Shell and Navigation Restoration | Complete |
+| 52 | Prepare Sidebar and Preset Controls | Complete |
+| 53 | Prepare Object, Plate, and Viewport Workflow | Complete |
 | 54 | Preview Layout, Sliders, and Right Panels | Pending |
 | 55 | G-code Preview Semantics and Rendering Stability | Pending |
 | 56 | Parameter Settings Dialogs Restoration | Pending |
@@ -100,14 +100,14 @@ If an existing Qt page is materially off-design and expensive to repair, replace
 
 ## Handoff
 
-Start with Phase 50:
+Start with Phase 54:
 
 ```text
-$gsd-plan-phase 50
+$gsd-plan-phase 54
 ```
 
 or run the milestone autonomously:
 
 ```text
-$gsd-autonomous --from 50
+$gsd-autonomous --from 54
 ```

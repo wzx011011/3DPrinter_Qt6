@@ -1,4 +1,4 @@
-﻿import QtQuick
+import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
@@ -59,6 +59,13 @@ Item {
         viewport3d.requestThumbnailCapture(root.editorVm ? root.editorVm.currentPlateIndex : 0, 128)
     }
 
+    function setGizmoIfAvailable(mode) {
+        if (!root.editorVm || ((root.editorVm.availableGizmoMask & (1 << mode)) === 0))
+            return false
+        viewport3d.gizmoMode = mode
+        return true
+    }
+
     // Keyboard shortcuts matching upstream CrealityPrint Plater
     Keys.onPressed: (event) => {
         if (!root.editorVm)
@@ -67,17 +74,14 @@ Item {
         var mod = event.modifiers
         switch (key) {
         case Qt.Key_W:
-            viewport3d.gizmoMode = GLViewport.GizmoMove
-            event.accepted = true
+            event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoMove)
             break
         case Qt.Key_E:
-            viewport3d.gizmoMode = GLViewport.GizmoRotate
-            event.accepted = true
+            event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoRotate)
             break
         case Qt.Key_R:
             if (!(mod & Qt.ControlModifier)) {
-                viewport3d.gizmoMode = GLViewport.GizmoScale
-                event.accepted = true
+                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoScale)
             }
             break
         case Qt.Key_Z:
@@ -92,7 +96,7 @@ Item {
             break
         case Qt.Key_Delete:
         case Qt.Key_Backspace:
-            root.editorVm.deleteSelectedObjects()
+            root.editorVm.deleteSelection()
             event.accepted = true
             break
         case Qt.Key_Escape:
@@ -128,8 +132,7 @@ Item {
                 root.editorVm.cutSelectedObjects()
                 event.accepted = true
             } else if ((mod & Qt.ControlModifier) && (mod & Qt.ShiftModifier)) {
-                viewport3d.gizmoMode = GLViewport.GizmoCut
-                event.accepted = true
+                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoCut)
             }
             break
         case Qt.Key_F:
@@ -138,18 +141,15 @@ Item {
             break
         case Qt.Key_U:
             if (mod & Qt.ControlModifier) {
-                viewport3d.gizmoMode = GLViewport.GizmoMeasure
-                event.accepted = true
+                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoMeasure)
             }
             break
         case Qt.Key_G:
-            viewport3d.gizmoMode = GLViewport.GizmoFlatten
-            event.accepted = true
+            event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoFlatten)
             break
         case Qt.Key_P:
             if (!(mod & Qt.ControlModifier)) {
-                viewport3d.gizmoMode = GLViewport.GizmoSupportPaint
-                event.accepted = true
+                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoSupportPaint)
             }
             break
         }
@@ -216,11 +216,13 @@ Item {
 
         CxMenuItem {
             text: qsTr("复制选中")
+            enabled: root.editorVm && root.editorVm.canDuplicateSelectedObjects
             onTriggered: if (root.editorVm) root.editorVm.duplicateSelectedObjects()
         }
         CxMenuItem {
             text: qsTr("删除选中")
-            onTriggered: if (root.editorVm) root.editorVm.deleteSelectedObjects()
+            enabled: root.editorVm && root.editorVm.canDeleteSelection
+            onTriggered: if (root.editorVm) root.editorVm.deleteSelection()
         }
         MenuSeparator { }
         CxMenuItem {
@@ -235,7 +237,7 @@ Item {
         // 对齐上游 create_extra_object_menu — Rename
         CxMenuItem {
             text: qsTr("重命名")
-            enabled: root.editorVm && root.editorVm.selectedObjectCount === 1
+            enabled: root.editorVm && root.editorVm.canRenameSelectedObject
             onTriggered: {
                 renameDialog.currentObjIndex = root.editorVm.selectedObjectIndex
                 renameDialog.currentName = root.editorVm.objectName(root.editorVm.selectedObjectIndex)
@@ -245,45 +247,52 @@ Item {
         // 对齐上游 create_extra_object_menu — Center
         CxMenuItem {
             text: qsTr("居中到热床")
+            enabled: root.editorVm && root.editorVm.canTransformSelection
             onTriggered: if (root.editorVm) root.editorVm.centerSelectedObjects()
         }
         // 对齐上游 create_extra_object_menu — Fill bed with copies
         CxMenuItem {
             text: qsTr("铺满热床")
+            enabled: root.editorVm && root.editorVm.canRenameSelectedObject
             onTriggered: if (root.editorVm) root.editorVm.fillBedWithCopies()
         }
         // 对齐上游 create_extra_object_menu — Export as STL
         CxMenuItem {
             text: qsTr("导出为 STL")
-            enabled: root.editorVm && root.editorVm.selectedObjectCount === 1
+            enabled: root.editorVm && root.editorVm.canRenameSelectedObject
             onTriggered: if (root.editorVm) root.editorVm.exportSelectedAsStl()
         }
         MenuSeparator { }
         CxMenuItem {
             text: qsTr("移动模式")
-            onTriggered: viewport3d.gizmoMode = GLViewport.GizmoMove
+            enabled: root.editorVm && ((root.editorVm.availableGizmoMask & (1 << GLViewport.GizmoMove)) !== 0)
+            onTriggered: root.setGizmoIfAvailable(GLViewport.GizmoMove)
         }
         CxMenuItem {
             text: qsTr("旋转模式")
-            onTriggered: viewport3d.gizmoMode = GLViewport.GizmoRotate
+            enabled: root.editorVm && ((root.editorVm.availableGizmoMask & (1 << GLViewport.GizmoRotate)) !== 0)
+            onTriggered: root.setGizmoIfAvailable(GLViewport.GizmoRotate)
         }
         CxMenuItem {
             text: qsTr("缩放模式")
-            onTriggered: viewport3d.gizmoMode = GLViewport.GizmoScale
+            enabled: root.editorVm && ((root.editorVm.availableGizmoMask & (1 << GLViewport.GizmoScale)) !== 0)
+            onTriggered: root.setGizmoIfAvailable(GLViewport.GizmoScale)
         }
         MenuSeparator { }
         CxMenuItem {
             text: qsTr("自动朝向")
+            enabled: root.editorVm && root.editorVm.canTransformSelection
             onTriggered: if (root.editorVm) root.editorVm.autoOrientSelected()
         }
         CxMenuItem {
             text: qsTr("拆分对象")
-            enabled: root.editorVm && root.editorVm.selectedObjectCount === 1
+            enabled: root.editorVm && root.editorVm.canRenameSelectedObject
             onTriggered: if (root.editorVm) root.editorVm.splitSelectedObject()
         }
         MenuSeparator { }
         CxMenu {
             title: qsTr("镜像")
+            enabled: root.editorVm && root.editorVm.canTransformSelection
             CxMenuItem {
                 text: qsTr("沿 X 轴镜像")
                 onTriggered: if (root.editorVm) root.editorVm.mirrorSelectedObjects(0)
@@ -303,6 +312,7 @@ Item {
             text: root.editorVm && root.editorVm.selectedObjectCount > 0
                    && root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex)
                    ? qsTr("设为不参与打印") : qsTr("设为可打印")
+            enabled: root.editorVm && root.editorVm.canSetSelectionPrintable
             onTriggered: {
                 if (root.editorVm) {
                     if (root.editorVm.selectedObjectCount > 1)
@@ -314,6 +324,7 @@ Item {
         }
         CxMenuItem {
             text: qsTr("显示/隐藏")
+            enabled: root.editorVm && root.editorVm.canTransformSelection
             onTriggered: if (root.editorVm) root.editorVm.toggleSelectedObjectsVisibility()
         }
         CxMenuItem {
@@ -324,23 +335,26 @@ Item {
         // 对齐上游 create_extra_object_menu — Fix Model
         CxMenuItem {
             text: qsTr("修复模型")
+            enabled: root.editorVm && root.editorVm.canTransformSelection
             onTriggered: if (root.editorVm) root.editorVm.fixMeshSelected()
         }
         // 对齐上游 create_extra_object_menu — Simplify
         CxMenuItem {
             text: qsTr("简化模型")
+            enabled: root.editorVm && ((root.editorVm.availableGizmoMask & (1 << GLViewport.GizmoSimplify)) !== 0)
             onTriggered: if (root.editorVm) root.editorVm.simplifyMeshSelected()
         }
         // 对齐上游 create_extra_object_menu — Mesh Boolean
         CxMenuItem {
             text: qsTr("网格布尔运算")
+            enabled: root.editorVm && ((root.editorVm.availableGizmoMask & (1 << GLViewport.GizmoMeshBoolean)) !== 0)
             onTriggered: if (root.editorVm) root.editorVm.meshBooleanSelected()
         }
         MenuSeparator { }
         // 对齐上游 append_menu_item_per_object_settings
         CxMenuItem {
             text: qsTr("编辑参数表")
-            enabled: root.editorVm && root.editorVm.selectedObjectCount === 1
+            enabled: root.editorVm && root.editorVm.canOpenSelectionSettings
             onTriggered: if (root.editorVm) root.editorVm.requestSelectionSettings()
         }
         CxMenuItem {
@@ -351,16 +365,19 @@ Item {
         // 对齐上游 append_menu_item_reload_from_disk
         CxMenuItem {
             text: qsTr("从磁盘重新加载")
+            enabled: root.editorVm && root.editorVm.canTransformSelection
             onTriggered: if (root.editorVm) root.editorVm.reloadSelectedFromDisk()
         }
         // 对齐上游 append_menu_item_replace_with_stl
         CxMenuItem {
             text: qsTr("替换为 STL...")
+            enabled: root.editorVm && root.editorVm.hasSelectedVolume
             onTriggered: replaceWithStlDlg.open()
         }
         // 对齐上游 append_menu_item_change_filament — Change Filament submenu
         CxMenu {
             title: qsTr("更换耗材")
+            enabled: root.editorVm && root.editorVm.canRenameSelectedObject
             CxMenuItem {
                 text: qsTr("默认")
                 onTriggered: if (root.editorVm) root.editorVm.setVolumeExtruderId(
@@ -384,37 +401,45 @@ Item {
         // 对齐上游 append_menu_item_merge_to_multipart_object
         CxMenuItem {
             text: qsTr("组合")
+            enabled: root.editorVm && root.editorVm.canDuplicateSelectedObjects
             onTriggered: if (root.editorVm) root.editorVm.assembleSelectedObjects()
         }
         CxMenuItem {
             text: qsTr("克隆")
+            enabled: root.editorVm && root.editorVm.canDuplicateSelectedObjects
             onTriggered: if (root.editorVm) root.editorVm.duplicateSelectedObjects()
         }
         MenuSeparator { }
         CxMenuItem {
             text: qsTr("居中到热床")
+            enabled: root.editorVm && root.editorVm.canTransformSelection
             onTriggered: if (root.editorVm) root.editorVm.centerSelectedObjects()
         }
         CxMenuItem {
             text: qsTr("修复模型")
+            enabled: root.editorVm && root.editorVm.canTransformSelection
             onTriggered: if (root.editorVm) root.editorVm.fixMeshSelected()
         }
         CxMenuItem {
             text: qsTr("删除")
-            onTriggered: if (root.editorVm) root.editorVm.deleteSelectedObjects()
+            enabled: root.editorVm && root.editorVm.canDeleteSelection
+            onTriggered: if (root.editorVm) root.editorVm.deleteSelection()
         }
         CxMenuItem {
             text: qsTr("复制")
+            enabled: root.editorVm && root.editorVm.canDuplicateSelectedObjects
             onTriggered: if (root.editorVm) root.editorVm.copySelectedObjects()
         }
         CxMenuItem {
             text: qsTr("粘贴")
+            enabled: root.editorVm && root.editorVm.hasClipboardContent
             onTriggered: if (root.editorVm) root.editorVm.pasteObjects()
         }
         MenuSeparator { }
         // 对齐上游 append_menu_item_set_printable
         CxMenuItem {
             text: qsTr("设为可打印")
+            enabled: root.editorVm && root.editorVm.canSetSelectionPrintable
             onTriggered: if (root.editorVm) root.editorVm.setSelectedObjectsPrintable(true)
         }
         CxMenuItem {
@@ -425,6 +450,7 @@ Item {
         // 对齐上游 append_menu_item_change_filament — Change Filament submenu
         CxMenu {
             title: qsTr("更换耗材")
+            enabled: root.editorVm && root.editorVm.canDuplicateSelectedObjects
             CxMenuItem {
                 text: qsTr("默认")
                 onTriggered: if (root.editorVm) root.editorVm.setVolumeExtruderId(
@@ -442,6 +468,7 @@ Item {
         MenuSeparator { }
         CxMenuItem {
             text: qsTr("导出为 STL")
+            enabled: root.editorVm && root.editorVm.canRenameSelectedObject
             onTriggered: if (root.editorVm) root.editorVm.exportSelectedAsStl()
         }
     }
@@ -588,7 +615,7 @@ Item {
         CxMenuItem {
             text: qsTr("克隆平板")
             enabled: root.contextPlateIndex >= 0 && root.editorVm
-                     && root.editorVm.plateCount < 36
+                     && root.editorVm.canAddPlate
             onTriggered: if (root.editorVm) {
                 if (!root.editorVm.clonePlate(root.contextPlateIndex))
                     backend.postNotification(qsTr("克隆平板失败：可能已达到最大平板数（36）"), qsTr("克隆失败"), 1)
@@ -3081,7 +3108,7 @@ Item {
 
                 // Add plate button
                 Rectangle {
-                    visible: root.editorVm && root.editorVm.plateCount < 10
+                    visible: root.editorVm && root.editorVm.canAddPlate
                     width: 30
                     height: 30
                     radius: 6

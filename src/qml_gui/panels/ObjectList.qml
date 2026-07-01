@@ -115,7 +115,7 @@ Item {
                 }
             }
             Rectangle {
-                visible: !!root.editorVm && root.editorVm.hasSelection
+                visible: !!root.editorVm && root.editorVm.canDeleteSelection
                 width: 38
                 height: 22
                 radius: 7
@@ -145,7 +145,7 @@ Item {
                 }
             }
             Rectangle {
-                visible: !!root.editorVm && !root.editorVm.hasSelectedVolume && root.editorVm.selectedObjectCount > 0
+                visible: !!root.editorVm && root.editorVm.canSetSelectionPrintable
                 width: 38
                 height: 22
                 radius: 7
@@ -160,7 +160,7 @@ Item {
                 }
             }
             Rectangle {
-                visible: !!root.editorVm && !root.editorVm.hasSelectedVolume && root.editorVm.selectedObjectCount > 0
+                visible: !!root.editorVm && root.editorVm.canSetSelectionPrintable
                 width: 38
                 height: 22
                 radius: 7
@@ -323,7 +323,7 @@ Item {
 
                 CxMenuItem {
                     text: qsTr("重命名")
-                    enabled: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount === 1
+                    enabled: !!root.editorVm && row.isSelected && root.editorVm.canRenameSelectedObject
                     onTriggered: {
                         if (root.editorVm) {
                             row.renaming = true
@@ -337,7 +337,7 @@ Item {
                 // ── Add Volume 子菜单 (对齐上游 GUI_Factories::append_menu_items_add_volume) ──
                 CxMenu {
                     title: qsTr("添加部件")
-                    enabled: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount === 1 && !root.editorVm.hasSelectedVolume
+                    enabled: !!root.editorVm && row.isSelected && root.editorVm.canRenameSelectedObject
 
                     CxMenuItem {
                         text: qsTr("添加部件")
@@ -487,19 +487,19 @@ Item {
                 // 复制/粘贴/克隆/剪切（对齐上游 create_extra_object_menu）
                 CxMenuItem {
                     text: qsTr("复制")
-                    enabled: !!root.editorVm && root.editorVm.hasSelection && !root.editorVm.hasSelectedVolume
+                    enabled: !!root.editorVm && root.editorVm.canDuplicateSelectedObjects
                     onTriggered: { if (root.editorVm) root.editorVm.copySelectedObjects() }
                 }
 
                 CxMenuItem {
                     text: qsTr("剪切")
-                    enabled: !!root.editorVm && root.editorVm.hasSelection && !root.editorVm.hasSelectedVolume
+                    enabled: !!root.editorVm && root.editorVm.canDuplicateSelectedObjects
                     onTriggered: { if (root.editorVm) root.editorVm.cutSelectedObjects() }
                 }
 
                 CxMenuItem {
                     text: qsTr("克隆")
-                    enabled: !!root.editorVm && row.isSelected && !root.editorVm.hasSelectedVolume
+                    enabled: !!root.editorVm && row.isSelected && root.editorVm.canDuplicateSelectedObjects
                     onTriggered: { if (root.editorVm) root.editorVm.duplicateSelectedObjects() }
                 }
 
@@ -508,7 +508,7 @@ Item {
                 // 居中/镜像（对齐上游 create_extra_object_menu center/mirror）
                 CxMenuItem {
                     text: qsTr("居中到热床")
-                    enabled: !!root.editorVm && root.editorVm.hasSelection
+                    enabled: !!root.editorVm && root.editorVm.canTransformSelection
                     onTriggered: { if (root.editorVm) root.editorVm.centerSelectedObjects() }
                 }
 
@@ -517,21 +517,21 @@ Item {
                 // Split (对齐上游 GUI_ObjectList split_to_objects/split_to_parts)
                 CxMenuItem {
                     text: qsTr("拆分为对象")
-                    enabled: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount === 1 && !root.editorVm.hasSelectedVolume
+                    enabled: !!root.editorVm && row.isSelected && root.editorVm.canRenameSelectedObject
                     onTriggered: { if (root.editorVm) root.editorVm.splitSelectedObject() }
                 }
 
                 // Fix Mesh (对齐上游 menu_item_fix_mesh)
                 CxMenuItem {
                     text: qsTr("修复网格")
-                    enabled: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount === 1
+                    enabled: !!root.editorVm && row.isSelected && root.editorVm.canRenameSelectedObject
                     onTriggered: { if (root.editorVm) root.editorVm.fixMeshForObject(row.index) }
                 }
 
                 // Export as STL (对齐上游 export_stl / export_mesh)
                 CxMenuItem {
                     text: qsTr("导出为 STL...")
-                    enabled: !!root.editorVm && row.isSelected && root.editorVm.selectedObjectCount === 1
+                    enabled: !!root.editorVm && row.isSelected && root.editorVm.canRenameSelectedObject
                     onTriggered: { if (root.editorVm) root.editorVm.exportObjectAsStl(row.index) }
                 }
 
@@ -541,7 +541,7 @@ Item {
                           ? qsTr("拆分为独立对象")
                           : qsTr("设为独立对象")
                     visible: !!root.editorVm && row.isSelected
-                             && root.editorVm.selectedObjectCount === 1
+                             && root.editorVm.canRenameSelectedObject
                              && !root.editorVm.hasSelectedVolume
                              && root.editorVm.objectInstanceCount(row.index) > 1
                     onTriggered: { if (root.editorVm) root.editorVm.instanceToObject(0) }
@@ -553,14 +553,13 @@ Item {
                     text: row.isSelected && root.editorVm && root.editorVm.selectedObjectCount > 1
                           ? qsTr("删除已选对象")
                           : qsTr("删除对象")
-                    enabled: !!root.editorVm
+                    enabled: !!root.editorVm && root.editorVm.canDeleteSelection
                     onTriggered: {
                         if (!root.editorVm)
                             return
-                        if (row.isSelected && root.editorVm.selectedObjectCount > 1)
-                            root.editorVm.deleteSelectedObjects()
-                        else
-                            root.editorVm.deleteObject(row.index)
+                        if (!row.isSelected)
+                            root.editorVm.selectObject(row.index)
+                        root.editorVm.deleteSelection()
                     }
                 }
             }
@@ -821,10 +820,9 @@ Item {
                         onClicked: {
                             if (!root.editorVm)
                                 return
-                            if (row.isSelected && root.editorVm.selectedObjectCount > 1)
-                                root.editorVm.deleteSelectedObjects()
-                            else
-                                root.editorVm.deleteObject(row.index)
+                            if (!row.isSelected)
+                                root.editorVm.selectObject(row.index)
+                            root.editorVm.deleteSelection()
                         }
                     }
                 }
@@ -882,6 +880,7 @@ Item {
                             // ── 克隆 (对齐上游 append_menu_item_clone) ──
                             CxMenuItem {
                                 text: qsTr("克隆")
+                                enabled: !!root.editorVm && root.editorVm.canDuplicateSelectedObjects
                                 onTriggered: { if (root.editorVm) root.editorVm.duplicateSelectedObjects() }
                             }
 
@@ -892,12 +891,14 @@ Item {
                                 text: root.editorVm && root.editorVm.selectedVolumeCount > 1
                                       ? qsTr("删除已选部件")
                                       : qsTr("删除部件")
+                                enabled: !!root.editorVm && root.editorVm.canDeleteSelection
                                 onTriggered: { if (root.editorVm) root.editorVm.deleteSelection() }
                             }
 
                             // ── 复制/粘贴 (对齐上游 append_menu_item_copy / paste) ──
                             CxMenuItem {
                                 text: qsTr("复制")
+                                enabled: !!root.editorVm && root.editorVm.canDuplicateSelectedObjects
                                 onTriggered: { if (root.editorVm) root.editorVm.copySelectedObjects() }
                             }
                             CxMenuItem {
@@ -911,24 +912,28 @@ Item {
                             // ── 修复网格 (对齐上游 append_menu_item_fix_through_netfabb) ──
                             CxMenuItem {
                                 text: qsTr("修复网格")
+                                enabled: !!root.editorVm && root.editorVm.canTransformSelection
                                 onTriggered: { if (root.editorVm) root.editorVm.fixMeshSelected() }
                             }
 
                             // ── 简化模型 (对齐上游 append_menu_item_simplify) ──
                             CxMenuItem {
                                 text: qsTr("简化模型")
+                                enabled: !!root.editorVm && ((root.editorVm.availableGizmoMask & (1 << 9)) !== 0)
                                 onTriggered: { if (root.editorVm) root.editorVm.simplifyMeshSelected() }
                             }
 
                             // ── 居中 (对齐上游 append_menu_item_center) ──
                             CxMenuItem {
                                 text: qsTr("居中到热床")
+                                enabled: !!root.editorVm && root.editorVm.canTransformSelection
                                 onTriggered: { if (root.editorVm) root.editorVm.centerSelectedObjects() }
                             }
 
                             // ── 镜像子菜单 (对齐上游 append_menu_items_mirror) ──
                             CxMenu {
                                 title: qsTr("镜像")
+                                enabled: !!root.editorVm && root.editorVm.canTransformSelection
 
                                 CxMenuItem {
                                     text: qsTr("沿 X 轴")

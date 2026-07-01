@@ -1,9 +1,10 @@
-﻿#include "EditorViewModel.h"
+#include "EditorViewModel.h"
 
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceService.h"
 #include "core/services/UndoRedoManager.h"
 #include "core/services/UndoCommands.h"
+#include "core/model/PartPlateList.h"
 #include "core/viewmodels/ConfigViewModel.h"
 #include <QFileInfo>
 #include <QUrl>
@@ -100,7 +101,7 @@ static int primarySelectedSourceIndex(const EditorViewModel *vm)
   if (!vm)
     return -1;
   if (vm->selectedObjectCount() == 1)
-    return vm->selectedObjectIndex();
+    return vm->selectedSourceObjectIndex();
   return -1; // Multi-select: no numeric editing
 }
 
@@ -683,7 +684,7 @@ bool EditorViewModel::simplifySelected()
 {
   if (!projectService_)
     return false;
-  const int idx = selectedObjectIndex();
+  const int idx = selectedSourceObjectIndex();
   if (idx < 0)
     return false;
 
@@ -710,7 +711,7 @@ int EditorViewModel::selectedObjectTriangleCount() const
 {
   if (!projectService_)
     return 0;
-  const int idx = selectedObjectIndex();
+  const int idx = selectedSourceObjectIndex();
   if (idx < 0)
     return 0;
 #ifdef HAS_LIBSLIC3R
@@ -724,11 +725,11 @@ int EditorViewModel::selectedObjectTriangleCount() const
 
 QString EditorViewModel::selectedObjectInfoText() const
 {
-  const int idx = selectedObjectIndex();
+  const int idx = selectedSourceObjectIndex();
   if (idx < 0 || !projectService_)
     return {};
 
-  const QString name = objectName(idx);
+  const QString name = projectService_->objectNames().value(idx);
   const QVector4D dims = m_measureDimensions;
 
   if (dims.x() <= 0)
@@ -765,7 +766,7 @@ int EditorViewModel::selectedObjectTriangles() const
 int EditorViewModel::selectedObjectOpenEdges() const
 {
 #ifdef HAS_LIBSLIC3R
-  const int idx = selectedObjectIndex();
+  const int idx = selectedSourceObjectIndex();
   if (idx < 0 || !projectService_)
     return 0;
   return projectService_->objectOpenEdges(idx);
@@ -777,7 +778,7 @@ int EditorViewModel::selectedObjectOpenEdges() const
 int EditorViewModel::selectedObjectRepairedErrors() const
 {
 #ifdef HAS_LIBSLIC3R
-  const int idx = selectedObjectIndex();
+  const int idx = selectedSourceObjectIndex();
   if (idx < 0 || !projectService_)
     return 0;
   return projectService_->objectRepairedErrors(idx);
@@ -820,7 +821,7 @@ bool EditorViewModel::drillSelected()
 {
   if (!projectService_)
     return false;
-  const int idx = selectedObjectIndex();
+  const int idx = selectedSourceObjectIndex();
   if (idx < 0)
     return false;
 
@@ -856,7 +857,7 @@ bool EditorViewModel::embossSelected()
 {
   if (!projectService_)
     return false;
-  const int idx = selectedObjectIndex();
+  const int idx = selectedSourceObjectIndex();
   if (idx < 0 || m_embossText.isEmpty())
     return false;
 
@@ -1036,7 +1037,7 @@ bool EditorViewModel::addTextObject()
 {
   if (!projectService_)
     return false;
-  const int idx = selectedObjectIndex();
+  const int idx = selectedSourceObjectIndex();
   if (idx < 0 || m_textContent.isEmpty())
     return false;
 
@@ -1070,7 +1071,7 @@ bool EditorViewModel::importSVG()
 {
   if (!projectService_)
     return false;
-  const int idx = selectedObjectIndex();
+  const int idx = selectedSourceObjectIndex();
   if (idx < 0 || m_svgFilePath.isEmpty())
     return false;
 
@@ -1602,6 +1603,7 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
 QString EditorViewModel::projectName() const { return projectService_ ? projectService_->projectName() : QString(); }
 int EditorViewModel::modelCount() const { return projectService_ ? projectService_->modelCount() : 0; }
 int EditorViewModel::plateCount() const { return projectService_ ? projectService_->plateCount() : 0; }
+int EditorViewModel::maxPlateCount() const { return OWzx::kMaxPlateCount; }
 int EditorViewModel::currentPlateIndex() const { return projectService_ ? projectService_->currentPlateIndex() : 0; }
 QVariantList EditorViewModel::activePlateObjectIndices() const
 {
@@ -1650,6 +1652,47 @@ bool EditorViewModel::canOpenSelectionSettings() const
     return m_selectedVolumeIndices.size() == 1;
 
   return m_selectedSourceIndices.size() == 1;
+}
+
+bool EditorViewModel::canRenameSelectedObject() const
+{
+  return projectService_ && !hasSelectedVolume() && m_selectedSourceIndices.size() == 1;
+}
+
+bool EditorViewModel::canDuplicateSelectedObjects() const
+{
+  return projectService_ && !hasSelectedVolume() && !m_selectedSourceIndices.isEmpty();
+}
+
+bool EditorViewModel::canDeleteSelection() const
+{
+  return projectService_ && hasSelection();
+}
+
+bool EditorViewModel::canSetSelectionPrintable() const
+{
+  return projectService_ && !hasSelectedVolume() && !m_selectedSourceIndices.isEmpty();
+}
+
+bool EditorViewModel::canTransformSelection() const
+{
+  return projectService_ && !hasSelectedVolume() && !m_selectedSourceIndices.isEmpty();
+}
+
+bool EditorViewModel::canArrangeObjects() const
+{
+  return projectService_ && projectService_->modelCount() > 0;
+}
+
+int EditorViewModel::availableGizmoMask() const
+{
+  int mask = 0;
+  for (int mode = 0; mode <= 18; ++mode)
+  {
+    if (canActivateGizmo(mode))
+      mask |= (1 << mode);
+  }
+  return mask;
 }
 
 QString EditorViewModel::settingsTargetType() const
@@ -2028,7 +2071,7 @@ bool EditorViewModel::addVolumeToObject(int volumeType)
     return false;
   }
 
-  const int sourceIndex = selectedObjectIndex();
+  const int sourceIndex = selectedSourceObjectIndex();
   if (sourceIndex < 0)
     return false;
 
@@ -2089,7 +2132,8 @@ int EditorViewModel::volumeExtruderId(int objectIndex, int volumeIndex) const
 {
   if (!projectService_)
     return -1;
-  return projectService_->volumeExtruderId(objectIndex, volumeIndex);
+  const int sourceIndex = mapFilteredToSourceIndex(objectIndex);
+  return sourceIndex >= 0 ? projectService_->volumeExtruderId(sourceIndex, volumeIndex) : -1;
 }
 
 bool EditorViewModel::setVolumeExtruderId(int objectIndex, int volumeIndex, int extruderId)
@@ -2101,7 +2145,15 @@ bool EditorViewModel::setVolumeExtruderId(int objectIndex, int volumeIndex, int 
     return false;
   }
 
-  if (!projectService_->setVolumeExtruderId(objectIndex, volumeIndex, extruderId))
+  const int sourceIndex = mapFilteredToSourceIndex(objectIndex);
+  if (sourceIndex < 0)
+  {
+    statusText_ = QStringLiteral("无法设置耗材：对象索引无效");
+    emit stateChanged();
+    return false;
+  }
+
+  if (!projectService_->setVolumeExtruderId(sourceIndex, volumeIndex, extruderId))
   {
     statusText_ = projectService_->lastError();
     emit stateChanged();
@@ -2118,7 +2170,10 @@ bool EditorViewModel::addVolumeFromFile(int objectIndex, const QString &filePath
 {
   if (!projectService_)
     return false;
-  bool ok = projectService_->addVolumeFromFile(objectIndex, filePath, volumeType);
+  const int sourceIndex = mapFilteredToSourceIndex(objectIndex);
+  if (sourceIndex < 0)
+    return false;
+  bool ok = projectService_->addVolumeFromFile(sourceIndex, filePath, volumeType);
   if (ok)
   {
     rebuildObjectEntriesFromService();
@@ -2131,7 +2186,10 @@ bool EditorViewModel::addPrimitive(int objectIndex, int primitiveType)
 {
   if (!projectService_)
     return false;
-  bool ok = projectService_->addPrimitive(objectIndex, primitiveType);
+  const int sourceIndex = mapFilteredToSourceIndex(objectIndex);
+  if (sourceIndex < 0)
+    return false;
+  bool ok = projectService_->addPrimitive(sourceIndex, primitiveType);
   if (ok)
   {
     rebuildObjectEntriesFromService();
@@ -2144,7 +2202,10 @@ bool EditorViewModel::addTextVolume(int objectIndex, const QString &text)
 {
   if (!projectService_)
     return false;
-  bool ok = projectService_->addTextVolume(objectIndex, text);
+  const int sourceIndex = mapFilteredToSourceIndex(objectIndex);
+  if (sourceIndex < 0)
+    return false;
+  bool ok = projectService_->addTextVolume(sourceIndex, text);
   if (ok)
   {
     rebuildObjectEntriesFromService();
@@ -2157,7 +2218,10 @@ bool EditorViewModel::addSvgVolume(int objectIndex, const QString &svgFilePath)
 {
   if (!projectService_)
     return false;
-  bool ok = projectService_->addSvgVolume(objectIndex, svgFilePath);
+  const int sourceIndex = mapFilteredToSourceIndex(objectIndex);
+  if (sourceIndex < 0)
+    return false;
+  bool ok = projectService_->addSvgVolume(sourceIndex, svgFilePath);
   if (ok)
   {
     rebuildObjectEntriesFromService();
@@ -2245,7 +2309,7 @@ void EditorViewModel::deleteSelectedObjects()
   QList<int> sourceIndices = m_selectedSourceIndices.values();
   if (sourceIndices.isEmpty())
   {
-    const int sourceIndex = mapFilteredToSourceIndex(selectedObjectIndex());
+    const int sourceIndex = selectedSourceObjectIndex();
     if (sourceIndex >= 0)
       sourceIndices.append(sourceIndex);
   }
@@ -2415,7 +2479,7 @@ void EditorViewModel::selectAllVisibleObjects()
 
 void EditorViewModel::setSelectedObjectsPrintable(bool printable)
 {
-  if (m_selectedSourceIndices.isEmpty())
+  if (!canSetSelectionPrintable())
     return;
 
   QSet<int> affectedPlates;
@@ -2463,7 +2527,7 @@ void EditorViewModel::deleteSelection()
 
 void EditorViewModel::duplicateSelectedObjects()
 {
-  if (!projectService_)
+  if (!canDuplicateSelectedObjects())
     return;
 
   // 收集所有选中的源索引（按从大到小排列，避免插入导致索引偏移问题）
@@ -2521,6 +2585,9 @@ bool EditorViewModel::hasClipboardContent() const
 
 void EditorViewModel::copySelectedObjects()
 {
+  if (!canDuplicateSelectedObjects())
+    return;
+
   // 复制选中对象元数据到内部剪贴板（对齐上游 Selection::copy_to_clipboard）
   m_clipboard.clear();
   QList<int> sorted = m_selectedSourceIndices.values();
@@ -2575,7 +2642,7 @@ void EditorViewModel::pasteObjects()
 
 void EditorViewModel::mirrorSelectedObjects(int axis)
 {
-  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+  if (!canTransformSelection())
     return;
 
 #ifdef HAS_LIBSLIC3R
@@ -2592,13 +2659,16 @@ void EditorViewModel::mirrorSelectedObjects(int axis)
 
 void EditorViewModel::cutSelectedObjects()
 {
+  if (!canDuplicateSelectedObjects())
+    return;
+
   copySelectedObjects();
   deleteSelectedObjects();
 }
 
 void EditorViewModel::toggleSelectedObjectsVisibility()
 {
-  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+  if (!canTransformSelection())
     return;
 
   for (int srcIdx : m_selectedSourceIndices)
@@ -2614,7 +2684,7 @@ void EditorViewModel::toggleSelectedObjectsVisibility()
 
 void EditorViewModel::autoOrientSelected()
 {
-  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+  if (!canTransformSelection())
     return;
 
   statusText_ = tr("正在计算最优朝向...");
@@ -2653,7 +2723,7 @@ void EditorViewModel::autoOrientSelected()
 
 void EditorViewModel::splitSelectedObject()
 {
-  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+  if (!canRenameSelectedObject())
     return;
 
   // 对齐上游 Plater::priv::split_object()
@@ -2713,7 +2783,7 @@ void EditorViewModel::splitSelectedObject()
 
 bool EditorViewModel::fixMeshSelected()
 {
-  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+  if (!canTransformSelection())
     return false;
 
   bool anyFixed = false;
@@ -2773,7 +2843,7 @@ bool EditorViewModel::changeVolumeTypeByIndex(int objIdx, int volIdx, int newTyp
 
 bool EditorViewModel::reloadSelectedFromDisk()
 {
-  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+  if (!canTransformSelection())
     return false;
 
   bool anyReloaded = false;
@@ -2881,11 +2951,7 @@ bool EditorViewModel::instanceToObject(int instIdx)
   if (!projectService_)
     return false;
 
-  const int srcIdx = selectedObjectIndex();
-  if (srcIdx < 0)
-    return false;
-
-  const int sourceIndex = mapFilteredToSourceIndex(srcIdx);
+  const int sourceIndex = selectedSourceObjectIndex();
   if (sourceIndex < 0)
     return false;
 
@@ -3070,7 +3136,7 @@ void EditorViewModel::setObjectOrganizeMode(int mode)
 
 bool EditorViewModel::addPlate()
 {
-  if (!projectService_)
+  if (!canAddPlate())
     return false;
   if (projectService_->addPlate())
   {
@@ -3081,9 +3147,14 @@ bool EditorViewModel::addPlate()
   return false;
 }
 
+bool EditorViewModel::canAddPlate() const
+{
+  return projectService_ && plateCount() < maxPlateCount();
+}
+
 bool EditorViewModel::deletePlate(int plateIndex)
 {
-  if (!projectService_)
+  if (!canDeletePlate(plateIndex))
     return false;
   if (projectService_->deletePlate(plateIndex))
   {
@@ -3093,6 +3164,11 @@ bool EditorViewModel::deletePlate(int plateIndex)
     return true;
   }
   return false;
+}
+
+bool EditorViewModel::canDeletePlate(int plateIndex) const
+{
+  return projectService_ && plateIndex >= 0 && plateIndex < plateCount() && plateCount() > 1;
 }
 
 void EditorViewModel::selectAllOnPlate(int plateIndex)
@@ -3197,24 +3273,44 @@ bool EditorViewModel::isPlateSliced(int plateIndex) const
 
 bool EditorViewModel::moveSelectedObjectToPlate(int targetPlateIndex)
 {
-  // 对齐上游 Plater::priv::on_arrange 跨平板拖拽
-  if (!projectService_)
+  if (!canMoveSelectionToPlate(targetPlateIndex))
     return false;
 
-  const int srcPlate = currentPlateIndex();
-  if (srcPlate < 0 || targetPlateIndex < 0 || srcPlate == targetPlateIndex)
-    return false;
+  QSet<int> sourcePlates;
+  QList<int> selected = m_selectedSourceIndices.values();
+  std::sort(selected.begin(), selected.end());
+  for (int sourceIndex : selected)
+  {
+    const int sourcePlate = projectService_->plateIndexForObject(sourceIndex);
+    if (sourcePlate >= 0)
+      sourcePlates.insert(sourcePlate);
+    projectService_->setObjectPlateForIndex(sourceIndex, targetPlateIndex);
+  }
 
-  const int selObj = selectedObjectIndex();
-  if (selObj < 0)
-    return false;
-
-  // Mock 模式：更新对象的平板归属
-  projectService_->setObjectPlateForIndex(selObj, targetPlateIndex);
-  invalidateSliceResultsForPlate(srcPlate);
+  for (int sourcePlate : sourcePlates)
+    invalidateSliceResultsForPlate(sourcePlate);
   invalidateSliceResultsForPlate(targetPlateIndex);
+  rebuildObjectEntriesFromService();
+  ensureValidObjectSelection(true);
+  refreshMeshCacheAndFitHint();
   emit stateChanged();
   return true;
+}
+
+bool EditorViewModel::canMoveSelectionToPlate(int targetPlateIndex) const
+{
+  if (!projectService_ || targetPlateIndex < 0 || targetPlateIndex >= plateCount())
+    return false;
+  if (hasSelectedVolume() || m_selectedSourceIndices.isEmpty())
+    return false;
+  for (int sourceIndex : m_selectedSourceIndices)
+  {
+    if (sourceIndex < 0 || sourceIndex >= m_objects.size())
+      return false;
+    if (projectService_->plateIndexForObject(sourceIndex) != targetPlateIndex)
+      return true;
+  }
+  return false;
 }
 
 QString EditorViewModel::plateThumbnailColor(int plateIndex) const
@@ -3232,14 +3328,18 @@ bool EditorViewModel::renameObject(int index, const QString &newName)
   if (!projectService_ || index < 0)
     return false;
 
-  const QString oldName = projectService_->objectNames().value(index);
+  const int sourceIndex = mapFilteredToSourceIndex(index);
+  if (sourceIndex < 0)
+    return false;
+
+  const QString oldName = projectService_->objectNames().value(sourceIndex);
   if (oldName == newName)
     return true;
 
-  projectService_->renameObject(index, newName);
+  projectService_->renameObject(sourceIndex, newName);
 
   if (m_undoManager)
-    m_undoManager->push(new RenameCommand(index, oldName, newName, projectService_));
+    m_undoManager->push(new RenameCommand(sourceIndex, oldName, newName, projectService_));
 
   emit stateChanged();
   return true;
@@ -3452,7 +3552,9 @@ void EditorViewModel::centerSelectedObjects()
   {
     if (isObjectSelected(i))
     {
-      projectService_->setObjectPosition(i, 0, 0, 0);
+      const int sourceIndex = mapFilteredToSourceIndex(i);
+      if (sourceIndex >= 0)
+        projectService_->setObjectPosition(sourceIndex, 0, 0, 0);
     }
   }
   invalidateSliceResultsForCurrentPlate();
@@ -3465,7 +3567,7 @@ void EditorViewModel::fillBedWithCopies()
   // Mock 模式：生成 9 个副本（3x3 网格）
   if (!projectService_)
     return;
-  const int sel = selectedObjectIndex();
+  const int sel = selectedSourceObjectIndex();
   if (sel < 0)
     return;
   const QString name = projectService_->objectNames().value(sel, "Object");
@@ -3490,7 +3592,7 @@ void EditorViewModel::exportSelectedAsStl()
   // Mock 模式：仅通知用户（实际 STL 导出需要 libslic3r mesh 序列化）
   if (!projectService_)
     return;
-  const int sel = selectedObjectIndex();
+  const int sel = selectedSourceObjectIndex();
   if (sel >= 0)
   {
     const QString name = projectService_->objectNames().value(sel, "object");
@@ -4107,6 +4209,84 @@ void EditorViewModel::arrangeAllObjects()
   }
   // If real arrange not available (no HAS_LIBSLIC3R), the GLViewport mock
   // arrange will still work via the existing ArrangeSelected InputEvent path
+}
+
+bool EditorViewModel::canActivateGizmo(int gizmoMode) const
+{
+  if (!projectService_)
+    return false;
+
+  const bool hasSingleObject = !hasSelectedVolume() && m_selectedSourceIndices.size() == 1;
+
+  switch (gizmoMode)
+  {
+  case 0: // Move
+  case 1: // Rotate
+  case 2: // Scale
+  case 4: // Flatten
+  case 5: // Cut
+  case 9: // Simplify
+  case 11: // Drill
+  case 14: // Advanced Cut
+    return hasSingleObject;
+  case 3: // Measure
+    return projectService_->modelCount() > 0;
+  case 6: // Support paint
+  case 7: // Seam paint
+    return hasSingleObject;
+  case 12: // Emboss
+  case 16: // Text
+  case 17: // SVG
+    return hasSingleObject;
+  case 13: // Mesh Boolean
+    return !hasSelectedVolume() && m_selectedSourceIndices.size() == 2;
+  case 8: // Hollow
+  case 10: // MMU segmentation
+  case 15: // Face detector
+  case 18: // SLA supports
+    return false;
+  default:
+    return false;
+  }
+}
+
+QString EditorViewModel::gizmoStatusText(int gizmoMode) const
+{
+  if (!projectService_)
+    return QStringLiteral("Backend unavailable");
+
+  if (canActivateGizmo(gizmoMode))
+    return QStringLiteral("Ready");
+
+  switch (gizmoMode)
+  {
+  case 0:
+  case 1:
+  case 2:
+  case 4:
+  case 5:
+  case 6:
+  case 7:
+  case 9:
+  case 11:
+  case 12:
+  case 14:
+  case 16:
+  case 17:
+    return QStringLiteral("Requires one selected object");
+  case 3:
+    return QStringLiteral("Requires a loaded model");
+  case 13:
+    return QStringLiteral("Requires two selected objects");
+  case 8:
+  case 18:
+    return QStringLiteral("Blocked: OpenVDB unavailable");
+  case 10:
+  case 15:
+    return QStringLiteral("Not yet backed by a real Qt workflow");
+  default:
+    return QStringLiteral("Unsupported tool");
+  }
 }
 
 void EditorViewModel::switchToPreview()

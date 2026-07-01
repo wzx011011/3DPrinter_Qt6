@@ -22,6 +22,8 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(QString projectName READ projectName NOTIFY stateChanged)
   Q_PROPERTY(int modelCount READ modelCount NOTIFY stateChanged)
   Q_PROPERTY(int plateCount READ plateCount NOTIFY stateChanged)
+  Q_PROPERTY(int maxPlateCount READ maxPlateCount CONSTANT)
+  Q_PROPERTY(bool canAddPlate READ canAddPlate NOTIFY stateChanged)
   Q_PROPERTY(int currentPlateIndex READ currentPlateIndex NOTIFY stateChanged)
   Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices NOTIFY stateChanged)
   Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices NOTIFY stateChanged)
@@ -34,6 +36,13 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(bool hasSelectedVolume READ hasSelectedVolume NOTIFY stateChanged)
   Q_PROPERTY(int selectedVolumeCount READ selectedVolumeCount NOTIFY stateChanged)
   Q_PROPERTY(bool canOpenSelectionSettings READ canOpenSelectionSettings NOTIFY stateChanged)
+  Q_PROPERTY(bool canRenameSelectedObject READ canRenameSelectedObject NOTIFY stateChanged)
+  Q_PROPERTY(bool canDuplicateSelectedObjects READ canDuplicateSelectedObjects NOTIFY stateChanged)
+  Q_PROPERTY(bool canDeleteSelection READ canDeleteSelection NOTIFY stateChanged)
+  Q_PROPERTY(bool canSetSelectionPrintable READ canSetSelectionPrintable NOTIFY stateChanged)
+  Q_PROPERTY(bool canTransformSelection READ canTransformSelection NOTIFY stateChanged)
+  Q_PROPERTY(bool canArrangeObjects READ canArrangeObjects NOTIFY stateChanged)
+  Q_PROPERTY(int availableGizmoMask READ availableGizmoMask NOTIFY stateChanged)
   Q_PROPERTY(QString settingsTargetType READ settingsTargetType NOTIFY stateChanged)
   Q_PROPERTY(QString settingsTargetName READ settingsTargetName NOTIFY stateChanged)
   Q_PROPERTY(int settingsTargetObjectIndex READ settingsTargetObjectIndex NOTIFY stateChanged)
@@ -89,6 +98,7 @@ public:
   QString projectName() const;
   int modelCount() const;
   int plateCount() const;
+  int maxPlateCount() const;
   int currentPlateIndex() const;
   QVariantList activePlateObjectIndices() const;
   QVariantList meshBatchSourceObjectIndices() const;
@@ -102,6 +112,13 @@ public:
   bool hasSelectedVolume() const;
   int selectedVolumeCount() const;
   bool canOpenSelectionSettings() const;
+  bool canRenameSelectedObject() const;
+  bool canDuplicateSelectedObjects() const;
+  bool canDeleteSelection() const;
+  bool canSetSelectionPrintable() const;
+  bool canTransformSelection() const;
+  bool canArrangeObjects() const;
+  int availableGizmoMask() const;
   QString settingsTargetType() const;
   QString settingsTargetName() const;
   int settingsTargetObjectIndex() const;
@@ -482,7 +499,9 @@ public:
   Q_INVOKABLE void setObjectOrganizeMode(int mode);
   /// 平板管理（对齐上游 PartPlateList）
   Q_INVOKABLE bool addPlate();
+  Q_INVOKABLE bool canAddPlate() const;
   Q_INVOKABLE bool deletePlate(int plateIndex);
+  Q_INVOKABLE bool canDeletePlate(int plateIndex) const;
   /// 平板级操作（对齐上游 create_plate_menu）
   Q_INVOKABLE void selectAllOnPlate(int plateIndex);
   Q_INVOKABLE void removeAllOnPlate(int plateIndex);
@@ -499,6 +518,7 @@ public:
   /// 查询指定平板是否有有效切片结果
   Q_INVOKABLE bool isPlateSliced(int plateIndex) const;
   /// 移动选中对象到指定平板（对齐上游 Plater::priv::on_arrange 跨平板拖拽）
+  Q_INVOKABLE bool canMoveSelectionToPlate(int targetPlateIndex) const;
   Q_INVOKABLE bool moveSelectedObjectToPlate(int targetPlateIndex);
   /// 平板缩略图颜色（Mock 模式：基于平板对象数生成独特颜色，对齐上游 PartPlate thumbnail）
   Q_INVOKABLE QString plateThumbnailColor(int plateIndex) const;
@@ -668,6 +688,8 @@ public:
   Q_INVOKABLE bool requestExportAllGCode(const QString &directoryPath, const QString &baseName = QString());
   /// 请求切换到预览页面（对齐上游 Plater::priv::on_preview）
   Q_INVOKABLE void switchToPreview();
+  Q_INVOKABLE bool canActivateGizmo(int gizmoMode) const;
+  Q_INVOKABLE QString gizmoStatusText(int gizmoMode) const;
   /// 加载模型文件 (3MF/STL/OBJ)
   Q_INVOKABLE bool loadFile(const QString &filePath);
   /// 清空当前场景与项目状态（用于顶部工具栏新建）

@@ -55,12 +55,12 @@ v3.5 Phase 47-49 are superseded by this milestone. v3.5 Phase 44-46 remain histo
 
 ### Prepare Object, Plate, and Viewport Workflow
 
-- [ ] **PREPWF-01:** User can import models/projects from the restored Prepare workflow and see model/object state update in the sidebar, plate controls, and viewport.
-- [ ] **PREPWF-02:** User can select, rename, duplicate, delete, arrange, lock/unlock, mark printable/unprintable, and inspect objects/volumes through source-truth-aligned object and context-menu flows.
-- [ ] **PREPWF-03:** User can switch and manage plates with screenshot-aligned plate controls and source-truth-aligned plate membership behavior.
-- [ ] **PREPWF-04:** User can use viewport camera controls, zoom/view orientation controls, bed/grid display, and vertical tool buttons without layout overlap or stale state.
-- [ ] **PREPWF-05:** User can use move, rotate, scale, place-on-face, cut, support/seam/paint, and related gizmo entry points only when backed by real or explicitly classified behavior.
-- [ ] **PREPWF-06:** Prepare renderer remains visible and stable while selecting objects, changing tools, rotating the camera, switching plates, and returning from Preview.
+- [x] **PREPWF-01:** User can import models/projects from the restored Prepare workflow and see model/object state update in the sidebar, plate controls, and viewport.
+- [x] **PREPWF-02:** User can select, rename, duplicate, delete, arrange, lock/unlock, mark printable/unprintable, and inspect objects/volumes through source-truth-aligned object and context-menu flows.
+- [x] **PREPWF-03:** User can switch and manage plates with screenshot-aligned plate controls and source-truth-aligned plate membership behavior.
+- [x] **PREPWF-04:** User can use viewport camera controls, zoom/view orientation controls, bed/grid display, and vertical tool buttons without layout overlap or stale state.
+- [x] **PREPWF-05:** User can use move, rotate, scale, place-on-face, cut, support/seam/paint, and related gizmo entry points only when backed by real or explicitly classified behavior.
+- [x] **PREPWF-06:** Prepare renderer remains visible and stable while selecting objects, changing tools, rotating the camera, switching plates, and returning from Preview.
 
 ### Preview Layout, Controls, and Panels
 
@@ -146,12 +146,12 @@ v3.5 Phase 47-49 are superseded by this milestone. v3.5 Phase 44-46 remain histo
 | PREPSB-03 | Phase 52 | Pending |
 | PREPSB-04 | Phase 52 | Pending |
 | PREPSB-05 | Phase 52 | Pending |
-| PREPWF-01 | Phase 53 | Pending |
-| PREPWF-02 | Phase 53 | Pending |
-| PREPWF-03 | Phase 53 | Pending |
-| PREPWF-04 | Phase 53 | Pending |
-| PREPWF-05 | Phase 53 | Pending |
-| PREPWF-06 | Phase 53 | Pending |
+| PREPWF-01 | Phase 53 | Complete |
+| PREPWF-02 | Phase 53 | Complete |
+| PREPWF-03 | Phase 53 | Complete |
+| PREPWF-04 | Phase 53 | Complete |
+| PREPWF-05 | Phase 53 | Complete |
+| PREPWF-06 | Phase 53 | Complete |
 | PREVLAY-01 | Phase 54 | Pending |
 | PREVLAY-02 | Phase 54 | Pending |
 | PREVLAY-03 | Phase 54 | Pending |

@@ -3889,6 +3889,11 @@ int ProjectServiceMock::addPrimitiveToPlate(int type)
     objectPositions_.push_back(QVector3D(0, 0, 0));
     objectRotations_.push_back(QVector3D(0, 0, 0));
     objectScales_.push_back(QVector3D(1, 1, 1));
+    modelCount_ = objectNames_.size();
+    MockVolumeEntry entry;
+    entry.name = tr("Part 1");
+    entry.type = MockVolumeType::ModelPart;
+    m_mockVolumes[newIdx] = {entry};
 
     // Add to current plate
     if (m_plateList) {
