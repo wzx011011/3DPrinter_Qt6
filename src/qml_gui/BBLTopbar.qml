@@ -190,15 +190,15 @@ Item {
                 }
             }
 
-            // Undo (对齐上游 wxID_UNDO)
+            // Undo (对齐上游 wxID_UNDO) — Phase 51 SHELL-03: gate on BOTH page AND canUndo (undo stack non-empty)
             CxIconButton {
                 cxStyle: CxIconButton.Style.Chrome
                 buttonSize: 30
                 iconSize: 16
                 iconSource: "qrc:/qml/assets/icons/arrow-back-up.svg"
                 toolTipText: qsTr("撤销")
-                enabled: backend.currentPage === backend.tp3DEditor
-                onClicked: if (backend.currentPage === backend.tp3DEditor) root.undoRequested()
+                enabled: backend.currentPage === backend.tp3DEditor && backend.canUndo
+                onClicked: if (backend.currentPage === backend.tp3DEditor && backend.canUndo) root.undoRequested()
             }
 
             // Redo (对齐上游 wxID_REDO)
