@@ -36,6 +36,9 @@ private slots:
   void shellActionsBindToBackendContextGates();
   // Phase 51-03 (SHELL-04): the 3 notification surfaces keep non-overlapping placement.
   void notificationSurfacesStayNonOverlapping();
+  // Phase 52-03 (PREPSB-01..04): LeftSidebar + FilamentSlot bindings are
+  // present and there is no silent dead UI or empty handler.
+  void leftSidebarPresetControlsAreWiredAndHonest();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -1058,6 +1061,58 @@ void QmlUiAuditTests::notificationSurfacesStayNonOverlapping()
            "main.qml must mount ErrorToast");
   QVERIFY2(mainQml.contains(QStringLiteral("NotificationCenter {")),
            "main.qml must mount NotificationCenter");
+}
+
+// ── Phase 52-03 (PREPSB-01..04): LeftSidebar + FilamentSlot bindings audit ──
+// Source-text audit that guards every Plan 52-02 binding against regression:
+// dynamic extruder-count slot count (PREPSB-01), hidden dead color picker
+// (PREPSB-01), dirty dots + read-only gating (PREPSB-03), enabled Setting
+// entry point (PREPSB-02), live search filter (PREPSB-04), and the complete
+// Global/Object/Plate scope triad (PREPSB-04). Mirrors the Phase 51-03
+// shellActionsBindToBackendContextGates source-grep pattern.
+
+void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
+{
+  const QString sidebar = readSource(QStringLiteral("src/qml_gui/panels/LeftSidebar.qml"));
+  const QString slot = readSource(QStringLiteral("src/qml_gui/components/FilamentSlot.qml"));
+  QVERIFY2(!sidebar.isEmpty(), "Unable to read LeftSidebar.qml");
+  QVERIFY2(!slot.isEmpty(), "Unable to read FilamentSlot.qml");
+
+  // PREPSB-01: filament slot count is dynamic (no hard-coded model: 5).
+  QVERIFY2(!sidebar.contains(QStringLiteral("\n                            model: 5\n")),
+           "LeftSidebar must not use the hard-coded model: 5 filament slot count");
+  QVERIFY2(sidebar.contains(QStringLiteral("extruderCount")),
+           "LeftSidebar filament Repeater must bind to editorVm.extruderCount");
+  QVERIFY2(sidebar.contains(QStringLiteral("Math.max(1,")),
+           "LeftSidebar slot count must guard against 0 with Math.max(1, ...)");
+
+  // PREPSB-01: dead color picker popup must be hidden (no toggle onClicked).
+  QVERIFY2(!slot.contains(QStringLiteral("colorPickerLoader.active = !colorPickerLoader.active")),
+           "FilamentSlot must not toggle the dead color picker popup");
+  QVERIFY2(slot.contains(QStringLiteral("TODO(Phase 56)")),
+           "FilamentSlot must carry an honest Phase-56 TODO for the color picker");
+
+  // PREPSB-03: dirty state surfaced via isPresetDirty (printer + process).
+  QVERIFY2(sidebar.count(QStringLiteral("isPresetDirty")) >= 2,
+           "LeftSidebar must surface isPresetDirty on >= 2 preset rows (printer + process)");
+  QVERIFY2(sidebar.contains(QStringLiteral("presetActionBlocker(2,")),
+           "LeftSidebar printer edit must gate on presetActionBlocker (read-only)");
+
+  // PREPSB-02: Setting button visible+enabled and forwards the request.
+  QVERIFY2(sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"process\")")),
+           "LeftSidebar Setting button must call backend.forwardSettingsRequest(\"process\")");
+
+  // PREPSB-04: search box wired to filterOptionIndices (onAccepted + onTextChanged).
+  QVERIFY2(sidebar.count(QStringLiteral("filterOptionIndices")) >= 2,
+           "LeftSidebar search must call filterOptionIndices on both onAccepted and onTextChanged");
+
+  // PREPSB-04: scope toggles complete (Global/Object/Plate).
+  QVERIFY2(sidebar.contains(QStringLiteral("requestGlobalScope")),
+           "LeftSidebar must have a Global scope toggle");
+  QVERIFY2(sidebar.contains(QStringLiteral("requestObjectScope")),
+           "LeftSidebar must have an Object scope toggle");
+  QVERIFY2(sidebar.contains(QStringLiteral("requestPlateScope")),
+           "LeftSidebar must have a Plate scope toggle");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
