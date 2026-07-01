@@ -284,6 +284,23 @@ Rectangle {
                         }
                     }
 
+                    // Phase 52 PREPSB-04: Plate scope (completes the
+                    // Global/Object/Plate triad; mirrors upstream ParamsPanel
+                    // scope switch). Uses the current plate index.
+                    CxButton {
+                        implicitWidth: 44
+                        implicitHeight: 24
+                        compact: true
+                        cxStyle: root.configVm && root.configVm.settingsScope === "plate"
+                                 ? CxButton.Style.Primary : CxButton.Style.Ghost
+                        text: qsTr("盘")
+                        enabled: root.editorVm && root.editorVm.currentPlateIndex >= 0
+                        onClicked: {
+                            if (root.editorVm && root.editorVm.currentPlateIndex >= 0 && root.configVm)
+                                root.configVm.requestPlateScope(root.editorVm.currentPlateIndex)
+                        }
+                    }
+
                     // Phase 56: Advanced (Simple/Advanced) toggle -- settings-dialog
                     // feature, hidden until Phase 56.
                     CxButton {
