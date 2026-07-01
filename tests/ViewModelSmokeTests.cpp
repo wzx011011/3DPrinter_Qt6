@@ -1520,6 +1520,84 @@ void ViewModelSmokeTests::shellStateGatesForwardToEditorViewModelAndPreserveRoun
   QTRY_VERIFY_WITH_TIMEOUT(editor->modelCount() >= 1, 10000);
 }
 
+// ── Phase 52-03 (PREPSB-05): config/preset change invalidates slice results ──
+// CRITICAL gap fix from Plan 52-01: before the BackendContext composition-root
+// connect, a config/preset/scope change did NOT invalidate a previously-sliced
+// result, so a user could change a filament preset and export G-code based on
+// the OLD preset. This test is the regression guard: it verifies the staleness
+// Q_PROPERTYs (Plan 52-01) are registered on EditorViewModel and that the
+// configVm.stateChanged -> editor invalidateAllSliceResults connect is wired and
+// active (driving a config change fires editor stateChanged via the connect).
+//
+// Honest scope: this asserts the CONNECT FIRES (the deterministic, no-libslic3r
+// guard). The stale-becomes-true path requires a prior real slice result; that
+// needs a libslic3r + real-model fixture and is NOT exercised here. This slot
+// inherits the initTestCase HAS_LIBSLIC3R skip (configVm needs preset data).
+
+void ViewModelSmokeTests::sidebarPresetChangeInvalidatesSliceResults()
+{
+  BackendContext ctx;
+  const QMetaObject *editorMeta = ctx.editorViewModel()->metaObject();
+
+  // The two staleness Q_PROPERTYs (Plan 52-01) must be registered so QML can
+  // resolve editorVm.hasStaleSliceResults / stalePlateIndices.
+  QVERIFY2(editorMeta->indexOfProperty("hasStaleSliceResults") >= 0,
+           "EditorViewModel must expose hasStaleSliceResults Q_PROPERTY");
+  QVERIFY2(editorMeta->indexOfProperty("stalePlateIndices") >= 0,
+           "EditorViewModel must expose stalePlateIndices Q_PROPERTY");
+
+  auto *editor = qobject_cast<EditorViewModel *>(ctx.editorViewModel());
+  QVERIFY(editor);
+  auto *config = qobject_cast<ConfigViewModel *>(ctx.configViewModel());
+  QVERIFY(config);
+
+  // On a fresh idle context there are no sliced plates, so nothing is stale.
+  QVERIFY2(!editor->hasStaleSliceResults(),
+           "hasStaleSliceResults must be false before any config change");
+  QVERIFY2(editor->stalePlateIndices().isEmpty(),
+           "stalePlateIndices must be empty before any config change");
+
+  // The PREPSB-05 mechanism is the Plan 52-01 connect in BackendContext:
+  // configVm.stateChanged -> editor->invalidateAllSliceResults() +
+  // emit editor stateChanged. To verify it is wired, drive a config change
+  // (a preset selection / scope change) and assert the editor stateChanged
+  // spy fires (proving the connect forwarded). A full stale-becomes-true
+  // assertion would require a prior real slice result (libslic3r fixture);
+  // the connect-fires guard is the deterministic regression guard.
+  QSignalSpy editorSpy(editor, &EditorViewModel::stateChanged);
+  QVERIFY(editorSpy.isValid());
+
+  // loadDefault ensures the preset list is populated so a selection change has
+  // a target. The exact preset name is not significant -- any successful
+  // request that fires configVm.stateChanged exercises the connect.
+  config->loadDefault();
+  editorSpy.clear();
+
+  // Drive a config change: select an alternate print preset if more than one
+  // exists; otherwise force a stateChanged by toggling scope (still a config
+  // change that must invalidate per PREPSB-05).
+  const QStringList printNames = config->printPresetNames();
+  QVERIFY2(!printNames.isEmpty(), "default print preset list must be non-empty");
+  if (printNames.size() > 1) {
+    const QString alt = (config->currentPrintPreset() == printNames.first())
+                            ? printNames.last() : printNames.first();
+    config->requestCurrentPrintPreset(alt);
+  } else {
+    config->requestGlobalScope();
+  }
+
+  // The Plan 52-01 connect must have forwarded configVm.stateChanged to
+  // editor->invalidateAllSliceResults() + emit editor stateChanged.
+  QVERIFY2(editorSpy.count() >= 1,
+           "configVm.stateChanged must forward to editor stateChanged (PREPSB-05 connect)");
+  // With no prior slice result, hasStaleSliceResults stays false (nothing to
+  // invalidate), BUT the connect fired -- the mechanism is wired. The
+  // stale-becomes-true path requires a prior slice result; that is covered by
+  // the slice-result tests. Here we assert the CONNECT is present and active.
+  // (Driving a full slice + config change would require libslic3r + a model
+  //  fixture; the connect-wired assertion is the deterministic guard.)
+}
+
 // ── Phase 04-01: Sidebar Dockable 状态 + 持久化 unit tests ──
 // 注意：QSettings 持久化在测试进程内可验证（同 QSettings 默认 ini 路径）。
 // 为隔离，每个测试先 reset 三个 key，验证后再 reset。
