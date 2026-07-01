@@ -1,4 +1,4 @@
-﻿#include <QSignalSpy>
+#include <QSignalSpy>
 #include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
@@ -17,12 +17,10 @@
 
 namespace
 {
-  // v2.6 E2E 夹具修复：原 hotend.stl 是 3.5mm 微型件且坐标偏出默认热床，
-  // 在 GUI/ProjectServiceMock 路径（无完整打印机预设）下 arrange 状态回调
-  // 报 "Objects could not fit on the bed; bed_idx==-1"，导致 sliceFailed。
-  // 改用 OrcaSlicer 自带的 test_3mf/Prusa.stl —— 标准 ~20mm 测试立方体，
-  // 居中、尺寸合规，在默认床面上即可摆放，与 CLI 自回归 (regression_slice.ps1)
-  // 的成功路径对齐，确保 E2E 切片链路与 CLI 端口验证一致。
+  // Use OrcaSlicer's Prusa.stl fixture instead of the tiny hotend.stl fixture.
+  // The former hotend fixture can sit outside the default bed and trigger
+  // "Objects could not fit on the bed; bed_idx==-1" in GUI-path arrange code.
+  // Prusa.stl matches the successful CLI regression path and keeps E2E slicing deterministic.
   static const QString kStlPath = QDir::cleanPath(
       QStringLiteral(QT_TESTCASE_SOURCEDIR) +
       QStringLiteral("/third_party/OrcaSlicer/tests/data/test_3mf/Prusa.stl"));
@@ -81,25 +79,17 @@ private slots:
 
 private:
   bool hasLibslic3r() const;
-  /// 注入最小有效打印机配置（对齐 src/cli/CliRunner.cpp slice 路径）+ 将模型
-  /// 显式摆放到有效热床范围。
+  /// Inject a minimal valid printer config aligned with the CLI slicing path.
   ///
-  /// v2.6 E2E 修复：两个根因导致切片测试失败/挂起：
-  ///   1) SliceService::startSlice 默认用 full_print_config() 的空 printable_area，
-  ///      切片引擎 arrange 回调报 "bed_idx==-1"。
-  ///   2) ProjectServiceMock::loadFile() 在加载后自动调用 arrangeObjects() 但不传
-  ///      printableArea，其 InfiniteBed 回退分支抛 "Objects could not fit on the bed"，
-  ///      模型保留越界坐标 → SliceService 切片 worker 挂起（不发出 finished/failed），
-  ///      导致 QTRY 静等 300s QtTest 超时。
+  /// Historical E2E failure mode:
+  ///   1) SliceService::startSlice can start with an empty printable_area.
+  ///   2) ProjectServiceMock::loadFile() arranges after load without a printable area.
+  /// Both can leave the model outside a valid bed and make the slicing worker hang.
   ///
-  /// 修复：切片前显式 arrangeObjects 到 220x220 热床（与 CLI bed_shape 一致），
-  /// 若 arrange 仍失败则测试 QSKIP（快速失败，而非挂起），并注入 printable_area
-  /// 配置供切片引擎使用。
+  /// The test injects a 220x220 bed matching the CLI bed_shape before slicing.
   void applyMinimalPrinterConfig(SliceService &slice, ProjectServiceMock &project) const;
-  /// 返回模型是否成功摆放到有效热床范围。
-  /// v2.6 已知问题：上游 OrcaSlicer arrange_objects 在 multi-plate (bed_idx) 路径下
-  /// 即便几何在热床内也抛 "bed_idx==-1"（生产 bug，待修）。本方法据此返回 false，
-  /// 调用方应在 false 时 QSKIP，避免 SliceService 切片 worker 挂起（300s QtTest 超时）。
+  /// Return whether the model was successfully arranged into the valid bed area.
+  /// Upstream multi-plate arrange can still report bed_idx==-1, so callers may skip.
   bool ensureModelOnBed(ProjectServiceMock &project) const;
 };
 
@@ -115,14 +105,12 @@ bool E2EWorkflowTests::hasLibslic3r() const
 void E2EWorkflowTests::applyMinimalPrinterConfig(SliceService &slice, ProjectServiceMock &project) const
 {
   Q_UNUSED(project)
-  // v2.7 P0：用 setBedShape 直接注入 bed_shape（镜像 CLI CliRunner.cpp:397-399 成功路径）。
-  // 之前用 printable_area 经 injectPresetConfig 的 set_deserialize_strict 路径不可靠
-  // （printable_area 别名不在 full_print_config 注册表 → option() 返回 null → bed 未设置
-  // → slice 失败）。setBedShape 内部用 set_key_value + ConfigOptionPoints 直接创建 option。
-  // 220x220 矩形热床（与 CLI bed_shape 一致）。
+  // Inject bed_shape directly through setBedShape, mirroring the successful CLI path.
+  // printable_area through preset deserialization is unreliable because the alias is
+  // not guaranteed to resolve in full_print_config.
   slice.setBedShape({QPointF(0, 0), QPointF(220, 0), QPointF(220, 220), QPointF(0, 220)});
 
-  // printable_height + nozzle_diameter 仍走 preset 注入（这两个 key 在注册表里，正常生效）
+  // printable_height and nozzle_diameter are registered preset keys and can use config injection.
   QHash<QString, QVariant> cfg;
   cfg.insert(QStringLiteral("printable_height"), 250.0);
   cfg.insert(QStringLiteral("nozzle_diameter"), QVariantList{0.4});
@@ -131,8 +119,8 @@ void E2EWorkflowTests::applyMinimalPrinterConfig(SliceService &slice, ProjectSer
 
 bool E2EWorkflowTests::ensureModelOnBed(ProjectServiceMock &project) const
 {
-  // 显式摆放到 220x220 热床（loadFile 的自动 arrange 因无 printableArea 抛 InfiniteBed 异常）。
-  // 格式：arrangeObjects 接受 "x1,y1,x2,y2,..." 平面坐标序列。
+  // Explicitly arrange onto a 220x220 bed. arrangeObjects accepts a flat
+  // "x1,y1,x2,y2,..." polygon coordinate string.
   const QString printableArea = QStringLiteral("0,0,220,0,220,220,0,220");
   return project.arrangeObjects(5.0f, false, false, printableArea);
 }
@@ -258,17 +246,14 @@ void E2EWorkflowTests::test_slice_produces_gcode_file()
   QVERIFY(_loadSpy.isValid());
   QTRY_VERIFY_WITH_TIMEOUT(_loadSpy.count() > 0, 10000);
 
-  // v2.7 P0: loadFile 异步（Qt::QueuedConnection），模型/plate 状态在 queued
-  // invoke 里赋值。必须等 loadFinished 信号 + pump event loop，否则 startSlice
-  // 时模型未就绪 → "未找到可切片模型"。
+  // loadFile completes through queued work. Wait for loadFinished before slicing.
 
   // Start slice and wait for completion
   QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
   QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
 
   applyMinimalPrinterConfig(slice, project);
-  // 模型摆放（容错 vfn 已使 arrange 不抛异常；失败时模型保留原坐标，切片引擎
-  // 仍可处理 —— CLI 自回归已证明 Prusa.stl 在自然坐标下可切片成功）。
+  // Arrange when possible; Prusa.stl remains sliceable in its natural coordinates.
   ensureModelOnBed(project);
   slice.startSlice(QStringLiteral("e2e_test"));
 
@@ -277,7 +262,7 @@ void E2EWorkflowTests::test_slice_produces_gcode_file()
 
   if (failedSpy.count() > 0)
   {
-    // v2.7 P0 调试：打印实际切片失败原因以便定位
+    // Include the actual slicing failure reason to keep failures diagnosable.
     const QString failReason = failedSpy.first().at(0).toString();
     QSKIP(QString("Slice failed: %1").arg(failReason).toUtf8().constData());
   }
@@ -326,11 +311,8 @@ void E2EWorkflowTests::test_slice_results_propagate_to_editor_vm()
 
   applyMinimalPrinterConfig(slice, project);
   ensureModelOnBed(project);
-  // 直接调用 SliceService::startSlice（而非 editor.requestSlice()）：
-  // requestSlice() 的 canRequestSlice() 守卫检查 sourceFilePath/printable objects 等
-  // GUI 前置条件，在无完整 BackendContext 的单元测试中可能 early-return（不切片，
-  // 不发信号 → QTRY 超时挂起）。本测试验证的是切片结果→EditorViewModel 的传播，
-  // EditorViewModel 监听 SliceService 信号，与切片如何启动无关，故直接 startSlice。
+  // Call SliceService::startSlice directly. editor.requestSlice() checks GUI
+  // preconditions that are not fully present in this focused unit-test setup.
   slice.startSlice(QStringLiteral("editor_vm_test"));
 
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
@@ -703,6 +685,12 @@ G1 X50 Y20 E0.60
   QVERIFY2(preview.gcodePreviewData().startsWith("GCV1"),
            "preview payload should use the GCV1 segment format");
   QCOMPARE(gcv1SegmentCount(preview.gcodePreviewData()), preview.moveCount());
+  QVERIFY2(preview.previewReady(), "loaded fixture should make Preview ready");
+  QVERIFY2(preview.gcodeLineCount() > 0, "Preview should expose a bounded G-code text window");
+  QVERIFY2(!preview.gcodeLines().isEmpty(), "Preview G-code text window should be non-empty");
+  QVERIFY2(preview.currentGcodeLine() > 0, "Preview should track the current G-code line");
+  QVERIFY2(preview.currentLayerLabel().contains(QStringLiteral("/")),
+           "Preview should expose a user-facing layer summary");
 
   preview.setViewModeIndex(3);
   QCOMPARE(preview.legendType(), 2);
@@ -713,6 +701,25 @@ G1 X50 Y20 E0.60
 
   preview.setShowTravelMoves(true);
   QCOMPARE(gcv1SegmentCount(preview.gcodePreviewData()), preview.moveCount());
+
+  const int targetMove = qMax(1, preview.moveCount() / 2);
+  preview.setCurrentMove(targetMove);
+  QVERIFY2(preview.currentGcodeLine() > 0, "Preview should keep tracking a current G-code line after move changes");
+  bool foundCurrentRow = false;
+  int currentRowMove = -1;
+  for (const QVariant &rowValue : preview.gcodeLines()) {
+    const QVariantMap row = rowValue.toMap();
+    if (row.value(QStringLiteral("current")).toBool()) {
+      foundCurrentRow = true;
+      currentRowMove = row.value(QStringLiteral("move")).toInt();
+      QVERIFY2(row.value(QStringLiteral("line")).toInt() == preview.currentGcodeLine(),
+               "Current G-code row should match PreviewViewModel::currentGcodeLine");
+      break;
+    }
+  }
+  QVERIFY2(foundCurrentRow, "Preview G-code text window should mark one current row");
+  QVERIFY2(currentRowMove >= targetMove,
+           "Preview G-code text window should highlight the source line at or after the selected move");
 }
 
 void E2EWorkflowTests::test_preview_parser_handles_orca_metadata_view_modes_and_ticks()
@@ -888,8 +895,7 @@ void E2EWorkflowTests::test_model_change_invalidates_slice_result()
 
   applyMinimalPrinterConfig(slice, project);
   ensureModelOnBed(project);
-  // 直接 startSlice（见 test_slice_results_propagate_to_editor_vm 注释：
-  // editor.requestSlice() 的 canRequestSlice 守卫在测试环境 early-return → 挂起）
+  // Call startSlice directly; editor.requestSlice() can early-return in this test setup.
   slice.startSlice(QStringLiteral("invalidate_test"));
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
 

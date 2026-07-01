@@ -2,8 +2,10 @@
 
 #include <QObject>
 #include <QByteArray>
+#include <QVariantMap>
 #include <QVariantList>
 #include <QHash>
+#include <QVector>
 #include <vector>
 #include "core/rendering/TickCodeTypes.h"
 
@@ -18,6 +20,12 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(bool slicing READ slicing NOTIFY stateChanged)
   Q_PROPERTY(bool isPlaying READ isPlaying NOTIFY stateChanged)
   Q_PROPERTY(QString estimatedTime READ estimatedTime NOTIFY stateChanged)
+  Q_PROPERTY(bool previewReady READ previewReady NOTIFY stateChanged)
+  Q_PROPERTY(QString previewStatusText READ previewStatusText NOTIFY stateChanged)
+  Q_PROPERTY(QString currentLayerLabel READ currentLayerLabel NOTIFY stateChanged)
+  Q_PROPERTY(QString currentMoveLabel READ currentMoveLabel NOTIFY stateChanged)
+  Q_PROPERTY(QString plateSummary READ plateSummary NOTIFY stateChanged)
+  Q_PROPERTY(QString warningSummary READ warningSummary NOTIFY stateChanged)
   Q_PROPERTY(int layerCount READ layerCount NOTIFY stateChanged)
   Q_PROPERTY(int currentLayerMin READ currentLayerMin NOTIFY stateChanged)
   Q_PROPERTY(int currentLayerMax READ currentLayerMax NOTIFY stateChanged)
@@ -25,8 +33,11 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(int currentMove READ currentMove NOTIFY stateChanged)
   Q_PROPERTY(QString currentTime READ currentTime NOTIFY stateChanged)
   Q_PROPERTY(QByteArray gcodePreviewData READ gcodePreviewData NOTIFY stateChanged)
+  Q_PROPERTY(int gcodeLineCount READ gcodeLineCount NOTIFY stateChanged)
+  Q_PROPERTY(int currentGcodeLine READ currentGcodeLine NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList gcodeLines READ gcodeLines NOTIFY stateChanged)
   Q_PROPERTY(QVariantList legendItems READ legendItems NOTIFY stateChanged)
-  /// Legend rendering type (对齐上游 GCodeViewer legend): 0=discrete, 1=gradient, 2=extruder
+  /// Legend rendering type aligned with upstream GCodeViewer legend: 0=discrete, 1=gradient, 2=extruder.
   Q_PROPERTY(int legendType READ legendType NOTIFY stateChanged)
   Q_PROPERTY(QString legendGradientMinLabel READ legendGradientMinLabel NOTIFY stateChanged)
   Q_PROPERTY(QString legendGradientMaxLabel READ legendGradientMaxLabel NOTIFY stateChanged)
@@ -42,15 +53,15 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(QString estimatedCost READ estimatedCost NOTIFY stateChanged)
   Q_PROPERTY(QStringList viewModes READ viewModes CONSTANT)
   Q_PROPERTY(int viewModeIndex READ viewModeIndex WRITE setViewModeIndex NOTIFY stateChanged)
-  /// Normal/Stealth 双模式（对齐上游 PrintEstimatedStatistics modes[0]/modes[1]）
+  /// Normal/Stealth mode aligned with upstream PrintEstimatedStatistics modes.
   Q_PROPERTY(bool stealthMode READ stealthMode WRITE setStealthMode NOTIFY stateChanged)
-  /// 显示/隐藏空驶移动（对齐上游 GCodeViewer travel visibility toggle）
+  /// Travel visibility toggle aligned with upstream GCodeViewer.
   Q_PROPERTY(bool showTravelMoves READ showTravelMoves WRITE setShowTravelMoves NOTIFY stateChanged)
-  /// 显示/隐藏热床网格（对齐上游 GCodeViewer show_bed）
+  /// Bed-grid visibility aligned with upstream GCodeViewer show_bed.
   Q_PROPERTY(bool showBed READ showBed WRITE setShowBed NOTIFY stateChanged)
-  /// 显示/隐藏工具位置标记（对齐上游 GCodeViewer show_marker）
+  /// Tool marker visibility aligned with upstream GCodeViewer show_marker.
   Q_PROPERTY(bool showMarker READ showMarker WRITE setShowMarker NOTIFY stateChanged)
-  /// 工具位置提示框数据（对齐上游 GCodeViewer::Marker::render）
+  /// Tool-position tooltip data aligned with upstream GCodeViewer::Marker::render.
   Q_PROPERTY(bool hasToolPosition READ hasToolPosition NOTIFY stateChanged)
   Q_PROPERTY(double toolX READ toolX NOTIFY stateChanged)
   Q_PROPERTY(double toolY READ toolY NOTIFY stateChanged)
@@ -75,16 +86,25 @@ public:
   bool slicing() const;
   bool isPlaying() const;
   QString estimatedTime() const;
+  bool previewReady() const;
+  QString previewStatusText() const;
+  QString currentLayerLabel() const;
+  QString currentMoveLabel() const;
+  QString plateSummary() const;
+  QString warningSummary() const;
   int layerCount() const { return layerCount_; }
   int currentLayerMin() const { return currentLayerMin_; }
   int currentLayerMax() const { return currentLayerMax_; }
   int moveCount() const { return moveCount_; }
   int currentMove() const { return currentMove_; }
-  /// Elapsed time at current move position (对齐上游 IMSlider get_label)
+  /// Elapsed time at the current move position, aligned with upstream IMSlider get_label.
   QString currentTime() const;
-  /// Elapsed time at an arbitrary move position (对齐上游 IMSlider hover 时间提示)
+  /// Elapsed time at an arbitrary move position, aligned with upstream IMSlider hover labels.
   Q_INVOKABLE QString timeAtMove(int moveIndex) const;
   const QByteArray &gcodePreviewData() const { return gcodePreviewData_; }
+  int gcodeLineCount() const { return gcodeLineCount_; }
+  int currentGcodeLine() const { return currentGcodeLine_; }
+  QVariantList gcodeLines() const { return gcodeLines_; }
   QVariantList legendItems() const { return legendItems_; }
   int legendType() const { return m_legendType; }
   QString legendGradientMinLabel() const { return m_legendGradMinLabel; }
@@ -99,26 +119,26 @@ public:
   int toolChangeCount() const { return toolChangeCount_; }
   QString avgSpeed() const { return avgSpeed_; }
   QString estimatedCost() const { return estimatedCost_; }
-  /// 按角色时间分解（对齐上游 PrintEstimatedStatistics::roles_times）
+  /// Per-role time breakdown aligned with upstream PrintEstimatedStatistics::roles_times.
   Q_INVOKABLE int roleTimeCount() const;
   Q_INVOKABLE QString roleTimeName(int i) const;
   Q_INVOKABLE QString roleTimeValue(int i) const;
   Q_INVOKABLE double roleTimePercent(int i) const;
-  /// Per-layer time chart data (对齐上游 IMSlider m_layers_times)
+  /// Per-layer time chart data aligned with upstream IMSlider m_layers_times.
   Q_INVOKABLE int layerTimeCount() const;
   Q_INVOKABLE float layerTimeAt(int layer) const;  // seconds
   Q_INVOKABLE float maxLayerTime() const;
   Q_INVOKABLE float minLayerTime() const;
   Q_INVOKABLE float avgLayerTime() const;
-  /// Per-layer Z height（对齐上游 IMSlider hover tooltip 显示层高度）
+  /// Per-layer Z height for the upstream IMSlider hover tooltip.
   Q_INVOKABLE float layerZAt(int layer) const;
-  /// 工具切换位置（对齐上游 IMSlider colored band / extruder_colors）
+  /// Tool-change positions aligned with upstream IMSlider colored bands.
   Q_INVOKABLE int toolChangePositionCount() const;
   Q_INVOKABLE int toolChangePositionAt(int i) const;  // move index
   Q_INVOKABLE int toolChangeExtruderIdAt(int i) const; // extruder ID at that point
-  /// 挤出机颜色（对齐上游 extruder_colors）
+  /// Extruder colors aligned with upstream extruder_colors.
   Q_INVOKABLE QString extruderColor(int extruderId) const;
-  /// 每挤出机耗材用量（对齐上游 PrintEstimatedStatistics render_all_plates_stats）
+  /// Per-extruder filament usage aligned with upstream all-plate statistics.
   Q_INVOKABLE int extruderCount() const;
   Q_INVOKABLE double extruderUsedLength(int extruderId) const;  // meters
   Q_INVOKABLE double extruderUsedWeight(int extruderId) const;  // grams
@@ -149,9 +169,9 @@ public:
   bool toolIsExtrusion() const { return toolIsExtrusion_; }
 
   Q_INVOKABLE void setLayerRange(int minLayer, int maxLayer);
-  /// 跳转到指定层（1-indexed，对齐上游 IMSlider::do_go_to_layer）
+  /// Jump to a 1-indexed layer, aligned with upstream IMSlider::do_go_to_layer.
   Q_INVOKABLE void jumpToLayer(int oneIndexedLayer);
-  /// 整体平移层范围（对齐上游 IMSlider 鼠标滚轮行为）
+  /// Move the full layer range, aligned with upstream IMSlider mouse-wheel behavior.
   Q_INVOKABLE void moveLayerRange(int delta);
   Q_INVOKABLE void setCurrentMove(int move);
   Q_INVOKABLE void playAnimation();
@@ -182,6 +202,7 @@ private:
   void buildLegendItems(int mode, float minV, float maxV);
   QVariantMap legendItem(const QString &label, const QString &color, int count) const;
   void updateToolPositionData();
+  void rebuildGcodeLineWindow();
 
   SliceService *sliceService_ = nullptr;
   QString estimatedTime_ = QStringLiteral("--:--:--");
@@ -205,28 +226,31 @@ private:
   int toolChangeCount_ = 0;
   QString avgSpeed_ = QStringLiteral("--");
   QString estimatedCost_ = QStringLiteral("--");
+  int gcodeLineCount_ = 0;
+  int currentGcodeLine_ = 0;
+  QVariantList gcodeLines_;
 
-  /// Per-role time breakdown (对齐上游 ExtrusionRole)
+  /// Per-role time breakdown aligned with upstream ExtrusionRole.
   struct RoleTimeEntry
   {
-    QString name;     ///< Display name (e.g., "内壁", "外壁", "填充")
+    QString name;     ///< Display name.
     double timeSecs = 0.0;  ///< Total time in seconds
   };
   QList<RoleTimeEntry> m_roleTimes;
-  QVector<float> m_layerTimes;  ///< Per-layer elapsed time in seconds (对齐上游 IMSlider m_layers_times)
-  QVector<float> m_layerZs;     ///< Per-layer Z height in mm (对齐上游 IMSlider hover tooltip)
+  QVector<float> m_layerTimes;  ///< Per-layer elapsed time in seconds, aligned with IMSlider m_layers_times.
+  QVector<float> m_layerZs;     ///< Per-layer Z height in mm for the IMSlider hover tooltip.
   struct ToolChangePos { int moveIndex; int extruderId; };
   QVector<ToolChangePos> m_toolChangePositions; ///< Tool change positions for colored bands
-  /// Per-extruder filament usage (对齐上游 PrintEstimatedStatistics volumes_per_extruder)
-  QMap<int, double> m_extruderUsedLength;  ///< extruder_id → total extrusion length in mm
-  QMap<int, double> m_extruderUsedWeight;  ///< extruder_id → total extrusion weight in g
+  /// Per-extruder filament usage aligned with upstream PrintEstimatedStatistics volumes_per_extruder.
+  QMap<int, double> m_extruderUsedLength;  ///< extruder_id to total extrusion length in mm.
+  QMap<int, double> m_extruderUsedWeight;  ///< extruder_id to total extrusion weight in g.
   float m_maxLayerTime = 0.f;
   int viewModeIndex_ = 0;
   QList<OWzx::TickCode> tickMarks_;
   bool stealthMode_ = false;
-  bool showTravelMoves_ = true;  ///< 显示空驶移动（对齐上游 GCodeViewer travel toggle）
-  bool showBed_ = true;           ///< 显示热床网格（对齐上游 GCodeViewer show_bed）
-  bool showMarker_ = true;        ///< 显示工具位置标记（对齐上游 GCodeViewer show_marker）
+  bool showTravelMoves_ = true;  ///< Travel-move visibility aligned with upstream GCodeViewer.
+  bool showBed_ = true;          ///< Bed-grid visibility aligned with upstream GCodeViewer.
+  bool showMarker_ = true;       ///< Tool-marker visibility aligned with upstream GCodeViewer.
   QTimer *playTimer_ = nullptr;
 
   // Stored parsed segments for view-mode recoloring
@@ -248,8 +272,15 @@ private:
     bool isTravel;
   };
   std::vector<StoredSegment> segments_;
+  struct SourceGcodeLine
+  {
+    int lineNumber = 0;
+    int moveIndex = -1;
+    QString text;
+  };
+  QVector<SourceGcodeLine> m_gcodeSourceLines;
   QHash<QString, int> featureCount_;
-  /// Accumulated elapsed time per move (对齐上游 IMSlider m_layers_times)
+  /// Accumulated elapsed time per move aligned with upstream IMSlider m_layers_times.
   std::vector<float> m_moveAccumulatedTime;
   // Tool position data (updated when currentMove changes)
   bool hasToolPosition_ = false;

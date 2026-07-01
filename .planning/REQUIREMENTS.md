@@ -64,11 +64,11 @@ v3.5 Phase 47-49 are superseded by this milestone. v3.5 Phase 44-46 remain histo
 
 ### Preview Layout, Controls, and Panels
 
-- [ ] **PREVLAY-01:** User sees a Preview page layout matching the supplied screenshot: left summary/sidebar, center G-code viewport, vertical layer slider, bottom move slider, and right legend/statistics/G-code panels.
-- [ ] **PREVLAY-02:** User can move the layer slider and move slider without the model or G-code preview disappearing, losing camera state, or resetting unrelated UI state.
-- [ ] **PREVLAY-03:** User can rotate/pan/zoom the Preview viewport after slicing without the preview disappearing or clearing draw ranges.
-- [ ] **PREVLAY-04:** User can view plate thumbnail/summary, current layer, current move, print time, filament usage, and slice result warnings where upstream exposes equivalent data.
-- [ ] **PREVLAY-05:** User can collapse or resize side panels where the screenshot/upstream workflow expects it, while preserving text fit and avoiding viewport overlap.
+- [x] **PREVLAY-01:** User sees a Preview page layout matching the supplied screenshot: left summary/sidebar, center G-code viewport, vertical layer slider, bottom move slider, and right legend/statistics/G-code panels.
+- [x] **PREVLAY-02:** User can move the layer slider and move slider without the model or G-code preview disappearing, losing camera state, or resetting unrelated UI state.
+- [x] **PREVLAY-03:** User can rotate/pan/zoom the Preview viewport after slicing without the preview disappearing or clearing draw ranges.
+- [x] **PREVLAY-04:** User can view plate thumbnail/summary, current layer, current move, print time, filament usage, and slice result warnings where upstream exposes equivalent data.
+- [x] **PREVLAY-05:** User can collapse or resize side panels where the screenshot/upstream workflow expects it, while preserving text fit and avoiding viewport overlap.
 
 ### G-code Preview Semantics and Rendering
 
@@ -152,11 +152,11 @@ v3.5 Phase 47-49 are superseded by this milestone. v3.5 Phase 44-46 remain histo
 | PREPWF-04 | Phase 53 | Complete |
 | PREPWF-05 | Phase 53 | Complete |
 | PREPWF-06 | Phase 53 | Complete |
-| PREVLAY-01 | Phase 54 | Pending |
-| PREVLAY-02 | Phase 54 | Pending |
-| PREVLAY-03 | Phase 54 | Pending |
-| PREVLAY-04 | Phase 54 | Pending |
-| PREVLAY-05 | Phase 54 | Pending |
+| PREVLAY-01 | Phase 54 | Complete |
+| PREVLAY-02 | Phase 54 | Complete |
+| PREVLAY-03 | Phase 54 | Complete |
+| PREVLAY-04 | Phase 54 | Complete |
+| PREVLAY-05 | Phase 54 | Complete |
 | GCODE-01 | Phase 55 | Pending |
 | GCODE-02 | Phase 55 | Pending |
 | GCODE-03 | Phase 55 | Pending |

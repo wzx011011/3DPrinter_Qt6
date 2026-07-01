@@ -8,19 +8,19 @@ Item {
     id: root
     required property var previewVm
 
-    // 上游 IMSlider 使用 1-indexed 层号显示
+    // Upstream IMSlider displays layers as 1-indexed values.
     property int displayMin: root.previewVm ? root.previewVm.currentLayerMin + 1 : 1
     property int displayMax: root.previewVm ? root.previewVm.currentLayerMax + 1 : 1
     property int maxDisplay: root.previewVm ? Math.max(1, root.previewVm.layerCount) : 1
     property int totalLayers: root.previewVm ? Math.max(0, root.previewVm.layerCount - 1) : 0
 
-    // Tick mark editing state (对齐上游 IMSlider::render_edit_menu tick context)
+    // Tick mark editing state aligned with upstream IMSlider::render_edit_menu.
     property int editMenuTickLayer: -1
     property int editMenuTickType: -1
     // Target layer for add menu (computed from right-click position on groove)
     property int addMenuTargetLayer: -1
 
-    // 鼠标滚轮改变层范围（对齐上游 IMSlider::on_mouse_wheel）
+    // Mouse wheel changes the layer range, aligned with upstream IMSlider::on_mouse_wheel.
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.NoButton
@@ -39,9 +39,9 @@ Item {
         anchors.fill: parent
         spacing: Theme.spacingSM
 
-        Label { text: qsTr("Layer Range"); color: Theme.textPrimary; font.bold: true; font.pixelSize: Theme.fontSizeLG }
+        Label { text: qsTr("层范围"); color: Theme.textPrimary; font.bold: true; font.pixelSize: Theme.fontSizeLG }
 
-        // ── Dual-thumb range slider (对齐上游 IMSlider 双拇指层范围拖拽) ──
+        // Dual-thumb range slider aligned with upstream IMSlider layer-range drag behavior.
         Item {
             id: rangeSliderItem
             Layout.fillWidth: true
@@ -62,7 +62,7 @@ Item {
                 color: Theme.bgElevated
             }
 
-            // Active range track (between two thumbs, 对齐上游 IMSlider scroll_line)
+            // Active range track between the two thumbs, aligned with upstream IMSlider scroll_line.
             Rectangle {
                 x: rangeSliderItem.trackMargin + (root.totalLayers > 0
                      ? (root.previewVm.currentLayerMin / root.totalLayers) * rangeSliderItem.trackWidth
@@ -77,7 +77,7 @@ Item {
                 opacity: 0.7
             }
 
-            // ── Tick marks rendered on slider track (对齐上游 IMSlider::draw_ticks) ──
+            // Tick marks rendered on the slider track, aligned with upstream IMSlider::draw_ticks.
             Repeater {
                 model: root.previewVm ? root.previewVm.tickMarks : []
                 delegate: Item {
@@ -109,7 +109,7 @@ Item {
                         }
                     }
 
-                    // Right-click on tick mark shows edit menu (对齐上游 IMSlider::render_edit_menu)
+                    // Right-click on a tick mark shows the edit menu, aligned with upstream IMSlider.
                     MouseArea {
                         anchors.fill: parent
                         anchors.margins: -4
@@ -123,8 +123,8 @@ Item {
                 }
             }
 
-            // Non-selected range dimming (对齐上游 IMSlider groove outside selected range)
-            // Groove hover tooltip (对齐上游 IMSlider::draw_tick_on_mouse_position hover Z-height 提示)
+            // Non-selected range dimming aligned with the upstream IMSlider groove.
+            // Groove hover tooltip aligned with upstream IMSlider Z-height hover labels.
             Rectangle {
                 id: grooveHoverTooltip
                 x: {
@@ -159,7 +159,7 @@ Item {
                         font.pixelSize: 10
                         font.family: "monospace"
                     }
-                    // 对齐上游 IMSlider::draw_tick_on_mouse_position — 悬浮显示层时间
+                    // Show layer time on hover, aligned with upstream IMSlider::draw_tick_on_mouse_position.
                     Text {
                         text: {
                             if (!grooveHoverMA.containsMouse || !root.previewVm || root.totalLayers <= 0) return ""
@@ -188,7 +188,7 @@ Item {
             }
 
             // Groove interaction area: hover tooltip + click-to-jump + right-click add menu
-            // (对齐上游 IMSlider groove click + right-click add_menu)
+            // Aligned with upstream IMSlider groove click and right-click add_menu behavior.
             MouseArea {
                 id: grooveHoverMA
                 anchors.left: parent.left
@@ -197,7 +197,7 @@ Item {
                 anchors.bottom: parent.bottom
                 hoverEnabled: true
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
-                // Left-click on groove: jump nearest thumb to clicked position (对齐上游 IMSlider slider_behavior)
+                // Left-click on the groove jumps the nearest thumb to the clicked position.
                 onClicked: function(mouse) {
                     if (!root.previewVm || root.totalLayers <= 0) return
 
@@ -211,7 +211,7 @@ Item {
                         return
                     }
 
-                    // Left click — move nearest thumb
+                    // Left-click moves the nearest thumb.
                     var relX2 = mouse.x - rangeSliderItem.trackMargin
                     var clickedLayer2 = Math.round((relX2 / rangeSliderItem.trackWidth) * root.totalLayers)
                     clickedLayer2 = Math.max(0, Math.min(clickedLayer2, root.totalLayers))
@@ -298,7 +298,7 @@ Item {
 
                 ToolTip.visible: minThumbMA.containsMouse
                 ToolTip.delay: 300
-                ToolTip.text: qsTr("Start: %1 (Z: %2 mm)").arg(root.displayMin)
+                ToolTip.text: qsTr("起始: %1 (Z: %2 mm)").arg(root.displayMin)
                             .arg(root.previewVm ? root.previewVm.layerZAt(Math.max(0, root.previewVm.currentLayerMin)).toFixed(2) : "0.00")
             }
 
@@ -348,17 +348,17 @@ Item {
 
                 ToolTip.visible: maxThumbMA.containsMouse
                 ToolTip.delay: 300
-                ToolTip.text: qsTr("End: %1 (Z: %2 mm)").arg(root.displayMax)
+                ToolTip.text: qsTr("结束: %1 (Z: %2 mm)").arg(root.displayMax)
                             .arg(root.previewVm ? root.previewVm.layerZAt(Math.max(0, root.previewVm.currentLayerMax)).toFixed(2) : "0.00")
             }
         }
 
-        // ── Range inputs + summary row ──
+        // Range inputs and summary row.
         RowLayout {
             Layout.fillWidth: true
             spacing: 6
 
-            Label { text: qsTr("From"); color: Theme.textSecondary; font.pixelSize: 10 }
+            Label { text: qsTr("从"); color: Theme.textSecondary; font.pixelSize: 10 }
             CxTextField {
                 id: minInput
                 Layout.preferredWidth: 50
@@ -378,7 +378,7 @@ Item {
 
             Label { text: "-"; color: Theme.textDisabled; font.pixelSize: 12 }
 
-            Label { text: qsTr("To"); color: Theme.textSecondary; font.pixelSize: 10 }
+            Label { text: qsTr("到"); color: Theme.textSecondary; font.pixelSize: 10 }
             CxTextField {
                 id: maxInput
                 Layout.preferredWidth: 50
@@ -404,7 +404,7 @@ Item {
             }
         }
 
-        // ── Jump to Layer (对齐上游 IMSlider::render_go_to_layer_dialog) ──
+        // Jump-to-layer control aligned with upstream IMSlider::render_go_to_layer_dialog.
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 30
@@ -417,7 +417,7 @@ Item {
                 anchors.centerIn: parent
                 spacing: 6
                 Label {
-                    text: qsTr("Jump to Layer")
+                    text: qsTr("跳到层")
                     color: jumpMA.containsMouse ? Theme.accentLight : Theme.textSecondary
                     font.pixelSize: 11
                 }
@@ -444,7 +444,7 @@ Item {
             CxMenu {
                 id: jumpCtxMenu
                 CxMenuItem {
-                    text: qsTr("Jump to Layer...")
+                    text: qsTr("跳到层...")
                     onTriggered: {
                         jumpDialog.open()
                         jumpInput.text = ""
@@ -454,12 +454,12 @@ Item {
             }
         }
 
-        // ── Jump Dialog ──
+        // Jump dialog.
         Dialog {
             id: jumpDialog
             anchors.centerIn: parent.parent
             modal: true
-            title: qsTr("Jump to Layer")
+            title: qsTr("跳到层")
             padding: 16
 
             background: Rectangle {
@@ -470,7 +470,7 @@ Item {
             }
 
             header: Label {
-                text: qsTr("Jump to Layer")
+                text: qsTr("跳到层")
                 color: Theme.textPrimary
                 font.bold: true
                 font.pixelSize: 14
@@ -481,7 +481,7 @@ Item {
                 spacing: 12
 
                 Label {
-                    text: qsTr("Layer (1-%1):").arg(root.maxDisplay)
+                    text: qsTr("层 (1-%1):").arg(root.maxDisplay)
                     color: Theme.textSecondary
                     font.pixelSize: 12
                 }
@@ -504,11 +504,11 @@ Item {
                     spacing: 8
 
                     CxButton {
-                        text: qsTr("Cancel")
+                        text: qsTr("取消")
                         onClicked: jumpDialog.close()
                     }
                     CxButton {
-                        text: qsTr("OK")
+                        text: qsTr("确定")
                         highlighted: true
                         onClicked: doJump()
                     }
@@ -526,20 +526,20 @@ Item {
             }
         }
 
-        // ── Slider Add Menu (对齐上游 IMSlider::render_add_menu) ──
+        // Slider add menu aligned with upstream IMSlider::render_add_menu.
         // Shown on right-click on slider groove (empty area)
         CxMenu {
             id: sliderAddMenu
 
             CxMenuItem {
-                text: qsTr("Add Pause")
+                text: qsTr("添加暂停")
                 onTriggered: {
                     if (root.previewVm && root.addMenuTargetLayer >= 0)
                         root.previewVm.addPauseAtLayer(root.addMenuTargetLayer)
                 }
             }
             CxMenuItem {
-                text: qsTr("Add Custom G-code...")
+                text: qsTr("添加自定义 G-code...")
                 onTriggered: {
                     customGcodeAddDialog.targetLayer = root.addMenuTargetLayer
                     customGcodeAddDialog.gcodeText = ""
@@ -547,7 +547,7 @@ Item {
                 }
             }
             CxMenuItem {
-                text: qsTr("Jump to Layer...")
+                text: qsTr("跳到层...")
                 onTriggered: {
                     jumpDialog.open()
                     jumpInput.text = ""
@@ -556,14 +556,14 @@ Item {
             }
         }
 
-        // ── Slider Edit Menu (对齐上游 IMSlider::render_edit_menu) ──
+        // Slider edit menu aligned with upstream IMSlider::render_edit_menu.
         // Shown on right-click on existing tick mark
         CxMenu {
             id: sliderEditMenu
 
             // PausePrint tick (type 0)
             CxMenuItem {
-                text: qsTr("Delete Pause")
+                text: qsTr("删除暂停")
                 visible: root.editMenuTickType === 0
                 onTriggered: {
                     if (root.previewVm && root.editMenuTickLayer >= 0)
@@ -573,7 +573,7 @@ Item {
 
             // Template tick (type 2)
             CxMenuItem {
-                text: qsTr("Delete Custom Template")
+                text: qsTr("删除自定义模板")
                 visible: root.editMenuTickType === 2
                 onTriggered: {
                     if (root.previewVm && root.editMenuTickLayer >= 0)
@@ -583,7 +583,7 @@ Item {
 
             // CustomGcode tick (type 1)
             CxMenuItem {
-                text: qsTr("Edit Custom G-code")
+                text: qsTr("编辑自定义 G-code")
                 visible: root.editMenuTickType === 1
                 onTriggered: {
                     if (!root.previewVm || root.editMenuTickLayer < 0) return
@@ -594,7 +594,7 @@ Item {
                 }
             }
             CxMenuItem {
-                text: qsTr("Delete Custom G-code")
+                text: qsTr("删除自定义 G-code")
                 visible: root.editMenuTickType === 1
                 onTriggered: {
                     if (root.previewVm && root.editMenuTickLayer >= 0)
@@ -604,7 +604,7 @@ Item {
 
             // ToolChange tick (type 3)
             CxMenuItem {
-                text: qsTr("Delete Filament Change")
+                text: qsTr("删除换料")
                 visible: root.editMenuTickType === 3
                 onTriggered: {
                     if (root.previewVm && root.editMenuTickLayer >= 0)
@@ -614,7 +614,7 @@ Item {
 
             // ColorChange tick (type 4)
             CxMenuItem {
-                text: qsTr("Delete Color Change")
+                text: qsTr("删除换色")
                 visible: root.editMenuTickType === 4
                 onTriggered: {
                     if (root.previewVm && root.editMenuTickLayer >= 0)
@@ -623,18 +623,18 @@ Item {
             }
         }
 
-        // ── Custom G-code Add Dialog (对齐上游 IMSlider custom gcode window) ──
+        // Custom G-code add dialog aligned with the upstream IMSlider custom G-code window.
         CustomGcodeDialog {
             id: customGcodeAddDialog
             previewVm: root.previewVm
             anchors.centerIn: parent.parent
         }
 
-        // ── Custom G-code Edit Dialog ──
+        // Custom G-code edit dialog.
         CustomGcodeDialog {
             id: customGcodeEditDialog
             previewVm: root.previewVm
-            dialogTitle: qsTr("Edit Custom G-code")
+            dialogTitle: qsTr("编辑自定义 G-code")
             isEditMode: true
             anchors.centerIn: parent.parent
         }

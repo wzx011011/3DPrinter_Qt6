@@ -11,7 +11,12 @@ Item {
     required property var previewVm
     focus: true
 
-    // Keyboard shortcuts for Preview (matching upstream GCodeViewer)
+    property bool leftPanelExpanded: true
+    property bool rightPanelExpanded: true
+    readonly property int leftPanelWidth: leftPanelExpanded ? 286 : 36
+    readonly property int rightPanelWidth: rightPanelExpanded ? 322 : 42
+    readonly property bool hasPreviewData: root.previewVm && root.previewVm.previewReady
+
     Keys.onPressed: (event) => {
         if (!root.previewVm)
             return
@@ -20,18 +25,17 @@ Item {
             root.previewVm.togglePlayPause()
             event.accepted = true
             break
-        // Move navigation（对齐上游 IMSlider Left/Right 单步，Shift 10 步，Ctrl 100 步）
         case Qt.Key_Left: {
-            var step = event.modifiers & Qt.ControlModifier ? 100
-                     : event.modifiers & Qt.ShiftModifier ? 10 : 1
+            const step = event.modifiers & Qt.ControlModifier ? 100
+                       : event.modifiers & Qt.ShiftModifier ? 10 : 1
             root.previewVm.setCurrentMove(Math.max(0, root.previewVm.currentMove - step))
             event.accepted = true
             break
         }
         case Qt.Key_Right: {
-            var stepR = event.modifiers & Qt.ControlModifier ? 100
-                      : event.modifiers & Qt.ShiftModifier ? 10 : 1
-            root.previewVm.setCurrentMove(Math.min(root.previewVm.moveCount, root.previewVm.currentMove + stepR))
+            const step = event.modifiers & Qt.ControlModifier ? 100
+                       : event.modifiers & Qt.ShiftModifier ? 10 : 1
+            root.previewVm.setCurrentMove(Math.min(root.previewVm.moveCount, root.previewVm.currentMove + step))
             event.accepted = true
             break
         }
@@ -43,7 +47,6 @@ Item {
             root.previewVm.setCurrentMove(root.previewVm.moveCount)
             event.accepted = true
             break
-        // Layer navigation（对齐上游 IMSlider Up/Down 导航层滑块）
         case Qt.Key_PageUp:
             root.previewVm.moveLayerRange(event.modifiers & Qt.ShiftModifier ? 10 : 1)
             event.accepted = true
@@ -57,118 +60,91 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: Theme.bgBase
+        color: "#55575f"
     }
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: Theme.spacingMD
-        anchors.margins: Theme.spacingLG
+        spacing: 0
 
-        RowLayout {
+        Rectangle {
+            id: previewHeader
             Layout.fillWidth: true
-            spacing: Theme.spacingMD
+            Layout.preferredHeight: 42
+            color: "#2f3036"
+            border.width: 0
 
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 48
-                radius: Theme.radiusXXL
-                color: Theme.bgPanel
-                border.width: 1
-                border.color: Theme.borderSubtle
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                spacing: 10
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 14
-                    anchors.rightMargin: 14
-                    spacing: Theme.spacingMD
+                Label {
+                    text: qsTr("预览模式")
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeLG
+                    font.bold: true
+                }
 
-                    Label {
-                        text: qsTr("预览模式")
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontSizeLG
-                        font.bold: true
-                    }
+                CxComboBox {
+                    Layout.preferredWidth: 190
+                    model: root.previewVm ? root.previewVm.viewModes : []
+                    currentIndex: root.previewVm ? root.previewVm.viewModeIndex : 0
+                    onActivated: if (root.previewVm) root.previewVm.setViewModeIndex(currentIndex)
+                }
 
-                    CxComboBox {
-                        Layout.preferredWidth: 190
-                        model: root.previewVm.viewModes
-                        currentIndex: root.previewVm.viewModeIndex
-                        onActivated: root.previewVm.setViewModeIndex(currentIndex)
-                    }
+                Row {
+                    spacing: 4
+                    Repeater {
+                        model: [
+                            { label: qsTr("顶"), preset: 0 },
+                            { label: qsTr("前"), preset: 1 },
+                            { label: qsTr("右"), preset: 2 },
+                            { label: qsTr("等轴"), preset: 3 }
+                        ]
+                        delegate: Rectangle {
+                            required property var modelData
+                            width: modelData.preset === 3 ? 44 : 28
+                            height: 28
+                            radius: 4
+                            color: cameraButtonMouse.containsMouse ? Theme.bgHover : Theme.bgElevated
+                            border.width: 1
+                            border.color: cameraButtonMouse.containsMouse ? Theme.accentDark : Theme.borderSubtle
 
-                    Item { Layout.fillWidth: true }
+                            Text {
+                                anchors.centerIn: parent
+                                text: parent.modelData.label
+                                color: Theme.textPrimary
+                                font.pixelSize: 11
+                            }
 
-                    // Camera preset view buttons (matching upstream GCodeViewer)
-                    Row {
-                        spacing: 4
-                        Repeater {
-                            model: [
-                                { label: qsTr("顶"), preset: 0 },
-                                { label: qsTr("前"), preset: 1 },
-                                { label: qsTr("右"), preset: 2 },
-                                { label: qsTr("等轴"), preset: 3 }
-                            ]
-                            delegate: Rectangle {
-                                required property var modelData
-                                width: 26
-                                height: 26
-                                radius: 6
-                                color: viewMA.containsMouse ? Theme.bgHover : Theme.bgPanel
-                                border.color: viewMA.containsMouse ? Theme.borderDefault : Theme.borderSubtle
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: parent.modelData.label
-                                    color: Theme.textSecondary
-                                    font.pixelSize: 10
-                                }
-
-                                MouseArea {
-                                    id: viewMA
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: previewViewport.requestViewPreset(parent.modelData.preset)
-                                }
+                            MouseArea {
+                                id: cameraButtonMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: previewViewport.requestViewPreset(parent.modelData.preset)
                             }
                         }
                     }
+                }
 
-                    Rectangle {
-                        Layout.preferredHeight: 28
-                        Layout.preferredWidth: 118
-                        radius: 10
-                        color: Theme.accentSubtle
-                        border.width: 1
-                        border.color: Theme.accentDark
+                Item { Layout.fillWidth: true }
 
-                        Label {
-                            anchors.centerIn: parent
-                            text: root.previewVm.slicing ? (root.previewVm.progress + "%") : root.previewVm.estimatedTime
-                            color: Theme.accentLight
-                            font.bold: true
-                        }
-                    }
+                HeaderMetric {
+                    label: qsTr("时间")
+                    value: root.previewVm ? (root.previewVm.slicing ? root.previewVm.progress + "%" : root.previewVm.totalTime) : "--"
+                }
 
-                    // Layer/move summary (对齐上游 GCodeViewer header info)
-                    Rectangle {
-                        visible: root.previewVm && root.previewVm.layerCount > 0
-                        Layout.preferredHeight: 28
-                        Layout.preferredWidth: 130
-                        radius: 10
-                        color: Theme.bgPanel
-                        border.width: 1
-                        border.color: Theme.borderSubtle
+                HeaderMetric {
+                    label: qsTr("层")
+                    value: root.previewVm ? root.previewVm.currentLayerLabel : "-- / --"
+                }
 
-                        Label {
-                            anchors.centerIn: parent
-                            text: (root.previewVm ? root.previewVm.layerCount : 0) + " 层 · "
-                                  + (root.previewVm ? root.previewVm.moveCount : 0) + " 步"
-                            color: Theme.textTertiary
-                            font.pixelSize: 11
-                        }
-                    }
+                HeaderMetric {
+                    label: qsTr("移动")
+                    value: root.previewVm ? root.previewVm.currentMoveLabel : "-- / --"
                 }
             }
         }
@@ -176,38 +152,135 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: Theme.spacingMD
+            spacing: 0
 
             Rectangle {
-                Layout.preferredWidth: 240
+                id: leftPanel
+                Layout.preferredWidth: root.leftPanelWidth
                 Layout.fillHeight: true
-                color: Theme.bgPanel
-                radius: Theme.radiusXXL
+                color: "#27292f"
                 border.width: 1
-                border.color: Theme.borderSubtle
+                border.color: "#3a3d45"
+                clip: true
+
+                Behavior on Layout.preferredWidth { NumberAnimation { duration: 120 } }
+
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: Theme.spacingLG
-                    Components.LayerSlider {
-                        Layout.fillWidth: true
-                        previewVm: root.previewVm
+                    anchors.margins: root.leftPanelExpanded ? 10 : 4
+                    spacing: 10
+
+                    SidePanelHeader {
+                        title: qsTr("盘与层")
+                        expanded: root.leftPanelExpanded
+                        onToggleRequested: root.leftPanelExpanded = !root.leftPanelExpanded
                     }
-                    Item { Layout.fillHeight: true }
+
+                    ColumnLayout {
+                        visible: root.leftPanelExpanded
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        spacing: 10
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 112
+                            radius: 6
+                            color: "#383b43"
+                            border.width: 1
+                            border.color: root.hasPreviewData ? Theme.accentDark : Theme.borderSubtle
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 10
+
+                                Rectangle {
+                                    Layout.preferredWidth: 74
+                                    Layout.preferredHeight: 74
+                                    radius: 6
+                                    color: "#4b4d56"
+                                    border.width: 1
+                                    border.color: Theme.borderSubtle
+
+                                    Canvas {
+                                        anchors.fill: parent
+                                        anchors.margins: 12
+                                        onPaint: {
+                                            const ctx = getContext("2d")
+                                            ctx.reset()
+                                            ctx.strokeStyle = root.hasPreviewData ? Theme.accent : Theme.textTertiary
+                                            ctx.lineWidth = 3
+                                            ctx.beginPath()
+                                            ctx.moveTo(width * 0.18, height * 0.70)
+                                            ctx.lineTo(width * 0.78, height * 0.38)
+                                            ctx.lineTo(width * 0.62, height * 0.20)
+                                            ctx.moveTo(width * 0.36, height * 0.60)
+                                            ctx.lineTo(width * 0.68, height * 0.74)
+                                            ctx.stroke()
+                                        }
+                                    }
+                                }
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 5
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: root.previewVm ? root.previewVm.plateSummary : qsTr("当前盘")
+                                        color: Theme.textPrimary
+                                        font.bold: true
+                                        font.pixelSize: Theme.fontSizeMD
+                                        elide: Text.ElideRight
+                                    }
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: root.previewVm ? root.previewVm.previewStatusText : qsTr("请先切片或载入 G-code")
+                                        color: root.hasPreviewData ? Theme.accentLight : Theme.textSecondary
+                                        font.pixelSize: Theme.fontSizeSM
+                                        elide: Text.ElideRight
+                                    }
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: root.previewVm ? root.previewVm.warningSummary : ""
+                                        color: Theme.textTertiary
+                                        font.pixelSize: Theme.fontSizeSM
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+                        }
+
+                        InfoRow { label: qsTr("层范围"); value: root.previewVm ? root.previewVm.currentLayerLabel : "--" }
+                        InfoRow { label: qsTr("当前移动"); value: root.previewVm ? root.previewVm.currentMoveLabel : "--" }
+                        InfoRow { label: qsTr("当前时间"); value: root.previewVm ? root.previewVm.currentTime : "0s" }
+                        InfoRow { label: qsTr("总时间"); value: root.previewVm ? root.previewVm.totalTime : "--:--:--" }
+                        InfoRow { label: qsTr("耗材"); value: root.previewVm ? root.previewVm.filamentUsed : "--" }
+                        InfoRow { label: qsTr("重量"); value: root.previewVm ? root.previewVm.filamentWeight : "--" }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 1
+                            color: Theme.borderSubtle
+                        }
+
+                        Components.LayerSlider {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            previewVm: root.previewVm
+                        }
+                    }
                 }
             }
 
-            Rectangle {
+            Item {
+                id: centerArea
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                color: Theme.bgSurface
-                radius: Theme.radiusXXL
-                border.width: 1
-                border.color: Theme.borderSubtle
 
                 GLViewport {
                     id: previewViewport
                     anchors.fill: parent
-                    anchors.margins: 8
                     canvasType: GLViewport.CanvasPreview
                     previewData: root.previewVm.gcodePreviewData
                     layerMin: root.previewVm.currentLayerMin
@@ -216,89 +289,330 @@ Item {
                     showTravelMoves: root.previewVm.showTravelMoves
                     showBed: root.previewVm.showBed
                     showMarker: root.previewVm.showMarker
-                    // SLICE-01: 着色模式绑定（previewVm.viewModeIndex ↔ GLViewport.gcodeViewMode）
                     gcodeViewMode: root.previewVm.viewModeIndex
                     markerX: root.previewVm.toolX
                     markerY: root.previewVm.toolY
                     markerZ: root.previewVm.toolZ
                 }
 
-                // 工具位置提示框（对齐上游 GCodeViewer::Marker::render）
+                Rectangle {
+                    visible: !root.hasPreviewData
+                    anchors.centerIn: parent
+                    width: emptyStateText.implicitWidth + 28
+                    height: 40
+                    radius: 6
+                    color: "#20242bcc"
+                    border.width: 1
+                    border.color: Theme.borderSubtle
+
+                    Label {
+                        id: emptyStateText
+                        anchors.centerIn: parent
+                        text: root.previewVm ? root.previewVm.previewStatusText : qsTr("请先切片或载入 G-code")
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeMD
+                    }
+                }
+
                 Components.ToolPositionTooltip {
                     anchors.left: parent.left
                     anchors.bottom: parent.bottom
-                    anchors.margins: 16
+                    anchors.margins: 14
                     previewVm: root.previewVm
-                    visible: root.previewVm ? root.previewVm.showMarker : true
+                    visible: root.previewVm ? root.previewVm.showMarker : false
                 }
             }
 
             Rectangle {
-                Layout.preferredWidth: 280
+                id: rightPanel
+                Layout.preferredWidth: root.rightPanelWidth
                 Layout.fillHeight: true
-                color: Theme.bgPanel
-                radius: Theme.radiusXXL
+                color: "#202126"
                 border.width: 1
-                border.color: Theme.borderSubtle
+                border.color: "#3a3d45"
+                clip: true
+
+                Behavior on Layout.preferredWidth { NumberAnimation { duration: 120 } }
+
                 ColumnLayout {
-                    id: rightPanelLayout
                     anchors.fill: parent
-                    anchors.margins: Theme.spacingLG
-                    spacing: Theme.spacingLG
-                    property bool legendVisible: true
-                    Components.StatsPanel {
-                        Layout.fillWidth: true
-                        previewVm: root.previewVm
+                    anchors.margins: root.rightPanelExpanded ? 10 : 4
+                    spacing: 8
+
+                    SidePanelHeader {
+                        title: qsTr("分析")
+                        expanded: root.rightPanelExpanded
+                        onToggleRequested: root.rightPanelExpanded = !root.rightPanelExpanded
                     }
-                    // 图例折叠开关（对齐上游 GCodeViewer m_legend_enabled）
-                    RowLayout {
+
+                    ColumnLayout {
+                        visible: root.rightPanelExpanded
                         Layout.fillWidth: true
-                        spacing: Theme.spacingSM
-                        Text {
-                            text: qsTr("图例")
-                            color: Theme.textPrimary
-                            font.pixelSize: Theme.fontSizeLG
-                            font.bold: true
+                        Layout.fillHeight: true
+                        spacing: 8
+
+                        ScrollView {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Math.min(360, parent.height * 0.42)
+                            clip: true
+                            contentWidth: availableWidth
+
+                            ColumnLayout {
+                                width: parent.width
+                                spacing: 8
+
+                                Components.StatsPanel {
+                                    Layout.fillWidth: true
+                                    previewVm: root.previewVm
+                                }
+
+                                Components.Legend {
+                                    Layout.fillWidth: true
+                                    previewVm: root.previewVm
+                                }
+                            }
                         }
-                        Item { Layout.fillWidth: true }
-                        // Collapse/expand toggle
-                        Text {
-                            text: rightPanelLayout.legendVisible ? "▾" : "▸"
-                            color: Theme.textTertiary
-                            font.pixelSize: 14
-                            MouseArea {
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            radius: 6
+                            color: "#191b20"
+                            border.width: 1
+                            border.color: Theme.borderSubtle
+                            clip: true
+
+                            ColumnLayout {
                                 anchors.fill: parent
-                                anchors.margins: -6
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: rightPanelLayout.legendVisible = !rightPanelLayout.legendVisible
+                                spacing: 0
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 34
+                                    Layout.leftMargin: 10
+                                    Layout.rightMargin: 10
+
+                                    Label {
+                                        text: qsTr("G-code")
+                                        color: Theme.textPrimary
+                                        font.bold: true
+                                        font.pixelSize: Theme.fontSizeMD
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                    Label {
+                                        text: root.previewVm ? qsTr("行 %1 / %2").arg(root.previewVm.currentGcodeLine).arg(root.previewVm.gcodeLineCount) : qsTr("行 -- / --")
+                                        color: Theme.textTertiary
+                                        font.pixelSize: Theme.fontSizeSM
+                                    }
+                                }
+
+                                ListView {
+                                    id: gcodeList
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    clip: true
+                                    model: root.previewVm ? root.previewVm.gcodeLines : []
+
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        width: gcodeList.width
+                                        height: 22
+                                        color: modelData.current ? "#3a2515" : "transparent"
+
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 8
+                                            anchors.rightMargin: 8
+                                            spacing: 8
+
+                                            Text {
+                                                Layout.preferredWidth: 52
+                                                text: modelData.line
+                                                color: modelData.current ? "#ff9f40" : Theme.textTertiary
+                                                horizontalAlignment: Text.AlignRight
+                                                font.pixelSize: 10
+                                                font.family: "Consolas"
+                                            }
+                                            Text {
+                                                Layout.fillWidth: true
+                                                text: modelData.text
+                                                color: modelData.current ? "#ffb866" : Theme.textSecondary
+                                                elide: Text.ElideRight
+                                                font.pixelSize: 10
+                                                font.family: "Consolas"
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
-                    Components.Legend {
-                        Layout.fillWidth: true
-                        previewVm: root.previewVm
-                        visible: rightPanelLayout.legendVisible
-                        Layout.preferredHeight: rightPanelLayout.legendVisible ? implicitHeight : 0
-                        Behavior on Layout.preferredHeight { NumberAnimation { duration: 150; easing.type: Easing.InOutCubic } }
-                        clip: true
+                }
+            }
+
+            Rectangle {
+                id: verticalLayerRail
+                Layout.preferredWidth: 44
+                Layout.fillHeight: true
+                color: "#2f323a"
+                border.width: 1
+                border.color: "#3a3d45"
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 6
+                    spacing: 8
+
+                    Label {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: root.previewVm ? root.previewVm.layerCount : 0
+                        color: Theme.accentLight
+                        font.pixelSize: Theme.fontSizeSM
+                        font.bold: true
                     }
-                    Item { Layout.fillHeight: true }
+
+                    Slider {
+                        id: verticalLayerSlider
+                        Layout.fillHeight: true
+                        Layout.alignment: Qt.AlignHCenter
+                        orientation: Qt.Vertical
+                        from: 0
+                        to: root.previewVm ? Math.max(0, root.previewVm.layerCount - 1) : 0
+                        stepSize: 1
+                        value: root.previewVm ? root.previewVm.currentLayerMax : 0
+                        enabled: root.previewVm && root.previewVm.layerCount > 0
+                        onMoved: if (root.previewVm) root.previewVm.setLayerRange(Math.round(value), Math.round(value))
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: root.previewVm ? root.previewVm.currentLayerMax + 1 : 0
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeSM
+                    }
                 }
             }
         }
 
         Rectangle {
+            id: moveSliderBar
             Layout.fillWidth: true
-            Layout.preferredHeight: 56
-            color: Theme.bgPanel
-            radius: Theme.radiusXXL
+            Layout.preferredHeight: 58
+            color: "#2f3036"
             border.width: 1
-            border.color: Theme.borderSubtle
+            border.color: "#3a3d45"
+
             Components.MoveSlider {
                 anchors.fill: parent
-                anchors.margins: Theme.spacingLG
+                anchors.leftMargin: 14
+                anchors.rightMargin: 14
+                anchors.topMargin: 8
+                anchors.bottomMargin: 8
                 previewVm: root.previewVm
             }
+        }
+    }
+
+    component HeaderMetric: Rectangle {
+        id: headerMetricRoot
+        property string label: ""
+        property string value: ""
+
+        Layout.preferredHeight: 28
+        Layout.preferredWidth: 128
+        radius: 4
+        color: "#24272e"
+        border.width: 1
+        border.color: Theme.borderSubtle
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 8
+            anchors.rightMargin: 8
+            spacing: 6
+            Label {
+                text: headerMetricRoot.label
+                color: Theme.textTertiary
+                font.pixelSize: Theme.fontSizeXS
+            }
+            Label {
+                Layout.fillWidth: true
+                text: headerMetricRoot.value
+                color: Theme.textPrimary
+                font.pixelSize: Theme.fontSizeSM
+                font.bold: true
+                elide: Text.ElideRight
+                horizontalAlignment: Text.AlignRight
+            }
+        }
+    }
+
+    component SidePanelHeader: RowLayout {
+        id: sidePanelHeaderRoot
+        property string title: ""
+        property bool expanded: true
+        signal toggleRequested()
+
+        Layout.fillWidth: true
+        spacing: 6
+
+        Label {
+            visible: sidePanelHeaderRoot.expanded
+            Layout.fillWidth: true
+            text: sidePanelHeaderRoot.title
+            color: Theme.textPrimary
+            font.pixelSize: Theme.fontSizeMD
+            font.bold: true
+            elide: Text.ElideRight
+        }
+
+        Rectangle {
+            Layout.preferredWidth: 26
+            Layout.preferredHeight: 26
+            radius: 4
+            color: headerMouse.containsMouse ? Theme.bgHover : Theme.bgElevated
+            border.width: 1
+            border.color: Theme.borderSubtle
+
+            Text {
+                anchors.centerIn: parent
+                text: sidePanelHeaderRoot.expanded ? "<" : ">"
+                color: Theme.textPrimary
+                font.pixelSize: 16
+            }
+
+            MouseArea {
+                id: headerMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: toggleRequested()
+            }
+        }
+    }
+
+    component InfoRow: RowLayout {
+        id: infoRowRoot
+        property string label: ""
+        property string value: ""
+
+        Layout.fillWidth: true
+        spacing: 8
+
+        Label {
+            Layout.preferredWidth: 72
+            text: infoRowRoot.label
+            color: Theme.textTertiary
+            font.pixelSize: Theme.fontSizeSM
+            elide: Text.ElideRight
+        }
+        Label {
+            Layout.fillWidth: true
+            text: infoRowRoot.value
+            color: Theme.textPrimary
+            font.pixelSize: Theme.fontSizeSM
+            horizontalAlignment: Text.AlignRight
+            elide: Text.ElideRight
         }
     }
 }

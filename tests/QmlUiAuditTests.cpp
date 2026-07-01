@@ -27,6 +27,7 @@ private slots:
   void previewRhiRendererResetsGpuStateAfterResourceRelease();
   void previewRhiInteractionSettersPreservePreviewPayload();
   void previewNormalPathCoversFullWorkflowBindingsAndDiagnostics();
+  void previewLayoutRestoresScreenshotRegionsAndGcodePanel();
   void previewStatsPanelCallsOnlyQmlInvokableSetters();
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
   void visiblePlaceholderSurfacesAreHonest();
@@ -813,6 +814,69 @@ void QmlUiAuditTests::previewNormalPathCoversFullWorkflowBindingsAndDiagnostics(
            "PreviewViewModel must log payload size/range diagnostics after parsing");
 }
 
+void QmlUiAuditTests::previewLayoutRestoresScreenshotRegionsAndGcodePanel()
+{
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  const QString previewHeader = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.h"));
+  const QString statsPanel = readSource(QStringLiteral("src/qml_gui/components/StatsPanel.qml"));
+  const QString moveSlider = readSource(QStringLiteral("src/qml_gui/components/MoveSlider.qml"));
+  QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
+  QVERIFY2(!previewHeader.isEmpty(), "Unable to read PreviewViewModel.h");
+  QVERIFY2(!statsPanel.isEmpty(), "Unable to read StatsPanel.qml");
+  QVERIFY2(!moveSlider.isEmpty(), "Unable to read MoveSlider.qml");
+
+  const QStringList requiredRegions = {
+    QStringLiteral("id: previewHeader"),
+    QStringLiteral("id: leftPanel"),
+    QStringLiteral("id: centerArea"),
+    QStringLiteral("id: rightPanel"),
+    QStringLiteral("id: verticalLayerRail"),
+    QStringLiteral("id: moveSliderBar"),
+    QStringLiteral("Components.LayerSlider"),
+    QStringLiteral("Components.MoveSlider"),
+    QStringLiteral("Components.StatsPanel"),
+    QStringLiteral("Components.Legend"),
+    QStringLiteral("Components.ToolPositionTooltip"),
+    QStringLiteral("id: gcodeList")
+  };
+  for (const QString &region : requiredRegions) {
+    QVERIFY2(previewPage.contains(region),
+             qPrintable(QStringLiteral("Phase 54 Preview layout missing region: %1").arg(region)));
+  }
+
+  const QStringList requiredStateBindings = {
+    QStringLiteral("root.previewVm.currentLayerLabel"),
+    QStringLiteral("root.previewVm.currentMoveLabel"),
+    QStringLiteral("root.previewVm.plateSummary"),
+    QStringLiteral("root.previewVm.warningSummary"),
+    QStringLiteral("root.previewVm.gcodeLines"),
+    QStringLiteral("root.previewVm.currentGcodeLine"),
+    QStringLiteral("root.leftPanelExpanded"),
+    QStringLiteral("root.rightPanelExpanded")
+  };
+  for (const QString &binding : requiredStateBindings) {
+    QVERIFY2(previewPage.contains(binding),
+             qPrintable(QStringLiteral("Phase 54 Preview layout missing binding: %1").arg(binding)));
+  }
+
+  QVERIFY2(!previewPage.contains(QStringLiteral("SoftwareViewport")),
+           "PreviewPage must keep SoftwareViewport out of the normal layout path");
+  QVERIFY2(!previewPage.contains(QStringLiteral("QFile"))
+               && !previewPage.contains(QStringLiteral("FileReader"))
+               && !previewPage.contains(QStringLiteral("XMLHttpRequest")),
+           "PreviewPage must not read or parse G-code files in QML");
+  QVERIFY2(previewHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList gcodeLines READ gcodeLines"))
+               && previewHeader.contains(QStringLiteral("Q_PROPERTY(QString currentLayerLabel READ currentLayerLabel"))
+               && previewHeader.contains(QStringLiteral("Q_PROPERTY(QString plateSummary READ plateSummary")),
+           "PreviewViewModel must own the Phase 54 Preview summary and G-code text data");
+  QVERIFY2(statsPanel.contains(QStringLiteral("root.previewVm.setShowTravelMoves(checked)"))
+               && statsPanel.contains(QStringLiteral("root.previewVm.setShowBed(checked)"))
+               && statsPanel.contains(QStringLiteral("root.previewVm.setShowMarker(checked)")),
+           "StatsPanel visibility toggles must route through PreviewViewModel invokable setters");
+  QVERIFY2(moveSlider.contains(QStringLiteral("root.previewVm.setCurrentMove(Math.round(value))")),
+           "MoveSlider must update the move range through PreviewViewModel");
+}
+
 void QmlUiAuditTests::previewStatsPanelCallsOnlyQmlInvokableSetters()
 {
   const QString statsPanel = readSource(QStringLiteral("src/qml_gui/components/StatsPanel.qml"));
@@ -975,7 +1039,7 @@ void QmlUiAuditTests::plateContextMenuItemsWiredAndNonEmpty()
            "PreparePage must not contain empty onTriggered: {} handlers");
 }
 
-// ── Phase 51-03 (SHELL-03): shell actions bind to BackendContext gates ──
+// Phase 51-03 (SHELL-03): shell actions bind to BackendContext gates.
 // Locks the BBLTopbar binding contract from Plan 51-02 against regression:
 // Undo/Redo/Slice/Save must bind `enabled` to the C++ gate properties so the
 // undo-stack-empty UX bug (Undo clickable when the stack is empty) cannot
@@ -988,7 +1052,7 @@ void QmlUiAuditTests::shellActionsBindToBackendContextGates()
   QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
 
   // Undo/Redo toolbar buttons must bind enabled to BOTH the page gate AND the
-  // C++ undo/redo-stack gate (defense-in-depth — CONTEXT decision to keep both
+  // C++ undo/redo-stack gate (defense-in-depth; CONTEXT decision to keep both
   // checks in QML). This is the concrete fix for the stack-empty UX bug.
   QVERIFY2(topbar.contains(QStringLiteral("backend.currentPage === backend.tp3DEditor && backend.canUndo")),
            "Undo toolbar button must bind enabled to page-gate AND backend.canUndo");
@@ -1017,7 +1081,7 @@ void QmlUiAuditTests::shellActionsBindToBackendContextGates()
            qPrintable(QStringLiteral("backend.canRedo must appear >= 2 times (toolbar + menu), got %1").arg(canRedoCount)));
 }
 
-// ── Phase 51-03 (SHELL-04): notification surfaces stay non-overlapping ──
+// Phase 51-03 (SHELL-04): notification surfaces stay non-overlapping.
 // Guards the existing non-overlapping placement of the 3 notification surfaces
 // (ErrorBanner inline / ErrorToast z=200 floating / NotificationCenter top-right
 // popup). Phase 51 verifies + guards, it does not redesign placement (CONTEXT).
@@ -1036,7 +1100,7 @@ void QmlUiAuditTests::notificationSurfacesStayNonOverlapping()
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
 
   // ErrorBanner: inline push-down between top bar and content. It must NOT float
-  // at z=200 (that placement belongs to ErrorToast) — a z=200 on the banner
+  // at z=200 (that placement belongs to ErrorToast); a z=200 on the banner
   // would overlap the viewport.
   QVERIFY2(banner.contains(QStringLiteral("Layout.fillWidth: true")),
            "ErrorBanner must stay inline Layout.fillWidth (no overlap with viewport)");
@@ -1065,7 +1129,7 @@ void QmlUiAuditTests::notificationSurfacesStayNonOverlapping()
            "main.qml must mount NotificationCenter");
 }
 
-// ── Phase 52-03 (PREPSB-01..04): LeftSidebar + FilamentSlot bindings audit ──
+// Phase 52-03 (PREPSB-01..04): LeftSidebar + FilamentSlot bindings audit.
 // Source-text audit that guards every Plan 52-02 binding against regression:
 // dynamic extruder-count slot count (PREPSB-01), hidden dead color picker
 // (PREPSB-01), dirty dots + read-only gating (PREPSB-03), enabled Setting

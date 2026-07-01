@@ -3,48 +3,51 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import ".."
 
-// Legend — 图例组件（对齐上游 GCodeViewer legend）
-// 支持三种渲染模式：
-//   0 = discrete: 色块 + 标签 + 计数（FeatureType 等）
-//   1 = gradient:  渐变条 + min/max 标签（Height/Feedrate/Temperature 等）
-//   2 = extruder:  挤出机色块 + 标签 + 计数（Tool/ColorPrint/FilamentId）
 Item {
     id: root
     required property var previewVm
 
-    // 0=discrete, 1=gradient, 2=extruder
     readonly property int legendType: root.previewVm ? root.previewVm.legendType : 0
+    implicitHeight: legendLayout.implicitHeight
 
     ColumnLayout {
-        anchors.fill: parent
-        spacing: Theme.spacingSM
+        id: legendLayout
+        anchors.left: parent.left
+        anchors.right: parent.right
+        spacing: 8
 
-        Label { text: qsTr("图例"); color: Theme.textPrimary; font.bold: true; font.pixelSize: Theme.fontSizeLG }
+        Label {
+            text: qsTr("图例")
+            color: Theme.textPrimary
+            font.bold: true
+            font.pixelSize: Theme.fontSizeLG
+        }
 
         Rectangle {
             Layout.fillWidth: true
-            radius: 12
-            color: Theme.bgElevated
+            radius: 6
+            color: "#24272e"
             border.width: 1
             border.color: Theme.borderSubtle
+            implicitHeight: legendContent.implicitHeight + 18
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 10
+                id: legendContent
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 9
                 spacing: 8
 
-                // ── Gradient legend (对齐上游 Range_Colors bluish→reddish) ──
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 6
                     visible: root.legendType === 1
 
-                    // Gradient bar
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 16
                         radius: 4
-                        // 10-stop gradient matching upstream GCodeViewer Range_Colors
                         gradient: Gradient {
                             GradientStop { position: 0.0; color: "#0b2c7a" }
                             GradientStop { position: 0.12; color: "#154d8a" }
@@ -61,46 +64,52 @@ Item {
                         border.color: Theme.borderSubtle
                     }
 
-                    // Min / Max labels
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 4
-
                         Text {
                             text: root.previewVm ? root.previewVm.legendGradientMinLabel : "--"
                             color: Theme.textPrimary
-                            font.pixelSize: 10
-                            font.family: "monospace"
+                            font.pixelSize: Theme.fontSizeXS
+                            font.family: "Consolas"
                         }
                         Item { Layout.fillWidth: true }
                         Text {
                             text: root.previewVm ? root.previewVm.legendGradientMaxLabel : "--"
                             color: Theme.textPrimary
-                            font.pixelSize: 10
-                            font.family: "monospace"
+                            font.pixelSize: Theme.fontSizeXS
+                            font.family: "Consolas"
                         }
                     }
                 }
 
-                // ── Discrete / Extruder legend ──
                 Repeater {
                     model: root.previewVm ? root.previewVm.legendItems : []
                     delegate: RowLayout {
+                        Layout.fillWidth: true
                         spacing: 8
                         visible: root.legendType !== 1
 
                         Rectangle {
                             width: 10
                             height: 10
-                            radius: 3
+                            radius: 2
                             color: modelData.color
                         }
                         Label {
-                            text: modelData.label + (modelData.count > 0 ? (" (" + modelData.count + ")") : "")
+                            Layout.fillWidth: true
+                            text: modelData.label + (modelData.count > 0 ? " (" + modelData.count + ")" : "")
                             color: Theme.textPrimary
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fontSizeSM
+                            elide: Text.ElideRight
                         }
                     }
+                }
+
+                Label {
+                    visible: !root.previewVm || root.previewVm.legendItems.length === 0
+                    text: qsTr("暂无图例数据")
+                    color: Theme.textTertiary
+                    font.pixelSize: Theme.fontSizeSM
                 }
             }
         }

@@ -15,7 +15,7 @@
 
 namespace
 {
-  // 对齐上游 short_and_splitted_time
+  // Aligned with upstream short_and_splitted_time.
   QString formatTime(float totalSecs)
   {
     if (totalSecs < 0.f) totalSecs = 0.f;
@@ -225,6 +225,7 @@ PreviewViewModel::PreviewViewModel(SliceService *sliceService, QObject *parent)
     }
     currentMove_ = qMin(currentMove_ + 12, moveCount_);
     updateToolPositionData();
+    rebuildGcodeLineWindow();
     emit stateChanged(); });
 
   connect(sliceService_, &SliceService::progressChanged, this, &PreviewViewModel::stateChanged);
@@ -272,9 +273,60 @@ QString PreviewViewModel::estimatedTime() const
   return estimatedTime_;
 }
 
+bool PreviewViewModel::previewReady() const
+{
+  return !gcodePreviewData_.isEmpty() && moveCount_ > 0;
+}
+
+QString PreviewViewModel::previewStatusText() const
+{
+  if (slicing())
+    return tr("正在切片，预览将在切片完成后更新");
+  if (previewReady())
+    return tr("预览已就绪");
+  return tr("请先切片或载入 G-code");
+}
+
+QString PreviewViewModel::currentLayerLabel() const
+{
+  if (layerCount_ <= 0)
+    return tr("-- / --");
+  return tr("%1-%2 / %3")
+      .arg(currentLayerMin_ + 1)
+      .arg(currentLayerMax_ + 1)
+      .arg(layerCount_);
+}
+
+QString PreviewViewModel::currentMoveLabel() const
+{
+  if (moveCount_ <= 0)
+    return tr("-- / --");
+  return tr("%1 / %2").arg(currentMove_).arg(moveCount_);
+}
+
+QString PreviewViewModel::plateSummary() const
+{
+  if (!sliceService_ || sliceService_->resultPlateIndex() < 0)
+    return tr("当前盘");
+
+  const QString label = sliceService_->resultPlateLabel();
+  if (!label.isEmpty())
+    return label;
+  return tr("盘 %1").arg(sliceService_->resultPlateIndex() + 1);
+}
+
+QString PreviewViewModel::warningSummary() const
+{
+  if (!previewReady())
+    return previewStatusText();
+  if (travelMoveCount_ <= 0)
+    return tr("未检测到空驶移动");
+  return tr("空驶 %1，挤出 %2").arg(travelMoveCount_).arg(extrudeMoveCount_);
+}
+
 QString PreviewViewModel::currentTime() const
 {
-  // Look up accumulated time at current move (对齐上游 IMSlider::get_label)
+  // Look up accumulated time at the current move, aligned with upstream IMSlider::get_label.
   if (m_moveAccumulatedTime.empty() || currentMove_ <= 0)
     return QStringLiteral("0s");
   const int idx = qMin(currentMove_, int(m_moveAccumulatedTime.size()) - 1);
@@ -283,7 +335,7 @@ QString PreviewViewModel::currentTime() const
 
 QString PreviewViewModel::timeAtMove(int moveIndex) const
 {
-  // Look up accumulated time at arbitrary move position (对齐上游 IMSlider hover 提示)
+  // Look up accumulated time at an arbitrary move position, aligned with upstream IMSlider hover labels.
   if (m_moveAccumulatedTime.empty() || moveIndex <= 0)
     return QStringLiteral("0s");
   const int idx = qMin(moveIndex, int(m_moveAccumulatedTime.size()) - 1);
@@ -292,7 +344,7 @@ QString PreviewViewModel::timeAtMove(int moveIndex) const
 
 QStringList PreviewViewModel::viewModes() const
 {
-  // 对齐上游 GCodeViewer get_view_type_string 显示名称
+  // Display names aligned with upstream GCodeViewer get_view_type_string.
   return {
       QStringLiteral("Line Type"),
       QStringLiteral("Layer Height"),
@@ -363,7 +415,7 @@ void PreviewViewModel::jumpToLayer(int oneIndexedLayer)
 {
   if (layerCount_ <= 0)
     return;
-  // 上游 IMSlider::do_go_to_layer 接收 1-indexed，内部转为 0-indexed
+  // Upstream IMSlider::do_go_to_layer receives 1-indexed input and converts it to 0-indexed state.
   const int zeroBased = qBound(0, oneIndexedLayer - 1, layerCount_ - 1);
   setLayerRange(zeroBased, zeroBased);
 }
@@ -375,7 +427,7 @@ void PreviewViewModel::moveLayerRange(int delta)
   const int span = currentLayerMax_ - currentLayerMin_;
   int newMin = currentLayerMin_ + delta;
   int newMax = currentLayerMax_ + delta;
-  // 钳位：保持 span 不变
+  // Clamp while preserving the current span.
   if (newMin < 0) {
     newMin = 0;
     newMax = qMin(span, layerCount_ - 1);
@@ -394,6 +446,7 @@ void PreviewViewModel::setCurrentMove(int move)
     return;
   currentMove_ = clamped;
   updateToolPositionData();
+  rebuildGcodeLineWindow();
   emit stateChanged();
 }
 
@@ -405,7 +458,7 @@ void PreviewViewModel::updateToolPositionData()
   }
   const int idx = qMin(currentMove_, static_cast<int>(segments_.size()) - 1);
   const auto &seg = segments_[idx];
-  // 上游 GCodeViewer::Marker 使用 move 的终点位置
+  // Upstream GCodeViewer::Marker uses the endpoint of the current move.
   hasToolPosition_ = true;
   toolX_ = seg.x2;
   toolY_ = seg.y2;
@@ -419,8 +472,39 @@ void PreviewViewModel::updateToolPositionData()
   toolExtruderId_ = seg.extruder_id;
   toolLayer_ = seg.layer;
   toolMoveIndex_ = seg.move;
-  // 挤出移动判断：起点和终点不同且有 feedrate
+  // Treat the current move as extrusion when the parser classified it as non-travel.
   toolIsExtrusion_ = !seg.isTravel;
+}
+
+void PreviewViewModel::rebuildGcodeLineWindow()
+{
+  gcodeLines_.clear();
+  gcodeLineCount_ = m_gcodeSourceLines.size();
+  currentGcodeLine_ = 0;
+
+  if (m_gcodeSourceLines.isEmpty())
+    return;
+
+  int anchor = m_gcodeSourceLines.size() - 1;
+  for (int i = 0; i < m_gcodeSourceLines.size(); ++i) {
+    if (m_gcodeSourceLines[i].moveIndex >= currentMove_) {
+      anchor = i;
+      break;
+    }
+  }
+
+  currentGcodeLine_ = m_gcodeSourceLines[anchor].lineNumber;
+  const int start = qMax(0, anchor - 24);
+  const int end = qMin(m_gcodeSourceLines.size() - 1, anchor + 28);
+  for (int i = start; i <= end; ++i) {
+    const SourceGcodeLine &source = m_gcodeSourceLines[i];
+    QVariantMap row;
+    row.insert(QStringLiteral("line"), source.lineNumber);
+    row.insert(QStringLiteral("move"), source.moveIndex);
+    row.insert(QStringLiteral("text"), source.text);
+    row.insert(QStringLiteral("current"), i == anchor);
+    gcodeLines_.append(row);
+  }
 }
 
 void PreviewViewModel::playAnimation()
@@ -461,7 +545,7 @@ void PreviewViewModel::setStealthMode(bool enabled)
     return;
   stealthMode_ = enabled;
   // Recalculate totalTime with stealth multiplier (~1.4x slower due to reduced accel/jerk)
-  // 对齐上游 PrintEstimatedStatistics::modes[1] — stealth mode
+  // Aligned with upstream PrintEstimatedStatistics::modes[1] stealth mode.
   if (!totalTime_.contains("--"))
   {
     totalTime_ = stealthMode_
@@ -537,6 +621,10 @@ void PreviewViewModel::resetPreviewState()
   toolChangeCount_ = 0;
   avgSpeed_ = QStringLiteral("--");
   estimatedCost_ = QStringLiteral("--");
+  gcodeLineCount_ = 0;
+  currentGcodeLine_ = 0;
+  gcodeLines_.clear();
+  m_gcodeSourceLines.clear();
   m_legendType = 0;
   m_legendGradMinLabel.clear();
   m_legendGradMaxLabel.clear();
@@ -607,22 +695,33 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   double feedrateSum = 0.0;
   int feedrateCount = 0;
 
-  // Per-role time tracking (对齐上游 PrintEstimatedStatistics::roles_times)
-  QHash<QString, double> roleTimeAccum; // TYPE label → accumulated time in seconds
+  // Per-role time tracking aligned with upstream PrintEstimatedStatistics::roles_times.
+  QHash<QString, double> roleTimeAccum; // TYPE label to accumulated time in seconds.
   auto accumulateRoleTime = [&](const QString &role, float dx, float dy, float dz, float feed) {
     if (feed <= 0.f) return;
     const float dist = std::sqrt(dx*dx + dy*dy + dz*dz);
-    roleTimeAccum[role] += dist / feed * 60.0; // feed is mm/min, dist is mm → seconds
+    roleTimeAccum[role] += dist / feed * 60.0; // feed is mm/min, dist is mm to seconds.
   };
 
+  int sourceLineNumber = 0;
   while (!file.atEnd())
   {
     const QString raw = QString::fromUtf8(file.readLine()).trimmed();
+    ++sourceLineNumber;
     if (raw.isEmpty())
       continue;
 
+    auto appendSourceLine = [&](int sourceMoveIndex) {
+      SourceGcodeLine line;
+      line.lineNumber = sourceLineNumber;
+      line.moveIndex = sourceMoveIndex;
+      line.text = raw;
+      m_gcodeSourceLines.append(line);
+    };
+
     if (raw.startsWith(';'))
     {
+      appendSourceLine(qMax(0, moveIndex));
       if (raw.startsWith(QStringLiteral(";TYPE:")))
         currentType = raw.mid(6).trimmed();
       else
@@ -712,10 +811,13 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     const int commentPos = command.indexOf(QLatin1Char(';'));
     if (commentPos >= 0)
       command = command.left(commentPos).trimmed();
-    if (command.isEmpty())
+    if (command.isEmpty()) {
+      appendSourceLine(qMax(0, moveIndex));
       continue;
+    }
 
     const QString upper = command.toUpper();
+    appendSourceLine(qMax(0, moveIndex));
 
     if (upper.startsWith(QStringLiteral("M106")))
     {
@@ -766,7 +868,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       {
         if (tid != currentExtruder) {
           ++toolChangeCount;
-          // 记录工具切换位置（对齐上游 IMSlider colored band）
+          // Record the tool-change position for the upstream-style colored band.
           m_toolChangePositions.push_back({moveIndex, tid});
         }
         currentExtruder = tid;
@@ -875,7 +977,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
         feedrateSum += currentFeedrate;
         ++feedrateCount;
       }
-      // 每挤出机耗材追踪（对齐上游 PrintEstimatedStatistics volumes_per_extruder）
+      // Track filament usage per extruder, aligned with upstream PrintEstimatedStatistics.
       m_extruderUsedLength[currentExtruder] += extrusionDelta;
       accumulateRoleTime(currentType, dx, dy, dz, currentFeedrate);
     }
@@ -910,7 +1012,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     seg.isTravel = !extruding;
     segments_.push_back(seg);
 
-    // Accumulate elapsed time for move slider (对齐上游 IMSlider m_layers_times)
+    // Accumulate elapsed time for the move slider, aligned with upstream IMSlider m_layers_times.
     {
       const float dt = currentFeedrate > 0.f ? dist / currentFeedrate * 60.f : 0.f;
       const float prev = m_moveAccumulatedTime.empty() ? 0.f : m_moveAccumulatedTime.back();
@@ -956,13 +1058,13 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   else
   {
     filamentUsed_ = QStringLiteral("%1 m").arg(totalFilamentUsed / 1000.f, 0, 'f', 2);
-    // Weight = volume (mm³) × density (g/cm³) × 1e-3 (cm³/mm³)
-    // volume = length_mm × π × (diameter/2)²
+    // Weight = volume_mm3 * density_g_per_cm3 * 1e-3.
+    // volume_mm3 = length_mm * pi * (diameter / 2)^2.
     const float volume_mm3 = totalFilamentUsed * 3.14159265f * (filamentDiameter * 0.5f) * (filamentDiameter * 0.5f);
     const float weight_g = volume_mm3 * filamentDensity * 0.001f;
     filamentWeight_ = QStringLiteral("%1 g").arg(weight_g, 0, 'f', 1);
 
-    // 计算每挤出机耗材重量（对齐上游 PrintEstimatedStatistics volumes_per_extruder）
+    // Compute per-extruder filament weight, aligned with upstream PrintEstimatedStatistics.
     m_extruderUsedWeight.clear();
     for (auto it = m_extruderUsedLength.constBegin(); it != m_extruderUsedLength.constEnd(); ++it)
     {
@@ -975,7 +1077,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     estimatedCost_ = QStringLiteral("$%1").arg(weight_g / 1000.0f * pricePerKg, 0, 'f', 2);
   }
 
-  // Build role time breakdown (对齐上游 PrintEstimatedStatistics::roles_times)
+  // Build role time breakdown, aligned with upstream PrintEstimatedStatistics::roles_times.
   m_roleTimes.clear();
   // Map upstream TYPE labels to Chinese display names
   static const QHash<QString, QString> roleLabels = {
@@ -1011,6 +1113,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
             [](const RoleTimeEntry &a, const RoleTimeEntry &b) { return a.timeSecs > b.timeSecs; });
 
   updateToolPositionData();
+  rebuildGcodeLineWindow();
   recolorAndPackSegments();
   qInfo("[PreviewViewModel] payload file=%s bytes=%lld layers=%d moves=%d segments=%d travelVisible=%d",
         filePath.toUtf8().constData(),
@@ -1104,7 +1207,7 @@ int PreviewViewModel::toolChangeExtruderIdAt(int i) const
 
 QString PreviewViewModel::extruderColor(int extruderId) const
 {
-  // 上游 extruder_colors: 8 种固定颜色循环
+  // Upstream extruder_colors: fixed 8-color cycle.
   static const char *colors[] = {
     "#009688", "#f44336", "#2196f3", "#ff9800",
     "#9c27b0", "#4caf50", "#ff5722", "#607d8b"
@@ -1119,7 +1222,7 @@ int PreviewViewModel::extruderCount() const
 
 double PreviewViewModel::extruderUsedLength(int extruderId) const
 {
-  return m_extruderUsedLength.value(extruderId, 0.0) / 1000.0; // mm → m
+  return m_extruderUsedLength.value(extruderId, 0.0) / 1000.0; // mm to m
 }
 
 double PreviewViewModel::extruderUsedWeight(int extruderId) const
@@ -1277,7 +1380,7 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
   }
   else if (mode == 3 || mode == 7 || mode == 8)
   {
-    // Tool / ColorPrint / FilamentId legend: extruder palette (对齐上游 extruder_colors)
+      // Tool / ColorPrint / FilamentId legend: extruder palette aligned with upstream extruder_colors.
     m_legendType = 2; // extruder palette
     QSet<int> usedIds;
     for (const auto &s : segments_)
@@ -1310,7 +1413,7 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
   }
   else
   {
-    // Gradient legend (对齐上游 Range_Colors 10-stop bluish→reddish gradient)
+    // Gradient legend aligned with upstream Range_Colors.
     m_legendType = 1; // gradient
     QString label;
     switch (mode)
@@ -1330,7 +1433,7 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
     const QString minStr = (minV <= FLT_MAX) ? QString::number(minV, 'f', 1) : QStringLiteral("--");
     const QString maxStr = (maxV >= -FLT_MAX) ? QString::number(maxV, 'f', 1) : QStringLiteral("--");
 
-    // Upstream Range_Colors endpoints: #0b2c7a (bluish) → #942616 (reddish)
+    // Upstream Range_Colors endpoints: #0b2c7a (bluish) to #942616 (reddish).
     static const QColor kGradStart(11, 44, 122);
     static const QColor kGradEnd(148, 38, 22);
 

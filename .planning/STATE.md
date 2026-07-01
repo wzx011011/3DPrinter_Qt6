@@ -3,26 +3,26 @@ gsd_state_version: 1.0
 milestone: v3.6
 milestone_name: Screenshot-Driven OrcaSlicer UI Restoration
 status: ready_to_plan
-last_updated: 2026-07-01T07:44:07.550Z
-last_activity: 2026-07-01 -- Phase 53 completed and verified
+last_updated: 2026-07-01T09:45:00.000Z
+last_activity: 2026-07-01 -- Phase 54 completed and verified
 progress:
   total_phases: 9
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 11
-  completed_plans: 68
-  percent: 44
-stopped_at: Phase 53 complete (3/3) - ready to discuss Phase 54
+  completed_plans: 69
+  percent: 56
+stopped_at: Phase 54 complete (1/1) - ready to discuss Phase 55
 ---
 
 # Project State
 
 **Milestone:** v3.6 - Screenshot-Driven OrcaSlicer UI Restoration
 **Status:** Ready to plan
-**Next step:** Start Phase 54, `Preview Layout, Sliders, and Right Panels`.
+**Next step:** Start Phase 55, `G-code Preview Semantics and Rendering Stability`.
 
 ## Current Position
 
-Phase: 54
+Phase: 55
 Plan: Not started
 Status: Ready to plan
 Last activity: 2026-07-01
@@ -32,7 +32,7 @@ Last activity: 2026-07-01
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth; screenshot-driven UI milestones also use screenshots as the visual/layout source of truth.
-**Current focus:** Phase 54 - preview layout, sliders, and right panels
+**Current focus:** Phase 55 - G-code preview semantics and rendering stability
 
 ## Superseded Milestone Status
 
@@ -65,7 +65,7 @@ Run build/OWzxSlicer.exe and complete .planning/phases/43-end-to-end-verificatio
 | 51 | Shell and Navigation Restoration | Complete |
 | 52 | Prepare Sidebar and Preset Controls | Complete |
 | 53 | Prepare Object, Plate, and Viewport Workflow | Complete |
-| 54 | Preview Layout, Sliders, and Right Panels | Pending |
+| 54 | Preview Layout, Sliders, and Right Panels | Complete |
 | 55 | G-code Preview Semantics and Rendering Stability | Pending |
 | 56 | Parameter Settings Dialogs Restoration | Pending |
 | 57 | Deprecated UI Removal and Architecture Cleanup | Pending |
@@ -100,14 +100,14 @@ If an existing Qt page is materially off-design and expensive to repair, replace
 
 ## Handoff
 
-Start with Phase 54:
+Start with Phase 55:
 
 ```text
-$gsd-plan-phase 54
+$gsd-plan-phase 55
 ```
 
 or run the milestone autonomously:
 
 ```text
-$gsd-autonomous --from 54
+$gsd-autonomous --from 55
 ```

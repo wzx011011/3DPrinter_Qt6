@@ -29,7 +29,7 @@
 - [x] **Phase 51:** Shell and Navigation Restoration (completed 2026-07-01)
 - [x] **Phase 52:** Prepare Sidebar and Preset Controls (completed 2026-07-01)
 - [x] **Phase 53:** Prepare Object, Plate, and Viewport Workflow (completed 2026-07-01)
-- [ ] **Phase 54:** Preview Layout, Sliders, and Right Panels
+- [x] **Phase 54:** Preview Layout, Sliders, and Right Panels (completed 2026-07-01)
 - [ ] **Phase 55:** G-code Preview Semantics and Rendering Stability
 - [ ] **Phase 56:** Parameter Settings Dialogs Restoration
 - [ ] **Phase 57:** Deprecated UI Removal and Architecture Cleanup
@@ -223,18 +223,18 @@
 
 ## Next Step
 
-Start Phase 54:
+Start Phase 55:
 
 ```text
-$gsd-plan-phase 54
+$gsd-plan-phase 55
 ```
 
 or execute the milestone autonomously:
 
 ```text
-$gsd-autonomous --from 54
+$gsd-autonomous --from 55
 ```
 
 ---
 
-*Last updated: 2026-07-01 for v3.6 milestone definition.*
+*Last updated: 2026-07-01 after Phase 54 completion.*
