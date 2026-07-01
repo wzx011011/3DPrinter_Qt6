@@ -674,6 +674,12 @@ public:
   Q_INVOKABLE void clearWorkspace();
   /// JSON 项目加载后刷新 UI 状态（供 BackendContext 调用）
   void refreshAfterLoad();
+  /// Phase 52 PREPSB-05: invalidate slice/preview/export results for ALL
+  /// plates (a preset/scope/option change affects every plate's result). Made
+  /// public so the composition root (BackendContext) can call it on
+  /// ConfigViewModel::stateChanged. Callers must re-emit stateChanged() so the
+  /// stalePlateIndices / hasStaleSliceResults Q_PROPERTYs refresh in QML.
+  void invalidateAllSliceResults();
 
   /// Undo/Redo integration (对齐上游 UndoRedo 框架)
   void setUndoRedoManager(UndoRedoManager *manager);
@@ -702,7 +708,6 @@ private:
   void refreshMeshCacheAndFitHint();
   void invalidateSliceResultsForCurrentPlate();
   void invalidateSliceResultsForPlate(int plateIndex);
-  void invalidateAllSliceResults();
   void rebuildObjectEntriesFromService();
   bool deleteSelectedVolumesBySource();
   void ensureValidObjectSelection(bool preferFirstVisible);
