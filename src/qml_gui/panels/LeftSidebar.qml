@@ -163,6 +163,27 @@ Rectangle {
                 expanded: true  // G1: 默认展开（对齐上游，耗材列表可见）
 
                 rightActions: [
+                    // 编辑耗材预设（对齐上游 m_edit_filament_btn，镜像打印机区 ✎ 编辑按钮）
+                    // 依赖 CollapsibleSection 折叠点击区置底修复——否则本按钮点击被吞。
+                    Rectangle {
+                        opacity: (root.configVm && root.configVm.presetActionBlocker(1, root.configVm.currentFilamentPreset, "rename") !== "") ? 0.4 : 1.0
+                        width: 22; height: 22; radius: 4
+                        color: editFilaBtn.containsMouse ? Theme.bgHover : "transparent"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "✎"
+                            color: Theme.textMuted
+                            font.pixelSize: 12
+                        }
+                        MouseArea {
+                            id: editFilaBtn
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            enabled: !(root.configVm && root.configVm.presetActionBlocker(1, root.configVm.currentFilamentPreset, "rename") !== "")
+                            onClicked: backend.openSettings()
+                        }
+                    },
                     Rectangle {
                         width: 8; height: 8; radius: 4
                         visible: !!root.configVm && !root.configVm.isCurrentFilamentCompatible()
