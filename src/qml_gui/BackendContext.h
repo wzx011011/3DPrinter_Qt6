@@ -410,6 +410,10 @@ signals:
   void settingsChanged();
   void configWizardCompletedChanged();
   void showConfigWizardRequested();
+  /// Phase 52 PREPSB-02: request to open an independent settings dialog for a
+  /// category ("printer" / "filament" / "process"). Phase 56 connects the real
+  /// dialog; until then the forward is an honest no-op log.
+  void settingsRequested(const QString &category);
   void showBedShapeDialogRequested();
   void showEditGCodeDialogRequested(const QString &key, const QString &value);
   void showAMSSettingsDialogRequested();
