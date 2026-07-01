@@ -179,7 +179,14 @@ Rectangle {
                         Layout.preferredHeight: childrenRect.height
 
                         Repeater {
-                            model: 5
+                            // Phase 52 PREPSB-01: dynamic slot count (upstream
+                            // Plater shows one filament slot per extruder).
+                            // editorVm.extruderCount is the extruder-count surface;
+                            // guard with Math.max(1, ...) so a single-extruder (the
+                            // common mock default) always shows at least one slot.
+                            // Full multi-extruder count arrives when Phase 56 wires
+                            // real PresetBundle nozzle_diameter data.
+                            model: Math.max(1, root.editorVm ? root.editorVm.extruderCount : 1)
                             delegate: FilamentSlot {
                                 required property int index
                                 Layout.fillWidth: true
