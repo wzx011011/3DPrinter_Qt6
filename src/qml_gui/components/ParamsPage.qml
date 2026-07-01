@@ -321,12 +321,46 @@ Item {
                                             enabled: !paramRow.oRO
                                             onMoved: root.optionModel.setValue(paramRow.optIdx, value)
                                         }
-                                        Text {
-                                            text: typeof paramRow.oVal === "number"
-                                                  ? Number(paramRow.oVal).toFixed(paramRow.oType === "double" ? 2 : 0)
-                                                  : "—"
-                                            color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true
-                                            Layout.preferredWidth: 50
+                                        // 可编辑数值输入（对齐上游 SpinCtrl；Sidebar.qml 变换输入同款模式）
+                                        // 此前为只读 Text——仅滑块可改值，无法直接键入（"在参数表中编辑隐藏"）。
+                                        Rectangle {
+                                            Layout.preferredWidth: 64
+                                            height: 24
+                                            radius: 4
+                                            color: Theme.bgInset
+                                            border.width: 1
+                                            border.color: paramEdit.activeFocus ? Theme.accent
+                                                          : (paramRow.oRO ? Theme.borderSubtle : Theme.borderInput)
+                                            opacity: paramRow.oRO ? 0.6 : 1.0
+
+                                            TextInput {
+                                                id: paramEdit
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 6
+                                                anchors.rightMargin: 6
+                                                verticalAlignment: Text.AlignVCenter
+                                                horizontalAlignment: Text.AlignRight
+                                                color: Theme.textPrimary
+                                                font.pixelSize: Theme.fontSizeSM
+                                                font.bold: true
+                                                selectByMouse: true
+                                                readOnly: paramRow.oRO
+                                                validator: DoubleValidator {
+                                                    decimals: paramRow.oType === "double" ? 3 : 0
+                                                    notation: DoubleValidator.StandardNotation
+                                                }
+                                                text: typeof paramRow.oVal === "number"
+                                                      ? Number(paramRow.oVal).toFixed(paramRow.oType === "double" ? 2 : 0)
+                                                      : ""
+                                                onEditingFinished: {
+                                                    if (!root.optionModel || paramRow.oRO) return
+                                                    var v = parseFloat(text)
+                                                    if (isNaN(v)) return
+                                                    if (v < paramRow.oMin) v = paramRow.oMin
+                                                    if (v > paramRow.oMax) v = paramRow.oMax
+                                                    root.optionModel.setValue(paramRow.optIdx, v)
+                                                }
+                                            }
                                         }
                                     }
 
