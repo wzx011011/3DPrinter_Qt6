@@ -255,6 +255,19 @@ public:
   bool visualCompareMode() const;
 
   int currentPage() const;
+  // Phase 51: shell action gates (forward to EditorViewModel/PreviewViewModel)
+  bool canImport() const;
+  bool canSlice() const;
+  bool isSlicing() const;
+  bool canExport() const;
+  bool canSave() const;
+  bool canUndo() const;
+  bool canRedo() const;
+  bool isBusy() const;
+  QString exportActionLabel() const;
+  QString exportActionHint() const;
+  QString saveActionLabel() const;
+  QString saveActionHint() const;
   /// Phase 3: 璁剧疆褰撳墠 Plater 瑙嗗浘妯″紡锛堝幓閲?+ emit currentViewModeChanged锛夈€備緵 requestSelectTab 鑱斿姩 + requestChangeViewMode 澶嶇敤銆?
   void setCurrentViewMode(int mode);
   double uiScale() const { return m_uiScale; }
