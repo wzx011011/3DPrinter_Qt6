@@ -284,7 +284,8 @@ Rectangle {
                         }
                     }
 
-                    // ModeSwitchButton(Simple/Advanced) — SIDEBAR-08 骨架 (configMode 待 VM 扩展)
+                    // Phase 56: Advanced (Simple/Advanced) toggle -- settings-dialog
+                    // feature, hidden until Phase 56.
                     CxButton {
                         implicitWidth: 44
                         implicitHeight: 24
@@ -295,7 +296,8 @@ Rectangle {
                         visible: false
                     }
 
-                    // Compare 按钮 (SIDEBAR-09 占位, v2.2 DiffPresetDialog)
+                    // Phase 56: Compare (DiffPresetDialog) -- settings-dialog feature,
+                    // hidden until Phase 56.
                     CxButton {
                         implicitWidth: 28
                         implicitHeight: 24
@@ -306,15 +308,19 @@ Rectangle {
                         visible: false
                     }
 
-                    // Setting 按钮 (SIDEBAR-10 占位, ObjectTableDialog)
+                    // Phase 52 PREPSB-02: "Setting" entry point -- visible and
+                    // enabled. Emits settingsRequested("process"); BackendContext
+                    // forwards it (interim no-op log; Phase 56 wires the real
+                    // independent settings dialog). Honest deferred entry point.
                     CxButton {
                         implicitWidth: 28
                         implicitHeight: 24
                         compact: true
                         cxStyle: CxButton.Style.Ghost
                         text: "☰"
-                        enabled: false
-                        visible: false
+                        enabled: true
+                        visible: true
+                        onClicked: backend.forwardSettingsRequest("process")
                     }
                 }
             }
