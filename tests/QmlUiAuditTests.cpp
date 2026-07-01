@@ -32,6 +32,10 @@ private slots:
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
   void plateContextMenuItemsWiredAndNonEmpty();
+  // Phase 51-03 (SHELL-03): BBLTopbar action controls bind to the BackendContext gate properties.
+  void shellActionsBindToBackendContextGates();
+  // Phase 51-03 (SHELL-04): the 3 notification surfaces keep non-overlapping placement.
+  void notificationSurfacesStayNonOverlapping();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -964,6 +968,96 @@ void QmlUiAuditTests::plateContextMenuItemsWiredAndNonEmpty()
   // PreparePage (Phase 14 forbade these; Phase 22 extends the guard here).
   QVERIFY2(!preparePage.contains(QStringLiteral("onTriggered: {}")),
            "PreparePage must not contain empty onTriggered: {} handlers");
+}
+
+// ── Phase 51-03 (SHELL-03): shell actions bind to BackendContext gates ──
+// Locks the BBLTopbar binding contract from Plan 51-02 against regression:
+// Undo/Redo/Slice/Save must bind `enabled` to the C++ gate properties so the
+// undo-stack-empty UX bug (Undo clickable when the stack is empty) cannot
+// silently return. This is the QML route/registration automated test for
+// SHELL-03 (CONTEXT: "QML route/resource registration test").
+
+void QmlUiAuditTests::shellActionsBindToBackendContextGates()
+{
+  const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
+  QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
+
+  // Undo/Redo toolbar buttons must bind enabled to BOTH the page gate AND the
+  // C++ undo/redo-stack gate (defense-in-depth — CONTEXT decision to keep both
+  // checks in QML). This is the concrete fix for the stack-empty UX bug.
+  QVERIFY2(topbar.contains(QStringLiteral("backend.currentPage === backend.tp3DEditor && backend.canUndo")),
+           "Undo toolbar button must bind enabled to page-gate AND backend.canUndo");
+  QVERIFY2(topbar.contains(QStringLiteral("backend.currentPage === backend.tp3DEditor && backend.canRedo")),
+           "Redo toolbar button must bind enabled to page-gate AND backend.canRedo");
+
+  // Page gate preserved as defense-in-depth (the new gate is ADDITIONAL).
+  QVERIFY2(topbar.contains(QStringLiteral("backend.currentPage === backend.tp3DEditor")),
+           "Undo/Redo must keep the Prepare page gate");
+
+  // Save toolbar button gated on canSave (forwards to !isSlicing && !isBusy).
+  QVERIFY2(topbar.contains(QStringLiteral("enabled: backend.canSave")),
+           "Save toolbar button must bind enabled to backend.canSave");
+
+  // Slice side-tool button gated on canSlice.
+  QVERIFY2(topbar.contains(QStringLiteral("enabled: backend.canSlice")),
+           "Slice side-tool button must bind enabled to backend.canSlice");
+
+  // canUndo / canRedo must each appear at least twice (toolbar icon + Edit-menu
+  // item) so a regression deleting one binding is caught.
+  const int canUndoCount = topbar.count(QStringLiteral("backend.canUndo"));
+  QVERIFY2(canUndoCount >= 2,
+           qPrintable(QStringLiteral("backend.canUndo must appear >= 2 times (toolbar + menu), got %1").arg(canUndoCount)));
+  const int canRedoCount = topbar.count(QStringLiteral("backend.canRedo"));
+  QVERIFY2(canRedoCount >= 2,
+           qPrintable(QStringLiteral("backend.canRedo must appear >= 2 times (toolbar + menu), got %1").arg(canRedoCount)));
+}
+
+// ── Phase 51-03 (SHELL-04): notification surfaces stay non-overlapping ──
+// Guards the existing non-overlapping placement of the 3 notification surfaces
+// (ErrorBanner inline / ErrorToast z=200 floating / NotificationCenter top-right
+// popup). Phase 51 verifies + guards, it does not redesign placement (CONTEXT).
+// This asserts the anchoring contract is unchanged so a future edit cannot
+// accidentally overlap the viewport/sidebar or collapse the surfaces.
+
+void QmlUiAuditTests::notificationSurfacesStayNonOverlapping()
+{
+  const QString banner = readSource(QStringLiteral("src/qml_gui/components/ErrorBanner.qml"));
+  const QString toast = readSource(QStringLiteral("src/qml_gui/components/ErrorToast.qml"));
+  const QString center = readSource(QStringLiteral("src/qml_gui/components/NotificationCenter.qml"));
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  QVERIFY2(!banner.isEmpty(), "Unable to read ErrorBanner.qml");
+  QVERIFY2(!toast.isEmpty(), "Unable to read ErrorToast.qml");
+  QVERIFY2(!center.isEmpty(), "Unable to read NotificationCenter.qml");
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+
+  // ErrorBanner: inline push-down between top bar and content. It must NOT float
+  // at z=200 (that placement belongs to ErrorToast) — a z=200 on the banner
+  // would overlap the viewport.
+  QVERIFY2(banner.contains(QStringLiteral("Layout.fillWidth: true")),
+           "ErrorBanner must stay inline Layout.fillWidth (no overlap with viewport)");
+  QVERIFY2(!banner.contains(QStringLiteral("z: 200")),
+           "ErrorBanner must not float at z=200 (that is the ErrorToast placement)");
+
+  // ErrorToast: floating centered overlay anchored to the bottom, z=200. It
+  // anchors to the bottom (not covering the left sidebar or the slice/print
+  // dropdowns).
+  QVERIFY2(toast.contains(QStringLiteral("z: 200")),
+           "ErrorToast must keep z=200 floating overlay placement");
+  QVERIFY2(toast.contains(QStringLiteral("anchors.bottom")),
+           "ErrorToast must anchor to the bottom (not covering the sidebar)");
+
+  // NotificationCenter: keeps explicit placement (top-right popup, not floating
+  // free over the viewport). The popup host in main.qml sets x: root.width-340.
+  QVERIFY2(center.contains(QStringLiteral("anchors")) || center.contains(QStringLiteral("Popup")) || center.contains(QStringLiteral("x:")),
+           "NotificationCenter must keep explicit placement (anchors/Popup/x:)");
+
+  // main.qml keeps all 3 surfaces mounted so none is silently dropped.
+  QVERIFY2(mainQml.contains(QStringLiteral("ErrorBanner { }")),
+           "main.qml must mount ErrorBanner");
+  QVERIFY2(mainQml.contains(QStringLiteral("ErrorToast { }")),
+           "main.qml must mount ErrorToast");
+  QVERIFY2(mainQml.contains(QStringLiteral("NotificationCenter {")),
+           "main.qml must mount NotificationCenter");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
