@@ -201,15 +201,15 @@ Item {
                 onClicked: if (backend.currentPage === backend.tp3DEditor && backend.canUndo) root.undoRequested()
             }
 
-            // Redo (对齐上游 wxID_REDO)
+            // Redo (对齐上游 wxID_REDO) — Phase 51 SHELL-03: gate on BOTH page AND canRedo (redo stack non-empty)
             CxIconButton {
                 cxStyle: CxIconButton.Style.Chrome
                 buttonSize: 30
                 iconSize: 16
                 iconSource: "qrc:/qml/assets/icons/arrow-forward-up.svg"
                 toolTipText: qsTr("重做")
-                enabled: backend.currentPage === backend.tp3DEditor
-                onClicked: if (backend.currentPage === backend.tp3DEditor) root.redoRequested()
+                enabled: backend.currentPage === backend.tp3DEditor && backend.canRedo
+                onClicked: if (backend.currentPage === backend.tp3DEditor && backend.canRedo) root.redoRequested()
             }
 
             // Calibration 快捷按钮 (对齐上游 ID_CALIB)
