@@ -322,7 +322,10 @@ public:
   Q_INVOKABLE bool currentHintHasDocumentationLink() const;
 
   Q_INVOKABLE void openSettings(); // H3
-  /// 璇锋眰鏄剧ず棣栨閰嶇疆鍚戝锛圦ML 渚цЕ鍙戯級
+  // Phase 52 PREPSB-02: forward sidebar settings request (interim no-op log;
+  // Phase 56 wires the independent dialog). category: "printer"/"filament"/"process".
+  Q_INVOKABLE void forwardSettingsRequest(const QString &category);
+  /// 璇锋眰鏄剧ず棣栨閰嶇疆鍚戝锛圤ML 渚цЕ鍙戯級
   Q_INVOKABLE void showConfigWizard();
   /// 璇锋眰鏄剧ず鐑簥褰㈢姸璁剧疆瀵硅瘽妗嗭紙QML 渚цЕ鍙戯級
   Q_INVOKABLE void showBedShapeDialog();
