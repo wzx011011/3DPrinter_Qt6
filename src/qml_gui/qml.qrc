@@ -52,7 +52,6 @@
         <file>panels/AuxiliaryListPanel.qml</file>
         <!-- Components -->
         <file>components/StatusBar.qml</file>
-        <file>components/Toolbar.qml</file>
         <file>components/ErrorToast.qml</file>
         <file>components/ErrorBanner.qml</file>
         <file>components/LayerSlider.qml</file>
