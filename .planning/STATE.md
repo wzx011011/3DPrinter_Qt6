@@ -24,7 +24,7 @@ progress:
 Phase: 55
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-07-02 - Completed quick task 260702-1bn: 准备页收敛路线图审计降级
+Last activity: 2026-07-02 - Completed quick task 260702-1q7: P0修复 CollapsibleSection吞点击+耗材编辑按钮+参数表编辑隐藏
 
 ## Project Reference
 
@@ -102,6 +102,7 @@ If an existing Qt page is materially off-design and expensive to repair, replace
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260702-1bn | 准备页收敛路线图审计降级：基线表+假绿清单+修复优先级 | 2026-07-02 | 260702-1bn | [260702-1bn-prepare-roadmap-audit-downgrade](./quick/260702-1bn-prepare-roadmap-audit-downgrade/) |
+| 260702-1q7 | P0修复：CollapsibleSection吞点击+耗材编辑按钮+在参数表中编辑隐藏 | 2026-07-02 | 260702-1q7 | [260702-1q7-p0-collapsiblesection](./quick/260702-1q7-p0-collapsiblesection/) |
 
 ## Handoff
 
