@@ -50,11 +50,21 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: colorPickerLoader.active = !colorPickerLoader.active
+                        // Phase 52 PREPSB-01: color picker popup hidden --
+                        // selecting a color did nothing (visual only).
+                        // Full filament color metadata (PresetBundle
+                        // filament_colour) is Phase 56 settings work.
+                        // TODO(Phase 56): wire colorPickerLoader to real
+                        // filament color metadata + configVm setter.
+                        // onClicked intentionally a no-op until Phase 56.
+                        onClicked: {}
                     }
 
                     Loader {
                         id: colorPickerLoader
+                        // Phase 52 PREPSB-01: kept inactive -- popup is non-
+                        // functional until Phase 56 wires real filament color
+                        // metadata. Do NOT re-enable without a working setter.
                         active: false
                         sourceComponent: Component {
                             Popup {
