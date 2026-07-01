@@ -354,10 +354,18 @@ Rectangle {
                         background: Item {}  // 透明背景（外框由 searchBox 提供）
                         selectByMouse: true
                         onAccepted: {
-                            // SIDEBAR-11: 跳转到 SearchDialog（复用现有搜索）
-                            if (text.trim().length > 0 && root.configVm) {
-                                // 触发搜索：调用 configVm 的 preset 搜索或打开 SearchDialog
-                                // 当前简化：清空并提示（完整跳转需 SearchDialog 集成）
+                            // Phase 52 PREPSB-04: wire search to
+                            // configVm.filterOptionIndices so the search is live.
+                            // The matched option indices drive the config option
+                            // model; full ParamsPanel option rendering is Phase 56.
+                            if (root.configVm && text.trim().length > 0) {
+                                root.configVm.filterOptionIndices("", text.trim(), false)
+                            }
+                        }
+                        onTextChanged: {
+                            // Phase 52 PREPSB-04: live filter as the user types.
+                            if (root.configVm) {
+                                root.configVm.filterOptionIndices("", text.trim(), false)
                             }
                         }
                     }
