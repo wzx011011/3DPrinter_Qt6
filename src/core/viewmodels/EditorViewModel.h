@@ -579,6 +579,10 @@ public:
   Q_PROPERTY(float bedDiameter READ bedDiameter WRITE setBedDiameter NOTIFY bedShapeChanged)
   Q_PROPERTY(int extruderCount READ extruderCount NOTIFY stateChanged)
   Q_PROPERTY(bool hasSliceResult READ hasSliceResult NOTIFY stateChanged)
+  /// Phase 52 PREPSB-05: staleness exposed to QML so Preview/Export can show a
+  /// "stale -- reslice" indicator and disable export of stale results.
+  Q_PROPERTY(QVariantList stalePlateIndices READ stalePlateIndices NOTIFY stateChanged)
+  Q_PROPERTY(bool hasStaleSliceResults READ hasStaleSliceResults NOTIFY stateChanged)
   Q_PROPERTY(bool canRequestSlice READ canRequestSlice NOTIFY stateChanged)
   Q_PROPERTY(bool canPreview READ canPreview NOTIFY stateChanged)
   Q_PROPERTY(bool canExportGCode READ canExportGCode NOTIFY stateChanged)
@@ -640,6 +644,9 @@ public:
   Q_INVOKABLE QString extruderUsedLength(int extruderId) const;
   Q_INVOKABLE QString extruderUsedWeight(int extruderId) const;
   bool hasSliceResult() const;
+  // Phase 52 PREPSB-05: staleness surface for Preview/Export gating
+  QVariantList stalePlateIndices() const;
+  bool hasStaleSliceResults() const;
   bool canRequestSlice() const;
   bool canPreview() const;
   bool canExportGCode() const;
