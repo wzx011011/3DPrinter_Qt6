@@ -26,7 +26,7 @@
 ## Phases
 
 - [x] **Phase 50:** Screenshot and Source-Truth Inventory (completed 2026-06-30)
-- [ ] **Phase 51:** Shell and Navigation Restoration
+- [x] **Phase 51:** Shell and Navigation Restoration (completed 2026-07-01)
 - [ ] **Phase 52:** Prepare Sidebar and Preset Controls
 - [ ] **Phase 53:** Prepare Object, Plate, and Viewport Workflow
 - [ ] **Phase 54:** Preview Layout, Sliders, and Right Panels
