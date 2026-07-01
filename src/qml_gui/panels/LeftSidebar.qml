@@ -83,8 +83,24 @@ Rectangle {
                             }
                         }
 
+                        // Phase 52 PREPSB-03: dirty dot -- configVm.isPresetDirty
+                        // is true when the active preset has unsaved option edits.
+                        Rectangle {
+                            visible: !!root.configVm && root.configVm.isPresetDirty
+                            width: 8; height: 8; radius: 4
+                            color: Theme.accent
+                            Layout.leftMargin: 2
+                            ToolTip.text: qsTr("预设已修改（未保存）")
+                            ToolTip.visible: dirtyTipMA.containsMouse
+                            MouseArea { id: dirtyTipMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
+                        }
+
                         // Edit preset (对齐上游 edit_btn → open SettingsPage)
                         Rectangle {
+                            // Phase 52 PREPSB-03: builtin/read-only presets are
+                            // honestly gated via presetActionBlocker (mirrors
+                            // PresetServiceMock::isBuiltinPreset gating).
+                            opacity: (root.configVm && root.configVm.presetActionBlocker(2, root.configVm.currentPrinterPreset, "rename") !== "") ? 0.4 : 1.0
                             width: 26; height: 26; radius: 5
                             color: editPresetBtn.containsMouse ? Theme.bgHover : "transparent"
                             border.width: 1; border.color: Theme.borderSubtle
@@ -99,6 +115,7 @@ Rectangle {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
+                                enabled: !(root.configVm && root.configVm.presetActionBlocker(2, root.configVm.currentPrinterPreset, "rename") !== "")
                                 onClicked: backend.openSettings()
                             }
                         }
@@ -226,6 +243,17 @@ Rectangle {
                         font.pixelSize: 12
                         font.weight: Font.Medium
                         Layout.leftMargin: 2
+                    }
+                    // Phase 52 PREPSB-03: process preset dirty dot (same
+                    // isPresetDirty source as the printer row dirty dot).
+                    Rectangle {
+                        visible: !!root.configVm && root.configVm.isPresetDirty
+                        width: 8; height: 8; radius: 4
+                        color: Theme.accent
+                        Layout.leftMargin: 2
+                        ToolTip.text: qsTr("预设已修改（未保存）")
+                        ToolTip.visible: procDirtyTipMA.containsMouse
+                        MouseArea { id: procDirtyTipMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
                     }
                     Item { Layout.fillWidth: true }
 
