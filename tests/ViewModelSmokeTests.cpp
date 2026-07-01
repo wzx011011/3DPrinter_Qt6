@@ -1598,6 +1598,27 @@ void ViewModelSmokeTests::sidebarPresetChangeInvalidatesSliceResults()
   //  fixture; the connect-wired assertion is the deterministic guard.)
 }
 
+// ── Phase 52-03 (PREPSB-02): settings forward signal is honest ──
+// The sidebar "Setting" entry point forwards to BackendContext::forwardSettingsRequest,
+// which must emit settingsRequested (interim no-op log until Phase 56 wires the dialog).
+// This asserts the signal fires so the entry point is honest, not silent dead UI.
+
+void ViewModelSmokeTests::sidebarSettingsForwardEmitsRequestedSignal()
+{
+  BackendContext ctx;
+  const QMetaObject *meta = ctx.metaObject();
+  QVERIFY2(meta->indexOfSignal("settingsRequested(QString)") >= 0,
+           "BackendContext must expose settingsRequested signal");
+
+  QSignalSpy spy(&ctx, &BackendContext::settingsRequested);
+  QVERIFY(spy.isValid());
+
+  ctx.forwardSettingsRequest(QStringLiteral("process"));
+  QVERIFY2(spy.count() == 1,
+           "forwardSettingsRequest must emit settingsRequested exactly once");
+  QCOMPARE(spy.takeFirst().at(0).toString(), QStringLiteral("process"));
+}
+
 // ── Phase 04-01: Sidebar Dockable 状态 + 持久化 unit tests ──
 // 注意：QSettings 持久化在测试进程内可验证（同 QSettings 默认 ini 路径）。
 // 为隔离，每个测试先 reset 三个 key，验证后再 reset。
