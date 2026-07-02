@@ -1,3 +1,11 @@
+// QmlUiAuditTests — Phase 55-04 additions.
+//
+// AUTOMOC caveat (v3.0 retrospective, see ViewModelSmokeTests CMake comment):
+// single-file QtTest with cpp-internal Q_OBJECT has weak moc dependency
+// tracking. After adding a new private slot here, re-run cmake configure (the
+// canonical verify script does this) or delete
+//   build/QmlUiAuditTests_autogen/timestamp
+// before rebuilding, otherwise the new slot silently does not execute.
 #include <QDir>
 #include <QFile>
 #include <QRegularExpression>
@@ -42,6 +50,12 @@ private slots:
   void leftSidebarPresetControlsAreWiredAndHonest();
   // Phase 53: Prepare object, plate, and viewport actions bind to C++ gates.
   void prepareWorkflowActionsBindCppGates();
+  // Phase 55-04 (GCODE-04/05): source-audit guards for the SoftwareViewport
+  // absence, the computePreviewDrawRange role-skip block, and the
+  // GcvPackedSegment sizeof wire-format lockstep.
+  void previewPageNeverReferencesSoftwareViewport();
+  void rhiViewportRendererComputePreviewDrawRangeAppliesRoleFilter();
+  void rhiViewportRendererHasGcvPackedSegmentRoleGuard();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -1226,6 +1240,60 @@ void QmlUiAuditTests::prepareWorkflowActionsBindCppGates()
     QVERIFY2(preparePage.contains(gate) || objectList.contains(gate),
              qPrintable(QStringLiteral("Prepare object actions must bind to %1").arg(gate)));
   }
+}
+
+// ── Phase 55-04 (GCODE-04/05): Preview renderer source-audit guards ──
+// These three source-audit tests lock the renderer/UI contracts that defend
+// the disappearing-preview regression class: PreviewPage must never instantiate
+// SoftwareViewport, computePreviewDrawRange must consult the role-visibility
+// mask for render-side filtering, and the GcvPackedSegment wire format must
+// stay sizeof-locked at 76 bytes (Plan 02 lockstep).
+
+// Phase 55 (GCODE-04): PreviewPage.qml must never reference SoftwareViewport.
+// The normal Preview path is RhiViewport (registered as GLViewport); the
+// SoftwareViewport only exists as a QRhi init fallback. This is the regression
+// gate that fails the build if anyone re-adds SoftwareViewport to PreviewPage.
+void QmlUiAuditTests::previewPageNeverReferencesSoftwareViewport()
+{
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
+  QVERIFY2(!previewPage.contains(QStringLiteral("SoftwareViewport")),
+           "PreviewPage.qml must not reference SoftwareViewport (GCODE-04 no-regression; "
+           "the normal path is RhiViewport registered as GLViewport)");
+}
+
+// Phase 55 (GCODE-02): computePreviewDrawRange must consult m_roleVisibility so
+// the renderer skips masked spans over the already-uploaded segment buffer
+// without repacking gcodePreviewData_ (Plan 02 render-side filter contract).
+void QmlUiAuditTests::rhiViewportRendererComputePreviewDrawRangeAppliesRoleFilter()
+{
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+
+  QVERIFY2(rendererSource.contains(QStringLiteral("computePreviewDrawRange")),
+           "RhiViewportRenderer must define computePreviewDrawRange (Plan 02 contract)");
+
+  // The role-skip block must reference the per-role visibility mask. This is
+  // the supporting evidence for the ViewModelSmokeTests no-repack guard.
+  const int rangeStart = rendererSource.indexOf(QStringLiteral("computePreviewDrawRange"));
+  QVERIFY2(rangeStart >= 0, "computePreviewDrawRange implementation not found");
+  QVERIFY2(rendererSource.contains(QStringLiteral("m_roleVisibility")),
+           "computePreviewDrawRange must consult m_roleVisibility for render-side role filtering "
+           "(Plan 02 contract)");
+}
+
+// Phase 55 (GCODE-05): GcvPackedSegment must carry a compile-time sizeof==76
+// guard so the GCV1 wire format stays lockstep between PreviewViewModel packing
+// and renderer unpacking. A struct layout change would silently break the
+// preview at runtime; the static_assert makes it a build error.
+void QmlUiAuditTests::rhiViewportRendererHasGcvPackedSegmentRoleGuard()
+{
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+
+  QVERIFY2(rendererSource.contains(QStringLiteral("static_assert(sizeof(GcvPackedSegment) == 76")),
+           "RhiViewportRenderer must contain static_assert(sizeof(GcvPackedSegment) == 76) "
+           "(Plan 02 wire-format lockstep guard)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
