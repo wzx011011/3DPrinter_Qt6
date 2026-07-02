@@ -575,7 +575,7 @@ QShader RhiViewportRenderer::loadShader(const QString &path) const
 
 // ── Phase 26: Preview segment pipeline ──────────────────────────────────────
 // GCV1 wire format from PreviewViewModel: "GCV1" magic + int count +
-// count * PackedSegment (80 bytes each). Each segment → 2 Line vertices
+// count * PackedSegment (76 bytes each). Each segment → 2 Line vertices
 // (start xyz + end xyz, sharing RGBA), with GCode y↔z axis swap to GL space.
 // Layer ranges are indexed per-layer for GPU draw-range filtering (D-26-02).
 // Color is CPU-pre-baked by PreviewViewModel (D-26-03); renderer is opaque RGBA.

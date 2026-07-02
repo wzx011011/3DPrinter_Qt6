@@ -287,7 +287,11 @@ Item {
                     layerMax: root.previewVm.currentLayerMax
                     moveEnd: root.previewVm.currentMove
                     showTravelMoves: root.previewVm.showTravelMoves
-                    roleVisibility: root.previewVm ? root.previewVm.roleVisibilities : []
+                    // Bind the dense 20-bool mask (roleVisibilityMask), NOT the
+                    // 18-row QVariantMap list (roleVisibilities). The renderer's
+                    // synchronize expects a flat 20-bool list indexed by canonical
+                    // libvgcode role; roleVisibilities is for the UI Repeater only.
+                    roleVisibility: root.previewVm ? root.previewVm.roleVisibilityMask : []
                     showBed: root.previewVm.showBed
                     showMarker: root.previewVm.showMarker
                     gcodeViewMode: root.previewVm.viewModeIndex

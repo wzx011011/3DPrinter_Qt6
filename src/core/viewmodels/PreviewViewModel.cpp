@@ -65,6 +65,11 @@ namespace
     int move;
     int role;  // CANONICAL libvgcode EGCodeExtrusionRole index (0..19) -- must match GcvPackedSegment exactly.
   };
+  // Producer-side wire-format lockstep guard (Phase 55 code-review Warning fix:
+  // the static_assert previously existed only on the renderer side). PackedSegment
+  // must be byte-identical to GcvPackedSegment in RhiViewportRenderer.cpp; a
+  // layout drift here would silently corrupt the GCV1 preview blob at runtime.
+  static_assert(sizeof(PackedSegment) == 76, "PackedSegment must be 76 bytes (matches GcvPackedSegment)");
 
   // Upstream-matched gradient: 10-color Range_Colors from CrealityPrint GCodeViewer
   struct ColorResult { float r, g, b; };
@@ -765,6 +770,22 @@ QVariantList PreviewViewModel::roleVisibilities() const
     rows.append(row);
   }
   return rows;
+}
+
+QVariantList PreviewViewModel::roleVisibilityMask() const
+{
+  // Dense 20-bool mask for the renderer's render-side role filter. The renderer
+  // (RhiViewportRenderer::synchronize) expects a flat QVariantList of 20 bools
+  // indexed by canonical libvgcode role; roleVisibilities() (18 QVariantMap
+  // rows for the UI Repeater) has the wrong shape for that consumer. Bind THIS
+  // property to GLViewport.roleVisibility, not roleVisibilities. (Phase 55
+  // code-review Critical fix: the prior binding fed 18 maps into a consumer
+  // that requires 20 bools, so the filter was a no-op.)
+  QVariantList mask;
+  mask.reserve(20);
+  for (int i = 0; i < 20; ++i)
+    mask.append(m_roleVisibility[i]);
+  return mask;
 }
 
 QVariantMap PreviewViewModel::legendItem(const QString &label, const QString &color, int count) const

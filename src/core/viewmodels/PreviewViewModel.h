@@ -84,6 +84,12 @@ class PreviewViewModel final : public QObject
   /// Rows are emitted in ascending canonical libvgcode EGCodeExtrusionRole
   /// index order (1..19 except 0 None and 14 Custom).
   Q_PROPERTY(QVariantList roleVisibilities READ roleVisibilities NOTIFY stateChanged)
+  /// Dense 20-bool mask for the renderer (canonical libvgcode index 0..19).
+  /// Distinct from roleVisibilities (18 QVariantMap rows for the UI Repeater):
+  /// the renderer's synchronize expects a flat 20-element bool list indexed
+  /// by canonical role. Binding roleVisibilities (18 maps) here would defeat
+  /// the render-side filter (Phase 55 code-review Critical fix).
+  Q_PROPERTY(QVariantList roleVisibilityMask READ roleVisibilityMask NOTIFY stateChanged)
 
 public:
   explicit PreviewViewModel(SliceService *sliceService, QObject *parent = nullptr);
@@ -203,6 +209,8 @@ public:
   /// QML-facing list of {roleIndex,label,color,visible} rows for the visibility
   /// filter Repeater (ascending canonical index; None(0) and Custom(14) hidden).
   QVariantList roleVisibilities() const;
+  /// Dense 20-bool mask (canonical libvgcode index 0..19) for the renderer.
+  QVariantList roleVisibilityMask() const;
 
   /// Tick code management (aligned with upstream TickCode/TickCodeInfo)
   Q_INVOKABLE void addPauseAtLayer(int layer);

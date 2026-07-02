@@ -247,6 +247,11 @@ private slots:
   void legendGradientBoundsStableAcrossLayerMoveDrag();
   void currentMoveUpdatesGcodeLineWindowAtomically();
   void viewModesExposeUpstreamSeventeenModes();
+  // Phase 55 code-review fix (GCODE-02): the renderer consumes a DENSE 20-bool
+  // mask, not the 18-row QVariantMap UI list. Guard the producer shape and the
+  // toggle→mask propagation so the role-visibility feature cannot silently
+  // become a dead path again.
+  void roleVisibilityMaskFeedsRendererShapeAndTogglesPropagate();
 
 private:
   bool hasLibslic3r() const;
@@ -2983,6 +2988,55 @@ void ViewModelSmokeTests::roleVisibilityToggleDoesNotRepackGcodePreviewData()
   QVERIFY2(after.size() > 8, "payload must remain a valid GCV1 blob after the toggle");
   QVERIFY2(gcv1SegmentCount(after) == gcv1SegmentCount(before),
            "segment count must be unchanged after a role-visibility toggle");
+}
+
+// Phase 55 code-review fix (GCODE-02): the renderer's synchronize consumes a
+// dense 20-bool QVariantList indexed by canonical libvgcode role. The prior
+// binding pushed roleVisibilities (18 QVariantMap rows) into that consumer,
+// which silently dropped the mask (size<20 gate) and made the filter a no-op.
+// This test guards the producer shape (20 bools) and the toggle→mask path so
+// the dead-path class of regression cannot recur.
+void ViewModelSmokeTests::roleVisibilityMaskFeedsRendererShapeAndTogglesPropagate()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+
+  // The mask must be a dense 20-element bool list regardless of load state.
+  const QVariantList maskBefore = preview.roleVisibilityMask();
+  QVERIFY2(maskBefore.size() == 20,
+           qPrintable(QStringLiteral("roleVisibilityMask must have 20 entries for the "
+                                     "renderer; got %1").arg(maskBefore.size())));
+  for (int i = 0; i < maskBefore.size(); ++i)
+  {
+    QVERIFY2(maskBefore.at(i).canConvert<bool>(),
+             qPrintable(QStringLiteral("mask entry %1 must be a bool, not a QVariantMap "
+                                       "(renderer reads .toBool())").arg(i)));
+    QVERIFY2(maskBefore.at(i).toBool(),
+             "all roles default visible (upstream extrusion_roles_visibility defaults)");
+  }
+
+  // roleVisibilities (UI rows) and roleVisibilityMask (renderer mask) must be
+  // distinct shapes: 18 maps vs 20 bools. Binding the wrong one is the bug.
+  QVERIFY2(preview.roleVisibilities().size() == 18,
+           "roleVisibilities must expose 18 UI rows (1..19 minus None/Custom)");
+  QVERIFY2(preview.roleVisibilityMask().size() == 20,
+           "roleVisibilityMask must expose 20 dense bools for the renderer");
+
+  // A toggle must flip exactly one mask slot and leave the other 19 unchanged.
+  QVERIFY2(preview.isRoleVisible(2), "Outer wall (canonical index 2) starts visible");
+  preview.toggleRoleVisibility(2);
+  QVERIFY2(!preview.isRoleVisible(2), "toggleRoleVisibility must flip the slot");
+  const QVariantList maskAfter = preview.roleVisibilityMask();
+  QVERIFY2(maskAfter.size() == 20, "mask size is invariant across toggles");
+  QVERIFY2(!maskAfter.at(2).toBool(),
+           "toggled slot must read false in the renderer mask");
+  for (int i = 0; i < 20; ++i)
+  {
+    if (i == 2) continue;
+    QVERIFY2(maskAfter.at(i).toBool() == maskBefore.at(i).toBool(),
+             qPrintable(QStringLiteral("toggle must not perturb slot %1").arg(i)));
+  }
 }
 
 // Phase 55 (GCODE-03): legend gradient min/max must be stable across a layer
