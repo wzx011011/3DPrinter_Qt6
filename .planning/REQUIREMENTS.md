@@ -157,8 +157,8 @@ v3.5 Phase 47-49 are superseded by this milestone. v3.5 Phase 44-46 remain histo
 | PREVLAY-03 | Phase 54 | Complete |
 | PREVLAY-04 | Phase 54 | Complete |
 | PREVLAY-05 | Phase 54 | Complete |
-| GCODE-01 | Phase 55 | Pending |
-| GCODE-02 | Phase 55 | Pending |
+| GCODE-01 | Phase 55 | Complete |
+| GCODE-02 | Phase 55 | Complete |
 | GCODE-03 | Phase 55 | Pending |
 | GCODE-04 | Phase 55 | Pending |
 | GCODE-05 | Phase 55 | Pending |

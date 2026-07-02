@@ -163,12 +163,12 @@
 3. Layer/move filters update draw ranges and text/current-line state together.
 4. Restored Preview does not regress to `SoftwareViewport` unless explicitly classified as fallback.
 
-**Plans:** 5 plans
+**Plans:** 1/5 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 55-01-PLAN.md — Wave 0 foundation: OrcaSlicer-style .gcode fixture + PreviewParserTests RED scaffold
+- [x] 55-01-PLAN.md — Wave 0 foundation: OrcaSlicer-style .gcode fixture + PreviewParserTests RED scaffold
 - [ ] 55-02-PLAN.md — Wave 1 data semantics: 20-role ;TYPE: parser, 17 EViewType modes, GCV1 wire-format role field, render-side per-role filtering (no repack)
 
 **Wave 2** *(blocked on Wave 1 completion)*
