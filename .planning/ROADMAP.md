@@ -31,7 +31,7 @@
 - [x] **Phase 52:** Prepare Sidebar and Preset Controls (completed 2026-07-01)
 - [x] **Phase 53:** Prepare Object, Plate, and Viewport Workflow (completed 2026-07-01)
 - [x] **Phase 54:** Preview Layout, Sliders, and Right Panels (completed 2026-07-01)
-- [ ] **Phase 55:** G-code Preview Semantics and Rendering Stability
+- [x] **Phase 55:** G-code Preview Semantics and Rendering Stability (completed 2026-07-02)
 - [ ] **Phase 56:** Parameter Settings Dialogs Restoration
 - [ ] **Phase 57:** Deprecated UI Removal and Architecture Cleanup
 - [ ] **Phase 58:** End-to-End Visual and Functional Verification
@@ -163,22 +163,22 @@
 3. Layer/move filters update draw ranges and text/current-line state together.
 4. Restored Preview does not regress to `SoftwareViewport` unless explicitly classified as fallback.
 
-**Plans:** 1/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 **Wave 1**
 
 - [x] 55-01-PLAN.md — Wave 0 foundation: OrcaSlicer-style .gcode fixture + PreviewParserTests RED scaffold
-- [ ] 55-02-PLAN.md — Wave 1 data semantics: 20-role ;TYPE: parser, 17 EViewType modes, GCV1 wire-format role field, render-side per-role filtering (no repack)
+- [x] 55-02-PLAN.md — Wave 1 data semantics: 20-role ;TYPE: parser, 17 EViewType modes, GCV1 wire-format role field, render-side per-role filtering (no repack)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 55-03-PLAN.md — Wave 2 UI: VisibilityFilter.qml (right-panel per-role checkbox group) + PreviewPage roleVisibility binding
-- [ ] 55-04-PLAN.md — Wave 2 regression tests: GCODE-01 no-placeholder RED, GCODE-03 legend/atomicity, GCODE-04 SoftwareViewport/role-skip/sizeof audit guards, GCODE-05 reslice/export/page-switch invariants
+- [x] 55-03-PLAN.md — Wave 2 UI: VisibilityFilter.qml (right-panel per-role checkbox group) + PreviewPage roleVisibility binding
+- [x] 55-04-PLAN.md — Wave 2 regression tests: GCODE-01 no-placeholder RED, GCODE-03 legend/atomicity, GCODE-04 SoftwareViewport/role-skip/sizeof audit guards, GCODE-05 reslice/export/page-switch invariants
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 55-05-PLAN.md — Wave 3 D3D11 startup-policy audit guard + 55-VALIDATION.md sign-off
+- [x] 55-05-PLAN.md — Wave 3 D3D11 startup-policy audit guard + 55-VALIDATION.md sign-off
 
 ### Phase 56: Parameter Settings Dialogs Restoration
 
