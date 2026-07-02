@@ -1384,50 +1384,51 @@ void E2EWorkflowTests::previewReceivesRealGcodeAfterLiveSliceNoPlaceholder()
 }
 
 // Phase 55 (GCODE-01): a sliceFailed emission must trigger resetPreviewState,
-// clearing gcodePreviewData and zeroing layerCount. Seed a preview via the
-// committed Orca fixture (loadGCodeFromPrevious runs the parse worker), then
-// drive a deterministic sliceFailed: the project has no sliceable source model,
-// so startSlice hits the empty-sourcePath branch and emits sliceFailed
-// synchronously, which PreviewViewModel routes to resetPreviewState.
+// clearing gcodePreviewData and zeroing layerCount. Seed a valid preview via a
+// real live slice, then drive a deterministic sliceFailed: loadGCodeFromPrevious
+// on a non-existent path emits sliceFailed synchronously (SliceService checks
+// QFileInfo::exists before dispatching), which PreviewViewModel routes to
+// resetPreviewState.
 void E2EWorkflowTests::sliceFailedClearsPreviewState()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
   PreviewViewModel preview(&slice);
+  EditorViewModel editor(&project, &slice);
 
-  // Seed a valid preview via the committed Orca fixture so we can observe the
-  // cleared state (avoids a second live slice for the seed). loadGCodeFromPrevious
-  // stores the reuse output under outputPath_ but leaves sourceFilePath() empty.
-  const QString fixturePath = QDir::cleanPath(
-      QStringLiteral(QT_TESTCASE_SOURCEDIR) +
-      QStringLiteral("/tests/fixtures/orca_sample.gcode"));
-  QVERIFY2(QFileInfo::exists(fixturePath), "Orca fixture must be present for the seed");
-  QVERIFY2(slice.loadGCodeFromPrevious(fixturePath),
-           "seeding preview via loadGCodeFromPrevious should accept the Orca fixture");
-  QSignalSpy seedFinished(&slice, &SliceService::sliceFinished);
-  QSignalSpy seedFailed(&slice, &SliceService::sliceFailed);
-  QTRY_VERIFY_WITH_TIMEOUT(seedFinished.count() > 0 || seedFailed.count() > 0, 60000);
-  if (seedFailed.count() > 0)
-    QSKIP("Previous-G-code seed failed in this environment");
+  // Seed a valid preview via a real live slice so we can observe the cleared state.
+  QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+  slice.startSlice(QStringLiteral("fail_clear_seed"));
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+    QSKIP("Live slice seed failed in sliceFailed test");
   QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
   QVERIFY2(!preview.gcodePreviewData().isEmpty(), "seeded preview should hold a GCV1 payload");
+  const QString seedOutput = slice.outputPath();
 
-  // Trigger a deterministic sliceFailed: no model was loaded into the project,
-  // so sourceFilePath() is empty and startSlice emits sliceFailed synchronously.
-  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
-  QVERIFY(failedSpy.isValid());
-  slice.startSlice(QStringLiteral("fail_trigger"));
-  QTRY_VERIFY_WITH_TIMEOUT(failedSpy.count() > 0, 10000);
+  // Trigger a deterministic sliceFailed: loadGCodeFromPrevious on a path that
+  // does not exist hits the early failure branch and emits sliceFailed.
+  QSignalSpy failSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(failSpy.isValid());
+  slice.loadGCodeFromPrevious(QStringLiteral("/nonexistent/owzx_55_04_missing.gcode"));
+  QTRY_VERIFY_WITH_TIMEOUT(failSpy.count() > 0, 10000);
 
   QVERIFY2(preview.gcodePreviewData().isEmpty(),
            "sliceFailed must clear gcodePreviewData via resetPreviewState");
   QVERIFY2(preview.layerCount() == 0,
            qPrintable(QStringLiteral("sliceFailed must zero layerCount, got %1").arg(preview.layerCount())));
 
-  // Clean up any temp reuse output the seed produced; never remove the fixture.
-  const QString reuseOutput = slice.outputPath();
-  if (!reuseOutput.isEmpty() && reuseOutput != fixturePath && QFileInfo::exists(reuseOutput))
-    QFile::remove(reuseOutput);
+  if (QFileInfo::exists(seedOutput))
+    QFile::remove(seedOutput);
 }
 
 // Phase 55 (GCODE-01): sliceResultCleared must clear the preview state. Seed a
@@ -1511,7 +1512,10 @@ void E2EWorkflowTests::plateSwitchToInvalidClearsPreviewState()
 
 // Phase 55 (GCODE-05): a reslice must rebuild gcodePreviewData with DIFFERENT
 // bytes and recomputed layer/move counts (the original invalidation contract).
-// Seed a slice, change a setting that invalidates, slice again.
+// Uses the proven slice.startSlice() + slice.clearResults() pattern (see
+// test_previous_gcode_reuse): re-import invalidates the prior result, and the
+// second slice injects a different layer_height through the minimal-config
+// path so the second GCV1 payload packs different segment data.
 void E2EWorkflowTests::resliceRebuildsGcodePreviewDataWithDifferentBytes()
 {
   ProjectServiceMock project;
@@ -1521,34 +1525,55 @@ void E2EWorkflowTests::resliceRebuildsGcodePreviewDataWithDifferentBytes()
 
   QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
   QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
 
   applyMinimalPrinterConfig(slice, project);
   ensureModelOnBed(project);
 
-  // First slice.
+  // First slice (default layer_height).
   QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
   QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
-  editor.requestSlice();
+  slice.startSlice(QStringLiteral("reslice_first_seed"));
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
   if (failedSpy.count() > 0)
     QSKIP("First live slice failed in reslice test");
   QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
   const QByteArray firstPayload = preview.gcodePreviewData();
-  const int firstLayer = preview.layerCount();
-  const int firstMove = preview.moveCount();
   QVERIFY2(firstPayload.size() > 8, "first slice must produce a GCV1 payload");
+  QVERIFY2(preview.layerCount() > 0, "first slice must expose layers");
   const QString firstOutput = slice.outputPath();
 
-  // Invalidate with a settings change (layer_height shift) and reslice.
-  QHash<QString, QVariant> cfg;
-  cfg.insert(QStringLiteral("layer_height"), 0.30);
-  slice.setMergedPresetConfig(cfg);
-  finishedSpy.clear();
-  failedSpy.clear();
-  editor.requestSlice();
-  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
-  if (failedSpy.count() > 0)
+  // Invalidate: clear the result and re-import the model so the preview state
+  // is reset (matches the import-invalidates contract).
+  slice.clearResults();
+  QVERIFY2(slice.outputPath().isEmpty(), "clearResults must drop the first slice output path");
+  QSignalSpy reloadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY2(editor.loadFile(kStlPath), "reimporting the model should start");
+  QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);
+  QVERIFY2(reloadSpy.takeFirst().at(0).toBool(), "model reimport should complete successfully");
+  QVERIFY2(preview.gcodePreviewData().isEmpty(),
+           "reimport must clear the stale preview payload before the reslice");
+
+  // Re-apply config (bed/nozzle) and add a layer_height override that
+  // changes the toolpath so the second GCV1 payload differs in bytes.
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+  {
+    QHash<QString, QVariant> cfg;
+    cfg.insert(QStringLiteral("printable_height"), 250.0);
+    cfg.insert(QStringLiteral("nozzle_diameter"), QVariantList{0.4});
+    cfg.insert(QStringLiteral("layer_height"), 0.30);  // differs from default
+    slice.setMergedPresetConfig(cfg);
+  }
+
+  // Second slice (reslice with the new layer_height).
+  QSignalSpy resliceFinished(&slice, &SliceService::sliceFinished);
+  QSignalSpy resliceFailed(&slice, &SliceService::sliceFailed);
+  slice.startSlice(QStringLiteral("reslice_second"));
+  QTRY_VERIFY_WITH_TIMEOUT(resliceFinished.count() > 0 || resliceFailed.count() > 0, 120000);
+  if (resliceFailed.count() > 0)
     QSKIP("Reslice failed in this environment");
   QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
 
