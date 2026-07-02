@@ -58,6 +58,7 @@
         <file>components/CustomGcodeDialog.qml</file>
         <file>components/MoveSlider.qml</file>
         <file>components/Legend.qml</file>
+        <file>components/VisibilityFilter.qml</file>
         <file>components/StatsPanel.qml</file>
         <file>components/ToolPositionTooltip.qml</file>
         <file>components/NotificationCenter.qml</file>
