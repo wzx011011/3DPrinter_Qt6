@@ -426,6 +426,29 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
+    # Phase 55-01 Wave 0: ;TYPE: parser / view-mode scaffold for Plan 02.
+    # Links owzx_app_core + Qt modules (same pattern as ViewModelSmokeTests)
+    # so the real PreviewViewModel and its loadGCodeForPreview path are
+    # available. Plan 01 only registers the target + RED scaffold; Plan 02
+    # implements the 20-role fine-grained parser, the 17-mode list, and the
+    # Summary legend sentinel that flip the QEXPECT_FAIL / QSKIP slots green.
+    # AUTOMOC caveat: same weak-moc dependency as ViewModelSmokeTests /
+    # PartPlateTests -- the canonical verify script re-runs cmake configure
+    # after slot edits; for incremental builds, delete
+    #   build/PreviewParserTests_autogen/timestamp
+    qt_add_executable(PreviewParserTests tests/PreviewParserTests.cpp)
+    target_link_libraries(PreviewParserTests PRIVATE owzx_app_core
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
+    )
+    target_compile_definitions(PreviewParserTests PRIVATE
+        QT_TESTCASE_SOURCEDIR="${CMAKE_SOURCE_DIR}"
+    )
+    target_link_options(PreviewParserTests PRIVATE /FORCE:MULTIPLE)
+    add_test(NAME PreviewParserTests COMMAND PreviewParserTests)
+    set_tests_properties(PreviewParserTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
 endif()
 
 # ── CLI ────────────────────────────────────────────────────────────────────

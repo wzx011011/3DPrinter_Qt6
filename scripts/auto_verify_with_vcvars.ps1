@@ -4,6 +4,28 @@ if (-not (Test-Path $vcvars)) {
   exit 1
 }
 
+# Sanitize PATH before invoking vcvars64.bat. vcvars is a batch script and
+# parses the inherited PATH with weak quoting; entries that contain BOTH spaces
+# and parentheses (e.g. "F:\Program Files (x86)\VMware\VMware Workstation\bin")
+# break its parser and abort before INCLUDE/LIB are exported, which surfaces as
+# C1083 "cannot open <vector>" on the first real C++ compile (libslic3r_cgal).
+# Drop only those offending entries; the system PATH itself is left untouched.
+$rawPath = $env:PATH
+$kept = New-Object System.Collections.Generic.List[string]
+$dropped = New-Object System.Collections.Generic.List[string]
+foreach ($entry in ($rawPath -split ';')) {
+  if ($entry -and ($entry.Contains(' ') -and $entry.Contains('('))) {
+    [void]$dropped.Add($entry)
+  } else {
+    [void]$kept.Add($entry)
+  }
+}
+if ($dropped.Count -gt 0) {
+  $env:PATH = ($kept -join ';')
+  Write-Host ('[vcvars] Dropped ' + $dropped.Count + ' PATH entr' + $(if ($dropped.Count -eq 1) { 'y' } else { 'ies' }) + ' with spaces+parens that break vcvars64.bat batch parsing:') -ForegroundColor Yellow
+  foreach ($d in $dropped) { Write-Host ('[vcvars]   - ' + $d) -ForegroundColor DarkGray }
+}
+
 $envDump = cmd /c ('"' + $vcvars + '" >nul & set')
 foreach ($line in $envDump) {
   $idx = $line.IndexOf('=')
@@ -11,6 +33,43 @@ foreach ($line in $envDump) {
     $name = $line.Substring(0, $idx)
     $value = $line.Substring($idx + 1)
     Set-Item -Path ("env:" + $name) -Value $value
+  }
+}
+
+# Windows Kits fallback. When vcvars64.bat trips on a polluted PATH (see the
+# sanitize block above), its findstr-based Windows SDK detection silently
+# fails and the UCRT/UM headers (<stdio.h>, <Windows.h>) are NOT added to
+# INCLUDE/LIB even though the MSVC STL (<vector>) is. That surfaces as C1083
+# "cannot open <stdio.h>" on the first C source (mcut/shewchuk.c). Detect the
+# gap and append the installed Windows Kits paths explicitly so the build does
+# not depend on vcvars's fragile SDK auto-detection.
+$winKitsRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10'
+if (-not (Test-Path $winKitsRoot)) { $winKitsRoot = 'C:\Program Files (x86)\Windows Kits\10' }
+if ((-not $env:INCLUDE) -or (-not ($env:INCLUDE -match 'ucrt')) -and (Test-Path $winKitsRoot)) {
+  $wkVer = (Get-ChildItem -Path (Join-Path $winKitsRoot 'Include') -Directory -ErrorAction SilentlyContinue |
+    Sort-Object Name -Descending | Select-Object -First 1).Name
+  if ($wkVer) {
+    $wkIncBase = Join-Path $winKitsRoot "Include\$wkVer"
+    $wkLibBase = Join-Path $winKitsRoot "Lib\$wkVer"
+    $missingInc = @('shared', 'ucrt', 'um') | Where-Object {
+      $p = Join-Path $wkIncBase $_
+      (Test-Path $p) -and ($env:INCLUDE -notlike "*$p*")
+    }
+    $missingLib = @('ucrt', 'um') | Where-Object {
+      $p = Join-Path $wkLibBase "$_\x64"
+      (Test-Path $p) -and ($env:LIB -notlike "*$p*")
+    }
+    if ($missingInc) {
+      $env:INCLUDE = (($missingInc | ForEach-Object { Join-Path $wkIncBase $_ }) -join ';') + ';' + $env:INCLUDE
+    }
+    if ($missingLib) {
+      $env:LIB = (($missingLib | ForEach-Object { Join-Path $wkLibBase "$_\x64" }) -join ';') + ';' + $env:LIB
+    }
+    $wkBin = Join-Path $winKitsRoot "Bin\$wkVer\x64"
+    if ((Test-Path $wkBin) -and ($env:PATH -notlike "*$wkBin*")) {
+      $env:PATH = "$wkBin;$env:PATH"
+    }
+    Write-Host ('[vcvars] Patched Windows Kits ' + $wkVer + ' paths into INCLUDE/LIB (vcvars SDK detection failed)') -ForegroundColor Yellow
   }
 }
 
@@ -102,6 +161,8 @@ Invoke-NinjaTarget 'ViewModelSmokeTests'
 Invoke-NinjaTarget 'PrepareSceneDataTests'
 Invoke-NinjaTarget 'QmlUiAuditTests'
 Invoke-NinjaTarget 'PartPlateTests'
+# Phase 55-01: PreviewParserTests target (parser/role/mode coverage scaffold).
+Invoke-NinjaTarget 'PreviewParserTests'
 Invoke-NinjaTarget 'owzx-cli'
 Invoke-NinjaTarget 'CliTests'
 Invoke-NinjaTarget 'test-slice-direct' $false
@@ -209,6 +270,20 @@ if (Test-Path $uiAuditExe) {
   Write-Host "[UI] QML UI audit tests passed" -ForegroundColor Green
 } else {
   Write-Host "[UI] QmlUiAuditTests.exe not found" -ForegroundColor Red
+  exit 1
+}
+
+Write-Host "`n[PreviewParser] Running G-code parser/role/mode tests..." -ForegroundColor Cyan
+$previewParserExe = './PreviewParserTests.exe'
+if (Test-Path $previewParserExe) {
+  & $previewParserExe 2>&1 | ForEach-Object { Write-Host "  $_" }
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "[PreviewParser] PreviewParser tests failed" -ForegroundColor Red
+    exit $LASTEXITCODE
+  }
+  Write-Host "[PreviewParser] PreviewParser tests passed" -ForegroundColor Green
+} else {
+  Write-Host "[PreviewParser] PreviewParserTests.exe not found" -ForegroundColor Red
   exit 1
 }
 
