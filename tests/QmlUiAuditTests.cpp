@@ -56,6 +56,11 @@ private slots:
   void previewPageNeverReferencesSoftwareViewport();
   void rhiViewportRendererComputePreviewDrawRangeAppliesRoleFilter();
   void rhiViewportRendererHasGcvPackedSegmentRoleGuard();
+  // Phase 55-05 (GCODE-04): D3D11 default + SoftwareViewport fallback-only startup
+  // policy. Phase-55-tagged so a future regression that flips the default points
+  // directly at the requirement (complements the existing mainRegistersRhiViewport*
+  // tests with a GCODE-04-specific assertion bundle).
+  void gcode04RhiViewportIsDefaultRegistrationNoSoftwareViewportInPreviewPath();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -1294,6 +1299,44 @@ void QmlUiAuditTests::rhiViewportRendererHasGcvPackedSegmentRoleGuard()
   QVERIFY2(rendererSource.contains(QStringLiteral("static_assert(sizeof(GcvPackedSegment) == 76")),
            "RhiViewportRenderer must contain static_assert(sizeof(GcvPackedSegment) == 76) "
            "(Plan 02 wire-format lockstep guard)");
+}
+
+// Phase 55 (GCODE-04): D3D11 default + SoftwareViewport fallback-only policy.
+// main_qml.cpp must register RhiViewport as the QML type "GLViewport" (the
+// default QRhi/D3D11 path on Windows), and any SoftwareViewport registration
+// must be guarded behind an explicit env-var gate so the software rasterizer
+// never silently replaces the hardware-accelerated viewport in the Preview
+// page. PreviewPage.qml must bind GLViewport (which resolves to RhiViewport on
+// the default path) and never reference SoftwareViewport. This Phase-55-tagged
+// guard makes any future regression point directly at GCODE-04.
+void QmlUiAuditTests::gcode04RhiViewportIsDefaultRegistrationNoSoftwareViewportInPreviewPath()
+{
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main_qml.cpp");
+  QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
+
+  QVERIFY2(mainQml.contains(QStringLiteral("qmlRegisterType<RhiViewport>")),
+           "main_qml.cpp must register RhiViewport as a QML type (GCODE-04 default path)");
+  QVERIFY2(mainQml.contains(QStringLiteral("\"GLViewport\"")),
+           "RhiViewport must be registered under the QML name 'GLViewport' (GCODE-04 default path)");
+  // SoftwareViewport may be present as the QRhi fallback, but only behind an
+  // explicit env-var gate (OWZX_OPENGL / qEnvironmentVariableIsSet) so it never
+  // silently becomes the default registration.
+  if (mainQml.contains(QStringLiteral("SoftwareViewport")))
+  {
+    QVERIFY2(mainQml.contains(QStringLiteral("OWZX_OPENGL"))
+                 || mainQml.contains(QStringLiteral("qEnvironmentVariableIsSet")),
+             "SoftwareViewport registration, if present, must be guarded behind an explicit "
+             "env-var gate (GCODE-04 fallback-only policy)");
+  }
+  // Belt-and-suspenders vs previewPageNeverReferencesSoftwareViewport (Plan 04):
+  // the Preview page must resolve to the hardware-accelerated RhiViewport path.
+  QVERIFY2(!previewPage.contains(QStringLiteral("SoftwareViewport")),
+           "PreviewPage.qml must never reference SoftwareViewport (GCODE-04)");
+  QVERIFY2(previewPage.contains(QStringLiteral("GLViewport")),
+           "PreviewPage.qml must bind GLViewport (resolves to RhiViewport on the default "
+           "D3D11 path) (GCODE-04)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
