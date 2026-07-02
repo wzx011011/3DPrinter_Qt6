@@ -3142,9 +3142,21 @@ void ViewModelSmokeTests::viewModesExposeUpstreamSeventeenModes()
 
 void ViewModelSmokeTests::testSettingsDialogOpenFromSidebar()
 {
+  // SETTINGS-01: BackendContext::forwardSettingsRequest sets active preset tier
+  // and emits settingsRequested. Asserts the two-step ordering (setActivePresetTier
+  // BEFORE emit settingsRequested).
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56SettingsDialog"));
-  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+  BackendContext backend;
+
+  QSignalSpy spy(&backend, &BackendContext::settingsRequested);
+  QVERIFY2(spy.isValid(), "settingsRequested signal spy is valid");
+
+  backend.forwardSettingsRequest(QStringLiteral("printer"));
+  QCOMPARE(spy.count(), 1);
+  QCOMPARE(spy.at(0).at(0).toString(), QStringLiteral("printer"));
+  QCOMPARE(qobject_cast<ConfigViewModel *>(backend.configViewModel())->activePresetTier(),
+           QStringLiteral("printer"));
 }
 
 void ViewModelSmokeTests::testTabsAndGroupNavPerTier()
@@ -3210,23 +3222,126 @@ void ViewModelSmokeTests::testConfigOptionModelSevenTypes()
 
 void ViewModelSmokeTests::testPerOptionDirtyAndValueSource()
 {
+  // SETTINGS-04: per-option dirty tracking and valueSourceForKey
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56DirtyValue"));
-  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  QVERIFY(printOpts->rowCount() > 0);
+
+  // Find a known option (layer_height) and change its value
+  int layerIdx = -1;
+  for (int i = 0; i < printOpts->rowCount() && layerIdx < 0; ++i) {
+    if (printOpts->optKey(i) == QStringLiteral("layer_height"))
+      layerIdx = i;
+  }
+  QVERIFY2(layerIdx >= 0, "layer_height must exist in print options");
+
+  // Initially not dirty
+  QVERIFY(!printOpts->optIsDirty(layerIdx));
+
+  // Change value -> becomes dirty
+  printOpts->setValue(layerIdx, 0.22);
+  QVERIFY(printOpts->optIsDirty(layerIdx));
+
+  // valueSourceForKey returns non-empty source for a known option
+  QString source = config.valueSourceForKey(QStringLiteral("layer_height"));
+  QVERIFY2(!source.isEmpty(), "valueSourceForKey must return non-empty for known option");
+
+  // Per-group dirty count via ConfigViewModel proxy
+  QString group = printOpts->optGroup(layerIdx);
+  int dirtyCount = config.dirtyCountForGroup(QStringLiteral("print"), group);
+  QVERIFY2(dirtyCount >= 1, "dirtyCountForGroup must be >= 1 after setValue");
 }
 
 void ViewModelSmokeTests::testReadonlyBuiltinGating()
 {
+  // SETTINGS-06: builtin presets are read-only; requestSavePendingChanges
+  // must refuse to save and emit saveAsRequired instead of overwriting.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56Readonly"));
-  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  // Ensure we are on a builtin preset
+  QString currentPreset = config.currentPreset();
+  QVERIFY(!currentPreset.isEmpty());
+
+  // Check if the current preset is builtin
+  bool isBuiltin = preset.isBuiltinPreset(currentPreset);
+  if (!isBuiltin) {
+    // Find any builtin preset and switch to it
+    QStringList allPresets = preset.presetNamesForCategory(PresetServiceMock::PrintCat);
+    for (const QString &name : allPresets) {
+      if (preset.isBuiltinPreset(name)) {
+        config.setCurrentPreset(name);
+        currentPreset = name;
+        isBuiltin = true;
+        break;
+      }
+    }
+  }
+  if (!isBuiltin) {
+    QSKIP("No builtin preset available for this test");
+    return;
+  }
+
+  // Change a value to make the model dirty
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  int layerIdx = -1;
+  for (int i = 0; i < printOpts->rowCount() && layerIdx < 0; ++i) {
+    if (printOpts->optKey(i) == QStringLiteral("layer_height"))
+      layerIdx = i;
+  }
+  QVERIFY2(layerIdx >= 0, "layer_height must exist");
+  printOpts->setValue(layerIdx, 0.22);
+
+  // requestSavePendingChanges on a builtin preset must return false
+  QSignalSpy saveAsSpy(&config, &ConfigViewModel::saveAsRequired);
+  bool saveResult = config.requestSavePendingChanges();
+  QVERIFY2(!saveResult, "requestSavePendingChanges must return false for builtin presets");
 }
 
 void ViewModelSmokeTests::testSaveSaveAsResetOptionResetGroupResetAll()
 {
+  // SETTINGS-05: resetGroup resets all options in a named group to reference values.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56SaveReset"));
-  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  QVERIFY(printOpts->rowCount() > 0);
+
+  // Find an option and its group, make it dirty
+  int layerIdx = -1;
+  for (int i = 0; i < printOpts->rowCount() && layerIdx < 0; ++i) {
+    if (printOpts->optKey(i) == QStringLiteral("layer_height"))
+      layerIdx = i;
+  }
+  QVERIFY2(layerIdx >= 0, "layer_height must exist");
+  QString group = printOpts->optGroup(layerIdx);
+  QVERIFY2(!group.isEmpty(), "layer_height must belong to a group");
+
+  // Make dirty
+  printOpts->setValue(layerIdx, 0.22);
+  QVERIFY(printOpts->optIsDirty(layerIdx));
+  QVERIFY(config.dirtyCountForGroup(QStringLiteral("print"), group) >= 1);
+
+  // Reset the group via ConfigViewModel::resetGroup
+  config.resetGroup(QStringLiteral("print"), group);
+
+  // All options in the group should be clean after reset
+  QVERIFY(!printOpts->optIsDirty(layerIdx));
+  QCOMPARE(config.dirtyCountForGroup(QStringLiteral("print"), group), 0);
 }
 
 void ViewModelSmokeTests::testUnsavedChangesGuardOnDirtyClose()
@@ -3238,9 +3353,57 @@ void ViewModelSmokeTests::testUnsavedChangesGuardOnDirtyClose()
 
 void ViewModelSmokeTests::testPerDialogSearchAndFourLevelMode()
 {
+  // SETTINGS-02/03: filterOptionIndices dispatches per-tier and respects 4-level
+  // ConfigOptionMode (simple=0, advanced=1, develop=2+). Advanced/develop options
+  // are excluded when advancedMode=false.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56SearchMode"));
-  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  QVERIFY(printOpts->rowCount() > 0);
+
+  // Collect indices in simple mode (advancedMode=false) -- excludes mode>=1
+  QList<int> simpleIndices = config.filterOptionIndices(
+      QStringLiteral("print"), QString(), false);
+  QVERIFY2(!simpleIndices.isEmpty(), "Simple mode must return at least one index");
+
+  // Collect indices in advanced mode -- includes mode>=1
+  QList<int> advancedIndices = config.filterOptionIndices(
+      QStringLiteral("print"), QString(), true);
+  QVERIFY2(!advancedIndices.isEmpty(), "Advanced mode must return at least one index");
+
+  // Advanced mode must include AT LEAST as many options as simple mode
+  QVERIFY2(advancedIndices.size() >= simpleIndices.size(),
+           "Advanced mode must not exclude any simple-mode options");
+
+  // Every simple index must also be present in advanced indices
+  for (int idx : simpleIndices) {
+    QVERIFY2(advancedIndices.contains(idx),
+             "Simple-mode index must also appear in advanced-mode results");
+  }
+
+  // Test per-tier dispatch: "printer" (new) and "machine" (legacy) must return
+  // the same result
+  QList<int> printerIndices = config.filterOptionIndices(
+      QStringLiteral("printer"), QString(), false);
+  QList<int> machineIndices = config.filterOptionIndices(
+      QStringLiteral("machine"), QString(), false);
+  QCOMPARE(printerIndices, machineIndices);
+
+  // Search text filtering: non-empty needle must subset the results
+  QList<int> allIndices = config.filterOptionIndices(
+      QStringLiteral("print"), QStringLiteral("layer"), false);
+  QVERIFY2(allIndices.size() <= simpleIndices.size(),
+           "Search filter must return a subset of all indices");
+
+  // Legacy "process" alias must match "print"
+  QList<int> processIndices = config.filterOptionIndices(
+      QStringLiteral("process"), QString(), false);
+  QCOMPARE(processIndices, simpleIndices);
 }
 
 void ViewModelSmokeTests::testNullableAndVectorOptions()

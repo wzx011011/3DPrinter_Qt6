@@ -133,6 +133,20 @@ public:
   Q_INVOKABLE bool requestObjectScope(const QString &targetType, const QString &targetName, int objectIndex = -1, int volumeIndex = -1);
   Q_INVOKABLE bool requestPlateScope(int plateIndex);
   Q_INVOKABLE void setActivePresetTier(const QString &tier);
+
+  // Per-group reset (SETTINGS-05: per upstream Tab.cpp reset_group)
+  Q_INVOKABLE void resetGroup(const QString &tier, const QString &groupName);
+  // Per-option nullable flag proxy (delegates to optionModelForTier)
+  Q_INVOKABLE bool optNullable(const QString &tier, int index) const;
+  // Per-option isVector flag proxy
+  Q_INVOKABLE bool optIsVector(const QString &tier, int index) const;
+  // Per-option sidetext proxy
+  Q_INVOKABLE QString optSidetext(const QString &tier, int index) const;
+  // Group names for a given tier (delegates to optionModel->groupNames())
+  Q_INVOKABLE QStringList groupNames(const QString &tier) const;
+  // Per-group dirty count
+  Q_INVOKABLE int dirtyCountForGroup(const QString &tier, const QString &groupName) const;
+
   Q_INVOKABLE bool requestSavePendingChanges();
   Q_INVOKABLE bool requestDiscardPendingChanges();
   Q_INVOKABLE bool requestCancelPendingChanges();

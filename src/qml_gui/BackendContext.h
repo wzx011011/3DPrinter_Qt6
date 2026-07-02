@@ -413,9 +413,10 @@ signals:
   void settingsChanged();
   void configWizardCompletedChanged();
   void showConfigWizardRequested();
-  /// Phase 52 PREPSB-02: request to open an independent settings dialog for a
-  /// category ("printer" / "filament" / "process"). Phase 56 connects the real
-  /// dialog; until then the forward is an honest no-op log.
+  /// Phase 52 PREPSB-02 + Phase 56: request to open an independent
+  /// settings dialog for a category ("printer" / "filament" / "process").
+  /// BackendContext::forwardSettingsRequest() calls setActivePresetTier(category)
+  /// FIRST, then emits this signal. QML side connects to show the dialog.
   void settingsRequested(const QString &category);
   void showBedShapeDialogRequested();
   void showEditGCodeDialogRequested(const QString &key, const QString &value);

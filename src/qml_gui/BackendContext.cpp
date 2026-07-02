@@ -568,12 +568,11 @@ void BackendContext::showConfigWizard()
 
 void BackendContext::forwardSettingsRequest(const QString &category)
 {
-  // Phase 52 PREPSB-02: forward the sidebar "Setting" entry point. The
-  // independent settings dialog is Phase 56 work; until then this is an honest
-  // no-op log so the entry point is visible but explicitly deferred (not silent
-  // dead UI). Phase 56 connects the dialog and removes this interim log.
-  qInfo("[Backend] settingsRequested(%s) -- settings dialog pending Phase 56",
-        qPrintable(category));
+  // Phase 56: show/create the correct SettingsDialog for this category.
+  // Dialog instances are created once and shown/hidden (not destroyed per open).
+  // Step 1: ensure the active preset tier is set before any consumer reads it.
+  configViewModel_->setActivePresetTier(category);
+  // Step 2: emit signal; QML side connects to create/show the dialog.
   emit settingsRequested(category);
 }
 

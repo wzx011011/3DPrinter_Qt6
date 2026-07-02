@@ -115,10 +115,14 @@ QObject *ConfigViewModel::presetList() const { return presetList_; }
 
 QString ConfigViewModel::normalizedTier(const QString &tier) const
 {
-  if (tier == QStringLiteral("printer"))
+  // Accept both new tier strings ("printer"/"filament"/"print") and legacy aliases
+  // ("machine"/"process") so existing callers don't break.
+  if (tier == QStringLiteral("printer") || tier == QStringLiteral("machine"))
     return QStringLiteral("printer");
   if (tier == QStringLiteral("filament"))
     return QStringLiteral("filament");
+  if (tier == QStringLiteral("print") || tier == QStringLiteral("process"))
+    return QStringLiteral("print");
   return QStringLiteral("print");
 }
 
@@ -1171,43 +1175,44 @@ static bool fuzzyMatch(const QString &pattern, const QString &text, int &outScor
 
 QList<int> ConfigViewModel::filterOptionIndices(const QString &category, const QString &searchText, bool advancedMode) const
 {
-  if (!printOptions_)
+  // Dispatch to the correct option model via the category/tier parameter.
+  // Accepts new tier strings ("printer"/"filament"/"print") and legacy
+  // aliases ("machine"/"process") for backward compatibility.
+  ConfigOptionModel *model = optionModelForTier(category);
+  if (!model)
     return {};
 
-  const int n = printOptions_->rowCount();
+  const int n = model->rowCount();
   QList<int> result;
   result.reserve(n);
 
-  const bool matchAll = category.isEmpty() || category == QStringLiteral("鍏ㄩ儴") || category == tr("鍏ㄩ儴");
+  const bool matchAll = category.isEmpty() || category == QStringLiteral("all");
   const QString needle = searchText.toLower();
-  const bool useFuzzy = needle.length() >= 2; // 鍚敤 fuzzy matching锛堝榻愪笂娓?fts_fuzzy_match锛?
+  const bool useFuzzy = needle.length() >= 2;
 
   for (int i = 0; i < n; ++i)
   {
-    if (!matchAll && printOptions_->optCategory(i) != category)
-      continue;
-
     if (!needle.isEmpty())
     {
       bool matched = false;
       if (useFuzzy)
       {
         int score = 0;
-        matched = fuzzyMatch(needle, printOptions_->optLabel(i).toLower(), score);
+        matched = fuzzyMatch(needle, model->optLabel(i).toLower(), score);
         if (!matched)
-          matched = fuzzyMatch(needle, printOptions_->optKey(i).toLower(), score);
+          matched = fuzzyMatch(needle, model->optKey(i).toLower(), score);
       }
       else
       {
-        matched = printOptions_->optLabel(i).toLower().contains(needle) ||
-                printOptions_->optKey(i).toLower().contains(needle);
+        matched = model->optLabel(i).toLower().contains(needle) ||
+              model->optKey(i).toLower().contains(needle);
       }
       if (!matched)
         continue;
     }
 
-    // Mode filter (瀵归綈涓婃父 ConfigOptionMode: 0=comSimple, 1=comAdvanced, 2=comDevelop)
-    const int optMode = printOptions_->optMode(i);
+    // Mode filter (upstream ConfigOptionMode: 0=comSimple, 1=comAdvanced, 2=comDevelop)
+    const int optMode = model->optMode(i);
     if (optMode >= 1 && !advancedMode)
       continue; // Advanced/Develop-only options hidden in simple mode
     if (optMode == 0 && advancedMode)
@@ -1822,4 +1827,60 @@ void ConfigViewModel::resetAllGlobalOptions()
   updateMergedPresetValues();
   applyScopeValues();
   emit stateChanged();
+}
+
+// SETTINGS-05 reset-group: reset all options in a named group to reference values.
+// Per upstream Tab.cpp reset_group behavior.
+void ConfigViewModel::resetGroup(const QString &tier, const QString &groupName)
+{
+  ConfigOptionModel *model = optionModelForTier(tier);
+  if (!model)
+    return;
+
+  bool anyReset = false;
+  for (int i = 0; i < model->rowCount(); ++i)
+  {
+    if (model->optGroup(i) == groupName)
+    {
+      model->resetOption(i);
+      anyReset = true;
+    }
+  }
+  if (anyReset)
+    emit stateChanged();
+}
+
+// Per-option nullable flag proxy — delegates to optionModelForTier.
+bool ConfigViewModel::optNullable(const QString &tier, int index) const
+{
+  ConfigOptionModel *model = optionModelForTier(tier);
+  return model ? model->optNullable(index) : false;
+}
+
+// Per-option isVector flag proxy — delegates to optionModelForTier.
+bool ConfigViewModel::optIsVector(const QString &tier, int index) const
+{
+  ConfigOptionModel *model = optionModelForTier(tier);
+  return model ? model->optIsVector(index) : false;
+}
+
+// Per-option sidetext proxy — delegates to optionModelForTier.
+QString ConfigViewModel::optSidetext(const QString &tier, int index) const
+{
+  ConfigOptionModel *model = optionModelForTier(tier);
+  return model ? model->optSidetext(index) : QString();
+}
+
+// Group names for a given tier — delegates to optionModel->groupNames().
+QStringList ConfigViewModel::groupNames(const QString &tier) const
+{
+  ConfigOptionModel *model = optionModelForTier(tier);
+  return model ? model->groupNames() : QStringList();
+}
+
+// Per-group dirty count — delegates to optionModel->dirtyCountForGroup().
+int ConfigViewModel::dirtyCountForGroup(const QString &tier, const QString &groupName) const
+{
+  ConfigOptionModel *model = optionModelForTier(tier);
+  return model ? model->dirtyCountForGroup(groupName) : 0;
 }
