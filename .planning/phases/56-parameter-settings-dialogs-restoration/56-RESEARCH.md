@@ -553,22 +553,24 @@ void BackendContext::openSettings(const QString &category)
 
 **Validation note:** A1 is verified against upstream Tab.cpp source (lines 2311-2788) -- the page names match. A4 is standard Qt6 functionality but needs runtime verification on Windows.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All three open questions are resolved by the Phase 56 plan set (56-01 Task 2 resolves Q2; 56-02 Task 1 resolves Q1; 56-02 Task 2 resolves Q3). The RESOLVED markers below record the implemented answer for each.
 
 1. **Page-to-group mapping data format**
    - What we know: Upstream Tab.cpp manually places options into groups. No declarative metadata exists on ConfigOptionDef.
    - What's unclear: Should the mapping be (a) a C++ static QHash in ConfigOptionModel, (b) a JSON sidecar file, or (c) extracted at cmake configure time from upstream source?
-   - Recommendation: Option (a) -- a static QHash per tier in ConfigOptionModel.cpp, derived from upstream Tab.cpp source. This is maintainable and build-time verifiable.
+   - RESOLVED: Option (a) -- a static QHash per tier in ConfigOptionModel.cpp, derived from upstream Tab.cpp source. This is maintainable and build-time verifiable. Implemented in 56-02 Task 1 (kPrinterPageGroupMap / kFilamentPageGroupMap / kPrintPageGroupMap + assignPageGroupForTier).
 
 2. **CxUnitSpinBox -- extend CxSpinBox or new control?**
    - What we know: UI-SPEC identifies this as a gap. Current CxSpinBox has no suffix/unit property.
    - What's unclear: Whether to add a `property string suffix` to CxSpinBox or create a new CxUnitSpinBox wrapping it.
-   - Recommendation: Add a `property string suffix` to CxSpinBox (minimal change, avoids new control registration). The suffix renders as a Text element anchored to the right of the spinbox content area.
+   - RESOLVED: Add a `property string suffix` to CxSpinBox (minimal change, avoids new control registration). The suffix renders as a Text element anchored to the right of the spinbox content area. Implemented in 56-01 Task 2 (CxSpinBox.qml suffix property).
 
 3. **ConfigViewModel per-tier filterOptionIndices**
    - What we know: Current `filterOptionIndices()` only filters `printOptions_`. Machine and filament need the same capability.
    - What's unclear: Should the method accept a tier parameter, or should each option model have its own filter method?
-   - Recommendation: Add a tier parameter to `filterOptionIndices()` that selects the correct ConfigOptionModel internally via `optionModelForTier()`.
+   - RESOLVED: Add a tier parameter to `filterOptionIndices()` that selects the correct ConfigOptionModel internally via `optionModelForTier()`. Implemented in 56-02 Task 2 (filterOptionIndices dispatch via optionModelForTier for printer/filament/print + legacy machine/process aliases).
 
 ## Environment Availability
 
