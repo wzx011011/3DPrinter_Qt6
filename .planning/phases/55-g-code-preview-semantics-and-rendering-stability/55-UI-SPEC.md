@@ -135,7 +135,7 @@ Inside `PreviewPage.qml` right panel ScrollView ColumnLayout, between `Component
 
 1. **Visibility scope**: The VisibilityFilter group is always visible in the right panel regardless of current view-mode. Checking/unchecking a role toggles render-side draw filtering only (the renderer skips segments matching that role). It does NOT repack `gcodePreviewData`. Source: CONTEXT.md decision "render-side filtering".
 
-2. **Collapsible**: Has a section header "可见" (Visible) with collapse/expand toggle matching the existing SidePanelHeader pattern used by the left panel ("盘与层") and right panel ("分析"). Default: expanded.
+2. **Collapsible**: Has a section header "可见线条类型" (qsTr: "Visible Line Types") with collapse/expand toggle matching the existing SidePanelHeader pattern used by the left panel ("盘与层") and right panel ("分析"). Default: expanded.
 
 3. **Role list**: The checkbox list contains the following roles, ordered to match upstream `EGCodeExtrusionRole` enumeration order. Each row has a 10x10 colored square (matching the role's FeatureType color), a label, and a CxCheckBox.
 
@@ -279,7 +279,7 @@ This phase introduces no destructive actions (no delete, reset, or overwrite ope
 
 | Element | Copy (Chinese) | Copy (English source) |
 |---------|---------------|-----------------------|
-| VisibilityFilter section header | "可见" | "Visible" (upstream GCodeViewer legend section) |
+| VisibilityFilter section header | "可见线条类型" | "Visible Line Types" (noun phrase — describes the element type) |
 | Inner wall | "内壁" | "Inner wall" (upstream `to_string(EGCodeExtrusionRole::Perimeter)`) |
 | Outer wall | "外壁" | "Outer wall" (upstream `ExternalPerimeter`) |
 | Overhang wall | "悬垂壁" | "Overhang wall" (upstream `OverhangPerimeter`) |
@@ -346,7 +346,7 @@ This is not a UI visual spec but a behavioral contract the executor must enforce
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS — All labels defined with Chinese qsTr keys mapped to upstream English source-of-truth.
+- [ ] Dimension 1 Copywriting: PASS — All labels defined with Chinese qsTr keys mapped to upstream English source-of-truth. Section headers are noun phrases (not bare adjectives).
 - [ ] Dimension 2 Visuals: PASS — VisibilityFilter layout matches upstream right-panel legend structure. No new visual elements outside the right panel.
 - [ ] Dimension 3 Color: PASS — 60/30/10 split maintained. Accent reserved for active states only. Role colors from upstream FeatureType palette.
 - [ ] Dimension 4 Typography: PASS — 4 sizes declared (10/11/12/14), 2 weights (400/700). Monospace Consolas for numeric data.
