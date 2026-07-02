@@ -203,7 +203,7 @@ Plans:
 3. Edits are model-driven and update dirty, validation, and sidebar state.
 4. Save/reset/unsaved-change actions follow upstream-compatible behavior.
 
-**Plans:** 1/4 plans executed
+**Plans:** 2/4 plans executed
 
 Plans:
 **Wave 1**
@@ -212,7 +212,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 56-02-PLAN.md -- Wave 2 C++ backend: static page/group tables per tier, ConfigViewModel per-tier/per-group ops, BackendContext.openSettings active forwarder; SETTINGS-02/04/05/06 ViewModelSmokeTests GREEN
+- [x] 56-02-PLAN.md -- Wave 2 C++ backend: static page/group tables per tier, ConfigViewModel per-tier/per-group ops, BackendContext.openSettings active forwarder; SETTINGS-02/04/05/06 ViewModelSmokeTests GREEN
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
