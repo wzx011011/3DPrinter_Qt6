@@ -103,29 +103,6 @@ namespace
     return lerpColor(kRangeColors[lowIdx], kRangeColors[highIdx], global_t - float(lowIdx));
   }
 
-  struct FeatureStyle
-  {
-    QString label;
-    QString color;
-    float r;
-    float g;
-    float b;
-  };
-
-  FeatureStyle styleFor(const QString &type)
-  {
-    const QString t = type.toUpper();
-    if (t.contains("WALL") || t.contains("PERIMETER"))
-      return {QStringLiteral("外壁"), QStringLiteral("#FF8C3A"), 1.0f, 0.55f, 0.23f};
-    if (t.contains("INFILL") || t.contains("FILL"))
-      return {QStringLiteral("填充"), QStringLiteral("#38A4FF"), 0.22f, 0.64f, 1.0f};
-    if (t.contains("SUPPORT"))
-      return {QStringLiteral("支撑"), QStringLiteral("#8C63FF"), 0.55f, 0.39f, 1.0f};
-    if (t.contains("TRAVEL"))
-      return {QStringLiteral("空驶"), QStringLiteral("#6E7785"), 0.43f, 0.47f, 0.52f};
-    return {QStringLiteral("其他"), QStringLiteral("#53D890"), 0.33f, 0.84f, 0.56f};
-  }
-
   // Maps the upstream ;TYPE: display string DIRECTLY to the canonical libvgcode
   // EGCodeExtrusionRole index (the canonical role index throughout the Qt6 codebase).
   // Source strings: libslic3r/ExtrusionEntity.cpp:583-608 (role_to_string).
@@ -216,6 +193,51 @@ namespace
         return entry.role;
     }
     return 0;
+  }
+
+  // Canonical view-mode indices matching upstream libvgcode EViewType order
+  // (libvgcode/include/Types.hpp:80-103). Every mode-to-field mapping in
+  // recolorAndPackSegments() and buildLegendItems() uses these named constants
+  // instead of raw integers so the 17-mode renumber cannot silently mislabel a
+  // gradient (55-RESEARCH Pitfall 2).
+  enum EViewType
+  {
+    VT_Summary = 0,          // statistics only, no gradient legend
+    VT_LineType = 1,         // FeatureType: per-role colors (kRoleColors)
+    VT_Filament = 2,         // ColorPrint: per-extruder palette
+    VT_Speed = 3,            // gradient on feedrate
+    VT_ActualSpeed = 4,      // uniform (data unavailable in fixture-driven path)
+    VT_Acceleration = 5,     // gradient on acceleration
+    VT_Jerk = 6,             // uniform (data unavailable)
+    VT_Height = 7,           // gradient on layer height
+    VT_Width = 8,            // gradient on line width
+    VT_Flow = 9,             // gradient on volumetric_rate
+    VT_ActualFlow = 10,      // uniform (data unavailable)
+    VT_LayerTime = 11,       // gradient on layer_time
+    VT_LayerTimeLog = 12,    // gradient on log(layer_time)
+    VT_FanSpeed = 13,        // gradient on fan_speed
+    VT_Temperature = 14,     // gradient on temperature
+    VT_PressureAdvance = 15, // uniform (data unavailable)
+    VT_Tool = 16             // per-extruder palette
+  };
+
+  // One-time log guard for the modes whose underlying field is unavailable in
+  // the fixture-driven path (Jerk/PA/ActualSpeed/ActualFlow). Logs once per mode
+  // so users are informed without spamming on every recolor.
+  bool logOnceIfNeeded(int mode)
+  {
+    static bool logged[4] = {false, false, false, false};
+    static const int modes[4] = {VT_ActualSpeed, VT_Jerk, VT_ActualFlow, VT_PressureAdvance};
+    for (int i = 0; i < 4; ++i)
+    {
+      if (modes[i] == mode && !logged[i])
+      {
+        logged[i] = true;
+        qInfo("[Preview] Jerk/PA/ActualSpeed/ActualFlow data unavailable in fixture-driven path (mode=%d)", mode);
+        return true;
+      }
+    }
+    return false;
   }
 
   bool parseAxis(const QString &line, QChar axis, float &value)
@@ -440,21 +462,27 @@ QString PreviewViewModel::timeAtMove(int moveIndex) const
 
 QStringList PreviewViewModel::viewModes() const
 {
-  // Display names aligned with upstream GCodeViewer get_view_type_string.
+  // The 17 upstream EViewType display names in upstream update_by_mode order
+  // (libvgcode/include/Types.hpp:80-103 + GCodeViewer.cpp:66-103). Index order
+  // matches the EViewType enum so viewModeIndex_ maps 1:1 to the recolor switch.
   return {
+      QStringLiteral("Summary"),
       QStringLiteral("Line Type"),
+      QStringLiteral("Filament"),
+      QStringLiteral("Speed"),
+      QStringLiteral("Actual Speed"),
+      QStringLiteral("Acceleration"),
+      QStringLiteral("Jerk"),
       QStringLiteral("Layer Height"),
       QStringLiteral("Line Width"),
-      QStringLiteral("Tool"),
-      QStringLiteral("Speed"),
-      QStringLiteral("Fan Speed"),
-      QStringLiteral("Temperature"),
-      QStringLiteral("Filament"),
-      QStringLiteral("Filament ID"),
       QStringLiteral("Flow"),
+      QStringLiteral("Actual Flow"),
       QStringLiteral("Layer Time"),
       QStringLiteral("Layer Time (log)"),
-      QStringLiteral("Acceleration")};
+      QStringLiteral("Fan Speed"),
+      QStringLiteral("Temperature"),
+      QStringLiteral("Pressure Advance"),
+      QStringLiteral("Tool")};
 }
 
 bool PreviewViewModel::loadGCodeForPreview(const QString &filePath)
@@ -1145,7 +1173,12 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       ++travelMoveCount;
       accumulateRoleTime(QStringLiteral("TRAVEL"), dx, dy, dz, currentFeedrate);
     }
-    const FeatureStyle style = styleFor(extruding ? currentType : QStringLiteral("TRAVEL"));
+    // Fine-grained role assignment: map the ;TYPE: display string DIRECTLY to
+    // the canonical libvgcode index and bake the per-role base color from
+    // kRoleColors (FeatureType mode). Both arrays use the same canonical index,
+    // so every role -- including the divergent ones (Ironing->7, Bottom
+    // surface->15) -- gets the correct color and visibility slot.
+    const int role = extruding ? roleForTypeImpl(currentType) : 0;
 
     StoredSegment seg;
     seg.x1 = x;
@@ -1154,9 +1187,9 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     seg.x2 = nx;
     seg.y2 = ny;
     seg.z2 = nz;
-    seg.baseR = style.r;
-    seg.baseG = style.g;
-    seg.baseB = style.b;
+    seg.baseR = kRoleColors[role][0];
+    seg.baseG = kRoleColors[role][1];
+    seg.baseB = kRoleColors[role][2];
     seg.feedrate = currentFeedrate;
     seg.fan_speed = currentFanSpeed;
     seg.temperature = currentTemp;
@@ -1169,7 +1202,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     seg.layer = layer;
     seg.move = moveIndex;
     seg.isTravel = !extruding;
-    seg.role = extruding ? roleForTypeImpl(currentType) : 0;
+    seg.role = role;
     segments_.push_back(seg);
 
     // Accumulate elapsed time for the move slider, aligned with upstream IMSlider m_layers_times.
@@ -1179,7 +1212,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       m_moveAccumulatedTime.push_back(prev + dt);
     }
 
-    featureCount_[style.label] += 1;
+    featureCount_[QString::fromUtf8(kRoleLabels[role])] += 1;
 
     x = nx;
     y = ny;
@@ -1412,7 +1445,10 @@ void PreviewViewModel::recolorAndPackSegments()
 
   const int count = int(visibleIndices.size());
 
-  // Determine value range for gradient modes
+  // Determine value range for gradient modes. Uses the EViewType enum so the
+  // 17-mode renumber cannot silently mislabel a gradient (55-RESEARCH Pitfall 2).
+  // Summary / LineType / Filament / Tool / ActualSpeed / Jerk / ActualFlow /
+  // PressureAdvance do not contribute to the gradient range.
   float minV = FLT_MAX, maxV = -FLT_MAX;
   for (const int idx : visibleIndices)
   {
@@ -1420,19 +1456,18 @@ void PreviewViewModel::recolorAndPackSegments()
     float v = 0.f;
     switch (mode)
     {
-    case 1:  v = s.height; break;      // Layer height
-    case 2:  v = s.width; break;      // Width
-    case 4:  v = s.feedrate; break;    // Feedrate
-    case 5:  v = qMax(0.f, s.fan_speed); break; // FanSpeed
-    case 6:  v = s.temperature; break;  // Temperature
-    case 3:  v = float(s.extruder_id); break; // Tool
-    case 7:  v = float(s.extruder_id); break; // ColorPrint (via extruder)
-    case 8:  v = float(s.extruder_id); break; // FilamentId
-    case 9:  v = s.volumetric_rate; break;      // VolumetricRate
-    case 10: v = s.layer_time; break;   // LayerTime
-    case 11: v = s.layer_time > 0.f ? std::log(s.layer_time) : 0.f; break; // LayerTimeLog
-    case 12: v = s.acceleration; break;  // Acceleration
-    default: continue;
+    case VT_Height:       v = s.height; break;
+    case VT_Width:        v = s.width; break;
+    case VT_Speed:        v = s.feedrate; break;
+    case VT_Acceleration: v = s.acceleration; break;
+    case VT_Flow:         v = s.volumetric_rate; break;
+    case VT_LayerTime:    v = s.layer_time; break;
+    case VT_LayerTimeLog: v = s.layer_time > 0.f ? std::log(s.layer_time) : 0.f; break;
+    case VT_FanSpeed:     v = qMax(0.f, s.fan_speed); break;
+    case VT_Temperature:  v = s.temperature; break;
+    default: continue;  // VT_Summary, VT_LineType, VT_Filament, VT_Tool, and the
+                        // data-unavailable modes (ActualSpeed/Jerk/ActualFlow/PA)
+                        // do not compute a gradient range.
     }
     if (v < minV) minV = v;
     if (v > maxV) maxV = v;
@@ -1473,33 +1508,46 @@ void PreviewViewModel::recolorAndPackSegments()
     p.move = s.move;
     p.role = s.role;
 
-    if (mode == 0)
+    if (mode == VT_LineType)
     {
-      // FeatureType: use parsed role colors.
+      // FeatureType: use the baked per-role base color (kRoleColors).
       p.r = s.baseR;
       p.g = s.baseG;
       p.b = s.baseB;
     }
-    else if (mode == 3 || mode == 7 || mode == 8)
+    else if (mode == VT_Filament || mode == VT_Tool)
     {
-      // Tool / ColorPrint / FilamentId: fixed palette per extruder
+      // Filament (ColorPrint) / Tool: fixed palette per extruder.
       const auto &tc = toolColors[s.extruder_id % kToolColorCount];
       p.r = tc[0]; p.g = tc[1]; p.b = tc[2];
+    }
+    else if (mode == VT_ActualSpeed || mode == VT_Jerk || mode == VT_ActualFlow || mode == VT_PressureAdvance)
+    {
+      // Data unavailable in the fixture-driven path: render a uniform mid-gradient
+      // color. Log once per mode so users are informed without spamming.
+      logOnceIfNeeded(mode);
+      const ColorResult c = valueToGradient((minV + maxV) * 0.5f, minV, maxV);
+      p.r = c.r; p.g = c.g; p.b = c.b;
+    }
+    else if (mode == VT_Summary)
+    {
+      // Summary: statistics only; segments still draw in their baked role color.
+      p.r = s.baseR; p.g = s.baseG; p.b = s.baseB;
     }
     else
     {
       float value = 0.f;
       switch (mode)
       {
-      case 1:  value = s.height; break;
-      case 2:  value = s.width; break;
-      case 4:  value = s.feedrate; break;
-      case 5:  value = qMax(0.f, s.fan_speed); break;
-      case 6:  value = s.temperature; break;
-      case 9:  value = s.volumetric_rate; break;
-      case 10: value = s.layer_time; break;
-      case 11: value = s.layer_time > 0.f ? std::log(s.layer_time) : 0.f; break;
-      case 12: value = s.acceleration; break;
+      case VT_Height:       value = s.height; break;
+      case VT_Width:        value = s.width; break;
+      case VT_Speed:        value = s.feedrate; break;
+      case VT_Acceleration: value = s.acceleration; break;
+      case VT_Flow:         value = s.volumetric_rate; break;
+      case VT_LayerTime:    value = s.layer_time; break;
+      case VT_LayerTimeLog: value = s.layer_time > 0.f ? std::log(s.layer_time) : 0.f; break;
+      case VT_FanSpeed:     value = qMax(0.f, s.fan_speed); break;
+      case VT_Temperature:  value = s.temperature; break;
       default: break;
       }
       const ColorResult c = valueToGradient(value, minV, maxV);
@@ -1521,27 +1569,45 @@ void PreviewViewModel::recolorAndPackSegments()
 void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
 {
   legendItems_.clear();
-  m_legendType = 0; // default: discrete
+  m_legendType = 0; // default: discrete / no legend
   m_legendGradMinLabel.clear();
   m_legendGradMaxLabel.clear();
   m_legendGradMinColor.clear();
   m_legendGradMaxColor.clear();
 
-  if (mode == 0)
+  if (mode == VT_Summary)
   {
-    // FeatureType legend (discrete)
-    static const QHash<QString, QString> colorMap = {
-        {QStringLiteral("外壁"), QStringLiteral("#FF8C3A")},
-        {QStringLiteral("填充"), QStringLiteral("#38A4FF")},
-        {QStringLiteral("支撑"), QStringLiteral("#8C63FF")},
-        {QStringLiteral("空驶"), QStringLiteral("#6E7785")},
-        {QStringLiteral("其他"), QStringLiteral("#53D890")}};
-    for (auto it = featureCount_.cbegin(); it != featureCount_.cend(); ++it)
-      legendItems_.append(legendItem(it.key(), colorMap.value(it.key(), QStringLiteral("#53D890")), it.value()));
+    // Summary: statistics only -- no gradient legend (upstream EViewType::Summary).
+    // m_legendType stays 0 (discrete) and legendItems_ stays empty.
+    return;
   }
-  else if (mode == 3 || mode == 7 || mode == 8)
+
+  if (mode == VT_LineType)
   {
-      // Tool / ColorPrint / FilamentId legend: extruder palette aligned with upstream extruder_colors.
+    // FeatureType legend (discrete): per-role swatches indexed by the canonical
+    // libvgcode role present in the parsed segments.
+    for (auto it = featureCount_.cbegin(); it != featureCount_.cend(); ++it)
+    {
+      // Look up the role color by matching the feature label to kRoleLabels.
+      QString color = QStringLiteral("#53D890");
+      for (int r = 0; r < 20; ++r)
+      {
+        if (it.key() == QString::fromUtf8(kRoleLabels[r]))
+        {
+          const auto &c = kRoleColors[r];
+          color = QStringLiteral("#%1%2%3")
+              .arg(qBound(0, int(c[0] * 255.f + 0.5f), 255), 2, 16, QLatin1Char('0'))
+              .arg(qBound(0, int(c[1] * 255.f + 0.5f), 255), 2, 16, QLatin1Char('0'))
+              .arg(qBound(0, int(c[2] * 255.f + 0.5f), 255), 2, 16, QLatin1Char('0'));
+          break;
+        }
+      }
+      legendItems_.append(legendItem(it.key(), color, it.value()));
+    }
+  }
+  else if (mode == VT_Filament || mode == VT_Tool)
+  {
+    // Filament (ColorPrint) / Tool legend: extruder palette.
     m_legendType = 2; // extruder palette
     QSet<int> usedIds;
     for (const auto &s : segments_)
@@ -1579,15 +1645,20 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
     QString label;
     switch (mode)
     {
-    case 1:  label = QStringLiteral("高度"); break;
-    case 2:  label = QStringLiteral("线宽"); break;
-    case 4:  label = QStringLiteral("进给速率"); break;
-    case 5:  label = QStringLiteral("风扇转速"); break;
-    case 6:  label = QStringLiteral("温度"); break;
-    case 9:  label = QStringLiteral("体积速率"); break;
-    case 10: label = QStringLiteral("层时间"); break;
-    case 11: label = QStringLiteral("层时间(对数)"); break;
-    case 12: label = QStringLiteral("加速度"); break;
+    case VT_Height:       label = QStringLiteral("Layer Height"); break;
+    case VT_Width:        label = QStringLiteral("Line Width"); break;
+    case VT_Speed:        label = QStringLiteral("Speed"); break;
+    case VT_Acceleration: label = QStringLiteral("Acceleration"); break;
+    case VT_Flow:         label = QStringLiteral("Flow"); break;
+    case VT_LayerTime:    label = QStringLiteral("Layer Time"); break;
+    case VT_LayerTimeLog: label = QStringLiteral("Layer Time (log)"); break;
+    case VT_FanSpeed:     label = QStringLiteral("Fan Speed"); break;
+    case VT_Temperature:  label = QStringLiteral("Temperature"); break;
+    // Data-unavailable modes render a uniform gradient; label by mode name.
+    case VT_ActualSpeed:      label = QStringLiteral("Actual Speed"); break;
+    case VT_Jerk:             label = QStringLiteral("Jerk"); break;
+    case VT_ActualFlow:       label = QStringLiteral("Actual Flow"); break;
+    case VT_PressureAdvance:  label = QStringLiteral("Pressure Advance"); break;
     default: label = viewModes().value(mode); break;
     }
 

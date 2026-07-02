@@ -37,6 +37,7 @@ private slots:
   void test_role_string_mapping_covers_upstream_enum();
   void test_view_modes_match_upstream_seventeen();
   void test_summary_mode_has_no_gradient_legend();
+  void test_divergent_role_colors_correct();
 
 private:
   QString fixturePath() const;
@@ -88,41 +89,45 @@ void PreviewParserTests::test_fixture_has_expected_role_coverage()
   QVERIFY2(body.contains(QStringLiteral(";LAYER:1")), "fixture needs ;LAYER:1");
 }
 
-// RED-by-skip until Plan 02 implements the Q_INVOKABLE roleForType(QString)
-// fine-grained 20-role mapper. Plan 55-01 only registers the scaffold; today
-// PreviewViewModel has no such method. QSKIP keeps the target green-by-skip so
-// the build/test gate passes; Plan 02 removes the skip and asserts each of the
-// 20 upstream ;TYPE: strings maps to its canonical libvgcode EGCodeExtrusionRole
-// index (NOT the libslic3r ExtrusionRole integer — see 55-RESEARCH.md Pitfall 6).
+// GREEN since Plan 55-02: PreviewViewModel::roleForType maps each upstream
+// ;TYPE: display string DIRECTLY to its canonical libvgcode EGCodeExtrusionRole
+// index (NOT the libslic3r ExtrusionRole integer -- the two enums diverge past
+// index 6; see 55-RESEARCH.md Pitfall 6). The divergent indices (Ironing->7,
+// Bottom surface->15, etc.) are asserted explicitly as the regression guard.
 void PreviewParserTests::test_role_string_mapping_covers_upstream_enum()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
   PreviewViewModel preview(&slice);
 
-  const QMetaObject *mo = preview.metaObject();
-  const int methodIdx = mo->indexOfMethod("roleForType(QString)");
-  if (methodIdx < 0)
-  {
-    QSKIP("Plan 02 implements PreviewViewModel::roleForType (20-role fine-grained mapper)");
-  }
-
-  // Plan 02 path: roleForType("Inner wall") must return the canonical libvgcode
-  // Perimeter index (1), NOT the libslic3r erPerimeter integer. The full
-  // 20-string table is asserted here once Plan 02 lands.
-  const QMetaMethod method = mo->method(methodIdx);
-  QVariant ret;
-  method.invoke(&preview, Qt::DirectConnection,
-                Q_RETURN_ARG(QVariant, ret),
-                Q_ARG(QString, QStringLiteral("Inner wall")));
-  QCOMPARE(ret.toInt(), 1);
+  // Indices 0..6 are identical across both enums; 7..18 diverge.
+  QCOMPARE(preview.roleForType(QStringLiteral("Inner wall")), 1);
+  QCOMPARE(preview.roleForType(QStringLiteral("Outer wall")), 2);
+  QCOMPARE(preview.roleForType(QStringLiteral("Overhang wall")), 3);
+  QCOMPARE(preview.roleForType(QStringLiteral("Sparse infill")), 4);
+  QCOMPARE(preview.roleForType(QStringLiteral("Internal solid infill")), 5);
+  QCOMPARE(preview.roleForType(QStringLiteral("Top surface")), 6);
+  // Divergent roles -- the libslic3r integer would be WRONG here.
+  QCOMPARE(preview.roleForType(QStringLiteral("Ironing")), 7);              // NOT 8
+  QCOMPARE(preview.roleForType(QStringLiteral("Bridge")), 8);               // NOT 9
+  QCOMPARE(preview.roleForType(QStringLiteral("Gap infill")), 9);           // NOT 11
+  QCOMPARE(preview.roleForType(QStringLiteral("Skirt")), 10);               // NOT 12
+  QCOMPARE(preview.roleForType(QStringLiteral("Support")), 11);             // NOT 14
+  QCOMPARE(preview.roleForType(QStringLiteral("Support interface")), 12);   // NOT 15
+  QCOMPARE(preview.roleForType(QStringLiteral("Prime tower")), 13);         // NOT 17
+  QCOMPARE(preview.roleForType(QStringLiteral("Custom")), 14);              // NOT 18
+  QCOMPARE(preview.roleForType(QStringLiteral("Bottom surface")), 15);      // NOT 7
+  QCOMPARE(preview.roleForType(QStringLiteral("Internal Bridge")), 16);     // NOT 10
+  QCOMPARE(preview.roleForType(QStringLiteral("Brim")), 17);                // NOT 13
+  QCOMPARE(preview.roleForType(QStringLiteral("Support transition")), 18);  // NOT 16
+  QCOMPARE(preview.roleForType(QStringLiteral("Multiple")), 19);
+  // Travel / unrecognized -> 0 (None).
+  QCOMPARE(preview.roleForType(QStringLiteral("")), 0);
+  QCOMPARE(preview.roleForType(QStringLiteral("Nonexistent role")), 0);
 }
 
-// RED-by-skip until Plan 02 raises viewModes() from 13 to the upstream-complete
-// 17 EViewType entries. Plan 55-01 only registers the scaffold; today the list
-// has 13 entries and is missing "Summary", "Actual Speed", "Actual Flow",
-// "Layer Time (log)", "Pressure Advance", "Jerk". QSKIP keeps the target
-// green-by-skip; Plan 02 removes the skip and asserts the 17-mode contract.
+// GREEN since Plan 55-02: viewModes() returns the 17 upstream EViewType display
+// names in upstream update_by_mode order (libvgcode/include/Types.hpp:80-103).
 void PreviewParserTests::test_view_modes_match_upstream_seventeen()
 {
   ProjectServiceMock project;
@@ -130,12 +135,6 @@ void PreviewParserTests::test_view_modes_match_upstream_seventeen()
   PreviewViewModel preview(&slice);
 
   const QStringList modes = preview.viewModes();
-  if (modes.size() != 17)
-  {
-    QSKIP("Plan 02 raises viewModes to the 17 upstream EViewType entries");
-  }
-
-  // Plan 02 path: the upstream-complete display names must all be present.
   QCOMPARE(modes.size(), 17);
   QVERIFY2(modes.contains(QStringLiteral("Summary")),
            "viewModes must include Summary (upstream EViewType index 0)");
@@ -155,17 +154,16 @@ void PreviewParserTests::test_view_modes_match_upstream_seventeen()
            "viewModes must include Pressure Advance (upstream PressureAdvance)");
   QVERIFY2(modes.contains(QStringLiteral("Tool")),
            "viewModes must include Tool");
+  // Head/tail ordering guard: Summary first, Tool last (upstream order).
+  QCOMPARE(modes.first(), QStringLiteral("Summary"));
+  QCOMPARE(modes.last(), QStringLiteral("Tool"));
 }
 
-// RED-by-skip until Plan 02 defines the Summary-mode legend sentinel.
-// Summary mode (upstream EViewType index 0) renders statistics only and has
-// no gradient legend. Plan 02 sets legendType() to a "no legend" sentinel and
-// clears legendItems() when viewModeIndex maps to Summary. There is no
-// current equivalent, so the body is compile-guarded until Plan 02 lands.
+// GREEN since Plan 55-02: Summary mode (upstream EViewType index 0) renders
+// statistics only and produces no gradient legend. legendType() stays 0
+// (discrete) and legendItems() is empty when viewModeIndex maps to Summary.
 void PreviewParserTests::test_summary_mode_has_no_gradient_legend()
 {
-#if 0
-  // Plan 02 enables this body once the Summary sentinel is in place.
   ProjectServiceMock project;
   SliceService slice(&project);
   PreviewViewModel preview(&slice);
@@ -182,9 +180,38 @@ void PreviewParserTests::test_summary_mode_has_no_gradient_legend()
            "Summary mode must not produce discrete legend items");
   QVERIFY2(preview.legendType() == 0,
            "Summary mode must not render a gradient legend");
-#else
-  QSKIP("Plan 02 defines the Summary-mode legend sentinel (no current equivalent)");
-#endif
+}
+
+// NEW regression guard (Plan 55-02): the libslic3r ExtrusionRole and libvgcode
+// EGCodeExtrusionRole enums DIVERGE past index 6. This test verifies the
+// string->color mapping end-to-end so a future edit that accidentally indexes
+// kRoleColors by the libslic3r integer is caught. 'Ironing' must map to the
+// canonical libvgcode index 7 -> orange (255,140,105); 'Bottom surface' must
+// map to index 15 -> purple (102,92,199). If the two indices were swapped
+// (the bug), Ironing would render purple and Bottom surface orange.
+void PreviewParserTests::test_divergent_role_colors_correct()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+
+  // roleForType returns the canonical libvgcode index (NOT the libslic3r int).
+  const int ironingRole = preview.roleForType(QStringLiteral("Ironing"));
+  QCOMPARE(ironingRole, 7);   // libslic3r would give 8 -> wrong color slot
+  const int bottomRole = preview.roleForType(QStringLiteral("Bottom surface"));
+  QCOMPARE(bottomRole, 15);   // libslic3r would give 7 -> wrong color slot
+
+  // roleColor returns the upstream DEFAULT_EXTRUSION_ROLES_COLORS at the
+  // canonical index. Ironing(7) == (255,140,105); Bottom surface(15) == (102,92,199).
+  const QColor ironing = preview.roleColor(ironingRole);
+  QCOMPARE(ironing.red(), 255);
+  QCOMPARE(ironing.green(), 140);
+  QCOMPARE(ironing.blue(), 105);
+
+  const QColor bottom = preview.roleColor(bottomRole);
+  QCOMPARE(bottom.red(), 102);
+  QCOMPARE(bottom.green(), 92);
+  QCOMPARE(bottom.blue(), 199);
 }
 
 // QTEST_MAIN generates the test entry point (main). Without it the link fails
