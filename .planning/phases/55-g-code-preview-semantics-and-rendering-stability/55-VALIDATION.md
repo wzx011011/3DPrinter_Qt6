@@ -1,9 +1,9 @@
 ---
 phase: 55
 slug: g-code-preview-semantics-and-rendering-stability
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: ready-for-verify
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-07-02
 ---
 
@@ -63,7 +63,17 @@ created: 2026-07-02
 
 | Task ID | Plan | Wave | Requirement | Secure Behavior | Test Type | Automated Command | Status |
 |---------|------|------|-------------|-----------------|-----------|-------------------|--------|
-| TBD | TBD | TBD | TBD | TBD | TBD | TBD | ⬜ pending |
+| 55-01-T1 | 55-01 | 0 | GCODE-01 | OrcaSlicer-style fixture (12 roles, tags, 2 layers, travels, tool change) backs parser/no-placeholder tests without a live slice | source-audit | grep fixture checks (in task verify) | ✅ green |
+| 55-01-T2 | 55-01 | 0 | GCODE-02 | PreviewParserTests target registered + RED scaffold (fixture presence green; 3 RED-by-skip slots) | unit | `ctest --output-on-failure -R PreviewParser` | ✅ green |
+| 55-02-T1 | 55-02 | 1 | GCODE-02 | GCV1 wire format gains canonical `int role` (PackedSegment/GcvPackedSegment 76 bytes, lockstepped); render-side role skip; showTravelMoves_=false; toggleRoleVisibility no-repack | build | `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` | ✅ green |
+| 55-02-T2 | 55-02 | 1 | GCODE-02 | 20-role canonical libvgcode parser replaces styleFor; 17 upstream EViewType modes; divergent-role-color guard; PreviewParser RED slots flip GREEN | unit | `ctest --output-on-failure -R PreviewParser` | ✅ green |
+| 55-03-T1 | 55-03 | 2 | GCODE-02 | VisibilityFilter.qml (Cx* controls + Theme tokens) + qml.qrc registration | build | `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` | ✅ green |
+| 55-03-T2 | 55-03 | 2 | GCODE-02 | PreviewPage.qml inserts VisibilityFilter + binds GLViewport.roleVisibility (render-side filter fires) | build + audit | `ctest --output-on-failure -R QmlUiAudit` | ✅ green |
+| 55-04-T1 | 55-04 | 2 | GCODE-02, GCODE-03 | Role-toggle no-repack (hard QVERIFY2) + legend/global-scope + currentMove/G-code-text atomicity + 17-mode belt-and-suspenders | unit | `ctest --output-on-failure -R ViewModelSmoke` | ✅ green |
+| 55-04-T2 | 55-04 | 2 | GCODE-04 | PreviewPage no SoftwareViewport + computePreviewDrawRange role-skip + GcvPackedSegment sizeof 76 audit guards | source-audit | `ctest --output-on-failure -R QmlUiAudit` | ✅ green |
+| 55-04-T3 | 55-04 | 2 | GCODE-01, GCODE-05 | No-placeholder live-slice RED (hard QVERIFY2) + sliceFailed/sliceResultCleared/plate-switch reset + reslice/export/page-switch preservation | unit/integration | `ctest --output-on-failure -R E2EWorkflow` | ✅ green |
+| 55-05-T1 | 55-05 | 3 | GCODE-04 | Phase-55-tagged D3D11 startup-policy audit (RhiViewport default registration, SoftwareViewport fallback-only behind env gate, PreviewPage binds GLViewport) | source-audit | `ctest --output-on-failure -R QmlUiAudit` | ✅ green |
+| 55-05-T2 | 55-05 | 3 | GCODE-04, GCODE-05 | 55-VALIDATION.md frontmatter signed off + Per-Task Verification Map populated + Test Index | doc-audit | `grep -c "nyquist_compliant: true" 55-VALIDATION.md` | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -71,8 +81,8 @@ created: 2026-07-02
 
 ## Wave 0 Requirements
 
-- [ ] G-code fixture: commit a small realistic OrcaSlicer-generated `.gcode` file under `tests/fixtures/` with multiple extrusion roles (`;TYPE:`), travel moves, and tagged comments (`;HEIGHT:`, `;WIDTH:`, `;JERK:`, fan/temp/accel) — backs parser/view-mode/role tests without depending on a live slice.
-- [ ] New parser test file (e.g. `tests/PreviewParserTests.cpp`) registered in CMakeLists for the 20-role parse + 17-mode coverage that `E2EWorkflowTests`/`ViewModelSmokeTests` don't naturally host.
+- [x] G-code fixture: commit a small realistic OrcaSlicer-generated `.gcode` file under `tests/fixtures/` with multiple extrusion roles (`;TYPE:`), travel moves, and tagged comments (`;HEIGHT:`, `;WIDTH:`, `;JERK:`, fan/temp/accel) — backs parser/view-mode/role tests without depending on a live slice. **Delivered: tests/fixtures/orca_sample.gcode (Plan 55-01-T1).**
+- [x] New parser test file (e.g. `tests/PreviewParserTests.cpp`) registered in CMakeLists for the 20-role parse + 17-mode coverage that `E2EWorkflowTests`/`ViewModelSmokeTests` don't naturally host. **Delivered: tests/PreviewParserTests.cpp + CMakeLists registration (Plan 55-01-T2).**
 
 *Existing QtTest + CTest infrastructure covers all other phase requirements.*
 
@@ -89,11 +99,24 @@ created: 2026-07-02
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references (fixture + parser test file)
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 60s (quick audit)
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (fixture + parser test file)
+- [x] No watch-mode flags
+- [x] Feedback latency < 60s (quick audit)
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** ready-for-verify (Phase 55 planning complete)
+
+---
+
+## Phase 55 Test Index
+
+Canonical commands to run for full phase verification (all confirmed green during Plan 55-05 execution):
+
+- `ctest --output-on-failure -R PreviewParser`  — parser + 20-role + 17-mode + divergent-role-color coverage
+- `ctest --output-on-failure -R ViewModelSmoke`  — role-toggle no-repack + legend/global-scope + currentMove atomicity + 17-mode belt-and-suspenders
+- `ctest --output-on-failure -R QmlUiAudit`      — D3D11 startup-policy + SoftwareViewport absence + computePreviewDrawRange role-skip + GcvPackedSegment sizeof 76
+- `ctest --output-on-failure -R E2EWorkflow`     — no-placeholder live-slice + sliceFailed/sliceResultCleared/plate-switch reset + reslice/export/page-switch preservation
+- `ctest --output-on-failure`                    — full suite (PrepareScene + PartPlate + the four above)
+- `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`  — canonical build + all-test gate (the phase-close gate)
