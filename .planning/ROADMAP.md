@@ -16,6 +16,7 @@
 **Goal:** Restore the Prepare page, Preview page, and parameter settings workflows as complete OrcaSlicer-equivalent user flows, using screenshots as visual/layout truth and OrcaSlicer source as behavior truth.
 
 **Success criteria:**
+
 - Every visible screenshot module has a recorded mapping to Qt target files and upstream OrcaSlicer source files.
 - Prepare page layout and behavior support import, preset selection, object/plate actions, viewport controls, and gizmo entry points without placeholder-only workflows.
 - Preview page layout and behavior support G-code inspection, layer/move sliders, camera interaction, right-side legend/stat panels, and G-code text sync without disappearing-render regressions.
@@ -42,6 +43,7 @@
 **Requirements:** `INV-01`, `INV-02`, `INV-03`, `INV-04`, `INV-05`.
 
 **Deliverables:**
+
 - Inventory table for `shotScreen/准备页.png`, `shotScreen/预览页.png`, `shotScreen/打印机参数设置页.png`, and `shotScreen/材料参数设置页.png`.
 - Prepare module mapping against upstream `Plater.*`, `GLCanvas3D.*`, `GUI_ObjectList.*`, `GUI_ObjectSettings.*`, and `Gizmos/*`.
 - Preview module mapping against upstream `GUI_Preview.*`, `GCodeViewer.*`, `GLCanvas3D.*`, and `libslic3r/GCode/*`.
@@ -49,6 +51,7 @@
 - Modify-vs-replace decision per module, including cleanup checklist for each replacement.
 
 **Success criteria:**
+
 1. Every screenshot-visible region has a Qt target, upstream source target, status, and verification method.
 2. No implementation phase starts with unmapped screenshot-visible controls in its scope.
 3. Replacement decisions explicitly identify old files, routes, resources, registrations, imports, and tests to remove.
@@ -61,6 +64,7 @@
 **Requirements:** `SHELL-01`, `SHELL-02`, `SHELL-03`, `SHELL-04`, `SHELL-05`.
 
 **Deliverables:**
+
 - Source-truth comparison for top navigation, menus, page switching, and high-priority actions.
 - Restored top shell and navigation QML structure, replacing off-design routes where needed.
 - C++ viewmodel state for action enablement, loading, error, and blocked states.
@@ -68,6 +72,7 @@
 - Removal plan for shell-level legacy pages/routes that conflict with the restored workflow.
 
 **Success criteria:**
+
 1. User can navigate Prepare, Preview, Device/Monitor, Project, and settings actions through a screenshot-aligned shell.
 2. Import, slice, preview, export, save, undo/redo, and settings actions are driven by C++ state.
 3. Page switching preserves relevant Prepare and Preview state.
@@ -80,6 +85,7 @@
 **Requirements:** `PREPSB-01`, `PREPSB-02`, `PREPSB-03`, `PREPSB-04`, `PREPSB-05`.
 
 **Deliverables:**
+
 - Screenshot-aligned Prepare left sidebar structure for printer, material/filament, and process selections.
 - Sidebar-to-settings dialog entry points for printer, material, and process categories.
 - Compatibility, dirty, read-only, warning, and modified-state viewmodel bindings.
@@ -87,6 +93,7 @@
 - Slice invalidation and merged-config integration for sidebar changes.
 
 **Success criteria:**
+
 1. User can select and inspect printer/material/process state from the Prepare sidebar.
 2. Settings buttons open the correct restored parameter settings category.
 3. Sidebar warning/dirty/compatibility state updates without placeholder text.
@@ -99,6 +106,7 @@
 **Requirements:** `PREPWF-01`, `PREPWF-02`, `PREPWF-03`, `PREPWF-04`, `PREPWF-05`, `PREPWF-06`.
 
 **Deliverables:**
+
 - Source-truth comparison for object list/actions, plate controls, context menus, camera controls, and gizmos.
 - Import/project load wiring from restored Prepare flow to object list, plate state, and renderer state.
 - Object actions for select, rename, duplicate, delete, arrange, lock/unlock, printable state, and volume inspection where supported.
@@ -107,6 +115,7 @@
 - Renderer stability checks for selection, camera movement, plate switching, page return, and tool changes.
 
 **Success criteria:**
+
 1. User can import a model and immediately see consistent object, plate, and viewport state.
 2. Object and plate actions either work through source-truth behavior or are honestly classified and gated.
 3. Viewport controls do not overlap, resize unexpectedly, or leave stale selected/tool state.
@@ -119,6 +128,7 @@
 **Requirements:** `PREVLAY-01`, `PREVLAY-02`, `PREVLAY-03`, `PREVLAY-04`, `PREVLAY-05`.
 
 **Deliverables:**
+
 - Screenshot-aligned Preview layout with left summary, center viewport, vertical layer slider, bottom move slider, and right panels.
 - Layer and move slider viewmodel bindings that preserve camera and renderer state.
 - Preview camera interaction handling for rotate, pan, and zoom.
@@ -126,6 +136,7 @@
 - Panel collapse/resize behavior where supported by screenshot/source truth.
 
 **Success criteria:**
+
 1. User sees the same major Preview structure shown in the screenshot.
 2. Dragging the layer slider does not clear or hide the preview.
 3. Dragging the camera after slicing does not clear or hide the preview.
@@ -138,6 +149,7 @@
 **Requirements:** `GCODE-01`, `GCODE-02`, `GCODE-03`, `GCODE-04`, `GCODE-05`.
 
 **Deliverables:**
+
 - Source-truth comparison for G-code viewer data, color modes, line-type filters, layer/move semantics, and current-line sync.
 - Real G-code segment/layer metadata path from slicing/export into Preview for normal local workflows.
 - Color-mode and line-type filter APIs and UI bindings.
@@ -145,6 +157,7 @@
 - D3D11 QRhi path verification and regression tests for camera drag, layer drag, move drag, page switch, reslice, and export.
 
 **Success criteria:**
+
 1. Normal Preview does not rely on placeholder segment data after a real local slice.
 2. Color modes and line-type filters update visible rendering and legend state coherently.
 3. Layer/move filters update draw ranges and text/current-line state together.
@@ -153,10 +166,18 @@
 **Plans:** 5 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 55-01-PLAN.md — Wave 0 foundation: OrcaSlicer-style .gcode fixture + PreviewParserTests RED scaffold
 - [ ] 55-02-PLAN.md — Wave 1 data semantics: 20-role ;TYPE: parser, 17 EViewType modes, GCV1 wire-format role field, render-side per-role filtering (no repack)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 55-03-PLAN.md — Wave 2 UI: VisibilityFilter.qml (right-panel per-role checkbox group) + PreviewPage roleVisibility binding
 - [ ] 55-04-PLAN.md — Wave 2 regression tests: GCODE-01 no-placeholder RED, GCODE-03 legend/atomicity, GCODE-04 SoftwareViewport/role-skip/sizeof audit guards, GCODE-05 reslice/export/page-switch invariants
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 55-05-PLAN.md — Wave 3 D3D11 startup-policy audit guard + 55-VALIDATION.md sign-off
 
 ### Phase 56: Parameter Settings Dialogs Restoration
@@ -166,6 +187,7 @@ Plans:
 **Requirements:** `SETTINGS-01`, `SETTINGS-02`, `SETTINGS-03`, `SETTINGS-04`, `SETTINGS-05`, `SETTINGS-06`, `SETTINGS-07`.
 
 **Deliverables:**
+
 - Screenshot-aligned settings dialog/page structure for printer and material screenshots, plus process settings by upstream parity.
 - Top tabs, option groups, scroll behavior, labels, controls, and density matched to the screenshots.
 - C++ typed option model coverage for boolean, numeric, enum, string, unit, nullable, and multi-value fields where supported.
@@ -175,6 +197,7 @@ Plans:
 - Integration with Prepare sidebar, slice invalidation, merged slicing config, and project save/restore.
 
 **Success criteria:**
+
 1. User opens printer/material/process settings from the restored workflow without Project-page embedding.
 2. Settings dialogs visually match the supplied screenshots at the module and density level.
 3. Edits are model-driven and update dirty, validation, and sidebar state.
@@ -187,12 +210,14 @@ Plans:
 **Requirements:** `CLEAN-01`, `CLEAN-02`, `CLEAN-03`, `CLEAN-04`.
 
 **Deliverables:**
+
 - Audit of all replaced Prepare, Preview, Settings, shell, sidebar, dialog, and renderer files.
 - Deletion or update of obsolete QML/C++ files, `qml.qrc` entries, type registrations, routes, imports, tests, docs, and references.
 - QML business-logic audit with migration of durable behavior into C++ services/viewmodels.
 - Encoding and comment cleanup for changed files.
 
 **Success criteria:**
+
 1. No active UI path retains old/deprecated/disconnected copies of replaced components.
 2. Resource files and type registrations contain only live components.
 3. Workflow behavior, validation, settings state, preset state, and preview filtering live in C++.
@@ -205,6 +230,7 @@ Plans:
 **Requirements:** `VERIFY-01`, `VERIFY-02`, `VERIFY-03`, `VERIFY-04`, `VERIFY-05`.
 
 **Deliverables:**
+
 - Automated tests for inventory completeness, viewmodel state, QML route/resource registration, and cleanup guards.
 - Automated tests for import -> configure -> prepare -> slice -> preview -> export state transitions.
 - Regression tests or deterministic harnesses for Preview layer/move/camera disappearing bugs.
@@ -212,6 +238,7 @@ Plans:
 - Canonical verification run or classified failure report.
 
 **Success criteria:**
+
 1. Requirements traceability shows 47/47 requirements mapped and verified or honestly classified.
 2. The restored app can run the full local workflow without using deprecated UI paths.
 3. Preview remains visible through layer slider, move slider, and camera interaction.

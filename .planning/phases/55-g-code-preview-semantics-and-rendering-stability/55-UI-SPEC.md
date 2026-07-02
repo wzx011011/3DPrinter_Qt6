@@ -139,7 +139,7 @@ Inside `PreviewPage.qml` right panel ScrollView ColumnLayout, between `Component
 
 3. **Role list**: The checkbox list contains the following roles, ordered to match upstream `EGCodeExtrusionRole` enumeration order. Each row has a 10x10 colored square (matching the role's FeatureType color), a label, and a CxCheckBox.
 
-   | # | Role (English label) | Role (Chinese label via qsTr) | Default visible |
+   | Canonical libvgcode Index | Role (English label) | Role (Chinese label via qsTr) | Default visible |
    |---|---|---|---|
    | 1 | Inner wall | 内壁 | Yes |
    | 2 | Outer wall | 外壁 | Yes |
@@ -154,16 +154,18 @@ Inside `PreviewPage.qml` right panel ScrollView ColumnLayout, between `Component
    | 11 | Support | 支撑 | Yes |
    | 12 | Support interface | 支撑界面 | Yes |
    | 13 | Prime tower | 打塔 | Yes |
-   | 14 | Bottom surface | 底面 | Yes |
-   | 15 | Internal bridge | 内部桥接 | Yes |
-   | 16 | Brim | 边缘 | Yes |
-   | 17 | Support transition | 支撑过渡 | Yes |
-   | 18 | Mixed | 混合 | Yes |
+   | 15 | Bottom surface | 底面 | Yes |
+   | 16 | Internal bridge | 内部桥接 | Yes |
+   | 17 | Brim | 边缘 | Yes |
+   | 18 | Support transition | 支撑过渡 | Yes |
+   | 19 | Mixed | 混合 | Yes |
 
    Notes:
-   - "Custom" role (index 14 upstream) is excluded from the visibility filter list since it has no meaningful upstream display name for user toggling.
+   - Indices are the **canonical libvgcode `EGCodeExtrusionRole` index** (the same index used by `DEFAULT_EXTRUSION_ROLES_COLORS` and `extrusion_roles_visibility` in upstream). The list skips index 0 (None) and index 14 (Custom). It is NOT sequentially numbered 1..18 — the canonical indices 1..13 are contiguous, then jump to 15 (skipping Custom=14), then continue 16..19.
+   - **Do NOT confuse with libslic3r `ExtrusionRole`:** the libslic3r enum (in `ExtrusionEntity.hpp`) has a DIFFERENT ordering past index 6 — e.g. Bottom surface is libslic3r index 7 but libvgcode index 15. The Qt6 codebase uses the libvgcode index everywhere (parser output, wire format, color lookup, visibility array, QML `roleVisibilities()` ordering). See 55-RESEARCH.md "Pattern 2" for the cross-reference.
+   - "Custom" role (canonical libvgcode index 14) is excluded from the visibility filter list since it has no meaningful upstream display name for user toggling.
    - Labels use `qsTr()` for i18n. English labels match upstream `to_string(EGCodeExtrusionRole)` exactly. Chinese labels are new translations for this component.
-   - Default visibility: all extrusion roles visible. This is distinct from travel/wipe default-hidden (see existing `showTravelMoves` toggle in StatsPanel). Source: upstream extrusion_roles_visibility defaults all true.
+   - Default visibility: all extrusion roles visible. This is distinct from travel/wipe default-hidden (see existing `showTravelMoves` toggle in StatsPanel, which Plan 02 flips to default `false` to match upstream Travels/Wipes=false). Source: upstream extrusion_roles_visibility defaults all true.
 
 4. **Row layout**: Each row is a `RowLayout` containing:
    - `Rectangle` (10x10, radius 2) colored with the role's FeatureType color

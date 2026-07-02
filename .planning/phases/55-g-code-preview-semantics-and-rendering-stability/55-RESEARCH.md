@@ -202,10 +202,40 @@ Source: Pattern mirrors upstream `ViewerImpl::update_enabled_entities()` at `src
 ### Pattern 2: Upstream `;TYPE:` Comment Parsing
 **What:** OrcaSlicer generates G-code with `;TYPE:Inner wall`, `;TYPE:Outer wall`, `;TYPE:Bridge`, etc. comments (via `ExtrusionEntity::role_to_string()`). The parser must match these exact English strings to map to fine-grained roles.
 **When to use:** When parsing OrcaSlicer-generated G-code. Also handles `;FEATURE:Type Height H Width W` format and Cura-compatible `;TYPE:wall-outer` format.
+
+**CRITICAL ENUM INDEX MISMATCH (diverges at index 7):** The parser-side enum (`libslic3r ExtrusionRole` in `ExtrusionEntity.hpp:20-43`, used by `string_to_role`/`role_to_string` that produce and consume `;TYPE:` comments) and the color/visibility enum (`libvgcode EGCodeExtrusionRole` in `Types.hpp:131-157`, used by `DEFAULT_EXTRUSION_ROLES_COLORS` + `extrusion_roles_visibility`) have **different orderings past index 6**. The shared display strings (e.g. "Bottom surface", "Ironing") are identical across both enums, but the integer indices are NOT.
+
+| Index | libslic3r ExtrusionRole (parser) | libvgcode EGCodeExtrusionRole (color/visibility) |
+|-------|----------------------------------|--------------------------------------------------|
+| 0 | erNone | None |
+| 1 | erPerimeter | Perimeter |
+| 2 | erExternalPerimeter | ExternalPerimeter |
+| 3 | erOverhangPerimeter | OverhangPerimeter |
+| 4 | erInternalInfill | InternalInfill |
+| 5 | erSolidInfill | SolidInfill |
+| 6 | erTopSolidInfill | TopSolidInfill |
+| **7** | **erBottomSurface** | **Ironing** |
+| **8** | **erIroning** | **BridgeInfill** |
+| **9** | **erBridgeInfill** | **GapFill** |
+| **10** | **erInternalBridgeInfill** | **Skirt** |
+| **11** | **erGapFill** | **SupportMaterial** |
+| **12** | **erSkirt** | **SupportMaterialInterface** |
+| **13** | **erBrim** | **WipeTower** |
+| **14** | **erSupportMaterial** | **Custom** |
+| **15** | **erSupportMaterialInterface** | **BottomSurface** |
+| **16** | **erSupportTransition** | **InternalBridgeInfill** |
+| **17** | **erWipeTower** | **Brim** |
+| **18** | **erCustom** | **SupportTransition** |
+| 19 | erMixed | Mixed |
+
+**Migration strategy (chosen for Plan 02):** Use the **libvgcode `EGCodeExtrusionRole` index as the canonical role index throughout the Qt6 codebase** (StoredSegment.role, PackedSegment.role, GcvPackedSegment.role, PreviewDrawSpan.role, `m_roleVisibility[20]`, render-side skip, `roleVisibilities()` QML ordering, FeatureType color lookup). The `;TYPE:` parser maps the upstream display string DIRECTLY to the libvgcode index via `kRoleMap[]` (do NOT index `kRoleColors` by the libslic3r ExtrusionRole integer). Rationale: (a) the color palette and visibility array are both indexed by `EGCodeExtrusionRole`; (b) the strings match 1:1 across both enums so the parser just needs a string-keyed lookup; (c) a single canonical index everywhere eliminates the dual-indexing bug class.
+
 **Example:**
 ```cpp
-// Upstream role strings from ExtrusionEntity.cpp:583-608
-// These are what OrcaSlicer writes into ;TYPE: comments
+// Maps the upstream display string DIRECTLY to the libvgcode EGCodeExtrusionRole
+// index (the canonical role index throughout the Qt6 codebase).
+// Source strings: third_party/OrcaSlicer/src/libslic3r/ExtrusionEntity.cpp:583-608 (role_to_string)
+// Target indices: third_party/OrcaSlicer/src/libvgcode/include/Types.hpp:131-157 (EGCodeExtrusionRole)
 static const struct { const char *name; int role; } kRoleMap[] = {
     {"Inner wall",              1},  // Perimeter
     {"Outer wall",              2},  // ExternalPerimeter
@@ -213,27 +243,29 @@ static const struct { const char *name; int role; } kRoleMap[] = {
     {"Sparse infill",           4},  // InternalInfill
     {"Internal solid infill",   5},  // SolidInfill
     {"Top surface",             6},  // TopSolidInfill
-    {"Bottom surface",          7},  // BottomSurface
-    {"Ironing",                 8},  // Ironing
-    {"Bridge",                  9},  // BridgeInfill
-    {"Internal Bridge",         10}, // InternalBridgeInfill
-    {"Gap infill",             11}, // GapFill
-    {"Skirt",                  12}, // Skirt
-    {"Brim",                   13}, // Brim
-    {"Support",                14}, // SupportMaterial
-    {"Support interface",      15}, // SupportMaterialInterface
-    {"Support transition",     16}, // SupportTransition
-    {"Prime tower",            17}, // WipeTower
-    {"Custom",                 18}, // Custom
-    {"Multiple",               19}, // Mixed
+    {"Ironing",                 7},  // Ironing             (NOT 8 — that is the libslic3r index)
+    {"Bridge",                  8},  // BridgeInfill        (NOT 9)
+    {"Gap infill",              9},  // GapFill             (NOT 11)
+    {"Skirt",                  10},  // Skirt               (NOT 12)
+    {"Support",                11},  // SupportMaterial     (NOT 14)
+    {"Support interface",      12},  // SupportMaterialInterface (NOT 15)
+    {"Prime tower",            13},  // WipeTower           (NOT 17)
+    {"Custom",                 14},  // Custom              (NOT 18)
+    {"Bottom surface",         15},  // BottomSurface       (NOT 7)
+    {"Internal Bridge",        16},  // InternalBridgeInfill(NOT 10)
+    {"Brim",                   17},  // Brim                (NOT 13)
+    {"Support transition",     18},  // SupportTransition   (NOT 16)
+    {"Multiple",               19},  // Mixed               (identical in both enums)
 };
+// Travel moves / unrecognized -> 0 (None).
 ```
-Source: `third_party/OrcaSlicer/src/libslic3r/ExtrusionEntity.cpp:583-608` [VERIFIED: upstream source].
+Source: parser strings `third_party/OrcaSlicer/src/libslic3r/ExtrusionEntity.cpp:583-639`; canonical indices `third_party/OrcaSlicer/src/libvgcode/include/Types.hpp:131-157` [VERIFIED against both upstream files].
 
 ### Anti-Patterns to Avoid
 - **Repacking gcodePreviewData on role toggle:** CONTEXT.md explicitly forbids this. Only `update()` should be called on toggle. Repack only on mode change, payload change, or resource rebuild.
 - **Adding role filtering in QML:** QML boundary rules prohibit business logic in QML. All filtering logic lives in the renderer (C++).
 - **Coarse ;TYPE: parsing:** Current `styleFor()` maps to 5 categories (WALL, INFILL, SUPPORT, TRAVEL, OTHER). This loses the fine-grained role information needed for the 20-value visibility filter. Must be replaced with the full 20-value mapping.
+- **Mixing libslic3r and libvgcode role indices:** The two enums diverge past index 6 (see the cross-reference table in Pattern 2). Pick ONE index space (the Qt6 codebase uses libvgcode EGCodeExtrusionRole as canonical) and use it everywhere: parser output, PackedSegment.role, GcvPackedSegment.role, m_roleVisibility[], roleVisibilities() ordering, color lookup.
 
 ## Don't Hand-Roll
 
@@ -248,34 +280,52 @@ Source: `third_party/OrcaSlicer/src/libslic3r/ExtrusionEntity.cpp:583-608` [VERI
 
 ## Upstream Enum Reference (Definitive)
 
-### EGCodeExtrusionRole (20 values)
+### EGCodeExtrusionRole (20 values) -- CANONICAL role index for the Qt6 codebase
 Source: `third_party/OrcaSlicer/src/libvgcode/include/Types.hpp:131-157` [VERIFIED: upstream source]
-Also defined (with identical ordering) in `third_party/OrcaSlicer/src/libslic3r/ExtrusionEntity.hpp:20-43` as `enum ExtrusionRole`.
 
-| Index | libvgcode | libslic3r | Display Name (upstream) | Default Visible | Default Color (R,G,B) |
-|-------|-----------|-----------|------------------------|-----------------|---------------------|
-| 0 | None | erNone | Unknown | true | (230,179,179) |
-| 1 | Perimeter | erPerimeter | Inner wall | true | (255,230,77) |
-| 2 | ExternalPerimeter | erExternalPerimeter | Outer wall | true | (255,125,56) |
-| 3 | OverhangPerimeter | erOverhangPerimeter | Overhang wall | true | (31,31,255) |
-| 4 | InternalInfill | erInternalInfill | Sparse infill | true | (176,48,41) |
-| 5 | SolidInfill | erSolidInfill | Internal solid infill | true | (150,84,204) |
-| 6 | TopSolidInfill | erTopSolidInfill | Top surface | true | (240,64,64) |
-| 7 | Ironing | erIroning | Ironing | true | (255,140,105) |
-| 8 | BridgeInfill | erBridgeInfill | Bridge | true | (77,128,186) |
-| 9 | GapFill | erGapFill | Gap infill | true | (255,255,255) |
-| 10 | Skirt | erSkirt | Skirt | true | (0,135,110) |
-| 11 | SupportMaterial | erSupportMaterial | Support | true | (0,255,0) |
-| 12 | SupportMaterialInterface | erSupportMaterialInterface | Support interface | true | (0,128,0) |
-| 13 | WipeTower | erWipeTower | Prime tower | true | (179,227,171) |
-| 14 | Custom | erCustom | Custom | true | (94,209,148) |
-| 15 | BottomSurface | erBottomSurface | Bottom surface | true | (102,92,199) |
-| 16 | InternalBridgeInfill | erInternalBridgeInfill | Internal bridge | true | (77,128,186) |
-| 17 | Brim | erBrim | Brim | true | (0,59,110) |
-| 18 | SupportTransition | erSupportTransition | Support transition | true | (0,64,0) |
-| 19 | Mixed | erMixed | Mixed | true | (128,128,128) |
+> **CROSS-REFERENCE — DO NOT MIX INDEX SPACES:** The libslic3r `enum ExtrusionRole` in
+> `third_party/OrcaSlicer/src/libslic3r/ExtrusionEntity.hpp:20-43` (used by
+> `string_to_role`/`role_to_string`, which produce and consume the `;TYPE:` comment
+> strings) has a **DIFFERENT ordering** past index 6. The display strings (e.g.
+> "Bottom surface", "Ironing") are identical across both enums, but the integer
+> indices are NOT. The Qt6 codebase uses the **libvgcode index** as canonical everywhere
+> (parser output, PackedSegment.role, GcvPackedSegment.role, m_roleVisibility[],
+> roleVisibilities() ordering, color lookup). The parser maps the upstream display
+> string DIRECTLY to the libvgcode index via `kRoleMap[]` (see Pattern 2) — it must
+> NOT translate via the libslic3r integer.
+>
+> Divergence summary (libslic3r index → libvgcode index for the same display string):
+> BottomSurface 7→15, Ironing 8→7, BridgeInfill 9→8, InternalBridgeInfill 10→16,
+> GapFill 11→9, Skirt 12→10, Brim 13→17, SupportMaterial 14→11,
+> SupportMaterialInterface 15→12, SupportTransition 16→18, WipeTower 17→13,
+> Custom 18→14. Indices 0..6 and 19 are identical in both enums.
 
-**UI-SPEC note:** The UI-SPEC lists 18 roles (excluding None and Custom). This is correct for the VisibilityFilter UI -- upstream `GCodeViewer::render_legend()` also shows only roles present in the G-code, not None/Custom.
+The table below is indexed by the **libvgcode** `EGCodeExtrusionRole` (the canonical Qt6 index). All colors come from `DEFAULT_EXTRUSION_ROLES_COLORS` at `third_party/OrcaSlicer/src/libvgcode/src/ViewerImpl.cpp:283-305`, which is also indexed by `EGCodeExtrusionRole`.
+
+| Canonical (libvgcode) Index | EGCodeExtrusionRole | Display Name (upstream) | Default Visible | Default Color (R,G,B) | libslic3r ExtrusionRole (for cross-ref) |
+|-----------------------------|---------------------|-------------------------|-----------------|-----------------------|------------------------------------------|
+| 0 | None | Unknown | true | (230,179,179) | erNone |
+| 1 | Perimeter | Inner wall | true | (255,230,77) | erPerimeter |
+| 2 | ExternalPerimeter | Outer wall | true | (255,125,56) | erExternalPerimeter |
+| 3 | OverhangPerimeter | Overhang wall | true | (31,31,255) | erOverhangPerimeter |
+| 4 | InternalInfill | Sparse infill | true | (176,48,41) | erInternalInfill |
+| 5 | SolidInfill | Internal solid infill | true | (150,84,204) | erSolidInfill |
+| 6 | TopSolidInfill | Top surface | true | (240,64,64) | erTopSolidInfill |
+| 7 | Ironing | Ironing | true | (255,140,105) | erIroning (libslic3r idx 8) |
+| 8 | BridgeInfill | Bridge | true | (77,128,186) | erBridgeInfill (libslic3r idx 9) |
+| 9 | GapFill | Gap infill | true | (255,255,255) | erGapFill (libslic3r idx 11) |
+| 10 | Skirt | Skirt | true | (0,135,110) | erSkirt (libslic3r idx 12) |
+| 11 | SupportMaterial | Support | true | (0,255,0) | erSupportMaterial (libslic3r idx 14) |
+| 12 | SupportMaterialInterface | Support interface | true | (0,128,0) | erSupportMaterialInterface (libslic3r idx 15) |
+| 13 | WipeTower | Prime tower | true | (179,227,171) | erWipeTower (libslic3r idx 17) |
+| 14 | Custom | Custom | true | (94,209,148) | erCustom (libslic3r idx 18) |
+| 15 | BottomSurface | Bottom surface | true | (102,92,199) | erBottomSurface (libslic3r idx 7) |
+| 16 | InternalBridgeInfill | Internal bridge | true | (77,128,186) | erInternalBridgeInfill (libslic3r idx 10) |
+| 17 | Brim | Brim | true | (0,59,110) | erBrim (libslic3r idx 13) |
+| 18 | SupportTransition | Support transition | true | (0,64,0) | erSupportTransition (libslic3r idx 16) |
+| 19 | Mixed | Mixed | true | (128,128,128) | erMixed |
+
+**UI-SPEC note:** The UI-SPEC lists 18 roles (excluding None and Custom). This is correct for the VisibilityFilter UI -- upstream `GCodeViewer::render_legend()` also shows only roles present in the G-code, not None/Custom. The QML `roleVisibilities()` list returns rows in canonical (libvgcode) index order; the UI row order therefore matches the table above (excluding index 0 None and index 14 Custom).
 
 **Default visibility:** All extrusion roles default to `true` [VERIFIED: `third_party/OrcaSlicer/src/libvgcode/src/Settings.hpp:49-71`].
 
@@ -294,7 +344,7 @@ Source: `third_party/OrcaSlicer/src/libvgcode/include/Types.hpp:164-182` [VERIFI
 | 7 | PausePrints | false | (82,240,131) |
 | 8 | CustomGCodes | false | (226,210,67) |
 
-**Note:** Upstream options_items (visible in UI) lists only: Travel, Retract, Unretract, Wipe, Seam (from `GCodeViewer.cpp:1105-1113`). These are the ones that get toggle checkboxes. ToolChanges, ColorChanges, PausePrints, CustomGCodes are not shown in the normal UI. CONTEXT.md says "travel and wipe hidden after first view" which matches Travel=false and Wipe=false defaults. However our current `showTravelMoves` defaults to `true` -- this needs to match upstream default of `false` for new sessions.
+**Note:** Upstream options_items (visible in UI) lists only: Travel, Retract, Unretract, Wipe, Seam (from `GCodeViewer.cpp:1105-1113`). These are the ones that get toggle checkboxes. ToolChanges, ColorChanges, PausePrints, CustomGCodes are not shown in the normal UI. CONTEXT.md says "travel and wipe hidden after first view" which matches Travel=false and Wipe=false defaults. Our current `showTravelMoves` defaults to `true` -- Plan 02 changes this to `false` to match upstream (Pitfall 3).
 
 ### EViewType (17 values -- upstream complete list)
 Source: `third_party/OrcaSlicer/src/libvgcode/include/Types.hpp:80-103` [VERIFIED: upstream source]
@@ -360,7 +410,7 @@ struct PackedSegment {
 };  // Total: 72 bytes
 ```
 
-**Required change:** Add `int role;` at the end (grows to 76 bytes). Both PackedSegment (PreviewViewModel.cpp) and GcvPackedSegment (RhiViewportRenderer.cpp) must be updated in lockstep.
+**Required change:** Add `int role;` at the end (grows to 76 bytes). Both PackedSegment (PreviewViewModel.cpp) and GcvPackedSegment (RhiViewportRenderer.cpp) must be updated in lockstep. The role value is the **canonical libvgcode EGCodeExtrusionRole index** (0..19) — see the cross-reference table in "Upstream Enum Reference".
 
 ### Current PreviewDrawSpan (needs extension)
 **File:** `src/qml_gui/Renderer/RhiViewportRenderer.h:105-110`
@@ -374,7 +424,7 @@ struct PreviewDrawSpan {
 };
 ```
 
-**Required change:** Add `int role;` field.
+**Required change:** Add `int role;` field (canonical libvgcode index).
 
 ### Filter Check Location
 **File:** `src/qml_gui/Renderer/RhiViewportRenderer.cpp:648-713` (`computePreviewDrawRange`)
@@ -434,7 +484,7 @@ The current code has **no** placeholder/sample/demo code path. The `rebuildFromG
 4. The payload is NOT from a hardcoded fixture file (check that the filePath is the SliceService output path)
 
 ### Current Gap: Fine-Grained Role Parsing
-The current `styleFor()` function (`PreviewViewModel.cpp:114-126`) maps `;TYPE:` comments to only 5 categories. This must be replaced with the full 20-value `EGCodeExtrusionRole` mapping using the exact strings from `ExtrusionEntity::role_to_string()`.
+The current `styleFor()` function (`PreviewViewModel.cpp:114-126`) maps `;TYPE:` comments to only 5 categories. This must be replaced with the full 20-value `EGCodeExtrusionRole` mapping using the exact strings from `ExtrusionEntity::role_to_string()`, translated DIRECTLY to the canonical libvgcode index (see Pattern 2).
 
 ## Legend Coherence
 
@@ -499,44 +549,69 @@ The current `styleFor()` function (`PreviewViewModel.cpp:114-126`) maps `;TYPE:`
 **Why it happens:** The existing travel toggle IS a repack operation (it removes travel segments from the buffer). Role visibility is different -- it keeps all segments but skips drawing some.
 **How to avoid:** Travel/wipe visibility continues to repack. Role visibility uses the new render-side skip. These are two different mechanisms.
 
+### Pitfall 6: libslic3r vs libvgcode Role Index Mismatch
+**What goes wrong:** The parser maps `;TYPE:` strings to a libslic3r `ExtrusionRole` integer and that integer is then used to index `DEFAULT_EXTRUSION_ROLES_COLORS` / `m_roleVisibility[]` — but both arrays are indexed by the **libvgcode** `EGCodeExtrusionRole`. The two enums diverge past index 6 (see the cross-reference table in "Upstream Enum Reference" / Pattern 2). 10 of the 20 roles get the wrong color and the wrong visibility-slot, silently.
+**Why it happens:** The same display strings exist in both enums, so a developer assumes the integers agree.
+**How to avoid:** Use the libvgcode `EGCodeExtrusionRole` index as canonical everywhere in the Qt6 codebase. The `kRoleMap[]` parser table maps the display string DIRECTLY to the libvgcode index — it must not translate via the libslic3r integer. Add an acceptance test that asserts the string→color mapping for at least the divergent roles (e.g. "Bottom surface" → (102,92,199); "Ironing" → (255,140,105)).
+**Warning signs:** Ironing renders in the purple reserved for Bottom surface; Bottom surface renders in the orange reserved for Ironing.
+
 ## Code Examples
 
 ### Fine-Grained ;TYPE: Parser (replaces current styleFor)
 ```cpp
-// Source: third_party/OrcaSlicer/src/libslic3r/ExtrusionEntity.cpp:583-608
-// Maps ;TYPE: comment strings to EGCodeExtrusionRole index values
+// Source strings: third_party/OrcaSlicer/src/libslic3r/ExtrusionEntity.cpp:583-608 (role_to_string)
+// Canonical target index: third_party/OrcaSlicer/src/libvgcode/include/Types.hpp:131-157
+//   (EGCodeExtrusionRole -- DO NOT use the libslic3r ExtrusionRole integer here)
 struct RoleEntry {
     const char *name;  // must match ExtrusionEntity::role_to_string() output exactly
-    int role;          // index into EGCodeExtrusionRole (0=None, 1=Perimeter, etc.)
+    int role;          // CANONICAL libvgcode EGCodeExtrusionRole index
 };
 static const RoleEntry kRoleMap[] = {
-    {"Inner wall",              1},
-    {"Outer wall",              2},
-    {"Overhang wall",           3},
-    {"Sparse infill",           4},
-    {"Internal solid infill",   5},
-    {"Top surface",             6},
-    {"Bottom surface",          7},
-    {"Ironing",                 8},
-    {"Bridge",                  9},
-    {"Internal Bridge",        10},
-    {"Gap infill",             11},
-    {"Skirt",                  12},
-    {"Brim",                   13},
-    {"Support",                14},
-    {"Support interface",      15},
-    {"Support transition",     16},
-    {"Prime tower",            17},
-    {"Custom",                 18},
-    {"Multiple",               19},
+    {"Inner wall",              1},  // Perimeter
+    {"Outer wall",              2},  // ExternalPerimeter
+    {"Overhang wall",           3},  // OverhangPerimeter
+    {"Sparse infill",           4},  // InternalInfill
+    {"Internal solid infill",   5},  // SolidInfill
+    {"Top surface",             6},  // TopSolidInfill
+    {"Ironing",                 7},  // Ironing             (libslic3r idx 8)
+    {"Bridge",                  8},  // BridgeInfill        (libslic3r idx 9)
+    {"Gap infill",              9},  // GapFill             (libslic3r idx 11)
+    {"Skirt",                  10},  // Skirt               (libslic3r idx 12)
+    {"Support",                11},  // SupportMaterial     (libslic3r idx 14)
+    {"Support interface",      12},  // SupportMaterialInterface (libslic3r idx 15)
+    {"Prime tower",            13},  // WipeTower           (libslic3r idx 17)
+    {"Custom",                 14},  // Custom              (libslic3r idx 18)
+    {"Bottom surface",         15},  // BottomSurface       (libslic3r idx 7)
+    {"Internal Bridge",        16},  // InternalBridgeInfill(libslic3r idx 10)
+    {"Brim",                   17},  // Brim                (libslic3r idx 13)
+    {"Support transition",     18},  // SupportTransition   (libslic3r idx 16)
+    {"Multiple",               19},  // Mixed
 };
 
 // Role default colors from upstream DEFAULT_EXTRUSION_ROLES_COLORS
 // Source: third_party/OrcaSlicer/src/libvgcode/src/ViewerImpl.cpp:283-305
+// Indexed by CANONICAL libvgcode EGCodeExtrusionRole (matches kRoleMap output).
 static const float kRoleColors[][3] = {
-    {230/255.f, 179/255.f, 179/255.f}, // None
-    {255/255.f, 230/255.f,  77/255.f}, // Perimeter
-    // ... (full 20-color palette from upstream)
+    {230/255.f, 179/255.f, 179/255.f}, // 0  None
+    {255/255.f, 230/255.f,  77/255.f}, // 1  Perimeter
+    {255/255.f, 125/255.f,  56/255.f}, // 2  ExternalPerimeter
+    { 31/255.f,  31/255.f, 255/255.f}, // 3  OverhangPerimeter
+    {176/255.f,  48/255.f,  41/255.f}, // 4  InternalInfill
+    {150/255.f,  84/255.f, 204/255.f}, // 5  SolidInfill
+    {240/255.f,  64/255.f,  64/255.f}, // 6  TopSolidInfill
+    {255/255.f, 140/255.f, 105/255.f}, // 7  Ironing
+    { 77/255.f, 128/255.f, 186/255.f}, // 8  BridgeInfill
+    {255/255.f, 255/255.f, 255/255.f}, // 9  GapFill
+    {  0/255.f, 135/255.f, 110/255.f}, // 10 Skirt
+    {  0/255.f, 255/255.f,   0/255.f}, // 11 SupportMaterial
+    {  0/255.f, 128/255.f,   0/255.f}, // 12 SupportMaterialInterface
+    {179/255.f, 227/255.f, 171/255.f}, // 13 WipeTower
+    { 94/255.f, 209/255.f, 148/255.f}, // 14 Custom
+    {102/255.f,  92/255.f, 199/255.f}, // 15 BottomSurface
+    { 77/255.f, 128/255.f, 186/255.f}, // 16 InternalBridgeInfill
+    {  0/255.f,  59/255.f, 110/255.f}, // 17 Brim
+    {  0/255.f,  64/255.f,   0/255.f}, // 18 SupportTransition
+    {128/255.f, 128/255.f, 128/255.f}, // 19 Mixed
 };
 ```
 
@@ -549,7 +624,7 @@ struct PackedSegment
     float r, g, b;
     float feedrate, fan_speed, temperature, width, layer_time, acceleration;
     int extruder_id, layer, move;
-    int role;  // NEW: EGCodeExtrusionRole index (0=None, 1=Perimeter, ..., 19=Mixed)
+    int role;  // CANONICAL libvgcode EGCodeExtrusionRole index (0..19)
 };
 
 // RhiViewportRenderer.cpp (anonymous namespace)
@@ -559,7 +634,7 @@ struct GcvPackedSegment
     float r, g, b;
     float feedrate, fan_speed, temperature, width, layer_time, acceleration;
     int extruder_id, layer, move;
-    int role;  // NEW: must match PackedSegment layout exactly
+    int role;  // must match PackedSegment layout exactly (canonical libvgcode index)
 };
 // Compile-time guard:
 static_assert(sizeof(PackedSegment) == sizeof(GcvPackedSegment),
@@ -574,7 +649,7 @@ Q_INVOKABLE bool isRoleVisible(int roleIndex) const;
 Q_INVOKABLE void toggleRoleVisibility(int roleIndex);
 
 // PreviewViewModel.h -- new member
-std::array<bool, 20> m_roleVisibility; // indexed by EGCodeExtrusionRole
+std::array<bool, 20> m_roleVisibility; // indexed by CANONICAL libvgcode EGCodeExtrusionRole
 
 // Constructor: all extrusion roles visible by default (matching upstream)
 PreviewViewModel::PreviewViewModel(SliceService *sliceService, QObject *parent)
@@ -608,22 +683,22 @@ PreviewViewModel::PreviewViewModel(SliceService *sliceService, QObject *parent)
 | A4 | Summary mode (index 0 upstream) requires no gradient legend and only shows statistics | View-mode list | If Summary has hidden legend behavior, our implementation may be incomplete. LOW risk -- upstream Summary mode code path is simple. |
 | A5 | `showTravelMoves_` should default to `false` to match upstream | Common Pitfalls | If users expect travel visible by default, changing this breaks user expectations. LOW risk -- matches upstream behavior. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Summary mode behavior**
-   - What we know: Upstream puts Summary first. It shows print statistics without color visualization.
-   - What's unclear: Whether Summary mode disables the 3D viewport rendering entirely (showing only stats) or still renders the toolpath in a default color.
-   - Recommendation: Implement Summary as a mode where legend is hidden and stats are shown prominently. Verify against upstream `EViewType::Summary` rendering path.
+> All three questions below are formally resolved as of 2026-07-02. The resolutions
+> drive Plan 02 (Task 1 + Task 2) and Plan 04. Each item marks the accepted resolution.
 
-2. **Jerk and PressureAdvance data availability**
-   - What we know: StoredSegment currently has no jerk or pressure_advance fields.
-   - What's unclear: Whether OrcaSlicer G-code includes `;JERK:` comments or computed PA values, and whether our parser can extract them from G-code comments or feedrate/acceleration ratios.
-   - Recommendation: Check a real OrcaSlicer .gcode output for `;JERK:` tags. If absent, those modes fall back to uniform coloring with a "data unavailable" indicator.
+1. **Summary mode behavior** — (RESOLVED)
+   - **Resolution:** Summary mode renders no gradient legend. Plan 02 sets `m_legendType = 0` (discrete) and clears `legendItems_` when `viewModeIndex_ == 0` (Summary). Statistics panel stays visible. Plan 04 adds the assertion `legendItems_.isEmpty() && legendType() == 0` for Summary mode.
+   - Rationale: upstream `EViewType::Summary` renders statistics only, with no color-by-field visualization and no gradient legend. This matches the CONTEXT-locked "Legend scope under slider filtering is global" + "Summary is non-color mode" interpretation.
 
-3. **ActualSpeed vs Speed data source**
-   - What we know: Upstream has both `Speed` (commanded feedrate) and `ActualSpeed` (computed actual feedrate from distance/time).
-   - What's unclear: Whether ActualSpeed can be computed from our existing G-code parser data (distance / time_per_move).
-   - Recommendation: ActualSpeed can be derived from `distance / (layer_time * 60)` per segment. The data is available.
+2. **Jerk and PressureAdvance data availability** — (RESOLVED, accepting Assumption A2)
+   - **Resolution:** Assumption A2 is accepted with documented risk. The Phase 55 G-code fixture (committed in Plan 01) deliberately omits `;JERK:` / `;PA:` tags. Jerk (mode 6), Pressure Advance (mode 15), Actual Flow (mode 10), and Actual Speed (mode 4) view modes return a uniform gradient and emit a single one-time log line `[Preview] Jerk/PA/ActualFlow/ActualSpeed data unavailable in fixture-driven path`. No new StoredSegment fields are added in Phase 55.
+   - Rationale: the v3.6 local-workflow scope (CONTEXT.md) does not require these data fields; the uniform-gradient fallback is a non-crashing, non-misleading behavior that defers cleanly to a future phase when the upstream tags are confirmed and parsed.
+
+3. **ActualSpeed vs Speed data source** — (RESOLVED, deferred with accepted risk)
+   - **Resolution:** ActualSpeed (mode 4) is deferred alongside Jerk/PA/ActualFlow. The data is technically derivable (`distance / (layer_time * 60)` per segment) but the fixture lacks the required layer-time-per-segment precision to validate it. Plan 02 treats ActualSpeed identically to Jerk/PA: uniform gradient + one-time log. A future phase will reintroduce ActualSpeed with per-segment time data once the GCodeProcessor time-tracking path is migrated.
+   - Rationale: deferring avoids shipping an unvalidated per-segment time computation that could mislead users. Matches Assumption A2's accepted risk and the v3.6 local-workflow scope.
 
 ## Environment Availability
 
@@ -680,7 +755,7 @@ PreviewViewModel::PreviewViewModel(SliceService *sliceService, QObject *parent)
 - `third_party/OrcaSlicer/src/libvgcode/src/Settings.hpp:14-72` - Default visibility arrays for extrusion_roles_visibility and options_visibility
 - `third_party/OrcaSlicer/src/libvgcode/src/ViewerImpl.cpp:283-305` - DEFAULT_EXTRUSION_ROLES_COLORS and DEFAULT_OPTIONS_COLORS palettes
 - `third_party/OrcaSlicer/src/libvgcode/src/ViewerImpl.cpp:1156-1184` - update_enabled_entities() render-side filtering logic
-- `third_party/OrcaSlicer/src/libslic3r/ExtrusionEntity.hpp:20-43` - ExtrusionRole enum (libslic3r version)
+- `third_party/OrcaSlicer/src/libslic3r/ExtrusionEntity.hpp:20-43` - ExtrusionRole enum (libslic3r version -- DIFFERENT ordering from libvgcode past index 6)
 - `third_party/OrcaSlicer/src/libslic3r/ExtrusionEntity.cpp:583-639` - role_to_string() and string_to_role() exact string mappings
 - `third_party/OrcaSlicer/src/slic3r/GUI/GCodeViewer.cpp:66-103` - get_view_type_string() display name mapping
 - `third_party/OrcaSlicer/src/slic3r/GUI/GCodeViewer.cpp:1070-1114` - update_by_mode() view_type_items ordering
@@ -709,6 +784,7 @@ PreviewViewModel::PreviewViewModel(SliceService *sliceService, QObject *parent)
 - Pitfalls: HIGH - All patterns derived from actual code analysis with file:line citations
 - View-mode list: HIGH - Directly extracted from upstream `update_by_mode()` and `get_view_type_string()`
 - Extrusion role defaults: HIGH - Directly from upstream `Settings.hpp`
+- Role enum cross-reference: HIGH - Both `ExtrusionEntity.hpp` (libslic3r) and `Types.hpp` (libvgcode) directly inspected 2026-07-02; divergence past index 6 confirmed against `role_to_string` and `DEFAULT_EXTRUSION_ROLES_COLORS`
 
 **Research date:** 2026-07-02
 **Valid until:** 30 days (upstream source is locked to v7.0.1, unlikely to change)
