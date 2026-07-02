@@ -1,3 +1,11 @@
+// ViewModelSmokeTests — Phase 55-04 additions.
+//
+// AUTOMOC caveat (v3.0 retrospective, see ViewModelSmokeTests CMake comment):
+// single-file QtTest with cpp-internal Q_OBJECT has weak moc dependency
+// tracking. After adding a new private slot here, re-run cmake configure (the
+// canonical verify script does this) or delete
+//   build/ViewModelSmokeTests_autogen/timestamp
+// before rebuilding, otherwise the new slot silently does not execute.
 #include <QSignalSpy>
 #include <QDir>
 #include <QFile>
@@ -8,6 +16,7 @@
 #include <QSettings>
 #include <QHostAddress>
 #include <QUdpSocket>
+#include <cstring>
 #include <QtTest>
 
 #ifdef HAS_LIBSLIC3R
@@ -40,6 +49,25 @@ namespace
   static const QString kStlPath = QDir::cleanPath(
       QStringLiteral(QT_TESTCASE_SOURCEDIR) +
       QStringLiteral("/third_party/OrcaSlicer/resources/profiles/hotend.stl"));
+
+  // Phase 55-04: OrcaSlicer-style G-code fixture committed by Plan 01.
+  // Loaded directly via PreviewViewModel::loadGCodeForPreview for the
+  // render-side role-toggle / legend / current-line atomicity guards.
+  static const QString kOrcaGcodePath = QDir::cleanPath(
+      QStringLiteral(QT_TESTCASE_SOURCEDIR) +
+      QStringLiteral("/tests/fixtures/orca_sample.gcode"));
+
+  // Phase 55-04: count of packed GCV1 segments. Mirrors the E2EWorkflowTests
+  // helper so ViewModelSmokeTests can assert on the GCV1 payload shape without
+  // a live slice. Returns -1 if payload doesn't start with "GCV1".
+  int gcv1SegmentCount(const QByteArray &payload)
+  {
+    if (!payload.startsWith("GCV1") || payload.size() < 8)
+      return -1;
+    int count = 0;
+    std::memcpy(&count, payload.constData() + 4, sizeof(count));
+    return count;
+  }
 
   struct ExpectedCalibRequest
   {
@@ -213,6 +241,12 @@ private slots:
   void prepareWorkflowGatesExposeSourceTruthState();
   void prepareMoveSelectionToPlateUsesSourceSelection();
   void prepareVisibleObjectActionsMapToSourceObjects();
+  // Phase 55-04 (GCODE-02/03): render-side role-toggle no-repack guard,
+  // legend/global-scope coherence, currentMove atomicity, 17-view-mode contract.
+  void roleVisibilityToggleDoesNotRepackGcodePreviewData();
+  void legendGradientBoundsStableAcrossLayerMoveDrag();
+  void currentMoveUpdatesGcodeLineWindowAtomically();
+  void viewModesExposeUpstreamSeventeenModes();
 
 private:
   bool hasLibslic3r() const;
@@ -2911,6 +2945,129 @@ void ViewModelSmokeTests::sliceServiceConfigMergeDirectionPlateWins()
   // Compare as double (getFloat is double) to avoid float-literal precision mismatch.
   QCOMPARE(double(dynamic_cast<const Slic3r::ConfigOptionFloat *>(merged)->getFloat()), 0.4);
 #endif
+}
+
+// ── Phase 55-04 (GCODE-02/03): Preview render-side contract guards ──
+// These four methods load the committed OrcaSlicer-style fixture
+// (tests/fixtures/orca_sample.gcode) via PreviewViewModel::loadGCodeForPreview
+// and assert the invariants the disappearing-preview regression class depends
+// on. They mirror the GCV1 helpers used by E2EWorkflowTests but keep a local
+// copy so ViewModelSmokeTests stays self-contained (no cross-file helper).
+
+// Phase 55 (GCODE-02): toggleRoleVisibility must NOT mutate gcodePreviewData_.
+// This is the central render-side filter guard -- the single most important
+// regression lock for the disappearing-preview bug. A visibility toggle flip
+// updates draw filtering over the already-uploaded segment buffer (update()
+// only) and must never repack the payload.
+void ViewModelSmokeTests::roleVisibilityToggleDoesNotRepackGcodePreviewData()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+
+  QVERIFY2(QFileInfo::exists(kOrcaGcodePath),
+           qPrintable(QStringLiteral("Orca sample fixture missing: %1").arg(kOrcaGcodePath)));
+  QVERIFY2(preview.loadGCodeForPreview(kOrcaGcodePath),
+           "loadGCodeForPreview should succeed on the committed Orca fixture");
+
+  const QByteArray before = preview.gcodePreviewData();
+  QVERIFY2(before.size() > 8, "loaded GCV1 payload should exceed the 8-byte header");
+  QVERIFY2(gcv1SegmentCount(before) > 0,
+           "loaded payload should pack a positive GCV1 segment count");
+
+  preview.toggleRoleVisibility(1);  // Perimeter role index (canonical libvgcode).
+
+  const QByteArray after = preview.gcodePreviewData();
+  QVERIFY2(before == after,
+           "toggleRoleVisibility must not mutate gcodePreviewData_ (render-side filter only)");
+  QVERIFY2(after.size() > 8, "payload must remain a valid GCV1 blob after the toggle");
+  QVERIFY2(gcv1SegmentCount(after) == gcv1SegmentCount(before),
+           "segment count must be unchanged after a role-visibility toggle");
+}
+
+// Phase 55 (GCODE-03): legend gradient min/max must be stable across a layer
+// drag or move drag. The legend reflects the GLOBAL slice scope and must not
+// recompute on slider interaction -- only on a recolor (view-mode change).
+void ViewModelSmokeTests::legendGradientBoundsStableAcrossLayerMoveDrag()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+
+  QVERIFY2(preview.loadGCodeForPreview(kOrcaGcodePath),
+           "loadGCodeForPreview should succeed on the committed Orca fixture");
+  QVERIFY2(preview.moveCount() > 2, "fixture must expose enough moves for a drag");
+
+  // Pick a gradient mode BY NAME so the test survives the Plan 02 renumbering.
+  const int fanSpeedIndex = preview.viewModes().indexOf(QStringLiteral("Fan Speed"));
+  QVERIFY2(fanSpeedIndex >= 0,
+           "viewModes() must expose a 'Fan Speed' gradient mode");
+  preview.setViewModeIndex(fanSpeedIndex);
+
+  const QString minBefore = preview.legendGradientMinLabel();
+  const QString maxBefore = preview.legendGradientMaxLabel();
+  QVERIFY2(!minBefore.isEmpty() && !maxBefore.isEmpty(),
+           "gradient mode must populate non-empty legend min/max labels");
+
+  // Simulate a layer-range drag plus a move drag.
+  preview.setLayerRange(0, qMin(1, qMax(0, preview.layerCount() - 1)));
+  preview.setCurrentMove(qMin(2, preview.moveCount()));
+
+  const QString minAfter = preview.legendGradientMinLabel();
+  const QString maxAfter = preview.legendGradientMaxLabel();
+  QVERIFY2(minBefore == minAfter,
+           "legend gradient min label must be unchanged by a layer/move drag (global scope)");
+  QVERIFY2(maxBefore == maxAfter,
+           "legend gradient max label must be unchanged by a layer/move drag (global scope)");
+}
+
+// Phase 55 (GCODE-03): setCurrentMove must update currentGcodeLine and the
+// gcodeLines window atomically. A single stateChanged emission proves the
+// update + window rebuild happen as one observable transition.
+void ViewModelSmokeTests::currentMoveUpdatesGcodeLineWindowAtomically()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+
+  QVERIFY2(preview.loadGCodeForPreview(kOrcaGcodePath),
+           "loadGCodeForPreview should succeed on the committed Orca fixture");
+  QVERIFY2(preview.moveCount() > 2, "fixture must expose enough moves to step");
+
+  // Default currentMove is 0; step to a non-zero move so the early-return guard
+  // in setCurrentMove does not skip the update.
+  const int targetMove = qMin(2, preview.moveCount());
+
+  QSignalSpy spy(&preview, &PreviewViewModel::stateChanged);
+  QVERIFY(spy.isValid());
+  preview.setCurrentMove(targetMove);
+
+  QVERIFY2(spy.count() == 1,
+           "setCurrentMove must emit stateChanged exactly once (atomic window update)");
+  QVERIFY2(preview.currentGcodeLine() != 0,
+           "currentGcodeLine should advance to a real source line after a move step");
+  QVERIFY2(!preview.gcodeLines().isEmpty(),
+           "gcodeLines window must be populated after a move step");
+}
+
+// Phase 55 (GCODE-02): belt-and-suspenders alongside PreviewParserTests -- the
+// 17 upstream EViewType modes must be present with the canonical names so the
+// QML view-mode combo and recolor switch share one source of truth.
+void ViewModelSmokeTests::viewModesExposeUpstreamSeventeenModes()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+
+  const QStringList modes = preview.viewModes();
+  QVERIFY2(modes.size() == 17,
+           qPrintable(QStringLiteral("viewModes() should expose 17 upstream modes, got %1").arg(modes.size())));
+  QVERIFY2(modes.contains(QStringLiteral("Line Type")),
+           "viewModes() must contain 'Line Type'");
+  QVERIFY2(modes.contains(QStringLiteral("Summary")),
+           "viewModes() must contain 'Summary'");
+  QVERIFY2(modes.contains(QStringLiteral("Tool")),
+           "viewModes() must contain 'Tool'");
 }
 
 QTEST_MAIN(ViewModelSmokeTests)
