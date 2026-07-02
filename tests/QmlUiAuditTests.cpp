@@ -61,6 +61,10 @@ private slots:
   // directly at the requirement (complements the existing mainRegistersRhiViewport*
   // tests with a GCODE-04-specific assertion bundle).
   void gcode04RhiViewportIsDefaultRegistrationNoSoftwareViewportInPreviewPath();
+  // Phase 56-01: Wave 0 RED test scaffolds for settings dialog UI audit.
+  void settingsDialogUsesOnlyCxControls();
+  void settingsDialogNoRawControls();
+  void settingsDialogStringsQsTr();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -1337,6 +1341,23 @@ void QmlUiAuditTests::gcode04RhiViewportIsDefaultRegistrationNoSoftwareViewportI
   QVERIFY2(previewPage.contains(QStringLiteral("GLViewport")),
            "PreviewPage.qml must bind GLViewport (resolves to RhiViewport on the default "
            "D3D11 path) (GCODE-04)");
+}
+
+// -- Phase 56-01: Wave 0 RED test scaffolds for settings dialog UI audit --
+
+void QmlUiAuditTests::settingsDialogUsesOnlyCxControls()
+{
+  QFAIL("Wave 0 scaffold - implemented in 56-04");
+}
+
+void QmlUiAuditTests::settingsDialogNoRawControls()
+{
+  QFAIL("Wave 0 scaffold - implemented in 56-04");
+}
+
+void QmlUiAuditTests::settingsDialogStringsQsTr()
+{
+  QFAIL("Wave 0 scaffold - implemented in 56-04");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

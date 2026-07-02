@@ -252,6 +252,18 @@ private slots:
   // toggle→mask propagation so the role-visibility feature cannot silently
   // become a dead path again.
   void roleVisibilityMaskFeedsRendererShapeAndTogglesPropagate();
+  // Phase 56-01: Wave 0 RED test scaffolds for SETTINGS-01..07.
+  // AUTOMOC caveat: after adding new private slots, re-run cmake configure
+  // or delete build/ViewModelSmokeTests_autogen/timestamp before rebuilding.
+  void testSettingsDialogOpenFromSidebar();
+  void testTabsAndGroupNavPerTier();
+  void testConfigOptionModelSevenTypes();
+  void testPerOptionDirtyAndValueSource();
+  void testReadonlyBuiltinGating();
+  void testSaveSaveAsResetOptionResetGroupResetAll();
+  void testUnsavedChangesGuardOnDirtyClose();
+  void testPerDialogSearchAndFourLevelMode();
+  void testNullableAndVectorOptions();
 
 private:
   bool hasLibslic3r() const;
@@ -3122,6 +3134,73 @@ void ViewModelSmokeTests::viewModesExposeUpstreamSeventeenModes()
            "viewModes() must contain 'Summary'");
   QVERIFY2(modes.contains(QStringLiteral("Tool")),
            "viewModes() must contain 'Tool'");
+}
+
+// -- Phase 56-01: Wave 0 RED test scaffolds for SETTINGS-01..07 --
+// Each body is a QFAIL marker so the suite is RED until 56-02/56-03/56-04
+// replace them with real assertions.
+
+void ViewModelSmokeTests::testSettingsDialogOpenFromSidebar()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("56SettingsDialog"));
+  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+}
+
+void ViewModelSmokeTests::testTabsAndGroupNavPerTier()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("56GroupNav"));
+  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+}
+
+void ViewModelSmokeTests::testConfigOptionModelSevenTypes()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("56SevenTypes"));
+  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+}
+
+void ViewModelSmokeTests::testPerOptionDirtyAndValueSource()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("56DirtyValue"));
+  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+}
+
+void ViewModelSmokeTests::testReadonlyBuiltinGating()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("56Readonly"));
+  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+}
+
+void ViewModelSmokeTests::testSaveSaveAsResetOptionResetGroupResetAll()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("56SaveReset"));
+  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+}
+
+void ViewModelSmokeTests::testUnsavedChangesGuardOnDirtyClose()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("56UnsavedGuard"));
+  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+}
+
+void ViewModelSmokeTests::testPerDialogSearchAndFourLevelMode()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("56SearchMode"));
+  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+}
+
+void ViewModelSmokeTests::testNullableAndVectorOptions()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("56NullableVector"));
+  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
 }
 
 QTEST_MAIN(ViewModelSmokeTests)

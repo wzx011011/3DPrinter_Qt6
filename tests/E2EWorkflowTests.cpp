@@ -94,6 +94,9 @@ private slots:
   void resliceRebuildsGcodePreviewDataWithDifferentBytes();
   void exportWhilePreviewVisibleLeavesGcodePreviewDataIntact();
   void pageSwitchPreparePreviewPreservesGcodePreviewData();
+  // Phase 56-01: Wave 0 RED test scaffolds for SETTINGS-07.
+  void testSettingsEditInvalidatesSlice();
+  void testDirtyOverridesPersistAcrossProjectSaveRestore();
 
 private:
   bool hasLibslic3r() const;
@@ -1673,6 +1676,18 @@ void E2EWorkflowTests::pageSwitchPreparePreviewPreservesGcodePreviewData()
   const QString seedOutput = editor->sliceOutputPath();
   if (QFileInfo::exists(seedOutput))
     QFile::remove(seedOutput);
+}
+
+// -- Phase 56-01: Wave 0 RED test scaffolds for SETTINGS-07 --
+
+void E2EWorkflowTests::testSettingsEditInvalidatesSlice()
+{
+  QFAIL("Wave 0 scaffold - implemented in 56-03");
+}
+
+void E2EWorkflowTests::testDirtyOverridesPersistAcrossProjectSaveRestore()
+{
+  QFAIL("Wave 0 scaffold - implemented in 56-03");
 }
 
 QTEST_MAIN(E2EWorkflowTests)
