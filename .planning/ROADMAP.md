@@ -203,12 +203,12 @@ Plans:
 3. Edits are model-driven and update dirty, validation, and sidebar state.
 4. Save/reset/unsaved-change actions follow upstream-compatible behavior.
 
-**Plans:** 4/4 plans
+**Plans:** 1/4 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 56-01-PLAN.md -- Wave 0 foundation: ConfigOptionModel 7 typed kinds (nullable/isVector/percent/sidetext) + CxSpinBox suffix + RED test scaffolds for SETTINGS-01..07
+- [x] 56-01-PLAN.md -- Wave 0 foundation: ConfigOptionModel 7 typed kinds (nullable/isVector/percent/sidetext) + CxSpinBox suffix + RED test scaffolds for SETTINGS-01..07
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

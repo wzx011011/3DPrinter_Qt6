@@ -164,10 +164,10 @@ v3.5 Phase 47-49 are superseded by this milestone. v3.5 Phase 44-46 remain histo
 | GCODE-05 | Phase 55 | Pending |
 | SETTINGS-01 | Phase 56 | Pending |
 | SETTINGS-02 | Phase 56 | Pending |
-| SETTINGS-03 | Phase 56 | Pending |
+| SETTINGS-03 | Phase 56 | Complete |
 | SETTINGS-04 | Phase 56 | Pending |
 | SETTINGS-05 | Phase 56 | Pending |
-| SETTINGS-06 | Phase 56 | Pending |
+| SETTINGS-06 | Phase 56 | Complete |
 | SETTINGS-07 | Phase 56 | Pending |
 | CLEAN-01 | Phase 57 | Pending |
 | CLEAN-02 | Phase 57 | Pending |
