@@ -287,6 +287,7 @@ Item {
                     layerMax: root.previewVm.currentLayerMax
                     moveEnd: root.previewVm.currentMove
                     showTravelMoves: root.previewVm.showTravelMoves
+                    roleVisibility: root.previewVm ? root.previewVm.roleVisibilities : []
                     showBed: root.previewVm.showBed
                     showMarker: root.previewVm.showMarker
                     gcodeViewMode: root.previewVm.viewModeIndex
@@ -362,6 +363,11 @@ Item {
                                 spacing: 8
 
                                 Components.StatsPanel {
+                                    Layout.fillWidth: true
+                                    previewVm: root.previewVm
+                                }
+
+                                Components.VisibilityFilter {
                                     Layout.fillWidth: true
                                     previewVm: root.previewVm
                                 }
