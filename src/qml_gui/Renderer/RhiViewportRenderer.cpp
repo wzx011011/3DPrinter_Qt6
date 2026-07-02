@@ -88,6 +88,19 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   m_moveEnd = viewport->m_moveEnd;
   m_showTravelMoves = viewport->m_showTravelMoves;
   m_gcodeViewMode = viewport->m_gcodeViewMode;
+  // Render-side per-role visibility mask (no repack). The viewport carries a
+  // 20-element QVariantList of bools indexed by canonical libvgcode role; convert
+  // to QVector<bool> for the draw-range skip check. Missing entries default visible.
+  if (viewport->m_roleVisibility.size() >= 20)
+  {
+    m_roleVisibility.resize(20);
+    for (int i = 0; i < 20; ++i)
+      m_roleVisibility[i] = viewport->m_roleVisibility.at(i).toBool();
+  }
+  else
+  {
+    m_roleVisibility.clear();
+  }
 }
 
 void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
@@ -574,9 +587,13 @@ struct GcvPackedSegment
   float r, g, b;
   float feedrate, fan_speed, temperature, width, layer_time, acceleration;
   int extruder_id, layer, move;
+  int role;  // must match PackedSegment layout exactly (canonical libvgcode index).
 };
-// PackedSegment is 72 bytes on most compilers (15 floats + 3 ints, packed);
-// if the platform adds padding the parse logic uses sizeof explicitly.
+// Wire-format lock-step guard: PackedSegment and GcvPackedSegment carry the
+// identical 76-byte layout (16 floats + 4 ints) so the GCV1 blob memcpy is safe.
+static_assert(sizeof(GcvPackedSegment) == 76, "GcvPackedSegment must be 76 bytes after adding role");
+// PackedSegment is 76 bytes (16 floats + 4 ints, packed); if the platform adds
+// padding the parse logic uses sizeof explicitly.
 } // namespace
 
 void RhiViewportRenderer::parsePreviewSegments()
@@ -622,7 +639,7 @@ void RhiViewportRenderer::parsePreviewSegments()
     m_previewVertices.append(b);
 
     const quint32 vertexOffset = quint32(m_previewVertices.size() - 2);
-    m_previewDrawSpans.append({seg[i].layer, seg[i].move, vertexOffset, 2});
+    m_previewDrawSpans.append({seg[i].layer, seg[i].move, vertexOffset, 2, seg[i].role});
   }
 
   m_previewSegmentVertexCount = quint32(m_previewVertices.size());
@@ -693,6 +710,11 @@ void RhiViewportRenderer::computePreviewDrawRange(quint32 &firstVertex, quint32 
     if (span.layer < layerLow || span.layer > layerHigh)
       continue;
     if (span.move >= m_moveEnd)
+      continue;
+    // Render-side per-role filtering (no repack). Skips spans whose canonical
+    // libvgcode role is masked off in the visibility array.
+    if (span.role >= 0 && span.role < m_roleVisibility.size()
+        && !m_roleVisibility[span.role])
       continue;
 
     if (!foundStart) {

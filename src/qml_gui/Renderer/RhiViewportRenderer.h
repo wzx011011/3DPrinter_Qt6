@@ -101,12 +101,14 @@ private:
   int m_moveEnd = 0;
   bool m_showTravelMoves = true;
   int m_gcodeViewMode = 0;
+  QVector<bool> m_roleVisibility;  ///< Per-role extrusion mask from RhiViewport (render-side skip).
   QVector<Vertex> m_previewVertices;     // expanded Line vertices (CPU staging)
   struct PreviewDrawSpan {
     int layer;
     int move;
     quint32 vertexOffset;
     quint32 vertexCount;
+    int role;  ///< Canonical libvgcode EGCodeExtrusionRole index for render-side filtering.
   };
   QVector<PreviewDrawSpan> m_previewDrawSpans;
   std::unique_ptr<QRhiBuffer> m_previewSegmentBuffer;

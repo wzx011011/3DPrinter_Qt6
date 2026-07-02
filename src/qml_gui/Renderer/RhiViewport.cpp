@@ -23,7 +23,9 @@ struct GcvPackedSegment
   float r, g, b;
   float feedrate, fan_speed, temperature, width, layer_time, acceleration;
   int extruder_id, layer, move;
+  int role;  // must match PackedSegment layout exactly (canonical libvgcode index).
 };
+static_assert(sizeof(GcvPackedSegment) == 76, "GcvPackedSegment must be 76 bytes after adding role");
 }
 
 RhiViewport::RhiViewport(QQuickItem *parent)
@@ -32,6 +34,11 @@ RhiViewport::RhiViewport(QQuickItem *parent)
   setAcceptedMouseButtons(Qt::AllButtons);
   setAcceptHoverEvents(true);
   setMirrorVertically(true);
+  // Default: all 20 canonical libvgcode extrusion roles visible so renderer-side
+  // filtering is a no-op until QML binds Plan 03's UI (matches upstream defaults).
+  m_roleVisibility.reserve(20);
+  for (int i = 0; i < 20; ++i)
+    m_roleVisibility.append(true);
 }
 
 QQuickRhiItemRenderer *RhiViewport::createRenderer()
@@ -324,6 +331,17 @@ void RhiViewport::setGcodeViewMode(int value)
     return;
   m_gcodeViewMode = value;
   emit gcodeViewModeChanged();
+  update();
+}
+
+void RhiViewport::setRoleVisibility(const QVariantList &value)
+{
+  // Render-side filter only: store + update(). Does NOT mutate m_previewData
+  // (Phase 41 interaction-stability invariant; the renderer skips masked spans).
+  if (m_roleVisibility == value)
+    return;
+  m_roleVisibility = value;
+  emit roleVisibilityChanged();
   update();
 }
 

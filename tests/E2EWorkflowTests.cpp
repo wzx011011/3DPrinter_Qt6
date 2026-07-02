@@ -684,7 +684,10 @@ G1 X50 Y20 E0.60
 
   QVERIFY2(preview.gcodePreviewData().startsWith("GCV1"),
            "preview payload should use the GCV1 segment format");
-  QCOMPARE(gcv1SegmentCount(preview.gcodePreviewData()), preview.moveCount());
+  // showTravelMoves defaults to false (upstream Travels/Wipes=false + CONTEXT.md
+  // "travel and wipe hidden after first view"), so the GCV1 payload packs only
+  // the extrusion segments on first load. The toggle assertions below cover both.
+  QCOMPARE(gcv1SegmentCount(preview.gcodePreviewData()), preview.extrudeMoveCount());
   QVERIFY2(preview.previewReady(), "loaded fixture should make Preview ready");
   QVERIFY2(preview.gcodeLineCount() > 0, "Preview should expose a bounded G-code text window");
   QVERIFY2(!preview.gcodeLines().isEmpty(), "Preview G-code text window should be non-empty");
@@ -1172,6 +1175,10 @@ G1 X1 Y0 E0.10 F1200
   QVERIFY(editor.setCurrentPlateIndex(0));
   QCOMPARE(slice.outputPath(), plate0Path);
   QTRY_COMPARE(preview.moveCount(), 2);
+  // The compact fixture has 1 travel + 1 extrusion move. showTravelMoves
+  // defaults to false (only the extrusion segment is packed), so enable travel
+  // visibility before asserting the GCV1 payload carries both moves.
+  preview.setShowTravelMoves(true);
   QCOMPARE(gcv1SegmentCount(preview.gcodePreviewData()), 2);
 
   if (QFileInfo::exists(generatedOutput))

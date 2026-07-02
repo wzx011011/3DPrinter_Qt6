@@ -50,6 +50,7 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(int gizmoMode READ gizmoMode WRITE setGizmoMode NOTIFY gizmoModeChanged)
   Q_PROPERTY(bool wireframeMode READ wireframeMode WRITE setWireframeMode NOTIFY wireframeModeChanged)
   Q_PROPERTY(int gcodeViewMode READ gcodeViewMode WRITE setGcodeViewMode NOTIFY gcodeViewModeChanged)
+  Q_PROPERTY(QVariantList roleVisibility READ roleVisibility WRITE setRoleVisibility NOTIFY roleVisibilityChanged)
   Q_PROPERTY(int cutAxis READ cutAxis WRITE setCutAxis)
   Q_PROPERTY(float cutPosition READ cutPosition WRITE setCutPosition)
   Q_PROPERTY(QString lastThumbnailData READ lastThumbnailData NOTIFY thumbnailCaptured)
@@ -173,6 +174,9 @@ public:
   int gcodeViewMode() const { return m_gcodeViewMode; }
   void setGcodeViewMode(int value);
 
+  QVariantList roleVisibility() const { return m_roleVisibility; }
+  void setRoleVisibility(const QVariantList &value);
+
   int cutAxis() const { return m_cutAxis; }
   void setCutAxis(int value);
 
@@ -195,6 +199,7 @@ signals:
   void gizmoModeChanged();
   void wireframeModeChanged();
   void gcodeViewModeChanged();
+  void roleVisibilityChanged();
   void thumbnailCaptured();
   void objectPickedSource(int sourceIndex);
 
@@ -247,6 +252,7 @@ private:
   int m_gizmoMode = GizmoMove;
   bool m_wireframeMode = false;
   int m_gcodeViewMode = GCodeFeature;
+  QVariantList m_roleVisibility;
   int m_cutAxis = 2;
   float m_cutPosition = 0.f;
   QString m_lastThumbnailData;

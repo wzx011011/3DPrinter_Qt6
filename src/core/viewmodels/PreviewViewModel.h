@@ -5,7 +5,9 @@
 #include <QVariantMap>
 #include <QVariantList>
 #include <QHash>
+#include <QColor>
 #include <QVector>
+#include <array>
 #include <vector>
 #include "core/rendering/TickCodeTypes.h"
 
@@ -78,6 +80,10 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(bool toolIsExtrusion READ toolIsExtrusion NOTIFY stateChanged)
   Q_PROPERTY(QVariantList tickMarks READ tickMarks NOTIFY tickMarksChanged)
   Q_PROPERTY(int tickMarkCount READ tickMarkCount NOTIFY tickMarksChanged)
+  /// Per-role extrusion visibility (render-side filter, no repack).
+  /// Rows are emitted in ascending canonical libvgcode EGCodeExtrusionRole
+  /// index order (1..19 except 0 None and 14 Custom).
+  Q_PROPERTY(QVariantList roleVisibilities READ roleVisibilities NOTIFY stateChanged)
 
 public:
   explicit PreviewViewModel(SliceService *sliceService, QObject *parent = nullptr);
@@ -179,6 +185,25 @@ public:
   Q_INVOKABLE void togglePlayPause();
   Q_INVOKABLE void setViewModeIndex(int index);
 
+  /// Map an upstream ;TYPE: display string to its canonical libvgcode
+  /// EGCodeExtrusionRole index (0..19). Travel/unrecognized -> 0 (None).
+  /// Source strings: libslic3r/ExtrusionEntity.cpp:583-608 (role_to_string).
+  /// Target indices:  libvgcode/include/Types.hpp:131-157 (EGCodeExtrusionRole).
+  /// The two enums DIVERGE past index 6 -- this maps the string DIRECTLY to the
+  /// libvgcode index, never via the libslic3r integer (55-RESEARCH Pitfall 6).
+  Q_INVOKABLE int roleForType(const QString &type) const;
+  /// Return the canonical libvgcode color for a role index (normalized RGB),
+  /// sourced from upstream DEFAULT_EXTRUSION_ROLES_COLORS @ ViewerImpl.cpp:283.
+  Q_INVOKABLE QColor roleColor(int roleIndex) const;
+  /// Per-role extrusion visibility state (canonical libvgcode index 0..19).
+  Q_INVOKABLE bool isRoleVisible(int roleIndex) const;
+  /// Toggle a role's visibility. Render-side only: emits stateChanged() and does
+  /// NOT call recolorAndPackSegments() (Phase 41 interaction-stability invariant).
+  Q_INVOKABLE void toggleRoleVisibility(int roleIndex);
+  /// QML-facing list of {roleIndex,label,color,visible} rows for the visibility
+  /// filter Repeater (ascending canonical index; None(0) and Custom(14) hidden).
+  QVariantList roleVisibilities() const;
+
   /// Tick code management (aligned with upstream TickCode/TickCodeInfo)
   Q_INVOKABLE void addPauseAtLayer(int layer);
   Q_INVOKABLE void addCustomGcodeAtLayer(int layer, const QString& gcode);
@@ -248,7 +273,9 @@ private:
   int viewModeIndex_ = 0;
   QList<OWzx::TickCode> tickMarks_;
   bool stealthMode_ = false;
-  bool showTravelMoves_ = true;  ///< Travel-move visibility aligned with upstream GCodeViewer.
+  // Travel hidden after first view, matching upstream Travels/Wipes=false defaults
+  // and CONTEXT.md "travel and wipe hidden after first view" (55-RESEARCH Pitfall 3).
+  bool showTravelMoves_ = false;  ///< Travel-move visibility aligned with upstream GCodeViewer.
   bool showBed_ = true;          ///< Bed-grid visibility aligned with upstream GCodeViewer.
   bool showMarker_ = true;       ///< Tool-marker visibility aligned with upstream GCodeViewer.
   QTimer *playTimer_ = nullptr;
@@ -270,8 +297,12 @@ private:
     int layer;
     int move;
     bool isTravel;
+    int role = 0;  ///< Canonical libvgcode EGCodeExtrusionRole index (0=None..19=Mixed).
   };
   std::vector<StoredSegment> segments_;
+  /// Per-role extrusion visibility mask, indexed by canonical libvgcode
+  /// EGCodeExtrusionRole. All true by default (matches upstream extrusion_roles_visibility).
+  std::array<bool, 20> m_roleVisibility{};
   struct SourceGcodeLine
   {
     int lineNumber = 0;

@@ -63,6 +63,7 @@ namespace
     int extruder_id;
     int layer;
     int move;
+    int role;  // CANONICAL libvgcode EGCodeExtrusionRole index (0..19) -- must match GcvPackedSegment exactly.
   };
 
   // Upstream-matched gradient: 10-color Range_Colors from CrealityPrint GCodeViewer
@@ -123,6 +124,98 @@ namespace
     if (t.contains("TRAVEL"))
       return {QStringLiteral("空驶"), QStringLiteral("#6E7785"), 0.43f, 0.47f, 0.52f};
     return {QStringLiteral("其他"), QStringLiteral("#53D890"), 0.33f, 0.84f, 0.56f};
+  }
+
+  // Maps the upstream ;TYPE: display string DIRECTLY to the canonical libvgcode
+  // EGCodeExtrusionRole index (the canonical role index throughout the Qt6 codebase).
+  // Source strings: libslic3r/ExtrusionEntity.cpp:583-608 (role_to_string).
+  // Target indices:  libvgcode/include/Types.hpp:131-157 (EGCodeExtrusionRole).
+  // The two enums DIVERGE past index 6 -- do NOT translate via the libslic3r integer.
+  struct RoleMapEntry { const char *name; int role; };
+  static const RoleMapEntry kRoleMap[] = {
+      {"Inner wall",              1},  // Perimeter
+      {"Outer wall",              2},  // ExternalPerimeter
+      {"Overhang wall",           3},  // OverhangPerimeter
+      {"Sparse infill",           4},  // InternalInfill
+      {"Internal solid infill",   5},  // SolidInfill
+      {"Top surface",             6},  // TopSolidInfill
+      {"Ironing",                 7},  // Ironing             (NOT 8 -- libslic3r idx)
+      {"Bridge",                  8},  // BridgeInfill        (NOT 9)
+      {"Gap infill",              9},  // GapFill             (NOT 11)
+      {"Skirt",                  10},  // Skirt               (NOT 12)
+      {"Support",                11},  // SupportMaterial     (NOT 14)
+      {"Support interface",      12},  // SupportMaterialInterface (NOT 15)
+      {"Prime tower",            13},  // WipeTower           (NOT 17)
+      {"Custom",                 14},  // Custom              (NOT 18)
+      {"Bottom surface",         15},  // BottomSurface       (NOT 7)
+      {"Internal Bridge",        16},  // InternalBridgeInfill(NOT 10)
+      {"Brim",                   17},  // Brim                (NOT 13)
+      {"Support transition",     18},  // SupportTransition   (NOT 16)
+      {"Multiple",               19},  // Mixed               (identical in both enums)
+  };
+
+  // Role default colors from upstream DEFAULT_EXTRUSION_ROLES_COLORS.
+  // Source: libvgcode/src/ViewerImpl.cpp:283-305.
+  // Indexed by CANONICAL libvgcode EGCodeExtrusionRole (matches kRoleMap output).
+  static const float kRoleColors[][3] = {
+      {230 / 255.f, 179 / 255.f, 179 / 255.f}, // 0  None
+      {255 / 255.f, 230 / 255.f,  77 / 255.f}, // 1  Perimeter
+      {255 / 255.f, 125 / 255.f,  56 / 255.f}, // 2  ExternalPerimeter
+      { 31 / 255.f,  31 / 255.f, 255 / 255.f}, // 3  OverhangPerimeter
+      {176 / 255.f,  48 / 255.f,  41 / 255.f}, // 4  InternalInfill
+      {150 / 255.f,  84 / 255.f, 204 / 255.f}, // 5  SolidInfill
+      {240 / 255.f,  64 / 255.f,  64 / 255.f}, // 6  TopSolidInfill
+      {255 / 255.f, 140 / 255.f, 105 / 255.f}, // 7  Ironing
+      { 77 / 255.f, 128 / 255.f, 186 / 255.f}, // 8  BridgeInfill
+      {255 / 255.f, 255 / 255.f, 255 / 255.f}, // 9  GapFill
+      {  0 / 255.f, 135 / 255.f, 110 / 255.f}, // 10 Skirt
+      {  0 / 255.f, 255 / 255.f,   0 / 255.f}, // 11 SupportMaterial
+      {  0 / 255.f, 128 / 255.f,   0 / 255.f}, // 12 SupportMaterialInterface
+      {179 / 255.f, 227 / 255.f, 171 / 255.f}, // 13 WipeTower
+      { 94 / 255.f, 209 / 255.f, 148 / 255.f}, // 14 Custom
+      {102 / 255.f,  92 / 255.f, 199 / 255.f}, // 15 BottomSurface
+      { 77 / 255.f, 128 / 255.f, 186 / 255.f}, // 16 InternalBridgeInfill
+      {  0 / 255.f,  59 / 255.f, 110 / 255.f}, // 17 Brim
+      {  0 / 255.f,  64 / 255.f,   0 / 255.f}, // 18 SupportTransition
+      {128 / 255.f, 128 / 255.f, 128 / 255.f}, // 19 Mixed
+  };
+
+  // Upstream display labels for the canonical libvgcode role index, used by
+  // roleVisibilities() for the QML Repeater (English ASCII only).
+  static const char *kRoleLabels[] = {
+      "Unknown",            // 0  None
+      "Inner wall",         // 1
+      "Outer wall",         // 2
+      "Overhang wall",      // 3
+      "Sparse infill",      // 4
+      "Internal solid infill", // 5
+      "Top surface",        // 6
+      "Ironing",            // 7
+      "Bridge",             // 8
+      "Gap infill",         // 9
+      "Skirt",              // 10
+      "Support",            // 11
+      "Support interface",  // 12
+      "Prime tower",        // 13
+      "Custom",             // 14
+      "Bottom surface",     // 15
+      "Internal Bridge",    // 16
+      "Brim",               // 17
+      "Support transition", // 18
+      "Multiple",           // 19
+  };
+
+  // Map an upstream ;TYPE: display string to its canonical libvgcode index.
+  // Travel/unrecognized -> 0 (None). Never indexes kRoleColors out of bounds.
+  int roleForTypeImpl(const QString &type)
+  {
+    const QString t = type.trimmed();
+    for (const auto &entry : kRoleMap)
+    {
+      if (t.compare(QString::fromUtf8(entry.name), Qt::CaseSensitive) == 0)
+        return entry.role;
+    }
+    return 0;
   }
 
   bool parseAxis(const QString &line, QChar axis, float &value)
@@ -212,6 +305,9 @@ namespace
 PreviewViewModel::PreviewViewModel(SliceService *sliceService, QObject *parent)
     : QObject(parent), sliceService_(sliceService)
 {
+  // All extrusion roles visible by default, matching upstream extrusion_roles_visibility
+  // (libvgcode/src/Settings.hpp:49-71). showTravelMoves_ defaults to false in the header.
+  m_roleVisibility.fill(true);
   playTimer_ = new QTimer(this);
   playTimer_->setInterval(24);
   connect(playTimer_, &QTimer::timeout, this, [this]()
@@ -578,6 +674,69 @@ void PreviewViewModel::setShowMarker(bool enabled)
     return;
   showMarker_ = enabled;
   emit stateChanged();
+}
+
+int PreviewViewModel::roleForType(const QString &type) const
+{
+  return roleForTypeImpl(type);
+}
+
+QColor PreviewViewModel::roleColor(int roleIndex) const
+{
+  if (roleIndex < 0 || roleIndex >= 20)
+    roleIndex = 0;
+  const auto &c = kRoleColors[roleIndex];
+  return QColor::fromRgbF(c[0], c[1], c[2]);
+}
+
+bool PreviewViewModel::isRoleVisible(int roleIndex) const
+{
+  if (roleIndex < 0 || roleIndex >= int(m_roleVisibility.size()))
+    return true;
+  return m_roleVisibility[roleIndex];
+}
+
+void PreviewViewModel::toggleRoleVisibility(int roleIndex)
+{
+  if (roleIndex < 0 || roleIndex >= int(m_roleVisibility.size()))
+    return;
+  // Render-side filter only: flip the mask and emit stateChanged(). Does NOT
+  // call recolorAndPackSegments() and does NOT mutate gcodePreviewData_
+  // (Phase 41 interaction-stability invariant; the renderer skips masked spans).
+  m_roleVisibility[roleIndex] = !m_roleVisibility[roleIndex];
+  emit stateChanged();
+}
+
+QVariantList PreviewViewModel::roleVisibilities() const
+{
+  // Rows in ascending canonical libvgcode index order so the QML UI row order
+  // is deterministic and matches the color-swatch assignment. None(0) and
+  // Custom(14) are hidden per the UI-SPEC copywriting table but remain in the
+  // m_roleVisibility array for safe indexing.
+  QVariantList rows;
+  static const int kExcludedRoles[] = {0, 14};  // None, Custom
+  for (int role = 1; role < 20; ++role)
+  {
+    bool excluded = false;
+    for (int ex : kExcludedRoles)
+    {
+      if (role == ex) { excluded = true; break; }
+    }
+    if (excluded)
+      continue;
+    const auto &c = kRoleColors[role];
+    const QString color = QStringLiteral("#%1%2%3")
+        .arg(qBound(0, int(c[0] * 255.f + 0.5f), 255), 2, 16, QLatin1Char('0'))
+        .arg(qBound(0, int(c[1] * 255.f + 0.5f), 255), 2, 16, QLatin1Char('0'))
+        .arg(qBound(0, int(c[2] * 255.f + 0.5f), 255), 2, 16, QLatin1Char('0'));
+    QVariantMap row;
+    row.insert(QStringLiteral("roleIndex"), role);
+    row.insert(QStringLiteral("label"), QString::fromUtf8(kRoleLabels[role]));
+    row.insert(QStringLiteral("color"), color);
+    row.insert(QStringLiteral("visible"), m_roleVisibility[role]);
+    rows.append(row);
+  }
+  return rows;
 }
 
 QVariantMap PreviewViewModel::legendItem(const QString &label, const QString &color, int count) const
@@ -1010,6 +1169,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     seg.layer = layer;
     seg.move = moveIndex;
     seg.isTravel = !extruding;
+    seg.role = extruding ? roleForTypeImpl(currentType) : 0;
     segments_.push_back(seg);
 
     // Accumulate elapsed time for the move slider, aligned with upstream IMSlider m_layers_times.
@@ -1311,6 +1471,7 @@ void PreviewViewModel::recolorAndPackSegments()
     p.extruder_id = s.extruder_id;
     p.layer = s.layer;
     p.move = s.move;
+    p.role = s.role;
 
     if (mode == 0)
     {
