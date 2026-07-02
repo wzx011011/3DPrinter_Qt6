@@ -150,6 +150,15 @@
 3. Layer/move filters update draw ranges and text/current-line state together.
 4. Restored Preview does not regress to `SoftwareViewport` unless explicitly classified as fallback.
 
+**Plans:** 5 plans
+
+Plans:
+- [ ] 55-01-PLAN.md — Wave 0 foundation: OrcaSlicer-style .gcode fixture + PreviewParserTests RED scaffold
+- [ ] 55-02-PLAN.md — Wave 1 data semantics: 20-role ;TYPE: parser, 17 EViewType modes, GCV1 wire-format role field, render-side per-role filtering (no repack)
+- [ ] 55-03-PLAN.md — Wave 2 UI: VisibilityFilter.qml (right-panel per-role checkbox group) + PreviewPage roleVisibility binding
+- [ ] 55-04-PLAN.md — Wave 2 regression tests: GCODE-01 no-placeholder RED, GCODE-03 legend/atomicity, GCODE-04 SoftwareViewport/role-skip/sizeof audit guards, GCODE-05 reslice/export/page-switch invariants
+- [ ] 55-05-PLAN.md — Wave 3 D3D11 startup-policy audit guard + 55-VALIDATION.md sign-off
+
 ### Phase 56: Parameter Settings Dialogs Restoration
 
 **Goal:** Restore printer, material, and process settings as independent OrcaSlicer-like settings workflows.
