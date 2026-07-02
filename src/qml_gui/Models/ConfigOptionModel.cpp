@@ -228,6 +228,12 @@ QVariant ConfigOptionModel::data(const QModelIndex &index, int role) const
     return o.tooltip;
   case ModeRole:
     return o.mode;
+  case NullableRole:
+    return o.nullable;
+  case IsVectorRole:
+    return o.isVector;
+  case SidetextRole:
+    return o.sidetext;
   default:
     return {};
   }
@@ -251,6 +257,9 @@ QHash<int, QByteArray> ConfigOptionModel::roleNames() const
       {DirtyRole, "optDirty"},
       {TooltipRole, "optTooltip"},
       {ModeRole, "optMode"},
+      {NullableRole, "optNullable"},
+      {IsVectorRole, "optIsVector"},
+      {SidetextRole, "optSidetext"},
   };
 }
 
@@ -332,6 +341,43 @@ bool ConfigOptionModel::optIsDirty(int i) const
   if (i < 0 || i >= m_options.size())
     return false;
   return m_dirtyKeys.contains(m_options[i].key);
+}
+
+bool ConfigOptionModel::optNullable(int i) const
+{
+  return (i >= 0 && i < m_options.size()) ? m_options[i].nullable : false;
+}
+
+bool ConfigOptionModel::optIsVector(int i) const
+{
+  return (i >= 0 && i < m_options.size()) ? m_options[i].isVector : false;
+}
+
+QString ConfigOptionModel::optSidetext(int i) const
+{
+  return (i >= 0 && i < m_options.size()) ? m_options[i].sidetext : QString{};
+}
+
+QStringList ConfigOptionModel::groupNames() const
+{
+  QSet<QString> groups;
+  for (const auto &o : m_options)
+    if (!o.group.isEmpty())
+      groups.insert(o.group);
+  QStringList result = groups.values();
+  result.sort();
+  return result;
+}
+
+int ConfigOptionModel::dirtyCountForGroup(const QString &group) const
+{
+  int count = 0;
+  for (const auto &key : m_dirtyKeys) {
+    int idx = findIndex(key);
+    if (idx >= 0 && m_options[idx].group == group)
+      ++count;
+  }
+  return count;
 }
 
 void ConfigOptionModel::resetOption(int row)
@@ -589,10 +635,12 @@ namespace
   {
     switch (t)
     {
+    case Slic3r::coPercent:
+    case Slic3r::coPercents:
+      return QStringLiteral("percent");
     case Slic3r::coFloat:
     case Slic3r::coFloatOrPercent:
     case Slic3r::coFloats:
-    case Slic3r::coPercents:
       return QStringLiteral("double");
     case Slic3r::coInt:
     case Slic3r::coInts:
@@ -1006,6 +1054,12 @@ void ConfigOptionModel::loadSchemaFromKeys(const char *const keys[])
 
     // Mode from upstream (对齐上游 ConfigOptionMode: 0=Simple, 1=Advanced, 2=Develop)
     entry.mode = static_cast<int>(opt->mode);
+
+    // Nullable: accepts nil = inherit from parent preset (upstream ConfigOptionDef::nullable)
+    entry.nullable = opt->nullable;
+
+    // IsVector: multi-value per-extruder (upstream coVectorType = 0x4000 bit)
+    entry.isVector = ((opt->type & Slic3r::coVectorType) != 0);
 
     m_options.append(entry);
     m_defaultValues.insert(entry.key, entry.value);

@@ -25,6 +25,8 @@ struct ConfigOption
   QString tooltip{};  // 帮助文案（对齐上游 ConfigOptionDef::tooltip）
   QString sidetext{}; // 输入框右侧单位文本（对齐上游 ConfigOptionDef::sidetext）
   int mode = 2;       // 0=comSimple, 1=comAdvanced, 2=comDevelop (对齐上游 ConfigOptionMode)
+  bool nullable = false;  // accepts nil value = inherit from parent preset (upstream ConfigOptionDef::nullable)
+  bool isVector = false;  // multi-value per-extruder (upstream coFloats/coInts/coBools/coEnums/coPercents/coStrings where type has coVectorType=0x4000 bit set)
 
   // Constructor for 10-field aggregate init (key, label, type, value, min, max, step, enumLabels, category, group)
   ConfigOption(QString k, QString l, QString t, QVariant v, double mn, double mx, double s,
@@ -73,7 +75,10 @@ public:
     ReadonlyRole,
     DirtyRole,
     TooltipRole,
-    ModeRole
+    ModeRole,
+    NullableRole,
+    IsVectorRole,
+    SidetextRole
   };
   Q_ENUM(Roles)
 
@@ -109,6 +114,16 @@ public:
   Q_INVOKABLE int optMode(int i) const;
   /// 返回选项是否被修改（与默认值不同）
   Q_INVOKABLE bool optIsDirty(int i) const;
+  /// Returns whether this option accepts nil value = inherit from parent preset
+  Q_INVOKABLE bool optNullable(int i) const;
+  /// Returns whether this option is multi-value per-extruder (vector type)
+  Q_INVOKABLE bool optIsVector(int i) const;
+  /// Returns the sidetext (unit label) for this option from upstream metadata
+  Q_INVOKABLE QString optSidetext(int i) const;
+  /// Returns unique sorted group names currently present in the model
+  Q_INVOKABLE QStringList groupNames() const;
+  /// Returns the count of dirty keys whose option group matches the given group
+  Q_INVOKABLE int dirtyCountForGroup(const QString &group) const;
   /// 重置单个选项到默认值
   Q_INVOKABLE void resetOption(int row);
   /// 返回脏选项数量
