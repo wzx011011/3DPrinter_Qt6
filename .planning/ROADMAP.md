@@ -203,6 +203,25 @@ Plans:
 3. Edits are model-driven and update dirty, validation, and sidebar state.
 4. Save/reset/unsaved-change actions follow upstream-compatible behavior.
 
+**Plans:** 4/4 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 56-01-PLAN.md -- Wave 0 foundation: ConfigOptionModel 7 typed kinds (nullable/isVector/percent/sidetext) + CxSpinBox suffix + RED test scaffolds for SETTINGS-01..07
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 56-02-PLAN.md -- Wave 2 C++ backend: static page/group tables per tier, ConfigViewModel per-tier/per-group ops, BackendContext.openSettings active forwarder; SETTINGS-02/04/05/06 ViewModelSmokeTests GREEN
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 56-03-PLAN.md -- Wave 3 QML dialogs: OptionRow (typed dispatch, TextInput+DoubleValidator for float), GroupNavSidebar, parameterized SettingsDialog shell, main.qml settingsRequested wiring, QmlUiAuditTests GREEN
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 56-04-PLAN.md -- Wave 4 integration + verification: SETTINGS-07 E2E (option edit -> slice invalidation, dirty overrides persist via 3MF scoped-config), flip remaining Wave 0 scaffolds GREEN, finalize 56-VALIDATION.md
+
 ### Phase 57: Deprecated UI Removal and Architecture Cleanup
 
 **Goal:** Remove replaced/off-design UI code and enforce clean architecture boundaries after restoration work.
