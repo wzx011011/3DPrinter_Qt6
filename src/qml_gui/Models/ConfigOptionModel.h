@@ -87,6 +87,7 @@ public:
   int rowCount(const QModelIndex &parent = {}) const override;
   int dataVersion() const { return m_dataVersion; }
   QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
+  bool setData(const QModelIndex &index, const QVariant &value, int role = Qt::EditRole) override;
   QHash<int, QByteArray> roleNames() const override;
 
   // Safe individual accessors to avoid QVariantList exposure issues

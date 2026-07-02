@@ -3149,9 +3149,56 @@ void ViewModelSmokeTests::testSettingsDialogOpenFromSidebar()
 
 void ViewModelSmokeTests::testTabsAndGroupNavPerTier()
 {
+  // SETTINGS-02: page/group navigation per tier, derived from upstream Tab.cpp
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56GroupNav"));
-  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  // Printer tier: page names from TabPrinter::build_fff
+  auto *machineOpts = qobject_cast<ConfigOptionModel *>(config.machineOptions());
+  QVERIFY(machineOpts);
+  QVERIFY2(machineOpts->rowCount() > 0, "Machine options model is empty");
+  QStringList printerPages = machineOpts->pageNames();
+  QVERIFY2(printerPages.contains(QStringLiteral("Basic information")),
+           "Printer pageNames() must contain 'Basic information' (TabPrinter)");
+  QVERIFY2(printerPages.contains(QStringLiteral("Notes")),
+           "Printer pageNames() must contain 'Notes' (TabPrinter)");
+  QStringList printerGroups = machineOpts->groupNames();
+  QVERIFY2(printerGroups.contains(QStringLiteral("Printable space")),
+           "Printer groupNames() must contain 'Printable space' (TabPrinter)");
+  QVERIFY2(printerGroups.contains(QStringLiteral("Extruder Clearance")) ||
+           printerGroups.contains(QStringLiteral("Retraction")),
+           "Printer groupNames() must contain at least one extruder clearance/retraction group");
+
+  // Filament tier: page names from TabFilament::build
+  auto *filamentOpts = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
+  QVERIFY(filamentOpts);
+  QVERIFY2(filamentOpts->rowCount() > 0, "Filament options model is empty");
+  QStringList filamentPages = filamentOpts->pageNames();
+  QVERIFY2(filamentPages.contains(QStringLiteral("Filament")),
+           "Filament pageNames() must contain 'Filament' (TabFilament)");
+  QVERIFY2(filamentPages.contains(QStringLiteral("Cooling")),
+           "Filament pageNames() must contain 'Cooling' (TabFilament)");
+  QStringList filamentGroups = filamentOpts->groupNames();
+  QVERIFY2(filamentGroups.contains(QStringLiteral("Print temperature")),
+           "Filament groupNames() must contain 'Print temperature' (TabFilament)");
+
+  // Print tier: page names from TabPrint::build
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  QVERIFY2(printOpts->rowCount() > 0, "Print options model is empty");
+  QStringList printPages = printOpts->pageNames();
+  QVERIFY2(printPages.contains(QStringLiteral("Quality")),
+           "Print pageNames() must contain 'Quality' (TabPrint)");
+  QVERIFY2(printPages.contains(QStringLiteral("Speed")),
+           "Print pageNames() must contain 'Speed' (TabPrint)");
+  QStringList printGroups = printOpts->groupNames();
+  QVERIFY2(printGroups.contains(QStringLiteral("Layer height")),
+           "Print groupNames() must contain 'Layer height' (TabPrint)");
+  QVERIFY2(printGroups.contains(QStringLiteral("Infill")),
+           "Print groupNames() must contain 'Infill' (TabPrint)");
 }
 
 void ViewModelSmokeTests::testConfigOptionModelSevenTypes()

@@ -239,6 +239,26 @@ QVariant ConfigOptionModel::data(const QModelIndex &index, int role) const
   }
 }
 
+bool ConfigOptionModel::setData(const QModelIndex &index, const QVariant &value, int role)
+{
+  if (!index.isValid() || index.row() >= m_options.size())
+    return false;
+  auto &o = m_options[index.row()];
+  switch (role)
+  {
+  case PageRole:
+    o.page = value.toString();
+    emit dataChanged(index, index, {PageRole});
+    return true;
+  case GroupRole:
+    o.group = value.toString();
+    emit dataChanged(index, index, {GroupRole});
+    return true;
+  default:
+    return false;
+  }
+}
+
 QHash<int, QByteArray> ConfigOptionModel::roleNames() const
 {
   return {
@@ -740,11 +760,420 @@ namespace
       return {};
     }
   }
-}
 
-// Keys we want to expose in the UI (print-related, user-facing)
-// 对齐上游 print_config_def + Creality vendor process preset keys
-static const char *kDesiredKeys[] = {
+  // ── Static page-to-group mapping tables ────────────────────────────
+  // Upstream Tab.cpp:2311-2788 (TabPrint::build), 3892-4216 (TabFilament::build),
+  // 4438-4900 (TabPrinter::build_fff). Each entry maps option_key -> (page, group).
+  // These are derived from upstream new_optgroup / append_single_option_line calls.
+  // Options not in the table will appear under an "Other" bucket in the dialog.
+
+  // Upstream: Tab.cpp:4438-4900 (TabPrinter::build_fff)
+  static const QHash<QString, QPair<QString, QString>> &kPrinterPageGroupMap()
+  {
+    static const QHash<QString, QPair<QString, QString>> m = {
+      // Page: "Basic information" - Groups: Printable space, Advanced, Cooling Fan, Extruder Clearance, Adaptive bed mesh, Accessory
+      {QStringLiteral("printable_area"),        {QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
+      {QStringLiteral("printable_height"),      {QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
+      {QStringLiteral("bed_exclude_area"),       {QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
+      {QStringLiteral("z_offset"),               {QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
+      {QStringLiteral("preferred_orientation"),  {QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
+      {QStringLiteral("nozzle_volume"),          {QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
+      {QStringLiteral("best_object_pos"),        {QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
+      {QStringLiteral("support_multi_bed_types"),{QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
+      {QStringLiteral("printer_structure"),      {QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
+      {QStringLiteral("gcode_flavor"),           {QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
+      {QStringLiteral("use_relative_e_distances"),{QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
+      {QStringLiteral("use_firmware_retraction"),{QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
+      {QStringLiteral("machine_load_filament_time"),{QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
+      {QStringLiteral("machine_unload_filament_time"),{QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
+      {QStringLiteral("nozzle_type"),            {QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
+      {QStringLiteral("nozzle_hrc"),             {QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
+      {QStringLiteral("disable_m73"),            {QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
+      {QStringLiteral("thumbnails"),             {QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
+      {QStringLiteral("time_cost"),              {QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
+      {QStringLiteral("auxiliary_fan"),           {QStringLiteral("Basic information"), QStringLiteral("Cooling Fan")}},
+      {QStringLiteral("support_chamber_temp_control"),{QStringLiteral("Basic information"), QStringLiteral("Cooling Fan")}},
+      {QStringLiteral("support_air_filtration"),{QStringLiteral("Basic information"), QStringLiteral("Cooling Fan")}},
+      // Page: "Machine G-code" - Groups: File header G-code, Machine start/end G-code, etc.
+      {QStringLiteral("machine_start_gcode"),     {QStringLiteral("Machine G-code"), QStringLiteral("Machine start G-code")}},
+      {QStringLiteral("machine_end_gcode"),      {QStringLiteral("Machine G-code"), QStringLiteral("Machine end G-code")}},
+      {QStringLiteral("before_layer_change_gcode"),{QStringLiteral("Machine G-code"), QStringLiteral("Before layer change G-code")}},
+      {QStringLiteral("layer_change_gcode"),     {QStringLiteral("Machine G-code"), QStringLiteral("Layer change G-code")}},
+      {QStringLiteral("time_lapse_gcode"),       {QStringLiteral("Machine G-code"), QStringLiteral("Timelapse G-code")}},
+      {QStringLiteral("change_filament_gcode"),  {QStringLiteral("Machine G-code"), QStringLiteral("Change filament G-code")}},
+      {QStringLiteral("change_extrusion_role_gcode"),{QStringLiteral("Machine G-code"), QStringLiteral("Change extrusion role G-code")}},
+      {QStringLiteral("machine_pause_gcode"),    {QStringLiteral("Machine G-code"), QStringLiteral("Pause G-code")}},
+      {QStringLiteral("template_custom_gcode"),  {QStringLiteral("Machine G-code"), QStringLiteral("Template Custom G-code")}},
+      {QStringLiteral("printing_by_object_gcode"),{QStringLiteral("Machine G-code"), QStringLiteral("Printing by object G-code")}},
+      // Page: "Notes" - Groups: Notes
+      {QStringLiteral("printer_notes"),          {QStringLiteral("Notes"), QStringLiteral("Notes")}},
+      // Page: "Motion ability" - Groups: Advanced, Resonance Compensation, Speed limitation, Acceleration limitation, Jerk limitation
+      {QStringLiteral("emit_machine_limits_to_gcode"),{QStringLiteral("Motion ability"), QStringLiteral("Advanced")}},
+      {QStringLiteral("machine_max_speed_x"),    {QStringLiteral("Motion ability"), QStringLiteral("Speed limitation")}},
+      {QStringLiteral("machine_max_speed_y"),    {QStringLiteral("Motion ability"), QStringLiteral("Speed limitation")}},
+      {QStringLiteral("machine_max_speed_z"),    {QStringLiteral("Motion ability"), QStringLiteral("Speed limitation")}},
+      {QStringLiteral("machine_max_speed_e"),    {QStringLiteral("Motion ability"), QStringLiteral("Speed limitation")}},
+      {QStringLiteral("machine_max_acceleration_x"),{QStringLiteral("Motion ability"), QStringLiteral("Acceleration limitation")}},
+      {QStringLiteral("machine_max_acceleration_y"),{QStringLiteral("Motion ability"), QStringLiteral("Acceleration limitation")}},
+      {QStringLiteral("machine_max_acceleration_z"),{QStringLiteral("Motion ability"), QStringLiteral("Acceleration limitation")}},
+      {QStringLiteral("machine_max_acceleration_e"),{QStringLiteral("Motion ability"), QStringLiteral("Acceleration limitation")}},
+      {QStringLiteral("machine_max_acceleration_extruding"),{QStringLiteral("Motion ability"), QStringLiteral("Acceleration limitation")}},
+      {QStringLiteral("machine_max_acceleration_retracting"),{QStringLiteral("Motion ability"), QStringLiteral("Acceleration limitation")}},
+      {QStringLiteral("machine_max_acceleration_travel"),{QStringLiteral("Motion ability"), QStringLiteral("Acceleration limitation")}},
+      {QStringLiteral("machine_max_jerk_x"),     {QStringLiteral("Motion ability"), QStringLiteral("Jerk limitation")}},
+      {QStringLiteral("machine_max_jerk_y"),     {QStringLiteral("Motion ability"), QStringLiteral("Jerk limitation")}},
+      {QStringLiteral("machine_max_jerk_z"),     {QStringLiteral("Motion ability"), QStringLiteral("Jerk limitation")}},
+      {QStringLiteral("machine_max_jerk_e"),     {QStringLiteral("Motion ability"), QStringLiteral("Jerk limitation")}},
+      // Extruder pages - Groups: Size, Retraction
+      {QStringLiteral("nozzle_diameter"),         {QStringLiteral("Motion ability"), QStringLiteral("Size")}},
+      {QStringLiteral("min_layer_height"),       {QStringLiteral("Motion ability"), QStringLiteral("Size")}},
+      {QStringLiteral("max_layer_height"),       {QStringLiteral("Motion ability"), QStringLiteral("Size")}},
+      {QStringLiteral("extruder_offset"),        {QStringLiteral("Motion ability"), QStringLiteral("Size")}},
+      {QStringLiteral("retraction_length"),      {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
+      {QStringLiteral("retract_restart_extra"),  {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
+      {QStringLiteral("z_hop"),                  {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
+      {QStringLiteral("z_hop_types"),            {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
+      {QStringLiteral("retraction_speed"),       {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
+      {QStringLiteral("deretraction_speed"),     {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
+      {QStringLiteral("retraction_minimum_travel"),{QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
+      {QStringLiteral("retract_when_changing_layer"),{QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
+      {QStringLiteral("wipe"),                   {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
+      {QStringLiteral("wipe_distance"),          {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
+      {QStringLiteral("retract_before_wipe"),     {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
+      {QStringLiteral("retract_length_toolchange"),{QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
+      {QStringLiteral("retract_restart_extra_toolchange"),{QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
+      {QStringLiteral("long_retractions_when_cut"),{QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
+      // Extruder Clearance (for multi-extruder printers)
+      // These aren't actual option keys but are relevant groups
+    };
+    return m;
+  }
+
+  // Upstream: Tab.cpp:3892-4216 (TabFilament::build)
+  static const QHash<QString, QPair<QString, QString>> &kFilamentPageGroupMap()
+  {
+    static const QHash<QString, QPair<QString, QString>> m = {
+      // Page: "Filament" - Groups: Basic information, Flow ratio and Pressure Advance, etc.
+      {QStringLiteral("filament_type"),           {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
+      {QStringLiteral("filament_vendor"),         {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
+      {QStringLiteral("filament_colour"),         {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
+      {QStringLiteral("filament_density"),        {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
+      {QStringLiteral("filament_cost"),           {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
+      {QStringLiteral("filament_spool_weight"),   {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
+      {QStringLiteral("filament_flow_ratio"),     {QStringLiteral("Filament"), QStringLiteral("Flow ratio and Pressure Advance")}},
+      {QStringLiteral("filament_max_volumetric_speed"),{QStringLiteral("Filament"), QStringLiteral("Volumetric speed limitation")}},
+      {QStringLiteral("filament_min_speed"),      {QStringLiteral("Filament"), QStringLiteral("Volumetric speed limitation")}},
+      // Temperature groups
+      {QStringLiteral("nozzle_temperature"),      {QStringLiteral("Filament"), QStringLiteral("Print temperature")}},
+      {QStringLiteral("nozzle_temperature_initial_layer"),{QStringLiteral("Filament"), QStringLiteral("Print temperature")}},
+      {QStringLiteral("nozzle_temperature_range"),{QStringLiteral("Filament"), QStringLiteral("Print temperature")}},
+      {QStringLiteral("hot_plate_temp"),          {QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
+      {QStringLiteral("hot_plate_temp_initial_layer"),{QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
+      {QStringLiteral("cool_plate_temp"),         {QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
+      {QStringLiteral("chamber_temperature"),     {QStringLiteral("Filament"), QStringLiteral("Print chamber temperature")}},
+      // Page: "Cooling"
+      {QStringLiteral("fan_cooling_layer_time"),   {QStringLiteral("Cooling"), QStringLiteral("Cooling for specific layer")}},
+      {QStringLiteral("slow_down_min_speed"),     {QStringLiteral("Cooling"), QStringLiteral("Cooling for specific layer")}},
+      {QStringLiteral("fan_min_speed"),           {QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
+      {QStringLiteral("fan_max_speed"),           {QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
+      {QStringLiteral("default_fan_speed"),      {QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
+      {QStringLiteral("overhang_fan_speed"),     {QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
+      {QStringLiteral("close_fan_the_first_x_layers"),{QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
+      // Retraction
+      {QStringLiteral("filament_retraction_length"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
+      {QStringLiteral("filament_retraction_speed"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
+      {QStringLiteral("filament_deretraction_speed"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
+      {QStringLiteral("filament_z_hop"),          {QStringLiteral("Filament"), QStringLiteral("Retraction")}},
+      {QStringLiteral("filament_retract_restart_extra"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
+      {QStringLiteral("filament_retract_length_toolchange"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
+      {QStringLiteral("filament_retract_restart_extra_toolchange"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
+      {QStringLiteral("filament_retract_lift_above"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
+      {QStringLiteral("filament_retract_lift_below"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
+      // Page: "Advanced"
+      {QStringLiteral("filament_start_gcode"),    {QStringLiteral("Advanced"), QStringLiteral("Filament start G-code")}},
+      {QStringLiteral("filament_end_gcode"),      {QStringLiteral("Advanced"), QStringLiteral("Filament end G-code")}},
+      {QStringLiteral("filament_change_gcode"),   {QStringLiteral("Advanced"), QStringLiteral("Change extrusion role G-code")}},
+      // Page: "Notes"
+      {QStringLiteral("filament_notes"),          {QStringLiteral("Notes"), QStringLiteral("Notes")}},
+    };
+    return m;
+  }
+
+  // Upstream: Tab.cpp:2311-2788 (TabPrint::build)
+  static const QHash<QString, QPair<QString, QString>> &kPrintPageGroupMap()
+  {
+    static const QHash<QString, QPair<QString, QString>> m = {
+      // Page: "Quality" - Groups: Layer height, Line width, Seam, Precision, Ironing, etc.
+      {QStringLiteral("layer_height"),           {QStringLiteral("Quality"), QStringLiteral("Layer height")}},
+      {QStringLiteral("initial_layer_print_height"),{QStringLiteral("Quality"), QStringLiteral("Layer height")}},
+      {QStringLiteral("min_bead_width"),         {QStringLiteral("Quality"), QStringLiteral("Layer height")}},
+      {QStringLiteral("min_feature_size"),       {QStringLiteral("Quality"), QStringLiteral("Layer height")}},
+      {QStringLiteral("line_width"),             {QStringLiteral("Quality"), QStringLiteral("Line width")}},
+      {QStringLiteral("initial_layer_line_width"),{QStringLiteral("Quality"), QStringLiteral("Line width")}},
+      {QStringLiteral("initial_layer_min_bead_width"),{QStringLiteral("Quality"), QStringLiteral("Line width")}},
+      {QStringLiteral("outer_wall_line_width"), {QStringLiteral("Quality"), QStringLiteral("Line width")}},
+      {QStringLiteral("inner_wall_line_width"),  {QStringLiteral("Quality"), QStringLiteral("Line width")}},
+      {QStringLiteral("top_surface_line_width"),{QStringLiteral("Quality"), QStringLiteral("Line width")}},
+      {QStringLiteral("sparse_infill_line_width"),{QStringLiteral("Quality"), QStringLiteral("Line width")}},
+      {QStringLiteral("internal_solid_infill_line_width"),{QStringLiteral("Quality"), QStringLiteral("Line width")}},
+      {QStringLiteral("support_line_width"),     {QStringLiteral("Quality"), QStringLiteral("Line width")}},
+      {QStringLiteral("elefant_foot_compensation"),{QStringLiteral("Quality"), QStringLiteral("Precision")}},
+      {QStringLiteral("elefant_foot_compensation_layers"),{QStringLiteral("Quality"), QStringLiteral("Precision")}},
+      {QStringLiteral("xy_contour_compensation"),{QStringLiteral("Quality"), QStringLiteral("Precision")}},
+      {QStringLiteral("xy_hole_compensation"),   {QStringLiteral("Quality"), QStringLiteral("Precision")}},
+      {QStringLiteral("make_overhang_printable"),{QStringLiteral("Quality"), QStringLiteral("Overhangs")}},
+      {QStringLiteral("make_overhang_printable_angle"),{QStringLiteral("Quality"), QStringLiteral("Overhangs")}},
+      {QStringLiteral("make_overhang_printable_hole_size"),{QStringLiteral("Quality"), QStringLiteral("Overhangs")}},
+      {QStringLiteral("detect_overhang_wall"),   {QStringLiteral("Quality"), QStringLiteral("Overhangs")}},
+      // Page: "Strength" - Groups: Walls, Top/bottom shells, Infill, Advanced
+      {QStringLiteral("wall_loops"),             {QStringLiteral("Strength"), QStringLiteral("Walls")}},
+      {QStringLiteral("top_shell_layers"),       {QStringLiteral("Strength"), QStringLiteral("Top/bottom shells")}},
+      {QStringLiteral("bottom_shell_layers"),    {QStringLiteral("Strength"), QStringLiteral("Top/bottom shells")}},
+      {QStringLiteral("top_shell_thickness"),    {QStringLiteral("Strength"), QStringLiteral("Top/bottom shells")}},
+      {QStringLiteral("bottom_shell_thickness"), {QStringLiteral("Strength"), QStringLiteral("Top/bottom shells")}},
+      {QStringLiteral("wall_sequence"),          {QStringLiteral("Strength"), QStringLiteral("Walls")}},
+      {QStringLiteral("wall_generator"),         {QStringLiteral("Strength"), QStringLiteral("Walls")}},
+      {QStringLiteral("wall_transition_length"), {QStringLiteral("Strength"), QStringLiteral("Walls")}},
+      {QStringLiteral("wall_transition_angle"),  {QStringLiteral("Strength"), QStringLiteral("Walls")}},
+      {QStringLiteral("wall_transition_filter_deviation"),{QStringLiteral("Strength"), QStringLiteral("Walls")}},
+      {QStringLiteral("wall_distribution_count"),{QStringLiteral("Strength"), QStringLiteral("Walls")}},
+      {QStringLiteral("wall_direction"),         {QStringLiteral("Strength"), QStringLiteral("Walls")}},
+      {QStringLiteral("wall_infill_order"),      {QStringLiteral("Strength"), QStringLiteral("Walls")}},
+      {QStringLiteral("infill_wall_overlap"),    {QStringLiteral("Strength"), QStringLiteral("Walls")}},
+      {QStringLiteral("top_bottom_infill_wall_overlap"),{QStringLiteral("Strength"), QStringLiteral("Walls")}},
+      {QStringLiteral("sparse_infill_density"),  {QStringLiteral("Strength"), QStringLiteral("Infill")}},
+      {QStringLiteral("sparse_infill_pattern"),  {QStringLiteral("Strength"), QStringLiteral("Infill")}},
+      {QStringLiteral("top_surface_pattern"),    {QStringLiteral("Strength"), QStringLiteral("Infill")}},
+      {QStringLiteral("bottom_surface_pattern"), {QStringLiteral("Strength"), QStringLiteral("Infill")}},
+      {QStringLiteral("internal_solid_infill_pattern"),{QStringLiteral("Strength"), QStringLiteral("Infill")}},
+      {QStringLiteral("infill_direction"),        {QStringLiteral("Strength"), QStringLiteral("Infill")}},
+      {QStringLiteral("solid_infill_direction"),  {QStringLiteral("Strength"), QStringLiteral("Infill")}},
+      {QStringLiteral("infill_anchor"),          {QStringLiteral("Strength"), QStringLiteral("Infill")}},
+      {QStringLiteral("infill_anchor_max"),      {QStringLiteral("Strength"), QStringLiteral("Infill")}},
+      {QStringLiteral("infill_combination"),     {QStringLiteral("Strength"), QStringLiteral("Infill")}},
+      {QStringLiteral("minimum_sparse_infill_area"),{QStringLiteral("Strength"), QStringLiteral("Infill")}},
+      {QStringLiteral("ensure_vertical_shell_thickness"),{QStringLiteral("Strength"), QStringLiteral("Advanced")}},
+      {QStringLiteral("extra_perimeters_on_overhangs"),{QStringLiteral("Strength"), QStringLiteral("Advanced")}},
+      {QStringLiteral("detect_thin_wall"),       {QStringLiteral("Strength"), QStringLiteral("Advanced")}},
+      {QStringLiteral("detect_narrow_internal_solid_infill"),{QStringLiteral("Strength"), QStringLiteral("Advanced")}},
+      {QStringLiteral("staggered_inner_seams"),  {QStringLiteral("Strength"), QStringLiteral("Advanced")}},
+      {QStringLiteral("is_infill_first"),         {QStringLiteral("Strength"), QStringLiteral("Advanced")}},
+      // Page: "Speed" - Groups: First layer speed, Other layers speed, Overhang speed, etc.
+      {QStringLiteral("initial_layer_speed"),     {QStringLiteral("Speed"), QStringLiteral("First layer speed")}},
+      {QStringLiteral("initial_layer_infill_speed"),{QStringLiteral("Speed"), QStringLiteral("First layer speed")}},
+      {QStringLiteral("initial_layer_acceleration"),{QStringLiteral("Speed"), QStringLiteral("First layer speed")}},
+      {QStringLiteral("outer_wall_speed"),        {QStringLiteral("Speed"), QStringLiteral("Other layers speed")}},
+      {QStringLiteral("inner_wall_speed"),        {QStringLiteral("Speed"), QStringLiteral("Other layers speed")}},
+      {QStringLiteral("sparse_infill_speed"),     {QStringLiteral("Speed"), QStringLiteral("Other layers speed")}},
+      {QStringLiteral("top_surface_speed"),       {QStringLiteral("Speed"), QStringLiteral("Other layers speed")}},
+      {QStringLiteral("support_speed"),           {QStringLiteral("Speed"), QStringLiteral("Other layers speed")}},
+      {QStringLiteral("support_interface_speed"), {QStringLiteral("Speed"), QStringLiteral("Other layers speed")}},
+      {QStringLiteral("travel_speed"),            {QStringLiteral("Speed"), QStringLiteral("Travel speed")}},
+      {QStringLiteral("initial_layer_travel_speed"),{QStringLiteral("Speed"), QStringLiteral("Travel speed")}},
+      {QStringLiteral("travel_speed_z"),          {QStringLiteral("Speed"), QStringLiteral("Travel speed")}},
+      {QStringLiteral("max_print_speed"),         {QStringLiteral("Speed"), QStringLiteral("Speed limits")}},
+      {QStringLiteral("max_travel_speed"),        {QStringLiteral("Speed"), QStringLiteral("Speed limits")}},
+      {QStringLiteral("overhang_1_4_speed"),      {QStringLiteral("Speed"), QStringLiteral("Overhang speed")}},
+      {QStringLiteral("overhang_2_4_speed"),      {QStringLiteral("Speed"), QStringLiteral("Overhang speed")}},
+      {QStringLiteral("overhang_3_4_speed"),      {QStringLiteral("Speed"), QStringLiteral("Overhang speed")}},
+      {QStringLiteral("overhang_4_4_speed"),      {QStringLiteral("Speed"), QStringLiteral("Overhang speed")}},
+      {QStringLiteral("enable_overhang_speed"),   {QStringLiteral("Speed"), QStringLiteral("Overhang speed")}},
+      {QStringLiteral("small_perimeter_speed"),   {QStringLiteral("Speed"), QStringLiteral("Other layers speed")}},
+      {QStringLiteral("gap_infill_speed"),       {QStringLiteral("Speed"), QStringLiteral("Other layers speed")}},
+      {QStringLiteral("internal_solid_infill_speed"),{QStringLiteral("Speed"), QStringLiteral("Other layers speed")}},
+      {QStringLiteral("internal_bridge_speed"),    {QStringLiteral("Speed"), QStringLiteral("Other layers speed")}},
+      {QStringLiteral("bridge_speed"),            {QStringLiteral("Speed"), QStringLiteral("Other layers speed")}},
+      // Acceleration
+      {QStringLiteral("outer_wall_acceleration"), {QStringLiteral("Speed"), QStringLiteral("Acceleration")}},
+      {QStringLiteral("inner_wall_acceleration"), {QStringLiteral("Speed"), QStringLiteral("Acceleration")}},
+      {QStringLiteral("travel_acceleration"),     {QStringLiteral("Speed"), QStringLiteral("Acceleration")}},
+      {QStringLiteral("top_surface_acceleration"),{QStringLiteral("Speed"), QStringLiteral("Acceleration")}},
+      {QStringLiteral("bridge_acceleration"),    {QStringLiteral("Speed"), QStringLiteral("Acceleration")}},
+      {QStringLiteral("sparse_infill_acceleration"),{QStringLiteral("Speed"), QStringLiteral("Acceleration")}},
+      {QStringLiteral("default_acceleration"),    {QStringLiteral("Speed"), QStringLiteral("Acceleration")}},
+      {QStringLiteral("internal_solid_infill_acceleration"),{QStringLiteral("Speed"), QStringLiteral("Acceleration")}},
+      {QStringLiteral("accel_to_decel_enable"),   {QStringLiteral("Speed"), QStringLiteral("Acceleration")}},
+      {QStringLiteral("accel_to_decel_factor"),   {QStringLiteral("Speed"), QStringLiteral("Acceleration")}},
+      // Jerk
+      {QStringLiteral("default_jerk"),            {QStringLiteral("Speed"), QStringLiteral("Jerk(XY)")}},
+      {QStringLiteral("outer_wall_jerk"),        {QStringLiteral("Speed"), QStringLiteral("Jerk(XY)")}},
+      {QStringLiteral("inner_wall_jerk"),        {QStringLiteral("Speed"), QStringLiteral("Jerk(XY)")}},
+      {QStringLiteral("infill_jerk"),            {QStringLiteral("Speed"), QStringLiteral("Jerk(XY)")}},
+      {QStringLiteral("travel_jerk"),            {QStringLiteral("Speed"), QStringLiteral("Jerk(XY)")}},
+      {QStringLiteral("initial_layer_jerk"),     {QStringLiteral("Speed"), QStringLiteral("Jerk(XY)")}},
+      {QStringLiteral("top_surface_jerk"),       {QStringLiteral("Speed"), QStringLiteral("Jerk(XY)")}},
+      // Page: "Support" - Groups: Support, Raft, Support filament, Advanced, Tree supports
+      {QStringLiteral("enable_support"),          {QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_density"),         {QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_type"),            {QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_on_build_plate_only"),{QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_angle"),           {QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_remove_small_overhang"),{QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_top_z_distance"),  {QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_bottom_z_distance"),{QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_threshold_angle"), {QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_xy_overrides_z"),  {QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_critical_regions_only"),{QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("independent_support_layer_height"),{QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("minimum_support_area"),   {QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_object_xy_distance"),{QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_interface_top_layers"),{QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_interface_bottom_layers"),{QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_interface_spacing"),{QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_bottom_interface_spacing"),{QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_expansion"),       {QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_style"),           {QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_base_pattern"),   {QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_base_pattern_spacing"),{QStringLiteral("Support"), QStringLiteral("Support")}},
+      {QStringLiteral("support_filament"),        {QStringLiteral("Support"), QStringLiteral("Support filament")}},
+      {QStringLiteral("support_interface_filament"),{QStringLiteral("Support"), QStringLiteral("Support filament")}},
+      {QStringLiteral("support_line_width"),     {QStringLiteral("Support"), QStringLiteral("Support")}},
+      // Tree supports
+      {QStringLiteral("tree_support_adaptive_layer_height"),{QStringLiteral("Support"), QStringLiteral("Tree supports")}},
+      {QStringLiteral("tree_support_angle_slow"),{QStringLiteral("Support"), QStringLiteral("Tree supports")}},
+      {QStringLiteral("tree_support_auto_brim"),  {QStringLiteral("Support"), QStringLiteral("Tree supports")}},
+      {QStringLiteral("tree_support_branch_angle"),{QStringLiteral("Support"), QStringLiteral("Tree supports")}},
+      {QStringLiteral("tree_support_branch_diameter"),{QStringLiteral("Support"), QStringLiteral("Tree supports")}},
+      {QStringLiteral("tree_support_branch_distance"),{QStringLiteral("Support"), QStringLiteral("Tree supports")}},
+      {QStringLiteral("tree_support_brim_width"),{QStringLiteral("Support"), QStringLiteral("Tree supports")}},
+      {QStringLiteral("tree_support_tip_diameter"),{QStringLiteral("Support"), QStringLiteral("Tree supports")}},
+      {QStringLiteral("tree_support_top_rate"),   {QStringLiteral("Support"), QStringLiteral("Tree supports")}},
+      {QStringLiteral("tree_support_wall_count"), {QStringLiteral("Support"), QStringLiteral("Tree supports")}},
+      // Page: "Others" - Groups: Skirt, Brim, Special mode, Fuzzy Skin, G-code output, etc.
+      {QStringLiteral("skirt_loops"),             {QStringLiteral("Others"), QStringLiteral("Skirt")}},
+      {QStringLiteral("skirt_distance"),          {QStringLiteral("Others"), QStringLiteral("Skirt")}},
+      {QStringLiteral("skirt_height"),            {QStringLiteral("Others"), QStringLiteral("Skirt")}},
+      {QStringLiteral("skirt_speed"),            {QStringLiteral("Others"), QStringLiteral("Skirt")}},
+      {QStringLiteral("brim_enable"),             {QStringLiteral("Others"), QStringLiteral("Brim")}},
+      {QStringLiteral("brim_width"),              {QStringLiteral("Others"), QStringLiteral("Brim")}},
+      {QStringLiteral("brim_type"),               {QStringLiteral("Others"), QStringLiteral("Brim")}},
+      {QStringLiteral("brim_object_gap"),         {QStringLiteral("Others"), QStringLiteral("Brim")}},
+      {QStringLiteral("brim_ears_detection_length"),{QStringLiteral("Others"), QStringLiteral("Brim")}},
+      {QStringLiteral("brim_ears_max_angle"),    {QStringLiteral("Others"), QStringLiteral("Brim")}},
+      {QStringLiteral("adhesion_type"),           {QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      {QStringLiteral("raft_layers"),             {QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      {QStringLiteral("raft_contact_distance"),   {QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      {QStringLiteral("raft_expansion"),          {QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      {QStringLiteral("raft_first_layer_density"),{QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      {QStringLiteral("raft_first_layer_expansion"),{QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      {QStringLiteral("draft_shield"),            {QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      {QStringLiteral("ooze_prevention"),         {QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      {QStringLiteral("fuzzy_skin"),              {QStringLiteral("Others"), QStringLiteral("Fuzzy Skin")}},
+      {QStringLiteral("fuzzy_skin_thickness"),    {QStringLiteral("Others"), QStringLiteral("Fuzzy Skin")}},
+      {QStringLiteral("fuzzy_skin_point_distance"),{QStringLiteral("Others"), QStringLiteral("Fuzzy Skin")}},
+      {QStringLiteral("fuzzy_skin_first_layer"),  {QStringLiteral("Others"), QStringLiteral("Fuzzy Skin")}},
+      // Ironing
+      {QStringLiteral("ironing_type"),            {QStringLiteral("Quality"), QStringLiteral("Ironing")}},
+      {QStringLiteral("ironing_speed"),           {QStringLiteral("Quality"), QStringLiteral("Ironing")}},
+      {QStringLiteral("ironing_flow"),            {QStringLiteral("Quality"), QStringLiteral("Ironing")}},
+      {QStringLiteral("ironing_spacing"),         {QStringLiteral("Quality"), QStringLiteral("Ironing")}},
+      {QStringLiteral("ironing_pattern"),         {QStringLiteral("Quality"), QStringLiteral("Ironing")}},
+      {QStringLiteral("ironing_angle"),           {QStringLiteral("Quality"), QStringLiteral("Ironing")}},
+      {QStringLiteral("only_top_surface"),        {QStringLiteral("Quality"), QStringLiteral("Ironing")}},
+      // Seam
+      {QStringLiteral("z_seam_type"),             {QStringLiteral("Quality"), QStringLiteral("Seam")}},
+      {QStringLiteral("z_seam_position"),         {QStringLiteral("Quality"), QStringLiteral("Seam")}},
+      {QStringLiteral("z_seam_corner"),           {QStringLiteral("Quality"), QStringLiteral("Seam")}},
+      {QStringLiteral("seam_gap"),                {QStringLiteral("Quality"), QStringLiteral("Seam")}},
+      {QStringLiteral("seam_slope_type"),         {QStringLiteral("Quality"), QStringLiteral("Seam")}},
+      {QStringLiteral("seam_slope_steps"),       {QStringLiteral("Quality"), QStringLiteral("Seam")}},
+      {QStringLiteral("seam_slope_min_length"),   {QStringLiteral("Quality"), QStringLiteral("Seam")}},
+      {QStringLiteral("seam_slope_entire_loop"),  {QStringLiteral("Quality"), QStringLiteral("Seam")}},
+      {QStringLiteral("seam_slope_inner_walls"),  {QStringLiteral("Quality"), QStringLiteral("Seam")}},
+      {QStringLiteral("seam_slope_conditional"),  {QStringLiteral("Quality"), QStringLiteral("Seam")}},
+      {QStringLiteral("seam_slope_start_height"), {QStringLiteral("Quality"), QStringLiteral("Seam")}},
+      {QStringLiteral("reduce_crossing_wall"),     {QStringLiteral("Quality"), QStringLiteral("Seam")}},
+      {QStringLiteral("staggered_inner_seams"),   {QStringLiteral("Quality"), QStringLiteral("Seam")}},
+      // Bridge
+      {QStringLiteral("bridge_angle"),            {QStringLiteral("Others"), QStringLiteral("Bridge")}},
+      {QStringLiteral("bridge_density"),          {QStringLiteral("Others"), QStringLiteral("Bridge")}},
+      {QStringLiteral("bridge_flow"),             {QStringLiteral("Others"), QStringLiteral("Bridge")}},
+      {QStringLiteral("bridge_no_support"),        {QStringLiteral("Others"), QStringLiteral("Bridge")}},
+      {QStringLiteral("thick_bridges"),           {QStringLiteral("Others"), QStringLiteral("Bridge")}},
+      {QStringLiteral("thick_internal_bridges"),   {QStringLiteral("Others"), QStringLiteral("Bridge")}},
+      {QStringLiteral("internal_bridge_flow"),      {QStringLiteral("Others"), QStringLiteral("Bridge")}},
+      {QStringLiteral("max_bridge_length"),        {QStringLiteral("Others"), QStringLiteral("Bridge")}},
+      {QStringLiteral("dont_filter_internal_bridges"),{QStringLiteral("Others"), QStringLiteral("Bridge")}},
+      // Spiral mode
+      {QStringLiteral("spiral_mode"),             {QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      {QStringLiteral("spiral_mode_smooth"),      {QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      {QStringLiteral("enable_arc_fitting"),      {QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      // Prime tower (Multimaterial page upstream, but we keep it under Others for simple mode)
+      {QStringLiteral("enable_prime_tower"),      {QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      {QStringLiteral("prime_tower_width"),       {QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      {QStringLiteral("prime_volume"),            {QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      {QStringLiteral("prime_tower_brim_width"), {QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      {QStringLiteral("prime_tower_position_type"),{QStringLiteral("Others"), QStringLiteral("Special mode")}},
+      // Output / G-code
+      {QStringLiteral("gcode_comments"),          {QStringLiteral("Others"), QStringLiteral("G-code output")}},
+      {QStringLiteral("gcode_precision_xy"),     {QStringLiteral("Others"), QStringLiteral("G-code output")}},
+      {QStringLiteral("gcode_precision_z"),       {QStringLiteral("Others"), QStringLiteral("G-code output")}},
+      {QStringLiteral("gcode_flavor"),            {QStringLiteral("Others"), QStringLiteral("G-code output")}},
+      {QStringLiteral("filename_format"),         {QStringLiteral("Others"), QStringLiteral("G-code output")}},
+      {QStringLiteral("gcode_add_line_number"),   {QStringLiteral("Others"), QStringLiteral("G-code output")}},
+      {QStringLiteral("gcode_label_objects"),      {QStringLiteral("Others"), QStringLiteral("G-code output")}},
+      {QStringLiteral("exclude_object"),           {QStringLiteral("Others"), QStringLiteral("G-code output")}},
+      // Cooling
+      {QStringLiteral("default_fan_speed"),        {QStringLiteral("Others"), QStringLiteral("Cooling")}},
+      {QStringLiteral("min_fan_speed"),           {QStringLiteral("Others"), QStringLiteral("Cooling")}},
+      {QStringLiteral("max_fan_speed"),           {QStringLiteral("Others"), QStringLiteral("Cooling")}},
+      {QStringLiteral("overhang_fan_speed"),      {QStringLiteral("Others"), QStringLiteral("Cooling")}},
+      {QStringLiteral("slow_down_layer_time"),     {QStringLiteral("Others"), QStringLiteral("Cooling")}},
+      {QStringLiteral("overhang_fan_threshold"),  {QStringLiteral("Others"), QStringLiteral("Cooling")}},
+      {QStringLiteral("overhang_bridge_fan"),      {QStringLiteral("Others"), QStringLiteral("Cooling")}},
+      {QStringLiteral("slow_down_for_layer_cooling"),{QStringLiteral("Others"), QStringLiteral("Cooling")}},
+      {QStringLiteral("slow_down_layers"),       {QStringLiteral("Others"), QStringLiteral("Cooling")}},
+      {QStringLiteral("additional_cooling_fan_speed"),{QStringLiteral("Others"), QStringLiteral("Cooling")}},
+      {QStringLiteral("close_fan_the_first_x_layers"),{QStringLiteral("Others"), QStringLiteral("Cooling")}},
+      // Retraction
+      {QStringLiteral("retract_length"),          {QStringLiteral("Others"), QStringLiteral("Retraction")}},
+      {QStringLiteral("retract_speed"),           {QStringLiteral("Others"), QStringLiteral("Retraction")}},
+      {QStringLiteral("deretraction_speed"),       {QStringLiteral("Others"), QStringLiteral("Retraction")}},
+      {QStringLiteral("retract_before_wipe"),      {QStringLiteral("Others"), QStringLiteral("Retraction")}},
+      {QStringLiteral("retraction_speed"),         {QStringLiteral("Others"), QStringLiteral("Retraction")}},
+      {QStringLiteral("retraction_minimum_travel"),{QStringLiteral("Others"), QStringLiteral("Retraction")}},
+      {QStringLiteral("retract_when_changing_layer"),{QStringLiteral("Others"), QStringLiteral("Retraction")}},
+      {QStringLiteral("z_hop"),                   {QStringLiteral("Others"), QStringLiteral("Retraction")}},
+      {QStringLiteral("wipe_distance"),            {QStringLiteral("Others"), QStringLiteral("Retraction")}},
+      {QStringLiteral("wipe_speed"),              {QStringLiteral("Others"), QStringLiteral("Retraction")}},
+      {QStringLiteral("reduce_infill_retraction"),{QStringLiteral("Others"), QStringLiteral("Retraction")}},
+      {QStringLiteral("retract_length_toolchange"),{QStringLiteral("Others"), QStringLiteral("Retraction")}},
+      {QStringLiteral("wipe_on_loops"),            {QStringLiteral("Others"), QStringLiteral("Retraction")}},
+      {QStringLiteral("wipe_before_external_loop"),{QStringLiteral("Others"), QStringLiteral("Retraction")}},
+      // Other advanced
+      {QStringLiteral("resolution"),              {QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("slice_closing_radius"),    {QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("slicing_mode"),            {QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("print_flow_ratio"),        {QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("top_solid_infill_flow_ratio"),{QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("bottom_solid_infill_flow_ratio"),{QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("small_area_infill_flow_compensation"),{QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("flush_into_infill"),       {QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("flush_into_objects"),      {QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("flush_into_support"),       {QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("print_order"),             {QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("print_sequence"),           {QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("alternate_extra_wall"),      {QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("max_volumetric_extrusion_rate_slope"),{QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("max_volumetric_extrusion_rate_slope_segment_length"),{QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("hole_to_polyhole"),         {QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("hole_to_polyhole_threshold"),{QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("hole_to_polyhole_twisted"),{QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("interface_shells"),        {QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("filter_out_gap_fill"),     {QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("gap_fill_target"),         {QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("standby_temperature_delta"),{QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("slowdown_for_curled_perimeters"),{QStringLiteral("Others"), QStringLiteral("Advanced")}},
+      {QStringLiteral("only_one_wall_top"),       {QStringLiteral("Quality"), QStringLiteral("Advanced")}},
+      {QStringLiteral("only_one_wall_first_layer"),{QStringLiteral("Quality"), QStringLiteral("Advanced")}},
+      {QStringLiteral("precise_outer_wall"),      {QStringLiteral("Quality"), QStringLiteral("Advanced")}},
+    };
+    return m;
+  }
+
+  // Keys we want to expose in the UI (print-related, user-facing)
+  // 对齐上游 print_config_def + Creality vendor process preset keys
+  static const char *kDesiredKeys[] = {
   // Layer
   "layer_height", "initial_layer_print_height", "line_width",
   "initial_layer_line_width", "initial_layer_min_bead_width",
@@ -1006,6 +1435,25 @@ static const char *kFilamentKeys[] = {
   nullptr
 };
 
+} // anonymous namespace
+
+// Assign page/group from the tier-specific mapping table.
+// Called AFTER loadSchemaFromKeys populates m_options but BEFORE endResetModel().
+static void assignPageGroupForTier(ConfigOptionModel *model, const QHash<QString, QPair<QString, QString>> &pageGroupMap)
+{
+  for (int i = 0; i < model->rowCount(); ++i)
+  {
+    const QString key = model->optKey(i);
+    const auto it = pageGroupMap.constFind(key);
+    if (it != pageGroupMap.cend())
+    {
+      QModelIndex idx = model->index(i, 0);
+      model->setData(idx, it.value().first, ConfigOptionModel::PageRole);
+      model->setData(idx, it.value().second, ConfigOptionModel::GroupRole);
+    }
+  }
+}
+
 void ConfigOptionModel::loadSchemaFromKeys(const char *const keys[])
 {
   beginResetModel();
@@ -1075,16 +1523,22 @@ void ConfigOptionModel::loadSchemaFromKeys(const char *const keys[])
 void ConfigOptionModel::loadFromUpstreamSchema()
 {
   loadSchemaFromKeys(kDesiredKeys);
+  // Upstream: Tab.cpp:2311-2788 (TabPrint::build) - assign page/group metadata
+  assignPageGroupForTier(this, kPrintPageGroupMap());
 }
 
 void ConfigOptionModel::loadMachineSchema()
 {
   loadSchemaFromKeys(kMachineKeys);
+  // Upstream: Tab.cpp:4438-4900 (TabPrinter::build_fff) - assign page/group metadata
+  assignPageGroupForTier(this, kPrinterPageGroupMap());
 }
 
 void ConfigOptionModel::loadFilamentSchema()
 {
   loadSchemaFromKeys(kFilamentKeys);
+  // Upstream: Tab.cpp:3892-4216 (TabFilament::build) - assign page/group metadata
+  assignPageGroupForTier(this, kFilamentPageGroupMap());
 }
 
 #endif // HAS_LIBSLIC3R
