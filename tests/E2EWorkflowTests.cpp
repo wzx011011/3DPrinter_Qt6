@@ -1,3 +1,11 @@
+// E2EWorkflowTests — Phase 55-04 additions.
+//
+// AUTOMOC caveat (v3.0 retrospective, see ViewModelSmokeTests CMake comment):
+// single-file QtTest with cpp-internal Q_OBJECT has weak moc dependency
+// tracking. After adding a new private slot here, re-run cmake configure (the
+// canonical verify script does this) or delete
+//   build/E2EWorkflowTests_autogen/timestamp
+// before rebuilding, otherwise the new slot silently does not execute.
 #include <QSignalSpy>
 #include <QDir>
 #include <QDirIterator>
@@ -76,6 +84,16 @@ private slots:
   void test_preview_rebuilds_on_active_result_switch_without_slice_finished();
   void test_cancelled_slice_clears_active_result_and_blocks_preview_export();
   void test_slice_all_stores_outputs_for_printable_unlocked_plates_only();
+  // Phase 55-04 (GCODE-01/05): no-placeholder real-data path, reslice/export/
+  // page-switch/slice-failed/slice-result-cleared/plate-switch-invalid
+  // payload-survival and reset invariants.
+  void previewReceivesRealGcodeAfterLiveSliceNoPlaceholder();
+  void sliceFailedClearsPreviewState();
+  void sliceResultClearedClearsPreviewState();
+  void plateSwitchToInvalidClearsPreviewState();
+  void resliceRebuildsGcodePreviewDataWithDifferentBytes();
+  void exportWhilePreviewVisibleLeavesGcodePreviewDataIntact();
+  void pageSwitchPreparePreviewPreservesGcodePreviewData();
 
 private:
   bool hasLibslic3r() const;
@@ -1306,6 +1324,330 @@ void E2EWorkflowTests::test_slice_all_stores_outputs_for_printable_unlocked_plat
     QFile::remove(plate0Path);
   if (QFileInfo::exists(plate1Path))
     QFile::remove(plate1Path);
+}
+
+// ── Phase 55-04 (GCODE-01/05): no-placeholder real-data path + payload-survival ──
+// Seven methods covering the GCODE-01 no-placeholder RED test (now GREEN) and
+// the GCODE-05 reslice/export/page-switch/slice-failed/slice-result-cleared/
+// plate-switch-invalid invariants. Each seeds a preview via the proven
+// BackendContext live-slice workflow and then drives the specific lifecycle
+// trigger, asserting on gcodePreviewData / layerCount / moveCount.
+
+// Phase 55 (GCODE-01): after a LIVE slice, gcodePreviewData must be a non-empty
+// GCV1 blob with layerCount > 0, moveCount > 0, and NO placeholder/demo/sample
+// marker bytes. This is the central no-placeholder regression guard -- the
+// slice output path is the editor's sliceOutputPath() (a real local file from
+// SliceService::outputPath()), not a committed fixture. Follows the proven
+// test_backend_switches_to_preview_after_slice wiring. HARD QVERIFY2 -- the
+// only QSKIP is a genuine slice-failure escape, never on the assertions.
+void E2EWorkflowTests::previewReceivesRealGcodeAfterLiveSliceNoPlaceholder()
+{
+  BackendContext ctx;
+  auto *editor = qobject_cast<EditorViewModel *>(ctx.editorViewModel());
+  auto *preview = qobject_cast<PreviewViewModel *>(ctx.previewViewModel());
+  QVERIFY(editor);
+  QVERIFY(preview);
+
+  QVERIFY2(editor->loadFile(kStlPath), "import through EditorViewModel should start");
+  QTRY_VERIFY_WITH_TIMEOUT(editor->modelCount() >= 1, 10000);
+  QVERIFY2(editor->canRequestSlice(),
+           qPrintable(QStringLiteral("editor should be slice-ready: %1").arg(editor->sliceActionHint())));
+
+  editor->requestSlice();
+  QTRY_VERIFY_WITH_TIMEOUT(editor->hasSliceResult(), 120000);
+  if (!editor->hasSliceResult())
+    QSKIP("Live slice did not produce a result in this environment");
+
+  // The slice output must come from a real local file, not a committed fixture.
+  const QString liveOutputPath = editor->sliceOutputPath();
+  QVERIFY2(!liveOutputPath.isEmpty(), "live slice must expose a real G-code output path");
+  QVERIFY2(QFileInfo::exists(liveOutputPath),
+           qPrintable(QStringLiteral("live slice G-code should exist: %1").arg(liveOutputPath)));
+
+  QTRY_VERIFY_WITH_TIMEOUT(preview->gcodePreviewData().startsWith("GCV1"), 5000);
+  const QByteArray payload = preview->gcodePreviewData();
+
+  // The four GCODE-01 conditions -- all HARD QVERIFY2.
+  QVERIFY2(payload.size() > 8,
+           "live-slice GCV1 payload must exceed the 8-byte header");
+  QVERIFY2(gcv1SegmentCount(payload) > 0,
+           "live-slice payload must pack a positive GCV1 segment count");
+  QVERIFY2(preview->layerCount() > 0,
+           qPrintable(QStringLiteral("live-slice preview layerCount must be > 0, got %1").arg(preview->layerCount())));
+  QVERIFY2(preview->moveCount() > 0,
+           qPrintable(QStringLiteral("live-slice preview moveCount must be > 0, got %1").arg(preview->moveCount())));
+  QVERIFY2(!payload.contains("demo") && !payload.contains("sample") && !payload.contains("placeholder"),
+           "no placeholder/demo/sample marker bytes in live-slice GCV1 payload");
+
+  if (QFileInfo::exists(liveOutputPath))
+    QFile::remove(liveOutputPath);
+}
+
+// Phase 55 (GCODE-01): a sliceFailed emission must trigger resetPreviewState,
+// clearing gcodePreviewData and zeroing layerCount. Seed a preview via the
+// committed Orca fixture (loadGCodeFromPrevious runs the parse worker), then
+// drive a deterministic sliceFailed: the project has no sliceable source model,
+// so startSlice hits the empty-sourcePath branch and emits sliceFailed
+// synchronously, which PreviewViewModel routes to resetPreviewState.
+void E2EWorkflowTests::sliceFailedClearsPreviewState()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+
+  // Seed a valid preview via the committed Orca fixture so we can observe the
+  // cleared state (avoids a second live slice for the seed). loadGCodeFromPrevious
+  // stores the reuse output under outputPath_ but leaves sourceFilePath() empty.
+  const QString fixturePath = QDir::cleanPath(
+      QStringLiteral(QT_TESTCASE_SOURCEDIR) +
+      QStringLiteral("/tests/fixtures/orca_sample.gcode"));
+  QVERIFY2(QFileInfo::exists(fixturePath), "Orca fixture must be present for the seed");
+  QVERIFY2(slice.loadGCodeFromPrevious(fixturePath),
+           "seeding preview via loadGCodeFromPrevious should accept the Orca fixture");
+  QSignalSpy seedFinished(&slice, &SliceService::sliceFinished);
+  QSignalSpy seedFailed(&slice, &SliceService::sliceFailed);
+  QTRY_VERIFY_WITH_TIMEOUT(seedFinished.count() > 0 || seedFailed.count() > 0, 60000);
+  if (seedFailed.count() > 0)
+    QSKIP("Previous-G-code seed failed in this environment");
+  QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
+  QVERIFY2(!preview.gcodePreviewData().isEmpty(), "seeded preview should hold a GCV1 payload");
+
+  // Trigger a deterministic sliceFailed: no model was loaded into the project,
+  // so sourceFilePath() is empty and startSlice emits sliceFailed synchronously.
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(failedSpy.isValid());
+  slice.startSlice(QStringLiteral("fail_trigger"));
+  QTRY_VERIFY_WITH_TIMEOUT(failedSpy.count() > 0, 10000);
+
+  QVERIFY2(preview.gcodePreviewData().isEmpty(),
+           "sliceFailed must clear gcodePreviewData via resetPreviewState");
+  QVERIFY2(preview.layerCount() == 0,
+           qPrintable(QStringLiteral("sliceFailed must zero layerCount, got %1").arg(preview.layerCount())));
+
+  // Clean up any temp reuse output the seed produced; never remove the fixture.
+  const QString reuseOutput = slice.outputPath();
+  if (!reuseOutput.isEmpty() && reuseOutput != fixturePath && QFileInfo::exists(reuseOutput))
+    QFile::remove(reuseOutput);
+}
+
+// Phase 55 (GCODE-01): sliceResultCleared must clear the preview state. Seed a
+// preview, then call SliceService::clearResults() which emits sliceResultCleared.
+void E2EWorkflowTests::sliceResultClearedClearsPreviewState()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+  editor.requestSlice();
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+    QSKIP("Live slice seed failed in sliceResultCleared test");
+  QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
+  const QString seedOutputPath = slice.outputPath();
+
+  QSignalSpy clearedSpy(&slice, &SliceService::sliceResultCleared);
+  slice.clearResults();
+  QTRY_VERIFY_WITH_TIMEOUT(clearedSpy.count() > 0, 5000);
+
+  QVERIFY2(preview.gcodePreviewData().isEmpty(),
+           "sliceResultCleared must clear gcodePreviewData via resetPreviewState");
+  QVERIFY2(preview.layerCount() == 0,
+           qPrintable(QStringLiteral("sliceResultCleared must zero layerCount, got %1").arg(preview.layerCount())));
+
+  if (QFileInfo::exists(seedOutputPath))
+    QFile::remove(seedOutputPath);
+}
+
+// Phase 55 (GCODE-01): switching the active plate to one with no valid result
+// must clear the preview. Seed a per-plate result, then activatePlateResult on
+// an invalid plate index -- it returns false and emits resultChanged +
+// sliceResultCleared, triggering resetPreviewState.
+void E2EWorkflowTests::plateSwitchToInvalidClearsPreviewState()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+  slice.startSlice(QStringLiteral("plate_switch_seed"));
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+    QSKIP("Live slice seed failed in plate-switch test");
+  QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
+  const QString seedOutputPath = slice.outputPath();
+
+  // Activate an out-of-range plate with no result -> resultChanged fires with
+  // an empty outputPath, which PreviewViewModel routes to resetPreviewState.
+  QSignalSpy resultSpy(&slice, &SliceService::resultChanged);
+  QVERIFY2(!slice.activatePlateResult(999),
+           "activatePlateResult must return false for a plate with no valid result");
+  QTRY_VERIFY_WITH_TIMEOUT(resultSpy.count() > 0, 5000);
+
+  QVERIFY2(preview.gcodePreviewData().isEmpty(),
+           "plate switch to an invalid result must clear gcodePreviewData via resetPreviewState");
+  QVERIFY2(preview.layerCount() == 0,
+           qPrintable(QStringLiteral("invalid plate switch must zero layerCount, got %1").arg(preview.layerCount())));
+
+  if (QFileInfo::exists(seedOutputPath))
+    QFile::remove(seedOutputPath);
+}
+
+// Phase 55 (GCODE-05): a reslice must rebuild gcodePreviewData with DIFFERENT
+// bytes and recomputed layer/move counts (the original invalidation contract).
+// Seed a slice, change a setting that invalidates, slice again.
+void E2EWorkflowTests::resliceRebuildsGcodePreviewDataWithDifferentBytes()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+
+  // First slice.
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  editor.requestSlice();
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+    QSKIP("First live slice failed in reslice test");
+  QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
+  const QByteArray firstPayload = preview.gcodePreviewData();
+  const int firstLayer = preview.layerCount();
+  const int firstMove = preview.moveCount();
+  QVERIFY2(firstPayload.size() > 8, "first slice must produce a GCV1 payload");
+  const QString firstOutput = slice.outputPath();
+
+  // Invalidate with a settings change (layer_height shift) and reslice.
+  QHash<QString, QVariant> cfg;
+  cfg.insert(QStringLiteral("layer_height"), 0.30);
+  slice.setMergedPresetConfig(cfg);
+  finishedSpy.clear();
+  failedSpy.clear();
+  editor.requestSlice();
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+    QSKIP("Reslice failed in this environment");
+  QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
+
+  const QByteArray secondPayload = preview.gcodePreviewData();
+  QVERIFY2(secondPayload != firstPayload,
+           "reslice must rebuild gcodePreviewData with different bytes after a setting invalidation");
+  QVERIFY2(preview.layerCount() > 0,
+           qPrintable(QStringLiteral("resliced preview layerCount must be > 0, got %1").arg(preview.layerCount())));
+  QVERIFY2(preview.moveCount() > 0,
+           qPrintable(QStringLiteral("resliced preview moveCount must be > 0, got %1").arg(preview.moveCount())));
+
+  if (QFileInfo::exists(firstOutput))
+    QFile::remove(firstOutput);
+  const QString secondOutput = slice.outputPath();
+  if (QFileInfo::exists(secondOutput))
+    QFile::remove(secondOutput);
+}
+
+// Phase 55 (GCODE-05): exporting G-code while Preview is visible must leave
+// gcodePreviewData intact (the export path must not touch the live payload).
+void E2EWorkflowTests::exportWhilePreviewVisibleLeavesGcodePreviewDataIntact()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+  editor.requestSlice();
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+    QSKIP("Live slice seed failed in export-stability test");
+  QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
+
+  const QByteArray beforeExport = preview.gcodePreviewData();
+  QVERIFY2(beforeExport.size() > 8, "seeded preview must hold a GCV1 payload before export");
+
+  // Export to a temp path while the preview payload is live.
+  QTemporaryDir exportDir(QDir::tempPath() + QStringLiteral("/owzx_55_04_export_XXXXXX"));
+  QVERIFY2(exportDir.isValid(), "temporary export directory should be available");
+  const QString exportPath = exportDir.filePath(QStringLiteral("preview_visible_export.gcode"));
+  QVERIFY2(editor.requestExportGCode(exportPath),
+           "current-plate export should succeed while Preview is visible");
+  QVERIFY2(QFileInfo::exists(exportPath), "exported G-code file should exist");
+
+  const QByteArray afterExport = preview.gcodePreviewData();
+  QVERIFY2(afterExport == beforeExport,
+           "exporting while Preview is visible must leave gcodePreviewData byte-for-byte intact");
+
+  const QString seedOutput = slice.outputPath();
+  if (QFileInfo::exists(seedOutput))
+    QFile::remove(seedOutput);
+}
+
+// Phase 55 (GCODE-05): switching between the Prepare and Preview pages must
+// preserve gcodePreviewData (the original disappearing-preview bug class).
+// Follows the test_backend_switches_to_preview_after_slice wiring.
+void E2EWorkflowTests::pageSwitchPreparePreviewPreservesGcodePreviewData()
+{
+  BackendContext ctx;
+  auto *editor = qobject_cast<EditorViewModel *>(ctx.editorViewModel());
+  auto *preview = qobject_cast<PreviewViewModel *>(ctx.previewViewModel());
+  QVERIFY(editor);
+  QVERIFY(preview);
+
+  QVERIFY2(editor->loadFile(kStlPath), "import through EditorViewModel should start");
+  QTRY_VERIFY_WITH_TIMEOUT(editor->modelCount() >= 1, 10000);
+  QVERIFY2(editor->canRequestSlice(),
+           qPrintable(QStringLiteral("editor should be slice-ready: %1").arg(editor->sliceActionHint())));
+
+  editor->requestSlice();
+  QTRY_VERIFY_WITH_TIMEOUT(editor->hasSliceResult(), 120000);
+  if (!editor->hasSliceResult())
+    QSKIP("Live slice seed did not produce a result in page-switch test");
+  QTRY_VERIFY_WITH_TIMEOUT(preview->gcodePreviewData().startsWith("GCV1"), 5000);
+
+  const QByteArray capturedPayload = preview->gcodePreviewData();
+  QVERIFY2(capturedPayload.size() > 8, "seeded preview must hold a GCV1 payload before page switch");
+
+  // Simulate the Prepare -> Preview -> Prepare page switch via BackendContext.
+  // These setters drive currentPage + viewMode; they must not touch the payload.
+  ctx.setCurrentPage(static_cast<int>(BackendContext::TabPosition::tp3DEditor));
+  ctx.setCurrentPage(static_cast<int>(BackendContext::TabPosition::tpPreview));
+  ctx.setCurrentPage(static_cast<int>(BackendContext::TabPosition::tp3DEditor));
+
+  const QByteArray afterSwitch = preview->gcodePreviewData();
+  QVERIFY2(afterSwitch == capturedPayload,
+           "Prepare<->Preview page switch must preserve gcodePreviewData byte-for-byte");
+
+  const QString seedOutput = editor->sliceOutputPath();
+  if (QFileInfo::exists(seedOutput))
+    QFile::remove(seedOutput);
 }
 
 QTEST_MAIN(E2EWorkflowTests)
