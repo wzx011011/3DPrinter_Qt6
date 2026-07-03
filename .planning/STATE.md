@@ -2,29 +2,29 @@
 gsd_state_version: 1.0
 milestone: v3.6
 milestone_name: Screenshot-Driven OrcaSlicer UI Restoration
-status: ready_to_plan
-last_updated: 2026-07-03T04:53:44.900Z
+status: human_needed
+last_updated: "2026-07-03T05:55:00.000Z"
 last_activity: 2026-07-03
 progress:
   total_phases: 9
-  completed_phases: 7
-  total_plans: 23
-  completed_plans: 78
-  percent: 78
-stopped_at: Phase 57 complete (2/2) — ready to discuss Phase 58
+  completed_phases: 9
+  total_plans: 25
+  completed_plans: 25
+  percent: 100
+stopped_at: Phase 58 automated floor complete (2/2 plans); VERIFY-01/02/03/05 done; VERIFY-04 manual UAT awaiting human sign-off
 ---
 
 # Project State
 
 **Milestone:** v3.6 - Screenshot-Driven OrcaSlicer UI Restoration
-**Status:** Ready to plan
-**Next step:** Start Phase 58, `End-to-End Visual and Functional Verification`.
+**Status:** Human needed -- run `.planning/phases/58-end-to-end-visual-and-functional-verification/58-UAT.md` to close VERIFY-04.
+**Next step:** User runs 58-UAT.md against the 4 screenshots, then the v3.6 milestone is complete.
 
 ## Current Position
 
 Phase: 58
-Plan: Not started
-Status: Ready to plan Phase 58
+Plan: 02 complete (both 58-01 and 58-02 done)
+Status: human_needed (VERIFY-04 manual UAT)
 Last activity: 2026-07-03
 
 ## Project Reference
@@ -66,10 +66,10 @@ Run build/OWzxSlicer.exe and complete .planning/phases/43-end-to-end-verificatio
 | 52 | Prepare Sidebar and Preset Controls | Complete |
 | 53 | Prepare Object, Plate, and Viewport Workflow | Complete |
 | 54 | Preview Layout, Sliders, and Right Panels | Complete |
-| 55 | G-code Preview Semantics and Rendering Stability | Pending |
-| 56 | Parameter Settings Dialogs Restoration | Pending |
+| 55 | G-code Preview Semantics and Rendering Stability | Complete |
+| 56 | Parameter Settings Dialogs Restoration | Complete |
 | 57 | Deprecated UI Removal and Architecture Cleanup | Complete (2/2) |
-| 58 | End-to-End Visual and Functional Verification | Pending |
+| 58 | End-to-End Visual and Functional Verification | Automated floor complete (2/2 plans); VERIFY-04 manual UAT human_needed |
 
 ## v3.6 Scope
 
@@ -107,14 +107,14 @@ If an existing Qt page is materially off-design and expensive to repair, replace
 
 ## Handoff
 
-Start with Phase 58:
+Phase 58 automated verification floor is complete (both 58-01 and 58-02
+plans committed). The only remaining gate is the manual UAT:
 
 ```text
-$gsd-plan-phase 58
+Run build/OWzxSlicer.exe and complete
+.planning/phases/58-end-to-end-visual-and-functional-verification/58-UAT.md
 ```
 
-or run the milestone autonomously:
+Once the user records PASS/FAIL + outstanding gaps in 58-UAT.md, the v3.6
+milestone (VERIFY-01..05) is fully closed.
 
-```text
-$gsd-autonomous --from 58
-```

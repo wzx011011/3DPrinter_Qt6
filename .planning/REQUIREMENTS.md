@@ -97,11 +97,11 @@ v3.5 Phase 47-49 are superseded by this milestone. v3.5 Phase 44-46 remain histo
 
 ### End-to-End Verification
 
-- [ ] **VERIFY-01:** Automated tests cover screenshot/source inventory completeness, critical C++ viewmodel state, QML route/resource registration, and cleanup of replaced UI code.
-- [ ] **VERIFY-02:** Automated tests cover import -> configure -> prepare -> slice -> preview -> export state transitions, including slice invalidation after settings changes.
-- [ ] **VERIFY-03:** Automated tests or deterministic harnesses cover Preview layer/move/camera interactions so the disappearing-preview bug cannot regress.
-- [ ] **VERIFY-04:** Manual UAT checklist validates visual parity against the four screenshots and behavior parity against the mapped upstream source for Prepare, Preview, and settings.
-- [ ] **VERIFY-05:** Canonical verification passes or any failure is classified with file, command, cause, and follow-up owner.
+- [x] **VERIFY-01:** Automated tests cover screenshot/source inventory completeness, critical C++ viewmodel state, QML route/resource registration, and cleanup of replaced UI code. (Phase 58-01: tests/InventoryAuditTests.cpp + QmlUiAuditTests)
+- [x] **VERIFY-02:** Automated tests cover import -> configure -> prepare -> slice -> preview -> export state transitions, including slice invalidation after settings changes. (Phase 58-02 audit: covered by existing E2EWorkflowTests slots, no new code needed)
+- [x] **VERIFY-03:** Automated tests or deterministic harnesses cover Preview layer/move/camera interactions so the disappearing-preview bug cannot regress. (Phase 58-02 audit: covered by existing E2EWorkflowTests + QmlUiAuditTests GCODE-05 slots)
+- [ ] **VERIFY-04:** Manual UAT checklist validates visual parity against the four screenshots and behavior parity against the mapped upstream source for Prepare, Preview, and settings. (Phase 58-02: 58-UAT.md produced; awaiting human sign-off — status human_needed)
+- [x] **VERIFY-05:** Canonical verification passes or any failure is classified with file, command, cause, and follow-up owner. (Phase 58-02: 58-VERIFICATION.md; 7/8 ctest PASS, single CliTests failure classified carry-forward)
 
 ## Future Requirements
 
