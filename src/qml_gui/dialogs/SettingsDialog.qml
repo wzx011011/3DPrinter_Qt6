@@ -516,20 +516,14 @@ ApplicationWindow {
                             }
 
                             width: optionList.width
-                            height: optionRowLoader.totalHeight
+                            height: optRow.totalHeight
 
-                            Loader {
-                                id: optionRowLoader
-                                anchors.fill: parent
-                                sourceComponent: optionRowComponent
-                                readonly property int totalHeight: item ? item.totalHeight : 0
-                            }
-                        }
-
-                        Component {
-                            id: optionRowComponent
-
+                            // OptionRow inlined in the delegate (not via Loader/Component)
+                            // so its bindings resolve the delegate's scope (optDelegate).
                             OptionRow {
+                                id: optRow
+                                anchors.left: parent.left
+                                anchors.right: parent.right
                                 optionModel: root.optionModel
                                 optIdx: optDelegate.optIdx
                                 rowIndex: optDelegate.index
@@ -537,8 +531,8 @@ ApplicationWindow {
                                 showGroupHeader: optDelegate.showGroupHeader
                                 oGroup: optDelegate.optGroup
                                 valueSource: {
-                                    if (!root.configVm || !optionModel) return ""
-                                    var key = optionModel.optKey(optDelegate.optIdx)
+                                    if (!root.configVm || !root.optionModel) return ""
+                                    var key = root.optionModel.optKey(optDelegate.optIdx)
                                     return root.configVm.valueSourceForKey(key)
                                 }
                             }

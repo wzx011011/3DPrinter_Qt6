@@ -5,14 +5,17 @@
 
 import QtQuick
 import QtQuick.Layouts
+import ".."
 import "../controls"
 
 Rectangle {
     id: root
 
-    // Required properties
+    // Required properties.
+    // `groups` is a JS array (a QStringList exposed from C++ ConfigViewModel::groupNames
+    // arrives as an Array in QML -- `QStringList` is not a valid QML property type).
     required property var optionModel
-    required property QStringList groups
+    required property var groups
 
     // Selected group
     property string selectedGroup: ""
