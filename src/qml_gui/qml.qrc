@@ -1,4 +1,4 @@
-﻿<RCC>
+<RCC>
     <qresource prefix="/qml">
         <file>qmldir</file>
         <file>main.qml</file>
