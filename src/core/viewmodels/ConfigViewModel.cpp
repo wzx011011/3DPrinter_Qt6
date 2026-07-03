@@ -1162,7 +1162,10 @@ static bool fuzzyMatch(const QString &pattern, const QString &text, int &outScor
         }
       }
     }
-    prevRow = std::move(curRow);
+    // Copy (not move): a moved-from curRow would be empty, so the next
+    // iteration's curRow.fill() would be a no-op and the curRow[ti] accesses
+    // below would go out of bounds. Keep curRow sized n+1 every iteration.
+    prevRow = curRow;
   }
 
   int bestScore = prevRow[n].first;
