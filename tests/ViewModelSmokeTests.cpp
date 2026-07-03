@@ -152,7 +152,6 @@ private slots:
   void testTabPositionEnumValues();
   void testRequestSelectTabSignal();
   void testRequestSelectTabOutOfRange();
-  void configExternalTransitionDefersAndResumesNavigation();
   // Phase 03-01: ViewMode enum + requestChangeViewMode + tab 联动
   void testViewModeEnumValues();
   void testCurrentViewModeDefault();
@@ -729,12 +728,6 @@ void ViewModelSmokeTests::configUnsavedTransitionsQueueAndCancelPendingChanges()
   QCOMPARE(config.currentPrintPreset(), QStringLiteral("UT Guard Print A"));
   QVERIFY(config.isPresetDirty());
   QVERIFY(config.property("pendingUnsavedAction").toString().isEmpty());
-
-  bool leaveOk = false;
-  QVERIFY(QMetaObject::invokeMethod(&config, "requestLeaveSettingsPage",
-                                    Q_RETURN_ARG(bool, leaveOk)));
-  QVERIFY(!leaveOk);
-  QCOMPARE(config.property("pendingUnsavedAction").toString(), QStringLiteral("leave-settings-page"));
 }
 
 void ViewModelSmokeTests::configWritableSaveAppliesPendingTransition()
@@ -1357,41 +1350,6 @@ void ViewModelSmokeTests::testRequestSelectTabOutOfRange()
 
   QCOMPARE(spy.count(), 0);
   QCOMPARE(ctx.currentPage(), before);
-}
-
-void ViewModelSmokeTests::configExternalTransitionDefersAndResumesNavigation()
-{
-  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
-                                        QStringLiteral("ConfigExternalTransition"));
-  ScopedSettingsSnapshot snapshot({
-      QStringLiteral("presets/selectedPrint"),
-      QStringLiteral("presets/selectedFilament"),
-      QStringLiteral("presets/selectedPrinter")});
-  snapshot.clear();
-
-  BackendContext ctx;
-  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tp3DEditor));
-
-  ctx.setCurrentPage(static_cast<int>(BackendContext::TabPosition::tpProject));
-  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tpProject));
-
-  auto *config = qobject_cast<ConfigViewModel *>(ctx.configViewModel());
-  QVERIFY(config);
-  auto *printOpts = qobject_cast<ConfigOptionModel *>(config->printOptions());
-  QVERIFY(printOpts);
-
-  config->setActivePresetTier(QStringLiteral("print"));
-  const int layerIdx = printOpts->indexOfKey(QStringLiteral("layer_height"));
-  QVERIFY(layerIdx >= 0);
-  printOpts->setValue(layerIdx, 0.23);
-  QVERIFY(config->isPresetDirty());
-
-  ctx.setCurrentPage(static_cast<int>(BackendContext::TabPosition::tp3DEditor));
-  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tpProject));
-  QCOMPARE(config->property("pendingUnsavedAction").toString(), QStringLiteral("leave-settings-page"));
-
-  QVERIFY(config->requestDiscardPendingChanges());
-  QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tp3DEditor));
 }
 
 // ── Phase 03-01: ViewMode enum + requestChangeViewMode unit tests ──

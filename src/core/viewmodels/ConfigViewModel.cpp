@@ -382,8 +382,6 @@ bool ConfigViewModel::applyPendingAction()
     setCurrentPrinterPreset(target);
     return true;
   }
-  if (action == QStringLiteral("leave-settings-page"))
-    return true;
   if (action == QStringLiteral("scope-global")) {
     activateGlobalScope();
     return true;
@@ -966,11 +964,6 @@ bool ConfigViewModel::requestCancelPendingChanges()
 {
   clearPendingAction();
   return true;
-}
-
-bool ConfigViewModel::requestLeaveSettingsPage()
-{
-  return queuePendingAction(QStringLiteral("leave-settings-page"), QString());
 }
 
 void ConfigViewModel::applyScopeValues()

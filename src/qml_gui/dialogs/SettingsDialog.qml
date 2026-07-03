@@ -5,8 +5,8 @@
 //
 // Region IDs: SETPRINT-SHELL, SETMAT-SHELL, SETPROC-SHELL
 //
-// Note: per CONTEXT.md decision, old SettingsPage/ParamsPage/ConfigPage/SearchDialog
-// are NOT removed here; cleanup is Phase 57.
+// Note: the old SettingsPage/ParamsPage/ConfigPage/SearchDialog were removed
+// in Phase 57-01 (CLEAN-01); this dialog is the sole settings surface.
 
 import QtQuick
 import QtQuick.Controls

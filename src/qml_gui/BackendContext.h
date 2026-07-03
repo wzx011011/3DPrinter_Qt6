@@ -276,7 +276,6 @@ public:
   QColor sidebarColor() const { return m_sidebarColor; }
   QColor borderColor() const { return m_borderColor; }
   QString displayProjectTitle() const;
-  bool canLeaveSettingsPage() const;
 
   Q_INVOKABLE void setCurrentPage(int page);
   /// 璇锋眰鍒囨崲鍒版寚瀹?tab锛堝榻愪笂娓?MainFrame::request_select_tab锛孧ainFrame.cpp:3943-3948锛夈€?
@@ -501,10 +500,6 @@ private:
   Q_INVOKABLE void confirmCurrentNotification();
   /// 鍙栨秷褰撳墠闇€瑕佺‘璁ょ殑閫氱煡
   Q_INVOKABLE void cancelCurrentNotification();
-  bool requestConfigPageExitIfNeeded();
-  void handleConfigPendingActionApplied(const QString &action, const QString &target);
-  void clearDeferredConfigExit();
-  bool executeDeferredConfigExit();
 
   // 澶栬鐘舵€?
   QTranslator *m_translator = nullptr;
@@ -531,18 +526,6 @@ private:
   void initHintDatabase();
   void initFallbackHintDatabase();
   int selectNextHint(bool random = true);
-
-  int deferredConfigExitPage_ = -1;
-  enum class DeferredConfigExitKind
-  {
-    None = 0,
-    PageChange,
-    NewProject,
-    OpenProject,
-    ImportModel,
-  };
-  DeferredConfigExitKind deferredConfigExitKind_ = DeferredConfigExitKind::None;
-  QString deferredConfigExitPath_;
 
   struct PendingLatency
   {

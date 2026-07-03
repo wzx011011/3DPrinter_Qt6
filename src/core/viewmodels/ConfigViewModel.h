@@ -150,7 +150,6 @@ public:
   Q_INVOKABLE bool requestSavePendingChanges();
   Q_INVOKABLE bool requestDiscardPendingChanges();
   Q_INVOKABLE bool requestCancelPendingChanges();
-  Q_INVOKABLE bool requestLeaveSettingsPage();
 
   Q_INVOKABLE QList<int> filterOptionIndices(const QString &category, const QString &searchText, bool advancedMode = false) const;
   Q_INVOKABLE QList<int> moveListItem(int fromRow, int toRow) const;
