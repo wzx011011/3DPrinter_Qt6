@@ -9,7 +9,7 @@
 - Complete at MVP level, superseded for completeness: **v3.3 Slice Preview Main Flow MVP** - Phases 33-36
 - Automated verification passed, manual UAT deferred: **v3.4 Import to G-code Complete Workflow** - Phases 37-43
 - Superseded after Phase 46: **v3.5 Preset Authoring Complete Workflow** - Phases 44-49
-- Active: **v3.6 Screenshot-Driven OrcaSlicer UI Restoration** - Phases 50-58
+- Automated verification passed, manual UAT deferred: **v3.6 Screenshot-Driven OrcaSlicer UI Restoration** - Phases 50-58 (shipped 2026-07-03; VERIFY-04 visual UAT at `.planning/phases/58-.../58-UAT.md`)
 
 ## Active Milestone: v3.6 Screenshot-Driven OrcaSlicer UI Restoration
 

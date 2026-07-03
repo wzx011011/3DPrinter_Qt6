@@ -101,6 +101,39 @@ A stabilization/truth-reset milestone, not new features:
 
 ---
 
+## Milestone: v3.6 — Screenshot-Driven OrcaSlicer UI Restoration
+
+**Shipped:** 2026-07-03
+**Phases:** 9 | **Plans:** 25 | automated floor green; VERIFY-04 manual UAT deferred
+
+### What Was Built
+- Phase 50 inventory contract (34 regions) + Phase 58 InventoryAuditTests regression guard.
+- Shell + Prepare + Preview restoration (51-55), incl. the Phase-55 role-mask producer→binding→consumer fix.
+- Independent printer/material/process settings dialogs with real `print_config_def` typed option models, per-option dirty + 3 reset levels, slice-invalidation integration (Phase 56).
+- Deprecated UI removal: 7 obsolete QML files (3510 lines) + dead routes + regression tests (Phase 57).
+
+### What Worked
+- Locked Phase 50 inventory as the decision-of-record → downstream phases executed, didn't re-decide visual/layout.
+- The Phase-52→56 cross-phase chain (sidebar → settings dialog → slice invalidation) was verifiable end-to-end with a single BackendContext spy test.
+- Phase 57's grep-before-delete discipline + the deletedSettingsPathsStayAbsent/deletedRoutesStayAbsent regression tests make the cleanup permanent.
+
+### What Was Inefficient
+- **Qt Test stdout is block-buffered and invisible through redirection on this Windows/MSVC build.** An executor misdiagnosed real test failures as a "crash" because it saw non-zero exit + no output. Cost: a full debug detour before the `-o file,txt` workaround was discovered. **Fix forward: bake `-o` into every Qt Test invocation in executor prompts.**
+- A pre-existing latent UB (`fuzzyMatch` use-after-move, ConfigViewModel.cpp) was silent until a Phase-56 fix unblocked a test path that reached it for the first time — manifesting as a standalone segfault that disappeared under the debugger. Diagnosis required cdb + isolated per-test runs to localize.
+- REQUIREMENTS.md traceability checkboxes drifted stale across phases (phase.complete didn't update all rows); the per-phase VERIFICATION.md files remained authoritative.
+
+### Patterns Established
+- `exe -o file,txt` is the canonical way to read Qt Test results on this build (NOT stdout redirection).
+- Deletion phases: grep every deletion candidate for live refs BEFORE delete; lock deletions with a compiled audit test.
+- Pre-existing latent UB surfaces when a new test path reaches it — treat "standalone segfault that passes under cdb" as heap corruption, not a logic bug.
+
+### Key Lessons
+- The "no output + non-zero exit" pattern on redirected Qt Test is normal test failure, not a crash — verify with `-o` before debugging.
+- Screenshot-driven milestones need the inventory frozen FIRST; everything downstream is execution.
+- Manual visual UAT (VERIFY-04) is an irreducible user gate — surface it early and let the user defer it explicitly with a carry-forward.
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Reqs satisfied | Audit status | Notes |
