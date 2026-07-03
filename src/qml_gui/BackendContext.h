@@ -455,12 +455,12 @@ private:
 
   bool visualCompareMode_ = false;
   int currentPage_ = 1;
-  /// Phase 3: 褰撳墠 Plater 瑙嗗浘妯″紡锛堥粯璁?View3D锛屽榻愪笂娓?Plater 榛樿鏄剧ず view3D锛?
+  /// Phase 3: current Plater view mode. Default is View3D.
   ViewMode currentViewMode_ = ViewMode::View3D;
-  // Phase 4: Sidebar Dockable 鐘舵€侊紙鏋勯€犳椂浠?QSettings load锛宻etter 鏃?save锛?
-  static constexpr int kSidebarMinWidth = 240;   ///< 鏈€灏忓搴︼紙瀵归綈涓婃父 sidebar 涓嶅彲绐勪簬姝わ級
-  static constexpr int kSidebarMaxWidth = 480;   ///< 鏈€澶у搴︼紙閬垮厤鐙崰杩囧 3D 鍖猴級
-  static constexpr int kSidebarDefaultWidth = 280; ///< 榛樿瀹藉害锛堝榻愪笂娓?LeftSidebar 280px锛?
+  // Phase 4: dockable sidebar state is loaded from QSettings and saved by setters.
+  static constexpr int kSidebarMinWidth = 360;   ///< Minimum readable sidebar width.
+  static constexpr int kSidebarMaxWidth = 480;   ///< Maximum width before crowding the viewport.
+  static constexpr int kSidebarDefaultWidth = 390; ///< Screenshot-aligned default sidebar width.
   bool sidebarCollapsed_ = false;
   int sidebarWidth_ = kSidebarDefaultWidth;
   SidebarDockArea sidebarDockArea_ = SidebarDockArea::Left;

@@ -26,6 +26,10 @@ Item {
     property bool showGroupHeader: false
     property string oGroup: ""
     property string valueSource: ""
+    property bool compact: false
+    property int compactLabelWidth: 112
+    property int compactFieldWidth: 72
+    property int compactEnumWidth: 112
 
     // Computed accessors (mirrors ParamsPage paramRow pattern)
     readonly property string oType:   root.optionModel ? root.optionModel.optType(optIdx) : ""
@@ -47,11 +51,12 @@ Item {
 
     // Content height dispatch (bool/enum 44px, numeric 56px, string 80px)
     readonly property int contentHeight:
+        root.compact ? (root.oType === "string" ? 62 : 34) :
         (root.oType === "double" || root.oType === "int" || root.oType === "percent") ? 56
         : root.oType === "string" ? 80 : 44
 
     // Total height includes optional group header
-    readonly property int totalHeight: (root.showGroupHeader ? 28 : 0) + root.contentHeight
+    readonly property int totalHeight: (root.showGroupHeader ? (root.compact ? 24 : 28) : 0) + root.contentHeight
 
     // Tooltip
     ToolTip.visible: root.oTip !== "" && tipMA.containsMouse
@@ -63,15 +68,15 @@ Item {
         visible: root.showGroupHeader
         anchors.top: parent.top
         width: parent.width
-        height: 28
-        color: Theme.bgSurface
+        height: root.compact ? 24 : 28
+        color: root.compact ? "transparent" : Theme.bgSurface
 
         Text {
             anchors.left: parent.left
-            anchors.leftMargin: 20
+            anchors.leftMargin: root.compact ? 10 : 20
             anchors.verticalCenter: parent.verticalCenter
             text: root.oGroup
-            color: Theme.textTertiary
+            color: root.compact ? Theme.accent : Theme.textTertiary
             font.pixelSize: Theme.fontSizeSM
             font.bold: true
         }
@@ -87,7 +92,7 @@ Item {
     // Parameter row
     Rectangle {
         id: paramRow
-        y: root.showGroupHeader ? 28 : 0
+        y: root.showGroupHeader ? (root.compact ? 24 : 28) : 0
         width: parent.width
         height: root.contentHeight
         // Zebra striping
@@ -96,13 +101,13 @@ Item {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 20
-            anchors.rightMargin: Theme.fontSizeLG
-            spacing: Theme.spacingLG
+            anchors.leftMargin: root.compact ? 10 : 20
+            anchors.rightMargin: root.compact ? 10 : Theme.fontSizeLG
+            spacing: root.compact ? Theme.spacingSM : Theme.spacingLG
 
             // Label column
             ColumnLayout {
-                Layout.preferredWidth: 180
+                Layout.preferredWidth: root.compact ? root.compactLabelWidth : 180
                 spacing: 2
 
                 RowLayout {
@@ -122,7 +127,7 @@ Item {
                         text: root.oLabel
                         color: root.oRO ? Theme.textDisabled
                               : (root.oDirty ? Theme.statusWarning : Theme.textSecondary)
-                        font.pixelSize: Theme.fontSizeMD
+                        font.pixelSize: root.compact ? Theme.fontSizeSM : Theme.fontSizeMD
                         elide: Text.ElideRight
                         font.bold: root.oDirty || root.searchText !== ""
                         Layout.fillWidth: true
@@ -134,7 +139,7 @@ Item {
                     visible: root.valueSource !== ""
                     text: root.valueSource
                     color: Theme.textTertiary
-                    font.pixelSize: Theme.fontSizeXS
+                    font.pixelSize: root.compact ? 9 : Theme.fontSizeXS
                 }
 
                 // Read-only tag
@@ -169,6 +174,7 @@ Item {
                     spacing: Theme.spacingSM
 
                     CxSlider {
+                        visible: !root.compact
                         Layout.fillWidth: true
                         from: root.oMin
                         to: root.oMax
@@ -179,7 +185,7 @@ Item {
                     }
 
                     CxSpinBox {
-                        width: 90
+                        width: root.compact ? root.compactFieldWidth : 90
                         height: Theme.controlHeightSM
                         value: typeof root.oVal === "number" ? Math.round(root.oVal) : 0
                         from: root.oMin
@@ -198,6 +204,7 @@ Item {
                     spacing: Theme.spacingSM
 
                     CxSlider {
+                        visible: !root.compact
                         Layout.fillWidth: true
                         from: root.oMin
                         to: root.oMax
@@ -208,7 +215,7 @@ Item {
                     }
 
                     Rectangle {
-                        Layout.preferredWidth: 64
+                        Layout.preferredWidth: root.compact ? root.compactFieldWidth : 64
                         height: 24
                         radius: Theme.radiusSM
                         color: Theme.bgInset
@@ -264,7 +271,7 @@ Item {
                     visible: root.oType === "enum"
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: parent.right
-                    width: 160
+                    width: root.compact ? root.compactEnumWidth : 160
                     enabled: !root.oRO
                     model: root.oEnumLabels
                     currentIndex: typeof root.oVal === "number" ? root.oVal : 0
@@ -277,7 +284,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    height: 60
+                    height: root.compact ? 52 : 60
                     clip: true
 
                     CxTextArea {

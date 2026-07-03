@@ -79,7 +79,7 @@ Rectangle {
                             readonly property int cnt: {
                                 if (!root.optionModel) return 0
                                 if (modelData === qsTr("All")) return root.optionModel.count
-                                return root.optionModel.countForCategory(modelData)
+                                return root.optionModel.countForGroup(modelData)
                             }
                             visible: cnt > 0
                             width: cnt > 9 ? 26 : 20

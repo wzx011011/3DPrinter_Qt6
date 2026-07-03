@@ -123,6 +123,8 @@ public:
   Q_INVOKABLE QString optSidetext(int i) const;
   /// Returns unique sorted group names currently present in the model
   Q_INVOKABLE QStringList groupNames() const;
+  /// Returns the count of options whose option group matches the given group
+  Q_INVOKABLE int countForGroup(const QString &group) const;
   /// Returns the count of dirty keys whose option group matches the given group
   Q_INVOKABLE int dirtyCountForGroup(const QString &group) const;
   /// 重置单个选项到默认值
@@ -143,6 +145,8 @@ public:
   Q_INVOKABLE QStringList pageNames() const;
   /// Returns indices filtered by page
   Q_INVOKABLE QList<int> filterIndicesByPage(const QList<int> &indices, const QString &page) const;
+  /// Returns indices filtered by option group
+  Q_INVOKABLE QList<int> filterIndicesByGroup(const QList<int> &indices, const QString &group) const;
 
   QHash<QString, QVariant> valuesByKey() const;
   QHash<QString, QVariant> defaultValuesByKey() const;

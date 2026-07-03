@@ -13,12 +13,32 @@ Rectangle {
     required property var editorVm
     required property var configVm
     property string processCategory: ""
+    property string paramsCurrentTab: "Quality"
+    property string paramsSearchText: ""
+    readonly property var paramsOptionModel: {
+        if (!root.configVm) return null
+        return root.configVm.printOptions
+    }
+    readonly property string paramsTier: "print"
+    property var paramsFilteredIndices: []
     // G3: Printer 折叠状态（由 CollapsibleSection 管理）
     property bool printerExpanded: true
 
     color: "transparent"
     radius: 0
     border.width: 0
+
+    function rebuildParamsFilter() {
+        if (!root.configVm || !root.paramsOptionModel) {
+            root.paramsFilteredIndices = []
+            return
+        }
+        var indices = root.configVm.filterOptionIndices(
+                    root.paramsTier, root.paramsSearchText, true)
+        if (root.paramsCurrentTab !== "")
+            indices = root.paramsOptionModel.filterIndicesByPage(indices, root.paramsCurrentTab)
+        root.paramsFilteredIndices = indices
+    }
 
     CxScrollView {
         anchors.fill: parent
@@ -116,7 +136,7 @@ Rectangle {
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 enabled: !(root.configVm && root.configVm.presetActionBlocker(2, root.configVm.currentPrinterPreset, "rename") !== "")
-                                onClicked: backend.openSettings()
+                                onClicked: backend.forwardSettingsRequest("printer")
                             }
                         }
 
@@ -181,7 +201,7 @@ Rectangle {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             enabled: !(root.configVm && root.configVm.presetActionBlocker(1, root.configVm.currentFilamentPreset, "rename") !== "")
-                            onClicked: backend.openSettings()
+                            onClicked: backend.forwardSettingsRequest("filament")
                         }
                     },
                     Rectangle {
@@ -346,10 +366,7 @@ Rectangle {
                         visible: false
                     }
 
-                    // Phase 52 PREPSB-02: "Setting" entry point -- visible and
-                    // enabled. Emits settingsRequested("process"); BackendContext
-                    // forwards it (interim no-op log; Phase 56 wires the real
-                    // independent settings dialog). Honest deferred entry point.
+                    // Opens the independent process settings dialog.
                     CxButton {
                         implicitWidth: 28
                         implicitHeight: 24
@@ -363,7 +380,50 @@ Rectangle {
                 }
             }
 
-            // -- Section 4: Search bar (SIDEBAR-11, 对齐上游 OG::SearchCtrl) --
+            RowLayout {
+                id: processPresetRow
+                Layout.fillWidth: true
+                spacing: 6
+
+                CxComboBox {
+                    Layout.fillWidth: true
+                    model: root.configVm ? root.configVm.printPresetNames : []
+                    currentIndex: {
+                        if (!root.configVm) return -1
+                        return root.configVm.printPresetNames.indexOf(root.configVm.currentPrintPreset)
+                    }
+                    onActivated: (i) => {
+                        if (root.configVm && i >= 0)
+                            root.configVm.requestCurrentPrintPreset(model[i])
+                    }
+                }
+
+                Rectangle {
+                    width: 26
+                    height: 26
+                    radius: 5
+                    color: processEditMA.containsMouse ? Theme.bgHover : "transparent"
+                    border.width: 1
+                    border.color: Theme.borderSubtle
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "✎"
+                        color: Theme.textMuted
+                        font.pixelSize: 12
+                    }
+
+                    MouseArea {
+                        id: processEditMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: backend.forwardSettingsRequest("process")
+                    }
+                }
+            }
+
+            // -- Section 4: Process search and inline option list --
             Rectangle {
                 id: searchBox
                 Layout.fillWidth: true
@@ -392,22 +452,125 @@ Rectangle {
                         background: Item {}  // 透明背景（外框由 searchBox 提供）
                         selectByMouse: true
                         onAccepted: {
-                            // Phase 52 PREPSB-04: wire search to
-                            // configVm.filterOptionIndices so the search is live.
-                            // The matched option indices drive the config option
-                            // model; full ParamsPanel option rendering is Phase 56.
-                            if (root.configVm && text.trim().length > 0) {
-                                root.configVm.filterOptionIndices("", text.trim(), false)
-                            }
+                            root.rebuildParamsFilter()
                         }
                         onTextChanged: {
-                            // Phase 52 PREPSB-04: live filter as the user types.
-                            if (root.configVm) {
-                                root.configVm.filterOptionIndices("", text.trim(), false)
+                            root.paramsSearchText = text.trim()
+                            root.rebuildParamsFilter()
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                id: paramsInlinePanel
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(520, Math.max(280, paramsList.contentHeight + 58))
+                color: Theme.bgPanel
+                radius: 6
+                border.width: 1
+                border.color: Theme.borderSubtle
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 6
+                    spacing: 4
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+
+                        Repeater {
+                            model: [
+                                { key: "Quality", label: qsTr("质量") },
+                                { key: "Strength", label: qsTr("强度") },
+                                { key: "Support", label: qsTr("支撑") },
+                                { key: "Temperature", label: qsTr("材料") },
+                                { key: "Other", label: qsTr("其他") }
+                            ]
+                            delegate: Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 24
+                                color: modelData.key === root.paramsCurrentTab
+                                       ? Theme.accent : "transparent"
+                                radius: 3
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: modelData.label
+                                    color: modelData.key === root.paramsCurrentTab
+                                           ? Theme.textOnAccent : Theme.textSecondary
+                                    font.pixelSize: Theme.fontSizeXS
+                                    font.bold: modelData.key === root.paramsCurrentTab
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.paramsCurrentTab = modelData.key
+                                        root.rebuildParamsFilter()
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    ListView {
+                        id: paramsList
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        model: root.paramsFilteredIndices
+                        spacing: 0
+
+                        ScrollBar.vertical: ScrollBar {
+                            visible: paramsList.contentHeight > paramsList.height
+                        }
+
+                        delegate: Item {
+                            id: paramsDelegate
+                            required property int index
+                            required property var modelData
+
+                            readonly property int optIdx: modelData
+                            readonly property string optGroup: root.paramsOptionModel
+                                ? root.paramsOptionModel.optGroup(optIdx) : ""
+                            readonly property bool showGroupHeader: {
+                                if (paramsDelegate.index === 0) return optGroup !== ""
+                                var prevGroup = root.paramsOptionModel
+                                    ? root.paramsOptionModel.optGroup(root.paramsFilteredIndices[paramsDelegate.index - 1]) : ""
+                                return optGroup !== "" && optGroup !== prevGroup
+                            }
+
+                            width: paramsList.width
+                            height: optRow.totalHeight
+
+                            OptionRow {
+                                id: optRow
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                optionModel: root.paramsOptionModel
+                                optIdx: paramsDelegate.optIdx
+                                rowIndex: paramsDelegate.index
+                                searchText: root.paramsSearchText
+                                showGroupHeader: paramsDelegate.showGroupHeader
+                                oGroup: paramsDelegate.optGroup
+                                compact: true
+                                compactLabelWidth: 126
+                                compactFieldWidth: 78
+                                compactEnumWidth: 118
+                                valueSource: {
+                                    if (!root.configVm || !root.paramsOptionModel) return ""
+                                    var key = root.paramsOptionModel.optKey(paramsDelegate.optIdx)
+                                    return root.configVm.valueSourceForKey(key)
+                                }
                             }
                         }
                     }
                 }
+
+                Component.onCompleted: root.rebuildParamsFilter()
             }
 
             // -- Section 5: Objects (Prepare sidebar section, Phase 52) --
@@ -571,108 +734,6 @@ Rectangle {
                             readOnly: true
                         }
                     }
-                }
-            }
-
-            // -- Section 7: ObjectLayers (SIDEBAR-14, 变量层高编辑器, 仅打印对象显示) --
-            // 对齐上游 ObjectLayers: 变量层高编辑器（v2.0 占位，完整编辑器延后）
-            CollapsibleSection {
-                id: objectLayersSection
-                Layout.fillWidth: true
-                title: qsTr("可变层高")
-                iconText: "≣"
-                expanded: false  // 默认折叠（占位）
-                // 仅打印对象时显示
-                visible: root.editorVm && root.editorVm.selectedObjectIndex >= 0
-
-                content: ColumnLayout {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    spacing: 6
-
-                    Text {
-                        Layout.fillWidth: true
-                        text: qsTr("可变层高编辑器暂不可用")
-                        color: Theme.textTertiary
-                        font.pixelSize: 10
-                        wrapMode: Text.WordWrap
-                    }
-                }
-            }
-
-            // -- Section 8: ParamsPanel page_view (SIDEBAR-15, 参数列表 + 7 子 Tab) --
-            // 对齐上游 ParamsPanel page_view: 左侧 7 子 Tab (Print/PrintPlate/PrintObject/
-            // PrintPart/PrintLayer/Filament/Printer) + 右侧参数列表
-            // v2.0 骨架: 7 Tab 按钮 + 参数列表占位（完整参数需 ConfigViewModel pageView 扩展）
-            CollapsibleSection {
-                id: paramsPanelSection
-                Layout.fillWidth: true
-                title: qsTr("参数")
-                iconText: "▽"
-                expanded: true
-
-                content: ColumnLayout {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    spacing: 4
-
-                    // 7 子 Tab 按钮（对齐上游 ParamsPanel 左侧 TabList）
-                    // 完整参数列表需 ConfigViewModel pageView 分组扩展
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 2
-
-                        Repeater {
-                            // 7 子 Tab: Print/PrintPlate/PrintObject/PrintPart/PrintLayer/Filament/Printer
-                            model: [
-                                { key: "print", label: qsTr("打印") },
-                                { key: "printPlate", label: qsTr("盘") },
-                                { key: "printObject", label: qsTr("对象") },
-                                { key: "printPart", label: qsTr("部件") },
-                                { key: "printLayer", label: qsTr("层") },
-                                { key: "filament", label: qsTr("耗材") },
-                                { key: "printer", label: qsTr("打印机") }
-                            ]
-                            delegate: Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 22
-                                color: modelData.key === paramsTabBar.currentTab
-                                       ? Theme.accent : Theme.bgPanel
-                                radius: 3
-                                border.width: 1
-                                border.color: Theme.borderSubtle
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: modelData.label
-                                    color: modelData.key === paramsTabBar.currentTab
-                                           ? Theme.textOnAccent : Theme.textSecondary
-                                    font.pixelSize: Theme.fontSizeXS
-                                }
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: paramsTabBar.currentTab = modelData.key
-                                }
-                            }
-                        }
-                    }
-
-                    // 参数列表占位
-                    Text {
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 4
-                        text: qsTr("参数列表暂不可用")
-                        color: Theme.textTertiary
-                        font.pixelSize: 10
-                        wrapMode: Text.WordWrap
-                    }
-                }
-
-                // 7 子 Tab 当前选中状态（内联，避免污染外层）
-                QtObject {
-                    id: paramsTabBar
-                    property string currentTab: "print"
                 }
             }
 

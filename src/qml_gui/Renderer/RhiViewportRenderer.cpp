@@ -187,12 +187,14 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     cb->setShaderResources(m_srb.get());
     cb->setGraphicsPipeline(m_linePipeline.get());
 
-    quint32 firstVertex = 0, drawVertexCount = 0;
-    computePreviewDrawRange(firstVertex, drawVertexCount);
-    if (drawVertexCount > 0) {
+    const QVector<PreviewDrawRange> drawRanges = computePreviewDrawRanges();
+    if (!drawRanges.isEmpty()) {
       const QRhiCommandBuffer::VertexInput segBinding(m_previewSegmentBuffer.get(), 0);
       cb->setVertexInput(0, 1, &segBinding);
-      cb->draw(drawVertexCount, 1, firstVertex);
+      for (const PreviewDrawRange &range : drawRanges) {
+        if (range.vertexCount > 0)
+          cb->draw(range.vertexCount, 1, range.firstVertex);
+      }
     }
 
     // Phase 27 (PERF-01): capture Preview frame timing.
@@ -662,10 +664,9 @@ bool RhiViewportRenderer::uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *up
   return true;
 }
 
-void RhiViewportRenderer::computePreviewDrawRange(quint32 &firstVertex, quint32 &vertexCount) const
+QVector<RhiViewportRenderer::PreviewDrawRange> RhiViewportRenderer::computePreviewDrawRanges() const
 {
-  firstVertex = 0;
-  vertexCount = 0;
+  QVector<PreviewDrawRange> ranges;
 
   const auto logRangeIfChanged = [this](quint32 first, quint32 count, int layerLow, int layerHigh) {
     if (m_lastLoggedPreviewFirstVertex == first
@@ -679,7 +680,7 @@ void RhiViewportRenderer::computePreviewDrawRange(quint32 &firstVertex, quint32 
     m_lastLoggedPreviewLayerLow = layerLow;
     m_lastLoggedPreviewLayerHigh = layerHigh;
     m_lastLoggedPreviewMoveEnd = m_moveEnd;
-    qInfo("[RHI] preview range first=%u count=%u layers=%d..%d moveEnd=%d",
+    qInfo("[RHI] preview ranges first=%u visibleCount=%u layers=%d..%d moveEnd=%d",
           first,
           count,
           layerLow,
@@ -687,50 +688,66 @@ void RhiViewportRenderer::computePreviewDrawRange(quint32 &firstVertex, quint32 
           m_moveEnd);
   };
 
-  if (m_previewDrawSpans.isEmpty()) {
-    logRangeIfChanged(0, 0, m_layerMin, m_layerMax);
-    return;
-  }
-  if (m_moveEnd <= 0) {
-    logRangeIfChanged(0, 0, m_layerMin, m_layerMax);
-    return;
-  }
-
   const int layerLow = std::min(m_layerMin, m_layerMax);
   const int layerHigh = std::max(m_layerMin, m_layerMax);
 
-  // PreviewViewModel already repacks the GCV1 payload for travel visibility
-  // and color mode changes. Renderer range selection only applies layer and
-  // playback cutoff against exact packed segment metadata.
-  quint32 startOffset = 0;
-  quint32 endOffset = 0;
-  bool foundStart = false;
+  if (m_previewDrawSpans.isEmpty()) {
+    logRangeIfChanged(0, 0, layerLow, layerHigh);
+    return ranges;
+  }
+  if (m_moveEnd <= 0) {
+    logRangeIfChanged(0, 0, layerLow, layerHigh);
+    return ranges;
+  }
+
+  bool hasOpenRange = false;
+  PreviewDrawRange openRange;
+  quint32 totalVertexCount = 0;
+
+  const auto flushOpenRange = [&]() {
+    if (!hasOpenRange)
+      return;
+    ranges.append(openRange);
+    totalVertexCount += openRange.vertexCount;
+    hasOpenRange = false;
+    openRange = {};
+  };
 
   for (const auto &span : m_previewDrawSpans) {
+    bool visible = true;
     if (span.layer < layerLow || span.layer > layerHigh)
-      continue;
+      visible = false;
     if (span.move >= m_moveEnd)
-      continue;
-    // Render-side per-role filtering (no repack). Skips spans whose canonical
-    // libvgcode role is masked off in the visibility array.
-    if (span.role >= 0 && span.role < m_roleVisibility.size()
-        && !m_roleVisibility[span.role])
-      continue;
+      visible = false;
+    if (visible && span.role >= 0 && span.role < m_roleVisibility.size())
+      visible = m_roleVisibility[span.role];
 
-    if (!foundStart) {
-      startOffset = span.vertexOffset;
-      foundStart = true;
+    if (!visible) {
+      flushOpenRange();
+      continue;
     }
-    endOffset = span.vertexOffset + span.vertexCount;
-  }
 
-  if (!foundStart) {
-    logRangeIfChanged(0, 0, layerLow, layerHigh);
-    return;
-  }
+    if (!hasOpenRange) {
+      openRange.firstVertex = span.vertexOffset;
+      openRange.vertexCount = span.vertexCount;
+      hasOpenRange = true;
+      continue;
+    }
 
-  firstVertex = startOffset;
-  vertexCount = endOffset - startOffset;
-  logRangeIfChanged(firstVertex, vertexCount, layerLow, layerHigh);
+    const quint32 expectedNext = openRange.firstVertex + openRange.vertexCount;
+    if (span.vertexOffset == expectedNext) {
+      openRange.vertexCount += span.vertexCount;
+    } else {
+      flushOpenRange();
+      openRange.firstVertex = span.vertexOffset;
+      openRange.vertexCount = span.vertexCount;
+      hasOpenRange = true;
+    }
+  }
+  flushOpenRange();
+
+  const quint32 firstVertex = ranges.isEmpty() ? 0 : ranges.first().firstVertex;
+  logRangeIfChanged(firstVertex, totalVertexCount, layerLow, layerHigh);
+  return ranges;
 }
 

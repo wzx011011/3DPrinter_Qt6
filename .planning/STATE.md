@@ -1,123 +1,92 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.6
-milestone_name: Screenshot-Driven OrcaSlicer UI Restoration
-status: completed
-last_updated: "2026-07-03T06:14:04.824Z"
-last_activity: 2026-07-03 — Milestone v3.6 completed and archived
+milestone: v3.7
+milestone_name: Screenshot-Level UI Parity Closure
+status: active
+last_updated: "2026-07-03T18:45:00+08:00"
+last_activity: 2026-07-03 - Phase 64 canonical build passed and runtime screenshots were captured; visual acceptance still has recorded residual gaps
 progress:
-  total_phases: 9
-  completed_phases: 8
-  total_plans: 25
-  completed_plans: 23
-  percent: 89
+  total_phases: 6
+  completed_phases: 6
+  total_plans: 6
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
 
-**Milestone:** v3.6 - Screenshot-Driven OrcaSlicer UI Restoration
-**Status:** v3.6 milestone complete
-**Next step:** User runs 58-UAT.md against the 4 screenshots, then the v3.6 milestone is complete.
+**Milestone:** v3.7 - Screenshot-Level UI Parity Closure
+**Status:** Active
+**Current rule:** Execute all visual-fix phases first, then run one canonical
+build and visual acceptance pass at the end.
 
 ## Current Position
 
-Phase: Milestone v3.6 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-03 — Milestone v3.6 completed and archived
+Phase: 64
+Plan: Visual parity closure
+Status: Executed, with residual visual gaps recorded
+Last activity: 2026-07-03 - User approved starting v3.7 and requested one
+unified compile + visual acceptance after all phases. Phase 59 matrix is
+recorded, Phase 60 moved process options inline in the prepare sidebar, Phase
+61 compacted the settings dialogs, Phase 62 made Preview reuse the same left
+sidebar while tightening the right analysis panel, Phase 63 passed static
+checks, and Phase 64 passed the canonical build plus QML/ViewModel audit tests.
+Runtime visual acceptance captured prepare and process settings screenshots.
+Remaining acceptance gaps are tracked in
+`.planning/milestones/v3.7-VISUAL-MATRIX.md`.
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
-**Core value:** OrcaSlicer upstream behavior is the product source of truth; screenshot-driven UI milestones also use screenshots as the visual/layout source of truth.
-**Current focus:** Milestone complete
+**Core value:** OrcaSlicer upstream behavior is the product source of truth.
+Screenshot-driven UI milestones also use screenshots as visual/layout source of
+truth.
 
-## Superseded Milestone Status
+## Correction From v3.6
 
-**v3.5 Preset Authoring Complete Workflow** is no longer the active milestone.
-
-- Phase 44: Preset Bundle Service Foundation - complete historical evidence.
-- Phase 45: Compatibility and Selection State - complete historical evidence.
-- Phase 46: Config Editing, Dirty State, and Reset Semantics - complete historical evidence.
-- Phase 47: Preset Lifecycle Actions - superseded by v3.6 Settings and full UI restoration.
-- Phase 48: Create Presets and Bundle Workflows - superseded by v3.6 Settings and full UI restoration.
-- Phase 49: Slice Integration, Verification, and Handoff - superseded by v3.6 end-to-end restoration.
-
-Do not resume v3.5 Phase 47-49 unless the user explicitly reopens that milestone.
-
-## Carry-Forward Status
-
-**v3.4 Import to G-code Complete Workflow** reached Phase 43 with automated verification passing, but manual UAT is still pending because the user could not verify it at the time.
-
-Do not mark v3.4 as fully complete until this checklist is actually run:
-
-```text
-Run build/OWzxSlicer.exe and complete .planning/phases/43-end-to-end-verification-and-handoff/43-UAT.md
-```
+v3.6 must not be treated as visually complete. It reached an automated
+verification floor, but its manual visual UAT (VERIFY-04) was not executed.
+v3.7 exists to close that gap.
 
 ## Active Milestone Plan
 
 | Phase | Name | Status |
 |---|---|---|
-| 50 | Screenshot and Source-Truth Inventory | Complete |
-| 51 | Shell and Navigation Restoration | Complete |
-| 52 | Prepare Sidebar and Preset Controls | Complete |
-| 53 | Prepare Object, Plate, and Viewport Workflow | Complete |
-| 54 | Preview Layout, Sliders, and Right Panels | Complete |
-| 55 | G-code Preview Semantics and Rendering Stability | Complete |
-| 56 | Parameter Settings Dialogs Restoration | Complete |
-| 57 | Deprecated UI Removal and Architecture Cleanup | Complete (2/2) |
-| 58 | End-to-End Visual and Functional Verification | Automated floor complete (2/2 plans); VERIFY-04 manual UAT human_needed |
+| 59 | v3.6 status correction and visual baseline matrix | Complete |
+| 60 | Prepare sidebar and viewport chrome parity | Complete |
+| 61 | Settings dialog compact OrcaSlicer tab layout parity | Complete |
+| 62 | Preview right panel, sliders, and G-code text parity | Complete |
+| 63 | Placeholder removal, static audit hardening, and visual UAT assets | Complete |
+| 64 | Unified canonical build and running-app visual acceptance | Executed with residual gaps |
 
-## v3.6 Scope
+## Verification Rule
 
-This milestone restores the user-visible Prepare page, Preview page, and parameter settings workflows as complete source-truth-aligned UI flows:
+Per user instruction:
 
-```text
-Import model -> select/edit printer/material/process settings -> prepare model/plate -> slice -> inspect G-code preview -> export G-code
-```
+- Do not run the full canonical build after each phase.
+- During phases 59-63, use source reads, encoding guard, `git diff --check`,
+  and focused static checks only.
+- In Phase 64, run:
+  `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`
+- After the canonical build, launch `build/OWzxSlicer.exe` and capture
+  running-app screenshots for visual acceptance.
 
-Screenshots under `shotScreen/` are visual/layout truth. OrcaSlicer upstream source under `third_party/OrcaSlicer` is behavior truth.
+## Target Screenshots
 
-If an existing Qt page is materially off-design and expensive to repair, replace it and remove the old files, routes, resource entries, registrations, imports, and tests in the same milestone.
+- `shotScreen/准备页.png` - 2560x1400
+- `shotScreen/预览页.png` - 2560x1400
+- `shotScreen/打印机参数设置页.png` - 736x593
+- `shotScreen/材料参数设置页.png` - 736x593
 
-## Deferred Items
+## Carry-Forward Status
 
 | Category | Item | Target |
 |---|---|---|
+| correction | v3.6 Phase 58 manual visual UAT was not executed | Closed by v3.7 |
 | carry-forward | v3.4 Phase 43 manual UAT | Before claiming v3.4 complete |
-| carry-forward | v3.6 Phase 58 manual visual UAT (VERIFY-04) — checklist at `.planning/phases/58-end-to-end-visual-and-functional-verification/58-UAT.md` (34 region items + 9 workflow items against the 4 screenshots). Automated verification passed; user deferred the visual UAT. | Before claiming v3.6 visually complete / any release |
 | superseded | v3.5 Phase 47-49 | Do not resume unless explicitly reopened |
-| future | Device send/upload/cloud print and Monitor job lifecycle | After local workflow restoration |
+| future | Device send/upload/cloud print and Monitor job lifecycle | Future milestone |
 | future | AssembleView | Future source-truth milestone |
-| future | Auto filament-map recommendation | Future source-truth milestone |
-| future | Wipe-tower geometry and rendering | Future source-truth milestone |
-| future | THUMB-03 real GL/QRhi-capture thumbnails and 3MF pixel round-trip | Future renderer/project milestone |
-| future | FIXTURE-02 full PLATE-09 save/reload assertions after writer integration fix | Future fixture milestone |
 | future | Missing CLI test fixtures (`hotend.stl`, `Block20XY.stl`) | Future fixture milestone |
 | opportunistic | D3D12 crash root cause | Dedicated backend investigation milestone |
-
-## Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 260702-1bn | 准备页收敛路线图审计降级：基线表+假绿清单+修复优先级 | 2026-07-02 | 260702-1bn | [260702-1bn-prepare-roadmap-audit-downgrade](./quick/260702-1bn-prepare-roadmap-audit-downgrade/) |
-| 260702-1q7 | P0修复：CollapsibleSection吞点击+耗材编辑按钮+在参数表中编辑隐藏 | 2026-07-02 | 260702-1q7 | [260702-1q7-p0-collapsiblesection](./quick/260702-1q7-p0-collapsiblesection/) |
-
-## Handoff
-
-Phase 58 automated verification floor is complete (both 58-01 and 58-02
-plans committed). The only remaining gate is the manual UAT:
-
-```text
-Run build/OWzxSlicer.exe and complete
-.planning/phases/58-end-to-end-visual-and-functional-verification/58-UAT.md
-```
-
-Once the user records PASS/FAIL + outstanding gaps in 58-UAT.md, the v3.6
-milestone (VERIFY-01..05) is fully closed.
-
-## Operator Next Steps
-
-- Start the next milestone with /gsd-new-milestone

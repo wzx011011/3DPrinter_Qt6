@@ -5,16 +5,19 @@ import OWzxGL 1.0
 import ".."
 import "../controls"
 import "../components" as Components
+import "../panels"
 
 Item {
     id: root
     required property var previewVm
+    required property var editorVm
+    required property var configVm
+    property string processCategory: ""
     focus: true
 
-    property bool leftPanelExpanded: true
     property bool rightPanelExpanded: true
-    readonly property int leftPanelWidth: leftPanelExpanded ? 286 : 36
-    readonly property int rightPanelWidth: rightPanelExpanded ? 322 : 42
+    readonly property int leftPanelWidth: 390
+    readonly property int rightPanelWidth: rightPanelExpanded ? 268 : 36
     readonly property bool hasPreviewData: root.previewVm && root.previewVm.previewReady
 
     Keys.onPressed: (event) => {
@@ -163,113 +166,11 @@ Item {
                 border.color: "#3a3d45"
                 clip: true
 
-                Behavior on Layout.preferredWidth { NumberAnimation { duration: 120 } }
-
-                ColumnLayout {
+                LeftSidebar {
                     anchors.fill: parent
-                    anchors.margins: root.leftPanelExpanded ? 10 : 4
-                    spacing: 10
-
-                    SidePanelHeader {
-                        title: qsTr("盘与层")
-                        expanded: root.leftPanelExpanded
-                        onToggleRequested: root.leftPanelExpanded = !root.leftPanelExpanded
-                    }
-
-                    ColumnLayout {
-                        visible: root.leftPanelExpanded
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        spacing: 10
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 112
-                            radius: 6
-                            color: "#383b43"
-                            border.width: 1
-                            border.color: root.hasPreviewData ? Theme.accentDark : Theme.borderSubtle
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: 10
-                                spacing: 10
-
-                                Rectangle {
-                                    Layout.preferredWidth: 74
-                                    Layout.preferredHeight: 74
-                                    radius: 6
-                                    color: "#4b4d56"
-                                    border.width: 1
-                                    border.color: Theme.borderSubtle
-
-                                    Canvas {
-                                        anchors.fill: parent
-                                        anchors.margins: 12
-                                        onPaint: {
-                                            const ctx = getContext("2d")
-                                            ctx.reset()
-                                            ctx.strokeStyle = root.hasPreviewData ? Theme.accent : Theme.textTertiary
-                                            ctx.lineWidth = 3
-                                            ctx.beginPath()
-                                            ctx.moveTo(width * 0.18, height * 0.70)
-                                            ctx.lineTo(width * 0.78, height * 0.38)
-                                            ctx.lineTo(width * 0.62, height * 0.20)
-                                            ctx.moveTo(width * 0.36, height * 0.60)
-                                            ctx.lineTo(width * 0.68, height * 0.74)
-                                            ctx.stroke()
-                                        }
-                                    }
-                                }
-
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 5
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: root.previewVm ? root.previewVm.plateSummary : qsTr("当前盘")
-                                        color: Theme.textPrimary
-                                        font.bold: true
-                                        font.pixelSize: Theme.fontSizeMD
-                                        elide: Text.ElideRight
-                                    }
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: root.previewVm ? root.previewVm.previewStatusText : qsTr("请先切片或载入 G-code")
-                                        color: root.hasPreviewData ? Theme.accentLight : Theme.textSecondary
-                                        font.pixelSize: Theme.fontSizeSM
-                                        elide: Text.ElideRight
-                                    }
-                                    Label {
-                                        Layout.fillWidth: true
-                                        text: root.previewVm ? root.previewVm.warningSummary : ""
-                                        color: Theme.textTertiary
-                                        font.pixelSize: Theme.fontSizeSM
-                                        elide: Text.ElideRight
-                                    }
-                                }
-                            }
-                        }
-
-                        InfoRow { label: qsTr("层范围"); value: root.previewVm ? root.previewVm.currentLayerLabel : "--" }
-                        InfoRow { label: qsTr("当前移动"); value: root.previewVm ? root.previewVm.currentMoveLabel : "--" }
-                        InfoRow { label: qsTr("当前时间"); value: root.previewVm ? root.previewVm.currentTime : "0s" }
-                        InfoRow { label: qsTr("总时间"); value: root.previewVm ? root.previewVm.totalTime : "--:--:--" }
-                        InfoRow { label: qsTr("耗材"); value: root.previewVm ? root.previewVm.filamentUsed : "--" }
-                        InfoRow { label: qsTr("重量"); value: root.previewVm ? root.previewVm.filamentWeight : "--" }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 1
-                            color: Theme.borderSubtle
-                        }
-
-                        Components.LayerSlider {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            previewVm: root.previewVm
-                        }
-                    }
+                    editorVm: root.editorVm
+                    configVm: root.configVm
+                    processCategory: root.processCategory
                 }
             }
 
@@ -341,8 +242,8 @@ Item {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: root.rightPanelExpanded ? 10 : 4
-                    spacing: 8
+                    anchors.margins: root.rightPanelExpanded ? 8 : 4
+                    spacing: 6
 
                     SidePanelHeader {
                         title: qsTr("分析")
@@ -358,13 +259,13 @@ Item {
 
                         ScrollView {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Math.min(360, parent.height * 0.42)
+                            Layout.preferredHeight: Math.min(300, parent.height * 0.34)
                             clip: true
                             contentWidth: availableWidth
 
                             ColumnLayout {
                                 width: parent.width
-                                spacing: 8
+                                spacing: 6
 
                                 Components.StatsPanel {
                                     Layout.fillWidth: true
@@ -386,7 +287,7 @@ Item {
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            radius: 6
+                            radius: 4
                             color: "#191b20"
                             border.width: 1
                             border.color: Theme.borderSubtle
@@ -398,21 +299,21 @@ Item {
 
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Layout.preferredHeight: 34
-                                    Layout.leftMargin: 10
-                                    Layout.rightMargin: 10
+                                    Layout.preferredHeight: 30
+                                    Layout.leftMargin: 8
+                                    Layout.rightMargin: 8
 
                                     Label {
                                         text: qsTr("G-code")
                                         color: Theme.textPrimary
                                         font.bold: true
-                                        font.pixelSize: Theme.fontSizeMD
+                                        font.pixelSize: Theme.fontSizeSM
                                     }
                                     Item { Layout.fillWidth: true }
                                     Label {
                                         text: root.previewVm ? qsTr("行 %1 / %2").arg(root.previewVm.currentGcodeLine).arg(root.previewVm.gcodeLineCount) : qsTr("行 -- / --")
                                         color: Theme.textTertiary
-                                        font.pixelSize: Theme.fontSizeSM
+                                        font.pixelSize: Theme.fontSizeXS
                                     }
                                 }
 
@@ -426,7 +327,7 @@ Item {
                                     delegate: Rectangle {
                                         required property var modelData
                                         width: gcodeList.width
-                                        height: 22
+                                        height: 19
                                         color: modelData.current ? "#3a2515" : "transparent"
 
                                         RowLayout {
@@ -436,7 +337,7 @@ Item {
                                             spacing: 8
 
                                             Text {
-                                                Layout.preferredWidth: 52
+                                                Layout.preferredWidth: 44
                                                 text: modelData.line
                                                 color: modelData.current ? "#ff9f40" : Theme.textTertiary
                                                 horizontalAlignment: Text.AlignRight
@@ -462,7 +363,7 @@ Item {
 
             Rectangle {
                 id: verticalLayerRail
-                Layout.preferredWidth: 44
+                Layout.preferredWidth: 36
                 Layout.fillHeight: true
                 color: "#2f323a"
                 border.width: 1
@@ -470,8 +371,8 @@ Item {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 6
-                    spacing: 8
+                    anchors.margins: 4
+                    spacing: 6
 
                     Label {
                         Layout.alignment: Qt.AlignHCenter
@@ -507,7 +408,7 @@ Item {
         Rectangle {
             id: moveSliderBar
             Layout.fillWidth: true
-            Layout.preferredHeight: 58
+            Layout.preferredHeight: 48
             color: "#2f3036"
             border.width: 1
             border.color: "#3a3d45"
@@ -516,8 +417,8 @@ Item {
                 anchors.fill: parent
                 anchors.leftMargin: 14
                 anchors.rightMargin: 14
-                anchors.topMargin: 8
-                anchors.bottomMargin: 8
+                anchors.topMargin: 6
+                anchors.bottomMargin: 6
                 previewVm: root.previewVm
             }
         }
@@ -598,31 +499,6 @@ Item {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: toggleRequested()
             }
-        }
-    }
-
-    component InfoRow: RowLayout {
-        id: infoRowRoot
-        property string label: ""
-        property string value: ""
-
-        Layout.fillWidth: true
-        spacing: 8
-
-        Label {
-            Layout.preferredWidth: 72
-            text: infoRowRoot.label
-            color: Theme.textTertiary
-            font.pixelSize: Theme.fontSizeSM
-            elide: Text.ElideRight
-        }
-        Label {
-            Layout.fillWidth: true
-            text: infoRowRoot.value
-            color: Theme.textPrimary
-            font.pixelSize: Theme.fontSizeSM
-            horizontalAlignment: Text.AlignRight
-            elide: Text.ElideRight
         }
     }
 }

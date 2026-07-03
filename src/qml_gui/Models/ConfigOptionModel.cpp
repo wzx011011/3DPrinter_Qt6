@@ -389,6 +389,16 @@ QStringList ConfigOptionModel::groupNames() const
   return result;
 }
 
+int ConfigOptionModel::countForGroup(const QString &group) const
+{
+  int count = 0;
+  for (const auto &o : m_options) {
+    if (o.group == group)
+      ++count;
+  }
+  return count;
+}
+
 int ConfigOptionModel::dirtyCountForGroup(const QString &group) const
 {
   int count = 0;
@@ -532,6 +542,20 @@ QList<int> ConfigOptionModel::filterIndicesByPage(const QList<int> &indices, con
       continue;
     const QString &pg = m_options[idx].page.isEmpty() ? pageForCategory(m_options[idx].category) : m_options[idx].page;
     if (pg == page)
+      result.append(idx);
+  }
+  return result;
+}
+
+QList<int> ConfigOptionModel::filterIndicesByGroup(const QList<int> &indices, const QString &group) const
+{
+  QList<int> result;
+  result.reserve(indices.size());
+  for (int idx : indices)
+  {
+    if (idx < 0 || idx >= m_options.size())
+      continue;
+    if (m_options[idx].group == group)
       result.append(idx);
   }
   return result;

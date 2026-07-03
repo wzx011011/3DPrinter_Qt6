@@ -26,17 +26,17 @@ ApplicationWindow {
     // Window properties
     flags: Qt.Window | Qt.WindowCloseButtonHint
     modality: Qt.NonModal
-    width: 920
-    height: 640
-    minimumWidth: 720
-    minimumHeight: 480
+    width: 736
+    height: 593
+    minimumWidth: 736
+    minimumHeight: 593
     color: Theme.bgElevated
 
     // Title derived from presetTier
     title: {
-        if (presetTier === "printer") return qsTr("Printer Settings")
-        if (presetTier === "filament") return qsTr("Material Settings")
-        if (presetTier === "print") return qsTr("Process Settings")
+        if (presetTier === "printer") return qsTr("打印机设置")
+        if (presetTier === "filament") return qsTr("材料设置")
+        if (presetTier === "print") return qsTr("工艺设置")
         return qsTr("Settings")
     }
 
@@ -45,20 +45,37 @@ ApplicationWindow {
     property string selectedGroup: ""
     property string searchText: ""
     property bool advancedMode: false
+    property bool closeAfterSaveAs: false
     property var filteredIndices: []
 
-    // Tab labels per tier (upstream Tab.cpp)
-    readonly property var tabLabels: {
+    // Tab pages per tier. The label is visual text; key stays aligned with upstream page ids.
+    readonly property var tabPages: {
         if (presetTier === "printer") return [
-            qsTr("Basic information"), qsTr("Dependencies"), qsTr("Notes")
+            { key: "Basic information", label: qsTr("基础信息") },
+            { key: "Machine G-code", label: qsTr("打印机G-code") },
+            { key: "Material", label: qsTr("材料") },
+            { key: "Extruder", label: qsTr("挤出机") },
+            { key: "Motion ability", label: qsTr("移动能力") },
+            { key: "Notes", label: qsTr("注释") }
         ]
         if (presetTier === "filament") return [
-            qsTr("Filament"), qsTr("Cooling"), qsTr("Advanced"),
-            qsTr("Multimaterial"), qsTr("Dependencies"), qsTr("Notes")
+            { key: "Filament", label: qsTr("耗材丝") },
+            { key: "Cooling", label: qsTr("冷却") },
+            { key: "Overrides", label: qsTr("参数覆盖") },
+            { key: "Advanced", label: qsTr("高级") },
+            { key: "Multimaterial", label: qsTr("材料") },
+            { key: "Dependencies", label: qsTr("依赖") },
+            { key: "Notes", label: qsTr("注释") }
         ]
         if (presetTier === "print") return [
-            qsTr("Quality"), qsTr("Strength"), qsTr("Speed"),
-            qsTr("Support"), qsTr("Multimaterial"), qsTr("Others")
+            { key: "Quality", label: qsTr("质量") },
+            { key: "Strength", label: qsTr("强度") },
+            { key: "Speed", label: qsTr("速度") },
+            { key: "Support", label: qsTr("支撑") },
+            { key: "Base", label: qsTr("底板") },
+            { key: "Cooling", label: qsTr("冷却") },
+            { key: "Retraction", label: qsTr("回抽") },
+            { key: "Other", label: qsTr("其他") }
         ]
         return []
     }
@@ -81,14 +98,32 @@ ApplicationWindow {
 
     // Set default tab on first load
     Component.onCompleted: {
-        if (tabLabels.length > 0) activeTab = tabLabels[0]
+        if (tabPages.length > 0) activeTab = tabPages[0].key
+        selectedGroup = qsTr("All")
         rebuildFilter()
     }
 
     // Rebuild filtered indices when search/group/tab changes
     function rebuildFilter() {
         if (!configVm || !optionModel) { filteredIndices = []; return }
-        filteredIndices = configVm.filterOptionIndices(presetTier, searchText, advancedMode)
+        var indices = configVm.filterOptionIndices(presetTier, searchText, advancedMode)
+        if (activeTab !== "")
+            indices = optionModel.filterIndicesByPage(indices, activeTab)
+        if (selectedGroup !== "" && selectedGroup !== qsTr("All"))
+            indices = optionModel.filterIndicesByGroup(indices, selectedGroup)
+        filteredIndices = indices
+    }
+
+    function requestSaveAndMaybeClose(closeOnSuccess) {
+        if (!configVm) return false
+        closeAfterSaveAs = closeOnSuccess
+        var ok = configVm.requestSavePendingChanges()
+        if (ok) {
+            closeAfterSaveAs = false
+            if (closeOnSuccess)
+                root.close()
+        }
+        return ok
     }
 
     onSearchTextChanged: rebuildFilter()
@@ -148,8 +183,7 @@ ApplicationWindow {
 
         onAccepted: {
             if (unsavedDialog.action === "save") {
-                root.configVm.requestSavePendingChanges()
-                root.close()
+                root.requestSaveAndMaybeClose(true)
             } else if (unsavedDialog.action === "discard") {
                 root.configVm.requestDiscardPendingChanges()
                 root.close()
@@ -163,109 +197,26 @@ ApplicationWindow {
         id: saveAsDialog
         configVm: root.configVm
         presetTier: root.presetTier
-    }
-
-    // Delete preset confirmation dialog
-    CxDialog {
-        id: deleteConfirmDialog
-        title: qsTr("Delete Preset")
-        dialogTitle: qsTr("Delete")
-        width: 400
-        height: 160
-        contentItem: Rectangle {
-            color: Theme.bgPanel
-            anchors.fill: parent
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
-                spacing: 12
-                Text {
-                    text: qsTr("Delete preset '%1'?").arg(root.currentPreset)
-                    color: Theme.textPrimary
-                    font.pixelSize: Theme.fontSizeMD
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
-                Text {
-                    text: qsTr("This action cannot be undone.")
-                    color: Theme.textTertiary
-                    font.pixelSize: Theme.fontSizeSM
-                    Layout.fillWidth: true
-                }
-                Item { Layout.fillHeight: true }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 8
-                    Item { Layout.fillWidth: true }
-                    CxButton {
-                        text: qsTr("Cancel")
-                        onClicked: deleteConfirmDialog.reject()
-                    }
-                    CxButton {
-                        text: qsTr("Delete")
-                        cxStyle: CxButton.Style.Danger
-                        onClicked: {
-                            deleteConfirmDialog.accept()
-                        }
-                    }
-                }
+        onAccepted: {
+            if (root.closeAfterSaveAs) {
+                root.closeAfterSaveAs = false
+                root.close()
             }
         }
-        onAccepted: {
-            if (root.configVm) {
-                root.configVm.deletePreset(root.tierCategory, root.currentPreset)
-            }
+        onRejected: root.closeAfterSaveAs = false
+    }
+
+    Connections {
+        target: root.configVm
+        function onSaveAsRequired() {
+            saveAsDialog.open()
         }
     }
 
-    // Reset all confirmation dialog
-    CxDialog {
-        id: resetAllConfirmDialog
-        title: qsTr("Reset All")
-        dialogTitle: qsTr("Reset All")
-        width: 400
-        height: 160
-        contentItem: Rectangle {
-            color: Theme.bgPanel
-            anchors.fill: parent
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 20
-                spacing: 12
-                Text {
-                    text: qsTr("Reset all options to default values?")
-                    color: Theme.textPrimary
-                    font.pixelSize: Theme.fontSizeMD
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
-                Text {
-                    text: qsTr("All modifications will be lost.")
-                    color: Theme.textTertiary
-                    font.pixelSize: Theme.fontSizeSM
-                    Layout.fillWidth: true
-                }
-                Item { Layout.fillHeight: true }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 8
-                    Item { Layout.fillWidth: true }
-                    CxButton {
-                        text: qsTr("Cancel")
-                        onClicked: resetAllConfirmDialog.reject()
-                    }
-                    CxButton {
-                        text: qsTr("Reset")
-                        cxStyle: CxButton.Style.Danger
-                        onClicked: resetAllConfirmDialog.accept()
-                    }
-                }
-            }
-        }
-        onAccepted: {
-            if (root.configVm) root.configVm.resetAllGlobalOptions()
-        }
-    }
+    // Removed dead deleteConfirmDialog/resetAllConfirmDialog: their openers
+    // (Preset bar Delete/Reset All buttons) were removed in the compact-layout
+    // refactor. Preset deletion now goes through the sidebar's per-row edit
+    // affordance; Reset is per-group via OptionRow's reset control.
 
     // Dialog layout (top to bottom)
     Rectangle {
@@ -276,21 +227,21 @@ ApplicationWindow {
             anchors.fill: parent
             spacing: 0
 
-            // 1. Title bar
+            // 1. Preset and action bar
             Rectangle {
                 Layout.fillWidth: true
-                height: 40
+                height: 44
                 color: Theme.chromeSurface
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: Theme.spacingXL
-                    anchors.rightMargin: Theme.spacingMD
-                    spacing: Theme.spacingMD
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 8
+                    spacing: 6
 
                     // Preset selector
                     CxComboBox {
-                        width: 240
+                        Layout.fillWidth: true
                         model: root.presetNames
                         currentIndex: {
                             var idx = root.presetNames.indexOf(root.currentPreset)
@@ -301,8 +252,6 @@ ApplicationWindow {
                                 root.onPresetActivated(root.presetNames[i])
                         }
                     }
-
-                    Item { Layout.fillWidth: true }
 
                     // Modified badge
                     Rectangle {
@@ -321,10 +270,69 @@ ApplicationWindow {
                         }
                     }
 
+                    // Compatibility warning chip (shown when preset combination is invalid)
+                    Rectangle {
+                        visible: root.configVm && !root.configVm.currentPresetCombinationValid
+                        height: 22
+                        radius: Theme.radiusSM
+                        color: Theme.bgErrorSubtle
+                        width: compatBadge.implicitWidth + 16
+                        Text {
+                            id: compatBadge
+                            anchors.centerIn: parent
+                            text: root.configVm && root.configVm.currentPresetCompatibilityMessage
+                                  ? root.configVm.currentPresetCompatibilityMessage
+                                  : qsTr("Incompatible")
+                            color: Theme.statusError
+                            font.pixelSize: Theme.fontSizeXS
+                            font.bold: true
+                            elide: Text.ElideRight
+                            maximumLineCount: 1
+                        }
+                        ToolTip.visible: compatHover.containsMouse
+                        ToolTip.text: root.configVm ? root.configVm.currentPresetCompatibilityMessage : ""
+                        MouseArea {
+                            id: compatHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                        }
+                    }
+
+                    CxTextField {
+                        id: topSearchField
+                        placeholderText: qsTr("Search")
+                        implicitWidth: 132
+                        onTextChanged: root.searchText = text
+                    }
+
+                    RowLayout {
+                        spacing: 2
+                        Text {
+                            text: qsTr("Advanced")
+                            color: Theme.textSecondary
+                            font.pixelSize: Theme.fontSizeXS
+                        }
+                        CxSwitch {
+                            checked: root.advancedMode
+                            onToggled: root.advancedMode = checked
+                        }
+                    }
+
+                    CxButton {
+                        text: qsTr("Save")
+                        height: 28
+                        compact: true
+                        cxStyle: CxButton.Style.Primary
+                        visible: root.configVm && root.configVm.isPresetDirty
+                        enabled: root.configVm && root.configVm.isPresetDirty
+                        onClicked: root.requestSaveAndMaybeClose(false)
+                    }
+
                     // Save As button
                     CxButton {
                         text: qsTr("Save As...")
                         height: 28
+                        compact: true
                         onClicked: saveAsDialog.open()
                     }
 
@@ -353,59 +361,10 @@ ApplicationWindow {
                 }
             }
 
-            // 2. Preset bar
+            // 2. Tab strip
             Rectangle {
                 Layout.fillWidth: true
-                height: Theme.controlHeightMD
-                color: Theme.bgPanel
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spacingXL
-                    anchors.rightMargin: Theme.spacingXL
-                    spacing: Theme.spacingMD
-
-                    CxButton {
-                        text: qsTr("Save")
-                        height: Theme.controlHeightSM
-                        cxStyle: CxButton.Style.Primary
-                        visible: root.configVm && !root.configVm.isPresetDirty
-                        enabled: root.configVm && root.configVm.isPresetDirty
-                        onClicked: root.configVm.requestSavePendingChanges()
-                    }
-
-                    CxButton {
-                        text: qsTr("Delete")
-                        height: Theme.controlHeightSM
-                        cxStyle: CxButton.Style.Danger
-                        visible: root.configVm && root.configVm.canDeletePreset(root.currentPreset)
-                        onClicked: deleteConfirmDialog.open()
-                    }
-
-                    CxButton {
-                        text: qsTr("Reset All")
-                        height: Theme.controlHeightSM
-                        cxStyle: CxButton.Style.Ghost
-                        onClicked: resetAllConfirmDialog.open()
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    // Compatibility indicator
-                    Text {
-                        visible: root.configVm && !root.configVm.currentPresetCombinationValid
-                        text: root.configVm ? root.configVm.currentPresetCompatibilityMessage : ""
-                        color: Theme.statusError
-                        font.pixelSize: Theme.fontSizeXS
-                        elide: Text.ElideRight
-                    }
-                }
-            }
-
-            // 3. Tab strip
-            Rectangle {
-                Layout.fillWidth: true
-                height: Theme.tabBarHeight
+                height: 38
                 color: Theme.bgPanel
 
                 RowLayout {
@@ -413,10 +372,10 @@ ApplicationWindow {
                     spacing: 0
 
                     Repeater {
-                        model: root.tabLabels
+                        model: root.tabPages
 
                         delegate: Rectangle {
-                            required property string modelData
+                            required property var modelData
                             required property int index
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -427,23 +386,24 @@ ApplicationWindow {
                                 anchors.bottom: parent.bottom
                                 width: parent.width
                                 height: 2
-                                color: root.activeTab === modelData ? Theme.accent : "transparent"
+                                color: root.activeTab === modelData.key ? Theme.accent : "transparent"
                             }
 
                             Text {
                                 anchors.centerIn: parent
-                                text: modelData
-                                color: root.activeTab === modelData ? Theme.accent : Theme.textSecondary
-                                font.pixelSize: Theme.fontSizeMD
-                                font.bold: root.activeTab === modelData
+                                text: modelData.label
+                                color: root.activeTab === modelData.key ? Theme.accent : Theme.textSecondary
+                                font.pixelSize: Theme.fontSizeSM
+                                font.bold: root.activeTab === modelData.key
+                                elide: Text.ElideRight
                             }
 
                             HoverHandler { id: tabHov }
 
                             TapHandler {
                                 onTapped: {
-                                    root.activeTab = modelData
-                                    root.selectedGroup = ""
+                                    root.activeTab = modelData.key
+                                    root.selectedGroup = qsTr("All")
                                 }
                             }
                         }
@@ -451,24 +411,11 @@ ApplicationWindow {
                 }
             }
 
-            // 4. Main content area (group nav + option list)
+            // 3. Main content area
             RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 spacing: 0
-
-                // Group navigation sidebar
-                GroupNavSidebar {
-                    id: groupNav
-                    Layout.preferredWidth: 200
-                    Layout.fillHeight: true
-                    optionModel: root.optionModel
-                    groups: root.configVm ? root.configVm.groupNames(root.presetTier) : []
-                    selectedGroup: root.selectedGroup
-                    onGroupSelected: function(groupName) {
-                        root.selectedGroup = groupName
-                    }
-                }
 
                 // Option editing area
                 Rectangle {
@@ -492,7 +439,7 @@ ApplicationWindow {
                             anchors.centerIn: parent
                             visible: root.filteredIndices.length === 0
                             text: root.searchText !== "" ? qsTr("No matching options")
-                                                         : qsTr("No options in this group")
+                                                         : qsTr("No options")
                             color: Theme.textDisabled
                             font.pixelSize: Theme.fontSizeMD
                         }
@@ -530,6 +477,10 @@ ApplicationWindow {
                                 searchText: root.searchText
                                 showGroupHeader: optDelegate.showGroupHeader
                                 oGroup: optDelegate.optGroup
+                                compact: true
+                                compactLabelWidth: 210
+                                compactFieldWidth: 96
+                                compactEnumWidth: 190
                                 valueSource: {
                                     if (!root.configVm || !root.optionModel) return ""
                                     var key = root.optionModel.optKey(optDelegate.optIdx)
@@ -537,126 +488,6 @@ ApplicationWindow {
                                 }
                             }
                         }
-                    }
-                }
-            }
-
-            // 5. Search bar
-            Rectangle {
-                Layout.fillWidth: true
-                height: 44
-                color: Theme.bgSurface
-
-                Rectangle {
-                    anchors.top: parent.top
-                    width: parent.width
-                    height: 1
-                    color: Theme.borderSubtle
-                }
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.spacingXL
-                    anchors.rightMargin: Theme.spacingXL
-                    spacing: Theme.spacingMD
-
-                    Text {
-                        text: root.title + " - " + root.filteredIndices.length + " " + qsTr("items")
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontSizeLG
-                        font.bold: true
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    // Reset Group button
-                    CxButton {
-                        text: qsTr("Reset Group")
-                        height: 28
-                        cxStyle: CxButton.Style.Ghost
-                        visible: root.selectedGroup !== "" && root.selectedGroup !== qsTr("All")
-                        onClicked: root.configVm.resetGroup(root.presetTier, root.selectedGroup)
-                    }
-
-                    // Search input
-                    CxTextField {
-                        id: searchField
-                        placeholderText: qsTr("Search options...")
-                        implicitWidth: 200
-                        onTextChanged: root.searchText = text
-                    }
-
-                    // Advanced toggle
-                    RowLayout {
-                        spacing: Theme.spacingXS
-                        Text {
-                            text: qsTr("Advanced")
-                            color: Theme.textSecondary
-                            font.pixelSize: Theme.fontSizeSM
-                        }
-                        CxSwitch {
-                            checked: root.advancedMode
-                            onToggled: root.advancedMode = checked
-                        }
-                    }
-
-                    // Match count
-                    Text {
-                        visible: root.searchText !== ""
-                        text: root.filteredIndices.length + " " + qsTr("matched")
-                        color: Theme.textTertiary
-                        font.pixelSize: Theme.fontSizeXS
-                    }
-
-                    // Modified count
-                    Text {
-                        visible: root.optionModel && root.optionModel.dirtyCount > 0
-                        text: root.optionModel.dirtyCount + " " + qsTr("modified")
-                        color: Theme.statusWarning
-                        font.pixelSize: Theme.fontSizeXS
-                        font.bold: true
-                    }
-                }
-            }
-
-            // 6. Footer action bar
-            Rectangle {
-                Layout.fillWidth: true
-                height: 44
-                color: Theme.bgSurface
-
-                // Top border
-                Rectangle {
-                    anchors.top: parent.top
-                    width: parent.width
-                    height: 1
-                    color: Theme.borderSubtle
-                }
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.rightMargin: Theme.spacingXL
-                    spacing: Theme.spacingMD
-
-                    Item { Layout.fillWidth: true }
-
-                    CxButton {
-                        text: qsTr("Save")
-                        cxStyle: CxButton.Style.Primary
-                        enabled: root.configVm && root.configVm.isPresetDirty
-                        onClicked: root.configVm.requestSavePendingChanges()
-                    }
-
-                    CxButton {
-                        text: qsTr("Discard")
-                        cxStyle: CxButton.Style.Secondary
-                        onClicked: root.attemptClose()
-                    }
-
-                    CxButton {
-                        text: qsTr("Cancel")
-                        cxStyle: CxButton.Style.Ghost
-                        onClicked: root.attemptClose()
                     }
                 }
             }

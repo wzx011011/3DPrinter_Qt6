@@ -191,6 +191,7 @@ public:
 
 signals:
   void stateChanged();
+  void sliceAffectingConfigChanged();
   void pendingUnsavedChangesRequested();
   void pendingActionApplied(const QString &action, const QString &target);
   void pendingActionCleared();

@@ -471,6 +471,7 @@ void ConfigViewModel::setCurrentPreset(const QString &presetName)
   {
     currentPreset_ = presetName;
     emit stateChanged();
+    emit sliceAffectingConfigChanged();
     return;
   }
 
@@ -485,9 +486,10 @@ void ConfigViewModel::setCurrentPreset(const QString &presetName)
   settingsTargetVolumeIndex_ = -1;
   mergePresetHierarchy();
   emit stateChanged();
+  emit sliceAffectingConfigChanged();
 }
 
-// v2.4 IO: 棰勮鍖呭鍏ュ鍑鸿浆鍙?
+// v2.4 IO: preset bundle import/export.
 bool ConfigViewModel::exportBundle(const QString &filePath) const
 {
     if (!presetService_) return false;
@@ -600,23 +602,36 @@ QString ConfigViewModel::currentPresetCompatibilityMessage() const
 
 void ConfigViewModel::setCurrentPrinterPreset(const QString &name)
 {
+  const QString beforePrinter = currentPrinterPreset_;
+  const QString beforeFilament = currentFilamentPreset_;
+  const QString beforePrint = currentPrintPreset_;
   setCurrentPresetTierValue(QStringLiteral("printer"), name);
   mergePresetHierarchy();
   emit stateChanged();
+  if (beforePrinter != currentPrinterPreset_
+      || beforeFilament != currentFilamentPreset_
+      || beforePrint != currentPrintPreset_)
+    emit sliceAffectingConfigChanged();
 }
 
 void ConfigViewModel::setCurrentFilamentPreset(const QString &name)
 {
+  const QString before = currentFilamentPreset_;
   setCurrentPresetTierValue(QStringLiteral("filament"), name);
   mergePresetHierarchy();
   emit stateChanged();
+  if (before != currentFilamentPreset_)
+    emit sliceAffectingConfigChanged();
 }
 
 void ConfigViewModel::setCurrentPrintPreset(const QString &name)
 {
+  const QString before = currentPrintPreset_;
   setCurrentPresetTierValue(QStringLiteral("print"), name);
   mergePresetHierarchy();
   emit stateChanged();
+  if (before != currentPrintPreset_)
+    emit sliceAffectingConfigChanged();
 }
 
 void ConfigViewModel::mergePresetHierarchy()
@@ -786,43 +801,67 @@ QString ConfigViewModel::presetActionBlocker(int category, const QString &preset
 
 void ConfigViewModel::setLayerHeight(double v)
 {
+  if (qFuzzyCompare(layerHeight_, v))
+    return;
   layerHeight_ = v;
   emit stateChanged();
+  emit sliceAffectingConfigChanged();
 }
 void ConfigViewModel::setPrintSpeed(int v)
 {
+  if (printSpeed_ == v)
+    return;
   printSpeed_ = v;
   emit stateChanged();
+  emit sliceAffectingConfigChanged();
 }
 void ConfigViewModel::setSupportEnabled(bool v)
 {
+  if (supportEnabled_ == v)
+    return;
   supportEnabled_ = v;
   emit stateChanged();
+  emit sliceAffectingConfigChanged();
 }
 void ConfigViewModel::setInfillDensity(int v)
 {
+  if (infillDensity_ == v)
+    return;
   infillDensity_ = v;
   emit stateChanged();
+  emit sliceAffectingConfigChanged();
 }
 void ConfigViewModel::setNozzleTemp(int v)
 {
+  if (nozzleTemp_ == v)
+    return;
   nozzleTemp_ = v;
   emit stateChanged();
+  emit sliceAffectingConfigChanged();
 }
 void ConfigViewModel::setBedTemp(int v)
 {
+  if (bedTemp_ == v)
+    return;
   bedTemp_ = v;
   emit stateChanged();
+  emit sliceAffectingConfigChanged();
 }
 void ConfigViewModel::setWallCount(int v)
 {
+  if (wallCount_ == v)
+    return;
   wallCount_ = v;
   emit stateChanged();
+  emit sliceAffectingConfigChanged();
 }
 void ConfigViewModel::setEnableBrim(bool v)
 {
+  if (enableBrim_ == v)
+    return;
   enableBrim_ = v;
   emit stateChanged();
+  emit sliceAffectingConfigChanged();
 }
 
 void ConfigViewModel::activateGlobalScope()
@@ -946,6 +985,7 @@ bool ConfigViewModel::requestSavePendingChanges()
 
 bool ConfigViewModel::requestDiscardPendingChanges()
 {
+  const bool wasDirty = isPresetDirty();
   const QString tier = normalizedTier(activePresetTier_);
   if (tier == QStringLiteral("printer"))
     printerPresetValues_ = selectedPresetValuesForTier(tier);
@@ -957,6 +997,8 @@ bool ConfigViewModel::requestDiscardPendingChanges()
   updateMergedPresetValues();
   applyScopeValues();
   emit stateChanged();
+  if (wasDirty)
+    emit sliceAffectingConfigChanged();
   return applyPendingAction();
 }
 
@@ -1010,6 +1052,7 @@ void ConfigViewModel::handleOptionValueChanged(const QString &key, const QVarian
     updateMergedPresetValues();
     applyScopeValues();
     emit stateChanged();
+    emit sliceAffectingConfigChanged();
     return;
   }
 
@@ -1019,6 +1062,8 @@ void ConfigViewModel::handleOptionValueChanged(const QString &key, const QVarian
     if (!projectService_ || !projectService_->setPlateScopedOptionValue(settingsTargetPlateIndex_, key, value))
       return;
     applyScopeValues();
+    emit stateChanged();
+    emit sliceAffectingConfigChanged();
     return;
   }
 
@@ -1030,6 +1075,8 @@ void ConfigViewModel::handleOptionValueChanged(const QString &key, const QVarian
     return;
 
   applyScopeValues();
+  emit stateChanged();
+  emit sliceAffectingConfigChanged();
 }
 
 QVariant ConfigViewModel::scopedValueForKey(const QString &key, const QVariant &fallback) const
@@ -1099,10 +1146,10 @@ QSet<QString> ConfigViewModel::readonlyKeysForCurrentScope() const
   return {};
 }
 
-// 鈹€鈹€ Fuzzy matching helper (瀵归綈涓婃父 OptionsSearcher::search / fts_fuzzy_match) 鈹€鈹€
+// Fuzzy matching helper based on upstream OptionsSearcher / fts_fuzzy_match.
 namespace {
 
-// Subsequence matching with scoring (simplified M枚ller鈥揟rumbore-style scan)
+// Subsequence matching with scoring.
 static bool fuzzyMatch(const QString &pattern, const QString &text, int &outScore)
 {
   const int m = pattern.size(), n = text.size();
@@ -1400,18 +1447,16 @@ int fuzzyMatch(const QString &pattern, const QString &text, bool *outAllConsecut
   return score;
 }
 
-/// 鍦ㄥ涓瓧娈典腑鎼滅储锛岃繑鍥炴渶浣冲垎鏁板拰鍖归厤鐨勫瓧娈电储寮?
-/// fields: 瑕佹悳绱㈢殑鏂囨湰瀛楁鍒楄〃
-/// 杩斿洖鏈€浣虫ā绯婂尮閰嶅垎鏁?
+/// Returns the best fuzzy score across searchable fields.
 int bestFuzzyScore(const QString &needle, const QStringList &fields)
 {
   int best = 0;
   for (const auto &field : fields) {
-    // 瀛愪覆瀹屽叏鍖呭惈缁欐渶楂樺垎
+    // Direct substring match is strongest.
     if (field.toLower().contains(needle))
       return 1000 + needle.length() * 10;
 
-    // 妯＄硦鍖归厤
+    // Fuzzy subsequence match.
     bool dummy;
     int s = fuzzyMatch(needle, field, &dummy);
     if (s > best)
@@ -1476,8 +1521,8 @@ QString ConfigViewModel::valueSourceForKey(const QString &key) const
 
 QString ConfigViewModel::valueChainForKey(const QString &key) const
 {
-  // 杩斿洖 JSON: {"default":v,"printer":v,"filament":v,"print":v}
-  // 瀵归綈涓婃父 PresetBundle value_at_level 鍙鍖?
+  // Return a JSON value chain for default/printer/filament/print levels.
+  // Mirrors upstream PresetBundle value-at-level diagnostics.
   if (!printOptions_ || !presetService_)
     return QStringLiteral("{\"default\":\"\"}");
 
@@ -1794,6 +1839,7 @@ QString ConfigViewModel::globalModifiedDefaultValue(const QString &key) const
 bool ConfigViewModel::resetGlobalOption(const QString &key)
 {
   const QString tier = normalizedTier(activePresetTier_);
+  const QVariant before = effectivePresetValuesForTier(tier).value(key);
   const auto presetValues = selectedPresetValuesForTier(tier);
   const auto fallbackValues = referenceValuesForTier(tier);
   if (!presetValues.contains(key) && !fallbackValues.contains(key))
@@ -1808,12 +1854,15 @@ bool ConfigViewModel::resetGlobalOption(const QString &key)
   updateMergedPresetValues();
   applyScopeValues();
   emit stateChanged();
+  if (before != target)
+    emit sliceAffectingConfigChanged();
   return true;
 }
 
 void ConfigViewModel::resetAllGlobalOptions()
 {
   const QString tier = normalizedTier(activePresetTier_);
+  const auto before = effectivePresetValuesForTier(tier);
   const auto presetValues = selectedPresetValuesForTier(tier);
   if (tier == QStringLiteral("printer"))
     printerPresetValues_ = presetValues;
@@ -1824,6 +1873,8 @@ void ConfigViewModel::resetAllGlobalOptions()
   updateMergedPresetValues();
   applyScopeValues();
   emit stateChanged();
+  if (before != effectivePresetValuesForTier(tier))
+    emit sliceAffectingConfigChanged();
 }
 
 // SETTINGS-05 reset-group: reset all options in a named group to reference values.
@@ -1844,7 +1895,10 @@ void ConfigViewModel::resetGroup(const QString &tier, const QString &groupName)
     }
   }
   if (anyReset)
+  {
     emit stateChanged();
+    emit sliceAffectingConfigChanged();
+  }
 }
 
 // Per-option nullable flag proxy — delegates to optionModelForTier.

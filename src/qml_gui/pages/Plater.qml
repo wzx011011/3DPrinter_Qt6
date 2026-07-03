@@ -51,8 +51,8 @@ Item {
 
     // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage)
     property bool sidebarCollapsed: false
-    property int sidebarWidth: 280
-    property int sidebarMinWidth: 240
+    property int sidebarWidth: 390
+    property int sidebarMinWidth: 360
     property int sidebarMaxWidth: 480
     property int sidebarDockArea: 0
     property var sidebarToggleRequested: null
@@ -94,6 +94,9 @@ Item {
         // 常驻实例：visible 切换，不销毁（ARCH-07 状态保留）
         visible: root.viewMode === root.vmPreview
         previewVm: root.previewVm
+        editorVm: root.editorVm
+        configVm: root.configVm
+        processCategory: root.processCategory
     }
 
     // ═══ AssembleView slot（v2.0 占位）═══════════════════════════════════════

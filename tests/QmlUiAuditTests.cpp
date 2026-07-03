@@ -52,7 +52,7 @@ private slots:
   // Phase 53: Prepare object, plate, and viewport actions bind to C++ gates.
   void prepareWorkflowActionsBindCppGates();
   // Phase 55-04 (GCODE-04/05): source-audit guards for the SoftwareViewport
-  // absence, the computePreviewDrawRange role-skip block, and the
+  // absence, the computePreviewDrawRanges role-skip block, and the
   // GcvPackedSegment sizeof wire-format lockstep.
   void previewPageNeverReferencesSoftwareViewport();
   void rhiViewportRendererComputePreviewDrawRangeAppliesRoleFilter();
@@ -67,6 +67,9 @@ private slots:
   void settingsDialogNoRawControls();
   void settingsDialogStringsQsTr();
   void settingsDialogMainQmlDispatchStructural();
+  void settingsDialogFiltersByTabAndGroup();
+  void settingsDialogReadOnlySaveOpensSaveAs();
+  void leftSidebarParamsPanelUsesRealOptionRows();
   // Phase 57-02 (CLEAN-01/02 regression): the 7 obsolete QML files locked by
   // Phase 50 section 1.6 (SettingsPage/ConfigPage/ParamsPage/SearchDialog)
   // plus the legacy Sidebar/FilamentPanel/PrintSettings deferred by Phase 52
@@ -711,8 +714,8 @@ void QmlUiAuditTests::previewRhiRendererResetsGpuStateAfterResourceRelease()
                && helper.contains(QStringLiteral("m_previewSegmentVertexCount = 0")),
            "Preview GPU reset helper must optionally clear CPU staging and vertex count for payload changes");
 
-  const int rangeStart = rendererSource.indexOf(QStringLiteral("void RhiViewportRenderer::computePreviewDrawRange"));
-  QVERIFY2(rangeStart >= 0, "computePreviewDrawRange implementation missing");
+  const int rangeStart = rendererSource.indexOf(QStringLiteral("QVector<RhiViewportRenderer::PreviewDrawRange> RhiViewportRenderer::computePreviewDrawRanges"));
+  QVERIFY2(rangeStart >= 0, "computePreviewDrawRanges implementation missing");
   const QString drawRange = rendererSource.mid(rangeStart);
   QVERIFY2(drawRange.contains(QStringLiteral("const int layerLow = std::min(m_layerMin, m_layerMax)"))
                && drawRange.contains(QStringLiteral("const int layerHigh = std::max(m_layerMin, m_layerMax)")),
@@ -867,7 +870,7 @@ void QmlUiAuditTests::previewLayoutRestoresScreenshotRegionsAndGcodePanel()
     QStringLiteral("id: rightPanel"),
     QStringLiteral("id: verticalLayerRail"),
     QStringLiteral("id: moveSliderBar"),
-    QStringLiteral("Components.LayerSlider"),
+    QStringLiteral("LeftSidebar {"),
     QStringLiteral("Components.MoveSlider"),
     QStringLiteral("Components.StatsPanel"),
     QStringLiteral("Components.Legend"),
@@ -882,11 +885,12 @@ void QmlUiAuditTests::previewLayoutRestoresScreenshotRegionsAndGcodePanel()
   const QStringList requiredStateBindings = {
     QStringLiteral("root.previewVm.currentLayerLabel"),
     QStringLiteral("root.previewVm.currentMoveLabel"),
-    QStringLiteral("root.previewVm.plateSummary"),
-    QStringLiteral("root.previewVm.warningSummary"),
+    QStringLiteral("editorVm: root.editorVm"),
+    QStringLiteral("configVm: root.configVm"),
+    QStringLiteral("processCategory: root.processCategory"),
     QStringLiteral("root.previewVm.gcodeLines"),
     QStringLiteral("root.previewVm.currentGcodeLine"),
-    QStringLiteral("root.leftPanelExpanded"),
+    QStringLiteral("root.leftPanelWidth"),
     QStringLiteral("root.rightPanelExpanded")
   };
   for (const QString &binding : requiredStateBindings) {
@@ -1203,9 +1207,12 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
   QVERIFY2(sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"process\")")),
            "LeftSidebar Setting button must call backend.forwardSettingsRequest(\"process\")");
 
-  // PREPSB-04: search box wired to filterOptionIndices (onAccepted + onTextChanged).
-  QVERIFY2(sidebar.count(QStringLiteral("filterOptionIndices")) >= 2,
-           "LeftSidebar search must call filterOptionIndices on both onAccepted and onTextChanged");
+  // PREPSB-04: search box rebuilds the shared ParamsPanel filter on accept/change.
+  QVERIFY2(sidebar.contains(QStringLiteral("function rebuildParamsFilter()"))
+               && sidebar.contains(QStringLiteral("filterOptionIndices")),
+           "LeftSidebar must centralize ParamsPanel filtering through filterOptionIndices");
+  QVERIFY2(sidebar.count(QStringLiteral("root.rebuildParamsFilter()")) >= 3,
+           "LeftSidebar search/tab changes must call rebuildParamsFilter");
 
   // PREPSB-04: scope toggles complete (Global/Object/Plate).
   QVERIFY2(sidebar.contains(QStringLiteral("requestGlobalScope")),
@@ -1266,7 +1273,7 @@ void QmlUiAuditTests::prepareWorkflowActionsBindCppGates()
 // ── Phase 55-04 (GCODE-04/05): Preview renderer source-audit guards ──
 // These three source-audit tests lock the renderer/UI contracts that defend
 // the disappearing-preview regression class: PreviewPage must never instantiate
-// SoftwareViewport, computePreviewDrawRange must consult the role-visibility
+// SoftwareViewport, computePreviewDrawRanges must consult the role-visibility
 // mask for render-side filtering, and the GcvPackedSegment wire format must
 // stay sizeof-locked at 76 bytes (Plan 02 lockstep).
 
@@ -1283,24 +1290,32 @@ void QmlUiAuditTests::previewPageNeverReferencesSoftwareViewport()
            "the normal path is RhiViewport registered as GLViewport)");
 }
 
-// Phase 55 (GCODE-02): computePreviewDrawRange must consult m_roleVisibility so
-// the renderer skips masked spans over the already-uploaded segment buffer
-// without repacking gcodePreviewData_ (Plan 02 render-side filter contract).
+// Phase 55 (GCODE-02): computePreviewDrawRanges must consult m_roleVisibility
+// and return multiple draw ranges so masked spans in the middle are not drawn
+// by one broad contiguous draw call.
 void QmlUiAuditTests::rhiViewportRendererComputePreviewDrawRangeAppliesRoleFilter()
 {
   const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
   QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
 
-  QVERIFY2(rendererSource.contains(QStringLiteral("computePreviewDrawRange")),
-           "RhiViewportRenderer must define computePreviewDrawRange (Plan 02 contract)");
+  QVERIFY2(rendererSource.contains(QStringLiteral("computePreviewDrawRanges")),
+           "RhiViewportRenderer must define computePreviewDrawRanges (Plan 02 contract)");
 
   // The role-skip block must reference the per-role visibility mask. This is
   // the supporting evidence for the ViewModelSmokeTests no-repack guard.
-  const int rangeStart = rendererSource.indexOf(QStringLiteral("computePreviewDrawRange"));
-  QVERIFY2(rangeStart >= 0, "computePreviewDrawRange implementation not found");
+  const int rangeStart = rendererSource.indexOf(QStringLiteral("computePreviewDrawRanges"));
+  QVERIFY2(rangeStart >= 0, "computePreviewDrawRanges implementation not found");
   QVERIFY2(rendererSource.contains(QStringLiteral("m_roleVisibility")),
-           "computePreviewDrawRange must consult m_roleVisibility for render-side role filtering "
+           "computePreviewDrawRanges must consult m_roleVisibility for render-side role filtering "
            "(Plan 02 contract)");
+  QVERIFY2(rendererSource.contains(QStringLiteral("QVector<RhiViewportRenderer::PreviewDrawRange>")),
+           "computePreviewDrawRanges must return a QVector of draw ranges, not one broad range");
+  QVERIFY2(rendererSource.contains(QStringLiteral("ranges.append")),
+           "computePreviewDrawRanges must append separate visible ranges");
+  QVERIFY2(rendererSource.contains(QStringLiteral("for (const PreviewDrawRange &range : drawRanges)")),
+           "render() must iterate all visible preview draw ranges");
+  QVERIFY2(rendererSource.contains(QStringLiteral("cb->draw(range.vertexCount, 1, range.firstVertex)")),
+           "render() must draw each visible range independently");
 }
 
 // Phase 55 (GCODE-05): GcvPackedSegment must carry a compile-time sizeof==76
@@ -1461,6 +1476,69 @@ void QmlUiAuditTests::settingsDialogMainQmlDispatchStructural()
            "main.qml must dispatch settingsRequested to all three SettingsDialog instances");
   QVERIFY2(mainQml.contains(QStringLiteral("SettingsDialog {")),
            "main.qml must instantiate SettingsDialog");
+}
+
+void QmlUiAuditTests::settingsDialogFiltersByTabAndGroup()
+{
+  const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
+  const QString groupNav = readSource(QStringLiteral("src/qml_gui/components/GroupNavSidebar.qml"));
+  QVERIFY2(!settingsDialog.isEmpty(), "Unable to read SettingsDialog.qml");
+  QVERIFY2(!groupNav.isEmpty(), "Unable to read GroupNavSidebar.qml");
+
+  QVERIFY2(settingsDialog.contains(QStringLiteral("filterIndicesByPage")),
+           "SettingsDialog rebuildFilter must narrow option indices by active tab/page");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("filterIndicesByGroup")),
+           "SettingsDialog rebuildFilter must narrow option indices by selected group");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("root.selectedGroup = qsTr(\"All\")")),
+           "SettingsDialog tab switches must reset group navigation to All");
+  QVERIFY2(groupNav.contains(QStringLiteral("countForGroup")),
+           "GroupNavSidebar badges must count options by group, not by category");
+}
+
+void QmlUiAuditTests::settingsDialogReadOnlySaveOpensSaveAs()
+{
+  const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
+  QVERIFY2(!settingsDialog.isEmpty(), "Unable to read SettingsDialog.qml");
+
+  QVERIFY2(settingsDialog.contains(QStringLiteral("function requestSaveAndMaybeClose")),
+           "SettingsDialog must centralize save handling so false returns do not close the dialog");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("function onSaveAsRequired()")),
+           "SettingsDialog must handle ConfigViewModel::saveAsRequired");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("saveAsDialog.open()")),
+           "Read-only preset save must open SavePresetDialog");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("closeAfterSaveAs")),
+           "Unsaved close flow must remember whether Save As should close the settings window");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("root.requestSaveAndMaybeClose(true)")),
+           "Unsaved-dialog Save action must close only after a successful save or Save As");
+}
+
+void QmlUiAuditTests::leftSidebarParamsPanelUsesRealOptionRows()
+{
+  const QString sidebar = readSource(QStringLiteral("src/qml_gui/panels/LeftSidebar.qml"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
+  QVERIFY2(!sidebar.isEmpty(), "Unable to read LeftSidebar.qml");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!settingsDialog.isEmpty(), "Unable to read SettingsDialog.qml");
+
+  QVERIFY2(!sidebar.contains(QStringLiteral("参数列表暂不可用")),
+           "LeftSidebar ParamsPanel must not show the old unavailable placeholder");
+  QVERIFY2(sidebar.contains(QStringLiteral("OptionRow {")),
+           "LeftSidebar ParamsPanel must render real ConfigOptionModel rows");
+  QVERIFY2(sidebar.contains(QStringLiteral("paramsOptionModel")),
+           "LeftSidebar ParamsPanel must choose an option model for the active tab");
+  QVERIFY2(sidebar.contains(QStringLiteral("rebuildParamsFilter")),
+           "LeftSidebar search/tab changes must rebuild the params filter");
+  QVERIFY2(sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"process\")")),
+           "LeftSidebar process edit button must open the process SettingsDialog");
+  QVERIFY2(sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"printer\")"))
+               && sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"filament\")")),
+           "LeftSidebar preset edit buttons must open tier-specific SettingsDialog windows");
+  QVERIFY2(preparePage.contains(QStringLiteral("backend.forwardSettingsRequest(\"process\")")),
+           "Prepare context menu process settings entries must open the process SettingsDialog");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("key: \"Other\""))
+               && !settingsDialog.contains(QStringLiteral("key: \"Others\"")),
+           "Process SettingsDialog tabs must use ConfigOptionModel page keys such as Other");
 }
 
 // Phase 57-02 (CLEAN-02 regression): the 7 obsolete QML files removed in Wave 1

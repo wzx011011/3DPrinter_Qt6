@@ -163,6 +163,7 @@ private slots:
   // Phase 52-03 (PREPSB-05): config/preset change invalidates prior slice
   // results; staleness Q_PROPERTYs reach QML.
   void sidebarPresetChangeInvalidatesSliceResults();
+  void settingsOpenDoesNotInvalidateSliceResults();
   // Phase 52-03 (PREPSB-02): settings signal forward is honest (emits + logs).
   void sidebarSettingsForwardEmitsRequestedSignal();
   // Phase 04-01: Sidebar Dockable 状态 + 持久化
@@ -1539,8 +1540,9 @@ void ViewModelSmokeTests::shellStateGatesForwardToEditorViewModelAndPreserveRoun
 // result, so a user could change a filament preset and export G-code based on
 // the OLD preset. This test is the regression guard: it verifies the staleness
 // Q_PROPERTYs (Plan 52-01) are registered on EditorViewModel and that the
-// configVm.stateChanged -> editor invalidateAllSliceResults connect is wired and
-// active (driving a config change fires editor stateChanged via the connect).
+// configVm.sliceAffectingConfigChanged -> editor invalidateAllSliceResults
+// connect is wired and active (driving a real option/preset change fires editor
+// stateChanged via the connect).
 //
 // Honest scope: this asserts the CONNECT FIRES (the deterministic, no-libslic3r
 // guard). The stale-becomes-true path requires a prior real slice result; that
@@ -1570,15 +1572,14 @@ void ViewModelSmokeTests::sidebarPresetChangeInvalidatesSliceResults()
   QVERIFY2(editor->stalePlateIndices().isEmpty(),
            "stalePlateIndices must be empty before any config change");
 
-  // The PREPSB-05 mechanism is the Plan 52-01 connect in BackendContext:
-  // configVm.stateChanged -> editor->invalidateAllSliceResults() +
-  // emit editor stateChanged. To verify it is wired, drive a config change
-  // (a preset selection / scope change) and assert the editor stateChanged
-  // spy fires (proving the connect forwarded). A full stale-becomes-true
-  // assertion would require a prior real slice result (libslic3r fixture);
-  // the connect-fires guard is the deterministic regression guard.
+  // The PREPSB-05 mechanism is the BackendContext connect:
+  // configVm.sliceAffectingConfigChanged -> editor->invalidateAllSliceResults()
+  // + emit editor stateChanged. To verify it is wired, drive a preset or option
+  // value change and assert the editor stateChanged spy fires.
   QSignalSpy editorSpy(editor, &EditorViewModel::stateChanged);
   QVERIFY(editorSpy.isValid());
+  QSignalSpy configSliceSpy(config, &ConfigViewModel::sliceAffectingConfigChanged);
+  QVERIFY(configSliceSpy.isValid());
 
   // loadDefault ensures the preset list is populated so a selection change has
   // a target. The exact preset name is not significant -- any successful
@@ -1586,9 +1587,8 @@ void ViewModelSmokeTests::sidebarPresetChangeInvalidatesSliceResults()
   config->loadDefault();
   editorSpy.clear();
 
-  // Drive a config change: select an alternate print preset if more than one
-  // exists; otherwise force a stateChanged by toggling scope (still a config
-  // change that must invalidate per PREPSB-05).
+  // Drive a slice-affecting config change: select an alternate print preset if
+  // more than one exists; otherwise mutate a writable print option.
   const QStringList printNames = config->printPresetNames();
   QVERIFY2(!printNames.isEmpty(), "default print preset list must be non-empty");
   if (printNames.size() > 1) {
@@ -1596,19 +1596,54 @@ void ViewModelSmokeTests::sidebarPresetChangeInvalidatesSliceResults()
                             ? printNames.last() : printNames.first();
     config->requestCurrentPrintPreset(alt);
   } else {
-    config->requestGlobalScope();
+    auto *printOpts = qobject_cast<ConfigOptionModel *>(config->printOptions());
+    QVERIFY(printOpts);
+    int row = -1;
+    for (int i = 0; i < printOpts->rowCount() && row < 0; ++i) {
+      if (!printOpts->optReadonly(i))
+        row = i;
+    }
+    QVERIFY2(row >= 0, "No writable print option available to mutate");
+    const QVariant oldValue = printOpts->optValue(row);
+    const QVariant newValue = oldValue.canConvert<double>()
+        ? QVariant(oldValue.toDouble() + 0.01)
+        : QVariant(QStringLiteral("T_%1").arg(oldValue.toString()));
+    printOpts->setValue(row, newValue);
   }
 
-  // The Plan 52-01 connect must have forwarded configVm.stateChanged to
+  QVERIFY2(configSliceSpy.count() >= 1,
+           "slice-affecting config changes must emit sliceAffectingConfigChanged");
+  // The composition-root connect must forward sliceAffectingConfigChanged to
   // editor->invalidateAllSliceResults() + emit editor stateChanged.
   QVERIFY2(editorSpy.count() >= 1,
-           "configVm.stateChanged must forward to editor stateChanged (PREPSB-05 connect)");
+           "sliceAffectingConfigChanged must forward to editor stateChanged (PREPSB-05 connect)");
   // With no prior slice result, hasStaleSliceResults stays false (nothing to
   // invalidate), BUT the connect fired -- the mechanism is wired. The
   // stale-becomes-true path requires a prior slice result; that is covered by
   // the slice-result tests. Here we assert the CONNECT is present and active.
   // (Driving a full slice + config change would require libslic3r + a model
-  //  fixture; the connect-wired assertion is the deterministic guard.)
+  // fixture; the connect-wired assertion is the deterministic guard.)
+}
+
+void ViewModelSmokeTests::settingsOpenDoesNotInvalidateSliceResults()
+{
+  // Opening a settings dialog changes only the active settings tier. It must
+  // not clear existing slice/preview/export results.
+  BackendContext ctx;
+  auto *editor = qobject_cast<EditorViewModel *>(ctx.editorViewModel());
+  auto *config = qobject_cast<ConfigViewModel *>(ctx.configViewModel());
+  QVERIFY(editor);
+  QVERIFY(config);
+
+  QSignalSpy editorSpy(editor, &EditorViewModel::stateChanged);
+  QVERIFY(editorSpy.isValid());
+  QSignalSpy sliceConfigSpy(config, &ConfigViewModel::sliceAffectingConfigChanged);
+  QVERIFY(sliceConfigSpy.isValid());
+
+  ctx.forwardSettingsRequest(QStringLiteral("printer"));
+
+  QCOMPARE(sliceConfigSpy.count(), 0);
+  QCOMPARE(editorSpy.count(), 0);
 }
 
 // ── Phase 52-03 (PREPSB-02): settings forward signal is honest ──
@@ -1652,9 +1687,9 @@ void ViewModelSmokeTests::testSidebarCollapsedDefault()
 
   // 默认未折叠（对齐上游 Plater 默认显示 sidebar）
   QCOMPARE(ctx.sidebarCollapsed(), false);
-  QCOMPARE(ctx.sidebarMinWidth(), 240);
+  QCOMPARE(ctx.sidebarMinWidth(), 360);
   QCOMPARE(ctx.sidebarMaxWidth(), 480);
-  QCOMPARE(ctx.sidebarWidth(), 280);  // 默认宽度
+  QCOMPARE(ctx.sidebarWidth(), 390);  // 默认宽度
   QCOMPARE(ctx.sidebarDockArea(), static_cast<int>(BackendContext::SidebarDockArea::Left));
 }
 
@@ -1701,7 +1736,7 @@ void ViewModelSmokeTests::testSidebarWidthClamp()
 
   // 越小值 clamp 到 min
   ctx.requestSetSidebarWidth(100);
-  QCOMPARE(ctx.sidebarWidth(), 240);  // clamp 到 min
+  QCOMPARE(ctx.sidebarWidth(), 360);  // clamp 到 min
   QCOMPARE(spy.count(), 1);
 
   // 越大值 clamp 到 max
@@ -1712,18 +1747,18 @@ void ViewModelSmokeTests::testSidebarWidthClamp()
 
   // 正常值原样存
   spy.clear();
-  ctx.requestSetSidebarWidth(320);
-  QCOMPARE(ctx.sidebarWidth(), 320);
+  ctx.requestSetSidebarWidth(420);
+  QCOMPARE(ctx.sidebarWidth(), 420);
   QCOMPARE(spy.count(), 1);
 
-  // clamp 后同值去重（设置 320 再设置 350 才变）
+  // clamp 后同值去重
   spy.clear();
-  ctx.requestSetSidebarWidth(320);  // 同值
+  ctx.requestSetSidebarWidth(420);  // 同值
   QCOMPARE(spy.count(), 0);
 
   // 持久化验证
   BackendContext ctx2;
-  QCOMPARE(ctx2.sidebarWidth(), 320);  // 从 QSettings 恢复
+  QCOMPARE(ctx2.sidebarWidth(), 420);  // 从 QSettings 恢复
 
   resetSidebarSettings();
 }
@@ -3425,6 +3460,38 @@ void ViewModelSmokeTests::testPerDialogSearchAndFourLevelMode()
   QList<int> processIndices = config.filterOptionIndices(
       QStringLiteral("process"), QString(), false);
   QCOMPARE(processIndices, simpleIndices);
+
+  // SettingsDialog applies the same result chain in QML: tier/search/mode,
+  // then active tab page, then selected group. The model helpers must preserve
+  // that contract without relying on category names.
+  const QStringList pages = printOpts->pageNames();
+  QVERIFY2(!pages.isEmpty(), "Print options must expose at least one page");
+  const QString page = pages.first();
+  const QList<int> pageIndices = printOpts->filterIndicesByPage(advancedIndices, page);
+  QVERIFY2(!pageIndices.isEmpty(), "filterIndicesByPage must return rows for a populated page");
+  for (int idx : pageIndices) {
+    QCOMPARE(printOpts->optPage(idx), page);
+  }
+
+  QString group;
+  for (int idx : pageIndices) {
+    group = printOpts->optGroup(idx);
+    if (!group.isEmpty())
+      break;
+  }
+  QVERIFY2(!group.isEmpty(), "At least one filtered option must expose a group");
+  const QList<int> groupIndices = printOpts->filterIndicesByGroup(pageIndices, group);
+  QVERIFY2(!groupIndices.isEmpty(), "filterIndicesByGroup must return rows for a populated group");
+  for (int idx : groupIndices) {
+    QCOMPARE(printOpts->optGroup(idx), group);
+  }
+
+  int manualGroupCount = 0;
+  for (int i = 0; i < printOpts->rowCount(); ++i) {
+    if (printOpts->optGroup(i) == group)
+      ++manualGroupCount;
+  }
+  QCOMPARE(printOpts->countForGroup(group), manualGroupCount);
 }
 
 void ViewModelSmokeTests::testNullableAndVectorOptions()

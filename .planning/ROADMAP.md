@@ -9,34 +9,31 @@
 - Complete at MVP level, superseded for completeness: **v3.3 Slice Preview Main Flow MVP** - Phases 33-36
 - Automated verification passed, manual UAT deferred: **v3.4 Import to G-code Complete Workflow** - Phases 37-43
 - Superseded after Phase 46: **v3.5 Preset Authoring Complete Workflow** - Phases 44-49
-- Automated verification passed, manual UAT deferred: **v3.6 Screenshot-Driven OrcaSlicer UI Restoration** - Phases 50-58 (shipped 2026-07-03; VERIFY-04 visual UAT at `.planning/phases/58-.../58-UAT.md`)
+- Automated verification passed, visual UAT not closed: **v3.6 Screenshot-Driven OrcaSlicer UI Restoration** - Phases 50-58 (2026-07-03; VERIFY-04 was not executed)
+- Active: **v3.7 Screenshot-Level UI Parity Closure** - Phases 59-64
 
-## Active Milestone: v3.6 Screenshot-Driven OrcaSlicer UI Restoration
+## Active Milestone: v3.7 Screenshot-Level UI Parity Closure
 
-**Goal:** Restore the Prepare page, Preview page, and parameter settings workflows as complete OrcaSlicer-equivalent user flows, using screenshots as visual/layout truth and OrcaSlicer source as behavior truth.
+**Goal:** Close the visual parity gap left by v3.6. The target is running-app
+visual parity against the four screenshots in `shotScreen/`, with OrcaSlicer
+upstream behavior preserved where controls are interactive.
 
 **Success criteria:**
 
-- Every visible screenshot module has a recorded mapping to Qt target files and upstream OrcaSlicer source files.
-- Prepare page layout and behavior support import, preset selection, object/plate actions, viewport controls, and gizmo entry points without placeholder-only workflows.
-- Preview page layout and behavior support G-code inspection, layer/move sliders, camera interaction, right-side legend/stat panels, and G-code text sync without disappearing-render regressions.
-- Printer, material, and process settings are restored as independent source-truth-aligned dialogs/pages with typed option editing, dirty state, validation, save/reset, and compatibility behavior.
-- Replaced pages/components leave no abandoned files, routes, resource entries, registrations, imports, or tests behind.
-- The full local workflow import -> configure -> prepare -> slice -> preview -> export is verified with automated checks and manual visual/UAT evidence.
+- Prepare page, Preview page, Printer Settings, and Material Settings match the supplied screenshots at module layout, spacing, density, and visible-state level.
+- No visible in-scope UI shows unavailable placeholder copy.
+- Remaining unavailable controls in scope are hidden or disabled in a screenshot/source-truth-compatible way.
+- Phases 59-63 are executed as a batch without canonical full builds between phases, per user instruction.
+- Phase 64 runs the single canonical verification command and captures running-app visual evidence.
 
 ## Phases
 
-- [x] **Phase 50:** Screenshot and Source-Truth Inventory (completed 2026-06-30)
-- [x] **Phase 51:** Shell and Navigation Restoration (completed 2026-07-01)
-- [x] **Phase 52:** Prepare Sidebar and Preset Controls (completed 2026-07-01)
-- [x] **Phase 53:** Prepare Object, Plate, and Viewport Workflow (completed 2026-07-01)
-- [x] **Phase 54:** Preview Layout, Sliders, and Right Panels (completed 2026-07-01)
-- [x] **Phase 55:** G-code Preview Semantics and Rendering Stability (completed 2026-07-02)
-- [x] **Phase 56:** Parameter Settings Dialogs Restoration
- (completed 2026-07-03)
-- [x] **Phase 57:** Deprecated UI Removal and Architecture Cleanup
- (completed 2026-07-03)
-- [x] **Phase 58:** End-to-End Visual and Functional Verification (automated floor complete; VERIFY-04 manual UAT pending human sign-off)
+- [x] **Phase 59:** v3.6 status correction and visual baseline matrix
+- [x] **Phase 60:** Prepare sidebar and viewport chrome parity
+- [x] **Phase 61:** Settings dialog compact OrcaSlicer tab layout parity
+- [x] **Phase 62:** Preview right panel, sliders, and G-code text parity
+- [x] **Phase 63:** Placeholder removal, static audit hardening, and visual UAT assets
+- [x] **Phase 64:** Unified canonical build and running-app visual acceptance
 
 ### Phase 50: Screenshot and Source-Truth Inventory
 

@@ -88,13 +88,10 @@ BackendContext::BackendContext(QObject *parent)
   });
   monitorViewModel_ = new MonitorViewModel(deviceService_, networkService_, cameraService_, this);
   configViewModel_ = new ConfigViewModel(presetService_, projectService_, this);
-  // Phase 52 PREPSB-05 (CRITICAL): a config/preset/scope/option change makes any
-  // previously-sliced/previewed/exported result stale. Invalidate ALL plates
-  // (a preset change affects every plate's result) and refresh the editor so the
-  // new stalePlateIndices / hasStaleSliceResults Q_PROPERTYs reach QML. This
-  // closes the gap where changing a preset did not invalidate a prior result,
-  // which could let a user export G-code based on the OLD preset.
-  connect(configViewModel_, &ConfigViewModel::stateChanged, editorViewModel_,
+  // Phase 52 PREPSB-05 (CRITICAL): a real slicing config change makes any
+  // previously-sliced/previewed/exported result stale. UI-only settings state
+  // changes (opening a dialog or switching tabs) must not clear results.
+  connect(configViewModel_, &ConfigViewModel::sliceAffectingConfigChanged, editorViewModel_,
           [this]() {
             editorViewModel_->invalidateAllSliceResults();
             emit editorViewModel_->stateChanged();

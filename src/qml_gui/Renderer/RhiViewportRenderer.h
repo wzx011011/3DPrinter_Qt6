@@ -27,6 +27,11 @@ public:
     float b;
     float a;
   };
+  struct PreviewDrawRange
+  {
+    quint32 firstVertex = 0;
+    quint32 vertexCount = 0;
+  };
 
   RhiViewportRenderer();
   ~RhiViewportRenderer() override;
@@ -55,7 +60,7 @@ private:
   // ── Phase 26: Preview segment pipeline (D-26-01..04) ──
   void parsePreviewSegments();
   bool uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *updates);
-  void computePreviewDrawRange(quint32 &firstVertex, quint32 &vertexCount) const;
+  QVector<PreviewDrawRange> computePreviewDrawRanges() const;
 
   QVector<Vertex> buildSceneVertices(const QList<PrepareSceneData::Vertex> &source) const;
   QVector<Vertex> buildModelVertices(const QList<PrepareSceneData::ModelVertex> &source) const;

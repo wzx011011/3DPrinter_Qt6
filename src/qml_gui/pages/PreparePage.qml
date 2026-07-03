@@ -18,8 +18,8 @@ Item {
     property bool leftPanelVisible: true
     // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage → DockableSidebar)
     property bool sidebarCollapsed: false
-    property int sidebarWidth: 280
-    property int sidebarMinWidth: 240
+    property int sidebarWidth: 390
+    property int sidebarMinWidth: 360
     property int sidebarMaxWidth: 480
     property int sidebarDockArea: 0   // 0=Left, 1=Right
     // sidebar 操作回调 (转发到 backend, 由 main.qml 注入)
@@ -359,7 +359,7 @@ Item {
         }
         CxMenuItem {
             text: qsTr("编辑工艺设置")
-            onTriggered: backend.openSettings()
+            onTriggered: backend.forwardSettingsRequest("process")
         }
         MenuSeparator { }
         // 对齐上游 append_menu_item_reload_from_disk
@@ -444,7 +444,7 @@ Item {
         }
         CxMenuItem {
             text: qsTr("编辑工艺设置")
-            onTriggered: backend.openSettings()
+            onTriggered: backend.forwardSettingsRequest("process")
         }
         MenuSeparator { }
         // 对齐上游 append_menu_item_change_filament — Change Filament submenu

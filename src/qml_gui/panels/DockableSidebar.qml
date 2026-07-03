@@ -55,9 +55,8 @@ Item {
         // 折叠时整体隐藏（宽度已为 0，此处 visible 防止残留渲染）
         visible: !root.collapsed
         color: Theme.bgPanel
-        radius: 18
-        border.width: 1
-        border.color: Theme.borderSubtle
+        radius: 0
+        border.width: 0
 
         // ── 标题栏（折叠按钮 + dock 切换占位）──
         // 对齐上游 Sidebar 标题栏，右侧放折叠按钮（Phase 6 会迁到 GLCanvas overlay）
@@ -66,15 +65,15 @@ Item {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: dragHandle.left
-            height: 36
+            height: 28
 
             Text {
                 anchors.left: parent.left
                 anchors.leftMargin: Theme.spacingMD
                 anchors.verticalCenter: parent.verticalCenter
-                text: qsTr("Settings")
+                text: qsTr("设置")
                 color: Theme.textSecondary
-                font.pixelSize: 13
+                font.pixelSize: 12
                 font.weight: Font.Medium
             }
 
@@ -85,8 +84,8 @@ Item {
                 anchors.right: parent.right
                 anchors.rightMargin: 4
                 anchors.verticalCenter: parent.verticalCenter
-                implicitWidth: 28
-                implicitHeight: 28
+                implicitWidth: 24
+                implicitHeight: 24
                 text: "◀"  // Phase 6 替换为 Theme 图标
                 onClicked: {
                     if (root.toggleRequested)
