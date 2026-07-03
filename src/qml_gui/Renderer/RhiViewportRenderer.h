@@ -46,7 +46,8 @@ private:
   void resetPreviewGpuState(bool keepCpuStaging);
   bool ensurePipelines();
   bool ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &pipeline,
-                      QRhiGraphicsPipeline::Topology topology);
+                      QRhiGraphicsPipeline::Topology topology,
+                      bool enableDepthWrite = true);
   bool uploadSceneBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadBedBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadModelBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
@@ -76,6 +77,10 @@ private:
   std::unique_ptr<QRhiShaderResourceBindings> m_srb;
   std::unique_ptr<QRhiGraphicsPipeline> m_fillPipeline;
   std::unique_ptr<QRhiGraphicsPipeline> m_linePipeline;
+  // Highlight is translucent (alpha < 1.0): it tests depth (so it occludes
+  // behind opaque geometry) but does not WRITE depth (so it does not block
+  // geometry drawn after it from passing the depth test).
+  std::unique_ptr<QRhiGraphicsPipeline> m_fillPipelineNoDepthWrite;
   QRhiRenderPassDescriptor *m_renderPassDescriptor = nullptr;
   bool m_sceneBuffersUploaded = false;
   bool m_modelVertexBufferUploaded = false;

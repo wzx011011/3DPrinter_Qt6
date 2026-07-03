@@ -176,7 +176,9 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->draw(m_modelVertexCount);
     }
     if (m_highlightVertexBuffer && m_highlightVertexCount > 0) {
-      cb->setGraphicsPipeline(m_fillPipeline.get());
+      // Highlight is translucent: test depth but do not write it, so it does
+      // not occlude opaque geometry drawn in subsequent frames/passes.
+      cb->setGraphicsPipeline(m_fillPipelineNoDepthWrite.get());
       const QRhiCommandBuffer::VertexInput highlightBinding(m_highlightVertexBuffer.get(), 0);
       cb->setVertexInput(0, 1, &highlightBinding);
       cb->draw(m_highlightVertexCount);
@@ -221,6 +223,7 @@ void RhiViewportRenderer::releaseResources()
 {
   m_linePipeline.reset();
   m_fillPipeline.reset();
+  m_fillPipelineNoDepthWrite.reset();
   m_srb.reset();
   m_cameraUniformBuffer.reset();
   m_highlightVertexBuffer.reset();
@@ -294,11 +297,14 @@ bool RhiViewportRenderer::ensurePipelines()
   }
 
   return ensurePipeline(m_fillPipeline, QRhiGraphicsPipeline::Triangles)
-      && ensurePipeline(m_linePipeline, QRhiGraphicsPipeline::Lines);
+      && ensurePipeline(m_linePipeline, QRhiGraphicsPipeline::Lines)
+      && ensurePipeline(m_fillPipelineNoDepthWrite, QRhiGraphicsPipeline::Triangles,
+                        /*enableDepthWrite=*/false);
 }
 
 bool RhiViewportRenderer::ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &pipeline,
-                                         QRhiGraphicsPipeline::Topology topology)
+                                         QRhiGraphicsPipeline::Topology topology,
+                                         bool enableDepthWrite)
 {
   if (pipeline)
     return true;
@@ -329,6 +335,14 @@ bool RhiViewportRenderer::ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &
   pipeline->setShaderResourceBindings(m_srb.get());
   pipeline->setVertexInputLayout(inputLayout);
   pipeline->setRenderPassDescriptor(m_renderPassDescriptor);
+  // Depth test enabled so overlapping geometry occludes correctly instead of
+  // relying purely on draw order. Requires the depth-stencil buffer that
+  // QQuickRhiItem creates when sampleCount > 1 (set in RhiViewport ctor).
+  // Qt 6.10 QRhi API: setDepthTest + setDepthWrite (compare op hardcoded Less).
+  pipeline->setDepthTest(true);
+  pipeline->setDepthWrite(enableDepthWrite);
+  // Standard color blend (no blending for opaque scene geometry).
+  pipeline->setTargetBlends({});
   if (!pipeline->create()) {
     pipeline.reset();
     m_pipelineFailed = true;

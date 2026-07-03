@@ -34,6 +34,11 @@ RhiViewport::RhiViewport(QQuickItem *parent)
   setAcceptedMouseButtons(Qt::AllButtons);
   setAcceptHoverEvents(true);
   setMirrorVertically(true);
+  // EXPERIMENT: MSAA sample count > 1 to trigger QQuickRhiItem internal
+  // depth-stencil buffer creation (QQuickRhiItem has no public depth buffer
+  // API; this is the only known trigger). Remove if depth test proves
+  // unworkable or MSAA visual/perf cost is unacceptable.
+  setSampleCount(4);
   // Default: all 20 canonical libvgcode extrusion roles visible so renderer-side
   // filtering is a no-op until QML binds Plan 03's UI (matches upstream defaults).
   m_roleVisibility.reserve(20);
