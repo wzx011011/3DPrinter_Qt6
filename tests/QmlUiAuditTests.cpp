@@ -8,6 +8,7 @@
 // before rebuilding, otherwise the new slot silently does not execute.
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QRegularExpression>
 #include <QString>
 #include <QStringList>
@@ -66,6 +67,16 @@ private slots:
   void settingsDialogNoRawControls();
   void settingsDialogStringsQsTr();
   void settingsDialogMainQmlDispatchStructural();
+  // Phase 57-02 (CLEAN-01/02 regression): the 7 obsolete QML files locked by
+  // Phase 50 section 1.6 (SettingsPage/ConfigPage/ParamsPage/SearchDialog)
+  // plus the legacy Sidebar/FilamentPanel/PrintSettings deferred by Phase 52
+  // must stay deleted from disk and out of qml.qrc. Locks the Wave 1 deletion
+  // as a permanent ctest invariant.
+  void deletedSettingsPathsStayAbsent();
+  // Phase 57-02 (CLEAN-01 regression): the 3 named routes plus the dead
+  // deferred-config-exit machinery excised from BackendContext/ConfigViewModel
+  // in Wave 1 must stay removed. Fails loudly if any token is reintroduced.
+  void deletedRoutesStayAbsent();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -1450,6 +1461,77 @@ void QmlUiAuditTests::settingsDialogMainQmlDispatchStructural()
            "main.qml must dispatch settingsRequested to all three SettingsDialog instances");
   QVERIFY2(mainQml.contains(QStringLiteral("SettingsDialog {")),
            "main.qml must instantiate SettingsDialog");
+}
+
+// Phase 57-02 (CLEAN-02 regression): the 7 obsolete QML files removed in Wave 1
+// (4 from Phase 50 section 1.6 locked Settings cleanup + 3 legacy sidebar panels
+// deferred by Phase 52) must stay deleted. Asserts qml.qrc cleanliness AND
+// on-disk absence so a future regression that re-adds any of them fails CI
+// deterministically. Source paths are resolved against QT_TESTCASE_SOURCEDIR
+// (the repository root) so the test runs from any build directory.
+void QmlUiAuditTests::deletedSettingsPathsStayAbsent()
+{
+  const QStringList deletedPaths = {
+      QStringLiteral("pages/SettingsPage.qml"),
+      QStringLiteral("pages/ConfigPage.qml"),
+      QStringLiteral("components/ParamsPage.qml"),
+      QStringLiteral("components/SearchDialog.qml"),
+      QStringLiteral("panels/Sidebar.qml"),
+      QStringLiteral("panels/FilamentPanel.qml"),
+      QStringLiteral("panels/PrintSettings.qml"),
+  };
+  const QString qmlRoot = QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR))
+                              .filePath(QStringLiteral("src/qml_gui"));
+  // qml.qrc must not reference any of the deleted files. readSource resolves
+  // relative to QT_TESTCASE_SOURCEDIR (the repository root) the same way the
+  // other Phase 55/56 audit tests do.
+  const QString qrcContent = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  QVERIFY2(!qrcContent.isEmpty(),
+           "Cannot read src/qml_gui/qml.qrc");
+  for (const QString &p : deletedPaths) {
+    QVERIFY2(!qrcContent.contains(p),
+             qPrintable(QStringLiteral("qml.qrc reintroduced deleted entry: %1").arg(p)));
+  }
+  // The deleted files must not exist on disk under src/qml_gui/.
+  for (const QString &p : deletedPaths) {
+    const QString full = QDir(qmlRoot).filePath(p);
+    QVERIFY2(!QFileInfo::exists(full),
+             qPrintable(QStringLiteral("Deleted QML file reappeared on disk: %1").arg(full)));
+  }
+}
+
+// Phase 57-02 (CLEAN-01 regression): the 3 named routes
+// (canLeaveSettingsPage / requestConfigPageExitIfNeeded /
+// requestLeaveSettingsPage), their dead deferred-config-exit helpers
+// (executeDeferredConfigExit / clearDeferredConfigExit), and the
+// leave-settings-page pending action must stay excised from the BackendContext
+// page router and ConfigViewModel. Any reintroduction fails CI here.
+void QmlUiAuditTests::deletedRoutesStayAbsent()
+{
+  const QStringList deadTokens = {
+      QStringLiteral("canLeaveSettingsPage"),
+      QStringLiteral("requestConfigPageExitIfNeeded"),
+      QStringLiteral("executeDeferredConfigExit"),
+      QStringLiteral("clearDeferredConfigExit"),
+      QStringLiteral("requestLeaveSettingsPage"),
+      QStringLiteral("leave-settings-page"),
+  };
+  const QStringList sourceFiles = {
+      QStringLiteral("src/qml_gui/BackendContext.h"),
+      QStringLiteral("src/qml_gui/BackendContext.cpp"),
+      QStringLiteral("src/core/viewmodels/ConfigViewModel.h"),
+      QStringLiteral("src/core/viewmodels/ConfigViewModel.cpp"),
+  };
+  for (const QString &path : sourceFiles) {
+    const QString content = readSource(path);
+    QVERIFY2(!content.isEmpty(),
+             qPrintable(QStringLiteral("Cannot open %1").arg(path)));
+    for (const QString &token : deadTokens) {
+      QVERIFY2(!content.contains(token),
+               qPrintable(QStringLiteral("%1 reintroduced deleted token: %2")
+                              .arg(path, token)));
+    }
+  }
 }
 
 QTEST_MAIN(QmlUiAuditTests)
