@@ -90,10 +90,10 @@ v3.5 Phase 47-49 are superseded by this milestone. v3.5 Phase 44-46 remain histo
 
 ### Replacement and Cleanup
 
-- [ ] **CLEAN-01:** Every page/component replaced during v3.6 has its obsolete QML/C++ files, `qml.qrc` entries, registrations, routes, imports, tests, and documentation references removed or updated.
-- [ ] **CLEAN-02:** No active UI path keeps parallel `old`, `legacy`, `deprecated`, `unused`, placeholder-only, or disconnected copies of replaced Prepare, Preview, or Settings components.
-- [ ] **CLEAN-03:** QML remains presentation/wiring only; durable workflow behavior, validation, settings state, preset state, and preview filtering live in C++ services/viewmodels.
-- [ ] **CLEAN-04:** English ASCII-only comments and UTF-8-without-BOM are preserved across changed source, QML, Markdown, JSON, and CMake files.
+- [x] **CLEAN-01:** Every page/component replaced during v3.6 has its obsolete QML/C++ files, `qml.qrc` entries, registrations, routes, imports, tests, and documentation references removed or updated.
+- [x] **CLEAN-02:** No active UI path keeps parallel `old`, `legacy`, `deprecated`, `unused`, placeholder-only, or disconnected copies of replaced Prepare, Preview, or Settings components.
+- [x] **CLEAN-03:** QML remains presentation/wiring only; durable workflow behavior, validation, settings state, preset state, and preview filtering live in C++ services/viewmodels.
+- [x] **CLEAN-04:** English ASCII-only comments and UTF-8-without-BOM are preserved across changed source, QML, Markdown, JSON, and CMake files.
 
 ### End-to-End Verification
 
@@ -169,10 +169,10 @@ v3.5 Phase 47-49 are superseded by this milestone. v3.5 Phase 44-46 remain histo
 | SETTINGS-05 | Phase 56 | Complete |
 | SETTINGS-06 | Phase 56 | Complete |
 | SETTINGS-07 | Phase 56 | Pending |
-| CLEAN-01 | Phase 57 | Pending |
-| CLEAN-02 | Phase 57 | Pending |
-| CLEAN-03 | Phase 57 | Pending |
-| CLEAN-04 | Phase 57 | Pending |
+| CLEAN-01 | Phase 57 | Complete |
+| CLEAN-02 | Phase 57 | Complete |
+| CLEAN-03 | Phase 57 | Complete |
+| CLEAN-04 | Phase 57 | Complete |
 | VERIFY-01 | Phase 58 | Pending |
 | VERIFY-02 | Phase 58 | Pending |
 | VERIFY-03 | Phase 58 | Pending |

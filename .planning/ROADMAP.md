@@ -34,7 +34,8 @@
 - [x] **Phase 55:** G-code Preview Semantics and Rendering Stability (completed 2026-07-02)
 - [x] **Phase 56:** Parameter Settings Dialogs Restoration
  (completed 2026-07-03)
-- [ ] **Phase 57:** Deprecated UI Removal and Architecture Cleanup
+- [x] **Phase 57:** Deprecated UI Removal and Architecture Cleanup
+ (completed 2026-07-03)
 - [ ] **Phase 58:** End-to-End Visual and Functional Verification
 
 ### Phase 50: Screenshot and Source-Truth Inventory
@@ -243,7 +244,7 @@ Plans:
 3. Workflow behavior, validation, settings state, preset state, and preview filtering live in C++.
 4. Encoding guard and diff checks show no new BOM/mojibake/comment-rule issues.
 
-**Plans:** 1/2 plans complete
+**Plans:** 2/2 plans complete
 
 Plans:
 **Wave 1**
@@ -252,7 +253,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 57-02-PLAN.md -- Wave 2 doc rewrite (CrealityPrint -> OrcaSlicer in 2 locked docs) + compiled QmlUiAudit regression test locking the deletions as a permanent invariant + broader dead-UI sweep (CLEAN-02 audit) + global encoding guard on all phase-touched files (CLEAN-04)
+- [x] 57-02-PLAN.md -- Wave 2 doc rewrite (CrealityPrint -> OrcaSlicer in 2 locked docs) + compiled QmlUiAudit regression test locking the deletions as a permanent invariant + broader dead-UI sweep (CLEAN-02 audit) + global encoding guard on all phase-touched files (CLEAN-04) (SUMMARY: 57-02-SUMMARY.md)
 
 ### Phase 58: End-to-End Visual and Functional Verification
 
