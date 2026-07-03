@@ -7,7 +7,7 @@ import "../components"
 
 // LeftSidebar -- three-column layout left panel
 // Contains: Printer, Filament, Objects, Transform, Slice Progress
-// Extracted from PreparePage leftPanel + Sidebar.qml content
+// Extracted from earlier Prepare sidebar code (Phase 52).
 Rectangle {
     id: root
     required property var editorVm
@@ -95,7 +95,7 @@ Rectangle {
                             MouseArea { id: dirtyTipMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
                         }
 
-                        // Edit preset (对齐上游 edit_btn → open SettingsPage)
+                        // Edit preset (对齐上游 edit_btn → open SettingsDialog)
                         Rectangle {
                             // Phase 52 PREPSB-03: builtin/read-only presets are
                             // honestly gated via presetActionBlocker (mirrors
@@ -154,7 +154,7 @@ Rectangle {
                 }
             }
 
-            // -- Section 2: Filament (from PrintSettings.qml lines 626-704) --
+            // -- Section 2: Filament (Prepare sidebar section, Phase 52) --
             CollapsibleSection {
                 id: filamentSection
                 Layout.fillWidth: true
@@ -410,7 +410,7 @@ Rectangle {
                 }
             }
 
-            // -- Section 5: Objects (from PreparePage leftPanel + Sidebar.qml) --
+            // -- Section 5: Objects (Prepare sidebar section, Phase 52) --
             CollapsibleSection {
                 id: objectSection
                 Layout.fillWidth: true

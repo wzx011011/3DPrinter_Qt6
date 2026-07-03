@@ -1,5 +1,5 @@
 // OptionRow.qml — typed-option renderer for all 7 option kinds.
-// Extracted from ParamsPage.qml (Phase 56-03).
+// Typed option renderer (Phase 56-03).
 //
 // Dispatches by optType: bool, int, double, percent, enum, string.
 // Nullable and multi-value are surfaced via value-source indicator and

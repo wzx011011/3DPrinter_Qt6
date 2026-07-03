@@ -10,7 +10,6 @@
         <file>pages/PreviewPage.qml</file>
         <file>pages/Plater.qml</file>
         <file>pages/MonitorPage.qml</file>
-        <file>pages/ConfigPage.qml</file>
         <file>pages/ProjectPage.qml</file>
         <file>pages/CalibrationPage.qml</file>
         <file>pages/AuxiliaryPage.qml</file>
@@ -41,13 +40,9 @@
         <file>dialogs/NetworkTestDialog.qml</file>
         <file>dialogs/TroubleshootDialog.qml</file>
         <file>dialogs/SelectMachineDialog.qml</file>
-        <file>pages/SettingsPage.qml</file>
         <!-- Panels -->
         <file>panels/ObjectList.qml</file>
-        <file>panels/PrintSettings.qml</file>
         <file>panels/SliceProgress.qml</file>
-        <file>panels/Sidebar.qml</file>
-        <file>panels/FilamentPanel.qml</file>
         <file>panels/LeftSidebar.qml</file>
         <file>panels/DockableSidebar.qml</file>
         <file>panels/AuxiliaryListPanel.qml</file>
@@ -66,8 +61,6 @@
         <file>components/CxPanel.qml</file>
         <file>components/CxSectionHeader.qml</file>
         <file>components/CollapsibleSection.qml</file>
-        <file>components/SearchDialog.qml</file>
-        <file>components/ParamsPage.qml</file>
     <file>components/OptionRow.qml</file>
     <file>components/GroupNavSidebar.qml</file>
         <file>components/FilamentSlot.qml</file>

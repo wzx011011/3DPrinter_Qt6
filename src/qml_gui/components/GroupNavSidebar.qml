@@ -1,5 +1,5 @@
 // GroupNavSidebar.qml — left option-group navigation with count + dirty badges.
-// Extracted from ParamsPage.qml category sidebar (Phase 56-03).
+// Left option-group navigation (Phase 56-03).
 //
 // Region IDs: SETPRINT-GROUPNAV, SETMAT-GROUPNAV
 
