@@ -22,6 +22,7 @@
 #include "core/viewmodels/EditorViewModel.h"
 #include "core/viewmodels/PreviewViewModel.h"
 #include "qml_gui/BackendContext.h"
+#include "qml_gui/Models/ConfigOptionModel.h"
 
 namespace
 {
@@ -1682,12 +1683,78 @@ void E2EWorkflowTests::pageSwitchPreparePreviewPreservesGcodePreviewData()
 
 void E2EWorkflowTests::testSettingsEditInvalidatesSlice()
 {
-  QFAIL("Wave 0 scaffold - implemented in 56-03");
+  // SETTINGS-07: editing an option inside a SettingsDialog flows through
+  // ConfigOptionModel::setValue -> ConfigViewModel::stateChanged -> (Phase-52
+  // connect in BackendContext) -> EditorViewModel::invalidateAllSliceResults +
+  // stateChanged. Spy on EditorViewModel::stateChanged to prove the connect
+  // fired end-to-end through the real composition root.
+  BackendContext ctx;
+  auto *editor = qobject_cast<EditorViewModel *>(ctx.editorViewModel());
+  auto *config = qobject_cast<ConfigViewModel *>(ctx.configViewModel());
+  QVERIFY(editor);
+  QVERIFY(config);
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config->printOptions());
+  QVERIFY(printOpts);
+  QVERIFY2(printOpts->rowCount() > 0, "Print options model is empty");
+
+  // Find a non-readonly row to mutate.
+  int row = -1;
+  for (int i = 0; i < printOpts->rowCount() && row < 0; ++i)
+    if (!printOpts->optReadonly(i)) row = i;
+  QVERIFY2(row >= 0, "No non-readonly option available to mutate");
+
+  QSignalSpy editorSpy(editor, &EditorViewModel::stateChanged);
+  QVERIFY(editorSpy.isValid());
+
+  const QVariant orig = printOpts->optValue(row);
+  QVariant mutated = orig.canConvert<double>() ? QVariant(orig.toDouble() + 0.01)
+                                               : QVariant(QStringLiteral("Z_%1").arg(orig.toString()));
+  printOpts->setValue(row, mutated);
+
+  QVERIFY2(editorSpy.count() >= 1,
+           "Editing an option must fire EditorViewModel::stateChanged via the "
+           "Phase-52 configVm->editorVm invalidation connect (SETTINGS-07)");
 }
 
 void E2EWorkflowTests::testDirtyOverridesPersistAcrossProjectSaveRestore()
 {
-  QFAIL("Wave 0 scaffold - implemented in 56-03");
+  // SETTINGS-07: dirty user overrides are captured by ConfigViewModel::
+  // mergedConfigValues() and restored by applyProjectConfig() on a fresh
+  // viewmodel (the in-memory capture+restore contract that project save/load
+  // relies on). Asserts the ConfigViewModel persistence contract end-to-end.
+  PresetServiceMock presetService;
+  ProjectServiceMock projectService;
+  ConfigViewModel config(&presetService, &projectService);
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  QVERIFY2(printOpts->rowCount() > 0, "Print options model is empty");
+
+  int row = -1;
+  for (int i = 0; i < printOpts->rowCount() && row < 0; ++i)
+    if (!printOpts->optReadonly(i)) row = i;
+  QVERIFY2(row >= 0, "No non-readonly option available to mutate");
+
+  const QString key = printOpts->optKey(row);
+  const QVariant orig = printOpts->optValue(row);
+  const QVariant mutated = orig.canConvert<double>() ? QVariant(orig.toDouble() + 0.01)
+                                                     : QVariant(QStringLiteral("P_%1").arg(orig.toString()));
+  printOpts->setValue(row, mutated);
+
+  // Capture the dirty override via the public merged-config API.
+  const QHash<QString, QVariant> merged = config.mergedConfigValues();
+  QVERIFY2(merged.contains(key), "mergedConfigValues() must include the edited key");
+  QCOMPARE(merged.value(key), mutated);
+
+  // Restore into a fresh viewmodel and confirm the override survives.
+  PresetServiceMock presetService2;
+  ProjectServiceMock projectService2;
+  ConfigViewModel config2(&presetService2, &projectService2);
+  config2.applyProjectConfig(merged);
+  const QHash<QString, QVariant> restored = config2.mergedConfigValues();
+  QVERIFY2(restored.contains(key), "Restored config must include the edited key");
+  QCOMPARE(restored.value(key), mutated);
 }
 
 QTEST_MAIN(E2EWorkflowTests)

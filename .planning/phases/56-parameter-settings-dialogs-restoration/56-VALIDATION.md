@@ -1,10 +1,11 @@
 ---
 phase: 56
 slug: parameter-settings-dialogs-restoration
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-07-02
+finalized: 2026-07-03
 ---
 
 # Phase 56 — Validation Strategy
@@ -53,11 +54,19 @@ created: 2026-07-02
 
 ## Per-Task Verification Map
 
-> Filled with actual Task IDs during/after planning (PLAN.md task IDs). TBD rows are resolved at VALIDATION finalize (end of execute), per Phase-55 pattern.
-
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD (post-planning) | — | — | SETTINGS-01..07 | — (N/A — local desktop UI, no network/auth surface) | N/A | unit/smoke/integration | see map above | ❌ W0 | ⬜ pending |
+| 56-01-T1 | 56-01 | 1 | SETTINGS-03,06 | N/A (local UI) | N/A | unit | `ctest -R ViewModelSmokeTest` | ✅ | ✅ passed |
+| 56-01-T2 | 56-01 | 1 | SETTINGS-03 | N/A | N/A | build | `cmake --build build --config Release` | ✅ | ✅ passed |
+| 56-01-T3 | 56-01 | 1 | SETTINGS-01..07 | N/A | N/A | unit | `ctest -R 'ViewModelSmokeTest\|E2E\|QmlUiAudit'` | ✅ | ✅ passed (scaffolds placed, later flipped GREEN) |
+| 56-02-T1 | 56-02 | 2 | SETTINGS-02,06 | N/A | N/A | unit | `ctest -R ViewModelSmokeTest` | ✅ | ✅ passed |
+| 56-02-T2 | 56-02 | 2 | SETTINGS-01,02,04,05,06 | N/A | N/A | unit | `ctest -R ViewModelSmokeTest` | ✅ | ✅ passed (forwardSettingsRequest spy test GREEN) |
+| 56-03-T1 | 56-03 | 3 | SETTINGS-03 | N/A | N/A | build+audit | `cmake --build build --config Release` | ✅ | ✅ passed |
+| 56-03-T2 | 56-03 | 3 | SETTINGS-01,02,04,05,06 | N/A | N/A | build+audit | `cmake --build build --config Release` | ✅ | ✅ passed |
+| 56-03-T3 | 56-03 | 3 | SETTINGS-01 | N/A | N/A | unit | `ctest -R 'QmlUiAudit\|ViewModelSmokeTest'` | ✅ | ✅ passed (4 QmlUiAudit + 3 VMSmoke scaffolds GREEN) |
+| 56-04-T1 | 56-04 | 4 | SETTINGS-07 | N/A | N/A | integration | `ctest -R E2E` | ✅ | ✅ passed (testSettingsEditInvalidatesSlice + testDirtyOverridesPersist) |
+| 56-04-T2 | 56-04 | 4 | SETTINGS-03,04,05,06 | N/A | N/A | unit | `ctest -R ViewModelSmokeTest` | ✅ | ✅ passed (covered in 56-03; VMSmoke 85/0) |
+| 56-04-T3 | 56-04 | 4 | (VALIDATION finalize) | N/A | N/A | doc-check | `python -c "...assert nyquist_compliant: true..."` | ✅ | ✅ passed |
 
 ---
 
@@ -87,11 +96,17 @@ created: 2026-07-02
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references (CxSpinBox suffix + test stubs)
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 210s
-- [ ] `nyquist_compliant: true` set in frontmatter (at finalize)
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (CxSpinBox suffix + test stubs)
+- [x] No watch-mode flags
+- [x] Feedback latency < 210s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved (automated) — manual visual parity items deferred to Phase 58 per the Manual-Only table.
+
+**Final test results (2026-07-03):**
+- ViewModelSmokeTests: **85 passed, 0 failed, 1 skipped** (pre-existing THUMB-03 unrelated skip)
+- QmlUiAuditTests: **36 passed, 0 failed**
+- E2EWorkflowTests (new SETTINGS-07 tests): **testSettingsEditInvalidatesSlice + testDirtyOverridesPersistAcrossProjectSaveRestore PASS**
+- Incremental build: clean (0 errors). Canonical `auto_verify_with_vcvars.ps1` smoke step reported a one-off flaky Qt-environment crash (Qt version-mismatch warning, "crash at any arbitrary point"); 5/5 direct reruns of ViewModelSmokeTests.exe pass stable (85/0). The flake is environmental, not a Phase 56 code defect.
