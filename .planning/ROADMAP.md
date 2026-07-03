@@ -277,7 +277,7 @@ Plans:
 4. Manual visual/UAT checklist is ready for the user and records exact remaining gaps if any.
 5. `scripts/auto_verify_with_vcvars.ps1` passes, or failure is documented with root cause and owner.
 
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 58-01-PLAN.md -- VERIFY-01: encode the 9 Phase 50 §2 deterministic inventory checks as a new tests/InventoryAuditTests.cpp Qt Test target (region counts/schema/enums/ID format/INV-02..04 anchors/cleanup format/no-blank-upstream) running against both docs/v3.6-ui-inventory.md (canonical) and the 50-INVENTORY.md snapshot, plus CMakeLists.txt registration mirroring QmlUiAuditTests (completed 2026-07-03, commit 592c4ef)

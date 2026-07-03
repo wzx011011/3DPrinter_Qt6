@@ -2,28 +2,28 @@
 gsd_state_version: 1.0
 milestone: v3.6
 milestone_name: Screenshot-Driven OrcaSlicer UI Restoration
-status: human_needed
-last_updated: "2026-07-03T05:55:00.000Z"
+status: milestone_complete
+last_updated: 2026-07-03T05:50:23.232Z
 last_activity: 2026-07-03
 progress:
   total_phases: 9
   completed_phases: 9
   total_plans: 25
-  completed_plans: 25
+  completed_plans: 80
   percent: 100
-stopped_at: Phase 58 automated floor complete (2/2 plans); VERIFY-01/02/03/05 done; VERIFY-04 manual UAT awaiting human sign-off
+stopped_at: Milestone complete (Phase 58 was final phase)
 ---
 
 # Project State
 
 **Milestone:** v3.6 - Screenshot-Driven OrcaSlicer UI Restoration
-**Status:** Human needed -- run `.planning/phases/58-end-to-end-visual-and-functional-verification/58-UAT.md` to close VERIFY-04.
+**Status:** Milestone complete
 **Next step:** User runs 58-UAT.md against the 4 screenshots, then the v3.6 milestone is complete.
 
 ## Current Position
 
 Phase: 58
-Plan: 02 complete (both 58-01 and 58-02 done)
+Plan: Not started
 Status: human_needed (VERIFY-04 manual UAT)
 Last activity: 2026-07-03
 
@@ -32,7 +32,7 @@ Last activity: 2026-07-03
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth; screenshot-driven UI milestones also use screenshots as the visual/layout source of truth.
-**Current focus:** Phase 58 — end to end visual and functional verification
+**Current focus:** Milestone complete
 
 ## Superseded Milestone Status
 
@@ -88,6 +88,7 @@ If an existing Qt page is materially off-design and expensive to repair, replace
 | Category | Item | Target |
 |---|---|---|
 | carry-forward | v3.4 Phase 43 manual UAT | Before claiming v3.4 complete |
+| carry-forward | v3.6 Phase 58 manual visual UAT (VERIFY-04) — checklist at `.planning/phases/58-end-to-end-visual-and-functional-verification/58-UAT.md` (34 region items + 9 workflow items against the 4 screenshots). Automated verification passed; user deferred the visual UAT. | Before claiming v3.6 visually complete / any release |
 | superseded | v3.5 Phase 47-49 | Do not resume unless explicitly reopened |
 | future | Device send/upload/cloud print and Monitor job lifecycle | After local workflow restoration |
 | future | AssembleView | Future source-truth milestone |
