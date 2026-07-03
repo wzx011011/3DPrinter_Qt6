@@ -274,7 +274,7 @@ bool RhiViewportRenderer::ensurePipelines()
 
   if (!m_cameraUniformBuffer
       && !ensureBuffer(m_cameraUniformBuffer,
-                       64,
+                       256,  // 256-byte aligned for D3D12 cbuffer (see uploadCameraUniform)
                        m_cameraUniformBufferBytes,
                        QRhiBuffer::UniformBuffer)) {
     m_cameraUniformBufferBytes = 0;
@@ -463,7 +463,13 @@ bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, 
   if (!uploadCamera)
     return true;
 
-  if (!ensureBuffer(m_cameraUniformBuffer, 64, m_cameraUniformBufferBytes, QRhiBuffer::UniformBuffer))
+  // D3D12 requires uniform buffers to be 256-byte aligned (HLSL cbuffer
+  // minimum size). The MVP matrix is 64 bytes, but the backing buffer must be
+  // padded to a 256-byte boundary or D3D12's setShaderResources reads past the
+  // buffer end and segfaults. D3D11/Vulkan/Metal tolerate the smaller size,
+  // so this only manifests under D3D12. We allocate 256 bytes, upload only
+  // the 64-byte MVP, and leave the rest as padding.
+  if (!ensureBuffer(m_cameraUniformBuffer, 256, m_cameraUniformBufferBytes, QRhiBuffer::UniformBuffer))
     return false;
 
   const QMatrix4x4 corrected = rhi()->clipSpaceCorrMatrix() * m_cameraMvp;
