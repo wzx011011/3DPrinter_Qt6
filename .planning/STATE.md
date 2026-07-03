@@ -2,30 +2,29 @@
 gsd_state_version: 1.0
 milestone: v3.6
 milestone_name: Screenshot-Driven OrcaSlicer UI Restoration
-status: milestone_complete
-last_updated: 2026-07-03T05:50:23.232Z
-last_activity: 2026-07-03
+status: completed
+last_updated: "2026-07-03T06:14:04.824Z"
+last_activity: 2026-07-03 — Milestone v3.6 completed and archived
 progress:
   total_phases: 9
-  completed_phases: 9
+  completed_phases: 8
   total_plans: 25
-  completed_plans: 80
-  percent: 100
-stopped_at: Milestone complete (Phase 58 was final phase)
+  completed_plans: 23
+  percent: 89
 ---
 
 # Project State
 
 **Milestone:** v3.6 - Screenshot-Driven OrcaSlicer UI Restoration
-**Status:** Milestone complete
+**Status:** v3.6 milestone complete
 **Next step:** User runs 58-UAT.md against the 4 screenshots, then the v3.6 milestone is complete.
 
 ## Current Position
 
-Phase: 58
-Plan: Not started
-Status: human_needed (VERIFY-04 manual UAT)
-Last activity: 2026-07-03
+Phase: Milestone v3.6 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-03 — Milestone v3.6 completed and archived
 
 ## Project Reference
 
@@ -119,3 +118,6 @@ Run build/OWzxSlicer.exe and complete
 Once the user records PASS/FAIL + outstanding gaps in 58-UAT.md, the v3.6
 milestone (VERIFY-01..05) is fully closed.
 
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
