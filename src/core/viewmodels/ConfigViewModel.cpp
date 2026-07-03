@@ -1211,12 +1211,13 @@ QList<int> ConfigViewModel::filterOptionIndices(const QString &category, const Q
         continue;
     }
 
-    // Mode filter (upstream ConfigOptionMode: 0=comSimple, 1=comAdvanced, 2=comDevelop)
+    // Mode filter (upstream ConfigOptionMode: 0=comSimple, 1=comAdvanced, 2=comDevelop).
+    // Simple mode (advancedMode=false) shows only comSimple options; advanced mode
+    // (advancedMode=true) is a SUPERSET and shows comSimple + comAdvanced + comDevelop.
+    // Never exclude a simple-mode option from advanced mode.
     const int optMode = model->optMode(i);
     if (optMode >= 1 && !advancedMode)
       continue; // Advanced/Develop-only options hidden in simple mode
-    if (optMode == 0 && advancedMode)
-      continue; // Simple-only options hidden in advanced mode (rare)
 
     result.append(i);
   }

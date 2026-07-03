@@ -476,24 +476,49 @@ QVariantList ConfigOptionModel::indicesForCategory(const QString &category) cons
 
 QStringList ConfigOptionModel::pageNames() const
 {
+  // Collect every page actually present on a loaded option. A page is the
+  // explicit per-option page if assigned (e.g. via assignPageGroupForTier from
+  // upstream Tab.cpp), otherwise the legacy category-derived fallback.
   QSet<QString> pages;
-  pages.reserve(8);
-  const QStringList pageOrder = {
-    QStringLiteral("Quality"), QStringLiteral("Strength"), QStringLiteral("Speed"),
-    QStringLiteral("Temperature"), QStringLiteral("Support"), QStringLiteral("Base"),
-    QStringLiteral("Cooling"), QStringLiteral("Retraction"), QStringLiteral("Other")
-  };
+  pages.reserve(12);
   for (int i = 0; i < m_options.size(); ++i)
   {
     const QString &pg = m_options[i].page.isEmpty() ? pageForCategory(m_options[i].category) : m_options[i].page;
     if (!pg.isEmpty())
       pages.insert(pg);
   }
+
+  // Comprehensive cross-tier ordering (Print + Filament + Printer pages from
+  // upstream Tab.cpp). Known pages emit in this stable order; any page not in
+  // the list (future tiers / upstream additions) appends sorted so nothing is
+  // silently dropped.
+  const QStringList knownOrder = {
+    // Print tier (TabPrint::build)
+    QStringLiteral("Quality"), QStringLiteral("Strength"), QStringLiteral("Speed"),
+    QStringLiteral("Temperature"), QStringLiteral("Support"), QStringLiteral("Base"),
+    QStringLiteral("Cooling"), QStringLiteral("Retraction"), QStringLiteral("Other"),
+    // Filament tier (TabFilament::build)
+    QStringLiteral("Filament"), QStringLiteral("Advanced"), QStringLiteral("Multimaterial"),
+    QStringLiteral("Dependencies"), QStringLiteral("Notes"),
+    // Printer tier (TabPrinter::build_fff)
+    QStringLiteral("Basic information"), QStringLiteral("Machine G-code"),
+    QStringLiteral("Motion ability")
+  };
+
   QStringList result;
   result.reserve(pages.size());
-  for (const QString &p : pageOrder)
+  for (const QString &p : knownOrder)
     if (pages.contains(p))
       result.append(p);
+
+  // Append any remaining present pages not covered by knownOrder (sorted for
+  // deterministic output) so no page is hidden by the ordering table.
+  QStringList remainder;
+  for (const QString &p : pages)
+    if (!result.contains(p))
+      remainder.append(p);
+  remainder.sort();
+  result.append(remainder);
   return result;
 }
 
