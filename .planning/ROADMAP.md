@@ -277,6 +277,12 @@ Plans:
 4. Manual visual/UAT checklist is ready for the user and records exact remaining gaps if any.
 5. `scripts/auto_verify_with_vcvars.ps1` passes, or failure is documented with root cause and owner.
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 58-01-PLAN.md -- VERIFY-01: encode the 9 Phase 50 §2 deterministic inventory checks as a new tests/InventoryAuditTests.cpp Qt Test target (region counts/schema/enums/ID format/INV-02..04 anchors/cleanup format/no-blank-upstream) running against both docs/v3.6-ui-inventory.md (canonical) and the 50-INVENTORY.md snapshot, plus CMakeLists.txt registration mirroring QmlUiAuditTests
+- [ ] 58-02-PLAN.md -- VERIFY-02/03/04/05: audit existing E2E/Preview tests for transition + Preview-stability coverage (add a gap test only if a real gap is found), write 58-UAT.md manual checklist against the 4 screenshots mapping every region to a requirement, run canonical verify + classify every ctest failure (carry-forward CliTests missing-fixture + auto_verify Qt-mismatch flake) with file/command/cause/owner
+
 ## Deferred Backlog
 
 - v3.4 Phase 43 manual UAT for import -> Prepare -> slice -> Preview -> export remains pending until the user can verify it.
