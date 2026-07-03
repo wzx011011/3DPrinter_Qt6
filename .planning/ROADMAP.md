@@ -243,12 +243,12 @@ Plans:
 3. Workflow behavior, validation, settings state, preset state, and preview filtering live in C++.
 4. Encoding guard and diff checks show no new BOM/mojibake/comment-rule issues.
 
-**Plans:** 2/2 plans
+**Plans:** 1/2 plans complete
 
 Plans:
 **Wave 1**
 
-- [ ] 57-01-PLAN.md -- Wave 1 reference audit + safe deletion of 4 locked Settings files (SettingsPage/ConfigPage/ParamsPage/SearchDialog) + 3 legacy sidebar panels (Sidebar/FilamentPanel/PrintSettings) + removal of the 3 named routes (canLeaveSettingsPage / requestConfigPageExitIfNeeded / requestLeaveSettingsPage) and the dead deferred-config-exit machinery; pending-unsaved queue for preset/scope actions retained; ProjectPage tab untouched
+- [x] 57-01-PLAN.md -- Wave 1 reference audit + safe deletion of 4 locked Settings files (SettingsPage/ConfigPage/ParamsPage/SearchDialog) + 3 legacy sidebar panels (Sidebar/FilamentPanel/PrintSettings) + removal of the 3 named routes (canLeaveSettingsPage / requestConfigPageExitIfNeeded / requestLeaveSettingsPage) and the dead deferred-config-exit machinery; pending-unsaved queue for preset/scope actions retained; ProjectPage tab untouched (SUMMARY: 57-01-SUMMARY.md)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

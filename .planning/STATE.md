@@ -2,16 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.6
 milestone_name: Screenshot-Driven OrcaSlicer UI Restoration
-status: ready_to_plan
-last_updated: 2026-07-03T03:17:58.945Z
-last_activity: 2026-07-02
+status: planning
+last_updated: "2026-07-03T04:01:57.791Z"
+last_activity: 2026-07-03
 progress:
   total_phases: 9
-  completed_phases: 5
-  total_plans: 21
-  completed_plans: 76
-  percent: 56
-stopped_at: Phase 56 complete (4/4) — ready to discuss Phase 57
+  completed_phases: 6
+  total_plans: 23
+  completed_plans: 21
+  percent: 67
 ---
 
 # Project State
@@ -23,8 +22,8 @@ stopped_at: Phase 56 complete (4/4) — ready to discuss Phase 57
 ## Current Position
 
 Phase: 57
-Plan: Not started
-Status: Ready to execute
+Plan: 01 complete (see 57-01-SUMMARY.md)
+Status: Ready to execute 57-02
 Last activity: 2026-07-03
 
 ## Project Reference
@@ -68,7 +67,7 @@ Run build/OWzxSlicer.exe and complete .planning/phases/43-end-to-end-verificatio
 | 54 | Preview Layout, Sliders, and Right Panels | Complete |
 | 55 | G-code Preview Semantics and Rendering Stability | Pending |
 | 56 | Parameter Settings Dialogs Restoration | Pending |
-| 57 | Deprecated UI Removal and Architecture Cleanup | Pending |
+| 57 | Deprecated UI Removal and Architecture Cleanup | In Progress (1/2) |
 | 58 | End-to-End Visual and Functional Verification | Pending |
 
 ## v3.6 Scope
