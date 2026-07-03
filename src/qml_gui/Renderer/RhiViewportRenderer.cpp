@@ -17,7 +17,13 @@ RhiViewportRenderer::~RhiViewportRenderer()
 void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
 {
   Q_UNUSED(cb);
-  releaseResources();
+  // BUG FIX: do NOT call releaseResources() here unconditionally.
+  // QQuickRhiItemRenderer::initialize() is called on every swapchain rebuild
+  // (window resize, visibility change, etc). Clearing all GPU buffers here
+  // forces a full re-upload every frame, which makes the bed grid flash or
+  // disappear entirely (the original "blank viewport" symptom).
+  // Only reset the per-frame upload flag so the next render re-uploads scene
+  // buffers; the pipelines and buffers themselves are reused.
   m_pipelineFailed = false;
   m_sceneBuffersUploaded = false;
 }

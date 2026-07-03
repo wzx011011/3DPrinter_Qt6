@@ -44,6 +44,7 @@ private slots:
   void plateContextMenuItemsWiredAndNonEmpty();
   // Phase 51-03 (SHELL-03): BBLTopbar action controls bind to the BackendContext gate properties.
   void shellActionsBindToBackendContextGates();
+  void mainWindowDefaultsToFramelessMaximizedShell();
   // Phase 51-03 (SHELL-04): the 3 notification surfaces keep non-overlapping placement.
   void notificationSurfacesStayNonOverlapping();
   // Phase 52-03 (PREPSB-01..04): LeftSidebar + FilamentSlot bindings are
@@ -1118,6 +1119,23 @@ void QmlUiAuditTests::shellActionsBindToBackendContextGates()
   const int canRedoCount = topbar.count(QStringLiteral("backend.canRedo"));
   QVERIFY2(canRedoCount >= 2,
            qPrintable(QStringLiteral("backend.canRedo must appear >= 2 times (toolbar + menu), got %1").arg(canRedoCount)));
+}
+
+void QmlUiAuditTests::mainWindowDefaultsToFramelessMaximizedShell()
+{
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  const QString mainCpp = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+  QVERIFY2(!mainCpp.isEmpty(), "Unable to read main_qml.cpp");
+
+  QVERIFY2(mainQml.contains(QStringLiteral("flags: Qt.Window | Qt.FramelessWindowHint")),
+           "Main window must default to the custom frameless shell for screenshot parity");
+  QVERIFY2(mainQml.contains(QStringLiteral("visibility: Window.Maximized")),
+           "Main window must start maximized so runtime screenshots align with the reference frame");
+  QVERIFY2(!mainQml.contains(QStringLiteral("flags: owzxUseFramelessShell ?")),
+           "Frameless shell must not be disabled by default behind an environment flag");
+  QVERIFY2(!mainCpp.contains(QStringLiteral("owzxUseFramelessShell")),
+           "main_qml.cpp must not expose an opt-in-only frameless context property");
 }
 
 // Phase 51-03 (SHELL-04): notification surfaces stay non-overlapping.

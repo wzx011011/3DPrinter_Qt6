@@ -154,8 +154,9 @@ int main(int argc, char *argv[])
                      QCoreApplication::exit(-1); }, Qt::QueuedConnection);
 
   engine->rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
-  engine->rootContext()->setContextProperty(QStringLiteral("owzxUseFramelessShell"),
-                                            qEnvironmentVariableIsSet("OWZX_FRAMELESS"));
+  // The main window is frameless + maximized by default (declared directly in
+  // main.qml) for screenshot parity with OrcaSlicer. No context-property toggle
+  // is exposed — the frameless shell is always on.
 
   // v2.6 CAM-03：注册摄像头图像提供者（image://camera/live），供 MonitorPage 实时视频显示
   // provider 归 engine 所有，engine 在进程退出时被故意 leak（见上方注释），故不手动释放。

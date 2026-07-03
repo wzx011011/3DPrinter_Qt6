@@ -22,13 +22,17 @@ ApplicationWindow {
     visible: true
     title: "OWzx Slicer"
     color: "#0d0f12"
-    flags: owzxUseFramelessShell ? (Qt.Window | Qt.FramelessWindowHint) : Qt.Window
+    // Frameless + maximized by default for screenshot parity with OrcaSlicer.
+    flags: Qt.Window | Qt.FramelessWindowHint
+    visibility: Window.Maximized
     minimumWidth: 1100
     minimumHeight: 700
 
     readonly property int resizeMargin: 6
-    readonly property int frameMargin: (!owzxUseFramelessShell || backend.visualCompareMode || root.visibility === Window.Maximized) ? 0 : 10
-    readonly property int frameRadius: (!owzxUseFramelessShell || backend.visualCompareMode || root.visibility === Window.Maximized) ? 0 : 18
+    // Frame margin is 0 by default: the shell fills the whole window so the
+    // app content goes edge-to-edge (matching the OrcaSlicer screenshot).
+    readonly property int frameMargin: 0
+    readonly property int frameRadius: (backend.visualCompareMode) ? 0 : 18
 
     // 当前 tab-switch latency token (BBLTopbar 写入, Connections onCurrentPageChanged 收尾)
     // 替代旧的 pendingSwitchToken / pendingSwitchTargetPage（Plan 02-02 Pitfall 3 迁移）
