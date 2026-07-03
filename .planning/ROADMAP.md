@@ -32,7 +32,7 @@
 - [x] **Phase 53:** Prepare Object, Plate, and Viewport Workflow (completed 2026-07-01)
 - [x] **Phase 54:** Preview Layout, Sliders, and Right Panels (completed 2026-07-01)
 - [x] **Phase 55:** G-code Preview Semantics and Rendering Stability (completed 2026-07-02)
-- [ ] **Phase 56:** Parameter Settings Dialogs Restoration
+- [x] **Phase 56:** Parameter Settings Dialogs Restoration (completed 2026-07-03)
 - [ ] **Phase 57:** Deprecated UI Removal and Architecture Cleanup
 - [ ] **Phase 58:** End-to-End Visual and Functional Verification
 
@@ -203,7 +203,7 @@ Plans:
 3. Edits are model-driven and update dirty, validation, and sidebar state.
 4. Save/reset/unsaved-change actions follow upstream-compatible behavior.
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 **Wave 1**
@@ -220,7 +220,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 56-04-PLAN.md -- Wave 4 integration + verification: SETTINGS-07 E2E (option edit -> slice invalidation, dirty overrides persist via 3MF scoped-config), flip remaining Wave 0 scaffolds GREEN, finalize 56-VALIDATION.md
+- [x] 56-04-PLAN.md -- Wave 4 integration + verification: SETTINGS-07 E2E (option edit -> slice invalidation, dirty overrides persist via 3MF scoped-config), flip remaining Wave 0 scaffolds GREEN, finalize 56-VALIDATION.md
 
 ### Phase 57: Deprecated UI Removal and Architecture Cleanup
 

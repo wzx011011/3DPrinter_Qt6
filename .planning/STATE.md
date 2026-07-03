@@ -2,36 +2,37 @@
 gsd_state_version: 1.0
 milestone: v3.6
 milestone_name: Screenshot-Driven OrcaSlicer UI Restoration
-status: executing
-last_updated: "2026-07-02T21:12:06.062Z"
+status: ready_to_plan
+last_updated: 2026-07-03T03:17:58.945Z
 last_activity: 2026-07-02
 progress:
   total_phases: 9
   completed_phases: 5
   total_plans: 21
-  completed_plans: 17
+  completed_plans: 76
   percent: 56
+stopped_at: Phase 56 complete (4/4) — ready to discuss Phase 57
 ---
 
 # Project State
 
 **Milestone:** v3.6 - Screenshot-Driven OrcaSlicer UI Restoration
-**Status:** Ready to execute
+**Status:** Ready to plan
 **Next step:** Start Phase 55, `G-code Preview Semantics and Rendering Stability`.
 
 ## Current Position
 
-Phase: 56 (Parameter Settings Dialogs Restoration) — EXECUTING
-Plan: 3 of 4 (complete)
+Phase: 57
+Plan: Not started
 Status: Ready to execute
-Last activity: 2026-07-02
+Last activity: 2026-07-03
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth; screenshot-driven UI milestones also use screenshots as the visual/layout source of truth.
-**Current focus:** Phase 56 — Parameter Settings Dialogs Restoration
+**Current focus:** Phase 57 — deprecated ui removal and architecture cleanup
 
 ## Superseded Milestone Status
 
