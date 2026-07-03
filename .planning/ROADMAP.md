@@ -32,7 +32,8 @@
 - [x] **Phase 53:** Prepare Object, Plate, and Viewport Workflow (completed 2026-07-01)
 - [x] **Phase 54:** Preview Layout, Sliders, and Right Panels (completed 2026-07-01)
 - [x] **Phase 55:** G-code Preview Semantics and Rendering Stability (completed 2026-07-02)
-- [x] **Phase 56:** Parameter Settings Dialogs Restoration (completed 2026-07-03)
+- [x] **Phase 56:** Parameter Settings Dialogs Restoration
+ (completed 2026-07-03)
 - [ ] **Phase 57:** Deprecated UI Removal and Architecture Cleanup
 - [ ] **Phase 58:** End-to-End Visual and Functional Verification
 
@@ -241,6 +242,17 @@ Plans:
 2. Resource files and type registrations contain only live components.
 3. Workflow behavior, validation, settings state, preset state, and preview filtering live in C++.
 4. Encoding guard and diff checks show no new BOM/mojibake/comment-rule issues.
+
+**Plans:** 2/2 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 57-01-PLAN.md -- Wave 1 reference audit + safe deletion of 4 locked Settings files (SettingsPage/ConfigPage/ParamsPage/SearchDialog) + 3 legacy sidebar panels (Sidebar/FilamentPanel/PrintSettings) + removal of the 3 named routes (canLeaveSettingsPage / requestConfigPageExitIfNeeded / requestLeaveSettingsPage) and the dead deferred-config-exit machinery; pending-unsaved queue for preset/scope actions retained; ProjectPage tab untouched
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 57-02-PLAN.md -- Wave 2 doc rewrite (CrealityPrint -> OrcaSlicer in 2 locked docs) + compiled QmlUiAudit regression test locking the deletions as a permanent invariant + broader dead-UI sweep (CLEAN-02 audit) + global encoding guard on all phase-touched files (CLEAN-04)
 
 ### Phase 58: End-to-End Visual and Functional Verification
 
