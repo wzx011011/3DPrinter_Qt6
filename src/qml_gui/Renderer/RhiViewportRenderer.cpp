@@ -260,6 +260,8 @@ void RhiViewportRenderer::resetPreviewGpuState(bool keepCpuStaging)
     m_previewVertices.clear();
     m_previewDrawSpans.clear();
     m_previewSegmentVertexCount = 0;
+    m_previewRangeCacheKey = 0;
+    m_cachedPreviewRanges.clear();
   }
 }
 
@@ -651,6 +653,12 @@ void RhiViewportRenderer::parsePreviewSegments()
   }
 
   m_previewSegmentVertexCount = quint32(m_previewVertices.size());
+
+  // Invalidate the draw-range cache: m_previewDrawSpans was just rebuilt, so
+  // any cached ranges from a previous span set are stale. The next
+  // computePreviewDrawRanges call will repopulate the cache.
+  m_previewRangeCacheKey = 0;
+  m_cachedPreviewRanges.clear();
 }
 
 bool RhiViewportRenderer::uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *updates)
@@ -672,6 +680,16 @@ bool RhiViewportRenderer::uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *up
 
 QVector<RhiViewportRenderer::PreviewDrawRange> RhiViewportRenderer::computePreviewDrawRanges() const
 {
+  // Cache check: this function is called every render frame, but its inputs
+  // (layerMin/Max, moveEnd, roleVisibility, span count) change rarely. Reuse
+  // the cached result when the input signature matches; the heavy O(N) span
+  // traversal below only runs on a real input change.
+  const quint64 cacheKey = computePreviewRangeCacheKey();
+  if (cacheKey == m_previewRangeCacheKey && !m_cachedPreviewRanges.isEmpty()
+      && m_previewRangeCacheKey != 0) {
+    return m_cachedPreviewRanges;
+  }
+
   QVector<PreviewDrawRange> ranges;
 
   const auto logRangeIfChanged = [this](quint32 first, quint32 count, int layerLow, int layerHigh) {
@@ -699,10 +717,14 @@ QVector<RhiViewportRenderer::PreviewDrawRange> RhiViewportRenderer::computePrevi
 
   if (m_previewDrawSpans.isEmpty()) {
     logRangeIfChanged(0, 0, layerLow, layerHigh);
+    m_previewRangeCacheKey = cacheKey;
+    m_cachedPreviewRanges = ranges;
     return ranges;
   }
   if (m_moveEnd <= 0) {
     logRangeIfChanged(0, 0, layerLow, layerHigh);
+    m_previewRangeCacheKey = cacheKey;
+    m_cachedPreviewRanges = ranges;
     return ranges;
   }
 
@@ -754,6 +776,33 @@ QVector<RhiViewportRenderer::PreviewDrawRange> RhiViewportRenderer::computePrevi
 
   const quint32 firstVertex = ranges.isEmpty() ? 0 : ranges.first().firstVertex;
   logRangeIfChanged(firstVertex, totalVertexCount, layerLow, layerHigh);
+
+  m_previewRangeCacheKey = cacheKey;
+  m_cachedPreviewRanges = ranges;
   return ranges;
+}
+
+quint64 RhiViewportRenderer::computePreviewRangeCacheKey() const
+{
+  // Hash all inputs that affect computePreviewDrawRanges output. A change in
+  // any of these must invalidate the cache. Mirrors the visibility predicates
+  // in the traversal loop: layer range filter, moveEnd filter, per-role
+  // visibility, and the underlying span set itself (count + generation).
+  quint64 key = 1469598103934665603ULL;  // FNV-1a 64-bit offset basis
+  auto mix = [&key](quint64 v) {
+    key ^= v;
+    key *= 1099511628211ULL;  // FNV-1a 64-bit prime
+  };
+  mix(static_cast<quint64>(m_layerMin));
+  mix(static_cast<quint64>(m_layerMax));
+  mix(static_cast<quint64>(m_moveEnd));
+  mix(static_cast<quint64>(m_previewDrawSpans.size()));
+  // roleVisibility: pack each bool into the key. QVector<bool> is bit-packed,
+  // so iterate explicitly (no direct byte access).
+  for (int i = 0; i < m_roleVisibility.size() && i < 32; ++i) {
+    if (m_roleVisibility.at(i))
+      mix(static_cast<quint64>(1) << i);
+  }
+  return key;
 }
 

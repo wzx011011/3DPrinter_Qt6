@@ -61,6 +61,7 @@ private:
   void parsePreviewSegments();
   bool uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *updates);
   QVector<PreviewDrawRange> computePreviewDrawRanges() const;
+  quint64 computePreviewRangeCacheKey() const;
 
   QVector<Vertex> buildSceneVertices(const QList<PrepareSceneData::Vertex> &source) const;
   QVector<Vertex> buildModelVertices(const QList<PrepareSceneData::ModelVertex> &source) const;
@@ -120,6 +121,16 @@ private:
   quint32 m_previewSegmentBufferBytes = 0;
   quint32 m_previewSegmentVertexCount = 0;
   bool m_previewSegmentBufferUploaded = false;
+
+  // Cache for computePreviewDrawRanges — the function is called every render
+  // frame but its inputs (layer range, moveEnd, role visibility, span set)
+  // change rarely. Without this, each idle frame re-traverses the full span
+  // vector (can be millions of spans for large G-code). The cache is keyed by
+  // a hash of all inputs; m_previewDrawSpans rebuild (parsePreviewSegments)
+  // and span-set mutations invalidate it by resetting the key to 0.
+  // Members are mutable because computePreviewDrawRanges is const.
+  mutable quint64 m_previewRangeCacheKey = 0;
+  mutable QVector<PreviewDrawRange> m_cachedPreviewRanges;
   mutable quint32 m_lastLoggedPreviewFirstVertex = std::numeric_limits<quint32>::max();
   mutable quint32 m_lastLoggedPreviewVertexCount = std::numeric_limits<quint32>::max();
   mutable int m_lastLoggedPreviewLayerLow = std::numeric_limits<int>::min();
