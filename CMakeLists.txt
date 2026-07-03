@@ -395,6 +395,21 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
+    # Phase 58 (VERIFY-01): inventory audit harness. Encodes the 9 Phase 50
+    # section 2 deterministic checks (region counts, schema, status/verification
+    # enums, region-ID format, INV-02/03/04 coverage anchors, cleanup format,
+    # no-blank-upstream) against both docs/v3.6-ui-inventory.md (canonical)
+    # and the 50-INVENTORY.md snapshot.
+    qt_add_executable(InventoryAuditTests tests/InventoryAuditTests.cpp)
+    target_link_libraries(InventoryAuditTests PRIVATE Qt6::Test)
+    target_compile_definitions(InventoryAuditTests PRIVATE
+        QT_TESTCASE_SOURCEDIR="${CMAKE_SOURCE_DIR}"
+    )
+    add_test(NAME InventoryAuditTests COMMAND InventoryAuditTests)
+    set_tests_properties(InventoryAuditTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
     qt_add_executable(PrepareSceneDataTests
         tests/PrepareSceneDataTests.cpp
         src/qml_gui/Renderer/PrepareSceneData.cpp
