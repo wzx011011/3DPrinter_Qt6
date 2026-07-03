@@ -203,7 +203,7 @@ Plans:
 3. Edits are model-driven and update dirty, validation, and sidebar state.
 4. Save/reset/unsaved-change actions follow upstream-compatible behavior.
 
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -216,7 +216,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 56-03-PLAN.md -- Wave 3 QML dialogs: OptionRow (typed dispatch, TextInput+DoubleValidator for float), GroupNavSidebar, parameterized SettingsDialog shell, main.qml settingsRequested wiring, QmlUiAuditTests GREEN
+- [x] 56-03-PLAN.md -- Wave 3 QML dialogs: OptionRow (typed dispatch, TextInput+DoubleValidator for float), GroupNavSidebar, parameterized SettingsDialog shell, main.qml settingsRequested wiring, QmlUiAuditTests GREEN
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
