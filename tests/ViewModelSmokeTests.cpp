@@ -3215,9 +3215,32 @@ void ViewModelSmokeTests::testTabsAndGroupNavPerTier()
 
 void ViewModelSmokeTests::testConfigOptionModelSevenTypes()
 {
+  // SETTINGS-03: ConfigOptionModel exposes all 7 typed option kinds via optType.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56SevenTypes"));
-  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  QVERIFY2(printOpts->rowCount() > 0, "Print options model is empty");
+
+  // Collect every optType the schema actually exposes.
+  QSet<QString> seen;
+  for (int i = 0; i < printOpts->rowCount(); ++i)
+    seen.insert(printOpts->optType(i));
+
+  // The 6 dispatch types must all be present (nullable + isVector are
+  // orthogonal flags surfaced via optNullable/optIsVector, not separate types).
+  const QStringList required = {
+    QStringLiteral("bool"), QStringLiteral("int"), QStringLiteral("double"),
+    QStringLiteral("enum"), QStringLiteral("string"), QStringLiteral("percent"),
+  };
+  for (const auto &t : required)
+    QVERIFY2(seen.contains(t),
+             qPrintable(QStringLiteral("ConfigOptionModel must expose at least one '%1' option (got: %2)")
+                            .arg(t, QStringList(seen.begin(), seen.end()).join(", "))));
 }
 
 void ViewModelSmokeTests::testPerOptionDirtyAndValueSource()
@@ -3346,9 +3369,49 @@ void ViewModelSmokeTests::testSaveSaveAsResetOptionResetGroupResetAll()
 
 void ViewModelSmokeTests::testUnsavedChangesGuardOnDirtyClose()
 {
+  // SETTINGS-04/05: the QML close path checks ConfigViewModel::isPresetDirty to
+  // decide whether to open UnsavedChangesDialog. This is the backend-precondition
+  // half of that guard (the dialog visual interaction is in VALIDATION.md
+  // Manual-Only for Phase 58). isPresetDirty must be true after an edit and
+  // false after a full reset.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56UnsavedGuard"));
-  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  QVERIFY2(!config.isPresetDirty(),
+           "isPresetDirty must be false on a fresh (unmodified) preset");
+
+  // Dirty an option via the print option model.
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  QVERIFY2(printOpts->rowCount() > 0, "Print options model is empty");
+  // Find a non-readonly numeric/string row to mutate.
+  int mutateRow = -1;
+  for (int i = 0; i < printOpts->rowCount() && mutateRow < 0; ++i)
+  {
+    if (!printOpts->optReadonly(i))
+      mutateRow = i;
+  }
+  QVERIFY2(mutateRow >= 0, "No non-readonly option available to mutate");
+  const QVariant orig = printOpts->optValue(mutateRow);
+  QVariant mutated = orig;
+  if (orig.typeId() == QMetaType::Bool || orig.toString() == "true" || orig.toString() == "false")
+    mutated = !orig.toBool();
+  else if (orig.canConvert<double>())
+    mutated = orig.toDouble() + 0.01;
+  else
+    mutated = QStringLiteral("X_%1").arg(orig.toString());
+  printOpts->setValue(mutateRow, mutated);
+
+  QVERIFY2(config.isPresetDirty(),
+           "isPresetDirty must be true after editing an option");
+
+  // A full reset clears the dirty flag.
+  config.resetAllGlobalOptions();
+  QVERIFY2(!config.isPresetDirty(),
+           "isPresetDirty must be false after resetAllGlobalOptions");
 }
 
 void ViewModelSmokeTests::testPerDialogSearchAndFourLevelMode()
@@ -3408,9 +3471,37 @@ void ViewModelSmokeTests::testPerDialogSearchAndFourLevelMode()
 
 void ViewModelSmokeTests::testNullableAndVectorOptions()
 {
+  // SETTINGS-03: nullable (inherit-from-parent) and isVector (per-extruder)
+  // flags are surfaced on the option model. At least one option of each kind
+  // must exist in the loaded schema.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56NullableVector"));
-  QFAIL("Wave 0 scaffold - implemented in 56-02/56-03");
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  // Nullable / vector options are tier-dependent (e.g. per-extruder filament
+  // temps are vector; inheritable printer options are nullable). Scan all three
+  // tiers and require at least one of each across the union.
+  QList<ConfigOptionModel *> models = {
+    qobject_cast<ConfigOptionModel *>(config.printOptions()),
+    qobject_cast<ConfigOptionModel *>(config.filamentOptions()),
+    qobject_cast<ConfigOptionModel *>(config.machineOptions()),
+  };
+  bool sawNullable = false, sawVector = false;
+  for (ConfigOptionModel *m : models)
+  {
+    if (!m) continue;
+    for (int i = 0; i < m->rowCount() && !(sawNullable && sawVector); ++i)
+    {
+      if (m->optNullable(i)) sawNullable = true;
+      if (m->optIsVector(i)) sawVector = true;
+    }
+  }
+  QVERIFY2(sawNullable,
+           "Schema must expose at least one nullable option (optNullable==true) across tiers");
+  QVERIFY2(sawVector,
+           "Schema must expose at least one multi-value/vector option (optIsVector==true) across tiers");
 }
 
 QTEST_MAIN(ViewModelSmokeTests)

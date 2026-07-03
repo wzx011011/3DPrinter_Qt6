@@ -589,6 +589,15 @@ ApplicationWindow {
         function onShowPrintHostDialogRequested() { printHostDialog.open() }
         function onShowPluginManagerDialogRequested() { pluginManagerDialog.open() }
         function onShowEnableLiteModeDialogRequested() { enableLiteModeDialog.open() }
+        // Phase 56 — independent settings dialogs (region SETPRINT/SETMAT/SETPROC-SHELL).
+        // BackendContext::forwardSettingsRequest(category) already ran
+        // setActivePresetTier(category) before emitting, so the dialog opens scoped
+        // to the right tier.
+        function onSettingsRequested(category) {
+            if (category === "printer") printerSettingsDialog.show()
+            else if (category === "filament") materialSettingsDialog.show()
+            else if (category === "print" || category === "process") processSettingsDialog.show()
+        }
     }
 
     // P8.2 — Bed shape dialog
@@ -625,6 +634,29 @@ ApplicationWindow {
 
     // P10.2 — Enable lite mode dialog
     EnableLiteModeDialog { id: enableLiteModeDialog }
+
+    // Phase 56 — three independent non-modal settings dialogs (one per
+    // PresetCollection scope). Opened from the Prepare sidebar via the
+    // onSettingsRequested handler above. Each is an ApplicationWindow that
+    // stays focusable alongside the main window (CONTEXT.md decision).
+    SettingsDialog {
+        id: printerSettingsDialog
+        configVm: backend.configViewModel
+        presetTier: "printer"
+        optionModel: backend.configViewModel ? backend.configViewModel.machineOptions : null
+    }
+    SettingsDialog {
+        id: materialSettingsDialog
+        configVm: backend.configViewModel
+        presetTier: "filament"
+        optionModel: backend.configViewModel ? backend.configViewModel.filamentOptions : null
+    }
+    SettingsDialog {
+        id: processSettingsDialog
+        configVm: backend.configViewModel
+        presetTier: "print"
+        optionModel: backend.configViewModel ? backend.configViewModel.printOptions : null
+    }
 
     Component.onCompleted: {
         if (!backend.configWizardCompleted) {

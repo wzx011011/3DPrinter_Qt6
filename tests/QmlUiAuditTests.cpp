@@ -65,6 +65,7 @@ private slots:
   void settingsDialogUsesOnlyCxControls();
   void settingsDialogNoRawControls();
   void settingsDialogStringsQsTr();
+  void settingsDialogMainQmlDispatchStructural();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -1343,21 +1344,112 @@ void QmlUiAuditTests::gcode04RhiViewportIsDefaultRegistrationNoSoftwareViewportI
            "D3D11 path) (GCODE-04)");
 }
 
-// -- Phase 56-01: Wave 0 RED test scaffolds for settings dialog UI audit --
+// -- Phase 56-03: settings dialog UI audit (Cx-only controls, qsTr, main.qml dispatch) --
 
+// SETTINGS-01/02: the three new settings-dialog files use Cx* controls and the
+// OptionRow/GroupNavSidebar pattern; TextArea is allowed inside OptionRow for
+// the multiline string option (no CxTextArea covers it yet).
 void QmlUiAuditTests::settingsDialogUsesOnlyCxControls()
 {
-  QFAIL("Wave 0 scaffold - implemented in 56-04");
+  const QStringList files = {
+    QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"),
+    QStringLiteral("src/qml_gui/components/OptionRow.qml"),
+    QStringLiteral("src/qml_gui/components/GroupNavSidebar.qml"),
+  };
+  for (const auto &path : files)
+  {
+    const QString src = readSource(path);
+    QVERIFY2(!src.isEmpty(), qPrintable(QStringLiteral("Unable to read %1").arg(path)));
+    // Each file must reference at least one Cx* control (proof it uses the
+    // project control set, not raw QtQuick.Controls).
+    QVERIFY2(src.contains(QStringLiteral("Cx")),
+             qPrintable(QStringLiteral("%1 must use Cx* controls").arg(path)));
+  }
+  // OptionRow must dispatch via the Cx family (CxSwitch/CxSlider/CxSpinBox/CxComboBox).
+  const QString optionRow = readSource(QStringLiteral("src/qml_gui/components/OptionRow.qml"));
+  QVERIFY2(optionRow.contains(QStringLiteral("CxSwitch")) && optionRow.contains(QStringLiteral("CxComboBox")) &&
+               optionRow.contains(QStringLiteral("CxSpinBox")),
+           "OptionRow must dispatch bool/enum/int via CxSwitch/CxComboBox/CxSpinBox");
 }
 
+// SETTINGS-01/02: no raw QtQuick.Controls control declarations in the three new
+// files. TextArea is permitted inside OptionRow for the multiline string option.
 void QmlUiAuditTests::settingsDialogNoRawControls()
 {
-  QFAIL("Wave 0 scaffold - implemented in 56-04");
+  // Raw control declarations start at column 0 (after indentation) as `Name {`.
+  // Cx* controls all start with "Cx", so this regex catches only the raw ones.
+  const QRegularExpression rawControl(QStringLiteral("^\\s*(Switch|Slider|SpinBox|ComboBox|Button|TextField|Dialog)\\s*\\{"),
+                                      QRegularExpression::MultilineOption);
+  const QStringList files = {
+    QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"),
+    QStringLiteral("src/qml_gui/components/GroupNavSidebar.qml"),
+  };
+  for (const auto &path : files)
+  {
+    const QString src = readSource(path);
+    QVERIFY2(!src.isEmpty(), qPrintable(QStringLiteral("Unable to read %1").arg(path)));
+    QVERIFY2(!rawControl.match(src).hasMatch(),
+             qPrintable(QStringLiteral("%1 must not declare raw QtQuick.Controls (use Cx*)").arg(path)));
+  }
+  // OptionRow: TextArea is allowed (multiline string); other raw controls are not.
+  const QString optionRow = readSource(QStringLiteral("src/qml_gui/components/OptionRow.qml"));
+  QVERIFY2(!rawControl.match(optionRow).hasMatch(),
+           "OptionRow must not declare raw Switch/Slider/SpinBox/ComboBox/Button/TextField/Dialog (TextArea allowed)");
 }
 
+// SETTINGS-01: user-visible strings in the new files use qsTr() per the
+// UI-SPEC copywriting contract. We assert meaningful qsTr usage (>= 3 calls per
+// file) rather than parsing every literal; full per-string visual parity is the
+// Phase 58 manual UAT.
 void QmlUiAuditTests::settingsDialogStringsQsTr()
 {
-  QFAIL("Wave 0 scaffold - implemented in 56-04");
+  const QStringList files = {
+    QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"),
+    QStringLiteral("src/qml_gui/components/OptionRow.qml"),
+    QStringLiteral("src/qml_gui/components/GroupNavSidebar.qml"),
+  };
+  // SettingsDialog is label-heavy (many static strings); OptionRow and
+  // GroupNavSidebar are mostly dynamic bindings (optLabel/group names) with a
+  // few static strings each. Require qsTr usage proportional to that.
+  static const struct { QString path; int minHits; } checks[] = {
+    {QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"), 5},
+    {QStringLiteral("src/qml_gui/components/OptionRow.qml"), 1},
+    {QStringLiteral("src/qml_gui/components/GroupNavSidebar.qml"), 1},
+  };
+  for (const auto &c : checks)
+  {
+    const QString src = readSource(c.path);
+    QVERIFY2(!src.isEmpty(), qPrintable(QStringLiteral("Unable to read %1").arg(c.path)));
+    int hits = 0;
+    int from = 0;
+    forever
+    {
+      const int idx = src.indexOf(QStringLiteral("qsTr("), from);
+      if (idx < 0) break;
+      ++hits;
+      from = idx + 5;
+    }
+    QVERIFY2(hits >= c.minHits,
+             qPrintable(QStringLiteral("%1 must wrap user-visible strings in qsTr() (found %2, need %3)")
+                            .arg(c.path).arg(hits).arg(c.minHits)));
+  }
+}
+
+// SETTINGS-01: main.qml structurally wires backend.settingsRequested to the
+// three SettingsDialog show() calls (runtime open-path proof is the
+// ViewModelSmokeTests::testSettingsDialogOpenFromSidebar spy test).
+void QmlUiAuditTests::settingsDialogMainQmlDispatchStructural()
+{
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+  QVERIFY2(mainQml.contains(QStringLiteral("function onSettingsRequested")),
+           "main.qml must define an onSettingsRequested handler on backend");
+  QVERIFY2(mainQml.contains(QStringLiteral("printerSettingsDialog.show()")) &&
+               mainQml.contains(QStringLiteral("materialSettingsDialog.show()")) &&
+               mainQml.contains(QStringLiteral("processSettingsDialog.show()")),
+           "main.qml must dispatch settingsRequested to all three SettingsDialog instances");
+  QVERIFY2(mainQml.contains(QStringLiteral("SettingsDialog {")),
+           "main.qml must instantiate SettingsDialog");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
