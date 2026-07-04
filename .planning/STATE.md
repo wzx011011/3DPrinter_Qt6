@@ -2,34 +2,29 @@
 gsd_state_version: 1.0
 milestone: v3.8
 milestone_name: RHI Gizmo Parity
-status: milestone_complete
-last_updated: 2026-07-04T16:54:06.013Z
-last_activity: 2026-07-04 -- Phase 73 complete (GLViewport retired; canonical verifier passed)
+status: completed
+last_updated: "2026-07-04T17:01:43.281Z"
+last_activity: 2026-07-04 -- Milestone v3.8 completed and archived
 progress:
   total_phases: 18
   completed_phases: 18
-  total_plans: 7
-  completed_plans: 66
+  total_plans: 8
+  completed_plans: 8
   percent: 100
-stopped_at: Milestone complete (Phase 73 was final phase)
 ---
 
 # Project State
 
 **Milestone:** v3.8 - RHI Gizmo Parity
-**Status:** Milestone complete
+**Status:** v3.8 milestone complete
 **Next step:** Run milestone audit and complete v3.8 cleanup.
 
 ## Current Position
 
-Phase: 73
-Plan: 73-01-PLAN.md
-Status: Complete
-Last activity: 2026-07-04 -- Phase 73 complete
-Phase 73 deleted the retired OpenGL viewport implementation (`GLViewport*`
-and `GCodeRenderer*`), removed the `OWZX_OPENGL` startup branch, kept the
-stable QML `GLViewport` alias backed by `RhiViewport` or `SoftwareViewport`,
-and passed focused QML audit plus the canonical verifier.
+Phase: Milestone v3.8 complete
+Plan: N/A
+Status: Awaiting next milestone
+Last activity: 2026-07-04 -- Milestone v3.8 completed and archived
 
 ## Project Reference
 
@@ -41,11 +36,10 @@ visually present.
 
 ## Carry-Forward From v3.7 (closed)
 
-- **RHI gizmo silent-dead** (the v3.8 target): gizmoMode/cutAxis/cutPosition
-  properties exist on RhiViewport but RhiViewportRenderer::synchronize never
-  reads them; no gizmo renders, no pick, no drag on the default path.
-  GLViewportRenderer is the only fully functional implementation, gated
-  behind OWZX_OPENGL=1.
+- **RHI gizmo silent-dead**: closed by v3.8. RHI now owns the move, rotate,
+  scale, cut plane, wipe tower, and precise object-picking scope on the
+  default path. The legacy OpenGL `GLViewport*` and `GCodeRenderer*` files
+  were removed, and `OWZX_OPENGL` no longer activates a rendering path.
 
 - **D3D12 segfault at setShaderResources** (QRhi D3D12 backend deep issue):
   uniform buffer 256-byte alignment fix was necessary but not sufficient.
@@ -102,3 +96,22 @@ Per user instruction:
 | future | AssembleView | Future source-truth milestone |
 | future | Missing CLI test fixtures (`hotend.stl`, `Block20XY.stl`) | Future fixture milestone |
 | opportunistic | D3D12 crash root cause | Dedicated backend investigation milestone |
+
+## Deferred Items
+
+Items acknowledged and deferred at milestone close on 2026-07-04:
+
+| Category | Item | Status |
+|---|---|---|
+| debug | qrhi-d3d12-crash | fixing |
+| quick_task | 260625-0cz-ui | missing |
+| quick_task | 260702-1bn-prepare-roadmap-audit-downgrade | missing |
+| quick_task | 260702-1q7-p0-collapsiblesection | missing |
+| uat_gap | Phase 02 02-HUMAN-UAT.md | partial |
+| uat_gap | Phase 43 43-UAT.md | pending_user |
+| verification_gap | Phase 02 02-VERIFICATION.md | human_needed |
+| verification_gap | Phase 68 68-VERIFICATION.md | human_needed |
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

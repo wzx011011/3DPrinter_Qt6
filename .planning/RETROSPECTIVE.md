@@ -134,11 +134,53 @@ A stabilization/truth-reset milestone, not new features:
 
 ---
 
+## Milestone: v3.8 - RHI Gizmo Parity
+
+**Shipped:** 2026-07-04
+**Phases:** 9 | **Plans:** 8 | **Requirements:** 21/21 satisfied
+**Audit status:** `tech_debt` (one optional visual-evidence item; no product blocker)
+
+### What Was Built
+- Pure C++ gizmo math, gizmo geometry, and object-picking helpers with focused tests.
+- Default QRhi/D3D11 rendering for move, rotate, scale, cut plane, wipe tower, and Preview G-code flow.
+- RHI pick/drag interaction for move, rotate, and scale, including ViewModel transform application and undo coalescing.
+- Precise object selection using ray-AABB prefilter plus ray-triangle picking.
+- Legacy `GLViewport*` and `GCodeRenderer*` removal, with `OWzxGL.GLViewport` preserved as an RHI/Software compatibility alias.
+
+### What Worked
+- Extracting math and geometry before renderer work made later RHI interaction changes testable without app startup.
+- Static QML/C++ audits were effective deletion guards for the old OpenGL path and renderer registration drift.
+- Running the canonical verifier only at major checkpoints kept the milestone moving while still ending with full evidence.
+
+### What Was Inefficient
+- Phase 68's visual evidence was deferred, so the milestone audit had to carry an avoidable documentation debt item.
+- The SDK milestone completion summary extracted weak accomplishments automatically and needed manual correction.
+- Existing mojibake in planning docs made exact patching brittle; UTF-8 byte-safe targeted rewrites were required.
+
+### Patterns Established
+- Renderer feature ports should start with pure helper extraction and focused tests.
+- Deleting an old rendering path needs compiled audit guards for CMake sources, QML type registration, and environment flags.
+- Keep public QML type names stable when replacing the backing renderer implementation.
+
+### Key Lessons
+- A compatibility alias can decouple QML stability from renderer architecture cleanup.
+- Precise picking belongs in shared core math/data helpers, not ad hoc viewport code.
+- Milestone-close automation still needs a human-quality pass over summaries and state counters before committing.
+
+### Cost Observations
+- Phases: 9, Plans: 8.
+- Canonical verifier ran successfully after Phase 73 and covered app build, QML audit, PreviewParser, app launch smoke, and E2E pipeline.
+- Remaining debt is process/evidence debt, not a blocker for the v3.8 product objective.
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Reqs satisfied | Audit status | Notes |
 |---|---|---|---|---|---|
 | v2.9 | 6 | 6 | 28/28 | tech_debt | First milestone with full 3-source audit; zero requirement drift |
 | v3.0 | 7 (5+2 review) | 7 | 14/14 | tech_debt (review-clean) | First milestone with explicit code+UI review cycles; scout-before-refactor (D-14) avoided a big rewrite; build speed is the dominant inefficiency |
+| v3.6 | 9 | 25 | automated floor green | tech_debt | Screenshot inventory frozen first; manual visual UAT remains an explicit carry-forward |
+| v3.8 | 9 | 8 | 21/21 | tech_debt | RHI gizmo parity shipped; legacy OpenGL viewport retired; optional visual-evidence debt remains |
 
-*Last updated: 2026-06-26 after v3.0 milestone completion.*
+*Last updated: 2026-07-04 after v3.8 milestone completion.*

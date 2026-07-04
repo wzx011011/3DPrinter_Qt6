@@ -4,24 +4,21 @@
 
 OWzx Slicer is a Windows desktop slicer migrating OrcaSlicer from its upstream C++/wxWidgets GUI to a C++17, Qt 6.10, and QML architecture. The GUI layer is being rewritten while preserving libslic3r and upstream user-visible behavior as the functional source of truth.
 
-The project currently has a usable Qt6/QML shell, real model/project IO, real slicing and local G-code export paths, Prepare and Preview renderers, partial preset IO, and hybrid device/camera/network integrations. v3.6 pivots from partial page completion to screenshot-driven full restoration of the Prepare, Preview, and parameter settings workflows, because the existing UI has drifted too far from the target OrcaSlicer experience in several visible areas.
+The project currently has a usable Qt6/QML shell, real model/project IO, real slicing and local G-code export paths, screenshot-restored Prepare/Preview/settings workflows, and a default QRhi/D3D11 rendering path that owns gizmo, cut plane, wipe tower, precise picking, and G-code preview rendering. v3.8 retired the legacy OpenGL viewport path; remaining work is now future milestone scope rather than the default renderer foundation.
 
 ## Core Value
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current Milestone: v3.6 Screenshot-Driven OrcaSlicer UI Restoration
+## Current State After v3.8
 
-**Goal:** Restore the Prepare page, Preview page, and parameter settings workflows as complete OrcaSlicer-equivalent user flows, using screenshots as visual/layout truth and OrcaSlicer source as behavior truth.
+**Last shipped milestone:** v3.8 RHI Gizmo Parity (2026-07-04).
 
-**Target features:**
-- Screenshot-to-source inventory for Prepare, Preview, printer settings, and material settings, with every visible module mapped to Qt targets and upstream behavior.
-- OrcaSlicer-like application shell, top navigation, menu actions, page switching, and workflow action states.
-- Prepare page restoration: left preset/settings sidebar, object/plate workflows, model import/edit operations, viewport controls, camera/view controls, and gizmo behavior.
-- Preview page restoration: G-code viewport, layer slider, move slider, plate thumbnail, left state panel, right legend/statistics panel, G-code text/current-line panel, color modes, and filters.
-- Parameter settings restoration: independent printer/material/process settings dialogs with tabs, option groups, typed controls, search, basic/advanced filtering, dirty state, save/reset, compatibility, and validation.
-- Deprecated UI removal: replace off-design pages/components when needed and remove abandoned files, routes, registrations, resource entries, imports, and tests.
-- End-to-end verification for import -> configure -> prepare -> slice -> preview -> export, including visual screenshot comparison and source-truth behavior checks.
+**Outcome:** The default QRhi/D3D11 path now owns move, rotate, scale, cut plane, wipe tower, precise object picking, and Preview G-code rendering. Legacy `GLViewport*` / `GCodeRenderer*` files and the `OWZX_OPENGL` startup path are retired. The QML `OWzxGL.GLViewport` name remains as a compatibility alias backed by RHI or Software rendering.
+
+**Next milestone:** Not selected. Start with `$gsd-new-milestone` to define fresh requirements.
+
+**Carry-forward:** D3D12 remains blocked by the known QRhi `setShaderResources` crash; v3.4/v3.6 manual UAT evidence remains deferred; device/cloud/Monitor and AssembleView remain future source-truth milestones.
 
 ## Requirements
 
@@ -42,15 +39,13 @@ These are current baseline capabilities inferred from implementation, git histor
 - v3.4 local import-to-G-code workflow automated verification has passed; manual UAT is deferred and remains a carry-forward release gate.
 - v3.5 Phase 44-46 preset/config foundations exist as historical evidence; v3.5 Phase 47-49 are superseded by v3.6.
 
+- v3.8 RHI gizmo math, geometry, state wiring, move/rotate/scale interaction, cut plane, wipe tower, precise picking, and legacy OpenGL retirement shipped with 21/21 requirements satisfied.
+- Default renderer foundation now rests on QRhi/D3D11 plus Software fallback; the old OpenGL viewport is no longer a selectable application path.
+
 ### Active
 
-- [ ] Every screenshot-visible Prepare, Preview, printer settings, and material settings module is mapped to an upstream OrcaSlicer behavior source and a Qt target.
-- [ ] The application shell, page navigation, menu actions, and workflow action states visually and behaviorally match the screenshot/source-truth contract.
-- [ ] Prepare left sidebar, preset controls, object/plate operations, viewport controls, camera controls, and gizmos are restored as complete user workflows.
-- [ ] Preview page layout, layer/move controls, color/filter controls, right-side panels, G-code text sync, and renderer interaction remain stable during camera and slider changes.
-- [ ] Printer, material, and process settings are restored as independent dialogs/pages with real config option models, save/reset workflows, compatibility, validation, and dirty-state handling.
-- [ ] Off-design or obsolete UI is replaced rather than patched when replacement is the cleaner path, and deprecated files/routes/resources/tests are removed.
-- [ ] Import -> configure -> prepare -> slice -> preview -> export is verified with automated checks and manual visual/UAT checklists.
+- [ ] Define the next milestone requirements via `$gsd-new-milestone`.
+- [ ] Close deferred manual UAT evidence if release language needs full human sign-off.
 
 ### Future
 
@@ -69,9 +64,9 @@ These are current baseline capabilities inferred from implementation, git histor
 - Changing libslic3r slicing algorithms as part of GUI migration work.
 - Adding product behavior that is not mapped to OrcaSlicer upstream or explicitly documented as an OWzx-only decision.
 - Creating alternate build directories or using non-canonical build scripts.
-- Completing device send/upload/cloud print and Monitor print-job workflows in v3.6.
-- Completing AssembleView, auto filament-map recommendation, or wipe-tower rendering in v3.6.
-- Making D3D12 or Vulkan the default backend in v3.6.
+- Completing device send/upload/cloud print and Monitor print-job workflows before a dedicated source-truth milestone.
+- Completing AssembleView or auto filament-map recommendation before a dedicated source-truth milestone.
+- Making D3D12 or Vulkan the default backend before the backend crash/runtime constraints are resolved.
 - Treating v3.4 manual UAT as complete without running it.
 - Resuming v3.5 Phase 47-49 unless the user explicitly reopens that milestone.
 
@@ -94,6 +89,7 @@ These are current baseline capabilities inferred from implementation, git histor
 - v3.4 Phase 43 manual UAT remains pending because it could not be run when v3.4 closed. v3.6 planning may proceed, but release/handoff language must keep that fact visible.
 - Current Qt SDK reality: `E:/Qt6.10/lib/cmake/Qt6Gui/Qt6GuiTargets.cmake` lists `vulkan` under `QT_DISABLED_PUBLIC_FEATURES`, so Vulkan is not a default backend candidate.
 - Known carry-forward tech debt: `.Codex` path casing diverges from git-tracked lowercase `.codex` on Windows; normalize before case-sensitive CI if touched.
+- v3.8 closure state: RHI is the default functional renderer for gizmo/pick/cut/wipe scope; Phase 68 still lacks optional manual visual-capture evidence, tracked as tech debt rather than a blocker.
 
 ## Constraints
 
@@ -128,6 +124,9 @@ These are current baseline capabilities inferred from implementation, git histor
 | Remove deprecated UI when replacing pages | The user explicitly wants no abandoned/dead UI code left in the project. | Active rule for all future milestones |
 | Keep comments English and ASCII-only | Avoid recurrent Windows encoding/mojibake failures and keep source comments tool-friendly. | Active rule for all future milestones |
 | Keep v3.4 manual UAT visible | Automated verification passed, but user could not manually verify then; the project must not claim full manual completion. | Active carry-forward |
+| Retire legacy OpenGL viewport after RHI parity | Keeping two interactive renderers after RHI parity would preserve wrong fallback behavior and increase regression risk. | Good - v3.8 shipped |
+| Preserve `OWzxGL.GLViewport` as a QML compatibility alias | QML imports stay stable while the implementation resolves to RHI or Software rendering. | Good - v3.8 shipped |
+| Put gizmo math, geometry, and object picking in pure C++ helpers | Deterministic unit tests are cheaper and more reliable than renderer-only validation for interaction math. | Good - v3.8 shipped |
 
 ## Evolution
 
@@ -147,4 +146,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-01 for v3.6 milestone definition.*
+*Last updated: 2026-07-04 after v3.8 milestone completion.*

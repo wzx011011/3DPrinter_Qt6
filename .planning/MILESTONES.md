@@ -1,5 +1,23 @@
 # Milestones History
 
+## v3.8 RHI Gizmo Parity (Shipped: 2026-07-04)
+
+**Phases completed:** 9 phases, 8 plans, 0 tasks
+**Audit:** tech_debt; 21/21 requirements satisfied, with one deferred visual-evidence item.
+**Known deferred items at close:** 8 (see `.planning/STATE.md` Deferred Items)
+
+**Key accomplishments:**
+
+- Extracted gizmo math and geometry into pure, unit-tested C++ helpers shared by the rendering paths.
+- Wired the default RHI viewport state pipeline for gizmo mode, cut plane state, selected-object center, and update-triggered synchronization.
+- Ported move, rotate, scale, cut plane, and wipe tower rendering to the default D3D11 QRhi path.
+- Added RHI gizmo pick/drag interaction for move, rotate, and scale with ViewModel transform application and undo coalescing.
+- Replaced default-path object selection with precise ray-AABB plus ray-triangle picking.
+- Deleted the legacy OpenGL viewport and G-code renderer path, removed `OWZX_OPENGL`, and kept `OWzxGL.GLViewport` as a stable RHI/Software QML compatibility alias.
+- Passed the canonical verifier after Phase 73: app build, QML UI audit, PreviewParser, app launch smoke, and E2E pipeline.
+
+---
+
 ## v3.6 Screenshot-Driven OrcaSlicer UI Restoration (Shipped: 2026-07-03)
 
 **Phases completed:** 9 phases, 25 plans, 81 tasks
