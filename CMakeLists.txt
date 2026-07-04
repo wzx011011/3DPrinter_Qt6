@@ -105,6 +105,9 @@ if(OWZX_QML_GUI)
         src/core/rendering/GLShaderUtil.h
         src/core/rendering/GizmoMath.cpp
         src/core/rendering/GizmoMath.h
+        src/core/rendering/GizmoGeometry.cpp
+        src/core/rendering/GizmoGeometry.h
+        src/core/rendering/GizmoVertex.h
         src/core/model/PartPlate.cpp
         src/core/model/PartPlate.h
         src/core/model/PartPlateList.cpp
@@ -442,6 +445,25 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     target_link_libraries(GizmoMathTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
     add_test(NAME GizmoMathTests COMMAND GizmoMathTests)
     set_tests_properties(GizmoMathTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
+    # Phase 66: gizmo geometry builder snapshot tests (GGEO-01/02/03). Pins
+    # vertex counts (move=114, rotate=5184, scale=114), per-axis colors, and
+    # bounding ranges so Phase 68 RHI rendering can rely on the layout.
+    # Standalone pattern (compiles GizmoGeometry.cpp directly, like
+    # GizmoMathTests/PrepareSceneDataTests). AUTOMOC note: same weak-moc
+    # caveat as GizmoMathTests; canonical verify reconfigures, for incremental
+    # builds delete build/GizmoGeometryTests_autogen/timestamp.
+    qt_add_executable(GizmoGeometryTests
+        tests/GizmoGeometryTests.cpp
+        src/core/rendering/GizmoGeometry.cpp
+        src/core/rendering/GizmoGeometry.h
+    )
+    target_include_directories(GizmoGeometryTests PRIVATE src)
+    target_link_libraries(GizmoGeometryTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
+    add_test(NAME GizmoGeometryTests COMMAND GizmoGeometryTests)
+    set_tests_properties(GizmoGeometryTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 

@@ -10,6 +10,7 @@
 #include <memory>
 
 #include "PrepareSceneData.h"
+#include "core/rendering/GizmoVertex.h"
 
 #include <rhi/qrhi.h>
 #include <rhi/qshader.h>
@@ -17,16 +18,10 @@
 class RhiViewportRenderer : public QQuickRhiItemRenderer
 {
 public:
-  struct Vertex
-  {
-    float x;
-    float y;
-    float z;
-    float r;
-    float g;
-    float b;
-    float a;
-  };
+  // Vertex layout is defined in core/rendering/GizmoVertex.h (shared with
+  // the gizmo geometry builders so they can produce vertices without pulling
+  // in this heavy header). Alias kept for call-site compatibility.
+  using Vertex = GizmoVertex;
   struct PreviewDrawRange
   {
     quint32 firstVertex = 0;

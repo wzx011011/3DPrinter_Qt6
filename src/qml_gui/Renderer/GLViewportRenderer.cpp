@@ -2,6 +2,7 @@
 #include "GLViewport.h"
 #include "core/rendering/GLShaderUtil.h"
 #include "core/rendering/GizmoMath.h"
+#include "core/rendering/GizmoGeometry.h"
 
 #include <QOpenGLContext>
 #include <QOpenGLFramebufferObjectFormat>
@@ -62,18 +63,21 @@ static const char *kMeshFragSrc =
 static const char *kGizmoVertSrc =
     "#version 330 core\n"
     "layout(location = 0) in vec3 aPos;\n"
+    "layout(location = 1) in vec4 aColor;\n"
     "uniform mat4  uMVP;\n"
     "uniform vec3  uGizmoCenter;\n"
     "uniform float uGizmoScale;\n"
+    "out vec4 vColor;\n"
     "void main(){\n"
     "  gl_Position = uMVP * vec4(uGizmoCenter + aPos*uGizmoScale, 1.0);\n"
+    "  vColor = aColor;\n"
     "}\n";
 
 static const char *kGizmoFragSrc =
     "#version 330 core\n"
-    "uniform vec4 uGizmoColor;\n"
+    "in vec4 vColor;\n"
     "out vec4 fragColor;\n"
-    "void main(){ fragColor = uGizmoColor; }\n";
+    "void main(){ fragColor = vColor; }\n";
 
 // Bed shader: textured quad (P2.8.1 — 对齐上游 3DBed)
 static const char *kBedVertSrc =
@@ -124,17 +128,8 @@ static const QVector3D kObjColors[] = {
 };
 static constexpr int kNumColors = int(sizeof(kObjColors) / sizeof(kObjColors[0]));
 
-// Gizmo axis colors (RGBA), index 0=X 1=Y 2=Z
-static const QVector4D kAxisColors[3] = {
-    QVector4D(0.90f, 0.18f, 0.18f, 1.f),
-    QVector4D(0.22f, 0.80f, 0.22f, 1.f),
-    QVector4D(0.18f, 0.40f, 0.95f, 1.f),
-};
-static const QVector4D kAxisHighlight[3] = {
-    QVector4D(1.00f, 0.50f, 0.50f, 1.f),
-    QVector4D(0.50f, 1.00f, 0.50f, 1.f),
-    QVector4D(0.50f, 0.70f, 1.00f, 1.f),
-};
+// Note: gizmo axis colors now live in GizmoGeometry::kAxisColorRGB (Phase 66).
+// Highlight (hover) colors are deferred to Phase 68.
 
 // ---------------------------------------------------------------------------
 // Platform geometry
@@ -861,8 +856,7 @@ void GLViewportRenderer::renderMoveGizmo(const QMatrix4x4 &mvp)
   for (int ax = 0; ax < 3; ax++)
   {
     bool active = (m_gizmoAxis == ax + 1);
-    QVector4D col = active ? kAxisHighlight[ax] : kAxisColors[ax];
-    m_gizmoProg.setUniformValue(m_uGizmoColor, col);
+    (void)active; // Phase 68: highlight via uGizmoHighlight uniform when active.
     m_f->glDrawArrays(GL_LINES, m_moveShaftBase[ax], 2);
     m_f->glDrawArrays(GL_TRIANGLES, m_moveConeBase[ax], CONE_VERTS_STATIC);
   }
@@ -901,7 +895,9 @@ void GLViewportRenderer::initialize()
   m_uGizmoMVP = m_gizmoProg.uniformLocation("uMVP");
   m_uGizmoCenter = m_gizmoProg.uniformLocation("uGizmoCenter");
   m_uGizmoScale = m_gizmoProg.uniformLocation("uGizmoScale");
-  m_uGizmoColor = m_gizmoProg.uniformLocation("uGizmoColor");
+  // uGizmoColor removed (Phase 66): color now flows from the vertex buffer
+  // (location 1) through vColor. m_uGizmoColor stays in the header for
+  // Phase 68's highlight uniform; left unset here.
 
   const auto verts = buildGeometry(
       m_axisStart, m_axisCount, m_borderStart, m_borderCount,
@@ -937,141 +933,34 @@ void GLViewportRenderer::initialize()
 }
 
 // ===========================================================================
-// buildGizmoGeometry  -- builds static XYZ arrow geometry in local space
+// buildGizmoGeometry  -- delegates to GizmoGeometry (Phase 66 extraction)
+// Vertex layout: position (3 floats) + color (4 floats RGBA) = 7 floats/28 bytes.
 // ===========================================================================
 void GLViewportRenderer::buildGizmoGeometry()
 {
-  static const float kGizmoVerts[][3] = {
-      {0.00000f, 0.00000f, 0.00000f},
-      {0.78000f, 0.00000f, 0.00000f},
-      {1.00000f, 0.00000f, 0.00000f},
-      {0.78000f, 0.05500f, 0.00000f},
-      {0.78000f, 0.02750f, 0.04763f},
-      {0.78000f, 0.00000f, 0.00000f},
-      {0.78000f, 0.02750f, 0.04763f},
-      {0.78000f, 0.05500f, 0.00000f},
-      {1.00000f, 0.00000f, 0.00000f},
-      {0.78000f, 0.02750f, 0.04763f},
-      {0.78000f, -0.02750f, 0.04763f},
-      {0.78000f, 0.00000f, 0.00000f},
-      {0.78000f, -0.02750f, 0.04763f},
-      {0.78000f, 0.02750f, 0.04763f},
-      {1.00000f, 0.00000f, 0.00000f},
-      {0.78000f, -0.02750f, 0.04763f},
-      {0.78000f, -0.05500f, 0.00000f},
-      {0.78000f, 0.00000f, 0.00000f},
-      {0.78000f, -0.05500f, 0.00000f},
-      {0.78000f, -0.02750f, 0.04763f},
-      {1.00000f, 0.00000f, 0.00000f},
-      {0.78000f, -0.05500f, 0.00000f},
-      {0.78000f, -0.02750f, -0.04763f},
-      {0.78000f, 0.00000f, 0.00000f},
-      {0.78000f, -0.02750f, -0.04763f},
-      {0.78000f, -0.05500f, 0.00000f},
-      {1.00000f, 0.00000f, 0.00000f},
-      {0.78000f, -0.02750f, -0.04763f},
-      {0.78000f, 0.02750f, -0.04763f},
-      {0.78000f, 0.00000f, 0.00000f},
-      {0.78000f, 0.02750f, -0.04763f},
-      {0.78000f, -0.02750f, -0.04763f},
-      {1.00000f, 0.00000f, 0.00000f},
-      {0.78000f, 0.02750f, -0.04763f},
-      {0.78000f, 0.05500f, 0.00000f},
-      {0.78000f, 0.00000f, 0.00000f},
-      {0.78000f, 0.05500f, 0.00000f},
-      {0.78000f, 0.02750f, -0.04763f},
-      {0.00000f, 0.00000f, 0.00000f},
-      {0.00000f, 0.78000f, 0.00000f},
-      {0.00000f, 1.00000f, 0.00000f},
-      {0.05500f, 0.78000f, 0.00000f},
-      {0.02750f, 0.78000f, 0.04763f},
-      {0.00000f, 0.78000f, 0.00000f},
-      {0.02750f, 0.78000f, 0.04763f},
-      {0.05500f, 0.78000f, 0.00000f},
-      {0.00000f, 1.00000f, 0.00000f},
-      {0.02750f, 0.78000f, 0.04763f},
-      {-0.02750f, 0.78000f, 0.04763f},
-      {0.00000f, 0.78000f, 0.00000f},
-      {-0.02750f, 0.78000f, 0.04763f},
-      {0.02750f, 0.78000f, 0.04763f},
-      {0.00000f, 1.00000f, 0.00000f},
-      {-0.02750f, 0.78000f, 0.04763f},
-      {-0.05500f, 0.78000f, 0.00000f},
-      {0.00000f, 0.78000f, 0.00000f},
-      {-0.05500f, 0.78000f, 0.00000f},
-      {-0.02750f, 0.78000f, 0.04763f},
-      {0.00000f, 1.00000f, 0.00000f},
-      {-0.05500f, 0.78000f, 0.00000f},
-      {-0.02750f, 0.78000f, -0.04763f},
-      {0.00000f, 0.78000f, 0.00000f},
-      {-0.02750f, 0.78000f, -0.04763f},
-      {-0.05500f, 0.78000f, 0.00000f},
-      {0.00000f, 1.00000f, 0.00000f},
-      {-0.02750f, 0.78000f, -0.04763f},
-      {0.02750f, 0.78000f, -0.04763f},
-      {0.00000f, 0.78000f, 0.00000f},
-      {0.02750f, 0.78000f, -0.04763f},
-      {-0.02750f, 0.78000f, -0.04763f},
-      {0.00000f, 1.00000f, 0.00000f},
-      {0.02750f, 0.78000f, -0.04763f},
-      {0.05500f, 0.78000f, 0.00000f},
-      {0.00000f, 0.78000f, 0.00000f},
-      {0.05500f, 0.78000f, 0.00000f},
-      {0.02750f, 0.78000f, -0.04763f},
-      {0.00000f, 0.00000f, 0.00000f},
-      {0.00000f, 0.00000f, 0.78000f},
-      {0.00000f, 0.00000f, 1.00000f},
-      {0.05500f, 0.00000f, 0.78000f},
-      {0.02750f, 0.04763f, 0.78000f},
-      {0.00000f, 0.00000f, 0.78000f},
-      {0.02750f, 0.04763f, 0.78000f},
-      {0.05500f, 0.00000f, 0.78000f},
-      {0.00000f, 0.00000f, 1.00000f},
-      {0.02750f, 0.04763f, 0.78000f},
-      {-0.02750f, 0.04763f, 0.78000f},
-      {0.00000f, 0.00000f, 0.78000f},
-      {-0.02750f, 0.04763f, 0.78000f},
-      {0.02750f, 0.04763f, 0.78000f},
-      {0.00000f, 0.00000f, 1.00000f},
-      {-0.02750f, 0.04763f, 0.78000f},
-      {-0.05500f, 0.00000f, 0.78000f},
-      {0.00000f, 0.00000f, 0.78000f},
-      {-0.05500f, 0.00000f, 0.78000f},
-      {-0.02750f, 0.04763f, 0.78000f},
-      {0.00000f, 0.00000f, 1.00000f},
-      {-0.05500f, 0.00000f, 0.78000f},
-      {-0.02750f, -0.04763f, 0.78000f},
-      {0.00000f, 0.00000f, 0.78000f},
-      {-0.02750f, -0.04763f, 0.78000f},
-      {-0.05500f, 0.00000f, 0.78000f},
-      {0.00000f, 0.00000f, 1.00000f},
-      {-0.02750f, -0.04763f, 0.78000f},
-      {0.02750f, -0.04763f, 0.78000f},
-      {0.00000f, 0.00000f, 0.78000f},
-      {0.02750f, -0.04763f, 0.78000f},
-      {-0.02750f, -0.04763f, 0.78000f},
-      {0.00000f, 0.00000f, 1.00000f},
-      {0.02750f, -0.04763f, 0.78000f},
-      {0.05500f, 0.00000f, 0.78000f},
-      {0.00000f, 0.00000f, 0.78000f},
-      {0.05500f, 0.00000f, 0.78000f},
-      {0.02750f, -0.04763f, 0.78000f},
-  };
-  static constexpr int kGizmoN = 114;
-  m_moveShaftBase[0] = 0;
-  m_moveShaftBase[1] = 38;
-  m_moveShaftBase[2] = 76;
-  m_moveConeBase[0] = 2;
-  m_moveConeBase[1] = 40;
-  m_moveConeBase[2] = 78;
+  GizmoGeometryOffsets offsets;
+  QVector<GizmoVertex> verts =
+      GizmoGeometry::buildMoveGizmoVertices(&offsets);
+  for (int i = 0; i < 3; ++i)
+  {
+    m_moveShaftBase[i] = offsets.shaftBase[i];
+    m_moveConeBase[i] = offsets.coneBase[i];
+  }
 
   m_f->glGenVertexArrays(1, &m_moveGizmoVao);
   m_f->glGenBuffers(1, &m_moveGizmoVbo);
   m_f->glBindVertexArray(m_moveGizmoVao);
   m_f->glBindBuffer(GL_ARRAY_BUFFER, m_moveGizmoVbo);
-  m_f->glBufferData(GL_ARRAY_BUFFER, sizeof(kGizmoVerts), kGizmoVerts, GL_STATIC_DRAW);
+  m_f->glBufferData(GL_ARRAY_BUFFER,
+                    verts.size() * sizeof(GizmoVertex),
+                    verts.constData(), GL_STATIC_DRAW);
   m_f->glEnableVertexAttribArray(0);
-  m_f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+  m_f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+                             sizeof(GizmoVertex), nullptr);
+  m_f->glEnableVertexAttribArray(1);
+  m_f->glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE,
+                             sizeof(GizmoVertex),
+                             reinterpret_cast<void *>(3 * sizeof(float)));
   m_f->glBindVertexArray(0);
   m_f->glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
@@ -1431,76 +1320,31 @@ float GLViewportRenderer::computeRotateAngle(float sx, float sy, int axis) const
 }
 
 // ===========================================================================
-// buildRotateGizmoGeometry  -- build 3 torus rings for rotation gizmo
+// buildRotateGizmoGeometry  -- delegates to GizmoGeometry (Phase 66 extraction)
 // ===========================================================================
 void GLViewportRenderer::buildRotateGizmoGeometry()
 {
-  const int segments = 48;
-  const int sides = 6;
-  const float majorR = 0.7f; // ring center radius
-  const float minorR = 0.035f; // tube radius
-
-  QVector<float> verts;
-  verts.reserve(3 * segments * sides * 6); // 6 verts per quad
-
-  // Generate a torus ring in a specific plane
-  // axisIndex: 0=X (YZ plane), 1=Y (XZ plane), 2=Z (XY plane)
-  auto addRing = [&](int axisIndex)
-  {
-    int baseVertex = verts.size() / 3;
-    for (int i = 0; i < segments; i++)
-    {
-      float theta1 = 2.f * M_PI * i / segments;
-      float theta2 = 2.f * M_PI * (i + 1) / segments;
-
-      for (int j = 0; j < sides; j++)
-      {
-        float phi1 = 2.f * M_PI * j / sides;
-        float phi2 = 2.f * M_PI * (j + 1) / sides;
-
-        auto point = [&](float theta, float phi) -> QVector3D
-        {
-          float r = majorR + minorR * std::cos(phi);
-          float y = minorR * std::sin(phi);
-          // Base ring in XZ plane
-          float x = r * std::cos(theta);
-          float z = r * std::sin(theta);
-          // Rotate to target plane
-          if (axisIndex == 0) return QVector3D(y, x, z);     // X ring: YZ plane
-          else if (axisIndex == 1) return QVector3D(x, y, z); // Y ring: XZ plane
-          else return QVector3D(x, z, y);                     // Z ring: XY plane
-        };
-
-        QVector3D p00 = point(theta1, phi1);
-        QVector3D p10 = point(theta2, phi1);
-        QVector3D p01 = point(theta1, phi2);
-        QVector3D p11 = point(theta2, phi2);
-
-        // Triangle 1
-        verts.append(p00.x()); verts.append(p00.y()); verts.append(p00.z());
-        verts.append(p10.x()); verts.append(p10.y()); verts.append(p10.z());
-        verts.append(p11.x()); verts.append(p11.y()); verts.append(p11.z());
-        // Triangle 2
-        verts.append(p00.x()); verts.append(p00.y()); verts.append(p00.z());
-        verts.append(p11.x()); verts.append(p11.y()); verts.append(p11.z());
-        verts.append(p01.x()); verts.append(p01.y()); verts.append(p01.z());
-      }
-    }
-    return baseVertex;
-  };
-
-  m_rotateRingBase[0] = addRing(0); // X ring
-  m_rotateRingBase[1] = addRing(1); // Y ring
-  m_rotateRingBase[2] = addRing(2); // Z ring
-  m_rotateRingVertCount = segments * sides * 6; // vertices per ring
+  GizmoGeometryOffsets offsets;
+  QVector<GizmoVertex> verts =
+      GizmoGeometry::buildRotateGizmoVertices(&offsets);
+  for (int i = 0; i < 3; ++i)
+    m_rotateRingBase[i] = offsets.ringBase[i];
+  m_rotateRingVertCount = offsets.ringVertCount;
 
   m_f->glGenVertexArrays(1, &m_rotateGizmoVao);
   m_f->glGenBuffers(1, &m_rotateGizmoVbo);
   m_f->glBindVertexArray(m_rotateGizmoVao);
   m_f->glBindBuffer(GL_ARRAY_BUFFER, m_rotateGizmoVbo);
-  m_f->glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.constData(), GL_STATIC_DRAW);
+  m_f->glBufferData(GL_ARRAY_BUFFER,
+                    verts.size() * sizeof(GizmoVertex),
+                    verts.constData(), GL_STATIC_DRAW);
   m_f->glEnableVertexAttribArray(0);
-  m_f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+  m_f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+                             sizeof(GizmoVertex), nullptr);
+  m_f->glEnableVertexAttribArray(1);
+  m_f->glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE,
+                             sizeof(GizmoVertex),
+                             reinterpret_cast<void *>(3 * sizeof(float)));
   m_f->glBindVertexArray(0);
   m_f->glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
@@ -1528,8 +1372,7 @@ void GLViewportRenderer::renderRotateGizmo(const QMatrix4x4 &mvp)
   for (int ax = 0; ax < 3; ax++)
   {
     bool active = (m_gizmoAxis == ax + 1);
-    QVector4D col = active ? kAxisHighlight[ax] : kAxisColors[ax];
-    m_gizmoProg.setUniformValue(m_uGizmoColor, col);
+    (void)active; // Phase 68: highlight via uGizmoHighlight uniform when active.
     m_f->glDrawArrays(GL_TRIANGLES, m_rotateRingBase[ax], m_rotateRingVertCount);
   }
 
@@ -1550,77 +1393,34 @@ int GLViewportRenderer::pickRotateAxis(float sx, float sy) const
 }
 
 // ===========================================================================
-// buildScaleGizmoGeometry  -- build 3 axis shafts + box handles
+// buildScaleGizmoGeometry  -- delegates to GizmoGeometry (Phase 66 extraction)
 // ===========================================================================
 void GLViewportRenderer::buildScaleGizmoGeometry()
 {
-  QVector<float> verts;
-  const float shaftEnd = 0.7f;
-  const float boxSize = 0.08f;
-  const float boxCenter = 0.78f;
-
-  // Generate a unit cube centered at origin
-  auto addCube = [&](const QVector3D &center, const QVector3D &size)
+  GizmoGeometryOffsets offsets;
+  QVector<GizmoVertex> verts =
+      GizmoGeometry::buildScaleGizmoVertices(&offsets);
+  for (int i = 0; i < 3; ++i)
   {
-    float hx = size.x() * 0.5f, hy = size.y() * 0.5f, hz = size.z() * 0.5f;
-    float cx = center.x(), cy = center.y(), cz = center.z();
-
-    // 8 corners
-    QVector3D c[8] = {
-        {cx - hx, cy - hy, cz - hz}, {cx + hx, cy - hy, cz - hz},
-        {cx + hx, cy + hy, cz - hz}, {cx - hx, cy + hy, cz - hz},
-        {cx - hx, cy - hy, cz + hz}, {cx + hx, cy - hy, cz + hz},
-        {cx + hx, cy + hy, cz + hz}, {cx - hx, cy + hy, cz + hz}};
-
-    // 12 triangles (6 faces)
-    int faces[6][4] = {
-        {0, 1, 2, 3}, // -Z
-        {4, 6, 5, 7}, // +Z
-        {0, 4, 5, 1}, // -Y
-        {2, 6, 7, 3}, // +Y
-        {0, 3, 7, 4}, // -X
-        {1, 5, 6, 2}, // +X
-    };
-
-    for (auto &f : faces)
-    {
-      auto &a = c[f[0]], &b = c[f[1]], &cc = c[f[2]], &d = c[f[3]];
-      // Tri 1: a b c
-      verts.append(a.x()); verts.append(a.y()); verts.append(a.z());
-      verts.append(b.x()); verts.append(b.y()); verts.append(b.z());
-      verts.append(cc.x()); verts.append(cc.y()); verts.append(cc.z());
-      // Tri 2: a c d
-      verts.append(a.x()); verts.append(a.y()); verts.append(a.z());
-      verts.append(cc.x()); verts.append(cc.y()); verts.append(cc.z());
-      verts.append(d.x()); verts.append(d.y()); verts.append(d.z());
-    }
-  };
-
-  static const QVector3D kAxes[3] = {
-      QVector3D(1, 0, 0), QVector3D(0, 1, 0), QVector3D(0, 0, 1)};
-
-  for (int ax = 0; ax < 3; ax++)
-  {
-    m_scaleShaftBase[ax] = verts.size() / 3;
-    // Shaft line (origin to shaftEnd)
-    QVector3D o(0, 0, 0);
-    QVector3D e = kAxes[ax] * shaftEnd;
-    verts.append(o.x()); verts.append(o.y()); verts.append(o.z());
-    verts.append(e.x()); verts.append(e.y()); verts.append(e.z());
-
-    m_scaleBoxBase[ax] = verts.size() / 3;
-    // Box handle at end of axis
-    addCube(kAxes[ax] * boxCenter, QVector3D(boxSize, boxSize, boxSize));
+    m_scaleShaftBase[i] = offsets.shaftBase[i];
+    m_scaleBoxBase[i] = offsets.boxBase[i];
   }
-  m_scaleBoxVertCount = 36; // 6 faces * 2 tris * 3 verts
+  m_scaleBoxVertCount = offsets.boxVertCount;
 
   m_f->glGenVertexArrays(1, &m_scaleGizmoVao);
   m_f->glGenBuffers(1, &m_scaleGizmoVbo);
   m_f->glBindVertexArray(m_scaleGizmoVao);
   m_f->glBindBuffer(GL_ARRAY_BUFFER, m_scaleGizmoVbo);
-  m_f->glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.constData(), GL_STATIC_DRAW);
+  m_f->glBufferData(GL_ARRAY_BUFFER,
+                    verts.size() * sizeof(GizmoVertex),
+                    verts.constData(), GL_STATIC_DRAW);
   m_f->glEnableVertexAttribArray(0);
-  m_f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+  m_f->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+                             sizeof(GizmoVertex), nullptr);
+  m_f->glEnableVertexAttribArray(1);
+  m_f->glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE,
+                             sizeof(GizmoVertex),
+                             reinterpret_cast<void *>(3 * sizeof(float)));
   m_f->glBindVertexArray(0);
   m_f->glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
@@ -1648,8 +1448,7 @@ void GLViewportRenderer::renderScaleGizmo(const QMatrix4x4 &mvp)
   for (int ax = 0; ax < 3; ax++)
   {
     bool active = (m_gizmoAxis == ax + 1);
-    QVector4D col = active ? kAxisHighlight[ax] : kAxisColors[ax];
-    m_gizmoProg.setUniformValue(m_uGizmoColor, col);
+    (void)active; // Phase 68: highlight via uGizmoHighlight uniform when active.
     m_f->glDrawArrays(GL_LINES, m_scaleShaftBase[ax], 2);
     m_f->glDrawArrays(GL_TRIANGLES, m_scaleBoxBase[ax], m_scaleBoxVertCount);
   }
