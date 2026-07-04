@@ -1,5 +1,6 @@
 #include "RhiViewportRenderer.h"
 #include "RhiViewport.h"
+#include "core/rendering/GizmoCenter.h"
 
 #include <QDebug>
 #include <QFile>
@@ -94,6 +95,30 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   m_moveEnd = viewport->m_moveEnd;
   m_showTravelMoves = viewport->m_showTravelMoves;
   m_gcodeViewMode = viewport->m_gcodeViewMode;
+
+  // ── Phase 67: Gizmo state pipeline ──
+  // Read gizmoMode/cutAxis/cutPosition from the viewport item and compute
+  // gizmoCenter from the selected object's AABB. setGizmoMode already calls
+  // update() on the item (RhiViewport.cpp:321), so this synchronize runs on
+  // the next frame after any QML state change. The diagnostic log fires only
+  // on actual state deltas to avoid spamming once per frame.
+  const int prevGizmoMode = m_gizmoMode;
+  const int prevCutAxis = m_cutAxis;
+  const float prevCutPosition = m_cutPosition;
+  const QVector3D prevGizmoCenter = m_gizmoCenter;
+  m_gizmoMode = viewport->m_gizmoMode;
+  m_cutAxis = viewport->m_cutAxis;
+  m_cutPosition = viewport->m_cutPosition;
+  m_gizmoCenter = computeGizmoCenter();
+  if (m_gizmoMode != prevGizmoMode || m_cutAxis != prevCutAxis ||
+      !qFuzzyCompare(m_cutPosition, prevCutPosition) ||
+      m_gizmoCenter != prevGizmoCenter)
+  {
+    qInfo("[RHI] gizmo state: mode=%d cutAxis=%d cutPos=%.3f center=(%.2f,%.2f,%.2f)",
+          m_gizmoMode, m_cutAxis, double(m_cutPosition),
+          double(m_gizmoCenter.x()), double(m_gizmoCenter.y()), double(m_gizmoCenter.z()));
+  }
+
   // Render-side per-role visibility mask (no repack). The viewport carries a
   // 20-element QVariantList of bools indexed by canonical libvgcode role; convert
   // to QVector<bool> for the draw-range skip check. Missing entries default visible.
@@ -601,6 +626,17 @@ QShader RhiViewportRenderer::loadShader(const QString &path) const
   if (!file.open(QIODevice::ReadOnly))
     return {};
   return QShader::fromSerialized(file.readAll());
+}
+
+// ===========================================================================
+// Phase 67: Gizmo center computation (delegates to the free function so it
+// can be unit-tested without linking the full renderer).
+// ===========================================================================
+QVector3D RhiViewportRenderer::computeGizmoCenter() const
+{
+  return GizmoCenter::fromSelectedBatch(
+      m_prepareScene.selectedSourceObjectIndex(),
+      m_prepareScene.modelBatches());
 }
 
 // ── Phase 26: Preview segment pipeline ──────────────────────────────────────

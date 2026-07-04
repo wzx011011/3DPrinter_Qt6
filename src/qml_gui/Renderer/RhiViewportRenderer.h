@@ -5,6 +5,7 @@
 #include <QMatrix4x4>
 #include <QQuickRhiItem>
 #include <QVector>
+#include <QVector3D>
 
 #include <limits>
 #include <memory>
@@ -63,6 +64,8 @@ private:
   QVector<Vertex> buildModelVertices(const QList<PrepareSceneData::ModelVertex> &source) const;
   QVector<Vertex> buildHighlightVertices() const;
   QShader loadShader(const QString &path) const;
+  // Phase 67: instance helper forwarding to the static testable one.
+  QVector3D computeGizmoCenter() const;
 
   std::unique_ptr<QRhiBuffer> m_bedFillBuffer;
   std::unique_ptr<QRhiBuffer> m_bedLineBuffer;
@@ -99,6 +102,17 @@ private:
   PrepareSceneData m_prepareScene;
   QMatrix4x4 m_cameraMvp;
   QColor m_clearColor = QColor(14, 20, 28);
+
+  // ── Phase 67: Gizmo state read from RhiViewport in synchronize() ──
+  // The viewport item owns gizmoMode/cutAxis/cutPosition as Q_PROPERTY values;
+  // the renderer mirrors them here so render() (Phase 68+) can branch on them.
+  // gizmoCenter is computed from the selected object's AABB midpoint via the
+  // free function GizmoCenter::fromSelectedBatch (src/core/rendering/GizmoCenter.h),
+  // which is unit-tested independently.
+  int m_gizmoMode = 0;          // RhiViewport::GizmoMode (0=Move, 1=Rotate, 2=Scale, 5=Cut, ...)
+  int m_cutAxis = 2;            // 0=X, 1=Y, 2=Z (default Z)
+  float m_cutPosition = 0.f;    // cut-plane offset along cutAxis (mm)
+  QVector3D m_gizmoCenter;      // midpoint of the selected batch's bounds; origin if no selection
 
   // ── Phase 26: Preview segment pipeline state ──
   QByteArray m_previewData;              // GCV1 blob from RhiViewport

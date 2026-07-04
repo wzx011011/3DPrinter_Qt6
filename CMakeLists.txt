@@ -108,6 +108,8 @@ if(OWZX_QML_GUI)
         src/core/rendering/GizmoGeometry.cpp
         src/core/rendering/GizmoGeometry.h
         src/core/rendering/GizmoVertex.h
+        src/core/rendering/GizmoCenter.cpp
+        src/core/rendering/GizmoCenter.h
         src/core/model/PartPlate.cpp
         src/core/model/PartPlate.h
         src/core/model/PartPlateList.cpp
@@ -483,6 +485,27 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     target_link_options(PartPlateTests PRIVATE /FORCE:MULTIPLE)
     add_test(NAME PartPlateTests COMMAND PartPlateTests)
     set_tests_properties(PartPlateTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
+    # Phase 67: gizmo state wiring tests (GWIRE-02). Verifies the free
+    # GizmoCenter::fromSelectedBatch helper that derives the gizmo center from
+    # the selected object's AABB midpoint. Standalone pattern (compiles
+    # GizmoCenter.cpp + PrepareSceneData.cpp directly, like GizmoMathTests) -
+    # no owzx_app_core / QRhi / libslic3r dependency.
+    # AUTOMOC note: same weak-moc caveat; canonical verify reconfigures, for
+    # incremental builds delete build/GizmoStateWiringTests_autogen/timestamp.
+    qt_add_executable(GizmoStateWiringTests
+        tests/GizmoStateWiringTests.cpp
+        src/core/rendering/GizmoCenter.cpp
+        src/core/rendering/GizmoCenter.h
+        src/qml_gui/Renderer/PrepareSceneData.cpp
+        src/qml_gui/Renderer/PrepareSceneData.h
+    )
+    target_include_directories(GizmoStateWiringTests PRIVATE src)
+    target_link_libraries(GizmoStateWiringTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
+    add_test(NAME GizmoStateWiringTests COMMAND GizmoStateWiringTests)
+    set_tests_properties(GizmoStateWiringTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
