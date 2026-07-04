@@ -59,7 +59,7 @@ fully interactive.
 - [x] **Phase 65:** Gizmo math extraction + unit tests (completed 2026-07-04)
 - [x] **Phase 66:** Gizmo geometry builders port (CPU vertex generation) (completed 2026-07-04)
 - [x] **Phase 67:** RHI gizmo state wiring (synchronize + gizmoMode pipeline) (completed 2026-07-04)
-- [ ] **Phase 68:** Move gizmo RHI render (first visible gizmo)
+- [x] **Phase 68:** Move gizmo RHI render (first visible gizmo) (implemented 2026-07-04; visual verification deferred to Phase 73)
 - [ ] **Phase 69:** Move gizmo pick + drag interaction loop
 - [ ] **Phase 70:** Rotate + Scale gizmos
 - [ ] **Phase 71:** Cut plane + wipe tower
