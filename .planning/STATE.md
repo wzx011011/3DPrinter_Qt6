@@ -2,38 +2,35 @@
 gsd_state_version: 1.0
 milestone: v3.8
 milestone_name: RHI Gizmo Parity
-status: ready_to_plan
-last_updated: 2026-07-04T15:20:00.000Z
-last_activity: "2026-07-04 - Phase 71 complete (cut plane + wipe tower: RHI translucent cut fill/outline, wipe tower geometry/rendering, wipe property sync, canonical verifier passed)."
+status: executing
+last_updated: "2026-07-04T15:24:34.735Z"
+last_activity: 2026-07-04 -- Phase 72 planning complete
 progress:
   total_phases: 18
   completed_phases: 16
-  total_plans: 6
+  total_plans: 7
   completed_plans: 64
   percent: 89
-stopped_at: Phase 71 complete (1/1) - ready to discuss Phase 72
 ---
 
 # Project State
 
 **Milestone:** v3.8 - RHI Gizmo Parity
-**Status:** Ready to plan
-**Next step:** Plan Phase 72, `Precise Object Picking`.
+**Status:** Ready to execute
+**Next step:** Execute Phase 72, `Precise Object Picking`.
 
 ## Current Position
 
 Phase: 72
-Plan: Not started
-Status: Phase 71 complete; ready to plan Phase 72
-Last activity: 2026-07-04
-`RhiViewportRenderer` now renders cut planes and wipe towers on the default
-D3D11 path. Cut planes use pure `GizmoGeometry` CPU builders for translucent
-fill and outline, merge selected source-object batch bounds, and follow
-`cutAxis`/`cutPosition`. Wipe tower geometry is generated as a translucent
-bed-mounted box, and renderer synchronization reads all wipe tower properties
-from `RhiViewport`. Focused geometry/QML audit coverage and canonical
-verification passed with
-`powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`.
+Plan: 72-01-PLAN.md
+Status: Ready to execute
+Last activity: 2026-07-04 -- Phase 72 planning complete
+Phase 72 is planned as one TDD wave. It will replace the default RHI viewport's
+screen-rectangle AABB picking with a pure CPU `ObjectPicking` helper that uses
+`GizmoMath::computeRay`, ray-AABB prefiltering, and Moller-Trumbore
+ray-triangle intersection against `PrepareSceneData` scene-space vertices.
+The plan keeps QML as a signal bridge and verifies that projected bounding-box
+hits no longer select an object when the ray misses the actual mesh triangle.
 
 ## Project Reference
 

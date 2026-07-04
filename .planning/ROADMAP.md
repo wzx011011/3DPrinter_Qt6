@@ -221,6 +221,11 @@ Plans:
 1. Clicking a model selects the exact mesh under the cursor (not just the AABB bounding box).
 2. Picking precision matches the GL path.
 
+**Plans:** 1/1 plans planned
+
+Plans:
+- [ ] 72-01-PLAN.md - Wave 1: add pure `ObjectPicking` ray-AABB + Moller-Trumbore helper, register focused `ObjectPickingTests`, wire `RhiViewport::pickSourceObjectAt` through `GizmoMath::computeRay` and `ObjectPicking`, update the RHI selection audit to reject `projectBoundsToScreenRect` picking, then run focused and canonical verification.
+
 ### Phase 73: Retire GLViewport + Verification
 
 **Goal:** Remove the now-redundant GLViewportRenderer (2285 lines) and its dependencies; verify the RHI path is the sole functional path.
