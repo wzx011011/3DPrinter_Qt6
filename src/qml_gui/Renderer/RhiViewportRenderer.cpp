@@ -1,6 +1,7 @@
 #include "RhiViewportRenderer.h"
 #include "RhiViewport.h"
 #include "core/rendering/GizmoCenter.h"
+#include "core/rendering/GizmoGeometry.h"
 
 #include <QDebug>
 #include <QFile>
@@ -110,6 +111,7 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   m_cutAxis = viewport->m_cutAxis;
   m_cutPosition = viewport->m_cutPosition;
   m_gizmoCenter = computeGizmoCenter();
+  m_cameraEye = viewport->m_camera.eye();
   if (m_gizmoMode != prevGizmoMode || m_cutAxis != prevCutAxis ||
       !qFuzzyCompare(m_cutPosition, prevCutPosition) ||
       m_gizmoCenter != prevGizmoCenter)
@@ -155,6 +157,8 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
         delete updates;
         updates = nullptr;
       } else {
+        // Phase 68: upload the gizmo vertex buffer in the same batch.
+        uploadGizmoBuffer(updates);
         m_prepareScene.takeDirtyFlags();
       }
     }
@@ -208,6 +212,9 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->setVertexInput(0, 1, &highlightBinding);
       cb->draw(m_highlightVertexCount);
     }
+    // Phase 68: render the move gizmo (X/Y/Z arrows) when gizmoMode == Move.
+    // Drawn after meshes/highlight so it sits on top via no-depth-write.
+    renderMoveGizmo(cb);
   }
 
   // ── Phase 26/27: Preview segment rendering + timing (CanvasPreview branch) ──
@@ -249,6 +256,10 @@ void RhiViewportRenderer::releaseResources()
   m_linePipeline.reset();
   m_fillPipeline.reset();
   m_fillPipelineNoDepthWrite.reset();
+  // Phase 68: gizmo pipelines + vertex buffer.
+  m_gizmoLinePipeline.reset();
+  m_gizmoTriPipeline.reset();
+  m_gizmoVertexBuffer.reset();
   m_srb.reset();
   m_cameraUniformBuffer.reset();
   m_highlightVertexBuffer.reset();
@@ -261,11 +272,14 @@ void RhiViewportRenderer::releaseResources()
   m_modelVertexBufferUploaded = false;
   m_highlightVertexBufferUploaded = false;
   m_cameraUniformBufferUploaded = false;
+  m_gizmoVertexBufferUploaded = false;       // Phase 68
+  m_gizmoPipelineCreated = false;            // Phase 68
   m_bedFillBufferBytes = 0;
   m_bedLineBufferBytes = 0;
   m_modelVertexBufferBytes = 0;
   m_highlightVertexBufferBytes = 0;
   m_cameraUniformBufferBytes = 0;
+  m_gizmoVertexBufferBytes = 0;              // Phase 68
   m_bedFillVertexCount = 0;
   m_bedLineVertexCount = 0;
   m_modelVertexCount = 0;
@@ -498,7 +512,13 @@ bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, 
     return false;
 
   const bool uploadCamera = !m_cameraUniformBufferUploaded
-      || (dirtyFlags & (PrepareSceneData::DirtyCamera | PrepareSceneData::DirtyGpu)) != 0;
+      || (dirtyFlags & (PrepareSceneData::DirtyCamera
+                        | PrepareSceneData::DirtyGpu
+                        | PrepareSceneData::DirtySelection)) != 0;
+  // Phase 68: DirtySelection is included because gizmoCenter (packed into
+  // this uniform buffer) tracks the selected object's AABB. Without this, a
+  // selection change would update m_gizmoCenter in synchronize() but the GPU
+  // uniform would keep the stale value.
   if (!uploadCamera)
     return true;
 
@@ -513,6 +533,23 @@ bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, 
 
   const QMatrix4x4 corrected = rhi()->clipSpaceCorrMatrix() * m_cameraMvp;
   updates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 0, 64, corrected.constData());
+
+  // Phase 68: pack gizmoCenter (vec3 at offset 64) + gizmoScale (float at
+  // offset 76) into the same uniform buffer. The mesh shader's CameraBlock
+  // only declares mat4 mvp (64 bytes) so it ignores the extra data; the gizmo
+  // shader's CameraBlock declares the full { mat4; vec3; float; } and reads it.
+  // std140 padding: vec3 is followed by 4 bytes of pad to reach the float at
+  // offset 76 (= 64 + 12 + 4? no: std140 vec3 takes 16 bytes, but we pack the
+  // float in the vec3's tail padding). Match the GLSL std140 layout exactly:
+  //   offset 0:  mat4 mvp       (64 bytes)
+  //   offset 64: vec3 gizmoCenter (12 bytes) + float gizmoScale (4 bytes) = 16 bytes
+  // Total CameraBlock = 80 bytes, well within the 256-byte buffer.
+  const float gizmoScale = std::max((m_gizmoCenter - m_cameraEye).length() * 0.15f, 5.f);
+  updates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 64, 12,
+                               reinterpret_cast<const char *>(m_gizmoCenter.data()));
+  updates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 76, 4,
+                               reinterpret_cast<const char *>(&gizmoScale));
+
   m_cameraUniformBufferUploaded = true;
   return true;
 }
@@ -637,6 +674,145 @@ QVector3D RhiViewportRenderer::computeGizmoCenter() const
   return GizmoCenter::fromSelectedBatch(
       m_prepareScene.selectedSourceObjectIndex(),
       m_prepareScene.modelBatches());
+}
+
+// ===========================================================================
+// Phase 68: Move gizmo RHI rendering
+// ===========================================================================
+bool RhiViewportRenderer::uploadGizmoBuffer(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+  if (m_gizmoVertexBufferUploaded)
+    return true;
+
+  // Build the move gizmo vertices (shaft lines + cone triangles, per-axis
+  // colored). Phase 66 GizmoGeometry produces the same layout meshes use.
+  // Per-axis draw offsets are hardcoded in renderMoveGizmo (kShaftBase/kConeBase).
+  QVector<GizmoVertex> verts = GizmoGeometry::buildMoveGizmoVertices();
+
+  const quint32 byteSize = quint32(verts.size() * sizeof(GizmoVertex));
+  if (!ensureBuffer(m_gizmoVertexBuffer, byteSize, m_gizmoVertexBufferBytes,
+                    QRhiBuffer::Immutable | QRhiBuffer::VertexBuffer))
+    return false;
+
+  updates->uploadStaticBuffer(m_gizmoVertexBuffer.get(), 0, byteSize, verts.constData());
+  m_gizmoVertexBufferUploaded = true;
+  qInfo("[RHI] gizmo vertex buffer uploaded: %u move verts", quint32(verts.size()));
+  return true;
+}
+
+bool RhiViewportRenderer::ensureGizmoPipeline()
+{
+  if (m_gizmoPipelineCreated)
+    return true;
+  if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr)
+    return false;
+
+  // Gizmo shader reads the extended CameraBlock { mat4 mvp; vec3 gizmoCenter;
+  // float gizmoScale; } at binding 0 - same binding as the mesh SRB, so reuse
+  // m_srb (the uniform buffer now carries gizmoCenter+gizmoScale packed after
+  // the MVP, see uploadCameraUniform).
+  if (m_srb == nullptr)
+    return false;
+
+  QShader vertexShader = loadShader(QStringLiteral(":/rhi_viewport/shaders/rhi_gizmo.vert.qsb"));
+  QShader fragmentShader = loadShader(QStringLiteral(":/rhi_viewport/shaders/rhi_gizmo.frag.qsb"));
+  if (!vertexShader.isValid() || !fragmentShader.isValid())
+  {
+    m_pipelineFailed = true;
+    return false;
+  }
+
+  // Same vertex input layout as meshes: position (float3) + color (float4).
+  QRhiVertexInputLayout inputLayout;
+  inputLayout.setBindings({QRhiVertexInputBinding(sizeof(GizmoVertex))});
+  inputLayout.setAttributes({
+      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, offsetof(GizmoVertex, x)),
+      QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float4, offsetof(GizmoVertex, r)),
+  });
+
+  m_renderPassDescriptor = renderTarget()->renderPassDescriptor();
+
+  auto buildOne = [&](std::unique_ptr<QRhiGraphicsPipeline> &pipe,
+                      QRhiGraphicsPipeline::Topology topology) -> bool
+  {
+    pipe.reset(rhi()->newGraphicsPipeline());
+    pipe->setTopology(topology);
+    pipe->setShaderStages({
+        QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
+        QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
+    });
+    pipe->setShaderResourceBindings(m_srb.get());
+    pipe->setVertexInputLayout(inputLayout);
+    pipe->setRenderPassDescriptor(m_renderPassDescriptor);
+    // Gizmo tests depth (occludes behind itself correctly) but does NOT write
+    // depth, so it stays visible through objects drawn after it. Matches the
+    // GL path's glClear(GL_DEPTH_BUFFER_BIT) before each gizmo render.
+    pipe->setDepthTest(true);
+    pipe->setDepthWrite(false);
+    pipe->setTargetBlends({});
+    if (!pipe->create())
+    {
+      pipe.reset();
+      m_pipelineFailed = true;
+      return false;
+    }
+    return true;
+  };
+
+  if (!buildOne(m_gizmoLinePipeline, QRhiGraphicsPipeline::Lines))
+    return false;
+  if (!buildOne(m_gizmoTriPipeline, QRhiGraphicsPipeline::Triangles))
+    return false;
+
+  m_gizmoPipelineCreated = true;
+  qInfo("[RHI] gizmo pipelines created (lines + triangles, no-depth-write)");
+  return true;
+}
+
+void RhiViewportRenderer::renderMoveGizmo(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr || m_gizmoVertexBuffer == nullptr)
+    return;
+  // Only draw when move mode is active AND something is selected.
+  if (m_gizmoMode != 0 /*GizmoMove*/ ||
+      m_prepareScene.selectedSourceObjectIndex() < 0)
+    return;
+  if (!ensureGizmoPipeline())
+    return;
+
+  const QRhiCommandBuffer::VertexInput gizmoBinding(m_gizmoVertexBuffer.get(), 0);
+  cb->setShaderResources();
+
+  // The move gizmo layout from GizmoGeometry (3 axes x 38 verts each):
+  //   axis 0 (X): shaft [0,1], cone [2..37]
+  //   axis 1 (Y): shaft [38,39], cone [40..75]
+  //   axis 2 (Z): shaft [76,77], cone [78..113]
+  // Shafts use Lines topology (pair verts); cones use Triangles. The verts
+  // are NOT contiguous across axes, so issue per-axis draw calls (matches
+  // the GL path's glDrawArrays-per-axis loop).
+  static const int kShaftBase[3] = {0, 38, 76};
+  static const int kConeBase[3] = {2, 40, 78};
+  const int kShaftVertsPerAxis = 2;
+  const int kConeVertsPerAxis = 36;
+
+  // Shafts (GL_LINES).
+  if (m_gizmoLinePipeline)
+  {
+    cb->setGraphicsPipeline(m_gizmoLinePipeline.get());
+    cb->setVertexInput(0, 1, &gizmoBinding);
+    for (int ax = 0; ax < 3; ++ax)
+      cb->draw(kShaftVertsPerAxis, 1, kShaftBase[ax]);
+  }
+  // Cones (GL_TRIANGLES).
+  if (m_gizmoTriPipeline)
+  {
+    cb->setGraphicsPipeline(m_gizmoTriPipeline.get());
+    cb->setVertexInput(0, 1, &gizmoBinding);
+    for (int ax = 0; ax < 3; ++ax)
+      cb->draw(kConeVertsPerAxis, 1, kConeBase[ax]);
+  }
 }
 
 // ── Phase 26: Preview segment pipeline ──────────────────────────────────────

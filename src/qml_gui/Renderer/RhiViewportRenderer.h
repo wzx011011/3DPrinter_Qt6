@@ -49,6 +49,9 @@ private:
   bool uploadModelBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadHighlightBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadCameraUniform(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
+  bool ensureGizmoPipeline();                                  // Phase 68
+  bool uploadGizmoBuffer(QRhiResourceUpdateBatch *updates);   // Phase 68
+  void renderMoveGizmo(QRhiCommandBuffer *cb);                // Phase 68
   bool ensureBuffer(std::unique_ptr<QRhiBuffer> &buffer,
                     quint32 byteSize,
                     quint32 &storedSize,
@@ -79,6 +82,17 @@ private:
   // behind opaque geometry) but does not WRITE depth (so it does not block
   // geometry drawn after it from passing the depth test).
   std::unique_ptr<QRhiGraphicsPipeline> m_fillPipelineNoDepthWrite;
+  // Phase 68: gizmo pipelines. Separate from m_fill/m_line because the gizmo
+  // shader applies position*scale+center displacement. Lines for shafts,
+  // triangles for cones/rings/boxes. No depth write so the gizmo stays
+  // visible through objects (matches GL glClear(GL_DEPTH_BUFFER_BIT) before
+  // each gizmo render).
+  std::unique_ptr<QRhiGraphicsPipeline> m_gizmoLinePipeline;
+  std::unique_ptr<QRhiGraphicsPipeline> m_gizmoTriPipeline;
+  std::unique_ptr<QRhiBuffer> m_gizmoVertexBuffer;
+  bool m_gizmoVertexBufferUploaded = false;
+  bool m_gizmoPipelineCreated = false;
+  quint32 m_gizmoVertexBufferBytes = 0;
   QRhiRenderPassDescriptor *m_renderPassDescriptor = nullptr;
   bool m_sceneBuffersUploaded = false;
   bool m_modelVertexBufferUploaded = false;
@@ -113,6 +127,7 @@ private:
   int m_cutAxis = 2;            // 0=X, 1=Y, 2=Z (default Z)
   float m_cutPosition = 0.f;    // cut-plane offset along cutAxis (mm)
   QVector3D m_gizmoCenter;      // midpoint of the selected batch's bounds; origin if no selection
+  QVector3D m_cameraEye;        // Phase 68: camera position for gizmoScale computation
 
   // ── Phase 26: Preview segment pipeline state ──
   QByteArray m_previewData;              // GCV1 blob from RhiViewport

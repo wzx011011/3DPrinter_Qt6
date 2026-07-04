@@ -286,6 +286,8 @@ if(OWZX_QML_GUI)
         FILES
             src/qml_gui/Renderer/shaders/rhi_viewport.vert
             src/qml_gui/Renderer/shaders/rhi_viewport.frag
+            src/qml_gui/Renderer/shaders/rhi_gizmo.vert
+            src/qml_gui/Renderer/shaders/rhi_gizmo.frag
     )
     if(MSVC)
         target_compile_options(OWzxSlicer PRIVATE /Zi)
