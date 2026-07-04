@@ -40,6 +40,7 @@ private slots:
   void previewStatsPanelCallsOnlyQmlInvokableSetters();
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
   void rhiMoveGizmoDragBridgeStaysCppOwned();
+  void rhiRotateScaleGizmoBridgeStaysCppOwned();
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
   void plateContextMenuItemsWiredAndNonEmpty();
@@ -1064,6 +1065,74 @@ void QmlUiAuditTests::rhiMoveGizmoDragBridgeStaysCppOwned()
                && !preparePage.contains(QStringLiteral("rayToAxisT"))
                && !preparePage.contains(QStringLiteral("intersect")),
            "PreparePage must not own gizmo picking, ray, intersection, or drag math");
+}
+
+void QmlUiAuditTests::rhiRotateScaleGizmoBridgeStaysCppOwned()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!rendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+
+  QVERIFY2(editorHeader.contains(QStringLiteral("beginGizmoRotateDrag()"))
+               && editorHeader.contains(QStringLiteral("applyGizmoRotateDelta(int axis, float radians)"))
+               && editorHeader.contains(QStringLiteral("endGizmoRotateDrag()"))
+               && editorHeader.contains(QStringLiteral("beginGizmoScaleDrag()"))
+               && editorHeader.contains(QStringLiteral("applyGizmoScaleFactor(int axis, float factor)"))
+               && editorHeader.contains(QStringLiteral("endGizmoScaleDrag()")),
+           "EditorViewModel must expose rotate/scale gizmo drag begin/apply/end methods");
+
+  QVERIFY2(viewportHeader.contains(QStringLiteral("void gizmoRotateRequested(int axis, float radians);"))
+               && viewportHeader.contains(QStringLiteral("void gizmoScaleRequested(int axis, float factor);")),
+           "RhiViewport must expose rotate/scale drag signals to QML");
+
+  QVERIFY2(viewportSource.contains(QStringLiteral("GizmoMath::pickRotateAxis"))
+               && viewportSource.contains(QStringLiteral("GizmoMath::computeRotateAngle"))
+               && viewportSource.contains(QStringLiteral("GizmoMath::pickScaleAxis"))
+               && viewportSource.contains(QStringLiteral("GizmoMath::rayToAxisT")),
+           "RhiViewport must own rotate/scale pick and drag math");
+  QVERIFY2(viewportSource.contains(QStringLiteral("emit gizmoRotateRequested"))
+               && viewportSource.contains(QStringLiteral("emit gizmoScaleRequested"))
+               && viewportSource.contains(QStringLiteral("event->accept();")),
+           "RhiViewport must consume active rotate/scale drags and emit frame updates");
+
+  QVERIFY2(rendererHeader.contains(QStringLiteral("GizmoGeometryOffsets"))
+               && rendererHeader.contains(QStringLiteral("renderRotateGizmo"))
+               && rendererHeader.contains(QStringLiteral("renderScaleGizmo")),
+           "RhiViewportRenderer must store gizmo offsets and expose rotate/scale render helpers");
+  QVERIFY2(rendererSource.contains(QStringLiteral("GizmoGeometry::buildRotateGizmoVertices"))
+               && rendererSource.contains(QStringLiteral("GizmoGeometry::buildScaleGizmoVertices"))
+               && rendererSource.contains(QStringLiteral("renderRotateGizmo(cb)"))
+               && rendererSource.contains(QStringLiteral("renderScaleGizmo(cb)")),
+           "RhiViewportRenderer must upload and draw rotate/scale gizmo geometry");
+
+  QVERIFY2(preparePage.contains(QStringLiteral("onGizmoRotateRequested: function(axis, radians)"))
+               && preparePage.contains(QStringLiteral("root.editorVm.applyGizmoRotateDelta(axis, radians)"))
+               && preparePage.contains(QStringLiteral("onGizmoScaleRequested: function(axis, factor)"))
+               && preparePage.contains(QStringLiteral("root.editorVm.applyGizmoScaleFactor(axis, factor)")),
+           "PreparePage must forward RHI rotate/scale drag signals to EditorViewModel");
+
+  const QStringList forbiddenQmlMath = {
+      QStringLiteral("pickRotateAxis"),
+      QStringLiteral("pickScaleAxis"),
+      QStringLiteral("computeRotateAngle"),
+      QStringLiteral("rayToAxisT"),
+      QStringLiteral("computeRay"),
+      QStringLiteral("scaleFactor"),
+      QStringLiteral("intersect")
+  };
+  for (const QString &token : forbiddenQmlMath) {
+    QVERIFY2(!preparePage.contains(token),
+             qPrintable(QStringLiteral("PreparePage must not own rotate/scale gizmo math token: %1").arg(token)));
+  }
 }
 
 void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()

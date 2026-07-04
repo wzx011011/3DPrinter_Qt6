@@ -215,6 +215,8 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // Phase 68: render the move gizmo (X/Y/Z arrows) when gizmoMode == Move.
     // Drawn after meshes/highlight so it sits on top via no-depth-write.
     renderMoveGizmo(cb);
+    renderRotateGizmo(cb);
+    renderScaleGizmo(cb);
   }
 
   // ── Phase 26/27: Preview segment rendering + timing (CanvasPreview branch) ──
@@ -280,6 +282,9 @@ void RhiViewportRenderer::releaseResources()
   m_highlightVertexBufferBytes = 0;
   m_cameraUniformBufferBytes = 0;
   m_gizmoVertexBufferBytes = 0;              // Phase 68
+  m_moveGizmoOffsets = {};
+  m_rotateGizmoOffsets = {};
+  m_scaleGizmoOffsets = {};
   m_bedFillVertexCount = 0;
   m_bedLineVertexCount = 0;
   m_modelVertexCount = 0;
@@ -688,10 +693,40 @@ bool RhiViewportRenderer::uploadGizmoBuffer(QRhiResourceUpdateBatch *updates)
   if (m_gizmoVertexBufferUploaded)
     return true;
 
-  // Build the move gizmo vertices (shaft lines + cone triangles, per-axis
-  // colored). Phase 66 GizmoGeometry produces the same layout meshes use.
-  // Per-axis draw offsets are hardcoded in renderMoveGizmo (kShaftBase/kConeBase).
-  QVector<GizmoVertex> verts = GizmoGeometry::buildMoveGizmoVertices();
+  GizmoGeometryOffsets moveOffsets;
+  GizmoGeometryOffsets rotateOffsets;
+  GizmoGeometryOffsets scaleOffsets;
+  QVector<GizmoVertex> moveVerts = GizmoGeometry::buildMoveGizmoVertices(&moveOffsets);
+  QVector<GizmoVertex> rotateVerts = GizmoGeometry::buildRotateGizmoVertices(&rotateOffsets);
+  QVector<GizmoVertex> scaleVerts = GizmoGeometry::buildScaleGizmoVertices(&scaleOffsets);
+
+  auto adjustOffsets = [](GizmoGeometryOffsets offsets, int base) {
+    for (int ax = 0; ax < 3; ++ax)
+    {
+      if (offsets.shaftVertCount > 0)
+        offsets.shaftBase[ax] += base;
+      if (offsets.coneVertCount > 0)
+        offsets.coneBase[ax] += base;
+      if (offsets.boxVertCount > 0)
+        offsets.boxBase[ax] += base;
+      if (offsets.ringVertCount > 0)
+        offsets.ringBase[ax] += base;
+    }
+    return offsets;
+  };
+
+  const int moveBase = 0;
+  const int rotateBase = moveVerts.size();
+  const int scaleBase = rotateBase + rotateVerts.size();
+  m_moveGizmoOffsets = adjustOffsets(moveOffsets, moveBase);
+  m_rotateGizmoOffsets = adjustOffsets(rotateOffsets, rotateBase);
+  m_scaleGizmoOffsets = adjustOffsets(scaleOffsets, scaleBase);
+
+  QVector<GizmoVertex> verts;
+  verts.reserve(moveVerts.size() + rotateVerts.size() + scaleVerts.size());
+  verts += moveVerts;
+  verts += rotateVerts;
+  verts += scaleVerts;
 
   const quint32 byteSize = quint32(verts.size() * sizeof(GizmoVertex));
   if (!ensureBuffer(m_gizmoVertexBuffer, byteSize, m_gizmoVertexBufferBytes,
@@ -700,7 +735,8 @@ bool RhiViewportRenderer::uploadGizmoBuffer(QRhiResourceUpdateBatch *updates)
 
   updates->uploadStaticBuffer(m_gizmoVertexBuffer.get(), 0, byteSize, verts.constData());
   m_gizmoVertexBufferUploaded = true;
-  qInfo("[RHI] gizmo vertex buffer uploaded: %u move verts", quint32(verts.size()));
+  qInfo("[RHI] gizmo vertex buffer uploaded: %u verts (move=%d rotate=%d scale=%d)",
+        quint32(verts.size()), moveVerts.size(), rotateVerts.size(), scaleVerts.size());
   return true;
 }
 
@@ -787,25 +823,13 @@ void RhiViewportRenderer::renderMoveGizmo(QRhiCommandBuffer *cb)
   const QRhiCommandBuffer::VertexInput gizmoBinding(m_gizmoVertexBuffer.get(), 0);
   cb->setShaderResources();
 
-  // The move gizmo layout from GizmoGeometry (3 axes x 38 verts each):
-  //   axis 0 (X): shaft [0,1], cone [2..37]
-  //   axis 1 (Y): shaft [38,39], cone [40..75]
-  //   axis 2 (Z): shaft [76,77], cone [78..113]
-  // Shafts use Lines topology (pair verts); cones use Triangles. The verts
-  // are NOT contiguous across axes, so issue per-axis draw calls (matches
-  // the GL path's glDrawArrays-per-axis loop).
-  static const int kShaftBase[3] = {0, 38, 76};
-  static const int kConeBase[3] = {2, 40, 78};
-  const int kShaftVertsPerAxis = 2;
-  const int kConeVertsPerAxis = 36;
-
   // Shafts (GL_LINES).
   if (m_gizmoLinePipeline)
   {
     cb->setGraphicsPipeline(m_gizmoLinePipeline.get());
     cb->setVertexInput(0, 1, &gizmoBinding);
     for (int ax = 0; ax < 3; ++ax)
-      cb->draw(kShaftVertsPerAxis, 1, kShaftBase[ax]);
+      cb->draw(m_moveGizmoOffsets.shaftVertCount, 1, m_moveGizmoOffsets.shaftBase[ax]);
   }
   // Cones (GL_TRIANGLES).
   if (m_gizmoTriPipeline)
@@ -813,7 +837,58 @@ void RhiViewportRenderer::renderMoveGizmo(QRhiCommandBuffer *cb)
     cb->setGraphicsPipeline(m_gizmoTriPipeline.get());
     cb->setVertexInput(0, 1, &gizmoBinding);
     for (int ax = 0; ax < 3; ++ax)
-      cb->draw(kConeVertsPerAxis, 1, kConeBase[ax]);
+      cb->draw(m_moveGizmoOffsets.coneVertCount, 1, m_moveGizmoOffsets.coneBase[ax]);
+  }
+}
+
+void RhiViewportRenderer::renderRotateGizmo(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr || m_gizmoVertexBuffer == nullptr)
+    return;
+  if (m_gizmoMode != 1 /*GizmoRotate*/ ||
+      m_prepareScene.selectedSourceObjectIndex() < 0)
+    return;
+  if (!ensureGizmoPipeline())
+    return;
+
+  if (m_gizmoTriPipeline)
+  {
+    const QRhiCommandBuffer::VertexInput gizmoBinding(m_gizmoVertexBuffer.get(), 0);
+    cb->setShaderResources();
+    cb->setGraphicsPipeline(m_gizmoTriPipeline.get());
+    cb->setVertexInput(0, 1, &gizmoBinding);
+    for (int ax = 0; ax < 3; ++ax)
+      cb->draw(m_rotateGizmoOffsets.ringVertCount, 1, m_rotateGizmoOffsets.ringBase[ax]);
+  }
+}
+
+void RhiViewportRenderer::renderScaleGizmo(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr || m_gizmoVertexBuffer == nullptr)
+    return;
+  if (m_gizmoMode != 2 /*GizmoScale*/ ||
+      m_prepareScene.selectedSourceObjectIndex() < 0)
+    return;
+  if (!ensureGizmoPipeline())
+    return;
+
+  const QRhiCommandBuffer::VertexInput gizmoBinding(m_gizmoVertexBuffer.get(), 0);
+  cb->setShaderResources();
+
+  if (m_gizmoLinePipeline)
+  {
+    cb->setGraphicsPipeline(m_gizmoLinePipeline.get());
+    cb->setVertexInput(0, 1, &gizmoBinding);
+    for (int ax = 0; ax < 3; ++ax)
+      cb->draw(m_scaleGizmoOffsets.shaftVertCount, 1, m_scaleGizmoOffsets.shaftBase[ax]);
+  }
+
+  if (m_gizmoTriPipeline)
+  {
+    cb->setGraphicsPipeline(m_gizmoTriPipeline.get());
+    cb->setVertexInput(0, 1, &gizmoBinding);
+    for (int ax = 0; ax < 3; ++ax)
+      cb->draw(m_scaleGizmoOffsets.boxVertCount, 1, m_scaleGizmoOffsets.boxBase[ax]);
   }
 }
 

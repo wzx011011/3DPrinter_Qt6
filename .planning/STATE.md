@@ -3,36 +3,38 @@ gsd_state_version: 1.0
 milestone: v3.8
 milestone_name: RHI Gizmo Parity
 status: ready_to_plan
-last_updated: "2026-07-04T20:30:39+08:00"
-last_activity: "2026-07-04 - Phase 69 complete (move gizmo pick + drag interaction: RHI axis picking, per-axis drag deltas, C++ viewmodel translation, one undo entry per drag, canonical verifier passed)."
+last_updated: 2026-07-04T14:30:02.418Z
+last_activity: "2026-07-04 - Phase 70 complete (rotate and scale gizmos: RHI torus/shaft/box rendering, rotate/scale picking, C++ viewmodel deltas, one undo entry per drag, canonical verifier passed)."
 progress:
   total_phases: 18
-  completed_phases: 14
-  total_plans: 5
-  completed_plans: 5
-  percent: 78
-stopped_at: Phase 69 complete (1/1) - ready to plan Phase 70
+  completed_phases: 15
+  total_plans: 6
+  completed_plans: 63
+  percent: 83
+stopped_at: Phase 70 complete (1/1) — ready to discuss Phase 71
 ---
 
 # Project State
 
 **Milestone:** v3.8 - RHI Gizmo Parity
 **Status:** Ready to plan
-**Next step:** Plan Phase 70, `Rotate + Scale Gizmos`.
+**Next step:** Plan Phase 71, `Cut Plane + Wipe Tower`.
 
 ## Current Position
 
-Phase: 70
+Phase: 71
 Plan: Not started
-Status: Phase 69 complete; ready to plan Phase 70
-Last activity: 2026-07-04 - Phase 69 shipped RHI move-gizmo axis picking and
-dragging. `RhiViewport` uses `GizmoMath::pickMoveAxis`, `computeRay`, and
-`rayToAxisT` for axis selection and per-frame world deltas; drag events are
-consumed so camera orbit does not trigger. `EditorViewModel` applies deltas,
-invalidates stale slice results, and coalesces the whole drag into one undo
-entry. `PreparePage.qml` stays a thin signal bridge. Added focused viewmodel
-and QML audit coverage. Canonical verification passed with
-`powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`.
+Status: Phase 70 complete; ready to plan Phase 71
+Last activity: 2026-07-04
+`RhiViewportRenderer` uploads move, rotate, and scale geometry from
+`GizmoGeometry` and draws rotate torus rings plus scale shafts/box handles on
+the default D3D11 path. `RhiViewport` uses `GizmoMath::pickRotateAxis`,
+`computeRotateAngle`, `pickScaleAxis`, and `rayToAxisT` for pick/drag
+semantics; active drags consume mouse events. `EditorViewModel` applies
+rotation and axis-scale deltas, invalidates stale slice results, and coalesces
+each drag into one undo entry. `PreparePage.qml` remains a thin signal bridge.
+Added focused viewmodel and QML audit coverage. Canonical verification passed
+with `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`.
 
 ## Project Reference
 
@@ -68,7 +70,7 @@ visually present.
 | 67 | RHI gizmo state wiring | ✓ Complete |
 | 68 | Move gizmo RHI render | Complete (visual verification deferred to Phase 73) |
 | 69 | Move gizmo pick + drag interaction | Complete |
-| 70 | Rotate + Scale gizmos | Pending |
+| 70 | Rotate + Scale gizmos | Complete |
 | 71 | Cut plane + wipe tower | Pending |
 | 72 | Precise object picking | Pending |
 | 73 | Retire GLViewport + verification | Pending |

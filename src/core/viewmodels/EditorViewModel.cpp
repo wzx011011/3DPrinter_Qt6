@@ -17,6 +17,11 @@
 #include <cmath>
 #include <QDebug>
 
+namespace
+{
+constexpr float kRadiansToDegrees = 180.0f / float(M_PI);
+}
+
 void EditorViewModel::invalidateSliceResultsForCurrentPlate()
 {
   const int plateIdx = projectService_ ? projectService_->currentPlateIndex() : -1;
@@ -260,6 +265,204 @@ void EditorViewModel::endGizmoMoveDrag()
   }
 
   m_gizmoMoveDragStartPos = {};
+  emit stateChanged();
+}
+
+void EditorViewModel::beginGizmoRotateDrag()
+{
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0 || !projectService_)
+  {
+    m_gizmoRotateDragActive = false;
+    m_gizmoRotateDragSourceIndex = -1;
+    m_gizmoRotateDragStartRot = {};
+    return;
+  }
+
+  m_gizmoRotateDragActive = true;
+  m_gizmoRotateDragSourceIndex = idx;
+  m_gizmoRotateDragStartRot = projectService_->objectRotation(idx);
+}
+
+void EditorViewModel::applyGizmoRotateDelta(int axis, float radians)
+{
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0 || !projectService_ || axis < 1 || axis > 3)
+    return;
+
+  if (!std::isfinite(radians))
+    return;
+
+  if (qFuzzyIsNull(radians))
+    return;
+
+  if (m_gizmoRotateDragActive && idx != m_gizmoRotateDragSourceIndex)
+    return;
+
+  const QVector3D oldRot = projectService_->objectRotation(idx);
+  QVector3D newRot = oldRot;
+  const float degrees = radians * kRadiansToDegrees;
+  if (axis == 1)
+    newRot.setX(newRot.x() + degrees);
+  else if (axis == 2)
+    newRot.setY(newRot.y() + degrees);
+  else
+    newRot.setZ(newRot.z() + degrees);
+
+  projectService_->setObjectRotation(idx, newRot.x(), newRot.y(), newRot.z());
+  invalidateSliceResultsForCurrentPlate();
+
+  if (!m_gizmoRotateDragActive && m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, projectService_->objectPosition(idx),
+                                     oldRot, projectService_->objectScale(idx),
+                                     projectService_);
+    cmd->setNewTransform(projectService_->objectPosition(idx),
+                         newRot,
+                         projectService_->objectScale(idx));
+    m_undoManager->push(cmd);
+  }
+
+  emit stateChanged();
+}
+
+void EditorViewModel::endGizmoRotateDrag()
+{
+  if (!m_gizmoRotateDragActive)
+    return;
+
+  const int idx = m_gizmoRotateDragSourceIndex;
+  m_gizmoRotateDragActive = false;
+  m_gizmoRotateDragSourceIndex = -1;
+
+  if (idx < 0 || !projectService_)
+    return;
+
+  const QVector3D finalRot = projectService_->objectRotation(idx);
+  if ((finalRot - m_gizmoRotateDragStartRot).lengthSquared() <= 1e-12f)
+  {
+    m_gizmoRotateDragStartRot = {};
+    return;
+  }
+
+  if (m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, projectService_->objectPosition(idx),
+                                     m_gizmoRotateDragStartRot,
+                                     projectService_->objectScale(idx),
+                                     projectService_);
+    cmd->setNewTransform(projectService_->objectPosition(idx),
+                         finalRot,
+                         projectService_->objectScale(idx));
+    if (m_undoManager->isInMacro()) {
+      m_undoManager->push(cmd);
+    } else {
+      m_undoManager->beginMacro(tr("Rotate object"));
+      m_undoManager->push(cmd);
+      m_undoManager->endMacro();
+    }
+  }
+
+  m_gizmoRotateDragStartRot = {};
+  emit stateChanged();
+}
+
+void EditorViewModel::beginGizmoScaleDrag()
+{
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0 || !projectService_)
+  {
+    m_gizmoScaleDragActive = false;
+    m_gizmoScaleDragSourceIndex = -1;
+    m_gizmoScaleDragStartScale = {};
+    return;
+  }
+
+  m_gizmoScaleDragActive = true;
+  m_gizmoScaleDragSourceIndex = idx;
+  m_gizmoScaleDragStartScale = projectService_->objectScale(idx);
+}
+
+void EditorViewModel::applyGizmoScaleFactor(int axis, float factor)
+{
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0 || !projectService_ || axis < 1 || axis > 3)
+    return;
+
+  if (!std::isfinite(factor))
+    return;
+
+  const float clampedFactor = std::max(factor, 0.01f);
+  if (qFuzzyCompare(clampedFactor, 1.0f))
+    return;
+
+  if (m_gizmoScaleDragActive && idx != m_gizmoScaleDragSourceIndex)
+    return;
+
+  const QVector3D oldScale = projectService_->objectScale(idx);
+  QVector3D newScale = oldScale;
+  if (axis == 1)
+    newScale.setX(newScale.x() * clampedFactor);
+  else if (axis == 2)
+    newScale.setY(newScale.y() * clampedFactor);
+  else
+    newScale.setZ(newScale.z() * clampedFactor);
+
+  projectService_->setObjectScale(idx, newScale.x(), newScale.y(), newScale.z());
+  invalidateSliceResultsForCurrentPlate();
+
+  if (!m_gizmoScaleDragActive && m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, projectService_->objectPosition(idx),
+                                     projectService_->objectRotation(idx), oldScale,
+                                     projectService_);
+    cmd->setNewTransform(projectService_->objectPosition(idx),
+                         projectService_->objectRotation(idx),
+                         newScale);
+    m_undoManager->push(cmd);
+  }
+
+  emit stateChanged();
+}
+
+void EditorViewModel::endGizmoScaleDrag()
+{
+  if (!m_gizmoScaleDragActive)
+    return;
+
+  const int idx = m_gizmoScaleDragSourceIndex;
+  m_gizmoScaleDragActive = false;
+  m_gizmoScaleDragSourceIndex = -1;
+
+  if (idx < 0 || !projectService_)
+    return;
+
+  const QVector3D finalScale = projectService_->objectScale(idx);
+  if ((finalScale - m_gizmoScaleDragStartScale).lengthSquared() <= 1e-12f)
+  {
+    m_gizmoScaleDragStartScale = {};
+    return;
+  }
+
+  if (m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, projectService_->objectPosition(idx),
+                                     projectService_->objectRotation(idx),
+                                     m_gizmoScaleDragStartScale,
+                                     projectService_);
+    cmd->setNewTransform(projectService_->objectPosition(idx),
+                         projectService_->objectRotation(idx),
+                         finalScale);
+    if (m_undoManager->isInMacro()) {
+      m_undoManager->push(cmd);
+    } else {
+      m_undoManager->beginMacro(tr("Scale object"));
+      m_undoManager->push(cmd);
+      m_undoManager->endMacro();
+    }
+  }
+
+  m_gizmoScaleDragStartScale = {};
   emit stateChanged();
 }
 

@@ -240,6 +240,9 @@ private slots:
   void rendererPickingSelectsSourceObjectThroughEditorViewModel();
   // v3.8 Phase 69: move-gizmo drag deltas coalesce into one undo command.
   void gizmoMoveDragCoalescesIntoSingleUndoCommand();
+  // v3.8 Phase 70: rotate/scale gizmo drags coalesce into one undo command.
+  void gizmoRotateDragCoalescesIntoSingleUndoCommand();
+  void gizmoScaleDragCoalescesIntoSingleUndoCommand();
   // Phase 53-01: Prepare object/plate/gizmo gates live in C++, not QML.
   void prepareWorkflowGatesExposeSourceTruthState();
   void prepareMoveSelectionToPlateUsesSourceSelection();
@@ -2711,6 +2714,83 @@ void ViewModelSmokeTests::gizmoMoveDragCoalescesIntoSingleUndoCommand()
 
   undoManager.redo();
   QCOMPARE(project.objectPosition(sourceObject), dragStartPos + QVector3D(10.0f, 5.0f, 0.0f));
+  QCOMPARE(undoManager.stack()->count(), 2);
+}
+
+void ViewModelSmokeTests::gizmoRotateDragCoalescesIntoSingleUndoCommand()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.selectSourceObject(0));
+  const int sourceObject = editor.selectedSourceObjectIndex();
+  QCOMPARE(sourceObject, 0);
+
+  const QVector3D startRot = project.objectRotation(sourceObject);
+  editor.setObjectRotZ(startRot.z() + 5.0f);
+  QCOMPARE(undoManager.stack()->count(), 1);
+  const QVector3D dragStartRot = project.objectRotation(sourceObject);
+
+  editor.beginGizmoRotateDrag();
+  editor.applyGizmoRotateDelta(3, float(M_PI) / 6.0f);
+  editor.applyGizmoRotateDelta(3, float(M_PI) / 12.0f);
+  editor.endGizmoRotateDrag();
+
+  const QVector3D expectedRot(dragStartRot.x(), dragStartRot.y(), dragStartRot.z() + 45.0f);
+  QCOMPARE(project.objectRotation(sourceObject), expectedRot);
+  QCOMPARE(undoManager.stack()->count(), 2);
+  QVERIFY(undoManager.canUndo());
+
+  undoManager.undo();
+  QCOMPARE(project.objectRotation(sourceObject), dragStartRot);
+  QVERIFY(undoManager.canRedo());
+
+  undoManager.redo();
+  QCOMPARE(project.objectRotation(sourceObject), expectedRot);
+  QCOMPARE(undoManager.stack()->count(), 2);
+}
+
+void ViewModelSmokeTests::gizmoScaleDragCoalescesIntoSingleUndoCommand()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.selectSourceObject(0));
+  editor.setUniformScale(false);
+  const int sourceObject = editor.selectedSourceObjectIndex();
+  QCOMPARE(sourceObject, 0);
+
+  const QVector3D startScale = project.objectScale(sourceObject);
+  editor.setObjectScaleX(startScale.x() * 1.1f);
+  QCOMPARE(undoManager.stack()->count(), 1);
+  const QVector3D dragStartScale = project.objectScale(sourceObject);
+
+  editor.beginGizmoScaleDrag();
+  editor.applyGizmoScaleFactor(1, 1.2f);
+  editor.applyGizmoScaleFactor(1, 1.25f);
+  editor.endGizmoScaleDrag();
+
+  const QVector3D expectedScale(dragStartScale.x() * 1.5f,
+                                dragStartScale.y(),
+                                dragStartScale.z());
+  QCOMPARE(project.objectScale(sourceObject), expectedScale);
+  QCOMPARE(undoManager.stack()->count(), 2);
+  QVERIFY(undoManager.canUndo());
+
+  undoManager.undo();
+  QCOMPARE(project.objectScale(sourceObject), dragStartScale);
+  QVERIFY(undoManager.canRedo());
+
+  undoManager.redo();
+  QCOMPARE(project.objectScale(sourceObject), expectedScale);
   QCOMPARE(undoManager.stack()->count(), 2);
 }
 

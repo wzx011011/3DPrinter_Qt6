@@ -61,7 +61,7 @@ fully interactive.
 - [x] **Phase 67:** RHI gizmo state wiring (synchronize + gizmoMode pipeline) (completed 2026-07-04)
 - [x] **Phase 68:** Move gizmo RHI render (first visible gizmo) (implemented 2026-07-04; visual verification deferred to Phase 73)
 - [x] **Phase 69:** Move gizmo pick + drag interaction loop (completed 2026-07-04)
-- [ ] **Phase 70:** Rotate + Scale gizmos
+- [x] **Phase 70:** Rotate + Scale gizmos (completed 2026-07-04)
 - [ ] **Phase 71:** Cut plane + wipe tower
 - [ ] **Phase 72:** Precise object picking (ray-triangle)
 - [ ] **Phase 73:** Retire GLViewport + verification
@@ -181,6 +181,11 @@ Plans:
 1. Rotate gizmo: drag a ring to rotate the object around that axis.
 2. Scale gizmo: drag a box handle to scale along that axis.
 3. Both render correctly and pick precisely.
+
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 70-01-PLAN.md - Wave 1: upload and draw RHI rotate torus rings plus scale shafts/box handles from `GizmoGeometry`; generalize `RhiViewport` gizmo pick/drag through `GizmoMath::pickRotateAxis`, `computeRotateAngle`, `pickScaleAxis`, and `rayToAxisT`; apply rotate/scale deltas in `EditorViewModel` with one undo entry per drag; thin `PreparePage.qml` bridge and focused viewmodel/QML audit coverage pass with canonical verification (SUMMARY: 70-01-SUMMARY.md)
 
 ### Phase 71: Cut Plane + Wipe Tower
 

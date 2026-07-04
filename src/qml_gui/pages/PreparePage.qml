@@ -16,6 +16,7 @@ Item {
     property alias viewport3dRef: viewport3d
     property string processCategory: ""
     property bool leftPanelVisible: true
+    property int activeGizmoDragMode: GLViewport.GizmoMove
     // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage → DockableSidebar)
     property bool sidebarCollapsed: false
     property int sidebarWidth: 390
@@ -1651,16 +1652,37 @@ Item {
                             root.editorVm.selectSourceObject(sourceIndex)
                     }
                     onGizmoDragBegin: {
-                        if (root.editorVm)
-                            root.editorVm.beginGizmoMoveDrag()
+                        if (root.editorVm) {
+                            root.activeGizmoDragMode = viewport3d.gizmoMode
+                            if (root.activeGizmoDragMode === GLViewport.GizmoRotate)
+                                root.editorVm.beginGizmoRotateDrag()
+                            else if (root.activeGizmoDragMode === GLViewport.GizmoScale)
+                                root.editorVm.beginGizmoScaleDrag()
+                            else
+                                root.editorVm.beginGizmoMoveDrag()
+                        }
                     }
                     onGizmoMoveRequested: function(worldDelta) {
                         if (root.editorVm)
                             root.editorVm.applyGizmoMoveDelta(worldDelta.x, worldDelta.y, worldDelta.z)
                     }
-                    onGizmoDragEnd: {
+                    onGizmoRotateRequested: function(axis, radians) {
                         if (root.editorVm)
-                            root.editorVm.endGizmoMoveDrag()
+                            root.editorVm.applyGizmoRotateDelta(axis, radians)
+                    }
+                    onGizmoScaleRequested: function(axis, factor) {
+                        if (root.editorVm)
+                            root.editorVm.applyGizmoScaleFactor(axis, factor)
+                    }
+                    onGizmoDragEnd: {
+                        if (root.editorVm) {
+                            if (root.activeGizmoDragMode === GLViewport.GizmoRotate)
+                                root.editorVm.endGizmoRotateDrag()
+                            else if (root.activeGizmoDragMode === GLViewport.GizmoScale)
+                                root.editorVm.endGizmoScaleDrag()
+                            else
+                                root.editorVm.endGizmoMoveDrag()
+                        }
                     }
                     cutAxis: root.editorVm ? root.editorVm.cutAxis : 2
                     cutPosition: root.editorVm ? root.editorVm.cutPosition : 0.0

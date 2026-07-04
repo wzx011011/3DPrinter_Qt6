@@ -209,6 +209,8 @@ signals:
   // move); gizmoDragEnd fires once at release (after the last move). The
   // ViewModel uses begin/end to coalesce the whole drag into one undo entry.
   void gizmoMoveRequested(const QVector3D &worldDelta);
+  void gizmoRotateRequested(int axis, float radians);
+  void gizmoScaleRequested(int axis, float factor);
   void gizmoDragBegin();
   void gizmoDragEnd();
 
@@ -227,9 +229,10 @@ private:
   int pickSourceObjectAt(const QPointF &position);
   QRectF projectBoundsToScreenRect(const PrepareSceneData::ModelBounds &bounds,
                                    float *depth) const;
-  // Phase 69: gizmo-axis hit test and center derivation.
+  // Phase 69/70: gizmo-axis hit test and center derivation.
   int pickGizmoAxisAt(const QPointF &position);
   QVector3D currentGizmoCenter() const;
+  void resetGizmoDragState();
 
   int m_canvasType = CanvasView3D;
   QByteArray m_meshData;
@@ -283,10 +286,12 @@ private:
   int m_pressPickedSourceObjectIndex = -1;
   bool m_cameraDirty = true;
 
-  // Phase 69: move-gizmo drag state.
+  // Phase 69/70: gizmo drag state.
   // m_gizmoAxis: 0=none, 1=X, 2=Y, 3=Z.
   int m_gizmoAxis = 0;
+  int m_gizmoDragMode = GizmoMove;
   bool m_gizmoDragging = false;
   float m_gizmoDragStartT = 0.f;
+  float m_gizmoRotateStartAngle = 0.f;
   QVector3D m_gizmoDragCenter;
 };

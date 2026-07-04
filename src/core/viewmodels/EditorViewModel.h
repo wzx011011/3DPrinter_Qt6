@@ -305,6 +305,12 @@ public:
   Q_INVOKABLE void beginGizmoMoveDrag();
   Q_INVOKABLE void applyGizmoMoveDelta(float dx, float dy, float dz);
   Q_INVOKABLE void endGizmoMoveDrag();
+  Q_INVOKABLE void beginGizmoRotateDrag();
+  Q_INVOKABLE void applyGizmoRotateDelta(int axis, float radians);
+  Q_INVOKABLE void endGizmoRotateDrag();
+  Q_INVOKABLE void beginGizmoScaleDrag();
+  Q_INVOKABLE void applyGizmoScaleFactor(int axis, float factor);
+  Q_INVOKABLE void endGizmoScaleDrag();
   void setObjectRotX(float v);
   void setObjectRotY(float v);
   void setObjectRotZ(float v);
@@ -850,6 +856,12 @@ private:
   bool m_gizmoMoveDragActive = false;
   QVector3D m_gizmoMoveDragStartPos;
   int m_gizmoMoveDragSourceIndex = -1;
+  bool m_gizmoRotateDragActive = false;
+  QVector3D m_gizmoRotateDragStartRot;
+  int m_gizmoRotateDragSourceIndex = -1;
+  bool m_gizmoScaleDragActive = false;
+  QVector3D m_gizmoScaleDragStartScale;
+  int m_gizmoScaleDragSourceIndex = -1;
   // AdvancedCut (对齐上游 GLGizmoAdvancedCut)
   int m_advCutAxis = 2;                  ///< 0=X, 1=Y, 2=Z
   float m_advCutPosition = 0.0f;

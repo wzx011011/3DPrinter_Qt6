@@ -11,6 +11,7 @@
 #include <memory>
 
 #include "PrepareSceneData.h"
+#include "core/rendering/GizmoGeometry.h"
 #include "core/rendering/GizmoVertex.h"
 
 #include <rhi/qrhi.h>
@@ -50,8 +51,10 @@ private:
   bool uploadHighlightBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadCameraUniform(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool ensureGizmoPipeline();                                  // Phase 68
-  bool uploadGizmoBuffer(QRhiResourceUpdateBatch *updates);   // Phase 68
+  bool uploadGizmoBuffer(QRhiResourceUpdateBatch *updates);   // Phase 68/70
   void renderMoveGizmo(QRhiCommandBuffer *cb);                // Phase 68
+  void renderRotateGizmo(QRhiCommandBuffer *cb);              // Phase 70
+  void renderScaleGizmo(QRhiCommandBuffer *cb);               // Phase 70
   bool ensureBuffer(std::unique_ptr<QRhiBuffer> &buffer,
                     quint32 byteSize,
                     quint32 &storedSize,
@@ -93,6 +96,9 @@ private:
   bool m_gizmoVertexBufferUploaded = false;
   bool m_gizmoPipelineCreated = false;
   quint32 m_gizmoVertexBufferBytes = 0;
+  GizmoGeometryOffsets m_moveGizmoOffsets;
+  GizmoGeometryOffsets m_rotateGizmoOffsets;
+  GizmoGeometryOffsets m_scaleGizmoOffsets;
   QRhiRenderPassDescriptor *m_renderPassDescriptor = nullptr;
   bool m_sceneBuffersUploaded = false;
   bool m_modelVertexBufferUploaded = false;
