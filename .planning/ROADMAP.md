@@ -58,7 +58,7 @@ fully interactive.
 - [x] **Phase 58:** End-to-End Visual and Functional Verification (completed 2026-07-03; v3.6 closed)
 - [x] **Phase 65:** Gizmo math extraction + unit tests (completed 2026-07-04)
 - [x] **Phase 66:** Gizmo geometry builders port (CPU vertex generation) (completed 2026-07-04)
-- [ ] **Phase 67:** RHI gizmo state wiring (synchronize + gizmoMode pipeline)
+- [x] **Phase 67:** RHI gizmo state wiring (synchronize + gizmoMode pipeline) (completed 2026-07-04)
 - [ ] **Phase 68:** Move gizmo RHI render (first visible gizmo)
 - [ ] **Phase 69:** Move gizmo pick + drag interaction loop
 - [ ] **Phase 70:** Rotate + Scale gizmos
@@ -123,6 +123,11 @@ Plans:
 1. Setting gizmoMode in QML produces the correct value in the renderer's next synchronize.
 2. cutAxis/cutPosition changes propagate.
 3. gizmoCenter tracks the selected object.
+
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 67-01-PLAN.md — Wave 1: add m_gizmoMode/m_cutAxis/m_cutPosition/m_gizmoCenter members to RhiViewportRenderer; extend synchronize() to read viewport state + compute gizmoCenter via free function `GizmoCenter::fromSelectedBatch()` (extracted to `src/core/rendering/GizmoCenter.{h,cpp}` for testability); diagnostic `[RHI] gizmo state:` qInfo log on delta; 5-slot `GizmoStateWiringTests` (no-selection, not-found, single/multi-batch, negative-ranges) all pass (SUMMARY: 67-01-SUMMARY.md)
 
 ### Phase 68: Move Gizmo RHI Render
 

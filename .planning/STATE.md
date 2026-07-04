@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.8
 milestone_name: RHI Gizmo Parity
 status: in_progress
-last_updated: "2026-07-04T11:30:00+08:00"
-last_activity: "2026-07-04 - Phase 66 complete: GizmoGeometry builders + GizmoVertex extracted + per-vertex-color GL shaders (16/16 tests pass); ready for Phase 67 (RHI state wiring)"
+last_updated: "2026-07-04T12:30:00+08:00"
+last_activity: "2026-07-04 - Phase 67 complete: RHI gizmo state pipeline wired (gizmoMode/cutAxis/cutPosition/gizmoCenter flow to RhiViewportRenderer; 7/7 tests pass); ready for Phase 68 (first visible gizmo)"
 progress:
   total_phases: 9
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 22
-stopped_at: Phase 66 verified; ready to discuss Phase 67
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 33
+stopped_at: Phase 67 verified; ready to discuss Phase 68
 ---
 
 # Project State
@@ -67,7 +67,7 @@ visually present.
 |---|---|---|
 | 65 | Gizmo math extraction + unit tests | ✓ Complete |
 | 66 | Gizmo geometry builders port | ✓ Complete |
-| 67 | RHI gizmo state wiring | Pending |
+| 67 | RHI gizmo state wiring | ✓ Complete |
 | 68 | Move gizmo RHI render | Pending |
 | 69 | Move gizmo pick + drag interaction | Pending |
 | 70 | Rotate + Scale gizmos | Pending |
