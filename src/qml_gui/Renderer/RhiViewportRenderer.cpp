@@ -545,10 +545,12 @@ bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, 
   //   offset 64: vec3 gizmoCenter (12 bytes) + float gizmoScale (4 bytes) = 16 bytes
   // Total CameraBlock = 80 bytes, well within the 256-byte buffer.
   const float gizmoScale = std::max((m_gizmoCenter - m_cameraEye).length() * 0.15f, 5.f);
+  // QVector3D has no data() method; take the address of the first component.
+  // The three floats (x,y,z) are contiguous in memory per the Qt GUI ABI.
   updates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 64, 12,
-                               reinterpret_cast<const char *>(m_gizmoCenter.data()));
+                               &m_gizmoCenter[0]);
   updates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 76, 4,
-                               reinterpret_cast<const char *>(&gizmoScale));
+                               &gizmoScale);
 
   m_cameraUniformBufferUploaded = true;
   return true;
@@ -693,7 +695,7 @@ bool RhiViewportRenderer::uploadGizmoBuffer(QRhiResourceUpdateBatch *updates)
 
   const quint32 byteSize = quint32(verts.size() * sizeof(GizmoVertex));
   if (!ensureBuffer(m_gizmoVertexBuffer, byteSize, m_gizmoVertexBufferBytes,
-                    QRhiBuffer::Immutable | QRhiBuffer::VertexBuffer))
+                    QRhiBuffer::VertexBuffer))
     return false;
 
   updates->uploadStaticBuffer(m_gizmoVertexBuffer.get(), 0, byteSize, verts.constData());
