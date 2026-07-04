@@ -103,6 +103,8 @@ if(OWZX_QML_GUI)
         src/core/services/AppSettingsService.h
         src/core/rendering/GLShaderUtil.cpp
         src/core/rendering/GLShaderUtil.h
+        src/core/rendering/GizmoMath.cpp
+        src/core/rendering/GizmoMath.h
         src/core/model/PartPlate.cpp
         src/core/model/PartPlate.h
         src/core/model/PartPlateList.cpp
@@ -419,6 +421,27 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     target_link_libraries(PrepareSceneDataTests PRIVATE Qt6::Test Qt6::Core)
     add_test(NAME PrepareSceneDataTests COMMAND PrepareSceneDataTests)
     set_tests_properties(PrepareSceneDataTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
+    # Phase 65: pure-math gizmo pick/drag library unit tests (GMATH-01/02/03).
+    # GizmoMath has zero render deps (no QtOpenGL / QRhi) — only QtGui for
+    # QVector3D / QVector4D / QMatrix4x4 — so the test target compiles
+    # GizmoMath.cpp directly (like PrepareSceneDataTests) rather than linking
+    # owzx_app_core. Keeps the test fast and isolated from the renderer.
+    # AUTOMOC note: single-file QtTest with cpp-internal Q_OBJECT has weak moc
+    # tracking (see tests/ViewModelSmokeTests.cpp:1-10); the canonical verify
+    # script re-runs cmake configure after slot edits, for incremental builds
+    # delete build/GizmoMathTests_autogen/timestamp.
+    qt_add_executable(GizmoMathTests
+        tests/GizmoMathTests.cpp
+        src/core/rendering/GizmoMath.cpp
+        src/core/rendering/GizmoMath.h
+    )
+    target_include_directories(GizmoMathTests PRIVATE src)
+    target_link_libraries(GizmoMathTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
+    add_test(NAME GizmoMathTests COMMAND GizmoMathTests)
+    set_tests_properties(GizmoMathTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
