@@ -1650,6 +1650,18 @@ Item {
                         if (root.editorVm)
                             root.editorVm.selectSourceObject(sourceIndex)
                     }
+                    onGizmoDragBegin: {
+                        if (root.editorVm)
+                            root.editorVm.beginGizmoMoveDrag()
+                    }
+                    onGizmoMoveRequested: function(worldDelta) {
+                        if (root.editorVm)
+                            root.editorVm.applyGizmoMoveDelta(worldDelta.x, worldDelta.y, worldDelta.z)
+                    }
+                    onGizmoDragEnd: {
+                        if (root.editorVm)
+                            root.editorVm.endGizmoMoveDrag()
+                    }
                     cutAxis: root.editorVm ? root.editorVm.cutAxis : 2
                     cutPosition: root.editorVm ? root.editorVm.cutPosition : 0.0
 

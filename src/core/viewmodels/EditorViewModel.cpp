@@ -28,7 +28,7 @@ void EditorViewModel::invalidateSliceResultsForPlate(int plateIndex)
   if (plateIndex < 0)
     return;
 
-  const bool hadKnownResult = m_slicedPlateIndices.remove(plateIndex) > 0
+  const bool hadKnownResult = m_slicedPlateIndices.remove(plateIndex)
       || (sliceService_ && sliceService_->hasPlateResult(plateIndex))
       || m_sliceResultPlateIndex == plateIndex;
   if (hadKnownResult)
@@ -174,6 +174,95 @@ void EditorViewModel::setObjectPosZ(float v)
     m_undoManager->push(cmd);
   }
 }
+
+void EditorViewModel::beginGizmoMoveDrag()
+{
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0 || !projectService_)
+  {
+    m_gizmoMoveDragActive = false;
+    m_gizmoMoveDragSourceIndex = -1;
+    m_gizmoMoveDragStartPos = {};
+    return;
+  }
+
+  m_gizmoMoveDragActive = true;
+  m_gizmoMoveDragSourceIndex = idx;
+  m_gizmoMoveDragStartPos = projectService_->objectPosition(idx);
+}
+
+void EditorViewModel::applyGizmoMoveDelta(float dx, float dy, float dz)
+{
+  const int idx = primarySelectedSourceIndex(this);
+  if (idx < 0 || !projectService_)
+    return;
+
+  const QVector3D delta(dx, dy, dz);
+  if (delta.lengthSquared() <= 1e-12f)
+    return;
+
+  if (m_gizmoMoveDragActive && idx != m_gizmoMoveDragSourceIndex)
+    return;
+
+  const QVector3D oldPos = projectService_->objectPosition(idx);
+  const QVector3D newPos = oldPos + delta;
+  projectService_->setObjectPosition(idx, newPos.x(), newPos.y(), newPos.z());
+  invalidateSliceResultsForCurrentPlate();
+
+  if (!m_gizmoMoveDragActive && m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, oldPos, projectService_->objectRotation(idx),
+                                     projectService_->objectScale(idx), projectService_);
+    cmd->setNewTransform(newPos,
+                         projectService_->objectRotation(idx),
+                         projectService_->objectScale(idx));
+    m_undoManager->push(cmd);
+  }
+
+  emit stateChanged();
+}
+
+void EditorViewModel::endGizmoMoveDrag()
+{
+  if (!m_gizmoMoveDragActive)
+    return;
+
+  const int idx = m_gizmoMoveDragSourceIndex;
+  m_gizmoMoveDragActive = false;
+  m_gizmoMoveDragSourceIndex = -1;
+
+  if (idx < 0 || !projectService_)
+    return;
+
+  const QVector3D finalPos = projectService_->objectPosition(idx);
+  const QVector3D delta = finalPos - m_gizmoMoveDragStartPos;
+  if (delta.lengthSquared() <= 1e-12f)
+  {
+    m_gizmoMoveDragStartPos = {};
+    return;
+  }
+
+  if (m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, m_gizmoMoveDragStartPos,
+                                     projectService_->objectRotation(idx),
+                                     projectService_->objectScale(idx), projectService_);
+    cmd->setNewTransform(finalPos,
+                         projectService_->objectRotation(idx),
+                         projectService_->objectScale(idx));
+    if (m_undoManager->isInMacro()) {
+      m_undoManager->push(cmd);
+    } else {
+      m_undoManager->beginMacro(tr("Move object"));
+      m_undoManager->push(cmd);
+      m_undoManager->endMacro();
+    }
+  }
+
+  m_gizmoMoveDragStartPos = {};
+  emit stateChanged();
+}
+
 void EditorViewModel::setObjectRotX(float v)
 {
   const int idx = primarySelectedSourceIndex(this);

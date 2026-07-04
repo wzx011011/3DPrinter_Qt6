@@ -33,6 +33,7 @@
 #include "core/services/PresetServiceMock.h"
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceService.h"
+#include "core/services/UndoRedoManager.h"
 #include "core/services/FtpUploader.h"
 #include "core/services/SsdpDiscovery.h"
 #include "core/viewmodels/ConfigViewModel.h"
@@ -237,6 +238,8 @@ private slots:
   void activePlateObjectIndicesFollowCurrentPlateWithoutFallback();
   // v3.2 Phase 25-03: QRhi picking selects source objects through the ViewModel
   void rendererPickingSelectsSourceObjectThroughEditorViewModel();
+  // v3.8 Phase 69: move-gizmo drag deltas coalesce into one undo command.
+  void gizmoMoveDragCoalescesIntoSingleUndoCommand();
   // Phase 53-01: Prepare object/plate/gizmo gates live in C++, not QML.
   void prepareWorkflowGatesExposeSourceTruthState();
   void prepareMoveSelectionToPlateUsesSourceSelection();
@@ -2673,6 +2676,42 @@ void ViewModelSmokeTests::rendererPickingSelectsSourceObjectThroughEditorViewMod
   QVERIFY(editor.activePlateObjectIndices().isEmpty());
   QVERIFY(!editor.selectSourceObject(0));
   QCOMPARE(editor.selectedSourceObjectIndex(), -1);
+}
+
+void ViewModelSmokeTests::gizmoMoveDragCoalescesIntoSingleUndoCommand()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.selectSourceObject(0));
+  const int sourceObject = editor.selectedSourceObjectIndex();
+  QCOMPARE(sourceObject, 0);
+
+  const QVector3D startPos = project.objectPosition(sourceObject);
+  editor.setObjectPosX(startPos.x() + 1.0f);
+  QCOMPARE(undoManager.stack()->count(), 1);
+  const QVector3D dragStartPos = project.objectPosition(sourceObject);
+
+  editor.beginGizmoMoveDrag();
+  editor.applyGizmoMoveDelta(10.0f, 0.0f, 0.0f);
+  editor.applyGizmoMoveDelta(0.0f, 5.0f, 0.0f);
+  editor.endGizmoMoveDrag();
+
+  QCOMPARE(project.objectPosition(sourceObject), dragStartPos + QVector3D(10.0f, 5.0f, 0.0f));
+  QCOMPARE(undoManager.stack()->count(), 2);
+  QVERIFY(undoManager.canUndo());
+
+  undoManager.undo();
+  QCOMPARE(project.objectPosition(sourceObject), dragStartPos);
+  QVERIFY(undoManager.canRedo());
+
+  undoManager.redo();
+  QCOMPARE(project.objectPosition(sourceObject), dragStartPos + QVector3D(10.0f, 5.0f, 0.0f));
+  QCOMPARE(undoManager.stack()->count(), 2);
 }
 
 void ViewModelSmokeTests::prepareWorkflowGatesExposeSourceTruthState()

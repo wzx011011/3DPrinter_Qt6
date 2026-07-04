@@ -39,6 +39,7 @@ private slots:
   void previewLayoutRestoresScreenshotRegionsAndGcodePanel();
   void previewStatsPanelCallsOnlyQmlInvokableSetters();
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
+  void rhiMoveGizmoDragBridgeStaysCppOwned();
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
   void plateContextMenuItemsWiredAndNonEmpty();
@@ -482,7 +483,16 @@ void QmlUiAuditTests::rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads()
            "Prepare bed grid/origin overlay must use a line draw path");
   QVERIFY2(rendererSource.contains(QStringLiteral("takeDirtyFlags()")),
            "Renderer upload logic must consume PrepareSceneData dirty flags");
-  QVERIFY2(rendererSource.contains(QStringLiteral("} else {\n        m_prepareScene.takeDirtyFlags();")),
+  const qsizetype uploadFailureBranch = rendererSource.indexOf(
+      QStringLiteral("if (!uploadSceneBuffers(updates, dirtyFlags))"));
+  const qsizetype uploadSuccessBranch = rendererSource.indexOf(QStringLiteral("} else {"), uploadFailureBranch);
+  const qsizetype dirtyConsume = rendererSource.indexOf(
+      QStringLiteral("m_prepareScene.takeDirtyFlags();"), uploadSuccessBranch);
+  QVERIFY2(uploadFailureBranch >= 0
+               && uploadSuccessBranch > uploadFailureBranch
+               && dirtyConsume > uploadSuccessBranch
+               && !rendererSource.mid(uploadFailureBranch, uploadSuccessBranch - uploadFailureBranch)
+                       .contains(QStringLiteral("takeDirtyFlags();")),
            "Renderer must consume dirty flags only after scene upload scheduling succeeds");
   QVERIFY2(rendererSource.contains(QStringLiteral("DirtyBed"))
                && rendererSource.contains(QStringLiteral("DirtyPlate"))
@@ -501,14 +511,19 @@ void QmlUiAuditTests::rhiViewportRendererUsesModelBuffersAndCameraUniforms()
   const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
   const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
   const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString vertexLayoutHeader = readSource(QStringLiteral("src/core/rendering/GizmoVertex.h"));
   const QString vertexShader = readSource(QStringLiteral("src/qml_gui/Renderer/shaders/rhi_viewport.vert"));
   QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
   QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
   QVERIFY2(!rendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
   QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!vertexLayoutHeader.isEmpty(), "Unable to read GizmoVertex.h");
   QVERIFY2(!vertexShader.isEmpty(), "Unable to read rhi_viewport.vert");
 
-  QVERIFY2(rendererHeader.contains(QStringLiteral("float z")),
+  QVERIFY2(rendererHeader.contains(QStringLiteral("using Vertex = GizmoVertex"))
+               && vertexLayoutHeader.contains(QStringLiteral("float x;"))
+               && vertexLayoutHeader.contains(QStringLiteral("float y;"))
+               && vertexLayoutHeader.contains(QStringLiteral("float z;")),
            "RhiViewportRenderer vertex format must carry 3D positions");
   QVERIFY2(rendererHeader.contains(QStringLiteral("m_modelVertexBuffer")),
            "RhiViewportRenderer must own a persistent model vertex buffer");
@@ -1005,6 +1020,50 @@ void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
   QVERIFY2(!rendererSource.mid(uploadModelStart, uploadHighlightStart - uploadModelStart)
                .contains(QStringLiteral("DirtySelection")),
            "Selection/hover changes must not reupload the full model vertex buffer");
+}
+
+void QmlUiAuditTests::rhiMoveGizmoDragBridgeStaysCppOwned()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+
+  QVERIFY2(editorHeader.contains(QStringLiteral("beginGizmoMoveDrag()"))
+               && editorHeader.contains(QStringLiteral("applyGizmoMoveDelta(float dx, float dy, float dz)"))
+               && editorHeader.contains(QStringLiteral("endGizmoMoveDrag()")),
+           "EditorViewModel must expose move-gizmo drag begin/apply/end methods");
+
+  QVERIFY2(viewportHeader.contains(QStringLiteral("void gizmoMoveRequested(const QVector3D &worldDelta);"))
+               && viewportHeader.contains(QStringLiteral("void gizmoDragBegin();"))
+               && viewportHeader.contains(QStringLiteral("void gizmoDragEnd();")),
+           "RhiViewport must expose move-gizmo drag signals to QML");
+
+  QVERIFY2(viewportSource.contains(QStringLiteral("GizmoMath::computeRay"))
+               && viewportSource.contains(QStringLiteral("GizmoMath::pickMoveAxis"))
+               && viewportSource.contains(QStringLiteral("GizmoMath::rayToAxisT")),
+           "RhiViewport must own move-axis ray, pick, and drag-delta math");
+  QVERIFY2(viewportSource.contains(QStringLiteral("event->accept();"))
+               && viewportSource.contains(QStringLiteral("emit gizmoMoveRequested(frameDelta);")),
+           "RhiViewport must consume active gizmo drags and emit frame deltas");
+
+  QVERIFY2(preparePage.contains(QStringLiteral("onGizmoDragBegin"))
+               && preparePage.contains(QStringLiteral("root.editorVm.beginGizmoMoveDrag()"))
+               && preparePage.contains(QStringLiteral("onGizmoMoveRequested: function(worldDelta)"))
+               && preparePage.contains(QStringLiteral("root.editorVm.applyGizmoMoveDelta(worldDelta.x, worldDelta.y, worldDelta.z)"))
+               && preparePage.contains(QStringLiteral("onGizmoDragEnd"))
+               && preparePage.contains(QStringLiteral("root.editorVm.endGizmoMoveDrag()")),
+           "PreparePage must forward RHI move-gizmo drag signals to EditorViewModel");
+
+  QVERIFY2(!preparePage.contains(QStringLiteral("pickMoveAxis"))
+               && !preparePage.contains(QStringLiteral("computeRay"))
+               && !preparePage.contains(QStringLiteral("rayToAxisT"))
+               && !preparePage.contains(QStringLiteral("intersect")),
+           "PreparePage must not own gizmo picking, ray, intersection, or drag math");
 }
 
 void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()

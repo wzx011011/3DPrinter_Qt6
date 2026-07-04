@@ -2,41 +2,37 @@
 gsd_state_version: 1.0
 milestone: v3.8
 milestone_name: RHI Gizmo Parity
-status: in_progress
-last_updated: "2026-07-04T13:30:00+08:00"
-last_activity: "2026-07-04 - Phase 68 implemented (move gizmo RHI render: shaders + pipeline + renderMoveGizmo; visual verification deferred to Phase 73). Phases 69-72 require visual feedback to implement reliably; recommending fresh-context resumption."
+status: ready_to_plan
+last_updated: "2026-07-04T20:30:39+08:00"
+last_activity: "2026-07-04 - Phase 69 complete (move gizmo pick + drag interaction: RHI axis picking, per-axis drag deltas, C++ viewmodel translation, one undo entry per drag, canonical verifier passed)."
 progress:
-  total_phases: 9
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 44
-stopped_at: Phase 68 implemented (visual verify pending); Phases 69-72 need fresh context + running app
+  total_phases: 18
+  completed_phases: 14
+  total_plans: 5
+  completed_plans: 5
+  percent: 78
+stopped_at: Phase 69 complete (1/1) - ready to plan Phase 70
 ---
 
 # Project State
 
 **Milestone:** v3.8 - RHI Gizmo Parity
-**Status:** In Progress
-**Next step:** Start Phase 67, `RHI Gizmo State Wiring`.
+**Status:** Ready to plan
+**Next step:** Plan Phase 70, `Rotate + Scale Gizmos`.
 
 ## Current Position
 
-Phase: 66 complete; 67 next (not started)
-Plan: 66-01 complete
-Status: Phase 66 verified passed; ready to discuss Phase 67
-Last activity: 2026-07-04 - Phase 66 (Gizmo Geometry Builders Port) shipped.
-Extracted the three gizmo geometry builders (move arrows / rotate torus /
-scale shafts+boxes) into a standalone static `GizmoGeometry` class at
-`src/core/rendering/`, returning `QVector<GizmoVertex>` with per-axis RGBA
-color baked in. Extracted shared POD `GizmoVertex.h` so
-`RhiViewportRenderer::Vertex` becomes a `using = GizmoVertex` alias (no
-QtQuick dependency in the geometry layer). GLViewportRenderer delegates to
-GizmoGeometry and its shaders now consume per-vertex color (location 1 ->
-vColor); uGizmoColor uniform removed. 14-slot GizmoGeometryTests registered;
-all 16 pass. OWzxSlicer compiles clean. Next: Phase 67 wires the RHI
-renderer's synchronize() to read gizmoMode/cutAxis/cutPosition/gizmoCenter
-so the gizmo state pipeline is connected on the default D3D11 path.
+Phase: 70
+Plan: Not started
+Status: Phase 69 complete; ready to plan Phase 70
+Last activity: 2026-07-04 - Phase 69 shipped RHI move-gizmo axis picking and
+dragging. `RhiViewport` uses `GizmoMath::pickMoveAxis`, `computeRay`, and
+`rayToAxisT` for axis selection and per-frame world deltas; drag events are
+consumed so camera orbit does not trigger. `EditorViewModel` applies deltas,
+invalidates stale slice results, and coalesces the whole drag into one undo
+entry. `PreparePage.qml` stays a thin signal bridge. Added focused viewmodel
+and QML audit coverage. Canonical verification passed with
+`powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`.
 
 ## Project Reference
 
@@ -53,10 +49,12 @@ visually present.
   reads them; no gizmo renders, no pick, no drag on the default path.
   GLViewportRenderer is the only fully functional implementation, gated
   behind OWZX_OPENGL=1.
+
 - **D3D12 segfault at setShaderResources** (QRhi D3D12 backend deep issue):
   uniform buffer 256-byte alignment fix was necessary but not sufficient.
   D3D11 stays default throughout v3.8. Documented in
   `docs/Qt版本升级与RHI渲染管线评估.md`.
+
 - **v3.6 VERIFY-04 manual visual UAT** still pending (independent of v3.8).
 - **v3.7 residual visual gaps** tracked in
   `.planning/milestones/v3.7-VISUAL-MATRIX.md`.
@@ -68,8 +66,8 @@ visually present.
 | 65 | Gizmo math extraction + unit tests | ✓ Complete |
 | 66 | Gizmo geometry builders port | ✓ Complete |
 | 67 | RHI gizmo state wiring | ✓ Complete |
-| 68 | Move gizmo RHI render | Pending |
-| 69 | Move gizmo pick + drag interaction | Pending |
+| 68 | Move gizmo RHI render | Complete (visual verification deferred to Phase 73) |
+| 69 | Move gizmo pick + drag interaction | Complete |
 | 70 | Rotate + Scale gizmos | Pending |
 | 71 | Cut plane + wipe tower | Pending |
 | 72 | Precise object picking | Pending |
@@ -82,8 +80,10 @@ Per user instruction:
 - Do not run the full canonical build after each phase.
 - During phases 59-63, use source reads, encoding guard, `git diff --check`,
   and focused static checks only.
+
 - In Phase 64, run:
   `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`
+
 - After the canonical build, launch `build/OWzxSlicer.exe` and capture
   running-app screenshots for visual acceptance.
 

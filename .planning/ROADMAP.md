@@ -60,7 +60,7 @@ fully interactive.
 - [x] **Phase 66:** Gizmo geometry builders port (CPU vertex generation) (completed 2026-07-04)
 - [x] **Phase 67:** RHI gizmo state wiring (synchronize + gizmoMode pipeline) (completed 2026-07-04)
 - [x] **Phase 68:** Move gizmo RHI render (first visible gizmo) (implemented 2026-07-04; visual verification deferred to Phase 73)
-- [ ] **Phase 69:** Move gizmo pick + drag interaction loop
+- [x] **Phase 69:** Move gizmo pick + drag interaction loop (completed 2026-07-04)
 - [ ] **Phase 70:** Rotate + Scale gizmos
 - [ ] **Phase 71:** Cut plane + wipe tower
 - [ ] **Phase 72:** Precise object picking (ray-triangle)
@@ -161,6 +161,11 @@ Plans:
 1. Clicking the X axis and dragging moves the object along X only.
 2. Y and Z axes work analogously.
 3. No camera orbit triggered during gizmo drag (input event consumed).
+
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 69-01-PLAN.md - Wave 1: wire RHI move-gizmo axis picking and dragging through `RhiViewport`, `GizmoMath`, `EditorViewModel`, and the thin `PreparePage.qml` bridge; object translation applies per-frame while undo records one independent drag entry; focused viewmodel/QML audit tests and canonical verification pass (SUMMARY: 69-01-SUMMARY.md)
 
 ### Phase 70: Rotate + Scale Gizmos
 

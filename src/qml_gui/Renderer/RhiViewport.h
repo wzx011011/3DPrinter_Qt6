@@ -7,6 +7,7 @@
 #include <QRectF>
 #include <QString>
 #include <QVariant>
+#include <QVector3D>
 #include <QVector4D>
 
 #include "CameraController.h"
@@ -202,6 +203,14 @@ signals:
   void roleVisibilityChanged();
   void thumbnailCaptured();
   void objectPickedSource(int sourceIndex);
+  // Phase 69: emitted during a move-gizmo axis drag. worldDelta is the
+  // incremental translation to apply to the selected object this frame
+  // (in world mm). gizmoDragBegin fires once at press (before the first
+  // move); gizmoDragEnd fires once at release (after the last move). The
+  // ViewModel uses begin/end to coalesce the whole drag into one undo entry.
+  void gizmoMoveRequested(const QVector3D &worldDelta);
+  void gizmoDragBegin();
+  void gizmoDragEnd();
 
 private:
   friend class RhiViewportRenderer;
@@ -218,6 +227,9 @@ private:
   int pickSourceObjectAt(const QPointF &position);
   QRectF projectBoundsToScreenRect(const PrepareSceneData::ModelBounds &bounds,
                                    float *depth) const;
+  // Phase 69: gizmo-axis hit test and center derivation.
+  int pickGizmoAxisAt(const QPointF &position);
+  QVector3D currentGizmoCenter() const;
 
   int m_canvasType = CanvasView3D;
   QByteArray m_meshData;
@@ -270,4 +282,11 @@ private:
   Qt::MouseButton m_dragButton = Qt::NoButton;
   int m_pressPickedSourceObjectIndex = -1;
   bool m_cameraDirty = true;
+
+  // Phase 69: move-gizmo drag state.
+  // m_gizmoAxis: 0=none, 1=X, 2=Y, 3=Z.
+  int m_gizmoAxis = 0;
+  bool m_gizmoDragging = false;
+  float m_gizmoDragStartT = 0.f;
+  QVector3D m_gizmoDragCenter;
 };

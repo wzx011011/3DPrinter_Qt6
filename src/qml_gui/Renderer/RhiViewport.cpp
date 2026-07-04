@@ -1,5 +1,7 @@
 #include "RhiViewport.h"
 #include "RhiViewportRenderer.h"
+#include "core/rendering/GizmoCenter.h"
+#include "core/rendering/GizmoMath.h"
 
 #include <QBuffer>
 #include <QByteArray>
@@ -435,6 +437,40 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
   m_pressPosition = event->position();
   m_dragButton = event->button();
   m_pressPickedSourceObjectIndex = -1;
+  if (m_gizmoDragging)
+    emit gizmoDragEnd();
+  m_gizmoDragging = false;
+  m_gizmoAxis = 0;
+  m_gizmoDragStartT = 0.f;
+  m_gizmoDragCenter = {};
+
+  // Phase 69: move-axis hit test takes priority over object picking when
+  // the move gizmo is active and an object is selected.
+  if (event->button() == Qt::LeftButton && m_gizmoMode == GizmoMove &&
+      m_selectedSourceObjectIndex >= 0)
+  {
+    const int axis = pickGizmoAxisAt(event->position());
+    if (axis != 0)
+    {
+      m_gizmoAxis = axis;
+      m_gizmoDragging = true;
+      m_gizmoDragCenter = currentGizmoCenter();
+      const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+      const float aspect = float(viewSize.width()) / float(viewSize.height());
+      auto [orig, dir] = GizmoMath::computeRay(
+          float(event->position().x()), float(event->position().y()),
+          viewSize,
+          m_camera.projMatrix(aspect), m_camera.viewMatrix());
+      static const QVector3D kAxes[3] = {
+          QVector3D(1, 0, 0), QVector3D(0, 1, 0), QVector3D(0, 0, 1)};
+      m_gizmoDragStartT = GizmoMath::rayToAxisT(orig, dir, kAxes[axis - 1],
+                                                m_gizmoDragCenter);
+      emit gizmoDragBegin();
+      event->accept();
+      return;
+    }
+  }
+
   if (event->button() == Qt::LeftButton) {
     m_pressPickedSourceObjectIndex = pickSourceObjectAt(event->position());
     setHoveredSourceObjectIndex(m_pressPickedSourceObjectIndex);
@@ -444,6 +480,39 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
 
 void RhiViewport::mouseMoveEvent(QMouseEvent *event)
 {
+  // Phase 69: active gizmo drag translates the selected object along the
+  // picked axis. Consumes the event so camera orbit never fires mid-drag.
+  if (m_gizmoDragging && m_dragButton == Qt::LeftButton)
+  {
+    if (m_gizmoAxis < 1 || m_gizmoAxis > 3)
+    {
+      m_gizmoDragging = false;
+      m_gizmoAxis = 0;
+      m_gizmoDragStartT = 0.f;
+      m_gizmoDragCenter = {};
+      emit gizmoDragEnd();
+      event->accept();
+      return;
+    }
+
+    const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+    const float aspect = float(std::max(1, viewSize.width())) / float(std::max(1, viewSize.height()));
+    auto [orig, dir] = GizmoMath::computeRay(
+        float(event->position().x()), float(event->position().y()), viewSize,
+        m_camera.projMatrix(aspect), m_camera.viewMatrix());
+    static const QVector3D kAxes[3] = {
+        QVector3D(1, 0, 0), QVector3D(0, 1, 0), QVector3D(0, 0, 1)};
+    const QVector3D axisDir = kAxes[m_gizmoAxis - 1];
+    const float curT = GizmoMath::rayToAxisT(orig, dir, axisDir, m_gizmoDragCenter);
+    const float worldDeltaT = curT - m_gizmoDragStartT;
+    m_gizmoDragStartT = curT;
+    const QVector3D frameDelta = axisDir * worldDeltaT;
+    emit gizmoMoveRequested(frameDelta);
+    m_lastMousePosition = event->position();
+    event->accept();
+    return;
+  }
+
   const QPointF delta = event->position() - m_lastMousePosition;
   if (m_dragButton == Qt::LeftButton) {
     if (m_pressPickedSourceObjectIndex >= 0) {
@@ -464,6 +533,20 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
 
 void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
 {
+  // Phase 69: end the gizmo drag. The ViewModel coalesces all frame deltas
+  // into one undo command.
+  if (m_gizmoDragging && event->button() == Qt::LeftButton)
+  {
+    m_gizmoDragging = false;
+    m_gizmoAxis = 0;
+    m_gizmoDragStartT = 0.f;
+    m_gizmoDragCenter = {};
+    m_dragButton = Qt::NoButton;
+    emit gizmoDragEnd();
+    event->accept();
+    return;
+  }
+
   if (event->button() == Qt::LeftButton && m_pressPickedSourceObjectIndex >= 0) {
     const QPointF releaseDelta = event->position() - m_pressPosition;
     const bool isClick = std::hypot(releaseDelta.x(), releaseDelta.y()) <= 4.0;
@@ -678,4 +761,31 @@ QRectF RhiViewport::projectBoundsToScreenRect(const PrepareSceneData::ModelBound
     *depth = nearestDepth;
 
   return QRectF(QPointF(left, top), QPointF(right, bottom)).normalized().adjusted(-3.0, -3.0, 3.0, 3.0);
+}
+
+// ===========================================================================
+// Phase 69: gizmo-axis picking helpers
+// ===========================================================================
+QVector3D RhiViewport::currentGizmoCenter() const
+{
+  // Reuse the extracted Phase 67 helper against the pick-scene batches.
+  return GizmoCenter::fromSelectedBatch(m_selectedSourceObjectIndex,
+                                        m_pickScene.modelBatches());
+}
+
+int RhiViewport::pickGizmoAxisAt(const QPointF &position)
+{
+  // Only meaningful in Move mode with an active selection.
+  if (m_gizmoMode != GizmoMove || m_selectedSourceObjectIndex < 0)
+    return 0;
+  updatePickingScene();
+  const QSize viewSize{int(width()), int(height())};
+  if (viewSize.width() <= 0 || viewSize.height() <= 0)
+    return 0;
+  const float aspect = float(viewSize.width()) / float(viewSize.height());
+  return GizmoMath::pickMoveAxis(
+      float(position.x()), float(position.y()), viewSize,
+      m_camera.projMatrix(aspect), m_camera.viewMatrix(),
+      currentGizmoCenter(), m_camera.eye(),
+      /*hasSelection=*/true);
 }

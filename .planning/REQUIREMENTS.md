@@ -109,8 +109,8 @@ Carry-forward constraints:
 | GWIRE-02 | Phase 67 | Pending |
 | GMOV-01 | Phase 68 | Pending |
 | GMOV-02 | Phase 68 | Pending |
-| GMOV-03 | Phase 69 | Pending |
-| GMOV-04 | Phase 69 | Pending |
+| GMOV-03 | Phase 69 | Complete |
+| GMOV-04 | Phase 69 | Complete |
 | GROT-01 | Phase 70 | Pending |
 | GROT-02 | Phase 70 | Pending |
 | GSCA-01 | Phase 70 | Pending |

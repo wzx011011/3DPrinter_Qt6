@@ -300,6 +300,11 @@ public:
   void setObjectPosX(float v);
   void setObjectPosY(float v);
   void setObjectPosZ(float v);
+  // Phase 69: begin/end bracket a move-gizmo drag so undo sees one
+  // TransformCommand for the whole drag, not one command per frame.
+  Q_INVOKABLE void beginGizmoMoveDrag();
+  Q_INVOKABLE void applyGizmoMoveDelta(float dx, float dy, float dz);
+  Q_INVOKABLE void endGizmoMoveDrag();
   void setObjectRotX(float v);
   void setObjectRotY(float v);
   void setObjectRotZ(float v);
@@ -840,6 +845,11 @@ private:
   float m_embossDepth = 1.0f;
   // MeshBoolean (对齐上游 GLGizmoMeshBoolean)
   int m_booleanOperation = 1;             ///< 0=union, 1=diff, 2=intersect
+
+  // Phase 69: move-gizmo drag coalescing state.
+  bool m_gizmoMoveDragActive = false;
+  QVector3D m_gizmoMoveDragStartPos;
+  int m_gizmoMoveDragSourceIndex = -1;
   // AdvancedCut (对齐上游 GLGizmoAdvancedCut)
   int m_advCutAxis = 2;                  ///< 0=X, 1=Y, 2=Z
   float m_advCutPosition = 0.0f;
