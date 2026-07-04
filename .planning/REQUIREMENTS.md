@@ -68,8 +68,8 @@ Carry-forward constraints:
 
 ### Cut Plane + Wipe Tower
 
-- [ ] **GCUT-01:** Cut plane renders as a translucent quad with outline; cutAxis and cutPosition changes update the plane in real time.
-- [ ] **GWT-01:** Wipe tower renders as a translucent box when present in the scene; synchronize reads the wipe tower properties (currently broken, same as gizmo state).
+- [x] **GCUT-01:** Cut plane renders as a translucent quad with outline; cutAxis and cutPosition changes update the plane in real time.
+- [x] **GWT-01:** Wipe tower renders as a translucent box when present in the scene; synchronize reads the wipe tower properties (currently broken, same as gizmo state).
 
 ### Precise Object Picking
 
@@ -115,8 +115,8 @@ Carry-forward constraints:
 | GROT-02 | Phase 70 | Complete |
 | GSCA-01 | Phase 70 | Complete |
 | GSCA-02 | Phase 70 | Complete |
-| GCUT-01 | Phase 71 | Pending |
-| GWT-01 | Phase 71 | Pending |
+| GCUT-01 | Phase 71 | Complete |
+| GWT-01 | Phase 71 | Complete |
 | GPICK-01 | Phase 72 | Pending |
 | GRET-01 | Phase 73 | Pending |
 | GRET-02 | Phase 73 | Pending |

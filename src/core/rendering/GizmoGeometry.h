@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QVector>
+#include <QVector3D>
 
 // GizmoVertex is the shared POD vertex layout {x,y,z,r,g,b,a} (7 floats,
 // 28 bytes). Defined in core/rendering/GizmoVertex.h so this geometry layer
@@ -30,8 +31,8 @@ struct GizmoGeometryOffsets
 // Callers (GLViewportRenderer today, RhiViewportRenderer in Phase 68) own the
 // GPU upload.
 //
-// Scope (Phase 66): the three gizmo primitive builders only.
-// Cut plane + wipe tower geometry is deferred to Phase 71.
+// Scope: gizmo primitive builders plus Phase 71 cut-plane/wipe-tower helper
+// geometry. All functions are pure CPU builders with no GL/RHI calls.
 class GizmoGeometry
 {
 public:
@@ -51,6 +52,32 @@ public:
   // Shaft uses GL_LINES; box uses GL_TRIANGLES.
   static QVector<GizmoVertex> buildScaleGizmoVertices(
       GizmoGeometryOffsets *out = nullptr);
+
+  // Cut plane fill: 2 triangles (6 verts) perpendicular to cutAxis at
+  // cutPosition, using selected object bounds expanded by 5% on the two
+  // non-cut axes. Colors match the GL cut-plane path.
+  static QVector<GizmoVertex> buildCutPlaneVertices(
+      const QVector3D &boundsMin,
+      const QVector3D &boundsMax,
+      int cutAxis,
+      float cutPosition);
+
+  // Cut plane outline: 4 line segments (8 verts) around the same expanded
+  // plane as buildCutPlaneVertices. Outline alpha is stronger than fill.
+  static QVector<GizmoVertex> buildCutPlaneOutlineVertices(
+      const QVector3D &boundsMin,
+      const QVector3D &boundsMax,
+      int cutAxis,
+      float cutPosition);
+
+  // Wipe tower: rectangular prism on the bed, 6 faces x 2 triangles x 3 verts
+  // = 36 vertices. Empty if any dimension is non-positive.
+  static QVector<GizmoVertex> buildWipeTowerVertices(
+      float x,
+      float z,
+      float width,
+      float depth,
+      float height);
 
   // Axis color constants - single source of truth (X=0, Y=1, Z=2).
   // Alpha is always 1.0; callers that need transparency set it post-build.

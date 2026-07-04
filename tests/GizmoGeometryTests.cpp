@@ -14,6 +14,7 @@
 
 #include <QtTest>
 #include <QVector>
+#include <QVector3D>
 
 #include "core/rendering/GizmoGeometry.h"
 #include "core/rendering/GizmoVertex.h"
@@ -69,6 +70,12 @@ private slots:
   void testScaleGizmoAxisColors();
   void testScaleGizmoBoundingBox();
   void testScaleGizmoOffsets();
+
+  // Cut plane + wipe tower
+  void testCutPlaneGeometry();
+  void testCutPlaneAxisColors();
+  void testWipeTowerGeometry();
+  void testWipeTowerRejectsInvalidDimensions();
 
   // Shared color constants
   void testAxisColorConstants();
@@ -291,6 +298,113 @@ void GizmoGeometryTests::testScaleGizmoOffsets()
   QCOMPARE(offsets.boxBase[2], 78);
   QCOMPARE(offsets.shaftVertCount, 2);
   QCOMPARE(offsets.boxVertCount, 36);
+}
+
+// ===========================================================================
+// Cut plane + wipe tower
+// ===========================================================================
+
+void GizmoGeometryTests::testCutPlaneGeometry()
+{
+  const QVector3D boundsMin(-10.f, -5.f, 0.f);
+  const QVector3D boundsMax(30.f, 15.f, 40.f);
+  const auto fill = GizmoGeometry::buildCutPlaneVertices(boundsMin, boundsMax, 2, 12.5f);
+  const auto outline = GizmoGeometry::buildCutPlaneOutlineVertices(boundsMin, boundsMax, 2, 12.5f);
+
+  QCOMPARE(fill.size(), 6);
+  QCOMPARE(outline.size(), 8);
+
+  float minX = FLT_MAX;
+  float maxX = -FLT_MAX;
+  float minY = FLT_MAX;
+  float maxY = -FLT_MAX;
+  for (const auto &v : fill)
+  {
+    QVERIFY2(approx(v.z, 12.5f), msgF("cut plane z should equal cutPosition, got %f", v.z, 0, 0));
+    QVERIFY2(approx(v.r, 0.3f) && approx(v.g, 0.3f) && approx(v.b, 1.0f),
+             "Z cut plane fill should be blue");
+    QVERIFY2(approx(v.a, 0.30f), msgF("cut plane fill alpha should be 0.30, got %f", v.a, 0, 0));
+    minX = std::min(minX, v.x);
+    maxX = std::max(maxX, v.x);
+    minY = std::min(minY, v.y);
+    maxY = std::max(maxY, v.y);
+  }
+
+  // X span 40 expands by 5 percent on each side -> [-12, 32].
+  QVERIFY2(approx(minX, -12.f), msgF("cut plane min X should be -12, got %f", minX, 0, 0));
+  QVERIFY2(approx(maxX, 32.f), msgF("cut plane max X should be 32, got %f", maxX, 0, 0));
+  // Y span 20 expands by 5 percent on each side -> [-6, 16].
+  QVERIFY2(approx(minY, -6.f), msgF("cut plane min Y should be -6, got %f", minY, 0, 0));
+  QVERIFY2(approx(maxY, 16.f), msgF("cut plane max Y should be 16, got %f", maxY, 0, 0));
+
+  for (const auto &v : outline)
+  {
+    QVERIFY2(approx(v.z, 12.5f), msgF("outline z should equal cutPosition, got %f", v.z, 0, 0));
+    QVERIFY2(approx(v.a, 0.90f), msgF("outline alpha should be 0.90, got %f", v.a, 0, 0));
+  }
+}
+
+void GizmoGeometryTests::testCutPlaneAxisColors()
+{
+  const QVector3D boundsMin(0.f, 0.f, 0.f);
+  const QVector3D boundsMax(10.f, 20.f, 30.f);
+
+  const auto xFill = GizmoGeometry::buildCutPlaneVertices(boundsMin, boundsMax, 0, 4.f);
+  const auto yFill = GizmoGeometry::buildCutPlaneVertices(boundsMin, boundsMax, 1, 5.f);
+  const auto zFill = GizmoGeometry::buildCutPlaneVertices(boundsMin, boundsMax, 2, 6.f);
+  QCOMPARE(xFill.size(), 6);
+  QCOMPARE(yFill.size(), 6);
+  QCOMPARE(zFill.size(), 6);
+
+  QVERIFY2(approx(xFill.first().r, 1.0f) && approx(xFill.first().g, 0.3f)
+               && approx(xFill.first().b, 0.3f) && approx(xFill.first().a, 0.30f),
+           "X cut fill should be red with alpha 0.30");
+  QVERIFY2(approx(yFill.first().r, 0.3f) && approx(yFill.first().g, 1.0f)
+               && approx(yFill.first().b, 0.3f) && approx(yFill.first().a, 0.30f),
+           "Y cut fill should be green with alpha 0.30");
+  QVERIFY2(approx(zFill.first().r, 0.3f) && approx(zFill.first().g, 0.3f)
+               && approx(zFill.first().b, 1.0f) && approx(zFill.first().a, 0.30f),
+           "Z cut fill should be blue with alpha 0.30");
+}
+
+void GizmoGeometryTests::testWipeTowerGeometry()
+{
+  const auto verts = GizmoGeometry::buildWipeTowerVertices(100.f, 25.f, 20.f, 10.f, 50.f);
+  QCOMPARE(verts.size(), 36);
+
+  float minX = FLT_MAX;
+  float maxX = -FLT_MAX;
+  float minY = FLT_MAX;
+  float maxY = -FLT_MAX;
+  float minZ = FLT_MAX;
+  float maxZ = -FLT_MAX;
+  for (const auto &v : verts)
+  {
+    minX = std::min(minX, v.x);
+    maxX = std::max(maxX, v.x);
+    minY = std::min(minY, v.y);
+    maxY = std::max(maxY, v.y);
+    minZ = std::min(minZ, v.z);
+    maxZ = std::max(maxZ, v.z);
+    QVERIFY2(approx(v.r, 0.35f) && approx(v.g, 0.60f) && approx(v.b, 0.85f),
+             "wipe tower color should match GL path accent color");
+    QVERIFY2(approx(v.a, 0.50f), msgF("wipe tower alpha should be 0.50, got %f", v.a, 0, 0));
+  }
+
+  QVERIFY2(approx(minX, 90.f), msgF("wipe tower min X should be 90, got %f", minX, 0, 0));
+  QVERIFY2(approx(maxX, 110.f), msgF("wipe tower max X should be 110, got %f", maxX, 0, 0));
+  QVERIFY2(approx(minZ, 20.f), msgF("wipe tower min Z should be 20, got %f", minZ, 0, 0));
+  QVERIFY2(approx(maxZ, 30.f), msgF("wipe tower max Z should be 30, got %f", maxZ, 0, 0));
+  QVERIFY2(approx(minY, -0.04f), msgF("wipe tower min Y should be -0.04, got %f", minY, 0, 0));
+  QVERIFY2(approx(maxY, 49.96f), msgF("wipe tower max Y should be 49.96, got %f", maxY, 0, 0));
+}
+
+void GizmoGeometryTests::testWipeTowerRejectsInvalidDimensions()
+{
+  QVERIFY(GizmoGeometry::buildWipeTowerVertices(0.f, 0.f, 0.f, 10.f, 10.f).isEmpty());
+  QVERIFY(GizmoGeometry::buildWipeTowerVertices(0.f, 0.f, 10.f, 0.f, 10.f).isEmpty());
+  QVERIFY(GizmoGeometry::buildWipeTowerVertices(0.f, 0.f, 10.f, 10.f, 0.f).isEmpty());
+  QVERIFY(GizmoGeometry::buildWipeTowerVertices(0.f, 0.f, -1.f, 10.f, 10.f).isEmpty());
 }
 
 // ===========================================================================

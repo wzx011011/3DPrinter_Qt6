@@ -3,38 +3,37 @@ gsd_state_version: 1.0
 milestone: v3.8
 milestone_name: RHI Gizmo Parity
 status: ready_to_plan
-last_updated: 2026-07-04T14:30:02.418Z
-last_activity: "2026-07-04 - Phase 70 complete (rotate and scale gizmos: RHI torus/shaft/box rendering, rotate/scale picking, C++ viewmodel deltas, one undo entry per drag, canonical verifier passed)."
+last_updated: 2026-07-04T15:20:00.000Z
+last_activity: "2026-07-04 - Phase 71 complete (cut plane + wipe tower: RHI translucent cut fill/outline, wipe tower geometry/rendering, wipe property sync, canonical verifier passed)."
 progress:
   total_phases: 18
-  completed_phases: 15
+  completed_phases: 16
   total_plans: 6
-  completed_plans: 63
-  percent: 83
-stopped_at: Phase 70 complete (1/1) — ready to discuss Phase 71
+  completed_plans: 64
+  percent: 89
+stopped_at: Phase 71 complete (1/1) - ready to discuss Phase 72
 ---
 
 # Project State
 
 **Milestone:** v3.8 - RHI Gizmo Parity
 **Status:** Ready to plan
-**Next step:** Plan Phase 71, `Cut Plane + Wipe Tower`.
+**Next step:** Plan Phase 72, `Precise Object Picking`.
 
 ## Current Position
 
-Phase: 71
+Phase: 72
 Plan: Not started
-Status: Phase 70 complete; ready to plan Phase 71
+Status: Phase 71 complete; ready to plan Phase 72
 Last activity: 2026-07-04
-`RhiViewportRenderer` uploads move, rotate, and scale geometry from
-`GizmoGeometry` and draws rotate torus rings plus scale shafts/box handles on
-the default D3D11 path. `RhiViewport` uses `GizmoMath::pickRotateAxis`,
-`computeRotateAngle`, `pickScaleAxis`, and `rayToAxisT` for pick/drag
-semantics; active drags consume mouse events. `EditorViewModel` applies
-rotation and axis-scale deltas, invalidates stale slice results, and coalesces
-each drag into one undo entry. `PreparePage.qml` remains a thin signal bridge.
-Added focused viewmodel and QML audit coverage. Canonical verification passed
-with `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`.
+`RhiViewportRenderer` now renders cut planes and wipe towers on the default
+D3D11 path. Cut planes use pure `GizmoGeometry` CPU builders for translucent
+fill and outline, merge selected source-object batch bounds, and follow
+`cutAxis`/`cutPosition`. Wipe tower geometry is generated as a translucent
+bed-mounted box, and renderer synchronization reads all wipe tower properties
+from `RhiViewport`. Focused geometry/QML audit coverage and canonical
+verification passed with
+`powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`.
 
 ## Project Reference
 
@@ -71,7 +70,7 @@ visually present.
 | 68 | Move gizmo RHI render | Complete (visual verification deferred to Phase 73) |
 | 69 | Move gizmo pick + drag interaction | Complete |
 | 70 | Rotate + Scale gizmos | Complete |
-| 71 | Cut plane + wipe tower | Pending |
+| 71 | Cut plane + wipe tower | Complete |
 | 72 | Precise object picking | Pending |
 | 73 | Retire GLViewport + verification | Pending |
 

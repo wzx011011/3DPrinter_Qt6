@@ -44,17 +44,22 @@ private:
   bool ensurePipelines();
   bool ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &pipeline,
                       QRhiGraphicsPipeline::Topology topology,
-                      bool enableDepthWrite = true);
+                      bool enableDepthWrite = true,
+                      bool enableBlending = false);
   bool uploadSceneBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadBedBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadModelBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadHighlightBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
+  bool uploadCutPlaneBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
+  bool uploadWipeTowerBuffer(QRhiResourceUpdateBatch *updates);
   bool uploadCameraUniform(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool ensureGizmoPipeline();                                  // Phase 68
   bool uploadGizmoBuffer(QRhiResourceUpdateBatch *updates);   // Phase 68/70
   void renderMoveGizmo(QRhiCommandBuffer *cb);                // Phase 68
   void renderRotateGizmo(QRhiCommandBuffer *cb);              // Phase 70
   void renderScaleGizmo(QRhiCommandBuffer *cb);               // Phase 70
+  void renderCutPlane(QRhiCommandBuffer *cb);                  // Phase 71
+  void renderWipeTower(QRhiCommandBuffer *cb);                 // Phase 71
   bool ensureBuffer(std::unique_ptr<QRhiBuffer> &buffer,
                     quint32 byteSize,
                     quint32 &storedSize,
@@ -81,10 +86,10 @@ private:
   std::unique_ptr<QRhiShaderResourceBindings> m_srb;
   std::unique_ptr<QRhiGraphicsPipeline> m_fillPipeline;
   std::unique_ptr<QRhiGraphicsPipeline> m_linePipeline;
-  // Highlight is translucent (alpha < 1.0): it tests depth (so it occludes
-  // behind opaque geometry) but does not WRITE depth (so it does not block
-  // geometry drawn after it from passing the depth test).
-  std::unique_ptr<QRhiGraphicsPipeline> m_fillPipelineNoDepthWrite;
+  // Translucent cut/wipe/highlight pipelines test depth but do not write it,
+  // and enable source-alpha blending so baked vertex alpha is visible.
+  std::unique_ptr<QRhiGraphicsPipeline> m_translucentFillPipeline;
+  std::unique_ptr<QRhiGraphicsPipeline> m_translucentLinePipeline;
   // Phase 68: gizmo pipelines. Separate from m_fill/m_line because the gizmo
   // shader applies position*scale+center displacement. Lines for shafts,
   // triangles for cones/rings/boxes. No depth write so the gizmo stays
@@ -93,9 +98,18 @@ private:
   std::unique_ptr<QRhiGraphicsPipeline> m_gizmoLinePipeline;
   std::unique_ptr<QRhiGraphicsPipeline> m_gizmoTriPipeline;
   std::unique_ptr<QRhiBuffer> m_gizmoVertexBuffer;
+  std::unique_ptr<QRhiBuffer> m_cutPlaneFillBuffer;
+  std::unique_ptr<QRhiBuffer> m_cutPlaneOutlineBuffer;
+  std::unique_ptr<QRhiBuffer> m_wipeTowerBuffer;
   bool m_gizmoVertexBufferUploaded = false;
+  bool m_cutPlaneFillBufferUploaded = false;
+  bool m_cutPlaneOutlineBufferUploaded = false;
+  bool m_wipeTowerBufferUploaded = false;
   bool m_gizmoPipelineCreated = false;
   quint32 m_gizmoVertexBufferBytes = 0;
+  quint32 m_cutPlaneFillBufferBytes = 0;
+  quint32 m_cutPlaneOutlineBufferBytes = 0;
+  quint32 m_wipeTowerBufferBytes = 0;
   GizmoGeometryOffsets m_moveGizmoOffsets;
   GizmoGeometryOffsets m_rotateGizmoOffsets;
   GizmoGeometryOffsets m_scaleGizmoOffsets;
@@ -114,6 +128,9 @@ private:
   quint32 m_bedLineVertexCount = 0;
   quint32 m_modelVertexCount = 0;
   quint32 m_highlightVertexCount = 0;
+  quint32 m_cutPlaneFillVertexCount = 0;
+  quint32 m_cutPlaneOutlineVertexCount = 0;
+  quint32 m_wipeTowerVertexCount = 0;
   int m_canvasType = 0;
   int m_meshBytes = 0;
   int m_previewBytes = 0;
@@ -134,6 +151,14 @@ private:
   float m_cutPosition = 0.f;    // cut-plane offset along cutAxis (mm)
   QVector3D m_gizmoCenter;      // midpoint of the selected batch's bounds; origin if no selection
   QVector3D m_cameraEye;        // Phase 68: camera position for gizmoScale computation
+  bool m_cutPlaneDirty = true;
+  bool m_showWipeTower = false;
+  float m_wipeTowerWidth = 10.f;
+  float m_wipeTowerDepth = 10.f;
+  float m_wipeTowerHeight = 50.f;
+  float m_wipeTowerX = 100.f;
+  float m_wipeTowerZ = 25.f;
+  bool m_wipeTowerDirty = true;
 
   // ── Phase 26: Preview segment pipeline state ──
   QByteArray m_previewData;              // GCV1 blob from RhiViewport

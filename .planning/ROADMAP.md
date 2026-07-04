@@ -62,7 +62,7 @@ fully interactive.
 - [x] **Phase 68:** Move gizmo RHI render (first visible gizmo) (implemented 2026-07-04; visual verification deferred to Phase 73)
 - [x] **Phase 69:** Move gizmo pick + drag interaction loop (completed 2026-07-04)
 - [x] **Phase 70:** Rotate + Scale gizmos (completed 2026-07-04)
-- [ ] **Phase 71:** Cut plane + wipe tower
+- [x] **Phase 71:** Cut plane + wipe tower (completed 2026-07-04)
 - [ ] **Phase 72:** Precise object picking (ray-triangle)
 - [ ] **Phase 73:** Retire GLViewport + verification
 
@@ -201,6 +201,11 @@ Plans:
 **Success criteria:**
 1. Cut plane renders and adjusts with cutAxis/cutPosition.
 2. Wipe tower renders when present in the scene.
+
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 71-01-PLAN.md - Wave 1: add pure cut-plane and wipe-tower `GizmoGeometry` builders, upload/draw translucent cut fill/outline and wipe tower buffers in `RhiViewportRenderer`, synchronize wipe properties from `RhiViewport`, keep QML as a thin binding layer, and verify with focused geometry/QML audit coverage plus the canonical verifier (SUMMARY: 71-01-SUMMARY.md)
 
 ### Phase 72: Precise Object Picking
 

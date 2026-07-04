@@ -1,5 +1,6 @@
 #include "GizmoGeometry.h"
 
+#include <algorithm>
 #include <cmath>
 
 #ifndef M_PI
@@ -170,6 +171,53 @@ namespace
   {
     const float *rgb = GizmoGeometry::kAxisColorRGB[axisIndex];
     out.append({x, y, z, rgb[0], rgb[1], rgb[2], 1.0f});
+  }
+
+  inline void appendColoredVert(QVector<GizmoVertex> &out,
+                                const float p[3],
+                                const float color[4])
+  {
+    out.append({p[0], p[1], p[2], color[0], color[1], color[2], color[3]});
+  }
+
+  inline float component(const QVector3D &v, int axis)
+  {
+    return axis == 0 ? v.x() : axis == 1 ? v.y() : v.z();
+  }
+
+  static const float kCutFillColors[3][4] = {
+      {1.0f, 0.3f, 0.3f, 0.30f},
+      {0.3f, 1.0f, 0.3f, 0.30f},
+      {0.3f, 0.3f, 1.0f, 0.30f},
+  };
+
+  void buildCutPlaneCorners(const QVector3D &boundsMin,
+                            const QVector3D &boundsMax,
+                            int cutAxis,
+                            float cutPosition,
+                            float corners[4][3])
+  {
+    const int axis = std::clamp(cutAxis, 0, 2);
+    const int a1 = (axis + 1) % 3;
+    const int a2 = (axis + 2) % 3;
+    float lo1 = component(boundsMin, a1);
+    float hi1 = component(boundsMax, a1);
+    float lo2 = component(boundsMin, a2);
+    float hi2 = component(boundsMax, a2);
+
+    const float e1 = (hi1 - lo1) * 0.05f;
+    const float e2 = (hi2 - lo2) * 0.05f;
+    lo1 -= e1;
+    hi1 += e1;
+    lo2 -= e2;
+    hi2 += e2;
+
+    for (int i = 0; i < 4; ++i)
+    {
+      corners[i][axis] = cutPosition;
+      corners[i][a1] = (i < 2) ? lo1 : hi1;
+      corners[i][a2] = (i % 2 == 0) ? lo2 : hi2;
+    }
   }
 } // namespace
 
@@ -347,5 +395,105 @@ GizmoGeometry::buildScaleGizmoVertices(GizmoGeometryOffsets *out)
     out->shaftVertCount = kScaleShaftVertsPerAxis;
     out->boxVertCount = kScaleBoxVerts;
   }
+  return verts;
+}
+
+// ===========================================================================
+// buildCutPlaneVertices
+// ===========================================================================
+QVector<GizmoVertex>
+GizmoGeometry::buildCutPlaneVertices(const QVector3D &boundsMin,
+                                     const QVector3D &boundsMax,
+                                     int cutAxis,
+                                     float cutPosition)
+{
+  const int axis = std::clamp(cutAxis, 0, 2);
+  float corners[4][3] = {};
+  buildCutPlaneCorners(boundsMin, boundsMax, axis, cutPosition, corners);
+
+  const int order[6] = {0, 1, 2, 2, 1, 3};
+  QVector<GizmoVertex> verts;
+  verts.reserve(6);
+  for (int idx : order)
+    appendColoredVert(verts, corners[idx], kCutFillColors[axis]);
+  return verts;
+}
+
+// ===========================================================================
+// buildCutPlaneOutlineVertices
+// ===========================================================================
+QVector<GizmoVertex>
+GizmoGeometry::buildCutPlaneOutlineVertices(const QVector3D &boundsMin,
+                                            const QVector3D &boundsMax,
+                                            int cutAxis,
+                                            float cutPosition)
+{
+  const int axis = std::clamp(cutAxis, 0, 2);
+  float corners[4][3] = {};
+  buildCutPlaneCorners(boundsMin, boundsMax, axis, cutPosition, corners);
+
+  float outlineColor[4] = {
+      kCutFillColors[axis][0],
+      kCutFillColors[axis][1],
+      kCutFillColors[axis][2],
+      0.90f};
+  const int order[8] = {0, 1, 1, 3, 3, 2, 2, 0};
+  QVector<GizmoVertex> verts;
+  verts.reserve(8);
+  for (int idx : order)
+    appendColoredVert(verts, corners[idx], outlineColor);
+  return verts;
+}
+
+// ===========================================================================
+// buildWipeTowerVertices
+// ===========================================================================
+QVector<GizmoVertex>
+GizmoGeometry::buildWipeTowerVertices(float x,
+                                      float z,
+                                      float width,
+                                      float depth,
+                                      float height)
+{
+  QVector<GizmoVertex> verts;
+  if (width <= 0.f || depth <= 0.f || height <= 0.f)
+    return verts;
+
+  static constexpr float kGroundY = -0.04f;
+  static constexpr float kColor[4] = {0.35f, 0.60f, 0.85f, 0.50f};
+
+  const float hw = width * 0.5f;
+  const float hd = depth * 0.5f;
+  const float xMin = x - hw;
+  const float xMax = x + hw;
+  const float y0 = kGroundY;
+  const float y1 = y0 + height;
+  const float zMin = z - hd;
+  const float zMax = z + hd;
+
+  const float positions[36][3] = {
+      // Bottom face
+      {xMin, y0, zMin}, {xMax, y0, zMin}, {xMax, y0, zMax},
+      {xMin, y0, zMin}, {xMax, y0, zMax}, {xMin, y0, zMax},
+      // Top face
+      {xMin, y1, zMin}, {xMax, y1, zMax}, {xMax, y1, zMin},
+      {xMin, y1, zMin}, {xMin, y1, zMax}, {xMax, y1, zMax},
+      // Front face
+      {xMin, y0, zMax}, {xMax, y0, zMax}, {xMax, y1, zMax},
+      {xMin, y0, zMax}, {xMax, y1, zMax}, {xMin, y1, zMax},
+      // Back face
+      {xMax, y0, zMin}, {xMin, y0, zMin}, {xMin, y1, zMin},
+      {xMax, y0, zMin}, {xMin, y1, zMin}, {xMax, y1, zMin},
+      // Right face
+      {xMax, y0, zMin}, {xMax, y0, zMax}, {xMax, y1, zMax},
+      {xMax, y0, zMin}, {xMax, y1, zMax}, {xMax, y1, zMin},
+      // Left face
+      {xMin, y0, zMax}, {xMin, y0, zMin}, {xMin, y1, zMin},
+      {xMin, y0, zMax}, {xMin, y1, zMin}, {xMin, y1, zMax},
+  };
+
+  verts.reserve(36);
+  for (const auto &p : positions)
+    appendColoredVert(verts, p, kColor);
   return verts;
 }

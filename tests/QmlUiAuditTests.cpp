@@ -41,6 +41,7 @@ private slots:
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
   void rhiMoveGizmoDragBridgeStaysCppOwned();
   void rhiRotateScaleGizmoBridgeStaysCppOwned();
+  void rhiCutPlaneAndWipeTowerStayCppOwned();
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
   void plateContextMenuItemsWiredAndNonEmpty();
@@ -1132,6 +1133,99 @@ void QmlUiAuditTests::rhiRotateScaleGizmoBridgeStaysCppOwned()
   for (const QString &token : forbiddenQmlMath) {
     QVERIFY2(!preparePage.contains(token),
              qPrintable(QStringLiteral("PreparePage must not own rotate/scale gizmo math token: %1").arg(token)));
+  }
+}
+
+void QmlUiAuditTests::rhiCutPlaneAndWipeTowerStayCppOwned()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString geometryHeader = readSource(QStringLiteral("src/core/rendering/GizmoGeometry.h"));
+  const QString geometrySource = readSource(QStringLiteral("src/core/rendering/GizmoGeometry.cpp"));
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!geometryHeader.isEmpty(), "Unable to read GizmoGeometry.h");
+  QVERIFY2(!geometrySource.isEmpty(), "Unable to read GizmoGeometry.cpp");
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!rendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+
+  QVERIFY2(geometryHeader.contains(QStringLiteral("buildCutPlaneVertices"))
+               && geometryHeader.contains(QStringLiteral("buildCutPlaneOutlineVertices"))
+               && geometryHeader.contains(QStringLiteral("buildWipeTowerVertices")),
+           "GizmoGeometry must expose pure CPU cut-plane and wipe-tower builders");
+  QVERIFY2(geometrySource.contains(QStringLiteral("0.30f"))
+               && geometrySource.contains(QStringLiteral("0.90f"))
+               && geometrySource.contains(QStringLiteral("-0.04f"))
+               && geometrySource.contains(QStringLiteral("0.50f")),
+           "GizmoGeometry must preserve GL cut/wipe alpha and bed placement constants");
+
+  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_PROPERTY(bool showWipeTower"))
+               && viewportHeader.contains(QStringLiteral("Q_PROPERTY(float wipeTowerWidth"))
+               && viewportHeader.contains(QStringLiteral("Q_PROPERTY(float wipeTowerDepth"))
+               && viewportHeader.contains(QStringLiteral("Q_PROPERTY(float wipeTowerHeight"))
+               && viewportHeader.contains(QStringLiteral("Q_PROPERTY(float wipeTowerX"))
+               && viewportHeader.contains(QStringLiteral("Q_PROPERTY(float wipeTowerZ"))
+               && viewportHeader.contains(QStringLiteral("Q_PROPERTY(int cutAxis"))
+               && viewportHeader.contains(QStringLiteral("Q_PROPERTY(float cutPosition")),
+           "RhiViewport must keep cut and wipe tower properties available to QML");
+
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_cutPlaneFillBuffer"))
+               && rendererHeader.contains(QStringLiteral("m_cutPlaneOutlineBuffer"))
+               && rendererHeader.contains(QStringLiteral("m_wipeTowerBuffer"))
+               && rendererHeader.contains(QStringLiteral("m_translucentLinePipeline"))
+               && rendererHeader.contains(QStringLiteral("m_cutPlaneDirty"))
+               && rendererHeader.contains(QStringLiteral("m_wipeTowerDirty"))
+               && rendererHeader.contains(QStringLiteral("renderCutPlane"))
+               && rendererHeader.contains(QStringLiteral("renderWipeTower")),
+           "RhiViewportRenderer must own cut/wipe buffers, dirty state, and render helpers");
+
+  QVERIFY2(rendererSource.contains(QStringLiteral("m_showWipeTower = viewport->m_showWipeTower"))
+               && rendererSource.contains(QStringLiteral("m_wipeTowerWidth = viewport->m_wipeTowerWidth"))
+               && rendererSource.contains(QStringLiteral("m_wipeTowerDepth = viewport->m_wipeTowerDepth"))
+               && rendererSource.contains(QStringLiteral("m_wipeTowerHeight = viewport->m_wipeTowerHeight"))
+               && rendererSource.contains(QStringLiteral("m_wipeTowerX = viewport->m_wipeTowerX"))
+               && rendererSource.contains(QStringLiteral("m_wipeTowerZ = viewport->m_wipeTowerZ")),
+           "RhiViewportRenderer::synchronize must read all wipe tower properties");
+
+  QVERIFY2(rendererSource.contains(QStringLiteral("GizmoGeometry::buildCutPlaneVertices"))
+               && rendererSource.contains(QStringLiteral("GizmoGeometry::buildCutPlaneOutlineVertices"))
+               && rendererSource.contains(QStringLiteral("GizmoGeometry::buildWipeTowerVertices"))
+               && rendererSource.contains(QStringLiteral("selectedBounds.minX"))
+               && rendererSource.contains(QStringLiteral("std::min(selectedBounds.minX")),
+           "RhiViewportRenderer must consume builders and merge selected-object batches before building cut geometry");
+
+  QVERIFY2(rendererSource.contains(QStringLiteral("QRhiGraphicsPipeline::TargetBlend"))
+               && rendererSource.contains(QStringLiteral("enable.srcColor = QRhiGraphicsPipeline::SrcAlpha"))
+               && rendererSource.contains(QStringLiteral("enable.dstColor = QRhiGraphicsPipeline::OneMinusSrcAlpha"))
+               && rendererSource.contains(QStringLiteral("setDepthWrite(false)")),
+           "RhiViewportRenderer must configure alpha blending with no depth writes for translucent cut/wipe surfaces");
+
+  const int cutRenderStart = rendererSource.indexOf(QStringLiteral("void RhiViewportRenderer::renderCutPlane"));
+  QVERIFY2(cutRenderStart >= 0, "RhiViewportRenderer must define renderCutPlane");
+  const int nextRender = rendererSource.indexOf(QStringLiteral("\nvoid RhiViewportRenderer::renderWipeTower"), cutRenderStart);
+  const QString cutRenderBlock = rendererSource.mid(cutRenderStart, nextRender > cutRenderStart ? nextRender - cutRenderStart : 1200);
+  QVERIFY2(cutRenderBlock.contains(QStringLiteral("m_gizmoMode != 5"))
+               && cutRenderBlock.contains(QStringLiteral("m_gizmoMode != 14"))
+               && cutRenderBlock.contains(QStringLiteral("selectedSourceObjectIndex() < 0")),
+           "RHI cut plane render must be gated to Cut/AdvancedCut mode and selected objects");
+
+  QVERIFY2(preparePage.contains(QStringLiteral("cutAxis: root.editorVm ? root.editorVm.cutAxis : 2"))
+               && preparePage.contains(QStringLiteral("cutPosition: root.editorVm ? root.editorVm.cutPosition : 0.0")),
+           "PreparePage must bind cut axis and position into the viewport");
+
+  const QStringList forbiddenQmlGeometry = {
+      QStringLiteral("buildCutPlane"),
+      QStringLiteral("buildWipeTower"),
+      QStringLiteral("QRhi"),
+      QStringLiteral("bboxMin"),
+      QStringLiteral("bboxMax"),
+      QStringLiteral("TargetBlend")
+  };
+  for (const QString &token : forbiddenQmlGeometry) {
+    QVERIFY2(!preparePage.contains(token),
+             qPrintable(QStringLiteral("PreparePage must not own cut/wipe geometry or QRhi token: %1").arg(token)));
   }
 }
 

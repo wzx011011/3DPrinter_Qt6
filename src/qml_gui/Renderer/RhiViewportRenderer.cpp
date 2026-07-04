@@ -47,6 +47,7 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   batchSourceObjectIndices.reserve(viewport->m_meshBatchSourceObjectIndices.size());
   for (const QVariant &value : viewport->m_meshBatchSourceObjectIndices)
     batchSourceObjectIndices.append(value.toInt());
+  const bool modelGenerationChanged = m_modelGeneration != viewport->m_modelGeneration;
   if (m_sceneGeneration != viewport->m_sceneGeneration) {
     m_sceneGeneration = viewport->m_sceneGeneration;
     m_prepareScene.setBed(viewport->m_bedWidth,
@@ -66,6 +67,7 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
                                     batchSourceObjectIndices,
                                     activeObjectIndices);
   }
+  const int prevSelectedSourceObjectIndex = m_prepareScene.selectedSourceObjectIndex();
   m_prepareScene.setSelectedSourceObjectIndex(viewport->m_selectedSourceObjectIndex);
   m_prepareScene.setHoveredSourceObjectIndex(viewport->m_hoveredSourceObjectIndex);
   const QSize pixelSize = renderTarget() ? renderTarget()->pixelSize() : QSize(int(viewport->width()), int(viewport->height()));
@@ -120,6 +122,39 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
           m_gizmoMode, m_cutAxis, double(m_cutPosition),
           double(m_gizmoCenter.x()), double(m_gizmoCenter.y()), double(m_gizmoCenter.z()));
   }
+  if (modelGenerationChanged ||
+      m_gizmoMode != prevGizmoMode || m_cutAxis != prevCutAxis ||
+      !qFuzzyCompare(m_cutPosition, prevCutPosition) ||
+      prevSelectedSourceObjectIndex != m_prepareScene.selectedSourceObjectIndex() ||
+      m_gizmoCenter != prevGizmoCenter)
+  {
+    m_cutPlaneDirty = true;
+    m_cutPlaneFillBufferUploaded = false;
+    m_cutPlaneOutlineBufferUploaded = false;
+  }
+
+  const bool prevShowWipeTower = m_showWipeTower;
+  const float prevWipeTowerWidth = m_wipeTowerWidth;
+  const float prevWipeTowerDepth = m_wipeTowerDepth;
+  const float prevWipeTowerHeight = m_wipeTowerHeight;
+  const float prevWipeTowerX = m_wipeTowerX;
+  const float prevWipeTowerZ = m_wipeTowerZ;
+  m_showWipeTower = viewport->m_showWipeTower;
+  m_wipeTowerWidth = viewport->m_wipeTowerWidth;
+  m_wipeTowerDepth = viewport->m_wipeTowerDepth;
+  m_wipeTowerHeight = viewport->m_wipeTowerHeight;
+  m_wipeTowerX = viewport->m_wipeTowerX;
+  m_wipeTowerZ = viewport->m_wipeTowerZ;
+  if (m_showWipeTower != prevShowWipeTower ||
+      !qFuzzyCompare(m_wipeTowerWidth, prevWipeTowerWidth) ||
+      !qFuzzyCompare(m_wipeTowerDepth, prevWipeTowerDepth) ||
+      !qFuzzyCompare(m_wipeTowerHeight, prevWipeTowerHeight) ||
+      !qFuzzyCompare(m_wipeTowerX, prevWipeTowerX) ||
+      !qFuzzyCompare(m_wipeTowerZ, prevWipeTowerZ))
+  {
+    m_wipeTowerDirty = true;
+    m_wipeTowerBufferUploaded = false;
+  }
 
   // Render-side per-role visibility mask (no repack). The viewport carries a
   // 20-element QVariantList of bools indexed by canonical libvgcode role; convert
@@ -160,6 +195,17 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
         // Phase 68: upload the gizmo vertex buffer in the same batch.
         uploadGizmoBuffer(updates);
         m_prepareScene.takeDirtyFlags();
+      }
+    }
+    else if (!m_pipelineFailed && (m_cutPlaneDirty || m_wipeTowerDirty ||
+                                   !m_cutPlaneFillBufferUploaded ||
+                                   !m_wipeTowerBufferUploaded)) {
+      updates = rhi()->nextResourceUpdateBatch();
+      if (!uploadCutPlaneBuffers(updates, dirtyFlags) ||
+          !uploadWipeTowerBuffer(updates))
+      {
+        delete updates;
+        updates = nullptr;
       }
     }
   }
@@ -204,14 +250,16 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->setVertexInput(0, 1, &modelBinding);
       cb->draw(m_modelVertexCount);
     }
-    if (m_highlightVertexBuffer && m_highlightVertexCount > 0) {
+  if (m_highlightVertexBuffer && m_highlightVertexCount > 0) {
       // Highlight is translucent: test depth but do not write it, so it does
       // not occlude opaque geometry drawn in subsequent frames/passes.
-      cb->setGraphicsPipeline(m_fillPipelineNoDepthWrite.get());
+      cb->setGraphicsPipeline(m_translucentFillPipeline.get());
       const QRhiCommandBuffer::VertexInput highlightBinding(m_highlightVertexBuffer.get(), 0);
       cb->setVertexInput(0, 1, &highlightBinding);
       cb->draw(m_highlightVertexCount);
     }
+    renderWipeTower(cb);
+    renderCutPlane(cb);
     // Phase 68: render the move gizmo (X/Y/Z arrows) when gizmoMode == Move.
     // Drawn after meshes/highlight so it sits on top via no-depth-write.
     renderMoveGizmo(cb);
@@ -257,11 +305,15 @@ void RhiViewportRenderer::releaseResources()
 {
   m_linePipeline.reset();
   m_fillPipeline.reset();
-  m_fillPipelineNoDepthWrite.reset();
+  m_translucentFillPipeline.reset();
+  m_translucentLinePipeline.reset();
   // Phase 68: gizmo pipelines + vertex buffer.
   m_gizmoLinePipeline.reset();
   m_gizmoTriPipeline.reset();
   m_gizmoVertexBuffer.reset();
+  m_cutPlaneFillBuffer.reset();
+  m_cutPlaneOutlineBuffer.reset();
+  m_wipeTowerBuffer.reset();
   m_srb.reset();
   m_cameraUniformBuffer.reset();
   m_highlightVertexBuffer.reset();
@@ -275,6 +327,9 @@ void RhiViewportRenderer::releaseResources()
   m_highlightVertexBufferUploaded = false;
   m_cameraUniformBufferUploaded = false;
   m_gizmoVertexBufferUploaded = false;       // Phase 68
+  m_cutPlaneFillBufferUploaded = false;
+  m_cutPlaneOutlineBufferUploaded = false;
+  m_wipeTowerBufferUploaded = false;
   m_gizmoPipelineCreated = false;            // Phase 68
   m_bedFillBufferBytes = 0;
   m_bedLineBufferBytes = 0;
@@ -282,6 +337,9 @@ void RhiViewportRenderer::releaseResources()
   m_highlightVertexBufferBytes = 0;
   m_cameraUniformBufferBytes = 0;
   m_gizmoVertexBufferBytes = 0;              // Phase 68
+  m_cutPlaneFillBufferBytes = 0;
+  m_cutPlaneOutlineBufferBytes = 0;
+  m_wipeTowerBufferBytes = 0;
   m_moveGizmoOffsets = {};
   m_rotateGizmoOffsets = {};
   m_scaleGizmoOffsets = {};
@@ -289,8 +347,13 @@ void RhiViewportRenderer::releaseResources()
   m_bedLineVertexCount = 0;
   m_modelVertexCount = 0;
   m_highlightVertexCount = 0;
+  m_cutPlaneFillVertexCount = 0;
+  m_cutPlaneOutlineVertexCount = 0;
+  m_wipeTowerVertexCount = 0;
   m_sceneGeneration = 0;
   m_modelGeneration = 0;
+  m_cutPlaneDirty = true;
+  m_wipeTowerDirty = true;
 }
 
 void RhiViewportRenderer::resetPreviewGpuState(bool keepCpuStaging)
@@ -314,7 +377,8 @@ void RhiViewportRenderer::resetPreviewGpuState(bool keepCpuStaging)
 
 bool RhiViewportRenderer::ensurePipelines()
 {
-  if (m_fillPipeline && m_linePipeline)
+  if (m_fillPipeline && m_linePipeline && m_translucentFillPipeline
+      && m_translucentLinePipeline)
     return true;
   if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr)
     return false;
@@ -329,26 +393,34 @@ bool RhiViewportRenderer::ensurePipelines()
     return false;
   }
 
-  m_srb.reset(rhi()->newShaderResourceBindings());
-  m_srb->setBindings({
-      QRhiShaderResourceBinding::uniformBuffer(0,
-                                               QRhiShaderResourceBinding::VertexStage,
-                                               m_cameraUniformBuffer.get())
-  });
-  if (!m_srb->create()) {
-    m_pipelineFailed = true;
-    return false;
+  if (!m_srb)
+  {
+    m_srb.reset(rhi()->newShaderResourceBindings());
+    m_srb->setBindings({
+        QRhiShaderResourceBinding::uniformBuffer(0,
+                                                 QRhiShaderResourceBinding::VertexStage,
+                                                 m_cameraUniformBuffer.get())
+    });
+    if (!m_srb->create()) {
+      m_pipelineFailed = true;
+      return false;
+    }
   }
 
   return ensurePipeline(m_fillPipeline, QRhiGraphicsPipeline::Triangles)
       && ensurePipeline(m_linePipeline, QRhiGraphicsPipeline::Lines)
-      && ensurePipeline(m_fillPipelineNoDepthWrite, QRhiGraphicsPipeline::Triangles,
-                        /*enableDepthWrite=*/false);
+      && ensurePipeline(m_translucentFillPipeline, QRhiGraphicsPipeline::Triangles,
+                        /*enableDepthWrite=*/false,
+                        /*enableBlending=*/true)
+      && ensurePipeline(m_translucentLinePipeline, QRhiGraphicsPipeline::Lines,
+                        /*enableDepthWrite=*/false,
+                        /*enableBlending=*/true);
 }
 
 bool RhiViewportRenderer::ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &pipeline,
                                          QRhiGraphicsPipeline::Topology topology,
-                                         bool enableDepthWrite)
+                                         bool enableDepthWrite,
+                                         bool enableBlending)
 {
   if (pipeline)
     return true;
@@ -385,8 +457,21 @@ bool RhiViewportRenderer::ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &
   // Qt 6.10 QRhi API: setDepthTest + setDepthWrite (compare op hardcoded Less).
   pipeline->setDepthTest(true);
   pipeline->setDepthWrite(enableDepthWrite);
-  // Standard color blend (no blending for opaque scene geometry).
-  pipeline->setTargetBlends({});
+  if (enableBlending)
+  {
+    QRhiGraphicsPipeline::TargetBlend enable;
+    enable.enable = true;
+    enable.srcColor = QRhiGraphicsPipeline::SrcAlpha;
+    enable.dstColor = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+    enable.srcAlpha = QRhiGraphicsPipeline::One;
+    enable.dstAlpha = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+    pipeline->setTargetBlends({enable});
+  }
+  else
+  {
+    // Standard color blend (no blending for opaque scene geometry).
+    pipeline->setTargetBlends({});
+  }
   if (!pipeline->create()) {
     pipeline.reset();
     m_pipelineFailed = true;
@@ -408,6 +493,10 @@ bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, q
   if (!uploadModelBuffer(updates, dirtyFlags))
     return false;
   if (!uploadHighlightBuffer(updates, dirtyFlags))
+    return false;
+  if (!uploadCutPlaneBuffers(updates, dirtyFlags))
+    return false;
+  if (!uploadWipeTowerBuffer(updates))
     return false;
 
   m_sceneBuffersUploaded = true;
@@ -508,6 +597,120 @@ bool RhiViewportRenderer::uploadHighlightBuffer(QRhiResourceUpdateBatch *updates
                                 highlightVertices.constData());
   }
   m_highlightVertexBufferUploaded = true;
+  return true;
+}
+
+bool RhiViewportRenderer::uploadCutPlaneBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+
+  const bool uploadCut = m_cutPlaneDirty
+      || !m_cutPlaneFillBufferUploaded
+      || !m_cutPlaneOutlineBufferUploaded
+      || (dirtyFlags & (PrepareSceneData::DirtyMesh
+                        | PrepareSceneData::DirtySelection
+                        | PrepareSceneData::DirtyGpu)) != 0;
+  if (!uploadCut)
+    return true;
+
+  QVector<Vertex> fillVertices;
+  QVector<Vertex> outlineVertices;
+  const int selectedSourceObjectIndex = m_prepareScene.selectedSourceObjectIndex();
+  if ((m_gizmoMode == 5 || m_gizmoMode == 14) && selectedSourceObjectIndex >= 0)
+  {
+    bool found = false;
+    PrepareSceneData::ModelBounds selectedBounds;
+    for (const PrepareSceneData::ModelBatch &batch : m_prepareScene.modelBatches())
+    {
+      if (batch.sourceObjectIndex != selectedSourceObjectIndex)
+        continue;
+
+      if (!found)
+      {
+        selectedBounds = batch.bounds;
+        found = true;
+        continue;
+      }
+
+      selectedBounds.minX = std::min(selectedBounds.minX, batch.bounds.minX);
+      selectedBounds.minY = std::min(selectedBounds.minY, batch.bounds.minY);
+      selectedBounds.minZ = std::min(selectedBounds.minZ, batch.bounds.minZ);
+      selectedBounds.maxX = std::max(selectedBounds.maxX, batch.bounds.maxX);
+      selectedBounds.maxY = std::max(selectedBounds.maxY, batch.bounds.maxY);
+      selectedBounds.maxZ = std::max(selectedBounds.maxZ, batch.bounds.maxZ);
+    }
+
+    if (found)
+    {
+      const QVector3D boundsMin(selectedBounds.minX, selectedBounds.minY, selectedBounds.minZ);
+      const QVector3D boundsMax(selectedBounds.maxX, selectedBounds.maxY, selectedBounds.maxZ);
+      fillVertices = GizmoGeometry::buildCutPlaneVertices(boundsMin, boundsMax,
+                                                          m_cutAxis, m_cutPosition);
+      outlineVertices = GizmoGeometry::buildCutPlaneOutlineVertices(boundsMin, boundsMax,
+                                                                     m_cutAxis, m_cutPosition);
+    }
+  }
+
+  const quint32 fillBytes = quint32(fillVertices.size() * int(sizeof(Vertex)));
+  const quint32 outlineBytes = quint32(outlineVertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_cutPlaneFillBuffer, fillBytes, m_cutPlaneFillBufferBytes,
+                    QRhiBuffer::VertexBuffer)
+      || !ensureBuffer(m_cutPlaneOutlineBuffer, outlineBytes, m_cutPlaneOutlineBufferBytes,
+                       QRhiBuffer::VertexBuffer))
+    return false;
+
+  m_cutPlaneFillVertexCount = quint32(fillVertices.size());
+  m_cutPlaneOutlineVertexCount = quint32(outlineVertices.size());
+  if (m_cutPlaneFillBuffer && fillBytes > 0)
+  {
+    updates->uploadStaticBuffer(m_cutPlaneFillBuffer.get(), 0, fillBytes,
+                                fillVertices.constData());
+  }
+  if (m_cutPlaneOutlineBuffer && outlineBytes > 0)
+  {
+    updates->uploadStaticBuffer(m_cutPlaneOutlineBuffer.get(), 0, outlineBytes,
+                                outlineVertices.constData());
+  }
+
+  m_cutPlaneFillBufferUploaded = true;
+  m_cutPlaneOutlineBufferUploaded = true;
+  m_cutPlaneDirty = false;
+  return true;
+}
+
+bool RhiViewportRenderer::uploadWipeTowerBuffer(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+
+  if (!m_wipeTowerDirty && m_wipeTowerBufferUploaded)
+    return true;
+
+  QVector<Vertex> vertices;
+  if (m_showWipeTower)
+  {
+    vertices = GizmoGeometry::buildWipeTowerVertices(m_wipeTowerX,
+                                                     m_wipeTowerZ,
+                                                     m_wipeTowerWidth,
+                                                     m_wipeTowerDepth,
+                                                     m_wipeTowerHeight);
+  }
+
+  const quint32 byteSize = quint32(vertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_wipeTowerBuffer, byteSize, m_wipeTowerBufferBytes,
+                    QRhiBuffer::VertexBuffer))
+    return false;
+
+  m_wipeTowerVertexCount = quint32(vertices.size());
+  if (m_wipeTowerBuffer && byteSize > 0)
+  {
+    updates->uploadStaticBuffer(m_wipeTowerBuffer.get(), 0, byteSize,
+                                vertices.constData());
+  }
+
+  m_wipeTowerBufferUploaded = true;
+  m_wipeTowerDirty = false;
   return true;
 }
 
@@ -898,6 +1101,51 @@ void RhiViewportRenderer::renderScaleGizmo(QRhiCommandBuffer *cb)
 // (start xyz + end xyz, sharing RGBA), with GCode y↔z axis swap to GL space.
 // Layer ranges are indexed per-layer for GPU draw-range filtering (D-26-02).
 // Color is CPU-pre-baked by PreviewViewModel (D-26-03); renderer is opaque RGBA.
+
+void RhiViewportRenderer::renderCutPlane(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr)
+    return;
+  if (m_gizmoMode != 5 /*GizmoCut*/ && m_gizmoMode != 14 /*GizmoAdvancedCut*/)
+    return;
+  if (m_prepareScene.selectedSourceObjectIndex() < 0)
+    return;
+
+  if (m_translucentFillPipeline && m_cutPlaneFillBuffer && m_cutPlaneFillVertexCount > 0)
+  {
+    cb->setShaderResources(m_srb.get());
+    cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+    const QRhiCommandBuffer::VertexInput fillBinding(m_cutPlaneFillBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &fillBinding);
+    cb->draw(m_cutPlaneFillVertexCount);
+  }
+
+  if (m_translucentLinePipeline && m_cutPlaneOutlineBuffer && m_cutPlaneOutlineVertexCount > 0)
+  {
+    cb->setShaderResources(m_srb.get());
+    cb->setGraphicsPipeline(m_translucentLinePipeline.get());
+    const QRhiCommandBuffer::VertexInput outlineBinding(m_cutPlaneOutlineBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &outlineBinding);
+    cb->draw(m_cutPlaneOutlineVertexCount);
+  }
+}
+
+void RhiViewportRenderer::renderWipeTower(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr)
+    return;
+  if (!m_prepareScene.showBed() || !m_showWipeTower)
+    return;
+  if (m_translucentFillPipeline == nullptr || m_wipeTowerBuffer == nullptr ||
+      m_wipeTowerVertexCount == 0)
+    return;
+
+  cb->setShaderResources(m_srb.get());
+  cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+  const QRhiCommandBuffer::VertexInput wipeBinding(m_wipeTowerBuffer.get(), 0);
+  cb->setVertexInput(0, 1, &wipeBinding);
+  cb->draw(m_wipeTowerVertexCount);
+}
 
 namespace {
 struct GcvPackedSegment
