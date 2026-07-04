@@ -2,37 +2,38 @@
 gsd_state_version: 1.0
 milestone: v3.8
 milestone_name: RHI Gizmo Parity
-status: planning
-last_updated: "2026-07-04T02:50:00+08:00"
-last_activity: "2026-07-04 - v3.7 closed with residual gaps carried to v3.8; v3.8 milestone defined (RHI gizmo/pick/cut/wipe parity + GLViewport retirement)"
+status: in_progress
+last_updated: "2026-07-04T10:00:00+08:00"
+last_activity: "2026-07-04 - Phase 65 complete: GizmoMath extracted + unit-tested (17/17 pass); ready for Phase 66 (geometry builders)"
 progress:
   total_phases: 9
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
-stopped_at: v3.8 milestone defined; ready to discuss Phase 65
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 11
+stopped_at: Phase 65 verified; ready to discuss Phase 66
 ---
 
 # Project State
 
 **Milestone:** v3.8 - RHI Gizmo Parity
-**Status:** Planning
-**Next step:** Start Phase 65, `Gizmo Math Extraction + Unit Tests`.
+**Status:** In Progress
+**Next step:** Start Phase 66, `Gizmo Geometry Builders Port`.
 
 ## Current Position
 
-Phase: 65 (not started)
-Plan: Not started
-Status: Ready to discuss
-Last activity: 2026-07-04 - v3.7 closed with residual visual gaps carried
-forward. v3.8 milestone defined: port gizmo (move/rotate/scale/cut), wipe
-tower, cut plane, and precise object picking from GLViewportRenderer to
-RhiViewportRenderer so the default D3D11 RHI path is functionally complete
-and GLViewportRenderer (2285 lines) can be retired. Also: RHI pipeline
-optimizations landed this session (preview-range cache, uniform buffer
-256-byte alignment, MSAA-triggered depth test + highlight no-depth-write
-pipeline).
+Phase: 65 complete; 66 next (not started)
+Plan: 65-01 complete
+Status: Phase 65 verified passed; ready to discuss Phase 66
+Last activity: 2026-07-04 - Phase 65 (Gizmo Math Extraction) shipped.
+Extracted the seven pure-math gizmo functions (computeRay, rayXZIntersect,
+rayToAxisT, pickMoveAxis, pickRotateAxis, pickScaleAxis, computeRotateAngle)
+into a standalone static `GizmoMath` class at `src/core/rendering/` with
+zero render dependencies. GLViewportRenderer delegates to GizmoMath (header
+unchanged, math ported verbatim). 15-slot GizmoMathTests target registered;
+all 17 pass (15 slots + init/cleanup). OWzxSlicer compiles clean. Next:
+Phase 66 ports the geometry builders (move arrows, rotate torus, scale
+shaft+box) as pure CPU vertex generators consuming the Phase 65 math.
 
 ## Project Reference
 
@@ -61,7 +62,7 @@ visually present.
 
 | Phase | Name | Status |
 |---|---|---|
-| 65 | Gizmo math extraction + unit tests | Pending |
+| 65 | Gizmo math extraction + unit tests | ✓ Complete |
 | 66 | Gizmo geometry builders port | Pending |
 | 67 | RHI gizmo state wiring | Pending |
 | 68 | Move gizmo RHI render | Pending |

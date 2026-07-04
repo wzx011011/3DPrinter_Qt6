@@ -56,7 +56,7 @@ fully interactive.
 - [x] **Phase 56:** Parameter Settings Dialogs Restoration (completed 2026-07-03; v3.6 closed)
 - [x] **Phase 57:** Deprecated UI Removal and Architecture Cleanup (completed 2026-07-03; v3.6 closed)
 - [x] **Phase 58:** End-to-End Visual and Functional Verification (completed 2026-07-03; v3.6 closed)
-- [ ] **Phase 65:** Gizmo math extraction + unit tests
+- [x] **Phase 65:** Gizmo math extraction + unit tests (completed 2026-07-04)
 - [ ] **Phase 66:** Gizmo geometry builders port (CPU vertex generation)
 - [ ] **Phase 67:** RHI gizmo state wiring (synchronize + gizmoMode pipeline)
 - [ ] **Phase 68:** Move gizmo RHI render (first visible gizmo)
@@ -81,6 +81,11 @@ fully interactive.
 1. All pure-math functions extracted and unit-tested.
 2. GLViewportRenderer still works identically (calls the extracted library).
 3. Ray-axis pick precision matches GL path for known test rays.
+
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 65-01-PLAN.md — Wave 1: extract 7 pure-math gizmo functions (computeRay, rayXZIntersect, rayToAxisT, pickMoveAxis, pickRotateAxis, pickScaleAxis, computeRotateAngle) into static `GizmoMath` class at `src/core/rendering/`, fully parameterized; GLViewportRenderer delegates with state passed as args; 15-slot `GizmoMathTests` (hand-derived expected values, all pass) (SUMMARY: 65-01-SUMMARY.md)
 
 ### Phase 66: Gizmo Geometry Builders Port
 
