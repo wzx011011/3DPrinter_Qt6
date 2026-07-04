@@ -10,30 +10,195 @@
 - Automated verification passed, manual UAT deferred: **v3.4 Import to G-code Complete Workflow** - Phases 37-43
 - Superseded after Phase 46: **v3.5 Preset Authoring Complete Workflow** - Phases 44-49
 - Automated verification passed, visual UAT not closed: **v3.6 Screenshot-Driven OrcaSlicer UI Restoration** - Phases 50-58 (2026-07-03; VERIFY-04 was not executed)
-- Active: **v3.7 Screenshot-Level UI Parity Closure** - Phases 59-64
+- Complete with residual gaps (carried to v3.8): **v3.7 Screenshot-Level UI Parity Closure** - Phases 59-64 (2026-07-04; RHI gizmo silent-dead and D3D12 segfault carried forward)
 
-## Active Milestone: v3.7 Screenshot-Level UI Parity Closure
+## Active Milestone: v3.8 RHI Gizmo Parity
 
-**Goal:** Close the visual parity gap left by v3.6. The target is running-app
-visual parity against the four screenshots in `shotScreen/`, with OrcaSlicer
-upstream behavior preserved where controls are interactive.
+**Goal:** Port the gizmo system (move/rotate/scale/cut), wipe tower, cut plane,
+and precise object picking from the GLViewportRenderer (OpenGL path) to the
+RhiViewportRenderer (D3D11 default path), so that the default RHI rendering
+path is functionally complete and the GLViewport can be retired.
+
+**Motivation:** v3.7 closed the visual parity gap but the default RHI path is
+functionally incomplete — clicking Move/Rotate/Scale gizmo buttons sets the
+gizmoMode property but nothing renders (RhiViewportRenderer has zero gizmo
+support) and drag does nothing (no pickMoveAxis). The GLViewportRenderer
+(2285 lines) is the only fully functional implementation and is gated behind
+the OWZX_OPENGL=1 environment flag. This milestone makes the default path
+fully interactive.
+
+**Carry-forward from v3.7:**
+- D3D12 segfault at setShaderResources (QRhi D3D12 backend deep issue; needs
+  QRhi internal fix or Qt upgrade). D3D11 stays default throughout v3.8.
+- v3.6 VERIFY-04 manual visual UAT (deferred since v3.6, still pending).
 
 **Success criteria:**
 
-- Prepare page, Preview page, Printer Settings, and Material Settings match the supplied screenshots at module layout, spacing, density, and visible-state level.
-- No visible in-scope UI shows unavailable placeholder copy.
-- Remaining unavailable controls in scope are hidden or disabled in a screenshot/source-truth-compatible way.
-- Phases 59-63 are executed as a batch without canonical full builds between phases, per user instruction.
-- Phase 64 runs the single canonical verification command and captures running-app visual evidence.
+- Move/Rotate/Scale gizmos render on the default D3D11 path when gizmoMode is set.
+- User can drag a gizmo axis to transform the selected object (move along axis,
+  rotate around axis, scale along axis) on the default path.
+- Cut plane gizmo renders and is interactive (cut plane position adjustable).
+- Wipe tower renders when present.
+- Object picking uses ray-triangle (Möller-Trumbore) precision, matching GL path.
+- GLViewportRenderer is removed; only RhiViewport + SoftwareViewport remain.
+- All gizmo math (computeRay, pickMoveAxis, etc.) has unit tests.
+- Build via `scripts/auto_verify_with_vcvars.ps1` passes (sanitized PATH workaround
+  for the vcvars+VMware env issue is acceptable).
 
 ## Phases
 
-- [x] **Phase 59:** v3.6 status correction and visual baseline matrix
-- [x] **Phase 60:** Prepare sidebar and viewport chrome parity
-- [x] **Phase 61:** Settings dialog compact OrcaSlicer tab layout parity
-- [x] **Phase 62:** Preview right panel, sliders, and G-code text parity
-- [x] **Phase 63:** Placeholder removal, static audit hardening, and visual UAT assets
-- [x] **Phase 64:** Unified canonical build and running-app visual acceptance
+- [ ] **Phase 65:** Gizmo math extraction + unit tests
+- [ ] **Phase 66:** Gizmo geometry builders port (CPU vertex generation)
+- [ ] **Phase 67:** RHI gizmo state wiring (synchronize + gizmoMode pipeline)
+- [ ] **Phase 68:** Move gizmo RHI render (first visible gizmo)
+- [ ] **Phase 69:** Move gizmo pick + drag interaction loop
+- [ ] **Phase 70:** Rotate + Scale gizmos
+- [ ] **Phase 71:** Cut plane + wipe tower
+- [ ] **Phase 72:** Precise object picking (ray-triangle)
+- [ ] **Phase 73:** Retire GLViewport + verification
+
+### Phase 65: Gizmo Math Extraction + Unit Tests
+
+**Goal:** Extract pure-math gizmo functions into a testable library with zero render dependencies, establishing a verified foundation before any rendering work.
+
+**Requirements:** `GMATH-01`, `GMATH-02`, `GMATH-03`.
+
+**Deliverables:**
+- New class `GizmoMath` (or namespace) extracting: `computeRay`, `rayToAxisT`, `computeRotateAngle`, `pickMoveAxis`, `pickRotateAxis`, `pickScaleAxis`, `rayXZIntersect`. Inputs parameterized (no member-variable coupling).
+- Unit tests covering each function (current coverage is 0).
+- GLViewportRenderer updated to call the extracted functions (equivalence verified).
+
+**Success criteria:**
+1. All pure-math functions extracted and unit-tested.
+2. GLViewportRenderer still works identically (calls the extracted library).
+3. Ray-axis pick precision matches GL path for known test rays.
+
+### Phase 66: Gizmo Geometry Builders Port
+
+**Goal:** Port the gizmo geometry construction (move arrows, rotate torus, scale shaft+box) as pure CPU vertex generators, decoupled from any GL/RHI calls.
+
+**Requirements:** `GGEO-01`, `GGEO-02`, `GGEO-03`.
+
+**Deliverables:**
+- `buildMoveGizmoVertices()` / `buildRotateGizmoVertices()` / `buildScaleGizmoVertices()` returning `QVector<Vertex>` (剥离 the trailing glGenBuffers/glBufferData).
+- Snapshot tests asserting vertex counts and bounding ranges match GL originals.
+- Per-axis color baked into vertices (X=red, Y=green, Z=blue) for the per-vertex color approach.
+
+**Success criteria:**
+1. Geometry generators produce identical vertex counts to GL originals.
+2. No GL or RHI calls in the geometry layer.
+3. Snapshot tests pin the vertex layout.
+
+### Phase 67: RHI Gizmo State Wiring
+
+**Goal:** Connect the broken gizmo state pipeline — RhiViewportRenderer::synchronize must read gizmoMode/cutAxis/cutPosition/gizmoCenter, and setGizmoMode must trigger update().
+
+**Requirements:** `GWIRE-01`, `GWIRE-02`.
+
+**Deliverables:**
+- `RhiViewportRenderer::synchronize` reads viewport->gizmoMode(), cutAxis(), cutPosition(), and computes gizmoCenter from the selected object's AABB.
+- `RhiViewport::setGizmoMode` calls `update()` so the renderer re-syncs.
+- Diagnostic logging confirms state arrives at the renderer on mode change.
+
+**Success criteria:**
+1. Setting gizmoMode in QML produces the correct value in the renderer's next synchronize.
+2. cutAxis/cutPosition changes propagate.
+3. gizmoCenter tracks the selected object.
+
+### Phase 68: Move Gizmo RHI Render
+
+**Goal:** First visible gizmo on the D3D11 path — render the X/Y/Z move arrows using a new gizmo shader and dedicated pipeline.
+
+**Requirements:** `GMOV-01`, `GMOV-02`.
+
+**Deliverables:**
+- New `gizmo.vert.qsb` (GLSL 440 with uGizmoCenter/uGizmoScale displacement) + frag shader.
+- Gizmo uniform buffer (camera MVP + gizmoCenter + gizmoScale) or per-vertex color approach for axis colors.
+- Move gizmo vertex buffer + lines pipeline (arrows) + triangles pipeline (cones).
+- render() draws the 3 axes when gizmoMode == GizmoMove.
+
+**Success criteria:**
+1. Setting gizmoMode to Move renders three colored axis arrows at the selected object.
+2. Gizmo renders on top of geometry (depth clear or no-depth-write for gizmo).
+3. Build passes; no regression on Prepare bed grid.
+
+### Phase 69: Move Gizmo Pick + Drag Interaction
+
+**Goal:** Close the interaction loop — user can click an axis and drag to move the object along it.
+
+**Requirements:** `GMOV-03`, `GMOV-04`.
+
+**Deliverables:**
+- RhiViewport mouse handlers → computeRay → GizmoMath::pickMoveAxis (Phase 65).
+- Drag delta computation → EditorViewModel object translation.
+- Visual feedback (hover highlight on the picked axis, optional).
+
+**Success criteria:**
+1. Clicking the X axis and dragging moves the object along X only.
+2. Y and Z axes work analogously.
+3. No camera orbit triggered during gizmo drag (input event consumed).
+
+### Phase 70: Rotate + Scale Gizmos
+
+**Goal:** Port the rotate (torus rings) and scale (shaft+box) gizmos, reusing the Phase 68 pipeline skeleton.
+
+**Requirements:** `GROT-01`, `GROT-02`, `GSCA-01`, `GSCA-02`.
+
+**Deliverables:**
+- Rotate torus vertex buffer + render + pickRotateAxis + rotation interaction.
+- Scale shaft+box vertex buffer + render + pickScaleAxis + scale interaction.
+
+**Success criteria:**
+1. Rotate gizmo: drag a ring to rotate the object around that axis.
+2. Scale gizmo: drag a box handle to scale along that axis.
+3. Both render correctly and pick precisely.
+
+### Phase 71: Cut Plane + Wipe Tower
+
+**Goal:** Port the cut plane gizmo and wipe tower rendering, completing the functional parity with the GL path.
+
+**Requirements:** `GCUT-01`, `GWT-01`.
+
+**Deliverables:**
+- Cut plane render (translucent quad + outline, 2 pipelines) + cutAxis/cutPosition interaction.
+- Wipe tower geometry + render (translucent box pipeline).
+- synchronize extended to read wipe tower properties.
+
+**Success criteria:**
+1. Cut plane renders and adjusts with cutAxis/cutPosition.
+2. Wipe tower renders when present in the scene.
+
+### Phase 72: Precise Object Picking
+
+**Goal:** Replace the AABB-screen-rectangle picking with ray-triangle (Möller-Trumbore) precision matching the GL path.
+
+**Requirements:** `GPICK-01`.
+
+**Deliverables:**
+- cpuVerts passed through to RhiViewportRenderer.
+- pickObject ported (ray-AABB prefilter + ray-triangle) from GizmoMath.
+
+**Success criteria:**
+1. Clicking a model selects the exact mesh under the cursor (not just the AABB bounding box).
+2. Picking precision matches the GL path.
+
+### Phase 73: Retire GLViewport + Verification
+
+**Goal:** Remove the now-redundant GLViewportRenderer (2285 lines) and its dependencies; verify the RHI path is the sole functional path.
+
+**Requirements:** `GRET-01`, `GRET-02`.
+
+**Deliverables:**
+- Delete GLViewportRenderer.{cpp,h}, GLViewport.{cpp,h} (QML item + renderer), GCodeRenderer's GLViewport dependency decoupled.
+- Remove OWZX_OPENGL branch from main_qml.cpp registration (only RhiViewport + SoftwareViewport remain).
+- Update CMakeLists.txt, qml.qrc, QmlUiAuditTests.
+- Final verification: build passes, all gizmo interactions work on the default path, no regressions.
+
+**Success criteria:**
+1. GLViewportRenderer and GLViewport files removed; build succeeds without them.
+2. All gizmo/pick/wipe-tower/cut-plane functionality works on the default D3D11 path.
+3. OWZX_OPENGL environment flag no longer has any effect (no GL path to activate).
+4. Codebase reduced by ~2285 lines.
 
 ### Phase 50: Screenshot and Source-Truth Inventory
 
