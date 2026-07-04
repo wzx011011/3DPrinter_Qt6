@@ -2,35 +2,34 @@
 gsd_state_version: 1.0
 milestone: v3.8
 milestone_name: RHI Gizmo Parity
-status: ready_to_plan
-last_updated: 2026-07-04T16:13:48.424Z
-last_activity: 2026-07-04 -- Phase 72 complete (precise object picking)
+status: milestone_complete
+last_updated: 2026-07-04T16:54:06.013Z
+last_activity: 2026-07-04 -- Phase 73 complete (GLViewport retired; canonical verifier passed)
 progress:
   total_phases: 18
-  completed_phases: 17
+  completed_phases: 18
   total_plans: 7
-  completed_plans: 65
-  percent: 94
-stopped_at: Phase 72 complete (1/1) - ready to plan Phase 73
+  completed_plans: 66
+  percent: 100
+stopped_at: Milestone complete (Phase 73 was final phase)
 ---
 
 # Project State
 
 **Milestone:** v3.8 - RHI Gizmo Parity
-**Status:** Ready to plan
-**Next step:** Plan Phase 73, `Retire GLViewport + Verification`.
+**Status:** Milestone complete
+**Next step:** Run milestone audit and complete v3.8 cleanup.
 
 ## Current Position
 
 Phase: 73
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-07-04 -- Phase 72 complete
-Phase 72 replaced the default RHI viewport's screen-rectangle AABB picking with
-a pure CPU `ObjectPicking` helper that uses `GizmoMath::computeRay`,
-ray-AABB prefiltering, and Moller-Trumbore ray-triangle intersection against
-`PrepareSceneData` scene-space vertices. Focused picking tests, the RHI
-selection ownership audit, and the canonical verifier passed.
+Plan: 73-01-PLAN.md
+Status: Complete
+Last activity: 2026-07-04 -- Phase 73 complete
+Phase 73 deleted the retired OpenGL viewport implementation (`GLViewport*`
+and `GCodeRenderer*`), removed the `OWZX_OPENGL` startup branch, kept the
+stable QML `GLViewport` alias backed by `RhiViewport` or `SoftwareViewport`,
+and passed focused QML audit plus the canonical verifier.
 
 ## Project Reference
 
@@ -69,7 +68,7 @@ visually present.
 | 70 | Rotate + Scale gizmos | Complete |
 | 71 | Cut plane + wipe tower | Complete |
 | 72 | Precise object picking | Complete |
-| 73 | Retire GLViewport + verification | Pending |
+| 73 | Retire GLViewport + verification | Complete |
 
 ## Verification Rule
 

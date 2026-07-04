@@ -28,8 +28,7 @@ struct GizmoGeometryOffsets
 // GizmoGeometry - pure-CPU gizmo vertex generators (Phase 66, GGEO-01/02/03).
 // Three builders produce QVector<GizmoVertex> with per-axis
 // RGBA color baked in. Zero GL/RHI upload calls - only CPU vertex generation.
-// Callers (GLViewportRenderer today, RhiViewportRenderer in Phase 68) own the
-// GPU upload.
+// RhiViewportRenderer owns the GPU upload.
 //
 // Scope: gizmo primitive builders plus Phase 71 cut-plane/wipe-tower helper
 // geometry. All functions are pure CPU builders with no GL/RHI calls.

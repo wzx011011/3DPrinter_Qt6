@@ -77,8 +77,8 @@ Carry-forward constraints:
 
 ### GLViewport Retirement
 
-- [ ] **GRET-01:** GLViewportRenderer.{cpp,h}, GLViewport.{cpp,h}, and GCodeRenderer's GLViewport dependency are removed; the build succeeds without them (~2285 lines deleted).
-- [ ] **GRET-02:** The OWZX_OPENGL environment flag no longer has any effect (no GL path to activate); only RhiViewport + SoftwareViewport remain in the registration.
+- [x] **GRET-01:** GLViewportRenderer.{cpp,h}, GLViewport.{cpp,h}, and GCodeRenderer's GLViewport dependency are removed; the build succeeds without them (~2285 lines deleted).
+- [x] **GRET-02:** The OWZX_OPENGL environment flag no longer has any effect (no GL path to activate); only RhiViewport + SoftwareViewport remain in the registration.
 
 ## Future Requirements
 
@@ -118,8 +118,8 @@ Carry-forward constraints:
 | GCUT-01 | Phase 71 | Complete |
 | GWT-01 | Phase 71 | Complete |
 | GPICK-01 | Phase 72 | Complete |
-| GRET-01 | Phase 73 | Pending |
-| GRET-02 | Phase 73 | Pending |
+| GRET-01 | Phase 73 | Complete |
+| GRET-02 | Phase 73 | Complete |
 
 **Coverage:** 21 total; 21 mapped; 0 unmapped.
 

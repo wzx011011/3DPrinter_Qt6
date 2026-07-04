@@ -2944,7 +2944,7 @@ void EditorViewModel::mirrorSelectedObjects(int axis)
   projectService_->syncTransformsFromModel();
 #endif
 
-  // GLViewportRenderer handles the visual mirror via InputEvent
+  // The active viewport handles the visual mirror through its bound state.
   invalidateSliceResultsForCurrentPlate();
   emit stateChanged();
 }
@@ -4499,8 +4499,8 @@ void EditorViewModel::arrangeAllObjects()
     invalidateAllSliceResults();
     emit stateChanged();
   }
-  // If real arrange not available (no HAS_LIBSLIC3R), the GLViewport mock
-  // arrange will still work via the existing ArrangeSelected InputEvent path
+  // If real arrange is not available (no HAS_LIBSLIC3R), the viewport fallback
+  // arrange path remains a no-op rather than mutating model state in QML.
 }
 
 bool EditorViewModel::canActivateGizmo(int gizmoMode) const

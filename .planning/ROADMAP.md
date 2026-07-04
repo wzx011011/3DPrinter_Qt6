@@ -64,7 +64,7 @@ fully interactive.
 - [x] **Phase 70:** Rotate + Scale gizmos (completed 2026-07-04)
 - [x] **Phase 71:** Cut plane + wipe tower (completed 2026-07-04)
 - [x] **Phase 72:** Precise object picking (ray-triangle) (completed 2026-07-04)
-- [ ] **Phase 73:** Retire GLViewport + verification
+- [x] **Phase 73:** Retire GLViewport + verification (completed 2026-07-04)
 
 ### Phase 65: Gizmo Math Extraction + Unit Tests
 
@@ -243,6 +243,11 @@ Plans:
 2. All gizmo/pick/wipe-tower/cut-plane functionality works on the default D3D11 path.
 3. OWZX_OPENGL environment flag no longer has any effect (no GL path to activate).
 4. Codebase reduced by ~2285 lines.
+
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 73-01-PLAN.md - Wave 1: delete `GLViewport`, `GLViewportRenderer`, and `GCodeRenderer`; remove `OWZX_OPENGL` startup registration; keep the QML `GLViewport` compatibility alias backed by `RhiViewport`/`SoftwareViewport`; add deletion audit coverage; focused and canonical verification pass. (SUMMARY: 73-01-SUMMARY.md)
 
 ### Phase 50: Screenshot and Source-Truth Inventory
 
@@ -517,4 +522,4 @@ $gsd-autonomous --from 55
 
 ---
 
-*Last updated: 2026-07-01 after Phase 54 completion.*
+*Last updated: 2026-07-04 after Phase 73 completion.*

@@ -25,6 +25,7 @@ private slots:
   void mainRegistersRhiViewportByDefaultWithSoftwareFallback();
   void mainRegistersRhiViewportOnlyBehindExplicitGate();
   void renderBenchmarkMatchesRhiBackendPolicy();
+  void legacyOpenGlViewportPathsStayDeleted();
   void prepareViewportBindsBedAndPlateContext();
   void prepareReadinessControlsBindBackendAvailability();
   void exportUiUsesSaveDialogAndAvoidsSourcePathTarget();
@@ -183,16 +184,16 @@ void QmlUiAuditTests::mainRegistersRhiViewportByDefaultWithSoftwareFallback()
   QVERIFY2(!verifyScript.isEmpty(), "Unable to read auto_verify_with_vcvars.ps1");
   QVERIFY2(!selectorSource.isEmpty(), "Unable to read RhiBackendSelector.cpp");
 
-  QVERIFY2(mainCpp.contains(QStringLiteral("qEnvironmentVariableIsSet(\"OWZX_OPENGL\")")),
-            "main_qml.cpp must gate OpenGL viewport selection on OWZX_OPENGL");
+  QVERIFY2(!mainCpp.contains(QStringLiteral("OWZX_OPENGL")),
+            "main_qml.cpp must not keep the retired OpenGL viewport environment gate");
   QVERIFY2(mainCpp.contains(QStringLiteral("qputenv(\"OWZX_RHI_RENDERER\", \"auto\")")),
             "default startup must enable QRhi auto instead of the software viewport");
   QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
             "default GLViewport registration must use RhiViewport when QRhi initializes");
   QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
-           "SoftwareViewport must remain registered as the QRhi fallback");
-  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<GLViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
-            "OpenGL GLViewport registration must remain available behind OWZX_OPENGL");
+            "SoftwareViewport must remain registered as the QRhi fallback");
+  QVERIFY2(!mainCpp.contains(QStringLiteral("qmlRegisterType<GLViewport>")),
+            "retired OpenGL GLViewport must not be registered");
   const int defaultCandidatesStart = selectorSource.indexOf(QStringLiteral("QVector<RhiBackendCandidate> defaultWindowsCandidates()"));
   const int candidatesForRequestStart = selectorSource.indexOf(QStringLiteral("QVector<RhiBackendCandidate> candidatesForRequest"));
   QVERIFY2(defaultCandidatesStart >= 0 && candidatesForRequestStart > defaultCandidatesStart,
@@ -233,8 +234,10 @@ void QmlUiAuditTests::mainRegistersRhiViewportOnlyBehindExplicitGate()
 
   QVERIFY2(mainCpp.contains(QStringLiteral("OWZX_RHI_RENDERER")),
            "QRhi viewport selection must keep OWZX_RHI_RENDERER override support");
-  QVERIFY2(mainCpp.contains(QStringLiteral("qEnvironmentVariableIsSet(\"OWZX_OPENGL\")")),
-           "legacy OWZX_OPENGL path must stay independent from QRhi");
+  QVERIFY2(!mainCpp.contains(QStringLiteral("OWZX_OPENGL")),
+           "legacy OWZX_OPENGL path must stay retired");
+  QVERIFY2(!mainCpp.contains(QStringLiteral("qmlRegisterType<GLViewport>")),
+           "legacy OpenGL GLViewport registration must stay removed");
   QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
            "SoftwareViewport must remain the fallback GLViewport registration");
   QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
@@ -305,9 +308,45 @@ void QmlUiAuditTests::renderBenchmarkMatchesRhiBackendPolicy()
   QVERIFY2(!verifyScript.contains(QStringLiteral("$env:OWZX_RHI_RENDERER")),
            "Canonical verification must not enable the app QRhi viewport while running benchmark checks");
   QVERIFY2(cmake.contains(QStringLiteral("option(OWZX_RENDER_BENCH"))
-               && cmake.contains(QStringLiteral("qt_add_executable(owzx-render-bench"))
-               && cmake.contains(QStringLiteral("qt_add_shaders(owzx-render-bench \"render_bench_shaders\"")),
-           "Render benchmark target and shaders must remain build-gated in CMake");
+                && cmake.contains(QStringLiteral("qt_add_executable(owzx-render-bench"))
+                && cmake.contains(QStringLiteral("qt_add_shaders(owzx-render-bench \"render_bench_shaders\"")),
+            "Render benchmark target and shaders must remain build-gated in CMake");
+}
+
+void QmlUiAuditTests::legacyOpenGlViewportPathsStayDeleted()
+{
+  const QString mainCpp = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
+  const QString cmake = readSource(QStringLiteral("CMakeLists.txt"));
+  QVERIFY2(!mainCpp.isEmpty(), "Unable to read main_qml.cpp");
+  QVERIFY2(!cmake.isEmpty(), "Unable to read CMakeLists.txt");
+
+  const QStringList deletedFiles = {
+    QStringLiteral("src/qml_gui/Renderer/GLViewport.cpp"),
+    QStringLiteral("src/qml_gui/Renderer/GLViewport.h"),
+    QStringLiteral("src/qml_gui/Renderer/GLViewportRenderer.cpp"),
+    QStringLiteral("src/qml_gui/Renderer/GLViewportRenderer.h"),
+    QStringLiteral("src/qml_gui/Renderer/GCodeRenderer.cpp"),
+    QStringLiteral("src/qml_gui/Renderer/GCodeRenderer.h")
+  };
+
+  for (const QString &relativePath : deletedFiles) {
+    QFileInfo fileInfo(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)).filePath(relativePath));
+    QVERIFY2(!fileInfo.exists(),
+             qPrintable(QStringLiteral("Retired OpenGL viewport source must stay deleted: %1").arg(relativePath)));
+    QVERIFY2(!cmake.contains(relativePath),
+             qPrintable(QStringLiteral("Retired OpenGL viewport source must stay out of CMake: %1").arg(relativePath)));
+  }
+
+  QVERIFY2(!mainCpp.contains(QStringLiteral("GLViewport.h")),
+           "main_qml.cpp must not include the retired OpenGL viewport header");
+  QVERIFY2(!mainCpp.contains(QStringLiteral("OWZX_OPENGL")),
+           "OWZX_OPENGL must no longer activate a retired OpenGL viewport path");
+  QVERIFY2(!mainCpp.contains(QStringLiteral("qmlRegisterType<GLViewport>")),
+           "OpenGL GLViewport must not be registered after retirement");
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+           "RhiViewport must remain registered under the existing QML type name");
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+           "SoftwareViewport must remain the non-RHI fallback registration");
 }
 
 void QmlUiAuditTests::prepareViewportBindsBedAndPlateContext()
@@ -316,13 +355,11 @@ void QmlUiAuditTests::prepareViewportBindsBedAndPlateContext()
   const QString rhiViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
   const QString rhiViewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
   const QString softwareViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.h"));
-  const QString glViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/GLViewport.h"));
   const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
   QVERIFY2(!rhiViewportHeader.isEmpty(), "Unable to read RhiViewport.h");
   QVERIFY2(!rhiViewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
   QVERIFY2(!softwareViewportHeader.isEmpty(), "Unable to read SoftwareViewport.h");
-  QVERIFY2(!glViewportHeader.isEmpty(), "Unable to read GLViewport.h");
   QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
 
   QVERIFY2(editorHeader.contains(QStringLiteral("activePlateObjectIndices")),
@@ -363,12 +400,6 @@ void QmlUiAuditTests::prepareViewportBindsBedAndPlateContext()
            "SoftwareViewport must expose meshBatchSourceObjectIndices for the default QML registration path");
   QVERIFY2(softwareViewportHeader.contains(QStringLiteral("Q_PROPERTY(int selectedSourceObjectIndex")),
            "SoftwareViewport must expose selectedSourceObjectIndex for the default QML registration path");
-  QVERIFY2(glViewportHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList activePlateObjectIndices")),
-           "GLViewport must expose activePlateObjectIndices for the legacy OpenGL registration path");
-  QVERIFY2(glViewportHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList meshBatchSourceObjectIndices")),
-           "GLViewport must expose meshBatchSourceObjectIndices for the legacy OpenGL registration path");
-  QVERIFY2(glViewportHeader.contains(QStringLiteral("Q_PROPERTY(int selectedSourceObjectIndex")),
-           "GLViewport must expose selectedSourceObjectIndex for the legacy OpenGL registration path");
   QVERIFY2(rhiViewportSource.contains(QStringLiteral("setActivePlateObjectIndices")),
            "RhiViewport must store activePlateObjectIndices through a setter");
   QVERIFY2(rhiViewportSource.contains(QStringLiteral("setMeshBatchSourceObjectIndices")),
@@ -968,7 +999,6 @@ void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
   const QString objectPickingHeader = readSource(QStringLiteral("src/core/rendering/ObjectPicking.h"));
   const QString objectPickingSource = readSource(QStringLiteral("src/core/rendering/ObjectPicking.cpp"));
   const QString softwareViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.h"));
-  const QString glViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/GLViewport.h"));
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
   QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
   QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
@@ -978,7 +1008,6 @@ void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
   QVERIFY2(!objectPickingHeader.isEmpty(), "Unable to read ObjectPicking.h");
   QVERIFY2(!objectPickingSource.isEmpty(), "Unable to read ObjectPicking.cpp");
   QVERIFY2(!softwareViewportHeader.isEmpty(), "Unable to read SoftwareViewport.h");
-  QVERIFY2(!glViewportHeader.isEmpty(), "Unable to read GLViewport.h");
 
   QVERIFY2(editorHeader.contains(QStringLiteral("selectSourceObject(int sourceIndex)")),
            "EditorViewModel must expose a source-index selection bridge for renderer picking");
@@ -997,9 +1026,6 @@ void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
   QVERIFY2(softwareViewportHeader.contains(QStringLiteral("Q_PROPERTY(int hoveredSourceObjectIndex"))
                && softwareViewportHeader.contains(QStringLiteral("void objectPickedSource(int sourceIndex);")),
            "SoftwareViewport fallback must keep QML signal/property compatibility");
-  QVERIFY2(glViewportHeader.contains(QStringLiteral("Q_PROPERTY(int hoveredSourceObjectIndex"))
-               && glViewportHeader.contains(QStringLiteral("void objectPickedSource(int sourceIndex);")),
-           "GLViewport fallback must keep QML signal/property compatibility");
 
   const int pickStart = viewportSource.indexOf(QStringLiteral("int RhiViewport::pickSourceObjectAt"));
   const int nextFunction = viewportSource.indexOf(QStringLiteral("\nQRectF RhiViewport::projectBoundsToScreenRect"), pickStart);
@@ -1606,14 +1632,11 @@ void QmlUiAuditTests::rhiViewportRendererHasGcvPackedSegmentRoleGuard()
            "(Plan 02 wire-format lockstep guard)");
 }
 
-// Phase 55 (GCODE-04): D3D11 default + SoftwareViewport fallback-only policy.
-// main_qml.cpp must register RhiViewport as the QML type "GLViewport" (the
-// default QRhi/D3D11 path on Windows), and any SoftwareViewport registration
-// must be guarded behind an explicit env-var gate so the software rasterizer
-// never silently replaces the hardware-accelerated viewport in the Preview
-// page. PreviewPage.qml must bind GLViewport (which resolves to RhiViewport on
-// the default path) and never reference SoftwareViewport. This Phase-55-tagged
-// guard makes any future regression point directly at GCODE-04.
+// Phase 55/73 (GCODE-04/GRET-02): D3D11 default + SoftwareViewport fallback
+// policy. main_qml.cpp must register RhiViewport as the QML type "GLViewport"
+// on the normal QRhi/D3D11 path, and SoftwareViewport only when QRhi is
+// unavailable. PreviewPage.qml must bind GLViewport (which resolves to
+// RhiViewport on the default path) and never reference SoftwareViewport.
 void QmlUiAuditTests::gcode04RhiViewportIsDefaultRegistrationNoSoftwareViewportInPreviewPath()
 {
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
@@ -1625,15 +1648,12 @@ void QmlUiAuditTests::gcode04RhiViewportIsDefaultRegistrationNoSoftwareViewportI
            "main_qml.cpp must register RhiViewport as a QML type (GCODE-04 default path)");
   QVERIFY2(mainQml.contains(QStringLiteral("\"GLViewport\"")),
            "RhiViewport must be registered under the QML name 'GLViewport' (GCODE-04 default path)");
-  // SoftwareViewport may be present as the QRhi fallback, but only behind an
-  // explicit env-var gate (OWZX_OPENGL / qEnvironmentVariableIsSet) so it never
-  // silently becomes the default registration.
+  // SoftwareViewport may be present as the QRhi-unavailable fallback, but the
+  // retired OWZX_OPENGL path must not reintroduce a separate OpenGL viewport.
   if (mainQml.contains(QStringLiteral("SoftwareViewport")))
   {
-    QVERIFY2(mainQml.contains(QStringLiteral("OWZX_OPENGL"))
-                 || mainQml.contains(QStringLiteral("qEnvironmentVariableIsSet")),
-             "SoftwareViewport registration, if present, must be guarded behind an explicit "
-             "env-var gate (GCODE-04 fallback-only policy)");
+    QVERIFY2(mainQml.contains(QStringLiteral("rhiSelection.canUseRhi")),
+             "SoftwareViewport registration, if present, must be guarded behind QRhi availability");
   }
   // Belt-and-suspenders vs previewPageNeverReferencesSoftwareViewport (Plan 04):
   // the Preview page must resolve to the hardware-accelerated RhiViewport path.

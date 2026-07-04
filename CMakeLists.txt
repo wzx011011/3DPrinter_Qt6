@@ -142,10 +142,6 @@ if(OWZX_QML_GUI)
         src/qml_gui/Models/PresetListModel.h
         src/qml_gui/Renderer/CameraController.cpp
         src/qml_gui/Renderer/CameraController.h
-        src/qml_gui/Renderer/GLViewport.cpp
-        src/qml_gui/Renderer/GLViewport.h
-        src/qml_gui/Renderer/GLViewportRenderer.cpp
-        src/qml_gui/Renderer/GLViewportRenderer.h
         src/qml_gui/Renderer/SoftwareViewport.cpp
         src/qml_gui/Renderer/SoftwareViewport.h
         src/qml_gui/Renderer/RhiBackendSelector.cpp
@@ -156,8 +152,6 @@ if(OWZX_QML_GUI)
         src/qml_gui/Renderer/RhiViewportRenderer.h
         src/qml_gui/Renderer/PrepareSceneData.cpp
         src/qml_gui/Renderer/PrepareSceneData.h
-        src/qml_gui/Renderer/GCodeRenderer.cpp
-        src/qml_gui/Renderer/GCodeRenderer.h
     )
     if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/src/core/debug/CrashHandlerWin.cpp")
         target_sources(owzx_app_core PRIVATE

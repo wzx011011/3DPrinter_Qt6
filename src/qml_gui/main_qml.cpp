@@ -8,7 +8,6 @@
 #include <QDateTime>
 #include <QDir>
 #include <QtQml/qqml.h>
-#include "qml_gui/Renderer/GLViewport.h"
 #include "qml_gui/Renderer/RhiBackendSelector.h"
 #include "qml_gui/Renderer/RhiViewport.h"
 #include "qml_gui/Renderer/SoftwareViewport.h"
@@ -79,19 +78,13 @@ static void appendStartupLog(const QString &line)
 
 int main(int argc, char *argv[])
 {
-  const bool useOpenGLViewport = qEnvironmentVariableIsSet("OWZX_OPENGL");
-  if (!useOpenGLViewport && !qEnvironmentVariableIsSet("OWZX_RHI_RENDERER"))
+  if (!qEnvironmentVariableIsSet("OWZX_RHI_RENDERER"))
     qputenv("OWZX_RHI_RENDERER", "auto");
 
-  RhiBackendSelection rhiSelection;
-  if (!useOpenGLViewport) {
-    // RhiBackendSelector owns D3D11-first / D3D12 explicit opt-in policy.
-    rhiSelection = selectRhiBackendFromEnvironment();
-  }
+  // RhiBackendSelector owns D3D11-first / D3D12 explicit opt-in policy.
+  const RhiBackendSelection rhiSelection = selectRhiBackendFromEnvironment();
 
-  if (useOpenGLViewport) {
-    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
-  } else if (rhiSelection.canUseRhi) {
+  if (rhiSelection.canUseRhi) {
     QQuickWindow::setGraphicsApi(rhiSelection.selectedGraphicsApi);
   } else {
     if (rhiSelection.enabled)
@@ -123,21 +116,16 @@ int main(int argc, char *argv[])
   if (rhiSelection.enabled)
     appendStartupLog(QStringLiteral("QRhi backend selection: %1").arg(rhiSelection.diagnostics()));
 
-  // E5 — register 3-D viewport type. The OpenGL implementation is available
-  // via OWZX_OPENGL=1; QRhi/D3D11 is the default high-performance path on
-  // Windows, with SoftwareViewport retained as a driver/init fallback.
-  if (useOpenGLViewport)
-    qmlRegisterType<GLViewport>("OWzxGL", 1, 0, "GLViewport");
-  else if (rhiSelection.canUseRhi)
+  // Register the stable QML type name. RhiViewport is the default path, with
+  // SoftwareViewport retained as a driver/init fallback when QRhi is unavailable.
+  if (rhiSelection.canUseRhi)
     qmlRegisterType<RhiViewport>("OWzxGL", 1, 0, "GLViewport");
   else
     qmlRegisterType<SoftwareViewport>("OWzxGL", 1, 0, "GLViewport");
 
   BackendContext backend;
 
-  // Qt 6.10 MSVC debug heap crash: QQmlApplicationEngine dtor destroys
-  // QQuickFramebufferObject (GLViewport) and corrupts the heap.
-  // Intentionally leak the engine to skip its destructor — same fix as
+  // Intentionally leak the engine to skip late Qt teardown hazards seen in
   // VisualRegressionTests. The OS reclaims all memory on process exit.
   auto *engine = new QQmlApplicationEngine;
   QObject::connect(engine, &QQmlEngine::warnings, engine,

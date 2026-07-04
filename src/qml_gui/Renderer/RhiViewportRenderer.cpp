@@ -1187,7 +1187,8 @@ void RhiViewportRenderer::parsePreviewSegments()
 
   for (int i = 0; i < count; ++i)
   {
-    // Axis swap: GCode (x, y, z) → GL (x, z, y) — mirror GCodeRenderer.cpp:527-528.
+    // Axis swap: GCode (x, y, z) -> scene (x, z, y), matching the legacy
+    // preview renderer convention.
     Vertex a;
     a.x = seg[i].x1;
     a.y = seg[i].z1;
