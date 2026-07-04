@@ -57,7 +57,7 @@ fully interactive.
 - [x] **Phase 57:** Deprecated UI Removal and Architecture Cleanup (completed 2026-07-03; v3.6 closed)
 - [x] **Phase 58:** End-to-End Visual and Functional Verification (completed 2026-07-03; v3.6 closed)
 - [x] **Phase 65:** Gizmo math extraction + unit tests (completed 2026-07-04)
-- [ ] **Phase 66:** Gizmo geometry builders port (CPU vertex generation)
+- [x] **Phase 66:** Gizmo geometry builders port (CPU vertex generation) (completed 2026-07-04)
 - [ ] **Phase 67:** RHI gizmo state wiring (synchronize + gizmoMode pipeline)
 - [ ] **Phase 68:** Move gizmo RHI render (first visible gizmo)
 - [ ] **Phase 69:** Move gizmo pick + drag interaction loop
@@ -102,6 +102,11 @@ Plans:
 1. Geometry generators produce identical vertex counts to GL originals.
 2. No GL or RHI calls in the geometry layer.
 3. Snapshot tests pin the vertex layout.
+
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] 66-01-PLAN.md — Wave 1: extract 3 gizmo geometry builders (move arrows 114v, rotate torus 5184v, scale shafts+boxes 114v) into static `GizmoGeometry` class at `src/core/rendering/`, returning `QVector<GizmoVertex>` with per-axis RGBA color baked in; shared POD `GizmoVertex.h` extracted so `RhiViewportRenderer::Vertex` becomes a `using = GizmoVertex` alias; GL delegates + shaders consume per-vertex color (location 1); 14-slot `GizmoGeometryTests` (counts, colors, bounding boxes, offsets) all pass (SUMMARY: 66-01-SUMMARY.md)
 
 ### Phase 67: RHI Gizmo State Wiring
 

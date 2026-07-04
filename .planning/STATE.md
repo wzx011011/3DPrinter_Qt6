@@ -3,37 +3,40 @@ gsd_state_version: 1.0
 milestone: v3.8
 milestone_name: RHI Gizmo Parity
 status: in_progress
-last_updated: "2026-07-04T10:00:00+08:00"
-last_activity: "2026-07-04 - Phase 65 complete: GizmoMath extracted + unit-tested (17/17 pass); ready for Phase 66 (geometry builders)"
+last_updated: "2026-07-04T11:30:00+08:00"
+last_activity: "2026-07-04 - Phase 66 complete: GizmoGeometry builders + GizmoVertex extracted + per-vertex-color GL shaders (16/16 tests pass); ready for Phase 67 (RHI state wiring)"
 progress:
   total_phases: 9
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 11
-stopped_at: Phase 65 verified; ready to discuss Phase 66
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
+  percent: 22
+stopped_at: Phase 66 verified; ready to discuss Phase 67
 ---
 
 # Project State
 
 **Milestone:** v3.8 - RHI Gizmo Parity
 **Status:** In Progress
-**Next step:** Start Phase 66, `Gizmo Geometry Builders Port`.
+**Next step:** Start Phase 67, `RHI Gizmo State Wiring`.
 
 ## Current Position
 
-Phase: 65 complete; 66 next (not started)
-Plan: 65-01 complete
-Status: Phase 65 verified passed; ready to discuss Phase 66
-Last activity: 2026-07-04 - Phase 65 (Gizmo Math Extraction) shipped.
-Extracted the seven pure-math gizmo functions (computeRay, rayXZIntersect,
-rayToAxisT, pickMoveAxis, pickRotateAxis, pickScaleAxis, computeRotateAngle)
-into a standalone static `GizmoMath` class at `src/core/rendering/` with
-zero render dependencies. GLViewportRenderer delegates to GizmoMath (header
-unchanged, math ported verbatim). 15-slot GizmoMathTests target registered;
-all 17 pass (15 slots + init/cleanup). OWzxSlicer compiles clean. Next:
-Phase 66 ports the geometry builders (move arrows, rotate torus, scale
-shaft+box) as pure CPU vertex generators consuming the Phase 65 math.
+Phase: 66 complete; 67 next (not started)
+Plan: 66-01 complete
+Status: Phase 66 verified passed; ready to discuss Phase 67
+Last activity: 2026-07-04 - Phase 66 (Gizmo Geometry Builders Port) shipped.
+Extracted the three gizmo geometry builders (move arrows / rotate torus /
+scale shafts+boxes) into a standalone static `GizmoGeometry` class at
+`src/core/rendering/`, returning `QVector<GizmoVertex>` with per-axis RGBA
+color baked in. Extracted shared POD `GizmoVertex.h` so
+`RhiViewportRenderer::Vertex` becomes a `using = GizmoVertex` alias (no
+QtQuick dependency in the geometry layer). GLViewportRenderer delegates to
+GizmoGeometry and its shaders now consume per-vertex color (location 1 ->
+vColor); uGizmoColor uniform removed. 14-slot GizmoGeometryTests registered;
+all 16 pass. OWzxSlicer compiles clean. Next: Phase 67 wires the RHI
+renderer's synchronize() to read gizmoMode/cutAxis/cutPosition/gizmoCenter
+so the gizmo state pipeline is connected on the default D3D11 path.
 
 ## Project Reference
 
@@ -63,7 +66,7 @@ visually present.
 | Phase | Name | Status |
 |---|---|---|
 | 65 | Gizmo math extraction + unit tests | ✓ Complete |
-| 66 | Gizmo geometry builders port | Pending |
+| 66 | Gizmo geometry builders port | ✓ Complete |
 | 67 | RHI gizmo state wiring | Pending |
 | 68 | Move gizmo RHI render | Pending |
 | 69 | Move gizmo pick + drag interaction | Pending |
