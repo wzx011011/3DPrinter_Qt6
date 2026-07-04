@@ -23,9 +23,8 @@
 //      computeRotateAngle(sx, sy, axis, viewSize, projMatrix, viewMatrix,
 //                         gizmoCenter, rotateStartAngle)
 //
-// Scope (Phase 65): the seven gizmo pick/drag functions only.
-// pickObject / rayAABB / ray-triangle (Moller-Trumbore) helpers stay in the
-// renderer and are extracted in Phase 72 (Precise Object Picking).
+// Scope (Phase 65): the seven gizmo pick/drag functions only. Object picking
+// lives in ObjectPicking (Phase 72) so RHI can use the same source-truth ray.
 class GizmoMath
 {
 public:

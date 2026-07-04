@@ -110,6 +110,8 @@ if(OWZX_QML_GUI)
         src/core/rendering/GizmoVertex.h
         src/core/rendering/GizmoCenter.cpp
         src/core/rendering/GizmoCenter.h
+        src/core/rendering/ObjectPicking.cpp
+        src/core/rendering/ObjectPicking.h
         src/core/model/PartPlate.cpp
         src/core/model/PartPlate.h
         src/core/model/PartPlateList.cpp
@@ -449,6 +451,25 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     target_link_libraries(GizmoMathTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
     add_test(NAME GizmoMathTests COMMAND GizmoMathTests)
     set_tests_properties(GizmoMathTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
+    # Phase 72: precise object picking tests. Standalone target that exercises
+    # the source-truth screen ray -> ray-AABB -> Moller triangle path without a
+    # live QRhi/OpenGL renderer.
+    qt_add_executable(ObjectPickingTests
+        tests/ObjectPickingTests.cpp
+        src/core/rendering/ObjectPicking.cpp
+        src/core/rendering/ObjectPicking.h
+        src/core/rendering/GizmoMath.cpp
+        src/core/rendering/GizmoMath.h
+        src/qml_gui/Renderer/PrepareSceneData.cpp
+        src/qml_gui/Renderer/PrepareSceneData.h
+    )
+    target_include_directories(ObjectPickingTests PRIVATE src)
+    target_link_libraries(ObjectPickingTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
+    add_test(NAME ObjectPickingTests COMMAND ObjectPickingTests)
+    set_tests_properties(ObjectPickingTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 

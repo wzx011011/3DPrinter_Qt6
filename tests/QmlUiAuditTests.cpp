@@ -965,6 +965,8 @@ void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
   const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
   const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
   const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString objectPickingHeader = readSource(QStringLiteral("src/core/rendering/ObjectPicking.h"));
+  const QString objectPickingSource = readSource(QStringLiteral("src/core/rendering/ObjectPicking.cpp"));
   const QString softwareViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.h"));
   const QString glViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/GLViewport.h"));
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
@@ -973,6 +975,8 @@ void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
   QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
   QVERIFY2(!rendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
   QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!objectPickingHeader.isEmpty(), "Unable to read ObjectPicking.h");
+  QVERIFY2(!objectPickingSource.isEmpty(), "Unable to read ObjectPicking.cpp");
   QVERIFY2(!softwareViewportHeader.isEmpty(), "Unable to read SoftwareViewport.h");
   QVERIFY2(!glViewportHeader.isEmpty(), "Unable to read GLViewport.h");
 
@@ -997,10 +1001,40 @@ void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
                && glViewportHeader.contains(QStringLiteral("void objectPickedSource(int sourceIndex);")),
            "GLViewport fallback must keep QML signal/property compatibility");
 
-  QVERIFY2(viewportSource.contains(QStringLiteral("pickSourceObjectAt"))
-               && viewportSource.contains(QStringLiteral("projectBoundsToScreenRect"))
+  const int pickStart = viewportSource.indexOf(QStringLiteral("int RhiViewport::pickSourceObjectAt"));
+  const int nextFunction = viewportSource.indexOf(QStringLiteral("\nQRectF RhiViewport::projectBoundsToScreenRect"), pickStart);
+  const int fallbackEnd = viewportSource.indexOf(QStringLiteral("\n// ==========================================================================="), pickStart);
+  const int pickEnd = nextFunction > pickStart ? nextFunction : fallbackEnd;
+  QVERIFY2(pickStart >= 0 && pickEnd > pickStart,
+           "RhiViewport pickSourceObjectAt body must stay discoverable for the precise-picking audit");
+  const QString pickBody = viewportSource.mid(pickStart, pickEnd - pickStart);
+
+  QVERIFY2(objectPickingHeader.contains(QStringLiteral("class ObjectPicking"))
+               && objectPickingHeader.contains(QStringLiteral("pickSourceObject")),
+           "ObjectPicking must expose a pure CPU source-object picking helper");
+  QVERIFY2(objectPickingSource.contains(QStringLiteral("rayAABB"))
+               && objectPickingSource.contains(QStringLiteral("Moller"))
+               && objectPickingSource.contains(QStringLiteral("rayTriangle")),
+           "ObjectPicking must own ray-AABB and Moller ray-triangle picking logic");
+  QVERIFY2(!objectPickingHeader.contains(QStringLiteral("QRhi"))
+               && !objectPickingHeader.contains(QStringLiteral("QQuick"))
+               && !objectPickingSource.contains(QStringLiteral("QRhi"))
+               && !objectPickingSource.contains(QStringLiteral("QQuick"))
+               && !objectPickingSource.contains(QStringLiteral("QOpenGL"))
+               && !objectPickingSource.contains(QStringLiteral("glBind"))
+               && !objectPickingSource.contains(QStringLiteral("glDraw"))
+               && !objectPickingSource.contains(QStringLiteral("GL_")),
+           "ObjectPicking must stay free of renderer, QML item, and OpenGL dependencies");
+
+  QVERIFY2(viewportSource.contains(QStringLiteral("#include \"core/rendering/ObjectPicking.h\""))
+               && pickBody.contains(QStringLiteral("GizmoMath::computeRay"))
+               && pickBody.contains(QStringLiteral("ObjectPicking::pickSourceObject"))
+               && pickBody.contains(QStringLiteral("m_pickScene.modelVertices()"))
+               && pickBody.contains(QStringLiteral("m_pickScene.modelBatches()"))
                && viewportSource.contains(QStringLiteral("emit objectPickedSource")),
-           "RhiViewport picking must stay in C++ with camera/projected bounds");
+           "RhiViewport picking must stay in C++ and delegate precise mesh hits to ObjectPicking");
+  QVERIFY2(!pickBody.contains(QStringLiteral("projectBoundsToScreenRect(")),
+           "RhiViewport precise picking must not select through projected AABB screen rectangles");
   QVERIFY2(viewportSource.contains(QStringLiteral("setHoveredSourceObjectIndex"))
                && viewportSource.contains(QStringLiteral("hoverMoveEvent(QHoverEvent *event)")),
            "RhiViewport must maintain hover state from C++ pointer motion");

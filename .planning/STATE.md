@@ -2,35 +2,35 @@
 gsd_state_version: 1.0
 milestone: v3.8
 milestone_name: RHI Gizmo Parity
-status: executing
-last_updated: "2026-07-04T15:24:34.735Z"
-last_activity: 2026-07-04 -- Phase 72 planning complete
+status: ready_to_plan
+last_updated: 2026-07-04T16:13:48.424Z
+last_activity: 2026-07-04 -- Phase 72 complete (precise object picking)
 progress:
   total_phases: 18
-  completed_phases: 16
+  completed_phases: 17
   total_plans: 7
-  completed_plans: 64
-  percent: 89
+  completed_plans: 65
+  percent: 94
+stopped_at: Phase 72 complete (1/1) - ready to plan Phase 73
 ---
 
 # Project State
 
 **Milestone:** v3.8 - RHI Gizmo Parity
-**Status:** Ready to execute
-**Next step:** Execute Phase 72, `Precise Object Picking`.
+**Status:** Ready to plan
+**Next step:** Plan Phase 73, `Retire GLViewport + Verification`.
 
 ## Current Position
 
-Phase: 72
-Plan: 72-01-PLAN.md
-Status: Ready to execute
-Last activity: 2026-07-04 -- Phase 72 planning complete
-Phase 72 is planned as one TDD wave. It will replace the default RHI viewport's
-screen-rectangle AABB picking with a pure CPU `ObjectPicking` helper that uses
-`GizmoMath::computeRay`, ray-AABB prefiltering, and Moller-Trumbore
-ray-triangle intersection against `PrepareSceneData` scene-space vertices.
-The plan keeps QML as a signal bridge and verifies that projected bounding-box
-hits no longer select an object when the ray misses the actual mesh triangle.
+Phase: 73
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-04 -- Phase 72 complete
+Phase 72 replaced the default RHI viewport's screen-rectangle AABB picking with
+a pure CPU `ObjectPicking` helper that uses `GizmoMath::computeRay`,
+ray-AABB prefiltering, and Moller-Trumbore ray-triangle intersection against
+`PrepareSceneData` scene-space vertices. Focused picking tests, the RHI
+selection ownership audit, and the canonical verifier passed.
 
 ## Project Reference
 
@@ -68,7 +68,7 @@ visually present.
 | 69 | Move gizmo pick + drag interaction | Complete |
 | 70 | Rotate + Scale gizmos | Complete |
 | 71 | Cut plane + wipe tower | Complete |
-| 72 | Precise object picking | Pending |
+| 72 | Precise object picking | Complete |
 | 73 | Retire GLViewport + verification | Pending |
 
 ## Verification Rule

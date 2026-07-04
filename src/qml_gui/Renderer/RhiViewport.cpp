@@ -2,6 +2,7 @@
 #include "RhiViewportRenderer.h"
 #include "core/rendering/GizmoCenter.h"
 #include "core/rendering/GizmoMath.h"
+#include "core/rendering/ObjectPicking.h"
 
 #include <QBuffer>
 #include <QByteArray>
@@ -706,83 +707,18 @@ int RhiViewport::pickSourceObjectAt(const QPointF &position)
   if (width() <= 1.0 || height() <= 1.0)
     return -1;
 
-  int pickedSourceObjectIndex = -1;
-  float nearestDepth = std::numeric_limits<float>::max();
-  for (const PrepareSceneData::ModelBatch &batch : m_pickScene.modelBatches()) {
-    if (batch.sourceObjectIndex < 0)
-      continue;
+  const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+  const float aspect = float(viewSize.width()) / float(viewSize.height());
+  auto [rayOrigin, rayDirection] = GizmoMath::computeRay(
+      float(position.x()), float(position.y()),
+      viewSize,
+      m_camera.projMatrix(aspect),
+      m_camera.viewMatrix());
 
-    float depth = 0.0f;
-    const QRectF screenRect = projectBoundsToScreenRect(batch.bounds, &depth);
-    if (!screenRect.isValid() || !screenRect.contains(position))
-      continue;
-
-    if (depth < nearestDepth) {
-      nearestDepth = depth;
-      pickedSourceObjectIndex = batch.sourceObjectIndex;
-    }
-  }
-
-  return pickedSourceObjectIndex;
-}
-
-QRectF RhiViewport::projectBoundsToScreenRect(const PrepareSceneData::ModelBounds &bounds,
-                                              float *depth) const
-{
-  const float w = float(width());
-  const float h = float(height());
-  if (w <= 1.0f || h <= 1.0f)
-    return {};
-
-  const float aspect = w / h;
-  const QMatrix4x4 mvp = cameraMvp(aspect);
-  const QVector4D corners[] = {
-      QVector4D(bounds.minX, bounds.minY, bounds.minZ, 1.0f),
-      QVector4D(bounds.maxX, bounds.minY, bounds.minZ, 1.0f),
-      QVector4D(bounds.minX, bounds.maxY, bounds.minZ, 1.0f),
-      QVector4D(bounds.maxX, bounds.maxY, bounds.minZ, 1.0f),
-      QVector4D(bounds.minX, bounds.minY, bounds.maxZ, 1.0f),
-      QVector4D(bounds.maxX, bounds.minY, bounds.maxZ, 1.0f),
-      QVector4D(bounds.minX, bounds.maxY, bounds.maxZ, 1.0f),
-      QVector4D(bounds.maxX, bounds.maxY, bounds.maxZ, 1.0f),
-  };
-
-  bool hasPoint = false;
-  float left = std::numeric_limits<float>::max();
-  float top = std::numeric_limits<float>::max();
-  float right = std::numeric_limits<float>::lowest();
-  float bottom = std::numeric_limits<float>::lowest();
-  float nearestDepth = std::numeric_limits<float>::max();
-
-  for (const QVector4D &corner : corners) {
-    const QVector4D clip = mvp * corner;
-    if (clip.w() <= 0.0001f)
-      continue;
-
-    const float invW = 1.0f / clip.w();
-    const float ndcX = clip.x() * invW;
-    const float ndcY = clip.y() * invW;
-    const float ndcZ = clip.z() * invW;
-    if (!std::isfinite(ndcX) || !std::isfinite(ndcY) || !std::isfinite(ndcZ))
-      continue;
-
-    const float screenX = (ndcX * 0.5f + 0.5f) * w;
-    const float screenY = (1.0f - (ndcY * 0.5f + 0.5f)) * h;
-    left = std::min(left, screenX);
-    right = std::max(right, screenX);
-    top = std::min(top, screenY);
-    bottom = std::max(bottom, screenY);
-    nearestDepth = std::min(nearestDepth, ndcZ);
-    hasPoint = true;
-  }
-
-  if (!hasPoint)
-    return {};
-
-  if (depth)
-    *depth = nearestDepth;
-
-  return QRectF(QPointF(left, top), QPointF(right, bottom)).normalized().adjusted(-3.0, -3.0, 3.0, 3.0);
+  return ObjectPicking::pickSourceObject(rayOrigin,
+                                         rayDirection,
+                                         m_pickScene.modelVertices(),
+                                         m_pickScene.modelBatches());
 }
 
 // ===========================================================================

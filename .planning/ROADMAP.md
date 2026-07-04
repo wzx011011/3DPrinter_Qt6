@@ -63,7 +63,7 @@ fully interactive.
 - [x] **Phase 69:** Move gizmo pick + drag interaction loop (completed 2026-07-04)
 - [x] **Phase 70:** Rotate + Scale gizmos (completed 2026-07-04)
 - [x] **Phase 71:** Cut plane + wipe tower (completed 2026-07-04)
-- [ ] **Phase 72:** Precise object picking (ray-triangle)
+- [x] **Phase 72:** Precise object picking (ray-triangle) (completed 2026-07-04)
 - [ ] **Phase 73:** Retire GLViewport + verification
 
 ### Phase 65: Gizmo Math Extraction + Unit Tests
@@ -221,10 +221,10 @@ Plans:
 1. Clicking a model selects the exact mesh under the cursor (not just the AABB bounding box).
 2. Picking precision matches the GL path.
 
-**Plans:** 1/1 plans planned
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 72-01-PLAN.md - Wave 1: add pure `ObjectPicking` ray-AABB + Moller-Trumbore helper, register focused `ObjectPickingTests`, wire `RhiViewport::pickSourceObjectAt` through `GizmoMath::computeRay` and `ObjectPicking`, update the RHI selection audit to reject `projectBoundsToScreenRect` picking, then run focused and canonical verification.
+- [x] 72-01-PLAN.md - Wave 1: add pure `ObjectPicking` ray-AABB + Moller-Trumbore helper, register focused `ObjectPickingTests`, wire `RhiViewport::pickSourceObjectAt` through `GizmoMath::computeRay` and `ObjectPicking`, update the RHI selection audit to reject `projectBoundsToScreenRect` picking, then run focused and canonical verification. (SUMMARY: 72-01-SUMMARY.md)
 
 ### Phase 73: Retire GLViewport + Verification
 

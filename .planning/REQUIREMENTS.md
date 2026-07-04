@@ -73,7 +73,7 @@ Carry-forward constraints:
 
 ### Precise Object Picking
 
-- [ ] **GPICK-01:** Object picking on the default path uses ray-triangle (Möller-Trumbore) precision matching the GL path, replacing the current AABB-screen-rectangle approximation.
+- [x] **GPICK-01:** Object picking on the default path uses ray-triangle (Möller-Trumbore) precision matching the GL path, replacing the current AABB-screen-rectangle approximation.
 
 ### GLViewport Retirement
 
@@ -117,7 +117,7 @@ Carry-forward constraints:
 | GSCA-02 | Phase 70 | Complete |
 | GCUT-01 | Phase 71 | Complete |
 | GWT-01 | Phase 71 | Complete |
-| GPICK-01 | Phase 72 | Pending |
+| GPICK-01 | Phase 72 | Complete |
 | GRET-01 | Phase 73 | Pending |
 | GRET-02 | Phase 73 | Pending |
 

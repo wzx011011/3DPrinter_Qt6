@@ -227,8 +227,6 @@ private:
   void fitPreviewCameraToData();
   void updatePickingScene();
   int pickSourceObjectAt(const QPointF &position);
-  QRectF projectBoundsToScreenRect(const PrepareSceneData::ModelBounds &bounds,
-                                   float *depth) const;
   // Phase 69/70: gizmo-axis hit test and center derivation.
   int pickGizmoAxisAt(const QPointF &position);
   QVector3D currentGizmoCenter() const;
