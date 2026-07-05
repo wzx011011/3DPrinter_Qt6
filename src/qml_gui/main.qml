@@ -514,7 +514,8 @@ ApplicationWindow {
                 // 此 Item 仅占位以满足 StackLayout 9-slot 结构，不可见（visible 绑定 false）。
                 Item {
                     visible: false
-                    anchors.fill: parent
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
                 }
                 // Page 3 (tpDevice) — Monitor
                 MonitorPage {
@@ -522,6 +523,8 @@ ApplicationWindow {
                 }
                 // Page 4 (tpMultiDevice) — Multi-machine
                 Loader {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
                     active: backend.currentPage === backend.tpMultiDevice
                     sourceComponent: Component {
                         MultiMachinePage { multiMachineVm: backend.multiMachineViewModel }
@@ -529,6 +532,8 @@ ApplicationWindow {
                 }
                 // Page 5 (tpProject) — Project
                 Loader {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
                     active: backend.currentPage === backend.tpProject
                     sourceComponent: Component {
                         ProjectPage { projectVm: backend.projectViewModel; editorVm: backend.editorViewModel }
@@ -536,6 +541,8 @@ ApplicationWindow {
                 }
                 // Page 6 (tpCalibration) — Calibration
                 Loader {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
                     active: backend.currentPage === backend.tpCalibration
                     sourceComponent: Component {
                         CalibrationPage { calibrationVm: backend.calibrationViewModel }
@@ -543,6 +550,8 @@ ApplicationWindow {
                 }
                 // Page 7 (tpPlaceholder1) — AuxiliaryPage（v2.3 UI-02 挂载，原占位替换）
                 Loader {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
                     active: backend.currentPage === backend.tpPlaceholder1
                     sourceComponent: Component {
                         AuxiliaryPage {
@@ -554,6 +563,8 @@ ApplicationWindow {
                 // Page 8 (tpPlaceholder2) — reserved by upstream debug tooling; not exposed in navigation.
                 Item {
                     visible: false
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
                 }
             }
 

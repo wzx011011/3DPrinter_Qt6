@@ -29,15 +29,4 @@ TextArea {
         Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
         opacity: root.enabled ? 1.0 : 0.45
     }
-
-    ScrollBar.vertical: ScrollBar {
-        policy: ScrollBar.AsNeeded
-        contentItem: Rectangle {
-            implicitWidth: 8
-            implicitHeight: 100
-            radius: 4
-            opacity: parent.active ? 0.8 : 0.5
-            color: Theme.bgPressed
-        }
-    }
 }

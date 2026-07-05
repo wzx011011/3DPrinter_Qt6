@@ -62,6 +62,9 @@ private slots:
   void prepareWorkflowPanelsMatchRestorationContract();
   // Phase 77: Prepare viewport controls and gizmo panels must be icon-first.
   void prepareViewportControlsMatchRestorationContract();
+  // Phase 78: final Prepare cleanup must keep restored paths active and stale
+  // paths absent.
+  void prepareRestorationMilestoneHasCleanupCoverage();
   // Phase 55-04 (GCODE-04/05): source-audit guards for the SoftwareViewport
   // absence, the computePreviewDrawRanges role-skip block, and the
   // GcvPackedSegment sizeof wire-format lockstep.
@@ -1725,6 +1728,144 @@ void QmlUiAuditTests::prepareViewportControlsMatchRestorationContract()
                && preparePage.contains(QStringLiteral("viewport3d.gizmoMode === GLViewport.GizmoRotate"))
                && preparePage.contains(QStringLiteral("viewport3d.gizmoMode === GLViewport.GizmoScale")),
            "Transform mini panel must bind to move, rotate, and scale modes");
+}
+
+void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
+{
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  const QString dockableSidebar = readSource(QStringLiteral("src/qml_gui/panels/DockableSidebar.qml"));
+  const QString leftSidebar = readSource(QStringLiteral("src/qml_gui/panels/LeftSidebar.qml"));
+  const QString objectList = readSource(QStringLiteral("src/qml_gui/panels/ObjectList.qml"));
+  const QString sliceProgress = readSource(QStringLiteral("src/qml_gui/panels/SliceProgress.qml"));
+  const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
+  const QString cxTextArea = readSource(QStringLiteral("src/qml_gui/controls/CxTextArea.qml"));
+  const QString auditTests = readSource(QStringLiteral("tests/QmlUiAuditTests.cpp"));
+  QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+  QVERIFY2(!dockableSidebar.isEmpty(), "Unable to read DockableSidebar.qml");
+  QVERIFY2(!leftSidebar.isEmpty(), "Unable to read LeftSidebar.qml");
+  QVERIFY2(!objectList.isEmpty(), "Unable to read ObjectList.qml");
+  QVERIFY2(!sliceProgress.isEmpty(), "Unable to read SliceProgress.qml");
+  QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
+  QVERIFY2(!cxTextArea.isEmpty(), "Unable to read CxTextArea.qml");
+
+  const QStringList requiredQrcPaths = {
+    QStringLiteral("pages/PreparePage.qml"),
+    QStringLiteral("pages/Plater.qml"),
+    QStringLiteral("panels/LeftSidebar.qml"),
+    QStringLiteral("panels/ObjectList.qml"),
+    QStringLiteral("panels/SliceProgress.qml"),
+    QStringLiteral("panels/DockableSidebar.qml"),
+    QStringLiteral("components/GLToolbars.qml")
+  };
+  for (const QString &path : requiredQrcPaths) {
+    QVERIFY2(qrc.contains(path),
+             qPrintable(QStringLiteral("Restored Prepare QML path missing from qml.qrc: %1").arg(path)));
+  }
+
+  const QStringList deletedPreparePaths = {
+    QStringLiteral("panels/Sidebar.qml"),
+    QStringLiteral("panels/FilamentPanel.qml"),
+    QStringLiteral("panels/PrintSettings.qml"),
+    QStringLiteral("components/PrepareToolbar.qml"),
+    QStringLiteral("components/PrepareSidebar.qml"),
+    QStringLiteral("components/GLViewport.qml")
+  };
+  const QString qmlRoot = QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR))
+                              .filePath(QStringLiteral("src/qml_gui"));
+  for (const QString &path : deletedPreparePaths) {
+    QVERIFY2(!qrc.contains(path),
+             qPrintable(QStringLiteral("Deprecated Prepare QML path reintroduced in qml.qrc: %1").arg(path)));
+    const QString fullPath = QDir(qmlRoot).filePath(path);
+    QVERIFY2(!QFileInfo::exists(fullPath),
+             qPrintable(QStringLiteral("Deprecated Prepare QML file reappeared on disk: %1").arg(fullPath)));
+  }
+
+  const QStringList restoredStructureTokens = {
+    QStringLiteral("DockableSidebar {"),
+    QStringLiteral("GLViewport {"),
+    QStringLiteral("GLToolbars {"),
+    QStringLiteral("id: plateBar"),
+    QStringLiteral("id: transformMiniPanel")
+  };
+  for (const QString &token : restoredStructureTokens) {
+    QVERIFY2(preparePage.contains(token),
+             qPrintable(QStringLiteral("PreparePage lost restored structure token: %1").arg(token)));
+  }
+  QVERIFY2(dockableSidebar.contains(QStringLiteral("LeftSidebar {")),
+           "DockableSidebar must wrap the restored LeftSidebar path");
+  QVERIFY2(leftSidebar.contains(QStringLiteral("ObjectList {"))
+              && leftSidebar.contains(QStringLiteral("SliceProgress {")),
+           "LeftSidebar must compose the restored object list and slice progress panels");
+  QVERIFY2(leftSidebar.contains(QStringLiteral("onExportRequested: root.exportRequested()"))
+              && dockableSidebar.contains(QStringLiteral("onExportRequested: root.exportRequested()"))
+              && preparePage.contains(QStringLiteral("onExportRequested: root.openExportDialog()")),
+           "SliceProgress export must propagate to PreparePage.openExportDialog instead of exporting directly");
+  QVERIFY2(objectList.contains(QStringLiteral("objectListStatusPill")),
+           "ObjectList must keep the compact restored status pill");
+  QVERIFY2(sliceProgress.contains(QStringLiteral("primaryActionEnabled"))
+              && sliceProgress.contains(QStringLiteral("enabled: root.canSliceAll")),
+           "SliceProgress must keep backend-gated primary and slice-all controls");
+  QVERIFY2(glToolbars.contains(QStringLiteral("id: viewportActionToolbar"))
+              && glToolbars.contains(QStringLiteral("id: viewportGizmoToolbar"))
+              && glToolbars.contains(QStringLiteral("id: viewportViewControls")),
+           "GLToolbars must keep the restored top, right, and lower-left toolbar groups");
+
+  const QStringList removedViewportTokens = {
+    QStringLiteral("id: sliceButton"),
+    QStringLiteral("text: \">>\""),
+    QStringLiteral("label: \"P+\""),
+    QStringLiteral("label: \"AC\""),
+    QStringLiteral("label: \"SVG\"")
+  };
+  for (const QString &token : removedViewportTokens) {
+    QVERIFY2(!glToolbars.contains(token),
+             qPrintable(QStringLiteral("Legacy Prepare viewport token returned: %1").arg(token)));
+  }
+
+  const QStringList requiredAuditSlots = {
+    QStringLiteral("leftSidebarPresetControlsAreWiredAndHonest"),
+    QStringLiteral("prepareWorkflowActionsBindCppGates"),
+    QStringLiteral("prepareWorkflowPanelsMatchRestorationContract"),
+    QStringLiteral("prepareViewportControlsMatchRestorationContract"),
+    QStringLiteral("deletedSettingsPathsStayAbsent")
+  };
+  for (const QString &slotName : requiredAuditSlots) {
+    QVERIFY2(auditTests.contains(slotName),
+             qPrintable(QStringLiteral("Phase 78 requires existing audit slot to remain present: %1").arg(slotName)));
+  }
+
+  QVERIFY2(!cxTextArea.contains(QStringLiteral("ScrollBar.vertical")),
+           "CxTextArea must not attach ScrollBar.vertical directly to TextArea; Qt only accepts Flickable/ScrollView targets");
+  QVERIFY2(!dockableSidebar.contains(QStringLiteral("anchors.right: dragHandle.left")),
+           "DockableSidebar titleBar must not anchor to dragHandle because it is not a sibling");
+  const int plateBarStart = preparePage.indexOf(QStringLiteral("id: plateBar"));
+  const int objectInfoStart = preparePage.indexOf(QStringLiteral("id: objectInfoBar"));
+  QVERIFY2(plateBarStart >= 0 && objectInfoStart > plateBarStart,
+           "PreparePage must keep plateBar before objectInfoBar for the final overlay audit");
+  const QString plateBarBlock = preparePage.mid(plateBarStart, objectInfoStart - plateBarStart);
+  const QString objectInfoBlock = preparePage.mid(objectInfoStart, 700);
+  QVERIFY2(plateBarBlock.contains(QStringLiteral("parent: viewportArea"))
+              && plateBarBlock.contains(QStringLiteral("anchors.bottom: parent.bottom"))
+              && plateBarBlock.contains(QStringLiteral("anchors.left: parent.left"))
+              && plateBarBlock.contains(QStringLiteral("anchors.right: parent.right"))
+              && !plateBarBlock.contains(QStringLiteral("anchors.left: viewportArea.left"))
+              && !plateBarBlock.contains(QStringLiteral("anchors.right: viewportArea.right"))
+              && objectInfoBlock.contains(QStringLiteral("parent: viewportArea"))
+              && objectInfoBlock.contains(QStringLiteral("anchors.bottom: parent.bottom"))
+              && objectInfoBlock.contains(QStringLiteral("anchors.left: parent.left"))
+              && !objectInfoBlock.contains(QStringLiteral("anchors.left: viewportArea.left")),
+           "Prepare bottom overlays must be reparented into viewportArea before anchoring to viewportArea items");
+  QVERIFY2(!previewPage.contains(QStringLiteral("parent.height * 0.34")),
+           "Preview right panel must not use parent.height in a Layout.preferredHeight expression");
+  QVERIFY2(!mainQml.contains(QStringLiteral("anchors.fill: parent\n                }\n                // Page 3"))
+              && mainQml.contains(QStringLiteral("Layout.fillWidth: true\n                    Layout.fillHeight: true")),
+           "StackLayout children should use Layout fill constraints instead of anchors.fill");
 }
 
 void QmlUiAuditTests::previewPageNeverReferencesSoftwareViewport()

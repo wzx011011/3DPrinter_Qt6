@@ -37,6 +37,7 @@ Item {
     required property int sidebarWidth      // 当前宽度（展开时）
     required property int minWidth
     required property int maxWidth
+    signal exportRequested()
 
     // 宽度：折叠时为 0（viewportArea 独占），展开时为 sidebarWidth
     implicitWidth: collapsed ? 0 : sidebarWidth
@@ -64,7 +65,8 @@ Item {
             id: titleBar
             anchors.top: parent.top
             anchors.left: parent.left
-            anchors.right: dragHandle.left
+            anchors.right: parent.right
+            anchors.rightMargin: dragHandle.width
             height: 28
 
             Text {
@@ -106,6 +108,7 @@ Item {
             editorVm: root.editorVm
             configVm: root.configVm
             processCategory: root.processCategory
+            onExportRequested: root.exportRequested()
         }
     }
 

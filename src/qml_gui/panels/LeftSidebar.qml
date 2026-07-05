@@ -13,6 +13,7 @@ Rectangle {
     required property var editorVm
     required property var configVm
     property string processCategory: ""
+    signal exportRequested()
     property string paramsCurrentTab: "Quality"
     property string paramsSearchText: ""
     readonly property var paramsOptionModel: {
@@ -664,6 +665,27 @@ Rectangle {
 
             // -- Section 6: ObjectSettings (SIDEBAR-13, 选中对象的快速设置, 无选中隐藏) --
             // 对齐上游 ObjectSettings: 选中对象时显示层高/填充/速度等快速设置
+            CollapsibleSection {
+                id: sliceProgressSection
+                Layout.fillWidth: true
+                compact: true
+                title: qsTr("切片")
+                expanded: true
+
+                content: ColumnLayout {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    spacing: 0
+
+                    SliceProgress {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 620
+                        editorVm: root.editorVm
+                        onExportRequested: root.exportRequested()
+                    }
+                }
+            }
+
             CollapsibleSection {
                 id: objectSettingsSection
                 Layout.fillWidth: true

@@ -259,7 +259,8 @@ Item {
 
                         ScrollView {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Math.min(300, parent.height * 0.34)
+                            Layout.preferredHeight: 300
+                            Layout.maximumHeight: 300
                             clip: true
                             contentWidth: availableWidth
 

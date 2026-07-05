@@ -12,9 +12,9 @@
 - Automated verification passed, visual UAT not closed: **v3.6 Screenshot-Driven OrcaSlicer UI Restoration** - Phases 50-58 (shipped 2026-07-03)
 - Complete with residual gaps: **v3.7 Screenshot-Level UI Parity Closure** - Phases 59-64 (2026-07-04; D3D12 and manual visual debt carried forward)
 - Complete with tech debt: **v3.8 RHI Gizmo Parity** - Phases 65-73 (shipped 2026-07-04; 21/21 requirements satisfied, Phase 68 visual evidence deferred)
-- Active: **v3.9 Prepare Page UI Restoration** - Phases 74-78
+- Complete: **v3.9 Prepare Page UI Restoration** - Phases 74-78 (shipped 2026-07-05; canonical verifier passed, runtime screenshot captured)
 
-## Active Milestone: v3.9 Prepare Page UI Restoration
+## Completed Milestone: v3.9 Prepare Page UI Restoration
 
 **Goal:** Restore the Prepare page to screenshot-level OrcaSlicer parity using `shotScreen/` as visual truth and OrcaSlicer GUI source as behavior truth.
 
@@ -24,7 +24,7 @@
 - [x] Phase 75: Prepare Sidebar Restoration (completed 2026-07-05)
 - [x] Phase 76: Prepare Workflow Panels Restoration (completed 2026-07-05)
 - [x] Phase 77: Prepare Viewport Controls And Gizmo UI (completed 2026-07-05)
-- [ ] Phase 78: Prepare Verification And Cleanup
+- [x] Phase 78: Prepare Verification And Cleanup (completed 2026-07-05)
 
 | Phase | Name | Goal | Requirements |
 |---|---|---|---|
@@ -32,7 +32,7 @@
 | 75 | Prepare Sidebar Restoration | Complete 2026-07-05: restored compact sidebar width/density, filament rows, localized option source labels, and preset/settings wiring. | SIDE-01, SIDE-02, SIDE-03 |
 | 76 | Prepare Workflow Panels Restoration | Complete 2026-07-05: restored compact object/volume list density, compact plate strip state display, and honest slice/cancel/export readiness surfaces. | OBJ-01, PLATEUI-01, STATUS-01 |
 | 77 | Prepare Viewport Controls And Gizmo UI | Complete 2026-07-05: restored icon-first viewport toolbars, compact view controls, and mode-based gizmo panel placement. | VIEWUI-01, GIZMOUI-01 |
-| 78 | Prepare Verification And Cleanup | Remove deprecated Prepare UI paths and verify with audits, canonical build, app launch, and visual evidence. | CLEAN-01, VERIFY-01, VERIFY-02 |
+| 78 | Prepare Verification And Cleanup | Complete 2026-07-05: removed stale/disconnected Prepare paths, fixed startup QML warnings, passed canonical verifier, launched app, and captured runtime visual evidence. | CLEAN-01, VERIFY-01, VERIFY-02 |
 
 ### Phase 74: Prepare Source-Truth Gap Audit
 
@@ -87,6 +87,12 @@ Success criteria:
 3. Default RHI interaction remains functional while UI restoration changes presentation.
 
 ### Phase 78: Prepare Verification And Cleanup
+
+**Status:** Complete (2026-07-05)
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] `78-01-PLAN.md` - Prepare final cleanup and verification
 
 Success criteria:
 1. Replaced Prepare UI paths leave no stale files, imports, resource entries, tests, or disconnected controls.
@@ -145,12 +151,12 @@ Requirements: `.planning/milestones/v3.8-REQUIREMENTS.md`
 
 ## Next Step
 
-Plan Phase 78:
+v3.9 is complete. Prepare the next milestone:
 
 ```text
-$gsd-plan-phase 78
+$gsd-new-milestone
 ```
 
 ---
 
-*Last updated: 2026-07-05 after Phase 77 viewport controls and gizmo UI restoration.*
+*Last updated: 2026-07-05 after Phase 78 Prepare verification and cleanup.*

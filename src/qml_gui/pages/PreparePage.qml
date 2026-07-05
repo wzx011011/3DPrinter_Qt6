@@ -1611,6 +1611,7 @@ Item {
                 _isRightDocked: root.sidebarDockArea === 1   // sdaRight
                 toggleRequested: root.sidebarToggleRequested
                 widthChanged: root.sidebarWidthChanged
+                onExportRequested: root.openExportDialog()
                 visible: root.leftPanelVisible
             }
 
@@ -3071,11 +3072,12 @@ Item {
         Rectangle {
             id: plateBar
             visible: root.editorVm && root.editorVm.plateCount > 0
+            parent: viewportArea
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 10
-            anchors.left: viewportArea.left
+            anchors.left: parent.left
             anchors.leftMargin: 14
-            anchors.right: viewportArea.right
+            anchors.right: parent.right
             anchors.rightMargin: 14
             height: 44
             color: "transparent"
@@ -3249,9 +3251,10 @@ Item {
             id: objectInfoBar
             visible: root.editorVm && root.editorVm.selectedObjectCount === 1
                      && root.editorVm.selectedObjectInfoText !== ""
+            parent: viewportArea
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 52
-            anchors.left: viewportArea.left
+            anchors.left: parent.left
             anchors.leftMargin: 14
             height: infoRow.implicitHeight + 10
             width: infoRow.implicitWidth + 16

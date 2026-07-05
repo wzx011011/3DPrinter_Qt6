@@ -28,9 +28,9 @@
 
 ### Cleanup and Verification
 
-- [ ] **CLEAN-01**: Deprecated Prepare page components, imports, resource entries, tests, or disconnected UI paths are removed when replaced by the restored implementation.
-- [ ] **VERIFY-01**: Automated source/QML audits cover the restored Prepare bindings, absence of visible placeholders, and required upstream mapping evidence.
-- [ ] **VERIFY-02**: Final milestone verification runs the canonical build command, launches `build/OWzxSlicer.exe`, and records Prepare page visual evidence against the target screenshot.
+- [x] **CLEAN-01**: Deprecated Prepare page components, imports, resource entries, tests, or disconnected UI paths are removed when replaced by the restored implementation.
+- [x] **VERIFY-01**: Automated source/QML audits cover the restored Prepare bindings, absence of visible placeholders, and required upstream mapping evidence.
+- [x] **VERIFY-02**: Final milestone verification runs the canonical build command, launches `build/OWzxSlicer.exe`, and records Prepare page visual evidence against the target screenshot.
 
 ## Future Requirements
 
@@ -69,9 +69,9 @@ Explicitly excluded to keep v3.9 focused.
 | STATUS-01 | Phase 76 | Complete |
 | VIEWUI-01 | Phase 77 | Complete |
 | GIZMOUI-01 | Phase 77 | Complete |
-| CLEAN-01 | Phase 78 | Pending |
-| VERIFY-01 | Phase 78 | Pending |
-| VERIFY-02 | Phase 78 | Pending |
+| CLEAN-01 | Phase 78 | Complete |
+| VERIFY-01 | Phase 78 | Complete |
+| VERIFY-02 | Phase 78 | Complete |
 
 **Coverage:**
 - v3.9 requirements: 12 total
@@ -80,4 +80,4 @@ Explicitly excluded to keep v3.9 focused.
 
 ---
 *Requirements defined: 2026-07-05*
-*Last updated: 2026-07-05 after Phase 77 viewport controls and gizmo UI restoration*
+*Last updated: 2026-07-05 after Phase 78 Prepare verification and cleanup*
