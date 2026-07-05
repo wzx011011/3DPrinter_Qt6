@@ -40,8 +40,10 @@ private slots:
   void previewLayoutRestoresScreenshotRegionsAndGcodePanel();
   void previewStatsPanelCallsOnlyQmlInvokableSetters();
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
+  void rhiViewportModelDragOrbitsAfterClickThreshold();
   void rhiMoveGizmoDragBridgeStaysCppOwned();
   void rhiRotateScaleGizmoBridgeStaysCppOwned();
+  void rhiGizmosRenderAsDepthIndependentOverlay();
   void rhiCutPlaneAndWipeTowerStayCppOwned();
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
@@ -1084,6 +1086,24 @@ void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
            "Selection/hover changes must not reupload the full model vertex buffer");
 }
 
+void QmlUiAuditTests::rhiViewportModelDragOrbitsAfterClickThreshold()
+{
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+
+  const int moveStart = viewportSource.indexOf(QStringLiteral("void RhiViewport::mouseMoveEvent"));
+  const int releaseStart = viewportSource.indexOf(QStringLiteral("\nvoid RhiViewport::mouseReleaseEvent"), moveStart);
+  QVERIFY2(moveStart >= 0 && releaseStart > moveStart,
+           "RhiViewport mouseMoveEvent body must stay discoverable for drag/orbit audit");
+  const QString moveBlock = viewportSource.mid(moveStart, releaseStart - moveStart);
+
+  QVERIFY2(moveBlock.contains(QStringLiteral("const bool becameDrag"))
+               && moveBlock.contains(QStringLiteral("std::hypot"))
+               && moveBlock.contains(QStringLiteral("m_pressPickedSourceObjectIndex = -1"))
+               && moveBlock.contains(QStringLiteral("m_camera.orbit")),
+           "Model-surface left drags must orbit after the click threshold instead of only pinning hover");
+}
+
 void QmlUiAuditTests::rhiMoveGizmoDragBridgeStaysCppOwned()
 {
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
@@ -1174,6 +1194,15 @@ void QmlUiAuditTests::rhiRotateScaleGizmoBridgeStaysCppOwned()
                && rendererSource.contains(QStringLiteral("renderRotateGizmo(cb)"))
                && rendererSource.contains(QStringLiteral("renderScaleGizmo(cb)")),
            "RhiViewportRenderer must upload and draw rotate/scale gizmo geometry");
+  QVERIFY2(rendererSource.contains(QStringLiteral("verts.reserve(moveVerts.size() + rotateVerts.size() + scaleVerts.size())")),
+           "RhiViewportRenderer must reserve the combined gizmo vertex count before GPU upload");
+
+  const QString geometrySource = readSource(QStringLiteral("src/core/rendering/GizmoGeometry.cpp"));
+  QVERIFY2(!geometrySource.isEmpty(), "Unable to read GizmoGeometry.cpp");
+  QVERIFY2(geometrySource.contains(QStringLiteral("verts.reserve(3 * kRotateVertsPerRing);")),
+           "Rotate gizmo geometry must reserve vertex count, not byte count");
+  QVERIFY2(!geometrySource.contains(QStringLiteral("kRotateVertsPerRing * int(sizeof(GizmoVertex))")),
+           "Rotate gizmo geometry must not multiply reserve count by sizeof(GizmoVertex)");
 
   QVERIFY2(preparePage.contains(QStringLiteral("onGizmoRotateRequested: function(axis, radians)"))
                && preparePage.contains(QStringLiteral("root.editorVm.applyGizmoRotateDelta(axis, radians)"))
@@ -1194,6 +1223,24 @@ void QmlUiAuditTests::rhiRotateScaleGizmoBridgeStaysCppOwned()
     QVERIFY2(!preparePage.contains(token),
              qPrintable(QStringLiteral("PreparePage must not own rotate/scale gizmo math token: %1").arg(token)));
   }
+}
+
+void QmlUiAuditTests::rhiGizmosRenderAsDepthIndependentOverlay()
+{
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+
+  const int pipelineStart = rendererSource.indexOf(QStringLiteral("bool RhiViewportRenderer::ensureGizmoPipeline"));
+  const int renderStart = rendererSource.indexOf(QStringLiteral("\nvoid RhiViewportRenderer::renderMoveGizmo"), pipelineStart);
+  QVERIFY2(pipelineStart >= 0 && renderStart > pipelineStart,
+           "RhiViewportRenderer ensureGizmoPipeline body must stay discoverable for overlay audit");
+  const QString pipelineBlock = rendererSource.mid(pipelineStart, renderStart - pipelineStart);
+
+  QVERIFY2(pipelineBlock.contains(QStringLiteral("pipe->setDepthTest(false)"))
+               && pipelineBlock.contains(QStringLiteral("pipe->setDepthWrite(false)")),
+           "RHI gizmo pipelines must render as overlays: no depth test and no depth writes");
+  QVERIFY2(!pipelineBlock.contains(QStringLiteral("pipe->setDepthTest(true)")),
+           "RHI gizmo pipelines must not test against model depth already written earlier in the pass");
 }
 
 void QmlUiAuditTests::rhiCutPlaneAndWipeTowerStayCppOwned()

@@ -987,10 +987,10 @@ bool RhiViewportRenderer::ensureGizmoPipeline()
     pipe->setShaderResourceBindings(m_srb.get());
     pipe->setVertexInputLayout(inputLayout);
     pipe->setRenderPassDescriptor(m_renderPassDescriptor);
-    // Gizmo tests depth (occludes behind itself correctly) but does NOT write
-    // depth, so it stays visible through objects drawn after it. Matches the
-    // GL path's glClear(GL_DEPTH_BUFFER_BIT) before each gizmo render.
-    pipe->setDepthTest(true);
+    // Gizmos are overlays. The model has already populated the depth buffer
+    // in this pass, so testing depth here would hide axes inside the selected
+    // object instead of matching the legacy GL depth-clear behavior.
+    pipe->setDepthTest(false);
     pipe->setDepthWrite(false);
     pipe->setTargetBlends({});
     if (!pipe->create())
@@ -1008,7 +1008,7 @@ bool RhiViewportRenderer::ensureGizmoPipeline()
     return false;
 
   m_gizmoPipelineCreated = true;
-  qInfo("[RHI] gizmo pipelines created (lines + triangles, no-depth-write)");
+  qInfo("[RHI] gizmo pipelines created (lines + triangles, depth-independent overlay)");
   return true;
 }
 

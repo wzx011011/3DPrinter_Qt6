@@ -542,8 +542,16 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
   const QPointF delta = event->position() - m_lastMousePosition;
   if (m_dragButton == Qt::LeftButton) {
     if (m_pressPickedSourceObjectIndex >= 0) {
-      setHoveredSourceObjectIndex(m_pressPickedSourceObjectIndex);
-    } else {
+      const QPointF pressDelta = event->position() - m_pressPosition;
+      const bool becameDrag = std::hypot(pressDelta.x(), pressDelta.y()) > 4.0;
+      if (!becameDrag) {
+        setHoveredSourceObjectIndex(m_pressPickedSourceObjectIndex);
+      } else {
+        m_pressPickedSourceObjectIndex = -1;
+        setHoveredSourceObjectIndex(pickSourceObjectAt(event->position()));
+      }
+    }
+    if (m_pressPickedSourceObjectIndex < 0) {
       m_camera.orbit(float(delta.x()) * 0.5f, -float(delta.y()) * 0.5f);
       m_cameraDirty = true;
       update();

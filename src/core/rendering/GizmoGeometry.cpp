@@ -256,7 +256,7 @@ QVector<GizmoVertex>
 GizmoGeometry::buildRotateGizmoVertices(GizmoGeometryOffsets *out)
 {
   QVector<GizmoVertex> verts;
-  verts.reserve(3 * kRotateVertsPerRing * int(sizeof(GizmoVertex)));
+  verts.reserve(3 * kRotateVertsPerRing);
 
   // Generate a torus ring in a specific plane.
   // axisIndex: 0=X (YZ plane), 1=Y (XZ plane), 2=Z (XY plane)

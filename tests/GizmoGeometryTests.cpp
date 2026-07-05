@@ -13,6 +13,8 @@
 // or re-run cmake configure (the canonical verify script does this).
 
 #include <QtTest>
+#include <QDir>
+#include <QFile>
 #include <QVector>
 #include <QVector3D>
 
@@ -187,6 +189,16 @@ void GizmoGeometryTests::testMoveGizmoOffsets()
 
 void GizmoGeometryTests::testRotateGizmoVertexCount()
 {
+  const QFile geometrySource(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)).filePath(
+      QStringLiteral("src/core/rendering/GizmoGeometry.cpp")));
+  QVERIFY2(geometrySource.open(QIODevice::ReadOnly | QIODevice::Text),
+           "Unable to read GizmoGeometry.cpp");
+  const QString source = QString::fromUtf8(geometrySource.readAll());
+  QVERIFY2(source.contains(QStringLiteral("verts.reserve(3 * kRotateVertsPerRing);")),
+           "Rotate gizmo reserve must use vertex count, not byte count");
+  QVERIFY2(!source.contains(QStringLiteral("kRotateVertsPerRing * int(sizeof(GizmoVertex))")),
+           "Rotate gizmo reserve must not multiply the vertex count by sizeof(GizmoVertex)");
+
   auto verts = GizmoGeometry::buildRotateGizmoVertices();
   // 3 rings x 48 segments x 6 sides x 6 verts = 5184.
   QCOMPARE(verts.size(), 5184);
