@@ -3014,7 +3014,7 @@ Item {
             anchors.leftMargin: 14
             anchors.right: viewportArea.right
             anchors.rightMargin: 14
-            height: 62
+            height: 44
             color: "transparent"
 
             RowLayout {
@@ -3026,7 +3026,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     orientation: ListView.Horizontal
-                    spacing: 6
+                    spacing: 4
                     clip: true
                     model: root.editorVm ? root.editorVm.plateCount : 0
 
@@ -3034,9 +3034,9 @@ Item {
                         required property int index
                         property bool dragHover: false
                         readonly property int sliceResultStatus: root.editorVm ? root.editorVm.plateSliceResultStatus(index) : 0
-                        width: 120
+                        width: 86
                         height: plateListView.height
-                        radius: 8
+                        radius: 4
                         readonly property bool isCurrent: root.editorVm && !root.editorVm.showAllObjects && root.editorVm.currentPlateIndex === index
                         color: dragHover ? Theme.accentSubtle
                             : isCurrent ? Theme.accentSubtle
@@ -3048,15 +3048,15 @@ Item {
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 6
-                            anchors.rightMargin: 6
-                            spacing: 6
+                            anchors.leftMargin: 4
+                            anchors.rightMargin: 4
+                            spacing: 4
 
                             // Thumbnail
                             Rectangle {
-                                width: 40
-                                height: 40
-                                radius: 4
+                                width: 28
+                                height: 28
+                                radius: 3
                                 color: Theme.bgElevated
                                 border.width: 1
                                 border.color: Theme.borderSubtle
@@ -3064,7 +3064,7 @@ Item {
 
                                 Image {
                                     anchors.fill: parent
-                                    anchors.margins: 2
+                                    anchors.margins: 1
                                     fillMode: Image.PreserveAspectFit
                                     smooth: true
                                     source: {
@@ -3085,7 +3085,7 @@ Item {
                                     Layout.fillWidth: true
                                     text: root.editorVm ? root.editorVm.plateName(index) : ""
                                     color: isCurrent ? Theme.accent : Theme.textPrimary
-                                    font.pixelSize: 10
+                                    font.pixelSize: 9
                                     font.bold: isCurrent
                                     elide: Text.ElideRight
                                 }
@@ -3094,15 +3094,27 @@ Item {
                                     text: root.editorVm
                                         ? qsTr("%1 对象").arg(root.editorVm.plateObjectCount(index))
                                         : ""
-                                    color: Theme.textSecondary
-                                    font.pixelSize: 9
+                                    color: Theme.textTertiary
+                                    font.pixelSize: 8
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    id: plateStateText
+                                    Layout.fillWidth: true
+                                    text: sliceResultStatus === 1 ? qsTr("Sliced")
+                                        : sliceResultStatus === 2 ? qsTr("Stale")
+                                        : qsTr("Ready")
+                                    color: sliceResultStatus === 1 ? Theme.accent
+                                        : sliceResultStatus === 2 ? Theme.statusWarning
+                                        : Theme.textDisabled
+                                    font.pixelSize: 8
                                     elide: Text.ElideRight
                                 }
                             }
 
                             Rectangle {
                                 visible: sliceResultStatus !== 0
-                                width: 6; height: 6; radius: 3
+                                width: 5; height: 5; radius: 3
                                 color: sliceResultStatus === 1 ? Theme.accent : Theme.statusWarning
                                 opacity: 0.8
                             }
@@ -3143,9 +3155,9 @@ Item {
                 // Add plate button
                 Rectangle {
                     visible: root.editorVm && root.editorVm.canAddPlate
-                    width: 30
-                    height: 30
-                    radius: 6
+                    width: 26
+                    height: 26
+                    radius: 4
                     color: addPlateMA.containsMouse ? Theme.bgHover : Theme.bgElevated
                     border.width: 1
                     border.color: Theme.borderSubtle
@@ -3175,7 +3187,7 @@ Item {
             visible: root.editorVm && root.editorVm.selectedObjectCount === 1
                      && root.editorVm.selectedObjectInfoText !== ""
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: 44
+            anchors.bottomMargin: 52
             anchors.left: viewportArea.left
             anchors.leftMargin: 14
             height: infoRow.implicitHeight + 10

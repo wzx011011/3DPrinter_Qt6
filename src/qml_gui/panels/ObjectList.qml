@@ -12,6 +12,10 @@ Item {
     required property var editorVm
     property bool showToolbar: true
     property bool showImportButton: true
+    readonly property int objectRowHeight: 38
+    readonly property int volumeRowHeight: 26
+    readonly property int groupHeaderHeight: 18
+    readonly property int rowRadius: 4
 
     // ── 顶部工具栏 ──────────────────────────────────────────────
     Rectangle {
@@ -246,7 +250,7 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: -1
-                radius: 12
+                radius: root.rowRadius
                 color: row.dragHover ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.08) : "transparent"
                 border.width: (listView.dragSourceIndex >= 0 && listView.dragSourceIndex !== row.index) ? 2 : 0
                 border.color: row.dragHover ? Theme.accent : Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.4)
@@ -569,8 +573,8 @@ Item {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                height: 20
-                radius: 8
+                height: root.groupHeaderHeight
+                radius: root.rowRadius
                 visible: row.showGroupHeader
                 color: "#111722"
                 border.width: 1
@@ -578,9 +582,9 @@ Item {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 8
-                    anchors.rightMargin: 8
-                    spacing: 6
+                    anchors.leftMargin: 6
+                    anchors.rightMargin: 6
+                    spacing: 4
 
                     Text {
                         text: row.groupExpanded ? "-" : "+"
@@ -631,14 +635,14 @@ Item {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: groupHeader.visible ? groupHeader.bottom : parent.top
-                height: 54
-                radius: 10
+                height: root.objectRowHeight
+                radius: root.rowRadius
                 color: row.isSelected ? Theme.accentSubtle
                      : selMA.containsMouse ? Theme.bgHover
                      : "transparent"
                 Rectangle {
                     // 左侧选中指示条
-                    width: 3; height: parent.height - 10
+                    width: 3; height: parent.height - 8
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.leftMargin: 2
@@ -653,15 +657,15 @@ Item {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: groupHeader.visible ? groupHeader.bottom : parent.top
-                anchors.leftMargin: 12
-                anchors.rightMargin: 6
-                spacing: 8
+                anchors.leftMargin: 10
+                anchors.rightMargin: 4
+                spacing: 6
 
                     Rectangle {
                         visible: row.hasVolumeChildren
-                        width: 16
-                        height: 16
-                        radius: 5
+                        width: 14
+                        height: 14
+                        radius: 3
                         color: objectExpandMA.containsMouse ? Theme.bgHover : "transparent"
 
                         Text {
@@ -686,14 +690,14 @@ Item {
 
                     Item {
                         visible: !row.hasVolumeChildren
-                        width: visible ? 16 : 0
-                        height: 16
+                        width: visible ? 14 : 0
+                        height: 14
                     }
 
                 // 可见性切换小圆点
                 Rectangle {
-                    width: 9; height: 9; radius: 5
-                    color: row.objPrintable ? Theme.accent : Theme.bgPressed
+                    width: 8; height: 8; radius: 4
+                    color: row.objPrintable ? Theme.accent : Theme.textDisabled
                     MouseArea {
                         anchors.fill: parent
                         z: 2
@@ -713,7 +717,7 @@ Item {
                 // 文件名与 plate 信息
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 2
+                    spacing: 1
 
                     // Name display / inline rename (对齐上游 GUI_ObjectList rename_item)
                     CxTextField {
@@ -721,7 +725,7 @@ Item {
                         Layout.fillWidth: true
                         visible: row.renaming
                         text: row.renameText
-                        font.pixelSize: 12
+                        font.pixelSize: 11
                         onAccepted: {
                             if (root.editorVm && row.renameText.trim().length > 0) {
                                 root.editorVm.renameObject(row.index, row.renameText.trim())
@@ -745,43 +749,44 @@ Item {
                         visible: !row.renaming
                         text: root.editorVm ? root.editorVm.objectName(row.index) : ""
                         color: row.isSelected ? Theme.textPrimary : "#bbc7d4"
-                        font.pixelSize: 12
+                        font.pixelSize: 11
                         elide: Text.ElideRight
                     }
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 6
+                        spacing: 4
                         visible: row.plateLabel.length > 0 || !row.objPrintable
                                  || (root.editorVm && root.editorVm.objectOrganizeMode === 0 && row.moduleLabel.length > 0)
 
                         Rectangle {
+                            id: objectListStatusPill
                             visible: row.plateLabel.length > 0
-                            radius: 6
+                            radius: 3
                             color: "#243247"
                             border.width: 1
                             border.color: Theme.borderSubtle
-                            implicitWidth: plateText.implicitWidth + 10
-                            implicitHeight: 18
+                            implicitWidth: plateText.implicitWidth + 8
+                            implicitHeight: 16
 
                             Text {
                                 id: plateText
                                 anchors.centerIn: parent
                                 text: row.plateLabel
                                 color: Theme.textSecondary
-                                font.pixelSize: 9
+                                font.pixelSize: 8
                                 font.bold: true
                             }
                         }
 
                         Rectangle {
                             visible: root.editorVm && root.editorVm.objectOrganizeMode === 0 && row.moduleLabel.length > 0
-                            radius: 6
+                            radius: 3
                             color: "#1f2937"
                             border.width: 1
                             border.color: Theme.borderSubtle
-                            implicitWidth: moduleText.implicitWidth + 10
-                            implicitHeight: 18
+                            implicitWidth: moduleText.implicitWidth + 8
+                            implicitHeight: 16
 
                             Text {
                                 id: moduleText
@@ -833,10 +838,10 @@ Item {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: baseBlock.bottom
-                anchors.topMargin: row.groupExpanded && row.objectExpanded && row.hasVolumeChildren ? 4 : 0
-                leftPadding: 24
-                rightPadding: 6
-                spacing: 4
+                anchors.topMargin: row.groupExpanded && row.objectExpanded && row.hasVolumeChildren ? 2 : 0
+                leftPadding: 22
+                rightPadding: 4
+                spacing: 2
                 visible: row.groupExpanded && row.objectExpanded && row.hasVolumeChildren
 
                 Repeater {
@@ -846,10 +851,10 @@ Item {
                         required property int index
                         readonly property bool isSelected: root.editorVm && root.editorVm.isVolumeSelected(row.index, index)
                         width: childColumn.width - childColumn.leftPadding - childColumn.rightPadding
-                        height: 34
-                        radius: 9
-                        color: isSelected ? Theme.accentSubtle : Theme.bgElevated
-                        border.width: 1
+                        height: root.volumeRowHeight
+                        radius: root.rowRadius
+                        color: isSelected ? Theme.accentSubtle : "transparent"
+                        border.width: isSelected ? 1 : 0
                         border.color: isSelected ? Theme.accent : Theme.borderSubtle
 
                         CxMenu {
@@ -1024,13 +1029,13 @@ Item {
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 12
-                            anchors.rightMargin: 10
-                            spacing: 8
+                            anchors.leftMargin: 9
+                            anchors.rightMargin: 6
+                            spacing: 6
 
                             Rectangle {
-                                width: 6
-                                height: 6
+                                width: 5
+                                height: 5
                                 radius: 3
                                 color: {
                                     if (isSelected) return Theme.accent;
@@ -1048,39 +1053,39 @@ Item {
                                 Layout.fillWidth: true
                                 text: root.editorVm ? root.editorVm.objectVolumeName(row.index, index) : ""
                                 color: isSelected ? Theme.textPrimary : Theme.textSecondary
-                                font.pixelSize: 11
+                                font.pixelSize: 10
                                 elide: Text.ElideRight
                             }
 
                             Rectangle {
                                 visible: root.editorVm && root.editorVm.objectVolumeTypeLabel(row.index, index).length > 0
-                                radius: 6
+                                radius: 3
                                 color: "#1d2735"
                                 border.width: 1
                                 border.color: Theme.borderSubtle
-                                implicitWidth: volumeTypeText.implicitWidth + 10
-                                implicitHeight: 18
+                                implicitWidth: volumeTypeText.implicitWidth + 8
+                                implicitHeight: 16
 
                                 Text {
                                     id: volumeTypeText
                                     anchors.centerIn: parent
                                     text: root.editorVm ? root.editorVm.objectVolumeTypeLabel(row.index, index) : ""
                                     color: Theme.textDisabled
-                                    font.pixelSize: 9
+                                    font.pixelSize: 8
                                 }
                             }
 
                             Rectangle {
-                                width: 20
-                                height: 20
-                                radius: 6
+                                width: 18
+                                height: 18
+                                radius: 3
                                 color: volumeDeleteMA.containsMouse ? "#7d2020" : "transparent"
 
                                 Text {
                                     anchors.centerIn: parent
                                     text: "✕"
                                     color: volumeDeleteMA.containsMouse ? "#ffaaaa" : Theme.textDisabled
-                                    font.pixelSize: 10
+                                    font.pixelSize: 9
                                 }
 
                                 MouseArea {

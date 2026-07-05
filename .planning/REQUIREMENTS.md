@@ -7,19 +7,19 @@
 
 ### Source-Truth Inventory
 
-- [ ] **AUDIT-01**: User-facing Prepare page work has a single current inventory that maps screenshot-visible regions to OrcaSlicer source files, Qt targets, replacement decisions, and verification evidence.
+- [x] **AUDIT-01**: User-facing Prepare page work has a single current inventory that maps screenshot-visible regions to OrcaSlicer source files, Qt targets, replacement decisions, and verification evidence.
 
 ### Prepare Sidebar
 
-- [ ] **SIDE-01**: User can read and switch the screenshot-visible printer, filament, and process preset controls in a dense upstream-like Prepare sidebar layout.
-- [ ] **SIDE-02**: User sees upstream-mapped display names and translated labels for visible Prepare option rows instead of raw internal config keys where the UI exposes user-facing setting names.
-- [ ] **SIDE-03**: User can use Global, Object, and Plate scope controls, search/filter affordances, dirty state indicators, and settings entry points without visible placeholder or unavailable rows.
+- [x] **SIDE-01**: User can read and switch the screenshot-visible printer, filament, and process preset controls in a dense upstream-like Prepare sidebar layout.
+- [x] **SIDE-02**: User sees upstream-mapped display names and translated labels for visible Prepare option rows instead of raw internal config keys where the UI exposes user-facing setting names.
+- [x] **SIDE-03**: User can use Global, Object, and Plate scope controls, search/filter affordances, dirty state indicators, and settings entry points without visible placeholder or unavailable rows.
 
 ### Object, Plate, and Status Workflow
 
-- [ ] **OBJ-01**: User can inspect and select objects/volumes from a screenshot-aligned Prepare object list panel with correct empty, selected, disabled, and action states.
-- [ ] **PLATEUI-01**: User can select, add, and inspect plates from a screenshot-aligned plate strip that reflects the active plate and multi-plate state.
-- [ ] **STATUS-01**: User can start, cancel, and observe slicing/export readiness through Prepare page controls and status surfaces without dead buttons or misleading availability.
+- [x] **OBJ-01**: User can inspect and select objects/volumes from a screenshot-aligned Prepare object list panel with correct empty, selected, disabled, and action states.
+- [x] **PLATEUI-01**: User can select, add, and inspect plates from a screenshot-aligned plate strip that reflects the active plate and multi-plate state.
+- [x] **STATUS-01**: User can start, cancel, and observe slicing/export readiness through Prepare page controls and status surfaces without dead buttons or misleading availability.
 
 ### Viewport, Toolbars, and Gizmos
 
@@ -60,13 +60,13 @@ Explicitly excluded to keep v3.9 focused.
 
 | Requirement | Phase | Status |
 |---|---|---|
-| AUDIT-01 | Phase 74 | Pending |
-| SIDE-01 | Phase 75 | Pending |
-| SIDE-02 | Phase 75 | Pending |
-| SIDE-03 | Phase 75 | Pending |
-| OBJ-01 | Phase 76 | Pending |
-| PLATEUI-01 | Phase 76 | Pending |
-| STATUS-01 | Phase 76 | Pending |
+| AUDIT-01 | Phase 74 | Complete |
+| SIDE-01 | Phase 75 | Complete |
+| SIDE-02 | Phase 75 | Complete |
+| SIDE-03 | Phase 75 | Complete |
+| OBJ-01 | Phase 76 | Complete |
+| PLATEUI-01 | Phase 76 | Complete |
+| STATUS-01 | Phase 76 | Complete |
 | VIEWUI-01 | Phase 77 | Pending |
 | GIZMOUI-01 | Phase 77 | Pending |
 | CLEAN-01 | Phase 78 | Pending |
@@ -80,4 +80,4 @@ Explicitly excluded to keep v3.9 focused.
 
 ---
 *Requirements defined: 2026-07-05*
-*Last updated: 2026-07-05 after v3.9 milestone planning*
+*Last updated: 2026-07-05 after Phase 76 workflow panels restoration*

@@ -297,54 +297,6 @@ Item {
         }
     }
 
-    Rectangle {
-        id: sliceButton
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.rightMargin: 70
-        width: 48
-        height: 82
-        radius: 8
-        enabled: root.editorVm && root.editorVm.canRequestSlice
-        opacity: enabled ? 1.0 : 0.45
-        color: enabled && sliceMouse.containsMouse ? Theme.accentLight : Theme.accent
-        border.width: 1
-        border.color: Theme.accentDark
-
-        Column {
-            anchors.centerIn: parent
-            spacing: 4
-
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: ">>"
-                color: Theme.textOnAccent
-                font.pixelSize: 15
-                font.bold: true
-            }
-
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Slice")
-                color: Theme.textOnAccent
-                font.pixelSize: 11
-                font.bold: true
-            }
-        }
-
-        ToolTip.visible: sliceMouse.containsMouse
-        ToolTip.text: root.editorVm ? root.editorVm.sliceActionHint : qsTr("Backend unavailable")
-        ToolTip.delay: 400
-
-        MouseArea {
-            id: sliceMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: sliceButton.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: if (sliceButton.enabled) root.sliceRequested()
-        }
-    }
-
     component ToolbarSeparator: Rectangle {
         property bool vertical: false
         width: vertical ? 1 : 26

@@ -58,6 +58,8 @@ private slots:
   void leftSidebarPresetControlsAreWiredAndHonest();
   // Phase 53: Prepare object, plate, and viewport actions bind to C++ gates.
   void prepareWorkflowActionsBindCppGates();
+  // Phase 76: Prepare workflow panels must stay compact and backend-gated.
+  void prepareWorkflowPanelsMatchRestorationContract();
   // Phase 55-04 (GCODE-04/05): source-audit guards for the SoftwareViewport
   // absence, the computePreviewDrawRanges role-skip block, and the
   // GcvPackedSegment sizeof wire-format lockstep.
@@ -1628,6 +1630,56 @@ void QmlUiAuditTests::prepareWorkflowActionsBindCppGates()
 // The normal Preview path is RhiViewport (registered as GLViewport); the
 // SoftwareViewport only exists as a QRhi init fallback. This is the regression
 // gate that fails the build if anyone re-adds SoftwareViewport to PreviewPage.
+void QmlUiAuditTests::prepareWorkflowPanelsMatchRestorationContract()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
+  const QString objectList = readSource(QStringLiteral("src/qml_gui/panels/ObjectList.qml"));
+  const QString sliceProgress = readSource(QStringLiteral("src/qml_gui/panels/SliceProgress.qml"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
+  QVERIFY2(!objectList.isEmpty(), "Unable to read ObjectList.qml");
+  QVERIFY2(!sliceProgress.isEmpty(), "Unable to read SliceProgress.qml");
+
+  QVERIFY2(!glToolbars.contains(QStringLiteral("id: sliceButton")),
+           "Phase 76 removes the large floating viewport Slice button");
+  QVERIFY2(!glToolbars.contains(QStringLiteral("text: \">>\"")),
+           "Viewport overlays must not expose the legacy floating >> Slice affordance");
+
+  const QStringList objectListTokens = {
+    QStringLiteral("readonly property int objectRowHeight: 38"),
+    QStringLiteral("readonly property int volumeRowHeight: 26"),
+    QStringLiteral("readonly property int groupHeaderHeight: 18"),
+    QStringLiteral("objectListStatusPill"),
+    QStringLiteral("row.objPrintable ? Theme.accent : Theme.textDisabled"),
+    QStringLiteral("enabled: !!root.editorVm && root.editorVm.canDeleteSelection")
+  };
+  for (const QString &token : objectListTokens) {
+    QVERIFY2(objectList.contains(token),
+             qPrintable(QStringLiteral("ObjectList must preserve Phase 76 compact/tree contract token: %1").arg(token)));
+  }
+
+  const QStringList plateStripTokens = {
+    QStringLiteral("height: 44"),
+    QStringLiteral("width: 86"),
+    QStringLiteral("plateStateText"),
+    QStringLiteral("sliceResultStatus === 1"),
+    QStringLiteral("sliceResultStatus === 2"),
+    QStringLiteral("root.editorVm.canAddPlate")
+  };
+  for (const QString &token : plateStripTokens) {
+    QVERIFY2(preparePage.contains(token),
+             qPrintable(QStringLiteral("Prepare plate strip must preserve Phase 76 compact/state contract token: %1").arg(token)));
+  }
+
+  QVERIFY2(sliceProgress.contains(QStringLiteral("readonly property bool primaryActionEnabled")),
+           "SliceProgress must expose one backend-gated primary action state");
+  QVERIFY2(sliceProgress.contains(QStringLiteral("readonly property bool canSliceAll")),
+           "Slice-all must be explicitly gated instead of being an always-clickable button");
+  QVERIFY2(sliceProgress.contains(QStringLiteral("enabled: root.canSliceAll")),
+           "Slice-all button must bind to the explicit backend-derived gate");
+}
+
 void QmlUiAuditTests::previewPageNeverReferencesSoftwareViewport()
 {
   const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));

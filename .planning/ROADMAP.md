@@ -22,7 +22,7 @@
 
 - [x] Phase 74: Prepare Source-Truth Gap Audit (completed 2026-07-05)
 - [x] Phase 75: Prepare Sidebar Restoration (completed 2026-07-05)
-- [ ] Phase 76: Prepare Workflow Panels Restoration
+- [x] Phase 76: Prepare Workflow Panels Restoration (completed 2026-07-05)
 - [ ] Phase 77: Prepare Viewport Controls And Gizmo UI
 - [ ] Phase 78: Prepare Verification And Cleanup
 
@@ -30,7 +30,7 @@
 |---|---|---|---|
 | 74 | Prepare Source-Truth Gap Audit | Complete 2026-07-05: froze the v3.9 Prepare region map, current gaps, upstream anchors, and verification expectations before edits. | AUDIT-01 |
 | 75 | Prepare Sidebar Restoration | Complete 2026-07-05: restored compact sidebar width/density, filament rows, localized option source labels, and preset/settings wiring. | SIDE-01, SIDE-02, SIDE-03 |
-| 76 | Prepare Workflow Panels Restoration | Restore object list, plate strip, slice status, and workflow availability states to screenshot/source-truth parity. | OBJ-01, PLATEUI-01, STATUS-01 |
+| 76 | Prepare Workflow Panels Restoration | Complete 2026-07-05: restored compact object/volume list density, compact plate strip state display, and honest slice/cancel/export readiness surfaces. | OBJ-01, PLATEUI-01, STATUS-01 |
 | 77 | Prepare Viewport Controls And Gizmo UI | Restore viewport controls, vertical tool buttons, and RHI gizmo floating panels in the screenshot layout. | VIEWUI-01, GIZMOUI-01 |
 | 78 | Prepare Verification And Cleanup | Remove deprecated Prepare UI paths and verify with audits, canonical build, app launch, and visual evidence. | CLEAN-01, VERIFY-01, VERIFY-02 |
 
@@ -61,6 +61,12 @@ Success criteria:
 3. Global/Object/Plate scopes, search, settings entry points, and dirty indicators are live and free of visible unavailable placeholders.
 
 ### Phase 76: Prepare Workflow Panels Restoration
+
+**Status:** Complete (2026-07-05)
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] `76-01-PLAN.md` - Workflow panels restoration
 
 Success criteria:
 1. Object/volume list states match screenshot layout for empty, selected, disabled, and action-visible cases.
@@ -133,12 +139,12 @@ Requirements: `.planning/milestones/v3.8-REQUIREMENTS.md`
 
 ## Next Step
 
-Plan Phase 76:
+Plan Phase 77:
 
 ```text
-$gsd-plan-phase 76
+$gsd-plan-phase 77
 ```
 
 ---
 
-*Last updated: 2026-07-05 after Phase 75 sidebar restoration.*
+*Last updated: 2026-07-05 after Phase 76 workflow panels restoration.*

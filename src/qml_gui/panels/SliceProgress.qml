@@ -24,6 +24,8 @@ Item {
     readonly property bool canRequestSlice: root.editorVm ? root.editorVm.canRequestSlice : false
     readonly property bool canPreview: root.editorVm ? root.editorVm.canPreview : false
     readonly property bool canExportGCode: root.editorVm ? root.editorVm.canExportGCode : false
+    readonly property bool primaryActionEnabled: root.slicingNow || root.canRequestSlice
+    readonly property bool canSliceAll: !root.slicingNow && (root.canRequestSlice || root.hasSliceResult)
     readonly property string actionLabel: root.editorVm ? root.editorVm.sliceActionLabel : qsTr("▶ 开始切片")
     readonly property string actionHint: root.editorVm ? root.editorVm.sliceActionHint : ""
     readonly property string previewHint: root.editorVm ? root.editorVm.previewActionHint : ""
@@ -495,7 +497,7 @@ Item {
             Layout.fillWidth: true
             height: 30
             radius: Theme.radiusMD
-            color: !root.slicingNow && !root.canRequestSlice ? Theme.bgHover
+            color: !root.primaryActionEnabled ? Theme.bgHover
                    : actionMA.containsMouse
                      ? (root.slicingNow ? "#7d2020" : "#19a84e")
                      : (root.slicingNow ? "#5e1818" : "#157a39")
@@ -503,7 +505,7 @@ Item {
             Text {
                 anchors.centerIn: parent
                 text: root.slicingNow ? qsTr("✕ 取消切片") : root.actionLabel
-                color: !root.slicingNow && !root.canRequestSlice ? Theme.textDisabled : "white"
+                color: !root.primaryActionEnabled ? Theme.textDisabled : "white"
                 font.pixelSize: 12
                 font.bold: true
             }
@@ -512,7 +514,7 @@ Item {
                 id: actionMA
                 anchors.fill: parent
                 hoverEnabled: true
-                enabled: root.slicingNow || root.canRequestSlice
+                enabled: root.primaryActionEnabled
                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ForbiddenCursor
                 onClicked: {
                     if (!root.editorVm) return
@@ -589,20 +591,22 @@ Item {
                 Layout.fillWidth: true
                 height: 28
                 radius: Theme.radiusSM
-                color: sliceAllMA.containsMouse ? Theme.bgHover : Theme.bgElevated
+                color: !root.canSliceAll ? Theme.bgHover
+                       : sliceAllMA.containsMouse ? Theme.bgPressed : Theme.bgElevated
                 border.width: 1
                 border.color: Theme.borderSubtle
                 Text {
                     anchors.centerIn: parent
                     text: qsTr("全部切片")
-                    color: Theme.textPrimary
+                    color: root.canSliceAll ? Theme.textPrimary : Theme.textDisabled
                     font.pixelSize: 11
                 }
                 MouseArea {
                     id: sliceAllMA
                     anchors.fill: parent
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
+                    enabled: root.canSliceAll
+                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ForbiddenCursor
                     onClicked: {
                         if (root.editorVm)
                             root.editorVm.requestSliceAll()
