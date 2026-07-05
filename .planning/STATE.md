@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v3.8
 milestone_name: RHI Gizmo Parity
 status: completed
-last_updated: "2026-07-04T17:01:43.281Z"
-last_activity: 2026-07-04 -- Milestone v3.8 completed and archived
+last_updated: "2026-07-05T11:01:00+08:00"
+last_activity: 2026-07-05 -- Completed quick task 260705-e8x: Fix RHI gizmo depth overlay and viewport drag review findings
 progress:
   total_phases: 18
   completed_phases: 18
@@ -24,7 +24,7 @@ progress:
 Phase: Milestone v3.8 complete
 Plan: N/A
 Status: Awaiting next milestone
-Last activity: 2026-07-04 -- Milestone v3.8 completed and archived
+Last activity: 2026-07-05 -- Completed quick task 260705-e8x: Fix RHI gizmo depth overlay and viewport drag review findings
 
 ## Project Reference
 
@@ -111,6 +111,12 @@ Items acknowledged and deferred at milestone close on 2026-07-04:
 | uat_gap | Phase 43 43-UAT.md | pending_user |
 | verification_gap | Phase 02 02-VERIFICATION.md | human_needed |
 | verification_gap | Phase 68 68-VERIFICATION.md | human_needed |
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260705-e8x | Fix RHI gizmo depth overlay and viewport drag review findings | 2026-07-05 | 1ba32eb | [260705-e8x-fix-rhi-gizmo-depth-overlay-and-viewport](./quick/260705-e8x-fix-rhi-gizmo-depth-overlay-and-viewport/) |
 
 ## Operator Next Steps
 
