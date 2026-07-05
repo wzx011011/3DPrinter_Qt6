@@ -60,6 +60,8 @@ private slots:
   void prepareWorkflowActionsBindCppGates();
   // Phase 76: Prepare workflow panels must stay compact and backend-gated.
   void prepareWorkflowPanelsMatchRestorationContract();
+  // Phase 77: Prepare viewport controls and gizmo panels must be icon-first.
+  void prepareViewportControlsMatchRestorationContract();
   // Phase 55-04 (GCODE-04/05): source-audit guards for the SoftwareViewport
   // absence, the computePreviewDrawRanges role-skip block, and the
   // GcvPackedSegment sizeof wire-format lockstep.
@@ -1678,6 +1680,51 @@ void QmlUiAuditTests::prepareWorkflowPanelsMatchRestorationContract()
            "Slice-all must be explicitly gated instead of being an always-clickable button");
   QVERIFY2(sliceProgress.contains(QStringLiteral("enabled: root.canSliceAll")),
            "Slice-all button must bind to the explicit backend-derived gate");
+}
+
+void QmlUiAuditTests::prepareViewportControlsMatchRestorationContract()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
+
+  const QStringList toolbarTokens = {
+    QStringLiteral("readonly property int viewportToolbarHeight: 34"),
+    QStringLiteral("readonly property int toolbarButtonSize: 30"),
+    QStringLiteral("readonly property int gizmoToolbarWidth: 36"),
+    QStringLiteral("id: viewportActionToolbar"),
+    QStringLiteral("id: viewportGizmoToolbar"),
+    QStringLiteral("id: viewportViewControls"),
+    QStringLiteral("iconSource: iconForTool(toolId)")
+  };
+  for (const QString &token : toolbarTokens) {
+    QVERIFY2(glToolbars.contains(token),
+             qPrintable(QStringLiteral("GLToolbars must preserve Phase 77 icon/placement token: %1").arg(token)));
+  }
+
+  const QStringList removedTextLabels = {
+    QStringLiteral("label: \"M\""),
+    QStringLiteral("label: \"R\""),
+    QStringLiteral("label: \"S\""),
+    QStringLiteral("label: \"T\""),
+    QStringLiteral("label: \"P+\""),
+    QStringLiteral("label: \"AC\""),
+    QStringLiteral("label: \"SVG\"")
+  };
+  for (const QString &label : removedTextLabels) {
+    QVERIFY2(!glToolbars.contains(label),
+             qPrintable(QStringLiteral("Viewport toolbars must be icon-first, not text-only: %1").arg(label)));
+  }
+
+  QVERIFY2(preparePage.contains(QStringLiteral("readonly property int gizmoPanelTopOffset")),
+           "PreparePage must centralize gizmo panel top offset");
+  QVERIFY2(preparePage.contains(QStringLiteral("transformMiniPanel")),
+           "Move/rotate/scale modes must expose a compact transform mini panel");
+  QVERIFY2(preparePage.contains(QStringLiteral("viewport3d.gizmoMode === GLViewport.GizmoMove"))
+               && preparePage.contains(QStringLiteral("viewport3d.gizmoMode === GLViewport.GizmoRotate"))
+               && preparePage.contains(QStringLiteral("viewport3d.gizmoMode === GLViewport.GizmoScale")),
+           "Transform mini panel must bind to move, rotate, and scale modes");
 }
 
 void QmlUiAuditTests::previewPageNeverReferencesSoftwareViewport()

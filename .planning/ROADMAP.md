@@ -23,7 +23,7 @@
 - [x] Phase 74: Prepare Source-Truth Gap Audit (completed 2026-07-05)
 - [x] Phase 75: Prepare Sidebar Restoration (completed 2026-07-05)
 - [x] Phase 76: Prepare Workflow Panels Restoration (completed 2026-07-05)
-- [ ] Phase 77: Prepare Viewport Controls And Gizmo UI
+- [x] Phase 77: Prepare Viewport Controls And Gizmo UI (completed 2026-07-05)
 - [ ] Phase 78: Prepare Verification And Cleanup
 
 | Phase | Name | Goal | Requirements |
@@ -31,7 +31,7 @@
 | 74 | Prepare Source-Truth Gap Audit | Complete 2026-07-05: froze the v3.9 Prepare region map, current gaps, upstream anchors, and verification expectations before edits. | AUDIT-01 |
 | 75 | Prepare Sidebar Restoration | Complete 2026-07-05: restored compact sidebar width/density, filament rows, localized option source labels, and preset/settings wiring. | SIDE-01, SIDE-02, SIDE-03 |
 | 76 | Prepare Workflow Panels Restoration | Complete 2026-07-05: restored compact object/volume list density, compact plate strip state display, and honest slice/cancel/export readiness surfaces. | OBJ-01, PLATEUI-01, STATUS-01 |
-| 77 | Prepare Viewport Controls And Gizmo UI | Restore viewport controls, vertical tool buttons, and RHI gizmo floating panels in the screenshot layout. | VIEWUI-01, GIZMOUI-01 |
+| 77 | Prepare Viewport Controls And Gizmo UI | Complete 2026-07-05: restored icon-first viewport toolbars, compact view controls, and mode-based gizmo panel placement. | VIEWUI-01, GIZMOUI-01 |
 | 78 | Prepare Verification And Cleanup | Remove deprecated Prepare UI paths and verify with audits, canonical build, app launch, and visual evidence. | CLEAN-01, VERIFY-01, VERIFY-02 |
 
 ### Phase 74: Prepare Source-Truth Gap Audit
@@ -74,6 +74,12 @@ Success criteria:
 3. Slice/cancel/export readiness and progress surfaces are honest, live, and aligned with upstream workflow semantics.
 
 ### Phase 77: Prepare Viewport Controls And Gizmo UI
+
+**Status:** Complete (2026-07-05)
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] `77-01-PLAN.md` - Viewport controls and gizmo UI
 
 Success criteria:
 1. Prepare viewport controls and vertical tool buttons are positioned and disabled consistently with the screenshot.
@@ -139,12 +145,12 @@ Requirements: `.planning/milestones/v3.8-REQUIREMENTS.md`
 
 ## Next Step
 
-Plan Phase 77:
+Plan Phase 78:
 
 ```text
-$gsd-plan-phase 77
+$gsd-plan-phase 78
 ```
 
 ---
 
-*Last updated: 2026-07-05 after Phase 76 workflow panels restoration.*
+*Last updated: 2026-07-05 after Phase 77 viewport controls and gizmo UI restoration.*

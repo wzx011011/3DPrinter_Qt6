@@ -17,6 +17,7 @@ Item {
     property string processCategory: ""
     property bool leftPanelVisible: true
     property int activeGizmoDragMode: GLViewport.GizmoMove
+    readonly property int gizmoPanelTopOffset: 74
     // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage → DockableSidebar)
     property bool sidebarCollapsed: false
     property int sidebarWidth: 328
@@ -1808,6 +1809,68 @@ Item {
 
         // 支撑/缝线绘制信息面板（对齐上游 GLGizmoFdmSupports info panel）
         Rectangle {
+            id: transformMiniPanel
+            anchors.top: parent.top
+            anchors.topMargin: root.gizmoPanelTopOffset
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: transformMiniContent.implicitWidth + 24
+            height: transformMiniContent.implicitHeight + 14
+            radius: 6
+            color: Theme.bgFloating
+            border.width: 1
+            border.color: Theme.borderSubtle
+            visible: root.editorVm
+                     && (viewport3d.gizmoMode === GLViewport.GizmoMove
+                         || viewport3d.gizmoMode === GLViewport.GizmoRotate
+                         || viewport3d.gizmoMode === GLViewport.GizmoScale)
+
+            RowLayout {
+                id: transformMiniContent
+                anchors.centerIn: parent
+                spacing: 12
+
+                Text {
+                    text: viewport3d.gizmoMode === GLViewport.GizmoMove
+                          ? qsTr("Move")
+                          : viewport3d.gizmoMode === GLViewport.GizmoRotate
+                            ? qsTr("Rotate")
+                            : qsTr("Scale")
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
+                    font.bold: true
+                }
+
+                TransformMetric {
+                    axisName: "X"
+                    accentColor: "#e066a0"
+                    valueText: viewport3d.gizmoMode === GLViewport.GizmoMove
+                               ? root.editorVm.objectPosX.toFixed(1)
+                               : viewport3d.gizmoMode === GLViewport.GizmoRotate
+                                 ? root.editorVm.objectRotX.toFixed(1)
+                                 : root.editorVm.objectScaleX.toFixed(2)
+                }
+                TransformMetric {
+                    axisName: "Y"
+                    accentColor: "#4ec9b0"
+                    valueText: viewport3d.gizmoMode === GLViewport.GizmoMove
+                               ? root.editorVm.objectPosY.toFixed(1)
+                               : viewport3d.gizmoMode === GLViewport.GizmoRotate
+                                 ? root.editorVm.objectRotY.toFixed(1)
+                                 : root.editorVm.objectScaleY.toFixed(2)
+                }
+                TransformMetric {
+                    axisName: "Z"
+                    accentColor: "#569cd6"
+                    valueText: viewport3d.gizmoMode === GLViewport.GizmoMove
+                               ? root.editorVm.objectPosZ.toFixed(1)
+                               : viewport3d.gizmoMode === GLViewport.GizmoRotate
+                                 ? root.editorVm.objectRotZ.toFixed(1)
+                                 : root.editorVm.objectScaleZ.toFixed(2)
+                }
+            }
+        }
+
+        Rectangle {
             anchors.top: parent.top
             anchors.topMargin: 4
             anchors.horizontalCenter: parent.horizontalCenter
@@ -1853,11 +1916,11 @@ Item {
         // 测量信息面板（对齐上游 GLGizmoMeasure::on_render_input_window）
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 104
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: measureContent.implicitWidth + 24
             height: measureContent.implicitHeight + 16
-            radius: 12
+            radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoMeasure && root.editorVm
@@ -1927,11 +1990,11 @@ Item {
         // Flatten 信息面板（对齐上游 GLGizmoFlatten::on_render_input_window）
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 104
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: flattenContent.implicitWidth + 32
             height: flattenContent.implicitHeight + 20
-            radius: 12
+            radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoFlatten && root.editorVm
@@ -1991,11 +2054,11 @@ Item {
         // Cut 切割控制面板（对齐上游 GLGizmoCut::on_render_input_window）
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 104
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: cutContent.implicitWidth + 32
             height: cutContent.implicitHeight + 20
-            radius: 12
+            radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoCut && root.editorVm
@@ -2315,11 +2378,11 @@ Item {
         // Seam 缝线绘制控制面板（对齐上游 GLGizmoSeam::on_render_input_window）
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 104
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: seamContent.implicitWidth + 24
             height: seamContent.implicitHeight + 16
-            radius: 12
+            radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoSeamPaint && root.editorVm
@@ -2409,11 +2472,11 @@ Item {
         // Hollow SLA 空洞标记控制面板（对齐上游 GLGizmoHollow::on_render_input_window）
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 104
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: hollowContent.implicitWidth + 24
             height: hollowContent.implicitHeight + 16
-            radius: 12
+            radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoHollow && root.editorVm
@@ -2542,11 +2605,11 @@ Item {
         // 简化模型控制面板（对齐上游 GLGizmoSimplify）
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 104
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: simplifyContent.implicitWidth + 24
             height: simplifyContent.implicitHeight + 16
-            radius: 12
+            radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoSimplify && root.editorVm
@@ -2641,11 +2704,11 @@ Item {
         // MMU 多耗材分段控制面板（对齐上游 GLGizmoMmuSegmentation）
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 104
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: mmuContent.implicitWidth + 24
             height: mmuContent.implicitHeight + 16
-            radius: 12
+            radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoMmuSegmentation && root.editorVm
@@ -2730,11 +2793,11 @@ Item {
         // Drill control panel (对齐上游 GLGizmoDrill)
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 104
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: drillContent.implicitWidth + 24
             height: drillContent.implicitHeight + 16
-            radius: 12
+            radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoDrill && root.editorVm
@@ -2768,11 +2831,11 @@ Item {
         // Emboss control panel (对齐上游 GLGizmoEmboss)
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 104
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: embossContent.implicitWidth + 24
             height: embossContent.implicitHeight + 16
-            radius: 12
+            radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoEmboss && root.editorVm
@@ -2803,11 +2866,11 @@ Item {
         // MeshBoolean control panel (对齐上游 GLGizmoMeshBoolean)
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 104
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: boolContent.implicitWidth + 24
             height: boolContent.implicitHeight + 16
-            radius: 12
+            radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoMeshBoolean && root.editorVm
@@ -2834,11 +2897,11 @@ Item {
         // AdvancedCut control panel (对齐上游 GLGizmoAdvancedCut)
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 104
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: cutContent.implicitWidth + 24
             height: cutContent.implicitHeight + 16
-            radius: 12
+            radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoAdvancedCut && root.editorVm
@@ -2869,11 +2932,11 @@ Item {
         // FaceDetector control panel (对齐上游 GLGizmoFaceDetector)
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 104
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: fdContent.implicitWidth + 24
             height: fdContent.implicitHeight + 16
-            radius: 12
+            radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoFaceDetector && root.editorVm
@@ -2900,11 +2963,11 @@ Item {
         // Text tool control panel (对齐上游 GLGizmoText)
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 104
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: txtContent.implicitWidth + 24
             height: txtContent.implicitHeight + 16
-            radius: 12
+            radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoText && root.editorVm
@@ -2932,11 +2995,11 @@ Item {
         // SVG import control panel (对齐上游 GLGizmoSVG)
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 104
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: svgContent.implicitWidth + 24
             height: svgContent.implicitHeight + 16
-            radius: 12
+            radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoSVG && root.editorVm
@@ -2964,11 +3027,11 @@ Item {
         // SLA Supports control panel (对齐上游 GLGizmoSlaSupports)
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 104
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: slaContent.implicitWidth + 24
             height: slaContent.implicitHeight + 16
-            radius: 12
+            radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoSlaSupports && root.editorVm
@@ -3252,5 +3315,29 @@ Item {
             }
         }
 
+    }
+
+    component TransformMetric: Row {
+        property string axisName: ""
+        property string valueText: ""
+        property color accentColor: Theme.textSecondary
+
+        spacing: 4
+
+        Text {
+            text: axisName
+            color: accentColor
+            font.pixelSize: Theme.fontSizeXS
+            font.bold: true
+            anchors.verticalCenter: parent.verticalCenter
+        }
+
+        Text {
+            text: valueText
+            color: Theme.textPrimary
+            font.pixelSize: Theme.fontSizeXS
+            font.family: "Consolas, monospace"
+            anchors.verticalCenter: parent.verticalCenter
+        }
     }
 }

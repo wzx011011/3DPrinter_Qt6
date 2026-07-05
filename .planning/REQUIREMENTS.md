@@ -23,8 +23,8 @@
 
 ### Viewport, Toolbars, and Gizmos
 
-- [ ] **VIEWUI-01**: User can use Prepare viewport view controls, camera affordances, and vertical tool buttons in the screenshot layout without overlap, layout jumps, or incorrect disabled states.
-- [ ] **GIZMOUI-01**: User sees move, rotate, scale, cut, and wipe-tower gizmo panels and overlays in upstream-like positions and states on the default RHI path.
+- [x] **VIEWUI-01**: User can use Prepare viewport view controls, camera affordances, and vertical tool buttons in the screenshot layout without overlap, layout jumps, or incorrect disabled states.
+- [x] **GIZMOUI-01**: User sees move, rotate, scale, cut, and wipe-tower gizmo panels and overlays in upstream-like positions and states on the default RHI path.
 
 ### Cleanup and Verification
 
@@ -67,8 +67,8 @@ Explicitly excluded to keep v3.9 focused.
 | OBJ-01 | Phase 76 | Complete |
 | PLATEUI-01 | Phase 76 | Complete |
 | STATUS-01 | Phase 76 | Complete |
-| VIEWUI-01 | Phase 77 | Pending |
-| GIZMOUI-01 | Phase 77 | Pending |
+| VIEWUI-01 | Phase 77 | Complete |
+| GIZMOUI-01 | Phase 77 | Complete |
 | CLEAN-01 | Phase 78 | Pending |
 | VERIFY-01 | Phase 78 | Pending |
 | VERIFY-02 | Phase 78 | Pending |
@@ -80,4 +80,4 @@ Explicitly excluded to keep v3.9 focused.
 
 ---
 *Requirements defined: 2026-07-05*
-*Last updated: 2026-07-05 after Phase 76 workflow panels restoration*
+*Last updated: 2026-07-05 after Phase 77 viewport controls and gizmo UI restoration*
