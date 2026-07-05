@@ -42,17 +42,18 @@ Rectangle {
 
     CxScrollView {
         anchors.fill: parent
-        anchors.margins: Theme.spacingSM
+        anchors.margins: Theme.spacingXS
 
         ColumnLayout {
             width: parent.width
-            spacing: 10  // 区块间距增大（对齐上游 OrcaSlicer 卡片层次）
+            spacing: Theme.spacingXS
 
             // -- Section 1: Printer panel (对齐上游 SiderBar SidebarPrinter) --
             // G3: 用 CollapsibleSection 统一卡片风格（与 Filament/Objects 一致）
             CollapsibleSection {
                 id: printerSection
                 Layout.fillWidth: true
+                compact: true
                 title: qsTr("打印机")
                 iconText: "🖨"
                 expanded: printerExpanded
@@ -178,6 +179,7 @@ Rectangle {
             CollapsibleSection {
                 id: filamentSection
                 Layout.fillWidth: true
+                compact: true
                 title: qsTr("耗材")
                 iconText: "F"
                 expanded: true  // G1: 默认展开（对齐上游，耗材列表可见）
@@ -230,9 +232,9 @@ Rectangle {
 
                     // Filament slot grid — interactive (aligned with upstream Sidebar filament slots)
                     GridLayout {
-                        columns: 3
-                        rowSpacing: 8
-                        columnSpacing: 8
+                        columns: 1
+                        rowSpacing: 4
+                        columnSpacing: 4
                         Layout.fillWidth: true
                         Layout.preferredHeight: childrenRect.height
 
@@ -261,16 +263,16 @@ Rectangle {
             Rectangle {
                 id: processTopbar
                 Layout.fillWidth: true
-                Layout.preferredHeight: 40
+                Layout.preferredHeight: 34
                 color: Theme.bgPanel
-                radius: 6
+                radius: Theme.radiusSM
                 border.width: 1
                 border.color: Theme.borderSubtle
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 8
-                    spacing: 6
+                    anchors.margins: 5
+                    spacing: 4
 
                     // Process icon + label (对齐上游 m_process_title)
                     Text {
@@ -427,16 +429,16 @@ Rectangle {
             Rectangle {
                 id: searchBox
                 Layout.fillWidth: true
-                Layout.preferredHeight: 34
+                Layout.preferredHeight: 30
                 color: Theme.bgInset
-                radius: 6
+                radius: Theme.radiusSM
                 border.width: 1
                 border.color: searchField.activeFocus ? Theme.accent : Theme.borderSubtle
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 8
-                    spacing: 6
+                    anchors.margins: 6
+                    spacing: 4
 
                     Text {
                         text: "🔍"
@@ -465,16 +467,16 @@ Rectangle {
             Rectangle {
                 id: paramsInlinePanel
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(520, Math.max(280, paramsList.contentHeight + 58))
+                Layout.preferredHeight: Math.min(500, Math.max(260, paramsList.contentHeight + 44))
                 color: Theme.bgPanel
-                radius: 6
+                radius: Theme.radiusSM
                 border.width: 1
                 border.color: Theme.borderSubtle
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 6
-                    spacing: 4
+                    anchors.margins: 4
+                    spacing: 3
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -557,9 +559,9 @@ Rectangle {
                                 showGroupHeader: paramsDelegate.showGroupHeader
                                 oGroup: paramsDelegate.optGroup
                                 compact: true
-                                compactLabelWidth: 126
-                                compactFieldWidth: 78
-                                compactEnumWidth: 118
+                                compactLabelWidth: 118
+                                compactFieldWidth: 66
+                                compactEnumWidth: 104
                                 valueSource: {
                                     if (!root.configVm || !root.paramsOptionModel) return ""
                                     var key = root.paramsOptionModel.optKey(paramsDelegate.optIdx)
@@ -577,6 +579,7 @@ Rectangle {
             CollapsibleSection {
                 id: objectSection
                 Layout.fillWidth: true
+                compact: true
                 title: qsTr("对象")
                 iconText: "◇"
                 expanded: true
@@ -664,6 +667,7 @@ Rectangle {
             CollapsibleSection {
                 id: objectSettingsSection
                 Layout.fillWidth: true
+                compact: true
                 title: qsTr("对象设置")
                 iconText: "☰"
                 expanded: true

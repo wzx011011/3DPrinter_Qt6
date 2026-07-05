@@ -31,9 +31,42 @@ Item {
     property int compactFieldWidth: 72
     property int compactEnumWidth: 112
 
+    function displayValueSource(sourceKey) {
+        if (sourceKey === "default") return qsTr("默认")
+        if (sourceKey === "print") return qsTr("打印")
+        if (sourceKey === "filament") return qsTr("耗材")
+        if (sourceKey === "printer") return qsTr("打印机")
+        return sourceKey
+    }
+
+    function displayOptionLabel(key, label) {
+        var labels = {
+            "layer_height": qsTr("层高"),
+            "initial_layer_print_height": qsTr("首层层高"),
+            "line_width": qsTr("线宽"),
+            "initial_layer_line_width": qsTr("首层线宽"),
+            "wall_loops": qsTr("墙层数"),
+            "top_shell_layers": qsTr("顶层层数"),
+            "bottom_shell_layers": qsTr("底层层数"),
+            "sparse_infill_density": qsTr("填充密度"),
+            "sparse_infill_pattern": qsTr("填充图案"),
+            "outer_wall_speed": qsTr("外墙速度"),
+            "inner_wall_speed": qsTr("内墙速度"),
+            "sparse_infill_speed": qsTr("填充速度"),
+            "top_surface_speed": qsTr("顶面速度"),
+            "travel_speed": qsTr("空驶速度"),
+            "initial_layer_speed": qsTr("首层速度"),
+            "enable_support": qsTr("启用支撑"),
+            "support_density": qsTr("支撑密度"),
+            "support_type": qsTr("支撑类型")
+        }
+        return labels[key] || label
+    }
+
     // Computed accessors (mirrors ParamsPage paramRow pattern)
     readonly property string oType:   root.optionModel ? root.optionModel.optType(optIdx) : ""
-    readonly property string oLabel:  root.optionModel ? root.optionModel.optLabel(optIdx) : ""
+    readonly property string oKey:    root.optionModel ? root.optionModel.optKey(optIdx) : ""
+    readonly property string oLabel:  root.optionModel ? root.displayOptionLabel(root.oKey, root.optionModel.optLabel(optIdx)) : ""
     readonly property var    oVal:    root.optionModel ? root.optionModel.optValue(optIdx) : 0
     readonly property double oMin:    root.optionModel ? root.optionModel.optMin(optIdx) : 0
     readonly property double oMax:    root.optionModel ? root.optionModel.optMax(optIdx) : 1
@@ -51,12 +84,12 @@ Item {
 
     // Content height dispatch (bool/enum 44px, numeric 56px, string 80px)
     readonly property int contentHeight:
-        root.compact ? (root.oType === "string" ? 62 : 34) :
+        root.compact ? (root.oType === "string" ? 52 : 30) :
         (root.oType === "double" || root.oType === "int" || root.oType === "percent") ? 56
         : root.oType === "string" ? 80 : 44
 
     // Total height includes optional group header
-    readonly property int totalHeight: (root.showGroupHeader ? (root.compact ? 24 : 28) : 0) + root.contentHeight
+    readonly property int totalHeight: (root.showGroupHeader ? (root.compact ? 22 : 28) : 0) + root.contentHeight
 
     // Tooltip
     ToolTip.visible: root.oTip !== "" && tipMA.containsMouse
@@ -68,7 +101,7 @@ Item {
         visible: root.showGroupHeader
         anchors.top: parent.top
         width: parent.width
-        height: root.compact ? 24 : 28
+        height: root.compact ? 22 : 28
         color: root.compact ? "transparent" : Theme.bgSurface
 
         Text {
@@ -92,7 +125,7 @@ Item {
     // Parameter row
     Rectangle {
         id: paramRow
-        y: root.showGroupHeader ? (root.compact ? 24 : 28) : 0
+        y: root.showGroupHeader ? (root.compact ? 22 : 28) : 0
         width: parent.width
         height: root.contentHeight
         // Zebra striping
@@ -137,7 +170,7 @@ Item {
                 // Value-source indicator (for nullable options)
                 Text {
                     visible: root.valueSource !== ""
-                    text: root.valueSource
+                    text: root.displayValueSource(root.valueSource)
                     color: Theme.textTertiary
                     font.pixelSize: root.compact ? 9 : Theme.fontSizeXS
                 }
@@ -186,7 +219,7 @@ Item {
 
                     CxSpinBox {
                         width: root.compact ? root.compactFieldWidth : 90
-                        height: Theme.controlHeightSM
+                        height: root.compact ? 22 : Theme.controlHeightSM
                         value: typeof root.oVal === "number" ? Math.round(root.oVal) : 0
                         from: root.oMin
                         to: root.oMax
@@ -216,7 +249,7 @@ Item {
 
                     Rectangle {
                         Layout.preferredWidth: root.compact ? root.compactFieldWidth : 64
-                        height: 24
+                        height: root.compact ? 22 : 24
                         radius: Theme.radiusSM
                         color: Theme.bgInset
                         border.width: 1
@@ -284,7 +317,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    height: root.compact ? 52 : 60
+                    height: root.compact ? 44 : 60
                     clip: true
 
                     CxTextArea {

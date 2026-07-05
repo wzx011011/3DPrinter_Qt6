@@ -10,6 +10,7 @@ Item {
     required property string title
     property string iconText: ""
     property bool expanded: true
+    property bool compact: false
     property alias rightActions: actionsRow.data
     default property alias content: contentContainer.data
 
@@ -23,9 +24,9 @@ Item {
         anchors.right: parent.right
         anchors.top: parent.top
         // 高度 = 标题栏 + (展开时内容+间距)
-        height: titleBar.height + (root.expanded ? (contentContainer.implicitHeight + 8) : 0)
-        color: Theme.bgElevated      // 卡片背景（比主背景稍亮，形成层次）
-        radius: 8
+        height: titleBar.height + (root.expanded ? (contentContainer.implicitHeight + (root.compact ? 4 : 8)) : 0)
+        color: root.compact ? Theme.bgPanel : Theme.bgElevated
+        radius: root.compact ? Theme.radiusSM : 8
         border.width: 1
         border.color: Theme.borderSubtle
 
@@ -38,9 +39,9 @@ Item {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 34
+        height: root.compact ? 28 : 34
         color: "transparent"           // G2: 透明，用卡片背景
-        radius: 8
+        radius: root.compact ? Theme.radiusSM : 8
 
         // 折叠切换点击区：置于 RowLayout 之下（z 更低），避免吞掉 rightActions 按钮点击。
         // RowLayout 内 action 按钮自带 MouseArea（在上层）接收自身点击；
@@ -53,22 +54,22 @@ Item {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 10
-            anchors.rightMargin: 8
-            spacing: 8
+            anchors.leftMargin: root.compact ? 8 : 10
+            anchors.rightMargin: root.compact ? 6 : 8
+            spacing: root.compact ? 6 : 8
 
             Text {
                 visible: root.iconText !== ""
                 text: root.iconText
                 color: Theme.accent
-                font.pixelSize: 11
+                font.pixelSize: root.compact ? 10 : 11
                 font.bold: true
             }
 
             Text {
                 text: root.title
                 color: Theme.textPrimary
-                font.pixelSize: 12
+                font.pixelSize: root.compact ? Theme.fontSizeSM : 12
                 font.bold: true
                 Layout.fillWidth: true
                 elide: Text.ElideRight
@@ -95,8 +96,8 @@ Item {
     Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.leftMargin: 10
-        anchors.rightMargin: 10
+        anchors.leftMargin: root.compact ? 8 : 10
+        anchors.rightMargin: root.compact ? 8 : 10
         y: titleBar.height - 1
         height: 1
         color: Theme.borderSubtle
@@ -108,7 +109,7 @@ Item {
     Item {
         id: contentContainer
         anchors.top: titleBar.bottom
-        anchors.topMargin: root.expanded ? 6 : 0
+        anchors.topMargin: root.expanded ? (root.compact ? 4 : 6) : 0
         anchors.left: parent.left
         anchors.right: parent.right
         implicitHeight: childrenRect.height

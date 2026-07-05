@@ -207,7 +207,20 @@ BackendContext::BackendContext(QObject *parent)
   // 对齐上游 app_config collapsed_sidebar；width/dockArea 为增强（上游无）
   // 命名空间 owzx/sidebar/* 避免与其它 key 冲突
   sidebarCollapsed_ = settings.value(QStringLiteral("owzx/sidebar/collapsed"), false).toBool();
-  const int savedWidth = settings.value(QStringLiteral("owzx/sidebar/width"), kSidebarDefaultWidth).toInt();
+  const QVariant savedSidebarWidthValue = settings.value(QStringLiteral("owzx/sidebar/width"));
+  int savedWidth = savedSidebarWidthValue.isValid()
+                     ? savedSidebarWidthValue.toInt()
+                     : kSidebarDefaultWidth;
+  const int sidebarSettingsVersion =
+      settings.value(QStringLiteral("owzx/sidebar/settingsVersion"), 1).toInt();
+  if (sidebarSettingsVersion < kSidebarSettingsVersion &&
+      savedSidebarWidthValue.isValid() &&
+      savedWidth == kSidebarLegacyDefaultWidth) {
+    savedWidth = kSidebarDefaultWidth;
+    settings.setValue(QStringLiteral("owzx/sidebar/width"), savedWidth);
+    settings.setValue(QStringLiteral("owzx/sidebar/settingsVersion"), kSidebarSettingsVersion);
+    settings.sync();
+  }
   sidebarWidth_ = qBound(kSidebarMinWidth, savedWidth, kSidebarMaxWidth);  // clamp 防御损坏的存储值
   const int savedArea = settings.value(QStringLiteral("owzx/sidebar/dockArea"),
                                        static_cast<int>(SidebarDockArea::Left)).toInt();
@@ -401,6 +414,7 @@ void BackendContext::requestSetSidebarWidth(int w)
   sidebarWidth_ = clamped;
   QSettings settings;
   settings.setValue(QStringLiteral("owzx/sidebar/width"), clamped);  // 持久化
+  settings.setValue(QStringLiteral("owzx/sidebar/settingsVersion"), kSidebarSettingsVersion);
   settings.sync();
   emit sidebarWidthChanged();
 }

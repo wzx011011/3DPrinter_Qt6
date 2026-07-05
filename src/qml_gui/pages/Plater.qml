@@ -51,9 +51,9 @@ Item {
 
     // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage)
     property bool sidebarCollapsed: false
-    property int sidebarWidth: 390
-    property int sidebarMinWidth: 360
-    property int sidebarMaxWidth: 480
+    property int sidebarWidth: 328
+    property int sidebarMinWidth: 312
+    property int sidebarMaxWidth: 390
     property int sidebarDockArea: 0
     property var sidebarToggleRequested: null
     property var sidebarWidthChanged: null

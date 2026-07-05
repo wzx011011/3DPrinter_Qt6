@@ -21,7 +21,7 @@
 ## Phases
 
 - [x] Phase 74: Prepare Source-Truth Gap Audit (completed 2026-07-05)
-- [ ] Phase 75: Prepare Sidebar Restoration
+- [x] Phase 75: Prepare Sidebar Restoration (completed 2026-07-05)
 - [ ] Phase 76: Prepare Workflow Panels Restoration
 - [ ] Phase 77: Prepare Viewport Controls And Gizmo UI
 - [ ] Phase 78: Prepare Verification And Cleanup
@@ -29,7 +29,7 @@
 | Phase | Name | Goal | Requirements |
 |---|---|---|---|
 | 74 | Prepare Source-Truth Gap Audit | Complete 2026-07-05: froze the v3.9 Prepare region map, current gaps, upstream anchors, and verification expectations before edits. | AUDIT-01 |
-| 75 | Prepare Sidebar Restoration | Restore the left preset/settings sidebar density, labels, scope controls, search, dirty state, and placeholder removal. | SIDE-01, SIDE-02, SIDE-03 |
+| 75 | Prepare Sidebar Restoration | Complete 2026-07-05: restored compact sidebar width/density, filament rows, localized option source labels, and preset/settings wiring. | SIDE-01, SIDE-02, SIDE-03 |
 | 76 | Prepare Workflow Panels Restoration | Restore object list, plate strip, slice status, and workflow availability states to screenshot/source-truth parity. | OBJ-01, PLATEUI-01, STATUS-01 |
 | 77 | Prepare Viewport Controls And Gizmo UI | Restore viewport controls, vertical tool buttons, and RHI gizmo floating panels in the screenshot layout. | VIEWUI-01, GIZMOUI-01 |
 | 78 | Prepare Verification And Cleanup | Remove deprecated Prepare UI paths and verify with audits, canonical build, app launch, and visual evidence. | CLEAN-01, VERIFY-01, VERIFY-02 |
@@ -48,6 +48,12 @@ Success criteria:
 3. v3.7 residual Prepare gaps are reconciled into v3.9 requirements or explicitly deferred.
 
 ### Phase 75: Prepare Sidebar Restoration
+
+**Status:** Complete (2026-07-05)
+**Plans:** 1/1 plans complete
+
+Plans:
+- [x] `75-01-PLAN.md` - Sidebar UI restoration
 
 Success criteria:
 1. Printer, filament, and process preset controls match the screenshot density and state model.
@@ -127,12 +133,12 @@ Requirements: `.planning/milestones/v3.8-REQUIREMENTS.md`
 
 ## Next Step
 
-Plan Phase 75:
+Plan Phase 76:
 
 ```text
-$gsd-plan-phase 75
+$gsd-plan-phase 76
 ```
 
 ---
 
-*Last updated: 2026-07-05 after Phase 74 source-truth gap audit.*
+*Last updated: 2026-07-05 after Phase 75 sidebar restoration.*

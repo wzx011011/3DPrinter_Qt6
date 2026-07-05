@@ -19,9 +19,9 @@ Item {
     property int activeGizmoDragMode: GLViewport.GizmoMove
     // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage → DockableSidebar)
     property bool sidebarCollapsed: false
-    property int sidebarWidth: 390
-    property int sidebarMinWidth: 360
-    property int sidebarMaxWidth: 480
+    property int sidebarWidth: 328
+    property int sidebarMinWidth: 312
+    property int sidebarMaxWidth: 390
     property int sidebarDockArea: 0   // 0=Left, 1=Right
     // sidebar 操作回调 (转发到 backend, 由 main.qml 注入)
     property var sidebarToggleRequested: null

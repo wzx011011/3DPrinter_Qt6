@@ -1682,6 +1682,7 @@ static void resetSidebarSettings()
   QSettings s;
   s.remove(QStringLiteral("owzx/sidebar/collapsed"));
   s.remove(QStringLiteral("owzx/sidebar/width"));
+  s.remove(QStringLiteral("owzx/sidebar/settingsVersion"));
   s.remove(QStringLiteral("owzx/sidebar/dockArea"));
   s.sync();
 }
@@ -1691,11 +1692,11 @@ void ViewModelSmokeTests::testSidebarCollapsedDefault()
   resetSidebarSettings();
   BackendContext ctx;
 
-  // 默认未折叠（对齐上游 Plater 默认显示 sidebar）
+  // Sidebar is visible by default, matching upstream Plater.
   QCOMPARE(ctx.sidebarCollapsed(), false);
-  QCOMPARE(ctx.sidebarMinWidth(), 360);
-  QCOMPARE(ctx.sidebarMaxWidth(), 480);
-  QCOMPARE(ctx.sidebarWidth(), 390);  // 默认宽度
+  QCOMPARE(ctx.sidebarMinWidth(), 312);
+  QCOMPARE(ctx.sidebarMaxWidth(), 390);
+  QCOMPARE(ctx.sidebarWidth(), 328);
   QCOMPARE(ctx.sidebarDockArea(), static_cast<int>(BackendContext::SidebarDockArea::Left));
 }
 
@@ -1740,31 +1741,45 @@ void ViewModelSmokeTests::testSidebarWidthClamp()
   QSignalSpy spy(&ctx, &BackendContext::sidebarWidthChanged);
   QVERIFY(spy.isValid());
 
-  // 越小值 clamp 到 min
+  // Values below the readable width clamp to min.
   ctx.requestSetSidebarWidth(100);
-  QCOMPARE(ctx.sidebarWidth(), 360);  // clamp 到 min
+  QCOMPARE(ctx.sidebarWidth(), 312);
   QCOMPARE(spy.count(), 1);
 
-  // 越大值 clamp 到 max
+  // Values above the compact contract clamp to max.
   spy.clear();
   ctx.requestSetSidebarWidth(9999);
-  QCOMPARE(ctx.sidebarWidth(), 480);  // clamp 到 max
+  QCOMPARE(ctx.sidebarWidth(), 390);
   QCOMPARE(spy.count(), 1);
 
-  // 正常值原样存
+  // New max width must persist after the v3.9 settings-version marker is written.
+  BackendContext ctxMax;
+  QCOMPARE(ctxMax.sidebarWidth(), 390);
+
+  // Normal values are stored unchanged.
   spy.clear();
-  ctx.requestSetSidebarWidth(420);
-  QCOMPARE(ctx.sidebarWidth(), 420);
+  ctx.requestSetSidebarWidth(360);
+  QCOMPARE(ctx.sidebarWidth(), 360);
   QCOMPARE(spy.count(), 1);
 
-  // clamp 后同值去重
+  // Equal values after clamping are deduplicated.
   spy.clear();
-  ctx.requestSetSidebarWidth(420);  // 同值
+  ctx.requestSetSidebarWidth(360);
   QCOMPARE(spy.count(), 0);
 
-  // 持久化验证
+  // Persistence verification.
   BackendContext ctx2;
-  QCOMPARE(ctx2.sidebarWidth(), 420);  // 从 QSettings 恢复
+  QCOMPARE(ctx2.sidebarWidth(), 360);
+
+  // Pre-v3.9 default width is migrated to the compact default once.
+  resetSidebarSettings();
+  {
+    QSettings s;
+    s.setValue(QStringLiteral("owzx/sidebar/width"), 390);
+    s.sync();
+  }
+  BackendContext legacyCtx;
+  QCOMPARE(legacyCtx.sidebarWidth(), 328);
 
   resetSidebarSettings();
 }

@@ -31,21 +31,21 @@ class CalibrationViewModel;
 class ModelMallViewModel;
 class MultiMachineViewModel;
 
-/// 閫氱煡绾у埆锛堝榻愪笂娓?NotificationLevel锛?
+/// Notification severity exposed to QML.
 enum NotificationLevel {
-  NotiInfo = 0,           ///< 甯歌淇℃伅
-  NotiSuccess = 1,        ///< 鎴愬姛/瀹屾垚
-  NotiWarning = 2,        ///< 涓€鑸鍛?
-  NotiError = 3,          ///< 閿欒
-  NotiSeriousWarning = 4, ///< 涓ラ噸璀﹀憡
-  NotiHint = 5,           ///< 鎻愮ず/Did you know
-  NotiPrintInfo = 6,      ///< 鎵撳嵃淇℃伅
-  NotiPrintInfoShort = 7, ///< 鐭墦鍗颁俊鎭?
-  NotiProgress = 8,       ///< 杩涘害閫氱煡
-  NotiSlicingProgress = 9 ///< 鍒囩墖杩涘害锛堝惈涓嬩竴姝ユ搷浣滄寜閽級
+  NotiInfo = 0,           ///< Informational notification.
+  NotiSuccess = 1,        ///< Successful completion.
+  NotiWarning = 2,        ///< Warning notification.
+  NotiError = 3,          ///< Error notification.
+  NotiSeriousWarning = 4, ///< High-priority warning.
+  NotiHint = 5,           ///< Hint or did-you-know notification.
+  NotiPrintInfo = 6, ///< Print notification.
+  NotiPrintInfoShort = 7, ///< Print notification.
+  NotiProgress = 8, ///< Progress notification.
+  NotiSlicingProgress = 9 ///< Slicing progress notification.
 };
 
-/// 閫氱煡绫诲瀷锛堝榻愪笂娓?NotificationManager::NotificationType锛?
+/// Notification type values aligned with upstream NotificationManager.
 enum NotificationType {
   NotiTypeCustom = 0,
   NotiTypeExportFinished = 1,
@@ -65,16 +65,16 @@ enum NotificationType {
   NotiTypeProgressIndicator = 15,
 };
 
-/// 鎻愮ず鏁版嵁搴撴潯鐩紙瀵归綈涓婃父 HintData锛?
+/// Hint data exposed to QML notification surfaces.
 struct HintData {
   QString id;
   QString text;
   int weight = 1;
-  QString hypertext;           ///< 鍙偣鍑荤殑閾炬帴鏂囨湰
-  QString followText;          ///< 璺熼殢閾炬帴鍚庣殑鏂囧瓧
-  QString documentationLink;   ///< 鏂囨。閾炬帴
+  QString hypertext;           ///< Hyperlink target text.
+  QString followText;          ///< Text shown after the hyperlink.
+  QString documentationLink;   ///< Documentation URL.
   QString callbackType;        ///< link / settings / preferences
-  QString callbackTarget;      ///< URL 鎴栬缃?key
+  QString callbackTarget;      ///< URL or settings key.
 };
 
 class BackendContext final : public QObject
@@ -93,7 +93,7 @@ class BackendContext final : public QObject
   Q_PROPERTY(QObject *auxiliaryService READ auxiliaryService CONSTANT)
   Q_PROPERTY(QObject *appSettings READ appSettings CONSTANT)
   Q_PROPERTY(bool visualCompareMode READ visualCompareMode CONSTANT)
-  // Phase 51: shell-level action gate properties (SHELL-03) — forward to EditorViewModel/PreviewViewModel.
+  // Phase 51: shell-level action gate properties (SHELL-03) - forward to EditorViewModel/PreviewViewModel.
   Q_PROPERTY(bool canImport READ canImport NOTIFY stateChanged)
   Q_PROPERTY(bool canSlice READ canSlice NOTIFY stateChanged)
   Q_PROPERTY(bool isSlicing READ isSlicing NOTIFY stateChanged)
@@ -112,14 +112,14 @@ class BackendContext final : public QObject
   Q_PROPERTY(int lastErrorSeverity READ lastErrorSeverity NOTIFY errorChanged)
   Q_PROPERTY(QString lastErrorTitle READ lastErrorTitle NOTIFY errorChanged)
   Q_PROPERTY(int pendingNotificationCount READ pendingNotificationCount NOTIFY errorChanged)
-  /// 褰撳墠閫氱煡杩涘害锛堜緵 QML 杩涘害鏉＄粦瀹氾級
+  /// Progress value for the currently displayed notification.
   Q_PROPERTY(int currentNotificationProgress READ currentNotificationProgress NOTIFY errorChanged)
   Q_PROPERTY(bool currentNotificationHasProgress READ currentNotificationHasProgress NOTIFY errorChanged)
   Q_PROPERTY(bool currentNotificationPersistent READ currentNotificationPersistent NOTIFY errorChanged)
   Q_PROPERTY(int currentNotificationType READ currentNotificationType NOTIFY errorChanged)
   Q_PROPERTY(bool currentNotificationShowExport READ currentNotificationShowExport NOTIFY errorChanged)
   Q_PROPERTY(bool currentNotificationShowPreview READ currentNotificationShowPreview NOTIFY errorChanged)
-  /// 閫氱煡涓績锛堝榻愪笂娓?notification_manager 婊氬姩閫氱煡鍖哄煙锛?
+  /// Notification state exposed to QML.
   Q_PROPERTY(int historyCount READ historyCount NOTIFY historyChanged)
   Q_PROPERTY(int unreadHistoryCount READ unreadHistoryCount NOTIFY historyChanged)
   Q_PROPERTY(bool notificationsEnabled READ notificationsEnabled WRITE setNotificationsEnabled NOTIFY settingsChanged)
@@ -129,20 +129,20 @@ class BackendContext final : public QObject
   Q_PROPERTY(QString latencyBrief READ latencyBrief NOTIFY latencyChanged)
   Q_PROPERTY(QString lastLatencyOperation READ lastLatencyOperation NOTIFY latencyChanged)
   Q_PROPERTY(int lastLatencyMs READ lastLatencyMs NOTIFY latencyChanged)
-  // 澶栬 / 缂╂斁 / 涓婚棰滆壊
+  // Theme and scaling properties exposed to QML.
   Q_PROPERTY(double uiScale READ uiScale NOTIFY uiScaleChanged)
   Q_PROPERTY(QColor bgColor READ bgColor NOTIFY themeChanged)
   Q_PROPERTY(QColor surfaceColor READ surfaceColor NOTIFY themeChanged)
   Q_PROPERTY(QColor sidebarColor READ sidebarColor NOTIFY themeChanged)
   Q_PROPERTY(QColor borderColor READ borderColor NOTIFY themeChanged)
-  /// 椤圭洰鏍囬锛堜紭鍏堟樉绀?projectName锛屽惁鍒欎粠 projectPath 涓彁鍙栨枃浠跺悕锛?
+  /// Display title derived from project name/path state.
   Q_PROPERTY(QString displayProjectTitle READ displayProjectTitle NOTIFY displayProjectTitleChanged)
-  /// 棣栨閰嶇疆鍚戝鏄惁宸插畬鎴愶紙鎸佷箙鍖栧埌 QSettings锛?
+  /// Whether the first-run configuration wizard has completed.
   Q_PROPERTY(bool configWizardCompleted READ configWizardCompleted WRITE setConfigWizardCompleted NOTIFY configWizardCompletedChanged)
-  // 鈹€鈹€ TabPosition 鏋氫妇鍊兼毚闇茬粰 QML 浣滀负鍙 int 灞炴€?
-  // 瑙ｅ喅锛歈_ENUM 鍦?Qt 6.10 QML 涓€氳繃 context-property 瀹炰緥璁块棶涓嶇ǔ瀹氾紙"of undefined"锛夛紝
-  // 鏀圭敤 Q_PROPERTY(int) 鐩存帴鏆撮湶姣忎釜鏋氫妇鍊笺€俀_ENUM 浠嶄繚鐣欎緵 C++ 渚у厓瀵硅薄浣跨敤銆?
-  // 瀵归綈 third_party/OrcaSlicer/src/slic3r/GUI/MainFrame.hpp:218-229 TabPosition 鏋氫妇銆?
+  // TabPosition enum values are mirrored as integer properties for QML.
+  // Q_ENUM can be fragile through context-property access in Qt 6.10.
+  // Keep integer aliases so QML can compare page ids without enum lookup issues.
+  // Aligned with upstream MainFrame tab ids.
   Q_PROPERTY(int tpHome READ tpHome CONSTANT)
   Q_PROPERTY(int tp3DEditor READ tp3DEditor CONSTANT)
   Q_PROPERTY(int tpPreview READ tpPreview CONSTANT)
@@ -152,57 +152,57 @@ class BackendContext final : public QObject
   Q_PROPERTY(int tpCalibration READ tpCalibration CONSTANT)
   Q_PROPERTY(int tpPlaceholder1 READ tpPlaceholder1 CONSTANT)
   Q_PROPERTY(int tpPlaceholder2 READ tpPlaceholder2 CONSTANT)
-  // 鈹€鈹€ Phase 3: ViewMode 鏋氫妇锛圥later 鍐呴儴瑙嗗浘鍒囨崲锛屽榻愪笂娓?view3D/preview/assemble_view 涓?canvas锛?
-  // 鍚?TabPosition 妯″紡锛歈_PROPERTY(int) 鏆撮湶姣忎釜鏋氫妇鍊硷紝Q_ENUM 渚?C++ 鍏冨璞′娇鐢ㄣ€?
+  // Phase 3: ViewMode ids mirror Plater canvas modes.
+  // Upstream-aligned QML API.
   Q_PROPERTY(int vmView3D READ vmView3D CONSTANT)
   Q_PROPERTY(int vmPreview READ vmPreview CONSTANT)
   Q_PROPERTY(int vmAssembleView READ vmAssembleView CONSTANT)
-  /// 褰撳墠 Plater 瑙嗗浘妯″紡锛堢敱 currentPage 鑱斿姩锛歵p3DEditor鈫扸iew3D锛宼pPreview鈫扨review锛?
+  /// Current Plater view mode derived from page and canvas state.
   Q_PROPERTY(int currentViewMode READ currentViewMode NOTIFY currentViewModeChanged)
 
-  // 鈹€鈹€ Phase 4: Sidebar Dockable 鐘舵€侊紙瀵归綈涓婃父 collapse_sidebar + 澧炲己 dockArea/width锛夆攢鈹€
-  // 鎸佷箙鍖栧埌 QSettings owzx/sidebar/* 锛堝榻愪笂娓?app_config collapsed_sidebar锛?
+  // Phase 4: persisted sidebar state mirrors upstream collapsed-sidebar behavior.
+  // Sidebar state is persisted under the owzx/sidebar QSettings namespace.
   Q_PROPERTY(bool sidebarCollapsed READ sidebarCollapsed NOTIFY sidebarCollapsedChanged)
   Q_PROPERTY(int sidebarWidth READ sidebarWidth NOTIFY sidebarWidthChanged)
   Q_PROPERTY(int sidebarDockArea READ sidebarDockArea NOTIFY sidebarDockAreaChanged)
-  // 甯搁噺 accessors锛圦ML 鐢紝閬垮厤榄旀硶鏁帮級
+  // QML-facing constant accessors.
   Q_PROPERTY(int sidebarMinWidth READ sidebarMinWidth CONSTANT)
   Q_PROPERTY(int sidebarMaxWidth READ sidebarMaxWidth CONSTANT)
   Q_PROPERTY(int sdaLeft READ sdaLeft CONSTANT)
   Q_PROPERTY(int sdaRight READ sdaRight CONSTANT)
 
 public:
-  /// 涓婃父瀵归綈 TabPosition 鏋氫妇锛?:1 鏁板€煎榻?third_party/OrcaSlicer/src/slic3r/GUI/MainFrame.hpp:218-229锛夈€?
-  /// OWzx 閲嶅懡鍚嶏細tpMonitor鈫抰pDevice, tpAuxiliary鈫抰pPlaceholder1, toDebugTool鈫抰pPlaceholder2銆?
-  /// 鏁板€间笉鍙樹互淇濇寔涓庝笂娓?Notebook.cpp / EVT_SELECT_TAB 瀹屽叏鍏煎銆?
+  /// TabPosition mirrors upstream MainFrame tab ids.
+  /// OWzx renames monitor and reserves auxiliary/debug pages as placeholders.
+  /// Navigation requests follow upstream Notebook tab selection semantics.
   enum class TabPosition
   {
     tpHome = 0,
     tp3DEditor = 1,
     tpPreview = 2,
-    tpDevice = 3,         // upstream: tpMonitor 鈥?OWzx rename (CONTEXT.md D-ARCH-02)
+    tpDevice = 3,         // upstream: tpMonitor; OWzx rename (CONTEXT.md D-ARCH-02)
     tpMultiDevice = 4,
     tpProject = 5,
     tpCalibration = 6,
-    tpPlaceholder1 = 7,   // upstream: tpAuxiliary 鈥?reserved for future use
-    tpPlaceholder2 = 8,   // upstream: toDebugTool 鈥?reserved for future use
+    tpPlaceholder1 = 7,   // upstream: tpAuxiliary; reserved for future use
+    tpPlaceholder2 = 8,   // upstream: toDebugTool; reserved for future use
   };
   Q_ENUM(TabPosition)
 
-  /// Plater 瑙嗗浘妯″紡锛堝榻愪笂娓?Plater.cpp view3D / preview / assemble_view 涓?canvas 璁捐锛夈€?
-  /// 鍒囨崲鍙敼鍙鎬э紝涓嶉攢姣?閲嶅缓缁勪欢锛圓RCH-07 鐘舵€佷繚鐣欏绾︼級銆?
-  /// AssembleView 鍦?v2.0 涓?Out of Scope锛屼粎鐣欏崰浣嶃€?
+  /// Plater canvas mode exposed to QML.
+  /// Values follow upstream view3D / preview / assemble_view canvas modes.
+  /// AssembleView remains out of scope for this milestone.
   enum class ViewMode
   {
-    View3D = 0,        ///< Prepare 瑙嗗浘锛堝璞＄紪杈?3D 鍦烘櫙锛?
-    Preview = 1,       ///< G-code 棰勮锛堝垏鐗囩粨鏋滐級
-    AssembleView = 2,  ///< 澶氭澘瑁呴厤瑙嗗浘锛坴2.0 鍗犱綅锛?
+    View3D = 0, ///< Prepare 3D canvas.
+    Preview = 1, ///< G-code preview canvas.
+    AssembleView = 2, ///< Assemble canvas placeholder.
   };
   Q_ENUM(ViewMode)
 
-  /// Sidebar dock 鍖哄煙锛圥hase 4 澧炲己锛屼笂娓稿彧鏈?collapse 鏃?dock 鍒囨崲锛夈€?
-  /// Left=0 榛樿锛堝榻愪笂娓?Plater 宸︿晶鍥哄畾锛夛紱Right=1锛堝寮猴細鍙垏鍒板彸渚э級銆?
-  /// 娴姩绐楀彛 dock Out of Scope锛堜笂娓镐篃娌℃湁锛夈€?
+  /// Sidebar dock area exposed for persisted Prepare sidebar placement.
+  /// Left is the upstream default; right docking is retained for persistence.
+  /// Dragging between dock areas is out of scope for this milestone.
   enum class SidebarDockArea
   {
     Left = 0,
@@ -250,7 +250,7 @@ public:
   QObject *multiMachineViewModel() const;
   QObject *auxiliaryService() const;
   QObject *appSettings() const;
-  /// v2.6 CAM-03锛氭毚闇?CameraServiceMock锛堜緵 CameraImageProvider 娉ㄥ唽浣跨敤锛?
+  /// Camera image provider used by Monitor preview surfaces.
   CameraServiceMock *cameraService() const { return cameraService_; }
   bool visualCompareMode() const;
 
@@ -268,7 +268,7 @@ public:
   QString exportActionHint() const;
   QString saveActionLabel() const;
   QString saveActionHint() const;
-  /// Phase 3: 璁剧疆褰撳墠 Plater 瑙嗗浘妯″紡锛堝幓閲?+ emit currentViewModeChanged锛夈€備緵 requestSelectTab 鑱斿姩 + requestChangeViewMode 澶嶇敤銆?
+  /// Set current Plater canvas mode and emit currentViewModeChanged.
   void setCurrentViewMode(int mode);
   double uiScale() const { return m_uiScale; }
   QColor bgColor() const { return m_bgColor; }
@@ -278,26 +278,26 @@ public:
   QString displayProjectTitle() const;
 
   Q_INVOKABLE void setCurrentPage(int page);
-  /// 璇锋眰鍒囨崲鍒版寚瀹?tab锛堝榻愪笂娓?MainFrame::request_select_tab锛孧ainFrame.cpp:3943-3948锛夈€?
-  /// 鍏堝箍鎾?tabSelectRequested 淇″彿锛堣鐩戝惉鑰呭湪椤甸潰鍒囨崲鍓嶅搷搴旓級锛屽啀璋冪敤 setCurrentPage銆?
-  /// 瓒婄晫浣嶇疆闈欓粯鎷掔粷骞?qWarning锛圥itfall A3 鈥?闃叉 StackLayout currentIndex 瓒婄晫锛夈€?
+  /// Request a top-level tab change.
+  /// Emits tabSelectRequested before updating currentPage.
+  /// Invalid tab positions are rejected with a warning.
   Q_INVOKABLE void requestSelectTab(int position);
-  /// 璇锋眰鍒囨崲 Plater 瑙嗗浘妯″紡锛堝榻愪笂娓?Plater show_view3D / show_preview锛夈€?
-  /// 瓒婄晫/鍚屽€奸潤榛樻嫆缁濄€傚厛骞挎挱 viewModeChangeRequested锛屽啀 setCurrentViewMode銆?
+  /// Request a Plater canvas view-mode change.
+  /// Emits viewModeChangeRequested before updating currentViewMode.
   Q_INVOKABLE void requestChangeViewMode(int mode);
-  // Phase 4: Sidebar Dockable 鎿嶄綔锛堝榻愪笂娓?collapse_sidebar + 鎸佷箙鍖栵級
-  Q_INVOKABLE void requestToggleSidebar();           ///< 鎶樺彔/灞曞紑鍒囨崲锛堝榻愪笂娓?collapse_sidebar锛?
-  Q_INVOKABLE void requestSetSidebarCollapsed(bool c);  ///< 鏄惧紡璁剧疆鎶樺彔鐘舵€?
-  Q_INVOKABLE void requestSetSidebarWidth(int w);       ///< 璁剧疆瀹藉害锛坈lamp [min,max]锛屾寔涔呭寲锛?
-  Q_INVOKABLE void requestSetSidebarDockArea(int area); ///< 璁剧疆 dock 鍖哄煙锛圠eft/Right锛?
+  // Phase 4: dockable sidebar state aligns with upstream collapsed sidebar behavior.
+  Q_INVOKABLE void requestToggleSidebar();           ///< Toggle sidebar collapsed state.
+  Q_INVOKABLE void requestSetSidebarCollapsed(bool c);  ///< Set persisted sidebar collapsed state.
+  Q_INVOKABLE void requestSetSidebarWidth(int w);       ///< Set persisted sidebar width clamped to [min,max].
+  Q_INVOKABLE void requestSetSidebarDockArea(int area); ///< Set persisted sidebar dock area.
   Q_INVOKABLE void postError(const QString &message, int severity = 0);
   Q_INVOKABLE void postNotification(const QString &message, const QString &title = {}, int severity = 0);
   Q_INVOKABLE void clearError();
   Q_INVOKABLE void dismissNotification();
 
-  /// 涓撶敤閫氱煡绫诲瀷锛堝榻愪笂娓?NotificationManager 涓撶敤閫氱煡锛?
+  /// Convenience notification helpers aligned with upstream NotificationManager.
   Q_INVOKABLE void postSlicingProgress(int percent, const QString &stage = {});
-  Q_INVOKABLE void postSlicingComplete();          ///< 鍒囩墖瀹屾垚锛屽惈瀵煎嚭/棰勮鎸夐挳
+  Q_INVOKABLE void postSlicingComplete(); ///< Post slicing-complete notification.
   Q_INVOKABLE void postExportFinished(const QString &filePath);
   Q_INVOKABLE void postExportOngoing(const QString &stage = {});
   Q_INVOKABLE void postPlaterWarning(const QString &message);
@@ -306,7 +306,7 @@ public:
   Q_INVOKABLE void postValidateWarning(const QString &message);
   Q_INVOKABLE void postArrangeOngoing(int percent);
 
-  /// 鎻愮ず閫氱煡锛堝榻愪笂娓?HintNotification / DidYouKnowHint锛?
+  /// Post a hint notification aligned with upstream DidYouKnowHint behavior.
   Q_INVOKABLE void postHint();
   Q_INVOKABLE void nextHint();
   Q_INVOKABLE void prevHint();
@@ -315,34 +315,34 @@ public:
   Q_INVOKABLE QString currentHintText() const;
   Q_INVOKABLE QString currentHintHypertext() const;
   Q_INVOKABLE QString currentHintFollowText() const;
-  /// 鎵撳紑褰撳墠鎻愮ず鐨勬枃妗ｉ摼鎺ワ紙瀵归綈涓婃父 HintNotification documentation button锛?
+  /// Show the current hint documentation link.
   Q_INVOKABLE bool openHintDocumentation() const;
-  /// 褰撳墠鎻愮ず鏄惁鏈夋枃妗ｉ摼鎺?
+  /// Upstream-aligned QML API.
   Q_INVOKABLE bool currentHintHasDocumentationLink() const;
 
   Q_INVOKABLE void openSettings(); // H3
   // Phase 52 PREPSB-02: forward sidebar settings request (interim no-op log;
   // Phase 56 wires the independent dialog). category: "printer"/"filament"/"process".
   Q_INVOKABLE void forwardSettingsRequest(const QString &category);
-  /// 璇锋眰鏄剧ず棣栨閰嶇疆鍚戝锛圤ML 渚цЕ鍙戯級
+  /// Upstream-aligned QML API.
   Q_INVOKABLE void showConfigWizard();
-  /// 璇锋眰鏄剧ず鐑簥褰㈢姸璁剧疆瀵硅瘽妗嗭紙QML 渚цЕ鍙戯級
+  /// Request a QML-owned dialog or workflow surface.
   Q_INVOKABLE void showBedShapeDialog();
-  /// 璇锋眰鏄剧ず G-code 缂栬緫瀵硅瘽妗嗭紙QML 渚цЕ鍙戯紝瀵归綈涓婃父 EditGCodeDialog锛?
+  /// Request a QML-owned dialog or workflow surface.
   Q_INVOKABLE void showEditGCodeDialog(const QString &key = {}, const QString &value = {});
-  /// 璇锋眰鏄剧ず AMS 璁剧疆瀵硅瘽妗嗭紙QML 渚цЕ鍙戯紝瀵归綈涓婃父 AMSMaterialsSetting / AMSSetting锛?
+  /// Request a QML-owned dialog or workflow surface.
   Q_INVOKABLE void showAMSSettingsDialog();
-  /// 璇锋眰鏄剧ず鍥轰欢鍗囩骇瀵硅瘽妗嗭紙QML 渚цЕ鍙戯紝瀵归綈涓婃父 UpgradePanel / MachineInfoPanel锛?
+  /// Request a QML-owned dialog or workflow surface.
   Q_INVOKABLE void showFirmwareDialog();
-  /// 璇锋眰鏄剧ず閫熷害闄愬埗瀵硅瘽妗嗭紙QML 渚цЕ鍙戯紝瀵归綈涓婃父 AccelerationAndSpeedLimitDialog锛?
+  /// Request a QML-owned dialog or workflow surface.
   Q_INVOKABLE void showSpeedLimitDialog();
-  /// 璇锋眰鏄剧ず鎿︽枡濉旇缃璇濇锛圦ML 渚цЕ鍙戯紝瀵归綈涓婃父 WipeTowerDialog锛?
+  /// Upstream-aligned QML API.
   Q_INVOKABLE void showWipeTowerDialog();
-  /// 璇锋眰鏄剧ず鎵撳嵃涓绘満璁剧疆瀵硅瘽妗嗭紙QML 渚цЕ鍙戯紝瀵归綈涓婃父 PhysicalPrinterDialog锛?
+  /// Request a QML-owned dialog or workflow surface.
   Q_INVOKABLE void showPrintHostDialog();
-  /// 璇锋眰鏄剧ず鎻掍欢绠＄悊瀵硅瘽妗嗭紙QML 渚цЕ鍙戯紝瀵归綈涓婃父 WebDownPluginDlg锛?
+  /// Show plugin manager dialog placeholder until QML implements WebDownPluginDlg.
   Q_INVOKABLE void showPluginManagerDialog();
-  /// 璇锋眰鏄剧ず绮剧畝棰勮妯″紡瀵硅瘽妗嗭紙QML 渚цЕ鍙戯紝瀵归綈涓婃父 EnableLiteModeDialog锛?
+  /// Show lite-mode dialog placeholder until QML implements EnableLiteModeDialog.
   Q_INVOKABLE void showEnableLiteModeDialog();
   bool configWizardCompleted() const;
   void setConfigWizardCompleted(bool completed);
@@ -366,7 +366,7 @@ public:
   int currentNotificationType() const;
   bool currentNotificationShowExport() const;
   bool currentNotificationShowPreview() const;
-  /// 閫氱煡涓績
+  /// Notification state changed.
   Q_INVOKABLE int historyCount() const;
   Q_INVOKABLE int unreadHistoryCount() const;
   Q_INVOKABLE QString historyMessage(int index) const;
@@ -391,14 +391,14 @@ signals:
   void currentPageChanged();
   /// Phase 51 SHELL-03: bulk shell-state refresh signal for action gates + labels.
   void stateChanged();
-  /// 骞挎挱 tab 鍒囨崲璇锋眰锛堝榻愪笂娓?EVT_SELECT_TAB锛夈€?
-  /// 鍦?currentPage 鏀瑰彉涔嬪墠鍙戝嚭锛屼究浜庣洃鍚€呭厛浜庨〉闈㈠垏鎹㈠仛鍑哄搷搴斻€?
+  /// Emitted when a tab selection is requested.
+  /// Current Plater view mode derived from page and canvas state.
   void tabSelectRequested(int position);
-  /// 骞挎挱 Plater 瑙嗗浘妯″紡鍒囨崲璇锋眰锛堝榻愪笂娓?view3D/preview 鍙鎬у垏鎹級銆?
+  /// Upstream-aligned QML API.
   void viewModeChangeRequested(int mode);
-  /// 褰撳墠瑙嗗浘妯″紡宸叉敼鍙橈紙currentViewMode Q_PROPERTY NOTIFY锛夈€?
+  /// Emitted when the Plater view mode changes.
   void currentViewModeChanged();
-  // Phase 4: Sidebar Dockable 鐘舵€佸彉鏇翠俊鍙?
+  // Phase 4: dockable sidebar state changed.
   void sidebarCollapsedChanged();
   void sidebarWidthChanged();
   void sidebarDockAreaChanged();
@@ -435,7 +435,7 @@ private:
   DeviceServiceMock *deviceService_ = nullptr;
   ProjectServiceMock *projectService_ = nullptr;
   NetworkServiceMock *networkService_ = nullptr;
-  /// v2.6 CAM-03锛氭憚鍍忓ご鏈嶅姟锛圧TSP 瑙ｇ爜浠ｇ悊锛?
+  /// Upstream-aligned QML API.
   CameraServiceMock *cameraService_ = nullptr;
   /// v2.8 W3: application-level persisted settings, including bed size.
   AppSettingsService *appSettings_ = nullptr;
@@ -458,9 +458,11 @@ private:
   /// Phase 3: current Plater view mode. Default is View3D.
   ViewMode currentViewMode_ = ViewMode::View3D;
   // Phase 4: dockable sidebar state is loaded from QSettings and saved by setters.
-  static constexpr int kSidebarMinWidth = 360;   ///< Minimum readable sidebar width.
-  static constexpr int kSidebarMaxWidth = 480;   ///< Maximum width before crowding the viewport.
-  static constexpr int kSidebarDefaultWidth = 390; ///< Screenshot-aligned default sidebar width.
+  static constexpr int kSidebarSettingsVersion = 2; ///< Width persistence contract version.
+  static constexpr int kSidebarLegacyDefaultWidth = 390; ///< Pre-v3.9 default migrated to compact width.
+  static constexpr int kSidebarMinWidth = 312;   ///< Minimum readable Prepare sidebar width.
+  static constexpr int kSidebarMaxWidth = 390;   ///< Maximum width before crowding the viewport.
+  static constexpr int kSidebarDefaultWidth = 328; ///< Screenshot-ratio compact default sidebar width.
   bool sidebarCollapsed_ = false;
   int sidebarWidth_ = kSidebarDefaultWidth;
   SidebarDockArea sidebarDockArea_ = SidebarDockArea::Left;
@@ -474,34 +476,34 @@ private:
     QString title;
     int severity = 0;                 ///< NotificationLevel
     int type = NotiTypeCustom;         ///< NotificationType
-    bool persistent = false;           ///< true = 涓嶈嚜鍔ㄥ叧闂紝闇€鐢ㄦ埛鍏抽棴
-    int progressValue = 0;            ///< 杩涘害鏉″綋鍓嶅€?(0-100)
+    bool persistent = false; ///< Persistent notifications stay visible until dismissed.
+    int progressValue = 0; ///< Progress percentage from 0 to 100.
     int progressMin = 0;
     int progressMax = 100;
-    bool hasProgress = false;          ///< 鏄惁鏄剧ず杩涘害鏉?
-    bool requiresConfirm = false;      ///< 鏄惁闇€瑕佺敤鎴风‘璁?
-    int confirmAction = 0;             ///< 鑷畾涔夌‘璁ゅ姩浣滄爣璇?
-    QDateTime timestamp;               ///< 閫氱煡鏃堕棿鎴筹紙鐢ㄤ簬鍘嗗彶璁板綍锛?
-    /// 鍒囩墖瀹屾垚鍚庢搷浣滄寜閽紙瀵归綈涓婃父 SlicingProgressNotification锛?
+    bool hasProgress = false; ///< Whether the notification carries progress.
+    bool requiresConfirm = false; ///< Whether the notification requires confirmation.
+    int confirmAction = 0; ///< Confirmation action identifier.
+    QDateTime timestamp; ///< Notification creation timestamp.
+    /// Upstream-aligned QML API.
     bool showExportButton = false;
     bool showPreviewButton = false;
-    /// 鎻愮ず瀵艰埅锛堝榻愪笂娓?HintNotification next/prev锛?
+    /// Upstream-aligned QML API.
     bool hintHasNext = false;
     bool hintHasPrev = false;
   };
   QQueue<NotificationEntry> m_notificationQueue;
-  NotificationEntry m_currentNotification; ///< 褰撳墠鏄剧ず鐨勯€氱煡锛堟敮鎸佽繘搴︽洿鏂帮級
-  QVector<NotificationEntry> m_notificationHistory; ///< 宸插叧闂殑閫氱煡鍘嗗彶
+  NotificationEntry m_currentNotification; ///< Currently displayed notification entry.
+  QVector<NotificationEntry> m_notificationHistory; ///< Dismissed notification history.
   int m_unreadHistoryCount = 0;
   void showNextNotification();
-  /// 鏇存柊褰撳墠閫氱煡鐨勮繘搴﹀€硷紙瀵归綈涓婃父 notification_manager 杩涘害閫氱煡锛?
+  /// Update the active notification progress value.
   Q_INVOKABLE void updateNotificationProgress(int value);
-  /// 纭褰撳墠闇€瑕佺‘璁ょ殑閫氱煡锛堝榻愪笂娓?notification_manager confirm锛?
+  /// Confirm the active notification.
   Q_INVOKABLE void confirmCurrentNotification();
-  /// 鍙栨秷褰撳墠闇€瑕佺‘璁ょ殑閫氱煡
+  /// Cancel the active notification.
   Q_INVOKABLE void cancelCurrentNotification();
 
-  // 澶栬鐘舵€?
+  // Appearance state.
   QTranslator *m_translator = nullptr;
   double m_uiScale = 1.0;
   QColor m_bgColor{"#0d0f12"};
@@ -509,20 +511,20 @@ private:
   QColor m_sidebarColor{"#0f1218"};
   QColor m_borderColor{"#242a33"};
 
-  // 閫氱煡鍋忓ソ锛堝榻愪笂娓?notification_manager preferences锛?
+  // Notification preferences.
   bool m_notificationsEnabled = true;
   bool m_hintsEnabled = true;
-  int m_autoDismissSec = 5;           ///< 榛樿鑷姩娑堝け绉掓暟锛堥潪 persistent 閫氱煡锛?
-  bool m_showProgressNotifications = true; ///< 鏄剧ず鍒囩墖杩涘害閫氱煡
+  int m_autoDismissSec = 5; ///< Default auto-dismiss timeout for non-persistent notifications.
+  bool m_showProgressNotifications = true; ///< Whether progress notifications are shown.
 
-  /// 棣栨閰嶇疆鍚戝鐘舵€侊紙瀵归綈涓婃父 ConfigWizard 棣栨杩愯妫€娴嬶級
+  /// First-run configuration wizard completion flag.
   bool m_configWizardCompleted = false;
 
-  /// 鎻愮ず鏁版嵁搴擄紙瀵归綈涓婃父 HintDatabase锛?
+  /// Hint data exposed to QML notification surfaces.
   QVector<HintData> m_hints;
   int m_currentHintIndex = -1;
   QSet<QString> m_displayedHintIds;
-  QTimer *m_hintTimer = nullptr;      ///< 瀹氭湡鏄剧ず鎻愮ず锛堝榻愪笂娓?30s 闂撮殧锛?
+  QTimer *m_hintTimer = nullptr; ///< Timer for periodic hint notifications.
   void initHintDatabase();
   void initFallbackHintDatabase();
   int selectNextHint(bool random = true);
