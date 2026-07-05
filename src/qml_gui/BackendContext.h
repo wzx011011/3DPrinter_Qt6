@@ -458,11 +458,10 @@ private:
   /// Phase 3: current Plater view mode. Default is View3D.
   ViewMode currentViewMode_ = ViewMode::View3D;
   // Phase 4: dockable sidebar state is loaded from QSettings and saved by setters.
-  static constexpr int kSidebarSettingsVersion = 2; ///< Width persistence contract version.
-  static constexpr int kSidebarLegacyDefaultWidth = 390; ///< Pre-v3.9 default migrated to compact width.
-  static constexpr int kSidebarMinWidth = 312;   ///< Minimum readable Prepare sidebar width.
-  static constexpr int kSidebarMaxWidth = 390;   ///< Maximum width before crowding the viewport.
-  static constexpr int kSidebarDefaultWidth = 328; ///< Screenshot-ratio compact default sidebar width.
+  static constexpr int kSidebarSettingsVersion = 3; ///< Width persistence contract version.
+  static constexpr int kSidebarMinWidth = 392;   ///< Screenshot Prepare sidebar width.
+  static constexpr int kSidebarMaxWidth = 392;   ///< Screenshot Prepare sidebar width.
+  static constexpr int kSidebarDefaultWidth = 392; ///< Pixel-restored Prepare sidebar width.
   bool sidebarCollapsed_ = false;
   int sidebarWidth_ = kSidebarDefaultWidth;
   SidebarDockArea sidebarDockArea_ = SidebarDockArea::Left;

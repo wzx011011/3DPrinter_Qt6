@@ -1694,9 +1694,9 @@ void ViewModelSmokeTests::testSidebarCollapsedDefault()
 
   // Sidebar is visible by default, matching upstream Plater.
   QCOMPARE(ctx.sidebarCollapsed(), false);
-  QCOMPARE(ctx.sidebarMinWidth(), 312);
-  QCOMPARE(ctx.sidebarMaxWidth(), 390);
-  QCOMPARE(ctx.sidebarWidth(), 328);
+  QCOMPARE(ctx.sidebarMinWidth(), 392);
+  QCOMPARE(ctx.sidebarMaxWidth(), 392);
+  QCOMPARE(ctx.sidebarWidth(), 392);
   QCOMPARE(ctx.sidebarDockArea(), static_cast<int>(BackendContext::SidebarDockArea::Left));
 }
 
@@ -1743,24 +1743,24 @@ void ViewModelSmokeTests::testSidebarWidthClamp()
 
   // Values below the readable width clamp to min.
   ctx.requestSetSidebarWidth(100);
-  QCOMPARE(ctx.sidebarWidth(), 312);
-  QCOMPARE(spy.count(), 1);
+  QCOMPARE(ctx.sidebarWidth(), 392);
+  QCOMPARE(spy.count(), 0);
 
   // Values above the compact contract clamp to max.
   spy.clear();
   ctx.requestSetSidebarWidth(9999);
-  QCOMPARE(ctx.sidebarWidth(), 390);
-  QCOMPARE(spy.count(), 1);
+  QCOMPARE(ctx.sidebarWidth(), 392);
+  QCOMPARE(spy.count(), 0);
 
   // New max width must persist after the v3.9 settings-version marker is written.
   BackendContext ctxMax;
-  QCOMPARE(ctxMax.sidebarWidth(), 390);
+  QCOMPARE(ctxMax.sidebarWidth(), 392);
 
-  // Normal values are stored unchanged.
+  // Intermediate values also clamp to the screenshot width.
   spy.clear();
   ctx.requestSetSidebarWidth(360);
-  QCOMPARE(ctx.sidebarWidth(), 360);
-  QCOMPARE(spy.count(), 1);
+  QCOMPARE(ctx.sidebarWidth(), 392);
+  QCOMPARE(spy.count(), 0);
 
   // Equal values after clamping are deduplicated.
   spy.clear();
@@ -1769,17 +1769,18 @@ void ViewModelSmokeTests::testSidebarWidthClamp()
 
   // Persistence verification.
   BackendContext ctx2;
-  QCOMPARE(ctx2.sidebarWidth(), 360);
+  QCOMPARE(ctx2.sidebarWidth(), 392);
 
-  // Pre-v3.9 default width is migrated to the compact default once.
+  // Pre-pixel-restoration persisted widths are migrated to the screenshot width once.
   resetSidebarSettings();
   {
     QSettings s;
-    s.setValue(QStringLiteral("owzx/sidebar/width"), 390);
+    s.setValue(QStringLiteral("owzx/sidebar/width"), 328);
+    s.setValue(QStringLiteral("owzx/sidebar/settingsVersion"), 2);
     s.sync();
   }
   BackendContext legacyCtx;
-  QCOMPARE(legacyCtx.sidebarWidth(), 328);
+  QCOMPARE(legacyCtx.sidebarWidth(), 392);
 
   resetSidebarSettings();
 }

@@ -214,8 +214,7 @@ BackendContext::BackendContext(QObject *parent)
   const int sidebarSettingsVersion =
       settings.value(QStringLiteral("owzx/sidebar/settingsVersion"), 1).toInt();
   if (sidebarSettingsVersion < kSidebarSettingsVersion &&
-      savedSidebarWidthValue.isValid() &&
-      savedWidth == kSidebarLegacyDefaultWidth) {
+      savedSidebarWidthValue.isValid()) {
     savedWidth = kSidebarDefaultWidth;
     settings.setValue(QStringLiteral("owzx/sidebar/width"), savedWidth);
     settings.setValue(QStringLiteral("owzx/sidebar/settingsVersion"), kSidebarSettingsVersion);

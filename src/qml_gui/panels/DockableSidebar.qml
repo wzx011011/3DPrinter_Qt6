@@ -59,47 +59,10 @@ Item {
         radius: 0
         border.width: 0
 
-        // ── 标题栏（折叠按钮 + dock 切换占位）──
-        // 对齐上游 Sidebar 标题栏，右侧放折叠按钮（Phase 6 会迁到 GLCanvas overlay）
-        Item {
-            id: titleBar
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.rightMargin: dragHandle.width
-            height: 28
-
-            Text {
-                anchors.left: parent.left
-                anchors.leftMargin: Theme.spacingMD
-                anchors.verticalCenter: parent.verticalCenter
-                text: qsTr("设置")
-                color: Theme.textSecondary
-                font.pixelSize: 12
-                font.weight: Font.Medium
-            }
-
-            // 折叠按钮（对齐上游 collapse_toolbar 图标）
-            // onClicked 调用外部注入的 toggleRequested 回调（转发到 backend.requestToggleSidebar）
-            CxButton {
-                id: collapseBtn
-                anchors.right: parent.right
-                anchors.rightMargin: 4
-                anchors.verticalCenter: parent.verticalCenter
-                implicitWidth: 24
-                implicitHeight: 24
-                text: "◀"  // Phase 6 替换为 Theme 图标
-                onClicked: {
-                    if (root.toggleRequested)
-                        root.toggleRequested()
-                }
-            }
-        }
-
         // ── 内容区：LeftSidebar ──
         LeftSidebar {
             id: leftSidebar
-            anchors.top: titleBar.bottom
+            anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom

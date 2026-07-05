@@ -62,6 +62,8 @@ private slots:
   void prepareWorkflowPanelsMatchRestorationContract();
   // Phase 77: Prepare viewport controls and gizmo panels must be icon-first.
   void prepareViewportControlsMatchRestorationContract();
+  // Quick 260705-vkn: pixel-level Prepare left sidebar restoration.
+  void prepareLeftSidebarMatchesPixelRestorationContract();
   // Phase 78: final Prepare cleanup must keep restored paths active and stale
   // paths absent.
   void prepareRestorationMilestoneHasCleanupCoverage();
@@ -1730,6 +1732,67 @@ void QmlUiAuditTests::prepareViewportControlsMatchRestorationContract()
            "Transform mini panel must bind to move, rotate, and scale modes");
 }
 
+void QmlUiAuditTests::prepareLeftSidebarMatchesPixelRestorationContract()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString platerPage = readSource(QStringLiteral("src/qml_gui/pages/Plater.qml"));
+  const QString dockableSidebar = readSource(QStringLiteral("src/qml_gui/panels/DockableSidebar.qml"));
+  const QString leftSidebar = readSource(QStringLiteral("src/qml_gui/panels/LeftSidebar.qml"));
+  const QString backendContext = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!platerPage.isEmpty(), "Unable to read Plater.qml");
+  QVERIFY2(!dockableSidebar.isEmpty(), "Unable to read DockableSidebar.qml");
+  QVERIFY2(!leftSidebar.isEmpty(), "Unable to read LeftSidebar.qml");
+  QVERIFY2(!backendContext.isEmpty(), "Unable to read BackendContext.h");
+
+  QVERIFY2(preparePage.contains(QStringLiteral("property int sidebarWidth: 392")),
+           "Prepare page default sidebar width must match the screenshot left-panel boundary");
+  QVERIFY2(preparePage.contains(QStringLiteral("property int sidebarMinWidth: 392"))
+               && preparePage.contains(QStringLiteral("property int sidebarMaxWidth: 392")),
+           "Pixel-restored Prepare sidebar must not start narrower than the screenshot width");
+  QVERIFY2(platerPage.contains(QStringLiteral("property int sidebarWidth: 392"))
+               && platerPage.contains(QStringLiteral("property int sidebarMinWidth: 392"))
+               && platerPage.contains(QStringLiteral("property int sidebarMaxWidth: 392")),
+           "Plater fallback sidebar width must match the Prepare pixel contract");
+  QVERIFY2(backendContext.contains(QStringLiteral("kSidebarDefaultWidth = 392"))
+               && backendContext.contains(QStringLiteral("kSidebarMinWidth = 392"))
+               && backendContext.contains(QStringLiteral("kSidebarMaxWidth = 392")),
+           "Backend persisted sidebar contract must not override the Prepare pixel width");
+
+  QVERIFY2(!dockableSidebar.contains(QStringLiteral("id: titleBar")),
+           "Expanded DockableSidebar must not add the extra settings title strip");
+  QVERIFY2(dockableSidebar.contains(QStringLiteral("anchors.top: parent.top")),
+           "LeftSidebar must start at the top of the expanded dock body");
+
+  const QStringList layoutTokens = {
+    QStringLiteral("readonly property int targetSidebarWidth: 392"),
+    QStringLiteral("id: printerHeroCard"),
+    QStringLiteral("id: printerThumbnail"),
+    QStringLiteral("id: nozzleTile"),
+    QStringLiteral("id: buildPlateTile"),
+    QStringLiteral("id: heaterTile"),
+    QStringLiteral("id: filamentPixelRow"),
+    QStringLiteral("id: processScopeBar"),
+    QStringLiteral("id: processPresetRow"),
+    QStringLiteral("id: paramsInlinePanel"),
+    QStringLiteral("id: paramsTabDelegate"),
+    QStringLiteral("required property var modelData")
+  };
+  for (const QString &token : layoutTokens) {
+    QVERIFY2(leftSidebar.contains(token),
+             qPrintable(QStringLiteral("Prepare left sidebar lost pixel-restoration token: %1").arg(token)));
+  }
+
+  QVERIFY2(!leftSidebar.contains(QStringLiteral("ObjectList {")),
+           "Default screenshot sidebar must not mount ObjectList in the left parameter column");
+  QVERIFY2(!leftSidebar.contains(QStringLiteral("SliceProgress {")),
+           "Default screenshot sidebar must not mount SliceProgress in the left parameter column");
+  QVERIFY2(leftSidebar.contains(QStringLiteral("#303236"))
+               || leftSidebar.contains(QStringLiteral("#313337"))
+               || leftSidebar.contains(QStringLiteral("#323438")),
+           "Prepare left sidebar palette must move toward the screenshot gray panel surface");
+}
+
 void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
 {
   const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
@@ -1799,11 +1862,10 @@ void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
   }
   QVERIFY2(dockableSidebar.contains(QStringLiteral("LeftSidebar {")),
            "DockableSidebar must wrap the restored LeftSidebar path");
-  QVERIFY2(leftSidebar.contains(QStringLiteral("ObjectList {"))
-              && leftSidebar.contains(QStringLiteral("SliceProgress {")),
-           "LeftSidebar must compose the restored object list and slice progress panels");
-  QVERIFY2(leftSidebar.contains(QStringLiteral("onExportRequested: root.exportRequested()"))
-              && dockableSidebar.contains(QStringLiteral("onExportRequested: root.exportRequested()"))
+  QVERIFY2(!leftSidebar.contains(QStringLiteral("ObjectList {"))
+              && !leftSidebar.contains(QStringLiteral("SliceProgress {")),
+           "Default screenshot sidebar must stay focused on printer, filament, process, and params");
+  QVERIFY2(dockableSidebar.contains(QStringLiteral("onExportRequested: root.exportRequested()"))
               && preparePage.contains(QStringLiteral("onExportRequested: root.openExportDialog()")),
            "SliceProgress export must propagate to PreparePage.openExportDialog instead of exporting directly");
   QVERIFY2(objectList.contains(QStringLiteral("objectListStatusPill")),

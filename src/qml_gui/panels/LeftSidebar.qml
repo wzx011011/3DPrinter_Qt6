@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -5,15 +6,21 @@ import ".."
 import "../controls"
 import "../components"
 
-// LeftSidebar -- three-column layout left panel
-// Contains: Printer, Filament, Objects, Transform, Slice Progress
-// Extracted from earlier Prepare sidebar code (Phase 52).
 Rectangle {
     id: root
     required property var editorVm
     required property var configVm
     property string processCategory: ""
     signal exportRequested()
+
+    readonly property int targetSidebarWidth: 392
+    readonly property color panelSurface: "#303236"
+    readonly property color sectionSurface: "#33363a"
+    readonly property color controlSurface: "#3b3e43"
+    readonly property color fieldSurface: "#2c2f33"
+    readonly property color dividerColor: "#45484d"
+    readonly property color mutedText: "#aeb4b9"
+
     property string paramsCurrentTab: "Quality"
     property string paramsSearchText: ""
     readonly property var paramsOptionModel: {
@@ -22,10 +29,9 @@ Rectangle {
     }
     readonly property string paramsTier: "print"
     property var paramsFilteredIndices: []
-    // G3: Printer 折叠状态（由 CollapsibleSection 管理）
     property bool printerExpanded: true
 
-    color: "transparent"
+    color: panelSurface
     radius: 0
     border.width: 0
 
@@ -42,421 +48,351 @@ Rectangle {
     }
 
     CxScrollView {
+        id: sidebarScroll
         anchors.fill: parent
-        anchors.margins: Theme.spacingXS
+        anchors.leftMargin: 8
+        anchors.rightMargin: 8
+        anchors.topMargin: 10
+        anchors.bottomMargin: 8
+        contentWidth: availableWidth
+        clip: true
 
         ColumnLayout {
-            width: parent.width
-            spacing: Theme.spacingXS
+            width: Math.max(0, sidebarScroll.availableWidth)
+            spacing: 8
 
-            // -- Section 1: Printer panel (对齐上游 SiderBar SidebarPrinter) --
-            // G3: 用 CollapsibleSection 统一卡片风格（与 Filament/Objects 一致）
-            CollapsibleSection {
-                id: printerSection
+            PixelHeader {
                 Layout.fillWidth: true
-                compact: true
                 title: qsTr("打印机")
-                iconText: "🖨"
-                expanded: printerExpanded
-                rightActions: [
-                    // Settings gear → ConfigWizard (对齐上游 m_printer_setting)
-                    Rectangle {
-                        width: 22; height: 22; radius: 4
-                        color: printerGearBtn.containsMouse ? Theme.bgHover : "transparent"
-                        Image {
-                            anchors.centerIn: parent
-                            width: 14; height: 14
-                            source: "qrc:/qml/assets/icons/settings.svg"
-                            fillMode: Image.PreserveAspectFit
-                        }
-                        MouseArea {
-                            id: printerGearBtn
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: backend.showConfigWizard()
-                        }
-                    }
-                ]
+                iconSource: "qrc:/qml/assets/icons/printer.svg"
+                actionIcon: "qrc:/qml/assets/icons/settings.svg"
+                actionToolTip: qsTr("打印机设置")
+                onActionTriggered: backend.showConfigWizard()
+            }
 
-                // 展开/折叠状态由 CollapsibleSection 管理（点击标题栏切换）
-                onExpandedChanged: printerExpanded = expanded
+            Rectangle {
+                id: printerHeroCard
+                Layout.fillWidth: true
+                Layout.preferredHeight: 76
+                radius: 4
+                color: root.sectionSurface
+                border.width: 1
+                border.color: root.dividerColor
 
-                content: ColumnLayout {
-                    Layout.fillWidth: true
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 8
                     spacing: 8
 
-                    // Row 1: Printer preset combo + edit + connection (对齐上游 hsizer_printer)
-                    RowLayout {
+                    Rectangle {
+                        id: printerThumbnail
+                        Layout.preferredWidth: 52
+                        Layout.preferredHeight: 52
+                        radius: 4
+                        color: "#d9dee3"
+                        border.width: 1
+                        border.color: "#9ea6ad"
+
+                        Image {
+                            anchors.centerIn: parent
+                            width: 28
+                            height: 28
+                            source: "qrc:/qml/assets/icons/printer.svg"
+                            fillMode: Image.PreserveAspectFit
+                            opacity: 0.75
+                        }
+                    }
+
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 4
+                        spacing: 5
 
-                        CxComboBox {
-                            id: printerPresetCombo
+                        RowLayout {
                             Layout.fillWidth: true
-                            model: root.configVm ? root.configVm.printerPresetNames : []
-                            currentIndex: {
-                                if (!root.configVm) return -1
-                                return root.configVm.printerPresetNames.indexOf(root.configVm.currentPrinterPreset)
-                            }
-                            onActivated: (i) => {
-                                if (root.configVm && i >= 0)
-                                    root.configVm.requestCurrentPrinterPreset(model[i])
-                            }
-                        }
+                            spacing: 6
 
-                        // Phase 52 PREPSB-03: dirty dot -- configVm.isPresetDirty
-                        // is true when the active preset has unsaved option edits.
-                        Rectangle {
-                            visible: !!root.configVm && root.configVm.isPresetDirty
-                            width: 8; height: 8; radius: 4
-                            color: Theme.accent
-                            Layout.leftMargin: 2
-                            ToolTip.text: qsTr("预设已修改（未保存）")
-                            ToolTip.visible: dirtyTipMA.containsMouse
-                            MouseArea { id: dirtyTipMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
-                        }
-
-                        // Edit preset (对齐上游 edit_btn → open SettingsDialog)
-                        Rectangle {
-                            // Phase 52 PREPSB-03: builtin/read-only presets are
-                            // honestly gated via presetActionBlocker (mirrors
-                            // PresetServiceMock::isBuiltinPreset gating).
-                            opacity: (root.configVm && root.configVm.presetActionBlocker(2, root.configVm.currentPrinterPreset, "rename") !== "") ? 0.4 : 1.0
-                            width: 26; height: 26; radius: 5
-                            color: editPresetBtn.containsMouse ? Theme.bgHover : "transparent"
-                            border.width: 1; border.color: Theme.borderSubtle
                             Text {
-                                anchors.centerIn: parent
-                                text: "✎"
-                                color: Theme.textMuted
+                                Layout.fillWidth: true
+                                text: root.configVm && root.configVm.currentPrinterPreset !== ""
+                                      ? root.configVm.currentPrinterPreset
+                                      : qsTr("Creality K2 Plus")
+                                color: Theme.textPrimary
                                 font.pixelSize: 12
+                                font.bold: true
+                                elide: Text.ElideRight
                             }
-                            MouseArea {
-                                id: editPresetBtn
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                enabled: !(root.configVm && root.configVm.presetActionBlocker(2, root.configVm.currentPrinterPreset, "rename") !== "")
-                                onClicked: backend.forwardSettingsRequest("printer")
+
+                            Rectangle {
+                                visible: !!root.configVm && root.configVm.isPresetDirty
+                                Layout.preferredWidth: 8
+                                Layout.preferredHeight: 8
+                                radius: 4
+                                color: Theme.accent
+                                ToolTip.text: qsTr("预设已修改（未保存）")
+                                ToolTip.visible: printerDirtyMA.containsMouse
+                                MouseArea { id: printerDirtyMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
                             }
                         }
 
-                        // Connection (对齐上游 connection_btn)
-                        Rectangle {
-                            width: 26; height: 26; radius: 5
-                            color: connBtn.containsMouse ? Theme.bgHover : "transparent"
-                            border.width: 1; border.color: Theme.borderSubtle
-                            Text {
-                                anchors.centerIn: parent
-                                text: "⇄"
-                                color: Theme.textMuted
-                                font.pixelSize: 11
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 5
+
+                            InfoTile {
+                                id: nozzleTile
+                                Layout.fillWidth: true
+                                label: qsTr("喷嘴")
+                                value: "0.4 mm"
                             }
-                            MouseArea {
-                                id: connBtn
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: backend.showPrintHostDialog()
+                            InfoTile {
+                                id: buildPlateTile
+                                Layout.fillWidth: true
+                                label: qsTr("热床")
+                                value: root.editorVm ? root.bedTypeName(root.editorVm.plateBedType(root.editorVm.currentPlateIndex)) : "PEI"
+                            }
+                            InfoTile {
+                                id: heaterTile
+                                Layout.fillWidth: true
+                                label: qsTr("温度")
+                                value: root.configVm ? (root.configVm.nozzleTemp + " / " + root.configVm.bedTemp) : "220 / 65"
                             }
                         }
                     }
 
-                    // Row 2: Bed type (对齐上游 m_bed_type_list)
-                    CxComboBox {
-                        Layout.fillWidth: true
-                        model: [qsTr("PEI"), qsTr("EP"), qsTr("PC"), qsTr("Texture PEI"), qsTr("Custom")]
-                        currentIndex: root.editorVm ? root.editorVm.plateBedType(root.editorVm.currentPlateIndex) : 0
-                        onActivated: (i) => {
-                            if (root.editorVm)
-                                root.editorVm.setPlateBedType(root.editorVm.currentPlateIndex, i)
+                    ColumnLayout {
+                        Layout.preferredWidth: 28
+                        spacing: 6
+                        Layout.alignment: Qt.AlignTop
+
+                        PixelIconButton {
+                            iconSource: "qrc:/qml/assets/icons/settings.svg"
+                            toolTipText: qsTr("编辑打印机预设")
+                            enabled: !(root.configVm && root.configVm.presetActionBlocker(2, root.configVm.currentPrinterPreset, "rename") !== "")
+                            onClicked: backend.forwardSettingsRequest("printer")
+                        }
+
+                        PixelIconButton {
+                            iconSource: "qrc:/qml/assets/icons/send-2.svg"
+                            toolTipText: qsTr("打印机连接")
+                            onClicked: backend.showPrintHostDialog()
                         }
                     }
                 }
             }
 
-            // -- Section 2: Filament (Prepare sidebar section, Phase 52) --
-            CollapsibleSection {
-                id: filamentSection
+            PixelHeader {
                 Layout.fillWidth: true
-                compact: true
                 title: qsTr("耗材")
                 iconText: "F"
-                expanded: true  // G1: 默认展开（对齐上游，耗材列表可见）
+                actionIcon: "qrc:/qml/assets/icons/settings.svg"
+                actionToolTip: qsTr("耗材设置")
+                enabled: !(root.configVm && root.configVm.presetActionBlocker(1, root.configVm.currentFilamentPreset, "rename") !== "")
+                onActionTriggered: backend.forwardSettingsRequest("filament")
+            }
 
-                rightActions: [
-                    // 编辑耗材预设（对齐上游 m_edit_filament_btn，镜像打印机区 ✎ 编辑按钮）
-                    // 依赖 CollapsibleSection 折叠点击区置底修复——否则本按钮点击被吞。
-                    Rectangle {
-                        opacity: (root.configVm && root.configVm.presetActionBlocker(1, root.configVm.currentFilamentPreset, "rename") !== "") ? 0.4 : 1.0
-                        width: 22; height: 22; radius: 4
-                        color: editFilaBtn.containsMouse ? Theme.bgHover : "transparent"
-                        Text {
-                            anchors.centerIn: parent
-                            text: "✎"
-                            color: Theme.textMuted
-                            font.pixelSize: 12
+            Repeater {
+                model: Math.max(1, root.editorVm ? root.editorVm.extruderCount : 1)
+
+                delegate: Rectangle {
+                    id: filamentPixelRow
+                    required property int index
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 38
+                    radius: 4
+                    color: root.sectionSurface
+                    border.width: 1
+                    border.color: root.configVm && !root.configVm.isFilamentCompatible(root.configVm.materialPresetName(filamentPixelRow.index)) ? "#f05545" : root.dividerColor
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        spacing: 7
+
+                        Rectangle {
+                            Layout.preferredWidth: 18
+                            Layout.preferredHeight: 18
+                            radius: 9
+                            color: root.filamentColor(filamentPixelRow.index)
+                            border.width: 1
+                            border.color: Qt.lighter(root.filamentColor(filamentPixelRow.index), 1.25)
                         }
-                        MouseArea {
-                            id: editFilaBtn
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
+
+                        Text {
+                            text: String(filamentPixelRow.index + 1)
+                            color: Theme.textPrimary
+                            font.pixelSize: 12
+                            font.bold: true
+                        }
+
+                        CxComboBox {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 28
+                            font.pixelSize: 11
+                            model: root.configVm ? root.configVm.filamentPresetNames : []
+                            currentIndex: {
+                                if (!root.configVm) return -1
+                                var names = root.configVm.filamentPresetNames
+                                for (var i = 0; i < names.length; i++) {
+                                    if (names[i] === root.configVm.materialPresetName(filamentPixelRow.index)) return i
+                                }
+                                return -1
+                            }
+                            onActivated: (i) => {
+                                if (!root.configVm) return
+                                var names = root.configVm.filamentPresetNames
+                                if (i >= 0 && i < names.length)
+                                    root.configVm.requestCurrentFilamentPreset(names[i])
+                            }
+                        }
+
+                        PixelIconButton {
+                            iconSource: "qrc:/qml/assets/icons/settings.svg"
+                            toolTipText: qsTr("编辑耗材预设")
                             enabled: !(root.configVm && root.configVm.presetActionBlocker(1, root.configVm.currentFilamentPreset, "rename") !== "")
                             onClicked: backend.forwardSettingsRequest("filament")
                         }
-                    },
-                    Rectangle {
-                        width: 8; height: 8; radius: 4
-                        visible: !!root.configVm && !root.configVm.isCurrentFilamentCompatible()
-                        color: "#f05545"
-                        ToolTip.text: qsTr("当前耗材可能与打印机不兼容")
-                        ToolTip.visible: compMA2.containsMouse
-                        ToolTip.delay: 500
-                        MouseArea { id: compMA2; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
-                    },
-                    Rectangle {
-                        width: 22; height: 22; radius: 4
-                        color: autoMatchBtn.containsMouse ? "#1c2a3e" : "transparent"
-                        Text { anchors.centerIn: parent; text: "↻"; color: Theme.textMuted; font.pixelSize: 13; font.bold: true }
-                        MouseArea { id: autoMatchBtn; anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.configVm) root.configVm.autoMatchFilament()
-                        }
-                    }
-                ]
 
-                content: ColumnLayout {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    spacing: 6
-
-                    // Filament slot grid — interactive (aligned with upstream Sidebar filament slots)
-                    GridLayout {
-                        columns: 1
-                        rowSpacing: 4
-                        columnSpacing: 4
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: childrenRect.height
-
-                        Repeater {
-                            // Phase 52 PREPSB-01: dynamic slot count (upstream
-                            // Plater shows one filament slot per extruder).
-                            // editorVm.extruderCount is the extruder-count surface;
-                            // guard with Math.max(1, ...) so a single-extruder (the
-                            // common mock default) always shows at least one slot.
-                            // Full multi-extruder count arrives when Phase 56 wires
-                            // real PresetBundle nozzle_diameter data.
-                            model: Math.max(1, root.editorVm ? root.editorVm.extruderCount : 1)
-                            delegate: FilamentSlot {
-                                required property int index
-                                Layout.fillWidth: true
-                                slotIndex: index
-                                configVm: root.configVm
-                            }
+                        Rectangle {
+                            visible: !!root.configVm && !root.configVm.isFilamentCompatible(root.configVm.materialPresetName(filamentPixelRow.index))
+                            Layout.preferredWidth: 8
+                            Layout.preferredHeight: 8
+                            radius: 4
+                            color: "#f05545"
+                            ToolTip.text: root.configVm ? root.configVm.currentPresetCompatibilityMessage : ""
+                            ToolTip.visible: filamentCompatMA.containsMouse
+                            MouseArea { id: filamentCompatMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
                         }
                     }
                 }
             }
 
-            // -- Section 3: Process 顶部条 (SIDEBAR-06/07/08 骨架, 对齐上游 ParamsPanel.m_top_panel) --
-            // 上游: Process icon + SwitchButton(Global/Objects) + ModeIcon + ModeSwitchButton(Simple/Advanced) + Compare + Setting
-            Rectangle {
-                id: processTopbar
+            PixelHeader {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 34
-                color: Theme.bgPanel
-                radius: Theme.radiusSM
-                border.width: 1
-                border.color: Theme.borderSubtle
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: 5
-                    spacing: 4
-
-                    // Process icon + label (对齐上游 m_process_title)
-                    Text {
-                        text: "⚙"
-                        color: Theme.accent
-                        font.pixelSize: 14
-                    }
-                    Text {
-                        text: qsTr("工艺")
-                        color: Theme.textPrimary
-                        font.pixelSize: 12
-                        font.weight: Font.Medium
-                        Layout.leftMargin: 2
-                    }
-                    // Phase 52 PREPSB-03: process preset dirty dot (same
-                    // isPresetDirty source as the printer row dirty dot).
-                    Rectangle {
-                        visible: !!root.configVm && root.configVm.isPresetDirty
-                        width: 8; height: 8; radius: 4
-                        color: Theme.accent
-                        Layout.leftMargin: 2
-                        ToolTip.text: qsTr("预设已修改（未保存）")
-                        ToolTip.visible: procDirtyTipMA.containsMouse
-                        MouseArea { id: procDirtyTipMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
-                    }
-                    Item { Layout.fillWidth: true }
-
-                    // SwitchButton(Global/Objects) → 绑 settingsScope (SIDEBAR-07 做实)
-                    // 对齐上游 m_scope_switch (ParamsPanel.cpp)
-                    CxButton {
-                        implicitWidth: 44
-                        implicitHeight: 24
-                        compact: true
-                        cxStyle: root.configVm && root.configVm.settingsScope === "global"
-                                 ? CxButton.Style.Primary : CxButton.Style.Ghost
-                        text: qsTr("全局")
-                        onClicked: if (root.configVm) root.configVm.requestGlobalScope()
-                    }
-                    CxButton {
-                        implicitWidth: 44
-                        implicitHeight: 24
-                        compact: true
-                        cxStyle: root.configVm && root.configVm.settingsScope !== "global"
-                                 ? CxButton.Style.Primary : CxButton.Style.Ghost
-                        text: qsTr("对象")
-                        onClicked: {
-                            // SIDEBAR-07: 切到对象作用域（用当前选中对象，无选中则提示）
-                            if (root.editorVm && root.editorVm.selectedObjectIndex >= 0 && root.configVm) {
-                                root.configVm.requestObjectScope("object", "",
-                                    root.editorVm.selectedObjectIndex, -1)
-                            }
-                        }
-                    }
-
-                    // Phase 52 PREPSB-04: Plate scope (completes the
-                    // Global/Object/Plate triad; mirrors upstream ParamsPanel
-                    // scope switch). Uses the current plate index.
-                    CxButton {
-                        implicitWidth: 44
-                        implicitHeight: 24
-                        compact: true
-                        cxStyle: root.configVm && root.configVm.settingsScope === "plate"
-                                 ? CxButton.Style.Primary : CxButton.Style.Ghost
-                        text: qsTr("盘")
-                        enabled: root.editorVm && root.editorVm.currentPlateIndex >= 0
-                        onClicked: {
-                            if (root.editorVm && root.editorVm.currentPlateIndex >= 0 && root.configVm)
-                                root.configVm.requestPlateScope(root.editorVm.currentPlateIndex)
-                        }
-                    }
-
-                    // Phase 56: Advanced (Simple/Advanced) toggle -- settings-dialog
-                    // feature, hidden until Phase 56.
-                    CxButton {
-                        implicitWidth: 44
-                        implicitHeight: 24
-                        compact: true
-                        cxStyle: CxButton.Style.Ghost
-                        text: qsTr("高级")  // 占位: Simple/Advanced 切换
-                        enabled: false
-                        visible: false
-                    }
-
-                    // Phase 56: Compare (DiffPresetDialog) -- settings-dialog feature,
-                    // hidden until Phase 56.
-                    CxButton {
-                        implicitWidth: 28
-                        implicitHeight: 24
-                        compact: true
-                        cxStyle: CxButton.Style.Ghost
-                        text: "⇄"
-                        enabled: false
-                        visible: false
-                    }
-
-                    // Opens the independent process settings dialog.
-                    CxButton {
-                        implicitWidth: 28
-                        implicitHeight: 24
-                        compact: true
-                        cxStyle: CxButton.Style.Ghost
-                        text: "☰"
-                        enabled: true
-                        visible: true
-                        onClicked: backend.forwardSettingsRequest("process")
-                    }
-                }
+                title: qsTr("工艺")
+                iconSource: "qrc:/qml/assets/icons/list-details.svg"
+                actionIcon: "qrc:/qml/assets/icons/settings.svg"
+                actionToolTip: qsTr("工艺设置")
+                onActionTriggered: backend.forwardSettingsRequest("process")
             }
 
             RowLayout {
-                id: processPresetRow
+                id: processScopeBar
                 Layout.fillWidth: true
                 spacing: 6
 
-                CxComboBox {
+                PixelSegment {
                     Layout.fillWidth: true
-                    model: root.configVm ? root.configVm.printPresetNames : []
-                    currentIndex: {
-                        if (!root.configVm) return -1
-                        return root.configVm.printPresetNames.indexOf(root.configVm.currentPrintPreset)
-                    }
-                    onActivated: (i) => {
-                        if (root.configVm && i >= 0)
-                            root.configVm.requestCurrentPrintPreset(model[i])
+                    text: qsTr("全局")
+                    selected: root.configVm && root.configVm.settingsScope === "global"
+                    onClicked: if (root.configVm) root.configVm.requestGlobalScope()
+                }
+
+                PixelSegment {
+                    Layout.fillWidth: true
+                    text: qsTr("对象")
+                    selected: root.configVm && root.configVm.settingsScope !== "global" && root.configVm.settingsScope !== "plate"
+                    onClicked: {
+                        if (root.editorVm && root.editorVm.selectedObjectIndex >= 0 && root.configVm) {
+                            root.configVm.requestObjectScope("object", "",
+                                root.editorVm.selectedObjectIndex, -1)
+                        }
                     }
                 }
 
-                Rectangle {
-                    width: 26
-                    height: 26
-                    radius: 5
-                    color: processEditMA.containsMouse ? Theme.bgHover : "transparent"
-                    border.width: 1
-                    border.color: Theme.borderSubtle
+                PixelSegment {
+                    Layout.fillWidth: true
+                    text: qsTr("盘")
+                    selected: root.configVm && root.configVm.settingsScope === "plate"
+                    enabled: root.editorVm && root.editorVm.currentPlateIndex >= 0
+                    onClicked: {
+                        if (root.editorVm && root.editorVm.currentPlateIndex >= 0 && root.configVm)
+                            root.configVm.requestPlateScope(root.editorVm.currentPlateIndex)
+                    }
+                }
+            }
 
-                    Text {
-                        anchors.centerIn: parent
-                        text: "✎"
-                        color: Theme.textMuted
-                        font.pixelSize: 12
+            Rectangle {
+                id: processPresetRow
+                Layout.fillWidth: true
+                Layout.preferredHeight: 36
+                radius: 4
+                color: root.sectionSurface
+                border.width: 1
+                border.color: root.dividerColor
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 8
+                    anchors.rightMargin: 8
+                    spacing: 7
+
+                    CxComboBox {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 28
+                        font.pixelSize: 11
+                        model: root.configVm ? root.configVm.printPresetNames : []
+                        currentIndex: {
+                            if (!root.configVm) return -1
+                            return root.configVm.printPresetNames.indexOf(root.configVm.currentPrintPreset)
+                        }
+                        onActivated: (i) => {
+                            if (root.configVm && i >= 0)
+                                root.configVm.requestCurrentPrintPreset(model[i])
+                        }
                     }
 
-                    MouseArea {
-                        id: processEditMA
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
+                    Rectangle {
+                        visible: !!root.configVm && root.configVm.isPresetDirty
+                        Layout.preferredWidth: 8
+                        Layout.preferredHeight: 8
+                        radius: 4
+                        color: Theme.accent
+                        ToolTip.text: qsTr("预设已修改（未保存）")
+                        ToolTip.visible: processDirtyMA.containsMouse
+                        MouseArea { id: processDirtyMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
+                    }
+
+                    PixelIconButton {
+                        iconSource: "qrc:/qml/assets/icons/settings.svg"
+                        toolTipText: qsTr("编辑工艺预设")
                         onClicked: backend.forwardSettingsRequest("process")
                     }
                 }
             }
 
-            // -- Section 4: Process search and inline option list --
             Rectangle {
                 id: searchBox
                 Layout.fillWidth: true
-                Layout.preferredHeight: 30
-                color: Theme.bgInset
-                radius: Theme.radiusSM
+                Layout.preferredHeight: 32
+                radius: 4
+                color: root.fieldSurface
                 border.width: 1
-                border.color: searchField.activeFocus ? Theme.accent : Theme.borderSubtle
+                border.color: searchField.activeFocus ? Theme.accent : root.dividerColor
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 6
-                    spacing: 4
+                    anchors.leftMargin: 8
+                    anchors.rightMargin: 8
+                    spacing: 6
 
-                    Text {
-                        text: "🔍"
-                        color: Theme.textTertiary
-                        font.pixelSize: 12
+                    Image {
+                        Layout.preferredWidth: 14
+                        Layout.preferredHeight: 14
+                        source: "qrc:/qml/assets/icons/list-details.svg"
+                        opacity: 0.55
                     }
+
                     TextField {
                         id: searchField
                         Layout.fillWidth: true
                         placeholderText: qsTr("搜索设置...")
                         color: Theme.textPrimary
+                        placeholderTextColor: Theme.textDisabled
                         font.pixelSize: 11
-                        background: Item {}  // 透明背景（外框由 searchBox 提供）
+                        background: Item {}
                         selectByMouse: true
-                        onAccepted: {
-                            root.rebuildParamsFilter()
-                        }
+                        onAccepted: root.rebuildParamsFilter()
                         onTextChanged: {
                             root.paramsSearchText = text.trim()
                             root.rebuildParamsFilter()
@@ -468,20 +404,20 @@ Rectangle {
             Rectangle {
                 id: paramsInlinePanel
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(500, Math.max(260, paramsList.contentHeight + 44))
-                color: Theme.bgPanel
-                radius: Theme.radiusSM
+                Layout.preferredHeight: Math.min(760, Math.max(420, paramsList.contentHeight + 36))
+                radius: 4
+                color: root.sectionSurface
                 border.width: 1
-                border.color: Theme.borderSubtle
+                border.color: root.dividerColor
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 4
-                    spacing: 3
+                    anchors.margins: 5
+                    spacing: 4
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 2
+                        spacing: 3
 
                         Repeater {
                             model: [
@@ -492,26 +428,28 @@ Rectangle {
                                 { key: "Other", label: qsTr("其他") }
                             ]
                             delegate: Rectangle {
+                                id: paramsTabDelegate
+                                required property var modelData
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 24
-                                color: modelData.key === root.paramsCurrentTab
-                                       ? Theme.accent : "transparent"
+                                Layout.preferredHeight: 25
                                 radius: 3
+                                color: paramsTabDelegate.modelData.key === root.paramsCurrentTab ? Theme.accent : root.fieldSurface
+                                border.width: 1
+                                border.color: paramsTabDelegate.modelData.key === root.paramsCurrentTab ? Theme.accent : root.dividerColor
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: modelData.label
-                                    color: modelData.key === root.paramsCurrentTab
-                                           ? Theme.textOnAccent : Theme.textSecondary
-                                    font.pixelSize: Theme.fontSizeXS
-                                    font.bold: modelData.key === root.paramsCurrentTab
+                                    text: paramsTabDelegate.modelData.label
+                                    color: paramsTabDelegate.modelData.key === root.paramsCurrentTab ? Theme.textOnAccent : root.mutedText
+                                    font.pixelSize: 10
+                                    font.bold: paramsTabDelegate.modelData.key === root.paramsCurrentTab
                                 }
 
                                 MouseArea {
                                     anchors.fill: parent
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: {
-                                        root.paramsCurrentTab = modelData.key
+                                        root.paramsCurrentTab = paramsTabDelegate.modelData.key
                                         root.rebuildParamsFilter()
                                     }
                                 }
@@ -560,9 +498,9 @@ Rectangle {
                                 showGroupHeader: paramsDelegate.showGroupHeader
                                 oGroup: paramsDelegate.optGroup
                                 compact: true
-                                compactLabelWidth: 118
-                                compactFieldWidth: 66
-                                compactEnumWidth: 104
+                                compactLabelWidth: 148
+                                compactFieldWidth: 86
+                                compactEnumWidth: 132
                                 valueSource: {
                                     if (!root.configVm || !root.paramsOptionModel) return ""
                                     var key = root.paramsOptionModel.optKey(paramsDelegate.optIdx)
@@ -576,222 +514,188 @@ Rectangle {
                 Component.onCompleted: root.rebuildParamsFilter()
             }
 
-            // -- Section 5: Objects (Prepare sidebar section, Phase 52) --
-            CollapsibleSection {
-                id: objectSection
-                Layout.fillWidth: true
-                compact: true
-                title: qsTr("对象")
-                iconText: "◇"
-                expanded: true
-
-                content: ColumnLayout {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    spacing: 6
-
-                    // All/Objects filter (from PreparePage leftPanel lines 3026-3075)
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Theme.spacingSM
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 28
-                            radius: 10
-                            color: root.editorVm && root.editorVm.showAllObjects ? Theme.accent : Theme.bgElevated
-                            border.width: 1
-                            border.color: root.editorVm && root.editorVm.showAllObjects ? Theme.accentDark : Theme.borderSubtle
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: qsTr("全部")
-                                color: root.editorVm && root.editorVm.showAllObjects ? Theme.textOnAccent : Theme.textPrimary
-                                font.pixelSize: Theme.fontSizeMD
-                                font.bold: true
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: if (root.editorVm) root.editorVm.setShowAllObjects(true)
-                            }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 28
-                            radius: 10
-                            color: root.editorVm && !root.editorVm.showAllObjects ? Theme.accent : Theme.bgElevated
-                            border.width: 1
-                            border.color: root.editorVm && !root.editorVm.showAllObjects ? Theme.accentDark : Theme.borderSubtle
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: qsTr("对象")
-                                color: root.editorVm && !root.editorVm.showAllObjects ? Theme.textOnAccent : Theme.textPrimary
-                                font.pixelSize: Theme.fontSizeMD
-                                font.bold: true
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: if (root.editorVm) root.editorVm.setShowAllObjects(false)
-                            }
-                        }
-                    }
-
-                    // Object list header
-                    Text {
-                        Layout.fillWidth: true
-                        text: root.editorVm
-                            ? (root.editorVm.objectCount + qsTr(" 个对象"))
-                            : qsTr("0 个对象")
-                        color: Theme.textSecondary
-                        font.pixelSize: Theme.fontSizeXS
-                    }
-
-                    // Object list
-                    ObjectList {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 200
-                        editorVm: root.editorVm
-                        showToolbar: false
-                        showImportButton: false
-                    }
-                }
-            }
-
-            // -- Section 6: ObjectSettings (SIDEBAR-13, 选中对象的快速设置, 无选中隐藏) --
-            // 对齐上游 ObjectSettings: 选中对象时显示层高/填充/速度等快速设置
-            CollapsibleSection {
-                id: sliceProgressSection
-                Layout.fillWidth: true
-                compact: true
-                title: qsTr("切片")
-                expanded: true
-
-                content: ColumnLayout {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    spacing: 0
-
-                    SliceProgress {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 620
-                        editorVm: root.editorVm
-                        onExportRequested: root.exportRequested()
-                    }
-                }
-            }
-
-            CollapsibleSection {
-                id: objectSettingsSection
-                Layout.fillWidth: true
-                compact: true
-                title: qsTr("对象设置")
-                iconText: "☰"
-                expanded: true
-                // 无选中对象时隐藏整个区块
-                visible: root.editorVm && root.editorVm.selectedObjectIndex >= 0
-
-                content: ColumnLayout {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    spacing: 6
-
-                    Text {
-                        Layout.fillWidth: true
-                        text: root.editorVm && root.editorVm.selectedObjectIndex >= 0
-                              ? qsTr("正在编辑对象 #") + (root.editorVm.selectedObjectIndex + 1)
-                              : qsTr("未选择对象")
-                        color: Theme.textSecondary
-                        font.pixelSize: 10
-                        wrapMode: Text.WordWrap
-                    }
-
-                    // 快速设置项（绑定 configVm，对齐上游 ObjectSettings 常用参数）
-                    // 层高
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 6
-                        visible: !!root.configVm
-                        Text { text: qsTr("层高"); color: Theme.textTertiary; font.pixelSize: 10; Layout.preferredWidth: 90 }
-                        TextField {
-                            Layout.fillWidth: true
-                            text: root.configVm ? root.configVm.layerHeight : ""
-                            color: Theme.textPrimary
-                            font.pixelSize: 10
-                            selectByMouse: true
-                            background: Item {}
-                            readOnly: true
-                        }
-                    }
-                    // 填充密度
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 6
-                        visible: !!root.configVm
-                        Text { text: qsTr("填充密度"); color: Theme.textTertiary; font.pixelSize: 10; Layout.preferredWidth: 90 }
-                        TextField {
-                            Layout.fillWidth: true
-                            text: root.configVm ? (root.configVm.infillDensity + "%") : ""
-                            color: Theme.textPrimary
-                            font.pixelSize: 10
-                            selectByMouse: true
-                            background: Item {}
-                            readOnly: true
-                        }
-                    }
-                    // 打印速度
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 6
-                        visible: !!root.configVm
-                        Text { text: qsTr("打印速度"); color: Theme.textTertiary; font.pixelSize: 10; Layout.preferredWidth: 90 }
-                        TextField {
-                            Layout.fillWidth: true
-                            text: root.configVm ? (root.configVm.printSpeed + " mm/s") : ""
-                            color: Theme.textPrimary
-                            font.pixelSize: 10
-                            selectByMouse: true
-                            background: Item {}
-                            readOnly: true
-                        }
-                    }
-                }
-            }
-
-            Item { Layout.preferredHeight: 20 }
+            Item { Layout.preferredHeight: 18 }
         }
     }
 
-    // -- Rename printer preset dialog --
-    CxDialog {
-        id: renamePrinterDialog
-        dialogTitle: qsTr("重命名预设")
-        width: 320
-        ColumnLayout {
-            spacing: 8
-            CxTextField {
-                id: renamePrinterField
+    function bedTypeName(index) {
+        var names = [qsTr("PEI"), qsTr("EP"), qsTr("PC"), qsTr("纹理 PEI"), qsTr("自定义")]
+        if (index >= 0 && index < names.length)
+            return names[index]
+        return names[0]
+    }
+
+    function filamentColor(index) {
+        var colors = ["#b97914", "#b9b9b9", "#b9b9b9", "#214bc2", "#d63a21"]
+        return index < colors.length ? colors[index] : "#b9b9b9"
+    }
+
+    component PixelHeader: Item {
+        id: headerRoot
+        property string title: ""
+        property string iconText: ""
+        property url iconSource: ""
+        property url actionIcon: ""
+        property string actionToolTip: ""
+        signal actionTriggered()
+
+        implicitHeight: 24
+
+        RowLayout {
+            anchors.fill: parent
+            spacing: 6
+
+            Rectangle {
+                Layout.preferredWidth: 18
+                Layout.preferredHeight: 18
+                radius: 4
+                color: root.controlSurface
+                border.width: 1
+                border.color: root.dividerColor
+
+                Image {
+                    visible: headerRoot.iconSource !== ""
+                    anchors.centerIn: parent
+                    width: 12
+                    height: 12
+                    source: headerRoot.iconSource
+                    fillMode: Image.PreserveAspectFit
+                    opacity: 0.75
+                }
+
+                Text {
+                    visible: headerRoot.iconSource === ""
+                    anchors.centerIn: parent
+                    text: headerRoot.iconText
+                    color: Theme.accent
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+            }
+
+            Text {
                 Layout.fillWidth: true
-                text: root.configVm ? root.configVm.currentPrinterPreset : ""
-                selectByMouse: true
-                onAccepted: renamePrinterDialog.accept()
+                text: headerRoot.title
+                color: Theme.textPrimary
+                font.pixelSize: 12
+                font.bold: true
+                elide: Text.ElideRight
             }
-            RowLayout {
-                Layout.alignment: Qt.AlignRight
-                spacing: 8
-                CxButton { text: qsTr("取消"); cxStyle: CxButton.Style.Ghost; onClicked: renamePrinterDialog.reject() }
-                CxButton { text: qsTr("确认"); onClicked: renamePrinterDialog.accept() }
+
+            PixelIconButton {
+                visible: headerRoot.actionIcon !== ""
+                iconSource: headerRoot.actionIcon
+                toolTipText: headerRoot.actionToolTip
+                enabled: headerRoot.enabled
+                onClicked: headerRoot.actionTriggered()
             }
         }
-        onAccepted: {
-            if (root.configVm && renamePrinterField.text.trim().length > 0)
-                root.configVm.renamePreset(2, root.configVm.currentPrinterPreset, renamePrinterField.text.trim())
+    }
+
+    component InfoTile: Rectangle {
+        id: tileRoot
+        property string label: ""
+        property string value: ""
+
+        implicitHeight: 30
+        radius: 3
+        color: root.fieldSurface
+        border.width: 1
+        border.color: root.dividerColor
+
+        Column {
+            anchors.fill: parent
+            anchors.leftMargin: 6
+            anchors.rightMargin: 6
+            anchors.topMargin: 3
+            spacing: 0
+
+            Text {
+                width: parent.width
+                text: tileRoot.label
+                color: root.mutedText
+                font.pixelSize: 10
+                elide: Text.ElideRight
+            }
+
+            Text {
+                width: parent.width
+                text: tileRoot.value
+                color: Theme.textPrimary
+                font.pixelSize: 10
+                font.bold: true
+                elide: Text.ElideRight
+            }
         }
-        onOpened: renamePrinterField.selectAll()
+    }
+
+    component PixelIconButton: Rectangle {
+        id: iconButtonRoot
+        property url iconSource: ""
+        property string toolTipText: ""
+        signal clicked()
+
+        Layout.preferredWidth: 24
+        Layout.preferredHeight: 24
+        implicitWidth: 24
+        implicitHeight: 24
+        radius: 4
+        color: !enabled ? root.fieldSurface
+              : iconMA.containsMouse ? "#44484d"
+              : root.controlSurface
+        border.width: 1
+        border.color: root.dividerColor
+        opacity: enabled ? 1.0 : 0.45
+
+        Image {
+            anchors.centerIn: parent
+            width: 13
+            height: 13
+            source: iconButtonRoot.iconSource
+            fillMode: Image.PreserveAspectFit
+            opacity: 0.8
+        }
+
+        MouseArea {
+            id: iconMA
+            anchors.fill: parent
+            hoverEnabled: true
+            enabled: iconButtonRoot.enabled
+            cursorShape: Qt.PointingHandCursor
+            onClicked: iconButtonRoot.clicked()
+        }
+
+        ToolTip.visible: iconMA.containsMouse && iconButtonRoot.toolTipText.length > 0
+        ToolTip.text: iconButtonRoot.toolTipText
+        ToolTip.delay: 400
+    }
+
+    component PixelSegment: Rectangle {
+        id: segmentRoot
+        property string text: ""
+        property bool selected: false
+        signal clicked()
+
+        Layout.preferredHeight: 28
+        radius: 4
+        color: segmentRoot.selected ? Theme.accent : root.sectionSurface
+        border.width: 1
+        border.color: segmentRoot.selected ? Theme.accent : root.dividerColor
+        opacity: enabled ? 1.0 : 0.45
+
+        Text {
+            anchors.centerIn: parent
+            text: segmentRoot.text
+            color: segmentRoot.selected ? Theme.textOnAccent : root.mutedText
+            font.pixelSize: 11
+            font.bold: segmentRoot.selected
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            enabled: segmentRoot.enabled
+            cursorShape: Qt.PointingHandCursor
+            onClicked: segmentRoot.clicked()
+        }
     }
 }
