@@ -1,97 +1,73 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.8
-milestone_name: RHI Gizmo Parity
-status: completed
-last_updated: "2026-07-05T11:01:00+08:00"
-last_activity: 2026-07-05 -- Completed quick task 260705-e8x: Fix RHI gizmo depth overlay and viewport drag review findings
+milestone: v3.9
+milestone_name: Prepare Page UI Restoration
+status: planning
+last_updated: "2026-07-05T14:50:00+08:00"
+last_activity: 2026-07-05 -- Started milestone v3.9 Prepare Page UI Restoration
 progress:
-  total_phases: 18
-  completed_phases: 18
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
+  total_phases: 5
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
-**Milestone:** v3.8 - RHI Gizmo Parity
-**Status:** v3.8 milestone complete
-**Next step:** Run milestone audit and complete v3.8 cleanup.
+**Milestone:** v3.9 - Prepare Page UI Restoration
+**Status:** Planning complete; ready to plan Phase 74
+**Next step:** Run `$gsd-plan-phase 74`.
 
 ## Current Position
 
-Phase: Milestone v3.8 complete
+Phase: Not started
 Plan: N/A
-Status: Awaiting next milestone
-Last activity: 2026-07-05 -- Completed quick task 260705-e8x: Fix RHI gizmo depth overlay and viewport drag review findings
+Status: Roadmap created
+Last activity: 2026-07-05 -- Started milestone v3.9 Prepare Page UI Restoration
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-The default RHI rendering path must be functionally complete, not just
-visually present.
-
-## Carry-Forward From v3.7 (closed)
-
-- **RHI gizmo silent-dead**: closed by v3.8. RHI now owns the move, rotate,
-  scale, cut plane, wipe tower, and precise object-picking scope on the
-  default path. The legacy OpenGL `GLViewport*` and `GCodeRenderer*` files
-  were removed, and `OWZX_OPENGL` no longer activates a rendering path.
-
-- **D3D12 segfault at setShaderResources** (QRhi D3D12 backend deep issue):
-  uniform buffer 256-byte alignment fix was necessary but not sufficient.
-  D3D11 stays default throughout v3.8. Documented in
-  `docs/Qt版本升级与RHI渲染管线评估.md`.
-
-- **v3.6 VERIFY-04 manual visual UAT** still pending (independent of v3.8).
-- **v3.7 residual visual gaps** tracked in
-  `.planning/milestones/v3.7-VISUAL-MATRIX.md`.
+**Current focus:** Restore the Prepare page UI to screenshot-level OrcaSlicer parity without inventing new behavior.
 
 ## Active Milestone Plan
 
-| Phase | Name | Status |
-|---|---|---|
-| 65 | Gizmo math extraction + unit tests | ✓ Complete |
-| 66 | Gizmo geometry builders port | ✓ Complete |
-| 67 | RHI gizmo state wiring | ✓ Complete |
-| 68 | Move gizmo RHI render | Complete (visual verification deferred to Phase 73) |
-| 69 | Move gizmo pick + drag interaction | Complete |
-| 70 | Rotate + Scale gizmos | Complete |
-| 71 | Cut plane + wipe tower | Complete |
-| 72 | Precise object picking | Complete |
-| 73 | Retire GLViewport + verification | Complete |
+| Phase | Name | Status | Requirements |
+|---|---|---|---|
+| 74 | Prepare Source-Truth Gap Audit | Pending | AUDIT-01 |
+| 75 | Prepare Sidebar Restoration | Pending | SIDE-01, SIDE-02, SIDE-03 |
+| 76 | Prepare Workflow Panels Restoration | Pending | OBJ-01, PLATEUI-01, STATUS-01 |
+| 77 | Prepare Viewport Controls And Gizmo UI | Pending | VIEWUI-01, GIZMOUI-01 |
+| 78 | Prepare Verification And Cleanup | Pending | CLEAN-01, VERIFY-01, VERIFY-02 |
 
 ## Verification Rule
 
-Per user instruction:
-
-- Do not run the full canonical build after each phase.
-- During phases 59-63, use source reads, encoding guard, `git diff --check`,
-  and focused static checks only.
-
-- In Phase 64, run:
+- Do not run alternate build scripts or create alternate build directories.
+- During Phases 74-77, prefer source reads, focused tests, QML/source audits, `git diff --check`, and the encoding guard unless a code path requires broader verification.
+- In Phase 78, run the canonical verifier:
   `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`
+- After the canonical build, launch `build/OWzxSlicer.exe` and record Prepare page visual evidence against the target screenshot.
 
-- After the canonical build, launch `build/OWzxSlicer.exe` and capture
-  running-app screenshots for visual acceptance.
+## Source And Visual Truth
 
-## Target Screenshots
+- Visual truth: `shotScreen/` Prepare page screenshot.
+- Behavior truth: `third_party/OrcaSlicer/src/slic3r/GUI/Plater.*`, `GLCanvas3D.*`, `GUI_ObjectList.*`, `GUI_ObjectSettings.*`, and `Gizmos/*`.
+- Qt targets start from `src/qml_gui/pages/PreparePage.qml`, Prepare sidebars/panels/components, `EditorViewModel.*`, `ProjectServiceMock.*`, preset/config services, and RHI renderer classes.
 
-- `shotScreen/准备页.png` - 2560x1400
-- `shotScreen/预览页.png` - 2560x1400
-- `shotScreen/打印机参数设置页.png` - 736x593
-- `shotScreen/材料参数设置页.png` - 736x593
+## Target Screenshot
+
+- `shotScreen/鍑嗗椤?png` - 2560x1400
 
 ## Carry-Forward Status
 
 | Category | Item | Target |
 |---|---|---|
-| correction | v3.6 Phase 58 manual visual UAT was not executed | Closed by v3.7 |
 | carry-forward | v3.4 Phase 43 manual UAT | Before claiming v3.4 complete |
 | superseded | v3.5 Phase 47-49 | Do not resume unless explicitly reopened |
+| carry-forward | v3.7 residual Prepare visual gaps | Reconcile in v3.9 |
 | future | Device send/upload/cloud print and Monitor job lifecycle | Future milestone |
 | future | AssembleView | Future source-truth milestone |
 | future | Missing CLI test fixtures (`hotend.stl`, `Block20XY.stl`) | Future fixture milestone |
@@ -99,25 +75,20 @@ Per user instruction:
 
 ## Deferred Items
 
-Items acknowledged and deferred at milestone close on 2026-07-04:
+Items acknowledged and deferred at milestone start on 2026-07-05:
 
 | Category | Item | Status |
 |---|---|---|
-| debug | qrhi-d3d12-crash | fixing |
-| quick_task | 260625-0cz-ui | missing |
-| quick_task | 260702-1bn-prepare-roadmap-audit-downgrade | missing |
-| quick_task | 260702-1q7-p0-collapsiblesection | missing |
-| uat_gap | Phase 02 02-HUMAN-UAT.md | partial |
+| debug | qrhi-d3d12-crash | future |
 | uat_gap | Phase 43 43-UAT.md | pending_user |
-| verification_gap | Phase 02 02-VERIFICATION.md | human_needed |
-| verification_gap | Phase 68 68-VERIFICATION.md | human_needed |
+| verification_gap | Phase 68 visual evidence | human_needed |
 
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
+|---|---|---|---|---|
 | 260705-e8x | Fix RHI gizmo depth overlay and viewport drag review findings | 2026-07-05 | 1ba32eb | [260705-e8x-fix-rhi-gizmo-depth-overlay-and-viewport](./quick/260705-e8x-fix-rhi-gizmo-depth-overlay-and-viewport/) |
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Run `$gsd-plan-phase 74`.

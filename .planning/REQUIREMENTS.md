@@ -1,0 +1,83 @@
+# Requirements: OWzx Slicer v3.9 Prepare Page UI Restoration
+
+**Defined:** 2026-07-05
+**Core Value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
+
+## v3.9 Requirements
+
+### Source-Truth Inventory
+
+- [ ] **AUDIT-01**: User-facing Prepare page work has a single current inventory that maps screenshot-visible regions to OrcaSlicer source files, Qt targets, replacement decisions, and verification evidence.
+
+### Prepare Sidebar
+
+- [ ] **SIDE-01**: User can read and switch the screenshot-visible printer, filament, and process preset controls in a dense upstream-like Prepare sidebar layout.
+- [ ] **SIDE-02**: User sees upstream-mapped display names and translated labels for visible Prepare option rows instead of raw internal config keys where the UI exposes user-facing setting names.
+- [ ] **SIDE-03**: User can use Global, Object, and Plate scope controls, search/filter affordances, dirty state indicators, and settings entry points without visible placeholder or unavailable rows.
+
+### Object, Plate, and Status Workflow
+
+- [ ] **OBJ-01**: User can inspect and select objects/volumes from a screenshot-aligned Prepare object list panel with correct empty, selected, disabled, and action states.
+- [ ] **PLATEUI-01**: User can select, add, and inspect plates from a screenshot-aligned plate strip that reflects the active plate and multi-plate state.
+- [ ] **STATUS-01**: User can start, cancel, and observe slicing/export readiness through Prepare page controls and status surfaces without dead buttons or misleading availability.
+
+### Viewport, Toolbars, and Gizmos
+
+- [ ] **VIEWUI-01**: User can use Prepare viewport view controls, camera affordances, and vertical tool buttons in the screenshot layout without overlap, layout jumps, or incorrect disabled states.
+- [ ] **GIZMOUI-01**: User sees move, rotate, scale, cut, and wipe-tower gizmo panels and overlays in upstream-like positions and states on the default RHI path.
+
+### Cleanup and Verification
+
+- [ ] **CLEAN-01**: Deprecated Prepare page components, imports, resource entries, tests, or disconnected UI paths are removed when replaced by the restored implementation.
+- [ ] **VERIFY-01**: Automated source/QML audits cover the restored Prepare bindings, absence of visible placeholders, and required upstream mapping evidence.
+- [ ] **VERIFY-02**: Final milestone verification runs the canonical build command, launches `build/OWzxSlicer.exe`, and records Prepare page visual evidence against the target screenshot.
+
+## Future Requirements
+
+### Adjacent UI Restoration
+
+- **PREVIEW-FUTURE-01**: Restore any remaining Preview page visual gaps outside direct Prepare dependencies.
+- **SETTINGS-FUTURE-01**: Restore parameter settings dialogs beyond labels or entry points needed by the Prepare sidebar.
+- **DEVICE-FUTURE-01**: Complete device send/upload/cloud print and Monitor task lifecycle workflows.
+- **ASSEMBLE-FUTURE-01**: Complete AssembleView as a dedicated source-truth milestone.
+- **BACKEND-FUTURE-01**: Resolve the D3D12 QRhi crash and evaluate Vulkan only after an SDK/runtime path exists.
+
+## Out of Scope
+
+Explicitly excluded to keep v3.9 focused.
+
+| Feature | Reason |
+|---|---|
+| Preview page restoration outside direct Prepare dependencies | v3.9 is scoped to Prepare page UI restoration. |
+| Parameter settings dialog restoration beyond Prepare sidebar entry/display needs | Settings workflows need a dedicated source-truth pass. |
+| Device, cloud print, Monitor, and hardware task lifecycle workflows | These require protocol/hardware verification and are unrelated to Prepare page layout parity. |
+| AssembleView | Separate user workflow and source-truth surface. |
+| D3D12 or Vulkan backend promotion | Renderer backend work is blocked/future and not required for Prepare UI parity on D3D11. |
+| libslic3r slicing algorithm changes | GUI restoration must not change slicing engine behavior. |
+| New product behavior not mapped to OrcaSlicer upstream | Violates the project core value. |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|---|---|---|
+| AUDIT-01 | Phase 74 | Pending |
+| SIDE-01 | Phase 75 | Pending |
+| SIDE-02 | Phase 75 | Pending |
+| SIDE-03 | Phase 75 | Pending |
+| OBJ-01 | Phase 76 | Pending |
+| PLATEUI-01 | Phase 76 | Pending |
+| STATUS-01 | Phase 76 | Pending |
+| VIEWUI-01 | Phase 77 | Pending |
+| GIZMOUI-01 | Phase 77 | Pending |
+| CLEAN-01 | Phase 78 | Pending |
+| VERIFY-01 | Phase 78 | Pending |
+| VERIFY-02 | Phase 78 | Pending |
+
+**Coverage:**
+- v3.9 requirements: 12 total
+- Mapped to phases: 12
+- Unmapped: 0
+
+---
+*Requirements defined: 2026-07-05*
+*Last updated: 2026-07-05 after v3.9 milestone planning*

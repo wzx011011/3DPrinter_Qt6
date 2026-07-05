@@ -12,6 +12,54 @@
 - Automated verification passed, visual UAT not closed: **v3.6 Screenshot-Driven OrcaSlicer UI Restoration** - Phases 50-58 (shipped 2026-07-03)
 - Complete with residual gaps: **v3.7 Screenshot-Level UI Parity Closure** - Phases 59-64 (2026-07-04; D3D12 and manual visual debt carried forward)
 - Complete with tech debt: **v3.8 RHI Gizmo Parity** - Phases 65-73 (shipped 2026-07-04; 21/21 requirements satisfied, Phase 68 visual evidence deferred)
+- Active: **v3.9 Prepare Page UI Restoration** - Phases 74-78
+
+## Active Milestone: v3.9 Prepare Page UI Restoration
+
+**Goal:** Restore the Prepare page to screenshot-level OrcaSlicer parity using `shotScreen/` as visual truth and OrcaSlicer GUI source as behavior truth.
+
+| Phase | Name | Goal | Requirements |
+|---|---|---|---|
+| 74 | Prepare Source-Truth Gap Audit | Freeze the v3.9 Prepare region map, current gaps, upstream anchors, and verification expectations before edits. | AUDIT-01 |
+| 75 | Prepare Sidebar Restoration | Restore the left preset/settings sidebar density, labels, scope controls, search, dirty state, and placeholder removal. | SIDE-01, SIDE-02, SIDE-03 |
+| 76 | Prepare Workflow Panels Restoration | Restore object list, plate strip, slice status, and workflow availability states to screenshot/source-truth parity. | OBJ-01, PLATEUI-01, STATUS-01 |
+| 77 | Prepare Viewport Controls And Gizmo UI | Restore viewport controls, vertical tool buttons, and RHI gizmo floating panels in the screenshot layout. | VIEWUI-01, GIZMOUI-01 |
+| 78 | Prepare Verification And Cleanup | Remove deprecated Prepare UI paths and verify with audits, canonical build, app launch, and visual evidence. | CLEAN-01, VERIFY-01, VERIFY-02 |
+
+### Phase 74: Prepare Source-Truth Gap Audit
+
+Success criteria:
+1. Current Prepare page regions are mapped to target screenshot areas and OrcaSlicer source files.
+2. Each region records Qt target files, modify-vs-replace decision, and verification method.
+3. v3.7 residual Prepare gaps are reconciled into v3.9 requirements or explicitly deferred.
+
+### Phase 75: Prepare Sidebar Restoration
+
+Success criteria:
+1. Printer, filament, and process preset controls match the screenshot density and state model.
+2. Visible option rows use upstream-mapped display names/translations instead of raw internal keys where applicable.
+3. Global/Object/Plate scopes, search, settings entry points, and dirty indicators are live and free of visible unavailable placeholders.
+
+### Phase 76: Prepare Workflow Panels Restoration
+
+Success criteria:
+1. Object/volume list states match screenshot layout for empty, selected, disabled, and action-visible cases.
+2. Plate strip selection/add/state surfaces match the target layout and existing PartPlate behavior.
+3. Slice/cancel/export readiness and progress surfaces are honest, live, and aligned with upstream workflow semantics.
+
+### Phase 77: Prepare Viewport Controls And Gizmo UI
+
+Success criteria:
+1. Prepare viewport controls and vertical tool buttons are positioned and disabled consistently with the screenshot.
+2. Move, rotate, scale, cut, and wipe-tower floating panels are visible in the correct states and do not overlap core page controls.
+3. Default RHI interaction remains functional while UI restoration changes presentation.
+
+### Phase 78: Prepare Verification And Cleanup
+
+Success criteria:
+1. Replaced Prepare UI paths leave no stale files, imports, resource entries, tests, or disconnected controls.
+2. Automated source/QML audits cover upstream mapping, placeholder removal, and required bindings.
+3. The canonical verifier passes, `build/OWzxSlicer.exe` launches, and Prepare visual evidence is recorded against the target screenshot.
 
 ## Archived Phase Groups
 
@@ -65,12 +113,12 @@ Requirements: `.planning/milestones/v3.8-REQUIREMENTS.md`
 
 ## Next Step
 
-Start the next milestone:
+Plan Phase 74:
 
 ```text
-$gsd-new-milestone
+$gsd-plan-phase 74
 ```
 
 ---
 
-*Last updated: 2026-07-04 after v3.8 milestone completion.*
+*Last updated: 2026-07-05 after v3.9 milestone planning.*
