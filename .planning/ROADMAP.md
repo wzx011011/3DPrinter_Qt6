@@ -21,7 +21,7 @@
 
 ## Phases
 
-- [ ] Phase 79: Preview Source-Truth Gap Audit
+- [x] Phase 79: Preview Source-Truth Gap Audit (completed 2026-07-06)
 - [ ] Phase 80: Preview Layout And Panels Restoration
 - [ ] Phase 81: Preview Layer Move And Playback Controls
 - [ ] Phase 82: Preview G-code Roles Color Modes And Rendering
@@ -37,8 +37,8 @@
 
 ### Phase 79: Preview Source-Truth Gap Audit
 
-**Status:** Not started
-**Plans:** 0/1 plans complete
+**Status:** Complete
+**Plans:** 1/1 plans complete
 
 Success criteria:
 1. Current Preview page regions are mapped to target screenshot areas and OrcaSlicer source files.
@@ -155,10 +155,10 @@ Requirements: `.planning/milestones/v3.8-REQUIREMENTS.md`
 
 ## Next Step
 
-Start v4.0 with Phase 79:
+Continue v4.0 with Phase 80:
 
 ```text
-$gsd-discuss-phase 79
+$gsd-discuss-phase 80 --auto
 ```
 
 ---

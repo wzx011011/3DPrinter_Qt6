@@ -7,7 +7,7 @@
 
 ### Source-Truth Inventory
 
-- [ ] **PVAUDIT-01**: User-facing Preview page work has a single current inventory that maps screenshot-visible regions to OrcaSlicer source files, Qt targets, replacement decisions, and verification evidence.
+- [x] **PVAUDIT-01**: User-facing Preview page work has a single current inventory that maps screenshot-visible regions to OrcaSlicer source files, Qt targets, replacement decisions, and verification evidence.
 
 ### Preview Layout
 
@@ -60,7 +60,7 @@ Explicitly excluded to keep v4.0 focused.
 
 | Requirement | Phase | Status |
 |---|---|---|
-| PVAUDIT-01 | Phase 79 | Pending |
+| PVAUDIT-01 | Phase 79 | Complete |
 | PVLAYOUT-01 | Phase 80 | Pending |
 | PVLAYOUT-02 | Phase 80 | Pending |
 | PVLAYOUT-03 | Phase 80 | Pending |

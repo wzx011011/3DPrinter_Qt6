@@ -2,36 +2,37 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Preview Page UI Restoration
-status: planning
-last_updated: "2026-07-06T08:18:09.440Z"
+status: ready_to_plan
+last_updated: 2026-07-06T09:49:41.280Z
 last_activity: 2026-07-06
 progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 5
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 20
+stopped_at: Phase 79 complete (1/1) — ready to discuss Phase 80
 ---
 
 # Project State
 
 **Milestone:** v4.0 - Preview Page UI Restoration
-**Status:** Defining requirements and roadmap complete
-**Next step:** Start Phase 79 with `$gsd-discuss-phase 79`.
+**Status:** Ready to plan
+**Next step:** Start Phase 80 with `$gsd-discuss-phase 80 --auto`.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-06 — Milestone v4.0 started
+Phase: 80
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-06
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-**Current focus:** Restore the Preview page UI to screenshot-level OrcaSlicer parity.
+**Current focus:** Phase 80 — preview layout and panels restoration
 
 ## Last Completed Milestone
 
@@ -47,7 +48,7 @@ See: `.planning/PROJECT.md`
 
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
-| 79 | Preview Source-Truth Gap Audit | Not started | PVAUDIT-01 |
+| 79 | Preview Source-Truth Gap Audit | Complete | PVAUDIT-01 |
 | 80 | Preview Layout And Panels Restoration | Not started | PVLAYOUT-01, PVLAYOUT-02, PVLAYOUT-03 |
 | 81 | Preview Layer Move And Playback Controls | Not started | PVCTRL-01, PVCTRL-02, PVCTRL-03 |
 | 82 | Preview G-code Roles Color Modes And Rendering | Not started | PVRENDER-01, PVRENDER-02, PVRENDER-03 |
@@ -70,7 +71,7 @@ See: `.planning/PROJECT.md`
 
 ## Target Screenshot
 
-- `shotScreen/???.png` - Preview target screenshot
+- `shotScreen/预览页.png` - Preview target screenshot
 
 ## Carry-Forward Status
 
@@ -105,4 +106,4 @@ Historical items acknowledged before v3.9 and their current state:
 
 ## Operator Next Steps
 
-- Start Phase 79 with /gsd-discuss-phase 79
+- Start Phase 80 with /gsd-discuss-phase 80 --auto
