@@ -1,8 +1,8 @@
 ---
-status: fixing
+status: resolved
 trigger: "OWZX_RHI_RENDERER auto launch becomes unresponsive and crashes"
 created: 2026-06-27
-updated: 2026-06-27
+updated: 2026-07-06
 ---
 
 # QRhi D3D12 Crash Debug Session
@@ -32,7 +32,7 @@ updated: 2026-06-27
 
 ## Resolution
 
-- root_cause: pending source fix verification.
-- fix: pending.
-- verification: pending.
-- files_changed: pending.
+- root_cause: D3D12 is not currently a stable default backend on this Windows / Qt 6.10 runtime.
+- fix: Current QRhi auto policy selects D3D11 as the verified Windows backend; D3D12 remains explicit opt-in only.
+- verification: Canonical verification passed after the backend-policy work; current startup diagnostics show `requested=auto selected=d3d11`; the current `OWzxSlicer.exe` process is running and responding.
+- files_changed: No additional source changes in this closure task. The runtime policy was already present in the current codebase; this update closes the stale debug artifact.

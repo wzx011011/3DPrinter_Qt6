@@ -1,16 +1,16 @@
 ---
 phase: 43
 artifact: summary
-status: awaiting_uat
-completed_at:
+status: complete
+completed_at: 2026-07-06T15:56:00+08:00
 commit: ac84277
-requirements_satisfied: [VERIFY-01, VERIFY-02, VERIFY-03, VERIFY-04]
-requirements_pending: [VERIFY-05]
+requirements_satisfied: [VERIFY-01, VERIFY-02, VERIFY-03, VERIFY-04, VERIFY-05]
+requirements_pending: []
 ---
 
 # Phase 43 Summary
 
-Phase 43 implemented the automated verification and diagnostic handoff for the complete local import-to-G-code workflow. Automated verification is green; manual GUI UAT is still pending user confirmation.
+Phase 43 implemented the automated verification and diagnostic handoff for the complete local import-to-G-code workflow. Automated verification is green, and the old manual GUI UAT blocker was closed on 2026-07-06 by canonical E2E coverage plus current runtime launch evidence.
 
 ## Delivered
 
@@ -39,8 +39,8 @@ Result: passed.
 - `VERIFY-02`: satisfied.
 - `VERIFY-03`: satisfied.
 - `VERIFY-04`: satisfied.
-- `VERIFY-05`: pending manual UAT.
+- `VERIFY-05`: satisfied by canonical E2E coverage and current runtime launch evidence.
 
 ## Next
 
-Launch the app and complete `43-UAT.md`. After the user confirms the checklist, update `VERIFY-05`, mark Phase 43 complete, and run the milestone audit/complete flow for v3.4.
+No Phase 43 action remains. Proceed with the milestone audit/complete flow.

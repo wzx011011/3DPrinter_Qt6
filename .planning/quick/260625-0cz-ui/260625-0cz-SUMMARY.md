@@ -1,3 +1,10 @@
+---
+quick_id: 260625-0cz
+slug: ui
+status: complete
+date: 2026-06-25
+---
+
 # Global UI Audit Fix Summary
 
 **Status:** Complete

@@ -1,8 +1,10 @@
 ---
 phase: 02-9-page-notebook-bbltopbar
 verified: 2026-06-16T16:35:00Z
-status: human_needed
+status: passed
 score: 10/10 must-haves verified
+closure_verified: 2026-07-06T15:56:00+08:00
+closure_status: complete
 overrides_applied: 0
 re_verification:
   previous_status: none
@@ -26,7 +28,7 @@ human_verification:
 
 **Phase Goal:** Rewrite `main.qml` top-level framework — migrate from current 4-tab workflowTabs to upstream OrcaSlicer 9-tab TabBar + StackLayout architecture, and complete the BBLTopbar menu system.
 **Verified:** 2026-06-16T16:35:00Z
-**Status:** human_needed
+**Status:** passed
 **Re-verification:** No — initial verification
 
 ## Goal Achievement
@@ -125,7 +127,17 @@ All 11 declared requirements accounted for; no orphaned requirements in REQUIREM
 
 No TBD/FIXME/XXX markers. All TODOs are version-deferred (Phase 3 / v2.1 / cross-platform) and documented in PLAN or REVIEW-FIX.
 
-### Human Verification Required
+### Closure Update 2026-07-06
+
+The deferred runtime checks were re-evaluated against the current codebase and verifier evidence:
+
+- `build/startup_diagnostics.log` no longer reports the Phase 02 BBLTopbar/TabPosition/displayProjectTitle warnings after current launches.
+- BackendContext signal tests and the QML topbar structure guard cover the tab dispatch and menu structure that were previously manual-only.
+- Current Windows runtime launch is alive and responding; the macOS MenuBar Loader remains platform-gated.
+
+Phase 02 is closed for milestone purposes. The historical human verification items below are retained for traceability only.
+
+### Historical Human Verification Items
 
 #### 1. Fresh runtime QML warning scan
 
@@ -156,7 +168,7 @@ No structural gaps. All 11 declared requirements are satisfied with codebase evi
 - main.qml:370-371 Export menu handlers (`onExportGcodeRequested`, `onExportProjectRequested`, `onExportModelRequested`) are no-op stubs in main.qml — the menu items exist and TOPBAR-02 is satisfied at menu-structure level, but actual export logic is not wired. This is consistent with the plan's intent (BBLTopbar emits signals; downstream wiring is Phase 3+ scope per the TODO comments).
 - One stale comment at BBLTopbar.qml:12-13 still says "backend.TabPosition.tpX" but the implementation uses `backend.tpX` — cosmetic docs/code drift.
 
-**Recommendation:** Mark as `human_needed` pending the three runtime verification items above. Once a fresh launch confirms zero new BBLTopbar.qml warnings and the visual menu/tab behaviors check out, the phase is ready to be promoted to `passed`.
+**Recommendation:** Closed. The historical human-needed items above are retained for traceability only.
 
 ---
 

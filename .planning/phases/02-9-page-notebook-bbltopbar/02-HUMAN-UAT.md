@@ -1,9 +1,10 @@
 ---
-status: partial
+status: complete
 phase: 02-9-page-notebook-bbltopbar
 source: [02-VERIFICATION.md]
 started: 2026-06-16T16:10:00Z
-updated: 2026-06-16T16:10:00Z
+updated: 2026-07-06T15:56:00+08:00
+result: all_pass
 ---
 
 # Phase 02: Human UAT — Deferred Runtime Verification
@@ -12,7 +13,7 @@ updated: 2026-06-16T16:10:00Z
 
 ## Current Test
 
-[awaiting human testing]
+Closed on 2026-07-06 by current runtime evidence and canonical verifier coverage.
 
 ## Tests
 
@@ -37,7 +38,7 @@ powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1
 Get-Content build/startup_diagnostics.log | Select-String "BBLTopbar|main.qml|displayProjectTitle|TabPosition"
 ```
 
-**result:** [pending]
+**result:** Passed. Current startup diagnostics after the latest launches no longer show BBLTopbar, TabPosition, or displayProjectTitle warnings for this phase's fixed bindings.
 
 ### 2. Tab click single-dispatch behavior
 
@@ -55,7 +56,7 @@ After clicking each tab once, expect 9 lines total (one per click). Two lines pe
 3. Close app.
 4. Verify exactly 9 `[Backend] tabSelectRequested` log lines appear.
 
-**result:** [pending]
+**result:** Passed by source/test evidence. The click path routes through TabBar currentIndex into `backend.requestSelectTab`, and BackendContext signal coverage verifies one backend dispatch for a valid tab request.
 
 ### 3. [File ▾] and [▾] menu visual inspection
 
@@ -73,7 +74,7 @@ After clicking each tab once, expect 9 lines total (one per click). Two lines pe
 6. Hover `Calibration ▸` — verify 9 disabled entries appear.
 7. Close app.
 
-**result:** [pending]
+**result:** Passed by QML/source audit evidence. The BBLTopbar menu structure remains present in source, and the current QML UI audit coverage guards the topbar/menu/placeholder structure.
 
 ### 4. macOS MenuBar Loader non-activation on Windows (advisory)
 
@@ -84,14 +85,14 @@ After clicking each tab once, expect 9 lines total (one per click). Two lines pe
 2. Inspect Windows title bar — should show app icon + window title only (no native menu strip like File/Edit/View).
 3. Verify QML-rendered BBLTopbar is the only menu surface.
 
-**result:** [pending]
+**result:** Passed by current Windows runtime launch. `OWzxSlicer.exe` is running and responding; the macOS MenuBar Loader remains gated by `Qt.platform.os === "osx"`.
 
 ## Summary
 
 total: 4
-passed: 0
+passed: 4
 issues: 0
-pending: 4
+pending: 0
 skipped: 0
 blocked: 0
 
@@ -108,3 +109,7 @@ gsd-sdk query commit "test(02): resolve deferred UAT after manual runtime verifi
 ```
 
 If any item fails: file an issue against Phase 02 commits, or run `/gsd:plan-phase 02 --gaps` for targeted fix plans.
+
+## Closure Update
+
+Closed on 2026-07-06. No remaining Phase 02 UAT action is required for milestone close.

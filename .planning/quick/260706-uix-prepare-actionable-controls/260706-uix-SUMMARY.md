@@ -1,3 +1,10 @@
+---
+quick_id: 260706-uix
+slug: prepare-actionable-controls
+status: complete
+date: 2026-07-06
+---
+
 # Quick Task 260706-uix Summary
 
 ## Completed
