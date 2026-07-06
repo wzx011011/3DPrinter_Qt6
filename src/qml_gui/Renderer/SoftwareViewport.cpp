@@ -391,7 +391,7 @@ void SoftwareViewport::paintScene(QPainter *painter, const QRectF &target)
 {
   painter->save();
   painter->setRenderHint(QPainter::Antialiasing, true);
-  painter->fillRect(target, QColor("#2f3944"));
+  painter->fillRect(target, QColor("#56575d"));
 
   auto drawLine3D = [&](const QVector3D &a, const QVector3D &b, const QPen &pen) {
     painter->setPen(pen);

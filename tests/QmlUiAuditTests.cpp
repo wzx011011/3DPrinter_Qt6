@@ -64,6 +64,8 @@ private slots:
   void prepareViewportControlsMatchRestorationContract();
   // Quick 260705-vkn: pixel-level Prepare left sidebar restoration.
   void prepareLeftSidebarMatchesPixelRestorationContract();
+  // Quick 260706-r8m: full Prepare page visual parity anchors.
+  void prepareFullVisualParityContract();
   // Phase 78: final Prepare cleanup must keep restored paths active and stale
   // paths absent.
   void prepareRestorationMilestoneHasCleanupCoverage();
@@ -1791,6 +1793,59 @@ void QmlUiAuditTests::prepareLeftSidebarMatchesPixelRestorationContract()
                || leftSidebar.contains(QStringLiteral("#313337"))
                || leftSidebar.contains(QStringLiteral("#323438")),
            "Prepare left sidebar palette must move toward the screenshot gray panel surface");
+}
+
+void QmlUiAuditTests::prepareFullVisualParityContract()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+  QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
+
+  const QStringList prepareTokens = {
+    QStringLiteral("readonly property bool visualCompareActive"),
+    QStringLiteral("readonly property int targetViewportTopInset: 58"),
+    QStringLiteral("readonly property int targetViewportBottomInset: 50"),
+    QStringLiteral("id: prepareVisualStatusPill"),
+    QStringLiteral("anchors.bottomMargin: root.targetViewportBottomInset")
+  };
+  for (const QString &token : prepareTokens) {
+    QVERIFY2(preparePage.contains(token),
+             qPrintable(QStringLiteral("Prepare full visual parity token missing: %1").arg(token)));
+  }
+
+  const QStringList toolbarTokens = {
+    QStringLiteral("readonly property int targetActionToolbarTop: 22"),
+    QStringLiteral("readonly property int targetActionToolbarLeft: 598"),
+    QStringLiteral("readonly property int targetRightToolbarTop: 392"),
+    QStringLiteral("readonly property int targetViewControlsBottom: 42"),
+    QStringLiteral("id: prepareTopActionToolbar"),
+    QStringLiteral("id: prepareRightGizmoToolbar"),
+    QStringLiteral("id: prepareBottomViewControls"),
+    QStringLiteral("buttonSize: root.targetToolbarButtonSize"),
+    QStringLiteral("opacity: root.targetDisabledToolOpacity")
+  };
+  for (const QString &token : toolbarTokens) {
+    QVERIFY2(glToolbars.contains(token),
+             qPrintable(QStringLiteral("Prepare GL toolbar visual parity token missing: %1").arg(token)));
+  }
+
+  const QStringList shellTokens = {
+    QStringLiteral("readonly property int prepareChromeHeight: 70"),
+    QStringLiteral("Layout.preferredHeight: root.prepareChromeHeight"),
+    QStringLiteral("id: workflowBar"),
+    QStringLiteral("id: prepareExportGcodeButton"),
+    QStringLiteral("root.exportGcodeRequested()"),
+    QStringLiteral("visible: false")
+  };
+  for (const QString &token : shellTokens) {
+    QVERIFY2(mainQml.contains(token) || topbar.contains(token),
+             qPrintable(QStringLiteral("Prepare shell visual parity token missing: %1").arg(token)));
+  }
 }
 
 void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()

@@ -18,6 +18,9 @@ Item {
     property bool leftPanelVisible: true
     property int activeGizmoDragMode: GLViewport.GizmoMove
     readonly property int gizmoPanelTopOffset: 74
+    readonly property bool visualCompareActive: typeof backend !== "undefined" && backend.visualCompareMode
+    readonly property int targetViewportTopInset: 58
+    readonly property int targetViewportBottomInset: 50
     // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage → DockableSidebar)
     property bool sidebarCollapsed: false
     property int sidebarWidth: 392
@@ -3062,25 +3065,29 @@ Item {
             function onCurrentPlateIndexChanged() { root.requestGLThumbnail() }
         }
 
-        // GL FBO 缩略图捕获完成后刷新平板列表（对齐上游 PartPlate::thumbnail_data 回写）
+        // Refresh the plate list after the GL FBO thumbnail capture completes.
         Connections {
             target: viewport3d
             function onThumbnailCaptured() { /* plate cards auto-rebind via lastThumbnailData property */ }
         }
 
         // Bottom plate bar (aligned with upstream GLCanvas3D plate thumbnails at viewport bottom)
-        Rectangle {
+        Item {
             id: plateBar
-            visible: root.editorVm && root.editorVm.plateCount > 0
             parent: viewportArea
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: 10
+            anchors.bottomMargin: root.targetViewportBottomInset
             anchors.left: parent.left
             anchors.leftMargin: 14
             anchors.right: parent.right
             anchors.rightMargin: 14
             height: 44
-            color: "transparent"
+            visible: root.editorVm && root.editorVm.plateCount > 0
+
+            Rectangle {
+                id: prepareVisualStatusPill
+                anchors.fill: parent
+                color: "transparent"
 
             RowLayout {
                 anchors.fill: parent
@@ -3244,6 +3251,7 @@ Item {
                     }
                 }
             }
+        }
         }
 
         // 对象信息栏（对齐上游 Plater::show_object_info）

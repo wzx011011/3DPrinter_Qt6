@@ -81,7 +81,7 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   }
   m_clearColor = (m_canvasType == RhiViewport::CanvasPreview)
       ? QColor(8, 12, 20)
-      : QColor(13, 18, 24);
+      : QColor(86, 87, 93);
 
   // ── Phase 26: Preview segment pipeline — store preview data + control props ──
   if (m_previewData != viewport->m_previewData) {

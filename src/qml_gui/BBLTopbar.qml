@@ -53,7 +53,15 @@ Item {
     // ── 内部状态：当前 tab-switch latency token（main.qml 读取用于 onCurrentPageChanged 收尾）
     property int lastTabSwitchToken: -1
 
-    implicitHeight: 40
+    readonly property var workflowTabs: [
+        { label: qsTr("首页"), icon: "qrc:/qml/assets/icons/box.svg", pos: backend.tpHome },
+        { label: qsTr("准备"), icon: "qrc:/qml/assets/icons/box.svg", pos: backend.tp3DEditor },
+        { label: qsTr("预览"), icon: "qrc:/qml/assets/icons/layers.svg", pos: backend.tpPreview },
+        { label: qsTr("设备"), icon: "qrc:/qml/assets/icons/printer.svg", pos: backend.tpDevice },
+        { label: qsTr("项目"), icon: "qrc:/qml/assets/icons/device-floppy.svg", pos: backend.tpProject }
+    ]
+
+    implicitHeight: 70
 
     // macOS 系统菜单栏（TOPBAR-07）：仅 macOS 激活，Windows/Linux 保持 inactive
     Loader {
@@ -88,7 +96,10 @@ Item {
 
         // Title bar drag for frameless window (与上游 BBLTopbar forwardMouseEvent 等价)
         MouseArea {
-            anchors.fill: parent
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: 36
             acceptedButtons: Qt.LeftButton
             propagateComposedEvents: true
             z: -1
@@ -263,6 +274,7 @@ Item {
             TabBar {
                 id: navTabBar
                 Layout.alignment: Qt.AlignVCenter
+                visible: false
                 currentIndex: backend.currentPage
 
                 // 反馈环保护 (Pitfall 2 in 02-RESEARCH.md)：
@@ -345,6 +357,7 @@ Item {
             RowLayout {
                 id: sideTools
                 Layout.alignment: Qt.AlignVCenter
+                visible: false
                 spacing: 2
 
                 // Slice 下拉 (复用 main.qml sliceTopMenu 语义) — Phase 51 SHELL-03: canSlice gate
@@ -453,6 +466,120 @@ Item {
                 iconSource: "qrc:/qml/assets/icons/x.svg"
                 toolTipText: qsTr("关闭")
                 onClicked: root.windowCloseRequested()
+            }
+        }
+
+        Rectangle {
+            id: workflowBar
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.topMargin: 36
+            height: 34
+            color: Theme.chromeSurface
+
+            RowLayout {
+                anchors.fill: parent
+                spacing: 0
+
+                Repeater {
+                    model: root.workflowTabs
+                    delegate: Rectangle {
+                        id: workflowTab
+                        required property var modelData
+                        Layout.preferredWidth: Math.max(112, workflowLabel.implicitWidth + 48)
+                        Layout.fillHeight: true
+                        color: backend.currentPage === modelData.pos ? Theme.accent : "transparent"
+
+                        Row {
+                            anchors.centerIn: parent
+                            spacing: 7
+
+                            Image {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 16
+                                height: 16
+                                source: workflowTab.modelData.icon
+                                opacity: backend.currentPage === workflowTab.modelData.pos ? 1.0 : 0.72
+                                fillMode: Image.PreserveAspectFit
+                            }
+
+                            Text {
+                                id: workflowLabel
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: workflowTab.modelData.label
+                                color: backend.currentPage === workflowTab.modelData.pos ? Theme.textOnAccent : Theme.chromeText
+                                font.pixelSize: 12
+                                font.bold: backend.currentPage === workflowTab.modelData.pos
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (backend.currentPage === workflowTab.modelData.pos)
+                                    return
+                                root.lastTabSwitchToken = backend.beginLatency("tab-switch", workflowTab.modelData.label)
+                                backend.requestSelectTab(workflowTab.modelData.pos)
+                            }
+                        }
+                    }
+                }
+
+                Item { Layout.fillWidth: true; Layout.fillHeight: true }
+
+                Rectangle {
+                    id: prepareSliceButton
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredWidth: 106
+                    Layout.preferredHeight: 24
+                    radius: 12
+                    color: "#4a7f76"
+                    opacity: backend.currentPage === backend.tp3DEditor ? 1.0 : 0.0
+                    visible: backend.currentPage === backend.tp3DEditor
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: qsTr("切片单盘")
+                        color: "#e7f4f0"
+                        font.pixelSize: 12
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.sliceRequested()
+                    }
+                }
+
+                Item { width: 8; height: 1 }
+
+                Rectangle {
+                    id: prepareExportGcodeButton
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredWidth: 146
+                    Layout.preferredHeight: 24
+                    radius: 12
+                    color: Theme.accent
+                    visible: backend.currentPage === backend.tp3DEditor
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: qsTr("导出G-code文件")
+                        color: Theme.textOnAccent
+                        font.pixelSize: 12
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.exportGcodeRequested()
+                    }
+                }
+
+                Item { width: 20; height: 1 }
             }
         }
 

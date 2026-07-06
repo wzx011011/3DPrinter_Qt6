@@ -13,9 +13,26 @@ Item {
 
     readonly property int viewportToolbarHeight: 34
     readonly property int toolbarButtonSize: 30
+    readonly property int targetToolbarButtonSize: 30
     readonly property int gizmoToolbarWidth: 36
-    readonly property int toolbarGap: 4
+    readonly property int toolbarGap: 3
+    readonly property int targetActionToolbarTop: 22
+    readonly property int targetActionToolbarLeft: 598
+    readonly property int targetRightToolbarTop: 392
+    readonly property int targetRightToolbarCenterOffset: 300
+    readonly property int targetViewControlsBottom: 42
+    readonly property real targetDisabledToolOpacity: 0.34
+    readonly property color targetToolbarSurface: "#3b3e46aa"
+    readonly property color targetToolbarBorder: "#71757d88"
     readonly property string iconBase: "qrc:/qml/assets/icons/"
+    readonly property var targetActionIcons: [
+        "box.svg", "layout-grid-plus.svg", "mirror.svg", "list-details.svg",
+        "plus.svg", "minus.svg", "layout-grid.svg", "layers.svg",
+        "list-details.svg", "maximize.svg", "restore.svg", "rotate-2.svg",
+        "mirror.svg", "copy.svg", "clone.svg", "layers-subtract.svg",
+        "scissors.svg", "layers.svg", "settings.svg", "printer.svg",
+        "layers.svg", "send-2.svg", "settings.svg"
+    ]
 
     signal addModelRequested()
     signal fitViewRequested()
@@ -69,165 +86,187 @@ Item {
         }
     }
 
-    Rectangle {
-        id: viewportActionToolbar
+    Item {
+        id: prepareTopActionToolbar
         anchors.top: parent.top
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.topMargin: 8
-        width: actionRow.implicitWidth + 10
+        anchors.left: parent.left
+        anchors.topMargin: root.targetActionToolbarTop
+        anchors.leftMargin: root.targetActionToolbarLeft
+        width: actionRow.implicitWidth + 12
         height: root.viewportToolbarHeight
-        radius: 4
-        color: "#2a2f36cc"
-        border.width: 1
-        border.color: "#69707880"
 
-        RowLayout {
-            id: actionRow
-            anchors.centerIn: parent
-            spacing: root.toolbarGap
+        Rectangle {
+            id: viewportActionToolbar
+            anchors.fill: parent
+            radius: 3
+            color: root.targetToolbarSurface
+            border.width: 1
+            border.color: root.targetToolbarBorder
 
-            ActionToolButton {
-                iconName: "plus.svg"
-                toolTipText: qsTr("Add model")
-                onClicked: root.addModelRequested()
-            }
+            RowLayout {
+                id: actionRow
+                anchors.centerIn: parent
+                spacing: root.toolbarGap
 
-            ActionToolButton {
-                iconName: "layout-grid-plus.svg"
-                toolTipText: root.editorVm && root.editorVm.canAddPlate
-                             ? qsTr("Add plate")
-                             : qsTr("Maximum plate count reached")
-                enabled: root.editorVm && root.editorVm.canAddPlate
-                onClicked: root.editorVm.addPlate()
-            }
+                ActionToolButton {
+                    iconName: "box.svg"
+                    toolTipText: qsTr("Add model")
+                    onClicked: root.addModelRequested()
+                }
 
-            ActionToolButton {
-                iconName: "rotate-2.svg"
-                toolTipText: root.gizmoTip(qsTr("Auto orient"), GLViewport.GizmoRotate)
-                enabled: root.canUseGizmo(GLViewport.GizmoRotate)
-                onClicked: root.editorVm.autoOrientSelected()
-            }
+                ActionToolButton {
+                    iconName: "layout-grid-plus.svg"
+                    toolTipText: root.editorVm && root.editorVm.canAddPlate
+                                 ? qsTr("Add plate")
+                                 : qsTr("Maximum plate count reached")
+                    enabled: root.editorVm && root.editorVm.canAddPlate
+                    onClicked: root.editorVm.addPlate()
+                }
 
-            ActionToolButton {
-                iconName: "layout-grid.svg"
-                toolTipText: root.editorVm && root.editorVm.canArrangeObjects
-                             ? qsTr("Arrange all objects")
-                             : qsTr("Load a model before arranging")
-                enabled: root.editorVm && root.editorVm.canArrangeObjects
-                onClicked: root.editorVm.arrangeAllObjects()
-            }
+                ActionToolButton {
+                    iconName: "mirror.svg"
+                    toolTipText: root.gizmoTip(qsTr("Auto orient"), GLViewport.GizmoRotate)
+                    enabled: root.canUseGizmo(GLViewport.GizmoRotate)
+                    onClicked: root.editorVm.autoOrientSelected()
+                }
 
-            ToolbarSeparator { vertical: true }
+                ActionToolButton {
+                    iconName: "list-details.svg"
+                    toolTipText: root.editorVm && root.editorVm.canArrangeObjects
+                                 ? qsTr("Arrange all objects")
+                                 : qsTr("Load a model before arranging")
+                    enabled: root.editorVm && root.editorVm.canArrangeObjects
+                    onClicked: root.editorVm.arrangeAllObjects()
+                }
 
-            ActionToolButton {
-                iconName: "clone.svg"
-                toolTipText: root.editorVm && root.editorVm.canDuplicateSelectedObjects
-                             ? qsTr("Duplicate selected objects")
-                             : qsTr("Select one or more objects")
-                enabled: root.editorVm && root.editorVm.canDuplicateSelectedObjects
-                onClicked: root.editorVm.duplicateSelectedObjects()
-            }
+                ToolbarSeparator { vertical: true }
 
-            ActionToolButton {
-                iconName: "scissors.svg"
-                toolTipText: root.gizmoTip(qsTr("Split object"), GLViewport.GizmoCut)
-                enabled: root.canUseGizmo(GLViewport.GizmoCut)
-                onClicked: root.editorVm.splitSelectedObject()
-            }
+                ActionToolButton {
+                    iconName: "plus.svg"
+                    toolTipText: root.editorVm && root.editorVm.canDuplicateSelectedObjects
+                                 ? qsTr("Duplicate selected objects")
+                                 : qsTr("Select one or more objects")
+                    enabled: root.editorVm && root.editorVm.canDuplicateSelectedObjects
+                    onClicked: root.editorVm.duplicateSelectedObjects()
+                }
 
-            ActionToolButton {
-                iconName: "layers.svg"
-                toolTipText: qsTr("Layer editing is not backed by a Qt workflow yet")
-                enabled: false
+                ActionToolButton {
+                    iconName: "minus.svg"
+                    toolTipText: root.gizmoTip(qsTr("Split object"), GLViewport.GizmoCut)
+                    enabled: root.canUseGizmo(GLViewport.GizmoCut)
+                    onClicked: root.editorVm.splitSelectedObject()
+                }
+
+                Repeater {
+                    model: root.targetActionIcons.slice(6)
+                    delegate: ActionToolButton {
+                        required property string modelData
+                        iconName: modelData
+                        enabled: false
+                        opacity: root.targetDisabledToolOpacity
+                        toolTipText: qsTr("Unavailable in the current Prepare state")
+                    }
+                }
             }
         }
     }
 
-    Rectangle {
-        id: viewportGizmoToolbar
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.rightMargin: 18
+    Item {
+        id: prepareRightGizmoToolbar
+        anchors.top: parent.top
+        anchors.topMargin: root.targetRightToolbarTop
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.horizontalCenterOffset: root.targetRightToolbarCenterOffset
         width: root.gizmoToolbarWidth
-        height: gizmoColumn.implicitHeight + 10
-        radius: 4
-        color: "#6f747c66"
-        border.width: 1
-        border.color: "#c3c7cd66"
+        height: gizmoColumn.implicitHeight + 12
 
-        ColumnLayout {
-            id: gizmoColumn
-            anchors.centerIn: parent
-            spacing: root.toolbarGap
+        Rectangle {
+            id: viewportGizmoToolbar
+            anchors.fill: parent
+            radius: 4
+            color: "#7a7d8466"
+            border.width: 1
+            border.color: "#c3c7cd77"
 
-            GizmoToolButton { toolId: GLViewport.GizmoMove; textTip: qsTr("Move"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoRotate; textTip: qsTr("Rotate"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoScale; textTip: qsTr("Scale"); iconSource: iconForTool(toolId) }
+            ColumnLayout {
+                id: gizmoColumn
+                anchors.centerIn: parent
+                spacing: root.toolbarGap
 
-            ToolbarSeparator { }
+                GizmoToolButton { toolId: GLViewport.GizmoMove; textTip: qsTr("Move"); iconSource: iconForTool(toolId) }
+                GizmoToolButton { toolId: GLViewport.GizmoRotate; textTip: qsTr("Rotate"); iconSource: iconForTool(toolId) }
+                GizmoToolButton { toolId: GLViewport.GizmoScale; textTip: qsTr("Scale"); iconSource: iconForTool(toolId) }
 
-            GizmoToolButton { toolId: GLViewport.GizmoFlatten; textTip: qsTr("Place on face"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoCut; textTip: qsTr("Cut"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoAdvancedCut; textTip: qsTr("Advanced cut"); iconSource: iconForTool(toolId) }
+                ToolbarSeparator { }
 
-            ToolbarSeparator { }
+                GizmoToolButton { toolId: GLViewport.GizmoFlatten; textTip: qsTr("Place on face"); iconSource: iconForTool(toolId) }
+                GizmoToolButton { toolId: GLViewport.GizmoCut; textTip: qsTr("Cut"); iconSource: iconForTool(toolId) }
+                GizmoToolButton { toolId: GLViewport.GizmoAdvancedCut; textTip: qsTr("Advanced cut"); iconSource: iconForTool(toolId) }
 
-            GizmoToolButton { toolId: GLViewport.GizmoSupportPaint; textTip: qsTr("Support painting"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoSeamPaint; textTip: qsTr("Seam painting"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoSimplify; textTip: qsTr("Simplify mesh"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoMeasure; textTip: qsTr("Measure"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoMeshBoolean; textTip: qsTr("Mesh boolean"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoEmboss; textTip: qsTr("Emboss"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoSVG; textTip: qsTr("SVG emboss"); iconSource: iconForTool(toolId) }
+                ToolbarSeparator { }
+
+                GizmoToolButton { toolId: GLViewport.GizmoSupportPaint; textTip: qsTr("Support painting"); iconSource: iconForTool(toolId) }
+                GizmoToolButton { toolId: GLViewport.GizmoSeamPaint; textTip: qsTr("Seam painting"); iconSource: iconForTool(toolId) }
+                GizmoToolButton { toolId: GLViewport.GizmoSimplify; textTip: qsTr("Simplify mesh"); iconSource: iconForTool(toolId) }
+                GizmoToolButton { toolId: GLViewport.GizmoMeasure; textTip: qsTr("Measure"); iconSource: iconForTool(toolId) }
+                GizmoToolButton { toolId: GLViewport.GizmoMeshBoolean; textTip: qsTr("Mesh boolean"); iconSource: iconForTool(toolId) }
+                GizmoToolButton { toolId: GLViewport.GizmoEmboss; textTip: qsTr("Emboss"); iconSource: iconForTool(toolId) }
+                GizmoToolButton { toolId: GLViewport.GizmoSVG; textTip: qsTr("SVG emboss"); iconSource: iconForTool(toolId) }
+            }
         }
     }
 
-    Rectangle {
-        id: viewportViewControls
+    Item {
+        id: prepareBottomViewControls
         anchors.left: parent.left
         anchors.bottom: parent.bottom
-        anchors.leftMargin: 18
-        anchors.bottomMargin: 58
+        anchors.leftMargin: 20
+        anchors.bottomMargin: root.targetViewControlsBottom
         width: viewRow.implicitWidth + 10
         height: root.viewportToolbarHeight
-        radius: 4
-        color: "#2a2f36cc"
-        border.width: 1
-        border.color: "#69707880"
 
-        RowLayout {
-            id: viewRow
-            anchors.centerIn: parent
-            spacing: root.toolbarGap
+        Rectangle {
+            id: viewportViewControls
+            anchors.fill: parent
+            radius: 4
+            color: root.targetToolbarSurface
+            border.width: 1
+            border.color: root.targetToolbarBorder
 
-            ViewToolButton {
-                iconName: "box.svg"
-                toolTipText: qsTr("Top view")
-                onClicked: if (root.viewport3d) root.viewport3d.requestViewPreset(0)
-            }
+            RowLayout {
+                id: viewRow
+                anchors.centerIn: parent
+                spacing: root.toolbarGap
 
-            ViewToolButton {
-                iconName: "layout-grid.svg"
-                toolTipText: qsTr("Front view")
-                onClicked: if (root.viewport3d) root.viewport3d.requestViewPreset(1)
-            }
+                ViewToolButton {
+                    iconName: "box.svg"
+                    toolTipText: qsTr("Top view")
+                    onClicked: if (root.viewport3d) root.viewport3d.requestViewPreset(0)
+                }
 
-            ViewToolButton {
-                iconName: "layout-sidebar-right.svg"
-                toolTipText: qsTr("Right view")
-                onClicked: if (root.viewport3d) root.viewport3d.requestViewPreset(2)
-            }
+                ViewToolButton {
+                    iconName: "layout-grid.svg"
+                    toolTipText: qsTr("Front view")
+                    onClicked: if (root.viewport3d) root.viewport3d.requestViewPreset(1)
+                }
 
-            ViewToolButton {
-                iconName: "box.svg"
-                toolTipText: qsTr("Isometric view")
-                onClicked: if (root.viewport3d) root.viewport3d.requestViewPreset(3)
-            }
+                ViewToolButton {
+                    iconName: "layout-sidebar-right.svg"
+                    toolTipText: qsTr("Right view")
+                    onClicked: if (root.viewport3d) root.viewport3d.requestViewPreset(2)
+                }
 
-            ViewToolButton {
-                iconName: "maximize.svg"
-                toolTipText: qsTr("Fit view")
-                onClicked: root.fitViewRequested()
+                ViewToolButton {
+                    iconName: "box.svg"
+                    toolTipText: qsTr("Isometric view")
+                    onClicked: if (root.viewport3d) root.viewport3d.requestViewPreset(3)
+                }
+
+                ViewToolButton {
+                    iconName: "maximize.svg"
+                    toolTipText: qsTr("Fit view")
+                    onClicked: root.fitViewRequested()
+                }
             }
         }
     }
@@ -243,7 +282,7 @@ Item {
         property string iconName: ""
 
         cxStyle: CxIconButton.Style.Ghost
-        buttonSize: root.toolbarButtonSize
+        buttonSize: root.targetToolbarButtonSize
         iconSize: 16
         iconSource: root.iconBase + iconName
     }
@@ -252,7 +291,7 @@ Item {
         property string iconName: ""
 
         cxStyle: CxIconButton.Style.Ghost
-        buttonSize: root.toolbarButtonSize
+        buttonSize: root.targetToolbarButtonSize
         iconSize: 16
         iconSource: root.iconBase + iconName
     }
@@ -262,7 +301,7 @@ Item {
         property string textTip: ""
 
         cxStyle: CxIconButton.Style.Ghost
-        buttonSize: root.toolbarButtonSize
+        buttonSize: root.targetToolbarButtonSize
         iconSize: 16
         iconSource: ""
         selected: root.viewport3d && root.viewport3d.gizmoMode === toolId

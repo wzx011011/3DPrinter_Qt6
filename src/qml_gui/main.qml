@@ -33,6 +33,7 @@ ApplicationWindow {
     // app content goes edge-to-edge (matching the OrcaSlicer screenshot).
     readonly property int frameMargin: 0
     readonly property int frameRadius: (backend.visualCompareMode) ? 0 : 18
+    readonly property int prepareChromeHeight: 70
 
     // 当前 tab-switch latency token (BBLTopbar 写入, Connections onCurrentPageChanged 收尾)
     // 替代旧的 pendingSwitchToken / pendingSwitchTargetPage（Plan 02-02 Pitfall 3 迁移）
@@ -387,7 +388,7 @@ ApplicationWindow {
                 // Phase 3: preparePage 现在是 Plater 内部子组件，通过 plater.preparePageRef 访问
                 preparePageRef: plater.preparePageRef
                 Layout.fillWidth: true
-                Layout.preferredHeight: 40
+                Layout.preferredHeight: root.prepareChromeHeight
                 windowVisibility: root.visibility
 
                 onNewProjectRequested: newProjectDialog.open()
