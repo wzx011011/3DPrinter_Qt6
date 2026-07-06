@@ -25,6 +25,17 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 **Carry-forward outside v3.9:** D3D12 remains explicit opt-in future investigation; device/cloud/Monitor, Preview/settings rework beyond direct Prepare dependencies, and AssembleView remain future source-truth milestones.
 
+## Current Milestone: v4.0 Preview Page UI Restoration
+
+**Goal:** Restore the Preview page to screenshot-level OrcaSlicer parity using `shotScreen/???.png` as visual truth and OrcaSlicer Preview/G-code source as behavior truth.
+
+**Target features:**
+- Preview page visual/source-truth gap inventory with a canonical region map for top controls, left/right panels, layer slider, playback controls, legend, and viewport.
+- Preview layout restored to screenshot density and spacing, including layer range controls, vertical sliders, bottom playback strip, statistics/legend panels, and color-mode surfaces.
+- G-code role/color legend, line visibility, layer/move playback, camera controls, and selected-range behavior aligned with OrcaSlicer semantics on the default RHI/D3D11 path.
+- Dead, placeholder, or misleading Preview controls removed or honestly gated.
+- Final verification through source/QML audits, canonical build, running app launch, Preview visual evidence, and E2E import-slice-preview-export flow checks.
+
 ## Requirements
 
 ### Validated
@@ -50,7 +61,9 @@ These are current baseline capabilities inferred from implementation, git histor
 
 ### Active
 
-- [ ] Define the next source-truth milestone.
+- [ ] Restore the Preview page UI to screenshot-level OrcaSlicer parity.
+- [ ] Align Preview layer controls, playback, G-code role visibility, color modes, and statistics panels with upstream behavior.
+- [ ] Verify the restored Preview page with source/QML audits, canonical build, running app launch, visual evidence, and E2E workflow checks.
 
 ### Future
 
@@ -96,6 +109,7 @@ These are current baseline capabilities inferred from implementation, git histor
 - Known carry-forward tech debt: `.Codex` path casing diverges from git-tracked lowercase `.codex` on Windows; normalize before case-sensitive CI if touched.
 - v3.8 closure state: RHI is the default functional renderer for gizmo/pick/cut/wipe scope; Phase 68 still lacks optional manual visual-capture evidence, tracked as tech debt rather than a blocker.
 - v3.9 restored the Prepare page and archived its phase evidence under `.planning/milestones/v3.9-phases/`.
+- v4.0 focuses on Preview page restoration. Prepare remains a dependency and regression surface, not the implementation target.
 
 ## Constraints
 
@@ -134,6 +148,7 @@ These are current baseline capabilities inferred from implementation, git histor
 | Preserve `OWzxGL.GLViewport` as a QML compatibility alias | QML imports stay stable while the implementation resolves to RHI or Software rendering. | Good - v3.8 shipped |
 | Put gizmo math, geometry, and object picking in pure C++ helpers | Deterministic unit tests are cheaper and more reliable than renderer-only validation for interaction math. | Good - v3.8 shipped |
 | Scope v3.9 to Prepare page UI restoration | The user explicitly selected "准备页 UI 还原"; Preview, settings, device, and AssembleView should not dilute this milestone. | Good - v3.9 shipped |
+| Scope v4.0 to Preview page UI restoration | After Prepare shipped, the next highest-value screenshot/source-truth gap is Preview; device, settings, and AssembleView stay future unless directly required. | Active - v4.0 |
 
 ## Evolution
 
@@ -153,4 +168,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-06 after v3.9 milestone archive.*
+*Last updated: 2026-07-06 after v4.0 milestone start.*

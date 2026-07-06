@@ -1,37 +1,37 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.9
-milestone_name: Prepare Page UI Restoration
-status: awaiting_next_milestone
-last_updated: "2026-07-06T08:04:50.628Z"
-last_activity: 2026-07-06 — Milestone v3.9 completed and archived
+milestone: v4.0
+milestone_name: Preview Page UI Restoration
+status: planning
+last_updated: "2026-07-06T08:18:09.440Z"
+last_activity: 2026-07-06
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
-**Milestone:** v3.9 - Prepare Page UI Restoration
-**Status:** v3.9 milestone archived
-**Next step:** Start the next milestone with `$gsd-new-milestone`.
+**Milestone:** v4.0 - Preview Page UI Restoration
+**Status:** Defining requirements and roadmap complete
+**Next step:** Start Phase 79 with `$gsd-discuss-phase 79`.
 
 ## Current Position
 
-Phase: none
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-06 — Milestone v3.9 completed and archived
+Status: Defining requirements
+Last activity: 2026-07-06 — Milestone v4.0 started
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-**Current focus:** Planning the next source-truth milestone.
+**Current focus:** Restore the Preview page UI to screenshot-level OrcaSlicer parity.
 
 ## Last Completed Milestone
 
@@ -43,24 +43,34 @@ See: `.planning/PROJECT.md`
 | 77 | Prepare Viewport Controls And Gizmo UI | Complete | VIEWUI-01, GIZMOUI-01 |
 | 78 | Prepare Verification And Cleanup | Complete | CLEAN-01, VERIFY-01, VERIFY-02 |
 
+## Active Milestone Plan
+
+| Phase | Name | Status | Requirements |
+|---|---|---|---|
+| 79 | Preview Source-Truth Gap Audit | Not started | PVAUDIT-01 |
+| 80 | Preview Layout And Panels Restoration | Not started | PVLAYOUT-01, PVLAYOUT-02, PVLAYOUT-03 |
+| 81 | Preview Layer Move And Playback Controls | Not started | PVCTRL-01, PVCTRL-02, PVCTRL-03 |
+| 82 | Preview G-code Roles Color Modes And Rendering | Not started | PVRENDER-01, PVRENDER-02, PVRENDER-03 |
+| 83 | Preview Verification And Cleanup | Not started | PVCLEAN-01, PVVERIFY-01, PVVERIFY-02 |
+
 ## Verification Rule
 
 - Do not run alternate build scripts or create alternate build directories.
-- During Phases 74-77, prefer source reads, focused tests, QML/source audits, `git diff --check`, and the encoding guard unless a code path requires broader verification.
-- In Phase 78, run the canonical verifier:
+- During Phases 79-82, prefer source reads, focused tests, QML/source audits, `git diff --check`, and the encoding guard unless a code path requires broader verification.
+- In Phase 83, run the canonical verifier:
   `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`
 
-- After the canonical build, launch `build/OWzxSlicer.exe` and record Prepare page visual evidence against the target screenshot.
+- After the canonical build, launch `build/OWzxSlicer.exe` and record Preview page visual evidence against the target screenshot.
 
 ## Source And Visual Truth
 
-- Visual truth: `shotScreen/` Prepare page screenshot.
-- Behavior truth: `third_party/OrcaSlicer/src/slic3r/GUI/Plater.*`, `GLCanvas3D.*`, `GUI_ObjectList.*`, `GUI_ObjectSettings.*`, and `Gizmos/*`.
-- Qt targets start from `src/qml_gui/pages/PreparePage.qml`, Prepare sidebars/panels/components, `EditorViewModel.*`, `ProjectServiceMock.*`, preset/config services, and RHI renderer classes.
+- Visual truth: `shotScreen/预览页.png`.
+- Behavior truth: `third_party/OrcaSlicer/src/slic3r/GUI/GUI_Preview.*`, `GCodeViewer.*`, `GLCanvas3D.*`, and `third_party/OrcaSlicer/src/libslic3r/GCode/*`.
+- Qt targets start from `src/qml_gui/pages/PreviewPage.qml`, Preview panels/components, `PreviewViewModel.*`, `EditorViewModel.*`, `SliceService.*`, and RHI renderer classes.
 
 ## Target Screenshot
 
-- `shotScreen/鍑嗗椤?png` - 2560x1400
+- `shotScreen/???.png` - Preview target screenshot
 
 ## Carry-Forward Status
 
@@ -95,4 +105,4 @@ Historical items acknowledged before v3.9 and their current state:
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Start Phase 79 with /gsd-discuss-phase 79

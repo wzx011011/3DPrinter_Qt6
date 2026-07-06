@@ -13,6 +13,77 @@
 - Complete with residual gaps: **v3.7 Screenshot-Level UI Parity Closure** - Phases 59-64 (2026-07-04; D3D12 and manual visual debt carried forward)
 - Complete with tech debt: **v3.8 RHI Gizmo Parity** - Phases 65-73 (shipped 2026-07-04; 21/21 requirements satisfied, Phase 68 visual evidence deferred)
 - Complete with process debt: **v3.9 Prepare Page UI Restoration** - Phases 74-78 (shipped 2026-07-06; 12/12 requirements satisfied, canonical verifier passed, runtime screenshot captured)
+- Planned: **v4.0 Preview Page UI Restoration** - Phases 79-83
+
+## Current Milestone: v4.0 Preview Page UI Restoration
+
+**Goal:** Restore the Preview page to screenshot-level OrcaSlicer parity using `shotScreen/预览页.png` as visual truth and OrcaSlicer Preview/G-code source as behavior truth.
+
+## Phases
+
+- [ ] Phase 79: Preview Source-Truth Gap Audit
+- [ ] Phase 80: Preview Layout And Panels Restoration
+- [ ] Phase 81: Preview Layer Move And Playback Controls
+- [ ] Phase 82: Preview G-code Roles Color Modes And Rendering
+- [ ] Phase 83: Preview Verification And Cleanup
+
+| Phase | Name | Goal | Requirements |
+|---|---|---|---|
+| 79 | Preview Source-Truth Gap Audit | Freeze the v4.0 Preview region map, current gaps, upstream anchors, Qt targets, and verification expectations before edits. | PVAUDIT-01 |
+| 80 | Preview Layout And Panels Restoration | Restore the screenshot-visible Preview layout, statistics/legend panels, and remove visible placeholders/dead surfaces. | PVLAYOUT-01, PVLAYOUT-02, PVLAYOUT-03 |
+| 81 | Preview Layer Move And Playback Controls | Restore layer range/current-layer controls, move/layer playback controls, and camera interaction stability. | PVCTRL-01, PVCTRL-02, PVCTRL-03 |
+| 82 | Preview G-code Roles Color Modes And Rendering | Align G-code role colors, role visibility, color modes, and payload preservation with upstream semantics. | PVRENDER-01, PVRENDER-02, PVRENDER-03 |
+| 83 | Preview Verification And Cleanup | Remove stale Preview paths, lock restored bindings with audits/tests, run canonical verifier, launch app, and capture Preview visual evidence. | PVCLEAN-01, PVVERIFY-01, PVVERIFY-02 |
+
+### Phase 79: Preview Source-Truth Gap Audit
+
+**Status:** Not started
+**Plans:** 0/1 plans complete
+
+Success criteria:
+1. Current Preview page regions are mapped to target screenshot areas and OrcaSlicer source files.
+2. Each region records Qt target files, modify-vs-replace decision, and verification method.
+3. v3.6/v3.7 residual Preview gaps are reconciled into v4.0 requirements or explicitly deferred.
+
+### Phase 80: Preview Layout And Panels Restoration
+
+**Status:** Not started
+**Plans:** 0/1 plans complete
+
+Success criteria:
+1. Preview top controls, viewport, side panels, layer slider, and bottom playback/status controls match screenshot layout without overlap.
+2. Statistics, metadata, estimates, and legend surfaces use upstream-like density and placement.
+3. Visible Preview placeholders, raw labels, and dead controls are removed or honestly gated.
+
+### Phase 81: Preview Layer Move And Playback Controls
+
+**Status:** Not started
+**Plans:** 0/1 plans complete
+
+Success criteria:
+1. Layer range/current-layer controls update PreviewViewModel and renderer state.
+2. Layer/move playback and stepping controls stay synchronized with backend Preview state.
+3. Camera rotate/pan/zoom/fit interactions do not make model or toolpath data disappear.
+
+### Phase 82: Preview G-code Roles Color Modes And Rendering
+
+**Status:** Not started
+**Plans:** 0/1 plans complete
+
+Success criteria:
+1. Role colors and role visibility controls map to OrcaSlicer/libvgcode source truth.
+2. Screenshot-visible color modes are wired or honestly gated when blocked.
+3. Prepare -> slice -> Preview -> adjust layer/range/roles -> return flow preserves G-code payload state.
+
+### Phase 83: Preview Verification And Cleanup
+
+**Status:** Not started
+**Plans:** 0/1 plans complete
+
+Success criteria:
+1. Replaced Preview UI paths leave no stale files, imports, resource entries, tests, or disconnected controls.
+2. Automated source/QML audits cover upstream mapping, placeholder removal, and required bindings.
+3. The canonical verifier passes, `build/OWzxSlicer.exe` launches, and Preview visual evidence is recorded against the target screenshot.
 
 ## Completed Milestones
 
@@ -84,12 +155,12 @@ Requirements: `.planning/milestones/v3.8-REQUIREMENTS.md`
 
 ## Next Step
 
-v3.9 is archived. Prepare the next milestone:
+Start v4.0 with Phase 79:
 
 ```text
-$gsd-new-milestone
+$gsd-discuss-phase 79
 ```
 
 ---
 
-*Last updated: 2026-07-06 after v3.9 milestone archive.*
+*Last updated: 2026-07-06 after v4.0 milestone start.*
