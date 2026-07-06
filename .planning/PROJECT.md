@@ -10,22 +10,20 @@ The project currently has a usable Qt6/QML shell, real model/project IO, real sl
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current Milestone: v3.9 Prepare Page UI Restoration
+## Current State: After v3.9 Prepare Page UI Restoration
 
-**Goal:** Restore the Prepare page to screenshot-level OrcaSlicer parity using `shotScreen/` as visual truth and OrcaSlicer GUI source as behavior truth.
+**Last shipped milestone:** v3.9 Prepare Page UI Restoration (2026-07-06).
 
-**Last shipped milestone:** v3.8 RHI Gizmo Parity (2026-07-04).
-
-**Target features:**
-- Prepare page visual/source-truth gap inventory with one canonical region map for the current milestone.
-- Left preset/settings sidebar restored for upstream-like density, display names, scope state, and no visible unavailable placeholders.
-- Object list, plate strip, view controls, vertical toolbar, slice status, and Prepare workflow controls restored to the screenshot layout.
-- RHI-backed viewport, toolbars, and gizmo floating panels integrated into the restored Prepare page without overlap or dead controls.
-- Final verification through source/QML audits, canonical build, running application, and recorded visual evidence.
+**Shipped state:**
+- Prepare page visual/source-truth gap inventory exists as the canonical v3.9 region map.
+- Prepare left preset/settings sidebar is restored for upstream-like density, display names, scope state, and no visible unavailable placeholders.
+- Prepare object list, plate strip, view controls, vertical toolbar, slice status, and workflow controls are restored to the screenshot layout.
+- RHI-backed viewport controls and gizmo floating panels are integrated into the restored Prepare page without overlap or dead controls.
+- Final verification passed through source/QML audits, canonical build, running application, and recorded visual evidence.
 
 **Carry-forward from v3.8:** The default QRhi/D3D11 path owns move, rotate, scale, cut plane, wipe tower, precise object picking, and Preview G-code rendering. Legacy `GLViewport*` / `GCodeRenderer*` files and the `OWZX_OPENGL` startup path are retired. The QML `OWzxGL.GLViewport` name remains as a compatibility alias backed by RHI or Software rendering.
 
-**Carry-forward outside v3.9:** D3D12 remains blocked by the known QRhi `setShaderResources` crash; v3.4/v3.6 manual UAT evidence remains deferred; device/cloud/Monitor, Preview/settings rework, and AssembleView remain future source-truth milestones unless a direct Prepare dependency is found.
+**Carry-forward outside v3.9:** D3D12 remains explicit opt-in future investigation; device/cloud/Monitor, Preview/settings rework beyond direct Prepare dependencies, and AssembleView remain future source-truth milestones.
 
 ## Requirements
 
@@ -43,17 +41,16 @@ These are current baseline capabilities inferred from implementation, git histor
 - v3.0 PartPlate/PartPlateList domain model, plate lifecycle operations, 3MF multi-plate persistence, and per-plate slice scheduling.
 - v3.1 QRhi renderer infrastructure, benchmark path, Prepare/Preview integration, and default D3D11 startup path.
 - v3.2 plate-grid arrangement, manual filament map, real STL fixture, and partial thumbnail/writer integration hooks.
-- v3.4 local import-to-G-code workflow automated verification has passed; manual UAT is deferred and remains a carry-forward release gate.
+- v3.4 local import-to-G-code workflow is closed by automated E2E coverage and current runtime launch evidence; do not describe it as a separate manual user click-through.
 - v3.5 Phase 44-46 preset/config foundations exist as historical evidence; v3.5 Phase 47-49 are superseded by v3.6.
 
 - v3.8 RHI gizmo math, geometry, state wiring, move/rotate/scale interaction, cut plane, wipe tower, precise picking, and legacy OpenGL retirement shipped with 21/21 requirements satisfied.
 - Default renderer foundation now rests on QRhi/D3D11 plus Software fallback; the old OpenGL viewport is no longer a selectable application path.
+- v3.9 Prepare page UI restoration shipped with 12/12 requirements satisfied, canonical verification passed, current runtime launch evidence, and final Prepare screenshot evidence.
 
 ### Active
 
-- [ ] Restore the Prepare page UI to screenshot-level OrcaSlicer parity.
-- [ ] Replace visible Prepare placeholders, raw labels, and off-design layout blocks with upstream-mapped controls.
-- [ ] Verify the restored Prepare page with source/QML audits, canonical build, running app launch, and visual evidence.
+- [ ] Define the next source-truth milestone.
 
 ### Future
 
@@ -75,7 +72,7 @@ These are current baseline capabilities inferred from implementation, git histor
 - Completing device send/upload/cloud print and Monitor print-job workflows before a dedicated source-truth milestone.
 - Completing AssembleView or auto filament-map recommendation before a dedicated source-truth milestone.
 - Making D3D12 or Vulkan the default backend before the backend crash/runtime constraints are resolved.
-- Treating v3.4 manual UAT as complete without running it.
+- Claiming separate manual user click-through for v3.4 Phase 43. It is closed by E2E/runtime evidence, not by a distinct manual session.
 - Resuming v3.5 Phase 47-49 unless the user explicitly reopens that milestone.
 
 ## Context
@@ -94,11 +91,11 @@ These are current baseline capabilities inferred from implementation, git histor
 - Settings source-truth candidates include `third_party/OrcaSlicer/src/slic3r/GUI/Tab.*`, `PresetComboBoxes.*`, `ConfigManipulation.*`, `UnsavedChangesDialog.*`, `CreatePresetsDialog.*`, and `third_party/OrcaSlicer/src/libslic3r/PrintConfig.*`, `Preset.*`, `PresetBundle.*`.
 - Current Qt candidates include `src/qml_gui/main.qml`, `src/qml_gui/pages/PreparePage.qml`, `PreviewPage.qml`, `ConfigPage.qml`, `SettingsPage.qml`, sidebar/panel components, `src/core/viewmodels/EditorViewModel.*`, `PreviewViewModel.*`, `ConfigViewModel.*`, `src/core/services/ProjectServiceMock.*`, `PresetServiceMock.*`, and QRhi renderer classes.
 - Several `*Mock` services now contain real production-like paths plus fallback/mock behavior. The name alone does not describe implementation status.
-- v3.4 Phase 43 manual UAT remains pending because it could not be run when v3.4 closed. v3.6 planning may proceed, but release/handoff language must keep that fact visible.
+- v3.4 Phase 43 is closed by canonical E2E coverage plus current runtime launch evidence. Do not describe it as a separate manual user click-through.
 - Current Qt SDK reality: `E:/Qt6.10/lib/cmake/Qt6Gui/Qt6GuiTargets.cmake` lists `vulkan` under `QT_DISABLED_PUBLIC_FEATURES`, so Vulkan is not a default backend candidate.
 - Known carry-forward tech debt: `.Codex` path casing diverges from git-tracked lowercase `.codex` on Windows; normalize before case-sensitive CI if touched.
 - v3.8 closure state: RHI is the default functional renderer for gizmo/pick/cut/wipe scope; Phase 68 still lacks optional manual visual-capture evidence, tracked as tech debt rather than a blocker.
-- v3.9 narrows the screenshot-restoration effort back to the Prepare page. Previous v3.6/v3.7 structural restoration is evidence, not proof that the page is visually complete.
+- v3.9 restored the Prepare page and archived its phase evidence under `.planning/milestones/v3.9-phases/`.
 
 ## Constraints
 
@@ -136,7 +133,7 @@ These are current baseline capabilities inferred from implementation, git histor
 | Retire legacy OpenGL viewport after RHI parity | Keeping two interactive renderers after RHI parity would preserve wrong fallback behavior and increase regression risk. | Good - v3.8 shipped |
 | Preserve `OWzxGL.GLViewport` as a QML compatibility alias | QML imports stay stable while the implementation resolves to RHI or Software rendering. | Good - v3.8 shipped |
 | Put gizmo math, geometry, and object picking in pure C++ helpers | Deterministic unit tests are cheaper and more reliable than renderer-only validation for interaction math. | Good - v3.8 shipped |
-| Scope v3.9 to Prepare page UI restoration | The user explicitly selected "准备页 UI 还原"; Preview, settings, device, and AssembleView should not dilute this milestone. | Active - v3.9 |
+| Scope v3.9 to Prepare page UI restoration | The user explicitly selected "准备页 UI 还原"; Preview, settings, device, and AssembleView should not dilute this milestone. | Good - v3.9 shipped |
 
 ## Evolution
 
@@ -156,4 +153,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-05 after v3.9 milestone planning.*
+*Last updated: 2026-07-06 after v3.9 milestone archive.*

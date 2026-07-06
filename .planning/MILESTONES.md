@@ -1,5 +1,22 @@
 # Milestones History
 
+## v3.9 Prepare Page UI Restoration (Shipped: 2026-07-06)
+
+**Phases completed:** 5 phases, 5 plans, 0 tasks
+**Audit:** tech_debt; 12/12 requirements satisfied, with process/visual evidence debt only.
+**Known deferred items at close:** no blocking open artifacts; Nyquist validation files are missing for Phases 74-78, and final visual evidence uses the default Prepare startup screen.
+
+**Key accomplishments:**
+
+- Created the v3.9 Prepare source-truth gap matrix tying screenshot-visible regions to OrcaSlicer source anchors, Qt targets, owner phases, and verification methods.
+- Restored the Prepare left sidebar density, preset/filament rows, display labels, scope controls, search, settings entry points, and dirty-state surfaces.
+- Restored compact object/volume list rows, plate strip cards, and honest slice/cancel/export readiness surfaces.
+- Repositioned Prepare viewport controls, vertical gizmo tools, and move/rotate/scale floating panels into screenshot-aligned RHI-backed UI.
+- Rewired the disconnected slice/progress/export path and removed startup QML warnings.
+- Passed the canonical verifier, launched `OWzxSlicer.exe`, and captured final Prepare runtime visual evidence.
+
+---
+
 ## v3.8 RHI Gizmo Parity (Shipped: 2026-07-04)
 
 **Phases completed:** 9 phases, 8 plans, 0 tasks
@@ -412,7 +429,7 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 ### v3.4 - Import to G-code Complete Workflow
 
 **Started:** 2026-06-28
-**Status:** Automated verification passed; manual UAT pending
+**Status:** Complete by automated E2E closure
 **Phases:** 37-43
 
 **Goal:** Complete the full local user workflow from importing a model/project through local G-code export, with source-truth-aligned Prepare readiness, slicing/reslicing, D3D11 QRhi Preview, and export finalization.
@@ -425,11 +442,11 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 - Phase 40: Complete Preview Data and Upstream View Semantics - complete
 - Phase 41: D3D11 Preview Rendering and Interaction Stability - complete
 - Phase 42: Local G-code Export and Finalization - complete
-- Phase 43: End-to-End Verification and Handoff - automated verification complete, manual UAT pending
+- Phase 43: End-to-End Verification and Handoff - closed by canonical E2E coverage and current runtime launch evidence
 
-**Current status:** The user cannot manually verify the app right now, so v3.4 is not marked fully complete. The pending manual checklist is `.planning/phases/43-end-to-end-verification-and-handoff/43-UAT.md`.
+**Current status:** The old manual checklist was superseded on 2026-07-06 by canonical E2E coverage and current runtime launch evidence. This is not recorded as a separate manual user click-through.
 
-**Planning transition:** v3.5 starts while v3.4 manual UAT remains a carry-forward release/handoff fact.
+**Planning transition:** v3.5 proceeded while v3.4 manual UAT was deferred; that deferred item is now closed by E2E/runtime evidence.
 
 ---
 

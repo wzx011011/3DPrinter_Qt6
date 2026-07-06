@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v3.9
 milestone_name: Prepare Page UI Restoration
-status: complete
-last_updated: "2026-07-06T14:54:27+08:00"
-last_activity: 2026-07-06 -- Completed quick task 260706-uix Prepare actionable controls restoration
+status: awaiting_next_milestone
+last_updated: "2026-07-06T08:04:50.628Z"
+last_activity: 2026-07-06 — Milestone v3.9 completed and archived
 progress:
   total_phases: 5
   completed_phases: 5
@@ -16,24 +16,24 @@ progress:
 # Project State
 
 **Milestone:** v3.9 - Prepare Page UI Restoration
-**Status:** Complete
-**Next step:** Start the next milestone with `$gsd-new-milestone` or run milestone archival.
+**Status:** v3.9 milestone archived
+**Next step:** Start the next milestone with `$gsd-new-milestone`.
 
 ## Current Position
 
-Phase: 78 - Prepare Verification And Cleanup
-Plan: 78-01-PLAN.md
-Status: Complete
-Last activity: 2026-07-06 -- Completed quick task 260706-uix Prepare actionable controls restoration
+Phase: none
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-06 — Milestone v3.9 completed and archived
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-**Current focus:** Restore the Prepare page UI to screenshot-level OrcaSlicer parity without inventing new behavior.
+**Current focus:** Planning the next source-truth milestone.
 
-## Active Milestone Plan
+## Last Completed Milestone
 
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
@@ -49,6 +49,7 @@ See: `.planning/PROJECT.md`
 - During Phases 74-77, prefer source reads, focused tests, QML/source audits, `git diff --check`, and the encoding guard unless a code path requires broader verification.
 - In Phase 78, run the canonical verifier:
   `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`
+
 - After the canonical build, launch `build/OWzxSlicer.exe` and record Prepare page visual evidence against the target screenshot.
 
 ## Source And Visual Truth
@@ -65,23 +66,23 @@ See: `.planning/PROJECT.md`
 
 | Category | Item | Target |
 |---|---|---|
-| carry-forward | v3.4 Phase 43 manual UAT | Before claiming v3.4 complete |
+| closed | v3.4 Phase 43 UAT | Closed by canonical E2E coverage plus current runtime launch evidence |
 | superseded | v3.5 Phase 47-49 | Do not resume unless explicitly reopened |
-| carry-forward | v3.7 residual Prepare visual gaps | Reconcile in v3.9 |
+| closed | v3.7 residual Prepare visual gaps | Reconciled in v3.9 |
 | future | Device send/upload/cloud print and Monitor job lifecycle | Future milestone |
 | future | AssembleView | Future source-truth milestone |
 | future | Missing CLI test fixtures (`hotend.stl`, `Block20XY.stl`) | Future fixture milestone |
-| opportunistic | D3D12 crash root cause | Dedicated backend investigation milestone |
+| future | D3D12 root cause | Dedicated backend investigation milestone |
 
 ## Deferred Items
 
-Items acknowledged and deferred at milestone start on 2026-07-05:
+Historical items acknowledged before v3.9 and their current state:
 
 | Category | Item | Status |
 |---|---|---|
-| debug | qrhi-d3d12-crash | future |
-| uat_gap | Phase 43 43-UAT.md | pending_user |
-| verification_gap | Phase 68 visual evidence | human_needed |
+| debug | qrhi-d3d12-crash | resolved for default path; D3D12 remains future opt-in investigation |
+| uat_gap | Phase 43 43-UAT.md | closed by E2E/runtime evidence |
+| verification_gap | Phase 68 visual evidence | carried as optional v3.8 visual-evidence debt |
 
 ### Quick Tasks Completed
 
@@ -94,4 +95,4 @@ Items acknowledged and deferred at milestone start on 2026-07-05:
 
 ## Operator Next Steps
 
-- Start the next milestone with `$gsd-new-milestone` or archive v3.9 with `$gsd-complete-milestone`.
+- Start the next milestone with /gsd-new-milestone

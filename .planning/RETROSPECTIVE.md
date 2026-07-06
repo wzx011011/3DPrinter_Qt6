@@ -174,6 +174,48 @@ A stabilization/truth-reset milestone, not new features:
 
 ---
 
+
+## Milestone: v3.9 - Prepare Page UI Restoration
+
+**Shipped:** 2026-07-06
+**Phases:** 5 | **Plans:** 5 | **Requirements:** 12/12 satisfied
+**Audit status:** `tech_debt` (Nyquist validation files missing; no product blocker)
+
+### What Was Built
+- A canonical Prepare source-truth gap matrix mapping screenshot-visible regions to OrcaSlicer source anchors, Qt targets, owner phases, and verification methods.
+- Screenshot-aligned Prepare sidebar density, preset rows, filament rows, translated/display option labels, scope controls, search, settings entry points, and dirty-state surfaces.
+- Compact object/volume list rows, plate strip cards, and honest slice/cancel/export readiness surfaces.
+- Icon-first viewport controls, vertical gizmo toolbar, and move/rotate/scale floating panels on the default RHI path.
+- Final cleanup of disconnected Prepare paths, startup QML warning fixes, canonical verifier pass, app launch evidence, and final Prepare screenshot evidence.
+
+### What Worked
+- Focusing v3.9 on Prepare only made the visual restoration tractable and avoided diluting the milestone with Preview/settings/device scope.
+- The Phase 74 gap matrix created a stable decision record before edits, so Phases 75-78 could execute without re-litigating ownership.
+- Static QML audits were useful for guarding visual/wiring contracts that are easy to break during layout work.
+- The final actionable-controls quick pass closed the gap between visual parity and honest operation: restored UI controls are now wired or explicitly gated.
+
+### What Was Inefficient
+- Windows Graphics Capture failure meant intermediate visual evidence was weaker than planned until Phase 78 captured a final runtime screenshot.
+- Some historical planning artifacts lacked frontmatter or used older summary names, causing milestone-close audit false positives that had to be cleaned up.
+- Existing mojibake in planning docs again made exact patching brittle and increased the cost of clean archival updates.
+
+### Patterns Established
+- Screenshot restoration should be paired with a control-actionability pass before claiming completion.
+- Milestone-close should run both the local GSD audit and the SDK `audit-open` query because their compatibility behavior may differ.
+- Add frontmatter to phase summaries and verification files as soon as they are created; retroactive metadata repair is avoidable overhead.
+
+### Key Lessons
+- Visual parity work is not complete until controls are also clickable, honest, and covered by source/QML audits.
+- Closing stale artifacts before milestone archival prevents hidden process debt from leaking into the next milestone.
+- Process-only debt, such as missing `*-VALIDATION.md`, should be recorded separately from product blockers so the next milestone can start cleanly.
+
+### Cost Observations
+- Phases: 5, Plans: 5.
+- Canonical verifier passed after Phase 78 and covered app build, QML UI audit, PreviewParser, app launch smoke, and E2E pipeline.
+- Follow-up quick tasks after Phase 78 handled pixel parity refinements, actionable controls, and open-artifact cleanup before archival.
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Reqs satisfied | Audit status | Notes |
@@ -182,5 +224,6 @@ A stabilization/truth-reset milestone, not new features:
 | v3.0 | 7 (5+2 review) | 7 | 14/14 | tech_debt (review-clean) | First milestone with explicit code+UI review cycles; scout-before-refactor (D-14) avoided a big rewrite; build speed is the dominant inefficiency |
 | v3.6 | 9 | 25 | automated floor green | tech_debt | Screenshot inventory frozen first; manual visual UAT remains an explicit carry-forward |
 | v3.8 | 9 | 8 | 21/21 | tech_debt | RHI gizmo parity shipped; legacy OpenGL viewport retired; optional visual-evidence debt remains |
+| v3.9 | 5 | 5 | 12/12 | tech_debt | Prepare page restored and verified; remaining debt is process/visual evidence quality |
 
-*Last updated: 2026-07-04 after v3.8 milestone completion.*
+*Last updated: 2026-07-06 after v3.9 milestone completion.*
