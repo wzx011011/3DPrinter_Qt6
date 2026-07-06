@@ -20,6 +20,8 @@
 namespace
 {
 constexpr float kRadiansToDegrees = 180.0f / float(M_PI);
+constexpr bool kViewportTrianglePickingAvailable = false;
+constexpr bool kCgalMeshBooleanAvailable = false;
 }
 
 void EditorViewModel::invalidateSliceResultsForCurrentPlate()
@@ -4518,20 +4520,21 @@ bool EditorViewModel::canActivateGizmo(int gizmoMode) const
   case 4: // Flatten
   case 5: // Cut
   case 9: // Simplify
-  case 11: // Drill
   case 14: // Advanced Cut
     return hasSingleObject;
   case 3: // Measure
     return projectService_->modelCount() > 0;
   case 6: // Support paint
   case 7: // Seam paint
-    return hasSingleObject;
+    return kViewportTrianglePickingAvailable && hasSingleObject;
+  case 11: // Drill
+    return kCgalMeshBooleanAvailable && hasSingleObject;
   case 12: // Emboss
   case 16: // Text
   case 17: // SVG
     return hasSingleObject;
   case 13: // Mesh Boolean
-    return !hasSelectedVolume() && m_selectedSourceIndices.size() == 2;
+    return kCgalMeshBooleanAvailable && !hasSelectedVolume() && m_selectedSourceIndices.size() == 2;
   case 8: // Hollow
   case 10: // MMU segmentation
   case 15: // Face detector
@@ -4557,19 +4560,21 @@ QString EditorViewModel::gizmoStatusText(int gizmoMode) const
   case 2:
   case 4:
   case 5:
-  case 6:
-  case 7:
   case 9:
-  case 11:
   case 12:
   case 14:
   case 16:
   case 17:
     return QStringLiteral("Requires one selected object");
+  case 6:
+  case 7:
+    return QStringLiteral("Blocked: viewport triangle picking unavailable");
+  case 11:
+    return QStringLiteral("Blocked: CGAL MeshBoolean unavailable");
   case 3:
     return QStringLiteral("Requires a loaded model");
   case 13:
-    return QStringLiteral("Requires two selected objects");
+    return QStringLiteral("Blocked: CGAL MeshBoolean unavailable");
   case 8:
   case 18:
     return QStringLiteral("Blocked: OpenVDB unavailable");

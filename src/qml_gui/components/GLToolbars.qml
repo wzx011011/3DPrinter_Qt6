@@ -21,18 +21,9 @@ Item {
     readonly property int targetRightToolbarTop: 392
     readonly property int targetRightToolbarCenterOffset: 300
     readonly property int targetViewControlsBottom: 42
-    readonly property real targetDisabledToolOpacity: 0.34
     readonly property color targetToolbarSurface: "#3b3e46aa"
     readonly property color targetToolbarBorder: "#71757d88"
     readonly property string iconBase: "qrc:/qml/assets/icons/"
-    readonly property var targetActionIcons: [
-        "box.svg", "layout-grid-plus.svg", "mirror.svg", "list-details.svg",
-        "plus.svg", "minus.svg", "layout-grid.svg", "layers.svg",
-        "list-details.svg", "maximize.svg", "restore.svg", "rotate-2.svg",
-        "mirror.svg", "copy.svg", "clone.svg", "layers-subtract.svg",
-        "scissors.svg", "layers.svg", "settings.svg", "printer.svg",
-        "layers.svg", "send-2.svg", "settings.svg"
-    ]
 
     signal addModelRequested()
     signal fitViewRequested()
@@ -157,15 +148,91 @@ Item {
                     onClicked: root.editorVm.splitSelectedObject()
                 }
 
-                Repeater {
-                    model: root.targetActionIcons.slice(6)
-                    delegate: ActionToolButton {
-                        required property string modelData
-                        iconName: modelData
-                        enabled: false
-                        opacity: root.targetDisabledToolOpacity
-                        toolTipText: qsTr("Unavailable in the current Prepare state")
-                    }
+                ToolbarSeparator { vertical: true }
+
+                ActionToolButton {
+                    iconName: "trash.svg"
+                    toolTipText: root.editorVm && root.editorVm.canDeleteSelection
+                                 ? qsTr("Delete selected objects")
+                                 : qsTr("Select one or more objects")
+                    enabled: root.editorVm && root.editorVm.canDeleteSelection
+                    onClicked: root.editorVm.deleteSelection()
+                }
+
+                ActionToolButton {
+                    iconName: "copy.svg"
+                    toolTipText: root.editorVm && root.editorVm.hasSelection
+                                 ? qsTr("Copy selected objects")
+                                 : qsTr("Select one or more objects")
+                    enabled: root.editorVm && root.editorVm.hasSelection
+                    onClicked: root.editorVm.copySelectedObjects()
+                }
+
+                ActionToolButton {
+                    iconName: "clipboard.svg"
+                    toolTipText: root.editorVm && root.editorVm.hasClipboardContent
+                                 ? qsTr("Paste objects")
+                                 : qsTr("Clipboard is empty")
+                    enabled: root.editorVm && root.editorVm.hasClipboardContent
+                    onClicked: root.editorVm.pasteObjects()
+                }
+
+                ToolbarSeparator { vertical: true }
+
+                ActionToolButton {
+                    iconName: "mirror.svg"
+                    toolTipText: root.editorVm && root.editorVm.canTransformSelection
+                                 ? qsTr("Mirror selected objects on X")
+                                 : qsTr("Select one or more objects")
+                    enabled: root.editorVm && root.editorVm.canTransformSelection
+                    onClicked: root.editorVm.mirrorSelectedObjects(0)
+                }
+
+                ActionToolButton {
+                    iconName: "layout-sidebar-right.svg"
+                    toolTipText: root.editorVm && root.editorVm.canTransformSelection
+                                 ? qsTr("Mirror selected objects on Y")
+                                 : qsTr("Select one or more objects")
+                    enabled: root.editorVm && root.editorVm.canTransformSelection
+                    onClicked: root.editorVm.mirrorSelectedObjects(1)
+                }
+
+                ActionToolButton {
+                    iconName: "layers.svg"
+                    toolTipText: root.editorVm && root.editorVm.canTransformSelection
+                                 ? qsTr("Mirror selected objects on Z")
+                                 : qsTr("Select one or more objects")
+                    enabled: root.editorVm && root.editorVm.canTransformSelection
+                    onClicked: root.editorVm.mirrorSelectedObjects(2)
+                }
+
+                ToolbarSeparator { vertical: true }
+
+                ActionToolButton {
+                    iconName: "maximize.svg"
+                    toolTipText: root.editorVm && root.editorVm.canTransformSelection
+                                 ? qsTr("Center selected objects")
+                                 : qsTr("Select one or more objects")
+                    enabled: root.editorVm && root.editorVm.canTransformSelection
+                    onClicked: root.editorVm.centerSelectedObjects()
+                }
+
+                ActionToolButton {
+                    iconName: "layers-subtract.svg"
+                    toolTipText: root.editorVm && root.editorVm.canTransformSelection
+                                 ? qsTr("Repair selected mesh")
+                                 : qsTr("Select one or more objects")
+                    enabled: root.editorVm && root.editorVm.canTransformSelection
+                    onClicked: root.editorVm.fixMeshSelected()
+                }
+
+                ActionToolButton {
+                    iconName: "settings.svg"
+                    toolTipText: root.editorVm && root.editorVm.canOpenSelectionSettings
+                                 ? qsTr("Object settings")
+                                 : qsTr("Select an object or volume")
+                    enabled: root.editorVm && root.editorVm.canOpenSelectionSettings
+                    onClicked: root.editorVm.requestSelectionSettings()
                 }
             }
         }

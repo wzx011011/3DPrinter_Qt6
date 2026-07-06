@@ -66,6 +66,8 @@ private slots:
   void prepareLeftSidebarMatchesPixelRestorationContract();
   // Quick 260706-r8m: full Prepare page visual parity anchors.
   void prepareFullVisualParityContract();
+  // Quick 260706-uix: restored Prepare controls must be actionable.
+  void prepareRestoredControlsAreActionable();
   // Phase 78: final Prepare cleanup must keep restored paths active and stale
   // paths absent.
   void prepareRestorationMilestoneHasCleanupCoverage();
@@ -1826,8 +1828,7 @@ void QmlUiAuditTests::prepareFullVisualParityContract()
     QStringLiteral("id: prepareTopActionToolbar"),
     QStringLiteral("id: prepareRightGizmoToolbar"),
     QStringLiteral("id: prepareBottomViewControls"),
-    QStringLiteral("buttonSize: root.targetToolbarButtonSize"),
-    QStringLiteral("opacity: root.targetDisabledToolOpacity")
+    QStringLiteral("buttonSize: root.targetToolbarButtonSize")
   };
   for (const QString &token : toolbarTokens) {
     QVERIFY2(glToolbars.contains(token),
@@ -1846,6 +1847,51 @@ void QmlUiAuditTests::prepareFullVisualParityContract()
     QVERIFY2(mainQml.contains(token) || topbar.contains(token),
              qPrintable(QStringLiteral("Prepare shell visual parity token missing: %1").arg(token)));
   }
+}
+
+void QmlUiAuditTests::prepareRestoredControlsAreActionable()
+{
+  const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
+  const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
+  QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+
+  QVERIFY2(!glToolbars.contains(QStringLiteral("targetActionIcons.slice")),
+           "Prepare GL toolbar must not generate visible placeholder buttons from a raw icon list");
+  QVERIFY2(!glToolbars.contains(QStringLiteral("Unavailable in the current Prepare state")),
+           "Prepare GL toolbar must not expose screenshot-only placeholder tooltips");
+  QVERIFY2(!glToolbars.contains(QStringLiteral("opacity: root.targetDisabledToolOpacity")),
+           "Prepare GL toolbar must not dim fake controls instead of wiring real actions");
+
+  const QStringList requiredToolbarActions = {
+    QStringLiteral("root.editorVm.deleteSelection()"),
+    QStringLiteral("root.editorVm.copySelectedObjects()"),
+    QStringLiteral("root.editorVm.pasteObjects()"),
+    QStringLiteral("root.editorVm.mirrorSelectedObjects(0)"),
+    QStringLiteral("root.editorVm.fixMeshSelected()"),
+    QStringLiteral("root.editorVm.requestSelectionSettings()")
+  };
+  for (const QString &token : requiredToolbarActions) {
+    QVERIFY2(glToolbars.contains(token),
+             qPrintable(QStringLiteral("Prepare GL toolbar restored action missing: %1").arg(token)));
+  }
+  QVERIFY2(glToolbars.contains(QStringLiteral("root.editorVm.gizmoStatusText(mode)")),
+           "Prepare right gizmo toolbar must surface backend capability reasons in tooltips");
+  QVERIFY2(glToolbars.contains(QStringLiteral("availableGizmoMask & (1 << mode)")),
+           "Prepare right gizmo toolbar must bind enabled state to EditorViewModel::availableGizmoMask");
+
+  QVERIFY2(topbar.contains(QStringLiteral("enabled: backend.editorViewModel && backend.editorViewModel.canRequestSlice")),
+           "Prepare top slice button must bind to EditorViewModel::canRequestSlice");
+  QVERIFY2(topbar.contains(QStringLiteral("onClicked: root.sliceSinglePlateRequested()")),
+           "Prepare top slice button must directly request single-plate slicing");
+  QVERIFY2(topbar.contains(QStringLiteral("enabled: backend.editorViewModel && backend.editorViewModel.canExportGCode")),
+           "Prepare top export button must bind to EditorViewModel::canExportGCode");
+  QVERIFY2(topbar.contains(QStringLiteral("toolTipText: backend.editorViewModel ? backend.editorViewModel.exportActionHint")),
+           "Prepare top export button must show backend export readiness");
+  QVERIFY2(mainQml.contains(QStringLiteral("onSliceSinglePlateRequested: if (backend.editorViewModel) backend.editorViewModel.requestSlice()")),
+           "main.qml must wire the topbar single-plate slice signal to EditorViewModel::requestSlice");
 }
 
 void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()

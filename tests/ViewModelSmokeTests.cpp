@@ -2849,7 +2849,7 @@ void ViewModelSmokeTests::prepareWorkflowGatesExposeSourceTruthState()
   QVERIFY(!editor.canActivateGizmo(0));
   QCOMPARE(editor.gizmoStatusText(0), QStringLiteral("Requires one selected object"));
   QVERIFY(!editor.canActivateGizmo(13));
-  QCOMPARE(editor.gizmoStatusText(13), QStringLiteral("Requires two selected objects"));
+  QCOMPARE(editor.gizmoStatusText(13), QStringLiteral("Blocked: CGAL MeshBoolean unavailable"));
   QVERIFY(!editor.canActivateGizmo(8));
   QCOMPARE(editor.gizmoStatusText(8), QStringLiteral("Blocked: OpenVDB unavailable"));
 
@@ -2877,8 +2877,15 @@ void ViewModelSmokeTests::prepareWorkflowGatesExposeSourceTruthState()
   QVERIFY(!editor.canRenameSelectedObject());
   QVERIFY(editor.canDuplicateSelectedObjects());
   QVERIFY(editor.canDeleteSelection());
-  QVERIFY(editor.canActivateGizmo(13));
-  QVERIFY((editor.availableGizmoMask() & (1 << 13)) != 0);
+  QVERIFY(!editor.canActivateGizmo(13));
+  QVERIFY((editor.availableGizmoMask() & (1 << 13)) == 0);
+  QCOMPARE(editor.gizmoStatusText(13), QStringLiteral("Blocked: CGAL MeshBoolean unavailable"));
+  QVERIFY(!editor.canActivateGizmo(6));
+  QVERIFY(!editor.canActivateGizmo(7));
+  QCOMPARE(editor.gizmoStatusText(6), QStringLiteral("Blocked: viewport triangle picking unavailable"));
+  QCOMPARE(editor.gizmoStatusText(7), QStringLiteral("Blocked: viewport triangle picking unavailable"));
+  QVERIFY(!editor.canActivateGizmo(11));
+  QCOMPARE(editor.gizmoStatusText(11), QStringLiteral("Blocked: CGAL MeshBoolean unavailable"));
 }
 
 void ViewModelSmokeTests::prepareMoveSelectionToPlateUsesSourceSelection()

@@ -409,6 +409,7 @@ ApplicationWindow {
                 onAboutRequested: aboutDialog.open()
                 onShortcutOverviewRequested: shortcutDialog.open()
                 onSliceRequested: sliceTopMenuExternal.popup()
+                onSliceSinglePlateRequested: if (backend.editorViewModel) backend.editorViewModel.requestSlice()
                 onPrintRequested: printTopMenuExternal.popup()
                 onBellClicked: notificationCenterPopup.open()
                 onWindowMinimizeRequested: root.showMinimized()

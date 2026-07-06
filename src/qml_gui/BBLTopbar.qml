@@ -42,6 +42,7 @@ Item {
     signal redoRequested()
     signal calibrationRequested()
     signal sliceRequested()
+    signal sliceSinglePlateRequested()
     signal printRequested()
     signal bellClicked()
     signal windowMinimizeRequested()
@@ -531,25 +532,34 @@ Item {
 
                 Rectangle {
                     id: prepareSliceButton
+                    property string toolTipText: backend.editorViewModel ? backend.editorViewModel.sliceActionHint : qsTr("Backend unavailable")
                     Layout.alignment: Qt.AlignVCenter
                     Layout.preferredWidth: 106
                     Layout.preferredHeight: 24
                     radius: 12
-                    color: "#4a7f76"
+                    enabled: backend.editorViewModel && backend.editorViewModel.canRequestSlice
+                    color: enabled ? "#4a7f76" : "#33433f"
                     opacity: backend.currentPage === backend.tp3DEditor ? 1.0 : 0.0
                     visible: backend.currentPage === backend.tp3DEditor
+                    ToolTip.visible: sliceMouse.containsMouse && prepareSliceButton.toolTipText.length > 0
+                    ToolTip.text: prepareSliceButton.toolTipText
+                    ToolTip.delay: 400
 
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("切片单盘")
                         color: "#e7f4f0"
                         font.pixelSize: 12
+                        opacity: prepareSliceButton.enabled ? 1.0 : 0.55
                     }
 
                     MouseArea {
+                        id: sliceMouse
                         anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.sliceRequested()
+                        enabled: parent.enabled
+                        hoverEnabled: true
+                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        onClicked: root.sliceSinglePlateRequested()
                     }
                 }
 
@@ -557,12 +567,17 @@ Item {
 
                 Rectangle {
                     id: prepareExportGcodeButton
+                    property string toolTipText: backend.editorViewModel ? backend.editorViewModel.exportActionHint : qsTr("Backend unavailable")
                     Layout.alignment: Qt.AlignVCenter
                     Layout.preferredWidth: 146
                     Layout.preferredHeight: 24
                     radius: 12
-                    color: Theme.accent
+                    enabled: backend.editorViewModel && backend.editorViewModel.canExportGCode
+                    color: enabled ? Theme.accent : "#31504b"
                     visible: backend.currentPage === backend.tp3DEditor
+                    ToolTip.visible: exportMouse.containsMouse && prepareExportGcodeButton.toolTipText.length > 0
+                    ToolTip.text: prepareExportGcodeButton.toolTipText
+                    ToolTip.delay: 400
 
                     Text {
                         anchors.centerIn: parent
@@ -570,11 +585,15 @@ Item {
                         color: Theme.textOnAccent
                         font.pixelSize: 12
                         font.bold: true
+                        opacity: prepareExportGcodeButton.enabled ? 1.0 : 0.55
                     }
 
                     MouseArea {
+                        id: exportMouse
                         anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
+                        enabled: parent.enabled
+                        hoverEnabled: true
+                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                         onClicked: root.exportGcodeRequested()
                     }
                 }
