@@ -14,30 +14,30 @@ Item {
         id: legendLayout
         anchors.left: parent.left
         anchors.right: parent.right
-        spacing: 8
+        spacing: 6
 
         Label {
             text: qsTr("图例")
             color: Theme.textPrimary
             font.bold: true
-            font.pixelSize: Theme.fontSizeLG
+            font.pixelSize: Theme.fontSizeMD
         }
 
         Rectangle {
             Layout.fillWidth: true
-            radius: 6
+            radius: 5
             color: "#24272e"
             border.width: 1
             border.color: Theme.borderSubtle
-            implicitHeight: legendContent.implicitHeight + 18
+            implicitHeight: legendContent.implicitHeight + 16
 
             ColumnLayout {
                 id: legendContent
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 9
-                spacing: 8
+                anchors.margins: 8
+                spacing: 7
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -85,19 +85,21 @@ Item {
                 Repeater {
                     model: root.previewVm ? root.previewVm.legendItems : []
                     delegate: RowLayout {
+                        id: legendRow
+                        required property var modelData
                         Layout.fillWidth: true
                         spacing: 8
                         visible: root.legendType !== 1
 
                         Rectangle {
-                            width: 10
-                            height: 10
+                            Layout.preferredWidth: 10
+                            Layout.preferredHeight: 10
                             radius: 2
-                            color: modelData.color
+                            color: legendRow.modelData.color
                         }
                         Label {
                             Layout.fillWidth: true
-                            text: modelData.label + (modelData.count > 0 ? " (" + modelData.count + ")" : "")
+                            text: legendRow.modelData.label + (legendRow.modelData.count > 0 ? " (" + legendRow.modelData.count + ")" : "")
                             color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeSM
                             elide: Text.ElideRight

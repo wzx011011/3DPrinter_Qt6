@@ -7,22 +7,22 @@ last_updated: 2026-07-06T09:49:41.280Z
 last_activity: 2026-07-06
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 20
-stopped_at: Phase 79 complete (1/1) — ready to discuss Phase 80
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
+  percent: 40
+stopped_at: Phase 80 complete (1/1) - ready to discuss Phase 81
 ---
 
 # Project State
 
 **Milestone:** v4.0 - Preview Page UI Restoration
 **Status:** Ready to plan
-**Next step:** Start Phase 80 with `$gsd-discuss-phase 80 --auto`.
+**Next step:** Start Phase 81 with `$gsd-discuss-phase 81 --auto`.
 
 ## Current Position
 
-Phase: 80
+Phase: 81
 Plan: Not started
 Status: Ready to plan
 Last activity: 2026-07-06
@@ -32,7 +32,7 @@ Last activity: 2026-07-06
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-**Current focus:** Phase 80 — preview layout and panels restoration
+**Current focus:** Phase 81 - preview layer, move, and playback controls
 
 ## Last Completed Milestone
 
@@ -49,7 +49,7 @@ See: `.planning/PROJECT.md`
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
 | 79 | Preview Source-Truth Gap Audit | Complete | PVAUDIT-01 |
-| 80 | Preview Layout And Panels Restoration | Not started | PVLAYOUT-01, PVLAYOUT-02, PVLAYOUT-03 |
+| 80 | Preview Layout And Panels Restoration | Complete | PVLAYOUT-01, PVLAYOUT-02, PVLAYOUT-03 |
 | 81 | Preview Layer Move And Playback Controls | Not started | PVCTRL-01, PVCTRL-02, PVCTRL-03 |
 | 82 | Preview G-code Roles Color Modes And Rendering | Not started | PVRENDER-01, PVRENDER-02, PVRENDER-03 |
 | 83 | Preview Verification And Cleanup | Not started | PVCLEAN-01, PVVERIFY-01, PVVERIFY-02 |
@@ -106,4 +106,4 @@ Historical items acknowledged before v3.9 and their current state:
 
 ## Operator Next Steps
 
-- Start Phase 80 with /gsd-discuss-phase 80 --auto
+- Start Phase 81 with /gsd-discuss-phase 81 --auto

@@ -921,10 +921,14 @@ void QmlUiAuditTests::previewLayoutRestoresScreenshotRegionsAndGcodePanel()
   const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
   const QString previewHeader = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.h"));
   const QString statsPanel = readSource(QStringLiteral("src/qml_gui/components/StatsPanel.qml"));
+  const QString visibilityFilter = readSource(QStringLiteral("src/qml_gui/components/VisibilityFilter.qml"));
+  const QString legend = readSource(QStringLiteral("src/qml_gui/components/Legend.qml"));
   const QString moveSlider = readSource(QStringLiteral("src/qml_gui/components/MoveSlider.qml"));
   QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
   QVERIFY2(!previewHeader.isEmpty(), "Unable to read PreviewViewModel.h");
   QVERIFY2(!statsPanel.isEmpty(), "Unable to read StatsPanel.qml");
+  QVERIFY2(!visibilityFilter.isEmpty(), "Unable to read VisibilityFilter.qml");
+  QVERIFY2(!legend.isEmpty(), "Unable to read Legend.qml");
   QVERIFY2(!moveSlider.isEmpty(), "Unable to read MoveSlider.qml");
 
   const QStringList requiredRegions = {
@@ -937,6 +941,7 @@ void QmlUiAuditTests::previewLayoutRestoresScreenshotRegionsAndGcodePanel()
     QStringLiteral("LeftSidebar {"),
     QStringLiteral("Components.MoveSlider"),
     QStringLiteral("Components.StatsPanel"),
+    QStringLiteral("Components.VisibilityFilter"),
     QStringLiteral("Components.Legend"),
     QStringLiteral("Components.ToolPositionTooltip"),
     QStringLiteral("id: gcodeList")
@@ -978,6 +983,46 @@ void QmlUiAuditTests::previewLayoutRestoresScreenshotRegionsAndGcodePanel()
            "StatsPanel visibility toggles must route through PreviewViewModel invokable setters");
   QVERIFY2(moveSlider.contains(QStringLiteral("root.previewVm.setCurrentMove(Math.round(value))")),
            "MoveSlider must update the move range through PreviewViewModel");
+
+  const QStringList phase80Sources = { previewPage, statsPanel, visibilityFilter, legend, moveSlider };
+  const QStringList mojibakeTokens = {
+    QString(QChar(0x68f0)),
+    QString(QChar(0x9352)),
+    QString(QChar(0x93c4)),
+    QString(QChar(0x93c3)),
+    QString(QChar(0x7ec9)),
+    QString(QChar(0x705e)),
+    QString(QChar(0x741b)),
+    QString(QChar(0x9365)),
+    QString(QChar(0x93c6)),
+    QString(QChar(0x9470)),
+    QString(QChar(0x93ac)),
+    QString(QChar(0x93b8)),
+    QString(QChar(0x95c8)),
+    QString(QChar(0x7ecc)),
+    QString(QChar(0x7039))
+  };
+  for (const QString &source : phase80Sources) {
+    for (const QString &token : mojibakeTokens) {
+      QVERIFY2(!source.contains(token),
+               qPrintable(QStringLiteral("Phase 80 Preview QML must not expose mojibake token: %1").arg(token)));
+    }
+  }
+
+  const QStringList requiredPhase80Tokens = {
+    QStringLiteral("readonly property int targetPreviewLeftWidth: 392"),
+    QStringLiteral("readonly property int targetPreviewRightWidth: 300"),
+    QStringLiteral("id: rightAnalysisStack"),
+    QStringLiteral("id: gcodeSourcePanel"),
+    QStringLiteral("root.previewVm.roleVisibilities"),
+    QStringLiteral("root.previewVm.legendItems"),
+    QStringLiteral("root.previewVm.gcodeLines")
+  };
+  for (const QString &token : requiredPhase80Tokens) {
+    QVERIFY2(previewPage.contains(token) || statsPanel.contains(token)
+                 || visibilityFilter.contains(token) || legend.contains(token),
+             qPrintable(QStringLiteral("Phase 80 Preview restoration token missing: %1").arg(token)));
+  }
 }
 
 void QmlUiAuditTests::previewStatsPanelCallsOnlyQmlInvokableSetters()

@@ -22,7 +22,7 @@
 ## Phases
 
 - [x] Phase 79: Preview Source-Truth Gap Audit (completed 2026-07-06)
-- [ ] Phase 80: Preview Layout And Panels Restoration
+- [x] Phase 80: Preview Layout And Panels Restoration (completed 2026-07-06)
 - [ ] Phase 81: Preview Layer Move And Playback Controls
 - [ ] Phase 82: Preview G-code Roles Color Modes And Rendering
 - [ ] Phase 83: Preview Verification And Cleanup
@@ -47,8 +47,8 @@ Success criteria:
 
 ### Phase 80: Preview Layout And Panels Restoration
 
-**Status:** Not started
-**Plans:** 0/1 plans complete
+**Status:** Complete
+**Plans:** 1/1 plans complete
 
 Success criteria:
 1. Preview top controls, viewport, side panels, layer slider, and bottom playback/status controls match screenshot layout without overlap.
@@ -155,10 +155,10 @@ Requirements: `.planning/milestones/v3.8-REQUIREMENTS.md`
 
 ## Next Step
 
-Continue v4.0 with Phase 80:
+Continue v4.0 with Phase 81:
 
 ```text
-$gsd-discuss-phase 80 --auto
+$gsd-discuss-phase 81 --auto
 ```
 
 ---

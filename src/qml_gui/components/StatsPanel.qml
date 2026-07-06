@@ -14,13 +14,13 @@ Item {
         id: statsLayout
         anchors.left: parent.left
         anchors.right: parent.right
-        spacing: 8
+        spacing: 6
 
         Label {
             text: qsTr("统计")
             color: Theme.textPrimary
             font.bold: true
-            font.pixelSize: Theme.fontSizeLG
+            font.pixelSize: Theme.fontSizeMD
         }
 
         RowLayout {
@@ -69,19 +69,19 @@ Item {
 
         Rectangle {
             Layout.fillWidth: true
-            radius: 6
+            radius: 5
             color: "#24272e"
             border.width: 1
             border.color: Theme.borderSubtle
-            implicitHeight: statValues.implicitHeight + 18
+            implicitHeight: statValues.implicitHeight + 16
 
             ColumnLayout {
                 id: statValues
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 9
-                spacing: 6
+                anchors.margins: 8
+                spacing: 5
 
                 StatRow { label: qsTr("总时间"); value: root.previewVm ? root.previewVm.totalTime : "--:--:--" }
                 StatRow { label: qsTr("层数"); value: root.previewVm ? String(root.previewVm.layerCount) : "0" }
@@ -100,37 +100,39 @@ Item {
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSizeSM
                     font.bold: true
-                    Layout.topMargin: 4
+                    Layout.topMargin: 3
                 }
 
                 Repeater {
                     model: root.previewVm ? root.previewVm.extruderCount() : 0
                     delegate: RowLayout {
+                        id: extruderRow
+                        required property int index
                         Layout.fillWidth: true
                         spacing: 6
-                        visible: root.previewVm && root.previewVm.extruderUsedLength(index) > 0.001
+                        visible: root.previewVm && root.previewVm.extruderUsedLength(extruderRow.index) > 0.001
 
                         Rectangle {
-                            width: 10
-                            height: 10
+                            Layout.preferredWidth: 10
+                            Layout.preferredHeight: 10
                             radius: 2
-                            color: root.previewVm ? root.previewVm.extruderColor(index) : Theme.accent
+                            color: root.previewVm ? root.previewVm.extruderColor(extruderRow.index) : Theme.accent
                         }
                         Label {
                             Layout.fillWidth: true
-                            text: qsTr("挤出机 %1").arg(index)
+                            text: qsTr("挤出机 %1").arg(extruderRow.index + 1)
                             color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeSM
                             elide: Text.ElideRight
                         }
                         Label {
-                            text: root.previewVm ? root.previewVm.extruderUsedLength(index).toFixed(2) + " m" : "0.00 m"
+                            text: root.previewVm ? root.previewVm.extruderUsedLength(extruderRow.index).toFixed(2) + " m" : "0.00 m"
                             color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeXS
                             font.family: "Consolas"
                         }
                         Label {
-                            text: root.previewVm ? root.previewVm.extruderUsedWeight(index).toFixed(1) + " g" : "0.0 g"
+                            text: root.previewVm ? root.previewVm.extruderUsedWeight(extruderRow.index).toFixed(1) + " g" : "0.0 g"
                             color: Theme.textSecondary
                             font.pixelSize: Theme.fontSizeXS
                         }
@@ -143,32 +145,34 @@ Item {
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSizeSM
                     font.bold: true
-                    Layout.topMargin: 4
+                    Layout.topMargin: 3
                 }
 
                 Repeater {
                     model: root.previewVm ? Math.min(root.previewVm.roleTimeCount(), 8) : 0
                     delegate: RowLayout {
+                        id: roleTimeRow
+                        required property int index
                         Layout.fillWidth: true
                         spacing: 6
-                        visible: root.previewVm && root.previewVm.roleTimePercent(index) >= 0.1
+                        visible: root.previewVm && root.previewVm.roleTimePercent(roleTimeRow.index) >= 0.1
 
                         Label {
                             Layout.fillWidth: true
-                            text: root.previewVm ? root.previewVm.roleTimeName(index) : ""
+                            text: root.previewVm ? root.previewVm.roleTimeName(roleTimeRow.index) : ""
                             color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeSM
                             elide: Text.ElideRight
                         }
                         Label {
-                            text: root.previewVm ? root.previewVm.roleTimeValue(index) : ""
+                            text: root.previewVm ? root.previewVm.roleTimeValue(roleTimeRow.index) : ""
                             color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeXS
                             font.family: "Consolas"
                         }
                         Label {
                             Layout.preferredWidth: 44
-                            text: root.previewVm ? root.previewVm.roleTimePercent(index).toFixed(1) + "%" : "0%"
+                            text: root.previewVm ? root.previewVm.roleTimePercent(roleTimeRow.index).toFixed(1) + "%" : "0%"
                             color: Theme.textSecondary
                             font.pixelSize: Theme.fontSizeXS
                             horizontalAlignment: Text.AlignRight
@@ -182,7 +186,7 @@ Item {
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSizeSM
                     font.bold: true
-                    Layout.topMargin: 4
+                    Layout.topMargin: 3
                 }
 
                 RowLayout {

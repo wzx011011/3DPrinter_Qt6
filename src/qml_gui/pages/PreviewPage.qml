@@ -16,9 +16,22 @@ Item {
     focus: true
 
     property bool rightPanelExpanded: true
-    readonly property int leftPanelWidth: 390
-    readonly property int rightPanelWidth: rightPanelExpanded ? 268 : 36
+    readonly property int targetPreviewLeftWidth: 392
+    readonly property int targetPreviewRightWidth: 300
+    readonly property int targetPreviewLayerRailWidth: 38
+    readonly property int targetPreviewMoveBarHeight: 50
+    readonly property int leftPanelWidth: root.targetPreviewLeftWidth
+    readonly property int rightPanelWidth: root.rightPanelExpanded ? root.targetPreviewRightWidth : 38
     readonly property bool hasPreviewData: root.previewVm && root.previewVm.previewReady
+
+    function cameraButtonLabel(index) {
+        switch (index) {
+        case 0: return qsTr("顶")
+        case 1: return qsTr("前")
+        case 2: return qsTr("右")
+        default: return qsTr("等轴")
+        }
+    }
 
     Keys.onPressed: (event) => {
         if (!root.previewVm)
@@ -73,25 +86,24 @@ Item {
         Rectangle {
             id: previewHeader
             Layout.fillWidth: true
-            Layout.preferredHeight: 42
+            Layout.preferredHeight: 40
             color: "#2f3036"
-            border.width: 0
 
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
-                spacing: 10
+                spacing: 8
 
                 Label {
-                    text: qsTr("预览模式")
+                    text: qsTr("预览")
                     color: Theme.textPrimary
                     font.pixelSize: Theme.fontSizeLG
                     font.bold: true
                 }
 
                 CxComboBox {
-                    Layout.preferredWidth: 190
+                    Layout.preferredWidth: 204
                     model: root.previewVm ? root.previewVm.viewModes : []
                     currentIndex: root.previewVm ? root.previewVm.viewModeIndex : 0
                     onActivated: if (root.previewVm) root.previewVm.setViewModeIndex(currentIndex)
@@ -100,15 +112,12 @@ Item {
                 Row {
                     spacing: 4
                     Repeater {
-                        model: [
-                            { label: qsTr("顶"), preset: 0 },
-                            { label: qsTr("前"), preset: 1 },
-                            { label: qsTr("右"), preset: 2 },
-                            { label: qsTr("等轴"), preset: 3 }
-                        ]
+                        model: 4
                         delegate: Rectangle {
-                            required property var modelData
-                            width: modelData.preset === 3 ? 44 : 28
+                            id: cameraPresetButton
+                            required property int index
+                            readonly property int preset: index
+                            width: index === 3 ? 46 : 28
                             height: 28
                             radius: 4
                             color: cameraButtonMouse.containsMouse ? Theme.bgHover : Theme.bgElevated
@@ -117,9 +126,10 @@ Item {
 
                             Text {
                                 anchors.centerIn: parent
-                                text: parent.modelData.label
+                                text: root.cameraButtonLabel(cameraPresetButton.index)
                                 color: Theme.textPrimary
                                 font.pixelSize: 11
+                                elide: Text.ElideRight
                             }
 
                             MouseArea {
@@ -127,7 +137,7 @@ Item {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: previewViewport.requestViewPreset(parent.modelData.preset)
+                                onClicked: previewViewport.requestViewPreset(cameraPresetButton.preset)
                             }
                         }
                     }
@@ -188,11 +198,7 @@ Item {
                     layerMax: root.previewVm.currentLayerMax
                     moveEnd: root.previewVm.currentMove
                     showTravelMoves: root.previewVm.showTravelMoves
-                    // Bind the dense 20-bool mask (roleVisibilityMask), NOT the
-                    // 18-row QVariantMap list (roleVisibilities). The renderer's
-                    // synchronize expects a flat 20-bool list indexed by canonical
-                    // libvgcode role; roleVisibilities is for the UI Repeater only.
-                    roleVisibility: root.previewVm ? root.previewVm.roleVisibilityMask : []
+                    roleVisibility: root.previewVm.roleVisibilityMask
                     showBed: root.previewVm.showBed
                     showMarker: root.previewVm.showMarker
                     gcodeViewMode: root.previewVm.viewModeIndex
@@ -204,7 +210,7 @@ Item {
                 Rectangle {
                     visible: !root.hasPreviewData
                     anchors.centerIn: parent
-                    width: emptyStateText.implicitWidth + 28
+                    width: Math.min(parent.width - 32, emptyStateText.implicitWidth + 28)
                     height: 40
                     radius: 6
                     color: "#20242bcc"
@@ -214,9 +220,12 @@ Item {
                     Label {
                         id: emptyStateText
                         anchors.centerIn: parent
+                        width: parent.width - 18
                         text: root.previewVm ? root.previewVm.previewStatusText : qsTr("请先切片或载入 G-code")
                         color: Theme.textSecondary
                         font.pixelSize: Theme.fontSizeMD
+                        elide: Text.ElideRight
+                        horizontalAlignment: Text.AlignHCenter
                     }
                 }
 
@@ -258,14 +267,17 @@ Item {
                         spacing: 8
 
                         ScrollView {
+                            id: rightAnalysisStack
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 300
-                            Layout.maximumHeight: 300
+                            Layout.preferredHeight: 392
+                            Layout.minimumHeight: 260
+                            Layout.maximumHeight: 430
                             clip: true
                             contentWidth: availableWidth
+                            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
                             ColumnLayout {
-                                width: parent.width
+                                width: rightAnalysisStack.availableWidth
                                 spacing: 6
 
                                 Components.StatsPanel {
@@ -286,8 +298,10 @@ Item {
                         }
 
                         Rectangle {
+                            id: gcodeSourcePanel
                             Layout.fillWidth: true
                             Layout.fillHeight: true
+                            Layout.minimumHeight: 150
                             radius: 4
                             color: "#191b20"
                             border.width: 1
@@ -326,10 +340,11 @@ Item {
                                     model: root.previewVm ? root.previewVm.gcodeLines : []
 
                                     delegate: Rectangle {
+                                        id: gcodeRow
                                         required property var modelData
                                         width: gcodeList.width
                                         height: 19
-                                        color: modelData.current ? "#3a2515" : "transparent"
+                                        color: gcodeRow.modelData.current ? "#3a2515" : "transparent"
 
                                         RowLayout {
                                             anchors.fill: parent
@@ -339,16 +354,16 @@ Item {
 
                                             Text {
                                                 Layout.preferredWidth: 44
-                                                text: modelData.line
-                                                color: modelData.current ? "#ff9f40" : Theme.textTertiary
+                                                text: gcodeRow.modelData.line
+                                                color: gcodeRow.modelData.current ? "#ff9f40" : Theme.textTertiary
                                                 horizontalAlignment: Text.AlignRight
                                                 font.pixelSize: 10
                                                 font.family: "Consolas"
                                             }
                                             Text {
                                                 Layout.fillWidth: true
-                                                text: modelData.text
-                                                color: modelData.current ? "#ffb866" : Theme.textSecondary
+                                                text: gcodeRow.modelData.text
+                                                color: gcodeRow.modelData.current ? "#ffb866" : Theme.textSecondary
                                                 elide: Text.ElideRight
                                                 font.pixelSize: 10
                                                 font.family: "Consolas"
@@ -364,7 +379,7 @@ Item {
 
             Rectangle {
                 id: verticalLayerRail
-                Layout.preferredWidth: 36
+                Layout.preferredWidth: root.targetPreviewLayerRailWidth
                 Layout.fillHeight: true
                 color: "#2f323a"
                 border.width: 1
@@ -409,7 +424,7 @@ Item {
         Rectangle {
             id: moveSliderBar
             Layout.fillWidth: true
-            Layout.preferredHeight: 48
+            Layout.preferredHeight: root.targetPreviewMoveBarHeight
             color: "#2f3036"
             border.width: 1
             border.color: "#3a3d45"
@@ -431,7 +446,7 @@ Item {
         property string value: ""
 
         Layout.preferredHeight: 28
-        Layout.preferredWidth: 128
+        Layout.preferredWidth: 118
         radius: 4
         color: "#24272e"
         border.width: 1
@@ -498,7 +513,7 @@ Item {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: toggleRequested()
+                onClicked: sidePanelHeaderRoot.toggleRequested()
             }
         }
     }

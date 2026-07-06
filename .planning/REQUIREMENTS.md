@@ -11,9 +11,9 @@
 
 ### Preview Layout
 
-- [ ] **PVLAYOUT-01**: User can enter Preview and see a screenshot-aligned layout for top controls, viewport, side panels, layer slider, and bottom playback/status controls without overlap or layout jumps.
-- [ ] **PVLAYOUT-02**: User can read Preview statistics, G-code metadata, print-time/material estimates, and legend surfaces in upstream-like density and positions.
-- [ ] **PVLAYOUT-03**: User sees no visible Preview placeholders, raw internal labels, or dead controls in the restored layout.
+- [x] **PVLAYOUT-01**: User can enter Preview and see a screenshot-aligned layout for top controls, viewport, side panels, layer slider, and bottom playback/status controls without overlap or layout jumps.
+- [x] **PVLAYOUT-02**: User can read Preview statistics, G-code metadata, print-time/material estimates, and legend surfaces in upstream-like density and positions.
+- [x] **PVLAYOUT-03**: User sees no visible Preview placeholders, raw internal labels, or dead controls in the restored layout.
 
 ### Layer, Move, And Playback Controls
 
@@ -61,9 +61,9 @@ Explicitly excluded to keep v4.0 focused.
 | Requirement | Phase | Status |
 |---|---|---|
 | PVAUDIT-01 | Phase 79 | Complete |
-| PVLAYOUT-01 | Phase 80 | Pending |
-| PVLAYOUT-02 | Phase 80 | Pending |
-| PVLAYOUT-03 | Phase 80 | Pending |
+| PVLAYOUT-01 | Phase 80 | Complete |
+| PVLAYOUT-02 | Phase 80 | Complete |
+| PVLAYOUT-03 | Phase 80 | Complete |
 | PVCTRL-01 | Phase 81 | Pending |
 | PVCTRL-02 | Phase 81 | Pending |
 | PVCTRL-03 | Phase 81 | Pending |
