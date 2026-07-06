@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v3.9
 milestone_name: Prepare Page UI Restoration
 status: complete
-last_updated: "2026-07-06T00:31:00+08:00"
-last_activity: 2026-07-06 -- Completed quick task 260705-vkn Prepare left sidebar pixel restoration
+last_updated: "2026-07-06T12:30:35+08:00"
+last_activity: 2026-07-06 -- Completed quick task 260706-r8m Prepare page remaining visual surfaces restoration
 progress:
   total_phases: 5
   completed_phases: 5
@@ -24,7 +24,7 @@ progress:
 Phase: 78 - Prepare Verification And Cleanup
 Plan: 78-01-PLAN.md
 Status: Complete
-Last activity: 2026-07-06 -- Completed quick task 260705-vkn Prepare left sidebar pixel restoration
+Last activity: 2026-07-06 -- Completed quick task 260706-r8m Prepare page remaining visual surfaces restoration
 
 ## Project Reference
 
@@ -89,6 +89,7 @@ Items acknowledged and deferred at milestone start on 2026-07-05:
 |---|---|---|---|---|
 | 260705-e8x | Fix RHI gizmo depth overlay and viewport drag review findings | 2026-07-05 | 1ba32eb | [260705-e8x-fix-rhi-gizmo-depth-overlay-and-viewport](./quick/260705-e8x-fix-rhi-gizmo-depth-overlay-and-viewport/) |
 | 260705-vkn | Pixel restore Prepare page left sidebar against target screenshot | 2026-07-06 | eab371a | [260705-vkn-pixel-restore-prepare-page-left-sidebar](./quick/260705-vkn-pixel-restore-prepare-page-left-sidebar/) |
+| 260706-r8m | Restore remaining Prepare page visual surfaces against target screenshot | 2026-07-06 | b62e224 | [260706-r8m-prepare-page-full-visual-parity](./quick/260706-r8m-prepare-page-full-visual-parity/) |
 
 ## Operator Next Steps
 
