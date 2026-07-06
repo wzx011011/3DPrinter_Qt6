@@ -1,3 +1,10 @@
+---
+phase: 78-prepare-verification-and-cleanup
+status: passed
+verified_at: 2026-07-05T22:10:00+08:00
+requirements: [CLEAN-01, VERIFY-01, VERIFY-02]
+---
+
 # Phase 78 Verification
 
 ## Source Checks
@@ -50,3 +57,11 @@ Saved:
 ```
 
 The screenshot shows the restored default Prepare page with dense left sidebar, central RHI bed viewport, icon-first viewport controls, vertical gizmo controls, compact plate strip, and the restored slice/progress panel path.
+
+## Acceptance Mapping
+
+| Requirement | Status | Evidence |
+|---|---|---|
+| CLEAN-01 | Passed | Stale Prepare paths and disconnected controls were removed or rewired; QML audit cleanup coverage was added. |
+| VERIFY-01 | Passed | Automated source/QML audits cover restored Prepare bindings, placeholder removal, and upstream mapping evidence. |
+| VERIFY-02 | Passed | Canonical verifier passed, `OWzxSlicer.exe` launched/responded, and `prepare-final-runtime.png` records visual evidence. |
