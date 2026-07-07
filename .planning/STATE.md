@@ -2,28 +2,28 @@
 gsd_state_version: 1.0
 milestone: v4.1
 milestone_name: Parameter Settings Dialogs Source-Truth Restoration
-status: ready_to_plan
+status: ready_to_execute
 last_updated: 2026-07-07T10:50:45.113Z
-last_activity: 2026-07-07 -- Phase 86 complete; ready to discuss Phase 87
+last_activity: 2026-07-07 -- Phase 87 planning complete
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 5
   completed_plans: 3
   percent: 60
-stopped_at: Phase 86 complete (1/1); ready to discuss Phase 87
+stopped_at: Phase 87 planning complete (1/1); ready to execute
 ---
 
 # Project State
 
 **Milestone:** v4.1 - Parameter Settings Dialogs Source-Truth Restoration
-**Status:** Ready to plan
-**Next step:** Start Phase 87 settings preset semantics and workflow stability.
+**Status:** Ready to execute
+**Next step:** Execute Phase 87 settings preset semantics and workflow stability.
 
 ## Current Position
 
 Phase: 87
-Plan: Not started
+Plan: 87-01
 Status: Ready to execute
 Last activity: 2026-07-07
 

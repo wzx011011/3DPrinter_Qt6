@@ -70,7 +70,7 @@ Success criteria:
 ### Phase 87: Settings Preset Semantics And Workflow Stability
 
 **Status:** Planned
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 Success criteria:
 1. Preset selection, save, save-as, reset option/group/all, discard, cancel, and unsaved-close flows keep upstream-mapped behavior.
