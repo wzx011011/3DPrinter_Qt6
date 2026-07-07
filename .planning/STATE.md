@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v4.1
 milestone_name: Parameter Settings Dialogs Source-Truth Restoration
-status: planning
-last_updated: 2026-07-07T15:14:34+08:00
-last_activity: 2026-07-07
+status: executing
+last_updated: "2026-07-07T07:55:44.657Z"
+last_activity: 2026-07-07 -- Phase 84 planning complete
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 5
+  total_plans: 1
   completed_plans: 0
   percent: 0
 ---
@@ -16,15 +16,15 @@ progress:
 # Project State
 
 **Milestone:** v4.1 - Parameter Settings Dialogs Source-Truth Restoration
-**Status:** Planning
+**Status:** Ready to execute
 **Next step:** Start Phase 84 settings source-truth gap audit.
 
 ## Current Position
 
 Phase: Not started
 Plan: Not started
-Status: Roadmap created
-Last activity: 2026-07-07 - Milestone v4.1 planned
+Status: Ready to execute
+Last activity: 2026-07-07 -- Phase 84 planning complete
 
 ## Current Milestone
 
@@ -56,6 +56,7 @@ See: `.planning/PROJECT.md`
 
 - Last completed canonical verifier passed:
   `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`
+
 - App launched on the D3D11 QRhi path.
 - Final Preview runtime screenshot:
   `.planning/milestones/v4.0-phases/83-preview-verification-and-cleanup/visual-evidence/runtime-preview-page-button-invoked.png`
