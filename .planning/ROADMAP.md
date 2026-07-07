@@ -23,7 +23,7 @@
 
 ## Phases
 
-- [ ] Phase 84: Settings Source-Truth Gap Audit
+- [x] Phase 84: Settings Source-Truth Gap Audit (completed 2026-07-07)
 - [ ] Phase 85: Settings Shell And Tab Layout Restoration
 - [ ] Phase 86: Settings Option Sections And Typed Controls
 - [ ] Phase 87: Settings Preset Semantics And Workflow Stability
@@ -31,7 +31,7 @@
 
 | Phase | Name | Goal | Requirements |
 |---|---|---|---|
-| 84 | Settings Source-Truth Gap Audit | Freeze the v4.1 settings region map, current gaps, upstream anchors, Qt targets, replacement decisions, and verification expectations before edits. | SETAUDIT-01, SETAUDIT-02 |
+| 84 | Settings Source-Truth Gap Audit | Complete 2026-07-07: froze the v4.1 settings region map, current gaps, upstream anchors, Qt targets, replacement decisions, and verification expectations. | SETAUDIT-01, SETAUDIT-02 |
 | 85 | Settings Shell And Tab Layout Restoration | Restore the screenshot-visible settings window chrome, preset/action row, tab strip, sizing, density, and clean user-facing text. | SETLAYOUT-01, SETLAYOUT-02, SETLAYOUT-03 |
 | 86 | Settings Option Sections And Typed Controls | Restore option section rendering and typed control visuals for printer/material/process settings without breaking existing C++ option models. | SETCTRL-01, SETCTRL-02, SETCTRL-03 |
 | 87 | Settings Preset Semantics And Workflow Stability | Preserve and harden save/reset/search/dirty/edit semantics across settings dialogs, Prepare, Preview, project persistence, and slice invalidation. | SETSEM-01, SETSEM-02, SETSEM-03 |
@@ -39,8 +39,8 @@
 
 ### Phase 84: Settings Source-Truth Gap Audit
 
-**Status:** Planned
-**Plans:** 0/1 plans complete
+**Status:** Complete 2026-07-07
+**Plans:** 1/1 plans complete
 
 Success criteria:
 1. Printer, material, and process settings regions are mapped to target screenshots, upstream source files, and Qt targets.
@@ -101,16 +101,16 @@ Success criteria:
 
 ## Next Step
 
-Start Phase 84:
+Start Phase 85:
 
 ```text
-$gsd-discuss-phase 84 --auto
+$gsd-discuss-phase 85 --auto
 ```
 
 or plan directly:
 
 ```text
-$gsd-plan-phase 84
+$gsd-plan-phase 85
 ```
 
 ---

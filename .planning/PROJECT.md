@@ -61,6 +61,7 @@ These are current baseline capabilities inferred from implementation, git histor
 - Default renderer foundation now rests on QRhi/D3D11 plus Software fallback; the old OpenGL viewport is no longer a selectable application path.
 - v3.9 Prepare page UI restoration shipped with 12/12 requirements satisfied, canonical verification passed, current runtime launch evidence, and final Prepare screenshot evidence.
 - v4.0 Preview page UI restoration shipped with 13/13 requirements satisfied, canonical verification passed, current runtime launch evidence, and final Preview screenshot evidence.
+- v4.1 Phase 84 settings source-truth gap audit is complete: the printer/material/process settings matrix maps screenshot/source truth, Qt targets, upstream anchors, Phase 56 residuals, and Phase 85-88 verification ownership.
 
 ### Active
 

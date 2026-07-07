@@ -7,8 +7,8 @@
 
 ### Source-Truth Inventory
 
-- [ ] **SETAUDIT-01**: User-facing printer, material, and process settings work has a current inventory that maps screenshot-visible regions to OrcaSlicer source files, Qt targets, replacement decisions, and verification evidence.
-- [ ] **SETAUDIT-02**: Phase 56 residual settings visual-UAT items are reconciled into v4.1 requirements or explicitly closed/deferred with evidence.
+- [x] **SETAUDIT-01**: User-facing printer, material, and process settings work has a current inventory that maps screenshot-visible regions to OrcaSlicer source files, Qt targets, replacement decisions, and verification evidence.
+- [x] **SETAUDIT-02**: Phase 56 residual settings visual-UAT items are reconciled into v4.1 requirements or explicitly closed/deferred with evidence.
 
 ### Settings Window Layout
 
@@ -64,8 +64,8 @@ Explicitly excluded to keep v4.1 focused.
 
 | Requirement | Phase | Status |
 |---|---|---|
-| SETAUDIT-01 | Phase 84 | Pending |
-| SETAUDIT-02 | Phase 84 | Pending |
+| SETAUDIT-01 | Phase 84 | Complete |
+| SETAUDIT-02 | Phase 84 | Complete |
 | SETLAYOUT-01 | Phase 85 | Pending |
 | SETLAYOUT-02 | Phase 85 | Pending |
 | SETLAYOUT-03 | Phase 85 | Pending |
