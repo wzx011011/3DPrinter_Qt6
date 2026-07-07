@@ -13,7 +13,7 @@
 - Complete with residual gaps: **v3.7 Screenshot-Level UI Parity Closure** - Phases 59-64 (2026-07-04; D3D12 and manual visual debt carried forward)
 - Complete with tech debt: **v3.8 RHI Gizmo Parity** - Phases 65-73 (shipped 2026-07-04; 21/21 requirements satisfied, Phase 68 visual evidence deferred)
 - Complete with process debt: **v3.9 Prepare Page UI Restoration** - Phases 74-78 (shipped 2026-07-06; 12/12 requirements satisfied, canonical verifier passed, runtime screenshot captured)
-- Planned: **v4.0 Preview Page UI Restoration** - Phases 79-83
+- Complete: **v4.0 Preview Page UI Restoration** - Phases 79-83 (shipped 2026-07-07; 13/13 requirements satisfied, canonical verifier passed, runtime Preview screenshot captured)
 
 ## Current Milestone: v4.0 Preview Page UI Restoration
 
@@ -25,7 +25,7 @@
 - [x] Phase 80: Preview Layout And Panels Restoration (completed 2026-07-06)
 - [x] Phase 81: Preview Layer Move And Playback Controls (completed 2026-07-07)
 - [x] Phase 82: Preview G-code Roles Color Modes And Rendering (completed 2026-07-07)
-- [ ] Phase 83: Preview Verification And Cleanup
+- [x] Phase 83: Preview Verification And Cleanup (completed 2026-07-07)
 
 | Phase | Name | Goal | Requirements |
 |---|---|---|---|
@@ -77,13 +77,17 @@ Success criteria:
 
 ### Phase 83: Preview Verification And Cleanup
 
-**Status:** Not started
-**Plans:** 0/1 plans complete
+**Status:** Complete
+**Plans:** 1/1 plans complete
 
 Success criteria:
 1. Replaced Preview UI paths leave no stale files, imports, resource entries, tests, or disconnected controls.
 2. Automated source/QML audits cover upstream mapping, placeholder removal, and required bindings.
 3. The canonical verifier passes, `build/OWzxSlicer.exe` launches, and Preview visual evidence is recorded against the target screenshot.
+
+Evidence:
+- `.planning/milestones/v4.0-phases/83-preview-verification-and-cleanup/83-VERIFICATION.md`
+- `.planning/milestones/v4.0-phases/83-preview-verification-and-cleanup/visual-evidence/runtime-preview-page-button-invoked.png`
 
 ## Completed Milestones
 

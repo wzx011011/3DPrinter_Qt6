@@ -41,6 +41,7 @@ private slots:
   void previewStatsPanelCallsOnlyQmlInvokableSetters();
   void previewLayerMoveControlsAreActionableAndRendererSafe();
   void previewRoleColorModesAreHonestAndPayloadSafe();
+  void previewRestorationMilestoneHasFinalCleanupCoverage();
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
   void rhiViewportModelDragOrbitsAfterClickThreshold();
   void rhiMoveGizmoDragBridgeStaysCppOwned();
@@ -1245,6 +1246,165 @@ void QmlUiAuditTests::previewRoleColorModesAreHonestAndPayloadSafe()
            "PreviewViewModel must centrally list data-unavailable view modes");
 }
 
+void QmlUiAuditTests::previewRestorationMilestoneHasFinalCleanupCoverage()
+{
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  const QString qmlQrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString layerRail = readSource(QStringLiteral("src/qml_gui/components/PreviewLayerRail.qml"));
+  const QString moveSlider = readSource(QStringLiteral("src/qml_gui/components/MoveSlider.qml"));
+  const QString statsPanel = readSource(QStringLiteral("src/qml_gui/components/StatsPanel.qml"));
+  const QString visibilityFilter = readSource(QStringLiteral("src/qml_gui/components/VisibilityFilter.qml"));
+  const QString legend = readSource(QStringLiteral("src/qml_gui/components/Legend.qml"));
+  const QString previewHeader = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.h"));
+  const QString previewSource = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.cpp"));
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString mainCpp = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
+  QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
+  QVERIFY2(!qmlQrc.isEmpty(), "Unable to read qml.qrc");
+  QVERIFY2(!layerRail.isEmpty(), "Unable to read PreviewLayerRail.qml");
+  QVERIFY2(!moveSlider.isEmpty(), "Unable to read MoveSlider.qml");
+  QVERIFY2(!statsPanel.isEmpty(), "Unable to read StatsPanel.qml");
+  QVERIFY2(!visibilityFilter.isEmpty(), "Unable to read VisibilityFilter.qml");
+  QVERIFY2(!legend.isEmpty(), "Unable to read Legend.qml");
+  QVERIFY2(!previewHeader.isEmpty(), "Unable to read PreviewViewModel.h");
+  QVERIFY2(!previewSource.isEmpty(), "Unable to read PreviewViewModel.cpp");
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!mainCpp.isEmpty(), "Unable to read main_qml.cpp");
+
+  const QStringList requiredPreviewResources = {
+    QStringLiteral("<file>pages/PreviewPage.qml</file>"),
+    QStringLiteral("<file>components/PreviewLayerRail.qml</file>"),
+    QStringLiteral("<file>components/MoveSlider.qml</file>"),
+    QStringLiteral("<file>components/StatsPanel.qml</file>"),
+    QStringLiteral("<file>components/VisibilityFilter.qml</file>"),
+    QStringLiteral("<file>components/Legend.qml</file>"),
+    QStringLiteral("<file>components/ToolPositionTooltip.qml</file>")
+  };
+  for (const QString &resource : requiredPreviewResources) {
+    QVERIFY2(qmlQrc.contains(resource),
+             qPrintable(QStringLiteral("Preview restored resource missing from qml.qrc: %1").arg(resource)));
+  }
+
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+           "Normal Preview path must register RhiViewport as GLViewport");
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+           "SoftwareViewport must remain an explicit QRhi-unavailable fallback");
+  QVERIFY2(previewPage.contains(QStringLiteral("GLViewport {")),
+           "PreviewPage must instantiate the registered GLViewport type");
+  QVERIFY2(!previewPage.contains(QStringLiteral("SoftwareViewport")),
+           "PreviewPage must not instantiate SoftwareViewport in the normal path");
+
+  const QStringList requiredPreviewBindings = {
+    QStringLiteral("previewData: root.previewVm.gcodePreviewData"),
+    QStringLiteral("layerMin: root.previewVm.currentLayerMin"),
+    QStringLiteral("layerMax: root.previewVm.currentLayerMax"),
+    QStringLiteral("moveEnd: root.previewVm.currentMove"),
+    QStringLiteral("showTravelMoves: root.previewVm.showTravelMoves"),
+    QStringLiteral("roleVisibility: root.previewVm.roleVisibilityMask"),
+    QStringLiteral("showBed: root.previewVm.showBed"),
+    QStringLiteral("showMarker: root.previewVm.showMarker"),
+    QStringLiteral("gcodeViewMode: root.previewVm.viewModeIndex"),
+    QStringLiteral("markerX: root.previewVm.toolX"),
+    QStringLiteral("markerY: root.previewVm.toolY"),
+    QStringLiteral("markerZ: root.previewVm.toolZ")
+  };
+  for (const QString &binding : requiredPreviewBindings) {
+    QVERIFY2(previewPage.contains(binding),
+             qPrintable(QStringLiteral("PreviewPage missing restored renderer binding: %1").arg(binding)));
+  }
+
+  QVERIFY2(previewPage.contains(QStringLiteral("Components.PreviewLayerRail"))
+              && previewPage.contains(QStringLiteral("Components.MoveSlider"))
+              && previewPage.contains(QStringLiteral("Components.StatsPanel"))
+              && previewPage.contains(QStringLiteral("Components.VisibilityFilter"))
+              && previewPage.contains(QStringLiteral("Components.Legend"))
+              && previewPage.contains(QStringLiteral("Components.ToolPositionTooltip")),
+           "PreviewPage must use the restored Preview component set");
+  QVERIFY2(previewPage.contains(QStringLiteral("root.previewVm.currentViewModeAvailable"))
+              && previewPage.contains(QStringLiteral("root.previewVm.currentViewModeStatus")),
+           "PreviewPage must surface honest view-mode availability state");
+  QVERIFY2(previewPage.contains(QStringLiteral("previewViewport.requestPreviewFit()")),
+           "PreviewPage fit action must use the Preview-data camera fit path");
+  const QRegularExpression rawSliderRegex(QStringLiteral("(^|\\n)\\s*Slider\\s*\\{"));
+  QVERIFY2(!previewPage.contains(QStringLiteral("verticalLayerSlider"))
+              && !rawSliderRegex.match(previewPage).hasMatch(),
+           "PreviewPage must not retain the replaced simple layer slider path");
+
+  const QStringList layerControlCalls = {
+    QStringLiteral("root.previewVm.setLayerRange("),
+    QStringLiteral("root.previewVm.jumpToLayer("),
+    QStringLiteral("root.previewVm.moveLayerRange(")
+  };
+  for (const QString &call : layerControlCalls) {
+    QVERIFY2(layerRail.contains(call),
+             qPrintable(QStringLiteral("PreviewLayerRail missing actionable ViewModel call: %1").arg(call)));
+  }
+  QVERIFY2(layerRail.contains(QStringLiteral("RangeSlider")),
+           "PreviewLayerRail must keep the range control restored in Phase 81");
+
+  const QStringList moveControlCalls = {
+    QStringLiteral("root.previewVm.stepCurrentMove("),
+    QStringLiteral("root.previewVm.setCurrentMove("),
+    QStringLiteral("root.previewVm.togglePlayPause()")
+  };
+  for (const QString &call : moveControlCalls) {
+    QVERIFY2(moveSlider.contains(call),
+             qPrintable(QStringLiteral("MoveSlider missing actionable ViewModel call: %1").arg(call)));
+  }
+  QVERIFY2(!moveSlider.contains(QStringLiteral("root.previewVm.currentMove +"))
+              && !moveSlider.contains(QStringLiteral("root.previewVm.currentMove -")),
+           "MoveSlider must not reintroduce duplicated QML move arithmetic");
+
+  QVERIFY2(statsPanel.contains(QStringLiteral("root.previewVm.setStealthMode(checked)"))
+              && statsPanel.contains(QStringLiteral("root.previewVm.setShowTravelMoves(checked)"))
+              && statsPanel.contains(QStringLiteral("root.previewVm.setShowBed(checked)"))
+              && statsPanel.contains(QStringLiteral("root.previewVm.setShowMarker(checked)")),
+           "Preview stats controls must remain backed by invokable ViewModel setters");
+  QVERIFY2(visibilityFilter.contains(QStringLiteral("root.previewVm.toggleRoleVisibility(roleVisibilityRow.modelData.roleIndex)")),
+           "Role visibility controls must remain actionable");
+  QVERIFY2(legend.contains(QStringLiteral("root.previewVm.legendItems"))
+              && legend.contains(QStringLiteral("root.previewVm.legendGradientMinLabel"))
+              && legend.contains(QStringLiteral("root.previewVm.legendGradientMaxLabel")),
+           "Preview legend must remain ViewModel-backed");
+
+  QVERIFY2(previewHeader.contains(QStringLiteral("Q_INVOKABLE void stepCurrentMove(int delta)"))
+              && previewHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList roleVisibilityMask READ roleVisibilityMask NOTIFY stateChanged)"))
+              && previewHeader.contains(QStringLiteral("Q_PROPERTY(bool currentViewModeAvailable READ currentViewModeAvailable NOTIFY stateChanged)")),
+           "PreviewViewModel public API must keep restored Preview controls callable from QML");
+  QVERIFY2(previewSource.contains(QStringLiteral("viewModeUsesUnavailableData"))
+              && previewSource.contains(QStringLiteral("roleVisibilityMask() const")),
+           "PreviewViewModel implementation must keep color availability and role mask semantics centralized");
+  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_INVOKABLE void requestPreviewFit()")),
+           "RhiViewport must keep the Preview fit action callable from QML");
+
+  const int fitStart = viewportSource.indexOf(QStringLiteral("void RhiViewport::requestPreviewFit"));
+  QVERIFY2(fitStart >= 0, "RhiViewport::requestPreviewFit implementation missing");
+  const int fitEnd = viewportSource.indexOf(QStringLiteral("\nvoid RhiViewport::"), fitStart + 1);
+  const QString fitBody = viewportSource.mid(fitStart, fitEnd > fitStart ? fitEnd - fitStart : viewportSource.size() - fitStart);
+  QVERIFY2(fitBody.contains(QStringLiteral("m_previewFitHint"))
+              && fitBody.contains(QStringLiteral("m_camera.fitView")),
+           "requestPreviewFit must fit against cached Preview bounds");
+  QVERIFY2(!fitBody.contains(QStringLiteral("m_previewData =")),
+           "requestPreviewFit must not clear or replace Preview payload data");
+
+  const QStringList restoredSurfaces = {
+    previewPage,
+    layerRail,
+    moveSlider,
+    statsPanel,
+    visibilityFilter,
+    legend
+  };
+  for (const QString &surface : restoredSurfaces) {
+    QVERIFY2(!surface.contains(QStringLiteral("TODO"))
+                && !surface.contains(QStringLiteral("placeholder"))
+                && !surface.contains(QStringLiteral("reserved (")),
+             "Restored Preview QML surfaces must not expose placeholder markers");
+  }
+}
+
 void QmlUiAuditTests::rhiViewportModelDragOrbitsAfterClickThreshold()
 {
   const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
@@ -1598,6 +1758,17 @@ void QmlUiAuditTests::shellActionsBindToBackendContextGates()
   // Slice side-tool button gated on canSlice.
   QVERIFY2(topbar.contains(QStringLiteral("enabled: backend.canSlice")),
            "Slice side-tool button must bind enabled to backend.canSlice");
+
+  QVERIFY2(topbar.contains(QStringLiteral("function selectWorkflowTab(tab)"))
+              && topbar.contains(QStringLiteral("backend.requestSelectTab(tab.pos)")),
+           "Workflow tabs must route through a shared backend.requestSelectTab helper");
+  QVERIFY2(topbar.contains(QStringLiteral("delegate: Button"))
+              && topbar.contains(QStringLiteral("Accessible.name: workflowTab.modelData.label"))
+              && topbar.contains(QStringLiteral("onClicked: root.selectWorkflowTab(workflowTab.modelData)")),
+           "Workflow tabs must be real accessible buttons wired to the tab-selection helper");
+  QVERIFY2(topbar.contains(QStringLiteral("activeFocusOnTab: true"))
+              && topbar.contains(QStringLiteral("Qt.Key_Space")),
+           "Workflow tabs must be keyboard-operable");
 
   // canUndo / canRedo must each appear at least twice (toolbar icon + Edit-menu
   // item) so a regression deleting one binding is caught.

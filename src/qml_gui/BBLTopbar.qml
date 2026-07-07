@@ -62,6 +62,13 @@ Item {
         { label: qsTr("项目"), icon: "qrc:/qml/assets/icons/device-floppy.svg", pos: backend.tpProject }
     ]
 
+    function selectWorkflowTab(tab) {
+        if (!tab || backend.currentPage === tab.pos)
+            return
+        root.lastTabSwitchToken = backend.beginLatency("tab-switch", tab.label)
+        backend.requestSelectTab(tab.pos)
+    }
+
     implicitHeight: 70
 
     // macOS 系统菜单栏（TOPBAR-07）：仅 macOS 激活，Windows/Linux 保持 inactive
@@ -485,44 +492,52 @@ Item {
 
                 Repeater {
                     model: root.workflowTabs
-                    delegate: Rectangle {
+                    delegate: Button {
                         id: workflowTab
                         required property var modelData
                         Layout.preferredWidth: Math.max(112, workflowLabel.implicitWidth + 48)
                         Layout.fillHeight: true
-                        color: backend.currentPage === modelData.pos ? Theme.accent : "transparent"
+                        activeFocusOnTab: true
+                        padding: 0
+                        hoverEnabled: true
+                        Accessible.name: workflowTab.modelData.label
+                        onClicked: root.selectWorkflowTab(workflowTab.modelData)
 
-                        Row {
-                            anchors.centerIn: parent
-                            spacing: 7
-
-                            Image {
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: 16
-                                height: 16
-                                source: workflowTab.modelData.icon
-                                opacity: backend.currentPage === workflowTab.modelData.pos ? 1.0 : 0.72
-                                fillMode: Image.PreserveAspectFit
-                            }
-
-                            Text {
-                                id: workflowLabel
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: workflowTab.modelData.label
-                                color: backend.currentPage === workflowTab.modelData.pos ? Theme.textOnAccent : Theme.chromeText
-                                font.pixelSize: 12
-                                font.bold: backend.currentPage === workflowTab.modelData.pos
+                        Keys.onPressed: (event) => {
+                            if (event.key === Qt.Key_Return
+                                    || event.key === Qt.Key_Enter
+                                    || event.key === Qt.Key_Space) {
+                                root.selectWorkflowTab(workflowTab.modelData)
+                                event.accepted = true
                             }
                         }
 
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                if (backend.currentPage === workflowTab.modelData.pos)
-                                    return
-                                root.lastTabSwitchToken = backend.beginLatency("tab-switch", workflowTab.modelData.label)
-                                backend.requestSelectTab(workflowTab.modelData.pos)
+                        background: Rectangle {
+                            color: backend.currentPage === workflowTab.modelData.pos ? Theme.accent : "transparent"
+                        }
+
+                        contentItem: Item {
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 7
+
+                                Image {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 16
+                                    height: 16
+                                    source: workflowTab.modelData.icon
+                                    opacity: backend.currentPage === workflowTab.modelData.pos ? 1.0 : 0.72
+                                    fillMode: Image.PreserveAspectFit
+                                }
+
+                                Text {
+                                    id: workflowLabel
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: workflowTab.modelData.label
+                                    color: backend.currentPage === workflowTab.modelData.pos ? Theme.textOnAccent : Theme.chromeText
+                                    font.pixelSize: 12
+                                    font.bold: backend.currentPage === workflowTab.modelData.pos
+                                }
                             }
                         }
                     }
