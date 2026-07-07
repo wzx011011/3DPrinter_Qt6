@@ -10,31 +10,32 @@ The project currently has a usable Qt6/QML shell, real model/project IO, real sl
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current State: After v3.9 Prepare Page UI Restoration
+## Current State: After v4.0 Preview Page UI Restoration
 
-**Last shipped milestone:** v3.9 Prepare Page UI Restoration (2026-07-06).
+**Last shipped milestone:** v4.0 Preview Page UI Restoration (2026-07-07).
 
 **Shipped state:**
 - Prepare page visual/source-truth gap inventory exists as the canonical v3.9 region map.
 - Prepare left preset/settings sidebar is restored for upstream-like density, display names, scope state, and no visible unavailable placeholders.
 - Prepare object list, plate strip, view controls, vertical toolbar, slice status, and workflow controls are restored to the screenshot layout.
 - RHI-backed viewport controls and gizmo floating panels are integrated into the restored Prepare page without overlap or dead controls.
-- Final verification passed through source/QML audits, canonical build, running application, and recorded visual evidence.
+- Preview page visual/source-truth gap inventory exists as the canonical v4.0 region map.
+- Preview layout, layer/move controls, playback, role visibility, color-mode availability, statistics/legend surfaces, and Preview navigation are restored and audited.
+- Final verification passed through source/QML audits, canonical build, running application, and recorded Prepare/Preview visual evidence.
 
 **Carry-forward from v3.8:** The default QRhi/D3D11 path owns move, rotate, scale, cut plane, wipe tower, precise object picking, and Preview G-code rendering. Legacy `GLViewport*` / `GCodeRenderer*` files and the `OWZX_OPENGL` startup path are retired. The QML `OWzxGL.GLViewport` name remains as a compatibility alias backed by RHI or Software rendering.
 
-**Carry-forward outside v3.9:** D3D12 remains explicit opt-in future investigation; device/cloud/Monitor, Preview/settings rework beyond direct Prepare dependencies, and AssembleView remain future source-truth milestones.
+**Carry-forward outside v4.0:** D3D12 remains explicit opt-in future investigation. Parameter settings dialogs and AssembleView remain valid local/offline source-truth candidates. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows are removed from forward scope unless the user explicitly reopens them.
 
-## Current Milestone: v4.0 Preview Page UI Restoration
+## Current Milestone
 
-**Goal:** Restore the Preview page to screenshot-level OrcaSlicer parity using `shotScreen/???.png` as visual truth and OrcaSlicer Preview/G-code source as behavior truth.
+No active milestone is open. The next milestone should target local/offline slicer behavior, with parameter settings dialog restoration as the recommended first candidate.
 
-**Target features:**
-- Preview page visual/source-truth gap inventory with a canonical region map for top controls, left/right panels, layer slider, playback controls, legend, and viewport.
-- Preview layout restored to screenshot density and spacing, including layer range controls, vertical sliders, bottom playback strip, statistics/legend panels, and color-mode surfaces.
-- G-code role/color legend, line visibility, layer/move playback, camera controls, and selected-range behavior aligned with OrcaSlicer semantics on the default RHI/D3D11 path.
-- Dead, placeholder, or misleading Preview controls removed or honestly gated.
-- Final verification through source/QML audits, canonical build, running app launch, Preview visual evidence, and E2E import-slice-preview-export flow checks.
+**Recommended local/offline candidates:**
+- Parameter settings dialogs source-truth restoration.
+- AssembleView dedicated restoration.
+- Thumbnail/3MF pixel round-trip and deterministic GUI fixture loading.
+- D3D12 root-cause investigation after the default D3D11 path remains stable.
 
 ## Requirements
 
@@ -58,31 +59,28 @@ These are current baseline capabilities inferred from implementation, git histor
 - v3.8 RHI gizmo math, geometry, state wiring, move/rotate/scale interaction, cut plane, wipe tower, precise picking, and legacy OpenGL retirement shipped with 21/21 requirements satisfied.
 - Default renderer foundation now rests on QRhi/D3D11 plus Software fallback; the old OpenGL viewport is no longer a selectable application path.
 - v3.9 Prepare page UI restoration shipped with 12/12 requirements satisfied, canonical verification passed, current runtime launch evidence, and final Prepare screenshot evidence.
+- v4.0 Preview page UI restoration shipped with 13/13 requirements satisfied, canonical verification passed, current runtime launch evidence, and final Preview screenshot evidence.
 
 ### Active
 
-- [ ] Restore the Preview page UI to screenshot-level OrcaSlicer parity.
-- [ ] Align Preview layer controls, playback, G-code role visibility, color modes, and statistics panels with upstream behavior.
-- [ ] Verify the restored Preview page with source/QML audits, canonical build, running app launch, visual evidence, and E2E workflow checks.
+- [ ] No active milestone. Plan the next local/offline source-truth milestone.
 
 ### Future
 
-- Device send/print workflows, including upload to printer, cloud printing, and Monitor task lifecycle.
+- Parameter settings dialogs source-truth completion.
 - AssembleView source-truth completion.
 - Auto filament-map recommendation and wipe-tower geometry/rendering.
 - Real GL/QRhi-capture thumbnails and 3MF pixel round-trip (`THUMB-03`).
 - Full PLATE-09 save/reload state assertions after shared 3MF writer integration is fixed (`FIXTURE-02` carry-forward).
 - D3D12 crash root cause and Vulkan evaluation after the SDK/runtime path is ready.
-- ModelMall/Home WebView and cloud-related workflows.
 - Full i18n translation coverage beyond strings touched by active workflows.
-- WebRTC/MetaRTC camera flows when dependencies and protocols are available.
 
 ### Out of Scope
 
 - Changing libslic3r slicing algorithms as part of GUI migration work.
 - Adding product behavior that is not mapped to OrcaSlicer upstream or explicitly documented as an OWzx-only decision.
 - Creating alternate build directories or using non-canonical build scripts.
-- Completing device send/upload/cloud print and Monitor print-job workflows before a dedicated source-truth milestone.
+- LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows. These are removed from forward scope unless the user explicitly reopens them.
 - Completing AssembleView or auto filament-map recommendation before a dedicated source-truth milestone.
 - Making D3D12 or Vulkan the default backend before the backend crash/runtime constraints are resolved.
 - Claiming separate manual user click-through for v3.4 Phase 43. It is closed by E2E/runtime evidence, not by a distinct manual session.
@@ -122,7 +120,7 @@ These are current baseline capabilities inferred from implementation, git histor
 - **Completeness Rule:** each milestone must implement the complete declared target behavior. If old Qt behavior is simplified, mock, legacy, or semantically wrong for that target, replace it instead of preserving compatibility with the wrong behavior.
 - **No Deprecated UI Rule:** when a page/component is replaced, remove the old files, routes, registrations, resource entries, imports, tests, and disconnected code paths in the same milestone.
 - **Preset Rule:** preset behavior must be implemented against upstream `PresetBundle`/`PresetCollection` semantics where feasible; simplified JSON/mock behavior must be removed or explicitly classified as fallback.
-- **Dependencies:** CGAL is available; OpenVDB, FFmpeg-related runtime availability, WebRTC/MetaRTC, and closed device protocols must be handled according to the local dependency state and current build rules.
+- **Dependencies:** CGAL is available. OpenVDB remains unavailable. FFmpeg/WebRTC/closed device protocol work is not forward product scope unless explicitly reopened.
 - **Rendering Backend:** QRhi/D3D11 is the default high-performance Windows path. D3D12 is explicit opt-in pending root-cause work. Vulkan is future work until a Vulkan-enabled Qt SDK/runtime is available and benchmarked.
 - **Comments and Encoding:** new or modified source comments must be English and ASCII-only; preserve UTF-8 without BOM.
 - **Worktree Safety:** unrelated local code changes must not be reverted or cleaned during planning updates.
@@ -148,7 +146,8 @@ These are current baseline capabilities inferred from implementation, git histor
 | Preserve `OWzxGL.GLViewport` as a QML compatibility alias | QML imports stay stable while the implementation resolves to RHI or Software rendering. | Good - v3.8 shipped |
 | Put gizmo math, geometry, and object picking in pure C++ helpers | Deterministic unit tests are cheaper and more reliable than renderer-only validation for interaction math. | Good - v3.8 shipped |
 | Scope v3.9 to Prepare page UI restoration | The user explicitly selected "准备页 UI 还原"; Preview, settings, device, and AssembleView should not dilute this milestone. | Good - v3.9 shipped |
-| Scope v4.0 to Preview page UI restoration | After Prepare shipped, the next highest-value screenshot/source-truth gap is Preview; device, settings, and AssembleView stay future unless directly required. | Active - v4.0 |
+| Scope v4.0 to Preview page UI restoration | After Prepare shipped, the next highest-value screenshot/source-truth gap is Preview; device, settings, and AssembleView stay future unless directly required. | Good - v4.0 shipped |
+| Remove LAN/device/network/cloud work from forward scope | User direction on 2026-07-07: LAN devices and networking are no longer done. | Active scope rule |
 
 ## Evolution
 
@@ -168,4 +167,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-06 after v4.0 milestone start.*
+*Last updated: 2026-07-07 after network/device scope removal.*

@@ -1,6 +1,6 @@
 # Planning Index
 
-Last updated: 2026-07-01
+Last updated: 2026-07-07
 
 This is the canonical entry point for `.planning/`. Historical phase files are evidence; current work starts from the files below.
 
@@ -13,7 +13,7 @@ This is the canonical entry point for `.planning/`. Historical phase files are e
 - v3.6 starting inventory: [research/v3.6-SCREENSHOT-SOURCE-TRUTH.md](research/v3.6-SCREENSHOT-SOURCE-TRUTH.md)
 - Remaining migration plan: [REMAINING_MIGRATION_PLAN.md](REMAINING_MIGRATION_PLAN.md)
 - Milestone history: [MILESTONES.md](MILESTONES.md)
-- Latest completed milestone audit: [v3.2-MILESTONE-AUDIT.md](v3.2-MILESTONE-AUDIT.md)
+- Latest completed milestone audit: [milestones/v4.0-MILESTONE-AUDIT.md](milestones/v4.0-MILESTONE-AUDIT.md)
 - Archived milestone audit: [milestones/v3.2-MILESTONE-AUDIT.md](milestones/v3.2-MILESTONE-AUDIT.md)
 - Retrospective: [RETROSPECTIVE.md](RETROSPECTIVE.md)
 - Prior alignment audit: [audits/2026-06-24-plan-implementation-alignment.md](audits/2026-06-24-plan-implementation-alignment.md)
@@ -22,32 +22,19 @@ This is the canonical entry point for `.planning/`. Historical phase files are e
 
 ## Active Milestone
 
-**v3.6 Screenshot-Driven OrcaSlicer UI Restoration** is active.
+No active milestone is open. The latest completed milestone is **v4.0 Preview Page UI Restoration**.
 
-Primary objective:
+Recommended next objective:
 
-- Restore the Prepare page, Preview page, and parameter settings workflows as complete OrcaSlicer-equivalent user flows, using screenshots as visual/layout truth and OrcaSlicer source as behavior truth.
-
-Active phases:
-
-- Phase 50: Screenshot and Source-Truth Inventory
-- Phase 51: Shell and Navigation Restoration
-- Phase 52: Prepare Sidebar and Preset Controls
-- Phase 53: Prepare Object, Plate, and Viewport Workflow
-- Phase 54: Preview Layout, Sliders, and Right Panels
-- Phase 55: G-code Preview Semantics and Rendering Stability
-- Phase 56: Parameter Settings Dialogs Restoration
-- Phase 57: Deprecated UI Removal and Architecture Cleanup
-- Phase 58: End-to-End Visual and Functional Verification
+- Plan the next local/offline source-truth milestone. Recommended first candidate: parameter settings dialogs restoration.
 
 Carry-forward:
 
-- v3.4 Phase 43 manual UAT remains pending because the user could not verify it earlier. Do not mark v3.4 fully complete without running `.planning/phases/43-end-to-end-verification-and-handoff/43-UAT.md`.
+- v3.4 Phase 43 manual UAT is closed by canonical E2E coverage and current runtime launch evidence, not by a separate user click-through.
 - v3.5 Phase 47-49 are superseded by v3.6 and should not be resumed as standalone work unless explicitly reopened.
 
-Deferred until after v3.6:
+Deferred until the next local/offline milestone:
 
-- Device send/upload/cloud print and Monitor task workflow
 - AssembleView
 - Auto filament-map recommendation
 - Wipe-tower geometry/rendering
@@ -55,6 +42,10 @@ Deferred until after v3.6:
 - `FIXTURE-02` full PLATE-09 save/reload assertions after writer integration fix
 - D3D12 crash root cause and future Vulkan/D3D12 backend promotion
 - Missing CLI test fixtures
+
+Removed from forward scope:
+
+- LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows.
 
 ## Directory Map
 
@@ -87,14 +78,14 @@ Do not treat phase completion as product completion unless the exact workflow is
 
 ## Next Step
 
-Start Phase 50:
+Plan the next local/offline milestone:
 
 ```text
-$gsd-plan-phase 50
+$gsd-new-milestone
 ```
 
-or execute the milestone autonomously:
+or run an explicitly scoped autonomous milestone after planning:
 
 ```text
-$gsd-autonomous --from 50
+$gsd-autonomous --auto
 ```

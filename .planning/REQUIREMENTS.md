@@ -38,9 +38,12 @@
 ### Adjacent Restoration
 
 - **SETTINGS-FUTURE-01**: Restore parameter settings dialogs beyond Preview dependencies.
-- **DEVICE-FUTURE-01**: Complete device send/upload/cloud print and Monitor task lifecycle workflows.
 - **ASSEMBLE-FUTURE-01**: Complete AssembleView as a dedicated source-truth milestone.
 - **BACKEND-FUTURE-01**: Resolve the D3D12 QRhi crash and evaluate Vulkan only after an SDK/runtime path exists.
+
+### Removed Product Scope
+
+- **NETWORK-REMOVED-01**: LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows are not future requirements unless the user explicitly reopens them.
 
 ## Out of Scope
 
@@ -50,7 +53,7 @@ Explicitly excluded to keep v4.0 focused.
 |---|---|
 | Prepare page redesign beyond Preview regression fixes | v3.9 already shipped Prepare restoration; v4.0 should not reopen it unless Preview depends on it. |
 | Parameter settings dialog restoration beyond Preview entry/display needs | Settings workflows need a dedicated source-truth pass. |
-| Device, cloud print, Monitor, and hardware task lifecycle workflows | These require protocol/hardware verification and are unrelated to Preview page layout parity. |
+| Device, cloud print, Monitor, ModelMall/Home WebView/cloud, live camera/network, and printer-connected hardware workflows | Removed from forward product scope by user direction on 2026-07-07; do not promote to a future milestone unless explicitly reopened. |
 | AssembleView | Separate user workflow and source-truth surface. |
 | D3D12 or Vulkan backend promotion | Renderer backend work is blocked/future and not required for Preview UI parity on D3D11. |
 | libslic3r slicing algorithm changes | GUI restoration must not change slicing engine behavior. |
@@ -81,4 +84,4 @@ Explicitly excluded to keep v4.0 focused.
 
 ---
 *Requirements defined: 2026-07-06*
-*Last updated: 2026-07-07 after Phase 83 Preview verification and cleanup*
+*Last updated: 2026-07-07 after network/device scope removal*

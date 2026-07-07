@@ -15,7 +15,13 @@
 - Complete with process debt: **v3.9 Prepare Page UI Restoration** - Phases 74-78 (shipped 2026-07-06; 12/12 requirements satisfied, canonical verifier passed, runtime screenshot captured)
 - Complete: **v4.0 Preview Page UI Restoration** - Phases 79-83 (shipped 2026-07-07; 13/13 requirements satisfied, canonical verifier passed, runtime Preview screenshot captured)
 
-## Current Milestone: v4.0 Preview Page UI Restoration
+## Current Milestone
+
+No active milestone is open. The last completed milestone is **v4.0 Preview Page UI Restoration**.
+
+The next milestone must stay inside local/offline slicer functionality. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows are removed from the forward roadmap unless the user explicitly reopens them.
+
+## Last Completed Milestone: v4.0 Preview Page UI Restoration
 
 **Goal:** Restore the Preview page to screenshot-level OrcaSlicer parity using `shotScreen/预览页.png` as visual truth and OrcaSlicer Preview/G-code source as behavior truth.
 
@@ -149,22 +155,25 @@ Requirements: `.planning/milestones/v3.8-REQUIREMENTS.md`
 
 - v3.4 Phase 43 manual UAT is closed by canonical E2E coverage and current runtime launch evidence, not by a separate user click-through.
 - v3.5 Phase 47-49 are superseded by v3.6 and should not be resumed as standalone work unless explicitly reopened.
-- Device send/upload/cloud print and Monitor task workflow.
 - AssembleView.
 - Auto filament-map recommendation and wipe-tower geometry/rendering.
 - Real thumbnail capture and 3MF pixel round-trip.
 - D3D12 root-cause investigation and future Vulkan/D3D12 backend promotion.
-- ModelMall/Home WebView and cloud workflows.
-- Full hardware calibration completion beyond preserving existing implemented preset read/write paths.
+
+## Removed Scope
+
+- LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware calibration are no longer backlog items.
 
 ## Next Step
 
-Continue v4.0 with Phase 83:
+Plan the next local/offline source-truth milestone. Recommended order:
 
 ```text
-$gsd-discuss-phase 83 --auto
+1. Parameter settings dialogs source-truth restoration
+2. AssembleView dedicated restoration
+3. Thumbnail/3MF pixel round-trip or D3D12 root-cause investigation
 ```
 
 ---
 
-*Last updated: 2026-07-07 after Phase 82 completion.*
+*Last updated: 2026-07-07 after network/device scope removal.*

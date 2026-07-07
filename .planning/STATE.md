@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Preview Page UI Restoration
 status: milestone_complete
-last_updated: 2026-07-07T13:45:00+08:00
+last_updated: 2026-07-07T14:35:44+08:00
 last_activity: 2026-07-07
 progress:
   total_phases: 5
@@ -18,7 +18,7 @@ stopped_at: v4.0 complete - Preview Page UI Restoration archived
 
 **Milestone:** v4.0 - Preview Page UI Restoration
 **Status:** Milestone complete
-**Next step:** Plan the next source-truth milestone.
+**Next step:** Plan the next local/offline source-truth milestone.
 
 ## Current Position
 
@@ -56,7 +56,7 @@ See: `.planning/PROJECT.md`
 | Category | Item | Target |
 |---|---|---|
 | closed | v4.0 Preview screenshot restoration | Closed by Phase 83 audit, canonical verifier, and runtime Preview evidence |
-| future | Device send/upload/cloud print and Monitor job lifecycle | Future milestone |
+| removed | LAN/device/cloud/network/Monitor workflows | Removed from future scope by user direction on 2026-07-07 |
 | future | AssembleView | Future source-truth milestone |
 | future | Missing CLI test fixtures (`hotend.stl`, `Block20XY.stl`) | Future fixture milestone |
 | future | Deterministic argv-based GUI fixture loading for screenshots | Future testability milestone |
@@ -70,6 +70,13 @@ See: `.planning/PROJECT.md`
 | evidence | Loaded-G-code runtime screenshot | Default no-G-code Preview screenshot captured; deterministic loaded fixture screenshots require app argv/file-loading support |
 | process | per-phase VALIDATION.md | Phase 79-83 have deterministic verification artifacts but no separate Nyquist validation files |
 
+## Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260707-lan | Remove LAN/device/network/cloud work from future scope | 2026-07-07 | docs-only | [260707-lan-network-scope-removal](./quick/260707-lan-network-scope-removal/) |
+
 ## Operator Next Steps
 
-- Start the next milestone with `/gsd-new-milestone` or a source-truth migration command.
+- Start the next local/offline milestone with `/gsd-new-milestone` or a source-truth migration command.
+- Do not promote LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, or printer-connected hardware workflows unless the user explicitly reopens them.

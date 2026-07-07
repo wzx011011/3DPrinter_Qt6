@@ -1,6 +1,6 @@
 # Remaining Feature Migration Plan
 
-Last updated: 2026-06-25
+Last updated: 2026-07-07
 
 This is the ordered backlog after reconciling planning with current implementation. If older milestone wording conflicts with the dated audits or current code evidence, the code evidence and latest audit win.
 
@@ -11,10 +11,11 @@ This is the ordered backlog after reconciling planning with current implementati
 - Build verification remains: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`.
 - Build directory remains: `build/`.
 - QML must stay presentation and wiring only; durable business rules, validation, persistence, and upstream behavior mapping belong in C++ services/viewmodels.
+- LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows are removed from forward scope unless the user explicitly reopens them. Historical code and phase evidence remain historical only.
 
 ## Current Baseline
 
-The project has a usable Qt6/QML shell, real model/project IO, real slicing and G-code export paths, preview rendering, partial preset IO, and hybrid device/camera/network integration work.
+The project has a usable Qt6/QML shell, real model/project IO, real slicing and G-code export paths, preview rendering, partial preset IO, and historical hybrid device/camera/network integration work that is no longer forward roadmap scope.
 
 Code-verified baseline:
 
@@ -22,12 +23,12 @@ Code-verified baseline:
 |---|---|---|
 | Model/project load and basic slicing | Hybrid/Real | Real libslic3r paths exist; E2E pipeline passed in canonical verify. |
 | Calibration | Hybrid | PA/Flow/Temp slice dispatch exists, but topbar UI and deterministic tests are incomplete. |
-| SSDP/device discovery | Hybrid | Real discovery exists with deterministic Phase 13 parser/timeout fixture coverage, but device state remains mock-heavy. |
-| MQTT/FTP/send print | Hybrid | Real transport wrappers exist with Phase 13 deterministic telemetry, command, FTP URL, and error-path coverage; live printer publish/upload remains manual. |
-| Camera | Hybrid | FFmpeg/RTSP path exists with Phase 13 no-stream/default-URL coverage, but real-stream verification remains environment dependent. |
+| SSDP/device discovery | Removed scope | Historical real-path evidence exists, but no future LAN/device discovery work should be promoted. |
+| MQTT/FTP/send print | Removed scope | Historical transport wrappers exist, but no future printer upload/control work should be promoted. |
+| Camera | Removed scope | Historical FFmpeg/RTSP path exists, but no future live camera/network stream work should be promoted. |
 | Preset bundle | Partial | Current bundle IO is simplified JSON, not upstream-compatible bundle behavior. |
 | PartPlate/AssembleView | Hybrid/Placeholder | Plate APIs exist; upstream PartPlate config and AssembleView are not source-truth complete. |
-| Web/model mall/cloud/multi-machine | Mock/Blocked | Pages exist, but WebView is unavailable and state is largely mock/local. |
+| Web/model mall/cloud/multi-machine | Removed scope | Pages exist historically, but no future WebView/cloud/multi-machine work should be promoted. |
 
 ## Milestone Sequence
 
@@ -103,28 +104,22 @@ Candidate tasks:
 - [ ] Wire Compare/Diff preset flow from sidebar and settings.
 - [ ] Add preset bundle round-trip tests.
 
-### v3.2 Candidate: Web, Cloud, and Multi-Machine
+### Removed Candidate: Web, Cloud, and Multi-Machine
 
-Goal: move web/cloud/multi-machine surfaces from mock/blocked status to verified integration or explicit blocked state.
+Goal: none. This candidate is removed from the forward roadmap by user direction on 2026-07-07.
 
-Candidate tasks:
-
-- [ ] Decide QtWebEngine integration policy for ModelMall/Home.
-- [ ] Classify cloud APIs, credentials, and network protocol constraints.
-- [ ] Replace local mock multi-machine state with verified protocol-backed or fixture-backed behavior.
-- [ ] Add tests around offline/error states so blocked integrations fail visibly and predictably.
+Do not promote ModelMall/Home WebView, cloud account/sync, LAN device discovery, multi-machine, device send/upload, Monitor task lifecycle, live camera/network streams, or printer-connected hardware workflows unless the user explicitly reopens them.
 
 ### Later Candidates
 
-- Full calibration mode coverage beyond PA, Flow Rate, and Temp Tower.
+- Local calibration generation and preset workflows beyond PA, Flow Rate, and Temp Tower when they do not require live printer hardware or networking.
 - Full i18n content migration beyond infrastructure.
 - OpenVDB-dependent hollow/support paint workflows.
-- WebRTC/MetaRTC camera workflows.
 - SLA-specific GUI modules and gizmos.
 
 ## Backlog Rule
 
-Next recommended promotion candidate: v3.0 PartPlate and AssembleView.
+Next recommended promotion candidate: parameter settings dialogs source-truth restoration, followed by AssembleView if the settings milestone is not selected.
 
 Do not promote a future candidate into an active milestone until:
 
