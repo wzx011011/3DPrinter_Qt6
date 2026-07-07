@@ -39,12 +39,52 @@ This matrix is the canonical routing artifact for Phase 85-88.
 | SET-PERSISTENCE | Settings edits invalidate slice state, preserve dirty overrides through project save/load, and do not clear Prepare/Preview payload state. | `ConfigViewModel::mergedConfigValues` and `applyProjectConfig` carry settings state; `handleOptionValueChanged` feeds edits; `EditorViewModel` consumes merged config for slicing. | `src/core/viewmodels/ConfigViewModel.*`; `src/core/viewmodels/EditorViewModel.*`; `src/core/services/ProjectServiceMock.*`; `tests/ViewModelSmokeTests.cpp` | `third_party/OrcaSlicer/src/libslic3r/PresetBundle.*`; `third_party/OrcaSlicer/src/libslic3r/PrintConfig.cpp`; `third_party/OrcaSlicer/src/slic3r/GUI/Tab.*` | Preserve/harden. | Persistence/invalidating behavior exists but needs regression proof after visual rewrites and dialog action changes. | Critical | Phase 87 | SETSEM-03 | Existing E2E tests plus Phase 88 regression pass. |
 | SET-CLEANUP | Deprecated settings surfaces, mojibake, placeholders, disconnected controls, unused left group sidebar, stale qrc/imports/tests, and off-design code paths are removed or explicitly classified. | `GroupNavSidebar.qml` exists as a left group navigation component, but the target screenshots show no left group navigation in the settings window and `SettingsDialog.qml` does not use it in the visible shell; cleanup also must catch mojibake/stale tests/resources. | `src/qml_gui/components/GroupNavSidebar.qml`; `src/qml_gui/dialogs/SettingsDialog.qml`; `src/qml_gui/components/OptionRow.qml`; `src/qml_gui/qml.qrc`; `tests/ViewModelSmokeTests.cpp` | Source-truth cleanup rule; `third_party/OrcaSlicer/src/slic3r/GUI/Tab.*`; `third_party/OrcaSlicer/src/slic3r/GUI/PresetComboBoxes.*`; `third_party/OrcaSlicer/src/slic3r/GUI/OptionsGroup.*` | Remove/hide/defer off-design surfaces; `GroupNavSidebar.qml` is not part of the screenshot-visible window unless Phase 85 finds new evidence. | Stale component/resource/test paths can keep old UI reachable unless Phase 88 explicitly removes or classifies them. | High | Phase 88 | SETCLEAN-01, SETVERIFY-01, SETVERIFY-02 | Source/QML audit, canonical verifier, runtime visual evidence. |
 
+## Phase 56 Residual Reconciliation
+
+Phase 56 closed the settings backend workflow, but its verification explicitly
+deferred three visual/manual items in
+`.planning/milestones/v3.6-phases/56-parameter-settings-dialogs-restoration/56-VERIFICATION.md`.
+Those residuals are now owned by v4.1 as follows:
+
+| Phase 56 Residual | v4.1 Owner | Requirement Routing | Closure Evidence |
+|---|---|---|---|
+| Settings dialog visual parity with `shotScreen/打印机参数设置页.png` and `shotScreen/材料参数设置页.png` for density, spacing, control placement, and tab/group navigation. | Phase 85 for shell/top row/tabs; Phase 86 for section/control density; Phase 88 for final screenshot evidence. | SETLAYOUT-01, SETLAYOUT-02, SETLAYOUT-03, SETCTRL-01, SETVERIFY-02 | Pixel-level runtime captures for printer/material dialogs plus process source-parity evidence. |
+| Typed-control rendering per option type, including unit suffix visuals, enum combo behavior, nullable/inherit indicator, and validation error row visuals. | Phase 86 for renderer changes; Phase 87 for semantic preservation; Phase 88 for audits/tests. | SETCTRL-02, SETCTRL-03, SETSEM-01, SETVERIFY-01, SETVERIFY-02 | Source/QML audits prove type wiring; runtime interaction checks prove edited controls are operable. |
+| Non-modal cross-window live edit while Prepare sidebar dirty and slice-stale indicators update without closing the settings dialog. | Phase 87 for workflow stability; Phase 88 for UIAutomation/runtime proof. | SETSEM-02, SETSEM-03, SETVERIFY-01, SETVERIFY-02 | Existing Phase 56 tests stay green and runtime click/edit/close scenarios are captured. |
+
+## v4.1 Requirement Routing
+
+| Requirement | Owner | Matrix Region |
+|---|---|---|
+| SETAUDIT-01 | Phase 84 | All canonical regions in this matrix. |
+| SETAUDIT-02 | Phase 84 | Phase 56 residual reconciliation above. |
+| SETLAYOUT-01 | Phase 85 | SET-SHELL, SET-PRESET-ACTIONS, SET-ENTRYPOINTS. |
+| SETLAYOUT-02 | Phase 85 | SET-SHELL, SET-TABS. |
+| SETLAYOUT-03 | Phase 85 | SET-PRESET-ACTIONS, SET-TABS, SET-SEARCH-MODE, SET-CLEANUP. |
+| SETCTRL-01 | Phase 86 | SET-SECTIONS. |
+| SETCTRL-02 | Phase 86 | SET-TYPED-ROWS. |
+| SETCTRL-03 | Phase 86 | SET-STATE-INDICATORS. |
+| SETSEM-01 | Phase 87 | SET-PRESET-ACTIONS, SET-STATE-INDICATORS, SET-PRESET-SEMANTICS. |
+| SETSEM-02 | Phase 87 | SET-PRESET-ACTIONS, SET-SEARCH-MODE. |
+| SETSEM-03 | Phase 87 | SET-ENTRYPOINTS, SET-PERSISTENCE. |
+| SETCLEAN-01 | Phase 88 | SET-CLEANUP. |
+| SETVERIFY-01 | Phase 88 | SET-CLEANUP plus source/QML audits for all regions. |
+| SETVERIFY-02 | Phase 88 | Final runtime launch, interaction, and visual evidence. |
+
+## Removed Scope Confirmation
+
+The v4.1 settings milestone does not reopen LAN device discovery, networked
+printer workflows, cloud print, Monitor task lifecycle, ModelMall/Home WebView,
+camera streams, D3D12/Vulkan promotion, AssembleView, or full upstream preset
+bundle import/export compatibility. Those items remain outside this milestone
+unless the user explicitly reopens them.
+
 ## Requirement Coverage
 
 | Requirement | Covered By |
 |---|---|
 | SETAUDIT-01 | This matrix maps settings regions to target screenshots, upstream source files, Qt targets, decisions, owner phases, and verification. |
-| SETAUDIT-02 | The residual reconciliation section must map Phase 56 deferred visual-UAT items into v4.1 ownership. |
+| SETAUDIT-02 | The residual reconciliation section maps Phase 56 deferred visual-UAT items into v4.1 ownership with requirement routing and closure evidence. |
 
 ## Phase Routing
 
