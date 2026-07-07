@@ -18,9 +18,9 @@
 
 ### Option Sections And Controls
 
-- [ ] **SETCTRL-01**: User can read settings as upstream/screenshot-like option sections with compact section headers, dividers, icons where applicable, and stable scroll behavior.
-- [ ] **SETCTRL-02**: User can edit typed options with screenshot-aligned controls for checkboxes, numeric fields with units, enum combos, text/color fields, and paired min/max numeric rows.
-- [ ] **SETCTRL-03**: Dirty, value-source, read-only, nullable/inherit, vector/per-extruder, and validation states are visible without row resize, overlap, or ambiguous disabled affordances.
+- [x] **SETCTRL-01**: User can read settings as upstream/screenshot-like option sections with compact section headers, dividers, icons where applicable, and stable scroll behavior.
+- [x] **SETCTRL-02**: User can edit typed options with screenshot-aligned controls for checkboxes, numeric fields with units, enum combos, text/color fields, and paired min/max numeric rows.
+- [x] **SETCTRL-03**: Dirty, value-source, read-only, nullable/inherit, vector/per-extruder, and validation states are visible without row resize, overlap, or ambiguous disabled affordances.
 
 ### Preset And Edit Semantics
 
@@ -69,9 +69,9 @@ Explicitly excluded to keep v4.1 focused.
 | SETLAYOUT-01 | Phase 85 | Complete |
 | SETLAYOUT-02 | Phase 85 | Complete |
 | SETLAYOUT-03 | Phase 85 | Complete |
-| SETCTRL-01 | Phase 86 | Pending |
-| SETCTRL-02 | Phase 86 | Pending |
-| SETCTRL-03 | Phase 86 | Pending |
+| SETCTRL-01 | Phase 86 | Complete |
+| SETCTRL-02 | Phase 86 | Complete |
+| SETCTRL-03 | Phase 86 | Complete |
 | SETSEM-01 | Phase 87 | Pending |
 | SETSEM-02 | Phase 87 | Pending |
 | SETSEM-03 | Phase 87 | Pending |

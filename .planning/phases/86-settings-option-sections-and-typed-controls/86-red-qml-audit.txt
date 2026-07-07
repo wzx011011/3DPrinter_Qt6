@@ -1,0 +1,8 @@
+********* Start testing of QmlUiAuditTests *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-llp64 shared (dynamic) release build; by MSVC 2026), windows 10
+PASS   : QmlUiAuditTests::initTestCase()
+FAIL!  : QmlUiAuditTests::settingsOptionRowsRestorePhase86ControlContract() 'optionRow.contains(token)' returned FALSE. (OptionRow missing Phase 86 section-header token: sectionIconRail)
+E:\ai\3DPrinter_Qt6\tests\QmlUiAuditTests.cpp(2620) : failure location
+PASS   : QmlUiAuditTests::cleanupTestCase()
+Totals: 2 passed, 1 failed, 0 skipped, 0 blacklisted, 2ms
+********* Finished testing of QmlUiAuditTests *********

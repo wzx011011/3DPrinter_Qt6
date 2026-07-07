@@ -91,6 +91,7 @@ private slots:
   void settingsDialogStringsQsTr();
   void settingsDialogMainQmlDispatchStructural();
   void settingsDialogRestoresPhase85ShellContract();
+  void settingsOptionRowsRestorePhase86ControlContract();
   void settingsDialogReadOnlySaveOpensSaveAs();
   void leftSidebarParamsPanelUsesRealOptionRows();
   // Phase 57-02 (CLEAN-01/02 regression): the 7 obsolete QML files locked by
@@ -2452,11 +2453,11 @@ void QmlUiAuditTests::settingsDialogUsesOnlyCxControls()
     QVERIFY2(src.contains(QStringLiteral("Cx")),
              qPrintable(QStringLiteral("%1 must use Cx* controls").arg(path)));
   }
-  // OptionRow must dispatch via the Cx family (CxSwitch/CxSlider/CxSpinBox/CxComboBox).
+  // OptionRow must dispatch via the Cx family (CxCheckBox/CxSpinBox/CxComboBox).
   const QString optionRow = readSource(QStringLiteral("src/qml_gui/components/OptionRow.qml"));
-  QVERIFY2(optionRow.contains(QStringLiteral("CxSwitch")) && optionRow.contains(QStringLiteral("CxComboBox")) &&
+  QVERIFY2(optionRow.contains(QStringLiteral("CxCheckBox")) && optionRow.contains(QStringLiteral("CxComboBox")) &&
                optionRow.contains(QStringLiteral("CxSpinBox")),
-           "OptionRow must dispatch bool/enum/int via CxSwitch/CxComboBox/CxSpinBox");
+           "OptionRow must dispatch bool/enum/int via CxCheckBox/CxComboBox/CxSpinBox");
 }
 
 // SETTINGS-01/02: no raw QtQuick.Controls control declarations in the three new
@@ -2599,6 +2600,83 @@ void QmlUiAuditTests::settingsDialogRestoresPhase85ShellContract()
                && settingsDialog.contains(QStringLiteral("CxSwitch"))
                && settingsDialog.contains(QStringLiteral("advancedMode")),
            "SettingsDialog compact top-row actions must keep save, save-as, search, and advanced-mode wiring");
+}
+
+void QmlUiAuditTests::settingsOptionRowsRestorePhase86ControlContract()
+{
+  const QString optionRow = readSource(QStringLiteral("src/qml_gui/components/OptionRow.qml"));
+  const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
+  QVERIFY2(!optionRow.isEmpty(), "Unable to read OptionRow.qml");
+  QVERIFY2(!settingsDialog.isEmpty(), "Unable to read SettingsDialog.qml");
+
+  const QStringList sectionTokens = {
+      QStringLiteral("sectionIconRail"),
+      QStringLiteral("sectionDivider"),
+      QStringLiteral("sectionGlyph"),
+      QStringLiteral("Theme.accent")
+  };
+  for (const QString &token : sectionTokens) {
+    QVERIFY2(optionRow.contains(token),
+             qPrintable(QStringLiteral("OptionRow missing Phase 86 section-header token: %1").arg(token)));
+  }
+  QVERIFY2(!optionRow.contains(QStringLiteral("color: root.compact ? \"transparent\" : Theme.bgSurface")),
+           "Phase 86 section headers must not keep the old plain text/card header branch");
+
+  const QStringList typedControlTokens = {
+      QStringLiteral("CxCheckBox"),
+      QStringLiteral("CxSpinBox"),
+      QStringLiteral("CxComboBox"),
+      QStringLiteral("CxTextField"),
+      QStringLiteral("CxTextArea"),
+      QStringLiteral("optionModel.setValue(root.optIdx"),
+      QStringLiteral("readonly property string oSidetext"),
+      QStringLiteral("readonly property string displayUnit"),
+      QStringLiteral("optSidetext(root.optIdx)")
+  };
+  for (const QString &token : typedControlTokens) {
+    QVERIFY2(optionRow.contains(token),
+             qPrintable(QStringLiteral("OptionRow missing Phase 86 typed-control token: %1").arg(token)));
+  }
+
+  const QStringList rangeAndColorTokens = {
+      QStringLiteral("readonly property bool isRangeLike"),
+      QStringLiteral("rangeCluster"),
+      QStringLiteral("rangeMinLabel"),
+      QStringLiteral("rangeMaxLabel"),
+      QStringLiteral("rangeMinEditor"),
+      QStringLiteral("rangeMaxEditor"),
+      QStringLiteral("readonly property bool isColorLike"),
+      QStringLiteral("colorSwatchButton"),
+      QStringLiteral("colorSwatch")
+  };
+  for (const QString &token : rangeAndColorTokens) {
+    QVERIFY2(optionRow.contains(token),
+             qPrintable(QStringLiteral("OptionRow missing Phase 86 range/color token: %1").arg(token)));
+  }
+
+  const QStringList stateTokens = {
+      QStringLiteral("metadataLane"),
+      QStringLiteral("dirtyBadge"),
+      QStringLiteral("sourceBadge"),
+      QStringLiteral("readOnlyBadge"),
+      QStringLiteral("nullableBadge"),
+      QStringLiteral("vectorBadge"),
+      QStringLiteral("boundsBadge"),
+      QStringLiteral("readonly property int metadataLaneWidth"),
+      QStringLiteral("readonly property int controlColumnWidth")
+  };
+  for (const QString &token : stateTokens) {
+    QVERIFY2(optionRow.contains(token),
+             qPrintable(QStringLiteral("OptionRow missing fixed state-indicator token: %1").arg(token)));
+  }
+
+  QVERIFY2(settingsDialog.contains(QStringLiteral("showGroupHeader: optDelegate.showGroupHeader"))
+               && settingsDialog.contains(QStringLiteral("oGroup: optDelegate.optGroup"))
+               && settingsDialog.contains(QStringLiteral("compactLabelWidth:"))
+               && settingsDialog.contains(QStringLiteral("compactFieldWidth:"))
+               && settingsDialog.contains(QStringLiteral("compactEnumWidth:"))
+               && settingsDialog.contains(QStringLiteral("valueSource:")),
+           "SettingsDialog must continue passing group, compact width, and value-source metadata into OptionRow");
 }
 
 void QmlUiAuditTests::settingsDialogReadOnlySaveOpensSaveAs()

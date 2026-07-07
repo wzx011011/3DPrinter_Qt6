@@ -1,0 +1,16 @@
+********* Start testing of ViewModelSmokeTests *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-llp64 shared (dynamic) release build; by MSVC 2026), windows 10
+PASS   : ViewModelSmokeTests::initTestCase()
+QDEBUG : ViewModelSmokeTests::testSettingsDialogOpenFromSidebar() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testSettingsDialogOpenFromSidebar() [Backend] hints.json not found, using fallback hints
+PASS   : ViewModelSmokeTests::testSettingsDialogOpenFromSidebar()
+QDEBUG : ViewModelSmokeTests::settingsOpenDoesNotInvalidateSliceResults() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::settingsOpenDoesNotInvalidateSliceResults() [Backend] hints.json not found, using fallback hints
+PASS   : ViewModelSmokeTests::settingsOpenDoesNotInvalidateSliceResults()
+QDEBUG : ViewModelSmokeTests::sidebarSettingsForwardEmitsRequestedSignal() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::sidebarSettingsForwardEmitsRequestedSignal() [Backend] hints.json not found, using fallback hints
+PASS   : ViewModelSmokeTests::sidebarSettingsForwardEmitsRequestedSignal()
+PASS   : ViewModelSmokeTests::testPerDialogSearchAndFourLevelMode()
+PASS   : ViewModelSmokeTests::cleanupTestCase()
+Totals: 6 passed, 0 failed, 0 skipped, 0 blacklisted, 1155ms
+********* Finished testing of ViewModelSmokeTests *********
