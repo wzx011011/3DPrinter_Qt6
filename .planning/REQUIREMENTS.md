@@ -23,9 +23,9 @@
 
 ### G-code Roles, Color Modes, And Rendering
 
-- [ ] **PVRENDER-01**: User can view G-code toolpaths with upstream-mapped role colors and role visibility controls.
-- [ ] **PVRENDER-02**: User can switch screenshot-visible Preview color modes and see honest availability for any blocked modes.
-- [ ] **PVRENDER-03**: User can slice from Prepare, enter Preview, adjust layer/range/role visibility, and return without losing loaded G-code payload state.
+- [x] **PVRENDER-01**: User can view G-code toolpaths with upstream-mapped role colors and role visibility controls.
+- [x] **PVRENDER-02**: User can switch screenshot-visible Preview color modes and see honest availability for any blocked modes.
+- [x] **PVRENDER-03**: User can slice from Prepare, enter Preview, adjust layer/range/role visibility, and return without losing loaded G-code payload state.
 
 ### Cleanup And Verification
 
@@ -67,9 +67,9 @@ Explicitly excluded to keep v4.0 focused.
 | PVCTRL-01 | Phase 81 | Complete |
 | PVCTRL-02 | Phase 81 | Complete |
 | PVCTRL-03 | Phase 81 | Complete |
-| PVRENDER-01 | Phase 82 | Pending |
-| PVRENDER-02 | Phase 82 | Pending |
-| PVRENDER-03 | Phase 82 | Pending |
+| PVRENDER-01 | Phase 82 | Complete |
+| PVRENDER-02 | Phase 82 | Complete |
+| PVRENDER-03 | Phase 82 | Complete |
 | PVCLEAN-01 | Phase 83 | Pending |
 | PVVERIFY-01 | Phase 83 | Pending |
 | PVVERIFY-02 | Phase 83 | Pending |
@@ -81,4 +81,4 @@ Explicitly excluded to keep v4.0 focused.
 
 ---
 *Requirements defined: 2026-07-06*
-*Last updated: 2026-07-07 after Phase 81 completion*
+*Last updated: 2026-07-07 after Phase 82 completion*

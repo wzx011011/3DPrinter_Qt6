@@ -36,8 +36,10 @@ private slots:
   void test_fixture_has_expected_role_coverage();
   void test_role_string_mapping_covers_upstream_enum();
   void test_view_modes_match_upstream_seventeen();
+  void test_view_mode_availability_reports_data_unavailable_modes();
   void test_summary_mode_has_no_gradient_legend();
   void test_divergent_role_colors_correct();
+  void test_all_view_modes_keep_valid_gcv1_payload();
 
 private:
   QString fixturePath() const;
@@ -159,6 +161,53 @@ void PreviewParserTests::test_view_modes_match_upstream_seventeen()
   QCOMPARE(modes.last(), QStringLiteral("Tool"));
 }
 
+void PreviewParserTests::test_view_mode_availability_reports_data_unavailable_modes()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+
+  const QStringList modes = preview.viewModes();
+  const QStringList unavailableModes = {
+    QStringLiteral("Actual Speed"),
+    QStringLiteral("Jerk"),
+    QStringLiteral("Actual Flow"),
+    QStringLiteral("Pressure Advance")
+  };
+
+  for (const QString &modeName : unavailableModes) {
+    const int index = modes.indexOf(modeName);
+    QVERIFY2(index >= 0, qPrintable(QStringLiteral("Missing mode: %1").arg(modeName)));
+    QVERIFY2(!preview.viewModeAvailable(index),
+             qPrintable(QStringLiteral("%1 must be marked unavailable for the current Qt data path").arg(modeName)));
+    QVERIFY2(!preview.viewModeStatusText(index).isEmpty(),
+             qPrintable(QStringLiteral("%1 must expose an honest status string").arg(modeName)));
+  }
+
+  const QStringList availableModes = {
+    QStringLiteral("Summary"),
+    QStringLiteral("Line Type"),
+    QStringLiteral("Filament"),
+    QStringLiteral("Fan Speed"),
+    QStringLiteral("Tool")
+  };
+  for (const QString &modeName : availableModes) {
+    const int index = modes.indexOf(modeName);
+    QVERIFY2(index >= 0, qPrintable(QStringLiteral("Missing mode: %1").arg(modeName)));
+    QVERIFY2(preview.viewModeAvailable(index),
+             qPrintable(QStringLiteral("%1 must not be incorrectly gated").arg(modeName)));
+    QVERIFY2(preview.viewModeStatusText(index).isEmpty(),
+             qPrintable(QStringLiteral("%1 must not show an unavailable-mode status").arg(modeName)));
+  }
+
+  const int actualSpeedIndex = modes.indexOf(QStringLiteral("Actual Speed"));
+  preview.setViewModeIndex(actualSpeedIndex);
+  QVERIFY2(!preview.currentViewModeAvailable(),
+           "currentViewModeAvailable must follow setViewModeIndex");
+  QVERIFY2(!preview.currentViewModeStatus().isEmpty(),
+           "currentViewModeStatus must follow setViewModeIndex");
+}
+
 // GREEN since Plan 55-02: Summary mode (upstream EViewType index 0) renders
 // statistics only and produces no gradient legend. legendType() stays 0
 // (discrete) and legendItems() is empty when viewModeIndex maps to Summary.
@@ -212,6 +261,26 @@ void PreviewParserTests::test_divergent_role_colors_correct()
   QCOMPARE(bottom.red(), 102);
   QCOMPARE(bottom.green(), 92);
   QCOMPARE(bottom.blue(), 199);
+}
+
+void PreviewParserTests::test_all_view_modes_keep_valid_gcv1_payload()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+
+  QVERIFY2(preview.loadGCodeForPreview(fixturePath()),
+           "fixture should parse before validating view-mode payload survival");
+
+  const QStringList modes = preview.viewModes();
+  for (int i = 0; i < modes.size(); ++i) {
+    preview.setViewModeIndex(i);
+    const QByteArray payload = preview.gcodePreviewData();
+    QVERIFY2(payload.size() > 8,
+             qPrintable(QStringLiteral("%1 mode must keep a non-empty preview payload").arg(modes.at(i))));
+    QVERIFY2(payload.startsWith("GCV1"),
+             qPrintable(QStringLiteral("%1 mode must keep the GCV1 wire format").arg(modes.at(i))));
+  }
 }
 
 // QTEST_MAIN generates the test entry point (main). Without it the link fails

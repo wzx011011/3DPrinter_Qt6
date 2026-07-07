@@ -229,6 +229,20 @@ namespace
   // One-time log guard for the modes whose underlying field is unavailable in
   // the fixture-driven path (Jerk/PA/ActualSpeed/ActualFlow). Logs once per mode
   // so users are informed without spamming on every recolor.
+  bool viewModeUsesUnavailableData(int mode)
+  {
+    switch (mode)
+    {
+    case VT_ActualSpeed:
+    case VT_Jerk:
+    case VT_ActualFlow:
+    case VT_PressureAdvance:
+      return true;
+    default:
+      return false;
+    }
+  }
+
   bool logOnceIfNeeded(int mode)
   {
     static bool logged[4] = {false, false, false, false};
@@ -488,6 +502,33 @@ QStringList PreviewViewModel::viewModes() const
       QStringLiteral("Temperature"),
       QStringLiteral("Pressure Advance"),
       QStringLiteral("Tool")};
+}
+
+bool PreviewViewModel::currentViewModeAvailable() const
+{
+  return viewModeAvailable(viewModeIndex_);
+}
+
+QString PreviewViewModel::currentViewModeStatus() const
+{
+  return viewModeStatusText(viewModeIndex_);
+}
+
+bool PreviewViewModel::viewModeAvailable(int index) const
+{
+  if (index < 0 || index >= viewModes().size())
+    return false;
+  return !viewModeUsesUnavailableData(index);
+}
+
+QString PreviewViewModel::viewModeStatusText(int index) const
+{
+  const QStringList modes = viewModes();
+  if (index < 0 || index >= modes.size())
+    return tr("View mode unavailable");
+  if (!viewModeUsesUnavailableData(index))
+    return {};
+  return tr("%1 data is not available in the current Preview payload").arg(modes.at(index));
 }
 
 bool PreviewViewModel::loadGCodeForPreview(const QString &filePath)

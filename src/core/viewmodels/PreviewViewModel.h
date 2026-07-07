@@ -55,6 +55,8 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(QString estimatedCost READ estimatedCost NOTIFY stateChanged)
   Q_PROPERTY(QStringList viewModes READ viewModes CONSTANT)
   Q_PROPERTY(int viewModeIndex READ viewModeIndex WRITE setViewModeIndex NOTIFY stateChanged)
+  Q_PROPERTY(bool currentViewModeAvailable READ currentViewModeAvailable NOTIFY stateChanged)
+  Q_PROPERTY(QString currentViewModeStatus READ currentViewModeStatus NOTIFY stateChanged)
   /// Normal/Stealth mode aligned with upstream PrintEstimatedStatistics modes.
   Q_PROPERTY(bool stealthMode READ stealthMode WRITE setStealthMode NOTIFY stateChanged)
   /// Travel visibility toggle aligned with upstream GCodeViewer.
@@ -157,6 +159,10 @@ public:
   Q_INVOKABLE bool loadGCodeForPreview(const QString &filePath);
   QStringList viewModes() const;
   int viewModeIndex() const { return viewModeIndex_; }
+  bool currentViewModeAvailable() const;
+  QString currentViewModeStatus() const;
+  Q_INVOKABLE bool viewModeAvailable(int index) const;
+  Q_INVOKABLE QString viewModeStatusText(int index) const;
   bool stealthMode() const { return stealthMode_; }
   Q_INVOKABLE void setStealthMode(bool enabled);
   bool showTravelMoves() const { return showTravelMoves_; }

@@ -40,6 +40,7 @@ private slots:
   void previewLayoutRestoresScreenshotRegionsAndGcodePanel();
   void previewStatsPanelCallsOnlyQmlInvokableSetters();
   void previewLayerMoveControlsAreActionableAndRendererSafe();
+  void previewRoleColorModesAreHonestAndPayloadSafe();
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
   void rhiViewportModelDragOrbitsAfterClickThreshold();
   void rhiMoveGizmoDragBridgeStaysCppOwned();
@@ -1198,6 +1199,50 @@ void QmlUiAuditTests::previewLayerMoveControlsAreActionableAndRendererSafe()
            "requestPreviewFit must schedule a redraw");
   QVERIFY2(!body.contains(QStringLiteral("m_previewData =")),
            "requestPreviewFit must not mutate Preview payload data");
+}
+
+void QmlUiAuditTests::previewRoleColorModesAreHonestAndPayloadSafe()
+{
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  const QString visibilityFilter = readSource(QStringLiteral("src/qml_gui/components/VisibilityFilter.qml"));
+  const QString legend = readSource(QStringLiteral("src/qml_gui/components/Legend.qml"));
+  const QString previewHeader = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.h"));
+  const QString previewSource = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.cpp"));
+  QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
+  QVERIFY2(!visibilityFilter.isEmpty(), "Unable to read VisibilityFilter.qml");
+  QVERIFY2(!legend.isEmpty(), "Unable to read Legend.qml");
+  QVERIFY2(!previewHeader.isEmpty(), "Unable to read PreviewViewModel.h");
+  QVERIFY2(!previewSource.isEmpty(), "Unable to read PreviewViewModel.cpp");
+
+  QVERIFY2(previewPage.contains(QStringLiteral("root.previewVm.setViewModeIndex(currentIndex)")),
+           "Preview view mode combo must call PreviewViewModel::setViewModeIndex");
+  QVERIFY2(previewPage.contains(QStringLiteral("root.previewVm.currentViewModeAvailable"))
+              && previewPage.contains(QStringLiteral("root.previewVm.currentViewModeStatus")),
+           "Preview header must surface honest availability for data-unavailable view modes");
+  QVERIFY2(previewPage.contains(QStringLiteral("gcodeViewMode: root.previewVm.viewModeIndex")),
+           "Renderer view mode must bind to PreviewViewModel::viewModeIndex");
+  QVERIFY2(previewPage.contains(QStringLiteral("roleVisibility: root.previewVm.roleVisibilityMask")),
+           "Renderer role visibility must bind to the dense mask, not UI rows");
+
+  QVERIFY2(visibilityFilter.contains(QStringLiteral("root.previewVm.roleVisibilities")),
+           "VisibilityFilter must render QML role rows from roleVisibilities");
+  QVERIFY2(visibilityFilter.contains(QStringLiteral("root.previewVm.toggleRoleVisibility(roleVisibilityRow.modelData.roleIndex)")),
+           "VisibilityFilter rows must call toggleRoleVisibility with the canonical role index");
+
+  QVERIFY2(legend.contains(QStringLiteral("root.previewVm.legendType"))
+              && legend.contains(QStringLiteral("root.previewVm.legendGradientMinLabel"))
+              && legend.contains(QStringLiteral("root.previewVm.legendItems")),
+           "Legend must use ViewModel legend semantics for discrete, gradient, and extruder modes");
+
+  QVERIFY2(previewHeader.contains(QStringLiteral("Q_PROPERTY(bool currentViewModeAvailable READ currentViewModeAvailable NOTIFY stateChanged)"))
+              && previewHeader.contains(QStringLiteral("Q_PROPERTY(QString currentViewModeStatus READ currentViewModeStatus NOTIFY stateChanged)"))
+              && previewHeader.contains(QStringLiteral("Q_INVOKABLE bool viewModeAvailable(int index) const"))
+              && previewHeader.contains(QStringLiteral("Q_INVOKABLE QString viewModeStatusText(int index) const")),
+           "PreviewViewModel must expose view-mode availability and status APIs");
+  QVERIFY2(previewSource.contains(QStringLiteral("viewModeUsesUnavailableData"))
+              && previewSource.contains(QStringLiteral("VT_ActualSpeed"))
+              && previewSource.contains(QStringLiteral("VT_PressureAdvance")),
+           "PreviewViewModel must centrally list data-unavailable view modes");
 }
 
 void QmlUiAuditTests::rhiViewportModelDragOrbitsAfterClickThreshold()

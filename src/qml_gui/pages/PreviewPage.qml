@@ -109,6 +109,37 @@ Item {
                     onActivated: if (root.previewVm) root.previewVm.setViewModeIndex(currentIndex)
                 }
 
+                Rectangle {
+                    id: viewModeStatusPill
+                    visible: root.previewVm && !root.previewVm.currentViewModeAvailable
+                    Layout.preferredWidth: 72
+                    Layout.preferredHeight: 24
+                    radius: 4
+                    color: "#3a2f18"
+                    border.width: 1
+                    border.color: "#8a6a24"
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: qsTr("No data")
+                        color: "#f3c969"
+                        font.pixelSize: 11
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+
+                    MouseArea {
+                        id: viewModeStatusMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
+                    }
+
+                    ToolTip.visible: viewModeStatusMouse.containsMouse
+                    ToolTip.text: root.previewVm ? root.previewVm.currentViewModeStatus : ""
+                    ToolTip.delay: 450
+                }
+
                 Row {
                     spacing: 4
                     Repeater {

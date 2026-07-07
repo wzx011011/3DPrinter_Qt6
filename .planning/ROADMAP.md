@@ -24,7 +24,7 @@
 - [x] Phase 79: Preview Source-Truth Gap Audit (completed 2026-07-06)
 - [x] Phase 80: Preview Layout And Panels Restoration (completed 2026-07-06)
 - [x] Phase 81: Preview Layer Move And Playback Controls (completed 2026-07-07)
-- [ ] Phase 82: Preview G-code Roles Color Modes And Rendering
+- [x] Phase 82: Preview G-code Roles Color Modes And Rendering (completed 2026-07-07)
 - [ ] Phase 83: Preview Verification And Cleanup
 
 | Phase | Name | Goal | Requirements |
@@ -67,8 +67,8 @@ Success criteria:
 
 ### Phase 82: Preview G-code Roles Color Modes And Rendering
 
-**Status:** Not started
-**Plans:** 0/1 plans complete
+**Status:** Complete
+**Plans:** 1/1 plans complete
 
 Success criteria:
 1. Role colors and role visibility controls map to OrcaSlicer/libvgcode source truth.
@@ -155,12 +155,12 @@ Requirements: `.planning/milestones/v3.8-REQUIREMENTS.md`
 
 ## Next Step
 
-Continue v4.0 with Phase 82:
+Continue v4.0 with Phase 83:
 
 ```text
-$gsd-discuss-phase 82 --auto
+$gsd-discuss-phase 83 --auto
 ```
 
 ---
 
-*Last updated: 2026-07-07 after Phase 81 completion.*
+*Last updated: 2026-07-07 after Phase 82 completion.*
