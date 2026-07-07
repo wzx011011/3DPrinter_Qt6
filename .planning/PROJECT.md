@@ -27,15 +27,16 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 **Carry-forward outside v4.0:** D3D12 remains explicit opt-in future investigation. Parameter settings dialogs and AssembleView remain valid local/offline source-truth candidates. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows are removed from forward scope unless the user explicitly reopens them.
 
-## Current Milestone
+## Current Milestone: v4.1 Parameter Settings Dialogs Source-Truth Restoration
 
-No active milestone is open. The next milestone should target local/offline slicer behavior, with parameter settings dialog restoration as the recommended first candidate.
+**Goal:** Restore printer, material, and process settings dialogs to screenshot/source-truth parity while preserving the Phase 56 backend semantics for typed options, dirty state, save/reset, slice invalidation, and project persistence.
 
-**Recommended local/offline candidates:**
-- Parameter settings dialogs source-truth restoration.
-- AssembleView dedicated restoration.
-- Thumbnail/3MF pixel round-trip and deterministic GUI fixture loading.
-- D3D12 root-cause investigation after the default D3D11 path remains stable.
+**Target features:**
+- Settings source-truth gap inventory for printer, material, and process dialogs using the two settings screenshots plus OrcaSlicer settings/preset sources.
+- Screenshot-aligned settings window chrome, preset/action row, tab strip, section flow, density, clean text, and stable non-modal behavior.
+- Option sections and typed controls for checkboxes, numeric/unit fields, enum combos, text/color fields, paired min/max rows, dirty/read-only/value-source/validation states.
+- Preset selection/save/save-as/reset/discard/unsaved-close/search/simple-advanced semantics preserved through Prepare, Preview, slice invalidation, and project persistence.
+- Final verification through source/QML audits, canonical build, running app launch, and settings visual evidence.
 
 ## Requirements
 
@@ -63,11 +64,13 @@ These are current baseline capabilities inferred from implementation, git histor
 
 ### Active
 
-- [ ] No active milestone. Plan the next local/offline source-truth milestone.
+- [ ] Restore printer/material/process settings dialogs to screenshot-level OrcaSlicer parity.
+- [ ] Remove mojibake, placeholders, disconnected controls, and off-design settings surfaces.
+- [ ] Preserve existing Phase 56 settings backend semantics while improving visible layout and interaction.
+- [ ] Verify restored settings with source/QML audits, canonical build, running app launch, and visual evidence.
 
 ### Future
 
-- Parameter settings dialogs source-truth completion.
 - AssembleView source-truth completion.
 - Auto filament-map recommendation and wipe-tower geometry/rendering.
 - Real GL/QRhi-capture thumbnails and 3MF pixel round-trip (`THUMB-03`).
@@ -107,7 +110,7 @@ These are current baseline capabilities inferred from implementation, git histor
 - Known carry-forward tech debt: `.Codex` path casing diverges from git-tracked lowercase `.codex` on Windows; normalize before case-sensitive CI if touched.
 - v3.8 closure state: RHI is the default functional renderer for gizmo/pick/cut/wipe scope; Phase 68 still lacks optional manual visual-capture evidence, tracked as tech debt rather than a blocker.
 - v3.9 restored the Prepare page and archived its phase evidence under `.planning/milestones/v3.9-phases/`.
-- v4.0 focuses on Preview page restoration. Prepare remains a dependency and regression surface, not the implementation target.
+- v4.1 focuses on parameter settings dialog restoration. Prepare and Preview remain dependency/regression surfaces, not the implementation target.
 
 ## Constraints
 
@@ -148,6 +151,7 @@ These are current baseline capabilities inferred from implementation, git histor
 | Scope v3.9 to Prepare page UI restoration | The user explicitly selected "准备页 UI 还原"; Preview, settings, device, and AssembleView should not dilute this milestone. | Good - v3.9 shipped |
 | Scope v4.0 to Preview page UI restoration | After Prepare shipped, the next highest-value screenshot/source-truth gap is Preview; device, settings, and AssembleView stay future unless directly required. | Good - v4.0 shipped |
 | Remove LAN/device/network/cloud work from forward scope | User direction on 2026-07-07: LAN devices and networking are no longer done. | Active scope rule |
+| Scope v4.1 to parameter settings dialogs | Settings has real Phase 56 backend semantics but target screenshots still expose visual/text/layout debt. | Active - v4.1 |
 
 ## Evolution
 
@@ -167,4 +171,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-07 after network/device scope removal.*
+*Last updated: 2026-07-07 after v4.1 milestone planning.*

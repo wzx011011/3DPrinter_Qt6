@@ -15,149 +15,84 @@
 - Complete with process debt: **v3.9 Prepare Page UI Restoration** - Phases 74-78 (shipped 2026-07-06; 12/12 requirements satisfied, canonical verifier passed, runtime screenshot captured)
 - Complete: **v4.0 Preview Page UI Restoration** - Phases 79-83 (shipped 2026-07-07; 13/13 requirements satisfied, canonical verifier passed, runtime Preview screenshot captured)
 
-## Current Milestone
+## Current Milestone: v4.1 Parameter Settings Dialogs Source-Truth Restoration
 
-No active milestone is open. The last completed milestone is **v4.0 Preview Page UI Restoration**.
+**Goal:** Restore printer, material, and process settings dialogs to screenshot/source-truth parity while preserving the Phase 56 backend semantics for typed options, dirty state, save/reset, slice invalidation, and project persistence.
 
-The next milestone must stay inside local/offline slicer functionality. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows are removed from the forward roadmap unless the user explicitly reopens them.
-
-## Last Completed Milestone: v4.0 Preview Page UI Restoration
-
-**Goal:** Restore the Preview page to screenshot-level OrcaSlicer parity using `shotScreen/预览页.png` as visual truth and OrcaSlicer Preview/G-code source as behavior truth.
+**Scope rule:** This milestone is local/offline only. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows remain removed from the forward roadmap unless explicitly reopened.
 
 ## Phases
 
-- [x] Phase 79: Preview Source-Truth Gap Audit (completed 2026-07-06)
-- [x] Phase 80: Preview Layout And Panels Restoration (completed 2026-07-06)
-- [x] Phase 81: Preview Layer Move And Playback Controls (completed 2026-07-07)
-- [x] Phase 82: Preview G-code Roles Color Modes And Rendering (completed 2026-07-07)
-- [x] Phase 83: Preview Verification And Cleanup (completed 2026-07-07)
+- [ ] Phase 84: Settings Source-Truth Gap Audit
+- [ ] Phase 85: Settings Shell And Tab Layout Restoration
+- [ ] Phase 86: Settings Option Sections And Typed Controls
+- [ ] Phase 87: Settings Preset Semantics And Workflow Stability
+- [ ] Phase 88: Settings Verification And Cleanup
 
 | Phase | Name | Goal | Requirements |
 |---|---|---|---|
-| 79 | Preview Source-Truth Gap Audit | Freeze the v4.0 Preview region map, current gaps, upstream anchors, Qt targets, and verification expectations before edits. | PVAUDIT-01 |
-| 80 | Preview Layout And Panels Restoration | Restore the screenshot-visible Preview layout, statistics/legend panels, and remove visible placeholders/dead surfaces. | PVLAYOUT-01, PVLAYOUT-02, PVLAYOUT-03 |
-| 81 | Preview Layer Move And Playback Controls | Restore layer range/current-layer controls, move/layer playback controls, and camera interaction stability. | PVCTRL-01, PVCTRL-02, PVCTRL-03 |
-| 82 | Preview G-code Roles Color Modes And Rendering | Align G-code role colors, role visibility, color modes, and payload preservation with upstream semantics. | PVRENDER-01, PVRENDER-02, PVRENDER-03 |
-| 83 | Preview Verification And Cleanup | Remove stale Preview paths, lock restored bindings with audits/tests, run canonical verifier, launch app, and capture Preview visual evidence. | PVCLEAN-01, PVVERIFY-01, PVVERIFY-02 |
+| 84 | Settings Source-Truth Gap Audit | Freeze the v4.1 settings region map, current gaps, upstream anchors, Qt targets, replacement decisions, and verification expectations before edits. | SETAUDIT-01, SETAUDIT-02 |
+| 85 | Settings Shell And Tab Layout Restoration | Restore the screenshot-visible settings window chrome, preset/action row, tab strip, sizing, density, and clean user-facing text. | SETLAYOUT-01, SETLAYOUT-02, SETLAYOUT-03 |
+| 86 | Settings Option Sections And Typed Controls | Restore option section rendering and typed control visuals for printer/material/process settings without breaking existing C++ option models. | SETCTRL-01, SETCTRL-02, SETCTRL-03 |
+| 87 | Settings Preset Semantics And Workflow Stability | Preserve and harden save/reset/search/dirty/edit semantics across settings dialogs, Prepare, Preview, project persistence, and slice invalidation. | SETSEM-01, SETSEM-02, SETSEM-03 |
+| 88 | Settings Verification And Cleanup | Remove stale settings paths, lock bindings with audits/tests, run canonical verifier, launch app, and capture settings visual evidence. | SETCLEAN-01, SETVERIFY-01, SETVERIFY-02 |
 
-### Phase 79: Preview Source-Truth Gap Audit
+### Phase 84: Settings Source-Truth Gap Audit
 
-**Status:** Complete
-**Plans:** 1/1 plans complete
-
-Success criteria:
-1. Current Preview page regions are mapped to target screenshot areas and OrcaSlicer source files.
-2. Each region records Qt target files, modify-vs-replace decision, and verification method.
-3. v3.6/v3.7 residual Preview gaps are reconciled into v4.0 requirements or explicitly deferred.
-
-### Phase 80: Preview Layout And Panels Restoration
-
-**Status:** Complete
-**Plans:** 1/1 plans complete
+**Status:** Planned
+**Plans:** 0/1 plans complete
 
 Success criteria:
-1. Preview top controls, viewport, side panels, layer slider, and bottom playback/status controls match screenshot layout without overlap.
-2. Statistics, metadata, estimates, and legend surfaces use upstream-like density and placement.
-3. Visible Preview placeholders, raw labels, and dead controls are removed or honestly gated.
+1. Printer, material, and process settings regions are mapped to target screenshots, upstream source files, and Qt targets.
+2. Phase 56 residual visual-UAT items are reconciled into v4.1 requirements with explicit owner phases.
+3. Current SettingsDialog/OptionRow/GroupNavSidebar gaps are classified as modify, replace, remove, or defer.
 
-### Phase 81: Preview Layer Move And Playback Controls
+### Phase 85: Settings Shell And Tab Layout Restoration
 
-**Status:** Complete
-**Plans:** 1/1 plans complete
-
-Success criteria:
-1. Layer range/current-layer controls update PreviewViewModel and renderer state.
-2. Layer/move playback and stepping controls stay synchronized with backend Preview state.
-3. Camera rotate/pan/zoom/fit interactions do not make model or toolpath data disappear.
-
-### Phase 82: Preview G-code Roles Color Modes And Rendering
-
-**Status:** Complete
-**Plans:** 1/1 plans complete
+**Status:** Planned
+**Plans:** 0/1 plans complete
 
 Success criteria:
-1. Role colors and role visibility controls map to OrcaSlicer/libvgcode source truth.
-2. Screenshot-visible color modes are wired or honestly gated when blocked.
-3. Prepare -> slice -> Preview -> adjust layer/range/roles -> return flow preserves G-code payload state.
+1. Printer/material/process settings open as independent non-modal windows from every intended entry point.
+2. Window title, preset selector, action icons, search/advanced affordance, tab strip, and close behavior match screenshot density without mojibake or raw labels.
+3. Off-design surfaces such as the unused left group sidebar are removed from the visible settings window unless source-truth evidence requires them.
 
-### Phase 83: Preview Verification And Cleanup
+### Phase 86: Settings Option Sections And Typed Controls
 
-**Status:** Complete
-**Plans:** 1/1 plans complete
+**Status:** Planned
+**Plans:** 0/1 plans complete
 
 Success criteria:
-1. Replaced Preview UI paths leave no stale files, imports, resource entries, tests, or disconnected controls.
-2. Automated source/QML audits cover upstream mapping, placeholder removal, and required bindings.
-3. The canonical verifier passes, `build/OWzxSlicer.exe` launches, and Preview visual evidence is recorded against the target screenshot.
+1. Option sections render with screenshot-like headers, dividers, icons, and compact vertical spacing.
+2. Bool, numeric/unit, enum, text/color, nullable/vector, and min/max paired controls render and edit through existing C++ models.
+3. Dirty, read-only, value-source, validation, and disabled states stay visible without row overlap or layout jumps.
 
-Evidence:
-- `.planning/milestones/v4.0-phases/83-preview-verification-and-cleanup/83-VERIFICATION.md`
-- `.planning/milestones/v4.0-phases/83-preview-verification-and-cleanup/visual-evidence/runtime-preview-page-button-invoked.png`
+### Phase 87: Settings Preset Semantics And Workflow Stability
 
-## Completed Milestones
+**Status:** Planned
+**Plans:** 0/1 plans complete
 
-<details>
-<summary>v3.9 Prepare Page UI Restoration (Phases 74-78) - SHIPPED 2026-07-06</summary>
+Success criteria:
+1. Preset selection, save, save-as, reset option/group/all, discard, cancel, and unsaved-close flows keep upstream-mapped behavior.
+2. Search and simple/advanced filtering remain per-dialog and do not hide active dirty/error states.
+3. Settings edits invalidate slice state, persist dirty overrides through project save/load, and do not clear Prepare/Preview payload state.
 
-- [x] Phase 74: Prepare Source-Truth Gap Audit (completed 2026-07-05)
-- [x] Phase 75: Prepare Sidebar Restoration (completed 2026-07-05)
-- [x] Phase 76: Prepare Workflow Panels Restoration (completed 2026-07-05)
-- [x] Phase 77: Prepare Viewport Controls And Gizmo UI (completed 2026-07-05)
-- [x] Phase 78: Prepare Verification And Cleanup (completed 2026-07-05)
+### Phase 88: Settings Verification And Cleanup
 
-Archive: `.planning/milestones/v3.9-ROADMAP.md`
-Audit: `.planning/milestones/v3.9-MILESTONE-AUDIT.md`
-Requirements: `.planning/milestones/v3.9-REQUIREMENTS.md`
-Phases: `.planning/milestones/v3.9-phases/`
+**Status:** Planned
+**Plans:** 0/1 plans complete
 
-</details>
-
-## Archived Phase Groups
-
-<details>
-<summary>v3.6 Screenshot-Driven OrcaSlicer UI Restoration (Phases 50-58) - SHIPPED 2026-07-03</summary>
-
-- [x] Phase 50: Screenshot and Source-Truth Inventory (completed 2026-07-03)
-- [x] Phase 51: Shell and Navigation Restoration (completed 2026-07-03)
-- [x] Phase 52: Prepare Sidebar and Preset Controls (completed 2026-07-03)
-- [x] Phase 53: Prepare Object, Plate, and Viewport Workflow (completed 2026-07-03)
-- [x] Phase 54: Preview Layout, Sliders, and Right Panels (completed 2026-07-03)
-- [x] Phase 55: G-code Preview Semantics and Rendering Stability (completed 2026-07-03)
-- [x] Phase 56: Parameter Settings Dialogs Restoration (completed 2026-07-03)
-- [x] Phase 57: Deprecated UI Removal and Architecture Cleanup (completed 2026-07-03)
-- [x] Phase 58: End-to-End Visual and Functional Verification (completed 2026-07-03; manual visual UAT deferred)
-
-Archive: `.planning/milestones/v3.6-ROADMAP.md`
-
-</details>
-
-<details>
-<summary>v3.8 RHI Gizmo Parity (Phases 65-73) - SHIPPED 2026-07-04</summary>
-
-- [x] Phase 65: Gizmo math extraction + unit tests (completed 2026-07-04)
-- [x] Phase 66: Gizmo geometry builders port (completed 2026-07-04)
-- [x] Phase 67: RHI gizmo state wiring (completed 2026-07-04)
-- [x] Phase 68: Move gizmo RHI render (completed 2026-07-04; visual evidence deferred)
-- [x] Phase 69: Move gizmo pick + drag interaction loop (completed 2026-07-04)
-- [x] Phase 70: Rotate + Scale gizmos (completed 2026-07-04)
-- [x] Phase 71: Cut plane + wipe tower (completed 2026-07-04)
-- [x] Phase 72: Precise object picking (completed 2026-07-04)
-- [x] Phase 73: Retire GLViewport + verification (completed 2026-07-04)
-
-Archive: `.planning/milestones/v3.8-ROADMAP.md`
-Audit: `.planning/milestones/v3.8-MILESTONE-AUDIT.md`
-Requirements: `.planning/milestones/v3.8-REQUIREMENTS.md`
-
-</details>
+Success criteria:
+1. Replaced settings UI paths leave no stale files, imports, resource entries, tests, or disconnected controls.
+2. Automated source/QML audits cover region mapping, text cleanup, layout structure, option bindings, and upstream anchors.
+3. The canonical verifier passes, `build/OWzxSlicer.exe` launches, and printer/material/process settings visual evidence is recorded against the target screenshots.
 
 ## Deferred Backlog
 
-- v3.4 Phase 43 manual UAT is closed by canonical E2E coverage and current runtime launch evidence, not by a separate user click-through.
-- v3.5 Phase 47-49 are superseded by v3.6 and should not be resumed as standalone work unless explicitly reopened.
 - AssembleView.
 - Auto filament-map recommendation and wipe-tower geometry/rendering.
 - Real thumbnail capture and 3MF pixel round-trip.
+- Missing CLI fixtures and deterministic argv-based GUI fixture loading for screenshots.
 - D3D12 root-cause investigation and future Vulkan/D3D12 backend promotion.
 
 ## Removed Scope
@@ -166,14 +101,18 @@ Requirements: `.planning/milestones/v3.8-REQUIREMENTS.md`
 
 ## Next Step
 
-Plan the next local/offline source-truth milestone. Recommended order:
+Start Phase 84:
 
 ```text
-1. Parameter settings dialogs source-truth restoration
-2. AssembleView dedicated restoration
-3. Thumbnail/3MF pixel round-trip or D3D12 root-cause investigation
+$gsd-discuss-phase 84 --auto
+```
+
+or plan directly:
+
+```text
+$gsd-plan-phase 84
 ```
 
 ---
 
-*Last updated: 2026-07-07 after network/device scope removal.*
+*Last updated: 2026-07-07 after v4.1 milestone planning.*

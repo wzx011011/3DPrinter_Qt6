@@ -1,44 +1,46 @@
-# Requirements: OWzx Slicer v4.0 Preview Page UI Restoration
+# Requirements: OWzx Slicer v4.1 Parameter Settings Dialogs Source-Truth Restoration
 
-**Defined:** 2026-07-06
+**Defined:** 2026-07-07
 **Core Value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## v4.0 Requirements
+## v4.1 Requirements
 
 ### Source-Truth Inventory
 
-- [x] **PVAUDIT-01**: User-facing Preview page work has a single current inventory that maps screenshot-visible regions to OrcaSlicer source files, Qt targets, replacement decisions, and verification evidence.
+- [ ] **SETAUDIT-01**: User-facing printer, material, and process settings work has a current inventory that maps screenshot-visible regions to OrcaSlicer source files, Qt targets, replacement decisions, and verification evidence.
+- [ ] **SETAUDIT-02**: Phase 56 residual settings visual-UAT items are reconciled into v4.1 requirements or explicitly closed/deferred with evidence.
 
-### Preview Layout
+### Settings Window Layout
 
-- [x] **PVLAYOUT-01**: User can enter Preview and see a screenshot-aligned layout for top controls, viewport, side panels, layer slider, and bottom playback/status controls without overlap or layout jumps.
-- [x] **PVLAYOUT-02**: User can read Preview statistics, G-code metadata, print-time/material estimates, and legend surfaces in upstream-like density and positions.
-- [x] **PVLAYOUT-03**: User sees no visible Preview placeholders, raw internal labels, or dead controls in the restored layout.
+- [ ] **SETLAYOUT-01**: User can open printer, material, and process settings from Prepare/sidebar/preset entry points as independent non-modal windows with screenshot-aligned chrome, preset selector, action icons, top tabs, and stable size.
+- [ ] **SETLAYOUT-02**: Printer and material settings dialogs match target screenshot density, spacing, tab order, and section flow; the process dialog reuses the same source-truth shell without a separate invented design.
+- [ ] **SETLAYOUT-03**: User sees no mojibake, raw internal strings, placeholder controls, disconnected buttons, or off-design left group sidebar in restored settings windows.
 
-### Layer, Move, And Playback Controls
+### Option Sections And Controls
 
-- [x] **PVCTRL-01**: User can change visible layer range and current layer through restored slider/input controls with state reflected in the renderer.
-- [x] **PVCTRL-02**: User can use playback controls for layer/move stepping and animation without desynchronizing PreviewViewModel state.
-- [x] **PVCTRL-03**: User can rotate, pan, zoom, and fit the Preview camera without causing the model or toolpath to disappear.
+- [ ] **SETCTRL-01**: User can read settings as upstream/screenshot-like option sections with compact section headers, dividers, icons where applicable, and stable scroll behavior.
+- [ ] **SETCTRL-02**: User can edit typed options with screenshot-aligned controls for checkboxes, numeric fields with units, enum combos, text/color fields, and paired min/max numeric rows.
+- [ ] **SETCTRL-03**: Dirty, value-source, read-only, nullable/inherit, vector/per-extruder, and validation states are visible without row resize, overlap, or ambiguous disabled affordances.
 
-### G-code Roles, Color Modes, And Rendering
+### Preset And Edit Semantics
 
-- [x] **PVRENDER-01**: User can view G-code toolpaths with upstream-mapped role colors and role visibility controls.
-- [x] **PVRENDER-02**: User can switch screenshot-visible Preview color modes and see honest availability for any blocked modes.
-- [x] **PVRENDER-03**: User can slice from Prepare, enter Preview, adjust layer/range/role visibility, and return without losing loaded G-code payload state.
+- [ ] **SETSEM-01**: Preset selection, save, save-as, reset option/group/all, discard, cancel, and unsaved-close guard remain mapped to upstream settings semantics.
+- [ ] **SETSEM-02**: Search and simple/advanced filtering work per dialog without breaking tab/section navigation or hiding current dirty/error states.
+- [ ] **SETSEM-03**: Settings edits invalidate slice state, preserve dirty overrides through project save/load, and keep Prepare/Preview payloads stable across settings dialog interaction.
 
 ### Cleanup And Verification
 
-- [x] **PVCLEAN-01**: Deprecated Preview page components, imports, resource entries, tests, or disconnected UI paths are removed when replaced by the restored implementation.
-- [x] **PVVERIFY-01**: Automated source/QML audits cover the restored Preview bindings, absence of visible placeholders, and required upstream mapping evidence.
-- [x] **PVVERIFY-02**: Final milestone verification runs the canonical build command, launches `build/OWzxSlicer.exe`, records Preview page visual evidence against the target screenshot, and passes E2E import-slice-preview-export checks.
+- [ ] **SETCLEAN-01**: Deprecated settings pages, components, routes, imports, resources, tests, and disconnected code paths left by replaced UI are removed or explicitly classified if still used.
+- [ ] **SETVERIFY-01**: Automated source/QML audits cover the settings region map, clean text, required bindings, option-control structure, and upstream mapping anchors.
+- [ ] **SETVERIFY-02**: The canonical verifier passes, `build/OWzxSlicer.exe` launches, and printer/material/process settings visual evidence is recorded; printer/material screenshots are compared against target images.
 
 ## Future Requirements
 
-### Adjacent Restoration
+### Adjacent Local/Offline Work
 
-- **SETTINGS-FUTURE-01**: Restore parameter settings dialogs beyond Preview dependencies.
 - **ASSEMBLE-FUTURE-01**: Complete AssembleView as a dedicated source-truth milestone.
+- **THUMB-FUTURE-01**: Complete real thumbnail capture and 3MF pixel round-trip.
+- **FIXTURE-FUTURE-01**: Add missing CLI fixtures (`hotend.stl`, `Block20XY.stl`) and deterministic GUI fixture loading for visual screenshots.
 - **BACKEND-FUTURE-01**: Resolve the D3D12 QRhi crash and evaluate Vulkan only after an SDK/runtime path exists.
 
 ### Removed Product Scope
@@ -47,15 +49,14 @@
 
 ## Out of Scope
 
-Explicitly excluded to keep v4.0 focused.
+Explicitly excluded to keep v4.1 focused.
 
 | Feature | Reason |
 |---|---|
-| Prepare page redesign beyond Preview regression fixes | v3.9 already shipped Prepare restoration; v4.0 should not reopen it unless Preview depends on it. |
-| Parameter settings dialog restoration beyond Preview entry/display needs | Settings workflows need a dedicated source-truth pass. |
-| Device, cloud print, Monitor, ModelMall/Home WebView/cloud, live camera/network, and printer-connected hardware workflows | Removed from forward product scope by user direction on 2026-07-07; do not promote to a future milestone unless explicitly reopened. |
+| Full upstream PresetBundle import/export compatibility beyond settings dialog save/reset/preset selection | Larger preset-system milestone; v4.1 focuses on visible settings dialogs and already-wired edit semantics. |
 | AssembleView | Separate user workflow and source-truth surface. |
-| D3D12 or Vulkan backend promotion | Renderer backend work is blocked/future and not required for Preview UI parity on D3D11. |
+| Device, cloud print, Monitor, ModelMall/Home WebView/cloud, live camera/network, and printer-connected hardware workflows | Removed from forward product scope by user direction on 2026-07-07. |
+| D3D12 or Vulkan backend promotion | Renderer backend work is blocked/future and not required for settings UI restoration on D3D11. |
 | libslic3r slicing algorithm changes | GUI restoration must not change slicing engine behavior. |
 | New product behavior not mapped to OrcaSlicer upstream | Violates the project core value. |
 
@@ -63,25 +64,26 @@ Explicitly excluded to keep v4.0 focused.
 
 | Requirement | Phase | Status |
 |---|---|---|
-| PVAUDIT-01 | Phase 79 | Complete |
-| PVLAYOUT-01 | Phase 80 | Complete |
-| PVLAYOUT-02 | Phase 80 | Complete |
-| PVLAYOUT-03 | Phase 80 | Complete |
-| PVCTRL-01 | Phase 81 | Complete |
-| PVCTRL-02 | Phase 81 | Complete |
-| PVCTRL-03 | Phase 81 | Complete |
-| PVRENDER-01 | Phase 82 | Complete |
-| PVRENDER-02 | Phase 82 | Complete |
-| PVRENDER-03 | Phase 82 | Complete |
-| PVCLEAN-01 | Phase 83 | Complete |
-| PVVERIFY-01 | Phase 83 | Complete |
-| PVVERIFY-02 | Phase 83 | Complete |
+| SETAUDIT-01 | Phase 84 | Pending |
+| SETAUDIT-02 | Phase 84 | Pending |
+| SETLAYOUT-01 | Phase 85 | Pending |
+| SETLAYOUT-02 | Phase 85 | Pending |
+| SETLAYOUT-03 | Phase 85 | Pending |
+| SETCTRL-01 | Phase 86 | Pending |
+| SETCTRL-02 | Phase 86 | Pending |
+| SETCTRL-03 | Phase 86 | Pending |
+| SETSEM-01 | Phase 87 | Pending |
+| SETSEM-02 | Phase 87 | Pending |
+| SETSEM-03 | Phase 87 | Pending |
+| SETCLEAN-01 | Phase 88 | Pending |
+| SETVERIFY-01 | Phase 88 | Pending |
+| SETVERIFY-02 | Phase 88 | Pending |
 
 **Coverage:**
-- v4.0 requirements: 13 total
-- Mapped to phases: 13
+- v4.1 requirements: 14 total
+- Mapped to phases: 14
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-07-06*
-*Last updated: 2026-07-07 after network/device scope removal*
+*Requirements defined: 2026-07-07*
+*Last updated: 2026-07-07 after v4.1 milestone planning*

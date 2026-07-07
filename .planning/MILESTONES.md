@@ -1,5 +1,22 @@
 # Milestones History
 
+## v4.0 Preview Page UI Restoration (Shipped: 2026-07-07)
+
+**Phases completed:** 5 phases, 5 plans, 0 tasks
+**Audit:** complete; 13/13 requirements satisfied, canonical verifier passed, runtime Preview visual evidence captured.
+**Known deferred items at close:** loaded-G-code runtime screenshot still needs deterministic GUI fixture loading; D3D12 remains future opt-in investigation.
+
+**Key accomplishments:**
+
+- Created the v4.0 Preview source-truth gap matrix tying screenshot-visible Preview regions to OrcaSlicer source anchors, Qt targets, owner phases, and verification methods.
+- Restored Preview layout density for top controls, viewport, side panels, layer slider, bottom move/playback controls, statistics, metadata, and legend surfaces.
+- Restored layer range/current layer controls, move stepping, playback, and Preview camera fit/orbit stability without losing payload state.
+- Surfaced G-code role colors, role visibility, and Preview color-mode availability with honest gating for blocked modes.
+- Replaced the workflow tab delegate with a real accessible `Button`, fixing runtime Preview navigation by UI automation.
+- Passed the canonical verifier, launched `OWzxSlicer.exe`, invoked the Preview tab at runtime, and captured final Preview visual evidence.
+
+---
+
 ## v3.9 Prepare Page UI Restoration (Shipped: 2026-07-06)
 
 **Phases completed:** 5 phases, 5 plans, 0 tasks

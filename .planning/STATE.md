@@ -1,31 +1,40 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.0
-milestone_name: Preview Page UI Restoration
-status: milestone_complete
-last_updated: 2026-07-07T14:35:44+08:00
+milestone: v4.1
+milestone_name: Parameter Settings Dialogs Source-Truth Restoration
+status: planning
+last_updated: 2026-07-07T15:14:34+08:00
 last_activity: 2026-07-07
 progress:
   total_phases: 5
-  completed_phases: 5
+  completed_phases: 0
   total_plans: 5
-  completed_plans: 5
-  percent: 100
-stopped_at: v4.0 complete - Preview Page UI Restoration archived
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
-**Milestone:** v4.0 - Preview Page UI Restoration
-**Status:** Milestone complete
-**Next step:** Plan the next local/offline source-truth milestone.
+**Milestone:** v4.1 - Parameter Settings Dialogs Source-Truth Restoration
+**Status:** Planning
+**Next step:** Start Phase 84 settings source-truth gap audit.
 
 ## Current Position
 
-Phase: 83
-Plan: Complete
-Status: Complete
-Last activity: 2026-07-07
+Phase: Not started
+Plan: Not started
+Status: Roadmap created
+Last activity: 2026-07-07 - Milestone v4.1 planned
+
+## Current Milestone
+
+| Phase | Name | Status | Requirements |
+|---|---|---|---|
+| 84 | Settings Source-Truth Gap Audit | Planned | SETAUDIT-01, SETAUDIT-02 |
+| 85 | Settings Shell And Tab Layout Restoration | Planned | SETLAYOUT-01, SETLAYOUT-02, SETLAYOUT-03 |
+| 86 | Settings Option Sections And Typed Controls | Planned | SETCTRL-01, SETCTRL-02, SETCTRL-03 |
+| 87 | Settings Preset Semantics And Workflow Stability | Planned | SETSEM-01, SETSEM-02, SETSEM-03 |
+| 88 | Settings Verification And Cleanup | Planned | SETCLEAN-01, SETVERIFY-01, SETVERIFY-02 |
 
 ## Project Reference
 
@@ -45,7 +54,7 @@ See: `.planning/PROJECT.md`
 
 ## Verification Result
 
-- Canonical verifier passed:
+- Last completed canonical verifier passed:
   `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`
 - App launched on the D3D11 QRhi path.
 - Final Preview runtime screenshot:
@@ -56,6 +65,7 @@ See: `.planning/PROJECT.md`
 | Category | Item | Target |
 |---|---|---|
 | closed | v4.0 Preview screenshot restoration | Closed by Phase 83 audit, canonical verifier, and runtime Preview evidence |
+| active | Parameter settings dialog source-truth restoration | v4.1 |
 | removed | LAN/device/cloud/network/Monitor workflows | Removed from future scope by user direction on 2026-07-07 |
 | future | AssembleView | Future source-truth milestone |
 | future | Missing CLI test fixtures (`hotend.stl`, `Block20XY.stl`) | Future fixture milestone |
@@ -70,6 +80,11 @@ See: `.planning/PROJECT.md`
 | evidence | Loaded-G-code runtime screenshot | Default no-G-code Preview screenshot captured; deterministic loaded fixture screenshots require app argv/file-loading support |
 | process | per-phase VALIDATION.md | Phase 79-83 have deterministic verification artifacts but no separate Nyquist validation files |
 
+## Scope Guard
+
+- v4.1 is local/offline settings UI work only.
+- Do not promote LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, or printer-connected hardware workflows unless the user explicitly reopens them.
+
 ## Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
@@ -78,5 +93,4 @@ See: `.planning/PROJECT.md`
 
 ## Operator Next Steps
 
-- Start the next local/offline milestone with `/gsd-new-milestone` or a source-truth migration command.
-- Do not promote LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, or printer-connected hardware workflows unless the user explicitly reopens them.
+- Start Phase 84 with `$gsd-discuss-phase 84 --auto` or `$gsd-plan-phase 84`.

@@ -22,18 +22,26 @@ This is the canonical entry point for `.planning/`. Historical phase files are e
 
 ## Active Milestone
 
-No active milestone is open. The latest completed milestone is **v4.0 Preview Page UI Restoration**.
+**v4.1 Parameter Settings Dialogs Source-Truth Restoration** is active.
 
-Recommended next objective:
+Primary objective:
 
-- Plan the next local/offline source-truth milestone. Recommended first candidate: parameter settings dialogs restoration.
+- Restore printer, material, and process settings dialogs to screenshot/source-truth parity while preserving existing Phase 56 backend semantics.
+
+Active phases:
+
+- Phase 84: Settings Source-Truth Gap Audit
+- Phase 85: Settings Shell And Tab Layout Restoration
+- Phase 86: Settings Option Sections And Typed Controls
+- Phase 87: Settings Preset Semantics And Workflow Stability
+- Phase 88: Settings Verification And Cleanup
 
 Carry-forward:
 
 - v3.4 Phase 43 manual UAT is closed by canonical E2E coverage and current runtime launch evidence, not by a separate user click-through.
 - v3.5 Phase 47-49 are superseded by v3.6 and should not be resumed as standalone work unless explicitly reopened.
 
-Deferred until the next local/offline milestone:
+Deferred until after v4.1:
 
 - AssembleView
 - Auto filament-map recommendation
@@ -78,14 +86,14 @@ Do not treat phase completion as product completion unless the exact workflow is
 
 ## Next Step
 
-Plan the next local/offline milestone:
+Start Phase 84:
 
 ```text
-$gsd-new-milestone
+$gsd-discuss-phase 84 --auto
 ```
 
-or run an explicitly scoped autonomous milestone after planning:
+or plan directly:
 
 ```text
-$gsd-autonomous --auto
+$gsd-plan-phase 84
 ```

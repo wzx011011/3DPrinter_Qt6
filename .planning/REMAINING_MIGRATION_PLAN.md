@@ -7,6 +7,7 @@ This is the ordered backlog after reconciling planning with current implementati
 ## Scope and Assumptions
 
 - Active product target: OWzx Slicer, Qt6/QML GUI, upstream behavior mapped from `third_party/OrcaSlicer`.
+- Current active milestone: v4.1 Parameter Settings Dialogs Source-Truth Restoration.
 - Historical CrealityPrint-era notes are evidence only. New work must cite active OrcaSlicer upstream paths unless the task explicitly cleans historical compatibility.
 - Build verification remains: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`.
 - Build directory remains: `build/`.
@@ -85,6 +86,8 @@ Candidate tasks:
 
 Goal: replace the current simplified JSON preset approximation with workflows that match upstream preset semantics.
 
+Status: partially promoted. v4.1 covers the visible parameter settings dialogs, typed option controls, dirty/save/reset semantics, and settings workflow stability. Full PresetBundle import/export compatibility remains future scope.
+
 Likely upstream areas:
 
 - `PresetBundle`
@@ -119,7 +122,9 @@ Do not promote ModelMall/Home WebView, cloud account/sync, LAN device discovery,
 
 ## Backlog Rule
 
-Next recommended promotion candidate: parameter settings dialogs source-truth restoration, followed by AssembleView if the settings milestone is not selected.
+Current promoted candidate: v4.1 Parameter Settings Dialogs Source-Truth Restoration.
+
+Next recommended promotion candidate after v4.1: AssembleView, unless v4.1 uncovers a blocking settings/preset follow-up.
 
 Do not promote a future candidate into an active milestone until:
 
