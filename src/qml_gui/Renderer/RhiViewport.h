@@ -187,6 +187,7 @@ public:
   QString lastThumbnailData() const { return m_lastThumbnailData; }
 
   Q_INVOKABLE void requestFitView(float cx, float cy, float cz, float r);
+  Q_INVOKABLE void requestPreviewFit();
   Q_INVOKABLE void requestViewPreset(int preset);
   Q_INVOKABLE void undo() { update(); }
   Q_INVOKABLE void redo() { update(); }

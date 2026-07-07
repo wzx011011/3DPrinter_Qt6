@@ -13,12 +13,28 @@ Item {
 
     RowLayout {
         anchors.fill: parent
-        spacing: Theme.spacingMD
+        spacing: 6
+
+        MoveStepButton {
+            id: prevMajorMoveButton
+            label: "<<"
+            delta: -10
+            controlEnabled: root.previewVm && root.totalMoves > 0
+            onTriggered: root.previewVm.stepCurrentMove(prevMajorMoveButton.delta)
+        }
+
+        MoveStepButton {
+            id: prevMoveButton
+            label: "<"
+            delta: -1
+            controlEnabled: root.previewVm && root.totalMoves > 0
+            onTriggered: root.previewVm.stepCurrentMove(prevMoveButton.delta)
+        }
 
         CxButton {
             text: root.previewVm && root.previewVm.isPlaying ? qsTr("暂停") : qsTr("播放")
             compact: true
-            implicitWidth: 56
+            implicitWidth: 52
             enabled: root.previewVm && root.totalMoves > 0
             onClicked: if (root.previewVm) root.previewVm.togglePlayPause()
         }
@@ -143,6 +159,55 @@ Item {
             font.family: "Consolas"
             Layout.minimumWidth: 86
             horizontalAlignment: Text.AlignRight
+        }
+
+        MoveStepButton {
+            id: nextMoveButton
+            label: ">"
+            delta: 1
+            controlEnabled: root.previewVm && root.totalMoves > 0
+            onTriggered: root.previewVm.stepCurrentMove(nextMoveButton.delta)
+        }
+
+        MoveStepButton {
+            id: nextMajorMoveButton
+            label: ">>"
+            delta: 10
+            controlEnabled: root.previewVm && root.totalMoves > 0
+            onTriggered: root.previewVm.stepCurrentMove(nextMajorMoveButton.delta)
+        }
+    }
+
+    component MoveStepButton: Rectangle {
+        id: moveStepButtonRoot
+        property string label: ""
+        property int delta: 0
+        property bool controlEnabled: true
+        signal triggered()
+
+        Layout.preferredWidth: 28
+        Layout.preferredHeight: 26
+        radius: 4
+        color: stepMouse.containsMouse && moveStepButtonRoot.controlEnabled ? Theme.bgHover : Theme.bgElevated
+        border.width: 1
+        border.color: stepMouse.containsMouse && moveStepButtonRoot.controlEnabled ? Theme.accentDark : Theme.borderSubtle
+        opacity: moveStepButtonRoot.controlEnabled ? 1.0 : 0.45
+
+        Text {
+            anchors.centerIn: parent
+            text: moveStepButtonRoot.label
+            color: Theme.textPrimary
+            font.pixelSize: Theme.fontSizeSM
+            font.family: "Consolas"
+        }
+
+        MouseArea {
+            id: stepMouse
+            anchors.fill: parent
+            enabled: moveStepButtonRoot.controlEnabled
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: moveStepButtonRoot.triggered()
         }
     }
 }

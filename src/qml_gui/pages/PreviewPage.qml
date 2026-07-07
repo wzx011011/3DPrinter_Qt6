@@ -44,14 +44,14 @@ Item {
         case Qt.Key_Left: {
             const step = event.modifiers & Qt.ControlModifier ? 100
                        : event.modifiers & Qt.ShiftModifier ? 10 : 1
-            root.previewVm.setCurrentMove(Math.max(0, root.previewVm.currentMove - step))
+            root.previewVm.stepCurrentMove(-step)
             event.accepted = true
             break
         }
         case Qt.Key_Right: {
             const step = event.modifiers & Qt.ControlModifier ? 100
                        : event.modifiers & Qt.ShiftModifier ? 10 : 1
-            root.previewVm.setCurrentMove(Math.min(root.previewVm.moveCount, root.previewVm.currentMove + step))
+            root.previewVm.stepCurrentMove(step)
             event.accepted = true
             break
         }
@@ -140,6 +140,36 @@ Item {
                                 onClicked: previewViewport.requestViewPreset(cameraPresetButton.preset)
                             }
                         }
+                    }
+
+                    Rectangle {
+                        id: previewFitButton
+                        width: 34
+                        height: 28
+                        radius: 4
+                        color: previewFitMouse.containsMouse ? Theme.bgHover : Theme.bgElevated
+                        border.width: 1
+                        border.color: previewFitMouse.containsMouse ? Theme.accentDark : Theme.borderSubtle
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("Fit")
+                            color: Theme.textPrimary
+                            font.pixelSize: 11
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            id: previewFitMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: previewViewport.requestPreviewFit()
+                        }
+
+                        ToolTip.visible: previewFitMouse.containsMouse
+                        ToolTip.text: qsTr("Fit preview")
+                        ToolTip.delay: 450
                     }
                 }
 
@@ -385,38 +415,10 @@ Item {
                 border.width: 1
                 border.color: "#3a3d45"
 
-                ColumnLayout {
+                Components.PreviewLayerRail {
                     anchors.fill: parent
                     anchors.margins: 4
-                    spacing: 6
-
-                    Label {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: root.previewVm ? root.previewVm.layerCount : 0
-                        color: Theme.accentLight
-                        font.pixelSize: Theme.fontSizeSM
-                        font.bold: true
-                    }
-
-                    Slider {
-                        id: verticalLayerSlider
-                        Layout.fillHeight: true
-                        Layout.alignment: Qt.AlignHCenter
-                        orientation: Qt.Vertical
-                        from: 0
-                        to: root.previewVm ? Math.max(0, root.previewVm.layerCount - 1) : 0
-                        stepSize: 1
-                        value: root.previewVm ? root.previewVm.currentLayerMax : 0
-                        enabled: root.previewVm && root.previewVm.layerCount > 0
-                        onMoved: if (root.previewVm) root.previewVm.setLayerRange(Math.round(value), Math.round(value))
-                    }
-
-                    Label {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: root.previewVm ? root.previewVm.currentLayerMax + 1 : 0
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontSizeSM
-                    }
+                    previewVm: root.previewVm
                 }
             }
         }

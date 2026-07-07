@@ -39,6 +39,7 @@ private slots:
   void previewNormalPathCoversFullWorkflowBindingsAndDiagnostics();
   void previewLayoutRestoresScreenshotRegionsAndGcodePanel();
   void previewStatsPanelCallsOnlyQmlInvokableSetters();
+  void previewLayerMoveControlsAreActionableAndRendererSafe();
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
   void rhiViewportModelDragOrbitsAfterClickThreshold();
   void rhiMoveGizmoDragBridgeStaysCppOwned();
@@ -798,20 +799,16 @@ void QmlUiAuditTests::previewRhiInteractionSettersPreservePreviewPayload()
     QStringLiteral("void RhiViewport::setShowTravelMoves"),
     QStringLiteral("void RhiViewport::setShowBed"),
     QStringLiteral("void RhiViewport::setShowMarker"),
-    QStringLiteral("void RhiViewport::setGcodeViewMode")
+    QStringLiteral("void RhiViewport::setGcodeViewMode"),
+    QStringLiteral("void RhiViewport::setRoleVisibility")
   };
   for (int i = 0; i < setters.size(); ++i) {
     const int start = viewportSource.indexOf(setters.at(i));
     QVERIFY2(start >= 0,
              qPrintable(QStringLiteral("Missing Preview interaction setter: %1").arg(setters.at(i))));
-    int end = viewportSource.size();
-    for (int j = 0; j < setters.size(); ++j) {
-      if (i == j)
-        continue;
-      const int candidate = viewportSource.indexOf(setters.at(j), start + 1);
-      if (candidate > start)
-        end = std::min(end, candidate);
-    }
+    int end = viewportSource.indexOf(QStringLiteral("\nvoid RhiViewport::"), start + 1);
+    if (end < 0)
+      end = viewportSource.size();
     const QString body = viewportSource.mid(start, end - start);
     QVERIFY2(body.contains(QStringLiteral("update();")),
              qPrintable(QStringLiteral("%1 must schedule a redraw").arg(setters.at(i))));
@@ -1142,6 +1139,65 @@ void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
   QVERIFY2(!rendererSource.mid(uploadModelStart, uploadHighlightStart - uploadModelStart)
                .contains(QStringLiteral("DirtySelection")),
            "Selection/hover changes must not reupload the full model vertex buffer");
+}
+
+void QmlUiAuditTests::previewLayerMoveControlsAreActionableAndRendererSafe()
+{
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  const QString layerRail = readSource(QStringLiteral("src/qml_gui/components/PreviewLayerRail.qml"));
+  const QString moveSlider = readSource(QStringLiteral("src/qml_gui/components/MoveSlider.qml"));
+  const QString previewHeader = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.h"));
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
+  QVERIFY2(!layerRail.isEmpty(), "Unable to read PreviewLayerRail.qml");
+  QVERIFY2(!moveSlider.isEmpty(), "Unable to read MoveSlider.qml");
+  QVERIFY2(!previewHeader.isEmpty(), "Unable to read PreviewViewModel.h");
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+
+  QVERIFY2(previewPage.contains(QStringLiteral("Components.PreviewLayerRail")),
+           "PreviewPage must use the compact PreviewLayerRail component");
+  QVERIFY2(previewPage.contains(QStringLiteral("previewViewport.requestPreviewFit()")),
+           "PreviewPage must expose an explicit fit-to-preview camera action");
+  QVERIFY2(previewPage.contains(QStringLiteral("root.previewVm.stepCurrentMove(")),
+           "Preview keyboard shortcuts must route move stepping through PreviewViewModel");
+
+  const QStringList layerCalls = {
+    QStringLiteral("root.previewVm.setLayerRange("),
+    QStringLiteral("root.previewVm.jumpToLayer("),
+    QStringLiteral("root.previewVm.moveLayerRange(")
+  };
+  for (const QString &call : layerCalls) {
+    QVERIFY2(layerRail.contains(call),
+             qPrintable(QStringLiteral("PreviewLayerRail missing ViewModel call: %1").arg(call)));
+  }
+  QVERIFY2(layerRail.contains(QStringLiteral("RangeSlider")),
+           "PreviewLayerRail must expose a vertical range control, not a single-value slider");
+
+  QVERIFY2(moveSlider.contains(QStringLiteral("root.previewVm.stepCurrentMove(")),
+           "MoveSlider step buttons must use PreviewViewModel::stepCurrentMove");
+  QVERIFY2(moveSlider.contains(QStringLiteral("root.previewVm.togglePlayPause()")),
+           "MoveSlider must keep the playback timer routed through PreviewViewModel");
+  QVERIFY2(!moveSlider.contains(QStringLiteral("root.previewVm.currentMove +"))
+              && !moveSlider.contains(QStringLiteral("root.previewVm.currentMove -")),
+           "MoveSlider must not duplicate move clamping arithmetic in QML");
+
+  QVERIFY2(previewHeader.contains(QStringLiteral("Q_INVOKABLE void stepCurrentMove(int delta)")),
+           "PreviewViewModel must expose stepCurrentMove to QML");
+  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_INVOKABLE void requestPreviewFit()")),
+           "RhiViewport must expose a Preview-data fit action to QML");
+
+  const int start = viewportSource.indexOf(QStringLiteral("void RhiViewport::requestPreviewFit"));
+  QVERIFY2(start >= 0, "RhiViewport::requestPreviewFit implementation missing");
+  const int end = viewportSource.indexOf(QStringLiteral("\nvoid RhiViewport::"), start + 1);
+  const QString body = viewportSource.mid(start, end > start ? end - start : viewportSource.size() - start);
+  QVERIFY2(body.contains(QStringLiteral("m_previewFitHint")),
+           "requestPreviewFit must reuse cached Preview fit bounds");
+  QVERIFY2(body.contains(QStringLiteral("update();")),
+           "requestPreviewFit must schedule a redraw");
+  QVERIFY2(!body.contains(QStringLiteral("m_previewData =")),
+           "requestPreviewFit must not mutate Preview payload data");
 }
 
 void QmlUiAuditTests::rhiViewportModelDragOrbitsAfterClickThreshold()

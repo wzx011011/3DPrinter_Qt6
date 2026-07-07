@@ -17,9 +17,9 @@
 
 ### Layer, Move, And Playback Controls
 
-- [ ] **PVCTRL-01**: User can change visible layer range and current layer through restored slider/input controls with state reflected in the renderer.
-- [ ] **PVCTRL-02**: User can use playback controls for layer/move stepping and animation without desynchronizing PreviewViewModel state.
-- [ ] **PVCTRL-03**: User can rotate, pan, zoom, and fit the Preview camera without causing the model or toolpath to disappear.
+- [x] **PVCTRL-01**: User can change visible layer range and current layer through restored slider/input controls with state reflected in the renderer.
+- [x] **PVCTRL-02**: User can use playback controls for layer/move stepping and animation without desynchronizing PreviewViewModel state.
+- [x] **PVCTRL-03**: User can rotate, pan, zoom, and fit the Preview camera without causing the model or toolpath to disappear.
 
 ### G-code Roles, Color Modes, And Rendering
 
@@ -64,9 +64,9 @@ Explicitly excluded to keep v4.0 focused.
 | PVLAYOUT-01 | Phase 80 | Complete |
 | PVLAYOUT-02 | Phase 80 | Complete |
 | PVLAYOUT-03 | Phase 80 | Complete |
-| PVCTRL-01 | Phase 81 | Pending |
-| PVCTRL-02 | Phase 81 | Pending |
-| PVCTRL-03 | Phase 81 | Pending |
+| PVCTRL-01 | Phase 81 | Complete |
+| PVCTRL-02 | Phase 81 | Complete |
+| PVCTRL-03 | Phase 81 | Complete |
 | PVRENDER-01 | Phase 82 | Pending |
 | PVRENDER-02 | Phase 82 | Pending |
 | PVRENDER-03 | Phase 82 | Pending |
@@ -81,4 +81,4 @@ Explicitly excluded to keep v4.0 focused.
 
 ---
 *Requirements defined: 2026-07-06*
-*Last updated: 2026-07-06 after v4.0 milestone start*
+*Last updated: 2026-07-07 after Phase 81 completion*

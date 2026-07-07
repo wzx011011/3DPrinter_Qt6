@@ -23,7 +23,7 @@
 
 - [x] Phase 79: Preview Source-Truth Gap Audit (completed 2026-07-06)
 - [x] Phase 80: Preview Layout And Panels Restoration (completed 2026-07-06)
-- [ ] Phase 81: Preview Layer Move And Playback Controls
+- [x] Phase 81: Preview Layer Move And Playback Controls (completed 2026-07-07)
 - [ ] Phase 82: Preview G-code Roles Color Modes And Rendering
 - [ ] Phase 83: Preview Verification And Cleanup
 
@@ -57,8 +57,8 @@ Success criteria:
 
 ### Phase 81: Preview Layer Move And Playback Controls
 
-**Status:** Not started
-**Plans:** 0/1 plans complete
+**Status:** Complete
+**Plans:** 1/1 plans complete
 
 Success criteria:
 1. Layer range/current-layer controls update PreviewViewModel and renderer state.
@@ -155,12 +155,12 @@ Requirements: `.planning/milestones/v3.8-REQUIREMENTS.md`
 
 ## Next Step
 
-Continue v4.0 with Phase 81:
+Continue v4.0 with Phase 82:
 
 ```text
-$gsd-discuss-phase 81 --auto
+$gsd-discuss-phase 82 --auto
 ```
 
 ---
 
-*Last updated: 2026-07-06 after v4.0 milestone start.*
+*Last updated: 2026-07-07 after Phase 81 completion.*

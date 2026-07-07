@@ -3,36 +3,36 @@ gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Preview Page UI Restoration
 status: ready_to_plan
-last_updated: 2026-07-06T09:49:41.280Z
-last_activity: 2026-07-06
+last_updated: 2026-07-07T11:47:26.8989764+08:00
+last_activity: 2026-07-07
 progress:
   total_phases: 5
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 40
-stopped_at: Phase 80 complete (1/1) - ready to discuss Phase 81
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 60
+stopped_at: Phase 81 complete (1/1) - ready to discuss Phase 82
 ---
 
 # Project State
 
 **Milestone:** v4.0 - Preview Page UI Restoration
 **Status:** Ready to plan
-**Next step:** Start Phase 81 with `$gsd-discuss-phase 81 --auto`.
+**Next step:** Start Phase 82 with `$gsd-discuss-phase 82 --auto`.
 
 ## Current Position
 
-Phase: 81
+Phase: 82
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-07-06
+Last activity: 2026-07-07
 
 ## Project Reference
 
 See: `.planning/PROJECT.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-**Current focus:** Phase 81 - preview layer, move, and playback controls
+**Current focus:** Phase 82 - Preview G-code roles, color modes, and rendering
 
 ## Last Completed Milestone
 
@@ -50,7 +50,7 @@ See: `.planning/PROJECT.md`
 |---|---|---|---|
 | 79 | Preview Source-Truth Gap Audit | Complete | PVAUDIT-01 |
 | 80 | Preview Layout And Panels Restoration | Complete | PVLAYOUT-01, PVLAYOUT-02, PVLAYOUT-03 |
-| 81 | Preview Layer Move And Playback Controls | Not started | PVCTRL-01, PVCTRL-02, PVCTRL-03 |
+| 81 | Preview Layer Move And Playback Controls | Complete | PVCTRL-01, PVCTRL-02, PVCTRL-03 |
 | 82 | Preview G-code Roles Color Modes And Rendering | Not started | PVRENDER-01, PVRENDER-02, PVRENDER-03 |
 | 83 | Preview Verification And Cleanup | Not started | PVCLEAN-01, PVVERIFY-01, PVVERIFY-02 |
 
@@ -106,4 +106,4 @@ Historical items acknowledged before v3.9 and their current state:
 
 ## Operator Next Steps
 
-- Start Phase 81 with /gsd-discuss-phase 81 --auto
+- Start Phase 82 with /gsd-discuss-phase 82 --auto

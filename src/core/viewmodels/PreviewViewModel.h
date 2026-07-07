@@ -186,6 +186,7 @@ public:
   /// Move the full layer range, aligned with upstream IMSlider mouse-wheel behavior.
   Q_INVOKABLE void moveLayerRange(int delta);
   Q_INVOKABLE void setCurrentMove(int move);
+  Q_INVOKABLE void stepCurrentMove(int delta);
   Q_INVOKABLE void playAnimation();
   Q_INVOKABLE void pauseAnimation();
   Q_INVOKABLE void togglePlayPause();

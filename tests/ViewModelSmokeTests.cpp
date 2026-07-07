@@ -252,6 +252,7 @@ private slots:
   void roleVisibilityToggleDoesNotRepackGcodePreviewData();
   void legendGradientBoundsStableAcrossLayerMoveDrag();
   void currentMoveUpdatesGcodeLineWindowAtomically();
+  void stepCurrentMoveClampsAndUpdatesGcodeLineWindow();
   void viewModesExposeUpstreamSeventeenModes();
   // Phase 55 code-review fix (GCODE-02): the renderer consumes a DENSE 20-bool
   // mask, not the 18-row QVariantMap UI list. Guard the producer shape and the
@@ -3634,6 +3635,39 @@ void ViewModelSmokeTests::testPerDialogSearchAndFourLevelMode()
       ++manualGroupCount;
   }
   QCOMPARE(printOpts->countForGroup(group), manualGroupCount);
+}
+
+void ViewModelSmokeTests::stepCurrentMoveClampsAndUpdatesGcodeLineWindow()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&slice);
+
+  QVERIFY2(preview.loadGCodeForPreview(kOrcaGcodePath),
+           "loadGCodeForPreview should succeed on the committed Orca fixture");
+  QVERIFY2(preview.moveCount() > 4, "fixture must expose enough moves for stepping");
+
+  preview.setCurrentMove(0);
+  QCOMPARE(preview.currentMove(), 0);
+
+  QSignalSpy spy(&preview, &PreviewViewModel::stateChanged);
+  QVERIFY(spy.isValid());
+
+  preview.stepCurrentMove(2);
+  QCOMPARE(preview.currentMove(), 2);
+  QVERIFY2(preview.currentGcodeLine() > 0,
+           "stepCurrentMove must rebuild the current source-line window");
+  QVERIFY2(!preview.gcodeLines().isEmpty(),
+           "stepCurrentMove must keep the G-code source window populated");
+
+  const int emittedAfterForward = spy.count();
+  QVERIFY2(emittedAfterForward >= 1,
+           "stepCurrentMove must emit stateChanged when it changes the move");
+
+  preview.stepCurrentMove(999999);
+  QCOMPARE(preview.currentMove(), preview.moveCount());
+  preview.stepCurrentMove(-999999);
+  QCOMPARE(preview.currentMove(), 0);
 }
 
 void ViewModelSmokeTests::testNullableAndVectorOptions()

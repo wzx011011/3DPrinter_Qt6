@@ -579,6 +579,13 @@ void PreviewViewModel::setCurrentMove(int move)
   emit stateChanged();
 }
 
+void PreviewViewModel::stepCurrentMove(int delta)
+{
+  if (delta == 0)
+    return;
+  setCurrentMove(currentMove_ + delta);
+}
+
 void PreviewViewModel::updateToolPositionData()
 {
   if (segments_.empty() || currentMove_ < 0) {

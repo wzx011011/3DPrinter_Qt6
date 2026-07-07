@@ -380,6 +380,27 @@ void RhiViewport::requestFitView(float cx, float cy, float cz, float r)
   update();
 }
 
+void RhiViewport::requestPreviewFit()
+{
+  if (m_canvasType != CanvasPreview) {
+    update();
+    return;
+  }
+
+  if (!m_previewCameraFitted)
+    fitPreviewCameraToData();
+
+  if (m_previewCameraFitted) {
+    m_camera.fitView(m_previewFitHint.x(),
+                     m_previewFitHint.y(),
+                     m_previewFitHint.z(),
+                     m_previewFitHint.w());
+    m_cameraDirty = true;
+    ++m_fitRequestCount;
+  }
+  update();
+}
+
 void RhiViewport::requestViewPreset(int preset)
 {
   m_viewPreset = preset;
