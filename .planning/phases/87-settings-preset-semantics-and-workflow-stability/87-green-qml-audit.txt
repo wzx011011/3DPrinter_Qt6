@@ -1,0 +1,10 @@
+********* Start testing of QmlUiAuditTests *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-llp64 shared (dynamic) release build; by MSVC 2026), windows 10
+PASS   : QmlUiAuditTests::initTestCase()
+PASS   : QmlUiAuditTests::settingsDialogDirtyPendingActionsOpenUnsavedGuard()
+PASS   : QmlUiAuditTests::settingsDialogReadOnlySaveOpensSaveAs()
+PASS   : QmlUiAuditTests::settingsDialogRestoresPhase85ShellContract()
+PASS   : QmlUiAuditTests::settingsOptionRowsRestorePhase86ControlContract()
+PASS   : QmlUiAuditTests::cleanupTestCase()
+Totals: 6 passed, 0 failed, 0 skipped, 0 blacklisted, 3ms
+********* Finished testing of QmlUiAuditTests *********

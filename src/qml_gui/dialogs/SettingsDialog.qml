@@ -46,6 +46,7 @@ ApplicationWindow {
     property bool searchExpanded: false
     property bool advancedMode: false
     property bool closeAfterSaveAs: false
+    property bool closeAfterUnsavedResolution: false
     property var filteredIndices: []
 
     // Tab pages per tier. The label is visual text; key stays aligned with upstream page ids.
@@ -123,6 +124,11 @@ ApplicationWindow {
         return ok
     }
 
+    function openUnsavedChangesGuard(closeOnResolve) {
+        closeAfterUnsavedResolution = closeOnResolve
+        unsavedDialog.openDialog()
+    }
+
     onSearchTextChanged: rebuildFilter()
     onAdvancedModeChanged: rebuildFilter()
     onActiveTabChanged: rebuildFilter()
@@ -145,7 +151,7 @@ ApplicationWindow {
     // Dirty-guarded close
     function attemptClose() {
         if (configVm && configVm.isPresetDirty) {
-            unsavedDialog.openDialog()
+            root.openUnsavedChangesGuard(true)
         } else {
             root.close()
         }
@@ -161,7 +167,7 @@ ApplicationWindow {
     onClosing: function(close) {
         if (configVm && configVm.isPresetDirty) {
             close.accepted = false
-            unsavedDialog.openDialog()
+            root.openUnsavedChangesGuard(true)
         }
     }
 
@@ -179,12 +185,20 @@ ApplicationWindow {
 
         onAccepted: {
             if (unsavedDialog.action === "save") {
-                root.requestSaveAndMaybeClose(true)
+                root.requestSaveAndMaybeClose(root.closeAfterUnsavedResolution)
+                root.closeAfterUnsavedResolution = false
             } else if (unsavedDialog.action === "discard") {
                 root.configVm.requestDiscardPendingChanges()
-                root.close()
+                if (root.closeAfterUnsavedResolution)
+                    root.close()
+                root.closeAfterUnsavedResolution = false
             }
-            // "cancel" -> do nothing, dialog stays open
+        }
+
+        onRejected: {
+            if (root.configVm)
+                root.configVm.requestCancelPendingChanges()
+            root.closeAfterUnsavedResolution = false
         }
     }
 
@@ -199,13 +213,20 @@ ApplicationWindow {
                 root.close()
             }
         }
-        onRejected: root.closeAfterSaveAs = false
+        onRejected: {
+            if (root.configVm && root.configVm.hasPendingUnsavedChanges)
+                root.configVm.requestCancelPendingChanges()
+            root.closeAfterSaveAs = false
+        }
     }
 
     Connections {
         target: root.configVm
         function onSaveAsRequired() {
             saveAsDialog.open()
+        }
+        function onPendingUnsavedChangesRequested() {
+            root.openUnsavedChangesGuard(false)
         }
     }
 

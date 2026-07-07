@@ -24,9 +24,9 @@
 
 ### Preset And Edit Semantics
 
-- [ ] **SETSEM-01**: Preset selection, save, save-as, reset option/group/all, discard, cancel, and unsaved-close guard remain mapped to upstream settings semantics.
-- [ ] **SETSEM-02**: Search and simple/advanced filtering work per dialog without breaking tab/section navigation or hiding current dirty/error states.
-- [ ] **SETSEM-03**: Settings edits invalidate slice state, preserve dirty overrides through project save/load, and keep Prepare/Preview payloads stable across settings dialog interaction.
+- [x] **SETSEM-01**: Preset selection, save, save-as, reset option/group/all, discard, cancel, and unsaved-close guard remain mapped to upstream settings semantics.
+- [x] **SETSEM-02**: Search and simple/advanced filtering work per dialog without breaking tab/section navigation or hiding current dirty/error states.
+- [x] **SETSEM-03**: Settings edits invalidate slice state, preserve dirty overrides through project save/load, and keep Prepare/Preview payloads stable across settings dialog interaction.
 
 ### Cleanup And Verification
 
@@ -72,9 +72,9 @@ Explicitly excluded to keep v4.1 focused.
 | SETCTRL-01 | Phase 86 | Complete |
 | SETCTRL-02 | Phase 86 | Complete |
 | SETCTRL-03 | Phase 86 | Complete |
-| SETSEM-01 | Phase 87 | Pending |
-| SETSEM-02 | Phase 87 | Pending |
-| SETSEM-03 | Phase 87 | Pending |
+| SETSEM-01 | Phase 87 | Complete |
+| SETSEM-02 | Phase 87 | Complete |
+| SETSEM-03 | Phase 87 | Complete |
 | SETCLEAN-01 | Phase 88 | Pending |
 | SETVERIFY-01 | Phase 88 | Pending |
 | SETVERIFY-02 | Phase 88 | Pending |

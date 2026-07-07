@@ -93,6 +93,7 @@ private slots:
   void settingsDialogRestoresPhase85ShellContract();
   void settingsOptionRowsRestorePhase86ControlContract();
   void settingsDialogReadOnlySaveOpensSaveAs();
+  void settingsDialogDirtyPendingActionsOpenUnsavedGuard();
   void leftSidebarParamsPanelUsesRealOptionRows();
   // Phase 57-02 (CLEAN-01/02 regression): the 7 obsolete QML files locked by
   // Phase 50 section 1.6 (SettingsPage/ConfigPage/ParamsPage/SearchDialog)
@@ -2692,8 +2693,34 @@ void QmlUiAuditTests::settingsDialogReadOnlySaveOpensSaveAs()
            "Read-only preset save must open SavePresetDialog");
   QVERIFY2(settingsDialog.contains(QStringLiteral("closeAfterSaveAs")),
            "Unsaved close flow must remember whether Save As should close the settings window");
-  QVERIFY2(settingsDialog.contains(QStringLiteral("root.requestSaveAndMaybeClose(true)")),
-           "Unsaved-dialog Save action must close only after a successful save or Save As");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("root.requestSaveAndMaybeClose(root.closeAfterUnsavedResolution)")),
+           "Unsaved-dialog Save action must close only for close-guard flows");
+}
+
+void QmlUiAuditTests::settingsDialogDirtyPendingActionsOpenUnsavedGuard()
+{
+  const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
+  QVERIFY2(!settingsDialog.isEmpty(), "Unable to read SettingsDialog.qml");
+
+  const QStringList requiredTokens = {
+      QStringLiteral("function openUnsavedChangesGuard"),
+      QStringLiteral("property bool closeAfterUnsavedResolution"),
+      QStringLiteral("function onPendingUnsavedChangesRequested()"),
+      QStringLiteral("root.openUnsavedChangesGuard(false)"),
+      QStringLiteral("root.openUnsavedChangesGuard(true)"),
+      QStringLiteral("root.configVm.requestCancelPendingChanges()"),
+      QStringLiteral("root.configVm.requestDiscardPendingChanges()"),
+      QStringLiteral("if (root.closeAfterUnsavedResolution)")
+  };
+  for (const QString &token : requiredTokens) {
+    QVERIFY2(settingsDialog.contains(token),
+             qPrintable(QStringLiteral("SettingsDialog missing Phase 87 dirty-pending token: %1").arg(token)));
+  }
+
+  QVERIFY2(settingsDialog.contains(QStringLiteral("target: root.configVm")),
+           "SettingsDialog must connect directly to ConfigViewModel signals");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("root.requestSaveAndMaybeClose(root.closeAfterUnsavedResolution)")),
+           "Save from the unsaved dialog must close only for close-guard flows, not preset-switch flows");
 }
 
 void QmlUiAuditTests::leftSidebarParamsPanelUsesRealOptionRows()
