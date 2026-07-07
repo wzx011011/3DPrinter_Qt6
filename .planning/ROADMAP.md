@@ -24,7 +24,7 @@
 ## Phases
 
 - [x] Phase 84: Settings Source-Truth Gap Audit (completed 2026-07-07)
-- [ ] Phase 85: Settings Shell And Tab Layout Restoration
+- [x] Phase 85: Settings Shell And Tab Layout Restoration (completed 2026-07-07)
 - [ ] Phase 86: Settings Option Sections And Typed Controls
 - [ ] Phase 87: Settings Preset Semantics And Workflow Stability
 - [ ] Phase 88: Settings Verification And Cleanup
@@ -32,7 +32,7 @@
 | Phase | Name | Goal | Requirements |
 |---|---|---|---|
 | 84 | Settings Source-Truth Gap Audit | Complete 2026-07-07: froze the v4.1 settings region map, current gaps, upstream anchors, Qt targets, replacement decisions, and verification expectations. | SETAUDIT-01, SETAUDIT-02 |
-| 85 | Settings Shell And Tab Layout Restoration | Restore the screenshot-visible settings window chrome, preset/action row, tab strip, sizing, density, and clean user-facing text. | SETLAYOUT-01, SETLAYOUT-02, SETLAYOUT-03 |
+| 85 | Settings Shell And Tab Layout Restoration | Complete 2026-07-07: restored the settings window shell, compact preset/action row, clean titles/tabs, no visible left group sidebar dependency, and source audits. | SETLAYOUT-01, SETLAYOUT-02, SETLAYOUT-03 |
 | 86 | Settings Option Sections And Typed Controls | Restore option section rendering and typed control visuals for printer/material/process settings without breaking existing C++ option models. | SETCTRL-01, SETCTRL-02, SETCTRL-03 |
 | 87 | Settings Preset Semantics And Workflow Stability | Preserve and harden save/reset/search/dirty/edit semantics across settings dialogs, Prepare, Preview, project persistence, and slice invalidation. | SETSEM-01, SETSEM-02, SETSEM-03 |
 | 88 | Settings Verification And Cleanup | Remove stale settings paths, lock bindings with audits/tests, run canonical verifier, launch app, and capture settings visual evidence. | SETCLEAN-01, SETVERIFY-01, SETVERIFY-02 |
@@ -49,8 +49,8 @@ Success criteria:
 
 ### Phase 85: Settings Shell And Tab Layout Restoration
 
-**Status:** Planned
-**Plans:** 0/1 plans complete
+**Status:** Complete 2026-07-07
+**Plans:** 1/1 plans complete
 
 Success criteria:
 1. Printer/material/process settings open as independent non-modal windows from every intended entry point.
@@ -101,18 +101,18 @@ Success criteria:
 
 ## Next Step
 
-Start Phase 85:
+Start Phase 86:
 
 ```text
-$gsd-discuss-phase 85 --auto
+$gsd-discuss-phase 86 --auto
 ```
 
 or plan directly:
 
 ```text
-$gsd-plan-phase 85
+$gsd-plan-phase 86
 ```
 
 ---
 
-*Last updated: 2026-07-07 after v4.1 milestone planning.*
+*Last updated: 2026-07-07 after Phase 85 completion.*

@@ -90,7 +90,7 @@ private slots:
   void settingsDialogNoRawControls();
   void settingsDialogStringsQsTr();
   void settingsDialogMainQmlDispatchStructural();
-  void settingsDialogFiltersByTabAndGroup();
+  void settingsDialogRestoresPhase85ShellContract();
   void settingsDialogReadOnlySaveOpensSaveAs();
   void leftSidebarParamsPanelUsesRealOptionRows();
   // Phase 57-02 (CLEAN-01/02 regression): the 7 obsolete QML files locked by
@@ -2539,21 +2539,66 @@ void QmlUiAuditTests::settingsDialogMainQmlDispatchStructural()
            "main.qml must instantiate SettingsDialog");
 }
 
-void QmlUiAuditTests::settingsDialogFiltersByTabAndGroup()
+void QmlUiAuditTests::settingsDialogRestoresPhase85ShellContract()
 {
   const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
-  const QString groupNav = readSource(QStringLiteral("src/qml_gui/components/GroupNavSidebar.qml"));
   QVERIFY2(!settingsDialog.isEmpty(), "Unable to read SettingsDialog.qml");
-  QVERIFY2(!groupNav.isEmpty(), "Unable to read GroupNavSidebar.qml");
 
+  const QStringList restoredLabels = {
+      QStringLiteral("qsTr(\"打印机设置\")"),
+      QStringLiteral("qsTr(\"材料设置\")"),
+      QStringLiteral("qsTr(\"工艺设置\")"),
+      QStringLiteral("qsTr(\"基础信息\")"),
+      QStringLiteral("qsTr(\"打印机G-code\")"),
+      QStringLiteral("qsTr(\"材料\")"),
+      QStringLiteral("qsTr(\"挤出机\")"),
+      QStringLiteral("qsTr(\"移动能力\")"),
+      QStringLiteral("qsTr(\"注释\")"),
+      QStringLiteral("qsTr(\"耗材丝\")"),
+      QStringLiteral("qsTr(\"冷却\")"),
+      QStringLiteral("qsTr(\"参数覆盖\")"),
+      QStringLiteral("qsTr(\"高级\")"),
+      QStringLiteral("qsTr(\"依赖\")"),
+      QStringLiteral("qsTr(\"质量\")"),
+      QStringLiteral("qsTr(\"强度\")"),
+      QStringLiteral("qsTr(\"速度\")"),
+      QStringLiteral("qsTr(\"支撑\")"),
+      QStringLiteral("qsTr(\"底板\")"),
+      QStringLiteral("qsTr(\"回抽\")"),
+      QStringLiteral("qsTr(\"其他\")"),
+  };
+  for (const QString &label : restoredLabels) {
+    QVERIFY2(settingsDialog.contains(label),
+             qPrintable(QStringLiteral("SettingsDialog missing restored Phase 85 label: %1").arg(label)));
+  }
+
+  const QStringList oldShellTokens = {
+      QStringLiteral("selectedGroup"),
+      QStringLiteral("filterIndicesByGroup"),
+      QStringLiteral("GroupNavSidebar {"),
+      QStringLiteral("topSearchField"),
+      QStringLiteral("text: qsTr(\"Save\")"),
+      QStringLiteral("text: qsTr(\"Save As...\")"),
+      QStringLiteral("closeMouseArea"),
+  };
+  for (const QString &token : oldShellTokens) {
+    QVERIFY2(!settingsDialog.contains(token),
+             qPrintable(QStringLiteral("SettingsDialog still contains off-design Phase 85 shell token: %1").arg(token)));
+  }
+
+  QVERIFY2(settingsDialog.contains(QStringLiteral("width: 736"))
+               && settingsDialog.contains(QStringLiteral("height: 593"))
+               && settingsDialog.contains(QStringLiteral("Qt.NonModal")),
+           "SettingsDialog must keep the screenshot-sized non-modal ApplicationWindow shell");
   QVERIFY2(settingsDialog.contains(QStringLiteral("filterIndicesByPage")),
            "SettingsDialog rebuildFilter must narrow option indices by active tab/page");
-  QVERIFY2(settingsDialog.contains(QStringLiteral("filterIndicesByGroup")),
-           "SettingsDialog rebuildFilter must narrow option indices by selected group");
-  QVERIFY2(settingsDialog.contains(QStringLiteral("root.selectedGroup = qsTr(\"All\")")),
-           "SettingsDialog tab switches must reset group navigation to All");
-  QVERIFY2(groupNav.contains(QStringLiteral("countForGroup")),
-           "GroupNavSidebar badges must count options by group, not by category");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("CxIconButton"))
+               && settingsDialog.contains(QStringLiteral("searchExpanded"))
+               && settingsDialog.contains(QStringLiteral("root.requestSaveAndMaybeClose(false)"))
+               && settingsDialog.contains(QStringLiteral("saveAsDialog.open()"))
+               && settingsDialog.contains(QStringLiteral("CxSwitch"))
+               && settingsDialog.contains(QStringLiteral("advancedMode")),
+           "SettingsDialog compact top-row actions must keep save, save-as, search, and advanced-mode wiring");
 }
 
 void QmlUiAuditTests::settingsDialogReadOnlySaveOpensSaveAs()

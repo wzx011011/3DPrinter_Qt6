@@ -12,9 +12,9 @@
 
 ### Settings Window Layout
 
-- [ ] **SETLAYOUT-01**: User can open printer, material, and process settings from Prepare/sidebar/preset entry points as independent non-modal windows with screenshot-aligned chrome, preset selector, action icons, top tabs, and stable size.
-- [ ] **SETLAYOUT-02**: Printer and material settings dialogs match target screenshot density, spacing, tab order, and section flow; the process dialog reuses the same source-truth shell without a separate invented design.
-- [ ] **SETLAYOUT-03**: User sees no mojibake, raw internal strings, placeholder controls, disconnected buttons, or off-design left group sidebar in restored settings windows.
+- [x] **SETLAYOUT-01**: User can open printer, material, and process settings from Prepare/sidebar/preset entry points as independent non-modal windows with screenshot-aligned chrome, preset selector, action icons, top tabs, and stable size.
+- [x] **SETLAYOUT-02**: Printer and material settings dialogs match target screenshot density, spacing, tab order, and section flow; the process dialog reuses the same source-truth shell without a separate invented design.
+- [x] **SETLAYOUT-03**: User sees no mojibake, raw internal strings, placeholder controls, disconnected buttons, or off-design left group sidebar in restored settings windows.
 
 ### Option Sections And Controls
 
@@ -66,9 +66,9 @@ Explicitly excluded to keep v4.1 focused.
 |---|---|---|
 | SETAUDIT-01 | Phase 84 | Complete |
 | SETAUDIT-02 | Phase 84 | Complete |
-| SETLAYOUT-01 | Phase 85 | Pending |
-| SETLAYOUT-02 | Phase 85 | Pending |
-| SETLAYOUT-03 | Phase 85 | Pending |
+| SETLAYOUT-01 | Phase 85 | Complete |
+| SETLAYOUT-02 | Phase 85 | Complete |
+| SETLAYOUT-03 | Phase 85 | Complete |
 | SETCTRL-01 | Phase 86 | Pending |
 | SETCTRL-02 | Phase 86 | Pending |
 | SETCTRL-03 | Phase 86 | Pending |
@@ -86,4 +86,4 @@ Explicitly excluded to keep v4.1 focused.
 
 ---
 *Requirements defined: 2026-07-07*
-*Last updated: 2026-07-07 after v4.1 milestone planning*
+*Last updated: 2026-07-07 after Phase 85 completion*

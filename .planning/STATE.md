@@ -2,36 +2,36 @@
 gsd_state_version: 1.0
 milestone: v4.1
 milestone_name: Parameter Settings Dialogs Source-Truth Restoration
-status: executing
-last_updated: "2026-07-07T08:40:39.879Z"
-last_activity: 2026-07-07 -- Phase 85 planning complete
+status: ready_to_plan
+last_updated: "2026-07-07T09:26:20.206Z"
+last_activity: 2026-07-07 -- Phase 85 complete
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 2
-  completed_plans: 1
-  percent: 20
+  completed_plans: 2
+  percent: 40
 ---
 
 # Project State
 
 **Milestone:** v4.1 - Parameter Settings Dialogs Source-Truth Restoration
-**Status:** Ready to execute
-**Next step:** Start Phase 85 settings shell and tab layout restoration.
+**Status:** Ready to plan
+**Next step:** Start Phase 86 settings option sections and typed controls.
 
 ## Current Position
 
-Phase: 85
+Phase: 86
 Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-07 -- Phase 85 planning complete
+Status: Ready to discuss and plan
+Last activity: 2026-07-07 -- Phase 85 complete
 
 ## Current Milestone
 
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
 | 84 | Settings Source-Truth Gap Audit | Complete | SETAUDIT-01, SETAUDIT-02 |
-| 85 | Settings Shell And Tab Layout Restoration | Planned | SETLAYOUT-01, SETLAYOUT-02, SETLAYOUT-03 |
+| 85 | Settings Shell And Tab Layout Restoration | Complete | SETLAYOUT-01, SETLAYOUT-02, SETLAYOUT-03 |
 | 86 | Settings Option Sections And Typed Controls | Planned | SETCTRL-01, SETCTRL-02, SETCTRL-03 |
 | 87 | Settings Preset Semantics And Workflow Stability | Planned | SETSEM-01, SETSEM-02, SETSEM-03 |
 | 88 | Settings Verification And Cleanup | Planned | SETCLEAN-01, SETVERIFY-01, SETVERIFY-02 |
@@ -94,4 +94,4 @@ See: `.planning/PROJECT.md`
 
 ## Operator Next Steps
 
-- Start Phase 85 with `$gsd-discuss-phase 85 --auto` or `$gsd-plan-phase 85`.
+- Start Phase 86 with `$gsd-discuss-phase 86 --auto` or `$gsd-plan-phase 86`.

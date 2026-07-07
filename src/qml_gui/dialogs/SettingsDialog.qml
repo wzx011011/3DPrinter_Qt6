@@ -42,8 +42,8 @@ ApplicationWindow {
 
     // Internal state
     property string activeTab: ""
-    property string selectedGroup: ""
     property string searchText: ""
+    property bool searchExpanded: false
     property bool advancedMode: false
     property bool closeAfterSaveAs: false
     property var filteredIndices: []
@@ -99,18 +99,15 @@ ApplicationWindow {
     // Set default tab on first load
     Component.onCompleted: {
         if (tabPages.length > 0) activeTab = tabPages[0].key
-        selectedGroup = qsTr("All")
         rebuildFilter()
     }
 
-    // Rebuild filtered indices when search/group/tab changes
+    // Rebuild filtered indices when search/tab/mode changes.
     function rebuildFilter() {
         if (!configVm || !optionModel) { filteredIndices = []; return }
         var indices = configVm.filterOptionIndices(presetTier, searchText, advancedMode)
         if (activeTab !== "")
             indices = optionModel.filterIndicesByPage(indices, activeTab)
-        if (selectedGroup !== "" && selectedGroup !== qsTr("All"))
-            indices = optionModel.filterIndicesByGroup(indices, selectedGroup)
         filteredIndices = indices
     }
 
@@ -129,7 +126,6 @@ ApplicationWindow {
     onSearchTextChanged: rebuildFilter()
     onAdvancedModeChanged: rebuildFilter()
     onActiveTabChanged: rebuildFilter()
-    onSelectedGroupChanged: rebuildFilter()
 
     // Tier to category index (0=print, 1=filament, 2=printer)
     readonly property int tierCategory: {
@@ -253,44 +249,34 @@ ApplicationWindow {
                         }
                     }
 
-                    // Modified badge
+                    // Compact dirty marker.
                     Rectangle {
                         visible: root.configVm && root.configVm.isPresetDirty
-                        height: 22
-                        radius: Theme.radiusSM
-                        color: Theme.bgWarningSubtle
-                        width: modBadge.implicitWidth + 16
-                        Text {
-                            id: modBadge
-                            anchors.centerIn: parent
-                            text: qsTr("Modified")
-                            color: Theme.statusWarning
-                            font.pixelSize: Theme.fontSizeXS
-                            font.bold: true
+                        Layout.preferredWidth: 8
+                        Layout.preferredHeight: 8
+                        radius: 4
+                        color: Theme.statusWarning
+                        ToolTip.visible: dirtyHover.containsMouse
+                        ToolTip.text: qsTr("预设已修改")
+                        MouseArea {
+                            id: dirtyHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.NoButton
                         }
                     }
 
-                    // Compatibility warning chip (shown when preset combination is invalid)
+                    // Compact compatibility marker.
                     Rectangle {
                         visible: root.configVm && !root.configVm.currentPresetCombinationValid
-                        height: 22
-                        radius: Theme.radiusSM
-                        color: Theme.bgErrorSubtle
-                        width: compatBadge.implicitWidth + 16
-                        Text {
-                            id: compatBadge
-                            anchors.centerIn: parent
-                            text: root.configVm && root.configVm.currentPresetCompatibilityMessage
-                                  ? root.configVm.currentPresetCompatibilityMessage
-                                  : qsTr("Incompatible")
-                            color: Theme.statusError
-                            font.pixelSize: Theme.fontSizeXS
-                            font.bold: true
-                            elide: Text.ElideRight
-                            maximumLineCount: 1
-                        }
+                        Layout.preferredWidth: 8
+                        Layout.preferredHeight: 8
+                        radius: 4
+                        color: Theme.statusError
                         ToolTip.visible: compatHover.containsMouse
-                        ToolTip.text: root.configVm ? root.configVm.currentPresetCompatibilityMessage : ""
+                        ToolTip.text: root.configVm && root.configVm.currentPresetCompatibilityMessage
+                                      ? root.configVm.currentPresetCompatibilityMessage
+                                      : qsTr("预设不兼容")
                         MouseArea {
                             id: compatHover
                             anchors.fill: parent
@@ -298,65 +284,62 @@ ApplicationWindow {
                         }
                     }
 
-                    CxTextField {
-                        id: topSearchField
-                        placeholderText: qsTr("Search")
-                        implicitWidth: 132
-                        onTextChanged: root.searchText = text
-                    }
-
-                    RowLayout {
-                        spacing: 2
-                        Text {
-                            text: qsTr("Advanced")
-                            color: Theme.textSecondary
-                            font.pixelSize: Theme.fontSizeXS
-                        }
-                        CxSwitch {
-                            checked: root.advancedMode
-                            onToggled: root.advancedMode = checked
-                        }
-                    }
-
-                    CxButton {
-                        text: qsTr("Save")
-                        height: 28
-                        compact: true
-                        cxStyle: CxButton.Style.Primary
-                        visible: root.configVm && root.configVm.isPresetDirty
+                    CxIconButton {
+                        buttonSize: 28
+                        iconSize: 15
+                        cxStyle: CxIconButton.Style.Ghost
+                        iconSource: "qrc:/qml/assets/icons/device-floppy.svg"
+                        selected: root.configVm && root.configVm.isPresetDirty
                         enabled: root.configVm && root.configVm.isPresetDirty
+                        toolTipText: qsTr("保存")
                         onClicked: root.requestSaveAndMaybeClose(false)
                     }
 
-                    // Save As button
-                    CxButton {
-                        text: qsTr("Save As...")
-                        height: 28
-                        compact: true
+                    CxIconButton {
+                        buttonSize: 28
+                        iconSize: 15
+                        cxStyle: CxIconButton.Style.Ghost
+                        iconSource: "qrc:/qml/assets/icons/copy.svg"
+                        toolTipText: qsTr("另存为")
                         onClicked: saveAsDialog.open()
                     }
 
-                    // Close button
-                    Rectangle {
-                        width: 28
-                        height: 28
-                        radius: Theme.radiusSM
-                        color: closeMouseArea.containsMouse ? Theme.chromeDangerHover : "transparent"
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "✕"
-                            color: Theme.textMuted
-                            font.pixelSize: Theme.fontSizeMD
+                    CxIconButton {
+                        buttonSize: 28
+                        iconSize: 15
+                        cxStyle: CxIconButton.Style.Ghost
+                        iconSource: "qrc:/qml/assets/icons/search.svg"
+                        selected: root.searchExpanded || root.searchText.length > 0
+                        toolTipText: qsTr("搜索")
+                        onClicked: {
+                            root.searchExpanded = !root.searchExpanded
+                            if (!root.searchExpanded)
+                                root.searchText = ""
                         }
+                    }
 
-                        MouseArea {
-                            id: closeMouseArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.attemptClose()
+                    CxTextField {
+                        id: compactSearchField
+                        visible: root.searchExpanded || root.searchText.length > 0
+                        Layout.preferredWidth: visible ? 132 : 0
+                        Layout.preferredHeight: 28
+                        opacity: visible ? 1 : 0
+                        placeholderText: qsTr("搜索")
+                        text: root.searchText
+                        onTextChanged: {
+                            if (root.searchText !== text)
+                                root.searchText = text
                         }
+                    }
+
+                    CxSwitch {
+                        text: ""
+                        checked: root.advancedMode
+                        Layout.preferredWidth: 42
+                        Layout.preferredHeight: 24
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("高级模式")
+                        onToggled: root.advancedMode = checked
                     }
                 }
             }
@@ -401,10 +384,7 @@ ApplicationWindow {
                             HoverHandler { id: tabHov }
 
                             TapHandler {
-                                onTapped: {
-                                    root.activeTab = modelData.key
-                                    root.selectedGroup = qsTr("All")
-                                }
+                                onTapped: root.activeTab = modelData.key
                             }
                         }
                     }
@@ -454,8 +434,6 @@ ApplicationWindow {
 
                             // Show group header when group changes
                             readonly property bool showGroupHeader: {
-                                if (root.selectedGroup !== "" && root.selectedGroup !== qsTr("All"))
-                                    return false // group filter active, no need for headers
                                 if (optDelegate.index === 0) return optGroup !== ""
                                 var prevGroup = root.optionModel
                                     ? root.optionModel.optGroup(root.filteredIndices[optDelegate.index - 1]) : ""
