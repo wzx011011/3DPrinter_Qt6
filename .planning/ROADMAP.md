@@ -80,7 +80,7 @@ Success criteria:
 ### Phase 88: Settings Verification And Cleanup
 
 **Status:** Planned
-**Plans:** 0/1 plans complete
+**Plans:** 1/1 plans complete
 
 Success criteria:
 1. Replaced settings UI paths leave no stale files, imports, resource entries, tests, or disconnected controls.
