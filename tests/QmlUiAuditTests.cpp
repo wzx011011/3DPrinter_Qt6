@@ -206,14 +206,19 @@ void QmlUiAuditTests::guiStartupDeepLinkArgumentsAreExtensible()
       QStringLiteral("QCommandLineParser"),
       QStringLiteral("QCommandLineOption openPageOption"),
       QStringLiteral("QCommandLineOption openDialogOption"),
+      QStringLiteral("QCommandLineOption loadModelOption"),
       QStringLiteral("QCommandLineOption skipFirstRunOption"),
+      QStringLiteral("QStringList modelPaths"),
       QStringLiteral("QStringLiteral(\"open-page\")"),
       QStringLiteral("QStringLiteral(\"open-dialog\")"),
+      QStringLiteral("QStringLiteral(\"load-model\")"),
       QStringLiteral("QStringLiteral(\"skip-first-run\")"),
       QStringLiteral("struct StartupPageRoute"),
       QStringLiteral("struct StartupDialogRoute"),
       QStringLiteral("applyStartupOpenRequests"),
       QStringLiteral("parser.values(openDialogOption)"),
+      QStringLiteral("parser.values(loadModelOption)"),
+      QStringLiteral("backend.topbarImportModel(modelPath)"),
       QStringLiteral("startupSkipFirstRun"),
       QStringLiteral("QTimer::singleShot(0, &backend")
   };
@@ -1937,8 +1942,9 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
   // PREPSB-03: dirty state surfaced via isPresetDirty (printer + process).
   QVERIFY2(sidebar.count(QStringLiteral("isPresetDirty")) >= 2,
            "LeftSidebar must surface isPresetDirty on >= 2 preset rows (printer + process)");
-  QVERIFY2(sidebar.contains(QStringLiteral("presetActionBlocker(2,")),
-           "LeftSidebar printer edit must gate on presetActionBlocker (read-only)");
+  QVERIFY2(!sidebar.contains(QStringLiteral("presetActionBlocker(2, root.configVm.currentPrinterPreset, \"rename\")"))
+              && !sidebar.contains(QStringLiteral("presetActionBlocker(1, root.configVm.currentFilamentPreset, \"rename\")")),
+           "LeftSidebar settings entry buttons must stay clickable even when a preset cannot be renamed");
 
   // PREPSB-02: Setting button visible+enabled and forwards the request.
   QVERIFY2(sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"process\")")),
@@ -2190,7 +2196,8 @@ void QmlUiAuditTests::prepareFullVisualParityContract()
     QStringLiteral("readonly property int targetViewportTopInset: 58"),
     QStringLiteral("readonly property int targetViewportBottomInset: 50"),
     QStringLiteral("id: prepareVisualStatusPill"),
-    QStringLiteral("anchors.bottomMargin: root.targetViewportBottomInset")
+    QStringLiteral("anchors.bottomMargin: root.targetViewportBottomInset"),
+    QStringLiteral("function thumbnailSource(data)")
   };
   for (const QString &token : prepareTokens) {
     QVERIFY2(preparePage.contains(token),
@@ -2215,6 +2222,7 @@ void QmlUiAuditTests::prepareFullVisualParityContract()
   const QStringList shellTokens = {
     QStringLiteral("readonly property int prepareChromeHeight: 70"),
     QStringLiteral("Layout.preferredHeight: root.prepareChromeHeight"),
+    QStringLiteral("id: titleToolRow"),
     QStringLiteral("id: workflowBar"),
     QStringLiteral("id: prepareExportGcodeButton"),
     QStringLiteral("root.exportGcodeRequested()"),
@@ -2224,6 +2232,20 @@ void QmlUiAuditTests::prepareFullVisualParityContract()
     QVERIFY2(mainQml.contains(token) || topbar.contains(token),
              qPrintable(QStringLiteral("Prepare shell visual parity token missing: %1").arg(token)));
   }
+  QVERIFY2(topbar.contains(QStringLiteral("id: titleToolRow\n            anchors.left: parent.left\n            anchors.right: parent.right\n            anchors.top: parent.top\n            height: 36"))
+              && !topbar.contains(QStringLiteral("id: titleToolRow\n            anchors.fill: parent")),
+           "BBLTopbar title tools must be constrained to the 36px title row so workflow tabs cannot overlap them");
+  QVERIFY2(topbar.contains(QStringLiteral("anchors.topMargin: 36"))
+              && topbar.contains(QStringLiteral("height: 34")),
+           "BBLTopbar workflowBar must remain below the 36px title row");
+  QVERIFY2(preparePage.contains(QStringLiteral("readonly property int prepareBottomViewControlsBottomMargin"))
+              && preparePage.contains(QStringLiteral("viewControlsBottomMargin: root.prepareBottomViewControlsBottomMargin"))
+              && glToolbars.contains(QStringLiteral("property int viewControlsBottomMargin"))
+              && glToolbars.contains(QStringLiteral("anchors.bottomMargin: root.viewControlsBottomMargin")),
+           "Prepare lower-left view controls must use a caller-provided safe bottom margin instead of overlapping plate thumbnails");
+  QVERIFY2(preparePage.contains(QStringLiteral("data.indexOf(\"data:image/\") === 0 ? data"))
+              && !preparePage.contains(QStringLiteral("\"data:image/png;base64,\" + glThumb")),
+           "Prepare plate thumbnails must not prepend a data URL prefix when GL already returned a data URL");
 }
 
 void QmlUiAuditTests::prepareRestoredControlsAreActionable()
@@ -2802,7 +2824,13 @@ void QmlUiAuditTests::leftSidebarParamsPanelUsesRealOptionRows()
            "LeftSidebar process edit button must open the process SettingsDialog");
   QVERIFY2(sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"printer\")"))
                && sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"filament\")")),
-           "LeftSidebar preset edit buttons must open tier-specific SettingsDialog windows");
+            "LeftSidebar preset edit buttons must open tier-specific SettingsDialog windows");
+  QVERIFY2(sidebar.contains(QStringLiteral("onActionTriggered: backend.forwardSettingsRequest(\"printer\")"))
+              && !sidebar.contains(QStringLiteral("onActionTriggered: backend.showConfigWizard()")),
+           "LeftSidebar printer settings header must open printer settings, not the first-run config wizard");
+  QVERIFY2(!sidebar.contains(QStringLiteral("presetActionBlocker(2, root.configVm.currentPrinterPreset, \"rename\")"))
+              && !sidebar.contains(QStringLiteral("presetActionBlocker(1, root.configVm.currentFilamentPreset, \"rename\")")),
+           "LeftSidebar printer and filament settings entry buttons must not be disabled by preset rename blockers");
   QVERIFY2(preparePage.contains(QStringLiteral("backend.forwardSettingsRequest(\"process\")")),
            "Prepare context menu process settings entries must open the process SettingsDialog");
   QVERIFY2(settingsDialog.contains(QStringLiteral("key: \"Other\""))

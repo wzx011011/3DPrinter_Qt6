@@ -21,6 +21,9 @@ Item {
     readonly property bool visualCompareActive: typeof backend !== "undefined" && backend.visualCompareMode
     readonly property int targetViewportTopInset: 58
     readonly property int targetViewportBottomInset: 50
+    readonly property int preparePlateBarHeight: 44
+    readonly property int prepareBottomViewControlsBottomMargin: root.targetViewportBottomInset
+        + ((root.editorVm && root.editorVm.plateCount > 0) ? root.preparePlateBarHeight + 8 : 0)
     // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage → DockableSidebar)
     property bool sidebarCollapsed: false
     property int sidebarWidth: 392
@@ -62,6 +65,12 @@ Item {
     // GL FBO 缩略图捕获（对齐上游 PartPlate::thumbnail_data）
     function requestGLThumbnail() {
         viewport3d.requestThumbnailCapture(root.editorVm ? root.editorVm.currentPlateIndex : 0, 128)
+    }
+
+    function thumbnailSource(data) {
+        if (!data || data.length === 0)
+            return ""
+        return data.indexOf("data:image/") === 0 ? data : "data:image/png;base64," + data
     }
 
     function setGizmoIfAvailable(mode) {
@@ -1631,6 +1640,7 @@ Item {
                     z: 100
                     editorVm: root.editorVm
                     viewport3d: viewport3d
+                    viewControlsBottomMargin: root.prepareBottomViewControlsBottomMargin
                     onAddModelRequested: openFileDlg.open()
                     onFitViewRequested: root.applyFitHintIfReady()
                     onSliceRequested: if (root.editorVm) root.editorVm.requestSlice()
@@ -3143,8 +3153,8 @@ Item {
                                         if (!root.editorVm) return ""
                                         var glThumb = viewport3d.lastThumbnailData
                                         if (glThumb.length > 0 && index === root.editorVm.currentPlateIndex)
-                                            return "data:image/png;base64," + glThumb
-                                        return "data:image/png;base64," + root.editorVm.generatePlateThumbnail(index, 80)
+                                            return root.thumbnailSource(glThumb)
+                                        return root.thumbnailSource(root.editorVm.generatePlateThumbnail(index, 80))
                                     }
                                 }
                             }

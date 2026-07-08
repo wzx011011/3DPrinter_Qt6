@@ -21,6 +21,7 @@ Item {
     readonly property int targetRightToolbarTop: 392
     readonly property int targetRightToolbarCenterOffset: 300
     readonly property int targetViewControlsBottom: 42
+    property int viewControlsBottomMargin: root.targetViewControlsBottom
     readonly property color targetToolbarSurface: "#3b3e46aa"
     readonly property color targetToolbarBorder: "#71757d88"
     readonly property string iconBase: "qrc:/qml/assets/icons/"
@@ -288,7 +289,7 @@ Item {
         anchors.left: parent.left
         anchors.bottom: parent.bottom
         anchors.leftMargin: 20
-        anchors.bottomMargin: root.targetViewControlsBottom
+        anchors.bottomMargin: root.viewControlsBottomMargin
         width: viewRow.implicitWidth + 10
         height: root.viewportToolbarHeight
 

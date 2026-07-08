@@ -67,7 +67,7 @@ Rectangle {
                 iconSource: "qrc:/qml/assets/icons/printer.svg"
                 actionIcon: "qrc:/qml/assets/icons/settings.svg"
                 actionToolTip: qsTr("打印机设置")
-                onActionTriggered: backend.showConfigWizard()
+                onActionTriggered: backend.forwardSettingsRequest("printer")
             }
 
             Rectangle {
@@ -167,7 +167,6 @@ Rectangle {
                         PixelIconButton {
                             iconSource: "qrc:/qml/assets/icons/settings.svg"
                             toolTipText: qsTr("编辑打印机预设")
-                            enabled: !(root.configVm && root.configVm.presetActionBlocker(2, root.configVm.currentPrinterPreset, "rename") !== "")
                             onClicked: backend.forwardSettingsRequest("printer")
                         }
 
@@ -186,7 +185,6 @@ Rectangle {
                 iconText: "F"
                 actionIcon: "qrc:/qml/assets/icons/settings.svg"
                 actionToolTip: qsTr("耗材设置")
-                enabled: !(root.configVm && root.configVm.presetActionBlocker(1, root.configVm.currentFilamentPreset, "rename") !== "")
                 onActionTriggered: backend.forwardSettingsRequest("filament")
             }
 
@@ -249,7 +247,6 @@ Rectangle {
                         PixelIconButton {
                             iconSource: "qrc:/qml/assets/icons/settings.svg"
                             toolTipText: qsTr("编辑耗材预设")
-                            enabled: !(root.configVm && root.configVm.presetActionBlocker(1, root.configVm.currentFilamentPreset, "rename") !== "")
                             onClicked: backend.forwardSettingsRequest("filament")
                         }
 

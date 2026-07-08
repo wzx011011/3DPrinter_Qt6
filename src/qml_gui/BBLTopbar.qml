@@ -120,7 +120,11 @@ Item {
         }
 
         RowLayout {
-            anchors.fill: parent
+            id: titleToolRow
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: 36
             anchors.leftMargin: 5
             anchors.rightMargin: 0
             spacing: 0
@@ -128,8 +132,8 @@ Item {
             // ── LEFT GROUP ───────────────────────────────────────────────
             // Logo (对齐上游 ID_LOGO)
             Rectangle {
-                Layout.preferredWidth: 40
-                Layout.preferredHeight: 40
+                Layout.preferredWidth: 36
+                Layout.preferredHeight: 32
                 color: logoHover.containsMouse ? Theme.chromeHover : "transparent"
 
                 Image {

@@ -86,6 +86,7 @@ struct StartupOpenRequest
 {
   QString page;
   QStringList dialogs;
+  QStringList modelPaths;
   bool skipFirstRun = false;
 };
 
@@ -181,18 +182,24 @@ static StartupOpenRequest parseStartupOpenRequest(QCoreApplication &app)
       QStringLiteral("open-dialog"),
       QStringLiteral("Open a dialog after QML startup. Can be specified multiple times."),
       QStringLiteral("dialog"));
+  QCommandLineOption loadModelOption(
+      QStringLiteral("load-model"),
+      QStringLiteral("Load a model file after QML startup. Can be specified multiple times."),
+      QStringLiteral("path"));
   QCommandLineOption skipFirstRunOption(
       QStringLiteral("skip-first-run"),
       QStringLiteral("Mark the first-run config wizard complete for this startup."));
 
   parser.addOption(openPageOption);
   parser.addOption(openDialogOption);
+  parser.addOption(loadModelOption);
   parser.addOption(skipFirstRunOption);
   parser.process(app);
 
   StartupOpenRequest request;
   request.page = parser.value(openPageOption);
   request.dialogs = parser.values(openDialogOption);
+  request.modelPaths = parser.values(loadModelOption);
   request.skipFirstRun = parser.isSet(skipFirstRunOption);
   return request;
 }
@@ -200,7 +207,7 @@ static StartupOpenRequest parseStartupOpenRequest(QCoreApplication &app)
 static void applyStartupOpenRequests(const StartupOpenRequest &request,
                                      BackendContext &backend)
 {
-  if (request.page.isEmpty() && request.dialogs.isEmpty())
+  if (request.page.isEmpty() && request.dialogs.isEmpty() && request.modelPaths.isEmpty())
     return;
 
   QTimer::singleShot(0, &backend, [&backend, request]()
@@ -220,6 +227,14 @@ static void applyStartupOpenRequests(const StartupOpenRequest &request,
       }
       if (!handled)
         appendStartupLog(QStringLiteral("Startup open-page ignored: %1").arg(request.page));
+    }
+
+    for (const QString &modelPath : request.modelPaths)
+    {
+      const bool loaded = backend.topbarImportModel(modelPath);
+      appendStartupLog(QStringLiteral("Startup load-model %1: %2")
+                           .arg(loaded ? QStringLiteral("handled") : QStringLiteral("failed"),
+                                modelPath));
     }
 
     for (const QString &dialog : request.dialogs)
