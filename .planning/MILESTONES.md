@@ -1,5 +1,31 @@
 # Milestones History
 
+## v4.1 Parameter Settings Dialogs Source-Truth Restoration (Shipped: 2026-07-09)
+
+**Phases completed:** 5 phases, 5 plans
+**Audit:** passed; 14/14 requirements satisfied, 5/5 Nyquist compliant, canonical verifier passed, runtime settings visual evidence captured.
+**Known deferred items at close:** none blocking — direct automated SettingsDialog window capture was blocked by the Windows capture API; SETVERIFY-02 accepts manual click-through plus runtime evidence, and startup deep links (`--open-page`, `--open-dialog`, `--load-model`) were added to support future deterministic visual evidence.
+
+**Key accomplishments:**
+
+- Created the v4.1 settings source-truth gap matrix tying screenshot-visible printer/material/process settings regions to OrcaSlicer source anchors, Qt targets, replacement decisions, owner phases, and verification methods (Phase 84).
+- Restored the settings dialog shell: independent 736x593 non-modal windows, compact preset/action row, clean titles/tabs, removed the off-design left group sidebar, and no mojibake or raw labels (Phase 85).
+- Restored typed option sections: compact section headers/dividers/icons, checkbox/numeric-unit/enum/text-color/range controls all routed through existing `optionModel.setValue`, dirty/read-only/value-source/validation states without row overlap (Phase 86).
+- Wired the dirty pending preset guard (`pendingUnsavedChangesRequested` → `UnsavedChangesDialog`) distinguishing close-window flows from preset-switch flows, and preserved read-only Save As handling (Phase 87).
+- Locked final verification: normalized settings QML resources, final QML audits for region mapping/text/layout/option bindings/upstream anchors, canonical verifier pass, app launch, and runtime settings visual evidence (Phase 88).
+- Added extensible startup deep-link arguments (`--open-page`, repeated `--open-dialog`, `--skip-first-run`, `--load-model`) so future visual inspection can open pages/dialogs and load models without simulated clicks.
+- Pre-close fix restored Prepare topbar/settings-entry/viewport layout (topbar title controls constrained to 36px, settings entries routed to `forwardSettingsRequest`, lower-left view controls moved above the plate bar) with regression-guarding QmlUiAuditTests.
+
+**Git range:** `349ea7a..a218972` (20 commits, 71 files, +5294/-522)
+
+**Archives:**
+
+- `.planning/milestones/v4.1-ROADMAP.md`
+- `.planning/milestones/v4.1-REQUIREMENTS.md`
+- `.planning/milestones/v4.1-MILESTONE-AUDIT.md`
+
+---
+
 ## v4.0 Preview Page UI Restoration (Shipped: 2026-07-07)
 
 **Phases completed:** 5 phases, 5 plans, 0 tasks

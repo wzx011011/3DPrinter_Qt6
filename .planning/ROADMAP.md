@@ -2,90 +2,148 @@
 
 ## Milestones
 
-- Complete: **v2.9** - Phases 10-15 (shipped 2026-06-25)
-- Complete: **v3.0 PartPlate Core** - Phases 16-22 (shipped 2026-06-26)
-- Complete: **v3.1 QRhi Rendering** - Phases 23-28 (shipped 2026-06-28)
-- Complete with tech debt: **v3.2 Multi-Plate Data Polish** - Phases 29-32 (audited 2026-06-28)
-- Complete at MVP level, superseded for completeness: **v3.3 Slice Preview Main Flow MVP** - Phases 33-36
-- Complete by automated E2E closure: **v3.4 Import to G-code Complete Workflow** - Phases 37-43
-- Superseded after Phase 46: **v3.5 Preset Authoring Complete Workflow** - Phases 44-49
-- Automated verification passed, visual UAT not closed: **v3.6 Screenshot-Driven OrcaSlicer UI Restoration** - Phases 50-58 (shipped 2026-07-03)
-- Complete with residual gaps: **v3.7 Screenshot-Level UI Parity Closure** - Phases 59-64 (2026-07-04; D3D12 and manual visual debt carried forward)
-- Complete with tech debt: **v3.8 RHI Gizmo Parity** - Phases 65-73 (shipped 2026-07-04; 21/21 requirements satisfied, Phase 68 visual evidence deferred)
-- Complete with process debt: **v3.9 Prepare Page UI Restoration** - Phases 74-78 (shipped 2026-07-06; 12/12 requirements satisfied, canonical verifier passed, runtime screenshot captured)
-- Complete: **v4.0 Preview Page UI Restoration** - Phases 79-83 (shipped 2026-07-07; 13/13 requirements satisfied, canonical verifier passed, runtime Preview screenshot captured)
-
-## Current Milestone: v4.1 Parameter Settings Dialogs Source-Truth Restoration
-
-**Goal:** Restore printer, material, and process settings dialogs to screenshot/source-truth parity while preserving the Phase 56 backend semantics for typed options, dirty state, save/reset, slice invalidation, and project persistence.
-
-**Scope rule:** This milestone is local/offline only. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows remain removed from the forward roadmap unless explicitly reopened.
+- ✅ **v2.9** Implementation Realignment and Stabilization — Phases 10-15 (shipped 2026-06-25)
+- ✅ **v3.0** PartPlate Core — Phases 16-22 (shipped 2026-06-26)
+- ✅ **v3.1** QRhi Rendering — Phases 23-28 (shipped 2026-06-28)
+- ✅ **v3.2** Multi-Plate Data Polish — Phases 29-32 (audited 2026-06-28)
+- ✅ **v3.3** Slice Preview Main Flow MVP — Phases 33-36 (superseded by v3.4)
+- ✅ **v3.4** Import to G-code Complete Workflow — Phases 37-43 (closed by automated E2E)
+- ✅ **v3.5** Preset Authoring Complete Workflow — Phases 44-49 (superseded after Phase 46)
+- ✅ **v3.6** Screenshot-Driven OrcaSlicer UI Restoration — Phases 50-58 (shipped 2026-07-03)
+- ✅ **v3.7** Screenshot-Level UI Parity Closure — Phases 59-64 (2026-07-04; D3D12 and manual visual debt carried forward)
+- ✅ **v3.8** RHI Gizmo Parity — Phases 65-73 (shipped 2026-07-04; 21/21 requirements, Phase 68 visual evidence deferred)
+- ✅ **v3.9** Prepare Page UI Restoration — Phases 74-78 (shipped 2026-07-06; 12/12 requirements)
+- ✅ **v4.0** Preview Page UI Restoration — Phases 79-83 (shipped 2026-07-07; 13/13 requirements)
+- ✅ **v4.1** Parameter Settings Dialogs Source-Truth Restoration — Phases 84-88 (shipped 2026-07-09; 14/14 requirements)
 
 ## Phases
 
-- [x] Phase 84: Settings Source-Truth Gap Audit (completed 2026-07-07)
-- [x] Phase 85: Settings Shell And Tab Layout Restoration (completed 2026-07-07)
-- [x] Phase 86: Settings Option Sections And Typed Controls (completed 2026-07-07)
-- [x] Phase 87: Settings Preset Semantics And Workflow Stability (completed 2026-07-07)
-- [x] Phase 88: Settings Verification And Cleanup (completed 2026-07-08)
+<details>
+<summary>✅ v4.1 Parameter Settings Dialogs Source-Truth Restoration (Phases 84-88) — SHIPPED 2026-07-09</summary>
 
-| Phase | Name | Goal | Requirements |
-|---|---|---|---|
-| 84 | Settings Source-Truth Gap Audit | Complete 2026-07-07: froze the v4.1 settings region map, current gaps, upstream anchors, Qt targets, replacement decisions, and verification expectations. | SETAUDIT-01, SETAUDIT-02 |
-| 85 | Settings Shell And Tab Layout Restoration | Complete 2026-07-07: restored the settings window shell, compact preset/action row, clean titles/tabs, no visible left group sidebar dependency, and source audits. | SETLAYOUT-01, SETLAYOUT-02, SETLAYOUT-03 |
-| 86 | Settings Option Sections And Typed Controls | Complete 2026-07-07: restored compact typed option sections, value-source chips, validation/read-only states, and stable row controls. | SETCTRL-01, SETCTRL-02, SETCTRL-03 |
-| 87 | Settings Preset Semantics And Workflow Stability | Complete 2026-07-07: wired dirty pending preset guard flows, read-only Save As preservation, and settings interaction stability coverage. | SETSEM-01, SETSEM-02, SETSEM-03 |
-| 88 | Settings Verification And Cleanup | Complete 2026-07-08: removed stale coverage gaps, locked final QML audits, ran canonical verifier, launched app, and recorded runtime visual evidence. | SETCLEAN-01, SETVERIFY-01, SETVERIFY-02 |
+- [x] Phase 84: Settings Source-Truth Gap Audit (1/1 plans) — completed 2026-07-07
+- [x] Phase 85: Settings Shell And Tab Layout Restoration (1/1 plans) — completed 2026-07-07
+- [x] Phase 86: Settings Option Sections And Typed Controls (1/1 plans) — completed 2026-07-07
+- [x] Phase 87: Settings Preset Semantics And Workflow Stability (1/1 plans) — completed 2026-07-07
+- [x] Phase 88: Settings Verification And Cleanup (1/1 plans) — completed 2026-07-08
 
-### Phase 84: Settings Source-Truth Gap Audit
+Archives: `.planning/milestones/v4.1-ROADMAP.md` · `.planning/milestones/v4.1-REQUIREMENTS.md` · `.planning/milestones/v4.1-MILESTONE-AUDIT.md`
 
-**Status:** Complete 2026-07-07
-**Plans:** 1/1 plans complete
+</details>
 
-Success criteria:
-1. Printer, material, and process settings regions are mapped to target screenshots, upstream source files, and Qt targets.
-2. Phase 56 residual visual-UAT items are reconciled into v4.1 requirements with explicit owner phases.
-3. Current SettingsDialog/OptionRow/GroupNavSidebar gaps are classified as modify, replace, remove, or defer.
+<details>
+<summary>✅ v4.0 Preview Page UI Restoration (Phases 79-83) — SHIPPED 2026-07-07</summary>
 
-### Phase 85: Settings Shell And Tab Layout Restoration
+- [x] Phase 79: Preview Source-Truth Gap Audit (1/1 plans)
+- [x] Phase 80: Preview Layout And Panels Restoration (1/1 plans)
+- [x] Phase 81: Preview Layer Move And Playback Controls (1/1 plans)
+- [x] Phase 82: Preview G-code Roles Color Modes And Rendering (1/1 plans)
+- [x] Phase 83: Preview Verification And Cleanup (1/1 plans)
 
-**Status:** Complete 2026-07-07
-**Plans:** 1/1 plans complete
+Archives: `.planning/milestones/v4.0-ROADMAP.md`
 
-Success criteria:
-1. Printer/material/process settings open as independent non-modal windows from every intended entry point.
-2. Window title, preset selector, action icons, search/advanced affordance, tab strip, and close behavior match screenshot density without mojibake or raw labels.
-3. Off-design surfaces such as the unused left group sidebar are removed from the visible settings window unless source-truth evidence requires them.
+</details>
 
-### Phase 86: Settings Option Sections And Typed Controls
+<details>
+<summary>✅ v3.9 Prepare Page UI Restoration (Phases 74-78) — SHIPPED 2026-07-06</summary>
 
-**Status:** Complete 2026-07-07
-**Plans:** 1/1 plans complete
+- [x] Phase 74: Prepare Source-Truth Gap Audit (1/1 plans)
+- [x] Phase 75: Prepare Sidebar And Preset Controls (1/1 plans)
+- [x] Phase 76: Prepare Object Plate And Viewport (1/1 plans)
+- [x] Phase 77: Prepare Viewport Controls And Gizmo Panels (1/1 plans)
+- [x] Phase 78: Prepare Verification And Cleanup (1/1 plans)
 
-Success criteria:
-1. Option sections render with screenshot-like headers, dividers, icons, and compact vertical spacing.
-2. Bool, numeric/unit, enum, text/color, nullable/vector, and min/max paired controls render and edit through existing C++ models.
-3. Dirty, read-only, value-source, validation, and disabled states stay visible without row overlap or layout jumps.
+Archives: `.planning/milestones/v3.9-ROADMAP.md`
 
-### Phase 87: Settings Preset Semantics And Workflow Stability
+</details>
 
-**Status:** Complete 2026-07-07
-**Plans:** 1/1 plans complete
+<details>
+<summary>✅ v3.8 RHI Gizmo Parity (Phases 65-73) — SHIPPED 2026-07-04</summary>
 
-Success criteria:
-1. Preset selection, save, save-as, reset option/group/all, discard, cancel, and unsaved-close flows keep upstream-mapped behavior.
-2. Search and simple/advanced filtering remain per-dialog and do not hide active dirty/error states.
-3. Settings edits invalidate slice state, persist dirty overrides through project save/load, and do not clear Prepare/Preview payload state.
+Phases 65-73, 9 phases / 8 plans. Archives: `.planning/milestones/v3.8-ROADMAP.md`
 
-### Phase 88: Settings Verification And Cleanup
+</details>
 
-**Status:** Complete 2026-07-08
-**Plans:** 1/1 plans complete
+<details>
+<summary>✅ v3.7 Screenshot-Level UI Parity Closure (Phases 59-64) — SHIPPED 2026-07-04</summary>
 
-Success criteria:
-1. Replaced settings UI paths leave no stale files, imports, resource entries, tests, or disconnected controls.
-2. Automated source/QML audits cover region mapping, text cleanup, layout structure, option bindings, and upstream anchors.
-3. The canonical verifier passes, `build/OWzxSlicer.exe` launches, and printer/material/process settings visual evidence is recorded against the target screenshots.
+Phases 59-64. Archives: `.planning/milestones/v3.7-ROADMAP.md`
+
+</details>
+
+<details>
+<summary>✅ v3.6 Screenshot-Driven OrcaSlicer UI Restoration (Phases 50-58) — SHIPPED 2026-07-03</summary>
+
+Phases 50-58, 9 phases / 25 plans. Archives: `.planning/milestones/v3.6-ROADMAP.md`
+
+</details>
+
+<details>
+<summary>✅ v3.5 Preset Authoring Complete Workflow (Phases 44-49) — SUPERSEDED after Phase 46</summary>
+
+Phases 44-49. Superseded by v3.6 settings restoration. Archives: see git history.
+
+</details>
+
+<details>
+<summary>✅ v3.4 Import to G-code Complete Workflow (Phases 37-43) — CLOSED by automated E2E</summary>
+
+Phases 37-43. Closed by canonical E2E coverage and runtime launch evidence.
+
+</details>
+
+<details>
+<summary>✅ v3.3 Slice Preview Main Flow MVP (Phases 33-36) — SUPERSEDED by v3.4</summary>
+
+Phases 33-36. MVP-level, superseded for completeness.
+
+</details>
+
+<details>
+<summary>✅ v3.2 Multi-Plate Data Polish (Phases 29-32) — AUDITED 2026-06-28</summary>
+
+Phases 29-32. Archives: `.planning/milestones/v3.2-ROADMAP.md`
+
+</details>
+
+<details>
+<summary>✅ v3.1 QRhi Rendering (Phases 23-28) — SHIPPED 2026-06-28</summary>
+
+Phases 23-28, 6 phases / 14 plans. Archives: `.planning/milestones/v3.1-ROADMAP.md`
+
+</details>
+
+<details>
+<summary>✅ v3.0 PartPlate Core (Phases 16-22) — SHIPPED 2026-06-26</summary>
+
+Phases 16-22, 7 phases / 7 plans. Archives: `.planning/milestones/v3.0-ROADMAP.md`
+
+</details>
+
+<details>
+<summary>✅ v2.9 Implementation Realignment and Stabilization (Phases 10-15) — SHIPPED 2026-06-25</summary>
+
+Phases 10-15, 6 phases / 6 plans. Archives: `.planning/milestones/v2.9-ROADMAP.md`
+
+</details>
+
+## Progress
+
+| Milestone | Phases | Plans | Reqs | Status | Shipped |
+|---|---|---|---|---|---|
+| v2.9 | 10-15 | 6 | 28/28 | Complete | 2026-06-25 |
+| v3.0 | 16-22 | 7 | 14/14 | Complete | 2026-06-26 |
+| v3.1 | 23-28 | 14 | 26/26 | Complete (tech debt) | 2026-06-28 |
+| v3.2 | 29-32 | 4 | 8/10 | Complete (tech debt) | 2026-06-28 |
+| v3.3 | 33-36 | - | MVP | Superseded by v3.4 | 2026-06-28 |
+| v3.4 | 37-43 | - | closed by E2E | Complete | 2026-07-06 |
+| v3.5 | 44-49 | - | - | Superseded after Phase 46 | - |
+| v3.6 | 50-58 | 25 | automated floor | Complete (tech debt) | 2026-07-03 |
+| v3.7 | 59-64 | - | - | Complete (tech debt) | 2026-07-04 |
+| v3.8 | 65-73 | 8 | 21/21 | Complete (tech debt) | 2026-07-04 |
+| v3.9 | 74-78 | 5 | 12/12 | Complete (tech debt) | 2026-07-06 |
+| v4.0 | 79-83 | 5 | 13/13 | Complete | 2026-07-07 |
+| v4.1 | 84-88 | 5 | 14/14 | Complete | 2026-07-09 |
 
 ## Deferred Backlog
 
@@ -101,12 +159,8 @@ Success criteria:
 
 ## Next Step
 
-Run v4.1 milestone audit and closeout after manual visual inspection is accepted:
-
-```text
-$gsd-audit-milestone
-```
+v4.1 is shipped. Start the next milestone with `/gsd-new-milestone`. Candidate backlog is in the Deferred Backlog section above; do not reintroduce Removed Scope unless the user explicitly reopens it.
 
 ---
 
-*Last updated: 2026-07-08 after Phase 88 completion.*
+*Last updated: 2026-07-09 after v4.1 milestone completion.*

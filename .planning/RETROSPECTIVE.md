@@ -216,6 +216,81 @@ A stabilization/truth-reset milestone, not new features:
 
 ---
 
+## Milestone: v4.0 - Preview Page UI Restoration
+
+**Shipped:** 2026-07-07
+**Phases:** 5 | **Plans:** 5 | **Requirements:** 13/13 satisfied
+**Audit status:** `passed` (D3D12 and deterministic loaded-G-code screenshot carried forward)
+
+### What Was Built
+- A canonical Preview source-truth gap matrix mapping screenshot-visible Preview regions to OrcaSlicer source anchors, Qt targets, owner phases, and verification methods.
+- Preview layout density for top controls, viewport, side panels, layer slider, bottom move/playback controls, statistics, metadata, and legend surfaces.
+- Layer range/current-layer controls, move stepping, playback, and Preview camera fit/orbit stability without losing payload state.
+- G-code role colors, role visibility, and color-mode availability with honest gating for blocked modes.
+- Replaced the workflow tab delegate with a real accessible `Button`, fixing runtime Preview navigation by UI automation.
+
+### What Worked
+- Mirroring the v3.9 gap-matrix-first cadence (audit → layout → controls → semantics → verification) kept each phase tightly scoped and auditable.
+- The workflow-tab delegate fix turned an accessibility/automation blocker into a one-component replacement with immediate test payoff.
+- Honest gating of blocked color modes preserved the source-truth rule without over-promising on the default D3D11 path.
+
+### What Was Inefficient
+- Direct automated Preview-window capture remained limited by the Windows capture API; final evidence still relied on a runtime screenshot rather than deterministic loaded-G-code frames.
+- D3D12 remained an open explicit-opt-in investigation, carried forward unchanged.
+
+### Patterns Established
+- Per-page restoration milestones (Prepare → Preview → Settings) using the same five-phase cadence is the stable template for screenshot-driven source-truth work.
+- Workflow-tab delegate replacement reinforced that runtime-clickability/accessibility is part of UI restoration, not a separate concern.
+
+### Key Lessons
+- A restored UI is only done when a UI-automation tool can actually drive it; replace delegate controls that block automation rather than working around them.
+
+### Cost Observations
+- Phases: 5, Plans: 5.
+- Canonical verifier passed after Phase 83 and covered app build, QML UI audit, PreviewParser, app launch smoke, and E2E pipeline.
+
+---
+
+## Milestone: v4.1 - Parameter Settings Dialogs Source-Truth Restoration
+
+**Shipped:** 2026-07-09
+**Phases:** 5 | **Plans:** 5 | **Requirements:** 14/14 satisfied
+**Audit status:** `passed` (14/14 requirements, 5/5 Nyquist compliant)
+
+### What Was Built
+- A settings source-truth gap matrix mapping printer/material/process settings regions to screenshots, OrcaSlicer source anchors (Tab/PresetComboBoxes/ConfigManipulation/UnsavedChangesDialog/CreatePresetsDialog + PrintConfig/Preset/PresetBundle), Qt targets, replacement decisions, and verification ownership.
+- Restored settings dialog shell: independent 736x593 non-modal windows, compact preset/action row, clean titles/tabs, removed the off-design left group sidebar, no mojibake or raw labels.
+- Restored typed option sections: compact section headers/dividers/icons; checkbox/numeric-unit/enum/text-color/range controls all routed through `optionModel.setValue`; dirty/read-only/value-source/validation states without row overlap.
+- Wired the dirty pending preset guard (`pendingUnsavedChangesRequested` → `UnsavedChangesDialog`) distinguishing close-window flows from preset-switch flows, with read-only Save As preserved.
+- Final verification: normalized settings QML resources, final QML audits, canonical verifier pass, app launch, and runtime settings visual evidence.
+- Added startup deep links (`--open-page`, repeated `--open-dialog`, `--skip-first-run`, `--load-model`) and a pre-close Prepare topbar/settings-entry/viewport layout fix with regression-guarding QmlUiAuditTests.
+
+### What Worked
+- Keeping all typed-control edits routed through the existing `optionModel.setValue` path preserved Phase 56 backend semantics with zero C++ model changes — pure QML restoration.
+- The gap-matrix-first cadence (now the stable template across Prepare/Preview/Settings) made owner-phase routing unambiguous and prevented re-litigation during execution.
+- Adding startup deep-link arguments proactively solved the recurring Windows-capture-API blocker: future visual evidence can open pages/dialogs and load models without simulated clicks.
+- Catching the Prepare topbar/settings-entry/viewport regression at milestone close (a `resolved` debug artifact with uncommitted changes) and committing it before tagging kept the v4.1 tag clean.
+
+### What Was Inefficient
+- Direct automated capture of separate `SettingsDialog` windows was blocked by the Windows capture API, so SETVERIFY-02 had to accept manual click-through plus runtime evidence rather than a deterministic dialog screenshot.
+- A `resolved` debug artifact with uncommitted source changes existed at milestone close, requiring a pre-close fix commit before archival. This would have leaked into the next milestone if not checked via the pre-close artifact audit.
+
+### Patterns Established
+- For pure-presentation restoration where backend semantics already exist, route all edits through existing ViewModel/C++ model APIs and keep QML-only changes.
+- Startup deep-link arguments (`--open-page`/`--open-dialog`/`--load-model`/`--skip-first-run`) are now the standard mechanism for deterministic visual evidence on Windows where window capture is unreliable.
+- Pre-close artifact audit (especially `resolved` debug artifacts with uncommitted changes) is a required milestone-close gate, not optional.
+
+### Key Lessons
+- The pre-close artifact audit is load-bearing: a `resolved` debug file can hide uncommitted source changes that should be committed before tagging.
+- When window capture is blocked, invest in argv-based deep links once and reuse them across all future visual-evidence needs instead of fighting the capture API each milestone.
+
+### Cost Observations
+- Phases: 5, Plans: 5.
+- Git range `349ea7a..a218972`: 20 commits, 71 files, +5294/-522 (includes the pre-close Prepare fix commit).
+- Canonical verifier passed after Phase 88 and covered app build, QML UI audit, ViewModel smoke, Prepare scene data, PartPlate, and PreviewParser tests.
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Reqs satisfied | Audit status | Notes |
@@ -225,5 +300,7 @@ A stabilization/truth-reset milestone, not new features:
 | v3.6 | 9 | 25 | automated floor green | tech_debt | Screenshot inventory frozen first; manual visual UAT remains an explicit carry-forward |
 | v3.8 | 9 | 8 | 21/21 | tech_debt | RHI gizmo parity shipped; legacy OpenGL viewport retired; optional visual-evidence debt remains |
 | v3.9 | 5 | 5 | 12/12 | tech_debt | Prepare page restored and verified; remaining debt is process/visual evidence quality |
+| v4.0 | 5 | 5 | 13/13 | passed | Preview page restored; workflow-tab delegate replaced for automation; D3D12 + deterministic loaded-G-code screenshot carried forward |
+| v4.1 | 5 | 5 | 14/14 | passed | Settings dialogs restored (QML-only, backend preserved); startup deep links added; pre-close artifact audit caught an uncommitted resolved debug fix |
 
-*Last updated: 2026-07-06 after v3.9 milestone completion.*
+*Last updated: 2026-07-09 after v4.1 milestone completion.*

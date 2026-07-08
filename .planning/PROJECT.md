@@ -4,15 +4,15 @@
 
 OWzx Slicer is a Windows desktop slicer migrating OrcaSlicer from its upstream C++/wxWidgets GUI to a C++17, Qt 6.10, and QML architecture. The GUI layer is being rewritten while preserving libslic3r and upstream user-visible behavior as the functional source of truth.
 
-The project currently has a usable Qt6/QML shell, real model/project IO, real slicing and local G-code export paths, screenshot-restored Prepare/Preview/settings workflows, and a default QRhi/D3D11 rendering path that owns gizmo, cut plane, wipe tower, precise picking, and G-code preview rendering. v3.8 retired the legacy OpenGL viewport path; remaining work is now future milestone scope rather than the default renderer foundation.
+The project currently has a usable Qt6/QML shell, real model/project IO, real slicing and local G-code export paths, screenshot-restored Prepare/Preview/settings workflows, and a default QRhi/D3D11 rendering path that owns gizmo, cut plane, wipe tower, precise picking, and G-code preview rendering. v3.8 retired the legacy OpenGL viewport path; v4.1 completed the parameter settings dialog restoration. Remaining work is now future milestone scope rather than the default renderer or settings foundation.
 
 ## Core Value
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current State: After v4.0 Preview Page UI Restoration
+## Current State: After v4.1 Parameter Settings Dialogs Source-Truth Restoration
 
-**Last shipped milestone:** v4.0 Preview Page UI Restoration (2026-07-07).
+**Last shipped milestone:** v4.1 Parameter Settings Dialogs Source-Truth Restoration (2026-07-09).
 
 **Shipped state:**
 - Prepare page visual/source-truth gap inventory exists as the canonical v3.9 region map.
@@ -21,22 +21,22 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 - RHI-backed viewport controls and gizmo floating panels are integrated into the restored Prepare page without overlap or dead controls.
 - Preview page visual/source-truth gap inventory exists as the canonical v4.0 region map.
 - Preview layout, layer/move controls, playback, role visibility, color-mode availability, statistics/legend surfaces, and Preview navigation are restored and audited.
-- Final verification passed through source/QML audits, canonical build, running application, and recorded Prepare/Preview visual evidence.
+- Parameter settings dialogs (printer, material, process) are restored to the screenshot/source-truth shell, compact preset/action row, clean titles/tabs, typed option sections, dirty/read-only/value-source/validation states, and preset save/save-as/reset/discard/unsaved-close semantics.
+- Startup deep links (`--open-page`, repeated `--open-dialog`, `--skip-first-run`, `--load-model`) support deterministic visual inspection without simulated clicks.
+- Final verification passed through source/QML audits, canonical build, running application, and recorded Prepare/Preview/settings visual evidence.
 
 **Carry-forward from v3.8:** The default QRhi/D3D11 path owns move, rotate, scale, cut plane, wipe tower, precise object picking, and Preview G-code rendering. Legacy `GLViewport*` / `GCodeRenderer*` files and the `OWZX_OPENGL` startup path are retired. The QML `OWzxGL.GLViewport` name remains as a compatibility alias backed by RHI or Software rendering.
 
-**Carry-forward outside v4.0:** D3D12 remains explicit opt-in future investigation. Parameter settings dialogs and AssembleView remain valid local/offline source-truth candidates. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows are removed from forward scope unless the user explicitly reopens them.
+**Carry-forward outside v4.1:** D3D12 remains explicit opt-in future investigation. AssembleView remains a valid local/offline source-truth candidate. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows are removed from forward scope unless the user explicitly reopens them.
 
-## Current Milestone: v4.1 Parameter Settings Dialogs Source-Truth Restoration
+## Next Milestone
 
-**Goal:** Restore printer, material, and process settings dialogs to screenshot/source-truth parity while preserving the Phase 56 backend semantics for typed options, dirty state, save/reset, slice invalidation, and project persistence.
-
-**Target features:**
-- Settings source-truth gap inventory for printer, material, and process dialogs using the two settings screenshots plus OrcaSlicer settings/preset sources.
-- Screenshot-aligned settings window chrome, preset/action row, tab strip, section flow, density, clean text, and stable non-modal behavior.
-- Option sections and typed controls for checkboxes, numeric/unit fields, enum combos, text/color fields, paired min/max rows, dirty/read-only/value-source/validation states.
-- Preset selection/save/save-as/reset/discard/unsaved-close/search/simple-advanced semantics preserved through Prepare, Preview, slice invalidation, and project persistence.
-- Final verification through source/QML audits, canonical build, running app launch, and settings visual evidence.
+v4.1 is shipped. The next milestone has not been planned yet. Run `/gsd-new-milestone` to select the next source-truth restoration target. Candidate backlog:
+- AssembleView source-truth completion.
+- Auto filament-map recommendation and wipe-tower geometry/rendering.
+- Real GL/QRhi-capture thumbnails and 3MF pixel round-trip.
+- Missing CLI fixtures and deterministic argv-based GUI fixture loading for screenshots.
+- D3D12 crash root cause and Vulkan evaluation after the SDK/runtime path is ready.
 
 ## Requirements
 
@@ -61,14 +61,11 @@ These are current baseline capabilities inferred from implementation, git histor
 - Default renderer foundation now rests on QRhi/D3D11 plus Software fallback; the old OpenGL viewport is no longer a selectable application path.
 - v3.9 Prepare page UI restoration shipped with 12/12 requirements satisfied, canonical verification passed, current runtime launch evidence, and final Prepare screenshot evidence.
 - v4.0 Preview page UI restoration shipped with 13/13 requirements satisfied, canonical verification passed, current runtime launch evidence, and final Preview screenshot evidence.
-- v4.1 Phase 84 settings source-truth gap audit is complete: the printer/material/process settings matrix maps screenshot/source truth, Qt targets, upstream anchors, Phase 56 residuals, and Phase 85-88 verification ownership.
+- v4.1 Parameter settings dialogs source-truth restoration shipped with 14/14 requirements satisfied, milestone audit passed, canonical verifier passing, runtime settings visual evidence recorded, and startup deep links for deterministic visual inspection.
 
 ### Active
 
-- [ ] Restore printer/material/process settings dialogs to screenshot-level OrcaSlicer parity.
-- [ ] Remove mojibake, placeholders, disconnected controls, and off-design settings surfaces.
-- [ ] Preserve existing Phase 56 settings backend semantics while improving visible layout and interaction.
-- [ ] Verify restored settings with source/QML audits, canonical build, running app launch, and visual evidence.
+No active requirements. The next milestone has not been planned. Requirements will be defined via `/gsd-new-milestone` once the next source-truth target is selected.
 
 ### Future
 
@@ -111,7 +108,7 @@ These are current baseline capabilities inferred from implementation, git histor
 - Known carry-forward tech debt: `.Codex` path casing diverges from git-tracked lowercase `.codex` on Windows; normalize before case-sensitive CI if touched.
 - v3.8 closure state: RHI is the default functional renderer for gizmo/pick/cut/wipe scope; Phase 68 still lacks optional manual visual-capture evidence, tracked as tech debt rather than a blocker.
 - v3.9 restored the Prepare page and archived its phase evidence under `.planning/milestones/v3.9-phases/`.
-- v4.1 focuses on parameter settings dialog restoration. Prepare and Preview remain dependency/regression surfaces, not the implementation target.
+- v4.1 restored the parameter settings dialogs (printer/material/process) to screenshot/source-truth parity and shipped on 2026-07-09. Prepare and Preview were dependency/regression surfaces, not the v4.1 implementation target.
 
 ## Constraints
 
@@ -152,7 +149,8 @@ These are current baseline capabilities inferred from implementation, git histor
 | Scope v3.9 to Prepare page UI restoration | The user explicitly selected "准备页 UI 还原"; Preview, settings, device, and AssembleView should not dilute this milestone. | Good - v3.9 shipped |
 | Scope v4.0 to Preview page UI restoration | After Prepare shipped, the next highest-value screenshot/source-truth gap is Preview; device, settings, and AssembleView stay future unless directly required. | Good - v4.0 shipped |
 | Remove LAN/device/network/cloud work from forward scope | User direction on 2026-07-07: LAN devices and networking are no longer done. | Active scope rule |
-| Scope v4.1 to parameter settings dialogs | Settings has real Phase 56 backend semantics but target screenshots still expose visual/text/layout debt. | Active - v4.1 |
+| Scope v4.1 to parameter settings dialogs | Settings has real Phase 56 backend semantics but target screenshots still expose visual/text/layout debt. | Good - v4.1 shipped |
+| Add startup deep-link arguments for settings/dialogs/models | Direct SettingsDialog window capture was blocked by the Windows capture API; argv-based deep links let future visual evidence open pages/dialogs and load models without simulated clicks. | Good - v4.1 shipped |
 
 ## Evolution
 
@@ -172,4 +170,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-07 after v4.1 milestone planning.*
+*Last updated: 2026-07-09 after v4.1 milestone completion.*

@@ -2,32 +2,32 @@
 gsd_state_version: 1.0
 milestone: v4.1
 milestone_name: Parameter Settings Dialogs Source-Truth Restoration
-status: ready_for_milestone_closeout
-last_updated: 2026-07-08T23:21:14+08:00
-last_activity: 2026-07-08 -- v4.1 milestone audit passed; ready for milestone closeout
+status: milestone_complete
+last_updated: 2026-07-09T01:10:00+08:00
+last_activity: 2026-07-09 -- v4.1 milestone completed, archived, and tagged
 progress:
   total_phases: 5
   completed_phases: 5
   total_plans: 5
   completed_plans: 5
   percent: 100
-stopped_at: v4.1 milestone audit complete; ready for milestone closeout
+stopped_at: v4.1 milestone complete; ready for next milestone planning
 ---
 
 # Project State
 
-**Milestone:** v4.1 - Parameter Settings Dialogs Source-Truth Restoration
-**Status:** Ready for milestone closeout
-**Next step:** Run `$gsd-complete-milestone v4.1`.
+**Milestone:** v4.1 - Parameter Settings Dialogs Source-Truth Restoration (SHIPPED 2026-07-09)
+**Status:** Milestone complete
+**Next step:** Run `/gsd-new-milestone` to plan the next source-truth restoration target.
 
 ## Current Position
 
-Phase: 88
-Plan: 88-01
-Status: Complete
-Last activity: 2026-07-08
+Phase: (none active — milestone closed)
+Plan: (none active)
+Status: Between milestones
+Last activity: 2026-07-09
 
-## Current Milestone
+## Last Completed Milestone: v4.1
 
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
@@ -39,54 +39,50 @@ Last activity: 2026-07-08
 
 ## Project Reference
 
-See: `.planning/PROJECT.md`
+See: `.planning/PROJECT.md` (updated 2026-07-09)
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-
-## Last Completed Milestone
-
-| Phase | Name | Status | Requirements |
-|---|---|---|---|
-| 79 | Preview Source-Truth Gap Audit | Complete | PVAUDIT-01 |
-| 80 | Preview Layout And Panels Restoration | Complete | PVLAYOUT-01, PVLAYOUT-02, PVLAYOUT-03 |
-| 81 | Preview Layer Move And Playback Controls | Complete | PVCTRL-01, PVCTRL-02, PVCTRL-03 |
-| 82 | Preview G-code Roles Color Modes And Rendering | Complete | PVRENDER-01, PVRENDER-02, PVRENDER-03 |
-| 83 | Preview Verification And Cleanup | Complete | PVCLEAN-01, PVVERIFY-01, PVVERIFY-02 |
+**Current focus:** Planning next milestone — candidate backlog is in `ROADMAP.md` Deferred Backlog.
 
 ## Verification Result
 
 - Last completed canonical verifier passed:
   `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`
-
 - App launched on the D3D11 QRhi path.
 - Final settings runtime screenshots:
   `.planning/phases/88-settings-verification-and-cleanup/visual-evidence/runtime-app-main.png`
   `.planning/phases/88-settings-verification-and-cleanup/visual-evidence/runtime-settings-prepare-panel.png`
+- Pre-close fix commit `a218972` restored Prepare topbar/settings-entry/viewport layout with regression-guarding QmlUiAuditTests; 5/5 relevant ctest targets passed.
 
 ## Carry-Forward Status
 
 | Category | Item | Target |
 |---|---|---|
+| closed | Parameter settings dialog source-truth restoration | Shipped in v4.1 |
 | closed | v4.0 Preview screenshot restoration | Closed by Phase 83 audit, canonical verifier, and runtime Preview evidence |
-| closed | Parameter settings dialog source-truth restoration | v4.1 milestone audit passed |
 | removed | LAN/device/cloud/network/Monitor workflows | Removed from future scope by user direction on 2026-07-07 |
 | future | AssembleView | Future source-truth milestone |
+| future | Auto filament-map recommendation + wipe-tower geometry/rendering | Future milestone |
+| future | Real GL/QRhi-capture thumbnails + 3MF pixel round-trip | Future milestone |
 | future | Missing CLI test fixtures (`hotend.stl`, `Block20XY.stl`) | Future fixture milestone |
-| future | Deterministic argv-based GUI fixture loading for screenshots | Future testability milestone |
+| future | Deterministic argv-based GUI fixture loading for screenshots | Partially addressed by v4.1 startup deep links; future milestone for fixtures |
 | future | D3D12 root cause | Dedicated backend investigation milestone |
 
 ## Deferred Items
 
+Items acknowledged and deferred at milestone close on 2026-07-09:
+
 | Category | Item | Status |
 |---|---|---|
 | debug | qrhi-d3d12-crash | D3D11 default path remains verified; D3D12 remains future opt-in investigation |
-| evidence | Loaded-G-code runtime screenshot | Default no-G-code Preview screenshot captured; deterministic loaded fixture screenshots require app argv/file-loading support |
-| process | per-phase VALIDATION.md | Phase 79-83 have deterministic verification artifacts but no separate Nyquist validation files |
+| evidence | Loaded-G-code runtime screenshot | Default no-G-code Preview screenshot captured; deterministic loaded fixture screenshots now possible via `--load-model` startup hook but fixtures remain future |
+| process | per-phase VALIDATION.md | Phase 84-88 have deterministic verification artifacts (Nyquist compliant per audit) but no separate Nyquist validation files |
+| evidence | Direct SettingsDialog window capture | Blocked by Windows capture API; SETVERIFY-02 accepts manual click-through plus runtime evidence plus canonical verifier |
 
 ## Scope Guard
 
-- v4.1 is local/offline settings UI work only.
 - Do not promote LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, or printer-connected hardware workflows unless the user explicitly reopens them.
+- Do not resume v3.5 Phase 47-49 unless explicitly reopened.
 
 ## Quick Tasks Completed
 
@@ -97,4 +93,5 @@ See: `.planning/PROJECT.md`
 
 ## Operator Next Steps
 
-- Run `$gsd-complete-milestone v4.1`.
+- Run `/gsd-new-milestone` to select the next source-truth restoration target.
+- Candidate backlog: AssembleView, auto filament-map + wipe-tower, real thumbnails + 3MF round-trip, missing CLI fixtures, D3D12 root cause.
