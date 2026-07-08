@@ -2,23 +2,23 @@
 gsd_state_version: 1.0
 milestone: v4.1
 milestone_name: Parameter Settings Dialogs Source-Truth Restoration
-status: ready_for_milestone_audit
-last_updated: 2026-07-08T23:25:00+08:00
-last_activity: 2026-07-08 -- Completed quick task 260708-e60: Add extensible GUI startup deep-link arguments for pages and dialogs
+status: ready_for_milestone_closeout
+last_updated: 2026-07-08T23:21:14+08:00
+last_activity: 2026-07-08 -- v4.1 milestone audit passed; ready for milestone closeout
 progress:
   total_phases: 5
   completed_phases: 5
   total_plans: 5
   completed_plans: 5
   percent: 100
-stopped_at: Phase 88 complete; ready for v4.1 milestone audit
+stopped_at: v4.1 milestone audit complete; ready for milestone closeout
 ---
 
 # Project State
 
 **Milestone:** v4.1 - Parameter Settings Dialogs Source-Truth Restoration
-**Status:** Ready for milestone audit
-**Next step:** Run the v4.1 milestone audit after manual visual inspection is accepted.
+**Status:** Ready for milestone closeout
+**Next step:** Run `$gsd-complete-milestone v4.1`.
 
 ## Current Position
 
@@ -68,7 +68,7 @@ See: `.planning/PROJECT.md`
 | Category | Item | Target |
 |---|---|---|
 | closed | v4.0 Preview screenshot restoration | Closed by Phase 83 audit, canonical verifier, and runtime Preview evidence |
-| audit | Parameter settings dialog source-truth restoration | v4.1 milestone audit |
+| closed | Parameter settings dialog source-truth restoration | v4.1 milestone audit passed |
 | removed | LAN/device/cloud/network/Monitor workflows | Removed from future scope by user direction on 2026-07-07 |
 | future | AssembleView | Future source-truth milestone |
 | future | Missing CLI test fixtures (`hotend.stl`, `Block20XY.stl`) | Future fixture milestone |
@@ -97,5 +97,4 @@ See: `.planning/PROJECT.md`
 
 ## Operator Next Steps
 
-- Inspect the launched settings dialogs manually.
-- Run `$gsd-audit-milestone` when the visual inspection is accepted.
+- Run `$gsd-complete-milestone v4.1`.

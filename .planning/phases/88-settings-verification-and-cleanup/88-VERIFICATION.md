@@ -1,6 +1,13 @@
-# Phase 88 Verification
-
+---
+phase: 88-settings-verification-and-cleanup
+verified: 2026-07-08
 status: passed
+requirements: [SETCLEAN-01, SETVERIFY-01, SETVERIFY-02]
+canonical_build_run: true
+canonical_build_command: "powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1"
+---
+
+# Phase 88 Verification
 
 ## Result
 
@@ -79,3 +86,11 @@ Computer Use screenshot capture failed on this Windows session with `SetIsBorder
 - Final audit coverage verifies `main.qml` still dispatches printer, material, and process settings dialogs.
 - Final audit coverage anchors Phase 85 shell structure, Phase 86 typed option rows, Phase 87 dirty pending guard behavior, and deleted-route/path regressions.
 - Cleanup normalized restored settings resource indentation without touching removed LAN/device/cloud scope.
+
+## Requirement Coverage
+
+| Requirement | Status | Evidence |
+|---|---|---|
+| SETCLEAN-01 | passed | Final QML audit covers normalized `qml.qrc` settings resources plus deleted settings paths/routes. |
+| SETVERIFY-01 | passed | Final QML audit covers region mapping anchors, clean restored shell, option row structure, dirty guard workflow, and dispatch wiring. |
+| SETVERIFY-02 | passed | Canonical verifier passed, application launch succeeded, and runtime visual evidence was captured under `visual-evidence/`; direct SettingsDialog capture is manual-only due Windows capture API failure. |

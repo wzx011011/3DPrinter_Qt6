@@ -1,3 +1,13 @@
+---
+phase: 85
+slug: settings-shell-and-tab-layout-restoration
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
+created: 2026-07-07
+audited: 2026-07-08
+---
+
 # Phase 85 Validation: Settings Shell And Tab Layout Restoration
 
 **Date:** 2026-07-07
@@ -44,6 +54,22 @@ the canonical build command if a fresh binary/configure is required:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1
 ```
+
+## Per-Task Verification Map
+
+| Task ID | Plan | Wave | Requirement | Test Type | Automated Command | Status |
+|---|---|---|---|---|---|---|
+| 85-01-01 | 01 | 1 | SETLAYOUT-03 | source/qml audit | `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` | green |
+| 85-01-02 | 01 | 1 | SETLAYOUT-01, SETLAYOUT-02, SETLAYOUT-03 | qml source | `.\build\QmlUiAuditTests.exe settingsDialogRestoresPhase85ShellContract` | green |
+| 85-01-03 | 01 | 1 | SETLAYOUT-01 | qml/viewmodel integration | `.\build\ViewModelSmokeTests.exe testSettingsDialogOpenFromSidebar sidebarSettingsForwardEmitsRequestedSignal` | green |
+| 85-01-04 | 01 | 1 | SETLAYOUT-01, SETLAYOUT-02, SETLAYOUT-03 | canonical verifier | `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1` | green |
+
+## Validation Sign-Off
+
+- [x] All Phase 85 requirements have automated source or behavior checks.
+- [x] No implementation validation depends on LAN/device/cloud/network scope.
+- [x] Final runtime screenshot evidence is intentionally owned by Phase 88.
+- [x] `nyquist_compliant: true` set in frontmatter.
 
 ## Deferred Runtime Validation
 

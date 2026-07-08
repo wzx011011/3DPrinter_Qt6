@@ -40,10 +40,10 @@ created: 2026-07-07
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---|---|---|---|---|---|---|---|---|
-| 84-01-01 | 01 | 1 | SETAUDIT-01 | N/A | N/A | source/doc | `rg -n "SET-SHELL|SET-PRESET-ACTIONS|SET-TABS|SET-SECTIONS|SET-TYPED-ROWS" .planning/phases/84-settings-source-truth-gap-audit/84-GAP-MATRIX.md` | green after execution | pending |
-| 84-01-02 | 01 | 1 | SETAUDIT-01 | N/A | N/A | source/doc | `rg -n "SettingsDialog.qml|OptionRow.qml|GroupNavSidebar.qml|Tab.cpp|PresetComboBoxes.cpp|PrintConfig.cpp" .planning/phases/84-settings-source-truth-gap-audit/84-GAP-MATRIX.md` | green after execution | pending |
-| 84-01-03 | 01 | 1 | SETAUDIT-02 | N/A | N/A | source/doc | `rg -n "Phase 56|visual parity|typed-control rendering|cross-window live edit|Phase 85|Phase 86|Phase 87|Phase 88" .planning/phases/84-settings-source-truth-gap-audit/84-GAP-MATRIX.md` | green after execution | pending |
-| 84-01-04 | 01 | 1 | SETAUDIT-01, SETAUDIT-02 | N/A | N/A | source/doc | `git diff --check` | green after execution | pending |
+| 84-01-01 | 01 | 1 | SETAUDIT-01 | N/A | N/A | source/doc | `rg -n "SET-SHELL|SET-PRESET-ACTIONS|SET-TABS|SET-SECTIONS|SET-TYPED-ROWS" .planning/phases/84-settings-source-truth-gap-audit/84-GAP-MATRIX.md` | green after execution | green |
+| 84-01-02 | 01 | 1 | SETAUDIT-01 | N/A | N/A | source/doc | `rg -n "SettingsDialog.qml|OptionRow.qml|GroupNavSidebar.qml|Tab.cpp|PresetComboBoxes.cpp|PrintConfig.cpp" .planning/phases/84-settings-source-truth-gap-audit/84-GAP-MATRIX.md` | green after execution | green |
+| 84-01-03 | 01 | 1 | SETAUDIT-02 | N/A | N/A | source/doc | `rg -n "Phase 56|visual parity|typed-control rendering|cross-window live edit|Phase 85|Phase 86|Phase 87|Phase 88" .planning/phases/84-settings-source-truth-gap-audit/84-GAP-MATRIX.md` | green after execution | green |
+| 84-01-04 | 01 | 1 | SETAUDIT-01, SETAUDIT-02 | N/A | N/A | source/doc | `git diff --check` | green after execution | green |
 
 ---
 

@@ -1,3 +1,12 @@
+---
+phase: 87-settings-preset-semantics-and-workflow-stability
+verified: 2026-07-07
+status: passed
+requirements: [SETSEM-01, SETSEM-02, SETSEM-03]
+canonical_build_run: true
+canonical_build_command: "powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1"
+---
+
 # Phase 87 Verification
 
 ## Result
@@ -66,6 +75,14 @@ Result:
 - Save preserves prior read-only Save As behavior and only closes the settings window for close-guard flows.
 - Opening settings remains non-invalidating for Prepare/Preview state.
 - Config edits still emit `sliceAffectingConfigChanged`.
+
+## Requirement Coverage
+
+| Requirement | Status | Evidence |
+|---|---|---|
+| SETSEM-01 | passed | Targeted QML audit and ViewModel smoke tests cover pending preset save, discard, cancel, read-only Save As, and close-guard behavior. |
+| SETSEM-02 | passed | Phase 87 preserved `filterOptionIndices`, per-dialog search/mode behavior, and dirty/error markers outside filtered option rows; related smoke tests remained green. |
+| SETSEM-03 | passed | `settingsOpenDoesNotInvalidateSliceResults` and `sidebarPresetChangeInvalidatesSliceResults` passed; pending transition tests preserve settings state without clearing Prepare/Preview payloads. |
 
 ## Notes
 
