@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v4.1
 milestone_name: Parameter Settings Dialogs Source-Truth Restoration
 status: ready_for_milestone_audit
-last_updated: 2026-07-08T10:01:19+08:00
-last_activity: 2026-07-08 -- Phase 88 verification complete
+last_updated: 2026-07-08T23:25:00+08:00
+last_activity: 2026-07-08 -- Completed quick task 260708-e60: Add extensible GUI startup deep-link arguments for pages and dialogs
 progress:
   total_phases: 5
   completed_phases: 5
@@ -92,6 +92,7 @@ See: `.planning/PROJECT.md`
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 260708-e60 | Add extensible GUI startup deep-link arguments for pages and dialogs | 2026-07-08 | pending | [260708-e60-add-extensible-gui-startup-deep-link-arg](./quick/260708-e60-add-extensible-gui-startup-deep-link-arg/) |
 | 260707-lan | Remove LAN/device/network/cloud work from future scope | 2026-07-07 | docs-only | [260707-lan-network-scope-removal](./quick/260707-lan-network-scope-removal/) |
 
 ## Operator Next Steps

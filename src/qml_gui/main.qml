@@ -676,7 +676,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        if (!backend.configWizardCompleted) {
+        if (!startupSkipFirstRun && !backend.configWizardCompleted) {
             configWizardDialog.open()
         }
     }

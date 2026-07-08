@@ -22,6 +22,7 @@ private slots:
   void topLevelUiHasNoVisiblePlaceholdersOrNoopActions();
   void mainChromeUsesThemeTokens();
   void sidebarCopyIsLocalizedAndOperationalTextIsReadable();
+  void guiStartupDeepLinkArgumentsAreExtensible();
   void mainRegistersRhiViewportByDefaultWithSoftwareFallback();
   void mainRegistersRhiViewportOnlyBehindExplicitGate();
   void renderBenchmarkMatchesRhiBackendPolicy();
@@ -194,6 +195,62 @@ void QmlUiAuditTests::sidebarCopyIsLocalizedAndOperationalTextIsReadable()
   const QRegularExpression tinyFont(QStringLiteral("font\\.pixelSize:\\s*(?:7|8|9)\\b"));
   QVERIFY2(!tinyFont.match(sidebar).hasMatch(),
            "LeftSidebar operational controls should not use sub-10px text");
+}
+
+void QmlUiAuditTests::guiStartupDeepLinkArgumentsAreExtensible()
+{
+  const QString mainCpp = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
+  QVERIFY2(!mainCpp.isEmpty(), "Unable to read main_qml.cpp");
+
+  const QStringList requiredTokens = {
+      QStringLiteral("QCommandLineParser"),
+      QStringLiteral("QCommandLineOption openPageOption"),
+      QStringLiteral("QCommandLineOption openDialogOption"),
+      QStringLiteral("QCommandLineOption skipFirstRunOption"),
+      QStringLiteral("QStringLiteral(\"open-page\")"),
+      QStringLiteral("QStringLiteral(\"open-dialog\")"),
+      QStringLiteral("QStringLiteral(\"skip-first-run\")"),
+      QStringLiteral("struct StartupPageRoute"),
+      QStringLiteral("struct StartupDialogRoute"),
+      QStringLiteral("applyStartupOpenRequests"),
+      QStringLiteral("parser.values(openDialogOption)"),
+      QStringLiteral("startupSkipFirstRun"),
+      QStringLiteral("QTimer::singleShot(0, &backend")
+  };
+  for (const QString &token : requiredTokens) {
+    QVERIFY2(mainCpp.contains(token),
+             qPrintable(QStringLiteral("GUI startup deep-link support missing token: %1").arg(token)));
+  }
+
+  const QStringList pageAliases = {
+      QStringLiteral("QStringLiteral(\"home\")"),
+      QStringLiteral("QStringLiteral(\"prepare\")"),
+      QStringLiteral("QStringLiteral(\"preview\")"),
+      QStringLiteral("QStringLiteral(\"project\")"),
+      QStringLiteral("QStringLiteral(\"calibration\")")
+  };
+  for (const QString &alias : pageAliases) {
+    QVERIFY2(mainCpp.contains(alias),
+             qPrintable(QStringLiteral("GUI startup page registry missing alias: %1").arg(alias)));
+  }
+
+  const QStringList dialogRoutes = {
+      QStringLiteral("QStringLiteral(\"settings:printer\")"),
+      QStringLiteral("QStringLiteral(\"settings:filament\")"),
+      QStringLiteral("QStringLiteral(\"settings:material\")"),
+      QStringLiteral("QStringLiteral(\"settings:process\")"),
+      QStringLiteral("QStringLiteral(\"settings:print\")"),
+      QStringLiteral("backend.forwardSettingsRequest")
+  };
+  for (const QString &route : dialogRoutes) {
+    QVERIFY2(mainCpp.contains(route),
+             qPrintable(QStringLiteral("GUI startup dialog registry missing route: %1").arg(route)));
+  }
+
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+  QVERIFY2(mainQml.contains(QStringLiteral("!startupSkipFirstRun && !backend.configWizardCompleted")),
+           "GUI startup skip-first-run must suppress the wizard for this launch without persisting QSettings");
 }
 
 void QmlUiAuditTests::mainRegistersRhiViewportByDefaultWithSoftwareFallback()

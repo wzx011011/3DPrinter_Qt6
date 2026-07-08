@@ -1,13 +1,19 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QCommandLineOption>
+#include <QCommandLineParser>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
 #include <QFile>
 #include <QTextStream>
 #include <QDateTime>
 #include <QDir>
+#include <QStringList>
+#include <QTimer>
+#include <QVector>
 #include <QtQml/qqml.h>
+#include <functional>
 #include "qml_gui/Renderer/RhiBackendSelector.h"
 #include "qml_gui/Renderer/RhiViewport.h"
 #include "qml_gui/Renderer/SoftwareViewport.h"
@@ -76,6 +82,165 @@ static void appendStartupLog(const QString &line)
       << " " << line << "\n";
 }
 
+struct StartupOpenRequest
+{
+  QString page;
+  QStringList dialogs;
+  bool skipFirstRun = false;
+};
+
+struct StartupPageRoute
+{
+  QStringList aliases;
+  int page = 0;
+};
+
+struct StartupDialogRoute
+{
+  QStringList aliases;
+  std::function<void(BackendContext &)> open;
+};
+
+static QString normalizeStartupToken(QString token)
+{
+  token = token.trimmed().toLower();
+  token.replace(QLatin1Char('_'), QLatin1Char('-'));
+  return token;
+}
+
+static bool routeMatches(const QStringList &aliases, const QString &value)
+{
+  const QString normalized = normalizeStartupToken(value);
+  for (const QString &alias : aliases)
+  {
+    if (normalizeStartupToken(alias) == normalized)
+      return true;
+  }
+  return false;
+}
+
+static QVector<StartupPageRoute> startupPageRoutes()
+{
+  using Tab = BackendContext::TabPosition;
+  return {
+      {{QStringLiteral("home")}, static_cast<int>(Tab::tpHome)},
+      {{QStringLiteral("prepare"), QStringLiteral("3d"), QStringLiteral("editor"), QStringLiteral("plater")},
+       static_cast<int>(Tab::tp3DEditor)},
+      {{QStringLiteral("preview")}, static_cast<int>(Tab::tpPreview)},
+      {{QStringLiteral("device"), QStringLiteral("monitor")}, static_cast<int>(Tab::tpDevice)},
+      {{QStringLiteral("multi-device"), QStringLiteral("multi")}, static_cast<int>(Tab::tpMultiDevice)},
+      {{QStringLiteral("project")}, static_cast<int>(Tab::tpProject)},
+      {{QStringLiteral("calibration"), QStringLiteral("calibrate")}, static_cast<int>(Tab::tpCalibration)},
+  };
+}
+
+static QVector<StartupDialogRoute> startupDialogRoutes()
+{
+  return {
+      {{QStringLiteral("settings:printer"), QStringLiteral("printer-settings")},
+       [](BackendContext &backend) { backend.forwardSettingsRequest(QStringLiteral("printer")); }},
+      {{QStringLiteral("settings:filament"), QStringLiteral("settings:material"),
+        QStringLiteral("filament-settings"), QStringLiteral("material-settings")},
+       [](BackendContext &backend) { backend.forwardSettingsRequest(QStringLiteral("filament")); }},
+      {{QStringLiteral("settings:process"), QStringLiteral("settings:print"),
+        QStringLiteral("process-settings"), QStringLiteral("print-settings")},
+       [](BackendContext &backend) { backend.forwardSettingsRequest(QStringLiteral("process")); }},
+      {{QStringLiteral("config-wizard"), QStringLiteral("wizard")},
+       [](BackendContext &backend) { backend.showConfigWizard(); }},
+      {{QStringLiteral("bed-shape"), QStringLiteral("bed")},
+       [](BackendContext &backend) { backend.showBedShapeDialog(); }},
+      {{QStringLiteral("ams-settings"), QStringLiteral("ams")},
+       [](BackendContext &backend) { backend.showAMSSettingsDialog(); }},
+      {{QStringLiteral("firmware")},
+       [](BackendContext &backend) { backend.showFirmwareDialog(); }},
+      {{QStringLiteral("speed-limit")},
+       [](BackendContext &backend) { backend.showSpeedLimitDialog(); }},
+      {{QStringLiteral("wipe-tower")},
+       [](BackendContext &backend) { backend.showWipeTowerDialog(); }},
+      {{QStringLiteral("print-host")},
+       [](BackendContext &backend) { backend.showPrintHostDialog(); }},
+      {{QStringLiteral("plugin-manager"), QStringLiteral("plugins")},
+       [](BackendContext &backend) { backend.showPluginManagerDialog(); }},
+      {{QStringLiteral("lite-mode"), QStringLiteral("enable-lite-mode")},
+       [](BackendContext &backend) { backend.showEnableLiteModeDialog(); }},
+  };
+}
+
+static StartupOpenRequest parseStartupOpenRequest(QCoreApplication &app)
+{
+  QCommandLineParser parser;
+  parser.setApplicationDescription(QStringLiteral("OWzx Slicer GUI"));
+  parser.addHelpOption();
+  parser.addVersionOption();
+
+  QCommandLineOption openPageOption(
+      QStringLiteral("open-page"),
+      QStringLiteral("Open a top-level page after QML startup."),
+      QStringLiteral("page"));
+  QCommandLineOption openDialogOption(
+      QStringLiteral("open-dialog"),
+      QStringLiteral("Open a dialog after QML startup. Can be specified multiple times."),
+      QStringLiteral("dialog"));
+  QCommandLineOption skipFirstRunOption(
+      QStringLiteral("skip-first-run"),
+      QStringLiteral("Mark the first-run config wizard complete for this startup."));
+
+  parser.addOption(openPageOption);
+  parser.addOption(openDialogOption);
+  parser.addOption(skipFirstRunOption);
+  parser.process(app);
+
+  StartupOpenRequest request;
+  request.page = parser.value(openPageOption);
+  request.dialogs = parser.values(openDialogOption);
+  request.skipFirstRun = parser.isSet(skipFirstRunOption);
+  return request;
+}
+
+static void applyStartupOpenRequests(const StartupOpenRequest &request,
+                                     BackendContext &backend)
+{
+  if (request.page.isEmpty() && request.dialogs.isEmpty())
+    return;
+
+  QTimer::singleShot(0, &backend, [&backend, request]()
+  {
+    if (!request.page.isEmpty())
+    {
+      bool handled = false;
+      for (const StartupPageRoute &route : startupPageRoutes())
+      {
+        if (routeMatches(route.aliases, request.page))
+        {
+          backend.requestSelectTab(route.page);
+          appendStartupLog(QStringLiteral("Startup open-page handled: %1").arg(request.page));
+          handled = true;
+          break;
+        }
+      }
+      if (!handled)
+        appendStartupLog(QStringLiteral("Startup open-page ignored: %1").arg(request.page));
+    }
+
+    for (const QString &dialog : request.dialogs)
+    {
+      bool handled = false;
+      for (const StartupDialogRoute &route : startupDialogRoutes())
+      {
+        if (routeMatches(route.aliases, dialog))
+        {
+          route.open(backend);
+          appendStartupLog(QStringLiteral("Startup open-dialog handled: %1").arg(dialog));
+          handled = true;
+          break;
+        }
+      }
+      if (!handled)
+        appendStartupLog(QStringLiteral("Startup open-dialog ignored: %1").arg(dialog));
+    }
+  });
+}
+
 int main(int argc, char *argv[])
 {
   if (!qEnvironmentVariableIsSet("OWZX_RHI_RENDERER"))
@@ -108,6 +273,7 @@ int main(int argc, char *argv[])
   QGuiApplication app(argc, argv);
   app.setOrganizationName(QStringLiteral("OWzx"));
   app.setApplicationName(QStringLiteral("OWzxSlicer"));
+  const StartupOpenRequest startupOpenRequest = parseStartupOpenRequest(app);
   const QString dumpDir = QCoreApplication::applicationDirPath() + QStringLiteral("/crash_dumps");
   QDir().mkpath(dumpDir);
   appendStartupLog(QStringLiteral("Crash dump dir prepared: %1").arg(dumpDir));
@@ -142,6 +308,8 @@ int main(int argc, char *argv[])
                      QCoreApplication::exit(-1); }, Qt::QueuedConnection);
 
   engine->rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+  engine->rootContext()->setContextProperty(QStringLiteral("startupSkipFirstRun"),
+                                            startupOpenRequest.skipFirstRun);
   // The main window is frameless + maximized by default (declared directly in
   // main.qml) for screenshot parity with OrcaSlicer. No context-property toggle
   // is exposed — the frameless shell is always on.
@@ -162,6 +330,8 @@ int main(int argc, char *argv[])
     appendStartupLog(QStringLiteral("rootObjects is empty, exiting with -1"));
     return -1;
   }
+
+  applyStartupOpenRequests(startupOpenRequest, backend);
 
 #ifdef Q_OS_WIN
   if (qEnvironmentVariableIsSet("OWZX_FRAMELESS"))
