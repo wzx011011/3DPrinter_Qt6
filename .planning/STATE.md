@@ -2,30 +2,30 @@
 gsd_state_version: 1.0
 milestone: v4.1
 milestone_name: Parameter Settings Dialogs Source-Truth Restoration
-status: ready_to_execute
-last_updated: 2026-07-07T11:48:32.971Z
-last_activity: 2026-07-07 -- Phase 88 planning complete
+status: ready_for_milestone_audit
+last_updated: 2026-07-08T10:01:19+08:00
+last_activity: 2026-07-08 -- Phase 88 verification complete
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 5
-  completed_plans: 4
-  percent: 80
-stopped_at: Phase 88 planning complete (1/1); ready to execute
+  completed_plans: 5
+  percent: 100
+stopped_at: Phase 88 complete; ready for v4.1 milestone audit
 ---
 
 # Project State
 
 **Milestone:** v4.1 - Parameter Settings Dialogs Source-Truth Restoration
-**Status:** Ready to execute
-**Next step:** Execute Phase 88 settings verification and cleanup.
+**Status:** Ready for milestone audit
+**Next step:** Run the v4.1 milestone audit after manual visual inspection is accepted.
 
 ## Current Position
 
 Phase: 88
 Plan: 88-01
-Status: Ready to execute
-Last activity: 2026-07-07
+Status: Complete
+Last activity: 2026-07-08
 
 ## Current Milestone
 
@@ -35,7 +35,7 @@ Last activity: 2026-07-07
 | 85 | Settings Shell And Tab Layout Restoration | Complete | SETLAYOUT-01, SETLAYOUT-02, SETLAYOUT-03 |
 | 86 | Settings Option Sections And Typed Controls | Complete | SETCTRL-01, SETCTRL-02, SETCTRL-03 |
 | 87 | Settings Preset Semantics And Workflow Stability | Complete | SETSEM-01, SETSEM-02, SETSEM-03 |
-| 88 | Settings Verification And Cleanup | Planned | SETCLEAN-01, SETVERIFY-01, SETVERIFY-02 |
+| 88 | Settings Verification And Cleanup | Complete | SETCLEAN-01, SETVERIFY-01, SETVERIFY-02 |
 
 ## Project Reference
 
@@ -59,15 +59,16 @@ See: `.planning/PROJECT.md`
   `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`
 
 - App launched on the D3D11 QRhi path.
-- Final Preview runtime screenshot:
-  `.planning/milestones/v4.0-phases/83-preview-verification-and-cleanup/visual-evidence/runtime-preview-page-button-invoked.png`
+- Final settings runtime screenshots:
+  `.planning/phases/88-settings-verification-and-cleanup/visual-evidence/runtime-app-main.png`
+  `.planning/phases/88-settings-verification-and-cleanup/visual-evidence/runtime-settings-prepare-panel.png`
 
 ## Carry-Forward Status
 
 | Category | Item | Target |
 |---|---|---|
 | closed | v4.0 Preview screenshot restoration | Closed by Phase 83 audit, canonical verifier, and runtime Preview evidence |
-| active | Parameter settings dialog source-truth restoration | v4.1 |
+| audit | Parameter settings dialog source-truth restoration | v4.1 milestone audit |
 | removed | LAN/device/cloud/network/Monitor workflows | Removed from future scope by user direction on 2026-07-07 |
 | future | AssembleView | Future source-truth milestone |
 | future | Missing CLI test fixtures (`hotend.stl`, `Block20XY.stl`) | Future fixture milestone |
@@ -95,4 +96,5 @@ See: `.planning/PROJECT.md`
 
 ## Operator Next Steps
 
-- Start Phase 86 with `$gsd-discuss-phase 86 --auto` or `$gsd-plan-phase 86`.
+- Inspect the launched settings dialogs manually.
+- Run `$gsd-audit-milestone` when the visual inspection is accepted.

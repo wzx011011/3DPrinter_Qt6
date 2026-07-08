@@ -95,6 +95,7 @@ private slots:
   void settingsDialogReadOnlySaveOpensSaveAs();
   void settingsDialogDirtyPendingActionsOpenUnsavedGuard();
   void leftSidebarParamsPanelUsesRealOptionRows();
+  void settingsRestorationMilestoneHasFinalVerificationCoverage();
   // Phase 57-02 (CLEAN-01/02 regression): the 7 obsolete QML files locked by
   // Phase 50 section 1.6 (SettingsPage/ConfigPage/ParamsPage/SearchDialog)
   // plus the legacy Sidebar/FilamentPanel/PrintSettings deferred by Phase 52
@@ -2750,6 +2751,53 @@ void QmlUiAuditTests::leftSidebarParamsPanelUsesRealOptionRows()
   QVERIFY2(settingsDialog.contains(QStringLiteral("key: \"Other\""))
                && !settingsDialog.contains(QStringLiteral("key: \"Others\"")),
            "Process SettingsDialog tabs must use ConfigOptionModel page keys such as Other");
+}
+
+void QmlUiAuditTests::settingsRestorationMilestoneHasFinalVerificationCoverage()
+{
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  const QString audits = readSource(QStringLiteral("tests/QmlUiAuditTests.cpp"));
+  QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+  QVERIFY2(!audits.isEmpty(), "Unable to read QmlUiAuditTests.cpp");
+
+  const QStringList restoredResourceEntries = {
+      QStringLiteral("        <file>dialogs/SettingsDialog.qml</file>"),
+      QStringLiteral("        <file>dialogs/SavePresetDialog.qml</file>"),
+      QStringLiteral("        <file>dialogs/UnsavedChangesDialog.qml</file>"),
+      QStringLiteral("        <file>components/OptionRow.qml</file>"),
+      QStringLiteral("        <file>components/GroupNavSidebar.qml</file>")
+  };
+  for (const QString &entry : restoredResourceEntries) {
+    QVERIFY2(qrc.contains(entry),
+             qPrintable(QStringLiteral("qml.qrc missing normalized settings resource entry: %1").arg(entry.trimmed())));
+  }
+
+  QVERIFY2(mainQml.contains(QStringLiteral("printerSettingsDialog.show()"))
+               && mainQml.contains(QStringLiteral("materialSettingsDialog.show()"))
+               && mainQml.contains(QStringLiteral("processSettingsDialog.show()")),
+           "Final settings milestone must keep printer/material/process dialog dispatch");
+  const QRegularExpression settingsDialogInstancePattern(QStringLiteral("(^|\\n)\\s+SettingsDialog \\{"));
+  int settingsDialogInstanceCount = 0;
+  auto instanceMatches = settingsDialogInstancePattern.globalMatch(mainQml);
+  while (instanceMatches.hasNext()) {
+    instanceMatches.next();
+    ++settingsDialogInstanceCount;
+  }
+  QCOMPARE(settingsDialogInstanceCount, 3);
+
+  const QStringList auditAnchors = {
+      QStringLiteral("settingsDialogRestoresPhase85ShellContract"),
+      QStringLiteral("settingsOptionRowsRestorePhase86ControlContract"),
+      QStringLiteral("settingsDialogDirtyPendingActionsOpenUnsavedGuard"),
+      QStringLiteral("deletedSettingsPathsStayAbsent"),
+      QStringLiteral("deletedRoutesStayAbsent")
+  };
+  for (const QString &anchor : auditAnchors) {
+    QVERIFY2(audits.contains(anchor),
+             qPrintable(QStringLiteral("Final settings milestone missing audit anchor: %1").arg(anchor)));
+  }
 }
 
 // Phase 57-02 (CLEAN-02 regression): the 7 obsolete QML files removed in Wave 1

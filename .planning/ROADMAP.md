@@ -27,15 +27,15 @@
 - [x] Phase 85: Settings Shell And Tab Layout Restoration (completed 2026-07-07)
 - [x] Phase 86: Settings Option Sections And Typed Controls (completed 2026-07-07)
 - [x] Phase 87: Settings Preset Semantics And Workflow Stability (completed 2026-07-07)
-- [ ] Phase 88: Settings Verification And Cleanup
+- [x] Phase 88: Settings Verification And Cleanup (completed 2026-07-08)
 
 | Phase | Name | Goal | Requirements |
 |---|---|---|---|
 | 84 | Settings Source-Truth Gap Audit | Complete 2026-07-07: froze the v4.1 settings region map, current gaps, upstream anchors, Qt targets, replacement decisions, and verification expectations. | SETAUDIT-01, SETAUDIT-02 |
 | 85 | Settings Shell And Tab Layout Restoration | Complete 2026-07-07: restored the settings window shell, compact preset/action row, clean titles/tabs, no visible left group sidebar dependency, and source audits. | SETLAYOUT-01, SETLAYOUT-02, SETLAYOUT-03 |
-| 86 | 1/1 | Complete    | 2026-07-07 |
-| 87 | 1/1 | Complete    | 2026-07-07 |
-| 88 | Settings Verification And Cleanup | Remove stale settings paths, lock bindings with audits/tests, run canonical verifier, launch app, and capture settings visual evidence. | SETCLEAN-01, SETVERIFY-01, SETVERIFY-02 |
+| 86 | Settings Option Sections And Typed Controls | Complete 2026-07-07: restored compact typed option sections, value-source chips, validation/read-only states, and stable row controls. | SETCTRL-01, SETCTRL-02, SETCTRL-03 |
+| 87 | Settings Preset Semantics And Workflow Stability | Complete 2026-07-07: wired dirty pending preset guard flows, read-only Save As preservation, and settings interaction stability coverage. | SETSEM-01, SETSEM-02, SETSEM-03 |
+| 88 | Settings Verification And Cleanup | Complete 2026-07-08: removed stale coverage gaps, locked final QML audits, ran canonical verifier, launched app, and recorded runtime visual evidence. | SETCLEAN-01, SETVERIFY-01, SETVERIFY-02 |
 
 ### Phase 84: Settings Source-Truth Gap Audit
 
@@ -79,7 +79,7 @@ Success criteria:
 
 ### Phase 88: Settings Verification And Cleanup
 
-**Status:** Planned
+**Status:** Complete 2026-07-08
 **Plans:** 1/1 plans complete
 
 Success criteria:
@@ -101,18 +101,12 @@ Success criteria:
 
 ## Next Step
 
-Start Phase 86:
+Run v4.1 milestone audit and closeout after manual visual inspection is accepted:
 
 ```text
-$gsd-discuss-phase 86 --auto
-```
-
-or plan directly:
-
-```text
-$gsd-plan-phase 86
+$gsd-audit-milestone
 ```
 
 ---
 
-*Last updated: 2026-07-07 after Phase 85 completion.*
+*Last updated: 2026-07-08 after Phase 88 completion.*

@@ -36,7 +36,7 @@
         <file>dialogs/SavePresetDialog.qml</file>
         <file>dialogs/UnsavedChangesDialog.qml</file>
         <file>dialogs/ExportPresetBundleDialog.qml</file>
-    <file>dialogs/SettingsDialog.qml</file>
+        <file>dialogs/SettingsDialog.qml</file>
         <file>dialogs/NetworkTestDialog.qml</file>
         <file>dialogs/TroubleshootDialog.qml</file>
         <file>dialogs/SelectMachineDialog.qml</file>
@@ -62,8 +62,8 @@
         <file>components/CxPanel.qml</file>
         <file>components/CxSectionHeader.qml</file>
         <file>components/CollapsibleSection.qml</file>
-    <file>components/OptionRow.qml</file>
-    <file>components/GroupNavSidebar.qml</file>
+        <file>components/OptionRow.qml</file>
+        <file>components/GroupNavSidebar.qml</file>
         <file>components/FilamentSlot.qml</file>
         <file>components/GLToolbars.qml</file>
         <!-- Controls -->

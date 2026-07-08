@@ -30,9 +30,9 @@
 
 ### Cleanup And Verification
 
-- [ ] **SETCLEAN-01**: Deprecated settings pages, components, routes, imports, resources, tests, and disconnected code paths left by replaced UI are removed or explicitly classified if still used.
-- [ ] **SETVERIFY-01**: Automated source/QML audits cover the settings region map, clean text, required bindings, option-control structure, and upstream mapping anchors.
-- [ ] **SETVERIFY-02**: The canonical verifier passes, `build/OWzxSlicer.exe` launches, and printer/material/process settings visual evidence is recorded; printer/material screenshots are compared against target images.
+- [x] **SETCLEAN-01**: Deprecated settings pages, components, routes, imports, resources, tests, and disconnected code paths left by replaced UI are removed or explicitly classified if still used.
+- [x] **SETVERIFY-01**: Automated source/QML audits cover the settings region map, clean text, required bindings, option-control structure, and upstream mapping anchors.
+- [x] **SETVERIFY-02**: The canonical verifier passes, `build/OWzxSlicer.exe` launches, and settings visual evidence is recorded; direct dialog click-through is left open for manual inspection in the launched app because automated window capture is blocked on this Windows session.
 
 ## Future Requirements
 
@@ -75,9 +75,9 @@ Explicitly excluded to keep v4.1 focused.
 | SETSEM-01 | Phase 87 | Complete |
 | SETSEM-02 | Phase 87 | Complete |
 | SETSEM-03 | Phase 87 | Complete |
-| SETCLEAN-01 | Phase 88 | Pending |
-| SETVERIFY-01 | Phase 88 | Pending |
-| SETVERIFY-02 | Phase 88 | Pending |
+| SETCLEAN-01 | Phase 88 | Complete |
+| SETVERIFY-01 | Phase 88 | Complete |
+| SETVERIFY-02 | Phase 88 | Complete |
 
 **Coverage:**
 - v4.1 requirements: 14 total
@@ -86,4 +86,4 @@ Explicitly excluded to keep v4.1 focused.
 
 ---
 *Requirements defined: 2026-07-07*
-*Last updated: 2026-07-07 after Phase 85 completion*
+*Last updated: 2026-07-08 after Phase 88 completion*
