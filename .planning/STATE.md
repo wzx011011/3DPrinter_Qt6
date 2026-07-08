@@ -92,7 +92,7 @@ See: `.planning/PROJECT.md`
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
-| 260708-e60 | Add extensible GUI startup deep-link arguments for pages and dialogs | 2026-07-08 | pending | [260708-e60-add-extensible-gui-startup-deep-link-arg](./quick/260708-e60-add-extensible-gui-startup-deep-link-arg/) |
+| 260708-e60 | Add extensible GUI startup deep-link arguments for pages and dialogs | 2026-07-08 | fc97507 | [260708-e60-add-extensible-gui-startup-deep-link-arg](./quick/260708-e60-add-extensible-gui-startup-deep-link-arg/) |
 | 260707-lan | Remove LAN/device/network/cloud work from future scope | 2026-07-07 | docs-only | [260707-lan-network-scope-removal](./quick/260707-lan-network-scope-removal/) |
 
 ## Operator Next Steps
