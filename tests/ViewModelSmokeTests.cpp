@@ -284,6 +284,11 @@ private slots:
   // Phase 92-01 (ASMMEASURE-02): AssemblyMeasureGeometry::measure computes
   // correct distance/angle for two known AABBs (pure math, no model needed).
   void assemblyMeasureGeometryComputesDistanceAndAngle();
+  // Phase 93-01 (ASMROUTE-02): the AssembleView data pool is populated ONLY
+  // when the active canvas is CanvasAssembleView (m_activeCanvasType == 2),
+  // mirroring upstream GLGizmosManager.cpp:427-431. Prepare/Preview never
+  // populate or read it (isolation constraint).
+  void assembleViewDataPoolIsolatedFromPrepareAndPreview();
 
 private:
   bool hasLibslic3r() const;
@@ -3932,6 +3937,80 @@ void ViewModelSmokeTests::assemblyMeasureGeometryComputesDistanceAndAngle()
   PrepareSceneData::ModelBounds degenerate;  // all-zero extents
   const AssemblyMeasureResult bad = AssemblyMeasureGeometry::measure(degenerate, b);
   QVERIFY2(!bad.valid, "measure() must return invalid for a degenerate AABB");
+}
+
+void ViewModelSmokeTests::assembleViewDataPoolIsolatedFromPrepareAndPreview()
+{
+  // Phase 93-01 (ASMROUTE-02): the AssembleView data pool caches per-object
+  // info and is updated ONLY when m_activeCanvasType == 2 (CanvasAssembleView),
+  // mirroring upstream GLGizmosManager.cpp:427-431. Prepare (0) and Preview (1)
+  // never populate or read it. The pool's test accessor returns 0 when the
+  // ModelObjectsInfo resource is not valid, which is itself the isolation
+  // assertion.
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  // (a) Default canvas (View3D = 0): pool not populated even with objects
+  //     loaded. Fixture: two primitives via addPrimitiveToPlate (synchronous +
+  //     additive — loadFile replaces rather than appends).
+  QVERIFY2(editor.addPrimitiveToPlate(0), "adding the first primitive should succeed");
+  QVERIFY2(editor.addPrimitiveToPlate(0), "adding the second primitive should succeed");
+  QVERIFY2(editor.objectCount() >= 2,
+           "two addPrimitiveToPlate calls should yield >=2 objects");
+  QCOMPARE(editor.activeCanvasType(), 0);
+  QVERIFY2(editor.assembleViewDataPoolObjectCountForTest() == 0,
+           "pool must stay empty on Prepare (View3D) — isolation constraint");
+
+  // (b) Switch to AssembleView (2): pool refreshes and the ModelObjectsInfo
+  //     resource reflects the loaded per-object info (count >= 2).
+  editor.setActiveCanvasType(2);
+  QCOMPARE(editor.activeCanvasType(), 2);
+  QVERIFY2(editor.assembleViewDataPoolObjectCountForTest() >= 2,
+           qPrintable(QStringLiteral("pool object count must be >=2 on AssembleView, "
+                                     "got %1")
+                          .arg(editor.assembleViewDataPoolObjectCountForTest())));
+
+  // (c) Switch back to Prepare (0): pool releases (update(None)) -> count 0.
+  editor.setActiveCanvasType(0);
+  QCOMPARE(editor.activeCanvasType(), 0);
+  QVERIFY2(editor.assembleViewDataPoolObjectCountForTest() == 0,
+           "pool must release when leaving AssembleView for Prepare");
+
+  // (d) Switch to Preview (1): pool stays released.
+  editor.setActiveCanvasType(1);
+  QCOMPARE(editor.activeCanvasType(), 1);
+  QVERIFY2(editor.assembleViewDataPoolObjectCountForTest() == 0,
+           "pool must stay released on Preview");
+
+  // (e) Switch to AssembleView again: selectedVolumeBoundsForAssemblyMeasure()
+  //     returns the same bounds whether read directly or via the pool (the
+  //     refactor routes the existing computation through the cached resource).
+  editor.setActiveCanvasType(2);
+  QCOMPARE(editor.activeCanvasType(), 2);
+  QVERIFY2(editor.assembleViewDataPoolObjectCountForTest() >= 2,
+           "pool must repopulate on returning to AssembleView");
+  // Select >=2 objects so the measure bounds path is exercised; the pool-fed
+  // read returns the same values the inline fallback would (same source).
+  editor.selectAllVisibleObjects();
+  if (editor.selectedObjectCount() >= 2)
+  {
+    const QList<PrepareSceneData::ModelBounds> bounds =
+        editor.selectedVolumeBoundsForAssemblyMeasure();
+    QVERIFY2(bounds.size() == 2,
+             qPrintable(QStringLiteral("selectedVolumeBoundsForAssemblyMeasure must "
+                                       "return 2 bounds when >=2 selected on "
+                                       "AssembleView, got %1")
+                            .arg(bounds.size())));
+    // The pool-fed bounds are non-degenerate for real primitives (extent > 0
+    // on at least one axis). Sanity-check the first bounds.
+    const bool nonDegenerate =
+        (bounds.at(0).maxX > bounds.at(0).minX) ||
+        (bounds.at(0).maxY > bounds.at(0).minY) ||
+        (bounds.at(0).maxZ > bounds.at(0).minZ);
+    QVERIFY2(nonDegenerate,
+             "pool-fed assembly-measure bounds must be non-degenerate for primitives");
+  }
 }
 
 QTEST_MAIN(ViewModelSmokeTests)

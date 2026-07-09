@@ -28,6 +28,9 @@ class ConfigViewModel;
 class EditorViewModel final : public QObject
 {
   Q_OBJECT
+  // Phase 93 (ASMROUTE-02): test access to private pool/members for the
+  // assembleViewDataPoolIsolatedFromPrepareAndPreview isolation slot.
+  friend class ViewModelSmokeTests;
   Q_PROPERTY(QString projectName READ projectName NOTIFY stateChanged)
   Q_PROPERTY(int modelCount READ modelCount NOTIFY stateChanged)
   Q_PROPERTY(int plateCount READ plateCount NOTIFY stateChanged)
