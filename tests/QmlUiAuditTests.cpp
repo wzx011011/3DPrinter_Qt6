@@ -118,6 +118,14 @@ private slots:
   // with connector guide lines gated to ratio > 1.0. Prepare/Preview guards stay
   // intact.
   void assembleViewExplosionRatioWiredAndRenderBranchAppliesOffset();
+  // Phase 92-01 (ASMMEASURE-01/02): the Assembly measurement gizmo is wired:
+  // GizmoAssemblyMeasure enum value exists, EditorViewModel has the
+  // activability gate (AssembleView + explosion ratio ~ 1.0 + >=2 volumes) +
+  // measure Q_PROPERTYs + activateAssemblyMeasureGizmo, AssemblePage has
+  // Ctrl+Y + the 测量 panel bound to the measure properties, the renderer has
+  // the overlay gated to gizmo mode 19 + CanvasAssembleView, and the
+  // AssemblyMeasureGeometry helper exists. Prepare/Preview guards stay intact.
+  void assembleViewMeasurementGizmoWiredAndOverlayRenders();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -3107,6 +3115,83 @@ void QmlUiAuditTests::assembleViewExplosionRatioWiredAndRenderBranchAppliesOffse
            "RhiViewportRenderer.cpp must have an assembly-connector buffer/render path");
   QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("m_explosionRatio > 1.0")),
            "RhiViewportRenderer.cpp must gate connector rendering on m_explosionRatio > 1.0");
+}
+
+void QmlUiAuditTests::assembleViewMeasurementGizmoWiredAndOverlayRenders()
+{
+  // Phase 92-01 (ASMMEASURE-01/02): the Assembly measurement gizmo wiring is
+  // source-audited: GizmoAssemblyMeasure enum value, EditorViewModel
+  // activability gate + measure Q_PROPERTYs + activator, AssemblePage Ctrl+Y +
+  // the 测量 panel bound to the measure properties, the renderer overlay gated
+  // to gizmo mode 19 + CanvasAssembleView, the AssemblyMeasureGeometry helper
+  // file present, and the CanvasPreview guards intact (Prepare/Preview
+  // regression-free).
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString rhiViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString rhiViewportRenderer = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString assemblePage = readSource(QStringLiteral("src/qml_gui/pages/AssemblePage.qml"));
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!editorSource.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!rhiViewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!rhiViewportRenderer.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!assemblePage.isEmpty(), "Unable to read AssemblePage.qml");
+
+  // (1) Gizmo enum value (ASMMEASURE-01): GizmoAssemblyMeasure exists in the
+  // RhiViewport GizmoMode enum (distinct from GizmoMeasure = 3 / Prepare).
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("GizmoAssemblyMeasure")),
+           "RhiViewport.h must declare the GizmoAssemblyMeasure enum value");
+
+  // (2) EditorViewModel activability + state (ASMMEASURE-01/02).
+  QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(bool assemblyMeasureGizmoActive")),
+           "EditorViewModel.h must declare the assemblyMeasureGizmoActive Q_PROPERTY");
+  QVERIFY2(editorHeader.contains(QStringLiteral("activateAssemblyMeasureGizmo")),
+           "EditorViewModel.h must declare activateAssemblyMeasureGizmo()");
+  QVERIFY2(editorHeader.contains(QStringLiteral("assemblyMeasureDistanceText")),
+           "EditorViewModel.h must declare the assemblyMeasureDistanceText accessor");
+  QVERIFY2(editorHeader.contains(QStringLiteral("assemblyMeasureAngleText")),
+           "EditorViewModel.h must declare the assemblyMeasureAngleText accessor");
+  QVERIFY2(editorHeader.contains(QStringLiteral("assemblyMeasurePlaneText")),
+           "EditorViewModel.h must declare the assemblyMeasurePlaneText accessor");
+  // Activability gate references AssembleView + explosion ratio + 2 volumes.
+  QVERIFY2(editorSource.contains(QStringLiteral("m_activeCanvasType == 2")),
+           "EditorViewModel.cpp activability must gate on AssembleView (m_activeCanvasType == 2)");
+  QVERIFY2(editorSource.contains(QStringLiteral("m_explosionRatio")),
+           "EditorViewModel.cpp activability must reference m_explosionRatio");
+  QVERIFY2(editorSource.contains(QStringLiteral("m_selectedSourceIndices.size() >= 2")),
+           "EditorViewModel.cpp activability must require >=2 selected volumes");
+  // The AssembleView mask advertises the GizmoAssemblyMeasure bit (1 << 19).
+  QVERIFY2(editorSource.contains(QStringLiteral("(1 << 19)")),
+           "EditorViewModel.cpp availableGizmoMask AssembleView branch must return (1 << 19)");
+
+  // (3) AssemblePage shortcut + 测量 panel (ASMMEASURE-01/02).
+  QVERIFY2(assemblePage.contains(QStringLiteral("Ctrl+Y")),
+           "AssemblePage must bind the Ctrl+Y shortcut");
+  QVERIFY2(assemblePage.contains(QStringLiteral("\u6d4b\u91cf")),
+           "AssemblePage must contain the '\u6d4b\u91cf' (Measurement) panel");
+  QVERIFY2(assemblePage.contains(QStringLiteral("activateAssemblyMeasureGizmo")),
+           "AssemblePage must call editorVm.activateAssemblyMeasureGizmo() from Ctrl+Y");
+  QVERIFY2(assemblePage.contains(QStringLiteral("assemblyMeasureDistanceText")),
+           "AssemblePage must bind the distance label to assemblyMeasureDistanceText");
+  QVERIFY2(assemblePage.contains(QStringLiteral("assemblyMeasureAngleText")),
+           "AssemblePage must bind the angle label to assemblyMeasureAngleText");
+
+  // (4) Renderer overlay gated to AssembleView + gizmo mode 19 (ASMMEASURE-02).
+  QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("m_gizmoMode == 19"))
+               || rhiViewportRenderer.contains(QStringLiteral("GizmoAssemblyMeasure")),
+           "RhiViewportRenderer.cpp must gate the overlay on m_gizmoMode == 19 / GizmoAssemblyMeasure");
+  QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("CanvasAssembleView")),
+           "RhiViewportRenderer.cpp must gate the overlay on CanvasAssembleView");
+  QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("assemblyMeasureLineBuffer"))
+               || rhiViewportRenderer.contains(QStringLiteral("renderAssemblyMeasureOverlay")),
+           "RhiViewportRenderer.cpp must have an assembly-measure overlay buffer/render path");
+  // Prepare/Preview regression gate: CanvasPreview guards must still be present.
+  QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("m_canvasType == RhiViewport::CanvasPreview")),
+           "RhiViewportRenderer.cpp must keep the CanvasPreview guards intact");
+
+  // (5) Geometry helper file exists (ASMMEASURE-02).
+  QVERIFY2(QFileInfo::exists(QStringLiteral("src/core/rendering/AssemblyMeasureGeometry.h")),
+           "AssemblyMeasureGeometry.h must exist in src/core/rendering/");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
