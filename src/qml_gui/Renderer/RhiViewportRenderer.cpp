@@ -179,7 +179,13 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
 
   QRhiResourceUpdateBatch *updates = nullptr;
   quint32 dirtyFlags = m_prepareScene.peekDirtyFlags();
-  if (m_canvasType == RhiViewport::CanvasView3D) {
+  // Phase 90: CanvasAssembleView reuses the View3D mesh-render path (basic
+  // mesh render proves the canvas host). Guard widened to != CanvasPreview so
+  // both CanvasView3D and CanvasAssembleView upload scene/gizmo buffers;
+  // CanvasPreview keeps its own segment upload block below. Mirrors the
+  // upstream CanvasAssembleView render branch on selection change
+  // (Plater.cpp:7322). Explosion-driven separation rendering is Phase 91.
+  if (m_canvasType != RhiViewport::CanvasPreview) {
     const bool sceneDirty = (dirtyFlags & (PrepareSceneData::DirtyBed
                                            | PrepareSceneData::DirtyPlate
                                            | PrepareSceneData::DirtyMesh
@@ -228,7 +234,11 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   }
 
   cb->beginPass(renderTarget(), m_clearColor, {1.0f, 0}, updates);
-  if (m_canvasType == RhiViewport::CanvasView3D && ensurePipelines()) {
+  // Phase 90: CanvasAssembleView shares the View3D mesh draw block (bed +
+  // model vertex buffer) so the AssembleView canvas is not empty at runtime.
+  // Guard widened to != CanvasPreview; the CanvasPreview draw block below
+  // stays strictly == CanvasPreview. Mirrors Plater.cpp:7322.
+  if (m_canvasType != RhiViewport::CanvasPreview && ensurePipelines()) {
     cb->setViewport(QRhiViewport(0, 0, float(renderTarget()->pixelSize().width()),
                                  float(renderTarget()->pixelSize().height())));
     cb->setShaderResources(m_srb.get());
