@@ -1767,6 +1767,102 @@ void EditorViewModel::resetExplosionRatio()
   emit stateChanged();
 }
 
+bool EditorViewModel::isAssemblyMeasureActivable() const
+{
+  // Phase 92 (ASMMEASURE-01): Assembly measurement gizmo activability. Mirrors
+  // upstream GLGizmoAssembly::on_is_activable()
+  // (third_party/OrcaSlicer/src/slic3r/GUI/Gizmos/GLGizmoAssembly.cpp:53-68):
+  //   abs(get_explosion_ratio() - 1.0f) < 1e-2 && selection.volumes_count() >= 2
+  // The gizmo is only meaningful on AssembleView (m_activeCanvasType == 2).
+  // m_selectedSourceIndices is the per-object selection set; the renderer
+  // treats each source object's first volume batch as the measured AABB.
+  return m_activeCanvasType == 2
+      && std::abs(m_explosionRatio - 1.0f) < 1e-2f
+      && m_selectedSourceIndices.size() >= 2;
+}
+
+bool EditorViewModel::activateAssemblyMeasureGizmo()
+{
+  // Phase 92 (ASMMEASURE-01): mirror upstream GLGizmoAssembly activation
+  // (Ctrl+Y, ONLY_ASSEMBLY mode; GLGizmoAssembly.cpp:45-51). Guarded by the
+  // activability rule so a stale Ctrl+Y (e.g. while exploded or <2 volumes)
+  // is a no-op. Returns success so QML can branch on the result.
+  if (!isAssemblyMeasureActivable())
+    return false;
+  if (m_assemblyMeasureGizmoActive)
+    return true;
+  m_assemblyMeasureGizmoActive = true;
+  emit stateChanged();
+  return true;
+}
+
+void EditorViewModel::deactivateAssemblyMeasureGizmo()
+{
+  // Phase 92 (ASMMEASURE-01): mirror upstream GLGizmoBase deactivation.
+  if (!m_assemblyMeasureGizmoActive)
+    return;
+  m_assemblyMeasureGizmoActive = false;
+  emit stateChanged();
+}
+
+QList<int> EditorViewModel::assemblyMeasureSelectedSourceIndices() const
+{
+  // Phase 92 (ASMMEASURE-02): the first two selected source indices, fed to the
+  // RhiViewport overlay (assemblyMeasureSelectedA/B) so the renderer knows which
+  // two volumes to annotate. Order follows the QSet iteration order; the
+  // measurement is symmetric so order does not affect the distance/angle.
+  QList<int> result;
+  result.reserve(2);
+  for (int idx : m_selectedSourceIndices)
+  {
+    if (result.size() >= 2)
+      break;
+    result.append(idx);
+  }
+  return result;
+}
+
+QString EditorViewModel::assemblyMeasureDistanceText() const
+{
+  // Phase 92 (ASMMEASURE-02): placeholder until task 92-01-04 wires the real
+  // AssemblyMeasureGeometry::measure result. Returns empty when the gizmo is
+  // inactive or fewer than two volumes are selected (the documented contract).
+  if (!m_assemblyMeasureGizmoActive || m_selectedSourceIndices.size() < 2)
+    return {};
+  return {};
+}
+
+QString EditorViewModel::assemblyMeasureAngleText() const
+{
+  // Phase 92 (ASMMEASURE-02): placeholder until task 92-01-04 wires the real
+  // AssemblyMeasureGeometry::measure result.
+  if (!m_assemblyMeasureGizmoActive || m_selectedSourceIndices.size() < 2)
+    return {};
+  return {};
+}
+
+QVector3D EditorViewModel::assemblyMeasureDistanceXyz() const
+{
+  // Phase 92 (ASMMEASURE-02): placeholder until task 92-01-04 wires the real
+  // AssemblyMeasureGeometry::measure result.
+  if (!m_assemblyMeasureGizmoActive || m_selectedSourceIndices.size() < 2)
+    return {};
+  return {};
+}
+
+QString EditorViewModel::assemblyMeasurePlaneText() const
+{
+  // Phase 92 (ASMMEASURE-02): plane-selection indicator mirroring 装配页_测量.png
+  // ("选中 N 平面"). Phase 92 approximates "plane" by the count of selected
+  // volumes (each volume contributes one longest-AABB-axis plane); full
+  // per-triangle plane picking is deferred (needs ITS + raycaster).
+  if (!m_assemblyMeasureGizmoActive || m_selectedSourceIndices.isEmpty())
+    return {};
+  // "选中 N 平面" — emit as \uXXXX escapes (ASCII-only source per AGENTS.md).
+  return QString::fromUtf8(u8"\u9009\u4e2d ") + QString::number(m_selectedSourceIndices.size())
+       + QString::fromUtf8(u8" \u5e73\u9762");
+}
+
 void EditorViewModel::undo()
 {
   if (m_undoManager)
@@ -2018,13 +2114,18 @@ int EditorViewModel::availableGizmoMask() const
   // Phase 90 (ASMROUTE-01): AssembleView-aware gizmo routing. When the active
   // canvas is CanvasAssembleView (m_activeCanvasType == 2), do not advertise
   // the Prepare gizmos (move/rotate/scale/cut/etc.) that have no AssembleView
-  // implementation yet — the Assembly measurement gizmo (Ctrl+Y,
-  // GLGizmoAssembly / ONLY_ASSEMBLY) is Phase 92. Returning 0 keeps Prepare's
-  // gizmo toolbar from leaking into AssembleView. Mirrors upstream gizmos
-  // manager + snapshot selection routing on CanvasAssembleView
+  // implementation yet. Phase 92 (ASMMEASURE-01) advertises ONLY the Assembly
+  // measurement gizmo (GizmoAssemblyMeasure = 19), and only when activable:
+  // explosion ratio ~= 1.0 AND >=2 volumes selected. Mirrors upstream
+  // GLGizmoAssembly::on_is_activable (GLGizmoAssembly.cpp:53-68) and the
+  // gizmos manager + snapshot selection routing on CanvasAssembleView
   // (Plater.cpp:11601,11635). Prepare (CanvasView3D) path below is unchanged.
   if (m_activeCanvasType == 2)
+  {
+    if (isAssemblyMeasureActivable())
+      return (1 << 19);  // GizmoAssemblyMeasure bit only.
     return 0;
+  }
 
   int mask = 0;
   for (int mode = 0; mode <= 18; ++mode)

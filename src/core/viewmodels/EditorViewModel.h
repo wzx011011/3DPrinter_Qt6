@@ -89,6 +89,19 @@ class EditorViewModel final : public QObject
   /// GLCanvas3D.hpp:596). NOTIFY stateChanged drives the QML slider readout AND
   /// the RhiViewport re-render (the offset pass keys on this value).
   Q_PROPERTY(float explosionRatio READ explosionRatio WRITE setExplosionRatio NOTIFY stateChanged)
+  // Phase 92 (ASMMEASURE-01/02): Assembly measurement gizmo state. The gizmo
+  // is activable only on AssembleView with explosion ratio ~= 1.0 AND >=2
+  // volumes selected (mirrors GLGizmoAssembly::on_is_activable,
+  // GLGizmoAssembly.cpp:53-68). The distance/angle/plane accessors expose the
+  // current measurement between the first two selected volumes; they are
+  // computed via AssemblyMeasureGeometry (AABB-center distance + longest-axis
+  // angle — documented Phase 92 simplification of the full feature-picking
+  // engine, which needs ITS + raycaster + data pool from Phase 93).
+  Q_PROPERTY(bool assemblyMeasureGizmoActive READ assemblyMeasureGizmoActive NOTIFY stateChanged)
+  Q_PROPERTY(QString assemblyMeasureDistanceText READ assemblyMeasureDistanceText NOTIFY stateChanged)
+  Q_PROPERTY(QString assemblyMeasureAngleText READ assemblyMeasureAngleText NOTIFY stateChanged)
+  Q_PROPERTY(QVector3D assemblyMeasureDistanceXyz READ assemblyMeasureDistanceXyz NOTIFY stateChanged)
+  Q_PROPERTY(QString assemblyMeasurePlaneText READ assemblyMeasurePlaneText NOTIFY stateChanged)
 
 public:
   enum SliceResultStatus {
@@ -739,6 +752,25 @@ public:
   /// upstream reset_explosion_ratio()
   /// (third_party/OrcaSlicer/src/slic3r/GUI/GLCanvas3D.hpp:770-771).
   Q_INVOKABLE void resetExplosionRatio();
+  // Phase 92 (ASMMEASURE-01): activate the Assembly measurement gizmo. Mirrors
+  // upstream GLGizmoAssembly (Ctrl+Y, ONLY_ASSEMBLY mode,
+  // third_party/OrcaSlicer/src/slic3r/GUI/Gizmos/GLGizmoAssembly.cpp:45-51).
+  // Returns true if the gizmo is activable (AssembleView + explosion ~ 1.0 +
+  // >=2 volumes selected, GLGizmoAssembly.cpp:53-68) and was activated.
+  Q_INVOKABLE bool activateAssemblyMeasureGizmo();
+  Q_INVOKABLE void deactivateAssemblyMeasureGizmo();
+  // Phase 92 (ASMMEASURE-01): Assembly measurement gizmo state accessors. The
+  // text/vector accessors compute lazily from the first two selected volumes'
+  // AABBs via AssemblyMeasureGeometry (center-to-center distance + longest-axis
+  // angle — documented simplification). Empty/zero when <2 volumes selected.
+  bool assemblyMeasureGizmoActive() const { return m_assemblyMeasureGizmoActive; }
+  QString assemblyMeasureDistanceText() const;
+  QString assemblyMeasureAngleText() const;
+  QVector3D assemblyMeasureDistanceXyz() const;
+  QString assemblyMeasurePlaneText() const;
+  // Phase 92: first-two selected source indices, for the RhiViewport overlay
+  // selection bindings (AssemblePage forwards them to the renderer).
+  QList<int> assemblyMeasureSelectedSourceIndices() const;
   /// Config preset injection (对齐上游 PresetBundle::full_fff_config → BackgroundSlicingProcess)
   void setConfigViewModel(ConfigViewModel *vm);
   Q_INVOKABLE void undo();
@@ -776,6 +808,13 @@ private:
   bool hasValidSliceResultForPlate(int plateIndex) const;
   void checkViewportWarnings();
   void continueSliceAllQueue();
+  // Phase 92 (ASMMEASURE-01): Assembly measurement gizmo activability. Mirrors
+  // upstream GLGizmoAssembly::on_is_activable()
+  // (third_party/OrcaSlicer/src/slic3r/GUI/Gizmos/GLGizmoAssembly.cpp:53-68):
+  // active canvas is AssembleView (2) AND explosion ratio ~= 1.0 (within 1e-2,
+  // matching upstream abs(ratio-1.0f) < 1e-2) AND >=2 volumes selected. Used by
+  // availableGizmoMask() AssembleView branch and activateAssemblyMeasureGizmo().
+  bool isAssemblyMeasureActivable() const;
 
   struct ObjectEntry
   {
@@ -794,6 +833,10 @@ private:
   // m_explosion_ratio (GLCanvas3D.hpp:596, default 1.0). Drives the per-volume
   // separation offset in RhiViewportRenderer's CanvasAssembleView branch.
   float m_explosionRatio = 1.0f;
+  // Phase 92 (ASMMEASURE-01): Assembly measurement gizmo active flag. Set by
+  // activateAssemblyMeasureGizmo() only when isAssemblyMeasureActivable() is
+  // true. Mirrors upstream GLGizmoBase::m_state activation.
+  bool m_assemblyMeasureGizmoActive = false;
   QString statusText_ = tr("就绪");
   QList<ObjectEntry> m_objects;
   QSet<int> m_selectedSourceIndices;
