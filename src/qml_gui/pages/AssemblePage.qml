@@ -16,9 +16,10 @@ import "../panels"
 // with assembly-info panel) follows shotScreen/装配页.png.
 //
 // Phase 90 scope: shell + canvas host + basic mesh render (proves the host
-// works end-to-end). Explosion-ratio slider, Assembly measurement gizmo, and
-// the data pool are deferred to Phase 91/92/93. The bottom controls row shows
-// the assembly-info panel only.
+// works end-to-end). Phase 91 adds the 爆炸比例 (Explosion Ratio) slider with
+// per-volume separation rendering + yellow dashed connector guide lines on the
+// CanvasAssembleView branch. Assembly measurement gizmo and the data pool are
+// deferred to Phase 92/93.
 // ─────────────────────────────────────────────────────────────────────────────
 
 Item {
@@ -81,6 +82,12 @@ Item {
         anchors.left: leftSidebar.right
         anchors.right: parent.right
         canvasType: GLViewport.CanvasAssembleView
+        // Phase 91 (ASMEXPLODE-01): bind the explosion ratio so the renderer
+        // re-applies the per-volume offset on every change. Re-render loop:
+        // slider writes editorVm.explosionRatio -> stateChanged -> this binding
+        // re-evaluates -> RhiViewport::setExplosionRatio -> update() ->
+        // synchronize()+render() re-upload with the new offset.
+        explosionRatio: root.editorVm ? root.editorVm.explosionRatio : 1.0
         meshData: root.editorVm ? root.editorVm.meshData : null
         bedWidth: root.editorVm ? root.editorVm.bedWidth : 220
         bedDepth: root.editorVm ? root.editorVm.bedDepth : 220
@@ -100,8 +107,8 @@ Item {
     }
 
     // ── Region 4: bottom controls row with assembly-info panel ──
-    // Phase 90 shows the assembly-info panel only. The "爆炸比例" explosion
-    // slider and "选择模式" dropdown are deferred to Phase 91/92.
+    // Phase 91 adds the 爆炸比例 (Explosion Ratio) slider on the left; the
+    // assembly-info panel stays on the right. The "选择模式" dropdown is Phase 92.
     Rectangle {
         id: bottomBar
         anchors.bottom: parent.bottom
@@ -110,6 +117,56 @@ Item {
         height: root.bottomBarHeight
         color: Theme.bgBase
         border.width: 0
+
+        // Phase 91 (ASMEXPLODE-01): 爆炸比例 (Explosion Ratio) slider on the
+        // LEFT of the bottom controls, mirroring shotScreen/装配页.png (slider
+        // at 0.00 default) and 装配页_爆炸.png (slider at 3.00, parts separated).
+        // Range 0.00-3.00, bound two-way to editorVm.explosionRatio
+        // (mirrors upstream m_explosion_ratio, GLCanvas3D.hpp:596). Reset calls
+        // editorVm.resetExplosionRatio() (mirrors reset_explosion_ratio(),
+        // GLCanvas3D.hpp:770-771). The slider only writes the property; all
+        // rendering/separation logic lives in the viewmodel + renderer
+        // (QML-boundaries rule).
+        Item {
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: Theme.spacingMD
+            width: explosionRow.implicitWidth + 4
+            height: parent.height
+
+            RowLayout {
+                id: explosionRow
+                anchors.centerIn: parent
+                spacing: Theme.spacingMD
+
+                Label {
+                    text: qsTr("爆炸比例")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeMD
+                }
+                CxSlider {
+                    from: 0.0
+                    to: 3.0
+                    stepSize: 0.01
+                    value: root.editorVm ? root.editorVm.explosionRatio : 1.0
+                    implicitWidth: 160
+                    onMoved: if (root.editorVm) root.editorVm.explosionRatio = value
+                }
+                Label {
+                    text: root.editorVm ? root.editorVm.explosionRatio.toFixed(2) : "1.00"
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeMD
+                    font.family: "Consolas, monospace"
+                    Layout.preferredWidth: 36
+                }
+                CxButton {
+                    cxStyle: CxButton.Style.Ghost
+                    compact: true
+                    text: qsTr("重置")
+                    onClicked: if (root.editorVm) root.editorVm.resetExplosionRatio()
+                }
+            }
+        }
 
         // 装配体信息 (Assembly Info) panel on the right, mirroring 装配页.png.
         // Phase 90 derives basic info from editorVm (object count + the existing
