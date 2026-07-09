@@ -112,6 +112,28 @@ Item {
         // re-evaluates -> RhiViewport::setExplosionRatio -> update() ->
         // synchronize()+render() re-upload with the new offset.
         explosionRatio: root.editorVm ? root.editorVm.explosionRatio : 1.0
+        // Phase 92 (ASMMEASURE-01/02): gizmoMode + the two selected source
+        // indices close the overlay re-render loop. When the Assembly measure
+        // gizmo is active, drive the viewport's gizmoMode to
+        // GizmoAssemblyMeasure (19) so the renderer draws the overlay; the two
+        // selection bindings forward the first-two selected source indices.
+        // Re-render loop: Ctrl+Y -> viewmodel activates -> stateChanged ->
+        // these bindings re-evaluate -> RhiViewport setters -> update() ->
+        // synchronize()+render() re-upload + draw the overlay.
+        gizmoMode: root.editorVm && root.editorVm.assemblyMeasureGizmoActive
+                   ? GLViewport.GizmoAssemblyMeasure : GLViewport.GizmoMove
+        assemblyMeasureSelectedA: {
+            if (!root.editorVm || !root.editorVm.assemblyMeasureGizmoActive)
+                return -1
+            const idx = root.editorVm.assemblyMeasureSelectedSourceIndices()
+            return (idx && idx.length > 0) ? idx[0] : -1
+        }
+        assemblyMeasureSelectedB: {
+            if (!root.editorVm || !root.editorVm.assemblyMeasureGizmoActive)
+                return -1
+            const idx = root.editorVm.assemblyMeasureSelectedSourceIndices()
+            return (idx && idx.length > 1) ? idx[1] : -1
+        }
         meshData: root.editorVm ? root.editorVm.meshData : null
         bedWidth: root.editorVm ? root.editorVm.bedWidth : 220
         bedDepth: root.editorVm ? root.editorVm.bedDepth : 220
