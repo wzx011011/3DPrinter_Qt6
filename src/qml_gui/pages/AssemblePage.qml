@@ -32,6 +32,30 @@ Item {
     readonly property int topBarHeight: 32
     readonly property int bottomBarHeight: 44
     readonly property int sidebarWidth: 392
+    // Phase 92 (ASMMEASURE-02): teal accent for the 测量 panel value text,
+    // consistent with the on-canvas teal value box (rendered by
+    // RhiViewportRenderer) and the upstream measure-panel #4ec9b0 family.
+    readonly property color measureAccent: "#4ec9b0"
+
+    // Phase 92 (ASMMEASURE-01): Ctrl+Y toggles the Assembly measurement gizmo,
+    // mirroring upstream GLGizmoAssembly (WXK_CONTROL_Y,
+    // GLGizmoAssembly.cpp:45-51). Activability is enforced in the viewmodel
+    // (AssembleView + explosion ratio ~= 1.0 + >=2 volumes selected), so this
+    // shortcut is a pure routing call — no business logic in QML
+    // (AGENTS.md qml-boundaries rule). The same key is redo on Prepare
+    // (PreparePage.qml), but AssemblePage owns it within its focus scope.
+    Shortcut {
+        sequences: ["Ctrl+Y"]
+        enabled: root.editorVm !== null && root.editorVm !== undefined
+        onActivated: {
+            if (!root.editorVm)
+                return
+            if (root.editorVm.assemblyMeasureGizmoActive)
+                root.editorVm.deactivateAssemblyMeasureGizmo()
+            else
+                root.editorVm.activateAssemblyMeasureGizmo()
+        }
+    }
 
     // ── Region 5: per-page top bar ──
     // Minimal for Phase 90; navigation toggle lives in BBLTopbar (task 90-01-05).
@@ -104,6 +128,123 @@ Item {
             if (root.editorVm)
                 root.editorVm.selectSourceObject(sourceIndex)
         }
+    }
+
+    // ── Phase 92 (ASMMEASURE-02): right-side 测量 (Measurement) panel ──
+    // Mirrors upstream GLGizmoAssembly::on_render_input_window and the
+    // shotScreen/装配页_测量.png right-side panel: header, mode label, plane-
+    // selection indicator ("选中 N 平面"), distance + angle values bound to the
+    // viewmodel Q_PROPERTYs, and an activability hint. Presentation-only: reads
+    // editorVm properties and calls the Q_INVOKABLE activator; all measurement
+    // math lives in C++ (AssemblyMeasureGeometry + EditorViewModel).
+    Rectangle {
+        id: measurePanel
+        anchors.top: topBar.bottom
+        anchors.bottom: bottomBar.top
+        anchors.right: parent.right
+        anchors.rightMargin: Theme.spacingMD
+        anchors.topMargin: Theme.spacingMD
+        width: 220
+        visible: root.editorVm && root.editorVm.assemblyMeasureGizmoActive
+        color: Theme.bgFloating
+        border.color: Theme.borderDefault
+        border.width: 1
+        radius: Theme.radiusMD
+        z: 10
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Theme.spacingMD
+            spacing: Theme.spacingMD
+
+            Label {
+                text: qsTr("测量")
+                color: Theme.textPrimary
+                font.pixelSize: Theme.fontSizeLG
+                font.bold: true
+            }
+            Label {
+                // ONLY_ASSEMBLY measure mode (GLGizmoAssembly.cpp:25-29).
+                text: qsTr("装配测量")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeMD
+            }
+            Rectangle { height: 1; Layout.fillWidth: true; color: Theme.borderSubtle }
+            // Plane-selection indicator ("选中 N 平面") — approximated by the
+            // count of selected volumes (full per-triangle plane picking is
+            // future; needs ITS + raycaster).
+            Label {
+                text: root.editorVm ? root.editorVm.assemblyMeasurePlaneText : ""
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeMD
+                visible: text.length > 0
+            }
+            // Distance row (mm, formatted to upstream 3-decimal precision).
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spacingSM
+                Label {
+                    text: qsTr("距离")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeMD
+                    Layout.preferredWidth: 48
+                }
+                Label {
+                    text: root.editorVm ? root.editorVm.assemblyMeasureDistanceText : ""
+                    color: root.measureAccent
+                    font.pixelSize: Theme.fontSizeMD
+                    font.family: "Consolas, monospace"
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
+            }
+            // Angle row (degrees + glyph, formatted to upstream 3-decimal precision).
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spacingSM
+                Label {
+                    text: qsTr("角度")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeMD
+                    Layout.preferredWidth: 48
+                }
+                Label {
+                    text: root.editorVm ? root.editorVm.assemblyMeasureAngleText : ""
+                    color: root.measureAccent
+                    font.pixelSize: Theme.fontSizeMD
+                    font.family: "Consolas, monospace"
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
+            }
+            Item { Layout.fillHeight: true }  // spacer
+            // Deactivate affordance (Esc-equivalent in the panel).
+            CxButton {
+                cxStyle: CxButton.Style.Ghost
+                compact: true
+                Layout.fillWidth: true
+                text: qsTr("关闭测量")
+                onClicked: if (root.editorVm) root.editorVm.deactivateAssemblyMeasureGizmo()
+            }
+        }
+    }
+
+    // Phase 92 (ASMMEASURE-01): activability hint when the gizmo is NOT active
+    // but the user is on AssembleView. Mirrors upstream GLGizmoAssembly::
+    // on_get_name hint ("Please confirm explosion ratio = 1 and select at
+    // least two volumes."). Shown floating over the canvas bottom-center.
+    Label {
+        anchors.bottom: bottomBar.top
+        anchors.horizontalCenter: assembleViewport.horizontalCenter
+        anchors.bottomMargin: Theme.spacingMD
+        padding: Theme.spacingSM
+        visible: root.editorVm && !root.editorVm.assemblyMeasureGizmoActive
+                 && root.editorVm.explosionRatio > 1.01
+        text: qsTr("请将爆炸比例重置为 1.00 后再使用测量")
+        color: Theme.textSecondary
+        font.pixelSize: Theme.fontSizeMD
+        background: Rectangle { color: Theme.bgFloating; radius: Theme.radiusSM; border.color: Theme.borderDefault; border.width: 1 }
+        z: 10
     }
 
     // ── Region 4: bottom controls row with assembly-info panel ──
