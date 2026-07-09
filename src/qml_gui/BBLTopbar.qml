@@ -617,6 +617,44 @@ Item {
                     }
                 }
 
+                // ── Phase 90 AssembleView view-mode toggle ───────────────────
+                // (90-CONTEXT.md decision 5; mirrors upstream Plater::assemble_view
+                //  Plater.cpp:4959 as a peer of view3D/preview.) Visible only on the
+                //  Prepare/3D-editor tab — AssembleView is a sub-view of tp3DEditor,
+                //  like Prepare<->Preview are peer Plater view-modes. Clicking
+                //  requests vmAssembleView via the Q_INVOKABLE entry point that
+                //  emits viewModeChangeRequested first.
+                Rectangle {
+                    id: assembleViewToggle
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredWidth: 92
+                    Layout.preferredHeight: 24
+                    radius: 12
+                    color: assembleToggleMouse.containsMouse ? Theme.accentDark : Theme.accentSubtle
+                    border.width: backend.currentViewMode === backend.vmAssembleView ? 1 : 0
+                    border.color: Theme.accent
+                    opacity: backend.currentPage === backend.tp3DEditor ? 1.0 : 0.0
+                    visible: backend.currentPage === backend.tp3DEditor
+                    ToolTip.visible: assembleToggleMouse.containsMouse
+                    ToolTip.text: qsTr("切换到装配视图")
+                    ToolTip.delay: 400
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: qsTr("装配视图")
+                        color: Theme.textPrimary
+                        font.pixelSize: 12
+                    }
+
+                    MouseArea {
+                        id: assembleToggleMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: backend.requestChangeViewMode(backend.vmAssembleView)
+                    }
+                }
+
                 Item { width: 20; height: 1 }
             }
         }
