@@ -75,3 +75,86 @@ mark the active measurement plane. This screenshot is the source of truth for
 | ASM-PLATER-ROUTING | Upstream `Plater.cpp` branches selection, undo/redo, and gizmo routing on `CanvasAssembleView`; the Qt side must mirror this so Prepare/Preview stay unchanged while AssembleView gets its own routing. | `BackendContext.h:199` `ViewMode::AssembleView = 2` enum entry and `BackendContext.cpp:362,376` `kLastVm` boundary exist as the routing anchor, but no real canvas host is wired behind them. | `src/qml_gui/BackendContext.h:159` (`Q_PROPERTY(int vmAssembleView ...)`); `BackendContext.h:195-200` (`enum class ViewMode { View3D = 0, Preview = 1, AssembleView = 2 }`); `BackendContext.h:227` (`int vmAssembleView() const`); `BackendContext.cpp:362,376` (`kLastVm` boundary). | `third_party/OrcaSlicer/src/slic3r/GUI/Plater.cpp:4959` (`assemble_view = new AssembleView(...)`); `Plater.cpp:4431` (`bool is_assemble_view_show() const`); `Plater.cpp:7322` (`CanvasAssembleView` render branch); `Plater.cpp:11601,11635` (gizmo routing + snapshot branch); `Plater.cpp:11744` (undo/redo routing); `Plater.cpp:11823` (selection clear on undo/redo). | Preserve (enum entry + accessor + `kLastVm` as routing anchor) + add (real routing branches behind them in Phase 90). | Enum/accessor exist but no real canvas host or routing branches wired behind them. | Critical | Phase 90 | ASMROUTE-01 | Source audit proving `CanvasAssembleView` routing branches mirror upstream; Phase 93 runtime Prepare/Preview regression check. |
 | ASM-NAVIGATION | `shotScreen/装配页.png` is reached from the application navigation; upstream AssembleView is a peer of View3D/Preview. | `src/qml_gui/main.qml` has no navigation entry that toggles to AssembleView; the only entry is the `vmAssembleView` enum value consumed by the placeholder. | `src/qml_gui/main.qml` (add navigation entry toggling to `vmAssembleView`); `src/qml_gui/pages/Plater.qml` (the placeholder slot that the navigation reveals). | `third_party/OrcaSlicer/src/slic3r/GUI/GUI_Preview.hpp:180` (AssembleView is the third panel peer of View3D/Preview); `Plater.cpp:4959` (instantiation alongside `view3D`/`preview`). | Add (navigation entry) + preserve (`vmAssembleView` enum consumed by the new entry). | No navigation entry reaches AssembleView from the application shell. | High | Phase 90 | ASMSHELL-01 | Source/QML audit proving navigation entry added; Phase 93 runtime navigation to AssembleView. |
 | ASM-CLEANUP | The placeholder `assembleSlot` Item and "装配视图暂不可用" Text must be removed once a real AssembleView host lands; stale imports/resources/tests must not remain. | `Plater.qml:102-115` placeholder `Item` (id `assembleSlot`) + "装配视图暂不可用" `Text` are the removal candidates; no AssemblePage.qml/AssembleViewModel exist yet to leave stale. | `src/qml_gui/pages/Plater.qml:102-115` (placeholder `assembleSlot` Item + "装配视图暂不可用" `Text` to remove); `src/qml_gui/qml.qrc` (verify no stale entries after replacement). | Source-truth cleanup rule (No Deprecated UI Rule); `third_party/OrcaSlicer/src/slic3r/GUI/GUI_Preview.hpp:180` (the real AssembleView class that replaces the placeholder). | Remove (placeholder Item + Text) — owned by Phase 90 shell; Phase 93 verifies no stale paths remain. | Placeholder Item + Text still present; must be removed in Phase 90 and audited in Phase 93. | High | Phase 93 | ASMVERIFY-01 | Source/QML audit proving placeholder removed + no stale imports/resources/tests; Phase 93 canonical verifier. |
+
+## Placeholder Reconciliation (ASMAUDIT-02)
+
+The current Qt AssembleView surface is a placeholder. ASMAUDIT-02 requires it
+to be reconciled into a replacement plan with explicit removal of the
+placeholder code path. The reconciliation is:
+
+**Removed in Phase 90 (replaced by a real AssembleView canvas host):**
+
+- `src/qml_gui/pages/Plater.qml:102-115` — the placeholder `Item` (id
+  `assembleSlot`) and its child `Text { text: qsTr("装配视图暂不可用") }`.
+  The comment at `Plater.qml:103` ("上游 AssembleView 在 v2.0 为 Out of
+  Scope，仅保留枚举入口") is also removed because v4.2 reopens AssembleView.
+  These are classified `remove` in the `ASM-CLEANUP` and `ASM-SHELL` rows and
+  owned by Phase 90.
+
+**Preserved as the canvas-type routing anchor (retained, not removed):**
+
+- `src/qml_gui/BackendContext.h:159` — `Q_PROPERTY(int vmAssembleView READ
+  vmAssembleView CONSTANT)`. Retained.
+- `src/qml_gui/BackendContext.h:195-200` — `enum class ViewMode { View3D = 0,
+  Preview = 1, AssembleView = 2 }`. The `AssembleView = 2` entry is retained
+  because it mirrors upstream `ECanvasType::CanvasAssembleView = 2`
+  (`GLCanvas3D.hpp:509-513`) and is the canvas-type routing anchor.
+- `src/qml_gui/BackendContext.h:227` — `int vmAssembleView() const`. Retained.
+- `src/qml_gui/BackendContext.cpp:362,376` — `constexpr int kLastVm =
+  static_cast<int>(ViewMode::AssembleView);` in `setCurrentViewMode` and
+  `requestChangeViewMode`. The `kLastVm` boundary stays valid once Phase 90
+  wires the real host behind `AssembleView = 2`; no boundary change is needed.
+
+**Net effect:** the placeholder UI (`assembleSlot` Item + "装配视图暂不可用"
+Text) is removed and replaced by a real AssembleView canvas host in Phase 90,
+while the `ViewMode::AssembleView` enum entry, the `vmAssembleView` Q_PROPERTY,
+and the `vmAssembleView()` accessor are preserved as the routing anchor that
+the new host plugs into. Phase 93 verifies no stale placeholder paths remain.
+
+## Out-of-Scope Classification
+
+The following items are explicitly out of scope for Phase 89-93. No later
+phase in v4.2 re-touches them unless the user explicitly reopens them.
+
+| Item | Status | Evidence / Reason |
+|---|---|---|
+| Arrange (auto-arrangement) | Out of scope — already implemented | `src/core/services/ProjectServiceMock.cpp:2521-2592` (`arrangeObjects` calls real `Slic3r::arrange_objects` at line 2580 with a tolerant `VirtualBedFn`); `src/core/viewmodels/EditorViewModel.h:595-656` (arrange settings properties: `arrangeDistance`, `arrangeRotation`, `arrangeAlignY`, `arrangeMultiMaterial`, `arrangeAvoidCalibration`); `src/qml_gui/pages/PreparePage.qml:573` (`arrangeAllObjects()` call) and `1398-1545` (full arrange settings popup UI). Arrange is distinct from the AssembleView canvas and is not re-touched by Phase 90-93. |
+| `assembleObjects` (multi-part merge) | Out of scope — already implemented | `src/core/viewmodels/EditorViewModel.cpp:3227` (`projectService_->assembleObjects(indices)`; requires ≥2 selected objects). This is a model merge operation, distinct from the AssembleView canvas rendering and gizmo. Already complete. |
+| LAN/device/cloud/network/Monitor/ModelMall/Home WebView/camera/printer-hardware workflows | Out of scope — removed scope | Removed from forward scope by user direction on 2026-07-07. The v4.2 milestone is local/offline AssembleView UI work only. Not reintroduced unless the user explicitly reopens it. |
+| D3D12/Vulkan backend promotion | Out of scope — future backend work | D3D12 has a known startup crash and remains explicit opt-in; Vulkan is disabled in the current Qt 6.10 SDK (`QT_DISABLED_PUBLIC_FEATURES` lists `vulkan`). AssembleView renders on the default RHI/D3D11 path. Backend promotion is a dedicated future investigation milestone. |
+| libslic3r slicing algorithm changes | Out of scope — engine preserved | The migration rewrites the GUI layer only; libslic3r slicing algorithms are preserved unchanged. |
+
+## v4.2 Requirement Routing
+
+Every v4.2 requirement is routed to its owner phase and matrix region(s).
+
+| Requirement | Owner | Matrix Region(s) |
+|---|---|---|
+| ASMAUDIT-01 | Phase 89 | All canonical regions in this matrix (ASM-SHELL through ASM-CLEANUP). |
+| ASMAUDIT-02 | Phase 89 | Placeholder Reconciliation section above (removal of `assembleSlot` Item + "装配视图暂不可用" Text; preservation of `ViewMode::AssembleView` enum + `vmAssembleView` accessor + `kLastVm`). |
+| ASMSHELL-01 | Phase 90 | ASM-SHELL, ASM-ASSEMBLY-INFO, ASM-NAVIGATION. |
+| ASMSHELL-02 | Phase 90 | ASM-CANVAS. |
+| ASMROUTE-01 | Phase 90 | ASM-PLATER-ROUTING. |
+| ASMEXPLODE-01 | Phase 91 | ASM-EXPLODE-SLIDER. |
+| ASMEXPLODE-02 | Phase 91 | ASM-EXPLODE-RENDER. |
+| ASMMEASURE-01 | Phase 92 | ASM-ASSEMBLY-GIZMO. |
+| ASMMEASURE-02 | Phase 92 | ASM-MEASURE-OVERLAY. |
+| ASMROUTE-02 | Phase 93 | ASM-DATA-POOL. |
+| ASMVERIFY-01 | Phase 93 | ASM-CLEANUP plus source/QML audits for all regions. |
+| ASMVERIFY-02 | Phase 93 | Final runtime launch, AssembleView reachability, and visual evidence against all three target screenshots. |
+
+## Requirement Coverage
+
+| Requirement | Covered By |
+|---|---|
+| ASMAUDIT-01 | This matrix maps all 11 AssembleView regions to the three target screenshots, OrcaSlicer upstream source files (with line anchors), current Qt targets, replacement decisions, gaps, severities, owner phases, requirement IDs, and verification routes. |
+| ASMAUDIT-02 | The Placeholder Reconciliation section explicitly classifies the `Plater.qml:102-115` placeholder `assembleSlot` Item and "装配视图暂不可用" Text for removal in Phase 90, while preserving the `BackendContext.h:199` `ViewMode::AssembleView = 2` enum entry, the `BackendContext.h:159` `vmAssembleView` Q_PROPERTY, and the `BackendContext.h:227` `vmAssembleView()` accessor as the `CanvasAssembleView = 2` routing anchor. |
+
+## Phase Routing
+
+| Phase | Work To Start From This Audit |
+|---|---|
+| 90 | Replace the `Plater.qml` placeholder with a real AssembleView page/canvas host (ASM-SHELL, ASM-CANVAS, ASM-ASSEMBLY-INFO, ASM-NAVIGATION); wire `CanvasAssembleView` routing branches (ASM-PLATER-ROUTING). Preserve the `ViewMode::AssembleView` enum/accessor/`kLastVm`. |
+| 91 | Implement the explosion-ratio slider and multi-part volume separation rendering with connector guide lines on the default RHI/D3D11 path (ASM-EXPLODE-SLIDER, ASM-EXPLODE-RENDER). |
+| 92 | Port the Assembly measurement gizmo (`Ctrl+Y`, `GLGizmoAssembly`/`ONLY_ASSEMBLY`) with the right-side 测量 panel and measurement overlays (ASM-ASSEMBLY-GIZMO, ASM-MEASURE-OVERLAY). |
+| 93 | Wire AssembleView data pool plumbing (ASM-DATA-POOL); remove stale placeholder artifacts and run source/QML audits (ASM-CLEANUP/ASMVERIFY-01); run the canonical verifier, launch the app, and record AssembleView visual evidence against all three target screenshots (ASMVERIFY-02). |
