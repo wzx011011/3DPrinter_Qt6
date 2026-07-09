@@ -1732,6 +1732,18 @@ void EditorViewModel::setUndoRedoManager(UndoRedoManager *manager)
     connect(m_undoManager, &UndoRedoManager::stateChanged, this, &EditorViewModel::stateChanged);
 }
 
+void EditorViewModel::setActiveCanvasType(int type)
+{
+  // Phase 90 (ASMROUTE-01): active canvas type set by BackendContext on
+  // view-mode change. Mirrors upstream canvas-type routing
+  // (GLCanvas3D.hpp:509-513; Plater.cpp:7322,11601,11635). The
+  // availableGizmoMask() AssembleView branch reads m_activeCanvasType.
+  if (m_activeCanvasType == type)
+    return;
+  m_activeCanvasType = type;
+  emit stateChanged();
+}
+
 void EditorViewModel::undo()
 {
   if (m_undoManager)

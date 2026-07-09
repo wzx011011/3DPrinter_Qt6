@@ -294,11 +294,20 @@ bool BackendContext::canUndo() const
 {
   // Raw undo-stack availability; the page gate (currentPage === tp3DEditor)
   // is applied in QML in Plan 51-02.
+  // Phase 90 (ASMROUTE-01): the UndoRedoManager is a single shared stack
+  // (90-CONTEXT.md decision 8), so undo/redo operates on the active canvas
+  // regardless of view mode — mirroring upstream Plater.cpp:11744 (undo entry
+  // routing) and Plater.cpp:11823 (selection passed to undo/redo). When
+  // currentViewMode_ == ViewMode::AssembleView (CanvasAssembleView=2) the
+  // stack still routes through the same editorViewModel_; no isolated
+  // per-canvas stack is created.
   return editorViewModel_ && editorViewModel_->canUndo();
 }
 
 bool BackendContext::canRedo() const
 {
+  // Phase 90 (ASMROUTE-01): see canUndo() — shared single undo stack applies
+  // to the AssembleView canvas host the same as Prepare/Preview.
   return editorViewModel_ && editorViewModel_->canRedo();
 }
 
@@ -368,6 +377,16 @@ void BackendContext::setCurrentViewMode(int mode)
     return;
   currentViewMode_ = static_cast<ViewMode>(mode);
   emit currentViewModeChanged();
+  // Phase 90 (ASMROUTE-01): push the active canvas type to EditorViewModel so
+  // selection / gizmo / undo-redo routing branches on the active canvas,
+  // mirroring upstream Plater.cpp:7322 (CanvasAssembleView render branch on
+  // selection change) and Plater.cpp:11744/11823 (undo/redo routing). The
+  // ViewMode value equals the RhiViewport::CanvasType value
+  // (View3D=0/CanvasView3D, Preview=1/CanvasPreview, AssembleView=2/
+  // CanvasAssembleView). When AssembleView is active the shared UndoRedoManager
+  // (single stack) routes to the AssembleView canvas host.
+  if (editorViewModel_)
+    editorViewModel_->setActiveCanvasType(static_cast<int>(currentViewMode_));
 }
 
 void BackendContext::requestChangeViewMode(int mode)

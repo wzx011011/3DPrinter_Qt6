@@ -716,6 +716,15 @@ public:
 
   /// Undo/Redo integration (对齐上游 UndoRedo 框架)
   void setUndoRedoManager(UndoRedoManager *manager);
+  /// Phase 90 (ASMROUTE-01): active canvas type injected by BackendContext on
+  /// view-mode change. Mirrors upstream
+  /// get_current_canvas3D()->get_canvas_type() (GLCanvas3D.hpp:509-513). The
+  /// int value equals RhiViewport::CanvasType (0=View3D, 1=Preview,
+  /// 2=AssembleView). Drives selection/gizmo/undo-redo routing in
+  /// availableGizmoMask() and selectSourceObject() (see Plater.cpp:7322,11601,
+  /// 11635). Phase 92 adds the Assembly gizmo to the mask.
+  void setActiveCanvasType(int type);
+  int activeCanvasType() const { return m_activeCanvasType; }
   /// Config preset injection (对齐上游 PresetBundle::full_fff_config → BackgroundSlicingProcess)
   void setConfigViewModel(ConfigViewModel *vm);
   Q_INVOKABLE void undo();
@@ -764,6 +773,9 @@ private:
   SliceService *sliceService_ = nullptr;
   ConfigViewModel *configViewModel_ = nullptr;
   UndoRedoManager *m_undoManager = nullptr;
+  // Phase 90 (ASMROUTE-01): active canvas type (0=View3D, 1=Preview,
+  // 2=AssembleView). Default View3D. Set by BackendContext::setCurrentViewMode.
+  int m_activeCanvasType = 0;
   QString statusText_ = tr("就绪");
   QList<ObjectEntry> m_objects;
   QSet<int> m_selectedSourceIndices;

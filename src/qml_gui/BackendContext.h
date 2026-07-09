@@ -227,6 +227,16 @@ public:
   int vmAssembleView() const { return static_cast<int>(ViewMode::AssembleView); }
   int currentViewMode() const { return static_cast<int>(currentViewMode_); }
 
+  // Phase 90 (ASMROUTE-01): Plater-level canvas-type routing helper.
+  // Mirrors upstream get_current_canvas3D()->get_canvas_type()
+  // (GLCanvas3D.hpp:509-513 ECanvasType). The ViewMode enum is the routing
+  // anchor: View3D<->CanvasView3D(0), Preview<->CanvasPreview(1),
+  // AssembleView<->CanvasAssembleView(2). Exposed as an int (matching
+  // RhiViewport::CanvasType values) so EditorViewModel can branch selection /
+  // gizmo / undo-redo routing on the active canvas without a layering
+  // dependency on RhiViewport.h.
+  int currentCanvasType() const { return static_cast<int>(currentViewMode_); }
+
   // Phase 4: Sidebar Dockable accessors
   bool sidebarCollapsed() const { return sidebarCollapsed_; }
   int sidebarWidth() const { return sidebarWidth_; }
