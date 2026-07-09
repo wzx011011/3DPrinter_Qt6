@@ -5,6 +5,7 @@
 
 #include <QDebug>
 #include <QFile>
+#include <QHash>
 
 #include <algorithm>
 #include <cstddef>
@@ -37,6 +38,17 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
     return;
 
   m_canvasType = viewport->m_canvasType;
+  // Phase 91 (ASMEXPLODE-02): mirror upstream m_explosion_ratio
+  // (GLCanvas3D.hpp:596). If the ratio changed since the last synchronize,
+  // force a model re-upload so buildModelVertices re-applies the per-volume
+  // offset on the CanvasAssembleView branch. The offset is gated to
+  // CanvasAssembleView in buildModelVertices, so Prepare/Preview are unaffected.
+  m_explosionRatio = viewport->m_explosionRatio;
+  if (!qFuzzyCompare(m_explosionRatio, m_lastExplosionRatio))
+  {
+    m_lastExplosionRatio = m_explosionRatio;
+    m_modelVertexBufferUploaded = false;
+  }
   m_meshBytes = viewport->m_meshData.size();
   m_previewBytes = viewport->m_previewData.size();
   QList<int> activeObjectIndices;
@@ -837,6 +849,76 @@ QVector<RhiViewportRenderer::Vertex> RhiViewportRenderer::buildModelVertices(con
                            sourceVertex.g,
                            sourceVertex.b,
                            sourceVertex.a});
+  }
+
+  // Phase 91 (ASMEXPLODE-02): per-volume explosion offset on AssembleView only.
+  // Mirrors upstream m_explosion_ratio separation (GLCanvas3D.hpp:596): each
+  // volume is pushed radially away from its parent object's center by
+  // (volumeCenter - objectCenter) * (ratio - 1.0). objectCenter is the midpoint
+  // of the union of all sibling volume batches sharing a sourceObjectIndex.
+  // Strictly gated to CanvasAssembleView and to ratio != 1.0, so Prepare
+  // (CanvasView3D) and Preview (CanvasPreview) rendering is byte-for-byte
+  // unaffected (CONTEXT.md decision 4 offset formula).
+  if (m_canvasType == RhiViewport::CanvasAssembleView
+      && !qFuzzyIsNull(m_explosionRatio - 1.0f)
+      && !vertices.isEmpty())
+  {
+    const QList<PrepareSceneData::ModelBatch> &batches = m_prepareScene.modelBatches();
+
+    // Precompute per-object unioned bounds midpoint (objectCenter).
+    QHash<int, PrepareSceneData::ModelBounds> objectBoundsBySource;
+    objectBoundsBySource.reserve(batches.size() * 2);
+    for (const PrepareSceneData::ModelBatch &batch : batches)
+    {
+      if (batch.sourceObjectIndex < 0 || batch.vertexCount <= 0)
+        continue;
+      auto it = objectBoundsBySource.find(batch.sourceObjectIndex);
+      if (it == objectBoundsBySource.end())
+      {
+        objectBoundsBySource.insert(batch.sourceObjectIndex, batch.bounds);
+      }
+      else
+      {
+        PrepareSceneData::ModelBounds &ub = it.value();
+        ub.minX = std::min(ub.minX, batch.bounds.minX);
+        ub.minY = std::min(ub.minY, batch.bounds.minY);
+        ub.minZ = std::min(ub.minZ, batch.bounds.minZ);
+        ub.maxX = std::max(ub.maxX, batch.bounds.maxX);
+        ub.maxY = std::max(ub.maxY, batch.bounds.maxY);
+        ub.maxZ = std::max(ub.maxZ, batch.bounds.maxZ);
+      }
+    }
+
+    const float t = m_explosionRatio - 1.0f;
+    for (const PrepareSceneData::ModelBatch &batch : batches)
+    {
+      if (batch.sourceObjectIndex < 0 || batch.vertexCount <= 0)
+        continue;
+      const auto it = objectBoundsBySource.constFind(batch.sourceObjectIndex);
+      if (it == objectBoundsBySource.constEnd())
+        continue;
+
+      const PrepareSceneData::ModelBounds &objectBounds = it.value();
+      const float objectCenterX = (objectBounds.minX + objectBounds.maxX) * 0.5f;
+      const float objectCenterY = (objectBounds.minY + objectBounds.maxY) * 0.5f;
+      const float objectCenterZ = (objectBounds.minZ + objectBounds.maxZ) * 0.5f;
+      // batchCenter = midpoint of this volume's own bounds.
+      const float batchCenterX = (batch.bounds.minX + batch.bounds.maxX) * 0.5f;
+      const float batchCenterY = (batch.bounds.minY + batch.bounds.maxY) * 0.5f;
+      const float batchCenterZ = (batch.bounds.minZ + batch.bounds.maxZ) * 0.5f;
+      const float offX = (batchCenterX - objectCenterX) * t;
+      const float offY = (batchCenterY - objectCenterY) * t;
+      const float offZ = (batchCenterZ - objectCenterZ) * t;
+
+      const int endVertex = std::min(batch.firstVertex + batch.vertexCount, int(vertices.size()));
+      for (int i = std::max(0, batch.firstVertex); i < endVertex; ++i)
+      {
+        Vertex &v = vertices[i];
+        v.x += offX;
+        v.y += offY;
+        v.z += offZ;
+      }
+    }
   }
 
   return vertices;

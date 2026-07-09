@@ -132,6 +132,12 @@ private:
   quint32 m_cutPlaneOutlineVertexCount = 0;
   quint32 m_wipeTowerVertexCount = 0;
   int m_canvasType = 0;
+  // Phase 91 (ASMEXPLODE-02): explosion ratio mirrored from RhiViewport in
+  // synchronize(). Drives the per-volume offset in buildModelVertices when the
+  // active canvas is CanvasAssembleView. m_lastExplosionRatio forces a model
+  // re-upload when the ratio changes (default 1.0 == no offset).
+  float m_explosionRatio = 1.0f;
+  float m_lastExplosionRatio = 1.0f;
   int m_meshBytes = 0;
   int m_previewBytes = 0;
   qint64 m_sceneGeneration = 0;
