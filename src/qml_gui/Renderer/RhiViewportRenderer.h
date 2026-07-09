@@ -52,6 +52,11 @@ private:
   bool uploadHighlightBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadCutPlaneBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadWipeTowerBuffer(QRhiResourceUpdateBatch *updates);
+  // Phase 91 (ASMEXPLODE-02): yellow dashed connector guide lines between
+  // originally-adjacent volumes of the same object on AssembleView when
+  // ratio > 1.0 (matches shotScreen/装配页_爆炸.png).
+  bool uploadAssemblyConnectorBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
+  void renderAssemblyConnectors(QRhiCommandBuffer *cb);
   bool uploadCameraUniform(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool ensureGizmoPipeline();                                  // Phase 68
   bool uploadGizmoBuffer(QRhiResourceUpdateBatch *updates);   // Phase 68/70
@@ -101,15 +106,19 @@ private:
   std::unique_ptr<QRhiBuffer> m_cutPlaneFillBuffer;
   std::unique_ptr<QRhiBuffer> m_cutPlaneOutlineBuffer;
   std::unique_ptr<QRhiBuffer> m_wipeTowerBuffer;
+  // Phase 91 (ASMEXPLODE-02): assembly connector guide-line buffer.
+  std::unique_ptr<QRhiBuffer> m_assemblyConnectorBuffer;
   bool m_gizmoVertexBufferUploaded = false;
   bool m_cutPlaneFillBufferUploaded = false;
   bool m_cutPlaneOutlineBufferUploaded = false;
   bool m_wipeTowerBufferUploaded = false;
+  bool m_assemblyConnectorBufferUploaded = false;
   bool m_gizmoPipelineCreated = false;
   quint32 m_gizmoVertexBufferBytes = 0;
   quint32 m_cutPlaneFillBufferBytes = 0;
   quint32 m_cutPlaneOutlineBufferBytes = 0;
   quint32 m_wipeTowerBufferBytes = 0;
+  quint32 m_assemblyConnectorBufferBytes = 0;
   GizmoGeometryOffsets m_moveGizmoOffsets;
   GizmoGeometryOffsets m_rotateGizmoOffsets;
   GizmoGeometryOffsets m_scaleGizmoOffsets;
@@ -131,6 +140,7 @@ private:
   quint32 m_cutPlaneFillVertexCount = 0;
   quint32 m_cutPlaneOutlineVertexCount = 0;
   quint32 m_wipeTowerVertexCount = 0;
+  quint32 m_assemblyConnectorVertexCount = 0;
   int m_canvasType = 0;
   // Phase 91 (ASMEXPLODE-02): explosion ratio mirrored from RhiViewport in
   // synchronize(). Drives the per-volume offset in buildModelVertices when the

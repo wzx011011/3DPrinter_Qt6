@@ -48,6 +48,8 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   {
     m_lastExplosionRatio = m_explosionRatio;
     m_modelVertexBufferUploaded = false;
+    // Connector guide lines appear/disappear when the ratio crosses 1.0.
+    m_assemblyConnectorBufferUploaded = false;
   }
   m_meshBytes = viewport->m_meshData.size();
   m_previewBytes = viewport->m_previewData.size();
@@ -282,6 +284,14 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     }
     renderWipeTower(cb);
     renderCutPlane(cb);
+    // Phase 91 (ASMEXPLODE-02): yellow dashed connector guide lines on
+    // AssembleView only, when ratio > 1.0 (matches 装配页_爆炸.png).
+    if (m_canvasType == RhiViewport::CanvasAssembleView
+        && m_explosionRatio > 1.0f + std::numeric_limits<float>::epsilon()
+        && m_assemblyConnectorBuffer && m_assemblyConnectorVertexCount > 0)
+    {
+      renderAssemblyConnectors(cb);
+    }
     // Phase 68: render the move gizmo (X/Y/Z arrows) when gizmoMode == Move.
     // Drawn after meshes/highlight so it sits on top via no-depth-write.
     renderMoveGizmo(cb);
@@ -336,6 +346,7 @@ void RhiViewportRenderer::releaseResources()
   m_cutPlaneFillBuffer.reset();
   m_cutPlaneOutlineBuffer.reset();
   m_wipeTowerBuffer.reset();
+  m_assemblyConnectorBuffer.reset();  // Phase 91
   m_srb.reset();
   m_cameraUniformBuffer.reset();
   m_highlightVertexBuffer.reset();
@@ -352,6 +363,7 @@ void RhiViewportRenderer::releaseResources()
   m_cutPlaneFillBufferUploaded = false;
   m_cutPlaneOutlineBufferUploaded = false;
   m_wipeTowerBufferUploaded = false;
+  m_assemblyConnectorBufferUploaded = false;  // Phase 91
   m_gizmoPipelineCreated = false;            // Phase 68
   m_bedFillBufferBytes = 0;
   m_bedLineBufferBytes = 0;
@@ -519,6 +531,9 @@ bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, q
   if (!uploadCutPlaneBuffers(updates, dirtyFlags))
     return false;
   if (!uploadWipeTowerBuffer(updates))
+    return false;
+  // Phase 91 (ASMEXPLODE-02): connector guide lines (AssembleView, ratio > 1.0).
+  if (!uploadAssemblyConnectorBuffer(updates, dirtyFlags))
     return false;
 
   m_sceneBuffersUploaded = true;
@@ -734,6 +749,106 @@ bool RhiViewportRenderer::uploadWipeTowerBuffer(QRhiResourceUpdateBatch *updates
   m_wipeTowerBufferUploaded = true;
   m_wipeTowerDirty = false;
   return true;
+}
+
+bool RhiViewportRenderer::uploadAssemblyConnectorBuffer(QRhiResourceUpdateBatch *updates,
+                                                        quint32 dirtyFlags)
+{
+  // Phase 91 (ASMEXPLODE-02): yellow dashed connector guide lines between
+  // originally-adjacent volumes of the same object, visible only when ratio > 1.0
+  // on AssembleView (matches shotScreen/装配页_爆炸.png; CONTEXT.md decision 7).
+  // Connectors join the ORIGINAL (pre-offset) volume centers — they stay anchored
+  // where the volumes were touching and bridge the gap created by the explosion.
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+
+  const bool reupload = !m_assemblyConnectorBufferUploaded
+      || (dirtyFlags & (PrepareSceneData::DirtyMesh
+                        | PrepareSceneData::DirtyPlate
+                        | PrepareSceneData::DirtyGpu)) != 0;
+  if (!reupload)
+    return true;
+
+  QVector<Vertex> vertices;
+  // Connectors are meaningful only on AssembleView with ratio > 1.0. On any
+  // other canvas or at ratio <= 1.0 the buffer is left empty (nothing drawn).
+  if (m_canvasType == RhiViewport::CanvasAssembleView
+      && m_explosionRatio > 1.0f + std::numeric_limits<float>::epsilon())
+  {
+    // Group volume batches by their parent object (sourceObjectIndex), keeping
+    // the original modelBatches() order so "adjacent" = consecutive batches of
+    // the same object (the simplest faithful definition of originally-touching
+    // volumes — upstream connects volumes that were adjacent pre-explosion).
+    struct VolumeCenter { int sourceObjectIndex; QVector3D center; };
+    QList<VolumeCenter> centers;
+    for (const PrepareSceneData::ModelBatch &batch : m_prepareScene.modelBatches())
+    {
+      if (batch.sourceObjectIndex < 0 || batch.vertexCount <= 0)
+        continue;
+      VolumeCenter vc;
+      vc.sourceObjectIndex = batch.sourceObjectIndex;
+      vc.center = QVector3D((batch.bounds.minX + batch.bounds.maxX) * 0.5f,
+                            (batch.bounds.minY + batch.bounds.maxY) * 0.5f,
+                            (batch.bounds.minZ + batch.bounds.maxZ) * 0.5f);
+      centers.append(vc);
+    }
+
+    // Yellow RGBA (matches 装配页_爆炸.png). Dash effect: emit short alternating
+    // dash/gap segments along each connector (avoids a new stipple shader while
+    // matching the dashed visual). 6 dash segments per connector at this density.
+    const float r = 1.0f;
+    const float g = 0.85f;
+    const float b = 0.0f;
+    const float a = 1.0f;
+    const int kDashCount = 6;
+    for (int i = 1; i < centers.size(); ++i)
+    {
+      if (centers[i].sourceObjectIndex != centers[i - 1].sourceObjectIndex)
+        continue;
+      const QVector3D &p0 = centers[i - 1].center;
+      const QVector3D &p1 = centers[i].center;
+      for (int d = 0; d < kDashCount; ++d)
+      {
+        const float t0 = float(d) / float(kDashCount);
+        const float t1 = float(d + 0.5f) / float(kDashCount);
+        const QVector3D a0 = p0 + (p1 - p0) * t0;
+        const QVector3D a1 = p0 + (p1 - p0) * t1;
+        // Two vertices = one line segment (GL_LINES via m_linePipeline).
+        vertices.append(Vertex{a0.x(), a0.y(), a0.z(), r, g, b, a});
+        vertices.append(Vertex{a1.x(), a1.y(), a1.z(), r, g, b, a});
+      }
+    }
+  }
+
+  const quint32 byteSize = quint32(vertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_assemblyConnectorBuffer, byteSize, m_assemblyConnectorBufferBytes,
+                    QRhiBuffer::VertexBuffer))
+    return false;
+
+  m_assemblyConnectorVertexCount = quint32(vertices.size());
+  if (m_assemblyConnectorBuffer && byteSize > 0)
+  {
+    updates->uploadStaticBuffer(m_assemblyConnectorBuffer.get(), 0, byteSize,
+                                vertices.constData());
+  }
+  m_assemblyConnectorBufferUploaded = true;
+  return true;
+}
+
+void RhiViewportRenderer::renderAssemblyConnectors(QRhiCommandBuffer *cb)
+{
+  // Phase 91 (ASMEXPLODE-02): draw the connector guide-line buffer with the
+  // shared line pipeline (GL_LINES). Drawn after the mesh so connectors sit on
+  // top of separated volumes (matches 装配页_爆炸.png).
+  if (cb == nullptr || m_assemblyConnectorBuffer == nullptr
+      || m_assemblyConnectorVertexCount == 0 || m_linePipeline == nullptr)
+    return;
+
+  cb->setShaderResources();
+  cb->setGraphicsPipeline(m_linePipeline.get());
+  const QRhiCommandBuffer::VertexInput binding(m_assemblyConnectorBuffer.get(), 0);
+  cb->setVertexInput(0, 1, &binding);
+  cb->draw(m_assemblyConnectorVertexCount);
 }
 
 bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags)
