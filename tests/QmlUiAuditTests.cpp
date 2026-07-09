@@ -126,6 +126,16 @@ private slots:
   // the overlay gated to gizmo mode 19 + CanvasAssembleView, and the
   // AssemblyMeasureGeometry helper exists. Prepare/Preview guards stay intact.
   void assembleViewMeasurementGizmoWiredAndOverlayRenders();
+  // Phase 93-01 (ASMVERIFY-01): consolidated AssembleView-restoration
+  // milestone verification. Locks: placeholder removed, AssemblePage.qml
+  // present + registered, CanvasAssembleView enum, explosion-ratio wiring,
+  // Assembly gizmo anchors, data pool present. Mirrors Phase 88's
+  // settingsRestorationMilestoneHasFinalVerificationCoverage.
+  void assembleViewRestorationMilestoneHasFinalVerificationCoverage();
+  // Phase 93-01 (ASMVERIFY-01 regression): the AssembleView placeholder
+  // tokens removed by Phase 90 must stay absent. Fails CI deterministically
+  // if any reappear. Mirrors Phase 88's deletedSettingsPathsStayAbsent.
+  void assembleViewPlaceholderArtifactsStayAbsent();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -3198,6 +3208,143 @@ void QmlUiAuditTests::assembleViewMeasurementGizmoWiredAndOverlayRenders()
   QVERIFY2(QFileInfo::exists(assemblyMeasureHeaderPath),
            qPrintable(QStringLiteral("AssemblyMeasureGeometry.h must exist at %1")
                           .arg(assemblyMeasureHeaderPath)));
+}
+
+void QmlUiAuditTests::assembleViewRestorationMilestoneHasFinalVerificationCoverage()
+{
+  // Phase 93-01 (ASMVERIFY-01): consolidated AssembleView-restoration milestone
+  // verification. Mirrors Phase 88's settingsRestorationMilestoneHasFinalVerifi
+  // cationCoverage: reads the relevant sources + self-reads the audit file and
+  // asserts the whole v4.2 milestone is covered. Locks: (1) placeholder
+  // removed; (2) AssemblePage present + registered; (3) CanvasAssembleView
+  // enum; (4) explosion-ratio wiring; (5) Assembly gizmo anchors; (6) data
+  // pool present; (7) Phase 90/91/92/93 audit anchors referenced.
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString plater = readSource(QStringLiteral("src/qml_gui/pages/Plater.qml"));
+  const QString rhiViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString rhiViewportRenderer = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString assemblePage = readSource(QStringLiteral("src/qml_gui/pages/AssemblePage.qml"));
+  const QString audits = readSource(QStringLiteral("tests/QmlUiAuditTests.cpp"));
+  QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
+  QVERIFY2(!plater.isEmpty(), "Unable to read Plater.qml");
+  QVERIFY2(!rhiViewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!rhiViewportRenderer.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!assemblePage.isEmpty(), "Unable to read AssemblePage.qml");
+  QVERIFY2(!audits.isEmpty(), "Unable to read QmlUiAuditTests.cpp");
+
+  // (1) Placeholder removed (ASM-CLEANUP): the placeholder Text, the
+  //     assembleSlot Item, and the v2.0 Out-of-Scope comment must be absent.
+  QVERIFY2(!plater.contains(QStringLiteral("\u88c5\u914d\u89c6\u56fe\u6682\u4e0d\u53ef\u7528")),
+           "Plater.qml must not contain the '\u88c5\u914d\u89c6\u56fe\u6682\u4e0d\u53ef\u7528' placeholder text");
+  QVERIFY2(!plater.contains(QStringLiteral("id: assembleSlot")),
+           "Plater.qml must not contain the 'id: assembleSlot' placeholder item");
+  QVERIFY2(!plater.contains(QStringLiteral("Out of Scope\u3001\u4ec5\u4fdd\u7559\u679a\u4e3e\u5165\u53e3")),
+           "Plater.qml must not contain the v2.0 Out-of-Scope comment");
+
+  // (2) AssemblePage present + registered (ASMSHELL): qml.qrc registers it and
+  //     Plater.qml instantiates it.
+  QVERIFY2(qrc.contains(QStringLiteral("pages/AssemblePage.qml")),
+           "qml.qrc must register pages/AssemblePage.qml");
+  QVERIFY2(plater.contains(QStringLiteral("AssemblePage")),
+           "Plater.qml must instantiate AssemblePage");
+
+  // (3) CanvasAssembleView enum (ASMSHELL-02/ASMROUTE-01).
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("CanvasAssembleView = 2")),
+           "RhiViewport.h must declare CanvasAssembleView = 2");
+  QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("CanvasAssembleView")),
+           "RhiViewportRenderer.cpp must branch on CanvasAssembleView");
+  // Prepare/Preview regression: CanvasPreview guards must still be present.
+  QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("m_canvasType == RhiViewport::CanvasPreview")),
+           "RhiViewportRenderer.cpp must keep the CanvasPreview guards intact");
+
+  // (4) Explosion-ratio wiring (ASMEXPLODE).
+  QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(float explosionRatio")),
+           "EditorViewModel.h must declare the explosionRatio Q_PROPERTY");
+  QVERIFY2(assemblePage.contains(QStringLiteral("\u7206\u70b8\u6bd4\u4f8b")),
+           "AssemblePage must contain the '\u7206\u70b8\u6bd4\u4f8b' (Explosion Ratio) label");
+  QVERIFY2(assemblePage.contains(QStringLiteral("editorVm.explosionRatio")),
+           "AssemblePage must bind to editorVm.explosionRatio");
+
+  // (5) Assembly gizmo anchors (ASMMEASURE).
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("GizmoAssemblyMeasure = 19")),
+           "RhiViewport.h must declare GizmoAssemblyMeasure = 19");
+  QVERIFY2(editorHeader.contains(QStringLiteral("activateAssemblyMeasureGizmo")),
+           "EditorViewModel.h must declare activateAssemblyMeasureGizmo()");
+  QVERIFY2(assemblePage.contains(QStringLiteral("\u6d4b\u91cf")),
+           "AssemblePage must contain the '\u6d4b\u91cf' (Measurement) panel");
+
+  // (6) Data pool present (ASMROUTE-02): the AssembleViewDataPool header
+  //     exists on disk + EditorViewModel references the pool. File existence
+  //     resolves against QT_TESTCASE_SOURCEDIR (repo root) — the Phase 92
+  //     fixture convention.
+  const QString poolHeaderPath =
+      QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR))
+          .filePath(QStringLiteral("src/core/rendering/AssembleViewDataPool.h"));
+  QVERIFY2(QFileInfo::exists(poolHeaderPath),
+           qPrintable(QStringLiteral("AssembleViewDataPool.h must exist at %1")
+                          .arg(poolHeaderPath)));
+  QVERIFY2(editorHeader.contains(QStringLiteral("AssembleViewDataPool"))
+               || editorHeader.contains(QStringLiteral("m_assembleViewDataPool"))
+               || editorHeader.contains(QStringLiteral("refreshAssembleViewDataPool")),
+           "EditorViewModel.h must reference the AssembleView data pool");
+
+  // (7) Milestone anchor coverage: the Phase 90/91/92/93 audit slot names must
+  //     all be present in this audit file.
+  const QStringList milestoneAnchors = {
+      QStringLiteral("assembleViewShellReplacesPlaceholderAndRegistersCanvasHost"),
+      QStringLiteral("assembleViewExplosionRatioWiredAndRenderBranchAppliesOffset"),
+      QStringLiteral("assembleViewMeasurementGizmoWiredAndOverlayRenders"),
+      QStringLiteral("assembleViewRestorationMilestoneHasFinalVerificationCoverage"),
+      QStringLiteral("assembleViewPlaceholderArtifactsStayAbsent")
+  };
+  for (const QString &anchor : milestoneAnchors) {
+    QVERIFY2(audits.contains(anchor),
+             qPrintable(QStringLiteral("AssembleView milestone missing audit anchor: %1").arg(anchor)));
+  }
+}
+
+void QmlUiAuditTests::assembleViewPlaceholderArtifactsStayAbsent()
+{
+  // Phase 93-01 (ASMVERIFY-01 regression): the AssembleView placeholder tokens
+  // removed by Phase 90 must stay absent. Mirrors Phase 88's
+  // deletedSettingsPathsStayAbsent: a token list + a source-file list +
+  // QVERIFY2(!content.contains(token), ...). Fails CI deterministically if any
+  // reappear.
+  const QString plater = readSource(QStringLiteral("src/qml_gui/pages/Plater.qml"));
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  QVERIFY2(!plater.isEmpty(), "Unable to read Plater.qml");
+  QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
+
+  // Placeholder tokens that must be absent from Plater.qml (the Phase 90
+  // removal surface). CJK literals as \uXXXX escapes.
+  const QStringList placeholderTokens = {
+      QStringLiteral("\u88c5\u914d\u89c6\u56fe\u6682\u4e0d\u53ef\u7528"),  // 装配视图暂不可用
+      QStringLiteral("id: assembleSlot"),
+      QStringLiteral("Out of Scope\u3001\u4ec5\u4fdd\u7559\u679a\u4e3e\u5165\u53e3"),  // v2.0 Out-of-Scope comment
+      QStringLiteral("\u4ec5\u4fdd\u7559\u679a\u4e3e\u5165\u53e3")  // 仅保留枚举入口
+  };
+  for (const QString &token : placeholderTokens) {
+    QVERIFY2(!plater.contains(token),
+             qPrintable(QStringLiteral("Plater.qml reintroduced placeholder token: %1").arg(token)));
+  }
+
+  // qml.qrc must not reference any stale AssembleView placeholder file. The
+  // only AssembleView entry is the normalized pages/AssemblePage.qml.
+  QVERIFY2(!qrc.contains(QStringLiteral("AssembleViewPlaceholder")),
+           "qml.qrc must not reference a stale AssembleView placeholder resource");
+  // Confirm exactly the normalized AssemblePage entry is present (count == 1).
+  int assemblePageEntries = 0;
+  int idx = 0;
+  while ((idx = qrc.indexOf(QStringLiteral("pages/AssemblePage.qml"), idx)) != -1) {
+    ++assemblePageEntries;
+    idx += QStringLiteral("pages/AssemblePage.qml").size();
+  }
+  QVERIFY2(assemblePageEntries == 1,
+           qPrintable(QStringLiteral("qml.qrc must have exactly one pages/AssemblePage.qml "
+                                     "entry, got %1")
+                          .arg(assemblePageEntries)));
 }
 
 QTEST_MAIN(QmlUiAuditTests)
