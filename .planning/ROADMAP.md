@@ -28,7 +28,7 @@
 
 ## Phases
 
-- [ ] Phase 89: AssembleView Source-Truth Gap Audit
+- [x] Phase 89: AssembleView Source-Truth Gap Audit
 - [ ] Phase 90: AssembleView Shell And Canvas Host Restoration
 - [ ] Phase 91: Explosion Ratio And Assembly Rendering
 - [ ] Phase 92: Assembly Measurement Gizmo
@@ -44,12 +44,12 @@
 
 ### Phase 89: AssembleView Source-Truth Gap Audit
 
-**Status:** Not started
-**Plans:** 0/1
+**Status:** Complete
+**Plans:** 1/1
 
 Success criteria:
-1. AssembleView screenshot-visible regions (4-region chrome, explosion slider, assembly-info panel, measurement panel, canvas view controls) are mapped to target screenshots, upstream source files, Qt targets, replacement decisions, and verification evidence.
-2. The current `Plater.qml:104-117` placeholder and `BackendContext.h:199` enum entry are reconciled into a removal/replacement plan with explicit out-of-scope classification for Arrange.
+1. AssembleView screenshot-visible regions (4-region chrome, explosion slider, assembly-info panel, measurement panel, canvas view controls) are mapped to target screenshots, upstream source files, Qt targets, replacement decisions, and verification evidence. — Met by `89-GAP-MATRIX.md` (11 ASM-* regions, 11 columns, 3 screenshots, upstream anchors with line citations).
+2. The current `Plater.qml:104-117` placeholder and `BackendContext.h:199` enum entry are reconciled into a removal/replacement plan with explicit out-of-scope classification for Arrange. — Met by the Placeholder Reconciliation (ASMAUDIT-02) and Out-of-Scope Classification sections.
 
 ### Phase 90: AssembleView Shell And Canvas Host Restoration
 
@@ -104,12 +104,13 @@ Success criteria:
 
 ## Next Step
 
-Plan Phase 89 after this roadmap is approved:
+Phase 89 gap audit is complete. Plan Phase 90 (AssembleView Shell And Canvas
+Host Restoration) next:
 
 ```text
-$gsd-plan-phase 89
+$gsd-plan-phase 90
 ```
 
 ---
 
-*Last updated: 2026-07-09 at v4.2 milestone start.*
+*Last updated: 2026-07-09 after Phase 89 plan 01 completion.*

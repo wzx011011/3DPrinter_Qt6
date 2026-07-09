@@ -2,36 +2,36 @@
 gsd_state_version: 1.0
 milestone: v4.2
 milestone_name: AssembleView Source-Truth Restoration
-status: planning
-last_updated: 2026-07-09T01:30:00+08:00
-last_activity: 2026-07-09 -- Milestone v4.2 started
+status: executing
+last_updated: 2026-07-09T11:30:00+08:00
+last_activity: 2026-07-09 -- Phase 89 plan 01 complete (AssembleView gap matrix frozen)
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
-stopped_at: Milestone v4.2 started; defining requirements and roadmap
+  total_plans: 5
+  completed_plans: 1
+  percent: 20
+stopped_at: Phase 89 plan 01 complete; Phase 90 ready to plan/execute
 ---
 
 # Project State
 
 **Milestone:** v4.2 - AssembleView Source-Truth Restoration
-**Status:** Planning (defining requirements and roadmap)
-**Next step:** Plan Phase 89 with `/gsd-plan-phase 89` (or `/gsd-discuss-phase 89` first).
+**Status:** Executing (Phase 89 gap audit complete)
+**Next step:** Plan Phase 90 (AssembleView Shell And Canvas Host Restoration) with `/gsd-plan-phase 90`.
 
 ## Current Position
 
-Phase: 89 (AssembleView Source-Truth Gap Audit) — not started
-Plan: —
-Status: Roadmap approved; ready to plan Phase 89
-Last activity: 2026-07-09 — v4.2 roadmap created (Phases 89-93)
+Phase: 89 (AssembleView Source-Truth Gap Audit) — complete
+Plan: 01 — complete
+Status: Gap matrix frozen; Phase 90-93 can execute against `89-GAP-MATRIX.md`
+Last activity: 2026-07-09 — Phase 89 plan 01 executed (4 tasks, 4 commits)
 
 ## Current Milestone (v4.2)
 
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
-| 89 | AssembleView Source-Truth Gap Audit | Not started | ASMAUDIT-01, ASMAUDIT-02 |
+| 89 | AssembleView Source-Truth Gap Audit | Complete | ASMAUDIT-01, ASMAUDIT-02 |
 | 90 | AssembleView Shell And Canvas Host Restoration | Not started | ASMSHELL-01, ASMSHELL-02, ASMROUTE-01 |
 | 91 | Explosion Ratio And Assembly Rendering | Not started | ASMEXPLODE-01, ASMEXPLODE-02 |
 | 92 | Assembly Measurement Gizmo | Not started | ASMMEASURE-01, ASMMEASURE-02 |
@@ -76,14 +76,14 @@ See: `.planning/PROJECT.md` (updated 2026-07-09)
 - LAN/device/cloud/network/Monitor/ModelMall/camera/printer-connected hardware workflows (removed scope).
 
 **Screenshot dependency:**
-- User will provide an AssembleView screenshot to `shotScreen/` (visual/layout truth). Execution phases start after the screenshot is available; requirements and roadmap can be defined now.
+- The three AssembleView screenshots are now present in `shotScreen/` (`装配页.png`, `装配页_爆炸.png`, `装配页_测量.png`) and are cited as visual truth in `89-GAP-MATRIX.md`. Phase 90-93 execute against them.
 
 ## Carry-Forward Status
 
 | Category | Item | Target |
 |---|---|---|
 | closed | v4.1 Parameter settings dialogs | Shipped in v4.1 |
-| active | AssembleView source-truth restoration | v4.2 |
+| active | AssembleView source-truth restoration | v4.2 (Phase 89 gap audit complete; Phase 90-93 pending) |
 | removed | LAN/device/cloud/network/Monitor workflows | Removed from future scope by user direction on 2026-07-07 |
 | future | Auto filament-map recommendation + wipe-tower geometry/rendering | Future milestone |
 | future | Real GL/QRhi-capture thumbnails + 3MF pixel round-trip | Future milestone |
@@ -109,6 +109,6 @@ Items acknowledged and deferred at v4.1 milestone close on 2026-07-09:
 
 ## Operator Next Steps
 
-- Define REQUIREMENTS.md for v4.2.
-- Create ROADMAP.md (phases continue from 89).
-- Execution starts after the AssembleView screenshot is provided to `shotScreen/`.
+- Phase 89 gap audit is complete; the canonical matrix is `89-GAP-MATRIX.md`.
+- Plan Phase 90 (AssembleView Shell And Canvas Host Restoration) with `/gsd-plan-phase 90` — it replaces the `Plater.qml` placeholder and wires `CanvasAssembleView` routing.
+- Phase 91-93 follow the Phase Routing table in `89-GAP-MATRIX.md`.
