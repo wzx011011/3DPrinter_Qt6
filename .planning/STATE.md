@@ -18,14 +18,24 @@ stopped_at: Milestone v4.2 started; defining requirements and roadmap
 
 **Milestone:** v4.2 - AssembleView Source-Truth Restoration
 **Status:** Planning (defining requirements and roadmap)
-**Next step:** Define REQUIREMENTS.md, then create ROADMAP.md (phases continue from 89).
+**Next step:** Plan Phase 89 with `/gsd-plan-phase 89` (or `/gsd-discuss-phase 89` first).
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 89 (AssembleView Source-Truth Gap Audit) — not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-07-09 — Milestone v4.2 started
+Status: Roadmap approved; ready to plan Phase 89
+Last activity: 2026-07-09 — v4.2 roadmap created (Phases 89-93)
+
+## Current Milestone (v4.2)
+
+| Phase | Name | Status | Requirements |
+|---|---|---|---|
+| 89 | AssembleView Source-Truth Gap Audit | Not started | ASMAUDIT-01, ASMAUDIT-02 |
+| 90 | AssembleView Shell And Canvas Host Restoration | Not started | ASMSHELL-01, ASMSHELL-02, ASMROUTE-01 |
+| 91 | Explosion Ratio And Assembly Rendering | Not started | ASMEXPLODE-01, ASMEXPLODE-02 |
+| 92 | Assembly Measurement Gizmo | Not started | ASMMEASURE-01, ASMMEASURE-02 |
+| 93 | AssembleView Verification And Cleanup | Not started | ASMROUTE-02, ASMVERIFY-01, ASMVERIFY-02 |
 
 ## Last Completed Milestone: v4.1
 

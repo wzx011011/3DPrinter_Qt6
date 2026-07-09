@@ -10,144 +10,89 @@
 - ✅ **v3.4** Import to G-code Complete Workflow — Phases 37-43 (closed by automated E2E)
 - ✅ **v3.5** Preset Authoring Complete Workflow — Phases 44-49 (superseded after Phase 46)
 - ✅ **v3.6** Screenshot-Driven OrcaSlicer UI Restoration — Phases 50-58 (shipped 2026-07-03)
-- ✅ **v3.7** Screenshot-Level UI Parity Closure — Phases 59-64 (2026-07-04; D3D12 and manual visual debt carried forward)
-- ✅ **v3.8** RHI Gizmo Parity — Phases 65-73 (shipped 2026-07-04; 21/21 requirements, Phase 68 visual evidence deferred)
-- ✅ **v3.9** Prepare Page UI Restoration — Phases 74-78 (shipped 2026-07-06; 12/12 requirements)
-- ✅ **v4.0** Preview Page UI Restoration — Phases 79-83 (shipped 2026-07-07; 13/13 requirements)
-- ✅ **v4.1** Parameter Settings Dialogs Source-Truth Restoration — Phases 84-88 (shipped 2026-07-09; 14/14 requirements)
+- ✅ **v3.7** Screenshot-Level UI Parity Closure — Phases 59-64 (2026-07-04)
+- ✅ **v3.8** RHI Gizmo Parity — Phases 65-73 (shipped 2026-07-04)
+- ✅ **v3.9** Prepare Page UI Restoration — Phases 74-78 (shipped 2026-07-06)
+- ✅ **v4.0** Preview Page UI Restoration — Phases 79-83 (shipped 2026-07-07)
+- ✅ **v4.1** Parameter Settings Dialogs Source-Truth Restoration — Phases 84-88 (shipped 2026-07-09)
+- 🚧 **v4.2** AssembleView Source-Truth Restoration — Phases 89-93 (in progress)
+
+## Current Milestone: v4.2 AssembleView Source-Truth Restoration
+
+**Goal:** Restore OrcaSlicer's AssembleView to screenshot/source-truth parity, replacing the current `Plater.qml` placeholder with a real canvas host, explosion-ratio slider, Assembly measurement gizmo (`Ctrl+Y`), data pool, and Plater `CanvasAssembleView` routing on the default RHI/D3D11 path.
+
+**Scope rule:** This milestone is local/offline only. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows remain removed from scope. Arrange (auto-arrangement) is already implemented and explicitly out of scope.
+
+**Visual truth:** `shotScreen/装配页.png` (default), `shotScreen/装配页_爆炸.png` (explosion ratio), `shotScreen/装配页_测量.png` (measurement gizmo).
+**Behavior truth:** `third_party/OrcaSlicer/src/slic3r/GUI/GUI_Preview.hpp:180` (AssembleView class), `GLCanvas3D.hpp:509-513` (CanvasAssembleView enum), `GLCanvas3D.hpp:596` (explosion ratio), `Gizmos/GLGizmoAssembly.hpp` (Assembly gizmo), `Plater.cpp` (routing).
 
 ## Phases
 
-<details>
-<summary>✅ v4.1 Parameter Settings Dialogs Source-Truth Restoration (Phases 84-88) — SHIPPED 2026-07-09</summary>
+- [ ] Phase 89: AssembleView Source-Truth Gap Audit
+- [ ] Phase 90: AssembleView Shell And Canvas Host Restoration
+- [ ] Phase 91: Explosion Ratio And Assembly Rendering
+- [ ] Phase 92: Assembly Measurement Gizmo
+- [ ] Phase 93: AssembleView Verification And Cleanup
 
-- [x] Phase 84: Settings Source-Truth Gap Audit (1/1 plans) — completed 2026-07-07
-- [x] Phase 85: Settings Shell And Tab Layout Restoration (1/1 plans) — completed 2026-07-07
-- [x] Phase 86: Settings Option Sections And Typed Controls (1/1 plans) — completed 2026-07-07
-- [x] Phase 87: Settings Preset Semantics And Workflow Stability (1/1 plans) — completed 2026-07-07
-- [x] Phase 88: Settings Verification And Cleanup (1/1 plans) — completed 2026-07-08
+| Phase | Name | Goal | Requirements |
+|---|---|---|---|
+| 89 | AssembleView Source-Truth Gap Audit | Freeze the v4.2 AssembleView region map, current gaps, upstream anchors, Qt targets, replacement decisions, and verification expectations before edits. | ASMAUDIT-01, ASMAUDIT-02 |
+| 90 | AssembleView Shell And Canvas Host Restoration | Replace the `Plater.qml` placeholder with a real AssembleView page/canvas host registered as the third `CanvasAssembleView`-equivalent canvas, with navigation entry and screenshot-aligned 4-region chrome, without breaking Prepare/Preview. | ASMSHELL-01, ASMSHELL-02, ASMROUTE-01 |
+| 91 | Explosion Ratio And Assembly Rendering | Implement the explosion-ratio slider and multi-part volume separation rendering on the default RHI/D3D11 path with connector guide lines, mirroring upstream `m_explosion_ratio` behavior. | ASMEXPLODE-01, ASMEXPLODE-02 |
+| 92 | Assembly Measurement Gizmo | Port the Assembly measurement gizmo (`Ctrl+Y`, `GLGizmoAssembly`/`GLGizmoMeasure` ONLY_ASSEMBLY mode) with measurement overlays, value annotations, and the right-side measurement panel. | ASMMEASURE-01, ASMMEASURE-02 |
+| 93 | AssembleView Verification And Cleanup | Wire AssembleView data pool plumbing, lock final source/QML audits, remove stale placeholder artifacts, run canonical verifier, launch app, and record AssembleView visual evidence. | ASMROUTE-02, ASMVERIFY-01, ASMVERIFY-02 |
 
-Archives: `.planning/milestones/v4.1-ROADMAP.md` · `.planning/milestones/v4.1-REQUIREMENTS.md` · `.planning/milestones/v4.1-MILESTONE-AUDIT.md`
+### Phase 89: AssembleView Source-Truth Gap Audit
 
-</details>
+**Status:** Not started
+**Plans:** 0/1
 
-<details>
-<summary>✅ v4.0 Preview Page UI Restoration (Phases 79-83) — SHIPPED 2026-07-07</summary>
+Success criteria:
+1. AssembleView screenshot-visible regions (4-region chrome, explosion slider, assembly-info panel, measurement panel, canvas view controls) are mapped to target screenshots, upstream source files, Qt targets, replacement decisions, and verification evidence.
+2. The current `Plater.qml:104-117` placeholder and `BackendContext.h:199` enum entry are reconciled into a removal/replacement plan with explicit out-of-scope classification for Arrange.
 
-- [x] Phase 79: Preview Source-Truth Gap Audit (1/1 plans)
-- [x] Phase 80: Preview Layout And Panels Restoration (1/1 plans)
-- [x] Phase 81: Preview Layer Move And Playback Controls (1/1 plans)
-- [x] Phase 82: Preview G-code Roles Color Modes And Rendering (1/1 plans)
-- [x] Phase 83: Preview Verification And Cleanup (1/1 plans)
+### Phase 90: AssembleView Shell And Canvas Host Restoration
 
-Archives: `.planning/milestones/v4.0-ROADMAP.md`
+**Status:** Not started
+**Plans:** 0/1
 
-</details>
+Success criteria:
+1. A real AssembleView page/canvas host replaces the `Plater.qml` placeholder; navigation reaches AssembleView with no leftover "装配视图暂不可用" text.
+2. AssembleView is registered as the third canvas host (mirroring `CanvasAssembleView = 2`) and coexists with Prepare/Preview without breaking navigation, payload, or view-mode state.
+3. Plater-level selection/undo-redo/gizmo routing branches correctly on `CanvasAssembleView` so Prepare/Preview behavior is unchanged.
 
-<details>
-<summary>✅ v3.9 Prepare Page UI Restoration (Phases 74-78) — SHIPPED 2026-07-06</summary>
+### Phase 91: Explosion Ratio And Assembly Rendering
 
-- [x] Phase 74: Prepare Source-Truth Gap Audit (1/1 plans)
-- [x] Phase 75: Prepare Sidebar And Preset Controls (1/1 plans)
-- [x] Phase 76: Prepare Object Plate And Viewport (1/1 plans)
-- [x] Phase 77: Prepare Viewport Controls And Gizmo Panels (1/1 plans)
-- [x] Phase 78: Prepare Verification And Cleanup (1/1 plans)
+**Status:** Not started
+**Plans:** 0/1
 
-Archives: `.planning/milestones/v3.9-ROADMAP.md`
+Success criteria:
+1. User can adjust an explosion-ratio control that separates multi-part object volumes for assembly inspection, mirroring upstream `m_explosion_ratio` (default 1.0, reset capability).
+2. AssembleView renders all loaded model volumes on the default RHI/D3D11 path with correct per-volume separation at the current explosion ratio, without regressing Prepare/Preview rendering.
+3. Connector guide lines between separated parts render when the explosion ratio is non-default (matching `shotScreen/装配页_爆炸.png`).
 
-</details>
+### Phase 92: Assembly Measurement Gizmo
 
-<details>
-<summary>✅ v3.8 RHI Gizmo Parity (Phases 65-73) — SHIPPED 2026-07-04</summary>
+**Status:** Not started
+**Plans:** 0/1
 
-Phases 65-73, 9 phases / 8 plans. Archives: `.planning/milestones/v3.8-ROADMAP.md`
+Success criteria:
+1. User can invoke the Assembly measurement gizmo (`Ctrl+Y`) on the AssembleView canvas, mirroring `GLGizmoAssembly` activability rules (explosion ratio near 1.0, multi-volume selection).
+2. The Assembly gizmo measures distances/angles/relations between selected volumes using the upstream `ONLY_ASSEMBLY` measure mode, rendering measurement overlays anchored to the right geometry.
+3. Measurement value annotations (e.g. distance/angle) and the right-side measurement panel render per `shotScreen/装配页_测量.png`.
 
-</details>
+### Phase 93: AssembleView Verification And Cleanup
 
-<details>
-<summary>✅ v3.7 Screenshot-Level UI Parity Closure (Phases 59-64) — SHIPPED 2026-07-04</summary>
+**Status:** Not started
+**Plans:** 0/1
 
-Phases 59-64. Archives: `.planning/milestones/v3.7-ROADMAP.md`
-
-</details>
-
-<details>
-<summary>✅ v3.6 Screenshot-Driven OrcaSlicer UI Restoration (Phases 50-58) — SHIPPED 2026-07-03</summary>
-
-Phases 50-58, 9 phases / 25 plans. Archives: `.planning/milestones/v3.6-ROADMAP.md`
-
-</details>
-
-<details>
-<summary>✅ v3.5 Preset Authoring Complete Workflow (Phases 44-49) — SUPERSEDED after Phase 46</summary>
-
-Phases 44-49. Superseded by v3.6 settings restoration. Archives: see git history.
-
-</details>
-
-<details>
-<summary>✅ v3.4 Import to G-code Complete Workflow (Phases 37-43) — CLOSED by automated E2E</summary>
-
-Phases 37-43. Closed by canonical E2E coverage and runtime launch evidence.
-
-</details>
-
-<details>
-<summary>✅ v3.3 Slice Preview Main Flow MVP (Phases 33-36) — SUPERSEDED by v3.4</summary>
-
-Phases 33-36. MVP-level, superseded for completeness.
-
-</details>
-
-<details>
-<summary>✅ v3.2 Multi-Plate Data Polish (Phases 29-32) — AUDITED 2026-06-28</summary>
-
-Phases 29-32. Archives: `.planning/milestones/v3.2-ROADMAP.md`
-
-</details>
-
-<details>
-<summary>✅ v3.1 QRhi Rendering (Phases 23-28) — SHIPPED 2026-06-28</summary>
-
-Phases 23-28, 6 phases / 14 plans. Archives: `.planning/milestones/v3.1-ROADMAP.md`
-
-</details>
-
-<details>
-<summary>✅ v3.0 PartPlate Core (Phases 16-22) — SHIPPED 2026-06-26</summary>
-
-Phases 16-22, 7 phases / 7 plans. Archives: `.planning/milestones/v3.0-ROADMAP.md`
-
-</details>
-
-<details>
-<summary>✅ v2.9 Implementation Realignment and Stabilization (Phases 10-15) — SHIPPED 2026-06-25</summary>
-
-Phases 10-15, 6 phases / 6 plans. Archives: `.planning/milestones/v2.9-ROADMAP.md`
-
-</details>
-
-## Progress
-
-| Milestone | Phases | Plans | Reqs | Status | Shipped |
-|---|---|---|---|---|---|
-| v2.9 | 10-15 | 6 | 28/28 | Complete | 2026-06-25 |
-| v3.0 | 16-22 | 7 | 14/14 | Complete | 2026-06-26 |
-| v3.1 | 23-28 | 14 | 26/26 | Complete (tech debt) | 2026-06-28 |
-| v3.2 | 29-32 | 4 | 8/10 | Complete (tech debt) | 2026-06-28 |
-| v3.3 | 33-36 | - | MVP | Superseded by v3.4 | 2026-06-28 |
-| v3.4 | 37-43 | - | closed by E2E | Complete | 2026-07-06 |
-| v3.5 | 44-49 | - | - | Superseded after Phase 46 | - |
-| v3.6 | 50-58 | 25 | automated floor | Complete (tech debt) | 2026-07-03 |
-| v3.7 | 59-64 | - | - | Complete (tech debt) | 2026-07-04 |
-| v3.8 | 65-73 | 8 | 21/21 | Complete (tech debt) | 2026-07-04 |
-| v3.9 | 74-78 | 5 | 12/12 | Complete (tech debt) | 2026-07-06 |
-| v4.0 | 79-83 | 5 | 13/13 | Complete | 2026-07-07 |
-| v4.1 | 84-88 | 5 | 14/14 | Complete | 2026-07-09 |
+Success criteria:
+1. AssembleView data pool plumbing (`AssembleViewDataID`/`AssembleViewDataPool`) caches per-object data needed by the view without leaking into Prepare/Preview state.
+2. Replaced AssembleView placeholder leaves no stale files, imports, resource entries, tests, or disconnected code paths; source/QML audits cover region mapping, canvas-type routing, explosion-ratio wiring, and gizmo anchors.
+3. The canonical verifier passes, `build/OWzxSlicer.exe` launches, AssembleView is reachable at runtime, and visual evidence is recorded against the target screenshots.
 
 ## Deferred Backlog
 
-- AssembleView.
 - Auto filament-map recommendation and wipe-tower geometry/rendering.
 - Real thumbnail capture and 3MF pixel round-trip.
 - Missing CLI fixtures and deterministic argv-based GUI fixture loading for screenshots.
@@ -159,8 +104,12 @@ Phases 10-15, 6 phases / 6 plans. Archives: `.planning/milestones/v2.9-ROADMAP.m
 
 ## Next Step
 
-v4.1 is shipped. Start the next milestone with `/gsd-new-milestone`. Candidate backlog is in the Deferred Backlog section above; do not reintroduce Removed Scope unless the user explicitly reopens it.
+Plan Phase 89 after this roadmap is approved:
+
+```text
+$gsd-plan-phase 89
+```
 
 ---
 
-*Last updated: 2026-07-09 after v4.1 milestone completion.*
+*Last updated: 2026-07-09 at v4.2 milestone start.*

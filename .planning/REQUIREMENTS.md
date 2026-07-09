@@ -70,24 +70,24 @@ Explicitly excluded to keep v4.2 focused.
 
 | Requirement | Phase | Status |
 |---|---|---|
-| ASMAUDIT-01 | (pending roadmap) | — |
-| ASMAUDIT-02 | (pending roadmap) | — |
-| ASMSHELL-01 | (pending roadmap) | — |
-| ASMSHELL-02 | (pending roadmap) | — |
-| ASMEXPLODE-01 | (pending roadmap) | — |
-| ASMEXPLODE-02 | (pending roadmap) | — |
-| ASMMEASURE-01 | (pending roadmap) | — |
-| ASMMEASURE-02 | (pending roadmap) | — |
-| ASMROUTE-01 | (pending roadmap) | — |
-| ASMROUTE-02 | (pending roadmap) | — |
-| ASMVERIFY-01 | (pending roadmap) | — |
-| ASMVERIFY-02 | (pending roadmap) | — |
+| ASMAUDIT-01 | Phase 89 | Not started |
+| ASMAUDIT-02 | Phase 89 | Not started |
+| ASMSHELL-01 | Phase 90 | Not started |
+| ASMSHELL-02 | Phase 90 | Not started |
+| ASMROUTE-01 | Phase 90 | Not started |
+| ASMEXPLODE-01 | Phase 91 | Not started |
+| ASMEXPLODE-02 | Phase 91 | Not started |
+| ASMMEASURE-01 | Phase 92 | Not started |
+| ASMMEASURE-02 | Phase 92 | Not started |
+| ASMROUTE-02 | Phase 93 | Not started |
+| ASMVERIFY-01 | Phase 93 | Not started |
+| ASMVERIFY-02 | Phase 93 | Not started |
 
 **Coverage:**
 - v4.2 requirements: 12 total
-- Mapped to phases: 0 (pending roadmap creation)
+- Mapped to phases: 12
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-07-09*
-*Last updated: 2026-07-09 at milestone start*
+*Last updated: 2026-07-09 after roadmap creation (Phases 89-93)*
