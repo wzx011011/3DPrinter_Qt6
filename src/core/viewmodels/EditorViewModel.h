@@ -84,6 +84,11 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(bool canUndo READ canUndo NOTIFY stateChanged)
   Q_PROPERTY(bool canRedo READ canRedo NOTIFY stateChanged)
   Q_PROPERTY(bool showLabels READ showLabels WRITE setShowLabels NOTIFY stateChanged)
+  /// Phase 91 (ASMEXPLODE-01): explosion ratio for AssembleView multi-part
+  /// separation. Mirrors upstream m_explosion_ratio (default 1.0,
+  /// GLCanvas3D.hpp:596). NOTIFY stateChanged drives the QML slider readout AND
+  /// the RhiViewport re-render (the offset pass keys on this value).
+  Q_PROPERTY(float explosionRatio READ explosionRatio WRITE setExplosionRatio NOTIFY stateChanged)
 
 public:
   enum SliceResultStatus {
@@ -725,6 +730,15 @@ public:
   /// 11635). Phase 92 adds the Assembly gizmo to the mask.
   void setActiveCanvasType(int type);
   int activeCanvasType() const { return m_activeCanvasType; }
+  /// Phase 91 (ASMEXPLODE-01): explosion ratio for AssembleView, mirroring
+  /// upstream m_explosion_ratio (GLCanvas3D.hpp:596). setExplosionRatio drives
+  /// the per-volume separation rendering via NOTIFY stateChanged.
+  float explosionRatio() const { return m_explosionRatio; }
+  void setExplosionRatio(float ratio);
+  /// Phase 91 (ASMEXPLODE-01): reset explosion ratio to default 1.0, mirroring
+  /// upstream reset_explosion_ratio()
+  /// (third_party/OrcaSlicer/src/slic3r/GUI/GLCanvas3D.hpp:770-771).
+  Q_INVOKABLE void resetExplosionRatio();
   /// Config preset injection (对齐上游 PresetBundle::full_fff_config → BackgroundSlicingProcess)
   void setConfigViewModel(ConfigViewModel *vm);
   Q_INVOKABLE void undo();
@@ -776,6 +790,10 @@ private:
   // Phase 90 (ASMROUTE-01): active canvas type (0=View3D, 1=Preview,
   // 2=AssembleView). Default View3D. Set by BackendContext::setCurrentViewMode.
   int m_activeCanvasType = 0;
+  // Phase 91 (ASMEXPLODE-01): explosion ratio mirroring upstream
+  // m_explosion_ratio (GLCanvas3D.hpp:596, default 1.0). Drives the per-volume
+  // separation offset in RhiViewportRenderer's CanvasAssembleView branch.
+  float m_explosionRatio = 1.0f;
   QString statusText_ = tr("就绪");
   QList<ObjectEntry> m_objects;
   QSet<int> m_selectedSourceIndices;

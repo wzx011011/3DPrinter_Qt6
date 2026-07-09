@@ -1744,6 +1744,29 @@ void EditorViewModel::setActiveCanvasType(int type)
   emit stateChanged();
 }
 
+void EditorViewModel::setExplosionRatio(float ratio)
+{
+  // Phase 91 (ASMEXPLODE-01): mirror upstream m_explosion_ratio
+  // (GLCanvas3D.hpp:596, default 1.0). NOTIFY stateChanged drives the QML
+  // slider readout AND the RhiViewport explosionRatio re-render (the renderer
+  // copies m_explosionRatio in synchronize() and re-uploads with the new
+  // per-volume offset on every change).
+  if (qFuzzyCompare(m_explosionRatio, ratio) || !std::isfinite(ratio))
+    return;
+  m_explosionRatio = ratio;
+  emit stateChanged();
+}
+
+void EditorViewModel::resetExplosionRatio()
+{
+  // Phase 91 (ASMEXPLODE-01): mirror upstream reset_explosion_ratio()
+  // (GLCanvas3D.hpp:770-771). No-op when already at default 1.0.
+  if (qFuzzyCompare(m_explosionRatio, 1.0f))
+    return;
+  m_explosionRatio = 1.0f;
+  emit stateChanged();
+}
+
 void EditorViewModel::undo()
 {
   if (m_undoManager)
