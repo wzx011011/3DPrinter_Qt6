@@ -252,6 +252,28 @@ void RhiViewport::setHoveredSourceObjectIndex(int value)
   update();
 }
 
+void RhiViewport::setAssemblyMeasureSelectedA(int value)
+{
+  // Phase 92 (ASMMEASURE-02): overlay selection index A. update() triggers
+  // synchronize()+render() so the renderer re-uploads and re-draws the
+  // Assembly measurement overlay anchored to the new selection.
+  if (m_assemblyMeasureSelectedA == value)
+    return;
+  m_assemblyMeasureSelectedA = value;
+  emit assemblyMeasureSelectionChanged();
+  update();
+}
+
+void RhiViewport::setAssemblyMeasureSelectedB(int value)
+{
+  // Phase 92 (ASMMEASURE-02): overlay selection index B (see setAssemblyMeasureSelectedA).
+  if (m_assemblyMeasureSelectedB == value)
+    return;
+  m_assemblyMeasureSelectedB = value;
+  emit assemblyMeasureSelectionChanged();
+  update();
+}
+
 void RhiViewport::setShowWipeTower(bool value)
 {
   if (m_showWipeTower == value)

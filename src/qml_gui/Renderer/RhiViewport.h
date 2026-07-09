@@ -43,6 +43,13 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices WRITE setMeshBatchSourceObjectIndices)
   Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex WRITE setSelectedSourceObjectIndex)
   Q_PROPERTY(int hoveredSourceObjectIndex READ hoveredSourceObjectIndex WRITE setHoveredSourceObjectIndex)
+  // Phase 92 (ASMMEASURE-02): the two selected source-object indices the
+  // Assembly measurement overlay annotates (volume A and volume B). Default -1
+  // = not set. The setter calls update() so the renderer re-renders the
+  // overlay on selection change. Bound from the viewmodel's first-two selected
+  // indices in AssemblePage.qml (task 92-01-07).
+  Q_PROPERTY(int assemblyMeasureSelectedA READ assemblyMeasureSelectedA WRITE setAssemblyMeasureSelectedA NOTIFY assemblyMeasureSelectionChanged)
+  Q_PROPERTY(int assemblyMeasureSelectedB READ assemblyMeasureSelectedB WRITE setAssemblyMeasureSelectedB NOTIFY assemblyMeasureSelectionChanged)
   Q_PROPERTY(bool showWipeTower READ showWipeTower WRITE setShowWipeTower)
   Q_PROPERTY(float wipeTowerWidth READ wipeTowerWidth WRITE setWipeTowerWidth)
   Q_PROPERTY(float wipeTowerDepth READ wipeTowerDepth WRITE setWipeTowerDepth)
@@ -92,7 +99,13 @@ public:
     GizmoFaceDetector = 15,
     GizmoText = 16,
     GizmoSVG = 17,
-    GizmoSlaSupports = 18
+    GizmoSlaSupports = 18,
+    // Phase 92 (ASMMEASURE-01): Assembly measurement gizmo (Ctrl+Y,
+    // GLGizmoAssembly / ONLY_ASSEMBLY). Distinct from GizmoMeasure (Prepare,
+    // Ctrl+U) — mirrors upstream GLGizmoAssembly being a separate class from
+    // GLGizmoMeasure (GLGizmoAssembly.hpp:9). The AssembleView mask returns
+    // (1 << 19); the renderer gates the overlay on m_gizmoMode == 19.
+    GizmoAssemblyMeasure = 19
   };
   Q_ENUM(GizmoMode)
 
@@ -159,6 +172,11 @@ public:
   void setSelectedSourceObjectIndex(int value);
   int hoveredSourceObjectIndex() const { return m_hoveredSourceObjectIndex; }
   void setHoveredSourceObjectIndex(int value);
+  // Phase 92 (ASMMEASURE-02): Assembly measurement overlay selection indices.
+  int assemblyMeasureSelectedA() const { return m_assemblyMeasureSelectedA; }
+  void setAssemblyMeasureSelectedA(int value);
+  int assemblyMeasureSelectedB() const { return m_assemblyMeasureSelectedB; }
+  void setAssemblyMeasureSelectedB(int value);
   bool showWipeTower() const { return m_showWipeTower; }
   void setShowWipeTower(bool value);
   float wipeTowerWidth() const { return m_wipeTowerWidth; }
@@ -213,6 +231,7 @@ public:
 signals:
   void canvasTypeChanged();
   void explosionRatioChanged();
+  void assemblyMeasureSelectionChanged();
   void gizmoModeChanged();
   void wireframeModeChanged();
   void gcodeViewModeChanged();
@@ -272,6 +291,9 @@ private:
   QVariantList m_meshBatchSourceObjectIndices;
   int m_selectedSourceObjectIndex = -1;
   int m_hoveredSourceObjectIndex = -1;
+  // Phase 92 (ASMMEASURE-02): the two volumes the overlay annotates. -1 = not set.
+  int m_assemblyMeasureSelectedA = -1;
+  int m_assemblyMeasureSelectedB = -1;
   bool m_showWipeTower = false;
   float m_wipeTowerWidth = 10.f;
   float m_wipeTowerDepth = 10.f;
