@@ -126,6 +126,16 @@ public:
   // ModelObjectsInfo, or update() has not been called yet).
   AssembleViewModelObjectsInfo *model_objects_info() const;
 
+  // Minimal-port refresh seam: mutable access to the ModelObjectsInfo resource
+  // so the owner (EditorViewModel::refreshAssembleViewDataPool) can pre-fill
+  // the cached objects via setObjects() before calling update(), which then
+  // flips is_valid() true. This mirrors upstream's on_update() pulling
+  // model->objects, but here the bounds source is the viewmodel's mesh blob
+  // (no libslic3r), so the caller supplies the data. Not part of the upstream
+  // pool API — it exists only because the minimal port keeps the resource
+  // stack-owned and the data source external.
+  AssembleViewModelObjectsInfo *model_objects_info_for_refresh();
+
 private:
   // Stack-owned registered resource (minimal port — upstream uses a map of
   // unique_ptrs so dynamic_cast getters work for arbitrary resources; with a

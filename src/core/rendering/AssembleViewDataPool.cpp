@@ -29,3 +29,10 @@ AssembleViewModelObjectsInfo *AssembleViewDataPool::model_objects_info() const
   // consumes the info when on AssembleView, where the pool is kept valid).
   return m_modelObjectsInfo.is_valid() ? &m_modelObjectsInfo : nullptr;
 }
+
+AssembleViewModelObjectsInfo *AssembleViewDataPool::model_objects_info_for_refresh()
+{
+  // Minimal-port refresh seam (see header). Returns the mutable resource
+  // unconditionally so the owner can pre-fill it before update().
+  return &m_modelObjectsInfo;
+}

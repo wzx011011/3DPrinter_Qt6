@@ -17,13 +17,118 @@
 #include <cstring> // memcpy
 #include <cmath>
 #include <QDebug>
+#include <QMap>
 
 namespace
 {
 constexpr float kRadiansToDegrees = 180.0f / float(M_PI);
 constexpr bool kViewportTrianglePickingAvailable = false;
 constexpr bool kCgalMeshBooleanAvailable = false;
+
+// Phase 93 (ASMROUTE-02): parse the cached mesh blob into a map of
+// sourceObjectIndex -> unioned AABB, the per-object bounds source Phase 92
+// encapsulated inline in selectedVolumeBoundsForAssemblyMeasure(). Shared by
+// refreshAssembleViewDataPool() (feeds the pool's ModelObjectsInfo) and
+// selectedVolumeBoundsForAssemblyMeasure() (reads the two selected bounds) so
+// the bounds source is single-sourced. Returns an empty map on a malformed
+// blob (same early-return contract as the Phase 92 inline parse). The blob
+// format mirrors PrepareSceneData::setModelMeshData: [objectCount int32] then
+// per-batch [renderObjectId int32][triangleCount int32][verts...], followed by
+// a 6-float global bbox trailer (skipped here).
+QMap<int, PrepareSceneData::ModelBounds>
+parseAllSourceObjectBoundsFromMeshBlob(const QByteArray &blob,
+                                       const QList<int> &batchSourceObjectIndices)
+{
+  QMap<int, PrepareSceneData::ModelBounds> result;
+  constexpr qsizetype kFloatBytes = qsizetype(sizeof(float));
+  constexpr qsizetype kIntBytes = qsizetype(sizeof(qint32));
+  constexpr qsizetype kVertexBytes = 3 * kFloatBytes;
+
+  qsizetype offset = 0;
+  qint32 objectCount = 0;
+  if (blob.size() < qsizetype(sizeof(qint32)))
+    return result;
+  memcpy(&objectCount, blob.constData() + offset, kIntBytes);
+  offset += kIntBytes;
+  if (objectCount < 0 || objectCount > batchSourceObjectIndices.size())
+    return result;
+
+  for (qint32 i = 0; i < objectCount; ++i)
+  {
+    if (offset + 2 * kIntBytes > blob.size())
+      return {};
+    qint32 renderObjectId = 0;
+    qint32 triangleCount = 0;
+    memcpy(&renderObjectId, blob.constData() + offset, kIntBytes);
+    offset += kIntBytes;
+    memcpy(&triangleCount, blob.constData() + offset, kIntBytes);
+    offset += kIntBytes;
+    if (triangleCount < 0)
+      return result;
+    (void)renderObjectId; // not needed for bounds derivation
+
+    const qsizetype vertexCount = qsizetype(triangleCount) * 3;
+    const qsizetype payloadBytes = vertexCount * kVertexBytes;
+    if (payloadBytes < 0 || blob.size() - offset < payloadBytes)
+      return result;
+
+    const int sourceIndex = batchSourceObjectIndices.value(i, -1);
+    if (sourceIndex >= 0)
+    {
+      PrepareSceneData::ModelBounds batchBounds{};
+      bool first = true;
+      for (qsizetype v = 0; v < vertexCount; ++v)
+      {
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        memcpy(&x, blob.constData() + offset + v * kVertexBytes + 0 * kFloatBytes, kFloatBytes);
+        memcpy(&y, blob.constData() + offset + v * kVertexBytes + 1 * kFloatBytes, kFloatBytes);
+        memcpy(&z, blob.constData() + offset + v * kVertexBytes + 2 * kFloatBytes, kFloatBytes);
+        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+        {
+          first = false;
+          break;
+        }
+        if (first)
+        {
+          batchBounds = PrepareSceneData::ModelBounds{x, y, z, x, y, z};
+          first = false;
+        }
+        else
+        {
+          batchBounds.minX = std::min(batchBounds.minX, x);
+          batchBounds.minY = std::min(batchBounds.minY, y);
+          batchBounds.minZ = std::min(batchBounds.minZ, z);
+          batchBounds.maxX = std::max(batchBounds.maxX, x);
+          batchBounds.maxY = std::max(batchBounds.maxY, y);
+          batchBounds.maxZ = std::max(batchBounds.maxZ, z);
+        }
+      }
+      if (!first)
+      {
+        // Union this batch into the source object's running bounds (a source
+        // object may have multiple volume batches — mirrors the renderer's
+        // uploadHighlightBuffer union).
+        auto it = result.find(sourceIndex);
+        if (it == result.end())
+          result.insert(sourceIndex, batchBounds);
+        else
+        {
+          it.value().minX = std::min(it.value().minX, batchBounds.minX);
+          it.value().minY = std::min(it.value().minY, batchBounds.minY);
+          it.value().minZ = std::min(it.value().minZ, batchBounds.minZ);
+          it.value().maxX = std::max(it.value().maxX, batchBounds.maxX);
+          it.value().maxY = std::max(it.value().maxY, batchBounds.maxY);
+          it.value().maxZ = std::max(it.value().maxZ, batchBounds.maxZ);
+        }
+      }
+    }
+    offset += payloadBytes;
+    if (offset > blob.size())
+      return result;
+  }
+  return result;
 }
+} // namespace
 
 void EditorViewModel::invalidateSliceResultsForCurrentPlate()
 {
@@ -99,6 +204,17 @@ void EditorViewModel::refreshMeshCacheAndFitHint()
 
   // 检查视口告警（对齐上游 Plater::check_outside_state / EWarning）
   checkViewportWarnings();
+
+  // Phase 93 (ASMROUTE-02): when on AssembleView, refresh the data pool so the
+  // cached per-object info tracks the freshly-loaded mesh. Gated to
+  // m_activeCanvasType == 2 so Prepare/Preview never populate the pool
+  // (mirrors upstream GLGizmosManager.cpp:427-431 running the pool update in
+  // the AssembleView-only gizmo update).
+  if (m_activeCanvasType == 2)
+  {
+    refreshAssembleViewDataPool();
+    m_assembleViewDataPool.update(AssembleViewDataID::ModelObjectsInfo);
+  }
 }
 
 // ── Object manipulation (对齐上游 ObjectManipulation) ──────────────────────
@@ -1742,6 +1858,20 @@ void EditorViewModel::setActiveCanvasType(int type)
   if (m_activeCanvasType == type)
     return;
   m_activeCanvasType = type;
+  // Phase 93 (ASMROUTE-02): refresh the AssembleView data pool ONLY on the
+  // AssembleView canvas. Mirrors upstream GLGizmosManager.cpp:427-431 where
+  // update_data() runs the pool update with the ModelObjectsInfo bitmask on
+  // AssembleView and with None otherwise (releasing all resources).
+  // Prepare/Preview never populate or read the pool (isolation constraint).
+  if (m_activeCanvasType == 2)
+  {
+    refreshAssembleViewDataPool();
+    m_assembleViewDataPool.update(AssembleViewDataID::ModelObjectsInfo);
+  }
+  else
+  {
+    m_assembleViewDataPool.update(AssembleViewDataID::None);
+  }
   emit stateChanged();
 }
 
@@ -1785,129 +1915,87 @@ bool EditorViewModel::isAssemblyMeasureActivable() const
 QList<PrepareSceneData::ModelBounds>
 EditorViewModel::selectedVolumeBoundsForAssemblyMeasure() const
 {
-  // Phase 92 (ASMMEASURE-02): parse the cached mesh blob to extract per-volume
-  // AABBs for the first two selected source indices. The blob format mirrors
-  // PrepareSceneData::setModelMeshData: [objectCount int32] then per-batch
-  // [renderObjectId int32][triangleCount int32][verts: triangleCount*3 * float3],
-  // followed by a 6-float global bbox trailer (which we skip). Bounds are
-  // derived from the vertices, matching the renderer's batch.bounds derivation.
-  // This keeps the measurement computation in C++ (AGENTS.md: no business logic
-  // in QML) without needing the renderer's parsed batches.
+  // Phase 92 (ASMMEASURE-02) + Phase 93 (ASMROUTE-02): per-volume AABBs for the
+  // first two selected source indices. Phase 93 routes the bounds through the
+  // cached AssembleViewDataPool ModelObjectsInfo resource when on AssembleView
+  // + the pool is valid (the bounds source is unchanged — same mesh blob — now
+  // formalized as the cached pool resource). When not on AssembleView the pool
+  // is released and this returns empty (Phase 92 behavior) — Prepare/Preview
+  // never call it.
   const QList<int> selected = assemblyMeasureSelectedSourceIndices();
   if (selected.size() < 2)
     return {};
 
-  constexpr qsizetype kFloatBytes = qsizetype(sizeof(float));
-  constexpr qsizetype kIntBytes = qsizetype(sizeof(qint32));
-  constexpr qsizetype kVertexBytes = 3 * kFloatBytes;
-  constexpr qsizetype kTrailerBytes = 6 * kFloatBytes;
-
-  const QByteArray &blob = m_cachedMeshData;
-  qsizetype offset = 0;
-  qint32 objectCount = 0;
-  if (blob.size() < qsizetype(sizeof(qint32)))
+  // Phase 93 (ASMROUTE-02): prefer the cached pool resource when valid. The
+  // bounds values are byte-identical to the inline parse (same source) — this
+  // is a pure refactor that formalizes the per-object data the view needs.
+  if (const AssembleViewModelObjectsInfo *info = m_assembleViewDataPool.model_objects_info())
+  {
+    const QList<AssembleViewObjectInfo> &objects = info->objects();
+    const int targetA = selected.at(0);
+    const int targetB = selected.at(1);
+    const AssembleViewObjectInfo *a = nullptr;
+    const AssembleViewObjectInfo *b = nullptr;
+    for (const AssembleViewObjectInfo &o : objects)
+    {
+      if (o.sourceObjectIndex == targetA) a = &o;
+      else if (o.sourceObjectIndex == targetB) b = &o;
+    }
+    if (a && b)
+      return {a->bounds, b->bounds};
     return {};
-  memcpy(&objectCount, blob.constData() + offset, kIntBytes);
-  offset += kIntBytes;
-  if (objectCount < 0 || objectCount > m_cachedMeshBatchSourceObjectIndices.size())
-    return {};
+  }
 
-  // Derive the bounds for the first two selected source indices. A source
-  // object may have multiple volume batches (multi-part object); mirror the
-  // renderer's uploadHighlightBuffer which unions all batches matching a
-  // sourceObjectIndex.
-  PrepareSceneData::ModelBounds boundsA{};
-  PrepareSceneData::ModelBounds boundsB{};
-  bool haveA = false;
-  bool haveB = false;
+  // Fallback: inline parse (kept for the rare case where the pool is not yet
+  // populated on AssembleView, e.g. before the first refresh). Shares the same
+  // parseAllSourceObjectBoundsFromMeshBlob helper as refreshAssembleViewDataPool.
+  const QMap<int, PrepareSceneData::ModelBounds> all =
+      parseAllSourceObjectBoundsFromMeshBlob(m_cachedMeshData,
+                                             m_cachedMeshBatchSourceObjectIndices);
+  if (all.isEmpty())
+    return {};
   const int targetA = selected.at(0);
   const int targetB = selected.at(1);
-
-  for (qint32 i = 0; i < objectCount; ++i)
-  {
-    if (offset + 2 * kIntBytes > blob.size())
-      return {};
-    qint32 renderObjectId = 0;
-    qint32 triangleCount = 0;
-    memcpy(&renderObjectId, blob.constData() + offset, kIntBytes);
-    offset += kIntBytes;
-    memcpy(&triangleCount, blob.constData() + offset, kIntBytes);
-    offset += kIntBytes;
-    if (triangleCount < 0)
-      return {};
-
-    const qsizetype vertexCount = qsizetype(triangleCount) * 3;
-    const qsizetype payloadBytes = vertexCount * kVertexBytes;
-    if (payloadBytes < 0 || blob.size() - offset < payloadBytes)
-      return {};
-
-    const int sourceIndex = m_cachedMeshBatchSourceObjectIndices.value(i, -1);
-    const bool isA = (sourceIndex == targetA);
-    const bool isB = (sourceIndex == targetB);
-    if (isA || isB)
-    {
-      PrepareSceneData::ModelBounds batchBounds{};
-      bool first = true;
-      for (qsizetype v = 0; v < vertexCount; ++v)
-      {
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-        memcpy(&x, blob.constData() + offset + v * kVertexBytes + 0 * kFloatBytes, kFloatBytes);
-        memcpy(&y, blob.constData() + offset + v * kVertexBytes + 1 * kFloatBytes, kFloatBytes);
-        memcpy(&z, blob.constData() + offset + v * kVertexBytes + 2 * kFloatBytes, kFloatBytes);
-        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
-        {
-          first = false;
-          break;
-        }
-        if (first)
-        {
-          batchBounds = PrepareSceneData::ModelBounds{x, y, z, x, y, z};
-          first = false;
-        }
-        else
-        {
-          batchBounds.minX = std::min(batchBounds.minX, x);
-          batchBounds.minY = std::min(batchBounds.minY, y);
-          batchBounds.minZ = std::min(batchBounds.minZ, z);
-          batchBounds.maxX = std::max(batchBounds.maxX, x);
-          batchBounds.maxY = std::max(batchBounds.maxY, y);
-          batchBounds.maxZ = std::max(batchBounds.maxZ, z);
-        }
-      }
-      if (first)
-      {
-        // Empty batch — skip (matches the renderer which drops vertexCount<=0 batches).
-      }
-      else if (isA)
-      {
-        if (!haveA) { boundsA = batchBounds; haveA = true; }
-        else { boundsA.minX = std::min(boundsA.minX, batchBounds.minX);
-               boundsA.minY = std::min(boundsA.minY, batchBounds.minY);
-               boundsA.minZ = std::min(boundsA.minZ, batchBounds.minZ);
-               boundsA.maxX = std::max(boundsA.maxX, batchBounds.maxX);
-               boundsA.maxY = std::max(boundsA.maxY, batchBounds.maxY);
-               boundsA.maxZ = std::max(boundsA.maxZ, batchBounds.maxZ); }
-      }
-      else  // isB
-      {
-        if (!haveB) { boundsB = batchBounds; haveB = true; }
-        else { boundsB.minX = std::min(boundsB.minX, batchBounds.minX);
-               boundsB.minY = std::min(boundsB.minY, batchBounds.minY);
-               boundsB.minZ = std::min(boundsB.minZ, batchBounds.minZ);
-               boundsB.maxX = std::max(boundsB.maxX, batchBounds.maxX);
-               boundsB.maxY = std::max(boundsB.maxY, batchBounds.maxY);
-               boundsB.maxZ = std::max(boundsB.maxZ, batchBounds.maxZ); }
-      }
-    }
-    offset += payloadBytes;
-    if (offset > blob.size())
-      return {};
-  }
-  (void)kTrailerBytes;  // global bbox trailer is not needed here.
-
-  if (!haveA || !haveB)
+  auto itA = all.constFind(targetA);
+  auto itB = all.constFind(targetB);
+  if (itA == all.constEnd() || itB == all.constEnd())
     return {};
-  return {boundsA, boundsB};
+  return {itA.value(), itB.value()};
+}
+
+void EditorViewModel::refreshAssembleViewDataPool()
+{
+  // Phase 93 (ASMROUTE-02): populate the pool's ModelObjectsInfo resource from
+  // the same bounds source Phase 92 used (the cached mesh blob + the
+  // per-batch source-object index map). One AssembleViewObjectInfo entry per
+  // source object (bounds unioned across its volume batches). Called only when
+  // m_activeCanvasType == 2 (setActiveCanvasType / refreshMeshCacheAndFitHint
+  // guard the entry points) — Prepare/Preview never reach here.
+  const QMap<int, PrepareSceneData::ModelBounds> all =
+      parseAllSourceObjectBoundsFromMeshBlob(m_cachedMeshData,
+                                             m_cachedMeshBatchSourceObjectIndices);
+  QList<AssembleViewObjectInfo> objects;
+  objects.reserve(all.size());
+  for (auto it = all.constBegin(); it != all.constEnd(); ++it)
+  {
+    AssembleViewObjectInfo info;
+    info.sourceObjectIndex = it.key();
+    info.bounds = it.value();
+    objects.append(info);
+  }
+  // The minimal-port seam: pre-fill the resource before the pool's update()
+  // marks it valid (AssembleViewModelObjectsInfo::on_update is a no-op).
+  m_assembleViewDataPool.model_objects_info_for_refresh()->setObjects(std::move(objects));
+}
+
+int EditorViewModel::assembleViewDataPoolObjectCountForTest() const
+{
+  // Phase 93 (ASMROUTE-02): test accessor. Returns 0 when the pool's
+  // ModelObjectsInfo is not valid — which is itself the isolation assertion
+  // (Prepare/Preview leave the pool released).
+  if (const AssembleViewModelObjectsInfo *info = m_assembleViewDataPool.model_objects_info())
+    return info->objects().size();
+  return 0;
 }
 
 bool EditorViewModel::activateAssemblyMeasureGizmo()

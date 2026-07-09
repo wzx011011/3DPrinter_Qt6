@@ -10,6 +10,11 @@
 #include <QVector4D>
 
 #include "core/rendering/SupportPaintTypes.h"
+// Phase 93 (ASMROUTE-02): AssembleView data pool — caches per-object info for
+// the AssembleView gizmos. Pure data (no libslic3r, no QRhi). See
+// src/core/rendering/AssembleViewDataPool.h for the upstream mirror + the
+// ModelObjectsClipper deferral.
+#include "core/rendering/AssembleViewDataPool.h"
 // PrepareSceneData.h is lightweight (Qt Core only — no QRhi, no libslic3r);
 // included so the Assembly-measure bounds helper can return ModelBounds values
 // (mirrors the GizmoCenter.h include pattern).
@@ -828,6 +833,20 @@ private:
   // vertices, matching the renderer's batch.bounds derivation.
   QList<PrepareSceneData::ModelBounds> selectedVolumeBoundsForAssemblyMeasure() const;
 
+  // Phase 93 (ASMROUTE-02): refresh the AssembleView data pool's
+  // ModelObjectsInfo resource from the same bounds source Phase 92 used (the
+  // cached mesh blob + m_cachedMeshBatchSourceObjectIndices). Called ONLY when
+  // m_activeCanvasType == 2 (CanvasAssembleView), mirroring upstream
+  // GLGizmosManager.cpp:427-431 running in the AssembleView-only gizmo
+  // update. Prepare/Preview never call this (isolation constraint).
+  void refreshAssembleViewDataPool();
+  // Phase 93 (ASMROUTE-02): test accessor exposing the cached object count
+  // for the AssembleView data pool. Returns 0 when the pool is not currently
+  // valid (i.e. when not on AssembleView, or update() has released the
+  // resource) — which is itself the isolation assertion consumed by the
+  // assembleViewDataPoolIsolatedFromPrepareAndPreview smoke test.
+  int assembleViewDataPoolObjectCountForTest() const;
+
   struct ObjectEntry
   {
     QString name;
@@ -849,6 +868,13 @@ private:
   // activateAssemblyMeasureGizmo() only when isAssemblyMeasureActivable() is
   // true. Mirrors upstream GLGizmoBase::m_state activation.
   bool m_assemblyMeasureGizmoActive = false;
+  // Phase 93 (ASMROUTE-02): AssembleView data pool — caches per-object info
+  // for the AssembleView gizmos. Updated ONLY when m_activeCanvasType == 2
+  // (CanvasAssembleView), mirroring upstream GLGizmosManager.cpp:427-431
+  // where update_data() runs the pool update with the full bitmask on
+  // AssembleView and with None otherwise (releasing all resources).
+  // Prepare/Preview never populate or read it (isolation constraint).
+  AssembleViewDataPool m_assembleViewDataPool;
   QString statusText_ = tr("就绪");
   QList<ObjectEntry> m_objects;
   QSet<int> m_selectedSourceIndices;
