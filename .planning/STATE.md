@@ -3,29 +3,29 @@ gsd_state_version: 1.0
 milestone: v4.2
 milestone_name: AssembleView Source-Truth Restoration
 status: executing
-last_updated: 2026-07-09T17:15:00+08:00
-last_activity: 2026-07-09 -- Phase 90 plan 01 complete (AssembleView shell + canvas host shipped)
+last_updated: 2026-07-09T19:30:00+08:00
+last_activity: 2026-07-09 -- Phase 91 plan 01 complete (explosion ratio + per-volume assembly rendering shipped)
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 2
-  percent: 40
-stopped_at: Phase 90 plan 01 complete; Phase 91 ready to plan/execute
+  completed_plans: 3
+  percent: 60
+stopped_at: Phase 91 plan 01 complete; Phase 92 ready to plan/execute
 ---
 
 # Project State
 
 **Milestone:** v4.2 - AssembleView Source-Truth Restoration
-**Status:** Executing (Phase 90 shell + canvas host complete)
-**Next step:** Plan Phase 91 (Explosion Ratio And Assembly Rendering) with `/gsd-plan-phase 91`.
+**Status:** Executing (Phase 91 explosion ratio + assembly rendering complete)
+**Next step:** Plan Phase 92 (Assembly Measurement Gizmo) with `/gsd-plan-phase 92`.
 
 ## Current Position
 
-Phase: 90 (AssembleView Shell And Canvas Host Restoration) — complete
+Phase: 91 (Explosion Ratio And Assembly Rendering) — complete
 Plan: 01 — complete
-Status: AssembleView placeholder replaced with real canvas host + 4-region shell + nav toggle + CanvasAssembleView routing; canonical verifier exited 0, all 6 suites passed.
-Last activity: 2026-07-09 — Phase 90 plan 01 executed (9 tasks, 8 commits + docs)
+Status: Explosion-ratio Q_PROPERTY + reset wired to AssemblePage 爆炸比例 slider; per-volume separation rendering + yellow dashed connector guide lines on the CanvasAssembleView branch; Prepare/Preview regression suites green (PrepareSceneDataTests + PartPlateTests + PreviewParserTests + ViewModelSmokeTests + QmlUiAuditTests).
+Last activity: 2026-07-09 — Phase 91 plan 01 executed (8 code/test commits + docs)
 
 ## Current Milestone (v4.2)
 
@@ -33,7 +33,7 @@ Last activity: 2026-07-09 — Phase 90 plan 01 executed (9 tasks, 8 commits + do
 |---|---|---|---|
 | 89 | AssembleView Source-Truth Gap Audit | Complete | ASMAUDIT-01, ASMAUDIT-02 |
 | 90 | AssembleView Shell And Canvas Host Restoration | Complete | ASMSHELL-01, ASMSHELL-02, ASMROUTE-01 |
-| 91 | Explosion Ratio And Assembly Rendering | Not started | ASMEXPLODE-01, ASMEXPLODE-02 |
+| 91 | Explosion Ratio And Assembly Rendering | Complete | ASMEXPLODE-01, ASMEXPLODE-02 |
 | 92 | Assembly Measurement Gizmo | Not started | ASMMEASURE-01, ASMMEASURE-02 |
 | 93 | AssembleView Verification And Cleanup | Not started | ASMROUTE-02, ASMVERIFY-01, ASMVERIFY-02 |
 
@@ -83,7 +83,7 @@ See: `.planning/PROJECT.md` (updated 2026-07-09)
 | Category | Item | Target |
 |---|---|---|
 | closed | v4.1 Parameter settings dialogs | Shipped in v4.1 |
-| active | AssembleView source-truth restoration | v4.2 (Phase 89-90 complete; Phase 91-93 pending) |
+| active | AssembleView source-truth restoration | v4.2 (Phase 89-91 complete; Phase 92-93 pending) |
 | removed | LAN/device/cloud/network/Monitor workflows | Removed from future scope by user direction on 2026-07-07 |
 | future | Auto filament-map recommendation + wipe-tower geometry/rendering | Future milestone |
 | future | Real GL/QRhi-capture thumbnails + 3MF pixel round-trip | Future milestone |
@@ -109,11 +109,12 @@ Items acknowledged and deferred at v4.1 milestone close on 2026-07-09:
 
 ## Operator Next Steps
 
-- Phase 89 gap audit and Phase 90 shell + canvas host are complete. The `Plater.qml` placeholder is gone; `AssemblePage.qml` hosts the third `CanvasAssembleView` canvas; `BackendContext`/`EditorViewModel` carry the `activeCanvasType` routing; the canonical verifier exited 0.
-- Plan Phase 91 (Explosion Ratio And Assembly Rendering) with `/gsd-plan-phase 91` — it adds the explosion-ratio slider and per-volume separation rendering on top of the `CanvasAssembleView` render branch in `RhiViewportRenderer.cpp:188,241`.
-- Phase 92-93 follow the Phase Routing table in `89-GAP-MATRIX.md`.
+- Phase 89 gap audit, Phase 90 shell + canvas host, and Phase 91 explosion-ratio + per-volume separation rendering are complete. `EditorViewModel.explosionRatio` (default 1.0, reset) mirrors upstream `m_explosion_ratio`; the AssemblePage 爆炸比例 slider binds it; the `CanvasAssembleView` branch in `RhiViewportRenderer::buildModelVertices` applies a per-volume offset when ratio != 1.0 and `uploadAssemblyConnectorBuffer`/`renderAssemblyConnectors` draw yellow dashed connector guide lines when ratio > 1.0. Prepare/Preview regression suites are green.
+- Plan Phase 92 (Assembly Measurement Gizmo) with `/gsd-plan-phase 92` — it ports `GLGizmoAssembly`/`ONLY_ASSEMBLY` (`Ctrl+Y`) starting from the `availableGizmoMask()` AssembleView early-return in `EditorViewModel`.
+- Phase 93 follows the Phase Routing table in `89-GAP-MATRIX.md`.
 
 ## Key Decisions (accumulating)
 
 - v4.2 / Phase 90: AssembleView reuses the shared `EditorViewModel`/`ProjectServiceMock` model and the shared single `UndoRedoManager` stack (no scene/stack duplication), mirroring upstream's single-Plater-three-canvas architecture. A new `CanvasType::CanvasAssembleView = 2` and a new `activeCanvasType` int flow from `BackendContext` to `EditorViewModel` on every view-mode change; the `availableGizmoMask()` AssembleView early-return is the documented seam for Phase 92.
 - v4.2 / Phase 90: The RHI render path is restored for AssembleView by widening two View3D guards to `!= CanvasPreview` (Preview strict guards unchanged). Phase 91 specializes per-volume explosion rendering on this branch.
+- v4.2 / Phase 91: Per-volume separation is delivered by restructuring `ProjectServiceMock::meshData` to emit one `ObjBatch` per (object, volume) pair (parent `objectIndex`/`renderObjectId` repeated across sibling volume batches). The parallel-array contract (`meshBatchSourceObjectIndices.size() == objectCount`, `PrepareSceneData.cpp:143`) and unioned-bounds highlight/picking key on `batch.sourceObjectIndex` so Prepare/Preview are unaffected. The renderer applies the offset `(batchCenter - objectCenter) * (ratio - 1.0)` only on the `CanvasAssembleView` branch. Verification used a focused vcvars runner (`scripts/run_unit_tests_vcvars.ps1`) that reuses the canonical vcvars+Windows-Kits setup verbatim but skips the ~8-min libslic3r reconfigure — documented as a verification-method deviation (not a build deviation) in `91-01-VERIFICATION.md`.

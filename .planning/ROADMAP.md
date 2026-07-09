@@ -30,7 +30,7 @@
 
 - [x] Phase 89: AssembleView Source-Truth Gap Audit
 - [x] Phase 90: AssembleView Shell And Canvas Host Restoration
-- [ ] Phase 91: Explosion Ratio And Assembly Rendering
+- [x] Phase 91: Explosion Ratio And Assembly Rendering
 - [ ] Phase 92: Assembly Measurement Gizmo
 - [ ] Phase 93: AssembleView Verification And Cleanup
 
@@ -63,13 +63,13 @@ Success criteria:
 
 ### Phase 91: Explosion Ratio And Assembly Rendering
 
-**Status:** Not started
-**Plans:** 0/1
+**Status:** Complete
+**Plans:** 1/1
 
 Success criteria:
-1. User can adjust an explosion-ratio control that separates multi-part object volumes for assembly inspection, mirroring upstream `m_explosion_ratio` (default 1.0, reset capability).
-2. AssembleView renders all loaded model volumes on the default RHI/D3D11 path with correct per-volume separation at the current explosion ratio, without regressing Prepare/Preview rendering.
-3. Connector guide lines between separated parts render when the explosion ratio is non-default (matching `shotScreen/装配页_爆炸.png`).
+1. User can adjust an explosion-ratio control that separates multi-part object volumes for assembly inspection, mirroring upstream `m_explosion_ratio` (default 1.0, reset capability). — Met by the `explosionRatio` Q_PROPERTY on `EditorViewModel` (default 1.0, `resetExplosionRatio`) + the 爆炸比例 `CxSlider` in `AssemblePage.qml` bound to it.
+2. AssembleView renders all loaded model volumes on the default RHI/D3D11 path with correct per-volume separation at the current explosion ratio, without regressing Prepare/Preview rendering. — Met by the per-volume blob restructure (`ProjectServiceMock::meshData`) + the CanvasAssembleView offset pass in `RhiViewportRenderer::buildModelVertices` (offset gated to AssembleView && ratio != 1.0); PrepareSceneDataTests + PartPlateTests + PreviewParserTests green.
+3. Connector guide lines between separated parts render when the explosion ratio is non-default (matching `shotScreen/装配页_爆炸.png`). — Met by `uploadAssemblyConnectorBuffer` + `renderAssemblyConnectors` in `RhiViewportRenderer`, yellow GL_LINES segments between original volume centers, gated to AssembleView && ratio > 1.0.
 
 ### Phase 92: Assembly Measurement Gizmo
 
@@ -104,13 +104,16 @@ Success criteria:
 
 ## Next Step
 
-Phase 89 gap audit is complete. Plan Phase 90 (AssembleView Shell And Canvas
-Host Restoration) next:
+Phase 89 gap audit, Phase 90 shell + canvas host, and Phase 91 explosion-ratio
++ per-volume separation rendering are complete. Plan Phase 92 (Assembly
+Measurement Gizmo) next — it ports `GLGizmoAssembly`/`ONLY_ASSEMBLY`
+(`Ctrl+Y`) starting from the `availableGizmoMask()` AssembleView early-return
+in `EditorViewModel`:
 
 ```text
-$gsd-plan-phase 90
+$gsd-plan-phase 92
 ```
 
 ---
 
-*Last updated: 2026-07-09 after Phase 89 plan 01 completion.*
+*Last updated: 2026-07-09 after Phase 91 plan 01 completion.*
