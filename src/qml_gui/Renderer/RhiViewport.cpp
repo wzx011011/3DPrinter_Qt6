@@ -68,6 +68,20 @@ void RhiViewport::setCanvasType(int value)
   update();
 }
 
+void RhiViewport::setExplosionRatio(float value)
+{
+  // Phase 91 (ASMEXPLODE-01): mirror upstream m_explosion_ratio
+  // (GLCanvas3D.hpp:596). update() triggers synchronize()+render() so the
+  // renderer re-applies the per-volume offset on every change. Guarded against
+  // no-op and non-finite values so Prepare/Preview-equivalent rendering (ratio
+  // == 1.0) produces zero offset.
+  if (qFuzzyCompare(m_explosionRatio, value) || !std::isfinite(value))
+    return;
+  m_explosionRatio = value;
+  emit explosionRatioChanged();
+  update();
+}
+
 void RhiViewport::setMeshData(const QByteArray &data)
 {
   if (m_meshData == data)

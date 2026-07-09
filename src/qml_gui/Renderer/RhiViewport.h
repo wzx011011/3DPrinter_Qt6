@@ -19,6 +19,11 @@ class RhiViewport : public QQuickRhiItem
 {
   Q_OBJECT
   Q_PROPERTY(int canvasType READ canvasType WRITE setCanvasType NOTIFY canvasTypeChanged)
+  // Phase 91 (ASMEXPLODE-01): explosion ratio mirroring upstream m_explosion_ratio
+  // (GLCanvas3D.hpp:596, default 1.0). The setter calls update() so the renderer
+  // re-applies the per-volume offset on every change. Bound from
+  // editorVm.explosionRatio in AssemblePage.qml.
+  Q_PROPERTY(float explosionRatio READ explosionRatio WRITE setExplosionRatio NOTIFY explosionRatioChanged)
   Q_PROPERTY(QByteArray meshData READ meshData WRITE setMeshData)
   Q_PROPERTY(QByteArray previewData READ previewData WRITE setPreviewData)
   Q_PROPERTY(int layerMin READ layerMin WRITE setLayerMin)
@@ -108,6 +113,11 @@ public:
 
   int canvasType() const { return m_canvasType; }
   void setCanvasType(int value);
+  // Phase 91 (ASMEXPLODE-01): explosion ratio mirroring upstream m_explosion_ratio
+  // (GLCanvas3D.hpp:596). The setter triggers update() so synchronize()+render()
+  // re-apply the per-volume offset on every change.
+  float explosionRatio() const { return m_explosionRatio; }
+  void setExplosionRatio(float value);
 
   QByteArray meshData() const { return m_meshData; }
   void setMeshData(const QByteArray &data);
@@ -202,6 +212,7 @@ public:
 
 signals:
   void canvasTypeChanged();
+  void explosionRatioChanged();
   void gizmoModeChanged();
   void wireframeModeChanged();
   void gcodeViewModeChanged();
@@ -238,6 +249,10 @@ private:
   void resetGizmoDragState();
 
   int m_canvasType = CanvasView3D;
+  // Phase 91 (ASMEXPLODE-01): explosion ratio mirroring upstream m_explosion_ratio
+  // (GLCanvas3D.hpp:596, default 1.0). The setter triggers update() so the
+  // renderer re-applies the per-volume offset (see RhiViewportRenderer).
+  float m_explosionRatio = 1.0f;
   QByteArray m_meshData;
   QByteArray m_previewData;
   int m_layerMin = 0;
