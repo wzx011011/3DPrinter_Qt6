@@ -57,10 +57,14 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(QString lastThumbnailData READ lastThumbnailData NOTIFY thumbnailCaptured)
 
 public:
+  // Mirrors upstream ECanvasType { CanvasView3D=0, CanvasPreview=1,
+  // CanvasAssembleView=2 } (GLCanvas3D.hpp:509-513). Phase 90 adds the third
+  // canvas host so AssembleView reuses the default RHI/D3D11 mesh-render path.
   enum CanvasType
   {
     CanvasView3D = 0,
-    CanvasPreview = 1
+    CanvasPreview = 1,
+    CanvasAssembleView = 2
   };
   Q_ENUM(CanvasType)
 
