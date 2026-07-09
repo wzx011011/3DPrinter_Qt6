@@ -10,6 +10,10 @@
 #include <QVector4D>
 
 #include "core/rendering/SupportPaintTypes.h"
+// PrepareSceneData.h is lightweight (Qt Core only — no QRhi, no libslic3r);
+// included so the Assembly-measure bounds helper can return ModelBounds values
+// (mirrors the GizmoCenter.h include pattern).
+#include "qml_gui/Renderer/PrepareSceneData.h"
 
 class ProjectServiceMock;
 class SliceService;
@@ -815,6 +819,14 @@ private:
   // matching upstream abs(ratio-1.0f) < 1e-2) AND >=2 volumes selected. Used by
   // availableGizmoMask() AssembleView branch and activateAssemblyMeasureGizmo().
   bool isAssemblyMeasureActivable() const;
+  // Phase 92 (ASMMEASURE-02): parse the cached mesh blob to extract per-volume
+  // AABBs for the first two selected source indices. Returns the bounds in the
+  // same order as assemblyMeasureSelectedSourceIndices(). Empty when fewer than
+  // two volumes are selected or the blob is malformed. The blob format mirrors
+  // PrepareSceneData::setModelMeshData (objectCount header + per-batch
+  // [renderObjectId, triangleCount, verts...]); bounds are derived from the
+  // vertices, matching the renderer's batch.bounds derivation.
+  QList<PrepareSceneData::ModelBounds> selectedVolumeBoundsForAssemblyMeasure() const;
 
   struct ObjectEntry
   {

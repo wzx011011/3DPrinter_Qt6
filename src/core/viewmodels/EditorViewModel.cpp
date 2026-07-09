@@ -5,6 +5,7 @@
 #include "core/services/UndoRedoManager.h"
 #include "core/services/UndoCommands.h"
 #include "core/model/PartPlateList.h"
+#include "core/rendering/AssemblyMeasureGeometry.h"
 #include "core/viewmodels/ConfigViewModel.h"
 #include <QFileInfo>
 #include <QUrl>
@@ -1781,6 +1782,134 @@ bool EditorViewModel::isAssemblyMeasureActivable() const
       && m_selectedSourceIndices.size() >= 2;
 }
 
+QList<PrepareSceneData::ModelBounds>
+EditorViewModel::selectedVolumeBoundsForAssemblyMeasure() const
+{
+  // Phase 92 (ASMMEASURE-02): parse the cached mesh blob to extract per-volume
+  // AABBs for the first two selected source indices. The blob format mirrors
+  // PrepareSceneData::setModelMeshData: [objectCount int32] then per-batch
+  // [renderObjectId int32][triangleCount int32][verts: triangleCount*3 * float3],
+  // followed by a 6-float global bbox trailer (which we skip). Bounds are
+  // derived from the vertices, matching the renderer's batch.bounds derivation.
+  // This keeps the measurement computation in C++ (AGENTS.md: no business logic
+  // in QML) without needing the renderer's parsed batches.
+  const QList<int> selected = assemblyMeasureSelectedSourceIndices();
+  if (selected.size() < 2)
+    return {};
+
+  constexpr qsizetype kFloatBytes = qsizetype(sizeof(float));
+  constexpr qsizetype kIntBytes = qsizetype(sizeof(qint32));
+  constexpr qsizetype kVertexBytes = 3 * kFloatBytes;
+  constexpr qsizetype kTrailerBytes = 6 * kFloatBytes;
+
+  const QByteArray &blob = m_cachedMeshData;
+  qsizetype offset = 0;
+  qint32 objectCount = 0;
+  if (blob.size() < qsizetype(sizeof(qint32)))
+    return {};
+  memcpy(&objectCount, blob.constData() + offset, kIntBytes);
+  offset += kIntBytes;
+  if (objectCount < 0 || objectCount > m_cachedMeshBatchSourceObjectIndices.size())
+    return {};
+
+  // Derive the bounds for the first two selected source indices. A source
+  // object may have multiple volume batches (multi-part object); mirror the
+  // renderer's uploadHighlightBuffer which unions all batches matching a
+  // sourceObjectIndex.
+  PrepareSceneData::ModelBounds boundsA{};
+  PrepareSceneData::ModelBounds boundsB{};
+  bool haveA = false;
+  bool haveB = false;
+  const int targetA = selected.at(0);
+  const int targetB = selected.at(1);
+
+  for (qint32 i = 0; i < objectCount; ++i)
+  {
+    if (offset + 2 * kIntBytes > blob.size())
+      return {};
+    qint32 renderObjectId = 0;
+    qint32 triangleCount = 0;
+    memcpy(&renderObjectId, blob.constData() + offset, kIntBytes);
+    offset += kIntBytes;
+    memcpy(&triangleCount, blob.constData() + offset, kIntBytes);
+    offset += kIntBytes;
+    if (triangleCount < 0)
+      return {};
+
+    const qsizetype vertexCount = qsizetype(triangleCount) * 3;
+    const qsizetype payloadBytes = vertexCount * kVertexBytes;
+    if (payloadBytes < 0 || blob.size() - offset < payloadBytes)
+      return {};
+
+    const int sourceIndex = m_cachedMeshBatchSourceObjectIndices.value(i, -1);
+    const bool isA = (sourceIndex == targetA);
+    const bool isB = (sourceIndex == targetB);
+    if (isA || isB)
+    {
+      PrepareSceneData::ModelBounds batchBounds{};
+      bool first = true;
+      for (qsizetype v = 0; v < vertexCount; ++v)
+      {
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        memcpy(&x, blob.constData() + offset + v * kVertexBytes + 0 * kFloatBytes, kFloatBytes);
+        memcpy(&y, blob.constData() + offset + v * kVertexBytes + 1 * kFloatBytes, kFloatBytes);
+        memcpy(&z, blob.constData() + offset + v * kVertexBytes + 2 * kFloatBytes, kFloatBytes);
+        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+        {
+          first = false;
+          break;
+        }
+        if (first)
+        {
+          batchBounds = PrepareSceneData::ModelBounds{x, y, z, x, y, z};
+          first = false;
+        }
+        else
+        {
+          batchBounds.minX = std::min(batchBounds.minX, x);
+          batchBounds.minY = std::min(batchBounds.minY, y);
+          batchBounds.minZ = std::min(batchBounds.minZ, z);
+          batchBounds.maxX = std::max(batchBounds.maxX, x);
+          batchBounds.maxY = std::max(batchBounds.maxY, y);
+          batchBounds.maxZ = std::max(batchBounds.maxZ, z);
+        }
+      }
+      if (first)
+      {
+        // Empty batch — skip (matches the renderer which drops vertexCount<=0 batches).
+      }
+      else if (isA)
+      {
+        if (!haveA) { boundsA = batchBounds; haveA = true; }
+        else { boundsA.minX = std::min(boundsA.minX, batchBounds.minX);
+               boundsA.minY = std::min(boundsA.minY, batchBounds.minY);
+               boundsA.minZ = std::min(boundsA.minZ, batchBounds.minZ);
+               boundsA.maxX = std::max(boundsA.maxX, batchBounds.maxX);
+               boundsA.maxY = std::max(boundsA.maxY, batchBounds.maxY);
+               boundsA.maxZ = std::max(boundsA.maxZ, batchBounds.maxZ); }
+      }
+      else  // isB
+      {
+        if (!haveB) { boundsB = batchBounds; haveB = true; }
+        else { boundsB.minX = std::min(boundsB.minX, batchBounds.minX);
+               boundsB.minY = std::min(boundsB.minY, batchBounds.minY);
+               boundsB.minZ = std::min(boundsB.minZ, batchBounds.minZ);
+               boundsB.maxX = std::max(boundsB.maxX, batchBounds.maxX);
+               boundsB.maxY = std::max(boundsB.maxY, batchBounds.maxY);
+               boundsB.maxZ = std::max(boundsB.maxZ, batchBounds.maxZ); }
+      }
+    }
+    offset += payloadBytes;
+    if (offset > blob.size())
+      return {};
+  }
+  (void)kTrailerBytes;  // global bbox trailer is not needed here.
+
+  if (!haveA || !haveB)
+    return {};
+  return {boundsA, boundsB};
+}
+
 bool EditorViewModel::activateAssemblyMeasureGizmo()
 {
   // Phase 92 (ASMMEASURE-01): mirror upstream GLGizmoAssembly activation
@@ -1824,30 +1953,52 @@ QList<int> EditorViewModel::assemblyMeasureSelectedSourceIndices() const
 
 QString EditorViewModel::assemblyMeasureDistanceText() const
 {
-  // Phase 92 (ASMMEASURE-02): placeholder until task 92-01-04 wires the real
-  // AssemblyMeasureGeometry::measure result. Returns empty when the gizmo is
-  // inactive or fewer than two volumes are selected (the documented contract).
+  // Phase 92 (ASMMEASURE-02): the center-to-center distance between the first
+  // two selected volumes, formatted to upstream precision (3 decimals + mm,
+  // GLGizmoMeasure.cpp:24,1250). Documented simplification: AABB-center
+  // distance, not picked-feature distance (full feature-picking is future).
   if (!m_assemblyMeasureGizmoActive || m_selectedSourceIndices.size() < 2)
     return {};
-  return {};
+  const QList<PrepareSceneData::ModelBounds> bounds = selectedVolumeBoundsForAssemblyMeasure();
+  if (bounds.size() < 2)
+    return {};
+  const AssemblyMeasureResult r = AssemblyMeasureGeometry::measure(bounds.at(0), bounds.at(1));
+  if (!r.valid)
+    return {};
+  return AssemblyMeasureGeometry::formatDistance(r.distance);
 }
 
 QString EditorViewModel::assemblyMeasureAngleText() const
 {
-  // Phase 92 (ASMMEASURE-02): placeholder until task 92-01-04 wires the real
-  // AssemblyMeasureGeometry::measure result.
+  // Phase 92 (ASMMEASURE-02): the angle between the two selected volumes'
+  // longest-AABB-axis directions, formatted as degrees (3 decimals + degree
+  // glyph, GLGizmoMeasure.cpp:1558). Documented simplification: longest-axis
+  // direction stands in for the upstream edge/plane feature direction.
   if (!m_assemblyMeasureGizmoActive || m_selectedSourceIndices.size() < 2)
     return {};
-  return {};
+  const QList<PrepareSceneData::ModelBounds> bounds = selectedVolumeBoundsForAssemblyMeasure();
+  if (bounds.size() < 2)
+    return {};
+  const AssemblyMeasureResult r = AssemblyMeasureGeometry::measure(bounds.at(0), bounds.at(1));
+  if (!r.valid)
+    return {};
+  return AssemblyMeasureGeometry::formatAngle(r.angleDeg);
 }
 
 QVector3D EditorViewModel::assemblyMeasureDistanceXyz() const
 {
-  // Phase 92 (ASMMEASURE-02): placeholder until task 92-01-04 wires the real
-  // AssemblyMeasureGeometry::measure result.
+  // Phase 92 (ASMMEASURE-02): the per-axis XYZ delta between the two selected
+  // volumes' AABB centers (mm). Distance-XYZ editing (moving volumes) is a
+  // deferred future enhancement (mutates the model).
   if (!m_assemblyMeasureGizmoActive || m_selectedSourceIndices.size() < 2)
     return {};
-  return {};
+  const QList<PrepareSceneData::ModelBounds> bounds = selectedVolumeBoundsForAssemblyMeasure();
+  if (bounds.size() < 2)
+    return {};
+  const AssemblyMeasureResult r = AssemblyMeasureGeometry::measure(bounds.at(0), bounds.at(1));
+  if (!r.valid)
+    return {};
+  return r.distanceXyz;
 }
 
 QString EditorViewModel::assemblyMeasurePlaneText() const
