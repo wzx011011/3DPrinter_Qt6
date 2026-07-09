@@ -291,6 +291,46 @@ A stabilization/truth-reset milestone, not new features:
 
 ---
 
+## Milestone: v4.2 - AssembleView Source-Truth Restoration
+
+**Shipped:** 2026-07-09
+**Phases:** 5 | **Plans:** 5 | **Requirements:** 12/12 satisfied
+**Audit status:** `passed` (5/5 integration chains, 3/3 E2E flows)
+
+### What Was Built
+- A source-truth gap matrix mapping 11 ASM-* AssembleView regions across 3 screenshots to upstream anchors and Qt targets (Phase 89).
+- A real AssembleView canvas host (CanvasAssembleView=2 in RhiViewport), AssemblePage.qml 4-region shell, BBLTopbar navigation, and Plater routing branches — replacing the "装配视图暂不可用" placeholder (Phase 90).
+- Explosion-ratio control + per-volume radial separation rendering + yellow dashed connector guide lines on the default RHI/D3D11 path, with a ProjectServiceMock per-volume blob restructure (Phase 91).
+- The Assembly measurement gizmo (Ctrl+Y, GLGizmoAssembly/ONLY_ASSEMBLY): gizmo enum + activability gating + AssemblyMeasureGeometry C++ helper + overlay + 测量 panel (Phase 92).
+- An isolated AssembleViewDataPool, consolidated milestone audits, placeholder regression lock, canonical build clean, and runtime evidence (Phase 93).
+
+### What Worked
+- The gap-matrix-first cadence (now proven across Prepare/Preview/settings/AssembleView) kept each phase's scope unambiguous and let Phase 90-93 execute against a frozen region map.
+- Disabling the per-phase discuss step (`workflow.skip_discuss: true`) mid-milestone eliminated a round of questions per phase without losing quality — the gap matrix + ROADMAP goal were sufficient specs, and autonomous mode ran faster.
+- Honest scope simplification (AABB-center measurement engine instead of the full 2670-line GLGizmoMeasure; deferred ModelObjectsClipper) shipped the screenshot-visible behavior with documented tech debt rather than stalling on the full engine.
+- The CMakeLists explicit source list gotcha (`src/core/rendering/` does not glob) was caught by the planner (must_have M-03) before execution, preventing a silent build failure for both AssemblyMeasureGeometry (Phase 92) and AssembleViewDataPool (Phase 93).
+
+### What Was Inefficient
+- The canonical build's per-invocation libslic3r reconfigure (~8 min) timed out the executor wrapper in every code phase (90-93). The regression suite ran via a focused runner, but this is a recurring verification friction that the build system should address.
+- The measurement engine simplification (AABB-center) means the gizmo's values are geometrically coarse for non-trivial assemblies — acceptable for screenshot parity, but the full feature-picking engine remains a real future gap, not just cosmetic debt.
+- v4.2 phases still lack Nyquist VALIDATION.md files (carried process debt from v4.1).
+
+### Patterns Established
+- For renderer/gizmo ports where the upstream engine is too large for one phase, deliver the screenshot-visible behavior with a documented simplification and reserve enum slots for deferred resources.
+- `workflow.skip_discuss: true` is a viable accelerator for milestones where the gap matrix + ROADMAP goal fully specify the work; the discuss step adds most value when design decisions are genuinely open.
+- The `run_unit_tests_vcvars.ps1` focused runner is the standard regression workaround when the canonical build's reconfigure cost dominates.
+
+### Key Lessons
+- Disabling discuss mid-milestone worked because the gap matrix had already frozen all grey-area decisions; for milestones with genuinely open design questions, keep discuss on.
+- A planner that reads upstream source thoroughly enough to flag the CMakeLists non-glob gotcha before execution saves an entire build-fix cycle.
+
+### Cost Observations
+- Phases: 5, Plans: 5.
+- Git range `v4.1..v4.2`: 55 commits, 52 files, +9374/-209.
+- Autonomous mode ran discuss→plan→execute→verify for 4 code phases (90-93) after the Phase 89 docs-only audit.
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Reqs satisfied | Audit status | Notes |
@@ -302,5 +342,6 @@ A stabilization/truth-reset milestone, not new features:
 | v3.9 | 5 | 5 | 12/12 | tech_debt | Prepare page restored and verified; remaining debt is process/visual evidence quality |
 | v4.0 | 5 | 5 | 13/13 | passed | Preview page restored; workflow-tab delegate replaced for automation; D3D12 + deterministic loaded-G-code screenshot carried forward |
 | v4.1 | 5 | 5 | 14/14 | passed | Settings dialogs restored (QML-only, backend preserved); startup deep links added; pre-close artifact audit caught an uncommitted resolved debug fix |
+| v4.2 | 5 | 5 | 12/12 | passed | AssembleView restored (canvas host + explosion + gizmo + data pool); renderer/gizmo port with documented simplifications; discuss disabled mid-milestone to accelerate autonomous mode |
 
-*Last updated: 2026-07-09 after v4.1 milestone completion.*
+*Last updated: 2026-07-09 after v4.2 milestone completion.*

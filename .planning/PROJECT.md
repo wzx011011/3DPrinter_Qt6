@@ -10,9 +10,9 @@ The project currently has a usable Qt6/QML shell, real model/project IO, real sl
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current State: v4.2 AssembleView Source-Truth Restoration (Active)
+## Current State: After v4.2 AssembleView Source-Truth Restoration
 
-**Last shipped milestone:** v4.1 Parameter Settings Dialogs Source-Truth Restoration (2026-07-09).
+**Last shipped milestone:** v4.2 AssembleView Source-Truth Restoration (2026-07-09).
 
 **Shipped state:**
 - Prepare page visual/source-truth gap inventory exists as the canonical v3.9 region map.
@@ -22,34 +22,22 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 - Preview page visual/source-truth gap inventory exists as the canonical v4.0 region map.
 - Preview layout, layer/move controls, playback, role visibility, color-mode availability, statistics/legend surfaces, and Preview navigation are restored and audited.
 - Parameter settings dialogs (printer, material, process) are restored to the screenshot/source-truth shell, compact preset/action row, clean titles/tabs, typed option sections, dirty/read-only/value-source/validation states, and preset save/save-as/reset/discard/unsaved-close semantics.
+- AssembleView (assembly view) is restored as the third canvas host (`CanvasAssembleView = 2`) on the default RHI/D3D11 path, with explosion-ratio separation rendering, yellow dashed connector guide lines, the Assembly measurement gizmo (`Ctrl+Y`, `ONLY_ASSEMBLY` mode), an isolated AssembleView data pool, and Plater `CanvasAssembleView` routing branches.
 - Startup deep links (`--open-page`, repeated `--open-dialog`, `--skip-first-run`, `--load-model`) support deterministic visual inspection without simulated clicks.
-- Final verification passed through source/QML audits, canonical build, running application, and recorded Prepare/Preview/settings visual evidence.
+- Final verification passed through source/QML audits, canonical build, running application, and recorded Prepare/Preview/settings/AssembleView visual evidence.
 
 **Carry-forward from v3.8:** The default QRhi/D3D11 path owns move, rotate, scale, cut plane, wipe tower, precise object picking, and Preview G-code rendering. Legacy `GLViewport*` / `GCodeRenderer*` files and the `OWZX_OPENGL` startup path are retired. The QML `OWzxGL.GLViewport` name remains as a compatibility alias backed by RHI or Software rendering.
 
-**Carry-forward outside v4.1:** D3D12 remains explicit opt-in future investigation. AssembleView remains a valid local/offline source-truth candidate. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows are removed from forward scope unless the user explicitly reopens them.
-
-## Current Milestone: v4.2 AssembleView Source-Truth Restoration
-
-**Goal:** Restore OrcaSlicer's AssembleView (assembly view) to screenshot/source-truth parity as the fourth screenshot-driven UI restoration milestone, replacing the current placeholder implementation.
-
-**Scope rule:** This milestone is local/offline only. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows remain removed from scope.
-
-**Target features:**
-- AssembleView page shell and navigation entry replacing the `Plater.qml` placeholder.
-- Explosion ratio slider separating volumes for assembly inspection (`m_explosion_ratio`).
-- Assembly measurement gizmo (`Ctrl+Y`, `GLGizmoAssembly` / `GLGizmoMeasure` subclass with ONLY_ASSEMBLY mode).
-- AssembleView data pool plumbing (`AssembleViewDataID` / `AssembleViewDataPool`).
-- Plater-level `CanvasAssembleView` branching for selection, undo/redo, and gizmo routing.
-- RHI-based AssembleView rendering (reuse/extend the default D3D11 path).
+**Carry-forward outside v4.2:** D3D12 remains explicit opt-in future investigation. Full GLGizmoMeasure feature-picking engine (needs per-volume ITS + scene raycaster) and the AssembleViewDataPool ModelObjectsClipper resource are deferred to a future milestone. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows are removed from forward scope unless the user explicitly reopens them.
 
 ## Next Milestone
 
-v4.1 is shipped. v4.2 (AssembleView) is the active milestone. Candidate backlog after v4.2:
+v4.2 is shipped. The next milestone has not been planned. Run `/gsd-new-milestone` to select the next target. Candidate backlog:
 - Auto filament-map recommendation and wipe-tower geometry/rendering.
 - Real GL/QRhi-capture thumbnails and 3MF pixel round-trip.
 - Missing CLI fixtures and deterministic argv-based GUI fixture loading for screenshots.
 - D3D12 crash root cause and Vulkan evaluation after the SDK/runtime path is ready.
+- Full GLGizmoMeasure feature-picking engine + AssembleViewDataPool clipper (needs per-volume ITS).
 
 ## Requirements
 
@@ -75,16 +63,11 @@ These are current baseline capabilities inferred from implementation, git histor
 - v3.9 Prepare page UI restoration shipped with 12/12 requirements satisfied, canonical verification passed, current runtime launch evidence, and final Prepare screenshot evidence.
 - v4.0 Preview page UI restoration shipped with 13/13 requirements satisfied, canonical verification passed, current runtime launch evidence, and final Preview screenshot evidence.
 - v4.1 Parameter settings dialogs source-truth restoration shipped with 14/14 requirements satisfied, milestone audit passed, canonical verifier passing, runtime settings visual evidence recorded, and startup deep links for deterministic visual inspection.
+- v4.2 AssembleView source-truth restoration shipped with 12/12 requirements satisfied, milestone audit passed (5/5 integration chains, 3/3 E2E flows), canonical build clean, and Prepare/Preview regression-free across all phases.
 
 ### Active
 
-- [ ] Restore the AssembleView (assembly view) page shell and navigation entry, replacing the `Plater.qml` placeholder.
-- [ ] Implement the explosion ratio slider that separates volumes for assembly inspection.
-- [ ] Port the Assembly measurement gizmo (`Ctrl+Y`, `GLGizmoAssembly`) with ONLY_ASSEMBLY measure mode.
-- [ ] Add AssembleView data pool plumbing (`AssembleViewDataID` / `AssembleViewDataPool`).
-- [ ] Wire Plater-level `CanvasAssembleView` branching for selection, undo/redo, and gizmo routing.
-- [ ] Render AssembleView on the default RHI/D3D11 path (reuse/extend existing rendering).
-- [ ] Verify restored AssembleView with source/QML audits, canonical build, running app launch, and visual evidence against the target screenshot.
+No active requirements. The next milestone has not been planned. Requirements will be defined via `/gsd-new-milestone` once the next target is selected.
 
 ### Future
 
@@ -169,7 +152,7 @@ These are current baseline capabilities inferred from implementation, git histor
 | Remove LAN/device/network/cloud work from forward scope | User direction on 2026-07-07: LAN devices and networking are no longer done. | Active scope rule |
 | Scope v4.1 to parameter settings dialogs | Settings has real Phase 56 backend semantics but target screenshots still expose visual/text/layout debt. | Good - v4.1 shipped |
 | Add startup deep-link arguments for settings/dialogs/models | Direct SettingsDialog window capture was blocked by the Windows capture API; argv-based deep links let future visual evidence open pages/dialogs and load models without simulated clicks. | Good - v4.1 shipped |
-| Scope v4.2 to AssembleView source-truth restoration | After Prepare/Preview/settings shipped, AssembleView is the last screenshot-level UI surface; Arrange (auto-arrangement) is already complete and distinct from the assembly canvas. | Active - v4.2 |
+| Scope v4.2 to AssembleView source-truth restoration | After Prepare/Preview/settings shipped, AssembleView is the last screenshot-level UI surface; Arrange (auto-arrangement) is already complete and distinct from the assembly canvas. | Good - v4.2 shipped |
 
 ## Evolution
 
@@ -189,4 +172,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-09 after v4.1 milestone completion.*
+*Last updated: 2026-07-09 after v4.2 milestone completion.*

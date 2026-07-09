@@ -1,5 +1,31 @@
 # Milestones History
 
+## v4.2 AssembleView Source-Truth Restoration (Shipped: 2026-07-09)
+
+**Phases completed:** 5 phases, 5 plans
+**Audit:** passed; 12/12 requirements satisfied, 5/5 cross-phase integration chains wired, 3/3 E2E flows reachable, Prepare/Preview regression-free.
+**Known deferred items at close:** full GLGizmoMeasure feature-picking engine (needs per-volume ITS + scene raycaster), AssembleViewDataPool ModelObjectsClipper resource (needs ITS), runtime visual evidence capture-blocked (Windows capture API; SETVERIFY-02 precedent), no Nyquist VALIDATION.md files (process debt).
+
+**Key accomplishments:**
+
+- Created the v4.2 AssembleView source-truth gap matrix mapping 11 ASM-* regions across 3 screenshots to OrcaSlicer source anchors, Qt targets, replacement decisions, and Phase 90-93 ownership (Phase 89).
+- Replaced the Plater.qml AssembleView placeholder with a real canvas host: CanvasAssembleView=2 enum in RhiViewport, AssemblePage.qml 4-region shell, BBLTopbar navigation toggle, and Plater CanvasAssembleView routing branches mirroring upstream Plater.cpp conditionals — Prepare/Preview untouched (Phase 90).
+- Added explosionRatio Q_PROPERTY + slider + per-volume radial separation rendering + yellow dashed connector guide lines on the default RHI/D3D11 path, with ProjectServiceMock per-volume blob restructure regression-gated by PrepareSceneDataTests (Phase 91).
+- Ported the Assembly measurement gizmo (Ctrl+Y, GLGizmoAssembly/ONLY_ASSEMBLY): GizmoAssemblyMeasure=19 enum, activability gating (AssembleView + explosion≈1.0 + ≥2 volumes), AssemblyMeasureGeometry C++ helper, overlay (dashed line + arrowheads + teal value box), and right-side 测量 panel (Phase 92).
+- Added AssembleViewDataPool C++ helper (ModelObjectsInfo cache) isolated from Prepare/Preview by the activeCanvasType==2 gate, consolidated milestone audit slots, placeholder-absent regression lock, canonical build clean, and runtime evidence (Phase 93).
+
+**Git range:** `v4.1..v4.2` (55 commits, 52 files, +9374/-209)
+
+**Scope simplifications (documented):** measurement engine uses AABB-center distance + longest-axis angle (full per-triangle feature picking deferred); ModelObjectsClipper pool resource deferred (enum slot reserved).
+
+**Archives:**
+
+- `.planning/milestones/v4.2-ROADMAP.md`
+- `.planning/milestones/v4.2-REQUIREMENTS.md`
+- `.planning/milestones/v4.2-MILESTONE-AUDIT.md`
+
+---
+
 ## v4.1 Parameter Settings Dialogs Source-Truth Restoration (Shipped: 2026-07-09)
 
 **Phases completed:** 5 phases, 5 plans
