@@ -1992,6 +1992,17 @@ bool EditorViewModel::canArrangeObjects() const
 
 int EditorViewModel::availableGizmoMask() const
 {
+  // Phase 90 (ASMROUTE-01): AssembleView-aware gizmo routing. When the active
+  // canvas is CanvasAssembleView (m_activeCanvasType == 2), do not advertise
+  // the Prepare gizmos (move/rotate/scale/cut/etc.) that have no AssembleView
+  // implementation yet — the Assembly measurement gizmo (Ctrl+Y,
+  // GLGizmoAssembly / ONLY_ASSEMBLY) is Phase 92. Returning 0 keeps Prepare's
+  // gizmo toolbar from leaking into AssembleView. Mirrors upstream gizmos
+  // manager + snapshot selection routing on CanvasAssembleView
+  // (Plater.cpp:11601,11635). Prepare (CanvasView3D) path below is unchanged.
+  if (m_activeCanvasType == 2)
+    return 0;
+
   int mask = 0;
   for (int mode = 0; mode <= 18; ++mode)
   {
@@ -2694,6 +2705,15 @@ bool EditorViewModel::selectSourceObject(int sourceIndex)
 {
   if (!projectService_ || sourceIndex < 0 || sourceIndex >= m_objects.size())
     return false;
+
+  // Phase 90 (ASMROUTE-01): selection on the AssembleView canvas routes through
+  // the same shared ProjectServiceMock model (90-CONTEXT.md decision 2 — no
+  // separate scene copy). This mirrors upstream Plater.cpp:11601 (snapshot
+  // selection routing) and Plater.cpp:11635 (gizmos manager selection on
+  // CanvasAssembleView), where the selection state is shared and not
+  // duplicated per canvas. Prepare (CanvasView3D) path below is unchanged.
+  // (No explicit branch needed here for Phase 90; the comment documents that
+  // the shared selection state is the AssembleView routing surface.)
 
   const QList<int> activePlateObjects = projectService_->currentPlateObjectIndices();
   if (!activePlateObjects.contains(sourceIndex)) {
