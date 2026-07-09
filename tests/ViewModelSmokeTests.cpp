@@ -272,6 +272,9 @@ private slots:
   void testUnsavedChangesGuardOnDirtyClose();
   void testPerDialogSearchAndFourLevelMode();
   void testNullableAndVectorOptions();
+  // Phase 91-01 (ASMEXPLODE-01): explosionRatio Q_PROPERTY behavior mirrors
+  // upstream m_explosion_ratio (default 1.0, set/reset emit stateChanged).
+  void editorExplosionRatioDefaultsAndResetMirrorsUpstream();
 
 private:
   bool hasLibslic3r() const;
@@ -3761,6 +3764,42 @@ void ViewModelSmokeTests::testNullableAndVectorOptions()
            "Schema must expose at least one nullable option (optNullable==true) across tiers");
   QVERIFY2(sawVector,
            "Schema must expose at least one multi-value/vector option (optIsVector==true) across tiers");
+}
+
+void ViewModelSmokeTests::editorExplosionRatioDefaultsAndResetMirrorsUpstream()
+{
+  // Phase 91-01 (ASMEXPLODE-01): explosionRatio mirrors upstream m_explosion_ratio
+  // (GLCanvas3D.hpp:596, default 1.0) and reset mirrors reset_explosion_ratio()
+  // (GLCanvas3D.hpp:770-771). The property is pure state — no model load needed.
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  // (1) Default is 1.0 (mirrors m_explosion_ratio = 1.0).
+  QCOMPARE(editor.explosionRatio(), 1.0f);
+
+  // (2) setExplosionRatio emits stateChanged and stores the value.
+  QSignalSpy spy(&editor, &EditorViewModel::stateChanged);
+  QVERIFY(spy.isValid());
+  editor.setExplosionRatio(2.5f);
+  QCOMPARE(editor.explosionRatio(), 2.5f);
+  QVERIFY(spy.count() >= 1);
+
+  // (3) setExplosionRatio is a no-op on an unchanged value (guard).
+  spy.clear();
+  editor.setExplosionRatio(2.5f);
+  QCOMPARE(spy.count(), 0);
+
+  // (4) resetExplosionRatio restores 1.0 and emits (mirrors reset_explosion_ratio).
+  spy.clear();
+  editor.resetExplosionRatio();
+  QCOMPARE(editor.explosionRatio(), 1.0f);
+  QVERIFY(spy.count() >= 1);
+
+  // (5) resetExplosionRatio is a no-op when already at default.
+  spy.clear();
+  editor.resetExplosionRatio();
+  QCOMPARE(spy.count(), 0);
 }
 
 QTEST_MAIN(ViewModelSmokeTests)
