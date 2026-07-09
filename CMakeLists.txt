@@ -110,6 +110,8 @@ if(OWZX_QML_GUI)
         src/core/rendering/GizmoVertex.h
         src/core/rendering/GizmoCenter.cpp
         src/core/rendering/GizmoCenter.h
+        src/core/rendering/AssemblyMeasureGeometry.cpp
+        src/core/rendering/AssemblyMeasureGeometry.h
         src/core/rendering/ObjectPicking.cpp
         src/core/rendering/ObjectPicking.h
         src/core/model/PartPlate.cpp
