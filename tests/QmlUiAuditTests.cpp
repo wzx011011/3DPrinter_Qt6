@@ -107,6 +107,11 @@ private slots:
   // deferred-config-exit machinery excised from BackendContext/ConfigViewModel
   // in Wave 1 must stay removed. Fails loudly if any token is reintroduced.
   void deletedRoutesStayAbsent();
+  // Phase 90-01 (ASMSHELL-01/02, ASMROUTE-01): the Plater.qml AssembleView
+  // placeholder is replaced by a real AssemblePage canvas host, the
+  // CanvasAssembleView enum is registered, the renderer has an AssembleView
+  // branch, navigation is wired, and CanvasAssembleView routing exists.
+  void assembleViewShellReplacesPlaceholderAndRegistersCanvasHost();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -2954,6 +2959,84 @@ void QmlUiAuditTests::deletedRoutesStayAbsent()
                               .arg(path, token)));
     }
   }
+}
+
+void QmlUiAuditTests::assembleViewShellReplacesPlaceholderAndRegistersCanvasHost()
+{
+  // Phase 90-01: the Plater.qml AssembleView placeholder is replaced by a real
+  // AssemblePage canvas host, the CanvasAssembleView=2 enum is registered in
+  // RhiViewport, the renderer has an AssembleView mesh-render branch, the
+  // BBLTopbar navigation toggle is wired, AssemblePage is in qml.qrc, and
+  // CanvasAssembleView routing exists in BackendContext/EditorViewModel.
+  const QString plater = readSource(QStringLiteral("src/qml_gui/pages/Plater.qml"));
+  const QString assemblePage = readSource(QStringLiteral("src/qml_gui/pages/AssemblePage.qml"));
+  const QString rhiViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString rhiViewportRenderer = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
+  const QString qmlQrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString backendContext = readSource(QStringLiteral("src/qml_gui/BackendContext.cpp"));
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  QVERIFY2(!plater.isEmpty(), "Unable to read Plater.qml");
+  QVERIFY2(!assemblePage.isEmpty(), "Unable to read AssemblePage.qml");
+  QVERIFY2(!rhiViewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!rhiViewportRenderer.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
+  QVERIFY2(!qmlQrc.isEmpty(), "Unable to read qml.qrc");
+  QVERIFY2(!backendContext.isEmpty(), "Unable to read BackendContext.cpp");
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!editorSource.isEmpty(), "Unable to read EditorViewModel.cpp");
+
+  // (1) Placeholder removed (ASM-SHELL / ASMSHELL-01).
+  QVERIFY2(!plater.contains(QStringLiteral("\u88c5\u914d\u89c6\u56fe\u6682\u4e0d\u53ef\u7528")),
+           "Plater.qml must not contain the 'assemble view unavailable' placeholder text");
+  QVERIFY2(!plater.contains(QStringLiteral("id: assembleSlot")),
+           "Plater.qml must not contain the placeholder assembleSlot Item");
+  QVERIFY2(!plater.contains(QStringLiteral("Out of Scope\u3001\u4ec5\u4fdd\u7559\u679a\u4e3e\u5165\u53e3")),
+           "Plater.qml must not contain the v2.0 Out-of-Scope comment");
+
+  // (2) AssemblePage exists and is a real canvas host (ASM-SHELL / ASMSHELL-02).
+  QVERIFY2(assemblePage.contains(QStringLiteral("canvasType: GLViewport.CanvasAssembleView")),
+           "AssemblePage must instantiate GLViewport with canvasType CanvasAssembleView");
+  QVERIFY2(assemblePage.contains(QStringLiteral("meshData: root.editorVm")),
+           "AssemblePage must bind meshData from the shared editorVm");
+  QVERIFY2(assemblePage.contains(QStringLiteral("LeftSidebar")),
+           "AssemblePage must reuse the LeftSidebar component");
+
+  // (3) Plater instantiates AssemblePage (ASM-SHELL).
+  QVERIFY2(plater.contains(QStringLiteral("AssemblePage")),
+           "Plater.qml must instantiate AssemblePage");
+  QVERIFY2(plater.contains(QStringLiteral("vmAssembleView: 2")),
+           "Plater.qml must preserve the vmAssembleView: 2 routing anchor");
+  QVERIFY2(plater.contains(QStringLiteral("visible: root.viewMode === root.vmAssembleView")),
+           "Plater.qml must gate the AssemblePage slot on viewMode === vmAssembleView");
+
+  // (4) CanvasAssembleView enum registered (ASMSHELL-02).
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("CanvasAssembleView = 2")),
+           "RhiViewport.h must declare CanvasAssembleView = 2 in the CanvasType enum");
+
+  // (5) Renderer has AssembleView branch; Preview guards intact
+  //     (ASMSHELL-02 / ASMROUTE-01).
+  QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("CanvasAssembleView")),
+           "RhiViewportRenderer.cpp must reference CanvasAssembleView in the render path");
+  QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("m_canvasType == RhiViewport::CanvasPreview")),
+           "RhiViewportRenderer.cpp must keep the CanvasPreview-only guards unchanged");
+
+  // (6) Navigation toggle wired (ASM-NAVIGATION / ASMSHELL-01).
+  QVERIFY2(topbar.contains(QStringLiteral("backend.requestChangeViewMode(backend.vmAssembleView)")),
+           "BBLTopbar must wire the AssembleView view-mode toggle");
+
+  // (7) qml.qrc registers AssemblePage (ASM-SHELL).
+  QVERIFY2(qmlQrc.contains(QStringLiteral("pages/AssemblePage.qml")),
+           "qml.qrc must register pages/AssemblePage.qml");
+
+  // (8) Routing branches present (ASMROUTE-01).
+  QVERIFY2(backendContext.contains(QStringLiteral("CanvasAssembleView"))
+               || backendContext.contains(QStringLiteral("ViewMode::AssembleView")),
+           "BackendContext.cpp must carry a CanvasAssembleView/AssembleView routing branch");
+  QVERIFY2(editorHeader.contains(QStringLiteral("activeCanvasType"))
+               || editorSource.contains(QStringLiteral("activeCanvasType")),
+           "EditorViewModel must expose an active-canvas-type routing surface");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
