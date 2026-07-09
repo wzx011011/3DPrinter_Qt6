@@ -312,34 +312,35 @@ ProjectServiceMock::ProjectServiceMock(QObject *parent)
 QList<int> ProjectServiceMock::meshBatchSourceObjectIndices() const
 {
 #ifdef HAS_LIBSLIC3R
+  // Phase 91 (ASMEXPLODE-02): emit one source-object index per VOLUME batch
+  // (mirroring meshData()'s per-volume emission). meshData() now produces one
+  // batch per volume per instance, so this parallel array must produce one
+  // entry per volume per instance, each carrying the parent objectIndex. The
+  // two arrays MUST stay length-aligned for PrepareSceneData's parser
+  // (batchSourceObjectIndices.size() == objectCount, PrepareSceneData.cpp:143);
+  // Prepare's highlight unions sibling volumes by this sourceObjectIndex.
   QList<int> indices;
   if (!model_ || model_->objects.empty())
     return indices;
 
-  auto hasRenderableTriangles = [](const Slic3r::ModelObject *obj) -> bool
+  auto volumeHasRenderableTriangles = [](const Slic3r::ModelVolume *vol) -> bool
   {
-    if (!obj)
+    if (!vol)
+      return false;
+    const auto &its = vol->mesh().its;
+    const int vcount = int(its.vertices.size());
+    if (vcount <= 0 || its.indices.empty())
       return false;
 
-    for (const auto *vol : obj->volumes)
+    for (const auto &face : its.indices)
     {
-      if (!vol)
-        continue;
-      const auto &its = vol->mesh().its;
-      const int vcount = int(its.vertices.size());
-      if (vcount <= 0 || its.indices.empty())
-        continue;
-
-      for (const auto &face : its.indices)
-      {
-        const int idx0 = face(0);
-        const int idx1 = face(1);
-        const int idx2 = face(2);
-        if (idx0 >= 0 && idx0 < vcount
-            && idx1 >= 0 && idx1 < vcount
-            && idx2 >= 0 && idx2 < vcount)
-          return true;
-      }
+      const int idx0 = face(0);
+      const int idx1 = face(1);
+      const int idx2 = face(2);
+      if (idx0 >= 0 && idx0 < vcount
+          && idx1 >= 0 && idx1 < vcount
+          && idx2 >= 0 && idx2 < vcount)
+        return true;
     }
     return false;
   };
@@ -350,20 +351,20 @@ QList<int> ProjectServiceMock::meshBatchSourceObjectIndices() const
     if (!obj)
       continue;
 
-    if (!hasRenderableTriangles(obj))
-      continue;
-
-    if (!obj->instances.empty())
+    const int instanceCount = obj->instances.empty() ? 1 : int(obj->instances.size());
+    for (int instIdx = 0; instIdx < instanceCount; ++instIdx)
     {
-      for (const auto *inst : obj->instances)
+      // Skip an instance slot only if the object has instances and this slot is
+      // null; meshData() emits a single identity-instance slot when there are
+      // no instances.
+      if (!obj->instances.empty() && !obj->instances[instIdx])
+        continue;
+
+      for (const auto *vol : obj->volumes)
       {
-        if (inst)
+        if (volumeHasRenderableTriangles(vol))
           indices.append(objectIndex);
       }
-    }
-    else
-    {
-      indices.append(objectIndex);
     }
   }
 
@@ -5924,8 +5925,17 @@ QByteArray ProjectServiceMock::meshData() const
       auto appendObjectByInstance = [&](const Slic3r::Transform3d &instMat,
                                         const Slic3r::ModelInstance *inst)
       {
-        ObjBatch batch;
-        batch.objectId = makeStableObjectId(obj, inst);
+        // Phase 91 (ASMEXPLODE-02): emit one ObjBatch per VOLUME (not one per
+        // instance) so the CanvasAssembleView renderer can offset each volume
+        // independently for the explosion view. Each per-volume batch keeps its
+        // parent instance's stable objectId (siblings share the id), so Prepare's
+        // selection highlight is byte-for-byte identical: uploadHighlightBuffer
+        // unions the bounds of ALL batches matching a sourceObjectIndex
+        // (RhiViewportRenderer.cpp uploadHighlightBuffer loop), and picking keys
+        // on batch.sourceObjectIndex (the parallel array below), not on
+        // renderObjectId uniqueness. Upstream GLVolumeCollection stores one
+        // GLVolume per volume and m_explosion_ratio offsets each independently.
+        const int32_t instanceObjectId = makeStableObjectId(obj, inst);
 
         for (const auto *vol : obj->volumes)
         {
@@ -5939,6 +5949,10 @@ QByteArray ProjectServiceMock::meshData() const
           const auto &its = vol->mesh().its; // const ref — 零拷贝
           if (its.vertices.empty() || its.indices.empty())
             continue;
+
+          // One batch per volume — exposes this volume's center via its bounds.
+          ObjBatch batch;
+          batch.objectId = instanceObjectId;
 
           for (const auto &face : its.indices)
           {
@@ -5978,10 +5992,10 @@ QByteArray ProjectServiceMock::meshData() const
               bmaxZ = std::max(bmaxZ, gz);
             }
           }
-        }
 
-        if (!batch.verts.empty())
-          batches.push_back(std::move(batch));
+          if (!batch.verts.empty())
+            batches.push_back(std::move(batch));
+        }
       };
 
       if (!obj->instances.empty())
