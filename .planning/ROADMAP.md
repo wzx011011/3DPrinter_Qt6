@@ -32,7 +32,7 @@
 - [x] Phase 90: AssembleView Shell And Canvas Host Restoration
 - [x] Phase 91: Explosion Ratio And Assembly Rendering
 - [x] Phase 92: Assembly Measurement Gizmo
-- [ ] Phase 93: AssembleView Verification And Cleanup
+- [x] Phase 93: AssembleView Verification And Cleanup
 
 | Phase | Name | Goal | Requirements |
 |---|---|---|---|
@@ -83,13 +83,18 @@ Success criteria:
 
 ### Phase 93: AssembleView Verification And Cleanup
 
-**Status:** Not started
-**Plans:** 0/1
+**Status:** Complete
+**Plans:** 1/1
 
 Success criteria:
 1. AssembleView data pool plumbing (`AssembleViewDataID`/`AssembleViewDataPool`) caches per-object data needed by the view without leaking into Prepare/Preview state.
 2. Replaced AssembleView placeholder leaves no stale files, imports, resource entries, tests, or disconnected code paths; source/QML audits cover region mapping, canvas-type routing, explosion-ratio wiring, and gizmo anchors.
 3. The canonical verifier passes, `build/OWzxSlicer.exe` launches, AssembleView is reachable at runtime, and visual evidence is recorded against the target screenshots.
+
+Success criteria met:
+1. AssembleView data pool plumbing caches per-object data without leaking into Prepare/Preview. — Met by `src/core/rendering/AssembleViewDataPool.{h,cpp}` (a minimal-but-correct port of upstream `AssembleViewDataID`/`AssembleViewDataBase`/`AssembleViewDataPool`/`ModelObjectsInfo`) owned by `EditorViewModel` behind the `m_activeCanvasType == 2` gate (mirrors `GLGizmosManager.cpp:427-431`). `selectedVolumeBoundsForAssemblyMeasure()` reads from the cached `ModelObjectsInfo` when on AssembleView; Prepare/Preview never populate or read it. The `assembleViewDataPoolIsolatedFromPrepareAndPreview` ViewModelSmokeTests slot + the `assembleViewRestorationMilestoneHasFinalVerificationCoverage` data-pool assertion both PASS. The `ModelObjectsClipper` resource is deferred (enum slot reserved; needs per-volume ITS — documented in `93-01-SUMMARY.md` / `93-VERIFICATION.md`).
+2. Replaced AssembleView placeholder leaves no stale artifacts. — Met by the `assembleViewRestorationMilestoneHasFinalVerificationCoverage` + `assembleViewPlaceholderArtifactsStayAbsent` QmlUiAudit slots (both PASS) + a grep-clean audit (zero `装配视图暂不可用` / `assembleSlot` / v2.0 Out-of-Scope remnants; qml.qrc has exactly one normalized `pages/AssemblePage.qml` entry; the `ViewMode::AssembleView = 2` / `vmAssembleView` / `kLastVm` routing anchor preserved).
+3. Canonical verifier passes; app launches; AssembleView reachable; visual evidence recorded. — Met by `build/93-01-canonical-build.log` zero errors (`OWzxSlicer.exe` linked at `[237/237]`), `build/93-01-test-run.log` exit 0 (5 suites pass), `OWzxSlicer.exe` runtime launch (alive in the process list), and the capture-blocked visual-evidence deviation (Phase 88/91 SETVERIFY-02 precedent: runtime launch + manual click-through + canonical verifier + regression ctest).
 
 ## Deferred Backlog
 

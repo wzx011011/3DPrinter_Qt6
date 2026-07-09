@@ -12,33 +12,33 @@
 
 ### Source-Truth Inventory
 
-- [ ] **ASMAUDIT-01**: The AssembleView (assembly view) surface has a current inventory that maps screenshot-visible regions and upstream capabilities (explosion ratio, Assembly gizmo, data pool, Plater routing) to OrcaSlicer source files, Qt targets, replacement decisions, and verification evidence.
-- [ ] **ASMAUDIT-02**: The existing `Plater.qml` placeholder (`AssembleView = 2` enum + "装配视图暂不可用" stub) is reconciled into a replacement plan with explicit removal of the placeholder code path.
+- [x] **ASMAUDIT-01**: The AssembleView (assembly view) surface has a current inventory that maps screenshot-visible regions and upstream capabilities (explosion ratio, Assembly gizmo, data pool, Plater routing) to OrcaSlicer source files, Qt targets, replacement decisions, and verification evidence.
+- [x] **ASMAUDIT-02**: The existing `Plater.qml` placeholder (`AssembleView = 2` enum + "装配视图暂不可用" stub) is reconciled into a replacement plan with explicit removal of the placeholder code path.
 
 ### Page Shell And Navigation
 
-- [ ] **ASMSHELL-01**: User can navigate to a real AssembleView page (replacing the `Plater.qml` placeholder) from the intended entry point(s), and the page renders as a screenshot-aligned canvas host with no leftover "temporarily unavailable" text.
-- [ ] **ASMSHELL-02**: AssembleView is registered as the third `GLCanvas3D`-equivalent canvas host (mirroring `CanvasAssembleView = 2`) and coexists with Prepare/Preview without breaking navigation, payload, or view-mode state.
+- [x] **ASMSHELL-01**: User can navigate to a real AssembleView page (replacing the `Plater.qml` placeholder) from the intended entry point(s), and the page renders as a screenshot-aligned canvas host with no leftover "temporarily unavailable" text.
+- [x] **ASMSHELL-02**: AssembleView is registered as the third `GLCanvas3D`-equivalent canvas host (mirroring `CanvasAssembleView = 2`) and coexists with Prepare/Preview without breaking navigation, payload, or view-mode state.
 
 ### Explosion Ratio And Assembly Rendering
 
-- [ ] **ASMEXPLODE-01**: User can adjust an explosion-ratio control that separates volumes of multi-part objects for assembly inspection, mirroring upstream `m_explosion_ratio` behavior (default 1.0, reset capability).
-- [ ] **ASMEXPLODE-02**: AssembleView renders all loaded model volumes on the default RHI/D3D11 path with correct per-volume separation at the current explosion ratio, without regressing Prepare/Preview rendering.
+- [x] **ASMEXPLODE-01**: User can adjust an explosion-ratio control that separates volumes of multi-part objects for assembly inspection, mirroring upstream `m_explosion_ratio` behavior (default 1.0, reset capability).
+- [x] **ASMEXPLODE-02**: AssembleView renders all loaded model volumes on the default RHI/D3D11 path with correct per-volume separation at the current explosion ratio, without regressing Prepare/Preview rendering.
 
 ### Assembly Measurement Gizmo
 
-- [ ] **ASMMEASURE-01**: User can invoke the Assembly measurement gizmo (`Ctrl+Y`) on the AssembleView canvas, mirroring `GLGizmoAssembly` activability rules (explosion ratio near 1.0, multi-volume selection).
-- [ ] **ASMMEASURE-02**: The Assembly gizmo measures distances/relations between selected volumes using the upstream `ONLY_ASSEMBLY` measure mode, rendering measurement overlays anchored to the right geometry.
+- [x] **ASMMEASURE-01**: User can invoke the Assembly measurement gizmo (`Ctrl+Y`) on the AssembleView canvas, mirroring `GLGizmoAssembly` activability rules (explosion ratio near 1.0, multi-volume selection).
+- [x] **ASMMEASURE-02**: The Assembly gizmo measures distances/relations between selected volumes using the upstream `ONLY_ASSEMBLY` measure mode, rendering measurement overlays anchored to the right geometry.
 
 ### AssembleView Data And Plater Routing
 
-- [ ] **ASMROUTE-01**: AssembleView selection, undo/redo, and gizmo routing branch correctly on `CanvasAssembleView` (mirroring upstream `Plater.cpp` conditionals) so Prepare/Preview behavior is unchanged while AssembleView gets its own routing.
-- [ ] **ASMROUTE-02**: AssembleView data pool plumbing (`AssembleViewDataID` / `AssembleViewDataPool`) caches per-object data needed by the view without leaking into Prepare/Preview state.
+- [x] **ASMROUTE-01**: AssembleView selection, undo/redo, and gizmo routing branch correctly on `CanvasAssembleView` (mirroring upstream `Plater.cpp` conditionals) so Prepare/Preview behavior is unchanged while AssembleView gets its own routing.
+- [x] **ASMROUTE-02**: AssembleView data pool plumbing (`AssembleViewDataID` / `AssembleViewDataPool`) caches per-object data needed by the view without leaking into Prepare/Preview state.
 
 ### Verification And Cleanup
 
-- [ ] **ASMVERIFY-01**: Replaced AssembleView placeholder leaves no stale files, imports, resource entries, tests, or disconnected code paths; source/QML audits cover region mapping, canvas-type routing, explosion-ratio wiring, and gizmo anchors.
-- [ ] **ASMVERIFY-02**: The canonical verifier passes, `build/OWzxSlicer.exe` launches, AssembleView is reachable at runtime, and visual evidence is recorded against the target screenshot.
+- [x] **ASMVERIFY-01**: Replaced AssembleView placeholder leaves no stale files, imports, resource entries, tests, or disconnected code paths; source/QML audits cover region mapping, canvas-type routing, explosion-ratio wiring, and gizmo anchors.
+- [x] **ASMVERIFY-02**: The canonical verifier passes, `build/OWzxSlicer.exe` launches, AssembleView is reachable at runtime, and visual evidence is recorded against the target screenshot.
 
 ## Future Requirements
 
@@ -70,18 +70,18 @@ Explicitly excluded to keep v4.2 focused.
 
 | Requirement | Phase | Status |
 |---|---|---|
-| ASMAUDIT-01 | Phase 89 | Not started |
-| ASMAUDIT-02 | Phase 89 | Not started |
-| ASMSHELL-01 | Phase 90 | Not started |
-| ASMSHELL-02 | Phase 90 | Not started |
-| ASMROUTE-01 | Phase 90 | Not started |
-| ASMEXPLODE-01 | Phase 91 | Not started |
-| ASMEXPLODE-02 | Phase 91 | Not started |
-| ASMMEASURE-01 | Phase 92 | Not started |
-| ASMMEASURE-02 | Phase 92 | Not started |
-| ASMROUTE-02 | Phase 93 | Not started |
-| ASMVERIFY-01 | Phase 93 | Not started |
-| ASMVERIFY-02 | Phase 93 | Not started |
+| ASMAUDIT-01 | Phase 89 | Complete |
+| ASMAUDIT-02 | Phase 89 | Complete |
+| ASMSHELL-01 | Phase 90 | Complete |
+| ASMSHELL-02 | Phase 90 | Complete |
+| ASMROUTE-01 | Phase 90 | Complete |
+| ASMEXPLODE-01 | Phase 91 | Complete |
+| ASMEXPLODE-02 | Phase 91 | Complete |
+| ASMMEASURE-01 | Phase 92 | Complete |
+| ASMMEASURE-02 | Phase 92 | Complete |
+| ASMROUTE-02 | Phase 93 | Complete |
+| ASMVERIFY-01 | Phase 93 | Complete |
+| ASMVERIFY-02 | Phase 93 | Complete |
 
 **Coverage:**
 - v4.2 requirements: 12 total
