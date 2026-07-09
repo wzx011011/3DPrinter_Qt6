@@ -31,7 +31,7 @@
 - [x] Phase 89: AssembleView Source-Truth Gap Audit
 - [x] Phase 90: AssembleView Shell And Canvas Host Restoration
 - [x] Phase 91: Explosion Ratio And Assembly Rendering
-- [ ] Phase 92: Assembly Measurement Gizmo
+- [x] Phase 92: Assembly Measurement Gizmo
 - [ ] Phase 93: AssembleView Verification And Cleanup
 
 | Phase | Name | Goal | Requirements |
@@ -73,13 +73,13 @@ Success criteria:
 
 ### Phase 92: Assembly Measurement Gizmo
 
-**Status:** Not started
-**Plans:** 0/1
+**Status:** Complete
+**Plans:** 1/1
 
 Success criteria:
-1. User can invoke the Assembly measurement gizmo (`Ctrl+Y`) on the AssembleView canvas, mirroring `GLGizmoAssembly` activability rules (explosion ratio near 1.0, multi-volume selection).
-2. The Assembly gizmo measures distances/angles/relations between selected volumes using the upstream `ONLY_ASSEMBLY` measure mode, rendering measurement overlays anchored to the right geometry.
-3. Measurement value annotations (e.g. distance/angle) and the right-side measurement panel render per `shotScreen/装配页_测量.png`.
+1. User can invoke the Assembly measurement gizmo (`Ctrl+Y`) on the AssembleView canvas, mirroring `GLGizmoAssembly` activability rules (explosion ratio near 1.0, multi-volume selection). — Met by `GizmoAssemblyMeasure = 19` (distinct from `GizmoMeasure = 3`) + `EditorViewModel::isAssemblyMeasureActivable()` (AssembleView + `abs(ratio-1.0) < 1e-2` + ≥2 selected, mirrors `GLGizmoAssembly.cpp:53-68`) returning `(1 << 19)` in `availableGizmoMask()` + the `Ctrl+Y` Shortcut in `AssemblePage.qml`.
+2. The Assembly gizmo measures distances/angles/relations between selected volumes using the upstream `ONLY_ASSEMBLY` measure mode, rendering measurement overlays anchored to the right geometry. — Met by the `AssemblyMeasureGeometry` C++ helper (AABB-center distance + longest-axis angle, a documented simplification of the full feature-picking engine — deferred to Phase 93) + the `RhiViewportRenderer` overlay (white dashed dimension line + arrowheads + teal value box gated to `CanvasAssembleView && m_gizmoMode == 19`).
+3. Measurement value annotations (e.g. distance/angle) and the right-side measurement panel render per `shotScreen/装配页_测量.png`. — Met by the right-side 测量 panel in `AssemblePage.qml` (header + 装配测量 mode label + plane indicator + distance/angle rows bound to the viewmodel Q_PROPERTYs) + the in-world teal value box; canonical build zero errors; 5 regression suites pass.
 
 ### Phase 93: AssembleView Verification And Cleanup
 

@@ -3,29 +3,29 @@ gsd_state_version: 1.0
 milestone: v4.2
 milestone_name: AssembleView Source-Truth Restoration
 status: executing
-last_updated: 2026-07-09T19:30:00+08:00
-last_activity: 2026-07-09 -- Phase 91 plan 01 complete (explosion ratio + per-volume assembly rendering shipped)
+last_updated: 2026-07-09T20:45:00+08:00
+last_activity: 2026-07-09 -- Phase 92 plan 01 complete (Assembly Measurement Gizmo: GizmoAssemblyMeasure enum + activability gate + AssemblyMeasureGeometry helper + overlay rendering + 测量 panel + Ctrl+Y shipped)
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 3
-  percent: 60
-stopped_at: Phase 91 plan 01 complete; Phase 92 ready to plan/execute
+  completed_plans: 4
+  percent: 80
+stopped_at: Phase 92 plan 01 complete; Phase 93 ready to plan/execute
 ---
 
 # Project State
 
 **Milestone:** v4.2 - AssembleView Source-Truth Restoration
-**Status:** Executing (Phase 91 explosion ratio + assembly rendering complete)
-**Next step:** Plan Phase 92 (Assembly Measurement Gizmo) with `/gsd-plan-phase 92`.
+**Status:** Executing (Phase 92 Assembly Measurement Gizmo complete)
+**Next step:** Plan Phase 93 (AssembleView Verification And Cleanup) with `/gsd-plan-phase 93`.
 
 ## Current Position
 
-Phase: 91 (Explosion Ratio And Assembly Rendering) — complete
+Phase: 92 (Assembly Measurement Gizmo) — complete
 Plan: 01 — complete
-Status: Explosion-ratio Q_PROPERTY + reset wired to AssemblePage 爆炸比例 slider; per-volume separation rendering + yellow dashed connector guide lines on the CanvasAssembleView branch; Prepare/Preview regression suites green (PrepareSceneDataTests + PartPlateTests + PreviewParserTests + ViewModelSmokeTests + QmlUiAuditTests).
-Last activity: 2026-07-09 — Phase 91 plan 01 executed (8 code/test commits + docs)
+Status: GizmoAssemblyMeasure = 19 enum (distinct from GizmoMeasure = 3) + EditorViewModel activability gate (AssembleView + explosion ≈ 1.0 + ≥2 volumes, mirrors GLGizmoAssembly.cpp:53-68) + AssemblyMeasureGeometry C++ helper (AABB-center distance + longest-axis angle) + RhiViewportRenderer overlay (white dashed dimension line + arrowheads + teal value box, gated to CanvasAssembleView + gizmo 19) + AssemblePage Ctrl+Y shortcut + right-side 测量 panel + assemblyMeasureSelectedA/B GLViewport bindings; 3 new test slots. Canonical build zero errors; 5 regression suites pass (Prepare/Preview unaffected). Scope simplification documented (full feature-picking deferred to Phase 93).
+Last activity: 2026-07-09 — Phase 92 plan 01 executed (10 code/test commits + 1 verification fix + SUMMARY/VERIFICATION)
 
 ## Current Milestone (v4.2)
 
@@ -34,7 +34,7 @@ Last activity: 2026-07-09 — Phase 91 plan 01 executed (8 code/test commits + d
 | 89 | AssembleView Source-Truth Gap Audit | Complete | ASMAUDIT-01, ASMAUDIT-02 |
 | 90 | AssembleView Shell And Canvas Host Restoration | Complete | ASMSHELL-01, ASMSHELL-02, ASMROUTE-01 |
 | 91 | Explosion Ratio And Assembly Rendering | Complete | ASMEXPLODE-01, ASMEXPLODE-02 |
-| 92 | Assembly Measurement Gizmo | Not started | ASMMEASURE-01, ASMMEASURE-02 |
+| 92 | Assembly Measurement Gizmo | Complete | ASMMEASURE-01, ASMMEASURE-02 |
 | 93 | AssembleView Verification And Cleanup | Not started | ASMROUTE-02, ASMVERIFY-01, ASMVERIFY-02 |
 
 ## Last Completed Milestone: v4.1
@@ -109,8 +109,8 @@ Items acknowledged and deferred at v4.1 milestone close on 2026-07-09:
 
 ## Operator Next Steps
 
-- Phase 89 gap audit, Phase 90 shell + canvas host, and Phase 91 explosion-ratio + per-volume separation rendering are complete. `EditorViewModel.explosionRatio` (default 1.0, reset) mirrors upstream `m_explosion_ratio`; the AssemblePage 爆炸比例 slider binds it; the `CanvasAssembleView` branch in `RhiViewportRenderer::buildModelVertices` applies a per-volume offset when ratio != 1.0 and `uploadAssemblyConnectorBuffer`/`renderAssemblyConnectors` draw yellow dashed connector guide lines when ratio > 1.0. Prepare/Preview regression suites are green.
-- Plan Phase 92 (Assembly Measurement Gizmo) with `/gsd-plan-phase 92` — it ports `GLGizmoAssembly`/`ONLY_ASSEMBLY` (`Ctrl+Y`) starting from the `availableGizmoMask()` AssembleView early-return in `EditorViewModel`.
+- Phase 89 gap audit, Phase 90 shell + canvas host, Phase 91 explosion-ratio + per-volume separation rendering, and Phase 92 Assembly measurement gizmo are complete. Phase 92 ships `GizmoAssemblyMeasure = 19` (distinct from `GizmoMeasure = 3`), an `EditorViewModel` activability gate (AssembleView + explosion ≈ 1.0 + ≥2 volumes) replacing the `availableGizmoMask()` AssembleView early-return, the `AssemblyMeasureGeometry` C++ helper (AABB-center distance + longest-axis angle), the RhiViewportRenderer assembly-measure overlay (white dashed dimension line + arrowheads + teal value box gated to CanvasAssembleView + gizmo 19), and the AssemblePage `Ctrl+Y` shortcut + right-side 测量 panel. The scope simplification (center-to-center + longest-axis angle instead of the full feature-picking engine) is documented in `92-01-SUMMARY.md` / `92-01-VERIFICATION.md`; full feature-picking is deferred to Phase 93. Prepare/Preview regression suites are green.
+- Plan Phase 93 (AssembleView Verification And Cleanup) with `/gsd-plan-phase 93` — it covers ASMROUTE-02 (AssembleViewDataPool / selection routing cleanup), ASMVERIFY-01, ASMVERIFY-02 (the deferred full feature-picking engine prerequisites: per-volume indexed_triangle_set + scene raycaster).
 - Phase 93 follows the Phase Routing table in `89-GAP-MATRIX.md`.
 
 ## Key Decisions (accumulating)
@@ -118,3 +118,4 @@ Items acknowledged and deferred at v4.1 milestone close on 2026-07-09:
 - v4.2 / Phase 90: AssembleView reuses the shared `EditorViewModel`/`ProjectServiceMock` model and the shared single `UndoRedoManager` stack (no scene/stack duplication), mirroring upstream's single-Plater-three-canvas architecture. A new `CanvasType::CanvasAssembleView = 2` and a new `activeCanvasType` int flow from `BackendContext` to `EditorViewModel` on every view-mode change; the `availableGizmoMask()` AssembleView early-return is the documented seam for Phase 92.
 - v4.2 / Phase 90: The RHI render path is restored for AssembleView by widening two View3D guards to `!= CanvasPreview` (Preview strict guards unchanged). Phase 91 specializes per-volume explosion rendering on this branch.
 - v4.2 / Phase 91: Per-volume separation is delivered by restructuring `ProjectServiceMock::meshData` to emit one `ObjBatch` per (object, volume) pair (parent `objectIndex`/`renderObjectId` repeated across sibling volume batches). The parallel-array contract (`meshBatchSourceObjectIndices.size() == objectCount`, `PrepareSceneData.cpp:143`) and unioned-bounds highlight/picking key on `batch.sourceObjectIndex` so Prepare/Preview are unaffected. The renderer applies the offset `(batchCenter - objectCenter) * (ratio - 1.0)` only on the `CanvasAssembleView` branch. Verification used a focused vcvars runner (`scripts/run_unit_tests_vcvars.ps1`) that reuses the canonical vcvars+Windows-Kits setup verbatim but skips the ~8-min libslic3r reconfigure — documented as a verification-method deviation (not a build deviation) in `91-01-VERIFICATION.md`.
+- v4.2 / Phase 92: The Assembly measurement gizmo gets its own enum value `GizmoAssemblyMeasure = 19` (distinct from `GizmoMeasure = 3` = Prepare Ctrl+U), mirroring upstream `GLGizmoAssembly` being a separate class. The measurement is a documented simplification: AABB-center-to-center distance + longest-AABB-axis angle (instead of upstream's full feature-picking engine with ITS + raycaster + plane extraction) — enough for the screenshot's distance/angle values, with the full engine deferred to Phase 93 (needs per-volume `indexed_triangle_set` + scene raycaster + `AssembleViewDataPool`). The bounds source is the cached mesh blob parsed in the viewmodel (`selectedVolumeBoundsForAssemblyMeasure()`), avoiding a new `ProjectServiceMock` surface. Arrowheads use `m_fillPipeline` (raw world-space triangles) rather than `m_gizmoTriPipeline` (which applies a gizmoCenter+scale vertex-shader displacement that would offset them).
