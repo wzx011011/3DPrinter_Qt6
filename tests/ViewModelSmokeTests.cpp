@@ -36,6 +36,7 @@
 #include "core/services/UndoRedoManager.h"
 #include "core/services/FtpUploader.h"
 #include "core/services/SsdpDiscovery.h"
+#include "core/rendering/AssemblyMeasureGeometry.h"
 #include "core/viewmodels/ConfigViewModel.h"
 #include "core/viewmodels/CalibrationViewModel.h"
 #include "core/viewmodels/EditorViewModel.h"
@@ -44,6 +45,7 @@
 #include "core/viewmodels/ProjectViewModel.h"
 #include "qml_gui/BackendContext.h"
 #include "qml_gui/Models/ConfigOptionModel.h"
+#include "qml_gui/Renderer/PrepareSceneData.h"
 
 namespace
 {
@@ -275,6 +277,13 @@ private slots:
   // Phase 91-01 (ASMEXPLODE-01): explosionRatio Q_PROPERTY behavior mirrors
   // upstream m_explosion_ratio (default 1.0, set/reset emit stateChanged).
   void editorExplosionRatioDefaultsAndResetMirrorsUpstream();
+  // Phase 92-01 (ASMMEASURE-01): Assembly measurement gizmo activability
+  // mirrors upstream GLGizmoAssembly::on_is_activable (AssembleView + explosion
+  // ratio ~= 1.0 + >=2 volumes). Loads a 2-object fixture for the >=2 case.
+  void assemblyMeasureGizmoActivabilityMirrorsUpstream();
+  // Phase 92-01 (ASMMEASURE-02): AssemblyMeasureGeometry::measure computes
+  // correct distance/angle for two known AABBs (pure math, no model needed).
+  void assemblyMeasureGeometryComputesDistanceAndAngle();
 
 private:
   bool hasLibslic3r() const;
@@ -3800,6 +3809,126 @@ void ViewModelSmokeTests::editorExplosionRatioDefaultsAndResetMirrorsUpstream()
   spy.clear();
   editor.resetExplosionRatio();
   QCOMPARE(spy.count(), 0);
+}
+
+void ViewModelSmokeTests::assemblyMeasureGizmoActivabilityMirrorsUpstream()
+{
+  // Phase 92-01 (ASMMEASURE-01): the Assembly measurement gizmo activability
+  // mirrors upstream GLGizmoAssembly::on_is_activable()
+  // (GLGizmoAssembly.cpp:53-68): active canvas == AssembleView (2) AND
+  // abs(explosion_ratio - 1.0) < 1e-2 AND selection.volumes_count() >= 2.
+  // Parts (a)-(c) need no model (the gate fails before the selection count);
+  // parts (d)-(e) load a 2-object fixture so >=2 volumes can be selected.
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  // (a) Default (canvas = View3D = 0, no selection): gizmo not active;
+  //     activate is a no-op returning false.
+  QCOMPARE(editor.activeCanvasType(), 0);
+  QVERIFY(!editor.assemblyMeasureGizmoActive());
+  QVERIFY(!editor.activateAssemblyMeasureGizmo());
+  QVERIFY(!editor.assemblyMeasureGizmoActive());
+
+  // (b) AssembleView but <2 selected: not activable.
+  editor.setActiveCanvasType(2);
+  QCOMPARE(editor.activeCanvasType(), 2);
+  QVERIFY(!editor.assemblyMeasureGizmoActive());
+  QVERIFY(!editor.activateAssemblyMeasureGizmo());
+  QVERIFY(!editor.assemblyMeasureGizmoActive());
+
+  // (c) AssembleView + explosionRatio != 1.0 (2.0): not activable (mirrors the
+  //     abs(ratio-1.0) < 1e-2 gate).
+  editor.setExplosionRatio(2.0f);
+  QVERIFY(!editor.activateAssemblyMeasureGizmo());
+  QVERIFY(!editor.assemblyMeasureGizmoActive());
+  editor.setExplosionRatio(1.0f);  // restore
+
+  // (d) AssembleView + ratio 1.0 + >=2 selected (load 2 objects, select all):
+  //     activate returns true and flips the active flag. QSignalSpy records the
+  //     stateChanged transition.
+  QVERIFY2(editor.loadFile(kStlPath), "loading the first fixture object should start");
+  QTRY_VERIFY_WITH_TIMEOUT(editor.modelCount() >= 1, 5000);
+  QVERIFY2(editor.loadFile(kStlPath), "loading the second fixture object should start");
+  QTRY_VERIFY_WITH_TIMEOUT(editor.modelCount() >= 2, 5000);
+  editor.selectAllVisibleObjects();
+  QVERIFY2(editor.selectedObjectCount() >= 2,
+           "select-all should yield >=2 selected objects for the activability case");
+
+  QSignalSpy spy(&editor, &EditorViewModel::stateChanged);
+  QVERIFY(spy.isValid());
+  QVERIFY(editor.activateAssemblyMeasureGizmo());
+  QVERIFY(editor.assemblyMeasureGizmoActive());
+  QVERIFY(spy.count() >= 1);
+
+  // (e) deactivate flips it back to false and emits.
+  spy.clear();
+  editor.deactivateAssemblyMeasureGizmo();
+  QVERIFY(!editor.assemblyMeasureGizmoActive());
+  QVERIFY(spy.count() >= 1);
+
+  // (f) activate is a no-op when the canvas is switched away from AssembleView
+  //     even with >=2 selected (the canvas gate is the first condition).
+  editor.setActiveCanvasType(0);
+  QVERIFY(!editor.activateAssemblyMeasureGizmo());
+  QVERIFY(!editor.assemblyMeasureGizmoActive());
+}
+
+void ViewModelSmokeTests::assemblyMeasureGeometryComputesDistanceAndAngle()
+{
+  // Phase 92-01 (ASMMEASURE-02): AssemblyMeasureGeometry::measure computes the
+  // correct center-to-center distance + per-axis XYZ delta + angle between the
+  // two volumes' longest-AABB-axis directions. Pure math — no model needed.
+  // Box A: longest axis = X (extent 10). Box B: longest axis = Y (extent 10),
+  // offset +16 in X and +4 in Y from A's center.
+  PrepareSceneData::ModelBounds a;
+  a.minX = 0.0f;  a.maxX = 10.0f;   // extent 10 (longest)
+  a.minY = 0.0f;  a.maxY = 2.0f;
+  a.minZ = 0.0f;  a.maxZ = 2.0f;
+  // A center = (5, 1, 1).
+  PrepareSceneData::ModelBounds b;
+  b.minX = 20.0f; b.maxX = 22.0f;
+  b.minY = 0.0f;  b.maxY = 10.0f;   // extent 10 (longest)
+  b.minZ = 0.0f;  b.maxZ = 2.0f;
+  // B center = (21, 5, 1). Delta A->B = (16, 4, 0). Distance = sqrt(272) ~= 16.49.
+
+  const AssemblyMeasureResult r = AssemblyMeasureGeometry::measure(a, b);
+  QVERIFY2(r.valid, "measure() must return valid for two non-degenerate AABBs");
+
+  // Distance = sqrt(16^2 + 4^2 + 0) = sqrt(272) ~= 16.492.
+  QVERIFY2(qFuzzyCompare(r.distance, std::sqrt(272.0f))
+               || std::abs(r.distance - std::sqrt(272.0f)) < 1e-3f,
+           qPrintable(QStringLiteral("distance expected ~16.492, got %1")
+                          .arg(r.distance)));
+  // XYZ delta A->B = (16, 4, 0).
+  QVERIFY2(qFuzzyCompare(r.distanceXyz.x(), 16.0f), "distanceXyz.x must be 16");
+  QVERIFY2(qFuzzyCompare(r.distanceXyz.y(), 4.0f), "distanceXyz.y must be 4");
+  QVERIFY2(qFuzzyCompare(r.distanceXyz.z(), 0.0f), "distanceXyz.z must be 0");
+
+  // Longest axes: A -> X, B -> Y (perpendicular).
+  QVERIFY2(r.axisA == QVector3D(1, 0, 0), "axisA must be the X unit vector");
+  QVERIFY2(r.axisB == QVector3D(0, 1, 0), "axisB must be the Y unit vector");
+  // Angle between X and Y = 90 degrees.
+  QVERIFY2(std::abs(r.angleDeg - 90.0f) < 1e-3f,
+           qPrintable(QStringLiteral("angle expected ~90.000, got %1")
+                          .arg(r.angleDeg)));
+
+  // Formatting: distance gets 3 decimals + ' mm'; angle gets 3 decimals + degree glyph.
+  const QString distStr = AssemblyMeasureGeometry::formatDistance(r.distance);
+  QVERIFY2(distStr.contains(QStringLiteral("mm")),
+           "formatDistance must include the 'mm' suffix");
+  QVERIFY2(distStr.contains(QStringLiteral(".")),
+           "formatDistance must use decimal precision");
+  const QString angleStr = AssemblyMeasureGeometry::formatAngle(90.0f);
+  QVERIFY2(angleStr.contains(QStringLiteral("90.000")),
+           "formatAngle(90) must contain '90.000'");
+  QVERIFY2(angleStr.contains(QStringLiteral("\u00b0")),
+           "formatAngle must include the degree glyph");
+
+  // Degenerate AABB -> invalid.
+  PrepareSceneData::ModelBounds degenerate;  // all-zero extents
+  const AssemblyMeasureResult bad = AssemblyMeasureGeometry::measure(degenerate, b);
+  QVERIFY2(!bad.valid, "measure() must return invalid for a degenerate AABB");
 }
 
 QTEST_MAIN(ViewModelSmokeTests)
