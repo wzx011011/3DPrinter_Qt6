@@ -3,36 +3,36 @@ gsd_state_version: 1.0
 milestone: v4.2
 milestone_name: AssembleView Source-Truth Restoration
 status: executing
-last_updated: 2026-07-09T11:30:00+08:00
-last_activity: 2026-07-09 -- Phase 89 plan 01 complete (AssembleView gap matrix frozen)
+last_updated: 2026-07-09T17:15:00+08:00
+last_activity: 2026-07-09 -- Phase 90 plan 01 complete (AssembleView shell + canvas host shipped)
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 1
-  percent: 20
-stopped_at: Phase 89 plan 01 complete; Phase 90 ready to plan/execute
+  completed_plans: 2
+  percent: 40
+stopped_at: Phase 90 plan 01 complete; Phase 91 ready to plan/execute
 ---
 
 # Project State
 
 **Milestone:** v4.2 - AssembleView Source-Truth Restoration
-**Status:** Executing (Phase 89 gap audit complete)
-**Next step:** Plan Phase 90 (AssembleView Shell And Canvas Host Restoration) with `/gsd-plan-phase 90`.
+**Status:** Executing (Phase 90 shell + canvas host complete)
+**Next step:** Plan Phase 91 (Explosion Ratio And Assembly Rendering) with `/gsd-plan-phase 91`.
 
 ## Current Position
 
-Phase: 89 (AssembleView Source-Truth Gap Audit) — complete
+Phase: 90 (AssembleView Shell And Canvas Host Restoration) — complete
 Plan: 01 — complete
-Status: Gap matrix frozen; Phase 90-93 can execute against `89-GAP-MATRIX.md`
-Last activity: 2026-07-09 — Phase 89 plan 01 executed (4 tasks, 4 commits)
+Status: AssembleView placeholder replaced with real canvas host + 4-region shell + nav toggle + CanvasAssembleView routing; canonical verifier exited 0, all 6 suites passed.
+Last activity: 2026-07-09 — Phase 90 plan 01 executed (9 tasks, 8 commits + docs)
 
 ## Current Milestone (v4.2)
 
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
 | 89 | AssembleView Source-Truth Gap Audit | Complete | ASMAUDIT-01, ASMAUDIT-02 |
-| 90 | AssembleView Shell And Canvas Host Restoration | Not started | ASMSHELL-01, ASMSHELL-02, ASMROUTE-01 |
+| 90 | AssembleView Shell And Canvas Host Restoration | Complete | ASMSHELL-01, ASMSHELL-02, ASMROUTE-01 |
 | 91 | Explosion Ratio And Assembly Rendering | Not started | ASMEXPLODE-01, ASMEXPLODE-02 |
 | 92 | Assembly Measurement Gizmo | Not started | ASMMEASURE-01, ASMMEASURE-02 |
 | 93 | AssembleView Verification And Cleanup | Not started | ASMROUTE-02, ASMVERIFY-01, ASMVERIFY-02 |
@@ -83,7 +83,7 @@ See: `.planning/PROJECT.md` (updated 2026-07-09)
 | Category | Item | Target |
 |---|---|---|
 | closed | v4.1 Parameter settings dialogs | Shipped in v4.1 |
-| active | AssembleView source-truth restoration | v4.2 (Phase 89 gap audit complete; Phase 90-93 pending) |
+| active | AssembleView source-truth restoration | v4.2 (Phase 89-90 complete; Phase 91-93 pending) |
 | removed | LAN/device/cloud/network/Monitor workflows | Removed from future scope by user direction on 2026-07-07 |
 | future | Auto filament-map recommendation + wipe-tower geometry/rendering | Future milestone |
 | future | Real GL/QRhi-capture thumbnails + 3MF pixel round-trip | Future milestone |
@@ -109,6 +109,11 @@ Items acknowledged and deferred at v4.1 milestone close on 2026-07-09:
 
 ## Operator Next Steps
 
-- Phase 89 gap audit is complete; the canonical matrix is `89-GAP-MATRIX.md`.
-- Plan Phase 90 (AssembleView Shell And Canvas Host Restoration) with `/gsd-plan-phase 90` — it replaces the `Plater.qml` placeholder and wires `CanvasAssembleView` routing.
-- Phase 91-93 follow the Phase Routing table in `89-GAP-MATRIX.md`.
+- Phase 89 gap audit and Phase 90 shell + canvas host are complete. The `Plater.qml` placeholder is gone; `AssemblePage.qml` hosts the third `CanvasAssembleView` canvas; `BackendContext`/`EditorViewModel` carry the `activeCanvasType` routing; the canonical verifier exited 0.
+- Plan Phase 91 (Explosion Ratio And Assembly Rendering) with `/gsd-plan-phase 91` — it adds the explosion-ratio slider and per-volume separation rendering on top of the `CanvasAssembleView` render branch in `RhiViewportRenderer.cpp:188,241`.
+- Phase 92-93 follow the Phase Routing table in `89-GAP-MATRIX.md`.
+
+## Key Decisions (accumulating)
+
+- v4.2 / Phase 90: AssembleView reuses the shared `EditorViewModel`/`ProjectServiceMock` model and the shared single `UndoRedoManager` stack (no scene/stack duplication), mirroring upstream's single-Plater-three-canvas architecture. A new `CanvasType::CanvasAssembleView = 2` and a new `activeCanvasType` int flow from `BackendContext` to `EditorViewModel` on every view-mode change; the `availableGizmoMask()` AssembleView early-return is the documented seam for Phase 92.
+- v4.2 / Phase 90: The RHI render path is restored for AssembleView by widening two View3D guards to `!= CanvasPreview` (Preview strict guards unchanged). Phase 91 specializes per-volume explosion rendering on this branch.

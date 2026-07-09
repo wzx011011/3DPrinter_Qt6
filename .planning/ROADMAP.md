@@ -29,7 +29,7 @@
 ## Phases
 
 - [x] Phase 89: AssembleView Source-Truth Gap Audit
-- [ ] Phase 90: AssembleView Shell And Canvas Host Restoration
+- [x] Phase 90: AssembleView Shell And Canvas Host Restoration
 - [ ] Phase 91: Explosion Ratio And Assembly Rendering
 - [ ] Phase 92: Assembly Measurement Gizmo
 - [ ] Phase 93: AssembleView Verification And Cleanup
@@ -53,8 +53,8 @@ Success criteria:
 
 ### Phase 90: AssembleView Shell And Canvas Host Restoration
 
-**Status:** Not started
-**Plans:** 0/1
+**Status:** Complete
+**Plans:** 1/1
 
 Success criteria:
 1. A real AssembleView page/canvas host replaces the `Plater.qml` placeholder; navigation reaches AssembleView with no leftover "装配视图暂不可用" text.
