@@ -112,6 +112,12 @@ private slots:
   // CanvasAssembleView enum is registered, the renderer has an AssembleView
   // branch, navigation is wired, and CanvasAssembleView routing exists.
   void assembleViewShellReplacesPlaceholderAndRegistersCanvasHost();
+  // Phase 91-01 (ASMEXPLODE-01/02): the explosion-ratio control is wired
+  // (EditorViewModel property + QML slider + RhiViewport re-render trigger) and
+  // the renderer applies the per-volume offset on the CanvasAssembleView branch
+  // with connector guide lines gated to ratio > 1.0. Prepare/Preview guards stay
+  // intact.
+  void assembleViewExplosionRatioWiredAndRenderBranchAppliesOffset();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -3037,6 +3043,70 @@ void QmlUiAuditTests::assembleViewShellReplacesPlaceholderAndRegistersCanvasHost
   QVERIFY2(editorHeader.contains(QStringLiteral("activeCanvasType"))
                || editorSource.contains(QStringLiteral("activeCanvasType")),
            "EditorViewModel must expose an active-canvas-type routing surface");
+}
+
+void QmlUiAuditTests::assembleViewExplosionRatioWiredAndRenderBranchAppliesOffset()
+{
+  // Phase 91-01 (ASMEXPLODE-01/02): the explosion-ratio Q_PROPERTY exists on
+  // EditorViewModel (default 1.0), the AssemblePage 爆炸比例 slider is bound to
+  // editorVm.explosionRatio with a reset, the RhiViewport re-render trigger is
+  // wired, the renderer applies the per-volume offset on the CanvasAssembleView
+  // branch, and connector guide lines render when ratio > 1.0. Preview guards
+  // stay intact.
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString assemblePage = readSource(QStringLiteral("src/qml_gui/pages/AssemblePage.qml"));
+  const QString rhiViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString rhiViewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString rhiViewportRenderer = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!editorSource.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!assemblePage.isEmpty(), "Unable to read AssemblePage.qml");
+  QVERIFY2(!rhiViewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!rhiViewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!rhiViewportRenderer.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+
+  // (1) EditorViewModel explosionRatio Q_PROPERTY + reset (ASMEXPLODE-01).
+  QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(float explosionRatio")),
+           "EditorViewModel.h must declare the explosionRatio Q_PROPERTY");
+  QVERIFY2(editorHeader.contains(QStringLiteral("resetExplosionRatio")),
+           "EditorViewModel.h must declare resetExplosionRatio()");
+  QVERIFY2(editorHeader.contains(QStringLiteral("m_explosionRatio = 1.0f"))
+               || editorSource.contains(QStringLiteral("m_explosionRatio = 1.0f")),
+           "EditorViewModel must initialize m_explosionRatio to 1.0f");
+
+  // (2) AssemblePage slider bound to editorVm.explosionRatio (ASMEXPLODE-01).
+  QVERIFY2(assemblePage.contains(QStringLiteral("\u7206\u70b8\u6bd4\u4f8b")),
+           "AssemblePage must contain the '\u7206\u70b8\u6bd4\u4f8b' (Explosion Ratio) label");
+  QVERIFY2(assemblePage.contains(QStringLiteral("CxSlider")),
+           "AssemblePage must use a CxSlider for the explosion ratio");
+  QVERIFY2(assemblePage.contains(QStringLiteral("editorVm.explosionRatio")),
+           "AssemblePage must bind the slider to editorVm.explosionRatio");
+  QVERIFY2(assemblePage.contains(QStringLiteral("resetExplosionRatio")),
+           "AssemblePage must call editorVm.resetExplosionRatio() from a reset affordance");
+
+  // (3) RhiViewport property + re-render trigger (ASMEXPLODE-01).
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("Q_PROPERTY(float explosionRatio")),
+           "RhiViewport.h must declare the explosionRatio Q_PROPERTY");
+  QVERIFY2(rhiViewportSource.contains(QStringLiteral("setExplosionRatio")),
+           "RhiViewport.cpp must implement setExplosionRatio");
+  QVERIFY2(rhiViewportSource.contains(QStringLiteral("update()")),
+           "RhiViewport::setExplosionRatio must call update() to trigger re-render");
+
+  // (4) Renderer offset gated to AssembleView (ASMEXPLODE-02).
+  QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("m_explosionRatio")),
+           "RhiViewportRenderer.cpp must read m_explosionRatio");
+  QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("CanvasAssembleView")),
+           "RhiViewportRenderer.cpp must gate the explosion offset on CanvasAssembleView");
+  QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("m_canvasType == RhiViewport::CanvasPreview")),
+           "RhiViewportRenderer.cpp must keep the CanvasPreview guards intact");
+
+  // (5) Connector guide lines gated to ratio > 1.0 (ASMEXPLODE-02).
+  QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("assemblyConnector"))
+               || rhiViewportRenderer.contains(QStringLiteral("renderAssemblyConnectors")),
+           "RhiViewportRenderer.cpp must have an assembly-connector buffer/render path");
+  QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("m_explosionRatio > 1.0")),
+           "RhiViewportRenderer.cpp must gate connector rendering on m_explosionRatio > 1.0");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
