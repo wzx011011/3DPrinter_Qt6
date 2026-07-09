@@ -3189,9 +3189,15 @@ void QmlUiAuditTests::assembleViewMeasurementGizmoWiredAndOverlayRenders()
   QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("m_canvasType == RhiViewport::CanvasPreview")),
            "RhiViewportRenderer.cpp must keep the CanvasPreview guards intact");
 
-  // (5) Geometry helper file exists (ASMMEASURE-02).
-  QVERIFY2(QFileInfo::exists(QStringLiteral("src/core/rendering/AssemblyMeasureGeometry.h")),
-           "AssemblyMeasureGeometry.h must exist in src/core/rendering/");
+  // (5) Geometry helper file exists (ASMMEASURE-02). Resolve against
+  // QT_TESTCASE_SOURCEDIR (repo root) the same way the other file-existence
+  // checks do (QmlUiAuditTests.cpp:2361-2368) — the test exe runs from build/.
+  const QString assemblyMeasureHeaderPath =
+      QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR))
+          .filePath(QStringLiteral("src/core/rendering/AssemblyMeasureGeometry.h"));
+  QVERIFY2(QFileInfo::exists(assemblyMeasureHeaderPath),
+           qPrintable(QStringLiteral("AssemblyMeasureGeometry.h must exist at %1")
+                          .arg(assemblyMeasureHeaderPath)));
 }
 
 QTEST_MAIN(QmlUiAuditTests)

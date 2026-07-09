@@ -3818,7 +3818,9 @@ void ViewModelSmokeTests::assemblyMeasureGizmoActivabilityMirrorsUpstream()
   // (GLGizmoAssembly.cpp:53-68): active canvas == AssembleView (2) AND
   // abs(explosion_ratio - 1.0) < 1e-2 AND selection.volumes_count() >= 2.
   // Parts (a)-(c) need no model (the gate fails before the selection count);
-  // parts (d)-(e) load a 2-object fixture so >=2 volumes can be selected.
+  // parts (d)-(e) add two primitives via addPrimitiveToPlate (synchronous +
+  // additive — loadFile replaces rather than appends, so it cannot reach the
+  // >=2 count) so >=2 volumes can be selected.
   ProjectServiceMock project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
@@ -3844,13 +3846,14 @@ void ViewModelSmokeTests::assemblyMeasureGizmoActivabilityMirrorsUpstream()
   QVERIFY(!editor.assemblyMeasureGizmoActive());
   editor.setExplosionRatio(1.0f);  // restore
 
-  // (d) AssembleView + ratio 1.0 + >=2 selected (load 2 objects, select all):
-  //     activate returns true and flips the active flag. QSignalSpy records the
-  //     stateChanged transition.
-  QVERIFY2(editor.loadFile(kStlPath), "loading the first fixture object should start");
-  QTRY_VERIFY_WITH_TIMEOUT(editor.modelCount() >= 1, 5000);
-  QVERIFY2(editor.loadFile(kStlPath), "loading the second fixture object should start");
-  QTRY_VERIFY_WITH_TIMEOUT(editor.modelCount() >= 2, 5000);
+  // (d) AssembleView + ratio 1.0 + >=2 selected: activate returns true and flips
+  //     the active flag. QSignalSpy records the stateChanged transition.
+  //     Fixture: two primitives via addPrimitiveToPlate (synchronous + additive —
+  //     loadFile replaces rather than appends, so it cannot reach the >=2 count).
+  QVERIFY2(editor.addPrimitiveToPlate(0), "adding the first primitive should succeed");
+  QVERIFY2(editor.addPrimitiveToPlate(0), "adding the second primitive should succeed");
+  QVERIFY2(editor.objectCount() >= 2,
+           "two addPrimitiveToPlate calls should yield >=2 objects");
   editor.selectAllVisibleObjects();
   QVERIFY2(editor.selectedObjectCount() >= 2,
            "select-all should yield >=2 selected objects for the activability case");
