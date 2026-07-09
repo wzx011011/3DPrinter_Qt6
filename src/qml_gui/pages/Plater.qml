@@ -99,18 +99,16 @@ Item {
         processCategory: root.processCategory
     }
 
-    // ═══ AssembleView slot（v2.0 占位）═══════════════════════════════════════
-    // 上游 AssembleView 在 v2.0 为 Out of Scope，仅保留枚举入口
-    Item {
-        id: assembleSlot
+    // ═══ AssembleView slot (Phase 90: real canvas host) ═══════════════════════
+    // Mirrors upstream Plater::assemble_view (Plater.cpp:4959) as the third
+    // GLCanvas3D host peer of view3D/preview. AssemblePage owns the
+    // CanvasAssembleView RHI host and 4-region chrome (GUI_Preview.hpp:180).
+    AssemblePage {
+        id: assemblePage
         anchors.fill: parent
         visible: root.viewMode === root.vmAssembleView
-
-        Text {
-            anchors.centerIn: parent
-            text: qsTr("装配视图暂不可用")
-            color: Theme.textSecondary
-            font.pixelSize: 14
-        }
+        editorVm: root.editorVm
+        configVm: root.configVm
+        processCategory: root.processCategory
     }
 }
