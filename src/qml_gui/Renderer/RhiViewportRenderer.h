@@ -57,6 +57,11 @@ private:
   // ratio > 1.0 (matches shotScreen/装配页_爆炸.png).
   bool uploadAssemblyConnectorBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   void renderAssemblyConnectors(QRhiCommandBuffer *cb);
+  // Phase 92 (ASMMEASURE-02): Assembly measurement overlay (white dashed
+  // dimension line + arrowheads + teal value box) between the two selected
+  // volumes. Gated to m_gizmoMode == GizmoAssemblyMeasure on CanvasAssembleView.
+  bool uploadAssemblyMeasureBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
+  void renderAssemblyMeasureOverlay(QRhiCommandBuffer *cb);
   bool uploadCameraUniform(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool ensureGizmoPipeline();                                  // Phase 68
   bool uploadGizmoBuffer(QRhiResourceUpdateBatch *updates);   // Phase 68/70
@@ -108,17 +113,31 @@ private:
   std::unique_ptr<QRhiBuffer> m_wipeTowerBuffer;
   // Phase 91 (ASMEXPLODE-02): assembly connector guide-line buffer.
   std::unique_ptr<QRhiBuffer> m_assemblyConnectorBuffer;
+  // Phase 92 (ASMMEASURE-02): Assembly measurement overlay buffers. The
+  // dimension line uses the line pipeline (white GL_LINES dashes); the
+  // arrowheads + teal value-box quad use the triangle pipelines (gizmo tri
+  // for white arrowheads, translucent fill for the teal box). Drawn only when
+  // m_gizmoMode == GizmoAssemblyMeasure on CanvasAssembleView.
+  std::unique_ptr<QRhiBuffer> m_assemblyMeasureLineBuffer;
+  std::unique_ptr<QRhiBuffer> m_assemblyMeasureTriBuffer;
+  std::unique_ptr<QRhiBuffer> m_assemblyMeasureValueBuffer;
   bool m_gizmoVertexBufferUploaded = false;
   bool m_cutPlaneFillBufferUploaded = false;
   bool m_cutPlaneOutlineBufferUploaded = false;
   bool m_wipeTowerBufferUploaded = false;
   bool m_assemblyConnectorBufferUploaded = false;
+  bool m_assemblyMeasureLineBufferUploaded = false;
+  bool m_assemblyMeasureTriBufferUploaded = false;
+  bool m_assemblyMeasureValueBufferUploaded = false;
   bool m_gizmoPipelineCreated = false;
   quint32 m_gizmoVertexBufferBytes = 0;
   quint32 m_cutPlaneFillBufferBytes = 0;
   quint32 m_cutPlaneOutlineBufferBytes = 0;
   quint32 m_wipeTowerBufferBytes = 0;
   quint32 m_assemblyConnectorBufferBytes = 0;
+  quint32 m_assemblyMeasureLineBufferBytes = 0;
+  quint32 m_assemblyMeasureTriBufferBytes = 0;
+  quint32 m_assemblyMeasureValueBufferBytes = 0;
   GizmoGeometryOffsets m_moveGizmoOffsets;
   GizmoGeometryOffsets m_rotateGizmoOffsets;
   GizmoGeometryOffsets m_scaleGizmoOffsets;
@@ -141,6 +160,9 @@ private:
   quint32 m_cutPlaneOutlineVertexCount = 0;
   quint32 m_wipeTowerVertexCount = 0;
   quint32 m_assemblyConnectorVertexCount = 0;
+  quint32 m_assemblyMeasureLineVertexCount = 0;
+  quint32 m_assemblyMeasureTriVertexCount = 0;
+  quint32 m_assemblyMeasureValueVertexCount = 0;
   int m_canvasType = 0;
   // Phase 91 (ASMEXPLODE-02): explosion ratio mirrored from RhiViewport in
   // synchronize(). Drives the per-volume offset in buildModelVertices when the
@@ -148,6 +170,13 @@ private:
   // re-upload when the ratio changes (default 1.0 == no offset).
   float m_explosionRatio = 1.0f;
   float m_lastExplosionRatio = 1.0f;
+  // Phase 92 (ASMMEASURE-02): the two selected source indices the overlay
+  // annotates. Mirrored from RhiViewport in synchronize(); a change forces an
+  // overlay re-upload. Default -1 = not set (nothing drawn).
+  int m_assemblyMeasureSelectedA = -1;
+  int m_assemblyMeasureSelectedB = -1;
+  int m_assemblyMeasureLastSelectedA = -1;
+  int m_assemblyMeasureLastSelectedB = -1;
   int m_meshBytes = 0;
   int m_previewBytes = 0;
   qint64 m_sceneGeneration = 0;

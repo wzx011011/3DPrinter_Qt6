@@ -1,5 +1,6 @@
 #include "RhiViewportRenderer.h"
 #include "RhiViewport.h"
+#include "core/rendering/AssemblyMeasureGeometry.h"
 #include "core/rendering/GizmoCenter.h"
 #include "core/rendering/GizmoGeometry.h"
 
@@ -147,6 +148,25 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
     m_cutPlaneOutlineBufferUploaded = false;
   }
 
+  // Phase 92 (ASMMEASURE-02): mirror the two Assembly-measure selection indices
+  // and force an overlay re-upload when they change OR the gizmo mode flips
+  // to/from GizmoAssemblyMeasure (19). This closes the re-render loop:
+  // selection change -> viewmodel stateChanged -> QML binding ->
+  // RhiViewport setter -> update() -> synchronize() copies here ->
+  // uploadAssemblyMeasureBuffers rebuilds the overlay.
+  m_assemblyMeasureSelectedA = viewport->m_assemblyMeasureSelectedA;
+  m_assemblyMeasureSelectedB = viewport->m_assemblyMeasureSelectedB;
+  if (m_assemblyMeasureSelectedA != m_assemblyMeasureLastSelectedA
+      || m_assemblyMeasureSelectedB != m_assemblyMeasureLastSelectedB
+      || m_gizmoMode != prevGizmoMode)
+  {
+    m_assemblyMeasureLastSelectedA = m_assemblyMeasureSelectedA;
+    m_assemblyMeasureLastSelectedB = m_assemblyMeasureSelectedB;
+    m_assemblyMeasureLineBufferUploaded = false;
+    m_assemblyMeasureTriBufferUploaded = false;
+    m_assemblyMeasureValueBufferUploaded = false;
+  }
+
   const bool prevShowWipeTower = m_showWipeTower;
   const float prevWipeTowerWidth = m_wipeTowerWidth;
   const float prevWipeTowerDepth = m_wipeTowerDepth;
@@ -291,6 +311,14 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
         && m_assemblyConnectorBuffer && m_assemblyConnectorVertexCount > 0)
     {
       renderAssemblyConnectors(cb);
+    }
+    // Phase 92 (ASMMEASURE-02): Assembly measurement overlay (white dashed
+    // dimension line + arrowheads + teal value box) on AssembleView only, when
+    // the Assembly measure gizmo is active (mode 19). Matches 装配页_测量.png.
+    if (m_canvasType == RhiViewport::CanvasAssembleView
+        && m_gizmoMode == 19 /*GizmoAssemblyMeasure*/)
+    {
+      renderAssemblyMeasureOverlay(cb);
     }
     // Phase 68: render the move gizmo (X/Y/Z arrows) when gizmoMode == Move.
     // Drawn after meshes/highlight so it sits on top via no-depth-write.
@@ -534,6 +562,10 @@ bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, q
     return false;
   // Phase 91 (ASMEXPLODE-02): connector guide lines (AssembleView, ratio > 1.0).
   if (!uploadAssemblyConnectorBuffer(updates, dirtyFlags))
+    return false;
+  // Phase 92 (ASMMEASURE-02): Assembly measurement overlay (AssembleView,
+  // gizmo mode 19). Upload is a no-op (empty buffers) outside that gate.
+  if (!uploadAssemblyMeasureBuffers(updates, dirtyFlags))
     return false;
 
   m_sceneBuffersUploaded = true;
@@ -849,6 +881,215 @@ void RhiViewportRenderer::renderAssemblyConnectors(QRhiCommandBuffer *cb)
   const QRhiCommandBuffer::VertexInput binding(m_assemblyConnectorBuffer.get(), 0);
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_assemblyConnectorVertexCount);
+}
+
+bool RhiViewportRenderer::uploadAssemblyMeasureBuffers(QRhiResourceUpdateBatch *updates,
+                                                       quint32 dirtyFlags)
+{
+  // Phase 92 (ASMMEASURE-02): Assembly measurement overlay (white dashed
+  // dimension line + arrowheads + teal value box) between the two selected
+  // volumes. Matches shotScreen/装配页_测量.png. The overlay is meaningful only
+  // on AssembleView with the Assembly measure gizmo active (mode 19); on any
+  // other canvas/gizmo the buffers are left empty (nothing drawn). Selection
+  // deltas are handled by the dirty flags set in synchronize() (which clear
+  // the *Uploaded flags); mesh/plate/gpu dirty also force a rebuild.
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+
+  const bool reupload = !m_assemblyMeasureLineBufferUploaded
+      || !m_assemblyMeasureTriBufferUploaded
+      || !m_assemblyMeasureValueBufferUploaded
+      || (dirtyFlags & (PrepareSceneData::DirtyMesh
+                        | PrepareSceneData::DirtyPlate
+                        | PrepareSceneData::DirtySelection
+                        | PrepareSceneData::DirtyGpu)) != 0;
+  if (!reupload)
+    return true;
+
+  // Start empty; only populate on AssembleView + gizmo mode 19 with two valid
+  // selected volumes.
+  QVector<Vertex> lineVerts;     // dimension line (GL_LINES)
+  QVector<Vertex> triVerts;      // arrowheads (GL_TRIANGLES)
+  QVector<Vertex> valueVerts;    // teal value-box quad (GL_TRIANGLES)
+
+  const bool active = m_canvasType == RhiViewport::CanvasAssembleView
+      && m_gizmoMode == 19 /*GizmoAssemblyMeasure*/;
+  if (active)
+  {
+    // Locate the two selected volumes' first batches (mirrors uploadHighlightBuffer
+    // / renderAssemblyConnectors). Use the first batch per sourceObjectIndex.
+    bool foundA = false, foundB = false;
+    PrepareSceneData::ModelBounds boundsA{}, boundsB{};
+    for (const PrepareSceneData::ModelBatch &batch : m_prepareScene.modelBatches())
+    {
+      if (batch.vertexCount <= 0 || batch.sourceObjectIndex < 0)
+        continue;
+      if (!foundA && batch.sourceObjectIndex == m_assemblyMeasureSelectedA)
+      {
+        boundsA = batch.bounds;
+        foundA = true;
+        continue;
+      }
+      if (!foundB && batch.sourceObjectIndex == m_assemblyMeasureSelectedB)
+      {
+        boundsB = batch.bounds;
+        foundB = true;
+        continue;
+      }
+      if (foundA && foundB)
+        break;
+    }
+
+    if (foundA && foundB)
+    {
+      const AssemblyMeasureResult result =
+          AssemblyMeasureGeometry::measure(boundsA, boundsB);
+      if (result.valid)
+      {
+        const QVector3D &p0 = result.centerA;
+        const QVector3D &p1 = result.centerB;
+        // ── Dimension line: white dashed segments (reuse the Phase 91 dash
+        // technique — N alternating dash/gap GL_LINES segments, white RGBA).
+        const float wr = 1.0f, wg = 1.0f, wb = 1.0f, wa = 1.0f;
+        const int kDashCount = 8;
+        for (int d = 0; d < kDashCount; ++d)
+        {
+          const float t0 = float(d) / float(kDashCount);
+          const float t1 = float(d + 0.5f) / float(kDashCount);
+          const QVector3D a0 = p0 + (p1 - p0) * t0;
+          const QVector3D a1 = p0 + (p1 - p0) * t1;
+          lineVerts.append(Vertex{a0.x(), a0.y(), a0.z(), wr, wg, wb, wa});
+          lineVerts.append(Vertex{a1.x(), a1.y(), a1.z(), wr, wg, wb, wa});
+        }
+
+        // ── Arrowheads: a small white triangle at each endpoint pointing along
+        // the line. World-space approximation (a faithful screen-space arrow
+        // like upstream render_dimensioning needs the MVP; this approximation
+        // is documented in the plan and is acceptable for Phase 92). Build two
+        // side vertices perpendicular to the line in world space.
+        QVector3D dir = (p1 - p0);
+        const float len = dir.length();
+        if (len > 1e-5f)
+        {
+          dir /= len;
+          // Pick a vector not parallel to dir for the perpendicular basis.
+          QVector3D up = (std::abs(dir.y()) < 0.9f) ? QVector3D(0, 1, 0) : QVector3D(1, 0, 0);
+          QVector3D perp = QVector3D::crossProduct(dir, up).normalized();
+          const float head = std::clamp(len * 0.08f, 1.0f, 8.0f);  // arrow size (mm)
+          const float half = head * 0.5f;
+          // Tip at p0 - dir*head (points outward from A along the line toward B
+          // reversed), base two side vertices. Symmetric for B.
+          auto appendArrow = [&](const QVector3D &tip, const QVector3D &lineDir) {
+            const QVector3D base = tip + lineDir * head;
+            const QVector3D s1 = base + perp * half;
+            const QVector3D s2 = base - perp * half;
+            triVerts.append(Vertex{tip.x(), tip.y(), tip.z(), wr, wg, wb, wa});
+            triVerts.append(Vertex{s1.x(), s1.y(), s1.z(), wr, wg, wb, wa});
+            triVerts.append(Vertex{s2.x(), s2.y(), s2.z(), wr, wg, wb, wa});
+          };
+          appendArrow(p0, dir);    // arrow at A pointing toward B
+          appendArrow(p1, -dir);   // arrow at B pointing toward A
+        }
+
+        // ── Teal value box: a small translucent teal quad at the midpoint,
+        // drawn behind the value text (the value text itself renders in the
+        // QML panel — the box is a visual anchor per the screenshot). Teal
+        // #0fb-family (0.0, 0.73, 0.73) with alpha 0.85.
+        const QVector3D mid = (p0 + p1) * 0.5f;
+        const float tr = 0.0f, tg = 0.73f, tb = 0.73f, ta = 0.85f;
+        // Size the box in world mm (a few mm each side). Orient facing the
+        // camera by building a billboard-ish quad in the plane spanned by `dir`
+        // and `up` — good enough for the screenshot visual.
+        const float boxHalf = 2.5f;
+        QVector3D boxUp = (std::abs(dir.y()) < 0.9f) ? QVector3D(0, 1, 0) : QVector3D(1, 0, 0);
+        QVector3D boxPerp = QVector3D::crossProduct(dir, boxUp).normalized();
+        const QVector3D c0 = mid - boxPerp * boxHalf - boxUp * boxHalf;
+        const QVector3D c1 = mid + boxPerp * boxHalf - boxUp * boxHalf;
+        const QVector3D c2 = mid + boxPerp * boxHalf + boxUp * boxHalf;
+        const QVector3D c3 = mid - boxPerp * boxHalf + boxUp * boxHalf;
+        valueVerts.append(Vertex{c0.x(), c0.y(), c0.z(), tr, tg, tb, ta});
+        valueVerts.append(Vertex{c1.x(), c1.y(), c1.z(), tr, tg, tb, ta});
+        valueVerts.append(Vertex{c2.x(), c2.y(), c2.z(), tr, tg, tb, ta});
+        valueVerts.append(Vertex{c0.x(), c0.y(), c0.z(), tr, tg, tb, ta});
+        valueVerts.append(Vertex{c2.x(), c2.y(), c2.z(), tr, tg, tb, ta});
+        valueVerts.append(Vertex{c3.x(), c3.y(), c3.z(), tr, tg, tb, ta});
+      }
+    }
+  }
+
+  // Upload the three buffers (empty uploads are fine — vertex count stays 0).
+  const quint32 lineBytes = quint32(lineVerts.size() * int(sizeof(Vertex)));
+  const quint32 triBytes = quint32(triVerts.size() * int(sizeof(Vertex)));
+  const quint32 valueBytes = quint32(valueVerts.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_assemblyMeasureLineBuffer, lineBytes,
+                    m_assemblyMeasureLineBufferBytes, QRhiBuffer::VertexBuffer)
+      || !ensureBuffer(m_assemblyMeasureTriBuffer, triBytes,
+                       m_assemblyMeasureTriBufferBytes, QRhiBuffer::VertexBuffer)
+      || !ensureBuffer(m_assemblyMeasureValueBuffer, valueBytes,
+                       m_assemblyMeasureValueBufferBytes, QRhiBuffer::VertexBuffer))
+  {
+    return false;
+  }
+
+  m_assemblyMeasureLineVertexCount = quint32(lineVerts.size());
+  m_assemblyMeasureTriVertexCount = quint32(triVerts.size());
+  m_assemblyMeasureValueVertexCount = quint32(valueVerts.size());
+  if (m_assemblyMeasureLineBuffer && lineBytes > 0)
+    updates->uploadStaticBuffer(m_assemblyMeasureLineBuffer.get(), 0, lineBytes,
+                                lineVerts.constData());
+  if (m_assemblyMeasureTriBuffer && triBytes > 0)
+    updates->uploadStaticBuffer(m_assemblyMeasureTriBuffer.get(), 0, triBytes,
+                                triVerts.constData());
+  if (m_assemblyMeasureValueBuffer && valueBytes > 0)
+    updates->uploadStaticBuffer(m_assemblyMeasureValueBuffer.get(), 0, valueBytes,
+                                valueVerts.constData());
+  m_assemblyMeasureLineBufferUploaded = true;
+  m_assemblyMeasureTriBufferUploaded = true;
+  m_assemblyMeasureValueBufferUploaded = true;
+  return true;
+}
+
+void RhiViewportRenderer::renderAssemblyMeasureOverlay(QRhiCommandBuffer *cb)
+{
+  // Phase 92 (ASMMEASURE-02): draw the three overlay buffers. The dimension
+  // line uses the shared line pipeline (GL_LINES, white dashes); the arrowheads
+  // use the gizmo triangle pipeline (white, no depth write so they stay
+  // visible); the teal value box uses the translucent fill pipeline (source-
+  // alpha blend, no depth write). Drawn after the mesh + connectors so the
+  // overlay sits on top (matches 装配页_测量.png).
+  if (cb == nullptr)
+    return;
+
+  cb->setShaderResources();
+  // Dimension line (white dashes).
+  if (m_assemblyMeasureLineBuffer && m_assemblyMeasureLineVertexCount > 0
+      && m_linePipeline)
+  {
+    cb->setGraphicsPipeline(m_linePipeline.get());
+    const QRhiCommandBuffer::VertexInput binding(m_assemblyMeasureLineBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &binding);
+    cb->draw(m_assemblyMeasureLineVertexCount);
+  }
+  // Arrowheads (white triangles). Uses m_fillPipeline (raw world-space
+  // triangles) — NOT m_gizmoTriPipeline, which applies a gizmoCenter+scale
+  // displacement in its vertex shader and would offset the arrowheads.
+  if (m_assemblyMeasureTriBuffer && m_assemblyMeasureTriVertexCount > 0
+      && m_fillPipeline)
+  {
+    cb->setGraphicsPipeline(m_fillPipeline.get());
+    const QRhiCommandBuffer::VertexInput binding(m_assemblyMeasureTriBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &binding);
+    cb->draw(m_assemblyMeasureTriVertexCount);
+  }
+  // Teal value box (translucent fill).
+  if (m_assemblyMeasureValueBuffer && m_assemblyMeasureValueVertexCount > 0
+      && m_translucentFillPipeline)
+  {
+    cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+    const QRhiCommandBuffer::VertexInput binding(m_assemblyMeasureValueBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &binding);
+    cb->draw(m_assemblyMeasureValueVertexCount);
+  }
 }
 
 bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags)
