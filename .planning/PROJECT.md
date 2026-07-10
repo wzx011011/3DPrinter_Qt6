@@ -10,9 +10,23 @@ The project currently has a usable Qt6/QML shell, real model/project IO, real sl
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current State: v4.3 Real Thumbnail Capture And 3MF Round-Trip (Active)
+## Current State: post-v4.3 (planning next milestone)
 
-**Last shipped milestone:** v4.2 AssembleView Source-Truth Restoration (2026-07-09).
+**Last shipped milestone:** v4.3 Real Thumbnail Capture And 3MF Round-Trip (2026-07-10).
+
+**v4.3 shipped state (new in this milestone):**
+- Real QRhi texture readback thumbnail capture replaces the solid-color stub: offscreen single-sample `QRhiTexture` render-target at thumbnail size + `QRhiResourceUpdateBatch::readBackTexture()` + render-thread capture queue mirroring the `synchronize()` pattern + queued `QImage` callback to the GUI thread.
+- Both 3MF thumbnail write-side populate sites closed: `PlateData::plate_thumbnail` (per-plate XML `<metadata thumbnail_file="Metadata/plate_N.png">` reference) and `StoreParams::thumbnail_data` (project + per-plate PNG bytes), wired via a file-local `qimageToThumbnailData` helper producing `Format_RGBA8888` bytes symmetric with the read side.
+- Save→reload 3MF thumbnail round-trip closed end-to-end with exact RGBA8888 pixel match: a known synthesized thumbnail survives `saveProject` → fresh `loadFile` through the real `bbs_3mf` writer/reader, verified by automated tests asserting lossless byte equality (`thumbnailSaveReloadRoundTrip` + `thumbnailMultiPlateSaveReloadRoundTrip`).
+- Read-side `extractPlateThumbnailFrom3mf` helper reads `Metadata/plate_N.png` straight out of the archive via miniz; thumbnails restored AFTER `arrangeObjects` so the rebuild does not wipe them.
+- Mock thumbnail generators removed cleanly (no dead paths): real QRhi capture is the sole source; a `plateThumbnailBase64` accessor exposes the persisted `PartPlate::thumbnail()` for the UI plate-card fallback.
+- Closed v3.2 THUMB-02/THUMB-03 deferred items; unblocked the shared `store_bbs_3mf` writer (also unblocks FIXTURE-02).
+
+**Carry-forward from v4.2:** Prepare/Preview/settings dialog restoration + AssembleView source-truth restoration (explosion ratio, measurement gizmo, isolated data pool) all shipped. Default QRhi/D3D11 path owns all gizmo/pick/cut/wipe/Preview rendering.
+
+**Carry-forward outside v4.3:** Full GLGizmoMeasure feature-picking engine (needs per-volume ITS + scene raycaster), AssembleViewDataPool ModelObjectsClipper resource, auto filament-map recommendation + wipe-tower, D3D12 root-cause investigation, and CLI fixtures are deferred to future milestones. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from forward scope.
+
+## Previous State: v4.2 AssembleView Source-Truth Restoration (shipped 2026-07-09)
 
 **Shipped state:**
 - Prepare page visual/source-truth gap inventory exists as the canonical v3.9 region map.
@@ -30,25 +44,17 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 **Carry-forward outside v4.2:** D3D12 remains explicit opt-in future investigation. Full GLGizmoMeasure feature-picking engine (needs per-volume ITS + scene raycaster) and the AssembleViewDataPool ModelObjectsClipper resource are deferred to a future milestone. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows are removed from forward scope unless the user explicitly reopens them.
 
-## Current Milestone: v4.3 Real Thumbnail Capture And 3MF Round-Trip
+## Current Milestone: (none — planning next)
 
-**Goal:** Replace the current mock thumbnails with real QRhi framebuffer capture, and close the 3MF write side so thumbnails survive a save → reload round-trip — unblocking the v3.2 THUMB-02/THUMB-03 deferred items.
+**Status:** v4.3 shipped 2026-07-10. No active milestone. Run `/gsd:new-milestone` to define the next scope.
 
-**Scope rule:** Local/offline only. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from scope.
-
-**Target features:**
-- Real QRhi texture readback thumbnail capture (replace `RhiViewport::requestThumbnailCapture` solid-color stub).
-- MSAA resolve handling (sample count > 1).
-- Render-thread capture request queue + QImage callback (item → renderer → item).
-- 3MF write side populates `PlateData::plate_thumbnail` + `StoreParams::thumbnail_data`.
-- Upstream writer PNG encoding path no longer throws on the Qt6 pipeline.
-- save → reload pixel round-trip verification.
+**Scope rule (carry-forward):** Local/offline only. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from scope.
 
 ## Next Milestone
 
-v4.3 is the active milestone. Candidate backlog after v4.3:
+Not yet defined. Candidate backlog after v4.3:
 - Auto filament-map recommendation and wipe-tower geometry/rendering.
-- Missing CLI fixtures and deterministic argv-based GUI fixture loading for screenshots.
+- Missing CLI fixtures and deterministic argv-based GUI fixture loading for screenshots (FIXTURE-02 — now unblocked by v4.3's shared-writer fix).
 - D3D12 crash root cause and Vulkan evaluation after the SDK/runtime path is ready.
 - Full GLGizmoMeasure feature-picking engine + AssembleViewDataPool clipper (needs per-volume ITS).
 
@@ -77,22 +83,16 @@ These are current baseline capabilities inferred from implementation, git histor
 - v4.0 Preview page UI restoration shipped with 13/13 requirements satisfied, canonical verification passed, current runtime launch evidence, and final Preview screenshot evidence.
 - v4.1 Parameter settings dialogs source-truth restoration shipped with 14/14 requirements satisfied, milestone audit passed, canonical verifier passing, runtime settings visual evidence recorded, and startup deep links for deterministic visual inspection.
 - v4.2 AssembleView source-truth restoration shipped with 12/12 requirements satisfied, milestone audit passed (5/5 integration chains, 3/3 E2E flows), canonical build clean, and Prepare/Preview regression-free across all phases.
+- v4.3 Real Thumbnail Capture And 3MF Round-Trip shipped with 12/12 requirements satisfied, milestone audit tech_debt status (no critical blockers), real QRhi readback capture replacing the solid-color stub, 3MF write side closed, save→reload round-trip verified with exact RGBA8888 byte match (single-plate + multi-plate), mock generators removed cleanly, and the shared `store_bbs_3mf` writer unblocked.
 
 ### Active
 
-- [ ] Replace mock thumbnails with real QRhi framebuffer capture (multiple variants).
-- [ ] Implement MSAA-aware readback (resolve multisampled render target before readback).
-- [ ] Wire render-thread capture request queue + QImage callback (item → renderer → item).
-- [ ] Populate `PlateData::plate_thumbnail` + `StoreParams::thumbnail_data` on the 3MF write path.
-- [ ] Make the upstream `store_bbs_3mf` PNG encoding path work on the Qt6 pipeline (no exception).
-- [ ] Verify save → reload thumbnail pixel round-trip (THUMB-02 closure).
-- [ ] Verify with canonical build + ctest regression (Prepare/Preview/AssembleView not broken).
+(No active milestone — run `/gsd:new-milestone` to define the next scope.)
 
 ### Future
 
 - Auto filament-map recommendation and wipe-tower geometry/rendering.
-- Real GL/QRhi-capture thumbnails and 3MF pixel round-trip (`THUMB-03`) — now the active v4.3 milestone.
-- Full PLATE-09 save/reload state assertions after shared 3MF writer integration is fixed (`FIXTURE-02` carry-forward).
+- Full PLATE-09 save/reload state assertions — now unblocked by v4.3's shared-writer fix (`FIXTURE-02`).
 - D3D12 crash root cause and Vulkan evaluation after the SDK/runtime path is ready.
 - Full i18n translation coverage beyond strings touched by active workflows.
 
@@ -192,4 +192,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-10 after v4.3 milestone planning.*
+*Last updated: 2026-07-10 after v4.3 milestone shipped.*

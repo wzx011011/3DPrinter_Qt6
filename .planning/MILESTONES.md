@@ -1,5 +1,18 @@
 # Milestones History
 
+## v4.3 Real Thumbnail Capture And 3MF Round-Trip (Shipped: 2026-07-10)
+
+**Phases completed:** 5 phases, 5 plans, 19 tasks
+
+**Key accomplishments:**
+
+- Real QRhi texture readback thumbnail capture via a single-sample offscreen render-target + render-thread queue, replacing the solid-color stub
+- Both 3MF thumbnail write-side populate sites closed: PlateData::plate_thumbnail (per-plate XML reference) and StoreParams::thumbnail_data (project PNG bytes), wired via a file-local qimageToThumbnailData helper that produces Format_RGBA8888 bytes symmetric with the read side.
+- The save->reload 3MF thumbnail round-trip is closed end-to-end with an exact RGBA8888 pixel match: a KNOWN synthesized thumbnail survives saveProject -> loadFile through the real bbs_3mf writer/reader, verified by an automated test asserting lossless byte equality (THUMBRT-01/02).
+- Mock thumbnail generators removed cleanly (real QRhi capture is the sole source), the Phase 97 multi-plate write-side gap is fixed (one thumbnail_data entry per plate), and the canonical verifier + regression ctest + OWzxSlicer.exe launch all pass.
+
+---
+
 ## v4.2 AssembleView Source-Truth Restoration (Shipped: 2026-07-09)
 
 **Phases completed:** 5 phases, 5 plans
