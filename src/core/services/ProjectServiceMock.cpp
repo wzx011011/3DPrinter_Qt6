@@ -2,6 +2,7 @@
 
 #include <QFileInfo>
 #include <QFile>
+#include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -37,7 +38,15 @@
 #include <libslic3r/Geometry.hpp>
 #include <libslic3r/CutUtils.hpp>
 #include <libslic3r/Semver.hpp>
+#include <libslic3r/miniz_extension.hpp>  // Phase 97: open_zip_reader/close_zip_reader for thumbnail extraction
 #include <cstring> // memcpy
+
+#ifdef HAS_LIBSLIC3R
+// Phase 97 (THUMBRT-01): forward declaration -- the definition (with full
+// root-cause writeup) is below near qimageToThumbnailData. The model-load
+// read blocks (loadFile/loadProject) call it before the definition site.
+static QImage extractPlateThumbnailFrom3mf(const QString &archivePath, int plateIndex);
+#endif
 
 namespace
 {
@@ -605,12 +614,34 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                   bedType = int(opt->getInt());
                 if (auto *opt = plate->config.option("print_sequence"))
                   printSeq = int(opt->getInt());
-                if (auto *opt = plate->config.option("spiral_mode"))
-                  spiral = int(opt->getInt());
+                // Phase 97 fix (THUMBRT-01): spiral_mode is coBool; ConfigOptionBool
+                // does NOT override getInt (only ConfigOptionEnum/Int do, Config.hpp),
+                // so getInt() throws "Calling ConfigOption::getInt on a non-int
+                // ConfigOption". Read via the typed Bool accessor instead. This is
+                // the read-side mirror of the write-side spiral_mode fix at ~5159.
+                if (auto *opt = plate->config.option<Slic3r::ConfigOptionBool>("spiral_mode"))
+                  spiral = (opt->value ? 1 : 0);
               }
               receiver->pendingPlateBedType_.append(bedType);
               receiver->pendingPlatePrintSeq_.append(printSeq);
               receiver->pendingPlateSpiral_.append(spiral);
+
+              // Phase 97 fix (THUMBRT-01): restore the persisted per-plate
+              // thumbnail so it survives save->reload. The normal model-load
+              // path (_BBS_3MF_Importer::_load_model_from_file) does NOT extract
+              // the per-plate thumbnail bytes into plate_thumbnail.pixels -- it
+              // only copies the thumbnail_file STRING (bbs_3mf.cpp:2299). The
+              // byte extraction (_extract_from_archive at bbs_3mf.cpp:1640) lives
+              // only in load_gcode_3mf_from_stream, not the model-load path. So
+              // read the PNG straight out of the archive (Metadata/plate_N.png,
+              // matching the writer at bbs_3mf.cpp:6550) and decode it. tdefl PNG
+              // is lossless, so the decoded pixels are the exact saved pixels
+              // (Phase 96 format symmetry). See extractPlateThumbnailFrom3mf for
+              // the full root-cause writeup. (Mirrors the loadProject block.)
+              QImage loadedThumb;
+              if (plate)
+                loadedThumb = extractPlateThumbnailFrom3mf(localPath, plate->plate_index);
+              receiver->pendingPlateThumbnails_.append(loadedThumb);
 
               QSet<int> uniq;
               QList<int> objList;
@@ -834,6 +865,13 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
             if (pi < receiver->pendingPlateBedType_.size()) p->setBedType(receiver->pendingPlateBedType_[pi]);
             if (pi < receiver->pendingPlatePrintSeq_.size()) p->setPrintSequence(receiver->pendingPlatePrintSeq_[pi]);
             if (pi < receiver->pendingPlateSpiral_.size()) p->setSpiralMode(receiver->pendingPlateSpiral_[pi]);
+            // Phase 97 fix (THUMBRT-01): restore the persisted thumbnail so it
+            // survives save->reload. addInstance above invalidated the cache;
+            // setThumbnail repopulates it without triggering regeneration. (Mirrors
+            // the loadProject block at ~5754.)
+            if (pi < receiver->pendingPlateThumbnails_.size() &&
+                !receiver->pendingPlateThumbnails_[pi].isNull())
+              p->setThumbnail(receiver->pendingPlateThumbnails_[pi]);
           }
           // loadedPlateCount may exceed the reconstructed list (multi-plate 3MF whose
           // object membership wasn't fully parsed) — pad with empty plates to match.
@@ -5076,6 +5114,58 @@ static Slic3r::ThumbnailData qimageToThumbnailData(const QImage &img)
   }
   return td;  // is_valid()==true (pixels.size()==4*w*h)
 }
+
+// Phase 97 (THUMBRT-01) read-side fix: extract a per-plate thumbnail PNG
+// directly from a 3MF archive into a QImage so the thumbnail survives
+// save->reload.
+//
+// ROOT CAUSE this fixes: the normal model-load path
+// (_BBS_3MF_Importer::_load_model_from_file, bbs_3mf.cpp:1674) does NOT
+// extract per-plate thumbnail bytes into PlateData::plate_thumbnail.pixels --
+// it only copies the thumbnail_file STRING (bbs_3mf.cpp:2299, with the backup
+// path prepended). The thumbnail-byte extraction (_extract_from_archive at
+// bbs_3mf.cpp:1640) lives ONLY in load_gcode_3mf_from_stream (bbs_3mf.cpp:1492),
+// which is not the path Model::read_from_file takes for a model 3MF. So after
+// read_from_file, plate_thumbnail.pixels is empty and is_valid() is false, even
+// though the PNG bytes are present in the archive at Metadata/plate_N.png.
+// Phase 97's thumbnailSaveReloadRoundTrip test (the first end-to-end save->
+// reload) exposed this gap. The fix: read Metadata/plate_{plateIndex+1}.png
+// straight out of the zip and decode it. This mirrors what the upstream gcode
+// path does at bbs_3mf.cpp:1640-1643 (mz_zip_reader_extract_to_mem on the
+// thumbnail_file entry), just done here because the model-load path skips it.
+// tdefl PNG is lossless, so the decoded pixels are the exact saved pixels
+// (Phase 96 format symmetry holds for the decode).
+//
+// File-local (not a member, not in the public header) -- matches the
+// qimageToThumbnailData design. plateIndex is 0-based, matching
+// PlateData::plate_index; the archive entry is 1-based (Metadata/plate_1.png
+// for plateIndex 0), matching the writer at bbs_3mf.cpp:6550.
+static QImage extractPlateThumbnailFrom3mf(const QString &archivePath, int plateIndex)
+{
+  QImage thumb;  // null by default; an empty/non-existent entry leaves it null
+  if (archivePath.isEmpty() || plateIndex < 0)
+    return thumb;
+
+  const std::string pathUtf8 = QDir::toNativeSeparators(archivePath).toStdString();
+  mz_zip_archive archive;
+  mz_zip_zero_struct(&archive);
+  if (!Slic3r::open_zip_reader(&archive, pathUtf8))
+    return thumb;
+
+  const std::string entry = "Metadata/plate_" + std::to_string(plateIndex + 1) + ".png";
+  const int index = mz_zip_reader_locate_file(&archive, entry.c_str(), nullptr, 0);
+  if (index >= 0) {
+    mz_zip_archive_file_stat stat;
+    if (mz_zip_reader_file_stat(&archive, static_cast<mz_uint>(index), &stat)) {
+      const size_t size = stat.m_uncomp_size;
+      std::vector<unsigned char> buf(size);
+      if (mz_zip_reader_extract_to_mem(&archive, static_cast<mz_uint>(index), buf.data(), size, 0))
+        thumb.loadFromData(buf.data(), size, "PNG");
+    }
+  }
+  Slic3r::close_zip_reader(&archive);
+  return thumb;
+}
 #endif // HAS_LIBSLIC3R
 
 // v3.0 Phase 18 (D-10): build a PlateData list from a PartPlateList so multi-plate
@@ -5107,12 +5197,23 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
       // Bed-type / print-sequence / spiral live inside config (PlateData has no
       // standalone fields). Write them as config keys so they round-trip; these
       // are the same keys SliceService reads (SliceService.cpp:379-403).
+      // curr_bed_type / print_sequence / filament_map_mode are coEnum options
+      // (PrintConfig.cpp:1072,1829,2495); ConfigOptionEnum<T> overrides setInt
+      // (Config.hpp:1989) so setInt is valid for them. spiral_mode is a coBool
+      // option (PrintConfig.cpp:5822); ConfigOptionBool does NOT override setInt
+      // (Config.hpp:1809 -- the base ConfigOption::setInt at Config.hpp:275
+      // throws BadOptionTypeException "Calling ConfigOption::setInt on a
+      // non-int ConfigOption"), so it MUST be written via the typed
+      // ConfigOptionBool accessor. Phase 97 (THUMBRT round-trip) exposed this:
+      // the first test to drive saveProject with a real model crashed in
+      // buildPlateDataList on the spiral_mode setInt. Mirrors upstream
+      // set_key_value("spiral_mode", new ConfigOptionBool(...)) (Plater.cpp).
       if (auto *opt = pd->config.option("curr_bed_type", true))
         opt->setInt(p->bedType());
       if (auto *opt = pd->config.option("print_sequence", true))
         opt->setInt(p->printSequence());
-      if (auto *opt = pd->config.option("spiral_mode", true))
-        opt->setInt(p->spiralMode());
+      if (auto *opt = pd->config.option<Slic3r::ConfigOptionBool>("spiral_mode", true))
+        opt->value = (p->spiralMode() != 0);
 
       // v3.2 Phase 31 (FMAP-01/02): populate filament_maps from the plate's
       // manual mapping (1-based, matching upstream PlateData::filament_maps at
@@ -5495,8 +5596,12 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
               bedType = int(opt->getInt());
             if (auto *opt = plate->config.option("print_sequence"))
               printSeq = int(opt->getInt());
-            if (auto *opt = plate->config.option("spiral_mode"))
-              spiral = int(opt->getInt());
+            // Phase 97 fix (THUMBRT-01): spiral_mode is coBool; getInt() throws on
+            // ConfigOptionBool (it does NOT override getInt). Read via the typed
+            // Bool accessor instead. (Mirrors the loadFile read at ~608 and the
+            // write-side fix at ~5159.)
+            if (auto *opt = plate->config.option<Slic3r::ConfigOptionBool>("spiral_mode"))
+              spiral = (opt->value ? 1 : 0);
           }
           receiver->pendingPlateBedType_.append(bedType);
           receiver->pendingPlatePrintSeq_.append(printSeq);
@@ -5515,17 +5620,20 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           receiver->pendingPlateFilamentMaps_.append(fmap);
           receiver->pendingPlateFilamentMapMode_.append(fmapMode);
 
-          // v3.2 Phase 30 (THUMB-02): extract plate_thumbnail back into a QImage
-          // so it survives save→reload (D-30-8 round-trip). The pixels were read
-          // by bbs_3mf.cpp:1640 (_extract_from_archive) into plate->plate_thumbnail.pixels.
+          // v3.2 Phase 30 (THUMB-02) + Phase 97 fix (THUMBRT-01): restore the
+          // persisted per-plate thumbnail so it survives save->reload. The
+          // normal model-load path (_BBS_3MF_Importer::_load_model_from_file)
+          // does NOT extract the per-plate thumbnail bytes into
+          // plate_thumbnail.pixels -- it only copies the thumbnail_file STRING
+          // (bbs_3mf.cpp:2299); the byte extraction lives only in
+          // load_gcode_3mf_from_stream. So read the PNG straight out of the
+          // archive (Metadata/plate_N.png) and decode it. tdefl PNG is lossless,
+          // so the decoded pixels are the exact saved pixels (Phase 96 format
+          // symmetry). See extractPlateThumbnailFrom3mf for the full root-cause
+          // writeup. (Mirrors the loadFile block.)
           QImage loadedThumb;
-          if (plate && plate->plate_thumbnail.is_valid()) {
-            const Slic3r::ThumbnailData &td = plate->plate_thumbnail;
-            QImage raw(reinterpret_cast<const uchar *>(td.pixels.data()),
-                       static_cast<int>(td.width), static_cast<int>(td.height),
-                       static_cast<int>(td.width) * 4, QImage::Format_RGBA8888);
-            if (!raw.isNull()) loadedThumb = raw.copy();  // detach from the buffer
-          }
+          if (plate)
+            loadedThumb = extractPlateThumbnailFrom3mf(localPath, plate->plate_index);
           receiver->pendingPlateThumbnails_.append(loadedThumb);
 
           QSet<int> uniq;

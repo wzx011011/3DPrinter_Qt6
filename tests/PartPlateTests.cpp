@@ -15,6 +15,7 @@
 #include <QDir>
 #include <QDateTime>
 #include <QFileInfo>
+#include <QColor>
 #include <QSignalSpy>
 #include <cstring>
 
@@ -492,7 +493,12 @@ void PartPlateTests::thumbnailSaveReloadRoundTrip() {
   const int thumbH = 32;
   const QRgb knownColor = qRgba(123, 45, 67, 255);  // recognizable, non-gray
   QImage savedThumb(thumbW, thumbH, QImage::Format_RGBA8888);
-  savedThumb.fill(knownColor);
+  // Fill via QColor (NOT fill(QRgb)): QImage::fill(uint pixel) stores the raw
+  // uint in NATIVE byte order, which for RGBA8888 on little-endian swaps R/B
+  // (the ARGB 0xFF7B2D43 becomes bytes 43 2D 7B FF = R=67,B=123 in memory).
+  // fill(QColor) converts the color to the target format correctly so the
+  // pixels actually hold R=123,G=45,B=67 and knownColor matches on reload.
+  savedThumb.fill(QColor(123, 45, 67, 255));
   QVERIFY2(!savedThumb.isNull(), "synthesized thumbnail must be non-null");
   // Install on plate 0 via the sanctioned test seam (ProjectServiceMock.h:80).
   service.plateListMut()->plate(0)->setThumbnail(savedThumb);
