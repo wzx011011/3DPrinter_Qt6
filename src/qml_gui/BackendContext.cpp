@@ -181,6 +181,10 @@ BackendContext::BackendContext(QObject *parent)
   connect(settingsViewModel_, &SettingsViewModel::languageIndexChanged, this,
           [this]()
           { applyLanguage(settingsViewModel_->languageIndex()); });
+  // 初始同步：启动时立即加载持久化的语言翻译（默认 zh_CN）。
+  // applyLanguage 只连接到 languageIndexChanged 信号，而构造时 m_languageIndex
+  // 默认已是 0 不会触发信号，导致程序以英文启动。此处补上初始调用。
+  applyLanguage(settingsViewModel_->languageIndex());
 
   // 同步撤销栈上限设置到 UndoRedoManager（对齐上游 UndoRedo::UndoRedoStackLimit）
   connect(settingsViewModel_, &SettingsViewModel::settingsChanged, this,
