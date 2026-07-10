@@ -5171,15 +5171,31 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
     Slic3r::PlateDataPtrs plateData = buildPlateDataList(m_plateList.get());
     params.plate_data_list = plateData;
 
-    // v3.2 Phase 30 (THUMB-02 partial): the 3MF writer reads per-plate
-    // thumbnails from store_params.thumbnail_data (bbs_3mf.cpp:6133). Populating
-    // it here would persist thumbnails, but the upstream writer's PNG pixel
-    // encoding path (_add_thumbnail_file_to_archive) is coupled to real GL
-    // capture and throws a non-std exception on the Qt6 mock pipeline.
-    // Per-plate thumbnail CACHE (PartPlate::m_thumbnail) + variant generation
-    // (THUMB-01) are implemented and tested; the write-side pixel persistence +
-    // full save→reload round-trip is deferred to THUMB-03 (v3.3+, needs real
-    // GL capture + validated writer pixel format).
+    // Phase 96 (THUMBWRITE-02): populate StoreParams::thumbnail_data with a
+    // real captured thumbnail so the writer archives it as
+    // Metadata/plate_1.png (bbs_3mf.cpp:6133-6143 -> _add_thumbnail_file_to_
+    // archive at 6543). With real RGBA pixels, tdefl_write_image_to_png_file_
+    // in_memory_ex (bbs_3mf.cpp:6548) returns non-null -> mz_zip_writer_add_mem
+    // (6551) succeeds -> no exception (THUMBWRITE-03). The v3.2 "throws" was
+    // the empty/mock-pixel path; real pixels make it complete.
+    //
+    // LIFETIME: StoreParams::thumbnail_data is vector<ThumbnailData*> (raw
+    // pointers, bbs_3mf.hpp:235). The pointed-to ThumbnailData MUST outlive
+    // store_bbs_3mf. projectThumb is a single local declared in this block, so
+    // its address is stable until block exit — past the store_bbs_3mf call at
+    // :5187 and the release_PlateData_list cleanup at :5198. Do NOT push into a
+    // vector that reallocates after taking the address (a single local avoids
+    // dangling entirely).
+    Slic3r::ThumbnailData projectThumb;
+    const OWzx::PartPlate *projPlate = m_plateList
+        ? (m_plateList->currentPlateIndex() >= 0
+               ? m_plateList->plate(m_plateList->currentPlateIndex())
+               : m_plateList->plate(0))
+        : nullptr;
+    if (projPlate && !projPlate->thumbnail().isNull())
+      projectThumb = qimageToThumbnailData(projPlate->thumbnail());
+    if (projectThumb.is_valid())
+      params.thumbnail_data.push_back(&projectThumb);
 
     bool ok = false;
     try
