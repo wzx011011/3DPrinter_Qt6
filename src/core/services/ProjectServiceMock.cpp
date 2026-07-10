@@ -5042,6 +5042,42 @@ void ProjectServiceMock::clearProject()
   emit plateSelectionChanged();
 }
 
+#ifdef HAS_LIBSLIC3R
+// Phase 96 (THUMBWRITE-01/02): convert a captured QImage into a
+// Slic3r::ThumbnailData (width/height/RGBA bytes) for the 3MF writer.
+// Format symmetry: the READ side (ProjectServiceMock.cpp:5455) wraps
+// ThumbnailData::pixels as QImage::Format_RGBA8888, so the write side MUST
+// produce RGBA8888 bytes (convertToFormat) for a clean round-trip.
+// File-local (not a member) to keep bbs_3mf.hpp out of the public header,
+// matching the buildPlateDataList design (ProjectServiceMock.cpp:5048-5049).
+// NOTE: do NOT call ThumbnailData::set(w,h) — it fills the buffer with white
+// (255) defaults (ThumbnailData.cpp:5-18); we want real captured pixels, so
+// resize + memcpy the RGBA bytes directly.
+static Slic3r::ThumbnailData qimageToThumbnailData(const QImage &img)
+{
+  Slic3r::ThumbnailData td;  // width=0/height=0/pixels empty (is_valid()==false)
+  if (img.isNull())
+    return td;  // empty cache -> writer silently skips (bbs_3mf.cpp:6135,7987 is_valid guard)
+  const QImage rgba = img.convertToFormat(QImage::Format_RGBA8888);
+  const int w = rgba.width();
+  const int h = rgba.height();
+  if (w <= 0 || h <= 0)
+    return td;
+  td.width = static_cast<unsigned int>(w);
+  td.height = static_cast<unsigned int>(h);
+  td.pixels.resize(static_cast<size_t>(w) * static_cast<size_t>(h) * 4);
+  // RGBA8888 has a tightly-packed stride of w*4 (no padding for this format);
+  // copy scanline-by-scanline to be robust against any future format that pads
+  // the stride (matches the read side's per-row wrapping at :5455-5466).
+  for (int y = 0; y < h; ++y) {
+    const uchar *src = rgba.constScanLine(y);
+    uchar *dst = td.pixels.data() + static_cast<size_t>(y) * w * 4;
+    std::memcpy(dst, src, static_cast<size_t>(w) * 4);
+  }
+  return td;  // is_valid()==true (pixels.size()==4*w*h)
+}
+#endif // HAS_LIBSLIC3R
+
 // v3.0 Phase 18 (D-10): build a PlateData list from a PartPlateList so multi-plate
 // state round-trips through store_bbs_3mf. The caller (saveProject) must
 // release_PlateData_list() after use to free the heap PlateData objects.
