@@ -143,6 +143,14 @@ private slots:
   // ctest without launching the app.
   void rhiViewportThumbnailCaptureUsesRealReadback();
 
+  // Phase 96-01 (THUMBWRITE-01/02/03): source-audit guard proving the 3MF
+  // write-side thumbnail hooks are populated with real captured pixels
+  // (qimageToThumbnailData helper + plate_thumbnail populate + thumbnail_data
+  // populate + deferred markers gone). Source-level only so it runs in the
+  // regression ctest. Runtime save-reload round-trip proof is routed to
+  // Phase 97.
+  void projectServiceWrites3mfThumbnails();
+
 private:
   QString readSource(const QString &relativePath) const;
 };
@@ -3438,6 +3446,53 @@ void QmlUiAuditTests::rhiViewportThumbnailCaptureUsesRealReadback()
            "RhiViewport::requestThumbnailCapture must set the render-thread request flag");
   QVERIFY2(viewportSource.contains(QStringLiteral("m_thumbnailSize = qMax(32, size)")),
            "RhiViewport::requestThumbnailCapture must clamp the thumbnail size to >= 32");
+}
+
+void QmlUiAuditTests::projectServiceWrites3mfThumbnails()
+{
+  // Phase 96-01 (THUMBWRITE-01/02/03): source-audit guard proving the 3MF
+  // write-side thumbnail hooks are populated with real captured pixels.
+  // Mirrors the rhiViewportThumbnailCaptureUsesRealReadback pattern
+  // (Phase 95): reads ProjectServiceMock.cpp and asserts the replacement is
+  // real. Source-level only — no 3MF save runtime dependency — so this runs
+  // in the regression ctest. Runtime save-reload round-trip proof is routed
+  // to Phase 97.
+  const QString src = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  QVERIFY2(!src.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+
+  // (1) qimageToThumbnailData helper exists (THUMBWRITE-01/02 enabler):
+  //     file-local, Format_RGBA8888 conversion for read-side symmetry.
+  QVERIFY2(src.contains(QStringLiteral("qimageToThumbnailData")),
+           "ProjectServiceMock.cpp must define a qimageToThumbnailData helper");
+  QVERIFY2(src.contains(QStringLiteral("convertToFormat(QImage::Format_RGBA8888")),
+           "qimageToThumbnailData must convertToFormat(Format_RGBA8888) for read-side symmetry (ProjectServiceMock.cpp:5455)");
+
+  // (2) buildPlateDataList populates PlateData::plate_thumbnail (THUMBWRITE-01):
+  //     the per-plate populate guarded by !thumbnail().isNull().
+  QVERIFY2(src.contains(QStringLiteral("pd->plate_thumbnail = qimageToThumbnailData")),
+           "buildPlateDataList must populate pd->plate_thumbnail via qimageToThumbnailData");
+  QVERIFY2(src.contains(QStringLiteral("!p->thumbnail().isNull()")),
+           "buildPlateDataList must guard the plate_thumbnail populate with !p->thumbnail().isNull()");
+
+  // (3) saveProject populates StoreParams::thumbnail_data (THUMBWRITE-02):
+  //     a real ThumbnailData pointer pushed before store_bbs_3mf.
+  QVERIFY2(src.contains(QStringLiteral("params.thumbnail_data.push_back")),
+           "saveProject must push a ThumbnailData* into params.thumbnail_data before store_bbs_3mf");
+
+  // (4) The deferred-write markers are gone (THUMBWRITE-01/02 closure):
+  //     the v3.2 "deferred to THUMB-03" / "throws a non-std exception"
+  //     comments that documented the omitted write side must no longer be
+  //     present at the populate sites.
+  QVERIFY2(!src.contains(QStringLiteral("throws a non-std exception on the Qt6 mock pipeline")),
+           "ProjectServiceMock.cpp must not retain the 'throws a non-std exception' deferred-write marker (THUMBWRITE-03: real pixels make the PNG path complete)");
+  QVERIFY2(!src.contains(QStringLiteral("deferred to THUMB-03")),
+           "ProjectServiceMock.cpp must not retain the 'deferred to THUMB-03' marker at the thumbnail populate sites");
+
+  // (5) HAS_LIBSLIC3R guard present around the write-side code (the store
+  //     call is guarded at ProjectServiceMock.cpp:5109; the thumbnail
+  //     populate must inherit the same guard).
+  QVERIFY2(src.contains(QStringLiteral("#ifdef HAS_LIBSLIC3R")),
+           "ProjectServiceMock.cpp must guard the libslic3r write-side under #ifdef HAS_LIBSLIC3R");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
