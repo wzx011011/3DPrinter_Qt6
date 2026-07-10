@@ -12,9 +12,9 @@
 
 ### RHI Capture Infrastructure
 
-- [ ] **THUMBCAP-01**: The Qt6 app captures a real screenshot of the current 3D viewport via QRhi texture readback, replacing the `RhiViewport::requestThumbnailCapture` solid-color stub (`RhiViewport.cpp:476`) so the captured pixels reflect the actual rendered scene (bed, plate, model mesh, gizmos).
-- [ ] **THUMBCAP-02**: The capture handles multisampled (MSAA) render targets — the viewport sets sample count > 1 (`RhiViewport.cpp:43`) — so the readback resolves the multisampled color attachment before producing a non-multisampled QImage.
-- [ ] **THUMBCAP-03**: The capture runs on the render thread (inside `RhiViewportRenderer::render`) via a cross-thread request queue (item → renderer), and delivers the resulting QImage back to the item/GUI thread via a callback, mirroring the existing `m_fitRequestCount`/`m_viewPreset` request pattern.
+- [x] **THUMBCAP-01**: The Qt6 app captures a real screenshot of the current 3D viewport via QRhi texture readback, replacing the `RhiViewport::requestThumbnailCapture` solid-color stub (`RhiViewport.cpp:476`) so the captured pixels reflect the actual rendered scene (bed, plate, model mesh, gizmos).
+- [x] **THUMBCAP-02**: The capture handles multisampled (MSAA) render targets — the viewport sets sample count > 1 (`RhiViewport.cpp:43`) — so the readback resolves the multisampled color attachment before producing a non-multisampled QImage.
+- [x] **THUMBCAP-03**: The capture runs on the render thread (inside `RhiViewportRenderer::render`) via a cross-thread request queue (item → renderer), and delivers the resulting QImage back to the item/GUI thread via a callback, mirroring the existing `m_fitRequestCount`/`m_viewPreset` request pattern.
 
 ### 3MF Write Integration
 
@@ -63,9 +63,9 @@ Explicitly excluded to keep v4.3 focused.
 |---|---|---|
 | THUMBAUDIT-01 | Phase 94 | Complete |
 | THUMBAUDIT-02 | Phase 94 | Complete |
-| THUMBCAP-01 | Phase 95 | Not started |
-| THUMBCAP-02 | Phase 95 | Not started |
-| THUMBCAP-03 | Phase 95 | Not started |
+| THUMBCAP-01 | Phase 95 | Complete |
+| THUMBCAP-02 | Phase 95 | Complete |
+| THUMBCAP-03 | Phase 95 | Complete |
 | THUMBWRITE-01 | Phase 96 | Not started |
 | THUMBWRITE-02 | Phase 96 | Not started |
 | THUMBWRITE-03 | Phase 96 | Not started |
@@ -81,4 +81,4 @@ Explicitly excluded to keep v4.3 focused.
 
 ---
 *Requirements defined: 2026-07-10*
-*Last updated: 2026-07-10 after roadmap creation (Phases 94-98)*
+*Last updated: 2026-07-10 after Phase 95 plan 01 complete (THUMBCAP-01/02/03 marked complete)*

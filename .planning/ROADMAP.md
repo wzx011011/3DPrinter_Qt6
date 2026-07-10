@@ -32,7 +32,7 @@
 ## Phases
 
 - [x] Phase 94: Thumbnail Capture Gap Audit
-- [ ] Phase 95: QRhi Thumbnail Capture Infrastructure
+- [x] Phase 95: QRhi Thumbnail Capture Infrastructure
 - [ ] Phase 96: 3MF Thumbnail Write Integration
 - [ ] Phase 97: Thumbnail Save-Reload Round-Trip
 - [ ] Phase 98: Thumbnail Verification And Cleanup
@@ -56,13 +56,14 @@ Success criteria:
 
 ### Phase 95: QRhi Thumbnail Capture Infrastructure
 
-**Status:** Not started
-**Plans:** 0/1
+**Status:** Complete
+**Plans:** 1/1
+**Shipped:** 2026-07-10 (commit fc4aadb + docs commit)
 
 Success criteria:
-1. `RhiViewport::requestThumbnailCapture` produces a real screenshot reflecting the rendered scene (bed/plate/mesh/gizmos), replacing the solid-color stub.
-2. The capture handles the MSAA render target (sample count > 1) — readback resolves the multisampled color attachment to a non-multisampled QImage.
-3. The capture runs on the render thread via a request queue (item → renderer) and delivers the QImage back to the GUI thread via callback (mirroring the `m_fitRequestCount`/`m_viewPreset` pattern).
+1. `RhiViewport::requestThumbnailCapture` produces a real screenshot reflecting the rendered scene (bed/plate/mesh/gizmos), replacing the solid-color stub. — MET: solid-color `#18222c` stub removed; offscreen RT reuses on-screen scene vertex buffers (bed fill + grid lines + model mesh).
+2. The capture handles the MSAA render target (sample count > 1) — readback resolves the multisampled color attachment to a non-multisampled QImage. — MET: offscreen RT is single-sample (sample count 1), eliminating the MSAA resolve step entirely (frozen decision 2).
+3. The capture runs on the render thread via a request queue (item → renderer) and delivers the QImage back to the GUI thread via callback (mirroring the `m_fitRequestCount`/`m_viewPreset` pattern). — MET: `m_thumbnailRequestPending` mirrored via `synchronize()`; async readback polled next frame; `deliverThumbnail` posted via `QMetaObject::invokeMethod(..., Qt::QueuedConnection)`.
 
 ### Phase 96: 3MF Thumbnail Write Integration
 
@@ -105,12 +106,12 @@ Success criteria:
 
 ## Next Step
 
-Plan Phase 94 after this roadmap is approved:
+Plan Phase 96 after this roadmap is approved:
 
 ```text
-$gsd-plan-phase 94
+$gsd-plan-phase 96
 ```
 
 ---
 
-*Last updated: 2026-07-10 at v4.3 milestone start.*
+*Last updated: 2026-07-10 after Phase 95 plan 01 complete.*
