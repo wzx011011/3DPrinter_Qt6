@@ -4225,6 +4225,11 @@ int EditorViewModel::plateExtruderCount(int plateIndex) const
   return projectService_ ? projectService_->plateExtruderCount(plateIndex) : 1;
 }
 
+QString EditorViewModel::plateThumbnailBase64(int plateIndex) const
+{
+  return projectService_ ? projectService_->plateThumbnailBase64(plateIndex) : QString();
+}
+
 QString EditorViewModel::generatePlateThumbnail(int plateIndex, int size)
 {
   return projectService_ ? projectService_->generatePlateThumbnail(plateIndex, size) : QString();

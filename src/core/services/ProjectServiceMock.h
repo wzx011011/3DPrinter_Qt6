@@ -328,6 +328,12 @@ public:
   Q_INVOKABLE bool setPlateOtherLayersSeqOrder(int plateIndex, int entryIndex, const QVariantList &order);
   /// 获取当前平板使用的耗材数（Mock 模式基于对象数推断）
   Q_INVOKABLE int plateExtruderCount(int plateIndex) const;
+  // Phase 98 (THUMBVERIFY-01): real persisted-thumbnail accessor for the UI
+  // plate-card fallback. Returns the cached PartPlate::thumbnail() as base64
+  // PNG (empty when no thumbnail is cached -- never fabricates a placeholder).
+  // Replaces the mock generatePlateThumbnail QPainter fallback so non-current
+  // plates display their saved/reloaded thumbnail instead of a fake.
+  Q_INVOKABLE QString plateThumbnailBase64(int plateIndex) const;
   /// 生成平板缩略图（对齐上游 PartPlate::thumbnail_data，Mock 模式使用 QPainter 合成）
   /// 返回 base64 编码的 PNG 图片供 QML Image 组件使用
   Q_INVOKABLE QString generatePlateThumbnail(int plateIndex, int size = 64);

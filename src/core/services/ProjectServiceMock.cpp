@@ -4291,6 +4291,25 @@ namespace
   }
 }
 
+QString ProjectServiceMock::plateThumbnailBase64(int plateIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!m_plateList) return {};
+  const OWzx::PartPlate *p = m_plateList->plate(plateIndex);
+  if (!p || !p->hasThumbnail()) return {};  // empty -- no fake placeholder
+  const QImage img = p->thumbnail();
+  if (img.isNull()) return {};
+  QByteArray ba;
+  QBuffer buf(&ba);
+  buf.open(QIODevice::WriteOnly);
+  img.save(&buf, "PNG");
+  return QString::fromLatin1(ba.toBase64());
+#else
+  Q_UNUSED(plateIndex);
+  return {};
+#endif
+}
+
 QString ProjectServiceMock::generatePlateThumbnail(int plateIndex, int size)
 {
   const int count = plateObjectCount(plateIndex);

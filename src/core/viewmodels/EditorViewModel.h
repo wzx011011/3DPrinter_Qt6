@@ -563,6 +563,9 @@ public:
   Q_INVOKABLE bool moveSelectedObjectToPlate(int targetPlateIndex);
   /// 平板缩略图颜色（Mock 模式：基于平板对象数生成独特颜色，对齐上游 PartPlate thumbnail）
   Q_INVOKABLE QString plateThumbnailColor(int plateIndex) const;
+  // Phase 98 (THUMBVERIFY-01): persisted-thumbnail accessor for QML. Empty
+  // when no thumbnail is cached (plate-card renders nothing, not a mock).
+  Q_INVOKABLE QString plateThumbnailBase64(int plateIndex) const;
   /// 重命名对象（对齐上游 Plater::rename_object）
   Q_INVOKABLE bool renameObject(int index, const QString &newName);
   /// 移动对象排序位置（对齐上游 GUI_ObjectList 拖拽重排序）

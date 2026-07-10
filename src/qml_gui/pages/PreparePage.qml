@@ -3154,7 +3154,7 @@ Item {
                                         var glThumb = viewport3d.lastThumbnailData
                                         if (glThumb.length > 0 && index === root.editorVm.currentPlateIndex)
                                             return root.thumbnailSource(glThumb)
-                                        return root.thumbnailSource(root.editorVm.generatePlateThumbnail(index, 80))
+                                        return root.thumbnailSource(root.editorVm.plateThumbnailBase64(index))
                                     }
                                 }
                             }
