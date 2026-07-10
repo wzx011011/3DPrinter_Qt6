@@ -13,8 +13,10 @@
 
 #include <QtTest>
 #include <QDir>
+#include <QDateTime>
 #include <QFileInfo>
 #include <QSignalSpy>
+#include <cstring>
 
 #include "core/model/PartPlate.h"
 #include "core/model/PartPlateList.h"
@@ -66,10 +68,12 @@ class PartPlateTests final : public QObject {
   void thumbnailCacheInvalidation();  // PartPlate unit test (no libslic3r)
 #ifdef HAS_LIBSLIC3R
   void thumbnailVariantsProduceValidData();  // THUMB-01
-  void thumbnailRoundTrip();                 // THUMB-02
+  void thumbnailRoundTrip();                 // THUMB-02 (in-memory cache)
+  void thumbnailSaveReloadRoundTrip();       // Phase 97 (THUMBRT-01/02): save->reload 3MF pixel round-trip
 #else
   void thumbnailVariantsProduceValidData() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void thumbnailRoundTrip() { QSKIP("Requires HAS_LIBSLIC3R"); }
+  void thumbnailSaveReloadRoundTrip() { QSKIP("Requires HAS_LIBSLIC3R"); }
 #endif
 
   // ── FMAP-01/03 tests (v3.2 Phase 31) ────────────────────────────────────
@@ -457,6 +461,90 @@ void PartPlateTests::thumbnailRoundTrip() {
   service.plateListMut()->plate(0)->addInstance(0, 0);
   QVERIFY2(!service.plateListConst()->plate(0)->hasThumbnail(),
            "cache must be invalidated by content change");
+}
+
+void PartPlateTests::thumbnailSaveReloadRoundTrip() {
+  // Phase 97 (THUMBRT-01/02): full save->reload 3MF pixel round-trip.
+  // Closes THUMB-02: the v3.2 thumbnailRoundTrip slot above verified only the
+  // in-memory cache contract and explicitly deferred the 3MF pixel round-trip
+  // to THUMB-03. Phase 96 closed the write side (PlateData::plate_thumbnail +
+  // StoreParams::thumbnail_data via qimageToThumbnailData); the read side
+  // (ProjectServiceMock.cpp:5518-5529 -> applied at 5721-5723) has been complete
+  // since v3.2. This test proves the two halves meet end-to-end.
+  //
+  // ISOLATION: uses a KNOWN synthesized QImage (NOT RHI capture, NOT the
+  // QPainter mock generator) set directly via plateListMut() so PERSISTENCE
+  // (Phase 97) is verified independently of CAPTURE (Phase 95).
+
+  // -- ARRANGE: load a real model (saveProject's real-3MF branch needs it).
+  ProjectServiceMock service;
+  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  QVERIFY(service.loadFile(kStlPath));
+  QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(service.modelCount() >= 1, "loadFile must add >= 1 object");
+  QVERIFY2(service.plateCount() >= 1, "loaded project must have >= 1 plate");
+
+  // -- ARRANGE: synthesize a KNOWN recognizable thumbnail (RGBA8888 so the
+  // round-trip is byte-symmetric: write convertToFormat(RGBA8888) at
+  // ProjectServiceMock.cpp:5061 <-> read Format_RGBA8888 at :5526).
+  const int thumbW = 32;
+  const int thumbH = 32;
+  const QRgb knownColor = qRgba(123, 45, 67, 255);  // recognizable, non-gray
+  QImage savedThumb(thumbW, thumbH, QImage::Format_RGBA8888);
+  savedThumb.fill(knownColor);
+  QVERIFY2(!savedThumb.isNull(), "synthesized thumbnail must be non-null");
+  // Install on plate 0 via the sanctioned test seam (ProjectServiceMock.h:80).
+  service.plateListMut()->plate(0)->setThumbnail(savedThumb);
+  QVERIFY2(service.plateListConst()->plate(0)->hasThumbnail(),
+           "plate 0 must hold the synthesized thumbnail after setThumbnail");
+
+  // -- ACT: save to a temp .3mf (do not pollute the repo).
+  const QString tempPath = QDir::tempPath() + QStringLiteral(
+      "/owzx_thumb_roundtrip_%1.3mf").arg(QDateTime::currentMSecsSinceEpoch());
+  QVERIFY2(service.saveProject(tempPath),
+           qPrintable(QStringLiteral("saveProject must succeed: %1").arg(tempPath)));
+  QVERIFY2(QFileInfo::exists(tempPath),
+           "the saved .3mf file must exist on disk");
+
+  // -- ACT: reload into a FRESH service (exercises the read side in isolation).
+  ProjectServiceMock reloaded;
+  QSignalSpy reloadSpy(&reloaded, &ProjectServiceMock::loadFinished);
+  QVERIFY(reloaded.loadFile(tempPath));
+  QVERIFY2(reloadSpy.isValid(), "loadFinished signal spy must be valid");
+  QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);
+  QVERIFY2(reloaded.plateCount() >= 1,
+           "reloaded project must have >= 1 plate");
+
+  // -- ASSERT: the thumbnail survived (THUMBRT-01).
+  const OWzx::PartPlate *reloadedPlate = reloaded.plateListConst()->plate(0);
+  QVERIFY2(reloadedPlate != nullptr, "reloaded plate 0 must exist");
+  QVERIFY2(reloadedPlate->hasThumbnail(),
+           "THUMBRT-01: reloaded plate 0 must have a thumbnail (read side restored it)");
+  const QImage reloadedThumb = reloadedPlate->thumbnail();
+  QCOMPARE(reloadedThumb.width(), thumbW);
+  QCOMPARE(reloadedThumb.height(), thumbH);
+
+  // Recognizable-pixel assertion (the primary survival proof). Convert to
+  // RGBA8888 so the comparison is format-stable regardless of how Qt
+  // internally represents the reloaded image.
+  const QImage reloadedRgba = reloadedThumb.convertToFormat(QImage::Format_RGBA8888);
+  QCOMPARE(reloadedRgba.pixel(0, 0), knownColor);
+  QCOMPARE(reloadedRgba.pixel(thumbW - 1, thumbH - 1), knownColor);
+
+  // Exact-buffer match (the preferred strict assertion -- tdefl PNG is
+  // lossless and the RGBA8888 round-trip is byte-symmetric per Phase 96
+  // W-02). If this is ever fragile due to a format-conversion subtlety,
+  // the dimensions + recognizable-pixel assertions above already prove
+  // survival; document the fragility and keep the looser assertions.
+  const QImage savedRgba = savedThumb.convertToFormat(QImage::Format_RGBA8888);
+  QCOMPARE(reloadedRgba.sizeInBytes(), savedRgba.sizeInBytes());
+  QVERIFY2(std::memcmp(reloadedRgba.constBits(), savedRgba.constBits(),
+                       savedRgba.sizeInBytes()) == 0,
+           "THUMBRT-01: reloaded thumbnail RGBA8888 bytes must match the saved bytes (lossless PNG round-trip)");
+
+  // -- CLEANUP: do not leave the temp artifact behind.
+  QFile::remove(tempPath);
 }
 #endif  // HAS_LIBSLIC3R
 
