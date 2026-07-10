@@ -5122,10 +5122,21 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
       if (auto *opt = pd->config.option("filament_map_mode", true))
         opt->setInt(p->filamentMapMode());
 
-      // v3.2 Phase 30 (THUMB-02): plate_thumbnail pixel population deferred to
-      // THUMB-03 (v3.3+) — the writer's PNG encoding path is coupled to real
-      // GL capture. The per-plate QImage cache + variant generation (THUMB-01)
-      // are implemented; persistence follows in THUMB-03.
+      // Phase 96 (THUMBWRITE-01): populate plate_thumbnail from the plate's
+      // captured QImage cache (PartPlate::thumbnail(), populated by Phase 95
+      // QRhi capture). The writer emits the XML <metadata thumbnail_file=
+      // "Metadata/plate_N.png"> reference when plate_thumbnail.is_valid()
+      // (bbs_3mf.cpp:7987) and writes the PNG bytes from StoreParams::
+      // thumbnail_data (bbs_3mf.cpp:6133 — wired in saveProject). Empty cache
+      // -> empty ThumbnailData -> writer silently skips (graceful). The guard
+      // !thumbnail().isNull() ensures plates with no captured thumbnail (never
+      // viewed, or cache invalidated by a content change per PartPlate.h:116,
+      // 157,163) leave plate_thumbnail at its default — no regression when no
+      // capture exists. pd->plate_thumbnail is a value ThumbnailData member
+      // (bbs_3mf.hpp:80), owned by pd which saveProject frees via
+      // release_PlateData_list (no separate lifetime management here).
+      if (!p->thumbnail().isNull())
+        pd->plate_thumbnail = qimageToThumbnailData(p->thumbnail());
     }
 
     result.push_back(pd);
