@@ -595,9 +595,6 @@ public:
   Q_INVOKABLE bool setPlateOtherLayersSeqOrder(int plateIndex, int entryIndex, const QVariantList &order);
   /// 当前平板使用的耗材数（Mock 模式）
   Q_INVOKABLE int plateExtruderCount(int plateIndex) const;
-  /// 生成平板缩略图（对齐上游 PartPlate::thumbnail_data）
-  /// 返回 base64 PNG 图片供 QML Image 组件使用
-  Q_INVOKABLE QString generatePlateThumbnail(int plateIndex, int size = 64);
   /// 居中选中对象到热床（对齐上游 Plater::priv::on_center / ModelObject::center_instances）
   Q_INVOKABLE void centerSelectedObjects();
   /// 铺满热床副本（对齐上游 Plater::priv::on_fill_bed）

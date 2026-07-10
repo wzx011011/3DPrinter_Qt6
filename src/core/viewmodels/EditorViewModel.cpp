@@ -4230,11 +4230,6 @@ QString EditorViewModel::plateThumbnailBase64(int plateIndex) const
   return projectService_ ? projectService_->plateThumbnailBase64(plateIndex) : QString();
 }
 
-QString EditorViewModel::generatePlateThumbnail(int plateIndex, int size)
-{
-  return projectService_ ? projectService_->generatePlateThumbnail(plateIndex, size) : QString();
-}
-
 void EditorViewModel::centerSelectedObjects()
 {
   // 对齐上游 Plater::priv::on_center / ModelObject::center_instances

@@ -331,17 +331,9 @@ public:
   // Phase 98 (THUMBVERIFY-01): real persisted-thumbnail accessor for the UI
   // plate-card fallback. Returns the cached PartPlate::thumbnail() as base64
   // PNG (empty when no thumbnail is cached -- never fabricates a placeholder).
-  // Replaces the mock generatePlateThumbnail QPainter fallback so non-current
-  // plates display their saved/reloaded thumbnail instead of a fake.
+  // Replaces the removed mock QPainter fallback so non-current plates display
+  // their saved/reloaded thumbnail instead of a fake.
   Q_INVOKABLE QString plateThumbnailBase64(int plateIndex) const;
-  /// 生成平板缩略图（对齐上游 PartPlate::thumbnail_data，Mock 模式使用 QPainter 合成）
-  /// 返回 base64 编码的 PNG 图片供 QML Image 组件使用
-  Q_INVOKABLE QString generatePlateThumbnail(int plateIndex, int size = 64);
-
-  // v3.2 Phase 30, THUMB-01: 缩略图变体生成。
-  // variant=0: 主视角（delegates to generatePlateThumbnail）
-  // variant=1: 俯视图（top-down 2D footprint）
-  Q_INVOKABLE QString generatePlateThumbnailVariant(int plateIndex, int size = 64, int variant = 0);
 
   /// 添加新对象到当前平板（对齐上游 Plater 粘贴剪贴板行为）
   /// 返回新对象的索引，失败返回 -1
@@ -387,9 +379,6 @@ signals:
   void projectConfigLoaded(const QHash<QString, QVariant> &config);
 
 private:
-  // v3.2 Phase 30: top-down 2D footprint thumbnail generator (variant=1).
-  QString generateTopDownThumbnail(int plateIndex, int size);
-
   /// v2.4: 当前项目保存路径（saveProjectAs 后更新）
   QString currentProjectPath_;
   /// Mock-mode per-object scoped overrides (objectIndex → key-value map)
