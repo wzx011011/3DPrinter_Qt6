@@ -33,7 +33,7 @@
 
 - [x] Phase 94: Thumbnail Capture Gap Audit
 - [x] Phase 95: QRhi Thumbnail Capture Infrastructure
-- [ ] Phase 96: 3MF Thumbnail Write Integration
+- [x] Phase 96: 3MF Thumbnail Write Integration
 - [ ] Phase 97: Thumbnail Save-Reload Round-Trip
 - [ ] Phase 98: Thumbnail Verification And Cleanup
 
@@ -67,13 +67,14 @@ Success criteria:
 
 ### Phase 96: 3MF Thumbnail Write Integration
 
-**Status:** Not started
-**Plans:** 0/1
+**Status:** Complete
+**Plans:** 1/1
+**Shipped:** 2026-07-10 (commits 71295cc + 68fb3b7 + 94a78ed + 9829ab4 + docs 50b41c7)
 
 Success criteria:
-1. `buildPlateDataList` populates `PlateData::plate_thumbnail` with real captured pixels on save.
-2. `saveProject` populates `StoreParams::thumbnail_data` with a real captured project thumbnail.
-3. The upstream `store_bbs_3mf` PNG encoding path (`_add_thumbnail_file_to_archive`) runs to completion without throwing the non-std exception seen on the mock pipeline.
+1. `buildPlateDataList` populates `PlateData::plate_thumbnail` with real captured pixels on save. — MET: `pd->plate_thumbnail = qimageToThumbnailData(p->thumbnail())` guarded by `!p->thumbnail().isNull()` (drives the XML `thumbnail_file` reference at `bbs_3mf.cpp:7987`).
+2. `saveProject` populates `StoreParams::thumbnail_data` with a real captured project thumbnail. — MET: a `ThumbnailData` built from the current plate (fallback plate 0), held in a single local whose address outlives `store_bbs_3mf`, pushed before the store call (drives the PNG byte writing at `bbs_3mf.cpp:6133-6143`).
+3. The upstream `store_bbs_3mf` PNG encoding path (`_add_thumbnail_file_to_archive`) runs to completion without throwing the non-std exception seen on the mock pipeline. — MET (compile/link + regression): production code compiles/links clean (`OWzxSlicer.exe` linked at `[236/236]`); the write-side produces real RGBA pixels so `tdefl_write_image_to_png_file_in_memory_ex` returns non-null. The v3.2 "throws" was the empty/mock-pixel path. Regression ctest passes (ViewModelSmoke/QmlUiAudit/PrepareSceneData/PartPlate all PASS). Runtime save-reload round-trip proof routed to Phase 97.
 
 ### Phase 97: Thumbnail Save-Reload Round-Trip
 
@@ -106,12 +107,12 @@ Success criteria:
 
 ## Next Step
 
-Plan Phase 96 after this roadmap is approved:
+Plan Phase 97 (Thumbnail Save-Reload Round-Trip) next:
 
 ```text
-$gsd-plan-phase 96
+$gsd-plan-phase 97
 ```
 
 ---
 
-*Last updated: 2026-07-10 after Phase 95 plan 01 complete.*
+*Last updated: 2026-07-10 after Phase 96 plan 01 complete.*

@@ -3,29 +3,29 @@ gsd_state_version: 1.0
 milestone: v4.3
 milestone_name: Real Thumbnail Capture And 3MF Round-Trip
 status: executing
-last_updated: 2026-07-10T08:42:26+08:00
-last_activity: 2026-07-10 -- Phase 95 plan 01 complete (real QRhi thumbnail capture infrastructure)
+last_updated: 2026-07-10T09:48:00+08:00
+last_activity: 2026-07-10 -- Phase 96 plan 01 complete (3MF thumbnail write-side population)
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 2
   completed_plans: 2
-  percent: 40
-stopped_at: Phase 95 plan 01 complete; ready to plan Phase 96
+  percent: 60
+stopped_at: Phase 96 plan 01 complete; ready to plan Phase 97
 ---
 
 # Project State
 
 **Milestone:** v4.3 - Real Thumbnail Capture And 3MF Round-Trip
-**Status:** Executing (Phase 95 capture infrastructure complete)
-**Next step:** Plan Phase 96 with `/gsd-plan-phase 96`.
+**Status:** Executing (Phase 96 write-side population complete)
+**Next step:** Plan Phase 97 with `/gsd-plan-phase 97`.
 
 ## Current Position
 
-Phase: 95 (QRhi Thumbnail Capture Infrastructure) — complete
+Phase: 96 (3MF Thumbnail Write Integration) — complete
 Plan: 01/01 complete
-Status: Phase 95 capture infrastructure shipped; ready to plan Phase 96
-Last activity: 2026-07-10 — Phase 95 plan 01 executed (real QRhi offscreen RT readback replacing solid-color stub; commit fc4aadb)
+Status: Phase 96 write-side population shipped; ready to plan Phase 97
+Last activity: 2026-07-10 — Phase 96 plan 01 executed (both 3MF thumbnail write-side populate sites closed: PlateData::plate_thumbnail + StoreParams::thumbnail_data via qimageToThumbnailData helper; commits 71295cc + 68fb3b7 + 94a78ed + 9829ab4 + 50b41c7)
 
 ## Current Milestone (v4.3)
 
@@ -33,9 +33,17 @@ Last activity: 2026-07-10 — Phase 95 plan 01 executed (real QRhi offscreen RT 
 |---|---|---|---|
 | 94 | Thumbnail Capture Gap Audit | Complete | THUMBAUDIT-01, THUMBAUDIT-02 |
 | 95 | QRhi Thumbnail Capture Infrastructure | Complete | THUMBCAP-01, THUMBCAP-02, THUMBCAP-03 |
-| 96 | 3MF Thumbnail Write Integration | Not started | THUMBWRITE-01, THUMBWRITE-02, THUMBWRITE-03 |
+| 96 | 3MF Thumbnail Write Integration | Complete | THUMBWRITE-01, THUMBWRITE-02, THUMBWRITE-03 |
 | 97 | Thumbnail Save-Reload Round-Trip | Not started | THUMBRT-01, THUMBRT-02 |
 | 98 | Thumbnail Verification And Cleanup | Not started | THUMBVERIFY-01, THUMBVERIFY-02 |
+
+## Phase 96 Frozen Decisions Implemented (THUMBWRITE-01/02/03)
+
+- **qimageToThumbnailData helper (THUMBWRITE-01/02 enabler):** File-local static free function under `#ifdef HAS_LIBSLIC3R` (not a member, not in the public header) converts a captured `QImage` to `Slic3r::ThumbnailData` via `convertToFormat(QImage::Format_RGBA8888)` + `resize` + scanline `std::memcpy`. Uses `resize`+`memcpy` directly (NOT `ThumbnailData::set()`, which fills white defaults). Early-returns an empty/invalid `ThumbnailData` on null/non-positive dims so the writer's `is_valid()` guard skips gracefully.
+- **PlateData::plate_thumbnail per plate (THUMBWRITE-01):** `buildPlateDataList` populates `pd->plate_thumbnail = qimageToThumbnailData(p->thumbnail())` guarded by `!p->thumbnail().isNull()`. Drives the per-plate XML `<metadata thumbnail_file="Metadata/plate_N.png">` reference (`bbs_3mf.cpp:7987`).
+- **StoreParams::thumbnail_data project-level (THUMBWRITE-02):** `saveProject` builds a `ThumbnailData` from the current plate's (fallback plate 0) captured thumbnail, held in a single local `projectThumb` whose address outlives `store_bbs_3mf` (block-scoped, destroyed only after the store call + `release_PlateData_list` cleanup). Pushed into `params.thumbnail_data` guarded by `is_valid()`. Drives the actual PNG byte writing (`bbs_3mf.cpp:6133-6143` -> `_add_thumbnail_file_to_archive`).
+- **Format symmetry (round-trip foundation):** Write side produces `Format_RGBA8888` bytes via `convertToFormat`, matching the read side at `ProjectServiceMock.cpp:5455` — Phase 97 round-trip relies on this.
+- **PNG path runs to completion (THUMBWRITE-03):** With real RGBA pixels, `tdefl_write_image_to_png_file_in_memory_ex` (`bbs_3mf.cpp:6548`) returns non-null -> `mz_zip_writer_add_mem` (`:6551`) succeeds. The v3.2 "throws a non-std exception" was the empty/mock-pixel path. Production code compiles/links clean against the real writer; runtime save round-trip proof routed to Phase 97.
 
 ## Phase 95 Frozen Decisions Implemented (THUMBCAP-01/02/03)
 
