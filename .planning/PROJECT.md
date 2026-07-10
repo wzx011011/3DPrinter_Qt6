@@ -10,7 +10,7 @@ The project currently has a usable Qt6/QML shell, real model/project IO, real sl
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current State: After v4.2 AssembleView Source-Truth Restoration
+## Current State: v4.3 Real Thumbnail Capture And 3MF Round-Trip (Active)
 
 **Last shipped milestone:** v4.2 AssembleView Source-Truth Restoration (2026-07-09).
 
@@ -30,11 +30,24 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 **Carry-forward outside v4.2:** D3D12 remains explicit opt-in future investigation. Full GLGizmoMeasure feature-picking engine (needs per-volume ITS + scene raycaster) and the AssembleViewDataPool ModelObjectsClipper resource are deferred to a future milestone. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows are removed from forward scope unless the user explicitly reopens them.
 
+## Current Milestone: v4.3 Real Thumbnail Capture And 3MF Round-Trip
+
+**Goal:** Replace the current mock thumbnails with real QRhi framebuffer capture, and close the 3MF write side so thumbnails survive a save → reload round-trip — unblocking the v3.2 THUMB-02/THUMB-03 deferred items.
+
+**Scope rule:** Local/offline only. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from scope.
+
+**Target features:**
+- Real QRhi texture readback thumbnail capture (replace `RhiViewport::requestThumbnailCapture` solid-color stub).
+- MSAA resolve handling (sample count > 1).
+- Render-thread capture request queue + QImage callback (item → renderer → item).
+- 3MF write side populates `PlateData::plate_thumbnail` + `StoreParams::thumbnail_data`.
+- Upstream writer PNG encoding path no longer throws on the Qt6 pipeline.
+- save → reload pixel round-trip verification.
+
 ## Next Milestone
 
-v4.2 is shipped. The next milestone has not been planned. Run `/gsd-new-milestone` to select the next target. Candidate backlog:
+v4.3 is the active milestone. Candidate backlog after v4.3:
 - Auto filament-map recommendation and wipe-tower geometry/rendering.
-- Real GL/QRhi-capture thumbnails and 3MF pixel round-trip.
 - Missing CLI fixtures and deterministic argv-based GUI fixture loading for screenshots.
 - D3D12 crash root cause and Vulkan evaluation after the SDK/runtime path is ready.
 - Full GLGizmoMeasure feature-picking engine + AssembleViewDataPool clipper (needs per-volume ITS).
@@ -67,12 +80,18 @@ These are current baseline capabilities inferred from implementation, git histor
 
 ### Active
 
-No active requirements. The next milestone has not been planned. Requirements will be defined via `/gsd-new-milestone` once the next target is selected.
+- [ ] Replace mock thumbnails with real QRhi framebuffer capture (multiple variants).
+- [ ] Implement MSAA-aware readback (resolve multisampled render target before readback).
+- [ ] Wire render-thread capture request queue + QImage callback (item → renderer → item).
+- [ ] Populate `PlateData::plate_thumbnail` + `StoreParams::thumbnail_data` on the 3MF write path.
+- [ ] Make the upstream `store_bbs_3mf` PNG encoding path work on the Qt6 pipeline (no exception).
+- [ ] Verify save → reload thumbnail pixel round-trip (THUMB-02 closure).
+- [ ] Verify with canonical build + ctest regression (Prepare/Preview/AssembleView not broken).
 
 ### Future
 
 - Auto filament-map recommendation and wipe-tower geometry/rendering.
-- Real GL/QRhi-capture thumbnails and 3MF pixel round-trip (`THUMB-03`).
+- Real GL/QRhi-capture thumbnails and 3MF pixel round-trip (`THUMB-03`) — now the active v4.3 milestone.
 - Full PLATE-09 save/reload state assertions after shared 3MF writer integration is fixed (`FIXTURE-02` carry-forward).
 - D3D12 crash root cause and Vulkan evaluation after the SDK/runtime path is ready.
 - Full i18n translation coverage beyond strings touched by active workflows.
@@ -153,6 +172,7 @@ No active requirements. The next milestone has not been planned. Requirements wi
 | Scope v4.1 to parameter settings dialogs | Settings has real Phase 56 backend semantics but target screenshots still expose visual/text/layout debt. | Good - v4.1 shipped |
 | Add startup deep-link arguments for settings/dialogs/models | Direct SettingsDialog window capture was blocked by the Windows capture API; argv-based deep links let future visual evidence open pages/dialogs and load models without simulated clicks. | Good - v4.1 shipped |
 | Scope v4.2 to AssembleView source-truth restoration | After Prepare/Preview/settings shipped, AssembleView is the last screenshot-level UI surface; Arrange (auto-arrangement) is already complete and distinct from the assembly canvas. | Good - v4.2 shipped |
+| Scope v4.3 to real thumbnail capture + 3MF round-trip | v3.2 THUMB-02/THUMB-03 are the longest-running deferred items; both share one root cause (the upstream writer needs real GL pixels). Closing them also unblocks FIXTURE-02. | Active - v4.3 |
 
 ## Evolution
 
@@ -172,4 +192,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-09 after v4.2 milestone completion.*
+*Last updated: 2026-07-10 after v4.3 milestone planning.*
