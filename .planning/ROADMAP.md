@@ -34,7 +34,7 @@
 - [x] Phase 94: Thumbnail Capture Gap Audit
 - [x] Phase 95: QRhi Thumbnail Capture Infrastructure
 - [x] Phase 96: 3MF Thumbnail Write Integration
-- [ ] Phase 97: Thumbnail Save-Reload Round-Trip
+- [x] Phase 97: Thumbnail Save-Reload Round-Trip (completed 2026-07-10)
 - [ ] Phase 98: Thumbnail Verification And Cleanup
 
 | Phase | Name | Goal | Requirements |
@@ -42,7 +42,7 @@
 | 94 | Thumbnail Capture Gap Audit | Freeze the v4.3 capture+writer region map: current mock paths, upstream writer anchors, Qt RHI readback approach, MSAA handling, replacement decisions, and verification expectations before edits. | THUMBAUDIT-01, THUMBAUDIT-02 |
 | 95 | QRhi Thumbnail Capture Infrastructure | Implement real QRhi texture readback capture replacing the `requestThumbnailCapture` stub, with MSAA resolve and a render-thread capture queue + QImage callback. | THUMBCAP-01, THUMBCAP-02, THUMBCAP-03 |
 | 96 | 3MF Thumbnail Write Integration | Populate `PlateData::plate_thumbnail` + `StoreParams::thumbnail_data` on save, and make the upstream `store_bbs_3mf` PNG encoding path run to completion on the Qt6 pipeline. | THUMBWRITE-01, THUMBWRITE-02, THUMBWRITE-03 |
-| 97 | Thumbnail Save-Reload Round-Trip | Verify the existing read side restores saved thumbnails and add an automated round-trip test asserting pixels survive save → reload (THUMB-02 closure). | THUMBRT-01, THUMBRT-02 |
+| 97 | 1/1 | Complete   | 2026-07-10 |
 | 98 | Thumbnail Verification And Cleanup | Remove dead mock thumbnail paths, run canonical verifier, confirm Prepare/Preview/AssembleView regression-free, and record runtime capture evidence. | THUMBVERIFY-01, THUMBVERIFY-02 |
 
 ### Phase 94: Thumbnail Capture Gap Audit
@@ -79,7 +79,7 @@ Success criteria:
 ### Phase 97: Thumbnail Save-Reload Round-Trip
 
 **Status:** Not started
-**Plans:** 0/1
+**Plans:** 1/1 plans complete
 
 Success criteria:
 1. Saving a project with captured thumbnails and reloading it restores the thumbnails via the existing read side so the reloaded `PartPlate::thumbnail()` matches the saved pixels.
