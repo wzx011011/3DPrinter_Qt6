@@ -35,7 +35,7 @@
 - [x] Phase 95: QRhi Thumbnail Capture Infrastructure
 - [x] Phase 96: 3MF Thumbnail Write Integration
 - [x] Phase 97: Thumbnail Save-Reload Round-Trip (completed 2026-07-10)
-- [ ] Phase 98: Thumbnail Verification And Cleanup
+- [x] Phase 98: Thumbnail Verification And Cleanup (completed 2026-07-10)
 
 | Phase | Name | Goal | Requirements |
 |---|---|---|---|
@@ -43,7 +43,7 @@
 | 95 | QRhi Thumbnail Capture Infrastructure | Implement real QRhi texture readback capture replacing the `requestThumbnailCapture` stub, with MSAA resolve and a render-thread capture queue + QImage callback. | THUMBCAP-01, THUMBCAP-02, THUMBCAP-03 |
 | 96 | 3MF Thumbnail Write Integration | Populate `PlateData::plate_thumbnail` + `StoreParams::thumbnail_data` on save, and make the upstream `store_bbs_3mf` PNG encoding path run to completion on the Qt6 pipeline. | THUMBWRITE-01, THUMBWRITE-02, THUMBWRITE-03 |
 | 97 | 1/1 | Complete   | 2026-07-10 |
-| 98 | Thumbnail Verification And Cleanup | Remove dead mock thumbnail paths, run canonical verifier, confirm Prepare/Preview/AssembleView regression-free, and record runtime capture evidence. | THUMBVERIFY-01, THUMBVERIFY-02 |
+| 98 | 1/1 | Complete   | 2026-07-10 |
 
 ### Phase 94: Thumbnail Capture Gap Audit
 
@@ -88,7 +88,7 @@ Success criteria:
 ### Phase 98: Thumbnail Verification And Cleanup
 
 **Status:** Not started
-**Plans:** 0/1
+**Plans:** 1/1 plans complete
 
 Success criteria:
 1. Replaced mock thumbnail code (QPainter placeholder generator + solid-color stub) leaves no dead/disconnected paths; the real capture path is the sole source.
