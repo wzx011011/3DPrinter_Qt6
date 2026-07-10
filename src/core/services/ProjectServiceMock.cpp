@@ -5043,31 +5043,46 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
     Slic3r::PlateDataPtrs plateData = buildPlateDataList(m_plateList.get());
     params.plate_data_list = plateData;
 
-    // Phase 96 (THUMBWRITE-02): populate StoreParams::thumbnail_data with a
-    // real captured thumbnail so the writer archives it as
-    // Metadata/plate_1.png (bbs_3mf.cpp:6133-6143 -> _add_thumbnail_file_to_
-    // archive at 6543). With real RGBA pixels, tdefl_write_image_to_png_file_
-    // in_memory_ex (bbs_3mf.cpp:6548) returns non-null -> mz_zip_writer_add_mem
-    // (6551) succeeds -> no exception (THUMBWRITE-03). The v3.2 "throws" was
-    // the empty/mock-pixel path; real pixels make it complete.
+    // Phase 96 (THUMBWRITE-02) + Phase 98 (THUMBVERIFY, REVIEW MEDIUM-3):
+    // populate StoreParams::thumbnail_data with one entry per plate so the
+    // writer archives Metadata/plate_{i+1}.png for EVERY plate with a valid
+    // cached thumbnail. The writer iterates thumbnail_data by INDEX and maps
+    // entry[index] to plate index (bbs_3mf.cpp:6133-6143, name built at 6550 as
+    // "Metadata/plate_{index+1}.png"), so the vector MUST be plate-index
+    // aligned. buildPlateDataList (above) emits the matching XML <metadata
+    // thumbnail_file="Metadata/plate_N.png"> reference per plate (bbs_3mf.cpp
+    // :7987). Phase 96 pushed only the current plate as thumbnail_data[0]; for
+    // multi-plate projects that left plates > 0 with an XML ref but NO archived
+    // PNG bytes, so on reload the read helper (extractPlateThumbnailFrom3mf)
+    // could not find the entry and plates > 0 silently lost thumbnails
+    // (Phase 97 REVIEW MEDIUM-3). Phase 98 pushes one entry per plate in order.
+    // Plates with no cached thumbnail get a default (invalid) ThumbnailData
+    // placeholder so indices stay aligned; the writer skips invalid entries
+    // (is_valid() guard at bbs_3mf.cpp:6135). The vector guard at
+    // bbs_3mf.cpp:6101 only rejects size > plate count, so equal size is valid.
     //
     // LIFETIME: StoreParams::thumbnail_data is vector<ThumbnailData*> (raw
     // pointers, bbs_3mf.hpp:235). The pointed-to ThumbnailData MUST outlive
-    // store_bbs_3mf. projectThumb is a single local declared in this block, so
-    // its address is stable until block exit — past the store_bbs_3mf call at
-    // :5187 and the release_PlateData_list cleanup at :5198. Do NOT push into a
-    // vector that reallocates after taking the address (a single local avoids
-    // dangling entirely).
-    Slic3r::ThumbnailData projectThumb;
-    const OWzx::PartPlate *projPlate = m_plateList
-        ? (m_plateList->currentPlateIndex() >= 0
-               ? m_plateList->plate(m_plateList->currentPlateIndex())
-               : m_plateList->plate(0))
-        : nullptr;
-    if (projPlate && !projPlate->thumbnail().isNull())
-      projectThumb = qimageToThumbnailData(projPlate->thumbnail());
-    if (projectThumb.is_valid())
-      params.thumbnail_data.push_back(&projectThumb);
+    // store_bbs_3mf. plateThumbs is a single local vector in this block; we
+    // reserve() the full capacity up front and take addresses only AFTER all
+    // pushes are done, so no reallocation can invalidate the pointers before
+    // store_bbs_3mf (called below at :5187) returns and the block exits past
+    // the release_PlateData_list cleanup.
+    std::vector<Slic3r::ThumbnailData> plateThumbs;
+    if (m_plateList && m_plateList->plateCount() > 0)
+    {
+      plateThumbs.reserve(m_plateList->plateCount());
+      for (int i = 0; i < m_plateList->plateCount(); ++i)
+      {
+        const OWzx::PartPlate *p = m_plateList->plate(i);
+        if (p && !p->thumbnail().isNull())
+          plateThumbs.push_back(qimageToThumbnailData(p->thumbnail()));
+        else
+          plateThumbs.push_back(Slic3r::ThumbnailData());  // invalid placeholder
+      }
+      for (const Slic3r::ThumbnailData &td : plateThumbs)
+        params.thumbnail_data.push_back(const_cast<Slic3r::ThumbnailData *>(&td));
+    }
 
     bool ok = false;
     try

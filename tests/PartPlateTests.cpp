@@ -70,9 +70,11 @@ class PartPlateTests final : public QObject {
 #ifdef HAS_LIBSLIC3R
   void thumbnailRoundTrip();                 // THUMB-02 (in-memory cache)
   void thumbnailSaveReloadRoundTrip();       // Phase 97 (THUMBRT-01/02): save->reload 3MF pixel round-trip
+  void thumbnailMultiPlateSaveReloadRoundTrip();  // Phase 98 (REVIEW MEDIUM-3): multi-plate write side
 #else
   void thumbnailRoundTrip() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void thumbnailSaveReloadRoundTrip() { QSKIP("Requires HAS_LIBSLIC3R"); }
+  void thumbnailMultiPlateSaveReloadRoundTrip() { QSKIP("Requires HAS_LIBSLIC3R"); }
 #endif
 
   // ── FMAP-01/03 tests (v3.2 Phase 31) ────────────────────────────────────
@@ -517,6 +519,88 @@ void PartPlateTests::thumbnailSaveReloadRoundTrip() {
            "THUMBRT-01: reloaded thumbnail RGBA8888 bytes must match the saved bytes (lossless PNG round-trip)");
 
   // -- CLEANUP: do not leave the temp artifact behind.
+  QFile::remove(tempPath);
+}
+
+void PartPlateTests::thumbnailMultiPlateSaveReloadRoundTrip() {
+  // Phase 98 (Phase 97 REVIEW MEDIUM-3): multi-plate write side.
+  // Phase 96's saveProject pushed only the CURRENT plate's thumbnail into
+  // StoreParams::thumbnail_data (as entry [0]), but buildPlateDataList emits
+  // per-plate XML <metadata thumbnail_file="Metadata/plate_N.png"> refs for
+  // every plate. The writer (bbs_3mf.cpp:6133) iterates thumbnail_data by
+  // INDEX mapping entry[index] -> Metadata/plate_{index+1}.png, so plates > 0
+  // got an XML ref with NO archived PNG bytes and silently lost thumbnails on
+  // reload. Phase 98's fix pushes one (index-aligned) thumbnail_data entry per
+  // plate. This slot proves a 2-plate project round-trips BOTH thumbnails.
+  //
+  // ISOLATION: synthesizes two DISTINCT known QImages (different colors) so a
+  // plate-index swap or a single-entry regression is detectable.
+
+  // -- ARRANGE: load a real model, add a second plate, set distinct thumbnails.
+  ProjectServiceMock service;
+  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  QVERIFY(service.loadFile(kStlPath));
+  QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(service.plateCount() >= 1, "loaded project must have >= 1 plate");
+
+  QVERIFY2(service.addPlate(), "addPlate must succeed to create plate 1");
+  QVERIFY2(service.plateCount() >= 2, "project must have >= 2 plates after addPlate");
+
+  // DISTINCT colors so a plate-index swap would be caught.
+  QImage thumb0(32, 32, QImage::Format_RGBA8888);
+  thumb0.fill(QColor(11, 22, 33, 255));  // plate 0: dark blue
+  QVERIFY2(!thumb0.isNull(), "plate 0 synthesized thumbnail must be non-null");
+  QImage thumb1(32, 32, QImage::Format_RGBA8888);
+  thumb1.fill(QColor(244, 200, 80, 255));  // plate 1: amber
+  QVERIFY2(!thumb1.isNull(), "plate 1 synthesized thumbnail must be non-null");
+
+  QVERIFY2(service.plateListConst()->plateCount() >= 2,
+           "plateList must report >= 2 plates");
+  service.plateListMut()->plate(0)->setThumbnail(thumb0);
+  service.plateListMut()->plate(1)->setThumbnail(thumb1);
+  QVERIFY2(service.plateListConst()->plate(0)->hasThumbnail(),
+           "plate 0 must hold its thumbnail");
+  QVERIFY2(service.plateListConst()->plate(1)->hasThumbnail(),
+           "plate 1 must hold its thumbnail");
+
+  // -- ACT: save then reload into a FRESH service.
+  const QString tempPath = QDir::tempPath() + QStringLiteral(
+      "/owzx_thumb_multi_%1.3mf").arg(QDateTime::currentMSecsSinceEpoch());
+  QVERIFY2(service.saveProject(tempPath),
+           qPrintable(QStringLiteral("saveProject must succeed: %1").arg(tempPath)));
+  QVERIFY2(QFileInfo::exists(tempPath), "the saved .3mf file must exist on disk");
+
+  ProjectServiceMock reloaded;
+  QSignalSpy reloadSpy(&reloaded, &ProjectServiceMock::loadFinished);
+  QVERIFY(reloaded.loadFile(tempPath));
+  QVERIFY2(reloadSpy.isValid(), "loadFinished signal spy must be valid");
+  QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);
+  QVERIFY2(reloaded.plateCount() >= 2,
+           "reloaded project must have >= 2 plates");
+
+  // -- ASSERT: BOTH plates' thumbnails survived, with their DISTINCT colors.
+  const OWzx::PartPlate *rp0 = reloaded.plateListConst()->plate(0);
+  const OWzx::PartPlate *rp1 = reloaded.plateListConst()->plate(1);
+  QVERIFY2(rp0 != nullptr, "reloaded plate 0 must exist");
+  QVERIFY2(rp1 != nullptr, "reloaded plate 1 must exist");
+  QVERIFY2(rp0->hasThumbnail(),
+           "REVIEW MEDIUM-3: reloaded plate 0 must have a thumbnail");
+  QVERIFY2(rp1->hasThumbnail(),
+           "REVIEW MEDIUM-3: reloaded plate 1 must have a thumbnail (the fix)");
+  QCOMPARE(rp0->thumbnail().width(), 32);
+  QCOMPARE(rp0->thumbnail().height(), 32);
+  QCOMPARE(rp1->thumbnail().width(), 32);
+  QCOMPARE(rp1->thumbnail().height(), 32);
+
+  // DISTINCT-color check catches a plate-index swap or a single-entry
+  // (current-plate-only) regression: plate 0 is dark blue, plate 1 is amber.
+  const QImage r0 = rp0->thumbnail().convertToFormat(QImage::Format_RGBA8888);
+  const QImage r1 = rp1->thumbnail().convertToFormat(QImage::Format_RGBA8888);
+  QCOMPARE(r0.pixel(0, 0), qRgba(11, 22, 33, 255));
+  QCOMPARE(r1.pixel(0, 0), qRgba(244, 200, 80, 255));
+
+  // -- CLEANUP.
   QFile::remove(tempPath);
 }
 #endif  // HAS_LIBSLIC3R
