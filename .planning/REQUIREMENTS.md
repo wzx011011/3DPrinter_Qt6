@@ -7,8 +7,8 @@
 
 ### Source-Truth Inventory
 
-- [ ] **THUMBAUDIT-01**: The thumbnail capture + 3MF writer surface has a current inventory mapping the mock paths (`generatePlateThumbnail` QPainter stub, `requestThumbnailCapture` solid-color stub), the deferred write-side gaps, upstream source anchors (`store_bbs_3mf` thumbnail path, `PartPlate::store_to_3mf_structure`), the QRhi readback approach, MSAA resolve strategy, and verification expectations.
-- [ ] **THUMBAUDIT-02**: The QRhi readback design (offscreen `QRhiTexture` render-target + `readBackTexture`, vs live RT color attachment readback), the MSAA resolve approach (sample count > 1), and the render-thread capture request queue + QImage callback design are frozen as locked decisions before implementation.
+- [x] **THUMBAUDIT-01**: The thumbnail capture + 3MF writer surface has a current inventory mapping the mock paths (`generatePlateThumbnail` QPainter stub, `requestThumbnailCapture` solid-color stub), the deferred write-side gaps, upstream source anchors (`store_bbs_3mf` thumbnail path, `PartPlate::store_to_3mf_structure`), the QRhi readback approach, MSAA resolve strategy, and verification expectations.
+- [x] **THUMBAUDIT-02**: The QRhi readback design (offscreen `QRhiTexture` render-target + `readBackTexture`, vs live RT color attachment readback), the MSAA resolve approach (sample count > 1), and the render-thread capture request queue + QImage callback design are frozen as locked decisions before implementation.
 
 ### RHI Capture Infrastructure
 
@@ -61,8 +61,8 @@ Explicitly excluded to keep v4.3 focused.
 
 | Requirement | Phase | Status |
 |---|---|---|
-| THUMBAUDIT-01 | Phase 94 | Not started |
-| THUMBAUDIT-02 | Phase 94 | Not started |
+| THUMBAUDIT-01 | Phase 94 | Complete |
+| THUMBAUDIT-02 | Phase 94 | Complete |
 | THUMBCAP-01 | Phase 95 | Not started |
 | THUMBCAP-02 | Phase 95 | Not started |
 | THUMBCAP-03 | Phase 95 | Not started |

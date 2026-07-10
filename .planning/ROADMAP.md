@@ -31,7 +31,7 @@
 
 ## Phases
 
-- [ ] Phase 94: Thumbnail Capture Gap Audit
+- [x] Phase 94: Thumbnail Capture Gap Audit
 - [ ] Phase 95: QRhi Thumbnail Capture Infrastructure
 - [ ] Phase 96: 3MF Thumbnail Write Integration
 - [ ] Phase 97: Thumbnail Save-Reload Round-Trip
@@ -47,8 +47,8 @@
 
 ### Phase 94: Thumbnail Capture Gap Audit
 
-**Status:** Not started
-**Plans:** 0/1
+**Status:** Complete
+**Plans:** 1/1
 
 Success criteria:
 1. The thumbnail capture + 3MF writer surface is mapped to upstream source anchors (`store_bbs_3mf` thumbnail path, `PartPlate::store_to_3mf_structure`), current Qt mock paths, replacement decisions, and verification expectations.

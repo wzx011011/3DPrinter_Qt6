@@ -2,40 +2,46 @@
 gsd_state_version: 1.0
 milestone: v4.3
 milestone_name: Real Thumbnail Capture And 3MF Round-Trip
-status: planning
-last_updated: 2026-07-10T02:30:00+08:00
-last_activity: 2026-07-10 -- Milestone v4.3 started
+status: executing
+last_updated: 2026-07-09T23:59:00+08:00
+last_activity: 2026-07-09 -- Phase 94 plan 01 complete (thumbnail capture gap audit)
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
-stopped_at: Milestone v4.3 started; defining requirements and roadmap
+  total_plans: 1
+  completed_plans: 1
+  percent: 20
+stopped_at: Phase 94 plan 01 complete; ready to plan Phase 95
 ---
 
 # Project State
 
 **Milestone:** v4.3 - Real Thumbnail Capture And 3MF Round-Trip
-**Status:** Planning (defining requirements and roadmap)
-**Next step:** Plan Phase 94 with `/gsd-plan-phase 94`.
+**Status:** Executing (Phase 94 audit complete)
+**Next step:** Plan Phase 95 with `/gsd-plan-phase 95`.
 
 ## Current Position
 
-Phase: 94 (Thumbnail Capture Gap Audit) — not started
-Plan: —
-Status: Roadmap approved; ready to plan Phase 94
-Last activity: 2026-07-10 — v4.3 roadmap created (Phases 94-98)
+Phase: 94 (Thumbnail Capture Gap Audit) — complete
+Plan: 01/01 complete
+Status: Phase 94 gap matrix frozen; ready to plan Phase 95
+Last activity: 2026-07-09 — Phase 94 plan 01 executed (94-GAP-MATRIX.md + 3 frozen THUMBAUDIT-02 decisions)
 
 ## Current Milestone (v4.3)
 
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
-| 94 | Thumbnail Capture Gap Audit | Not started | THUMBAUDIT-01, THUMBAUDIT-02 |
+| 94 | Thumbnail Capture Gap Audit | Complete | THUMBAUDIT-01, THUMBAUDIT-02 |
 | 95 | QRhi Thumbnail Capture Infrastructure | Not started | THUMBCAP-01, THUMBCAP-02, THUMBCAP-03 |
 | 96 | 3MF Thumbnail Write Integration | Not started | THUMBWRITE-01, THUMBWRITE-02, THUMBWRITE-03 |
 | 97 | Thumbnail Save-Reload Round-Trip | Not started | THUMBRT-01, THUMBRT-02 |
 | 98 | Thumbnail Verification And Cleanup | Not started | THUMBVERIFY-01, THUMBVERIFY-02 |
+
+## Phase 94 Frozen Decisions (THUMBAUDIT-02)
+
+- **QRhi readback (THUMB-RHI-READBACK):** Option A — offscreen `QRhiTexture` render-target at thumbnail size + `QRhiResourceUpdateBatch::readBackTexture()` (mirrors upstream's dedicated thumbnail framebuffer; yields a single-sample thumbnail-sized texture). Drives Phase 95 THUMBCAP-01.
+- **MSAA resolve (THUMB-MSAA-RESOLVE):** render the thumbnail to a single-sample (sample count 1) offscreen RT so no resolve step is needed at readback (consequence of Option A); on-screen viewport keeps sample count 4 per `RhiViewport.cpp:47`. Drives Phase 95 THUMBCAP-02.
+- **Render-thread capture queue (THUMB-RT-QUEUE):** mirror the existing `m_fitRequestCount`/`m_viewPreset` synchronize() pattern (`RhiViewport.h:314-315`, `RhiViewport.cpp:415,435,442`, `RhiViewportRenderer.cpp:35`); readback inside `render()`, QImage delivered back via queued signal/connection. Drives Phase 95 THUMBCAP-03.
 
 ## Last Completed Milestone: v4.2
 
