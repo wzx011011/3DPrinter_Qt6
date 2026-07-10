@@ -4290,7 +4290,9 @@ QString ProjectServiceMock::plateThumbnailBase64(int plateIndex) const
   QByteArray ba;
   QBuffer buf(&ba);
   buf.open(QIODevice::WriteOnly);
-  img.save(&buf, "PNG");
+  // Phase 98 REVIEW W-1: guard the encode return so a failed PNG save returns
+  // empty (no fake/broken base64 placeholder) -- honors the phase contract.
+  if (!img.save(&buf, "PNG")) return {};
   return QString::fromLatin1(ba.toBase64());
 #else
   Q_UNUSED(plateIndex);
@@ -5080,6 +5082,10 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
         else
           plateThumbs.push_back(Slic3r::ThumbnailData());  // invalid placeholder
       }
+      // const_cast: upstream StoreParams::thumbnail_data is vector<ThumbnailData*>
+      // (non-const, bbs_3mf.hpp:235) but store_bbs_3mf treats the pointers as
+      // read-only inputs (is_valid() + pixels/width/height reads, no mutation).
+      // Safe given the writer's read-only contract. (Phase 98 REVIEW W-2.)
       for (const Slic3r::ThumbnailData &td : plateThumbs)
         params.thumbnail_data.push_back(const_cast<Slic3r::ThumbnailData *>(&td));
     }

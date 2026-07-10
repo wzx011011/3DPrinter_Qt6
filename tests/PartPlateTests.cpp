@@ -600,6 +600,20 @@ void PartPlateTests::thumbnailMultiPlateSaveReloadRoundTrip() {
   QCOMPARE(r0.pixel(0, 0), qRgba(11, 22, 33, 255));
   QCOMPARE(r1.pixel(0, 0), qRgba(244, 200, 80, 255));
 
+  // Exact-buffer match (Phase 98 REVIEW W-3): parity with the single-plate
+  // sibling's memcmp assertion. tdefl PNG is lossless and the RGBA8888
+  // round-trip is byte-symmetric per Phase 96 W-02, so a full-buffer byte
+  // match is achievable here too -- catches a stride/offset corruption that
+  // a single-pixel sample misses.
+  const QImage s0 = thumb0.convertToFormat(QImage::Format_RGBA8888);
+  const QImage s1 = thumb1.convertToFormat(QImage::Format_RGBA8888);
+  QCOMPARE(r0.sizeInBytes(), s0.sizeInBytes());
+  QVERIFY2(std::memcmp(r0.constBits(), s0.constBits(), s0.sizeInBytes()) == 0,
+           "REVIEW W-3: plate 0 reloaded RGBA8888 bytes must match saved bytes");
+  QCOMPARE(r1.sizeInBytes(), s1.sizeInBytes());
+  QVERIFY2(std::memcmp(r1.constBits(), s1.constBits(), s1.sizeInBytes()) == 0,
+           "REVIEW W-3: plate 1 reloaded RGBA8888 bytes must match saved bytes");
+
   // -- CLEANUP.
   QFile::remove(tempPath);
 }
