@@ -2,6 +2,7 @@
 
 #include <QByteArray>
 #include <QHoverEvent>
+#include <QImage>
 #include <QPointF>
 #include <QQuickRhiItem>
 #include <QRectF>
@@ -227,6 +228,12 @@ public:
   Q_INVOKABLE void mirrorSelection(int axis);
   Q_INVOKABLE void arrangeSelected(float spacing = 0.f, bool rotation = false, bool alignY = false);
   Q_INVOKABLE void requestThumbnailCapture(int plateIndex, int size = 128);
+  // Phase 95 (THUMBCAP-03): GUI-thread delivery slot the renderer targets via
+  // a queued QMetaObject::invokeMethod. Encodes the captured QImage to the
+  // base64 PNG m_lastThumbnailData format and emits thumbnailCaptured(), so
+  // PreparePage.qml's contract (lastThumbnailData / onThumbnailCaptured) stays
+  // unchanged. plateIndex is carried for Phase 96 per-plate routing.
+  void deliverThumbnail(const QImage &image, int plateIndex);
 
 signals:
   void canvasTypeChanged();
@@ -313,6 +320,13 @@ private:
   QString m_lastThumbnailData;
   int m_fitRequestCount = 0;
   int m_viewPreset = 3;
+  // Phase 95 (THUMBCAP-03): item-side capture-request fields set by
+  // requestThumbnailCapture (GUI thread). synchronize() copies them to the
+  // renderer and clears m_thumbnailRequestPending (mirrors the
+  // m_cameraDirty=false consumption pattern at RhiViewportRenderer.cpp:95).
+  bool m_thumbnailRequestPending = false;
+  int m_thumbnailPlateIndex = 0;
+  int m_thumbnailSize = 128;
   bool m_previewCameraFitted = false;
   QVector4D m_previewFitHint;
   qint64 m_sceneGeneration = 1;

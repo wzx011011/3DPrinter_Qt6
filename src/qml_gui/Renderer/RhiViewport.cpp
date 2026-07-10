@@ -475,15 +475,36 @@ void RhiViewport::arrangeSelected(float spacing, bool rotation, bool alignY)
 
 void RhiViewport::requestThumbnailCapture(int plateIndex, int size)
 {
+  // Phase 95 (THUMBCAP-01/03): real QRhi texture readback dispatch. The
+  // previous solid-color stub (flat dark PNG fabricated on the GUI thread) is
+  // removed. This sets the capture-request fields and schedules a render so
+  // synchronize() copies the request to the renderer, which performs the
+  // offscreen render + async readback inside render() and delivers the QImage
+  // back via deliverThumbnail (queued). Mirrors the requestFitView/
+  // requestViewPreset pattern (set state + update()).
+  m_thumbnailPlateIndex = plateIndex;
+  m_thumbnailSize = qMax(32, size);
+  m_thumbnailRequestPending = true;
+  update();  // schedule synchronize()+render() on the render thread
+}
+
+void RhiViewport::deliverThumbnail(const QImage &image, int plateIndex)
+{
+  // Phase 95 (THUMBCAP-03): GUI-thread delivery slot targeted by the
+  // renderer's queued QMetaObject::invokeMethod. Encodes the captured QImage
+  // to the base64 PNG m_lastThumbnailData format (preserving the exact format
+  // the previous stub produced) so PreparePage.qml:3154 (lastThumbnailData)
+  // and onThumbnailCaptured (PreparePage.qml:3081) keep working unchanged.
+  // plateIndex is carried for Phase 96 per-plate routing but not consumed here.
   Q_UNUSED(plateIndex);
-  const int side = qMax(32, size);
-  QImage image(side, side, QImage::Format_ARGB32_Premultiplied);
-  image.fill(QColor("#18222c"));
+  if (image.isNull())
+    return;
   QByteArray bytes;
   QBuffer buffer(&bytes);
   buffer.open(QIODevice::WriteOnly);
   image.save(&buffer, "PNG");
-  m_lastThumbnailData = QStringLiteral("data:image/png;base64,") + QString::fromLatin1(bytes.toBase64());
+  m_lastThumbnailData = QStringLiteral("data:image/png;base64,")
+                        + QString::fromLatin1(bytes.toBase64());
   emit thumbnailCaptured();
 }
 

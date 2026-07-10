@@ -2,7 +2,9 @@
 
 #include <QColor>
 #include <QElapsedTimer>
+#include <QImage>
 #include <QMatrix4x4>
+#include <QPointer>
 #include <QQuickRhiItem>
 #include <QVector>
 #include <QVector3D>
@@ -17,6 +19,7 @@
 #include <rhi/qrhi.h>
 #include <rhi/qshader.h>
 
+class RhiViewport;
 class RhiViewportRenderer : public QQuickRhiItemRenderer
 {
 public:
@@ -85,6 +88,19 @@ private:
   QVector<Vertex> buildModelVertices(const QList<PrepareSceneData::ModelVertex> &source) const;
   QVector<Vertex> buildHighlightVertices() const;
   QShader loadShader(const QString &path) const;
+
+  // ── Phase 95 (THUMBCAP-01/02/03): offscreen thumbnail capture ──
+  // Real QRhi texture readback replacing the solid-color stub. The thumbnail
+  // is rendered into a separate single-sample offscreen QRhiTexture RT at the
+  // requested size, then read back via QRhiResourceUpdateBatch::readBackTexture.
+  // The request crosses GUI->render via synchronize() (mirroring the
+  // m_fitRequestCount pattern); the QImage crosses back via a queued
+  // QMetaObject::invokeMethod to RhiViewport::deliverThumbnail.
+  bool ensureThumbnailRenderTarget(int size);
+  void releaseThumbnailResources();
+  void renderThumbnailPass(QRhiCommandBuffer *cb);
+  void issueThumbnailReadback(QRhiResourceUpdateBatch *updates);
+  void deliverCompletedThumbnail();
   // Phase 67: instance helper forwarding to the static testable one.
   QVector3D computeGizmoCenter() const;
 
@@ -248,4 +264,32 @@ private:
   qint64 m_previewLastFrameMs = -1;
   qint64 m_previewFirstFrameMs = -1;
   bool m_previewFirstFrameDone = false;
+
+  // ── Phase 95 (THUMBCAP-01/02/03): offscreen thumbnail capture state ──
+  // The offscreen RT is single-sample (sample count 1) so NO MSAA resolve is
+  // needed at readback (frozen decision 2). It has its own render-pass
+  // descriptor because the thumbnail pipelines cannot share the on-screen
+  // renderTarget()'s RPD. The thumbnail pipelines reuse the same .qsb shaders
+  // and vertex layout as m_fillPipeline/m_linePipeline but are separate
+  // instances bound to the thumbnail RPD.
+  std::unique_ptr<QRhiTexture> m_thumbnailTexture;
+  std::unique_ptr<QRhiTextureRenderTarget> m_thumbnailRenderTarget;
+  QRhiRenderPassDescriptor *m_thumbnailRenderPassDescriptor = nullptr;
+  std::unique_ptr<QRhiGraphicsPipeline> m_thumbnailFillPipeline;
+  std::unique_ptr<QRhiGraphicsPipeline> m_thumbnailLinePipeline;
+  // Request mirror (copied from the item in synchronize()).
+  bool m_thumbnailRequestPending = false;
+  int m_thumbnailPlateIndex = 0;
+  int m_thumbnailSize = 128;
+  int m_thumbnailLastBuiltSize = 0;
+  // Async readback state: readBackTexture completes on a later frame, so the
+  // renderer polls m_thumbnailReadbackResult at the start of render() and
+  // delivers the QImage only when data is populated.
+  bool m_thumbnailReadbackInFlight = false;
+  QRhiReadbackResult m_thumbnailReadbackResult;
+  int m_thumbnailResultPlateIndex = 0;
+  int m_thumbnailResultSize = 0;
+  // Item pointer for the queued callback (QPointer survives item recreation
+  // and nulls itself if the item is destroyed before the readback completes).
+  QPointer<RhiViewport> m_viewportItem;
 };

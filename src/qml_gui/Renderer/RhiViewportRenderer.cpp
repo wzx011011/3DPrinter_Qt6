@@ -203,12 +203,44 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   {
     m_roleVisibility.clear();
   }
+
+  // Phase 95 (THUMBCAP-03): mirror the thumbnail capture request from the item
+  // (GUI thread) to the renderer. Mirrors the m_fitRequestCount/m_viewPreset
+  // pattern: requestThumbnailCapture sets the flag + plateIndex/size + update()
+  // on the GUI thread; synchronize() copies them here and clears the item-side
+  // flag so the request does not re-fire every frame. The request is now
+  // "owned" by the renderer until the readback completes.
+  if (viewport->m_thumbnailRequestPending) {
+    m_thumbnailRequestPending = true;
+    m_thumbnailPlateIndex = viewport->m_thumbnailPlateIndex;
+    m_thumbnailSize = viewport->m_thumbnailSize;
+    viewport->m_thumbnailRequestPending = false;
+  }
+  // Cache the item pointer for the queued QImage callback + follow-up update().
+  // QPointer survives item recreation and nulls itself if the item is destroyed
+  // before the readback completes.
+  m_viewportItem = viewport;
 }
 
 void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
 {
   if (cb == nullptr || rhi() == nullptr || renderTarget() == nullptr) {
     return;
+  }
+
+  // Phase 95 (THUMBCAP-01/03): poll the async thumbnail readback at the START
+  // of render(), before the on-screen pass. readBackTexture completes on a
+  // later frame; when m_thumbnailReadbackResult.data becomes non-empty the
+  // QImage is ready and is posted back to the GUI thread. The on-screen scene
+  // buffers are NOT re-uploaded here (the thumbnail MVP overwrite in
+  // renderThumbnailPass is transient — the next frame's synchronize() restores
+  // the on-screen MVP).
+  if (m_thumbnailReadbackInFlight && !m_thumbnailReadbackResult.data.isEmpty()) {
+    m_thumbnailReadbackInFlight = false;
+    deliverCompletedThumbnail();
+    // Force the on-screen camera uniform to refresh on the next frame so the
+    // thumbnail-aspect MVP overwrite does not leak into steady-state rendering.
+    m_cameraUniformBufferUploaded = false;
   }
 
   QRhiResourceUpdateBatch *updates = nullptr;
@@ -359,10 +391,52 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   }
 
   cb->endPass();
+
+  // Phase 95 (THUMBCAP-01/02/03): offscreen thumbnail pass runs AFTER the
+  // on-screen pass completes, as a second beginPass/endPass pair on the same
+  // command buffer. Thumbnail capture is a View3D/AssembleView feature
+  // (Preview thumbnails are out of scope). The readback is issued on the
+  // offscreen pass's resource-update batch and completes on a later frame.
+  if (m_thumbnailRequestPending && !m_thumbnailReadbackInFlight
+      && m_canvasType != RhiViewport::CanvasPreview
+      && m_cameraUniformBuffer != nullptr && m_srb != nullptr
+      && m_thumbnailSize > 0
+      && ensureThumbnailRenderTarget(m_thumbnailSize))
+  {
+    renderThumbnailPass(cb);
+    // Issue the readback on a fresh batch merged into the next beginPass of
+    // the on-screen RT — but since the offscreen pass just ended, use a
+    // resource-update batch that the QRhi processes as part of this frame's
+    // command stream. The readback result lands in m_thumbnailReadbackResult
+    // on a subsequent frame.
+    QRhiResourceUpdateBatch *readbackUpdates = rhi()->nextResourceUpdateBatch();
+    issueThumbnailReadback(readbackUpdates);
+    // Merge the readback into the on-screen RT by ending the frame with it
+    // pending: QRhi processes resource-update batches via
+    // cb->resourceUpdate() — issue it directly here so the readback is
+    // scheduled before the frame ends.
+    cb->resourceUpdate(readbackUpdates);
+    m_thumbnailReadbackInFlight = true;
+    m_thumbnailResultPlateIndex = m_thumbnailPlateIndex;
+    m_thumbnailResultSize = m_thumbnailSize;
+    m_thumbnailRequestPending = false;
+    // Request a follow-up frame so the async readback result is polled on the
+    // next render(). Without this, a single capture on an otherwise-idle
+    // scene would never deliver the QImage.
+    if (m_viewportItem != nullptr) {
+      QMetaObject::invokeMethod(m_viewportItem.data(),
+                                "update",
+                                Qt::QueuedConnection);
+    }
+  }
 }
 
 void RhiViewportRenderer::releaseResources()
 {
+  // Phase 95 (THUMBCAP-01): release offscreen thumbnail RT + pipelines +
+  // pending readback state before the on-screen resources are torn down.
+  releaseThumbnailResources();
+  m_thumbnailRequestPending = false;
   m_linePipeline.reset();
   m_fillPipeline.reset();
   m_translucentFillPipeline.reset();
@@ -416,6 +490,218 @@ void RhiViewportRenderer::releaseResources()
   m_modelGeneration = 0;
   m_cutPlaneDirty = true;
   m_wipeTowerDirty = true;
+}
+
+// ===========================================================================
+// Phase 95 (THUMBCAP-01/02/03): offscreen thumbnail capture infrastructure.
+// Replaces the RhiViewport::requestThumbnailCapture solid-color stub with a
+// real QRhi texture readback. The thumbnail RT is single-sample (frozen
+// decision 2: no MSAA resolve), sized to the requested thumbnail dimensions
+// (frozen decision 1: Option A offscreen RT), and rendered AFTER the on-screen
+// pass completes. The readback is async (completes on a later frame), so the
+// renderer polls the result at the start of render() and delivers the QImage
+// back to the item via a queued callback (frozen decision 3: synchronize()
+// queue pattern + queued signal).
+// ===========================================================================
+void RhiViewportRenderer::releaseThumbnailResources()
+{
+  m_thumbnailFillPipeline.reset();
+  m_thumbnailLinePipeline.reset();
+  if (m_thumbnailRenderPassDescriptor != nullptr) {
+    m_thumbnailRenderPassDescriptor->deleteLater();
+    m_thumbnailRenderPassDescriptor = nullptr;
+  }
+  m_thumbnailRenderTarget.reset();
+  m_thumbnailTexture.reset();
+  m_thumbnailReadbackInFlight = false;
+  m_thumbnailLastBuiltSize = 0;
+}
+
+bool RhiViewportRenderer::ensureThumbnailRenderTarget(int size)
+{
+  if (rhi() == nullptr)
+    return false;
+  // Already built for this size: reuse.
+  if (m_thumbnailRenderTarget && m_thumbnailLastBuiltSize == size)
+    return true;
+
+  // Tear down any previous-size RT before rebuilding.
+  releaseThumbnailResources();
+
+  // Phase 95 (THUMBCAP-02): single-sample (sample count 1) offscreen texture.
+  // No multisample flag, no resolve step. RGBA8 matches the QImage the
+  // readback produces.
+  m_thumbnailTexture.reset(rhi()->newTexture(QRhiTexture::RGBA8,
+                                             QSize(size, size),
+                                             /*sampleCount=*/1,
+                                             QRhiTexture::RenderTarget));
+  if (!m_thumbnailTexture || !m_thumbnailTexture->create()) {
+    releaseThumbnailResources();
+    return false;
+  }
+
+  // Offscreen RT needs its OWN QRhiRenderPassDescriptor (the on-screen
+  // renderTarget()->renderPassDescriptor() is not compatible with the
+  // thumbnail texture format).
+  QRhiTextureRenderTargetDescription desc(QRhiColorAttachment(m_thumbnailTexture.get()));
+  m_thumbnailRenderTarget.reset(rhi()->newTextureRenderTarget(desc));
+  m_thumbnailRenderPassDescriptor = m_thumbnailRenderTarget->newCompatibleRenderPassDescriptor();
+  m_thumbnailRenderTarget->setRenderPassDescriptor(m_thumbnailRenderPassDescriptor);
+  if (!m_thumbnailRenderTarget->create()) {
+    releaseThumbnailResources();
+    return false;
+  }
+
+  // Build the thumbnail pipelines reusing the SAME .qsb shaders and vertex
+  // input layout as the on-screen m_fillPipeline/m_linePipeline, but bound to
+  // the thumbnail RPD. They are separate instances because the render-pass
+  // descriptors differ (cannot reuse on-screen pipelines for the offscreen RT).
+  QShader vertexShader = loadShader(QStringLiteral(":/rhi_viewport/shaders/rhi_viewport.vert.qsb"));
+  QShader fragmentShader = loadShader(QStringLiteral(":/rhi_viewport/shaders/rhi_viewport.frag.qsb"));
+  if (!vertexShader.isValid() || !fragmentShader.isValid()) {
+    releaseThumbnailResources();
+    return false;
+  }
+
+  QRhiVertexInputLayout inputLayout;
+  inputLayout.setBindings({QRhiVertexInputBinding(sizeof(Vertex))});
+  inputLayout.setAttributes({
+      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, offsetof(Vertex, x)),
+      QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float4, offsetof(Vertex, r)),
+  });
+
+  auto buildOne = [&](std::unique_ptr<QRhiGraphicsPipeline> &pipe,
+                      QRhiGraphicsPipeline::Topology topology) -> bool {
+    pipe.reset(rhi()->newGraphicsPipeline());
+    pipe->setTopology(topology);
+    pipe->setShaderStages({
+        QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
+        QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
+    });
+    // Reuse m_srb (binding 0 = camera uniform buffer) so the thumbnail pass
+    // reads the same MVP + gizmoCenter/gizmoScale uniform block.
+    pipe->setShaderResourceBindings(m_srb.get());
+    pipe->setVertexInputLayout(inputLayout);
+    pipe->setRenderPassDescriptor(m_thumbnailRenderPassDescriptor);
+    pipe->setDepthTest(true);
+    pipe->setDepthWrite(true);
+    pipe->setTargetBlends({});
+    if (!pipe->create()) {
+      pipe.reset();
+      return false;
+    }
+    return true;
+  };
+
+  if (!buildOne(m_thumbnailFillPipeline, QRhiGraphicsPipeline::Triangles)
+      || !buildOne(m_thumbnailLinePipeline, QRhiGraphicsPipeline::Lines)) {
+    releaseThumbnailResources();
+    return false;
+  }
+
+  m_thumbnailLastBuiltSize = size;
+  return true;
+}
+
+void RhiViewportRenderer::renderThumbnailPass(QRhiCommandBuffer *cb)
+{
+  // Phase 95 (THUMBCAP-01): render the SAME scene (bed fill + grid lines +
+  // model mesh) as the on-screen View3D/AssembleView pass, but into the
+  // offscreen thumbnail RT. Reuses the on-screen vertex buffers + SRB.
+  // Thumbnail capture is a View3D/AssembleView feature; Preview thumbnails are
+  // out of scope for this phase (gated by the m_canvasType != CanvasPreview
+  // check in the caller).
+  if (cb == nullptr || m_thumbnailRenderTarget == nullptr)
+    return;
+
+  // Re-upload the camera uniform with the thumbnail aspect ratio. The
+  // thumbnail is square so aspect = 1.0 (no distortion). Use the item's
+  // cameraMvp(1.0f) so the offscreen pass does not inherit the on-screen
+  // viewport's wide aspect ratio.
+  const QMatrix4x4 thumbnailMvp = (m_viewportItem != nullptr)
+      ? m_viewportItem->cameraMvp(1.0f)
+      : m_cameraMvp;
+
+  QRhiResourceUpdateBatch *thumbUpdates = rhi()->nextResourceUpdateBatch();
+  // Upload the thumbnail-aspect MVP into the shared camera uniform buffer.
+  // Only the 64-byte MVP is overwritten; the gizmoCenter/gizmoScale tail is
+  // irrelevant for the thumbnail (no gizmos drawn) and is left as-is.
+  const QMatrix4x4 corrected = rhi()->clipSpaceCorrMatrix() * thumbnailMvp;
+  thumbUpdates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 0, 64,
+                                    corrected.constData());
+
+  cb->beginPass(m_thumbnailRenderTarget.get(), m_clearColor, {1.0f, 0}, thumbUpdates);
+  cb->setViewport(QRhiViewport(0, 0, float(m_thumbnailLastBuiltSize),
+                               float(m_thumbnailLastBuiltSize)));
+  cb->setShaderResources(m_srb.get());
+
+  // Bed fill (triangles).
+  if (m_prepareScene.showBed() && m_bedFillBuffer && m_bedFillVertexCount > 0) {
+    cb->setGraphicsPipeline(m_thumbnailFillPipeline.get());
+    const QRhiCommandBuffer::VertexInput fillBinding(m_bedFillBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &fillBinding);
+    cb->draw(m_bedFillVertexCount);
+  }
+  // Bed grid lines.
+  if (m_prepareScene.showBed() && m_bedLineBuffer && m_bedLineVertexCount > 0) {
+    cb->setGraphicsPipeline(m_thumbnailLinePipeline.get());
+    const QRhiCommandBuffer::VertexInput lineBinding(m_bedLineBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &lineBinding);
+    cb->draw(m_bedLineVertexCount);
+  }
+  // Model mesh (triangles) — the actual rendered scene, not just a clear color.
+  if (m_modelVertexBuffer && m_modelVertexCount > 0) {
+    cb->setGraphicsPipeline(m_thumbnailFillPipeline.get());
+    const QRhiCommandBuffer::VertexInput modelBinding(m_modelVertexBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &modelBinding);
+    cb->draw(m_modelVertexCount);
+  }
+
+  cb->endPass();
+}
+
+void RhiViewportRenderer::issueThumbnailReadback(QRhiResourceUpdateBatch *updates)
+{
+  // Phase 95 (THUMBCAP-01): issue the async readback. readBackTexture completes
+  // on a later frame; the result is polled in render() via
+  // m_thumbnailReadbackResult.data becoming non-empty.
+  if (updates == nullptr || m_thumbnailTexture == nullptr)
+    return;
+  m_thumbnailReadbackResult = {};
+  QRhiReadbackDescription rb(m_thumbnailTexture.get());
+  updates->readBackTexture(rb, &m_thumbnailReadbackResult);
+}
+
+void RhiViewportRenderer::deliverCompletedThumbnail()
+{
+  // Phase 95 (THUMBCAP-01/03): construct the QImage from the completed
+  // readback result and post it to the GUI thread via a queued
+  // QMetaObject::invokeMethod to RhiViewport::deliverThumbnail. The QRhi
+  // readback produces raw RGBA8 pixel bytes in m_thumbnailReadbackResult.data
+  // (format == QRhiTexture::RGBA8); wrap them into a QImage.
+  if (m_viewportItem == nullptr)
+    return;
+
+  const QSize size(m_thumbnailResultSize, m_thumbnailResultSize);
+  if (m_thumbnailReadbackResult.data.isEmpty() || size.isEmpty())
+    return;
+
+  // QRhiReadbackResult.format is QRhiTexture::Format. The thumbnail RT is
+  // RGBA8, so the bytes are 4 bytes/pixel in R,G,B,A order. QImage's
+  // Format_RGBA8888 matches that byte order exactly (no swizzle needed).
+  QImage image(reinterpret_cast<const uchar *>(m_thumbnailReadbackResult.data.constData()),
+               size.width(), size.height(), size.width() * 4,
+               QImage::Format_RGBA8888);
+  // Detach into a deep copy with its own buffer before the next readback
+  // overwrites m_thumbnailReadbackResult.data.
+  image = image.copy();
+
+  const int plateIndex = m_thumbnailResultPlateIndex;
+  QMetaObject::invokeMethod(m_viewportItem.data(),
+                            "deliverThumbnail",
+                            Qt::QueuedConnection,
+                            Q_ARG(QImage, image),
+                            Q_ARG(int, plateIndex));
 }
 
 void RhiViewportRenderer::resetPreviewGpuState(bool keepCpuStaging)

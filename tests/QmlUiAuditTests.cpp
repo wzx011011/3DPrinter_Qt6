@@ -136,6 +136,12 @@ private slots:
   // tokens removed by Phase 90 must stay absent. Fails CI deterministically
   // if any reappear. Mirrors Phase 88's deletedSettingsPathsStayAbsent.
   void assembleViewPlaceholderArtifactsStayAbsent();
+  // Phase 95-01 (THUMBCAP-01/02/03): the requestThumbnailCapture solid-color
+  // stub is gone and real QRhi texture readback is wired (offscreen RT +
+  // readBackTexture + render-thread request queue mirroring synchronize() +
+  // queued QImage callback). Source-level only so it runs in the regression
+  // ctest without launching the app.
+  void rhiViewportThumbnailCaptureUsesRealReadback();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -3345,6 +3351,93 @@ void QmlUiAuditTests::assembleViewPlaceholderArtifactsStayAbsent()
            qPrintable(QStringLiteral("qml.qrc must have exactly one pages/AssemblePage.qml "
                                      "entry, got %1")
                           .arg(assemblePageEntries)));
+}
+
+void QmlUiAuditTests::rhiViewportThumbnailCaptureUsesRealReadback()
+{
+  // Phase 95-01 (THUMBCAP-01/02/03): source-audit guard proving the
+  // requestThumbnailCapture solid-color stub is replaced with real QRhi texture
+  // readback. Mirrors the rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads
+  // pattern: reads the item + renderer sources and asserts the replacement is
+  // real. Source-level only — no GPU/runtime dependency — so this runs in the
+  // regression ctest. Runtime pixel proof (non-solid-color capture) is routed
+  // to Phase 98.
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!rendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+
+  // (1) Stub gone (THUMBCAP-01): the #18222c solid-color literal unique to the
+  //     old stub is no longer present anywhere in RhiViewport.cpp.
+  QVERIFY2(!viewportSource.contains(QStringLiteral("#18222c")),
+           "RhiViewport.cpp must not retain the #18222c solid-color stub literal");
+
+  // (2) Real readback wired in the renderer (THUMBCAP-01): readBackTexture +
+  //     QRhiReadbackDescription/QRhiReadbackResult + offscreen texture RT +
+  //     its own compatible render-pass descriptor.
+  QVERIFY2(rendererSource.contains(QStringLiteral("readBackTexture")),
+           "RhiViewportRenderer.cpp must call QRhiResourceUpdateBatch::readBackTexture");
+  QVERIFY2(rendererSource.contains(QStringLiteral("QRhiReadbackDescription"))
+               || rendererSource.contains(QStringLiteral("QRhiReadbackResult")),
+           "RhiViewportRenderer.cpp must use QRhiReadbackDescription/QRhiReadbackResult");
+  QVERIFY2(rendererSource.contains(QStringLiteral("newTextureRenderTarget")),
+           "RhiViewportRenderer.cpp must create an offscreen QRhiTextureRenderTarget");
+  QVERIFY2(rendererSource.contains(QStringLiteral("newCompatibleRenderPassDescriptor")),
+           "RhiViewportRenderer.cpp must create the offscreen RT's own render-pass descriptor");
+
+  // (3) Offscreen RT is single-sample (THUMBCAP-02): thumbnail texture created
+  //     with sample count 1, no multisample resolve in the thumbnail path.
+  QVERIFY2(rendererSource.contains(QStringLiteral("QRhiTexture::RGBA8")),
+           "RhiViewportRenderer.cpp must create the thumbnail texture as RGBA8");
+  QVERIFY2(rendererSource.contains(QStringLiteral("QRhiTexture::RenderTarget")),
+           "RhiViewportRenderer.cpp must flag the thumbnail texture as a render target");
+  QVERIFY2(!rendererSource.contains(QStringLiteral("resolveTexture")),
+           "RhiViewportRenderer.cpp thumbnail path must not perform MSAA resolve (single-sample offscreen RT)");
+
+  // (4) Render-thread request queue mirrors synchronize() (THUMBCAP-03): the
+  //     renderer copies the item-side request and clears the item-side flag
+  //     (m_cameraDirty=false consumption pattern).
+  QVERIFY2(rendererSource.contains(QStringLiteral("viewport->m_thumbnailRequestPending = false")),
+           "RhiViewportRenderer.cpp synchronize() must clear the item-side request flag after copying");
+  QVERIFY2(rendererSource.contains(QStringLiteral("m_thumbnailRequestPending")),
+           "RhiViewportRenderer.cpp must mirror the thumbnail request flag");
+  QVERIFY2(rendererSource.contains(QStringLiteral("m_viewportItem")),
+           "RhiViewportRenderer.cpp must cache the item pointer for the queued callback");
+
+  // (5) Async readback poll at the start of render() (THUMBCAP-01): the
+  //     renderer checks the pending result before the on-screen pass and
+  //     requests a follow-up frame so the async readback is polled.
+  QVERIFY2(rendererSource.contains(QStringLiteral("m_thumbnailReadbackInFlight")),
+           "RhiViewportRenderer.cpp must track the async readback in-flight flag");
+  QVERIFY2(rendererSource.contains(QStringLiteral("m_thumbnailReadbackResult")),
+           "RhiViewportRenderer.cpp must poll the async readback result");
+
+  // (6) Queued callback (THUMBCAP-03): deliverThumbnail is defined on the item
+  //     and the renderer posts the QImage via Qt::QueuedConnection.
+  QVERIFY2(viewportHeader.contains(QStringLiteral("deliverThumbnail(const QImage &image, int plateIndex)")),
+           "RhiViewport.h must declare the deliverThumbnail GUI-thread delivery slot");
+  QVERIFY2(viewportSource.contains(QStringLiteral("void RhiViewport::deliverThumbnail")),
+           "RhiViewport.cpp must define the deliverThumbnail delivery slot");
+  QVERIFY2(rendererSource.contains(QStringLiteral("Qt::QueuedConnection")),
+           "RhiViewportRenderer.cpp must post the QImage via Qt::QueuedConnection");
+
+  // (7) Public contract preserved (THUMBCAP-01): requestThumbnailCapture still
+  //     sets the request + calls update(); lastThumbnailData/thumbnailCaptured
+  //     remain the Q_PROPERTY/signal contract.
+  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_INVOKABLE void requestThumbnailCapture(int plateIndex, int size = 128)")),
+           "RhiViewport.h must keep the requestThumbnailCapture Q_INVOKABLE signature unchanged");
+  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_PROPERTY(QString lastThumbnailData")),
+           "RhiViewport.h must keep the lastThumbnailData Q_PROPERTY contract");
+  QVERIFY2(viewportHeader.contains(QStringLiteral("void thumbnailCaptured();")),
+           "RhiViewport.h must keep the thumbnailCaptured signal contract");
+  QVERIFY2(viewportSource.contains(QStringLiteral("m_thumbnailRequestPending = true")),
+           "RhiViewport::requestThumbnailCapture must set the render-thread request flag");
+  QVERIFY2(viewportSource.contains(QStringLiteral("m_thumbnailSize = qMax(32, size)")),
+           "RhiViewport::requestThumbnailCapture must clamp the thumbnail size to >= 32");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
