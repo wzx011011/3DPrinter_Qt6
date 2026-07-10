@@ -503,7 +503,7 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     target_compile_definitions(PartPlateTests PRIVATE
         QT_TESTCASE_SOURCEDIR="${CMAKE_SOURCE_DIR}"
     )
-    target_link_options(PartPlateTests PRIVATE /FORCE:MULTIPLE)
+    target_link_options(PartPlateTests PRIVATE /FORCE:MULTIPLE /SUBSYSTEM:CONSOLE)
     add_test(NAME PartPlateTests COMMAND PartPlateTests)
     set_tests_properties(PartPlateTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"

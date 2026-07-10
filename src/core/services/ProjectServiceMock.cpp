@@ -865,13 +865,11 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
             if (pi < receiver->pendingPlateBedType_.size()) p->setBedType(receiver->pendingPlateBedType_[pi]);
             if (pi < receiver->pendingPlatePrintSeq_.size()) p->setPrintSequence(receiver->pendingPlatePrintSeq_[pi]);
             if (pi < receiver->pendingPlateSpiral_.size()) p->setSpiralMode(receiver->pendingPlateSpiral_[pi]);
-            // Phase 97 fix (THUMBRT-01): restore the persisted thumbnail so it
-            // survives save->reload. addInstance above invalidated the cache;
-            // setThumbnail repopulates it without triggering regeneration. (Mirrors
-            // the loadProject block at ~5754.)
-            if (pi < receiver->pendingPlateThumbnails_.size() &&
-                !receiver->pendingPlateThumbnails_[pi].isNull())
-              p->setThumbnail(receiver->pendingPlateThumbnails_[pi]);
+            // NOTE: thumbnail restoration is applied AFTER arrangeObjects below.
+            // The in-loop setThumbnail would be wiped by arrangeObjects ->
+            // rebuildPlatesAfterArrangement (clearInstances + addInstance each
+            // invalidate m_thumbnail per PartPlate.h D-30-10). See the
+            // post-arrange restore pass at ~907.
           }
           // loadedPlateCount may exceed the reconstructed list (multi-plate 3MF whose
           // object membership wasn't fully parsed) — pad with empty plates to match.
@@ -900,6 +898,22 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         // 传具体热床 + 容错 vfn（见 arrangeObjects）保证导入后模型在床内且不抛异常。
         receiver->arrangeObjects(5.0f, false, false,
                                  QStringLiteral("0,0,220,0,220,220,0,220"));
+
+        // Phase 97 fix (THUMBRT-01): restore persisted thumbnails AFTER
+        // arrangeObjects. arrangeObjects -> rebuildPlatesAfterArrangement
+        // invalidates m_thumbnail via clearInstances()/addInstance()
+        // (PartPlate.h D-30-10), so an in-loop setThumbnail (pre-arrange) would
+        // be wiped before loadFinished fires. This post-arrange pass is the
+        // last writer of m_thumbnail before the load completes, so the
+        // restored thumbnail survives save->reload. (Mirrors loadProject below.)
+        if (receiver->m_plateList) {
+          for (int pi = 0; pi < receiver->m_plateList->plateCount(); ++pi) {
+            if (pi >= receiver->pendingPlateThumbnails_.size()) break;
+            const QImage &thumb = receiver->pendingPlateThumbnails_[pi];
+            if (!thumb.isNull())
+              receiver->m_plateList->plate(pi)->setThumbnail(thumb);
+          }
+        }
 
         emit receiver->projectChanged();
         emit receiver->plateDataLoaded(receiver->m_plateList ? receiver->m_plateList->plateCount() : 0);
@@ -5822,13 +5836,11 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
               }
               if (pi < receiver->pendingPlateFilamentMapMode_.size())
                 p->setFilamentMapMode(receiver->pendingPlateFilamentMapMode_[pi]);
-              // v3.2 Phase 30 (THUMB-02): restore the persisted thumbnail so it
-              // survives save→reload (D-30-8 round-trip). Note: addInstance above
-              // invalidated the cache; setThumbnail repopulates it without
-              // triggering regeneration on next access.
-              if (pi < receiver->pendingPlateThumbnails_.size() &&
-                  !receiver->pendingPlateThumbnails_[pi].isNull())
-                p->setThumbnail(receiver->pendingPlateThumbnails_[pi]);
+              // NOTE: thumbnail restoration is applied AFTER arrangeObjects below.
+              // The in-loop setThumbnail would be wiped by arrangeObjects ->
+              // rebuildPlatesAfterArrangement (clearInstances + addInstance each
+              // invalidate m_thumbnail per PartPlate.h D-30-10). See the
+              // post-arrange restore pass at ~5863.
             }
             const int reconstructed = receiver->m_plateList->plateCount();
             const int target = std::max(reconstructed, loadedPlateCount);
@@ -5854,6 +5866,22 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           // bed_idx==-1（详见 arrangeObjects 注释）。
           receiver->arrangeObjects(5.0f, false, false,
                                    QStringLiteral("0,0,220,0,220,220,0,220"));
+
+          // Phase 97 fix (THUMBRT-01): restore persisted thumbnails AFTER
+          // arrangeObjects. arrangeObjects -> rebuildPlatesAfterArrangement
+          // invalidates m_thumbnail via clearInstances()/addInstance()
+          // (PartPlate.h D-30-10), so an in-loop setThumbnail (pre-arrange) would
+          // be wiped before loadFinished fires. This post-arrange pass is the
+          // last writer of m_thumbnail before the load completes, so the
+          // restored thumbnail survives save->reload. (Mirrors loadFile above.)
+          if (receiver->m_plateList) {
+            for (int pi = 0; pi < receiver->m_plateList->plateCount(); ++pi) {
+              if (pi >= receiver->pendingPlateThumbnails_.size()) break;
+              const QImage &thumb = receiver->pendingPlateThumbnails_[pi];
+              if (!thumb.isNull())
+                receiver->m_plateList->plate(pi)->setThumbnail(thumb);
+            }
+          }
 
           emit receiver->projectChanged();
           emit receiver->plateDataLoaded(receiver->m_plateList ? receiver->m_plateList->plateCount() : 0);
