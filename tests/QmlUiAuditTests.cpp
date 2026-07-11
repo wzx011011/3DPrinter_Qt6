@@ -150,6 +150,14 @@ private slots:
   // regression ctest. Runtime save-reload round-trip proof is routed to
   // Phase 97.
   void projectServiceWrites3mfThumbnails();
+  // Phase 102-01 (WTVERIFY-01): consolidated wipe-tower source-audit lock
+  // across all 8 WT-* regions from the Phase 99 gap matrix
+  // (99-GAP-MATRIX.md). Each assertion names the WT-* region it locks so a
+  // future regression's failure output is directly attributable to the gap-
+  // matrix row. Mirrors the deterministic Phase 101 source-audit pattern
+  // (QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with a
+  // region-named message). Source-level only; runs in the regression ctest.
+  void wipeTowerReadbackAndRenderAnchorsPresent();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -3493,6 +3501,124 @@ void QmlUiAuditTests::projectServiceWrites3mfThumbnails()
   //     populate must inherit the same guard).
   QVERIFY2(src.contains(QStringLiteral("#ifdef HAS_LIBSLIC3R")),
            "ProjectServiceMock.cpp must guard the libslic3r write-side under #ifdef HAS_LIBSLIC3R");
+}
+
+void QmlUiAuditTests::wipeTowerReadbackAndRenderAnchorsPresent()
+{
+  // Phase 102-01 (WTVERIFY-01): consolidated wipe-tower source-audit lock
+  // covering all 8 WT-* regions from 99-GAP-MATRIX.md. This is the regression
+  // lock that prevents a future refactor from silently removing the readback
+  // wiring (Phase 100), the PreparePage binding (Phase 100), the Option A
+  // baseline comment (Phase 101), or the SoftwareViewport QPainter box
+  // (Phase 101). Each QVERIFY2 message names the WT-* region it locks so a
+  // failure points directly at the gap-matrix row.
+  //
+  // Pattern: QFile + QT_TESTCASE_SOURCEDIR + QString::contains (deterministic,
+  // build-dir-independent). Mirrors the Phase 101
+  // wipeTowerRealDimsReachRendererPipeline pattern (ViewModelSmokeTests.cpp)
+  // and the Phase 96 projectServiceWrites3mfThumbnails pattern in this file.
+
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString sliceService = readSource(QStringLiteral("src/core/services/SliceService.cpp"));
+  const QString editorVmHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString editorVmSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString gizmoGeometry = readSource(QStringLiteral("src/core/rendering/GizmoGeometry.cpp"));
+  const QString rhiViewportRenderer = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString softwareViewport = readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.cpp"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!sliceService.isEmpty(), "Unable to read SliceService.cpp");
+  QVERIFY2(!editorVmHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!editorVmSource.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!gizmoGeometry.isEmpty(), "Unable to read GizmoGeometry.cpp");
+  QVERIFY2(!rhiViewportRenderer.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!softwareViewport.isEmpty(), "Unable to read SoftwareViewport.cpp");
+
+  // (1) WT-VIEWPORT-DEFAULTS (Phase 100): PreparePage.qml GLViewport must bind
+  //     all 6 wipe-tower Q_PROPERTYs to root.editorVm so the renderer no longer
+  //     falls through to the hardcoded 10/10/50/100/25 defaults. Each binding
+  //     is whitespace-sensitive; a reformatter that breaks this signals a real
+  //     change to review.
+  QVERIFY2(preparePage.contains(QStringLiteral("showWipeTower: root.editorVm ? root.editorVm.showWipeTower")),
+           "WT-VIEWPORT-DEFAULTS: PreparePage.qml GLViewport must bind showWipeTower to editorVm");
+  QVERIFY2(preparePage.contains(QStringLiteral("wipeTowerWidth: root.editorVm ? root.editorVm.wipeTowerWidth")),
+           "WT-VIEWPORT-DEFAULTS: PreparePage.qml GLViewport must bind wipeTowerWidth to editorVm");
+  QVERIFY2(preparePage.contains(QStringLiteral("wipeTowerDepth: root.editorVm ? root.editorVm.wipeTowerDepth")),
+           "WT-VIEWPORT-DEFAULTS: PreparePage.qml GLViewport must bind wipeTowerDepth to editorVm");
+  QVERIFY2(preparePage.contains(QStringLiteral("wipeTowerHeight: root.editorVm ? root.editorVm.wipeTowerHeight")),
+           "WT-VIEWPORT-DEFAULTS: PreparePage.qml GLViewport must bind wipeTowerHeight to editorVm");
+  QVERIFY2(preparePage.contains(QStringLiteral("wipeTowerX: root.editorVm ? root.editorVm.wipeTowerX")),
+           "WT-VIEWPORT-DEFAULTS: PreparePage.qml GLViewport must bind wipeTowerX to editorVm");
+  QVERIFY2(preparePage.contains(QStringLiteral("wipeTowerZ: root.editorVm ? root.editorVm.wipeTowerZ")),
+           "WT-VIEWPORT-DEFAULTS: PreparePage.qml GLViewport must bind wipeTowerZ to editorVm");
+
+  // (2) WT-PRINT-DATA (Phase 100): SliceService.cpp must read the upstream
+  //     Print::wipe_tower_data() AND the has_wipe_tower() gate inside the
+  //     worker where the Print is valid. Zero references means the real
+  //     sliced geometry never reaches the GUI.
+  QVERIFY2(sliceService.contains(QStringLiteral("print.wipe_tower_data()")),
+           "WT-PRINT-DATA: SliceService must read print.wipe_tower_data()");
+  QVERIFY2(sliceService.contains(QStringLiteral("print.has_wipe_tower()")),
+           "WT-PRINT-DATA: SliceService must read print.has_wipe_tower()");
+
+  // (3) WT-READBACK-POINT (Phase 100, Frozen Decision 1): the readback must
+  //     occur between print.process() (where wipe_tower_data is populated) and
+  //     activePrint_.store(nullptr) (where the Print is invalidated). The
+  //     capturedGeometry.valid = true marker confirms the valid path is set
+  //     inside that window. No Print* may escape the worker.
+  QVERIFY2(sliceService.contains(QStringLiteral("print.process()")),
+           "WT-READBACK-POINT: SliceService must call print.process() before reading wipe_tower_data");
+  QVERIFY2(sliceService.contains(QStringLiteral("activePrint_.store(nullptr")),
+           "WT-READBACK-POINT: SliceService must invalidate the Print via activePrint_.store(nullptr) after readback");
+  QVERIFY2(sliceService.contains(QStringLiteral("capturedGeometry.valid = true")),
+           "WT-READBACK-POINT: SliceService must set capturedGeometry.valid = true inside the readback window (between print.process() and activePrint_.store(nullptr))");
+
+  // (4) WT-HAS-WIPE-GATE (Phase 100, Frozen Decision 3): the readback gates
+  //     on has_wipe_tower() inside SliceService.cpp, and the EditorViewModel
+  //     slot forces m_showWipeTower from geometry.valid so single-material
+  //     slices show no placeholder box leak.
+  QVERIFY2(sliceService.contains(QStringLiteral("if (print.has_wipe_tower())")),
+           "WT-HAS-WIPE-GATE: SliceService readback must be gated on if (print.has_wipe_tower())");
+  QVERIFY2(editorVmSource.contains(QStringLiteral("m_showWipeTower = true")),
+           "WT-HAS-WIPE-GATE: EditorViewModel::onWipeTowerGeometryReady must set m_showWipeTower = true on the valid path");
+  QVERIFY2(editorVmSource.contains(QStringLiteral("m_showWipeTower = false")),
+           "WT-HAS-WIPE-GATE: EditorViewModel::onWipeTowerGeometryReady must force m_showWipeTower = false on the invalid path (no placeholder leak)");
+
+  // (5) WT-PLACEHOLDER-BOX (Phase 101, Option A baseline): buildWipeTowerVertices
+  //     must accept the real width/depth/height/position dims fed from the
+  //     readback. The Option A structure (36-vertex rectangular prism) is the
+  //     v4.4 baseline; Option B real mesh is deferred.
+  QVERIFY2(gizmoGeometry.contains(QStringLiteral("GizmoGeometry::buildWipeTowerVertices(float x,")),
+           "WT-PLACEHOLDER-BOX: GizmoGeometry::buildWipeTowerVertices must accept width/depth/height/position dims (Option A structure)");
+
+  // (6) WT-RENDERER-BUFFER (Phase 101 verified): RhiViewportRenderer::
+  //     uploadWipeTowerBuffer must call buildWipeTowerVertices with the
+  //     m_wipeTower* members so the real dims reach the GPU buffer. The
+  //     m_wipeTowerDirty rebuild path was already correct end-to-end after
+  //     Phase 100.
+  QVERIFY2(rhiViewportRenderer.contains(QStringLiteral("buildWipeTowerVertices(m_wipeTowerX,")),
+           "WT-RENDERER-BUFFER: RhiViewportRenderer::uploadWipeTowerBuffer must call buildWipeTowerVertices with the m_wipeTower* dims");
+
+  // (7) WT-RENDER-UPGRADE (Phase 101, Frozen Decision 2): the Option A
+  //     baseline must be documented in the GizmoGeometry.cpp comment block
+  //     with the upstream load_wipe_tower_preview anchor and the Option B
+  //     deferral marker. This locks the v4.4 baseline against accidental
+  //     upgrade to Option B without re-opening WTAUDIT-02.
+  QVERIFY2(gizmoGeometry.contains(QStringLiteral("Option A")),
+           "WT-RENDER-UPGRADE: GizmoGeometry.cpp must document the Option A baseline");
+  QVERIFY2(gizmoGeometry.contains(QStringLiteral("load_wipe_tower_preview")),
+           "WT-RENDER-UPGRADE: GizmoGeometry.cpp must cite the upstream load_wipe_tower_preview anchor");
+  QVERIFY2(gizmoGeometry.contains(QStringLiteral("Option B")),
+           "WT-RENDER-UPGRADE: GizmoGeometry.cpp must document Option B as the deferred future upgrade");
+
+  // (8) WT-SOFTWARE-VIEWPORT (Phase 101): SoftwareViewport.cpp paint must
+  //     consume m_showWipeTower (the WTREAD-02 gate) and the dim members
+  //     (m_wipeTowerWidth/Depth/Height/X/Z) so the software fallback path
+  //     does not lag the RHI path. The QPainter box mirrors the RHI box
+  //     geometry + color.
+  QVERIFY2(softwareViewport.contains(QStringLiteral("m_showWipeTower")),
+           "WT-SOFTWARE-VIEWPORT: SoftwareViewport.cpp paint must consume m_showWipeTower (the WTREAD-02 gate)");
+  QVERIFY2(softwareViewport.contains(QStringLiteral("m_wipeTowerWidth")),
+           "WT-SOFTWARE-VIEWPORT: SoftwareViewport.cpp paint must consume m_wipeTowerWidth (real dim from readback)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
