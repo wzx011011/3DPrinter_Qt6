@@ -228,7 +228,14 @@ private:
   QVariantList m_meshBatchSourceObjectIndices;
   int m_selectedSourceObjectIndex = -1;
   int m_hoveredSourceObjectIndex = -1;
-  bool m_showWipeTower = true;
+  // Phase 100 (WTREAD-02): aligned to false so the software path gates on real
+  // data like the RHI path (RhiViewport.h:304 default false), not default-true.
+  // SoftwareViewport is not instantiated in any page today (only registered as
+  // an alternate GLViewport QML type at main_qml.cpp:305); this is defensive so
+  // a future instantiation cannot leak a placeholder box before readback
+  // arrives. The width/depth/height/x/z defaults stay 0.f (benign while
+  // show=false).
+  bool m_showWipeTower = false;
   float m_wipeTowerWidth = 0.f;
   float m_wipeTowerDepth = 0.f;
   float m_wipeTowerHeight = 0.f;
