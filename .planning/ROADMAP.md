@@ -34,15 +34,15 @@
 
 - [x] Phase 99: Wipe-Tower Geometry Gap Audit
 - [x] Phase 100: Wipe-Tower Geometry Readback (completed 2026-07-11)
-- [ ] Phase 101: Wipe-Tower Real Rendering Upgrade
-- [ ] Phase 102: Wipe-Tower Verification And Regression
+- [x] Phase 101: Wipe-Tower Real Rendering Upgrade (completed 2026-07-11)
+- [x] Phase 102: Wipe-Tower Verification And Regression (completed 2026-07-11)
 
 | Phase | Name | Goal | Requirements |
 |---|---|---|---|
 | 99 | Wipe-Tower Geometry Gap Audit | Freeze the v4.4 readback + rendering region map: placeholder path, upstream `Print::wipe_tower_data()` anchors, post-slice readback integration point, rendering-upgrade decision (box dims vs real mesh), and verification expectations before edits. | WTAUDIT-01, WTAUDIT-02 |
 | 100 | 1/1 | Complete   | 2026-07-11 |
-| 101 | Wipe-Tower Real Rendering Upgrade | Feed the real geometry dimensions into the renderer (replace placeholder defaults) and upgrade `GizmoGeometry::buildWipeTowerVertices` from a placeholder box toward real geometry (dimensioned box minimum, real mesh if feasible), with brim/rib representation. | WTRENDER-01, WTRENDER-02 |
-| 102 | Wipe-Tower Verification And Regression | Lock source/QML audits, run canonical verifier, confirm Prepare/Preview/AssembleView regression-free, and verify the wipe-tower renders at runtime when a multi-material slice produces one. | WTVERIFY-01, WTVERIFY-02 |
+| 101 | 1/1 | Complete   | 2026-07-11 |
+| 102 | 1/1 | Complete   | 2026-07-11 |
 
 ### Phase 99: Wipe-Tower Geometry Gap Audit
 
@@ -55,7 +55,7 @@ Success criteria:
 
 ### Phase 100: Wipe-Tower Geometry Readback
 
-**Status:** Not started
+**Status:** Complete
 **Plans:** 1/1 plans complete
 
 Success criteria:
@@ -64,8 +64,8 @@ Success criteria:
 
 ### Phase 101: Wipe-Tower Real Rendering Upgrade
 
-**Status:** Not started
-**Plans:** 0/1
+**Status:** Complete
+**Plans:** 1/1 plans complete
 
 Success criteria:
 1. The rendered wipe-tower reflects real sliced dimensions (not placeholder 10/10/50/100/25).
@@ -73,8 +73,8 @@ Success criteria:
 
 ### Phase 102: Wipe-Tower Verification And Regression
 
-**Status:** Not started
-**Plans:** 0/1
+**Status:** Complete
+**Plans:** 1/1 plans complete
 
 Success criteria:
 1. Placeholder defaults are no longer steady-state when a real slice exists; source/QML audits cover the readback wiring + rendering-upgrade anchors.
