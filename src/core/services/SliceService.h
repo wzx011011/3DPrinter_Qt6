@@ -31,6 +31,36 @@ struct PlateSliceResult {
   int source = 0;
 };
 
+/// Phase 100 (WTREAD-01): Wipe-tower geometry captured BY VALUE inside the
+/// SliceService worker after print.process() succeeds and before the Print is
+/// invalidated. No Print* or WipeTowerData* may escape the worker (Frozen
+/// Decision 1 from 99-GAP-MATRIX.md). The fields mirror upstream
+/// Print::WipeTowerData (Print.hpp:740-786) and the width/position derivation
+/// in Print.cpp:2871-2873 (bbx span + rib_offset). The Qt renderer uses X/Z as
+/// the bed plane (upstream Y maps to Qt Z), matching buildWipeTowerVertices at
+/// GizmoGeometry.cpp:449.
+struct WipeTowerGeometry {
+  /// Mirrors Print::has_wipe_tower() (Print.hpp:988). When false (single-material
+  /// / enable_prime_tower off), the renderer must show no wipe-tower (WTREAD-02).
+  bool valid = false;
+  /// Tower origin X in the bed plane (bbx.min.x() + rib_offset.x()).
+  float x = 0.f;
+  /// Tower origin Z in the bed plane (bbx.min.y() + rib_offset.y()).
+  float z = 0.f;
+  /// Tower width (bbx.max.x() - bbx.min.x()).
+  float width = 0.f;
+  /// Tower depth (Print::get_wipe_tower_depth()).
+  float depth = 0.f;
+  /// Tower height (Print::wipe_tower_data().height).
+  float height = 0.f;
+  /// Tower brim width (Print::wipe_tower_data().brim_width).
+  float brimWidth = 0.f;
+  /// Rib offset X (Print::get_rib_offset().x()).
+  float ribOffsetX = 0.f;
+  /// Rib offset Y (Print::get_rib_offset().y()).
+  float ribOffsetY = 0.f;
+};
+
 class SliceService final : public QObject
 {
   Q_OBJECT
@@ -129,6 +159,12 @@ signals:
   void resultChanged();
   void sliceResultCleared();
   void sliceFinished(const QString &estimatedTime);
+  /// Phase 100 (WTREAD-01): delivers the captured-by-value wipe-tower geometry
+  /// to the GUI thread. Emitted on the success branch of the sliceFinished
+  /// queued-invokeMethod lambda (SliceService.cpp worker). When valid is false
+  /// (single-material / enable_prime_tower off), receivers must gate to
+  /// showWipeTower=false (WTREAD-02).
+  void wipeTowerGeometryReady(const WipeTowerGeometry &geometry);
   void sliceFailed(const QString &message);
   void exportStarted(const QString &stage);
   void exportFinished(const QString &filePath);

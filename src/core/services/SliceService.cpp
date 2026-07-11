@@ -417,6 +417,12 @@ void SliceService::startSlice(const QString &projectName)
     QString resultPlateLabel;
     int resultPlateIndex = -1;
     int layerCount = 0;
+    // Phase 100 (WTREAD-01): captured-by-value wipe-tower geometry. Stays
+    // default-constructed (valid=false) in mock mode and on any error/cancel
+    // path; only the HAS_LIBSLIC3R success branch populates it. Captured by
+    // value into the GUI-thread delivery lambda below so no Print* escapes
+    // the worker (Frozen Decision 1).
+    WipeTowerGeometry capturedGeometry{};
 
 #ifdef HAS_LIBSLIC3R
     try
@@ -619,6 +625,31 @@ void SliceService::startSlice(const QString &projectName)
       if (printStats.total_cost > 0.0)
         resultCostLabel = QStringLiteral("$%1").arg(QString::number(printStats.total_cost, 'f', 2));
 
+      // Phase 100 (WTREAD-01): capture real wipe-tower geometry BY VALUE before
+      // the Print is invalidated (activePrint_.store(nullptr) below). No Print*
+      // or WipeTowerData* may escape the worker (Frozen Decision 1). The
+      // width/position derivation matches upstream Print.cpp:2871-2873
+      // (bbx span + rib_offset). The Qt renderer uses X/Z as the bed plane
+      // (upstream Y maps to Qt Z), matching buildWipeTowerVertices at
+      // GizmoGeometry.cpp:449. has_wipe_tower() (Print.hpp:988) is the gate:
+      // when false, capturedGeometry.valid stays false (WTREAD-02).
+      if (print.has_wipe_tower())
+      {
+        const Slic3r::BoundingBoxf bbx = print.get_wipe_tower_bbx();
+        const float depth = print.get_wipe_tower_depth();
+        const Slic3r::Vec2f ribOffset = print.get_rib_offset();
+        const Slic3r::WipeTowerData &wtData = print.wipe_tower_data();
+        capturedGeometry.valid = true;
+        capturedGeometry.width = float(bbx.max.x() - bbx.min.x());
+        capturedGeometry.depth = depth;
+        capturedGeometry.height = wtData.height;
+        capturedGeometry.brimWidth = wtData.brim_width;
+        capturedGeometry.x = float(bbx.min.x() + ribOffset.x());
+        capturedGeometry.z = float(bbx.min.y() + ribOffset.y());
+        capturedGeometry.ribOffsetX = ribOffset.x();
+        capturedGeometry.ribOffsetY = ribOffset.y();
+      }
+
       resultPlateLabel = targetPlateLabel;
       resultPlateIndex = targetPlateIndex;
 
@@ -685,7 +716,7 @@ void SliceService::startSlice(const QString &projectName)
     if (!receiver)
       return;
 
-    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, resultFilamentLabel, resultCostLabel, layerCount]() {
+    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, resultFilamentLabel, resultCostLabel, layerCount, capturedGeometry]() {
       if (!receiver)
         return;
 
@@ -761,6 +792,17 @@ void SliceService::startSlice(const QString &projectName)
       emit receiver->progressUpdated(100, receiver->statusLabel_);
       emit receiver->resultChanged();
       emit receiver->sliceFinished(receiver->estimatedTimeLabel_);
+      // Phase 100 (WTREAD-01): deliver the captured-by-value wipe-tower geometry
+      // to the GUI thread. Emitted on the success branch only (cancel/error
+      // branches above return early without reaching here). The
+      // EditorViewModel::onWipeTowerGeometryReady slot applies the has_wipe_tower()
+      // gate (WTREAD-02): when capturedGeometry.valid is false, showWipeTower
+      // stays false and no placeholder dims are pushed.
+      qInfo("[SliceService] wipe-tower ready valid=%d w=%.2f d=%.2f h=%.2f x=%.2f z=%.2f",
+            capturedGeometry.valid ? 1 : 0,
+            capturedGeometry.width, capturedGeometry.depth,
+            capturedGeometry.height, capturedGeometry.x, capturedGeometry.z);
+      emit receiver->wipeTowerGeometryReady(capturedGeometry);
     }, Qt::QueuedConnection); });
 }
 
