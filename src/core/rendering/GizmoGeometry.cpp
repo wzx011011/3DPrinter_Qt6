@@ -447,6 +447,42 @@ GizmoGeometry::buildCutPlaneOutlineVertices(const QVector3D &boundsMin,
 
 // ===========================================================================
 // buildWipeTowerVertices
+//
+// Phase 101 (WTRENDER-02) - Option A v4.4 baseline (LOCKED per Phase 99 Frozen
+// Decision 2, WT-RENDER-UPGRADE, in 99-GAP-MATRIX.md). This builder emits a
+// 36-vertex dimensioned rectangular prism from the REAL sliced width/depth/
+// height/position delivered by Phase 100's readback (Print::wipe_tower_data()
+// -> SliceService::WipeTowerGeometry -> EditorViewModel Q_PROPERTYs ->
+// PreparePage.qml GLViewport binding -> RhiViewportRenderer::synchronize ->
+// uploadWipeTowerBuffer). It mirrors the upstream default box-preview path
+// `GLVolumeCollection::load_wipe_tower_preview` (3DScene.cpp:840-885), which
+// builds `make_cube(width, depth, height)` at :855 from the real sliced dims
+// and sets `v.is_wipe_tower = true` at :882. The single hardcoded color
+// {0.35, 0.60, 0.85, 0.50} below is the Qt-side simplification of upstream's
+// per-extruder colored slices (3DScene.cpp:851-873); per-extruder coloring is
+// out of scope for v4.4.
+//
+// Input contract (Phase 100 REVIEW W1, commit b12d0e5): `x` and `z` arrive as
+// the box CENTER in the bed plane (SliceService.cpp converts the upstream
+// corner origin `bbx.min + rib_offset` to center by adding half the
+// width/depth before delivery). This builder's `x - hw` / `x + hw` /
+// `z - hd` / `z + hd` convention is therefore correct: it reconstructs the
+// box faces around the supplied center. Y is up; kGroundY (-0.04f) is the bed
+// surface so the box sits on the plate.
+//
+// Option B (real wipe-tower mesh) is a LOCKED FUTURE UPGRADE - DO NOT
+// implement it without re-opening WTAUDIT-02. Option B mirrors the upstream
+// high-fidelity path `GLVolumeCollection::load_real_wipe_tower_preview`
+// (3DScene.cpp:887-925), which builds the real mesh via
+// `mesh.convex_hull_3d()` at :914 from
+// `wipe_tower_mesh_data->real_wipe_tower_mesh` + `real_brim_mesh`
+// (Print.hpp:745-746, held in the optional `wipe_tower_mesh_data` at
+// Print.hpp:766). Option B requires an ITS (indexed_triangle_set) vertex
+// format extension in GizmoGeometry (this builder emits a fixed 36-vertex box
+// layout, not an arbitrary mesh) and a non-box upload path in
+// RhiViewportRenderer, plus handling for `wipe_tower_mesh_data == std::nullopt`
+// (its clear() resets it to nullopt at Print.hpp:776). Option B shows the
+// brim/rib/cone base; Option A does not. v4.4 ships Option A only.
 // ===========================================================================
 QVector<GizmoVertex>
 GizmoGeometry::buildWipeTowerVertices(float x,
