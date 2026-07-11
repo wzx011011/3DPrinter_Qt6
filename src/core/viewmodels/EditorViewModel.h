@@ -723,15 +723,6 @@ public:
   float wipeTowerX() const;
   float wipeTowerZ() const;
 
-private slots:
-  /// Phase 100 (WTREAD-01): receives the captured-by-value wipe-tower geometry
-  /// delivered by SliceService::wipeTowerGeometryReady on the GUI thread.
-  /// Applies the has_wipe_tower() gate (WTREAD-02): when geometry.valid is
-  /// false, m_showWipeTower is forced to false and the dim members are left
-  /// untouched (no placeholder pushed as "real" geometry). Always emits
-  /// wipeTowerGeometryChanged() so the QML bindings refresh.
-  void onWipeTowerGeometryReady(const WipeTowerGeometry &geometry);
-
   bool allPlatesSliced() const;
   int extruderCount() const;
   Q_INVOKABLE QString extruderUsedLength(int extruderId) const;
@@ -827,6 +818,15 @@ private slots:
   /// Rebuild object list and notify (called by undo/redo commands after model changes)
   Q_INVOKABLE void rebuildAndNotify();
   UndoRedoManager *undoRedoManager() const { return m_undoManager; }
+
+private slots:
+  /// Phase 100 (WTREAD-01): receives the captured-by-value wipe-tower geometry
+  /// delivered by SliceService::wipeTowerGeometryReady on the GUI thread.
+  /// Applies the has_wipe_tower() gate (WTREAD-02): when geometry.valid is
+  /// false, m_showWipeTower is forced to false and the dim members are left
+  /// untouched (no placeholder pushed as "real" geometry). Always emits
+  /// wipeTowerGeometryChanged() so the QML bindings refresh.
+  void onWipeTowerGeometryReady(const WipeTowerGeometry &geometry);
 
 signals:
   void stateChanged();
