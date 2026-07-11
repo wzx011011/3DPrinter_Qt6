@@ -95,3 +95,171 @@ read from the current Qt6 source:
 | WT-RENDER-UPGRADE | `src/core/rendering/GizmoGeometry.cpp:449-499` (`buildWipeTowerVertices`, the Option A target: keep the box builder, feed real dims). | Option A source-truth: `3DScene.cpp:840-885 load_wipe_tower_preview` (`make_cube(width, depth, height)` box from real dims, `:855`). Option B source-truth: `3DScene.cpp:887-925 load_real_wipe_tower_preview` (real mesh via `mesh.convex_hull_3d()` at `:914` from `wipe_tower_mesh_data`; shows brim/rib/cone base). | `src/core/rendering/GizmoGeometry.cpp:449-499` (`buildWipeTowerVertices`, Option A target: keep the box builder, feed real dims); for Option B the `indexed_triangle_set` from `wipe_tower_mesh_data->real_wipe_tower_mesh` + `real_brim_mesh` (`Print.hpp:745-746`) would need ITS handling in `GizmoGeometry` + `RhiViewportRenderer`. | Freeze Option A as v4.4 baseline; document Option B as future upgrade (see Frozen Decisions WTAUDIT-02). | The box is a placeholder shape (no brim/rib/cone base) until Option B lands; Option A closes the dim gap with minimal risk and reuses the existing `buildWipeTowerVertices` + `uploadWipeTowerBuffer` pipeline unchanged except for the fed dims. | High | Phase 101 | WTRENDER-02 | Source audit (Phase 102) confirming Option A is the v4.4 baseline (real dims fed to the existing box builder); Option B documented as deferred; downstream runtime visual evidence (Phase 102). |
 | WT-HAS-WIPE-GATE | `src/qml_gui/Renderer/RhiViewport.h:54` (`showWipeTower` Q_PROPERTY, default false at `:304`); `src/qml_gui/Renderer/RhiViewportRenderer.h:216` (`m_showWipeTower=false`). | `Print.hpp:988 has_wipe_tower()` is the gate — returns false for single-material / `enable_prime_tower` off. Upstream only loads a wipe-tower volume when `has_wipe_tower()` is true. | `src/qml_gui/Renderer/RhiViewport.h:54` (`showWipeTower` Q_PROPERTY) + `:304` (`m_showWipeTower=false` default); `src/qml_gui/Renderer/RhiViewportRenderer.h:216` (`m_showWipeTower=false`); `renderWipeTower` early-returns when `!m_showWipeTower` (`RhiViewportRenderer.cpp:1898`). | Preserve + enforce: when `has_wipe_tower()` is false, no geometry is pushed and `m_showWipeTower` stays false — no placeholder box leak on single-material slices (see Frozen Decisions WTAUDIT-02). | Today the gate is purely a Q_PROPERTY default (`false`); nothing in the readback path enforces it from the real `Print::has_wipe_tower()` result, so the guarantee is currently structural (default off) not data-driven. | Critical | Phase 100 | WTREAD-02 | Source audit (Phase 102) proving the readback sets `showWipeTower` from `Print::has_wipe_tower()` and pushes no geometry when false; downstream runtime evidence (Phase 102) showing no placeholder box on a single-material slice. |
 | WT-SOFTWARE-VIEWPORT | `src/qml_gui/Renderer/SoftwareViewport.h:35-40` (Q_PROPERTY show/width/depth/height/x/z), `:126-127` (accessors), `:231-236` (defaults `m_showWipeTower=true`, width/depth/height/x/z all `0.f`); `src/qml_gui/Renderer/SoftwareViewport.cpp:207-253` setters (each calls `update()`). | Same as WT-VIEWPORT-DEFAULTS — `SoftwareViewport` is a parallel non-RHI (`QQuickPaintedItem`) renderer; upstream has no equivalent (upstream is GL-only). The source-truth is the same `wipe_tower_data` dims. | `src/qml_gui/Renderer/SoftwareViewport.h:35-40,126-137,231-236` (show/width/depth/height/x/z props, defaults show=true + zeros); `SoftwareViewport.cpp:207-253` setters (each calls `update()`). Registered as the alternate `GLViewport` QML type at `main_qml.cpp:305`. | Mirror readback into SoftwareViewport too: Phase 100/101 push the same real dims so the software path does not lag the RHI path. Note the default `show=true` + zero dims differs from RhiViewport's `show=false` + 10/10/50/100/25 — Phase 100 should align both to the data-driven gate. | SoftwareViewport defaults differ from RhiViewport (show=true + zero dims vs show=false + 10/10/50/100/25); without mirroring the readback, the two renderers would show inconsistent wipe-towers. | Medium | Phase 100 | WTREAD-01 | Source audit (Phase 102) confirming SoftwareViewport receives the same real dims + gate as RhiViewport; downstream runtime visual evidence (Phase 102) on both render paths. |
+
+## Frozen Decisions (WTAUDIT-02)
+
+The three designs below are locked before implementation. Phase 100 implements
+exactly the readback + gate choices; Phase 101 implements the render-upgrade
+baseline. Deviations require re-opening WTAUDIT-02.
+
+### 1. Post-slice readback integration point (WT-READBACK-POINT) — LOCKED: read `wipe_tower_data()` inside the SliceService worker after `print.process()` succeeds, deliver dims to the GUI thread alongside `sliceFinished`, push into `RhiViewport` via `EditorViewModel`
+
+The `Print` object that holds `wipe_tower_data` is constructed and destroyed
+entirely inside the `SliceService` worker lambda. Its lifetime is bounded:
+
+- `SliceService.cpp:508` — `receiver->activePrint_.store(&print,
+  std::memory_order_release)`: the `Print` becomes addressable to the GUI
+  thread mid-slice (this is what `SliceService::cancelSlice()` taps at
+  `SliceService.cpp:775` to call `active->cancel()`).
+- `SliceService.cpp:584` — `print.process()`: the slice that populates
+  `wipe_tower_data` (and all other print results). After this returns
+  successfully, `Print::wipe_tower_data()` is valid.
+- `SliceService.cpp:625` / `:629` / `:634` —
+  `receiver->activePrint_.store(nullptr, std::memory_order_release)`: the
+  `Print` goes invalid when the worker lambda exits (normal exit at `:625`,
+  exception at `:629`, catch-all at `:634`). The `print` local is destroyed
+  when the lambda's scope ends, so any pointer captured before this is dangling
+  after.
+- `SliceService.cpp:763` — `emit receiver->sliceFinished(receiver->estimatedTimeLabel_)`:
+  the GUI-thread delivery point after a successful slice (queued connection,
+  emitted from the outer `QMetaObject::invokeMethod` that wraps the whole
+  worker).
+
+`EditorViewModel.h:860` — `SliceService *sliceService_ = nullptr;` is the
+viewmodel-side bridge that already holds the service and can push geometry into
+`RhiViewport` Q_PROPERTYs (PreparePage.qml:1648 GLViewport is bound to
+`root.editorVm`).
+
+**Upstream behavior truth:** upstream OrcaSlicer reads
+`Print::wipe_tower_data()` after the slice completes (via the plater's
+`update_schedule`/`arrange` refresh) to drive the 3D preview —
+`3DScene.cpp:840 load_wipe_tower_preview` consumes `width`/`depth`/`height`/
+`position` from the real slice result, not placeholders.
+
+**Locked readback design:** after `print.process()` succeeds (between `:584`
+and the `:625` invalidation), read `Print::wipe_tower_data()` inside the worker
+— capturing `bbx`, `depth`, `height`, `position`, `width`, `brim_width`,
+`rib_offset`, plus the `has_wipe_tower()` gate result — into plain value
+captures (no `Print*` escapes the worker). Deliver those captured values to the
+GUI thread alongside the existing `sliceFinished` path (e.g. extend the queued
+`invokeMethod` payload or a dedicated signal), and have `EditorViewModel`
+(which already holds `sliceService_` at `EditorViewModel.h:860`) push them into
+the `RhiViewport` Q_PROPERTYs (`wipeTowerWidth`/`Depth`/`Height`/`X`/`Z` +
+`showWipeTower`) that Phase 100's WT-VIEWPORT-DEFAULTS wiring exposes to
+PreparePage.qml. The `Print` is only valid mid-slice between
+`activePrint_.store(&print)` (`:508`) and `activePrint_.store(nullptr)`
+(`:625`/`:629`/`:634`), so the readback MUST capture the values into
+worker-local storage before the lambda exits — never capture a `Print*` for
+later GUI-thread use. Severity Critical; Owner Phase 100; Requirement
+WTREAD-01.
+
+### 2. Rendering-upgrade approach (WT-RENDER-UPGRADE) — LOCKED: Option A (dimensioned box) as v4.4 baseline; Option B (real mesh) documented as future upgrade
+
+Two candidate approaches were evaluated against the two upstream paths:
+
+- **Option A — dimensioned box.** Read `bbx`/`depth`/`height`/`position`/
+  `width` from `wipe_tower_data`, push as dims to the existing
+  `buildWipeTowerVertices`. Still a box, but real dimensions. Low risk, reuses
+  the entire `buildWipeTowerVertices` + `uploadWipeTowerBuffer` +
+  `renderWipeTower` pipeline unchanged except for the fed dims. Mirrors
+  `3DScene.cpp:840-885 load_wipe_tower_preview`, which uses
+  `make_cube(width, depth, height)` (`:855`) as the default box preview and
+  sets `v.is_wipe_tower = true` (`:882`).
+- **Option B — real mesh.** Read optional `wipe_tower_mesh_data`
+  (`Print.hpp:766`, type `std::optional<WipeTowerMeshData>`), extract the
+  `indexed_triangle_set` from `real_wipe_tower_mesh` + `real_brim_mesh`
+  (`Print.hpp:745-746`), build a real vertex buffer mirroring
+  `3DScene.cpp:887-925 load_real_wipe_tower_preview` via
+  `mesh.convex_hull_3d()` (`:914`). Higher fidelity (shows brim, rib, cone
+  base), but more work: needs ITS handling in `GizmoGeometry` +
+  `RhiViewportRenderer` (the current `buildWipeTowerVertices` emits a fixed
+  36-vertex layout, not an arbitrary ITS), and `wipe_tower_mesh_data` may be
+  `std::nullopt` depending on config (its `clear()` resets it to `nullopt` at
+  `Print.hpp:776`).
+
+**Upstream behavior truth:** upstream OrcaSlicer ships BOTH paths —
+`load_wipe_tower_preview` (box) as the default and `load_real_wipe_tower_preview`
+(real mesh) as the high-fidelity path used when `wipe_tower_mesh_data` is
+populated. The box path is the steady-state preview; the real-mesh path is the
+upgrade.
+
+**Locked choice: Option A as the v4.4 baseline.** Rationale: (a) it closes the
+"placeholder 10/10/50/100/25 defaults" gap with minimal risk, reusing the
+existing `buildWipeTowerVertices` + `uploadWipeTowerBuffer` pipeline unchanged
+except for the fed dims; (b) it mirrors upstream's default box-preview path
+(`3DScene.cpp:840 load_wipe_tower_preview`), so the v4.4 box is source-truth
+for the default fidelity; (c) Option B's `wipe_tower_mesh_data` may be
+`std::nullopt` depending on config, and the ITS extraction adds renderer scope
+(ITS vertex format in `GizmoGeometry` + a non-box upload path in
+`RhiViewportRenderer`) that v4.4 defers. Option B is documented here as a
+future upgrade; its `load_real_wipe_tower_preview` anchor (`3DScene.cpp:887`)
+and `wipe_tower_mesh_data` / `convex_hull_3d` citations are preserved so a
+future milestone can pick it up without re-discovery. Severity High; Owner
+Phase 101; Requirement WTRENDER-02.
+
+### 3. has_wipe_tower() gating (WT-HAS-WIPE-GATE) — LOCKED: when `Print::has_wipe_tower()` is false, no geometry is pushed and `showWipeTower` stays false
+
+`Print::has_wipe_tower()` (`Print.hpp:988`) is the gate: it returns false for
+single-material prints or when `enable_prime_tower` is off. Upstream only loads
+a wipe-tower volume when `has_wipe_tower()` is true; otherwise no wipe-tower
+volume is created.
+
+**Locked gating design:** the Phase 100 readback (Frozen Decision 1) captures
+`Print::has_wipe_tower()` alongside the dims. When it is false, the readback
+pushes NO geometry and `RhiViewport::showWipeTower` (`RhiViewport.h:54`,
+default false at `:304`; mirrored in `RhiViewportRenderer.h:216
+m_showWipeTower=false`) stays false — `renderWipeTower` early-returns on
+`!m_showWipeTower` (`RhiViewportRenderer.cpp:1898`), so no placeholder box
+leaks onto single-material slices. This is the WTREAD-02 guarantee. The current
+structural default (`showWipeTower=false`) already prevents a leak today, but
+the gate becomes data-driven once the readback lands: the readback must set
+`showWipeTower` from the real `has_wipe_tower()` result, not assume the
+default. `SoftwareViewport` (default `m_showWipeTower=true` at
+`SoftwareViewport.h:231`) must be aligned to the same data-driven gate so its
+differing default does not leak a box either. Severity Critical; Owner Phase
+100; Requirement WTREAD-02.
+
+## v4.4 Requirement Routing
+
+Every v4.4 requirement is routed to its owner phase and matrix region(s).
+
+| Requirement | Owner | Matrix Region(s) |
+|---|---|---|
+| WTAUDIT-01 | Phase 99 | All canonical regions in this matrix (WT-PLACEHOLDER-BOX through WT-SOFTWARE-VIEWPORT). |
+| WTAUDIT-02 | Phase 99 | Frozen Decisions section above (WT-READBACK-POINT worker readback; WT-RENDER-UPGRADE Option A baseline; WT-HAS-WIPE-GATE data-driven gate). |
+| WTREAD-01 | Phase 100 | WT-PRINT-DATA, WT-READBACK-POINT, WT-VIEWPORT-DEFAULTS, WT-SOFTWARE-VIEWPORT. |
+| WTREAD-02 | Phase 100 | WT-HAS-WIPE-GATE. |
+| WTRENDER-01 | Phase 101 | WT-PLACEHOLDER-BOX, WT-RENDERER-BUFFER. |
+| WTRENDER-02 | Phase 101 | WT-RENDER-UPGRADE (Option A baseline; Option B documented as future upgrade). |
+| WTVERIFY-01 | Phase 102 | Source/QML audits across WT-VIEWPORT-DEFAULTS, WT-PRINT-DATA, WT-READBACK-POINT, WT-HAS-WIPE-GATE, WT-PLACEHOLDER-BOX (placeholder 10/10/50/100/25 no longer steady-state when a real slice exists). |
+| WTVERIFY-02 | Phase 102 | Final runtime launch, canonical verifier, Prepare/Preview/AssembleView regression ctest, and runtime wipe-tower visibility evidence when a multi-material slice produces one. |
+
+## Out-of-Scope Classification
+
+The following items are explicitly out of scope for v4.4. No phase in v4.4
+re-touches them unless the user explicitly reopens them.
+
+| Item | Status | Evidence / Reason |
+|---|---|---|
+| Auto filament-map recommendation | Out of scope — future milestone | Separate algorithm + UI milestone; the cleanest impl leans on libslic3r's auto-firing in `Print::` + a QML popup. Loosely coupled to wipe-tower but deferred to avoid scope creep (AUTOMAP-FUTURE-01). |
+| Per-plate wipe-tower architecture refactor | Out of scope — future milestone | The v3.0 audit flags Qt6's per-plate filtered-copy slice path; multi-plate wipe-tower correctness depends on that deeper architecture. v4.4 reads geometry from the slice result that exists, not a refactor. |
+| D3D12 or Vulkan backend promotion | Out of scope — future backend work | D3D12 has a known startup crash and remains explicit opt-in; Vulkan is disabled in the current Qt 6.10 SDK. Wipe-tower readback + rendering runs on the default RHI/D3D11 path (BACKEND-FUTURE-01). |
+| Full GLGizmoMeasure feature-picking engine + AssembleViewDataPool clipper | Out of scope — future milestone | Needs per-volume ITS + scene raycaster. Not required for wipe-tower geometry (MEASURE-FUTURE-01). |
+| Missing CLI fixtures + deterministic argv-based GUI fixture loading for screenshots | Out of scope — future fixture milestone | FIXTURE-FUTURE-01 is unblocked by v4.3, but the fixtures themselves are a future milestone. |
+| LAN/device/cloud/network/Monitor/ModelMall/Home WebView/camera/printer-hardware workflows | Out of scope — removed scope | Removed from forward scope by user direction on 2026-07-07 (NETWORK-REMOVED-01). The v4.4 milestone is local/offline wipe-tower geometry readback + rendering only. Not reintroduced unless the user explicitly reopens it. |
+| libslic3r slicing algorithm changes | Out of scope — engine preserved | The migration rewrites the GUI layer only; libslic3r slicing algorithms are preserved unchanged. Wipe-tower readback must not change slicing engine behavior. |
+
+## Requirement Coverage
+
+| Requirement | Covered By |
+|---|---|
+| WTAUDIT-01 | This matrix maps all 8 wipe-tower regions (WT-PLACEHOLDER-BOX through WT-SOFTWARE-VIEWPORT) to OrcaSlicer upstream source files (with line anchors: `Print.hpp:740-786,988-989,1078-1080`, `3DScene.cpp:840-885,887-925`), current Qt placeholder paths (`GizmoGeometry.h:74`/`.cpp:449-499`, `RhiViewport.h:54-59,181-192,304-309`, `RhiViewportRenderer.h:57,75,129,143,152,177,216-222`/`.cpp:1064-1095,1894-1908`, `SoftwareViewport.h:35-40,126-137,231-236`/`.cpp:207-253`, `PreparePage.qml:1648`), the post-slice readback design (Frozen Decision 1, citing `SliceService.cpp:508,584,625/629/634,763` + `EditorViewModel.h:860`), the rendering-upgrade decision (Frozen Decision 2, Option A baseline + Option B future), and verification expectations (Phase 102 source audits + canonical verifier + runtime visual evidence). |
+| WTAUDIT-02 | The Frozen Decisions section locks three designs before implementation: (1) post-slice readback integration point = read `Print::wipe_tower_data()` inside the SliceService worker after `print.process()` succeeds (between `:584` and the `:625` invalidation), capture dims into worker-local storage, deliver to the GUI thread alongside `sliceFinished` (`:763`), push into `RhiViewport` Q_PROPERTYs via `EditorViewModel` (`EditorViewModel.h:860`) — because the `Print` is only valid mid-slice between `activePrint_.store(&print)` (`:508`) and `activePrint_.store(nullptr)` (`:625`/`:629`/`:634`); (2) rendering-upgrade approach = Option A (dimensioned box from real `bbx`/`depth`/`height`/`position`/`width`, fed to the existing `buildWipeTowerVertices`, mirroring `3DScene.cpp:840-885 load_wipe_tower_preview`) LOCKED as the v4.4 baseline, with Option B (real mesh from optional `wipe_tower_mesh_data` via `convex_hull_3d`, mirroring `3DScene.cpp:887-925 load_real_wipe_tower_preview`) documented as a future upgrade; (3) `has_wipe_tower()` gating (`Print.hpp:988`) = when false, no geometry is pushed and `showWipeTower` stays false (`RhiViewport.h:54`/`:304`, `RhiViewportRenderer.h:216`), so no placeholder box leaks on single-material slices — the gate becomes data-driven from the readback (SoftwareViewport's differing default `show=true` at `SoftwareViewport.h:231` is aligned to the same gate). |
+
+## Phase Routing
+
+| Phase | Work To Start From This Audit |
+|---|---|
+| 100 | Implement the post-slice readback reading `Print::wipe_tower_data()` inside the SliceService worker after `print.process()` succeeds, capturing `bbx`/`depth`/`height`/`position`/`width`/`brim_width`/`rib_offset` + `has_wipe_tower()` before the `Print` is invalidated, and delivering dims to the GUI thread via the `sliceFinished` path (WT-READBACK-POINT, WT-PRINT-DATA); wire `PreparePage.qml:1648` GLViewport wipe-tower Q_PROPERTY bindings + the EditorViewModel push (WT-VIEWPORT-DEFAULTS); enforce the `has_wipe_tower()` gate so no placeholder box leaks on single-material slices (WT-HAS-WIPE-GATE); mirror the readback into SoftwareViewport (WT-SOFTWARE-VIEWPORT). |
+| 101 | Feed the real dims into `buildWipeTowerVertices` so the rendered wipe-tower reflects the real sliced dimensions (WT-PLACEHOLDER-BOX); confirm the `uploadWipeTowerBuffer` + `renderWipeTower` pipeline rebuilds on `m_wipeTowerDirty` with the new dims (WT-RENDERER-BUFFER); ship Option A as the v4.4 baseline, documenting Option B (real mesh via `wipe_tower_mesh_data`/`convex_hull_3d`) as a future upgrade (WT-RENDER-UPGRADE). |
+| 102 | Run source/QML audits proving the placeholder 10/10/50/100/25 defaults are no longer steady-state when a real slice exists (WTVERIFY-01); run the canonical verifier, launch `build/OWzxSlicer.exe`, confirm Prepare/Preview/AssembleView regression-free, and record runtime wipe-tower visibility evidence when a multi-material slice produces one (WTVERIFY-02). |
