@@ -231,16 +231,12 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   // Phase 95 (THUMBCAP-01/03): poll the async thumbnail readback at the START
   // of render(), before the on-screen pass. readBackTexture completes on a
   // later frame; when m_thumbnailReadbackResult.data becomes non-empty the
-  // QImage is ready and is posted back to the GUI thread. The on-screen scene
-  // buffers are NOT re-uploaded here (the thumbnail MVP overwrite in
-  // renderThumbnailPass is transient — the next frame's synchronize() restores
-  // the on-screen MVP).
+  // QImage is ready and is posted back to the GUI thread. Since Phase 95 REVIEW
+  // W-2 the thumbnail pass uses a dedicated uniform buffer, so the on-screen
+  // camera UBO is never touched by a capture — no MVP restore is needed here.
   if (m_thumbnailReadbackInFlight && !m_thumbnailReadbackResult.data.isEmpty()) {
     m_thumbnailReadbackInFlight = false;
     deliverCompletedThumbnail();
-    // Force the on-screen camera uniform to refresh on the next frame so the
-    // thumbnail-aspect MVP overwrite does not leak into steady-state rendering.
-    m_cameraUniformBufferUploaded = false;
   }
 
   QRhiResourceUpdateBatch *updates = nullptr;
@@ -507,6 +503,9 @@ void RhiViewportRenderer::releaseThumbnailResources()
 {
   m_thumbnailFillPipeline.reset();
   m_thumbnailLinePipeline.reset();
+  m_thumbnailSrb.reset();
+  m_thumbnailUniformBuffer.reset();
+  m_thumbnailUniformBufferBytes = 0;
   if (m_thumbnailRenderPassDescriptor != nullptr) {
     m_thumbnailRenderPassDescriptor->deleteLater();
     m_thumbnailRenderPassDescriptor = nullptr;
@@ -570,6 +569,28 @@ bool RhiViewportRenderer::ensureThumbnailRenderTarget(int size)
       QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float4, offsetof(Vertex, r)),
   });
 
+  // Dedicated uniform buffer + SRB for the thumbnail pass (Phase 95 REVIEW W-2).
+  // Same 256-byte aligned Dynamic layout as the on-screen m_cameraUniformBuffer,
+  // but a separate instance so the thumbnail pass never overwrites the on-screen
+  // camera UBO. The thumbnail pipelines bind this SRB, not m_srb.
+  if (!ensureBuffer(m_thumbnailUniformBuffer,
+                    256,  // 256-byte aligned for D3D12 cbuffer (matches on-screen)
+                    m_thumbnailUniformBufferBytes,
+                    QRhiBuffer::UniformBuffer)) {
+    releaseThumbnailResources();
+    return false;
+  }
+  m_thumbnailSrb.reset(rhi()->newShaderResourceBindings());
+  m_thumbnailSrb->setBindings({
+      QRhiShaderResourceBinding::uniformBuffer(0,
+                                               QRhiShaderResourceBinding::VertexStage,
+                                               m_thumbnailUniformBuffer.get())
+  });
+  if (!m_thumbnailSrb->create()) {
+    releaseThumbnailResources();
+    return false;
+  }
+
   auto buildOne = [&](std::unique_ptr<QRhiGraphicsPipeline> &pipe,
                       QRhiGraphicsPipeline::Topology topology) -> bool {
     pipe.reset(rhi()->newGraphicsPipeline());
@@ -578,9 +599,10 @@ bool RhiViewportRenderer::ensureThumbnailRenderTarget(int size)
         QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
         QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
     });
-    // Reuse m_srb (binding 0 = camera uniform buffer) so the thumbnail pass
-    // reads the same MVP + gizmoCenter/gizmoScale uniform block.
-    pipe->setShaderResourceBindings(m_srb.get());
+    // Bind the dedicated thumbnail SRB (Phase 95 REVIEW W-2): the thumbnail
+    // pipelines read the thumbnail-aspect MVP from m_thumbnailUniformBuffer,
+    // not the shared on-screen camera UBO.
+    pipe->setShaderResourceBindings(m_thumbnailSrb.get());
     pipe->setVertexInputLayout(inputLayout);
     pipe->setRenderPassDescriptor(m_thumbnailRenderPassDescriptor);
     pipe->setDepthTest(true);
@@ -623,17 +645,19 @@ void RhiViewportRenderer::renderThumbnailPass(QRhiCommandBuffer *cb)
       : m_cameraMvp;
 
   QRhiResourceUpdateBatch *thumbUpdates = rhi()->nextResourceUpdateBatch();
-  // Upload the thumbnail-aspect MVP into the shared camera uniform buffer.
-  // Only the 64-byte MVP is overwritten; the gizmoCenter/gizmoScale tail is
-  // irrelevant for the thumbnail (no gizmos drawn) and is left as-is.
+  // Upload the thumbnail-aspect MVP into the DEDICATED thumbnail uniform buffer
+  // (Phase 95 REVIEW W-2). This leaves the on-screen m_cameraUniformBuffer
+  // untouched, so no next-frame refresh is needed to restore the on-screen MVP.
+  // Only the 64-byte MVP is written; the tail is zero-initialized/irrelevant
+  // for the thumbnail (no gizmos drawn).
   const QMatrix4x4 corrected = rhi()->clipSpaceCorrMatrix() * thumbnailMvp;
-  thumbUpdates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 0, 64,
+  thumbUpdates->updateDynamicBuffer(m_thumbnailUniformBuffer.get(), 0, 64,
                                     corrected.constData());
 
   cb->beginPass(m_thumbnailRenderTarget.get(), m_clearColor, {1.0f, 0}, thumbUpdates);
   cb->setViewport(QRhiViewport(0, 0, float(m_thumbnailLastBuiltSize),
                                float(m_thumbnailLastBuiltSize)));
-  cb->setShaderResources(m_srb.get());
+  cb->setShaderResources(m_thumbnailSrb.get());
 
   // Bed fill (triangles).
   if (m_prepareScene.showBed() && m_bedFillBuffer && m_bedFillVertexCount > 0) {
@@ -689,12 +713,15 @@ void RhiViewportRenderer::deliverCompletedThumbnail()
   // QRhiReadbackResult.format is QRhiTexture::Format. The thumbnail RT is
   // RGBA8, so the bytes are 4 bytes/pixel in R,G,B,A order. QImage's
   // Format_RGBA8888 matches that byte order exactly (no swizzle needed).
-  QImage image(reinterpret_cast<const uchar *>(m_thumbnailReadbackResult.data.constData()),
-               size.width(), size.height(), size.width() * 4,
-               QImage::Format_RGBA8888);
-  // Detach into a deep copy with its own buffer before the next readback
-  // overwrites m_thumbnailReadbackResult.data.
-  image = image.copy();
+  // The QImage is constructed as a non-owning view over the readback buffer,
+  // then copy()'d into a deep copy with its own pixel buffer in the SAME
+  // expression. This guarantees the detached copy is the only thing handed
+  // to the queued invokeMethod, so a future readback (or any mutation of
+  // m_thumbnailReadbackResult.data) can never reach the delivered image.
+  // (Phase 95 REVIEW W-1 hardening.)
+  QImage image = QImage(reinterpret_cast<const uchar *>(m_thumbnailReadbackResult.data.constData()),
+                        size.width(), size.height(), size.width() * 4,
+                        QImage::Format_RGBA8888).copy();
 
   const int plateIndex = m_thumbnailResultPlateIndex;
   QMetaObject::invokeMethod(m_viewportItem.data(),

@@ -5082,12 +5082,16 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
         else
           plateThumbs.push_back(Slic3r::ThumbnailData());  // invalid placeholder
       }
-      // const_cast: upstream StoreParams::thumbnail_data is vector<ThumbnailData*>
-      // (non-const, bbs_3mf.hpp:235) but store_bbs_3mf treats the pointers as
-      // read-only inputs (is_valid() + pixels/width/height reads, no mutation).
-      // Safe given the writer's read-only contract. (Phase 98 REVIEW W-2.)
-      for (const Slic3r::ThumbnailData &td : plateThumbs)
-        params.thumbnail_data.push_back(const_cast<Slic3r::ThumbnailData *>(&td));
+      // Take addresses of the non-const ThumbnailData entries and push as raw
+      // pointers into StoreParams::thumbnail_data (vector<ThumbnailData*>,
+      // bbs_3mf.hpp:235). store_bbs_3mf treats these as read-only inputs
+      // (is_valid() + pixels/width/height reads, no mutation). plateThumbs
+      // outlives the store call (single local vector, reserved up front — see
+      // LIFETIME above). (Phase 95 REVIEW W-3: removed the prior const_cast by
+      // iterating with a non-const reference so the address is already
+      // ThumbnailData*.)
+      for (Slic3r::ThumbnailData &td : plateThumbs)
+        params.thumbnail_data.push_back(&td);
     }
 
     bool ok = false;

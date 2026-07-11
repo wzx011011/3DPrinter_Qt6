@@ -277,6 +277,15 @@ private:
   QRhiRenderPassDescriptor *m_thumbnailRenderPassDescriptor = nullptr;
   std::unique_ptr<QRhiGraphicsPipeline> m_thumbnailFillPipeline;
   std::unique_ptr<QRhiGraphicsPipeline> m_thumbnailLinePipeline;
+  // Dedicated uniform buffer + SRB for the thumbnail pass (Phase 95 REVIEW W-2).
+  // The thumbnail pass previously overwrote the shared m_cameraUniformBuffer's
+  // MVP and relied on a next-frame refresh to restore the on-screen value. A
+  // dedicated buffer + SRB removes that modify-restore coupling entirely: the
+  // thumbnail pipelines bind m_thumbnailSrb (pointing at m_thumbnailUniformBuffer)
+  // so the on-screen camera UBO is never touched by a capture.
+  std::unique_ptr<QRhiBuffer> m_thumbnailUniformBuffer;
+  std::unique_ptr<QRhiShaderResourceBindings> m_thumbnailSrb;
+  quint32 m_thumbnailUniformBufferBytes = 0;
   // Request mirror (copied from the item in synchronize()).
   bool m_thumbnailRequestPending = false;
   int m_thumbnailPlateIndex = 0;
