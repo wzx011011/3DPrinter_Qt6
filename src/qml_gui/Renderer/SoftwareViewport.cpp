@@ -444,6 +444,58 @@ void SoftwareViewport::paintScene(QPainter *painter, const QRectF &target)
     }
   }
 
+  // Phase 101 (WTRENDER-01): render the real-dims wipe-tower box on the
+  // software fallback path so it does not lag the RHI path
+  // (RhiViewportRenderer::uploadWipeTowerBuffer at .cpp:1064-1095). Gated on
+  // m_showWipeTower (WTREAD-02 - no placeholder leak on single-material
+  // slices). The dims arrive as the box CENTER (Phase 100 REVIEW W1
+  // convention, commit b12d0e5). The color {0.35,0.60,0.85,0.50} and
+  // kGroundY mirror the RHI box (GizmoGeometry.cpp:462-463); the geometry
+  // (x-hw..x+hw, z-hd..z+hd, y0..y1, Y-up) mirrors buildWipeTowerVertices.
+  if (m_showWipeTower && m_wipeTowerWidth > 0.f &&
+      m_wipeTowerDepth > 0.f && m_wipeTowerHeight > 0.f)
+  {
+    constexpr float kGroundY = -0.04f; // mirrors GizmoGeometry.cpp:462
+    const QColor wipeTowerColor = QColor::fromRgbF(0.35f, 0.60f, 0.85f, 0.50f);
+    const float hw = m_wipeTowerWidth * 0.5f;
+    const float hd = m_wipeTowerDepth * 0.5f;
+    const float xMin = m_wipeTowerX - hw;
+    const float xMax = m_wipeTowerX + hw;
+    const float zMin = m_wipeTowerZ - hd;
+    const float zMax = m_wipeTowerZ + hd;
+    const float y0 = kGroundY;
+    const float y1 = kGroundY + m_wipeTowerHeight;
+    // 8 box corners (world space: X/Z bed plane, Y up).
+    const QVector3D c000(xMin, y0, zMin);
+    const QVector3D c100(xMax, y0, zMin);
+    const QVector3D c110(xMax, y0, zMax);
+    const QVector3D c010(xMin, y0, zMax);
+    const QVector3D c001(xMin, y1, zMin);
+    const QVector3D c101(xMax, y1, zMin);
+    const QVector3D c111(xMax, y1, zMax);
+    const QVector3D c011(xMin, y1, zMax);
+    // Emit the 5 visible faces (top + 4 sides; bottom is coplanar with the
+    // bed grid and hidden) into the unified depth-sorted `faces` vector so
+    // they render correctly alongside model meshes (painter's algorithm).
+    auto addWipeTowerFace = [&](const QVector3D &p0, const QVector3D &p1,
+                                const QVector3D &p2, const QVector3D &p3) {
+      const QVector3D r0 = rotatePoint(p0 - m_center);
+      const QVector3D r1 = rotatePoint(p1 - m_center);
+      const QVector3D r2 = rotatePoint(p2 - m_center);
+      const QVector3D r3 = rotatePoint(p3 - m_center);
+      Face face;
+      face.poly << project(p0) << project(p1) << project(p2) << project(p3);
+      face.color = wipeTowerColor;
+      face.depth = (r0.z() + r1.z() + r2.z() + r3.z()) * 0.25f;
+      faces.append(face);
+    };
+    addWipeTowerFace(c001, c101, c111, c011); // top
+    addWipeTowerFace(c010, c110, c111, c011); // front (+Z)
+    addWipeTowerFace(c100, c000, c001, c101); // back (-Z)
+    addWipeTowerFace(c110, c100, c101, c111); // right (+X)
+    addWipeTowerFace(c000, c010, c011, c001); // left (-X)
+  }
+
   std::sort(faces.begin(), faces.end(), [](const Face &lhs, const Face &rhs) {
     return lhs.depth < rhs.depth;
   });
