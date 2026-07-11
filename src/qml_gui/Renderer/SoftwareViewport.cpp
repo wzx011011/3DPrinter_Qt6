@@ -450,12 +450,13 @@ void SoftwareViewport::paintScene(QPainter *painter, const QRectF &target)
   // m_showWipeTower (WTREAD-02 - no placeholder leak on single-material
   // slices). The dims arrive as the box CENTER (Phase 100 REVIEW W1
   // convention, commit b12d0e5). The color {0.35,0.60,0.85,0.50} and
-  // kGroundY mirror the RHI box (GizmoGeometry.cpp:462-463); the geometry
-  // (x-hw..x+hw, z-hd..z+hd, y0..y1, Y-up) mirrors buildWipeTowerVertices.
+  // kGroundY mirror the RHI box (GizmoGeometry.cpp kGroundY + kColor
+  // constants inside buildWipeTowerVertices); the geometry (x-hw..x+hw,
+  // z-hd..z+hd, y0..y1, Y-up) mirrors buildWipeTowerVertices.
   if (m_showWipeTower && m_wipeTowerWidth > 0.f &&
       m_wipeTowerDepth > 0.f && m_wipeTowerHeight > 0.f)
   {
-    constexpr float kGroundY = -0.04f; // mirrors GizmoGeometry.cpp:462
+    constexpr float kGroundY = -0.04f; // mirrors GizmoGeometry kGroundY
     const QColor wipeTowerColor = QColor::fromRgbF(0.35f, 0.60f, 0.85f, 0.50f);
     const float hw = m_wipeTowerWidth * 0.5f;
     const float hd = m_wipeTowerDepth * 0.5f;
