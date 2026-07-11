@@ -33,14 +33,14 @@
 ## Phases
 
 - [x] Phase 99: Wipe-Tower Geometry Gap Audit
-- [ ] Phase 100: Wipe-Tower Geometry Readback
+- [x] Phase 100: Wipe-Tower Geometry Readback (completed 2026-07-11)
 - [ ] Phase 101: Wipe-Tower Real Rendering Upgrade
 - [ ] Phase 102: Wipe-Tower Verification And Regression
 
 | Phase | Name | Goal | Requirements |
 |---|---|---|---|
 | 99 | Wipe-Tower Geometry Gap Audit | Freeze the v4.4 readback + rendering region map: placeholder path, upstream `Print::wipe_tower_data()` anchors, post-slice readback integration point, rendering-upgrade decision (box dims vs real mesh), and verification expectations before edits. | WTAUDIT-01, WTAUDIT-02 |
-| 100 | Wipe-Tower Geometry Readback | After a successful slice, read real wipe-tower geometry from `Print::wipe_tower_data()` (bbx, depth, height, brim, rib_offset, position, width) and push it into `RhiViewport`/`EditorViewModel`, respecting `has_wipe_tower()`. | WTREAD-01, WTREAD-02 |
+| 100 | 1/1 | Complete   | 2026-07-11 |
 | 101 | Wipe-Tower Real Rendering Upgrade | Feed the real geometry dimensions into the renderer (replace placeholder defaults) and upgrade `GizmoGeometry::buildWipeTowerVertices` from a placeholder box toward real geometry (dimensioned box minimum, real mesh if feasible), with brim/rib representation. | WTRENDER-01, WTRENDER-02 |
 | 102 | Wipe-Tower Verification And Regression | Lock source/QML audits, run canonical verifier, confirm Prepare/Preview/AssembleView regression-free, and verify the wipe-tower renders at runtime when a multi-material slice produces one. | WTVERIFY-01, WTVERIFY-02 |
 
@@ -56,7 +56,7 @@ Success criteria:
 ### Phase 100: Wipe-Tower Geometry Readback
 
 **Status:** Not started
-**Plans:** 0/1
+**Plans:** 1/1 plans complete
 
 Success criteria:
 1. After a successful slice, real wipe-tower geometry (bbx/depth/height/brim/rib_offset/position/width) is read from `Print::wipe_tower_data()` and pushed into the renderer-facing layer, replacing the placeholder defaults.
