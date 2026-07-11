@@ -289,6 +289,12 @@ private slots:
   // mirroring upstream GLGizmosManager.cpp:427-431. Prepare/Preview never
   // populate or read it (isolation constraint).
   void assembleViewDataPoolIsolatedFromPrepareAndPreview();
+  // Phase 100-01 (WTREAD-01/02): the wipe-tower geometry readback wiring.
+  // Drives SliceService::wipeTowerGeometryReady directly (no real slice
+  // needed) and asserts the EditorViewModel Q_PROPERTYs reflect the captured
+  // dims when valid=true (WTREAD-01), AND that showWipeTower=false with dims
+  // not overwritten to placeholders when valid=false (WTREAD-02 gate).
+  void wipeTowerGeometryReadbackAppliesValidAndInvalidGate();
 
 private:
   bool hasLibslic3r() const;
@@ -3937,6 +3943,91 @@ void ViewModelSmokeTests::assemblyMeasureGeometryComputesDistanceAndAngle()
   PrepareSceneData::ModelBounds degenerate;  // all-zero extents
   const AssemblyMeasureResult bad = AssemblyMeasureGeometry::measure(degenerate, b);
   QVERIFY2(!bad.valid, "measure() must return invalid for a degenerate AABB");
+}
+
+// ── Phase 100-01 (WTREAD-01/02): wipe-tower geometry readback wiring ──
+//
+// Drives the SliceService::wipeTowerGeometryReady signal directly (no real
+// libslic3r slice needed) and asserts the EditorViewModel Q_PROPERTYs reflect
+// the captured-by-value dims when valid=true (WTREAD-01), AND that
+// showWipeTower=false with dims not overwritten to placeholder values when
+// valid=false (WTREAD-02 gate). The test registers WipeTowerGeometry as a
+// metatype so QMetaObject::invokeMethod can emit the signal by name through
+// Q_ARG, proving the connect(sliceService, wipeTowerGeometryReady, ...,
+// onWipeTowerGeometryReady) wiring end-to-end (signal exists, slot fires).
+//
+// Note: this test always runs under HAS_LIBSLIC3R (initTestCase skips the
+// whole suite otherwise). The WipeTowerGeometry struct itself is always
+// defined (not behind #ifdef HAS_LIBSLIC3R), so the assertions are
+// build-mode-independent.
+static const int kWipeTowerGeometryMetaTypeId = []() {
+  return qRegisterMetaType<WipeTowerGeometry>("WipeTowerGeometry");
+}();
+
+void ViewModelSmokeTests::wipeTowerGeometryReadbackAppliesValidAndInvalidGate()
+{
+  Q_UNUSED(kWipeTowerGeometryMetaTypeId); // registration side-effect only
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  // Defaults match RhiViewport.h:304-309 (show=false, 10/10/50/100/25) so the
+  // pre-slice renderer is unchanged. This is the WTREAD-02 structural baseline.
+  QCOMPARE(editor.showWipeTower(), false);
+  QCOMPARE(editor.wipeTowerWidth(), 10.f);
+  QCOMPARE(editor.wipeTowerDepth(), 10.f);
+  QCOMPARE(editor.wipeTowerHeight(), 50.f);
+  QCOMPARE(editor.wipeTowerX(), 100.f);
+  QCOMPARE(editor.wipeTowerZ(), 25.f);
+
+  QSignalSpy geometrySpy(&editor, &EditorViewModel::wipeTowerGeometryChanged);
+  QVERIFY2(geometrySpy.isValid(),
+           "wipeTowerGeometryChanged must be a registered NOTIFY signal");
+
+  // --- WTREAD-01 path: valid=true delivers the real sliced dims. ---
+  WipeTowerGeometry validGeo;
+  validGeo.valid = true;
+  validGeo.width = 60.f;
+  validGeo.depth = 40.f;
+  validGeo.height = 5.f;
+  validGeo.x = 200.f;
+  validGeo.z = 150.f;
+
+  // Emit SliceService::wipeTowerGeometryReady via the meta-object system so the
+  // connect(sliceService_, &SliceService::wipeTowerGeometryReady, this,
+  // &EditorViewModel::onWipeTowerGeometryReady) wiring is exercised end-to-end.
+  QVERIFY2(QMetaObject::invokeMethod(&slice, "wipeTowerGeometryReady",
+                                     Qt::DirectConnection,
+                                     Q_ARG(WipeTowerGeometry, validGeo)),
+           "SliceService must declare the wipeTowerGeometryReady signal so it "
+           "can be invoked by name through the meta-object system");
+
+  QCOMPARE(geometrySpy.count(), 1);
+  QCOMPARE(editor.showWipeTower(), true);
+  QCOMPARE(editor.wipeTowerWidth(), 60.f);
+  QCOMPARE(editor.wipeTowerDepth(), 40.f);
+  QCOMPARE(editor.wipeTowerHeight(), 5.f);
+  QCOMPARE(editor.wipeTowerX(), 200.f);
+  QCOMPARE(editor.wipeTowerZ(), 150.f);
+
+  // --- WTREAD-02 path: valid=false forces show=false and does NOT overwrite
+  //     the dims with placeholder values. The previous real dims are left
+  //     untouched so no placeholder box leaks as "real" geometry. ---
+  WipeTowerGeometry invalidGeo; // valid defaults to false
+  QVERIFY2(QMetaObject::invokeMethod(&slice, "wipeTowerGeometryReady",
+                                     Qt::DirectConnection,
+                                     Q_ARG(WipeTowerGeometry, invalidGeo)),
+           "emit of valid=false wipeTowerGeometryReady must dispatch");
+
+  QCOMPARE(geometrySpy.count(), 2);
+  QCOMPARE(editor.showWipeTower(), false);
+  // The real dims from the previous valid readback must persist (not reset to
+  // the 10/10/50/100/25 placeholders). This is the WTREAD-02 gate guarantee.
+  QCOMPARE(editor.wipeTowerWidth(), 60.f);
+  QCOMPARE(editor.wipeTowerDepth(), 40.f);
+  QCOMPARE(editor.wipeTowerHeight(), 5.f);
+  QCOMPARE(editor.wipeTowerX(), 200.f);
+  QCOMPARE(editor.wipeTowerZ(), 150.f);
 }
 
 void ViewModelSmokeTests::assembleViewDataPoolIsolatedFromPrepareAndPreview()
