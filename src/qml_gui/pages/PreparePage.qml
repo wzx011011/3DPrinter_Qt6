@@ -1657,6 +1657,22 @@ Item {
                     bedOriginY: root.editorVm ? root.editorVm.bedOriginY : 0
                     bedShapeType: root.editorVm ? root.editorVm.bedShapeType : 0
                     bedDiameter: root.editorVm ? root.editorVm.bedDiameter : 220
+                    // Phase 100 (WTREAD-01): wire the real post-slice wipe-tower
+                    // geometry (from Print::wipe_tower_data() via SliceService ->
+                    // EditorViewModel) into the GLViewport Q_PROPERTYs so the real
+                    // dims reach the renderer's m_wipeTowerDirty rebuild path
+                    // (RhiViewportRenderer::uploadWipeTowerBuffer, .cpp:1064-1095).
+                    // Closes the WT-VIEWPORT-DEFAULTS unbound gap (99-GAP-MATRIX).
+                    // showWipeTower is the WTREAD-02 gate (has_wipe_tower()):
+                    // false on single-material slices so no placeholder box
+                    // leaks. Defaults match RhiViewport.h:304-309 (10/10/50/100/25)
+                    // for the null-editorVm / pre-slice path.
+                    showWipeTower: root.editorVm ? root.editorVm.showWipeTower : false
+                    wipeTowerWidth: root.editorVm ? root.editorVm.wipeTowerWidth : 10
+                    wipeTowerDepth: root.editorVm ? root.editorVm.wipeTowerDepth : 10
+                    wipeTowerHeight: root.editorVm ? root.editorVm.wipeTowerHeight : 50
+                    wipeTowerX: root.editorVm ? root.editorVm.wipeTowerX : 100
+                    wipeTowerZ: root.editorVm ? root.editorVm.wipeTowerZ : 25
                     currentPlateIndex: root.editorVm ? root.editorVm.currentPlateIndex : 0
                     plateCount: root.editorVm ? root.editorVm.plateCount : 0
                     activePlateObjectIndices: root.editorVm ? root.editorVm.activePlateObjectIndices : []
