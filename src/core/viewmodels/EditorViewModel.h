@@ -19,9 +19,12 @@
 // included so the Assembly-measure bounds helper can return ModelBounds values
 // (mirrors the GizmoCenter.h include pattern).
 #include "qml_gui/Renderer/PrepareSceneData.h"
+// Phase 100 (WTREAD-01): SliceService.h defines the WipeTowerGeometry POD
+// struct captured by value in the worker; included here so the
+// onWipeTowerGeometryReady slot signature has the complete type.
+#include "core/services/SliceService.h"
 
 class ProjectServiceMock;
-class SliceService;
 class UndoRedoManager;
 class ConfigViewModel;
 
@@ -638,6 +641,18 @@ public:
   Q_PROPERTY(float bedOriginY READ bedOriginY WRITE setBedOriginY NOTIFY bedShapeChanged)
   Q_PROPERTY(int bedShapeType READ bedShapeType WRITE setBedShapeType NOTIFY bedShapeChanged)
   Q_PROPERTY(float bedDiameter READ bedDiameter WRITE setBedDiameter NOTIFY bedShapeChanged)
+  /// Phase 100 (WTREAD-01): post-slice wipe-tower geometry read back from
+  /// Print::wipe_tower_data() via SliceService. READ-only + NOTIFY because the
+  /// dims flow from SliceService (libslic3r worker), not from QML. showWipeTower
+  /// is the WTREAD-02 gate (has_wipe_tower()): false on single-material slices
+  /// so no placeholder box leaks. Defaults match RhiViewport.h:304-309
+  /// (show=false, 10/10/50/100/25) so the pre-slice renderer is unchanged.
+  Q_PROPERTY(bool showWipeTower READ showWipeTower NOTIFY wipeTowerGeometryChanged)
+  Q_PROPERTY(float wipeTowerWidth READ wipeTowerWidth NOTIFY wipeTowerGeometryChanged)
+  Q_PROPERTY(float wipeTowerDepth READ wipeTowerDepth NOTIFY wipeTowerGeometryChanged)
+  Q_PROPERTY(float wipeTowerHeight READ wipeTowerHeight NOTIFY wipeTowerGeometryChanged)
+  Q_PROPERTY(float wipeTowerX READ wipeTowerX NOTIFY wipeTowerGeometryChanged)
+  Q_PROPERTY(float wipeTowerZ READ wipeTowerZ NOTIFY wipeTowerGeometryChanged)
   Q_PROPERTY(int extruderCount READ extruderCount NOTIFY stateChanged)
   Q_PROPERTY(bool hasSliceResult READ hasSliceResult NOTIFY stateChanged)
   /// Phase 52 PREPSB-05: staleness exposed to QML so Preview/Export can show a
@@ -699,6 +714,23 @@ public:
   void setBedShapeType(int v);
   float bedDiameter() const;
   void setBedDiameter(float v);
+  // Phase 100 (WTREAD-01): wipe-tower geometry getters (read-only; set from
+  // the SliceService-received WipeTowerGeometry struct, not from QML).
+  bool showWipeTower() const;
+  float wipeTowerWidth() const;
+  float wipeTowerDepth() const;
+  float wipeTowerHeight() const;
+  float wipeTowerX() const;
+  float wipeTowerZ() const;
+
+private slots:
+  /// Phase 100 (WTREAD-01): receives the captured-by-value wipe-tower geometry
+  /// delivered by SliceService::wipeTowerGeometryReady on the GUI thread.
+  /// Applies the has_wipe_tower() gate (WTREAD-02): when geometry.valid is
+  /// false, m_showWipeTower is forced to false and the dim members are left
+  /// untouched (no placeholder pushed as "real" geometry). Always emits
+  /// wipeTowerGeometryChanged() so the QML bindings refresh.
+  void onWipeTowerGeometryReady(const WipeTowerGeometry &geometry);
 
   bool allPlatesSliced() const;
   int extruderCount() const;
@@ -800,6 +832,10 @@ signals:
   void stateChanged();
   void paintDataChanged();
   void bedShapeChanged();
+  /// Phase 100 (WTREAD-01): emitted whenever the wipe-tower geometry is
+  /// refreshed from a SliceService readback (valid or invalid). Drives the
+  /// six wipe-tower Q_PROPERTYs above.
+  void wipeTowerGeometryChanged();
   void selectionSettingsRequested();
   /// 请求切换到预览页面（对齐上游 Plater::priv::on_preview）
   void previewRequested();
@@ -997,4 +1033,16 @@ private:
   float m_bedOriginY = 0.0f;
   int m_bedShapeType = 0;                 ///< 0=Rectangle, 1=Circle, 2=Custom
   float m_bedDiameter = 220.0f;
+  // Phase 100 (WTREAD-01): wipe-tower geometry mirrored from the SliceService
+  // readback (Print::wipe_tower_data() captured by value in the worker).
+  // Defaults match RhiViewport.h:304-309 (show=false, 10/10/50/100/25) so the
+  // pre-slice renderer is unchanged. m_showWipeTower is the WTREAD-02 gate
+  // (Print::has_wipe_tower()): false on single-material slices so no
+  // placeholder box leaks.
+  bool m_showWipeTower = false;
+  float m_wipeTowerWidth = 10.f;
+  float m_wipeTowerDepth = 10.f;
+  float m_wipeTowerHeight = 50.f;
+  float m_wipeTowerX = 100.f;
+  float m_wipeTowerZ = 25.f;
 };

@@ -2217,6 +2217,13 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
       statusText_ = QStringLiteral("切片完成");
       emit stateChanged();
     } });
+  // Phase 100 (WTREAD-01): deliver the captured-by-value wipe-tower geometry
+  // (from Print::wipe_tower_data(), read in the SliceService worker) to the
+  // six wipeTower* Q_PROPERTYs above. The slot applies the has_wipe_tower()
+  // gate (WTREAD-02): single-material slices keep showWipeTower=false and do
+  // not push placeholder dims as "real" geometry.
+  connect(sliceService_, &SliceService::wipeTowerGeometryReady,
+          this, &EditorViewModel::onWipeTowerGeometryReady);
   connect(projectService_, &ProjectServiceMock::loadProgressUpdated, this, [this](int progress, const QString &stageText)
           {
     if (projectService_->loading())
@@ -5075,3 +5082,37 @@ void EditorViewModel::setBedDiameter(float v)
   emit bedShapeChanged();
   emit stateChanged();
 }
+
+// ── Phase 100 (WTREAD-01): wipe-tower geometry readback from SliceService ──
+//
+// onWipeTowerGeometryReady applies the has_wipe_tower() gate (WTREAD-02): when
+// geometry.valid is false (single-material / enable_prime_tower off), the
+// renderer must show no wipe-tower — m_showWipeTower is forced to false and
+// the dim members are left untouched so no placeholder 10/10/50/100/25 box is
+// pushed as "real" geometry. When geometry.valid is true, the real dims from
+// Print::wipe_tower_data() (captured by value in the SliceService worker,
+// Frozen Decision 1) overwrite the placeholder defaults.
+void EditorViewModel::onWipeTowerGeometryReady(const WipeTowerGeometry &geometry)
+{
+  if (geometry.valid) {
+    m_wipeTowerWidth = geometry.width;
+    m_wipeTowerDepth = geometry.depth;
+    m_wipeTowerHeight = geometry.height;
+    m_wipeTowerX = geometry.x;
+    m_wipeTowerZ = geometry.z;
+    m_showWipeTower = true;
+  } else {
+    // WTREAD-02 gate: do NOT overwrite width/depth/height/x/z with placeholder
+    // values. They are irrelevant while show=false; leaving them at their
+    // prior values guarantees no placeholder box leaks as "real" geometry.
+    m_showWipeTower = false;
+  }
+  emit wipeTowerGeometryChanged();
+}
+
+bool EditorViewModel::showWipeTower() const { return m_showWipeTower; }
+float EditorViewModel::wipeTowerWidth() const { return m_wipeTowerWidth; }
+float EditorViewModel::wipeTowerDepth() const { return m_wipeTowerDepth; }
+float EditorViewModel::wipeTowerHeight() const { return m_wipeTowerHeight; }
+float EditorViewModel::wipeTowerX() const { return m_wipeTowerX; }
+float EditorViewModel::wipeTowerZ() const { return m_wipeTowerZ; }
