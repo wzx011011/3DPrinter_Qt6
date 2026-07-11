@@ -1,139 +1,99 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.3
-milestone_name: Real Thumbnail Capture And 3MF Round-Trip
-status: completed
-last_updated: "2026-07-10T20:08:55.509Z"
-last_activity: 2026-07-10 — Milestone v4.3 completed and archived
+milestone: v4.4
+milestone_name: Wipe-Tower Geometry Readback And Real Rendering
+status: planning
+last_updated: 2026-07-11T12:00:00+08:00
+last_activity: 2026-07-11 -- Milestone v4.4 started
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
+stopped_at: Milestone v4.4 started; defining requirements and roadmap
 ---
 
 # Project State
 
-**Milestone:** v4.3 - Real Thumbnail Capture And 3MF Round-Trip
-**Status:** v4.3 milestone complete
-**Next step:** Plan Phase 97 with `/gsd-plan-phase 97`.
+**Milestone:** v4.4 - Wipe-Tower Geometry Readback And Real Rendering
+**Status:** Planning (defining requirements and roadmap)
+**Next step:** Plan Phase 99 with `/gsd-plan-phase 99`.
 
 ## Current Position
 
-Phase: Milestone v4.3 complete
+Phase: 99 (Wipe-Tower Geometry Gap Audit) — not started
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-10 — Milestone v4.3 completed and archived
+Status: Roadmap approved; ready to plan Phase 99
+Last activity: 2026-07-11 — v4.4 roadmap created (Phases 99-102)
 
-## Current Milestone (v4.3)
+## Current Milestone (v4.4)
+
+| Phase | Name | Status | Requirements |
+|---|---|---|---|
+| 99 | Wipe-Tower Geometry Gap Audit | Not started | WTAUDIT-01, WTAUDIT-02 |
+| 100 | Wipe-Tower Geometry Readback | Not started | WTREAD-01, WTREAD-02 |
+| 101 | Wipe-Tower Real Rendering Upgrade | Not started | WTRENDER-01, WTRENDER-02 |
+| 102 | Wipe-Tower Verification And Regression | Not started | WTVERIFY-01, WTVERIFY-02 |
+
+## Last Completed Milestone: v4.3
 
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
 | 94 | Thumbnail Capture Gap Audit | Complete | THUMBAUDIT-01, THUMBAUDIT-02 |
 | 95 | QRhi Thumbnail Capture Infrastructure | Complete | THUMBCAP-01, THUMBCAP-02, THUMBCAP-03 |
 | 96 | 3MF Thumbnail Write Integration | Complete | THUMBWRITE-01, THUMBWRITE-02, THUMBWRITE-03 |
-| 97 | Thumbnail Save-Reload Round-Trip | Not started | THUMBRT-01, THUMBRT-02 |
-| 98 | Thumbnail Verification And Cleanup | Not started | THUMBVERIFY-01, THUMBVERIFY-02 |
-
-## Phase 96 Frozen Decisions Implemented (THUMBWRITE-01/02/03)
-
-- **qimageToThumbnailData helper (THUMBWRITE-01/02 enabler):** File-local static free function under `#ifdef HAS_LIBSLIC3R` (not a member, not in the public header) converts a captured `QImage` to `Slic3r::ThumbnailData` via `convertToFormat(QImage::Format_RGBA8888)` + `resize` + scanline `std::memcpy`. Uses `resize`+`memcpy` directly (NOT `ThumbnailData::set()`, which fills white defaults). Early-returns an empty/invalid `ThumbnailData` on null/non-positive dims so the writer's `is_valid()` guard skips gracefully.
-- **PlateData::plate_thumbnail per plate (THUMBWRITE-01):** `buildPlateDataList` populates `pd->plate_thumbnail = qimageToThumbnailData(p->thumbnail())` guarded by `!p->thumbnail().isNull()`. Drives the per-plate XML `<metadata thumbnail_file="Metadata/plate_N.png">` reference (`bbs_3mf.cpp:7987`).
-- **StoreParams::thumbnail_data project-level (THUMBWRITE-02):** `saveProject` builds a `ThumbnailData` from the current plate's (fallback plate 0) captured thumbnail, held in a single local `projectThumb` whose address outlives `store_bbs_3mf` (block-scoped, destroyed only after the store call + `release_PlateData_list` cleanup). Pushed into `params.thumbnail_data` guarded by `is_valid()`. Drives the actual PNG byte writing (`bbs_3mf.cpp:6133-6143` -> `_add_thumbnail_file_to_archive`).
-- **Format symmetry (round-trip foundation):** Write side produces `Format_RGBA8888` bytes via `convertToFormat`, matching the read side at `ProjectServiceMock.cpp:5455` — Phase 97 round-trip relies on this.
-- **PNG path runs to completion (THUMBWRITE-03):** With real RGBA pixels, `tdefl_write_image_to_png_file_in_memory_ex` (`bbs_3mf.cpp:6548`) returns non-null -> `mz_zip_writer_add_mem` (`:6551`) succeeds. The v3.2 "throws a non-std exception" was the empty/mock-pixel path. Production code compiles/links clean against the real writer; runtime save round-trip proof routed to Phase 97.
-
-## Phase 95 Frozen Decisions Implemented (THUMBCAP-01/02/03)
-
-- **Real QRhi readback (THUMBCAP-01):** Offscreen single-sample `QRhiTexture` render-target at thumbnail size + `QRhiResourceUpdateBatch::readBackTexture()` with its own `QRhiRenderPassDescriptor`; offscreen pass reuses the on-screen scene vertex buffers (bed fill + grid lines + model mesh) with a thumbnail-aspect (1.0) camera MVP. Stub `#18222c` PNG fabrication removed from `requestThumbnailCapture`.
-- **Single-sample RT no MSAA resolve (THUMBCAP-02):** Thumbnail RT is sample count 1, so no resolve step is needed at readback. On-screen viewport keeps sample count 4.
-- **Render-thread capture queue + queued callback (THUMBCAP-03):** Item-side `m_thumbnailRequestPending`/`m_thumbnailPlateIndex`/`m_thumbnailSize` mirrored into the renderer via `synchronize()`; async readback polled at the start of the next `render()` frame; `QImage` delivered back to `RhiViewport::deliverThumbnail` on the GUI thread via `QMetaObject::invokeMethod(..., Qt::QueuedConnection)`. `QPointer<RhiViewport>` survives item deletion.
-
-## Phase 94 Frozen Decisions (THUMBAUDIT-02)
-
-- **QRhi readback (THUMB-RHI-READBACK):** Option A — offscreen `QRhiTexture` render-target at thumbnail size + `QRhiResourceUpdateBatch::readBackTexture()` (mirrors upstream's dedicated thumbnail framebuffer; yields a single-sample thumbnail-sized texture). Drives Phase 95 THUMBCAP-01.
-- **MSAA resolve (THUMB-MSAA-RESOLVE):** render the thumbnail to a single-sample (sample count 1) offscreen RT so no resolve step is needed at readback (consequence of Option A); on-screen viewport keeps sample count 4 per `RhiViewport.cpp:47`. Drives Phase 95 THUMBCAP-02.
-- **Render-thread capture queue (THUMB-RT-QUEUE):** mirror the existing `m_fitRequestCount`/`m_viewPreset` synchronize() pattern (`RhiViewport.h:314-315`, `RhiViewport.cpp:415,435,442`, `RhiViewportRenderer.cpp:35`); readback inside `render()`, QImage delivered back via queued signal/connection. Drives Phase 95 THUMBCAP-03.
-
-## Last Completed Milestone: v4.2
-
-| Phase | Name | Status | Requirements |
-|---|---|---|---|
-| 89 | AssembleView Source-Truth Gap Audit | Complete | ASMAUDIT-01, ASMAUDIT-02 |
-| 90 | AssembleView Shell And Canvas Host Restoration | Complete | ASMSHELL-01, ASMSHELL-02, ASMROUTE-01 |
-| 91 | Explosion Ratio And Assembly Rendering | Complete | ASMEXPLODE-01, ASMEXPLODE-02 |
-| 92 | Assembly Measurement Gizmo | Complete | ASMMEASURE-01, ASMMEASURE-02 |
-| 93 | AssembleView Verification And Cleanup | Complete | ASMROUTE-02, ASMVERIFY-01, ASMVERIFY-02 |
+| 97 | Thumbnail Save-Reload Round-Trip | Complete | THUMBRT-01, THUMBRT-02 |
+| 98 | Thumbnail Verification And Cleanup | Complete | THUMBVERIFY-01, THUMBVERIFY-02 |
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-07-10)
+See: `.planning/PROJECT.md` (updated 2026-07-11)
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-**Current focus:** Phase 97 — thumbnail-save-reload-round-trip
+**Current focus:** v4.4 — wipe-tower geometry readback from `Print::wipe_tower_data()` + real rendering replacing the placeholder box.
 
-## Milestone Context (v4.3)
+## Milestone Context (v4.4)
 
-**Goal:** Replace mock thumbnails with real QRhi framebuffer capture, and close the 3MF write side so thumbnails survive save → reload.
+**Goal:** Replace the hardcoded placeholder-box wipe-tower rendering with real libslic3r post-slice geometry.
 
 **Current state (from pre-planning exploration):**
+- Wipe-tower rendering pipeline is 90% ready (RHI `RhiViewportRenderer` has `m_wipeTowerBuffer` + `uploadWipeTowerBuffer()` + `renderWipeTower()`; Software viewport has parallel props).
+- **Geometry is a hardcoded placeholder:** `GizmoGeometry::buildWipeTowerVertices` builds a 36-vertex rectangular prism (6 faces) with caller-supplied or default dims. `RhiViewport` defaults: width=10, depth=10, height=50, x=100, z=25.
+- **The Qt6 side never reads libslic3r's `Print::wipe_tower_data()`** — zero references to `wipe_tower_data`, `get_wipe_tower_depth`, `get_wipe_tower_bbx` in `src/`.
+- `WipeTowerDialog.qml:25-30` has a mock `flushMatrix` (not wired to real data).
 
-- Mock thumbnails: `ProjectServiceMock.cpp:4242 generatePlateThumbnail()` draws QPainter flat-color placeholders; `RhiViewport.cpp:476 requestThumbnailCapture()` is a solid-color PNG stub. Zero real readback code in repo.
-- 3MF write side explicitly NOT populated: `saveProject` (`ProjectServiceMock.cpp:5100`) omits `StoreParams::thumbnail_data` and `PlateData::plate_thumbnail` (comments at `:5089-5093` and `:5127-5135`) because the upstream writer's PNG encoding path throws on the Qt6 mock pipeline.
-- 3MF READ side fully implemented: `ProjectServiceMock.cpp:5455-5466` extracts `plate->plate_thumbnail` → QImage, applied at `5654-5660`. Only the write side is missing.
-- Infrastructure present: `RhiViewport : QQuickRhiItem` exposes `rhi()`/`renderTarget()`; `RhiViewportRenderer : QQuickRhiItemRenderer`. Need: render-thread capture queue + `QRhiReadback`/`QRhiReadbackResult` + MSAA resolve (sample count > 1 per `RhiViewport.cpp:43`).
+**Upstream source anchors (behavior truth):**
+- `third_party/OrcaSlicer/src/libslic3r/Print.hpp:740-786` — `struct WipeTowerData`: tool_changes, bbx (includes brim), rib_offset, wipe_tower_mesh_data (optional), depth, height, brim_width, position, width.
+- `Print.hpp:988-989` — `has_wipe_tower()`, `wipe_tower_data()`.
+- `Print.hpp:1078-1080` — `get_wipe_tower_depth()`, `get_wipe_tower_bbx()`, `get_rib_offset()`.
+- `third_party/OrcaSlicer/src/slic3r/GUI/3DScene.cpp:840-882` — `load_wipe_tower_preview` (make_cube box).
+- `3DScene.cpp:887-923` — `load_real_wipe_tower_preview` (uses real mesh via convex_hull_3d).
 
-**v3.2 deferred items being closed:**
-
-- THUMB-02 (partial v3.2): write `PlateData::plate_thumbnail` pixels into 3MF so save→reload round-trips. Blocked because writer PNG path throws on mock pixels.
-- THUMB-03 (deferred v3.3+): real GL/QRhi-capture thumbnails. Unblocks both THUMB-02 and the shared `store_bbs_3mf` writer blocker (also blocks FIXTURE-02).
-
-**Out of scope for v4.3:**
-
-- Auto filament-map + wipe-tower.
-- CLI fixtures + deterministic screenshots.
-- D3D12 root cause.
-- Full GLGizmoMeasure engine + clipper.
+**Out of scope for v4.4:**
+- Auto filament-map recommendation (future milestone; cleanest impl is letting libslic3r auto-compute in `Print::` and reading back `filament_maps`).
+- Per-plate wipe-tower architecture refactor (v3.0-audited per-plate filtered-copy slice path).
+- D3D12, GLGizmoMeasure engine, CLI fixtures.
 - LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows (removed scope).
 
 ## Carry-Forward Status
 
 | Category | Item | Target |
 |---|---|---|
-| closed | v4.2 AssembleView source-truth restoration | Shipped in v4.2 |
-| active | Real thumbnail capture + 3MF round-trip | v4.3 |
+| closed | v4.3 Real Thumbnail Capture + 3MF round-trip | Shipped in v4.3 |
+| active | Wipe-tower geometry readback + real rendering | v4.4 |
 | removed | LAN/device/cloud/network/Monitor workflows | Removed from future scope by user direction on 2026-07-07 |
-| future | Auto filament-map recommendation + wipe-tower geometry/rendering | Future milestone |
-| future | Missing CLI test fixtures (`hotend.stl`, `Block20XY.stl`) | Future fixture milestone (FIXTURE-02 unblocked by v4.3) |
+| future | Auto filament-map recommendation | Future milestone (loosely coupled, deferred from v4.4) |
+| future | Missing CLI test fixtures | Future fixture milestone (FIXTURE-02 unblocked by v4.3) |
 | future | D3D12 root cause | Dedicated backend investigation milestone |
 | future | Full GLGizmoMeasure feature-picking engine + AssembleViewDataPool clipper | Future milestone (needs per-volume ITS) |
 
-## Deferred Items
-
-Items acknowledged and deferred at v4.2 milestone close on 2026-07-09:
-
-| Category | Item | Status |
-|---|---|---|
-| process | Nyquist VALIDATION.md files | Phases 89-93 have deterministic verification artifacts but no separate Nyquist validation files |
-| evidence | Runtime visual evidence | Windows capture API blocked; reachability via process-liveness + canonical verifier + regression ctest |
-| build | Canonical build libslic3r reconfigure | Per-invocation ~8 min reconfigure timed out executor wrapper in code phases; production code clean |
-| feature | Full GLGizmoMeasure engine + clipper | Deferred (needs per-volume ITS + raycaster) |
-
-Items acknowledged and deferred at v4.3 milestone close on 2026-07-11:
-
-| Category | Item | Status |
-|---|---|---|
-| process | Phases 95-98 lack formal VERIFICATION.md | Equivalent verification via code review (0 critical) + regression ctest 4/4 + empirical harness probes; artifact gap, not substance gap |
-| process | Nyquist VALIDATION.md files (v4.3) | Carry-forward from v4.2; phases have SUMMARY/REVIEW verification |
-| quick_task | 260708-e60-add-extensible-gui-startup-deep-link-arg | Unrelated to v4.3 scope (GUI startup args seed, created 2026-07-08); left in-progress for future milestone |
-| verification | Phase 97 REVIEW MEDIUM-3 multi-plate gap | CLOSED in Phase 98 (per-plate thumbnail_data fix + multi-plate test); not deferred |
-
 ## Scope Guard
 
-- v4.3 is local/offline thumbnail capture + 3MF persistence work only.
+- v4.4 is wipe-tower geometry readback + rendering only.
 - Do not promote LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, or printer-connected hardware workflows unless the user explicitly reopens them.
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Define REQUIREMENTS.md for v4.4.
+- Create ROADMAP.md (phases continue from 99).

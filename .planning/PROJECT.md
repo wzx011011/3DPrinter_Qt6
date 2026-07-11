@@ -10,7 +10,7 @@ The project currently has a usable Qt6/QML shell, real model/project IO, real sl
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current State: post-v4.3 (planning next milestone)
+## Current State: v4.4 Wipe-Tower Geometry Readback And Real Rendering (Active)
 
 **Last shipped milestone:** v4.3 Real Thumbnail Capture And 3MF Round-Trip (2026-07-10).
 
@@ -44,16 +44,24 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 **Carry-forward outside v4.2:** D3D12 remains explicit opt-in future investigation. Full GLGizmoMeasure feature-picking engine (needs per-volume ITS + scene raycaster) and the AssembleViewDataPool ModelObjectsClipper resource are deferred to a future milestone. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows are removed from forward scope unless the user explicitly reopens them.
 
-## Current Milestone: (none — planning next)
+## Current Milestone: v4.4 Wipe-Tower Geometry Readback And Real Rendering
 
-**Status:** v4.3 shipped 2026-07-10. No active milestone. Run `/gsd:new-milestone` to define the next scope.
+**Goal:** Replace the current hardcoded placeholder-box wipe-tower rendering with real libslic3r post-slice geometry. Read `Print::wipe_tower_data()` (bbx/depth/height/brim_width/rib_offset/position/width, optional `wipe_tower_mesh_data`) and feed it to the existing RHI renderer so the Prepare view wipe-tower reflects real slice results.
 
-**Scope rule (carry-forward):** Local/offline only. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from scope.
+**Scope rule:** Local/offline only. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from scope. Auto filament-map recommendation is explicitly deferred to a future milestone — v4.4 is wipe-tower geometry readback + rendering only.
+
+**Target features:**
+- Post-slice readback of `Print::wipe_tower_data()` geometry (bbx, depth, height, brim_width, rib_offset, position, width, optional mesh).
+- Push real geometry dimensions into `RhiViewport` wipeTowerWidth/Depth/Height/X/Z (replacing the default 10/10/50/100/25 placeholder values).
+- Upgrade `GizmoGeometry::buildWipeTowerVertices` from a placeholder box toward real geometry (mirror upstream `3DScene.cpp:887 load_real_wipe_tower_preview`).
+- Render the wipe-tower only when one exists (multi-material / `enable_prime_tower`).
+
+**Out of scope:** Auto filament-map recommendation (future milestone), per-plate wipe-tower architecture refactor (the v3.0-audited per-plate filtered-copy slice path), D3D12, GLGizmoMeasure engine.
 
 ## Next Milestone
 
-Not yet defined. Candidate backlog after v4.3:
-- Auto filament-map recommendation and wipe-tower geometry/rendering.
+v4.4 is the active milestone. Candidate backlog after v4.4:
+- Auto filament-map recommendation (let libslic3r auto-compute in `Print::`, Qt6 reads back `filament_maps` + builds `FilamentGroupPopup` UI; widen Qt6 mode enum to upstream 4-value).
 - Missing CLI fixtures and deterministic argv-based GUI fixture loading for screenshots (FIXTURE-02 — now unblocked by v4.3's shared-writer fix).
 - D3D12 crash root cause and Vulkan evaluation after the SDK/runtime path is ready.
 - Full GLGizmoMeasure feature-picking engine + AssembleViewDataPool clipper (needs per-volume ITS).
@@ -87,11 +95,15 @@ These are current baseline capabilities inferred from implementation, git histor
 
 ### Active
 
-(No active milestone — run `/gsd:new-milestone` to define the next scope.)
+- [ ] Read real wipe-tower geometry from `Print::wipe_tower_data()` post-slice (bbx, depth, height, brim, rib_offset, position, width, optional mesh).
+- [ ] Feed real geometry dimensions into the RHI renderer (replace placeholder 10/10/50/100/25 defaults).
+- [ ] Upgrade `GizmoGeometry::buildWipeTowerVertices` from placeholder box toward real geometry.
+- [ ] Render the wipe-tower only when one exists (multi-material / enable_prime_tower).
+- [ ] Verify with canonical build + ctest regression (Prepare/Preview/AssembleView not broken).
 
 ### Future
 
-- Auto filament-map recommendation and wipe-tower geometry/rendering.
+- Auto filament-map recommendation (let libslic3r auto-compute, Qt6 reads back + UI).
 - Full PLATE-09 save/reload state assertions — now unblocked by v4.3's shared-writer fix (`FIXTURE-02`).
 - D3D12 crash root cause and Vulkan evaluation after the SDK/runtime path is ready.
 - Full i18n translation coverage beyond strings touched by active workflows.
@@ -172,7 +184,8 @@ These are current baseline capabilities inferred from implementation, git histor
 | Scope v4.1 to parameter settings dialogs | Settings has real Phase 56 backend semantics but target screenshots still expose visual/text/layout debt. | Good - v4.1 shipped |
 | Add startup deep-link arguments for settings/dialogs/models | Direct SettingsDialog window capture was blocked by the Windows capture API; argv-based deep links let future visual evidence open pages/dialogs and load models without simulated clicks. | Good - v4.1 shipped |
 | Scope v4.2 to AssembleView source-truth restoration | After Prepare/Preview/settings shipped, AssembleView is the last screenshot-level UI surface; Arrange (auto-arrangement) is already complete and distinct from the assembly canvas. | Good - v4.2 shipped |
-| Scope v4.3 to real thumbnail capture + 3MF round-trip | v3.2 THUMB-02/THUMB-03 are the longest-running deferred items; both share one root cause (the upstream writer needs real GL pixels). Closing them also unblocks FIXTURE-02. | Active - v4.3 |
+| Scope v4.3 to real thumbnail capture + 3MF round-trip | v3.2 THUMB-02/THUMB-03 are the longest-running deferred items; both share one root cause (the upstream writer needs real GL pixels). Closing them also unblocks FIXTURE-02. | Good - v4.3 shipped |
+| Scope v4.4 to wipe-tower geometry readback only | Exploration showed auto filament-map + wipe-tower is too large for one milestone and the two are loosely coupled. Wipe-tower readback is smaller, higher-ROI (renderer is 90% done), and avoids touching the slice architecture / per-plate-Print gap. Auto filament-map deferred to a future milestone. | Active - v4.4 |
 
 ## Evolution
 
@@ -192,4 +205,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-10 after v4.3 milestone shipped.*
+*Last updated: 2026-07-11 after v4.4 milestone planning.*

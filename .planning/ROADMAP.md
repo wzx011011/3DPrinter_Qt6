@@ -17,81 +17,72 @@
 - ✅ **v4.1** Parameter Settings Dialogs Source-Truth Restoration — Phases 84-88 (shipped 2026-07-09)
 - ✅ **v4.2** AssembleView Source-Truth Restoration — Phases 89-93 (shipped 2026-07-09)
 - ✅ **v4.3** Real Thumbnail Capture And 3MF Round-Trip — Phases 94-98 (shipped 2026-07-10)
+- 🚧 **v4.4** Wipe-Tower Geometry Readback And Real Rendering — Phases 99-102 (in progress)
 
-## Current Milestone: (planning next — run /gsd:new-milestone)
+## Current Milestone: v4.4 Wipe-Tower Geometry Readback And Real Rendering
 
-**Status:** v4.3 shipped. No active milestone. Run `/gsd:new-milestone` to define the next scope.
+**Goal:** Replace the current hardcoded placeholder-box wipe-tower rendering with real libslic3r post-slice geometry. Read `Print::wipe_tower_data()` and feed it to the existing RHI renderer so the Prepare view wipe-tower reflects real slice results.
 
-**v4.3 shipped summary:** Real QRhi thumbnail capture (Phase 95) + 3MF write-side closed (Phase 96) + save→reload round-trip verified with exact byte match (Phase 97) + mock-generator removal + multi-plate write-side fix (Phase 98). Closed v3.2 THUMB-02/THUMB-03. See `.planning/milestones/v4.3-ROADMAP.md` for the archived detail.
+**Scope rule:** Local/offline only. Auto filament-map recommendation is explicitly deferred to a future milestone — v4.4 is wipe-tower geometry readback + rendering only. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from scope.
+
+**Current state (from pre-planning exploration):**
+- Wipe-tower rendering pipeline is 90% ready (RHI `m_wipeTowerBuffer` + `uploadWipeTowerBuffer()` + `renderWipeTower()`; Software viewport parallel).
+- **Geometry is a hardcoded placeholder:** `GizmoGeometry::buildWipeTowerVertices` (36-vertex box); `RhiViewport` defaults width=10/depth=10/height=50/x=100/z=25.
+- **Qt6 never reads `Print::wipe_tower_data()`** — zero references in `src/`.
 
 ## Phases
 
-- [x] Phase 94: Thumbnail Capture Gap Audit
-- [x] Phase 95: QRhi Thumbnail Capture Infrastructure
-- [x] Phase 96: 3MF Thumbnail Write Integration
-- [x] Phase 97: Thumbnail Save-Reload Round-Trip (completed 2026-07-10)
-- [x] Phase 98: Thumbnail Verification And Cleanup (completed 2026-07-10)
+- [ ] Phase 99: Wipe-Tower Geometry Gap Audit
+- [ ] Phase 100: Wipe-Tower Geometry Readback
+- [ ] Phase 101: Wipe-Tower Real Rendering Upgrade
+- [ ] Phase 102: Wipe-Tower Verification And Regression
 
 | Phase | Name | Goal | Requirements |
 |---|---|---|---|
-| 94 | Thumbnail Capture Gap Audit | Freeze the v4.3 capture+writer region map: current mock paths, upstream writer anchors, Qt RHI readback approach, MSAA handling, replacement decisions, and verification expectations before edits. | THUMBAUDIT-01, THUMBAUDIT-02 |
-| 95 | QRhi Thumbnail Capture Infrastructure | Implement real QRhi texture readback capture replacing the `requestThumbnailCapture` stub, with MSAA resolve and a render-thread capture queue + QImage callback. | THUMBCAP-01, THUMBCAP-02, THUMBCAP-03 |
-| 96 | 3MF Thumbnail Write Integration | Populate `PlateData::plate_thumbnail` + `StoreParams::thumbnail_data` on save, and make the upstream `store_bbs_3mf` PNG encoding path run to completion on the Qt6 pipeline. | THUMBWRITE-01, THUMBWRITE-02, THUMBWRITE-03 |
-| 97 | 1/1 | Complete   | 2026-07-10 |
-| 98 | 1/1 | Complete   | 2026-07-10 |
+| 99 | Wipe-Tower Geometry Gap Audit | Freeze the v4.4 readback + rendering region map: placeholder path, upstream `Print::wipe_tower_data()` anchors, post-slice readback integration point, rendering-upgrade decision (box dims vs real mesh), and verification expectations before edits. | WTAUDIT-01, WTAUDIT-02 |
+| 100 | Wipe-Tower Geometry Readback | After a successful slice, read real wipe-tower geometry from `Print::wipe_tower_data()` (bbx, depth, height, brim, rib_offset, position, width) and push it into `RhiViewport`/`EditorViewModel`, respecting `has_wipe_tower()`. | WTREAD-01, WTREAD-02 |
+| 101 | Wipe-Tower Real Rendering Upgrade | Feed the real geometry dimensions into the renderer (replace placeholder defaults) and upgrade `GizmoGeometry::buildWipeTowerVertices` from a placeholder box toward real geometry (dimensioned box minimum, real mesh if feasible), with brim/rib representation. | WTRENDER-01, WTRENDER-02 |
+| 102 | Wipe-Tower Verification And Regression | Lock source/QML audits, run canonical verifier, confirm Prepare/Preview/AssembleView regression-free, and verify the wipe-tower renders at runtime when a multi-material slice produces one. | WTVERIFY-01, WTVERIFY-02 |
 
-### Phase 94: Thumbnail Capture Gap Audit
-
-**Status:** Complete
-**Plans:** 1/1
-
-Success criteria:
-1. The thumbnail capture + 3MF writer surface is mapped to upstream source anchors (`store_bbs_3mf` thumbnail path, `PartPlate::store_to_3mf_structure`), current Qt mock paths, replacement decisions, and verification expectations.
-2. The QRhi readback approach (offscreen QRhiTexture RT render + `readBackTexture`, or live RT color attachment readback), MSAA resolve strategy, and render-thread request queue design are frozen before implementation.
-
-### Phase 95: QRhi Thumbnail Capture Infrastructure
-
-**Status:** Complete
-**Plans:** 1/1
-**Shipped:** 2026-07-10 (commit fc4aadb + docs commit)
-
-Success criteria:
-1. `RhiViewport::requestThumbnailCapture` produces a real screenshot reflecting the rendered scene (bed/plate/mesh/gizmos), replacing the solid-color stub. — MET: solid-color `#18222c` stub removed; offscreen RT reuses on-screen scene vertex buffers (bed fill + grid lines + model mesh).
-2. The capture handles the MSAA render target (sample count > 1) — readback resolves the multisampled color attachment to a non-multisampled QImage. — MET: offscreen RT is single-sample (sample count 1), eliminating the MSAA resolve step entirely (frozen decision 2).
-3. The capture runs on the render thread via a request queue (item → renderer) and delivers the QImage back to the GUI thread via callback (mirroring the `m_fitRequestCount`/`m_viewPreset` pattern). — MET: `m_thumbnailRequestPending` mirrored via `synchronize()`; async readback polled next frame; `deliverThumbnail` posted via `QMetaObject::invokeMethod(..., Qt::QueuedConnection)`.
-
-### Phase 96: 3MF Thumbnail Write Integration
-
-**Status:** Complete
-**Plans:** 1/1
-**Shipped:** 2026-07-10 (commits 71295cc + 68fb3b7 + 94a78ed + 9829ab4 + docs 50b41c7)
-
-Success criteria:
-1. `buildPlateDataList` populates `PlateData::plate_thumbnail` with real captured pixels on save. — MET: `pd->plate_thumbnail = qimageToThumbnailData(p->thumbnail())` guarded by `!p->thumbnail().isNull()` (drives the XML `thumbnail_file` reference at `bbs_3mf.cpp:7987`).
-2. `saveProject` populates `StoreParams::thumbnail_data` with a real captured project thumbnail. — MET: a `ThumbnailData` built from the current plate (fallback plate 0), held in a single local whose address outlives `store_bbs_3mf`, pushed before the store call (drives the PNG byte writing at `bbs_3mf.cpp:6133-6143`).
-3. The upstream `store_bbs_3mf` PNG encoding path (`_add_thumbnail_file_to_archive`) runs to completion without throwing the non-std exception seen on the mock pipeline. — MET (compile/link + regression): production code compiles/links clean (`OWzxSlicer.exe` linked at `[236/236]`); the write-side produces real RGBA pixels so `tdefl_write_image_to_png_file_in_memory_ex` returns non-null. The v3.2 "throws" was the empty/mock-pixel path. Regression ctest passes (ViewModelSmoke/QmlUiAudit/PrepareSceneData/PartPlate all PASS). Runtime save-reload round-trip proof routed to Phase 97.
-
-### Phase 97: Thumbnail Save-Reload Round-Trip
+### Phase 99: Wipe-Tower Geometry Gap Audit
 
 **Status:** Not started
-**Plans:** 1/1 plans complete
+**Plans:** 0/1
 
 Success criteria:
-1. Saving a project with captured thumbnails and reloading it restores the thumbnails via the existing read side so the reloaded `PartPlate::thumbnail()` matches the saved pixels.
-2. An automated test (PartPlateTests or a new round-trip test) saves a project with a known thumbnail, reloads it, and asserts the thumbnail pixels survive.
+1. The wipe-tower capture + rendering surface is mapped to upstream `Print::wipe_tower_data()` / `WipeTowerData` anchors, the current placeholder path, the post-slice readback integration point, and verification expectations.
+2. The readback design and the rendering-upgrade approach (dimensioned box from bbx/depth/height vs real mesh from `wipe_tower_mesh_data`) are frozen as locked decisions before implementation.
 
-### Phase 98: Thumbnail Verification And Cleanup
+### Phase 100: Wipe-Tower Geometry Readback
 
 **Status:** Not started
-**Plans:** 1/1 plans complete
+**Plans:** 0/1
 
 Success criteria:
-1. Replaced mock thumbnail code (QPainter placeholder generator + solid-color stub) leaves no dead/disconnected paths; the real capture path is the sole source.
-2. The canonical verifier passes, `build/OWzxSlicer.exe` launches, Prepare/Preview/AssembleView rendering is regression-free, and runtime thumbnail capture is reachable.
+1. After a successful slice, real wipe-tower geometry (bbx/depth/height/brim/rib_offset/position/width) is read from `Print::wipe_tower_data()` and pushed into the renderer-facing layer, replacing the placeholder defaults.
+2. The readback respects `Print::has_wipe_tower()` — no wipe-tower geometry is pushed when none exists.
+
+### Phase 101: Wipe-Tower Real Rendering Upgrade
+
+**Status:** Not started
+**Plans:** 0/1
+
+Success criteria:
+1. The rendered wipe-tower reflects real sliced dimensions (not placeholder 10/10/50/100/25).
+2. `GizmoGeometry::buildWipeTowerVertices` is upgraded toward real geometry (dimensioned box minimum; real mesh if feasible), with brim/rib representation where applicable.
+
+### Phase 102: Wipe-Tower Verification And Regression
+
+**Status:** Not started
+**Plans:** 0/1
+
+Success criteria:
+1. Placeholder defaults are no longer steady-state when a real slice exists; source/QML audits cover the readback wiring + rendering-upgrade anchors.
+2. The canonical verifier passes, `build/OWzxSlicer.exe` launches, Prepare/Preview/AssembleView rendering is regression-free, and the wipe-tower is visible at runtime when a multi-material slice produces one.
 
 ## Deferred Backlog
 
-- Auto filament-map recommendation and wipe-tower geometry/rendering.
+- Auto filament-map recommendation (let libslic3r auto-compute, Qt6 reads back + UI; widen mode enum).
 - Missing CLI fixtures and deterministic argv-based GUI fixture loading for screenshots (FIXTURE-02 unblocked by v4.3).
 - D3D12 root-cause investigation and future Vulkan/D3D12 backend promotion.
 - Full GLGizmoMeasure feature-picking engine + AssembleViewDataPool clipper (needs per-volume ITS).
@@ -102,12 +93,12 @@ Success criteria:
 
 ## Next Step
 
-Plan Phase 97 (Thumbnail Save-Reload Round-Trip) next:
+Plan Phase 99 after this roadmap is approved:
 
 ```text
-$gsd-plan-phase 97
+$gsd-plan-phase 99
 ```
 
 ---
 
-*Last updated: 2026-07-10 after Phase 96 plan 01 complete.*
+*Last updated: 2026-07-11 at v4.4 milestone start.*
