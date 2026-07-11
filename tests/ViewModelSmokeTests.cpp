@@ -295,6 +295,16 @@ private slots:
   // dims when valid=true (WTREAD-01), AND that showWipeTower=false with dims
   // not overwritten to placeholders when valid=false (WTREAD-02 gate).
   void wipeTowerGeometryReadbackAppliesValidAndInvalidGate();
+  // Phase 101-01 (WTRENDER-01): regression lock proving the real sliced
+  // wipe-tower dims reach the render pipeline contract (PreparePage.qml
+  // GLViewport binds the 6 wipe-tower Q_PROPERTYs to editorVm). Uses the
+  // PreparePage.qml source-audit fallback because RhiViewport is a
+  // QQuickRhiItem that cannot be constructed in the headless test harness
+  // (it needs a QRhi context). Combined with the Phase 100 readback test
+  // above (which proves the EditorViewModel Q_PROPERTYs receive real dims),
+  // this locks the end-to-end dim-reach contract so a future refactor
+  // cannot silently unbind the GLViewport.
+  void wipeTowerRealDimsReachRendererPipeline();
 
 private:
   bool hasLibslic3r() const;
@@ -4028,6 +4038,64 @@ void ViewModelSmokeTests::wipeTowerGeometryReadbackAppliesValidAndInvalidGate()
   QCOMPARE(editor.wipeTowerHeight(), 5.f);
   QCOMPARE(editor.wipeTowerX(), 200.f);
   QCOMPARE(editor.wipeTowerZ(), 150.f);
+}
+
+void ViewModelSmokeTests::wipeTowerRealDimsReachRendererPipeline()
+{
+  // Phase 101-01 (WTRENDER-01): regression lock proving the real sliced
+  // wipe-tower dims reach the render pipeline CONTRACT. The RHI render path
+  // (RhiViewportRenderer::uploadWipeTowerBuffer at .cpp:1064-1095) was
+  // already correct end-to-end after Phase 100: it calls
+  // buildWipeTowerVertices(m_wipeTowerX, m_wipeTowerZ, m_wipeTowerWidth,
+  // m_wipeTowerDepth, m_wipeTowerHeight) with the real dims and rebuilds on
+  // m_wipeTowerDirty. This test locks the CONTRACT so a future refactor
+  // cannot silently break the dim-reach path.
+  //
+  // PATH TAKEN: PreparePage.qml source-audit fallback. RhiViewport is a
+  // QQuickRhiItem (src/qml_gui/Renderer/RhiViewport.h:19) that requires a
+  // live QRhi context to construct, which is not available in the headless
+  // test harness. Instead, this test reads PreparePage.qml and asserts the
+  // GLViewport instance (id viewport3d, ~:1648) binds all 6 wipe-tower
+  // Q_PROPERTYs (showWipeTower, wipeTowerWidth/Depth/Height/X/Z) to
+  // root.editorVm. Combined with the Phase 100 readback test above (which
+  // proves the EditorViewModel Q_PROPERTYs receive the real dims from the
+  // SliceService readback), this proves the real dims flow from the slice
+  // engine all the way to the QML binding that feeds the renderer's
+  // synchronize() dim-pull (RhiViewportRenderer.cpp:171-189).
+  const QString qmlPath = QDir::cleanPath(
+      QStringLiteral(QT_TESTCASE_SOURCEDIR) +
+      QStringLiteral("/src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(QFileInfo::exists(qmlPath),
+           qPrintable(QStringLiteral("PreparePage.qml not found at %1").arg(qmlPath)));
+
+  QFile qmlFile(qmlPath);
+  QVERIFY2(qmlFile.open(QIODevice::ReadOnly | QIODevice::Text),
+           qPrintable(QStringLiteral("Cannot open PreparePage.qml: %1").arg(qmlFile.errorString())));
+  const QString qml = QString::fromUtf8(qmlFile.readAll());
+  qmlFile.close();
+
+  // The 6 wipe-tower Q_PROPERTYs must each be bound to root.editorVm.* in the
+  // GLViewport instance. Each assertion checks for the binding line. If any
+  // binding is removed, the renderer would fall through to the RhiViewport.h
+  // hardcoded defaults (10/10/50/100/25), silently breaking WTRENDER-01.
+  QVERIFY2(qml.contains(QStringLiteral("showWipeTower: root.editorVm ? root.editorVm.showWipeTower")),
+           "PreparePage.qml GLViewport must bind showWipeTower to editorVm (WTRENDER-01)");
+  QVERIFY2(qml.contains(QStringLiteral("wipeTowerWidth: root.editorVm ? root.editorVm.wipeTowerWidth")),
+           "PreparePage.qml GLViewport must bind wipeTowerWidth to editorVm (WTRENDER-01)");
+  QVERIFY2(qml.contains(QStringLiteral("wipeTowerDepth: root.editorVm ? root.editorVm.wipeTowerDepth")),
+           "PreparePage.qml GLViewport must bind wipeTowerDepth to editorVm (WTRENDER-01)");
+  QVERIFY2(qml.contains(QStringLiteral("wipeTowerHeight: root.editorVm ? root.editorVm.wipeTowerHeight")),
+           "PreparePage.qml GLViewport must bind wipeTowerHeight to editorVm (WTRENDER-01)");
+  QVERIFY2(qml.contains(QStringLiteral("wipeTowerX: root.editorVm ? root.editorVm.wipeTowerX")),
+           "PreparePage.qml GLViewport must bind wipeTowerX to editorVm (WTRENDER-01)");
+  QVERIFY2(qml.contains(QStringLiteral("wipeTowerZ: root.editorVm ? root.editorVm.wipeTowerZ")),
+           "PreparePage.qml GLViewport must bind wipeTowerZ to editorVm (WTRENDER-01)");
+
+  // Also confirm the WTREAD-02 gate default (show=false when editorVm is
+  // null/pre-slice) is present so no placeholder box leaks on the fallback
+  // path. This locks the null-editorVm contract too.
+  QVERIFY2(qml.contains(QStringLiteral("showWipeTower: root.editorVm ? root.editorVm.showWipeTower : false")),
+           "PreparePage.qml GLViewport showWipeTower must default to false when editorVm is null (WTREAD-02)");
 }
 
 void ViewModelSmokeTests::assembleViewDataPoolIsolatedFromPrepareAndPreview()
