@@ -32,7 +32,7 @@
 
 ## Phases
 
-- [ ] Phase 99: Wipe-Tower Geometry Gap Audit
+- [x] Phase 99: Wipe-Tower Geometry Gap Audit
 - [ ] Phase 100: Wipe-Tower Geometry Readback
 - [ ] Phase 101: Wipe-Tower Real Rendering Upgrade
 - [ ] Phase 102: Wipe-Tower Verification And Regression
@@ -46,8 +46,8 @@
 
 ### Phase 99: Wipe-Tower Geometry Gap Audit
 
-**Status:** Not started
-**Plans:** 0/1
+**Status:** Complete (2026-07-11)
+**Plans:** 1/1
 
 Success criteria:
 1. The wipe-tower capture + rendering surface is mapped to upstream `Print::wipe_tower_data()` / `WipeTowerData` anchors, the current placeholder path, the post-slice readback integration point, and verification expectations.
@@ -101,4 +101,4 @@ $gsd-plan-phase 99
 
 ---
 
-*Last updated: 2026-07-11 at v4.4 milestone start.*
+*Last updated: 2026-07-11 after Phase 99 gap audit complete.*

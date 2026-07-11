@@ -2,36 +2,36 @@
 gsd_state_version: 1.0
 milestone: v4.4
 milestone_name: Wipe-Tower Geometry Readback And Real Rendering
-status: planning
-last_updated: 2026-07-11T12:00:00+08:00
-last_activity: 2026-07-11 -- Milestone v4.4 started
+status: executing
+last_updated: 2026-07-11T23:45:00+08:00
+last_activity: 2026-07-11 -- Phase 99 complete (WTAUDIT-01, WTAUDIT-02)
 progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
-stopped_at: Milestone v4.4 started; defining requirements and roadmap
+  total_phases: 4
+  completed_phases: 1
+  total_plans: 4
+  completed_plans: 1
+  percent: 25
+stopped_at: Phase 99 gap audit complete; ready to plan/execute Phase 100
 ---
 
 # Project State
 
 **Milestone:** v4.4 - Wipe-Tower Geometry Readback And Real Rendering
-**Status:** Planning (defining requirements and roadmap)
-**Next step:** Plan Phase 99 with `/gsd-plan-phase 99`.
+**Status:** Executing (Phase 99 complete; Phase 100 next)
+**Next step:** Plan Phase 100 with `/gsd-plan-phase 100`.
 
 ## Current Position
 
-Phase: 99 (Wipe-Tower Geometry Gap Audit) — not started
+Phase: 100 (Wipe-Tower Geometry Readback) — not started
 Plan: —
-Status: Roadmap approved; ready to plan Phase 99
-Last activity: 2026-07-11 — v4.4 roadmap created (Phases 99-102)
+Status: Phase 99 gap audit complete; ready to plan Phase 100
+Last activity: 2026-07-11 — Phase 99 produced 99-GAP-MATRIX.md (8 WT-* regions, 3 frozen WTAUDIT-02 decisions)
 
 ## Current Milestone (v4.4)
 
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
-| 99 | Wipe-Tower Geometry Gap Audit | Not started | WTAUDIT-01, WTAUDIT-02 |
+| 99 | Wipe-Tower Geometry Gap Audit | Complete | WTAUDIT-01, WTAUDIT-02 |
 | 100 | Wipe-Tower Geometry Readback | Not started | WTREAD-01, WTREAD-02 |
 | 101 | Wipe-Tower Real Rendering Upgrade | Not started | WTRENDER-01, WTRENDER-02 |
 | 102 | Wipe-Tower Verification And Regression | Not started | WTVERIFY-01, WTVERIFY-02 |
@@ -57,11 +57,12 @@ See: `.planning/PROJECT.md` (updated 2026-07-11)
 
 **Goal:** Replace the hardcoded placeholder-box wipe-tower rendering with real libslic3r post-slice geometry.
 
-**Current state (from pre-planning exploration):**
-- Wipe-tower rendering pipeline is 90% ready (RHI `RhiViewportRenderer` has `m_wipeTowerBuffer` + `uploadWipeTowerBuffer()` + `renderWipeTower()`; Software viewport has parallel props).
-- **Geometry is a hardcoded placeholder:** `GizmoGeometry::buildWipeTowerVertices` builds a 36-vertex rectangular prism (6 faces) with caller-supplied or default dims. `RhiViewport` defaults: width=10, depth=10, height=50, x=100, z=25.
+**Current state (after Phase 99 gap audit):**
+- Wipe-tower rendering pipeline is structurally ready (RHI `RhiViewportRenderer` has `m_wipeTowerBuffer` + `uploadWipeTowerBuffer()` + `renderWipeTower()` + the `m_wipeTowerDirty` rebuild; Software viewport has parallel props) — classified `preserve` for Option A.
+- **Geometry is a hardcoded placeholder:** `GizmoGeometry::buildWipeTowerVertices` builds a 36-vertex rectangular prism with caller-supplied or default dims. `RhiViewport` defaults: width=10, depth=10, height=50, x=100, z=25.
 - **The Qt6 side never reads libslic3r's `Print::wipe_tower_data()`** — zero references to `wipe_tower_data`, `get_wipe_tower_depth`, `get_wipe_tower_bbx` in `src/`.
-- `WipeTowerDialog.qml:25-30` has a mock `flushMatrix` (not wired to real data).
+- **Phase 99 froze 3 WTAUDIT-02 decisions** in `99-GAP-MATRIX.md`: (1) readback reads `wipe_tower_data()` in the SliceService worker after `print.process()` succeeds, captures dims before the Print is invalidated, delivers via `sliceFinished`; (2) Option A dimensioned-box render baseline locked (Option B real mesh deferred); (3) data-driven `has_wipe_tower()` gate (no placeholder leak on single-material).
+- `PreparePage.qml:1648` GLViewport does NOT bind any wipe-tower Q_PROPERTY — the Phase 100 wiring task.
 
 **Upstream source anchors (behavior truth):**
 - `third_party/OrcaSlicer/src/libslic3r/Print.hpp:740-786` — `struct WipeTowerData`: tool_changes, bbx (includes brim), rib_offset, wipe_tower_mesh_data (optional), depth, height, brim_width, position, width.
@@ -95,5 +96,5 @@ See: `.planning/PROJECT.md` (updated 2026-07-11)
 
 ## Operator Next Steps
 
-- Define REQUIREMENTS.md for v4.4.
-- Create ROADMAP.md (phases continue from 99).
+- Plan Phase 100 (Wipe-Tower Geometry Readback) against `99-GAP-MATRIX.md`.
+- Then execute Phase 100, 101, 102 in sequence.

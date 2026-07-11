@@ -7,8 +7,8 @@
 
 ### Source-Truth Inventory
 
-- [ ] **WTAUDIT-01**: The wipe-tower capture + rendering surface has a current inventory mapping the placeholder geometry path (`GizmoGeometry::buildWipeTowerVertices`, RhiViewport defaults 10/10/50/100/25), the upstream `Print::wipe_tower_data()` / `WipeTowerData` struct anchors, the readback design (post-slice Print → RhiViewport dims), and the rendering-upgrade decision (box dims vs real mesh) before implementation.
-- [ ] **WTAUDIT-02**: The post-slice readback integration point (where `Print::wipe_tower_data()` becomes available after slicing, and how it flows to `RhiViewport`/`EditorViewModel`) and the rendering-upgrade approach (real mesh via `wipe_tower_mesh_data`/convex_hull vs dimensioned box from bbx/depth/height) are frozen as locked decisions before implementation.
+- [x] **WTAUDIT-01**: The wipe-tower capture + rendering surface has a current inventory mapping the placeholder geometry path (`GizmoGeometry::buildWipeTowerVertices`, RhiViewport defaults 10/10/50/100/25), the upstream `Print::wipe_tower_data()` / `WipeTowerData` struct anchors, the readback design (post-slice Print → RhiViewport dims), and the rendering-upgrade decision (box dims vs real mesh) before implementation.
+- [x] **WTAUDIT-02**: The post-slice readback integration point (where `Print::wipe_tower_data()` becomes available after slicing, and how it flows to `RhiViewport`/`EditorViewModel`) and the rendering-upgrade approach (real mesh via `wipe_tower_mesh_data`/convex_hull vs dimensioned box from bbx/depth/height) are frozen as locked decisions before implementation.
 
 ### Geometry Readback
 
@@ -55,8 +55,8 @@ Explicitly excluded to keep v4.4 focused.
 
 | Requirement | Phase | Status |
 |---|---|---|
-| WTAUDIT-01 | Phase 99 | Not started |
-| WTAUDIT-02 | Phase 99 | Not started |
+| WTAUDIT-01 | Phase 99 | Complete |
+| WTAUDIT-02 | Phase 99 | Complete |
 | WTREAD-01 | Phase 100 | Not started |
 | WTREAD-02 | Phase 100 | Not started |
 | WTRENDER-01 | Phase 101 | Not started |
@@ -71,4 +71,4 @@ Explicitly excluded to keep v4.4 focused.
 
 ---
 *Requirements defined: 2026-07-11*
-*Last updated: 2026-07-11 after roadmap creation (Phases 99-102)*
+*Last updated: 2026-07-11 after Phase 99 gap audit (WTAUDIT-01, WTAUDIT-02 complete)*
