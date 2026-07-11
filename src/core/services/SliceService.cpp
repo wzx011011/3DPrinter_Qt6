@@ -630,9 +630,15 @@ void SliceService::startSlice(const QString &projectName)
       // or WipeTowerData* may escape the worker (Frozen Decision 1). The
       // width/position derivation matches upstream Print.cpp:2871-2873
       // (bbx span + rib_offset). The Qt renderer uses X/Z as the bed plane
-      // (upstream Y maps to Qt Z), matching buildWipeTowerVertices at
-      // GizmoGeometry.cpp:449. has_wipe_tower() (Print.hpp:988) is the gate:
+      // (upstream Y maps to Qt Z). has_wipe_tower() (Print.hpp:988) is the gate:
       // when false, capturedGeometry.valid stays false (WTREAD-02).
+      //
+      // Phase 100 REVIEW W1: upstream pt0 = bbx.min + rib_offset is the tower
+      // CORNER, but the Qt consumer GizmoGeometry::buildWipeTowerVertices
+      // (GizmoGeometry.cpp:465-469) treats its x/z args as a box CENTER
+      // (uses x - hw / x + hw). Convert corner -> center here so the rendered
+      // box sits on the true sliced position (otherwise it is offset by
+      // +width/2, +depth/2).
       if (print.has_wipe_tower())
       {
         const Slic3r::BoundingBoxf bbx = print.get_wipe_tower_bbx();
@@ -644,8 +650,10 @@ void SliceService::startSlice(const QString &projectName)
         capturedGeometry.depth = depth;
         capturedGeometry.height = wtData.height;
         capturedGeometry.brimWidth = wtData.brim_width;
-        capturedGeometry.x = float(bbx.min.x() + ribOffset.x());
-        capturedGeometry.z = float(bbx.min.y() + ribOffset.y());
+        // Corner -> center: add half the bed-plane extents so the consumer
+        // (which expects a center) renders the box at the true position.
+        capturedGeometry.x = float(bbx.min.x() + ribOffset.x()) + capturedGeometry.width * 0.5f;
+        capturedGeometry.z = float(bbx.min.y() + ribOffset.y()) + capturedGeometry.depth * 0.5f;
         capturedGeometry.ribOffsetX = ribOffset.x();
         capturedGeometry.ribOffsetY = ribOffset.y();
       }
