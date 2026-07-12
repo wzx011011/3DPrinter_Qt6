@@ -43,7 +43,7 @@
 
 - [x] Phase 103: CLI Fixture Readiness Gate (completed 2026-07-12)
 - [x] Phase 104: CLI Fixture Recipes And Multi-Material Model (completed 2026-07-12)
-- [ ] Phase 105: D3D12 Debug Layer Wiring
+- [x] Phase 105: D3D12 Debug Layer Wiring (completed 2026-07-12)
 - [ ] Phase 106: D3D12 Crash Root-Cause And Backend Readiness (time-boxed)
 - [ ] Phase 107: Filament-Map Mode Enum Widening And 3MF Migration
 - [ ] Phase 108: Filament-Map Auto Recommendation Readback
@@ -60,7 +60,7 @@
 |---|---|---|---|
 | 103 | 1/1 | Complete   | 2026-07-12 |
 | 104 | 1/1 | Complete   | 2026-07-12 |
-| 105 | D3D12 Debug Layer Wiring | Wire the D3D12 debug layer behind an env flag in `RhiBackendSelector.cpp` (before `QRhi::create`), gated to Debug builds, so the startup `0xc0000005` crash can be triaged with validation output. | D3D12-01 |
+| 105 | 1/1 | Complete   | 2026-07-12 |
 | 106 | D3D12 Crash Root-Cause And Backend Readiness | Time-boxed isolation of the D3D12 crash root cause (distinct from the already-merged BUG-V31-1 fix), a stability decision on opt-in vs default, and documentation that default promotion stays out of scope and Vulkan is SDK-blocked. | D3D12-02, D3D12-03 |
 | 107 | Filament-Map Mode Enum Widening And 3MF Migration | Widen the Qt6 filament-map mode enum from 2-value (Auto/Manual) to upstream 4-value, with a 3MF read-side migration so pre-v4.5 "Manual" plates do not silently reload as "AutoForMatch" (the raw-int `setInt` hazard). Ships BEFORE the readback so auto-mode code does not entrench the new convention first. | FMAP-02 |
 | 108 | Filament-Map Auto Recommendation Readback | After a successful slice, read back the auto-recommended per-plate filament map from libslic3r inside the SliceService worker (between `print.process()` and `activePrint_.store(nullptr)`), captured by value into a POD, delivered via `filamentMapReady` — mirrors v4.4 WTREAD-01. | FMAP-01 |
@@ -109,7 +109,7 @@ Success criteria:
 ### Phase 105: D3D12 Debug Layer Wiring
 
 **Status:** Not started
-**Plans:** 0/0
+**Plans:** 1/1 plans complete
 **Workstream:** WS4 (D3D12)
 
 Success criteria:
