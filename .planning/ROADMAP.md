@@ -50,7 +50,7 @@
 - [x] Phase 109: Option B Wipe-Tower Mesh Readback And Real Rendering (completed 2026-07-12)
 - [x] Phase 110: Filament-Map Popup UI And Mode Surfacing (completed 2026-07-12)
 - [x] Phase 111: Filament-Map Save-Reload Round-Trip (completed 2026-07-12)
-- [ ] Phase 112: Per-Volume ITS Accessor And Mesh Cache
+- [x] Phase 112: Per-Volume ITS Accessor And Mesh Cache (completed 2026-07-12)
 - [ ] Phase 113: Scene And Mesh Raycaster Port
 - [ ] Phase 114: Measure Engine Instantiation And Feature Readouts
 - [ ] Phase 115: GLGizmoMeasure Snap UX And Feature Picking
@@ -67,7 +67,7 @@
 | 109 | 1/1 | Complete   | 2026-07-12 |
 | 110 | 1/1 | Complete   | 2026-07-12 |
 | 111 | 1/1 | Complete   | 2026-07-12 |
-| 112 | Per-Volume ITS Accessor And Mesh Cache | Add a per-volume ITS accessor to `ProjectServiceMock` (current `meshData()` is per-object-flattened) with an explicit `shared_ptr<indexed_triangle_set>` ownership contract + mesh-changed signal — the cross-workstream dependency that also unblocks the AssembleViewDataPool `ModelObjectsClipper` registration. | MEASURE-01 |
+| 112 | 1/1 | Complete   | 2026-07-12 |
 | 113 | Scene And Mesh Raycaster Port | Port `MeshRaycaster` + `SceneRaycaster` from upstream into `src/core/rendering/` as pure-CPU helpers (matching the `GizmoGeometry`/`ObjectPicking` pattern), with two-stage pick (coarse AABB via `ObjectPicking::pickSourceObject`, then per-triangle ITS on the hit volume only). | MEASURE-02 |
 | 114 | Measure Engine Instantiation And Feature Readouts | Instantiate `Measure::Measuring` per-volume (not reimplement) to produce real measurements (angle, direct/perpendicular distance, distance XYZ), replacing the current AABB stub at `AssemblyMeasureGeometry`. | MEASURE-03 |
 | 115 | GLGizmoMeasure Snap UX And Feature Picking | Wire the GLGizmoMeasure snap UX (Point/Edge/Circle/Plane feature picks; Shift toggles FeatureSelection vs PointSelection) through the raycaster + `Measuring`, with `SurfaceFeature` raw-pointer scrubbing at the libslic3r→Qt boundary. | MEASURE-04 |
@@ -186,7 +186,7 @@ Success criteria:
 ### Phase 112: Per-Volume ITS Accessor And Mesh Cache
 
 **Status:** Not started
-**Plans:** 0/0
+**Plans:** 1/1 plans complete
 **Workstream:** WS5 (GLGizmoMeasure) — cross-workstream dependency (also unblocks AssembleViewDataPool clipper)
 
 Success criteria:
