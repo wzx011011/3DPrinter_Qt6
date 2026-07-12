@@ -11,6 +11,7 @@
 
 #include <limits>
 #include <memory>
+#include <vector>
 
 #include "PrepareSceneData.h"
 #include "core/rendering/GizmoGeometry.h"
@@ -220,6 +221,16 @@ private:
   float m_wipeTowerX = 100.f;
   float m_wipeTowerZ = 25.f;
   bool m_wipeTowerDirty = true;
+  // Phase 109 (WTMESH-03/WM-04/WM-05): Option B real-mesh state mirrored from
+  // RhiViewport in synchronize(). When m_wipeTowerHasRealMesh is true,
+  // uploadWipeTowerBuffer builds the vertex buffer from m_wipeTowerMeshVertices
+  // via buildWipeTowerMeshVertices (Option B); otherwise it falls back to
+  // buildWipeTowerVertices (Option A, Phase 99 Frozen Decision 2 baseline).
+  // The mesh vertices are flattened XYZ triples (libslic3r world frame); the
+  // builder applies the upstream Y -> Qt Z transform. No libslic3r types cross
+  // into the renderer.
+  bool m_wipeTowerHasRealMesh = false;
+  std::vector<float> m_wipeTowerMeshVertices;
 
   // ── Phase 26: Preview segment pipeline state ──
   QByteArray m_previewData;              // GCV1 blob from RhiViewport

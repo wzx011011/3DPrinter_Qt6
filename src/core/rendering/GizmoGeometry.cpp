@@ -533,3 +533,78 @@ GizmoGeometry::buildWipeTowerVertices(float x,
     appendColoredVert(verts, p, kColor);
   return verts;
 }
+
+// ===========================================================================
+// buildWipeTowerMeshVertices
+//
+// Phase 109 (WTMESH-03) - Option B real wipe-tower mesh builder, PARALLEL to
+// the Option A buildWipeTowerVertices above. This builder does NOT modify
+// Option A (Phase 99 Frozen Decision 2 baseline). It maps the
+// convex-hull-of-merged-wipe-tower-and-brim mesh captured BY VALUE in the
+// SliceService worker (WipeTowerGeometry::meshVertices, flattened XYZ triples)
+// into the GizmoVertex format the RHI mesh path consumes.
+//
+// Mirrors upstream load_real_wipe_tower_preview (3DScene.cpp:887-925): the
+// engine merges real_wipe_tower_mesh + real_brim_mesh then runs
+// convex_hull_3d() to get the silhouette shell (3DScene.cpp:914). The Qt port
+// captures that shell's its.vertices as a flat float vector in the worker
+// (no TriangleMesh* escapes -- Frozen Decision 1), and this builder rebuilds
+// the triangle soup on the renderer side. The single hardcoded color matches
+// Option A so the two paths render consistently; per-extruder coloring is out
+// of scope (upstream chose the silhouette over stripes).
+//
+// Coordinate transform: captured mesh is in libslic3r convention (X right, Y
+// into the bed, Z up). Qt renderer uses X/Z as the bed plane and Y up (matches
+// Option A's buildWipeTowerVertices). So each captured (mx, my, mz) maps to
+// Qt-space (mx, mz, my). The v4.4 W1 corner-to-center convention is ALREADY
+// applied to the captured x/z passed in (SliceService.cpp adds half the bed-
+// plane extents); the builder therefore treats x/z as the box CENTER, matching
+// Option A. The captured mesh vertices are already in the libslic3r world
+// frame (origin at the bed corner), and the upstream load_real_wipe_tower_preview
+// applies a position offset (pos_x, pos_y) via set_volume_offset at
+// 3DScene.cpp:918. The Qt SliceService worker captures the mesh after the
+// engine applies that offset (the read point is post-process, between
+// print.process() and activePrint_.store(nullptr)), so the vertices already
+// reflect the real bed position -- NO additional offset is applied here.
+// The x/z arguments are accepted for API symmetry with Option A and for the
+// capture-invariant-defensive empty-mesh case (caller falls back to Option A
+// when meshVertices is empty, so this builder is only called with a non-empty
+// mesh).
+//
+// kGroundY (-0.04f) mirrors Option A so the mesh sits at the same bed plane.
+// ===========================================================================
+QVector<GizmoVertex>
+GizmoGeometry::buildWipeTowerMeshVertices(const std::vector<float> &meshVertices,
+                                          float x,
+                                          float z)
+{
+  Q_UNUSED(x);
+  Q_UNUSED(z);
+  QVector<GizmoVertex> verts;
+  // Defensive: the capture invariant guarantees size % 3 == 0 and non-empty on
+  // the Option B path (SliceService.cpp checks its.vertices.empty() before
+  // populating meshVertices and sets hasRealMesh=true only when non-empty). A
+  // malformed vector returns empty so the renderer draws nothing (safer than
+  // crashing on an out-of-bounds read).
+  if (meshVertices.empty() || meshVertices.size() % 3 != 0)
+    return verts;
+
+  static constexpr float kGroundY = -0.04f;
+  static constexpr float kColor[4] = {0.35f, 0.60f, 0.85f, 0.50f};
+
+  const size_t vertCount = meshVertices.size() / 3;
+  verts.reserve(int(vertCount));
+  for (size_t i = 0; i < vertCount; ++i)
+  {
+    const float mx = meshVertices[i * 3 + 0];
+    const float my = meshVertices[i * 3 + 1];
+    const float mz = meshVertices[i * 3 + 2];
+    // libslic3r (X right, Y into bed, Z up) -> Qt (X right, Y up, Z into bed).
+    // Y in the captured mesh is "into the bed" (depth); the Qt renderer's Z
+    // axis is "into the bed"; the Qt renderer's Y is up. So the swap is
+    // (mx, mz, my). kGroundY anchors the bed plane the same as Option A.
+    const float p[3] = {mx, mz + kGroundY, my};
+    appendColoredVert(verts, p, kColor);
+  }
+  return verts;
+}

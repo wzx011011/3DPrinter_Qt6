@@ -10,6 +10,7 @@
 #include <QVariant>
 #include <QVector3D>
 #include <QVector4D>
+#include <vector>
 
 #include "CameraController.h"
 #include "PrepareSceneData.h"
@@ -307,6 +308,15 @@ private:
   float m_wipeTowerHeight = 50.f;
   float m_wipeTowerX = 100.f;
   float m_wipeTowerZ = 25.f;
+  // Phase 109 (WTMESH-05): Option B real-mesh storage. Populated by the
+  // wipeTowerHasRealMesh / wipeTowerMeshVertices Q_PROPERTY setters (declared
+  // below) from the EditorViewModel readback. synchronize() pulls these into
+  // RhiViewportRenderer. Defaults keep hasRealMesh=false so the pre-slice and
+  // single-material paths take the Option A fallback (Phase 99 Frozen Decision
+  // 2 baseline). The mesh vertices are flattened XYZ triples (libslic3r world
+  // frame).
+  bool m_wipeTowerHasRealMesh = false;
+  std::vector<float> m_wipeTowerMeshVertices;
   float m_markerX = 0.f;
   float m_markerY = 0.f;
   float m_markerZ = 0.f;

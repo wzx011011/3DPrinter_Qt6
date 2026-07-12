@@ -173,18 +173,29 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   const float prevWipeTowerHeight = m_wipeTowerHeight;
   const float prevWipeTowerX = m_wipeTowerX;
   const float prevWipeTowerZ = m_wipeTowerZ;
+  const bool prevWipeTowerHasRealMesh = m_wipeTowerHasRealMesh;
+  const std::vector<float> prevWipeTowerMeshVertices = m_wipeTowerMeshVertices;
   m_showWipeTower = viewport->m_showWipeTower;
   m_wipeTowerWidth = viewport->m_wipeTowerWidth;
   m_wipeTowerDepth = viewport->m_wipeTowerDepth;
   m_wipeTowerHeight = viewport->m_wipeTowerHeight;
   m_wipeTowerX = viewport->m_wipeTowerX;
   m_wipeTowerZ = viewport->m_wipeTowerZ;
+  // Phase 109 (WTMESH-05): pull the Option B real-mesh state from the viewport
+  // item. The mesh vertices are flattened XYZ triples (libslic3r world frame);
+  // the builder applies the upstream Y -> Qt Z transform. The dirty-flag
+  // comparison uses size + content equality so a re-slice that produces the
+  // same hull does NOT trigger a rebuild, but a real change does.
+  m_wipeTowerHasRealMesh = viewport->m_wipeTowerHasRealMesh;
+  m_wipeTowerMeshVertices = viewport->m_wipeTowerMeshVertices;
   if (m_showWipeTower != prevShowWipeTower ||
       !qFuzzyCompare(m_wipeTowerWidth, prevWipeTowerWidth) ||
       !qFuzzyCompare(m_wipeTowerDepth, prevWipeTowerDepth) ||
       !qFuzzyCompare(m_wipeTowerHeight, prevWipeTowerHeight) ||
       !qFuzzyCompare(m_wipeTowerX, prevWipeTowerX) ||
-      !qFuzzyCompare(m_wipeTowerZ, prevWipeTowerZ))
+      !qFuzzyCompare(m_wipeTowerZ, prevWipeTowerZ) ||
+      m_wipeTowerHasRealMesh != prevWipeTowerHasRealMesh ||
+      m_wipeTowerMeshVertices != prevWipeTowerMeshVertices)
   {
     m_wipeTowerDirty = true;
     m_wipeTowerBufferUploaded = false;
@@ -1072,11 +1083,42 @@ bool RhiViewportRenderer::uploadWipeTowerBuffer(QRhiResourceUpdateBatch *updates
   QVector<Vertex> vertices;
   if (m_showWipeTower)
   {
-    vertices = GizmoGeometry::buildWipeTowerVertices(m_wipeTowerX,
-                                                     m_wipeTowerZ,
-                                                     m_wipeTowerWidth,
-                                                     m_wipeTowerDepth,
-                                                     m_wipeTowerHeight);
+    // Phase 109 (WTMESH-04/WM-04): Option B real-mesh branch. When
+    // m_wipeTowerHasRealMesh is true, the worker captured the convex hull of
+    // the merged real_wipe_tower_mesh + real_brim_mesh; build the vertex
+    // buffer from that mesh. Otherwise fall back to the Option A dimensioned
+    // box (Phase 99 Frozen Decision 2 baseline -- UNCHANGED). The dynamic-size
+    // ensureBuffer + uploadStaticBuffer path below already handles variable
+    // vertex counts, so no buffer resize changes are needed here.
+    if (m_wipeTowerHasRealMesh && !m_wipeTowerMeshVertices.empty())
+    {
+      vertices = GizmoGeometry::buildWipeTowerMeshVertices(
+          m_wipeTowerMeshVertices, m_wipeTowerX, m_wipeTowerZ);
+      // Defensive: if the builder returned empty (malformed capture), fall
+      // back to Option A so the wipe tower still renders. The capture
+      // invariant guarantees non-empty, but this guards against a future
+      // regression without silently dropping the tower.
+      if (vertices.isEmpty())
+      {
+        vertices = GizmoGeometry::buildWipeTowerVertices(m_wipeTowerX,
+                                                         m_wipeTowerZ,
+                                                         m_wipeTowerWidth,
+                                                         m_wipeTowerDepth,
+                                                         m_wipeTowerHeight);
+      }
+    }
+    else
+    {
+      // Option A (Phase 99 Frozen Decision 2 baseline): dimensioned box from
+      // the real sliced width/depth/height/position. This is the v4.4 path,
+      // unchanged. Single-material / pre-slice / mock paths land here because
+      // wipe_tower_mesh_data is std::nullopt (hasRealMesh=false).
+      vertices = GizmoGeometry::buildWipeTowerVertices(m_wipeTowerX,
+                                                       m_wipeTowerZ,
+                                                       m_wipeTowerWidth,
+                                                       m_wipeTowerDepth,
+                                                       m_wipeTowerHeight);
+    }
   }
 
   const quint32 byteSize = quint32(vertices.size() * int(sizeof(Vertex)));
