@@ -17,6 +17,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 import "controls"
+import "dialogs"
 import "."
 
 Item {
@@ -393,17 +394,18 @@ Item {
                     onClicked: root.printRequested()
                 }
 
-                // FilamentGroupPopup 占位 — Pitfall 5: 仅视觉，无 Q_INVOKABLE 调用，无状态
-                // TODO(v2.1): implement FilamentGroupPopup
+                // Phase 110 (FMAP-03): FilamentGroupPopup trigger. Opens the
+                // CxPopup-based 3-mode selector (AutoForFlush / AutoForMatch /
+                // Manual). fmmDefault is the per-plate inherit-sentinel and is
+                // NOT surfaced as a 4th radio (anti-feature per FEATURES.md).
                 CxIconButton {
                     cxStyle: CxIconButton.Style.Chrome
                     buttonSize: 30
                     iconSize: 16
                     iconSource: "qrc:/qml/assets/icons/box.svg"
-                    toolTipText: ""
-                    enabled: false
-                    visible: false
-                    opacity: 0.4
+                    toolTipText: qsTr("Filament Group")
+                    enabled: backend.editorViewModel != null
+                    onClicked: filamentGroupPopup.openForCurrentPlate()
                 }
             }
 
@@ -666,6 +668,15 @@ Item {
             height: 1
             color: Theme.chromeBorder
         }
+    }
+
+    // Phase 110 (FMAP-03): FilamentGroupPopup instance. Bound to the
+    // BackendContext EditorViewModel so the popup can read the Phase 108
+    // auto-recommended map preview and write the selected mode back.
+    FilamentGroupPopup {
+        id: filamentGroupPopup
+        parent: Overlay.overlay
+        editorVm: backend.editorViewModel
     }
 
     // ── TitleBarDivider 复用组件 ────────────────────────────────────────

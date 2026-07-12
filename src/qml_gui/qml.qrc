@@ -37,6 +37,7 @@
         <file>dialogs/SavePresetDialog.qml</file>
         <file>dialogs/UnsavedChangesDialog.qml</file>
         <file>dialogs/ExportPresetBundleDialog.qml</file>
+        <file>dialogs/FilamentGroupPopup.qml</file>
         <file>dialogs/SettingsDialog.qml</file>
         <file>dialogs/NetworkTestDialog.qml</file>
         <file>dialogs/TroubleshootDialog.qml</file>
