@@ -2224,6 +2224,13 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
   // not push placeholder dims as "real" geometry.
   connect(sliceService_, &SliceService::wipeTowerGeometryReady,
           this, &EditorViewModel::onWipeTowerGeometryReady);
+  // Phase 108 (FMAP-01): deliver the captured-by-value filament-map auto-
+  // recommendation (from Print::get_filament_maps(), read in the SliceService
+  // worker) to the three auto* Q_PROPERTYs above. The slot applies the valid
+  // gate (mirrors WTREAD-02): when result.valid is false, hasAutoFilamentMap
+  // stays false and no stale map leaks to the Phase 110 UI.
+  connect(sliceService_, &SliceService::filamentMapReady,
+          this, &EditorViewModel::onFilamentMapReady);
   connect(projectService_, &ProjectServiceMock::loadProgressUpdated, this, [this](int progress, const QString &stageText)
           {
     if (projectService_->loading())
@@ -5116,3 +5123,36 @@ float EditorViewModel::wipeTowerDepth() const { return m_wipeTowerDepth; }
 float EditorViewModel::wipeTowerHeight() const { return m_wipeTowerHeight; }
 float EditorViewModel::wipeTowerX() const { return m_wipeTowerX; }
 float EditorViewModel::wipeTowerZ() const { return m_wipeTowerZ; }
+
+// ── Phase 108 (FMAP-01): filament-map auto-recommendation readback ──
+//
+// onFilamentMapReady applies the valid gate (mirrors the WTREAD-02 gate on
+// onWipeTowerGeometryReady): when result.valid is false (user picked Manual,
+// so the engine computed no auto-map at Print.cpp:2484-2491 -- the
+// mode < fmmManual branch did not fire), m_hasAutoFilamentMap is forced to
+// false and the maps/mode members are left untouched so no stale map leaks to
+// the Phase 110 UI. When result.valid is true, the real auto recommendation
+// from Print::get_filament_maps() (captured by value in the SliceService
+// worker, Frozen Decision 1) overwrites the defaults.
+void EditorViewModel::onFilamentMapReady(const FilamentMapResult &result)
+{
+  if (result.valid) {
+    m_autoFilamentMapMode = static_cast<int>(result.mode);
+    QVariantList maps;
+    maps.reserve(static_cast<int>(result.maps.size()));
+    for (const int id : result.maps)
+      maps.append(id);
+    m_autoFilamentMaps = std::move(maps);
+    m_hasAutoFilamentMap = true;
+  } else {
+    // FMAP-01 gate: do NOT overwrite maps/mode with placeholder values. They
+    // are irrelevant while hasAuto=false; leaving them at their prior values
+    // guarantees no stale map leaks as a "fresh" recommendation.
+    m_hasAutoFilamentMap = false;
+  }
+  emit filamentMapChanged();
+}
+
+bool EditorViewModel::hasAutoFilamentMap() const { return m_hasAutoFilamentMap; }
+int EditorViewModel::autoFilamentMapMode() const { return m_autoFilamentMapMode; }
+QVariantList EditorViewModel::autoFilamentMaps() const { return m_autoFilamentMaps; }

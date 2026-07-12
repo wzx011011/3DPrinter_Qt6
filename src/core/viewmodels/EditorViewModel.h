@@ -653,6 +653,19 @@ public:
   Q_PROPERTY(float wipeTowerHeight READ wipeTowerHeight NOTIFY wipeTowerGeometryChanged)
   Q_PROPERTY(float wipeTowerX READ wipeTowerX NOTIFY wipeTowerGeometryChanged)
   Q_PROPERTY(float wipeTowerZ READ wipeTowerZ NOTIFY wipeTowerGeometryChanged)
+  /// Phase 108 (FMAP-01): post-slice filament-map auto-recommendation read
+  /// back from Print::get_filament_maps() via SliceService. READ-only + NOTIFY
+  /// because the map flows from SliceService (libslic3r worker), not from QML
+  /// -- one-way libslic3r -> GUI flow, mirroring the wipe-tower Q_PROPERTYs.
+  /// hasAutoFilamentMap is the gate (mirrors the v4.4 WTREAD-02 showWipeTower
+  /// gate): false until a valid auto recommendation arrives (the engine only
+  /// computes an auto-map when mode < fmmManual). autoFilamentMapMode exposes
+  /// the resolved OWzx::FilamentMapMode as an int for Phase 110 UI binding.
+  /// autoFilamentMaps exposes the 1-based per-extruder group ids. Phase 110
+  /// builds the FilamentGroupPopup UI on top of these bindings.
+  Q_PROPERTY(bool hasAutoFilamentMap READ hasAutoFilamentMap NOTIFY filamentMapChanged)
+  Q_PROPERTY(int autoFilamentMapMode READ autoFilamentMapMode NOTIFY filamentMapChanged)
+  Q_PROPERTY(QVariantList autoFilamentMaps READ autoFilamentMaps NOTIFY filamentMapChanged)
   Q_PROPERTY(int extruderCount READ extruderCount NOTIFY stateChanged)
   Q_PROPERTY(bool hasSliceResult READ hasSliceResult NOTIFY stateChanged)
   /// Phase 52 PREPSB-05: staleness exposed to QML so Preview/Export can show a
@@ -722,6 +735,11 @@ public:
   float wipeTowerHeight() const;
   float wipeTowerX() const;
   float wipeTowerZ() const;
+  // Phase 108 (FMAP-01): filament-map auto-recommendation getters (read-only;
+  // set from the SliceService-received FilamentMapResult struct, not from QML).
+  bool hasAutoFilamentMap() const;
+  int autoFilamentMapMode() const;
+  QVariantList autoFilamentMaps() const;
 
   bool allPlatesSliced() const;
   int extruderCount() const;
@@ -827,6 +845,14 @@ private slots:
   /// untouched (no placeholder pushed as "real" geometry). Always emits
   /// wipeTowerGeometryChanged() so the QML bindings refresh.
   void onWipeTowerGeometryReady(const WipeTowerGeometry &geometry);
+  /// Phase 108 (FMAP-01): receives the captured-by-value filament-map auto-
+  /// recommendation delivered by SliceService::filamentMapReady on the GUI
+  /// thread. Applies the valid gate: when result.valid is false (user picked
+  /// Manual, so the engine computed no auto-map), m_hasAutoFilamentMap is
+  /// forced to false and the maps/mode members are left untouched (no stale
+  /// map leaks to the Phase 110 UI). Always emits filamentMapChanged() so the
+  /// QML bindings refresh.
+  void onFilamentMapReady(const FilamentMapResult &result);
 
 signals:
   void stateChanged();
@@ -836,6 +862,10 @@ signals:
   /// refreshed from a SliceService readback (valid or invalid). Drives the
   /// six wipe-tower Q_PROPERTYs above.
   void wipeTowerGeometryChanged();
+  /// Phase 108 (FMAP-01): emitted whenever the filament-map auto-recommendation
+  /// is refreshed from a SliceService readback (valid or invalid). Drives the
+  /// three auto* Q_PROPERTYs above.
+  void filamentMapChanged();
   void selectionSettingsRequested();
   /// 请求切换到预览页面（对齐上游 Plater::priv::on_preview）
   void previewRequested();
@@ -1045,4 +1075,13 @@ private:
   float m_wipeTowerHeight = 50.f;
   float m_wipeTowerX = 100.f;
   float m_wipeTowerZ = 25.f;
+  // Phase 108 (FMAP-01): filament-map auto-recommendation readback state.
+  // m_hasAutoFilamentMap is the valid gate (mirrors WTREAD-02 showWipeTower):
+  // false until a valid auto recommendation arrives. m_autoFilamentMapMode is
+  // the resolved OWzx::FilamentMapMode; m_autoFilamentMaps is the 1-based
+  // per-extruder group id list. Defaults keep the pre-slice UI inert so no
+  // stale recommendation leaks before the first real readback.
+  bool m_hasAutoFilamentMap = false;
+  int m_autoFilamentMapMode = static_cast<int>(OWzx::FilamentMapMode::fmmDefault);
+  QVariantList m_autoFilamentMaps;
 };
