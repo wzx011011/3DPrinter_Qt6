@@ -158,6 +158,16 @@ private slots:
   // (QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with a
   // region-named message). Source-level only; runs in the regression ctest.
   void wipeTowerReadbackAndRenderAnchorsPresent();
+  // Phase 103-01 (FIXTURE-02): the argv startup-fixture gate waits for the
+  // first QQuickWindow::frameSwapped (NOT the old zero-delay timer trick) so
+  // external screenshot capture is deterministic (the scene graph has rendered
+  // at least one frame before open-page / load-model / open-dialog are applied).
+  // Source-audit locks: frameSwapped present, the old singleShot(0 gate gone,
+  // and applyStartupOpenRequests still exists. Mirrors the Phase 102
+  // wipeTowerReadbackAndRenderAnchorsPresent pattern (QFile +
+  // QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with a
+  // FIXTURE-02-named message). Source-level only; runs in the regression ctest.
+  void argvFixtureGateUsesFrameSwappedNotSingleShot();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -271,7 +281,7 @@ void QmlUiAuditTests::guiStartupDeepLinkArgumentsAreExtensible()
       QStringLiteral("parser.values(loadModelOption)"),
       QStringLiteral("backend.topbarImportModel(modelPath)"),
       QStringLiteral("startupSkipFirstRun"),
-      QStringLiteral("QTimer::singleShot(0, &backend")
+      QStringLiteral("&QQuickWindow::frameSwapped")
   };
   for (const QString &token : requiredTokens) {
     QVERIFY2(mainCpp.contains(token),
@@ -3619,6 +3629,52 @@ void QmlUiAuditTests::wipeTowerReadbackAndRenderAnchorsPresent()
            "WT-SOFTWARE-VIEWPORT: SoftwareViewport.cpp paint must consume m_showWipeTower (the WTREAD-02 gate)");
   QVERIFY2(softwareViewport.contains(QStringLiteral("m_wipeTowerWidth")),
            "WT-SOFTWARE-VIEWPORT: SoftwareViewport.cpp paint must consume m_wipeTowerWidth (real dim from readback)");
+}
+
+void QmlUiAuditTests::argvFixtureGateUsesFrameSwappedNotSingleShot()
+{
+  // Phase 103-01 (FIXTURE-02): the argv startup-fixture gate must wait for the
+  // first QQuickWindow::frameSwapped (scene graph rendered at least one frame)
+  // before applying open-page / load-model / open-dialog, NOT the old
+  // zero-delay timer trick that fired on the next event-loop iteration before a
+  // frame was guaranteed. This is the canonical workaround for the recurring
+  // Windows-capture-API runtime-evidence blocker (Pitfall 4 readiness gate).
+  //
+  // Pattern: QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with
+  // a FIXTURE-02-named message (deterministic, build-dir-independent). Mirrors
+  // the Phase 102 wipeTowerReadbackAndRenderAnchorsPresent pattern in this file.
+
+  const QString mainCpp = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
+  QVERIFY2(!mainCpp.isEmpty(), "Unable to read main_qml.cpp");
+
+  // FIXTURE-02 (gate present): the frameSwapped signal must gate fixture
+  // application so screenshots are deterministic.
+  QVERIFY2(mainCpp.contains(QStringLiteral("frameSwapped")),
+           "FIXTURE-02: argv fixture gate must use QQuickWindow::frameSwapped (deterministic screenshots; the scene graph has rendered at least one frame)");
+
+  // FIXTURE-02 (old gate removed): the zero-delay timer gate signature must be
+  // gone. The literal singleShot(0 form is targeted because singleShot may
+  // legitimately appear elsewhere; this targets the gate signature.
+  QVERIFY2(!mainCpp.contains(QStringLiteral("singleShot(0")),
+           "FIXTURE-02: argv fixture gate must NOT use the old singleShot(0) zero-delay timer trick (it fired before the first frame was guaranteed)");
+
+  // FIXTURE-02 (apply function present): the apply function must still exist so
+  // the open-page / load-model / open-dialog routing logic is intact (only the
+  // scheduling wrapper changed, not the apply logic).
+  QVERIFY2(mainCpp.contains(QStringLiteral("applyStartupOpenRequests")),
+           "FIXTURE-02: applyStartupOpenRequests must still exist (the apply routing logic is preserved; only the gate scheduling changed)");
+
+  // FIXTURE-02 (one-shot connection contract): the gate must disconnect itself
+  // in the handler so it fires exactly once on the first frameSwapped, not on
+  // every subsequent frame (the old singleShot also ran exactly once; the new
+  // gate must preserve that contract).
+  QVERIFY2(mainCpp.contains(QStringLiteral("QObject::disconnect")),
+           "FIXTURE-02: the frameSwapped gate must disconnect itself in the handler (one-shot connection; fires exactly once)");
+
+  // FIXTURE-02 (defensive fallback): if the root object is not a QQuickWindow,
+  // the gate must apply immediately (degraded mode) rather than hang forever.
+  QVERIFY2(mainCpp.contains(QStringLiteral("degraded mode")),
+           "FIXTURE-02: the gate must have a defensive fallback when the root object is not a QQuickWindow (apply immediately, never hang)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
