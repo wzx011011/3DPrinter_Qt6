@@ -229,7 +229,17 @@ class PartPlate {
   // normalizes legacy raw ints) can still set by raw value.
   FilamentMapMode filamentMapMode() const { return m_filament_map_mode; }
   void setFilamentMapMode(FilamentMapMode mode) { m_filament_map_mode = mode; }
-  void setFilamentMapMode(int mode) { m_filament_map_mode = FilamentMapMode(mode); }
+  // Phase 110 R-02 (FP-04): validate the int at the Q_INVOKABLE boundary. A
+  // QML/Q_INVOKABLE caller passing an out-of-range mode (e.g. mode=5) would
+  // otherwise silently store an invalid enum, masked by the writer-side
+  // default: case. Clamp out-of-range to fmmDefault (the safe per-plate
+  // "inherit from global" sentinel) so the on-disk value stays one of the 3
+  // concrete modes after the write-site resolution. The [0,3] bounds cover
+  // all 4 enum values (fmmAutoForFlush..fmmDefault). grep-assertable guard.
+  void setFilamentMapMode(int mode) {
+    if (mode < 0 || mode > 3) mode = static_cast<int>(FilamentMapMode::fmmDefault);
+    m_filament_map_mode = FilamentMapMode(mode);
+  }
 
   int firstLayerSeqChoice() const { return m_first_layer_seq_choice; }
   void setFirstLayerSeqChoice(int choice) { m_first_layer_seq_choice = choice; }
