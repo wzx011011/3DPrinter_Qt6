@@ -90,6 +90,22 @@ class PartPlateTests final : public QObject {
 #else
   void filamentMapModeRoundTripManualPreserved() { QSKIP("Requires HAS_LIBSLIC3R"); }
 #endif
+
+  // ── Phase 111 FMAP-04 (full save->reload round-trip) + R-01 (legacy ──
+  //    raw-int-1 -> fmmManual migration runtime coverage). Closes the Phase 107
+  //    REVIEW R-01 gap: the FM-03 migration was correct by inspection but never
+  //    executed at runtime (the existing round-trip test takes the trusted
+  //    coEnum branch because the write side produces typed values). The legacy
+  //    test exercises the factored OWzx::migrateLegacyFilamentMapMode helper
+  //    directly with a synthetic legacy config, so the legacy discriminator
+  //    branch is hit at runtime. Mirrors the Phase 97 thumbnailSaveReloadRoundTrip
+  //    pattern for the full round-trip slot.
+  void filamentMapLegacyMigrationMapsInt1ToManual();  // R-01 (no libslic3r)
+#ifdef HAS_LIBSLIC3R
+  void filamentMapSaveReloadRoundTrip();  // FMAP-04: full save->reload round-trip
+#else
+  void filamentMapSaveReloadRoundTrip() { QSKIP("Requires HAS_LIBSLIC3R"); }
+#endif
 };
 
 void PartPlateTests::initTestCase() {
@@ -756,6 +772,170 @@ void PartPlateTests::filamentMapModeRoundTripManualPreserved() {
 
   // CLEANUP.
   QFile::remove(tempPath);
+}
+#endif  // HAS_LIBSLIC3R
+
+// ── Phase 111 FMAP-04 + R-01 ──────────────────────────────────────────────
+
+void PartPlateTests::filamentMapLegacyMigrationMapsInt1ToManual() {
+  // Phase 111 (FMAP-04 / Phase 107 REVIEW R-01): the FM-03 legacy raw-int-1 ->
+  // fmmManual migration MUST be exercised at runtime. The existing round-trip
+  // slot (filamentMapModeRoundTripManualPreserved) takes the trusted coEnum
+  // branch because the Phase 107 write side produces typed values; the legacy
+  // discriminator branch (the actual headline FMAP-02 fix) was never executed
+  // at runtime -- R-01 called this out as a real coverage gap. Phase 111
+  // factors the migration predicate into OWzx::migrateLegacyFilamentMapMode
+  // (PartPlate.h/PartPlate.cpp) so the legacy branch is unit-testable in
+  // isolation WITHOUT a synthetic 3MF fixture. This slot feeds raw legacy ints
+  // (simulating a pre-v4.5 Qt6 file that bypassed enum typing) through the
+  // factored predicate and asserts the documented mapping.
+  //
+  // No libslic3r needed: the predicate is a pure int->enum function. This slot
+  // runs in BOTH the HAS_LIBSLIC3R and non-HAS_LIBSLIC3R test builds.
+
+  // R-01 / FM-03 legacy raw-int-1 -> fmmManual (NOT fmmAutoForMatch). This is
+  // the headline assertion: a pre-v4.5 "Manual"=1 plate stays Manual after the
+  // migration, instead of flipping to the new "Convenience Mode"
+  // (fmmAutoForMatch=1). QVERIFY2 with the R-01 name so a regression message
+  // names the finding it closed.
+  QCOMPARE(int(OWzx::migrateLegacyFilamentMapMode(1)),
+           int(OWzx::FilamentMapMode::fmmManual));
+  QVERIFY2(int(OWzx::migrateLegacyFilamentMapMode(1))
+               == int(OWzx::FilamentMapMode::fmmManual),
+           "R-01/FM-03: legacy raw-int-1 MUST map to fmmManual (value 2), NOT "
+           "fmmAutoForMatch (value 1) -- pre-v4.5 'Manual'=1 must stay Manual");
+
+  // The full legacy mapping contract (documented in PartPlate.h): raw 0 (old
+  // "Auto") -> fmmAutoForFlush; raw 1 (old "Manual") -> fmmManual; anything
+  // else -> fmmDefault (the safe per-plate "inherit from global" sentinel).
+  QCOMPARE(int(OWzx::migrateLegacyFilamentMapMode(0)),
+           int(OWzx::FilamentMapMode::fmmAutoForFlush));
+  QCOMPARE(int(OWzx::migrateLegacyFilamentMapMode(2)),
+           int(OWzx::FilamentMapMode::fmmDefault));
+  QCOMPARE(int(OWzx::migrateLegacyFilamentMapMode(3)),
+           int(OWzx::FilamentMapMode::fmmDefault));
+  QCOMPARE(int(OWzx::migrateLegacyFilamentMapMode(999)),
+           int(OWzx::FilamentMapMode::fmmDefault));
+  QCOMPARE(int(OWzx::migrateLegacyFilamentMapMode(-1)),
+           int(OWzx::FilamentMapMode::fmmDefault));
+
+  // Sanity: the migrated legacy-1 value must NOT equal the new
+  // fmmAutoForMatch=1 (the regression the FMAP-02 widening would have caused
+  // without the migration). This is the negation form of the headline assertion
+  // above, made explicit so a future reader sees the trap.
+  QVERIFY2(int(OWzx::migrateLegacyFilamentMapMode(1))
+               != int(OWzx::FilamentMapMode::fmmAutoForMatch),
+           "R-01/FM-03: legacy raw-int-1 must NOT silently map to the new "
+           "fmmAutoForMatch (1) -- that would flip pre-v4.5 Manual plates to "
+           "Convenience Mode on reload");
+}
+
+#ifdef HAS_LIBSLIC3R
+void PartPlateTests::filamentMapSaveReloadRoundTrip() {
+  // FMAP-04: full save->reload round-trip for the filament-map MODE + the
+  // filament_maps ARRAY across both of the two most-used concrete modes
+  // (fmmAutoForFlush and fmmManual). Closes the Phase 107 deferral: the existing
+  // filamentMapModeRoundTripManualPreserved slot asserted the MODE only and only
+  // for fmmManual; FMAP-04 requires mode + maps coverage across at least two
+  // modes. Mirrors the Phase 97 thumbnailSaveReloadRoundTrip pattern (load a
+  // real model -> set known state -> saveProject -> fresh loadFile -> assert
+  // survived).
+  //
+  // SCOPE NOTE: the filament_maps ARRAY round-trip is asserted where it is
+  // observable from the Qt6 read path. The Qt6 write side sets
+  // pd->filament_maps (bbs_3mf.hpp:98); the bbs_3mf writer's
+  // _add_model_config_file_to_archive block at bbs_3mf.cpp:8207-8212 prefers
+  // pd->filament_maps and emits the <metadata key="filament_maps"> entry; the
+  // reader (bbs_3mf.cpp:4450-4459) parses it back into both plate->filament_maps
+  // and config["filament_map"]. ProjectServiceMock reads plate->filament_maps
+  // (ProjectServiceMock.cpp:636-637, 5515-5516), so the array survives when the
+  // writer runs that branch. fmmAutoForFlush has no meaningful per-extruder map
+  // (the array is unused in auto mode), so the array assertion is scoped to the
+  // fmmManual leg.
+
+  // ── LEG 1: fmmManual (mode + maps both asserted) ──────────────────────────
+  {
+    ProjectServiceMock service;
+    QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+    QVERIFY(service.loadFile(kStlPath));
+    QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
+    QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+    QVERIFY2(service.modelCount() >= 1, "loadFile must add >= 1 object");
+    QVERIFY2(service.plateCount() >= 1, "loaded project must have >= 1 plate");
+
+    // ACT: set plate 0 to Manual mode with an explicit filament map.
+    const QList<int> manualMaps = QList<int>{2, 1, 3};
+    QVERIFY2(service.setPlateFilamentMap(
+                 0, int(OWzx::FilamentMapMode::fmmManual), manualMaps),
+             "setPlateFilamentMap(fmmManual) must succeed on a valid plate");
+    QCOMPARE(service.plateFilamentMapMode(0),
+             int(OWzx::FilamentMapMode::fmmManual));
+    QCOMPARE(service.plateFilamentMaps(0), manualMaps);
+
+    // Save then reload into a FRESH service.
+    const QString tempPath = QDir::tempPath() + QStringLiteral(
+        "/owzx_fmap_rt_manual_%1.3mf").arg(QDateTime::currentMSecsSinceEpoch());
+    QVERIFY2(service.saveProject(tempPath),
+             qPrintable(QStringLiteral("saveProject must succeed: %1").arg(tempPath)));
+    QVERIFY2(QFileInfo::exists(tempPath), "the saved .3mf file must exist on disk");
+
+    ProjectServiceMock reloaded;
+    QSignalSpy reloadSpy(&reloaded, &ProjectServiceMock::loadFinished);
+    QVERIFY(reloaded.loadFile(tempPath));
+    QVERIFY2(reloadSpy.isValid(), "loadFinished signal spy must be valid");
+    QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);
+    QVERIFY2(reloaded.plateCount() >= 1, "reloaded project must have >= 1 plate");
+
+    // FMAP-04 ASSERT: the reloaded plate 0 MODE + MAPS survived the round-trip.
+    QCOMPARE(reloaded.plateFilamentMapMode(0),
+             int(OWzx::FilamentMapMode::fmmManual));
+    QCOMPARE(reloaded.plateFilamentMaps(0), manualMaps);
+
+    QFile::remove(tempPath);
+  }
+
+  // ── LEG 2: fmmAutoForFlush (mode asserted) ───────────────────────────────
+  // fmmAutoForFlush is the enum default; setting it explicitly and reloading
+  // proves the concrete auto mode round-trips (not just the Manual leg). The
+  // maps array is unused in auto mode, so only the mode is asserted here.
+  {
+    ProjectServiceMock service;
+    QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+    QVERIFY(service.loadFile(kStlPath));
+    QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
+    QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+    QVERIFY2(service.plateCount() >= 1, "loaded project must have >= 1 plate");
+
+    // ACT: set plate 0 to AutoForFlush explicitly (the enum default, but set
+    // through the API so the write side persists the typed value).
+    QVERIFY2(service.setPlateFilamentMapMode(
+                 0, int(OWzx::FilamentMapMode::fmmAutoForFlush)),
+             "setPlateFilamentMapMode(fmmAutoForFlush) must succeed on a valid plate");
+    QCOMPARE(service.plateFilamentMapMode(0),
+             int(OWzx::FilamentMapMode::fmmAutoForFlush));
+
+    const QString tempPath = QDir::tempPath() + QStringLiteral(
+        "/owzx_fmap_rt_auto_%1.3mf").arg(QDateTime::currentMSecsSinceEpoch());
+    QVERIFY2(service.saveProject(tempPath),
+             qPrintable(QStringLiteral("saveProject must succeed: %1").arg(tempPath)));
+    QVERIFY2(QFileInfo::exists(tempPath), "the saved .3mf file must exist on disk");
+
+    ProjectServiceMock reloaded;
+    QSignalSpy reloadSpy(&reloaded, &ProjectServiceMock::loadFinished);
+    QVERIFY(reloaded.loadFile(tempPath));
+    QVERIFY2(reloadSpy.isValid(), "loadFinished signal spy must be valid");
+    QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);
+    QVERIFY2(reloaded.plateCount() >= 1, "reloaded project must have >= 1 plate");
+
+    // FMAP-04 ASSERT: the reloaded plate 0 MODE is fmmAutoForFlush. The on-disk
+    // value is the "Auto For Flush" string (FM-02 typed-enum write) which the
+    // upstream reader deserializes back to fmmAutoForFlush via the trusted coEnum
+    // branch (opt->type() == coEnum -> getInt()).
+    QCOMPARE(reloaded.plateFilamentMapMode(0),
+             int(OWzx::FilamentMapMode::fmmAutoForFlush));
+
+    QFile::remove(tempPath);
+  }
 }
 #endif  // HAS_LIBSLIC3R
 

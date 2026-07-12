@@ -646,13 +646,15 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                   if (opt->type() == Slic3r::coEnum) {
                     fmapMode = int(opt->getInt());
                   } else {
-                    const int legacy = int(opt->getInt());
-                    if (legacy == 0)
-                      fmapMode = int(OWzx::FilamentMapMode::fmmAutoForFlush);
-                    else if (legacy == 1)
-                      fmapMode = int(OWzx::FilamentMapMode::fmmManual);
-                    else
-                      fmapMode = int(OWzx::FilamentMapMode::fmmDefault);
+                    // Legacy raw-int path (pre-v4.5 Qt6 files that bypassed enum
+                    // typing). Apply the FM-03 migration preserving pre-v4.5
+                    // intent: raw 0 (old "Auto") -> fmmAutoForFlush (0); raw 1
+                    // (old "Manual") -> fmmManual (2) -- the headline FMAP-02 fix
+                    // (NOT fmmAutoForMatch=1); else -> fmmDefault (3) safe
+                    // fallback. Phase 111 (FMAP-04 / R-01): factored into
+                    // OWzx::migrateLegacyFilamentMapMode so the legacy branch is
+                    // unit-tested in isolation (PartPlateTests).
+                    fmapMode = int(OWzx::migrateLegacyFilamentMapMode(int(opt->getInt())));
                   }
                 }
               }
@@ -5527,21 +5529,11 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
                 fmapMode = int(opt->getInt());
               } else {
                 // Legacy raw-int path (pre-v4.5 Qt6 files that bypassed enum
-                // typing). Apply the FM-03 migration preserving pre-v4.5 intent:
-                //   raw 0 (old "Auto")    -> fmmAutoForFlush (0)
-                //   raw 1 (old "Manual")  -> fmmManual        (2)  <-- the fix
-                //   anything else          -> fmmDefault       (3)  safe fallback
-                // Mapping legacy 1 -> fmmManual (NOT fmmAutoForMatch) is the
-                // user-visible behavior change FMAP-02 ships: a pre-v4.5 Manual
-                // plate stays Manual after reload instead of flipping to the
-                // new "Convenience Mode" (fmmAutoForMatch).
-                const int legacy = int(opt->getInt());
-                if (legacy == 0)
-                  fmapMode = int(OWzx::FilamentMapMode::fmmAutoForFlush);
-                else if (legacy == 1)
-                  fmapMode = int(OWzx::FilamentMapMode::fmmManual);
-                else
-                  fmapMode = int(OWzx::FilamentMapMode::fmmDefault);
+                // typing). Apply the FM-03 migration preserving pre-v4.5 intent
+                // (raw 1 -> fmmManual, NOT fmmAutoForMatch). Phase 111 (FMAP-04
+                // / R-01): factored into OWzx::migrateLegacyFilamentMapMode so
+                // the legacy branch is unit-tested in isolation (PartPlateTests).
+                fmapMode = int(OWzx::migrateLegacyFilamentMapMode(int(opt->getInt())));
               }
             }
           }

@@ -100,6 +100,24 @@ enum class FilamentMapMode : int {
   fmmDefault      = 3   // per-plate "inherit from global" sentinel (not a UI radio).
 };
 
+/// Phase 111 (FMAP-04 / Phase 107 REVIEW R-01): the FM-03 read-side migration
+/// predicate, factored out of ProjectServiceMock so it is unit-testable in
+/// isolation (R-01: the legacy raw-int-1 -> fmmManual branch was correct by
+/// inspection but never executed at runtime -- the round-trip test always took
+/// the trusted coEnum branch because the write side produces typed values).
+///
+/// This function mirrors ONLY the legacy raw-int branch of the read-side
+/// discriminator in ProjectServiceMock.cpp (the branch taken when the option
+/// is a NON-coEnum int, i.e. a pre-v4.5 Qt6 file that bypassed enum typing).
+/// The mapping preserves pre-v4.5 user intent:
+///   raw 0 (old "Auto")   -> fmmAutoForFlush (0)
+///   raw 1 (old "Manual") -> fmmManual       (2)  <-- the headline FMAP-02 fix
+///   anything else         -> fmmDefault      (3)  safe fallback
+/// Mapping legacy 1 -> fmmManual (NOT fmmAutoForMatch=1) is the user-visible
+/// behavior change FMAP-02 ships: a pre-v4.5 "Manual" plate stays Manual after
+/// reload instead of flipping to the new "Convenience Mode" (fmmAutoForMatch).
+FilamentMapMode migrateLegacyFilamentMapMode(int legacyRawInt);
+
 class PartPlate {
  public:
   PartPlate() = default;
