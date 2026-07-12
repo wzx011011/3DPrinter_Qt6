@@ -271,6 +271,20 @@ private slots:
   // QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with FMAP-04/R-01-
   // named messages). Source-level only; runs in the regression ctest.
   void filamentMapSaveReloadRoundTripCoversModesAndLegacyMigration();
+  // Phase 112-01 (MEASURE-01): source-audit lock proving the per-volume ITS
+  // accessor exists on ProjectServiceMock WITH the ownership contract
+  // documented at the declaration. Locks: (a) the accessor signature
+  // `std::shared_ptr<const indexed_triangle_set> volumeMeshIts(int, int)
+  // const` is declared in ProjectServiceMock.h (MI-01); (b) the ownership-
+  // contract section headers are present so a future edit cannot silently
+  // drop the shallow-share / cache / null-return / SurfaceFeature-boundary
+  // documentation (MI-02/MI-03/MI-04/MI-05/MI-06); (c) the .cpp defines the
+  // accessor and uses the shared_ptr aliasing constructor (the shallow-share
+  // implementation, MI-03); (d) the ViewModelSmokeTests regression slot
+  // exists (MI-07). Mirrors the Phase 102/111 source-audit pattern (QFile +
+  // QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with MEASURE-01-
+  // named messages). Source-level only; runs in the regression ctest.
+  void perVolumeItsAccessorPresent();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -4401,6 +4415,80 @@ void QmlUiAuditTests::filamentMapSaveReloadRoundTripCoversModesAndLegacyMigratio
            "R-01: filamentMapLegacyMigrationMapsInt1ToManual must assert the R-01 headline (legacy raw-int-1 -> fmmManual) in its QVERIFY2 message");
   QVERIFY2(partPlateTests.contains(QStringLiteral("migrateLegacyFilamentMapMode(1)")),
            "R-01: filamentMapLegacyMigrationMapsInt1ToManual must exercise the factored helper with legacy int 1 (the actual legacy discriminator branch)");
+}
+
+void QmlUiAuditTests::perVolumeItsAccessorPresent()
+{
+  // MEASURE-01 / Phase 112-01: source-audit lock for the per-volume ITS
+  // accessor that unblocks Phase 113 (SceneRaycaster) + Phase 114
+  // (Measure::Measuring) + AssembleViewDataPool ModelObjectsClipper. The
+  // accessor MUST exist with a documented ownership contract; a future
+  // refactor that drops it, weakens the null-return guard, or strips the
+  // ownership / SurfaceFeature-boundary documentation fails here. Mirrors the
+  // Phase 102/111 source-audit pattern.
+
+  const QString header = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  QVERIFY2(!header.isEmpty(), "Unable to read ProjectServiceMock.h");
+  const QString source = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  QVERIFY2(!source.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  const QString smokeTests = readSource(QStringLiteral("tests/ViewModelSmokeTests.cpp"));
+  QVERIFY2(!smokeTests.isEmpty(), "Unable to read ViewModelSmokeTests.cpp");
+
+  // MI-01: the accessor signature must be declared. The return type is
+  // std::shared_ptr<const indexed_triangle_set> (global-scope ITS, per
+  // Measure.hpp:9); the plan's prose wrote Slic3r::indexed_triangle_set but
+  // the upstream type is global, so the audit locks the global-scope form.
+  QVERIFY2(header.contains(QStringLiteral("std::shared_ptr<const indexed_triangle_set> volumeMeshIts(int objectIndex, int volumeIndex) const;")),
+           "MEASURE-01/MI-01: ProjectServiceMock.h must declare volumeMeshIts(int, int) returning shared_ptr<const indexed_triangle_set>");
+
+  // MI-02: the OWNERSHIP CONTRACT section must be present at the declaration
+  // so a future edit cannot silently drop the lifetime documentation (the
+  // shallow-share aliasing pointer + the cross-boundary UAF closure from
+  // pitfall 6).
+  QVERIFY2(header.contains(QStringLiteral("OWNERSHIP CONTRACT")),
+           "MEASURE-01/MI-02: ProjectServiceMock.h must document the ITS ownership contract (shallow-share aliasing pointer + pitfall 6 UAF closure)");
+  QVERIFY2(header.contains(QStringLiteral("aliasing pointer")),
+           "MEASURE-01/MI-02: the ownership contract must name the aliasing-pointer shallow-share mechanism");
+
+  // MI-03: the SHALLOW-SHARE DECISION section must be present so the
+  // copy-vs-share choice is documented at the source (the executor's
+  // decision: share because set_mesh/reset_mesh always make a NEW shared_ptr).
+  QVERIFY2(header.contains(QStringLiteral("SHALLOW-SHARE DECISION")),
+           "MEASURE-01/MI-03: ProjectServiceMock.h must document the shallow-share-vs-copy decision");
+
+  // MI-04: the CACHE DECISION section must be present so the no-cache choice
+  // (ModelVolume::m_mesh IS the cache) is documented.
+  QVERIFY2(header.contains(QStringLiteral("CACHE DECISION")),
+           "MEASURE-01/MI-04: ProjectServiceMock.h must document the mesh-cache decision");
+
+  // MI-05: the DEFENSIVE NULL RETURN section must be present so the
+  // null-return contract is documented at the declaration.
+  QVERIFY2(header.contains(QStringLiteral("DEFENSIVE NULL RETURN")),
+           "MEASURE-01/MI-05: ProjectServiceMock.h must document the defensive nullptr-return contract");
+
+  // MI-06: the SURFACE FEATURE BOUNDARY section must be present, flagging the
+  // raw void*/vector* scrubbing that Phase 113/114 enforce.
+  QVERIFY2(header.contains(QStringLiteral("SURFACE FEATURE BOUNDARY")),
+           "MEASURE-01/MI-06: ProjectServiceMock.h must flag the SurfaceFeature raw-pointer boundary concern for Phase 113/114");
+  QVERIFY2(header.contains(QStringLiteral("void* volume")),
+           "MEASURE-01/MI-06: the SurfaceFeature boundary section must name the raw void* volume pointer (Measure.hpp:95) that must not escape into Qt");
+
+  // MI-03 (implementation): the .cpp must define the accessor AND use the
+  // shared_ptr aliasing constructor (the shallow-share mechanism -- not a
+  // copy). Locking the aliasing constructor presence keeps a future edit from
+  // silently switching to a deep copy (which would be correct but wasteful)
+  // or a raw pointer (which would re-open the UAF).
+  QVERIFY2(source.contains(QStringLiteral("ProjectServiceMock::volumeMeshIts")),
+           "MEASURE-01/MI-03: ProjectServiceMock.cpp must define volumeMeshIts");
+  QVERIFY2(source.contains(QStringLiteral("return std::shared_ptr<const indexed_triangle_set>(meshPtr, &its);")),
+           "MEASURE-01/MI-03: volumeMeshIts must return via the shared_ptr aliasing constructor (shallow-share, zero copy)");
+
+  // MI-07: the ViewModelSmokeTests regression slot must exist (valid-path +
+  // null-path coverage). A removal of the slot drops the runtime coverage.
+  QVERIFY2(smokeTests.contains(QStringLiteral("void perVolumeItsAccessorReturnsValidMeshAndNullForInvalidIndices()")),
+           "MEASURE-01/MI-07: ViewModelSmokeTests must declare perVolumeItsAccessorReturnsValidMeshAndNullForInvalidIndices");
+  QVERIFY2(smokeTests.contains(QStringLiteral("void ViewModelSmokeTests::perVolumeItsAccessorReturnsValidMeshAndNullForInvalidIndices()")),
+           "MEASURE-01/MI-07: ViewModelSmokeTests must define perVolumeItsAccessorReturnsValidMeshAndNullForInvalidIndices");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

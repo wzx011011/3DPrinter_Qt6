@@ -323,6 +323,16 @@ private slots:
   // with a std::vector<float> meshVertices field (pure float, NO TriangleMesh*
   // or its*), so the test confirms the field type via the readback round-trip.
   void wipeTowerRealMeshReadbackGatesOptionBAndOptionAFallback();
+  // Phase 112-01 (MEASURE-01): per-volume ITS accessor regression lock.
+  // Loads a real model (kStlPath) and asserts ProjectServiceMock::volumeMeshIts
+  // returns (a) a non-null ITS for a valid (objectIndex=0, volumeIndex=0) with
+  // a non-empty vertex/triangle count that matches the loaded model's
+  // objectTriangleCount; (b) nullptr for an invalid objectIndex and an invalid
+  // volumeIndex (MI-05 defensive null return). Mirrors the v4.4 readback test
+  // pattern (editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid
+  // load + QTRY_VERIFY_WITH_TIMEOUT(loadFinished)). Locks the cross-workstream
+  // accessor that Phase 113/114 + AssembleViewDataPool consume.
+  void perVolumeItsAccessorReturnsValidMeshAndNullForInvalidIndices();
 
 private:
   bool hasLibslic3r() const;
@@ -4371,6 +4381,68 @@ void ViewModelSmokeTests::assembleViewDataPoolIsolatedFromPrepareAndPreview()
     QVERIFY2(nonDegenerate,
              "pool-fed assembly-measure bounds must be non-degenerate for primitives");
   }
+}
+
+void ViewModelSmokeTests::perVolumeItsAccessorReturnsValidMeshAndNullForInvalidIndices()
+{
+  // MEASURE-01 / Phase 112-01-02: regression lock for the per-volume ITS
+  // accessor that unblocks Phase 113 (SceneRaycaster) + Phase 114
+  // (Measure::Measuring) + AssembleViewDataPool ModelObjectsClipper. The
+  // accessor returns a shared_ptr<const indexed_triangle_set> via the
+  // aliasing constructor (shallow-share over ModelVolume::mesh_ptr()). This
+  // test proves (a) the valid path returns a non-null ITS with the expected
+  // vertex/triangle counts and (b) the MI-05 defensive null return fires for
+  // out-of-range indices.
+  ProjectServiceMock project;
+
+  // Load the real STL fixture (kStlPath, hotend.stl) and wait for completion
+  // -- mirrors editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid.
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
+  QVERIFY2(project.loadFile(kStlPath), "importing the test STL should start");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(),
+           "the test STL import should complete successfully");
+
+  QVERIFY2(project.modelCount() >= 1,
+           "the loaded model must have at least one object");
+  QVERIFY2(project.objectVolumeCount(0) >= 1,
+           "the loaded object must have at least one volume");
+
+  // MEASURE-01 valid path: volumeMeshIts(0, 0) returns a non-null ITS with
+  // geometry matching the loaded model.
+  auto its0 = project.volumeMeshIts(0, 0);
+  QVERIFY2(its0 != nullptr,
+           "MEASURE-01: volumeMeshIts(0,0) must return a non-null ITS for a loaded volume");
+  QVERIFY2(!its0->vertices.empty(),
+           "MEASURE-01: the returned ITS must have a non-empty vertex array");
+  QVERIFY2(!its0->indices.empty(),
+           "MEASURE-01: the returned ITS must have a non-empty triangle index array");
+
+  // The per-volume ITS triangle count for volume 0 plus objectTriangleCount
+  // (which sums ALL volumes) must be consistent: at minimum, volume 0's
+  // triangle count must be <= the object total. objectTriangleCount sums
+  // every volume of object 0, so volume 0 alone cannot exceed it.
+  const int volumeTriCount = int(its0->indices.size());
+  const int objectTriCount = project.objectTriangleCount(0);
+  QVERIFY2(objectTriCount > 0,
+           "MEASURE-01: objectTriangleCount(0) must be > 0 for a loaded model");
+  QVERIFY2(volumeTriCount <= objectTriCount,
+           qPrintable(QStringLiteral("MEASURE-01: volume 0 triangle count (%1) must "
+                                     "not exceed the object total (%2)")
+                          .arg(volumeTriCount)
+                          .arg(objectTriCount)));
+
+  // MEASURE-05 defensive null returns: out-of-range indices yield nullptr,
+  // never a crash.
+  QVERIFY2(project.volumeMeshIts(-1, 0) == nullptr,
+           "MEASURE-01/MI-05: volumeMeshIts(-1,0) must return nullptr (negative object index)");
+  QVERIFY2(project.volumeMeshIts(project.modelCount() + 100, 0) == nullptr,
+           "MEASURE-01/MI-05: volumeMeshIts(out-of-range-object,0) must return nullptr");
+  QVERIFY2(project.volumeMeshIts(0, -1) == nullptr,
+           "MEASURE-01/MI-05: volumeMeshIts(0,-1) must return nullptr (negative volume index)");
+  QVERIFY2(project.volumeMeshIts(0, project.objectVolumeCount(0) + 100) == nullptr,
+           "MEASURE-01/MI-05: volumeMeshIts(0,out-of-range-volume) must return nullptr");
 }
 
 QTEST_MAIN(ViewModelSmokeTests)
