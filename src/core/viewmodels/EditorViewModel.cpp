@@ -5108,11 +5108,26 @@ void EditorViewModel::onWipeTowerGeometryReady(const WipeTowerGeometry &geometry
     m_wipeTowerX = geometry.x;
     m_wipeTowerZ = geometry.z;
     m_showWipeTower = true;
+    // Phase 109 (WTMESH-01/02): mirror the Option B real-mesh readback. The
+    // worker populates hasRealMesh + meshVertices ONLY when the engine
+    // produced wipe_tower_mesh_data (multi-material post-slice); otherwise
+    // hasRealMesh stays false and the renderer takes the Option A fallback.
+    // The mesh vertices are flattened XYZ triples (libslic3r world frame);
+    // the getter converts to QVariantList for the QML binding.
+    m_wipeTowerHasRealMesh = geometry.hasRealMesh;
+    m_wipeTowerMeshVertices = geometry.meshVertices;
   } else {
     // WTREAD-02 gate: do NOT overwrite width/depth/height/x/z with placeholder
     // values. They are irrelevant while show=false; leaving them at their
     // prior values guarantees no placeholder box leaks as "real" geometry.
     m_showWipeTower = false;
+    // Phase 109 (WTMESH-02): force Option A on the invalid path so a stale
+    // real-mesh from a prior multi-material slice cannot leak through a
+    // single-material re-slice. The renderer's hasRealMesh gate is only
+    // meaningful while showWipeTower is true, but clearing it here keeps the
+    // invariant tight: invalid readback => pure Option A state.
+    m_wipeTowerHasRealMesh = false;
+    m_wipeTowerMeshVertices.clear();
   }
   emit wipeTowerGeometryChanged();
 }
@@ -5123,6 +5138,15 @@ float EditorViewModel::wipeTowerDepth() const { return m_wipeTowerDepth; }
 float EditorViewModel::wipeTowerHeight() const { return m_wipeTowerHeight; }
 float EditorViewModel::wipeTowerX() const { return m_wipeTowerX; }
 float EditorViewModel::wipeTowerZ() const { return m_wipeTowerZ; }
+bool EditorViewModel::wipeTowerHasRealMesh() const { return m_wipeTowerHasRealMesh; }
+QVariantList EditorViewModel::wipeTowerMeshVertices() const
+{
+  QVariantList out;
+  out.reserve(int(m_wipeTowerMeshVertices.size()));
+  for (float v : m_wipeTowerMeshVertices)
+    out.append(v);
+  return out;
+}
 
 // ── Phase 108 (FMAP-01): filament-map auto-recommendation readback ──
 //

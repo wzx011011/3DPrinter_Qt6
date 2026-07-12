@@ -8,6 +8,7 @@
 #include <QVariant>
 #include <QVector>
 #include <QVector3D>
+#include <vector>
 
 class SoftwareViewport : public QQuickPaintedItem
 {
@@ -38,6 +39,11 @@ class SoftwareViewport : public QQuickPaintedItem
   Q_PROPERTY(float wipeTowerHeight READ wipeTowerHeight WRITE setWipeTowerHeight)
   Q_PROPERTY(float wipeTowerX READ wipeTowerX WRITE setWipeTowerX)
   Q_PROPERTY(float wipeTowerZ READ wipeTowerZ WRITE setWipeTowerZ)
+  // Phase 109 (WTMESH-07): Option B real-mesh Q_PROPERTYs mirror RhiViewport so
+  // the software fallback path can render the real mesh when hasRealMesh is
+  // true. Same QVariantList-over-QML convention as RhiViewport.
+  Q_PROPERTY(bool wipeTowerHasRealMesh READ wipeTowerHasRealMesh WRITE setWipeTowerHasRealMesh)
+  Q_PROPERTY(QVariantList wipeTowerMeshVertices READ wipeTowerMeshVertices WRITE setWipeTowerMeshVertices)
   Q_PROPERTY(int gcodeViewMode READ gcodeViewMode WRITE setGcodeViewMode NOTIFY gcodeViewModeChanged)
   Q_PROPERTY(float markerX READ markerX WRITE setMarkerX)
   Q_PROPERTY(float markerY READ markerY WRITE setMarkerY)
@@ -135,6 +141,11 @@ public:
   void setWipeTowerX(float value);
   float wipeTowerZ() const { return m_wipeTowerZ; }
   void setWipeTowerZ(float value);
+  // Phase 109 (WTMESH-07): Option B real-mesh getters/setters.
+  bool wipeTowerHasRealMesh() const { return m_wipeTowerHasRealMesh; }
+  void setWipeTowerHasRealMesh(bool value);
+  QVariantList wipeTowerMeshVertices() const;
+  void setWipeTowerMeshVertices(const QVariantList &value);
   int gcodeViewMode() const { return m_gcodeViewMode; }
   void setGcodeViewMode(int value);
   float markerX() const { return m_markerX; }
@@ -241,6 +252,12 @@ private:
   float m_wipeTowerHeight = 0.f;
   float m_wipeTowerX = 0.f;
   float m_wipeTowerZ = 0.f;
+  // Phase 109 (WTMESH-07): Option B real-mesh storage (mirrors RhiViewport).
+  // Defaults keep hasRealMesh=false so the software path takes the Option A
+  // fallback (Phase 99 Frozen Decision 2 baseline) until a real readback
+  // arrives.
+  bool m_wipeTowerHasRealMesh = false;
+  std::vector<float> m_wipeTowerMeshVertices;
   int m_gcodeViewMode = 0;
   float m_markerX = 0.f;
   float m_markerY = 0.f;

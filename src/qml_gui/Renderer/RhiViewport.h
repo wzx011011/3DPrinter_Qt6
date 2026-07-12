@@ -58,6 +58,14 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(float wipeTowerHeight READ wipeTowerHeight WRITE setWipeTowerHeight)
   Q_PROPERTY(float wipeTowerX READ wipeTowerX WRITE setWipeTowerX)
   Q_PROPERTY(float wipeTowerZ READ wipeTowerZ WRITE setWipeTowerZ)
+  // Phase 109 (WTMESH-05): Option B real-mesh Q_PROPERTYs. hasRealMesh gates
+  // the renderer branch (true -> buildWipeTowerMeshVertices, false -> Option A
+  // buildWipeTowerVertices). meshVertices carries the flattened XYZ triples
+  // (libslic3r world frame) as a QVariantList so it crosses the QML boundary
+  // cleanly (mirrors the autoFilamentMaps QVariantList pattern). The setter
+  // converts back to std::vector<float> for the renderer's synchronize() pull.
+  Q_PROPERTY(bool wipeTowerHasRealMesh READ wipeTowerHasRealMesh WRITE setWipeTowerHasRealMesh)
+  Q_PROPERTY(QVariantList wipeTowerMeshVertices READ wipeTowerMeshVertices WRITE setWipeTowerMeshVertices)
   Q_PROPERTY(float markerX READ markerX WRITE setMarkerX)
   Q_PROPERTY(float markerY READ markerY WRITE setMarkerY)
   Q_PROPERTY(float markerZ READ markerZ WRITE setMarkerZ)
@@ -191,6 +199,11 @@ public:
   void setWipeTowerX(float value);
   float wipeTowerZ() const { return m_wipeTowerZ; }
   void setWipeTowerZ(float value);
+  // Phase 109 (WTMESH-05): Option B real-mesh getters/setters.
+  bool wipeTowerHasRealMesh() const { return m_wipeTowerHasRealMesh; }
+  void setWipeTowerHasRealMesh(bool value);
+  QVariantList wipeTowerMeshVertices() const;
+  void setWipeTowerMeshVertices(const QVariantList &value);
   float markerX() const { return m_markerX; }
   void setMarkerX(float value);
   float markerY() const { return m_markerY; }

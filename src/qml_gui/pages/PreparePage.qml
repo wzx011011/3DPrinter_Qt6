@@ -1673,6 +1673,15 @@ Item {
                     wipeTowerHeight: root.editorVm ? root.editorVm.wipeTowerHeight : 50
                     wipeTowerX: root.editorVm ? root.editorVm.wipeTowerX : 100
                     wipeTowerZ: root.editorVm ? root.editorVm.wipeTowerZ : 25
+                    // Phase 109 (WTMESH-01/02): Option B real-mesh bindings.
+                    // hasRealMesh gates the renderer branch (true ->
+                    // buildWipeTowerMeshVertices real convex-hull mesh; false ->
+                    // Option A dimensioned box, Phase 99 Frozen Decision 2
+                    // baseline). meshVertices carries the flattened XYZ triples
+                    // (libslic3r world frame). Default hasRealMesh=false so the
+                    // pre-slice and single-material paths take Option A.
+                    wipeTowerHasRealMesh: root.editorVm ? root.editorVm.wipeTowerHasRealMesh : false
+                    wipeTowerMeshVertices: root.editorVm ? root.editorVm.wipeTowerMeshVertices : []
                     currentPlateIndex: root.editorVm ? root.editorVm.currentPlateIndex : 0
                     plateCount: root.editorVm ? root.editorVm.plateCount : 0
                     activePlateObjectIndices: root.editorVm ? root.editorVm.activePlateObjectIndices : []

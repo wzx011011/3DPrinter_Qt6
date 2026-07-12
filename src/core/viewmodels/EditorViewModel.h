@@ -653,6 +653,17 @@ public:
   Q_PROPERTY(float wipeTowerHeight READ wipeTowerHeight NOTIFY wipeTowerGeometryChanged)
   Q_PROPERTY(float wipeTowerX READ wipeTowerX NOTIFY wipeTowerGeometryChanged)
   Q_PROPERTY(float wipeTowerZ READ wipeTowerZ NOTIFY wipeTowerGeometryChanged)
+  /// Phase 109 (WTMESH-01/02): Option B real-mesh readback. hasRealMesh gates
+  /// the renderer branch (true -> buildWipeTowerMeshVertices, false -> Option A
+  /// buildWipeTowerVertices, Phase 99 Frozen Decision 2 baseline). meshVertices
+  /// carries the flattened XYZ triples (libslic3r world frame) as a
+  /// QVariantList so it crosses the QML boundary cleanly. Both are READ-only +
+  /// NOTIFY (wipeTowerGeometryChanged) because they flow from SliceService
+  /// (libslic3r worker), not from QML -- same one-way flow as the dim
+  /// Q_PROPERTYs above. When hasRealMesh is false, meshVertices is empty and
+  /// PreparePage.qml binds the renderer to the Option A fallback.
+  Q_PROPERTY(bool wipeTowerHasRealMesh READ wipeTowerHasRealMesh NOTIFY wipeTowerGeometryChanged)
+  Q_PROPERTY(QVariantList wipeTowerMeshVertices READ wipeTowerMeshVertices NOTIFY wipeTowerGeometryChanged)
   /// Phase 108 (FMAP-01): post-slice filament-map auto-recommendation read
   /// back from Print::get_filament_maps() via SliceService. READ-only + NOTIFY
   /// because the map flows from SliceService (libslic3r worker), not from QML
@@ -735,6 +746,10 @@ public:
   float wipeTowerHeight() const;
   float wipeTowerX() const;
   float wipeTowerZ() const;
+  // Phase 109 (WTMESH-01/02): Option B real-mesh getters (read-only; set from
+  // the SliceService-received WipeTowerGeometry struct, not from QML).
+  bool wipeTowerHasRealMesh() const;
+  QVariantList wipeTowerMeshVertices() const;
   // Phase 108 (FMAP-01): filament-map auto-recommendation getters (read-only;
   // set from the SliceService-received FilamentMapResult struct, not from QML).
   bool hasAutoFilamentMap() const;
@@ -1075,6 +1090,13 @@ private:
   float m_wipeTowerHeight = 50.f;
   float m_wipeTowerX = 100.f;
   float m_wipeTowerZ = 25.f;
+  // Phase 109 (WTMESH-01/02): Option B real-mesh readback state. m_hasRealMesh
+  // gates the renderer branch; m_meshVertices carries the flattened XYZ triples
+  // (libslic3r world frame) as a std::vector<float> for the getter to convert
+  // to QVariantList. Defaults keep hasRealMesh=false so the pre-slice and
+  // single-material paths take the Option A fallback.
+  bool m_wipeTowerHasRealMesh = false;
+  std::vector<float> m_wipeTowerMeshVertices;
   // Phase 108 (FMAP-01): filament-map auto-recommendation readback state.
   // m_hasAutoFilamentMap is the valid gate (mirrors WTREAD-02 showWipeTower):
   // false until a valid auto recommendation arrives. m_autoFilamentMapMode is

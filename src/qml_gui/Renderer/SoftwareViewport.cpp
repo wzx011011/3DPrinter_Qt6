@@ -252,6 +252,44 @@ void SoftwareViewport::setWipeTowerZ(float value)
   update();
 }
 
+// Phase 109 (WTMESH-07): Option B real-mesh setters mirror RhiViewport. The
+// mesh vertices cross the QML boundary as a QVariantList of floats; the
+// setter converts back to std::vector<float> for the paint() mesh projection.
+void SoftwareViewport::setWipeTowerHasRealMesh(bool value)
+{
+  if (m_wipeTowerHasRealMesh == value)
+    return;
+  m_wipeTowerHasRealMesh = value;
+  update();
+}
+
+QVariantList SoftwareViewport::wipeTowerMeshVertices() const
+{
+  QVariantList out;
+  out.reserve(int(m_wipeTowerMeshVertices.size()));
+  for (float v : m_wipeTowerMeshVertices)
+    out.append(v);
+  return out;
+}
+
+void SoftwareViewport::setWipeTowerMeshVertices(const QVariantList &value)
+{
+  std::vector<float> converted;
+  converted.reserve(size_t(value.size()));
+  bool ok = false;
+  for (const QVariant &entry : value)
+  {
+    const float f = entry.toFloat(&ok);
+    if (!ok)
+      return; // Malformed entry -- keep the prior mesh (defensive).
+    converted.push_back(f);
+  }
+  if (m_wipeTowerMeshVertices == converted)
+    return;
+  m_wipeTowerMeshVertices = std::move(converted);
+  update();
+}
+
 void SoftwareViewport::setGcodeViewMode(int value)
 {
   if (m_gcodeViewMode == value)
@@ -453,7 +491,49 @@ void SoftwareViewport::paintScene(QPainter *painter, const QRectF &target)
   // kGroundY mirror the RHI box (GizmoGeometry.cpp kGroundY + kColor
   // constants inside buildWipeTowerVertices); the geometry (x-hw..x+hw,
   // z-hd..z+hd, y0..y1, Y-up) mirrors buildWipeTowerVertices.
-  if (m_showWipeTower && m_wipeTowerWidth > 0.f &&
+  //
+  // Phase 109 (WTMESH-07): Option B real-mesh projection. When
+  // m_wipeTowerHasRealMesh is true, the worker captured the convex hull of the
+  // merged real_wipe_tower_mesh + real_brim_mesh (mirrors upstream
+  // 3DScene.cpp:906-914). Project each triangle into the unified depth-sorted
+  // `faces` vector using the SAME color as Option A so the two paths render
+  // consistently. The captured mesh is in libslic3r convention (X right, Y
+  // into bed, Z up); the Qt world space here is (X right, Y up, Z into bed),
+  // so each captured (mx, my, mz) maps to Qt (mx, mz + kGroundY, my). This
+  // matches buildWipeTowerMeshVertices (GizmoGeometry.cpp) so the software and
+  // RHI paths agree. The Option A box block below is the else branch
+  // (unchanged -- Phase 99 Frozen Decision 2 baseline).
+  if (m_showWipeTower && m_wipeTowerHasRealMesh &&
+      m_wipeTowerMeshVertices.size() >= 9 &&
+      m_wipeTowerMeshVertices.size() % 3 == 0)
+  {
+    constexpr float kGroundY = -0.04f; // mirrors GizmoGeometry kGroundY
+    const QColor wipeTowerMeshColor = QColor::fromRgbF(0.35f, 0.60f, 0.85f, 0.50f);
+    const size_t triCount = m_wipeTowerMeshVertices.size() / 9;
+    for (size_t t = 0; t < triCount; ++t)
+    {
+      const size_t base = t * 9;
+      // Captured (mx, my, mz) -> Qt (mx, mz + kGroundY, my).
+      const QVector3D p0(m_wipeTowerMeshVertices[base + 0],
+                         m_wipeTowerMeshVertices[base + 2] + kGroundY,
+                         m_wipeTowerMeshVertices[base + 1]);
+      const QVector3D p1(m_wipeTowerMeshVertices[base + 3],
+                         m_wipeTowerMeshVertices[base + 5] + kGroundY,
+                         m_wipeTowerMeshVertices[base + 4]);
+      const QVector3D p2(m_wipeTowerMeshVertices[base + 6],
+                         m_wipeTowerMeshVertices[base + 8] + kGroundY,
+                         m_wipeTowerMeshVertices[base + 7]);
+      const QVector3D r0 = rotatePoint(p0 - m_center);
+      const QVector3D r1 = rotatePoint(p1 - m_center);
+      const QVector3D r2 = rotatePoint(p2 - m_center);
+      Face face;
+      face.poly << project(p0) << project(p1) << project(p2);
+      face.color = wipeTowerMeshColor;
+      face.depth = (r0.z() + r1.z() + r2.z()) / 3.f;
+      faces.append(face);
+    }
+  }
+  else if (m_showWipeTower && m_wipeTowerWidth > 0.f &&
       m_wipeTowerDepth > 0.f && m_wipeTowerHeight > 0.f)
   {
     constexpr float kGroundY = -0.04f; // mirrors GizmoGeometry kGroundY

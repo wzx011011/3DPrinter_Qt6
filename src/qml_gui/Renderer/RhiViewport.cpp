@@ -322,6 +322,47 @@ void RhiViewport::setWipeTowerZ(float value)
   update();
 }
 
+// Phase 109 (WTMESH-05): Option B real-mesh setters. The mesh vertices cross
+// the QML boundary as a QVariantList of floats (mirrors the autoFilamentMaps
+// pattern); the setter converts back to std::vector<float> for the renderer's
+// synchronize() pull. Each setter calls update() so synchronize() + render()
+// re-run on every change (the renderer's dirty-flag comparison handles the
+// no-op-skip when the value did not actually change).
+void RhiViewport::setWipeTowerHasRealMesh(bool value)
+{
+  if (m_wipeTowerHasRealMesh == value)
+    return;
+  m_wipeTowerHasRealMesh = value;
+  update();
+}
+
+QVariantList RhiViewport::wipeTowerMeshVertices() const
+{
+  QVariantList out;
+  out.reserve(int(m_wipeTowerMeshVertices.size()));
+  for (float v : m_wipeTowerMeshVertices)
+    out.append(v);
+  return out;
+}
+
+void RhiViewport::setWipeTowerMeshVertices(const QVariantList &value)
+{
+  std::vector<float> converted;
+  converted.reserve(size_t(value.size()));
+  bool ok = false;
+  for (const QVariant &entry : value)
+  {
+    const float f = entry.toFloat(&ok);
+    if (!ok)
+      return; // Malformed entry -- keep the prior mesh (defensive).
+    converted.push_back(f);
+  }
+  if (m_wipeTowerMeshVertices == converted)
+    return;
+  m_wipeTowerMeshVertices = std::move(converted);
+  update();
+}
+
 void RhiViewport::setMarkerX(float value)
 {
   if (qFuzzyCompare(m_markerX, value))
