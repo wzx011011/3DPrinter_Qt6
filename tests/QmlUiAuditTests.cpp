@@ -227,6 +227,15 @@ private slots:
   // QString::contains + QVERIFY2 with an FMAP-02-named message). Source-level
   // only; runs in the regression ctest.
   void filamentMapModeEnumWidenedToUpstream4Value();
+  // Phase 108-01 (FMAP-01): source-audit lock proving the filament-map auto-
+  // recommendation readback is wired end-to-end (SliceService POD + signal +
+  // worker capture site + EditorViewModel slot + Q_PROPERTYs). Locks the source
+  // anchors so a future regression (drop the POD, drop the signal, remove the
+  // worker capture, or unwire the slot) fails here deterministically. Mirrors
+  // the Phase 102/103/104/105/106/107 source-audit pattern (QFile +
+  // QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with an FMAP-01-named
+  // message). Source-level only; runs in the regression ctest.
+  void filamentMapAutoRecommendationReadbackPresent();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -4024,6 +4033,81 @@ void QmlUiAuditTests::filamentMapModeEnumWidenedToUpstream4Value()
            "FMAP-02/FM-03: ProjectServiceMock read site must discriminate typed coEnum from legacy raw int");
   QVERIFY2(serviceSource.contains(QStringLiteral("raw 1 (old \"Manual\")  -> fmmManual")),
            "FMAP-02/FM-03: ProjectServiceMock read site must keep the legacy raw-int-1 -> fmmManual migration (the pre-v4.5 'Manual'=1 preservation)");
+}
+
+void QmlUiAuditTests::filamentMapAutoRecommendationReadbackPresent()
+{
+  // FMAP-01: the filament-map auto-recommendation readback must stay wired
+  // end-to-end -- the FilamentMapResult POD + filamentMapReady signal + worker
+  // capture site (Print::get_filament_maps) in SliceService, and the
+  // onFilamentMapReady slot + 3 auto* Q_PROPERTYs + filamentMapChanged NOTIFY
+  // in EditorViewModel. Locks the source anchors so a future regression (drop
+  // the POD, drop the signal, remove the worker capture, or unwire the slot)
+  // fails here deterministically. Mirrors the Phase 100/101/102 wipe-tower
+  // source-audit pattern.
+
+  const QString sliceHeader = readSource(QStringLiteral("src/core/services/SliceService.h"));
+  QVERIFY2(!sliceHeader.isEmpty(), "Unable to read SliceService.h");
+  const QString sliceSource = readSource(QStringLiteral("src/core/services/SliceService.cpp"));
+  QVERIFY2(!sliceSource.isEmpty(), "Unable to read SliceService.cpp");
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  QVERIFY2(!editorSource.isEmpty(), "Unable to read EditorViewModel.cpp");
+
+  // FMAP-01 / FR-01 (POD present): the FilamentMapResult struct must be
+  // declared in SliceService.h with the three fields (valid/mode/maps). A
+  // removal of the POD drops all three and fails here.
+  QVERIFY2(sliceHeader.contains(QStringLiteral("struct FilamentMapResult")),
+           "FMAP-01/FR-01: SliceService.h must declare the FilamentMapResult POD (mirrors WipeTowerGeometry)");
+  QVERIFY2(sliceHeader.contains(QStringLiteral("bool valid = false;")),
+           "FMAP-01/FR-01: FilamentMapResult must have a bool valid field (the auto-recommendation-ran gate)");
+  QVERIFY2(sliceHeader.contains(QStringLiteral("OWzx::FilamentMapMode mode")),
+           "FMAP-01/FR-01: FilamentMapResult.mode must use the Phase 107 OWzx::FilamentMapMode enum");
+  QVERIFY2(sliceHeader.contains(QStringLiteral("std::vector<int> maps")),
+           "FMAP-01/FR-01: FilamentMapResult.maps must be std::vector<int> (Print::get_filament_maps result)");
+
+  // FMAP-01 / FR-02 (signal present): filamentMapReady must be declared on
+  // SliceService next to wipeTowerGeometryReady.
+  QVERIFY2(sliceHeader.contains(QStringLiteral("void filamentMapReady(const FilamentMapResult &result);")),
+           "FMAP-01/FR-02: SliceService must declare the filamentMapReady signal (mirrors wipeTowerGeometryReady)");
+
+  // FMAP-01 / FR-03 (worker capture site): the SliceService worker must read
+  // Print::get_filament_maps() AND Print::get_filament_map_mode() inside the
+  // HAS_LIBSLIC3R branch, and the mode < fmmManual gate must be present (the
+  // upstream Print.cpp:2485 condition that determines whether the auto-
+  // recommendation ran). A removal of the capture or the gate fails here.
+  QVERIFY2(sliceSource.contains(QStringLiteral("print.get_filament_maps()")),
+           "FMAP-01/FR-03: SliceService worker must read Print::get_filament_maps() (Print.cpp:3051) inside the Print-lifetime window");
+  QVERIFY2(sliceSource.contains(QStringLiteral("print.get_filament_map_mode()")),
+           "FMAP-01/FR-03: SliceService worker must read Print::get_filament_map_mode() (Print.cpp:3056) to resolve the mode");
+  QVERIFY2(sliceSource.contains(QStringLiteral("fmmManual")),
+           "FMAP-01/FR-03: SliceService worker must gate valid on mode < fmmManual (upstream Print.cpp:2485 auto-recommendation condition)");
+  QVERIFY2(sliceSource.contains(QStringLiteral("capturedFilamentMap")),
+           "FMAP-01/FR-03: SliceService worker must capture the result by value into a worker-local FilamentMapResult (Frozen Decision 1: no Print* escape)");
+
+  // FMAP-01 / FR-02 (emit on success branch): the worker must emit
+  // filamentMapReady on the success branch of the sliceFinished queued lambda
+  // (same gate as wipeTowerGeometryReady).
+  QVERIFY2(sliceSource.contains(QStringLiteral("emit receiver->filamentMapReady(capturedFilamentMap)")),
+           "FMAP-01/FR-02: SliceService must emit filamentMapReady on the sliceFinished success branch (cancel/error branches do not emit)");
+
+  // FMAP-01 / FR-04 (EditorViewModel slot + Q_PROPERTYs): the onFilamentMapReady
+  // private slot + the 3 auto* Q_PROPERTYs + the filamentMapChanged NOTIFY +
+  // the connect wiring must all stay present.
+  QVERIFY2(editorHeader.contains(QStringLiteral("void onFilamentMapReady(const FilamentMapResult &result);")),
+           "FMAP-01/FR-04: EditorViewModel must declare the onFilamentMapReady private slot (mirrors onWipeTowerGeometryReady)");
+  QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(bool hasAutoFilamentMap READ hasAutoFilamentMap NOTIFY filamentMapChanged)")),
+           "FMAP-01/FR-04: EditorViewModel must expose hasAutoFilamentMap (the valid gate, mirrors WTREAD-02 showWipeTower)");
+  QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(int autoFilamentMapMode READ autoFilamentMapMode NOTIFY filamentMapChanged)")),
+           "FMAP-01/FR-04: EditorViewModel must expose autoFilamentMapMode (resolved OWzx::FilamentMapMode as int)");
+  QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList autoFilamentMaps READ autoFilamentMaps NOTIFY filamentMapChanged)")),
+           "FMAP-01/FR-04: EditorViewModel must expose autoFilamentMaps (1-based per-extruder group ids)");
+  QVERIFY2(editorHeader.contains(QStringLiteral("void filamentMapChanged();")),
+           "FMAP-01/FR-04: EditorViewModel must declare the filamentMapChanged NOTIFY signal");
+  QVERIFY2(editorSource.contains(QStringLiteral("&SliceService::filamentMapReady,"))
+           && editorSource.contains(QStringLiteral("&EditorViewModel::onFilamentMapReady)")),
+           "FMAP-01/FR-04: EditorViewModel must connect SliceService::filamentMapReady to onFilamentMapReady");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

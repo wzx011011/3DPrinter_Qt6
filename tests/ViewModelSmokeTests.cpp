@@ -295,6 +295,13 @@ private slots:
   // dims when valid=true (WTREAD-01), AND that showWipeTower=false with dims
   // not overwritten to placeholders when valid=false (WTREAD-02 gate).
   void wipeTowerGeometryReadbackAppliesValidAndInvalidGate();
+  // Phase 108-01 (FMAP-01): the filament-map auto-recommendation readback
+  // wiring. Drives SliceService::filamentMapReady directly (no real slice
+  // needed) and asserts the EditorViewModel Q_PROPERTYs reflect the captured
+  // auto recommendation when valid=true (auto-mode slice), AND that
+  // hasAutoFilamentMap=false with maps/mode not overwritten to placeholders
+  // when valid=false (user picked Manual -- no auto-map computed).
+  void filamentMapAutoRecommendationReadbackWired();
   // Phase 101-01 (WTRENDER-01): regression lock proving the real sliced
   // wipe-tower dims reach the render pipeline contract (PreparePage.qml
   // GLViewport binds the 6 wipe-tower Q_PROPERTYs to editorVm). Uses the
@@ -4038,6 +4045,95 @@ void ViewModelSmokeTests::wipeTowerGeometryReadbackAppliesValidAndInvalidGate()
   QCOMPARE(editor.wipeTowerHeight(), 5.f);
   QCOMPARE(editor.wipeTowerX(), 200.f);
   QCOMPARE(editor.wipeTowerZ(), 150.f);
+}
+
+// Phase 108-01 (FMAP-01): the filament-map auto-recommendation readback wiring
+// test. Mirrors the v4.4 wipeTowerGeometryReadbackAppliesValidAndInvalidGate
+// slot above. Drives SliceService::filamentMapReady directly (no real libslic3r
+// slice needed -- avoids needing multi-material fixtures) and asserts the
+// EditorViewModel Q_PROPERTYs reflect the captured auto recommendation when
+// valid=true (auto-mode slice, the upstream Print.cpp:2484-2491 branch fired),
+// AND that hasAutoFilamentMap=false with maps/mode NOT overwritten to
+// placeholders when valid=false (user picked Manual -- the engine computed no
+// auto-map). The test registers FilamentMapResult as a metatype so
+// QMetaObject::invokeMethod can emit the signal by name through Q_ARG, proving
+// the connect(sliceService, filamentMapReady, ..., onFilamentMapReady) wiring
+// end-to-end (signal exists, slot fires).
+//
+// Capture-by-value invariant (Frozen Decision 1): FilamentMapResult is a pure
+// value type -- no Print* or libslic3r reference type is stored on the signal
+// path. The struct is always defined (not behind #ifdef HAS_LIBSLIC3R), so the
+// assertions are build-mode-independent.
+static const int kFilamentMapResultMetaTypeId = []() {
+  return qRegisterMetaType<FilamentMapResult>("FilamentMapResult");
+}();
+
+void ViewModelSmokeTests::filamentMapAutoRecommendationReadbackWired()
+{
+  Q_UNUSED(kFilamentMapResultMetaTypeId); // registration side-effect only
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  // Defaults keep the pre-slice UI inert: no auto recommendation surfaced, and
+  // the mode defaults to fmmDefault (the per-plate inherit sentinel). The maps
+  // list is empty. This is the FMAP-01 baseline.
+  QCOMPARE(editor.hasAutoFilamentMap(), false);
+  QCOMPARE(editor.autoFilamentMapMode(),
+           static_cast<int>(OWzx::FilamentMapMode::fmmDefault));
+  QCOMPARE(editor.autoFilamentMaps().size(), 0);
+
+  QSignalSpy mapSpy(&editor, &EditorViewModel::filamentMapChanged);
+  QVERIFY2(mapSpy.isValid(),
+           "filamentMapChanged must be a registered NOTIFY signal");
+
+  // --- FMAP-01 valid path: an auto-mode slice delivers the real recommended
+  //     per-extruder map. mode=fmmAutoForFlush, maps={1,2,3} (1-based group
+  //     ids, as produced by upstream Print::get_filament_maps after the +1
+  //     transform at Print.cpp:2489). ---
+  FilamentMapResult validResult;
+  validResult.valid = true;
+  validResult.mode = OWzx::FilamentMapMode::fmmAutoForFlush;
+  validResult.maps = {1, 2, 3};
+
+  // Emit SliceService::filamentMapReady via the meta-object system so the
+  // connect(sliceService_, &SliceService::filamentMapReady, this,
+  // &EditorViewModel::onFilamentMapReady) wiring is exercised end-to-end.
+  QVERIFY2(QMetaObject::invokeMethod(&slice, "filamentMapReady",
+                                     Qt::DirectConnection,
+                                     Q_ARG(FilamentMapResult, validResult)),
+           "SliceService must declare the filamentMapReady signal so it can "
+           "be invoked by name through the meta-object system");
+
+  QCOMPARE(mapSpy.count(), 1);
+  QCOMPARE(editor.hasAutoFilamentMap(), true);
+  QCOMPARE(editor.autoFilamentMapMode(),
+           static_cast<int>(OWzx::FilamentMapMode::fmmAutoForFlush));
+  QCOMPARE(editor.autoFilamentMaps().size(), 3);
+  QCOMPARE(editor.autoFilamentMaps().at(0).toInt(), 1);
+  QCOMPARE(editor.autoFilamentMaps().at(1).toInt(), 2);
+  QCOMPARE(editor.autoFilamentMaps().at(2).toInt(), 3);
+
+  // --- FMAP-01 invalid/manual path: valid=false forces hasAuto=false and does
+  //     NOT overwrite the maps/mode with placeholder values. The previous real
+  //     recommendation is left untouched so no stale map leaks as a "fresh"
+  //     recommendation (mirrors the WTREAD-02 gate guarantee). This is the
+  //     user-picked-Manual branch: the engine computed no auto-map, so there
+  //     is nothing to surface. ---
+  FilamentMapResult invalidResult; // valid defaults to false
+  QVERIFY2(QMetaObject::invokeMethod(&slice, "filamentMapReady",
+                                     Qt::DirectConnection,
+                                     Q_ARG(FilamentMapResult, invalidResult)),
+           "emit of valid=false filamentMapReady must dispatch");
+
+  QCOMPARE(mapSpy.count(), 2);
+  QCOMPARE(editor.hasAutoFilamentMap(), false);
+  // The mode + maps from the previous valid readback must persist (not reset
+  // to placeholders). This is the FMAP-01 gate guarantee.
+  QCOMPARE(editor.autoFilamentMapMode(),
+           static_cast<int>(OWzx::FilamentMapMode::fmmAutoForFlush));
+  QCOMPARE(editor.autoFilamentMaps().size(), 3);
+  QCOMPARE(editor.autoFilamentMaps().at(0).toInt(), 1);
 }
 
 void ViewModelSmokeTests::wipeTowerRealDimsReachRendererPipeline()
