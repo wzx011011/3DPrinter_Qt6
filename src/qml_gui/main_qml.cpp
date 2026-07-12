@@ -166,6 +166,16 @@ static QVector<StartupDialogRoute> startupDialogRoutes()
   };
 }
 
+// FIXTURE-04 (anti-feature): the 4 QCommandLineOption flags parsed below
+// (--open-page, --open-dialog, --load-model, --skip-first-run) are OWzx-only
+// test-evidence plumbing. Upstream OrcaSlicer has NO equivalent argv surface;
+// upstream argv is CLI-only (--load / --slice / positional at OrcaSlicer.cpp:7183).
+// These flags exist so external screenshot capture can reach a target GUI state
+// without simulated clicks, and they are gated on objectCreated +
+// QQuickWindow::frameSwapped (FIXTURE-02) so screenshots are deterministic.
+// They MUST NOT be promoted to a user-facing deep-link product feature. See
+// tests/data/fixture_recipes.md for the canonical argv combos and
+// REQUIREMENTS.md (WS3 Out of Scope) for the anti-feature contract.
 static StartupOpenRequest parseStartupOpenRequest(QCoreApplication &app)
 {
   QCommandLineParser parser;
