@@ -54,20 +54,22 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 **Carry-forward outside v4.2:** D3D12 remains explicit opt-in future investigation. Full GLGizmoMeasure feature-picking engine (needs per-volume ITS + scene raycaster) and the AssembleViewDataPool ModelObjectsClipper resource are deferred to a future milestone. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows are removed from forward scope unless the user explicitly reopens them.
 
-## Current Milestone: (none — planning next)
+## Current Milestone: v4.5 Backlog Closure (Mega-Milestone)
 
-**Status:** v4.4 shipped 2026-07-12. No active milestone. Run `/gsd:new-milestone` to define the next scope.
+**Goal:** Clear the deferred-backlog in one cycle — wipe-tower Option B mesh, auto filament-map, CLI fixtures, D3D12 root cause, and the GLGizmoMeasure engine — extending v4.4's slice/UI work and unblocking long-deferred items.
 
-**Scope rule (carry-forward):** Local/offline only. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from scope.
+**Scope rule:** Mixed. Workstreams 1 (filament-map), 2 (Option B mesh), 3 (CLI fixtures), and 5 (GLGizmoMeasure) are local/offline. Workstream 4 (D3D12) is investigation-heavy and may not produce a clean "feature" output. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from scope.
+
+**Target features (5 workstreams, ~14-21 phases starting from 103):**
+- **Auto filament-map recommendation:** libslic3r auto-computes per-plate filament map during slicing, Qt6 reads back + surfaces in `FilamentGroupPopup` UI; widen Qt6 mode enum from 2-value (Auto/Manual) to upstream 4-value.
+- **Option B real wipe-tower mesh:** upgrade rendered wipe-tower from v4.4 Option A dimensioned box to real mesh via `wipe_tower_mesh_data` + `convex_hull_3d` (mirrors upstream `3DScene.cpp:887-925 load_real_wipe_tower_preview`); needs ITS vertex format extension in `GizmoGeometry` + `RhiViewportRenderer`. Re-opens Phase 99 Frozen Decision 2.
+- **CLI fixtures + GUI deep-link loading:** deterministic argv-based fixture loading (`--load-model`, `--open-page`, `--open-dialog`) to unblock runtime visual evidence (the recurring Windows-capture-API blocker). FIXTURE-02.
+- **D3D12 crash root cause + backend promotion:** investigate the D3D12 crash, evaluate Vulkan/D3D12 backend readiness.
+- **Full GLGizmoMeasure engine + AssembleViewDataPool clipper:** port the measurement gizmo's feature-picking engine; needs per-volume ITS + scene raycaster.
 
 ## Next Milestone
 
-Not yet defined. Candidate backlog after v4.4:
-- Auto filament-map recommendation (let libslic3r auto-compute in `Print::`, Qt6 reads back `filament_maps` + builds `FilamentGroupPopup` UI; widen Qt6 mode enum to upstream 4-value).
-- Option B real wipe-tower mesh via `wipe_tower_mesh_data` + `convex_hull_3d` (LOCKED future upgrade per Phase 99 Frozen Decision 2; needs ITS vertex format extension in `GizmoGeometry` + `RhiViewportRenderer`).
-- Missing CLI fixtures and deterministic argv-based GUI fixture loading for screenshots (FIXTURE-02 — unblocked by v4.3's shared-writer fix).
-- D3D12 crash root cause and Vulkan evaluation after the SDK/runtime path is ready.
-- Full GLGizmoMeasure feature-picking engine + AssembleViewDataPool clipper (needs per-volume ITS).
+v4.5 is the active milestone (backlog closure). After v4.5, the candidate backlog will be re-evaluated based on what ships and what new gaps emerge.
 
 ## Requirements
 
@@ -99,14 +101,15 @@ These are current baseline capabilities inferred from implementation, git histor
 
 ### Active
 
-(No active milestone — run `/gsd:new-milestone` to define the next scope.)
+- [ ] Auto filament-map recommendation (libslic3r auto-computes, Qt6 reads back + FilamentGroupPopup UI; widen mode enum to upstream 4-value).
+- [ ] Option B real wipe-tower mesh via `wipe_tower_mesh_data` + `convex_hull_3d` (re-opens Phase 99 Frozen Decision 2; needs ITS vertex format extension).
+- [ ] CLI fixtures + deterministic argv GUI fixture loading for runtime visual evidence (FIXTURE-02).
+- [ ] D3D12 crash root cause + Vulkan/D3D12 backend readiness evaluation.
+- [ ] Full GLGizmoMeasure feature-picking engine + AssembleViewDataPool clipper (needs per-volume ITS + scene raycaster).
 
 ### Future
 
-- Auto filament-map recommendation (let libslic3r auto-compute, Qt6 reads back + UI).
-- Option B real wipe-tower mesh via `wipe_tower_mesh_data` + `convex_hull_3d` (LOCKED future upgrade per Phase 99 Frozen Decision 2; needs ITS vertex format extension).
-- Full PLATE-09 save/reload state assertions — now unblocked by v4.3's shared-writer fix (`FIXTURE-02`).
-- D3D12 crash root cause and Vulkan evaluation after the SDK/runtime path is ready.
+- Full PLATE-09 save/reload state assertions — unblocked by v4.3's shared-writer fix (`FIXTURE-02`); may be partially addressed by v4.5 workstream 3.
 - Full i18n translation coverage beyond strings touched by active workflows.
 
 ### Out of Scope
@@ -206,4 +209,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-12 after v4.4 milestone shipped.*
+*Last updated: 2026-07-12 after v4.5 milestone planning.*
