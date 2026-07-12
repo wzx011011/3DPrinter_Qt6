@@ -41,7 +41,7 @@
 
 ## Phases
 
-- [ ] Phase 103: CLI Fixture Readiness Gate
+- [x] Phase 103: CLI Fixture Readiness Gate (completed 2026-07-12)
 - [ ] Phase 104: CLI Fixture Recipes And Multi-Material Model
 - [ ] Phase 105: D3D12 Debug Layer Wiring
 - [ ] Phase 106: D3D12 Crash Root-Cause And Backend Readiness (time-boxed)
@@ -58,7 +58,7 @@
 
 | Phase | Name | Goal | Requirements |
 |---|---|---|---|
-| 103 | CLI Fixture Readiness Gate | Add the `QQmlApplicationEngine::objectCreated` + `QQuickWindow::frameSwapped` readiness gate so argv-driven fixture actions fire deterministically (after the QML tree + first GPU frame), closing the recurring Windows-capture-API race for every other workstream. | FIXTURE-02 |
+| 103 | 1/1 | Complete   | 2026-07-12 |
 | 104 | CLI Fixture Recipes And Multi-Material Model | Add a multi-material fixture model to `tests/data/` and document argv recipes (`--load-model`/`--open-page`/`--open-dialog` combos) covering the major GUI states, classified as test-evidence plumbing (not product). | FIXTURE-01, FIXTURE-03, FIXTURE-04 |
 | 105 | D3D12 Debug Layer Wiring | Wire the D3D12 debug layer behind an env flag in `RhiBackendSelector.cpp` (before `QRhi::create`), gated to Debug builds, so the startup `0xc0000005` crash can be triaged with validation output. | D3D12-01 |
 | 106 | D3D12 Crash Root-Cause And Backend Readiness | Time-boxed isolation of the D3D12 crash root cause (distinct from the already-merged BUG-V31-1 fix), a stability decision on opt-in vs default, and documentation that default promotion stays out of scope and Vulkan is SDK-blocked. | D3D12-02, D3D12-03 |
@@ -87,7 +87,7 @@ Phase numbers are sequential, but several phases are parallel-safe and may be ex
 ### Phase 103: CLI Fixture Readiness Gate
 
 **Status:** Not started
-**Plans:** 0/0
+**Plans:** 1/1 plans complete
 **Workstream:** WS3 (CLI Fixtures)
 
 Success criteria:
