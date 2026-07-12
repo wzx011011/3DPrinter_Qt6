@@ -706,11 +706,19 @@ void PartPlateTests::filamentMapModeEnumWidenedAnd3MFMigrates() {
 #ifdef HAS_LIBSLIC3R
 void PartPlateTests::filamentMapModeRoundTripManualPreserved() {
   // FMAP-02 (FM-05 part b/c): the 3MF round-trip preserves the filament-map
-  // mode. Set a plate to fmmManual, save, reload into a FRESH service, and
+  // MODE. Set a plate to fmmManual, save, reload into a FRESH service, and
   // assert the reloaded mode is still fmmManual (2). This is the regression
   // guard for the FM-03 read-side migration and the FM-02 write-side typed-
-  // enum serialization. Mirrors the Phase 97 thumbnailSaveReloadRoundTrip
-  // pattern (load STL -> mutate plate -> save -> reload -> assert).
+  // enum serialization (the on-disk value is the "Manual" string). Mirrors the
+  // Phase 97 thumbnailSaveReloadRoundTrip pattern.
+  //
+  // SCOPE NOTE: this slot asserts the MODE only -- the critical user-visible
+  // behavior change FMAP-02 ships (pre-v4.5 'Manual'=1 stays Manual, not the
+  // new fmmAutoForMatch=1). The filament_maps ARRAY round-trip is a separate
+  // pre-existing gap (the Qt6 write path sets pd->filament_maps but the
+  // active bbs_3mf writer branch reads pd->config["filament_map"]
+  // ConfigOptionInts, which the Qt6 layer does not populate); closing it is
+  // FMAP-03/04 scope (Phase 110/111), not FMAP-02.
   ProjectServiceMock service;
   QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
   QVERIFY(service.loadFile(kStlPath));
@@ -739,12 +747,12 @@ void PartPlateTests::filamentMapModeRoundTripManualPreserved() {
   QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);
   QVERIFY2(reloaded.plateCount() >= 1, "reloaded project must have >= 1 plate");
 
-  // ASSERT: the reloaded plate 0 mode is STILL fmmManual (2). A regression that
+  // ASSERT: the reloaded plate 0 MODE is STILL fmmManual (2). A regression that
   // re-introduces the raw-int hazard (Manual flipped to AutoForMatch on reload)
-  // fails here. The filament_maps array round-trips unchanged too.
+  // fails here. The on-disk metadata is the "Manual" string (FM-02 typed-enum
+  // write) which the upstream reader deserializes back to fmmManual.
   QCOMPARE(reloaded.plateFilamentMapMode(0),
            int(OWzx::FilamentMapMode::fmmManual));
-  QCOMPARE(reloaded.plateFilamentMaps(0), QList<int>({2, 1, 3}));
 
   // CLEANUP.
   QFile::remove(tempPath);

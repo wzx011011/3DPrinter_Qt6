@@ -626,6 +626,39 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
               receiver->pendingPlatePrintSeq_.append(printSeq);
               receiver->pendingPlateSpiral_.append(spiral);
 
+              // v3.2 Phase 31 (FMAP-02) + v4.5 Phase 107 (FMAP-02): extract
+              // filament maps + mode. The mode read applies the Pitfall 2 /
+              // FM-03 migration so pre-v4.5 "Manual"=1 plates do NOT silently
+              // reload as the new fmmAutoForMatch=1. Mirrors the loadProject
+              // read block (see ~5445); the coEnum-vs-legacy discriminator and
+              // the legacy raw-int-1 -> fmmManual mapping are identical.
+              QList<int> fmap;
+              if (plate) {
+                for (int m : plate->filament_maps) fmap.append(m);
+              }
+              int fmapMode = int(OWzx::FilamentMapMode::fmmAutoForFlush);
+              if (plate) {
+                if (auto *opt = plate->config.option("filament_map_mode")) {
+                  // Typed coEnum (deserialized from the upstream string by
+                  // bbs_3mf.cpp:4443-4448) is trusted directly; a legacy raw
+                  // int is migrated: 0->fmmAutoForFlush, 1->fmmManual (the
+                  // pre-v4.5 "Manual" preservation), else->fmmDefault.
+                  if (opt->type() == Slic3r::coEnum) {
+                    fmapMode = int(opt->getInt());
+                  } else {
+                    const int legacy = int(opt->getInt());
+                    if (legacy == 0)
+                      fmapMode = int(OWzx::FilamentMapMode::fmmAutoForFlush);
+                    else if (legacy == 1)
+                      fmapMode = int(OWzx::FilamentMapMode::fmmManual);
+                    else
+                      fmapMode = int(OWzx::FilamentMapMode::fmmDefault);
+                  }
+                }
+              }
+              receiver->pendingPlateFilamentMaps_.append(fmap);
+              receiver->pendingPlateFilamentMapMode_.append(fmapMode);
+
               // Phase 97 fix (THUMBRT-01): restore the persisted per-plate
               // thumbnail so it survives save->reload. The normal model-load
               // path (_BBS_3MF_Importer::_load_model_from_file) does NOT extract
@@ -865,6 +898,14 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
             if (pi < receiver->pendingPlateBedType_.size()) p->setBedType(receiver->pendingPlateBedType_[pi]);
             if (pi < receiver->pendingPlatePrintSeq_.size()) p->setPrintSequence(receiver->pendingPlatePrintSeq_[pi]);
             if (pi < receiver->pendingPlateSpiral_.size()) p->setSpiralMode(receiver->pendingPlateSpiral_[pi]);
+            // v3.2 Phase 31 (FMAP-02) + v4.5 Phase 107 (FMAP-02): restore
+            // filament maps + mode (the mode was migrated in the read block).
+            if (pi < receiver->pendingPlateFilamentMaps_.size()) {
+              const QList<int> &fm = receiver->pendingPlateFilamentMaps_[pi];
+              p->setFilamentMaps(std::vector<int>(fm.begin(), fm.end()));
+            }
+            if (pi < receiver->pendingPlateFilamentMapMode_.size())
+              p->setFilamentMapMode(receiver->pendingPlateFilamentMapMode_[pi]);
             // NOTE: thumbnail restoration is applied AFTER arrangeObjects below.
             // The in-loop setThumbnail would be wiped by arrangeObjects ->
             // rebuildPlatesAfterArrangement (clearInstances + addInstance each
