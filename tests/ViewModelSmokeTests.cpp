@@ -4300,8 +4300,6 @@ void ViewModelSmokeTests::wipeTowerRealMeshReadbackGatesOptionBAndOptionAFallbac
 }
 
 void ViewModelSmokeTests::assembleViewDataPoolIsolatedFromPrepareAndPreview()
-
-void ViewModelSmokeTests::assembleViewDataPoolIsolatedFromPrepareAndPreview()
 {
   // Phase 93-01 (ASMROUTE-02): the AssembleView data pool caches per-object
   // info and is updated ONLY when m_activeCanvasType == 2 (CanvasAssembleView),
