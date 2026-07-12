@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v4.5
 milestone_name: Backlog Closure
 status: planning
-last_updated: "2026-07-12T01:20:50.595Z"
+last_updated: "2026-07-12T00:00:00.000Z"
 last_activity: 2026-07-12
 progress:
   total_phases: 14
@@ -136,6 +136,7 @@ Items acknowledged and deferred at v4.4 milestone close (2026-07-12) and carried
 | feature | CLI fixtures + argv GUI fixture loading | ACTIVE in v4.5 Phases 103-104 |
 | feature | Full GLGizmoMeasure feature-picking engine + AssembleViewDataPool clipper | ACTIVE in v4.5 Phases 112-115 |
 | feature | D3D12 crash root cause + backend readiness | ACTIVE in v4.5 Phases 105-106 (time-boxed) |
+| policy (D3D12-03) | D3D12 default-backend promotion stays OUT OF SCOPE until a confirmed root cause (Phase 106-01 root-cause report at `.planning/research/D3D12-CRASH-ROOT-CAUSE.md`, time-boxed per DR-04). D3D12 remains opt-in via `OWZX_RHI_RENDERER=d3d12`; `defaultWindowsCandidates()` keeps D3D11 first (`RhiBackendSelector.cpp:56-65`, locked by the `d3d12StaysOptInBehindEnvFlag` source-audit slot). Vulkan is SDK-blocked (Qt disables the `vulkan` public feature, `PROJECT.md:143`) and is evaluation-only, NOT a v4.5 deliverable. | DEFERRED — promotion to a future milestone requires a confirmed root cause + clean repro on the original machine |
 | feature | MEASURE-06 Assembly-mode transformation actions | DEFERRED to future milestone (P3) |
 | process | Nyquist VALIDATION.md files (v4.4 carry-forward) | Carry-forward; v4.5 phases should produce VALIDATION.md |
 | evidence | Runtime visual evidence (Windows capture API) | v4.5 WS3 argv fixtures are the chosen workaround |
