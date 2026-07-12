@@ -168,6 +168,16 @@ private slots:
   // QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with a
   // FIXTURE-02-named message). Source-level only; runs in the regression ctest.
   void argvFixtureGateUsesFrameSwappedNotSingleShot();
+  // Phase 104-01 (FIXTURE-01/03/04): the multi-material fixture model, the
+  // argv recipe doc, and the anti-feature comment all exist on disk. Locks:
+  // (a) tests/data/multi_material_fixture.3mf exists and is non-empty
+  // (FIXTURE-01); (b) tests/data/fixture_recipes.md exists and contains each
+  // major GUI state name (FIXTURE-03); (c) main_qml.cpp contains the anti-
+  // feature comment anchor (FIXTURE-04). Mirrors the Phase 102/103 source-
+  // audit pattern (QFile + QT_TESTCASE_SOURCEDIR + QString::contains +
+  // QVERIFY2 with a FIXTURE-named message). Source-level only; runs in the
+  // regression ctest.
+  void cliFixtureRecipesAndMultiMaterialModelPresent();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -3675,6 +3685,80 @@ void QmlUiAuditTests::argvFixtureGateUsesFrameSwappedNotSingleShot()
   // the gate must apply immediately (degraded mode) rather than hang forever.
   QVERIFY2(mainCpp.contains(QStringLiteral("degraded mode")),
            "FIXTURE-02: the gate must have a defensive fallback when the root object is not a QQuickWindow (apply immediately, never hang)");
+}
+
+void QmlUiAuditTests::cliFixtureRecipesAndMultiMaterialModelPresent()
+{
+  // Phase 104-01 (FIXTURE-01/03/04): the multi-material fixture model, the
+  // argv recipe doc, and the anti-feature comment all exist on disk. This is
+  // the regression lock that prevents a future refactor from silently deleting
+  // the fixture content Phase 103's readiness gate now deterministically
+  // applies. Each QVERIFY2 message names the FIXTURE-0X contract it locks so a
+  // failure points directly at the requirement.
+  //
+  // Pattern: QFile + QT_TESTCASE_SOURCEDIR + QFileInfo::exists +
+  // QString::contains + QVERIFY2 (deterministic, build-dir-independent).
+  // Mirrors the Phase 102 wipeTowerReadbackAndRenderAnchorsPresent pattern and
+  // the Phase 103 argvFixtureGateUsesFrameSwappedNotSingleShot pattern in this
+  // file.
+
+  // FIXTURE-01 (multi-material fixture present): the 2-extruder fixture must
+  // exist on disk and be non-empty so multi-material-dependent features (wipe-
+  // tower, filament-map, AMS) can be exercised deterministically. The fixture
+  // is a hand-authored 3MF (no suitable multi-material 3MF exists in
+  // third_party/OrcaSlicer/tests/data/).
+  QFileInfo fixtureInfo(
+      QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR))
+          .filePath(QStringLiteral("tests/data/multi_material_fixture.3mf")));
+  QVERIFY2(fixtureInfo.exists(),
+           "FIXTURE-01: tests/data/multi_material_fixture.3mf must exist so multi-material features can be exercised deterministically");
+  QVERIFY2(fixtureInfo.size() > 0,
+           "FIXTURE-01: tests/data/multi_material_fixture.3mf must be non-empty");
+
+  // FIXTURE-03 (argv recipe doc present + covers major GUI states): the recipe
+  // doc must exist and name each major GUI state so visual verification can
+  // reach them without simulated clicks.
+  const QString recipes = readSource(
+      QStringLiteral("tests/data/fixture_recipes.md"));
+  QVERIFY2(!recipes.isEmpty(),
+           "FIXTURE-03: tests/data/fixture_recipes.md must exist and be readable");
+  const QStringList majorStates = {
+      QStringLiteral("Prepare"),
+      QStringLiteral("Preview"),
+      QStringLiteral("AssembleView"),
+      QStringLiteral("settings")
+  };
+  for (const QString &state : majorStates) {
+    QVERIFY2(recipes.contains(state),
+             qPrintable(QStringLiteral("FIXTURE-03: fixture_recipes.md must cover the major GUI state: %1").arg(state)));
+  }
+
+  // FIXTURE-03 (recipes reference the canonical flags): the doc must reference
+  // all 4 argv flags so the recipe set is complete.
+  const QStringList canonicalFlags = {
+      QStringLiteral("--open-page"),
+      QStringLiteral("--open-dialog"),
+      QStringLiteral("--load-model"),
+      QStringLiteral("--skip-first-run")
+  };
+  for (const QString &flag : canonicalFlags) {
+    QVERIFY2(recipes.contains(flag),
+             qPrintable(QStringLiteral("FIXTURE-03: fixture_recipes.md must reference the canonical argv flag: %1").arg(flag)));
+  }
+
+  // FIXTURE-04 (anti-feature comment present): main_qml.cpp must contain the
+  // anti-feature comment anchor documenting that these 4 flags are OWzx-only
+  // test-evidence plumbing, NOT a user-facing deep-link product feature.
+  const QString mainCpp = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
+  QVERIFY2(!mainCpp.isEmpty(), "Unable to read main_qml.cpp");
+  QVERIFY2(mainCpp.contains(QStringLiteral("test-evidence plumbing")),
+           "FIXTURE-04: main_qml.cpp must document the argv flags as test-evidence plumbing (anti-feature anchor)");
+  QVERIFY2(mainCpp.contains(QStringLiteral("OWzx-only")),
+           "FIXTURE-04: main_qml.cpp must mark the argv flags as OWzx-only (no upstream equivalent)");
+  QVERIFY2(mainCpp.contains(QStringLiteral("OrcaSlicer.cpp:7183")),
+           "FIXTURE-04: main_qml.cpp anti-feature comment must cite the upstream argv anchor (OrcaSlicer.cpp:7183) so the no-upstream-equivalent claim is traceable");
+  QVERIFY2(mainCpp.contains(QStringLiteral("MUST NOT be promoted")),
+           "FIXTURE-04: main_qml.cpp anti-feature comment must explicitly state the flags MUST NOT be promoted to a user-facing product feature");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
