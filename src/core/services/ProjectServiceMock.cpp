@@ -5037,18 +5037,23 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
       // v3.2 Phase 31 (FMAP-01/02) + v4.5 Phase 107 (FMAP-02): populate
       // filament_maps from the plate's manual mapping (1-based, matching
       // upstream PlateData::filament_maps at bbs_3mf.hpp:98). filament_map_mode
-      // is written via the typed ConfigOptionEnum<FilamentMapMode> so the
-      // on-disk value round-trips as the upstream enum-name string
+      // is written via the def-respecting coEnum accessor so the bbs_3mf writer
+      // (bbs_3mf.cpp:7964-7967) serializes it as the upstream enum-name string
       // ("Auto For Flush"/"Auto For Match"/"Manual"). This is the FM-02
-      // forward-compat write: the bbs_3mf writer (bbs_3mf.cpp:7964-7967)
-      // serializes via ConfigOptionEnum<FilamentMapMode>::get_enum_names()
-      // [getInt()] -- a positional vector of size 3 (PrintConfig.cpp:579-584
-      // has NO "Default" entry, so names[3] is out of bounds). Therefore
-      // fmmDefault MUST be resolved to a concrete mode BEFORE persistence
-      // (the upstream get_real_filament_map_mode equivalent). Here we resolve
-      // fmmDefault -> fmmAutoForFlush (the upstream default, PrintConfig.cpp:
-      // 2509); a future Phase 108+ readback layer will resolve it against the
-      // global config like upstream PartPlate.cpp:317-328.
+      // forward-compat write. The writer indexes
+      // ConfigOptionEnum<FilamentMapMode>::get_enum_names()[getInt()] -- a
+      // positional vector of size 3 (PrintConfig.cpp:579-584 has NO "Default"
+      // entry, so names[3] is out of bounds). Therefore fmmDefault MUST be
+      // resolved to a concrete mode BEFORE persistence (the upstream
+      // get_real_filament_map_mode equivalent). Here we resolve fmmDefault ->
+      // fmmAutoForFlush (the upstream default, PrintConfig.cpp:2509); a future
+      // Phase 108+ readback layer will resolve it against the global config
+      // like upstream PartPlate.cpp:317-328. setInt is valid here because
+      // ConfigOptionEnum overrides it (Config.hpp:1989); using option(...,true)
+      // (NOT set_key_value) keeps the def-created ConfigOptionEnumGeneric type
+      // that the writer expects -- an earlier draft used set_key_value with a
+      // raw ConfigOptionEnum<FilamentMapMode> which crashed
+      // _add_project_config_file_to_archive on the type mismatch.
       pd->filament_maps = p->filamentMaps();
       Slic3r::FilamentMapMode writeMode = Slic3r::FilamentMapMode::fmmAutoForFlush;
       switch (p->filamentMapMode()) {
@@ -5065,9 +5070,8 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
         default:
           writeMode = Slic3r::FilamentMapMode::fmmAutoForFlush; break;
       }
-      pd->config.set_key_value(
-          "filament_map_mode",
-          new Slic3r::ConfigOptionEnum<Slic3r::FilamentMapMode>(writeMode));
+      if (auto *opt = pd->config.option("filament_map_mode", true))
+        opt->setInt(static_cast<int>(writeMode));
 
       // Phase 96 (THUMBWRITE-01): populate plate_thumbnail from the plate's
       // captured QImage cache (PartPlate::thumbnail(), populated by Phase 95
@@ -5112,6 +5116,16 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
     params.path = filePath.toUtf8().constData();
     params.model = model_;
     params.strategy = Slic3r::SaveStrategy::Zip64;
+    // Phase 107-01 diagnostic: StoreParams::config (bbs_3mf.hpp:234) is declared
+    // WITHOUT a default member initializer and the empty StoreParams() {}
+    // constructor does NOT zero it, so an unassigned params.config is a WILD
+    // pointer. store_bbs_3mf dereferences it after a `config != nullptr` guard
+    // (bbs_3mf.cpp:6350) which is UB on a wild pointer and intermittently
+    // SEGFAULTs in _add_project_config_file_to_archive during ctest. We do not
+    // currently persist a global project config (Qt6 has no preset-bundle write
+    // path yet), so explicitly null it out to skip that writer branch. This is a
+    // pre-existing latent hazard independent of FMAP-02; tracked separately.
+    params.config = nullptr;
 
     // v3.0 Phase 18 (D-10): populate plate_data_list so multi-plate state round-trips.
     // Fixes the v2.9 blocker where save lost all plate names/locked/objects/config.

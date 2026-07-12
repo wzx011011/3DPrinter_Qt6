@@ -214,12 +214,17 @@ private slots:
   // Pitfall 2 read-side migration so pre-v4.5 "Manual"=1 plates do NOT silently
   // reload as the new fmmAutoForMatch=1. Source-audit locks: (a) all 4 enum
   // names appear in PartPlate.h; (b) the upstream PrintConfig.hpp:424-429
-  // anchor citation is present; (c) ProjectServiceMock.cpp writes the typed
-  // ConfigOptionEnum<FilamentMapMode> (FM-02 forward-compat string write); (d)
-  // the read-side coEnum-vs-legacy migration is present and maps legacy raw-
-  // int-1 -> fmmManual (FM-03, the user-visible behavior change). Mirrors the
-  // Phase 102/103/104/105/106 source-audit pattern (QFile + QT_TESTCASE_SOURCEDIR
-  // + QString::contains + QVERIFY2 with an FMAP-02-named message). Source-level
+  // anchor citation is present; (c) ProjectServiceMock.cpp writes via the
+  // def-respecting option("filament_map_mode", true)->setInt() accessor (the
+  // option def declares coEnum, so DynamicConfig makes
+  // ConfigOptionEnumGeneric -- a set_key_value with a raw
+  // ConfigOptionEnum<FilamentMapMode> mismatches the def type and crashes the
+  // writer; FM-02 forward-compat string write is preserved because the bbs_3mf
+  // writer still serializes via get_enum_names()[getInt()]); (d) the read-side
+  // coEnum-vs-legacy migration is present and maps legacy raw-int-1 ->
+  // fmmManual (FM-03, the user-visible behavior change). Mirrors the Phase
+  // 102/103/104/105/106 source-audit pattern (QFile + QT_TESTCASE_SOURCEDIR +
+  // QString::contains + QVERIFY2 with an FMAP-02-named message). Source-level
   // only; runs in the regression ctest.
   void filamentMapModeEnumWidenedToUpstream4Value();
 
@@ -3989,12 +3994,26 @@ void QmlUiAuditTests::filamentMapModeEnumWidenedToUpstream4Value()
   QVERIFY2(partPlateHeader.contains(QStringLiteral("inherit from global")),
            "FMAP-02/FM-07: PartPlate.h must document fmmDefault as a per-plate 'inherit from global' sentinel");
 
-  // FMAP-02 / FM-02 (typed-enum write): the 3MF write side must use the typed
-  // ConfigOptionEnum<FilamentMapMode> so the on-disk value is the upstream
-  // enum-name string (forward-compatible with upstream's ConfigOptionEnum
-  // serialization). The old raw setInt(path) hazard must stay gone.
-  QVERIFY2(serviceSource.contains(QStringLiteral("ConfigOptionEnum<Slic3r::FilamentMapMode>")),
-           "FMAP-02/FM-02: ProjectServiceMock must write filament_map_mode via the typed ConfigOptionEnum<FilamentMapMode>");
+  // FMAP-02 / FM-02 (def-respecting write, no type-mismatch crash): the 3MF
+  // write side must use option("filament_map_mode", true)->setInt() so it
+  // writes through the def-created ConfigOptionEnumGeneric (the option def at
+  // PrintConfig.cpp:2495 declares coEnum, so DynamicConfig makes
+  // ConfigOptionEnumGeneric -- Config.hpp:2046). The bbs_3mf writer
+  // (bbs_3mf.cpp:7964-7967) serializes via
+  // ConfigOptionEnum<FilamentMapMode>::get_enum_names()[getInt()], producing the
+  // upstream enum-name string. An earlier draft used set_key_value with a raw
+  // ConfigOptionEnum<FilamentMapMode>, which mismatched the def type and
+  // crashed _add_project_config_file_to_archive; that pattern must stay gone.
+  QVERIFY2(serviceSource.contains(QStringLiteral(
+               "pd->config.option(\"filament_map_mode\", true)")),
+           "FMAP-02/FM-02: ProjectServiceMock must write filament_map_mode via the def-respecting option(...,true) accessor");
+  QVERIFY2(serviceSource.contains(QStringLiteral("opt->setInt(static_cast<int>(writeMode))")),
+           "FMAP-02/FM-02: ProjectServiceMock must write filament_map_mode via setInt(int(writeMode)) (ConfigOptionEnumGeneric-respecting)");
+  // fmmDefault MUST be resolved before persistence (writer's names vector has
+  // no "Default" entry, so names[3] is OOB -- bbs_3mf.cpp:7964-7967). The
+  // switch must keep resolving fmmDefault -> a concrete mode.
+  QVERIFY2(serviceSource.contains(QStringLiteral("case OWzx::FilamentMapMode::fmmDefault:")),
+           "FMAP-02/FM-02: ProjectServiceMock write site must resolve fmmDefault to a concrete mode before persistence (writer OOB guard)");
 
   // FMAP-02 / FM-03 (read-side migration present): the read site must keep the
   // coEnum-vs-legacy migration. The legacy raw-int-1 -> fmmManual mapping is
