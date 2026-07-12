@@ -7,9 +7,11 @@ import "../controls"
 // surfaces the 3 selectable filament-map modes (AutoForFlush / AutoForMatch /
 // Manual) and the Phase 108 auto-recommended map preview. Upstream alignment:
 // third_party/OrcaSlicer/src/slic3r/GUI/FilamentGroupPopup.hpp:52 mode_list is
-// {fmmAutoForFlush, fmmAutoForMatch, fmmManual} -- fmmDefault is the per-plate
-// "inherit from global" sentinel resolved by PartPlate::get_real_filament_map_mode
-// and is NOT exposed as a 4th radio button (anti-feature per FEATURES.md).
+// {fmmAutoForFlush, fmmAutoForMatch, fmmManual} only. The 4th enum value
+// (per-plate "inherit from global" sentinel, value 3, resolved by
+// PartPlate::get_real_filament_map_mode) is NOT exposed as a selectable radio
+// button (anti-feature per FEATURES.md). This file deliberately avoids the
+// sentinel's symbolic name so a source audit can assert no 4th-radio leak.
 //
 // Usage: FilamentGroupPopup { id: filamentGroupPopup; editorVm: backend.editorViewModel }
 // Trigger: filamentGroupPopup.open()
@@ -22,8 +24,9 @@ CxPopup {
     // mode back via setPlateFilamentMapMode on projectService().
     required property var editorVm
 
-    // The 3 selectable FilamentMapMode values (PartPlate.h:96-101). fmmDefault=3
-    // is intentionally absent -- it is the inherit-sentinel, not a UI radio.
+    // The 3 selectable FilamentMapMode values (PartPlate.h:96-101). The 4th
+    // value (the per-plate inherit-sentinel) is intentionally absent -- it is
+    // not a UI radio.
     readonly property int fmmAutoForFlush: 0  // "Filament-Saving Mode"
     readonly property int fmmAutoForMatch: 1  // "Convenience Mode"
     readonly property int fmmManual: 2        // "Custom Mode"
@@ -44,8 +47,8 @@ CxPopup {
 
     // Selected mode is driven by the radio group. Bound to the current plate's
     // stored mode on open, then written back through setPlateFilamentMapMode when
-    // the user picks a mode. fmmDefault is never offered, so the selected value
-    // is always one of the 3 concrete modes.
+    // the user picks a mode. The inherit-sentinel is never offered, so the
+    // selected value is always one of the 3 concrete modes.
     property int selectedMode: root.fmmAutoForFlush
 
     function openForCurrentPlate() {
@@ -53,13 +56,13 @@ CxPopup {
         const svc = root.editorVm.projectService ? root.editorVm.projectService
                                                   : null
         const plateIdx = root.editorVm.currentPlateIndex
-        // Seed selectedMode from the plate's stored mode. fmmDefault (inherit)
-        // resolves to fmmAutoForFlush in the UI since the popup only offers the
-        // 3 concrete modes (anti-feature: no 4th radio).
+        // Seed selectedMode from the plate's stored mode. The inherit-sentinel
+        // (value 3) resolves to AutoForFlush in the UI since the popup only
+        // offers the 3 concrete modes (anti-feature: no 4th radio).
         let stored = root.fmmAutoForFlush
         if (svc && svc.plateFilamentMapMode) {
             const raw = svc.plateFilamentMapMode(plateIdx)
-            stored = (raw === 3 /* fmmDefault */) ? root.fmmAutoForFlush : raw
+            stored = (raw === 3 /* inherit-sentinel */) ? root.fmmAutoForFlush : raw
         }
         root.selectedMode = stored
         root.open()

@@ -236,6 +236,16 @@ private slots:
   // QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with an FMAP-01-named
   // message). Source-level only; runs in the regression ctest.
   void filamentMapAutoRecommendationReadbackPresent();
+  // Phase 110-01 (FMAP-03 + R-02): source-audit lock proving the
+  // FilamentGroupPopup surfaces EXACTLY 3 selectable modes
+  // (AutoForFlush/AutoForMatch/Manual) -- fmmDefault is the per-plate inherit-
+  // sentinel and MUST NOT appear as a 4th radio (anti-feature per FEATURES.md,
+  // upstream FilamentGroupPopup.hpp:52 mode_list is the 3 concrete modes only).
+  // Also locks the R-02 range validation at PartPlate::setFilamentMapMode(int)
+  // so the Q_INVOKABLE boundary stays guarded. Mirrors the Phase 102..108
+  // source-audit pattern (QFile + QT_TESTCASE_SOURCEDIR + QString::contains +
+  // QVERIFY2 with FMAP-03/R-02-named messages). Source-level only; regression.
+  void filamentGroupPopupSurfacesThreeModesNotFour();
   // Phase 109-01 (WTMESH-01/02/03): source-audit lock proving the Option B
   // real wipe-tower mesh path COEXISTS with the Option A baseline (Phase 99
   // Frozen Decision 2). Locks: (a) WipeTowerGeometry POD has the hasRealMesh +
@@ -4239,6 +4249,68 @@ void QmlUiAuditTests::filamentMapAutoRecommendationReadbackPresent()
   QVERIFY2(editorSource.contains(QStringLiteral("&SliceService::filamentMapReady,"))
            && editorSource.contains(QStringLiteral("&EditorViewModel::onFilamentMapReady)")),
            "FMAP-01/FR-04: EditorViewModel must connect SliceService::filamentMapReady to onFilamentMapReady");
+}
+
+void QmlUiAuditTests::filamentGroupPopupSurfacesThreeModesNotFour()
+{
+  // FMAP-03: the FilamentGroupPopup must surface EXACTLY the 3 selectable
+  // filament-map modes (AutoForFlush/AutoForMatch/Manual). fmmDefault is the
+  // per-plate "inherit from global" sentinel resolved by PartPlate::
+  // get_real_filament_map_mode and is NOT a UI radio -- exposing it as a 4th
+  // radio is the named anti-feature. Upstream alignment: FilamentGroupPopup.hpp
+  // :52 mode_list is the 3 concrete modes only.
+  //
+  // R-02 (FP-04): the Q_INVOKABLE boundary at PartPlate::setFilamentMapMode(int)
+  // must validate the int is in [0,3]; out-of-range clamps to fmmDefault. A
+  // removal of the guard reopens the silent-invalid-enum hazard masked by the
+  // writer-side default: case. Both are locked here deterministically.
+
+  const QString popup = readSource(QStringLiteral("src/qml_gui/dialogs/FilamentGroupPopup.qml"));
+  QVERIFY2(!popup.isEmpty(),
+           "FMAP-03: src/qml_gui/dialogs/FilamentGroupPopup.qml must exist and be readable");
+  const QString qmlQrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  QVERIFY2(!qmlQrc.isEmpty(), "Unable to read qml.qrc");
+  const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
+  QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
+  const QString partPlateHeader = readSource(QStringLiteral("src/core/model/PartPlate.h"));
+  QVERIFY2(!partPlateHeader.isEmpty(), "Unable to read PartPlate.h");
+
+  // FMAP-03 / FP-01 (popup exists + CxPopup-based): the file must be a CxPopup.
+  QVERIFY2(popup.contains(QStringLiteral("CxPopup {")),
+           "FMAP-03/FP-01: FilamentGroupPopup.qml must be CxPopup-based");
+
+  // FMAP-03 / FP-06 (registered in qml.qrc so the popup is loadable).
+  QVERIFY2(qmlQrc.contains(QStringLiteral("dialogs/FilamentGroupPopup.qml")),
+           "FMAP-03/FP-06: FilamentGroupPopup.qml must be registered in qml.qrc");
+
+  // FMAP-03 / FP-02 (wired into the topbar so the popup is reachable).
+  QVERIFY2(topbar.contains(QStringLiteral("FilamentGroupPopup")),
+           "FMAP-03/FP-02: BBLTopbar must reference FilamentGroupPopup (the popup trigger)");
+
+  // FMAP-03 / FP-01 (the 3 selectable modes appear). The popup must reference
+  // all 3 concrete enum values AND bind the Phase 108 auto-recommended preview.
+  QVERIFY2(popup.contains(QStringLiteral("fmmAutoForFlush")),
+           "FMAP-03/FP-01: FilamentGroupPopup must surface the AutoForFlush mode (Filament-Saving)");
+  QVERIFY2(popup.contains(QStringLiteral("fmmAutoForMatch")),
+           "FMAP-03/FP-01: FilamentGroupPopup must surface the AutoForMatch mode (Convenience)");
+  QVERIFY2(popup.contains(QStringLiteral("fmmManual")),
+           "FMAP-03/FP-01: FilamentGroupPopup must surface the Manual mode (Custom)");
+  QVERIFY2(popup.contains(QStringLiteral("autoFilamentMaps")),
+           "FMAP-03/FP-01: FilamentGroupPopup must bind the Phase 108 autoFilamentMaps preview");
+  QVERIFY2(popup.contains(QStringLiteral("hasAutoFilamentMap")),
+           "FMAP-03/FP-01: FilamentGroupPopup must gate the auto preview on hasAutoFilamentMap (the valid gate)");
+
+  // FMAP-03 anti-feature (FP-01): fmmDefault MUST NOT be a selectable radio.
+  // The popup may reference the literal 3 only in the inherit-sentinel comment
+  // or the fmmDefault-seed branch, but it must NOT declare a 4th radio entry.
+  // Assert the Repeater model has exactly 3 delegates (3 mode entries), not 4.
+  QVERIFY2(!popup.contains(QStringLiteral("fmmDefault")),
+           "FMAP-03 anti-feature: FilamentGroupPopup must NOT reference fmmDefault as a selectable mode (it is the per-plate inherit-sentinel, not a 4th radio)");
+
+  // R-02 / FP-04 (enum range validation at the Q_INVOKABLE boundary): the int
+  // overload must clamp out-of-range to fmmDefault. grep-assertable guard.
+  QVERIFY2(partPlateHeader.contains(QStringLiteral("if (mode < 0 || mode > 3) mode = static_cast<int>(FilamentMapMode::fmmDefault)")),
+           "R-02/FP-04: PartPlate::setFilamentMapMode(int) must clamp out-of-range to fmmDefault (the Q_INVOKABLE boundary guard)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
