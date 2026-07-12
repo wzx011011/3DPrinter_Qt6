@@ -45,7 +45,7 @@
 - [x] Phase 104: CLI Fixture Recipes And Multi-Material Model (completed 2026-07-12)
 - [x] Phase 105: D3D12 Debug Layer Wiring (completed 2026-07-12)
 - [x] Phase 106: D3D12 Crash Root-Cause And Backend Readiness (time-boxed) (completed 2026-07-12)
-- [ ] Phase 107: Filament-Map Mode Enum Widening And 3MF Migration
+- [x] Phase 107: Filament-Map Mode Enum Widening And 3MF Migration (completed 2026-07-12)
 - [ ] Phase 108: Filament-Map Auto Recommendation Readback
 - [ ] Phase 109: Option B Wipe-Tower Mesh Readback And Real Rendering
 - [ ] Phase 110: Filament-Map Popup UI And Mode Surfacing
@@ -62,7 +62,7 @@
 | 104 | 1/1 | Complete   | 2026-07-12 |
 | 105 | 1/1 | Complete   | 2026-07-12 |
 | 106 | 1/1 | Complete   | 2026-07-12 |
-| 107 | Filament-Map Mode Enum Widening And 3MF Migration | Widen the Qt6 filament-map mode enum from 2-value (Auto/Manual) to upstream 4-value, with a 3MF read-side migration so pre-v4.5 "Manual" plates do not silently reload as "AutoForMatch" (the raw-int `setInt` hazard). Ships BEFORE the readback so auto-mode code does not entrench the new convention first. | FMAP-02 |
+| 107 | 1/1 | Complete   | 2026-07-12 |
 | 108 | Filament-Map Auto Recommendation Readback | After a successful slice, read back the auto-recommended per-plate filament map from libslic3r inside the SliceService worker (between `print.process()` and `activePrint_.store(nullptr)`), captured by value into a POD, delivered via `filamentMapReady` — mirrors v4.4 WTREAD-01. | FMAP-01 |
 | 109 | Option B Wipe-Tower Mesh Readback And Real Rendering | Capture `wipe_tower_mesh_data` (+ `convex_hull_3d`) in the worker, render the real mesh post-slice via a NEW parallel builder/upload path, and preserve the v4.4-frozen Option A box as the fallback when the mesh is `nullopt` — Option A and Option B coexist gated on the mesh, shipping together (re-opens Phase 99 Frozen Decision 2). | WTMESH-01, WTMESH-02, WTMESH-03 |
 | 110 | Filament-Map Popup UI And Mode Surfacing | Surface the 3 selectable modes (AutoForFlush / AutoForMatch / Manual) plus the auto-recommended map preview in a `FilamentGroupPopup` QML driven by EditorViewModel Q_INVOKABLE/Q_PROPERTY APIs (no QML-local state); `fmmDefault` is the per-plate inherit sentinel, NOT a 4th radio button. | FMAP-03 |
@@ -131,7 +131,7 @@ Success criteria:
 ### Phase 107: Filament-Map Mode Enum Widening And 3MF Migration
 
 **Status:** Not started
-**Plans:** 0/0
+**Plans:** 1/1 plans complete
 **Workstream:** WS1 (Auto Filament-Map)
 
 Success criteria:
