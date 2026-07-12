@@ -1,5 +1,16 @@
 # Milestones History
 
+## v4.4 Wipe-Tower Geometry Readback And Real Rendering (Shipped: 2026-07-12)
+
+**Phases completed:** 4 phases, 4 plans, 16 tasks
+
+**Key accomplishments:**
+
+- Post-slice wipe-tower geometry readback wired end-to-end (Print::wipe_tower_data() captured by value in SliceService worker, delivered via wipeTowerGeometryReady, exposed as EditorViewModel Q_PROPERTYs, bound in PreparePage.qml GLViewport, gated by has_wipe_tower()). WTREAD-01 + WTREAD-02 closed.
+- Option A dimensioned-box wipe-tower rendering LOCKED as the v4.4 baseline (comment in buildWipeTowerVertices); SoftwareViewport rendering gap closed with a QPainter box mirroring the RHI path; regression test locks the dim-reach contract; RHI pipeline confirmed unchanged. WTRENDER-01 + WTRENDER-02 closed.
+
+---
+
 ## v4.3 Real Thumbnail Capture And 3MF Round-Trip (Shipped: 2026-07-10)
 
 **Phases completed:** 5 phases, 5 plans, 19 tasks

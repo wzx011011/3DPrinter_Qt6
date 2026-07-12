@@ -10,21 +10,31 @@ The project currently has a usable Qt6/QML shell, real model/project IO, real sl
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current State: v4.4 Wipe-Tower Geometry Readback And Real Rendering (Active)
+## Current State: post-v4.4 (planning next milestone)
 
-**Last shipped milestone:** v4.3 Real Thumbnail Capture And 3MF Round-Trip (2026-07-10).
+**Last shipped milestone:** v4.4 Wipe-Tower Geometry Readback And Real Rendering (2026-07-12).
 
-**v4.3 shipped state (new in this milestone):**
-- Real QRhi texture readback thumbnail capture replaces the solid-color stub: offscreen single-sample `QRhiTexture` render-target at thumbnail size + `QRhiResourceUpdateBatch::readBackTexture()` + render-thread capture queue mirroring the `synchronize()` pattern + queued `QImage` callback to the GUI thread.
-- Both 3MF thumbnail write-side populate sites closed: `PlateData::plate_thumbnail` (per-plate XML `<metadata thumbnail_file="Metadata/plate_N.png">` reference) and `StoreParams::thumbnail_data` (project + per-plate PNG bytes), wired via a file-local `qimageToThumbnailData` helper producing `Format_RGBA8888` bytes symmetric with the read side.
-- Save→reload 3MF thumbnail round-trip closed end-to-end with exact RGBA8888 pixel match: a known synthesized thumbnail survives `saveProject` → fresh `loadFile` through the real `bbs_3mf` writer/reader, verified by automated tests asserting lossless byte equality (`thumbnailSaveReloadRoundTrip` + `thumbnailMultiPlateSaveReloadRoundTrip`).
-- Read-side `extractPlateThumbnailFrom3mf` helper reads `Metadata/plate_N.png` straight out of the archive via miniz; thumbnails restored AFTER `arrangeObjects` so the rebuild does not wipe them.
-- Mock thumbnail generators removed cleanly (no dead paths): real QRhi capture is the sole source; a `plateThumbnailBase64` accessor exposes the persisted `PartPlate::thumbnail()` for the UI plate-card fallback.
-- Closed v3.2 THUMB-02/THUMB-03 deferred items; unblocked the shared `store_bbs_3mf` writer (also unblocks FIXTURE-02).
+**v4.4 shipped state (new in this milestone):**
+- Post-slice wipe-tower geometry readback wired end-to-end: `Print::wipe_tower_data()` is read inside the SliceService worker after `print.process()` succeeds (between the process call and `activePrint_.store(nullptr)`), captured by value into a `WipeTowerGeometry` POD struct (no `Print*` escapes the worker — Frozen Decision 1), delivered to the GUI thread via the new `wipeTowerGeometryReady` signal (success branch only — WTREAD-02 gate), and exposed as 6 EditorViewModel Q_PROPERTYs (`showWipeTower`, `wipeTowerWidth/Depth/Height/X/Z`) bound in `PreparePage.qml:1670-1675` GLViewport.
+- `has_wipe_tower()` gate enforced data-driven: when false (single-material / `enable_prime_tower` off), `capturedGeometry.valid` stays false, `showWipeTower` stays false, and no placeholder box leaks.
+- Option A dimensioned-box rendering LOCKED as the v4.4 baseline: the existing `buildWipeTowerVertices` + `uploadWipeTowerBuffer` pipeline was already structurally correct; Phase 100 wired the real dims, Phase 101 regression-locked the contract + documented Option B (real mesh via `wipe_tower_mesh_data` + `convex_hull_3d`) as a LOCKED future upgrade.
+- Phase 100 REVIEW W1 fix: the captured x/z is converted corner→center (`bbx.min + rib_offset + width/2`) so the rendered box sits on the true sliced position (otherwise offset by ~30mm for a typical 60mm tower).
+- SoftwareViewport rendering gap closed: a QPainter wipe-tower box mirrors the RHI path's geometry + color, gated on `m_showWipeTower`, so the software fallback path does not lag the RHI path.
+- 8 WT-* region source anchors locked by the Phase 102 `wipeTowerReadbackAndRenderAnchorsPresent` QmlUiAuditTests regression test.
 
-**Carry-forward from v4.2:** Prepare/Preview/settings dialog restoration + AssembleView source-truth restoration (explosion ratio, measurement gizmo, isolated data pool) all shipped. Default QRhi/D3D11 path owns all gizmo/pick/cut/wipe/Preview rendering.
+**Carry-forward from v4.3:** Real QRhi thumbnail capture + 3MF write side closed + save→reload round-trip verified + mock generators removed. Default QRhi/D3D11 path owns all gizmo/pick/cut/wipe/Preview/thumbnail rendering.
 
-**Carry-forward outside v4.3:** Full GLGizmoMeasure feature-picking engine (needs per-volume ITS + scene raycaster), AssembleViewDataPool ModelObjectsClipper resource, auto filament-map recommendation + wipe-tower, D3D12 root-cause investigation, and CLI fixtures are deferred to future milestones. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from forward scope.
+**Carry-forward outside v4.4:** Option B (real wipe-tower mesh) LOCKED as future upgrade per Phase 99 Frozen Decision 2 (needs ITS vertex format extension). Auto filament-map recommendation, full GLGizmoMeasure feature-picking engine, AssembleViewDataPool ModelObjectsClipper, D3D12 root-cause, and CLI fixtures are deferred to future milestones. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from forward scope.
+
+## Previous State: v4.3 Real Thumbnail Capture And 3MF Round-Trip (shipped 2026-07-10)
+
+**Shipped state:**
+- Real QRhi texture readback thumbnail capture replaces the solid-color stub.
+- Both 3MF thumbnail write-side populate sites closed: `PlateData::plate_thumbnail` + `StoreParams::thumbnail_data`.
+- Save→reload 3MF thumbnail round-trip closed end-to-end with exact RGBA8888 pixel match.
+- Read-side `extractPlateThumbnailFrom3mf` helper + ordering fix (thumbnails restored AFTER arrangeObjects).
+- Mock thumbnail generators removed cleanly; `plateThumbnailBase64` accessor for the UI fallback.
+- Closed v3.2 THUMB-02/THUMB-03; unblocked the shared `store_bbs_3mf` writer (also unblocks FIXTURE-02).
 
 ## Previous State: v4.2 AssembleView Source-Truth Restoration (shipped 2026-07-09)
 
@@ -44,25 +54,18 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 **Carry-forward outside v4.2:** D3D12 remains explicit opt-in future investigation. Full GLGizmoMeasure feature-picking engine (needs per-volume ITS + scene raycaster) and the AssembleViewDataPool ModelObjectsClipper resource are deferred to a future milestone. LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows are removed from forward scope unless the user explicitly reopens them.
 
-## Current Milestone: v4.4 Wipe-Tower Geometry Readback And Real Rendering
+## Current Milestone: (none — planning next)
 
-**Goal:** Replace the current hardcoded placeholder-box wipe-tower rendering with real libslic3r post-slice geometry. Read `Print::wipe_tower_data()` (bbx/depth/height/brim_width/rib_offset/position/width, optional `wipe_tower_mesh_data`) and feed it to the existing RHI renderer so the Prepare view wipe-tower reflects real slice results.
+**Status:** v4.4 shipped 2026-07-12. No active milestone. Run `/gsd:new-milestone` to define the next scope.
 
-**Scope rule:** Local/offline only. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from scope. Auto filament-map recommendation is explicitly deferred to a future milestone — v4.4 is wipe-tower geometry readback + rendering only.
-
-**Target features:**
-- Post-slice readback of `Print::wipe_tower_data()` geometry (bbx, depth, height, brim_width, rib_offset, position, width, optional mesh).
-- Push real geometry dimensions into `RhiViewport` wipeTowerWidth/Depth/Height/X/Z (replacing the default 10/10/50/100/25 placeholder values).
-- Upgrade `GizmoGeometry::buildWipeTowerVertices` from a placeholder box toward real geometry (mirror upstream `3DScene.cpp:887 load_real_wipe_tower_preview`).
-- Render the wipe-tower only when one exists (multi-material / `enable_prime_tower`).
-
-**Out of scope:** Auto filament-map recommendation (future milestone), per-plate wipe-tower architecture refactor (the v3.0-audited per-plate filtered-copy slice path), D3D12, GLGizmoMeasure engine.
+**Scope rule (carry-forward):** Local/offline only. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from scope.
 
 ## Next Milestone
 
-v4.4 is the active milestone. Candidate backlog after v4.4:
+Not yet defined. Candidate backlog after v4.4:
 - Auto filament-map recommendation (let libslic3r auto-compute in `Print::`, Qt6 reads back `filament_maps` + builds `FilamentGroupPopup` UI; widen Qt6 mode enum to upstream 4-value).
-- Missing CLI fixtures and deterministic argv-based GUI fixture loading for screenshots (FIXTURE-02 — now unblocked by v4.3's shared-writer fix).
+- Option B real wipe-tower mesh via `wipe_tower_mesh_data` + `convex_hull_3d` (LOCKED future upgrade per Phase 99 Frozen Decision 2; needs ITS vertex format extension in `GizmoGeometry` + `RhiViewportRenderer`).
+- Missing CLI fixtures and deterministic argv-based GUI fixture loading for screenshots (FIXTURE-02 — unblocked by v4.3's shared-writer fix).
 - D3D12 crash root cause and Vulkan evaluation after the SDK/runtime path is ready.
 - Full GLGizmoMeasure feature-picking engine + AssembleViewDataPool clipper (needs per-volume ITS).
 
@@ -92,18 +95,16 @@ These are current baseline capabilities inferred from implementation, git histor
 - v4.1 Parameter settings dialogs source-truth restoration shipped with 14/14 requirements satisfied, milestone audit passed, canonical verifier passing, runtime settings visual evidence recorded, and startup deep links for deterministic visual inspection.
 - v4.2 AssembleView source-truth restoration shipped with 12/12 requirements satisfied, milestone audit passed (5/5 integration chains, 3/3 E2E flows), canonical build clean, and Prepare/Preview regression-free across all phases.
 - v4.3 Real Thumbnail Capture And 3MF Round-Trip shipped with 12/12 requirements satisfied, milestone audit tech_debt status (no critical blockers), real QRhi readback capture replacing the solid-color stub, 3MF write side closed, save→reload round-trip verified with exact RGBA8888 byte match (single-plate + multi-plate), mock generators removed cleanly, and the shared `store_bbs_3mf` writer unblocked.
+- v4.4 Wipe-Tower Geometry Readback And Real Rendering shipped with 8/8 requirements satisfied, milestone audit tech_debt status (no critical blockers), post-slice wipe-tower geometry readback wired end-to-end (Print::wipe_tower_data() captured by value in SliceService worker, has_wipe_tower() gate enforced, EditorViewModel Q_PROPERTYs + PreparePage.qml bindings), Option A dimensioned-box rendering LOCKED as v4.4 baseline, SoftwareViewport QPainter box closes the fallback-path rendering gap, Phase 100 REVIEW W1 corner→center fix, and 8 WT-* region anchors locked by Phase 102 regression test.
 
 ### Active
 
-- [ ] Read real wipe-tower geometry from `Print::wipe_tower_data()` post-slice (bbx, depth, height, brim, rib_offset, position, width, optional mesh).
-- [ ] Feed real geometry dimensions into the RHI renderer (replace placeholder 10/10/50/100/25 defaults).
-- [ ] Upgrade `GizmoGeometry::buildWipeTowerVertices` from placeholder box toward real geometry.
-- [ ] Render the wipe-tower only when one exists (multi-material / enable_prime_tower).
-- [ ] Verify with canonical build + ctest regression (Prepare/Preview/AssembleView not broken).
+(No active milestone — run `/gsd:new-milestone` to define the next scope.)
 
 ### Future
 
 - Auto filament-map recommendation (let libslic3r auto-compute, Qt6 reads back + UI).
+- Option B real wipe-tower mesh via `wipe_tower_mesh_data` + `convex_hull_3d` (LOCKED future upgrade per Phase 99 Frozen Decision 2; needs ITS vertex format extension).
 - Full PLATE-09 save/reload state assertions — now unblocked by v4.3's shared-writer fix (`FIXTURE-02`).
 - D3D12 crash root cause and Vulkan evaluation after the SDK/runtime path is ready.
 - Full i18n translation coverage beyond strings touched by active workflows.
@@ -205,4 +206,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-11 after v4.4 milestone planning.*
+*Last updated: 2026-07-12 after v4.4 milestone shipped.*

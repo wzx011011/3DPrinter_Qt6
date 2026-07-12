@@ -2,30 +2,29 @@
 gsd_state_version: 1.0
 milestone: v4.4
 milestone_name: Wipe-Tower Geometry Readback And Real Rendering
-status: executing
-last_updated: 2026-07-11T23:45:00+08:00
-last_activity: 2026-07-11 -- Phase 99 complete (WTAUDIT-01, WTAUDIT-02)
+status: completed
+last_updated: "2026-07-12T00:33:45.384Z"
+last_activity: 2026-07-12 — Milestone v4.4 completed and archived
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 4
   total_plans: 4
-  completed_plans: 1
-  percent: 25
-stopped_at: Phase 99 gap audit complete; ready to plan/execute Phase 100
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
 
 **Milestone:** v4.4 - Wipe-Tower Geometry Readback And Real Rendering
-**Status:** Executing (Phase 99 complete; Phase 100 next)
+**Status:** v4.4 milestone complete
 **Next step:** Plan Phase 100 with `/gsd-plan-phase 100`.
 
 ## Current Position
 
-Phase: 100 (Wipe-Tower Geometry Readback) — not started
+Phase: Milestone v4.4 complete
 Plan: —
-Status: Phase 99 gap audit complete; ready to plan Phase 100
-Last activity: 2026-07-11 — Phase 99 produced 99-GAP-MATRIX.md (8 WT-* regions, 3 frozen WTAUDIT-02 decisions)
+Status: Awaiting next milestone
+Last activity: 2026-07-12 — Milestone v4.4 completed and archived
 
 ## Current Milestone (v4.4)
 
@@ -58,6 +57,7 @@ See: `.planning/PROJECT.md` (updated 2026-07-11)
 **Goal:** Replace the hardcoded placeholder-box wipe-tower rendering with real libslic3r post-slice geometry.
 
 **Current state (after Phase 99 gap audit):**
+
 - Wipe-tower rendering pipeline is structurally ready (RHI `RhiViewportRenderer` has `m_wipeTowerBuffer` + `uploadWipeTowerBuffer()` + `renderWipeTower()` + the `m_wipeTowerDirty` rebuild; Software viewport has parallel props) — classified `preserve` for Option A.
 - **Geometry is a hardcoded placeholder:** `GizmoGeometry::buildWipeTowerVertices` builds a 36-vertex rectangular prism with caller-supplied or default dims. `RhiViewport` defaults: width=10, depth=10, height=50, x=100, z=25.
 - **The Qt6 side never reads libslic3r's `Print::wipe_tower_data()`** — zero references to `wipe_tower_data`, `get_wipe_tower_depth`, `get_wipe_tower_bbx` in `src/`.
@@ -65,6 +65,7 @@ See: `.planning/PROJECT.md` (updated 2026-07-11)
 - `PreparePage.qml:1648` GLViewport does NOT bind any wipe-tower Q_PROPERTY — the Phase 100 wiring task.
 
 **Upstream source anchors (behavior truth):**
+
 - `third_party/OrcaSlicer/src/libslic3r/Print.hpp:740-786` — `struct WipeTowerData`: tool_changes, bbx (includes brim), rib_offset, wipe_tower_mesh_data (optional), depth, height, brim_width, position, width.
 - `Print.hpp:988-989` — `has_wipe_tower()`, `wipe_tower_data()`.
 - `Print.hpp:1078-1080` — `get_wipe_tower_depth()`, `get_wipe_tower_bbx()`, `get_rib_offset()`.
@@ -72,6 +73,7 @@ See: `.planning/PROJECT.md` (updated 2026-07-11)
 - `3DScene.cpp:887-923` — `load_real_wipe_tower_preview` (uses real mesh via convex_hull_3d).
 
 **Out of scope for v4.4:**
+
 - Auto filament-map recommendation (future milestone; cleanest impl is letting libslic3r auto-compute in `Print::` and reading back `filament_maps`).
 - Per-plate wipe-tower architecture refactor (v3.0-audited per-plate filtered-copy slice path).
 - D3D12, GLGizmoMeasure engine, CLI fixtures.
@@ -96,5 +98,16 @@ See: `.planning/PROJECT.md` (updated 2026-07-11)
 
 ## Operator Next Steps
 
-- Plan Phase 100 (Wipe-Tower Geometry Readback) against `99-GAP-MATRIX.md`.
-- Then execute Phase 100, 101, 102 in sequence.
+- Start the next milestone with /gsd-new-milestone
+
+## Deferred Items
+
+Items acknowledged and deferred at v4.4 milestone close on 2026-07-12:
+
+| Category | Item | Status |
+|---|---|---|
+| process | Phases 100-102 lack formal VERIFICATION.md | Equivalent verification via code review (0 critical across all 3) + regression ctest 4/4 + empirical harness probes + canonical verifier + launch liveness |
+| evidence | Runtime visual evidence | Windows capture API blocked (carry-forward from v4.2/v4.3); reachability via process-liveness (OWzxSlicer.exe PID 34240, 5s no-crash) + canonical verifier + regression ctest |
+| feature | Option B (real wipe-tower mesh via wipe_tower_mesh_data + convex_hull_3d) | LOCKED future upgrade per Phase 99 Frozen Decision 2; requires ITS vertex format extension in GizmoGeometry + RhiViewportRenderer |
+| process | Nyquist VALIDATION.md files (v4.4) | Carry-forward from v4.2/v4.3; phases have SUMMARY/REVIEW verification |
+| quick_task | 260708-e60-add-extensible-gui-startup-deep-link-arg | Unrelated to v4.4 scope (GUI startup args seed); left in-progress for future milestone (carry-forward from v4.3 close) |
