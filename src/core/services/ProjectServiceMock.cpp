@@ -1165,7 +1165,11 @@ bool ProjectServiceMock::setPlatePrintable(int plateIndex, bool printable)
   return true;
 }
 
-// v3.2 Phase 31 (FMAP-03, Manual mode): per-plate filament→extruder mapping.
+// v3.2 Phase 31 (FMAP-03, Manual mode) + v4.5 Phase 107 (FMAP-02): per-plate
+// filament->extruder mapping. `mode` is the widened 4-value FilamentMapMode
+// (cast to int for the Q_INVOKABLE boundary; QML/Phase 110 popup will pass the
+// enum-named constants). The int overload on PartPlate::setFilamentMapMode
+// accepts the raw value here.
 bool ProjectServiceMock::setPlateFilamentMap(int plateIndex, int mode, const QList<int>& maps)
 {
   if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())
@@ -1182,9 +1186,10 @@ bool ProjectServiceMock::setPlateFilamentMap(int plateIndex, int mode, const QLi
 int ProjectServiceMock::plateFilamentMapMode(int plateIndex) const
 {
   if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())
-    return 0;  // Auto
+    return int(OWzx::FilamentMapMode::fmmAutoForFlush);  // default Auto
   const OWzx::PartPlate *p = m_plateList->plate(plateIndex);
-  return p ? p->filamentMapMode() : 0;
+  return p ? int(p->filamentMapMode())
+           : int(OWzx::FilamentMapMode::fmmAutoForFlush);
 }
 
 QList<int> ProjectServiceMock::plateFilamentMaps(int plateIndex) const
@@ -4988,13 +4993,40 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
       if (auto *opt = pd->config.option<Slic3r::ConfigOptionBool>("spiral_mode", true))
         opt->value = (p->spiralMode() != 0);
 
-      // v3.2 Phase 31 (FMAP-01/02): populate filament_maps from the plate's
-      // manual mapping (1-based, matching upstream PlateData::filament_maps at
-      // bbs_3mf.hpp:98). filament_map_mode is written as a config key so it
-      // round-trips (the writer persists filament_maps via PlateData).
+      // v3.2 Phase 31 (FMAP-01/02) + v4.5 Phase 107 (FMAP-02): populate
+      // filament_maps from the plate's manual mapping (1-based, matching
+      // upstream PlateData::filament_maps at bbs_3mf.hpp:98). filament_map_mode
+      // is written via the typed ConfigOptionEnum<FilamentMapMode> so the
+      // on-disk value round-trips as the upstream enum-name string
+      // ("Auto For Flush"/"Auto For Match"/"Manual"). This is the FM-02
+      // forward-compat write: the bbs_3mf writer (bbs_3mf.cpp:7964-7967)
+      // serializes via ConfigOptionEnum<FilamentMapMode>::get_enum_names()
+      // [getInt()] -- a positional vector of size 3 (PrintConfig.cpp:579-584
+      // has NO "Default" entry, so names[3] is out of bounds). Therefore
+      // fmmDefault MUST be resolved to a concrete mode BEFORE persistence
+      // (the upstream get_real_filament_map_mode equivalent). Here we resolve
+      // fmmDefault -> fmmAutoForFlush (the upstream default, PrintConfig.cpp:
+      // 2509); a future Phase 108+ readback layer will resolve it against the
+      // global config like upstream PartPlate.cpp:317-328.
       pd->filament_maps = p->filamentMaps();
-      if (auto *opt = pd->config.option("filament_map_mode", true))
-        opt->setInt(p->filamentMapMode());
+      Slic3r::FilamentMapMode writeMode = Slic3r::FilamentMapMode::fmmAutoForFlush;
+      switch (p->filamentMapMode()) {
+        case OWzx::FilamentMapMode::fmmAutoForFlush:
+          writeMode = Slic3r::FilamentMapMode::fmmAutoForFlush; break;
+        case OWzx::FilamentMapMode::fmmAutoForMatch:
+          writeMode = Slic3r::FilamentMapMode::fmmAutoForMatch; break;
+        case OWzx::FilamentMapMode::fmmManual:
+          writeMode = Slic3r::FilamentMapMode::fmmManual; break;
+        // fmmDefault is the per-plate "inherit from global" sentinel; resolve
+        // to the upstream default here so the on-disk int stays in [0,2]
+        // (avoids the names[3] OOB in the writer). See FM-02 / FM-07.
+        case OWzx::FilamentMapMode::fmmDefault:
+        default:
+          writeMode = Slic3r::FilamentMapMode::fmmAutoForFlush; break;
+      }
+      pd->config.set_key_value(
+          "filament_map_mode",
+          new Slic3r::ConfigOptionEnum<Slic3r::FilamentMapMode>(writeMode));
 
       // Phase 96 (THUMBWRITE-01): populate plate_thumbnail from the plate's
       // captured QImage cache (PartPlate::thumbnail(), populated by Phase 95
@@ -5403,15 +5435,43 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           receiver->pendingPlatePrintSeq_.append(printSeq);
           receiver->pendingPlateSpiral_.append(spiral);
 
-          // v3.2 Phase 31 (FMAP-02): extract filament maps + mode (Manual mode).
+          // v3.2 Phase 31 (FMAP-02) + v4.5 Phase 107 (FMAP-02): extract
+          // filament maps + mode. The mode read applies the Pitfall 2 / FM-03
+          // migration so pre-v4.5 "Manual"=1 plates do NOT silently reload as
+          // the new fmmAutoForMatch=1.
           QList<int> fmap;
           if (plate) {
             for (int m : plate->filament_maps) fmap.append(m);
           }
-          int fmapMode = 0;
+          int fmapMode = int(OWzx::FilamentMapMode::fmmAutoForFlush);
           if (plate) {
-            if (auto *opt = plate->config.option("filament_map_mode"))
-              fmapMode = int(opt->getInt());
+            if (auto *opt = plate->config.option("filament_map_mode")) {
+              // The upstream 3MF reader (bbs_3mf.cpp:4443-4448) deserializes the
+              // enum-name string ("Auto For Flush"/"Auto For Match"/"Manual")
+              // via ConfigOptionEnum<FilamentMapMode>::from_string and stores a
+              // TYPED ConfigOptionEnum (type()==coEnum) whose getInt() already
+              // holds the correct 0/1/2 value. Trust those ints directly.
+              if (opt->type() == Slic3r::coEnum) {
+                fmapMode = int(opt->getInt());
+              } else {
+                // Legacy raw-int path (pre-v4.5 Qt6 files that bypassed enum
+                // typing). Apply the FM-03 migration preserving pre-v4.5 intent:
+                //   raw 0 (old "Auto")    -> fmmAutoForFlush (0)
+                //   raw 1 (old "Manual")  -> fmmManual        (2)  <-- the fix
+                //   anything else          -> fmmDefault       (3)  safe fallback
+                // Mapping legacy 1 -> fmmManual (NOT fmmAutoForMatch) is the
+                // user-visible behavior change FMAP-02 ships: a pre-v4.5 Manual
+                // plate stays Manual after reload instead of flipping to the
+                // new "Convenience Mode" (fmmAutoForMatch).
+                const int legacy = int(opt->getInt());
+                if (legacy == 0)
+                  fmapMode = int(OWzx::FilamentMapMode::fmmAutoForFlush);
+                else if (legacy == 1)
+                  fmapMode = int(OWzx::FilamentMapMode::fmmManual);
+                else
+                  fmapMode = int(OWzx::FilamentMapMode::fmmDefault);
+              }
+            }
           }
           receiver->pendingPlateFilamentMaps_.append(fmap);
           receiver->pendingPlateFilamentMapMode_.append(fmapMode);

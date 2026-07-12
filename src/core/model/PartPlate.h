@@ -75,6 +75,31 @@ enum class LayerSeqChoice : int {
   Custom = 1
 };
 
+/// Filament-map mode (v4.5 Phase 107 FMAP-02 -- widened 2-value -> 4-value).
+/// Source truth: third_party/OrcaSlicer/src/libslic3r/PrintConfig.hpp:424-429
+///   enum FilamentMapMode { fmmAutoForFlush, fmmAutoForMatch, fmmManual, fmmDefault };
+/// Names + numeric values MUST match upstream exactly (PrintConfig.cpp:579-584
+/// serializes the first three as the strings "Auto For Flush" / "Auto For Match"
+/// / "Manual"; there is NO "Default" string -- see fmmDefault below).
+///
+/// FM-07 / fmmDefault semantics (FEATURES.md WS1): fmmDefault=3 is a per-plate
+/// "inherit from global" sentinel resolved at read/apply time by upstream
+/// PartPlate::get_real_filament_map_mode (PartPlate.cpp:317-328):
+///   if (mode != fmmDefault) return mode;        // plate override wins
+///   return global_config.filament_map_mode;     // else fall back to global
+/// The Qt6 layer stores fmmDefault as-is; the UI does NOT expose it as a 4th
+/// radio button (anti-feature per FEATURES.md -- upstream FilamentGroupPopup
+/// mode_list is {fmmAutoForFlush, fmmAutoForMatch, fmmManual} only). The
+/// resolution to a concrete mode belongs to a future Phase 108+ readback layer;
+/// persistence resolves fmmDefault before writing (see ProjectServiceMock write
+/// site) so the on-disk value is always one of the three concrete modes.
+enum class FilamentMapMode : int {
+  fmmAutoForFlush = 0,  // "Filament-Saving Mode" -- minimize flush volume.
+  fmmAutoForMatch = 1,  // "Convenience Mode" -- match AMS-loaded filaments.
+  fmmManual       = 2,  // "Custom Mode" -- use the explicit filament_maps array.
+  fmmDefault      = 3   // per-plate "inherit from global" sentinel (not a UI radio).
+};
+
 class PartPlate {
  public:
   PartPlate() = default;
@@ -195,12 +220,16 @@ class PartPlate {
   int spiralMode() const { return m_spiral_mode; }
   void setSpiralMode(int mode) { m_spiral_mode = mode; }
 
-  // v3.2 Phase 31 (FMAP-01/03): manual filament→extruder mapping per plate.
-  // Mirrors upstream PartPlate.hpp:262-263.
+  // v3.2 Phase 31 (FMAP-01/03) + v4.5 Phase 107 (FMAP-02): manual
+  // filament->extruder mapping per plate. Mirrors upstream PartPlate.hpp:262-263.
   std::vector<int> filamentMaps() const { return m_filament_maps; }
   void setFilamentMaps(const std::vector<int>& maps) { m_filament_maps = maps; }
-  int filamentMapMode() const { return m_filament_map_mode; }  // 0=Auto, 1=Manual
-  void setFilamentMapMode(int mode) { m_filament_map_mode = mode; }
+  // Widened to the upstream 4-value FilamentMapMode (see enum above). The int
+  // overloads remain so legacy callers (and the 3MF read-migration path that
+  // normalizes legacy raw ints) can still set by raw value.
+  FilamentMapMode filamentMapMode() const { return m_filament_map_mode; }
+  void setFilamentMapMode(FilamentMapMode mode) { m_filament_map_mode = mode; }
+  void setFilamentMapMode(int mode) { m_filament_map_mode = FilamentMapMode(mode); }
 
   int firstLayerSeqChoice() const { return m_first_layer_seq_choice; }
   void setFirstLayerSeqChoice(int choice) { m_first_layer_seq_choice = choice; }
@@ -264,13 +293,16 @@ class PartPlate {
   int m_print_sequence = 0;            // PlatePrintSequence
   int m_spiral_mode = 0;               // PlateSpiralMode
 
-  // v3.2 Phase 31 (FMAP-01): manual filament→extruder mapping per plate.
-  // Mirrors upstream PartPlate.hpp:262-263 (m_filament_maps, m_filament_map_mode).
+  // v3.2 Phase 31 (FMAP-01) + v4.5 Phase 107 (FMAP-02): manual
+  // filament->extruder mapping per plate. Mirrors upstream PartPlate.hpp:262-263
+  // (m_filament_maps, m_filament_map_mode).
   // filament_maps[i] = the extruder index that filament i maps to (1-based,
   // matching upstream PlateData::filament_maps at bbs_3mf.hpp:98).
-  // filament_map_mode: 0 = Auto (deferred to v3.3+, FMAP-04), 1 = Manual.
+  // filament_map_mode: widened 2-value -> upstream 4-value FilamentMapMode
+  // (fmmAutoForFlush=0 / fmmAutoForMatch=1 / fmmManual=2 / fmmDefault=3). The
+  // default is fmmAutoForFlush (matches upstream PrintConfig.cpp:2509 default).
   std::vector<int> m_filament_maps;
-  int m_filament_map_mode = 0;  // 0=Auto, 1=Manual (upstream FilamentMapMode)
+  FilamentMapMode m_filament_map_mode = FilamentMapMode::fmmAutoForFlush;
   int m_first_layer_seq_choice = 0;    // LayerSeqChoice
   std::vector<int> m_first_layer_seq_order;
   int m_other_layers_seq_choice = 0;   // LayerSeqChoice

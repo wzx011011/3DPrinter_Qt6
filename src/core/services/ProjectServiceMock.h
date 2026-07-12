@@ -142,8 +142,11 @@ public:
   Q_INVOKABLE bool setPlatePrintable(int plateIndex, bool printable);
   Q_INVOKABLE bool isPlatePrintable(int plateIndex) const;
 
-  // v3.2 Phase 31 (FMAP-03, Manual mode): per-plate filament→extruder mapping.
-  // mode: 0 = Auto (deferred to v3.3+ FMAP-04), 1 = Manual.
+  // v3.2 Phase 31 (FMAP-03, Manual mode) + v4.5 Phase 107 (FMAP-02): per-plate
+  // filament->extruder mapping. `mode` is the widened 4-value FilamentMapMode
+  // (OWzx::FilamentMapMode): fmmAutoForFlush=0, fmmAutoForMatch=1, fmmManual=2,
+  // fmmDefault=3 (per-plate "inherit from global" sentinel; the UI does NOT
+  // expose fmmDefault as a 4th radio button -- anti-feature per FEATURES.md).
   // maps[i] = the extruder index that filament i maps to (1-based, matching
   // upstream PlateData::filament_maps at bbs_3mf.hpp:98).
   Q_INVOKABLE bool setPlateFilamentMap(int plateIndex, int mode, const QList<int>& maps);
