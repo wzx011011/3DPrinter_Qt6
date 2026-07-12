@@ -48,7 +48,7 @@
 - [x] Phase 107: Filament-Map Mode Enum Widening And 3MF Migration (completed 2026-07-12)
 - [x] Phase 108: Filament-Map Auto Recommendation Readback (completed 2026-07-12)
 - [x] Phase 109: Option B Wipe-Tower Mesh Readback And Real Rendering (completed 2026-07-12)
-- [ ] Phase 110: Filament-Map Popup UI And Mode Surfacing
+- [x] Phase 110: Filament-Map Popup UI And Mode Surfacing (completed 2026-07-12)
 - [ ] Phase 111: Filament-Map Save-Reload Round-Trip
 - [ ] Phase 112: Per-Volume ITS Accessor And Mesh Cache
 - [ ] Phase 113: Scene And Mesh Raycaster Port
@@ -65,7 +65,7 @@
 | 107 | 1/1 | Complete   | 2026-07-12 |
 | 108 | 1/1 | Complete   | 2026-07-12 |
 | 109 | 1/1 | Complete   | 2026-07-12 |
-| 110 | Filament-Map Popup UI And Mode Surfacing | Surface the 3 selectable modes (AutoForFlush / AutoForMatch / Manual) plus the auto-recommended map preview in a `FilamentGroupPopup` QML driven by EditorViewModel Q_INVOKABLE/Q_PROPERTY APIs (no QML-local state); `fmmDefault` is the per-plate inherit sentinel, NOT a 4th radio button. | FMAP-03 |
+| 110 | 1/1 | Complete   | 2026-07-12 |
 | 111 | Filament-Map Save-Reload Round-Trip | Automated test asserting the auto-recommended map round-trips through save→reload (mirrors the Phase 97 thumbnail pattern) and that `fmmDefault` inheritance resolves correctly. Ships last in the WS1 workstream. | FMAP-04 |
 | 112 | Per-Volume ITS Accessor And Mesh Cache | Add a per-volume ITS accessor to `ProjectServiceMock` (current `meshData()` is per-object-flattened) with an explicit `shared_ptr<indexed_triangle_set>` ownership contract + mesh-changed signal — the cross-workstream dependency that also unblocks the AssembleViewDataPool `ModelObjectsClipper` registration. | MEASURE-01 |
 | 113 | Scene And Mesh Raycaster Port | Port `MeshRaycaster` + `SceneRaycaster` from upstream into `src/core/rendering/` as pure-CPU helpers (matching the `GizmoGeometry`/`ObjectPicking` pattern), with two-stage pick (coarse AABB via `ObjectPicking::pickSourceObject`, then per-triangle ITS on the hit volume only). | MEASURE-02 |
@@ -164,7 +164,7 @@ Success criteria:
 ### Phase 110: Filament-Map Popup UI And Mode Surfacing
 
 **Status:** Not started
-**Plans:** 0/0
+**Plans:** 1/1 plans complete
 **Workstream:** WS1 (Auto Filament-Map)
 
 Success criteria:
