@@ -258,6 +258,19 @@ private slots:
   // pattern (QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with
   // a WTMESH-named message). Source-level only; runs in the regression ctest.
   void optionBWipeTowerMeshCoexistsWithOptionA();
+  // Phase 111-01 (FMAP-04 + R-01): source-audit lock proving the filament-map
+  // save->reload round-trip coverage + the legacy raw-int-1 -> fmmManual
+  // migration runtime coverage exist in PartPlateTests. Locks: (a) the
+  // filamentMapSaveReloadRoundTrip slot exists (FMAP-04 full round-trip);
+  // (b) the legacy-migration slot exists + asserts the R-01 headline
+  // (legacy-int-1 -> fmmManual, NOT fmmAutoForMatch); (c) the factored
+  // OWzx::migrateLegacyFilamentMapMode helper exists in PartPlate.h +
+  // PartPlate.cpp (R-01 closure: the legacy branch is now unit-testable in
+  // isolation); (d) both ProjectServiceMock read sites use the factored helper.
+  // Mirrors the Phase 102/107/108/110 source-audit pattern (QFile +
+  // QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with FMAP-04/R-01-
+  // named messages). Source-level only; runs in the regression ctest.
+  void filamentMapSaveReloadRoundTripCoversModesAndLegacyMigration();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -4311,6 +4324,77 @@ void QmlUiAuditTests::filamentGroupPopupSurfacesThreeModesNotFour()
   // overload must clamp out-of-range to fmmDefault. grep-assertable guard.
   QVERIFY2(partPlateHeader.contains(QStringLiteral("if (mode < 0 || mode > 3) mode = static_cast<int>(FilamentMapMode::fmmDefault)")),
            "R-02/FP-04: PartPlate::setFilamentMapMode(int) must clamp out-of-range to fmmDefault (the Q_INVOKABLE boundary guard)");
+}
+
+void QmlUiAuditTests::filamentMapSaveReloadRoundTripCoversModesAndLegacyMigration()
+{
+  // FMAP-04 + Phase 107 REVIEW R-01: the filament-map save->reload round-trip
+  // coverage + the legacy raw-int-1 -> fmmManual migration runtime coverage
+  // must stay present in PartPlateTests. R-01 observed the FM-03 migration was
+  // correct by inspection but never executed at runtime (the round-trip test
+  // takes the trusted coEnum branch because the write side produces typed
+  // values). Phase 111 closes the gap by (a) factoring the migration into a
+  // testable helper and (b) adding a legacy-migration slot + a full round-trip
+  // slot. This audit locks those anchors so a future regression (drop the
+  // helper, drop a slot, or weaken the R-01 headline assertion) fails here
+  // deterministically. Mirrors the Phase 102/107/108/110 source-audit pattern.
+
+  const QString partPlateHeader = readSource(QStringLiteral("src/core/model/PartPlate.h"));
+  QVERIFY2(!partPlateHeader.isEmpty(), "Unable to read PartPlate.h");
+  const QString partPlateSource = readSource(QStringLiteral("src/core/model/PartPlate.cpp"));
+  QVERIFY2(!partPlateSource.isEmpty(), "Unable to read PartPlate.cpp");
+  const QString serviceSource = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  QVERIFY2(!serviceSource.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  const QString partPlateTests = readSource(QStringLiteral("tests/PartPlateTests.cpp"));
+  QVERIFY2(!partPlateTests.isEmpty(), "Unable to read PartPlateTests.cpp");
+
+  // FMAP-04 / R-01 (factored helper declared + defined): the migration
+  // predicate must exist as a free function so the legacy branch is unit-
+  // testable in isolation. A removal (or re-inlining back into ProjectServiceMock)
+  // drops both anchors and fails here.
+  QVERIFY2(partPlateHeader.contains(QStringLiteral("FilamentMapMode migrateLegacyFilamentMapMode(int legacyRawInt);")),
+           "FMAP-04/R-01: PartPlate.h must declare OWzx::migrateLegacyFilamentMapMode(int) (the factored migration predicate)");
+  QVERIFY2(partPlateSource.contains(QStringLiteral("FilamentMapMode migrateLegacyFilamentMapMode(int legacyRawInt)")),
+           "FMAP-04/R-01: PartPlate.cpp must define OWzx::migrateLegacyFilamentMapMode(int) (the factored migration predicate)");
+
+  // FMAP-04 / R-01 (both read sites use the factored helper): ProjectServiceMock
+  // must call migrateLegacyFilamentMapMode at BOTH read sites (loadFile +
+  // loadProject) so the legacy branch is reached via the same predicate the
+  // unit test exercises. There are 2 occurrences (one per read path).
+  const int helperCallCount = serviceSource.count(
+      QStringLiteral("OWzx::migrateLegacyFilamentMapMode(int(opt->getInt()))"));
+  QVERIFY2(helperCallCount >= 2,
+           qPrintable(QStringLiteral("FMAP-04/R-01: ProjectServiceMock must call "
+                                     "OWzx::migrateLegacyFilamentMapMode at both read sites "
+                                     "(loadFile + loadProject); found %1").arg(helperCallCount)));
+
+  // FMAP-04 (full round-trip slot exists): the save->reload round-trip slot
+  // must be declared + defined in PartPlateTests. A removal drops the FMAP-04
+  // coverage and fails here.
+  QVERIFY2(partPlateTests.contains(QStringLiteral("void filamentMapSaveReloadRoundTrip()")),
+           "FMAP-04: PartPlateTests must declare filamentMapSaveReloadRoundTrip (full save->reload round-trip)");
+  QVERIFY2(partPlateTests.contains(QStringLiteral("void PartPlateTests::filamentMapSaveReloadRoundTrip()")),
+           "FMAP-04: PartPlateTests must define filamentMapSaveReloadRoundTrip (full save->reload round-trip)");
+
+  // FMAP-04 (round-trip covers BOTH concrete modes): the slot must exercise
+  // fmmManual (mode + maps) AND fmmAutoForFlush (mode). A regression that drops
+  // one leg fails here. QString::contains defaults to case-sensitive.
+  QVERIFY2(partPlateTests.contains(QStringLiteral("fmmManual"))
+               && partPlateTests.contains(QStringLiteral("fmmAutoForFlush")),
+           "FMAP-04: filamentMapSaveReloadRoundTrip must cover both fmmManual and fmmAutoForFlush legs");
+
+  // R-01 (legacy-migration slot exists + asserts the headline): the legacy
+  // migration slot must exist AND its QVERIFY2 message must name the R-01
+  // headline (legacy-int-1 -> fmmManual, NOT fmmAutoForMatch). A removal of the
+  // slot or a weakening of the assertion fails here.
+  QVERIFY2(partPlateTests.contains(QStringLiteral("void filamentMapLegacyMigrationMapsInt1ToManual()")),
+           "R-01: PartPlateTests must declare filamentMapLegacyMigrationMapsInt1ToManual (legacy migration runtime coverage)");
+  QVERIFY2(partPlateTests.contains(QStringLiteral("void PartPlateTests::filamentMapLegacyMigrationMapsInt1ToManual()")),
+           "R-01: PartPlateTests must define filamentMapLegacyMigrationMapsInt1ToManual (legacy migration runtime coverage)");
+  QVERIFY2(partPlateTests.contains(QStringLiteral("legacy raw-int-1 MUST map to fmmManual")),
+           "R-01: filamentMapLegacyMigrationMapsInt1ToManual must assert the R-01 headline (legacy raw-int-1 -> fmmManual) in its QVERIFY2 message");
+  QVERIFY2(partPlateTests.contains(QStringLiteral("migrateLegacyFilamentMapMode(1)")),
+           "R-01: filamentMapLegacyMigrationMapsInt1ToManual must exercise the factored helper with legacy int 1 (the actual legacy discriminator branch)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
