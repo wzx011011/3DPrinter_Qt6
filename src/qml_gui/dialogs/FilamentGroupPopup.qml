@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
 import "../controls"
 
 // Phase 110 (FMAP-03): FilamentGroupPopup -- CxPopup-based mode selector that
