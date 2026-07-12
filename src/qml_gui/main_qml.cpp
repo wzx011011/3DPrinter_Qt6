@@ -271,6 +271,20 @@ int main(int argc, char *argv[])
   if (!qEnvironmentVariableIsSet("OWZX_RHI_RENDERER"))
     qputenv("OWZX_RHI_RENDERER", "auto");
 
+  // Phase 105 (D3D12-01): forward OWZX_D3D12_DEBUG to Qt's QSG RHI debug
+  // mechanism so the LIVE QQuickRhiItem render path emits GPU validation
+  // output for Phase 106 triage. This MUST run BEFORE QGuiApplication
+  // construction because Qt Quick reads QSG_RHI_DEBUG during QGuiApplication
+  // startup (it configures the scene-graph RHI backend init). The crash
+  // (0xc0000005) fires in RhiViewportRenderer.cpp:282-298 (beginPass-after-
+  // resourceUpdate on the live D3D12 render path), NOT at the probe
+  // QRhi::create, so the probe-path enableDebugLayer alone is insufficient.
+  // QSG_RHI_DEBUG covers the live render path (DL-03 option a). Fully env-
+  // gated (DL-04 / Pitfall 5): when OWZX_D3D12_DEBUG is unset, no QSG_RHI_DEBUG
+  // leak into the default OWzxSlicer.exe build.
+  if (qEnvironmentVariableIsSet("OWZX_D3D12_DEBUG"))
+    qputenv("QSG_RHI_DEBUG", "1");
+
   // RhiBackendSelector owns D3D11-first / D3D12 explicit opt-in policy.
   const RhiBackendSelection rhiSelection = selectRhiBackendFromEnvironment();
 

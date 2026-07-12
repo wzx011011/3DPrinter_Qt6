@@ -1,6 +1,7 @@
 #include "RhiBackendSelector.h"
 
 #include <QByteArray>
+#include <QLoggingCategory>
 
 #include <memory>
 
@@ -32,6 +33,24 @@ QString normalizeRequestedBackend(const QByteArray &value)
       || requested == QLatin1String("yes"))
     return QStringLiteral("auto");
   return requested;
+}
+
+// Phase 105 (D3D12-01): read the OWZX_D3D12_DEBUG env flag and return true for
+// the same truthy values normalizeRequestedBackend accepts ("1"/"true"/"on"/"yes").
+// This gates the D3D12 debug layer so Phase 106 can triage the startup
+// 0xc0000005 access violation with GPU validation output. The gate is FULLY
+// conditional on the env flag (DL-04 / Pitfall 5): when OWZX_D3D12_DEBUG is
+// unset, the default OWzxSlicer.exe build behaves identically to pre-Phase-105
+// (enableDebugLayer stays false, no perf hit, no release-build leak).
+bool d3d12DebugLayerRequested()
+{
+  if (!qEnvironmentVariableIsSet("OWZX_D3D12_DEBUG"))
+    return false;
+  const QString value = QString::fromLocal8Bit(qgetenv("OWZX_D3D12_DEBUG")).trimmed().toLower();
+  return value == QLatin1String("1")
+      || value == QLatin1String("true")
+      || value == QLatin1String("on")
+      || value == QLatin1String("yes");
 }
 
 QVector<RhiBackendCandidate> defaultWindowsCandidates()
@@ -68,6 +87,17 @@ bool probeBackend(const RhiBackendCandidate &candidate, QString *failure)
   switch (candidate.implementation) {
     case QRhi::D3D12:
       params = &owner.d3d12Params;
+      // Phase 105 (D3D12-01): enable the D3D12 debug layer for the probe path
+      // when OWZX_D3D12_DEBUG is set, BEFORE QRhi::create (DL-02). This path
+      // only calls QRhi::create (it does not render), so the debug layer here
+      // surfaces device/adapter creation validation. The live render-path
+      // crash (RhiViewportRenderer.cpp:282-298 beginPass-after-resourceUpdate)
+      // is covered by QSG_RHI_DEBUG set in main_qml.cpp before QGuiApplication
+      // (DL-03). Fully env-gated (DL-04 / Pitfall 5): default build unchanged.
+      if (d3d12DebugLayerRequested()) {
+        owner.d3d12Params.enableDebugLayer = true;
+        qInfo("D3D12-01: OWZX_D3D12_DEBUG set; enabling D3D12 debug layer on probe path");
+      }
       break;
     case QRhi::D3D11:
       params = &owner.d3d11Params;
