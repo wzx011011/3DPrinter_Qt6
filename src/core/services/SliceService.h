@@ -9,6 +9,13 @@
 #include <QPointF>
 #include <memory>
 #include <atomic>
+#include <vector>
+
+// Phase 108 (FMAP-01): PartPlate.h declares the OWzx::FilamentMapMode enum
+// (widened to the upstream 4-value model in Phase 107) used by the
+// FilamentMapResult POD below. Included here so the POD's mode field has the
+// complete type on every consumer of this header (EditorViewModel, tests).
+#include "core/model/PartPlate.h"
 
 class ProjectServiceMock;
 class AppSettingsService;
@@ -59,6 +66,35 @@ struct WipeTowerGeometry {
   float ribOffsetX = 0.f;
   /// Rib offset Y (Print::get_rib_offset().y()).
   float ribOffsetY = 0.f;
+};
+
+/// Phase 108 (FMAP-01): filament-map auto-recommendation readback captured BY
+/// VALUE inside the SliceService worker after print.process() succeeds and
+/// before the Print is invalidated. Mirrors the v4.4 WipeTowerGeometry capture
+/// pattern (Frozen Decision 1 from 99-GAP-MATRIX.md): no Print* or libslic3r
+/// reference type may escape the worker. The maps field mirrors upstream
+/// Print::get_filament_maps() (Print.cpp:3051, declared Print.hpp:996), which
+/// returns the result of the auto-recommendation computed inside print.process()
+/// at Print.cpp:2484-2491 (ToolOrdering::get_recommended_filament_maps + the
+/// +1 transform, so the values are 1-based group ids). The mode field is the
+/// Phase 107 OWzx::FilamentMapMode enum (numeric values identical to upstream
+/// Slic3r::FilamentMapMode, so a static_cast<int> round-trips losslessly).
+/// When valid is false (user picked Manual, so mode >= fmmManual and no
+/// auto-map was computed), receivers must not surface an auto recommendation.
+struct FilamentMapResult {
+  /// True ONLY when the upstream auto-recommendation actually ran, i.e. when
+  /// the resolved mode was < fmmManual (Print.cpp:2485). When the user picked
+  /// Manual, the engine does not compute an auto-map, so valid stays false and
+  /// there is no recommendation to surface (mirrors WTREAD-02 gate logic).
+  bool valid = false;
+  /// The resolved per-plate filament-map mode (OWzx::FilamentMapMode). When
+  /// capturing, the worker resolves fmmDefault against the resolved mode read
+  /// from the print config (Print::get_filament_map_mode, Print.cpp:3056) so
+  /// the value stored here is always one of the three concrete modes.
+  OWzx::FilamentMapMode mode = OWzx::FilamentMapMode::fmmDefault;
+  /// The auto-recommended per-extruder mapping (1-based group ids), as returned
+  /// by Print::get_filament_maps(). Empty when valid is false.
+  std::vector<int> maps;
 };
 
 class SliceService final : public QObject
@@ -165,6 +201,13 @@ signals:
   /// (single-material / enable_prime_tower off), receivers must gate to
   /// showWipeTower=false (WTREAD-02).
   void wipeTowerGeometryReady(const WipeTowerGeometry &geometry);
+  /// Phase 108 (FMAP-01): delivers the captured-by-value filament-map
+  /// auto-recommendation to the GUI thread. Emitted on the success branch of
+  /// the sliceFinished queued-invokeMethod lambda (SliceService.cpp worker),
+  /// on the SAME gate as wipeTowerGeometryReady (cancel/error branches do NOT
+  /// emit). When result.valid is false (user picked Manual, so no auto-map was
+  /// computed by the engine), receivers must not surface an auto recommendation.
+  void filamentMapReady(const FilamentMapResult &result);
   void sliceFailed(const QString &message);
   void exportStarted(const QString &stage);
   void exportFinished(const QString &filePath);

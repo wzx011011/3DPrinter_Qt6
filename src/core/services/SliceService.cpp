@@ -423,6 +423,12 @@ void SliceService::startSlice(const QString &projectName)
     // value into the GUI-thread delivery lambda below so no Print* escapes
     // the worker (Frozen Decision 1).
     WipeTowerGeometry capturedGeometry{};
+    // Phase 108 (FMAP-01): captured-by-value filament-map auto-recommendation.
+    // Same invariant as capturedGeometry: default-constructed (valid=false) in
+    // mock mode and on any error/cancel path; only the HAS_LIBSLIC3R success
+    // branch populates it. Captured by value into the GUI-thread delivery
+    // lambda below so no Print* escapes the worker (Frozen Decision 1).
+    FilamentMapResult capturedFilamentMap{};
 
 #ifdef HAS_LIBSLIC3R
     try
@@ -661,6 +667,29 @@ void SliceService::startSlice(const QString &projectName)
       resultPlateLabel = targetPlateLabel;
       resultPlateIndex = targetPlateIndex;
 
+      // Phase 108 (FMAP-01): capture the filament-map auto-recommendation BY
+      // VALUE before the Print is invalidated (activePrint_.store(nullptr)
+      // below). Mirrors the WipeTowerGeometry capture above (Frozen Decision 1:
+      // no Print* may escape the worker). Reads Print::get_filament_maps()
+      // (Print.cpp:3051) -- the per-extruder mapping the engine computed inside
+      // print.process() at Print.cpp:2484-2491 (only when mode < fmmManual).
+      // The mode is read via Print::get_filament_map_mode() (Print.cpp:3056)
+      // and stored as the Phase 107 OWzx::FilamentMapMode enum (the upstream
+      // Slic3r::FilamentMapMode has identical numeric values, so a
+      // static_cast<int> round-trips losslessly). valid is set ONLY when the
+      // auto-recommendation actually ran (mode < fmmManual per Print.cpp:2485):
+      // when the user picked Manual, the engine does not compute an auto-map
+      // and there is nothing to surface (mirrors WTREAD-02 gate logic).
+      {
+        const int mapModeInt = static_cast<int>(print.get_filament_map_mode());
+        capturedFilamentMap.mode =
+            static_cast<OWzx::FilamentMapMode>(mapModeInt);
+        if (mapModeInt < static_cast<int>(OWzx::FilamentMapMode::fmmManual)) {
+          capturedFilamentMap.maps = print.get_filament_maps();
+          capturedFilamentMap.valid = true;
+        }
+      }
+
       receiver->activePrint_.store(nullptr, std::memory_order_release);
     }
     catch (const std::exception &ex)
@@ -724,7 +753,7 @@ void SliceService::startSlice(const QString &projectName)
     if (!receiver)
       return;
 
-    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, resultFilamentLabel, resultCostLabel, layerCount, capturedGeometry]() {
+    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, resultFilamentLabel, resultCostLabel, layerCount, capturedGeometry, capturedFilamentMap]() {
       if (!receiver)
         return;
 
@@ -811,6 +840,19 @@ void SliceService::startSlice(const QString &projectName)
             capturedGeometry.width, capturedGeometry.depth,
             capturedGeometry.height, capturedGeometry.x, capturedGeometry.z);
       emit receiver->wipeTowerGeometryReady(capturedGeometry);
+      // Phase 108 (FMAP-01): deliver the captured-by-value filament-map
+      // auto-recommendation to the GUI thread. Emitted on the success branch
+      // only (the cancel/error branches above return early without reaching
+      // here) -- same gate as wipeTowerGeometryReady (v4.4 WTREAD-02). The
+      // EditorViewModel::onFilamentMapReady slot applies the valid gate: when
+      // capturedFilamentMap.valid is false (user picked Manual, so the engine
+      // computed no auto-map), hasAutoFilamentMap stays false and no stale map
+      // leaks to the Phase 110 UI.
+      qInfo("[SliceService] filament-map ready valid=%d mode=%d count=%d",
+            capturedFilamentMap.valid ? 1 : 0,
+            static_cast<int>(capturedFilamentMap.mode),
+            static_cast<int>(capturedFilamentMap.maps.size()));
+      emit receiver->filamentMapReady(capturedFilamentMap);
     }, Qt::QueuedConnection); });
 }
 
