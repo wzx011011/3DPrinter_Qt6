@@ -207,6 +207,21 @@ private slots:
   // + QVERIFY2 with a D3D12-03-named message). Source-level only; runs in the
   // regression ctest.
   void d3d12StaysOptInBehindEnvFlag();
+  // Phase 107-01 (FMAP-02): the Qt6 filament-map mode enum is widened from the
+  // old 2-value (0=Auto, 1=Manual) to the upstream 4-value FilamentMapMode
+  // (fmmAutoForFlush=0 / fmmAutoForMatch=1 / fmmManual=2 / fmmDefault=3,
+  // matching PrintConfig.hpp:424-429), AND the 3MF persistence applies the
+  // Pitfall 2 read-side migration so pre-v4.5 "Manual"=1 plates do NOT silently
+  // reload as the new fmmAutoForMatch=1. Source-audit locks: (a) all 4 enum
+  // names appear in PartPlate.h; (b) the upstream PrintConfig.hpp:424-429
+  // anchor citation is present; (c) ProjectServiceMock.cpp writes the typed
+  // ConfigOptionEnum<FilamentMapMode> (FM-02 forward-compat string write); (d)
+  // the read-side coEnum-vs-legacy migration is present and maps legacy raw-
+  // int-1 -> fmmManual (FM-03, the user-visible behavior change). Mirrors the
+  // Phase 102/103/104/105/106 source-audit pattern (QFile + QT_TESTCASE_SOURCEDIR
+  // + QString::contains + QVERIFY2 with an FMAP-02-named message). Source-level
+  // only; runs in the regression ctest.
+  void filamentMapModeEnumWidenedToUpstream4Value();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -3935,6 +3950,61 @@ void QmlUiAuditTests::d3d12StaysOptInBehindEnvFlag()
   // v4.5 deliverable" part of D3D12-03.
   QVERIFY2(!defaultCandidates.contains(QStringLiteral("QRhi::Vulkan")),
            "D3D12-03: defaultWindowsCandidates() must not include Vulkan (SDK-blocked; PROJECT.md:143)");
+}
+
+void QmlUiAuditTests::filamentMapModeEnumWidenedToUpstream4Value()
+{
+  // FMAP-02 / FM-01 + FM-02 + FM-03: the Qt6 filament-map mode enum must stay
+  // widened to the upstream 4-value FilamentMapMode, and the 3MF persistence
+  // must keep the Pitfall 2 read-side migration. Locks the source anchors so a
+  // future regression (re-collapse to 2-value, drop the typed-enum write, or
+  // remove the legacy-int-1 -> fmmManual migration) fails here deterministically.
+
+  const QString partPlateHeader = readSource(QStringLiteral("src/core/model/PartPlate.h"));
+  QVERIFY2(!partPlateHeader.isEmpty(), "Unable to read PartPlate.h");
+  const QString serviceSource = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  QVERIFY2(!serviceSource.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+
+  // FMAP-02 / FM-01 (4-value enum present): all 4 upstream enum names must
+  // appear in PartPlate.h. A re-collapse to the old 2-value model drops at
+  // least fmmAutoForMatch / fmmDefault and fails here.
+  QVERIFY2(partPlateHeader.contains(QStringLiteral("fmmAutoForFlush")),
+           "FMAP-02/FM-01: PartPlate.h must declare fmmAutoForFlush (upstream PrintConfig.hpp:424)");
+  QVERIFY2(partPlateHeader.contains(QStringLiteral("fmmAutoForMatch")),
+           "FMAP-02/FM-01: PartPlate.h must declare fmmAutoForMatch (upstream PrintConfig.hpp:425)");
+  QVERIFY2(partPlateHeader.contains(QStringLiteral("fmmManual")),
+           "FMAP-02/FM-01: PartPlate.h must declare fmmManual (upstream PrintConfig.hpp:426)");
+  QVERIFY2(partPlateHeader.contains(QStringLiteral("fmmDefault")),
+           "FMAP-02/FM-01: PartPlate.h must declare fmmDefault (upstream PrintConfig.hpp:428)");
+
+  // FMAP-02 / FM-01 (upstream anchor citation): the comment must cite the
+  // upstream PrintConfig.hpp:424-429 source-of-truth so a future reader knows
+  // the 4 values are sourced from upstream, not invented.
+  QVERIFY2(partPlateHeader.contains(QStringLiteral("PrintConfig.hpp:424-429")),
+           "FMAP-02/FM-01: PartPlate.h must cite the upstream PrintConfig.hpp:424-429 anchor");
+
+  // FMAP-02 / FM-07 (fmmDefault anti-feature doc): the per-plate "inherit from
+  // global" sentinel semantics must be documented so fmmDefault is NOT added as
+  // a 4th UI radio button.
+  QVERIFY2(partPlateHeader.contains(QStringLiteral("inherit from global")),
+           "FMAP-02/FM-07: PartPlate.h must document fmmDefault as a per-plate 'inherit from global' sentinel");
+
+  // FMAP-02 / FM-02 (typed-enum write): the 3MF write side must use the typed
+  // ConfigOptionEnum<FilamentMapMode> so the on-disk value is the upstream
+  // enum-name string (forward-compatible with upstream's ConfigOptionEnum
+  // serialization). The old raw setInt(path) hazard must stay gone.
+  QVERIFY2(serviceSource.contains(QStringLiteral("ConfigOptionEnum<Slic3r::FilamentMapMode>")),
+           "FMAP-02/FM-02: ProjectServiceMock must write filament_map_mode via the typed ConfigOptionEnum<FilamentMapMode>");
+
+  // FMAP-02 / FM-03 (read-side migration present): the read site must keep the
+  // coEnum-vs-legacy migration. The legacy raw-int-1 -> fmmManual mapping is
+  // the user-visible behavior change (pre-v4.5 'Manual'=1 stays Manual, NOT the
+  // new fmmAutoForMatch=1). Assert the discriminator + the fmmManual mapping
+  // anchor both stay.
+  QVERIFY2(serviceSource.contains(QStringLiteral("opt->type() == Slic3r::coEnum")),
+           "FMAP-02/FM-03: ProjectServiceMock read site must discriminate typed coEnum from legacy raw int");
+  QVERIFY2(serviceSource.contains(QStringLiteral("raw 1 (old \"Manual\")  -> fmmManual")),
+           "FMAP-02/FM-03: ProjectServiceMock read site must keep the legacy raw-int-1 -> fmmManual migration (the pre-v4.5 'Manual'=1 preservation)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
