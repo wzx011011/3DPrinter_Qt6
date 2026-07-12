@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-07-12T01:20:50.595Z"
 last_activity: 2026-07-12
 progress:
-  total_phases: 0
+  total_phases: 14
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -15,99 +15,127 @@ progress:
 
 # Project State
 
-**Milestone:** v4.4 - Wipe-Tower Geometry Readback And Real Rendering
-**Status:** v4.4 milestone complete
-**Next step:** Plan Phase 100 with `/gsd-plan-phase 100`.
+**Milestone:** v4.5 - Backlog Closure (Mega-Milestone)
+**Status:** v4.5 roadmap defined; awaiting Phase 103 planning
+**Next step:** Plan Phase 103 (CLI Fixture Readiness Gate) with `/gsd-plan-phase 103`.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 103 (CLI Fixture Readiness Gate) — not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-07-12 — Milestone v4.5 started
+Status: Roadmap defined; ready to plan Phase 103
+Last activity: 2026-07-12 — v4.5 roadmap created (14 phases, 103-116; 20 active requirements mapped across 5 workstreams)
 
-## Current Milestone (v4.4)
+## Current Milestone (v4.5)
+
+| Phase | Name | Status | Requirements |
+|---|---|---|---|
+| 103 | CLI Fixture Readiness Gate | Not started | FIXTURE-02 |
+| 104 | CLI Fixture Recipes And Multi-Material Model | Not started | FIXTURE-01, FIXTURE-03, FIXTURE-04 |
+| 105 | D3D12 Debug Layer Wiring | Not started | D3D12-01 |
+| 106 | D3D12 Crash Root-Cause And Backend Readiness (time-boxed) | Not started | D3D12-02, D3D12-03 |
+| 107 | Filament-Map Mode Enum Widening And 3MF Migration | Not started | FMAP-02 |
+| 108 | Filament-Map Auto Recommendation Readback | Not started | FMAP-01 |
+| 109 | Option B Wipe-Tower Mesh Readback And Real Rendering | Not started | WTMESH-01, WTMESH-02, WTMESH-03 |
+| 110 | Filament-Map Popup UI And Mode Surfacing | Not started | FMAP-03 |
+| 111 | Filament-Map Save-Reload Round-Trip | Not started | FMAP-04 |
+| 112 | Per-Volume ITS Accessor And Mesh Cache | Not started | MEASURE-01 |
+| 113 | Scene And Mesh Raycaster Port | Not started | MEASURE-02 |
+| 114 | Measure Engine Instantiation And Feature Readouts | Not started | MEASURE-03 |
+| 115 | GLGizmoMeasure Snap UX And Feature Picking | Not started | MEASURE-04 |
+| 116 | v4.5 Verification And Cross-Workstream Regression | Not started | WTMESH-04, MEASURE-05 |
+
+**Coverage:** 20/20 active requirements mapped to exactly one phase. MEASURE-06 (Assembly-mode transformation actions) deferred — not mapped.
+
+## Last Completed Milestone: v4.4 Wipe-Tower Geometry Readback And Real Rendering
 
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
 | 99 | Wipe-Tower Geometry Gap Audit | Complete | WTAUDIT-01, WTAUDIT-02 |
-| 100 | Wipe-Tower Geometry Readback | Not started | WTREAD-01, WTREAD-02 |
-| 101 | Wipe-Tower Real Rendering Upgrade | Not started | WTRENDER-01, WTRENDER-02 |
-| 102 | Wipe-Tower Verification And Regression | Not started | WTVERIFY-01, WTVERIFY-02 |
-
-## Last Completed Milestone: v4.3
-
-| Phase | Name | Status | Requirements |
-|---|---|---|---|
-| 94 | Thumbnail Capture Gap Audit | Complete | THUMBAUDIT-01, THUMBAUDIT-02 |
-| 95 | QRhi Thumbnail Capture Infrastructure | Complete | THUMBCAP-01, THUMBCAP-02, THUMBCAP-03 |
-| 96 | 3MF Thumbnail Write Integration | Complete | THUMBWRITE-01, THUMBWRITE-02, THUMBWRITE-03 |
-| 97 | Thumbnail Save-Reload Round-Trip | Complete | THUMBRT-01, THUMBRT-02 |
-| 98 | Thumbnail Verification And Cleanup | Complete | THUMBVERIFY-01, THUMBVERIFY-02 |
+| 100 | Wipe-Tower Geometry Readback | Complete | WTREAD-01, WTREAD-02 |
+| 101 | Wipe-Tower Real Rendering Upgrade | Complete | WTRENDER-01, WTRENDER-02 |
+| 102 | Wipe-Tower Verification And Regression | Complete | WTVERIFY-01, WTVERIFY-02 |
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-07-11)
+See: `.planning/PROJECT.md` (updated 2026-07-12)
+See: `.planning/ROADMAP.md` (v4.5 roadmap — 14 phases, 103-116)
+See: `.planning/REQUIREMENTS.md` (20 active v4.5 requirements + 1 deferred)
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-**Current focus:** v4.4 — wipe-tower geometry readback from `Print::wipe_tower_data()` + real rendering replacing the placeholder box.
+**Current focus:** v4.5 — backlog closure across 5 workstreams (auto filament-map, Option B wipe-tower mesh, CLI fixtures, D3D12 root cause, GLGizmoMeasure engine).
 
-## Milestone Context (v4.4)
+## Milestone Context (v4.5)
 
-**Goal:** Replace the hardcoded placeholder-box wipe-tower rendering with real libslic3r post-slice geometry.
+**Goal:** Clear the deferred backlog in one cycle across 5 workstreams, extending v4.4's slice/UI work and unblocking long-deferred items.
 
-**Current state (after Phase 99 gap audit):**
+**Workstream map:**
 
-- Wipe-tower rendering pipeline is structurally ready (RHI `RhiViewportRenderer` has `m_wipeTowerBuffer` + `uploadWipeTowerBuffer()` + `renderWipeTower()` + the `m_wipeTowerDirty` rebuild; Software viewport has parallel props) — classified `preserve` for Option A.
-- **Geometry is a hardcoded placeholder:** `GizmoGeometry::buildWipeTowerVertices` builds a 36-vertex rectangular prism with caller-supplied or default dims. `RhiViewport` defaults: width=10, depth=10, height=50, x=100, z=25.
-- **The Qt6 side never reads libslic3r's `Print::wipe_tower_data()`** — zero references to `wipe_tower_data`, `get_wipe_tower_depth`, `get_wipe_tower_bbx` in `src/`.
-- **Phase 99 froze 3 WTAUDIT-02 decisions** in `99-GAP-MATRIX.md`: (1) readback reads `wipe_tower_data()` in the SliceService worker after `print.process()` succeeds, captures dims before the Print is invalidated, delivers via `sliceFinished`; (2) Option A dimensioned-box render baseline locked (Option B real mesh deferred); (3) data-driven `has_wipe_tower()` gate (no placeholder leak on single-material).
-- `PreparePage.qml:1648` GLViewport does NOT bind any wipe-tower Q_PROPERTY — the Phase 100 wiring task.
+| WS | Workstream | Phases | Priority | Notes |
+|---|---|---|---|---|
+| 1 | Auto filament-map recommendation | 107, 108, 110, 111 | P1 | Enum widening BEFORE readback (Pitfall 2); round-trip ships last |
+| 2 | Option B real wipe-tower mesh | 109, 116 (regression) | P1 | Re-opens Phase 99 Frozen Decision 2; Option A fallback preserved (Pitfall 3) |
+| 3 | CLI fixtures + argv GUI loading | 103, 104 | P1 | Cheapest unblocker; argv plumbing already exists (FIXTURE-02 gate is first) |
+| 4 | D3D12 crash root cause + backend readiness | 105, 106 | P2/P3 | Time-boxed investigation; may not produce a clean feature; default promotion out of scope |
+| 5 | Full GLGizmoMeasure engine + clipper | 112, 113, 114, 115, 116 | P2 | Per-volume ITS unblocks BOTH raycaster + clipper (Pitfall 6) |
 
-**Upstream source anchors (behavior truth):**
+**Key research findings (from `.planning/research/SUMMARY.md`):**
 
-- `third_party/OrcaSlicer/src/libslic3r/Print.hpp:740-786` — `struct WipeTowerData`: tool_changes, bbx (includes brim), rib_offset, wipe_tower_mesh_data (optional), depth, height, brim_width, position, width.
-- `Print.hpp:988-989` — `has_wipe_tower()`, `wipe_tower_data()`.
-- `Print.hpp:1078-1080` — `get_wipe_tower_depth()`, `get_wipe_tower_bbx()`, `get_rib_offset()`.
-- `third_party/OrcaSlicer/src/slic3r/GUI/3DScene.cpp:840-882` — `load_wipe_tower_preview` (make_cube box).
-- `3DScene.cpp:887-923` — `load_real_wipe_tower_preview` (uses real mesh via convex_hull_3d).
+- ZERO new external libraries needed across all 5 workstreams (STACK.md confirmed).
+- The v4.4 capture-by-value readback pattern (`WipeTowerGeometry` POD + `wipeTowerGeometryReady`) is the proven backbone for WS1 + WS2 readback.
+- Two cross-workstream dependencies: (a) per-volume ITS accessor (Phase 112) unblocks WS5 raycaster + clipper; (b) WS3 readiness gate (Phase 103) is the same gate WS4 needs to repro the D3D12 crash.
+- 8 critical pitfalls documented (`.planning/research/PITFALLS.md`): enum-widening 3MF migration (P2), Option A baseline regression (P3), D3D12 debug-layer Release leak (P5), `Measure::Measuring` ITS lifetime/UAF (P6), raycaster per-frame performance (P7).
 
-**Out of scope for v4.4:**
+## Out of Scope for v4.5
 
-- Auto filament-map recommendation (future milestone; cleanest impl is letting libslic3r auto-compute in `Print::` and reading back `filament_maps`).
-- Per-plate wipe-tower architecture refactor (v3.0-audited per-plate filtered-copy slice path).
-- D3D12, GLGizmoMeasure engine, CLI fixtures.
+- MEASURE-06 Assembly-mode transformation actions (deferred — needs stable feature-picking foundation first).
+- D3D12 default-backend promotion before Phase 106 root cause is resolved.
+- Vulkan production backend (SDK-blocked).
+- Auto filament-map, wipe-tower Option B, GLGizmoMeasure engine, CLI fixtures — all IN scope (this milestone closes them).
 - LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows (removed scope).
 
 ## Carry-Forward Status
 
 | Category | Item | Target |
 |---|---|---|
-| closed | v4.3 Real Thumbnail Capture + 3MF round-trip | Shipped in v4.3 |
-| active | Wipe-tower geometry readback + real rendering | v4.4 |
+| closed | v4.4 Wipe-tower geometry readback + Option A rendering | Shipped in v4.4 |
+| active | Auto filament-map recommendation (WS1) | v4.5 Phases 107, 108, 110, 111 |
+| active | Option B real wipe-tower mesh (WS2) | v4.5 Phase 109 (+ 116 regression) |
+| active | CLI fixtures + argv GUI loading (WS3) | v4.5 Phases 103, 104 |
+| active | D3D12 root cause + backend readiness (WS4) | v4.5 Phases 105, 106 (time-boxed) |
+| active | Full GLGizmoMeasure engine + clipper (WS5) | v4.5 Phases 112-115 (+ 116 regression) |
 | removed | LAN/device/cloud/network/Monitor workflows | Removed from future scope by user direction on 2026-07-07 |
-| future | Auto filament-map recommendation | Future milestone (loosely coupled, deferred from v4.4) |
-| future | Missing CLI test fixtures | Future fixture milestone (FIXTURE-02 unblocked by v4.3) |
-| future | D3D12 root cause | Dedicated backend investigation milestone |
-| future | Full GLGizmoMeasure feature-picking engine + AssembleViewDataPool clipper | Future milestone (needs per-volume ITS) |
+| future | MEASURE-06 Assembly-mode transformation actions | Future milestone (after v4.5 measure foundation) |
+| future | D3D12 default-backend promotion | After Phase 106 root cause + stability proof |
+| future | Full PLATE-09 save/reload state assertions | Partially addressed by v4.5 WS3; complete coverage future |
+| future | Full i18n translation coverage | Future |
 
 ## Scope Guard
 
-- v4.4 is wipe-tower geometry readback + rendering only.
+- v4.5 is backlog closure across the 5 declared workstreams only.
 - Do not promote LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, or printer-connected hardware workflows unless the user explicitly reopens them.
+- Do not promote D3D12 to default before Phase 106 closes with a confirmed root cause.
+- Do not ship MEASURE-06 (Assembly transformation actions) before MEASURE-01..05 ship the stable feature-picking foundation.
+- Do not expose `fmmDefault` as a 4th popup radio button, render Option B color slabs AND mesh together, or ship argv fixtures as a user-facing product feature (anti-features).
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan Phase 103 with `/gsd-plan-phase 103` (CLI Fixture Readiness Gate — Wave A, parallel with Phase 105).
+- Phases 103 + 105 are parallel-safe (Wave A); Phase 104 follows 103; Phase 106 follows 105 (time-boxed).
+- Phase 107 (WS1 enum widening) MUST precede Phase 108 (readback) per Pitfall 2.
+- Phase 109 (WS2 Option B) readback reuses the Phase 108 capture-by-value precedent.
 
 ## Deferred Items
 
-Items acknowledged and deferred at v4.4 milestone close on 2026-07-12:
+Items acknowledged and deferred at v4.4 milestone close (2026-07-12) and carried into v4.5 scope:
 
 | Category | Item | Status |
 |---|---|---|
-| process | Phases 100-102 lack formal VERIFICATION.md | Equivalent verification via code review (0 critical across all 3) + regression ctest 4/4 + empirical harness probes + canonical verifier + launch liveness |
-| evidence | Runtime visual evidence | Windows capture API blocked (carry-forward from v4.2/v4.3); reachability via process-liveness (OWzxSlicer.exe PID 34240, 5s no-crash) + canonical verifier + regression ctest |
-| feature | Option B (real wipe-tower mesh via wipe_tower_mesh_data + convex_hull_3d) | LOCKED future upgrade per Phase 99 Frozen Decision 2; requires ITS vertex format extension in GizmoGeometry + RhiViewportRenderer |
-| process | Nyquist VALIDATION.md files (v4.4) | Carry-forward from v4.2/v4.3; phases have SUMMARY/REVIEW verification |
-| quick_task | 260708-e60-add-extensible-gui-startup-deep-link-arg | Unrelated to v4.4 scope (GUI startup args seed); left in-progress for future milestone (carry-forward from v4.3 close) |
+| feature | Option B (real wipe-tower mesh via wipe_tower_mesh_data + convex_hull_3d) | ACTIVE in v4.5 Phase 109 (was LOCKED future per Phase 99 Frozen Decision 2) |
+| feature | Auto filament-map recommendation | ACTIVE in v4.5 Phases 107-111 |
+| feature | CLI fixtures + argv GUI fixture loading | ACTIVE in v4.5 Phases 103-104 |
+| feature | Full GLGizmoMeasure feature-picking engine + AssembleViewDataPool clipper | ACTIVE in v4.5 Phases 112-115 |
+| feature | D3D12 crash root cause + backend readiness | ACTIVE in v4.5 Phases 105-106 (time-boxed) |
+| feature | MEASURE-06 Assembly-mode transformation actions | DEFERRED to future milestone (P3) |
+| process | Nyquist VALIDATION.md files (v4.4 carry-forward) | Carry-forward; v4.5 phases should produce VALIDATION.md |
+| evidence | Runtime visual evidence (Windows capture API) | v4.5 WS3 argv fixtures are the chosen workaround |

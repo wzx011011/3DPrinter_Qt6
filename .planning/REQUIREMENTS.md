@@ -66,31 +66,57 @@
 
 ## Traceability
 
-(Filled by the roadmapper — each REQ-ID mapped to exactly one phase.)
+Each active REQ-ID is mapped to exactly one phase. Phases continue from 103 (v4.4 ended at Phase 102). MEASURE-06 is deferred and NOT mapped.
 
-| REQ-ID | Phase | Notes |
-|--------|-------|-------|
-| FMAP-01 | TBD | |
-| FMAP-02 | TBD | |
-| FMAP-03 | TBD | |
-| FMAP-04 | TBD | |
-| WTMESH-01 | TBD | |
-| WTMESH-02 | TBD | |
-| WTMESH-03 | TBD | |
-| WTMESH-04 | TBD | |
-| FIXTURE-01 | TBD | |
-| FIXTURE-02 | TBD | |
-| FIXTURE-03 | TBD | |
-| FIXTURE-04 | TBD | |
-| D3D12-01 | TBD | |
-| D3D12-02 | TBD | |
-| D3D12-03 | TBD | |
-| MEASURE-01 | TBD | |
-| MEASURE-02 | TBD | |
-| MEASURE-03 | TBD | |
-| MEASURE-04 | TBD | |
-| MEASURE-05 | TBD | |
+| REQ-ID | Phase | Phase Name | Notes |
+|--------|-------|------------|-------|
+| FMAP-01 | 108 | Filament-Map Auto Recommendation Readback | Mirrors v4.4 WTREAD-01 capture-by-value; Pitfall 1 |
+| FMAP-02 | 107 | Filament-Map Mode Enum Widening And 3MF Migration | MUST precede FMAP-01 (Pitfall 2 — raw `setInt` migration hazard at `ProjectServiceMock.cpp:4997`) |
+| FMAP-03 | 110 | Filament-Map Popup UI And Mode Surfacing | Needs 107 (enum) + 108 (readback) first; Pitfall 8 (no QML-local state) |
+| FMAP-04 | 111 | Filament-Map Save-Reload Round-Trip | Ships last in WS1; mirrors Phase 97 thumbnail pattern |
+| WTMESH-01 | 109 | Option B Wipe-Tower Mesh Readback And Real Rendering | Real mesh via `wipe_tower_mesh_data` + `convex_hull_3d`; re-opens Phase 99 Frozen Decision 2 |
+| WTMESH-02 | 109 | Option B Wipe-Tower Mesh Readback And Real Rendering | Option A fallback preserved byte-for-byte (Pitfall 3); co-ships with WTMESH-01 |
+| WTMESH-03 | 109 | Option B Wipe-Tower Mesh Readback And Real Rendering | SoftwareViewport mirror (v4.4 Phase 101 parity) |
+| WTMESH-04 | 116 | v4.5 Verification And Cross-Workstream Regression | Option A regression-lock + Option B fires-only-when-populated audit |
+| FIXTURE-01 | 104 | CLI Fixture Recipes And Multi-Material Model | Multi-material fixture in `tests/data/` |
+| FIXTURE-02 | 103 | CLI Fixture Readiness Gate | `objectCreated` + `frameSwapped` gate; closes the Windows-capture-API blocker (Pitfall 4) |
+| FIXTURE-03 | 104 | CLI Fixture Recipes And Multi-Material Model | Documented argv recipes per screenshot target |
+| FIXTURE-04 | 104 | CLI Fixture Recipes And Multi-Material Model | Anti-feature: test-evidence plumbing, NOT user-facing deep link |
+| D3D12-01 | 105 | D3D12 Debug Layer Wiring | Env-gated, Debug-build-only (Pitfall 5 — no Release leak) |
+| D3D12-02 | 106 | D3D12 Crash Root-Cause And Backend Readiness | TIME-BOXED investigation; "fixed" = root cause documented + stable opt-in |
+| D3D12-03 | 106 | D3D12 Crash Root-Cause And Backend Readiness | Documentation: default promotion out of scope; Vulkan SDK-blocked |
+| MEASURE-01 | 112 | Per-Volume ITS Accessor And Mesh Cache | Cross-workstream dep — unblocks raycaster + AssembleViewDataPool clipper; Pitfall 6 (ITS ownership contract first) |
+| MEASURE-02 | 113 | Scene And Mesh Raycaster Port | Pure-CPU port; two-stage pick mandatory (Pitfall 7) |
+| MEASURE-03 | 114 | Measure Engine Instantiation And Feature Readouts | Instantiate `Measure::Measuring`, don't reimplement (AGENTS.md) |
+| MEASURE-04 | 115 | GLGizmoMeasure Snap UX And Feature Picking | Point/Edge/Circle/Plane picks; Shift toggle; `SurfaceFeature` raw-pointer scrub |
+| MEASURE-05 | 116 | v4.5 Verification And Cross-Workstream Regression | Real-readout assertion + ITS lifetime + frame-time < 16ms (Pitfall 7) |
+
+### Coverage Validation
+
+- **Active requirements mapped:** 20/20 (FMAP-01..04, WTMESH-01..04, FIXTURE-01..04, D3D12-01..03, MEASURE-01..05).
+- **Deferred (NOT mapped):** MEASURE-06 (Assembly-mode transformation actions — P3 future).
+- **Phase range:** 103-116 (14 phases; continues from v4.4 Phase 102, no reset).
+- **Each REQ-ID maps to exactly one phase** (WTMESH-01/02/03 share Phase 109 by design — Option A fallback + Option B path + SoftwareViewport mirror must ship together per Pitfall 3; FIXTURE-01/03/04 share Phase 104; D3D12-02/03 share Phase 106; WTMESH-04 + MEASURE-05 share the verification Phase 116).
+
+### Phase-to-Requirement Reverse Map
+
+| Phase | Phase Name | Workstream | Requirements |
+|-------|------------|------------|--------------|
+| 103 | CLI Fixture Readiness Gate | WS3 | FIXTURE-02 |
+| 104 | CLI Fixture Recipes And Multi-Material Model | WS3 | FIXTURE-01, FIXTURE-03, FIXTURE-04 |
+| 105 | D3D12 Debug Layer Wiring | WS4 | D3D12-01 |
+| 106 | D3D12 Crash Root-Cause And Backend Readiness | WS4 | D3D12-02, D3D12-03 |
+| 107 | Filament-Map Mode Enum Widening And 3MF Migration | WS1 | FMAP-02 |
+| 108 | Filament-Map Auto Recommendation Readback | WS1 | FMAP-01 |
+| 109 | Option B Wipe-Tower Mesh Readback And Real Rendering | WS2 | WTMESH-01, WTMESH-02, WTMESH-03 |
+| 110 | Filament-Map Popup UI And Mode Surfacing | WS1 | FMAP-03 |
+| 111 | Filament-Map Save-Reload Round-Trip | WS1 | FMAP-04 |
+| 112 | Per-Volume ITS Accessor And Mesh Cache | WS5 | MEASURE-01 |
+| 113 | Scene And Mesh Raycaster Port | WS5 | MEASURE-02 |
+| 114 | Measure Engine Instantiation And Feature Readouts | WS5 | MEASURE-03 |
+| 115 | GLGizmoMeasure Snap UX And Feature Picking | WS5 | MEASURE-04 |
+| 116 | v4.5 Verification And Cross-Workstream Regression | cross-WS | WTMESH-04, MEASURE-05 |
 
 ---
 
-*20 active requirements + 1 deferred (MEASURE-06) across 5 workstreams. Phases continue from 103.*
+*20 active requirements + 1 deferred (MEASURE-06) across 5 workstreams. Phases 103-116 (14 phases). Traceability filled by the roadmapper on 2026-07-12.*
