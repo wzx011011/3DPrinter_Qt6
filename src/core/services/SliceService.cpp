@@ -662,6 +662,49 @@ void SliceService::startSlice(const QString &projectName)
         capturedGeometry.z = float(bbx.min.y() + ribOffset.y()) + capturedGeometry.depth * 0.5f;
         capturedGeometry.ribOffsetX = ribOffset.x();
         capturedGeometry.ribOffsetY = ribOffset.y();
+
+        // Phase 109 (WTMESH-01/02): capture the real wipe-tower mesh BY VALUE
+        // when the engine populated wipe_tower_mesh_data (Print.hpp:766). This
+        // RE-OPENS Phase 99 Frozen Decision 2 (Option B was LOCKED future
+        // upgrade). The Option A dim fields above stay populated so the Option
+        // A fallback still works when hasRealMesh is false.
+        //
+        // Mirrors upstream load_real_wipe_tower_preview (3DScene.cpp:906-914):
+        // start from real_wipe_tower_mesh, merge real_brim_mesh when present,
+        // run convex_hull_3d() to get the silhouette shell, extract its.vertices
+        // as flattened XYZ floats. NO TriangleMesh* or its* escapes the worker
+        // -- meshVertices is a pure float vector (Frozen Decision 1 extended).
+        // wipe_tower_mesh_data->clear() resets it to nullopt (Print.hpp:776), so
+        // single-material / pre-slice / mock paths leave hasRealMesh=false and
+        // the renderer takes the Option A dimensioned-box path.
+        if (wtData.wipe_tower_mesh_data != std::nullopt)
+        {
+          const Slic3r::WipeTowerData::WipeTowerMeshData &meshData =
+              *wtData.wipe_tower_mesh_data;
+          Slic3r::TriangleMesh mergedMesh = meshData.real_wipe_tower_mesh;
+          // Upstream 3DScene.cpp:907-909 conditionally merges the brim mesh.
+          // We mirror that: merge when the brim mesh carries geometry. The
+          // engine populates real_brim_mesh alongside real_wipe_tower_mesh when
+          // a brim is present, so the vertex count check is the safe gate.
+          if (!meshData.real_brim_mesh.its.vertices.empty())
+            mergedMesh.merge(meshData.real_brim_mesh);
+          if (!mergedMesh.its.vertices.empty())
+          {
+            const Slic3r::TriangleMesh shell = mergedMesh.convex_hull_3d();
+            const auto &shellVerts = shell.its.vertices;
+            if (!shellVerts.empty())
+            {
+              capturedGeometry.meshVertices.reserve(shellVerts.size() * 3);
+              for (const Slic3r::Vec3f &v : shellVerts)
+              {
+                capturedGeometry.meshVertices.push_back(v.x());
+                capturedGeometry.meshVertices.push_back(v.y());
+                capturedGeometry.meshVertices.push_back(v.z());
+              }
+              capturedGeometry.hasRealMesh = true;
+            }
+          }
+        }
       }
 
       resultPlateLabel = targetPlateLabel;

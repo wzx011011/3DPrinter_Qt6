@@ -46,6 +46,19 @@ struct PlateSliceResult {
 /// in Print.cpp:2871-2873 (bbx span + rib_offset). The Qt renderer uses X/Z as
 /// the bed plane (upstream Y maps to Qt Z), matching buildWipeTowerVertices at
 /// GizmoGeometry.cpp:449.
+///
+/// Phase 109 (WTMESH-01/02): the POD is EXTENDED (not replaced) with the real
+/// mesh field hasRealMesh + meshVertices. The existing v4.4 dim fields above
+/// are UNCHANGED so the Option A fallback (Phase 99 Frozen Decision 2) still
+/// works when the engine did not populate wipe_tower_mesh_data. The new fields
+/// default to false/empty so a v4.4-style dims-only capture leaves
+/// hasRealMesh=false (the renderer takes the Option A else branch). When the
+/// mesh is populated, meshVertices holds the flattened XYZ floats of the
+/// convex hull of the merged real_wipe_tower_mesh + real_brim_mesh (mirrors
+/// upstream 3DScene.cpp:906-914: mesh.merge(brim_mesh) then
+/// mesh.convex_hull_3d() then its.vertices). NO TriangleMesh* or its* escapes
+/// the worker -- meshVertices is a pure float vector (Frozen Decision 1
+/// extended).
 struct WipeTowerGeometry {
   /// Mirrors Print::has_wipe_tower() (Print.hpp:988). When false (single-material
   /// / enable_prime_tower off), the renderer must show no wipe-tower (WTREAD-02).
@@ -66,6 +79,22 @@ struct WipeTowerGeometry {
   float ribOffsetX = 0.f;
   /// Rib offset Y (Print::get_rib_offset().y()).
   float ribOffsetY = 0.f;
+  /// Phase 109 (WTMESH-01): true ONLY when the engine populated
+  /// Print::wipe_tower_data().wipe_tower_mesh_data (Print.hpp:766), so the
+  /// merged+convex-hull mesh is available for real-mesh rendering (Option B).
+  /// When false, meshVertices is empty and the renderer must take the Option A
+  /// dimensioned-box path (Phase 99 Frozen Decision 2 baseline).
+  bool hasRealMesh = false;
+  /// Phase 109 (WTMESH-02): flattened XYZ floats of the convex hull of the
+  /// merged real_wipe_tower_mesh + real_brim_mesh. Layout: [x0,y0,z0, x1,y1,z1,
+  /// ...] with size divisible by 3. The v4.4 W1 corner-to-center convention is
+  /// ALREADY applied to the captured x/z above (SliceService.cpp adds half the
+  /// bed-plane extents); this vector stores the upstream mesh vertices as-is
+  /// (the bed-plane transform upstream Y -> Qt Z is applied in the renderer
+  /// builder, not here). Empty when hasRealMesh is false. NO TriangleMesh* or
+  /// its* is captured -- the worker extracts its.vertices into this flat vector
+  /// (Frozen Decision 1 extended).
+  std::vector<float> meshVertices;
 };
 
 /// Phase 108 (FMAP-01): filament-map auto-recommendation readback captured BY
