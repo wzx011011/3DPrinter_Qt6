@@ -5092,6 +5092,28 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
       if (auto *opt = pd->config.option("filament_map_mode", true))
         opt->setInt(static_cast<int>(writeMode));
 
+      // Phase 111 (FMAP-04): also populate pd->config["filament_map"] (a
+      // ConfigOptionInts) from the plate's manual mapping, NOT just the
+      // pd->filament_maps member. The bbs_3mf model.config writer
+      // (_add_model_config_file_to_archive, bbs_3mf.cpp:7969-7980) reads the
+      // CONFIG option "filament_map" -- it does NOT read pd->filament_maps
+      // (that member is read only by the slice_info.config writer at
+      // bbs_3mf.cpp:8207, a separate XML the model-load path does not parse for
+      // filament_maps). Without this config write, the <metadata
+      // key="filament_maps"> entry is never emitted to model.config and the
+      // array is lost on reload -- the deferred gap Phase 107 REVIEW noted in
+      // filamentMapModeRoundTripManualPreserved's SCOPE NOTE. Mirrors upstream
+      // Plater's set_key_value("filament_map", new ConfigOptionInts(...))
+      // pattern (the def-respecting option<T>(...,true) form avoids the type-
+      // mismatch crash an earlier Phase 107 draft hit on filament_map_mode).
+      // The reader (bbs_3mf.cpp:4450-4459) parses this back into both
+      // plate->filament_maps AND plate->config["filament_map"]; ProjectServiceMock
+      // reads plate->filament_maps, so the array now survives save->reload.
+      if (!p->filamentMaps().empty()) {
+        if (auto *opt = pd->config.option<Slic3r::ConfigOptionInts>("filament_map", true))
+          opt->values = p->filamentMaps();
+      }
+
       // Phase 96 (THUMBWRITE-01): populate plate_thumbnail from the plate's
       // captured QImage cache (PartPlate::thumbnail(), populated by Phase 95
       // QRhi capture). The writer emits the XML <metadata thumbnail_file=
