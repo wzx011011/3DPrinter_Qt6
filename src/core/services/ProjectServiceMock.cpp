@@ -1224,6 +1224,23 @@ bool ProjectServiceMock::setPlateFilamentMap(int plateIndex, int mode, const QLi
   return true;
 }
 
+// Phase 110 (FMAP-03): mode-only write path. Reuses the existing plate-write
+// plumbing by reading the current maps and delegating to setPlateFilamentMap.
+// The clamp at PartPlate::setFilamentMapMode(int) (R-02 / FP-04) guards the
+// int boundary, so out-of-range modes resolve to fmmDefault before the write.
+bool ProjectServiceMock::setPlateFilamentMapMode(int plateIndex, int mode)
+{
+  if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())
+    return false;
+  const OWzx::PartPlate *p = m_plateList->plate(plateIndex);
+  if (!p) return false;
+  // Preserve the existing per-extruder map; only the mode changes.
+  QList<int> currentMaps;
+  const std::vector<int> &v = p->filamentMaps();
+  for (int m : v) currentMaps.append(m);
+  return setPlateFilamentMap(plateIndex, mode, currentMaps);
+}
+
 int ProjectServiceMock::plateFilamentMapMode(int plateIndex) const
 {
   if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())

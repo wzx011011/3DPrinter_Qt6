@@ -150,6 +150,14 @@ public:
   // maps[i] = the extruder index that filament i maps to (1-based, matching
   // upstream PlateData::filament_maps at bbs_3mf.hpp:98).
   Q_INVOKABLE bool setPlateFilamentMap(int plateIndex, int mode, const QList<int>& maps);
+  // Phase 110 (FMAP-03): mode-only write path for the FilamentGroupPopup. The
+  // full setPlateFilamentMap above takes mode + maps together; the popup only
+  // changes the mode and leaves the per-extruder maps untouched, so this
+  // thin variant reuses the existing plate-write plumbing (reads the current
+  // maps then delegates to setPlateFilamentMap). PartPlate::setFilamentMapMode
+  // (Phase 110 R-02 / FP-04) clamps out-of-range ints at the Q_INVOKABLE
+  // boundary, so a QML caller passing mode=5 cannot store an invalid enum.
+  Q_INVOKABLE bool setPlateFilamentMapMode(int plateIndex, int mode);
   Q_INVOKABLE int plateFilamentMapMode(int plateIndex) const;
   Q_INVOKABLE QList<int> plateFilamentMaps(int plateIndex) const;
 #ifdef HAS_LIBSLIC3R

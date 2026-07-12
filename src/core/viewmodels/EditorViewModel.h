@@ -559,6 +559,14 @@ public:
   Q_INVOKABLE bool movePlate(int oldIndex, int newIndex);
   Q_INVOKABLE bool setPlatePrintable(int plateIndex, bool printable);
   Q_INVOKABLE bool isPlatePrintable(int plateIndex) const;
+  // Phase 110 (FMAP-03): mode-only write path for the FilamentGroupPopup.
+  // Delegates to ProjectServiceMock::setPlateFilamentMapMode, which reuses the
+  // existing plate-write plumbing and is guarded by the R-02 / FP-04 clamp at
+  // PartPlate::setFilamentMapMode(int). Emits stateChanged so the preview
+  // surface refreshes; the popup reads the Phase 108 auto* Q_PROPERTYs for the
+  // auto-recommended preview.
+  Q_INVOKABLE bool setPlateFilamentMapMode(int plateIndex, int mode);
+  Q_INVOKABLE int plateFilamentMapMode(int plateIndex) const;
   /// 查询指定平板是否有有效切片结果
   Q_INVOKABLE bool isPlateSliced(int plateIndex) const;
   /// 移动选中对象到指定平板（对齐上游 Plater::priv::on_arrange 跨平板拖拽）

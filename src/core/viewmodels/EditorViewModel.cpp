@@ -3969,6 +3969,27 @@ bool EditorViewModel::isPlatePrintable(int plateIndex) const
   return projectService_ ? projectService_->isPlatePrintable(plateIndex) : false;
 }
 
+// Phase 110 (FMAP-03): mode-only write path for the FilamentGroupPopup.
+// Delegates to ProjectServiceMock::setPlateFilamentMapMode; the clamp at
+// PartPlate::setFilamentMapMode(int) (R-02 / FP-04) guards the int boundary.
+bool EditorViewModel::setPlateFilamentMapMode(int plateIndex, int mode)
+{
+  if (!projectService_)
+    return false;
+  const bool ok = projectService_->setPlateFilamentMapMode(plateIndex, mode);
+  if (ok) {
+    invalidateSliceResultsForPlate(plateIndex);
+    emit stateChanged();
+  }
+  return ok;
+}
+
+int EditorViewModel::plateFilamentMapMode(int plateIndex) const
+{
+  return projectService_ ? projectService_->plateFilamentMapMode(plateIndex)
+                         : int(OWzx::FilamentMapMode::fmmAutoForFlush);
+}
+
 bool EditorViewModel::isPlateSliced(int plateIndex) const
 {
   return m_slicedPlateIndices.contains(plateIndex);
