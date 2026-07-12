@@ -12,6 +12,13 @@
 #include "core/model/PartPlateList.h"
 
 #ifdef HAS_LIBSLIC3R
+// Phase 112 (MEASURE-01): indexed_triangle_set lives at GLOBAL scope in
+// libslic3r (forward-declared before `namespace Slic3r` at Measure.hpp:9 and
+// used as a public value member of TriangleMesh at TriangleMesh.hpp:158). It
+// is forward-declared here (not fully included) so the header stays free of
+// the TriangleMesh.hpp / Point.hpp / admesh pollution; the complete type is
+// only required in the .cpp where the accessor is implemented.
+struct indexed_triangle_set;
 namespace Slic3r
 {
   class Model;
@@ -376,6 +383,83 @@ public:
   Q_INVOKABLE int objectRepairedErrors(int objectIndex) const;
   /// 获取对象网格体积 mm^3（对齐上游 TriangleMeshStats::volume，考虑实例变换）
   Q_INVOKABLE float objectVolume(int objectIndex) const;
+
+  // == Phase 112 (MEASURE-01): per-volume ITS accessor ========================
+  // Returns the per-volume indexed_triangle_set (ITS) for the ModelVolume at
+  // (objectIndex, volumeIndex), as a std::shared_ptr<const indexed_triangle_set>.
+  //
+  // This is the PUBLIC API that unblocks the cross-workstream dependencies:
+  //   - Phase 113 (SceneRaycaster port, one raycaster per volume,
+  //     SceneRaycaster.hpp:71-72 m_volumes).
+  //   - Phase 114 (Measure::Measuring ctor, Measure.hpp:122
+  //     `explicit Measuring(const indexed_triangle_set&)`).
+  //   - AssembleViewDataPool ModelObjectsClipper (the reserved
+  //     AssembleViewDataID::ModelObjectsClipper = 1 << 4 slot at
+  //     AssembleViewDataPool.h:44).
+  //
+  // == OWNERSHIP CONTRACT (Pitfalls.md pitfall 6 / MI-02) =====================
+  // The returned shared_ptr is a SHALLOW-SHARE aliasing pointer: it shares the
+  // refcount of the ModelVolume's internal std::shared_ptr<const TriangleMesh>
+  // (Model.hpp:856 mesh_ptr(), member m_mesh at Model.hpp:1040) and points at
+  // &mesh.its (TriangleMesh.hpp:158 -- `its` is a public value member). Because
+  // the refcount is shared, the TriangleMesh (and therefore the ITS) stays
+  // alive for as long as ANY caller holds the returned shared_ptr -- even if the
+  // ModelVolume itself is removed mid-use (deleteObject / cut / boolean / etc.
+  // drop the ModelVolume, but the previous ITS shared_ptr remains valid until
+  // the last holder releases it). This closes the use-after-free hazard at the
+  // libslic3r->Qt boundary documented in pitfall 6 (the "detach-on-copy" and
+  // "rebuild timing" lifetime bugs).
+  //
+  // == SHALLOW-SHARE DECISION (MI-03) =========================================
+  // Shallow-share is SAFE here and is chosen over a copy:
+  //   1. The ModelVolume already owns the TriangleMesh via a shared_ptr (NOT a
+  //      raw owning pointer), so the ITS reference is stable for the
+  //      TriangleMesh's lifetime, and the TriangleMesh is reference-counted.
+  //   2. set_mesh / reset_mesh (Model.hpp:857-863) always construct a NEW
+  //      shared_ptr (make_shared); they never mutate the existing TriangleMesh
+  //      in place. A caller holding a prior ITS therefore never observes a
+  //      torn-down or detached ITS -- the worst case is a STALE-but-valid ITS,
+  //      which is exactly the contract Measure::Measuring needs (it indexes
+  //      the mesh in its ctor and treats it as immutable thereafter).
+  //   3. Qt implicit-sharing detach does NOT apply: TriangleMesh / ITS are
+  //      plain libslic3r types (no QSharedData), and the shared_ptr<const ...>
+  //      constness prevents writes from the Qt side.
+  // The aliasing constructor (std::shared_ptr<const indexed_triangle_set>(
+  // meshSharedPtr, &meshSharedPtr->its)) gives zero-copy shallow-share while
+  // preserving the refcount tie to the TriangleMesh. This is the cleanest
+  // approach.
+  //
+  // == CACHE DECISION (MI-04) =================================================
+  // NO separate mesh cache is added on ProjectServiceMock. Rationale: the
+  // ModelVolume's shared_ptr<const TriangleMesh> m_mesh IS the cache -- it is
+  // the in-memory source of truth, it is already reference-counted, and
+  // set_mesh/reset_mesh atomically swap it. A parallel cache keyed by
+  // (objectIndex, volumeIndex) would (a) duplicate the libslic3r ownership
+  // model, (b) require its own invalidation wiring on every model mutation
+  // (load/cut/boolean/simplify/drill/orient/arrange), and (c) risk diverging
+  // from the live mesh after a mutation if a cache-flush is missed. The
+  // accessor reads the live m_mesh every call (O(1) pointer dereference), so
+  // there is no construction cost to amortize. If a future phase proves that
+  // hot-path callers (e.g. per-mouse-move raycast in Phase 113) need a stable
+  // snapshot independent of mutations, they hold the returned shared_ptr for
+  // the duration of their use -- that is the cache, and it is caller-owned.
+  //
+  // == DEFENSIVE NULL RETURN (MI-05) ==========================================
+  // Returns nullptr for: no model loaded; objectIndex out of range; object
+  // null; volumeIndex out of range; volume null; volume mesh empty. Callers
+  // MUST null-check before dereferencing. No exceptions, no crashes.
+  //
+  // == SURFACE FEATURE BOUNDARY (MI-06 / pitfall 6, FUTURE Phase 113/114) =====
+  // This accessor returns the ITS ONLY. It does NOT return libslic3r
+  // SurfaceFeature instances. SurfaceFeature (Measure.hpp:27-99) carries raw
+  // `void* volume` (Measure.hpp:95) and `std::vector<int>* plane_indices`
+  // (Measure.hpp:96) that point at libslic3r-owned memory. These raw pointers
+  // MUST NOT escape into Qt -- Phase 113 (raycaster) and Phase 114 (Measuring)
+  // are responsible for scrubbing/repointing them to Qt-owned handles at the
+  // boundary (e.g. cast a Qt volume index to void* for SurfaceFeature::volume,
+  // never hand through a libslic3r ModelVolume*). This accessor flags that
+  // boundary concern in its contract so the downstream phases cannot miss it.
+  std::shared_ptr<const indexed_triangle_set> volumeMeshIts(int objectIndex, int volumeIndex) const;
 #endif
 
 signals:

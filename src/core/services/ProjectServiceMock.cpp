@@ -3458,6 +3458,47 @@ float ProjectServiceMock::objectVolume(int objectIndex) const
     return 0.f;
   return model_->objects[size_t(objectIndex)]->get_object_stl_stats().volume;
 }
+
+// Phase 112 (MEASURE-01): per-volume ITS accessor. See the ownership contract
+// in ProjectServiceMock.h (MI-02/MI-03/MI-04/MI-05/MI-06). Shallow-share via
+// the shared_ptr aliasing constructor: the returned shared_ptr shares the
+// ModelVolume's m_mesh refcount and points at &mesh.its, so the TriangleMesh
+// (and its ITS) stays alive as long as ANY caller holds the result.
+std::shared_ptr<const indexed_triangle_set>
+ProjectServiceMock::volumeMeshIts(int objectIndex, int volumeIndex) const
+{
+  // MI-05: defensive null return. No model, no object, no volume -> nullptr.
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return nullptr;
+
+  const auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || volumeIndex < 0 || size_t(volumeIndex) >= obj->volumes.size())
+    return nullptr;
+
+  const Slic3r::ModelVolume *volume = obj->volumes[size_t(volumeIndex)];
+  if (!volume)
+    return nullptr;
+
+  // ModelVolume::mesh_ptr() returns the internal std::shared_ptr<const
+  // TriangleMesh> (Model.hpp:856). Grab it so the aliasing pointer keeps the
+  // TriangleMesh alive.
+  const std::shared_ptr<const Slic3r::TriangleMesh> meshPtr = volume->mesh_ptr();
+  if (!meshPtr)
+    return nullptr;
+
+  // MI-05: also guard against an empty mesh (no geometry) so callers do not
+  // receive an ITS they would immediately reject. its.vertices + its.indices
+  // are the same fields meshData()/meshBatchSourceObjectIndices() check at
+  // :339 and :563.
+  const indexed_triangle_set &its = meshPtr->its;
+  if (its.vertices.empty() || its.indices.empty())
+    return nullptr;
+
+  // MI-03 shallow-share: alias meshPtr's refcount onto &its. Zero copy. The
+  // returned shared_ptr owns one ref on the TriangleMesh; when the last holder
+  // releases it, the TriangleMesh (and its `its` member) is destroyed.
+  return std::shared_ptr<const indexed_triangle_set>(meshPtr, &its);
+}
 #endif
 
 // ── Layer range support (对齐上游 ModelObject::layer_config_ranges) ──
