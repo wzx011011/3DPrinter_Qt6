@@ -10,7 +10,6 @@
 #include <QDateTime>
 #include <QDir>
 #include <QStringList>
-#include <QTimer>
 #include <QVector>
 #include <QtQml/qqml.h>
 #include <functional>
@@ -204,56 +203,57 @@ static StartupOpenRequest parseStartupOpenRequest(QCoreApplication &app)
   return request;
 }
 
+// FIXTURE-02: applies the parsed startup open-page / load-model / open-dialog
+// requests directly against the backend. The readiness gate (rootObjects check
+// + QQuickWindow::frameSwapped one-shot) lives at the call site in main(),
+// where the QQmlApplicationEngine is in scope. This function only runs after
+// the gate has fired, so the QML scene graph has rendered at least one frame
+// and screenshots are deterministic. The previous zero-delay timer trick fired
+// on the next event-loop iteration, before the first frame was guaranteed.
 static void applyStartupOpenRequests(const StartupOpenRequest &request,
                                      BackendContext &backend)
 {
-  if (request.page.isEmpty() && request.dialogs.isEmpty() && request.modelPaths.isEmpty())
-    return;
-
-  QTimer::singleShot(0, &backend, [&backend, request]()
+  if (!request.page.isEmpty())
   {
-    if (!request.page.isEmpty())
+    bool handled = false;
+    for (const StartupPageRoute &route : startupPageRoutes())
     {
-      bool handled = false;
-      for (const StartupPageRoute &route : startupPageRoutes())
+      if (routeMatches(route.aliases, request.page))
       {
-        if (routeMatches(route.aliases, request.page))
-        {
-          backend.requestSelectTab(route.page);
-          appendStartupLog(QStringLiteral("Startup open-page handled: %1").arg(request.page));
-          handled = true;
-          break;
-        }
+        backend.requestSelectTab(route.page);
+        appendStartupLog(QStringLiteral("Startup open-page handled: %1").arg(request.page));
+        handled = true;
+        break;
       }
-      if (!handled)
-        appendStartupLog(QStringLiteral("Startup open-page ignored: %1").arg(request.page));
     }
+    if (!handled)
+      appendStartupLog(QStringLiteral("Startup open-page ignored: %1").arg(request.page));
+  }
 
-    for (const QString &modelPath : request.modelPaths)
-    {
-      const bool loaded = backend.topbarImportModel(modelPath);
-      appendStartupLog(QStringLiteral("Startup load-model %1: %2")
-                           .arg(loaded ? QStringLiteral("handled") : QStringLiteral("failed"),
-                                modelPath));
-    }
+  for (const QString &modelPath : request.modelPaths)
+  {
+    const bool loaded = backend.topbarImportModel(modelPath);
+    appendStartupLog(QStringLiteral("Startup load-model %1: %2")
+                         .arg(loaded ? QStringLiteral("handled") : QStringLiteral("failed"),
+                              modelPath));
+  }
 
-    for (const QString &dialog : request.dialogs)
+  for (const QString &dialog : request.dialogs)
+  {
+    bool handled = false;
+    for (const StartupDialogRoute &route : startupDialogRoutes())
     {
-      bool handled = false;
-      for (const StartupDialogRoute &route : startupDialogRoutes())
+      if (routeMatches(route.aliases, dialog))
       {
-        if (routeMatches(route.aliases, dialog))
-        {
-          route.open(backend);
-          appendStartupLog(QStringLiteral("Startup open-dialog handled: %1").arg(dialog));
-          handled = true;
-          break;
-        }
+        route.open(backend);
+        appendStartupLog(QStringLiteral("Startup open-dialog handled: %1").arg(dialog));
+        handled = true;
+        break;
       }
-      if (!handled)
-        appendStartupLog(QStringLiteral("Startup open-dialog ignored: %1").arg(dialog));
     }
-  });
+    if (!handled)
+      appendStartupLog(QStringLiteral("Startup open-dialog ignored: %1").arg(dialog));
+  }
 }
 
 int main(int argc, char *argv[])
@@ -346,7 +346,40 @@ int main(int argc, char *argv[])
     return -1;
   }
 
-  applyStartupOpenRequests(startupOpenRequest, backend);
+  // FIXTURE-02: gate argv fixture application on BOTH (a) the QML object tree
+  // being built (guaranteed by the rootObjects().isEmpty() check above, since
+  // engine->load() is synchronous) AND (b) the first QQuickWindow::frameSwapped
+  // signal (the scene graph has rendered at least one frame). The previous
+  // zero-delay timer trick ran on the next event-loop iteration, before a frame
+  // was guaranteed, so external screenshot capture could catch a blank/partial
+  // window. The gate fires EXACTLY ONCE on the first frameSwapped (one-shot
+  // connection: disconnect in the handler). If the root object is not a
+  // QQuickWindow (defensive - shouldn't happen for main.qml), apply immediately
+  // with a startup-log warning so the fixture plumbing degrades gracefully
+  // instead of hanging forever. The empty-request case skips the gate entirely.
+  if (!startupOpenRequest.page.isEmpty()
+      || !startupOpenRequest.dialogs.isEmpty()
+      || !startupOpenRequest.modelPaths.isEmpty())
+  {
+    auto *rootWindow = qobject_cast<QQuickWindow *>(engine->rootObjects().value(0));
+    if (rootWindow)
+    {
+      auto *frameGateConnection = new QMetaObject::Connection;
+      *frameGateConnection = QObject::connect(
+          rootWindow, &QQuickWindow::frameSwapped, rootWindow,
+          [&backend, startupOpenRequest, frameGateConnection]() {
+            QObject::disconnect(*frameGateConnection);
+            delete frameGateConnection;
+            applyStartupOpenRequests(startupOpenRequest, backend);
+          },
+          Qt::QueuedConnection);
+    }
+    else
+    {
+      appendStartupLog(QStringLiteral("FIXTURE-02: root object is not a QQuickWindow; applying startup requests immediately (degraded mode)"));
+      applyStartupOpenRequests(startupOpenRequest, backend);
+    }
+  }
 
 #ifdef Q_OS_WIN
   if (qEnvironmentVariableIsSet("OWZX_FRAMELESS"))
