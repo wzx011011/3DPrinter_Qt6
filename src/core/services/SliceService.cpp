@@ -691,15 +691,28 @@ void SliceService::startSlice(const QString &projectName)
           if (!mergedMesh.its.vertices.empty())
           {
             const Slic3r::TriangleMesh shell = mergedMesh.convex_hull_3d();
-            const auto &shellVerts = shell.its.vertices;
-            if (!shellVerts.empty())
+            // Phase 109 REVIEW CRITICAL-1: shell.its.vertices is a DEDUPLICATED
+            // POINT CLOUD, not a triangle soup (its_convex_hull at
+            // TriangleMesh.cpp:1342-1424 builds a separate its.indices facet
+            // list). Upstream renders the hull via init_from(shell) which uses
+            // BOTH. Expand the indices into a flattened XYZ triangle soup here
+            // so downstream consumers (buildWipeTowerMeshVertices + SoftwareViewport
+            // mirror) receive the triangle payload they expect, not a point cloud
+            // that would render as garbage GL_TRIANGLES.
+            const auto &sv = shell.its.vertices;
+            const auto &si = shell.its.indices;
+            if (!sv.empty() && !si.empty())
             {
-              capturedGeometry.meshVertices.reserve(shellVerts.size() * 3);
-              for (const Slic3r::Vec3f &v : shellVerts)
+              capturedGeometry.meshVertices.reserve(si.size() * 9);
+              for (const Slic3r::Vec3i32 &f : si)
               {
-                capturedGeometry.meshVertices.push_back(v.x());
-                capturedGeometry.meshVertices.push_back(v.y());
-                capturedGeometry.meshVertices.push_back(v.z());
+                for (int k = 0; k < 3; ++k)
+                {
+                  const Slic3r::Vec3f &v = sv[f[k]];
+                  capturedGeometry.meshVertices.push_back(v.x());
+                  capturedGeometry.meshVertices.push_back(v.y());
+                  capturedGeometry.meshVertices.push_back(v.z());
+                }
               }
               capturedGeometry.hasRealMesh = true;
             }

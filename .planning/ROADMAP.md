@@ -47,7 +47,7 @@
 - [x] Phase 106: D3D12 Crash Root-Cause And Backend Readiness (time-boxed) (completed 2026-07-12)
 - [x] Phase 107: Filament-Map Mode Enum Widening And 3MF Migration (completed 2026-07-12)
 - [x] Phase 108: Filament-Map Auto Recommendation Readback (completed 2026-07-12)
-- [ ] Phase 109: Option B Wipe-Tower Mesh Readback And Real Rendering
+- [x] Phase 109: Option B Wipe-Tower Mesh Readback And Real Rendering (completed 2026-07-12)
 - [ ] Phase 110: Filament-Map Popup UI And Mode Surfacing
 - [ ] Phase 111: Filament-Map Save-Reload Round-Trip
 - [ ] Phase 112: Per-Volume ITS Accessor And Mesh Cache
@@ -64,7 +64,7 @@
 | 106 | 1/1 | Complete   | 2026-07-12 |
 | 107 | 1/1 | Complete   | 2026-07-12 |
 | 108 | 1/1 | Complete   | 2026-07-12 |
-| 109 | Option B Wipe-Tower Mesh Readback And Real Rendering | Capture `wipe_tower_mesh_data` (+ `convex_hull_3d`) in the worker, render the real mesh post-slice via a NEW parallel builder/upload path, and preserve the v4.4-frozen Option A box as the fallback when the mesh is `nullopt` — Option A and Option B coexist gated on the mesh, shipping together (re-opens Phase 99 Frozen Decision 2). | WTMESH-01, WTMESH-02, WTMESH-03 |
+| 109 | 1/1 | Complete   | 2026-07-12 |
 | 110 | Filament-Map Popup UI And Mode Surfacing | Surface the 3 selectable modes (AutoForFlush / AutoForMatch / Manual) plus the auto-recommended map preview in a `FilamentGroupPopup` QML driven by EditorViewModel Q_INVOKABLE/Q_PROPERTY APIs (no QML-local state); `fmmDefault` is the per-plate inherit sentinel, NOT a 4th radio button. | FMAP-03 |
 | 111 | Filament-Map Save-Reload Round-Trip | Automated test asserting the auto-recommended map round-trips through save→reload (mirrors the Phase 97 thumbnail pattern) and that `fmmDefault` inheritance resolves correctly. Ships last in the WS1 workstream. | FMAP-04 |
 | 112 | Per-Volume ITS Accessor And Mesh Cache | Add a per-volume ITS accessor to `ProjectServiceMock` (current `meshData()` is per-object-flattened) with an explicit `shared_ptr<indexed_triangle_set>` ownership contract + mesh-changed signal — the cross-workstream dependency that also unblocks the AssembleViewDataPool `ModelObjectsClipper` registration. | MEASURE-01 |
@@ -153,7 +153,7 @@ Success criteria:
 ### Phase 109: Option B Wipe-Tower Mesh Readback And Real Rendering
 
 **Status:** Not started
-**Plans:** 0/0
+**Plans:** 1/1 plans complete
 **Workstream:** WS2 (Option B Real Wipe-Tower Mesh) — re-opens Phase 99 Frozen Decision 2
 
 Success criteria:

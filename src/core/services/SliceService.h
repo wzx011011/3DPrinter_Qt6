@@ -85,15 +85,18 @@ struct WipeTowerGeometry {
   /// When false, meshVertices is empty and the renderer must take the Option A
   /// dimensioned-box path (Phase 99 Frozen Decision 2 baseline).
   bool hasRealMesh = false;
-  /// Phase 109 (WTMESH-02): flattened XYZ floats of the convex hull of the
-  /// merged real_wipe_tower_mesh + real_brim_mesh. Layout: [x0,y0,z0, x1,y1,z1,
-  /// ...] with size divisible by 3. The v4.4 W1 corner-to-center convention is
+  /// Phase 109 (WTMESH-02): flattened XYZ TRIANGLE SOUP expanded from the
+  /// convex hull of the merged real_wipe_tower_mesh + real_brim_mesh. Layout:
+  /// [x0,y0,z0, x1,y1,z1, x2,y2,z2, ...] -- 9 floats per triangle (3 verts ×
+  /// XYZ), size divisible by 9. The v4.4 W1 corner-to-center convention is
   /// ALREADY applied to the captured x/z above (SliceService.cpp adds half the
   /// bed-plane extents); this vector stores the upstream mesh vertices as-is
   /// (the bed-plane transform upstream Y -> Qt Z is applied in the renderer
   /// builder, not here). Empty when hasRealMesh is false. NO TriangleMesh* or
-  /// its* is captured -- the worker extracts its.vertices into this flat vector
-  /// (Frozen Decision 1 extended).
+  /// its* is captured -- the worker EXPANDS shell.its.indices into this flat
+  /// soup (its.vertices alone is a deduplicated point cloud that would render
+  /// as garbage GL_TRIANGLES; the indices carry the triangle connectivity --
+  /// Phase 109 REVIEW CRITICAL-1). Frozen Decision 1 extended.
   std::vector<float> meshVertices;
 };
 
