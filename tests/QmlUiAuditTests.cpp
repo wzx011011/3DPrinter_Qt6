@@ -4181,12 +4181,18 @@ void QmlUiAuditTests::filamentMapModeEnumWidenedToUpstream4Value()
   // FMAP-02 / FM-03 (read-side migration present): the read site must keep the
   // coEnum-vs-legacy migration. The legacy raw-int-1 -> fmmManual mapping is
   // the user-visible behavior change (pre-v4.5 'Manual'=1 stays Manual, NOT the
-  // new fmmAutoForMatch=1). Assert the discriminator + the fmmManual mapping
-  // anchor both stay.
+  // new fmmAutoForMatch=1). Phase 111 (FMAP-04 / R-01) factored the legacy
+  // mapping into OWzx::migrateLegacyFilamentMapMode (PartPlate.h/PartPlate.cpp)
+  // so the legacy discriminator branch is unit-tested in isolation; the read
+  // sites now delegate to that helper. Assert the discriminator stays inline
+  // AND the factored-helper call is present at the legacy branch (the call
+  // carries the documented 0->fmmAutoForFlush / 1->fmmManual / else->fmmDefault
+  // mapping). The helper declaration + definition are locked by the Phase 111
+  // filamentMapSaveReloadRoundTripCoversModesAndLegacyMigration slot.
   QVERIFY2(serviceSource.contains(QStringLiteral("opt->type() == Slic3r::coEnum")),
            "FMAP-02/FM-03: ProjectServiceMock read site must discriminate typed coEnum from legacy raw int");
-  QVERIFY2(serviceSource.contains(QStringLiteral("raw 1 (old \"Manual\")  -> fmmManual")),
-           "FMAP-02/FM-03: ProjectServiceMock read site must keep the legacy raw-int-1 -> fmmManual migration (the pre-v4.5 'Manual'=1 preservation)");
+  QVERIFY2(serviceSource.contains(QStringLiteral("OWzx::migrateLegacyFilamentMapMode(int(opt->getInt()))")),
+           "FMAP-02/FM-03: ProjectServiceMock read site must delegate the legacy raw-int branch to OWzx::migrateLegacyFilamentMapMode (the factored legacy-int-1 -> fmmManual migration)");
 }
 
 void QmlUiAuditTests::filamentMapAutoRecommendationReadbackPresent()
