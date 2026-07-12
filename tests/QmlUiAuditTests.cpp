@@ -236,6 +236,18 @@ private slots:
   // QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with an FMAP-01-named
   // message). Source-level only; runs in the regression ctest.
   void filamentMapAutoRecommendationReadbackPresent();
+  // Phase 109-01 (WTMESH-01/02/03): source-audit lock proving the Option B
+  // real wipe-tower mesh path COEXISTS with the Option A baseline (Phase 99
+  // Frozen Decision 2). Locks: (a) WipeTowerGeometry POD has the hasRealMesh +
+  // meshVertices fields (WTMESH-01); (b) the worker capture reads
+  // wipe_tower_mesh_data + convex_hull_3d (WTMESH-02 capture-by-value); (c)
+  // buildWipeTowerMeshVertices exists PARALLEL to buildWipeTowerVertices
+  // (WTMESH-03 -- Option A is NOT modified); (d) uploadWipeTowerBuffer has the
+  // hasRealMesh branch; (e) the Q_PROPERTY chain + PreparePage binding +
+  // SoftwareViewport mirror are wired. Mirrors the Phase 102/108 source-audit
+  // pattern (QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with
+  // a WTMESH-named message). Source-level only; runs in the regression ctest.
+  void optionBWipeTowerMeshCoexistsWithOptionA();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -3697,6 +3709,125 @@ void QmlUiAuditTests::wipeTowerReadbackAndRenderAnchorsPresent()
            "WT-SOFTWARE-VIEWPORT: SoftwareViewport.cpp paint must consume m_showWipeTower (the WTREAD-02 gate)");
   QVERIFY2(softwareViewport.contains(QStringLiteral("m_wipeTowerWidth")),
            "WT-SOFTWARE-VIEWPORT: SoftwareViewport.cpp paint must consume m_wipeTowerWidth (real dim from readback)");
+}
+
+void QmlUiAuditTests::optionBWipeTowerMeshCoexistsWithOptionA()
+{
+  // Phase 109-01 (WTMESH-01/02/03): Option B real wipe-tower mesh COEXISTS
+  // with Option A baseline source-audit lock. Phase 99 Frozen Decision 2 froze
+  // Option A as the v4.4 baseline and locked Option B as a future upgrade;
+  // Phase 109 RE-OPENS that decision and adds Option B as a PARALLEL path
+  // (Option A is preserved as the fallback branch). This test locks the
+  // coexistence contract so a future regression cannot silently remove
+  // Option B (dropping the real mesh path) OR Option A (breaking the
+  // single-material / pre-slice fallback).
+  //
+  // Pattern: QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with
+  // a WTMESH-named message (deterministic, build-dir-independent). Mirrors the
+  // Phase 102 wipeTowerReadbackAndRenderAnchorsPresent pattern in this file.
+
+  const QString sliceHeader = readSource(QStringLiteral("src/core/services/SliceService.h"));
+  const QString sliceSource = readSource(QStringLiteral("src/core/services/SliceService.cpp"));
+  const QString geometryHeader = readSource(QStringLiteral("src/core/rendering/GizmoGeometry.h"));
+  const QString geometrySource = readSource(QStringLiteral("src/core/rendering/GizmoGeometry.cpp"));
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString softwareViewport = readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.cpp"));
+  QVERIFY2(!sliceHeader.isEmpty(), "Unable to read SliceService.h");
+  QVERIFY2(!sliceSource.isEmpty(), "Unable to read SliceService.cpp");
+  QVERIFY2(!geometryHeader.isEmpty(), "Unable to read GizmoGeometry.h");
+  QVERIFY2(!geometrySource.isEmpty(), "Unable to read GizmoGeometry.cpp");
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!rendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!editorSource.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!softwareViewport.isEmpty(), "Unable to read SoftwareViewport.cpp");
+
+  // (1) WTMESH-01 (POD extended): WipeTowerGeometry must have the hasRealMesh
+  //     bool field AND the meshVertices std::vector<float> field. The Option A
+  //     dim fields stay in place (the POD is EXTENDED, not replaced).
+  QVERIFY2(sliceHeader.contains(QStringLiteral("bool hasRealMesh = false;")),
+           "WTMESH-01: WipeTowerGeometry must have a hasRealMesh bool field (default false)");
+  QVERIFY2(sliceHeader.contains(QStringLiteral("std::vector<float> meshVertices;")),
+           "WTMESH-01: WipeTowerGeometry must have a meshVertices std::vector<float> field (flattened XYZ, capture-by-value)");
+
+  // (2) WTMESH-02 (worker capture-by-value): the worker must read
+  //     wipe_tower_mesh_data, merge real_brim_mesh, run convex_hull_3d(), and
+  //     extract its.vertices into the flat float vector. NO TriangleMesh* or
+  //     its* may escape -- the capturedGeometry.meshVertices.push_back chain
+  //     proves the pure-float extraction.
+  QVERIFY2(sliceSource.contains(QStringLiteral("wipe_tower_mesh_data != std::nullopt")),
+           "WTMESH-02: SliceService worker must gate the mesh capture on wipe_tower_mesh_data != std::nullopt");
+  QVERIFY2(sliceSource.contains(QStringLiteral("real_brim_mesh")),
+           "WTMESH-02: SliceService worker must read real_brim_mesh (mirrors upstream 3DScene.cpp:906-909 merge)");
+  QVERIFY2(sliceSource.contains(QStringLiteral("convex_hull_3d()")),
+           "WTMESH-02: SliceService worker must run convex_hull_3d() on the merged mesh (mirrors upstream 3DScene.cpp:914)");
+  QVERIFY2(sliceSource.contains(QStringLiteral("capturedGeometry.meshVertices.push_back")),
+           "WTMESH-02: SliceService worker must extract its.vertices into meshVertices as flattened floats (capture-by-value, no TriangleMesh* escape)");
+  QVERIFY2(sliceSource.contains(QStringLiteral("capturedGeometry.hasRealMesh = true")),
+           "WTMESH-02: SliceService worker must set capturedGeometry.hasRealMesh = true only when the mesh is populated");
+
+  // (3) WTMESH-03 (Option B builder PARALLEL to Option A): buildWipeTower-
+  //     MeshVertices must exist in BOTH the header (declaration) and the cpp
+  //     (implementation). Option A buildWipeTowerVertices must STILL EXIST
+  //     UNCHANGED (Phase 99 Frozen Decision 2 baseline is preserved).
+  QVERIFY2(geometryHeader.contains(QStringLiteral("buildWipeTowerMeshVertices")),
+           "WTMESH-03: GizmoGeometry.h must declare buildWipeTowerMeshVertices (Option B builder)");
+  QVERIFY2(geometryHeader.contains(QStringLiteral("buildWipeTowerVertices")),
+           "WTMESH-03: GizmoGeometry.h must STILL declare buildWipeTowerVertices (Option A baseline preserved)");
+  QVERIFY2(geometrySource.contains(QStringLiteral("GizmoGeometry::buildWipeTowerMeshVertices")),
+           "WTMESH-03: GizmoGeometry.cpp must implement buildWipeTowerMeshVertices (Option B builder)");
+  QVERIFY2(geometrySource.contains(QStringLiteral("GizmoGeometry::buildWipeTowerVertices")),
+           "WTMESH-03: GizmoGeometry.cpp must STILL implement buildWipeTowerVertices (Option A baseline preserved)");
+
+  // (4) WTMESH-04 (renderer branch): uploadWipeTowerBuffer must have the
+  //     hasRealMesh branch (Option B) AND the Option A else fallback. The
+  //     RhiViewportRenderer must carry the m_wipeTowerHasRealMesh +
+  //     m_wipeTowerMeshVertices members.
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_wipeTowerHasRealMesh")),
+           "WTMESH-04: RhiViewportRenderer.h must carry m_wipeTowerHasRealMesh (Option B gate)");
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_wipeTowerMeshVertices")),
+           "WTMESH-04: RhiViewportRenderer.h must carry m_wipeTowerMeshVertices (Option B mesh)");
+  QVERIFY2(rendererSource.contains(QStringLiteral("buildWipeTowerMeshVertices(")),
+           "WTMESH-04: RhiViewportRenderer::uploadWipeTowerBuffer must call buildWipeTowerMeshVertices on the Option B branch");
+  QVERIFY2(rendererSource.contains(QStringLiteral("buildWipeTowerVertices(m_wipeTowerX,")),
+           "WTMESH-04: RhiViewportRenderer::uploadWipeTowerBuffer must STILL call buildWipeTowerVertices on the Option A else branch (Phase 99 Frozen Decision 2 preserved)");
+
+  // (5) WTMESH-05 (Q_PROPERTY chain wired): RhiViewport + EditorViewModel must
+  //     expose the wipeTowerHasRealMesh + wipeTowerMeshVertices Q_PROPERTYs.
+  //     The onWipeTowerGeometryReady slot must mirror geometry.hasRealMesh +
+  //     geometry.meshVertices.
+  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_PROPERTY(bool wipeTowerHasRealMesh")),
+           "WTMESH-05: RhiViewport.h must expose wipeTowerHasRealMesh Q_PROPERTY");
+  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList wipeTowerMeshVertices")),
+           "WTMESH-05: RhiViewport.h must expose wipeTowerMeshVertices Q_PROPERTY");
+  QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(bool wipeTowerHasRealMesh")),
+           "WTMESH-05: EditorViewModel.h must expose wipeTowerHasRealMesh Q_PROPERTY");
+  QVERIFY2(editorSource.contains(QStringLiteral("m_wipeTowerHasRealMesh = geometry.hasRealMesh")),
+           "WTMESH-05: EditorViewModel::onWipeTowerGeometryReady must mirror geometry.hasRealMesh on the valid path");
+  QVERIFY2(editorSource.contains(QStringLiteral("m_wipeTowerHasRealMesh = false")),
+           "WTMESH-05: EditorViewModel::onWipeTowerGeometryReady must force m_wipeTowerHasRealMesh = false on the invalid path (no stale mesh leak)");
+
+  // (6) WTMESH-06 (PreparePage binding): GLViewport must bind
+  //     wipeTowerHasRealMesh + wipeTowerMeshVertices to root.editorVm.
+  QVERIFY2(preparePage.contains(QStringLiteral("wipeTowerHasRealMesh: root.editorVm ? root.editorVm.wipeTowerHasRealMesh")),
+           "WTMESH-06: PreparePage.qml GLViewport must bind wipeTowerHasRealMesh to editorVm");
+  QVERIFY2(preparePage.contains(QStringLiteral("wipeTowerMeshVertices: root.editorVm ? root.editorVm.wipeTowerMeshVertices")),
+           "WTMESH-06: PreparePage.qml GLViewport must bind wipeTowerMeshVertices to editorVm");
+
+  // (7) WTMESH-07 (SoftwareViewport mirror): the fallback renderer must consume
+  //     m_wipeTowerHasRealMesh + m_wipeTowerMeshVertices so the software path
+  //     does not lag the RHI path.
+  QVERIFY2(softwareViewport.contains(QStringLiteral("m_wipeTowerHasRealMesh")),
+           "WTMESH-07: SoftwareViewport.cpp must consume m_wipeTowerHasRealMesh (Option B gate on the fallback path)");
+  QVERIFY2(softwareViewport.contains(QStringLiteral("m_wipeTowerMeshVertices")),
+           "WTMESH-07: SoftwareViewport.cpp must consume m_wipeTowerMeshVertices (Option B mesh on the fallback path)");
 }
 
 void QmlUiAuditTests::argvFixtureGateUsesFrameSwappedNotSingleShot()

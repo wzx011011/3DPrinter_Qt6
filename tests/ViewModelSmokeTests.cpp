@@ -312,6 +312,17 @@ private slots:
   // this locks the end-to-end dim-reach contract so a future refactor
   // cannot silently unbind the GLViewport.
   void wipeTowerRealDimsReachRendererPipeline();
+  // Phase 109-01 (WTMESH-01/02/03): Option B real wipe-tower mesh readback +
+  // capture-by-value invariant regression lock. Drives
+  // SliceService::wipeTowerGeometryReady directly (no real slice needed) with
+  // a WipeTowerGeometry carrying hasRealMesh=true + a flattened XYZ
+  // meshVertices vector (WTMESH-01 valid path), then with hasRealMesh=false
+  // (WTMESH-02 Option A fallback gate), and asserts the EditorViewModel
+  // Q_PROPERTYs mirror both states. The capture-by-value invariant (Frozen
+  // Decision 1 extended) is locked structurally: WipeTowerGeometry is a POD
+  // with a std::vector<float> meshVertices field (pure float, NO TriangleMesh*
+  // or its*), so the test confirms the field type via the readback round-trip.
+  void wipeTowerRealMeshReadbackGatesOptionBAndOptionAFallback();
 
 private:
   bool hasLibslic3r() const;
@@ -4193,6 +4204,102 @@ void ViewModelSmokeTests::wipeTowerRealDimsReachRendererPipeline()
   QVERIFY2(qml.contains(QStringLiteral("showWipeTower: root.editorVm ? root.editorVm.showWipeTower : false")),
            "PreparePage.qml GLViewport showWipeTower must default to false when editorVm is null (WTREAD-02)");
 }
+
+void ViewModelSmokeTests::wipeTowerRealMeshReadbackGatesOptionBAndOptionAFallback()
+{
+  // Phase 109-01 (WTMESH-01/02/03): Option B real wipe-tower mesh readback
+  // regression lock. Drives SliceService::wipeTowerGeometryReady directly (no
+  // real slice needed) and asserts the EditorViewModel Q_PROPERTYs mirror the
+  // captured state on both paths:
+  //   (a) WTMESH-01 valid path: hasRealMesh=true + a non-empty meshVertices
+  //       vector => the EditorViewModel exposes wipeTowerHasRealMesh=true and
+  //       wipeTowerMeshVertices carries the captured floats. This is the
+  //       multi-material post-slice path that takes the renderer's Option B
+  //       branch (buildWipeTowerMeshVertices).
+  //   (b) WTMESH-02 Option A fallback gate: a subsequent readback with
+  //       hasRealMesh=false forces wipeTowerHasRealMesh=false and CLEARS
+  //       wipeTowerMeshVertices (no stale mesh leaks from a prior multi-
+  //       material slice through a single-material re-slice). The renderer
+  //       takes the Option A dimensioned-box branch (Phase 99 Frozen Decision
+  //       2 baseline).
+  //
+  // The capture-by-value invariant (Frozen Decision 1 extended) is locked
+  // structurally: WipeTowerGeometry::meshVertices is a std::vector<float>
+  // (pure float, NO TriangleMesh* or its*), so the round-trip through the
+  // Q_PROPERTY QVariantList conversion proves no libslic3r type escapes the
+  // worker. Mirrors the Phase 100 wipeTowerGeometryReadbackAppliesValidAnd-
+  // InvalidGate pattern (QMetaObject::invokeMethod on the signal).
+  Q_UNUSED(kWipeTowerGeometryMetaTypeId); // registration side-effect only
+
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  // Pre-slice baseline: defaults keep hasRealMesh=false and meshVertices
+  // empty, so the renderer takes Option A until a real readback arrives.
+  QCOMPARE(editor.wipeTowerHasRealMesh(), false);
+  QCOMPARE(editor.wipeTowerMeshVertices().size(), 0);
+
+  QSignalSpy geometrySpy(&editor, &EditorViewModel::wipeTowerGeometryChanged);
+  QVERIFY2(geometrySpy.isValid(),
+           "wipeTowerGeometryChanged must be a registered NOTIFY signal");
+
+  // --- WTMESH-01 path: valid=true + hasRealMesh=true delivers the real mesh. ---
+  WipeTowerGeometry validGeo;
+  validGeo.valid = true;
+  validGeo.width = 60.f;
+  validGeo.depth = 40.f;
+  validGeo.height = 5.f;
+  validGeo.x = 200.f;
+  validGeo.z = 150.f;
+  validGeo.hasRealMesh = true;
+  // 2 flattened triangles (6 vertices, 18 floats). Pure float payload -- no
+  // TriangleMesh* or its* crosses the worker boundary (Frozen Decision 1).
+  validGeo.meshVertices = {
+      0.f, 0.f, 0.f,   10.f, 0.f, 0.f,   10.f, 10.f, 0.f,   // tri 0
+      0.f, 0.f, 5.f,   10.f, 0.f, 5.f,   10.f, 10.f, 5.f,   // tri 1
+  };
+  QVERIFY2(QMetaObject::invokeMethod(&slice, "wipeTowerGeometryReady",
+                                     Qt::DirectConnection,
+                                     Q_ARG(WipeTowerGeometry, validGeo)),
+           "emit of valid+hasRealMesh wipeTowerGeometryReady must dispatch");
+
+  QCOMPARE(geometrySpy.count(), 1);
+  QCOMPARE(editor.showWipeTower(), true);
+  QCOMPARE(editor.wipeTowerWidth(), 60.f);
+  QCOMPARE(editor.wipeTowerHasRealMesh(), true);
+  // The QVariantList round-trip preserves the flattened XYZ payload exactly.
+  const QVariantList captured = editor.wipeTowerMeshVertices();
+  QCOMPARE(captured.size(), 18);
+  QCOMPARE(captured.at(0).toFloat(), 0.f);
+  QCOMPARE(captured.at(3).toFloat(), 10.f);
+  QCOMPARE(captured.at(17).toFloat(), 5.f);
+
+  // --- WTMESH-02 path: valid=true + hasRealMesh=false forces Option A. The
+  //     mesh state is cleared so a stale real-mesh cannot leak through a
+  //     re-slice that produced no wipe_tower_mesh_data (e.g. the engine
+  //     cleared it via WipeTowerData::clear() at Print.hpp:776). ---
+  WipeTowerGeometry optionAGeo;
+  optionAGeo.valid = true;
+  optionAGeo.width = 70.f;
+  optionAGeo.depth = 45.f;
+  optionAGeo.height = 6.f;
+  optionAGeo.x = 210.f;
+  optionAGeo.z = 160.f;
+  optionAGeo.hasRealMesh = false; // engine produced no wipe_tower_mesh_data
+  QVERIFY2(QMetaObject::invokeMethod(&slice, "wipeTowerGeometryReady",
+                                     Qt::DirectConnection,
+                                     Q_ARG(WipeTowerGeometry, optionAGeo)),
+           "emit of valid+!hasRealMesh wipeTowerGeometryReady must dispatch");
+
+  QCOMPARE(geometrySpy.count(), 2);
+  QCOMPARE(editor.showWipeTower(), true);
+  QCOMPARE(editor.wipeTowerWidth(), 70.f); // dims refreshed
+  QCOMPARE(editor.wipeTowerHasRealMesh(), false); // Option A gate
+  QCOMPARE(editor.wipeTowerMeshVertices().size(), 0); // stale mesh cleared
+}
+
+void ViewModelSmokeTests::assembleViewDataPoolIsolatedFromPrepareAndPreview()
 
 void ViewModelSmokeTests::assembleViewDataPoolIsolatedFromPrepareAndPreview()
 {
