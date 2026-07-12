@@ -191,6 +191,22 @@ private slots:
   // QString::contains + QVERIFY2 with a D3D12-01-named message). Source-level
   // only; runs in the regression ctest.
   void d3d12DebugLayerWiredBehindEnvFlag();
+  // Phase 106-01 (D3D12-03): D3D12 stays opt-in and the default Windows
+  // candidate order keeps D3D11 before D3D12 so the v3.2 startup
+  // 0xc0000005 access violation cannot recur for default-`auto` users. The
+  // Phase 106-01 root-cause investigation (.planning/research/
+  // D3D12-CRASH-ROOT-CAUSE.md) is time-boxed per DR-04; until a confirmed
+  // root cause + clean repro on the original machine land, D3D12 must NOT be
+  // promoted to default. This slot locks that decision at the source level:
+  // (a) defaultWindowsCandidates() keeps D3D11 before D3D12 (position-ordered
+  // assertion, mirrors the Phase 105 position-order check); (b) the D3D11-first
+  // comment is still present (documents WHY the order is load-bearing); (c)
+  // D3D12 remains reachable only via the explicit OWZX_RHI_RENDERER=d3d12 opt-in
+  // (the candidatesForRequest exact-match path). Mirrors the Phase 102/103/104/
+  // 105 source-audit pattern (QFile + QT_TESTCASE_SOURCEDIR + QString::contains
+  // + QVERIFY2 with a D3D12-03-named message). Source-level only; runs in the
+  // regression ctest.
+  void d3d12StaysOptInBehindEnvFlag();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -3854,6 +3870,71 @@ void QmlUiAuditTests::d3d12DebugLayerWiredBehindEnvFlag()
   const int guiAppPos = mainCpp.indexOf(QStringLiteral("QGuiApplication app(argc, argv)"));
   QVERIFY2(guiAppPos > qsgRhiDebugPos,
            "D3D12-01/DL-03: qputenv QSG_RHI_DEBUG must appear BEFORE QGuiApplication construction in main_qml.cpp (Qt Quick reads it during QGuiApplication startup)");
+}
+
+void QmlUiAuditTests::d3d12StaysOptInBehindEnvFlag()
+{
+  // Phase 106-01 (D3D12-03): D3D12 must stay opt-in and the default Windows
+  // candidate order must keep D3D11 before D3D12. The Phase 106-01 root-cause
+  // investigation (.planning/research/D3D12-CRASH-ROOT-CAUSE.md) is time-boxed
+  // per DR-04: the 0xc0000005 access violation could NOT be reproduced in the
+  // test environment, so D3D12 must NOT be promoted to default until a
+  // confirmed root cause + clean repro on the original machine land. This slot
+  // is the D3D12-03 hard-rule regression lock (DR-05): it prevents a future
+  // refactor from reordering defaultWindowsCandidates() to put D3D12 first,
+  // which would re-introduce the v3.2 startup crash for every default-`auto`
+  // user. Each QVERIFY2 message names the D3D12-03 contract it locks so a
+  // failure points directly at the truth.
+  //
+  // Pattern: QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with
+  // a D3D12-03-named message (deterministic, build-dir-independent). Mirrors
+  // the Phase 102/103/104/105 source-audit slots in this file, and reuses the
+  // exact position-ordered defaultWindowsCandidates boundary check the Phase
+  // 55/73/105 slots already assert.
+
+  const QString selectorSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiBackendSelector.cpp"));
+  QVERIFY2(!selectorSource.isEmpty(), "Unable to read RhiBackendSelector.cpp");
+
+  // D3D12-03 / DR-05 (D3D11-first order): defaultWindowsCandidates() must keep
+  // D3D11 before D3D12. Reuse the position-ordered boundary check established
+  // by the Phase 55/73/105 slots: slice the defaultWindowsCandidates body
+  // between its signature and candidatesForRequest, then assert Direct3D11
+  // appears before Direct3D12 inside that slice. A future regression that
+  // flips the order (or moves D3D12 above D3D11) fails here deterministically.
+  const int defaultCandidatesStart = selectorSource.indexOf(QStringLiteral("QVector<RhiBackendCandidate> defaultWindowsCandidates()"));
+  const int candidatesForRequestStart = selectorSource.indexOf(QStringLiteral("QVector<RhiBackendCandidate> candidatesForRequest"));
+  QVERIFY2(defaultCandidatesStart >= 0 && candidatesForRequestStart > defaultCandidatesStart,
+           "D3D12-03/DR-05: RhiBackendSelector default candidate boundaries changed; update the D3D12-03 audit");
+  const QString defaultCandidates = selectorSource.mid(defaultCandidatesStart,
+                                                       candidatesForRequestStart - defaultCandidatesStart);
+  QVERIFY2(defaultCandidates.indexOf(QStringLiteral("Direct3D11"))
+               < defaultCandidates.indexOf(QStringLiteral("Direct3D12")),
+           "D3D12-03/DR-05: defaultWindowsCandidates() must keep D3D11 before D3D12 (promotion blocked until Phase 106 root cause is confirmed)");
+  QVERIFY2(defaultCandidates.indexOf(QStringLiteral("QRhi::D3D11"))
+               < defaultCandidates.indexOf(QStringLiteral("QRhi::D3D12")),
+           "D3D12-03/DR-05: defaultWindowsCandidates() must keep the D3D11 QRhi implementation before the D3D12 one");
+
+  // D3D12-03 (D3D11-first rationale comment present): the load-bearing
+  // D3D11-first comment must stay so a future reader knows the order exists
+  // BECAUSE of the unresolved D3D12 crash, not by accident. Removing the
+  // comment would let a refactor reorder the candidates without understanding
+  // the consequence.
+  QVERIFY2(defaultCandidates.contains(QStringLiteral("D3D11-first")),
+           "D3D12-03: defaultWindowsCandidates() must keep the D3D11-first rationale comment (documents WHY the order is load-bearing)");
+
+  // D3D12-03 (opt-in only): D3D12 must remain reachable ONLY via the explicit
+  // OWZX_RHI_RENDERER=d3d12 opt-in (candidatesForRequest exact-match), never
+  // via the default `auto` selection. The selector must keep reading
+  // OWZX_RHI_RENDERER as the gate.
+  QVERIFY2(selectorSource.contains(QStringLiteral("OWZX_RHI_RENDERER")),
+           "D3D12-03: RhiBackendSelector must keep OWZX_RHI_RENDERER as the D3D12 opt-in gate");
+
+  // D3D12-03 (no Vulkan in the default selector): Vulkan is SDK-blocked (Qt
+  // disables the `vulkan` public feature) and must not appear in the default
+  // Windows candidate list. This locks the "Vulkan is evaluation-only, not a
+  // v4.5 deliverable" part of D3D12-03.
+  QVERIFY2(!defaultCandidates.contains(QStringLiteral("QRhi::Vulkan")),
+           "D3D12-03: defaultWindowsCandidates() must not include Vulkan (SDK-blocked; PROJECT.md:143)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
