@@ -178,6 +178,19 @@ private slots:
   // QVERIFY2 with a FIXTURE-named message). Source-level only; runs in the
   // regression ctest.
   void cliFixtureRecipesAndMultiMaterialModelPresent();
+  // Phase 105-01 (D3D12-01): the D3D12 debug layer is gated on the
+  // OWZX_D3D12_DEBUG env flag in RhiBackendSelector.cpp (probe-path
+  // enableDebugLayer) AND forwarded to Qt's QSG RHI debug mechanism in
+  // main_qml.cpp (QSG_RHI_DEBUG before QGuiApplication) so Phase 106 can
+  // triage the startup 0xc0000005 access violation. Source-audit locks:
+  // (a) OWZX_D3D12_DEBUG appears in RhiBackendSelector.cpp; (b) enableDebugLayer
+  // appears in RhiBackendSelector.cpp; (c) the enablement is conditional (env-
+  // gated, not unconditionally enabled); (d) QSG_RHI_DEBUG appears in
+  // main_qml.cpp BEFORE the QGuiApplication construction. Mirrors the Phase
+  // 102/103/104 source-audit pattern (QFile + QT_TESTCASE_SOURCEDIR +
+  // QString::contains + QVERIFY2 with a D3D12-01-named message). Source-level
+  // only; runs in the regression ctest.
+  void d3d12DebugLayerWiredBehindEnvFlag();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -3759,6 +3772,88 @@ void QmlUiAuditTests::cliFixtureRecipesAndMultiMaterialModelPresent()
            "FIXTURE-04: main_qml.cpp anti-feature comment must cite the upstream argv anchor (OrcaSlicer.cpp:7183) so the no-upstream-equivalent claim is traceable");
   QVERIFY2(mainCpp.contains(QStringLiteral("MUST NOT be promoted")),
            "FIXTURE-04: main_qml.cpp anti-feature comment must explicitly state the flags MUST NOT be promoted to a user-facing product feature");
+}
+
+void QmlUiAuditTests::d3d12DebugLayerWiredBehindEnvFlag()
+{
+  // Phase 105-01 (D3D12-01): the D3D12 debug layer must be gated on the
+  // OWZX_D3D12_DEBUG env flag so Phase 106 can triage the startup 0xc0000005
+  // access violation with GPU validation output, WITHOUT leaking the debug
+  // layer into the default OWzxSlicer.exe build (Pitfall 5). This is the
+  // regression lock that prevents a future refactor from either (a) dropping
+  // the env gate (unconditional enableDebugLayer = true would ship a 20-40%
+  // GPU perf regression in Release) or (b) dropping the live-path QSG_RHI_DEBUG
+  // forward (the crash fires in the live QQuickRhiItem render path at
+  // RhiViewportRenderer.cpp:282-298, NOT at the probe QRhi::create, so the
+  // probe-path enablement alone is insufficient). Each QVERIFY2 message names
+  // the D3D12-01 contract it locks so a failure points directly at the truth.
+  //
+  // Pattern: QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with
+  // a D3D12-01-named message (deterministic, build-dir-independent). Mirrors
+  // the Phase 102 wipeTowerReadbackAndRenderAnchorsPresent pattern, the Phase
+  // 103 argvFixtureGateUsesFrameSwappedNotSingleShot pattern, and the Phase
+  // 104 cliFixtureRecipesAndMultiMaterialModelPresent pattern in this file.
+
+  const QString selectorSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiBackendSelector.cpp"));
+  const QString mainCpp = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
+  QVERIFY2(!selectorSource.isEmpty(), "Unable to read RhiBackendSelector.cpp");
+  QVERIFY2(!mainCpp.isEmpty(), "Unable to read main_qml.cpp");
+
+  // D3D12-01 / DL-01 (env flag present): the OWZX_D3D12_DEBUG env flag must be
+  // read in RhiBackendSelector.cpp via the existing qEnvironmentVariableIsSet +
+  // qgetenv pattern (mirrors OWZX_RHI_RENDERER at lines 117-124).
+  QVERIFY2(selectorSource.contains(QStringLiteral("OWZX_D3D12_DEBUG")),
+           "D3D12-01/DL-01: RhiBackendSelector.cpp must read the OWZX_D3D12_DEBUG env flag");
+
+  // D3D12-01 / DL-02 (probe-path enablement): enableDebugLayer must appear in
+  // RhiBackendSelector.cpp on the probe path (set before QRhi::create).
+  QVERIFY2(selectorSource.contains(QStringLiteral("enableDebugLayer")),
+           "D3D12-01/DL-02: RhiBackendSelector.cpp must set enableDebugLayer on the D3D12 probe path");
+
+  // D3D12-01 / DL-04 (conditional gate, Pitfall 5): enableDebugLayer must NOT
+  // be unconditionally enabled. The gate must be the d3d12DebugLayerRequested()
+  // helper call (env-flag conditional), not a bare enableDebugLayer = true.
+  // The literal "= true" must appear INSIDE the d3d12DebugLayerRequested() gate
+  // block. A future regression that writes "enableDebugLayer = true;" at struct
+  // scope (unconditional) would ship a 20-40% Release-build GPU perf
+  // regression (Pitfall 5).
+  QVERIFY2(selectorSource.contains(QStringLiteral("if (d3d12DebugLayerRequested())")),
+           "D3D12-01/DL-04: enableDebugLayer must be gated on d3d12DebugLayerRequested() (env-flag conditional, NOT unconditional -- Pitfall 5 Release-build leak)");
+  QVERIFY2(selectorSource.contains(QStringLiteral("d3d12DebugLayerRequested")),
+           "D3D12-01/DL-04: the d3d12DebugLayerRequested() helper must exist in RhiBackendSelector.cpp");
+
+  // D3D12-01 / DL-02 (enablement BEFORE QRhi::create): the enableDebugLayer
+  // assignment must precede the QRhi::create call on the probe path. The
+  // QRhi::create call site is the anchor; enableDebugLayer must appear before
+  // it in the source.
+  const int enableDebugLayerPos = selectorSource.indexOf(QStringLiteral("owner.d3d12Params.enableDebugLayer = true"));
+  const int rhiCreatePos = selectorSource.indexOf(QStringLiteral("QRhi::create(candidate.implementation, params)"));
+  QVERIFY2(enableDebugLayerPos >= 0,
+           "D3D12-01/DL-02: owner.d3d12Params.enableDebugLayer = true must appear in RhiBackendSelector.cpp");
+  QVERIFY2(rhiCreatePos > enableDebugLayerPos,
+           "D3D12-01/DL-02: enableDebugLayer must be set BEFORE QRhi::create on the probe path (RhiBackendSelector.cpp)");
+
+  // D3D12-01 / DL-03 (live-path coverage): the crash fires in the LIVE
+  // QQuickRhiItem render path (RhiViewportRenderer.cpp:282-298 beginPass-after-
+  // resourceUpdate), NOT at the probe QRhi::create. So the probe-path
+  // enablement alone is insufficient; main_qml.cpp must forward
+  // OWZX_D3D12_DEBUG to Qt's QSG_RHI_DEBUG mechanism before QGuiApplication
+  // construction so the live render path emits GPU validation output.
+  QVERIFY2(mainCpp.contains(QStringLiteral("QSG_RHI_DEBUG")),
+           "D3D12-01/DL-03: main_qml.cpp must forward OWZX_D3D12_DEBUG to QSG_RHI_DEBUG (live render-path coverage; the crash fires in the live QQuickRhiItem path, not at the probe QRhi::create)");
+  QVERIFY2(mainCpp.contains(QStringLiteral("qputenv(\"QSG_RHI_DEBUG\", \"1\")")),
+           "D3D12-01/DL-03: main_qml.cpp must qputenv QSG_RHI_DEBUG=1 when OWZX_D3D12_DEBUG is set");
+
+  // D3D12-01 / DL-03 (QGuiApplication-before timing): QSG_RHI_DEBUG must be
+  // set BEFORE QGuiApplication construction because Qt Quick reads it during
+  // QGuiApplication startup (scene-graph RHI backend init). The env-gate
+  // comment must document this timing constraint.
+  QVERIFY2(mainCpp.contains(QStringLiteral("BEFORE QGuiApplication")),
+           "D3D12-01/DL-03: main_qml.cpp must document the QSG_RHI_DEBUG timing constraint (set BEFORE QGuiApplication construction)");
+  const int qsgRhiDebugPos = mainCpp.indexOf(QStringLiteral("qputenv(\"QSG_RHI_DEBUG\", \"1\")"));
+  const int guiAppPos = mainCpp.indexOf(QStringLiteral("QGuiApplication app(argc, argv)"));
+  QVERIFY2(guiAppPos > qsgRhiDebugPos,
+           "D3D12-01/DL-03: qputenv QSG_RHI_DEBUG must appear BEFORE QGuiApplication construction in main_qml.cpp (Qt Quick reads it during QGuiApplication startup)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
