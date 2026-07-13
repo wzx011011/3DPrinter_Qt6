@@ -301,6 +301,23 @@ private slots:
   // QT_TESTCASE_SOURCEDIR + QVERIFY2 with MEASURE-02-named messages).
   // Source-level only; runs in the regression ctest.
   void meshAndSceneRaycasterPorted();
+  // Phase 114-01 (MEASURE-03): source-audit lock proving the Measure::Measuring
+  // instantiation + get_feature wiring + SurfaceFeature boundary scrubbing
+  // landed. Locks: (a) MeasureEngine.h/.cpp exist in src/core/rendering/
+  // (ME-01); (b) MeasureEngine.h instantiates Measure::Measuring (NOT a
+  // reimplementation) + names the ME-01 truth; (c) MeasureEngine wires
+  // get_feature (ME-02) + documents the per-volume cache + invalidate
+  // contract; (d) the QtFeature + QtMeasurement PODs exist (Qt-owned types
+  // only -- pitfall-6 scrubbing, ME-03); (e) the readout API is exposed on
+  // EditorViewModel (ME-04) via the measure* Q_PROPERTYs + the
+  // computeMeasureReadoutFromHit Q_INVOKABLE; (f) the AssemblyMeasureGeometry
+  // AABB-stub relationship is documented (ME-05); (g) both files are
+  // registered in owzx_app_core in CMakeLists.txt (ME-06); (h) the
+  // PartPlateTests regression slot exists (ME-07). Mirrors the Phase 113
+  // source-audit pattern (QFile + QT_TESTCASE_SOURCEDIR + QString::contains
+  // + QVERIFY2 with MEASURE-03-named messages). Source-level only; runs in
+  // the regression ctest.
+  void measureEngineInstantiatedPerVolume();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -4626,6 +4643,142 @@ void QmlUiAuditTests::meshAndSceneRaycasterPorted()
   // upstream SceneRaycaster.hpp structure that this thin port mirrors).
   QVERIFY2(sceneHeader.contains(QStringLiteral("SceneRaycaster.hpp")),
            "MEASURE-02/MR-07: SceneRaycaster.h must cite upstream SceneRaycaster.hpp (the wrapper structure reference)");
+}
+
+void QmlUiAuditTests::measureEngineInstantiatedPerVolume()
+{
+  // MEASURE-03 / Phase 114-01: source-audit lock for the Measure::Measuring
+  // instantiation + get_feature wiring + SurfaceFeature boundary scrubbing.
+  // This is the precise single-feature measurement path that Phase 115 (snap
+  // UX) consumes. A future refactor that drops the engine, strips the
+  // upstream anchor cite, weakens the per-volume cache / scrubbing contract,
+  // forgets the EditorViewModel readout API, or fails to register the files
+  // in CMake fails here. Mirrors the Phase 113 meshAndSceneRaycasterPorted
+  // source-audit pattern (QFile + QT_TESTCASE_SOURCEDIR + QString::contains
+  // + QVERIFY2 with MEASURE-03-named messages). Source-level only; runs in
+  // the regression ctest.
+
+  const QString engineHeader = readSource(QStringLiteral("src/core/rendering/MeasureEngine.h"));
+  QVERIFY2(!engineHeader.isEmpty(), "Unable to read MeasureEngine.h");
+  const QString engineSource = readSource(QStringLiteral("src/core/rendering/MeasureEngine.cpp"));
+  QVERIFY2(!engineSource.isEmpty(), "Unable to read MeasureEngine.cpp");
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  QVERIFY2(!editorSource.isEmpty(), "Unable to read EditorViewModel.cpp");
+  const QString cmakeLists = readSource(QStringLiteral("CMakeLists.txt"));
+  QVERIFY2(!cmakeLists.isEmpty(), "Unable to read CMakeLists.txt");
+  const QString partPlateTests = readSource(QStringLiteral("tests/PartPlateTests.cpp"));
+  QVERIFY2(!partPlateTests.isEmpty(), "Unable to read PartPlateTests.cpp");
+  const QString asmGeo = readSource(QStringLiteral("src/core/rendering/AssemblyMeasureGeometry.h"));
+  QVERIFY2(!asmGeo.isEmpty(), "Unable to read AssemblyMeasureGeometry.h");
+
+  // ME-01: MeasureEngine.h must instantiate Measure::Measuring directly (NOT
+  // reimplement the math). Locking the instantiate-don't-reimplement truth
+  // keeps a future refactor honest about which layer owns the math.
+  QVERIFY2(engineHeader.contains(QStringLiteral("INSTANTIATE, NOT REIMPLEMENT")),
+           "MEASURE-03/ME-01: MeasureEngine.h must document the instantiate-don't-reimplement truth");
+  QVERIFY2(engineHeader.contains(QStringLiteral("Measure::Measuring")),
+           "MEASURE-03/ME-01: MeasureEngine.h must name Measure::Measuring (the upstream class it instantiates)");
+  QVERIFY2(engineHeader.contains(QStringLiteral("ME-01")),
+           "MEASURE-03/ME-01: MeasureEngine.h must name the ME-01 truth it implements");
+  // The .cpp must actually construct the Measuring (the instantiation
+  // evidence, not just a doc claim).
+  QVERIFY2(engineSource.contains(QStringLiteral("make_shared<Slic3r::Measure::Measuring>")),
+           "MEASURE-03/ME-01: MeasureEngine.cpp must instantiate Measure::Measuring via make_shared (the real construction)");
+
+  // ME-01 cache: the per-volume cache + invalidate must be present so a model
+  // change drops stale Measuring instances (pitfall 6 rebuild signal).
+  QVERIFY2(engineHeader.contains(QStringLiteral("cachedMeasuringCount")),
+           "MEASURE-03/ME-01: MeasureEngine must expose cachedMeasuringCount() (diagnostic / test hook for the per-volume cache)");
+  QVERIFY2(engineHeader.contains(QStringLiteral("void invalidate()")),
+           "MEASURE-03/ME-01: MeasureEngine must expose invalidate() (drop cached Measuring on model change)");
+  QVERIFY2(engineHeader.contains(QStringLiteral("invalidateVolume(")),
+           "MEASURE-03/ME-01: MeasureEngine must expose granular invalidateVolume(object, volume)");
+
+  // ME-02 get_feature wiring: the getFeature entry point must take the Phase
+  // 113 hit fields (objectIndex, volumeIndex, facetIdx, worldPoint,
+  // worldTransform) and call Measuring::get_feature.
+  QVERIFY2(engineHeader.contains(QStringLiteral("getFeature(")),
+           "MEASURE-03/ME-02: MeasureEngine must expose getFeature(object, volume, facet, point, worldTran, onlySelectPlane)");
+  QVERIFY2(engineSource.contains(QStringLiteral("->get_feature(")),
+           "MEASURE-03/ME-02: MeasureEngine.cpp must call Measuring::get_feature (the upstream feature resolver)");
+  QVERIFY2(engineHeader.contains(QStringLiteral("ME-02")),
+           "MEASURE-03/ME-02: MeasureEngine.h must name the ME-02 get_feature-wiring truth");
+
+  // ME-03 pitfall-6 scrubbing: the QtFeature + QtMeasurement PODs must be
+  // Qt-owned types only (FeatureKind enum + QVector3D + float/int), and the
+  // header must document the scrubbing contract. The libslic3r SurfaceFeature
+  // back-pointer members must NOT appear as Qt-side members (the grep returns
+  // zero in MeasureEngine.h/.cpp).
+  QVERIFY2(engineHeader.contains(QStringLiteral("struct QtFeature")),
+           "MEASURE-03/ME-03: MeasureEngine must define the QtFeature POD (Qt-owned VALUE mirror of SurfaceFeature)");
+  QVERIFY2(engineHeader.contains(QStringLiteral("struct QtMeasurement")),
+           "MEASURE-03/ME-03: MeasureEngine must define the QtMeasurement POD (Qt-owned VALUE mirror of MeasurementResult)");
+  QVERIFY2(engineHeader.contains(QStringLiteral("FeatureKind")),
+           "MEASURE-03/ME-03: MeasureEngine must define the FeatureKind enum (Qt-owned SurfaceFeatureType mirror)");
+  QVERIFY2(engineHeader.contains(QStringLiteral("pitfall 6")),
+           "MEASURE-03/ME-03: MeasureEngine.h must document the pitfall-6 scrubbing contract (no libslic3r back-pointer escapes)");
+  QVERIFY2(engineSource.contains(QStringLiteral("scrubSurfaceFeature")),
+           "MEASURE-03/ME-03: MeasureEngine.cpp must implement the scrubSurfaceFeature helper (the boundary scrubber)");
+  // The literal libslic3r back-pointer member names must NOT be stored on
+  // the Qt side. A grep for them in MeasureEngine.h/.cpp returns ZERO (the
+  // audit re-runs the same grep the plan's verify step requires).
+  QVERIFY2(!engineHeader.contains(QStringLiteral("plane_indices")),
+           "MEASURE-03/ME-03: MeasureEngine.h must NOT store the libslic3r plane-index-vector back-pointer member (pitfall 6)");
+  QVERIFY2(!engineSource.contains(QStringLiteral("plane_indices")),
+           "MEASURE-03/ME-03: MeasureEngine.cpp must NOT store the libslic3r plane-index-vector back-pointer member (pitfall 6)");
+
+  // ME-04 readout API on EditorViewModel: the measure* Q_PROPERTYs + the
+  // computeMeasureReadoutFromHit Q_INVOKABLE + the measureReadoutChanged
+  // NOTIFY signal. Phase 115 snap UX binds these.
+  QVERIFY2(editorHeader.contains(QStringLiteral("measureReadoutValid")),
+           "MEASURE-03/ME-04: EditorViewModel must expose measureReadoutValid (the readout gate)");
+  QVERIFY2(editorHeader.contains(QStringLiteral("measureAngleText")),
+           "MEASURE-03/ME-04: EditorViewModel must expose measureAngleText (angle readout)");
+  QVERIFY2(editorHeader.contains(QStringLiteral("measurePerpendicularDistanceText")),
+           "MEASURE-03/ME-04: EditorViewModel must expose measurePerpendicularDistanceText (perpendicular distance readout)");
+  QVERIFY2(editorHeader.contains(QStringLiteral("measureDirectDistanceText")),
+           "MEASURE-03/ME-04: EditorViewModel must expose measureDirectDistanceText (direct distance readout)");
+  QVERIFY2(editorHeader.contains(QStringLiteral("measureDistanceXyzText")),
+           "MEASURE-03/ME-04: EditorViewModel must expose measureDistanceXyzText (distance XYZ readout)");
+  QVERIFY2(editorHeader.contains(QStringLiteral("computeMeasureReadoutFromHit")),
+           "MEASURE-03/ME-04: EditorViewModel must expose computeMeasureReadoutFromHit (the Q_INVOKABLE that drives a readout from a Phase 113 hit)");
+  QVERIFY2(editorHeader.contains(QStringLiteral("measureReadoutChanged")),
+           "MEASURE-03/ME-04: EditorViewModel must emit measureReadoutChanged (the NOTIFY signal for the measure* Q_PROPERTYs)");
+  QVERIFY2(editorHeader.contains(QStringLiteral("invalidateMeasureEngine")),
+           "MEASURE-03/ME-04: EditorViewModel must expose invalidateMeasureEngine (drop the per-volume Measuring cache on mesh change)");
+
+  // ME-05 AABB-stub relationship: MeasureEngine.h must document the
+  // AssemblyMeasureGeometry relationship (AssemblyMeasureGeometry stays as
+  // the coarse Assembly multi-volume fallback; MeasureEngine is the precise
+  // single-feature path). AssemblyMeasureGeometry.h itself must still exist
+  // (the AABB stub is NOT deleted).
+  QVERIFY2(engineHeader.contains(QStringLiteral("AssemblyMeasureGeometry")),
+           "MEASURE-03/ME-05: MeasureEngine.h must document the AssemblyMeasureGeometry relationship (AABB-stub coarse fallback vs precise single-feature)");
+  QVERIFY2(engineHeader.contains(QStringLiteral("ME-05")),
+           "MEASURE-03/ME-05: MeasureEngine.h must name the ME-05 AABB-stub-relationship truth");
+  QVERIFY2(asmGeo.contains(QStringLiteral("AssemblyMeasureResult")),
+           "MEASURE-03/ME-05: AssemblyMeasureGeometry.h must still exist with its AssemblyMeasureResult (the AABB stub is NOT deleted -- it stays as the coarse fallback)");
+
+  // ME-06 CMake registration: both MeasureEngine files must be in the
+  // owzx_app_core target source list.
+  QVERIFY2(cmakeLists.contains(QStringLiteral("src/core/rendering/MeasureEngine.cpp")),
+           "MEASURE-03/ME-06: CMakeLists.txt must register MeasureEngine.cpp in owzx_app_core");
+  QVERIFY2(cmakeLists.contains(QStringLiteral("src/core/rendering/MeasureEngine.h")),
+           "MEASURE-03/ME-06: CMakeLists.txt must register MeasureEngine.h in owzx_app_core");
+
+  // ME-07 regression slot: the deterministic feature + readout runtime test
+  // must exist in PartPlateTests.
+  QVERIFY2(partPlateTests.contains(QStringLiteral("void measureEngineProducesFeatureAndReadout()")),
+           "MEASURE-03/ME-07: PartPlateTests must declare measureEngineProducesFeatureAndReadout");
+  QVERIFY2(partPlateTests.contains(QStringLiteral("void PartPlateTests::measureEngineProducesFeatureAndReadout()")),
+           "MEASURE-03/ME-07: PartPlateTests must define measureEngineProducesFeatureAndReadout");
+
+  // ME-08: this source-audit slot must exist (a removal drops the audit
+  // coverage). The declaration is checked implicitly by the slot running.
+  QVERIFY2(partPlateTests.contains(QStringLiteral("MEASURE-03/ME-02")),
+           "MEASURE-03/ME-08: PartPlateTests regression must cite MEASURE-03 truth names in QVERIFY2 messages (audit-message discipline)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

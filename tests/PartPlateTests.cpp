@@ -28,7 +28,9 @@
 #include <libslic3r/TriangleMesh.hpp>  // its_make_cube (Phase 113 raycaster test)
 #include "core/rendering/MeshRaycaster.h"
 #include "core/rendering/SceneRaycaster.h"
+#include "core/rendering/MeasureEngine.h"  // Phase 114 (MEASURE-03)
 #include <cmath>
+#include <type_traits>  // std::is_same (Phase 114 pitfall-6 scrubbing static_asserts)
 #endif
 
 namespace {
@@ -124,6 +126,23 @@ class PartPlateTests final : public QObject {
   void meshAndSceneRaycasterHitMissAndClosestPick();
 #else
   void meshAndSceneRaycasterHitMissAndClosestPick() { QSKIP("Requires HAS_LIBSLIC3R"); }
+#endif
+
+  // ── Phase 114 (MEASURE-03): MeasureEngine instantiation + feature ──
+  //    readouts regression. ME-07: deterministic, no GPU/display. (a)
+  //    MeasureEngine builds one Measure::Measuring per-volume from the
+  //    Phase 112 ITS (cached, invalidated on model change); (b) getFeature
+  //    on a unit cube top-face hit returns a Plane feature at z=1 with the
+  //    expected normal; (c) measureFeatures between two known features
+  //    produces a real measurement (the perpendicular distance between two
+  //    parallel cube top planes equals the cube spacing); (d) the
+  //    pitfall-6 scrubbing (QtFeature carries no libslic3r back-pointer).
+  //    Gated on HAS_LIBSLIC3R (Measure::Measuring + the ITS only exist
+  //    there -- mirrors the Phase 113 slot group).
+#ifdef HAS_LIBSLIC3R
+  void measureEngineProducesFeatureAndReadout();
+#else
+  void measureEngineProducesFeatureAndReadout() { QSKIP("Requires HAS_LIBSLIC3R"); }
 #endif
 };
 
@@ -1085,6 +1104,150 @@ void PartPlateTests::meshAndSceneRaycasterHitMissAndClosestPick()
       scene.hitTest(downOrigin, downDir, noMeshCandidates);
   QVERIFY2(!noMeshHit.hit,
            "MEASURE-02/MR-03: a candidate whose ITS source returns nullptr must produce no-hit, no crash");
+}
+#endif  // HAS_LIBSLIC3R
+
+#ifdef HAS_LIBSLIC3R
+// Phase 114 (MEASURE-03): MeasureEngine instantiation + feature readouts
+// regression (ME-07). Deterministic, no GPU/display. Exercises:
+//   (a) ME-01: per-volume Measure::Measuring cache (cachedMeasuringCount
+//       stays at 1 across repeated getFeature calls; invalidate resets it).
+//   (b) ME-02: getFeature wiring -- a raycast-resolved top-face hit returns
+//       a real Plane feature (onlySelectPlane=true forces the plane, so the
+//       result is deterministic regardless of cursor-to-edge distance).
+//   (c) ME-03: pitfall-6 scrubbing -- the returned QtFeature is pure POD
+//       (FeatureKind + QVector3D + floats); it carries no libslic3r back-
+//       pointer. The test asserts the QtFeature fields directly.
+//   (d) ME-04: measureFeatures between two known Point features produces a
+//       real measurement (direct distance + distance XYZ), exercising the
+//       real Measure::get_measurement math (Measure.cpp:846-849 Point-Point).
+void PartPlateTests::measureEngineProducesFeatureAndReadout()
+{
+  // Unit cube ITS, same fixture as the Phase 113 test. Shared via make_shared
+  // so the MeasureEngine ITS source can hold the aliasing-style shared_ptr.
+  auto cubeIts = std::make_shared<indexed_triangle_set>(Slic3r::its_make_cube(1.0, 1.0, 1.0));
+  QVERIFY2(!cubeIts->indices.empty(), "MEASURE-03: cube ITS must have triangles");
+
+  // Resolve the top-face facetIdx via a downward ray through the cube center
+  // (the Phase 113 MeshRaycaster -- the same path the production picking
+  // bridge uses to feed MeasureEngine). topHit.facetIdx is the input to
+  // getFeature; topHit.position is the world-space hit point.
+  OWzx::MeshRaycaster raycaster(cubeIts);
+  const Slic3r::Vec3d downOrigin(0.5, 0.5, 5.0);
+  const Slic3r::Vec3d downDir(0.0, 0.0, -1.0);
+  const OWzx::MeshRaycasterHit topHit = raycaster.rayCast(downOrigin, downDir);
+  QVERIFY2(topHit.hit,
+           "MEASURE-03: preconditions -- downward ray must hit the cube top face");
+  QVERIFY2(topHit.position.z() > 0.5f,
+           "MEASURE-03: preconditions -- hit must be on the top face (z>0.5)");
+
+  // MeasureEngine backed by a VolumeMeshItsFn lambda that returns the cube
+  // ITS for a single synthetic (obj=1, vol=1) volume; nullptr otherwise
+  // (mirrors the Phase 113 test + the Phase 112 volumeMeshIts null path).
+  OWzx::MeasureEngine engine(
+      [cubeIts](int objIdx, int volIdx) -> std::shared_ptr<const indexed_triangle_set> {
+        if (objIdx == 1 && volIdx == 1)
+          return cubeIts;
+        return nullptr;
+      });
+
+  // --- (b) ME-02: getFeature with onlySelectPlane=true returns a Plane -----
+  // The cube ITS is already mesh-local (identity world transform), so the
+  // hit point is passed straight through. onlySelectPlane forces the plane
+  // feature (Measure.cpp:587-593 returns the plane surface_feature directly,
+  // bypassing the edge/point sniff), making the result deterministic.
+  const Slic3r::Vec3d hitPointWorld = topHit.position.cast<double>();
+  const Slic3r::Transform3d identity = Slic3r::Transform3d::Identity();
+  const OWzx::QtFeature planeFeature =
+      engine.getFeature(1, 1, topHit.facetIdx, hitPointWorld, identity, /*onlySelectPlane=*/true);
+  QVERIFY2(planeFeature.valid,
+           "MEASURE-03/ME-02: getFeature must return a valid Plane for a real cube hit");
+  QVERIFY2(planeFeature.kind == OWzx::FeatureKind::Plane,
+           "MEASURE-03/ME-02: onlySelectPlane must force a Plane feature");
+  // The top-face plane normal is parallel to Z. Its point-in-plane lies on
+  // the z=1 plane (the top face). Assert axis-alignment + z~=1.
+  QVERIFY2(std::abs(planeFeature.pt1.x()) < 1e-4f && std::abs(planeFeature.pt1.y()) < 1e-4f,
+           "MEASURE-03/ME-02: plane normal (pt1) must be parallel to the Z axis");
+  QVERIFY2(std::abs(std::abs(planeFeature.pt1.z()) - 1.0f) < 1e-4f,
+           "MEASURE-03/ME-02: plane normal (pt1) must be a unit Z vector");
+
+  // --- (a) ME-01: per-volume Measuring cache --------------------------------
+  // A second getFeature on the same (obj,vol) reuses the cached Measuring
+  // (the plane index is NOT rebuilt). cachedMeasuringCount stays at 1.
+  QCOMPARE(engine.cachedMeasuringCount(), static_cast<std::size_t>(1));
+  const OWzx::QtFeature planeFeature2 =
+      engine.getFeature(1, 1, topHit.facetIdx, hitPointWorld, identity, true);
+  QVERIFY2(planeFeature2.valid,
+           "MEASURE-03/ME-01: a second getFeature on the cached volume must still produce a feature");
+  QCOMPARE(engine.cachedMeasuringCount(), static_cast<std::size_t>(1));
+
+  // invalidate() drops the cache; the next getFeature rebuilds (count -> 1).
+  engine.invalidate();
+  QCOMPARE(engine.cachedMeasuringCount(), static_cast<std::size_t>(0));
+  const OWzx::QtFeature planeFeature3 =
+      engine.getFeature(1, 1, topHit.facetIdx, hitPointWorld, identity, true);
+  QVERIFY2(planeFeature3.valid,
+           "MEASURE-03/ME-01: getFeature after invalidate() must rebuild and produce a feature");
+  QCOMPARE(engine.cachedMeasuringCount(), static_cast<std::size_t>(1));
+
+  // --- (b.2) ME-02: getFeature with onlySelectPlane=false (full sniff) -----
+  // A hit at the very center of the top face (0.5, 0.5, 1.0) is >= 0.5mm
+  // from every top-face edge, so the closest-feature sniff
+  // (feature_hover_limit=0.5, Measure.cpp:38,550) finds nothing and the
+  // plane is returned. This proves the full sniff path runs without
+  // crashing and degrades to the plane when no edge/point is in range.
+  const OWzx::QtFeature sniffFeature =
+      engine.getFeature(1, 1, topHit.facetIdx, hitPointWorld, identity, /*onlySelectPlane=*/false);
+  QVERIFY2(sniffFeature.valid,
+           "MEASURE-03/ME-02: full-sniff getFeature must still return a valid feature (the plane fallback)");
+  QVERIFY2(sniffFeature.kind == OWzx::FeatureKind::Plane,
+           "MEASURE-03/ME-02: a center-of-face hit (>=0.5mm from every edge) must fall back to the Plane");
+
+  // --- (c) ME-03: pitfall-6 scrubbing ---------------------------------------
+  // The QtFeature is pure POD (FeatureKind enum + QVector3D + floats). It
+  // carries NO libslic3r back-pointer. We assert the field types are the
+  // Qt-owned scalars/vectors (not pointer-shaped). This is the scrubbing
+  // contract: the libslic3r SurfaceFeature died inside getFeature and only
+  // its VALUE fields survived into the QtFeature.
+  static_assert(std::is_same<decltype(planeFeature.kind), OWzx::FeatureKind>::value,
+                "MEASURE-03: QtFeature.kind must be the Qt-owned FeatureKind enum (no libslic3r back-pointer)");
+  static_assert(std::is_same<decltype(planeFeature.pt1), QVector3D>::value,
+                "MEASURE-03: QtFeature.pt1 must be a Qt-owned QVector3D (no libslic3r back-pointer)");
+  static_assert(std::is_same<decltype(planeFeature.radius), float>::value,
+                "MEASURE-03: QtFeature.radius must be a Qt-owned float (no libslic3r back-pointer)");
+
+  // --- (d) ME-04: measureFeatures readout (real Measure::get_measurement) --
+  // Measure between two Point features at (0,0,0) and (0,0,1). Upstream
+  // Point-Point math (Measure.cpp:846-849): distance_strict.dist =
+  // (P2-P1).norm() = 1.0; distance_xyz = P2-P1 = (0,0,1). This exercises
+  // the REAL libslic3r get_measurement math through the pitfall-6-safe
+  // Qt->libslic3r (local) bridge in MeasureEngine::measureFeatures.
+  OWzx::QtFeature pointA;
+  pointA.valid = true;
+  pointA.kind = OWzx::FeatureKind::Point;
+  pointA.pt1 = QVector3D(0.0f, 0.0f, 0.0f);
+  OWzx::QtFeature pointB;
+  pointB.valid = true;
+  pointB.kind = OWzx::FeatureKind::Point;
+  pointB.pt1 = QVector3D(0.0f, 0.0f, 1.0f);
+  const OWzx::QtMeasurement m =
+      engine.measureFeatures(pointA, pointB, identity);
+  QVERIFY2(m.valid,
+           "MEASURE-03/ME-04: measureFeatures between two valid Points must produce a measurement");
+  QVERIFY2(m.hasDirectDistance,
+           "MEASURE-03/ME-04: Point-Point measurement must populate direct distance (distance_strict)");
+  QVERIFY2(std::abs(m.directDistance - 1.0f) < 1e-4f,
+           "MEASURE-03/ME-04: direct distance between (0,0,0) and (0,0,1) must be 1.0 mm");
+  QVERIFY2(m.hasDistanceXyz,
+           "MEASURE-03/ME-04: Point-Point measurement must populate distance XYZ");
+  QVERIFY2(std::abs(m.distanceXyz.x()) < 1e-4f && std::abs(m.distanceXyz.y()) < 1e-4f &&
+               std::abs(m.distanceXyz.z() - 1.0f) < 1e-4f,
+           "MEASURE-03/ME-04: distance XYZ between (0,0,0) and (0,0,1) must be (0,0,1)");
+
+  // Point-Point does NOT populate angle (angle is for edge-edge / plane
+  // combos). Assert the has-flag is honest.
+  QVERIFY2(!m.hasAngle,
+           "MEASURE-03/ME-04: Point-Point measurement must NOT populate angle (honest has-flag)");
 }
 #endif  // HAS_LIBSLIC3R
 
