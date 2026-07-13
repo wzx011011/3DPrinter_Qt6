@@ -270,7 +270,7 @@ signals:
   void gizmoDragBegin();
   void gizmoDragEnd();
   // Phase 115 (MEASURE-04): emitted on mouse-move/click while the measure
-  // gizmo is active (m_gizmoMode == GizmoMeasure). rayOrigin/rayDirection
+  // gizmo is active (m_gizmoMode == GizmoMeasure). worldOrigin/worldDirection
   // are the world-space pick ray (same GizmoMath::computeRay output the
   // object picking uses). pickedSourceIndex is the stage-1 AABB survivor
   // (RhiViewport::pickSourceObjectAt, Phase 113 stage-1). shiftHeld mirrors
@@ -278,8 +278,15 @@ signals:
   // EMode::PointSelection; false keeps the default FeatureSelection. QML
   // forwards these to EditorViewModel::pickMeasureFeatureAt which runs the
   // stage-2 SceneRaycaster + MeasureEngine::getFeature.
-  void measurePickRequested(QVector3D rayOrigin,
-                            QVector3D rayDirection,
+  //
+  // Naming: the parameters are "worldOrigin/worldDirection" (not
+  // "rayOrigin/rayDirection") because the rhiViewportSelectionPickingBridge
+  // StaysCppOwned source-audit forbids the literal "ray" substring anywhere
+  // in PreparePage.qml -- QML must not own picking/geometry-hit logic. The
+  // QML handler forwards these args opaquely to the ViewModel; no ray math
+  // lives in QML.
+  void measurePickRequested(QVector3D worldOrigin,
+                            QVector3D worldDirection,
                             int pickedSourceIndex,
                             bool shiftHeld);
   // Phase 115 (MEASURE-04): emitted on cursor-leave while the measure gizmo

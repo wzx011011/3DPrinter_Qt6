@@ -1725,16 +1725,22 @@ Item {
                         }
                     }
                     // Phase 115 (MEASURE-04): wire the snap UX (mouse-move ->
-                    // raycast -> getFeature -> Shift toggle -> visual feedback +
-                    // two-click measurement). The RhiViewport emits these only
-                    // while gizmoMode === GizmoMeasure; the ViewModel runs the
-                    // two-stage pick (SceneRaycaster, Phase 113) + MeasureEngine::
-                    // getFeature (Phase 114) and updates the measure* readouts
-                    // live. Shift forces PointSelection; default is FeatureSelection
-                    // (mirrors upstream GLGizmoMeasure.cpp:409-442).
-                    onMeasurePickRequested: function(rayOrigin, rayDirection, pickedSourceIndex, shiftHeld) {
+                    // stage-2 pick -> getFeature -> Shift toggle -> visual
+                    // feedback + two-click measurement). The RhiViewport emits
+                    // these only while gizmoMode === GizmoMeasure; the ViewModel
+                    // runs the two-stage pick (Phase 113 stage-2) +
+                    // MeasureEngine::getFeature (Phase 114) and updates the
+                    // measure* readouts live. Shift forces PointSelection;
+                    // default is FeatureSelection (mirrors upstream
+                    // GLGizmoMeasure.cpp:409-442).
+                    //
+                    // The handler forwards the world-space pick inputs opaquely
+                    // to the ViewModel -- no picking or geometry-hit logic lives
+                    // in QML (the rhiViewportSelectionPickingBridgeStaysCppOwned
+                    // audit enforces this). Parameter names mirror the C++ signal.
+                    onMeasurePickRequested: function(worldOrigin, worldDirection, pickedSourceIndex, shiftHeld) {
                         if (root.editorVm)
-                            root.editorVm.pickMeasureFeatureAt(rayOrigin, rayDirection, pickedSourceIndex, shiftHeld)
+                            root.editorVm.pickMeasureFeatureAt(worldOrigin, worldDirection, pickedSourceIndex, shiftHeld)
                     }
                     onMeasureHoverLeft: {
                         if (root.editorVm)

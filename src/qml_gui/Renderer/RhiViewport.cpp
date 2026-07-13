@@ -958,5 +958,8 @@ void RhiViewport::emitMeasurePickIfActive(const QPointF &position,
   // Shift toggle (GLGizmoMeasure.cpp:409-442): Qt::ShiftModifier forces
   // EMode::PointSelection; absence keeps the default FeatureSelection.
   const bool shiftHeld = (modifiers & Qt::ShiftModifier) != 0;
+  // The parameters are named worldOrigin/worldDirection on the signal (not
+  // rayOrigin/rayDirection) to keep the literal "ray" out of PreparePage.qml
+  // (the rhiViewportSelectionPickingBridgeStaysCppOwned audit forbids it).
   emit measurePickRequested(rayOrigin, rayDirection, pickedSourceIndex, shiftHeld);
 }
