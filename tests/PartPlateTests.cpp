@@ -25,6 +25,10 @@
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Point.hpp>
+#include <libslic3r/TriangleMesh.hpp>  // its_make_cube (Phase 113 raycaster test)
+#include "core/rendering/MeshRaycaster.h"
+#include "core/rendering/SceneRaycaster.h"
+#include <cmath>
 #endif
 
 namespace {
@@ -105,6 +109,21 @@ class PartPlateTests final : public QObject {
   void filamentMapSaveReloadRoundTrip();  // FMAP-04: full save->reload round-trip
 #else
   void filamentMapSaveReloadRoundTrip() { QSKIP("Requires HAS_LIBSLIC3R"); }
+#endif
+
+  // ── Phase 113 (MEASURE-02): MeshRaycaster + SceneRaycaster port regression.
+  //    MR-06: deterministic, no GPU/display. (a) a known ray hits a known
+  //    triangle on a unit cube ITS; (b) a miss returns no-hit; (c) the
+  //    closest-hit semantics (a ray piercing two faces reports the nearer
+  //    one). Also exercises the SceneRaycaster stage-2 hitTest (world-space
+  //    hit + identity transform) and the MR-02 per-volume cache
+  //    (cachedRaycasterCount stays at 1 across repeated hitTest calls;
+  //    invalidate resets it). Gated on HAS_LIBSLIC3R (the ITS / AABBMesh
+  //    types only exist there -- mirrors the rest of this slot group).
+#ifdef HAS_LIBSLIC3R
+  void meshAndSceneRaycasterHitMissAndClosestPick();
+#else
+  void meshAndSceneRaycasterHitMissAndClosestPick() { QSKIP("Requires HAS_LIBSLIC3R"); }
 #endif
 };
 
@@ -936,6 +955,136 @@ void PartPlateTests::filamentMapSaveReloadRoundTrip() {
 
     QFile::remove(tempPath);
   }
+}
+#endif  // HAS_LIBSLIC3R
+
+#ifdef HAS_LIBSLIC3R
+// Phase 113 (MEASURE-02): MeshRaycaster + SceneRaycaster regression (MR-06).
+// Deterministic, no GPU/display. Builds a unit cube ITS via its_make_cube and
+// exercises (a) a known ray hits a known triangle; (b) a miss returns no-hit;
+// (c) closest-hit semantics (a ray piercing two cube faces reports the nearer
+// one). Then drives the SceneRaycaster stage-2 hitTest (world-space hit) and
+// the MR-02 per-volume cache (repeated hitTest does not rebuild; invalidate
+// resets the count).
+void PartPlateTests::meshAndSceneRaycasterHitMissAndClosestPick()
+{
+  // its_make_cube(1,1,1) -> a unit cube spanning x,y,z in [0,1]
+  // (TriangleMesh.cpp:886-896). Shared via make_shared so MeshRaycaster can
+  // hold the aliasing-style shared_ptr contract.
+  auto cubeIts = std::make_shared<indexed_triangle_set>(Slic3r::its_make_cube(1.0, 1.0, 1.0));
+  QVERIFY2(!cubeIts->indices.empty(), "MEASURE-02: cube ITS must have triangles");
+  QVERIFY2(!cubeIts->vertices.empty(), "MEASURE-02: cube ITS must have vertices");
+
+  OWzx::MeshRaycaster raycaster(cubeIts);
+
+  // --- (a) known ray hits a known triangle ---
+  // Ray straight down through the cube center hits the top face (z=1) at
+  // (0.5, 0.5, 1.0). MeshRaycaster works in mesh-local coords; the cube ITS
+  // is already in its local frame so no transform is needed for this stage.
+  const Slic3r::Vec3d downOrigin(0.5, 0.5, 5.0);
+  const Slic3r::Vec3d downDir(0.0, 0.0, -1.0);
+  const OWzx::MeshRaycasterHit topHit = raycaster.rayCast(downOrigin, downDir);
+  QVERIFY2(topHit.hit,
+           "MEASURE-02/MR-06a: a downward ray through the cube center must hit the top face");
+  QVERIFY2(std::abs(topHit.position.x() - 0.5f) < 1e-4f && std::abs(topHit.position.y() - 0.5f) < 1e-4f,
+           "MEASURE-02/MR-06a: top-face hit x/y must be ~0.5 (cube center)");
+  QVERIFY2(std::abs(topHit.position.z() - 1.0f) < 1e-4f,
+           "MEASURE-02/MR-06a: top-face hit z must be ~1.0 (top of unit cube)");
+
+  // The top-face normal must be axis-aligned to Z (the geometric normal of the
+  // z=1 plane). The sign depends on winding; assert only axis-alignment.
+  QVERIFY2(std::abs(topHit.normal.x()) < 1e-4f && std::abs(topHit.normal.y()) < 1e-4f,
+           "MEASURE-02/MR-06a: top-face normal must be parallel to the Z axis");
+  QVERIFY2(std::abs(std::abs(topHit.normal.z()) - 1.0f) < 1e-4f,
+           "MEASURE-02/MR-06a: top-face normal must be a unit Z vector");
+
+  // triangleNormal() must agree with the embedded hit normal (MR-04 normal
+  // channel is consistent with the precomputed its_face_normals array).
+  const Slic3r::Vec3f facetNrm = raycaster.triangleNormal(topHit.facetIdx);
+  QVERIFY2((facetNrm - topHit.normal).norm() < 1e-4f,
+           "MEASURE-02/MR-04: triangleNormal(facetIdx) must equal the embedded hit normal");
+
+  // --- (b) miss returns no-hit ---
+  // A ray fired beside the cube (x=5, y=5, going down) must miss every face.
+  const Slic3r::Vec3d missOrigin(5.0, 5.0, 5.0);
+  const OWzx::MeshRaycasterHit missHit = raycaster.rayCast(missOrigin, downDir);
+  QVERIFY2(!missHit.hit,
+           "MEASURE-02/MR-06b: a ray fired beside the cube must report no-hit");
+
+  // --- (c) closest-hit semantics ---
+  // The same downward ray at (0.5, 0.5, 5.0) pierces BOTH the top face (z=1)
+  // AND the bottom face (z=0). Closest-hit semantics: the reported z must be
+  // ~1.0 (top, nearer to the ray origin at z=5), NOT 0.0 (bottom, farther).
+  // This is the AABBMesh::query_ray_hit contract MeshRaycaster reuses.
+  QVERIFY2(topHit.position.z() > 0.5f,
+           "MEASURE-02/MR-06c: closest-hit must be the top face (z>0.5), not the bottom (z<0.5)");
+
+  // === SceneRaycaster: stage-2 hitTest (world-space) + MR-02 cache ===========
+  // Inject the cube ITS via a VolumeMeshItsFn lambda keyed on (obj,vol). The
+  // candidate uses an IDENTITY worldTransform so world == mesh-local. This
+  // exercises the same world->mesh inverse-transform path the production
+  // picking bridge will use, with a trivially-verifiable result.
+  OWzx::SceneRaycaster scene(
+      [cubeIts](int objIdx, int volIdx) -> std::shared_ptr<const indexed_triangle_set> {
+        // Return the cube ITS for a single synthetic (obj=7, vol=3) volume;
+        // nullptr for everything else (mirrors volumeMeshIts's MI-05 null path
+        // for out-of-range indices).
+        if (objIdx == 7 && volIdx == 3)
+          return cubeIts;
+        return nullptr;
+      });
+
+  OWzx::SceneRaycasterCandidate cand;
+  cand.objectIndex = 7;
+  cand.volumeIndex = 3;
+  cand.worldTransform = Slic3r::Transform3d::Identity();
+  const std::vector<OWzx::SceneRaycasterCandidate> candidates{cand};
+
+  const OWzx::SceneRaycasterHit worldHit =
+      scene.hitTest(downOrigin, downDir, candidates);
+  QVERIFY2(worldHit.hit,
+           "MEASURE-02/MR-03: SceneRaycaster::hitTest must hit the candidate volume");
+  QCOMPARE(worldHit.objectIndex, 7);
+  QCOMPARE(worldHit.volumeIndex, 3);
+  QVERIFY2(std::abs(worldHit.worldPosition.x() - 0.5) < 1e-4 &&
+               std::abs(worldHit.worldPosition.y() - 0.5) < 1e-4 &&
+               std::abs(worldHit.worldPosition.z() - 1.0) < 1e-4,
+           "MEASURE-02/MR-04: world-space hit must be (0.5, 0.5, 1.0) under identity transform");
+  QVERIFY2(std::abs(std::abs(worldHit.worldNormal.z()) - 1.0) < 1e-4,
+           "MEASURE-02/MR-04: world-space normal must be a unit Z vector");
+
+  // MR-02 cache: a second hitTest on the same candidate must NOT rebuild the
+  // MeshRaycaster (the BVH is reused). cachedRaycasterCount stays at 1.
+  QCOMPARE(scene.cachedRaycasterCount(), static_cast<std::size_t>(1));
+  const OWzx::SceneRaycasterHit worldHit2 =
+      scene.hitTest(downOrigin, downDir, candidates);
+  QVERIFY2(worldHit2.hit,
+           "MEASURE-02/MR-02: a second hitTest on the cached volume must still hit");
+  QCOMPARE(scene.cachedRaycasterCount(), static_cast<std::size_t>(1));
+
+  // MR-02 invalidation: invalidate() drops the cache; the next hitTest
+  // rebuilds it (count returns to 1).
+  scene.invalidate();
+  QCOMPARE(scene.cachedRaycasterCount(), static_cast<std::size_t>(0));
+  const OWzx::SceneRaycasterHit worldHit3 =
+      scene.hitTest(downOrigin, downDir, candidates);
+  QVERIFY2(worldHit3.hit,
+           "MEASURE-02/MR-02: hitTest after invalidate() must rebuild and hit");
+  QCOMPARE(scene.cachedRaycasterCount(), static_cast<std::size_t>(1));
+
+  // MR-03 two-stage filter: a candidate whose (obj,vol) the ITS source does
+  // not serve (here obj=999) is skipped -- no crash, no hit. This mirrors the
+  // stage-1 narrowing: stage-1 may hand in candidates that have no mesh
+  // (deleted volume), and stage-2 must tolerate them.
+  OWzx::SceneRaycasterCandidate noMeshCand;
+  noMeshCand.objectIndex = 999;
+  noMeshCand.volumeIndex = 999;
+  noMeshCand.worldTransform = Slic3r::Transform3d::Identity();
+  const std::vector<OWzx::SceneRaycasterCandidate> noMeshCandidates{noMeshCand};
+  const OWzx::SceneRaycasterHit noMeshHit =
+      scene.hitTest(downOrigin, downDir, noMeshCandidates);
+  QVERIFY2(!noMeshHit.hit,
+           "MEASURE-02/MR-03: a candidate whose ITS source returns nullptr must produce no-hit, no crash");
 }
 #endif  // HAS_LIBSLIC3R
 

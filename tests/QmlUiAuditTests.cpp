@@ -285,6 +285,22 @@ private slots:
   // QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with MEASURE-01-
   // named messages). Source-level only; runs in the regression ctest.
   void perVolumeItsAccessorPresent();
+  // Phase 113-01 (MEASURE-02): source-audit lock proving the pure-CPU
+  // MeshRaycaster + SceneRaycaster port landed with the upstream anchor
+  // cited, the two-stage pick documented, and the per-volume cache
+  // contract present. Locks: (a) both header files exist in
+  // src/core/rendering/ (MR-01); (b) MeshRaycaster.h cites the upstream
+  // anchor (MeshUtils.hpp:159+, the intersection math source -- MR-01);
+  // (c) MeshRaycaster.h documents the pure-CPU + cache contracts (MR-01
+  // no-GL/wx + MR-02 BVH-once); (d) SceneRaycaster.h documents the two-
+  // stage pick + the pitfall-7 mitigation (MR-03); (e) SceneRaycaster
+  // exposes the MR-04 world-space hit result (object/volume/facet/pos/
+  // normal); (f) both files are registered in the owzx_app_core target in
+  // CMakeLists.txt (MR-05); (g) the PartPlateTests regression slot
+  // exists (MR-06). Mirrors the Phase 112 source-audit pattern (QFile +
+  // QT_TESTCASE_SOURCEDIR + QVERIFY2 with MEASURE-02-named messages).
+  // Source-level only; runs in the regression ctest.
+  void meshAndSceneRaycasterPorted();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -4489,6 +4505,127 @@ void QmlUiAuditTests::perVolumeItsAccessorPresent()
            "MEASURE-01/MI-07: ViewModelSmokeTests must declare perVolumeItsAccessorReturnsValidMeshAndNullForInvalidIndices");
   QVERIFY2(smokeTests.contains(QStringLiteral("void ViewModelSmokeTests::perVolumeItsAccessorReturnsValidMeshAndNullForInvalidIndices()")),
            "MEASURE-01/MI-07: ViewModelSmokeTests must define perVolumeItsAccessorReturnsValidMeshAndNullForInvalidIndices");
+}
+
+void QmlUiAuditTests::meshAndSceneRaycasterPorted()
+{
+  // MEASURE-02 / Phase 113-01: source-audit lock for the pure-CPU
+  // MeshRaycaster + SceneRaycaster port. This is the picking/measure math
+  // foundation that Phase 114 (Measuring) and Phase 115 (snap UX) consume.
+  // A future refactor that drops either class, strips the upstream anchor
+  // cite, weakens the pure-CPU / cache / two-stage-pick contracts, or
+  // forgets to register the files in CMake fails here. Mirrors the Phase
+  // 112 perVolumeItsAccessorPresent source-audit pattern (QFile +
+  // QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with MEASURE-02-
+  // named messages). Source-level only; runs in the regression ctest.
+
+  const QString meshHeader = readSource(QStringLiteral("src/core/rendering/MeshRaycaster.h"));
+  QVERIFY2(!meshHeader.isEmpty(), "Unable to read MeshRaycaster.h");
+  const QString meshSource = readSource(QStringLiteral("src/core/rendering/MeshRaycaster.cpp"));
+  QVERIFY2(!meshSource.isEmpty(), "Unable to read MeshRaycaster.cpp");
+  const QString sceneHeader = readSource(QStringLiteral("src/core/rendering/SceneRaycaster.h"));
+  QVERIFY2(!sceneHeader.isEmpty(), "Unable to read SceneRaycaster.h");
+  const QString sceneSource = readSource(QStringLiteral("src/core/rendering/SceneRaycaster.cpp"));
+  QVERIFY2(!sceneSource.isEmpty(), "Unable to read SceneRaycaster.cpp");
+  const QString cmakeLists = readSource(QStringLiteral("CMakeLists.txt"));
+  QVERIFY2(!cmakeLists.isEmpty(), "Unable to read CMakeLists.txt");
+  const QString partPlateTests = readSource(QStringLiteral("tests/PartPlateTests.cpp"));
+  QVERIFY2(!partPlateTests.isEmpty(), "Unable to read PartPlateTests.cpp");
+  const QString objectPicking = readSource(QStringLiteral("src/core/rendering/ObjectPicking.h"));
+  QVERIFY2(!objectPicking.isEmpty(), "Unable to read ObjectPicking.h");
+
+  // MR-01: MeshRaycaster.h must cite the upstream anchor (the intersection
+  // math source). Locking the anchor cite keeps a future refactor honest
+  // about which upstream lines it mirrors.
+  QVERIFY2(meshHeader.contains(QStringLiteral("MeshUtils.hpp:159")),
+           "MEASURE-02/MR-01: MeshRaycaster.h must cite upstream MeshUtils.hpp:159+ (the MeshRaycaster class + intersection math source)");
+  QVERIFY2(meshHeader.contains(QStringLiteral("MeshUtils.cpp:425")),
+           "MEASURE-02/MR-01: MeshRaycaster.h must cite upstream MeshUtils.cpp:425-466 (unproject_on_mesh implementation)");
+
+  // MR-01 pure-CPU: the contract must be documented at the header so a future
+  // edit cannot silently introduce a GL/wxWidgets dependency. The header
+  // explicitly states the no-GL/no-wx guarantee.
+  QVERIFY2(meshHeader.contains(QStringLiteral("pure-CPU")),
+           "MEASURE-02/MR-01: MeshRaycaster.h must document the pure-CPU contract (no GL/wxWidgets deps)");
+  QVERIFY2(meshHeader.contains(QStringLiteral("MR-01")),
+           "MEASURE-02/MR-01: MeshRaycaster.h must name the MR-01 truth it implements");
+
+  // MR-02 cache: the cache contract must be documented so a future edit
+  // cannot rebuild the BVH per mouse-move (pitfall 7). The header must name
+  // the BVH-build-once guarantee.
+  QVERIFY2(meshHeader.contains(QStringLiteral("MR-02")),
+           "MEASURE-02/MR-02: MeshRaycaster.h must name the MR-02 cache truth (BVH built once in ctor)");
+  QVERIFY2(meshHeader.contains(QStringLiteral("AABBMesh")),
+           "MEASURE-02/MR-01: MeshRaycaster.h must name the libslic3r AABBMesh (the pure-CPU BVH it reuses)");
+
+  // MR-01 API: the rayCast entry point + the shared_ptr<const ITS> input
+  // (the Phase 112 volumeMeshIts output type) must be present.
+  QVERIFY2(meshHeader.contains(QStringLiteral("shared_ptr<const") ),
+           "MEASURE-02/MR-01: MeshRaycaster must take a shared_ptr<const indexed_triangle_set> (Phase 112 volumeMeshIts output)");
+  QVERIFY2(meshHeader.contains(QStringLiteral("rayCast(")),
+           "MEASURE-02/MR-01: MeshRaycaster must expose rayCast(rayOrigin, rayDir)");
+
+  // MR-02 cache (SceneRaycaster): the per-volume cache + invalidate must be
+  // present so a model change drops stale raycasters.
+  QVERIFY2(sceneHeader.contains(QStringLiteral("MR-02")),
+           "MEASURE-02/MR-02: SceneRaycaster.h must name the MR-02 cache truth");
+  QVERIFY2(sceneHeader.contains(QStringLiteral("void invalidate()")),
+           "MEASURE-02/MR-02: SceneRaycaster must expose invalidate() (drop cached raycasters on model change)");
+  QVERIFY2(sceneHeader.contains(QStringLiteral("invalidateVolume(")),
+           "MEASURE-02/MR-02: SceneRaycaster must expose granular invalidateVolume(object, volume)");
+
+  // MR-03 two-stage pick: SceneRaycaster.h must document the two-stage pick
+  // + the pitfall-7 mitigation (no per-mouse-move volume loop). The wiring
+  // is also surfaced at the ObjectPicking stage-1 seam.
+  QVERIFY2(sceneHeader.contains(QStringLiteral("MR-03")),
+           "MEASURE-02/MR-03: SceneRaycaster.h must name the MR-03 two-stage pick truth");
+  QVERIFY2(sceneHeader.contains(QStringLiteral("pitfall 7")),
+           "MEASURE-02/MR-03: SceneRaycaster.h must reference pitfall 7 (the upstream per-mouse-move volume loop)");
+  QVERIFY2(sceneHeader.contains(QStringLiteral("SceneRaycasterCandidate")),
+           "MEASURE-02/MR-03: SceneRaycaster must define the SceneRaycasterCandidate stage-1 seam type");
+  QVERIFY2(sceneHeader.contains(QStringLiteral("hitTest(")),
+           "MEASURE-02/MR-03: SceneRaycaster must expose hitTest(rayOrigin, rayDir, candidates)");
+  QVERIFY2(objectPicking.contains(QStringLiteral("STAGE 1")),
+           "MEASURE-02/MR-03: ObjectPicking.h must document itself as STAGE 1 of the two-stage pick (the seam must be discoverable at both ends)");
+
+  // MR-04 hit result: the world-space hit result must carry object index,
+  // volume index, facet index, world position, world normal.
+  QVERIFY2(sceneHeader.contains(QStringLiteral("struct SceneRaycasterHit")),
+           "MEASURE-02/MR-04: SceneRaycaster must define the SceneRaycasterHit result struct");
+  QVERIFY2(sceneHeader.contains(QStringLiteral("objectIndex")),
+           "MEASURE-02/MR-04: SceneRaycasterHit must carry objectIndex");
+  QVERIFY2(sceneHeader.contains(QStringLiteral("volumeIndex")),
+           "MEASURE-02/MR-04: SceneRaycasterHit must carry volumeIndex");
+  QVERIFY2(sceneHeader.contains(QStringLiteral("facetIdx")),
+           "MEASURE-02/MR-04: SceneRaycasterHit must carry facetIdx (the ITS triangle index)");
+  QVERIFY2(sceneHeader.contains(QStringLiteral("worldPosition")),
+           "MEASURE-02/MR-04: SceneRaycasterHit must carry worldPosition");
+  QVERIFY2(sceneHeader.contains(QStringLiteral("worldNormal")),
+           "MEASURE-02/MR-04: SceneRaycasterHit must carry worldNormal");
+
+  // MR-05 CMake registration: both .cpp files must be in the owzx_app_core
+  // target source list. A drop silently leaves the classes unbuilt.
+  QVERIFY2(cmakeLists.contains(QStringLiteral("src/core/rendering/MeshRaycaster.cpp")),
+           "MEASURE-02/MR-05: CMakeLists.txt must register MeshRaycaster.cpp in owzx_app_core");
+  QVERIFY2(cmakeLists.contains(QStringLiteral("src/core/rendering/MeshRaycaster.h")),
+           "MEASURE-02/MR-05: CMakeLists.txt must register MeshRaycaster.h in owzx_app_core");
+  QVERIFY2(cmakeLists.contains(QStringLiteral("src/core/rendering/SceneRaycaster.cpp")),
+           "MEASURE-02/MR-05: CMakeLists.txt must register SceneRaycaster.cpp in owzx_app_core");
+  QVERIFY2(cmakeLists.contains(QStringLiteral("src/core/rendering/SceneRaycaster.h")),
+           "MEASURE-02/MR-05: CMakeLists.txt must register SceneRaycaster.h in owzx_app_core");
+
+  // MR-06 regression slot: the deterministic hit/miss/closest-pick runtime
+  // test must exist in PartPlateTests (the slot that exercises the actual
+  // AABBMesh BVH + closest-hit semantics).
+  QVERIFY2(partPlateTests.contains(QStringLiteral("void meshAndSceneRaycasterHitMissAndClosestPick()")),
+           "MEASURE-02/MR-06: PartPlateTests must declare meshAndSceneRaycasterHitMissAndClosestPick");
+  QVERIFY2(partPlateTests.contains(QStringLiteral("void PartPlateTests::meshAndSceneRaycasterHitMissAndClosestPick()")),
+           "MEASURE-02/MR-06: PartPlateTests must define meshAndSceneRaycasterHitMissAndClosestPick");
+
+  // MR-07 upstream-anchor reference for the SceneRaycaster wrapper (the
+  // upstream SceneRaycaster.hpp structure that this thin port mirrors).
+  QVERIFY2(sceneHeader.contains(QStringLiteral("SceneRaycaster.hpp")),
+           "MEASURE-02/MR-07: SceneRaycaster.h must cite upstream SceneRaycaster.hpp (the wrapper structure reference)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
