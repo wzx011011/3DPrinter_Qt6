@@ -126,6 +126,14 @@ if(OWZX_QML_GUI)
         src/core/rendering/MeshRaycaster.h
         src/core/rendering/SceneRaycaster.cpp
         src/core/rendering/SceneRaycaster.h
+        # Phase 114 (MEASURE-03): Measure::Measuring instantiation per
+        # volume (reuses the Phase 112 ITS source + Phase 113 raycaster hit)
+        # + SurfaceFeature boundary scrubbing (pitfall 6 -- VALUES into Qt
+        # POD before the libslic3r SurfaceFeature goes out of scope).
+        # #ifdef HAS_LIBSLIC3R -- Measure::Measuring / SurfaceFeature only
+        # exist there.
+        src/core/rendering/MeasureEngine.cpp
+        src/core/rendering/MeasureEngine.h
         src/core/model/PartPlate.cpp
         src/core/model/PartPlate.h
         src/core/model/PartPlateList.cpp
