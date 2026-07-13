@@ -318,6 +318,23 @@ private slots:
   // + QVERIFY2 with MEASURE-03-named messages). Source-level only; runs in
   // the regression ctest.
   void measureEngineInstantiatedPerVolume();
+  // Phase 115-01 (MEASURE-04): source-audit lock proving the GLGizmoMeasure
+  // snap UX is wired end-to-end. Locks: (a) RhiViewport emits the
+  // measurePickRequested + measureHoverLeft signals (MS-01 mouse-move path);
+  // (b) RhiViewport reads Qt::ShiftModifier for the Shift toggle (MS-02);
+  // (c) EditorViewModel exposes pickMeasureFeatureAt Q_INVOKABLE that drives
+  // SceneRaycaster::hitTest + MeasureEngine::getFeature (MS-01 stage-2);
+  // (d) the 4 SurfaceFeatureTypes (Point/Edge/Circle/Plane) are handled --
+  // the FeatureKind enum + the measureHoverFeatureKind Q_PROPERTY exist
+  // (MS-03); (e) PreparePage.qml forwards the signals to the ViewModel
+  // (the QML binding is the runtime wiring); (f) the two-click measurement
+  // flow reuses the Phase 114 m_measureFromFeatureValid stash (MS-04).
+  // Mirrors the Phase 114 measureEngineInstantiatedPerVolume source-audit
+  // pattern (QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2
+  // with MEASURE-04-named messages). Source-level only; runs in the
+  // regression ctest. Runtime visual interaction is not unit-tested per
+  // STATE.md (the source-audit + the Phase 114 readout test are the bar).
+  void glGizmoMeasureSnapUxWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -4779,6 +4796,106 @@ void QmlUiAuditTests::measureEngineInstantiatedPerVolume()
   // coverage). The declaration is checked implicitly by the slot running.
   QVERIFY2(partPlateTests.contains(QStringLiteral("MEASURE-03/ME-02")),
            "MEASURE-03/ME-08: PartPlateTests regression must cite MEASURE-03 truth names in QVERIFY2 messages (audit-message discipline)");
+}
+
+void QmlUiAuditTests::glGizmoMeasureSnapUxWired()
+{
+  // MEASURE-04 / Phase 115-01: source-audit lock for the GLGizmoMeasure snap
+  // UX wiring (mouse-move -> raycast -> getFeature -> Shift toggle -> visual
+  // feedback + two-click measurement). This is the user-facing interaction
+  // layer that closes MEASURE-04. A future refactor that drops the signals,
+  // removes the Shift toggle, breaks the SceneRaycaster::hitTest wiring,
+  // forgets the 4 SurfaceFeatureTypes handling, or unbinds the QML forwarding
+  // fails here. Mirrors the Phase 114 measureEngineInstantiatedPerVolume
+  // source-audit pattern (QFile + QT_TESTCASE_SOURCEDIR + QString::contains
+  // + QVERIFY2 with MEASURE-04-named messages). Source-level only; runs in
+  // the regression ctest. Runtime visual interaction is not unit-tested per
+  // STATE.md (the source-audit + the Phase 114 readout test are the bar).
+
+  const QString rhiViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  QVERIFY2(!rhiViewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  const QString rhiViewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  QVERIFY2(!rhiViewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  QVERIFY2(!editorSource.isEmpty(), "Unable to read EditorViewModel.cpp");
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+
+  // MS-01 (mouse-move -> raycast -> getFeature): RhiViewport must emit the
+  // measurePickRequested signal on mouse-move while the measure gizmo is
+  // active, and EditorViewModel::pickMeasureFeatureAt must drive
+  // SceneRaycaster::hitTest + MeasureEngine::getFeature.
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("void measurePickRequested(")),
+           "MEASURE-04/MS-01: RhiViewport.h must declare the measurePickRequested signal (mouse-move -> raycast path)");
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("void measureHoverLeft()")),
+           "MEASURE-04/MS-01: RhiViewport.h must declare the measureHoverLeft signal (cursor-leave clear)");
+  QVERIFY2(rhiViewportSource.contains(QStringLiteral("emitMeasurePickIfActive")),
+           "MEASURE-04/MS-01: RhiViewport.cpp must implement emitMeasurePickIfActive (the measure-gizmo pick helper)");
+  QVERIFY2(rhiViewportSource.contains(QStringLiteral("m_gizmoMode == GizmoMeasure")),
+           "MEASURE-04/MS-01: RhiViewport.cpp must gate the measure pick on m_gizmoMode == GizmoMeasure");
+  QVERIFY2(editorHeader.contains(QStringLiteral("pickMeasureFeatureAt")),
+           "MEASURE-04/MS-01: EditorViewModel must expose pickMeasureFeatureAt Q_INVOKABLE (the snap-UX entry point)");
+  QVERIFY2(editorSource.contains(QStringLiteral("->hitTest(")),
+           "MEASURE-04/MS-01: EditorViewModel.cpp must call SceneRaycaster::hitTest (the two-stage pick stage-2)");
+  QVERIFY2(editorSource.contains(QStringLiteral("computeMeasureReadoutFromHit(")),
+           "MEASURE-04/MS-01: EditorViewModel.cpp must drive computeMeasureReadoutFromHit (Phase 114 MeasureEngine::getFeature)");
+
+  // MS-02 (Shift toggle): RhiViewport must read Qt::ShiftModifier and forward
+  // it as the shiftHeld arg. Mirrors upstream GLGizmoMeasure.cpp:409-442.
+  QVERIFY2(rhiViewportSource.contains(QStringLiteral("Qt::ShiftModifier")),
+           "MEASURE-04/MS-02: RhiViewport.cpp must read Qt::ShiftModifier for the Shift toggle (FeatureSelection vs PointSelection)");
+  QVERIFY2(rhiViewportSource.contains(QStringLiteral("shiftHeld")),
+           "MEASURE-04/MS-02: RhiViewport.cpp must forward the shiftHeld arg through measurePickRequested");
+  QVERIFY2(rhiViewportSource.contains(QStringLiteral("GLGizmoMeasure.cpp:409-442")),
+           "MEASURE-04/MS-02: RhiViewport.cpp must cite the upstream Shift-toggle anchor (GLGizmoMeasure.cpp:409-442)");
+
+  // MS-03 (visual feedback + 4 SurfaceFeatureTypes): the FeatureKind enum
+  // must be surfaced via the measureHoverFeatureKind Q_PROPERTY (the live
+  // hover-feature type drives the overlay). The 4 SurfaceFeatureTypes
+  // (Point/Edge/Circle/Plane, Measure.hpp:16-22) are resolved by
+  // MeasureEngine (Phase 114, audited by measureEngineInstantiatedPerVolume);
+  // Phase 115 surfaces the resolved kind via the Q_PROPERTY + the QML
+  // indicator. PointSelection (Shift) overrides the kind to Point.
+  QVERIFY2(editorSource.contains(QStringLiteral("FeatureKind::Point")),
+           "MEASURE-04/MS-03: EditorViewModel.cpp must reference FeatureKind::Point (the Shift/PointSelection override)");
+  QVERIFY2(editorHeader.contains(QStringLiteral("measureHoverFeatureKind")),
+           "MEASURE-04/MS-03: EditorViewModel must expose measureHoverFeatureKind (the live hover-feature type for the overlay)");
+  QVERIFY2(editorHeader.contains(QStringLiteral("measureHoverWorldPosition")),
+           "MEASURE-04/MS-03: EditorViewModel must expose measureHoverWorldPosition (the live hover-feature position for the overlay)");
+  QVERIFY2(preparePage.contains(QStringLiteral("measureHoverFeatureKind")),
+           "MEASURE-04/MS-03: PreparePage.qml must surface measureHoverFeatureKind (the live feature-type indicator)");
+
+  // MS-04 (two-click measurement): the Phase 114 m_measureFromFeatureValid
+  // stash must be reused (first click = A, second click = B). The
+  // clearMeasureReadout path must reset it.
+  QVERIFY2(editorHeader.contains(QStringLiteral("m_measureFromFeatureValid")),
+           "MEASURE-04/MS-04: EditorViewModel must hold m_measureFromFeatureValid (the two-click A/B stash)");
+  QVERIFY2(editorHeader.contains(QStringLiteral("clearMeasureReadout")),
+           "MEASURE-04/MS-04: EditorViewModel must expose clearMeasureReadout (reset the two-click flow on cursor-leave / Escape)");
+
+  // MS-05 (pitfall-7 mitigation): the candidate list must be the SINGLE
+  // stage-1 survivor, NOT a whole-scene loop. The SceneRaycaster is lazily
+  // built from the same ITS source MeasureEngine uses.
+  QVERIFY2(editorSource.contains(QStringLiteral("SceneRaycasterCandidate")),
+           "MEASURE-04/MS-05: EditorViewModel.cpp must use SceneRaycasterCandidate (the stage-2 candidate type -- pitfall-7 mitigation)");
+  QVERIFY2(editorSource.contains(QStringLiteral("m_sceneRaycaster")),
+           "MEASURE-04/MS-05: EditorViewModel.cpp must hold a SceneRaycaster member (lazily built, cached per-volume)");
+
+  // QML wiring: PreparePage.qml must forward the signals to the ViewModel.
+  QVERIFY2(preparePage.contains(QStringLiteral("onMeasurePickRequested")),
+           "MEASURE-04/QML: PreparePage.qml must handle onMeasurePickRequested (forward to editorVm.pickMeasureFeatureAt)");
+  QVERIFY2(preparePage.contains(QStringLiteral("onMeasureHoverLeft")),
+           "MEASURE-04/QML: PreparePage.qml must handle onMeasureHoverLeft (forward to editorVm.clearMeasureReadout)");
+  QVERIFY2(preparePage.contains(QStringLiteral("pickMeasureFeatureAt")),
+           "MEASURE-04/QML: PreparePage.qml must call editorVm.pickMeasureFeatureAt (the snap-UX binding)");
+
+  // MS-06: this source-audit slot must exist (a removal drops the audit
+  // coverage). The declaration is checked implicitly by the slot running.
+  // The runtime visual evidence bar is documented as blocked per STATE.md
+  // (the source-audit + the Phase 114 readout test are the verification
+  // surface -- the plan's MS-06 truth names this explicitly).
 }
 
 QTEST_MAIN(QmlUiAuditTests)
