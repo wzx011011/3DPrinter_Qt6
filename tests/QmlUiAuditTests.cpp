@@ -335,6 +335,35 @@ private slots:
   // regression ctest. Runtime visual interaction is not unit-tested per
   // STATE.md (the source-audit + the Phase 114 readout test are the bar).
   void glGizmoMeasureSnapUxWired();
+  // Phase 116-01 (VV-01a/b/c, WTMESH-04 + MEASURE-05): the FINAL v4.5 cross-
+  // workstream regression lock. A consolidated source-audit slot that asserts
+  // the v4.5 contracts from ALL FIVE workstreams in one place so a regression
+  // in any workstream fails this gate (the per-workstream slots above lock
+  // the individual truths; this slot is the milestone-level meta-gate).
+  //
+  // VV-01a (WTMESH-04, the FINAL WTMESH closure): Option A
+  // buildWipeTowerVertices is PRESERVED alongside Option B
+  // buildWipeTowerMeshVertices in GizmoGeometry.h (the v4.4 Phase 99 Frozen
+  // Decision 2 baseline did not regress -- Phase 109 added Option B as a
+  // PARALLEL path, NOT a replacement).
+  //
+  // VV-01b (MEASURE-05, the FINAL MEASURE closure): MeasureEngine (Phase 114)
+  // is wired and produces REAL measurements via Measure::Measuring -- NOT just
+  // the AssemblyMeasureGeometry AABB stub. The AABB stub stays as the coarse
+  // Assembly multi-volume fallback (augmented, not replaced -- documented in
+  // MeasureEngine.h ME-05).
+  //
+  // VV-01c (cross-workstream anchors): the 5 v4.5 workstreams are all wired:
+  // (1) filament-map 4-value enum + readback + popup; (2) Option B real wipe-
+  // tower mesh; (3) CLI fixtures; (4) D3D12 opt-in; (5) WS5 measure (per-
+  // volume ITS + raycaster + Measuring + snap UX).
+  //
+  // Mirrors the Phase 102..115 source-audit pattern (QFile +
+  // QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with v4.5-named
+  // messages). Source-level only; runs in the regression ctest. Runtime
+  // visual evidence is blocked per STATE.md (the source-audit + regression
+  // ctest + launch liveness are the verification bar -- VV-02/03/04).
+  void v45CrossWorkstreamRegressionLocked();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -4896,6 +4925,145 @@ void QmlUiAuditTests::glGizmoMeasureSnapUxWired()
   // The runtime visual evidence bar is documented as blocked per STATE.md
   // (the source-audit + the Phase 114 readout test are the verification
   // surface -- the plan's MS-06 truth names this explicitly).
+}
+
+void QmlUiAuditTests::v45CrossWorkstreamRegressionLocked()
+{
+  // Phase 116-01 (VV-01a/b/c): the FINAL v4.5 cross-workstream regression
+  // meta-gate. This is the milestone-level lock that closes WTMESH-04 +
+  // MEASURE-05 and proves the 5 v4.5 workstreams shipped without regressing
+  // the v4.4 Phase 99 baseline. The per-workstream source-audit slots above
+  // (optionBWipeTowerMeshCoexistsWithOptionA, filamentMap*,
+  // perVolumeItsAccessorPresent, meshAndSceneRaycasterPorted,
+  // measureEngineInstantiatedPerVolume, glGizmoMeasureSnapUxWired,
+  // argvFixtureGate*, d3d12*) lock the individual truths; THIS slot is the
+  // consolidated milestone contract so a regression in any workstream fails
+  // the v4.5 close gate.
+  //
+  // Pattern: QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2
+  // with v4.5-named messages (VV-01a/b/c). Deterministic, build-dir-
+  // independent. Source-level only; runs in the regression ctest.
+
+  // ---- VV-01a (WTMESH-04): Option A + Option B coexist ----
+  // The v4.4 Phase 99 Frozen Decision 2 froze Option A (buildWipeTowerVertices,
+  // the rectangular-prism silhouette) as the baseline. Phase 109 (WTMESH-01/02/
+  // 03) re-opened that decision and added Option B (buildWipeTowerMeshVertices,
+  // the real wipe_tower_mesh_data + convex_hull_3d mesh) as a PARALLEL path.
+  // WTMESH-04 closes by proving BOTH builders are present (Option A is the
+  // single-material / pre-slice fallback; Option B is the real-mesh upgrade).
+  const QString geometryHeader = readSource(QStringLiteral("src/core/rendering/GizmoGeometry.h"));
+  QVERIFY2(!geometryHeader.isEmpty(), "Unable to read GizmoGeometry.h");
+  QVERIFY2(geometryHeader.contains(QStringLiteral("buildWipeTowerVertices")),
+           "VV-01a/WTMESH-04: GizmoGeometry.h must STILL declare buildWipeTowerVertices (Option A baseline -- v4.4 Phase 99 Frozen Decision 2 preserved)");
+  QVERIFY2(geometryHeader.contains(QStringLiteral("buildWipeTowerMeshVertices")),
+           "VV-01a/WTMESH-04: GizmoGeometry.h must declare buildWipeTowerMeshVertices (Option B real-mesh builder -- Phase 109 upgrade)");
+  QVERIFY2(geometryHeader.contains(QStringLiteral("WTMESH-03")),
+           "VV-01a/WTMESH-04: GizmoGeometry.h must document the WTMESH-03 PARALLEL-path contract (Option A preserved, Option B added alongside)");
+
+  // ---- VV-01b (MEASURE-05): MeasureEngine is the REAL measurement path ----
+  // MeasureEngine (Phase 114) instantiates Measure::Measuring and produces
+  // REAL per-feature measurements (point / edge / circle / plane + angle /
+  // distance readouts). The AssemblyMeasureGeometry AABB stub is NOT the
+  // measurement engine -- it stays as the COARSE Assembly multi-volume
+  // fallback (augmented, not replaced; documented in MeasureEngine.h ME-05).
+  const QString engineHeader = readSource(QStringLiteral("src/core/rendering/MeasureEngine.h"));
+  QVERIFY2(!engineHeader.isEmpty(), "Unable to read MeasureEngine.h");
+  const QString engineSource = readSource(QStringLiteral("src/core/rendering/MeasureEngine.cpp"));
+  QVERIFY2(!engineSource.isEmpty(), "Unable to read MeasureEngine.cpp");
+  const QString asmGeo = readSource(QStringLiteral("src/core/rendering/AssemblyMeasureGeometry.h"));
+  QVERIFY2(!asmGeo.isEmpty(), "Unable to read AssemblyMeasureGeometry.h");
+  QVERIFY2(engineHeader.contains(QStringLiteral("INSTANTIATE, NOT REIMPLEMENT")),
+           "VV-01b/MEASURE-05: MeasureEngine.h must document the instantiate-don't-reimplement truth (the REAL measurement path, not a stub)");
+  QVERIFY2(engineHeader.contains(QStringLiteral("Measure::Measuring")),
+           "VV-01b/MEASURE-05: MeasureEngine.h must name Measure::Measuring (the upstream class it instantiates for real measurements)");
+  QVERIFY2(engineSource.contains(QStringLiteral("make_shared<Slic3r::Measure::Measuring>")),
+           "VV-01b/MEASURE-05: MeasureEngine.cpp must actually construct Measure::Measuring (the real measurement engine, not the AABB stub)");
+  QVERIFY2(engineSource.contains(QStringLiteral("->get_feature(")),
+           "VV-01b/MEASURE-05: MeasureEngine.cpp must call Measuring::get_feature (real per-feature resolution, not AABB approximation)");
+  QVERIFY2(engineHeader.contains(QStringLiteral("ME-05")),
+           "VV-01b/MEASURE-05: MeasureEngine.h must name the ME-05 AABB-stub-relationship truth");
+  QVERIFY2(engineHeader.contains(QStringLiteral("AssemblyMeasureGeometry")),
+           "VV-01b/MEASURE-05: MeasureEngine.h must document the AssemblyMeasureGeometry relationship (AABB stub is augmented, not replaced -- it stays as the coarse Assembly fallback)");
+  QVERIFY2(asmGeo.contains(QStringLiteral("AssemblyMeasureResult")),
+           "VV-01b/MEASURE-05: AssemblyMeasureGeometry.h must still exist with AssemblyMeasureResult (the AABB stub is preserved as the coarse fallback, NOT deleted by the MeasureEngine upgrade)");
+
+  // ---- VV-01c: the 5 v4.5 workstream anchors are all wired ----
+
+  // WS1: filament-map (4-value enum + auto readback + 3-mode popup). Phases
+  // 107/108/110/111. The enum must stay widened to upstream's 4 values; the
+  // auto-recommendation readback + the 3-mode popup must stay wired.
+  const QString partPlateHeader = readSource(QStringLiteral("src/core/model/PartPlate.h"));
+  QVERIFY2(!partPlateHeader.isEmpty(), "Unable to read PartPlate.h");
+  QVERIFY2(partPlateHeader.contains(QStringLiteral("fmmAutoForFlush")) &&
+           partPlateHeader.contains(QStringLiteral("fmmAutoForMatch")) &&
+           partPlateHeader.contains(QStringLiteral("fmmManual")) &&
+           partPlateHeader.contains(QStringLiteral("fmmDefault")),
+           "VV-01c/WS1: PartPlate.h must declare all 4 FilamentMapMode values (filament-map enum widening, Phase 107)");
+  QVERIFY2(partPlateHeader.contains(QStringLiteral("migrateLegacyFilamentMapMode")),
+           "VV-01c/WS1: PartPlate.h must declare migrateLegacyFilamentMapMode (R-01 legacy raw-int-1 -> fmmManual migration helper, Phase 111)");
+
+  // WS2: Option B real wipe-tower mesh (covered in depth by VV-01a above;
+  // this anchor confirms the SliceService capture path is wired).
+  const QString sliceSource = readSource(QStringLiteral("src/core/services/SliceService.cpp"));
+  QVERIFY2(!sliceSource.isEmpty(), "Unable to read SliceService.cpp");
+  QVERIFY2(sliceSource.contains(QStringLiteral("wipe_tower_mesh_data")),
+           "VV-01c/WS2: SliceService.cpp must read wipe_tower_mesh_data (the Option B real-mesh capture, Phase 109)");
+  QVERIFY2(sliceSource.contains(QStringLiteral("convex_hull_3d()")),
+           "VV-01c/WS2: SliceService.cpp must run convex_hull_3d() on the merged wipe-tower mesh (Phase 109, mirrors upstream 3DScene.cpp:914)");
+
+  // WS3: CLI fixtures (multi-material fixture model + argv recipe doc). The
+  // runtime-visual-evidence workaround per STATE.md. Phases 103/104.
+  QFileInfo fixtureInfo(
+      QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR))
+          .filePath(QStringLiteral("tests/data/multi_material_fixture.3mf")));
+  QVERIFY2(fixtureInfo.exists(),
+           "VV-01c/WS3: tests/data/multi_material_fixture.3mf must exist (CLI fixture readiness, Phase 104 FIXTURE-01)");
+  QFileInfo recipeInfo(
+      QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR))
+          .filePath(QStringLiteral("tests/data/fixture_recipes.md")));
+  QVERIFY2(recipeInfo.exists(),
+           "VV-01c/WS3: tests/data/fixture_recipes.md must exist (argv recipe doc, Phase 104 FIXTURE-03)");
+
+  // WS4: D3D12 opt-in (debug layer wired behind env flag, stays opt-in --
+  // NOT the default backend). Phases 105/106. The D3D12-03 anti-feature
+  // contract: default promotion stays out of scope until a confirmed root
+  // cause.
+  const QString rhiBackendSelector = readSource(QStringLiteral("src/qml_gui/Renderer/RhiBackendSelector.cpp"));
+  QVERIFY2(!rhiBackendSelector.isEmpty(), "Unable to read RhiBackendSelector.cpp");
+  QVERIFY2(rhiBackendSelector.contains(QStringLiteral("OWZX_RHI_RENDERER")),
+           "VV-01c/WS4: RhiBackendSelector.cpp must read the OWZX_RHI_RENDERER env flag (D3D12 stays opt-in, Phase 105/106)");
+  QVERIFY2(rhiBackendSelector.contains(QStringLiteral("d3d12")),
+           "VV-01c/WS4: RhiBackendSelector.cpp must accept the d3d12 opt-in value (Phase 105/106 backend readiness)");
+
+  // WS5: GLGizmoMeasure engine (per-volume ITS + raycaster + Measuring +
+  // snap UX). Phases 112/113/114/115. This is the measure chain VV-01b
+  // builds on; the anchors confirm the full chain is wired end-to-end.
+  const QString projectHeader = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  QVERIFY2(!projectHeader.isEmpty(), "Unable to read ProjectServiceMock.h");
+  QVERIFY2(projectHeader.contains(QStringLiteral("volumeMeshIts")),
+           "VV-01c/WS5: ProjectServiceMock.h must declare volumeMeshIts (per-volume ITS accessor, Phase 112 MEASURE-01 -- unblocks raycaster + Measuring)");
+  QVERIFY2(QFile::exists(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR))
+                             .filePath(QStringLiteral("src/core/rendering/MeshRaycaster.h"))),
+           "VV-01c/WS5: MeshRaycaster.h must exist (pure-CPU raycaster port, Phase 113 MEASURE-02)");
+  QVERIFY2(QFile::exists(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR))
+                             .filePath(QStringLiteral("src/core/rendering/SceneRaycaster.h"))),
+           "VV-01c/WS5: SceneRaycaster.h must exist (two-stage pick wrapper, Phase 113 MEASURE-02)");
+  QVERIFY2(QFile::exists(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR))
+                             .filePath(QStringLiteral("src/core/rendering/MeasureEngine.h"))),
+           "VV-01c/WS5: MeasureEngine.h must exist (Measure::Measuring instantiation, Phase 114 MEASURE-03)");
+
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(editorHeader.contains(QStringLiteral("pickMeasureFeatureAt")),
+           "VV-01c/WS5: EditorViewModel.h must expose pickMeasureFeatureAt (Phase 115 snap-UX entry point, MEASURE-04)");
+  QVERIFY2(editorHeader.contains(QStringLiteral("computeMeasureReadoutFromHit")),
+           "VV-01c/WS5: EditorViewModel.h must expose computeMeasureReadoutFromHit (Phase 114 readout API, MEASURE-03/ME-04)");
+
+  // VV-01 meta: this slot is the v4.5 milestone close gate. A removal of the
+  // per-workstream slots above would still fail this gate because the
+  // consolidated anchors are re-asserted here. Runtime visual evidence is
+  // blocked per STATE.md; the source-audit + regression ctest + launch
+  // liveness are the verification bar (VV-02/03/04).
 }
 
 QTEST_MAIN(QmlUiAuditTests)
