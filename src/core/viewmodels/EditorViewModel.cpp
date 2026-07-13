@@ -7,6 +7,15 @@
 #include "core/model/PartPlateList.h"
 #include "core/rendering/AssemblyMeasureGeometry.h"
 #include "core/viewmodels/ConfigViewModel.h"
+#ifdef HAS_LIBSLIC3R
+// Phase 114 (MEASURE-03): MeasureEngine instantiates Measure::Measuring per
+// volume from ProjectServiceMock::volumeMeshIts (Phase 112 ITS accessor) and
+// scrubs the SurfaceFeature back-pointers at the boundary (pitfall 6). The
+// SceneRaycaster (Phase 113) produces the hit that feeds getFeature.
+#include "core/rendering/MeasureEngine.h"
+#include <libslic3r/Geometry.hpp>  // Geometry::assemble_transform (canonical TRS)
+#include <libslic3r/Point.hpp>     // Vec3d / Transform3d for world-transform rebuild
+#endif
 #include <QFileInfo>
 #include <QUrl>
 #include <QVector4D>
@@ -2101,6 +2110,257 @@ QString EditorViewModel::assemblyMeasurePlaneText() const
   return QString::fromUtf8(u8"\u9009\u4e2d ") + QString::number(m_selectedSourceIndices.size())
        + QString::fromUtf8(u8" \u5e73\u9762");
 }
+
+// Phase 114 (MEASURE-03): real feature-picking measurement readout text
+// getters (ME-04). Each formats to upstream precision (3 decimals + unit/
+// glyph, mirroring GLGizmoMeasure.cpp:24 format_double + the
+// ClipboardAngle/ClipboardDistance* rows at GLGizmoMeasure.cpp:1996,2009,
+// 2022,2031). Empty when no valid readout is cached (the valid gate is
+// measureReadoutValid()).
+QString EditorViewModel::measureAngleText() const
+{
+  if (!m_measureReadout.valid || !m_measureReadout.hasAngle)
+    return {};
+  // Upstream format_double(rad2deg(angle)) + degree glyph
+  // (GLGizmoMeasure.cpp:1996).
+  return QString::number(m_measureReadout.angleDeg, 'f', 3) +
+         QString::fromUtf8(u8"\u00b0");
+}
+
+QString EditorViewModel::measurePerpendicularDistanceText() const
+{
+  if (!m_measureReadout.valid || !m_measureReadout.hasPerpendicularDistance)
+    return {};
+  // Upstream "Perpendicular distance" row (distance_infinite,
+  // GLGizmoMeasure.cpp:2009): value + " mm".
+  return QString::number(m_measureReadout.perpendicularDistance, 'f', 3) +
+         QStringLiteral(" mm");
+}
+
+QString EditorViewModel::measureDirectDistanceText() const
+{
+  if (!m_measureReadout.valid || !m_measureReadout.hasDirectDistance)
+    return {};
+  // Upstream "Direct distance" row (distance_strict,
+  // GLGizmoMeasure.cpp:2022): value + " mm".
+  return QString::number(m_measureReadout.directDistance, 'f', 3) +
+         QStringLiteral(" mm");
+}
+
+QString EditorViewModel::measureDistanceXyzText() const
+{
+  if (!m_measureReadout.valid || !m_measureReadout.hasDistanceXyz)
+    return {};
+  // Upstream "Distance XYZ" row (GLGizmoMeasure.cpp:2031 format_vec3):
+  // "(x, y, z)". Skip when the vector is ~zero (mirrors the upstream
+  // norm()>EPSILON gate at GLGizmoMeasure.cpp:2029).
+  const QVector3D &v = m_measureReadout.distanceXyz;
+  if (v.lengthSquared() < 1e-12f)
+    return {};
+  return QStringLiteral("(%1, %2, %3)")
+      .arg(v.x(), 0, 'f', 3)
+      .arg(v.y(), 0, 'f', 3)
+      .arg(v.z(), 0, 'f', 3);
+}
+
+int EditorViewModel::measureEngineCachedCount() const
+{
+#ifdef HAS_LIBSLIC3R
+  return m_measureEngine ? int(m_measureEngine->cachedMeasuringCount()) : 0;
+#else
+  return 0;
+#endif
+}
+
+void EditorViewModel::clearMeasureReadout()
+{
+  // Phase 114 (MEASURE-03): reset the cached readout to the invalid defaults
+  // + drop the "from" feature so the next hit starts a fresh two-click
+  // measure. Always emits measureReadoutChanged so the QML bindings refresh
+  // (mirrors the WTREAD-02 / FMAP-01 always-emit pattern).
+  m_measureReadout = MeasureReadout{};
+#ifdef HAS_LIBSLIC3R
+  m_measureFromFeatureValid = false;
+  m_measureFromObjectIndex = -1;
+  m_measureFromVolumeIndex = -1;
+  m_measureFromFacetIdx = -1;
+  m_measureFromWorldPoint = {};
+  m_measureFromVolumeTranslation = {};
+  m_measureFromVolumeRotationRad = {};
+  m_measureFromVolumeScale = QVector3D(1.0f, 1.0f, 1.0f);
+#endif
+  emit measureReadoutChanged();
+}
+
+void EditorViewModel::invalidateMeasureEngine()
+{
+  // Phase 114 (MEASURE-03): drop the per-volume Measuring cache on mesh
+  // change (load/cut/boolean/simplify/drill). Mirrors the upstream rebuild-
+  // on-mesh-change signal (GLGizmoMeasure.cpp m_curr_measuring rebuild,
+  // pitfall 6). Without this, a stale Measuring serves features from the
+  // OLD mesh. No-op when HAS_LIBSLIC3R is off or the engine was never built.
+#ifdef HAS_LIBSLIC3R
+  if (m_measureEngine)
+    m_measureEngine->invalidate();
+#endif
+}
+
+#ifdef HAS_LIBSLIC3R
+namespace {
+// Rebuild a Slic3r::Transform3d from the QML-facing translation/rotation/
+// scale decomposition. Eigen types cannot be Q_PROPERTY members or cross
+// QML, so the renderer decomposes the candidate worldTransform it already
+// holds and the C++ side rebuilds it here. Uses the canonical
+// Geometry::assemble_transform (the SAME helper ModelInstance::get_matrix
+// uses, Geometry.hpp:354) so the composition matches the rest of the
+// codebase byte-for-byte: T = translation * RotZ * RotY * RotX * Scale.
+Slic3r::Transform3d rebuildWorldTransform(QVector3D translation,
+                                          QVector3D rotationRad,
+                                          QVector3D scale)
+{
+  return Slic3r::Geometry::assemble_transform(
+      Slic3r::Vec3d(double(translation.x()), double(translation.y()),
+                    double(translation.z())),
+      Slic3r::Vec3d(double(rotationRad.x()), double(rotationRad.y()),
+                    double(rotationRad.z())),
+      Slic3r::Vec3d(double(scale.x()), double(scale.y()),
+                    double(scale.z())));
+}
+} // namespace
+
+bool EditorViewModel::computeMeasureReadoutFromHit(int objectIndex,
+                                                   int volumeIndex,
+                                                   int facetIdx,
+                                                   QVector3D worldPoint,
+                                                   QVector3D volumeTranslation,
+                                                   QVector3D volumeRotationRad,
+                                                   QVector3D volumeScale,
+                                                   bool onlySelectPlane)
+{
+  // Phase 114 (MEASURE-03): drive a measurement readout from a Phase 113
+  // SceneRaycaster hit. This is the production wiring of MeasureEngine to
+  // the QML layer: the renderer (RhiViewportRenderer) holds the
+  // SceneRaycasterHit + the candidate worldTransform; it decomposes the
+  // transform and calls this Q_INVOKABLE. The engine resolves the picked
+  // feature (Measure::Measuring on the per-volume ITS, pitfall-6 scrubbed)
+  // and, when a "from" feature is already cached, computes the readout
+  // between them (Measure::get_measurement). Mirrors the upstream two-click
+  // measure flow (GLGizmoMeasure.cpp m_selected_features first/second).
+  //
+  // ProjectServiceMock is required for the ITS source. Without it (or
+  // without HAS_LIBSLIC3R), the readout stays invalid.
+  if (!projectService_)
+    return false;
+
+  // Lazy-construct the MeasureEngine on first use (ME-01). The ITS source
+  // lambda captures projectService_ (non-owning -- EditorViewModel does not
+  // own the service). The same accessor feeds the Phase 113 SceneRaycaster
+  // in production, keeping per-volume ITS identity consistent.
+  if (!m_measureEngine) {
+    m_measureEngine = std::make_unique<OWzx::MeasureEngine>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const indexed_triangle_set> {
+          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
+        });
+  }
+
+  const Slic3r::Vec3d worldPt(double(worldPoint.x()), double(worldPoint.y()),
+                              double(worldPoint.z()));
+  const Slic3r::Transform3d worldTran =
+      rebuildWorldTransform(volumeTranslation, volumeRotationRad, volumeScale);
+
+  // Resolve the feature at this hit (ME-02). The returned QtFeature is
+  // pure POD (pitfall 6 scrubbed) -- safe to hold across calls.
+  OWzx::QtFeature feature = m_measureEngine->getFeature(
+      objectIndex, volumeIndex, static_cast<std::size_t>(facetIdx), worldPt,
+      worldTran, onlySelectPlane);
+  if (!feature.valid)
+    return false; // ray missed / facet out of range / no mesh
+
+  if (!m_measureFromFeatureValid) {
+    // First click: stash as the "from" feature, no readout yet.
+    m_measureFromFeatureValid = true;
+    m_measureFromObjectIndex = objectIndex;
+    m_measureFromVolumeIndex = volumeIndex;
+    m_measureFromFacetIdx = facetIdx;
+    m_measureFromWorldPoint = worldPoint;
+    m_measureFromVolumeTranslation = volumeTranslation;
+    m_measureFromVolumeRotationRad = volumeRotationRad;
+    m_measureFromVolumeScale = volumeScale;
+    m_measureReadout = MeasureReadout{};
+    emit measureReadoutChanged();
+    return false;
+  }
+
+  // Second click: re-resolve the "from" feature from the stashed hit fields
+  // (we stash the hit, not the feature, so the engine can rebuild the
+  // SurfaceFeature on this side of the boundary without holding a libslic3r
+  // object). Then measure feature-vs-fromFeature.
+  const Slic3r::Vec3d fromWorldPt(
+      double(m_measureFromWorldPoint.x()), double(m_measureFromWorldPoint.y()),
+      double(m_measureFromWorldPoint.z()));
+  const Slic3r::Transform3d fromWorldTran = rebuildWorldTransform(
+      m_measureFromVolumeTranslation, m_measureFromVolumeRotationRad,
+      m_measureFromVolumeScale);
+  OWzx::QtFeature fromFeature = m_measureEngine->getFeature(
+      m_measureFromObjectIndex, m_measureFromVolumeIndex,
+      static_cast<std::size_t>(m_measureFromFacetIdx), fromWorldPt,
+      fromWorldTran, onlySelectPlane);
+  if (!fromFeature.valid) {
+    // The "from" feature is no longer resolvable (mesh changed without an
+    // invalidate). Fall back: this hit becomes the new "from" feature.
+    m_measureFromFeatureValid = true;
+    m_measureFromObjectIndex = objectIndex;
+    m_measureFromVolumeIndex = volumeIndex;
+    m_measureFromFacetIdx = facetIdx;
+    m_measureFromWorldPoint = worldPoint;
+    m_measureFromVolumeTranslation = volumeTranslation;
+    m_measureFromVolumeRotationRad = volumeRotationRad;
+    m_measureFromVolumeScale = volumeScale;
+    m_measureReadout = MeasureReadout{};
+    emit measureReadoutChanged();
+    return false;
+  }
+
+  // Compute the readout in WORLD space. Both features are resolved with
+  // their own worldTransform; the measurement uses the SECOND hit's
+  // worldTransform as the reference frame (mirrors upstream world_tran on
+  // the active feature). The QtMeasurement is POD (pitfall 6 scrubbed).
+  const OWzx::QtMeasurement m =
+      m_measureEngine->measureFeatures(fromFeature, feature, worldTran);
+
+  MeasureReadout out;
+  out.valid = m.valid;
+  out.hasAngle = m.hasAngle;
+  out.angleDeg = m.hasAngle ? float(m.angleRad * kRadiansToDegrees) : 0.0f;
+  out.hasPerpendicularDistance = m.hasPerpendicularDistance;
+  out.perpendicularDistance = m.perpendicularDistance;
+  out.hasDirectDistance = m.hasDirectDistance;
+  out.directDistance = m.directDistance;
+  out.hasDistanceXyz = m.hasDistanceXyz;
+  out.distanceXyz = m.distanceXyz;
+  m_measureReadout = out;
+  emit measureReadoutChanged();
+  return out.valid;
+}
+#else
+bool EditorViewModel::computeMeasureReadoutFromHit(int, int, int, QVector3D,
+                                                   QVector3D, QVector3D,
+                                                   QVector3D, bool)
+{
+  // HAS_LIBSLIC3R off: Measure::Measuring + the ITS accessor do not exist.
+  // Return false so the QML caller sees no readout (mirrors the
+  // kViewportTrianglePickingAvailable=false stub pattern).
+  return false;
+}
+#endif
+
+// Phase 114 (MEASURE-03): out-of-line destructor so the unique_ptr<MeasureEngine>
+// member (forward-declared in the header) destroys where MeasureEngine is
+// complete. Empty body -- unique_ptr + the Qt parent-child ownership handle
+// the cleanup. Defined here (not = default in the header) so the compiler
+// does NOT instantiate the deleter at the header's point of incomplete type.
+EditorViewModel::~EditorViewModel() = default;
 
 void EditorViewModel::undo()
 {

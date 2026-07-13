@@ -73,6 +73,13 @@
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Point.hpp>  // Vec3d, Transform3d (via Point.hpp -> Eigen)
 struct indexed_triangle_set;
+namespace Slic3r {
+namespace Measure {
+class Measuring;  // forward-declared; the complete type (Measure.hpp) is
+                  // pulled in only by the .cpp. Keeps this header free of
+                  // the Measure.hpp transitive includes (CGAL etc.).
+}
+} // namespace Slic3r
 #endif
 
 #ifdef HAS_LIBSLIC3R

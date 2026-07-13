@@ -8,6 +8,7 @@
 #include <QVariant>
 #include <QVector3D>
 #include <QVector4D>
+#include <memory>
 
 #include "core/rendering/SupportPaintTypes.h"
 // Phase 93 (ASMROUTE-02): AssembleView data pool — caches per-object info for
@@ -27,6 +28,9 @@
 class ProjectServiceMock;
 class UndoRedoManager;
 class ConfigViewModel;
+namespace OWzx {
+class MeasureEngine;
+} // namespace OWzx
 
 class EditorViewModel final : public QObject
 {
@@ -117,6 +121,28 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(QString assemblyMeasureAngleText READ assemblyMeasureAngleText NOTIFY stateChanged)
   Q_PROPERTY(QVector3D assemblyMeasureDistanceXyz READ assemblyMeasureDistanceXyz NOTIFY stateChanged)
   Q_PROPERTY(QString assemblyMeasurePlaneText READ assemblyMeasurePlaneText NOTIFY stateChanged)
+  // Phase 114 (MEASURE-03): real feature-picking measurement readouts. The
+  // Assembly Q_PROPERTYs above are the COARSE AABB-center multi-volume
+  // fallback (AssemblyMeasureGeometry, Phase 92). These are the PRECISE
+  // single-feature readouts from MeasureEngine (Measure::Measuring on the
+  // per-volume ITS). The Phase 115 snap UX binds the measure*Text readouts
+  // directly; the raw float/vector Q_PROPERTYs are exposed for debug + the
+  // Phase 115 point/edge/circle/plane overlay. measureReadoutValid is the
+  // gate (mirrors the WTREAD-02 / FMAP-01 valid-flag pattern): false until a
+  // valid measurement is computed, so no stale readout leaks to QML.
+  //
+  // Mirrors upstream GLGizmoMeasure.cpp:1990-2048 readout table: angle
+  // (AngleAndEdges.angle), perpendicular distance (distance_infinite),
+  // direct distance (distance_strict), distance XYZ (distance_xyz).
+  Q_PROPERTY(bool measureReadoutValid READ measureReadoutValid NOTIFY measureReadoutChanged)
+  Q_PROPERTY(QString measureAngleText READ measureAngleText NOTIFY measureReadoutChanged)
+  Q_PROPERTY(QString measurePerpendicularDistanceText READ measurePerpendicularDistanceText NOTIFY measureReadoutChanged)
+  Q_PROPERTY(QString measureDirectDistanceText READ measureDirectDistanceText NOTIFY measureReadoutChanged)
+  Q_PROPERTY(QString measureDistanceXyzText READ measureDistanceXyzText NOTIFY measureReadoutChanged)
+  Q_PROPERTY(float measureAngleDeg READ measureAngleDeg NOTIFY measureReadoutChanged)
+  Q_PROPERTY(float measurePerpendicularDistance READ measurePerpendicularDistance NOTIFY measureReadoutChanged)
+  Q_PROPERTY(float measureDirectDistance READ measureDirectDistance NOTIFY measureReadoutChanged)
+  Q_PROPERTY(QVector3D measureDistanceXyz READ measureDistanceXyz NOTIFY measureReadoutChanged)
 
 public:
   enum SliceResultStatus {
@@ -127,6 +153,10 @@ public:
   Q_ENUM(SliceResultStatus)
 
   explicit EditorViewModel(ProjectServiceMock *projectService, SliceService *sliceService, QObject *parent = nullptr);
+  // Phase 114 (MEASURE-03): destructor defined out-of-line in the .cpp so the
+  // unique_ptr<MeasureEngine> member (forward-declared here) can be destroyed
+  // where MeasureEngine is a complete type.
+  ~EditorViewModel();
 
   QString projectName() const;
   int modelCount() const;
@@ -844,6 +874,64 @@ public:
   QString assemblyMeasureAngleText() const;
   QVector3D assemblyMeasureDistanceXyz() const;
   QString assemblyMeasurePlaneText() const;
+  // Phase 114 (MEASURE-03): real feature-picking measurement readout
+  // accessors (ME-04). The text variants format to upstream precision
+  // (3 decimals + unit/glyph, GLGizmoMeasure.cpp:24 format_double). The
+  // raw float/vector variants expose the underlying value for debug + the
+  // Phase 115 overlay. measureReadoutValid is the gate.
+  bool measureReadoutValid() const { return m_measureReadout.valid; }
+  QString measureAngleText() const;
+  QString measurePerpendicularDistanceText() const;
+  QString measureDirectDistanceText() const;
+  QString measureDistanceXyzText() const;
+  float measureAngleDeg() const { return m_measureReadout.angleDeg; }
+  float measurePerpendicularDistance() const
+  { return m_measureReadout.perpendicularDistance; }
+  float measureDirectDistance() const { return m_measureReadout.directDistance; }
+  QVector3D measureDistanceXyz() const { return m_measureReadout.distanceXyz; }
+  /// Phase 114 (MEASURE-03): drive a measurement readout from a Phase 113
+  /// SceneRaycaster hit + an optional second hit. Computes the picked
+  /// feature(s) via MeasureEngine (Measure::Measuring on the per-volume ITS,
+  /// pitfall-6 scrubbed) and the measurement readouts between them, caches
+  /// the result into the measure* Q_PROPERTYs, and emits
+  /// measureReadoutChanged(). Returns true if a valid readout was produced.
+  ///
+  /// The single-hit overload (secondHit=false) resolves the feature at the
+  /// hit but produces no measurement (measureReadoutValid stays false until
+  /// a second feature is supplied) -- the Phase 115 snap UX uses the first
+  /// hit to set the "from" feature, the second to compute the readout.
+  /// Mirrors the upstream two-click measure flow
+  /// (GLGizmoMeasure.cpp m_selected_features first/second).
+  ///
+  /// All inputs are world-space. objectIndex/volumeIndex/facetIdx come from
+  /// SceneRaycasterHit; worldPoint is the hit position; the volume's world
+  /// transform is reconstructed on the C++ side from translation + euler
+  /// rotation (radians, XYZ order) + scale (Eigen types cannot cross QML,
+  /// so the renderer decomposes the candidate worldTransform it already
+  /// holds). onlySelectPlane forces the plane feature
+  /// (Measuring::get_feature last arg, Measure.hpp:128).
+  Q_INVOKABLE bool computeMeasureReadoutFromHit(int objectIndex,
+                                                int volumeIndex,
+                                                int facetIdx,
+                                                QVector3D worldPoint,
+                                                QVector3D volumeTranslation,
+                                                QVector3D volumeRotationRad,
+                                                QVector3D volumeScale,
+                                                bool onlySelectPlane);
+  /// Phase 114 (MEASURE-03): clear the cached measurement readout (sends
+  /// the measure* Q_PROPERTYs back to their invalid defaults). Call on
+  /// cursor-leave / gizmo-deactivate so no stale readout lingers.
+  Q_INVOKABLE void clearMeasureReadout();
+  /// Phase 114 (MEASURE-03): invalidate the per-volume Measure::Measuring
+  /// cache. Wire to every mutation that changes a volume mesh (load, cut,
+  /// boolean, simplify, drill) -- mirrors the upstream rebuild-on-mesh-
+  /// change signal (GLGizmoMeasure.cpp m_curr_measuring rebuild, pitfall 6).
+  /// Without this, a stale Measuring would serve features from the OLD mesh.
+  Q_INVOKABLE void invalidateMeasureEngine();
+  /// Phase 114 (MEASURE-03): test accessor exposing the cached Measuring
+  /// count for the measureEngineInstantiatedPerVolume smoke assertion.
+  /// Returns 0 when no Measuring is cached (or HAS_LIBSLIC3R is off).
+  int measureEngineCachedCount() const;
   // Phase 92: first-two selected source indices, for the RhiViewport overlay
   // selection bindings (AssemblePage forwards them to the renderer).
   QList<int> assemblyMeasureSelectedSourceIndices() const;
@@ -889,6 +977,10 @@ signals:
   /// is refreshed from a SliceService readback (valid or invalid). Drives the
   /// three auto* Q_PROPERTYs above.
   void filamentMapChanged();
+  /// Phase 114 (MEASURE-03): emitted whenever the feature-picking
+  /// measurement readout is refreshed (valid or cleared). Drives the nine
+  /// measure* Q_PROPERTYs above.
+  void measureReadoutChanged();
   void selectionSettingsRequested();
   /// 请求切换到预览页面（对齐上游 Plater::priv::on_preview）
   void previewRequested();
@@ -1114,4 +1206,46 @@ private:
   bool m_hasAutoFilamentMap = false;
   int m_autoFilamentMapMode = static_cast<int>(OWzx::FilamentMapMode::fmmDefault);
   QVariantList m_autoFilamentMaps;
+  // Phase 114 (MEASURE-03): feature-picking measurement readout cache.
+  // m_measureReadoutValid is the gate (mirrors WTREAD-02 / FMAP-01 valid-
+  // flag pattern): false until a valid readout is computed, so no stale
+  // value leaks to the Phase 115 UI. The text getters format on demand;
+  // the raw values live here and are surfaced via the Q_PROPERTY getters.
+  struct MeasureReadout
+  {
+    bool valid = false;
+    bool hasAngle = false;
+    float angleDeg = 0.0f;          // Measure::AngleAndEdges.angle, deg
+    bool hasPerpendicularDistance = false;
+    float perpendicularDistance = 0.0f; // distance_infinite
+    bool hasDirectDistance = false;
+    float directDistance = 0.0f;    // distance_strict
+    bool hasDistanceXyz = false;
+    QVector3D distanceXyz;          // distance_xyz
+  };
+  MeasureReadout m_measureReadout;
+#ifdef HAS_LIBSLIC3R
+  // Phase 114 (MEASURE-03): per-volume Measure::Measuring engine. Held via
+  // unique_ptr + forward-declared so the MeasureEngine.h (and its libslic3r
+  // Point.hpp include) does NOT leak into this header. Lazily constructed
+  // on the first computeMeasureReadoutFromHit call, invalidated on mesh
+  // change via invalidateMeasureEngine(). Null when HAS_LIBSLIC3R is off.
+  std::unique_ptr<OWzx::MeasureEngine> m_measureEngine;
+  // Phase 114 (MEASURE-03): the first ("from") feature of the two-click
+  // measure flow (mirrors GLGizmoMeasure m_selected_features.first). When
+  // set, the next computeMeasureReadoutFromHit measures against it; when
+  // empty, the next hit becomes the "from" feature. Held as the hit fields
+  // (no libslic3r SurfaceFeature -- pitfall 6). The volume world transform
+  // is stored as its translation/rotation/scale decomposition so the C++
+  // side can rebuild the Eigen Transform3d (Eigen types cannot be Q_PROPERTY
+  // members and cannot cross QML).
+  bool m_measureFromFeatureValid = false;
+  int m_measureFromObjectIndex = -1;
+  int m_measureFromVolumeIndex = -1;
+  QVector3D m_measureFromWorldPoint;
+  QVector3D m_measureFromVolumeTranslation;
+  QVector3D m_measureFromVolumeRotationRad;
+  QVector3D m_measureFromVolumeScale{1.0f, 1.0f, 1.0f};
+  int m_measureFromFacetIdx = -1;
+#endif
 };
