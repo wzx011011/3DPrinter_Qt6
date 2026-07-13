@@ -564,6 +564,17 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
     emit gizmoDragEnd();
   resetGizmoDragState();
 
+  // Phase 115 (MEASURE-04): the measure gizmo does not drag the object -- a
+  // left click drives the two-click measure flow (first click sets A, second
+  // sets B). Emit measurePickRequested so the ViewModel runs the stage-2
+  // pick + getFeature + the readout math. Mirrors upstream GLGizmoMeasure
+  // gizmo_event handling LeftDown (the upstream two-click measure flow).
+  if (event->button() == Qt::LeftButton && m_gizmoMode == GizmoMeasure) {
+    emitMeasurePickIfActive(event->position(), event->modifiers());
+    event->accept();
+    return;
+  }
+
   // Phase 69/70: active gizmo hit tests take priority over object picking.
   if (event->button() == Qt::LeftButton &&
       (m_gizmoMode == GizmoMove || m_gizmoMode == GizmoRotate || m_gizmoMode == GizmoScale) &&
@@ -711,12 +722,20 @@ void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
 void RhiViewport::hoverMoveEvent(QHoverEvent *event)
 {
   setHoveredSourceObjectIndex(pickSourceObjectAt(event->position()));
+  // Phase 115 (MEASURE-04): drive the snap UX on mouse-move while the measure
+  // gizmo is active. The ViewModel runs the two-stage pick + getFeature and
+  // updates the readout live. Mirrors upstream GLGizmoMeasure on_mouse move.
+  emitMeasurePickIfActive(event->position(), event->modifiers());
   event->accept();
 }
 
 void RhiViewport::hoverLeaveEvent(QHoverEvent *event)
 {
   setHoveredSourceObjectIndex(-1);
+  // Phase 115 (MEASURE-04): clear the hovered feature when the cursor leaves
+  // the viewport so no stale highlight lingers off-mesh.
+  if (m_gizmoMode == GizmoMeasure)
+    emit measureHoverLeft();
   event->accept();
 }
 
@@ -902,4 +921,42 @@ void RhiViewport::resetGizmoDragState()
   m_gizmoDragStartT = 0.f;
   m_gizmoRotateStartAngle = 0.f;
   m_gizmoDragCenter = {};
+}
+
+// ===========================================================================
+// Phase 115 (MEASURE-04): measure-gizmo snap UX wiring
+// ===========================================================================
+void RhiViewport::emitMeasurePickIfActive(const QPointF &position,
+                                          Qt::KeyboardModifiers modifiers)
+{
+  // Only the measure gizmo drives this path. Other gizmos (move/rotate/scale/
+  // cut/flatten/...) keep their existing mouse handling untouched.
+  if (m_gizmoMode != GizmoMeasure)
+    return;
+
+  // Stage-1: cheap ray->AABB prefilter over the scene vertices. Returns -1
+  // when the ray misses every object's AABB (the ViewModel clears the hover
+  // highlight in that case).
+  const int pickedSourceIndex = pickSourceObjectAt(position);
+  if (pickedSourceIndex < 0) {
+    emit measureHoverLeft();
+    return;
+  }
+
+  // Build the world-space pick ray (same GizmoMath::computeRay the object
+  // picking + gizmo-axis picking already use). The ViewModel feeds this to
+  // SceneRaycaster::hitTest (Phase 113 stage-2).
+  const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+  if (viewSize.width() <= 1 || viewSize.height() <= 1)
+    return;
+  const float aspect = float(viewSize.width()) / float(viewSize.height());
+  auto [rayOrigin, rayDirection] = GizmoMath::computeRay(
+      float(position.x()), float(position.y()),
+      viewSize,
+      m_camera.projMatrix(aspect), m_camera.viewMatrix());
+
+  // Shift toggle (GLGizmoMeasure.cpp:409-442): Qt::ShiftModifier forces
+  // EMode::PointSelection; absence keeps the default FeatureSelection.
+  const bool shiftHeld = (modifiers & Qt::ShiftModifier) != 0;
+  emit measurePickRequested(rayOrigin, rayDirection, pickedSourceIndex, shiftHeld);
 }

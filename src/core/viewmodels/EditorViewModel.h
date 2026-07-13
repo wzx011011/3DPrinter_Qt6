@@ -30,6 +30,7 @@ class UndoRedoManager;
 class ConfigViewModel;
 namespace OWzx {
 class MeasureEngine;
+class SceneRaycaster;  // Phase 115 (MEASURE-04): two-stage pick stage-2.
 } // namespace OWzx
 
 class EditorViewModel final : public QObject
@@ -922,6 +923,36 @@ public:
   /// the measure* Q_PROPERTYs back to their invalid defaults). Call on
   /// cursor-leave / gizmo-deactivate so no stale readout lingers.
   Q_INVOKABLE void clearMeasureReadout();
+  /// Phase 115 (MEASURE-04): drive the snap UX from a mouse event. Runs the
+  /// two-stage pick (Phase 113 SceneRaycaster over the picked source object's
+  /// volumes only -- pitfall 7 mitigation, NO whole-scene loop) and feeds the
+  /// closest world-space hit through computeMeasureReadoutFromHit (Phase 114
+  /// MeasureEngine::getFeature). The shiftHeld arg implements the upstream
+  /// Shift toggle (GLGizmoMeasure.cpp:409-442): shiftHeld==true forces
+  /// EMode::PointSelection -- the raw world hit point is used as a Point
+  /// feature (no feature snapping). shiftHeld==false keeps the default
+  /// FeatureSelection (snap to nearest edge/circle/plane). Returns true when
+  /// a feature was resolved and the readout (or the "from" stash) updated.
+  ///
+  /// pickedSourceIndex is the stage-1 survivor from RhiViewport::pickSourceObjectAt
+  /// (the cheap ray->AABB prefilter). Stage 2 narrows to that object's volumes.
+  Q_INVOKABLE bool pickMeasureFeatureAt(QVector3D rayOrigin,
+                                        QVector3D rayDirection,
+                                        int pickedSourceIndex,
+                                        bool shiftHeld);
+  /// Phase 115 (MEASURE-04): the FeatureKind of the most recently picked
+  /// feature (0=Undef, 1=Point, 2=Edge, 4=Circle, 8=Plane -- mirrors
+  /// OWzx::FeatureKind / Measure::SurfaceFeatureType). Drives the gizmo
+  /// overlay highlight type (point marker / edge line / circle / plane).
+  /// 0 when no feature is currently hovered (ray missed / gizmo off).
+  Q_PROPERTY(int measureHoverFeatureKind READ measureHoverFeatureKind NOTIFY measureReadoutChanged)
+  int measureHoverFeatureKind() const { return m_measureHoverFeatureKind; }
+  /// Phase 115 (MEASURE-04): the world-space position of the most recently
+  /// picked feature (the snapped point for PointSelection, or the feature's
+  /// representative point for FeatureSelection). Drives the gizmo overlay
+  /// marker placement. Origin when no feature is hovered.
+  Q_PROPERTY(QVector3D measureHoverWorldPosition READ measureHoverWorldPosition NOTIFY measureReadoutChanged)
+  QVector3D measureHoverWorldPosition() const { return m_measureHoverWorldPosition; }
   /// Phase 114 (MEASURE-03): invalidate the per-volume Measure::Measuring
   /// cache. Wire to every mutation that changes a volume mesh (load, cut,
   /// boolean, simplify, drill) -- mirrors the upstream rebuild-on-mesh-
@@ -1247,5 +1278,17 @@ private:
   QVector3D m_measureFromVolumeRotationRad;
   QVector3D m_measureFromVolumeScale{1.0f, 1.0f, 1.0f};
   int m_measureFromFacetIdx = -1;
+  // Phase 115 (MEASURE-04): two-stage pick stage-2 raycaster. Lazily built on
+  // the first pickMeasureFeatureAt call from the SAME ITS source MeasureEngine
+  // uses (ProjectServiceMock::volumeMeshIts, Phase 112). invalidateMeasureEngine
+  // drops both caches so a mesh change refreshes them together (pitfall 6/7).
+  std::unique_ptr<OWzx::SceneRaycaster> m_sceneRaycaster;
 #endif
+  // Phase 115 (MEASURE-04): the most recently picked feature kind + world
+  // position (drives the gizmo overlay highlight). Reset to Undef/origin by
+  // clearMeasureReadout() (mirrors WTREAD-02 / FMAP-01 always-emit pattern).
+  // Kept outside the HAS_LIBSLIC3R guard so the Q_PROPERTY getters always have
+  // a defined value (0/origin) when libslic3r is off.
+  int m_measureHoverFeatureKind = 0;  // OWzx::FeatureKind::Undef == 0
+  QVector3D m_measureHoverWorldPosition;
 };

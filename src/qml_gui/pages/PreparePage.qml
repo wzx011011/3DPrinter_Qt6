@@ -1724,6 +1724,22 @@ Item {
                                 root.editorVm.endGizmoMoveDrag()
                         }
                     }
+                    // Phase 115 (MEASURE-04): wire the snap UX (mouse-move ->
+                    // raycast -> getFeature -> Shift toggle -> visual feedback +
+                    // two-click measurement). The RhiViewport emits these only
+                    // while gizmoMode === GizmoMeasure; the ViewModel runs the
+                    // two-stage pick (SceneRaycaster, Phase 113) + MeasureEngine::
+                    // getFeature (Phase 114) and updates the measure* readouts
+                    // live. Shift forces PointSelection; default is FeatureSelection
+                    // (mirrors upstream GLGizmoMeasure.cpp:409-442).
+                    onMeasurePickRequested: function(rayOrigin, rayDirection, pickedSourceIndex, shiftHeld) {
+                        if (root.editorVm)
+                            root.editorVm.pickMeasureFeatureAt(rayOrigin, rayDirection, pickedSourceIndex, shiftHeld)
+                    }
+                    onMeasureHoverLeft: {
+                        if (root.editorVm)
+                            root.editorVm.clearMeasureReadout()
+                    }
                     cutAxis: root.editorVm ? root.editorVm.cutAxis : 2
                     cutPosition: root.editorVm ? root.editorVm.cutPosition : 0.0
 
@@ -2015,10 +2031,73 @@ Item {
                     font.family: "Consolas, monospace"
                     Layout.alignment: Qt.AlignHCenter
                 }
+                // Phase 115 (MEASURE-04): the picked-feature readouts. Surfaces
+                // the MeasureEngine angle / perpendicular distance / direct
+                // distance live as the cursor moves (MS-03 visual feedback).
+                // Mirrors the upstream GLGizmoMeasure.cpp:1990-2048 readout
+                // rows. Empty until the second click completes the measure.
+                Label {
+                    visible: root.editorVm && root.editorVm.measureReadoutValid
+                    text: root.editorVm && root.editorVm.measureAngleText
+                          ? (qsTr("角度: ") + root.editorVm.measureAngleText)
+                          : ""
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
+                    font.family: "Consolas, monospace"
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Label {
+                    visible: root.editorVm && root.editorVm.measureReadoutValid
+                    text: root.editorVm && root.editorVm.measurePerpendicularDistanceText
+                          ? (qsTr("垂直距离: ") + root.editorVm.measurePerpendicularDistanceText)
+                          : ""
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
+                    font.family: "Consolas, monospace"
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Label {
+                    visible: root.editorVm && root.editorVm.measureReadoutValid
+                    text: root.editorVm && root.editorVm.measureDirectDistanceText
+                          ? (qsTr("直线距离: ") + root.editorVm.measureDirectDistanceText)
+                          : ""
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
+                    font.family: "Consolas, monospace"
+                    Layout.alignment: Qt.AlignHCenter
+                }
                 Label {
                     text: root.editorVm && root.editorVm.measureSelectionMode === 1
                         ? qsTr("点击网格面拾取特征 (点/边/圆/平面)")
                         : qsTr("点测量模式 — 显示选中对象尺寸")
+                    color: Theme.textTertiary
+                    font.pixelSize: 9
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                // Phase 115 (MEASURE-04): the live hover-feature indicator.
+                // Surfaces the FeatureKind of the feature currently under the
+                // cursor (MS-03 visual feedback) + the Shift-toggle hint.
+                Label {
+                    visible: viewport3d.gizmoMode === GLViewport.GizmoMeasure && root.editorVm
+                    text: {
+                        if (!root.editorVm || root.editorVm.measureHoverFeatureKind === 0)
+                            return qsTr("悬停特征: 无")
+                        // OWzx::FeatureKind: 1=Point, 2=Edge, 4=Circle, 8=Plane
+                        switch (root.editorVm.measureHoverFeatureKind) {
+                            case 1: return qsTr("悬停特征: 点")
+                            case 2: return qsTr("悬停特征: 边")
+                            case 4: return qsTr("悬停特征: 圆")
+                            case 8: return qsTr("悬停特征: 平面")
+                            default: return qsTr("悬停特征: 未知")
+                        }
+                    }
+                    color: Theme.textTertiary
+                    font.pixelSize: 9
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Label {
+                    visible: viewport3d.gizmoMode === GLViewport.GizmoMeasure
+                    text: qsTr("Shift = 点测量 (对齐上游 GLGizmoMeasure)")
                     color: Theme.textTertiary
                     font.pixelSize: 9
                     Layout.alignment: Qt.AlignHCenter

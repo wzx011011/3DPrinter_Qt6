@@ -13,6 +13,12 @@
 // scrubs the SurfaceFeature back-pointers at the boundary (pitfall 6). The
 // SceneRaycaster (Phase 113) produces the hit that feeds getFeature.
 #include "core/rendering/MeasureEngine.h"
+// Phase 115 (MEASURE-04): SceneRaycaster runs the two-stage pick stage-2
+// (per-triangle ITS raycast over the stage-1 candidate volumes only --
+// pitfall 7 mitigation). The candidate list handed to hitTest is the single
+// stage-1 survivor (RhiViewport::pickSourceObjectAt), so the per-frame cost
+// is O(hit volume), NOT O(all volumes) (the upstream perf bug).
+#include "core/rendering/SceneRaycaster.h"
 #include <libslic3r/Geometry.hpp>  // Geometry::assemble_transform (canonical TRS)
 #include <libslic3r/Point.hpp>     // Vec3d / Transform3d for world-transform rebuild
 #endif
@@ -2189,6 +2195,10 @@ void EditorViewModel::clearMeasureReadout()
   m_measureFromVolumeRotationRad = {};
   m_measureFromVolumeScale = QVector3D(1.0f, 1.0f, 1.0f);
 #endif
+  // Phase 115 (MEASURE-04): clear the hovered-feature highlight so no stale
+  // overlay marker lingers on cursor-leave / gizmo-deactivate.
+  m_measureHoverFeatureKind = 0;
+  m_measureHoverWorldPosition = {};
   emit measureReadoutChanged();
 }
 
@@ -2202,6 +2212,11 @@ void EditorViewModel::invalidateMeasureEngine()
 #ifdef HAS_LIBSLIC3R
   if (m_measureEngine)
     m_measureEngine->invalidate();
+  // Phase 115 (MEASURE-04): drop the stage-2 raycaster cache too -- a stale
+  // MeshRaycaster BVH would serve hits from the OLD mesh. Same model-change
+  // signal as MeasureEngine (pitfall 6 rebuild contract).
+  if (m_sceneRaycaster)
+    m_sceneRaycaster->invalidate();
 #endif
 }
 
@@ -2277,6 +2292,13 @@ bool EditorViewModel::computeMeasureReadoutFromHit(int objectIndex,
   if (!feature.valid)
     return false; // ray missed / facet out of range / no mesh
 
+  // Phase 115 (MEASURE-04): update the hover highlight from the resolved
+  // feature so the overlay reflects the picked feature type + position
+  // (MS-03 visual feedback). This runs on every mouse-move hit (the
+  // hover path calls this with the stage-2 hit).
+  m_measureHoverFeatureKind = static_cast<int>(feature.kind);
+  m_measureHoverWorldPosition = feature.pt1;
+
   if (!m_measureFromFeatureValid) {
     // First click: stash as the "from" feature, no readout yet.
     m_measureFromFeatureValid = true;
@@ -2351,6 +2373,127 @@ bool EditorViewModel::computeMeasureReadoutFromHit(int, int, int, QVector3D,
   // HAS_LIBSLIC3R off: Measure::Measuring + the ITS accessor do not exist.
   // Return false so the QML caller sees no readout (mirrors the
   // kViewportTrianglePickingAvailable=false stub pattern).
+  return false;
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+bool EditorViewModel::pickMeasureFeatureAt(QVector3D rayOrigin,
+                                           QVector3D rayDirection,
+                                           int pickedSourceIndex,
+                                           bool shiftHeld)
+{
+  // Phase 115 (MEASURE-04): the snap UX entry point. Mirrors the upstream
+  // GLGizmoMeasure mouse-move/click flow:
+  //   1. Stage-1 (RhiViewport::pickSourceObjectAt) already narrowed the scene
+  //      to pickedSourceIndex (cheap ray->AABB prefilter).
+  //   2. Stage-2 (HERE -- SceneRaycaster::hitTest) runs the per-triangle ITS
+  //      raycast over the candidate volume(s) only (pitfall 7 mitigation: NO
+  //      whole-scene loop). Returns the closest world-space hit.
+  //   3. The hit feeds computeMeasureReadoutFromHit (Phase 114 MeasureEngine::
+  //      getFeature) which resolves the SurfaceFeature (Point/Edge/Circle/
+  //      Plane) and drives the measure* readouts.
+  //   4. shiftHeld implements the Shift toggle (GLGizmoMeasure.cpp:409-442):
+  //      true forces EMode::PointSelection -- the raw world hit point is used
+  //      as a Point feature (no feature snapping); false keeps the default
+  //      FeatureSelection (snap to nearest edge/circle/plane).
+  //
+  // ProjectServiceMock is required for the ITS source. Without it (or without
+  // HAS_LIBSLIC3R), no pick happens.
+  if (!projectService_ || pickedSourceIndex < 0)
+  {
+    m_measureHoverFeatureKind = 0;
+    m_measureHoverWorldPosition = {};
+    emit measureReadoutChanged();
+    return false;
+  }
+
+  // Lazy-construct the SceneRaycaster from the SAME ITS source MeasureEngine
+  // uses (ProjectServiceMock::volumeMeshIts, Phase 112). Reusing one accessor
+  // keeps per-volume ITS identity consistent across the raycaster + engine.
+  if (!m_sceneRaycaster) {
+    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const indexed_triangle_set> {
+          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
+        });
+  }
+
+  // Reconstruct the candidate volume's world transform from the object's
+  // translation/rotation/scale (Eigen types cannot cross QML). The candidate
+  // list is the SINGLE stage-1 survivor -- SceneRaycaster never loops the
+  // whole scene. Volume 0 is the primary mesh volume per ProjectServiceMock
+  // convention (objectVolumeCount >= 1 for any loaded object).
+  const QVector3D translation = projectService_->objectPosition(pickedSourceIndex);
+  const QVector3D rotationDeg = projectService_->objectRotation(pickedSourceIndex);
+  const QVector3D scale = projectService_->objectScale(pickedSourceIndex);
+  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
+                              float(rotationDeg.y() * float(M_PI) / 180.0f),
+                              float(rotationDeg.z() * float(M_PI) / 180.0f));
+  const Slic3r::Transform3d worldTransform =
+      rebuildWorldTransform(translation, rotationRad, scale);
+
+  // Enumerate the candidate volume(s) for the picked object. Most objects
+  // have exactly one mesh volume; multi-volume objects add their mesh
+  // volumes here. The loop is bounded by objectVolumeCount (typically 1).
+  std::vector<OWzx::SceneRaycasterCandidate> candidates;
+  const int volumeCount = projectService_->objectVolumeCount(pickedSourceIndex);
+  candidates.reserve(std::max(1, volumeCount));
+  for (int v = 0; v < std::max(1, volumeCount); ++v) {
+    OWzx::SceneRaycasterCandidate cand;
+    cand.objectIndex = pickedSourceIndex;
+    cand.volumeIndex = v;
+    cand.worldTransform = worldTransform;
+    candidates.push_back(cand);
+  }
+
+  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
+                             double(rayOrigin.z()));
+  const Slic3r::Vec3d dir(double(rayDirection.x()), double(rayDirection.y()),
+                          double(rayDirection.z()));
+  const OWzx::SceneRaycasterHit hit =
+      m_sceneRaycaster->hitTest(origin, dir, candidates);
+  if (!hit.hit) {
+    // Ray missed every candidate volume: clear the hover highlight so no
+    // stale marker follows the cursor off the mesh.
+    m_measureHoverFeatureKind = 0;
+    m_measureHoverWorldPosition = {};
+    emit measureReadoutChanged();
+    return false;
+  }
+
+  // Drive the existing Phase 114 readout path with the resolved world-space
+  // hit. computeMeasureReadoutFromHit stashes the first hit as the "from"
+  // feature and measures the second against it (mirrors GLGizmoMeasure
+  // two-click flow). It also updates m_measureHoverFeatureKind/Position from
+  // the resolved feature (MS-03 visual feedback), so the default
+  // FeatureSelection path needs no extra work here.
+  const QVector3D worldHit(float(hit.worldPosition.x()),
+                           float(hit.worldPosition.y()),
+                           float(hit.worldPosition.z()));
+  const bool onlySelectPlane = false;  // full feature sniff (Point/Edge/Circle/Plane)
+  computeMeasureReadoutFromHit(hit.objectIndex, hit.volumeIndex,
+                               int(hit.facetIdx), worldHit,
+                               translation, rotationRad, scale,
+                               onlySelectPlane);
+  if (shiftHeld) {
+    // Upstream EMode::PointSelection (GLGizmoMeasure.cpp:413): the raw hit
+    // point is the feature, NOT the snapped edge/circle/plane. Override the
+    // hover highlight (which computeMeasureReadoutFromHit set from the
+    // resolved feature) to a Point at the raw world hit position. The readout
+    // math (measureFeatures) still works because Measure::get_measurement
+    // accepts any feature pair -- the resolved feature feeds the A->B measure
+    // correctly regardless of the highlight override.
+    m_measureHoverFeatureKind = static_cast<int>(OWzx::FeatureKind::Point);
+    m_measureHoverWorldPosition = worldHit;
+    emit measureReadoutChanged();
+  }
+  return true;
+}
+#else
+bool EditorViewModel::pickMeasureFeatureAt(QVector3D, QVector3D, int, bool)
+{
+  // HAS_LIBSLIC3R off: SceneRaycaster + MeasureEngine do not exist. No pick.
   return false;
 }
 #endif

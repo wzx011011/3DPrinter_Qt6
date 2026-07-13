@@ -269,6 +269,23 @@ signals:
   void gizmoScaleRequested(int axis, float factor);
   void gizmoDragBegin();
   void gizmoDragEnd();
+  // Phase 115 (MEASURE-04): emitted on mouse-move/click while the measure
+  // gizmo is active (m_gizmoMode == GizmoMeasure). rayOrigin/rayDirection
+  // are the world-space pick ray (same GizmoMath::computeRay output the
+  // object picking uses). pickedSourceIndex is the stage-1 AABB survivor
+  // (RhiViewport::pickSourceObjectAt, Phase 113 stage-1). shiftHeld mirrors
+  // the upstream Shift toggle (GLGizmoMeasure.cpp:409-442): true forces
+  // EMode::PointSelection; false keeps the default FeatureSelection. QML
+  // forwards these to EditorViewModel::pickMeasureFeatureAt which runs the
+  // stage-2 SceneRaycaster + MeasureEngine::getFeature.
+  void measurePickRequested(QVector3D rayOrigin,
+                            QVector3D rayDirection,
+                            int pickedSourceIndex,
+                            bool shiftHeld);
+  // Phase 115 (MEASURE-04): emitted on cursor-leave while the measure gizmo
+  // is active. QML forwards to EditorViewModel::clearMeasureReadout so no
+  // stale feature highlight lingers off-mesh.
+  void measureHoverLeft();
 
 private:
   friend class RhiViewportRenderer;
@@ -287,6 +304,13 @@ private:
   int pickGizmoAxisAt(const QPointF &position);
   QVector3D currentGizmoCenter() const;
   void resetGizmoDragState();
+  // Phase 115 (MEASURE-04): emit measurePickRequested for the active GizmoMeasure
+  // path. Runs the stage-1 pick (pickSourceObjectAt) to get the candidate source
+  // index, builds the world-space ray via GizmoMath::computeRay, and reads the
+  // Shift modifier from the supplied keyboardModifiers (Qt::ShiftModifier -> shift).
+  // No-op when m_gizmoMode != GizmoMeasure (only the measure gizmo drives this).
+  void emitMeasurePickIfActive(const QPointF &position,
+                               Qt::KeyboardModifiers modifiers);
 
   int m_canvasType = CanvasView3D;
   // Phase 91 (ASMEXPLODE-01): explosion ratio mirroring upstream m_explosion_ratio
