@@ -51,7 +51,7 @@
 - [x] Phase 110: Filament-Map Popup UI And Mode Surfacing (completed 2026-07-12)
 - [x] Phase 111: Filament-Map Save-Reload Round-Trip (completed 2026-07-12)
 - [x] Phase 112: Per-Volume ITS Accessor And Mesh Cache (completed 2026-07-12)
-- [ ] Phase 113: Scene And Mesh Raycaster Port
+- [x] Phase 113: Scene And Mesh Raycaster Port (completed 2026-07-13)
 - [ ] Phase 114: Measure Engine Instantiation And Feature Readouts
 - [ ] Phase 115: GLGizmoMeasure Snap UX And Feature Picking
 - [ ] Phase 116: v4.5 Verification And Cross-Workstream Regression
@@ -68,7 +68,7 @@
 | 110 | 1/1 | Complete   | 2026-07-12 |
 | 111 | 1/1 | Complete   | 2026-07-12 |
 | 112 | 1/1 | Complete   | 2026-07-12 |
-| 113 | Scene And Mesh Raycaster Port | Port `MeshRaycaster` + `SceneRaycaster` from upstream into `src/core/rendering/` as pure-CPU helpers (matching the `GizmoGeometry`/`ObjectPicking` pattern), with two-stage pick (coarse AABB via `ObjectPicking::pickSourceObject`, then per-triangle ITS on the hit volume only). | MEASURE-02 |
+| 113 | 1/1 | Complete   | 2026-07-13 |
 | 114 | Measure Engine Instantiation And Feature Readouts | Instantiate `Measure::Measuring` per-volume (not reimplement) to produce real measurements (angle, direct/perpendicular distance, distance XYZ), replacing the current AABB stub at `AssemblyMeasureGeometry`. | MEASURE-03 |
 | 115 | GLGizmoMeasure Snap UX And Feature Picking | Wire the GLGizmoMeasure snap UX (Point/Edge/Circle/Plane feature picks; Shift toggles FeatureSelection vs PointSelection) through the raycaster + `Measuring`, with `SurfaceFeature` raw-pointer scrubbing at the libslic3r→Qt boundary. | MEASURE-04 |
 | 116 | v4.5 Verification And Cross-Workstream Regression | Lock the milestone: automated tests + source audits confirm Option A does not regress and Option B fires only when populated (WTMESH-04), measurement readouts are real with correct ITS lifetime (MEASURE-05), the canonical verifier passes, the app launches, and Prepare/Preview/AssembleView rendering is regression-free. | WTMESH-04, MEASURE-05 |
@@ -197,7 +197,7 @@ Success criteria:
 ### Phase 113: Scene And Mesh Raycaster Port
 
 **Status:** Not started
-**Plans:** 0/0
+**Plans:** 1/1 plans complete
 **Workstream:** WS5 (GLGizmoMeasure)
 
 Success criteria:
