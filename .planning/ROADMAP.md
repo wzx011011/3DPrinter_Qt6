@@ -53,7 +53,7 @@
 - [x] Phase 112: Per-Volume ITS Accessor And Mesh Cache (completed 2026-07-12)
 - [x] Phase 113: Scene And Mesh Raycaster Port (completed 2026-07-13)
 - [x] Phase 114: Measure Engine Instantiation And Feature Readouts (completed 2026-07-13)
-- [ ] Phase 115: GLGizmoMeasure Snap UX And Feature Picking
+- [x] Phase 115: GLGizmoMeasure Snap UX And Feature Picking (completed 2026-07-13)
 - [ ] Phase 116: v4.5 Verification And Cross-Workstream Regression
 
 | Phase | Name | Goal | Requirements |
@@ -70,7 +70,7 @@
 | 112 | 1/1 | Complete   | 2026-07-12 |
 | 113 | 1/1 | Complete   | 2026-07-13 |
 | 114 | 1/1 | Complete   | 2026-07-13 |
-| 115 | GLGizmoMeasure Snap UX And Feature Picking | Wire the GLGizmoMeasure snap UX (Point/Edge/Circle/Plane feature picks; Shift toggles FeatureSelection vs PointSelection) through the raycaster + `Measuring`, with `SurfaceFeature` raw-pointer scrubbing at the libslic3r→Qt boundary. | MEASURE-04 |
+| 115 | 1/1 | Complete   | 2026-07-13 |
 | 116 | v4.5 Verification And Cross-Workstream Regression | Lock the milestone: automated tests + source audits confirm Option A does not regress and Option B fires only when populated (WTMESH-04), measurement readouts are real with correct ITS lifetime (MEASURE-05), the canonical verifier passes, the app launches, and Prepare/Preview/AssembleView rendering is regression-free. | WTMESH-04, MEASURE-05 |
 
 ### Build Order (parallelism guidance for the executor)
@@ -219,7 +219,7 @@ Success criteria:
 ### Phase 115: GLGizmoMeasure Snap UX And Feature Picking
 
 **Status:** Not started
-**Plans:** 0/0
+**Plans:** 1/1 plans complete
 **Workstream:** WS5 (GLGizmoMeasure)
 
 Success criteria:
