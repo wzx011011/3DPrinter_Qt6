@@ -116,6 +116,16 @@ if(OWZX_QML_GUI)
         src/core/rendering/AssembleViewDataPool.h
         src/core/rendering/ObjectPicking.cpp
         src/core/rendering/ObjectPicking.h
+        # Phase 113 (MEASURE-02): pure-CPU ray-triangle intersection port.
+        # MeshRaycaster wraps a shared_ptr<const indexed_triangle_set> (Phase
+        # 112 volumeMeshIts output) over a libslic3r AABBMesh BVH; SceneRaycaster
+        # caches per-volume raycasters and runs the stage-2 per-triangle pick
+        # on stage-1 (ObjectPicking) candidates only (pitfall 7 fix). Both are
+        # #ifdef HAS_LIBSLIC3R -- the ITS / AABBMesh types only exist there.
+        src/core/rendering/MeshRaycaster.cpp
+        src/core/rendering/MeshRaycaster.h
+        src/core/rendering/SceneRaycaster.cpp
+        src/core/rendering/SceneRaycaster.h
         src/core/model/PartPlate.cpp
         src/core/model/PartPlate.h
         src/core/model/PartPlateList.cpp
