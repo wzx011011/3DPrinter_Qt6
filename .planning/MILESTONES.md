@@ -1,5 +1,28 @@
 # Milestones History
 
+## v4.5 Backlog Closure (Shipped: 2026-07-13)
+
+**Phases completed:** 14 phases, 14 plans, 49 tasks
+
+**Key accomplishments:**
+
+- Replaced the singleShot(0) argv-fixture gate with a one-shot QQuickWindow::frameSwapped gate so external screenshot capture is deterministic (scene graph rendered at least one frame before open-page/load-model/open-dialog apply) — closing FIXTURE-02, the recurring Windows-capture-API runtime-evidence blocker.
+- Hand-authored 2-extruder 3MF fixture + canonical argv recipe doc + grep-assertable anti-feature comment block, all locked by a cliFixtureRecipesAndMultiMaterialModelPresent source-audit slot; canonical build clean (exit 0), OWzxSlicer.exe launch liveness confirmed (PID 32272), regression ctest 4/4 PASS. FIXTURE-01/03/04 closed.
+- OWZX_D3D12_DEBUG env flag gates the D3D12 debug layer on both the probe QRhi::create path (enableDebugLayer before create) and the live QQuickRhiItem render path (QSG_RHI_DEBUG before QGuiApplication), locked by a d3d12DebugLayerWiredBehindEnvFlag source-audit slot; canonical build clean (exit 0), OWzxSlicer.exe launch liveness confirmed (PID 32080, no OWZX_D3D12_DEBUG), regression ctest 4/4 PASS. D3D12-01 closed; crash root cause deferred to Phase 106.
+- Time-boxed D3D12 crash investigation (DR-04): the 0xc0000005 access violation does NOT reproduce in the test env, so D3D12-02 ships a documented hypothesis + tooling gap (NOT a fabricated root cause); D3D12-03 documented in STATE.md and locked by a d3d12StaysOptInBehindEnvFlag source-audit slot that keeps D3D11-first in defaultWindowsCandidates(). Canonical build clean, regression 5/5 PASS.
+- Widened Qt6 filament-map mode from 2-value to upstream's 4-value enum (fmmAutoForFlush/fmmAutoForMatch/fmmManual/fmmDefault) with a 3MF read-side migration that preserves pre-v4.5 'Manual'=1 as fmmManual instead of the new fmmAutoForMatch=1.
+- Post-slice filament-map auto-recommendation readback wired end-to-end (Print::get_filament_maps() captured by value in the SliceService worker, delivered via filamentMapReady, exposed as EditorViewModel Q_PROPERTYs for Phase 110 UI binding, valid-gated so Manual-mode slices surface no stale map). FMAP-01 closed.
+- Real wipe-tower mesh (convex hull of merged real_wipe_tower_mesh + real_brim_mesh) captured by value in the SliceService worker and rendered as a triangle set when wipe_tower_mesh_data is populated; Option A dimensioned box preserved as the else-branch fallback. Re-opens Phase 99 Frozen Decision 2.
+- CxPopup-based FilamentGroupPopup surfacing the 3 selectable filament-map modes (AutoForFlush/AutoForMatch/Manual) + Phase 108 auto-map preview, with the R-02 enum-range clamp at the Q_INVOKABLE boundary.
+- Full save->reload round-trip test (FMAP-04) for filament-map mode + maps array across fmmManual/fmmAutoForFlush, plus runtime closure of the Phase 107 R-01 legacy raw-int-1 -> fmmManual migration gap via a factored testable helper.
+- Per-volume indexed_triangle_set accessor on ProjectServiceMock with a documented shallow-share ownership contract, unblocking Phase 113 (SceneRaycaster), Phase 114 (Measure::Measuring), and the AssembleViewDataPool ModelObjectsClipper.
+- Pure-CPU MeshRaycaster + thin Qt6 SceneRaycaster port (reusing libslic3r AABBMesh BVH) with a two-stage pick and per-volume cache, closing MEASURE-02 for Phase 114/115.
+- Per-volume `Measure::Measuring` instantiated (NOT reimplemented), wired to the Phase 113 raycaster hit, producing real measurements (angle / direct / perpendicular / XYZ distance) through a pitfall-6-safe boundary scrubbing layer, exposed to QML via EditorViewModel Q_PROPERTYs. Closes MEASURE-03.
+- GLGizmoMeasure snap UX wired end-to-end: mouse-move -> SceneRaycaster stage-2 pick -> MeasureEngine::getFeature, with Shift toggle (FeatureSelection vs PointSelection) and live readout/feature-kind feedback driving the measure panel; closes MEASURE-04.
+- Consolidated v4.5 cross-workstream regression lock (closes WTMESH-04 + MEASURE-05); canonical build + regression ctest + launch liveness all green across the 5 v4.5 workstreams
+
+---
+
 ## v4.4 Wipe-Tower Geometry Readback And Real Rendering (Shipped: 2026-07-12)
 
 **Phases completed:** 4 phases, 4 plans, 16 tasks
