@@ -201,6 +201,23 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
     m_wipeTowerBufferUploaded = false;
   }
 
+  // Phase 121 (PAINT-02/PAINT-03): mirror the paint overlay payload + brush
+  // params from the viewport item. The payload is the EditorViewModel byte
+  // stream (world-transformed painted facets); brush fields drive the sphere
+  // cursor. A change to the payload forces an overlay re-upload; the brush
+  // cursor re-uploads when its inputs change (handled in renderBrushCursor).
+  const QByteArray prevPaintOverlay = m_paintOverlayData;
+  m_paintOverlayData = viewport->m_paintOverlayData;
+  m_extrudersColors = viewport->m_extrudersColors;
+  m_brushRadius = viewport->m_brushRadius;
+  m_brushCursorType = viewport->m_brushCursorType;
+  m_paintState = viewport->m_paintState;
+  m_brushMouseScreenX = viewport->m_brushMouseScreenX;
+  m_brushMouseScreenY = viewport->m_brushMouseScreenY;
+  m_brushButtonState = viewport->m_brushButtonState;
+  if (m_paintOverlayData != prevPaintOverlay)
+    m_paintOverlayBufferUploaded = false;
+
   // Render-side per-role visibility mask (no repack). The viewport carries a
   // 20-element QVariantList of bools indexed by canonical libvgcode role; convert
   // to QVector<bool> for the draw-range skip check. Missing entries default visible.
@@ -278,13 +295,24 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     }
     else if (!m_pipelineFailed && (m_cutPlaneDirty || m_wipeTowerDirty ||
                                    !m_cutPlaneFillBufferUploaded ||
-                                   !m_wipeTowerBufferUploaded)) {
+                                   !m_wipeTowerBufferUploaded ||
+                                   !m_paintOverlayBufferUploaded ||
+                                   !m_brushCursorBufferUploaded)) {
       updates = rhi()->nextResourceUpdateBatch();
       if (!uploadCutPlaneBuffers(updates, dirtyFlags) ||
           !uploadWipeTowerBuffer(updates))
       {
         delete updates;
         updates = nullptr;
+      }
+      else
+      {
+        // Phase 121 (PAINT-02/PAINT-03): paint overlay + brush cursor uploads.
+        // These reuse the same batch; failure of either is non-fatal (the draw
+        // is simply skipped). uploadPaintOverlayBuffer parses the byte stream;
+        // uploadBrushCursorBuffer rebuilds the sphere when inputs change.
+        uploadPaintOverlayBuffer(updates);
+        uploadBrushCursorBuffer(updates);
       }
     }
   }
@@ -333,6 +361,10 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->setVertexInput(0, 1, &modelBinding);
       cb->draw(m_modelVertexCount);
     }
+    // Phase 121 (PAINT-02/OV-03): render the painted-facet overlay after the
+    // model mesh, before highlight. Reuses m_fillPipeline (opaque vertex-color
+    // fill). Gated to the three paint gizmos (Support=6, Seam=7, MMU=10).
+    renderPaintOverlay(cb);
   if (m_highlightVertexBuffer && m_highlightVertexCount > 0) {
       // Highlight is translucent: test depth but do not write it, so it does
       // not occlude opaque geometry drawn in subsequent frames/passes.
@@ -364,6 +396,10 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     renderMoveGizmo(cb);
     renderRotateGizmo(cb);
     renderScaleGizmo(cb);
+    // Phase 121 (PAINT-03/OV-05): translucent brush sphere cursor. Drawn last
+    // so it sits on top via no-depth-write (m_translucentFillPipeline). Gated
+    // to the three paint gizmos; hidden when brushButtonState < 0.
+    renderBrushCursor(cb);
   }
 
   // ── Phase 26/27: Preview segment rendering + timing (CanvasPreview branch) ──
@@ -455,6 +491,8 @@ void RhiViewportRenderer::releaseResources()
   m_cutPlaneFillBuffer.reset();
   m_cutPlaneOutlineBuffer.reset();
   m_wipeTowerBuffer.reset();
+  m_paintOverlayBuffer.reset();   // Phase 121 (PAINT-02)
+  m_brushCursorBuffer.reset();    // Phase 121 (PAINT-03)
   m_assemblyConnectorBuffer.reset();  // Phase 91
   m_srb.reset();
   m_cameraUniformBuffer.reset();
@@ -472,6 +510,8 @@ void RhiViewportRenderer::releaseResources()
   m_cutPlaneFillBufferUploaded = false;
   m_cutPlaneOutlineBufferUploaded = false;
   m_wipeTowerBufferUploaded = false;
+  m_paintOverlayBufferUploaded = false;   // Phase 121 (PAINT-02)
+  m_brushCursorBufferUploaded = false;    // Phase 121 (PAINT-03)
   m_assemblyConnectorBufferUploaded = false;  // Phase 91
   m_gizmoPipelineCreated = false;            // Phase 68
   m_bedFillBufferBytes = 0;
@@ -483,6 +523,8 @@ void RhiViewportRenderer::releaseResources()
   m_cutPlaneFillBufferBytes = 0;
   m_cutPlaneOutlineBufferBytes = 0;
   m_wipeTowerBufferBytes = 0;
+  m_paintOverlayBufferBytes = 0;   // Phase 121 (PAINT-02)
+  m_brushCursorBufferBytes = 0;    // Phase 121 (PAINT-03)
   m_moveGizmoOffsets = {};
   m_rotateGizmoOffsets = {};
   m_scaleGizmoOffsets = {};
@@ -493,6 +535,8 @@ void RhiViewportRenderer::releaseResources()
   m_cutPlaneFillVertexCount = 0;
   m_cutPlaneOutlineVertexCount = 0;
   m_wipeTowerVertexCount = 0;
+  m_paintOverlayVertexCount = 0;   // Phase 121 (PAINT-02)
+  m_brushCursorVertexCount = 0;    // Phase 121 (PAINT-03)
   m_sceneGeneration = 0;
   m_modelGeneration = 0;
   m_cutPlaneDirty = true;
@@ -1948,6 +1992,274 @@ void RhiViewportRenderer::renderWipeTower(QRhiCommandBuffer *cb)
   const QRhiCommandBuffer::VertexInput wipeBinding(m_wipeTowerBuffer.get(), 0);
   cb->setVertexInput(0, 1, &wipeBinding);
   cb->draw(m_wipeTowerVertexCount);
+}
+
+// ===========================================================================
+// Phase 121 (PAINT-02/OV-03): painted-facet overlay upload + render.
+//
+// uploadPaintOverlayBuffer parses the m_paintOverlayData byte stream (produced
+// by EditorViewModel::paintOverlayData) into GizmoVertex records with a
+// per-state color, then ensureBuffer + uploadStaticBuffer. The byte stream is
+// ALREADY world-transformed (the ViewModel applies rebuildWorldTransform), so
+// the renderer just copies the vertices and applies the upstream Y->Qt-Z axis
+// swap (the scene uses X/Z as the bed plane, Y up -- same swap as the mesh-data
+// path in parsePreviewSegments).
+//
+// Wire format (packed, little-endian):
+//   header: [int32 modeLabel, int32 triangleCount]
+//   body:   triangleCount * [int32 state, float vx,vy,vz (3 verts)] (40 B/ea)
+//
+// Color mapping (OV-04):
+//   Support/Seam Enforcer(1) = light green (0.5,1,0.5,1)
+//   Support/Seam Blocker(2)  = light red  (1,0.5,0.5,1)
+//   MMU ExtruderN(N in 1..16) = extrudersColors[N-1] hex -> QColor
+// ===========================================================================
+namespace {
+struct PaintOverlayHeader
+{
+  qint32 modeLabel;
+  qint32 triangleCount;
+};
+struct PaintOverlayTri
+{
+  qint32 state;
+  float verts[9]; // 3 verts x (x,y,z)
+};
+// State -> RGBA. Support/Seam use Enforcer=green/Blocker=red; MMU states
+// (3..16) are colored per-extruder by the caller (stateColor function falls
+// back to a neutral gray for MMU when no extruder color list is set).
+inline void stateColor(int state, const QVariantList &extruderColors,
+                       float out[4])
+{
+  // EnforcerBlockerType: 1=Enforcer, 2=Blocker, 3..16=Extruder3..16
+  // (TriangleSelector.hpp:13-38). Extruder1 aliases ENFORCER, Extruder2 aliases
+  // BLOCKER, so MMU extruders 1/2 reuse the green/red; extruders 3..16 use the
+  // filament-color list.
+  if (state == 1) // Enforcer / Extruder1
+  {
+    out[0] = 0.5f; out[1] = 1.0f; out[2] = 0.5f; out[3] = 1.0f;
+    return;
+  }
+  if (state == 2) // Blocker / Extruder2
+  {
+    out[0] = 1.0f; out[1] = 0.5f; out[2] = 0.5f; out[3] = 1.0f;
+    return;
+  }
+  // MMU extruder 3..16: index into extruderColors (state-1, clamped). Missing
+  // list -> neutral gray so the facet is still visible.
+  if (state >= 3 && state <= 16 && !extruderColors.isEmpty())
+  {
+    const int idx = (state - 1) % extruderColors.size();
+    const QColor c = QColor(extruderColors.at(idx).toString());
+    if (c.isValid())
+    {
+      out[0] = float(c.redF());
+      out[1] = float(c.greenF());
+      out[2] = float(c.blueF());
+      out[3] = 1.0f;
+      return;
+    }
+  }
+  // Fallback neutral.
+  out[0] = 0.7f; out[1] = 0.7f; out[2] = 0.7f; out[3] = 1.0f;
+}
+} // namespace
+
+bool RhiViewportRenderer::uploadPaintOverlayBuffer(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+  if (m_paintOverlayBufferUploaded)
+    return true;
+
+  QVector<Vertex> vertices;
+  if (m_paintOverlayData.size() >= int(sizeof(PaintOverlayHeader)))
+  {
+    const auto *hdr = reinterpret_cast<const PaintOverlayHeader *>(
+        m_paintOverlayData.constData());
+    const qint32 triCount = hdr->triangleCount;
+    const qint64 expected = qint64(sizeof(PaintOverlayHeader))
+                            + qint64(triCount) * qint64(sizeof(PaintOverlayTri));
+    if (triCount > 0 && m_paintOverlayData.size() >= expected)
+    {
+      const auto *tris = reinterpret_cast<const PaintOverlayTri *>(
+          m_paintOverlayData.constData() + sizeof(PaintOverlayHeader));
+      vertices.reserve(int(triCount) * 3);
+      for (qint32 t = 0; t < triCount; ++t)
+      {
+        float color[4];
+        stateColor(int(tris[t].state), m_extrudersColors, color);
+        for (int v = 0; v < 3; ++v)
+        {
+          // Upstream Y -> Qt-Z axis swap (libslic3r world X,Y,Z -> scene X,Z,Y),
+          // matching the mesh-data path (parsePreviewSegments). The ViewModel
+          // emits libslic3r world coords; the renderer converts to scene coords.
+          Vertex gv;
+          gv.x = tris[t].verts[v * 3 + 0];
+          gv.y = tris[t].verts[v * 3 + 2]; // libslic3r Z -> scene Y (up)
+          gv.z = tris[t].verts[v * 3 + 1]; // libslic3r Y -> scene Z (into bed)
+          gv.r = color[0];
+          gv.g = color[1];
+          gv.b = color[2];
+          gv.a = color[3];
+          vertices.append(gv);
+        }
+      }
+    }
+  }
+
+  const quint32 byteSize = quint32(vertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_paintOverlayBuffer, byteSize, m_paintOverlayBufferBytes,
+                    QRhiBuffer::VertexBuffer))
+    return false;
+
+  m_paintOverlayVertexCount = quint32(vertices.size());
+  if (m_paintOverlayBuffer && byteSize > 0)
+  {
+    updates->uploadStaticBuffer(m_paintOverlayBuffer.get(), 0, byteSize,
+                                vertices.constData());
+  }
+  m_paintOverlayBufferUploaded = true;
+  return true;
+}
+
+void RhiViewportRenderer::renderPaintOverlay(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr)
+    return;
+  // OV-03: gate to the three paint gizmos (Support=6, Seam=7, MMU=10).
+  if (m_gizmoMode != 6 && m_gizmoMode != 7 && m_gizmoMode != 10)
+    return;
+  if (m_fillPipeline == nullptr || m_paintOverlayBuffer == nullptr ||
+      m_paintOverlayVertexCount == 0)
+    return;
+
+  cb->setShaderResources(m_srb.get());
+  // Reuse m_fillPipeline (opaque vertex-color fill, same as the model mesh).
+  cb->setGraphicsPipeline(m_fillPipeline.get());
+  const QRhiCommandBuffer::VertexInput binding(m_paintOverlayBuffer.get(), 0);
+  cb->setVertexInput(0, 1, &binding);
+  cb->draw(m_paintOverlayVertexCount);
+}
+
+// ===========================================================================
+// Phase 121 (PAINT-03/OV-05): brush sphere cursor.
+//
+// The cursor is a translucent UV-sphere (buildBrushSphereVertices) centered at
+// the world point under the mouse. To avoid duplicating the picking pipeline in
+// the renderer (pickSourceObjectAt lives in RhiViewport), the world center is
+// approximated by unprojecting the mouse to a world ray and intersecting the
+// bed plane (Y=0) -- the same anchor the model sits on. This keeps the cursor
+// glued to the bed at the mouse location without a per-frame raycast. When no
+// bed intersection exists (ray parallel to bed), the cursor falls back to the
+// selected-object gizmo center so it stays visible.
+//
+// Color (OV-05): left-button blue (0,0,1,0.25), right-button red (1,0,0,0.25),
+// hover black (0,0,0,0.25). brushButtonState < 0 hides the cursor entirely.
+// ===========================================================================
+bool RhiViewportRenderer::uploadBrushCursorBuffer(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+
+  // Determine the cursor color from the button state.
+  float color[4] = {0.f, 0.f, 0.f, 0.25f}; // hover black (default)
+  if (m_brushButtonState == 1)             // left -> blue
+  {
+    color[2] = 1.0f;
+  }
+  else if (m_brushButtonState == 2)        // right -> red
+  {
+    color[0] = 1.0f;
+  }
+
+  // Recompute the world center only when inputs change (mouse position, radius,
+  // button state, or MVP). The MVP changes with camera moves, so compare the
+  // raw screen coords + radius + button; the world center is derived in
+  // renderBrushCursor (kept here as a cached value). To keep this simple, we
+  // rebuild the sphere whenever any cursor-driving input changed since the last
+  // upload -- tracked via m_brushCursorLastButtonState + a screen-position
+  // comparison.
+  const bool inputsChanged =
+      (m_brushButtonState != m_brushCursorLastButtonState) ||
+      !qFuzzyCompare(m_brushMouseScreenX, m_brushCursorLastScreenX) ||
+      !qFuzzyCompare(m_brushMouseScreenY, m_brushCursorLastScreenY) ||
+      !qFuzzyCompare(m_brushRadius, m_brushCursorLastRadius);
+  if (!inputsChanged && m_brushCursorBufferUploaded)
+    return true;
+
+  m_brushCursorLastButtonState = m_brushButtonState;
+  m_brushCursorLastScreenX = m_brushMouseScreenX;
+  m_brushCursorLastScreenY = m_brushMouseScreenY;
+  m_brushCursorLastRadius = m_brushRadius;
+
+  // Hidden (buttonState < 0): emit zero verts so the draw is skipped.
+  QVector<Vertex> vertices;
+  if (m_brushButtonState >= 0 && m_brushRadius > 0.f)
+  {
+    // Unproject the mouse to a world ray and intersect the bed plane (Y=0).
+    // m_cameraMvp is the view-projection; invert it to map NDC->world. The
+    // mouse is in pixel coords; convert to NDC via the render-target size.
+    QVector3D center = m_gizmoCenter; // fallback when no bed hit
+    if (renderTarget() != nullptr)
+    {
+      const QSize pix = renderTarget()->pixelSize();
+      if (pix.width() > 0 && pix.height() > 0)
+      {
+        const float ndcX = (m_brushMouseScreenX / float(pix.width())) * 2.f - 1.f;
+        const float ndcY = 1.f - (m_brushMouseScreenY / float(pix.height())) * 2.f;
+        const QMatrix4x4 invMvp = m_cameraMvp.inverted();
+        const QVector3D nearPt = invMvp.map(QVector3D(ndcX, ndcY, 0.f));
+        const QVector3D farPt = invMvp.map(QVector3D(ndcX, ndcY, 1.f));
+        const QVector3D dir = (farPt - nearPt).normalized();
+        // Intersect with the Y=0 plane (scene bed plane). Solving
+        // nearPt.y + t*dir.y = 0 -> t = -nearPt.y / dir.y.
+        if (std::abs(dir.y()) > 1e-6f)
+        {
+          const float t = -nearPt.y() / dir.y();
+          if (t >= 0.f) // forward of the camera
+            center = nearPt + dir * t;
+        }
+      }
+    }
+    m_brushCursorWorldCenter = center;
+    vertices = GizmoGeometry::buildBrushSphereVertices(center, m_brushRadius,
+                                                       color);
+  }
+
+  const quint32 byteSize = quint32(vertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_brushCursorBuffer, byteSize, m_brushCursorBufferBytes,
+                    QRhiBuffer::VertexBuffer))
+    return false;
+
+  m_brushCursorVertexCount = quint32(vertices.size());
+  if (m_brushCursorBuffer && byteSize > 0)
+  {
+    updates->uploadStaticBuffer(m_brushCursorBuffer.get(), 0, byteSize,
+                                vertices.constData());
+  }
+  m_brushCursorBufferUploaded = true;
+  return true;
+}
+
+void RhiViewportRenderer::renderBrushCursor(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr)
+    return;
+  // OV-05: gate to the three paint gizmos; hide when buttonState < 0.
+  if (m_gizmoMode != 6 && m_gizmoMode != 7 && m_gizmoMode != 10)
+    return;
+  if (m_brushButtonState < 0)
+    return;
+  if (m_translucentFillPipeline == nullptr || m_brushCursorBuffer == nullptr ||
+      m_brushCursorVertexCount == 0)
+    return;
+
+  cb->setShaderResources(m_srb.get());
+  cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+  const QRhiCommandBuffer::VertexInput binding(m_brushCursorBuffer.get(), 0);
+  cb->setVertexInput(0, 1, &binding);
+  cb->draw(m_brushCursorVertexCount);
 }
 
 namespace {

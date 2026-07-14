@@ -449,6 +449,73 @@ void RhiViewport::setCutPosition(float value)
   update();
 }
 
+// Phase 121 (PAINT-02/OV-02): reverse-channel setter. Stores the flattened
+// paint-facet byte stream (from EditorViewModel::paintOverlayData) and triggers
+// update() so synchronize() pulls it into the renderer. No equality short-circuit:
+// the byte stream may differ each paint stroke even at the same size, and a
+// redundant update() is cheap (one dirty check).
+void RhiViewport::setPaintOverlayData(const QByteArray &data)
+{
+  m_paintOverlayData = data;
+  update();
+}
+
+// Phase 121 (PAINT-03/OV-02/OV-05): brush param setters. Each calls update()
+// so renderBrushCursor + the overlay stay in sync with the UI controls.
+void RhiViewport::setBrushRadius(float r)
+{
+  if (qFuzzyCompare(m_brushRadius, r))
+    return;
+  m_brushRadius = r;
+  update();
+}
+
+void RhiViewport::setBrushCursorType(int t)
+{
+  if (m_brushCursorType == t)
+    return;
+  m_brushCursorType = t;
+  update();
+}
+
+void RhiViewport::setPaintState(int s)
+{
+  if (m_paintState == s)
+    return;
+  m_paintState = s;
+  update();
+}
+
+void RhiViewport::setBrushMouseScreenX(float x)
+{
+  if (qFuzzyCompare(m_brushMouseScreenX, x))
+    return;
+  m_brushMouseScreenX = x;
+  update();
+}
+
+void RhiViewport::setBrushMouseScreenY(float y)
+{
+  if (qFuzzyCompare(m_brushMouseScreenY, y))
+    return;
+  m_brushMouseScreenY = y;
+  update();
+}
+
+void RhiViewport::setBrushButtonState(int s)
+{
+  if (m_brushButtonState == s)
+    return;
+  m_brushButtonState = s;
+  update();
+}
+
+void RhiViewport::setExtrudersColors(const QVariantList &c)
+{
+  m_extrudersColors = c;
+  update();
+}
+
 void RhiViewport::requestFitView(float cx, float cy, float cz, float r)
 {
   m_camera.fitView(cx, cy, cz, r);
@@ -578,11 +645,14 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
   // Phase 120 (PAINT-01): a paint-gizmo left click drives the TriangleSelector
   // brush. Emit paintPickRequested so the ViewModel runs the stage-2 pick +
   // PaintEngine::paintAt (select_patch). Mirrors upstream
-  // GLGizmoPainterBase gizmo_event handling LeftDown.
+  // GLGizmoPainterBase gizmo_event handling LeftDown. Phase 121 (PAINT-03) also
+  // sets the brush-cursor button state to left so renderBrushCursor paints the
+  // cursor blue while painting.
   if (event->button() == Qt::LeftButton &&
       (m_gizmoMode == GizmoSupportPaint ||
        m_gizmoMode == GizmoSeamPaint ||
        m_gizmoMode == GizmoMmuSegmentation)) {
+    updateBrushCursorState(event->position(), 1 /*left*/);
     emitPaintPickIfActive(event->position(), event->modifiers());
     event->accept();
     return;
@@ -642,6 +712,7 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
       (m_gizmoMode == GizmoSupportPaint ||
        m_gizmoMode == GizmoSeamPaint ||
        m_gizmoMode == GizmoMmuSegmentation)) {
+    updateBrushCursorState(event->position(), 1 /*left*/);
     emitPaintPickIfActive(event->position(), event->modifiers());
     event->accept();
     return;
@@ -742,6 +813,11 @@ void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
   }
   m_dragButton = Qt::NoButton;
   m_pressPickedSourceObjectIndex = -1;
+  // Phase 121 (PAINT-03): release returns the brush cursor to hover (black).
+  if (m_gizmoMode == GizmoSupportPaint ||
+      m_gizmoMode == GizmoSeamPaint ||
+      m_gizmoMode == GizmoMmuSegmentation)
+    updateBrushCursorState(event->position(), 0 /*hover*/);
   event->accept();
 }
 
@@ -752,6 +828,9 @@ void RhiViewport::hoverMoveEvent(QHoverEvent *event)
   // gizmo is active. The ViewModel runs the two-stage pick + getFeature and
   // updates the readout live. Mirrors upstream GLGizmoMeasure on_mouse move.
   emitMeasurePickIfActive(event->position(), event->modifiers());
+  // Phase 121 (PAINT-03/OV-05): track the brush-cursor position on hover so
+  // the sphere cursor follows the mouse before a click (hover -> black cursor).
+  updateBrushCursorState(event->position(), 0 /*hover*/);
   event->accept();
 }
 
@@ -762,6 +841,8 @@ void RhiViewport::hoverLeaveEvent(QHoverEvent *event)
   // the viewport so no stale highlight lingers off-mesh.
   if (m_gizmoMode == GizmoMeasure)
     emit measureHoverLeft();
+  // Phase 121 (PAINT-03): hide the brush cursor when the mouse leaves.
+  updateBrushCursorState(event->position(), -1 /*hide*/);
   event->accept();
 }
 
@@ -1026,19 +1107,50 @@ void RhiViewport::emitPaintPickIfActive(const QPointF &position,
       viewSize,
       m_camera.projMatrix(aspect), m_camera.viewMatrix());
 
-  // Phase 120 conservative brush defaults. Phase 121 (PAINT-03 brush UI) will
-  // source these from real gizmo state (size slider, type toggle, tool). For
-  // now: Sphere cursor (the upstream painting default for organic brushes),
-  // 2.0 mm radius, Enforcer state. Shift toggles to Blocker (mirrors upstream
-  // Shift-to-erase convention in GLGizmoPainterBase).
-  const double brushRadius = 2.0;
-  const int    cursorType  = 1;  // PaintCursorType::Sphere
+  // Phase 121 (PAINT-03/OV-02): brush params now come from the Q_PROPERTYs the
+  // UI controls set (radius slider, cursor-type toggle, tool selector). This
+  // replaces the Phase 120 conservative defaults (2.0/1/1). Shift still toggles
+  // to the erase state for the Support/Seam gizmos (mirrors upstream
+  // Shift-to-erase in GLGizmoPainterBase) -- when Shift is held, paintState is
+  // forced to Blocker (2) regardless of the Q_PROPERTY so Shift-erase works
+  // even when the tool selector shows Enforcer.
+  const double brushRadius = double(m_brushRadius);
+  const int    cursorType  = m_brushCursorType;
   const bool   shiftHeld   = (modifiers & Qt::ShiftModifier) != 0;
   // EnforcerBlockerType: 1=Enforcer, 2=Blocker (TriangleSelector.hpp:13-38).
-  const int    paintState  = shiftHeld ? 2 : 1;
+  const int    paintState  = shiftHeld ? 2 : m_paintState;
 
   // Forward to QML opaquely (no ray math in QML -- same contract as
   // measurePickRequested). QML connects this to EditorViewModel::paintAtFacet.
   emit paintPickRequested(rayOrigin, rayDirection, pickedSourceIndex,
                           brushRadius, cursorType, paintState);
+}
+
+// Phase 121 (PAINT-03/OV-05): track the mouse screen position + button state so
+// renderBrushCursor can draw the sphere cursor at the brush location. buttonState
+// drives the cursor color (0=hover black, 1=left blue, 2=right red). No-op when
+// no paint gizmo is active (keeps the cursor hidden outside paint mode).
+void RhiViewport::updateBrushCursorState(const QPointF &position, int buttonState)
+{
+  const bool isPaintGizmo =
+      (m_gizmoMode == GizmoSupportPaint ||
+       m_gizmoMode == GizmoSeamPaint ||
+       m_gizmoMode == GizmoMmuSegmentation);
+  if (!isPaintGizmo)
+  {
+    // Clear the cursor when not painting so it does not linger.
+    if (m_brushButtonState != 0 || m_brushMouseScreenX != 0.f
+        || m_brushMouseScreenY != 0.f)
+    {
+      m_brushButtonState = 0;
+      m_brushMouseScreenX = 0.f;
+      m_brushMouseScreenY = 0.f;
+      update();
+    }
+    return;
+  }
+  m_brushMouseScreenX = float(position.x());
+  m_brushMouseScreenY = float(position.y());
+  m_brushButtonState = buttonState;
+  update();
 }

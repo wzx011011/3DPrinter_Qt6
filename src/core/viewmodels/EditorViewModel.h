@@ -294,6 +294,15 @@ public:
   int enforcedSupportCount() const;
   int blockedSupportCount() const;
   int totalPaintedTriangleCount() const;
+  // Phase 121 (PAINT-02): reverse-channel getter. Flattens the selected
+  // object's painted facets (state set chosen by the current gizmo) into a
+  // world-transformed byte stream for the RHI overlay renderer + Software
+  // mirror. See the Q_PROPERTY comment above for the wire format.
+  QByteArray paintOverlayData() const;
+  // Phase 121 (PAINT-02/OV-04): MMU per-extruder filament colors as hex strings
+  // (matches PreviewViewModel::extruderColor). Used by the overlay renderer to
+  // color ExtruderN facets.
+  QVariantList extrudersColors() const;
   // Seam painting (对齐上游 GLGizmoSeam)
   int seamPaintTool() const;
   void setSeamPaintTool(int tool);
@@ -541,6 +550,22 @@ public:
   Q_PROPERTY(int enforcedSupportCount READ enforcedSupportCount NOTIFY paintDataChanged)
   Q_PROPERTY(int blockedSupportCount READ blockedSupportCount NOTIFY paintDataChanged)
   Q_PROPERTY(int totalPaintedTriangleCount READ totalPaintedTriangleCount NOTIFY paintDataChanged)
+  // Phase 121 (PAINT-02): reverse data channel for the painted-facet overlay.
+  // paintOverlayData flattens the selected object's painted facets (Enforcer +
+  // Blocker; MMU: Extruder1..N) into a byte stream the RHI renderer + Software
+  // mirror consume. Wire format: a header (int32 paintGizmoMode, int32 triangle
+  // count) followed by triangleCount records of [int32 state, float vx,vy,vz x3]
+  // (3 verts per triangle, already world-transformed via rebuildWorldTransform).
+  // Mirrors the meshData Q_PROPERTY pattern (QByteArray over QML). The getter
+  // drives PaintEngine::getFacets per (object, volume) for the active gizmo's
+  // state set so the renderer reuses the mesh pipeline (GizmoVertex fill).
+  Q_PROPERTY(QByteArray paintOverlayData READ paintOverlayData NOTIFY paintDataChanged)
+  // Phase 121 (PAINT-02/OV-04): MMU per-extruder filament colors so the overlay
+  // renderer can map ExtruderN -> a real color (mirrors PreviewViewModel::
+  // extruderColor, upstream 8-color cycle). Exposed as a hex-string list so QML
+  // + the renderer both decode with QColor(hex). NOTIFY paintDataChanged keeps
+  // it in lockstep with the overlay stream.
+  Q_PROPERTY(QVariantList extrudersColors READ extrudersColors NOTIFY paintDataChanged)
   /// 缝线绘制设置（对齐上游 GLGizmoSeam）
   Q_PROPERTY(int seamPaintTool READ seamPaintTool WRITE setSeamPaintTool NOTIFY stateChanged)
   Q_PROPERTY(float seamPaintCursorRadius READ seamPaintCursorRadius WRITE setSeamPaintCursorRadius NOTIFY stateChanged)

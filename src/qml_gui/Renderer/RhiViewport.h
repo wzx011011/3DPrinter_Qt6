@@ -77,6 +77,32 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(int cutAxis READ cutAxis WRITE setCutAxis)
   Q_PROPERTY(float cutPosition READ cutPosition WRITE setCutPosition)
   Q_PROPERTY(QString lastThumbnailData READ lastThumbnailData NOTIFY thumbnailCaptured)
+  // Phase 121 (PAINT-02/OV-02): reverse-channel Q_PROPERTY. The ViewModel
+  // flattens the selected object's painted facets into a world-transformed byte
+  // stream (see EditorViewModel::paintOverlayData); the renderer uploads it to
+  // m_paintOverlayBuffer via uploadPaintOverlayBuffer and renders it after the
+  // model mesh (reuse mesh pipeline -- GizmoVertex + m_fillPipeline). The
+  // setter calls update() so a paintDataChanged -> QML binding -> setter ->
+  // synchronize() -> uploadPaintOverlayBuffer loop closes on every paint stroke.
+  Q_PROPERTY(QByteArray paintOverlayData READ paintOverlayData WRITE setPaintOverlayData)
+  // Phase 121 (PAINT-03/OV-02/OV-05): brush params. emitPaintPickIfActive
+  // forwards these to the ViewModel instead of the Phase 120 hardcoded
+  // defaults (2.0/1/1). brushRadius is the world-space sphere/circle radius
+  // (mm), brushCursorType mirrors PaintCursorType (0=Circle, 1=Sphere),
+  // paintState is the EnforcerBlockerType int (1=Enforcer, 2=Blocker,
+  // 3..16=ExtruderN). brushMouseScreenX/Y feed the sphere-cursor position
+  // (rendered by renderBrushCursor), and brushButtonState drives its color
+  // (0=hover black, 1=left blue, 2=right red).
+  Q_PROPERTY(float brushRadius READ brushRadius WRITE setBrushRadius)
+  Q_PROPERTY(int brushCursorType READ brushCursorType WRITE setBrushCursorType)
+  Q_PROPERTY(int paintState READ paintState WRITE setPaintState)
+  Q_PROPERTY(float brushMouseScreenX READ brushMouseScreenX WRITE setBrushMouseScreenX)
+  Q_PROPERTY(float brushMouseScreenY READ brushMouseScreenY WRITE setBrushMouseScreenY)
+  Q_PROPERTY(int brushButtonState READ brushButtonState WRITE setBrushButtonState)
+  // Phase 121 (PAINT-02/OV-04): MMU per-extruder filament colors as hex
+  // strings (mirrors EditorViewModel.extrudersColors). The renderer maps
+  // ExtruderN -> colors[N-1] for the MMU overlay coloring.
+  Q_PROPERTY(QVariantList extrudersColors READ extrudersColors WRITE setExtrudersColors)
 
 public:
   // Mirrors upstream ECanvasType { CanvasView3D=0, CanvasPreview=1,
@@ -233,6 +259,27 @@ public:
 
   QString lastThumbnailData() const { return m_lastThumbnailData; }
 
+  // Phase 121 (PAINT-02/OV-02): paint overlay reverse-channel getter/setter.
+  QByteArray paintOverlayData() const { return m_paintOverlayData; }
+  void setPaintOverlayData(const QByteArray &data);
+  // Phase 121 (PAINT-03/OV-02/OV-05): brush params. Setters call update() so
+  // the renderer re-renders the sphere cursor + overlay on every change.
+  float brushRadius() const { return m_brushRadius; }
+  void setBrushRadius(float r);
+  int brushCursorType() const { return m_brushCursorType; }
+  void setBrushCursorType(int t);
+  int paintState() const { return m_paintState; }
+  void setPaintState(int s);
+  float brushMouseScreenX() const { return m_brushMouseScreenX; }
+  void setBrushMouseScreenX(float x);
+  float brushMouseScreenY() const { return m_brushMouseScreenY; }
+  void setBrushMouseScreenY(float y);
+  int brushButtonState() const { return m_brushButtonState; }
+  void setBrushButtonState(int s);
+  // Phase 121 (PAINT-02/OV-04): MMU per-extruder filament colors.
+  QVariantList extrudersColors() const { return m_extrudersColors; }
+  void setExtrudersColors(const QVariantList &c);
+
   Q_INVOKABLE void requestFitView(float cx, float cy, float cz, float r);
   Q_INVOKABLE void requestPreviewFit();
   Q_INVOKABLE void requestViewPreset(int preset);
@@ -346,6 +393,10 @@ private:
   // one of the three paint gizmos (keeps other gizmos' mouse handling untouched).
   void emitPaintPickIfActive(const QPointF &position,
                              Qt::KeyboardModifiers modifiers);
+  // Phase 121 (PAINT-03/OV-05): update the brush-cursor tracking fields
+  // (screen-space position + button state) so renderBrushCursor can draw the
+  // sphere cursor at the mouse. No-op when no paint gizmo is active.
+  void updateBrushCursorState(const QPointF &position, int buttonState);
 
   int m_canvasType = CanvasView3D;
   // Phase 91 (ASMEXPLODE-01): explosion ratio mirroring upstream m_explosion_ratio
@@ -400,6 +451,20 @@ private:
   int m_cutAxis = 2;
   float m_cutPosition = 0.f;
   QString m_lastThumbnailData;
+  // Phase 121 (PAINT-02/OV-02): painted-facet overlay reverse-channel payload.
+  // Flattened by EditorViewModel::paintOverlayData (world-transformed bytes).
+  QByteArray m_paintOverlayData;
+  // Phase 121 (PAINT-03/OV-02/OV-05): brush params. emitPaintPickIfActive
+  // forwards brushRadius/brushCursorType/paintState; renderBrushCursor uses
+  // brushMouseScreenX/Y + brushButtonState for the sphere cursor.
+  float m_brushRadius = 2.0f;
+  int m_brushCursorType = 1; // 1=Sphere (PaintCursorType::Sphere)
+  int m_paintState = 1;      // EnforcerBlockerType: 1=Enforcer
+  float m_brushMouseScreenX = 0.f;
+  float m_brushMouseScreenY = 0.f;
+  int m_brushButtonState = 0; // 0=hover, 1=left, 2=right
+  // Phase 121 (PAINT-02/OV-04): MMU per-extruder filament colors (hex strings).
+  QVariantList m_extrudersColors;
   int m_fitRequestCount = 0;
   int m_viewPreset = 3;
   // Phase 95 (THUMBCAP-03): item-side capture-request fields set by

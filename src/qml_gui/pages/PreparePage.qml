@@ -43,6 +43,42 @@ Item {
             viewport3d.requestFitView(h.x, h.y, h.z, h.w)
     }
 
+    // Phase 121 (PAINT-03): per-gizmo brush-param selectors. The three paint
+    // gizmos (Support=6, Seam=7, MMU=10) each have their own radius/tool/
+    // cursor-type property set on the ViewModel; these helpers pick the active
+    // set based on the current gizmoMode so the RhiViewport brushRadius /
+    // brushCursorType / paintState Q_PROPERTYs bind to the right control. They
+    // are pure value selectors -- no picking/geometry logic (the
+    // rhiViewportSelectionPickingBridgeStaysCppOwned audit forbids that in QML).
+    function _activeBrushRadius() {
+        if (!root.editorVm)
+            return 2
+        if (viewport3d.gizmoMode === GLViewport.GizmoSeamPaint)
+            return root.editorVm.seamPaintCursorRadius
+        if (viewport3d.gizmoMode === GLViewport.GizmoMmuSegmentation)
+            return root.editorVm.supportPaintCursorRadius
+        // Default + GizmoSupportPaint: the support-paint cursor radius.
+        return root.editorVm.supportPaintCursorRadius
+    }
+    function _activeBrushCursorType() {
+        if (!root.editorVm)
+            return 1
+        // All three gizmos reuse supportPaintCursorType (0=Circle, 1=Sphere).
+        return root.editorVm.supportPaintCursorType
+    }
+    function _activePaintState() {
+        if (!root.editorVm)
+            return 1
+        // Support/Seam: tool 1=Enforcer(1), 2=Blocker(2). MMU: the selected
+        // extruder (1-based) maps to EnforcerBlockerType ExtruderN (value N).
+        if (viewport3d.gizmoMode === GLViewport.GizmoMmuSegmentation)
+            return root.editorVm.mmuSelectedExtruder + 1
+        if (viewport3d.gizmoMode === GLViewport.GizmoSeamPaint)
+            return root.editorVm.seamPaintTool
+        // GizmoSupportPaint: supportPaintTool (1=Enforcer, 2=Blocker).
+        return root.editorVm.supportPaintTool
+    }
+
     function undoFromTopbar() {
         viewport3d.undo()
     }
@@ -1686,6 +1722,19 @@ Item {
                     // and single-material paths take Option A.
                     wipeTowerHasRealMesh: root.editorVm ? root.editorVm.wipeTowerHasRealMesh : false
                     wipeTowerMeshVertices: root.editorVm ? root.editorVm.wipeTowerMeshVertices : []
+                    // Phase 121 (PAINT-02/PAINT-03): paint overlay reverse-channel
+                    // + brush params. paintOverlayData carries the flattened
+                    // painted-facet byte stream from EditorViewModel (bound for
+                    // both the RHI + Software paths). The brush params (radius,
+                    // cursor type, paint state) are sourced per-gizmoMode from the
+                    // matching editorVm brush property set. brushMouseScreenX/Y +
+                    // brushButtonState are driven by the C++ mouse handlers inside
+                    // RhiViewport (updateBrushCursorState) -- NOT bound from QML.
+                    paintOverlayData: root.editorVm ? root.editorVm.paintOverlayData : null
+                    extrudersColors: root.editorVm ? root.editorVm.extrudersColors : []
+                    brushRadius: root.editorVm ? _activeBrushRadius() : 2
+                    brushCursorType: root.editorVm ? _activeBrushCursorType() : 1
+                    paintState: root.editorVm ? _activePaintState() : 1
                     currentPlateIndex: root.editorVm ? root.editorVm.currentPlateIndex : 0
                     plateCount: root.editorVm ? root.editorVm.plateCount : 0
                     activePlateObjectIndices: root.editorVm ? root.editorVm.activePlateObjectIndices : []
@@ -1943,45 +1992,144 @@ Item {
             }
         }
 
+        // Phase 121 (PAINT-03/OV-07): Support paint panel with brush controls.
+        // Modeled on the seam panel below: tool selector (Enforcer/Blocker),
+        // radius CxSlider, cursor-type combo, plus the count readouts + clear
+        // button. Visible only on GizmoSupportPaint (seam has its own panel).
         Rectangle {
             anchors.top: parent.top
-            anchors.topMargin: 4
+            anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
-            width: paintInfoRow.implicitWidth + 24
-            height: 36
-            radius: 8
-            color: Theme.bgElevated
-            border.width: 1
+            width: supportPaintContent.implicitWidth + 24
+            height: supportPaintContent.implicitHeight + 16
+            radius: 6
+            color: Theme.bgFloating
             border.color: Theme.borderSubtle
-            visible: (viewport3d.gizmoMode === GLViewport.GizmoSupportPaint
-                      || viewport3d.gizmoMode === GLViewport.GizmoSeamPaint)
-                     && root.editorVm
+            visible: viewport3d.gizmoMode === GLViewport.GizmoSupportPaint && root.editorVm
 
-            RowLayout {
-                id: paintInfoRow
-                anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
-                spacing: 16
+            ColumnLayout {
+                id: supportPaintContent
+                anchors.centerIn: parent
+                spacing: 6
 
                 Text {
-                    text: qsTr("已强制: %1").arg(root.editorVm.enforcedSupportCount)
-                    color: Theme.accent
+                    text: qsTr("支撑绘制")
+                    color: Theme.textPrimary
                     font.pixelSize: Theme.fontSizeSM
-                }
-                Text {
-                    text: qsTr("已阻止: %1").arg(root.editorVm.blockedSupportCount)
-                    color: Theme.statusWarning
-                    font.pixelSize: Theme.fontSizeSM
+                    font.bold: true
+                    Layout.alignment: Qt.AlignHCenter
                 }
 
-                Item { Layout.fillWidth: true }
+                // Count readouts (enforced / blocked).
+                RowLayout {
+                    spacing: 12
+                    Layout.alignment: Qt.AlignHCenter
+                    Text {
+                        text: qsTr("已强制: %1").arg(root.editorVm.enforcedSupportCount)
+                        color: Theme.accent
+                        font.pixelSize: Theme.fontSizeSM
+                    }
+                    Text {
+                        text: qsTr("已阻止: %1").arg(root.editorVm.blockedSupportCount)
+                        color: Theme.statusWarning
+                        font.pixelSize: Theme.fontSizeSM
+                    }
+                }
 
-                CxButton {
-                    text: qsTr("清除全部")
-                    cxStyle: CxButton.Style.Secondary
-                    compact: true
-                    onClicked: root.editorVm.clearAllPaintData()
+                // Tool selector (对齐上游 GLGizmoFdmSupports m_current_tool):
+                // 1=Enforcer (green), 2=Blocker (red). Bound to supportPaintTool.
+                Row {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    Repeater {
+                        model: [qsTr("强制"), qsTr("阻止")]
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: 72; height: 24; radius: 4
+                            color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? "#1c2a3e" : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? "#569cd6" : Theme.bgHover
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData
+                                color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? "#569cd6" : Theme.textTertiary
+                                font.pixelSize: 10
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.supportPaintTool = index + 1
+                            }
+                        }
+                    }
+                }
+
+                // Cursor radius (对齐上游 brush radius slider).
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("半径:"); color: Theme.textMuted; font.pixelSize: 10 }
+                    CxSlider {
+                        from: 0.05; to: 20; stepSize: 0.1
+                        value: root.editorVm ? root.editorVm.supportPaintCursorRadius : 2
+                        implicitWidth: 100
+                        onMoved: if (root.editorVm) root.editorVm.supportPaintCursorRadius = value
+                    }
+                    Text {
+                        text: root.editorVm ? root.editorVm.supportPaintCursorRadius.toFixed(1) : "2.0"
+                        color: Theme.textPrimary
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 30
+                    }
+                }
+
+                // Cursor type combo (Sphere=1 / Circle=0, 对齐 PaintCursorType).
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("光标:"); color: Theme.textMuted; font.pixelSize: 10 }
+                    Repeater {
+                        model: [{label: qsTr("球体"), val: 1}, {label: qsTr("圆形"), val: 0}]
+                        delegate: Rectangle {
+                            required property var modelData
+                            width: 56; height: 22; radius: 4
+                            color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? "#1c2a3e" : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? "#569cd6" : Theme.bgHover
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? "#569cd6" : Theme.textTertiary
+                                font.pixelSize: 10
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.supportPaintCursorType = modelData.val
+                            }
+                        }
+                    }
+                }
+
+                // Clear button.
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    width: 80; height: 24; radius: 4
+                    color: Theme.bgElevated
+                    border.color: Theme.borderDefault; border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: qsTr("清除全部")
+                        color: Theme.textPrimary
+                        font.pixelSize: 10
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: if (root.editorVm) root.editorVm.clearAllPaintData()
+                    }
                 }
             }
         }

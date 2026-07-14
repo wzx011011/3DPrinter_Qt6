@@ -608,3 +608,67 @@ GizmoGeometry::buildWipeTowerMeshVertices(const std::vector<float> &meshVertices
   }
   return verts;
 }
+
+// ===========================================================================
+// buildBrushSphereVertices
+//
+// Phase 121 (PAINT-03/OV-05) - brush cursor sphere. UV-sphere (lat/long
+// tessellation) for the translucent brush preview that follows the mouse while
+// a paint gizmo is active. Mirrors the upstream GLGizmoPainterBase cursor
+// sphere (GLGizmoPainterBase.hpp:231-234). The color is baked per-vertex so the
+// caller switches left-button blue / right-button red / hover black.
+// slices=16, stacks=12 -> 16*12*2 triangles = 384 triangles = 1152 verts.
+// ===========================================================================
+QVector<GizmoVertex>
+GizmoGeometry::buildBrushSphereVertices(const QVector3D &center,
+                                        float radius,
+                                        const float color[4])
+{
+  QVector<GizmoVertex> verts;
+  if (radius <= 0.f)
+    return verts;
+
+  const int slices = 16; // longitude segments
+  const int stacks = 12; // latitude segments (pole-to-pole)
+  const float cx = center.x();
+  const float cy = center.y();
+  const float cz = center.z();
+
+  // Generate the lat/long vertex grid first, then emit two triangles per quad
+  // (skipping degenerate quads at the poles where the longitude collapses).
+  // This matches the canonical UV-sphere tessellation (same approach as the
+  // upstream cursor sphere in GLGizmoPainterBase::render_cursor_sphere).
+  auto vertexAt = [&](int stack, int slice) {
+    // stack 0 = north pole, stack stacks = south pole.
+    const float theta = float(M_PI) * float(stack) / float(stacks);   // [0, PI]
+    const float phi = 2.f * float(M_PI) * float(slice) / float(slices); // [0, 2PI)
+    const float sinT = std::sin(theta);
+    float p[3] = {
+        cx + radius * sinT * std::cos(phi),
+        cy + radius * std::cos(theta),
+        cz + radius * sinT * std::sin(phi),
+    };
+    return GizmoVertex{p[0], p[1], p[2], color[0], color[1], color[2], color[3]};
+  };
+
+  verts.reserve(slices * stacks * 6);
+  for (int st = 0; st < stacks; ++st)
+  {
+    for (int sl = 0; sl < slices; ++sl)
+    {
+      // Four corners of the quad (counter-clockwise from bottom-left).
+      const GizmoVertex v00 = vertexAt(st, sl);
+      const GizmoVertex v10 = vertexAt(st, sl + 1);
+      const GizmoVertex v11 = vertexAt(st + 1, sl + 1);
+      const GizmoVertex v01 = vertexAt(st + 1, sl);
+      // Two triangles per quad.
+      verts.append(v00);
+      verts.append(v10);
+      verts.append(v11);
+      verts.append(v00);
+      verts.append(v11);
+      verts.append(v01);
+    }
+  }
+  return verts;
+}

@@ -429,6 +429,17 @@ private slots:
   // stay deleted (No-Deprecated-UI rule). These were in the removed LAN/device/
   // cloud scope — deletion, not repair. Source-level only.
   void legacyDeadCodePagesRemoved();
+  // Phase 121 (PAINT-02 + PAINT-03): source-audit lock that the painted-facet
+  // overlay render + brush interaction wiring is in place. Locks: (a)
+  // EditorViewModel exposes paintOverlayData + extrudersColors Q_PROPERTYs;
+  // (b) RhiViewport exposes paintOverlayData + the brush Q_PROPERTYs
+  // (brushRadius/brushCursorType/paintState); (c) RhiViewportRenderer has
+  // renderPaintOverlay + uploadPaintOverlayBuffer + the brush-cursor render
+  // path; (d) emitPaintPickIfActive no longer hardcodes brushRadius=2.0 (reads
+  // the Q_PROPERTY). Mirrors the Phase 120 source-audit pattern (readSource +
+  // QVERIFY2 with PAINT-02/PAINT-03-named messages). Source-level only; runs in
+  // the regression ctest.
+  void paintedFacetOverlayAndBrushInteraction();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -5633,6 +5644,112 @@ void QmlUiAuditTests::legacyDeadCodePagesRemoved()
            "CLEAN-01/CL-03: BackendContext.h must not reference AuxiliaryService (service deleted with its only would-be consumer)");
   QVERIFY2(!cmake.contains(QStringLiteral("AuxiliaryService")),
            "CLEAN-01/CL-03: CMakeLists.txt must not compile AuxiliaryService (service deleted)");
+}
+
+void QmlUiAuditTests::paintedFacetOverlayAndBrushInteraction()
+{
+  // Phase 121 (PAINT-02 + PAINT-03): source-audit lock for the painted-facet
+  // overlay render + brush interaction. Each QVERIFY2 names the OV truth it
+  // locks. Source-level only; runs in the regression ctest. Mirrors the Phase
+  // 120 triangleSelectorEnginePorted pattern (readSource + QVERIFY2 with
+  // PAINT-02/PAINT-03-named messages).
+  const QString editorHeader =
+      readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString editorSource =
+      readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString rhiHeader =
+      readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString rhiSource =
+      readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString rhiRendererHeader =
+      readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rhiRendererSource =
+      readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString gizmoHeader =
+      readSource(QStringLiteral("src/core/rendering/GizmoGeometry.h"));
+  const QString gizmoSource =
+      readSource(QStringLiteral("src/core/rendering/GizmoGeometry.cpp"));
+  const QString softwareViewport =
+      readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.cpp"));
+  const QString preparePage =
+      readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!rhiHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!rhiRendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+
+  // OV-01 (a): EditorViewModel must expose the paintOverlayData Q_PROPERTY
+  // (reverse data channel, NOTIFY paintDataChanged).
+  QVERIFY2(editorHeader.contains(QStringLiteral(
+               "Q_PROPERTY(QByteArray paintOverlayData READ paintOverlayData NOTIFY paintDataChanged")),
+           "PAINT-02/OV-01: EditorViewModel.h must declare the paintOverlayData Q_PROPERTY");
+  QVERIFY2(editorHeader.contains(QStringLiteral("paintOverlayData() const")),
+           "PAINT-02/OV-01: EditorViewModel.h must declare the paintOverlayData getter");
+  QVERIFY2(editorSource.contains(QStringLiteral("EditorViewModel::paintOverlayData")),
+           "PAINT-02/OV-01: EditorViewModel.cpp must implement paintOverlayData");
+
+  // OV-04: EditorViewModel must expose extrudersColors (MMU per-extruder
+  // filament colors) so the overlay renderer can map ExtruderN -> a color.
+  QVERIFY2(editorHeader.contains(QStringLiteral("extrudersColors")),
+           "PAINT-02/OV-04: EditorViewModel.h must declare the extrudersColors Q_PROPERTY");
+  QVERIFY2(editorSource.contains(QStringLiteral("EditorViewModel::extrudersColors")),
+           "PAINT-02/OV-04: EditorViewModel.cpp must implement extrudersColors");
+
+  // OV-02 (b): RhiViewport must expose paintOverlayData + the brush Q_PROPERTYs.
+  QVERIFY2(rhiHeader.contains(QStringLiteral("Q_PROPERTY(QByteArray paintOverlayData")),
+           "PAINT-02/OV-02: RhiViewport.h must declare the paintOverlayData Q_PROPERTY");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("Q_PROPERTY(float brushRadius")),
+           "PAINT-03/OV-02: RhiViewport.h must declare the brushRadius Q_PROPERTY");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("Q_PROPERTY(int brushCursorType")),
+           "PAINT-03/OV-02: RhiViewport.h must declare the brushCursorType Q_PROPERTY");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("Q_PROPERTY(int paintState")),
+           "PAINT-03/OV-02: RhiViewport.h must declare the paintState Q_PROPERTY");
+
+  // OV-03 (c): RhiViewportRenderer must have renderPaintOverlay +
+  // uploadPaintOverlayBuffer (reuse mesh pipeline, no new shader).
+  QVERIFY2(rhiRendererHeader.contains(QStringLiteral("renderPaintOverlay")),
+           "PAINT-02/OV-03: RhiViewportRenderer.h must declare renderPaintOverlay");
+  QVERIFY2(rhiRendererSource.contains(QStringLiteral("RhiViewportRenderer::renderPaintOverlay")),
+           "PAINT-02/OV-03: RhiViewportRenderer.cpp must implement renderPaintOverlay");
+  QVERIFY2(rhiRendererSource.contains(QStringLiteral("RhiViewportRenderer::uploadPaintOverlayBuffer")),
+           "PAINT-02/OV-03: RhiViewportRenderer.cpp must implement uploadPaintOverlayBuffer");
+  // Reuse check: renderPaintOverlay must bind m_fillPipeline (no new pipeline).
+  QVERIFY2(rhiRendererSource.contains(QStringLiteral("m_fillPipeline.get()")),
+           "PAINT-02/OV-03: renderPaintOverlay must reuse m_fillPipeline (no new shader/pipeline)");
+
+  // OV-05: brush sphere cursor. GizmoGeometry::buildBrushSphereVertices must
+  // exist, and the renderer must have uploadBrushCursorBuffer + renderBrushCursor
+  // using m_translucentFillPipeline.
+  QVERIFY2(gizmoHeader.contains(QStringLiteral("buildBrushSphereVertices")),
+           "PAINT-03/OV-05: GizmoGeometry.h must declare buildBrushSphereVertices");
+  QVERIFY2(gizmoSource.contains(QStringLiteral("GizmoGeometry::buildBrushSphereVertices")),
+           "PAINT-03/OV-05: GizmoGeometry.cpp must implement buildBrushSphereVertices");
+  QVERIFY2(rhiRendererSource.contains(QStringLiteral("renderBrushCursor")),
+           "PAINT-03/OV-05: RhiViewportRenderer.cpp must have renderBrushCursor");
+  QVERIFY2(rhiRendererSource.contains(QStringLiteral("m_translucentFillPipeline.get()")),
+           "PAINT-03/OV-05: renderBrushCursor must use m_translucentFillPipeline");
+
+  // OV-02 (d): emitPaintPickIfActive must read the brush Q_PROPERTYs, NOT
+  // hardcode brushRadius=2.0. The Phase 120 hardcoded line must be gone.
+  QVERIFY2(!rhiSource.contains(QStringLiteral("const double brushRadius = 2.0")),
+           "PAINT-03/OV-02: emitPaintPickIfActive must NOT hardcode brushRadius=2.0 (read the Q_PROPERTY)");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_brushRadius")),
+           "PAINT-03/OV-02: emitPaintPickIfActive must read m_brushRadius (the Q_PROPERTY)");
+
+  // OV-06: SoftwareViewport mirror must append painted facets in paintScene.
+  QVERIFY2(softwareViewport.contains(QStringLiteral("m_paintOverlayData")),
+           "PAINT-02/OV-06: SoftwareViewport.cpp must consume m_paintOverlayData in paintScene");
+
+  // OV-07: PreparePage.qml Support paint panel must have brush controls
+  // (tool selector bound to supportPaintTool, radius CxSlider bound to
+  // supportPaintCursorRadius, cursor type).
+  QVERIFY2(preparePage.contains(QStringLiteral("supportPaintTool")),
+           "PAINT-03/OV-07: PreparePage.qml Support panel must bind supportPaintTool");
+  QVERIFY2(preparePage.contains(QStringLiteral("supportPaintCursorRadius")),
+           "PAINT-03/OV-07: PreparePage.qml Support panel must bind supportPaintCursorRadius");
+  QVERIFY2(preparePage.contains(QStringLiteral("supportPaintCursorType")),
+           "PAINT-03/OV-07: PreparePage.qml Support panel must bind supportPaintCursorType");
+  QVERIFY2(preparePage.contains(QStringLiteral("paintOverlayData")),
+           "PAINT-02/OV-07: PreparePage.qml must bind paintOverlayData on the viewport");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

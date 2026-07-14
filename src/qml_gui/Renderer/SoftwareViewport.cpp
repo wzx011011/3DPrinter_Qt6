@@ -577,6 +577,63 @@ void SoftwareViewport::paintScene(QPainter *painter, const QRectF &target)
     addWipeTowerFace(c000, c010, c011, c001); // left (-X)
   }
 
+  // Phase 121 (PAINT-02/OV-06): append painted facets to the depth-sorted
+  // `faces` vector so they render alongside the model meshes (painter's
+  // algorithm). The byte stream m_paintOverlayData is produced by
+  // EditorViewModel::paintOverlayData (world-transformed libslic3r coords).
+  // Apply the same libslic3r->Qt axis swap as the wipe-tower mesh path: each
+  // captured (mx, my, mz) maps to Qt (mx, mz, my) [X right, Y up, Z into bed].
+  // Color mapping matches the RHI overlay (OV-04): Enforcer green, Blocker red,
+  // MMU per-extruder filament colors. The faces participate in the depth sort
+  // so they occlude/be-occluded correctly.
+  if (m_paintOverlayData.size() >= int(2 * sizeof(qint32)))
+  {
+    const auto *hdr = reinterpret_cast<const qint32 *>(
+        m_paintOverlayData.constData());
+    const qint32 triCount = hdr[1];
+    const qint64 expected = qint64(2 * sizeof(qint32))
+                            + qint64(triCount) * qint64(4 + 9 * sizeof(float));
+    if (triCount > 0 && m_paintOverlayData.size() >= expected)
+    {
+      const auto *tris = reinterpret_cast<const char *>(
+          m_paintOverlayData.constData() + 2 * sizeof(qint32));
+      for (qint32 t = 0; t < triCount; ++t)
+      {
+        const char *rec = tris + qint64(t) * qint64(4 + 9 * sizeof(float));
+        const qint32 state = *reinterpret_cast<const qint32 *>(rec);
+        const float *verts = reinterpret_cast<const float *>(rec + 4);
+        // libslic3r (mx, my, mz) -> Qt (mx, mz, my).
+        const QVector3D p0(verts[0], verts[2], verts[1]);
+        const QVector3D p1(verts[3], verts[5], verts[4]);
+        const QVector3D p2(verts[6], verts[8], verts[7]);
+        const QVector3D r0 = rotatePoint(p0 - m_center);
+        const QVector3D r1 = rotatePoint(p1 - m_center);
+        const QVector3D r2 = rotatePoint(p2 - m_center);
+        // State -> color (Enforcer green / Blocker red / MMU extruder color).
+        QColor faceColor = QColor::fromRgbF(0.7f, 0.7f, 0.7f, 0.85f);
+        if (state == 1)
+          faceColor = QColor::fromRgbF(0.5f, 1.0f, 0.5f, 0.85f);
+        else if (state == 2)
+          faceColor = QColor::fromRgbF(1.0f, 0.5f, 0.5f, 0.85f);
+        else if (state >= 3 && state <= 16 && !m_extrudersColors.isEmpty())
+        {
+          const int idx = (state - 1) % m_extrudersColors.size();
+          QColor c(m_extrudersColors.at(idx).toString());
+          if (c.isValid())
+          {
+            c.setAlphaF(0.85f);
+            faceColor = c;
+          }
+        }
+        Face face;
+        face.poly << project(p0) << project(p1) << project(p2);
+        face.color = faceColor;
+        face.depth = (r0.z() + r1.z() + r2.z()) / 3.f;
+        faces.append(face);
+      }
+    }
+  }
+
   std::sort(faces.begin(), faces.end(), [](const Face &lhs, const Face &rhs) {
     return lhs.depth < rhs.depth;
   });

@@ -6,6 +6,8 @@
 #include <QMatrix4x4>
 #include <QPointer>
 #include <QQuickRhiItem>
+#include <QVariant>
+#include <QVariantList>
 #include <QVector>
 #include <QVector3D>
 
@@ -56,6 +58,15 @@ private:
   bool uploadHighlightBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadCutPlaneBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadWipeTowerBuffer(QRhiResourceUpdateBatch *updates);
+  // Phase 121 (PAINT-02/OV-03): parse m_paintOverlayData bytes -> GizmoVertex
+  // (per-state color) -> ensureBuffer + uploadStaticBuffer. Reuses the mesh
+  // pipeline (m_fillPipeline); no new shader/pipeline.
+  bool uploadPaintOverlayBuffer(QRhiResourceUpdateBatch *updates);
+  void renderPaintOverlay(QRhiCommandBuffer *cb);
+  // Phase 121 (PAINT-03/OV-05): translucent sphere cursor that follows the
+  // mouse while a paint gizmo is active. Built from buildBrushSphereVertices.
+  bool uploadBrushCursorBuffer(QRhiResourceUpdateBatch *updates);
+  void renderBrushCursor(QRhiCommandBuffer *cb);
   // Phase 91 (ASMEXPLODE-02): yellow dashed connector guide lines between
   // originally-adjacent volumes of the same object on AssembleView when
   // ratio > 1.0 (matches shotScreen/装配页_爆炸.png).
@@ -128,6 +139,11 @@ private:
   std::unique_ptr<QRhiBuffer> m_cutPlaneFillBuffer;
   std::unique_ptr<QRhiBuffer> m_cutPlaneOutlineBuffer;
   std::unique_ptr<QRhiBuffer> m_wipeTowerBuffer;
+  // Phase 121 (PAINT-02/OV-03): painted-facet overlay buffer. Reuses the mesh
+  // pipeline (m_fillPipeline + GizmoVertex). Uploaded from m_paintOverlayData.
+  std::unique_ptr<QRhiBuffer> m_paintOverlayBuffer;
+  // Phase 121 (PAINT-03/OV-05): brush sphere cursor buffer (translucent).
+  std::unique_ptr<QRhiBuffer> m_brushCursorBuffer;
   // Phase 91 (ASMEXPLODE-02): assembly connector guide-line buffer.
   std::unique_ptr<QRhiBuffer> m_assemblyConnectorBuffer;
   // Phase 92 (ASMMEASURE-02): Assembly measurement overlay buffers. The
@@ -142,6 +158,9 @@ private:
   bool m_cutPlaneFillBufferUploaded = false;
   bool m_cutPlaneOutlineBufferUploaded = false;
   bool m_wipeTowerBufferUploaded = false;
+  // Phase 121 (PAINT-02/OV-03): overlay + brush-cursor upload flags.
+  bool m_paintOverlayBufferUploaded = false;
+  bool m_brushCursorBufferUploaded = false;
   bool m_assemblyConnectorBufferUploaded = false;
   bool m_assemblyMeasureLineBufferUploaded = false;
   bool m_assemblyMeasureTriBufferUploaded = false;
@@ -151,6 +170,9 @@ private:
   quint32 m_cutPlaneFillBufferBytes = 0;
   quint32 m_cutPlaneOutlineBufferBytes = 0;
   quint32 m_wipeTowerBufferBytes = 0;
+  // Phase 121 (PAINT-02/OV-03): overlay + brush-cursor buffer byte sizes.
+  quint32 m_paintOverlayBufferBytes = 0;
+  quint32 m_brushCursorBufferBytes = 0;
   quint32 m_assemblyConnectorBufferBytes = 0;
   quint32 m_assemblyMeasureLineBufferBytes = 0;
   quint32 m_assemblyMeasureTriBufferBytes = 0;
@@ -176,6 +198,9 @@ private:
   quint32 m_cutPlaneFillVertexCount = 0;
   quint32 m_cutPlaneOutlineVertexCount = 0;
   quint32 m_wipeTowerVertexCount = 0;
+  // Phase 121 (PAINT-02/OV-03): overlay + brush-cursor vertex counts.
+  quint32 m_paintOverlayVertexCount = 0;
+  quint32 m_brushCursorVertexCount = 0;
   quint32 m_assemblyConnectorVertexCount = 0;
   quint32 m_assemblyMeasureLineVertexCount = 0;
   quint32 m_assemblyMeasureTriVertexCount = 0;
@@ -231,6 +256,28 @@ private:
   // into the renderer.
   bool m_wipeTowerHasRealMesh = false;
   std::vector<float> m_wipeTowerMeshVertices;
+
+  // ── Phase 121 (PAINT-02/PAINT-03): paint overlay + brush cursor state ──
+  // Mirrored from RhiViewport in synchronize(). m_paintOverlayData is the byte
+  // stream from EditorViewModel::paintOverlayData (world-transformed facets).
+  // m_extrudersColors carries the MMU hex strings for ExtruderN coloring.
+  // Brush fields drive the sphere cursor (position/color/radius).
+  QByteArray m_paintOverlayData;
+  QVariantList m_extrudersColors;
+  float m_brushRadius = 2.0f;
+  int m_brushCursorType = 1;     // 1=Sphere
+  int m_paintState = 1;          // EnforcerBlockerType int
+  float m_brushMouseScreenX = 0.f;
+  float m_brushMouseScreenY = 0.f;
+  int m_brushButtonState = 0;    // 0=hover, 1=left, 2=right, -1=hide
+  // Cached cursor center (world space) + last-used button state for the brush
+  // sphere. Re-computed in renderBrushCursor from the screen position via a
+  // ray-mesh pick; stored here so uploadBrushCursorBuffer can rebuild on change.
+  QVector3D m_brushCursorWorldCenter;
+  int m_brushCursorLastButtonState = -2; // sentinel != any valid state
+  float m_brushCursorLastScreenX = std::numeric_limits<float>::lowest();
+  float m_brushCursorLastScreenY = std::numeric_limits<float>::lowest();
+  float m_brushCursorLastRadius = -1.f;
 
   // ── Phase 26: Preview segment pipeline state ──
   QByteArray m_previewData;              // GCV1 blob from RhiViewport

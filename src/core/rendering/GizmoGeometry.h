@@ -109,6 +109,20 @@ public:
       float x,
       float z);
 
+  // Phase 121 (PAINT-03/OV-05): brush cursor sphere. A UV-sphere (lat/long
+  // tessellation) centered at `center` with the given world-space `radius`.
+  // Used by renderBrushCursor to draw the translucent brush preview that
+  // follows the mouse while a paint gizmo is active (upstream
+  // GLGizmoPainterBase cursor sphere, GLGizmoPainterBase.hpp:231-234). The
+  // color is baked per-vertex from the `color` RGBA tuple so the caller can
+  // switch left-button blue / right-button red / hover black. Returns an empty
+  // vector when radius <= 0. The sphere uses slices=16, stacks=12 (enough
+  // facets for a smooth cursor at typical zoom without per-frame cost).
+  static QVector<GizmoVertex> buildBrushSphereVertices(
+      const QVector3D &center,
+      float radius,
+      const float color[4]);
+
   // Axis color constants - single source of truth (X=0, Y=1, Z=2).
   // Alpha is always 1.0; callers that need transparency set it post-build.
   // Matches the GL kAxisColors[3] (GLViewportRenderer.cpp:128-132 at HEAD

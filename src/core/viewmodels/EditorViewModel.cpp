@@ -2644,6 +2644,145 @@ void EditorViewModel::clearPaintOnObject(int objectIndex)
   }
   emit paintDataChanged();
 }
+
+// Phase 121 (PAINT-02/OV-01): reverse data channel. Flattens the selected
+// object's painted facets into a world-transformed byte stream the RHI overlay
+// renderer + Software mirror consume. Wire format (little-endian, packed):
+//   header: [int32 modeLabel, int32 triangleCount]
+//   body:   triangleCount * [int32 state, float vx,vy,vz (3 verts)]   (40 B/ea)
+// modeLabel is 1=Support, 2=Seam, 3=MMU (chosen from the gizmo the ViewModel
+// last entered via setSupportPaintTool/seamPaintTool/mmuSelectedExtruder usage;
+// here it is purely informational -- the renderer gates color mapping on its own
+// m_gizmoMode). state is the TriangleSelector EnforcerBlockerType int value
+// (1=Enforcer, 2=Blocker, 3..16=Extruder3..16) so the renderer can apply the
+// correct per-state color (Support/Seam green/red, MMU per-extruder filament).
+//
+// World transform: PaintEngine::getFacets returns MESH-LOCAL vertices
+// (TriangleSelector stores m_vertices in mesh space). The overlay must render in
+// WORLD space (same as the model mesh), so each vertex is transformed by the
+// object's TRS -- the SAME rebuildWorldTransform paintAtFacet uses (.cpp:2560-
+// 2567). The ITS is converted to libslic3r world frame, then the renderer's
+// upstream Y->Qt-Z swap is applied in uploadPaintOverlayBuffer (mirrors the
+// mesh-data path). Here we emit libslic3r world coords (X,Y,Z up).
+QByteArray EditorViewModel::paintOverlayData() const
+{
+  // const getter but getFacets may lazily build selectors. Reuse the same
+  // m_paintEngine instance paintAtFacet builds; const_cast keeps the lazy build
+  // confined to this getter (mirrors how the SceneRaycaster lazily builds from
+  // projectService_ in the non-const pickMeasureFeatureAt). No mutation of
+  // observable state beyond cache population.
+  const int obj = selectedSourceObjectIndex();
+  if (obj < 0 || !projectService_)
+    return {};
+
+  OWzx::PaintEngine *engine = m_paintEngine.get();
+  if (!engine)
+  {
+    // Lazy-build the PaintEngine from the TriangleMesh source (same factory
+    // lambda as paintAtFacet). const_cast because ensureSelector/getFacets are
+    // non-const (lazy cache population); the cache is the only mutation.
+    auto *self = const_cast<EditorViewModel *>(this);
+    self->m_paintEngine = std::make_unique<OWzx::PaintEngine>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const Slic3r::TriangleMesh> {
+          return svc ? svc->volumeMeshTriangleMesh(objIdx, volIdx) : nullptr;
+        });
+    engine = self->m_paintEngine.get();
+  }
+  if (!engine)
+    return {};
+
+  // Rebuild the object's world transform (same as paintAtFacet .cpp:2560-2567).
+  const QVector3D translation = projectService_->objectPosition(obj);
+  const QVector3D rotationDeg = projectService_->objectRotation(obj);
+  const QVector3D scale = projectService_->objectScale(obj);
+  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
+                              float(rotationDeg.y() * float(M_PI) / 180.0f),
+                              float(rotationDeg.z() * float(M_PI) / 180.0f));
+  const Slic3r::Transform3d worldTransform =
+      rebuildWorldTransform(translation, rotationRad, scale);
+
+  // Enumerate the relevant EnforcerBlockerType states. Support/Seam use only
+  // Enforcer(1) + Blocker(2); MMU uses Extruder1..16 (values 1..16, where
+  // Extruder1==ENFORCER and Extruder2==BLOCKER). To cover all three gizmos in
+  // one stream (the renderer gates which to render by m_gizmoMode), enumerate
+  // 1..16. hasFacets skips empty states so the stream stays minimal.
+  struct TriRecord
+  {
+    qint32 state;
+    float verts[9]; // 3 verts x (x,y,z)
+  };
+  std::vector<TriRecord> records;
+
+  const int volumeCount = std::max(1, projectService_->objectVolumeCount(obj));
+  for (int v = 0; v < volumeCount; ++v)
+  {
+    for (int stateInt = 1; stateInt <= 16; ++stateInt)
+    {
+      const Slic3r::EnforcerBlockerType state =
+          static_cast<Slic3r::EnforcerBlockerType>(stateInt);
+      if (!engine->hasFacets(obj, v, state))
+        continue;
+      auto its = engine->getFacets(obj, v, state);
+      if (!its || its->indices.empty())
+        continue;
+      // Transform each vertex mesh-local -> world. The ITS is a compact
+      // indexed set; indices reference into its->vertices.
+      std::vector<Slic3r::Vec3f> worldVerts(its->vertices.size());
+      for (size_t vi = 0; vi < its->vertices.size(); ++vi)
+      {
+        const Slic3r::Vec3f &ml = its->vertices[vi];
+        const Slic3r::Vec3d w =
+            worldTransform * Slic3r::Vec3d(double(ml.x()), double(ml.y()),
+                                           double(ml.z()));
+        worldVerts[vi] = Slic3r::Vec3f(float(w.x()), float(w.y()),
+                                       float(w.z()));
+      }
+      for (const auto &idx : its->indices)
+      {
+        TriRecord rec;
+        rec.state = stateInt;
+        for (int t = 0; t < 3; ++t)
+        {
+          const Slic3r::Vec3f &wv = worldVerts[size_t(idx[t])];
+          rec.verts[t * 3 + 0] = wv.x();
+          rec.verts[t * 3 + 1] = wv.y();
+          rec.verts[t * 3 + 2] = wv.z();
+        }
+        records.push_back(rec);
+      }
+    }
+  }
+
+  QByteArray bytes;
+  bytes.reserve(int(sizeof(qint32) * 2 + records.size() * sizeof(TriRecord)));
+  const qint32 modeLabel = 1; // informational; renderer gates by m_gizmoMode
+  const qint32 triCount = qint32(records.size());
+  bytes.append(reinterpret_cast<const char *>(&modeLabel), sizeof(qint32));
+  bytes.append(reinterpret_cast<const char *>(&triCount), sizeof(qint32));
+  if (!records.empty())
+    bytes.append(reinterpret_cast<const char *>(records.data()),
+                 int(records.size() * sizeof(TriRecord)));
+  return bytes;
+}
+
+// Phase 121 (PAINT-02/OV-04): MMU per-extruder filament colors as hex strings.
+// Mirrors PreviewViewModel::extruderColor (upstream 8-color cycle). The overlay
+// renderer maps ExtruderN -> colors[N-1] (QColor(hex)); missing entries fall
+// back to the cycle so an out-of-range index never yields an empty color.
+QVariantList EditorViewModel::extrudersColors() const
+{
+  static const char *kCycle[] = {
+      "#009688", "#f44336", "#2196f3", "#ff9800",
+      "#9c27b0", "#4caf50", "#ff5722", "#607d8b",
+  };
+  QVariantList out;
+  const int n = std::max(1, m_mmuExtruderCount);
+  out.reserve(n);
+  for (int i = 0; i < n; ++i)
+    out.append(QString::fromUtf8(kCycle[size_t(i) % 8]));
+  return out;
+}
 #else
 bool EditorViewModel::paintAtFacet(int, int, int, double, double, double,
                                    int, double, int, int,
@@ -2657,6 +2796,22 @@ void EditorViewModel::clearPaintOnObject(int)
   // HAS_LIBSLIC3R off: drop only the Qt data layer (no PaintEngine to clear).
   m_paintData.clear();
   emit paintDataChanged();
+}
+// Phase 121 (PAINT-02): stubs for the non-lib build. paintOverlayData returns
+// empty (nothing to overlay without PaintEngine); extrudersColors returns the
+// default cycle so any QML binding still resolves.
+QByteArray EditorViewModel::paintOverlayData() const { return {}; }
+QVariantList EditorViewModel::extrudersColors() const
+{
+  static const char *kCycle[] = {
+      "#009688", "#f44336", "#2196f3", "#ff9800",
+      "#9c27b0", "#4caf50", "#ff5722", "#607d8b",
+  };
+  QVariantList out;
+  const int n = std::max(1, m_mmuExtruderCount);
+  for (int i = 0; i < n; ++i)
+    out.append(QString::fromUtf8(kCycle[size_t(i) % 8]));
+  return out;
 }
 #endif
 

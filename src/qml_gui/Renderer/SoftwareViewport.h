@@ -54,6 +54,15 @@ class SoftwareViewport : public QQuickPaintedItem
   Q_PROPERTY(int cutAxis READ cutAxis WRITE setCutAxis)
   Q_PROPERTY(float cutPosition READ cutPosition WRITE setCutPosition)
   Q_PROPERTY(QString lastThumbnailData READ lastThumbnailData NOTIFY thumbnailCaptured)
+  // Phase 121 (PAINT-02/OV-06): paint overlay reverse-channel (mirrors RhiViewport).
+  // The Software mirror parses the same byte stream and appends the painted
+  // facets to the depth-sorted `faces` vector in paintScene.
+  Q_PROPERTY(QByteArray paintOverlayData READ paintOverlayData WRITE setPaintOverlayData)
+  // Phase 121 (PAINT-02/OV-04): MMU per-extruder filament colors (hex strings).
+  Q_PROPERTY(QVariantList extrudersColors READ extrudersColors WRITE setExtrudersColors)
+  // Phase 121 (PAINT-03/OV-06): brush params (mirror RhiViewport) so the
+  // software path can draw a 2D brush cursor circle when a paint gizmo is on.
+  Q_PROPERTY(float brushRadius READ brushRadius WRITE setBrushRadius)
 
 public:
   enum CanvasType { CanvasView3D = 0, CanvasPreview = 1 };
@@ -171,6 +180,14 @@ public:
 
   QString lastThumbnailData() const { return m_lastThumbnailData; }
 
+  // Phase 121 (PAINT-02/OV-06): paint overlay + brush accessors (mirror RhiViewport).
+  QByteArray paintOverlayData() const { return m_paintOverlayData; }
+  void setPaintOverlayData(const QByteArray &data) { m_paintOverlayData = data; update(); }
+  QVariantList extrudersColors() const { return m_extrudersColors; }
+  void setExtrudersColors(const QVariantList &c) { m_extrudersColors = c; update(); }
+  float brushRadius() const { return m_brushRadius; }
+  void setBrushRadius(float r) { m_brushRadius = r; update(); }
+
   Q_INVOKABLE void requestFitView(float cx, float cy, float cz, float r);
   Q_INVOKABLE void requestViewPreset(int preset);
   Q_INVOKABLE void undo() {}
@@ -222,6 +239,10 @@ private:
   float m_cutPosition = 0.f;
   QByteArray m_meshData;
   QByteArray m_previewData;
+  // Phase 121 (PAINT-02/OV-06): paint overlay payload (mirror RhiViewport).
+  QByteArray m_paintOverlayData;
+  QVariantList m_extrudersColors;
+  float m_brushRadius = 2.0f;
   int m_layerMin = 0;
   int m_layerMax = 0;
   int m_moveEnd = 0;
