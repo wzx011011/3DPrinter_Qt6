@@ -45,7 +45,7 @@
 - [x] Phase 118: custom_gcode_per_print_z Writeback And Re-Slice Loop (WS1) (completed 2026-07-15)
 - [x] Phase 119: Tick Type Coverage And Drag Relocation (WS1) (completed 2026-07-15)
 - [x] Phase 120: TriangleSelector Engine Port (WS2) (completed 2026-07-15)
-- [ ] Phase 121: Painted-Facet Overlay Render And Brush Interaction (WS2)
+- [x] Phase 121: Painted-Facet Overlay Render And Brush Interaction (WS2) (completed 2026-07-15)
 - [ ] Phase 122: Support And Seam Paint End-To-End (WS2)
 - [ ] Phase 123: MMU Segmentation Paint End-To-End (WS2)
 - [x] Phase 124: Software-Sliceable Calibration Mode Completion (WS3) (completed 2026-07-15)
