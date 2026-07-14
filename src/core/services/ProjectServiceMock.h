@@ -460,6 +460,30 @@ public:
   // never hand through a libslic3r ModelVolume*). This accessor flags that
   // boundary concern in its contract so the downstream phases cannot miss it.
   std::shared_ptr<const indexed_triangle_set> volumeMeshIts(int objectIndex, int volumeIndex) const;
+
+  // == Phase 120 (PAINT-01): per-volume TriangleMesh accessor =================
+  // Returns the per-volume TriangleMesh for the ModelVolume at (objectIndex,
+  // volumeIndex), as a std::shared_ptr<const Slic3r::TriangleMesh>.
+  //
+  // TriangleSelector's ctor takes `const TriangleMesh&` (TriangleSelector.hpp:
+  // 299) and stores it as a reference for its whole lifetime
+  // (TriangleSelector.hpp:477 m_mesh). So the TriangleMesh MUST outlive every
+  // TriangleSelector that references it. This accessor returns the SAME
+  // shared_ptr<const TriangleMesh> ModelVolume already owns (mesh_ptr(),
+  // Model.hpp:856 -- the aliasing target is the TriangleMesh itself, NOT its
+  // `its` member like volumeMeshIts above). The shared_ptr refcount therefore
+  // keeps the TriangleMesh alive as long as any PaintEngine selector holds it
+  // -- even if the ModelVolume is deleted mid-use (load/cut/boolean/etc.
+  // drop the volume, but the prior shared_ptr stays valid until released).
+  //
+  // Mirrors the volumeMeshIts ownership contract (MI-02/MI-03 shallow-share,
+  // MI-04 no parallel cache, MI-05 defensive nullptr). The only difference is
+  // the aliasing target: &mesh (this accessor) vs &mesh.its (volumeMeshIts).
+  // Both share the SAME refcount on ModelVolume::m_mesh.
+  //
+  // Returns nullptr for: no model loaded; objectIndex/volumeIndex out of
+  // range; volume null; mesh empty. Callers MUST null-check.
+  std::shared_ptr<const Slic3r::TriangleMesh> volumeMeshTriangleMesh(int objectIndex, int volumeIndex) const;
 #endif
 
 signals:

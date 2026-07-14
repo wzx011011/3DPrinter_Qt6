@@ -3499,6 +3499,53 @@ ProjectServiceMock::volumeMeshIts(int objectIndex, int volumeIndex) const
   // releases it, the TriangleMesh (and its `its` member) is destroyed.
   return std::shared_ptr<const indexed_triangle_set>(meshPtr, &its);
 }
+
+// Phase 120 (PAINT-01): per-volume TriangleMesh accessor. See the ownership
+// contract in ProjectServiceMock.h (mirrors volumeMeshIts MI-02..MI-06). The
+// aliasing target is the TriangleMesh itself (not &its like volumeMeshIts) so
+// TriangleSelector::TriangleSelector(const TriangleMesh&, ...) can bind a
+// stable reference whose lifetime is refcount-tied to ModelVolume::m_mesh.
+//
+// ModelVolume::mesh_ptr() returns the internal std::shared_ptr<const
+// TriangleMesh> m_mesh (Model.hpp:856). Returning it directly (no aliasing
+// constructor needed -- the target IS the TriangleMesh) keeps the refcount and
+// therefore the TriangleMesh alive for as long as any PaintEngine selector
+// holds the result.
+std::shared_ptr<const Slic3r::TriangleMesh>
+ProjectServiceMock::volumeMeshTriangleMesh(int objectIndex, int volumeIndex) const
+{
+  // MI-05: defensive null return. No model, no object, no volume -> nullptr.
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return nullptr;
+
+  const auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || volumeIndex < 0 || size_t(volumeIndex) >= obj->volumes.size())
+    return nullptr;
+
+  const Slic3r::ModelVolume *volume = obj->volumes[size_t(volumeIndex)];
+  if (!volume)
+    return nullptr;
+
+  // mesh_ptr() returns the internal shared_ptr<const TriangleMesh>
+  // (Model.hpp:856). Grab it so the TriangleMesh stays alive for any
+  // TriangleSelector that references it. nullptr guard: a freshly-reset
+  // volume can have an empty mesh.
+  std::shared_ptr<const Slic3r::TriangleMesh> meshPtr = volume->mesh_ptr();
+  if (!meshPtr)
+    return nullptr;
+
+  // MI-05: guard against an empty mesh (no geometry) so callers do not receive
+  // a TriangleMesh TriangleSelector would reject. its.vertices + its.indices
+  // mirror the volumeMeshIts empty-mesh check above.
+  const indexed_triangle_set &its = meshPtr->its;
+  if (its.vertices.empty() || its.indices.empty())
+    return nullptr;
+
+  // Return the shared_ptr directly (the aliasing target IS the TriangleMesh,
+  // so no aliasing constructor needed -- this differs from volumeMeshIts
+  // which aliases onto &its). The refcount keeps the TriangleMesh alive.
+  return meshPtr;
+}
 #endif
 
 // ── Layer range support (对齐上游 ModelObject::layer_config_ranges) ──

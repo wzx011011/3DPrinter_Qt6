@@ -19,8 +19,15 @@
 // stage-1 survivor (RhiViewport::pickSourceObjectAt), so the per-frame cost
 // is O(hit volume), NOT O(all volumes) (the upstream perf bug).
 #include "core/rendering/SceneRaycaster.h"
+// Phase 120 (PAINT-01): PaintEngine owns per-volume TriangleSelector instances
+// (reused libslic3r code -- TriangleSelector.hpp, NOT reimplemented) and drives
+// select_patch from the stage-2 hit. Built from the same ProjectServiceMock
+// mesh source (volumeMeshTriangleMesh, the aliasing shared_ptr that keeps the
+// TriangleMesh alive for the selector's reference).
+#include "core/rendering/PaintEngine.h"
 #include <libslic3r/Geometry.hpp>  // Geometry::assemble_transform (canonical TRS)
 #include <libslic3r/Point.hpp>     // Vec3d / Transform3d for world-transform rebuild
+#include <libslic3r/TriangleSelector.hpp>  // EnforcerBlockerType + select_patch
 #endif
 #include <QFileInfo>
 #include <QUrl>
@@ -2217,6 +2224,11 @@ void EditorViewModel::invalidateMeasureEngine()
   // signal as MeasureEngine (pitfall 6 rebuild contract).
   if (m_sceneRaycaster)
     m_sceneRaycaster->invalidate();
+  // Phase 120 (PAINT-01): drop the per-volume TriangleSelector cache too --
+  // a stale selector would paint against the OLD mesh's triangle indices. Same
+  // model-change signal (pitfall 6 rebuild contract).
+  if (m_paintEngine)
+    m_paintEngine->invalidate();
 #endif
 }
 
@@ -2495,6 +2507,156 @@ bool EditorViewModel::pickMeasureFeatureAt(QVector3D, QVector3D, int, bool)
 {
   // HAS_LIBSLIC3R off: SceneRaycaster + MeasureEngine do not exist. No pick.
   return false;
+}
+#endif
+
+// ===========================================================================
+// Phase 120 (PAINT-01): paint-pick entry -- stage-2 raycast + PaintEngine.
+// Mirrors pickMeasureFeatureAt's two-stage pattern but drives TriangleSelector
+// instead of MeasureEngine. See EditorViewModel.h for the contract.
+// ===========================================================================
+#ifdef HAS_LIBSLIC3R
+bool EditorViewModel::paintAtFacet(int obj, int vol, int facetIdx,
+                                   double hitX, double hitY, double hitZ,
+                                   int state, double brushRadius, int cursorType,
+                                   int pickedSourceIndex,
+                                   QVector3D rayOrigin, QVector3D rayDir)
+{
+  // TS-05: require the project service + a stage-1 survivor. Without
+  // libslic3r's mesh there is nothing to paint; the early-out keeps QML safe.
+  if (!projectService_ || pickedSourceIndex < 0)
+    return false;
+
+  // Lazy-construct the shared SceneRaycaster (same instance pickMeasureFeatureAt
+  // uses). The ITS source is volumeMeshIts (the SceneRaycaster consumes ITS,
+  // not TriangleMesh -- they alias the SAME refcount on ModelVolume::m_mesh).
+  // Reusing one raycaster keeps per-volume ITS identity consistent across the
+  // measure + paint paths and shares the cache invalidation.
+  if (!m_sceneRaycaster) {
+    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const indexed_triangle_set> {
+          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
+        });
+  }
+
+  // Lazy-construct the PaintEngine from the TriangleMesh source (TS-01). This
+  // is a DIFFERENT accessor from the raycaster's ITS source: volumeMeshTriangleMesh
+  // aliases onto &mesh (not &mesh.its) so TriangleSelector's `const TriangleMesh&`
+  // ctor binds a stable reference. The shared_ptr is held by the cache entry so
+  // the TriangleMesh outlives the selector.
+  if (!m_paintEngine) {
+    m_paintEngine = std::make_unique<OWzx::PaintEngine>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const Slic3r::TriangleMesh> {
+          return svc ? svc->volumeMeshTriangleMesh(objIdx, volIdx) : nullptr;
+        });
+  }
+
+  // Reconstruct the candidate volume's world transform from the object's
+  // translation/rotation/scale (Eigen types cannot cross QML). Same rebuild
+  // pickMeasureFeatureAt uses (the candidate list is the single stage-1
+  // survivor -- SceneRaycaster never loops the whole scene, pitfall 7).
+  const QVector3D translation = projectService_->objectPosition(pickedSourceIndex);
+  const QVector3D rotationDeg = projectService_->objectRotation(pickedSourceIndex);
+  const QVector3D scale = projectService_->objectScale(pickedSourceIndex);
+  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
+                              float(rotationDeg.y() * float(M_PI) / 180.0f),
+                              float(rotationDeg.z() * float(M_PI) / 180.0f));
+  const Slic3r::Transform3d worldTransform =
+      rebuildWorldTransform(translation, rotationRad, scale);
+
+  // Build the candidate list. When the caller passes a concrete (obj, vol) we
+  // narrow to exactly that volume; otherwise enumerate every volume of the
+  // picked object (mirrors pickMeasureFeatureAt's volume enumeration).
+  std::vector<OWzx::SceneRaycasterCandidate> candidates;
+  if (obj >= 0 && vol >= 0) {
+    OWzx::SceneRaycasterCandidate cand;
+    cand.objectIndex = obj;
+    cand.volumeIndex = vol;
+    cand.worldTransform = worldTransform;
+    candidates.push_back(cand);
+  } else {
+    const int volumeCount = projectService_->objectVolumeCount(pickedSourceIndex);
+    candidates.reserve(std::max(1, volumeCount));
+    for (int v = 0; v < std::max(1, volumeCount); ++v) {
+      OWzx::SceneRaycasterCandidate cand;
+      cand.objectIndex = pickedSourceIndex;
+      cand.volumeIndex = v;
+      cand.worldTransform = worldTransform;
+      candidates.push_back(cand);
+    }
+  }
+
+  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
+                             double(rayOrigin.z()));
+  const Slic3r::Vec3d dir(double(rayDir.x()), double(rayDir.y()),
+                          double(rayDir.z()));
+  const OWzx::SceneRaycasterHit hit =
+      m_sceneRaycaster->hitTest(origin, dir, candidates);
+  if (!hit.hit)
+    return false; // ray missed every candidate volume -- nothing to paint
+
+  // trafo_no_translate for select_patch (TriangleSelector.hpp:309): the mesh->
+  // world transform with the translation column zeroed. select_patch uses it to
+  // transform cursor directions/normals (rotation + scale only). Built by
+  // reusing rebuildWorldTransform with a zero translation.
+  const Slic3r::Transform3d trafoNoTranslate =
+      rebuildWorldTransform(QVector3D(0.f, 0.f, 0.f), rotationRad, scale);
+
+  // Drive PaintEngine.paintAt on the hit volume. The mesh-local hit point
+  // (TS-02 meshLocalPosition, preserved by SceneRaycaster) is the cursor
+  // center; facetIdx from the ray is select_patch's facet_start.
+  const OWzx::PaintCursorType cursor =
+      (cursorType == int(OWzx::PaintCursorType::Sphere))
+          ? OWzx::PaintCursorType::Sphere
+          : OWzx::PaintCursorType::Circle;
+  const Slic3r::EnforcerBlockerType ebt =
+      static_cast<Slic3r::EnforcerBlockerType>(state);
+  const bool painted = m_paintEngine->paintAt(
+      hit.objectIndex, hit.volumeIndex, int(hit.facetIdx),
+      hit.meshLocalPosition, float(brushRadius), cursor, ebt, trafoNoTranslate);
+
+  // Mirror the (obj, vol, facetIdx) the caller passed through the Qt data
+  // layer (back-compat with m_paintData / setTriangleSupportState consumers).
+  // The authoritative paint state lives in PaintEngine now; this is a thin
+  // enum mirror so existing QML that reads paintDataChanged still refreshes.
+  if (painted) {
+    setTriangleSupportState(hit.objectIndex, int(hit.facetIdx), state);
+  }
+  // hitX/hitY/hitZ are carried for future overlay anchoring (Phase 121) but
+  // are not consumed here -- the authoritative hit is hit.meshLocalPosition.
+  (void)hitX; (void)hitY; (void)hitZ;
+  return painted;
+}
+
+void EditorViewModel::clearPaintOnObject(int objectIndex)
+{
+  if (m_paintEngine)
+    m_paintEngine->clearObject(objectIndex);
+  // Also clear the back-compat m_paintData entries for this object so the Qt
+  // data layer stays consistent with the PaintEngine state.
+  for (auto it = m_paintData.begin(); it != m_paintData.end();) {
+    if (it->objectIndex == objectIndex)
+      it = m_paintData.erase(it);
+    else
+      ++it;
+  }
+  emit paintDataChanged();
+}
+#else
+bool EditorViewModel::paintAtFacet(int, int, int, double, double, double,
+                                   int, double, int, int,
+                                   QVector3D, QVector3D)
+{
+  // HAS_LIBSLIC3R off: PaintEngine + SceneRaycaster do not exist. No paint.
+  return false;
+}
+void EditorViewModel::clearPaintOnObject(int)
+{
+  // HAS_LIBSLIC3R off: drop only the Qt data layer (no PaintEngine to clear).
+  m_paintData.clear();
+  emit paintDataChanged();
 }
 #endif
 

@@ -134,6 +134,16 @@ if(OWZX_QML_GUI)
         # exist there.
         src/core/rendering/MeasureEngine.cpp
         src/core/rendering/MeasureEngine.h
+        # Phase 120 (PAINT-01): per-volume TriangleSelector owner + select_patch
+        # driver. Reuses libslic3r's TriangleSelector byte-for-byte (NOT a
+        # reimplementation) -- the engine wraps ctor/select_patch/get_facets/
+        # serialize/deserialize with a per-volume cache fed by
+        # ProjectServiceMock::volumeMeshTriangleMesh (the aliasing shared_ptr
+        # that keeps the TriangleMesh alive for the selector's reference).
+        # #ifdef HAS_LIBSLIC3R -- TriangleSelector / TriangleMesh only exist
+        # there. Pure C++ (no Qt widget dependency) so unit-testable.
+        src/core/rendering/PaintEngine.cpp
+        src/core/rendering/PaintEngine.h
         src/core/model/PartPlate.cpp
         src/core/model/PartPlate.h
         src/core/model/PartPlateList.cpp

@@ -31,6 +31,7 @@ class ConfigViewModel;
 namespace OWzx {
 class MeasureEngine;
 class SceneRaycaster;  // Phase 115 (MEASURE-04): two-stage pick stage-2.
+class PaintEngine;     // Phase 120 (PAINT-01): per-volume TriangleSelector owner.
 } // namespace OWzx
 
 class EditorViewModel final : public QObject
@@ -264,6 +265,32 @@ public:
   Q_INVOKABLE void setTriangleSupportState(int objectIndex, int triangleIndex, int paintState);
   /// 清除所有绘制数据（对齐上游 TriangleSelector reset）
   Q_INVOKABLE void clearAllPaintData();
+  // Phase 120 (PAINT-01 / TS-05): the paint-pick entry point. Mirrors the
+  // upstream GLGizmoPainterBase mouse-down flow:
+  //   1. Stage-1 (RhiViewport::pickSourceObjectAt) already narrowed the scene
+  //      to pickedSourceIndex (cheap ray->AABB prefilter).
+  //   2. Stage-2 (HERE -- SceneRaycaster::hitTest) runs the per-triangle ITS
+  //      raycast over the candidate volume(s) and returns facetIdx + the
+  //      mesh-local hit point (TS-02 meshLocalPosition).
+  //   3. PaintEngine::paintAt drives TriangleSelector::select_patch with a
+  //      cursor built from brushRadius/cursorType (TS-04).
+  //
+  // rayOrigin/rayDir are the world-space pick ray (QVector3D from QML, opaque
+  // -- no ray math in QML). pickedSourceIndex is the stage-1 survivor.
+  // hit{X,Y,Z} are the world-space hit (carried through for back-compat /
+  // future overlay anchor). state is the EnforcerBlockerType int
+  // (0=None,1=Enforcer,2=Blocker, 3..N=ExtruderN for MMU). brushRadius is in
+  // world mm. cursorType is PaintCursorType (0=Circle,1=Sphere).
+  //
+  // Returns true when a facet was hit and the selector was painted.
+  Q_INVOKABLE bool paintAtFacet(int obj, int vol, int facetIdx,
+                                double hitX, double hitY, double hitZ,
+                                int state, double brushRadius, int cursorType,
+                                int pickedSourceIndex,
+                                QVector3D rayOrigin, QVector3D rayDir);
+  /// Phase 120 (PAINT-01): drop all PaintEngine selectors for one object.
+  /// Called on gizmo-exit cleanup (mirrors GLGizmoPainterBase on_exit).
+  Q_INVOKABLE void clearPaintOnObject(int objectIndex);
   int enforcedSupportCount() const;
   int blockedSupportCount() const;
   int totalPaintedTriangleCount() const;
@@ -1283,6 +1310,15 @@ private:
   // uses (ProjectServiceMock::volumeMeshIts, Phase 112). invalidateMeasureEngine
   // drops both caches so a mesh change refreshes them together (pitfall 6/7).
   std::unique_ptr<OWzx::SceneRaycaster> m_sceneRaycaster;
+  // Phase 120 (PAINT-01): per-volume TriangleSelector owner. Lazily built on
+  // the first paintAtFacet call from ProjectServiceMock::volumeMeshTriangleMesh
+  // (TS-01 aliasing shared_ptr -- keeps the TriangleMesh alive for the
+  // selector's lifetime). Reuses m_sceneRaycaster for the stage-2 hit so the
+  // raycaster + paint engine share the same ITS identity + cache invalidation
+  // (invalidateMeasureEngine drops both). The m_paintData QList<ObjectPaintData>
+  // above is kept only as a back-compat enum mirror; PaintEngine is the real
+  // per-volume owner (replaces the flat placeholder, CONTEXT.md gap 3).
+  std::unique_ptr<OWzx::PaintEngine> m_paintEngine;
 #endif
   // Phase 115 (MEASURE-04): the most recently picked feature kind + world
   // position (drives the gizmo overlay highlight). Reset to Undef/origin by

@@ -91,6 +91,12 @@ SceneRaycasterHit SceneRaycaster::hitTest(
       // transform's scale. Degenerate (zero-length) normals are left as-is.
       const double nrmLen = worldNrm.norm();
       best.worldNormal = (nrmLen > 1e-12) ? (worldNrm / nrmLen) : worldNrm;
+      // TS-02 (Phase 120): preserve the mesh-local hit point (Vec3f, raw BVH
+      // intersection precision). Previously discarded here. TriangleSelector::
+      // select_patch needs this as the cursor center (TriangleSelector.hpp:
+      // 306-312) so the paint brush subdivides around the exact hit, not a
+      // world->local round-trip approximation.
+      best.meshLocalPosition = localHit.position;
     }
   }
 

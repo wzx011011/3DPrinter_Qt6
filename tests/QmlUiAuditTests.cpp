@@ -388,6 +388,21 @@ private slots:
   // the ViewModel). Mirrors the Phase 117/118 tick slot pattern (readSource +
   // QVERIFY2 with TICK-04/TICK-05-named messages).
   void tickTypeCoverageAndDragRelocation();
+  // Phase 120-01 (PAINT-01): source-audit lock proving the TriangleSelector
+  // triangle-pick + adaptive-subdivide + paint-state pipeline is ported to the
+  // Qt6 C++ layer via REUSE (libslic3r's TriangleSelector is compiled in and
+  // wrapped by PaintEngine, NOT reimplemented). Locks: (a) ProjectServiceMock
+  // exposes volumeMeshTriangleMesh (TS-01 aliasing shared_ptr); (b)
+  // SceneRaycasterHit carries meshLocalPosition (TS-02 -- the mesh-local hit
+  // select_patch needs); (c) PaintEngine.{h,cpp} exist, reference
+  // Slic3r::TriangleSelector + select_patch (TS-03/TS-04 reuse); (d)
+  // EditorViewModel references PaintEngine + exposes paintAtFacet (TS-05);
+  // (e) NO reimplementation -- PaintEngine.cpp includes TriangleSelector.hpp
+  // (TS-07e). Mirrors the Phase 113 meshAndSceneRaycasterPorted source-audit
+  // pattern (QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2
+  // with PAINT-01-named messages). Source-level only; runs in the regression
+  // ctest.
+  void triangleSelectorEnginePorted();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -5274,6 +5289,138 @@ void QmlUiAuditTests::tickTypeCoverageAndDragRelocation()
            "TICK-04: PreviewLayerRail.qml Add Color Change must call previewVm.addColorChangeAtLayer");
   QVERIFY2(rail.contains(QStringLiteral("addTemplateAtLayer")),
            "TICK-04: PreviewLayerRail.qml Add Template must call previewVm.addTemplateAtLayer");
+}
+
+void QmlUiAuditTests::triangleSelectorEnginePorted()
+{
+  // PAINT-01 / Phase 120-01-03: source-audit lock proving the TriangleSelector
+  // pick + subdivide + paint pipeline is ported via REUSE. TriangleSelector is
+  // ALREADY compiled in (CMakeLists.txt:457-458) -- Phase 120 wraps it in
+  // PaintEngine + bridges the 3 structural gaps (CONTEXT.md). This slot locks
+  // every must_have TS truth at the source level so a future refactor that
+  // drops the accessor, the mesh-local hit field, the PaintEngine wrapper, or
+  // (worst case) hand-rolls a selector fails here. Mirrors the Phase 113
+  // meshAndSceneRaycasterPorted pattern (readSource + QVERIFY2 with PAINT-01-
+  // named messages). Source-level only; runs in the regression ctest.
+
+  const QString projectHeader = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  QVERIFY2(!projectHeader.isEmpty(), "Unable to read ProjectServiceMock.h");
+  const QString projectSource = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  QVERIFY2(!projectSource.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  const QString sceneHeader = readSource(QStringLiteral("src/core/rendering/SceneRaycaster.h"));
+  QVERIFY2(!sceneHeader.isEmpty(), "Unable to read SceneRaycaster.h");
+  const QString paintHeader = readSource(QStringLiteral("src/core/rendering/PaintEngine.h"));
+  QVERIFY2(!paintHeader.isEmpty(), "Unable to read PaintEngine.h");
+  const QString paintSource = readSource(QStringLiteral("src/core/rendering/PaintEngine.cpp"));
+  QVERIFY2(!paintSource.isEmpty(), "Unable to read PaintEngine.cpp");
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  QVERIFY2(!editorSource.isEmpty(), "Unable to read EditorViewModel.cpp");
+  const QString rhiHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  QVERIFY2(!rhiHeader.isEmpty(), "Unable to read RhiViewport.h");
+  const QString rhiSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  QVERIFY2(!rhiSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  const QString cmakeLists = readSource(QStringLiteral("CMakeLists.txt"));
+  QVERIFY2(!cmakeLists.isEmpty(), "Unable to read CMakeLists.txt");
+
+  // TS-01 (a): ProjectServiceMock must declare + implement volumeMeshTriangleMesh
+  // returning shared_ptr<const TriangleMesh> (the aliasing shared_ptr that
+  // keeps the TriangleMesh alive for TriangleSelector's `const TriangleMesh&`
+  // reference ctor).
+  QVERIFY2(projectHeader.contains(QStringLiteral("volumeMeshTriangleMesh")),
+           "PAINT-01/TS-01: ProjectServiceMock.h must declare volumeMeshTriangleMesh");
+  QVERIFY2(projectHeader.contains(QStringLiteral("shared_ptr<const Slic3r::TriangleMesh>")),
+           "PAINT-01/TS-01: volumeMeshTriangleMesh must return shared_ptr<const Slic3r::TriangleMesh>");
+  QVERIFY2(projectSource.contains(QStringLiteral("ProjectServiceMock::volumeMeshTriangleMesh")),
+           "PAINT-01/TS-01: ProjectServiceMock.cpp must implement volumeMeshTriangleMesh");
+  // The TriangleMesh source is mesh_ptr() (Model.hpp:856), NOT a fresh copy.
+  QVERIFY2(projectSource.contains(QStringLiteral("mesh_ptr()")),
+           "PAINT-01/TS-01: volumeMeshTriangleMesh must reuse ModelVolume::mesh_ptr() (shallow-share, not a copy)");
+
+  // TS-02 (b): SceneRaycasterHit must carry meshLocalPosition (the mesh-local
+  // hit TriangleSelector::select_patch needs as the cursor center).
+  QVERIFY2(sceneHeader.contains(QStringLiteral("meshLocalPosition")),
+           "PAINT-01/TS-02: SceneRaycasterHit must carry meshLocalPosition");
+  QVERIFY2(sceneHeader.contains(QStringLiteral("Slic3r::Vec3f meshLocalPosition")),
+           "PAINT-01/TS-02: meshLocalPosition must be a Vec3f (mesh-local float coords)");
+
+  // TS-03 (c): PaintEngine.h must exist and reference Slic3r::TriangleSelector
+  // (reuse, not reinvent). It must hold unique_ptr<TriangleSelector> per
+  // volume (mirror upstream GLGizmoPainterBase::m_triangle_selectors).
+  QVERIFY2(paintHeader.contains(QStringLiteral("Slic3r::TriangleSelector")),
+           "PAINT-01/TS-03: PaintEngine.h must reference Slic3r::TriangleSelector (reuse, not reinvent)");
+  QVERIFY2(paintHeader.contains(QStringLiteral("unique_ptr<Slic3r::TriangleSelector>")),
+           "PAINT-01/TS-03: PaintEngine must own unique_ptr<Slic3r::TriangleSelector> per volume");
+  QVERIFY2(paintHeader.contains(QStringLiteral("class PaintEngine")),
+           "PAINT-01/TS-03: PaintEngine.h must declare the PaintEngine class");
+
+  // TS-03 API surface: ensureSelector / paintAt / getFacets / clearObject /
+  // serialize / deserialize must all be declared.
+  QVERIFY2(paintHeader.contains(QStringLiteral("ensureSelector")),
+           "PAINT-01/TS-03: PaintEngine must expose ensureSelector(obj, vol, mesh)");
+  QVERIFY2(paintHeader.contains(QStringLiteral("paintAt")),
+           "PAINT-01/TS-04: PaintEngine must expose paintAt(...)");
+  QVERIFY2(paintHeader.contains(QStringLiteral("getFacets")),
+           "PAINT-01/TS-03: PaintEngine must expose getFacets(obj, vol, state)");
+  QVERIFY2(paintHeader.contains(QStringLiteral("clearObject")),
+           "PAINT-01/TS-03: PaintEngine must expose clearObject(obj)");
+
+  // TS-04 (c): PaintEngine.cpp must drive select_patch (the upstream paint
+  // entry, TriangleSelector.hpp:306-312).
+  QVERIFY2(paintSource.contains(QStringLiteral("select_patch")),
+           "PAINT-01/TS-04: PaintEngine.cpp must call TriangleSelector::select_patch");
+
+  // TS-07 (e): NO reimplementation. PaintEngine.cpp must INCLUDE the upstream
+  // TriangleSelector.hpp (reuse byte-for-byte), not hand-roll a selector. A
+  // grep for a class TriangleSelector definition here MUST return zero.
+  QVERIFY2(paintSource.contains(QStringLiteral("<libslic3r/TriangleSelector.hpp>")),
+           "PAINT-01/TS-07: PaintEngine.cpp must include <libslic3r/TriangleSelector.hpp> (reuse, not reinvent)");
+  QVERIFY2(!paintSource.contains(QStringLiteral("class TriangleSelector")),
+           "PAINT-01/TS-07: PaintEngine.cpp must NOT redefine TriangleSelector (reuse the libslic3r class)");
+
+  // TS-04 (c): PaintEngine.cpp must build the Cursor via cursor_factory (the
+  // upstream Sphere/Circle factory, TriangleSelector.hpp:114/123).
+  QVERIFY2(paintSource.contains(QStringLiteral("cursor_factory")),
+           "PAINT-01/TS-04: PaintEngine.cpp must build the Cursor via cursor_factory (reuse the upstream factory)");
+
+  // TS-05 (d): EditorViewModel must reference PaintEngine + expose the
+  // paintAtFacet Q_INVOKABLE entry.
+  QVERIFY2(editorHeader.contains(QStringLiteral("PaintEngine")),
+           "PAINT-01/TS-05: EditorViewModel.h must reference PaintEngine");
+  QVERIFY2(editorHeader.contains(QStringLiteral("paintAtFacet")),
+           "PAINT-01/TS-05: EditorViewModel.h must declare the paintAtFacet Q_INVOKABLE");
+  QVERIFY2(editorSource.contains(QStringLiteral("EditorViewModel::paintAtFacet")),
+           "PAINT-01/TS-05: EditorViewModel.cpp must implement paintAtFacet");
+  QVERIFY2(editorSource.contains(QStringLiteral("PaintEngine.h")),
+           "PAINT-01/TS-05: EditorViewModel.cpp must include PaintEngine.h");
+  // setTriangleSupportState is kept as a thin alias (back-compat with the
+  // Qt data layer). It must still exist.
+  QVERIFY2(editorHeader.contains(QStringLiteral("setTriangleSupportState")),
+           "PAINT-01/TS-05: EditorViewModel.h must keep setTriangleSupportState as a back-compat alias");
+
+  // TS-06: RhiViewport must emit paintPickRequested + expose
+  // emitPaintPickIfActive gated on the three paint gizmos.
+  QVERIFY2(rhiHeader.contains(QStringLiteral("paintPickRequested")),
+           "PAINT-01/TS-06: RhiViewport.h must declare the paintPickRequested signal");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("emitPaintPickIfActive")),
+           "PAINT-01/TS-06: RhiViewport.h must declare emitPaintPickIfActive");
+  QVERIFY2(rhiSource.contains(QStringLiteral("void RhiViewport::emitPaintPickIfActive")),
+           "PAINT-01/TS-06: RhiViewport.cpp must implement emitPaintPickIfActive");
+  QVERIFY2(rhiSource.contains(QStringLiteral("GizmoSupportPaint")),
+           "PAINT-01/TS-06: emitPaintPickIfActive must gate on GizmoSupportPaint");
+  QVERIFY2(rhiSource.contains(QStringLiteral("GizmoSeamPaint")),
+           "PAINT-01/TS-06: emitPaintPickIfActive must gate on GizmoSeamPaint");
+  QVERIFY2(rhiSource.contains(QStringLiteral("GizmoMmuSegmentation")),
+           "PAINT-01/TS-06: emitPaintPickIfActive must gate on GizmoMmuSegmentation");
+
+  // CMake registration (mirrors MR-05): PaintEngine.{cpp,h} must be in the
+  // owzx_app_core target source list. A drop silently leaves the class
+  // unbuilt.
+  QVERIFY2(cmakeLists.contains(QStringLiteral("src/core/rendering/PaintEngine.cpp")),
+           "PAINT-01: CMakeLists.txt must register PaintEngine.cpp in owzx_app_core");
+  QVERIFY2(cmakeLists.contains(QStringLiteral("src/core/rendering/PaintEngine.h")),
+           "PAINT-01: CMakeLists.txt must register PaintEngine.h in owzx_app_core");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

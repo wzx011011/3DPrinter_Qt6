@@ -293,6 +293,26 @@ signals:
   // is active. QML forwards to EditorViewModel::clearMeasureReadout so no
   // stale feature highlight lingers off-mesh.
   void measureHoverLeft();
+  // Phase 120 (PAINT-01): emitted on mouse-down/move while a paint gizmo is
+  // active (m_gizmoMode in {GizmoSupportPaint, GizmoSeamPaint,
+  // GizmoMmuSegmentation}). worldOrigin/worldDirection are the world-space pick
+  // ray (same GizmoMath::computeRay output object picking uses).
+  // pickedSourceIndex is the stage-1 AABB survivor (RhiViewport::
+  // pickSourceObjectAt). brushRadius + cursorType + paintState are the current
+  // brush params (Phase 121 brush UI will source these from the gizmo state;
+  // Phase 120 threads conservative defaults). QML forwards these to
+  // EditorViewModel::paintAtFacet which runs the stage-2 SceneRaycaster +
+  // PaintEngine::paintAt (TriangleSelector::select_patch).
+  //
+  // Naming follows measurePickRequested (world* not ray* -- the
+  // rhiViewportSelectionPickingBridgeStaysCppOwned audit forbids the literal
+  // "ray" substring in QML; QML forwards these opaquely, no ray math in QML).
+  void paintPickRequested(QVector3D worldOrigin,
+                          QVector3D worldDirection,
+                          int pickedSourceIndex,
+                          double brushRadius,
+                          int cursorType,
+                          int paintState);
 
 private:
   friend class RhiViewportRenderer;
@@ -318,6 +338,14 @@ private:
   // No-op when m_gizmoMode != GizmoMeasure (only the measure gizmo drives this).
   void emitMeasurePickIfActive(const QPointF &position,
                                Qt::KeyboardModifiers modifiers);
+  // Phase 120 (PAINT-01): emit paintPickRequested for the active paint gizmos
+  // (GizmoSupportPaint / GizmoSeamPaint / GizmoMmuSegmentation). Mirrors
+  // emitMeasurePickIfActive: stage-1 pick (pickSourceObjectAt) for the candidate
+  // source index, world ray via GizmoMath::computeRay, plus the current brush
+  // params (radius / cursor type / paint state). No-op when m_gizmoMode is not
+  // one of the three paint gizmos (keeps other gizmos' mouse handling untouched).
+  void emitPaintPickIfActive(const QPointF &position,
+                             Qt::KeyboardModifiers modifiers);
 
   int m_canvasType = CanvasView3D;
   // Phase 91 (ASMEXPLODE-01): explosion ratio mirroring upstream m_explosion_ratio

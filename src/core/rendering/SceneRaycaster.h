@@ -61,6 +61,16 @@ namespace OWzx {
 // MR-04: object index, volume index, triangle index, world-space hit
 // position, world-space normal -- sufficient for the measure + snap
 // downstream phases.
+//
+// TS-02 (Phase 120 / PAINT-01): meshLocalPosition carries the mesh-local hit
+// point (the raw MeshRaycasterHit.position, a Vec3f in mesh coordinates).
+// TriangleSelector::select_patch needs the mesh-local hit point
+// (TriangleSelector.hpp:306-312 -- facet_start + cursor center are mesh-local)
+// to drive the brush subdivision. Without this field the paint path would
+// have to re-derive the local hit from worldPosition + the inverse transform,
+// which loses the float precision of the BVH intersection. Phase 120 fills
+// this from the winning MeshRaycasterHit (previously discarded at
+// SceneRaycaster.cpp:85-89).
 struct SceneRaycasterHit
 {
   bool          hit         = false;
@@ -69,6 +79,7 @@ struct SceneRaycasterHit
   std::size_t   facetIdx    = static_cast<std::size_t>(-1); // ITS triangle index
   Slic3r::Vec3d worldPosition{0.0, 0.0, 0.0}; // world-space intersection
   Slic3r::Vec3d worldNormal{0.0, 0.0, 0.0};   // world-space face normal
+  Slic3r::Vec3f meshLocalPosition{0.f, 0.f, 0.f}; // TS-02: mesh-local hit (Vec3f)
 };
 
 // A single candidate volume produced by stage 1 (the coarse AABB pick).

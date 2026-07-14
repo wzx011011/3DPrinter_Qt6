@@ -21,6 +21,9 @@
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/PrintConfig.hpp>
+#include <libslic3r/TriangleMesh.hpp>
+#include <libslic3r/TriangleSelector.hpp>
+#include "core/rendering/PaintEngine.h"
 #endif
 
 #include "core/services/AppSettingsService.h"
@@ -333,6 +336,17 @@ private slots:
   // load + QTRY_VERIFY_WITH_TIMEOUT(loadFinished)). Locks the cross-workstream
   // accessor that Phase 113/114 + AssembleViewDataPool consume.
   void perVolumeItsAccessorReturnsValidMeshAndNullForInvalidIndices();
+  // Phase 120-01 (PAINT-01): PaintEngine + applyPaintToSelector smoke test.
+  // Synthesizes a small TriangleMesh (one triangle in the XY plane), builds a
+  // TriangleSelector over it, and drives the pure applyPaintToSelector helper
+  // to stamp facet 0 with Enforcer. Asserts (a) get_facets returns a non-empty
+  // ITS for the Enforcer state after the paint, (b) has_facets flips true,
+  // (c) the SAME selector returns an empty ITS + has_facets==false for the
+  // Blocker state (no Blocker was painted). This is the TS-08 unit-testable
+  // boundary: the cursor + select_patch invocation runs WITHOUT a Model or
+  // renderer. Mirrors the Phase 114 MeasureEngine readback pattern (synthetic
+  // input + pure helper assertion).
+  void paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt();
 
 private:
   bool hasLibslic3r() const;
@@ -4444,6 +4458,115 @@ void ViewModelSmokeTests::perVolumeItsAccessorReturnsValidMeshAndNullForInvalidI
   QVERIFY2(project.volumeMeshIts(0, project.objectVolumeCount(0) + 100) == nullptr,
            "MEASURE-01/MI-05: volumeMeshIts(0,out-of-range-volume) must return nullptr");
 }
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt()
+{
+  // PAINT-01 / Phase 120-01-03 (TS-08): exercise the pure
+  // OWzx::applyPaintToSelector helper with a synthesized mesh. This is the
+  // unit-testable boundary -- no Model, no renderer, no SceneRaycaster. The
+  // helper drives TriangleSelector::select_patch via cursor_factory exactly as
+  // PaintEngine::paintAt does in production.
+  //
+  // Synthesize a 2-triangle square in the XY plane (a unit square split into
+  // two triangles). The cursor is a Sphere centered at the centroid of facet 0
+  // with a radius large enough to cover the whole facet, so select_patch
+  // stamps facet 0 with Enforcer.
+
+  // Build the ITS: 4 vertices of a unit square + 2 triangles.
+  indexed_triangle_set its;
+  its.vertices = {
+    Slic3r::Vec3f(0.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 1.f, 0.f),
+    Slic3r::Vec3f(0.f, 1.f, 0.f)
+  };
+  its.indices = {
+    Slic3r::Vec3i32(0, 1, 2),  // facet 0: lower-right triangle
+    Slic3r::Vec3i32(0, 2, 3)   // facet 1: upper-left triangle
+  };
+
+  // Build a TriangleMesh + a TriangleSelector over it (the SAME path
+  // PaintEngine::ensureSelector takes in production).
+  Slic3r::TriangleMesh mesh(its);
+  Slic3r::TriangleSelector selector(mesh);
+
+  // Sanity: the selector sees both facets before any paint.
+  QVERIFY2(selector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER) == 0,
+           "PAINT-01/TS-08: no facet should be Enforcer before any paint");
+
+  // Facet 0 centroid (mesh-local): the cursor center.
+  const Slic3r::Vec3f facet0Center = (its.vertices[0] + its.vertices[1] +
+                                      its.vertices[2]) / 3.f;
+  // Identity transform (mesh == world for this synthetic test).
+  const Slic3r::Transform3d trafo = Slic3r::Transform3d::Identity();
+
+  // Drive the pure helper: Sphere cursor, Enforcer state, facet 0. Radius 2.0
+  // covers the whole unit facet (the facet is ~0.43 across).
+  OWzx::applyPaintToSelector(selector, /*facetIdx=*/0, facet0Center,
+                             /*brushRadius=*/2.0f,
+                             OWzx::PaintCursorType::Sphere,
+                             Slic3r::EnforcerBlockerType::ENFORCER, trafo,
+                             /*cameraPosMeshLocal=*/facet0Center);
+
+  // (a) has_facets(Enforcer) must now be true.
+  QVERIFY2(selector.has_facets(Slic3r::EnforcerBlockerType::ENFORCER),
+           "PAINT-01/TS-08: has_facets(Enforcer) must be true after painting facet 0");
+  QVERIFY2(selector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER) > 0,
+           "PAINT-01/TS-08: num_facets(Enforcer) must be > 0 after painting facet 0");
+
+  // (b) get_facets(Enforcer) must return a non-empty ITS.
+  indexed_triangle_set enforcerIts =
+      selector.get_facets(Slic3r::EnforcerBlockerType::ENFORCER);
+  QVERIFY2(!enforcerIts.indices.empty(),
+           "PAINT-01/TS-08: get_facets(Enforcer) must return a non-empty ITS after painting");
+
+  // (c) Blocker was never painted: has_facets(Blocker) is false + get_facets
+  // returns an empty ITS.
+  QVERIFY2(!selector.has_facets(Slic3r::EnforcerBlockerType::BLOCKER),
+           "PAINT-01/TS-08: has_facets(Blocker) must be false (no Blocker painted)");
+  indexed_triangle_set blockerIts =
+      selector.get_facets(Slic3r::EnforcerBlockerType::BLOCKER);
+  QVERIFY2(blockerIts.indices.empty(),
+           "PAINT-01/TS-08: get_facets(Blocker) must return an empty ITS (no Blocker painted)");
+
+  // (d) Exercise the PaintEngine wrapper end-to-end with the SAME synthetic
+  // mesh: ensureSelector builds from a shared_ptr, paintAt drives select_patch,
+  // getFacets returns a shared_ptr<ITS>. This locks the TS-03 cache +
+  // shared_ptr ownership (the TriangleMesh must outlive the selector).
+  auto meshPtr = std::make_shared<Slic3r::TriangleMesh>(its);
+  OWzx::PaintEngine engine([meshPtr](int, int) { return meshPtr; });
+  QVERIFY2(engine.cachedSelectorCount() == 0,
+           "PAINT-01/TS-03: PaintEngine cache must start empty");
+  const bool painted = engine.paintAt(
+      /*obj=*/0, /*vol=*/0, /*facetIdx=*/0, facet0Center,
+      /*brushRadius=*/2.0f, OWzx::PaintCursorType::Sphere,
+      Slic3r::EnforcerBlockerType::ENFORCER, trafo);
+  QVERIFY2(painted,
+           "PAINT-01/TS-04: paintAt must return true when the selector exists");
+  QVERIFY2(engine.cachedSelectorCount() == 1,
+           "PAINT-01/TS-03: PaintEngine cache must hold 1 selector after paintAt");
+  QVERIFY2(engine.hasFacets(0, 0, Slic3r::EnforcerBlockerType::ENFORCER),
+           "PAINT-01/TS-04: PaintEngine.hasFacets(Enforcer) must be true after paintAt");
+  auto paintedIts = engine.getFacets(0, 0, Slic3r::EnforcerBlockerType::ENFORCER);
+  QVERIFY2(paintedIts != nullptr,
+           "PAINT-01/TS-03: PaintEngine.getFacets must return a non-null shared_ptr<ITS>");
+  QVERIFY2(!paintedIts->indices.empty(),
+           "PAINT-01/TS-03: PaintEngine.getFacets(Enforcer) must return a non-empty ITS");
+
+  // (e) clearObject drops the cache entry (gizmo-exit cleanup path).
+  engine.clearObject(0);
+  QVERIFY2(engine.cachedSelectorCount() == 0,
+           "PAINT-01/TS-03: PaintEngine cache must be empty after clearObject");
+  QVERIFY2(!engine.hasFacets(0, 0, Slic3r::EnforcerBlockerType::ENFORCER),
+           "PAINT-01/TS-03: PaintEngine.hasFacets must be false after clearObject");
+}
+#else
+void ViewModelSmokeTests::paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt()
+{
+  QSKIP("PaintEngine smoke test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
 
 QTEST_MAIN(ViewModelSmokeTests)
 #include "ViewModelSmokeTests.moc"

@@ -575,6 +575,19 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
     return;
   }
 
+  // Phase 120 (PAINT-01): a paint-gizmo left click drives the TriangleSelector
+  // brush. Emit paintPickRequested so the ViewModel runs the stage-2 pick +
+  // PaintEngine::paintAt (select_patch). Mirrors upstream
+  // GLGizmoPainterBase gizmo_event handling LeftDown.
+  if (event->button() == Qt::LeftButton &&
+      (m_gizmoMode == GizmoSupportPaint ||
+       m_gizmoMode == GizmoSeamPaint ||
+       m_gizmoMode == GizmoMmuSegmentation)) {
+    emitPaintPickIfActive(event->position(), event->modifiers());
+    event->accept();
+    return;
+  }
+
   // Phase 69/70: active gizmo hit tests take priority over object picking.
   if (event->button() == Qt::LeftButton &&
       (m_gizmoMode == GizmoMove || m_gizmoMode == GizmoRotate || m_gizmoMode == GizmoScale) &&
@@ -620,6 +633,19 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
 
 void RhiViewport::mouseMoveEvent(QMouseEvent *event)
 {
+  // Phase 120 (PAINT-01): continuous-paint-on-drag. While a paint gizmo is
+  // active and the left button is held, every mouse-move drives the
+  // TriangleSelector brush (mirrors upstream GLGizmoPainterBase on_mouse
+  // move-while-LeftDown). mousePressEvent already accept()-ed the initial
+  // click for paint gizmos, so m_gizmoDragging stays false here.
+  if (m_dragButton == Qt::LeftButton &&
+      (m_gizmoMode == GizmoSupportPaint ||
+       m_gizmoMode == GizmoSeamPaint ||
+       m_gizmoMode == GizmoMmuSegmentation)) {
+    emitPaintPickIfActive(event->position(), event->modifiers());
+    event->accept();
+    return;
+  }
   // Phase 69: active gizmo drag translates the selected object along the
   // picked axis. Phase 70 extends the same consumed drag path to rotate/scale.
   if (m_gizmoDragging && m_dragButton == Qt::LeftButton)
@@ -962,4 +988,57 @@ void RhiViewport::emitMeasurePickIfActive(const QPointF &position,
   // rayOrigin/rayDirection) to keep the literal "ray" out of PreparePage.qml
   // (the rhiViewportSelectionPickingBridgeStaysCppOwned audit forbids it).
   emit measurePickRequested(rayOrigin, rayDirection, pickedSourceIndex, shiftHeld);
+}
+
+// ===========================================================================
+// Phase 120 (PAINT-01): paint-gizmo pick wiring
+// ===========================================================================
+void RhiViewport::emitPaintPickIfActive(const QPointF &position,
+                                        Qt::KeyboardModifiers modifiers)
+{
+  // Only the three paint gizmos drive this path. Other gizmos (move/rotate/
+  // scale/measure/cut/flatten/...) keep their existing mouse handling.
+  // TS-06: gate on m_gizmoMode in {GizmoSupportPaint, GizmoSeamPaint,
+  // GizmoMmuSegmentation}.
+  const bool isPaintGizmo =
+      (m_gizmoMode == GizmoSupportPaint ||
+       m_gizmoMode == GizmoSeamPaint ||
+       m_gizmoMode == GizmoMmuSegmentation);
+  if (!isPaintGizmo)
+    return;
+
+  // Stage-1: cheap ray->AABB prefilter (same pickSourceObjectAt the measure
+  // path uses). Returns -1 when the ray misses every object's AABB.
+  const int pickedSourceIndex = pickSourceObjectAt(position);
+  if (pickedSourceIndex < 0)
+    return;
+
+  // Build the world-space pick ray (same GizmoMath::computeRay the object
+  // picking + measure pick already use). The ViewModel feeds this to
+  // SceneRaycaster::hitTest (Phase 113 stage-2) which resolves the facet +
+  // mesh-local hit that PaintEngine::paintAt needs.
+  const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+  if (viewSize.width() <= 1 || viewSize.height() <= 1)
+    return;
+  const float aspect = float(viewSize.width()) / float(viewSize.height());
+  auto [rayOrigin, rayDirection] = GizmoMath::computeRay(
+      float(position.x()), float(position.y()),
+      viewSize,
+      m_camera.projMatrix(aspect), m_camera.viewMatrix());
+
+  // Phase 120 conservative brush defaults. Phase 121 (PAINT-03 brush UI) will
+  // source these from real gizmo state (size slider, type toggle, tool). For
+  // now: Sphere cursor (the upstream painting default for organic brushes),
+  // 2.0 mm radius, Enforcer state. Shift toggles to Blocker (mirrors upstream
+  // Shift-to-erase convention in GLGizmoPainterBase).
+  const double brushRadius = 2.0;
+  const int    cursorType  = 1;  // PaintCursorType::Sphere
+  const bool   shiftHeld   = (modifiers & Qt::ShiftModifier) != 0;
+  // EnforcerBlockerType: 1=Enforcer, 2=Blocker (TriangleSelector.hpp:13-38).
+  const int    paintState  = shiftHeld ? 2 : 1;
+
+  // Forward to QML opaquely (no ray math in QML -- same contract as
+  // measurePickRequested). QML connects this to EditorViewModel::paintAtFacet.
+  emit paintPickRequested(rayOrigin, rayDirection, pickedSourceIndex,
+                          brushRadius, cursorType, paintState);
 }

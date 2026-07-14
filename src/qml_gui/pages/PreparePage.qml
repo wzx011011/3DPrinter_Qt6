@@ -1750,6 +1750,14 @@ Item {
                         if (root.editorVm)
                             root.editorVm.clearMeasureReadout()
                     }
+                    // Phase 120 (PAINT-01): forward the paint-gizmo pick (brush
+                    // down/drag) to the ViewModel. Same opaque-forward contract
+                    // as onMeasurePickRequested -- no picking or geometry-hit
+                    // logic in QML. Parameter names mirror the C++ signal.
+                    onPaintPickRequested: function(worldOrigin, worldDirection, pickedSourceIndex, brushRadius, cursorType, paintState) {
+                        if (root.editorVm)
+                            root.editorVm.paintAtFacet(-1, -1, -1, 0.0, 0.0, 0.0, paintState, brushRadius, cursorType, pickedSourceIndex, worldOrigin, worldDirection)
+                    }
                     cutAxis: root.editorVm ? root.editorVm.cutAxis : 2
                     cutPosition: root.editorVm ? root.editorVm.cutPosition : 0.0
 
