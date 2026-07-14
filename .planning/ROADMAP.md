@@ -43,7 +43,7 @@
 
 - [x] Phase 117: IMSlider Integration And Tick Rendering (WS1) (completed 2026-07-15)
 - [x] Phase 118: custom_gcode_per_print_z Writeback And Re-Slice Loop (WS1) (completed 2026-07-15)
-- [ ] Phase 119: Tick Type Coverage And Drag Relocation (WS1)
+- [x] Phase 119: Tick Type Coverage And Drag Relocation (WS1) (completed 2026-07-15)
 - [ ] Phase 120: TriangleSelector Engine Port (WS2)
 - [ ] Phase 121: Painted-Facet Overlay Render And Brush Interaction (WS2)
 - [ ] Phase 122: Support And Seam Paint End-To-End (WS2)
