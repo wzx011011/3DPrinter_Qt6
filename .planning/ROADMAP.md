@@ -49,7 +49,7 @@
 - [ ] Phase 122: Support And Seam Paint End-To-End (WS2)
 - [ ] Phase 123: MMU Segmentation Paint End-To-End (WS2)
 - [x] Phase 124: Software-Sliceable Calibration Mode Completion (WS3) (completed 2026-07-15)
-- [ ] Phase 125: Calibration Range Input UI And Real K-Value Readback (WS3)
+- [x] Phase 125: Calibration Range Input UI And Real K-Value Readback (WS3) (completed 2026-07-15)
 - [x] Phase 126: Legacy Dead-Code Page Cleanup (WS4) (completed 2026-07-15)
 - [ ] Phase 127: i18n Translation Coverage And VALIDATION.md Backfill (WS4)
 - [ ] Phase 128: v4.6 Verification And Cross-Workstream Regression

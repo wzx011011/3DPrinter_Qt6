@@ -38,7 +38,7 @@ Last activity: 2026-07-14 — Milestone v4.6 started
 | 122 | Support And Seam Paint End-To-End | Not started | PAINT-04 |
 | 123 | MMU Segmentation Paint End-To-End | Not started | PAINT-05 |
 | 124 | Software-Sliceable Calibration Mode Completion | Complete | CALIB-01 |
-| 125 | Calibration Range Input UI And Real K-Value Readback | Not started | CALIB-02, CALIB-03 |
+| 125 | Calibration Range Input UI And Real K-Value Readback | Complete | CALIB-02, CALIB-03 |
 | 126 | Legacy Dead-Code Page Cleanup | Complete | CLEAN-01 |
 | 127 | i18n Translation Coverage And VALIDATION.md Backfill | Not started | I18N-01, PROC-01 |
 | 128 | v4.6 Verification And Cross-Workstream Regression | Not started | REGRESS-01 |
