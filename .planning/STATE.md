@@ -31,7 +31,7 @@ Last activity: 2026-07-14 — Milestone v4.6 started
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
 | 117 | IMSlider Integration And Tick Rendering | Complete | TICK-01 |
-| 118 | custom_gcode_per_print_z Writeback And Re-Slice Loop | Not started | TICK-02, TICK-03 |
+| 118 | custom_gcode_per_print_z Writeback And Re-Slice Loop | Complete | TICK-02, TICK-03 |
 | 119 | Tick Type Coverage And Drag Relocation | Not started | TICK-04, TICK-05 |
 | 120 | TriangleSelector Engine Port | Not started | PAINT-01 |
 | 121 | Painted-Facet Overlay Render And Brush Interaction | Not started | PAINT-02, PAINT-03 |
