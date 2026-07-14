@@ -1,139 +1,102 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.5
-milestone_name: Backlog Closure
-status: completed
-last_updated: "2026-07-13T05:17:26.367Z"
-last_activity: 2026-07-13 — Milestone v4.5 completed and archived
+milestone: v4.6
+milestone_name: Core Feature Completion Sweep
+status: planning
+last_updated: "2026-07-14T16:10:48.687Z"
+last_activity: 2026-07-14
 progress:
-  total_phases: 14
-  completed_phases: 14
-  total_plans: 14
-  completed_plans: 14
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
-**Milestone:** v4.5 - Backlog Closure (Mega-Milestone)
-**Status:** v4.5 milestone complete
-**Next step:** Plan Phase 103 (CLI Fixture Readiness Gate) with `/gsd-plan-phase 103`.
+**Milestone:** v4.6 - Core Feature Completion Sweep (Mega-Milestone)
+**Status:** Defining requirements
+**Next step:** Define v4.6 requirements, then roadmap, then `/gsd:plan-phase [N]`.
 
 ## Current Position
 
-Phase: Milestone v4.5 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-13 — Milestone v4.5 completed and archived
+Status: Defining requirements
+Last activity: 2026-07-14 — Milestone v4.6 started
 
-## Current Milestone (v4.5)
+## Current Milestone (v4.6)
+
+Roadmap phase table is filled by the roadmapper after requirements are defined.
+
+**Goal:** In one cycle, lift the four highest-value main-flow gaps from "skeleton-level" to "end-to-end usable": Preview TickCode/IMSlider closed loop, Gizmo triangle-paint engine, Calibration mode completion, and tech-debt convergence.
+
+**Workstream map (phases assigned by roadmapper):**
+
+| WS | Workstream | Priority | Notes |
+|---|---|---|---|
+| 1 | Preview TickCode/IMSlider closed loop | P1 | LayerSlider.qml skeleton exists (orphaned); zero `custom_gcode_per_print_z` refs in tree; read-side parse exists. Highest ROI. |
+| 2 | Gizmo triangle-paint engine (Support/Seam/MMU) | P1 | TriangleSelector pick + subdivide + paint-state + overlay missing; enums/buttons/panels already exist. Unblocks Hollow/FaceDetector future. |
+| 3 | Calibration mode completion | P2 | Software-sliceable modes only (3/9 real today); range input UI + K-value readback. Hardware modes out of scope. |
+| 4 | Tech-debt convergence | P2/P3 | i18n (non-en ~0%), missing VALIDATION.md, legacy dead-code pages. |
+
+## Last Completed Milestone: v4.5 Backlog Closure (Mega-Milestone)
 
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
-| 103 | CLI Fixture Readiness Gate | Not started | FIXTURE-02 |
-| 104 | CLI Fixture Recipes And Multi-Material Model | Not started | FIXTURE-01, FIXTURE-03, FIXTURE-04 |
-| 105 | D3D12 Debug Layer Wiring | Not started | D3D12-01 |
-| 106 | D3D12 Crash Root-Cause And Backend Readiness (time-boxed) | Not started | D3D12-02, D3D12-03 |
-| 107 | Filament-Map Mode Enum Widening And 3MF Migration | Not started | FMAP-02 |
-| 108 | Filament-Map Auto Recommendation Readback | Not started | FMAP-01 |
-| 109 | Option B Wipe-Tower Mesh Readback And Real Rendering | Not started | WTMESH-01, WTMESH-02, WTMESH-03 |
-| 110 | Filament-Map Popup UI And Mode Surfacing | Not started | FMAP-03 |
-| 111 | Filament-Map Save-Reload Round-Trip | Not started | FMAP-04 |
-| 112 | Per-Volume ITS Accessor And Mesh Cache | Not started | MEASURE-01 |
-| 113 | Scene And Mesh Raycaster Port | Not started | MEASURE-02 |
-| 114 | Measure Engine Instantiation And Feature Readouts | Not started | MEASURE-03 |
-| 115 | GLGizmoMeasure Snap UX And Feature Picking | Not started | MEASURE-04 |
-| 116 | v4.5 Verification And Cross-Workstream Regression | Not started | WTMESH-04, MEASURE-05 |
-
-**Coverage:** 20/20 active requirements mapped to exactly one phase. MEASURE-06 (Assembly-mode transformation actions) deferred — not mapped.
-
-## Last Completed Milestone: v4.4 Wipe-Tower Geometry Readback And Real Rendering
-
-| Phase | Name | Status | Requirements |
-|---|---|---|---|
-| 99 | Wipe-Tower Geometry Gap Audit | Complete | WTAUDIT-01, WTAUDIT-02 |
-| 100 | Wipe-Tower Geometry Readback | Complete | WTREAD-01, WTREAD-02 |
-| 101 | Wipe-Tower Real Rendering Upgrade | Complete | WTRENDER-01, WTRENDER-02 |
-| 102 | Wipe-Tower Verification And Regression | Complete | WTVERIFY-01, WTVERIFY-02 |
+| 103 | CLI Fixture Readiness Gate | Complete | FIXTURE-02 |
+| 104 | CLI Fixture Recipes And Multi-Material Model | Complete | FIXTURE-01, FIXTURE-03, FIXTURE-04 |
+| 105 | D3D12 Debug Layer Wiring | Complete | D3D12-01 |
+| 106 | D3D12 Crash Root-Cause And Backend Readiness (time-boxed) | Complete | D3D12-02, D3D12-03 |
+| 107 | Filament-Map Mode Enum Widening And 3MF Migration | Complete | FMAP-02 |
+| 108 | Filament-Map Auto Recommendation Readback | Complete | FMAP-01 |
+| 109 | Option B Wipe-Tower Mesh Readback And Real Rendering | Complete | WTMESH-01, WTMESH-02, WTMESH-03 |
+| 110 | Filament-Map Popup UI And Mode Surfacing | Complete | FMAP-03 |
+| 111 | Filament-Map Save-Reload Round-Trip | Complete | FMAP-04 |
+| 112 | Per-Volume ITS Accessor And Mesh Cache | Complete | MEASURE-01 |
+| 113 | Scene And Mesh Raycaster Port | Complete | MEASURE-02 |
+| 114 | Measure Engine Instantiation And Feature Readouts | Complete | MEASURE-03 |
+| 115 | GLGizmoMeasure Snap UX And Feature Picking | Complete | MEASURE-04 |
+| 116 | v4.5 Verification And Cross-Workstream Regression | Complete | WTMESH-04, MEASURE-05 |
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-07-12)
-See: `.planning/ROADMAP.md` (v4.5 roadmap — 14 phases, 103-116)
-See: `.planning/REQUIREMENTS.md` (20 active v4.5 requirements + 1 deferred)
+See: `.planning/PROJECT.md` (updated 2026-07-14)
+See: `.planning/ROADMAP.md` (v4.4-era; will be rewritten for v4.6 by roadmapper)
+See: `.planning/REQUIREMENTS.md` (will be rewritten for v4.6)
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-**Current focus:** v4.5 — backlog closure across 5 workstreams (auto filament-map, Option B wipe-tower mesh, CLI fixtures, D3D12 root cause, GLGizmoMeasure engine).
+**Current focus:** v4.6 — core feature completion across 4 workstreams (Preview TickCode loop, Gizmo paint engine, Calibration modes, tech-debt convergence).
 
-## Milestone Context (v4.5)
+## Out of Scope for v4.6
 
-**Goal:** Clear the deferred backlog in one cycle across 5 workstreams, extending v4.4's slice/UI work and unblocking long-deferred items.
-
-**Workstream map:**
-
-| WS | Workstream | Phases | Priority | Notes |
-|---|---|---|---|---|
-| 1 | Auto filament-map recommendation | 107, 108, 110, 111 | P1 | Enum widening BEFORE readback (Pitfall 2); round-trip ships last |
-| 2 | Option B real wipe-tower mesh | 109, 116 (regression) | P1 | Re-opens Phase 99 Frozen Decision 2; Option A fallback preserved (Pitfall 3) |
-| 3 | CLI fixtures + argv GUI loading | 103, 104 | P1 | Cheapest unblocker; argv plumbing already exists (FIXTURE-02 gate is first) |
-| 4 | D3D12 crash root cause + backend readiness | 105, 106 | P2/P3 | Time-boxed investigation; may not produce a clean feature; default promotion out of scope |
-| 5 | Full GLGizmoMeasure engine + clipper | 112, 113, 114, 115, 116 | P2 | Per-volume ITS unblocks BOTH raycaster + clipper (Pitfall 6) |
-
-**Key research findings (from `.planning/research/SUMMARY.md`):**
-
-- ZERO new external libraries needed across all 5 workstreams (STACK.md confirmed).
-- The v4.4 capture-by-value readback pattern (`WipeTowerGeometry` POD + `wipeTowerGeometryReady`) is the proven backbone for WS1 + WS2 readback.
-- Two cross-workstream dependencies: (a) per-volume ITS accessor (Phase 112) unblocks WS5 raycaster + clipper; (b) WS3 readiness gate (Phase 103) is the same gate WS4 needs to repro the D3D12 crash.
-- 8 critical pitfalls documented (`.planning/research/PITFALLS.md`): enum-widening 3MF migration (P2), Option A baseline regression (P3), D3D12 debug-layer Release leak (P5), `Measure::Measuring` ITS lifetime/UAF (P6), raycaster per-frame performance (P7).
-
-## Out of Scope for v4.5
-
-- MEASURE-06 Assembly-mode transformation actions (deferred — needs stable feature-picking foundation first).
-- D3D12 default-backend promotion before Phase 106 root cause is resolved.
+- Hollow / FaceDetector / SlaSupports gizmos — share the WS2 TriangleSelector engine; unlock after WS2 ships.
+- Hardware-dependent Calibration modes (ManualLeveling / BedLeveling / Vibration) — require live printer hardware.
+- D3D12 default-backend promotion (deferred from v4.5; needs confirmed root cause + clean repro).
 - Vulkan production backend (SDK-blocked).
-- Auto filament-map, wipe-tower Option B, GLGizmoMeasure engine, CLI fixtures — all IN scope (this milestone closes them).
+- MEASURE-06 Assembly-mode transformation actions (deferred from v4.5).
 - LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows (removed scope).
 
 ## Carry-Forward Status
 
 | Category | Item | Target |
 |---|---|---|
-| closed | v4.4 Wipe-tower geometry readback + Option A rendering | Shipped in v4.4 |
-| active | Auto filament-map recommendation (WS1) | v4.5 Phases 107, 108, 110, 111 |
-| active | Option B real wipe-tower mesh (WS2) | v4.5 Phase 109 (+ 116 regression) |
-| active | CLI fixtures + argv GUI loading (WS3) | v4.5 Phases 103, 104 |
-| active | D3D12 root cause + backend readiness (WS4) | v4.5 Phases 105, 106 (time-boxed) |
-| active | Full GLGizmoMeasure engine + clipper (WS5) | v4.5 Phases 112-115 (+ 116 regression) |
+| closed | v4.5 backlog: CLI fixtures, D3D12 debug, filament-map, Option B mesh, GLGizmoMeasure | Shipped in v4.5 |
+| active | Preview TickCode/IMSlider closed loop (WS1) | v4.6 |
+| active | Gizmo triangle-paint engine Support/Seam/MMU (WS2) | v4.6 |
+| active | Calibration software-sliceable mode completion (WS3) | v4.6 |
+| active | Tech-debt convergence: i18n + VALIDATION.md + dead-code pages (WS4) | v4.6 |
 | removed | LAN/device/cloud/network/Monitor workflows | Removed from future scope by user direction on 2026-07-07 |
-| future | MEASURE-06 Assembly-mode transformation actions | Future milestone (after v4.5 measure foundation) |
-| future | D3D12 default-backend promotion | After Phase 106 root cause + stability proof |
-| future | Full PLATE-09 save/reload state assertions | Partially addressed by v4.5 WS3; complete coverage future |
-| future | Full i18n translation coverage | Future |
+| future | Hollow / FaceDetector / SlaSupports gizmos | After v4.6 WS2 ships |
+| future | MEASURE-06 Assembly-mode transformation actions | Future milestone (v4.5 measure foundation shipped) |
+| future | D3D12 default-backend promotion | After confirmed root cause + stability proof |
+| future | Full PLATE-09 save/reload state assertions | Future |
 
 ## Scope Guard
 
-- v4.5 is backlog closure across the 5 declared workstreams only.
+- v4.6 is core feature completion across the 4 declared workstreams only.
 - Do not promote LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, or printer-connected hardware workflows unless the user explicitly reopens them.
-- Do not promote D3D12 to default before Phase 106 closes with a confirmed root cause.
-- Do not ship MEASURE-06 (Assembly transformation actions) before MEASURE-01..05 ship the stable feature-picking foundation.
-- Do not expose `fmmDefault` as a 4th popup radio button, render Option B color slabs AND mesh together, or ship argv fixtures as a user-facing product feature (anti-features).
-
-## Operator Next Steps
-
-- Start the next milestone with /gsd-new-milestone
-
-## Deferred Items
-
-Items acknowledged and deferred at v4.4 milestone close (2026-07-12) and carried into v4.5 scope:
-
-| Category | Item | Status |
-|---|---|---|
-| feature | Option B (real wipe-tower mesh via wipe_tower_mesh_data + convex_hull_3d) | ACTIVE in v4.5 Phase 109 (was LOCKED future per Phase 99 Frozen Decision 2) |
-| feature | Auto filament-map recommendation | ACTIVE in v4.5 Phases 107-111 |
-| feature | CLI fixtures + argv GUI fixture loading | ACTIVE in v4.5 Phases 103-104 |
-| feature | Full GLGizmoMeasure feature-picking engine + AssembleViewDataPool clipper | ACTIVE in v4.5 Phases 112-115 |
-| feature | D3D12 crash root cause + backend readiness | ACTIVE in v4.5 Phases 105-106 (time-boxed) |
-| policy (D3D12-03) | D3D12 default-backend promotion stays OUT OF SCOPE until a confirmed root cause (Phase 106-01 root-cause report at `.planning/research/D3D12-CRASH-ROOT-CAUSE.md`, time-boxed per DR-04). D3D12 remains opt-in via `OWZX_RHI_RENDERER=d3d12`; `defaultWindowsCandidates()` keeps D3D11 first (`RhiBackendSelector.cpp:56-65`, locked by the `d3d12StaysOptInBehindEnvFlag` source-audit slot). Vulkan is SDK-blocked (Qt disables the `vulkan` public feature, `PROJECT.md:143`) and is evaluation-only, NOT a v4.5 deliverable. | DEFERRED — promotion to a future milestone requires a confirmed root cause + clean repro on the original machine |
-| feature | MEASURE-06 Assembly-mode transformation actions | DEFERRED to future milestone (P3) |
-| process | Nyquist VALIDATION.md files (v4.4 carry-forward) | Carry-forward; v4.5 phases should produce VALIDATION.md |
-| evidence | Runtime visual evidence (Windows capture API) | v4.5 WS3 argv fixtures are the chosen workaround |
+- Do not add Hollow/FaceDetector/SlaSupports gizmos in v4.6 — they depend on the WS2 TriangleSelector engine shipping first.
+- Do not add hardware-dependent Calibration modes (ManualLeveling/BedLeveling/Vibration) in v4.6.
+- Do not promote D3D12 to default backend in v4.6.
