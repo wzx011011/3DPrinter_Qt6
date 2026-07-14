@@ -446,6 +446,12 @@ private slots:
   // Phase 123 (PAINT-05): MMU segmentation paint writes to
   // mmu_segmentation_facets + clearMmuSegmentation implemented (no TODO stub).
   void mmuSegmentationPaintFeedsSlice();
+  // Phase 127 (I18N-01): the i18n pipeline is documented + zh_CN has finished
+  // translations for v4.6-touched strings (proof-of-pipeline).
+  void translationPipelineDocumented();
+  // Phase 128 (REGRESS-01): v4.6 cross-workstream regression — all v4.6
+  // source-audit slots + key anchors consolidated in one milestone gate.
+  void v46CrossWorkstreamRegressionLocked();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -5808,6 +5814,69 @@ void QmlUiAuditTests::mmuSegmentationPaintFeedsSlice()
   // PAINT-05/MM-02: clearMmuSegmentation no longer a TODO stub returning false.
   QVERIFY2(!evm.contains(QStringLiteral("TODO: Clear per-triangle MMU facet data")),
            "PAINT-05/MM-02: clearMmuSegmentation TODO stub must be implemented");
+}
+
+void QmlUiAuditTests::translationPipelineDocumented()
+{
+  // Phase 127 (I18N-01): the lupdate->translate->lrelease workflow is
+  // documented + zh_CN has finished translations for the v4.6-touched strings.
+  const QString workflow = readSource(QStringLiteral(".planning/i18n-workflow.md"));
+  const QString zhCn = readSource(QStringLiteral("i18n/zh_CN.ts"));
+  QVERIFY2(!workflow.isEmpty(), "I18N-01: unable to read .planning/i18n-workflow.md");
+  QVERIFY2(!zhCn.isEmpty(), "I18N-01: unable to read i18n/zh_CN.ts");
+
+  // I18N-01: workflow doc exists + documents lupdate/lrelease.
+  QVERIFY2(workflow.contains(QStringLiteral("lupdate")),
+           "I18N-01: i18n-workflow.md must document lupdate");
+  QVERIFY2(workflow.contains(QStringLiteral("lrelease")),
+           "I18N-01: i18n-workflow.md must document lrelease");
+
+  // I18N-01: zh_CN has finished (non-unfinished) translations for v4.6 strings.
+  QVERIFY2(zhCn.contains(QStringLiteral("添加暂停")),
+           "I18N-01: zh_CN.ts must have a finished translation for 'Add Pause' (v4.6 proof-of-pipeline)");
+  QVERIFY2(zhCn.contains(QStringLiteral("添加换色")),
+           "I18N-01: zh_CN.ts must have a finished translation for 'Add Color Change'");
+}
+
+void QmlUiAuditTests::v46CrossWorkstreamRegressionLocked()
+{
+  // Phase 128 (REGRESS-01): v4.6 cross-workstream regression gate. Asserts the
+  // key anchors from all 4 workstreams in one consolidated slot so a removal
+  // of any per-workstream slot would still fail this gate. Mirrors the v4.5
+  // v45CrossWorkstreamRegressionLocked pattern.
+  const QString rail = readSource(QStringLiteral("src/qml_gui/components/PreviewLayerRail.qml"));
+  const QString pvm = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.cpp"));
+  const QString evmCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString evmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString svc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
+  const QString paintEngine = readSource(QStringLiteral("src/core/rendering/PaintEngine.cpp"));
+  QVERIFY2(!rail.isEmpty(), "Unable to read PreviewLayerRail.qml");
+  QVERIFY2(!pvm.isEmpty(), "Unable to read PreviewViewModel.cpp");
+
+  // WS1 (TickCode): preview rail renders ticks + write-back loop.
+  QVERIFY2(rail.contains(QStringLiteral("previewVm.tickMarks")),
+           "REGRESS-01/WS1: PreviewLayerRail must render tickMarks");
+  QVERIFY2(pvm.contains(QStringLiteral("plates_custom_gcodes")),
+           "REGRESS-01/WS1: PreviewViewModel must write back to plates_custom_gcodes");
+
+  // WS2 (Paint): PaintEngine + FacetsAnnotation bridge.
+  QVERIFY2(paintEngine.contains(QStringLiteral("select_patch")),
+           "REGRESS-01/WS2: PaintEngine must drive TriangleSelector::select_patch");
+  QVERIFY2(evmCpp.contains(QStringLiteral("writePaintToModelVolume")),
+           "REGRESS-01/WS2: EditorViewModel must write paint to ModelVolume FacetsAnnotation");
+
+  // WS3 (Calibration): 6 software modes dispatch.
+  QVERIFY2(svc.contains(QStringLiteral("calibMode = 7")),
+           "REGRESS-01/WS3: CalibrationServiceMock must dispatch Vol_speed_Tower (7)");
+  QVERIFY2(svc.contains(QStringLiteral("calibMode = 9")),
+           "REGRESS-01/WS3: CalibrationServiceMock must dispatch Retraction_tower (9)");
+
+  // WS4 (Cleanup): no LayerSlider orphan.
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  QVERIFY2(!qrc.contains(QStringLiteral("LayerSlider.qml")),
+           "REGRESS-01/WS4: qml.qrc must not list the deleted LayerSlider.qml");
+  QVERIFY2(!qrc.contains(QStringLiteral("AuxiliaryPage.qml")),
+           "REGRESS-01/WS4: qml.qrc must not list the deleted AuxiliaryPage.qml");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
