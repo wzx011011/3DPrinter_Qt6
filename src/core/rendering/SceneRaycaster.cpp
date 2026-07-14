@@ -58,7 +58,10 @@ SceneRaycasterHit SceneRaycaster::hitTest(
     //   direction = inv.linear() * direction;
     const Slic3r::Transform3d inv = cand.worldTransform.inverse();
     const Slic3r::Vec3d meshOrigin = inv * rayOriginWorld;
-    const Slic3r::Vec3d meshDir = inv.linear() * rayDirWorld;
+    // Phase 113 REVIEW M-02: inv.linear() * unitDir is NOT unit under
+    // non-uniform scale. Normalize so AABBMesh's Debug assert
+    // (is_approx(dir.norm(), 1.)) never trips on scaled instances.
+    const Slic3r::Vec3d meshDir = (inv.linear() * rayDirWorld).normalized();
 
     const MeshRaycasterHit localHit = rc->rayCast(meshOrigin, meshDir);
     if (!localHit.hit)

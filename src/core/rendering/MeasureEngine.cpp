@@ -228,16 +228,21 @@ MeasureEngine::measureFeatures(const QtFeature &a,
   // Build LOCAL SurfaceFeatures from the Qt POD. These are scratch objects
   // local to this call -- they own no libslic3r memory (their back-pointer
   // members default to null). Safe to construct, measure, and destroy here.
+  //
+  // Phase 114 REVIEW H1 FIX: the QtFeature points are ALREADY in world
+  // space (getFeature passes worldTransform to m->get_feature which
+  // internally translates the output SurfaceFeature to world space at
+  // Measure.cpp:583-594, and scrubSurfaceFeature copies those world-space
+  // points verbatim). So buildLocalSurfaceFeature reconstructs from
+  // world-space points. Do NOT translate again -- the previous code called
+  // sfA.translate(worldTransform) which double-applied the transform,
+  // corrupting the A->B readout for any rotated/scaled object. The
+  // regression test masked this by using Transform3d::Identity().
   Slic3r::Measure::SurfaceFeature sfA = buildLocalSurfaceFeature(a);
   Slic3r::Measure::SurfaceFeature sfB = buildLocalSurfaceFeature(b);
 
-  // Apply the world transform so the measurement is in world space
-  // (mirrors GLGizmoMeasure.cpp world_tran handling -- get_feature already
-  // translated the features to world space, so a re-measure must use the
-  // same frame). translate(Transform3d) is the affine overload
-  // (Measure.hpp:54).
-  sfA.translate(worldTransform);
-  sfB.translate(worldTransform);
+  // No additional world-transform application needed -- the QtFeature
+  // points are already world-space (see H1 FIX comment above).
 
   // get_measurement (Measure.hpp:183, Measure.cpp:832+) computes the
   // MeasurementResult. We copy the VALUES into QtMeasurement and let the

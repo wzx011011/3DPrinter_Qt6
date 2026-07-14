@@ -115,6 +115,10 @@ Item {
             break
         case Qt.Key_Escape:
             root.editorVm.clearObjectSelection()
+            // Phase 115 REVIEW M2: also reset the two-click measure flow
+            // so Escape cancels a pending A->B measurement cleanly.
+            if (viewport3d.gizmoMode === GLViewport.GizmoMeasure)
+                root.editorVm.clearMeasureReadout()
             event.accepted = true
             break
         case Qt.Key_A:

@@ -95,9 +95,9 @@ public:
   // which delegates to AABBMesh::query_ray_hit and picks the nearest). When
   // the ray misses every triangle, MeshRaycasterHit::hit == false.
   //
-  // rayDir does NOT need to be normalized -- AABBMesh normalizes internally
-  // (its hit_result.position() = source + dir * t uses the same dir scale).
-  // Callers that need a metric distance should normalize before calling.
+  // rayDir is normalized internally before calling AABBMesh::query_ray_hit
+  // (which asserts is_approx(dir.norm(), 1.) at entry, AABBMesh.cpp:154).
+  // Callers can pass a non-unit direction safely (Phase 113 REVIEW M-01).
   MeshRaycasterHit rayCast(const Slic3r::Vec3d &rayOrigin,
                            const Slic3r::Vec3d &rayDir) const;
 

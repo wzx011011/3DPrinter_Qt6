@@ -37,7 +37,13 @@ MeshRaycasterHit MeshRaycaster::rayCast(const Slic3r::Vec3d &rayOrigin,
   // :532 closest_hit which takes the nearest hit). We use the single-hit
   // query_ray_hit() (AABBMesh.hpp:118) which already returns the closest --
   // it is the libslic3r primitive closest_hit builds on.
-  const Slic3r::AABBMesh::hit_result result = m_emesh.query_ray_hit(rayOrigin, rayDir);
+  //
+  // Phase 113 REVIEW M-01: AABBMesh::query_ray_hit asserts
+  // is_approx(dir.norm(), 1.) at entry (AABBMesh.cpp:154). Normalize
+  // defensively so callers (including SceneRaycaster's inverse-transformed
+  // mesh-local dir under non-uniform scale) never trip the Debug assert.
+  const Slic3r::Vec3d normalizedDir = rayDir.normalized();
+  const Slic3r::AABBMesh::hit_result result = m_emesh.query_ray_hit(rayOrigin, normalizedDir);
 
   MeshRaycasterHit out;
   if (!result.is_hit())
