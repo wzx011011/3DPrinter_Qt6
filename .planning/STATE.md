@@ -28,7 +28,22 @@ Last activity: 2026-07-14 — Milestone v4.6 started
 
 ## Current Milestone (v4.6)
 
-Roadmap phase table is filled by the roadmapper after requirements are defined.
+| Phase | Name | Status | Requirements |
+|---|---|---|---|
+| 117 | IMSlider Integration And Tick Rendering | Not started | TICK-01 |
+| 118 | custom_gcode_per_print_z Writeback And Re-Slice Loop | Not started | TICK-02, TICK-03 |
+| 119 | Tick Type Coverage And Drag Relocation | Not started | TICK-04, TICK-05 |
+| 120 | TriangleSelector Engine Port | Not started | PAINT-01 |
+| 121 | Painted-Facet Overlay Render And Brush Interaction | Not started | PAINT-02, PAINT-03 |
+| 122 | Support And Seam Paint End-To-End | Not started | PAINT-04 |
+| 123 | MMU Segmentation Paint End-To-End | Not started | PAINT-05 |
+| 124 | Software-Sliceable Calibration Mode Completion | Not started | CALIB-01 |
+| 125 | Calibration Range Input UI And Real K-Value Readback | Not started | CALIB-02, CALIB-03 |
+| 126 | Legacy Dead-Code Page Cleanup | Not started | CLEAN-01 |
+| 127 | i18n Translation Coverage And VALIDATION.md Backfill | Not started | I18N-01, PROC-01 |
+| 128 | v4.6 Verification And Cross-Workstream Regression | Not started | REGRESS-01 |
+
+**Coverage:** 17/17 active requirements mapped to exactly one phase (TICK-01..05, PAINT-01..05, CALIB-01..03, I18N-01, PROC-01, CLEAN-01, REGRESS-01).
 
 **Goal:** In one cycle, lift the four highest-value main-flow gaps from "skeleton-level" to "end-to-end usable": Preview TickCode/IMSlider closed loop, Gizmo triangle-paint engine, Calibration mode completion, and tech-debt convergence.
 
@@ -63,8 +78,8 @@ Roadmap phase table is filled by the roadmapper after requirements are defined.
 ## Project Reference
 
 See: `.planning/PROJECT.md` (updated 2026-07-14)
-See: `.planning/ROADMAP.md` (v4.4-era; will be rewritten for v4.6 by roadmapper)
-See: `.planning/REQUIREMENTS.md` (will be rewritten for v4.6)
+See: `.planning/ROADMAP.md` (v4.6 roadmap — 12 phases, 117-128)
+See: `.planning/REQUIREMENTS.md` (17 active v4.6 requirements)
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
 **Current focus:** v4.6 — core feature completion across 4 workstreams (Preview TickCode loop, Gizmo paint engine, Calibration modes, tech-debt convergence).

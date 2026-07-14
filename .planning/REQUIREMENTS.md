@@ -92,28 +92,28 @@ Filled during roadmap creation. Each requirement maps to exactly one phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TICK-01 | TBD | Pending |
-| TICK-02 | TBD | Pending |
-| TICK-03 | TBD | Pending |
-| TICK-04 | TBD | Pending |
-| TICK-05 | TBD | Pending |
-| PAINT-01 | TBD | Pending |
-| PAINT-02 | TBD | Pending |
-| PAINT-03 | TBD | Pending |
-| PAINT-04 | TBD | Pending |
-| PAINT-05 | TBD | Pending |
-| CALIB-01 | TBD | Pending |
-| CALIB-02 | TBD | Pending |
-| CALIB-03 | TBD | Pending |
-| I18N-01 | TBD | Pending |
-| PROC-01 | TBD | Pending |
-| CLEAN-01 | TBD | Pending |
-| REGRESS-01 | TBD | Pending |
+| TICK-01 | Phase 117 | Pending |
+| TICK-02 | Phase 118 | Pending |
+| TICK-03 | Phase 118 | Pending |
+| TICK-04 | Phase 119 | Pending |
+| TICK-05 | Phase 119 | Pending |
+| PAINT-01 | Phase 120 | Pending |
+| PAINT-02 | Phase 121 | Pending |
+| PAINT-03 | Phase 121 | Pending |
+| PAINT-04 | Phase 122 | Pending |
+| PAINT-05 | Phase 123 | Pending |
+| CALIB-01 | Phase 124 | Pending |
+| CALIB-02 | Phase 125 | Pending |
+| CALIB-03 | Phase 125 | Pending |
+| I18N-01 | Phase 127 | Pending |
+| PROC-01 | Phase 127 | Pending |
+| CLEAN-01 | Phase 126 | Pending |
+| REGRESS-01 | Phase 128 | Pending |
 
 **Coverage:**
 - v4.6 requirements: 17 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 17 ⚠️ (until roadmapper fills the table)
+- Mapped to phases: 17
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-14*
