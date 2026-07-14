@@ -92,28 +92,29 @@ Filled during roadmap creation. Each requirement maps to exactly one phase.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TICK-01 | Phase 117 | Pending |
-| TICK-02 | Phase 118 | Pending |
-| TICK-03 | Phase 118 | Pending |
-| TICK-04 | Phase 119 | Pending |
-| TICK-05 | Phase 119 | Pending |
-| PAINT-01 | Phase 120 | Pending |
-| PAINT-02 | Phase 121 | Pending |
-| PAINT-03 | Phase 121 | Pending |
-| PAINT-04 | Phase 122 | Pending |
-| PAINT-05 | Phase 123 | Pending |
-| CALIB-01 | Phase 124 | Pending |
-| CALIB-02 | Phase 125 | Pending |
-| CALIB-03 | Phase 125 | Pending |
-| I18N-01 | Phase 127 | Pending |
-| PROC-01 | Phase 127 | Pending |
-| CLEAN-01 | Phase 126 | Pending |
-| REGRESS-01 | Phase 128 | Pending |
+| TICK-01 | Phase 117 | Satisfied |
+| TICK-02 | Phase 118 | Satisfied |
+| TICK-03 | Phase 118 | Satisfied |
+| TICK-04 | Phase 119 | Satisfied |
+| TICK-05 | Phase 119 | Satisfied |
+| PAINT-01 | Phase 120 | Satisfied |
+| PAINT-02 | Phase 121 | Satisfied |
+| PAINT-03 | Phase 121 | Satisfied |
+| PAINT-04 | Phase 122 | Satisfied |
+| PAINT-05 | Phase 123 | Satisfied |
+| CALIB-01 | Phase 124 | Satisfied |
+| CALIB-02 | Phase 125 | Satisfied |
+| CALIB-03 | Phase 125 | Satisfied |
+| I18N-01 | Phase 127 | Satisfied |
+| PROC-01 | Phase 127 | Satisfied |
+| CLEAN-01 | Phase 126 | Satisfied |
+| REGRESS-01 | Phase 128 | Satisfied |
 
 **Coverage:**
 - v4.6 requirements: 17 total
 - Mapped to phases: 17
-- Unmapped: 0 ✓
+- Satisfied: 17/17 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-07-14*
