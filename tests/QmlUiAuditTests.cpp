@@ -403,6 +403,22 @@ private slots:
   // with PAINT-01-named messages). Source-level only; runs in the regression
   // ctest.
   void triangleSelectorEnginePorted();
+  // Phase 124-01 (CALIB-01): source-audit lock that the 3 libslic3r calibration
+  // tower modes are now dispatched from CalibrationServiceMock (Vol_speed=7,
+  // VFA=8, Retraction=9, per calib.hpp:24-26). Locks: (a) calibMode 7/8/9 each
+  // appear in buildMockData; (b) the "Pending: outside Phase" placeholder is
+  // gone from max_volumetric_speed (now a real dispatched mode, not a stub);
+  // (c) bed_leveling/vibration still carry their honest "requires hardware"
+  // unavailableReason (NOT accidentally enabled by the tower-mode change).
+  // Mirrors the Phase 102..120 source-audit pattern (readSource + QVERIFY2
+  // with CALIB-01-named messages). Source-level only; runs in the regression
+  // ctest.
+  void calibrationTowerModesDispatchToLibslic3r();
+  // Phase 126 (CLEAN-01): the legacy dead-code pages (DeviceListPage,
+  // AuxiliaryPage, ModelMallPage, AuxiliaryListPanel) + AuxiliaryService must
+  // stay deleted (No-Deprecated-UI rule). These were in the removed LAN/device/
+  // cloud scope — deletion, not repair. Source-level only.
+  void legacyDeadCodePagesRemoved();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -2021,12 +2037,10 @@ void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()
   const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   const QString sidebar = readSource(QStringLiteral("src/qml_gui/panels/LeftSidebar.qml"));
-  const QString modelMall = readSource(QStringLiteral("src/qml_gui/pages/ModelMallPage.qml"));
   const QString preferences = readSource(QStringLiteral("src/qml_gui/pages/PreferencesPage.qml"));
   QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
   QVERIFY2(!sidebar.isEmpty(), "Unable to read LeftSidebar.qml");
-  QVERIFY2(!modelMall.isEmpty(), "Unable to read ModelMallPage.qml");
   QVERIFY2(!preferences.isEmpty(), "Unable to read PreferencesPage.qml");
 
   const QRegularExpression emptyClick(QStringLiteral("\\bon(?:Clicked|Triggered):\\s*\\{\\s*\\}"));
@@ -2044,10 +2058,10 @@ void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()
     QStringLiteral("qsTr(\"Free\")"),
     QStringLiteral("qsTr(\"Favorites\")")
   };
-  for (const QString &copy : forbiddenRuntimeCopy) {
-    QVERIFY2(!modelMall.contains(copy),
-             qPrintable(QStringLiteral("ModelMall must not expose fake marketplace copy: %1").arg(copy)));
-  }
+  // ModelMallPage.qml was removed in v4.6 Phase 126 (dead code, removed cloud scope).
+  // The forbiddenRuntimeCopy loop is retained but no longer applied to a deleted file;
+  // the upstream-alignment intent is preserved for any future marketplace surface.
+  Q_UNUSED(forbiddenRuntimeCopy)
 
   const QStringList forbiddenSidebarMarkers = {
     QStringLiteral("TODO SIDEBAR-08"),
@@ -5421,6 +5435,105 @@ void QmlUiAuditTests::triangleSelectorEnginePorted()
            "PAINT-01: CMakeLists.txt must register PaintEngine.cpp in owzx_app_core");
   QVERIFY2(cmakeLists.contains(QStringLiteral("src/core/rendering/PaintEngine.h")),
            "PAINT-01: CMakeLists.txt must register PaintEngine.h in owzx_app_core");
+}
+
+void QmlUiAuditTests::calibrationTowerModesDispatchToLibslic3r()
+{
+  // Phase 124-01 (CALIB-01): the 3 libslic3r calibration tower modes
+  // (Vol_speed=7, VFA=8, Retraction=9, per calib.hpp:24-26) must now be
+  // dispatched from CalibrationServiceMock::buildMockData. The generic
+  // dispatch path (calibMode != 0 -> SliceService::setCalibParams ->
+  // static_cast<CalibMode>) forwards them transparently, so NO SliceService /
+  // Print / GCode change is required -- this is a source-audit on the mock
+  // data only. This slot locks every CM truth at the source level so a future
+  // refactor that drops a tower mode, re-stubs max_volumetric_speed, or
+  // accidentally enables a hardware mode fails here. Mirrors the Phase
+  // 102..120 source-audit pattern (readSource + QVERIFY2 with CALIB-01-named
+  // messages). Source-level only; runs in the regression ctest.
+
+  const QString calibSource =
+      readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
+  QVERIFY2(!calibSource.isEmpty(), "Unable to read CalibrationServiceMock.cpp");
+
+  // CM-01 (a): calibMode 7/8/9 must each appear in buildMockData, mapping the
+  // 3 tower modes to upstream Calib_Vol_speed_Tower / Calib_VFA_Tower /
+  // Calib_Retraction_tower (calib.hpp:24-26).
+  QVERIFY2(calibSource.contains(QStringLiteral("maxVolSpeed.calibMode = 7")),
+           "CALIB-01/CM-01: max_volumetric_speed must map to calibMode 7 (Calib_Vol_speed_Tower)");
+  QVERIFY2(calibSource.contains(QStringLiteral("vfaTower.calibMode = 8")),
+           "CALIB-01/CM-01: vfa_tower must map to calibMode 8 (Calib_VFA_Tower)");
+  QVERIFY2(calibSource.contains(QStringLiteral("retractionTune.calibMode = 9")),
+           "CALIB-01/CM-01: retraction_tune must map to calibMode 9 (Calib_Retraction_tower)");
+
+  // The 3 new tower-mode ids must be registered in the m_calibTypes list so
+  // CalibrationPage.qml (which auto-enumerates calibItemCount) surfaces them.
+  QVERIFY2(calibSource.contains(QStringLiteral("\"vfa_tower\"")),
+           "CALIB-01/CM-01: buildMockData must register the vfa_tower calibration id");
+  QVERIFY2(calibSource.contains(QStringLiteral("\"retraction_tune\"")),
+           "CALIB-01/CM-01: buildMockData must register the retraction_tune calibration id");
+
+  // CM-03 (b): the "Pending: outside Phase" placeholder on max_volumetric_speed
+  // is GONE -- it is now a real dispatched mode, not a stub. The whole phrase
+  // must be absent from the file.
+  QVERIFY2(!calibSource.contains(QStringLiteral("Pending: outside Phase")),
+           "CALIB-01/CM-03: the 'Pending: outside Phase' placeholder must be removed (max_volumetric_speed is now dispatched)");
+  QVERIFY2(!calibSource.contains(QStringLiteral("Pending: max volumetric speed")),
+           "CALIB-01/CM-03: the legacy max_volumetric_speed pending reason must be removed");
+
+  // CM-03 (c): bed_leveling / vibration KEEP their honest "requires hardware"
+  // unavailableReason (the tower-mode change must NOT accidentally enable a
+  // hardware mode). Both reasons must still be present.
+  QVERIFY2(calibSource.contains(QStringLiteral("requires live printer hardware calibration support")),
+           "CALIB-01/CM-03: bed_leveling must keep its 'requires live printer hardware' unavailableReason");
+  QVERIFY2(calibSource.contains(QStringLiteral("requires live printer resonance measurement support")),
+           "CALIB-01/CM-03: vibration must keep its 'requires live printer resonance' unavailableReason");
+
+  // CM-02: transparent passthrough -- SliceService.cpp must still cast the
+  // calibMode int to CalibMode (no per-mode whitelist). This guards against a
+  // future whitelist that would silently drop the 3 tower modes.
+  const QString sliceSource =
+      readSource(QStringLiteral("src/core/services/SliceService.cpp"));
+  QVERIFY2(!sliceSource.isEmpty(), "Unable to read SliceService.cpp");
+  QVERIFY2(sliceSource.contains(QStringLiteral("setCalibParams")),
+           "CALIB-01/CM-02: SliceService must expose setCalibParams (transparent passthrough)");
+}
+
+void QmlUiAuditTests::legacyDeadCodePagesRemoved()
+{
+  // Phase 126 (CLEAN-01): the legacy dead-code pages + AuxiliaryService must
+  // stay deleted. These were in the removed LAN/device/cloud scope — deletion,
+  // not repair (No-Deprecated-UI rule). Each QVERIFY2 names the CLEAN-01
+  // contract it locks.
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
+  const QString backendH = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
+  const QString cmake = readSource(QStringLiteral("CMakeLists.txt"));
+  QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+
+  // CLEAN-01/CL-01: the 4 deleted pages must not appear in qml.qrc.
+  QVERIFY2(!qrc.contains(QStringLiteral("DeviceListPage.qml")),
+           "CLEAN-01/CL-01: qml.qrc must not list DeviceListPage.qml (dead, deleted)");
+  QVERIFY2(!qrc.contains(QStringLiteral("AuxiliaryPage.qml")),
+           "CLEAN-01/CL-01: qml.qrc must not list AuxiliaryPage.qml (dead, deleted)");
+  QVERIFY2(!qrc.contains(QStringLiteral("ModelMallPage.qml")),
+           "CLEAN-01/CL-01: qml.qrc must not list ModelMallPage.qml (dead, removed cloud scope)");
+  QVERIFY2(!qrc.contains(QStringLiteral("AuxiliaryListPanel.qml")),
+           "CLEAN-01/CL-01: qml.qrc must not list AuxiliaryListPanel.qml (orphan panel, deleted)");
+
+  // CLEAN-01/CL-02: main.qml must not instantiate AuxiliaryPage (slot 7 is now a placeholder).
+  QVERIFY2(!mainQml.contains(QStringLiteral("AuxiliaryPage {")),
+           "CLEAN-01/CL-02: main.qml must not instantiate AuxiliaryPage (slot 7 is now a structural placeholder)");
+  // BBLTopbar must not show the removed "辅助" tab.
+  QVERIFY2(!topbar.contains(QStringLiteral("tpPlaceholder1")),
+           "CLEAN-01/CL-02: BBLTopbar must not reference tpPlaceholder1 tab (Auxiliary tab removed)");
+
+  // CLEAN-01/CL-03: AuxiliaryService must be absent from BackendContext.h + CMakeLists.txt.
+  QVERIFY2(!backendH.contains(QStringLiteral("AuxiliaryService")),
+           "CLEAN-01/CL-03: BackendContext.h must not reference AuxiliaryService (service deleted with its only would-be consumer)");
+  QVERIFY2(!cmake.contains(QStringLiteral("AuxiliaryService")),
+           "CLEAN-01/CL-03: CMakeLists.txt must not compile AuxiliaryService (service deleted)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

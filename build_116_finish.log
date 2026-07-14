@@ -1,0 +1,128 @@
+[vcvars] Dropped 9 PATH entries with spaces+parens
+系统找不到指定的路径。
+'findstr' 不是内部或外部命令，也不是可运行的程序
+或批处理文件。
+[vcvars] Patched Windows Kits 10.0.26100.0
+[1/2] Building CXX object CMakeFiles\PartPlateTests.dir\tests\PartPlateTests.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): warning C4267: “=”: 从“size_t”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): note: 模板实例化上下文(最早的实例化上下文)为
+E:\ai\3DPrinter_Qt6\third_party\OrcaSlicer\src\libslic3r/ExtrusionEntity.hpp(432): note: 查看对正在编译的函数 模板 实例化“_Ty std::accumulate<std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,int,Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>>(const _InIt,const _InIt,_Ty,_Fn)”的引用
+        with
+        [
+            _Ty=int,
+            _InIt=std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,
+            _Fn=Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>
+        ]
+[2/2] Linking CXX executable PartPlateTests.exe
+[1/4] Automatic MOC and UIC for target PreviewParserTests
+[2/3] Building CXX object CMakeFiles\PreviewParserTests.dir\tests\PreviewParserTests.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): warning C4267: “=”: 从“size_t”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): note: 模板实例化上下文(最早的实例化上下文)为
+E:\ai\3DPrinter_Qt6\third_party\OrcaSlicer\src\libslic3r/ExtrusionEntity.hpp(432): note: 查看对正在编译的函数 模板 实例化“_Ty std::accumulate<std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,int,Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>>(const _InIt,const _InIt,_Ty,_Fn)”的引用
+        with
+        [
+            _Ty=int,
+            _InIt=std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,
+            _Fn=Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>
+        ]
+[3/3] Linking CXX executable PreviewParserTests.exe
+[1/11] Automatic MOC and UIC for target owzx_cli_core
+[2/11] Building CXX object CMakeFiles\owzx_cli_core.dir\src\core\model\PartPlate.cpp.obj
+[3/11] Building CXX object CMakeFiles\owzx_cli_core.dir\src\core\services\PresetServiceMock.cpp.obj
+[4/11] Building CXX object CMakeFiles\owzx_cli_core.dir\src\core\model\PartPlateList.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): warning C4267: “=”: 从“size_t”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): note: 模板实例化上下文(最早的实例化上下文)为
+E:\ai\3DPrinter_Qt6\third_party\OrcaSlicer\src\libslic3r/ExtrusionEntity.hpp(432): note: 查看对正在编译的函数 模板 实例化“_Ty std::accumulate<std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,int,Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>>(const _InIt,const _InIt,_Ty,_Fn)”的引用
+        with
+        [
+            _Ty=int,
+            _InIt=std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,
+            _Fn=Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>
+        ]
+[5/11] Building CXX object CMakeFiles\owzx_cli_core.dir\owzx_cli_core_autogen\mocs_compilation.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): warning C4267: “=”: 从“size_t”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): note: 模板实例化上下文(最早的实例化上下文)为
+E:\ai\3DPrinter_Qt6\third_party\OrcaSlicer\src\libslic3r/ExtrusionEntity.hpp(432): note: 查看对正在编译的函数 模板 实例化“_Ty std::accumulate<std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,int,Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>>(const _InIt,const _InIt,_Ty,_Fn)”的引用
+        with
+        [
+            _Ty=int,
+            _InIt=std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,
+            _Fn=Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>
+        ]
+[6/11] Building CXX object CMakeFiles\owzx_cli_core.dir\src\core\services\SliceService.cpp.obj
+E:\ai\3DPrinter_Qt6\src\core\services\SliceService.cpp(405): warning C4858: 正在放弃返回值: Use QThreadPool::start(Callable&&) if you don't need the returned QFuture
+E:\ai\3DPrinter_Qt6\src\core\services\SliceService.cpp(980): warning C4858: 正在放弃返回值: Use QThreadPool::start(Callable&&) if you don't need the returned QFuture
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): warning C4267: “=”: 从“size_t”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): note: 模板实例化上下文(最早的实例化上下文)为
+E:\ai\3DPrinter_Qt6\third_party\OrcaSlicer\src\libslic3r/ExtrusionEntity.hpp(432): note: 查看对正在编译的函数 模板 实例化“_Ty std::accumulate<std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,int,Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>>(const _InIt,const _InIt,_Ty,_Fn)”的引用
+        with
+        [
+            _Ty=int,
+            _InIt=std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,
+            _Fn=Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>
+        ]
+[7/11] Building CXX object CMakeFiles\owzx_cli_core.dir\src\cli\CliRunner.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): warning C4267: “=”: 从“size_t”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): note: 模板实例化上下文(最早的实例化上下文)为
+E:\ai\3DPrinter_Qt6\third_party\OrcaSlicer\src\libslic3r/ExtrusionEntity.hpp(432): note: 查看对正在编译的函数 模板 实例化“_Ty std::accumulate<std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,int,Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>>(const _InIt,const _InIt,_Ty,_Fn)”的引用
+        with
+        [
+            _Ty=int,
+            _InIt=std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,
+            _Fn=Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>
+        ]
+[8/11] Building CXX object CMakeFiles\owzx_cli_core.dir\src\core\services\ProjectServiceMock.cpp.obj
+E:\ai\3DPrinter_Qt6\src\core\services\ProjectServiceMock.cpp(493): warning C4858: 正在放弃返回值: Use QThreadPool::start(Callable&&) if you don't need the returned QFuture
+E:\ai\3DPrinter_Qt6\src\core\services\ProjectServiceMock.cpp(5457): warning C4858: 正在放弃返回值: Use QThreadPool::start(Callable&&) if you don't need the returned QFuture
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): warning C4267: “=”: 从“size_t”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): note: 模板实例化上下文(最早的实例化上下文)为
+E:\ai\3DPrinter_Qt6\third_party\OrcaSlicer\src\libslic3r/ExtrusionEntity.hpp(432): note: 查看对正在编译的函数 模板 实例化“_Ty std::accumulate<std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,int,Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>>(const _InIt,const _InIt,_Ty,_Fn)”的引用
+        with
+        [
+            _Ty=int,
+            _InIt=std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,
+            _Fn=Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>
+        ]
+[9/11] Automatic MOC and UIC for target owzx-cli
+[10/10] Linking CXX executable owzx-cli.exe
+[1/3] Automatic MOC and UIC for target CliTests
+
+[PrepareScene] Running Prepare scene data tests...
+[PrepareScene] tests passed
+
+[PartPlate] Running PartPlate tests...
+[PartPlate] tests passed
+
+[ViewModel] Running ViewModel smoke tests...
+[ViewModel] tests passed
+
+[UI] Running QML UI audit tests...
+[UI] FAILED

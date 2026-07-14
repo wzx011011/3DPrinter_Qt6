@@ -13,10 +13,7 @@
         <file>pages/MonitorPage.qml</file>
         <file>pages/ProjectPage.qml</file>
         <file>pages/CalibrationPage.qml</file>
-        <file>pages/AuxiliaryPage.qml</file>
-        <file>pages/DeviceListPage.qml</file>
         <file>pages/PreferencesPage.qml</file>
-        <file>pages/ModelMallPage.qml</file>
         <file>pages/MultiMachinePage.qml</file>
         <!-- Dialogs -->
         <file>dialogs/PrintDialog.qml</file>
@@ -47,7 +44,6 @@
         <file>panels/SliceProgress.qml</file>
         <file>panels/LeftSidebar.qml</file>
         <file>panels/DockableSidebar.qml</file>
-        <file>panels/AuxiliaryListPanel.qml</file>
         <!-- Components -->
         <file>components/StatusBar.qml</file>
         <file>components/ErrorToast.qml</file>

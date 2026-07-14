@@ -27,12 +27,24 @@ void CalibrationServiceMock::buildMockData()
     //   FlowRateWizard (Flow Rate / Calib_Flow_Rate)
     // Upstream CalibrationDialog provides hardware calibration:
     //   xcam_cali, bed_leveling, vibration, motor_noise
-    // Additional CalibMode values from upstream calib.hpp:
-    //   Temp_Tower, Vol_speed_Tower, Retraction_tower
+    // Additional CalibMode values from upstream calib.hpp:16-30:
+    //   Temp_Tower=6, Vol_speed_Tower=7, VFA_Tower=8, Retraction_tower=9
     //
-    // We expose 5 calibration types covering both slice and hardware domains,
-    // each with 2-4 wizard steps aligned to upstream CalibrationWizard page chain:
+    // We expose 7 calibration types covering both slice and hardware domains:
+    //   6 software-sliceable modes (PA=1, FlowRate=5, TempTower=6,
+    //     Vol_speed=7, VFA=8, Retraction=9) dispatched via the generic
+    //     calibMode!=0 path to SliceService -> libslic3r GCode branches
+    //     (GCode.cpp:4608 TempTower / :4617 Vol_speed / :4612 VFA / :4622 Retraction).
+    //   2 hardware modes (bed_leveling, vibration) kept unavailable.
+    // Each type has 2-4 wizard steps aligned to upstream CalibrationWizard page chain:
     //   Start -> Preset -> Calibration -> [CoarseSave -> FineCalibration -> FineSave ->] Save
+    //
+    // Tech-debt: upstream CalibUtils loads dedicated test-tower models
+    // (resources/calib/*.drc) and applies per-mode config overrides (spiral_mode,
+    // wall_loops). Qt6 slices the current-plate geometry via cloneCurrentPlateModel().
+    // The GCode parameter sweep (speed/temperature/retraction) works regardless of
+    // the tower shape; only the precision geometry differs. Documented as
+    // deferred in 124-CONTEXT.md, NOT a Phase 124 blocker.
 
     CalibrationType flowDynamics;
     flowDynamics.id = "flow_dynamics";
@@ -157,6 +169,10 @@ void CalibrationServiceMock::buildMockData()
         {"save",   tr("Apply Result"), tr("Review resonance data and apply compensation.")}
     };
 
+    // Calib_Vol_speed_Tower = 7 (calib.hpp:24). libslic3r GCode.cpp:4617 sweeps
+    // outer_wall_speed per mm of tower height using start/end/step. The generic
+    // dispatch path (calibMode != 0 -> SliceService::setCalibParams) forwards
+    // these transparently; no SliceService/Print/GCode change is needed.
     CalibrationType maxVolSpeed;
     maxVolSpeed.id = "max_volumetric_speed";
     maxVolSpeed.name = tr("Max Volumetric Speed");
@@ -170,15 +186,90 @@ void CalibrationServiceMock::buildMockData()
         "Over-extrusion or under-extrusion at high speeds indicates the need "
         "for this calibration.");
     maxVolSpeed.previewLabel = tr("Speed tower test pattern");
-    maxVolSpeed.unavailableReason = tr("Pending: max volumetric speed generation is outside Phase 12.");
+    maxVolSpeed.implemented = true;
+    maxVolSpeed.startable = true;
+    maxVolSpeed.calibMode = 7;
+    // Sweep outer_wall_speed across the tower (mm/s). Range aligned to the
+    // volumetric-speed sweep upstream exposes for the speed tower.
+    maxVolSpeed.calibStart = 5.0;
+    maxVolSpeed.calibEnd = 30.0;
+    maxVolSpeed.calibStep = 0.5;
+    maxVolSpeed.printNumbers = true;
     maxVolSpeed.steps = {
         {"start",  tr("Introduction"), tr("Learn about max volumetric speed calibration.")},
         {"preset", tr("Select Parameters"), tr("Set calibration range parameters.")},
-        {"cali",   tr("Calibrate"), tr("Send speed tower calibration to printer.")},
+        {"cali",   tr("Calibrate"), tr("Send speed tower calibration to slicer.")},
         {"save",   tr("Save Result"), tr("Review result and save to filament preset.")}
     };
 
-    m_calibTypes = {flowDynamics, flowRate, tempTower, bedLeveling, vibration, maxVolSpeed};
+    // Calib_VFA_Tower = 8 (calib.hpp:25). libslic3r GCode.cpp:4612 sweeps
+    // outer_wall_speed in 5mm height bands using start/end/step. Transparently
+    // dispatched via the generic calibMode != 0 path.
+    CalibrationType vfaTower;
+    vfaTower.id = "vfa_tower";
+    vfaTower.name = tr("VFA Tower");
+    vfaTower.icon = "\u{1F4CA}";  // bar chart
+    vfaTower.category = "slice";
+    vfaTower.description = tr("Volumetric flow artifact (VFA) test");
+    vfaTower.longDesc = tr(
+        "VFA (Volumetric Flow Artifact) calibration prints a speed tower so you "
+        "can identify the outer wall speeds at which surface artifacts (vertical "
+        "fine lines / ringing) appear for the selected filament.\n\n"
+        "Use the result to choose a maximum outer wall speed that minimizes VFAs "
+        "while keeping print time reasonable.");
+    vfaTower.previewLabel = tr("VFA speed tower test pattern");
+    vfaTower.implemented = true;
+    vfaTower.startable = true;
+    vfaTower.calibMode = 8;
+    // Sweep outer_wall_speed across the tower (mm/s). 5mm bands per step,
+    // matching GCode.cpp:4613 (std::floor(print_z / 5.0) * step).
+    vfaTower.calibStart = 10.0;
+    vfaTower.calibEnd = 100.0;
+    vfaTower.calibStep = 5.0;
+    vfaTower.printNumbers = true;
+    vfaTower.steps = {
+        {"start",  tr("Introduction"), tr("Learn when to use VFA calibration.")},
+        {"preset", tr("Select Parameters"), tr("Choose the speed sweep range.")},
+        {"cali",   tr("Calibrate"), tr("Send VFA tower calibration to slicer.")},
+        {"save",   tr("Save Result"), tr("Review artifact-free speed and save result.")}
+    };
+
+    // Calib_Retraction_tower = 9 (calib.hpp:26). libslic3r GCode.cpp:4622 sweeps
+    // retraction_length per layer using start/end/step. Transparently dispatched
+    // via the generic calibMode != 0 path.
+    CalibrationType retractionTune;
+    retractionTune.id = "retraction_tune";
+    retractionTune.name = tr("Retraction Tune");
+    retractionTune.icon = "\u{21BA}";  // anticlockwise arrow
+    retractionTune.category = "slice";
+    retractionTune.description = tr("Retraction length tower test");
+    retractionTune.longDesc = tr(
+        "Retraction Tune calibration prints a tower where each band uses a "
+        "different retraction length, so you can pick the value that best "
+        "eliminates stringing and blobs for your filament and hotend.\n\n"
+        "Inspect the tower after printing and choose the cleanest band.");
+    retractionTune.previewLabel = tr("Retraction tower test pattern");
+    retractionTune.implemented = true;
+    retractionTune.startable = true;
+    retractionTune.calibMode = 9;
+    // Sweep retraction_length across the tower (mm). GCode.cpp:4623 applies the
+    // length per layer above 0.4mm (std::floor(max(0.0,print_z-0.4)) * step).
+    retractionTune.calibStart = 0.0;
+    retractionTune.calibEnd = 2.0;
+    retractionTune.calibStep = 0.1;
+    retractionTune.printNumbers = true;
+    retractionTune.steps = {
+        {"start",  tr("Introduction"), tr("Learn when to use retraction calibration.")},
+        {"preset", tr("Select Parameters"), tr("Choose the retraction length range.")},
+        {"cali",   tr("Calibrate"), tr("Send retraction tower calibration to slicer.")},
+        {"save",   tr("Save Result"), tr("Review cleanest retraction length and save result.")}
+    };
+
+    m_calibTypes = {
+        flowDynamics, flowRate, tempTower,
+        bedLeveling, vibration,
+        maxVolSpeed, vfaTower, retractionTune
+    };
 
     // Initialize all statuses as NotStarted
     for (int i = 0; i < m_calibTypes.size(); ++i)

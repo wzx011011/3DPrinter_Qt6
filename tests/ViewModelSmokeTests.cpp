@@ -2142,10 +2142,18 @@ void ViewModelSmokeTests::calibrationImplementedModesExposeStableRouting()
   CalibrationServiceMock service;
   CalibrationViewModel vm(&service);
 
+  // Phase 124-01 (CALIB-01): the 3 libslic3r tower modes are now dispatched
+  // (Vol_speed=7, VFA=8, Retraction=9). The full emit-path (start/end/step)
+  // is asserted by calibrationImplementedModesEmitSliceRequests; this slot
+  // locks the model/ViewModel-level exposure: each id is present, implemented,
+  // startable, and carries no unavailableReason.
   const ExpectedCalibRequest expected[] = {
       {"flow_dynamics", 1, 0.0, 0.1, 0.002, true},
       {"flow_rate", 5, 0.90, 1.10, 0.01, true},
       {"temp_tower", 6, 190.0, 240.0, 5.0, true},
+      {"max_volumetric_speed", 7, 5.0, 30.0, 0.5, true},
+      {"vfa_tower", 8, 10.0, 100.0, 5.0, true},
+      {"retraction_tune", 9, 0.0, 2.0, 0.1, true},
   };
 
   for (const auto &item : expected)
@@ -2206,10 +2214,12 @@ void ViewModelSmokeTests::calibrationUnsupportedModesAreExplicitlyUnavailable()
   CalibrationServiceMock service;
   CalibrationViewModel vm(&service);
 
+  // Phase 124-01 (CALIB-01): max_volumetric_speed (calibMode=7) is now a real
+  // dispatched mode and is therefore NOT in this list. Only the 2 hardware
+  // modes remain explicitly unavailable (they require live printer hardware).
   const QStringList unsupportedIds = {
       QStringLiteral("bed_leveling"),
       QStringLiteral("vibration"),
-      QStringLiteral("max_volumetric_speed"),
   };
 
   for (const QString &id : unsupportedIds)

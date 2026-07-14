@@ -10,7 +10,6 @@
 #include "core/services/PresetServiceMock.h"
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceService.h"
-#include "core/services/AuxiliaryService.h"
 #include "core/services/UndoRedoManager.h"
 #include "core/services/AppSettingsService.h"
 #include "core/viewmodels/ConfigViewModel.h"
@@ -109,7 +108,6 @@ BackendContext::BackendContext(QObject *parent)
   calibrationViewModel_->setPresetService(presetService_);
   modelMallViewModel_ = new ModelMallViewModel(this);
   multiMachineViewModel_ = new MultiMachineViewModel(this);
-  auxiliaryService_ = new AuxiliaryService(this);
   // v2.8 W3: application-level persisted settings.
   appSettings_ = new AppSettingsService(this);
   // v2.8 W3: inject settings into SliceService for persisted bed size lookup.
@@ -244,7 +242,6 @@ QObject *BackendContext::projectViewModel() const { return projectViewModel_; }
 QObject *BackendContext::calibrationViewModel() const { return calibrationViewModel_; }
 QObject *BackendContext::modelMallViewModel() const { return modelMallViewModel_; }
 QObject *BackendContext::multiMachineViewModel() const { return multiMachineViewModel_; }
-QObject *BackendContext::auxiliaryService() const { return auxiliaryService_; }
 QObject *BackendContext::appSettings() const { return appSettings_; }
 
 bool BackendContext::visualCompareMode() const

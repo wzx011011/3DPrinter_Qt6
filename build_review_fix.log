@@ -1,0 +1,40 @@
+系统找不到指定的路径。
+'findstr' 不是内部或外部命令，也不是可运行的程序
+或批处理文件。
+[REVIEW] Building owzx_app_core + test targets...
+[1/11] Automatic MOC and UIC for target owzx_app_core
+[2/10] Building CXX object CMakeFiles\owzx_app_core.dir\src\core\rendering\MeshRaycaster.cpp.obj
+[3/10] Building CXX object CMakeFiles\owzx_app_core.dir\src\core\rendering\SceneRaycaster.cpp.obj
+[4/10] Building CXX object CMakeFiles\owzx_app_core.dir\src\core\rendering\MeasureEngine.cpp.obj
+[5/10] Building CXX object CMakeFiles\owzx_app_core.dir\src\core\viewmodels\EditorViewModel.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): warning C4267: “=”: 从“size_t”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): note: 模板实例化上下文(最早的实例化上下文)为
+E:\ai\3DPrinter_Qt6\third_party\OrcaSlicer\src\libslic3r/ExtrusionEntity.hpp(432): note: 查看对正在编译的函数 模板 实例化“_Ty std::accumulate<std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,int,Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>>(const _InIt,const _InIt,_Ty,_Fn)”的引用
+        with
+        [
+            _Ty=int,
+            _InIt=std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,
+            _Fn=Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>
+        ]
+[6/10] Linking CXX executable ViewModelSmokeTests.exe
+[7/10] Automatic MOC and UIC for target PartPlateTests
+[8/9] Building CXX object CMakeFiles\PartPlateTests.dir\tests\PartPlateTests.cpp.obj
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): warning C4267: “=”: 从“size_t”转换到“_Ty”，可能丢失数据
+        with
+        [
+            _Ty=int
+        ]
+C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\include\numeric(33): note: 模板实例化上下文(最早的实例化上下文)为
+E:\ai\3DPrinter_Qt6\third_party\OrcaSlicer\src\libslic3r/ExtrusionEntity.hpp(432): note: 查看对正在编译的函数 模板 实例化“_Ty std::accumulate<std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,int,Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>>(const _InIt,const _InIt,_Ty,_Fn)”的引用
+        with
+        [
+            _Ty=int,
+            _InIt=std::_Vector_const_iterator<std::_Vector_val<std::_Simple_types<Slic3r::ExtrusionPath>>>,
+            _Fn=Slic3r::ExtrusionMultiPath::collect_points::<lambda_1>
+        ]
+[9/9] Linking CXX executable PartPlateTests.exe
+[REVIEW] Build OK

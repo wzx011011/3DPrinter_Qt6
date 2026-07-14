@@ -1,0 +1,28 @@
+[vcvars] Dropped 9 PATH entries with spaces+parens
+系统找不到指定的路径。
+'findstr' 不是内部或外部命令，也不是可运行的程序
+或批处理文件。
+[vcvars] Patched Windows Kits 10.0.26100.0
+ninja: no work to do.
+ninja: no work to do.
+ninja: no work to do.
+ninja: no work to do.
+
+[PrepareScene] Running Prepare scene data tests...
+[PrepareScene] tests passed
+
+[PartPlate] Running PartPlate tests...
+[PartPlate] tests passed
+
+[ViewModel] Running ViewModel smoke tests...
+[ViewModel] tests passed
+
+[UI] Running QML UI audit tests...
+[UI] tests passed
+
+[PreviewParser] Running PreviewParser tests...
+[PreviewParser] tests passed
+APP_RUNNING_PID=34868
+
+[E2E] Running pipeline tests...
+[E2E] All pipeline tests passed

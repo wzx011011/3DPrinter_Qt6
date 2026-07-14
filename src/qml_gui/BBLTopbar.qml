@@ -310,8 +310,7 @@ Item {
                         { label: qsTr("设备"),     pos: backend.tpDevice },
                         { label: qsTr("多设备"),   pos: backend.tpMultiDevice },
                         { label: qsTr("项目"),     pos: backend.tpProject },
-                        { label: qsTr("校准"),     pos: backend.tpCalibration },
-                        { label: qsTr("辅助"),     pos: backend.tpPlaceholder1 }
+                        { label: qsTr("校准"),     pos: backend.tpCalibration }
                     ]
 
                     delegate: TabButton {

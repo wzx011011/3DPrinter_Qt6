@@ -550,17 +550,16 @@ ApplicationWindow {
                         CalibrationPage { calibrationVm: backend.calibrationViewModel }
                     }
                 }
-                // Page 7 (tpPlaceholder1) — AuxiliaryPage（v2.3 UI-02 挂载，原占位替换）
-                Loader {
+                // Page 7 (tpPlaceholder1) — structural placeholder.
+                // AuxiliaryPage was removed in v4.6 Phase 126 (dead code: the page had zero
+                // function — its actions all jumped to Prepare/Preview or logged "not yet
+                // implemented", and AuxiliaryService was a file-copy service unrelated to the
+                // UI). The slot stays as a structural placeholder to keep the StackLayout slot
+                // count stable; the "辅助" tab in BBLTopbar is removed.
+                Item {
+                    visible: false
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    active: backend.currentPage === backend.tpPlaceholder1
-                    sourceComponent: Component {
-                        AuxiliaryPage {
-                            projectVm: backend.projectViewModel
-                            backend: backend
-                        }
-                    }
                 }
                 // Page 8 (tpPlaceholder2) — reserved by upstream debug tooling; not exposed in navigation.
                 Item {

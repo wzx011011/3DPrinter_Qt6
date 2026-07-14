@@ -17,7 +17,6 @@ class ProjectServiceMock;
 class NetworkServiceMock;
 class CalibrationServiceMock;
 class CameraServiceMock;
-class AuxiliaryService;
 class AppSettingsService;
 
 class EditorViewModel;
@@ -90,7 +89,6 @@ class BackendContext final : public QObject
   Q_PROPERTY(QObject *calibrationViewModel READ calibrationViewModel CONSTANT)
   Q_PROPERTY(QObject *modelMallViewModel READ modelMallViewModel CONSTANT)
   Q_PROPERTY(QObject *multiMachineViewModel READ multiMachineViewModel CONSTANT)
-  Q_PROPERTY(QObject *auxiliaryService READ auxiliaryService CONSTANT)
   Q_PROPERTY(QObject *appSettings READ appSettings CONSTANT)
   Q_PROPERTY(bool visualCompareMode READ visualCompareMode CONSTANT)
   // Phase 51: shell-level action gate properties (SHELL-03) - forward to EditorViewModel/PreviewViewModel.
@@ -258,7 +256,6 @@ public:
   QObject *calibrationViewModel() const;
   QObject *modelMallViewModel() const;
   QObject *multiMachineViewModel() const;
-  QObject *auxiliaryService() const;
   QObject *appSettings() const;
   /// Camera image provider used by Monitor preview surfaces.
   CameraServiceMock *cameraService() const { return cameraService_; }
@@ -460,8 +457,6 @@ private:
   CalibrationViewModel *calibrationViewModel_ = nullptr;
   ModelMallViewModel *modelMallViewModel_ = nullptr;
   MultiMachineViewModel *multiMachineViewModel_ = nullptr;
-
-  AuxiliaryService *auxiliaryService_ = nullptr;
 
   bool visualCompareMode_ = false;
   int currentPage_ = 1;
