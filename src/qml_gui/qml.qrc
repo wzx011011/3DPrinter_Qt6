@@ -52,7 +52,6 @@
         <file>components/StatusBar.qml</file>
         <file>components/ErrorToast.qml</file>
         <file>components/ErrorBanner.qml</file>
-        <file>components/LayerSlider.qml</file>
         <file>components/CustomGcodeDialog.qml</file>
         <file>components/MoveSlider.qml</file>
         <file>components/PreviewLayerRail.qml</file>

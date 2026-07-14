@@ -149,7 +149,7 @@ function Invoke-NinjaTarget([string]$Target, [bool]$Required = $true) {
     return
   }
 
-  ninja -j16 $Target
+  ninja -j6 $Target
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 

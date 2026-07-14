@@ -364,6 +364,16 @@ private slots:
   // visual evidence is blocked per STATE.md (the source-audit + regression
   // ctest + launch liveness are the verification bar -- VV-02/03/04).
   void v45CrossWorkstreamRegressionLocked();
+  // Phase 117-01 (TICK-01): the Preview layer rail must render tick marks
+  // (pause / color-change / filament-change / custom-gcode / template) driven
+  // by previewVm.tickMarks, expose right-click add/edit/delete menus, and
+  // instantiate CustomGcodeDialog. The formerly-orphaned horizontal
+  // LayerSlider.qml is consolidated into the vertical PreviewLayerRail.qml
+  // (source-truth-aligned with upstream IMSlider) and MUST stay deleted with
+  // its qml.qrc entry gone. Mirrors the Phase 102..116 source-audit pattern
+  // (QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with
+  // TICK-01-named messages).
+  void tickMarksRenderedOnPreviewRail();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -5064,6 +5074,77 @@ void QmlUiAuditTests::v45CrossWorkstreamRegressionLocked()
   // consolidated anchors are re-asserted here. Runtime visual evidence is
   // blocked per STATE.md; the source-audit + regression ctest + launch
   // liveness are the verification bar (VV-02/03/04).
+}
+
+void QmlUiAuditTests::tickMarksRenderedOnPreviewRail()
+{
+  // Phase 117-01 (TICK-01): the Preview layer rail must render tick marks
+  // (pause / color-change / filament-change / custom-gcode / template) driven
+  // by previewVm.tickMarks. The read-side parse at PreviewViewModel.cpp:993-1021
+  // already feeds tickMarks_ from sliced G-code comments; Phase 117 surfaces the
+  // ticks in the running Preview by consolidating the formerly-orphaned
+  // horizontal LayerSlider.qml tick Repeater + right-click add/edit/delete menus
+  // + CustomGcodeDialog into the vertical PreviewLayerRail.qml (source-truth-
+  // aligned with upstream IMSlider). This slot locks the consolidation:
+  // (a) tickMarks is referenced in PreviewLayerRail.qml; (b) the ViewModel tick
+  // CRUD methods are wired into the menus; (c) CustomGcodeDialog is instantiated
+  // in the new host; (d) the orphaned LayerSlider.qml is deleted and its qml.qrc
+  // entry is gone (No-Deprecated-UI rule). Write-back to
+  // custom_gcode_per_print_z and re-slice are Phase 118 -- Phase 117 only
+  // surfaces the UI. Each QVERIFY2 names the TICK-01 contract it locks.
+  //
+  // Pattern: QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with
+  // a TICK-01-named message. Mirrors the Phase 102..116 source-audit pattern
+  // in this file (deterministic, build-dir-independent).
+
+  const QString rail = readSource(QStringLiteral("src/qml_gui/components/PreviewLayerRail.qml"));
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  QVERIFY2(!rail.isEmpty(), "Unable to read PreviewLayerRail.qml");
+  QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
+
+  // TICK-01 / TK-01 (tick render): PreviewLayerRail.qml must reference
+  // previewVm.tickMarks (the Repeater model).
+  QVERIFY2(rail.contains(QStringLiteral("previewVm.tickMarks")),
+           "TICK-01/TK-01: PreviewLayerRail.qml must render a Repeater over previewVm.tickMarks");
+
+  // TICK-01 / TK-02 (color-coded): the per-type color switch must cover the
+  // CustomGcode case (case 1) -- the orphaned LayerSlider.qml fell through to
+  // gray (default), upstream renders custom-gcode ticks distinctly.
+  QVERIFY2(rail.contains(QStringLiteral("case 1:")),
+           "TICK-01/TK-02: PreviewLayerRail.qml must color-code CustomGcode ticks (case 1 branch -- the orphaned LayerSlider fell to gray default)");
+
+  // TICK-01 / TK-03 (add menu): the right-click Add menu must be present and
+  // wired to addPauseAtLayer (and the Add Custom G-code entry).
+  QVERIFY2(rail.contains(QStringLiteral("addPauseAtLayer")),
+           "TICK-01/TK-03: PreviewLayerRail.qml add menu must call previewVm.addPauseAtLayer");
+  QVERIFY2(rail.contains(QStringLiteral("sliderAddMenu")),
+           "TICK-01/TK-03: PreviewLayerRail.qml must define the right-click add menu (sliderAddMenu)");
+
+  // TICK-01 / TK-04 (edit/delete menu): the right-click Edit/Delete menu on a
+  // tick must be present. Delete calls removeTickAtLayer directly in the rail;
+  // Edit opens customGcodeEditDialog (the dialog calls editCustomGcodeAtLayer
+  // on confirm -- see CustomGcodeDialog.qml:59 -- correct UI layering, so the
+  // rail reads the existing tick via tickAtLayer and the dialog owns the write).
+  QVERIFY2(rail.contains(QStringLiteral("removeTickAtLayer")),
+           "TICK-01/TK-04: PreviewLayerRail.qml edit menu must call previewVm.removeTickAtLayer");
+  QVERIFY2(rail.contains(QStringLiteral("customGcodeEditDialog")),
+           "TICK-01/TK-04: PreviewLayerRail.qml must open customGcodeEditDialog on edit (dialog owns editCustomGcodeAtLayer)");
+  QVERIFY2(rail.contains(QStringLiteral("tickAtLayer")),
+           "TICK-01/TK-04: PreviewLayerRail.qml edit menu must read the existing tick via previewVm.tickAtLayer");
+  QVERIFY2(rail.contains(QStringLiteral("sliderEditMenu")),
+           "TICK-01/TK-04: PreviewLayerRail.qml must define the right-click edit/delete menu (sliderEditMenu)");
+
+  // TICK-01 / TK-05 (CustomGcodeDialog host): PreviewLayerRail.qml must
+  // instantiate CustomGcodeDialog (the formerly-orphaned host was LayerSlider).
+  QVERIFY2(rail.contains(QStringLiteral("CustomGcodeDialog")),
+           "TICK-01/TK-05: PreviewLayerRail.qml must instantiate CustomGcodeDialog (new host replacing the deleted orphan LayerSlider)");
+
+  // TICK-01 / TK-06 (No-Deprecated-UI): the orphaned LayerSlider.qml must be
+  // deleted and its qml.qrc entry removed.
+  QVERIFY2(!qrc.contains(QStringLiteral("components/LayerSlider.qml")),
+           "TICK-01/TK-06: qml.qrc must NOT list components/LayerSlider.qml (orphaned slider deleted per No-Deprecated-UI rule)");
+  QVERIFY2(!rail.contains(QStringLiteral("import \"../controls\"")) == false || rail.contains(QStringLiteral("CxMenu")),
+           "TICK-01/TK-06: PreviewLayerRail.qml menus use CxMenu (controls import present)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
