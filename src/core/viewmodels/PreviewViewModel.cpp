@@ -1,6 +1,12 @@
 #include "PreviewViewModel.h"
 
 #include "core/services/SliceService.h"
+#include "core/services/ProjectServiceMock.h"
+#ifdef HAS_LIBSLIC3R
+// Phase 118 (TICK-02/TICK-03): libslic3r custom-g-code write-back path.
+#include <libslic3r/CustomGCode.hpp>
+#include <libslic3r/Model.hpp>
+#endif
 #include <QDebug>
 #include <QFile>
 #include <QRegularExpression>
@@ -341,10 +347,69 @@ namespace
   {
     return std::fabs(a - b) <= 0.0001f;
   }
+
+#ifdef HAS_LIBSLIC3R
+  // Phase 118 (TICK-02/TICK-03): pure, side-effect-free conversion of the
+  // project's OWzx::TickCode list into a libslic3r CustomGCode::Info so it can
+  // be written to model->plates_custom_gcodes. Extracted from writeTicksToModel
+  // (WB-05) so the mapping is unit-testable without a Model/SliceService, mirroring
+  // the v4.5 Measure-engine unit-testable-boundary pattern.
+  //
+  // CRITICAL: TickType and CustomGCode::Type have DIFFERENT numeric orders, so an
+  // explicit switch maps them -- never static_cast (CONTEXT.md enum table):
+  //   PausePrint(0)->CustomGCode::PausePrint(1), CustomGcode(1)->Custom(4),
+  //   Template(2)->Template(3),       ToolChange(3)->ToolChange(2),
+  //   ColorChange(4)->ColorChange(0).
+  // layer is a layer index; Item.print_z is a Z height (mm) -- converted via the
+  // supplied layerZs (sourced from PreviewViewModel::m_layerZs / layerZAt). A
+  // tick whose layer is out of range (or maps to 0 for a non-zero layer request)
+  // is skipped so it does not land on layer 0. Items are sorted by print_z
+  // (operator< exists on Item) and check_mode_for_custom_gcode_per_print_z is
+  // applied so Info::mode is derived before write-back.
+  Slic3r::CustomGCode::Info convertTicksToCustomGcodeInfo(const QList<OWzx::TickCode> &ticks, const QVector<float> &layerZs)
+  {
+    Slic3r::CustomGCode::Info info;
+    info.gcodes.reserve(static_cast<size_t>(ticks.size()));
+    for (const auto &tick : ticks) {
+      // layer -> print_z via layerZs with out-of-range guard.
+      if (tick.tick < 0 || tick.tick >= layerZs.size())
+        continue;
+      const float printZ = layerZs[tick.tick];
+      // layerZAt returns 0.f for an invalid layer; skip so the tick does not
+      // collapse onto layer 0.
+      if (printZ <= 0.f)
+        continue;
+
+      Slic3r::CustomGCode::Type type = Slic3r::CustomGCode::Unknown;
+      switch (tick.type) {
+        case OWzx::TickType::PausePrint:  type = Slic3r::CustomGCode::PausePrint; break;
+        case OWzx::TickType::CustomGcode: type = Slic3r::CustomGCode::Custom;     break;
+        case OWzx::TickType::Template:    type = Slic3r::CustomGCode::Template;   break;
+        case OWzx::TickType::ToolChange:  type = Slic3r::CustomGCode::ToolChange; break;
+        case OWzx::TickType::ColorChange: type = Slic3r::CustomGCode::ColorChange;break;
+        // No default static_cast -- unmapped ticks are dropped (defensive).
+      }
+      if (type == Slic3r::CustomGCode::Unknown)
+        continue;
+
+      Slic3r::CustomGCode::Item item;
+      item.print_z  = static_cast<double>(printZ);
+      item.type     = type;
+      item.extruder = tick.extruder;
+      item.color    = tick.color.toStdString();
+      item.extra    = tick.extra.toStdString();
+      info.gcodes.push_back(item);
+    }
+    std::sort(info.gcodes.begin(), info.gcodes.end());
+    // Derive Info::mode from the assembled items (CustomGCode.hpp:121).
+    Slic3r::CustomGCode::check_mode_for_custom_gcode_per_print_z(info);
+    return info;
+  }
+#endif // HAS_LIBSLIC3R
 }
 
-PreviewViewModel::PreviewViewModel(SliceService *sliceService, QObject *parent)
-    : QObject(parent), sliceService_(sliceService)
+PreviewViewModel::PreviewViewModel(ProjectServiceMock *projectService, SliceService *sliceService, QObject *parent)
+    : QObject(parent), projectService_(projectService), sliceService_(sliceService)
 {
   // All extrusion roles visible by default, matching upstream extrusion_roles_visibility
   // (libvgcode/src/Settings.hpp:49-71). showTravelMoves_ defaults to false in the header.
@@ -1789,6 +1854,8 @@ void PreviewViewModel::addPauseAtLayer(int layer)
   tickMarks_.append(tc);
   std::sort(tickMarks_.begin(), tickMarks_.end());
   emit tickMarksChanged();
+  // Phase 118 (TICK-02/TICK-03): persist into libslic3r custom-g-code store + re-slice.
+  writeTicksToModel();
 }
 
 void PreviewViewModel::addCustomGcodeAtLayer(int layer, const QString& gcode)
@@ -1806,6 +1873,8 @@ void PreviewViewModel::addCustomGcodeAtLayer(int layer, const QString& gcode)
   tickMarks_.append(tc);
   std::sort(tickMarks_.begin(), tickMarks_.end());
   emit tickMarksChanged();
+  // Phase 118 (TICK-02/TICK-03): persist into libslic3r custom-g-code store + re-slice.
+  writeTicksToModel();
 }
 
 void PreviewViewModel::removeTickAtLayer(int layer)
@@ -1814,6 +1883,8 @@ void PreviewViewModel::removeTickAtLayer(int layer)
     if (tickMarks_[i].tick == layer) {
       tickMarks_.removeAt(i);
       emit tickMarksChanged();
+      // Phase 118 (TICK-02/TICK-03): persist removal into libslic3r store + re-slice.
+      writeTicksToModel();
       return;
     }
   }
@@ -1825,6 +1896,8 @@ void PreviewViewModel::editCustomGcodeAtLayer(int layer, const QString& newGcode
     if (tickMarks_[i].tick == layer) {
       tickMarks_[i].extra = newGcode;
       emit tickMarksChanged();
+      // Phase 118 (TICK-02/TICK-03): persist the edited extra into the libslic3r store + re-slice.
+      writeTicksToModel();
       return;
     }
   }
@@ -1846,6 +1919,8 @@ void PreviewViewModel::addFilamentChangeAtLayer(int layer, int extruderId)
   tickMarks_.append(tc);
   std::sort(tickMarks_.begin(), tickMarks_.end());
   emit tickMarksChanged();
+  // Phase 118 (TICK-02/TICK-03): persist into libslic3r custom-g-code store + re-slice.
+  writeTicksToModel();
 }
 
 QVariantMap PreviewViewModel::tickAtLayer(int layer) const
@@ -1870,4 +1945,48 @@ void PreviewViewModel::clearAllTicks()
     return;
   tickMarks_.clear();
   emit tickMarksChanged();
+  // Phase 118 (TICK-02/TICK-03): write the now-empty Info back to the libslic3r
+  // store so the next G-code no longer carries the cleared markers, then re-slice.
+  writeTicksToModel();
+}
+
+void PreviewViewModel::writeTicksToModel()
+{
+  // Phase 118 (TICK-02/TICK-03): close the loop Phase 117 left open. The in-memory
+  // tickMarks_ is converted to a Slic3r::CustomGCode::Info and written to the
+  // current plate's entry in model->plates_custom_gcodes (direct field
+  // assignment -- BBS deprecated Model::set_custom_gcode_per_print_z, see
+  // Model.hpp:1559-1570). curr_plate_index is set so Print::apply reads the
+  // correct plate. A re-slice is then triggered so the emitted G-code contains
+  // the markers; cloneCurrentPlateModel() copies plates_custom_gcodes
+  // (Model.cpp:82-83) so startSlice() sees the written codes.
+  //
+  // Guard chain (WB-03): skip silently if any dependency is null, if a slice is
+  // already in flight (the tick edit is still persisted for the next slice), or
+  // when libslic3r is absent (the non-lib fallback just emits tickMarksChanged,
+  // preserving Phase 117 in-memory behavior).
+#ifdef HAS_LIBSLIC3R
+  if (!projectService_ || !sliceService_)
+    return;
+  if (sliceService_->slicing())
+    return;
+  Slic3r::Model *model = projectService_->rawModel();
+  if (!model)
+    return;
+
+  const int plate = projectService_->currentPlateIndex();
+  const Slic3r::CustomGCode::Info info = convertTicksToCustomGcodeInfo(tickMarks_, m_layerZs);
+
+  model->curr_plate_index = plate;
+  model->plates_custom_gcodes[plate] = info;
+
+  // WB-04: idempotent re-slice. startSlice() clears the old result and re-clones
+  // the model (with the written custom codes) before re-applying (SliceService
+  // .cpp:325-352). The re-slice runs async; tickMarks_ is repopulated from the
+  // new G-code when rebuildFromGCode fires (read-side parse at :993-1021).
+  sliceService_->startSlice(projectService_->projectName());
+#else
+  // Non-lib build: no Model to write to. Preserve Phase 117 in-memory behavior.
+  emit tickMarksChanged();
+#endif
 }

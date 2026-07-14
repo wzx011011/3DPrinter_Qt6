@@ -14,6 +14,7 @@
 class QTimer;
 
 class SliceService;
+class ProjectServiceMock;
 
 class PreviewViewModel final : public QObject
 {
@@ -94,7 +95,10 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(QVariantList roleVisibilityMask READ roleVisibilityMask NOTIFY stateChanged)
 
 public:
-  explicit PreviewViewModel(SliceService *sliceService, QObject *parent = nullptr);
+  // Phase 118 (TICK-02/TICK-03): projectService_ injected so tick CRUD can
+  // write back into libslic3r's model->plates_custom_gcodes (BBS path) and
+  // trigger a re-slice. Mirrors EditorViewModel's injection.
+  explicit PreviewViewModel(ProjectServiceMock *projectService, SliceService *sliceService, QObject *parent = nullptr);
 
   int progress() const;
   bool slicing() const;
@@ -243,7 +247,15 @@ private:
   QVariantMap legendItem(const QString &label, const QString &color, int count) const;
   void updateToolPositionData();
   void rebuildGcodeLineWindow();
+  // Phase 118 (TICK-02/TICK-03): write tickMarks_ back into libslic3r's
+  // model->plates_custom_gcodes (direct field assignment -- BBS deprecated
+  // set_custom_gcode_per_print_z, see Model.hpp:1559-1570) and trigger a
+  // re-slice so the resulting G-code contains the user's markers. Guarded by
+  // HAS_LIBSLIC3R; the non-lib fallback just emits tickMarksChanged (preserves
+  // Phase 117 in-memory behavior when libslic3r is absent).
+  void writeTicksToModel();
 
+  ProjectServiceMock *projectService_ = nullptr;
   SliceService *sliceService_ = nullptr;
   QString estimatedTime_ = QStringLiteral("--:--:--");
   int layerCount_ = 0;

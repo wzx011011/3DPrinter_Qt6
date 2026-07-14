@@ -3235,7 +3235,7 @@ void ViewModelSmokeTests::roleVisibilityToggleDoesNotRepackGcodePreviewData()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   QVERIFY2(QFileInfo::exists(kOrcaGcodePath),
            qPrintable(QStringLiteral("Orca sample fixture missing: %1").arg(kOrcaGcodePath)));
@@ -3267,7 +3267,7 @@ void ViewModelSmokeTests::roleVisibilityMaskFeedsRendererShapeAndTogglesPropagat
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   // The mask must be a dense 20-element bool list regardless of load state.
   const QVariantList maskBefore = preview.roleVisibilityMask();
@@ -3313,7 +3313,7 @@ void ViewModelSmokeTests::legendGradientBoundsStableAcrossLayerMoveDrag()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   QVERIFY2(preview.loadGCodeForPreview(kOrcaGcodePath),
            "loadGCodeForPreview should succeed on the committed Orca fixture");
@@ -3349,7 +3349,7 @@ void ViewModelSmokeTests::currentMoveUpdatesGcodeLineWindowAtomically()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   QVERIFY2(preview.loadGCodeForPreview(kOrcaGcodePath),
            "loadGCodeForPreview should succeed on the committed Orca fixture");
@@ -3378,7 +3378,7 @@ void ViewModelSmokeTests::viewModesExposeUpstreamSeventeenModes()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   const QStringList modes = preview.viewModes();
   QVERIFY2(modes.size() == 17,
@@ -3760,7 +3760,7 @@ void ViewModelSmokeTests::stepCurrentMoveClampsAndUpdatesGcodeLineWindow()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   QVERIFY2(preview.loadGCodeForPreview(kOrcaGcodePath),
            "loadGCodeForPreview should succeed on the committed Orca fixture");

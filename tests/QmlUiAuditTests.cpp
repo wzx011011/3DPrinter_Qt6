@@ -374,6 +374,12 @@ private slots:
   // (QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with
   // TICK-01-named messages).
   void tickMarksRenderedOnPreviewRail();
+  // Phase 118-01 (TICK-02/TICK-03): source-audit lock that the PreviewViewModel
+  // tick CRUD now writes back into libslic3r's model->plates_custom_gcodes and
+  // triggers a re-slice (closing the Phase 117 "in-memory only" gap). Mirrors
+  // the Phase 117 tickMarksRenderedOnPreviewRail slot pattern (readSource +
+  // QVERIFY2 with TICK-02/TICK-03-named messages).
+  void customGcodeWritebackAndResliceWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -5145,6 +5151,58 @@ void QmlUiAuditTests::tickMarksRenderedOnPreviewRail()
            "TICK-01/TK-06: qml.qrc must NOT list components/LayerSlider.qml (orphaned slider deleted per No-Deprecated-UI rule)");
   QVERIFY2(!rail.contains(QStringLiteral("import \"../controls\"")) == false || rail.contains(QStringLiteral("CxMenu")),
            "TICK-01/TK-06: PreviewLayerRail.qml menus use CxMenu (controls import present)");
+}
+
+void QmlUiAuditTests::customGcodeWritebackAndResliceWired()
+{
+  // Phase 118-01 (TICK-02/TICK-03): Phase 117 surfaced the tick UI but only
+  // mutated the in-memory tickMarks_. Phase 118 closes the loop: every tick CRUD
+  // mutator now writes the converted CustomGCode::Info back into libslic3r's
+  // model->plates_custom_gcodes (direct field assignment -- BBS deprecated
+  // Model::set_custom_gcode_per_print_z, see Model.hpp:1559-1570) and triggers a
+  // re-slice via sliceService_->startSlice so the emitted G-code actually
+  // contains the pause / color-change / filament-change / custom-gcode markers.
+  // This slot locks the write-back wiring at the source level (deterministic,
+  // build-dir-independent), mirroring the Phase 102..117 audit pattern. Each
+  // QVERIFY2 names the TICK-02/TICK-03 contract it locks.
+  const QString pvm = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.cpp"));
+  const QString pvmHeader = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.h"));
+  const QString ctx = readSource(QStringLiteral("src/qml_gui/BackendContext.cpp"));
+  QVERIFY2(!pvm.isEmpty(), "Unable to read PreviewViewModel.cpp");
+  QVERIFY2(!pvmHeader.isEmpty(), "Unable to read PreviewViewModel.h");
+  QVERIFY2(!ctx.isEmpty(), "Unable to read BackendContext.cpp");
+
+  // TICK-02 (write-back target): PreviewViewModel.cpp must reference the BBS
+  // plates_custom_gcodes map (the real write path -- NOT the deprecated
+  // set_custom_gcode_per_print_z helper).
+  QVERIFY2(pvm.contains(QStringLiteral("plates_custom_gcodes")),
+           "TICK-02: PreviewViewModel.cpp must write model->plates_custom_gcodes (BBS write path)");
+
+  // TICK-02 (explicit enum map, NOT static_cast): the pure conversion helper
+  // convertTicksToCustomGcodeInfo must exist, and the TickType->CustomGCode::Type
+  // map must be an explicit switch (the two enums have DIVERGENT numeric orders,
+  // so static_cast would corrupt PausePrint 0->1 and ColorChange 4->0). The
+  // helper name is the single audit anchor that proves the explicit map is in
+  // place; a bare static_cast<...Type> must NOT appear.
+  QVERIFY2(pvm.contains(QStringLiteral("convertTicksToCustomGcodeInfo")),
+           "TICK-02: PreviewViewModel.cpp must define the explicit-map conversion helper convertTicksToCustomGcodeInfo");
+  QVERIFY2(pvm.contains(QStringLiteral("CustomGCode::PausePrint")),
+           "TICK-02: convertTicksToCustomGcodeInfo must map via the explicit CustomGCode::Type enum (PausePrint branch present)");
+  QVERIFY2(!pvm.contains(QStringLiteral("static_cast<Slic3r::CustomGCode::Type>")),
+           "TICK-02: convertTicksToCustomGcodeInfo must NOT static_cast TickType to CustomGCode::Type (divergent numeric order)");
+
+  // TICK-03 (re-slice trigger): PreviewViewModel.cpp must call startSlice to
+  // re-slice after writing the Info, so the G-code picks up the markers.
+  QVERIFY2(pvm.contains(QStringLiteral("startSlice")),
+           "TICK-03: PreviewViewModel.cpp must trigger a re-slice via startSlice after write-back");
+
+  // TICK-02 (dependency injection): PreviewViewModel ctor must take
+  // ProjectServiceMock* so it can reach rawModel()->plates_custom_gcodes, and
+  // BackendContext must pass projectService_ at assembly.
+  QVERIFY2(pvmHeader.contains(QStringLiteral("ProjectServiceMock *projectService")),
+           "TICK-02: PreviewViewModel ctor must inject ProjectServiceMock* (projectService_ reach-through to rawModel)");
+  QVERIFY2(ctx.contains(QStringLiteral("new PreviewViewModel(projectService_, sliceService_, this)")),
+           "TICK-02: BackendContext must assemble PreviewViewModel with projectService_ as the first ctor arg");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

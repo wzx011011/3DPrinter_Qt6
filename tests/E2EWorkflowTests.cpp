@@ -475,7 +475,7 @@ void E2EWorkflowTests::test_local_import_slice_preview_export_workflow()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
   QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
@@ -568,7 +568,7 @@ void E2EWorkflowTests::test_preview_receives_gcode_data()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   // Load model
   QVERIFY(project.loadFile(kStlPath));
@@ -654,7 +654,7 @@ void E2EWorkflowTests::test_preview_parser_handles_extrusion_modes_and_travel_fi
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   QTemporaryFile gcode(QDir::tempPath() + QStringLiteral("/owzx_preview_parser_XXXXXX.gcode"));
   QVERIFY2(gcode.open(), "temporary G-code fixture should be writable");
@@ -754,7 +754,7 @@ void E2EWorkflowTests::test_preview_parser_handles_orca_metadata_view_modes_and_
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   QTemporaryFile gcode(QDir::tempPath() + QStringLiteral("/owzx_preview_orca_metadata_XXXXXX.gcode"));
   QVERIFY2(gcode.open(), "temporary G-code fixture should be writable");
@@ -869,7 +869,7 @@ void E2EWorkflowTests::test_preview_parser_ignores_z_hop_travel_as_layer()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   QTemporaryFile gcode(QDir::tempPath() + QStringLiteral("/owzx_preview_zhop_XXXXXX.gcode"));
   QVERIFY2(gcode.open(), "temporary G-code fixture should be writable");
@@ -1020,7 +1020,7 @@ void E2EWorkflowTests::test_import_invalidates_slice_output_and_preview_payload(
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
   QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
@@ -1069,7 +1069,7 @@ void E2EWorkflowTests::test_previous_gcode_reuse_marks_reused_result_and_refresh
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
   QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
@@ -1133,7 +1133,7 @@ void E2EWorkflowTests::test_preview_rebuilds_on_active_result_switch_without_sli
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
   QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
@@ -1397,7 +1397,7 @@ void E2EWorkflowTests::sliceFailedClearsPreviewState()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
   // Seed a valid preview via a real live slice so we can observe the cleared state.
@@ -1441,7 +1441,7 @@ void E2EWorkflowTests::sliceResultClearedClearsPreviewState()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
   QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
@@ -1480,7 +1480,7 @@ void E2EWorkflowTests::plateSwitchToInvalidClearsPreviewState()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
   QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
@@ -1524,7 +1524,7 @@ void E2EWorkflowTests::resliceRebuildsGcodePreviewDataWithDifferentBytes()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
   QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
@@ -1602,7 +1602,7 @@ void E2EWorkflowTests::exportWhilePreviewVisibleLeavesGcodePreviewDataIntact()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
   QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");

@@ -100,7 +100,7 @@ void PreviewParserTests::test_role_string_mapping_covers_upstream_enum()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   // Indices 0..6 are identical across both enums; 7..18 diverge.
   QCOMPARE(preview.roleForType(QStringLiteral("Inner wall")), 1);
@@ -134,7 +134,7 @@ void PreviewParserTests::test_view_modes_match_upstream_seventeen()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   const QStringList modes = preview.viewModes();
   QCOMPARE(modes.size(), 17);
@@ -165,7 +165,7 @@ void PreviewParserTests::test_view_mode_availability_reports_data_unavailable_mo
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   const QStringList modes = preview.viewModes();
   const QStringList unavailableModes = {
@@ -215,7 +215,7 @@ void PreviewParserTests::test_summary_mode_has_no_gradient_legend()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   QVERIFY2(preview.loadGCodeForPreview(fixturePath()),
            "fixture should parse for Summary legend assertion");
@@ -242,7 +242,7 @@ void PreviewParserTests::test_divergent_role_colors_correct()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   // roleForType returns the canonical libvgcode index (NOT the libslic3r int).
   const int ironingRole = preview.roleForType(QStringLiteral("Ironing"));
@@ -267,7 +267,7 @@ void PreviewParserTests::test_all_view_modes_keep_valid_gcv1_payload()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
-  PreviewViewModel preview(&slice);
+  PreviewViewModel preview(&project, &slice);
 
   QVERIFY2(preview.loadGCodeForPreview(fixturePath()),
            "fixture should parse before validating view-mode payload survival");

@@ -76,7 +76,9 @@ BackendContext::BackendContext(QObject *parent)
   // Undo/Redo 框架（对齐上游 UndoRedo）：创建管理器并注入到 EditorViewModel
   auto *undoManager = new UndoRedoManager(this);
   editorViewModel_->setUndoRedoManager(undoManager);
-  previewViewModel_ = new PreviewViewModel(sliceService_, this);
+  // Phase 118 (TICK-02/TICK-03): inject projectService_ so PreviewViewModel can
+  // write tickMarks_ back into libslic3r's plates_custom_gcodes and re-slice.
+  previewViewModel_ = new PreviewViewModel(projectService_, sliceService_, this);
   // Phase 51 SHELL-02/SHELL-03: forward viewmodel stateChanged so shell gates
   // (canImport/canSlice/isSlicing/canExport/canSave/canUndo/canRedo/isBusy) and
   // Prepare/Preview state stay live across page round-trips.
