@@ -440,6 +440,12 @@ private slots:
   // QVERIFY2 with PAINT-02/PAINT-03-named messages). Source-level only; runs in
   // the regression ctest.
   void paintedFacetOverlayAndBrushInteraction();
+  // Phase 122 (PAINT-04): Support/Seam painted facets write to ModelVolume
+  // FacetsAnnotation (supported_facets/seam_facets) so the slice consumes them.
+  void supportAndSeamPaintFeedsSlice();
+  // Phase 123 (PAINT-05): MMU segmentation paint writes to
+  // mmu_segmentation_facets + clearMmuSegmentation implemented (no TODO stub).
+  void mmuSegmentationPaintFeedsSlice();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -5750,6 +5756,58 @@ void QmlUiAuditTests::paintedFacetOverlayAndBrushInteraction()
            "PAINT-03/OV-07: PreparePage.qml Support panel must bind supportPaintCursorType");
   QVERIFY2(preparePage.contains(QStringLiteral("paintOverlayData")),
            "PAINT-02/OV-07: PreparePage.qml must bind paintOverlayData on the viewport");
+}
+
+void QmlUiAuditTests::supportAndSeamPaintFeedsSlice()
+{
+  // Phase 122 (PAINT-04): Support/Seam painted facets must write to ModelVolume
+  // FacetsAnnotation (supported_facets/seam_facets) via the ProjectServiceMock
+  // bridge, so the slice consumes them (cloneCurrentPlateModel deep-copies
+  // FacetsAnnotation -> PrintObject::project_and_append_custom_facets).
+  const QString svcH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString svcCpp = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  QVERIFY2(!svcH.isEmpty(), "Unable to read ProjectServiceMock.h");
+  QVERIFY2(!svcCpp.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
+
+  // PAINT-04/SS-01: bridge API present.
+  QVERIFY2(svcH.contains(QStringLiteral("writePaintToModelVolume")),
+           "PAINT-04/SS-01: ProjectServiceMock.h must declare writePaintToModelVolume");
+  QVERIFY2(svcH.contains(QStringLiteral("PaintKind")),
+           "PAINT-04/SS-01: ProjectServiceMock.h must define PaintKind enum");
+
+  // PAINT-04/SS-01: writes supported_facets + seam_facets.
+  QVERIFY2(svcCpp.contains(QStringLiteral("supported_facets")),
+           "PAINT-04/SS-01: ProjectServiceMock.cpp must write mv->supported_facets (Support paint)");
+  QVERIFY2(svcCpp.contains(QStringLiteral("seam_facets")),
+           "PAINT-04/SS-01: ProjectServiceMock.cpp must write mv->seam_facets (Seam paint)");
+
+  // PAINT-04/SS-02: EditorViewModel calls the bridge.
+  QVERIFY2(evm.contains(QStringLiteral("writePaintToModelVolume")),
+           "PAINT-04/SS-02: EditorViewModel paintAtFacet must call writePaintToModelVolume");
+
+  // PAINT-04/SS-03: clear stubs implemented (no longer TODO-only).
+  QVERIFY2(!evm.contains(QStringLiteral("TODO: Implement actual clear logic")),
+           "PAINT-04/SS-03: clearSupportPaintOnSelection TODO stub must be implemented");
+}
+
+void QmlUiAuditTests::mmuSegmentationPaintFeedsSlice()
+{
+  // Phase 123 (PAINT-05): MMU segmentation paint writes to
+  // mmu_segmentation_facets + clearMmuSegmentation implemented.
+  const QString svcCpp = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  QVERIFY2(!svcCpp.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
+
+  // PAINT-05/MM-01: mmu_segmentation_facets bridge present.
+  QVERIFY2(svcCpp.contains(QStringLiteral("mmu_segmentation_facets")),
+           "PAINT-05/MM-01: ProjectServiceMock.cpp must write mv->mmu_segmentation_facets (MMU paint)");
+
+  // PAINT-05/MM-02: clearMmuSegmentation no longer a TODO stub returning false.
+  QVERIFY2(!evm.contains(QStringLiteral("TODO: Clear per-triangle MMU facet data")),
+           "PAINT-05/MM-02: clearMmuSegmentation TODO stub must be implemented");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

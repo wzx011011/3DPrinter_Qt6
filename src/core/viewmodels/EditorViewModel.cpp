@@ -874,6 +874,14 @@ void EditorViewModel::setMeasureSelectionMode(int mode)
 }
 
 // Support painting (对齐上游 GLGizmoFdmSupports)
+int EditorViewModel::activePaintKind() const { return m_activePaintKind; }
+void EditorViewModel::setActivePaintKind(int kind)
+{
+  if (m_activePaintKind != kind) {
+    m_activePaintKind = kind;
+    emit stateChanged();
+  }
+}
 int EditorViewModel::supportPaintTool() const { return m_supportPaintTool; }
 void EditorViewModel::setSupportPaintTool(int tool)
 {
@@ -984,9 +992,26 @@ void EditorViewModel::setSupportPaintToolFromQml(int tool)
 
 void EditorViewModel::clearSupportPaintOnSelection()
 {
-  // TODO: Implement actual clear logic when mesh selection is available
-  // For now, just emit state changed signal
+  // Phase 122 (PAINT-04): clear Support paint on the selected object. Mirrors
+  // upstream GLGizmoFdmSupports reset: PaintEngine.clearObject + reset the
+  // ModelVolume supported_facets FacetsAnnotation + invalidate slice.
+  const int obj = primarySelectedSourceIndex(this);
+  if (obj >= 0) {
+    if (m_paintEngine)
+      m_paintEngine->clearObject(obj);
+#ifdef HAS_LIBSLIC3R
+    if (projectService_ && projectService_->rawModel() &&
+        size_t(obj) < projectService_->rawModel()->objects.size()) {
+      int vi = 0;
+      for (auto *mv : projectService_->rawModel()->objects[size_t(obj)]->volumes) {
+        if (mv) projectService_->clearPaintOnModelVolume(obj, vi, PaintKind::Support);
+        ++vi;
+      }
+    }
+#endif
+  }
   emit stateChanged();
+  emit paintDataChanged();
 }
 
 // ── Paint data management (对齐上游 TriangleSelector) ──────────────────────
@@ -1062,8 +1087,25 @@ void EditorViewModel::setSeamPaintOnOverhangsOnly(bool on)
 }
 void EditorViewModel::clearSeamPaintOnSelection()
 {
-  // TODO: Implement actual clear logic when mesh selection is available
+  // Phase 122 (PAINT-04): clear Seam paint on the selected object. Mirrors
+  // upstream GLGizmoSeam reset: PaintEngine.clearObject + reset seam_facets.
+  const int obj = primarySelectedSourceIndex(this);
+  if (obj >= 0) {
+    if (m_paintEngine)
+      m_paintEngine->clearObject(obj);
+#ifdef HAS_LIBSLIC3R
+    if (projectService_ && projectService_->rawModel() &&
+        size_t(obj) < projectService_->rawModel()->objects.size()) {
+      int vi = 0;
+      for (auto *mv : projectService_->rawModel()->objects[size_t(obj)]->volumes) {
+        if (mv) projectService_->clearPaintOnModelVolume(obj, vi, PaintKind::Seam);
+        ++vi;
+      }
+    }
+#endif
+  }
   emit stateChanged();
+  emit paintDataChanged();
 }
 
 // ── Hollow gizmo (对齐上游 GLGizmoHollow) ─────────────────────────────────
@@ -1233,9 +1275,27 @@ int EditorViewModel::mmuExtruderCount() const { return m_mmuExtruderCount; }
 
 bool EditorViewModel::clearMmuSegmentation()
 {
-  // TODO: Clear per-triangle MMU facet data when TriangleSelector is available
+  // Phase 123 (PAINT-05): clear MMU segmentation paint on the selected object.
+  // Mirrors upstream GLGizmoMmuSegmentation reset: PaintEngine.clearObject +
+  // reset mmu_segmentation_facets.
+  const int obj = primarySelectedSourceIndex(this);
+  if (obj >= 0) {
+    if (m_paintEngine)
+      m_paintEngine->clearObject(obj);
+#ifdef HAS_LIBSLIC3R
+    if (projectService_ && projectService_->rawModel() &&
+        size_t(obj) < projectService_->rawModel()->objects.size()) {
+      int vi = 0;
+      for (auto *mv : projectService_->rawModel()->objects[size_t(obj)]->volumes) {
+        if (mv) projectService_->clearPaintOnModelVolume(obj, vi, PaintKind::Mmu);
+        ++vi;
+      }
+    }
+#endif
+  }
   emit stateChanged();
-  return false;
+  emit paintDataChanged();
+  return true;
 }
 
 // ── Drill gizmo (对齐上游 GLGizmoDrill) ──
@@ -2623,6 +2683,25 @@ bool EditorViewModel::paintAtFacet(int obj, int vol, int facetIdx,
   // enum mirror so existing QML that reads paintDataChanged still refreshes.
   if (painted) {
     setTriangleSupportState(hit.objectIndex, int(hit.facetIdx), state);
+
+    // Phase 122/123 (PAINT-04/05): write the painted TriangleSelector back to
+    // the ModelVolume FacetsAnnotation member so the slice consumes the paint.
+    // Mirrors upstream update_model_object (GLGizmoFdmSupports.cpp:577 etc).
+    // The selector is the authoritative source; FacetsAnnotation::set serializes
+    // it + touch() (re-slice). cloneCurrentPlateModel deep-copies FacetsAnnotation
+    // so the next slice flows the paint to PrintObject automatically.
+#ifdef HAS_LIBSLIC3R
+    const Slic3r::TriangleSelector *selector =
+        m_paintEngine ? m_paintEngine->cachedSelectorForVolume(
+                            hit.objectIndex, hit.volumeIndex)
+                      : nullptr;
+    if (selector) {
+      const PaintKind kind = static_cast<PaintKind>(
+          (m_activePaintKind < 0 || m_activePaintKind > 2) ? 0 : m_activePaintKind);
+      projectService_->writePaintToModelVolume(
+          hit.objectIndex, hit.volumeIndex, kind, *selector);
+    }
+#endif
   }
   // hitX/hitY/hitZ are carried for future overlay anchoring (Phase 121) but
   // are not consumed here -- the authoritative hit is hit.meshLocalPosition.

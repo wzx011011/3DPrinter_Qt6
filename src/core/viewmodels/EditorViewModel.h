@@ -245,6 +245,8 @@ public:
   void setSupportPaintToolType(int type);
   float supportPaintCursorRadius() const;
   void setSupportPaintCursorRadius(float radius);
+  int activePaintKind() const;
+  void setActivePaintKind(int kind);
   float supportPaintAngleThreshold() const;
   void setSupportPaintAngleThreshold(float angle);
   float supportPaintSmartFillAngle() const;
@@ -536,6 +538,11 @@ public:
   /// 测量拾取模式（对齐上游 GLGizmoMeasure feature/point selection）
   Q_PROPERTY(int measureSelectionMode READ measureSelectionMode WRITE setMeasureSelectionMode NOTIFY stateChanged)
   /// 支撑绘制设置（对齐上游 GLGizmoFdmSupports）
+  // Phase 122/123 (PAINT-04/05): which paint kind is active so paintAtFacet
+  // can route the write-back to the correct ModelVolume FacetsAnnotation member
+  // (0=Support->supported_facets, 1=Seam->seam_facets, 2=Mmu->mmu_segmentation_facets).
+  // QML sets this when switching gizmo (GizmoSupportPaint=6->0, GizmoSeamPaint=7->1, GizmoMmuSegmentation=10->2).
+  Q_PROPERTY(int activePaintKind READ activePaintKind WRITE setActivePaintKind NOTIFY stateChanged)
   Q_PROPERTY(int supportPaintTool READ supportPaintTool WRITE setSupportPaintTool NOTIFY stateChanged)
   Q_PROPERTY(int supportPaintCursorType READ supportPaintCursorType WRITE setSupportPaintCursorType NOTIFY stateChanged)
   Q_PROPERTY(int supportPaintToolType READ supportPaintToolType WRITE setSupportPaintToolType NOTIFY stateChanged)
@@ -1190,6 +1197,7 @@ private:
   bool  m_arrangeMultiMaterial = true; ///< 允许多耗材同板
   bool  m_arrangeAvoidCalibration = true; ///< 避免校准区域
   // Support painting (对齐上游 GLGizmoFdmSupports)
+  int m_activePaintKind = 0;               ///< 0=Support, 1=Seam, 2=Mmu (Phase 122/123 write-back routing)
   int m_supportPaintTool = 1;              ///< 0=None, 1=Enforcer, 2=Blocker
   int m_supportPaintCursorType = 0;        ///< 0=Circle, 1=Sphere, 2=Pointer, 3=HeightRange, 4=GapFill
   int m_supportPaintToolType = 0;          ///< 0=Brush, 1=BucketFill, 2=SmartFill, 3=GapFill

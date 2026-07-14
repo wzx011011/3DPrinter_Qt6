@@ -25,6 +25,7 @@
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Model.hpp>
 #include <libslic3r/TriangleMesh.hpp>
+#include <libslic3r/TriangleSelector.hpp>
 #include <libslic3r/QuadricEdgeCollapse.hpp>
 #include <libslic3r/Format/3mf.hpp>
 #include <libslic3r/Format/bbs_3mf.hpp>
@@ -454,6 +455,55 @@ std::unique_ptr<Slic3r::Model> ProjectServiceMock::cloneCurrentPlateModel() cons
   }
 
   return clonedModel;
+}
+
+// Phase 122/123 (PAINT-04/05): bridge PaintEngine's TriangleSelector into the
+// ModelVolume FacetsAnnotation members so the slice consumes painted facets.
+// Mirrors upstream update_model_object: GLGizmoFdmSupports.cpp:577 writes
+// mv->supported_facets.set(selector); GLGizmoSeam.cpp:315 writes seam_facets;
+// GLGizmoMmuSegmentation.cpp:700 writes mmu_segmentation_facets. The FacetsAnnotation
+// is a member of ModelVolume (Model.hpp:870/873/876); cloneCurrentPlateModel
+// deep-copies it (Model.hpp:1111) so print.apply flows the paint to the slice.
+bool ProjectServiceMock::writePaintToModelVolume(int objectIndex, int volumeIndex,
+                                                 PaintKind kind,
+                                                 const Slic3r::TriangleSelector &selector)
+{
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return false;
+  Slic3r::ModelObject *mo = model_->objects[size_t(objectIndex)];
+  if (!mo || volumeIndex < 0 || size_t(volumeIndex) >= mo->volumes.size())
+    return false;
+  Slic3r::ModelVolume *mv = mo->volumes[size_t(volumeIndex)];
+  if (!mv)
+    return false;
+  // FacetsAnnotation::set (Model.cpp:3524) serializes the selector + touch()
+  // (timestamp bump -> Print::apply diff detects change -> re-slice).
+  switch (kind) {
+    case PaintKind::Support: mv->supported_facets.set(selector); break;
+    case PaintKind::Seam:    mv->seam_facets.set(selector);     break;
+    case PaintKind::Mmu:     mv->mmu_segmentation_facets.set(selector); break;
+  }
+  return true;
+}
+
+bool ProjectServiceMock::clearPaintOnModelVolume(int objectIndex, int volumeIndex,
+                                                 PaintKind kind)
+{
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return false;
+  Slic3r::ModelObject *mo = model_->objects[size_t(objectIndex)];
+  if (!mo || volumeIndex < 0 || size_t(volumeIndex) >= mo->volumes.size())
+    return false;
+  Slic3r::ModelVolume *mv = mo->volumes[size_t(volumeIndex)];
+  if (!mv)
+    return false;
+  // FacetsAnnotation::reset clears the serialized state + touch() for re-slice.
+  switch (kind) {
+    case PaintKind::Support: mv->supported_facets.reset(); break;
+    case PaintKind::Seam:    mv->seam_facets.reset();     break;
+    case PaintKind::Mmu:     mv->mmu_segmentation_facets.reset(); break;
+  }
+  return true;
 }
 #endif
 

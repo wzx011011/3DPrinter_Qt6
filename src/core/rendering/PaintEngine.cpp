@@ -113,6 +113,16 @@ bool PaintEngine::hasFacets(int objectIndex, int volumeIndex,
   return it->second.selector->has_facets(state);
 }
 
+const Slic3r::TriangleSelector *PaintEngine::cachedSelectorForVolume(
+    int objectIndex, int volumeIndex) const
+{
+  const Key key = volumeKey(objectIndex, volumeIndex);
+  auto it = m_cache.find(key);
+  if (it == m_cache.end() || !it->second.selector)
+    return nullptr;
+  return it->second.selector.get();
+}
+
 void PaintEngine::clearObject(int objectIndex)
 {
   // Erase every (objectIndex, *) entry. std::map::erase with iterator-based

@@ -22,6 +22,7 @@ struct indexed_triangle_set;
 namespace Slic3r
 {
   class Model;
+  class TriangleSelector;
 }
 #endif
 
@@ -35,6 +36,12 @@ enum class MockVolumeType {
   TextEmboss = 5,     ///< 对齐上游 GLGizmoText — 文字浮雕体积
   SvgEmboss = 6       ///< 对齐上游 GLGizmoSVG — SVG 浮雕体积
 };
+
+/// Paint kind for the Phase 122/123 TriangleSelector -> FacetsAnnotation bridge.
+/// Mirrors upstream update_model_object (GLGizmoFdmSupports.cpp:577,
+/// GLGizmoSeam.cpp:315, GLGizmoMmuSegmentation.cpp:700) which writes the
+/// TriangleSelector into one of three ModelVolume FacetsAnnotation members.
+enum class PaintKind { Support, Seam, Mmu };
 
 /// Mock volume data entry
 struct MockVolumeEntry {
@@ -112,6 +119,20 @@ public:
 #ifdef HAS_LIBSLIC3R
   std::unique_ptr<Slic3r::Model> cloneCurrentPlateModel() const;
   Slic3r::Model *rawModel() const { return model_; }
+
+  // Phase 122/123 (PAINT-04/05): write the painted TriangleSelector into the
+  // ModelVolume FacetsAnnotation member for the given paint kind. Mirrors
+  // upstream update_model_object (GLGizmoFdmSupports.cpp:577 for Support,
+  // GLGizmoSeam.cpp:315 for Seam, GLGizmoMmuSegmentation.cpp:700 for Mmu).
+  // FacetsAnnotation::set (Model.cpp:3524) serializes + touch() (timestamp bump
+  // -> re-slice). cloneCurrentPlateModel deep-copies FacetsAnnotation, so the
+  // slice consumes it automatically; 3MF persistence is automatic via
+  // bbs_3mf paint_supports/paint_seam/paint_color attributes.
+  bool writePaintToModelVolume(int objectIndex, int volumeIndex,
+                               PaintKind kind,
+                               const Slic3r::TriangleSelector &selector);
+  // Reset the FacetsAnnotation member for the given paint kind (clear paint).
+  bool clearPaintOnModelVolume(int objectIndex, int volumeIndex, PaintKind kind);
 #endif
 
   /// 加载 3MF/STL/OBJ 等模型文件（真正调用 libslic3r）

@@ -189,6 +189,15 @@ public:
   // Number of currently-cached selectors (diagnostic / test hook).
   std::size_t cachedSelectorCount() const { return m_cache.size(); }
 
+  // Read-only access to the cached selector for one volume, WITHOUT building.
+  // Returns nullptr if no selector has been built for the (object, volume) pair
+  // (e.g. nothing painted yet). Used by the Phase 122/123 write-back that feeds
+  // ModelVolume::supported_facets / seam_facets / mmu_segmentation_facets
+  // (FacetsAnnotation::set takes a const TriangleSelector&). The pointer stays
+  // owned by this engine; callers MUST NOT delete it.
+  const Slic3r::TriangleSelector *cachedSelectorForVolume(
+      int objectIndex, int volumeIndex) const;
+
 private:
   using Key = std::pair<int, int>;
 
