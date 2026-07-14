@@ -414,6 +414,16 @@ private slots:
   // with CALIB-01-named messages). Source-level only; runs in the regression
   // ctest.
   void calibrationTowerModesDispatchToLibslic3r();
+  // Phase 125 (CALIB-02 + CALIB-03): source-audit lock that (a)
+  // CalibrationDialog.qml has the range input fields (start/end/step) bound to
+  // the ViewModel; (b) CalibrationViewModel exposes the calibStart/calibEnd/
+  // calibStep Q_PROPERTYs that forward to setCalibParams; (c) the mock
+  // 0.04f + item*0.01 K-value writeback is GONE, replaced by the real PA
+  // G-code readback (M900 K / SET_PRESSURE_ADVANCE parse) for PA + an honest
+  // manual-interpretation note for non-PA tower modes. Mirrors the Phase
+  // 124 source-audit pattern (readSource + QVERIFY2 with CALIB-02/CALIB-03-
+  // named messages). Source-level only; runs in the regression ctest.
+  void calibrationRangeInputAndKValueReadback();
   // Phase 126 (CLEAN-01): the legacy dead-code pages (DeviceListPage,
   // AuxiliaryPage, ModelMallPage, AuxiliaryListPanel) + AuxiliaryService must
   // stay deleted (No-Deprecated-UI rule). These were in the removed LAN/device/
@@ -5496,6 +5506,95 @@ void QmlUiAuditTests::calibrationTowerModesDispatchToLibslic3r()
   QVERIFY2(!sliceSource.isEmpty(), "Unable to read SliceService.cpp");
   QVERIFY2(sliceSource.contains(QStringLiteral("setCalibParams")),
            "CALIB-01/CM-02: SliceService must expose setCalibParams (transparent passthrough)");
+}
+
+void QmlUiAuditTests::calibrationRangeInputAndKValueReadback()
+{
+  // Phase 125 (CALIB-02 + CALIB-03): source-audit lock that (a) the
+  // CalibrationDialog.qml has the range input fields (start/end/step) bound to
+  // the ViewModel; (b) CalibrationViewModel exposes the calibStart/calibEnd/
+  // calibStep Q_PROPERTYs that forward the user-edited range to
+  // CalibrationServiceMock::setCalibParams before startSlice; (c) the mock
+  // 0.04f + item*0.01 K-value writeback is GONE, replaced by a real PA G-code
+  // readback (M900 K / SET_PRESSURE_ADVANCE parse) for PA + an honest
+  // manual-interpretation note for non-PA tower modes (no fabricated K).
+  // Mirrors the Phase 124 source-audit pattern (readSource + QVERIFY2 with
+  // CALIB-02/CALIB-03-named messages). Source-level only; runs in the
+  // regression ctest.
+
+  // --- CALIB-02: range input UI + ViewModel range Q_PROPERTYs ---
+
+  // (a) CalibrationDialog.qml has the range input fields. The dialog must bind
+  // three CxTextField controls to calibStart/calibEnd/calibStep (the
+  // Q_PROPERTY names), with DoubleValidator on each.
+  const QString dialogSource =
+      readSource(QStringLiteral("src/qml_gui/dialogs/CalibrationDialog.qml"));
+  QVERIFY2(!dialogSource.isEmpty(), "Unable to read CalibrationDialog.qml");
+  QVERIFY2(dialogSource.contains(QStringLiteral("calibrationVm.calibStart")),
+           "CALIB-02/CR-01: CalibrationDialog.qml must bind a range field to calibrationVm.calibStart");
+  QVERIFY2(dialogSource.contains(QStringLiteral("calibrationVm.calibEnd")),
+           "CALIB-02/CR-01: CalibrationDialog.qml must bind a range field to calibrationVm.calibEnd");
+  QVERIFY2(dialogSource.contains(QStringLiteral("calibrationVm.calibStep")),
+           "CALIB-02/CR-01: CalibrationDialog.qml must bind a range field to calibrationVm.calibStep");
+  QVERIFY2(dialogSource.contains(QStringLiteral("DoubleValidator")),
+           "CALIB-02/CR-01: CalibrationDialog.qml range inputs must use a DoubleValidator for numeric bounds");
+
+  // (b) CalibrationViewModel exposes the range Q_PROPERTYs + setters that
+  // forward to the service before startSlice.
+  const QString vmHeader =
+      readSource(QStringLiteral("src/core/viewmodels/CalibrationViewModel.h"));
+  QVERIFY2(!vmHeader.isEmpty(), "Unable to read CalibrationViewModel.h");
+  QVERIFY2(vmHeader.contains(QStringLiteral("Q_PROPERTY(double calibStart READ calibStart WRITE setCalibStart")),
+           "CALIB-02/CR-02: CalibrationViewModel must expose Q_PROPERTY calibStart (READ+WRITE)");
+  QVERIFY2(vmHeader.contains(QStringLiteral("Q_PROPERTY(double calibEnd READ calibEnd WRITE setCalibEnd")),
+           "CALIB-02/CR-02: CalibrationViewModel must expose Q_PROPERTY calibEnd (READ+WRITE)");
+  QVERIFY2(vmHeader.contains(QStringLiteral("Q_PROPERTY(double calibStep READ calibStep WRITE setCalibStep")),
+           "CALIB-02/CR-02: CalibrationViewModel must expose Q_PROPERTY calibStep (READ+WRITE)");
+
+  // The ViewModel must forward the edited range to the service (setCalibRange).
+  const QString vmSource =
+      readSource(QStringLiteral("src/core/viewmodels/CalibrationViewModel.cpp"));
+  QVERIFY2(!vmSource.isEmpty(), "Unable to read CalibrationViewModel.cpp");
+  QVERIFY2(vmSource.contains(QStringLiteral("setCalibRange")),
+           "CALIB-02/CR-02: CalibrationViewModel range setters must forward to CalibrationServiceMock::setCalibRange");
+
+  // The service must expose the override API + default readback.
+  const QString calibHeader =
+      readSource(QStringLiteral("src/core/services/CalibrationServiceMock.h"));
+  QVERIFY2(!calibHeader.isEmpty(), "Unable to read CalibrationServiceMock.h");
+  QVERIFY2(calibHeader.contains(QStringLiteral("setCalibRange")),
+           "CALIB-02/CR-02: CalibrationServiceMock must expose setCalibRange (user override entry point)");
+  QVERIFY2(calibHeader.contains(QStringLiteral("calibTypeStart")),
+           "CALIB-02/CR-02: CalibrationServiceMock must expose calibTypeStart (default range readback)");
+
+  // --- CALIB-03: real K-value readback replaces the mock ---
+
+  // (c) the mock 0.04f + item*0.01 K-value writeback MUST be gone. The exact
+  // arithmetic expression must not appear as a live value in the history
+  // addHistoryEntry call sites (only allowed in an explanatory comment).
+  const QString calibSource =
+      readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
+  QVERIFY2(!calibSource.isEmpty(), "Unable to read CalibrationServiceMock.cpp");
+  QVERIFY2(!calibSource.contains(QStringLiteral("0.04f + (m_currentItem * 0.01f)")),
+           "CALIB-03/CR-03: the mock 0.04f + item*0.01 K-value writeback must be removed (replace with real PA readback or honest manual-interpretation note)");
+
+  // The real readback path must exist: a parser for the PA markers the slice
+  // engine writes (M900 K for Marlin/BBL, SET_PRESSURE_ADVANCE for Klipper).
+  QVERIFY2(calibSource.contains(QStringLiteral("parsePressureAdvanceFromGcode")),
+           "CALIB-03/CR-03: CalibrationServiceMock must implement parsePressureAdvanceFromGcode (real PA K readback from sliced G-code)");
+  QVERIFY2(calibSource.contains(QStringLiteral("M900")),
+           "CALIB-03/CR-03: the PA readback parser must recognize the M900 K marker (Marlin/BBL)");
+  QVERIFY2(calibSource.contains(QStringLiteral("SET_PRESSURE_ADVANCE")),
+           "CALIB-03/CR-03: the PA readback parser must recognize the SET_PRESSURE_ADVANCE marker (Klipper)");
+
+  // The honest manual-interpretation path must exist for non-PA modes (no
+  // fabricated K). The note helper + the history hasRealReadback/notes fields.
+  QVERIFY2(calibSource.contains(QStringLiteral("manualInterpretationNote")),
+           "CALIB-03/CR-03: CalibrationServiceMock must implement manualInterpretationNote (honest non-PA doc, no fabricated K)");
+  QVERIFY2(calibHeader.contains(QStringLiteral("historyHasRealReadback")),
+           "CALIB-03/CR-03: CalibrationServiceMock must expose historyHasRealReadback (distinguishes real readback from manual interpretation)");
+  QVERIFY2(calibHeader.contains(QStringLiteral("historyNotes")),
+           "CALIB-03/CR-03: CalibrationServiceMock must expose historyNotes (honest status/manual-interpretation text)");
 }
 
 void QmlUiAuditTests::legacyDeadCodePagesRemoved()

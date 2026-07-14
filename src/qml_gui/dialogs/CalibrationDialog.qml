@@ -293,6 +293,120 @@ CxDialog {
         // Divider
         Rectangle { Layout.fillWidth: true; height: 1; color: "#1e2535" }
 
+        // Phase 125 (CALIB-02): calibration sweep range inputs (start/end/step).
+        // Defaults come from the selected CalibrationType (Phase 124 hardcoded
+        // seeds); the user can override before starting. The edited values flow
+        // CalibrationViewModel -> CalibrationServiceMock::setCalibParams ->
+        // startSlice. Shown only when idle and a software-sliceable mode is
+        // selected (hardware modes have no sweep range).
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 8
+            visible: (!root.calibrationVm || !root.calibrationVm.isRunning)
+                     && root.calibrationVm && root.calibrationVm.selectedCategory === "slice"
+
+            Text {
+                text: qsTr("校准范围")
+                color: "#9daaba"
+                font.pixelSize: 11
+                font.bold: true
+            }
+            Text {
+                text: qsTr("编辑扫描范围（起始 / 结束 / 步长），覆盖默认值")
+                color: "#6b7a8d"
+                font.pixelSize: 9
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                // Start
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    Text { text: qsTr("起始"); color: "#6b7a8d"; font.pixelSize: 9 }
+                    CxTextField {
+                        id: rangeStartField
+                        Layout.fillWidth: true
+                        text: root.calibrationVm ? root.calibrationVm.calibStart.toFixed(3) : "0"
+                        validator: DoubleValidator {
+                            bottom: 0.0
+                            decimals: 4
+                            notation: DoubleValidator.StandardNotation
+                        }
+                        color: "#e2e8f1"
+                        font.pixelSize: 11
+                        onEditingFinished: {
+                            if (!root.calibrationVm) return
+                            var v = parseFloat(text)
+                            if (!isNaN(v)) root.calibrationVm.calibStart = v
+                            else text = root.calibrationVm.calibStart.toFixed(3)
+                        }
+                    }
+                }
+
+                // End
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    Text { text: qsTr("结束"); color: "#6b7a8d"; font.pixelSize: 9 }
+                    CxTextField {
+                        id: rangeEndField
+                        Layout.fillWidth: true
+                        text: root.calibrationVm ? root.calibrationVm.calibEnd.toFixed(3) : "0"
+                        validator: DoubleValidator {
+                            bottom: 0.0
+                            decimals: 4
+                            notation: DoubleValidator.StandardNotation
+                        }
+                        color: "#e2e8f1"
+                        font.pixelSize: 11
+                        onEditingFinished: {
+                            if (!root.calibrationVm) return
+                            var v = parseFloat(text)
+                            if (!isNaN(v)) root.calibrationVm.calibEnd = v
+                            else text = root.calibrationVm.calibEnd.toFixed(3)
+                        }
+                    }
+                }
+
+                // Step
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    Text { text: qsTr("步长"); color: "#6b7a8d"; font.pixelSize: 9 }
+                    CxTextField {
+                        id: rangeStepField
+                        Layout.fillWidth: true
+                        text: root.calibrationVm ? root.calibrationVm.calibStep.toFixed(4) : "0"
+                        validator: DoubleValidator {
+                            bottom: 0.0001
+                            decimals: 4
+                            notation: DoubleValidator.StandardNotation
+                        }
+                        color: "#e2e8f1"
+                        font.pixelSize: 11
+                        onEditingFinished: {
+                            if (!root.calibrationVm) return
+                            var v = parseFloat(text)
+                            if (!isNaN(v)) root.calibrationVm.calibStep = v
+                            else text = root.calibrationVm.calibStep.toFixed(4)
+                        }
+                    }
+                }
+            }
+
+            // Reset to defaults: switching away and back to the mode reloads its
+            // hardcoded seeds (Phase 124 defaults). The text fields re-bind via
+            // the calibStart/calibEnd/calibStep NOTIFY on selectionChanged.
+        }
+
+        // Divider
+        Rectangle { Layout.fillWidth: true; height: 1; color: "#1e2535" }
+
         // Button row
         RowLayout {
             Layout.fillWidth: true; spacing: 8

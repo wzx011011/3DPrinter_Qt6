@@ -273,6 +273,54 @@ QString CalibrationViewModel::calibrationResultSummary() const
                                          .arg(m_currentNValue, 0, 'f', 2);
 }
 
+// --- Phase 125 (CALIB-02): user-editable calibration range ---
+// The getter reads the selected mode's current range from the service
+// (Phase 124 hardcoded default until the user edits it). The setter forwards
+// the override to CalibrationServiceMock::setCalibRange so the edited sweep
+// flows into setCalibParams -> startSlice. We emit selectionChanged so QML
+// bindings re-evaluate (the property is NOTIFY-selectionChanged because a
+// mode switch must also reset the displayed range to the new mode's defaults).
+
+double CalibrationViewModel::calibStart() const
+{
+    if (!m_service || m_selectedIndex < 0) return 0.0;
+    return m_service->calibTypeStart(m_selectedIndex);
+}
+
+double CalibrationViewModel::calibEnd() const
+{
+    if (!m_service || m_selectedIndex < 0) return 0.0;
+    return m_service->calibTypeEnd(m_selectedIndex);
+}
+
+double CalibrationViewModel::calibStep() const
+{
+    if (!m_service || m_selectedIndex < 0) return 0.0;
+    return m_service->calibTypeStep(m_selectedIndex);
+}
+
+void CalibrationViewModel::setCalibStart(double v)
+{
+    if (!m_service || m_selectedIndex < 0) return;
+    // Forward the full current triple so the service stores a coherent range.
+    m_service->setCalibRange(m_selectedIndex, v, calibEnd(), calibStep());
+    emit selectionChanged();
+}
+
+void CalibrationViewModel::setCalibEnd(double v)
+{
+    if (!m_service || m_selectedIndex < 0) return;
+    m_service->setCalibRange(m_selectedIndex, calibStart(), v, calibStep());
+    emit selectionChanged();
+}
+
+void CalibrationViewModel::setCalibStep(double v)
+{
+    if (!m_service || m_selectedIndex < 0) return;
+    m_service->setCalibRange(m_selectedIndex, calibStart(), calibEnd(), v);
+    emit selectionChanged();
+}
+
 void CalibrationViewModel::saveCalibrationResult()
 {
     if (!m_service || m_selectedIndex < 0) return;

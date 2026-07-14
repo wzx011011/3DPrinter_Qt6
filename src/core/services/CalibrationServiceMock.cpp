@@ -3,6 +3,10 @@
 #include <QTimer>
 #include <QDateTime>
 #include <QDebug>
+#include <QFile>
+#include <QTextStream>
+#include <QRegularExpression>
+#include <cmath>
 #include <algorithm>
 
 #ifdef HAS_LIBSLIC3R
@@ -339,6 +343,39 @@ QString CalibrationServiceMock::calibTypeUnavailableReason(int index) const
     return (index >= 0 && index < m_calibTypes.size()) ? m_calibTypes[index].unavailableReason : QString{};
 }
 
+// Phase 125 (CALIB-02): per-mode default range readback + user override.
+// Defaults are the Phase 124 hardcoded seeds (buildMockData); the user can
+// override them via setCalibRange before startCalibration. The edited sweep
+// then flows into SliceService::setCalibParams, replacing the hardcoded values.
+
+double CalibrationServiceMock::calibTypeStart(int typeIndex) const
+{
+    return (typeIndex >= 0 && typeIndex < m_calibTypes.size()) ? m_calibTypes[typeIndex].calibStart : 0.0;
+}
+
+double CalibrationServiceMock::calibTypeEnd(int typeIndex) const
+{
+    return (typeIndex >= 0 && typeIndex < m_calibTypes.size()) ? m_calibTypes[typeIndex].calibEnd : 0.0;
+}
+
+double CalibrationServiceMock::calibTypeStep(int typeIndex) const
+{
+    return (typeIndex >= 0 && typeIndex < m_calibTypes.size()) ? m_calibTypes[typeIndex].calibStep : 0.0;
+}
+
+void CalibrationServiceMock::setCalibRange(int typeIndex, double start, double end, double step)
+{
+    if (typeIndex < 0 || typeIndex >= m_calibTypes.size()) return;
+    // Reject non-finite overrides so a NaN never reaches the slice engine.
+    if (!std::isfinite(start) || !std::isfinite(end) || !std::isfinite(step)) return;
+    auto &calibType = m_calibTypes[typeIndex];
+    calibType.calibStart = start;
+    calibType.calibEnd = end;
+    calibType.calibStep = step;
+    qDebug("[Calib] range override type='%s' start=%.4f end=%.4f step=%.4f",
+           calibType.id.toUtf8().constData(), start, end, step);
+}
+
 // --- Step accessors ---
 
 int CalibrationServiceMock::stepCount(int typeIndex) const
@@ -542,8 +579,19 @@ QString CalibrationServiceMock::historyTimestamp(int index) const
     return (index >= 0 && index < m_history.size()) ? m_history[index].timestamp : QString{};
 }
 
+bool CalibrationServiceMock::historyHasRealReadback(int index) const
+{
+    return (index >= 0 && index < m_history.size()) ? m_history[index].hasRealReadback : false;
+}
+
+QString CalibrationServiceMock::historyNotes(int index) const
+{
+    return (index >= 0 && index < m_history.size()) ? m_history[index].notes : QString{};
+}
+
 void CalibrationServiceMock::addHistoryEntry(const QString &name, const QString &filamentId,
-                                              float kValue, float nozzleDiameter, const QString &timestamp)
+                                              float kValue, float nozzleDiameter, const QString &timestamp,
+                                              bool hasRealReadback, const QString &notes)
 {
     CalibrationHistoryEntry entry;
     entry.name = name;
@@ -551,6 +599,8 @@ void CalibrationServiceMock::addHistoryEntry(const QString &name, const QString 
     entry.kValue = kValue;
     entry.nozzleDiameter = nozzleDiameter;
     entry.timestamp = timestamp;
+    entry.hasRealReadback = hasRealReadback;
+    entry.notes = notes;
     m_history.prepend(entry); // Most recent first
     emit historyChanged();
 }
@@ -560,6 +610,90 @@ void CalibrationServiceMock::clearHistory()
     if (m_history.isEmpty()) return;
     m_history.clear();
     emit historyChanged();
+}
+
+// Phase 125 (CALIB-03): parse the last PA K-value the slice engine wrote into
+// the generated G-code. Mirrors upstream GCodeWriter::set_pressure_advance
+// (GCodeWriter.cpp:370-392) which emits one of:
+//   Marlin/BBL   -> "M900 K<value> [L1000 M10 ] ; Override pressure advance"
+//   Klipper      -> "SET_PRESSURE_ADVANCE ADVANCE=<value>"
+//   RepRap       -> "M572 D0 S<value>"
+//   Repetier     -> "M233 X<value> Y<value>"
+// We scan the whole file and keep the LAST match (the engine writes the final
+// PA value last, after any per-layer overrides). Returns false when no marker
+// is present (the honest "no machine-readable readback" case for non-PA modes
+// or a failed slice). Reference: upstream CalibUtils never reads the K back
+// from G-code -- it stores the configured value -- so this is the OWzx-native
+// readback path that closes the CALIB-03 mock gap.
+bool CalibrationServiceMock::parsePressureAdvanceFromGcode(const QString &gcodePath, float &outK)
+{
+    if (gcodePath.isEmpty()) return false;
+    QFile file(gcodePath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qWarning("[Calib] PA readback: cannot open gcode %s",
+                 gcodePath.toUtf8().constData());
+        return false;
+    }
+
+    // Order matters: check the Klipper/RepRap/Repetier patterns BEFORE the
+    // generic M900 K so a flavor that emits a different marker still matches.
+    // Each regex is anchored to the start of a G-code line (after optional
+    // whitespace) and requires the numeric value immediately after the prefix
+    // (mirrors the exact string GCodeWriter writes).
+    static const QRegularExpression patterns[] = {
+        // Klipper: "SET_PRESSURE_ADVANCE ADVANCE=0.045"
+        QRegularExpression(QStringLiteral("(?:^|\\n)\\s*SET_PRESSURE_ADVANCE\\s+ADVANCE=([0-9]+(?:\\.[0-9]+)?)")),
+        // RepRap: "M572 D0 S0.045"
+        QRegularExpression(QStringLiteral("(?:^|\\n)\\s*M572\\s+D0\\s+S([0-9]+(?:\\.[0-9]+)?)")),
+        // Repetier: "M233 X0.045 Y..." (X is the K/linear component)
+        QRegularExpression(QStringLiteral("(?:^|\\n)\\s*M233\\s+X([0-9]+(?:\\.[0-9]+)?)")),
+        // Marlin/BBL: "M900 K0.045" (optionally followed by L1000 M10)
+        QRegularExpression(QStringLiteral("(?:^|\\n)\\s*M900\\s+K([0-9]+(?:\\.[0-9]+)?)")),
+    };
+
+    bool found = false;
+    float lastK = 0.0f;
+    QTextStream in(&file);
+    in.setEncoding(QStringConverter::Utf8);
+    while (!in.atEnd()) {
+        const QString line = in.readLine();
+        for (const auto &re : patterns) {
+            const QRegularExpressionMatch m = re.match(line);
+            if (m.hasMatch()) {
+                bool ok = false;
+                const float v = m.captured(1).toFloat(&ok);
+                if (ok && v >= 0.0f) {
+                    lastK = v;
+                    found = true;
+                }
+                break; // a line matches at most one flavor
+            }
+        }
+    }
+
+    if (found) {
+        outK = lastK;
+        qDebug("[Calib] PA readback: parsed K=%.4f from %s",
+               outK, gcodePath.toUtf8().constData());
+    } else {
+        qDebug("[Calib] PA readback: no M900 K / SET_PRESSURE_ADVANCE marker in %s",
+               gcodePath.toUtf8().constData());
+    }
+    return found;
+}
+
+// Phase 125 (CALIB-03): honest manual-interpretation guidance for the tower
+// modes whose result is read from the physical print (band/layer inspection),
+// not from a machine-readable marker. Upstream CalibUtils never auto-parses
+// these outcomes either -- the user picks the best band by eye. We store this
+// note in the history entry instead of a fabricated K so the UI can show
+// "interpret the print manually" honestly.
+QString CalibrationServiceMock::manualInterpretationNote(const QString &modeName)
+{
+    return QStringLiteral(
+        "%1 result is read by inspecting the printed tower: choose the cleanest "
+        "band/layer and apply that value to the filament preset. No K-value is "
+        "auto-read back for this mode.").arg(modeName);
 }
 
 void CalibrationServiceMock::advanceStep()
@@ -599,13 +733,19 @@ void CalibrationServiceMock::onTick()
             setStatus(m_currentItem, CalibrationStatus::Completed);
             emit stepChanged();
 
-            // Add history entry aligned with upstream FlowCalibHeaderView
+            // Phase 125 (CALIB-03): the mock-timer path has no real G-code to
+            // parse (no SliceService dispatched), so we never fabricate a K.
+            // Store the honest manual-interpretation note instead -- the user
+            // reads the calibration print by eye (mirrors upstream CalibUtils,
+            // which has no auto-readback for the timer-only fallback either).
             addHistoryEntry(
                 m_calibTypes[m_currentItem].name,
                 QString("filament_%1").arg(m_currentItem), // Mock filament ID
-                0.04f + (m_currentItem * 0.01f),           // Mock K-value
-                0.4f,                                       // Default nozzle diameter
-                QDateTime::currentDateTime().toString(Qt::ISODate)
+                0.0f,                                      // No fabricated K
+                0.4f,                                      // Default nozzle diameter
+                QDateTime::currentDateTime().toString(Qt::ISODate),
+                false,                                     // No machine-readable readback
+                manualInterpretationNote(m_calibTypes[m_currentItem].name)
             );
         }
 
@@ -647,13 +787,48 @@ void CalibrationServiceMock::onSliceFinished(const QString &estimatedTime)
         setStatus(m_currentItem, CalibrationStatus::Completed);
         emit stepChanged();
 
-        addHistoryEntry(
-            m_calibTypes[m_currentItem].name,
-            QString("filament_%1").arg(m_currentItem),
-            0.04f + (m_currentItem * 0.01f),
-            0.4f,
-            QDateTime::currentDateTime().toString(Qt::ISODate)
-        );
+        // Phase 125 (CALIB-03): real K-value readback replaces the mock
+        // 0.04f + item*0.01. For PA (calibMode==1) the slice engine wrote an
+        // M900 K / SET_PRESSURE_ADVANCE marker into the generated G-code; we
+        // parse it now and store the REAL value with hasRealReadback=true.
+        // For every other mode (FlowRate/TempTower/Vol_speed/VFA/Retraction)
+        // the outcome is read from the physical print (band/layer inspection)
+        // -- upstream CalibUtils never auto-parses those either -- so we store
+        // the honest manual-interpretation note with kValue=0 and
+        // hasRealReadback=false. No fabricated values.
+        const int calibMode = m_calibTypes[m_currentItem].calibMode;
+        const QString modeName = m_calibTypes[m_currentItem].name;
+        float realK = 0.0f;
+        bool parsed = false;
+        if (calibMode == 1 /* Calib_PA_Line */ && m_sliceService) {
+            const QString gcodePath = m_sliceService->outputPath();
+            parsed = parsePressureAdvanceFromGcode(gcodePath, realK);
+        }
+
+        if (parsed) {
+            addHistoryEntry(
+                modeName,
+                QString("filament_%1").arg(m_currentItem),
+                realK,
+                0.4f,
+                QDateTime::currentDateTime().toString(Qt::ISODate),
+                true,                                       // hasRealReadback
+                QStringLiteral("PA K-value read back from sliced G-code (M900 K / SET_PRESSURE_ADVANCE).")
+            );
+        } else {
+            // Honest path: no machine-readable marker (non-PA mode, or PA slice
+            // that produced no marker). Document that the user interprets the
+            // print manually; never store a fabricated K.
+            addHistoryEntry(
+                modeName,
+                QString("filament_%1").arg(m_currentItem),
+                0.0f,
+                0.4f,
+                QDateTime::currentDateTime().toString(Qt::ISODate),
+                false,                                      // no machine-readable readback
+                manualInterpretationNote(modeName)
+            );
+        }
     }
 
     emit isRunningChanged();

@@ -51,9 +51,18 @@ struct CalibrationHistoryEntry
 {
     QString name;           // Calibration type name
     QString filamentId;     // Filament preset identifier
-    float kValue;           // K-value (Pressure Advance)
+    float kValue;           // K-value (Pressure Advance); 0 when no machine-readable readback
     float nozzleDiameter;   // Nozzle diameter used
     QString timestamp;      // ISO timestamp
+    // Phase 125 (CALIB-03): honest result bookkeeping. hasRealReadback is true
+    // only when libslic3r emitted a machine-readable result marker (PA M900 K /
+    // SET_PRESSURE_ADVANCE). For FlowRate/TempTower/Vol_speed/VFA/Retraction
+    // the calibration outcome is read from the physical print (band/layer
+    // inspection) -- upstream CalibUtils never auto-parses those -- so
+    // hasRealReadback stays false and notes carries the manual-interpretation
+    // guidance instead of a fabricated value.
+    bool hasRealReadback = false;
+    QString notes;          // Status/manual-interpretation text (no fabricated K)
 };
 
 // Mock calibration service - simulates calibration wizard flow
@@ -99,6 +108,19 @@ public:
     // Status of a calibration type
     Q_INVOKABLE int calibStatus(int typeIndex) const;
 
+    // Phase 125 (CALIB-02): per-mode default range readback + user override.
+    // The defaults are the Phase 124 hardcoded seeds (buildMockData); the user
+    // can override them via setCalibRange before startCalibration. The edited
+    // range then flows into SliceService::setCalibParams, replacing the
+    // previously hardcoded sweep.
+    Q_INVOKABLE double calibTypeStart(int typeIndex) const;
+    Q_INVOKABLE double calibTypeEnd(int typeIndex) const;
+    Q_INVOKABLE double calibTypeStep(int typeIndex) const;
+    /// Apply a user-edited range override for the given mode. Stored on the
+    /// CalibrationType so startCalibration dispatches the edited sweep. No-op
+    /// when start/end/step are not finite or the index is out of range.
+    Q_INVOKABLE void setCalibRange(int typeIndex, double start, double end, double step);
+
     // Progress
     int progress() const { return m_progress; }
     bool isRunning() const { return m_isRunning; }
@@ -117,8 +139,14 @@ public:
     Q_INVOKABLE float historyKValue(int index) const;
     Q_INVOKABLE float historyNozzleDiameter(int index) const;
     Q_INVOKABLE QString historyTimestamp(int index) const;
+    /// Phase 125 (CALIB-03): true when the K-value was read back from a real
+    /// machine-readable marker (PA M900 K). False for manual-interpretation modes.
+    Q_INVOKABLE bool historyHasRealReadback(int index) const;
+    /// Phase 125 (CALIB-03): status/manual-interpretation notes (no fabricated K).
+    Q_INVOKABLE QString historyNotes(int index) const;
     Q_INVOKABLE void addHistoryEntry(const QString &name, const QString &filamentId,
-                                      float kValue, float nozzleDiameter, const QString &timestamp);
+                                      float kValue, float nozzleDiameter, const QString &timestamp,
+                                      bool hasRealReadback = false, const QString &notes = QString());
     Q_INVOKABLE void clearHistory();
 
 signals:
@@ -143,6 +171,22 @@ private:
     void buildMockData();
     void setStatus(int typeIndex, CalibrationStatus status);
     void advanceStep();
+    /// Phase 125 (CALIB-03): parse the last PA K-value from a sliced G-code
+    /// file. Recognizes the markers emitted by upstream GCodeWriter::
+    /// set_pressure_advance (GCodeWriter.cpp:370-392):
+    ///   Marlin/BBL   -> "M900 K<value>"
+    ///   Klipper      -> "SET_PRESSURE_ADVANCE ADVANCE=<value>"
+    ///   RepRap       -> "M572 D0 S<value>"
+    ///   Repetier     -> "M233 X<value>"
+    /// Returns true + outK when a marker was found, false otherwise. Mirrors
+    /// the upstream CalibUtils result-parsing intent (read the value the engine
+    /// actually wrote, not a fabricated constant).
+    static bool parsePressureAdvanceFromGcode(const QString &gcodePath, float &outK);
+    /// Build the manual-interpretation note for non-PA tower modes
+    /// (FlowRate/TempTower/Vol_speed/VFA/Retraction). The result of those
+    /// calibrations is read by inspecting the physical print (band/layer
+    /// quality), so we never fabricate a K-value.
+    static QString manualInterpretationNote(const QString &modeName);
 
     QList<CalibrationType> m_calibTypes;
     QMap<int, CalibrationStatus> m_statusMap; // typeIndex -> status

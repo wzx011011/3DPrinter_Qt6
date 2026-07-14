@@ -37,6 +37,15 @@ class CalibrationViewModel : public QObject
     /// 校准结果摘要（对齐上游 CalibrationWizardSavePage）
     Q_PROPERTY(bool hasCalibrationResult READ hasCalibrationResult NOTIFY calibrationParamsChanged)
     Q_PROPERTY(QString calibrationResultSummary READ calibrationResultSummary NOTIFY calibrationParamsChanged)
+    /// Phase 125 (CALIB-02): user-editable calibration sweep range. READ returns
+    /// the selected CalibrationType's current range (Phase 124 hardcoded default
+    /// until the user edits it); WRITE forwards the override to
+    /// CalibrationServiceMock::setCalibRange so the edited sweep flows into
+    /// setCalibParams -> startSlice. Re-emits on selectionChanged (new mode's
+    /// defaults) and on the explicit setter (user edit).
+    Q_PROPERTY(double calibStart READ calibStart WRITE setCalibStart NOTIFY selectionChanged)
+    Q_PROPERTY(double calibEnd READ calibEnd WRITE setCalibEnd NOTIFY selectionChanged)
+    Q_PROPERTY(double calibStep READ calibStep WRITE setCalibStep NOTIFY selectionChanged)
 
 public:
     explicit CalibrationViewModel(CalibrationServiceMock *service, QObject *parent = nullptr);
@@ -92,6 +101,17 @@ public:
     bool showParamInputs() const;
     bool hasCalibrationResult() const { return m_hasResult; }
     QString calibrationResultSummary() const;
+
+    // Phase 125 (CALIB-02): range accessors/setters. The getter reads the
+    // selected mode's current range from the service; the setter applies the
+    // user edit to the service (overrides the Phase 124 hardcoded default)
+    // before startSlice dispatches setCalibParams.
+    double calibStart() const;
+    double calibEnd() const;
+    double calibStep() const;
+    void setCalibStart(double v);
+    void setCalibEnd(double v);
+    void setCalibStep(double v);
 
     /// 保存校准结果到历史（对齐上游 CalibrationWizardSavePage save）
     Q_INVOKABLE void saveCalibrationResult();
