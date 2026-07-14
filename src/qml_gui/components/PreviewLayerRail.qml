@@ -93,6 +93,7 @@ Item {
             Repeater {
                 model: root.previewVm ? root.previewVm.tickMarks : []
                 delegate: Item {
+                    id: tickDelegate
                     readonly property real tickY: railTrackHost.trackMargin
                         + (root.lastLayerIndex > 0
                            ? (modelData.tick / root.lastLayerIndex) * railTrackHost.trackHeight
@@ -100,12 +101,21 @@ Item {
                     readonly property int tickType: modelData.type
                     readonly property int tickLayer: modelData.tick
 
+                    // Phase 119 (TICK-05): drag-to-relocate state. While dragging,
+                    // dragY overrides the layer-derived position so the tick follows
+                    // the cursor; on release the target layer is computed and
+                    // previewVm.moveTick is called. A false return (target occupied
+                    // or source missing) leaves tickY re-bound -> the tick snaps back.
+                    property real dragY: 0
+                    property bool dragging: false
+                    property int dragFromLayer: -1
+
                     // Position the tick horizontally beside the slider, vertically at the layer.
                     x: layerRangeSlider.width / 2 + 10
-                    y: tickY - 4
+                    y: dragging ? dragY : (tickY - 4)
                     width: 8
                     height: 8
-                    z: 2
+                    z: dragging ? 5 : 2
 
                     Rectangle {
                         anchors.fill: parent
@@ -121,6 +131,43 @@ Item {
                             case 4: return Theme.accent           // ColorChange - green
                             default: return Theme.textSecondary   // Template - gray
                             }
+                        }
+                    }
+
+                    // Phase 119 (TICK-05): left-button vertical drag-to-relocate,
+                    // aligned with upstream IMSlider on_mouse_drag. Computes the
+                    // target layer from the released y and calls previewVm.moveTick.
+                    MouseArea {
+                        anchors.fill: parent
+                        anchors.margins: -3
+                        acceptedButtons: Qt.LeftButton
+                        cursorShape: Qt.SizeVerCursor
+                        preventStealing: true
+                        onPressed: function(mouse) {
+                            if (!root.previewVm || root.lastLayerIndex <= 0) return
+                            tickDelegate.dragFromLayer = tickLayer
+                            tickDelegate.dragging = true
+                            tickDelegate.dragY = tickY - 4
+                        }
+                        onPositionChanged: function(mouse) {
+                            if (!tickDelegate.dragging) return
+                            // Follow the cursor vertically (map to track host coords).
+                            var mapped = parent.mapToItem(railTrackHost, mouse.x, mouse.y)
+                            tickDelegate.dragY = Math.max(railTrackHost.trackMargin - 4,
+                                                          Math.min(mapped.y,
+                                                                   railTrackHost.trackMargin + railTrackHost.trackHeight - 4))
+                        }
+                        onReleased: {
+                            if (!tickDelegate.dragging) return
+                            var relY = tickDelegate.dragY + 4 - railTrackHost.trackMargin
+                            var targetLayer = Math.round((relY / railTrackHost.trackHeight) * root.lastLayerIndex)
+                            targetLayer = Math.max(0, Math.min(targetLayer, root.lastLayerIndex))
+                            var fromLayer = tickDelegate.dragFromLayer
+                            tickDelegate.dragging = false
+                            // moveTick returns false when the target is occupied or
+                            // the source is gone; the y re-binds to tickY -> snap back.
+                            if (root.previewVm && fromLayer >= 0)
+                                root.previewVm.moveTick(fromLayer, targetLayer)
                         }
                     }
 
@@ -201,6 +248,25 @@ Item {
                 customGcodeAddDialog.targetLayer = root.addMenuTargetLayer
                 customGcodeAddDialog.gcodeText = ""
                 customGcodeAddDialog.open()
+            }
+        }
+        // Phase 119 (TICK-04): close the 5-type coverage gap. ColorChange +
+        // Template were reachable in the data + convert layers but missing from
+        // the Add menu. ColorChange uses a default extruder + color (extruder 1,
+        // red) for now; a dedicated extruder+color picker is a future enhancement
+        // (CustomGcodeDialog extension). Template needs no extra input.
+        CxMenuItem {
+            text: qsTr("Add Color Change")
+            onTriggered: {
+                if (root.previewVm && root.addMenuTargetLayer >= 0)
+                    root.previewVm.addColorChangeAtLayer(root.addMenuTargetLayer, 1, "#FF0000")
+            }
+        }
+        CxMenuItem {
+            text: qsTr("Add Template")
+            onTriggered: {
+                if (root.previewVm && root.addMenuTargetLayer >= 0)
+                    root.previewVm.addTemplateAtLayer(root.addMenuTargetLayer)
             }
         }
     }

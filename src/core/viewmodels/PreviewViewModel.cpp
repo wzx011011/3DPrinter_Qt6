@@ -1923,6 +1923,85 @@ void PreviewViewModel::addFilamentChangeAtLayer(int layer, int extruderId)
   writeTicksToModel();
 }
 
+void PreviewViewModel::addColorChangeAtLayer(int layer, int extruder, const QString& color)
+{
+  // Phase 119 (TICK-04): the ColorChange type was parsed + written back but had
+  // no Q_INVOKABLE add path. This closes the 5-type coverage gap. Dedup + sort
+  // + emit + writeTicksToModel mirrors the other add*AtLayer methods.
+  for (const auto& tc : tickMarks_) {
+    if (tc.tick == layer) {
+      qWarning("addColorChangeAtLayer: tick already exists at layer %d", layer);
+      return;
+    }
+  }
+  OWzx::TickCode tc;
+  tc.tick = layer;
+  tc.type = OWzx::TickType::ColorChange;
+  tc.extruder = extruder;
+  tc.color = color;
+  tickMarks_.append(tc);
+  std::sort(tickMarks_.begin(), tickMarks_.end());
+  emit tickMarksChanged();
+  // Phase 118 (TICK-02/TICK-03): persist into libslic3r custom-g-code store + re-slice.
+  writeTicksToModel();
+}
+
+void PreviewViewModel::addTemplateAtLayer(int layer)
+{
+  // Phase 119 (TICK-04): Template (upstream "save current state" anchor, type=2)
+  // round-trips through convertTicksToCustomGcodeInfo but had no add path. Full
+  // template UI is future; this wires the add + round-trip.
+  for (const auto& tc : tickMarks_) {
+    if (tc.tick == layer) {
+      qWarning("addTemplateAtLayer: tick already exists at layer %d", layer);
+      return;
+    }
+  }
+  OWzx::TickCode tc;
+  tc.tick = layer;
+  tc.type = OWzx::TickType::Template;
+  tickMarks_.append(tc);
+  std::sort(tickMarks_.begin(), tickMarks_.end());
+  emit tickMarksChanged();
+  // Phase 118 (TICK-02/TICK-03): persist into libslic3r custom-g-code store + re-slice.
+  writeTicksToModel();
+}
+
+bool PreviewViewModel::moveTick(int fromLayer, int toLayer)
+{
+  // Phase 119 (TICK-05): drag-to-relocate, aligned with upstream IMSlider tick
+  // drag (on_mouse_drag / render_tick_on_mouse_pos). Returns false when the
+  // source tick is missing or the target layer is occupied, so the QML delegate
+  // can snap back. On success, the moved tick is re-keyed to toLayer, the vector
+  // is re-sorted, and Phase 118's writeTicksToModel persists the new ordering +
+  // triggers a re-slice so the emitted G-code carries the relocated marker.
+  if (fromLayer == toLayer)
+    return true;
+  int fromIndex = -1;
+  for (int i = 0; i < tickMarks_.size(); ++i) {
+    if (tickMarks_[i].tick == fromLayer) {
+      fromIndex = i;
+      break;
+    }
+  }
+  if (fromIndex < 0) {
+    qWarning("moveTick: no tick at source layer %d", fromLayer);
+    return false;
+  }
+  for (const auto& tc : tickMarks_) {
+    if (tc.tick == toLayer) {
+      qWarning("moveTick: target layer %d already occupied", toLayer);
+      return false;
+    }
+  }
+  tickMarks_[fromIndex].tick = toLayer;
+  std::sort(tickMarks_.begin(), tickMarks_.end());
+  emit tickMarksChanged();
+  // Phase 118 (TICK-02/TICK-03): persist the relocated tick into the libslic3r store + re-slice.
+  writeTicksToModel();
+  return true;
+}
+
 QVariantMap PreviewViewModel::tickAtLayer(int layer) const
 {
   for (const auto& tc : tickMarks_) {

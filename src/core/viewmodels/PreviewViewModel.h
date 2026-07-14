@@ -229,6 +229,18 @@ public:
   Q_INVOKABLE void removeTickAtLayer(int layer);
   Q_INVOKABLE void editCustomGcodeAtLayer(int layer, const QString& newGcode);
   Q_INVOKABLE void addFilamentChangeAtLayer(int layer, int extruderId);
+  // Phase 119 (TICK-04): close the 5-type coverage gap. addColorChangeAtLayer
+  // stores type=ColorChange with the user's extruder + color; addTemplateAtLayer
+  // stores type=Template (an upstream "save current state" anchor). Both follow
+  // the Phase 118 dedup + sort + emit + writeTicksToModel pattern.
+  Q_INVOKABLE void addColorChangeAtLayer(int layer, int extruder, const QString& color);
+  Q_INVOKABLE void addTemplateAtLayer(int layer);
+  // Phase 119 (TICK-05): drag-to-relocate. Moves the tick at fromLayer to
+  // toLayer (re-sorts + re-emits + writeTicksToModel). Returns false when the
+  // source tick is missing or the target layer is already occupied (caller --
+  // PreviewLayerRail.qml -- snaps the delegate back on false). Mirrors upstream
+  // IMSlider tick drag (on_mouse_drag / render_tick_on_mouse_pos).
+  Q_INVOKABLE bool moveTick(int fromLayer, int toLayer);
   Q_INVOKABLE QVariantMap tickAtLayer(int layer) const;
   Q_INVOKABLE void clearAllTicks();
   QVariantList tickMarks() const;

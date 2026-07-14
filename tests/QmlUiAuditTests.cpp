@@ -380,6 +380,14 @@ private slots:
   // the Phase 117 tickMarksRenderedOnPreviewRail slot pattern (readSource +
   // QVERIFY2 with TICK-02/TICK-03-named messages).
   void customGcodeWritebackAndResliceWired();
+  // Phase 119-01 (TICK-04/TICK-05): source-audit lock that all 5 upstream tick
+  // types are now reachable from the Preview UI (ColorChange + Template add
+  // methods land in PreviewViewModel; the Add menu gains the two entries) and
+  // that tick drag-to-relocate is wired (previewVm.moveTick called from the
+  // PreviewLayerRail tick delegate, and the method is declared + implemented in
+  // the ViewModel). Mirrors the Phase 117/118 tick slot pattern (readSource +
+  // QVERIFY2 with TICK-04/TICK-05-named messages).
+  void tickTypeCoverageAndDragRelocation();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -5203,6 +5211,69 @@ void QmlUiAuditTests::customGcodeWritebackAndResliceWired()
            "TICK-02: PreviewViewModel ctor must inject ProjectServiceMock* (projectService_ reach-through to rawModel)");
   QVERIFY2(ctx.contains(QStringLiteral("new PreviewViewModel(projectService_, sliceService_, this)")),
            "TICK-02: BackendContext must assemble PreviewViewModel with projectService_ as the first ctor arg");
+}
+
+void QmlUiAuditTests::tickTypeCoverageAndDragRelocation()
+{
+  // Phase 119-01 (TICK-04/TICK-05): Phase 118 closed the write-back + re-slice
+  // loop but left two gaps -- (1) only Pause/CustomGcode/ToolChange had add
+  // paths, so ColorChange + Template were unreachable from the UI despite being
+  // handled by the read-side parse + convertTicksToCustomGcodeInfo; (2) ticks
+  // could be added/edited/deleted but not relocated (no moveTick). This slot
+  // locks the coverage + drag wiring at the source level (deterministic,
+  // build-dir-independent), mirroring the Phase 102..118 audit pattern. Each
+  // QVERIFY2 names the TICK-04/TICK-05 contract it locks.
+  const QString pvm = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.cpp"));
+  const QString pvmHeader = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.h"));
+  const QString rail = readSource(QStringLiteral("src/qml_gui/components/PreviewLayerRail.qml"));
+  QVERIFY2(!pvm.isEmpty(), "Unable to read PreviewViewModel.cpp");
+  QVERIFY2(!pvmHeader.isEmpty(), "Unable to read PreviewViewModel.h");
+  QVERIFY2(!rail.isEmpty(), "Unable to read PreviewLayerRail.qml");
+
+  // TICK-04 (ColorChange add path): PreviewViewModel.h must declare and .cpp
+  // must define addColorChangeAtLayer (type=ColorChange, extruder + color).
+  QVERIFY2(pvmHeader.contains(QStringLiteral("addColorChangeAtLayer")),
+           "TICK-04: PreviewViewModel.h must declare addColorChangeAtLayer (ColorChange had no add path)");
+  QVERIFY2(pvm.contains(QStringLiteral("void PreviewViewModel::addColorChangeAtLayer")),
+           "TICK-04: PreviewViewModel.cpp must implement addColorChangeAtLayer");
+
+  // TICK-04 (Template add path): PreviewViewModel.h must declare and .cpp must
+  // define addTemplateAtLayer (type=Template, upstream "save state" anchor).
+  QVERIFY2(pvmHeader.contains(QStringLiteral("addTemplateAtLayer")),
+           "TICK-04: PreviewViewModel.h must declare addTemplateAtLayer (Template had no add path)");
+  QVERIFY2(pvm.contains(QStringLiteral("void PreviewViewModel::addTemplateAtLayer")),
+           "TICK-04: PreviewViewModel.cpp must implement addTemplateAtLayer");
+
+  // TICK-04 (round-trip): both new add methods must flow through the Phase 118
+  // write-back (writeTicksToModel) so the marker lands in the emitted G-code.
+  QVERIFY2(pvm.contains(QStringLiteral("writeTicksToModel")),
+           "TICK-04: PreviewViewModel add methods must persist via writeTicksToModel");
+
+  // TICK-05 (moveTick declared + implemented): PreviewViewModel must expose
+  // Q_INVOKABLE bool moveTick and implement it (drag-to-relocate).
+  QVERIFY2(pvmHeader.contains(QStringLiteral("Q_INVOKABLE bool moveTick")),
+           "TICK-05: PreviewViewModel.h must declare Q_INVOKABLE bool moveTick");
+  QVERIFY2(pvm.contains(QStringLiteral("bool PreviewViewModel::moveTick")),
+           "TICK-05: PreviewViewModel.cpp must implement moveTick");
+
+  // TICK-05 (drag wired): PreviewLayerRail.qml must call previewVm.moveTick
+  // from the tick delegate drag handler (upstream IMSlider on_mouse_drag).
+  QVERIFY2(rail.contains(QStringLiteral("previewVm.moveTick")),
+           "TICK-05: PreviewLayerRail.qml tick delegate must call previewVm.moveTick on drag release");
+
+  // TICK-04 (Add menu coverage): the Add menu must surface ColorChange + Template
+  // entries so all 5 types are reachable from the UI.
+  QVERIFY2(rail.contains(QStringLiteral("Add Color Change")),
+           "TICK-04: PreviewLayerRail.qml Add menu must have an Add Color Change entry");
+  QVERIFY2(rail.contains(QStringLiteral("Add Template")),
+           "TICK-04: PreviewLayerRail.qml Add menu must have an Add Template entry");
+
+  // TICK-04 (Add menu wired): the two new entries must call the matching
+  // ViewModel add methods (not just display the label).
+  QVERIFY2(rail.contains(QStringLiteral("addColorChangeAtLayer")),
+           "TICK-04: PreviewLayerRail.qml Add Color Change must call previewVm.addColorChangeAtLayer");
+  QVERIFY2(rail.contains(QStringLiteral("addTemplateAtLayer")),
+           "TICK-04: PreviewLayerRail.qml Add Template must call previewVm.addTemplateAtLayer");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
