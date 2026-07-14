@@ -40,8 +40,8 @@ Last activity: 2026-07-14 — Milestone v4.6 started
 | 124 | Software-Sliceable Calibration Mode Completion | Complete | CALIB-01 |
 | 125 | Calibration Range Input UI And Real K-Value Readback | Complete | CALIB-02, CALIB-03 |
 | 126 | Legacy Dead-Code Page Cleanup | Complete | CLEAN-01 |
-| 127 | i18n Translation Coverage And VALIDATION.md Backfill | Not started | I18N-01, PROC-01 |
-| 128 | v4.6 Verification And Cross-Workstream Regression | Not started | REGRESS-01 |
+| 127 | i18n Translation Coverage And VALIDATION.md Backfill | Complete | I18N-01, PROC-01 |
+| 128 | v4.6 Verification And Cross-Workstream Regression | Complete | REGRESS-01 |
 
 **Coverage:** 17/17 active requirements mapped to exactly one phase (TICK-01..05, PAINT-01..05, CALIB-01..03, I18N-01, PROC-01, CLEAN-01, REGRESS-01).
 
