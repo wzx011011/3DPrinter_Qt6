@@ -35,8 +35,8 @@ Last activity: 2026-07-14 — Milestone v4.6 started
 | 119 | Tick Type Coverage And Drag Relocation | Complete | TICK-04, TICK-05 |
 | 120 | TriangleSelector Engine Port | Complete | PAINT-01 |
 | 121 | Painted-Facet Overlay Render And Brush Interaction | Complete | PAINT-02, PAINT-03 |
-| 122 | Support And Seam Paint End-To-End | Not started | PAINT-04 |
-| 123 | MMU Segmentation Paint End-To-End | Not started | PAINT-05 |
+| 122 | Support And Seam Paint End-To-End | Complete | PAINT-04 |
+| 123 | MMU Segmentation Paint End-To-End | Complete | PAINT-05 |
 | 124 | Software-Sliceable Calibration Mode Completion | Complete | CALIB-01 |
 | 125 | Calibration Range Input UI And Real K-Value Readback | Complete | CALIB-02, CALIB-03 |
 | 126 | Legacy Dead-Code Page Cleanup | Complete | CLEAN-01 |
