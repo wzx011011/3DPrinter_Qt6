@@ -1,6 +1,6 @@
 # Milestones History
 
-## v4.6 Core Feature Completion Sweep (Shipped: 2026-07-15)
+ Feature Completion Sweep (Shipped: 2026-07-15)
 
 **Phases completed:** 12 phases (117-128), 12 plans, 17 requirements
 
@@ -8,13 +8,13 @@
 
 **Key accomplishments:**
 
-- Preview TickCode/IMSlider closed loop end-to-end: the orphaned LayerSlider tick rendering + right-click add/edit/delete menus consolidated into the vertical PreviewLayerRail (source-truth-aligned with upstream IMSlider); tick CRUD wired into libslic3r `plates_custom_gcodes` (NOT the deprecated `set_custom_gcode_per_print_z` ‚Äî BBS removed it, direct field write is the real path) + re-slice on tick edit; all 5 upstream tick types (Pause/CustomGcode/Template/ToolChange/ColorChange) round-trip; drag-to-relocate. Explicit TickType‚ÜíCustomGCode::Type switch map (orders differ ‚Äî static_cast would corrupt). Closes TICK-01..05.
-- Gizmo triangle-paint engine: TriangleSelector ported by REUSE (already compiled in libslic3r, pure C++, no GL/wx coupling ‚Äî zero reimplementation); new PaintEngine (per-volume owner) bridges 3 structural gaps (volumeMeshTriangleMesh accessor, SceneRaycasterHit.meshLocalPosition, EditorViewModel paintAtFacet); QRhi colored-facet overlay (reuses m_fillPipeline + rhi_viewport.qsb, zero new shaders) + Software QPainter mirror; brush sphere cursor (translucent, button-state color); Support/Seam/MMU paint feeds the slice via ModelVolume FacetsAnnotation members (supported_facets/seam_facets/mmu_segmentation_facets) ‚Äî NOT new ModelVolume, NOT PrintConfig; 3MF persistence automatic. Closes PAINT-01..05.
-- Calibration mode completion: 3 tower modes added (Vol_speed=7, VFA=8, Retraction=9) ‚Äî now 6/9 software modes dispatch via transparent SliceService passthrough (no SliceService/Print/GCode changes); range input UI (start/end/step, user overrides Phase 124 defaults); real PA K-value readback (parses M900 K / SET_PRESSURE_ADVANCE / M572 / M233 from sliced G-code ‚Äî 4 firmware variants); non-PA modes get honest manual-interpretation notes (no fabricated values). Closes CALIB-01..03.
-- Tech-debt convergence: 4 dead-code pages + AuxiliaryService deleted (DeviceListPage/AuxiliaryPage/ModelMallPage/AuxiliaryListPanel ‚Äî in the removed LAN/device/cloud scope, deletion not repair); i18n pipeline documented (lupdate‚Üítranslate‚Üílrelease) + zh_CN v4.6 core strings translated (proof-of-pipeline); VALIDATION.md backfilled for phases 117-126. Closes CLEAN-01, I18N-01, PROC-01.
+- Preview TickCode/IMSlider closed loop end-to-end: the orphaned LayerSlider tick rendering + right-click add/edit/delete menus consolidated into the vertical PreviewLayerRail (source-truth-aligned with upstream IMSlider); tick CRUD wired into libslic3r `plates_custom_gcodes` (NOT the deprecated `set_custom_gcode_per_print_z` ‚Ä?BBS removed it, direct field write is the real path) + re-slice on tick edit; all 5 upstream tick types (Pause/CustomGcode/Template/ToolChange/ColorChange) round-trip; drag-to-relocate. Explicit TickType‚ÜíCustomGCode::Type switch map (orders differ ‚Ä?static_cast would corrupt). Closes TICK-01..05.
+- Gizmo triangle-paint engine: TriangleSelector ported by REUSE (already compiled in libslic3r, pure C++, no GL/wx coupling ‚Ä?zero reimplementation); new PaintEngine (per-volume owner) bridges 3 structural gaps (volumeMeshTriangleMesh accessor, SceneRaycasterHit.meshLocalPosition, EditorViewModel paintAtFacet); QRhi colored-facet overlay (reuses m_fillPipeline + rhi_viewport.qsb, zero new shaders) + Software QPainter mirror; brush sphere cursor (translucent, button-state color); Support/Seam/MMU paint feeds the slice via ModelVolume FacetsAnnotation members (supported_facets/seam_facets/mmu_segmentation_facets) ‚Ä?NOT new ModelVolume, NOT PrintConfig; 3MF persistence automatic. Closes PAINT-01..05.
+- Calibration mode completion: 3 tower modes added (Vol_speed=7, VFA=8, Retraction=9) ‚Ä?now 6/9 software modes dispatch via transparent SliceService passthrough (no SliceService/Print/GCode changes); range input UI (start/end/step, user overrides Phase 124 defaults); real PA K-value readback (parses M900 K / SET_PRESSURE_ADVANCE / M572 / M233 from sliced G-code ‚Ä?4 firmware variants); non-PA modes get honest manual-interpretation notes (no fabricated values). Closes CALIB-01..03.
+- Tech-debt convergence: 4 dead-code pages + AuxiliaryService deleted (DeviceListPage/AuxiliaryPage/ModelMallPage/AuxiliaryListPanel ‚Ä?in the removed LAN/device/cloud scope, deletion not repair); i18n pipeline documented (lupdate‚Üítranslate‚Üílrelease) + zh_CN v4.6 core strings translated (proof-of-pipeline); VALIDATION.md backfilled for phases 117-126. Closes CLEAN-01, I18N-01, PROC-01.
 - Cross-workstream regression: 12 source-audit slots + v46CrossWorkstreamRegressionLocked consolidated gate; canonical build (j6, adapted from j16 for 32GB-machine MSVC heap constraint) exit 0; 5/5 ctest groups PASS; app launch liveness confirmed. Closes REGRESS-01.
 
-**Audit status:** `tech_debt` ‚Äî 17/17 requirements satisfied, 5/5 integration chains, 3/3 E2E flows, no critical blockers.
+**Audit status:** `tech_debt` ‚Ä?17/17 requirements satisfied, 5/5 integration chains, 3/3 E2E flows, no critical blockers.
 
 **Known deferred items at close:** documented geometry tech-debt (calibration towers use current-plate model, not upstream .drc), non-en translations are baseline (unfinished), ColorChange default color (picker future), build j6 adaptation.
 
@@ -33,7 +33,7 @@
 
 **Key accomplishments:**
 
-- Replaced the singleShot(0) argv-fixture gate with a one-shot QQuickWindow::frameSwapped gate so external screenshot capture is deterministic (scene graph rendered at least one frame before open-page/load-model/open-dialog apply) ‚Äî closing FIXTURE-02, the recurring Windows-capture-API runtime-evidence blocker.
+- Replaced the singleShot(0) argv-fixture gate with a one-shot QQuickWindow::frameSwapped gate so external screenshot capture is deterministic (scene graph rendered at least one frame before open-page/load-model/open-dialog apply) ‚Ä?closing FIXTURE-02, the recurring Windows-capture-API runtime-evidence blocker.
 - Hand-authored 2-extruder 3MF fixture + canonical argv recipe doc + grep-assertable anti-feature comment block, all locked by a cliFixtureRecipesAndMultiMaterialModelPresent source-audit slot; canonical build clean (exit 0), OWzxSlicer.exe launch liveness confirmed (PID 32272), regression ctest 4/4 PASS. FIXTURE-01/03/04 closed.
 - OWZX_D3D12_DEBUG env flag gates the D3D12 debug layer on both the probe QRhi::create path (enableDebugLayer before create) and the live QQuickRhiItem render path (QSG_RHI_DEBUG before QGuiApplication), locked by a d3d12DebugLayerWiredBehindEnvFlag source-audit slot; canonical build clean (exit 0), OWzxSlicer.exe launch liveness confirmed (PID 32080, no OWZX_D3D12_DEBUG), regression ctest 4/4 PASS. D3D12-01 closed; crash root cause deferred to Phase 106.
 - Time-boxed D3D12 crash investigation (DR-04): the 0xc0000005 access violation does NOT reproduce in the test env, so D3D12-02 ships a documented hypothesis + tooling gap (NOT a fabricated root cause); D3D12-03 documented in STATE.md and locked by a d3d12StaysOptInBehindEnvFlag source-audit slot that keeps D3D11-first in defaultWindowsCandidates(). Canonical build clean, regression 5/5 PASS.
@@ -83,9 +83,9 @@
 **Key accomplishments:**
 
 - Created the v4.2 AssembleView source-truth gap matrix mapping 11 ASM-* regions across 3 screenshots to OrcaSlicer source anchors, Qt targets, replacement decisions, and Phase 90-93 ownership (Phase 89).
-- Replaced the Plater.qml AssembleView placeholder with a real canvas host: CanvasAssembleView=2 enum in RhiViewport, AssemblePage.qml 4-region shell, BBLTopbar navigation toggle, and Plater CanvasAssembleView routing branches mirroring upstream Plater.cpp conditionals ‚Äî Prepare/Preview untouched (Phase 90).
+- Replaced the Plater.qml AssembleView placeholder with a real canvas host: CanvasAssembleView=2 enum in RhiViewport, AssemblePage.qml 4-region shell, BBLTopbar navigation toggle, and Plater CanvasAssembleView routing branches mirroring upstream Plater.cpp conditionals ‚Ä?Prepare/Preview untouched (Phase 90).
 - Added explosionRatio Q_PROPERTY + slider + per-volume radial separation rendering + yellow dashed connector guide lines on the default RHI/D3D11 path, with ProjectServiceMock per-volume blob restructure regression-gated by PrepareSceneDataTests (Phase 91).
-- Ported the Assembly measurement gizmo (Ctrl+Y, GLGizmoAssembly/ONLY_ASSEMBLY): GizmoAssemblyMeasure=19 enum, activability gating (AssembleView + explosion‚âà1.0 + ‚â•2 volumes), AssemblyMeasureGeometry C++ helper, overlay (dashed line + arrowheads + teal value box), and right-side ÊµãÈáè panel (Phase 92).
+- Ported the Assembly measurement gizmo (Ctrl+Y, GLGizmoAssembly/ONLY_ASSEMBLY): GizmoAssemblyMeasure=19 enum, activability gating (AssembleView + explosion‚â?.0 + ‚â? volumes), AssemblyMeasureGeometry C++ helper, overlay (dashed line + arrowheads + teal value box), and right-side ÊµãÈáè panel (Phase 92).
 - Added AssembleViewDataPool C++ helper (ModelObjectsInfo cache) isolated from Prepare/Preview by the activeCanvasType==2 gate, consolidated milestone audit slots, placeholder-absent regression lock, canonical build clean, and runtime evidence (Phase 93).
 
 **Git range:** `v4.1..v4.2` (55 commits, 52 files, +9374/-209)
@@ -104,14 +104,14 @@
 
 **Phases completed:** 5 phases, 5 plans
 **Audit:** passed; 14/14 requirements satisfied, 5/5 Nyquist compliant, canonical verifier passed, runtime settings visual evidence captured.
-**Known deferred items at close:** none blocking ‚Äî direct automated SettingsDialog window capture was blocked by the Windows capture API; SETVERIFY-02 accepts manual click-through plus runtime evidence, and startup deep links (`--open-page`, `--open-dialog`, `--load-model`) were added to support future deterministic visual evidence.
+**Known deferred items at close:** none blocking ‚Ä?direct automated SettingsDialog window capture was blocked by the Windows capture API; SETVERIFY-02 accepts manual click-through plus runtime evidence, and startup deep links (`--open-page`, `--open-dialog`, `--load-model`) were added to support future deterministic visual evidence.
 
 **Key accomplishments:**
 
 - Created the v4.1 settings source-truth gap matrix tying screenshot-visible printer/material/process settings regions to OrcaSlicer source anchors, Qt targets, replacement decisions, owner phases, and verification methods (Phase 84).
 - Restored the settings dialog shell: independent 736x593 non-modal windows, compact preset/action row, clean titles/tabs, removed the off-design left group sidebar, and no mojibake or raw labels (Phase 85).
 - Restored typed option sections: compact section headers/dividers/icons, checkbox/numeric-unit/enum/text-color/range controls all routed through existing `optionModel.setValue`, dirty/read-only/value-source/validation states without row overlap (Phase 86).
-- Wired the dirty pending preset guard (`pendingUnsavedChangesRequested` ‚Üí `UnsavedChangesDialog`) distinguishing close-window flows from preset-switch flows, and preserved read-only Save As handling (Phase 87).
+- Wired the dirty pending preset guard (`pendingUnsavedChangesRequested` ‚Ü?`UnsavedChangesDialog`) distinguishing close-window flows from preset-switch flows, and preserved read-only Save As handling (Phase 87).
 - Locked final verification: normalized settings QML resources, final QML audits for region mapping/text/layout/option bindings/upstream anchors, canonical verifier pass, app launch, and runtime settings visual evidence (Phase 88).
 - Added extensible startup deep-link arguments (`--open-page`, repeated `--open-dialog`, `--skip-first-run`, `--load-model`) so future visual inspection can open pages/dialogs and load models without simulated clicks.
 - Pre-close fix restored Prepare topbar/settings-entry/viewport layout (topbar title controls constrained to 36px, settings entries routed to `forwardSettingsRequest`, lower-left view controls moved above the plate bar) with regression-guarding QmlUiAuditTests.
@@ -187,23 +187,23 @@
 - Single canonical inventory doc mapping all 34 screenshot-visible regions across 4 screenshots to a frozen 9-column schema, with per-cluster upstream coverage anchors, modify-vs-replace decisions, and a greppable cleanup checklist.
 - Frozen Phase 50 inventory contract embedding the 34-region canonical tables, a ¬ß2 Verification & Sign-Off recording all 9 deterministic checks as PASS, and a full INV-01..05 traceability matrix with real evidence counts.
 - 8 shell action gate Q_PROPERTY + 4 blocked-reason label Q_PROPERTY on BackendContext, forwarding to EditorViewModel/PreviewViewModel, plus a bulk stateChanged() signal wired from the owned viewmodels so shell gate state stays live across a Prepare‚ÜîPreview round-trip.
-- Bound the screenshot-visible shell action controls in `BBLTopbar.qml` to the 8 C++ gate properties added in Plan 51-01, fixing the concrete UX bug where Undo/Redo were clickable when the undo/redo stack was empty (page-gated only). All 8 shell gate properties (canImport, canSlice, isSlicing, canExport, canSave, canUndo, canRedo, isBusy) are now consumed in QML ‚Äî no dead C++ gate properties remain.
+- Bound the screenshot-visible shell action controls in `BBLTopbar.qml` to the 8 C++ gate properties added in Plan 51-01, fixing the concrete UX bug where Undo/Redo were clickable when the undo/redo stack was empty (page-gated only). All 8 shell gate properties (canImport, canSlice, isSlicing, canExport, canSave, canUndo, canRedo, isBusy) are now consumed in QML ‚Ä?no dead C++ gate properties remain.
 - Closed out Phase 51 with the verification + cleanup layer: an automated C++ shell-state test proving the 8 BackendContext gates are registered and the Prepare <-> Preview round-trip preserves state, two QML source-grep audits locking the BBLTopbar gate bindings and notification-surface placement, deletion of the stale unused components/Toolbar.qml, and the inventory PREP-TOP qt_target reconciliation to BBLTopbar.qml.
 - Staleness Q_PROPERTYs on EditorViewModel plus a CRITICAL preset-change slice-invalidation connect in BackendContext, and an honest deferred settings-request entry point -- all C++, no QML touched
 - Wired the Prepare left sidebar's six stubbed/dead controls to existing C++ viewmodel state: dynamic extruder-count filament slots, hidden dead color picker, dirty dots + read-only gating, enabled Setting entry point, live search filter, and the complete Global/Object/Plate scope triad -- QML-only, no C++ touched
 - Two C++ regression guards (PREPSB-05 connect-fires invalidation + PREPSB-02 honest settings forward) plus a QML source-text audit (PREPSB-01..04) that lock every Plan 52-01/52-02 binding against regression -- test files only, all green via the sanitized-PATH build pattern
 - OrcaSlicer-style G-code fixture + registered PreviewParserTests target (four RED/GREEN scaffold slots) so Plan 02's 20-role parser, 17-mode viewModes, and Summary legend have a deterministic place to land assertions
-- 20-role canonical libvgcode extrusion-role parser, 17 upstream EViewType view modes, render-side per-role visibility, and the GCV1 wire-format `int role` extension ‚Äî closing GCODE-01/02 at the data+renderer contract level
+- 20-role canonical libvgcode extrusion-role parser, 17 upstream EViewType view modes, render-side per-role visibility, and the GCV1 wire-format `int role` extension ‚Ä?closing GCODE-01/02 at the data+renderer contract level
 - Collapsible "Visible Line Types" card (18 per-role CxCheckBoxes bound to previewVm.toggleRoleVisibility) inserted into the Preview right panel, with a render-side GLViewport.roleVisibility binding that filters drawing on every toggle without repacking gcodePreviewData
-- 14 new QtTest methods locking GCODE-01 (no-placeholder real-data path), GCODE-03 (legend + G-code-text coherence), GCODE-04 (SoftwareViewport/role-skip/sizeof guards), and GCODE-05 (reslice/export/page-switch/slice-failed payload-survival) behind automated, headless regression coverage ‚Äî the no-placeholder and role-toggle-no-repack assertions are hard QVERIFY2.
-- Phase-55-tagged D3D11 startup-policy audit guard (RhiViewport default + SoftwareViewport fallback-only) plus the signed-off VALIDATION.md with a fully-populated Per-Task Verification Map ‚Äî all five GCODE requirements now have green automated commands and the phase is ready for /gsd:verify-work
+- 14 new QtTest methods locking GCODE-01 (no-placeholder real-data path), GCODE-03 (legend + G-code-text coherence), GCODE-04 (SoftwareViewport/role-skip/sizeof guards), and GCODE-05 (reslice/export/page-switch/slice-failed payload-survival) behind automated, headless regression coverage ‚Ä?the no-placeholder and role-toggle-no-repack assertions are hard QVERIFY2.
+- Phase-55-tagged D3D11 startup-policy audit guard (RhiViewport default + SoftwareViewport fallback-only) plus the signed-off VALIDATION.md with a fully-populated Per-Task Verification Map ‚Ä?all five GCODE requirements now have green automated commands and the phase is ready for /gsd:verify-work
 - ConfigOptionModel extended with nullable/isVector/sidetext/percent type support, CxSpinBox gained unit-suffix property, and Wave 0 RED test scaffolds laid down for all SETTINGS-01..07 behaviors.
 - Plan:
 - Plan:
 - 1. [Rule 3 - Blocking] Removed a second test the plan audit missed
 - 1. [Rule 1 - Bug] Stripped pre-existing UTF-8 BOM from qml.qrc
 - Encoded the 9 Phase 50 section 2 deterministic inventory checks as a 12-slot Qt Test target that runs in every canonical verify pass, locking region counts / schema / status+verification enums / region-ID format / INV-02-03-04 coverage anchors / cleanup format / no-blank-upstream against both the canonical doc and the frozen snapshot.
-- Audited the existing automated coverage (VERIFY-02 workflow transitions / VERIFY-03 Preview stability are already covered by E2E + QmlUiAuditTests ‚Äî no new test code needed), produced the user-runnable 4-screenshot UAT checklist (VERIFY-04), and ran the canonical verify end-to-end classifying every failure (VERIFY-05: 7/8 ctest targets PASS, the single CliTests failure is pre-existing carry-forward).
+- Audited the existing automated coverage (VERIFY-02 workflow transitions / VERIFY-03 Preview stability are already covered by E2E + QmlUiAuditTests ‚Ä?no new test code needed), produced the user-runnable 4-screenshot UAT checklist (VERIFY-04), and ran the canonical verify end-to-end classifying every failure (VERIFY-05: 7/8 ctest targets PASS, the single CliTests failure is pre-existing carry-forward).
 
 ---
 
@@ -339,7 +339,7 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 
 **Started:** 2026-06-24
 **Shipped:** 2026-06-25
-**Status:** ‚úÖ Complete
+**Status:** ‚ú?Complete
 **Phases:** 10-15 (6 phases, 6 plans)
 **Git range:** `a34d666..4a1b009` (20 commits, 82 files, +4984/-517)
 
@@ -347,12 +347,12 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 
 **Phases shipped:**
 
-- Phase 10: Planning Truth Reset ‚Äî complete
-- Phase 11: Source Hygiene Stabilization ‚Äî complete
-- Phase 12: Calibration Closure for Implemented Modes ‚Äî complete
-- Phase 13: Hybrid Integration Verification ‚Äî complete
-- Phase 14: Visible Placeholder Triage ‚Äî complete
-- Phase 15: Verification and Handoff ‚Äî complete
+- Phase 10: Planning Truth Reset ‚Ä?complete
+- Phase 11: Source Hygiene Stabilization ‚Ä?complete
+- Phase 12: Calibration Closure for Implemented Modes ‚Ä?complete
+- Phase 13: Hybrid Integration Verification ‚Ä?complete
+- Phase 14: Visible Placeholder Triage ‚Ä?complete
+- Phase 15: Verification and Handoff ‚Ä?complete
 
 **Requirements:** 28/28 satisfied (PLAN-01..05, HYGIENE-01..04, CAL-01..05, INT-01..06, UI-01..05, VERIFY-01..03).
 
@@ -374,9 +374,9 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 - `scripts/auto_verify_with_vcvars.ps1`: exited 0; QML UI audit passed; E2E pipeline passed.
 - `.planning/milestones/v2.9-MILESTONE-AUDIT.md`: 28/28 requirements, 14/14 integration checks, 4/4 E2E flows, 0 orphans.
 
-**Audit status:** `tech_debt` ‚Äî all requirements satisfied, no critical blockers.
+**Audit status:** `tech_debt` ‚Ä?all requirements satisfied, no critical blockers.
 
-**Known deferred items at close:** 15 (see `.planning/STATE.md` Deferred Items). Includes live MQTT/FTP/RTSP hardware verification, full calibration mode coverage, ModelMall/WebView, AssembleView, and preset bundle completion ‚Äî all scoped to v3.0/v3.1 or later.
+**Known deferred items at close:** 15 (see `.planning/STATE.md` Deferred Items). Includes live MQTT/FTP/RTSP hardware verification, full calibration mode coverage, ModelMall/WebView, AssembleView, and preset bundle completion ‚Ä?all scoped to v3.0/v3.1 or later.
 
 **Handoff:** Recommended next milestone is v3.0 PartPlate and AssembleView.
 
@@ -396,7 +396,7 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 
 **Started:** 2026-06-26
 **Shipped:** 2026-06-26
-**Status:** ‚úÖ Complete
+**Status:** ‚ú?Complete
 **Phases:** 16-22 (5 mainline + 2 review-driven)
 **Git range:** `v2.9..v3.0` (21 commits, 49 files, +5520/-502)
 
@@ -404,13 +404,13 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 
 **Phases shipped:**
 
-- Phase 16: PartPlate Data Model Foundation ‚Äî complete (2 plans: model+tests, big-bang migration)
-- Phase 17: Plate Lifecycle Completion ‚Äî complete (clone/reorder/printable + QML)
-- Phase 18: 3MF Multi-Plate Persistence ‚Äî complete (store_to_3mf_structure write path)
-- Phase 19: Per-Plate Slice Scheduling ‚Äî complete (config.apply full merge)
-- Phase 20: Verification and Handoff ‚Äî complete
-- Phase 21: Review-Driven Bug Fixes ‚Äî complete (code review: BUG-1/BUG-2 + merge-direction test)
-- Phase 22: UI Review-Driven Fixes ‚Äî complete (failure feedback + audit guards)
+- Phase 16: PartPlate Data Model Foundation ‚Ä?complete (2 plans: model+tests, big-bang migration)
+- Phase 17: Plate Lifecycle Completion ‚Ä?complete (clone/reorder/printable + QML)
+- Phase 18: 3MF Multi-Plate Persistence ‚Ä?complete (store_to_3mf_structure write path)
+- Phase 19: Per-Plate Slice Scheduling ‚Ä?complete (config.apply full merge)
+- Phase 20: Verification and Handoff ‚Ä?complete
+- Phase 21: Review-Driven Bug Fixes ‚Ä?complete (code review: BUG-1/BUG-2 + merge-direction test)
+- Phase 22: UI Review-Driven Fixes ‚Ä?complete (failure feedback + audit guards)
 
 **Requirements:** 14/14 satisfied (PLATE-01..14). PLATE-09 partial (round-trip test QSKIP'd, fixture gap). PLATE-11 documented (stack-local Print = per-plate isolation).
 
@@ -432,7 +432,7 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 - `scripts/auto_verify_with_vcvars.ps1`: exited 0; QML UI audit + E2E pipeline passed.
 - `.planning/milestones/v3.0-MILESTONE-AUDIT.md`: 14/14 requirements, 6/6 integration, 5/5 E2E; status `tech_debt`; review-clean (Phase 21+22).
 
-**Audit status:** `tech_debt` ‚Äî all requirements satisfied; 1 non-blocking gap (PLATE-09 fixture), documented v3.1-deferred items, review-clean.
+**Audit status:** `tech_debt` ‚Ä?all requirements satisfied; 1 non-blocking gap (PLATE-09 fixture), documented v3.1-deferred items, review-clean.
 
 **Known deferred items at close:** AssembleView (PLATE-15), m_print_list caching, per-plate wipe-tower geometry, PLATE-09 real-model fixture, multi-plate arrangement/thumbnail/filament-map UI, `.Codex` path casing (v2.9 carry-forward).
 
@@ -649,3 +649,4 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 ---
 
 *Last updated: 2026-07-01 after v3.6 planning.*
+
