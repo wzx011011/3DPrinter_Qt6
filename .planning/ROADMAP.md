@@ -38,8 +38,8 @@
 ## Phases
 
 - [x] Phase 129: Paint-Gizmo Gate Fix + Flatten + FixMesh (WS1) (completed 2026-07-15)
-- [ ] Phase 130: KBShortcutsDialog + ProjectPage Property Panel (WS1)
-- [ ] Phase 131: English i18n Translation Fill + Baseline Advance (WS2)
+- [x] Phase 130: KBShortcutsDialog + ProjectPage Property Panel (WS1) (completed 2026-07-15)
+- [x] Phase 131: English i18n Translation Fill + Baseline Advance (WS2) (completed 2026-07-15)
 - [ ] Phase 132: CGAL 5.6+ Upgrade (WS3)
 - [ ] Phase 133: MeshBoolean + Drill Activation (WS3)
 - [ ] Phase 134: Assembly Transformation Actions MEASURE-06 (WS4)
