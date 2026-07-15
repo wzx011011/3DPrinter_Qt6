@@ -29,7 +29,7 @@ Last activity: 2026-07-15 — Milestone v4.7 started
 
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
-| 129 | Paint-Gizmo Gate Fix + Flatten + FixMesh | Not started | POLISH-01, POLISH-02, POLISH-03 |
+| 129 | Paint-Gizmo Gate Fix + Flatten + FixMesh | Complete | POLISH-01, POLISH-02, POLISH-03 |
 | 130 | KBShortcutsDialog + ProjectPage Property Panel | Not started | POLISH-04, POLISH-05 |
 | 131 | English i18n Translation Fill + Baseline Advance | Not started | I18N-02, I18N-03 |
 | 132 | CGAL 5.6+ Upgrade | Not started | CGAL-01 |
