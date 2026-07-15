@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.6
-milestone_name: Core Feature Completion Sweep
-status: completed
-last_updated: "2026-07-15T23:59:00.000Z"
-last_activity: 2026-07-15 — Milestone v4.6 completed and archived
+milestone: v4.7
+milestone_name: Polish, i18n & Advanced Feature Recovery
+status: planning
+last_updated: "2026-07-15T03:13:15.516Z"
+last_activity: 2026-07-15
 progress:
-  total_phases: 12
-  completed_phases: 12
-  total_plans: 12
-  completed_plans: 12
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,10 +21,10 @@ progress:
 
 ## Current Position
 
-Phase: Milestone v4.6 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-15 — Milestone v4.6 completed and archived
+Status: Defining requirements
+Last activity: 2026-07-15 — Milestone v4.7 started
 
 ## Last Completed Milestone: v4.6 Core Feature Completion Sweep
 

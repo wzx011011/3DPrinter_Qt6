@@ -62,21 +62,25 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 - Option B real wipe-tower mesh: convex hull of merged `real_wipe_tower_mesh` + `real_brim_mesh` captured by value in the SliceService worker and rendered as a triangle set when `wipe_tower_mesh_data` is populated; Option A dimensioned box preserved as the else-branch fallback (re-opens Phase 99 Frozen Decision 2; WTMESH-01..04).
 - Full GLGizmoMeasure engine: per-volume indexed_triangle_set accessor with shallow-share ownership contract; pure-CPU `MeshRaycaster` + thin Qt6 `SceneRaycaster` port reusing libslic3r AABBMesh BVH (two-stage pick + per-volume cache); per-volume `Measure::Measuring` instantiated and wired to the raycaster hit, producing real angle/direct/perpendicular/XYZ measurements; GLGizmoMeasure snap UX wired end-to-end (MEASURE-01..05).
 
-## Current Milestone: v4.6 Core Feature Completion Sweep (Mega-Milestone)
+## Previous State: v4.6 Core Feature Completion Sweep (shipped 2026-07-15)
 
-**Goal:** In one cycle, lift the four highest-value main-flow gaps from "skeleton-level" to "end-to-end usable": close the Preview TickCode/IMSlider read-back-and-write loop, add the Gizmo triangle-paint engine (Support/Seam/MMU), complete the software-sliceable Calibration mode set, and converge process/quality tech debt (i18n, missing VALIDATION.md, legacy dead-code pages).
+**Shipped state:** Preview TickCode/IMSlider closed loop end-to-end (TICK-01..05); Gizmo triangle-paint engine via TriangleSelector reuse + QRhi overlay + FacetsAnnotation slice bridge (PAINT-01..05); Calibration mode completion to 6/9 software modes + range UI + real K-value readback (CALIB-01..03); tech-debt convergence — dead-code deletion + i18n pipeline + VALIDATION.md backfill (CLEAN-01, I18N-01, PROC-01); cross-workstream regression gate (REGRESS-01). 12 phases (117-128), 17 requirements, audit tech_debt.
 
-**Scope rule:** All four workstreams are local/offline (no printer hardware, no network). Preview TickCode (WS1) and the Gizmo paint engine (WS2) are both cross-cutting engine work that reuse shared per-volume ITS / raycaster infrastructure built in v4.5. Calibration (WS3) limits scope to software-sliceable modes — modes requiring live printer hardware (ManualLeveling/BedLeveling/Vibration) stay out of scope under the existing "printer-hardware workflows removed" rule. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from scope.
+## Current Milestone: v4.7 Polish, i18n & Advanced Feature Recovery
 
-**Target features (4 workstreams, ~16-20 phases starting from 117):**
-- **Preview TickCode/IMSlider closed loop (WS1):** surface the existing-but-orphaned `LayerSlider.qml` (tick rendering + right-click add/edit/delete menu) into `PreviewPage`; wire `PreviewViewModel` tick CRUD into libslic3r `Model::set_custom_gcode_per_print_z` and re-slice on tick edit, closing the upstream Preview core differentiation (color change / pause / custom G-code at a layer). Currently `custom_gcode_per_print_z` has zero references in the tree; the read-side parse already exists.
-- **Gizmo triangle-paint engine (WS2):** port the upstream `TriangleSelector` triangle-pick + subdivide + paint-state pipeline; add colored-facet overlay rendering on the QRhi/D3D11 path; wire Support-paint / Seam-paint / MMU-segmentation (the three paint gizmos whose enums/buttons/panels already exist but have no pick/render/execute). Hollow/FaceDetector/SlaSupports stay future — they share this engine and unlock after WS2.
-- **Calibration mode completion (WS3):** add the software-sliceable CalibModes that libslic3r supports but Qt6 does not yet dispatch (MaxVolumetricSpeed/VolumetricRate/RetractionTune/FlowRateProxy) into the existing `SliceService::setCalibParams` → `print.set_calib_params` path; add range (start/end/step) input UI to `CalibrationDialog`; replace the mock K-value writeback with real result readback where libslic3r provides it. Hardware-dependent modes (ManualLeveling/BedLeveling/Vibration) stay out of scope.
-- **Tech-debt convergence (WS4):** i18n translation coverage (zh_CN/ja/ko/de/fr are ~0% translated); fill missing Nyquist VALIDATION.md for previously-shipped phases; remove/repair legacy dead-code pages (DeviceListPage force-empty bug, AuxiliaryPage semantic mismatch, etc.).
+**Goal:** Fix the v4.6 carry-forward paint-gizmo gate bug + small-grain polish; restore English i18n coverage; upgrade CGAL to unlock MeshBoolean + Drill; advance MEASURE-06 assembly transformation actions on the v4.6 feature-picking foundation.
+
+**Scope rule:** All offline/local (no printer hardware, no network). Hollow/FaceDetector depend on OpenVDB (unavailable per project constraints) — if CGAL upgrade in WS3 does not incidentally unblock them, they stay deferred with an honest "OpenVDB unavailable" reason. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from scope.
+
+**Target features (4 workstreams, phases starting from 129):**
+- **WS1 Polish & bug-fix pack:** flip the stale `kViewportTrianglePickingAvailable=false` flag (Support/Seam/MMU paint gizmos work but misreport "unavailable"); wire Flatten to the real `orientObject` (currently mock 6-face); make fixMesh/reloadFromDisk call real `its_repair_*` (currently no-op copy); add KBShortcutsDialog; wire ProjectPage property panel (currently hardcoded "—").
+- **WS2 i18n English translation:** fill en.ts 1493 empty translations (source strings are Chinese; machine-translation draft + review); advance de/fr/ja/ko baseline from the v4.6 documented baseline.
+- **WS3 CGAL upgrade unlock:** upgrade CGAL 5.4→5.6+ in the dependency bundle; flip `kCgalMeshBooleanAvailable=true`; activate the ~200 lines of already-written MeshBoolean + Drill logic (currently `return false` "CGAL version too old").
+- **WS4 Assembly transformation (MEASURE-06):** port assembly-mode transformation actions (move/rotate/scale in assembly view) on the v4.5/v4.6 feature-picking + AssemblyMeasureGeometry foundation.
 
 ## Next Milestone
 
-v4.6 is the active milestone (core feature completion). After v4.6, the candidate backlog will be re-evaluated based on what ships and what new gaps emerge.
+v4.7 is the active milestone. After v4.7, the candidate backlog will be re-evaluated.
 
 ## Requirements
 
@@ -109,15 +113,16 @@ These are current baseline capabilities inferred from implementation, git histor
 
 ### Active
 
-- [ ] Preview TickCode/IMSlider closed loop: surface orphaned LayerSlider.qml into PreviewPage + wire tick CRUD into libslic3r `custom_gcode_per_print_z` + re-slice on tick edit (WS1).
-- [ ] Gizmo triangle-paint engine: port upstream TriangleSelector (pick + subdivide + paint-state) + colored-facet overlay on QRhi/D3D11 + wire Support/Seam/MMU paint gizmos (WS2).
-- [ ] Calibration mode completion: add software-sliceable CalibModes (MaxVolumetricSpeed/VolumetricRate/RetractionTune/FlowRateProxy) + range input UI + real K-value readback (WS3).
-- [ ] Tech-debt convergence: i18n translation coverage (non-en) + missing Nyquist VALIDATION.md + legacy dead-code page removal (WS4).
+- [ ] WS1 Polish & bug-fix: flip stale paint-gizmo gate flag + Flatten real orientObject + fixMesh real its_repair + KBShortcutsDialog + ProjectPage property panel.
+- [ ] WS2 i18n English: fill en.ts 1493 empty translations + advance de/fr/ja/ko baseline.
+- [ ] WS3 CGAL upgrade: 5.4→5.6+ to unlock MeshBoolean + Drill (~200 lines already written).
+- [ ] WS4 Assembly transformation: MEASURE-06 assembly-mode move/rotate/scale on feature-picking foundation.
 
 ### Future
 
-- Full PLATE-09 save/reload state assertions — unblocked by v4.3's shared-writer fix (`FIXTURE-02`); may be partially addressed by v4.5 workstream 3.
-- Hollow / FaceDetector / SlaSupports gizmos — share the WS2 TriangleSelector engine; unlock after WS2 ships.
+- Hollow / FaceDetector / SlaSupports gizmos — depend on OpenVDB (unavailable); unlock if OpenVDB becomes available.
+- Full PLATE-09 save/reload state assertions.
+- MEASURE-06 Assembly-mode transformation actions (deferred from v4.5; now ACTIVE in v4.7 WS4).
 - MEASURE-06 Assembly-mode transformation actions (deferred from v4.5; needs stable feature-picking foundation, now shipped).
 - D3D12 default-backend promotion (deferred from v4.5; needs confirmed root cause + clean repro on the original machine).
 
@@ -222,4 +227,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-15 after v4.6 milestone completion + archive.*
+*Last updated: 2026-07-15 after v4.7 milestone planning.*
