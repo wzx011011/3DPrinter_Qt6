@@ -68,20 +68,23 @@ Filled during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| POLISH-01 | TBD | Pending |
-| POLISH-02 | TBD | Pending |
-| POLISH-03 | TBD | Pending |
-| POLISH-04 | TBD | Pending |
-| POLISH-05 | TBD | Pending |
-| I18N-02 | TBD | Pending |
-| I18N-03 | TBD | Pending |
-| CGAL-01 | TBD | Pending |
-| CGAL-02 | TBD | Pending |
-| CGAL-03 | TBD | Pending |
-| ASM-01 | TBD | Pending |
-| REGRESS-02 | TBD | Pending |
+| POLISH-01 | Phase 129 | Pending |
+| POLISH-02 | Phase 129 | Pending |
+| POLISH-03 | Phase 129 | Pending |
+| POLISH-04 | Phase 130 | Pending |
+| POLISH-05 | Phase 130 | Pending |
+| I18N-02 | Phase 131 | Pending |
+| I18N-03 | Phase 131 | Pending |
+| CGAL-01 | Phase 132 | Pending |
+| CGAL-02 | Phase 133 | Pending |
+| CGAL-03 | Phase 133 | Pending |
+| ASM-01 | Phase 134 | Pending |
+| REGRESS-02 | Phase 135 | Pending |
 
-**Coverage:** 12 requirements, 0 mapped (pending roadmap).
+**Coverage:**
+- v4.7 requirements: 12 total
+- Mapped to phases: 12
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-15*

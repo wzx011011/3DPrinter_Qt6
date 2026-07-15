@@ -12,12 +12,11 @@ progress:
   completed_plans: 0
   percent: 0
 ---
-
 # Project State
 
-**Milestone:** v4.6 - Core Feature Completion Sweep (Mega-Milestone)
-**Status:** v4.6 milestone complete and archived
-**Next step:** Start the next milestone with /gsd:new-milestone.
+**Milestone:** v4.7 - Polish, i18n & Advanced Feature Recovery
+**Status:** Defining requirements
+**Next step:** Plan Phase 129 with /gsd:plan-phase 129.
 
 ## Current Position
 
@@ -26,33 +25,35 @@ Plan: —
 Status: Defining requirements
 Last activity: 2026-07-15 — Milestone v4.7 started
 
+## Current Milestone (v4.7)
+
+| Phase | Name | Status | Requirements |
+|---|---|---|---|
+| 129 | Paint-Gizmo Gate Fix + Flatten + FixMesh | Not started | POLISH-01, POLISH-02, POLISH-03 |
+| 130 | KBShortcutsDialog + ProjectPage Property Panel | Not started | POLISH-04, POLISH-05 |
+| 131 | English i18n Translation Fill + Baseline Advance | Not started | I18N-02, I18N-03 |
+| 132 | CGAL 5.6+ Upgrade | Not started | CGAL-01 |
+| 133 | MeshBoolean + Drill Activation | Not started | CGAL-02, CGAL-03 |
+| 134 | Assembly Transformation Actions MEASURE-06 | Not started | ASM-01 |
+| 135 | v4.7 Verification And Cross-Workstream Regression | Not started | REGRESS-02 |
+
+**Coverage:** 12/12 active requirements mapped to exactly one phase.
+
 ## Last Completed Milestone: v4.6 Core Feature Completion Sweep
 
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
-| 117 | IMSlider Integration And Tick Rendering | Complete | TICK-01 |
-| 118 | custom_gcode_per_print_z Writeback And Re-Slice Loop | Complete | TICK-02, TICK-03 |
-| 119 | Tick Type Coverage And Drag Relocation | Complete | TICK-04, TICK-05 |
-| 120 | TriangleSelector Engine Port | Complete | PAINT-01 |
-| 121 | Painted-Facet Overlay Render And Brush Interaction | Complete | PAINT-02, PAINT-03 |
-| 122 | Support And Seam Paint End-To-End | Complete | PAINT-04 |
-| 123 | MMU Segmentation Paint End-To-End | Complete | PAINT-05 |
-| 124 | Software-Sliceable Calibration Mode Completion | Complete | CALIB-01 |
-| 125 | Calibration Range Input UI And Real K-Value Readback | Complete | CALIB-02, CALIB-03 |
-| 126 | Legacy Dead-Code Page Cleanup | Complete | CLEAN-01 |
-| 127 | i18n Translation Coverage And VALIDATION.md Backfill | Complete | I18N-01, PROC-01 |
-| 128 | v4.6 Verification And Cross-Workstream Regression | Complete | REGRESS-01 |
+| 117-128 | (12 phases) | Complete | TICK-01..05, PAINT-01..05, CALIB-01..03, I18N-01, PROC-01, CLEAN-01, REGRESS-01 |
 
 ## Project Reference
 
-See: `.planning/PROJECT.md` (updated 2026-07-15)
-See: `.planning/ROADMAP.md` (v4.6 archived; no active milestone)
-See: `.planning/milestones/v4.6-REQUIREMENTS.md` (archived; fresh REQUIREMENTS.md created by next /gsd:new-milestone)
-See: `.planning/milestones/v4.6-MILESTONE-AUDIT.md` (tech_debt status, 17/17 satisfied)
+See: .planning/PROJECT.md (updated 2026-07-15)
+See: .planning/ROADMAP.md (v4.7 roadmap — 7 phases, 129-135)
+See: .planning/REQUIREMENTS.md (12 active v4.7 requirements)
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-**Current focus:** v4.6 shipped. Next milestone TBD via /gsd:new-milestone.
+**Current focus:** v4.7 — polish, i18n, CGAL unlock, assembly transformation.
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd:new-milestone
+- Plan Phase 129 with /gsd:plan-phase 129
