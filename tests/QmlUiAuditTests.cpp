@@ -455,6 +455,9 @@ private slots:
   // Phase 129 (POLISH-01/02/03): paint-gizmo gate flag flipped + Flatten real
   // + fixMesh real repair.
   void paintGizmoGateFlattenedAndFlattenFixMeshReal();
+  // Phase 130 (POLISH-04/05): KBShortcutsDialog exists + ProjectPage property
+  // panel wired to real values.
+  void kbShortcutsDialogAndProjectPagePropertyPanelWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -5905,6 +5908,28 @@ void QmlUiAuditTests::paintGizmoGateFlattenedAndFlattenFixMeshReal()
            "POLISH-03: fixMesh must call its_merge_vertices (real mesh repair, not no-op copy)");
   QVERIFY2(svc.contains(QStringLiteral("its_remove_degenerate_faces")),
            "POLISH-03: fixMesh must call its_remove_degenerate_faces (real mesh repair)");
+}
+
+void QmlUiAuditTests::kbShortcutsDialogAndProjectPagePropertyPanelWired()
+{
+  // Phase 130 (POLISH-04/05): KBShortcutsDialog exists in main.qml +
+  // ProjectPage property panel wired to real values (not all hardcoded "—").
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  const QString projectPage = readSource(QStringLiteral("src/qml_gui/pages/ProjectPage.qml"));
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+  QVERIFY2(!projectPage.isEmpty(), "Unable to read ProjectPage.qml");
+
+  // POLISH-04: KBShortcutsDialog exists (the shortcutDialog in main.qml).
+  QVERIFY2(mainQml.contains(QStringLiteral("shortcutDialog")),
+           "POLISH-04: main.qml must have a keyboard shortcuts dialog (shortcutDialog)");
+  QVERIFY2(mainQml.contains(QStringLiteral("Ctrl+Z")),
+           "POLISH-04: the shortcuts dialog must list keyboard shortcuts");
+
+  // POLISH-05: ProjectPage property panel wired to real values (not all "—").
+  QVERIFY2(projectPage.contains(QStringLiteral("currentProjectPath")),
+           "POLISH-05: ProjectPage property panel must use currentProjectPath (real values)");
+  QVERIFY2(projectPage.contains(QStringLiteral("Format")),
+           "POLISH-05: ProjectPage property panel must show Format");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

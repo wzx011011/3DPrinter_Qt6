@@ -226,7 +226,20 @@ Item {
                         topPadding: 12
 
                         Repeater {
-                            model: [[qsTr("路径"),"—"],[qsTr("格式"),"—"],[qsTr("大小"),"—"],[qsTr("修改时间"),"—"]]
+                            // Phase 130 (POLISH-05): wire real values from
+                            // currentProjectPath (path + format derived). Size/
+                            // modified need file IO not yet exposed by the
+                            // ViewModel — shown as "—" until then.
+                            model: {
+                              var p = root.projectVm.currentProjectPath
+                              var fmt = p ? p.split('.').pop().toUpperCase() : "—"
+                              return [
+                                [qsTr("Path"), p || qsTr("No project")],
+                                [qsTr("Format"), p ? fmt : "—"],
+                                [qsTr("Size"), "—"],
+                                [qsTr("Modified"), "—"],
+                              ]
+                            }
                             delegate: Rectangle {
                                 required property var modelData
                                 width: parent.width
