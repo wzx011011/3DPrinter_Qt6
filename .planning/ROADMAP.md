@@ -2,30 +2,36 @@
 
 ## Milestones
 
-- v2.9 Implementation Realignment and Stabilization ！ Phases 10-15 (shipped 2026-06-25)
-- v3.0 PartPlate Core ！ Phases 16-22 (shipped 2026-06-26)
-- v3.1 QRhi Rendering ！ Phases 23-28 (shipped 2026-06-28)
-- v3.2 Multi-Plate Data Polish ！ Phases 29-32 (audited 2026-06-28)
-- v3.3 Slice Preview Main Flow MVP ！ Phases 33-36 (superseded by v3.4)
-- v3.4 Import to G-code Complete Workflow ！ Phases 37-43 (closed by automated E2E)
-- v3.5 Preset Authoring Complete Workflow ！ Phases 44-49 (superseded after Phase 46)
-- v3.6 Screenshot-Driven OrcaSlicer UI Restoration ！ Phases 50-58 (shipped 2026-07-03)
-- v3.7 Screenshot-Level UI Parity Closure ！ Phases 59-64 (2026-07-04)
-- v3.8 RHI Gizmo Parity ！ Phases 65-73 (shipped 2026-07-04)
-- v3.9 Prepare Page UI Restoration ！ Phases 74-78 (shipped 2026-07-06)
-- v4.0 Preview Page UI Restoration ！ Phases 79-83 (shipped 2026-07-07)
-- v4.1 Parameter Settings Dialogs Source-Truth Restoration ！ Phases 84-88 (shipped 2026-07-09)
-- v4.2 AssembleView Source-Truth Restoration ！ Phases 89-93 (shipped 2026-07-09)
-- v4.3 Real Thumbnail Capture And 3MF Round-Trip ！ Phases 94-98 (shipped 2026-07-10)
-- v4.4 Wipe-Tower Geometry Readback And Real Rendering ！ Phases 99-102 (shipped 2026-07-12)
-- v4.5 Backlog Closure ！ Phases 103-116 (shipped 2026-07-13)
-- v4.6 Core Feature Completion Sweep ！ Phases 117-128 (shipped 2026-07-15) ！ archive: milestones/v4.6-ROADMAP.md
-- v4.7 Polish, i18n & Advanced Feature Recovery ！ Phases 129-135 (shipped 2026-07-15, tech_debt) ！ archive: milestones/v4.7-ROADMAP.md
+- v4.6 Core Feature Completion Sweep ！ Phases 117-128 (shipped 2026-07-15)
+- v4.7 Polish, i18n & Advanced Feature Recovery ！ Phases 129-135 (shipped 2026-07-15, tech_debt)
+- v4.8 Dependency Unlock, Assembly Transform & i18n Completion ！ Phases 136-140 (in progress)
 
-## Current Milestone
+## Current Milestone: v4.8 Dependency Unlock, Assembly Transform & i18n Completion
 
-No active milestone. Run /gsd:new-milestone to start the next one.
+**Goal:** Crack CGAL 5.6+ upgrade to unlock MeshBoolean + Drill; complete ASM-01 assembly transformation; fill en.ts remaining translations.
+
+## Phases
+
+- [ ] Phase 136: CGAL 5.6+ Dependency Upgrade (WS1)
+- [ ] Phase 137: MeshBoolean + Drill Activation (WS1)
+- [ ] Phase 138: Assembly Transformation Actions ASM-01 (WS2)
+- [ ] Phase 139: en.ts Full Translation + Baseline Advance (WS3)
+- [ ] Phase 140: v4.8 Verification And Cross-Workstream Regression
+
+| Phase | Name | Goal | Requirements |
+|---|---|---|---|
+| 136 | CGAL 5.6+ Dependency Upgrade | Rebuild/download CGAL 5.6+ in DEPS_PREFIX + build links clean | CGAL-01 |
+| 137 | MeshBoolean + Drill Activation | Flip flag + activate ~200 lines written logic | CGAL-02, CGAL-03 |
+| 138 | Assembly Transformation Actions ASM-01 | Assembly-mode move/rotate/scale per-volume | ASM-01 |
+| 139 | en.ts Full Translation + Baseline Advance | Fill remaining ~1372 translations + advance de/fr/ja/ko | I18N-04, I18N-05 |
+| 140 | v4.8 Verification And Cross-Workstream Regression | Canonical build + ctest + regression-free | REGRESS-03 |
+
+### Build Order
+
+- **Wave A (parallel):** Phase 136 (CGAL upgrade) + Phase 138 (ASM-01) + Phase 139 (i18n). Independent.
+- **Wave B (after 136):** Phase 137 (activate MeshBoolean + Drill).
+- **Wave C (last):** Phase 140 (verification).
 
 ---
 
-*v4.7 archived 2026-07-15. Next milestone starts fresh with /gsd:new-milestone.*
+*v4.8 roadmap created: 2026-07-15 ！ 5 phases (136-140), 7 requirements.*
