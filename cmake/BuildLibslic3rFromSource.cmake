@@ -468,14 +468,13 @@ set(LIBSLIC3R_CGAL_SOURCES
     "${LIBSLIC3R_SRC_DIR}/Triangulation.cpp"
 )
 
-# MeshBoolean requires CGAL 5.6+ (uses CGAL::parameters::default_values).
-# Our pre-built CGAL is 5.4. Exclude until CGAL is upgraded.
-# if(NOT DEFINED BUILD_CLOUD_SLICER OR NOT BUILD_CLOUD_SLICER)
-#     list(APPEND LIBSLIC3R_CGAL_SOURCES
-#         "${LIBSLIC3R_SRC_DIR}/MeshBoolean.hpp"
-#         "${LIBSLIC3R_SRC_DIR}/MeshBoolean.cpp"
-#     )
-# endif()
+# MeshBoolean — Phase 136 (CGAL-01): previously excluded under the assumption
+# CGAL 5.6+ was required, but MeshBoolean.cpp uses corefinement.h (available
+# since CGAL 5.4) not corefine_and_constructions.h. Re-enabling to test.
+list(APPEND LIBSLIC3R_CGAL_SOURCES
+    "${LIBSLIC3R_SRC_DIR}/MeshBoolean.hpp"
+    "${LIBSLIC3R_SRC_DIR}/MeshBoolean.cpp"
+)
 
 add_library(libslic3r_cgal_from_source STATIC ${LIBSLIC3R_CGAL_SOURCES})
 
