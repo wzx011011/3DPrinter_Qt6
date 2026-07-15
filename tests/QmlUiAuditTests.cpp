@@ -458,6 +458,8 @@ private slots:
   // Phase 130 (POLISH-04/05): KBShortcutsDialog exists + ProjectPage property
   // panel wired to real values.
   void kbShortcutsDialogAndProjectPagePropertyPanelWired();
+  // Phase 135 (REGRESS-02): v4.7 cross-workstream regression gate.
+  void v47CrossWorkstreamRegressionLocked();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -5930,6 +5932,39 @@ void QmlUiAuditTests::kbShortcutsDialogAndProjectPagePropertyPanelWired()
            "POLISH-05: ProjectPage property panel must use currentProjectPath (real values)");
   QVERIFY2(projectPage.contains(QStringLiteral("Format")),
            "POLISH-05: ProjectPage property panel must show Format");
+}
+
+void QmlUiAuditTests::v47CrossWorkstreamRegressionLocked()
+{
+  // Phase 135 (REGRESS-02): v4.7 cross-workstream regression gate. Consolidates
+  // the v4.7 workstream anchors (WS1 polish, WS2 i18n) + confirms the v4.6
+  // paint/calibration/tick anchors still hold. CGAL (WS3) is blocked by
+  // dependency (deferred); ASM-01 (WS4) is deferred.
+  const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
+  const QString enTs = readSource(QStringLiteral("i18n/en.ts"));
+  QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
+
+  // WS1 (Polish): gate flag flipped + flatten real + fixMesh real.
+  QVERIFY2(evm.contains(QStringLiteral("kViewportTrianglePickingAvailable = true")),
+           "REGRESS-02/WS1: paint-gizmo gate flag must be true (POLISH-01)");
+  QVERIFY2(evm.contains(QStringLiteral("orientObject")),
+           "REGRESS-02/WS1: flattenSelected must call orientObject (POLISH-02)");
+  QVERIFY2(projSvc.contains(QStringLiteral("its_merge_vertices")),
+           "REGRESS-02/WS1: fixMesh must call its_merge_vertices (POLISH-03)");
+
+  // WS2 (i18n): en.ts has some finished translations (proof-of-pipeline).
+  QVERIFY2(enTs.contains(QStringLiteral("Prepare")) || enTs.contains(QStringLiteral("Calibration")),
+           "REGRESS-02/WS2: en.ts must have at least some finished translations (I18N-02)");
+
+  // v4.6 regression: paint bridge + calibration modes still hold.
+  QVERIFY2(evm.contains(QStringLiteral("writePaintToModelVolume")),
+           "REGRESS-02/v4.6: paint FacetsAnnotation bridge must still be present");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
+           "REGRESS-02/v4.6: calibration tower modes must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
+           "REGRESS-02/v4.6: Retraction tower mode (9) must still dispatch");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
