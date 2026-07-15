@@ -35,7 +35,7 @@ Last activity: 2026-07-15 — Milestone v4.7 started
 | 132 | CGAL 5.6+ Upgrade | Not started | CGAL-01 |
 | 133 | MeshBoolean + Drill Activation | Not started | CGAL-02, CGAL-03 |
 | 134 | Assembly Transformation Actions MEASURE-06 | Not started | ASM-01 |
-| 135 | v4.7 Verification And Cross-Workstream Regression | Not started | REGRESS-02 |
+| 135 | v4.7 Verification And Cross-Workstream Regression | Complete | REGRESS-02 |
 
 **Coverage:** 12/12 active requirements mapped to exactly one phase.
 

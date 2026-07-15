@@ -43,7 +43,7 @@
 - [ ] Phase 132: CGAL 5.6+ Upgrade (WS3)
 - [ ] Phase 133: MeshBoolean + Drill Activation (WS3)
 - [ ] Phase 134: Assembly Transformation Actions MEASURE-06 (WS4)
-- [ ] Phase 135: v4.7 Verification And Cross-Workstream Regression
+- [x] Phase 135: v4.7 Verification And Cross-Workstream Regression (completed 2026-07-15)
 
 | Phase | Name | Goal | Requirements |
 |---|---|---|---|
