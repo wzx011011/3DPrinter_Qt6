@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.7
-milestone_name: Polish, i18n & Advanced Feature Recovery
+milestone: v4.8
+milestone_name: Dependency Unlock, Assembly Transform & i18n Completion
 status: planning
-last_updated: "2026-07-15T14:38:50.998Z"
+last_updated: "2026-07-15T14:57:45.527Z"
 last_activity: 2026-07-15
 progress:
   total_phases: 0
@@ -24,7 +24,7 @@ progress:
 Phase: Not started (defining requirements)
 Plan: —
 Status: Defining requirements
-Last activity: 2026-07-15 — Milestone v4.7 started
+Last activity: 2026-07-15 — Milestone v4.8 started
 
 ## Current Milestone (v4.7)
 

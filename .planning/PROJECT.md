@@ -10,7 +10,7 @@ The project currently has a usable Qt6/QML shell, real model/project IO, real sl
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current State: post-v4.6 (planning next milestone)
+## Current State: post-v4.7 (planning v4.8)
 
 **Last shipped milestone:** v4.6 Core Feature Completion Sweep (Mega-Milestone) (2026-07-15).
 
@@ -66,21 +66,24 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 **Shipped state:** Preview TickCode/IMSlider closed loop end-to-end (TICK-01..05); Gizmo triangle-paint engine via TriangleSelector reuse + QRhi overlay + FacetsAnnotation slice bridge (PAINT-01..05); Calibration mode completion to 6/9 software modes + range UI + real K-value readback (CALIB-01..03); tech-debt convergence — dead-code deletion + i18n pipeline + VALIDATION.md backfill (CLEAN-01, I18N-01, PROC-01); cross-workstream regression gate (REGRESS-01). 12 phases (117-128), 17 requirements, audit tech_debt.
 
-## Current Milestone: v4.7 Polish, i18n & Advanced Feature Recovery
+## Previous State: v4.7 Polish, i18n & Advanced Feature Recovery (shipped 2026-07-15, tech_debt)
 
-**Goal:** Fix the v4.6 carry-forward paint-gizmo gate bug + small-grain polish; restore English i18n coverage; upgrade CGAL to unlock MeshBoolean + Drill; advance MEASURE-06 assembly transformation actions on the v4.6 feature-picking foundation.
+**Shipped state:** POLISH-01..05 (paint-gizmo gate flag flipped + Flatten real orientObject + fixMesh real its_repair + KBShortcutsDialog + ProjectPage wired); I18N-02/03 (en.ts 121 terms translated + de/fr/ja/ko baseline); REGRESS-02 (v47 regression gate). 7 phases (129-135), 7/12 reqs satisfied, 3 blocked by CGAL dependency, 2 deferred.
 
-**Scope rule:** All offline/local (no printer hardware, no network). Hollow/FaceDetector depend on OpenVDB (unavailable per project constraints) — if CGAL upgrade in WS3 does not incidentally unblock them, they stay deferred with an honest "OpenVDB unavailable" reason. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from scope.
+## Current Milestone: v4.8 Dependency Unlock, Assembly Transform & i18n Completion
 
-**Target features (4 workstreams, phases starting from 129):**
-- **WS1 Polish & bug-fix pack:** flip the stale `kViewportTrianglePickingAvailable=false` flag (Support/Seam/MMU paint gizmos work but misreport "unavailable"); wire Flatten to the real `orientObject` (currently mock 6-face); make fixMesh/reloadFromDisk call real `its_repair_*` (currently no-op copy); add KBShortcutsDialog; wire ProjectPage property panel (currently hardcoded "—").
-- **WS2 i18n English translation:** fill en.ts 1493 empty translations (source strings are Chinese; machine-translation draft + review); advance de/fr/ja/ko baseline from the v4.6 documented baseline.
-- **WS3 CGAL upgrade unlock:** upgrade CGAL 5.4→5.6+ in the dependency bundle; flip `kCgalMeshBooleanAvailable=true`; activate the ~200 lines of already-written MeshBoolean + Drill logic (currently `return false` "CGAL version too old").
-- **WS4 Assembly transformation (MEASURE-06):** port assembly-mode transformation actions (move/rotate/scale in assembly view) on the v4.5/v4.6 feature-picking + AssemblyMeasureGeometry foundation.
+**Goal:** Crack the CGAL 5.6+ dependency upgrade to unlock MeshBoolean + Drill (~200 lines already written); complete ASM-01 assembly-mode transformation; fill en.ts remaining translations.
+
+**Scope rule:** CGAL upgrade is environment-level (rebuild/download dependency bundle). ASM-01 is rendering-layer work. i18n is content work. All offline/local. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed.
+
+**Target features (3 workstreams, phases starting from 136):**
+- **WS1 CGAL dependency upgrade:** rebuild/download CGAL 5.6+ in DEPS_PREFIX; flip `kCgalMeshBooleanAvailable=true`; activate MeshBoolean (union/subtract/intersect) + Drill (tool-mesh + feature-matrix).
+- **WS2 Assembly transformation (ASM-01):** assembly-mode move/rotate/scale per-volume on the v4.5/v4.6 feature-picking + AssemblyMeasureGeometry foundation (RhiViewport assembly canvas gizmo + ViewModel transform methods + AssemblePage interaction).
+- **WS3 i18n completion:** fill en.ts remaining ~1372 unfinished translations (long sentences, compound phrases); advance de/fr/ja/ko.
 
 ## Next Milestone
 
-v4.7 is the active milestone. After v4.7, the candidate backlog will be re-evaluated.
+v4.8 is the active milestone. After v4.8, the candidate backlog will be re-evaluated.
 
 ## Requirements
 
@@ -227,4 +230,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-15 after v4.7 milestone planning.*
+*Last updated: 2026-07-15 after v4.8 milestone planning.*
