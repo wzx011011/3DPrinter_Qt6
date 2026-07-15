@@ -6,32 +6,32 @@
     <message>
         <location filename="../src/qml_gui/dialogs/AMSSettingsDialog.qml" line="16"/>
         <source>AMS 设置</source>
-        <translation type="unfinished"></translation>
+        <translation >AMS Settings</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/AMSSettingsDialog.qml" line="24"/>
         <source>蓝色 PLA</source>
-        <translation type="unfinished"></translation>
+        <translation >Blue PLA</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/AMSSettingsDialog.qml" line="24"/>
         <source>红色 ABS</source>
-        <translation type="unfinished"></translation>
+        <translation >Red ABS</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/AMSSettingsDialog.qml" line="24"/>
         <source>绿色 PETG</source>
-        <translation type="unfinished"></translation>
+        <translation >Green PETG</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/AMSSettingsDialog.qml" line="24"/>
         <source>黄色 TPU</source>
-        <translation type="unfinished"></translation>
+        <translation >Yellow TPU</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/AMSSettingsDialog.qml" line="58"/>
         <source>耗材槽位管理</source>
-        <translation type="unfinished"></translation>
+        <translation >Filament Slot Management</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/AMSSettingsDialog.qml" line="106"/>
@@ -41,12 +41,12 @@
     <message>
         <location filename="../src/qml_gui/dialogs/AMSSettingsDialog.qml" line="115"/>
         <source>自动换色</source>
-        <translation type="unfinished"></translation>
+        <translation >Auto Color Change</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/AMSSettingsDialog.qml" line="199"/>
         <source>映射配置</source>
-        <translation type="unfinished"></translation>
+        <translation >Mapping Config</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/AMSSettingsDialog.qml" line="238"/>
@@ -192,7 +192,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/AccessCodeInputDialog.qml" line="145"/>
         <source>连接</source>
-        <translation type="unfinished"></translation>
+        <translation >Connect</translation>
     </message>
 </context>
 <context>
@@ -200,12 +200,12 @@
     <message>
         <location filename="../src/qml_gui/pages/AssemblePage.qml" line="75"/>
         <source>装配</source>
-        <translation type="unfinished"></translation>
+        <translation >Assembly</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/AssemblePage.qml" line="183"/>
         <source>测量</source>
-        <translation type="unfinished"></translation>
+        <translation >Measure</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/AssemblePage.qml" line="190"/>
@@ -220,7 +220,7 @@
     <message>
         <location filename="../src/qml_gui/pages/AssemblePage.qml" line="228"/>
         <source>角度</source>
-        <translation type="unfinished"></translation>
+        <translation >Angle</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/AssemblePage.qml" line="248"/>
@@ -240,7 +240,7 @@
     <message>
         <location filename="../src/qml_gui/pages/AssemblePage.qml" line="328"/>
         <source>重置</source>
-        <translation type="unfinished"></translation>
+        <translation >Reset</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/AssemblePage.qml" line="351"/>
@@ -259,7 +259,7 @@
         <location filename="../src/qml_gui/BBLTopbar.qml" line="83"/>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="165"/>
         <source>文件</source>
-        <translation type="unfinished"></translation>
+        <translation >File</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="84"/>
@@ -284,33 +284,33 @@
         <location filename="../src/qml_gui/BBLTopbar.qml" line="87"/>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="802"/>
         <source>退出</source>
-        <translation type="unfinished"></translation>
+        <translation >Exit</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="90"/>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="813"/>
         <source>编辑</source>
-        <translation type="unfinished"></translation>
+        <translation >Edit</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="91"/>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="224"/>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="815"/>
         <source>撤销</source>
-        <translation type="unfinished"></translation>
+        <translation >Undo</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="92"/>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="235"/>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="820"/>
         <source>重做</source>
-        <translation type="unfinished"></translation>
+        <translation >Redo</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="95"/>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="936"/>
         <source>帮助</source>
-        <translation type="unfinished"></translation>
+        <translation >Help</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="96"/>
@@ -327,7 +327,7 @@
         <location filename="../src/qml_gui/BBLTopbar.qml" line="59"/>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="307"/>
         <source>首页</source>
-        <translation type="unfinished"></translation>
+        <translation >Home</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="60"/>
@@ -350,7 +350,7 @@
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="311"/>
         <source>多设备</source>
-        <translation type="unfinished"></translation>
+        <translation >Multi-Device</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="63"/>
@@ -422,7 +422,7 @@
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="645"/>
         <source>装配视图</source>
-        <translation type="unfinished"></translation>
+        <translation >Assembly View</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="706"/>
@@ -442,7 +442,7 @@
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="746"/>
         <source>导入</source>
-        <translation type="unfinished"></translation>
+        <translation >Import</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="749"/>
@@ -527,12 +527,12 @@
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="831"/>
         <source>复制</source>
-        <translation type="unfinished"></translation>
+        <translation >Copy</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="836"/>
         <source>粘贴</source>
-        <translation type="unfinished"></translation>
+        <translation >Paste</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="842"/>
@@ -542,7 +542,7 @@
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="847"/>
         <source>全选</source>
-        <translation type="unfinished"></translation>
+        <translation >Select All</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="851"/>
@@ -582,7 +582,7 @@
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="893"/>
         <source>偏好设置</source>
-        <translation type="unfinished"></translation>
+        <translation >Preferences</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="901"/>
@@ -828,17 +828,17 @@
     <message>
         <location filename="../src/qml_gui/dialogs/BedShapeDialog.qml" line="104"/>
         <source>宽度</source>
-        <translation type="unfinished"></translation>
+        <translation >Width</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/BedShapeDialog.qml" line="136"/>
         <source>深度</source>
-        <translation type="unfinished"></translation>
+        <translation >Depth</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/BedShapeDialog.qml" line="159"/>
         <source>高度</source>
-        <translation type="unfinished"></translation>
+        <translation >Height</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/BedShapeDialog.qml" line="176"/>
@@ -858,7 +858,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/BedShapeDialog.qml" line="370"/>
         <source>确定</source>
-        <translation type="unfinished"></translation>
+        <translation >OK</translation>
     </message>
 </context>
 <context>
@@ -939,7 +939,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/CalibrationDialog.qml" line="132"/>
         <source>AI 监控</source>
-        <translation type="unfinished"></translation>
+        <translation >AI Monitor</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/CalibrationDialog.qml" line="175"/>
@@ -949,7 +949,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/CalibrationDialog.qml" line="183"/>
         <source>自动</source>
-        <translation type="unfinished"></translation>
+        <translation >Auto</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/CalibrationDialog.qml" line="226"/>
@@ -969,7 +969,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/CalibrationDialog.qml" line="309"/>
         <source>校准范围</source>
-        <translation type="unfinished"></translation>
+        <translation >Calibration Range</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/CalibrationDialog.qml" line="315"/>
@@ -979,17 +979,17 @@
     <message>
         <location filename="../src/qml_gui/dialogs/CalibrationDialog.qml" line="330"/>
         <source>起始</source>
-        <translation type="unfinished"></translation>
+        <translation >Start</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/CalibrationDialog.qml" line="355"/>
         <source>结束</source>
-        <translation type="unfinished"></translation>
+        <translation >End</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/CalibrationDialog.qml" line="380"/>
         <source>步长</source>
-        <translation type="unfinished"></translation>
+        <translation >Step</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/CalibrationDialog.qml" line="420"/>
@@ -1557,7 +1557,7 @@
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="31"/>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="79"/>
         <source>无</source>
-        <translation type="unfinished"></translation>
+        <translation >None</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="31"/>
@@ -1911,13 +1911,13 @@
     <message>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="75"/>
         <source>Brim 类型</source>
-        <translation type="unfinished"></translation>
+        <translation >Brim Type</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="75"/>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="100"/>
         <source>自动</source>
-        <translation type="unfinished"></translation>
+        <translation >Auto</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="75"/>
@@ -2399,7 +2399,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/EditGCodeDialog.qml" line="21"/>
         <source>编辑自定义 G-code</source>
-        <translation type="unfinished"></translation>
+        <translation >Edit Custom G-code</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/EditGCodeDialog.qml" line="44"/>
@@ -2424,7 +2424,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/EditGCodeDialog.qml" line="233"/>
         <source>添加</source>
-        <translation type="unfinished"></translation>
+        <translation >Add</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/EditGCodeDialog.qml" line="239"/>
@@ -2439,7 +2439,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/EditGCodeDialog.qml" line="307"/>
         <source>清除全部</source>
-        <translation type="unfinished"></translation>
+        <translation >Clear All</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/EditGCodeDialog.qml" line="318"/>
@@ -2449,7 +2449,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/EditGCodeDialog.qml" line="324"/>
         <source>确定</source>
-        <translation type="unfinished"></translation>
+        <translation >OK</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/EditGCodeDialog.qml" line="353"/>
@@ -2797,7 +2797,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/EnableLiteModeDialog.qml" line="167"/>
         <source>确定</source>
-        <translation type="unfinished"></translation>
+        <translation >OK</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/EnableLiteModeDialog.qml" line="173"/>
@@ -3492,7 +3492,7 @@
     <message>
         <location filename="../src/qml_gui/panels/LeftSidebar.qml" line="269"/>
         <source>工艺</source>
-        <translation type="unfinished"></translation>
+        <translation >Process</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/panels/LeftSidebar.qml" line="272"/>
@@ -3537,7 +3537,7 @@
     <message>
         <location filename="../src/qml_gui/panels/LeftSidebar.qml" line="424"/>
         <source>材料</source>
-        <translation type="unfinished"></translation>
+        <translation >Material</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/panels/LeftSidebar.qml" line="425"/>
@@ -3841,7 +3841,7 @@
         <location filename="../src/qml_gui/pages/MonitorPage.qml" line="1314"/>
         <location filename="../src/qml_gui/pages/MonitorPage.qml" line="1885"/>
         <source>连接</source>
-        <translation type="unfinished"></translation>
+        <translation >Connect</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/MonitorPage.qml" line="1357"/>
@@ -3891,7 +3891,7 @@
     <message>
         <location filename="../src/qml_gui/pages/MonitorPage.qml" line="1477"/>
         <source>AMS 耗材</source>
-        <translation type="unfinished"></translation>
+        <translation >AMS Filament</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/MonitorPage.qml" line="1516"/>
@@ -3946,12 +3946,12 @@
     <message>
         <location filename="../src/qml_gui/pages/MonitorPage.qml" line="1687"/>
         <source>导入</source>
-        <translation type="unfinished"></translation>
+        <translation >Import</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/MonitorPage.qml" line="1694"/>
         <source>删除</source>
-        <translation type="unfinished"></translation>
+        <translation >Delete</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/MonitorPage.qml" line="1794"/>
@@ -4031,7 +4031,7 @@
     <message>
         <location filename="../src/qml_gui/pages/MonitorPage.qml" line="2163"/>
         <source>警告</source>
-        <translation type="unfinished"></translation>
+        <translation >Warning</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/MonitorPage.qml" line="2164"/>
@@ -4056,7 +4056,7 @@
     <message>
         <location filename="../src/qml_gui/pages/MonitorPage.qml" line="2211"/>
         <source>挤出机</source>
-        <translation type="unfinished"></translation>
+        <translation >Extruder</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/MonitorPage.qml" line="2212"/>
@@ -4415,7 +4415,7 @@
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="112"/>
         <source>全选</source>
-        <translation type="unfinished"></translation>
+        <translation >Select All</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="127"/>
@@ -4441,7 +4441,7 @@
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="187"/>
         <source>删除</source>
-        <translation type="unfinished"></translation>
+        <translation >Delete</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="197"/>
@@ -4583,7 +4583,7 @@
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="493"/>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="905"/>
         <source>复制</source>
-        <translation type="unfinished"></translation>
+        <translation >Copy</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="499"/>
@@ -4594,7 +4594,7 @@
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="505"/>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="887"/>
         <source>克隆</source>
-        <translation type="unfinished"></translation>
+        <translation >Clone</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="514"/>
@@ -4677,7 +4677,7 @@
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="910"/>
         <source>粘贴</source>
-        <translation type="unfinished"></translation>
+        <translation >Paste</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="926"/>
@@ -4687,7 +4687,7 @@
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="940"/>
         <source>镜像</source>
-        <translation type="unfinished"></translation>
+        <translation >Mirror</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="944"/>
@@ -4717,7 +4717,7 @@
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="1013"/>
         <source>从磁盘重新加载</source>
-        <translation type="unfinished"></translation>
+        <translation >Reload from Disk</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="1019"/>
@@ -4737,7 +4737,7 @@
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="1047"/>
         <source>文字</source>
-        <translation type="unfinished"></translation>
+        <translation >Text</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="1047"/>
@@ -4788,7 +4788,7 @@
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="1327"/>
         <source>确定</source>
-        <translation type="unfinished"></translation>
+        <translation >OK</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/panels/ObjectList.qml" line="1352"/>
@@ -4939,7 +4939,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/PluginManagerDialog.qml" line="27"/>
         <source>Bambu Lab 打印机网络通信支持</source>
-        <translation type="unfinished"></translation>
+        <translation >Bambu Lab printer network communication support</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/PluginManagerDialog.qml" line="30"/>
@@ -4975,7 +4975,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/PluginManagerDialog.qml" line="43"/>
         <source>AI 切片优化</source>
-        <translation type="unfinished"></translation>
+        <translation >AI Slice Optimization</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/PluginManagerDialog.qml" line="45"/>
@@ -4990,7 +4990,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/PluginManagerDialog.qml" line="125"/>
         <source>启用</source>
-        <translation type="unfinished"></translation>
+        <translation >Enable</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/PluginManagerDialog.qml" line="125"/>
@@ -5000,7 +5000,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/PluginManagerDialog.qml" line="140"/>
         <source>下载</source>
-        <translation type="unfinished"></translation>
+        <translation >Download</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/PluginManagerDialog.qml" line="147"/>
@@ -5108,7 +5108,7 @@
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="130"/>
         <source>单位</source>
-        <translation type="unfinished"></translation>
+        <translation >Unit</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="134"/>
@@ -5314,12 +5314,12 @@
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="423"/>
         <source>撤销</source>
-        <translation type="unfinished"></translation>
+        <translation >Undo</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="424"/>
         <source>重做</source>
-        <translation type="unfinished"></translation>
+        <translation >Redo</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="425"/>
@@ -5329,7 +5329,7 @@
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="426"/>
         <source>全选</source>
-        <translation type="unfinished"></translation>
+        <translation >Select All</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="427"/>
@@ -5339,12 +5339,12 @@
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="428"/>
         <source>复制</source>
-        <translation type="unfinished"></translation>
+        <translation >Copy</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="429"/>
         <source>粘贴</source>
-        <translation type="unfinished"></translation>
+        <translation >Paste</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="430"/>
@@ -5364,12 +5364,12 @@
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="432"/>
         <source>设置</source>
-        <translation type="unfinished"></translation>
+        <translation >Settings</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="433"/>
         <source>偏好设置</source>
-        <translation type="unfinished"></translation>
+        <translation >Preferences</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="434"/>
@@ -5389,12 +5389,12 @@
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="437"/>
         <source>平放</source>
-        <translation type="unfinished"></translation>
+        <translation >Flatten</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="438"/>
         <source>切割</source>
-        <translation type="unfinished"></translation>
+        <translation >Cut</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="439"/>
@@ -5432,7 +5432,7 @@
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="444"/>
         <source>测量</source>
-        <translation type="unfinished"></translation>
+        <translation >Measure</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="445"/>
@@ -5735,7 +5735,7 @@
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="252"/>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="747"/>
         <source>文字</source>
-        <translation type="unfinished"></translation>
+        <translation >Text</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="256"/>
@@ -5766,7 +5766,7 @@
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="283"/>
         <source>全选</source>
-        <translation type="unfinished"></translation>
+        <translation >Select All</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="287"/>
@@ -5815,7 +5815,7 @@
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="337"/>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="617"/>
         <source>自动朝向</source>
-        <translation type="unfinished"></translation>
+        <translation >Auto Orient</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="342"/>
@@ -5825,7 +5825,7 @@
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="348"/>
         <source>镜像</source>
-        <translation type="unfinished"></translation>
+        <translation >Mirror</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="351"/>
@@ -5894,7 +5894,7 @@
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="421"/>
         <source>从磁盘重新加载</source>
-        <translation type="unfinished"></translation>
+        <translation >Reload from Disk</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="427"/>
@@ -5911,7 +5911,7 @@
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="436"/>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="509"/>
         <source>默认</source>
-        <translation type="unfinished"></translation>
+        <translation >Default</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="443"/>
@@ -5927,23 +5927,23 @@
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="462"/>
         <source>克隆</source>
-        <translation type="unfinished"></translation>
+        <translation >Clone</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="478"/>
         <source>删除</source>
-        <translation type="unfinished"></translation>
+        <translation >Delete</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="483"/>
         <source>复制</source>
-        <translation type="unfinished"></translation>
+        <translation >Copy</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="488"/>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="706"/>
         <source>粘贴</source>
-        <translation type="unfinished"></translation>
+        <translation >Paste</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="535"/>
@@ -6069,7 +6069,7 @@
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="807"/>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="1405"/>
         <source>确定</source>
-        <translation type="unfinished"></translation>
+        <translation >OK</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="849"/>
@@ -6169,7 +6169,7 @@
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="969"/>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="1144"/>
         <source>自动</source>
-        <translation type="unfinished"></translation>
+        <translation >Auto</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="978"/>
@@ -6250,7 +6250,7 @@
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="1580"/>
         <source>排列</source>
-        <translation type="unfinished"></translation>
+        <translation >Arrange</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="1594"/>
@@ -6338,7 +6338,7 @@
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="3167"/>
         <source>布尔运算</source>
-        <translation type="unfinished"></translation>
+        <translation >Mesh Boolean</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="3198"/>
@@ -6394,7 +6394,7 @@
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="2124"/>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="2743"/>
         <source>清除全部</source>
-        <translation type="unfinished"></translation>
+        <translation >Clear All</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="2159"/>
@@ -6504,7 +6504,7 @@
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="2312"/>
         <source>平放</source>
-        <translation type="unfinished"></translation>
+        <translation >Flatten</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="2323"/>
@@ -6716,13 +6716,13 @@
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="3096"/>
         <source>半径</source>
-        <translation type="unfinished"></translation>
+        <translation >Radius</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="3099"/>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="3140"/>
         <source>深度</source>
-        <translation type="unfinished"></translation>
+        <translation >Depth</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="3102"/>
@@ -6798,7 +6798,7 @@
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="3137"/>
         <source>高度</source>
-        <translation type="unfinished"></translation>
+        <translation >Height</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="3144"/>
@@ -6843,7 +6843,7 @@
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="3203"/>
         <source>位置</source>
-        <translation type="unfinished"></translation>
+        <translation >Position</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="3206"/>
@@ -6898,7 +6898,7 @@
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="3301"/>
         <source>缩放</source>
-        <translation type="unfinished"></translation>
+        <translation >Scale</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreparePage.qml" line="3305"/>
@@ -7136,12 +7136,12 @@
     <message>
         <location filename="../src/qml_gui/pages/PreviewPage.qml" line="215"/>
         <source>层</source>
-        <translation type="unfinished"></translation>
+        <translation >Layer</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreviewPage.qml" line="220"/>
         <source>移动</source>
-        <translation type="unfinished"></translation>
+        <translation >Move</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/pages/PreviewPage.qml" line="285"/>
@@ -7269,7 +7269,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/PrintHostDialog.qml" line="184"/>
         <source>确定</source>
-        <translation type="unfinished"></translation>
+        <translation >OK</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/PrintHostDialog.qml" line="190"/>
@@ -7457,7 +7457,7 @@
     <message>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="754"/>
         <source>挤出机</source>
-        <translation type="unfinished"></translation>
+        <translation >Extruder</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/Models/ConfigOptionModel.cpp" line="758"/>
@@ -7622,12 +7622,12 @@
         <location filename="../src/qml_gui/dialogs/SettingsDialog.qml" line="57"/>
         <location filename="../src/qml_gui/dialogs/SettingsDialog.qml" line="67"/>
         <source>材料</source>
-        <translation type="unfinished"></translation>
+        <translation >Material</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/SettingsDialog.qml" line="58"/>
         <source>挤出机</source>
-        <translation type="unfinished"></translation>
+        <translation >Extruder</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/SettingsDialog.qml" line="59"/>
@@ -7694,7 +7694,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/SettingsDialog.qml" line="78"/>
         <source>回抽</source>
-        <translation type="unfinished"></translation>
+        <translation >Retraction</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/SettingsDialog.qml" line="79"/>
@@ -7725,7 +7725,7 @@
         <location filename="../src/qml_gui/dialogs/SettingsDialog.qml" line="334"/>
         <location filename="../src/qml_gui/dialogs/SettingsDialog.qml" line="348"/>
         <source>搜索</source>
-        <translation type="unfinished"></translation>
+        <translation >Search</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/SettingsDialog.qml" line="362"/>
@@ -7828,7 +7828,7 @@
     <message>
         <location filename="../src/qml_gui/panels/SliceProgress.qml" line="423"/>
         <source>挤出机</source>
-        <translation type="unfinished"></translation>
+        <translation >Extruder</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/panels/SliceProgress.qml" line="461"/>
@@ -7890,7 +7890,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/SpeedLimitDialog.qml" line="26"/>
         <source>高度</source>
-        <translation type="unfinished"></translation>
+        <translation >Height</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/SpeedLimitDialog.qml" line="40"/>
@@ -7915,12 +7915,12 @@
     <message>
         <location filename="../src/qml_gui/dialogs/SpeedLimitDialog.qml" line="44"/>
         <source>类型</source>
-        <translation type="unfinished"></translation>
+        <translation >Type</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/SpeedLimitDialog.qml" line="152"/>
         <source>添加</source>
-        <translation type="unfinished"></translation>
+        <translation >Add</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/SpeedLimitDialog.qml" line="159"/>
@@ -7930,7 +7930,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/SpeedLimitDialog.qml" line="167"/>
         <source>确定</source>
-        <translation type="unfinished"></translation>
+        <translation >OK</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/SpeedLimitDialog.qml" line="173"/>
@@ -7983,7 +7983,7 @@
     <message>
         <location filename="../src/qml_gui/components/StatsPanel.qml" line="88"/>
         <source>移动</source>
-        <translation type="unfinished"></translation>
+        <translation >Move</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/components/StatsPanel.qml" line="89"/>
@@ -8291,7 +8291,7 @@
     <message>
         <location filename="../src/qml_gui/dialogs/WipeTowerDialog.qml" line="121"/>
         <source>体积</source>
-        <translation type="unfinished"></translation>
+        <translation >Volume</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/WipeTowerDialog.qml" line="124"/>
@@ -8332,12 +8332,12 @@
     <message>
         <location filename="../src/qml_gui/dialogs/WipeTowerDialog.qml" line="260"/>
         <source>重置</source>
-        <translation type="unfinished"></translation>
+        <translation >Reset</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/WipeTowerDialog.qml" line="290"/>
         <source>确定</source>
-        <translation type="unfinished"></translation>
+        <translation >OK</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/dialogs/WipeTowerDialog.qml" line="296"/>
@@ -8423,17 +8423,17 @@
     <message>
         <location filename="../src/qml_gui/main.qml" line="134"/>
         <source>撤销</source>
-        <translation type="unfinished"></translation>
+        <translation >Undo</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/main.qml" line="135"/>
         <source>重做</source>
-        <translation type="unfinished"></translation>
+        <translation >Redo</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/main.qml" line="138"/>
         <source>粘贴</source>
-        <translation type="unfinished"></translation>
+        <translation >Paste</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/main.qml" line="141"/>
@@ -8448,7 +8448,7 @@
     <message>
         <location filename="../src/qml_gui/main.qml" line="143"/>
         <source>全选</source>
-        <translation type="unfinished"></translation>
+        <translation >Select All</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/main.qml" line="142"/>
@@ -8458,7 +8458,7 @@
     <message>
         <location filename="../src/qml_gui/main.qml" line="153"/>
         <source>偏好设置</source>
-        <translation type="unfinished"></translation>
+        <translation >Preferences</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/main.qml" line="205"/>
@@ -8619,7 +8619,7 @@
         <location filename="../src/qml_gui/main.qml" line="243"/>
         <location filename="../src/qml_gui/main.qml" line="287"/>
         <source>确定</source>
-        <translation type="unfinished"></translation>
+        <translation >OK</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/main.qml" line="268"/>
