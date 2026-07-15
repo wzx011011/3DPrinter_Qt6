@@ -1,5 +1,32 @@
 # Milestones History
 
+## v4.6 Core Feature Completion Sweep (Shipped: 2026-07-15)
+
+**Phases completed:** 12 phases (117-128), 12 plans, 17 requirements
+
+**Git range:** 41 commits, 151 files, +88256/-21951
+
+**Key accomplishments:**
+
+- Preview TickCode/IMSlider closed loop end-to-end: the orphaned LayerSlider tick rendering + right-click add/edit/delete menus consolidated into the vertical PreviewLayerRail (source-truth-aligned with upstream IMSlider); tick CRUD wired into libslic3r `plates_custom_gcodes` (NOT the deprecated `set_custom_gcode_per_print_z` — BBS removed it, direct field write is the real path) + re-slice on tick edit; all 5 upstream tick types (Pause/CustomGcode/Template/ToolChange/ColorChange) round-trip; drag-to-relocate. Explicit TickType→CustomGCode::Type switch map (orders differ — static_cast would corrupt). Closes TICK-01..05.
+- Gizmo triangle-paint engine: TriangleSelector ported by REUSE (already compiled in libslic3r, pure C++, no GL/wx coupling — zero reimplementation); new PaintEngine (per-volume owner) bridges 3 structural gaps (volumeMeshTriangleMesh accessor, SceneRaycasterHit.meshLocalPosition, EditorViewModel paintAtFacet); QRhi colored-facet overlay (reuses m_fillPipeline + rhi_viewport.qsb, zero new shaders) + Software QPainter mirror; brush sphere cursor (translucent, button-state color); Support/Seam/MMU paint feeds the slice via ModelVolume FacetsAnnotation members (supported_facets/seam_facets/mmu_segmentation_facets) — NOT new ModelVolume, NOT PrintConfig; 3MF persistence automatic. Closes PAINT-01..05.
+- Calibration mode completion: 3 tower modes added (Vol_speed=7, VFA=8, Retraction=9) — now 6/9 software modes dispatch via transparent SliceService passthrough (no SliceService/Print/GCode changes); range input UI (start/end/step, user overrides Phase 124 defaults); real PA K-value readback (parses M900 K / SET_PRESSURE_ADVANCE / M572 / M233 from sliced G-code — 4 firmware variants); non-PA modes get honest manual-interpretation notes (no fabricated values). Closes CALIB-01..03.
+- Tech-debt convergence: 4 dead-code pages + AuxiliaryService deleted (DeviceListPage/AuxiliaryPage/ModelMallPage/AuxiliaryListPanel — in the removed LAN/device/cloud scope, deletion not repair); i18n pipeline documented (lupdate→translate→lrelease) + zh_CN v4.6 core strings translated (proof-of-pipeline); VALIDATION.md backfilled for phases 117-126. Closes CLEAN-01, I18N-01, PROC-01.
+- Cross-workstream regression: 12 source-audit slots + v46CrossWorkstreamRegressionLocked consolidated gate; canonical build (j6, adapted from j16 for 32GB-machine MSVC heap constraint) exit 0; 5/5 ctest groups PASS; app launch liveness confirmed. Closes REGRESS-01.
+
+**Audit status:** `tech_debt` — 17/17 requirements satisfied, 5/5 integration chains, 3/3 E2E flows, no critical blockers.
+
+**Known deferred items at close:** documented geometry tech-debt (calibration towers use current-plate model, not upstream .drc), non-en translations are baseline (unfinished), ColorChange default color (picker future), build j6 adaptation.
+
+**Archives:**
+
+- `.planning/milestones/v4.6-ROADMAP.md`
+- `.planning/milestones/v4.6-REQUIREMENTS.md`
+- `.planning/milestones/v4.6-MILESTONE-AUDIT.md`
+- `.planning/milestones/v4.6-phases/` (12 phase directories)
+
+---
+
 ## v4.5 Backlog Closure (Shipped: 2026-07-13)
 
 **Phases completed:** 14 phases, 14 plans, 49 tasks

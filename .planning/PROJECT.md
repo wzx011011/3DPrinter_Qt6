@@ -10,22 +10,20 @@ The project currently has a usable Qt6/QML shell, real model/project IO, real sl
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current State: post-v4.5 (planning next milestone)
+## Current State: post-v4.6 (planning next milestone)
 
-**Last shipped milestone:** v4.5 Backlog Closure (Mega-Milestone) (2026-07-13).
+**Last shipped milestone:** v4.6 Core Feature Completion Sweep (Mega-Milestone) (2026-07-15).
 
-**v4.5 shipped state (new in this milestone):**
-- CLI fixtures + argv GUI fixture loading (`--load-model`/`--open-page`/`--open-dialog`) closed FIXTURE-01..04; the recurring Windows-capture-API runtime-evidence blocker is worked around via a one-shot `QQuickWindow::frameSwapped` gate so external screenshot capture is deterministic.
-- D3D12 debug-layer wired behind `OWZX_D3D12_DEBUG` env flag (D3D12-01); time-boxed crash root-cause investigation documented the 0xc0000005 access violation as a non-reproducing hypothesis + tooling gap (D3D12-02/03). D3D12 stays opt-in via `defaultWindowsCandidates()` keeping D3D11 first.
-- Auto filament-map recommendation: Qt6 enum widened from 2-value to upstream 4-value (fmmAutoForFlush/fmmAutoForMatch/fmmManual/fmmDefault) with a 3MF read-side migration; post-slice `Print::get_filament_maps()` readback captured by value in the SliceService worker, delivered via `filamentMapReady`, surfaced in the `FilamentGroupPopup` UI; save→reload round-trip verified (FMAP-01..04).
-- Option B real wipe-tower mesh: convex hull of merged `real_wipe_tower_mesh` + `real_brim_mesh` captured by value in the SliceService worker and rendered as a triangle set when `wipe_tower_mesh_data` is populated; Option A dimensioned box preserved as the else-branch fallback (re-opens Phase 99 Frozen Decision 2; WTMESH-01..04).
-- Full GLGizmoMeasure engine: per-volume indexed_triangle_set accessor with shallow-share ownership contract; pure-CPU `MeshRaycaster` + thin Qt6 `SceneRaycaster` port reusing libslic3r AABBMesh BVH (two-stage pick + per-volume cache); per-volume `Measure::Measuring` instantiated and wired to the raycaster hit, producing real angle/direct/perpendicular/XYZ measurements through a pitfall-6-safe boundary scrubbing layer; GLGizmoMeasure snap UX wired end-to-end (mouse-move → SceneRaycaster stage-2 → `MeasureEngine::getFeature`, Shift toggle, live readout) (MEASURE-01..05).
+**v4.6 shipped state (new in this milestone):**
+- Preview TickCode/IMSlider closed loop end-to-end (TICK-01..05): the orphaned LayerSlider tick rendering + right-click add/edit/delete menus consolidated into the vertical PreviewLayerRail (source-truth-aligned with upstream IMSlider); tick CRUD wired into libslic3r `plates_custom_gcodes` (direct field write — BBS removed `set_custom_gcode_per_print_z`) + re-slice on tick edit; all 5 upstream tick types round-trip; drag-to-relocate; explicit TickType→CustomGCode::Type switch map (orders differ, no static_cast).
+- Gizmo triangle-paint engine (PAINT-01..05): TriangleSelector ported by REUSE (already compiled in libslic3r, pure C++, zero reimplementation); new PaintEngine (per-volume owner) bridges 3 structural gaps; QRhi colored-facet overlay (reuses m_fillPipeline + rhi_viewport.qsb, zero new shaders) + Software QPainter mirror; brush sphere cursor; Support/Seam/MMU paint feeds the slice via ModelVolume FacetsAnnotation members (not new ModelVolume, not PrintConfig); 3MF persistence automatic.
+- Calibration mode completion (CALIB-01..03): 3 tower modes added (Vol_speed=7, VFA=8, Retraction=9) — 6/9 software modes now dispatch via transparent SliceService passthrough; range input UI; real PA K-value readback (4 firmware variants); honest non-PA manual-interpretation notes.
+- Tech-debt convergence (CLEAN-01, I18N-01, PROC-01): 4 dead-code pages + AuxiliaryService deleted (removed LAN/device/cloud scope); i18n pipeline documented + zh_CN core strings translated; VALIDATION.md backfilled.
+- Cross-workstream regression (REGRESS-01): 12 source-audit slots + v46CrossWorkstreamRegressionLocked gate; canonical build (j6) exit 0; 5/5 ctest PASS.
 
-**Carry-forward from v4.4:** Post-slice wipe-tower geometry readback wired end-to-end + Option A dimensioned-box rendering baseline. Default QRhi/D3D11 path owns all gizmo/pick/cut/wipe/Preview/thumbnail rendering.
+**Carry-forward from v4.5:** CLI fixtures, D3D12 debug-layer, auto filament-map, Option B wipe-tower mesh, full GLGizmoMeasure engine — all shipped in v4.5, retained.
 
-**Carry-forward outside v4.5:** MEASURE-06 Assembly-mode transformation actions (deferred — needs stable feature-picking foundation, now shipped). D3D12 default-backend promotion (deferred — needs confirmed root cause + clean repro). Full PLATE-09 save/reload state assertions. Full i18n translation coverage. Process debt: missing Nyquist VALIDATION.md files across several milestones. Runtime visual evidence still relies on argv fixtures (Windows capture API workaround). LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from forward scope.
-
-**Carry-forward outside v4.4:** Option B (real wipe-tower mesh) LOCKED as future upgrade per Phase 99 Frozen Decision 2 (needs ITS vertex format extension). Auto filament-map recommendation, full GLGizmoMeasure feature-picking engine, AssembleViewDataPool ModelObjectsClipper, D3D12 root-cause, and CLI fixtures are deferred to future milestones. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from forward scope.
+**Carry-forward outside v4.6:** Dedicated calibration .drc tower models (geometry tech-debt — current-plate model used). Non-en translations are baseline (unfinished, not 100%). ColorChange default color (picker future). Build j6 adaptation (32GB machine MSVC heap constraint). MEASURE-06 Assembly-mode transformation actions. D3D12 default-backend promotion. Full PLATE-09 save/reload state assertions. Runtime visual evidence still relies on argv fixtures (Windows capture API workaround). LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed from forward scope.
 
 ## Previous State: v4.3 Real Thumbnail Capture And 3MF Round-Trip (shipped 2026-07-10)
 
@@ -224,4 +222,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-14 after v4.6 milestone planning.*
+*Last updated: 2026-07-15 after v4.6 milestone completion + archive.*
