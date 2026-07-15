@@ -3868,7 +3868,12 @@ bool ProjectServiceMock::fixMesh(int objectIndex)
   {
     if (vol)
     {
+      // Phase 129 (POLISH-03): real mesh repair via admesh-layer its_* functions
+      // (TriangleMesh.hpp:209 its_merge_vertices + :212 its_remove_degenerate_faces).
+      // The former code was a no-op copy (set_mesh(move(copy))) that did not repair.
       Slic3r::TriangleMesh m = vol->mesh();
+      Slic3r::its_merge_vertices(m.its);
+      Slic3r::its_remove_degenerate_faces(m.its);
       vol->set_mesh(std::move(m));
     }
   }
@@ -3902,13 +3907,24 @@ bool ProjectServiceMock::reloadFromDisk(int objectIndex)
     lastError_ = tr("重新加载失败：对象无源文件路径");
     return false;
   }
-  // Reload is deferred — real implementation would re-read the source file
-  // and replace the mesh. For now, trigger a repair as a best-effort.
+  // Reload from disk: re-read the source file, then repair the mesh. If re-read
+  // fails (file moved/deleted), fall back to repairing the existing mesh.
+  // Phase 129 (POLISH-03): real mesh repair via its_merge_vertices +
+  // its_remove_degenerate_faces (was a no-op copy before).
   for (auto *vol : obj->volumes)
   {
     if (vol)
     {
       Slic3r::TriangleMesh m = vol->mesh();
+      // Best-effort re-read from disk (replaces the mesh if the source file
+      // still exists and is readable).
+      if (!obj->input_file.empty()) {
+        Slic3r::TriangleMesh reloaded;
+        if (reloaded.ReadSTLFile(obj->input_file.c_str()))
+          m = std::move(reloaded);
+      }
+      Slic3r::its_merge_vertices(m.its);
+      Slic3r::its_remove_degenerate_faces(m.its);
       vol->set_mesh(std::move(m));
     }
   }

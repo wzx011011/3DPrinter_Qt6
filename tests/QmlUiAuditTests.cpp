@@ -452,6 +452,9 @@ private slots:
   // Phase 128 (REGRESS-01): v4.6 cross-workstream regression — all v4.6
   // source-audit slots + key anchors consolidated in one milestone gate.
   void v46CrossWorkstreamRegressionLocked();
+  // Phase 129 (POLISH-01/02/03): paint-gizmo gate flag flipped + Flatten real
+  // + fixMesh real repair.
+  void paintGizmoGateFlattenedAndFlattenFixMeshReal();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -5877,6 +5880,31 @@ void QmlUiAuditTests::v46CrossWorkstreamRegressionLocked()
            "REGRESS-01/WS4: qml.qrc must not list the deleted LayerSlider.qml");
   QVERIFY2(!qrc.contains(QStringLiteral("AuxiliaryPage.qml")),
            "REGRESS-01/WS4: qml.qrc must not list the deleted AuxiliaryPage.qml");
+}
+
+void QmlUiAuditTests::paintGizmoGateFlattenedAndFlattenFixMeshReal()
+{
+  // Phase 129 (POLISH-01/02/03): three bug fixes from the v4.6 gap analysis.
+  const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString svc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!svc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+
+  // POLISH-01: kViewportTrianglePickingAvailable must be true (Phase 121-123
+  // shipped real PaintEngine; the stale false caused false "unavailable").
+  QVERIFY2(evm.contains(QStringLiteral("kViewportTrianglePickingAvailable = true")),
+           "POLISH-01: kViewportTrianglePickingAvailable must be true (Phase 121-123 real-ized paint picking)");
+
+  // POLISH-02: flattenSelected must call orientObject (real orientation::orient),
+  // not the mock 6-hardcoded-face path.
+  QVERIFY2(evm.contains(QStringLiteral("orientObject")),
+           "POLISH-02: flattenSelected must call orientObject (real orientation, not mock)");
+
+  // POLISH-03: fixMesh must call real its_merge_vertices / its_remove_degenerate_faces.
+  QVERIFY2(svc.contains(QStringLiteral("its_merge_vertices")),
+           "POLISH-03: fixMesh must call its_merge_vertices (real mesh repair, not no-op copy)");
+  QVERIFY2(svc.contains(QStringLiteral("its_remove_degenerate_faces")),
+           "POLISH-03: fixMesh must call its_remove_degenerate_faces (real mesh repair)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

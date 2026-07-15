@@ -44,7 +44,11 @@
 namespace
 {
 constexpr float kRadiansToDegrees = 180.0f / float(M_PI);
-constexpr bool kViewportTrianglePickingAvailable = false;
+// Phase 129 (POLISH-01): flipped to true. Phase 121-123 shipped real PaintEngine
+// + SceneRaycaster + renderPaintOverlay; the Support/Seam/MMU paint gizmos now
+// have real triangle picking. The stale false caused gizmoStatusText to falsely
+// report "viewport triangle picking unavailable".
+constexpr bool kViewportTrianglePickingAvailable = true;
 constexpr bool kCgalMeshBooleanAvailable = false;
 
 // Phase 93 (ASMROUTE-02): parse the cached mesh blob into a map of
@@ -1612,33 +1616,29 @@ void EditorViewModel::flattenSelected()
   if (!projectService_ || m_selectedSourceIndices.isEmpty())
     return;
 
-  // 对齐上游 GLGizmoFlatten::set_flattening_data + on_mouse
-  // Flatten 将选中对象旋转使最大面朝下 (Z 平放)
-  // Mock 模式：模拟凸包面计算，重置旋转使最大面法线朝 -Z
-  statusText_ = tr("正在计算最佳平放面...");
+  // Phase 129 (POLISH-02): real flatten via orientObject, which calls
+  // Slic3r::orientation::orient(ModelObject*) (ProjectServiceMock.cpp:2664-2675).
+  // This computes the best orientation (largest flat face down) upstream-style,
+  // replacing the former mock that hardcoded 6 candidate faces + reset rotation.
+  statusText_ = tr("Computing best flat orientation...");
   emit stateChanged();
 
+  const int idx = *m_selectedSourceIndices.constBegin();
+  bool ok = false;
 #ifdef HAS_LIBSLIC3R
-  // TODO: 调用 orientation::orient() 或凸包面选择逻辑
-  // 1. 计算凸包面及其法线
-  // 2. 选择面积最大的面
-  // 3. 计算将该面法线旋转至 -Z 的四元数
-  // 4. 应用旋转到 ModelObject
+  if (projectService_)
+    ok = projectService_->orientObject(idx);
+#else
+  Q_UNUSED(idx);
 #endif
 
-  // Mock mode: 模拟凸包面检测，设置 6 个候选面
-  m_flattenFaceCount = 6;
-
-  QTimer::singleShot(400, this, [this]()
-                     {
-    // Mock: 重置旋转到使 Z 面朝下
-    const int idx = *m_selectedSourceIndices.constBegin();
-    if (projectService_)
-      projectService_->setObjectRotation(idx, 0, 0, 0);
-    statusText_ = tr("已平放至最大面（Mock，6 个候选面）");
+  statusText_ = ok ? tr("Flattened to best face")
+                   : tr("Flatten not available (libslic3r required)");
+  if (ok) {
     rebuildObjectEntriesFromService();
     refreshMeshCacheAndFitHint();
-    emit stateChanged(); });
+  }
+  emit stateChanged();
 }
 
 void EditorViewModel::cutSelected(int axis, double position)
