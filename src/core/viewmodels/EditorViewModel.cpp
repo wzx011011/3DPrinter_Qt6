@@ -49,7 +49,10 @@ constexpr float kRadiansToDegrees = 180.0f / float(M_PI);
 // have real triangle picking. The stale false caused gizmoStatusText to falsely
 // report "viewport triangle picking unavailable".
 constexpr bool kViewportTrianglePickingAvailable = true;
-constexpr bool kCgalMeshBooleanAvailable = false;
+// Phase 137 (CGAL-02/03): flipped to true. Phase 136 patched MeshBoolean.cpp
+// for CGAL 5.4 compat (corefinement.h is available in 5.4); MeshBoolean +
+// Drill are now compilable and activatable without upgrading CGAL.
+constexpr bool kCgalMeshBooleanAvailable = true;
 
 // Phase 93 (ASMROUTE-02): parse the cached mesh blob into a map of
 // sourceObjectIndex -> unioned AABB, the per-object bounds source Phase 92
@@ -5797,13 +5800,15 @@ QString EditorViewModel::gizmoStatusText(int gizmoMode) const
     return QStringLiteral("Requires one selected object");
   case 6:
   case 7:
-    return QStringLiteral("Blocked: viewport triangle picking unavailable");
+    return QStringLiteral("Requires one selected object");
   case 11:
-    return QStringLiteral("Blocked: CGAL MeshBoolean unavailable");
+    // Phase 137: CGAL MeshBoolean is now available; gate on selection instead.
+    return QStringLiteral("Requires two selected objects");
   case 3:
     return QStringLiteral("Requires a loaded model");
   case 13:
-    return QStringLiteral("Blocked: CGAL MeshBoolean unavailable");
+    // Phase 137: CGAL MeshBoolean is now available; gate on selection instead.
+    return QStringLiteral("Requires two selected objects");
   case 8:
   case 18:
     return QStringLiteral("Blocked: OpenVDB unavailable");

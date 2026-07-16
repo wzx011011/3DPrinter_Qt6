@@ -323,8 +323,9 @@ list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "Arachne/utils/ExtrusionJunction
 list(APPEND ALL_LIBSLIC3R_SOURCES
     "${LIBSLIC3R_GEN_DIR}/libslic3r_version.h"
     "${LIBSLIC3R_GEN_DIR}/buildinfo.h"
-    # Stub for MeshBoolean::mcut — see cmake/stubs/MeshBoolean_mcut_stub.cpp
-    "${CMAKE_SOURCE_DIR}/cmake/stubs/MeshBoolean_mcut_stub.cpp"
+    # Phase 137: MeshBoolean_mcut_stub.cpp removed — the real MeshBoolean.cpp
+    # is now compiled in libslic3r_cgal_from_source (Phase 136 re-enabled it),
+    # which provides the mcut::make_boolean symbol. The stub would cause LNK2005.
 )
 
 # ─── Platform-specific sources ───────────────────────────────────────────────
