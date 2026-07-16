@@ -5043,6 +5043,163 @@ bool ProjectServiceMock::setObjectScaleUniform(int index, float s)
   return setObjectScale(index, s, s, s);
 }
 
+// ---- ASM-01 (Phase 138): assemble-transform accessors ----
+// Mirror the ordinary objectPosition/Rotation/Scale dual-path pattern but target
+// ModelInstance::m_assemble_transformation (upstream Model.hpp:1253-1298) instead of
+// m_transformation. Same slic3r(X,Y,Z) <-> GL(X,Z,Y) Y/Z swap for offset, deg<->rad
+// for rotation. The Prepare/View3D path above is unchanged.
+QVector3D ProjectServiceMock::assembleOffset(int index) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    const auto *inst = model_->objects[size_t(index)]->instances.front();
+    if (inst)
+    {
+      const auto off = inst->get_assemble_offset();  // Model.hpp:1289
+      // slic3r(X,Y,Z) -> GL(X,Z,Y): GL.x=slic3r.x, GL.y=slic3r.z, GL.z=slic3r.y
+      return QVector3D(static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y()));
+    }
+  }
+#endif
+  return (index >= 0 && index < assembleOffsets_.size()) ? assembleOffsets_[index] : QVector3D(0, 0, 0);
+}
+
+QVector3D ProjectServiceMock::assembleRotation(int index) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    const auto *inst = model_->objects[size_t(index)]->instances.front();
+    if (inst)
+    {
+      const auto rot = inst->get_assemble_transformation().get_rotation();  // radians in slic3r space
+      return QVector3D(
+        qRadiansToDegrees(static_cast<float>(rot.x())),
+        qRadiansToDegrees(static_cast<float>(rot.y())),
+        qRadiansToDegrees(static_cast<float>(rot.z())));
+    }
+  }
+#endif
+  return (index >= 0 && index < assembleRotations_.size()) ? assembleRotations_[index] : QVector3D(0, 0, 0);
+}
+
+QVector3D ProjectServiceMock::assembleScale(int index) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    const auto *inst = model_->objects[size_t(index)]->instances.front();
+    if (inst)
+    {
+      const auto sc = inst->get_assemble_transformation().get_scaling_factor();
+      return QVector3D(static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z()));
+    }
+  }
+#endif
+  return (index >= 0 && index < assembleScales_.size()) ? assembleScales_[index] : QVector3D(1, 1, 1);
+}
+
+bool ProjectServiceMock::setAssembleOffset(int index, float x, float y, float z)
+{
+  if (index < 0 || index >= objectNames_.size())
+    return false;
+#ifdef HAS_LIBSLIC3R
+  if (model_ && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    auto *inst = model_->objects[size_t(index)]->instances.front();
+    if (inst)
+    {
+      // GL(X,Z,Y) -> slic3r(X,Y,Z): slic3r.x=GL.x, slic3r.y=GL.z, slic3r.z=GL.y
+      inst->set_assemble_offset(Slic3r::Vec3d(x, z, y));  // Model.hpp:1290
+      // set_assemble_offset does NOT flip m_assemble_initialized; re-assign the
+      // transformation through set_assemble_transformation (Model.hpp:1281) so the
+      // 3MF <assemble> block write gate (bbs_3mf.cpp:8076 is_assemble_initialized())
+      // passes and the transform round-trips.
+      inst->set_assemble_transformation(inst->get_assemble_transformation());
+    }
+  }
+#endif
+  while (assembleOffsets_.size() <= index)
+    assembleOffsets_.append(QVector3D(0, 0, 0));
+  assembleOffsets_[index] = QVector3D(x, y, z);
+  emit projectChanged();
+  return true;
+}
+
+bool ProjectServiceMock::setAssembleRotation(int index, float x, float y, float z)
+{
+  if (index < 0 || index >= objectNames_.size())
+    return false;
+#ifdef HAS_LIBSLIC3R
+  if (model_ && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    auto *inst = model_->objects[size_t(index)]->instances.front();
+    if (inst)
+    {
+      // degrees -> radians, written to m_assemble_transformation (Model.hpp:1291)
+      inst->set_assemble_rotation(Slic3r::Vec3d(
+        qDegreesToRadians(x), qDegreesToRadians(y), qDegreesToRadians(z)));
+      // set_assemble_rotation does NOT flip m_assemble_initialized; re-assign through
+      // set_assemble_transformation (Model.hpp:1281) so the 3MF <assemble> write gate
+      // (bbs_3mf.cpp:8076) passes and the transform round-trips.
+      inst->set_assemble_transformation(inst->get_assemble_transformation());
+    }
+  }
+#endif
+  while (assembleRotations_.size() <= index)
+    assembleRotations_.append(QVector3D(0, 0, 0));
+  assembleRotations_[index] = QVector3D(x, y, z);
+  emit projectChanged();
+  return true;
+}
+
+bool ProjectServiceMock::setAssembleScale(int index, float x, float y, float z)
+{
+  if (index < 0 || index >= objectNames_.size())
+    return false;
+#ifdef HAS_LIBSLIC3R
+  if (model_ && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    auto *inst = model_->objects[size_t(index)]->instances.front();
+    if (inst)
+    {
+      // get_assemble_transformation() returns const; take a copy, mutate, re-assign
+      // via set_assemble_transformation (Model.hpp:1281) which also flips
+      // m_assemble_initialized so the 3MF <assemble> write gate passes.
+      auto t = inst->get_assemble_transformation();
+      t.set_scaling_factor(Slic3r::Vec3d(x, y, z));
+      inst->set_assemble_transformation(t);
+    }
+  }
+#endif
+  while (assembleScales_.size() <= index)
+    assembleScales_.append(QVector3D(1, 1, 1));
+  assembleScales_[index] = QVector3D(x, y, z);
+  emit projectChanged();
+  return true;
+}
+
+bool ProjectServiceMock::isAssembleInitialized(int index)
+{
+#ifdef HAS_LIBSLIC3R
+  if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    auto *inst = model_->objects[size_t(index)]->instances.front();
+    if (inst)
+      return inst->is_assemble_initialized();  // Model.hpp:1345 (non-const upstream)
+  }
+#endif
+  return false;
+}
+
 void ProjectServiceMock::clearProject()
 {
   if (loading_)

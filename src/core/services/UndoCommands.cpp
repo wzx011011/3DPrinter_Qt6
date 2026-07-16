@@ -58,6 +58,63 @@ bool TransformCommand::mergeWith(const QUndoCommand *other)
   return true;
 }
 
+// ── AssembleTransformCommand (ASM-01 Phase 138) ────────────────────────────
+// Mirrors TransformCommand but writes the assemble transform (ModelInstance::
+// m_assemble_transformation, Model.hpp:1253-1298) via setAssembleOffset/Rotation/
+// Scale so assembly-canvas edits round-trip through undo/redo without disturbing
+// the Prepare transform. Distinct id (7) so mergeWith never crosses the two kinds.
+
+AssembleTransformCommand::AssembleTransformCommand(int objectIndex,
+                                                   const QVector3D &oldPos, const QVector3D &oldRot, const QVector3D &oldScale,
+                                                   ProjectServiceMock *service,
+                                                   QUndoCommand *parent)
+    : QUndoCommand(QObject::tr("Assemble Transform")), m_objectIndex(objectIndex),
+      m_oldPos(oldPos), m_oldRot(oldRot), m_oldScale(oldScale),
+      m_service(service)
+{
+  Q_UNUSED(parent)
+}
+
+void AssembleTransformCommand::setNewTransform(const QVector3D &newPos, const QVector3D &newRot, const QVector3D &newScale)
+{
+  m_newPos = newPos;
+  m_newRot = newRot;
+  m_newScale = newScale;
+}
+
+void AssembleTransformCommand::undo()
+{
+  if (m_service && m_objectIndex >= 0)
+  {
+    m_service->setAssembleOffset(m_objectIndex, m_oldPos.x(), m_oldPos.y(), m_oldPos.z());
+    m_service->setAssembleRotation(m_objectIndex, m_oldRot.x(), m_oldRot.y(), m_oldRot.z());
+    m_service->setAssembleScale(m_objectIndex, m_oldScale.x(), m_oldScale.y(), m_oldScale.z());
+  }
+}
+
+void AssembleTransformCommand::redo()
+{
+  if (m_service && m_objectIndex >= 0)
+  {
+    m_service->setAssembleOffset(m_objectIndex, m_newPos.x(), m_newPos.y(), m_newPos.z());
+    m_service->setAssembleRotation(m_objectIndex, m_newRot.x(), m_newRot.y(), m_newRot.z());
+    m_service->setAssembleScale(m_objectIndex, m_newScale.x(), m_newScale.y(), m_newScale.z());
+  }
+}
+
+bool AssembleTransformCommand::mergeWith(const QUndoCommand *other)
+{
+  if (other->id() != id())
+    return false;
+  const auto *otherCmd = static_cast<const AssembleTransformCommand *>(other);
+  if (otherCmd->m_objectIndex != m_objectIndex)
+    return false;
+  m_newPos = otherCmd->m_newPos;
+  m_newRot = otherCmd->m_newRot;
+  m_newScale = otherCmd->m_newScale;
+  return true;
+}
+
 // ── MultiTransformCommand ───────────────────────────────────────────────────
 
 MultiTransformCommand::MultiTransformCommand(ProjectServiceMock *service,

@@ -34,6 +34,36 @@ private:
   ProjectServiceMock *m_service;
 };
 
+// ── AssembleTransformCommand ───────────────────────────────────────────────
+// ASM-01 (Phase 138): like TransformCommand but targets ModelInstance::
+// m_assemble_transformation (upstream Model.hpp:1253-1298) via the service's
+// setAssembleOffset/Rotation/Scale accessors. Used by the Move/Rotate/Scale
+// gizmos when the active canvas is CanvasAssembleView so that assembly-canvas
+// edits round-trip through undo/redo without disturbing the Prepare transform.
+// Distinct id (7) so mergeWith never crosses the two transform kinds.
+class AssembleTransformCommand : public QUndoCommand
+{
+public:
+  /// Stores the old assemble transform in constructor; call setNewTransform() before push().
+  AssembleTransformCommand(int objectIndex,
+                           const QVector3D &oldPos, const QVector3D &oldRot, const QVector3D &oldScale,
+                           ProjectServiceMock *service,
+                           QUndoCommand *parent = nullptr);
+
+  void setNewTransform(const QVector3D &newPos, const QVector3D &newRot, const QVector3D &newScale);
+
+  void undo() override;
+  void redo() override;
+  int id() const override { return 7; }
+  bool mergeWith(const QUndoCommand *other) override;
+
+private:
+  int m_objectIndex;
+  QVector3D m_oldPos, m_oldRot, m_oldScale;
+  QVector3D m_newPos, m_newRot, m_newScale;
+  ProjectServiceMock *m_service;
+};
+
 // ── MultiTransformCommand ───────────────────────────────────────────────────
 /// Records before/after transforms for multiple objects (e.g. uniform scale).
 class MultiTransformCommand : public QUndoCommand

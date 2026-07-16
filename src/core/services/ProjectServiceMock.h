@@ -387,6 +387,22 @@ public:
   bool setObjectScale(int index, float x, float y, float z);
   bool setObjectScaleUniform(int index, float s);
 
+  // ASM-01 (Phase 138): per-instance assemble-transform accessors. In assembly
+  // mode the Move/Rotate/Scale gizmos target ModelInstance::m_assemble_transformation
+  // (upstream Model.hpp:1253-1298), NOT m_transformation. These mirror the ordinary
+  // objectPosition/Rotation/Scale dual-path convention (proxy to ModelInstance under
+  // HAS_LIBSLIC3R, else fall back to parallel mock stores) and apply the same
+  // slic3r(X,Y,Z) <-> GL(X,Z,Y) Y/Z swap for offset and deg<->rad for rotation.
+  QVector3D assembleOffset(int index) const;
+  QVector3D assembleRotation(int index) const;  // degrees
+  QVector3D assembleScale(int index) const;
+  bool setAssembleOffset(int index, float x, float y, float z);
+  bool setAssembleRotation(int index, float x, float y, float z);  // degrees in
+  bool setAssembleScale(int index, float x, float y, float z);
+  // Non-const: upstream ModelInstance::is_assemble_initialized() (Model.hpp:1345)
+  // is itself non-const, so we cannot expose this as a const query.
+  bool isAssembleInitialized(int index);
+
   /// 清空当前项目（新建项目/重置场景）
   Q_INVOKABLE void clearProject();
   /// 加载项目元数据（对齐上游 Plater::load_project，Mock 模式从 JSON 恢复）
@@ -555,6 +571,13 @@ private:
   QList<QVector3D> objectPositions_;   // (x, y, z) in mm
   QList<QVector3D> objectRotations_;   // (x, y, z) in degrees
   QList<QVector3D> objectScales_;      // (x, y, z) factors
+  // ASM-01 (Phase 138): per-instance assemble transforms (Mock mode). Mirror of the
+  // upstream ModelInstance::m_assemble_transformation (Model.hpp:1253). Used only on
+  // the non-lib path; under HAS_LIBSLIC3R these are kept in sync with the real Model
+  // field for consistency with the ordinary accessor pattern.
+  QList<QVector3D> assembleOffsets_;   // (x, y, z) in mm
+  QList<QVector3D> assembleRotations_; // (x, y, z) in degrees
+  QList<QVector3D> assembleScales_;    // (x, y, z) factors
   int loadProgress_ = 0;
   bool loading_ = false;
 
