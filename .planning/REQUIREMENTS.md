@@ -17,8 +17,8 @@
 
 ### WS3 — i18n Completion
 
-- [ ] **I18N-04**: en.ts remaining ~1372 unfinished translations are filled (long sentences, compound phrases). lrelease produces a complete en.qm.
-- [ ] **I18N-05**: de/fr/ja/ko advance meaningfully from baseline (documented remaining-work estimate).
+- [x] **I18N-04**: en.ts remaining ~1372 unfinished translations are filled (long sentences, compound phrases). lrelease produces a complete en.qm.
+- [x] **I18N-05**: de/fr/ja/ko advance meaningfully from baseline (documented remaining-work estimate).
 
 ### Cross-Cutting
 
@@ -32,8 +32,8 @@
 | CGAL-02 | Phase 137 | Pending |
 | CGAL-03 | Phase 137 | Pending |
 | ASM-01 | Phase 138 | Done (2026-07-16) |
-| I18N-04 | Phase 139 | Pending |
-| I18N-05 | Phase 139 | Pending |
+| I18N-04 | Phase 139 | Done (2026-07-16) |
+| I18N-05 | Phase 139 | Done (2026-07-16) |
 | REGRESS-03 | Phase 140 | Pending |
 
 **Coverage:** 7 requirements, 7 mapped.

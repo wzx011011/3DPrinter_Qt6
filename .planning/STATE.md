@@ -7,24 +7,24 @@ last_updated: "2026-07-16T00:00:00.000Z"
 last_activity: 2026-07-16
 progress:
   total_phases: 5
-  completed_phases: 3
-  total_plans: 5
-  completed_plans: 5
-  percent: 60
+  completed_phases: 4
+  total_plans: 7
+  completed_plans: 7
+  percent: 80
 ---
 
 # Project State
 
 **Milestone:** v4.8 — Dependency Unlock, Assembly Transform & i18n Completion
 **Status:** Executing (autonomous mode)
-**Next step:** Run Phase 139 (en.ts Full Translation + Baseline Advance) — discuss → plan → execute.
+**Next step:** Run Phase 140 (v4.8 Verification And Cross-Workstream Regression) — discuss → plan → execute.
 
 ## Current Position
 
-Phase: 139 (en.ts Full Translation + Baseline Advance) — next incomplete
+Phase: 140 (v4.8 Verification And Cross-Workstream Regression) — last incomplete
 Plan: —
 Status: Executing
-Last activity: 2026-07-16 — Phase 138 (ASM-01) complete; starting autonomous 139→140.
+Last activity: 2026-07-16 — Phase 139 (i18n) complete; starting autonomous 140.
 
 ## Current Milestone (v4.8)
 
@@ -33,10 +33,14 @@ Last activity: 2026-07-16 — Phase 138 (ASM-01) complete; starting autonomous 1
 | 136 | CGAL 5.6+ Dependency Upgrade | Complete (compat-patch path) | CGAL-01 |
 | 137 | MeshBoolean + Drill Activation | Complete | CGAL-02, CGAL-03 |
 | 138 | Assembly Transformation Actions ASM-01 | Complete | ASM-01 |
-| 139 | en.ts Full Translation + Baseline Advance | Not started | I18N-04, I18N-05 |
+| 139 | en.ts Full Translation + Baseline Advance | Complete | I18N-04, I18N-05 |
 | 140 | v4.8 Verification And Cross-Workstream Regression | Not started | REGRESS-03 |
 
 **Coverage:** 7/7 active requirements mapped to exactly one phase.
+
+## Phase 139 summary (i18n, completed 2026-07-16)
+
+I18N-04: filled all 1372 unfinished en.ts translations (1218 unique sources: 975 CJK + 243 non-CJK) via a re-runnable Python script (scripts/translate_en_ts.py). 0 unfinished remaining; en.qm = 148KB (complete). I18N-05: advanced de/fr/ja/ko by 723 core UI terms each (44% complete, ~906 remaining per language documented). Build exit 0, 5/5 ctest PASS, E2E PASS, APP_RUNNING_PID=2780. Build log: build_p139b.log.
 
 ## Phase 138 summary (ASM-01, completed 2026-07-16)
 

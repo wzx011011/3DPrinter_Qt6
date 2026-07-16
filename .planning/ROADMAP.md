@@ -19,7 +19,7 @@
 - [x] Phase 136: CGAL 5.6+ Dependency Upgrade (WS1) (completed 2026-07-16 — superseded by compat-patch path)
 - [x] Phase 137: MeshBoolean + Drill Activation (WS1) (completed 2026-07-16)
 - [x] Phase 138: Assembly Transformation Actions ASM-01 (WS2) (completed 2026-07-16)
-- [ ] Phase 139: en.ts Full Translation + Baseline Advance (WS3)
+- [x] Phase 139: en.ts Full Translation + Baseline Advance (WS3) (completed 2026-07-16)
 - [ ] Phase 140: v4.8 Verification And Cross-Workstream Regression
 
 ### Build Order
@@ -64,7 +64,7 @@ Success criteria:
 
 ### Phase 139: en.ts Full Translation + Baseline Advance
 
-**Status:** Not started
+**Status:** Complete (2026-07-16)
 **Workstream:** WS3 (i18n)
 **Goal:** Fill remaining ~1372 translations + advance de/fr/ja/ko
 **Depends on:** —
