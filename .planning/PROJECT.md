@@ -70,20 +70,28 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 **Shipped state:** POLISH-01..05 (paint-gizmo gate flag flipped + Flatten real orientObject + fixMesh real its_repair + KBShortcutsDialog + ProjectPage wired); I18N-02/03 (en.ts 121 terms translated + de/fr/ja/ko baseline); REGRESS-02 (v47 regression gate). 7 phases (129-135), 7/12 reqs satisfied, 3 blocked by CGAL dependency, 2 deferred.
 
-## Current Milestone: v4.8 Dependency Unlock, Assembly Transform & i18n Completion
+## Previous Milestone: v4.8 Dependency Unlock, Assembly Transform & i18n Completion (shipped 2026-07-16)
 
-**Goal:** Crack the CGAL 5.6+ dependency upgrade to unlock MeshBoolean + Drill (~200 lines already written); complete ASM-01 assembly-mode transformation; fill en.ts remaining translations.
+**Shipped state:** CGAL MeshBoolean + Drill activated on CGAL 5.4 via a 2-line compat patch (the v4.7 "needs 5.6+" premise was wrong — `corefinement.h` is in 5.4) (CGAL-01/02/03); ASM-01 assembly-mode per-volume move/rotate/scale end-to-end (accessors + routing + translate render + UI + 3MF round-trip) (ASM-01); en.ts filled 1372→0 unfinished, en.qm=148KB; de/fr/ja/ko advanced 44% (I18N-04/05); v48 cross-workstream regression gate (REGRESS-03). 5 phases (136-140), 7 requirements, audit tech_debt.
 
-**Scope rule:** CGAL upgrade is environment-level (rebuild/download dependency bundle). ASM-01 is rendering-layer work. i18n is content work. All offline/local. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed.
+**Known deferred items:** CGAL-02 intersection boolean (returns subtraction, not A∩B) + orphaned `meshBooleanSelected` menu stub; assemble rotate/scale live-visual compose (translate-only render; transforms persist + round-trip); `drillObject` C4715; de/fr/ja/ko ~906/lang long tail; 2-line CGAL submodule compat patch.
 
-**Target features (3 workstreams, phases starting from 136):**
-- **WS1 CGAL dependency upgrade:** rebuild/download CGAL 5.6+ in DEPS_PREFIX; flip `kCgalMeshBooleanAvailable=true`; activate MeshBoolean (union/subtract/intersect) + Drill (tool-mesh + feature-matrix).
-- **WS2 Assembly transformation (ASM-01):** assembly-mode move/rotate/scale per-volume on the v4.5/v4.6 feature-picking + AssemblyMeasureGeometry foundation (RhiViewport assembly canvas gizmo + ViewModel transform methods + AssemblePage interaction).
-- **WS3 i18n completion:** fill en.ts remaining ~1372 unfinished translations (long sentences, compound phrases); advance de/fr/ja/ko.
+## Current Milestone: v5.0 Advanced Feature Recovery & Tech-Debt Closure
+
+**Goal:** In one cycle, close the accumulated tech debt across v4.6/v4.7/v4.8 AND recover three long-blocked P1 feature clusters (Emboss / Preset Bundle / PartPlate), plus correct the mistaken "OpenVDB unavailable" premise by linking OpenVDB and unlocking the Hollow gizmo.
+
+**Scope rule:** All work is offline/local and maps to OrcaSlicer v7.0.1 upstream. The "OpenVDB unavailable" constraint is **revised**: OpenVDB IS present in DEPS_PREFIX (`libopenvdb.lib` 55MB + `FindOpenVDB.cmake`); the v4.x "unavailable" premise was an incomplete CMake port (Qt6 fork dropped `find_package(OpenVDB)` and renamed the gating target to `openvdb_libs`, which no file ever created). v5.0 corrects this. LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed.
+
+**Target features (5 workstreams, phases starting from 141):**
+- **WS1 Tech-debt closure:** CGAL-02 true intersection (CGAL `corefine_and_compute_intersection`); remove orphaned `meshBooleanSelected` menu stub; fix `drillObject` C4715; ASM rotate/scale live-visual compose (full transform matrix in `buildModelVertices`); v5.0 regression lock.
+- **WS2 OpenVDB unlock (corrected premise):** add `find_package(OpenVDB)` + `openvdb_libs` alias in root CMakeLists; activate `OpenVDBUtils.cpp` (mesh_to_grid/grid_to_mesh/redistance_grid); unlock Hollow gizmo; remove `EditorViewModel:6030` "Blocked: OpenVDB unavailable" hard gate.
+- **WS3 Emboss text gizmo:** port `GLGizmoEmboss.cpp` (62KB) — 3D text add/edit/delete, font selection, style/depth/bevel, on-canvas emboss; existing `GLToolbars` Emboss button + `EditorViewModel::addTextObject` are wired into the real gizmo.
+- **WS4 Preset Bundle full chain:** replace simplified JSON with upstream-compatible PresetBundle metadata + behavior; minimal source-truth `CreatePresetsDialog`; dirty-state propagation + unsaved-change prompts across page/preset switches; Simple/Advanced filtering in C++ model; Compare/Diff preset flow; bundle round-trip tests.
+- **WS5 PartPlate multi-plate completion:** real PartPlate data ownership; per-plate object assignment/reorder/duplicate/delete/rename; per-plate config override read/write; PartPlateList overlay wiring; AssembleView minimal real multi-plate assembly view; multi-plate save/reload regression.
 
 ## Next Milestone
 
-v4.8 is the active milestone. After v4.8, the candidate backlog will be re-evaluated.
+v5.0 is the active milestone. After v5.0, the candidate backlog will be re-evaluated (likely candidates: de/fr/ja/ko translation long tail; calibration .drc tower geometry; remaining deferred gizmos — FaceDetector/SlaSupports if OpenVDB unlock proves stable).
 
 ## Requirements
 
@@ -114,20 +122,22 @@ These are current baseline capabilities inferred from implementation, git histor
 - v4.4 Wipe-Tower Geometry Readback And Real Rendering shipped with 8/8 requirements satisfied, milestone audit tech_debt status (no critical blockers), post-slice wipe-tower geometry readback wired end-to-end (Print::wipe_tower_data() captured by value in SliceService worker, has_wipe_tower() gate enforced, EditorViewModel Q_PROPERTYs + PreparePage.qml bindings), Option A dimensioned-box rendering LOCKED as v4.4 baseline, SoftwareViewport QPainter box closes the fallback-path rendering gap, Phase 100 REVIEW W1 corner→center fix, and 8 WT-* region anchors locked by Phase 102 regression test.
 - v4.5 Backlog Closure shipped with 20/20 active requirements satisfied across 5 workstreams (CLI fixtures FIXTURE-01..04; D3D12 debug-layer + time-boxed root-cause D3D12-01..03; auto filament-map recommendation FMAP-01..04 with 4-value enum + 3MF migration + readback + popup + round-trip; Option B real wipe-tower mesh WTMESH-01..04 with convex-hull rendering + Option A fallback; full GLGizmoMeasure engine MEASURE-01..05 with per-volume ITS + MeshRaycaster/SceneRaycaster + Measure::Measuring + snap UX), milestone verified by canonical build + regression ctest + launch liveness.
 
-### Active
+### Active (v5.0)
 
-- [ ] WS1 Polish & bug-fix: flip stale paint-gizmo gate flag + Flatten real orientObject + fixMesh real its_repair + KBShortcutsDialog + ProjectPage property panel.
-- [ ] WS2 i18n English: fill en.ts 1493 empty translations + advance de/fr/ja/ko baseline.
-- [ ] WS3 CGAL upgrade: 5.4→5.6+ to unlock MeshBoolean + Drill (~200 lines already written).
-- [ ] WS4 Assembly transformation: MEASURE-06 assembly-mode move/rotate/scale on feature-picking foundation.
+- [ ] WS1 Tech-debt closure: CGAL-02 true intersection + remove orphaned `meshBooleanSelected` menu + fix `drillObject` C4715 + ASM rotate/scale live-visual compose + v5.0 regression lock.
+- [ ] WS2 OpenVDB unlock (corrected premise): root CMake `find_package(OpenVDB)` + `openvdb_libs` alias; activate `OpenVDBUtils.cpp`; unlock Hollow gizmo; remove `EditorViewModel:6030` hard gate.
+- [ ] WS3 Emboss text gizmo: port `GLGizmoEmboss.cpp` (62KB) — 3D text add/edit/delete with font/style/depth/bevel; wire existing Emboss button + `addTextObject` into the real gizmo.
+- [ ] WS4 Preset Bundle full chain: upstream-compatible PresetBundle metadata; `CreatePresetsDialog`; dirty-state propagation + unsaved prompts; Simple/Advanced filter in C++; Compare/Diff flow; round-trip tests.
+- [ ] WS5 PartPlate multi-plate completion: real plate data ownership; per-plate object CRUD + config override; PartPlateList overlay; AssembleView minimal real multi-plate view; save/reload regression.
 
 ### Future
 
-- Hollow / FaceDetector / SlaSupports gizmos — depend on OpenVDB (unavailable); unlock if OpenVDB becomes available.
-- Full PLATE-09 save/reload state assertions.
-- MEASURE-06 Assembly-mode transformation actions (deferred from v4.5; now ACTIVE in v4.7 WS4).
-- MEASURE-06 Assembly-mode transformation actions (deferred from v4.5; needs stable feature-picking foundation, now shipped).
+- Full PLATE-09 save/reload state assertions (subsumed by WS5 if PartPlate work completes; otherwise carries).
 - D3D12 default-backend promotion (deferred from v4.5; needs confirmed root cause + clean repro on the original machine).
+- FaceDetector / SlaSupports gizmos — OpenVDB-linking gizmos downstream of Hollow; unlock if WS2 OpenVDB link proves stable.
+- de/fr/ja/ko translation long tail (~906/lang remaining after v4.8 I18N-05).
+- Dedicated calibration .drc tower model loading (geometry tech-debt from v4.6 CALIB-01..03).
+- Emboss SVG path, advanced font features (variable fonts, system font enumeration) if WS3 baseline ships clean.
 
 ### Out of Scope
 
@@ -174,7 +184,7 @@ These are current baseline capabilities inferred from implementation, git histor
 - **Completeness Rule:** each milestone must implement the complete declared target behavior. If old Qt behavior is simplified, mock, legacy, or semantically wrong for that target, replace it instead of preserving compatibility with the wrong behavior.
 - **No Deprecated UI Rule:** when a page/component is replaced, remove the old files, routes, registrations, resource entries, imports, tests, and disconnected code paths in the same milestone.
 - **Preset Rule:** preset behavior must be implemented against upstream `PresetBundle`/`PresetCollection` semantics where feasible; simplified JSON/mock behavior must be removed or explicitly classified as fallback.
-- **Dependencies:** CGAL is available. OpenVDB remains unavailable. FFmpeg/WebRTC/closed device protocol work is not forward product scope unless explicitly reopened.
+- **Dependencies:** CGAL is available (5.4 in DEPS_PREFIX; v4.8 confirmed MeshBoolean + Drill work on 5.4). OpenVDB IS available in DEPS_PREFIX (`libopenvdb.lib` + `libblosc.lib` + `FindOpenVDB.cmake`) — v5.0 corrects the v4.x "unavailable" premise by linking it. FFmpeg/WebRTC/closed device protocol work is not forward product scope unless explicitly reopened.
 - **Rendering Backend:** QRhi/D3D11 is the default high-performance Windows path. D3D12 is explicit opt-in pending root-cause work. Vulkan is future work until a Vulkan-enabled Qt SDK/runtime is available and benchmarked.
 - **Comments and Encoding:** new or modified source comments must be English and ASCII-only; preserve UTF-8 without BOM.
 - **Worktree Safety:** unrelated local code changes must not be reverted or cleaned during planning updates.
@@ -209,8 +219,10 @@ These are current baseline capabilities inferred from implementation, git histor
 | Scope v4.4 to wipe-tower geometry readback only | Exploration showed auto filament-map + wipe-tower is too large for one milestone and the two are loosely coupled. Wipe-tower readback is smaller, higher-ROI (renderer is 90% done), and avoids touching the slice architecture / per-plate-Print gap. Auto filament-map deferred to a future milestone. | Good - v4.4 shipped |
 | Scope v4.5 to backlog closure (5 workstreams) | The deferred backlog (filament-map, Option B mesh, CLI fixtures, D3D12 root cause, GLGizmoMeasure engine) is long-standing; clearing it in one cycle unblocks downstream work and removes the recurring evidence/tooling gaps. | Good - v4.5 shipped |
 | Scope v4.6 to core feature completion (4 workstreams) | A code-truth gap audit found the next four highest-value gaps all sit at "skeleton-level" with existing scaffolding: Preview TickCode loop (orphaned LayerSlider + zero `custom_gcode_per_print_z` refs), Gizmo triangle-paint engine (TriangleSelector pick/render missing despite Support/Seam/MMU enums/buttons/panels existing), Calibration (3/9 software-sliceable modes), and i18n/dead-code tech debt. Lifting all four in one cycle raises main-flow completeness from skeleton to end-to-end usable. | Active - v4.6 |
-| Keep Hollow/FaceDetector/SlaSupports out of v4.6 | These gizmos share the WS2 TriangleSelector engine; adding them dilutes scope before the paint engine foundation is stable. They unlock naturally as a follow-up once WS2 ships. | Active - v4.6 |
+| Keep Hollow/FaceDetector/SlaSupports out of v4.6 | These gizmos share the WS2 TriangleSelector engine; adding them dilutes scope before the paint engine foundation is stable. They unlock naturally as a follow-up once WS2 ships. | Superseded — v5.0 WS2 links OpenVDB and unlocks Hollow |
 | Keep hardware-dependent Calibration modes out of v4.6 | ManualLeveling/BedLeveling/Vibration require live printer hardware and fall under the existing printer-hardware removal rule; only software-sliceable libslic3r modes are in scope. | Active - v4.6 |
+| Revise the "OpenVDB unavailable" premise in v5.0 | A code-truth audit found OpenVDB IS built and present in DEPS_PREFIX (`libopenvdb.lib` 55MB, headers, `FindOpenVDB.cmake`); the v4.x "unavailable" premise was an incomplete CMake port — the Qt6 fork dropped `find_package(OpenVDB)` and renamed the gating target to `openvdb_libs`, which no file ever created. v5.0 corrects this with a small CMake change (no dependency rebuild). | Active - v5.0 WS2 |
+| Scope v5.0 to 5 workstreams (tech-debt + OpenVDB + Emboss + Preset + PartPlate) | User direction on 2026-07-17: merge the recommended v4.9 polish and all backup candidates (Emboss/Preset Bundle/PartPlate) plus the newly-discovered OpenVDB unlock into one v5.0 mega-milestone, rather than splitting. | Active - v5.0 |
 
 ## Evolution
 
@@ -230,4 +242,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-15 after v4.8 milestone planning.*
+*Last updated: 2026-07-17 after v5.0 milestone planning.*
