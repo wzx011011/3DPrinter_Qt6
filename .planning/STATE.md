@@ -2,59 +2,65 @@
 gsd_state_version: 1.0
 milestone: v4.8
 milestone_name: Dependency Unlock, Assembly Transform & i18n Completion
-status: planning
-last_updated: "2026-07-15T14:57:45.527Z"
-last_activity: 2026-07-15
+status: executing
+last_updated: "2026-07-16T00:00:00.000Z"
+last_activity: 2026-07-16
 progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 5
+  completed_phases: 2
+  total_plans: 1
+  completed_plans: 1
+  percent: 40
 ---
 
 # Project State
 
-**Milestone:** v4.7 - Polish, i18n & Advanced Feature Recovery
-**Status:** Defining requirements
-**Next step:** Plan Phase 129 with /gsd:plan-phase 129.
+**Milestone:** v4.8 — Dependency Unlock, Assembly Transform & i18n Completion
+**Status:** Executing (autonomous mode)
+**Next step:** Run Phase 138 (Assembly Transform ASM-01) — discuss → plan → execute.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 138 (Assembly Transformation Actions ASM-01) — next incomplete
 Plan: —
-Status: Defining requirements
-Last activity: 2026-07-15 — Milestone v4.8 started
+Status: Executing
+Last activity: 2026-07-16 — Reconciled 136/137 complete from git evidence; starting autonomous 138→139→140.
 
-## Current Milestone (v4.7)
-
-| Phase | Name | Status | Requirements |
-|---|---|---|---|
-| 129 | Paint-Gizmo Gate Fix + Flatten + FixMesh | Complete | POLISH-01, POLISH-02, POLISH-03 |
-| 130 | KBShortcutsDialog + ProjectPage Property Panel | Complete | POLISH-04, POLISH-05 |
-| 131 | English i18n Translation Fill + Baseline Advance | Complete | I18N-02, I18N-03 |
-| 132 | CGAL 5.6+ Upgrade | Not started | CGAL-01 |
-| 133 | MeshBoolean + Drill Activation | Not started | CGAL-02, CGAL-03 |
-| 134 | Assembly Transformation Actions MEASURE-06 | Not started | ASM-01 |
-| 135 | v4.7 Verification And Cross-Workstream Regression | Complete | REGRESS-02 |
-
-**Coverage:** 12/12 active requirements mapped to exactly one phase.
-
-## Last Completed Milestone: v4.6 Core Feature Completion Sweep
+## Current Milestone (v4.8)
 
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
-| 117-128 | (12 phases) | Complete | TICK-01..05, PAINT-01..05, CALIB-01..03, I18N-01, PROC-01, CLEAN-01, REGRESS-01 |
+| 136 | CGAL 5.6+ Dependency Upgrade | Complete (compat-patch path) | CGAL-01 |
+| 137 | MeshBoolean + Drill Activation | Complete | CGAL-02, CGAL-03 |
+| 138 | Assembly Transformation Actions ASM-01 | Not started | ASM-01 |
+| 139 | en.ts Full Translation + Baseline Advance | Not started | I18N-04, I18N-05 |
+| 140 | v4.8 Verification And Cross-Workstream Regression | Not started | REGRESS-03 |
+
+**Coverage:** 7/7 active requirements mapped to exactly one phase.
+
+## Reconciliation note (2026-07-16)
+
+Phases 136/137 were implemented directly (commits `661f48c`, `a740147`, `a875c65`) before GSD planning artifacts existed. The v4.7 "CGAL 5.6+ required" blocker turned out to be a false premise — CGAL 5.4 already ships the `corefinement.h` API MeshBoolean needs, so a 2-line compat patch + CMake re-enable sufficed (no dependency-bundle upgrade). 136/137 CONTEXT/PLAN/SUMMARY/VERIFICATION backfilled from git + green-build evidence (`build_p137f.log`: 5/5 ctest PASS, `APP_RUNNING_PID=29868`).
+
+## Last Completed Milestone: v4.7 Polish, i18n & Advanced Feature Recovery
+
+**Audit status:** tech_debt — 7/12 requirements satisfied; CGAL-01/02/03 blocked (now unblocked in v4.8 via the compat-patch path); ASM-01 + I18N-04/05 deferred to v4.8.
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-15)
-See: .planning/ROADMAP.md (v4.7 roadmap — 7 phases, 129-135)
-See: .planning/REQUIREMENTS.md (12 active v4.7 requirements)
+See: .planning/PROJECT.md
+See: .planning/ROADMAP.md (v4.8 roadmap — 5 phases, 136-140)
+See: .planning/REQUIREMENTS.md (7 active v4.8 requirements)
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-**Current focus:** v4.7 — polish, i18n, CGAL unlock, assembly transformation.
+**Current focus:** v4.8 — assembly transform, en.ts i18n completion, v4.8 regression gate.
 
 ## Operator Next Steps
 
-- Plan Phase 129 with /gsd:plan-phase 129
+- Autonomous run is executing 138 → 139 → 140, then milestone lifecycle (audit → complete → cleanup).
+
+## Blockers/Concerns
+
+None active. Known tech debt (non-blocking):
+- `ProjectServiceMock::drillObject` MSVC C4715 (not all control paths return a value) — `src/core/services/ProjectServiceMock.cpp:3362`. Carry-forward cleanup item.
+- 2-line CGAL compat patch in `third_party/OrcaSlicer` submodule — droppable if CGAL is ever upgraded to 5.6+ in DEPS_PREFIX (deferred nice-to-have).
