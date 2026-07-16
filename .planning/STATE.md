@@ -7,24 +7,24 @@ last_updated: "2026-07-16T00:00:00.000Z"
 last_activity: 2026-07-16
 progress:
   total_phases: 5
-  completed_phases: 2
-  total_plans: 1
-  completed_plans: 1
-  percent: 40
+  completed_phases: 3
+  total_plans: 5
+  completed_plans: 5
+  percent: 60
 ---
 
 # Project State
 
 **Milestone:** v4.8 — Dependency Unlock, Assembly Transform & i18n Completion
 **Status:** Executing (autonomous mode)
-**Next step:** Run Phase 138 (Assembly Transform ASM-01) — discuss → plan → execute.
+**Next step:** Run Phase 139 (en.ts Full Translation + Baseline Advance) — discuss → plan → execute.
 
 ## Current Position
 
-Phase: 138 (Assembly Transformation Actions ASM-01) — next incomplete
+Phase: 139 (en.ts Full Translation + Baseline Advance) — next incomplete
 Plan: —
 Status: Executing
-Last activity: 2026-07-16 — Reconciled 136/137 complete from git evidence; starting autonomous 138→139→140.
+Last activity: 2026-07-16 — Phase 138 (ASM-01) complete; starting autonomous 139→140.
 
 ## Current Milestone (v4.8)
 
@@ -32,15 +32,15 @@ Last activity: 2026-07-16 — Reconciled 136/137 complete from git evidence; sta
 |---|---|---|---|
 | 136 | CGAL 5.6+ Dependency Upgrade | Complete (compat-patch path) | CGAL-01 |
 | 137 | MeshBoolean + Drill Activation | Complete | CGAL-02, CGAL-03 |
-| 138 | Assembly Transformation Actions ASM-01 | Not started | ASM-01 |
+| 138 | Assembly Transformation Actions ASM-01 | Complete | ASM-01 |
 | 139 | en.ts Full Translation + Baseline Advance | Not started | I18N-04, I18N-05 |
 | 140 | v4.8 Verification And Cross-Workstream Regression | Not started | REGRESS-03 |
 
 **Coverage:** 7/7 active requirements mapped to exactly one phase.
 
-## Reconciliation note (2026-07-16)
+## Phase 138 summary (ASM-01, completed 2026-07-16)
 
-Phases 136/137 were implemented directly (commits `661f48c`, `a740147`, `a875c65`) before GSD planning artifacts existed. The v4.7 "CGAL 5.6+ required" blocker turned out to be a false premise — CGAL 5.4 already ships the `corefinement.h` API MeshBoolean needs, so a 2-line compat patch + CMake re-enable sufficed (no dependency-bundle upgrade). 136/137 CONTEXT/PLAN/SUMMARY/VERIFICATION backfilled from git + green-build evidence (`build_p137f.log`: 5/5 ctest PASS, `APP_RUNNING_PID=29868`).
+Assembly-mode per-volume move/rotate/scale end-to-end. This was a routing/wiring gap, not new gizmo machinery — the existing Move/Rotate/Scale gizmo infrastructure is canvas-agnostic and reusable. 4 plans (strictly sequential waves): (01) ProjectServiceMock assemble-transform accessors proxying to ModelInstance::m_assemble_transformation + AssembleTransformCommand; (02) EditorViewModel gizmo mask widening + 9 slot branches routing to the assemble transform on AssembleView; (03) RhiViewportRenderer per-object assemble-offset thread-through (translate-only) + AssemblePage Move/Rotate/Scale selector + gizmo drag-signal wiring; (04) 3MF round-trip test via real bbs_3mf `<assemble>` block. Both ASM-01 success criteria met (automated). All 5 ctest groups PASS incl. new `testAssembleTransformRoundTrip`. Build logs: build_p138_01/02b/03c/04b.log.
 
 ## Last Completed Milestone: v4.7 Polish, i18n & Advanced Feature Recovery
 
@@ -53,14 +53,15 @@ See: .planning/ROADMAP.md (v4.8 roadmap — 5 phases, 136-140)
 See: .planning/REQUIREMENTS.md (7 active v4.8 requirements)
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-**Current focus:** v4.8 — assembly transform, en.ts i18n completion, v4.8 regression gate.
+**Current focus:** v4.8 — en.ts i18n completion, v4.8 regression gate.
 
 ## Operator Next Steps
 
-- Autonomous run is executing 138 → 139 → 140, then milestone lifecycle (audit → complete → cleanup).
+- Autonomous run continues 139 → 140, then milestone lifecycle (audit → complete → cleanup).
 
 ## Blockers/Concerns
 
 None active. Known tech debt (non-blocking):
 - `ProjectServiceMock::drillObject` MSVC C4715 (not all control paths return a value) — `src/core/services/ProjectServiceMock.cpp:3362`. Carry-forward cleanup item.
 - 2-line CGAL compat patch in `third_party/OrcaSlicer` submodule — droppable if CGAL is ever upgraded to 5.6+ in DEPS_PREFIX (deferred nice-to-have).
+- Assemble rotate/scale live-visual compose (full QMatrix4x4 per-vertex transform) — transforms persist + round-trip regardless; only the live rotate/scale visual is approximated by translate-only rendering (Phase 138 render-fidelity follow-up).

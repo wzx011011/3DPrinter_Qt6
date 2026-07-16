@@ -18,7 +18,7 @@
 
 - [x] Phase 136: CGAL 5.6+ Dependency Upgrade (WS1) (completed 2026-07-16 — superseded by compat-patch path)
 - [x] Phase 137: MeshBoolean + Drill Activation (WS1) (completed 2026-07-16)
-- [ ] Phase 138: Assembly Transformation Actions ASM-01 (WS2)
+- [x] Phase 138: Assembly Transformation Actions ASM-01 (WS2) (completed 2026-07-16)
 - [ ] Phase 139: en.ts Full Translation + Baseline Advance (WS3)
 - [ ] Phase 140: v4.8 Verification And Cross-Workstream Regression
 
@@ -53,7 +53,7 @@ Success criteria:
 
 ### Phase 138: Assembly Transformation Actions ASM-01
 
-**Status:** Not started
+**Status:** Complete (2026-07-16)
 **Workstream:** WS2 (Assembly)
 **Goal:** Assembly-mode move/rotate/scale per-volume
 **Depends on:** —

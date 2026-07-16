@@ -13,7 +13,7 @@
 
 ### WS2 — Assembly Transformation (ASM-01)
 
-- [ ] **ASM-01**: Assembly view supports move/rotate/scale transformation actions on assembled volumes (RhiViewport assembly canvas gizmo + ViewModel + AssemblePage). Transformations apply per-volume and round-trip through the model.
+- [x] **ASM-01**: Assembly view supports move/rotate/scale transformation actions on assembled volumes (RhiViewport assembly canvas gizmo + ViewModel + AssemblePage). Transformations apply per-volume and round-trip through the model.
 
 ### WS3 — i18n Completion
 
@@ -31,7 +31,7 @@
 | CGAL-01 | Phase 136 | Pending |
 | CGAL-02 | Phase 137 | Pending |
 | CGAL-03 | Phase 137 | Pending |
-| ASM-01 | Phase 138 | Pending |
+| ASM-01 | Phase 138 | Done (2026-07-16) |
 | I18N-04 | Phase 139 | Pending |
 | I18N-05 | Phase 139 | Pending |
 | REGRESS-03 | Phase 140 | Pending |
