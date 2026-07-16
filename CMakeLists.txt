@@ -53,6 +53,77 @@ if(BUILD_LIBSLIC3R)
     endif()
 endif()
 
+# ── OpenVDB unlock (Phase 142 / VDB-01) ───────────────────────────────────
+# Corrects the v4.x "OpenVDB unavailable" premise. OpenVDB IS built and present
+# in DEPS_PREFIX (lib/libopenvdb.lib 55MB + include/openvdb/ + bundled
+# FindOpenVDB.cmake + lib/libblosc.lib). The v4.x fork dropped the upstream
+# find_package(OpenVDB) call and renamed the gating target to `openvdb_libs`,
+# but no file ever created that target — so the gating in
+# cmake/BuildLibslic3rFromSource.cmake:366,718 was always false. This block
+# wires OpenVDB and creates the `openvdb_libs` alias target so those existing
+# gates activate automatically (mirrors upstream OrcaSlicer/CMakeLists.txt:754-767).
+#
+# IMPORTANT: this block runs AFTER libslic3r-from-source so the libslic3r TBB
+# import has already happened (avoids the "Some targets already defined" export
+# conflict when OpenVDB's transitive TBB dependency re-imports TBB). The
+# libslic3r_from_source target must already exist; we append OpenVDB to its
+# link line via the existing `if(TARGET openvdb_libs)` gate in
+# BuildLibslic3rFromSource.cmake:718 (which now evaluates true).
+set(OPENVDB_USE_STATIC_LIBS ON)
+set(USE_BLOSC TRUE)
+# Make the upstream FindOpenVDB.cmake + OpenVDBUtils.cmake discoverable. The
+# bundled module lives at ${DEPS_PREFIX}/lib/cmake/OpenVDB/ (from the OrcaSlicer
+# deps superbuild) and is also vendored at the OrcaSlicer source tree.
+list(APPEND CMAKE_MODULE_PATH
+    "${DEPS_PREFIX}/lib/cmake/OpenVDB"
+    "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer/cmake/modules")
+# The FindOpenVDB.cmake module uses OpenVDB_ROOT / OPENVDB_ROOT / OPENVDB_LIBRARYDIR
+# (not CMAKE_PREFIX_PATH) to locate the library binary. Set them explicitly so
+# libopenvdb.lib in DEPS_PREFIX/lib resolves. libblosc.lib is in the same dir.
+set(OpenVDB_ROOT "${DEPS_PREFIX}" CACHE PATH "OpenVDB install root" FORCE)
+set(OPENVDB_ROOT "${DEPS_PREFIX}" CACHE PATH "OpenVDB install root" FORCE)
+set(OPENVDB_LIBRARYDIR "${DEPS_PREFIX}/lib" CACHE PATH "OpenVDB library dir" FORCE)
+find_package(OpenVDB 5.0 COMPONENTS openvdb)
+if(OpenVDB_FOUND)
+    message(STATUS "OpenVDB found (Phase 142 unlock) — version ${OpenVDB_VERSION}")
+    # Map RelWithDebInfo → Release for the imported OpenVDB/Blosc/Half configs so
+    # a Release-built OpenVDB links cleanly into our Release app (no missing
+    # RelWithDebInfo import). Mirrors upstream slic3r_remap_configs behavior.
+    if(MSVC)
+        foreach(_ovdb_tgt OpenVDB::openvdb IlmBase::Half Blosc::blosc)
+            if(TARGET ${_ovdb_tgt})
+                set_target_properties(${_ovdb_tgt} PROPERTIES
+                    MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
+                    MAP_IMPORTED_CONFIG_MINSIZEREL Release)
+            endif()
+        endforeach()
+    endif()
+    # Create the alias the existing BuildLibslic3rFromSource.cmake gates expect.
+    # ALIAS targets cannot point at another alias; use a thin INTERFACE imported
+    # shim that re-exports OpenVDB::openvdb's interface so the existing
+    # `if(TARGET openvdb_libs)` checks AND `target_link_libraries(... openvdb_libs)`
+    # both work. If libslic3r_from_source already exists, also append the link
+    # directly (the gate at BuildLibslic3rFromSource.cmake:718 ran before this
+    # block, so it evaluated false; we add the link here as a follow-up).
+    if(TARGET openvdb_libs)
+        message(STATUS "openvdb_libs target already exists — skipping alias creation")
+    elseif(TARGET OpenVDB::openvdb)
+        add_library(openvdb_libs INTERFACE IMPORTED)
+        set_target_properties(openvdb_libs PROPERTIES
+            INTERFACE_LINK_LIBRARIES "OpenVDB::openvdb")
+        message(STATUS "openvdb_libs INTERFACE shim created → OpenVDB::openvdb")
+        # Late-bind the link line: BuildLibslic3rFromSource.cmake:718 gate already
+        # evaluated to false (this block runs after include()). Add the link here.
+        if(TARGET libslic3r_from_source)
+            target_link_libraries(libslic3r_from_source PUBLIC openvdb_libs)
+            message(STATUS "Linked openvdb_libs → libslic3r_from_source (late bind)")
+        endif()
+    endif()
+else()
+    message(WARNING "OpenVDB NOT found — Hollow/SLA features stay gated off. "
+                    "Phase 142 could not locate OpenVDB in DEPS_PREFIX or the bundled find module.")
+endif()
+
 if(OWZX_QML_GUI)
     if(NOT BUILD_LIBSLIC3R)
         message(WARNING "OWZX_QML_GUI: BUILD_LIBSLIC3R=OFF — OCCT/model loading will be stubbed out for testing.")

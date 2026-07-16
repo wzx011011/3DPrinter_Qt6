@@ -7,10 +7,10 @@ last_updated: "2026-07-17T04:45:00.000Z"
 last_activity: 2026-07-17
 progress:
   total_phases: 13
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
-  percent: 8
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
+  percent: 15
 ---
 
 # Project State
@@ -52,10 +52,10 @@ See: .planning/milestones/v4.8-* (last shipped milestone archive)
 
 ## Current Position
 
-Phase: 142 (OpenVDB CMake Unlock — next to plan)
+Phase: 143 (Hollow Gizmo — next to plan)
 Plan: —
-Status: Phase 141 verified ✓ (1/13 phases complete, 8%)
-Last activity: 2026-07-17 — Phase 141 shipped (5 DEBT reqs closed, 269 tests passing, v50TechDebtRegressionLocked locked). Ready for Phase 142.
+Status: Phase 142 verified ✓ (2/13 phases complete, 15%). OpenVDB unlocked — the v4.x "unavailable" premise is officially refuted. OWzxSlicer.exe links clean with OpenVDB; 270/270 tests passing.
+Last activity: 2026-07-17 — Phase 142 shipped (VDB-01/VDB-02 closed; OpenVDB 8.2.0 linked; libnoise latent-issue fixed; v50OpenVdbUnlockWired locked). Ready for Phase 143.
 
 ## v5.0 Roadmap Snapshot (13 phases, 141-153)
 

@@ -467,6 +467,12 @@ private slots:
   // transform compose) AND re-asserts the v4.8 anchors so the v5.0 tech-debt
   // work did not regress the v4.8 contract.
   void v50TechDebtRegressionLocked();
+  // Phase 142 (VDB-01/VDB-02): OpenVDB unlock gate. Locks the CMake wiring that
+  // corrects the v4.x "OpenVDB unavailable" premise — find_package(OpenVDB) +
+  // openvdb_libs alias + libnoise latent-issue fix. The real proof is that
+  // OWzxSlicer.exe links clean (no LNK2019 on mesh_to_grid/grid_to_mesh/
+  // redistance_grid); this slot anchors the source-level evidence.
+  void v50OpenVdbUnlockWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6101,6 +6107,48 @@ void QmlUiAuditTests::v50TechDebtRegressionLocked()
            "DEBT-05/v4.8: MeshBoolean::minus must still be wired for difference/drill");
   QVERIFY2(projSvc.contains(QStringLiteral("setAssembleOffset")),
            "DEBT-05/v4.8: setAssembleOffset must still be present (ASM-01)");
+}
+
+void QmlUiAuditTests::v50OpenVdbUnlockWired()
+{
+  // Phase 142 (VDB-01/VDB-02): OpenVDB unlock. The v4.x "OpenVDB unavailable"
+  // premise was an incomplete CMake port — the Qt6 fork dropped the upstream
+  // find_package(OpenVDB) call and renamed the gating target to `openvdb_libs`
+  // which no file ever created. This slot anchors the wiring that corrects it.
+  // The strongest proof is that OWzxSlicer.exe links clean with OpenVDB
+  // (no LNK2019 on mesh_to_grid/grid_to_mesh/redistance_grid); this slot
+  // anchors the source-level evidence that the wiring exists.
+  const QString rootCmake = readSource(QStringLiteral("CMakeLists.txt"));
+  const QString libsl3rCmake = readSource(QStringLiteral("cmake/BuildLibslic3rFromSource.cmake"));
+  QVERIFY2(!rootCmake.isEmpty(), "Unable to read root CMakeLists.txt");
+  QVERIFY2(!libsl3rCmake.isEmpty(), "Unable to read BuildLibslic3rFromSource.cmake");
+
+  // VDB-01: root CMakeLists invokes find_package(OpenVDB) and creates the
+  // openvdb_libs alias target.
+  QVERIFY2(rootCmake.contains(QStringLiteral("find_package(OpenVDB 5.0 COMPONENTS openvdb)")),
+           "VDB-01: root CMakeLists.txt must invoke find_package(OpenVDB 5.0 COMPONENTS openvdb)");
+  QVERIFY2(rootCmake.contains(QStringLiteral("OPENVDB_LIBRARYDIR")),
+           "VDB-01: root CMakeLists.txt must set OPENVDB_LIBRARYDIR (find module needs explicit lib path)");
+  QVERIFY2(rootCmake.contains(QStringLiteral("add_library(openvdb_libs INTERFACE IMPORTED)")),
+           "VDB-01: root CMakeLists.txt must create the openvdb_libs INTERFACE IMPORTED shim");
+  QVERIFY2(rootCmake.contains(QStringLiteral("INTERFACE_LINK_LIBRARIES \"OpenVDB::openvdb\"")),
+           "VDB-01: openvdb_libs shim must re-export OpenVDB::openvdb");
+
+  // VDB-02: OpenVDBUtils.cpp is conditionally compiled when openvdb_libs exists;
+  // the gate at BuildLibslic3rFromSource.cmake:366 must now evaluate true.
+  QVERIFY2(libsl3rCmake.contains(QStringLiteral("if(TARGET openvdb_libs)")),
+           "VDB-02: BuildLibslic3rFromSource.cmake must gate OpenVDBUtils compilation on TARGET openvdb_libs");
+  QVERIFY2(libsl3rCmake.contains(QStringLiteral("OpenVDBUtils.cpp")),
+           "VDB-02: OpenVDBUtils.cpp must be in the conditional source list (now active)");
+
+  // libnoise latent-issue fix exposed by the OpenVDB link (Phase 142):
+  // LIBNOISE_INCLUDE_DIR is force-set to the vcpkg path before find_package so
+  // the upstream Findlibnoise.cmake module does not leave the NOTFOUND sentinel
+  // in noise::noise's INTERFACE_INCLUDE_DIRECTORIES.
+  QVERIFY2(libsl3rCmake.contains(QStringLiteral("LIBNOISE_INCLUDE_DIR-NOTFOUND")),
+           "VDB-02/libnoise: BuildLibslic3rFromSource.cmake must document the NOTFOUND sentinel risk");
+  QVERIFY2(libsl3rCmake.contains(QStringLiteral("FORCE")),
+           "VDB-02/libnoise: LIBNOISE_INCLUDE_DIR must be force-set to vcpkg path");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

@@ -400,9 +400,19 @@ endif()
 
 # libnoise: prefer OrcaSlicer's deps prefix; fall back to the local vcpkg layout.
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer/cmake/modules")
+# Phase 142 fix: force LIBNOISE_INCLUDE_DIR to the vcpkg path BEFORE find_package
+# so the upstream Findlibnoise.cmake module does not leave it as the
+# LIBNOISE_INCLUDE_DIR-NOTFOUND sentinel. That sentinel propagates through
+# noise::noise's INTERFACE_INCLUDE_DIRECTORIES and (now that OpenVDB pulls more
+# transitive includes into libslic3r_from_source) triggers CMake's strict
+# relative/non-existent path check on dependent targets. This was a latent
+# issue exposed by the Phase 142 OpenVDB link.
+if(NOT EXISTS "${LIBNOISE_INCLUDE_DIR}")
+    set(LIBNOISE_INCLUDE_DIR "${VCPKG_INSTALLED_DIR}/include" CACHE PATH "" FORCE)
+endif()
 find_package(libnoise QUIET)
 if(NOT libnoise_FOUND)
-    set(LIBNOISE_INCLUDE_DIR "${VCPKG_INSTALLED_DIR}/include" CACHE PATH "")
+    set(LIBNOISE_INCLUDE_DIR "${VCPKG_INSTALLED_DIR}/include" CACHE PATH "" FORCE)
     set(LIBNOISE_LIBRARIES "${VCPKG_INSTALLED_DIR}/lib/noise.lib" CACHE FILEPATH "")
     if(NOT EXISTS "${LIBNOISE_LIBRARIES}")
         message(FATAL_ERROR "libnoise not found in DEPS_PREFIX or VCPKG_INSTALLED_DIR")
