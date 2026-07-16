@@ -341,7 +341,12 @@ void EditorViewModel::beginGizmoMoveDrag()
 
   m_gizmoMoveDragActive = true;
   m_gizmoMoveDragSourceIndex = idx;
-  m_gizmoMoveDragStartPos = projectService_->objectPosition(idx);
+  // Phase 138 (ASM-01): on the assembly canvas the baseline is the per-instance
+  // assemble transform (ModelInstance::m_assemble_transformation, Model.hpp:1280-1294).
+  if (m_activeCanvasType == 2)
+    m_gizmoMoveDragStartPos = projectService_->assembleOffset(idx);
+  else
+    m_gizmoMoveDragStartPos = projectService_->objectPosition(idx);
 }
 
 void EditorViewModel::applyGizmoMoveDelta(float dx, float dy, float dz)
@@ -356,6 +361,28 @@ void EditorViewModel::applyGizmoMoveDelta(float dx, float dy, float dz)
 
   if (m_gizmoMoveDragActive && idx != m_gizmoMoveDragSourceIndex)
     return;
+
+  // Phase 138 (ASM-01): route to the assemble transform on the assembly canvas.
+  if (m_activeCanvasType == 2)
+  {
+    const QVector3D oldPos = projectService_->assembleOffset(idx);
+    const QVector3D newPos = oldPos + delta;
+    projectService_->setAssembleOffset(idx, newPos.x(), newPos.y(), newPos.z());
+    // No slice invalidation on AssembleView — the assemble pose is not sliced (T-07).
+    if (!m_gizmoMoveDragActive && m_undoManager)
+    {
+      auto *cmd = new AssembleTransformCommand(idx, oldPos,
+                                               projectService_->assembleRotation(idx),
+                                               projectService_->assembleScale(idx),
+                                               projectService_);
+      cmd->setNewTransform(newPos,
+                           projectService_->assembleRotation(idx),
+                           projectService_->assembleScale(idx));
+      m_undoManager->push(cmd);
+    }
+    emit stateChanged();
+    return;
+  }
 
   const QVector3D oldPos = projectService_->objectPosition(idx);
   const QVector3D newPos = oldPos + delta;
@@ -386,6 +413,38 @@ void EditorViewModel::endGizmoMoveDrag()
 
   if (idx < 0 || !projectService_)
     return;
+
+  // Phase 138 (ASM-01): assemble-transform path on the assembly canvas.
+  if (m_activeCanvasType == 2)
+  {
+    const QVector3D finalPos = projectService_->assembleOffset(idx);
+    const QVector3D delta = finalPos - m_gizmoMoveDragStartPos;
+    if (delta.lengthSquared() <= 1e-12f)
+    {
+      m_gizmoMoveDragStartPos = {};
+      return;
+    }
+    if (m_undoManager)
+    {
+      auto *cmd = new AssembleTransformCommand(idx, m_gizmoMoveDragStartPos,
+                                               projectService_->assembleRotation(idx),
+                                               projectService_->assembleScale(idx),
+                                               projectService_);
+      cmd->setNewTransform(finalPos,
+                           projectService_->assembleRotation(idx),
+                           projectService_->assembleScale(idx));
+      if (m_undoManager->isInMacro()) {
+        m_undoManager->push(cmd);
+      } else {
+        m_undoManager->beginMacro(tr("Move object (assembly)"));
+        m_undoManager->push(cmd);
+        m_undoManager->endMacro();
+      }
+    }
+    m_gizmoMoveDragStartPos = {};
+    emit stateChanged();
+    return;
+  }
 
   const QVector3D finalPos = projectService_->objectPosition(idx);
   const QVector3D delta = finalPos - m_gizmoMoveDragStartPos;
@@ -429,7 +488,11 @@ void EditorViewModel::beginGizmoRotateDrag()
 
   m_gizmoRotateDragActive = true;
   m_gizmoRotateDragSourceIndex = idx;
-  m_gizmoRotateDragStartRot = projectService_->objectRotation(idx);
+  // Phase 138 (ASM-01): assemble-transform baseline on the assembly canvas.
+  if (m_activeCanvasType == 2)
+    m_gizmoRotateDragStartRot = projectService_->assembleRotation(idx);
+  else
+    m_gizmoRotateDragStartRot = projectService_->objectRotation(idx);
 }
 
 void EditorViewModel::applyGizmoRotateDelta(int axis, float radians)
@@ -446,6 +509,36 @@ void EditorViewModel::applyGizmoRotateDelta(int axis, float radians)
 
   if (m_gizmoRotateDragActive && idx != m_gizmoRotateDragSourceIndex)
     return;
+
+  // Phase 138 (ASM-01): route to the assemble transform on the assembly canvas.
+  if (m_activeCanvasType == 2)
+  {
+    const QVector3D oldRot = projectService_->assembleRotation(idx);
+    QVector3D newRot = oldRot;
+    const float degrees = radians * kRadiansToDegrees;
+    if (axis == 1)
+      newRot.setX(newRot.x() + degrees);
+    else if (axis == 2)
+      newRot.setY(newRot.y() + degrees);
+    else
+      newRot.setZ(newRot.z() + degrees);
+    projectService_->setAssembleRotation(idx, newRot.x(), newRot.y(), newRot.z());
+    // No slice invalidation on AssembleView (T-07).
+    if (!m_gizmoRotateDragActive && m_undoManager)
+    {
+      auto *cmd = new AssembleTransformCommand(idx,
+                                               projectService_->assembleOffset(idx),
+                                               oldRot,
+                                               projectService_->assembleScale(idx),
+                                               projectService_);
+      cmd->setNewTransform(projectService_->assembleOffset(idx),
+                           newRot,
+                           projectService_->assembleScale(idx));
+      m_undoManager->push(cmd);
+    }
+    emit stateChanged();
+    return;
+  }
 
   const QVector3D oldRot = projectService_->objectRotation(idx);
   QVector3D newRot = oldRot;
@@ -485,6 +578,38 @@ void EditorViewModel::endGizmoRotateDrag()
 
   if (idx < 0 || !projectService_)
     return;
+
+  // Phase 138 (ASM-01): assemble-transform path on the assembly canvas.
+  if (m_activeCanvasType == 2)
+  {
+    const QVector3D finalRot = projectService_->assembleRotation(idx);
+    if ((finalRot - m_gizmoRotateDragStartRot).lengthSquared() <= 1e-12f)
+    {
+      m_gizmoRotateDragStartRot = {};
+      return;
+    }
+    if (m_undoManager)
+    {
+      auto *cmd = new AssembleTransformCommand(idx,
+                                               projectService_->assembleOffset(idx),
+                                               m_gizmoRotateDragStartRot,
+                                               projectService_->assembleScale(idx),
+                                               projectService_);
+      cmd->setNewTransform(projectService_->assembleOffset(idx),
+                           finalRot,
+                           projectService_->assembleScale(idx));
+      if (m_undoManager->isInMacro()) {
+        m_undoManager->push(cmd);
+      } else {
+        m_undoManager->beginMacro(tr("Rotate object (assembly)"));
+        m_undoManager->push(cmd);
+        m_undoManager->endMacro();
+      }
+    }
+    m_gizmoRotateDragStartRot = {};
+    emit stateChanged();
+    return;
+  }
 
   const QVector3D finalRot = projectService_->objectRotation(idx);
   if ((finalRot - m_gizmoRotateDragStartRot).lengthSquared() <= 1e-12f)
@@ -528,7 +653,11 @@ void EditorViewModel::beginGizmoScaleDrag()
 
   m_gizmoScaleDragActive = true;
   m_gizmoScaleDragSourceIndex = idx;
-  m_gizmoScaleDragStartScale = projectService_->objectScale(idx);
+  // Phase 138 (ASM-01): assemble-transform baseline on the assembly canvas.
+  if (m_activeCanvasType == 2)
+    m_gizmoScaleDragStartScale = projectService_->assembleScale(idx);
+  else
+    m_gizmoScaleDragStartScale = projectService_->objectScale(idx);
 }
 
 void EditorViewModel::applyGizmoScaleFactor(int axis, float factor)
@@ -546,6 +675,35 @@ void EditorViewModel::applyGizmoScaleFactor(int axis, float factor)
 
   if (m_gizmoScaleDragActive && idx != m_gizmoScaleDragSourceIndex)
     return;
+
+  // Phase 138 (ASM-01): route to the assemble transform on the assembly canvas.
+  if (m_activeCanvasType == 2)
+  {
+    const QVector3D oldScale = projectService_->assembleScale(idx);
+    QVector3D newScale = oldScale;
+    if (axis == 1)
+      newScale.setX(newScale.x() * clampedFactor);
+    else if (axis == 2)
+      newScale.setY(newScale.y() * clampedFactor);
+    else
+      newScale.setZ(newScale.z() * clampedFactor);
+    projectService_->setAssembleScale(idx, newScale.x(), newScale.y(), newScale.z());
+    // No slice invalidation on AssembleView (T-07).
+    if (!m_gizmoScaleDragActive && m_undoManager)
+    {
+      auto *cmd = new AssembleTransformCommand(idx,
+                                               projectService_->assembleOffset(idx),
+                                               projectService_->assembleRotation(idx),
+                                               oldScale,
+                                               projectService_);
+      cmd->setNewTransform(projectService_->assembleOffset(idx),
+                           projectService_->assembleRotation(idx),
+                           newScale);
+      m_undoManager->push(cmd);
+    }
+    emit stateChanged();
+    return;
+  }
 
   const QVector3D oldScale = projectService_->objectScale(idx);
   QVector3D newScale = oldScale;
@@ -584,6 +742,38 @@ void EditorViewModel::endGizmoScaleDrag()
 
   if (idx < 0 || !projectService_)
     return;
+
+  // Phase 138 (ASM-01): assemble-transform path on the assembly canvas.
+  if (m_activeCanvasType == 2)
+  {
+    const QVector3D finalScale = projectService_->assembleScale(idx);
+    if ((finalScale - m_gizmoScaleDragStartScale).lengthSquared() <= 1e-12f)
+    {
+      m_gizmoScaleDragStartScale = {};
+      return;
+    }
+    if (m_undoManager)
+    {
+      auto *cmd = new AssembleTransformCommand(idx,
+                                               projectService_->assembleOffset(idx),
+                                               projectService_->assembleRotation(idx),
+                                               m_gizmoScaleDragStartScale,
+                                               projectService_);
+      cmd->setNewTransform(projectService_->assembleOffset(idx),
+                           projectService_->assembleRotation(idx),
+                           finalScale);
+      if (m_undoManager->isInMacro()) {
+        m_undoManager->push(cmd);
+      } else {
+        m_undoManager->beginMacro(tr("Scale object (assembly)"));
+        m_undoManager->push(cmd);
+        m_undoManager->endMacro();
+      }
+    }
+    m_gizmoScaleDragStartScale = {};
+    emit stateChanged();
+    return;
+  }
 
   const QVector3D finalScale = projectService_->objectScale(idx);
   if ((finalScale - m_gizmoScaleDragStartScale).lengthSquared() <= 1e-12f)
@@ -3175,11 +3365,22 @@ int EditorViewModel::availableGizmoMask() const
   // GLGizmoAssembly::on_is_activable (GLGizmoAssembly.cpp:53-68) and the
   // gizmos manager + snapshot selection routing on CanvasAssembleView
   // (Plater.cpp:11601,11635). Prepare (CanvasView3D) path below is unchanged.
+  //
+  // Phase 138 (ASM-01): widen the mask to advertise the ordinary Move/Rotate/
+  // Scale gizmos (bits 0/1/2) on AssembleView when exactly one source object is
+  // selected. The apply-slots (applyGizmoMoveDelta/Rotate/Scale + begin/end*Drag)
+  // route these to the per-instance assemble transform (ModelInstance::
+  // m_assemble_transformation, Model.hpp:1280-1294) instead of the Prepare
+  // transform, so advertising them here is safe — the Prepare path is untouched.
   if (m_activeCanvasType == 2)
   {
+    int assembleMask = 0;
+    const bool hasSingleObject = !hasSelectedVolume() && m_selectedSourceIndices.size() == 1;
+    if (hasSingleObject)
+      assembleMask |= (1 << 0) | (1 << 1) | (1 << 2);  // GizmoMove / Rotate / Scale
     if (isAssemblyMeasureActivable())
-      return (1 << 19);  // GizmoAssemblyMeasure bit only.
-    return 0;
+      assembleMask |= (1 << 19);  // GizmoAssemblyMeasure
+    return assembleMask;
   }
 
   int mask = 0;
