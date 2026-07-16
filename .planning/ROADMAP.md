@@ -20,7 +20,7 @@
 - [x] Phase 137: MeshBoolean + Drill Activation (WS1) (completed 2026-07-16)
 - [x] Phase 138: Assembly Transformation Actions ASM-01 (WS2) (completed 2026-07-16)
 - [x] Phase 139: en.ts Full Translation + Baseline Advance (WS3) (completed 2026-07-16)
-- [ ] Phase 140: v4.8 Verification And Cross-Workstream Regression
+- [x] Phase 140: v4.8 Verification And Cross-Workstream Regression (completed 2026-07-16)
 
 ### Build Order
 
@@ -75,7 +75,7 @@ Success criteria:
 
 ### Phase 140: v4.8 Verification And Cross-Workstream Regression
 
-**Status:** Not started
+**Status:** Complete (2026-07-16)
 **Workstream:** Cross-cutting
 **Goal:** Canonical build + ctest + regression-free
 **Depends on:** Phase 138, Phase 139

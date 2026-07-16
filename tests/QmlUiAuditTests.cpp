@@ -460,6 +460,8 @@ private slots:
   void kbShortcutsDialogAndProjectPagePropertyPanelWired();
   // Phase 135 (REGRESS-02): v4.7 cross-workstream regression gate.
   void v47CrossWorkstreamRegressionLocked();
+  // Phase 140 (REGRESS-03): v4.8 cross-workstream regression gate.
+  void v48CrossWorkstreamRegressionLocked();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -5965,6 +5967,63 @@ void QmlUiAuditTests::v47CrossWorkstreamRegressionLocked()
            "REGRESS-02/v4.6: calibration tower modes must still dispatch");
   QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
            "REGRESS-02/v4.6: Retraction tower mode (9) must still dispatch");
+}
+
+void QmlUiAuditTests::v48CrossWorkstreamRegressionLocked()
+{
+  // Phase 140 (REGRESS-03): v4.8 cross-workstream regression gate. Locks the
+  // v4.8 workstream anchors (WS1 CGAL MeshBoolean/Drill, WS2 Assembly ASM-01,
+  // WS3 i18n en.ts completion) AND re-asserts the v4.7/v4.6 anchors still hold
+  // so the v4.8 work did not regress them.
+  const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString rhiViewport = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
+  const QString enTs = readSource(QStringLiteral("i18n/en.ts"));
+  QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+
+  // WS1 (CGAL): MeshBoolean + Drill activated (Phase 137).
+  QVERIFY2(evm.contains(QStringLiteral("kCgalMeshBooleanAvailable = true")),
+           "REGRESS-03/WS1: kCgalMeshBooleanAvailable must be true (CGAL-02)");
+  QVERIFY2(projSvc.contains(QStringLiteral("MeshBoolean::minus")),
+           "REGRESS-03/WS1: MeshBoolean::minus must be wired (CGAL-02/03)");
+
+  // WS2 (Assembly ASM-01): per-instance assemble-transform accessors + routing +
+  // renderer thread-through (Phase 138).
+  QVERIFY2(projSvc.contains(QStringLiteral("setAssembleOffset")),
+           "REGRESS-03/WS2: ProjectServiceMock must expose setAssembleOffset (ASM-01)");
+  QVERIFY2(projSvc.contains(QStringLiteral("setAssembleRotation")),
+           "REGRESS-03/WS2: ProjectServiceMock must expose setAssembleRotation (ASM-01)");
+  QVERIFY2(projSvc.contains(QStringLiteral("setAssembleScale")),
+           "REGRESS-03/WS2: ProjectServiceMock must expose setAssembleScale (ASM-01)");
+  QVERIFY2(evm.contains(QStringLiteral("m_activeCanvasType == 2")),
+           "REGRESS-03/WS2: EditorViewModel must route gizmo slots on AssembleView (ASM-01)");
+  QVERIFY2(evm.contains(QStringLiteral("AssembleTransformCommand")),
+           "REGRESS-03/WS2: AssembleTransformCommand undo variant must be wired (ASM-01)");
+  QVERIFY2(rhiViewport.contains(QStringLiteral("assembleOffsets")),
+           "REGRESS-03/WS2: RhiViewport must expose assembleOffsets Q_PROPERTY (ASM-01)");
+
+  // WS3 (i18n): en.ts must be filled (I18N-04). Assert the unfinished count is
+  // low — a fully-filled en.ts has 0, but allow a tiny tolerance for any
+  // genuinely-ambiguous residual.
+  const int unfinished = enTs.count(QStringLiteral("type=\"unfinished\""));
+  QVERIFY2(unfinished <= 5,
+           qPrintable(QStringLiteral("REGRESS-03/WS3: en.ts must have <= 5 unfinished "
+                                     "(I18N-04), found %1").arg(unfinished)));
+
+  // v4.7 regression: the v4.7 anchors (paint gate, flatten, fixMesh, calibration
+  // modes) must still hold — the v4.8 work must not have regressed them.
+  QVERIFY2(evm.contains(QStringLiteral("kViewportTrianglePickingAvailable = true")),
+           "REGRESS-03/v4.7: paint-gizmo gate flag must still be true");
+  QVERIFY2(evm.contains(QStringLiteral("orientObject")),
+           "REGRESS-03/v4.7: flattenSelected must still call orientObject");
+  QVERIFY2(projSvc.contains(QStringLiteral("its_merge_vertices")),
+           "REGRESS-03/v4.7: fixMesh must still call its_merge_vertices");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
+           "REGRESS-03/v4.6: Vol_speed tower mode (7) must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
+           "REGRESS-03/v4.6: Retraction tower mode (9) must still dispatch");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

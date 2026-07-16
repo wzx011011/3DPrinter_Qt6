@@ -22,7 +22,7 @@
 
 ### Cross-Cutting
 
-- [ ] **REGRESS-03**: Canonical build passes clean; regression ctest passes; Prepare/Preview/Assembly/paint/calibration behaviors regression-free.
+- [x] **REGRESS-03**: Canonical build passes clean; regression ctest passes; Prepare/Preview/Assembly/paint/calibration behaviors regression-free.
 
 ## Traceability
 
@@ -34,7 +34,7 @@
 | ASM-01 | Phase 138 | Done (2026-07-16) |
 | I18N-04 | Phase 139 | Done (2026-07-16) |
 | I18N-05 | Phase 139 | Done (2026-07-16) |
-| REGRESS-03 | Phase 140 | Pending |
+| REGRESS-03 | Phase 140 | Done (2026-07-16) |
 
 **Coverage:** 7 requirements, 7 mapped.
 
