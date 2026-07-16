@@ -398,12 +398,12 @@ Item {
             enabled: root.editorVm && ((root.editorVm.availableGizmoMask & (1 << GLViewport.GizmoSimplify)) !== 0)
             onTriggered: if (root.editorVm) root.editorVm.simplifyMeshSelected()
         }
-        // 对齐上游 create_extra_object_menu — Mesh Boolean
-        CxMenuItem {
-            text: qsTr("网格布尔运算")
-            enabled: root.editorVm && ((root.editorVm.availableGizmoMask & (1 << GLViewport.GizmoMeshBoolean)) !== 0)
-            onTriggered: if (root.editorVm) root.editorVm.meshBooleanSelected()
-        }
+        // Phase 141 / DEBT-02: removed orphaned "网格布尔运算" CxMenuItem — the
+        // stub it called in EditorViewModel was a no-op (returned false, qWarning
+        // "not yet implemented"). The working boolean path is the boolean dialog
+        // (CxComboBox with 3 ops + booleanExecute button below), which routes
+        // through EditorViewModel booleanExecute → ProjectServiceMock meshBoolean.
+        // The dead menu + stub were removed together per the No-Deprecated-UI rule.
         MenuSeparator { }
         // 对齐上游 append_menu_item_per_object_settings
         CxMenuItem {

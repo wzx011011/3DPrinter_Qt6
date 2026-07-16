@@ -202,6 +202,11 @@ Item {
         // path (Plan 138-03 task 2). Re-evaluates on stateChanged after every
         // gizmo drag write (Plan 138-02 routing).
         assembleOffsets: root.editorVm ? root.editorVm.assembleOffsets : []
+        // Phase 141 (DEBT-04): bind parallel rotation/scale lists so the renderer
+        // composes the full transform (translate * rotate * scale) — Rotate/Scale
+        // gizmo drags now reflect in the live render (v4.8 tech debt closure).
+        assembleRotations: root.editorVm ? root.editorVm.assembleRotations : []
+        assembleScales: root.editorVm ? root.editorVm.assembleScales : []
         selectedSourceObjectIndex: root.editorVm ? root.editorVm.selectedSourceObjectIndex : -1
         onObjectPickedSource: function(sourceIndex) {
             if (root.editorVm)

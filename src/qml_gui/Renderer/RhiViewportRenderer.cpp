@@ -72,18 +72,59 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
     m_assembleOffsets = viewport->m_assembleOffsets;
     m_modelVertexBufferUploaded = false;
   }
+  // Phase 141 (DEBT-04): mirror the parallel rotation/scale lists. Any change to
+  // any of the three lists forces a vertex re-upload so the composed transform is
+  // reflected in the live CanvasAssembleView render (v4.8 tech-debt closure).
+  if (m_assembleRotations != viewport->m_assembleRotations)
+  {
+    m_assembleRotations = viewport->m_assembleRotations;
+    m_modelVertexBufferUploaded = false;
+  }
+  if (m_assembleScales != viewport->m_assembleScales)
+  {
+    m_assembleScales = viewport->m_assembleScales;
+    m_modelVertexBufferUploaded = false;
+  }
   m_assembleOffsetBySource.clear();
   m_assembleOffsetBySource.reserve(m_assembleOffsets.size() * 2);
+  m_assembleTransformBySource.clear();
+  m_assembleTransformBySource.reserve(m_assembleOffsets.size() * 2);
   {
     const int offsetCount = int(m_assembleOffsets.size());
+    const int rotCount = int(m_assembleRotations.size());
+    const int scaleCount = int(m_assembleScales.size());
     const int idxCount = batchSourceObjectIndices.size();
-    const int pairCount = std::min(offsetCount, idxCount);
+    const int pairCount = std::min({offsetCount, idxCount});
     for (int i = 0; i < pairCount; ++i)
     {
       const QVector3D off = m_assembleOffsets[i].value<QVector3D>();
-      if (off.x() == 0.0f && off.y() == 0.0f && off.z() == 0.0f)
-        continue;
-      m_assembleOffsetBySource.insert(batchSourceObjectIndices[i], off);
+      const bool hasRot = i < rotCount;
+      const bool hasScale = i < scaleCount;
+      const QVector3D rot = hasRot ? m_assembleRotations[i].value<QVector3D>() : QVector3D();
+      const QVector3D scl = hasScale ? m_assembleScales[i].value<QVector3D>() : QVector3D(1.0f, 1.0f, 1.0f);
+      const bool offZero = (off.x() == 0.0f && off.y() == 0.0f && off.z() == 0.0f);
+      const bool rotZero = (rot.x() == 0.0f && rot.y() == 0.0f && rot.z() == 0.0f);
+      const bool sclIdentity = (scl.x() == 1.0f && scl.y() == 1.0f && scl.z() == 1.0f);
+      // Keep the legacy offset-only map populated (other readers + the regression
+      // slot anchor on its presence); the composed transform is the source of truth
+      // for rendering once any non-translate component is present.
+      if (!offZero)
+        m_assembleOffsetBySource.insert(batchSourceObjectIndices[i], off);
+      if (offZero && rotZero && sclIdentity)
+        continue; // identity — no compose needed
+      // Build translate * rotateZ * rotateY * rotateX * scale (matches the
+      // gizmo Euler XYZ convention used by EditorViewModel assembleRotation).
+      QMatrix4x4 m;
+      m.translate(off);
+      if (!rotZero)
+      {
+        m.rotate(rot.z(), QVector3D(0.0f, 0.0f, 1.0f));
+        m.rotate(rot.y(), QVector3D(0.0f, 1.0f, 0.0f));
+        m.rotate(rot.x(), QVector3D(1.0f, 0.0f, 0.0f));
+      }
+      if (!sclIdentity)
+        m.scale(scl);
+      m_assembleTransformBySource.insert(batchSourceObjectIndices[i], m);
     }
   }
   const bool modelGenerationChanged = m_modelGeneration != viewport->m_modelGeneration;
@@ -1715,6 +1756,12 @@ QVector<RhiViewportRenderer::Vertex> RhiViewportRenderer::buildModelVertices(con
   // follow-up. Gated to CanvasAssembleView; Prepare/Preview unaffected.
   // m_assembleOffsetBySource is built in synchronize() by zipping the offsets
   // with the parallel meshBatchSourceObjectIndices list.
+  //
+  // Phase 141 (DEBT-04): the loop now prefers the full composed transform
+  // (m_assembleTransformBySource, populated when any rotate/scale is non-identity)
+  // and falls back to the legacy translate-only offset map otherwise. This closes
+  // the v4.8 tech debt where Rotate/Scale gizmo drags persisted + round-tripped
+  // but were not reflected in the live CanvasAssembleView render.
   if (m_canvasType == RhiViewport::CanvasAssembleView
       && !m_assembleOffsetBySource.isEmpty()
       && !vertices.isEmpty())
@@ -1724,17 +1771,35 @@ QVector<RhiViewportRenderer::Vertex> RhiViewportRenderer::buildModelVertices(con
     {
       if (batch.sourceObjectIndex < 0 || batch.vertexCount <= 0)
         continue;
-      const auto it = m_assembleOffsetBySource.constFind(batch.sourceObjectIndex);
-      if (it == m_assembleOffsetBySource.constEnd())
+      const auto tIt = m_assembleTransformBySource.constFind(batch.sourceObjectIndex);
+      const bool hasFull = (tIt != m_assembleTransformBySource.constEnd());
+      const auto oIt = m_assembleOffsetBySource.constFind(batch.sourceObjectIndex);
+      const bool hasOff = (oIt != m_assembleOffsetBySource.constEnd());
+      if (!hasFull && !hasOff)
         continue;
-      const QVector3D &off = it.value();
       const int endVertex = std::min(batch.firstVertex + batch.vertexCount, int(vertices.size()));
-      for (int i = std::max(0, batch.firstVertex); i < endVertex; ++i)
+      if (hasFull)
       {
-        Vertex &v = vertices[i];
-        v.x += off.x();
-        v.y += off.y();
-        v.z += off.z();
+        const QMatrix4x4 &m = tIt.value();
+        for (int i = std::max(0, batch.firstVertex); i < endVertex; ++i)
+        {
+          Vertex &v = vertices[i];
+          const QVector3D p = m.map(QVector3D(v.x, v.y, v.z));
+          v.x = p.x();
+          v.y = p.y();
+          v.z = p.z();
+        }
+      }
+      else
+      {
+        const QVector3D &off = oIt.value();
+        for (int i = std::max(0, batch.firstVertex); i < endVertex; ++i)
+        {
+          Vertex &v = vertices[i];
+          v.x += off.x();
+          v.y += off.y();
+          v.z += off.z();
+        }
       }
     }
   }

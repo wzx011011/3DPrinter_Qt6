@@ -462,6 +462,11 @@ private slots:
   void v47CrossWorkstreamRegressionLocked();
   // Phase 140 (REGRESS-03): v4.8 cross-workstream regression gate.
   void v48CrossWorkstreamRegressionLocked();
+  // Phase 141 (DEBT-05): v5.0 tech-debt closure gate. Locks the 4 code-only
+  // fixes (intersect, orphaned menu removed, drillObject return, ASM full
+  // transform compose) AND re-asserts the v4.8 anchors so the v5.0 tech-debt
+  // work did not regress the v4.8 contract.
+  void v50TechDebtRegressionLocked();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6024,6 +6029,78 @@ void QmlUiAuditTests::v48CrossWorkstreamRegressionLocked()
            "REGRESS-03/v4.6: Vol_speed tower mode (7) must still dispatch");
   QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
            "REGRESS-03/v4.6: Retraction tower mode (9) must still dispatch");
+}
+
+void QmlUiAuditTests::v50TechDebtRegressionLocked()
+{
+  // Phase 141 (DEBT-05): v5.0 tech-debt closure gate. Locks the 4 code-only
+  // fixes from Phase 141 (CGAL-02 true intersection, orphaned meshBooleanSelected
+  // menu + stub removed, drillObject C4715 fix, ASM rotate/scale live-visual
+  // compose) AND re-asserts the v4.8 anchors so the v5.0 tech-debt work did not
+  // regress the v4.8 contract.
+  const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString evmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString rhiRenderer = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString rhiViewport = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString assemblePage = readSource(QStringLiteral("src/qml_gui/pages/AssemblePage.qml"));
+  QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+
+  // DEBT-01: intersection op==2 must call MeshBoolean::cgal::intersect (not minus).
+  QVERIFY2(projSvc.contains(QStringLiteral("MeshBoolean::cgal::intersect")),
+           "DEBT-01: meshBoolean op==2 must call MeshBoolean::cgal::intersect (not minus)");
+  QVERIFY2(projSvc.contains(QStringLiteral("operation != 2")),
+           "DEBT-01: tool object must NOT be deleted after intersection (operation != 2 gate)");
+
+  // DEBT-02: the orphaned CxMenuItem + meshBooleanSelected stub are gone. The
+  // working boolean dialog path (booleanExecute) is unchanged. Note: a documentation
+  // comment block in PreparePage.qml mentions the removed menu text — that is
+  // intentional (grep-traceable deletion record), so we assert on the call site
+  // (meshBooleanSelected() QML invocation) instead of the raw menu label.
+  QVERIFY2(!preparePage.contains(QStringLiteral("meshBooleanSelected()")),
+           "DEBT-02: orphaned meshBooleanSelected() call must be removed from PreparePage.qml");
+  QVERIFY2(!evm.contains(QStringLiteral("bool EditorViewModel::meshBooleanSelected")),
+           "DEBT-02: meshBooleanSelected() stub body must be removed from EditorViewModel.cpp");
+  QVERIFY2(!evmH.contains(QStringLiteral("Q_INVOKABLE bool meshBooleanSelected")),
+           "DEBT-02: meshBooleanSelected() declaration must be removed from EditorViewModel.h");
+  QVERIFY2(evm.contains(QStringLiteral("booleanExecute")),
+           "DEBT-02: working booleanExecute path must still be present");
+
+  // DEBT-03: drillObject success path must return true (no C4715). We assert the
+  // return-true comment marker exists in the success path (more robust than the
+  // exact whitespace-sensitive multi-line literal).
+  QVERIFY2(projSvc.contains(QStringLiteral("return true; // Phase 141 / DEBT-03")),
+           "DEBT-03: drillObject must return true on the success path (after set_new_unique_id)");
+
+  // DEBT-04: assemble transform compose. Renderer must read rotation+scale lists
+  // AND build the full matrix; the EditorViewModel and RhiViewport must expose the
+  // parallel Q_PROPERTYs; AssemblePage must bind them.
+  QVERIFY2(evmH.contains(QStringLiteral("Q_PROPERTY(QVariantList assembleRotations")),
+           "DEBT-04: EditorViewModel must expose assembleRotations Q_PROPERTY");
+  QVERIFY2(evmH.contains(QStringLiteral("Q_PROPERTY(QVariantList assembleScales")),
+           "DEBT-04: EditorViewModel must expose assembleScales Q_PROPERTY");
+  QVERIFY2(rhiViewport.contains(QStringLiteral("Q_PROPERTY(QVariantList assembleRotations")),
+           "DEBT-04: RhiViewport must expose assembleRotations Q_PROPERTY");
+  QVERIFY2(rhiViewport.contains(QStringLiteral("Q_PROPERTY(QVariantList assembleScales")),
+           "DEBT-04: RhiViewport must expose assembleScales Q_PROPERTY");
+  QVERIFY2(rhiRenderer.contains(QStringLiteral("m_assembleTransformBySource")),
+           "DEBT-04: RhiViewportRenderer must build the full compose matrix (m_assembleTransformBySource)");
+  QVERIFY2(rhiRenderer.contains(QStringLiteral("m.map(QVector3D(v.x, v.y, v.z))")),
+           "DEBT-04: buildModelVertices must apply the full matrix to each vertex");
+  QVERIFY2(assemblePage.contains(QStringLiteral("assembleRotations:")),
+           "DEBT-04: AssemblePage must bind assembleRotations");
+  QVERIFY2(assemblePage.contains(QStringLiteral("assembleScales:")),
+           "DEBT-04: AssemblePage must bind assembleScales");
+
+  // v4.8 anchors must still hold (no regression from the v5.0 tech-debt work).
+  QVERIFY2(evm.contains(QStringLiteral("kCgalMeshBooleanAvailable = true")),
+           "DEBT-05/v4.8: kCgalMeshBooleanAvailable must still be true");
+  QVERIFY2(projSvc.contains(QStringLiteral("MeshBoolean::minus")),
+           "DEBT-05/v4.8: MeshBoolean::minus must still be wired for difference/drill");
+  QVERIFY2(projSvc.contains(QStringLiteral("setAssembleOffset")),
+           "DEBT-05/v4.8: setAssembleOffset must still be present (ASM-01)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

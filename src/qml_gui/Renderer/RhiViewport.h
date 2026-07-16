@@ -49,6 +49,12 @@ class RhiViewport : public QQuickRhiItem
   // it as a per-object translation on the CanvasAssembleView path in
   // buildModelVertices (alongside the explosion offset). Prepare/Preview unaffected.
   Q_PROPERTY(QVariantList assembleOffsets READ assembleOffsets WRITE setAssembleOffsets)
+  // Phase 141 (DEBT-04): per-source-object assemble rotation (Euler XYZ, radians)
+  // and scale (XYZ), parallel to assembleOffsets. The renderer composes the full
+  // transform (translate * rotate * scale) in buildModelVertices so Rotate/Scale
+  // gizmo drags reflect in the live CanvasAssembleView render (v4.8 tech debt).
+  Q_PROPERTY(QVariantList assembleRotations READ assembleRotations WRITE setAssembleRotations)
+  Q_PROPERTY(QVariantList assembleScales READ assembleScales WRITE setAssembleScales)
   Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex WRITE setSelectedSourceObjectIndex)
   Q_PROPERTY(int hoveredSourceObjectIndex READ hoveredSourceObjectIndex WRITE setHoveredSourceObjectIndex)
   // Phase 92 (ASMMEASURE-02): the two selected source-object indices the
@@ -214,6 +220,11 @@ public:
   // per source object index, GL X,Y,Z).
   QVariantList assembleOffsets() const { return m_assembleOffsets; }
   void setAssembleOffsets(const QVariantList &value);
+  // Phase 141 (DEBT-04): per-source-object assemble rotation/scale lists.
+  QVariantList assembleRotations() const { return m_assembleRotations; }
+  void setAssembleRotations(const QVariantList &value);
+  QVariantList assembleScales() const { return m_assembleScales; }
+  void setAssembleScales(const QVariantList &value);
   int selectedSourceObjectIndex() const { return m_selectedSourceObjectIndex; }
   void setSelectedSourceObjectIndex(int value);
   int hoveredSourceObjectIndex() const { return m_hoveredSourceObjectIndex; }
@@ -432,6 +443,9 @@ private:
   QVariantList m_meshBatchSourceObjectIndices;
   // Phase 138 (ASM-01): per-source-object assemble offset (GL X,Y,Z).
   QVariantList m_assembleOffsets;
+  // Phase 141 (DEBT-04): parallel rotation/scale lists.
+  QVariantList m_assembleRotations;
+  QVariantList m_assembleScales;
   int m_selectedSourceObjectIndex = -1;
   int m_hoveredSourceObjectIndex = -1;
   // Phase 92 (ASMMEASURE-02): the two volumes the overlay annotates. -1 = not set.

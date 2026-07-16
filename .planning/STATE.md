@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v5.0
 milestone_name: Advanced Feature Recovery & Tech-Debt Closure
-status: planning
-last_updated: "2026-07-17T00:00:00.000Z"
+status: in_progress
+last_updated: "2026-07-17T04:45:00.000Z"
 last_activity: 2026-07-17
 progress:
   total_phases: 13
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 8
 ---
 
 # Project State
@@ -52,10 +52,10 @@ See: .planning/milestones/v4.8-* (last shipped milestone archive)
 
 ## Current Position
 
-Phase: 141 (not started — next to plan)
+Phase: 142 (OpenVDB CMake Unlock — next to plan)
 Plan: —
-Status: ROADMAP.md created; ready for `/gsd:plan-phase 141`
-Last activity: 2026-07-17 — ROADMAP.md created (13 phases 141-153, 32 requirements mapped across 5 workstreams + REGRESS-04)
+Status: Phase 141 verified ✓ (1/13 phases complete, 8%)
+Last activity: 2026-07-17 — Phase 141 shipped (5 DEBT reqs closed, 269 tests passing, v50TechDebtRegressionLocked locked). Ready for Phase 142.
 
 ## v5.0 Roadmap Snapshot (13 phases, 141-153)
 

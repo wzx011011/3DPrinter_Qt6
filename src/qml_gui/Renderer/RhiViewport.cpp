@@ -249,6 +249,27 @@ void RhiViewport::setAssembleOffsets(const QVariantList &value)
   ++m_modelGeneration;
   update();
 }
+// Phase 141 (DEBT-04): parallel rotation/scale setters. Same invalidation pattern
+// as setAssembleOffsets — bump generations + update() so buildModelVertices re-applies
+// the full transform on the CanvasAssembleView branch.
+void RhiViewport::setAssembleRotations(const QVariantList &value)
+{
+  if (m_assembleRotations == value)
+    return;
+  m_assembleRotations = value;
+  ++m_sceneGeneration;
+  ++m_modelGeneration;
+  update();
+}
+void RhiViewport::setAssembleScales(const QVariantList &value)
+{
+  if (m_assembleScales == value)
+    return;
+  m_assembleScales = value;
+  ++m_sceneGeneration;
+  ++m_modelGeneration;
+  update();
+}
 
 void RhiViewport::setSelectedSourceObjectIndex(int value)
 {

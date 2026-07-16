@@ -42,7 +42,7 @@
 
 ## Phases
 
-- [ ] Phase 141: v4.x Tech-Debt Closure (WS1)
+- [x] Phase 141: v4.x Tech-Debt Closure (WS1) ✓
 - [ ] Phase 142: OpenVDB CMake Unlock And libslic3r Link (WS2)
 - [ ] Phase 143: Hollow Gizmo Availability + Button + Panel + SLA Slice (WS2)
 - [ ] Phase 144: Emboss Font Loading And Text2Shapes Extrude (WS3)

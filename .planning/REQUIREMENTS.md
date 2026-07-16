@@ -146,11 +146,11 @@ Populated by `gsd-roadmapper` during ROADMAP.md creation. Each v5.0 requirement 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEBT-01 | 141 | Pending |
-| DEBT-02 | 141 | Pending |
-| DEBT-03 | 141 | Pending |
-| DEBT-04 | 141 | Pending |
-| DEBT-05 | 141 | Pending |
+| DEBT-01 | 141 | Complete |
+| DEBT-02 | 141 | Complete |
+| DEBT-03 | 141 | Complete |
+| DEBT-04 | 141 | Complete |
+| DEBT-05 | 141 | Complete |
 | VDB-01 | 142 | Pending |
 | VDB-02 | 142 | Pending |
 | VDB-03 | 143 | Pending |

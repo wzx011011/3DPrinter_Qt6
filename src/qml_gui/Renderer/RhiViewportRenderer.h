@@ -216,10 +216,20 @@ private:
   // from RhiViewport::m_assembleOffsets in synchronize(). Applied as a per-object
   // translation in buildModelVertices on the CanvasAssembleView path.
   QVariantList m_assembleOffsets;
+  // Phase 141 (DEBT-04): per-source-object assemble rotation (Euler XYZ, radians)
+  // and scale (XYZ), mirrored from RhiViewport. Composed with the offset into the
+  // per-source transform matrix below (v4.8 tech-debt closure: translate-only → full).
+  QVariantList m_assembleRotations;
+  QVariantList m_assembleScales;
   // Phase 138 (ASM-01): offset map keyed by sourceObjectIndex, built in
   // synchronize() by zipping m_assembleOffsets with the viewport's parallel
   // meshBatchSourceObjectIndices list. Consumed by buildModelVertices.
   QHash<int, QVector3D> m_assembleOffsetBySource;
+  // Phase 141 (DEBT-04): full per-source assemble transform (translate * rotate *
+  // scale), built in synchronize() from the three parallel lists. Empty entry =
+  // identity (no compose). Applied to each vertex in buildModelVertices on the
+  // CanvasAssembleView branch.
+  QHash<int, QMatrix4x4> m_assembleTransformBySource;
   // Phase 92 (ASMMEASURE-02): the two selected source indices the overlay
   // annotates. Mirrored from RhiViewport in synchronize(); a change forces an
   // overlay re-upload. Default -1 = not set (nothing drawn).

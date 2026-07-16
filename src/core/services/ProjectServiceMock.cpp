@@ -3150,10 +3150,11 @@ bool ProjectServiceMock::meshBoolean(int srcObjectIndex, int toolObjectIndex, in
       Slic3r::its_merge(srcMesh.its, toolMesh.its);
       Slic3r::MeshBoolean::self_union(srcMesh);
     } else {
-      // intersection: not directly available via the minus API; use union of
-      // shared volume as approximation (full intersection needs corefine_and_compute_intersection).
-      // For now, support union + difference (the two most common operations).
-      Slic3r::MeshBoolean::minus(srcMesh, toolMesh);
+      // intersection (Phase 141 / DEBT-01): real A∩B via CGAL corefine_and_compute_intersection.
+      // Upstream MeshBoolean::cgal::intersect wraps _cgal_intersection (MeshBoolean.cpp:268-272);
+      // signature is the TriangleMesh& overload at MeshBoolean.hpp:54 (inside namespace cgal).
+      // Previously this branch silently ran MeshBoolean::minus (v4.8 tech debt — CGAL-02 partial).
+      Slic3r::MeshBoolean::cgal::intersect(srcMesh, toolMesh);
     }
 
     // Replace source object's first model_part volume with result mesh
@@ -3169,8 +3170,12 @@ bool ProjectServiceMock::meshBoolean(int srcObjectIndex, int toolObjectIndex, in
       }
     }
 
-    // Delete tool object from model (对齐上游: delete_input = true for union)
-    if (replaced)
+    // Delete tool object from model (对齐上游: delete_input = true for union/difference).
+    // For intersection (operation==2) the tool object is NOT deleted: A∩B keeps the
+    // shared volume in A and the tool may still be useful for further operations
+    // (Phase 141 / DEBT-01 — v4.8 tech debt: tool was deleted for all ops, which is
+    // semantically wrong for intersection).
+    if (replaced && operation != 2)
     {
       // Remove tool object from model_ internal list
       model_->objects.erase(model_->objects.begin() + toolObjectIndex);
@@ -3344,6 +3349,7 @@ bool ProjectServiceMock::drillObject(int objectIndex, float radius, float depth,
     // Write the drilled result back to the source volume.
     srcVol->set_mesh(std::move(srcMesh));
     srcVol->set_new_unique_id();
+    return true; // Phase 141 / DEBT-03 — fix MSVC C4715 (success path had no return).
   }
   catch (const std::exception &e)
   {

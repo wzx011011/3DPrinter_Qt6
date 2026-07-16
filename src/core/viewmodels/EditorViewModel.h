@@ -54,6 +54,14 @@ class EditorViewModel final : public QObject
   // their moved pose. Source: ModelInstance::m_assemble_transformation offset
   // (Model.hpp:1289) via ProjectServiceMock::assembleOffset.
   Q_PROPERTY(QVariantList assembleOffsets READ assembleOffsets NOTIFY stateChanged)
+  // Phase 141 (DEBT-04): per-source-object assemble rotation (Euler XYZ, radians)
+  // and scale (XYZ), parallel to assembleOffsets. Read via ProjectServiceMock
+  // assembleRotation/assembleScale (ModelInstance::m_assemble_transformation).
+  // Bound to RhiViewport on CanvasAssembleView; the renderer composes the full
+  // transform matrix (translate * rotate * scale) in buildModelVertices so
+  // rotate/scale drags reflect in the live render (v4.8 tech debt: translate-only).
+  Q_PROPERTY(QVariantList assembleRotations READ assembleRotations NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList assembleScales READ assembleScales NOTIFY stateChanged)
   Q_PROPERTY(QString statusText READ statusText NOTIFY stateChanged)
   Q_PROPERTY(int loadProgress READ loadProgress NOTIFY stateChanged)
   Q_PROPERTY(bool loading READ loading NOTIFY stateChanged)
@@ -176,6 +184,9 @@ public:
   // Phase 138 (ASM-01): per-source-object assemble offset list (one QVector3D
   // per source object index). Mirrors meshBatchSourceObjectIndices indexing.
   QVariantList assembleOffsets() const;
+  // Phase 141 (DEBT-04): per-source-object assemble rotation/scale lists.
+  QVariantList assembleRotations() const;
+  QVariantList assembleScales() const;
   QString statusText() const;
   int loadProgress() const;
   bool loading() const;
@@ -505,8 +516,9 @@ public:
   Q_INVOKABLE bool fixMeshSelected();
   /// 简化选中对象网格（对齐上游 GLGizmoSimplify — stub, needs simplify dialog）
   Q_INVOKABLE bool simplifyMeshSelected();
-  /// 布尔运算选中对象（对齐上游 GLGizmoMeshBoolean — stub, needs boolean dialog）
-  Q_INVOKABLE bool meshBooleanSelected();
+  // Phase 141 / DEBT-02: meshBooleanSelected() removed — was a no-op stub called only
+  // by the orphaned "网格布尔运算" CxMenuItem. The real boolean path is the boolean
+  // dialog → booleanExecute → ProjectServiceMock::meshBoolean.
   /// 按显式索引修改 volume 类型（对齐上游 GUI_ObjectList::load_generic_subobject）
   Q_INVOKABLE bool changeVolumeTypeByIndex(int objIdx, int volIdx, int newType);
   /// 重新从磁盘加载选中对象源文件（对齐上游 Plater::reload_from_disk）

@@ -3311,6 +3311,29 @@ QVariantList EditorViewModel::assembleOffsets() const
     offsets.append(QVariant::fromValue(projectService_->assembleOffset(objectIndex)));
   return offsets;
 }
+// Phase 141 (DEBT-04): per-source-object assemble rotation/scale lists, parallel
+// to assembleOffsets. The renderer composes the full transform in buildModelVertices
+// so Rotate/Scale gizmo drags reflect in the live render (v4.8 tech debt closure).
+QVariantList EditorViewModel::assembleRotations() const
+{
+  QVariantList rotations;
+  if (!projectService_)
+    return rotations;
+  rotations.reserve(m_cachedMeshBatchSourceObjectIndices.size());
+  for (int objectIndex : m_cachedMeshBatchSourceObjectIndices)
+    rotations.append(QVariant::fromValue(projectService_->assembleRotation(objectIndex)));
+  return rotations;
+}
+QVariantList EditorViewModel::assembleScales() const
+{
+  QVariantList scales;
+  if (!projectService_)
+    return scales;
+  scales.reserve(m_cachedMeshBatchSourceObjectIndices.size());
+  for (int objectIndex : m_cachedMeshBatchSourceObjectIndices)
+    scales.append(QVariant::fromValue(projectService_->assembleScale(objectIndex)));
+  return scales;
+}
 QString EditorViewModel::statusText() const { return statusText_; }
 int EditorViewModel::loadProgress() const { return projectService_ ? projectService_->loadProgress() : 0; }
 bool EditorViewModel::loading() const { return projectService_ ? projectService_->loading() : false; }
@@ -4532,13 +4555,6 @@ bool EditorViewModel::simplifyMeshSelected()
 {
   // Stub — needs simplify dialog (GLGizmoSimplify) integration
   qWarning("[EditorViewModel] simplifyMeshSelected: not yet implemented (needs simplify dialog)");
-  return false;
-}
-
-bool EditorViewModel::meshBooleanSelected()
-{
-  // Stub — needs boolean dialog (GLGizmoMeshBoolean) integration
-  qWarning("[EditorViewModel] meshBooleanSelected: not yet implemented (needs boolean dialog)");
   return false;
 }
 
