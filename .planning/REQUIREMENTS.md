@@ -142,18 +142,50 @@ Explicitly excluded from v5.0. Documented to prevent scope creep.
 
 ## Traceability
 
-Populated by `gsd-roadmapper` during ROADMAP.md creation. Each v5.0 requirement maps to exactly one phase (phases 141+).
+Populated by `gsd-roadmapper` during ROADMAP.md creation. Each v5.0 requirement maps to exactly one phase (phases 141-153).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (to be filled by roadmapper) | | |
+| DEBT-01 | 141 | Pending |
+| DEBT-02 | 141 | Pending |
+| DEBT-03 | 141 | Pending |
+| DEBT-04 | 141 | Pending |
+| DEBT-05 | 141 | Pending |
+| VDB-01 | 142 | Pending |
+| VDB-02 | 142 | Pending |
+| VDB-03 | 143 | Pending |
+| VDB-04 | 143 | Pending |
+| VDB-05 | 143 | Pending |
+| VDB-06 | 143 | Pending |
+| EMB-01 | 144 | Pending |
+| EMB-02 | 144 | Pending |
+| EMB-03 | 145 | Pending |
+| EMB-04 | 145 | Pending |
+| EMB-05 | 146 | Pending |
+| EMB-06 | 146 | Pending |
+| EMB-07 | 146 | Pending |
+| PSET-01 | 147 | Pending |
+| PSET-02 | 147 | Pending |
+| PSET-03 | 148 | Pending |
+| PSET-04 | 148 | Pending |
+| PSET-05 | 149 | Pending |
+| PSET-06 | 149 | Pending |
+| PSET-07 | 149 | Pending |
+| PLATE-01 | 150 | Pending |
+| PLATE-02 | 151 | Pending |
+| PLATE-03 | 151 | Pending |
+| PLATE-04 | 151 | Pending |
+| PLATE-05 | 151 | Pending |
+| PLATE-06 | 152 | Pending |
+| REGRESS-04 | 153 | Pending |
 
 **Coverage:**
-- v5.0 requirements: 33 total (DEBT-01..05, VDB-01..06, EMB-01..07, PSET-01..07, PLATE-01..06, REGRESS-04)
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 33 ⚠️ (will be 0 after roadmap creation)
+- v5.0 requirements: 32 total (DEBT-01..05, VDB-01..06, EMB-01..07, PSET-01..07, PLATE-01..06, REGRESS-04). NOTE: the previous header text in this file said "33 requirements" — that was an off-by-one miscount; the literal ID list contains 32 unique IDs (5+6+7+7+6+1=32). Corrected by the roadmapper on 2026-07-17. Both PROJECT.md and STATE.md reflect 32.
+- Mapped to phases: 32/32 (100%)
+- Unmapped: 0
+- Orphans (phase with no requirement): none (every phase 141-153 has ≥1 mapped requirement)
 
 ---
 
 *Requirements defined: 2026-07-17*
-*Last updated: 2026-07-17 after v5.0 milestone definition (5 workstreams, 33 requirements)*
+*Last updated: 2026-07-17 after v5.0 roadmap creation (5 workstreams, 32 requirements mapped to 13 phases 141-153, 0 unmapped)*
