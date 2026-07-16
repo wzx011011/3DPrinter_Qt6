@@ -32,6 +32,26 @@ Item {
     readonly property int topBarHeight: 32
     readonly property int bottomBarHeight: 44
     readonly property int sidebarWidth: 392
+
+    // Phase 138 (ASM-01): assembly-canvas transform-mode state. Tracks which
+    // Move/Rotate/Scale gizmo is active when the Assembly Measure gizmo is off.
+    // Mirrors PreparePage's activeGizmoDragMode (PreparePage.qml:19). The
+    // gizmoMode binding below drives the viewport; the mode selector in the top
+    // bar writes this property gated on editorVm.availableGizmoMask.
+    property int assembleTransformMode: GLViewport.GizmoMove
+    property int activeGizmoDragMode: GLViewport.GizmoMove
+
+    // Phase 138 (ASM-01): switch the active transform gizmo if the mask permits
+    // it (mirrors PreparePage.setGizmoIfAvailable at PreparePage.qml:112). No
+    // business logic — pure mask-gated routing.
+    function setAssembleGizmoIfAvailable(mode) {
+        if (!root.editorVm)
+            return false
+        if ((root.editorVm.availableGizmoMask & (1 << mode)) === 0)
+            return false
+        root.assembleTransformMode = mode
+        return true
+    }
     // Phase 92 (ASMMEASURE-02): teal accent for the 测量 panel value text,
     // consistent with the on-canvas teal value box (rendered by
     // RhiViewportRenderer) and the upstream measure-panel #4ec9b0 family.
@@ -77,6 +97,38 @@ Item {
             font.pixelSize: Theme.fontSizeLG
             font.bold: true
         }
+
+        // Phase 138 (ASM-01): Move/Rotate/Scale mode selector for the assembly
+        // canvas, gated on editorVm.availableGizmoMask (widened by Plan 138-02).
+        // Mirrors PreparePage's setGizmoIfAvailable pattern. The Assembly Measure
+        // gizmo (Ctrl+Y) takes precedence in the gizmoMode binding below.
+        Row {
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.leftMargin: 80
+            spacing: 4
+            CxButton {
+                text: qsTr("移动")
+                checkable: true
+                checked: root.assembleTransformMode === GLViewport.GizmoMove
+                enabled: root.editorVm && ((root.editorVm.availableGizmoMask & (1 << GLViewport.GizmoMove)) !== 0)
+                onClicked: root.setAssembleGizmoIfAvailable(GLViewport.GizmoMove)
+            }
+            CxButton {
+                text: qsTr("旋转")
+                checkable: true
+                checked: root.assembleTransformMode === GLViewport.GizmoRotate
+                enabled: root.editorVm && ((root.editorVm.availableGizmoMask & (1 << GLViewport.GizmoRotate)) !== 0)
+                onClicked: root.setAssembleGizmoIfAvailable(GLViewport.GizmoRotate)
+            }
+            CxButton {
+                text: qsTr("缩放")
+                checkable: true
+                checked: root.assembleTransformMode === GLViewport.GizmoScale
+                enabled: root.editorVm && ((root.editorVm.availableGizmoMask & (1 << GLViewport.GizmoScale)) !== 0)
+                onClicked: root.setAssembleGizmoIfAvailable(GLViewport.GizmoScale)
+            }
+        }
     }
 
     // ── Region 1: left settings sidebar (reused from Prepare) ──
@@ -121,7 +173,7 @@ Item {
         // these bindings re-evaluate -> RhiViewport setters -> update() ->
         // synchronize()+render() re-upload + draw the overlay.
         gizmoMode: root.editorVm && root.editorVm.assemblyMeasureGizmoActive
-                   ? GLViewport.GizmoAssemblyMeasure : GLViewport.GizmoMove
+                   ? GLViewport.GizmoAssemblyMeasure : root.assembleTransformMode
         assemblyMeasureSelectedA: {
             if (!root.editorVm || !root.editorVm.assemblyMeasureGizmoActive)
                 return -1
@@ -145,10 +197,53 @@ Item {
         plateCount: root.editorVm ? root.editorVm.plateCount : 0
         activePlateObjectIndices: root.editorVm ? root.editorVm.activePlateObjectIndices : []
         meshBatchSourceObjectIndices: root.editorVm ? root.editorVm.meshBatchSourceObjectIndices : []
+        // Phase 138 (ASM-01): bind the per-source-object assemble offset list so
+        // the renderer applies the per-object translation on the CanvasAssembleView
+        // path (Plan 138-03 task 2). Re-evaluates on stateChanged after every
+        // gizmo drag write (Plan 138-02 routing).
+        assembleOffsets: root.editorVm ? root.editorVm.assembleOffsets : []
         selectedSourceObjectIndex: root.editorVm ? root.editorVm.selectedSourceObjectIndex : -1
         onObjectPickedSource: function(sourceIndex) {
             if (root.editorVm)
                 root.editorVm.selectSourceObject(sourceIndex)
+        }
+        // Phase 138 (ASM-01): gizmo drag-signal wiring mirrored from
+        // PreparePage.qml (the onGizmoDragBegin/onGizmo*Requested/onGizmoDragEnd
+        // block). The ViewModel slots (Plan 138-02) route to the assemble
+        // transform when this canvas is active. activeGizmoDragMode records which
+        // gizmo began the drag so end*Drag dispatches correctly.
+        onGizmoDragBegin: {
+            if (root.editorVm) {
+                root.activeGizmoDragMode = assembleViewport.gizmoMode
+                if (root.activeGizmoDragMode === GLViewport.GizmoRotate)
+                    root.editorVm.beginGizmoRotateDrag()
+                else if (root.activeGizmoDragMode === GLViewport.GizmoScale)
+                    root.editorVm.beginGizmoScaleDrag()
+                else
+                    root.editorVm.beginGizmoMoveDrag()
+            }
+        }
+        onGizmoMoveRequested: function(worldDelta) {
+            if (root.editorVm)
+                root.editorVm.applyGizmoMoveDelta(worldDelta.x, worldDelta.y, worldDelta.z)
+        }
+        onGizmoRotateRequested: function(axis, radians) {
+            if (root.editorVm)
+                root.editorVm.applyGizmoRotateDelta(axis, radians)
+        }
+        onGizmoScaleRequested: function(axis, factor) {
+            if (root.editorVm)
+                root.editorVm.applyGizmoScaleFactor(axis, factor)
+        }
+        onGizmoDragEnd: {
+            if (root.editorVm) {
+                if (root.activeGizmoDragMode === GLViewport.GizmoRotate)
+                    root.editorVm.endGizmoRotateDrag()
+                else if (root.activeGizmoDragMode === GLViewport.GizmoScale)
+                    root.editorVm.endGizmoScaleDrag()
+                else
+                    root.editorVm.endGizmoMoveDrag()
+            }
         }
     }
 

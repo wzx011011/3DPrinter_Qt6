@@ -212,6 +212,14 @@ private:
   // re-upload when the ratio changes (default 1.0 == no offset).
   float m_explosionRatio = 1.0f;
   float m_lastExplosionRatio = 1.0f;
+  // Phase 138 (ASM-01): per-source-object assemble offset (GL X,Y,Z), mirrored
+  // from RhiViewport::m_assembleOffsets in synchronize(). Applied as a per-object
+  // translation in buildModelVertices on the CanvasAssembleView path.
+  QVariantList m_assembleOffsets;
+  // Phase 138 (ASM-01): offset map keyed by sourceObjectIndex, built in
+  // synchronize() by zipping m_assembleOffsets with the viewport's parallel
+  // meshBatchSourceObjectIndices list. Consumed by buildModelVertices.
+  QHash<int, QVector3D> m_assembleOffsetBySource;
   // Phase 92 (ASMMEASURE-02): the two selected source indices the overlay
   // annotates. Mirrored from RhiViewport in synchronize(); a change forces an
   // overlay re-upload. Default -1 = not set (nothing drawn).

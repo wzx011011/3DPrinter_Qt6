@@ -236,6 +236,20 @@ void RhiViewport::setMeshBatchSourceObjectIndices(const QVariantList &value)
   update();
 }
 
+// Phase 138 (ASM-01): per-source-object assemble offset. Force a model re-upload
+// so buildModelVertices re-applies the per-object translation on the
+// CanvasAssembleView branch. Gated to CanvasAssembleView in buildModelVertices,
+// so Prepare/Preview are unaffected.
+void RhiViewport::setAssembleOffsets(const QVariantList &value)
+{
+  if (m_assembleOffsets == value)
+    return;
+  m_assembleOffsets = value;
+  ++m_sceneGeneration;
+  ++m_modelGeneration;
+  update();
+}
+
 void RhiViewport::setSelectedSourceObjectIndex(int value)
 {
   if (m_selectedSourceObjectIndex == value)

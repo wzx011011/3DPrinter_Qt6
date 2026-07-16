@@ -43,6 +43,12 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(int plateCount READ plateCount WRITE setPlateCount)
   Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices WRITE setActivePlateObjectIndices)
   Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices WRITE setMeshBatchSourceObjectIndices)
+  // Phase 138 (ASM-01): per-source-object assemble offset (GL X,Y,Z), one entry
+  // per source object index (matches meshBatchSourceObjectIndices ordering).
+  // Bound from editorVm.assembleOffsets in AssemblePage.qml. The renderer applies
+  // it as a per-object translation on the CanvasAssembleView path in
+  // buildModelVertices (alongside the explosion offset). Prepare/Preview unaffected.
+  Q_PROPERTY(QVariantList assembleOffsets READ assembleOffsets WRITE setAssembleOffsets)
   Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex WRITE setSelectedSourceObjectIndex)
   Q_PROPERTY(int hoveredSourceObjectIndex READ hoveredSourceObjectIndex WRITE setHoveredSourceObjectIndex)
   // Phase 92 (ASMMEASURE-02): the two selected source-object indices the
@@ -204,6 +210,10 @@ public:
   void setActivePlateObjectIndices(const QVariantList &value);
   QVariantList meshBatchSourceObjectIndices() const { return m_meshBatchSourceObjectIndices; }
   void setMeshBatchSourceObjectIndices(const QVariantList &value);
+  // Phase 138 (ASM-01): per-source-object assemble offset list (one QVector3D
+  // per source object index, GL X,Y,Z).
+  QVariantList assembleOffsets() const { return m_assembleOffsets; }
+  void setAssembleOffsets(const QVariantList &value);
   int selectedSourceObjectIndex() const { return m_selectedSourceObjectIndex; }
   void setSelectedSourceObjectIndex(int value);
   int hoveredSourceObjectIndex() const { return m_hoveredSourceObjectIndex; }
@@ -420,6 +430,8 @@ private:
   int m_plateCount = 1;
   QVariantList m_activePlateObjectIndices;
   QVariantList m_meshBatchSourceObjectIndices;
+  // Phase 138 (ASM-01): per-source-object assemble offset (GL X,Y,Z).
+  QVariantList m_assembleOffsets;
   int m_selectedSourceObjectIndex = -1;
   int m_hoveredSourceObjectIndex = -1;
   // Phase 92 (ASMMEASURE-02): the two volumes the overlay annotates. -1 = not set.

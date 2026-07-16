@@ -48,6 +48,12 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(int currentPlateIndex READ currentPlateIndex NOTIFY stateChanged)
   Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices NOTIFY stateChanged)
   Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices NOTIFY stateChanged)
+  // Phase 138 (ASM-01): per-source-object assemble offset (GL X,Y,Z), one entry
+  // per source object index, paralleling meshBatchSourceObjectIndices. Consumed
+  // by RhiViewport on the CanvasAssembleView path so assembled volumes render at
+  // their moved pose. Source: ModelInstance::m_assemble_transformation offset
+  // (Model.hpp:1289) via ProjectServiceMock::assembleOffset.
+  Q_PROPERTY(QVariantList assembleOffsets READ assembleOffsets NOTIFY stateChanged)
   Q_PROPERTY(QString statusText READ statusText NOTIFY stateChanged)
   Q_PROPERTY(int loadProgress READ loadProgress NOTIFY stateChanged)
   Q_PROPERTY(bool loading READ loading NOTIFY stateChanged)
@@ -167,6 +173,9 @@ public:
   int currentPlateIndex() const;
   QVariantList activePlateObjectIndices() const;
   QVariantList meshBatchSourceObjectIndices() const;
+  // Phase 138 (ASM-01): per-source-object assemble offset list (one QVector3D
+  // per source object index). Mirrors meshBatchSourceObjectIndices indexing.
+  QVariantList assembleOffsets() const;
   QString statusText() const;
   int loadProgress() const;
   bool loading() const;

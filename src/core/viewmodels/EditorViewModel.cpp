@@ -3296,6 +3296,21 @@ QVariantList EditorViewModel::meshBatchSourceObjectIndices() const
     indices.append(objectIndex);
   return indices;
 }
+
+// Phase 138 (ASM-01): per-source-object assemble offset list (GL X,Y,Z). One
+// entry per source object index, matching meshBatchSourceObjectIndices ordering.
+// Read via ProjectServiceMock::assembleOffset (ModelInstance::m_assemble_transformation
+// offset, Model.hpp:1289). Consumed by RhiViewport on CanvasAssembleView.
+QVariantList EditorViewModel::assembleOffsets() const
+{
+  QVariantList offsets;
+  if (!projectService_)
+    return offsets;
+  offsets.reserve(m_cachedMeshBatchSourceObjectIndices.size());
+  for (int objectIndex : m_cachedMeshBatchSourceObjectIndices)
+    offsets.append(QVariant::fromValue(projectService_->assembleOffset(objectIndex)));
+  return offsets;
+}
 QString EditorViewModel::statusText() const { return statusText_; }
 int EditorViewModel::loadProgress() const { return projectService_ ? projectService_->loadProgress() : 0; }
 bool EditorViewModel::loading() const { return projectService_ ? projectService_->loading() : false; }

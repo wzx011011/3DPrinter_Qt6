@@ -62,6 +62,30 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   batchSourceObjectIndices.reserve(viewport->m_meshBatchSourceObjectIndices.size());
   for (const QVariant &value : viewport->m_meshBatchSourceObjectIndices)
     batchSourceObjectIndices.append(value.toInt());
+
+  // Phase 138 (ASM-01): build the sourceObjectIndex -> assemble offset map by
+  // zipping m_assembleOffsets with the parallel meshBatchSourceObjectIndices
+  // list. Skip zero offsets (they translate nothing). Used by buildModelVertices
+  // on the CanvasAssembleView path.
+  if (m_assembleOffsets != viewport->m_assembleOffsets)
+  {
+    m_assembleOffsets = viewport->m_assembleOffsets;
+    m_modelVertexBufferUploaded = false;
+  }
+  m_assembleOffsetBySource.clear();
+  m_assembleOffsetBySource.reserve(m_assembleOffsets.size() * 2);
+  {
+    const int offsetCount = int(m_assembleOffsets.size());
+    const int idxCount = batchSourceObjectIndices.size();
+    const int pairCount = std::min(offsetCount, idxCount);
+    for (int i = 0; i < pairCount; ++i)
+    {
+      const QVector3D off = m_assembleOffsets[i].value<QVector3D>();
+      if (off.x() == 0.0f && off.y() == 0.0f && off.z() == 0.0f)
+        continue;
+      m_assembleOffsetBySource.insert(batchSourceObjectIndices[i], off);
+    }
+  }
   const bool modelGenerationChanged = m_modelGeneration != viewport->m_modelGeneration;
   if (m_sceneGeneration != viewport->m_sceneGeneration) {
     m_sceneGeneration = viewport->m_sceneGeneration;
@@ -1672,6 +1696,45 @@ QVector<RhiViewportRenderer::Vertex> RhiViewportRenderer::buildModelVertices(con
         v.x += offX;
         v.y += offY;
         v.z += offZ;
+      }
+    }
+  }
+
+  // Phase 138 (ASM-01): per-object assemble-offset translation on AssembleView.
+  // The mesh blob above already bakes the ordinary per-object m_transformation
+  // (offset/rotation/scale) into world space, but NOT the per-instance assemble
+  // transform (ModelInstance::m_assemble_transformation, Model.hpp:1280-1294)
+  // which upstream stores separately. On the assembly canvas, Move/Rotate/Scale
+  // gizmo edits write the assemble transform (Plan 138-02 routing); the ViewModel
+  // exposes per-source-object offsets (assembleOffsets Q_PROPERTY) which the
+  // viewport forwards here. We apply the assemble translation (offset) to every
+  // vertex of each batch keyed by sourceObjectIndex. Rotate/scale of the assemble
+  // pose are persisted (Plan 01/02) and round-trip (Plan 04) but are not yet
+  // reflected in the live render — translate-only rendering is the ASM-01 minimum
+  // (Move is the primary interaction); full-matrix compose is a render-fidelity
+  // follow-up. Gated to CanvasAssembleView; Prepare/Preview unaffected.
+  // m_assembleOffsetBySource is built in synchronize() by zipping the offsets
+  // with the parallel meshBatchSourceObjectIndices list.
+  if (m_canvasType == RhiViewport::CanvasAssembleView
+      && !m_assembleOffsetBySource.isEmpty()
+      && !vertices.isEmpty())
+  {
+    const QList<PrepareSceneData::ModelBatch> &batches = m_prepareScene.modelBatches();
+    for (const PrepareSceneData::ModelBatch &batch : batches)
+    {
+      if (batch.sourceObjectIndex < 0 || batch.vertexCount <= 0)
+        continue;
+      const auto it = m_assembleOffsetBySource.constFind(batch.sourceObjectIndex);
+      if (it == m_assembleOffsetBySource.constEnd())
+        continue;
+      const QVector3D &off = it.value();
+      const int endVertex = std::min(batch.firstVertex + batch.vertexCount, int(vertices.size()));
+      for (int i = std::max(0, batch.firstVertex); i < endVertex; ++i)
+      {
+        Vertex &v = vertices[i];
+        v.x += off.x();
+        v.y += off.y();
+        v.z += off.z();
       }
     }
   }
