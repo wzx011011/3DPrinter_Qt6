@@ -526,6 +526,12 @@ private slots:
   // v5.0 did not regress them. Mirrors the v48CrossWorkstreamRegressionLocked
   // pattern (which is itself re-asserted here).
   void v50RegressionLocked();
+  // Phase 154 (CLOS-01): QML Preset Diff-View Dialog wiring gate. Locks the
+  // ConfigViewModel.comparePresetsDetailed proxy + the PresetDiffDialog
+  // consumer + the SettingsDialog toolbar entry that opens it. The underlying
+  // PresetServiceMock::comparePresets primitive (Phase 149) is separately
+  // anchored by v50CompareDiffAndRoundTripWired.
+  void v51PresetDiffDialogWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6714,6 +6720,78 @@ void QmlUiAuditTests::v50RegressionLocked()
            "REGRESS-04/v4.6: Vol_speed tower mode (7) must still dispatch");
   QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
            "REGRESS-04/v4.6: Retraction tower mode (9) must still dispatch");
+}
+
+// Phase 154 (CLOS-01): QML Preset Diff-View Dialog wiring gate.
+// Asserts the deferred QML consumer for the Phase 149 comparePresets primitive
+// is wired: (1) ConfigViewModel exposes a structured comparePresetsDetailed
+// proxy returning QVariantList (not the legacy QStringList); (2) a new
+// PresetDiffDialog.qml exists and renders the {key, valueA, valueB, status}
+// model roles; (3) SettingsDialog instantiates the dialog and binds the
+// comparePresetsRequired signal; (4) qml.qrc registers the new dialog file.
+void QmlUiAuditTests::v51PresetDiffDialogWired()
+{
+  const QString configVmH = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
+  const QString configVmCpp = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.cpp"));
+  const QString diffDialog = readSource(QStringLiteral("src/qml_gui/dialogs/PresetDiffDialog.qml"));
+  const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+
+  QVERIFY2(!configVmH.isEmpty(), "Unable to read ConfigViewModel.h");
+  QVERIFY2(!configVmCpp.isEmpty(), "Unable to read ConfigViewModel.cpp");
+  QVERIFY2(!diffDialog.isEmpty(), "Unable to read PresetDiffDialog.qml");
+  QVERIFY2(!settingsDialog.isEmpty(), "Unable to read SettingsDialog.qml");
+  QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
+
+  // (1) ConfigViewModel exposes the structured diff variant returning QVariantList
+  //     + the requestComparePresets opener that emits comparePresetsRequired.
+  QVERIFY2(configVmH.contains(QStringLiteral("Q_INVOKABLE QVariantList comparePresetsDetailed")),
+           "CLOS-01: ConfigViewModel must expose comparePresetsDetailed returning QVariantList");
+  QVERIFY2(configVmH.contains(QStringLiteral("requestComparePresets")),
+           "CLOS-01: ConfigViewModel must expose requestComparePresets opener");
+  QVERIFY2(configVmH.contains(QStringLiteral("comparePresetsRequired")),
+           "CLOS-01: ConfigViewModel must emit comparePresetsRequired signal");
+
+  // (1b) Implementation proxies to PresetServiceMock::comparePresets (Phase 149).
+  QVERIFY2(configVmCpp.contains(QStringLiteral("ConfigViewModel::comparePresetsDetailed")),
+           "CLOS-01: comparePresetsDetailed must be implemented in ConfigViewModel.cpp");
+  QVERIFY2(configVmCpp.contains(QStringLiteral("presetService_->comparePresets")),
+           "CLOS-01: comparePresetsDetailed must proxy to PresetServiceMock::comparePresets");
+
+  // (2) PresetDiffDialog.qml exists and consumes the model roles produced by
+  //     comparePresetsDetailed: key / valueA / valueB / status (added/removed/changed).
+  QVERIFY2(diffDialog.contains(QStringLiteral("comparePresetsDetailed")),
+           "CLOS-01: PresetDiffDialog must call comparePresetsDetailed");
+  QVERIFY2(diffDialog.contains(QStringLiteral("modelData.key")),
+           "CLOS-01: PresetDiffDialog delegate must read modelData.key");
+  QVERIFY2(diffDialog.contains(QStringLiteral("modelData.valueA")),
+           "CLOS-01: PresetDiffDialog delegate must read modelData.valueA");
+  QVERIFY2(diffDialog.contains(QStringLiteral("modelData.valueB")),
+           "CLOS-01: PresetDiffDialog delegate must read modelData.valueB");
+  QVERIFY2(diffDialog.contains(QStringLiteral("modelData.status")),
+           "CLOS-01: PresetDiffDialog delegate must read modelData.status");
+  QVERIFY2(diffDialog.contains(QStringLiteral("\"added\"")),
+           "CLOS-01: PresetDiffDialog must classify added rows (green badge)");
+  QVERIFY2(diffDialog.contains(QStringLiteral("\"removed\"")),
+           "CLOS-01: PresetDiffDialog must classify removed rows (red badge)");
+  QVERIFY2(diffDialog.contains(QStringLiteral("\"changed\"")),
+           "CLOS-01: PresetDiffDialog must classify changed rows (amber badge)");
+  // Empty-state: comparing identical presets yields a clear "no differences"
+  // affordance (no fabricated rows).
+  QVERIFY2(diffDialog.contains(QStringLiteral("No differences")),
+           "CLOS-01: PresetDiffDialog must show an empty-state placeholder when diff is empty");
+
+  // (3) SettingsDialog instantiates PresetDiffDialog + binds the opener signal.
+  QVERIFY2(settingsDialog.contains(QStringLiteral("PresetDiffDialog {")),
+           "CLOS-01: SettingsDialog must instantiate PresetDiffDialog");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("onComparePresetsRequired")),
+           "CLOS-01: SettingsDialog must bind onComparePresetsRequired to dialog.open()");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("requestComparePresets")),
+           "CLOS-01: SettingsDialog toolbar must call requestComparePresets to open the dialog");
+
+  // (4) qml.qrc registers the new dialog file.
+  QVERIFY2(qrc.contains(QStringLiteral("dialogs/PresetDiffDialog.qml")),
+           "CLOS-01: qml.qrc must register dialogs/PresetDiffDialog.qml");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

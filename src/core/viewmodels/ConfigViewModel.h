@@ -116,6 +116,14 @@ public:
   Q_INVOKABLE bool renamePreset(int category, const QString &oldName, const QString &newName);
   Q_INVOKABLE bool canDeletePreset(const QString &name) const;
   Q_INVOKABLE QStringList comparePresets(const QString &presetA, const QString &presetB) const;
+  /// Phase 154 (CLOS-01): structured diff variant — proxies to
+  /// PresetServiceMock::comparePresets(A, B) which returns a QVariantList of
+  /// {key, valueA, valueB, status} entries (status ∈ added/removed/changed).
+  /// The legacy QStringList overload above stays for any older callers.
+  Q_INVOKABLE QVariantList comparePresetsDetailed(const QString &presetA, const QString &presetB) const;
+  /// Phase 154 (CLOS-01): request opening the PresetDiffDialog. Emits
+  /// comparePresetsRequired which SettingsDialog binds to dialog.open().
+  Q_INVOKABLE void requestComparePresets() { emit comparePresetsRequired(); }
   Q_INVOKABLE void autoMatchFilament();
   Q_INVOKABLE bool isCurrentFilamentCompatible() const;
   Q_INVOKABLE bool isFilamentCompatible(const QString &filamentName) const;
@@ -202,6 +210,9 @@ signals:
   /// Phase 147 (PSET-02): emitted by requestCreatePreset; SettingsDialog binds
   /// it to open CreatePresetsDialog.
   void createPresetRequired();
+  /// Phase 154 (CLOS-01): emitted by requestComparePresets; SettingsDialog
+  /// binds it to open PresetDiffDialog.
+  void comparePresetsRequired();
 
 private:
   PresetServiceMock *presetService_ = nullptr;

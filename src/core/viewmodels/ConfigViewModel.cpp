@@ -748,10 +748,22 @@ QStringList ConfigViewModel::comparePresets(const QString &presetA, const QStrin
     QVariant valA = valsA.value(key);
     QVariant valB = valsB.value(key);
     if (valA != valB)
-      diffs.append(QStringLiteral("%1: %2 鈫?%3").arg(key, valA.toString(), valB.toString()));
+      diffs.append(QStringLiteral("%1: %2 鈭?%3").arg(key, valA.toString(), valB.toString()));
   }
 
   return diffs;
+}
+
+// Phase 154 (CLOS-01): structured diff variant — proxies to
+// PresetServiceMock::comparePresets (the Phase 149 primitive) which returns
+// a QVariantList of {key, valueA, valueB, status} entries. The legacy
+// QStringList overload above stays for older callers; this variant is the one
+// consumed by PresetDiffDialog's 3-column visual diff.
+QVariantList ConfigViewModel::comparePresetsDetailed(const QString &presetA, const QString &presetB) const
+{
+  if (!presetService_)
+    return {};
+  return presetService_->comparePresets(presetA, presetB);
 }
 
 void ConfigViewModel::autoMatchFilament()

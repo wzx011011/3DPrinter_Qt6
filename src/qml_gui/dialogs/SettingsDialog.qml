@@ -234,6 +234,16 @@ ApplicationWindow {
         }
     }
 
+    // Phase 154 (CLOS-01): PresetDiffDialog instance (scoped to this dialog).
+    // Minimal source-truth port of upstream UnsavedChangesDialog diff view mode
+    // — side-by-side 3-column diff of two presets. Opens via
+    // onComparePresetsRequired; consumes the existing
+    // comparePresetsDetailed(A,B) primitive (Phase 149).
+    PresetDiffDialog {
+        id: comparePresetsDialog
+        configVm: root.configVm
+    }
+
     Connections {
         target: root.configVm
         function onSaveAsRequired() {
@@ -242,6 +252,10 @@ ApplicationWindow {
         // Phase 147 (PSET-02): create-preset flow. Opens CreatePresetsDialog.
         function onCreatePresetRequired() {
             createPresetDialog.open()
+        }
+        // Phase 154 (CLOS-01): compare-presets flow. Opens PresetDiffDialog.
+        function onComparePresetsRequired() {
+            comparePresetsDialog.open()
         }
         function onPendingUnsavedChangesRequested() {
             root.openUnsavedChangesGuard(false)
@@ -341,6 +355,22 @@ ApplicationWindow {
                         iconSource: "qrc:/qml/assets/icons/copy.svg"
                         toolTipText: qsTr("另存为")
                         onClicked: saveAsDialog.open()
+                    }
+
+                    // Phase 154 (CLOS-01): Compare presets button. Opens
+                    // PresetDiffDialog via ConfigViewModel.requestComparePresets
+                    // (emits comparePresetsRequired → Connections handler).
+                    CxIconButton {
+                        buttonSize: 28
+                        iconSize: 15
+                        cxStyle: CxIconButton.Style.Ghost
+                        iconSource: "qrc:/qml/assets/icons/list-details.svg"
+                        toolTipText: qsTr("比较预设")
+                        enabled: root.configVm && root.presetNames && root.presetNames.length > 1
+                        onClicked: {
+                            if (root.configVm)
+                                root.configVm.requestComparePresets()
+                        }
                     }
 
                     CxIconButton {
