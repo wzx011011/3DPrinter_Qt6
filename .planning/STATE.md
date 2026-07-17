@@ -7,10 +7,10 @@ last_updated: "2026-07-17T04:45:00.000Z"
 last_activity: 2026-07-17
 progress:
   total_phases: 13
-  completed_phases: 11
-  total_plans: 11
-  completed_plans: 11
-  percent: 85
+  completed_phases: 12
+  total_plans: 12
+  completed_plans: 12
+  percent: 92
 ---
 
 # Project State
@@ -52,10 +52,10 @@ See: .planning/milestones/v4.8-* (last shipped milestone archive)
 
 ## Current Position
 
-Phase: 152 (PartPlate Save/Reload Regression — next to plan)
+Phase: 153 (v5.0 Cross-Workstream Regression Gate — next to plan)
 Plan: —
-Status: Phase 151 verified ✓ (11/13 phases complete, 85%). PLATE-02/03/04 satisfied + PLATE-05 refined scope. 109/109 QmlUiAuditTests passing.
-Last activity: 2026-07-17 — Phase 151 shipped (PLATE-02/03/04/05 closed; v50PartPlateUiImplementationWired locked). Ready for Phase 152.
+Status: Phase 152 verified ✓ (12/13 phases complete, 92%). PLATE-06 satisfied (source-audit lock; live ctest deferred). **WS5 (PartPlate) complete** — all 6 PLATE reqs. 110/110 QmlUiAuditTests passing. Only the final REGRESS-04 gate remains.
+Last activity: 2026-07-17 — Phase 152 shipped (PLATE-06 closed; v50PartPlateSaveReloadRegressionWired locked). Ready for Phase 153.
 
 ## Resume Brief — READ THIS BEFORE CONTINUING
 

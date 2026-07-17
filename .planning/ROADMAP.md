@@ -53,7 +53,7 @@
 - [x] Phase 149: Compare/Diff, Dirty Propagation, And Bundle Round-Trip (WS4) ✓
 - [x] Phase 150: PartPlate UI Gap Analysis (WS5, read-only) ✓
 - [x] Phase 151: PartPlate UI Implementation (WS5) ✓
-- [ ] Phase 152: PartPlate Multi-Plate Save/Reload Regression (WS5)
+- [x] Phase 152: PartPlate Multi-Plate Save/Reload Regression (WS5) ✓
 - [ ] Phase 153: v5.0 Cross-Workstream Regression Gate (REGRESS-04)
 
 | Phase | Name | Goal | Requirements |

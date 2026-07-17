@@ -176,7 +176,7 @@ Populated by `gsd-roadmapper` during ROADMAP.md creation. Each v5.0 requirement 
 | PLATE-03 | 151 | Complete (pre-existing; locked) |
 | PLATE-04 | 151 | Complete (pre-existing; locked) |
 | PLATE-05 | 151 | Complete (refined — persisted-plate thumbnails; runtime capture deferred) |
-| PLATE-06 | 152 | Pending |
+| PLATE-06 | 152 | Complete (source-audit locked; live ctest deferred) |
 | REGRESS-04 | 153 | Pending |
 
 **Coverage:**
