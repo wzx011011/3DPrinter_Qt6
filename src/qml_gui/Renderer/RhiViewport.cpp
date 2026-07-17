@@ -638,8 +638,11 @@ void RhiViewport::deliverThumbnail(const QImage &image, int plateIndex)
   // to the base64 PNG m_lastThumbnailData format (preserving the exact format
   // the previous stub produced) so PreparePage.qml:3154 (lastThumbnailData)
   // and onThumbnailCaptured (PreparePage.qml:3081) keep working unchanged.
-  // plateIndex is carried for Phase 96 per-plate routing but not consumed here.
-  Q_UNUSED(plateIndex);
+  // Phase 156 (CLOS-03): plateIndex is now forwarded through
+  // thumbnailCapturedForPlate so the QML consumer can route captured bytes
+  // back into PartPlate::setThumbnail for non-current plates (the gap that
+  // forced Phase 151 to ship persisted-only). The legacy no-arg signal stays
+  // for back-compat with existing lastThumbnailData bindings.
   if (image.isNull())
     return;
   QByteArray bytes;
@@ -649,6 +652,7 @@ void RhiViewport::deliverThumbnail(const QImage &image, int plateIndex)
   m_lastThumbnailData = QStringLiteral("data:image/png;base64,")
                         + QString::fromLatin1(bytes.toBase64());
   emit thumbnailCaptured();
+  emit thumbnailCapturedForPlate(plateIndex, m_lastThumbnailData);
 }
 
 void RhiViewport::mousePressEvent(QMouseEvent *event)

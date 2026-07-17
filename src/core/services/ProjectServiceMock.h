@@ -400,6 +400,13 @@ public:
   // Replaces the removed mock QPainter fallback so non-current plates display
   // their saved/reloaded thumbnail instead of a fake.
   Q_INVOKABLE QString plateThumbnailBase64(int plateIndex) const;
+  /// Phase 156 (CLOS-03): runtime thumbnail WRITE path. Decodes the base64
+  /// PNG (with or without the `data:image/png;base64,` prefix) into a QImage
+  /// and routes it into PartPlate::setThumbnail for the given plate. This is
+  /// the missing piece that lets non-current plates show real thumbnails
+  /// captured in-session (Phase 151 shipped the read accessor + 3MF save/load
+  /// round-trip only). Returns true on successful decode + store.
+  Q_INVOKABLE bool setPlateThumbnailFromBase64(int plateIndex, const QString &base64);
 
   /// 添加新对象到当前平板（对齐上游 Plater 粘贴剪贴板行为）
   /// 返回新对象的索引，失败返回 -1

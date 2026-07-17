@@ -538,6 +538,11 @@ private slots:
   // objectVolumeType/Label reading text_configuration to restore the
   // TextEmboss tag.
   void v51EmbossTextMetadataRoundTripWired();
+  // Phase 156 (CLOS-03): runtime plate thumbnail capture scheduler gate. Locks
+  // the setPlateThumbnailFromBase64 write path on ProjectServiceMock +
+  // EditorViewModel + the per-plate thumbnailCapturedForPlate signal on
+  // RhiViewport + the PreparePage session-capture scheduler.
+  void v51PartPlateSessionThumbnailWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6853,6 +6858,69 @@ void QmlUiAuditTests::v51EmbossTextMetadataRoundTripWired()
            "CLOS-02: objectVolumeType/objectVolumeTypeLabel must check text_configuration.has_value() to restore TextEmboss tag");
   QVERIFY2(projCpp.contains(QStringLiteral("MockVolumeType::TextEmboss")),
            "CLOS-02: load-side type detection must return the TextEmboss enum value for emboss volumes");
+}
+
+// Phase 156 (CLOS-03): runtime plate thumbnail capture scheduler gate.
+// Asserts the write path exists (so captured bytes can reach
+// PartPlate::setThumbnail for non-current plates), the per-plate capture
+// signal carries the plate index, and PreparePage wires a session-capture
+// scheduler. Phase 151 shipped the read accessor + 3MF save/load only; this
+// phase closes the in-session capture gap.
+void QmlUiAuditTests::v51PartPlateSessionThumbnailWired()
+{
+  const QString projH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString projCpp = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString editorH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString editorCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString rhiH = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString rhiCpp = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+
+  QVERIFY2(!projH.isEmpty(), "Unable to read ProjectServiceMock.h");
+  QVERIFY2(!projCpp.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!editorH.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!editorCpp.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!rhiH.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!rhiCpp.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+
+  // (1) Write path on ProjectServiceMock (the missing primitive).
+  QVERIFY2(projH.contains(QStringLiteral("setPlateThumbnailFromBase64")),
+           "CLOS-03: ProjectServiceMock.h must declare setPlateThumbnailFromBase64 write path");
+  QVERIFY2(projCpp.contains(QStringLiteral("ProjectServiceMock::setPlateThumbnailFromBase64")),
+           "CLOS-03: setPlateThumbnailFromBase64 must be implemented in ProjectServiceMock.cpp");
+  QVERIFY2(projCpp.contains(QStringLiteral("QByteArray::fromBase64")),
+           "CLOS-03: setPlateThumbnailFromBase64 must base64-decode the input");
+  QVERIFY2(projCpp.contains(QStringLiteral("loadFromData")),
+           "CLOS-03: setPlateThumbnailFromBase64 must QImage::loadFromData to decode the PNG");
+  QVERIFY2(projCpp.contains(QStringLiteral("setThumbnail(img)")),
+           "CLOS-03: setPlateThumbnailFromBase64 must route the QImage into PartPlate::setThumbnail");
+
+  // (2) EditorViewModel proxy so QML goes through the viewmodel (QML boundary
+  //     rule — QML never holds direct references to services).
+  QVERIFY2(editorH.contains(QStringLiteral("setPlateThumbnailFromBase64")),
+           "CLOS-03: EditorViewModel.h must expose the setPlateThumbnailFromBase64 proxy");
+  QVERIFY2(editorCpp.contains(QStringLiteral("EditorViewModel::setPlateThumbnailFromBase64")),
+           "CLOS-03: EditorViewModel.cpp must implement the proxy forwarding to projectService_");
+
+  // (3) RhiViewport carries the plateIndex through a per-plate signal so
+  //     captured bytes can be routed back to the right plate. (deliverThumbnail
+  //     previously Q_UNUSED'd the index — Phase 156 closes that.)
+  QVERIFY2(rhiH.contains(QStringLiteral("thumbnailCapturedForPlate(int plateIndex, const QString &data)")),
+           "CLOS-03: RhiViewport.h must declare thumbnailCapturedForPlate(int, QString) signal carrying the plate index");
+  QVERIFY2(rhiCpp.contains(QStringLiteral("emit thumbnailCapturedForPlate(plateIndex, m_lastThumbnailData)")),
+           "CLOS-03: RhiViewport::deliverThumbnail must emit thumbnailCapturedForPlate with the real plateIndex (no longer Q_UNUSED)");
+
+  // (4) PreparePage QML: per-plate capture handler persists bytes + a
+  //     session-capture scheduler sweeps plates on state change.
+  QVERIFY2(preparePage.contains(QStringLiteral("onThumbnailCapturedForPlate")),
+           "CLOS-03: PreparePage must handle the per-plate thumbnailCapturedForPlate signal");
+  QVERIFY2(preparePage.contains(QStringLiteral("setPlateThumbnailFromBase64(plateIndex, data)")),
+           "CLOS-03: PreparePage capture handler must persist bytes via setPlateThumbnailFromBase64");
+  QVERIFY2(preparePage.contains(QStringLiteral("sessionThumbScheduler")),
+           "CLOS-03: PreparePage must have a session-capture scheduler (sessionThumbScheduler Timer)");
+  QVERIFY2(preparePage.contains(QStringLiteral("captureMissingPlateThumbnails")),
+           "CLOS-03: PreparePage must implement captureMissingPlateThumbnails() that iterates plates");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

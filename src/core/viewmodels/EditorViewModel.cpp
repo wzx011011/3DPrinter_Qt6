@@ -5385,6 +5385,15 @@ QString EditorViewModel::plateThumbnailBase64(int plateIndex) const
   return projectService_ ? projectService_->plateThumbnailBase64(plateIndex) : QString();
 }
 
+// Phase 156 (CLOS-03): runtime thumbnail WRITE proxy — forwards to
+// ProjectServiceMock::setPlateThumbnailFromBase64. Called from PreparePage.qml's
+// per-plate capture handler so non-current plates persist captured bytes into
+// PartPlate::setThumbnail (the gap that forced Phase 151 to ship persisted-only).
+bool EditorViewModel::setPlateThumbnailFromBase64(int plateIndex, const QString &base64)
+{
+  return projectService_ ? projectService_->setPlateThumbnailFromBase64(plateIndex, base64) : false;
+}
+
 void EditorViewModel::centerSelectedObjects()
 {
   // 对齐上游 Plater::priv::on_center / ModelObject::center_instances

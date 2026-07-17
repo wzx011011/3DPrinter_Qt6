@@ -4848,6 +4848,41 @@ QString ProjectServiceMock::plateThumbnailBase64(int plateIndex) const
 #endif
 }
 
+// Phase 156 (CLOS-03): runtime thumbnail WRITE path — the inverse of
+// plateThumbnailBase64 above. Decodes a base64 PNG (with or without the
+// `data:image/png;base64,` prefix) into a QImage and routes it into
+// PartPlate::setThumbnail for the given plate. This is what the QML capture
+// handler calls to persist captured bytes for non-current plates (the gap
+// that forced Phase 151 to ship persisted-only).
+bool ProjectServiceMock::setPlateThumbnailFromBase64(int plateIndex, const QString &base64)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!m_plateList || base64.isEmpty()) return false;
+  OWzx::PartPlate *p = m_plateList->plate(plateIndex);
+  if (!p) return false;
+
+  // Strip the optional `data:image/png;base64,` prefix that QML thumbnail
+  // sources typically carry (and that our own deliverThumbnail emits).
+  QByteArray raw = base64.toUtf8();
+  const int comma = raw.indexOf(',');
+  if (comma >= 0 && comma < 64) raw = raw.mid(comma + 1);
+
+  const QByteArray pngBytes = QByteArray::fromBase64(raw);
+  if (pngBytes.isEmpty()) return false;
+  QImage img;
+  if (!img.loadFromData(pngBytes, "PNG") || img.isNull()) return false;
+
+  p->setThumbnail(img);
+  // NOTE: no projectChanged() here — this is a high-frequency capture-result
+  // write; the caller (PreparePage.qml capture handler) is responsible for
+  // triggering any UI refresh (plate cards re-bind on the next paint).
+  return true;
+#else
+  Q_UNUSED(plateIndex); Q_UNUSED(base64);
+  return false;
+#endif
+}
+
 int ProjectServiceMock::duplicateObject(int sourceIndex)
 {
   if (loading_)

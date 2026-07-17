@@ -3546,12 +3546,53 @@ Item {
             function onPreviewRequested() { backend.setCurrentPage(2) }
             // 平板切换或对象变更时请求 GL 缩略图更新（对齐上游 Plater::update_plate_thumbnails）
             function onCurrentPlateIndexChanged() { root.requestGLThumbnail() }
+            // Phase 156 (CLOS-03): on state change (covers project content
+            // changes — arrange/add/move all emit stateChanged), schedule a
+            // session-capture sweep for any plate missing a thumbnail. The
+            // 250ms debounce coalesces bursts (arrange/add/move emit several
+            // stateChanged signals in quick succession).
+            function onStateChanged() { sessionThumbScheduler.restart() }
         }
 
         // Refresh the plate list after the GL FBO thumbnail capture completes.
         Connections {
             target: viewport3d
             function onThumbnailCaptured() { /* plate cards auto-rebind via lastThumbnailData property */ }
+            // Phase 156 (CLOS-03): per-plate capture delivery. Routes the
+            // captured bytes back into PartPlate::setThumbnail via the
+            // ProjectServiceMock write path so non-current plates retain real
+            // thumbnails within the session (the gap that forced Phase 151 to
+            // ship persisted-only).
+            function onThumbnailCapturedForPlate(plateIndex, data) {
+                if (!root.editorVm || !data || data.length === 0) return
+                root.editorVm.setPlateThumbnailFromBase64(plateIndex, data)
+            }
+        }
+
+        // Phase 156 (CLOS-03): session-capture scheduler. Iterates plates and
+        // requests a thumbnail capture for each plate that lacks one. Aligned
+        // with upstream Plater::update_plate_thumbnails (fires on content
+        // change + before save). The renderer's queued delivery serializes
+        // captures naturally; we just enqueue one per plate.
+        Timer {
+            id: sessionThumbScheduler
+            interval: 250
+            repeat: false
+            onTriggered: root.captureMissingPlateThumbnails()
+        }
+
+        function captureMissingPlateThumbnails() {
+            if (!root.editorVm || !viewport3d) return
+            const count = root.editorVm.plateCount
+            if (count <= 0) return
+            // Capture any plate that has no thumbnail yet (including non-current
+            // plates — the gap Phase 151 left). The per-plate signal handler
+            // above persists each capture into PartPlate::setThumbnail.
+            for (let i = 0; i < count; i++) {
+                if (root.editorVm.plateThumbnailBase64(i).length === 0) {
+                    viewport3d.requestThumbnailCapture(i, 128)
+                }
+            }
         }
 
         // Bottom plate bar (aligned with upstream GLCanvas3D plate thumbnails at viewport bottom)

@@ -326,6 +326,12 @@ signals:
   void gcodeViewModeChanged();
   void roleVisibilityChanged();
   void thumbnailCaptured();
+  /// Phase 156 (CLOS-03): per-plate capture delivery signal. Carries the
+  /// plateIndex so the QML consumer can route the bytes back into
+  /// PartPlate::setThumbnail via ProjectServiceMock::setPlateThumbnailFromBase64.
+  /// The legacy no-arg thumbnailCaptured() above stays for back-compat with
+  /// QML bindings reading lastThumbnailData for the current plate's live preview.
+  void thumbnailCapturedForPlate(int plateIndex, const QString &data);
   void objectPickedSource(int sourceIndex);
   // Phase 69: emitted during a move-gizmo axis drag. worldDelta is the
   // incremental translation to apply to the selected object this frame
