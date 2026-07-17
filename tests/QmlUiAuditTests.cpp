@@ -552,6 +552,11 @@ private slots:
   // Locks the 4 new style Q_PROPERTYs + setters + forwarding + FontProp
   // population + the addSvgVolume depth-modifier extension.
   void v51EmbossStyleControlsAndSvgAdvancedWired();
+  // Phase 159 (REGRESS-05): v5.1 cross-workstream regression gate. Consolidates
+  // ALL v5.1 anchors from Phases 154-158 into one top-level gate AND re-asserts
+  // the v5.0/v4.8/v4.7/v4.6 milestone anchors so v5.1 did not regress them.
+  // Mirrors the v50RegressionLocked pattern (which is itself re-asserted here).
+  void v51RegressionLocked();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -7078,6 +7083,89 @@ void QmlUiAuditTests::v51EmbossStyleControlsAndSvgAdvancedWired()
            "EMBO-F01: PreparePage Emboss panel must bind a control to embossUseSurface");
   QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.embossCurveProjection")),
            "EMBO-F01: PreparePage Emboss panel must bind a control to embossCurveProjection");
+}
+
+// Phase 159 (REGRESS-05): v5.1 cross-workstream regression gate.
+// The most important assertion is cross-slot: this slot verifies the
+// consolidated v5.1 contract holds by spot-checking one anchor per workstream
+// AND re-asserting the v5.0/v4.8/v4.7/v4.6 milestone anchors. The per-phase
+// detail slots (v51PresetDiffDialogWired, v51EmbossTextMetadataRoundTripWired,
+// v51PartPlateSessionThumbnailWired, v51MultiPlateRoundTripLiveCtest,
+// v51EmbossStyleControlsAndSvgAdvancedWired) already run individually; this
+// slot is the cross-workstream rollup that protects against a regression
+// slipping through if a per-phase slot is later removed or weakened.
+void QmlUiAuditTests::v51RegressionLocked()
+{
+  const QString configVmH = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+  const QString rootCmake = readSource(QStringLiteral("CMakeLists.txt"));
+  const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString vmTests = readSource(QStringLiteral("tests/ViewModelSmokeTests.cpp"));
+  const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
+
+  QVERIFY2(!configVmH.isEmpty(), "Unable to read ConfigViewModel.h");
+  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+
+  // ── v5.1 CLOS-01 (Phase 154) anchor: QML Preset Diff-View Dialog.
+  QVERIFY2(configVmH.contains(QStringLiteral("comparePresetsDetailed")),
+           "REGRESS-05/CLOS-01: ConfigViewModel must keep the comparePresetsDetailed proxy");
+
+  // ── v5.1 CLOS-02 (Phase 155) anchor: Emboss 3MF text metadata round-trip.
+  QVERIFY2(projSvc.contains(QStringLiteral("text_configuration = std::move(tc)")),
+           "REGRESS-05/CLOS-02: attachEmbossMetadata must keep writing text_configuration");
+
+  // ── v5.1 CLOS-03 (Phase 156) anchor: runtime plate thumbnail write path.
+  QVERIFY2(projSvcH.contains(QStringLiteral("setPlateThumbnailFromBase64")),
+           "REGRESS-05/CLOS-03: ProjectServiceMock must keep the setPlateThumbnailFromBase64 write path");
+
+  // ── v5.1 CLOS-04 (Phase 157) anchor: live multi-plate full-state round-trip ctest.
+  QVERIFY2(vmTests.contains(QStringLiteral("multiPlateFullStateRoundTrip")),
+           "REGRESS-05/CLOS-04: ViewModelSmokeTests must keep the multiPlateFullStateRoundTrip live ctest");
+
+  // ── v5.1 EMBO-F (Phase 158) anchor: boldness is no longer hardcoded.
+  QVERIFY2(projSvc.contains(QStringLiteral("font_prop.boldness = m_embossBoldness")),
+           "REGRESS-05/EMBO-F: font_prop.boldness must stay parameterized from m_embossBoldness (not hardcoded)");
+
+  // ── v5.0 re-assertion (REGRESS-04): OpenVDB unlock + CGAL-02 + Emboss + Preset + PartPlate.
+  QVERIFY2(rootCmake.contains(QStringLiteral("find_package(OpenVDB 5.0 COMPONENTS openvdb)")),
+           "REGRESS-05/v5.0: root CMakeLists must keep find_package(OpenVDB)");
+  QVERIFY2(rootCmake.contains(QStringLiteral("add_library(openvdb_libs INTERFACE IMPORTED)")),
+           "REGRESS-05/v5.0: root CMakeLists must keep the openvdb_libs shim");
+  QVERIFY2(projSvc.contains(QStringLiteral("MeshBoolean::cgal::intersect")),
+           "REGRESS-05/v5.0: meshBoolean op==2 must still call MeshBoolean::cgal::intersect");
+  QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
+           "REGRESS-05/v5.0: text2shapes pipeline must stay wired");
+  QVERIFY2(presetSvc.contains(QStringLiteral("exportBundleIni")),
+           "REGRESS-05/v5.0: PresetServiceMock must keep exportBundleIni (.ini interop)");
+  QVERIFY2(presetSvc.contains(QStringLiteral("comparePresets")),
+           "REGRESS-05/v5.0: comparePresets primitive must stay present");
+  QVERIFY2(preparePage.contains(QStringLiteral("\"plate-drag\"")),
+           "REGRESS-05/v5.0: PreparePage must keep the plate-drag DropArea (drag-reorder)");
+  QVERIFY2(projSvcH.contains(QStringLiteral("pendingPlateThumbnails_")),
+           "REGRESS-05/v5.0: ProjectServiceMock must keep pendingPlateThumbnails_ (3MF round-trip)");
+
+  // ── v4.8 re-assertion: CGAL MeshBoolean + Drill + Assembly ASM-01.
+  QVERIFY2(evm.contains(QStringLiteral("kCgalMeshBooleanAvailable = true")),
+           "REGRESS-05/v4.8: kCgalMeshBooleanAvailable must still be true");
+  QVERIFY2(projSvc.contains(QStringLiteral("MeshBoolean::minus")),
+           "REGRESS-05/v4.8: MeshBoolean::minus must still be wired for difference/drill");
+
+  // ── v4.7 re-assertion: paint-gate flag + flatten + fixMesh.
+  QVERIFY2(evm.contains(QStringLiteral("kViewportTrianglePickingAvailable = true")),
+           "REGRESS-05/v4.7: paint-gizmo gate flag must still be true");
+  QVERIFY2(evm.contains(QStringLiteral("orientObject")),
+           "REGRESS-05/v4.7: flattenSelected must still call orientObject");
+  QVERIFY2(projSvc.contains(QStringLiteral("its_merge_vertices")),
+           "REGRESS-05/v4.7: fixMesh must still call its_merge_vertices");
+
+  // ── v4.6 re-assertion: calibration tower modes.
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
+           "REGRESS-05/v4.6: Vol_speed tower mode (7) must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
+           "REGRESS-05/v4.6: Retraction tower mode (9) must still dispatch");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
