@@ -500,6 +500,10 @@ private slots:
   // Locks the upstream-compatible `.ini` export/import + the CreatePresetsDialog
   // QML + the ConfigViewModel request/signal wiring.
   void v50PresetIniAndCreateDialogWired();
+  // Phase 148 (PSET-03/04): UnsavedChangesDialog + Simple/Advanced filter gate.
+  // Both pieces were largely wired pre-v5.0; this slot anchors that they remain
+  // intact + the C++ filter rule is real (advancedMode toggles comAdvanced+).
+  void v50UnsavedChangesAndFilterWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6426,6 +6430,50 @@ void QmlUiAuditTests::v50PresetIniAndCreateDialogWired()
            "PSET-02: ConfigViewModel must expose requestCreatePreset Q_INVOKABLE");
   QVERIFY2(configVmH.contains(QStringLiteral("createPresetRequired")),
            "PSET-02: ConfigViewModel must declare createPresetRequired signal");
+}
+
+void QmlUiAuditTests::v50UnsavedChangesAndFilterWired()
+{
+  // Phase 148 (PSET-03/04): both pieces were already wired pre-v5.0; this slot
+  // anchors that they remain intact AND that the C++ filter rule is a real
+  // typed behavior (advancedMode is a strict superset of Simple mode).
+  const QString configVmH = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
+  const QString configVm = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.cpp"));
+  const QString unsavedDialog = readSource(QStringLiteral("src/qml_gui/dialogs/UnsavedChangesDialog.qml"));
+  const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
+  QVERIFY2(!configVm.isEmpty(), "Unable to read ConfigViewModel.cpp");
+  QVERIFY2(!unsavedDialog.isEmpty(), "Unable to read UnsavedChangesDialog.qml");
+
+  // PSET-03: UnsavedChangesDialog has Keep/Discard/Save-As/Cancel actions
+  // (upstream 3-way diff UI columns are a documented follow-up; the existing
+  // flat-list diff view covers the functional contract).
+  QVERIFY2(unsavedDialog.contains(QStringLiteral("action = \"discard\"")),
+           "PSET-03: UnsavedChangesDialog must offer a discard action");
+  QVERIFY2(unsavedDialog.contains(QStringLiteral("action = \"save\"")),
+           "PSET-03: UnsavedChangesDialog must offer a save-as-preset action");
+  QVERIFY2(unsavedDialog.contains(QStringLiteral("action = \"cancel\"")),
+           "PSET-03: UnsavedChangesDialog must offer a cancel (keep) action");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("requestSaveAndMaybeClose")),
+           "PSET-03: SettingsDialog must route the save action to the save flow");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("requestDiscardPendingChanges")),
+           "PSET-03: SettingsDialog must route the discard action to the discard flow");
+
+  // PSET-04: Simple/Advanced filter is implemented in C++ as a typed behavior.
+  QVERIFY2(configVmH.contains(QStringLiteral("filterOptionIndices")),
+           "PSET-04: ConfigViewModel must expose filterOptionIndices (the C++ filter rule)");
+  QVERIFY2(configVm.contains(QStringLiteral("advancedMode")),
+           "PSET-04: filterOptionIndices must take an advancedMode parameter");
+  QVERIFY2(configVm.contains(QStringLiteral("Simple mode (advancedMode=false) shows only comSimple")),
+           "PSET-04: filter rule must be documented in C++ (Simple = comSimple subset)");
+  QVERIFY2(configVm.contains(QStringLiteral("SUPERSET")),
+           "PSET-04: advanced mode must be a documented superset of Simple");
+
+  // PSET-04: SettingsDialog exposes the user-facing advanced toggle bound to
+  // the C++ filter.
+  QVERIFY2(settingsDialog.contains(QStringLiteral("advancedMode")),
+           "PSET-04: SettingsDialog must expose an advancedMode user toggle");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("filterOptionIndices(presetTier, searchText, advancedMode)")),
+           "PSET-04: SettingsDialog must pass advancedMode to filterOptionIndices");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

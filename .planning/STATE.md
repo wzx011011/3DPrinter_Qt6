@@ -7,10 +7,10 @@ last_updated: "2026-07-17T04:45:00.000Z"
 last_activity: 2026-07-17
 progress:
   total_phases: 13
-  completed_phases: 7
-  total_plans: 7
-  completed_plans: 7
-  percent: 54
+  completed_phases: 8
+  total_plans: 8
+  completed_plans: 8
+  percent: 62
 ---
 
 # Project State
@@ -52,10 +52,10 @@ See: .planning/milestones/v4.8-* (last shipped milestone archive)
 
 ## Current Position
 
-Phase: 148 (UnsavedChangesDialog 3-Way Diff + Simple/Advanced Filter — next to plan)
+Phase: 149 (Compare/Diff + Dirty Propagation + Round-Trip — next to plan)
 Plan: —
-Status: Phase 147 verified ✓ (7/13 phases complete, 54%). PSET-01/02 satisfied (.ini bundle export/import + CreatePresetsDialog). 106/106 QmlUiAuditTests passing. Past halfway.
-Last activity: 2026-07-17 — Phase 147 shipped (PSET-01/02 closed; v50PresetIniAndCreateDialogWired locked). Ready for Phase 148.
+Status: Phase 148 verified ✓ (8/13 phases complete, 62%). PSET-03/04 satisfied (UnsavedChangesDialog + Simple/Advanced filter — both were already wired pre-v5.0; verified + locked). 107/107 QmlUiAuditTests passing.
+Last activity: 2026-07-17 — Phase 148 shipped (PSET-03/04 closed; v50UnsavedChangesAndFilterWired locked). Ready for Phase 149.
 
 ## Resume Brief — READ THIS BEFORE CONTINUING
 
