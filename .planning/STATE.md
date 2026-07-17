@@ -2,76 +2,71 @@
 gsd_state_version: 1.0
 milestone: v5.1
 milestone_name: v5.0 Deferred Items Closure
-status: planning
-last_updated: "2026-07-17T06:41:26.232Z"
+status: shipped
+last_updated: "2026-07-17T16:30:00.000Z"
 last_activity: 2026-07-17
 progress:
   total_phases: 6
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 6
+  total_plans: 6
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
 
-**Milestone:** v5.1 — v5.0 Deferred Items Closure
-**Status:** Planning (2026-07-17). Roadmap created — 6 phases (154-159), 7 requirements mapped.
-**Next step:** Plan Phase 154 (QML Preset Diff-View Dialog) — phases skip discuss (`skip_discuss=true`), so go straight to `/gsd:plan-phase 154`.
+**Last shipped milestone:** v5.1 — v5.0 Deferred Items Closure (2026-07-17, clean).
+**Next step:** No active milestone. Run `/gsd:new-milestone` to start the next one (recommended: v5.2 SLA Print Path).
 
-## Last Shipped Milestone: v5.0 (2026-07-17, tech_debt)
+## Last Shipped Milestone: v5.1 (2026-07-17, clean)
 
-**Audit status:** tech_debt — 31/32 requirements satisfied (VDB-06 deferred to v5.1+ SLA sub-milestone), 13/13 phases verified, 6/6 integration chains wired, no blockers.
+**Audit status:** clean — 7/7 requirements satisfied (2 with documented scope refinements), 6/6 phases verified, 6/6 closure chains wired, no blockers.
 
 | Phase | Name | Status | Requirements |
 |---|---|---|---|
-| 141 | v4.x Tech-Debt Closure | Complete | DEBT-01..05 |
-| 142 | OpenVDB CMake Unlock And libslic3r Link | Complete | VDB-01, VDB-02 |
-| 143 | Hollow Gizmo Availability + Button + Panel + SLA Slice | Partial (VDB-06 → v5.1+) | VDB-03..05 |
-| 144 | Emboss Font Loading And Text2Shapes Extrude | Complete | EMB-01, EMB-02 |
-| 145 | Async EmbossJob And Gizmo Panel | Complete | EMB-03, EMB-04 |
-| 146 | Emboss Wiring, 3MF Round-Trip, And SVG Path | Complete | EMB-05..07 |
-| 147 | Preset Bundle INI Format And CreatePresetsDialog | Complete | PSET-01, PSET-02 |
-| 148 | UnsavedChangesDialog 3-Way Diff And Simple/Advanced Filter | Complete | PSET-03, PSET-04 |
-| 149 | Compare/Diff, Dirty Propagation, And Bundle Round-Trip | Complete | PSET-05..07 |
-| 150 | PartPlate UI Gap Analysis | Complete | PLATE-01 |
-| 151 | PartPlate UI Implementation | Complete | PLATE-02..05 |
-| 152 | PartPlate Multi-Plate Save/Reload Regression | Complete | PLATE-06 |
-| 153 | v5.0 Cross-Workstream Regression Gate | Complete | REGRESS-04 |
+| 154 | QML Preset Diff-View Dialog | Complete | CLOS-01 (PSET-05 closure) |
+| 155 | Emboss 3MF Text Metadata Round-Trip | Complete | CLOS-02 (EMB-06 closure) |
+| 156 | Runtime Plate Thumbnail Capture Scheduler | Complete | CLOS-03 (PLATE-05 closure) |
+| 157 | Live Multi-Plate Round-Trip ctest Fixture | Complete | CLOS-04 (PLATE-06 closure) |
+| 158 | Emboss Style Controls + SVG Advanced Features | Complete | EMBO-F01, EMBO-F02 |
+| 159 | v5.1 Cross-Workstream Regression Gate | Complete | REGRESS-05 |
 
-**Key accomplishments:**
+### v5.1 closure summary
 
-- OpenVDB officially unlocked (Phase 142): the v4.x "OpenVDB unavailable" premise — which blocked Hollow, SlaSupports, FaceDetector, and downstream OpenVDB consumers for 4 milestone cycles — was wrong. OpenVDB 8.2.0 was built and present in DEPS_PREFIX all along; fixed with 3 CMake changes.
-- Tech-debt closure (Phase 141): CGAL-02 true intersection + orphaned menu removed + drillObject C4715 + ASM rotate/scale live-visual compose.
-- Emboss complete (Phases 144-146): parameterized real text2shapes pipeline + async Qt Concurrent wrapper + no-selection fallback + SVG path verified.
-- Preset bundle full chain (Phases 147-149): .ini interop + CreatePresetsDialog + UnsavedChangesDialog + comparePresets primitive + dirty propagation locked.
-- PartPlate UI completion (Phases 150-152): gap analysis + drag-reorder + 6 staging-buffer regression lock.
-- Cross-workstream regression gate (Phase 153): 12 source-audit slots; 280/280 tests passing.
+- **CLOS-01 (PSET-05)** closed by Phase 154 — QML PresetDiffDialog consuming the Phase 149 comparePresets primitive.
+- **CLOS-02 (EMB-06)** closed by Phase 155 — attachEmbossMetadata writes upstream TextConfiguration so store_bbs_3mf emits `<slic3rpe:text>`; load side restores TextEmboss tag.
+- **CLOS-03 (PLATE-05)** closed by Phase 156 — setPlateThumbnailFromBase64 write path + per-plate thumbnailCapturedForPlate signal + session-capture scheduler.
+- **CLOS-04 (PLATE-06)** closed by Phase 157 — multiPlateFullStateRoundTrip live ctest asserting all 5 state dimensions + thumbnail.
+- **EMBO-F01/F02** closed by Phase 158 — boldness + italic fully wired to FontProp; SVG depth-modifier shipped; use-surface/curve-projection exposed + persisted but geometry deformation deferred per upstream gap (Emboss.hpp has no ProjectCurve class).
+- **REGRESS-05** closed by Phase 159 — v51RegressionLocked locks all v5.1 anchors + re-asserts v5.0/v4.8/v4.7/v4.6.
 
-**Carried tech_debt (non-blocking, see v5.0-MILESTONE-AUDIT.md):**
+### Verification gate
 
-- VDB-06 SLA slice path → v5.1+ SLA sub-milestone (requires wiring SLAPrint from scratch).
-- EMB-03 minimal async wrapper (not full upstream EmbossJob port); EMB-06 3MF text metadata deferred.
-- PSET-05 comparePresets primitive shipped; QML diff-view consumer deferred.
-- PLATE-05 runtime thumbnail capture deferred; PLATE-06 live ctest deferred (source-audit locked).
-- 1 pre-existing open quick_task (`260708-e60-add-extensible-gui-startup-deep-link-arg`, pre-v5.0): acknowledged, not v5.0 scope.
+- Canonical build target (ninja OWzxSlicer + QmlUiAuditTests + ViewModelSmokeTests): exit 0 across all 6 phases.
+- 5/5 ctest groups PASS: QmlUiAuditTests, ViewModelSmokeTests, PartPlateTests, PrepareSceneDataTests, PreviewParserTests.
+- 12 v5.0 regression slots + 7 new v5.1 source-audit slots + 1 new live ctest all pass.
+
+### Carried tech_debt (non-blocking, see v5.1-MILESTONE-AUDIT.md)
+
+- EMBO-F01 use-surface + curve-projection geometry deformation deferred — upstream Emboss.hpp has no ProjectCurve primitive. Q_PROPERTYs + persistence are in place; only the projection math is missing (forbidden by v5.1 "no new architecture" rule).
+- EMBO-F02 SVG curve-projection follows the same scope rule. SVG depth-modifier IS shipped.
 
 ## Project Reference
 
 See: .planning/PROJECT.md
-See: .planning/ROADMAP.md (collapsed — v5.0 archived)
-See: .planning/milestones/v5.0-ROADMAP.md, v5.0-REQUIREMENTS.md, v5.0-MILESTONE-AUDIT.md, v5.0-phases/
+See: .planning/ROADMAP.md
+See: .planning/milestones/v5.1-ROADMAP.md, v5.1-REQUIREMENTS.md, v5.1-MILESTONE-AUDIT.md
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
 
 ## Operator Next Steps
 
-- v5.0 shipped. To start the next milestone: `/gsd:new-milestone`.
-- Recommended next: v5.1+ SLA sub-milestone (wire SLAPrint; close VDB-06; unblock SlaSupports + FaceDetector).
+- v5.1 shipped. To start the next milestone: `/gsd:new-milestone`.
+- Recommended next: **v5.2 SLA Print Path** — wire SLAPrint into SliceService via PrinterTechnology dispatch (FFF vs SLA), close VDB-06 (the carried v5.0 deferral), unblock SlaSupports + FaceDetector gizmos. Research at `.planning/research/sla-scope.md` confirms ~4 phases of Qt orchestration (libslic3r SLA files already compiled/linked).
 
 ## Current Position
 
-Phase: Not started (roadmap created, ready to plan Phase 154)
+Phase: All v5.1 phases complete (154-159 shipped).
 Plan: —
-Status: Roadmap created — 6 phases (154-159), 7 requirements mapped, 0 unmapped
-Last activity: 2026-07-17 — v5.1 ROADMAP.md created (154 QML diff dialog ‖ 155 Emboss 3MF text ‖ 156 runtime thumbnails ‖ 157 multi-plate ctest fixture ‖ 158 Emboss style+SVG → 159 REGRESS-05)
+Status: v5.1 shipped clean — 7/7 requirements, 6/6 phases, 5/5 ctest groups.
+Last activity: 2026-07-17 — v5.1 milestone shipped (154-159: CLOS-01..04 closure + EMBO-F style/SVG + REGRESS-05 gate).

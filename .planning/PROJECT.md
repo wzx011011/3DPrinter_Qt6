@@ -76,28 +76,19 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 **Known deferred items:** CGAL-02 intersection boolean (returns subtraction, not A∩B) + orphaned `meshBooleanSelected` menu stub; assemble rotate/scale live-visual compose (translate-only render; transforms persist + round-trip); `drillObject` C4715; de/fr/ja/ko ~906/lang long tail; 2-line CGAL submodule compat patch.
 
-## Current Milestone: v5.1 v5.0 Deferred Items Closure
+## Previous Shipped Milestone: v5.1 v5.0 Deferred Items Closure (shipped 2026-07-17, clean)
 
-**Goal:** Close the 4 documented v5.0 partials (PSET-05 / EMB-06 / PLATE-05 / PLATE-06) plus Emboss style/SVG follow-ups. Each item is a 1-phase completion of a primitive already shipped in v5.0 — low-risk closures, no new architecture.
+**Shipped state:** All 4 documented v5.0 partials closed. CLOS-01 (PSET-05 QML diff-view consumer — Phase 154); CLOS-02 (EMB-06 Emboss 3MF text metadata round-trip via upstream TextConfigurationSerialization — Phase 155); CLOS-03 (PLATE-05 runtime thumbnail capture scheduler + setPlateThumbnailFromBase64 write path — Phase 156); CLOS-04 (PLATE-06 live multi-plate full-state round-trip ctest — Phase 157); EMBO-F (Emboss style controls boldness+italic wired to FontProp, SVG depth-modifier shipped, use-surface/curve-projection geometry deferred per upstream ProjectCurve gap — Phase 158); REGRESS-05 (v51RegressionLocked cross-workstream gate — Phase 159). 6 phases (154-159), 7/7 requirements satisfied (2 with documented scope refinements), audit clean.
 
-**Scope rule:** All work is offline/local and maps to OrcaSlicer v7.0.1 upstream. SLA print path is explicitly deferred to v5.2 (a dedicated SLA milestone — research at `.planning/research/sla-scope.md` confirms it's ~4 phases for VDB-06 close, not the 8-10 previously estimated; libslic3r SLA files are already compiled and linked). LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed.
-
-**Target features (5 workstreams):**
-- **PSET-05 closure:** QML side-by-side diff-view consumer for the existing `comparePresets` primitive (Phase 149 shipped the QVariantList API; v5.1 wires the QML dialog).
-- **EMB-06 closure:** editable-text 3MF metadata persistence via upstream `TextConfigurationSerialization` (Phase 146 shipped geometry round-trip; v5.1 adds the `<text>` 3MF block so reloaded volumes are re-editable as text).
-- **PLATE-05 closure:** runtime thumbnail capture scheduler for session-created/modified plates (Phase 151 shipped persisted-plate thumbnails; v5.1 adds the capture loop + `Q_INVOKABLE setPlateThumbnailFromBase64` write path).
-- **PLATE-06 closure:** live multi-plate round-trip ctest (Phase 152 shipped the source-audit lock; v5.1 adds a `ProjectServiceMock` test fixture so the ctest can actually run).
-- **Emboss follow-ups (optional):** style controls (boldness via FontProp, italic, variable-font axes); SVG advanced features (curve projection, depth modifier). Scoped as a single phase if context allows.
+**Carried tech_debt (non-blocking, see v5.1-MILESTONE-AUDIT.md):** EMBO-F01 use-surface + curve-projection geometry deformation deferred (upstream Emboss.hpp has no ProjectCurve primitive — Q_PROPERTYs + persistence are in place; projection math missing, forbidden by v5.1 "no new architecture" rule); EMBO-F02 SVG curve-projection follows the same scope rule.
 
 ## Previous Milestone: v5.0 Advanced Feature Recovery & Tech-Debt Closure (shipped 2026-07-17)
 
-**Shipped state:** OpenVDB officially unlocked (Phase 142) — refuted the v4.x "unavailable" premise that blocked Hollow/SlaSupports/FaceDetector for 4 milestone cycles (VDB-01/02); tech-debt closure across v4.6/v4.7/v4.8 (DEBT-01..05); Hollow gizmo UI scaffolding (VDB-03/04/05; VDB-06 SLA slice → v5.1+ sub-milestone); Emboss complete — parameterized real text2shapes+polygons2model pipeline + async Qt Concurrent wrapper + SVG path (EMB-01..07); Preset bundle full chain — .ini interop + CreatePresetsDialog + UnsavedChangesDialog + comparePresets + dirty propagation (PSET-01..07); PartPlate UI completion — gap analysis + drag-reorder + 6 staging-buffer regression lock (PLATE-01..06); cross-workstream regression gate — 12 source-audit slots, 280/280 tests (REGRESS-04). 13 phases (141-153), 32 requirements (31 satisfied + VDB-06 deferred), audit tech_debt.
-
-**Carried tech_debt (non-blocking, see v5.0-MILESTONE-AUDIT.md):** VDB-06 SLA slice path → v5.1+ SLA sub-milestone; EMB-03 minimal async wrapper + EMB-06 3MF text metadata deferred; PSET-05 QML diff-view consumer deferred; PLATE-05 runtime thumbnail capture deferred; PLATE-06 live multi-plate ctest deferred (source-audit locked).
+**Shipped state:** OpenVDB officially unlocked (Phase 142) — refuted the v4.x "unavailable" premise that blocked Hollow/SlaSupports/FaceDetector for 4 milestone cycles (VDB-01/02); tech-debt closure across v4.6/v4.7/v4.8 (DEBT-01..05); Hollow gizmo UI scaffolding (VDB-03/04/05; VDB-06 SLA slice → v5.2 sub-milestone); Emboss complete — parameterized real text2shapes+polygons2model pipeline + async Qt Concurrent wrapper + SVG path (EMB-01..07); Preset bundle full chain — .ini interop + CreatePresetsDialog + UnsavedChangesDialog + comparePresets + dirty propagation (PSET-01..07); PartPlate UI completion — gap analysis + drag-reorder + 6 staging-buffer regression lock (PLATE-01..06); cross-workstream regression gate — 12 source-audit slots, 280/280 tests (REGRESS-04). 13 phases (141-153), 32 requirements (31 satisfied + VDB-06 deferred), audit tech_debt.
 
 ## Current Milestone
 
-v5.1 — v5.0 Deferred Items Closure (active).
+No active milestone. v5.1 shipped clean (2026-07-17).
 
 ## Next Milestone
 
