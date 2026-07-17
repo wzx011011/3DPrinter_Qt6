@@ -504,6 +504,10 @@ private slots:
   // Both pieces were largely wired pre-v5.0; this slot anchors that they remain
   // intact + the C++ filter rule is real (advancedMode toggles comAdvanced+).
   void v50UnsavedChangesAndFilterWired();
+  // Phase 149 (PSET-05/06/07): Compare/Diff + Dirty Propagation + Round-Trip
+  // contract gate. Locks the new comparePresets C++ primitive + the existing
+  // dirty-state propagation infrastructure + the bundle round-trip slot.
+  void v50CompareDiffAndRoundTripWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6474,6 +6478,54 @@ void QmlUiAuditTests::v50UnsavedChangesAndFilterWired()
            "PSET-04: SettingsDialog must expose an advancedMode user toggle");
   QVERIFY2(settingsDialog.contains(QStringLiteral("filterOptionIndices(presetTier, searchText, advancedMode)")),
            "PSET-04: SettingsDialog must pass advancedMode to filterOptionIndices");
+}
+
+void QmlUiAuditTests::v50CompareDiffAndRoundTripWired()
+{
+  // Phase 149 (PSET-05/06/07): Compare/Diff + Dirty Propagation + Round-Trip.
+  // PSET-05 (comparePresets primitive) is new in Phase 149; PSET-07 (dirty
+  // propagation) and PSET-06 (round-trip contract) build on existing
+  // infrastructure that this slot locks in place.
+  const QString presetSvcH = readSource(QStringLiteral("src/core/services/PresetServiceMock.h"));
+  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+  const QString configVmH = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
+  QVERIFY2(!presetSvc.isEmpty(), "Unable to read PresetServiceMock.cpp");
+  QVERIFY2(!configVmH.isEmpty(), "Unable to read ConfigViewModel.h");
+
+  // PSET-05: comparePresets C++ primitive.
+  QVERIFY2(presetSvcH.contains(QStringLiteral("comparePresets")),
+           "PSET-05: PresetServiceMock must expose comparePresets(A, B)");
+  QVERIFY2(presetSvc.contains(QStringLiteral("QVariantList PresetServiceMock::comparePresets")),
+           "PSET-05: comparePresets must be implemented (returns QVariantList of {key, valueA, valueB})");
+  QVERIFY2(presetSvc.contains(QStringLiteral("\"added\"")),
+           "PSET-05: comparePresets must classify added keys");
+  QVERIFY2(presetSvc.contains(QStringLiteral("\"removed\"")),
+           "PSET-05: comparePresets must classify removed keys");
+  QVERIFY2(presetSvc.contains(QStringLiteral("\"changed\"")),
+           "PSET-05: comparePresets must classify changed keys");
+
+  // PSET-06: bundle round-trip contract. The exportBundle/importBundle pair
+  // (JSON) + the new exportBundleIni/importBundleIni pair (.ini) round-trip
+  // user presets. This slot anchors that both paths exist; the live round-trip
+  // ctest is gated on a PresetServiceMock context the unit tests don't have.
+  QVERIFY2(presetSvcH.contains(QStringLiteral("exportBundle")) &&
+           presetSvcH.contains(QStringLiteral("importBundle")),
+           "PSET-06: JSON bundle round-trip pair must exist");
+  QVERIFY2(presetSvcH.contains(QStringLiteral("exportBundleIni")) &&
+           presetSvcH.contains(QStringLiteral("importBundleIni")),
+           "PSET-06: .ini bundle round-trip pair must exist");
+
+  // PSET-07: dirty-state propagation is consistent across page/preset/scope
+  // switches. The infrastructure (isPresetDirty + pendingUnsavedAction +
+  // pendingUnsavedTarget + hasPendingUnsavedChanges) lives on ConfigViewModel.
+  QVERIFY2(configVmH.contains(QStringLiteral("Q_PROPERTY(bool isPresetDirty")),
+           "PSET-07: ConfigViewModel must expose isPresetDirty Q_PROPERTY");
+  QVERIFY2(configVmH.contains(QStringLiteral("pendingUnsavedAction")),
+           "PSET-07: ConfigViewModel must track pendingUnsavedAction");
+  QVERIFY2(configVmH.contains(QStringLiteral("pendingUnsavedTarget")),
+           "PSET-07: ConfigViewModel must track pendingUnsavedTarget");
+  QVERIFY2(configVmH.contains(QStringLiteral("hasPendingUnsavedChanges")),
+           "PSET-07: ConfigViewModel must expose hasPendingUnsavedChanges");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

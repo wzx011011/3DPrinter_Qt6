@@ -56,6 +56,13 @@ public:
   /// `*.ini` files in the directory and ingests them as user presets. Returns
   /// the count of imported presets (-1 = directory access failure).
   Q_INVOKABLE int importBundleIni(const QString &dirPath);
+  /// Phase 149 (PSET-05): compare two presets key-by-key. Returns a QVariantList
+  /// of {key, valueA, valueB} maps for every key where the two presets differ
+  /// (added/removed/changed). Keys present in only one preset get a missing
+  /// marker ("<missing>") on the other side. Mirrors the upstream
+  /// UnsavedChangesDialog diff-view mode (single-direction diff A vs B; the
+  /// 3-way variant is a UI-layer concern on top of this primitive).
+  Q_INVOKABLE QVariantList comparePresets(const QString &presetA, const QString &presetB) const;
 
   /// 创建自定义预设（对齐上游 PresetBundle::save_current_preset）
   bool createCustomPreset(int category, const QString &name, const QHash<QString, QVariant> &values);

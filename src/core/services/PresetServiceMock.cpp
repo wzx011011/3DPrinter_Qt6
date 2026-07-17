@@ -4,6 +4,7 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QTextStream>
+#include <algorithm> // std::sort for comparePresets deterministic key ordering
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -1300,6 +1301,60 @@ int PresetServiceMock::importBundleIni(const QString &dirPath)
   }
   qDebug("[Preset] importBundleIni: imported %d presets from %s", imported, dirPath.toUtf8().constData());
   return imported;
+}
+
+// Phase 149 (PSET-05): compare two presets key-by-key. Returns a QVariantList
+// of {key, valueA, valueB} maps for differing keys. Mirrors upstream
+// UnsavedChangesDialog diff-view mode (single-direction A vs B; 3-way is a UI
+// layer concern built on top of this primitive).
+QVariantList PresetServiceMock::comparePresets(const QString &presetA, const QString &presetB) const
+{
+  QVariantList result;
+  const auto itA = m_presetStore.constFind(presetA);
+  const auto itB = m_presetStore.constFind(presetB);
+  if (itA == m_presetStore.constEnd() || itB == m_presetStore.constEnd())
+  {
+    qWarning("[Preset] comparePresets: missing preset A=%s B=%s",
+             presetA.toUtf8().constData(), presetB.toUtf8().constData());
+    return result;
+  }
+  const QHash<QString, QVariant> &a = itA.value();
+  const QHash<QString, QVariant> &b = itB.value();
+
+  // Collect the union of keys (sorted for deterministic display).
+  QList<QString> keys;
+  keys.reserve(a.size() + b.size());
+  for (auto k : a.keys()) keys << k;
+  for (auto k : b.keys())
+  {
+    if (!a.contains(k))
+      keys << k;
+  }
+  std::sort(keys.begin(), keys.end());
+
+  static const QString sMissing = QStringLiteral("<missing>");
+  for (const QString &k : keys)
+  {
+    const auto va = a.constFind(k);
+    const auto vb = b.constFind(k);
+    const bool hasA = (va != a.constEnd());
+    const bool hasB = (vb != b.constEnd());
+    QString sa = hasA ? va->toString() : sMissing;
+    QString sb = hasB ? vb->toString() : sMissing;
+    if (sa != sb)
+    {
+      QVariantMap entry;
+      entry.insert(QStringLiteral("key"), k);
+      entry.insert(QStringLiteral("valueA"), sa);
+      entry.insert(QStringLiteral("valueB"), sb);
+      entry.insert(QStringLiteral("status"),
+                   !hasA ? QStringLiteral("added")
+                   : !hasB ? QStringLiteral("removed")
+                           : QStringLiteral("changed"));
+      result.append(entry);
+    }
+  }
+  return result;
 }
 
 bool PresetServiceMock::createCustomPreset(int category, const QString &name, const QHash<QString, QVariant> &values)

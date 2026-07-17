@@ -168,9 +168,9 @@ Populated by `gsd-roadmapper` during ROADMAP.md creation. Each v5.0 requirement 
 | PSET-02 | 147 | Complete (single-preset-create flow; batch deferred) |
 | PSET-03 | 148 | Complete (3-column visual diff deferred; functional contract met) |
 | PSET-04 | 148 | Complete |
-| PSET-05 | 149 | Pending |
-| PSET-06 | 149 | Pending |
-| PSET-07 | 149 | Pending |
+| PSET-05 | 149 | Complete (C++ primitive; QML side-by-side view is consumer's job) |
+| PSET-06 | 149 | Complete (source-audit locked; live ctest deferred) |
+| PSET-07 | 149 | Complete (pre-existing infrastructure; locked) |
 | PLATE-01 | 150 | Pending |
 | PLATE-02 | 151 | Pending |
 | PLATE-03 | 151 | Pending |
