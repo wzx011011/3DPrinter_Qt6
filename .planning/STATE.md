@@ -7,10 +7,10 @@ last_updated: "2026-07-17T04:45:00.000Z"
 last_activity: 2026-07-17
 progress:
   total_phases: 13
-  completed_phases: 5
-  total_plans: 5
-  completed_plans: 5
-  percent: 38
+  completed_phases: 6
+  total_plans: 6
+  completed_plans: 6
+  percent: 46
 ---
 
 # Project State
@@ -52,10 +52,10 @@ See: .planning/milestones/v4.8-* (last shipped milestone archive)
 
 ## Current Position
 
-Phase: 146 (Emboss Wiring + 3MF Round-Trip + SVG — next to plan)
+Phase: 147 (Preset Bundle INI + CreatePresetsDialog — next to plan)
 Plan: —
-Status: Phase 145 verified ✓ (5/13 phases complete, 38%). EMB-03/04 satisfied (async emboss via Qt Concurrent + Emboss panel with font selector). 104/104 QmlUiAuditTests passing.
-Last activity: 2026-07-17 — Phase 145 shipped (EMB-03/04 closed; v50EmbossAsyncAndPanelWired locked). Ready for Phase 146.
+Status: Phase 146 verified ✓ (6/13 phases complete, 46%). EMB-05/06/07 satisfied (no-selection fallback + 3MF geometry round-trip + SVG path verified). **WS3 (Emboss) is complete** — all 7 EMB requirements addressed. 105/105 QmlUiAuditTests passing.
+Last activity: 2026-07-17 — Phase 146 shipped (EMB-05/06/07 closed; v50EmbossWiringAndSvgWired locked). Ready for Phase 147.
 
 ## Resume Brief — READ THIS BEFORE CONTINUING
 

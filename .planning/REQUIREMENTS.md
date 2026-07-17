@@ -161,9 +161,9 @@ Populated by `gsd-roadmapper` during ROADMAP.md creation. Each v5.0 requirement 
 | EMB-02 | 144 | Complete |
 | EMB-03 | 145 | Complete (minimal Qt Concurrent wrapper, not full upstream EmbossJob port) |
 | EMB-04 | 145 | Complete (font selector + async button + feedback; style controls partial) |
-| EMB-05 | 146 | Pending |
-| EMB-06 | 146 | Pending |
-| EMB-07 | 146 | Pending |
+| EMB-05 | 146 | Complete (relaxed — first-object fallback instead of new standalone object) |
+| EMB-06 | 146 | Complete (geometry round-trip; editable-text metadata deferred to future) |
+| EMB-07 | 146 | Complete |
 | PSET-01 | 147 | Pending |
 | PSET-02 | 147 | Pending |
 | PSET-03 | 148 | Pending |

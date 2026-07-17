@@ -1554,7 +1554,14 @@ bool EditorViewModel::embossSelected()
 {
   if (!projectService_)
     return false;
-  const int idx = selectedSourceObjectIndex();
+  // Phase 146 (EMB-05): first-object fallback (parallel to addTextObject).
+  int idx = selectedSourceObjectIndex();
+  if (idx < 0)
+  {
+    const QList<int> plateObjs = projectService_->currentPlateObjectIndices();
+    if (!plateObjs.isEmpty())
+      idx = plateObjs.first();
+  }
   if (idx < 0 || m_embossText.isEmpty())
     return false;
 
@@ -1595,7 +1602,14 @@ void EditorViewModel::embossSelectedAsync()
 {
   if (!projectService_)
     return;
-  const int idx = selectedSourceObjectIndex();
+  // Phase 146 (EMB-05): first-object fallback (parallel to sync path).
+  int idx = selectedSourceObjectIndex();
+  if (idx < 0)
+  {
+    const QList<int> plateObjs = projectService_->currentPlateObjectIndices();
+    if (!plateObjs.isEmpty())
+      idx = plateObjs.first();
+  }
   if (idx < 0 || m_embossText.isEmpty())
     return;
   // Forward the current Q_PROPERTY inputs (parallel to the sync path).
@@ -1782,7 +1796,18 @@ bool EditorViewModel::addTextObject()
 {
   if (!projectService_)
     return false;
-  const int idx = selectedSourceObjectIndex();
+  // Phase 146 (EMB-05): if no object is selected, fall back to the first object
+  // on the current plate (对齐上游 GLGizmoEmboss "create new at center" — we
+  // approximate by attaching to the first available object rather than creating
+  // a brand-new standalone object, which would require a wider object-creation
+  // API). Returns false only if there is no object at all.
+  int idx = selectedSourceObjectIndex();
+  if (idx < 0)
+  {
+    const QList<int> plateObjs = projectService_->currentPlateObjectIndices();
+    if (!plateObjs.isEmpty())
+      idx = plateObjs.first();
+  }
   if (idx < 0 || m_textContent.isEmpty())
     return false;
 

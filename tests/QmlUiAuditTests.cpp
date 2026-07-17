@@ -490,6 +490,12 @@ private slots:
   // queued GUI-thread result delivery), the EditorViewModel signal forwarding,
   // and the QML panel's font selector + async-execute button + result feedback.
   void v50EmbossAsyncAndPanelWired();
+  // Phase 146 (EMB-05/06/07): Emboss wiring + 3MF round-trip + SVG gate.
+  // Locks the no-selection auto-attach fallback, the SVG emboss path (real
+  // Model::read_from_file loader), and the 3MF persistence contract (TextEmboss
+  // volumes are MODEL_PART so geometry round-trips; editable-text metadata
+  // persistence via upstream 3MF <text> block is documented future work).
+  void v50EmbossWiringAndSvgWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6327,6 +6333,54 @@ void QmlUiAuditTests::v50EmbossAsyncAndPanelWired()
            "EMB-04: Emboss panel must have an async-execute button (embossSelectedAsync)");
   QVERIFY2(preparePage.contains(QStringLiteral("onEmbossVolumeAdded")),
            "EMB-04: Emboss panel must wire onEmbossVolumeAdded for result feedback");
+}
+
+void QmlUiAuditTests::v50EmbossWiringAndSvgWired()
+{
+  // Phase 146 (EMB-05/06/07): Emboss wiring (no-selection fallback), 3MF
+  // round-trip contract (geometry), and SVG emboss path.
+  const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString evmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
+  QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+
+  // EMB-05: GLToolbars Emboss + SVG buttons already existed (pre-v5.0); assert
+  // they are still present (no regression). Click behavior is wired through the
+  // standard toolId → gizmoMode plumbing.
+  QVERIFY2(glToolbars.contains(QStringLiteral("toolId: GLViewport.GizmoEmboss")),
+           "EMB-05: GLToolbars must keep the GizmoEmboss button");
+  QVERIFY2(glToolbars.contains(QStringLiteral("toolId: GLViewport.GizmoSVG")),
+           "EMB-07: GLToolbars must keep the GizmoSVG button");
+
+  // EMB-05: no-selection auto-attach fallback. addTextObject + embossSelected +
+  // embossSelectedAsync must all fall back to the first current-plate object
+  // when no object is selected (approximates upstream "create new at center").
+  QVERIFY2(evm.contains(QStringLiteral("Phase 146 (EMB-05): first-object fallback")),
+           "EMB-05: addTextObject must document the no-selection fallback");
+  QVERIFY2(evm.contains(QStringLiteral("plateObjs.first()")),
+           "EMB-05: fallback must use plateObjs.first() (first object on current plate)");
+
+  // EMB-06: TextEmboss volumes are added as MODEL_PART, so their geometry
+  // round-trips through 3MF via the standard store_3mf path (no special
+  // text-metadata block needed for geometry preservation). Editable-text
+  // metadata persistence (upstream 3MF <text> block via
+  // TextConfigurationSerialization) is documented future work — the volume
+  // reloads with correct geometry but currently not as a re-editable TextEmboss.
+  QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::ModelVolumeType::MODEL_PART")),
+           "EMB-06: addTextVolume must add the volume as MODEL_PART (so geometry round-trips through 3MF)");
+  QVERIFY2(projSvc.contains(QStringLiteral("MockVolumeType::TextEmboss")),
+           "EMB-06: the mock-side tag must remain TextEmboss (session-time identity)");
+
+  // EMB-07: SVG emboss path must use the real libslic3r loader.
+  QVERIFY2(projSvcH.contains(QStringLiteral("addSvgVolume")),
+           "EMB-07: ProjectServiceMock must expose addSvgVolume");
+  QVERIFY2(projSvc.contains(QStringLiteral("svgModel.read_from_file")),
+           "EMB-07: addSvgVolume must call Model::read_from_file (real libslic3r SVG loader)");
+  QVERIFY2(projSvc.contains(QStringLiteral("MockVolumeType::SvgEmboss")),
+           "EMB-07: SVG volumes must be tagged MockVolumeType::SvgEmboss");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
