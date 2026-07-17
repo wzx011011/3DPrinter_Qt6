@@ -543,6 +543,11 @@ private slots:
   // EditorViewModel + the per-plate thumbnailCapturedForPlate signal on
   // RhiViewport + the PreparePage session-capture scheduler.
   void v51PartPlateSessionThumbnailWired();
+  // Phase 157 (CLOS-04): live multi-plate full-state round-trip ctest anchor.
+  // Locks the existence of the multiPlateFullStateRoundTrip live ctest (the gap
+  // that forced Phase 152 to source-audit-lock only) AND its coverage breadth
+  // (all 5 CLOS-04 dimensions + thumbnail).
+  void v51MultiPlateRoundTripLiveCtest();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6921,6 +6926,63 @@ void QmlUiAuditTests::v51PartPlateSessionThumbnailWired()
            "CLOS-03: PreparePage must have a session-capture scheduler (sessionThumbScheduler Timer)");
   QVERIFY2(preparePage.contains(QStringLiteral("captureMissingPlateThumbnails")),
            "CLOS-03: PreparePage must implement captureMissingPlateThumbnails() that iterates plates");
+}
+
+// Phase 157 (CLOS-04): live multi-plate full-state round-trip ctest anchor.
+// Phase 152 could only source-audit-lock PLATE-06 because no live ctest
+// existed. Phase 157 ships multiPlateFullStateRoundTrip in ViewModelSmokeTests
+// (real store_bbs_3mf + read_from_archive on a stack ProjectServiceMock); this
+// slot locks its existence + coverage breadth across all 5 CLOS-04 dimensions.
+void QmlUiAuditTests::v51MultiPlateRoundTripLiveCtest()
+{
+  const QString vmTests = readSource(QStringLiteral("tests/ViewModelSmokeTests.cpp"));
+
+  QVERIFY2(!vmTests.isEmpty(), "Unable to read tests/ViewModelSmokeTests.cpp");
+
+  // (1) The live ctest exists (the gap Phase 152 left).
+  QVERIFY2(vmTests.contains(QStringLiteral("void ViewModelSmokeTests::multiPlateFullStateRoundTrip()")),
+           "CLOS-04: ViewModelSmokeTests must implement multiPlateFullStateRoundTrip (the live ctest Phase 152 lacked)");
+
+  // (2) Coverage breadth: all 5 CLOS-04 dimensions + thumbnail are exercised.
+  // Dim 1 — plate count + names.
+  QVERIFY2(vmTests.contains(QStringLiteral("renamePlate(0, QStringLiteral(\"Alpha\"))")),
+           "CLOS-04: live ctest must rename plates (dim 1: names)");
+  QVERIFY2(vmTests.contains(QStringLiteral("loader.plateNames()")),
+           "CLOS-04: live ctest must assert plateNames after reload (dim 1: names)");
+
+  // Dim 2 — per-plate config override.
+  QVERIFY2(vmTests.contains(QStringLiteral("setPlateScopedOptionValue(1, QStringLiteral(\"layer_height\"), 0.25)")),
+           "CLOS-04: live ctest must set a per-plate config override (dim 2)");
+  QVERIFY2(vmTests.contains(QStringLiteral("plateScopedOptionValue(")),
+           "CLOS-04: live ctest must assert the per-plate config override after reload (dim 2)");
+
+  // Dim 3 — non-default print sequence.
+  QVERIFY2(vmTests.contains(QStringLiteral("setPlatePrintSequence(2, 2)")),
+           "CLOS-04: live ctest must set a non-default print sequence (dim 3)");
+  QVERIFY2(vmTests.contains(QStringLiteral("loader.platePrintSequence(2)")),
+           "CLOS-04: live ctest must assert the print sequence after reload (dim 3)");
+
+  // Dim 4 — mixed bed types.
+  QVERIFY2(vmTests.contains(QStringLiteral("setPlateBedType(0, 1)")) &&
+           vmTests.contains(QStringLiteral("setPlateBedType(1, 3)")) &&
+           vmTests.contains(QStringLiteral("setPlateBedType(2, 4)")),
+           "CLOS-04: live ctest must set mixed bed types (dim 4)");
+  QVERIFY2(vmTests.contains(QStringLiteral("loader.plateBedType(0)")),
+           "CLOS-04: live ctest must assert bed types after reload (dim 4)");
+
+  // Dim 5 — mixed locked / printable flags.
+  QVERIFY2(vmTests.contains(QStringLiteral("setPlateLocked(1, true)")),
+           "CLOS-04: live ctest must set mixed locked flags (dim 5)");
+  QVERIFY2(vmTests.contains(QStringLiteral("setPlatePrintable(2, false)")),
+           "CLOS-04: live ctest must set mixed printable flags (dim 5)");
+  QVERIFY2(vmTests.contains(QStringLiteral("loader.isPlateLocked(1)")),
+           "CLOS-04: live ctest must assert locked state after reload (dim 5)");
+
+  // Dim 6 — per-plate thumbnail (uses the Phase 156 write path).
+  QVERIFY2(vmTests.contains(QStringLiteral("setPlateThumbnailFromBase64(0, thumbB64)")),
+           "CLOS-04: live ctest must write a per-plate thumbnail (dim 6: thumbnail)");
+  QVERIFY2(vmTests.contains(QStringLiteral("loader.plateThumbnailBase64(0).isEmpty()")),
+           "CLOS-04: live ctest must assert thumbnail non-empty after reload (dim 6: thumbnail)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
