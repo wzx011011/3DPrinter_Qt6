@@ -52,10 +52,45 @@ See: .planning/milestones/v4.8-* (last shipped milestone archive)
 
 ## Current Position
 
-Phase: 145 (Async EmbossJob + Panel — next to plan)
+Phase: 145 (Async EmbossJob + Panel — next to plan, NOT YET STARTED)
 Plan: —
-Status: Phase 144 verified ✓ (4/13 phases complete, 31%). EMB-01/02 satisfied (font enumeration + parameterized text2shapes pipeline). 103/103 QmlUiAuditTests passing. Phase 144 was much smaller than feared — the real Emboss pipeline (text2shapes + polygons2model via stb_truetype, no freetype dep) was already wired pre-v5.0; this phase parameterized it.
-Last activity: 2026-07-17 — Phase 144 shipped (EMB-01/02 closed; v50EmbossParameterized locked). Ready for Phase 145.
+Status: **Paused for handoff at 4/13 phases complete (31%).** 103/103 QmlUiAuditTests passing. 9 phases remain (145-153). Next session resume with Phase 145.
+Last activity: 2026-07-17 — User paused for clean handoff after Phase 144 shipped.
+
+## Resume Brief — READ THIS BEFORE CONTINUING
+
+### What's done (4 phases, all green)
+- Phase 141 (DEBT-01..05): tech-debt closure (CGAL intersect, orphaned menu, C4715, ASM rotate/scale render, regression slot)
+- Phase 142 (VDB-01/02): OpenVDB CMake unlock — **refuted the v4.x "unavailable" premise**. OpenVDB 8.2.0 now links clean. Required 3 CMake fixes: explicit OPENVDB_LIBRARYDIR, find_package AFTER libslic3r (avoids TBB export collision), libnoise NOTFOUND-sentinel force-fix.
+- Phase 143 (VDB-03/04/05): Hollow gizmo UI scaffolding (button + panel + reachability). **VDB-06 deferred to v5.1+ SLA sub-milestone** — would require wiring SLAPrint from scratch (no SLA infrastructure exists; SliceService is FFF-only, no SLA presets bundled).
+- Phase 144 (EMB-01/02): Emboss parameterization. **Was much smaller than feared** — the real text2shapes + polygons2model pipeline was already wired pre-v5.0 (uses stb_truetype, no freetype dep). This phase added font enumeration + parameterized height/depth from Q_PROPERTYs.
+
+### Build-cycle constraint (critical for planning)
+The canonical `scripts/auto_verify_with_vcvars.ps1` reconfigures CMake + does a full libslic3r rebuild each invocation (~12-15 min), exceeding the harness 10-min background-task budget. Workaround used: direct `ninja <target>` from existing `build.ninja` for verification (much faster, same answer for specific targets). Build helper batches in `build/_ninja_owzx.bat` (OWzxSlicer) + `build/_ninja_test.bat` (QmlUiAuditTests only) + `build/_ninja_tests.bat` (4 core test binaries).
+
+### Phase 145 (next) — scope decision needed
+EMB-03 says "async EmbossJob". Upstream `EmbossJob.cpp` is 1586 lines + requires porting the Job base-class system. **Recommendation: minimal Qt Concurrent wrapper** around the existing synchronous text2shapes+polygons2model (satisfies the spirit of EMB-03 — non-blocking, cancellable — without the upstream Job system port). Plus an Emboss gizmo panel (QML, parallel to the Hollow panel added in Phase 143).
+
+### Remaining phases
+- Phase 145: Async EmbossJob + Panel (EMB-03/04) — medium
+- Phase 146: Emboss Wiring + 3MF round-trip + SVG (EMB-05/06/07) — medium
+- Phase 147: Preset INI + CreatePresetsDialog (PSET-01/02) — medium-large (upstream CreatePresetsDialog port)
+- Phase 148: UnsavedChangesDialog + Filter (PSET-03/04) — medium (upstream UnsavedChangesDialog 3-way diff port)
+- Phase 149: Compare/Diff + Round-Trip (PSET-05/06/07) — medium
+- Phase 150: PartPlate UI Gap Analysis (PLATE-01) — read-only, small
+- Phase 151: PartPlate UI Implementation (PLATE-02..05) — medium (gap-analysis-driven)
+- Phase 152: PartPlate Save/Reload Regression (PLATE-06) — test-only, small
+- Phase 153: v5.0 Regression Gate (REGRESS-04) — test-only, small (final)
+
+### Key discoveries to carry forward
+1. **Always grep for existing implementation before assuming scope** (Phase 144 lesson — pipeline was already wired).
+2. **Verify integration depth before committing "X works end-to-end"** (Phase 143 lesson — SLAPrint didn't exist).
+3. **Anchor regression slots on callables, not documentation text** (Phase 141 lesson — assertion false-positive on comment).
+4. **OpenVDB link exposed libnoise latent NOTFOUND sentinel** — fixed in Phase 142 but worth knowing if other latent issues surface when transitive link chains expand.
+5. **REGRESS-04 (Phase 153) must re-assert v4.6/v4.7/v4.8 + all v5.0 anchors** — consolidate the per-phase slots (v50TechDebtRegressionLocked + v50OpenVdbUnlockWired + v50HollowGizmoReachable + v50EmbossParameterized + the 145-152 ones) into one `v50RegressionLocked` slot.
+
+### OpenVDB unlock is the milestone's headline value
+Even if v5.0 stopped today, Phase 142 alone is a major result: the v4.x "OpenVDB unavailable" premise (which blocked Hollow, SlaSupports, FaceDetector, and downstream OpenVDB consumers for 4 milestone cycles) was wrong, and the fix was a small CMake change.
 
 ## v5.0 Roadmap Snapshot (13 phases, 141-153)
 
