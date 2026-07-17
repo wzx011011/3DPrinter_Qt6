@@ -171,7 +171,7 @@ Populated by `gsd-roadmapper` during ROADMAP.md creation. Each v5.0 requirement 
 | PSET-05 | 149 | Complete (C++ primitive; QML side-by-side view is consumer's job) |
 | PSET-06 | 149 | Complete (source-audit locked; live ctest deferred) |
 | PSET-07 | 149 | Complete (pre-existing infrastructure; locked) |
-| PLATE-01 | 150 | Pending |
+| PLATE-01 | 150 | Complete |
 | PLATE-02 | 151 | Pending |
 | PLATE-03 | 151 | Pending |
 | PLATE-04 | 151 | Pending |
