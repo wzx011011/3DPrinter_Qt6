@@ -220,10 +220,28 @@ ApplicationWindow {
         }
     }
 
+    // Phase 147 (PSET-02): CreatePresetsDialog instance (scoped to this dialog).
+    // Minimal source-truth port of upstream CreatePresetsDialog — scope selector +
+    // inherits-from dropdown + name + create button. Opens via onCreatePresetRequired.
+    CreatePresetsDialog {
+        id: createPresetDialog
+        configVm: root.configVm
+        onAccepted: {
+            // Refresh the preset list so the new entry appears; the viewmodel
+            // emits stateChanged after createCustomPreset which re-evaluates the
+            // Q_PROPERTYs bound above.
+            root.closeAfterSaveAs = false
+        }
+    }
+
     Connections {
         target: root.configVm
         function onSaveAsRequired() {
             saveAsDialog.open()
+        }
+        // Phase 147 (PSET-02): create-preset flow. Opens CreatePresetsDialog.
+        function onCreatePresetRequired() {
+            createPresetDialog.open()
         }
         function onPendingUnsavedChangesRequested() {
             root.openUnsavedChangesGuard(false)

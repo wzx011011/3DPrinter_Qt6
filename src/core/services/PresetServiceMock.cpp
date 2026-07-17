@@ -3,6 +3,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QDir>
+#include <QTextStream>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -1139,6 +1140,166 @@ QString PresetServiceMock::findCompatiblePresetForCategory(int category, const Q
       firstGeneric = name;
   }
   return firstGeneric;
+}
+
+// Phase 147 (PSET-01): upstream-compatible `.ini` bundle export. Writes one
+// `.ini` file per user preset to a directory, with each file using the upstream
+// Preset `[preset]` header + `key = value` body format. Mirrors the on-disk
+// format OrcaSlicer uses for user presets under `user/<category>/`. The JSON
+// exportBundle remains as the internal fast-path format.
+int PresetServiceMock::exportBundleIni(const QString &dirPath) const
+{
+  QDir dir(dirPath);
+  if (!dir.exists() && !dir.mkpath(QStringLiteral(".")))
+  {
+    qWarning("[Preset] exportBundleIni: cannot create directory %s", dirPath.toUtf8().constData());
+    return -1;
+  }
+
+  int exported = 0;
+  for (auto it = m_presetStore.constBegin(); it != m_presetStore.constEnd(); ++it)
+  {
+    const QString &name = it.key();
+    const auto metaIt = m_presetMetadata.constFind(name);
+    if (metaIt == m_presetMetadata.constEnd() || metaIt->builtin)
+      continue;
+
+    // File name: <category>-<safe-name>.ini (mirrors upstream user/ layout).
+    const QString safeName = name;
+    const QString fileName = QStringLiteral("%1-%2.ini")
+                                  .arg(bundleCategoryName(metaIt->category), safeName);
+    const QString filePath = dir.absoluteFilePath(fileName);
+
+    QStringList lines;
+    lines << QStringLiteral("[preset]");
+    lines << QStringLiteral("name = ") + name;
+    lines << QStringLiteral("category = ") + bundleCategoryName(metaIt->category);
+    if (!metaIt->vendor.isEmpty())
+      lines << QStringLiteral("vendor = ") + metaIt->vendor;
+    if (!metaIt->settingId.isEmpty())
+      lines << QStringLiteral("setting_id = ") + metaIt->settingId;
+    lines << QStringLiteral("readonly = ") + (metaIt->readOnly ? QStringLiteral("1") : QStringLiteral("0"));
+    const QString inherits = m_presetInherits.value(name);
+    if (!inherits.isEmpty())
+      lines << QStringLiteral("inherits = ") + inherits;
+    lines << QString(); // blank line separating header from values
+    // Body: `key = value` per upstream Preset format. Variant stringification
+    // matches the upstream convention (numbers as-is, strings raw, bools as 1/0).
+    for (auto vit = it.value().constBegin(); vit != it.value().constEnd(); ++vit)
+    {
+      const QVariant &v = vit.value();
+      QString str;
+      switch (v.type())
+      {
+      case QVariant::Bool: str = v.toBool() ? QStringLiteral("1") : QStringLiteral("0"); break;
+      case QVariant::Double: str = QString::number(v.toDouble(), 'g', 12); break;
+      case QVariant::Int:
+      case QVariant::LongLong: str = QString::number(v.toLongLong()); break;
+      default: str = v.toString(); break;
+      }
+      lines << QStringLiteral("%1 = %2").arg(vit.key(), str);
+    }
+
+    QFile f(filePath);
+    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+    {
+      f.write(lines.join(QStringLiteral("\n")).toUtf8());
+      f.write("\n");
+      f.close();
+      ++exported;
+    }
+    else
+    {
+      qWarning("[Preset] exportBundleIni: cannot write %s", filePath.toUtf8().constData());
+    }
+  }
+  qDebug("[Preset] exportBundleIni: exported %d user presets to %s", exported, dirPath.toUtf8().constData());
+  return exported;
+}
+
+// Phase 147 (PSET-01): upstream-compatible `.ini` bundle import. Reads all
+// `*.ini` files in the directory and ingests them as user presets.
+int PresetServiceMock::importBundleIni(const QString &dirPath)
+{
+  QDir dir(dirPath);
+  if (!dir.exists())
+  {
+    qWarning("[Preset] importBundleIni: directory does not exist %s", dirPath.toUtf8().constData());
+    return -1;
+  }
+  const QStringList iniFiles = dir.entryList({QStringLiteral("*.ini")}, QDir::Files);
+  int imported = 0;
+  for (const QString &fileName : iniFiles)
+  {
+    QFile f(dir.absoluteFilePath(fileName));
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+      continue;
+
+    QString name;
+    int category = 0; // default to print
+    QString vendor, settingId, inherits;
+    bool readOnly = false;
+    QHash<QString, QVariant> values;
+
+    QTextStream in(&f);
+    bool inHeader = false;
+    for (QString line = in.readLine(); !line.isNull(); line = in.readLine())
+    {
+      QString trimmed = line.trimmed();
+      if (trimmed.isEmpty())
+        continue;
+      if (trimmed.startsWith(QStringLiteral("[")))
+      {
+        inHeader = (trimmed == QStringLiteral("[preset]"));
+        continue;
+      }
+      const int eq = trimmed.indexOf(QLatin1Char('='));
+      if (eq < 0)
+        continue;
+      const QString key = trimmed.left(eq).trimmed();
+      const QString val = trimmed.mid(eq + 1).trimmed();
+      if (inHeader)
+      {
+        if (key == QLatin1String("name")) name = val;
+        else if (key == QLatin1String("category"))
+        {
+          if (val == QLatin1String("printer")) category = 0;
+          else if (val == QLatin1String("filament")) category = 1;
+          else if (val == QLatin1String("print")) category = 2;
+        }
+        else if (key == QLatin1String("vendor")) vendor = val;
+        else if (key == QLatin1String("setting_id")) settingId = val;
+        else if (key == QLatin1String("inherits")) inherits = val;
+        else if (key == QLatin1String("readonly")) readOnly = (val == QLatin1String("1"));
+      }
+      else
+      {
+        // Value section: keep as string; the existing JSON path stores
+        // everything as QVariants and stringifies on demand, so this matches.
+        values.insert(key, val);
+      }
+    }
+    f.close();
+
+    if (name.isEmpty())
+      continue;
+    if (createCustomPreset(category, name, values))
+    {
+      // Patch metadata that createCustomPreset doesn't take.
+      auto metaIt = m_presetMetadata.find(name);
+      if (metaIt != m_presetMetadata.end())
+      {
+        if (!vendor.isEmpty()) metaIt->vendor = vendor;
+        if (!settingId.isEmpty()) metaIt->settingId = settingId;
+        metaIt->readOnly = readOnly;
+      }
+      if (!inherits.isEmpty())
+        m_presetInherits.insert(name, inherits);
+      ++imported;
+    }
+  }
+  qDebug("[Preset] importBundleIni: imported %d presets from %s", imported, dirPath.toUtf8().constData());
+  return imported;
 }
 
 bool PresetServiceMock::createCustomPreset(int category, const QString &name, const QHash<QString, QVariant> &values)

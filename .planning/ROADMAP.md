@@ -48,7 +48,7 @@
 - [x] Phase 144: Emboss Font Loading And Text2Shapes Extrude (WS3) ✓
 - [x] Phase 145: Async EmbossJob And Gizmo Panel (WS3) ✓
 - [x] Phase 146: Emboss Wiring, 3MF Round-Trip, And SVG Path (WS3) ✓
-- [ ] Phase 147: Preset Bundle INI Format And CreatePresetsDialog (WS4)
+- [x] Phase 147: Preset Bundle INI Format And CreatePresetsDialog (WS4) ✓
 - [ ] Phase 148: UnsavedChangesDialog 3-Way Diff And Simple/Advanced Filter (WS4)
 - [ ] Phase 149: Compare/Diff, Dirty Propagation, And Bundle Round-Trip (WS4)
 - [ ] Phase 150: PartPlate UI Gap Analysis (WS5, read-only)

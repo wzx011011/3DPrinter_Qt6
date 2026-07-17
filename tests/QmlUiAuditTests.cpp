@@ -496,6 +496,10 @@ private slots:
   // volumes are MODEL_PART so geometry round-trips; editable-text metadata
   // persistence via upstream 3MF <text> block is documented future work).
   void v50EmbossWiringAndSvgWired();
+  // Phase 147 (PSET-01/02): Preset INI bundle + CreatePresetsDialog gate.
+  // Locks the upstream-compatible `.ini` export/import + the CreatePresetsDialog
+  // QML + the ConfigViewModel request/signal wiring.
+  void v50PresetIniAndCreateDialogWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6381,6 +6385,47 @@ void QmlUiAuditTests::v50EmbossWiringAndSvgWired()
            "EMB-07: addSvgVolume must call Model::read_from_file (real libslic3r SVG loader)");
   QVERIFY2(projSvc.contains(QStringLiteral("MockVolumeType::SvgEmboss")),
            "EMB-07: SVG volumes must be tagged MockVolumeType::SvgEmboss");
+}
+
+void QmlUiAuditTests::v50PresetIniAndCreateDialogWired()
+{
+  // Phase 147 (PSET-01/02): upstream-compatible .ini bundle + CreatePresetsDialog.
+  const QString presetSvcH = readSource(QStringLiteral("src/core/services/PresetServiceMock.h"));
+  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+  const QString configVmH = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
+  const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
+  const QString createDialog = readSource(QStringLiteral("src/qml_gui/dialogs/CreatePresetsDialog.qml"));
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  QVERIFY2(!presetSvc.isEmpty(), "Unable to read PresetServiceMock.cpp");
+  QVERIFY2(!createDialog.isEmpty(), "Unable to read CreatePresetsDialog.qml");
+
+  // PSET-01: upstream-compatible .ini bundle export/import.
+  QVERIFY2(presetSvcH.contains(QStringLiteral("exportBundleIni")),
+           "PSET-01: PresetServiceMock must expose exportBundleIni (upstream-compatible .ini)");
+  QVERIFY2(presetSvcH.contains(QStringLiteral("importBundleIni")),
+           "PSET-01: PresetServiceMock must expose importBundleIni");
+  QVERIFY2(presetSvc.contains(QStringLiteral("[preset]")),
+           "PSET-01: exportBundleIni must write the upstream [preset] section header");
+  QVERIFY2(presetSvc.contains(QStringLiteral("inherits = ")),
+           "PSET-01: exportBundleIni must persist the inheritance chain (inherits = ...)");
+
+  // PSET-02: CreatePresetsDialog QML + wiring.
+  QVERIFY2(qrc.contains(QStringLiteral("dialogs/CreatePresetsDialog.qml")),
+           "PSET-02: CreatePresetsDialog.qml must be registered in qml.qrc");
+  QVERIFY2(createDialog.contains(QStringLiteral("Inherits from")),
+           "PSET-02: CreatePresetsDialog must have an inherits-from selector");
+  QVERIFY2(createDialog.contains(QStringLiteral("createCustomPreset")),
+           "PSET-02: CreatePresetsDialog must call configVm.createCustomPreset on Create");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("CreatePresetsDialog {")),
+           "PSET-02: SettingsDialog must instantiate CreatePresetsDialog");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("onCreatePresetRequired")),
+           "PSET-02: SettingsDialog must bind onCreatePresetRequired to open the dialog");
+
+  // PSET-02: ConfigViewModel exposes the request/signal pair.
+  QVERIFY2(configVmH.contains(QStringLiteral("requestCreatePreset")),
+           "PSET-02: ConfigViewModel must expose requestCreatePreset Q_INVOKABLE");
+  QVERIFY2(configVmH.contains(QStringLiteral("createPresetRequired")),
+           "PSET-02: ConfigViewModel must declare createPresetRequired signal");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

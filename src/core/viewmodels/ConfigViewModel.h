@@ -104,6 +104,9 @@ public:
   Q_INVOKABLE bool requestCurrentFilamentPreset(const QString &name);
   Q_INVOKABLE bool requestCurrentPrintPreset(const QString &name);
   Q_INVOKABLE void saveCurrentPreset();
+  /// Phase 147 (PSET-02): request opening the CreatePresetsDialog. Emits
+  /// createPresetRequired which SettingsDialog binds to dialog.open().
+  Q_INVOKABLE void requestCreatePreset() { emit createPresetRequired(); }
   Q_INVOKABLE bool exportBundle(const QString &filePath) const;
   Q_INVOKABLE bool importBundle(const QString &filePath);
   bool isPresetDirty() const;
@@ -196,6 +199,9 @@ signals:
   void pendingActionApplied(const QString &action, const QString &target);
   void pendingActionCleared();
   void saveAsRequired();
+  /// Phase 147 (PSET-02): emitted by requestCreatePreset; SettingsDialog binds
+  /// it to open CreatePresetsDialog.
+  void createPresetRequired();
 
 private:
   PresetServiceMock *presetService_ = nullptr;

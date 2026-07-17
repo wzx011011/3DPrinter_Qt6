@@ -164,8 +164,8 @@ Populated by `gsd-roadmapper` during ROADMAP.md creation. Each v5.0 requirement 
 | EMB-05 | 146 | Complete (relaxed — first-object fallback instead of new standalone object) |
 | EMB-06 | 146 | Complete (geometry round-trip; editable-text metadata deferred to future) |
 | EMB-07 | 146 | Complete |
-| PSET-01 | 147 | Pending |
-| PSET-02 | 147 | Pending |
+| PSET-01 | 147 | Complete (.ini interop layer alongside JSON; full multi-file bundle deferred) |
+| PSET-02 | 147 | Complete (single-preset-create flow; batch deferred) |
 | PSET-03 | 148 | Pending |
 | PSET-04 | 148 | Pending |
 | PSET-05 | 149 | Pending |

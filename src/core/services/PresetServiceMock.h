@@ -44,6 +44,18 @@ public:
   // v2.4 IO-04/05: 预设包导入导出（JSON 格式，简化版）
   Q_INVOKABLE bool exportBundle(const QString &filePath) const;
   Q_INVOKABLE bool importBundle(const QString &filePath);
+  /// Phase 147 (PSET-01): upstream-compatible `.ini` bundle export. Writes one
+  /// `.ini` file per user preset to a directory (dirPath), with each file
+  /// following the upstream Preset `key = value` format + a `[preset]` header
+  /// carrying metadata (name/category/vendor/inherits). This is the interop
+  /// layer for OrcaSlicer installs (the JSON exportBundle remains as the
+  /// internal fast-path format). Returns the count of exported presets
+  /// (-1 = directory creation failure).
+  Q_INVOKABLE int exportBundleIni(const QString &dirPath) const;
+  /// Phase 147 (PSET-01): upstream-compatible `.ini` bundle import. Reads all
+  /// `*.ini` files in the directory and ingests them as user presets. Returns
+  /// the count of imported presets (-1 = directory access failure).
+  Q_INVOKABLE int importBundleIni(const QString &dirPath);
 
   /// 创建自定义预设（对齐上游 PresetBundle::save_current_preset）
   bool createCustomPreset(int category, const QString &name, const QHash<QString, QVariant> &values);

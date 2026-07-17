@@ -32,6 +32,7 @@
         <file>dialogs/PluginManagerDialog.qml</file>
         <file>dialogs/EnableLiteModeDialog.qml</file>
         <file>dialogs/SavePresetDialog.qml</file>
+        <file>dialogs/CreatePresetsDialog.qml</file>
         <file>dialogs/UnsavedChangesDialog.qml</file>
         <file>dialogs/ExportPresetBundleDialog.qml</file>
         <file>dialogs/FilamentGroupPopup.qml</file>
