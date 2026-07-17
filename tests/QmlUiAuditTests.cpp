@@ -485,6 +485,11 @@ private slots:
   // phase parameterized it (font path + height + depth from Q_PROPERTYs instead
   // of hardcoded values). The slot anchors the parameterization surface.
   void v50EmbossParameterized();
+  // Phase 145 (EMB-03/04): async emboss + panel gate. Locks the
+  // addTextVolumeAsync worker pattern (Qt Concurrent + atomic cancel +
+  // queued GUI-thread result delivery), the EditorViewModel signal forwarding,
+  // and the QML panel's font selector + async-execute button + result feedback.
+  void v50EmbossAsyncAndPanelWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6263,6 +6268,65 @@ void QmlUiAuditTests::v50EmbossParameterized()
            "EMB-02: addTextVolume must still call Slic3r::Emboss::text2shapes");
   QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::polygons2model")),
            "EMB-02: addTextVolume must still call Slic3r::Emboss::polygons2model");
+}
+
+void QmlUiAuditTests::v50EmbossAsyncAndPanelWired()
+{
+  // Phase 145 (EMB-03/04): async emboss via Qt Concurrent + Emboss panel
+  // (font selector + async-execute button + result feedback). The slot anchors
+  // the worker pattern, signal forwarding, and panel wiring.
+  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString evmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
+
+  // EMB-03: async API exists.
+  QVERIFY2(projSvcH.contains(QStringLiteral("addTextVolumeAsync")),
+           "EMB-03: ProjectServiceMock must expose addTextVolumeAsync");
+  QVERIFY2(projSvcH.contains(QStringLiteral("cancelEmbossVolume")),
+           "EMB-03: ProjectServiceMock must expose cancelEmbossVolume");
+  QVERIFY2(projSvcH.contains(QStringLiteral("performEmbossVolumeAdd")),
+           "EMB-03: ProjectServiceMock must factor out performEmbossVolumeAdd (shared by sync+async)");
+
+  // EMB-03: signals for async result delivery.
+  QVERIFY2(projSvcH.contains(QStringLiteral("embossVolumeAdded")),
+           "EMB-03: ProjectServiceMock must emit embossVolumeAdded");
+  QVERIFY2(projSvcH.contains(QStringLiteral("embossVolumeFailed")),
+           "EMB-03: ProjectServiceMock must emit embossVolumeFailed");
+
+  // EMB-03: async worker uses Qt Concurrent + atomic cancel + GUI-thread delivery.
+  QVERIFY2(projSvc.contains(QStringLiteral("QtConcurrent::run")),
+           "EMB-03: addTextVolumeAsync must spawn a QtConcurrent::run worker");
+  QVERIFY2(projSvc.contains(QStringLiteral("m_embossCancelFlag")),
+           "EMB-03: async emboss must use an atomic cancel flag (cancellation on stale jobs)");
+  QVERIFY2(projSvc.contains(QStringLiteral("Qt::QueuedConnection")),
+           "EMB-03: result must be delivered on the GUI thread via QueuedConnection");
+
+  // EMB-03: the heavy text2shapes+polygons2model runs on the worker thread
+  // (the genuine off-GUI-thread portion). Look for the worker-lambda pipeline.
+  QVERIFY2(projSvc.contains(QStringLiteral("resultMesh = std::make_shared<Slic3r::TriangleMesh>")),
+           "EMB-03: worker must produce the mesh off-thread (resultMesh shared_ptr)");
+
+  // EMB-03: EditorViewModel forwards + re-emits.
+  QVERIFY2(evmH.contains(QStringLiteral("embossSelectedAsync")),
+           "EMB-03: EditorViewModel must expose embossSelectedAsync Q_INVOKABLE");
+  QVERIFY2(evmH.contains(QStringLiteral("embossVolumeAdded")),
+           "EMB-03: EditorViewModel must declare embossVolumeAdded signal");
+  QVERIFY2(evm.contains(QStringLiteral("projectService_->addTextVolumeAsync")),
+           "EMB-03: EditorViewModel must call addTextVolumeAsync on the service");
+
+  // EMB-04: QML panel has font selector + async-execute button + result feedback.
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.embossFontList")),
+           "EMB-04: Emboss panel must populate the font selector from embossFontList");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.embossFontPath")),
+           "EMB-04: Emboss panel must bind embossFontPath");
+  QVERIFY2(preparePage.contains(QStringLiteral("embossSelectedAsync")),
+           "EMB-04: Emboss panel must have an async-execute button (embossSelectedAsync)");
+  QVERIFY2(preparePage.contains(QStringLiteral("onEmbossVolumeAdded")),
+           "EMB-04: Emboss panel must wire onEmbossVolumeAdded for result feedback");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

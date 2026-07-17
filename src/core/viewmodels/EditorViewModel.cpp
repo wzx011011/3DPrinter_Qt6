@@ -1586,6 +1586,46 @@ bool EditorViewModel::embossSelected()
   return ok;
 }
 
+// Phase 145 (EMB-03): async emboss. Forwards the font path + height + depth
+// to the service then dispatches addTextVolumeAsync. The result arrives later
+// via the embossVolumeAdded/Failed signals (which we re-emit from the service's
+// signals — connection is wired here idempotently). Cancels any in-flight
+// async emboss before starting this one.
+void EditorViewModel::embossSelectedAsync()
+{
+  if (!projectService_)
+    return;
+  const int idx = selectedSourceObjectIndex();
+  if (idx < 0 || m_embossText.isEmpty())
+    return;
+  // Forward the current Q_PROPERTY inputs (parallel to the sync path).
+  projectService_->setEmbossFont(m_embossFontPath);
+  projectService_->setEmbossHeight(m_embossHeight);
+  projectService_->setEmbossDepth(m_embossDepth);
+  // Wire service signals → viewmodel signals (idempotent — UniqueConnection).
+  connect(projectService_, &ProjectServiceMock::embossVolumeAdded,
+          this, [this](int objectIndex, const QString &volumeName) {
+            // Refresh the volume entries + mesh cache so the new volume shows
+            // up in the UI, then re-emit the signal for QML.
+            rebuildObjectEntriesFromService();
+            refreshMeshCacheAndFitHint();
+            emit stateChanged();
+            emit embossVolumeAdded(objectIndex, volumeName);
+          }, Qt::UniqueConnection);
+  connect(projectService_, &ProjectServiceMock::embossVolumeFailed,
+          this, [this](const QString &reason) {
+            qWarning("[EditorViewModel] async emboss failed: %s", qUtf8Printable(reason));
+            emit embossVolumeFailed(reason);
+          }, Qt::UniqueConnection);
+  projectService_->addTextVolumeAsync(idx, m_embossText);
+}
+
+void EditorViewModel::cancelEmboss()
+{
+  if (projectService_)
+    projectService_->cancelEmbossVolume();
+}
+
 // ── MeshBoolean gizmo (对齐上游 GLGizmoMeshBoolean) ──
 
 int EditorViewModel::booleanOperation() const { return m_booleanOperation; }

@@ -242,6 +242,22 @@ public:
   /// 添加文字浮雕 volume（对齐上游 GLGizmoText）
   /// Mock 模式：创建 TextEmboss 类型 volume
   Q_INVOKABLE bool addTextVolume(int objectIndex, const QString &text);
+  /// Phase 145 (EMB-03): async variant of addTextVolume. Spawns a Qt Concurrent
+  /// worker that runs the text2shapes + polygons2model pipeline off the GUI
+  /// thread; result is delivered via the embossVolumeAdded signal on the GUI
+  /// thread. Caller should connect to embossVolumeAdded + embossVolumeFailed
+  /// before invoking. cancelEmbossVolume() cancels the in-flight job (a second
+  /// invocation auto-cancels the prior — typing fast does not pile up stale
+  /// jobs). Mirrors the codebase's QtConcurrent::run + atomic-cancel pattern
+  /// used by loadModelFromPath (ProjectServiceMock.cpp:540+) and SliceService.
+  Q_INVOKABLE void addTextVolumeAsync(int objectIndex, const QString &text);
+  Q_INVOKABLE void cancelEmbossVolume();
+  /// Synchronous helper (worker-thread side) that performs the actual
+  /// text2shapes+polygons2model pipeline and writes the resulting volume to the
+  /// model. Returns false on failure + fills `errMsg`. Pre-Phase-145 this was
+  /// the body of addTextVolume; the synchronous Q_INVOKABLE now forwards to it,
+  /// and addTextVolumeAsync spawns it via QtConcurrent::run.
+  bool performEmbossVolumeAdd(int objectIndex, const QString &text, QString &errMsg);
   /// Phase 144 (EMB-01): font path + height/depth setters. Used by addTextVolume
   /// to parameterize the Emboss pipeline (was hardcoded arial.ttf / 10mm / 2mm).
   /// The viewmodel forwards the user-selected font + embossHeight/embossDepth
@@ -544,6 +560,14 @@ signals:
   void loadFinished(bool success, const QString &message);
   /// Emitted when a 3MF project loads with embedded config (对齐上游 Plater::priv::load_config_file)
   void projectConfigLoaded(const QHash<QString, QVariant> &config);
+  /// Phase 145 (EMB-03): async emboss result delivery. Fires on the GUI thread
+  /// after addTextVolumeAsync's worker completes successfully. objectIndex is
+  /// the target object; volumeName is the (possibly truncated) text label.
+  void embossVolumeAdded(int objectIndex, const QString &volumeName);
+  /// Phase 145 (EMB-03): async emboss failure delivery. Fires on the GUI thread
+  /// after addTextVolumeAsync's worker fails (font load, empty shapes, mesh
+  /// generation, or cancellation).
+  void embossVolumeFailed(const QString &reason);
 
 private:
   /// v2.4: 当前项目保存路径（saveProjectAs 后更新）
@@ -555,6 +579,11 @@ private:
   std::string m_embossFontPath;
   float m_embossHeight = 10.0f;
   float m_embossDepth = 2.0f;
+  /// Phase 145 (EMB-03): in-flight async emboss cancellation flag. A new
+  /// addTextVolumeAsync invocation sets this to true on the prior flag (if any),
+  /// then installs a fresh flag for itself. The worker polls via load().
+  /// Mirrors the activeCancelFlag_ pattern used for model loading.
+  std::shared_ptr<std::atomic_bool> m_embossCancelFlag;
   /// Mock-mode per-object scoped overrides (objectIndex → key-value map)
   QHash<int, QHash<QString, QVariant>> m_mockObjectOverrides;
   /// Mock-mode per-volume scoped overrides ((objectIndex << 16 | volumeIndex) → key-value map)

@@ -7,10 +7,10 @@ last_updated: "2026-07-17T04:45:00.000Z"
 last_activity: 2026-07-17
 progress:
   total_phases: 13
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 31
+  completed_phases: 5
+  total_plans: 5
+  completed_plans: 5
+  percent: 38
 ---
 
 # Project State
@@ -52,10 +52,10 @@ See: .planning/milestones/v4.8-* (last shipped milestone archive)
 
 ## Current Position
 
-Phase: 145 (Async EmbossJob + Panel — next to plan, NOT YET STARTED)
+Phase: 146 (Emboss Wiring + 3MF Round-Trip + SVG — next to plan)
 Plan: —
-Status: **Paused for handoff at 4/13 phases complete (31%).** 103/103 QmlUiAuditTests passing. 9 phases remain (145-153). Next session resume with Phase 145.
-Last activity: 2026-07-17 — User paused for clean handoff after Phase 144 shipped.
+Status: Phase 145 verified ✓ (5/13 phases complete, 38%). EMB-03/04 satisfied (async emboss via Qt Concurrent + Emboss panel with font selector). 104/104 QmlUiAuditTests passing.
+Last activity: 2026-07-17 — Phase 145 shipped (EMB-03/04 closed; v50EmbossAsyncAndPanelWired locked). Ready for Phase 146.
 
 ## Resume Brief — READ THIS BEFORE CONTINUING
 

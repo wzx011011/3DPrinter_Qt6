@@ -388,6 +388,12 @@ public:
   /// Phase 144 (EMB-01): enumerate system fonts (proxies ProjectServiceMock).
   Q_INVOKABLE QVariantList embossFontList() const;
   Q_INVOKABLE bool embossSelected();
+  /// Phase 145 (EMB-03): async variant of embossSelected. Forwards inputs to
+  /// ProjectServiceMock::addTextVolumeAsync. The result arrives via the
+  /// embossVolumeAdded / embossVolumeFailed signals (which QML binds to).
+  /// A second invocation auto-cancels the prior job.
+  Q_INVOKABLE void embossSelectedAsync();
+  Q_INVOKABLE void cancelEmboss();
 
   /// ── MeshBoolean gizmo properties (对齐上游 GLGizmoMeshBoolean) ──
   int booleanOperation() const; // 0=union, 1=diff, 2=intersect
@@ -1087,6 +1093,11 @@ signals:
   void stateChanged();
   void paintDataChanged();
   void bedShapeChanged();
+  /// Phase 145 (EMB-03): async emboss result delivery. Re-emitted from
+  /// ProjectServiceMock's embossVolumeAdded/Failed so QML binds to a single
+  /// EditorViewModel signal source.
+  void embossVolumeAdded(int objectIndex, const QString &volumeName);
+  void embossVolumeFailed(const QString &reason);
   /// Phase 100 (WTREAD-01): emitted whenever the wipe-tower geometry is
   /// refreshed from a SliceService readback (valid or invalid). Drives the
   /// six wipe-tower Q_PROPERTYs above.

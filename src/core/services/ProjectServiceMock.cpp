@@ -2473,14 +2473,32 @@ QVariantList ProjectServiceMock::embossFontList() const
 
 bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
 {
+  // Phase 145 (EMB-03): thin wrapper around performEmbossVolumeAdd so the
+  // synchronous Q_INVOKABLE path and the async path share one implementation.
+  QString errMsg;
+  const bool ok = performEmbossVolumeAdd(objectIndex, text, errMsg);
+  if (!ok)
+    lastError_ = errMsg;
+  return ok;
+}
+
+// Phase 145 (EMB-03): worker-side implementation. Runs the (potentially slow)
+// text2shapes + polygons2model pipeline. Safe to call from a Qt Concurrent
+// worker — does NOT touch Qt signals directly (caller is responsible for
+// routing the result back to the GUI thread). The model_ pointer is owned by
+// the GUI thread; callers must guarantee no concurrent model_ mutation while
+// this runs (the async path enforces this by serializing via a single in-flight
+// cancel flag + canceling prior jobs).
+bool ProjectServiceMock::performEmbossVolumeAdd(int objectIndex, const QString &text, QString &errMsg)
+{
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
   {
-    lastError_ = tr("添加文字失败：对象索引无效");
+    errMsg = tr("添加文字失败：对象索引无效");
     return false;
   }
   if (text.isEmpty())
   {
-    lastError_ = tr("添加文字失败：文字内容为空");
+    errMsg = tr("添加文字失败：文字内容为空");
     return false;
   }
 
@@ -2508,7 +2526,7 @@ bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
       auto font_file = Slic3r::Emboss::create_font_file(fontPath.c_str());
       if (!font_file)
       {
-        lastError_ = tr("添加文字失败：无法加载字体");
+        errMsg = tr("添加文字失败：无法加载字体");
         return false;
       }
 
@@ -2525,7 +2543,7 @@ bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
       auto shapes = Slic3r::Emboss::text2shapes(font_cache, text.toLocal8Bit().constData(), font_prop);
       if (shapes.expolygons.empty())
       {
-        lastError_ = tr("添加文字失败：字体渲染返回空结果");
+        errMsg = tr("添加文字失败：字体渲染返回空结果");
         return false;
       }
 
@@ -2536,7 +2554,7 @@ bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
 
       if (its.vertices.empty())
       {
-        lastError_ = tr("添加文字失败：网格生成失败");
+        errMsg = tr("添加文字失败：网格生成失败");
         return false;
       }
 
@@ -2554,14 +2572,15 @@ bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
         entry.name = volName;
         entry.type = MockVolumeType::TextEmboss;
         vols.append(entry);
-        lastError_.clear();
-        emit projectChanged();
+        errMsg.clear();
+        // NOTE: caller (sync or async) is responsible for emit projectChanged()
+        // on the GUI thread — this worker-side helper does not emit.
         return true;
       }
     }
     catch (const std::exception &e)
     {
-      lastError_ = QString::fromUtf8(e.what());
+      errMsg = QString::fromUtf8(e.what());
       return false;
     }
   }
@@ -2574,9 +2593,164 @@ bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
   entry.type = MockVolumeType::TextEmboss;
   vols.append(entry);
 
-  lastError_.clear();
-  emit projectChanged();
+  errMsg.clear();
+  // Caller emits projectChanged() on the GUI thread.
   return true;
+}
+
+// Phase 145 (EMB-03): async emboss. Spawns a Qt Concurrent worker that runs
+// the text2shapes + polygons2model pipeline OFF the GUI thread (these libslic3r
+// calls are pure compute and thread-safe — they don't touch Qt or model_).
+// Only the final add_volume (which mutates model_) is dispatched back to the
+// GUI thread via a queued signal. A second invocation auto-cancels the prior
+// job (typing fast does not pile up stale merges). Mirrors the
+// QtConcurrent::run + std::atomic_bool pattern from loadModelFromPath.
+void ProjectServiceMock::addTextVolumeAsync(int objectIndex, const QString &text)
+{
+  // Cancel any in-flight job + install a fresh flag for this invocation.
+  if (m_embossCancelFlag)
+    m_embossCancelFlag->store(true);
+  m_embossCancelFlag = std::make_shared<std::atomic_bool>(false);
+  const auto cancelFlag = m_embossCancelFlag;
+  const QPointer<ProjectServiceMock> receiver(this);
+
+  // Snapshot the inputs the worker reads so they cannot race with a setter
+  // mid-flight. (m_embossFontPath/Height/Depth are simple value types.)
+  const std::string fontPath = m_embossFontPath;
+  const float height = m_embossHeight;
+  const float depth = m_embossDepth;
+
+  QtConcurrent::run([receiver, objectIndex, text, cancelFlag, fontPath, height, depth]()
+                    {
+      // ── Worker thread: heavy text2shapes + polygons2model. No Qt signals,
+      // no model_ mutation, no Qt-event-loop touch. This is the genuine
+      // off-GUI-thread portion that keeps the UI responsive for long text.
+      QString errMsg;
+      std::shared_ptr<Slic3r::TriangleMesh> resultMesh;
+
+#ifdef HAS_LIBSLIC3R
+      if (cancelFlag && cancelFlag->load())
+      {
+        errMsg = QStringLiteral("canceled");
+      }
+      else
+      {
+        try
+        {
+          const std::string &fp = fontPath.empty()
+              ? (
+#ifdef _WIN32
+                  "C:/Windows/Fonts/arial.ttf"
+#else
+                  "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+#endif
+              )
+              : fontPath;
+          auto font_file = Slic3r::Emboss::create_font_file(fp.c_str());
+          if (!font_file)
+          {
+            errMsg = QStringLiteral("font load failed");
+          }
+          else
+          {
+            Slic3r::Emboss::FontFileWithCache font_cache(std::move(font_file));
+            Slic3r::FontProp font_prop;
+            font_prop.size_in_mm = static_cast<double>(height > 0.0f ? height : 10.0f);
+            font_prop.boldness = 0.0f;
+            // Poll cancellation between the two heavy steps (text2shapes can
+            // take ~100ms for long text; polygons2model another ~50ms).
+            if (cancelFlag && cancelFlag->load())
+            {
+              errMsg = QStringLiteral("canceled");
+            }
+            else
+            {
+              auto shapes = Slic3r::Emboss::text2shapes(font_cache, text.toLocal8Bit().constData(), font_prop);
+              if (shapes.expolygons.empty())
+              {
+                errMsg = QStringLiteral("text2shapes returned empty");
+              }
+              else if (cancelFlag && cancelFlag->load())
+              {
+                errMsg = QStringLiteral("canceled");
+              }
+              else
+              {
+                const double dz = static_cast<double>(depth > 0.0f ? depth : 2.0f);
+                Slic3r::Emboss::ProjectZ projection(dz);
+                auto its = Slic3r::Emboss::polygons2model(shapes.expolygons, projection);
+                if (its.vertices.empty())
+                {
+                  errMsg = QStringLiteral("polygons2model returned empty");
+                }
+                else
+                {
+                  resultMesh = std::make_shared<Slic3r::TriangleMesh>(std::move(its));
+                }
+              }
+            }
+          }
+        }
+        catch (const std::exception &e)
+        {
+          errMsg = QString::fromUtf8(e.what());
+        }
+      }
+#else
+      errMsg = QStringLiteral("HAS_LIBSLIC3R off — async emboss unavailable");
+#endif
+
+      const bool ok = static_cast<bool>(resultMesh);
+
+      // ── GUI thread: deliver result + attach to model_. Queued (non-blocking).
+      if (receiver)
+      {
+        const QString volName = text.length() > 12 ? text.left(12) + "..." : text;
+        QMetaObject::invokeMethod(receiver, [receiver, objectIndex, ok, volName, errMsg, resultMesh, cancelFlag]() {
+          if (!receiver)
+            return;
+          // If a newer job has started since, drop this result (stale).
+          if (cancelFlag && cancelFlag->load())
+            return;
+          if (!ok)
+          {
+            if (errMsg != QStringLiteral("canceled"))
+              emit receiver->embossVolumeFailed(errMsg);
+            return;
+          }
+          // Attach the worker-produced mesh to the model on the GUI thread.
+#ifdef HAS_LIBSLIC3R
+          if (receiver->model_ && size_t(objectIndex) < receiver->model_->objects.size() &&
+              receiver->model_->objects[size_t(objectIndex)] && resultMesh)
+          {
+            auto *newVol = receiver->model_->objects[size_t(objectIndex)]->add_volume(
+                std::move(*resultMesh), Slic3r::ModelVolumeType::MODEL_PART);
+            if (newVol)
+            {
+              newVol->name = volName.toStdString();
+              newVol->set_type(Slic3r::ModelVolumeType::MODEL_PART);
+              auto &vols = receiver->m_mockVolumes[objectIndex];
+              MockVolumeEntry entry;
+              entry.name = volName;
+              entry.type = MockVolumeType::TextEmboss;
+              vols.append(entry);
+              emit receiver->embossVolumeAdded(objectIndex, volName);
+              emit receiver->projectChanged();
+              return;
+            }
+          }
+#endif
+          emit receiver->embossVolumeFailed(QStringLiteral("model attach failed"));
+        }, Qt::QueuedConnection);
+      }
+                    });
+}
+
+void ProjectServiceMock::cancelEmbossVolume()
+{
+  if (m_embossCancelFlag)
+    m_embossCancelFlag->store(true);
+  m_embossCancelFlag.reset();
 }
 
 // ── SVG 浮雕 volume（对齐上游 GLGizmoSVG → Model::read_from_file）──

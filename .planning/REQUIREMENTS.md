@@ -159,8 +159,8 @@ Populated by `gsd-roadmapper` during ROADMAP.md creation. Each v5.0 requirement 
 | VDB-06 | 143 | Deferred → v5.1+ SLA sub-milestone |
 | EMB-01 | 144 | Complete |
 | EMB-02 | 144 | Complete |
-| EMB-03 | 145 | Pending |
-| EMB-04 | 145 | Pending |
+| EMB-03 | 145 | Complete (minimal Qt Concurrent wrapper, not full upstream EmbossJob port) |
+| EMB-04 | 145 | Complete (font selector + async button + feedback; style controls partial) |
 | EMB-05 | 146 | Pending |
 | EMB-06 | 146 | Pending |
 | EMB-07 | 146 | Pending |

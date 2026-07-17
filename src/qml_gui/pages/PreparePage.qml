@@ -3286,15 +3286,66 @@ Item {
                 Text { text: qsTr("文本"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxTextField { Layout.preferredWidth: 120; implicitHeight: 22; font.pixelSize: 10; text: root.editorVm ? root.editorVm.embossText : ""; onEditingFinished: if (root.editorVm) root.editorVm.embossText = text }
 
+                // Phase 145 (EMB-04): font selector. Populated from the system
+                // font list via embossFontList(); user selection stores the path
+                // into embossFontPath which the pipeline reads (Phase 144 / EMB-01).
+                Text { text: qsTr("字体"); color: Theme.textMuted; font.pixelSize: 10 }
+                CxComboBox {
+                    Layout.preferredWidth: 160
+                    // Lazy-populate on first show (the list can be ~200 entries).
+                    model: {
+                        if (!root.editorVm) return []
+                        const list = root.editorVm.embossFontList()
+                        return list.length > 0 ? list : [{ family: qsTr("(默认)"), path: "" }]
+                    }
+                    textRole: "family"
+                    displayText: root.editorVm && root.editorVm.embossFontPath.length > 0 ? currentText : qsTr("(默认 arial)")
+                    onActivated: if (root.editorVm && count > 0) {
+                        const entry = model[index]
+                        root.editorVm.embossFontPath = entry ? entry.path : ""
+                    }
+                }
+
                 Text { text: qsTr("高度"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.embossHeight : 2; from: 1; to: 20; onValueModified: if (root.editorVm) root.editorVm.embossHeight = value }
 
                 Text { text: qsTr("深度"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.embossDepth : 1; from: 1; to: 20; onValueModified: if (root.editorVm) root.editorVm.embossDepth = value }
 
-                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("执行浮雕"); color: Theme.textPrimary; font.pixelSize: 10 }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.embossSelected() }
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 6
+                    // 同步执行（pre-Phase-145 行为保留）
+                    Rectangle { Layout.preferredWidth: 70; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
+                        Text { anchors.centerIn: parent; text: qsTr("执行"); color: Theme.textPrimary; font.pixelSize: 10 }
+                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.embossSelected() }
+                    }
+                    // Phase 145 (EMB-03): async 执行 — 长文本不阻塞 UI。
+                    Rectangle { Layout.preferredWidth: 90; height: 24; radius: 4; color: Theme.accent
+                        Text { anchors.centerIn: parent; text: qsTr("异步执行"); color: "white"; font.pixelSize: 10; font.bold: true }
+                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.embossSelectedAsync() }
+                    }
+                }
+
+                // Phase 145 (EMB-03): status feedback for async emboss.
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("(异步执行后状态显示于此)")
+                    color: Theme.textMuted
+                    font.pixelSize: 9
+                    font.italic: true
+                    visible: root.editorVm && root.editorVm.embossText.length > 0
+                }
+                Connections {
+                    target: root.editorVm
+                    // Phase 145 (EMB-03): the viewmodel handles object/mesh refresh
+                    // internally on embossVolumeAdded; QML just shows user feedback.
+                    function onEmbossVolumeAdded(objectIndex, volumeName) {
+                        if (backend) backend.postNotification(qsTr("浮雕完成：") + volumeName)
+                    }
+                    function onEmbossVolumeFailed(reason) {
+                        if (backend) backend.postError(qsTr("浮雕失败：") + reason, 2)
+                    }
                 }
             }
         }
