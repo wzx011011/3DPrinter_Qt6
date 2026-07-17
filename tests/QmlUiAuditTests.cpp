@@ -548,6 +548,10 @@ private slots:
   // that forced Phase 152 to source-audit-lock only) AND its coverage breadth
   // (all 5 CLOS-04 dimensions + thumbnail).
   void v51MultiPlateRoundTripLiveCtest();
+  // Phase 158 (EMBO-F01/F02): Emboss style controls + SVG depth-modifier wiring.
+  // Locks the 4 new style Q_PROPERTYs + setters + forwarding + FontProp
+  // population + the addSvgVolume depth-modifier extension.
+  void v51EmbossStyleControlsAndSvgAdvancedWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6983,6 +6987,97 @@ void QmlUiAuditTests::v51MultiPlateRoundTripLiveCtest()
            "CLOS-04: live ctest must write a per-plate thumbnail (dim 6: thumbnail)");
   QVERIFY2(vmTests.contains(QStringLiteral("loader.plateThumbnailBase64(0).isEmpty()")),
            "CLOS-04: live ctest must assert thumbnail non-empty after reload (dim 6: thumbnail)");
+}
+
+// Phase 158 (EMBO-F01/F02): Emboss style controls + SVG depth-modifier wiring
+// gate. Locks the 4 new style axes (boldness/italic/use-surface/curve-projection)
+// from Q_PROPERTY through viewmodel forwarding to ProjectServiceMock FontProp
+// population + TextConfiguration persistence, plus the addSvgVolume
+// depth-modifier extension.
+void QmlUiAuditTests::v51EmbossStyleControlsAndSvgAdvancedWired()
+{
+  const QString projH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString projCpp = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString editorH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString editorCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+
+  QVERIFY2(!projH.isEmpty(), "Unable to read ProjectServiceMock.h");
+  QVERIFY2(!projCpp.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!editorH.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!editorCpp.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+
+  // (1) EditorViewModel exposes the 4 new style axes + svgDepthModifier.
+  QVERIFY2(editorH.contains(QStringLiteral("Q_PROPERTY(float embossBoldness")),
+           "EMBO-F01: EditorViewModel.h must expose embossBoldness Q_PROPERTY");
+  QVERIFY2(editorH.contains(QStringLiteral("Q_PROPERTY(bool embossItalic")),
+           "EMBO-F01: EditorViewModel.h must expose embossItalic Q_PROPERTY");
+  QVERIFY2(editorH.contains(QStringLiteral("Q_PROPERTY(bool embossUseSurface")),
+           "EMBO-F01: EditorViewModel.h must expose embossUseSurface Q_PROPERTY");
+  QVERIFY2(editorH.contains(QStringLiteral("Q_PROPERTY(bool embossCurveProjection")),
+           "EMBO-F01: EditorViewModel.h must expose embossCurveProjection Q_PROPERTY");
+  QVERIFY2(editorH.contains(QStringLiteral("Q_PROPERTY(float svgDepthModifier")),
+           "EMBO-F02: EditorViewModel.h must expose svgDepthModifier Q_PROPERTY");
+
+  // (2) ProjectServiceMock has the 4 setters + member fields.
+  QVERIFY2(projH.contains(QStringLiteral("setEmbossBoldness")),
+           "EMBO-F01: ProjectServiceMock.h must declare setEmbossBoldness");
+  QVERIFY2(projH.contains(QStringLiteral("setEmbossItalic")),
+           "EMBO-F01: ProjectServiceMock.h must declare setEmbossItalic");
+  QVERIFY2(projH.contains(QStringLiteral("setEmbossUseSurface")),
+           "EMBO-F01: ProjectServiceMock.h must declare setEmbossUseSurface");
+  QVERIFY2(projH.contains(QStringLiteral("setEmbossCurveProjection")),
+           "EMBO-F01: ProjectServiceMock.h must declare setEmbossCurveProjection");
+  QVERIFY2(projH.contains(QStringLiteral("m_embossBoldness")),
+           "EMBO-F01: ProjectServiceMock.h must declare m_embossBoldness member field");
+  QVERIFY2(projH.contains(QStringLiteral("m_embossItalic")),
+           "EMBO-F01: ProjectServiceMock.h must declare m_embossItalic member field");
+
+  // (3) FontProp is populated from the new fields in performEmbossVolumeAdd +
+  //     the async worker (no longer hardcoded 0.0f).
+  QVERIFY2(projCpp.contains(QStringLiteral("font_prop.boldness = m_embossBoldness")),
+           "EMBO-F01: sync performEmbossVolumeAdd must populate font_prop.boldness from m_embossBoldness (was hardcoded 0.0f)");
+  QVERIFY2(projCpp.contains(QStringLiteral("font_prop.boldness = boldness")),
+           "EMBO-F01: async worker must populate font_prop.boldness from the captured snapshot");
+  QVERIFY2(projCpp.contains(QStringLiteral("font_prop.skew = 0.4")),
+           "EMBO-F01: italic must populate font_prop.skew (the upstream italic axis)");
+
+  // (4) Async worker captures the new fields (so the off-thread job reads a
+  //     consistent snapshot — mirrors the existing fontPath/height/depth captures).
+  QVERIFY2(projCpp.contains(QStringLiteral("const float boldness = m_embossBoldness;")),
+           "EMBO-F01: async worker must snapshot m_embossBoldness before QtConcurrent::run");
+  QVERIFY2(projCpp.contains(QStringLiteral("const bool italic = m_embossItalic;")),
+           "EMBO-F01: async worker must snapshot m_embossItalic before QtConcurrent::run");
+
+  // (5) attachEmbossMetadata persists boldness + skew into TextConfiguration
+  //     so the style round-trips through <slic3rpe:text> (Phase 155 metadata path).
+  QVERIFY2(projCpp.contains(QStringLiteral("tc.style.prop.boldness = boldness")),
+           "EMBO-F01: attachEmbossMetadata must persist boldness into TextConfiguration::style.prop");
+  QVERIFY2(projCpp.contains(QStringLiteral("tc.style.prop.skew = 0.4")),
+           "EMBO-F01: attachEmbossMetadata must persist skew into TextConfiguration::style.prop when italic");
+
+  // (6) The 3 viewmodel forwarding sites push the new fields to the service.
+  QVERIFY2(editorCpp.contains(QStringLiteral("projectService_->setEmbossBoldness(m_embossBoldness)")),
+           "EMBO-F01: EditorViewModel forwarding sites must call setEmbossBoldness");
+
+  // (7) addSvgVolume accepts the depth-modifier param + applies it.
+  QVERIFY2(projH.contains(QStringLiteral("addSvgVolume(int objectIndex, const QString &svgFilePath, float depthModifier = 1.0f)")),
+           "EMBO-F02: ProjectServiceMock::addSvgVolume must accept the depthModifier param");
+  QVERIFY2(projCpp.contains(QStringLiteral("set_scaling_factor")),
+           "EMBO-F02: addSvgVolume must apply the modifier via the volume's Z scaling factor");
+  QVERIFY2(editorCpp.contains(QStringLiteral("addSvgVolume(idx, m_svgFilePath, m_svgDepthModifier)")),
+           "EMBO-F02: importSVG must forward m_svgDepthModifier to addSvgVolume");
+
+  // (8) PreparePage Emboss panel exposes the 4 new style controls.
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.embossBoldness")),
+           "EMBO-F01: PreparePage Emboss panel must bind a control to embossBoldness");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.embossItalic")),
+           "EMBO-F01: PreparePage Emboss panel must bind a control to embossItalic");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.embossUseSurface")),
+           "EMBO-F01: PreparePage Emboss panel must bind a control to embossUseSurface");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.embossCurveProjection")),
+           "EMBO-F01: PreparePage Emboss panel must bind a control to embossCurveProjection");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

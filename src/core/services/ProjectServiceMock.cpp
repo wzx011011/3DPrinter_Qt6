@@ -2455,6 +2455,20 @@ void ProjectServiceMock::setEmbossDepth(float mm)
     m_embossDepth = mm;
 }
 
+// Phase 158 (EMBO-F01): style axes setters. boldness + italic map to FontProp
+// fields and reach text2shapes; use-surface + curve-projection are persisted
+// into TextConfiguration for round-trip (geometry deformation deferred — see
+// the upstream-gap note in the header).
+void ProjectServiceMock::setEmbossBoldness(float boldness)
+{
+  // Clamp to a sane range; upstream boldness is a width delta in mm.
+  m_embossBoldness = (boldness < 0.0f) ? 0.0f : (boldness > 2.0f ? 2.0f : boldness);
+}
+
+void ProjectServiceMock::setEmbossItalic(bool italic) { m_embossItalic = italic; }
+void ProjectServiceMock::setEmbossUseSurface(bool useSurface) { m_embossUseSurface = useSurface; }
+void ProjectServiceMock::setEmbossCurveProjection(bool curveProjection) { m_embossCurveProjection = curveProjection; }
+
 // Phase 144 (EMB-01): enumerate system fonts via upstream Emboss. Wraps
 // Slic3r::Emboss::get_font_list_by_enumeration (Windows registry-based) +
 // get_font_list_by_folder fallback. Returns a QVariantList of {family, path}
@@ -2512,7 +2526,8 @@ bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
 // suffix as an in-session affordance.
 void ProjectServiceMock::attachEmbossMetadata(void *volume, const QString &text,
                                               const std::string &fontPath,
-                                              float height, float depth)
+                                              float height, float depth,
+                                              float boldness, bool italic)
 {
 #ifdef HAS_LIBSLIC3R
   auto *vol = static_cast<Slic3r::ModelVolume *>(volume);
@@ -2542,10 +2557,18 @@ void ProjectServiceMock::attachEmbossMetadata(void *volume, const QString &text,
   tc.style.type = Slic3r::EmbossStyle::Type::file_path;
   tc.style.prop.size_in_mm = (height > 0.0f) ? height : 10.0f;
   tc.style.prop.family = familyName.toStdString();
+  // Phase 158 (EMBO-F01): persist boldness + italic (skew) so the style
+  // round-trips through the <slic3rpe:text> block. These are real FontProp
+  // fields upstream — read back into the loaded volume's text_configuration
+  // automatically by the 3MF reader.
+  tc.style.prop.boldness = boldness;
+  if (italic)
+    tc.style.prop.skew = 0.4;
 
   vol->text_configuration = std::move(tc);
 #else
   (void)volume; (void)text; (void)fontPath; (void)height; (void)depth;
+  (void)boldness; (void)italic;
 #endif
 }
 
@@ -2604,7 +2627,11 @@ bool ProjectServiceMock::performEmbossVolumeAdd(int objectIndex, const QString &
       // driven by user input (defaults remain 10mm/2mm for backwards compat).
       Slic3r::FontProp font_prop;
       font_prop.size_in_mm = static_cast<double>(m_embossHeight > 0.0f ? m_embossHeight : 10.0f);
-      font_prop.boldness = 0.0f;     // 正常字重
+      // Phase 158 (EMBO-F01): boldness + italic now wire to upstream FontProp
+      // fields and deform glyphs in text2shapes (was hardcoded 0.0f / no skew).
+      font_prop.boldness = m_embossBoldness;
+      if (m_embossItalic)
+        font_prop.skew = 0.4;  // upstream skew is an x:y ratio; 0.4 ≈ visible italic
 
       // 3. 文字 → 2D 多边形
       auto shapes = Slic3r::Emboss::text2shapes(font_cache, text.toLocal8Bit().constData(), font_prop);
@@ -2636,7 +2663,8 @@ bool ProjectServiceMock::performEmbossVolumeAdd(int objectIndex, const QString &
         // Phase 155 (CLOS-02): attach editable-text metadata so the volume
         // round-trips through 3MF as a re-editable TextEmboss (upstream
         // store_bbs_3mf writes `<slic3rpe:text>` automatically).
-        attachEmbossMetadata(newVol, text, fontPath, m_embossHeight, m_embossDepth);
+        attachEmbossMetadata(newVol, text, fontPath, m_embossHeight, m_embossDepth,
+                             m_embossBoldness, m_embossItalic);
         // 同步 Mock 数据
         auto &vols = m_mockVolumes[objectIndex];
         MockVolumeEntry entry;
@@ -2686,12 +2714,17 @@ void ProjectServiceMock::addTextVolumeAsync(int objectIndex, const QString &text
   const QPointer<ProjectServiceMock> receiver(this);
 
   // Snapshot the inputs the worker reads so they cannot race with a setter
-  // mid-flight. (m_embossFontPath/Height/Depth are simple value types.)
+  // mid-flight. (m_embossFontPath/Height/Depth + the Phase 158 style axes are
+  // simple value types.)
   const std::string fontPath = m_embossFontPath;
   const float height = m_embossHeight;
   const float depth = m_embossDepth;
+  // Phase 158 (EMBO-F01): snapshot the new style axes too so the worker reads
+  // a consistent set (was hardcoded 0.0f boldness / no italic in the worker).
+  const float boldness = m_embossBoldness;
+  const bool italic = m_embossItalic;
 
-  QtConcurrent::run([receiver, objectIndex, text, cancelFlag, fontPath, height, depth]()
+  QtConcurrent::run([receiver, objectIndex, text, cancelFlag, fontPath, height, depth, boldness, italic]()
                     {
       // ── Worker thread: heavy text2shapes + polygons2model. No Qt signals,
       // no model_ mutation, no Qt-event-loop touch. This is the genuine
@@ -2727,7 +2760,10 @@ void ProjectServiceMock::addTextVolumeAsync(int objectIndex, const QString &text
             Slic3r::Emboss::FontFileWithCache font_cache(std::move(font_file));
             Slic3r::FontProp font_prop;
             font_prop.size_in_mm = static_cast<double>(height > 0.0f ? height : 10.0f);
-            font_prop.boldness = 0.0f;
+            // Phase 158 (EMBO-F01): boldness + italic snapshot-fed (was hardcoded).
+            font_prop.boldness = boldness;
+            if (italic)
+              font_prop.skew = 0.4;
             // Poll cancellation between the two heavy steps (text2shapes can
             // take ~100ms for long text; polygons2model another ~50ms).
             if (cancelFlag && cancelFlag->load())
@@ -2779,7 +2815,7 @@ void ProjectServiceMock::addTextVolumeAsync(int objectIndex, const QString &text
         const QString volName = text.length() > 12 ? text.left(12) + "..." : text;
         // Phase 155 (CLOS-02): capture fontPath/height/depth/text so the
         // GUI-thread handler can attach TextConfiguration metadata.
-        QMetaObject::invokeMethod(receiver, [receiver, objectIndex, ok, volName, errMsg, resultMesh, cancelFlag, text, fontPath, height, depth]() {
+        QMetaObject::invokeMethod(receiver, [receiver, objectIndex, ok, volName, errMsg, resultMesh, cancelFlag, text, fontPath, height, depth, boldness, italic]() {
           if (!receiver)
             return;
           // If a newer job has started since, drop this result (stale).
@@ -2805,7 +2841,8 @@ void ProjectServiceMock::addTextVolumeAsync(int objectIndex, const QString &text
               // Phase 155 (CLOS-02): attach editable-text metadata so the volume
               // round-trips through 3MF as a re-editable TextEmboss. Uses the
               // captured fontPath/height/depth snapshot from the async call.
-              receiver->attachEmbossMetadata(newVol, text, fontPath, height, depth);
+              receiver->attachEmbossMetadata(newVol, text, fontPath, height, depth,
+                                              boldness, italic);
               auto &vols = receiver->m_mockVolumes[objectIndex];
               MockVolumeEntry entry;
               entry.name = volName;
@@ -2832,7 +2869,7 @@ void ProjectServiceMock::cancelEmbossVolume()
 
 // ── SVG 浮雕 volume（对齐上游 GLGizmoSVG → Model::read_from_file）──
 
-bool ProjectServiceMock::addSvgVolume(int objectIndex, const QString &svgFilePath)
+bool ProjectServiceMock::addSvgVolume(int objectIndex, const QString &svgFilePath, float depthModifier)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
   {
@@ -2868,6 +2905,18 @@ bool ProjectServiceMock::addSvgVolume(int objectIndex, const QString &svgFilePat
           {
             newVol->name = baseName.toStdString();
             newVol->set_type(Slic3r::ModelVolumeType::MODEL_PART);
+            // Phase 158 (EMBO-F02): depth-modifier scales the imported mesh's
+            // Z extent. Applied via the volume's transform (Z scaling factor)
+            // so the source mesh is preserved. Modifier clamped to a sane
+            // range; 1.0 = no change (backward compat).
+            const float dz = (depthModifier > 0.0f) ? depthModifier : 1.0f;
+            if (std::abs(dz - 1.0f) > 1e-4f)
+            {
+              auto tr = newVol->get_transformation();
+              const auto sc = tr.get_scaling_factor();
+              tr.set_scaling_factor(Slic3r::Vec3d(sc.x(), sc.y(), sc.z() * static_cast<double>(dz)));
+              newVol->set_transformation(tr);
+            }
             // 同步 Mock 数据
             auto &vols = m_mockVolumes[objectIndex];
             MockVolumeEntry entry;

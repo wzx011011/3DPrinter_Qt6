@@ -385,6 +385,20 @@ public:
   /// Phase 144 (EMB-01): user-selected font path (empty = default arial.ttf).
   QString embossFontPath() const;
   void setEmbossFontPath(const QString &path);
+  /// Phase 158 (EMBO-F01): style axes. boldness + italic map to upstream
+  /// FontProp; use-surface + curve-projection are projection concepts persisted
+  /// for round-trip (geometry deformation deferred — see header note above).
+  float embossBoldness() const;
+  void setEmbossBoldness(float b);
+  bool embossItalic() const;
+  void setEmbossItalic(bool i);
+  bool embossUseSurface() const;
+  void setEmbossUseSurface(bool u);
+  bool embossCurveProjection() const;
+  void setEmbossCurveProjection(bool c);
+  /// Phase 158 (EMBO-F02): SVG depth-modifier (Z-scale; 1.0 = no change).
+  float svgDepthModifier() const;
+  void setSvgDepthModifier(float m);
   /// Phase 144 (EMB-01): enumerate system fonts (proxies ProjectServiceMock).
   Q_INVOKABLE QVariantList embossFontList() const;
   Q_INVOKABLE bool embossSelected();
@@ -635,6 +649,17 @@ public:
   Q_PROPERTY(float embossDepth READ embossDepth WRITE setEmbossDepth NOTIFY stateChanged)
   /// Phase 144 (EMB-01): user-selected font path (empty = default system font).
   Q_PROPERTY(QString embossFontPath READ embossFontPath WRITE setEmbossFontPath NOTIFY stateChanged)
+  /// Phase 158 (EMBO-F01): style axes. boldness + italic map to upstream
+  /// FontProp fields and reach text2shapes; use-surface + curve-projection are
+  /// projection concepts persisted into TextConfiguration for round-trip
+  /// (geometry deformation deferred — upstream Emboss.hpp has no ProjectCurve).
+  Q_PROPERTY(float embossBoldness READ embossBoldness WRITE setEmbossBoldness NOTIFY stateChanged)
+  Q_PROPERTY(bool embossItalic READ embossItalic WRITE setEmbossItalic NOTIFY stateChanged)
+  Q_PROPERTY(bool embossUseSurface READ embossUseSurface WRITE setEmbossUseSurface NOTIFY stateChanged)
+  Q_PROPERTY(bool embossCurveProjection READ embossCurveProjection WRITE setEmbossCurveProjection NOTIFY stateChanged)
+  /// Phase 158 (EMBO-F02): SVG depth-modifier (Z-scale on the imported mesh;
+  /// 1.0 = no change). Forwarded via importSVG() → addSvgVolume(idx, path, dz).
+  Q_PROPERTY(float svgDepthModifier READ svgDepthModifier WRITE setSvgDepthModifier NOTIFY stateChanged)
   /// MeshBoolean 设置（对齐上游 GLGizmoMeshBoolean）
   Q_PROPERTY(int booleanOperation READ booleanOperation WRITE setBooleanOperation NOTIFY stateChanged)
   /// AdvancedCut 设置（对齐上游 GLGizmoAdvancedCut）
@@ -1279,6 +1304,15 @@ private:
   float m_embossHeight = 2.0f;
   float m_embossDepth = 1.0f;
   QString m_embossFontPath; // Phase 144 (EMB-01): empty = default system font
+  // Phase 158 (EMBO-F01): style axes. boldness + italic map to FontProp;
+  // use-surface + curve-projection are projection concepts (geometry
+  // deformation deferred — upstream has no ProjectCurve class).
+  float m_embossBoldness = 0.0f;
+  bool m_embossItalic = false;
+  bool m_embossUseSurface = false;
+  bool m_embossCurveProjection = false;
+  // Phase 158 (EMBO-F02): SVG depth-modifier (Z-scale on the imported mesh).
+  float m_svgDepthModifier = 1.0f;
   // MeshBoolean (对齐上游 GLGizmoMeshBoolean)
   int m_booleanOperation = 1;             ///< 0=union, 1=diff, 2=intersect
 

@@ -265,13 +265,26 @@ public:
   void setEmbossFont(const QString &fontPath);
   void setEmbossHeight(float mm);
   void setEmbossDepth(float mm);
+  /// Phase 158 (EMBO-F01): style axes forwarded from the EditorViewModel
+  /// Q_PROPERTYs before addTextVolume runs. Boldness + italic map directly to
+  /// upstream FontProp fields (boldness / skew) and deform glyphs in text2shapes.
+  /// use-surface + curve-projection are projection/placement concepts (NOT
+  /// FontProp fields upstream — Emboss.hpp has no ProjectCurve class); they are
+  /// persisted into TextConfiguration for round-trip fidelity but their geometry
+  /// deformation is deferred with a documented TODO referencing the upstream gap.
+  void setEmbossBoldness(float boldness);
+  void setEmbossItalic(bool italic);
+  void setEmbossUseSurface(bool useSurface);
+  void setEmbossCurveProjection(bool curveProjection);
   /// Phase 144 (EMB-01): enumerate system fonts via upstream
   /// Emboss::get_font_list_by_enumeration (Windows) or get_font_list_by_folder.
   /// Returns a list of {family name, font file path} pairs for QML.
   QVariantList embossFontList() const;
   /// 添加 SVG 浮雕 volume（对齐上游 GLGizmoSVG）
   /// Mock 模式：创建 SvgEmboss 类型 volume
-  Q_INVOKABLE bool addSvgVolume(int objectIndex, const QString &svgFilePath);
+  /// Phase 158 (EMBO-F02): depthModifier scales the imported mesh's Z extent
+  /// (1.0 = no change, 2.0 = double depth). Default 1.0 preserves backward compat.
+  Q_INVOKABLE bool addSvgVolume(int objectIndex, const QString &svgFilePath, float depthModifier = 1.0f);
   /// 简化对象网格（对齐上游 GLGizmoSimplify → its_quadric_edge_collapse）
   /// wantedCount: 目标三角面数 (0=不限制), maxError: 最大误差 (0=不限制)
   Q_INVOKABLE bool simplifyObject(int objectIndex, int wantedCount, float maxError);
@@ -586,6 +599,13 @@ private:
   std::string m_embossFontPath;
   float m_embossHeight = 10.0f;
   float m_embossDepth = 2.0f;
+  /// Phase 158 (EMBO-F01): style axes. boldness + italic map to FontProp
+  /// fields; use-surface + curve-projection are projection concepts persisted
+  /// into TextConfiguration for round-trip (geometry deformation deferred).
+  float m_embossBoldness = 0.0f;
+  bool m_embossItalic = false;
+  bool m_embossUseSurface = false;
+  bool m_embossCurveProjection = false;
   /// Phase 145 (EMB-03): in-flight async emboss cancellation flag. A new
   /// addTextVolumeAsync invocation sets this to true on the prior flag (if any),
   /// then installs a fresh flag for itself. The worker polls via load().
@@ -602,7 +622,8 @@ private:
   /// a projection property upstream, not a FontProp field, so it round-trips
   /// via the mesh Z extent (geometry already persisted as MODEL_PART).
   void attachEmbossMetadata(void *volume, const QString &text,
-                            const std::string &fontPath, float height, float depth);
+                            const std::string &fontPath, float height, float depth,
+                            float boldness = 0.0f, bool italic = false);
   /// Mock-mode per-object scoped overrides (objectIndex → key-value map)
   QHash<int, QHash<QString, QVariant>> m_mockObjectOverrides;
   /// Mock-mode per-volume scoped overrides ((objectIndex << 16 | volumeIndex) → key-value map)

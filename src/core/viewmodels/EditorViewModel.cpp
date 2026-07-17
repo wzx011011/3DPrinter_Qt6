@@ -1546,6 +1546,21 @@ void EditorViewModel::setEmbossDepth(float d) { m_embossDepth = d; emit stateCha
 // Phase 144 (EMB-01): font path accessor + font list proxy.
 QString EditorViewModel::embossFontPath() const { return m_embossFontPath; }
 void EditorViewModel::setEmbossFontPath(const QString &path) { m_embossFontPath = path; emit stateChanged(); }
+
+// Phase 158 (EMBO-F01): style axes accessors. boldness + italic map to
+// upstream FontProp fields; use-surface + curve-projection are projection
+// concepts (geometry deformation deferred — see header note).
+float EditorViewModel::embossBoldness() const { return m_embossBoldness; }
+void EditorViewModel::setEmbossBoldness(float b) { m_embossBoldness = b; emit stateChanged(); }
+bool EditorViewModel::embossItalic() const { return m_embossItalic; }
+void EditorViewModel::setEmbossItalic(bool i) { m_embossItalic = i; emit stateChanged(); }
+bool EditorViewModel::embossUseSurface() const { return m_embossUseSurface; }
+void EditorViewModel::setEmbossUseSurface(bool u) { m_embossUseSurface = u; emit stateChanged(); }
+bool EditorViewModel::embossCurveProjection() const { return m_embossCurveProjection; }
+void EditorViewModel::setEmbossCurveProjection(bool c) { m_embossCurveProjection = c; emit stateChanged(); }
+// Phase 158 (EMBO-F02): SVG depth-modifier accessor.
+float EditorViewModel::svgDepthModifier() const { return m_svgDepthModifier; }
+void EditorViewModel::setSvgDepthModifier(float m) { m_svgDepthModifier = m; emit stateChanged(); }
 QVariantList EditorViewModel::embossFontList() const
 {
   return projectService_ ? projectService_->embossFontList() : QVariantList{};
@@ -1575,6 +1590,13 @@ bool EditorViewModel::embossSelected()
   projectService_->setEmbossFont(m_embossFontPath);
   projectService_->setEmbossHeight(m_embossHeight);
   projectService_->setEmbossDepth(m_embossDepth);
+  // Phase 158 (EMBO-F01): forward the style axes so the service has a
+  // consistent snapshot before addTextVolume runs (mirrors the
+  // font/height/depth forwarding above).
+  projectService_->setEmbossBoldness(m_embossBoldness);
+  projectService_->setEmbossItalic(m_embossItalic);
+  projectService_->setEmbossUseSurface(m_embossUseSurface);
+  projectService_->setEmbossCurveProjection(m_embossCurveProjection);
 
   // Delegate to the real addTextVolume API (对齐上游 GLGizmoEmboss → Emboss::text2shapes)
   bool ok = projectService_->addTextVolume(idx, m_embossText);
@@ -1616,6 +1638,13 @@ void EditorViewModel::embossSelectedAsync()
   projectService_->setEmbossFont(m_embossFontPath);
   projectService_->setEmbossHeight(m_embossHeight);
   projectService_->setEmbossDepth(m_embossDepth);
+  // Phase 158 (EMBO-F01): forward the style axes so the service has a
+  // consistent snapshot before addTextVolume runs (mirrors the
+  // font/height/depth forwarding above).
+  projectService_->setEmbossBoldness(m_embossBoldness);
+  projectService_->setEmbossItalic(m_embossItalic);
+  projectService_->setEmbossUseSurface(m_embossUseSurface);
+  projectService_->setEmbossCurveProjection(m_embossCurveProjection);
   // Wire service signals → viewmodel signals (idempotent — UniqueConnection).
   connect(projectService_, &ProjectServiceMock::embossVolumeAdded,
           this, [this](int objectIndex, const QString &volumeName) {
@@ -1819,6 +1848,13 @@ bool EditorViewModel::addTextObject()
   projectService_->setEmbossFont(m_embossFontPath);
   projectService_->setEmbossHeight(m_embossHeight);
   projectService_->setEmbossDepth(m_embossDepth);
+  // Phase 158 (EMBO-F01): forward the style axes so the service has a
+  // consistent snapshot before addTextVolume runs (mirrors the
+  // font/height/depth forwarding above).
+  projectService_->setEmbossBoldness(m_embossBoldness);
+  projectService_->setEmbossItalic(m_embossItalic);
+  projectService_->setEmbossUseSurface(m_embossUseSurface);
+  projectService_->setEmbossCurveProjection(m_embossCurveProjection);
 
   // Delegate to the real addTextVolume API (对齐上游 GLGizmoText → Emboss::text2shapes)
   bool ok = projectService_->addTextVolume(idx, m_textContent);
@@ -1854,8 +1890,10 @@ bool EditorViewModel::importSVG()
   // Capture undo command before adding SVG volume
   auto *cmd = new AddVolumeCommand(idx, 1 /* svg */, m_svgFilePath, projectService_, this);
 
-  // Delegate to the real addSvgVolume API (对齐上游 GLGizmoSVG → Model::read_from_file)
-  bool ok = projectService_->addSvgVolume(idx, m_svgFilePath);
+  // Delegate to the real addSvgVolume API (对齐上游 GLGizmoSVG → Model::read_from_file).
+  // Phase 158 (EMBO-F02): forward the depth-modifier so the imported mesh's Z
+  // extent is scaled (1.0 = no change; backward compatible).
+  bool ok = projectService_->addSvgVolume(idx, m_svgFilePath, m_svgDepthModifier);
   if (ok)
   {
     if (m_undoManager)

@@ -3312,6 +3312,45 @@ Item {
                 Text { text: qsTr("深度"); color: Theme.textMuted; font.pixelSize: 10 }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.embossDepth : 1; from: 1; to: 20; onValueModified: if (root.editorVm) root.editorVm.embossDepth = value }
 
+                // Phase 158 (EMBO-F01): style controls — boldness slider + italic
+                // checkbox + use-surface / curve-projection toggles. Boldness +
+                // italic map to upstream FontProp fields and reach text2shapes.
+                // use-surface + curve-projection are projection concepts upstream
+                // has no primitive for (Emboss.hpp has no ProjectCurve); they are
+                // persisted into TextConfiguration for round-trip fidelity but
+                // their geometry deformation is documented-deferred.
+                Text { text: qsTr("粗细"); color: Theme.textMuted; font.pixelSize: 10 }
+                Slider {
+                    Layout.preferredWidth: 80
+                    from: 0.0; to: 2.0; stepSize: 0.1
+                    value: root.editorVm ? root.editorVm.embossBoldness : 0.0
+                    onMoved: if (root.editorVm) root.editorVm.embossBoldness = value
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    CxCheckBox {
+                        text: qsTr("斜体")
+                        checked: root.editorVm ? root.editorVm.embossItalic : false
+                        onToggled: if (root.editorVm) root.editorVm.embossItalic = checked
+                    }
+                    CxCheckBox {
+                        text: qsTr("贴附表面")
+                        checked: root.editorVm ? root.editorVm.embossUseSurface : false
+                        onToggled: if (root.editorVm) root.editorVm.embossUseSurface = checked
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("上游 Emboss.hpp 尚无 ProjectCurve 实现；意图已持久化，几何变形延后")
+                    }
+                    CxCheckBox {
+                        text: qsTr("曲线投影")
+                        checked: root.editorVm ? root.editorVm.embossCurveProjection : false
+                        onToggled: if (root.editorVm) root.editorVm.embossCurveProjection = checked
+                        ToolTip.visible: hovered
+                        ToolTip.text: qsTr("上游 Emboss.hpp 尚无 ProjectCurve 实现；意图已持久化，几何变形延后")
+                    }
+                }
+
                 RowLayout {
                     Layout.alignment: Qt.AlignHCenter
                     spacing: 6
