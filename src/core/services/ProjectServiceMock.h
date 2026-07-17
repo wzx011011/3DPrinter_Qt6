@@ -584,6 +584,18 @@ private:
   /// then installs a fresh flag for itself. The worker polls via load().
   /// Mirrors the activeCancelFlag_ pattern used for model loading.
   std::shared_ptr<std::atomic_bool> m_embossCancelFlag;
+
+  /// Phase 155 (CLOS-02): attach upstream `TextConfiguration` to a freshly
+  /// created emboss volume so store_bbs_3mf writes the `<slic3rpe:text>` block.
+  /// Called from both the sync performEmbossVolumeAdd path and the async
+  /// addTextVolumeAsync GUI-thread result handler — kept in one place so the
+  /// two paths persist identical metadata. `volume` is a ModelVolume* (opaque
+  /// in the header; full type only needed in the .cpp). `depth` is recorded
+  /// only into the volume name suffix as an in-session affordance — depth is
+  /// a projection property upstream, not a FontProp field, so it round-trips
+  /// via the mesh Z extent (geometry already persisted as MODEL_PART).
+  void attachEmbossMetadata(void *volume, const QString &text,
+                            const std::string &fontPath, float height, float depth);
   /// Mock-mode per-object scoped overrides (objectIndex → key-value map)
   QHash<int, QHash<QString, QVariant>> m_mockObjectOverrides;
   /// Mock-mode per-volume scoped overrides ((objectIndex << 16 | volumeIndex) → key-value map)

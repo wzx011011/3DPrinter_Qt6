@@ -1613,7 +1613,13 @@ QString ProjectServiceMock::objectVolumeTypeLabel(int objectIndex, int volumeInd
   if (!obj || volumeIndex < 0 || size_t(volumeIndex) >= obj->volumes.size())
     return {};
 
-  return volumeTypeToLabel(obj->volumes[size_t(volumeIndex)]);
+  // Phase 155 (CLOS-02): MODEL_PART volumes with an attached text_configuration
+  // round-trip as re-editable TextEmboss — surface the emboss type label here
+  // (upstream volumeTypeToLabel would return the generic MODEL_PART label).
+  const auto *vol = obj->volumes[size_t(volumeIndex)];
+  if (vol && vol->is_model_part() && vol->text_configuration.has_value())
+    return mockVolumeTypeLabel(MockVolumeType::TextEmboss); // "文字浮雕"
+  return volumeTypeToLabel(vol);
 #else
   if (objectIndex < 0)
     return {};
@@ -1638,7 +1644,17 @@ int ProjectServiceMock::objectVolumeType(int objectIndex, int volumeIndex) const
     return 0;
   const auto *vol = obj->volumes[size_t(volumeIndex)];
   if (!vol) return 0;
-  if (vol->is_model_part())       return 0;
+  // Phase 155 (CLOS-02): a MODEL_PART volume with an attached text_configuration
+  // (populated on save by attachEmbossMetadata, restored on load by upstream's
+  // 3MF reader) is a re-editable TextEmboss volume — surface it as type 5 so
+  // the Emboss panel treats it as emboss-text (not opaque geometry). The same
+  // trick would apply to emboss_shape for SVG volumes (type 6) once that path
+  // persists its metadata. Mirrors upstream `ModelVolume::is_text()`.
+  if (vol->is_model_part()) {
+    if (vol->text_configuration.has_value())
+      return static_cast<int>(MockVolumeType::TextEmboss); // 5
+    return 0;
+  }
   if (vol->is_negative_volume())  return 1;
   if (vol->is_modifier())         return 2;
   if (vol->is_support_blocker())  return 3;
@@ -2482,6 +2498,57 @@ bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
   return ok;
 }
 
+// Phase 155 (CLOS-02): attach upstream `TextConfiguration` to a freshly created
+// emboss volume. Upstream `store_bbs_3mf` (Format/bbs_3mf.cpp:7885-7887) writes
+// the `<slic3rpe:text ...>` block automatically when `volume->text_configuration`
+// has a value, and the upstream reader populates `text_configuration` on load
+// (bbs_3mf.cpp:3461/4072/4084) — so persisting here is sufficient to round-trip
+// editable-text metadata.
+//
+// `depth` is intentionally NOT stored in FontProp (it is a projection property
+// upstream, not a FontProp field). Depth round-trips via the mesh Z extent
+// (polygons2model already baked depth into the geometry, persisted as
+// MODEL_PART). We additionally surface the depth intent in the volume name
+// suffix as an in-session affordance.
+void ProjectServiceMock::attachEmbossMetadata(void *volume, const QString &text,
+                                              const std::string &fontPath,
+                                              float height, float depth)
+{
+#ifdef HAS_LIBSLIC3R
+  auto *vol = static_cast<Slic3r::ModelVolume *>(volume);
+  if (!vol)
+    return;
+
+  // Derive a human-readable font family name from the path (basename without
+  // extension). Used both as EmbossStyle::name and FontProp::family — the
+  // family field is the upstream "additional data about font to be able to
+  // find substitution when same font is not installed" hint.
+  QString familyName = QString::fromStdString(fontPath.empty()
+      ? std::string("arial")
+      : fontPath);
+  const int slash = familyName.lastIndexOf('/');
+  const int bslash = familyName.lastIndexOf('\\');
+  const int cut = std::max(slash, bslash);
+  if (cut >= 0)
+    familyName = familyName.mid(cut + 1);
+  const int dot = familyName.lastIndexOf('.');
+  if (dot > 0)
+    familyName = familyName.left(dot);
+
+  Slic3r::TextConfiguration tc;
+  tc.text = text.toStdString();
+  tc.style.name = familyName.toStdString();
+  tc.style.path = fontPath;
+  tc.style.type = Slic3r::EmbossStyle::Type::file_path;
+  tc.style.prop.size_in_mm = (height > 0.0f) ? height : 10.0f;
+  tc.style.prop.family = familyName.toStdString();
+
+  vol->text_configuration = std::move(tc);
+#else
+  (void)volume; (void)text; (void)fontPath; (void)height; (void)depth;
+#endif
+}
+
 // Phase 145 (EMB-03): worker-side implementation. Runs the (potentially slow)
 // text2shapes + polygons2model pipeline. Safe to call from a Qt Concurrent
 // worker — does NOT touch Qt signals directly (caller is responsible for
@@ -2566,6 +2633,10 @@ bool ProjectServiceMock::performEmbossVolumeAdd(int objectIndex, const QString &
         const QString volName = text.length() > 12 ? text.left(12) + "..." : text;
         newVol->name = volName.toStdString();
         newVol->set_type(Slic3r::ModelVolumeType::MODEL_PART);
+        // Phase 155 (CLOS-02): attach editable-text metadata so the volume
+        // round-trips through 3MF as a re-editable TextEmboss (upstream
+        // store_bbs_3mf writes `<slic3rpe:text>` automatically).
+        attachEmbossMetadata(newVol, text, fontPath, m_embossHeight, m_embossDepth);
         // 同步 Mock 数据
         auto &vols = m_mockVolumes[objectIndex];
         MockVolumeEntry entry;
@@ -2706,7 +2777,9 @@ void ProjectServiceMock::addTextVolumeAsync(int objectIndex, const QString &text
       if (receiver)
       {
         const QString volName = text.length() > 12 ? text.left(12) + "..." : text;
-        QMetaObject::invokeMethod(receiver, [receiver, objectIndex, ok, volName, errMsg, resultMesh, cancelFlag]() {
+        // Phase 155 (CLOS-02): capture fontPath/height/depth/text so the
+        // GUI-thread handler can attach TextConfiguration metadata.
+        QMetaObject::invokeMethod(receiver, [receiver, objectIndex, ok, volName, errMsg, resultMesh, cancelFlag, text, fontPath, height, depth]() {
           if (!receiver)
             return;
           // If a newer job has started since, drop this result (stale).
@@ -2729,6 +2802,10 @@ void ProjectServiceMock::addTextVolumeAsync(int objectIndex, const QString &text
             {
               newVol->name = volName.toStdString();
               newVol->set_type(Slic3r::ModelVolumeType::MODEL_PART);
+              // Phase 155 (CLOS-02): attach editable-text metadata so the volume
+              // round-trips through 3MF as a re-editable TextEmboss. Uses the
+              // captured fontPath/height/depth snapshot from the async call.
+              receiver->attachEmbossMetadata(newVol, text, fontPath, height, depth);
               auto &vols = receiver->m_mockVolumes[objectIndex];
               MockVolumeEntry entry;
               entry.name = volName;

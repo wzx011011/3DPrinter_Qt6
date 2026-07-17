@@ -532,6 +532,12 @@ private slots:
   // PresetServiceMock::comparePresets primitive (Phase 149) is separately
   // anchored by v50CompareDiffAndRoundTripWired.
   void v51PresetDiffDialogWired();
+  // Phase 155 (CLOS-02): Emboss 3MF text metadata round-trip gate. Locks the
+  // save-side attachEmbossMetadata (writes text_configuration so upstream
+  // store_bbs_3mf emits `<slic3rpe:text>`) + the load-side
+  // objectVolumeType/Label reading text_configuration to restore the
+  // TextEmboss tag.
+  void v51EmbossTextMetadataRoundTripWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6792,6 +6798,61 @@ void QmlUiAuditTests::v51PresetDiffDialogWired()
   // (4) qml.qrc registers the new dialog file.
   QVERIFY2(qrc.contains(QStringLiteral("dialogs/PresetDiffDialog.qml")),
            "CLOS-01: qml.qrc must register dialogs/PresetDiffDialog.qml");
+}
+
+// Phase 155 (CLOS-02): Emboss 3MF text metadata round-trip gate.
+// Asserts the save side writes upstream `TextConfiguration` (so store_bbs_3mf
+// emits the `<slic3rpe:text>` block automatically) and the load side reads
+// `text_configuration` to restore the TextEmboss tag. Mirrors upstream
+// `ModelVolume::is_text()` semantics (`Model.hpp:911`).
+void QmlUiAuditTests::v51EmbossTextMetadataRoundTripWired()
+{
+  const QString projH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString projCpp = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+
+  QVERIFY2(!projH.isEmpty(), "Unable to read ProjectServiceMock.h");
+  QVERIFY2(!projCpp.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+
+  // (1) TextConfiguration.hpp is included (struct definitions available).
+  QVERIFY2(projCpp.contains(QStringLiteral("<libslic3r/TextConfiguration.hpp>")),
+           "CLOS-02: ProjectServiceMock.cpp must include libslic3r/TextConfiguration.hpp");
+
+  // (2) attachEmbossMetadata helper exists and is declared in the header.
+  QVERIFY2(projH.contains(QStringLiteral("attachEmbossMetadata")),
+           "CLOS-02: ProjectServiceMock.h must declare attachEmbossMetadata helper");
+
+  // (3) Save side: the helper builds and assigns a TextConfiguration. Asserts
+  //     the key struct field assignments — these are what upstream
+  //     TextConfigurationSerialization::to_xml serializes to <slic3rpe:text>.
+  QVERIFY2(projCpp.contains(QStringLiteral("Slic3r::TextConfiguration tc;")),
+           "CLOS-02: attachEmbossMetadata must construct a Slic3r::TextConfiguration");
+  QVERIFY2(projCpp.contains(QStringLiteral("tc.text =")),
+           "CLOS-02: attachEmbossMetadata must set TextConfiguration::text");
+  QVERIFY2(projCpp.contains(QStringLiteral("tc.style.path =")),
+           "CLOS-02: attachEmbossMetadata must set EmbossStyle::path (font_descriptor)");
+  QVERIFY2(projCpp.contains(QStringLiteral("tc.style.type = Slic3r::EmbossStyle::Type::file_path")),
+           "CLOS-02: attachEmbossMetadata must set EmbossStyle::Type::file_path (source-truth font path type)");
+  QVERIFY2(projCpp.contains(QStringLiteral("tc.style.prop.size_in_mm =")),
+           "CLOS-02: attachEmbossMetadata must set FontProp::size_in_mm (line_height)");
+  QVERIFY2(projCpp.contains(QStringLiteral("tc.style.prop.family =")),
+           "CLOS-02: attachEmbossMetadata must set FontProp::family (font substitution hint)");
+  QVERIFY2(projCpp.contains(QStringLiteral("text_configuration = std::move(tc)")),
+           "CLOS-02: attachEmbossMetadata must assign the TextConfiguration to the volume");
+
+  // (4) Both emboss creation paths (sync + async) call attachEmbossMetadata.
+  QVERIFY2(projCpp.contains(QStringLiteral("attachEmbossMetadata(newVol, text, fontPath")),
+           "CLOS-02: sync performEmbossVolumeAdd path must call attachEmbossMetadata");
+  QVERIFY2(projCpp.contains(QStringLiteral("attachEmbossMetadata(newVol, text, fontPath, height, depth)")),
+           "CLOS-02: async addTextVolumeAsync GUI-thread handler must call attachEmbossMetadata");
+
+  // (5) Load side: objectVolumeType / objectVolumeTypeLabel read
+  //     text_configuration to restore the TextEmboss tag (mirrors upstream
+  //     ModelVolume::is_text()). This is what makes a reloaded emboss volume
+  //     re-editable in the Emboss panel instead of opaque geometry.
+  QVERIFY2(projCpp.contains(QStringLiteral("vol->text_configuration.has_value()")),
+           "CLOS-02: objectVolumeType/objectVolumeTypeLabel must check text_configuration.has_value() to restore TextEmboss tag");
+  QVERIFY2(projCpp.contains(QStringLiteral("MockVolumeType::TextEmboss")),
+           "CLOS-02: load-side type detection must return the TextEmboss enum value for emboss volumes");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
