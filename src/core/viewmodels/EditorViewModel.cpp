@@ -1543,6 +1543,13 @@ float EditorViewModel::embossHeight() const { return m_embossHeight; }
 void EditorViewModel::setEmbossHeight(float h) { m_embossHeight = h; emit stateChanged(); }
 float EditorViewModel::embossDepth() const { return m_embossDepth; }
 void EditorViewModel::setEmbossDepth(float d) { m_embossDepth = d; emit stateChanged(); }
+// Phase 144 (EMB-01): font path accessor + font list proxy.
+QString EditorViewModel::embossFontPath() const { return m_embossFontPath; }
+void EditorViewModel::setEmbossFontPath(const QString &path) { m_embossFontPath = path; emit stateChanged(); }
+QVariantList EditorViewModel::embossFontList() const
+{
+  return projectService_ ? projectService_->embossFontList() : QVariantList{};
+}
 bool EditorViewModel::embossSelected()
 {
   if (!projectService_)
@@ -1553,6 +1560,14 @@ bool EditorViewModel::embossSelected()
 
   // Capture undo command before adding emboss volume
   auto *cmd = new AddVolumeCommand(idx, 2 /* emboss */, m_embossText, projectService_, this);
+
+  // Phase 144 (EMB-01/02): forward the user-selected font path + embossHeight/
+  // embossDepth to the service before invoking addTextVolume. The service uses
+  // these to drive Emboss::create_font_file + FontProp.size_in_mm + ProjectZ depth.
+  // Pre-Phase-144 these were hardcoded (arial.ttf / 10mm / 2mm) inside the service.
+  projectService_->setEmbossFont(m_embossFontPath);
+  projectService_->setEmbossHeight(m_embossHeight);
+  projectService_->setEmbossDepth(m_embossDepth);
 
   // Delegate to the real addTextVolume API (对齐上游 GLGizmoEmboss → Emboss::text2shapes)
   bool ok = projectService_->addTextVolume(idx, m_embossText);
@@ -1733,6 +1748,12 @@ bool EditorViewModel::addTextObject()
 
   // Capture undo command before adding text volume
   auto *cmd = new AddVolumeCommand(idx, 0 /* text */, m_textContent, projectService_, this);
+
+  // Phase 144 (EMB-01/02): forward the emboss font + height + depth to the
+  // service (parallel to the embossSelected path).
+  projectService_->setEmbossFont(m_embossFontPath);
+  projectService_->setEmbossHeight(m_embossHeight);
+  projectService_->setEmbossDepth(m_embossDepth);
 
   // Delegate to the real addTextVolume API (对齐上游 GLGizmoText → Emboss::text2shapes)
   bool ok = projectService_->addTextVolume(idx, m_textContent);

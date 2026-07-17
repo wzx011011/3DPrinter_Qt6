@@ -2419,6 +2419,58 @@ bool ProjectServiceMock::addPrimitive(int objectIndex, int primitiveType)
 
 // ── 文字浮雕 volume（对齐上游 GLGizmoText）──
 
+// Phase 144 (EMB-01/02): emboss font + height/depth setters. Forwarded from
+// EditorViewModel Q_PROPERTYs before addTextVolume runs. Replaces the pre-Phase-144
+// hardcoded arial.ttf / 10mm / 2mm defaults; values persist for the next addTextVolume.
+void ProjectServiceMock::setEmbossFont(const QString &fontPath)
+{
+  m_embossFontPath = fontPath.toStdString();
+}
+
+void ProjectServiceMock::setEmbossHeight(float mm)
+{
+  if (mm > 0.0f)
+    m_embossHeight = mm;
+}
+
+void ProjectServiceMock::setEmbossDepth(float mm)
+{
+  if (mm > 0.0f)
+    m_embossDepth = mm;
+}
+
+// Phase 144 (EMB-01): enumerate system fonts via upstream Emboss. Wraps
+// Slic3r::Emboss::get_font_list_by_enumeration (Windows registry-based) +
+// get_font_list_by_folder fallback. Returns a QVariantList of {family, path}
+// pairs for QML consumption. Each call re-enumerates (cheap on Windows due
+// to registry cache).
+QVariantList ProjectServiceMock::embossFontList() const
+{
+  QVariantList result;
+#ifdef HAS_LIBSLIC3R
+  try
+  {
+    // Upstream prefers registry enumeration on Windows, folder scan elsewhere.
+    // The combined get_font_list() merges both.
+    Slic3r::EmbossStyles fonts = Slic3r::Emboss::get_font_list();
+    result.reserve(static_cast<int>(fonts.size()));
+    for (const auto &style : fonts)
+    {
+      QVariantMap entry;
+      entry.insert(QStringLiteral("family"), QString::fromUtf8(style.name.c_str()));
+      entry.insert(QStringLiteral("path"), QString::fromUtf8(style.path.c_str()));
+      result.append(entry);
+    }
+  }
+  catch (...)
+  {
+    // Swallow — font enumeration must never crash the app; the caller falls
+    // back to the hardcoded arial.ttf path when the list is empty.
+  }
+#endif
+  return result;
+}
+
 bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
@@ -2439,14 +2491,21 @@ bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
   {
     try
     {
-      // 1. 加载系统字体（对齐上游 GLGizmoEmboss 使用 wxFont → Emboss::create_font_file）
-      auto font_file = Slic3r::Emboss::create_font_file(
+      // Phase 144 (EMB-01): font loading. Was hardcoded to arial.ttf; now uses
+      // the user-selected font path from m_embossFontPath (set via setEmbossFont
+      // from QML). Falls back to a known system font if no path is set. The
+      // upstream Emboss::create_font_file wraps stb_truetype (no external
+      // freetype dependency), so this stays self-contained.
+      const std::string fontPath = m_embossFontPath.empty()
+          ? (
 #ifdef _WIN32
-          "C:/Windows/Fonts/arial.ttf"
+              "C:/Windows/Fonts/arial.ttf"
 #else
-          "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+              "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 #endif
-      );
+          )
+          : m_embossFontPath;
+      auto font_file = Slic3r::Emboss::create_font_file(fontPath.c_str());
       if (!font_file)
       {
         lastError_ = tr("添加文字失败：无法加载字体");
@@ -2455,9 +2514,11 @@ bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
 
       Slic3r::Emboss::FontFileWithCache font_cache(std::move(font_file));
 
-      // 2. 配置字体属性（对齐上游 FontProp，定义在 TextConfiguration.hpp）
+      // Phase 144 (EMB-02): parameterize font properties from the EditorViewModel
+      // Q_PROPERTYs (embossHeight + embossDepth). Was hardcoded 10mm/2mm; now
+      // driven by user input (defaults remain 10mm/2mm for backwards compat).
       Slic3r::FontProp font_prop;
-      font_prop.size_in_mm = 10.0;   // 10mm 字高
+      font_prop.size_in_mm = static_cast<double>(m_embossHeight > 0.0f ? m_embossHeight : 10.0f);
       font_prop.boldness = 0.0f;     // 正常字重
 
       // 3. 文字 → 2D 多边形
@@ -2468,8 +2529,8 @@ bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
         return false;
       }
 
-      // 4. 2D 多边形 → 3D 网格（对齐上游 polygons2model + ProjectZ）
-      const double depth = 2.0; // 2mm 挤出深度
+      // Phase 144 (EMB-02): depth from m_embossDepth Q_PROPERTY (was hardcoded 2.0).
+      const double depth = static_cast<double>(m_embossDepth > 0.0f ? m_embossDepth : 2.0f);
       Slic3r::Emboss::ProjectZ projection(depth);
       auto its = Slic3r::Emboss::polygons2model(shapes.expolygons, projection);
 

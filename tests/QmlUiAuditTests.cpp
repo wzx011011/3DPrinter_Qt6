@@ -480,6 +480,11 @@ private slots:
   // panel in PreparePage.qml. The full SLA slice path (VDB-06) is a v5.1+
   // follow-up — it requires wiring SLAPrint from scratch.
   void v50HollowGizmoReachable();
+  // Phase 144 (EMB-01/02): Emboss font + parameterization gate. The real Emboss
+  // pipeline (text2shapes + polygons2model) was already wired before v5.0; this
+  // phase parameterized it (font path + height + depth from Q_PROPERTYs instead
+  // of hardcoded values). The slot anchors the parameterization surface.
+  void v50EmbossParameterized();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6208,6 +6213,56 @@ void QmlUiAuditTests::v50HollowGizmoReachable()
            "VDB-05: EditorViewModel.h must keep Q_PROPERTY hollowQuality");
   QVERIFY2(evmH.contains(QStringLiteral("Q_PROPERTY(float hollowClosingDistance")),
            "VDB-05: EditorViewModel.h must keep Q_PROPERTY hollowClosingDistance");
+}
+
+void QmlUiAuditTests::v50EmbossParameterized()
+{
+  // Phase 144 (EMB-01/02): the real Emboss pipeline (text2shapes + polygons2model)
+  // was wired in an earlier phase but hardcoded (arial.ttf / 10mm / 2mm). Phase 144
+  // parameterizes it via the EditorViewModel embossFontPath/embossHeight/embossDepth
+  // Q_PROPERTYs. This slot anchors the parameterization surface.
+  const QString evmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+
+  // EMB-01: font enumeration + selection surface.
+  QVERIFY2(projSvcH.contains(QStringLiteral("setEmbossFont")),
+           "EMB-01: ProjectServiceMock must expose setEmbossFont");
+  QVERIFY2(projSvcH.contains(QStringLiteral("embossFontList")),
+           "EMB-01: ProjectServiceMock must expose embossFontList for system font enumeration");
+  QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::get_font_list")),
+           "EMB-01: embossFontList must call upstream Slic3r::Emboss::get_font_list");
+  QVERIFY2(evmH.contains(QStringLiteral("Q_PROPERTY(QString embossFontPath")),
+           "EMB-01: EditorViewModel must expose embossFontPath Q_PROPERTY");
+  QVERIFY2(evmH.contains(QStringLiteral("Q_INVOKABLE QVariantList embossFontList")),
+           "EMB-01: EditorViewModel must proxy embossFontList to QML");
+
+  // EMB-02: parameterize the pipeline from Q_PROPERTYs (was hardcoded).
+  QVERIFY2(projSvc.contains(QStringLiteral("m_embossFontPath")),
+           "EMB-02: ProjectServiceMock must use m_embossFontPath (not hardcoded arial)");
+  QVERIFY2(projSvc.contains(QStringLiteral("m_embossHeight > 0.0f")),
+           "EMB-02: ProjectServiceMock must use m_embossHeight to drive FontProp.size_in_mm");
+  QVERIFY2(projSvc.contains(QStringLiteral("m_embossDepth > 0.0f")),
+           "EMB-02: ProjectServiceMock must use m_embossDepth to drive ProjectZ depth");
+
+  // EMB-01/02: EditorViewModel must forward font + height + depth before invoking
+  // addTextVolume (both embossSelected and addTextObject paths).
+  QVERIFY2(evm.contains(QStringLiteral("projectService_->setEmbossFont(m_embossFontPath)")),
+           "EMB-01: EditorViewModel must forward embossFontPath to ProjectServiceMock");
+  QVERIFY2(evm.contains(QStringLiteral("projectService_->setEmbossHeight(m_embossHeight)")),
+           "EMB-02: EditorViewModel must forward embossHeight to ProjectServiceMock");
+  QVERIFY2(evm.contains(QStringLiteral("projectService_->setEmbossDepth(m_embossDepth)")),
+           "EMB-02: EditorViewModel must forward embossDepth to ProjectServiceMock");
+
+  // The pipeline itself (text2shapes + polygons2model) must still be wired
+  // (these come from the earlier phase that introduced addTextVolume).
+  QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
+           "EMB-02: addTextVolume must still call Slic3r::Emboss::text2shapes");
+  QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::polygons2model")),
+           "EMB-02: addTextVolume must still call Slic3r::Emboss::polygons2model");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

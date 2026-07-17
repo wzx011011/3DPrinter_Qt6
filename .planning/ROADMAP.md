@@ -45,7 +45,7 @@
 - [x] Phase 141: v4.x Tech-Debt Closure (WS1) ✓
 - [x] Phase 142: OpenVDB CMake Unlock And libslic3r Link (WS2) ✓
 - [x] Phase 143: Hollow Gizmo Availability + Button + Panel + SLA Slice (WS2) ✓ partial (VDB-06 → v5.1+)
-- [ ] Phase 144: Emboss Font Loading And Text2Shapes Extrude (WS3)
+- [x] Phase 144: Emboss Font Loading And Text2Shapes Extrude (WS3) ✓
 - [ ] Phase 145: Async EmbossJob And Gizmo Panel (WS3)
 - [ ] Phase 146: Emboss Wiring, 3MF Round-Trip, And SVG Path (WS3)
 - [ ] Phase 147: Preset Bundle INI Format And CreatePresetsDialog (WS4)

@@ -382,6 +382,11 @@ public:
   void setEmbossHeight(float h);
   float embossDepth() const;
   void setEmbossDepth(float d);
+  /// Phase 144 (EMB-01): user-selected font path (empty = default arial.ttf).
+  QString embossFontPath() const;
+  void setEmbossFontPath(const QString &path);
+  /// Phase 144 (EMB-01): enumerate system fonts (proxies ProjectServiceMock).
+  Q_INVOKABLE QVariantList embossFontList() const;
   Q_INVOKABLE bool embossSelected();
 
   /// ── MeshBoolean gizmo properties (对齐上游 GLGizmoMeshBoolean) ──
@@ -622,6 +627,8 @@ public:
   Q_PROPERTY(QString embossText READ embossText WRITE setEmbossText NOTIFY stateChanged)
   Q_PROPERTY(float embossHeight READ embossHeight WRITE setEmbossHeight NOTIFY stateChanged)
   Q_PROPERTY(float embossDepth READ embossDepth WRITE setEmbossDepth NOTIFY stateChanged)
+  /// Phase 144 (EMB-01): user-selected font path (empty = default system font).
+  Q_PROPERTY(QString embossFontPath READ embossFontPath WRITE setEmbossFontPath NOTIFY stateChanged)
   /// MeshBoolean 设置（对齐上游 GLGizmoMeshBoolean）
   Q_PROPERTY(int booleanOperation READ booleanOperation WRITE setBooleanOperation NOTIFY stateChanged)
   /// AdvancedCut 设置（对齐上游 GLGizmoAdvancedCut）
@@ -1256,6 +1263,7 @@ private:
   QString m_embossText;
   float m_embossHeight = 2.0f;
   float m_embossDepth = 1.0f;
+  QString m_embossFontPath; // Phase 144 (EMB-01): empty = default system font
   // MeshBoolean (对齐上游 GLGizmoMeshBoolean)
   int m_booleanOperation = 1;             ///< 0=union, 1=diff, 2=intersect
 

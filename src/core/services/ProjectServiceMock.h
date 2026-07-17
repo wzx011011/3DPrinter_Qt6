@@ -242,6 +242,17 @@ public:
   /// 添加文字浮雕 volume（对齐上游 GLGizmoText）
   /// Mock 模式：创建 TextEmboss 类型 volume
   Q_INVOKABLE bool addTextVolume(int objectIndex, const QString &text);
+  /// Phase 144 (EMB-01): font path + height/depth setters. Used by addTextVolume
+  /// to parameterize the Emboss pipeline (was hardcoded arial.ttf / 10mm / 2mm).
+  /// The viewmodel forwards the user-selected font + embossHeight/embossDepth
+  /// Q_PROPERTY values here before invoking addTextVolume.
+  void setEmbossFont(const QString &fontPath);
+  void setEmbossHeight(float mm);
+  void setEmbossDepth(float mm);
+  /// Phase 144 (EMB-01): enumerate system fonts via upstream
+  /// Emboss::get_font_list_by_enumeration (Windows) or get_font_list_by_folder.
+  /// Returns a list of {family name, font file path} pairs for QML.
+  QVariantList embossFontList() const;
   /// 添加 SVG 浮雕 volume（对齐上游 GLGizmoSVG）
   /// Mock 模式：创建 SvgEmboss 类型 volume
   Q_INVOKABLE bool addSvgVolume(int objectIndex, const QString &svgFilePath);
@@ -537,6 +548,13 @@ signals:
 private:
   /// v2.4: 当前项目保存路径（saveProjectAs 后更新）
   QString currentProjectPath_;
+  /// Phase 144 (EMB-01/02): emboss font path + height/depth. Set by the
+  /// viewmodel from EditorViewModel Q_PROPERTYs before addTextVolume runs.
+  /// Empty path = fall back to a known system font. Defaults preserve the
+  /// pre-Phase-144 behavior (10mm height, 2mm depth).
+  std::string m_embossFontPath;
+  float m_embossHeight = 10.0f;
+  float m_embossDepth = 2.0f;
   /// Mock-mode per-object scoped overrides (objectIndex → key-value map)
   QHash<int, QHash<QString, QVariant>> m_mockObjectOverrides;
   /// Mock-mode per-volume scoped overrides ((objectIndex << 16 | volumeIndex) → key-value map)

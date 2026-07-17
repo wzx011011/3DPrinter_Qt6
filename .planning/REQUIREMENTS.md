@@ -157,8 +157,8 @@ Populated by `gsd-roadmapper` during ROADMAP.md creation. Each v5.0 requirement 
 | VDB-04 | 143 | Complete (relaxed — SLA gating deferred to v5.1+) |
 | VDB-05 | 143 | Complete (panel edits; 3MF persistence deferred to v5.1+) |
 | VDB-06 | 143 | Deferred → v5.1+ SLA sub-milestone |
-| EMB-01 | 144 | Pending |
-| EMB-02 | 144 | Pending |
+| EMB-01 | 144 | Complete |
+| EMB-02 | 144 | Complete |
 | EMB-03 | 145 | Pending |
 | EMB-04 | 145 | Pending |
 | EMB-05 | 146 | Pending |

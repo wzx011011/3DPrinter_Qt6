@@ -7,10 +7,10 @@ last_updated: "2026-07-17T04:45:00.000Z"
 last_activity: 2026-07-17
 progress:
   total_phases: 13
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
-  percent: 23
+  completed_phases: 4
+  total_plans: 4
+  completed_plans: 4
+  percent: 31
 ---
 
 # Project State
@@ -52,10 +52,10 @@ See: .planning/milestones/v4.8-* (last shipped milestone archive)
 
 ## Current Position
 
-Phase: 144 (Emboss Font + Text2Shapes — next to plan)
+Phase: 145 (Async EmbossJob + Panel — next to plan)
 Plan: —
-Status: Phase 143 partial ✓ (3/13 phases complete, 23%). VDB-03/04/05 satisfied (Hollow gizmo reachable + button + panel); VDB-06 (SLA slice) explicitly deferred to v5.1+ SLA sub-milestone (requires wiring SLAPrint from scratch). 102/102 QmlUiAuditTests passing.
-Last activity: 2026-07-17 — Phase 143 shipped partial (3/4 reqs; v50HollowGizmoReachable locked). Ready for Phase 144.
+Status: Phase 144 verified ✓ (4/13 phases complete, 31%). EMB-01/02 satisfied (font enumeration + parameterized text2shapes pipeline). 103/103 QmlUiAuditTests passing. Phase 144 was much smaller than feared — the real Emboss pipeline (text2shapes + polygons2model via stb_truetype, no freetype dep) was already wired pre-v5.0; this phase parameterized it.
+Last activity: 2026-07-17 — Phase 144 shipped (EMB-01/02 closed; v50EmbossParameterized locked). Ready for Phase 145.
 
 ## v5.0 Roadmap Snapshot (13 phases, 141-153)
 
