@@ -135,6 +135,7 @@ These are current baseline capabilities inferred from implementation, git histor
 - Full PLATE-09 save/reload state assertions (subsumed by WS5 if PartPlate work completes; otherwise carries).
 - D3D12 default-backend promotion (deferred from v4.5; needs confirmed root cause + clean repro on the original machine).
 - FaceDetector / SlaSupports gizmos — OpenVDB-linking gizmos downstream of Hollow; unlock if WS2 OpenVDB link proves stable.
+- **SLA print path (v5.1+ sub-milestone)** — wire `SLAPrint` into SliceService (currently FFF-only), bundle SLA presets (printer/material/process), implement `.png` layer output, SLA-aware hollowing-reslice flow. Unblocks VDB-06 (hollowEnabled produces hollowed G-code) and the full Hollow feature, SlaSupports gizmo, and 3MF persistence of hollow parameters. Scope: ~35 files in upstream `libslic3r/SLA/` + `SLAPrint.cpp` 1261 lines + SLAPrintSteps + GLGizmoSlaSupports + SLA preset bundle. Phase 143 (v5.0) shipped the Hollow UI scaffolding (button + panel + reachability) on top of the Phase 142 OpenVDB link; this v5.1+ sub-milestone makes it actually slice.
 - de/fr/ja/ko translation long tail (~906/lang remaining after v4.8 I18N-05).
 - Dedicated calibration .drc tower model loading (geometry tech-debt from v4.6 CALIB-01..03).
 - Emboss SVG path, advanced font features (variable fonts, system font enumeration) if WS3 baseline ships clean.

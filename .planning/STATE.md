@@ -7,10 +7,10 @@ last_updated: "2026-07-17T04:45:00.000Z"
 last_activity: 2026-07-17
 progress:
   total_phases: 13
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
-  percent: 15
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
+  percent: 23
 ---
 
 # Project State
@@ -52,10 +52,10 @@ See: .planning/milestones/v4.8-* (last shipped milestone archive)
 
 ## Current Position
 
-Phase: 143 (Hollow Gizmo — next to plan)
+Phase: 144 (Emboss Font + Text2Shapes — next to plan)
 Plan: —
-Status: Phase 142 verified ✓ (2/13 phases complete, 15%). OpenVDB unlocked — the v4.x "unavailable" premise is officially refuted. OWzxSlicer.exe links clean with OpenVDB; 270/270 tests passing.
-Last activity: 2026-07-17 — Phase 142 shipped (VDB-01/VDB-02 closed; OpenVDB 8.2.0 linked; libnoise latent-issue fixed; v50OpenVdbUnlockWired locked). Ready for Phase 143.
+Status: Phase 143 partial ✓ (3/13 phases complete, 23%). VDB-03/04/05 satisfied (Hollow gizmo reachable + button + panel); VDB-06 (SLA slice) explicitly deferred to v5.1+ SLA sub-milestone (requires wiring SLAPrint from scratch). 102/102 QmlUiAuditTests passing.
+Last activity: 2026-07-17 — Phase 143 shipped partial (3/4 reqs; v50HollowGizmoReachable locked). Ready for Phase 144.
 
 ## v5.0 Roadmap Snapshot (13 phases, 141-153)
 

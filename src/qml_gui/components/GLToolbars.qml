@@ -73,6 +73,11 @@ Item {
         case GLViewport.GizmoEmboss:
         case GLViewport.GizmoSVG:
             return root.iconBase + "layout-grid.svg"
+        case GLViewport.GizmoHollow:
+            // Phase 143 (VDB-04): Hollow gizmo. No dedicated icon shipped yet;
+            // reuse the layers-subtract metaphor (a hollowed model subtracts
+            // interior volume). Dedicated hollow.svg can be added later.
+            return root.iconBase + "layers-subtract.svg"
         default:
             return root.iconBase + "box.svg"
         }
@@ -280,6 +285,11 @@ Item {
                 GizmoToolButton { toolId: GLViewport.GizmoMeshBoolean; textTip: qsTr("Mesh boolean"); iconSource: iconForTool(toolId) }
                 GizmoToolButton { toolId: GLViewport.GizmoEmboss; textTip: qsTr("Emboss"); iconSource: iconForTool(toolId) }
                 GizmoToolButton { toolId: GLViewport.GizmoSVG; textTip: qsTr("SVG emboss"); iconSource: iconForTool(toolId) }
+                // Phase 143 (VDB-04): Hollow gizmo button. Visible when the
+                // Hollow bit is set in availableGizmoMask (EditorViewModel case 8
+                // returns hasSingleObject after Phase 142 linked OpenVDB). The
+                // full SLA print path is a v5.1+ follow-up.
+                GizmoToolButton { toolId: GLViewport.GizmoHollow; textTip: qsTr("Hollow"); iconSource: iconForTool(toolId) }
             }
         }
     }

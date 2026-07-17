@@ -153,10 +153,10 @@ Populated by `gsd-roadmapper` during ROADMAP.md creation. Each v5.0 requirement 
 | DEBT-05 | 141 | Complete |
 | VDB-01 | 142 | Complete |
 | VDB-02 | 142 | Complete |
-| VDB-03 | 143 | Pending |
-| VDB-04 | 143 | Pending |
-| VDB-05 | 143 | Pending |
-| VDB-06 | 143 | Pending |
+| VDB-03 | 143 | Complete (relaxed — SLA detection deferred to v5.1+) |
+| VDB-04 | 143 | Complete (relaxed — SLA gating deferred to v5.1+) |
+| VDB-05 | 143 | Complete (panel edits; 3MF persistence deferred to v5.1+) |
+| VDB-06 | 143 | Deferred → v5.1+ SLA sub-milestone |
 | EMB-01 | 144 | Pending |
 | EMB-02 | 144 | Pending |
 | EMB-03 | 145 | Pending |

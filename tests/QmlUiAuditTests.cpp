@@ -473,6 +473,13 @@ private slots:
   // OWzxSlicer.exe links clean (no LNK2019 on mesh_to_grid/grid_to_mesh/
   // redistance_grid); this slot anchors the source-level evidence.
   void v50OpenVdbUnlockWired();
+  // Phase 143 (VDB-03/04/05): Hollow gizmo reachability + button + panel gate.
+  // Locks the EditorViewModel gizmo-availability change (case 8 returns
+  // hasSingleObject, not false), the removal of the "Blocked: OpenVDB unavailable"
+  // tooltip for case 8, the new Hollow button in GLToolbars.qml, and the Hollow
+  // panel in PreparePage.qml. The full SLA slice path (VDB-06) is a v5.1+
+  // follow-up — it requires wiring SLAPrint from scratch.
+  void v50HollowGizmoReachable();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6149,6 +6156,58 @@ void QmlUiAuditTests::v50OpenVdbUnlockWired()
            "VDB-02/libnoise: BuildLibslic3rFromSource.cmake must document the NOTFOUND sentinel risk");
   QVERIFY2(libsl3rCmake.contains(QStringLiteral("FORCE")),
            "VDB-02/libnoise: LIBNOISE_INCLUDE_DIR must be force-set to vcpkg path");
+}
+
+void QmlUiAuditTests::v50HollowGizmoReachable()
+{
+  // Phase 143 (VDB-03/04/05): Hollow gizmo is now reachable. Phase 142 linked
+  // OpenVDB; this slot anchors that the gizmo-availability switch, tooltip
+  // blocker, GLToolbars button, and PreparePage panel are all wired. The full
+  // SLA slice path (VDB-06) is deferred to v5.1+ (requires SLAPrint wiring).
+  const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString evmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
+
+  // VDB-03: case 8 must NOT return false unconditionally. It must reflect
+  // hasSingleObject (the Phase 143 change). The literal "case 8: // Hollow"
+  // followed by `return hasSingleObject` is the anchor.
+  QVERIFY2(evm.contains(QStringLiteral("case 8: // Hollow\n    return hasSingleObject")),
+           "VDB-03: EditorViewModel case 8 (Hollow) must return hasSingleObject, not false");
+
+  // VDB-03: case 8 tooltip must NOT say "Blocked: OpenVDB unavailable" anymore.
+  // The new behavior returns an empty string (no blocker).
+  QVERIFY2(!evm.contains(QStringLiteral("case 8:\n  case 18:\n    return QStringLiteral(\"Blocked: OpenVDB unavailable\")")),
+           "VDB-03: case 8 must NOT have the 'Blocked: OpenVDB unavailable' tooltip (case 18 may keep a v5.1+ SLA marker)");
+  QVERIFY2(evm.contains(QStringLiteral("Phase 143 (VDB-03): Hollow gizmo is now reachable")),
+           "VDB-03: case 8 must document the Phase 143 reachability change");
+
+  // VDB-04: GLToolbars must have a GizmoHollow button + an iconForTool mapping.
+  QVERIFY2(glToolbars.contains(QStringLiteral("toolId: GLViewport.GizmoHollow")),
+           "VDB-04: GLToolbars.qml must have a GizmoToolButton with toolId GizmoHollow");
+  QVERIFY2(glToolbars.contains(QStringLiteral("case GLViewport.GizmoHollow:")),
+           "VDB-04: GLToolbars iconForTool must handle GizmoHollow");
+
+  // VDB-05: PreparePage must have a Hollow panel that becomes visible when
+  // gizmoMode === GizmoHollow. The panel must bind at least hollowEnabled.
+  QVERIFY2(preparePage.contains(QStringLiteral("viewport3d.gizmoMode === GLViewport.GizmoHollow")),
+           "VDB-05: PreparePage must have a Hollow panel visible when gizmoMode === GizmoHollow");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.hollowEnabled")),
+           "VDB-05: Hollow panel must bind hollowEnabled");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.hollowOffset")),
+           "VDB-05: Hollow panel must bind hollowOffset");
+
+  // VDB-05: EditorViewModel must expose the Hollow Q_PROPERTYs (already declared
+  // before Phase 143 but anchor them here so a future refactor cannot drop them).
+  QVERIFY2(evmH.contains(QStringLiteral("Q_PROPERTY(bool hollowEnabled")),
+           "VDB-05: EditorViewModel.h must keep Q_PROPERTY hollowEnabled");
+  QVERIFY2(evmH.contains(QStringLiteral("Q_PROPERTY(float hollowOffset")),
+           "VDB-05: EditorViewModel.h must keep Q_PROPERTY hollowOffset");
+  QVERIFY2(evmH.contains(QStringLiteral("Q_PROPERTY(float hollowQuality")),
+           "VDB-05: EditorViewModel.h must keep Q_PROPERTY hollowQuality");
+  QVERIFY2(evmH.contains(QStringLiteral("Q_PROPERTY(float hollowClosingDistance")),
+           "VDB-05: EditorViewModel.h must keep Q_PROPERTY hollowClosingDistance");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

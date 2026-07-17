@@ -2985,6 +2985,158 @@ Item {
             }
         }
 
+        // Phase 143 (VDB-05): Hollow gizmo control panel (对齐上游 GLGizmoHollow).
+        // Surfaces the existing Q_PROPERTYs declared at EditorViewModel.h:326-340
+        // (hollowEnabled, hollowOffset, hollowQuality, hollowClosingDistance,
+        // hollowHoleRadius, hollowHoleHeight). The full SLA slice path (VDB-06)
+        // is a v5.1+ follow-up — this panel wires the parameter surface so when
+        // SLAPrint lands the values flow through.
+        Rectangle {
+            anchors.top: parent.top
+            anchors.topMargin: root.gizmoPanelTopOffset
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: hollowContent.implicitWidth + 24
+            height: hollowContent.implicitHeight + 16
+            radius: 6
+            color: Theme.bgFloating
+            border.color: Theme.borderSubtle
+            visible: viewport3d.gizmoMode === GLViewport.GizmoHollow && root.editorVm
+
+            ColumnLayout {
+                id: hollowContent
+                anchors.centerIn: parent
+                spacing: 6
+
+                Text {
+                    text: qsTr("镂空设置")
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeSM
+                    font.bold: true
+                    Layout.alignment: Qt.AlignHCenter
+                }
+
+                // 启用镂空（对齐上游 hollowing_enable）
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("启用镂空:"); color: Theme.textMuted; font.pixelSize: 10 }
+                    CxCheckBox {
+                        checked: root.editorVm ? root.editorVm.hollowEnabled : false
+                        onCheckedChanged: if (root.editorVm) root.editorVm.hollowEnabled = checked
+                    }
+                }
+
+                // 镂空厚度（对齐上游 hollowing_min_thickness — offset）
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("厚度:"); color: Theme.textMuted; font.pixelSize: 10 }
+                    CxSlider {
+                        from: 1.0; to: 10.0; stepSize: 0.1
+                        value: root.editorVm ? root.editorVm.hollowOffset : 3.0
+                        implicitWidth: 100
+                        onMoved: if (root.editorVm) root.editorVm.hollowOffset = value
+                    }
+                    Text {
+                        text: root.editorVm ? root.editorVm.hollowOffset.toFixed(1) + " mm" : "3.0 mm"
+                        color: Theme.textPrimary
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 50
+                    }
+                }
+
+                // 镂空质量（对齐上游 hollowing_quality）
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("质量:"); color: Theme.textMuted; font.pixelSize: 10 }
+                    CxSlider {
+                        from: 0.0; to: 1.0; stepSize: 0.05
+                        value: root.editorVm ? root.editorVm.hollowQuality : 0.5
+                        implicitWidth: 100
+                        onMoved: if (root.editorVm) root.editorVm.hollowQuality = value
+                    }
+                    Text {
+                        text: root.editorVm ? root.editorVm.hollowQuality.toFixed(2) : "0.50"
+                        color: Theme.textPrimary
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 40
+                    }
+                }
+
+                // 闭合距离（对齐上游 hollowing_closing_distance）
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("闭合距离:"); color: Theme.textMuted; font.pixelSize: 10 }
+                    CxSlider {
+                        from: 0.0; to: 10.0; stepSize: 0.1
+                        value: root.editorVm ? root.editorVm.hollowClosingDistance : 2.0
+                        implicitWidth: 100
+                        onMoved: if (root.editorVm) root.editorVm.hollowClosingDistance = value
+                    }
+                    Text {
+                        text: root.editorVm ? root.editorVm.hollowClosingDistance.toFixed(1) + " mm" : "2.0 mm"
+                        color: Theme.textPrimary
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 50
+                    }
+                }
+
+                // 排水孔直径（对齐上游 hole_diameter — hollowHoleRadius*2）
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("排水孔半径:"); color: Theme.textMuted; font.pixelSize: 10 }
+                    CxSlider {
+                        from: 1.0; to: 10.0; stepSize: 0.1
+                        value: root.editorVm ? root.editorVm.hollowHoleRadius : 3.0
+                        implicitWidth: 100
+                        onMoved: if (root.editorVm) root.editorVm.hollowHoleRadius = value
+                    }
+                    Text {
+                        text: root.editorVm ? root.editorVm.hollowHoleRadius.toFixed(1) + " mm" : "3.0 mm"
+                        color: Theme.textPrimary
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 50
+                    }
+                }
+
+                // 排水孔深度（对齐上游 hole_depth — hollowHoleHeight）
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("排水孔深度:"); color: Theme.textMuted; font.pixelSize: 10 }
+                    CxSlider {
+                        from: 1.0; to: 10.0; stepSize: 0.1
+                        value: root.editorVm ? root.editorVm.hollowHoleHeight : 3.0
+                        implicitWidth: 100
+                        onMoved: if (root.editorVm) root.editorVm.hollowHoleHeight = value
+                    }
+                    Text {
+                        text: root.editorVm ? root.editorVm.hollowHoleHeight.toFixed(1) + " mm" : "3.0 mm"
+                        color: Theme.textPrimary
+                        font.pixelSize: 10
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 50
+                    }
+                }
+
+                // SLA 切片提示 — VDB-06 is a v5.1+ follow-up
+                Text {
+                    text: qsTr("注：完整 SLA 切片待 v5.1+")
+                    color: Theme.textMuted
+                    font.pixelSize: 9
+                    font.italic: true
+                    Layout.alignment: Qt.AlignHCenter
+                }
+            }
+        }
+
         // MMU 多耗材分段控制面板（对齐上游 GLGizmoMmuSegmentation）
         Rectangle {
             anchors.top: parent.top

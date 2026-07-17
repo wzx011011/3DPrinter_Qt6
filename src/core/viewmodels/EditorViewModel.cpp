@@ -5999,7 +5999,18 @@ bool EditorViewModel::canActivateGizmo(int gizmoMode) const
     return hasSingleObject;
   case 13: // Mesh Boolean
     return kCgalMeshBooleanAvailable && !hasSelectedVolume() && m_selectedSourceIndices.size() == 2;
+  // Phase 143 (VDB-03): Hollow gizmo is now reachable. Phase 142 linked OpenVDB
+  // (refuting the v4.x "unavailable" premise); the EditorViewModel Q_PROPERTY
+  // scaffolding (hollowEnabled/hollowOffset/hollowQuality/hollowClosingDistance/
+  // hollowHoleRadius/hollowHoleHeight at EditorViewModel.h:326-340) already exists.
+  // The full SLA print path (VDB-06: produce hollowed G-code) is deferred to a
+  // future v5.1+ SLA sub-milestone — it requires wiring SLAPrint from scratch
+  // (no SLAPrint integration exists in SliceService, no SLA presets bundled).
+  // The Hollow bit flips on whenever exactly one object is selected so the gizmo
+  // button + panel are reachable; SLA-only enforcement will follow when SLAPrint
+  // lands.
   case 8: // Hollow
+    return hasSingleObject;
   case 10: // MMU segmentation
   case 15: // Face detector
   case 18: // SLA supports
@@ -6042,8 +6053,12 @@ QString EditorViewModel::gizmoStatusText(int gizmoMode) const
     // Phase 137: CGAL MeshBoolean is now available; gate on selection instead.
     return QStringLiteral("Requires two selected objects");
   case 8:
+    // Phase 143 (VDB-03): Hollow gizmo is now reachable (OpenVDB linked in
+    // Phase 142). The full SLA slice path is a v5.1+ follow-up — see case 8
+    // in availableGizmoMask above.
+    return QString();
   case 18:
-    return QStringLiteral("Blocked: OpenVDB unavailable");
+    return QStringLiteral("Blocked: requires SLA print path (v5.1+)");
   case 10:
   case 15:
     return QStringLiteral("Not yet backed by a real Qt workflow");
