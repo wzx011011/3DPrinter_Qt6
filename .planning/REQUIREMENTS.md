@@ -81,12 +81,18 @@ Populated by `gsd-roadmapper` during ROADMAP.md creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (to be filled by roadmapper) | | |
+| CLOS-01 (PSET-05 diff-view) | 154 | Pending |
+| CLOS-02 (EMB-06 3MF text metadata) | 155 | Pending |
+| CLOS-03 (PLATE-05 runtime thumbnails) | 156 | Pending |
+| CLOS-04 (PLATE-06 live ctest) | 157 | Pending |
+| EMBO-F01 (Emboss style controls) | 158 | Pending |
+| EMBO-F02 (SVG advanced) | 158 | Pending |
+| REGRESS-05 (regression gate) | 159 | Pending |
 
 **Coverage:**
 - v5.1 requirements: 7 total (CLOS-01..04, EMBO-F01..02, REGRESS-05)
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 7 ⚠️ (will be 0 after roadmap creation)
+- Mapped to phases: 7/7 (100%)
+- Unmapped: 0
 
 ---
 

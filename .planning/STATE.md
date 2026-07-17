@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-07-17T06:41:26.232Z"
 last_activity: 2026-07-17
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -16,8 +16,8 @@ progress:
 # Project State
 
 **Milestone:** v5.1 — v5.0 Deferred Items Closure
-**Status:** Planning (2026-07-17). Defining requirements.
-**Next step:** Define REQUIREMENTS.md → create ROADMAP.md (5 small closure phases, ~154+).
+**Status:** Planning (2026-07-17). Roadmap created — 6 phases (154-159), 7 requirements mapped.
+**Next step:** Plan Phase 154 (QML Preset Diff-View Dialog) — phases skip discuss (`skip_discuss=true`), so go straight to `/gsd:plan-phase 154`.
 
 ## Last Shipped Milestone: v5.0 (2026-07-17, tech_debt)
 
@@ -71,7 +71,7 @@ See: .planning/milestones/v5.0-ROADMAP.md, v5.0-REQUIREMENTS.md, v5.0-MILESTONE-
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Not started (roadmap created, ready to plan Phase 154)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-07-17 — Milestone v5.1 started
+Status: Roadmap created — 6 phases (154-159), 7 requirements mapped, 0 unmapped
+Last activity: 2026-07-17 — v5.1 ROADMAP.md created (154 QML diff dialog ‖ 155 Emboss 3MF text ‖ 156 runtime thumbnails ‖ 157 multi-plate ctest fixture ‖ 158 Emboss style+SVG → 159 REGRESS-05)
