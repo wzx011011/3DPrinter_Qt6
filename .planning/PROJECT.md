@@ -76,6 +76,19 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 **Known deferred items:** CGAL-02 intersection boolean (returns subtraction, not A∩B) + orphaned `meshBooleanSelected` menu stub; assemble rotate/scale live-visual compose (translate-only render; transforms persist + round-trip); `drillObject` C4715; de/fr/ja/ko ~906/lang long tail; 2-line CGAL submodule compat patch.
 
+## Current Milestone: v5.1 v5.0 Deferred Items Closure
+
+**Goal:** Close the 4 documented v5.0 partials (PSET-05 / EMB-06 / PLATE-05 / PLATE-06) plus Emboss style/SVG follow-ups. Each item is a 1-phase completion of a primitive already shipped in v5.0 — low-risk closures, no new architecture.
+
+**Scope rule:** All work is offline/local and maps to OrcaSlicer v7.0.1 upstream. SLA print path is explicitly deferred to v5.2 (a dedicated SLA milestone — research at `.planning/research/sla-scope.md` confirms it's ~4 phases for VDB-06 close, not the 8-10 previously estimated; libslic3r SLA files are already compiled and linked). LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed.
+
+**Target features (5 workstreams):**
+- **PSET-05 closure:** QML side-by-side diff-view consumer for the existing `comparePresets` primitive (Phase 149 shipped the QVariantList API; v5.1 wires the QML dialog).
+- **EMB-06 closure:** editable-text 3MF metadata persistence via upstream `TextConfigurationSerialization` (Phase 146 shipped geometry round-trip; v5.1 adds the `<text>` 3MF block so reloaded volumes are re-editable as text).
+- **PLATE-05 closure:** runtime thumbnail capture scheduler for session-created/modified plates (Phase 151 shipped persisted-plate thumbnails; v5.1 adds the capture loop + `Q_INVOKABLE setPlateThumbnailFromBase64` write path).
+- **PLATE-06 closure:** live multi-plate round-trip ctest (Phase 152 shipped the source-audit lock; v5.1 adds a `ProjectServiceMock` test fixture so the ctest can actually run).
+- **Emboss follow-ups (optional):** style controls (boldness via FontProp, italic, variable-font axes); SVG advanced features (curve projection, depth modifier). Scoped as a single phase if context allows.
+
 ## Previous Milestone: v5.0 Advanced Feature Recovery & Tech-Debt Closure (shipped 2026-07-17)
 
 **Shipped state:** OpenVDB officially unlocked (Phase 142) — refuted the v4.x "unavailable" premise that blocked Hollow/SlaSupports/FaceDetector for 4 milestone cycles (VDB-01/02); tech-debt closure across v4.6/v4.7/v4.8 (DEBT-01..05); Hollow gizmo UI scaffolding (VDB-03/04/05; VDB-06 SLA slice → v5.1+ sub-milestone); Emboss complete — parameterized real text2shapes+polygons2model pipeline + async Qt Concurrent wrapper + SVG path (EMB-01..07); Preset bundle full chain — .ini interop + CreatePresetsDialog + UnsavedChangesDialog + comparePresets + dirty propagation (PSET-01..07); PartPlate UI completion — gap analysis + drag-reorder + 6 staging-buffer regression lock (PLATE-01..06); cross-workstream regression gate — 12 source-audit slots, 280/280 tests (REGRESS-04). 13 phases (141-153), 32 requirements (31 satisfied + VDB-06 deferred), audit tech_debt.
@@ -84,11 +97,11 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 ## Current Milestone
 
-Not started. Run `/gsd:new-milestone` to define the next cycle.
+v5.1 — v5.0 Deferred Items Closure (active).
 
 ## Next Milestone
 
-After v5.0, the highest-value follow-up is the **v5.1+ SLA sub-milestone** (wire SLAPrint into SliceService; bundle SLA presets; implement .png layer output; close VDB-06; unblock SlaSupports + FaceDetector). Other candidate backlog: de/fr/ja/ko translation long tail; calibration .drc tower geometry; Emboss 3MF text metadata + style controls; Preset diff view; PartPlate runtime thumbnail capture.
+After v5.1, the next milestone is **v5.2 SLA Print Path** — wire `SLAPrint` into SliceService, close VDB-06, unblock SlaSupports + FaceDetector. Research at `.planning/research/sla-scope.md` confirms the libslic3r SLA surface is already compiled and linked; the real work is ~4 phases of Qt orchestration (PrinterTechnology dispatch + SLA preset schema + .sl1 output dialog + verify). Other candidate backlog: de/fr/ja/ko translation long tail; calibration .drc tower geometry.
 
 ## Requirements
 
@@ -239,4 +252,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-17 after v5.0 milestone shipped.*
+*Last updated: 2026-07-17 after v5.1 milestone planning.*

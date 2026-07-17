@@ -1,22 +1,23 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.0
-milestone_name: Advanced Feature Recovery & Tech-Debt Closure
-status: completed
-last_updated: "2026-07-17T03:30:00.000Z"
-last_activity: 2026-07-17 — Milestone v5.0 completed and archived
+milestone: v5.1
+milestone_name: v5.0 Deferred Items Closure
+status: planning
+last_updated: "2026-07-17T06:41:26.232Z"
+last_activity: 2026-07-17
 progress:
-  total_phases: 13
-  completed_phases: 13
-  total_plans: 13
-  completed_plans: 13
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
-**Last shipped milestone:** v5.0 — Advanced Feature Recovery & Tech-Debt Closure (2026-07-17, tech_debt).
-**Next step:** No active milestone. Run `/gsd:new-milestone` to start the next one.
+**Milestone:** v5.1 — v5.0 Deferred Items Closure
+**Status:** Planning (2026-07-17). Defining requirements.
+**Next step:** Define REQUIREMENTS.md → create ROADMAP.md (5 small closure phases, ~154+).
 
 ## Last Shipped Milestone: v5.0 (2026-07-17, tech_debt)
 
@@ -39,6 +40,7 @@ progress:
 | 153 | v5.0 Cross-Workstream Regression Gate | Complete | REGRESS-04 |
 
 **Key accomplishments:**
+
 - OpenVDB officially unlocked (Phase 142): the v4.x "OpenVDB unavailable" premise — which blocked Hollow, SlaSupports, FaceDetector, and downstream OpenVDB consumers for 4 milestone cycles — was wrong. OpenVDB 8.2.0 was built and present in DEPS_PREFIX all along; fixed with 3 CMake changes.
 - Tech-debt closure (Phase 141): CGAL-02 true intersection + orphaned menu removed + drillObject C4715 + ASM rotate/scale live-visual compose.
 - Emboss complete (Phases 144-146): parameterized real text2shapes pipeline + async Qt Concurrent wrapper + no-selection fallback + SVG path verified.
@@ -47,6 +49,7 @@ progress:
 - Cross-workstream regression gate (Phase 153): 12 source-audit slots; 280/280 tests passing.
 
 **Carried tech_debt (non-blocking, see v5.0-MILESTONE-AUDIT.md):**
+
 - VDB-06 SLA slice path → v5.1+ SLA sub-milestone (requires wiring SLAPrint from scratch).
 - EMB-03 minimal async wrapper (not full upstream EmbossJob port); EMB-06 3MF text metadata deferred.
 - PSET-05 comparePresets primitive shipped; QML diff-view consumer deferred.
@@ -65,3 +68,10 @@ See: .planning/milestones/v5.0-ROADMAP.md, v5.0-REQUIREMENTS.md, v5.0-MILESTONE-
 
 - v5.0 shipped. To start the next milestone: `/gsd:new-milestone`.
 - Recommended next: v5.1+ SLA sub-milestone (wire SLAPrint; close VDB-06; unblock SlaSupports + FaceDetector).
+
+## Current Position
+
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-07-17 — Milestone v5.1 started
