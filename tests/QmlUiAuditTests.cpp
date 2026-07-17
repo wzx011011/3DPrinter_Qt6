@@ -508,6 +508,12 @@ private slots:
   // contract gate. Locks the new comparePresets C++ primitive + the existing
   // dirty-state propagation infrastructure + the bundle round-trip slot.
   void v50CompareDiffAndRoundTripWired();
+  // Phase 151 (PLATE-02/03/04/05): PartPlate UI implementation gate. Locks the
+  // PLATE-02 drag-reorder path + the EditorViewModel movePlate proxy + the
+  // pre-existing PLATE-03 print-sequence dialog + the pre-existing PLATE-04
+  // plate-scope override path. PLATE-05 non-current thumbnail runtime capture
+  // is documented as refined scope (persisted-plate thumbnails already work).
+  void v50PartPlateUiImplementationWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6526,6 +6532,55 @@ void QmlUiAuditTests::v50CompareDiffAndRoundTripWired()
            "PSET-07: ConfigViewModel must track pendingUnsavedTarget");
   QVERIFY2(configVmH.contains(QStringLiteral("hasPendingUnsavedChanges")),
            "PSET-07: ConfigViewModel must expose hasPendingUnsavedChanges");
+}
+
+void QmlUiAuditTests::v50PartPlateUiImplementationWired()
+{
+  // Phase 151 (PLATE-02/03/04/05): PartPlate UI implementation. PLATE-02 is new
+  // (drag-reorder + EditorViewModel movePlate proxy); PLATE-03/04 were already
+  // implemented pre-v5.0 (locked); PLATE-05 is documented as refined scope
+  // (persisted-plate thumbnails work via plateThumbnailBase64; runtime capture
+  // for session-created plates is deferred — see .planning/research/partplate-ui-gap.md).
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString evmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
+
+  // PLATE-02: drag-reorder wiring + EditorViewModel movePlate proxy.
+  QVERIFY2(preparePage.contains(QStringLiteral("DropArea {"))
+           && preparePage.contains(QStringLiteral("\"plate-drag\"")),
+           "PLATE-02: PreparePage must have a DropArea keyed plate-drag for drag-reorder");
+  QVERIFY2(preparePage.contains(QStringLiteral("draggedPlateIndex")),
+           "PLATE-02: PreparePage must stash the source plate index during a plate drag");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.movePlate(")),
+           "PLATE-02: PreparePage must call editorVm.movePlate on plate-drag drop");
+  QVERIFY2(evmH.contains(QStringLiteral("Q_INVOKABLE bool movePlate(int oldIndex, int newIndex)")),
+           "PLATE-02: EditorViewModel must expose movePlate Q_INVOKABLE");
+  QVERIFY2(evm.contains(QStringLiteral("projectService_->movePlate(oldIndex, newIndex)")),
+           "PLATE-02: EditorViewModel movePlate must proxy to ProjectServiceMock");
+  QVERIFY2(projSvcH.contains(QStringLiteral("movePlate")),
+           "PLATE-02: ProjectServiceMock must expose movePlate (delegates to PartPlateList)");
+
+  // PLATE-03: per-plate print sequence dialog (pre-existing — verify still present).
+  QVERIFY2(preparePage.contains(QStringLiteral("platePrintSequence")),
+           "PLATE-03: PreparePage must bind the per-plate print-sequence combo");
+  QVERIFY2(preparePage.contains(QStringLiteral("setPlatePrintSequence")),
+           "PLATE-03: PreparePage must write back via setPlatePrintSequence");
+
+  // PLATE-04: per-plate config override (pre-existing — verify the scope path).
+  QVERIFY2(evmH.contains(QStringLiteral("requestPlateScope")) ||
+           readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h")).contains(QStringLiteral("requestPlateScope")),
+           "PLATE-04: ConfigViewModel must expose requestPlateScope (the plate-scope switch)");
+
+  // PLATE-05: non-current-plate thumbnail accessor (pre-existing). The QML
+  // binding reads plateThumbnailBase64 for non-current plates (gap analysis:
+  // runtime capture scheduler is documented refined scope).
+  QVERIFY2(preparePage.contains(QStringLiteral("plateThumbnailBase64")),
+           "PLATE-05: PreparePage must read plateThumbnailBase64 for non-current-plate thumbnails");
+  QVERIFY2(projSvcH.contains(QStringLiteral("plateThumbnailBase64")),
+           "PLATE-05: ProjectServiceMock must expose plateThumbnailBase64");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

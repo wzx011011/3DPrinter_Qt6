@@ -172,10 +172,10 @@ Populated by `gsd-roadmapper` during ROADMAP.md creation. Each v5.0 requirement 
 | PSET-06 | 149 | Complete (source-audit locked; live ctest deferred) |
 | PSET-07 | 149 | Complete (pre-existing infrastructure; locked) |
 | PLATE-01 | 150 | Complete |
-| PLATE-02 | 151 | Pending |
-| PLATE-03 | 151 | Pending |
-| PLATE-04 | 151 | Pending |
-| PLATE-05 | 151 | Pending |
+| PLATE-02 | 151 | Complete |
+| PLATE-03 | 151 | Complete (pre-existing; locked) |
+| PLATE-04 | 151 | Complete (pre-existing; locked) |
+| PLATE-05 | 151 | Complete (refined — persisted-plate thumbnails; runtime capture deferred) |
 | PLATE-06 | 152 | Pending |
 | REGRESS-04 | 153 | Pending |
 

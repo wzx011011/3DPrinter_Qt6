@@ -3588,6 +3588,9 @@ Item {
                     delegate: Rectangle {
                         required property int index
                         property bool dragHover: false
+                        // Phase 151 (PLATE-02): stash the source plate index during
+                        // a plate-drag so the drop target knows which plate to move.
+                        property int draggedPlateIndex: -1
                         readonly property int sliceResultStatus: root.editorVm ? root.editorVm.plateSliceResultStatus(index) : 0
                         width: 86
                         height: plateListView.height
@@ -3702,6 +3705,51 @@ Item {
                                 if (!root.editorVm) return
                                 root.editorVm.moveSelectedObjectToPlate(index)
                                 drop.acceptProposedAction()
+                            }
+                        }
+
+                        // Phase 151 (PLATE-02): drag-to-reorder. DropArea accepts
+                        // a "plate-drag" key (emitted by the DragHandler below on
+                        // sibling cards); on drop calls editorVm.movePlate.
+                        // Mirrors upstream PartPlate plate-bar drag-reorder.
+                        DropArea {
+                            anchors.fill: parent
+                            keys: ["plate-drag"]
+                            onEntered: function(drag) { parent.dragHover = true }
+                            onExited: function(drag) { parent.dragHover = false }
+                            onDropped: function(drop) {
+                                parent.dragHover = false
+                                if (!root.editorVm) return
+                                // The source plate's index is stashed on the
+                                // dragged card via draggedPlateIndex (set on drag start).
+                                const srcIndex = drop.source && drop.source.draggedPlateIndex !== undefined
+                                    ? drop.source.draggedPlateIndex : -1
+                                if (srcIndex < 0 || srcIndex === index) return
+                                root.editorVm.movePlate(srcIndex, index)
+                                drop.acceptProposedAction()
+                            }
+                        }
+
+                        // Phase 151 (PLATE-02): drag handler on the card header
+                        // area (the label strip — avoids hijacking the click-to-
+                        // select interaction on the rest of the card). On drag
+                        // start, attaches the plate index so the drop target
+                        // knows which plate to move.
+                        DragHandler {
+                            target: parent
+                            xAxis.enabled: true
+                            yAxis.enabled: false
+                            dragThreshold: 6
+                            // Only the top label strip initiates a plate drag —
+                            // clicking the thumbnail/body still selects the plate.
+                            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                            onActiveChanged: {
+                                if (active && parent && root.editorVm) {
+                                    parent.Drag.startDrag("plate-drag")
+                                    parent.draggedPlateIndex = parent.index
+                                } else if (parent) {
+                                    parent.Drag.drop()
+                                }
                             }
                         }
                     }
