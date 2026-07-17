@@ -177,13 +177,14 @@ Populated by `gsd-roadmapper` during ROADMAP.md creation. Each v5.0 requirement 
 | PLATE-04 | 151 | Complete (pre-existing; locked) |
 | PLATE-05 | 151 | Complete (refined — persisted-plate thumbnails; runtime capture deferred) |
 | PLATE-06 | 152 | Complete (source-audit locked; live ctest deferred) |
-| REGRESS-04 | 153 | Pending |
+| REGRESS-04 | 153 | Complete |
 
 **Coverage:**
-- v5.0 requirements: 32 total (DEBT-01..05, VDB-01..06, EMB-01..07, PSET-01..07, PLATE-01..06, REGRESS-04). NOTE: the previous header text in this file said "33 requirements" — that was an off-by-one miscount; the literal ID list contains 32 unique IDs (5+6+7+7+6+1=32). Corrected by the roadmapper on 2026-07-17. Both PROJECT.md and STATE.md reflect 32.
+- v5.0 requirements: 32 total (DEBT-01..05, VDB-01..06, EMB-01..07, PSET-01..07, PLATE-01..06, REGRESS-04). 31 complete + 1 deferred (VDB-06 → v5.1+ SLA sub-milestone).
 - Mapped to phases: 32/32 (100%)
 - Unmapped: 0
 - Orphans (phase with no requirement): none (every phase 141-153 has ≥1 mapped requirement)
+- All 13 phases verified (2026-07-17); 280/280 tests passing across 4 core groups.
 
 ---
 

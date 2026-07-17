@@ -520,6 +520,12 @@ private slots:
   // on a full ProjectServiceMock context; this slot anchors the source-level
   // contract that all plate fields have a round-trip staging path.
   void v50PartPlateSaveReloadRegressionWired();
+  // Phase 153 (REGRESS-04): v5.0 cross-workstream regression gate. Consolidates
+  // ALL v5.0 anchors from Phases 141-152 (DEBT/VDB/EMB/PSET/PLATE) into one
+  // top-level gate, AND re-asserts the v4.8/v4.7/v4.6 milestone anchors so
+  // v5.0 did not regress them. Mirrors the v48CrossWorkstreamRegressionLocked
+  // pattern (which is itself re-asserted here).
+  void v50RegressionLocked();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6629,6 +6635,85 @@ void QmlUiAuditTests::v50PartPlateSaveReloadRegressionWired()
   // is not in scope).
   QVERIFY2(projSvc.contains(QStringLiteral("pendingPlate")),
            "PLATE-06: ProjectServiceMock must rebuild pending plate state from 3MF load");
+}
+
+void QmlUiAuditTests::v50RegressionLocked()
+{
+  // Phase 153 (REGRESS-04): v5.0 cross-workstream regression gate. The most
+  // important assertion is cross-slot: this slot verifies that the consolidated
+  // v5.0 contract holds by spot-checking one anchor per workstream AND
+  // re-asserting the v4.x milestone anchors. The per-workstream detail slots
+  // (v50TechDebtRegressionLocked, v50OpenVdbUnlockWired, v50HollowGizmoReachable,
+  // v50EmbossParameterized, v50EmbossAsyncAndPanelWired, v50EmbossWiringAndSvgWired,
+  // v50PresetIniAndCreateDialogWired, v50UnsavedChangesAndFilterWired,
+  // v50CompareDiffAndRoundTripWired, v50PartPlateUiImplementationWired,
+  // v50PartPlateSaveReloadRegressionWired) already run individually; this slot
+  // is the cross-workstream rollup that protects against a regression slipping
+  // through if a per-workstream slot is later removed or weakened.
+  const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+  const QString rootCmake = readSource(QStringLiteral("CMakeLists.txt"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
+  QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+
+  // ── v5.0 WS1 (tech-debt) anchor: CGAL-02 true intersection.
+  QVERIFY2(projSvc.contains(QStringLiteral("MeshBoolean::cgal::intersect")),
+           "REGRESS-04/WS1: meshBoolean op==2 must still call MeshBoolean::cgal::intersect");
+
+  // ── v5.0 WS2 (OpenVDB) anchor: find_package(OpenVDB) + openvdb_libs shim.
+  QVERIFY2(rootCmake.contains(QStringLiteral("find_package(OpenVDB 5.0 COMPONENTS openvdb)")),
+           "REGRESS-04/WS2: root CMakeLists must keep find_package(OpenVDB)");
+  QVERIFY2(rootCmake.contains(QStringLiteral("add_library(openvdb_libs INTERFACE IMPORTED)")),
+           "REGRESS-04/WS2: root CMakeLists must keep the openvdb_libs shim");
+
+  // ── v5.0 WS2 (Hollow) anchor: case 8 reachable.
+  QVERIFY2(evm.contains(QStringLiteral("case 8: // Hollow\n    return hasSingleObject")),
+           "REGRESS-04/WS2: Hollow gizmo (case 8) must stay reachable (hasSingleObject)");
+
+  // ── v5.0 WS3 (Emboss) anchor: parameterized text2shapes pipeline.
+  QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
+           "REGRESS-04/WS3: text2shapes pipeline must stay wired");
+  QVERIFY2(projSvc.contains(QStringLiteral("m_embossFontPath")),
+           "REGRESS-04/WS3: emboss font path must stay parameterized (not hardcoded)");
+
+  // ── v5.0 WS3 (Emboss async) anchor: Qt Concurrent worker.
+  QVERIFY2(projSvc.contains(QStringLiteral("addTextVolumeAsync")),
+           "REGRESS-04/WS3: async emboss API must stay present");
+
+  // ── v5.0 WS4 (Preset) anchor: .ini bundle + comparePresets.
+  QVERIFY2(presetSvc.contains(QStringLiteral("exportBundleIni")),
+           "REGRESS-04/WS4: PresetServiceMock must keep exportBundleIni (.ini interop)");
+  QVERIFY2(presetSvc.contains(QStringLiteral("comparePresets")),
+           "REGRESS-04/WS4: comparePresets primitive must stay present");
+
+  // ── v5.0 WS5 (PartPlate) anchor: drag-reorder + staging buffers.
+  QVERIFY2(preparePage.contains(QStringLiteral("\"plate-drag\"")),
+           "REGRESS-04/WS5: PreparePage must keep the plate-drag DropArea (drag-reorder)");
+  QVERIFY2(readSource(QStringLiteral("src/core/services/ProjectServiceMock.h")).contains(QStringLiteral("pendingPlateThumbnails_")),
+           "REGRESS-04/WS5: ProjectServiceMock must keep pendingPlateThumbnails_ (3MF round-trip)");
+
+  // ── v4.8 re-assertion: CGAL MeshBoolean + Drill + Assembly ASM-01.
+  QVERIFY2(evm.contains(QStringLiteral("kCgalMeshBooleanAvailable = true")),
+           "REGRESS-04/v4.8: kCgalMeshBooleanAvailable must still be true");
+  QVERIFY2(projSvc.contains(QStringLiteral("MeshBoolean::minus")),
+           "REGRESS-04/v4.8: MeshBoolean::minus must still be wired for difference/drill");
+
+  // ── v4.7 re-assertion: paint-gate flag + flatten + fixMesh.
+  QVERIFY2(evm.contains(QStringLiteral("kViewportTrianglePickingAvailable = true")),
+           "REGRESS-04/v4.7: paint-gizmo gate flag must still be true");
+  QVERIFY2(evm.contains(QStringLiteral("orientObject")),
+           "REGRESS-04/v4.7: flattenSelected must still call orientObject");
+  QVERIFY2(projSvc.contains(QStringLiteral("its_merge_vertices")),
+           "REGRESS-04/v4.7: fixMesh must still call its_merge_vertices");
+
+  // ── v4.6 re-assertion: calibration tower modes.
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
+           "REGRESS-04/v4.6: Vol_speed tower mode (7) must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
+           "REGRESS-04/v4.6: Retraction tower mode (9) must still dispatch");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

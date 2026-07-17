@@ -7,10 +7,10 @@ last_updated: "2026-07-17T04:45:00.000Z"
 last_activity: 2026-07-17
 progress:
   total_phases: 13
-  completed_phases: 12
-  total_plans: 12
-  completed_plans: 12
-  percent: 92
+  completed_phases: 13
+  total_plans: 13
+  completed_plans: 13
+  percent: 100
 ---
 
 # Project State
@@ -52,10 +52,21 @@ See: .planning/milestones/v4.8-* (last shipped milestone archive)
 
 ## Current Position
 
-Phase: 153 (v5.0 Cross-Workstream Regression Gate — next to plan)
+Phase: — (all 13 phases complete)
 Plan: —
-Status: Phase 152 verified ✓ (12/13 phases complete, 92%). PLATE-06 satisfied (source-audit lock; live ctest deferred). **WS5 (PartPlate) complete** — all 6 PLATE reqs. 110/110 QmlUiAuditTests passing. Only the final REGRESS-04 gate remains.
-Last activity: 2026-07-17 — Phase 152 shipped (PLATE-06 closed; v50PartPlateSaveReloadRegressionWired locked). Ready for Phase 153.
+Status: **v5.0 all 13 phases complete (100%).** 280/280 tests passing across 4 core groups. REGRESS-04 `v50RegressionLocked` slot consolidates all v5.0 + re-asserts v4.6/v4.7/v4.8 anchors. Ready for milestone lifecycle.
+Last activity: 2026-07-17 — Phase 153 shipped (REGRESS-04 closed; v50RegressionLocked locked). **All 32 v5.0 requirements addressed** (31 complete + VDB-06 deferred to v5.1+ SLA sub-milestone).
+
+## v5.0 final headline
+
+The v4.x "OpenVDB unavailable" premise — which blocked Hollow, SlaSupports, FaceDetector, and downstream OpenVDB consumers for 4 milestone cycles — was wrong. Phase 142 fixed it with a small CMake change (3 fixes: explicit OPENVDB_LIBRARYDIR, find_package AFTER libslic3r to avoid TBB export collision, libnoise NOTFOUND-sentinel force-fix).
+
+## Next: milestone lifecycle
+
+Ready for:
+- `/gsd:audit-milestone v5.0` — audit-phase gate
+- `/gsd:complete-milestone v5.0` — archive + advance version
+- `/gsd:cleanup` — phase dir cleanup
 
 ## Resume Brief — READ THIS BEFORE CONTINUING
 
