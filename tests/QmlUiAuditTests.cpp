@@ -577,6 +577,10 @@ private slots:
   // 392px hardcode removal — backend.sidebarWidth is now resizable within
   // [300, 520]; DockableSidebar drag handle is functional (was visible no-op).
   void v52SidebarWidthUnbroken();
+  // Phase 165 (CW-01/02): copywriting & language sweep gate. Locks one source
+  // language (ZH) for the 3 previously-EN dialogs + removal of dev-jargon
+  // tooltips.
+  void v52CopywritingSwept();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -7427,6 +7431,43 @@ void QmlUiAuditTests::v52SidebarWidthUnbroken()
            "SW-01: PreviewPage targetPreviewLeftWidth must source from backend (was hardcoded 392)");
   QVERIFY2(assemblePage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
            "SW-01: AssemblePage sidebarWidth must source from backend (was hardcoded 392)");
+}
+
+// Phase 165 (CW-01/02): copywriting & language sweep gate.
+// Phase 165 enforced one source language (ZH per project positioning) for the
+// 3 previously-EN dialogs (PresetDiffDialog, CreatePresetsDialog,
+// FilamentGroupPopup) and removed dev-jargon tooltips from Phase 158 Emboss.
+void QmlUiAuditTests::v52CopywritingSwept()
+{
+  const QString presetDiff = readSource(QStringLiteral("src/qml_gui/dialogs/PresetDiffDialog.qml"));
+  const QString createPresets = readSource(QStringLiteral("src/qml_gui/dialogs/CreatePresetsDialog.qml"));
+  const QString filamentPopup = readSource(QStringLiteral("src/qml_gui/dialogs/FilamentGroupPopup.qml"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+
+  QVERIFY2(!presetDiff.isEmpty(), "Unable to read PresetDiffDialog.qml");
+  QVERIFY2(!createPresets.isEmpty(), "Unable to read CreatePresetsDialog.qml");
+  QVERIFY2(!filamentPopup.isEmpty(), "Unable to read FilamentGroupPopup.qml");
+
+  // (1) PresetDiffDialog: previously all-English — now ZH source.
+  QVERIFY2(presetDiff.contains(QStringLiteral("qsTr(\"预设对比\")")),
+           "CW-01: PresetDiffDialog title must be ZH source (was \"Compare Presets\")");
+  QVERIFY2(presetDiff.contains(QStringLiteral("qsTr(\"范围：\")")),
+           "CW-01: PresetDiffDialog Scope label must be ZH source");
+
+  // (2) CreatePresetsDialog: previously all-English — now ZH source.
+  QVERIFY2(createPresets.contains(QStringLiteral("qsTr(\"创建预设\")")),
+           "CW-01: CreatePresetsDialog title must be ZH source (was \"Create Preset\")");
+
+  // (3) FilamentGroupPopup: previously all-English — now ZH source.
+  QVERIFY2(filamentPopup.contains(QStringLiteral("qsTr(\"耗材分组\")")),
+           "CW-01: FilamentGroupPopup title must be ZH source (was \"Filament Group\")");
+
+  // (4) Phase 158 Emboss tooltips no longer leak dev jargon (Emboss.hpp,
+  //     ProjectCurve, 上游, 持久化). CW-02 contract.
+  QVERIFY2(!preparePage.contains(QStringLiteral("Emboss.hpp")),
+           "CW-02: PreparePage must not leak Emboss.hpp dev jargon into user copy");
+  QVERIFY2(!preparePage.contains(QStringLiteral("ProjectCurve")),
+           "CW-02: PreparePage must not leak ProjectCurve dev jargon into user copy");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

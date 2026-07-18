@@ -27,7 +27,7 @@ import "../controls"
 CxDialog {
     id: root
     modal: true
-    title: qsTr("Create Preset")
+    title: qsTr("创建预设")
     width: 480
     height: 280
     padding: 0
@@ -58,7 +58,7 @@ CxDialog {
             names = root.configVm.filamentPresetNames
         else if (root.selectedScope === 2 && root.configVm.printPresetNames)
             names = root.configVm.printPresetNames
-        inheritsCombo.model = (names && names.length > 0) ? names : [qsTr("(none)")]
+        inheritsCombo.model = (names && names.length > 0) ? names : [qsTr("（无）")]
         inheritsCombo.currentIndex = 0
     }
 
@@ -68,7 +68,7 @@ CxDialog {
         spacing: 10
 
         Text {
-            text: qsTr("Create a new user preset")
+            text: qsTr("创建新的用户预设")
             color: Theme.textPrimary
             font.pixelSize: Theme.fontSizeMD
             font.bold: true
@@ -77,11 +77,11 @@ CxDialog {
         // Scope selector (对齐上游 Preset::Type radio group)
         RowLayout {
             spacing: 8
-            Text { text: qsTr("Scope:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
+            Text { text: qsTr("范围："); color: Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
             CxComboBox {
                 id: scopeCombo
                 Layout.preferredWidth: 160
-                model: [qsTr("Printer"), qsTr("Material"), qsTr("Process")]
+                model: [qsTr("打印机"), qsTr("材料"), qsTr("工艺")]
                 onActivated: {
                     // 0=Printer, 1=Material, 2=Process (matches upstream Type enum order)
                     root.selectedScope = currentIndex
@@ -93,7 +93,7 @@ CxDialog {
         // Inherits-from selector (对齐上游 "Inherits from" combo)
         RowLayout {
             spacing: 8
-            Text { text: qsTr("Inherits from:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
+            Text { text: qsTr("继承自："); color: Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
             CxComboBox {
                 id: inheritsCombo
                 Layout.preferredWidth: 260
@@ -104,18 +104,18 @@ CxDialog {
         // Name input + duplicate warning
         RowLayout {
             spacing: 8
-            Text { text: qsTr("Name:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
+            Text { text: qsTr("名称："); color: Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
             CxTextField {
                 id: nameInput
                 Layout.preferredWidth: 260
                 implicitHeight: 26
                 font.pixelSize: Theme.fontSizeSM
-                placeholderText: qsTr("enter preset name")
+                placeholderText: qsTr("输入预设名称")
             }
         }
         Text {
             id: dupWarning
-            text: qsTr("A preset with this name already exists")
+            text: qsTr("该名称的预设已存在")
             color: Theme.accentDark
             font.pixelSize: Theme.fontSizeXS
             visible: false
@@ -128,11 +128,11 @@ CxDialog {
             Layout.alignment: Qt.AlignRight
             spacing: 8
             CxButton {
-                text: qsTr("Cancel")
+                text: qsTr("取消")
                 onClicked: root.reject()
             }
             CxButton {
-                text: qsTr("Create")
+                text: qsTr("创建")
                 enabled: nameInput.text.length > 0 && !dupWarning.visible
                 onClicked: {
                     if (!root.configVm) { root.reject(); return }
@@ -146,7 +146,7 @@ CxDialog {
                     if (ok) {
                         root.accept()
                     } else {
-                        dupWarning.text = qsTr("Create failed (duplicate name or invalid scope)")
+                        dupWarning.text = qsTr("创建失败（名称重复或范围无效）")
                         dupWarning.visible = true
                     }
                 }

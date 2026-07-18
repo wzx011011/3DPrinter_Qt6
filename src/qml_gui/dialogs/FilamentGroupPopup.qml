@@ -78,7 +78,7 @@ CxPopup {
         spacing: Theme.spacingSM
 
         Text {
-            text: qsTr("Filament Group")
+            text: qsTr("耗材分组")
             color: Theme.textPrimary
             font.pixelSize: Theme.fontSizeLG
             font.bold: true
@@ -86,7 +86,7 @@ CxPopup {
         }
 
         Text {
-            text: qsTr("Choose how filaments map to extruders for this plate.")
+            text: qsTr("为本盘选择耗材到喷嘴的映射方式。")
             color: Theme.textMuted
             font.pixelSize: Theme.fontSizeSM
             Layout.fillWidth: true
@@ -100,12 +100,12 @@ CxPopup {
 
         Repeater {
             model: [
-                { mode: root.fmmAutoForFlush, title: qsTr("Filament-Saving"),
-                  hint: qsTr("Minimize flush volume (auto-recommended).") },
-                { mode: root.fmmAutoForMatch, title: qsTr("Convenience"),
-                  hint: qsTr("Match AMS-loaded filaments (auto-recommended).") },
-                { mode: root.fmmManual,       title: qsTr("Custom"),
-                  hint: qsTr("Use the explicit per-extruder filament map.") }
+                { mode: root.fmmAutoForFlush, title: qsTr("省耗材"),
+                  hint: qsTr("最小化冲刷量（自动推荐）。") },
+                { mode: root.fmmAutoForMatch, title: qsTr("便利"),
+                  hint: qsTr("匹配 AMS 已装载耗材（自动推荐）。") },
+                { mode: root.fmmManual,       title: qsTr("自定义"),
+                  hint: qsTr("使用显式的每喷嘴耗材映射。") }
             ]
             delegate: RadioButton {
                 required property var modelData
@@ -157,14 +157,14 @@ CxPopup {
                 spacing: 2
 
                 Text {
-                    text: qsTr("Auto-recommended map (mode %1)").arg(root.autoMode)
+                    text: qsTr("自动推荐映射（模式 %1）").arg(root.autoMode)
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSizeSM
                 }
                 Text {
                     text: root.autoMaps.length > 0
                           ? root.autoMaps.join(", ")
-                          : qsTr("(no extruders)")
+                          : qsTr("（无喷嘴）")
                     color: Theme.textPrimary
                     font.pixelSize: Theme.fontSizeMD
                     Layout.fillWidth: true
@@ -181,7 +181,7 @@ CxPopup {
             Item { Layout.fillWidth: true }
 
             CxButton {
-                text: qsTr("Close")
+                text: qsTr("关闭")
                 onClicked: root.close()
             }
         }

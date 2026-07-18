@@ -30,7 +30,7 @@ import "../controls"
 CxDialog {
     id: root
     modal: false
-    title: qsTr("Compare Presets")
+    title: qsTr("预设对比")
     width: 720
     height: 520
     padding: 0
@@ -55,8 +55,8 @@ CxDialog {
     // preset exists).
     function refreshPresetList() {
         if (!root.configVm) {
-            presetACombo.model = [qsTr("(none)")]
-            presetBCombo.model = [qsTr("(none)")]
+            presetACombo.model = [qsTr("（无）")]
+            presetBCombo.model = [qsTr("（无）")]
             return
         }
         var names = []
@@ -64,7 +64,7 @@ CxDialog {
         else if (root.selectedScope === 1) names = root.configVm.filamentPresetNames || []
         else names = root.configVm.printPresetNames || []
 
-        if (!names || names.length === 0) names = [qsTr("(none)")]
+        if (!names || names.length === 0) names = [qsTr("（无）")]
 
         presetACombo.model = names
         presetBCombo.model = names
@@ -98,14 +98,14 @@ CxDialog {
             spacing: 8
 
             Text {
-                text: qsTr("Scope:")
+                text: qsTr("范围：")
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontSizeSM
             }
             CxComboBox {
                 id: scopeCombo
                 Layout.preferredWidth: 120
-                model: [qsTr("Printer"), qsTr("Material"), qsTr("Process")]
+                model: [qsTr("打印机"), qsTr("材料"), qsTr("工艺")]
                 onActivated: {
                     root.selectedScope = currentIndex
                     root.refreshPresetList()
@@ -116,7 +116,7 @@ CxDialog {
             Item { Layout.preferredWidth: 12 } // spacer
 
             Text {
-                text: qsTr("A:")
+                text: qsTr("A：")
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontSizeSM
             }
@@ -130,7 +130,7 @@ CxDialog {
             }
 
             Text {
-                text: qsTr("B:")
+                text: qsTr("B：")
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontSizeSM
             }
@@ -146,14 +146,14 @@ CxDialog {
             Item { Layout.fillWidth: true } // spacer
 
             CxButton {
-                text: qsTr("Compare")
+                text: qsTr("对比")
                 enabled: root.presetAName.length > 0 && root.presetBName.length > 0
-                         && root.presetAName !== qsTr("(none)")
-                         && root.presetBName !== qsTr("(none)")
+                         && root.presetAName !== qsTr("（无）")
+                         && root.presetBName !== qsTr("（无）")
                 onClicked: root.runDiff()
             }
             CxButton {
-                text: qsTr("Close")
+                text: qsTr("关闭")
                 onClicked: root.reject()
             }
         }
@@ -173,7 +173,7 @@ CxDialog {
 
                 Text {
                     Layout.preferredWidth: 240
-                    text: qsTr("Key")
+                    text: qsTr("键名")
                     color: Theme.textMuted
                     font.pixelSize: Theme.fontSizeXS
                     font.bold: true
@@ -211,8 +211,8 @@ CxDialog {
                 anchors.centerIn: parent
                 visible: diffList.count === 0
                 text: root.presetAName.length === 0 && root.presetBName.length === 0
-                      ? qsTr("Select two presets and click Compare")
-                      : qsTr("No differences")
+                      ? qsTr("请选择两个预设后点击对比")
+                      : qsTr("无差异")
                 color: Theme.textMuted
                 font.pixelSize: Theme.fontSizeMD
             }
