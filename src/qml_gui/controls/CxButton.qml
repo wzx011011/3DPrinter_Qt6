@@ -7,6 +7,8 @@ Button {
 
     property int cxStyle: CxButton.Style.Primary
     property bool compact: false
+    // Phase 161 (DS-02): ToolTip support for parity with CxIconButton.
+    property string toolTipText: ""
 
     enum Style { Primary, Secondary, Danger, Ghost }
 
@@ -14,6 +16,10 @@ Button {
     implicitWidth: Math.max(64, contentItem.implicitWidth + leftPadding + rightPadding)
     leftPadding: Theme.spacingLG
     rightPadding: Theme.spacingLG
+
+    // Phase 161 (DS-02): press-scale for parity with CxIconButton's 0.92.
+    scale: root.pressed ? 0.96 : 1.0
+    Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
 
     background: Rectangle {
         radius: Theme.radiusSM
@@ -28,8 +34,12 @@ Button {
                 return Theme.accent
             }
             if (root.cxStyle === CxButton.Style.Danger) {
-                if (d) return Qt.darker(Theme.statusError, 1.5)
-                if (p) return Qt.darker(Theme.statusError, 1.1)
+                // Phase 161 (DS-02): replaced the previous runtime color
+                // manipulation with explicit Phase 160 tokens (statusErrorDark /
+                // statusErrorPressed). No runtime darker/lighter calls — those
+                // bypass the Theme token system.
+                if (d) return Theme.statusErrorDark
+                if (p) return Theme.statusErrorPressed
                 return Theme.statusError
             }
             if (root.cxStyle === CxButton.Style.Ghost) {
@@ -47,12 +57,15 @@ Button {
         opacity: root.enabled ? 1.0 : 0.45
 
         border.color: {
+            // Phase 161 (DS-02): focus border for accessibility (keyboard nav).
+            if (root.activeFocus) return Theme.borderFocus
             if (root.cxStyle === CxButton.Style.Primary) return "transparent"
             if (root.cxStyle === CxButton.Style.Danger) return "transparent"
             if (root.cxStyle === CxButton.Style.Ghost) return root.hovered ? Theme.borderDefault : "transparent"
             return Theme.borderStrong
         }
-        border.width: 1
+        border.width: root.activeFocus ? 2 : 1
+        Behavior on border.color { ColorAnimation { duration: 120 } }
     }
 
     contentItem: Text {
@@ -67,4 +80,9 @@ Button {
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }
+
+    // Phase 161 (DS-02): ToolTip mirror CxIconButton's contract.
+    ToolTip.visible: root.hovered && root.toolTipText.length > 0
+    ToolTip.text: root.toolTipText
+    ToolTip.delay: 400
 }

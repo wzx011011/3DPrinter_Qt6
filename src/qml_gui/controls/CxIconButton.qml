@@ -45,7 +45,11 @@ ToolButton {
             if (root.cxStyle === CxIconButton.Style.Ghost)
                 return root.down ? Theme.bgPressed : (root.hovered ? Theme.bgHover : "transparent")
             if (root.selected)
-                return root.down ? Qt.darker(Theme.accentSubtle, 1.1) : (root.hovered ? Theme.accentSubtle : Theme.accentSubtle)
+                // Phase 161 (DS-02): replaced the previous runtime color
+                // manipulation with the explicit Phase 160 token
+                // (accentSubtlePressed). No runtime darker/lighter calls — those
+                // bypass the Theme token system.
+                return root.down ? Theme.accentSubtlePressed : Theme.accentSubtle
             return root.down ? Theme.bgPressed : (root.hovered ? Theme.bgHover : Theme.bgPanel)
         }
         Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }

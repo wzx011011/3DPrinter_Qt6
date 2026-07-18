@@ -60,7 +60,7 @@ SpinBox {
         height: parent.height / 2
         implicitWidth: 22
         color: root.up.pressed ? Theme.bgPressed : root.up.hovered ? Theme.bgHover : "transparent"
-        Text { anchors.centerIn: parent; text: "▲"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS - 2 }
+        Text { anchors.centerIn: parent; text: "▲"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
     }
 
     down.indicator: Rectangle {
@@ -69,6 +69,6 @@ SpinBox {
         height: parent.height / 2
         implicitWidth: 22
         color: root.down.pressed ? Theme.bgPressed : root.down.hovered ? Theme.bgHover : "transparent"
-        Text { anchors.centerIn: parent; text: "▼"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS - 2 }
+        Text { anchors.centerIn: parent; text: "▼"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
     }
 }

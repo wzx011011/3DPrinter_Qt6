@@ -562,6 +562,10 @@ private slots:
   // (no silent undefined); the v5.2 audit's missing tokens must be present;
   // header documentation exists.
   void v52ThemeTokenFoundationWired();
+  // Phase 161 (DS-02/03): Cx* control library hardening gate. Locks zero
+  // Qt.darker/lighter, no font size below the XS floor, CxButton has press-scale
+  // + toolTipText + focus border.
+  void v52ControlLibraryHardened();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -6864,9 +6868,11 @@ void QmlUiAuditTests::v51EmbossTextMetadataRoundTripWired()
            "CLOS-02: attachEmbossMetadata must assign the TextConfiguration to the volume");
 
   // (4) Both emboss creation paths (sync + async) call attachEmbossMetadata.
+  //     (Phase 158 extended the signature to carry boldness/italic; the
+  //     match anchors on the leading arg list which is stable across that.)
   QVERIFY2(projCpp.contains(QStringLiteral("attachEmbossMetadata(newVol, text, fontPath")),
            "CLOS-02: sync performEmbossVolumeAdd path must call attachEmbossMetadata");
-  QVERIFY2(projCpp.contains(QStringLiteral("attachEmbossMetadata(newVol, text, fontPath, height, depth)")),
+  QVERIFY2(projCpp.contains(QStringLiteral("receiver->attachEmbossMetadata(newVol, text, fontPath, height, depth")),
            "CLOS-02: async addTextVolumeAsync GUI-thread handler must call attachEmbossMetadata");
 
   // (5) Load side: objectVolumeType / objectVolumeTypeLabel read
@@ -7247,6 +7253,61 @@ void QmlUiAuditTests::v52ThemeTokenFoundationWired()
   QVERIFY2(guiDir.exists(), "Unable to locate src/qml_gui for token scan");
   QVERIFY2(theme.contains(QStringLiteral("readonly property")),
            "DS-01: Theme.qml must still define readonly property tokens (file structure intact)");
+}
+
+// Phase 161 (DS-02/03): Cx* control library hardening gate.
+// Locks the design-system-carrier contract: no Qt.darker/lighter runtime
+// manipulation, no font size below the XS floor, CxButton/CxIconButton have
+// press-scale + toolTipText + focus border for parity.
+void QmlUiAuditTests::v52ControlLibraryHardened()
+{
+  const QString cxButton = readSource(QStringLiteral("src/qml_gui/controls/CxButton.qml"));
+  const QString cxIconButton = readSource(QStringLiteral("src/qml_gui/controls/CxIconButton.qml"));
+  const QString cxSpinBox = readSource(QStringLiteral("src/qml_gui/controls/CxSpinBox.qml"));
+  const QString cxPillAction = readSource(QStringLiteral("src/qml_gui/controls/CxPillAction.qml"));
+
+  QVERIFY2(!cxButton.isEmpty(), "Unable to read CxButton.qml");
+  QVERIFY2(!cxIconButton.isEmpty(), "Unable to read CxIconButton.qml");
+  QVERIFY2(!cxSpinBox.isEmpty(), "Unable to read CxSpinBox.qml");
+
+  // (1) No Qt.darker / Qt.lighter runtime manipulation in any Cx* control.
+  //     These bypass the Theme token system entirely.
+  QVERIFY2(!cxButton.contains(QStringLiteral("Qt.darker")),
+           "DS-02: CxButton must not use Qt.darker (replaced with statusErrorDark/Pressed tokens)");
+  QVERIFY2(!cxButton.contains(QStringLiteral("Qt.lighter")),
+           "DS-02: CxButton must not use Qt.lighter");
+  QVERIFY2(!cxIconButton.contains(QStringLiteral("Qt.darker")),
+           "DS-02: CxIconButton must not use Qt.darker (replaced with accentSubtlePressed token)");
+  QVERIFY2(!cxIconButton.contains(QStringLiteral("Qt.lighter")),
+           "DS-02: CxIconButton must not use Qt.lighter");
+
+  // (2) No font size below the XS=10 floor in CxSpinBox arrows.
+  QVERIFY2(!cxSpinBox.contains(QStringLiteral("fontSizeXS - 2")),
+           "DS-02: CxSpinBox must not render below fontSizeXS floor (was 8px via fontSizeXS - 2)");
+
+  // (3) CxButton parity with CxIconButton: press-scale + toolTipText + focus border.
+  QVERIFY2(cxButton.contains(QStringLiteral("property string toolTipText")),
+           "DS-02: CxButton must expose toolTipText for parity with CxIconButton");
+  QVERIFY2(cxButton.contains(QStringLiteral("ToolTip.visible")),
+           "DS-02: CxButton must wire ToolTip (was missing)");
+  QVERIFY2(cxButton.contains(QStringLiteral("scale: root.pressed")),
+           "DS-02: CxButton must have press-scale (was missing — CxIconButton has 0.92)");
+  QVERIFY2(cxButton.contains(QStringLiteral("activeFocus")) && cxButton.contains(QStringLiteral("borderFocus")),
+           "DS-02: CxButton must show a focus border for keyboard accessibility");
+
+  // (4) Status-error danger variant uses the Phase 160 tokens.
+  QVERIFY2(cxButton.contains(QStringLiteral("Theme.statusErrorDark")),
+           "DS-02: CxButton Danger disabled state must use Theme.statusErrorDark (Phase 160 token)");
+  QVERIFY2(cxButton.contains(QStringLiteral("Theme.statusErrorPressed")),
+           "DS-02: CxButton Danger pressed state must use Theme.statusErrorPressed (Phase 160 token)");
+  QVERIFY2(cxIconButton.contains(QStringLiteral("Theme.accentSubtlePressed")),
+           "DS-02: CxIconButton selected-pressed must use Theme.accentSubtlePressed (Phase 160 token)");
+
+  // (5) Sanity: the rest of the Cx* library still uses Theme tokens for fonts.
+  QVERIFY2(cxSpinBox.contains(QStringLiteral("Theme.fontSize")),
+           "DS-03: CxSpinBox must use Theme.fontSize* tokens for typography");
+  QVERIFY2(cxPillAction.contains(QStringLiteral("Theme.fontSize")),
+           "DS-03: CxPillAction must use Theme.fontSize* tokens for typography");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
