@@ -65,13 +65,13 @@ CxDialog {
                 Layout.alignment: Qt.AlignHCenter
                 text: qsTr("暂无校准历史记录")
                 color: Theme.borderActive
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontSizeMD
             }
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: qsTr("完成校准后会在此显示记录")
                 color: Theme.scrollBarHoverColor
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
             }
 
             Item { Layout.fillHeight: true }
@@ -112,7 +112,7 @@ CxDialog {
                         Text {
                             anchors.centerIn: parent
                             text: "⚙"
-                            font.pixelSize: 16
+                            font.pixelSize: Theme.fontSizeXL
                             color: Theme.textTertiary
                         }
                     }
@@ -125,7 +125,7 @@ CxDialog {
                         Text {
                             text: modelData.name
                             color: Theme.textPrimary
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fontSizeMD
                             font.bold: true
                         }
 
@@ -134,17 +134,17 @@ CxDialog {
                             Text {
                                 text: qsTr("K值: %1").arg(modelData.kValue.toFixed(3))
                                 color: Theme.textTertiary
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fontSizeXS
                             }
                             Text {
                                 text: qsTr("喷嘴: %1mm").arg(modelData.nozzleDiameter.toFixed(2))
                                 color: Theme.textTertiary
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fontSizeXS
                             }
                             Text {
                                 text: modelData.filamentId
                                 color: Theme.borderActive
-                                font.pixelSize: 9
+                                font.pixelSize: Theme.fontSizeXS
                             }
                         }
 
@@ -161,7 +161,7 @@ CxDialog {
                                 }
                             }
                             color: Theme.scrollBarHoverColor
-                            font.pixelSize: 9
+                            font.pixelSize: Theme.fontSizeXS
                         }
                     }
 
@@ -169,7 +169,7 @@ CxDialog {
                     Rectangle {
                         width: 28; height: 28; radius: 4
                         color: exportHov.containsMouse ? Theme.borderInput : "transparent"
-                        Text { anchors.centerIn: parent; text: "⤓"; color: Theme.textTertiary; font.pixelSize: 12 }
+                        Text { anchors.centerIn: parent; text: "⤓"; color: Theme.textTertiary; font.pixelSize: Theme.fontSizeMD }
                         MouseArea { id: exportHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: {} }
                     }
                 }
@@ -191,7 +191,7 @@ CxDialog {
             Text {
                 text: qsTr("共 %1 条记录").arg(root._historyItems.length)
                 color: Theme.borderActive
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
             }
 
             Item { Layout.fillWidth: true }
@@ -200,7 +200,7 @@ CxDialog {
                 width: 72; height: 28; radius: 4
                 color: clearHov.containsMouse ? Theme.bgErrorSubtle : Theme.bgErrorSubtle
                 border.color: Theme.statusErrorPressed
-                Text { anchors.centerIn: parent; text: qsTr("清空"); color: "#ff9090"; font.pixelSize: 11 }
+                Text { anchors.centerIn: parent; text: qsTr("清空"); color: "#ff9090"; font.pixelSize: Theme.fontSizeSM }
                 MouseArea {
                     id: clearHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                     onClicked: {

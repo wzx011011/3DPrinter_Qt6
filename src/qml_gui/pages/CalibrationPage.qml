@@ -119,7 +119,7 @@ Item {
                         Text {
                             text: "\u231B" // Clock/history icon
                             color: Theme.textSecondary
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fontSizeMD
                             anchors.verticalCenter: parent.verticalCenter
                         }
                         Text {
@@ -621,7 +621,7 @@ Item {
                                                 color: kFineDec.containsMouse ? Theme.bgHover : Theme.bgPanel
                                                 border.color: Theme.borderSubtle
                                                 border.width: 1
-                                                Text { anchors.centerIn: parent; text: "--"; color: Theme.textSecondary; font.pixelSize: 10 }
+                                                Text { anchors.centerIn: parent; text: "--"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
                                                 HoverHandler { id: kFineDec }
                                                 TapHandler { onTapped: kSpinBox.value = Math.max(kSpinBox.from, parseFloat((kSpinBox.value - 0.0001).toFixed(4))) }
                                             }
@@ -631,7 +631,7 @@ Item {
                                                 color: kFineInc.containsMouse ? Theme.bgHover : Theme.bgPanel
                                                 border.color: Theme.borderSubtle
                                                 border.width: 1
-                                                Text { anchors.centerIn: parent; text: "+"; color: Theme.textSecondary; font.pixelSize: 12 }
+                                                Text { anchors.centerIn: parent; text: "+"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD }
                                                 HoverHandler { id: kFineInc }
                                                 TapHandler { onTapped: kSpinBox.value = Math.min(kSpinBox.to, parseFloat((kSpinBox.value + 0.0001).toFixed(4))) }
                                             }
@@ -677,7 +677,7 @@ Item {
                                                 color: nFineDec.containsMouse ? Theme.bgHover : Theme.bgPanel
                                                 border.color: Theme.borderSubtle
                                                 border.width: 1
-                                                Text { anchors.centerIn: parent; text: "--"; color: Theme.textSecondary; font.pixelSize: 10 }
+                                                Text { anchors.centerIn: parent; text: "--"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
                                                 HoverHandler { id: nFineDec }
                                                 TapHandler { onTapped: nSpinBox.value = Math.max(nSpinBox.from, parseFloat((nSpinBox.value - 0.01).toFixed(2))) }
                                             }
@@ -687,7 +687,7 @@ Item {
                                                 color: nFineInc.containsMouse ? Theme.bgHover : Theme.bgPanel
                                                 border.color: Theme.borderSubtle
                                                 border.width: 1
-                                                Text { anchors.centerIn: parent; text: "+"; color: Theme.textSecondary; font.pixelSize: 12 }
+                                                Text { anchors.centerIn: parent; text: "+"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD }
                                                 HoverHandler { id: nFineInc }
                                                 TapHandler { onTapped: nSpinBox.value = Math.min(nSpinBox.to, parseFloat((nSpinBox.value + 0.01).toFixed(2))) }
                                             }
@@ -818,7 +818,7 @@ Item {
                                                         anchors.centerIn: parent
                                                         text: "▾"
                                                         color: Theme.textSecondary
-                                                        font.pixelSize: 12
+                                                        font.pixelSize: Theme.fontSizeMD
                                                     }
 
                                                     TapHandler {
@@ -830,7 +830,7 @@ Item {
                                             // Simple inline preset selector (click to cycle)
                                             Text {
                                                 color: Theme.textTertiary
-                                                font.pixelSize: 9
+                                                font.pixelSize: Theme.fontSizeXS
                                                 Layout.fillWidth: true
                                                 wrapMode: Text.Wrap
                                                 text: qsTr("点击下方按钮切换预设")
@@ -859,7 +859,7 @@ Item {
                                                             text: modelData
                                                             color: root.calibrationVm.selectedFilamentPreset === modelData
                                                                    ? Theme.textOnAccent : Theme.textSecondary
-                                                            font.pixelSize: 10
+                                                            font.pixelSize: Theme.fontSizeXS
                                                             elide: Text.ElideRight
                                                         }
 

@@ -219,7 +219,7 @@ Item {
             text: root.previewVm ? root.previewVm.currentLayerMax + 1 : 0
             color: Theme.textPrimary
             font.pixelSize: Theme.fontSizeSM
-            font.family: "Consolas"
+            font.family: Theme.fontMono
         }
 
         RailButton {
@@ -375,7 +375,7 @@ Item {
             text: railButtonRoot.label
             color: Theme.textPrimary
             font.pixelSize: Theme.fontSizeXS
-            font.family: "Consolas"
+            font.family: Theme.fontMono
         }
 
         MouseArea {

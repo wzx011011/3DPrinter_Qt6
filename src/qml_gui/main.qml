@@ -168,12 +168,12 @@ ApplicationWindow {
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData.key; color: Theme.accent
-                                font.pixelSize: 11; font.bold: true
+                                font.pixelSize: Theme.fontSizeSM; font.bold: true
                             }
                         }
                         Text {
                             text: modelData.desc; color: Theme.textSecondary
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fontSizeMD
                         }
                     }
                 }
@@ -189,7 +189,7 @@ ApplicationWindow {
                 Text {
                     anchors.centerIn: parent
                     text: qsTr("关闭"); color: Theme.textOnAccent
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                 }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -216,23 +216,23 @@ ApplicationWindow {
             Text {
                 text: "OWzx Slicer"
                 color: Theme.textPrimary
-                font.pixelSize: 16
+                font.pixelSize: Theme.fontSizeXL
                 font.bold: true
             }
             Text {
                 text: qsTr("基于 OrcaSlicer 开源版本")
                 color: Theme.textSecondary
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontSizeMD
             }
             Text {
                 text: qsTr("Qt 6.10 + QML 重写迁移版")
                 color: Theme.textSecondary
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontSizeMD
             }
             Text {
                 text: qsTr("上游基线: 0d4ac73a6f3224a2bf753d7b9e67d7d515bc8557")
                 color: Theme.textDisabled
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
             }
             Item { Layout.fillHeight: true }
             Rectangle {
@@ -241,7 +241,7 @@ ApplicationWindow {
                 Text {
                     anchors.centerIn: parent
                     text: qsTr("确定"); color: Theme.textOnAccent
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                 }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -267,7 +267,7 @@ ApplicationWindow {
             Label {
                 text: qsTr("将创建新项目，当前未保存的更改将丢失。\n是否继续？")
                 color: Theme.textPrimary
-                font.pixelSize: 13
+                font.pixelSize: Theme.fontSize13
                 wrapMode: Text.Wrap
                 width: parent.width
             }
@@ -278,13 +278,13 @@ ApplicationWindow {
                     width: 80; height: 28; radius: 6
                     color: Theme.chromePressed
                     border.color: Theme.borderSubtle
-                    Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: 12 }
+                    Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: newProjectDialog.close() }
                 }
                 Rectangle {
                     width: 80; height: 28; radius: 6
                     color: Theme.accent
-                    Text { anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: 12; font.bold: true }
+                    Text { anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: Theme.fontSizeMD; font.bold: true }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { backend.topbarNewProject(); newProjectDialog.close() } }
                 }
             }

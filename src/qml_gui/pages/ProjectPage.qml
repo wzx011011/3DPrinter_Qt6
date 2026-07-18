@@ -138,7 +138,7 @@ Item {
 
                 Item { Layout.fillWidth: true }
 
-                Text { text: root.projectVm.isDirty ? qsTr("● 未保存") : ""; color: Theme.statusWarning; font.pixelSize: 11; font.bold: true }
+                Text { text: root.projectVm.isDirty ? qsTr("● 未保存") : ""; color: Theme.statusWarning; font.pixelSize: Theme.fontSizeSM; font.bold: true }
             }
         }
 
@@ -163,7 +163,7 @@ Item {
                     Rectangle {
                         width: parent.width; height: 40; color: Theme.bgSurface; radius: 16
                         Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 12
-                               text: qsTr("项目资源"); color: Theme.textSecondary; font.pixelSize: 12; font.bold: true }
+                               text: qsTr("项目资源"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; font.bold: true }
                     }
 
                     Repeater {
@@ -178,8 +178,8 @@ Item {
                                 anchors.left: parent.left
                                 anchors.leftMargin: 12 + (modelData.depth || 0) * 16
                                 spacing: 6
-                                Text { text: modelData.isDir ? "📁" : "📄"; font.pixelSize: 12 }
-                                Text { text: modelData.name; color: Theme.textPrimary; font.pixelSize: 11 }
+                                Text { text: modelData.isDir ? "📁" : "📄"; font.pixelSize: Theme.fontSizeMD }
+                                Text { text: modelData.name; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
                             }
                             HoverHandler { id: itemHov }
                         }
@@ -200,7 +200,7 @@ Item {
                     spacing: 12
                     visible: root.projectVm.selectedFile === ""
                     Text { text: "📋"; font.pixelSize: 48; color: Theme.textDisabled; horizontalAlignment: Text.AlignHCenter; width: parent.width }
-                    Text { text: qsTr("选择文件查看详情"); color: Theme.textSecondary; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                    Text { text: qsTr("选择文件查看详情"); color: Theme.textSecondary; font.pixelSize: Theme.fontSize13; horizontalAlignment: Text.AlignHCenter; width: parent.width }
                 }
             }
 
@@ -217,7 +217,7 @@ Item {
                     Rectangle {
                         width: parent.width; height: 40; color: Theme.bgSurface; radius: 16
                         Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 12
-                               text: qsTr("属性"); color: Theme.textSecondary; font.pixelSize: 12; font.bold: true }
+                               text: qsTr("属性"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; font.bold: true }
                     }
 
                     Column {
@@ -253,8 +253,8 @@ Item {
                                     anchors.fill: parent
                                     anchors.margins: 10
                                     spacing: 4
-                                    Text { text: modelData[0]; color: Theme.textDisabled; font.pixelSize: 10 }
-                                    Text { text: modelData[1]; color: Theme.textPrimary; font.pixelSize: 11 }
+                                    Text { text: modelData[0]; color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS }
+                                    Text { text: modelData[1]; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
                                 }
                             }
                         }
@@ -267,7 +267,7 @@ Item {
             Layout.fillWidth: true; height: 28; color: Theme.bgPanel; radius: 12; border.width: 1; border.color: Theme.borderSubtle
             Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 12
                    text: root.projectVm.currentProjectPath !== "" ? root.projectVm.currentProjectPath : qsTr("无项目")
-                   color: Theme.textDisabled; font.pixelSize: 10 }
+                   color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS }
         }
     }
 }

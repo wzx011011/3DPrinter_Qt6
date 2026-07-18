@@ -34,7 +34,7 @@ CxDialog {
                 Layout.fillWidth: true
                 text: qsTr("设备连接问题排查（按顺序检查）：")
                 color: Theme.textPrimary
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontSizeMD
                 font.bold: true
             }
 
@@ -76,7 +76,7 @@ CxDialog {
                                         anchors.centerIn: parent
                                         text: modelData.step
                                         color: Theme.textOnAccent
-                                        font.pixelSize: 11
+                                        font.pixelSize: Theme.fontSizeSM
                                         font.bold: true
                                     }
                                 }
@@ -86,13 +86,13 @@ CxDialog {
                                     Text {
                                         text: modelData.title
                                         color: Theme.textPrimary
-                                        font.pixelSize: 11
+                                        font.pixelSize: Theme.fontSizeSM
                                         font.bold: true
                                     }
                                     Text {
                                         text: modelData.desc
                                         color: Theme.textSecondary
-                                        font.pixelSize: 10
+                                        font.pixelSize: Theme.fontSizeXS
                                         wrapMode: Text.WordWrap
                                         Layout.fillWidth: true
                                     }

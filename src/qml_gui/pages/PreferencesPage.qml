@@ -60,8 +60,8 @@ Item {
                         Row {
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.left: parent.left; anchors.leftMargin: 12; spacing: 10
-                            Text { text: modelData.icon; font.pixelSize: 14 }
-                            Text { text: modelData.name; color: Theme.chromeText; font.pixelSize: 12 }
+                            Text { text: modelData.icon; font.pixelSize: Theme.fontSizeLG }
+                            Text { text: modelData.name; color: Theme.chromeText; font.pixelSize: Theme.fontSizeMD }
                         }
                         HoverHandler { id: catHov }
                         TapHandler { onTapped: root.settingsVm.setPrefCategory(index) }
@@ -79,7 +79,7 @@ Item {
 
                 Text {
                     text: root.settingsVm.prefCategoryTitle; color: Theme.textPrimary
-                    font.pixelSize: 16; font.bold: true
+                    font.pixelSize: Theme.fontSizeXL; font.bold: true
                 }
 
                 Rectangle { Layout.fillWidth: true; height: 1; color: Theme.scrollBarTrackColor }
@@ -92,7 +92,7 @@ Item {
                     // Show home page on startup
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("启动时显示主页"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("启动时显示主页"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxSwitch {
                             checked: root.settingsVm.showHomePage
                             onToggled: root.settingsVm.setShowHomePage(checked)
@@ -102,7 +102,7 @@ Item {
                     // Default page
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("默认页面"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("默认页面"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         Row {
                             spacing: 4
                             Repeater {
@@ -114,7 +114,7 @@ Item {
                                     color: root.settingsVm.defaultPage === index ? Theme.chromePressed : Theme.bgFloating
                                     border.color: root.settingsVm.defaultPage === index ? Theme.accent : Theme.bgHover
                                     border.width: 1
-                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.defaultPage === index ? Theme.accent : Theme.textMuted; font.pixelSize: 11 }
+                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.defaultPage === index ? Theme.accent : Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
                                     MouseArea {
                                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                         onClicked: root.settingsVm.setDefaultPage(index)
@@ -127,7 +127,7 @@ Item {
                     // Units
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("单位"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("单位"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         Row {
                             spacing: 4
                             Repeater {
@@ -139,7 +139,7 @@ Item {
                                     color: root.settingsVm.units === index ? Theme.chromePressed : Theme.bgFloating
                                     border.color: root.settingsVm.units === index ? Theme.accent : Theme.bgHover
                                     border.width: 1
-                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.units === index ? Theme.accent : Theme.textMuted; font.pixelSize: 11 }
+                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.units === index ? Theme.accent : Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
                                     MouseArea {
                                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                         onClicked: root.settingsVm.setUnits(index)
@@ -152,7 +152,7 @@ Item {
                     // User role
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("用户角色"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("用户角色"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         Row {
                             spacing: 4
                             Repeater {
@@ -164,7 +164,7 @@ Item {
                                     color: root.settingsVm.userRole === index ? Theme.chromePressed : Theme.bgFloating
                                     border.color: root.settingsVm.userRole === index ? Theme.accent : Theme.bgHover
                                     border.width: 1
-                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.userRole === index ? Theme.accent : Theme.textMuted; font.pixelSize: 11 }
+                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.userRole === index ? Theme.accent : Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
                                     MouseArea {
                                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                         onClicked: root.settingsVm.setUserRole(index)
@@ -177,12 +177,12 @@ Item {
                     // Auto-save（对齐上游 auto_save 选项）
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("自动保存"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("自动保存"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxSwitch {
                             checked: root.settingsVm.autoSave
                             onToggled: root.settingsVm.setAutoSave(checked)
                         }
-                        Text { text: qsTr("每"); color: Theme.textTertiary; font.pixelSize: 11 }
+                        Text { text: qsTr("每"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM }
                         CxComboBox {
                             model: ["5", "10", "15", "30"]
                             currentIndex: {
@@ -192,13 +192,13 @@ Item {
                             enabled: root.settingsVm.autoSave
                             onActivated: root.settingsVm.setAutoSaveInterval(parseInt(model[currentIndex]))
                         }
-                        Text { text: qsTr("分钟"); color: Theme.textTertiary; font.pixelSize: 11 }
+                        Text { text: qsTr("分钟"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM }
                     }
 
                     // Check for updates（对齐上游 preset_update/版本检查）
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("启动时检查更新"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("启动时检查更新"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxSwitch {
                             checked: root.settingsVm.checkUpdates
                             onToggled: root.settingsVm.setCheckUpdates(checked)
@@ -208,7 +208,7 @@ Item {
                     // Reduced motion（对齐上游 enable_reduce_motion）
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("减少动画效果"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("减少动画效果"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxSwitch {
                             checked: root.settingsVm.reducedMotion
                             onToggled: root.settingsVm.setReducedMotion(checked)
@@ -218,21 +218,21 @@ Item {
                     // Notification preferences（对齐上游 notification_manager preferences）
                     Text {
                         text: qsTr("通知设置")
-                        color: Theme.chromeText; font.pixelSize: 13; font.bold: true
+                        color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
                         Layout.topMargin: 8
                     }
 
                     Text {
                         Layout.fillWidth: true
                         text: qsTr("配置通知的显示方式和自动消失行为。通知将在切片完成、导出等操作时弹出。")
-                        color: Theme.textDisabled; font.pixelSize: 10; wrapMode: Text.Wrap
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
                         Layout.preferredWidth: 500
                         Layout.bottomMargin: 4
                     }
 
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("启用通知"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("启用通知"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxSwitch {
                             checked: root.settingsVm.notificationsEnabled
                             onToggled: root.settingsVm.setNotificationsEnabled(checked)
@@ -241,7 +241,7 @@ Item {
 
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("显示提示"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("显示提示"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxSwitch {
                             checked: root.settingsVm.hintsEnabled
                             enabled: root.settingsVm.notificationsEnabled
@@ -251,7 +251,7 @@ Item {
 
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("显示进度通知"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("显示进度通知"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxSwitch {
                             checked: root.settingsVm.showProgressNotifications
                             enabled: root.settingsVm.notificationsEnabled
@@ -263,13 +263,13 @@ Item {
                         Layout.fillWidth: true
                         Layout.leftMargin: 196
                         text: qsTr("关闭后将不再显示切片进度弹窗，切片完成后仍会通知。")
-                        color: Theme.textDisabled; font.pixelSize: 10; wrapMode: Text.Wrap
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
                         Layout.preferredWidth: 320
                     }
 
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("自动消失时间"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("自动消失时间"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxComboBox {
                             model: ["3s", "5s", "8s", "10s", "15s"]
                             currentIndex: {
@@ -290,7 +290,7 @@ Item {
                     // Region selection（对齐上游 PreferencesDialog region combo）
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("区域设置"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("区域设置"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxComboBox {
                             model: [qsTr("跟随系统"), qsTr("中国"), qsTr("美国"), qsTr("欧洲"), qsTr("日本")]
                             currentIndex: root.settingsVm.region
@@ -306,7 +306,7 @@ Item {
 
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("界面主题"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 140 }
+                        Text { text: qsTr("界面主题"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 140 }
                         Repeater {
                             model: [qsTr("深色 (默认)"), qsTr("深蓝"), qsTr("极暗")]
                             delegate: Rectangle {
@@ -315,7 +315,7 @@ Item {
                                 width: 100; height: 32; radius: 4
                                 color: root.settingsVm.themeIndex === index ? Theme.chromePressed : Theme.bgFloating
                                 border.color: root.settingsVm.themeIndex === index ? Theme.accent : Theme.bgHover; border.width: 1
-                                Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.themeIndex === index ? Theme.accent : Theme.textMuted; font.pixelSize: 11 }
+                                Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.themeIndex === index ? Theme.accent : Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
                                 MouseArea {
                                     anchors.fill: parent
                                     cursorShape: Qt.PointingHandCursor
@@ -327,18 +327,18 @@ Item {
 
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("字体大小"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 140 }
+                        Text { text: qsTr("字体大小"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 140 }
                         CxSlider {
                             from: 10; to: 16; stepSize: 1; value: root.settingsVm.fontSize
                             Layout.preferredWidth: 200
                             onMoved: root.settingsVm.setFontSize(Math.round(value))
                         }
-                        Text { text: root.settingsVm.fontSize + "px"; color: Theme.chromeText; font.pixelSize: 11 }
+                        Text { text: root.settingsVm.fontSize + "px"; color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
                     }
 
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("界面缩放"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 140 }
+                        Text { text: qsTr("界面缩放"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 140 }
                         CxComboBox {
                             model: ["100%","125%","150%","175%","200%"]
                             currentIndex: root.settingsVm.uiScaleIndex
@@ -366,12 +366,12 @@ Item {
                                 anchors.left: parent.left; anchors.leftMargin: 16; spacing: 12
                                 Text {
                                     text: root.settingsVm.languageIndex === index ? "✓" : " "
-                                    color: Theme.accent; font.pixelSize: 13; font.bold: true
+                                    color: Theme.accent; font.pixelSize: Theme.fontSize13; font.bold: true
                                 }
                                 Text {
                                     text: modelData
                                     color: root.settingsVm.languageIndex === index ? Theme.accent : Theme.chromeText
-                                    font.pixelSize: 13
+                                    font.pixelSize: Theme.fontSize13
                                 }
                             }
 
@@ -391,13 +391,13 @@ Item {
 
                     Text {
                         text: qsTr("快捷键绑定")
-                        color: Theme.chromeText; font.pixelSize: 13; font.bold: true
+                        color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
                     }
 
                     Text {
                         Layout.fillWidth: true
                         text: qsTr("以下为当前版本支持的快捷键列表。部分快捷键仅在特定页面生效。")
-                        color: Theme.textDisabled; font.pixelSize: 10; wrapMode: Text.Wrap
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
                         Layout.preferredWidth: 500
                         Layout.bottomMargin: 8
                     }
@@ -408,9 +408,9 @@ Item {
                         Row {
                             anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
                             spacing: 8
-                            Text { text: qsTr("功能"); color: Theme.textMuted; font.pixelSize: 10; font.bold: true; width: 160 }
-                            Text { text: qsTr("快捷键"); color: Theme.textMuted; font.pixelSize: 10; font.bold: true; width: 120 }
-                            Text { text: qsTr("页面"); color: Theme.textMuted; font.pixelSize: 10; font.bold: true }
+                            Text { text: qsTr("功能"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; font.bold: true; width: 160 }
+                            Text { text: qsTr("快捷键"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; font.bold: true; width: 120 }
+                            Text { text: qsTr("页面"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; font.bold: true }
                         }
                     }
 
@@ -457,14 +457,14 @@ Item {
                             Row {
                                 anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
                                 spacing: 8
-                                Text { text: modelData.action; color: Theme.chromeText; font.pixelSize: 11; width: 160 }
+                                Text { text: modelData.action; color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM; width: 160 }
                                 Rectangle {
                                     width: modelData.key.length * 8 + 12; height: 20; radius: 3
                                     color: Theme.scrollBarTrackColor; border.color: Theme.bgHover; border.width: 1
                                     anchors.verticalCenter: parent.verticalCenter
-                                    Text { anchors.centerIn: parent; text: modelData.key; color: Theme.chromeTextMuted; font.pixelSize: 10; font.family: "monospace" }
+                                    Text { anchors.centerIn: parent; text: modelData.key; color: Theme.chromeTextMuted; font.pixelSize: Theme.fontSizeXS; font.family: "monospace" }
                                 }
-                                Text { text: modelData.scope; color: Theme.textTertiary; font.pixelSize: 10 }
+                                Text { text: modelData.scope; color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
                             }
                         }
                     }
@@ -477,13 +477,13 @@ Item {
 
                     Text {
                         text: qsTr("默认打印机设置")
-                        color: Theme.chromeText; font.pixelSize: 13; font.bold: true
+                        color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
                     }
 
                     Text {
                         Layout.fillWidth: true
                         text: qsTr("配置打印机默认参数。此处设置将作为新项目的初始值。")
-                        color: Theme.textDisabled; font.pixelSize: 10; wrapMode: Text.Wrap
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
                         Layout.preferredWidth: 500
                         Layout.bottomMargin: 8
                     }
@@ -491,7 +491,7 @@ Item {
                     // Default nozzle diameter
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("默认喷嘴直径"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("默认喷嘴直径"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         Row {
                             spacing: 4
                             Repeater {
@@ -503,7 +503,7 @@ Item {
                                     color: root.settingsVm.defaultNozzleIndex === index ? Theme.chromePressed : Theme.bgFloating
                                     border.color: root.settingsVm.defaultNozzleIndex === index ? Theme.accent : Theme.bgHover
                                     border.width: 1
-                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.defaultNozzleIndex === index ? Theme.accent : Theme.textMuted; font.pixelSize: 11 }
+                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.defaultNozzleIndex === index ? Theme.accent : Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
                                     MouseArea {
                                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                         onClicked: root.settingsVm.setDefaultNozzleIndex(index)
@@ -516,7 +516,7 @@ Item {
                     // Default bed shape
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("默认热床形状"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("默认热床形状"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         Row {
                             spacing: 4
                             Repeater {
@@ -528,7 +528,7 @@ Item {
                                     color: root.settingsVm.defaultBedShape === index ? Theme.chromePressed : Theme.bgFloating
                                     border.color: root.settingsVm.defaultBedShape === index ? Theme.accent : Theme.bgHover
                                     border.width: 1
-                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.defaultBedShape === index ? Theme.accent : Theme.textMuted; font.pixelSize: 11 }
+                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.defaultBedShape === index ? Theme.accent : Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
                                     MouseArea {
                                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                         onClicked: root.settingsVm.setDefaultBedShape(index)
@@ -541,7 +541,7 @@ Item {
                     // Print host upload
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("切片完成后自动上传"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 200 }
+                        Text { text: qsTr("切片完成后自动上传"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 200 }
                         CxSwitch {
                             checked: root.settingsVm.autoUpload
                             onToggled: root.settingsVm.setAutoUpload(checked)
@@ -551,7 +551,7 @@ Item {
                     Text {
                         Layout.fillWidth: true
                         text: qsTr("启用后，切片完成后将自动上传 G-code 到连接的打印机（需先在设备页面连接打印机）。")
-                        color: Theme.textDisabled; font.pixelSize: 10; wrapMode: Text.Wrap
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
                         Layout.preferredWidth: 400
                     }
                 }
@@ -563,7 +563,7 @@ Item {
 
                     Text {
                         text: qsTr("软件更新")
-                        color: Theme.chromeText; font.pixelSize: 13; font.bold: true
+                        color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
                     }
 
                     // Current version info
@@ -576,11 +576,11 @@ Item {
                             spacing: 4
                             Text {
                                 text: qsTr("当前版本：2.4.0-dev (Qt6 Edition)")
-                                color: Theme.chromeText; font.pixelSize: 12
+                                color: Theme.chromeText; font.pixelSize: Theme.fontSizeMD
                             }
                             Text {
                                 text: qsTr("上游基线：OrcaSlicer main branch")
-                                color: Theme.textTertiary; font.pixelSize: 10
+                                color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS
                             }
                         }
                     }
@@ -588,7 +588,7 @@ Item {
                     // Check for updates button
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("自动检查更新"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("自动检查更新"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxSwitch {
                             checked: root.settingsVm.checkUpdates
                             onToggled: root.settingsVm.setCheckUpdates(checked)
@@ -598,7 +598,7 @@ Item {
                     // Update channel
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("更新通道"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("更新通道"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         Row {
                             spacing: 4
                             Repeater {
@@ -610,7 +610,7 @@ Item {
                                     color: root.settingsVm.updateChannel === index ? Theme.chromePressed : Theme.bgFloating
                                     border.color: root.settingsVm.updateChannel === index ? Theme.accent : Theme.bgHover
                                     border.width: 1
-                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.updateChannel === index ? Theme.accent : Theme.textMuted; font.pixelSize: 11 }
+                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.updateChannel === index ? Theme.accent : Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
                                     MouseArea {
                                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                                         onClicked: root.settingsVm.setUpdateChannel(index)
@@ -625,7 +625,7 @@ Item {
                         Layout.preferredWidth: 140; Layout.preferredHeight: 32; radius: 6
                         enabled: false
                         color: updateBtnMA.containsMouse ? Theme.accentDark : Theme.accentSubtle
-                        Text { anchors.centerIn: parent; text: qsTr("检查更新"); color: "white"; font.pixelSize: 12; font.bold: true }
+                        Text { anchors.centerIn: parent; text: qsTr("检查更新"); color: "white"; font.pixelSize: Theme.fontSizeMD; font.bold: true }
                         MouseArea {
                             id: updateBtnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                             acceptedButtons: Qt.NoButton
@@ -635,7 +635,7 @@ Item {
                     Text {
                         Layout.fillWidth: true
                         text: qsTr("当前为 Mock 模式，更新检查功能需要连接更新服务器后启用。")
-                        color: Theme.textDisabled; font.pixelSize: 10; wrapMode: Text.Wrap
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
                         Layout.preferredWidth: 400
                     }
                 }
@@ -647,7 +647,7 @@ Item {
 
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("自动备份项目到云端"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 200 }
+                        Text { text: qsTr("自动备份项目到云端"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 200 }
                         CxSwitch {
                             checked: root.settingsVm.autoBackup
                             onToggled: root.settingsVm.setAutoBackup(checked)
@@ -658,7 +658,7 @@ Item {
                         Layout.fillWidth: true
                         text: qsTr("启用后，项目文件将自动备份到您的云端账户。需要先登录云端账号。")
                         color: Theme.textDisabled
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                         wrapMode: Text.Wrap
                         Layout.preferredWidth: 400
                     }
@@ -672,7 +672,7 @@ Item {
                     // Compact/LOD mode（对齐上游 3D view LOD / enable_reduce_detail）
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("低细节模式"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("低细节模式"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxSwitch {
                             checked: root.settingsVm.compactMode
                             onToggled: root.settingsVm.setCompactMode(checked)
@@ -683,7 +683,7 @@ Item {
                         Layout.fillWidth: true
                         text: qsTr("启用后，3D 视口将降低渲染细节以提升性能。适合模型较多或硬件性能不足时使用。")
                         color: Theme.textDisabled
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                         wrapMode: Text.Wrap
                         Layout.preferredWidth: 400
                         visible: root.settingsVm.compactMode
@@ -692,7 +692,7 @@ Item {
                     // Undo stack limit（对齐上游 undo/redo 历史限制）
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("撤销栈上限"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("撤销栈上限"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         Row {
                             spacing: 4
                             Repeater {
@@ -704,7 +704,7 @@ Item {
                                     color: root.settingsVm.undoLimit === modelData ? Theme.chromePressed : Theme.bgFloating
                                     border.color: root.settingsVm.undoLimit === modelData ? Theme.accent : Theme.bgHover
                                     border.width: 1
-                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.undoLimit === modelData ? Theme.accent : Theme.textMuted; font.pixelSize: 11 }
+                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.undoLimit === modelData ? Theme.accent : Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
                                     MouseArea {
                                         anchors.fill: parent
                                         cursorShape: Qt.PointingHandCursor
@@ -719,7 +719,7 @@ Item {
                         Layout.fillWidth: true
                         text: qsTr("设置撤销/重做的历史记录上限。值越大可回退的操作越多，但占用更多内存。")
                         color: Theme.textDisabled
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                         wrapMode: Text.Wrap
                         Layout.preferredWidth: 400
                     }
@@ -732,13 +732,13 @@ Item {
 
                     Text {
                         text: qsTr("开发者选项")
-                        color: Theme.chromeText; font.pixelSize: 13; font.bold: true
+                        color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
                     }
 
                     Text {
                         Layout.fillWidth: true
                         text: qsTr("这些选项面向开发者调试使用，普通用户无需更改。")
-                        color: Theme.textDisabled; font.pixelSize: 10; wrapMode: Text.Wrap
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
                         Layout.preferredWidth: 500
                         Layout.bottomMargin: 8
                     }
@@ -746,7 +746,7 @@ Item {
                     // Developer Mode toggle
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("开发者模式"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("开发者模式"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxSwitch {
                             checked: root.settingsVm.developerMode
                             onToggled: root.settingsVm.setDeveloperMode(checked)
@@ -756,7 +756,7 @@ Item {
                     // Debug Overlay toggle
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("调试覆盖层"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("调试覆盖层"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxSwitch {
                             checked: root.settingsVm.showDebugOverlay
                             onToggled: root.settingsVm.setShowDebugOverlay(checked)
@@ -766,7 +766,7 @@ Item {
                     // Log Level selector
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("日志级别"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("日志级别"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxComboBox {
                             model: [qsTr("Error"), qsTr("Warning"), qsTr("Info"), qsTr("Debug"), qsTr("Trace")]
                             currentIndex: root.settingsVm.logLevel
@@ -777,7 +777,7 @@ Item {
                     // Verbose G-code toggle
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("详细 G-code"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("详细 G-code"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxSwitch {
                             checked: root.settingsVm.verboseGcode
                             onToggled: root.settingsVm.setVerboseGcode(checked)
@@ -787,7 +787,7 @@ Item {
                     // OpenGL Debug toggle
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("OpenGL 调试上下文"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("OpenGL 调试上下文"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxSwitch {
                             checked: root.settingsVm.glDebugContext
                             onToggled: root.settingsVm.setGlDebugContext(checked)
@@ -797,7 +797,7 @@ Item {
                     // Max Log Size selector
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("最大日志大小 (MB)"); color: Theme.textSecondary; font.pixelSize: 12; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("最大日志大小 (MB)"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxComboBox {
                             model: ["10", "25", "50", "100", "200"]
                             currentIndex: {
@@ -812,7 +812,7 @@ Item {
                         Layout.fillWidth: true
                         text: qsTr("日志文件达到指定大小后将自动轮转。增大此值可保留更多历史日志，但占用更多磁盘空间。")
                         color: Theme.textDisabled
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                         wrapMode: Text.Wrap
                         Layout.preferredWidth: 400
                     }
@@ -830,7 +830,7 @@ Item {
                         id: appliedHint
                         text: qsTr("✓ 已实时生效")
                         color: Theme.accent
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         opacity: 0
                         Behavior on opacity { NumberAnimation { duration: 300 } }
                     }

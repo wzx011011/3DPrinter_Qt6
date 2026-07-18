@@ -129,7 +129,7 @@ Item {
                             text: root.previewVm ? root.previewVm.extruderUsedLength(extruderRow.index).toFixed(2) + " m" : "0.00 m"
                             color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeXS
-                            font.family: "Consolas"
+                            font.family: Theme.fontMono
                         }
                         Label {
                             text: root.previewVm ? root.previewVm.extruderUsedWeight(extruderRow.index).toFixed(1) + " g" : "0.0 g"
@@ -168,7 +168,7 @@ Item {
                             text: root.previewVm ? root.previewVm.roleTimeValue(roleTimeRow.index) : ""
                             color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeXS
-                            font.family: "Consolas"
+                            font.family: Theme.fontMono
                         }
                         Label {
                             Layout.preferredWidth: 44
@@ -243,7 +243,7 @@ Item {
             text: statRowRoot.value
             color: Theme.textPrimary
             font.pixelSize: Theme.fontSizeSM
-            font.family: "Consolas"
+            font.family: Theme.fontMono
             horizontalAlignment: Text.AlignRight
         }
     }
@@ -267,14 +267,14 @@ Item {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: pillRoot.label
                 color: Theme.textTertiary
-                font.pixelSize: 9
+                font.pixelSize: Theme.fontSizeXS
             }
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: pillRoot.value
                 color: Theme.textPrimary
-                font.pixelSize: 10
-                font.family: "Consolas"
+                font.pixelSize: Theme.fontSizeXS
+                font.family: Theme.fontMono
             }
         }
     }

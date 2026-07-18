@@ -124,7 +124,7 @@ Item {
                     }
                     color: Theme.textPrimary
                     font.pixelSize: Theme.fontSizeXS
-                    font.family: "Consolas"
+                    font.family: Theme.fontMono
                 }
             }
 
@@ -140,7 +140,7 @@ Item {
             text: root.previewVm ? root.previewVm.currentTime : "0s"
             color: Theme.accentLight
             font.pixelSize: Theme.fontSizeSM
-            font.family: "Consolas"
+            font.family: Theme.fontMono
             Layout.minimumWidth: 54
             horizontalAlignment: Text.AlignRight
         }
@@ -156,7 +156,7 @@ Item {
             text: root.previewVm ? root.previewVm.currentMoveLabel : "-- / --"
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSizeXS
-            font.family: "Consolas"
+            font.family: Theme.fontMono
             Layout.minimumWidth: 86
             horizontalAlignment: Text.AlignRight
         }
@@ -198,7 +198,7 @@ Item {
             text: moveStepButtonRoot.label
             color: Theme.textPrimary
             font.pixelSize: Theme.fontSizeSM
-            font.family: "Consolas"
+            font.family: Theme.fontMono
         }
 
         MouseArea {

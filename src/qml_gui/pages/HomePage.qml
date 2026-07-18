@@ -61,7 +61,7 @@ Item {
                 Column {
                     spacing: 4
                     Text { text: "OWzx Slicer"; color: Theme.textPrimary; font.pixelSize: 24; font.bold: true }
-                    Text { text: qsTr("专业级 3D 打印切片软件"); color: Theme.textSecondary; font.pixelSize: 13 }
+                    Text { text: qsTr("专业级 3D 打印切片软件"); color: Theme.textSecondary; font.pixelSize: Theme.fontSize13 }
                 }
 
                 Item { Layout.fillWidth: true }
@@ -92,7 +92,7 @@ Item {
                             anchors.centerIn: parent
                             text: root.homeVm.cloudUserName.charAt(0).toUpperCase()
                             color: Theme.accent
-                            font.pixelSize: 14
+                            font.pixelSize: Theme.fontSizeLG
                             font.bold: true
                         }
                     }
@@ -102,7 +102,7 @@ Item {
                         Text {
                             text: root.homeVm.cloudUserName
                             color: Theme.textPrimary
-                            font.pixelSize: 13
+                            font.pixelSize: Theme.fontSize13
                             font.bold: true
                         }
                         Text {
@@ -110,7 +110,7 @@ Item {
                                   ? qsTr("%1 台设备").arg(root.homeVm.cloudBoundDeviceCount)
                                   : qsTr("无绑定设备")
                             color: Theme.textTertiary
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fontSizeSM
                         }
                     }
 
@@ -124,7 +124,7 @@ Item {
                             anchors.centerIn: parent
                             text: "\u21BB"
                             color: Theme.textSecondary
-                            font.pixelSize: 14
+                            font.pixelSize: Theme.fontSizeLG
                         }
                         HoverHandler { id: syncHover }
                         MouseArea {
@@ -140,7 +140,7 @@ Item {
                     Text {
                         text: qsTr("同步中...")
                         color: Theme.accent
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         visible: root.homeVm.cloudSyncing
                     }
 
@@ -153,7 +153,7 @@ Item {
                             anchors.centerIn: parent
                             text: "\u23FB"
                             color: logoutMA.containsMouse ? Theme.statusError : Theme.textTertiary
-                            font.pixelSize: 14
+                            font.pixelSize: Theme.fontSizeLG
                         }
                         MouseArea {
                             id: logoutMA
@@ -176,7 +176,7 @@ Item {
             Text {
                 text: qsTr("云端设备")
                 color: Theme.textSecondary
-                font.pixelSize: 13
+                font.pixelSize: Theme.fontSize13
                 font.bold: true
             }
 
@@ -213,7 +213,7 @@ Item {
                                         return d.name || ""
                                     }
                                     color: Theme.textPrimary
-                                    font.pixelSize: 12
+                                    font.pixelSize: Theme.fontSizeMD
                                     font.bold: true
                                 }
                                 Text {
@@ -222,7 +222,7 @@ Item {
                                         return d.sn || ""
                                     }
                                     color: Theme.textTertiary
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fontSizeXS
                                 }
                             }
 
@@ -231,7 +231,7 @@ Item {
                             Text {
                                 text: qsTr("解绑")
                                 color: unbindMA.containsMouse ? Theme.statusError : Theme.textTertiary
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                             }
                             MouseArea {
                                 id: unbindMA
@@ -254,8 +254,8 @@ Item {
                     RowLayout {
                         anchors.centerIn: parent
                         spacing: 4
-                        Text { text: "+"; color: Theme.accent; font.pixelSize: 16; font.bold: true }
-                        Text { text: qsTr("绑定设备"); color: Theme.accent; font.pixelSize: 12 }
+                        Text { text: "+"; color: Theme.accent; font.pixelSize: Theme.fontSizeXL; font.bold: true }
+                        Text { text: qsTr("绑定设备"); color: Theme.accent; font.pixelSize: Theme.fontSizeMD }
                     }
                     MouseArea {
                         id: addDevMA
@@ -287,7 +287,7 @@ Item {
                 text: qsTr("登录 OWzx 账号")
                 color: Theme.textPrimary
                 font.bold: true
-                font.pixelSize: 16
+                font.pixelSize: Theme.fontSizeXL
                 padding: 12
             }
 
@@ -298,7 +298,7 @@ Item {
                 Label {
                     text: qsTr("用户名")
                     color: Theme.textSecondary
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                 }
                 CxTextField {
                     id: loginUser
@@ -309,7 +309,7 @@ Item {
                 Label {
                     text: qsTr("密码")
                     color: Theme.textSecondary
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                 }
                 CxTextField {
                     id: loginPass
@@ -324,7 +324,7 @@ Item {
                 Label {
                     text: loginError
                     color: Theme.statusError
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                     visible: loginError !== ""
                 }
 
@@ -383,7 +383,7 @@ Item {
                 text: qsTr("绑定设备")
                 color: Theme.textPrimary
                 font.bold: true
-                font.pixelSize: 16
+                font.pixelSize: Theme.fontSizeXL
                 padding: 12
             }
 
@@ -394,7 +394,7 @@ Item {
                 Label {
                     text: qsTr("设备名称")
                     color: Theme.textSecondary
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                 }
                 CxTextField {
                     id: bindDeviceName
@@ -405,7 +405,7 @@ Item {
                 Label {
                     text: qsTr("PIN 码")
                     color: Theme.textSecondary
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                 }
                 CxTextField {
                     id: bindPinCode
@@ -418,7 +418,7 @@ Item {
                 Text {
                     text: bindError
                     color: Theme.statusError
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                     visible: bindError !== ""
                 }
 
@@ -469,7 +469,7 @@ Item {
 
                 Text {
                     text: "💡"
-                    font.pixelSize: 20
+                    font.pixelSize: Theme.fontSizeXXL
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -477,14 +477,14 @@ Item {
                     Text {
                         text: qsTr("每日提示")
                         color: Theme.accent
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         font.bold: true
                     }
                     Text {
                         Layout.fillWidth: true
                         text: qsTr("切片前确保模型已平放在热床上。使用 W/E/R 切换移动/旋转/缩放工具。")
                         color: Theme.textSecondary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         wrapMode: Text.WordWrap
                         elide: Text.ElideRight
                     }
@@ -492,7 +492,7 @@ Item {
             }
         }
 
-        Text { text: qsTr("最近项目"); color: Theme.textSecondary; font.pixelSize: 13; font.bold: true }
+        Text { text: qsTr("最近项目"); color: Theme.textSecondary; font.pixelSize: Theme.fontSize13; font.bold: true }
 
         ScrollView {
             Layout.fillWidth: true; Layout.preferredHeight: 188; clip: true
@@ -507,9 +507,9 @@ Item {
                             Rectangle { width: parent.width; height: 102; radius: 12; color: Theme.bgElevated
                                 Text { anchors.centerIn: parent; text: "🖨"; font.pixelSize: 34; color: Theme.textDisabled }
                             }
-                            Text { text: modelData.name || (qsTr("项目 ") + (index + 1)); color: Theme.textPrimary; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight; width: parent.width }
-                            Text { text: modelData.date || "—"; color: Theme.textSecondary; font.pixelSize: 10 }
-                            Text { text: modelData.path || ""; color: Theme.textDisabled; font.pixelSize: 10; elide: Text.ElideRight; width: parent.width }
+                            Text { text: modelData.name || (qsTr("项目 ") + (index + 1)); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeMD; font.bold: true; elide: Text.ElideRight; width: parent.width }
+                            Text { text: modelData.date || "—"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
+                            Text { text: modelData.path || ""; color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; elide: Text.ElideRight; width: parent.width }
                         }
                         HoverHandler { id: recentHover }
                         Rectangle { anchors.fill: parent; radius: parent.radius; color: recentHover.hovered ? "#1018c75e" : "transparent" }
@@ -518,7 +518,7 @@ Item {
             }
         }
 
-        Text { text: qsTr("快速入口"); color: Theme.textSecondary; font.pixelSize: 13; font.bold: true }
+        Text { text: qsTr("快速入口"); color: Theme.textSecondary; font.pixelSize: Theme.fontSize13; font.bold: true }
 
         RowLayout {
             Layout.fillWidth: true
@@ -545,8 +545,8 @@ Item {
                         anchors.margins: 14
                         spacing: 8
                         Text { text: parent.parent.modelData.icon; font.pixelSize: 24; horizontalAlignment: Text.AlignHCenter; width: parent.width }
-                        Text { text: parent.parent.modelData.title; color: Theme.textPrimary; font.pixelSize: 13; font.bold: true; horizontalAlignment: Text.AlignHCenter; width: parent.width }
-                        Text { text: parent.parent.modelData.sub; color: Theme.textSecondary; font.pixelSize: 10; horizontalAlignment: Text.AlignHCenter; width: parent.width; wrapMode: Text.WordWrap }
+                        Text { text: parent.parent.modelData.title; color: Theme.textPrimary; font.pixelSize: Theme.fontSize13; font.bold: true; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                        Text { text: parent.parent.modelData.sub; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS; horizontalAlignment: Text.AlignHCenter; width: parent.width; wrapMode: Text.WordWrap }
                     }
 
                     HoverHandler { id: qaHover }
@@ -556,6 +556,6 @@ Item {
 
         Item { Layout.fillHeight: true }
 
-        Text { text: qsTr("版本 2.4.0-dev  |  Qt 6.10  |  OWzx"); color: Theme.textDisabled; font.pixelSize: 10 }
+        Text { text: qsTr("版本 2.4.0-dev  |  Qt 6.10  |  OWzx"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS }
     }
 }

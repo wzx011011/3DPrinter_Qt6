@@ -100,7 +100,7 @@ CxDialog {
             Text {
                 text: qsTr("Scope:")
                 color: Theme.textMuted
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
             }
             CxComboBox {
                 id: scopeCombo
@@ -118,7 +118,7 @@ CxDialog {
             Text {
                 text: qsTr("A:")
                 color: Theme.textMuted
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
             }
             CxComboBox {
                 id: presetACombo
@@ -132,7 +132,7 @@ CxDialog {
             Text {
                 text: qsTr("B:")
                 color: Theme.textMuted
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
             }
             CxComboBox {
                 id: presetBCombo
@@ -175,14 +175,14 @@ CxDialog {
                     Layout.preferredWidth: 240
                     text: qsTr("Key")
                     color: Theme.textMuted
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fontSizeXS
                     font.bold: true
                 }
                 Text {
                     Layout.fillWidth: true
                     text: root.presetAName.length > 0 ? (qsTr("A: ") + root.presetAName) : qsTr("A")
                     color: Theme.textMuted
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fontSizeXS
                     font.bold: true
                     elide: Text.ElideRight
                 }
@@ -190,7 +190,7 @@ CxDialog {
                     Layout.fillWidth: true
                     text: root.presetBName.length > 0 ? (qsTr("B: ") + root.presetBName) : qsTr("B")
                     color: Theme.textMuted
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fontSizeXS
                     font.bold: true
                     elide: Text.ElideRight
                 }
@@ -214,7 +214,7 @@ CxDialog {
                       ? qsTr("Select two presets and click Compare")
                       : qsTr("No differences")
                 color: Theme.textMuted
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontSizeMD
             }
 
             delegate: Rectangle {
@@ -236,7 +236,7 @@ CxDialog {
                         Layout.preferredWidth: 240
                         text: modelData.key || ""
                         color: Theme.textPrimary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         elide: Text.ElideRight
                     }
                     // Value A column
@@ -244,7 +244,7 @@ CxDialog {
                         Layout.fillWidth: true
                         text: modelData.valueA || ""
                         color: Theme.textPrimary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         elide: Text.ElideRight
                     }
                     // Value B column
@@ -252,7 +252,7 @@ CxDialog {
                         Layout.fillWidth: true
                         text: modelData.valueB || ""
                         color: Theme.textPrimary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         elide: Text.ElideRight
                     }
                     // Status badge (added/removed/changed).
@@ -268,7 +268,7 @@ CxDialog {
                             anchors.centerIn: parent
                             text: modelData.status || ""
                             color: "white"
-                            font.pixelSize: 9
+                            font.pixelSize: Theme.fontSizeXS
                             font.bold: true
                         }
                     }
@@ -284,7 +284,7 @@ CxDialog {
                   ? ""
                   : qsTr("%1 difference(s)").arg(diffList.count)
             color: Theme.textMuted
-            font.pixelSize: 10
+            font.pixelSize: Theme.fontSizeXS
             horizontalAlignment: Text.AlignRight
         }
     }

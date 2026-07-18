@@ -38,7 +38,7 @@ CxDialog {
 
             Text {
                 id: pageIndicatorText
-                color: Theme.textTertiary; font.pixelSize: 11
+                color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM
                 text: qsTr("第 %1/%2 步").arg(swipeView.currentIndex + 1).arg(swipeView.count)
             }
         }
@@ -78,7 +78,7 @@ CxDialog {
                         Layout.alignment: Qt.AlignHCenter
                         Layout.preferredWidth: 340
                         text: qsTr("我们将引导您完成基本配置，选择您的打印机和耗材，以获得最佳切片体验。")
-                        color: Theme.textTertiary; font.pixelSize: 12
+                        color: Theme.textTertiary; font.pixelSize: Theme.fontSizeMD
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
                         lineHeight: 1.6
@@ -95,12 +95,12 @@ CxDialog {
 
                     Text {
                         text: qsTr("选择打印机")
-                        color: Theme.textPrimary; font.pixelSize: 16; font.bold: true
+                        color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXL; font.bold: true
                     }
 
                     Text {
                         text: qsTr("请选择您使用的打印机型号：")
-                        color: Theme.textTertiary; font.pixelSize: 11
+                        color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM
                     }
 
                     // Printer preset combo
@@ -110,7 +110,7 @@ CxDialog {
 
                         RowLayout {
                             anchors.fill: parent; anchors.margins: 8; spacing: 8
-                            Text { text: "🖨"; font.pixelSize: 14 }
+                            Text { text: "🖨"; font.pixelSize: Theme.fontSizeLG }
                             CxComboBox {
                                 id: printerCombo
                                 Layout.fillWidth: true
@@ -128,7 +128,7 @@ CxDialog {
                     // Bed type
                     Text {
                         text: qsTr("热床类型：")
-                        color: Theme.textTertiary; font.pixelSize: 11
+                        color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM
                     }
 
                     Rectangle {
@@ -137,7 +137,7 @@ CxDialog {
 
                         RowLayout {
                             anchors.fill: parent; anchors.margins: 8; spacing: 8
-                            Text { text: "🟦"; font.pixelSize: 14 }
+                            Text { text: "🟦"; font.pixelSize: Theme.fontSizeLG }
                             CxComboBox {
                                 id: bedCombo
                                 Layout.fillWidth: true
@@ -158,8 +158,8 @@ CxDialog {
                         color: Theme.bgSurface
                         RowLayout {
                             anchors.fill: parent; anchors.leftMargin: 10; spacing: 6
-                            Text { text: qsTr("喷嘴直径:"); color: Theme.textDisabled; font.pixelSize: 11 }
-                            Text { text: "0.4mm"; color: Theme.accent; font.pixelSize: 11; font.bold: true }
+                            Text { text: qsTr("喷嘴直径:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM }
+                            Text { text: "0.4mm"; color: Theme.accent; font.pixelSize: Theme.fontSizeSM; font.bold: true }
                         }
                     }
 
@@ -174,12 +174,12 @@ CxDialog {
 
                     Text {
                         text: qsTr("选择耗材")
-                        color: Theme.textPrimary; font.pixelSize: 16; font.bold: true
+                        color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXL; font.bold: true
                     }
 
                     Text {
                         text: qsTr("请选择您常用的耗材类型：")
-                        color: Theme.textTertiary; font.pixelSize: 11
+                        color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM
                     }
 
                     // Filament preset combo
@@ -189,7 +189,7 @@ CxDialog {
 
                         RowLayout {
                             anchors.fill: parent; anchors.margins: 8; spacing: 8
-                            Text { text: "🟡"; font.pixelSize: 14 }
+                            Text { text: "🟡"; font.pixelSize: Theme.fontSizeLG }
                             CxComboBox {
                                 id: filamentCombo
                                 Layout.fillWidth: true
@@ -210,10 +210,10 @@ CxDialog {
 
                             RowLayout {
                                 spacing: 6
-                                Text { text: qsTr("喷嘴温度:"); color: Theme.textDisabled; font.pixelSize: 11 }
+                                Text { text: qsTr("喷嘴温度:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM }
                                 Text {
                                     id: nozzleTempText
-                                    color: Theme.statusWarning; font.pixelSize: 12; font.bold: true
+                                    color: Theme.statusWarning; font.pixelSize: Theme.fontSizeMD; font.bold: true
                                     text: {
                                         switch (filamentCombo.currentIndex) {
                                         case 0: return "210°C";  // PLA
@@ -229,10 +229,10 @@ CxDialog {
 
                             RowLayout {
                                 spacing: 6
-                                Text { text: qsTr("热床温度:"); color: Theme.textDisabled; font.pixelSize: 11 }
+                                Text { text: qsTr("热床温度:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM }
                                 Text {
                                     id: bedTempText
-                                    color: Theme.statusInfo; font.pixelSize: 12; font.bold: true
+                                    color: Theme.statusInfo; font.pixelSize: Theme.fontSizeMD; font.bold: true
                                     text: {
                                         switch (filamentCombo.currentIndex) {
                                         case 0: return "60°C";   // PLA
@@ -248,7 +248,7 @@ CxDialog {
 
                             Text {
                                 Layout.fillWidth: true
-                                color: Theme.textDisabled; font.pixelSize: 10
+                                color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS
                                 wrapMode: Text.WordWrap
                                 lineHeight: 1.5
                                 text: {
@@ -293,7 +293,7 @@ CxDialog {
                     Text {
                         Layout.alignment: Qt.AlignHCenter
                         text: qsTr("您的基本配置已保存，可以开始使用了。")
-                        color: Theme.textTertiary; font.pixelSize: 12
+                        color: Theme.textTertiary; font.pixelSize: Theme.fontSizeMD
                     }
 
                     // Summary card
@@ -309,26 +309,26 @@ CxDialog {
 
                             Row {
                                 spacing: 8
-                                Text { text: qsTr("打印机:"); color: Theme.textDisabled; font.pixelSize: 11; width: 70 }
-                                Text { text: printerCombo.displayText; color: Theme.chromeText; font.pixelSize: 11 }
+                                Text { text: qsTr("打印机:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM; width: 70 }
+                                Text { text: printerCombo.displayText; color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
                             }
 
                             Row {
                                 spacing: 8
-                                Text { text: qsTr("热床:"); color: Theme.textDisabled; font.pixelSize: 11; width: 70 }
-                                Text { text: bedCombo.displayText; color: Theme.chromeText; font.pixelSize: 11 }
+                                Text { text: qsTr("热床:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM; width: 70 }
+                                Text { text: bedCombo.displayText; color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
                             }
 
                             Row {
                                 spacing: 8
-                                Text { text: qsTr("耗材:"); color: Theme.textDisabled; font.pixelSize: 11; width: 70 }
-                                Text { text: filamentCombo.displayText; color: Theme.chromeText; font.pixelSize: 11 }
+                                Text { text: qsTr("耗材:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM; width: 70 }
+                                Text { text: filamentCombo.displayText; color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
                             }
 
                             Row {
                                 spacing: 8
-                                Text { text: qsTr("喷嘴温度:"); color: Theme.textDisabled; font.pixelSize: 11; width: 70 }
-                                Text { text: nozzleTempText.text; color: Theme.statusWarning; font.pixelSize: 11 }
+                                Text { text: qsTr("喷嘴温度:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM; width: 70 }
+                                Text { text: nozzleTempText.text; color: Theme.statusWarning; font.pixelSize: Theme.fontSizeSM }
                             }
                         }
                     }
@@ -375,7 +375,7 @@ CxDialog {
                 Layout.preferredHeight: 30
                 radius: 4
                 color: backHov.containsMouse ? Theme.borderInput : Theme.bgCard
-                Text { anchors.centerIn: parent; text: qsTr("上一步"); color: Theme.chromeTextMuted; font.pixelSize: 12 }
+                Text { anchors.centerIn: parent; text: qsTr("上一步"); color: Theme.chromeTextMuted; font.pixelSize: Theme.fontSizeMD }
                 MouseArea { id: backHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: swipeView.decrementCurrentIndex(); }
             }
 
@@ -394,7 +394,7 @@ CxDialog {
                         if (swipeView.currentIndex === 3) return qsTr("完成");
                         return qsTr("下一步");
                     }
-                    color: "white"; font.pixelSize: 12; font.bold: true
+                    color: "white"; font.pixelSize: Theme.fontSizeMD; font.bold: true
                 }
                 MouseArea {
                     id: nextHov

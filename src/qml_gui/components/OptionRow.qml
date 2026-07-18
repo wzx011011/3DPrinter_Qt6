@@ -166,7 +166,7 @@ Item {
                     anchors.centerIn: parent
                     text: "+"
                     color: Theme.accent
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                     font.bold: true
                 }
             }
@@ -491,7 +491,7 @@ Item {
             anchors.centerIn: parent
             text: parent.label
             color: parent.colorToken
-            font.pixelSize: 9
+            font.pixelSize: Theme.fontSizeXS
             font.bold: true
         }
     }

@@ -70,14 +70,14 @@ Item {
                             text: root.previewVm ? root.previewVm.legendGradientMinLabel : "--"
                             color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeXS
-                            font.family: "Consolas"
+                            font.family: Theme.fontMono
                         }
                         Item { Layout.fillWidth: true }
                         Text {
                             text: root.previewVm ? root.previewVm.legendGradientMaxLabel : "--"
                             color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeXS
-                            font.family: "Consolas"
+                            font.family: Theme.fontMono
                         }
                     }
                 }

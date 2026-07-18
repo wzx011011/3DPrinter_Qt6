@@ -21,19 +21,19 @@ Rectangle {
         anchors.rightMargin: 8
         spacing: 8
 
-        Text { text: "⚠"; color: Theme.statusError; font.pixelSize: 13 }
+        Text { text: "⚠"; color: Theme.statusError; font.pixelSize: Theme.fontSize13 }
         Text {
             visible: backend.lastErrorTitle !== ""
             text: backend.lastErrorTitle
             color: Theme.statusError
-            font.pixelSize: 10
+            font.pixelSize: Theme.fontSizeXS
             font.bold: true
         }
 
         Text {
             text:            backend.lastErrorMessage
             color:           Theme.statusWarning
-            font.pixelSize:  12
+            font.pixelSize: Theme.fontSizeMD
             elide:           Text.ElideRight
             Layout.fillWidth: true
         }
@@ -48,7 +48,7 @@ Rectangle {
                 anchors.centerIn: parent
                 text: backend.pendingNotificationCount > 9 ? "9+" : backend.pendingNotificationCount.toString()
                 color: Theme.accentDark
-                font.pixelSize: 9
+                font.pixelSize: Theme.fontSizeXS
                 font.bold: true
             }
         }
@@ -62,7 +62,7 @@ Rectangle {
                 anchors.centerIn: parent
                 text:  qsTr("关闭")
                 color: Theme.statusError
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
             }
             HoverHandler { id: closeHov }
             TapHandler   { onTapped: backend.dismissNotification() }

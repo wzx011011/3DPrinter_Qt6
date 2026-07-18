@@ -137,7 +137,7 @@ Item {
             Text {
                 text: qsTr("平板切片状态")
                 color: Theme.textSecondary
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
             }
 
             Row {
@@ -167,13 +167,13 @@ Item {
                             Text {
                                 text: root.editorVm ? root.editorVm.plateName(index) : ""
                                 color: root.editorVm && root.editorVm.currentPlateIndex === index ? Theme.accent : Theme.textSecondary
-                                font.pixelSize: 9
+                                font.pixelSize: Theme.fontSizeXS
                             }
 
                             Text {
                                 text: root.editorVm && root.editorVm.isPlateSliced(index) ? "✓" : ""
                                 color: Theme.accent
-                                font.pixelSize: 9
+                                font.pixelSize: Theme.fontSizeXS
                                 font.bold: true
                             }
                         }
@@ -200,7 +200,7 @@ Item {
                 Text {
                     text: qsTr("切片结果")
                     color: Theme.accent
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                     font.bold: true
                     Layout.fillWidth: true
                 }
@@ -219,13 +219,13 @@ Item {
                     Text {
                         text: qsTr("模型尺寸")
                         color: Theme.textTertiary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         Layout.fillWidth: true
                     }
                     Text {
                         text: root.modelSize
                         color: Theme.textPrimary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         font.family: "monospace"
                     }
                 }
@@ -236,13 +236,13 @@ Item {
                     Text {
                         text: qsTr("预计打印时长")
                         color: Theme.textTertiary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         Layout.fillWidth: true
                     }
                     Text {
                         text: root.estimatedTime.length > 0 ? root.estimatedTime : "--:--:--"
                         color: Theme.accent
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         font.bold: true
                     }
 
@@ -253,12 +253,12 @@ Item {
                         Text {
                             text: qsTr("预估时间:")
                             color: Theme.textTertiary
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fontSizeSM
                         }
                         Text {
                             text: root.estimatedPrintTime.length > 0 ? root.estimatedPrintTime : "--:--:--"
                             color: Theme.textSecondary
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fontSizeSM
                             font.family: "monospace"
                         }
                     }
@@ -271,13 +271,13 @@ Item {
                     Text {
                         text: qsTr("平均打印速度")
                         color: Theme.textTertiary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         Layout.fillWidth: true
                     }
                     Text {
                         text: root.avgSpeed
                         color: Theme.textPrimary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         font.family: "monospace"
                     }
                 }
@@ -289,13 +289,13 @@ Item {
                     Text {
                         text: qsTr("当前平板")
                         color: Theme.textTertiary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         Layout.fillWidth: true
                     }
                     Text {
                         text: root.resultPlateLabel
                         color: Theme.textPrimary
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                     }
                 }
 
@@ -306,13 +306,13 @@ Item {
                     Text {
                         text: qsTr("切片层数")
                         color: Theme.textTertiary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         Layout.fillWidth: true
                     }
                     Text {
                         text: root.resultLayerCount + qsTr(" 层")
                         color: Theme.textPrimary
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         font.bold: true
                     }
                 }
@@ -332,7 +332,7 @@ Item {
                     Text {
                         text: qsTr("耗材重量")
                         color: Theme.textTertiary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         Layout.fillWidth: true
                     }
                     // Filament color chip (对齐上游 SliceInfoPopup filament color badge)
@@ -343,7 +343,7 @@ Item {
                     Text {
                         text: root.resultWeight
                         color: Theme.textPrimary
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         font.bold: true
                     }
                 }
@@ -355,13 +355,13 @@ Item {
                     Text {
                         text: qsTr("耗材用量")
                         color: Theme.textTertiary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         Layout.fillWidth: true
                     }
                     Text {
                         text: root.resultFilament
                         color: Theme.textPrimary
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         font.bold: true
                     }
                 }
@@ -373,13 +373,13 @@ Item {
                     Text {
                         text: qsTr("预估成本")
                         color: Theme.textTertiary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         Layout.fillWidth: true
                     }
                     Text {
                         text: root.resultCost
                         color: Theme.statusWarning
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         font.bold: true
                     }
                 }
@@ -401,7 +401,7 @@ Item {
                     Text {
                         text: qsTr("耗材用量明细")
                         color: Theme.accent
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         font.bold: true
                         Layout.fillWidth: true
                     }
@@ -422,21 +422,21 @@ Item {
                             Text {
                                 text: qsTr("挤出机") + (index + 1)
                                 color: Theme.textTertiary
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                                 Layout.fillWidth: true
                             }
 
                             Text {
                                 text: root.editorVm ? root.editorVm.extruderUsedLength(index) : ""
                                 color: Theme.textPrimary
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                                 font.family: "monospace"
                             }
 
                             Text {
                                 text: root.editorVm ? root.editorVm.extruderUsedWeight(index) : ""
                                 color: Theme.textSecondary
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fontSizeXS
                                 font.family: "monospace"
                             }
                         }
@@ -460,13 +460,13 @@ Item {
                     Text {
                         text: qsTr("输出文件")
                         color: Theme.textTertiary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                     }
                     Text {
                         Layout.fillWidth: true
                         text: root.outputPath
                         color: Theme.textSecondary
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                         font.family: "monospace"
                         wrapMode: Text.WrapAnywhere
                     }
@@ -487,7 +487,7 @@ Item {
                 anchors.margins: 9
                 text: root.actionHint
                 color: root.canRequestSlice ? Theme.textTertiary : Theme.statusError
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 wrapMode: Text.Wrap
             }
         }
@@ -506,7 +506,7 @@ Item {
                 anchors.centerIn: parent
                 text: root.slicingNow ? qsTr("✕ 取消切片") : root.actionLabel
                 color: !root.primaryActionEnabled ? Theme.textDisabled : "white"
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontSizeMD
                 font.bold: true
             }
 
@@ -544,7 +544,7 @@ Item {
                     anchors.centerIn: parent
                     text: qsTr("预览")
                     color: root.canPreview ? "white" : Theme.textDisabled
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                     font.bold: true
                 }
                 MouseArea {
@@ -571,7 +571,7 @@ Item {
                     anchors.centerIn: parent
                     text: qsTr("导出 G-code")
                     color: root.canExportGCode ? "white" : Theme.textDisabled
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                     font.bold: true
                 }
                 MouseArea {
@@ -599,7 +599,7 @@ Item {
                     anchors.centerIn: parent
                     text: qsTr("全部切片")
                     color: root.canSliceAll ? Theme.textPrimary : Theme.textDisabled
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                 }
                 MouseArea {
                     id: sliceAllMA
@@ -620,7 +620,7 @@ Item {
             visible: !root.slicingNow && (!root.canPreview || !root.canExportGCode)
             text: !root.canPreview ? root.previewHint : root.exportHint
             color: Theme.textTertiary
-            font.pixelSize: 10
+            font.pixelSize: Theme.fontSizeXS
             wrapMode: Text.Wrap
         }
 

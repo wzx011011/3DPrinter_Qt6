@@ -36,12 +36,12 @@ CxDialog {
             Layout.fillWidth: true
             spacing: 6
 
-            Text { Layout.preferredWidth: 20; text: ""; color: Theme.textTertiary; font.pixelSize: 10 }
-            Text { Layout.preferredWidth: 50; text: qsTr("范围最小"); color: Theme.textTertiary; font.pixelSize: 10 }
-            Text { Layout.preferredWidth: 50; text: qsTr("范围最大"); color: Theme.textTertiary; font.pixelSize: 10 }
-            Text { Layout.preferredWidth: 70; text: qsTr("速度限制"); color: Theme.textTertiary; font.pixelSize: 10 }
-            Text { Layout.preferredWidth: 70; text: qsTr("加速度限制"); color: Theme.textTertiary; font.pixelSize: 10 }
-            Text { Layout.preferredWidth: 40; text: qsTr("类型"); color: Theme.textTertiary; font.pixelSize: 10 }
+            Text { Layout.preferredWidth: 20; text: ""; color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
+            Text { Layout.preferredWidth: 50; text: qsTr("范围最小"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
+            Text { Layout.preferredWidth: 50; text: qsTr("范围最大"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
+            Text { Layout.preferredWidth: 70; text: qsTr("速度限制"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
+            Text { Layout.preferredWidth: 70; text: qsTr("加速度限制"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
+            Text { Layout.preferredWidth: 40; text: qsTr("类型"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
             Item { Layout.fillWidth: true }
         }
 
@@ -66,7 +66,7 @@ CxDialog {
                 CxTextField {
                     Layout.preferredWidth: 50
                     implicitHeight: 24
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fontSizeXS
                     text: modelData.rangeMin
                     enabled: modelData.enabled
                 }
@@ -74,7 +74,7 @@ CxDialog {
                 CxTextField {
                     Layout.preferredWidth: 50
                     implicitHeight: 24
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fontSizeXS
                     text: modelData.rangeMax
                     enabled: modelData.enabled
                 }
@@ -82,7 +82,7 @@ CxDialog {
                 CxTextField {
                     Layout.preferredWidth: 70
                     implicitHeight: 24
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fontSizeXS
                     text: modelData.speedLimit
                     enabled: modelData.enabled
                 }
@@ -90,7 +90,7 @@ CxDialog {
                 CxTextField {
                     Layout.preferredWidth: 70
                     implicitHeight: 24
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fontSizeXS
                     text: modelData.accelLimit
                     enabled: modelData.enabled
                 }
@@ -99,7 +99,7 @@ CxDialog {
                     Layout.preferredWidth: 40
                     text: modelData.type
                     color: modelData.enabled ? Theme.textSecondary : Theme.textTertiary
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fontSizeXS
                 }
 
                 Item { Layout.fillWidth: true }
@@ -114,7 +114,7 @@ CxDialog {
                         anchors.centerIn: parent
                         text: "×"
                         color: Theme.statusError
-                        font.pixelSize: 14
+                        font.pixelSize: Theme.fontSizeLG
                     }
 
                     MouseArea {

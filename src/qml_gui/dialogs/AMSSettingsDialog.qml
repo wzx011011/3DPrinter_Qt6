@@ -57,7 +57,7 @@ CxDialog {
             Text {
                 text: qsTr("耗材槽位管理")
                 color: Theme.textSecondary
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 font.bold: true
             }
 
@@ -105,7 +105,7 @@ CxDialog {
                                 Text {
                                     text: qsTr("槽位 %1").arg(index + 1)
                                     color: Theme.textPrimary
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fontSizeSM
                                     font.bold: true
                                 }
 
@@ -113,7 +113,7 @@ CxDialog {
 
                                 CxCheckBox {
                                     text: qsTr("自动换色")
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fontSizeXS
                                     Component.onCompleted: checked = (root.editAutoSwap[index] !== undefined)
                                         ? root.editAutoSwap[index]
                                         : root.slotAutoSwap[index]
@@ -129,7 +129,7 @@ CxDialog {
                             CxTextField {
                                 Layout.fillWidth: true
                                 implicitHeight: 24
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                                 text: root.editNames[index] !== undefined
                                     ? root.editNames[index]
                                     : root.slotNames[index]
@@ -148,7 +148,7 @@ CxDialog {
                                 CxComboBox {
                                     Layout.fillWidth: true
                                     implicitHeight: 24
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fontSizeSM
                                     model: root.materialTypes
                                     currentIndex: {
                                         var m = root.editMaterials[index] !== undefined
@@ -198,7 +198,7 @@ CxDialog {
             Text {
                 text: qsTr("映射配置")
                 color: Theme.textSecondary
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 font.bold: true
                 topPadding: 4
             }
@@ -237,26 +237,26 @@ CxDialog {
                             Text {
                                 text: qsTr("Slot %1").arg(modelData.slot)
                                 color: Theme.textPrimary
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                                 font.bold: true
                             }
 
                             Text {
                                 text: "->"
                                 color: Theme.textTertiary
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                             }
 
                             Text {
                                 text: qsTr("Extruder %1").arg(modelData.extruder)
                                 color: Theme.textSecondary
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                             }
 
                             Text {
                                 text: qsTr("(温度覆盖 %1°C)").arg(modelData.temp)
                                 color: Theme.accent
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                             }
                         }
                     }
@@ -275,7 +275,7 @@ CxDialog {
             Text {
                 text: qsTr("槽位耗材余量")
                 color: Theme.textSecondary
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 font.bold: true
                 topPadding: 4
             }
@@ -299,7 +299,7 @@ CxDialog {
                     Text {
                         text: qsTr("Slot %1:").arg(index + 1)
                         color: Theme.textSecondary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         Layout.preferredWidth: 50
                     }
 
@@ -333,7 +333,7 @@ CxDialog {
                             if (pct <= 50) return Theme.statusWarning
                             return Theme.textPrimary
                         }
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         font.bold: true
                         Layout.preferredWidth: 36
                         horizontalAlignment: Text.AlignRight

@@ -38,7 +38,7 @@ CxDialog {
             Text {
                 text: qsTr("热床形状")
                 color: Theme.textSecondary
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
             }
 
             RowLayout {
@@ -68,7 +68,7 @@ CxDialog {
                             anchors.centerIn: parent
                             text: modelData
                             color: checked ? Theme.textOnAccent : Theme.textPrimary
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fontSizeSM
                         }
 
                         MouseArea {
@@ -87,7 +87,7 @@ CxDialog {
             Text {
                 text: qsTr("尺寸")
                 color: Theme.textSecondary
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 topPadding: 4
             }
 
@@ -103,7 +103,7 @@ CxDialog {
                         ? qsTr("直径")
                         : qsTr("宽度")
                     color: Theme.textTertiary
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                 }
                 CxTextField {
                     id: widthField
@@ -135,7 +135,7 @@ CxDialog {
                     width: 50
                     text: qsTr("深度")
                     color: Theme.textTertiary
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                 }
                 CxTextField {
                     id: depthField
@@ -158,7 +158,7 @@ CxDialog {
                     width: 50
                     text: qsTr("高度")
                     color: Theme.textTertiary
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                 }
                 CxTextField {
                     id: heightField
@@ -175,7 +175,7 @@ CxDialog {
             Text {
                 text: qsTr("原点偏移")
                 color: Theme.textSecondary
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 topPadding: 4
             }
 
@@ -187,7 +187,7 @@ CxDialog {
                     width: 50
                     text: "X"
                     color: Theme.textTertiary
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                 }
                 CxTextField {
                     id: originXField
@@ -208,7 +208,7 @@ CxDialog {
                     width: 50
                     text: "Y"
                     color: Theme.textTertiary
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                 }
                 CxTextField {
                     id: originYField

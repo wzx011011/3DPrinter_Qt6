@@ -123,7 +123,7 @@ Item {
                         anchors.centerIn: parent
                         text: qsTr("No data")
                         color: Theme.statusWarning
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         font.bold: true
                         elide: Text.ElideRight
                     }
@@ -159,7 +159,7 @@ Item {
                                 anchors.centerIn: parent
                                 text: root.cameraButtonLabel(cameraPresetButton.index)
                                 color: Theme.textPrimary
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                                 elide: Text.ElideRight
                             }
 
@@ -186,7 +186,7 @@ Item {
                             anchors.centerIn: parent
                             text: qsTr("Fit")
                             color: Theme.textPrimary
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fontSizeSM
                             font.bold: true
                         }
 
@@ -418,16 +418,16 @@ Item {
                                                 text: gcodeRow.modelData.line
                                                 color: gcodeRow.modelData.current ? Theme.statusWarning : Theme.textTertiary
                                                 horizontalAlignment: Text.AlignRight
-                                                font.pixelSize: 10
-                                                font.family: "Consolas"
+                                                font.pixelSize: Theme.fontSizeXS
+                                                font.family: Theme.fontMono
                                             }
                                             Text {
                                                 Layout.fillWidth: true
                                                 text: gcodeRow.modelData.text
                                                 color: gcodeRow.modelData.current ? Theme.statusWarning : Theme.textSecondary
                                                 elide: Text.ElideRight
-                                                font.pixelSize: 10
-                                                font.family: "Consolas"
+                                                font.pixelSize: Theme.fontSizeXS
+                                                font.family: Theme.fontMono
                                             }
                                         }
                                     }
@@ -538,7 +538,7 @@ Item {
                 anchors.centerIn: parent
                 text: sidePanelHeaderRoot.expanded ? "<" : ">"
                 color: Theme.textPrimary
-                font.pixelSize: 16
+                font.pixelSize: Theme.fontSizeXL
             }
 
             MouseArea {

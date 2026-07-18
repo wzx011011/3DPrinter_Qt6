@@ -41,12 +41,12 @@ CxDialog {
                 Layout.preferredWidth: 80
                 text: qsTr("预设名称")
                 color: Theme.textTertiary
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
             }
             CxTextField {
                 Layout.fillWidth: true
                 implicitHeight: 24
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 text: root.presetName
             }
         }
@@ -60,12 +60,12 @@ CxDialog {
                 Layout.preferredWidth: 80
                 text: qsTr("主机类型")
                 color: Theme.textTertiary
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
             }
             CxComboBox {
                 Layout.fillWidth: true
                 implicitHeight: 24
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 model: ["OrcaSlicer Cloud", "OctoPrint", "PrusaLink", "Moonraker", "Klipper"]
                 currentIndex: 0
             }
@@ -80,18 +80,18 @@ CxDialog {
                 Layout.preferredWidth: 80
                 text: qsTr("主机地址")
                 color: Theme.textTertiary
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
             }
             CxTextField {
                 Layout.fillWidth: true
                 implicitHeight: 24
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 text: root.hostUrl
             }
             CxTextField {
                 Layout.preferredWidth: 60
                 implicitHeight: 24
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 text: root.hostPort.toString()
             }
         }
@@ -105,12 +105,12 @@ CxDialog {
                 Layout.preferredWidth: 80
                 text: qsTr("API Key")
                 color: Theme.textTertiary
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
             }
             CxTextField {
                 Layout.fillWidth: true
                 implicitHeight: 24
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 text: root.apiKey
                 echoMode: TextInput.Password
             }
@@ -125,12 +125,12 @@ CxDialog {
                 Layout.preferredWidth: 80
                 text: qsTr("认证方式")
                 color: Theme.textTertiary
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
             }
             CxComboBox {
                 Layout.fillWidth: true
                 implicitHeight: 24
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 model: [qsTr("API Key"), qsTr("用户名/密码"), qsTr("无认证")]
                 currentIndex: 0
             }
@@ -152,7 +152,7 @@ CxDialog {
 
             Text {
                 color: Theme.textTertiary
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
                 text: qsTr("需要有效的网络连接")
             }
         }

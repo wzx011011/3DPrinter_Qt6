@@ -162,8 +162,8 @@ Item {
                 Row {
                     anchors.centerIn: parent
                     spacing: 4
-                    Text { text: qsTr("文件"); color: Theme.chromeText; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
-                    Text { text: "▾"; color: Theme.chromeTextMuted; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                    Text { text: qsTr("文件"); color: Theme.chromeText; font.pixelSize: Theme.fontSizeMD; anchors.verticalCenter: parent.verticalCenter }
+                    Text { text: "▾"; color: Theme.chromeTextMuted; font.pixelSize: Theme.fontSizeXS; anchors.verticalCenter: parent.verticalCenter }
                 }
 
                 MouseArea {
@@ -187,7 +187,7 @@ Item {
                     anchors.centerIn: parent
                     text: "▾"
                     color: Theme.chromeTextMuted
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fontSizeXS
                 }
 
                 MouseArea {
@@ -338,7 +338,7 @@ Item {
                                   : tabBtn.checked ? Theme.textOnAccent
                                   : tabBtn.hovered ? Theme.textOnAccent
                                   : Theme.chromeText
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fontSizeMD
                             font.bold: tabBtn.checked
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -416,7 +416,7 @@ Item {
                 Layout.minimumWidth: 160
                 text: backend.displayProjectTitle
                 color: Theme.chromeText
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontSizeMD
                 elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
                 HoverHandler { id: titleHover }
@@ -540,7 +540,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: workflowTab.modelData.label
                                     color: backend.currentPage === workflowTab.modelData.pos ? Theme.textOnAccent : Theme.chromeText
-                                    font.pixelSize: 12
+                                    font.pixelSize: Theme.fontSizeMD
                                     font.bold: backend.currentPage === workflowTab.modelData.pos
                                 }
                             }
@@ -569,7 +569,7 @@ Item {
                         anchors.centerIn: parent
                         text: qsTr("切片单盘")
                         color: Theme.textPrimary
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         opacity: prepareSliceButton.enabled ? 1.0 : 0.55
                     }
 
@@ -603,7 +603,7 @@ Item {
                         anchors.centerIn: parent
                         text: qsTr("导出G-code文件")
                         color: Theme.textOnAccent
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         font.bold: true
                         opacity: prepareExportGcodeButton.enabled ? 1.0 : 0.55
                     }
@@ -644,7 +644,7 @@ Item {
                         anchors.centerIn: parent
                         text: qsTr("装配视图")
                         color: Theme.textPrimary
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                     }
 
                     MouseArea {

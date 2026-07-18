@@ -191,7 +191,7 @@ Item {
                             Text {
                                 text: "\u2315"
                                 color: Theme.textTertiary
-                                font.pixelSize: 13
+                                font.pixelSize: Theme.fontSize13
                             }
 
                             CxTextField {
@@ -207,7 +207,7 @@ Item {
                                 visible: searchField.text.length > 0
                                 text: "\u2715"
                                 color: Theme.textTertiary
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fontSizeXS
                                 TapHandler {
                                     onTapped: {
                                         searchField.text = ""
@@ -656,7 +656,7 @@ Item {
                     anchors.centerIn: parent
                     text: "x"
                     color: Theme.textTertiary
-                    font.pixelSize: 9
+                    font.pixelSize: Theme.fontSizeXS
                 }
                 TapHandler { onTapped: _vm.removeDevice(index) }
             }
@@ -862,7 +862,7 @@ Item {
                             visible: _selected
                             text: "\u2713"
                             color: Theme.textOnAccent
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fontSizeXS
                         }
                     }
                     Text {
@@ -1240,7 +1240,7 @@ Item {
                             visible: _selected
                             text: "\u2713"
                             color: Theme.textOnAccent
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fontSizeXS
                         }
                     }
                     Text {
@@ -1346,7 +1346,7 @@ Item {
                             anchors.centerIn: parent
                             text: qsTr("Pause")
                             color: _hovered ? Theme.textOnAccent : Theme.textSecondary
-                            font.pixelSize: 9
+                            font.pixelSize: Theme.fontSizeXS
                         }
                         TapHandler { onTapped: _vm.pauseCloudTask(index) }
                     }
@@ -1363,7 +1363,7 @@ Item {
                             anchors.centerIn: parent
                             text: qsTr("Resume")
                             color: Theme.textOnAccent
-                            font.pixelSize: 9
+                            font.pixelSize: Theme.fontSizeXS
                         }
                         TapHandler { onTapped: _vm.resumeCloudTask(index) }
                     }
@@ -1380,7 +1380,7 @@ Item {
                             anchors.centerIn: parent
                             text: qsTr("Stop")
                             color: _hovered ? Theme.textOnAccent : Theme.textSecondary
-                            font.pixelSize: 9
+                            font.pixelSize: Theme.fontSizeXS
                         }
                         TapHandler { onTapped: _vm.stopCloudTask(index) }
                     }
@@ -1407,7 +1407,7 @@ Item {
             spacing: 12
 
             // Task selector
-            Text { text: qsTr("Task:"); color: Theme.textSecondary; font.pixelSize: 12 }
+            Text { text: qsTr("Task:"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD }
             CxComboBox {
                 id: taskSelector
                 Layout.fillWidth: true
@@ -1418,7 +1418,7 @@ Item {
                     contentItem: Text {
                         text: root.multiMachineVm.localTaskProjectName(index)
                         color: Theme.textPrimary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                     }
                     highlighted: taskSelector.highlightedIndex === index
                 }
@@ -1428,7 +1428,7 @@ Item {
             }
 
             // Online device list
-            Text { text: qsTr("Online Devices:"); color: Theme.textSecondary; font.pixelSize: 12 }
+            Text { text: qsTr("Online Devices:"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD }
             ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -1457,7 +1457,7 @@ Item {
                                 Text {
                                     text: root.multiMachineVm.onlineMachineName(index)
                                     color: sendToDeviceDialog.selectedDeviceIndex === index ? Theme.accent : Theme.textPrimary
-                                    font.pixelSize: 12
+                                    font.pixelSize: Theme.fontSizeMD
                                 }
                             }
                             MouseArea {
@@ -1479,13 +1479,13 @@ Item {
                     width: 80; height: 28; radius: 4
                     color: Theme.bgElevated
                     border.color: Theme.borderDefault; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("Cancel"); color: Theme.textSecondary; font.pixelSize: 11 }
+                    Text { anchors.centerIn: parent; text: qsTr("Cancel"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: sendToDeviceDialog.close() }
                 }
                 Rectangle {
                     width: 80; height: 28; radius: 4
                     color: Theme.accent
-                    Text { anchors.centerIn: parent; text: qsTr("Send"); color: Theme.textOnAccent; font.pixelSize: 11 }
+                    Text { anchors.centerIn: parent; text: qsTr("Send"); color: Theme.textOnAccent; font.pixelSize: Theme.fontSizeSM }
                     MouseArea {
                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: {

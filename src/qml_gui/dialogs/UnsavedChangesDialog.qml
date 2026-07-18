@@ -51,7 +51,7 @@ CxDialog {
                 Layout.fillWidth: true
                 text: qsTr("当前预设已修改但未保存。切换前请选择如何处理这些修改：")
                 color: Theme.textPrimary
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontSizeMD
                 wrapMode: Text.WordWrap
             }
 
@@ -59,7 +59,7 @@ CxDialog {
             Text {
                 text: qsTr("已修改 %1 个参数").arg(root.configVm ? root.configVm.globalModifiedCount : 0)
                 color: Theme.statusWarning
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 font.bold: true
             }
 
@@ -96,7 +96,7 @@ CxDialog {
                                 Text {
                                     text: root.configVm ? root.configVm.globalModifiedKey(index) : ""
                                     color: Theme.textSecondary
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fontSizeXS
                                     font.family: "monospace"
                                     Layout.preferredWidth: 160
                                     elide: Text.ElideRight
@@ -104,7 +104,7 @@ CxDialog {
                                 Text {
                                     text: root.configVm ? root.configVm.globalModifiedDefaultValue(root.configVm.globalModifiedKey(index)) : ""
                                     color: Theme.textTertiary
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fontSizeXS
                                     font.family: "monospace"
                                     Layout.fillWidth: true
                                     elide: Text.ElideRight
@@ -112,12 +112,12 @@ CxDialog {
                                 Text {
                                     text: "→"
                                     color: Theme.textTertiary
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fontSizeXS
                                 }
                                 Text {
                                     text: root.configVm ? root.configVm.globalModifiedCurrentValue(root.configVm.globalModifiedKey(index)) : ""
                                     color: Theme.accent
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fontSizeXS
                                     font.family: "monospace"
                                     Layout.fillWidth: true
                                     elide: Text.ElideRight

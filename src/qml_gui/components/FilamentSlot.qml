@@ -105,7 +105,7 @@ Item {
                 id: filamentCombo
                 Layout.fillWidth: true
                 Layout.preferredHeight: 24
-                font.pixelSize: 9
+                font.pixelSize: Theme.fontSizeXS
                 model: root.configVm ? root.configVm.filamentPresetNames : []
                 currentIndex: {
                     if (!root.configVm) return -1

@@ -570,6 +570,9 @@ private slots:
   // of hardcoded hex literals to Theme tokens (PreferencesPage was the worst
   // offender with 129 hex literals; LeftSidebar private palette migrated).
   void v52ColorHardcodeSwept();
+  // Phase 163 (TK-02): typography hardcode sweep gate. Locks the migration of
+  // font.pixelSize literals to Theme.fontSize* tokens + Consolas → Theme.fontMono.
+  void v52TypographyHardcodeSwept();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -7352,6 +7355,27 @@ void QmlUiAuditTests::v52ColorHardcodeSwept()
                || presetDiff.contains(QStringLiteral("Theme.statusError"))
                || presetDiff.contains(QStringLiteral("Theme.statusWarning")),
            "TK-01: PresetDiffDialog status badges must use Theme.status* tokens (was hardcoded #1f8a4c/#b03a3a/#c98a1a)");
+}
+
+// Phase 163 (TK-02): typography hardcode sweep gate.
+// Phase 163 swept 647 font.pixelSize literals → Theme.fontSize* tokens +
+// 25 Consolas hardcodes → Theme.fontMono across 47 files. This slot anchors
+// the migration by spot-checking worst-offender files.
+void QmlUiAuditTests::v52TypographyHardcodeSwept()
+{
+  const QString theme = readSource(QStringLiteral("src/qml_gui/Theme.qml"));
+  QVERIFY2(theme.contains(QStringLiteral("fontSize13")),
+           "TK-02: Theme.fontSize13 must be present (Phase 160 token, used by Phase 163 sweep for size-13 literals)");
+  QVERIFY2(theme.contains(QStringLiteral("property string fontMono")),
+           "TK-02: Theme.fontMono must be present (Phase 160 token, replaces Consolas hardcodes)");
+
+  // Spot-check: a known dense-typography file should now reference Theme.fontSize*.
+  // PreparePage had 114 font.pixelSize literals per PreparePage-UI-REVIEW; the
+  // sweep migrated them. We assert Theme.fontSize* is used heavily in the file.
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const int themeFontSizeUses = preparePage.count(QStringLiteral("Theme.fontSize"));
+  QVERIFY2(themeFontSizeUses > 30,
+           "TK-02: PreparePage must reference Theme.fontSize* tokens 30+ times (sweep migrated 114 literals)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

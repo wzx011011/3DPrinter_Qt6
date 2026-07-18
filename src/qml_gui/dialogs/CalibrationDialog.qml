@@ -53,7 +53,7 @@ CxDialog {
                     text: root.calibrationVm && root.calibrationVm.isRunning ? qsTr("校准进行中，请勿移动打印机…")
                          : root.calibrationVm && root.calibrationVm.progress >= 100 ? qsTr("校准完成！")
                          : qsTr("准备开始校准")
-                    color: Theme.textSecondary; font.pixelSize: 11
+                    color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM
                 }
             }
         }
@@ -63,11 +63,11 @@ CxDialog {
             Layout.fillWidth: true; spacing: 4
             RowLayout {
                 Layout.fillWidth: true
-                Text { text: qsTr("进度"); color: Theme.textSecondary; font.pixelSize: 11 }
+                Text { text: qsTr("进度"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                 Item { Layout.fillWidth: true }
                 Text {
                     text: root.calibrationVm ? root.calibrationVm.progress + "%" : "0%"
-                    color: Theme.textPrimary; font.pixelSize: 11; font.bold: true
+                    color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true
                 }
             }
             CxProgressBar {
@@ -89,7 +89,7 @@ CxDialog {
             Text {
                 text: qsTr("硬件校准选项")
                 color: Theme.textSecondary
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 font.bold: true
             }
 
@@ -115,7 +115,7 @@ CxDialog {
                             anchors.centerIn: parent
                             text: hardwareLidar ? "✓" : ""
                             color: "white"
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fontSizeXS
                             font.bold: true
                         }
                     }
@@ -123,7 +123,7 @@ CxDialog {
                     Text {
                         text: qsTr("微型激光雷达校准")
                         color: Theme.chromeText
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                     }
 
                     Item { Layout.fillWidth: true }
@@ -131,7 +131,7 @@ CxDialog {
                     Text {
                         text: qsTr("AI 监控")
                         color: Theme.borderActive
-                        font.pixelSize: 9
+                        font.pixelSize: Theme.fontSizeXS
                     }
                 }
 
@@ -166,7 +166,7 @@ CxDialog {
                             anchors.centerIn: parent
                             text: hardwareBedLevel ? "✓" : ""
                             color: "white"
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fontSizeXS
                             font.bold: true
                         }
                     }
@@ -174,7 +174,7 @@ CxDialog {
                     Text {
                         text: qsTr("热床调平")
                         color: Theme.chromeText
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                     }
 
                     Item { Layout.fillWidth: true }
@@ -182,7 +182,7 @@ CxDialog {
                     Text {
                         text: qsTr("自动")
                         color: Theme.borderActive
-                        font.pixelSize: 9
+                        font.pixelSize: Theme.fontSizeXS
                     }
                 }
 
@@ -217,7 +217,7 @@ CxDialog {
                             anchors.centerIn: parent
                             text: hardwareVibration ? "✓" : ""
                             color: "white"
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fontSizeXS
                             font.bold: true
                         }
                     }
@@ -225,7 +225,7 @@ CxDialog {
                     Text {
                         text: qsTr("振动补偿")
                         color: Theme.chromeText
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                     }
                 }
 
@@ -260,7 +260,7 @@ CxDialog {
                             anchors.centerIn: parent
                             text: hardwareMotor ? "✓" : ""
                             color: "white"
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fontSizeXS
                             font.bold: true
                         }
                     }
@@ -268,7 +268,7 @@ CxDialog {
                     Text {
                         text: qsTr("电机降噪")
                         color: Theme.chromeText
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                     }
 
                     Item { Layout.fillWidth: true }
@@ -276,7 +276,7 @@ CxDialog {
                     Text {
                         text: qsTr("可选")
                         color: Theme.borderActive
-                        font.pixelSize: 9
+                        font.pixelSize: Theme.fontSizeXS
                     }
                 }
 
@@ -308,13 +308,13 @@ CxDialog {
             Text {
                 text: qsTr("校准范围")
                 color: Theme.textSecondary
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 font.bold: true
             }
             Text {
                 text: qsTr("编辑扫描范围（起始 / 结束 / 步长），覆盖默认值")
                 color: Theme.borderActive
-                font.pixelSize: 9
+                font.pixelSize: Theme.fontSizeXS
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
             }
@@ -327,7 +327,7 @@ CxDialog {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 2
-                    Text { text: qsTr("起始"); color: Theme.borderActive; font.pixelSize: 9 }
+                    Text { text: qsTr("起始"); color: Theme.borderActive; font.pixelSize: Theme.fontSizeXS }
                     CxTextField {
                         id: rangeStartField
                         Layout.fillWidth: true
@@ -338,7 +338,7 @@ CxDialog {
                             notation: DoubleValidator.StandardNotation
                         }
                         color: Theme.textPrimary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         onEditingFinished: {
                             if (!root.calibrationVm) return
                             var v = parseFloat(text)
@@ -352,7 +352,7 @@ CxDialog {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 2
-                    Text { text: qsTr("结束"); color: Theme.borderActive; font.pixelSize: 9 }
+                    Text { text: qsTr("结束"); color: Theme.borderActive; font.pixelSize: Theme.fontSizeXS }
                     CxTextField {
                         id: rangeEndField
                         Layout.fillWidth: true
@@ -363,7 +363,7 @@ CxDialog {
                             notation: DoubleValidator.StandardNotation
                         }
                         color: Theme.textPrimary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         onEditingFinished: {
                             if (!root.calibrationVm) return
                             var v = parseFloat(text)
@@ -377,7 +377,7 @@ CxDialog {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 2
-                    Text { text: qsTr("步长"); color: Theme.borderActive; font.pixelSize: 9 }
+                    Text { text: qsTr("步长"); color: Theme.borderActive; font.pixelSize: Theme.fontSizeXS }
                     CxTextField {
                         id: rangeStepField
                         Layout.fillWidth: true
@@ -388,7 +388,7 @@ CxDialog {
                             notation: DoubleValidator.StandardNotation
                         }
                         color: Theme.textPrimary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         onEditingFinished: {
                             if (!root.calibrationVm) return
                             var v = parseFloat(text)
@@ -417,7 +417,7 @@ CxDialog {
                 width: 88; height: 30; radius: 4; visible: root.calibrationVm && root.calibrationVm.isRunning
                 color: stopHov.containsMouse ? Theme.bgErrorSubtle : Theme.bgErrorSubtle
                 border.color: Theme.statusErrorPressed
-                Text { anchors.centerIn: parent; text: qsTr("✕ 取消"); color: "#ff9090"; font.pixelSize: 11 }
+                Text { anchors.centerIn: parent; text: qsTr("✕ 取消"); color: "#ff9090"; font.pixelSize: Theme.fontSizeSM }
                 MouseArea {
                     id: stopHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                     onClicked: { if (root.calibrationVm) root.calibrationVm.cancelCalibration() }
@@ -432,7 +432,7 @@ CxDialog {
                 Text {
                     anchors.centerIn: parent
                     text: root.calibrationVm && root.calibrationVm.progress >= 100 ? qsTr("完成") : qsTr("开始")
-                    color: "white"; font.pixelSize: 11; font.bold: true
+                    color: "white"; font.pixelSize: Theme.fontSizeSM; font.bold: true
                 }
                 MouseArea {
                     id: doneHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor

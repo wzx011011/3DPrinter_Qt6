@@ -68,12 +68,12 @@ CxDialog {
                         Layout.preferredWidth: 90
                         text: qsTr("打印机型号")
                         color: Theme.textTertiary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                     }
                     Text {
                         text: root.printerModel
                         color: Theme.textPrimary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         font.bold: true
                     }
                     Item { Layout.fillWidth: true }
@@ -101,12 +101,12 @@ CxDialog {
                         Layout.preferredWidth: 90
                         text: qsTr("序列号")
                         color: Theme.textTertiary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                     }
                     Text {
                         text: root.serialNumber
                         color: Theme.textPrimary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                     }
                 }
 
@@ -118,12 +118,12 @@ CxDialog {
                         Layout.preferredWidth: 90
                         text: qsTr("当前版本")
                         color: Theme.textTertiary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                     }
                     Text {
                         text: root.currentVersion
                         color: Theme.textPrimary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         font.bold: true
                     }
 
@@ -133,7 +133,7 @@ CxDialog {
                         visible: root.upgradeState === FirmwareDialog.UpgradeAvailable
                         text: qsTr("新版本可用: %1").arg(root.latestVersion)
                         color: Theme.accent
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         font.bold: true
                     }
                 }
@@ -147,12 +147,12 @@ CxDialog {
                         Layout.preferredWidth: 90
                         text: qsTr("最新版本")
                         color: Theme.textTertiary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                     }
                     Text {
                         text: root.latestVersion
                         color: Theme.textSecondary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                     }
                 }
             }
@@ -175,7 +175,7 @@ CxDialog {
                 Text {
                     text: qsTr("更新日志")
                     color: Theme.textSecondary
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                     font.bold: true
                 }
 
@@ -190,7 +190,7 @@ CxDialog {
                         wrapMode: Text.Wrap
                         text: qsTr("v%1 更新内容:\n\n1. 优化切片算法，提升打印质量\n2. 修复 AMS 多耗材切换偶尔失败的问题\n3. 新增 timelapse 视频录制优化\n4. 改善 Wi-Fi 连接稳定性\n5. 修复部分情况下热床温度显示异常").arg(root.latestVersion)
                         color: Theme.textTertiary
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                         lineHeight: 1.5
                     }
                 }
@@ -209,14 +209,14 @@ CxDialog {
                 Text {
                     text: qsTr("正在升级...")
                     color: Theme.accent
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                     font.bold: true
                 }
                 Item { Layout.fillWidth: true }
                 Text {
                     text: Math.round(root.upgradeProgress * 100) + "%"
                     color: Theme.accent
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                     font.bold: true
                 }
             }
@@ -230,7 +230,7 @@ CxDialog {
             Text {
                 text: qsTr("升级过程中请勿断开电源或网络连接")
                 color: Theme.statusWarning
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
             }
         }
 
@@ -257,7 +257,7 @@ CxDialog {
                         : qsTr("升级失败，请检查网络连接后重试。")
                     color: root.upgradeState === FirmwareDialog.UpgradeState.UpgradeSuccess
                         ? Theme.accent : Theme.statusError
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                     font.bold: true
                 }
             }

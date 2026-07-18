@@ -35,7 +35,7 @@ CxDialog {
                 Layout.fillWidth: true
                 text: qsTr("选择目标打印机发送 G-code：")
                 color: Theme.textPrimary
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontSizeMD
             }
 
             // 设备列表
@@ -72,19 +72,19 @@ CxDialog {
                                 Text {
                                     text: devData.name || devData.model || "Unknown"
                                     color: Theme.textPrimary
-                                    font.pixelSize: 12
+                                    font.pixelSize: Theme.fontSizeMD
                                     font.bold: true
                                 }
                                 Text {
                                     text: devData.online ? qsTr("● 在线") : qsTr("● 离线")
                                     color: devData.online ? Theme.statusSuccess : Theme.textTertiary
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fontSizeXS
                                 }
                             }
                             Text {
                                 text: devData.ip || qsTr("IP: 未知")
                                 color: Theme.textSecondary
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fontSizeXS
                             }
                         }
 
@@ -104,7 +104,7 @@ CxDialog {
                 Layout.fillWidth: true
                 text: qsTr("G-code: %1").arg(root.gcodePath || qsTr("（未选择）"))
                 color: Theme.textTertiary
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
                 elide: Text.ElideRight
             }
 

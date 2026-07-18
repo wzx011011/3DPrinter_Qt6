@@ -117,7 +117,7 @@ Rectangle {
                                       ? root.configVm.currentPrinterPreset
                                       : qsTr("Creality K2 Plus")
                                 color: Theme.textPrimary
-                                font.pixelSize: 12
+                                font.pixelSize: Theme.fontSizeMD
                                 font.bold: true
                                 elide: Text.ElideRight
                             }
@@ -219,14 +219,14 @@ Rectangle {
                         Text {
                             text: String(filamentPixelRow.index + 1)
                             color: Theme.textPrimary
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fontSizeMD
                             font.bold: true
                         }
 
                         CxComboBox {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 28
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fontSizeSM
                             model: root.configVm ? root.configVm.filamentPresetNames : []
                             currentIndex: {
                                 if (!root.configVm) return -1
@@ -327,7 +327,7 @@ Rectangle {
                     CxComboBox {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 28
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         model: root.configVm ? root.configVm.printPresetNames : []
                         currentIndex: {
                             if (!root.configVm) return -1
@@ -386,7 +386,7 @@ Rectangle {
                         placeholderText: qsTr("搜索设置...")
                         color: Theme.textPrimary
                         placeholderTextColor: Theme.textDisabled
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         background: Item {}
                         selectByMouse: true
                         onAccepted: root.rebuildParamsFilter()
@@ -438,7 +438,7 @@ Rectangle {
                                     anchors.centerIn: parent
                                     text: paramsTabDelegate.modelData.label
                                     color: paramsTabDelegate.modelData.key === root.paramsCurrentTab ? Theme.textOnAccent : root.mutedText
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fontSizeXS
                                     font.bold: paramsTabDelegate.modelData.key === root.paramsCurrentTab
                                 }
 
@@ -565,7 +565,7 @@ Rectangle {
                     anchors.centerIn: parent
                     text: headerRoot.iconText
                     color: Theme.accent
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                     font.bold: true
                 }
             }
@@ -574,7 +574,7 @@ Rectangle {
                 Layout.fillWidth: true
                 text: headerRoot.title
                 color: Theme.textPrimary
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontSizeMD
                 font.bold: true
                 elide: Text.ElideRight
             }
@@ -611,7 +611,7 @@ Rectangle {
                 width: parent.width
                 text: tileRoot.label
                 color: root.mutedText
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
                 elide: Text.ElideRight
             }
 
@@ -619,7 +619,7 @@ Rectangle {
                 width: parent.width
                 text: tileRoot.value
                 color: Theme.textPrimary
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
                 font.bold: true
                 elide: Text.ElideRight
             }
@@ -684,7 +684,7 @@ Rectangle {
             anchors.centerIn: parent
             text: segmentRoot.text
             color: segmentRoot.selected ? Theme.textOnAccent : root.mutedText
-            font.pixelSize: 11
+            font.pixelSize: Theme.fontSizeSM
             font.bold: segmentRoot.selected
         }
 

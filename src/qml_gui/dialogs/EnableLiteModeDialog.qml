@@ -41,7 +41,7 @@ CxDialog {
                 Text {
                     anchors.centerIn: parent
                     text: "⚡"
-                    font.pixelSize: 20
+                    font.pixelSize: Theme.fontSizeXXL
                 }
             }
 
@@ -52,7 +52,7 @@ CxDialog {
                 Text {
                     text: qsTr("精简预览模式")
                     color: Theme.textPrimary
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.fontSize13
                     font.bold: true
                 }
 
@@ -60,7 +60,7 @@ CxDialog {
                     Layout.fillWidth: true
                     text: qsTr("启用精简模式可隐藏内部填充结构，仅显示关键工具路径，显著提升预览响应速度。建议在内存较低的设备上启用。")
                     color: Theme.textTertiary
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                     wrapMode: Text.Wrap
                     lineHeight: 1.5
                 }
@@ -87,7 +87,7 @@ CxDialog {
                 Text {
                     text: qsTr("模式对比")
                     color: Theme.textSecondary
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                     font.bold: true
                 }
 
@@ -95,9 +95,9 @@ CxDialog {
                     Layout.fillWidth: true
                     spacing: 8
 
-                    Text { Layout.preferredWidth: 100; text: qsTr("功能"); color: Theme.textTertiary; font.pixelSize: 10 }
-                    Text { Layout.preferredWidth: 80; text: qsTr("完整模式"); color: Theme.textPrimary; font.pixelSize: 10; font.bold: true }
-                    Text { Layout.fillWidth: true; text: qsTr("精简模式"); color: Theme.accent; font.pixelSize: 10; font.bold: true }
+                    Text { Layout.preferredWidth: 100; text: qsTr("功能"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
+                    Text { Layout.preferredWidth: 80; text: qsTr("完整模式"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS; font.bold: true }
+                    Text { Layout.fillWidth: true; text: qsTr("精简模式"); color: Theme.accent; font.pixelSize: Theme.fontSizeXS; font.bold: true }
                 }
 
                 Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.borderInput }
@@ -114,9 +114,9 @@ CxDialog {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        Text { Layout.preferredWidth: 100; text: modelData.feature; color: Theme.textSecondary; font.pixelSize: 10 }
-                        Text { Layout.preferredWidth: 80; text: modelData.full; color: Theme.textPrimary; font.pixelSize: 10 }
-                        Text { Layout.fillWidth: true; text: modelData.lite; color: modelData.lite === "✓" ? Theme.accent : Theme.statusError; font.pixelSize: 10 }
+                        Text { Layout.preferredWidth: 100; text: modelData.feature; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
+                        Text { Layout.preferredWidth: 80; text: modelData.full; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
+                        Text { Layout.fillWidth: true; text: modelData.lite; color: modelData.lite === "✓" ? Theme.accent : Theme.statusError; font.pixelSize: Theme.fontSizeXS }
                     }
                 }
             }
@@ -129,7 +129,7 @@ CxDialog {
 
             CxCheckBox {
                 text: qsTr("启用精简预览模式")
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontSizeMD
                 checked: root.liteModeEnabled
                 onCheckedChanged: root.liteModeEnabled = checked
             }
@@ -138,7 +138,7 @@ CxDialog {
                 Layout.fillWidth: true
                 text: qsTr("可在设置中随时切换")
                 color: Theme.textTertiary
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
             }
         }
     }

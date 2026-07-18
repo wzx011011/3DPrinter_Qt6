@@ -91,7 +91,7 @@ Item {
                 visible: backend.lastErrorTitle !== ""
                 text: backend.lastErrorTitle
                 color: iconColor
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
                 font.bold: true
                 elide: Text.ElideRight
                 Layout.fillWidth: true
@@ -102,12 +102,12 @@ Item {
                 width: parent.width
                 spacing: 8
 
-                Text { text: iconText; color: iconColor; font.pixelSize: 13; font.bold: true }
+                Text { text: iconText; color: iconColor; font.pixelSize: Theme.fontSize13; font.bold: true }
                 Text {
                     id: toastLabel
                     text: backend.lastErrorMessage
                     color: textColor
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                     elide: Text.ElideRight
                     Layout.fillWidth: true
                 }
@@ -124,7 +124,7 @@ Item {
                         anchors.centerIn: parent
                         text: root.pending > 9 ? "9+" : root.pending.toString()
                         color: Theme.accentDark
-                        font.pixelSize: 9
+                        font.pixelSize: Theme.fontSizeXS
                         font.bold: true
                     }
                 }
@@ -134,7 +134,7 @@ Item {
                     visible: root.isPersistent
                     width: 18; height: 18; radius: 9
                     color: closeMA.containsMouse ? Theme.bgPressed : "transparent"
-                    Text { anchors.centerIn: parent; text: "✕"; color: Theme.textMuted; font.pixelSize: 10 }
+                    Text { anchors.centerIn: parent; text: "✕"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                     MouseArea {
                         id: closeMA
                         anchors.fill: parent
@@ -167,7 +167,7 @@ Item {
                     anchors.leftMargin: 6
                     text: backend.currentNotificationProgress + "%"
                     color: textColor
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fontSizeXS
                     font.family: "Consolas, monospace"
                 }
             }
@@ -183,7 +183,7 @@ Item {
                 Rectangle {
                     width: 24; height: 22; radius: 4
                     color: prevMA.containsMouse ? Theme.borderInput : Theme.chromePressed
-                    Text { anchors.centerIn: parent; text: "<"; color: Theme.chromeTextMuted; font.pixelSize: 13; font.bold: true }
+                    Text { anchors.centerIn: parent; text: "<"; color: Theme.chromeTextMuted; font.pixelSize: Theme.fontSize13; font.bold: true }
                     MouseArea {
                         id: prevMA
                         anchors.fill: parent
@@ -199,14 +199,14 @@ Item {
                           ? (backend.currentHintIndex + 1) + "/" + backend.hintCount
                           : ""
                     color: Theme.textTertiary
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fontSizeXS
                 }
 
                 // Next hint
                 Rectangle {
                     width: 24; height: 22; radius: 4
                     color: nextMA.containsMouse ? Theme.borderInput : Theme.chromePressed
-                    Text { anchors.centerIn: parent; text: ">"; color: Theme.chromeTextMuted; font.pixelSize: 13; font.bold: true }
+                    Text { anchors.centerIn: parent; text: ">"; color: Theme.chromeTextMuted; font.pixelSize: Theme.fontSize13; font.bold: true }
                     MouseArea {
                         id: nextMA
                         anchors.fill: parent
@@ -221,7 +221,7 @@ Item {
                     visible: backend.currentHintHasDocumentationLink
                     width: 40; height: 22; radius: 4
                     color: docMA.containsMouse ? Theme.bgWarningSubtle : Theme.bgCard
-                    Text { anchors.centerIn: parent; text: qsTr("文档"); color: Theme.textMuted; font.pixelSize: 10; font.bold: true }
+                    Text { anchors.centerIn: parent; text: qsTr("文档"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; font.bold: true }
                     MouseArea {
                         id: docMA
                         anchors.fill: parent
@@ -236,7 +236,7 @@ Item {
                     Layout.leftMargin: 8
                     text: qsTr("不再提示")
                     color: prefMA.containsMouse ? Theme.chromeTextMuted : Theme.borderActive
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fontSizeXS
                     MouseArea {
                         id: prefMA
                         anchors.fill: parent
@@ -262,7 +262,7 @@ Item {
                     visible: root.showPreviewBtn
                     width: 70; height: 24; radius: 4
                     color: previewMA.containsMouse ? Theme.scrollBarHoverColor : Theme.scrollBarHoverColor
-                    Text { anchors.centerIn: parent; text: qsTr("预览"); color: Theme.accentDark; font.pixelSize: 11; font.bold: true }
+                    Text { anchors.centerIn: parent; text: qsTr("预览"); color: Theme.accentDark; font.pixelSize: Theme.fontSizeSM; font.bold: true }
                     MouseArea {
                         id: previewMA
                         anchors.fill: parent
@@ -280,7 +280,7 @@ Item {
                     visible: root.showExportBtn
                     width: 70; height: 24; radius: 4
                     color: exportMA.containsMouse ? Theme.statusInfo : "#1d4ed8"
-                    Text { anchors.centerIn: parent; text: qsTr("导出"); color: Theme.accentDark; font.pixelSize: 11; font.bold: true }
+                    Text { anchors.centerIn: parent; text: qsTr("导出"); color: Theme.accentDark; font.pixelSize: Theme.fontSizeSM; font.bold: true }
                     MouseArea {
                         id: exportMA
                         anchors.fill: parent
@@ -298,7 +298,7 @@ Item {
                     width: 50; height: 24; radius: 4
                     color: Theme.chromePressed
                     border.color: Theme.borderDefault; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("关闭"); color: Theme.chromeText; font.pixelSize: 10 }
+                    Text { anchors.centerIn: parent; text: qsTr("关闭"); color: Theme.chromeText; font.pixelSize: Theme.fontSizeXS }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: backend.dismissNotification() }
                 }
@@ -315,14 +315,14 @@ Item {
                     width: 60; height: 24; radius: 4
                     color: Theme.chromePressed
                     border.color: Theme.borderDefault; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.chromeText; font.pixelSize: 11 }
+                    Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: backend.cancelCurrentNotification() }
                 }
                 Rectangle {
                     width: 60; height: 24; radius: 4
                     color: iconColor
-                    Text { anchors.centerIn: parent; text: qsTr("确认"); color: Theme.accentDark; font.pixelSize: 11 }
+                    Text { anchors.centerIn: parent; text: qsTr("确认"); color: Theme.accentDark; font.pixelSize: Theme.fontSizeSM }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: backend.confirmCurrentNotification() }
                 }

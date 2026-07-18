@@ -85,7 +85,7 @@ Item {
             Text {
                 text: root.expanded ? "▾" : "▸"
                 color: Theme.textDisabled
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
                 rotation: root.expanded ? 0 : -90
                 Behavior on rotation { NumberAnimation { duration: 200 } }
             }

@@ -39,14 +39,14 @@ CxDialog {
                 Layout.fillWidth: true
                 text: qsTr("将当前所有自定义预设导出为可分享的预设包文件。")
                 color: Theme.textPrimary
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontSizeMD
                 wrapMode: Text.WordWrap
             }
 
             Text {
                 text: qsTr("格式: .zip（含 print/filament/printer 自定义预设）")
                 color: Theme.textSecondary
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
             }
 
             Item { Layout.fillHeight: true }

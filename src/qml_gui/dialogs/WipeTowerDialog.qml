@@ -54,7 +54,7 @@ CxDialog {
             Text {
                 text: qsTr("模式")
                 color: Theme.textSecondary
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
             }
 
             Rectangle {
@@ -70,7 +70,7 @@ CxDialog {
                     anchors.centerIn: parent
                     text: qsTr("简单")
                     color: !root.advancedMode ? Theme.textOnAccent : Theme.textPrimary
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                 }
 
                 MouseArea {
@@ -93,7 +93,7 @@ CxDialog {
                     anchors.centerIn: parent
                     text: qsTr("高级")
                     color: root.advancedMode ? Theme.textOnAccent : Theme.textPrimary
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                 }
 
                 MouseArea {
@@ -108,7 +108,7 @@ CxDialog {
         Text {
             text: qsTr("撞击设置")
             color: Theme.textSecondary
-            font.pixelSize: 11
+            font.pixelSize: Theme.fontSizeSM
             font.bold: true
         }
 
@@ -118,21 +118,21 @@ CxDialog {
             columnSpacing: 8
             rowSpacing: 6
 
-            Text { text: qsTr("体积"); color: Theme.textTertiary; font.pixelSize: 10 }
-            CxTextField { Layout.fillWidth: true; implicitHeight: 22; font.pixelSize: 10; text: root.rammingVolume.toFixed(1) }
+            Text { text: qsTr("体积"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
+            CxTextField { Layout.fillWidth: true; implicitHeight: 22; font.pixelSize: Theme.fontSizeXS; text: root.rammingVolume.toFixed(1) }
 
-            Text { text: qsTr("线宽倍率"); color: Theme.textTertiary; font.pixelSize: 10 }
-            CxTextField { Layout.fillWidth: true; implicitHeight: 22; font.pixelSize: 10; text: root.rammingLineWidthMulti.toFixed(2) }
+            Text { text: qsTr("线宽倍率"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
+            CxTextField { Layout.fillWidth: true; implicitHeight: 22; font.pixelSize: Theme.fontSizeXS; text: root.rammingLineWidthMulti.toFixed(2) }
 
-            Text { text: qsTr("步进倍率"); color: Theme.textTertiary; font.pixelSize: 10 }
-            CxTextField { Layout.fillWidth: true; implicitHeight: 22; font.pixelSize: 10; text: root.rammingStepMulti.toFixed(2) }
+            Text { text: qsTr("步进倍率"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
+            CxTextField { Layout.fillWidth: true; implicitHeight: 22; font.pixelSize: Theme.fontSizeXS; text: root.rammingStepMulti.toFixed(2) }
         }
 
         // -- Wiping Section --
         Text {
             text: qsTr("擦洗设置")
             color: Theme.textSecondary
-            font.pixelSize: 11
+            font.pixelSize: Theme.fontSizeSM
             font.bold: true
             topPadding: 4
         }
@@ -156,7 +156,7 @@ CxDialog {
                 columnSpacing: 4
 
                 // Header row
-                Text { width: 50; height: 20; text: ""; color: Theme.textTertiary; font.pixelSize: 9 }
+                Text { width: 50; height: 20; text: ""; color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
                 Repeater {
                     model: root.extruderNames.length
                     Rectangle {
@@ -204,7 +204,7 @@ CxDialog {
                             CxTextField {
                                 width: 60
                                 implicitHeight: 22
-                                font.pixelSize: 9
+                                font.pixelSize: Theme.fontSizeXS
                                 horizontalAlignment: Text.AlignHCenter
                                 text: parent.Repeater ? (root.flushMatrix[index] !== undefined
                                     ? root.flushMatrix[index][modelData] : "0") : "0"
@@ -225,12 +225,12 @@ CxDialog {
                 Layout.preferredWidth: 70
                 text: qsTr("擦洗倍率")
                 color: Theme.textTertiary
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
             }
             CxTextField {
                 Layout.preferredWidth: 60
                 implicitHeight: 22
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
                 text: root.flushMultiplier.toFixed(2)
             }
 
@@ -238,12 +238,12 @@ CxDialog {
                 Layout.preferredWidth: 70
                 text: qsTr("最小体积")
                 color: Theme.textTertiary
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
             }
             CxTextField {
                 Layout.preferredWidth: 60
                 implicitHeight: 22
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
                 text: root.minFlushVolume.toFixed(1)
             }
 

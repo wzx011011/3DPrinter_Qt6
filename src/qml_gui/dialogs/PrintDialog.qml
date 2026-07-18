@@ -39,18 +39,18 @@ CxDialog {
                 anchors.rightMargin: 12
                 spacing: 10
 
-                Text { text: "📄"; font.pixelSize: 16 }
+                Text { text: "📄"; font.pixelSize: Theme.fontSizeXL }
                 ColumnLayout {
                     spacing: 2
                     Text {
                         text: root.editorVm ? root.editorVm.projectName : "—"
-                        color: Theme.textPrimary; font.pixelSize: 12; font.bold: true
+                        color: Theme.textPrimary; font.pixelSize: Theme.fontSizeMD; font.bold: true
                     }
                     Text {
                         text: root.editorVm
                               ? root.editorVm.objectCount + qsTr(" 个对象  ·  层高 0.20 mm")
                               : "—"
-                        color: Theme.textDisabled; font.pixelSize: 10
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS
                     }
                 }
                 Item { Layout.fillWidth: true }
@@ -62,7 +62,7 @@ CxDialog {
             Layout.fillWidth: true
             spacing: 8
 
-            Text { text: qsTr("输出路径"); color: Theme.textSecondary; font.pixelSize: 11; Layout.preferredWidth: 60 }
+            Text { text: qsTr("输出路径"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; Layout.preferredWidth: 60 }
 
             Rectangle {
                 Layout.fillWidth: true
@@ -78,7 +78,7 @@ CxDialog {
                     verticalAlignment: TextInput.AlignVCenter
                     text: "C:/Users/Output/print_job.gcode"
                     color: Theme.chromeText
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fontSizeSM
                     selectByMouse: true
                 }
             }
@@ -86,7 +86,7 @@ CxDialog {
             Rectangle {
                 width: 26; height: 28; radius: 4
                 color: browseHov.containsMouse ? Theme.borderInput : Theme.bgCard
-                Text { anchors.centerIn: parent; text: "📂"; font.pixelSize: 12 }
+                Text { anchors.centerIn: parent; text: "📂"; font.pixelSize: Theme.fontSizeMD }
                 MouseArea {
                     id: browseHov; anchors.fill: parent
                     hoverEnabled: true; cursorShape: Qt.PointingHandCursor
@@ -102,12 +102,12 @@ CxDialog {
             CheckBox {
                 text: qsTr("切片后自动发送")
                 checked: true
-                contentItem: Text { text: parent.text; color: Theme.textSecondary; font.pixelSize: 11; leftPadding: parent.indicator.width + 6 }
+                contentItem: Text { text: parent.text; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; leftPadding: parent.indicator.width + 6 }
             }
             CheckBox {
                 text: qsTr("完成后通知")
                 checked: false
-                contentItem: Text { text: parent.text; color: Theme.textSecondary; font.pixelSize: 11; leftPadding: parent.indicator.width + 6 }
+                contentItem: Text { text: parent.text; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; leftPadding: parent.indicator.width + 6 }
             }
         }
 
@@ -126,7 +126,7 @@ CxDialog {
                 width: 110; height: 30; radius: 4
                 color: exportHov.containsMouse ? Theme.borderInput : Theme.chromePressed
                 border.color: Theme.bgPressed
-                Text { anchors.centerIn: parent; text: qsTr("导出 G-code"); color: Theme.chromeTextMuted; font.pixelSize: 11 }
+                Text { anchors.centerIn: parent; text: qsTr("导出 G-code"); color: Theme.chromeTextMuted; font.pixelSize: Theme.fontSizeSM }
                 MouseArea {
                     id: exportHov; anchors.fill: parent
                     hoverEnabled: true; cursorShape: Qt.PointingHandCursor
@@ -138,7 +138,7 @@ CxDialog {
             Rectangle {
                 width: 60; height: 30; radius: 4
                 color: cancelHov.containsMouse ? Theme.chromePressed : Theme.bgCard
-                Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: 11 }
+                Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                 MouseArea {
                     id: cancelHov; anchors.fill: parent
                     hoverEnabled: true; cursorShape: Qt.PointingHandCursor
@@ -150,7 +150,7 @@ CxDialog {
             Rectangle {
                 width: 80; height: 30; radius: 4
                 color: printHov.containsMouse ? Theme.accentDark : Theme.accentSubtle
-                Text { anchors.centerIn: parent; text: qsTr("▶ 打印"); color: "white"; font.pixelSize: 11; font.bold: true }
+                Text { anchors.centerIn: parent; text: qsTr("▶ 打印"); color: "white"; font.pixelSize: Theme.fontSizeSM; font.bold: true }
                 MouseArea {
                     id: printHov; anchors.fill: parent
                     hoverEnabled: true; cursorShape: Qt.PointingHandCursor

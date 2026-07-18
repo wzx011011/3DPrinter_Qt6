@@ -48,51 +48,51 @@ Rectangle {
 
         Row {
             spacing: 10
-            Label { text: "X " + (root.previewVm ? root.previewVm.toolX.toFixed(2) : "0.00"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas" }
-            Label { text: "Y " + (root.previewVm ? root.previewVm.toolY.toFixed(2) : "0.00"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas" }
-            Label { text: "Z " + (root.previewVm ? root.previewVm.toolZ.toFixed(2) : "0.00"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas" }
+            Label { text: "X " + (root.previewVm ? root.previewVm.toolX.toFixed(2) : "0.00"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
+            Label { text: "Y " + (root.previewVm ? root.previewVm.toolY.toFixed(2) : "0.00"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
+            Label { text: "Z " + (root.previewVm ? root.previewVm.toolZ.toFixed(2) : "0.00"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
         }
 
         Row {
             spacing: 10
-            Label { text: qsTr("速度 ") + (root.previewVm ? root.previewVm.toolFeedrate.toFixed(0) : "0") + " mm/s"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas" }
-            Label { text: qsTr("层 ") + (root.previewVm ? root.previewVm.toolLayer + 1 : 0); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas" }
+            Label { text: qsTr("速度 ") + (root.previewVm ? root.previewVm.toolFeedrate.toFixed(0) : "0") + " mm/s"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
+            Label { text: qsTr("层 ") + (root.previewVm ? root.previewVm.toolLayer + 1 : 0); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
         }
 
         Row {
             spacing: 10
             visible: root.previewVm && root.previewVm.toolFanSpeed > 0
-            Label { text: qsTr("风扇 ") + (root.previewVm ? root.previewVm.toolFanSpeed.toFixed(0) : "0") + "%"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas" }
+            Label { text: qsTr("风扇 ") + (root.previewVm ? root.previewVm.toolFanSpeed.toFixed(0) : "0") + "%"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
         }
 
         Row {
             spacing: 10
             visible: root.previewVm && root.previewVm.toolTemperature > 0
-            Label { text: qsTr("温度 ") + (root.previewVm ? root.previewVm.toolTemperature.toFixed(0) : "0") + " C"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas" }
+            Label { text: qsTr("温度 ") + (root.previewVm ? root.previewVm.toolTemperature.toFixed(0) : "0") + " C"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
         }
 
         Row {
             spacing: 10
             visible: root.previewVm && root.previewVm.toolWidth > 0
-            Label { text: qsTr("线宽 ") + (root.previewVm ? root.previewVm.toolWidth.toFixed(2) : "0.00") + " mm"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas" }
+            Label { text: qsTr("线宽 ") + (root.previewVm ? root.previewVm.toolWidth.toFixed(2) : "0.00") + " mm"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
         }
 
         Row {
             spacing: 10
             visible: root.previewVm && root.previewVm.toolAcceleration > 0
-            Label { text: qsTr("加速度 ") + (root.previewVm ? root.previewVm.toolAcceleration.toFixed(0) : "0"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas" }
+            Label { text: qsTr("加速度 ") + (root.previewVm ? root.previewVm.toolAcceleration.toFixed(0) : "0"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
         }
 
         Row {
             spacing: 10
             visible: root.previewVm && root.previewVm.toolLayerTime > 0
-            Label { text: qsTr("层耗时 ") + (root.previewVm ? root.previewVm.toolLayerTime.toFixed(1) : "0.0") + "s"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas" }
+            Label { text: qsTr("层耗时 ") + (root.previewVm ? root.previewVm.toolLayerTime.toFixed(1) : "0.0") + "s"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
         }
 
         Row {
             spacing: 10
             visible: root.previewVm && root.previewVm.toolExtruderId > 0
-            Label { text: qsTr("挤出机 ") + (root.previewVm ? root.previewVm.toolExtruderId + 1 : 1); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas" }
+            Label { text: qsTr("挤出机 ") + (root.previewVm ? root.previewVm.toolExtruderId + 1 : 1); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
         }
     }
 }

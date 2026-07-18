@@ -77,7 +77,7 @@ CxDialog {
         // Scope selector (对齐上游 Preset::Type radio group)
         RowLayout {
             spacing: 8
-            Text { text: qsTr("Scope:"); color: Theme.textMuted; font.pixelSize: 11 }
+            Text { text: qsTr("Scope:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
             CxComboBox {
                 id: scopeCombo
                 Layout.preferredWidth: 160
@@ -93,7 +93,7 @@ CxDialog {
         // Inherits-from selector (对齐上游 "Inherits from" combo)
         RowLayout {
             spacing: 8
-            Text { text: qsTr("Inherits from:"); color: Theme.textMuted; font.pixelSize: 11 }
+            Text { text: qsTr("Inherits from:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
             CxComboBox {
                 id: inheritsCombo
                 Layout.preferredWidth: 260
@@ -104,12 +104,12 @@ CxDialog {
         // Name input + duplicate warning
         RowLayout {
             spacing: 8
-            Text { text: qsTr("Name:"); color: Theme.textMuted; font.pixelSize: 11 }
+            Text { text: qsTr("Name:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
             CxTextField {
                 id: nameInput
                 Layout.preferredWidth: 260
                 implicitHeight: 26
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 placeholderText: qsTr("enter preset name")
             }
         }
@@ -117,7 +117,7 @@ CxDialog {
             id: dupWarning
             text: qsTr("A preset with this name already exists")
             color: Theme.accentDark
-            font.pixelSize: 10
+            font.pixelSize: Theme.fontSizeXS
             visible: false
             Layout.leftMargin: 80
         }

@@ -56,7 +56,7 @@ Item {
                 Text {
                     text: qsTr("通知中心")
                     color: Theme.textPrimary
-                    font.pixelSize: 14
+                    font.pixelSize: Theme.fontSizeLG
                     font.bold: true
                     Layout.fillWidth: true
                 }
@@ -74,7 +74,7 @@ Item {
                         anchors.centerIn: parent
                         text: backend.unreadHistoryCount > 99 ? "99+" : backend.unreadHistoryCount.toString()
                         color: Theme.accentDark
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                         font.bold: true
                     }
                 }
@@ -89,7 +89,7 @@ Item {
                         anchors.centerIn: parent
                         text: "✓"
                         color: Theme.statusInfo
-                        font.pixelSize: 13
+                        font.pixelSize: Theme.fontSize13
                     }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: backend.markHistoryRead()
@@ -106,7 +106,7 @@ Item {
                         anchors.centerIn: parent
                         text: "🗑"
                         color: Theme.textMuted
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                     }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: backend.clearHistory()
@@ -122,7 +122,7 @@ Item {
                         anchors.centerIn: parent
                         text: "✕"
                         color: Theme.textMuted
-                        font.pixelSize: 13
+                        font.pixelSize: Theme.fontSize13
                     }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: root.closeRequested()
@@ -160,7 +160,7 @@ Item {
                         Text {
                             text: root.severityIcon(backend.historySeverity(index))
                             color: root.severityColor(backend.historySeverity(index))
-                            font.pixelSize: 14
+                            font.pixelSize: Theme.fontSizeLG
                             font.bold: true
                         }
 
@@ -173,7 +173,7 @@ Item {
                                 visible: backend.historyTitle(index) !== ""
                                 text: backend.historyTitle(index)
                                 color: root.severityColor(backend.historySeverity(index))
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                                 font.bold: true
                                 elide: Text.ElideRight
                                 width: parent.width
@@ -183,7 +183,7 @@ Item {
                             Text {
                                 text: backend.historyMessage(index)
                                 color: Theme.chromeTextMuted
-                                font.pixelSize: 12
+                                font.pixelSize: Theme.fontSizeMD
                                 elide: Text.ElideRight
                                 width: parent.width
                                 wrapMode: Text.Wrap
@@ -194,7 +194,7 @@ Item {
                             Text {
                                 text: backend.historyTime(index)
                                 color: Theme.borderStrong
-                                font.pixelSize: 9
+                                font.pixelSize: Theme.fontSizeXS
                                 font.family: "Consolas, monospace"
                             }
                         }
@@ -221,7 +221,7 @@ Item {
                 verticalAlignment: Text.AlignVCenter
                 text: qsTr("暂无通知记录")
                 color: Theme.borderStrong
-                font.pixelSize: 13
+                font.pixelSize: Theme.fontSize13
             }
         }
     }

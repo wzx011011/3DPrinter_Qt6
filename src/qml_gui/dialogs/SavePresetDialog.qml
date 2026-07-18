@@ -77,7 +77,7 @@ CxDialog {
                 Text {
                     text: qsTr("Preset type:")
                     color: Theme.textSecondary
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                 }
                 Text {
                     text: {
@@ -87,7 +87,7 @@ CxDialog {
                         return root.presetTier
                     }
                     color: Theme.accent
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                     font.bold: true
                 }
             }
@@ -99,7 +99,7 @@ CxDialog {
                 Text {
                     text: qsTr("Name:")
                     color: Theme.textPrimary
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                     Layout.preferredWidth: 60
                 }
                 TextField {
@@ -107,7 +107,7 @@ CxDialog {
                     Layout.fillWidth: true
                     text: root.suggestedName
                     color: Theme.textPrimary
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                     selectByMouse: true
                     background: Rectangle {
                         color: Theme.bgInset
@@ -133,7 +133,7 @@ CxDialog {
                 visible: !root.isValidName() && nameInput.text.length > 0
                 text: qsTr("A preset with this name already exists. Choose another name.")
                 color: Theme.statusError
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             }

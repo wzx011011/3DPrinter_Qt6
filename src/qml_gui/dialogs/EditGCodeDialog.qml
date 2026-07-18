@@ -43,7 +43,7 @@ CxDialog {
             Layout.bottomMargin: 4
             text: qsTr("内置占位符（双击项添加到 G-code）：")
             color: Theme.textSecondary
-            font.pixelSize: 11
+            font.pixelSize: Theme.fontSizeSM
             wrapMode: Text.Wrap
         }
 
@@ -121,7 +121,7 @@ CxDialog {
                                     Layout.fillWidth: true
                                     text: modelData.label
                                     color: Theme.textPrimary
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fontSizeSM
                                     font.bold: true
                                     elide: Text.ElideRight
                                 }
@@ -157,7 +157,7 @@ CxDialog {
                                     Layout.fillWidth: true
                                     text: modelData.label
                                     color: paramListView.currentIndex === index ? Theme.textPrimary : Theme.textSecondary
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fontSizeSM
                                     font.family: "Consolas, Monaco, monospace"
                                     elide: Text.ElideRight
                                 }
@@ -206,7 +206,7 @@ CxDialog {
                             ? root.selectedParamLabel + qsTr("（双击添加）")
                             : qsTr("选择占位符")
                         color: Theme.textPrimary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         font.bold: !!root.selectedParamLabel
                         elide: Text.ElideRight
                         wrapMode: Text.Wrap
@@ -217,7 +217,7 @@ CxDialog {
                         Layout.fillWidth: true
                         text: root.selectedParamDesc
                         color: Theme.textTertiary
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                         wrapMode: Text.Wrap
                         Layout.maximumHeight: 36
                         visible: !!root.selectedParamDesc
@@ -261,7 +261,7 @@ CxDialog {
                         text: root.initialGCode
                         wrapMode: TextArea.Wrap
                         font.family: "Consolas, Monaco, 'Courier New', monospace"
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fontSizeMD
                         color: Theme.textPrimary
                         selectionColor: Theme.accentSubtle
                         selectedTextColor: Theme.textPrimary

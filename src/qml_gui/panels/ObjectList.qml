@@ -45,7 +45,7 @@ Item {
             Rectangle {
                 width: 54; height: 22; radius: 7
                 color: root.editorVm && !root.editorVm.showAllObjects ? Theme.accent : Theme.bgElevated
-                Text { anchors.centerIn: parent; text: qsTr("当前盘"); color: root.editorVm && !root.editorVm.showAllObjects ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: 9 }
+                Text { anchors.centerIn: parent; text: qsTr("当前盘"); color: root.editorVm && !root.editorVm.showAllObjects ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
@@ -55,7 +55,7 @@ Item {
             Rectangle {
                 width: 42; height: 22; radius: 7
                 color: root.editorVm && root.editorVm.showAllObjects ? Theme.accent : Theme.bgElevated
-                Text { anchors.centerIn: parent; text: qsTr("全部"); color: root.editorVm && root.editorVm.showAllObjects ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: 9 }
+                Text { anchors.centerIn: parent; text: qsTr("全部"); color: root.editorVm && root.editorVm.showAllObjects ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
@@ -65,7 +65,7 @@ Item {
             Rectangle {
                 width: 44; height: 22; radius: 7
                 color: root.editorVm && root.editorVm.objectOrganizeMode === 0 ? Theme.accent : Theme.bgElevated
-                Text { anchors.centerIn: parent; text: qsTr("按盘"); color: root.editorVm && root.editorVm.objectOrganizeMode === 0 ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: 9 }
+                Text { anchors.centerIn: parent; text: qsTr("按盘"); color: root.editorVm && root.editorVm.objectOrganizeMode === 0 ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
@@ -75,7 +75,7 @@ Item {
             Rectangle {
                 width: 50; height: 22; radius: 7
                 color: root.editorVm && root.editorVm.objectOrganizeMode === 1 ? Theme.accent : Theme.bgElevated
-                Text { anchors.centerIn: parent; text: qsTr("按模块"); color: root.editorVm && root.editorVm.objectOrganizeMode === 1 ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: 9 }
+                Text { anchors.centerIn: parent; text: qsTr("按模块"); color: root.editorVm && root.editorVm.objectOrganizeMode === 1 ? Theme.textOnAccent : Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
@@ -99,7 +99,7 @@ Item {
                           : root.editorVm.hasSelectedVolume ? qsTr("已选 %1 个部件").arg(root.editorVm.selectedVolumeCount)
                           : qsTr("已选 %1 项").arg(root.editorVm.selectedObjectCount)
                     color: Theme.textPrimary
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fontSizeXS
                     font.bold: true
                 }
             }
@@ -109,7 +109,7 @@ Item {
                 height: 22
                 radius: 7
                 color: selectAllMA.containsMouse ? Theme.bgHover : Theme.bgElevated
-                Text { anchors.centerIn: parent; text: qsTr("全选"); color: Theme.textSecondary; font.pixelSize: 9 }
+                Text { anchors.centerIn: parent; text: qsTr("全选"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
                 MouseArea {
                     id: selectAllMA
                     anchors.fill: parent
@@ -124,7 +124,7 @@ Item {
                 height: 22
                 radius: 7
                 color: clearSelMA.containsMouse ? Theme.bgHover : Theme.bgElevated
-                Text { anchors.centerIn: parent; text: qsTr("清空"); color: Theme.textSecondary; font.pixelSize: 9 }
+                Text { anchors.centerIn: parent; text: qsTr("清空"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
                 MouseArea {
                     id: clearSelMA
                     anchors.fill: parent
@@ -139,7 +139,7 @@ Item {
                 height: 22
                 radius: 7
                 color: settingsMA.containsMouse ? Theme.bgHover : Theme.bgElevated
-                Text { anchors.centerIn: parent; text: qsTr("参数"); color: Theme.textSecondary; font.pixelSize: 9 }
+                Text { anchors.centerIn: parent; text: qsTr("参数"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
                 MouseArea {
                     id: settingsMA
                     anchors.fill: parent
@@ -154,7 +154,7 @@ Item {
                 height: 22
                 radius: 7
                 color: hideSelMA.containsMouse ? Theme.bgHover : Theme.bgElevated
-                Text { anchors.centerIn: parent; text: qsTr("禁打"); color: Theme.textSecondary; font.pixelSize: 9 }
+                Text { anchors.centerIn: parent; text: qsTr("禁打"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
                 MouseArea {
                     id: hideSelMA
                     anchors.fill: parent
@@ -169,7 +169,7 @@ Item {
                 height: 22
                 radius: 7
                 color: showSelMA.containsMouse ? Theme.bgHover : Theme.bgElevated
-                Text { anchors.centerIn: parent; text: qsTr("打印"); color: Theme.textSecondary; font.pixelSize: 9 }
+                Text { anchors.centerIn: parent; text: qsTr("打印"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
                 MouseArea {
                     id: showSelMA
                     anchors.fill: parent
@@ -184,7 +184,7 @@ Item {
                 height: 22
                 radius: 7
                 color: deleteSelMA.containsMouse ? Theme.statusErrorPressed : Theme.bgElevated
-                Text { anchors.centerIn: parent; text: qsTr("删除"); color: deleteSelMA.containsMouse ? "#ffaaaa" : Theme.textSecondary; font.pixelSize: 9 }
+                Text { anchors.centerIn: parent; text: qsTr("删除"); color: deleteSelMA.containsMouse ? "#ffaaaa" : Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
                 MouseArea {
                     id: deleteSelMA
                     anchors.fill: parent
@@ -196,7 +196,7 @@ Item {
             Text {
                 text: root.editorVm ? root.editorVm.objectCount + qsTr(" 个") : "0" + qsTr(" 个")
                 color: Theme.textDisabled
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
             }
         }
     }
@@ -589,14 +589,14 @@ Item {
                     Text {
                         text: row.groupExpanded ? "-" : "+"
                         color: Theme.textDisabled
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         font.bold: true
                     }
 
                     Text {
                         text: row.groupLabel
                         color: Theme.textSecondary
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                         font.bold: true
                     }
 
@@ -612,7 +612,7 @@ Item {
                             ? qsTr("%1 个对象").arg(root.editorVm.objectGroupCount(row.index))
                             : qsTr("0 个对象")
                         color: Theme.textDisabled
-                        font.pixelSize: 9
+                        font.pixelSize: Theme.fontSizeXS
                     }
 
                     Item { Layout.fillWidth: true }
@@ -672,7 +672,7 @@ Item {
                             anchors.centerIn: parent
                             text: row.objectExpanded ? "-" : "+"
                             color: Theme.textDisabled
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fontSizeSM
                             font.bold: true
                         }
 
@@ -725,7 +725,7 @@ Item {
                         Layout.fillWidth: true
                         visible: row.renaming
                         text: row.renameText
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         onAccepted: {
                             if (root.editorVm && row.renameText.trim().length > 0) {
                                 root.editorVm.renameObject(row.index, row.renameText.trim())
@@ -749,7 +749,7 @@ Item {
                         visible: !row.renaming
                         text: root.editorVm ? root.editorVm.objectName(row.index) : ""
                         color: row.isSelected ? Theme.textPrimary : Theme.chromeText
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         elide: Text.ElideRight
                     }
 
@@ -793,7 +793,7 @@ Item {
                                 anchors.centerIn: parent
                                 text: row.moduleLabel
                                 color: Theme.textDisabled
-                                font.pixelSize: 9
+                                font.pixelSize: Theme.fontSizeXS
                             }
                         }
 
@@ -801,7 +801,7 @@ Item {
                             visible: !row.objPrintable
                             text: qsTr("不参与打印")
                             color: Theme.textDisabled
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fontSizeXS
                         }
                     }
                 }
@@ -814,7 +814,7 @@ Item {
                         anchors.centerIn: parent
                         text: "✕"
                         color: delMA.containsMouse ? "#ffaaaa" : Theme.textDisabled
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                     }
                     MouseArea {
                         id: delMA
@@ -1053,7 +1053,7 @@ Item {
                                 Layout.fillWidth: true
                                 text: root.editorVm ? root.editorVm.objectVolumeName(row.index, index) : ""
                                 color: isSelected ? Theme.textPrimary : Theme.textSecondary
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fontSizeXS
                                 elide: Text.ElideRight
                             }
 
@@ -1085,7 +1085,7 @@ Item {
                                     anchors.centerIn: parent
                                     text: "✕"
                                     color: volumeDeleteMA.containsMouse ? "#ffaaaa" : Theme.textDisabled
-                                    font.pixelSize: 9
+                                    font.pixelSize: Theme.fontSizeXS
                                 }
 
                                 MouseArea {
@@ -1205,7 +1205,7 @@ Item {
         visible: !root.editorVm || root.editorVm.objectCount === 0
         text: qsTr("场景中无对象\n请从顶部菜单导入模型")
         color: Theme.textDisabled
-        font.pixelSize: 12
+        font.pixelSize: Theme.fontSizeMD
         horizontalAlignment: Text.AlignHCenter
         lineHeight: 1.5
     }
@@ -1226,7 +1226,7 @@ Item {
             anchors.centerIn: parent
             text: qsTr("+ 导入模型")
             color: Theme.textOnAccent
-            font.pixelSize: 12
+            font.pixelSize: Theme.fontSizeMD
             font.bold: true
         }
 
@@ -1294,14 +1294,14 @@ Item {
                 Text {
                     text: qsTr("输入浮雕文字")
                     color: Theme.textSecondary
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fontSizeMD
                 }
 
                 CxTextField {
                     id: textField
                     Layout.fillWidth: true
                     placeholderText: qsTr("请输入文字...")
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.fontSize13
                 }
 
                 RowLayout {
@@ -1315,7 +1315,7 @@ Item {
                         radius: 5
                         color: Theme.bgElevated
                         border.color: Theme.borderSubtle
-                        Text { id: cancelBtnText; anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: 11 }
+                        Text { id: cancelBtnText; anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                         TapHandler { onTapped: textDlg.close() }
                     }
 
@@ -1324,7 +1324,7 @@ Item {
                         width: okBtnText.implicitWidth + 20
                         radius: 5
                         color: Theme.accent
-                        Text { id: okBtnText; anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: 11; font.bold: true }
+                        Text { id: okBtnText; anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: Theme.fontSizeSM; font.bold: true }
                         TapHandler {
                             onTapped: {
                                 if (editorVm && textField.text.length > 0) {

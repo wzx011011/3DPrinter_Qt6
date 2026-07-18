@@ -82,7 +82,7 @@ CxDialog {
                         Text {
                             text: modelData.name
                             color: Theme.textPrimary
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fontSizeMD
                             font.bold: true
                         }
 
@@ -96,7 +96,7 @@ CxDialog {
                                 anchors.centerIn: parent
                                 text: "v" + modelData.version
                                 color: Theme.accent
-                                font.pixelSize: 9
+                                font.pixelSize: Theme.fontSizeXS
                             }
                         }
 
@@ -105,7 +105,7 @@ CxDialog {
                         Text {
                             text: modelData.size
                             color: Theme.textTertiary
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fontSizeXS
                         }
                     }
 
@@ -113,7 +113,7 @@ CxDialog {
                         Layout.fillWidth: true
                         text: modelData.description
                         color: Theme.textTertiary
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fontSizeXS
                         wrapMode: Text.Wrap
                     }
 
@@ -130,7 +130,7 @@ CxDialog {
                         Text {
                             text: modelData.status
                             color: modelData.installed ? Theme.accent : Theme.textTertiary
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fontSizeXS
                         }
 
                         Item { Layout.fillWidth: true }
@@ -177,7 +177,7 @@ CxDialog {
             Text {
                 text: qsTr("从插件市场浏览更多插件")
                 color: Theme.textTertiary
-                font.pixelSize: 10
+                font.pixelSize: Theme.fontSizeXS
             }
 
             Item { Layout.fillWidth: true }

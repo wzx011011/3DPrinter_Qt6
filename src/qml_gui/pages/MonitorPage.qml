@@ -104,7 +104,7 @@ Item {
                                 anchors.centerIn: parent
                                 text: "\u21BB"
                                 color: Theme.textSecondary
-                                font.pixelSize: 14
+                                font.pixelSize: Theme.fontSizeLG
                             }
                             HoverHandler { id: refreshHover }
                             TapHandler { onTapped: root.monitorVm.refresh() }
@@ -163,7 +163,7 @@ Item {
                             Text {
                                 text: "\u2315"
                                 color: Theme.textTertiary
-                                font.pixelSize: 13
+                                font.pixelSize: Theme.fontSize13
                             }
 
                             CxTextField {
@@ -180,7 +180,7 @@ Item {
                                 visible: searchField.text.length > 0
                                 text: "\u2715"
                                 color: Theme.textTertiary
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fontSizeXS
                                 TapHandler {
                                     onTapped: {
                                         searchField.text = ""
@@ -1213,7 +1213,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: qsTr("断开")
                                             color: "white"
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.fontSizeSM
                                         }
                                         MouseArea {
                                             id: connectMA
@@ -1233,7 +1233,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: qsTr("打印")
                                             color: "white"
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.fontSizeSM
                                         }
                                         MouseArea {
                                             id: startMA
@@ -1253,7 +1253,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: qsTr("暂停")
                                             color: "white"
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.fontSizeSM
                                         }
                                         MouseArea {
                                             id: pauseMA
@@ -1273,7 +1273,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: qsTr("继续")
                                             color: "white"
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.fontSizeSM
                                         }
                                         MouseArea {
                                             id: resumeMA
@@ -1293,7 +1293,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: qsTr("停止")
                                             color: "white"
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.fontSizeSM
                                         }
                                         MouseArea {
                                             id: stopMA
@@ -1313,7 +1313,7 @@ Item {
                                             anchors.centerIn: parent
                                             text: qsTr("连接")
                                             color: "white"
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.fontSizeSM
                                         }
                                         MouseArea {
                                             id: connOnMA
@@ -1515,7 +1515,7 @@ Item {
                                                             anchors.centerIn: parent
                                                             text: slotData.filamentType === "" ? qsTr("空") : ""
                                                             color: Theme.textDisabled
-                                                            font.pixelSize: 9
+                                                            font.pixelSize: Theme.fontSizeXS
                                                         }
                                                     }
 
@@ -1523,7 +1523,7 @@ Item {
                                                     Text {
                                                         text: slotData.filamentType || "--"
                                                         color: slotData.active ? Theme.accent : Theme.textSecondary
-                                                        font.pixelSize: 10
+                                                        font.pixelSize: Theme.fontSizeXS
                                                         font.bold: slotData.active
                                                         anchors.horizontalCenter: parent.horizontalCenter
                                                     }
@@ -1603,7 +1603,7 @@ Item {
                             Layout.fillWidth: true
                             Text { text: qsTr("SD 卡文件管理"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeLG; font.bold: true }
                             Item { Layout.fillWidth: true }
-                            Text { text: "8 " + qsTr("个文件"); color: Theme.textTertiary; font.pixelSize: 11 }
+                            Text { text: "8 " + qsTr("个文件"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM }
                         }
 
                         // Storage bar
@@ -1616,12 +1616,12 @@ Item {
                                 anchors.fill: parent
                                 anchors.margins: 4
                                 spacing: 8
-                                Text { text: qsTr("已用"); color: Theme.textTertiary; font.pixelSize: 10 }
+                                Text { text: qsTr("已用"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
                                 Rectangle {
                                     Layout.fillWidth: true; height: 8; radius: 4; color: Theme.switchTrackOff
                                     Rectangle { width: parent.width * 0.35; height: parent.height; radius: 4; color: Theme.accent }
                                 }
-                                Text { text: "1.8 / 5.2 GB"; color: Theme.textSecondary; font.pixelSize: 10 }
+                                Text { text: "1.8 / 5.2 GB"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
                             }
                         }
 
@@ -1630,9 +1630,9 @@ Item {
                         // File list header
                         RowLayout {
                             Layout.fillWidth: true
-                            Text { text: qsTr("文件名"); color: Theme.textTertiary; font.pixelSize: 10; Layout.fillWidth: true }
-                            Text { text: qsTr("大小"); color: Theme.textTertiary; font.pixelSize: 10; Layout.preferredWidth: 60 }
-                            Text { text: qsTr("日期"); color: Theme.textTertiary; font.pixelSize: 10; Layout.preferredWidth: 90 }
+                            Text { text: qsTr("文件名"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; Layout.fillWidth: true }
+                            Text { text: qsTr("大小"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; Layout.preferredWidth: 60 }
+                            Text { text: qsTr("日期"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; Layout.preferredWidth: 90 }
                         }
 
                         // Mock file list (对齐 upstream MediaFilePanel file table)
@@ -1659,9 +1659,9 @@ Item {
                                     anchors.rightMargin: 8
                                     spacing: 4
 
-                                    Text { text: modelData.name; color: Theme.textPrimary; font.pixelSize: 11; font.family: "monospace"; Layout.fillWidth: true; elide: Text.ElideRight }
-                                    Text { text: modelData.size; color: Theme.textSecondary; font.pixelSize: 10; Layout.preferredWidth: 60; horizontalAlignment: Text.AlignRight }
-                                    Text { text: modelData.date; color: Theme.textDisabled; font.pixelSize: 10; Layout.preferredWidth: 90; horizontalAlignment: Text.AlignRight }
+                                    Text { text: modelData.name; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "monospace"; Layout.fillWidth: true; elide: Text.ElideRight }
+                                    Text { text: modelData.size; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS; Layout.preferredWidth: 60; horizontalAlignment: Text.AlignRight }
+                                    Text { text: modelData.date; color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; Layout.preferredWidth: 90; horizontalAlignment: Text.AlignRight }
                                 }
 
                                 MouseArea {
@@ -1684,14 +1684,14 @@ Item {
                                 Layout.preferredWidth: 80; height: 28; radius: 6
                                 color: importMA.containsMouse ? Theme.bgHover : Theme.bgElevated
                                 border.width: 1; border.color: Theme.borderSubtle
-                                Text { anchors.centerIn: parent; text: qsTr("导入"); color: Theme.textSecondary; font.pixelSize: 11 }
+                                Text { anchors.centerIn: parent; text: qsTr("导入"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                                 MouseArea { id: importMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor }
                             }
                             Rectangle {
                                 Layout.preferredWidth: 80; height: 28; radius: 6
                                 color: deleteMA.containsMouse ? Theme.statusErrorPressed : Theme.bgElevated
                                 border.width: 1; border.color: Theme.borderSubtle
-                                Text { anchors.centerIn: parent; text: qsTr("删除"); color: deleteMA.containsMouse ? "#ffaaaa" : Theme.textSecondary; font.pixelSize: 11 }
+                                Text { anchors.centerIn: parent; text: qsTr("删除"); color: deleteMA.containsMouse ? "#ffaaaa" : Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                                 MouseArea { id: deleteMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor }
                             }
                         }
@@ -1756,7 +1756,7 @@ Item {
                                                     anchors.centerIn: parent
                                                     text: "\u21BB"
                                                     color: "white"
-                                                    font.pixelSize: 20
+                                                    font.pixelSize: Theme.fontSizeXXL
                                                     RotationAnimation on rotation {
                                                         from: 0; to: 360
                                                         duration: 1000
@@ -1832,7 +1832,7 @@ Item {
                                                     id: recordingLabel
                                                     text: qsTr("REC")
                                                     color: "white"
-                                                    font.pixelSize: 11
+                                                    font.pixelSize: Theme.fontSizeSM
                                                     font.bold: true
                                                 }
                                             }
@@ -1855,13 +1855,13 @@ Item {
                                                 spacing: 4
                                                 Text {
                                                     text: "\u{1F4F8}"
-                                                    font.pixelSize: 11
+                                                    font.pixelSize: Theme.fontSizeSM
                                                 }
                                                 Text {
                                                     id: timelapseLabel
                                                     text: qsTr("延时摄影")
                                                     color: "white"
-                                                    font.pixelSize: 11
+                                                    font.pixelSize: Theme.fontSizeSM
                                                     font.bold: true
                                                 }
                                             }
@@ -1884,7 +1884,7 @@ Item {
                                                 text: root.monitorVm.cameraStreamStatus <= 1
                                                        ? qsTr("连接") : qsTr("断开")
                                                 color: "white"
-                                                font.pixelSize: 11
+                                                font.pixelSize: Theme.fontSizeSM
                                             }
                                             MouseArea {
                                                 id: streamMA
@@ -1912,7 +1912,7 @@ Item {
                                                 text: root.monitorVm.cameraRecordingStatus >= 3
                                                        ? qsTr("停止录像") : qsTr("录像")
                                                 color: "white"
-                                                font.pixelSize: 11
+                                                font.pixelSize: Theme.fontSizeSM
                                             }
                                             MouseArea {
                                                 id: recMA
@@ -1935,7 +1935,7 @@ Item {
                                                 text: root.monitorVm.cameraTimelapseStatus >= 3
                                                        ? qsTr("停止延时") : qsTr("延时摄影")
                                                 color: "white"
-                                                font.pixelSize: 11
+                                                font.pixelSize: Theme.fontSizeSM
                                             }
                                             MouseArea {
                                                 id: tlMA
@@ -1957,7 +1957,7 @@ Item {
                                                 anchors.centerIn: parent
                                                 text: qsTr("切换")
                                                 color: Theme.textSecondary
-                                                font.pixelSize: 11
+                                                font.pixelSize: Theme.fontSizeSM
                                             }
                                             MouseArea {
                                                 id: switchMA
@@ -1976,7 +1976,7 @@ Item {
                                             Text {
                                                 anchors.centerIn: parent
                                                 text: "\u{1F4F7}"
-                                                font.pixelSize: 14
+                                                font.pixelSize: Theme.fontSizeLG
                                             }
                                             MouseArea {
                                                 id: shotMA
@@ -1996,7 +1996,7 @@ Item {
                                         Text {
                                             text: qsTr("分辨率:")
                                             color: Theme.textTertiary
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.fontSizeSM
                                         }
                                         Row {
                                             spacing: 4
@@ -2014,7 +2014,7 @@ Item {
                                                         text: modelData
                                                         color: index === root.monitorVm.cameraResolution
                                                                ? "white" : Theme.textTertiary
-                                                        font.pixelSize: 11
+                                                        font.pixelSize: Theme.fontSizeSM
                                                     }
                                                     MouseArea {
                                                         anchors.fill: parent
@@ -2030,14 +2030,14 @@ Item {
                                         Text {
                                             text: qsTr("URL:")
                                             color: Theme.textTertiary
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.fontSizeSM
                                         }
                                         CxTextField {
                                             Layout.preferredWidth: 180
                                             Layout.preferredHeight: 22
                                             text: root.monitorVm.cameraUrl
                                             placeholderText: "rtsp://..."
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.fontSizeSM
                                             onEditingFinished: root.monitorVm.setCameraUrl(text)
                                         }
                                     }
@@ -2130,7 +2130,7 @@ Item {
                                                         if (hmsData.msgLevel === 3) return "\u26A0"
                                                         return "\u2139"
                                                     }
-                                                    font.pixelSize: 16
+                                                    font.pixelSize: Theme.fontSizeXL
                                                     color: {
                                                         if (hmsData.msgLevel === 1) return Theme.statusError
                                                         if (hmsData.msgLevel === 2) return Theme.statusWarning
@@ -2258,7 +2258,7 @@ Item {
                                 anchors.centerIn: parent
                                 text: qsTr("全部标为已读")
                                 color: Theme.textSecondary
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fontSizeSM
                             }
                             MouseArea {
                                 id: clearHmsMA

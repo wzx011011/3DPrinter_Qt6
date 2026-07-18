@@ -34,7 +34,7 @@ CxDialog {
                 Layout.fillWidth: true
                 text: qsTr("测试与打印机的网络连接性：")
                 color: Theme.textPrimary
-                font.pixelSize: 12
+                font.pixelSize: Theme.fontSizeMD
             }
 
             // 测试项列表（占位）
@@ -51,13 +51,13 @@ CxDialog {
                     Text {
                         text: modelData.name
                         color: Theme.textSecondary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                         Layout.fillWidth: true
                     }
                     Text {
                         text: modelData.status
                         color: Theme.textTertiary
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fontSizeSM
                     }
                 }
             }
