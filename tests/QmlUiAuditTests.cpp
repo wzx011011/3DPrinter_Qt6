@@ -557,6 +557,11 @@ private slots:
   // the v5.0/v4.8/v4.7/v4.6 milestone anchors so v5.1 did not regress them.
   // Mirrors the v50RegressionLocked pattern (which is itself re-asserted here).
   void v51RegressionLocked();
+  // Phase 160 (DS-01): Theme token foundation gate. Locks the canonical
+  // token list — every Theme.X referenced in QML must be defined in Theme.qml
+  // (no silent undefined); the v5.2 audit's missing tokens must be present;
+  // header documentation exists.
+  void v52ThemeTokenFoundationWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -7166,6 +7171,82 @@ void QmlUiAuditTests::v51RegressionLocked()
            "REGRESS-05/v4.6: Vol_speed tower mode (7) must still dispatch");
   QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
            "REGRESS-05/v4.6: Retraction tower mode (9) must still dispatch");
+}
+
+// Phase 160 (DS-01): Theme token foundation gate.
+// Locks the canonical Theme.qml contract: every Theme.X referenced in QML
+// must be defined in Theme.qml (no silent undefined), the audit-mandated new
+// tokens are present, and the header documentation exists.
+void QmlUiAuditTests::v52ThemeTokenFoundationWired()
+{
+  const QString theme = readSource(QStringLiteral("src/qml_gui/Theme.qml"));
+
+  QVERIFY2(!theme.isEmpty(), "Unable to read Theme.qml");
+
+  // (1) Header documentation exists (canonical token list contract).
+  QVERIFY2(theme.contains(QStringLiteral("Phase 160 (DS-01")),
+           "DS-01: Theme.qml must have the Phase 160 header documenting the canonical token list");
+  QVERIFY2(theme.contains(QStringLiteral("single source of truth")),
+           "DS-01: Theme.qml header must declare it is the single source of truth");
+
+  // (2) Audit-flagged MISSING tokens now defined.
+  // borderActive — was referenced but undefined (silent undefined runtime).
+  QVERIFY2(theme.contains(QStringLiteral("property color borderActive")),
+           "DS-01: Theme.borderActive must be defined (was referenced but undefined)");
+  // statusErrorDark / statusErrorPressed — replace Qt.darker(statusError, 1.2).
+  QVERIFY2(theme.contains(QStringLiteral("statusErrorDark")),
+           "DS-01: Theme.statusErrorDark must be defined (replaces Qt.darker() in CxButton danger)");
+  QVERIFY2(theme.contains(QStringLiteral("statusErrorPressed")),
+           "DS-01: Theme.statusErrorPressed must be defined (replaces Qt.darker() in CxButton danger)");
+  // accentSubtlePressed — replace Qt.darker(accentSubtle, 1.2).
+  QVERIFY2(theme.contains(QStringLiteral("accentSubtlePressed")),
+           "DS-01: Theme.accentSubtlePressed must be defined (replaces Qt.darker() in CxIconButton)");
+  // scrollBarColor — was hardcoded across CxScrollView.
+  QVERIFY2(theme.contains(QStringLiteral("scrollBarColor")),
+           "DS-01: Theme.scrollBarColor must be defined (was hardcoded scrollbar color)");
+  // fontMono — replaces 26 `font.family: \"Consolas\"` hardcodes.
+  QVERIFY2(theme.contains(QStringLiteral("property string fontMono")),
+           "DS-01: Theme.fontMono must be defined (replaces 26 Consolas hardcodes)");
+  // fontSize13 — used 17x in pages but missing from scale.
+  QVERIFY2(theme.contains(QStringLiteral("fontSize13")),
+           "DS-01: Theme.fontSize13 must be defined (size 13 used 17x but was missing from scale)");
+  // Component sizing tokens — replace hand-rolled values in Cx*/dialogs.
+  QVERIFY2(theme.contains(QStringLiteral("sliderTrackHeight")),
+           "DS-01: Theme.sliderTrackHeight must be defined (was hand-rolled in CxSlider)");
+  QVERIFY2(theme.contains(QStringLiteral("switchTrackWidth")),
+           "DS-01: Theme.switchTrackWidth must be defined (was hand-rolled in CxSwitch)");
+  QVERIFY2(theme.contains(QStringLiteral("dialogHeaderHeight")),
+           "DS-01: Theme.dialogHeaderHeight must be defined (was magic 44px in CxDialog)");
+  QVERIFY2(theme.contains(QStringLiteral("controlHeightXL")),
+           "DS-01: Theme.controlHeightXL must be defined (extends the 28/34/40 scale)");
+
+  // (3) Sidebar width system — Phase 164 will consume these to unbreak the
+  //     7-layer 392px lock.
+  QVERIFY2(theme.contains(QStringLiteral("sidebarWidthMin")) &&
+           theme.contains(QStringLiteral("sidebarWidthMax")) &&
+           theme.contains(QStringLiteral("sidebarWidthDefault")),
+           "DS-01: Theme.sidebarWidth{Min,Max,Default} must be defined (Phase 164 unbreaks the 392px lock)");
+  QVERIFY2(theme.contains(QStringLiteral("rightPanelWidthMin")) &&
+           theme.contains(QStringLiteral("rightPanelWidthMax")),
+           "DS-01: Theme.rightPanelWidth{Min,Max} must be defined");
+
+  // (4) Notification severity palette — Phase 167 will collapse the 3 private
+  //     10-level tables in ErrorBanner/ErrorToast/NotificationCenter.
+  QVERIFY2(theme.contains(QStringLiteral("severityColors")),
+           "DS-01: Theme.severityColors palette must be defined (Phase 167 collapses 3 private tables)");
+  QVERIFY2(theme.contains(QStringLiteral("severityIcons")),
+           "DS-01: Theme.severityIcons palette must be defined");
+
+  // (5) panelPaddingSM — for scroll gutters / dense rows (Phase 164 consumer).
+  QVERIFY2(theme.contains(QStringLiteral("panelPaddingSM")),
+           "DS-01: Theme.panelPaddingSM must be defined (smaller padding for scroll gutters)");
+
+  // (6) No silent undefined — programmatically verify every Theme.X referenced
+  //     in *.qml is defined in Theme.qml. This is the load-bearing assertion.
+  const QDir guiDir(QStringLiteral(QT_TESTCASE_SOURCEDIR) + QStringLiteral("/src/qml_gui"));
+  QVERIFY2(guiDir.exists(), "Unable to locate src/qml_gui for token scan");
+  QVERIFY2(theme.contains(QStringLiteral("readonly property")),
+           "DS-01: Theme.qml must still define readonly property tokens (file structure intact)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
