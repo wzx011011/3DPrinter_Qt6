@@ -1839,9 +1839,12 @@ void ViewModelSmokeTests::testSidebarCollapsedDefault()
   BackendContext ctx;
 
   // Sidebar is visible by default, matching upstream Plater.
+  // Phase 164 (SW-01): sidebar is now resizable within [300, 520] — was
+  // min==max==392 making the drag handle a no-op. Default stays 392 to
+  // preserve the visual.
   QCOMPARE(ctx.sidebarCollapsed(), false);
-  QCOMPARE(ctx.sidebarMinWidth(), 392);
-  QCOMPARE(ctx.sidebarMaxWidth(), 392);
+  QCOMPARE(ctx.sidebarMinWidth(), 300);
+  QCOMPARE(ctx.sidebarMaxWidth(), 520);
   QCOMPARE(ctx.sidebarWidth(), 392);
   QCOMPARE(ctx.sidebarDockArea(), static_cast<int>(BackendContext::SidebarDockArea::Left));
 }
@@ -1887,26 +1890,27 @@ void ViewModelSmokeTests::testSidebarWidthClamp()
   QSignalSpy spy(&ctx, &BackendContext::sidebarWidthChanged);
   QVERIFY(spy.isValid());
 
-  // Values below the readable width clamp to min.
+  // Phase 164 (SW-01): sidebar now resizable within [300, 520] (was min==max==392).
+  // Values below min clamp to 300.
   ctx.requestSetSidebarWidth(100);
-  QCOMPARE(ctx.sidebarWidth(), 392);
-  QCOMPARE(spy.count(), 0);
+  QCOMPARE(ctx.sidebarWidth(), 300);
+  QCOMPARE(spy.count(), 1);
 
-  // Values above the compact contract clamp to max.
+  // Values above max clamp to 520.
   spy.clear();
   ctx.requestSetSidebarWidth(9999);
-  QCOMPARE(ctx.sidebarWidth(), 392);
-  QCOMPARE(spy.count(), 0);
+  QCOMPARE(ctx.sidebarWidth(), 520);
+  QCOMPARE(spy.count(), 1);
 
   // New max width must persist after the v3.9 settings-version marker is written.
   BackendContext ctxMax;
-  QCOMPARE(ctxMax.sidebarWidth(), 392);
+  QCOMPARE(ctxMax.sidebarWidth(), 520);  // persisted max from above
 
-  // Intermediate values also clamp to the screenshot width.
+  // Intermediate values within [300, 520] are accepted as-is.
   spy.clear();
   ctx.requestSetSidebarWidth(360);
-  QCOMPARE(ctx.sidebarWidth(), 392);
-  QCOMPARE(spy.count(), 0);
+  QCOMPARE(ctx.sidebarWidth(), 360);
+  QCOMPARE(spy.count(), 1);
 
   // Equal values after clamping are deduplicated.
   spy.clear();
@@ -1915,9 +1919,10 @@ void ViewModelSmokeTests::testSidebarWidthClamp()
 
   // Persistence verification.
   BackendContext ctx2;
-  QCOMPARE(ctx2.sidebarWidth(), 392);
+  QCOMPARE(ctx2.sidebarWidth(), 360);
 
-  // Pre-pixel-restoration persisted widths are migrated to the screenshot width once.
+  // Pre-pixel-restoration persisted widths (settingsVersion < 4) are migrated
+  // to the default width once.
   resetSidebarSettings();
   {
     QSettings s;
@@ -1926,7 +1931,7 @@ void ViewModelSmokeTests::testSidebarWidthClamp()
     s.sync();
   }
   BackendContext legacyCtx;
-  QCOMPARE(legacyCtx.sidebarWidth(), 392);
+  QCOMPARE(legacyCtx.sidebarWidth(), 392);  // migrated to kSidebarDefaultWidth
 
   resetSidebarSettings();
 }
@@ -3009,7 +3014,11 @@ void ViewModelSmokeTests::prepareWorkflowGatesExposeSourceTruthState()
   // the gizmo is blocked here only because no object is selected, not because of CGAL.
   QVERIFY(editor.gizmoStatusText(13) != QStringLiteral("Blocked: CGAL MeshBoolean unavailable"));
   QVERIFY(!editor.canActivateGizmo(8));
-  QCOMPARE(editor.gizmoStatusText(8), QStringLiteral("Blocked: OpenVDB unavailable"));
+  // Phase 170 (REGRESS-06): v5.0 Phase 143 unblocked the Hollow gizmo (gizmo 8)
+  // when OpenVDB was unlocked — the old "Blocked: OpenVDB unavailable" status
+  // is gone. With no object selected, the status is empty (the gizmo is
+  // reachable but disabled; the source-truth gate returns hasSingleObject).
+  QCOMPARE(editor.gizmoStatusText(8), QStringLiteral(""));
 
   QVERIFY(editor.addPrimitiveToPlate(0));
   QCOMPARE(editor.objectCount(), 1);
