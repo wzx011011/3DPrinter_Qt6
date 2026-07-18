@@ -581,6 +581,9 @@ private slots:
   // language (ZH) for the 3 previously-EN dialogs + removal of dev-jargon
   // tooltips.
   void v52CopywritingSwept();
+  // Phase 166 (Dlg-01/02): dialog consistency gate. Locks the 8 empty-header
+  // fixes (title: → dialogTitle:) + SavePresetDialog EN→ZH sweep.
+  void v52DialogConsistencyRepaired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -7468,6 +7471,38 @@ void QmlUiAuditTests::v52CopywritingSwept()
            "CW-02: PreparePage must not leak Emboss.hpp dev jargon into user copy");
   QVERIFY2(!preparePage.contains(QStringLiteral("ProjectCurve")),
            "CW-02: PreparePage must not leak ProjectCurve dev jargon into user copy");
+}
+
+// Phase 166 (Dlg-01/02): dialog consistency gate.
+// Phase 166 fixed the 8 empty-header dialogs flagged by Dialogs-UI-REVIEW:
+// they used `title:` but CxDialog.qml:14 explicitly suppresses title ("")
+// and exposes `dialogTitle:` instead — so they were rendering a 44px header
+// bar with only the ✕ button.
+void QmlUiAuditTests::v52DialogConsistencyRepaired()
+{
+  // The 8 dialogs must now use `dialogTitle:` instead of `title:` so the
+  // CxDialog header actually shows the title text.
+  const QStringList dialogsToCheck = {
+    QStringLiteral("src/qml_gui/dialogs/CreatePresetsDialog.qml"),
+    QStringLiteral("src/qml_gui/dialogs/ExportPresetBundleDialog.qml"),
+    QStringLiteral("src/qml_gui/dialogs/NetworkTestDialog.qml"),
+    QStringLiteral("src/qml_gui/dialogs/PresetDiffDialog.qml"),
+    QStringLiteral("src/qml_gui/dialogs/SavePresetDialog.qml"),
+    QStringLiteral("src/qml_gui/dialogs/SelectMachineDialog.qml"),
+    QStringLiteral("src/qml_gui/dialogs/TroubleshootDialog.qml"),
+    QStringLiteral("src/qml_gui/dialogs/UnsavedChangesDialog.qml"),
+  };
+  for (const QString &path : dialogsToCheck) {
+    const QString src = readSource(path);
+    QVERIFY2(!src.isEmpty(), QString("Unable to read %1").arg(path).toUtf8().constData());
+    QVERIFY2(src.contains(QStringLiteral("dialogTitle:")),
+             QString("Dlg-01: %1 must use dialogTitle: (was title: — rendered empty header)").arg(path).toUtf8().constData());
+  }
+
+  // SavePresetDialog was EN-source; Phase 166 also swept it to ZH.
+  const QString savePreset = readSource(QStringLiteral("src/qml_gui/dialogs/SavePresetDialog.qml"));
+  QVERIFY2(savePreset.contains(QStringLiteral("qsTr(\"另存为预设\")")),
+           "Dlg-02: SavePresetDialog title must be ZH source (was \"Save Preset\")");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

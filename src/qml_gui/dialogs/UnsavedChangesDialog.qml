@@ -21,7 +21,7 @@ import "../controls"
 CxDialog {
     id: root
     modal: true
-    title: qsTr("未保存的修改")
+    dialogTitle: qsTr("未保存的修改")
     width: 560
     height: 420
     padding: 0

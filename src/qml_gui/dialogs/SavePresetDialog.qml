@@ -23,7 +23,7 @@ import "../controls"
 CxDialog {
     id: root
     modal: true
-    title: qsTr("Save Preset")
+    dialogTitle: qsTr("另存为预设")
     width: 440
     height: 200
     padding: 0
@@ -75,15 +75,15 @@ CxDialog {
                 Layout.fillWidth: true
                 spacing: 8
                 Text {
-                    text: qsTr("Preset type:")
+                    text: qsTr("预设类型：")
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSizeMD
                 }
                 Text {
                     text: {
-                        if (root.presetTier === "print") return qsTr("Print")
-                        if (root.presetTier === "filament") return qsTr("Filament")
-                        if (root.presetTier === "printer") return qsTr("Printer")
+                        if (root.presetTier === "print") return qsTr("打印")
+                        if (root.presetTier === "filament") return qsTr("耗材")
+                        if (root.presetTier === "printer") return qsTr("打印机")
                         return root.presetTier
                     }
                     color: Theme.accent
@@ -146,11 +146,11 @@ CxDialog {
                 spacing: 8
                 Item { Layout.fillWidth: true }
                 CxButton {
-                    text: qsTr("Cancel")
+                    text: qsTr("取消")
                     onClicked: root.reject()
                 }
                 CxButton {
-                    text: qsTr("Save")
+                    text: qsTr("保存")
                     enabled: root.isValidName()
                     cxStyle: CxButton.Style.Primary
                     onClicked: {

@@ -14,7 +14,7 @@ import "../controls"
 CxDialog {
     id: root
     modal: true
-    title: qsTr("网络测试")
+    dialogTitle: qsTr("网络测试")
     width: 420
     height: 320
     padding: 0

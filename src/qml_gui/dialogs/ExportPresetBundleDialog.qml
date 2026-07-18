@@ -19,7 +19,7 @@ import "../controls"
 CxDialog {
     id: root
     modal: true
-    title: qsTr("导出预设包")
+    dialogTitle: qsTr("导出预设包")
     width: 420
     height: 180
     padding: 0

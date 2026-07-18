@@ -30,7 +30,7 @@ import "../controls"
 CxDialog {
     id: root
     modal: false
-    title: qsTr("预设对比")
+    dialogTitle: qsTr("预设对比")
     width: 720
     height: 520
     padding: 0

@@ -14,7 +14,7 @@ import "../controls"
 CxDialog {
     id: root
     modal: true
-    title: qsTr("选择打印机")
+    dialogTitle: qsTr("选择打印机")
     width: 480
     height: 400
     padding: 0

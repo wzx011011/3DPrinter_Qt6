@@ -27,7 +27,7 @@ import "../controls"
 CxDialog {
     id: root
     modal: true
-    title: qsTr("创建预设")
+    dialogTitle: qsTr("创建预设")
     width: 480
     height: 280
     padding: 0

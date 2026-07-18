@@ -14,7 +14,7 @@ import "../controls"
 CxDialog {
     id: root
     modal: true
-    title: qsTr("设备排错")
+    dialogTitle: qsTr("设备排错")
     width: 480
     height: 400
     padding: 0
