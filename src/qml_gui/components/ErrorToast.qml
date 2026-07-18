@@ -38,9 +38,9 @@ Item {
     z: 200
 
     // Severity color mapping (expanded with slicing progress)
-    readonly property color iconColor: sev === 3 ? "#f05545" : sev === 4 ? "#e04848" : sev === 2 ? "#c87840" : sev === 1 ? "#18c75e" : sev === 5 ? "#58a6ff" : sev === 6 || sev === 7 ? "#7c6aef" : sev === 8 || sev === 9 ? "#3b9cf0" : "#18c75e"
-    readonly property color bgColor: sev === 3 ? "#2e1a1a" : sev === 4 ? "#2e1418" : sev === 2 ? "#2e2410" : sev === 5 ? "#141e2e" : sev === 6 || sev === 7 ? "#1c1a2e" : sev === 8 || sev === 9 ? "#142030" : "#1a2e20"
-    readonly property color textColor: sev === 3 ? "#f0c0c0" : sev === 4 ? "#f0b8b8" : sev === 2 ? "#e8d0b0" : sev === 5 ? "#c0d8f0" : sev === 6 || sev === 7 ? "#d0c8f0" : sev === 8 || sev === 9 ? "#c0d8f0" : "#d4efe0"
+    readonly property color iconColor: sev === 3 ? Theme.statusError : sev === 4 ? Theme.statusError : sev === 2 ? Theme.statusError : sev === 1 ? Theme.accent : sev === 5 ? Theme.statusInfo : sev === 6 || sev === 7 ? Theme.textTertiary : sev === 8 || sev === 9 ? Theme.statusInfo : Theme.accent
+    readonly property color bgColor: sev === 3 ? Theme.bgPanel : sev === 4 ? Theme.bgPanel : sev === 2 ? Theme.bgWarningSubtle : sev === 5 ? Theme.bgFloating : sev === 6 || sev === 7 ? Theme.bgFloating : sev === 8 || sev === 9 ? Theme.bgTooltip : Theme.bgFloating
+    readonly property color textColor: sev === 3 ? Theme.chromeText : sev === 4 ? Theme.chromeText : sev === 2 ? Theme.chromeText : sev === 5 ? Theme.chromeText : sev === 6 || sev === 7 ? Theme.chromeText : sev === 8 || sev === 9 ? Theme.chromeText : Theme.chromeText
     readonly property string iconText: sev === 3 ? "✕" : sev === 4 ? "⚠" : sev === 2 ? "⚠" : sev === 1 ? "✓" : sev === 5 ? "?" : sev === 8 || sev === 9 ? "⟳" : "i"
     // Auto-dismiss uses user preference (in seconds)
     readonly property int autoDismissMs: backend.autoDismissSec * 1000
@@ -123,7 +123,7 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: root.pending > 9 ? "9+" : root.pending.toString()
-                        color: "#fff"
+                        color: Theme.accentDark
                         font.pixelSize: 9
                         font.bold: true
                     }
@@ -133,8 +133,8 @@ Item {
                 Rectangle {
                     visible: root.isPersistent
                     width: 18; height: 18; radius: 9
-                    color: closeMA.containsMouse ? "#404858" : "transparent"
-                    Text { anchors.centerIn: parent; text: "✕"; color: "#808890"; font.pixelSize: 10 }
+                    color: closeMA.containsMouse ? Theme.bgPressed : "transparent"
+                    Text { anchors.centerIn: parent; text: "✕"; color: Theme.textMuted; font.pixelSize: 10 }
                     MouseArea {
                         id: closeMA
                         anchors.fill: parent
@@ -151,7 +151,7 @@ Item {
                 Layout.fillWidth: true
                 height: 6
                 radius: 3
-                color: "#252b38"
+                color: Theme.chromePressed
 
                 Rectangle {
                     width: parent.width * (backend.currentNotificationProgress / 100.0)
@@ -182,8 +182,8 @@ Item {
                 // Prev hint
                 Rectangle {
                     width: 24; height: 22; radius: 4
-                    color: prevMA.containsMouse ? "#2a3550" : "#1e2a40"
-                    Text { anchors.centerIn: parent; text: "<"; color: "#80a0d0"; font.pixelSize: 13; font.bold: true }
+                    color: prevMA.containsMouse ? Theme.borderInput : Theme.chromePressed
+                    Text { anchors.centerIn: parent; text: "<"; color: Theme.chromeTextMuted; font.pixelSize: 13; font.bold: true }
                     MouseArea {
                         id: prevMA
                         anchors.fill: parent
@@ -198,15 +198,15 @@ Item {
                     text: backend.currentHintIndex >= 0
                           ? (backend.currentHintIndex + 1) + "/" + backend.hintCount
                           : ""
-                    color: "#6080a0"
+                    color: Theme.textTertiary
                     font.pixelSize: 10
                 }
 
                 // Next hint
                 Rectangle {
                     width: 24; height: 22; radius: 4
-                    color: nextMA.containsMouse ? "#2a3550" : "#1e2a40"
-                    Text { anchors.centerIn: parent; text: ">"; color: "#80a0d0"; font.pixelSize: 13; font.bold: true }
+                    color: nextMA.containsMouse ? Theme.borderInput : Theme.chromePressed
+                    Text { anchors.centerIn: parent; text: ">"; color: Theme.chromeTextMuted; font.pixelSize: 13; font.bold: true }
                     MouseArea {
                         id: nextMA
                         anchors.fill: parent
@@ -220,8 +220,8 @@ Item {
                 Rectangle {
                     visible: backend.currentHintHasDocumentationLink
                     width: 40; height: 22; radius: 4
-                    color: docMA.containsMouse ? "#2a4a2a" : "#1e3a1e"
-                    Text { anchors.centerIn: parent; text: qsTr("文档"); color: "#70c070"; font.pixelSize: 10; font.bold: true }
+                    color: docMA.containsMouse ? Theme.bgWarningSubtle : Theme.bgCard
+                    Text { anchors.centerIn: parent; text: qsTr("文档"); color: Theme.textMuted; font.pixelSize: 10; font.bold: true }
                     MouseArea {
                         id: docMA
                         anchors.fill: parent
@@ -235,7 +235,7 @@ Item {
                 Text {
                     Layout.leftMargin: 8
                     text: qsTr("不再提示")
-                    color: prefMA.containsMouse ? "#80a0d0" : "#506080"
+                    color: prefMA.containsMouse ? Theme.chromeTextMuted : Theme.borderActive
                     font.pixelSize: 10
                     MouseArea {
                         id: prefMA
@@ -261,8 +261,8 @@ Item {
                 Rectangle {
                     visible: root.showPreviewBtn
                     width: 70; height: 24; radius: 4
-                    color: previewMA.containsMouse ? "#5a2daa" : "#4a2288"
-                    Text { anchors.centerIn: parent; text: qsTr("预览"); color: "#fff"; font.pixelSize: 11; font.bold: true }
+                    color: previewMA.containsMouse ? Theme.scrollBarHoverColor : Theme.scrollBarHoverColor
+                    Text { anchors.centerIn: parent; text: qsTr("预览"); color: Theme.accentDark; font.pixelSize: 11; font.bold: true }
                     MouseArea {
                         id: previewMA
                         anchors.fill: parent
@@ -279,8 +279,8 @@ Item {
                 Rectangle {
                     visible: root.showExportBtn
                     width: 70; height: 24; radius: 4
-                    color: exportMA.containsMouse ? "#2563eb" : "#1d4ed8"
-                    Text { anchors.centerIn: parent; text: qsTr("导出"); color: "#fff"; font.pixelSize: 11; font.bold: true }
+                    color: exportMA.containsMouse ? Theme.statusInfo : "#1d4ed8"
+                    Text { anchors.centerIn: parent; text: qsTr("导出"); color: Theme.accentDark; font.pixelSize: 11; font.bold: true }
                     MouseArea {
                         id: exportMA
                         anchors.fill: parent
@@ -296,9 +296,9 @@ Item {
                 // Dismiss
                 Rectangle {
                     width: 50; height: 24; radius: 4
-                    color: "#252b38"
-                    border.color: "#363d4e"; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("关闭"); color: "#c8d4e0"; font.pixelSize: 10 }
+                    color: Theme.chromePressed
+                    border.color: Theme.borderDefault; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("关闭"); color: Theme.chromeText; font.pixelSize: 10 }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: backend.dismissNotification() }
                 }
@@ -313,16 +313,16 @@ Item {
 
                 Rectangle {
                     width: 60; height: 24; radius: 4
-                    color: "#252b38"
-                    border.color: "#363d4e"; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("取消"); color: "#c8d4e0"; font.pixelSize: 11 }
+                    color: Theme.chromePressed
+                    border.color: Theme.borderDefault; border.width: 1
+                    Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.chromeText; font.pixelSize: 11 }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: backend.cancelCurrentNotification() }
                 }
                 Rectangle {
                     width: 60; height: 24; radius: 4
                     color: iconColor
-                    Text { anchors.centerIn: parent; text: qsTr("确认"); color: "#fff"; font.pixelSize: 11 }
+                    Text { anchors.centerIn: parent; text: qsTr("确认"); color: Theme.accentDark; font.pixelSize: 11 }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: backend.confirmCurrentNotification() }
                 }

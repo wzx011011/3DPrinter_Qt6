@@ -183,7 +183,7 @@ Item {
                 width: 38
                 height: 22
                 radius: 7
-                color: deleteSelMA.containsMouse ? "#7d2020" : Theme.bgElevated
+                color: deleteSelMA.containsMouse ? Theme.statusErrorPressed : Theme.bgElevated
                 Text { anchors.centerIn: parent; text: qsTr("删除"); color: deleteSelMA.containsMouse ? "#ffaaaa" : Theme.textSecondary; font.pixelSize: 9 }
                 MouseArea {
                     id: deleteSelMA
@@ -576,7 +576,7 @@ Item {
                 height: root.groupHeaderHeight
                 radius: root.rowRadius
                 visible: row.showGroupHeader
-                color: "#111722"
+                color: Theme.bgSurface
                 border.width: 1
                 border.color: Theme.borderSubtle
 
@@ -748,7 +748,7 @@ Item {
                         Layout.fillWidth: true
                         visible: !row.renaming
                         text: root.editorVm ? root.editorVm.objectName(row.index) : ""
-                        color: row.isSelected ? Theme.textPrimary : "#bbc7d4"
+                        color: row.isSelected ? Theme.textPrimary : Theme.chromeText
                         font.pixelSize: 11
                         elide: Text.ElideRight
                     }
@@ -763,7 +763,7 @@ Item {
                             id: objectListStatusPill
                             visible: row.plateLabel.length > 0
                             radius: 3
-                            color: "#243247"
+                            color: Theme.chromeBorder
                             border.width: 1
                             border.color: Theme.borderSubtle
                             implicitWidth: plateText.implicitWidth + 8
@@ -782,7 +782,7 @@ Item {
                         Rectangle {
                             visible: root.editorVm && root.editorVm.objectOrganizeMode === 0 && row.moduleLabel.length > 0
                             radius: 3
-                            color: "#1f2937"
+                            color: Theme.bgCard
                             border.width: 1
                             border.color: Theme.borderSubtle
                             implicitWidth: moduleText.implicitWidth + 8
@@ -809,7 +809,7 @@ Item {
                 // 删除按钮
                 Rectangle {
                     width: 22; height: 22; radius: 7
-                    color: delMA.containsMouse ? "#7d2020" : "transparent"
+                    color: delMA.containsMouse ? Theme.statusErrorPressed : "transparent"
                     Text {
                         anchors.centerIn: parent
                         text: "✕"
@@ -1040,12 +1040,12 @@ Item {
                                 color: {
                                     if (isSelected) return Theme.accent;
                                     const label = root.editorVm ? root.editorVm.objectVolumeTypeLabel(row.index, index) : "";
-                                    if (label.includes(qsTr("负体积"))) return "#e74c3c";
-                                    if (label.includes(qsTr("参数"))) return "#f39c12";
-                                    if (label.includes(qsTr("屏蔽"))) return "#9b59b6";
-                                    if (label.includes(qsTr("增强"))) return "#2ecc71";
-                                    if (label.includes(qsTr("文字")) || label.includes(qsTr("SVG"))) return "#3498db";
-                                    return "#7b8794";
+                                    if (label.includes(qsTr("负体积"))) return Theme.statusError;
+                                    if (label.includes(qsTr("参数"))) return Theme.statusWarning;
+                                    if (label.includes(qsTr("屏蔽"))) return Theme.textTertiary;
+                                    if (label.includes(qsTr("增强"))) return Theme.accentLight;
+                                    if (label.includes(qsTr("文字")) || label.includes(qsTr("SVG"))) return Theme.statusInfo;
+                                    return Theme.textTertiary;
                                 }
                             }
 
@@ -1060,7 +1060,7 @@ Item {
                             Rectangle {
                                 visible: root.editorVm && root.editorVm.objectVolumeTypeLabel(row.index, index).length > 0
                                 radius: 3
-                                color: "#1d2735"
+                                color: Theme.bgCard
                                 border.width: 1
                                 border.color: Theme.borderSubtle
                                 implicitWidth: volumeTypeText.implicitWidth + 8
@@ -1079,7 +1079,7 @@ Item {
                                 width: 18
                                 height: 18
                                 radius: 3
-                                color: volumeDeleteMA.containsMouse ? "#7d2020" : "transparent"
+                                color: volumeDeleteMA.containsMouse ? Theme.statusErrorPressed : "transparent"
 
                                 Text {
                                     anchors.centerIn: parent

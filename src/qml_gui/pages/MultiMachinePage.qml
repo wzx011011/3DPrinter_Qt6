@@ -698,7 +698,7 @@ Item {
                         width: 80
                         height: Theme.controlHeightSM
                         radius: Theme.radiusSM
-                        color: sendAllBtnArea.containsMouse ? "#005a3d" : Theme.accent
+                        color: sendAllBtnArea.containsMouse ? Theme.accentSubtle : Theme.accent
                         Text {
                             anchors.centerIn: parent
                             text: qsTr("Send All")
@@ -964,7 +964,7 @@ Item {
                     Layout.preferredWidth: 50
                     Layout.preferredHeight: 26
                     radius: Theme.radiusSM
-                    color: retryBtnHover.containsMouse ? "#005a3d" : Theme.accent
+                    color: retryBtnHover.containsMouse ? Theme.accentSubtle : Theme.accent
                     border.color: Theme.accent
                     border.width: 1
                     anchors.verticalCenter: parent.verticalCenter

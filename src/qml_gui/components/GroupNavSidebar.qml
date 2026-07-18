@@ -55,8 +55,8 @@ Rectangle {
                     height: 34
                     radius: Theme.radiusSM
                     color: root.selectedGroup === modelData
-                           ? "#1c2a3e"
-                           : grpHov.containsMouse ? "#161d28" : "transparent"
+                           ? Theme.chromePressed
+                           : grpHov.containsMouse ? Theme.bgPanel : "transparent"
                     border.color: root.selectedGroup === modelData ? Theme.accent : "transparent"
                     border.width: 1
 
@@ -85,7 +85,7 @@ Rectangle {
                             width: cnt > 9 ? 26 : 20
                             height: 16
                             radius: 3
-                            color: root.selectedGroup === modelData ? "#1e3828" : "#1e2535"
+                            color: root.selectedGroup === modelData ? Theme.bgCard : Theme.bgCard
                             Text {
                                 anchors.centerIn: parent
                                 text: parent.cnt

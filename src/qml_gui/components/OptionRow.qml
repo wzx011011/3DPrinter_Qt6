@@ -196,7 +196,7 @@ Item {
         width: parent.width
         height: root.rowHeight
         color: (root.rowIndex + (root.showGroupHeader ? 1 : 0)) % 2 === 0
-               ? "transparent" : "#080b10"
+               ? "transparent" : Theme.bgBase
         opacity: root.oRO ? 0.72 : 1.0
 
         RowLayout {

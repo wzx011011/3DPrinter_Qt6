@@ -558,7 +558,7 @@ Item {
                     Layout.preferredHeight: 24
                     radius: 12
                     enabled: backend.editorViewModel && backend.editorViewModel.canRequestSlice
-                    color: enabled ? "#4a7f76" : "#33433f"
+                    color: enabled ? Theme.borderActive : Theme.borderInput
                     opacity: backend.currentPage === backend.tp3DEditor ? 1.0 : 0.0
                     visible: backend.currentPage === backend.tp3DEditor
                     ToolTip.visible: sliceMouse.containsMouse && prepareSliceButton.toolTipText.length > 0
@@ -568,7 +568,7 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("切片单盘")
-                        color: "#e7f4f0"
+                        color: Theme.textPrimary
                         font.pixelSize: 12
                         opacity: prepareSliceButton.enabled ? 1.0 : 0.55
                     }
@@ -593,7 +593,7 @@ Item {
                     Layout.preferredHeight: 24
                     radius: 12
                     enabled: backend.editorViewModel && backend.editorViewModel.canExportGCode
-                    color: enabled ? Theme.accent : "#31504b"
+                    color: enabled ? Theme.accent : Theme.borderDefault
                     visible: backend.currentPage === backend.tp3DEditor
                     ToolTip.visible: exportMouse.containsMouse && prepareExportGcodeButton.toolTipText.length > 0
                     ToolTip.text: prepareExportGcodeButton.toolTipText

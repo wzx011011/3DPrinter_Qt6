@@ -30,8 +30,8 @@ CxDialog {
             Layout.fillWidth: true
             height: 44
             radius: 5
-            color: "#111620"
-            border.color: "#2e3848"
+            color: Theme.bgSurface
+            border.color: Theme.borderInput
 
             RowLayout {
                 anchors.fill: parent
@@ -44,13 +44,13 @@ CxDialog {
                     spacing: 2
                     Text {
                         text: root.editorVm ? root.editorVm.projectName : "—"
-                        color: "#dde4ef"; font.pixelSize: 12; font.bold: true
+                        color: Theme.textPrimary; font.pixelSize: 12; font.bold: true
                     }
                     Text {
                         text: root.editorVm
                               ? root.editorVm.objectCount + qsTr(" 个对象  ·  层高 0.20 mm")
                               : "—"
-                        color: "#566070"; font.pixelSize: 10
+                        color: Theme.textDisabled; font.pixelSize: 10
                     }
                 }
                 Item { Layout.fillWidth: true }
@@ -62,13 +62,13 @@ CxDialog {
             Layout.fillWidth: true
             spacing: 8
 
-            Text { text: qsTr("输出路径"); color: "#9daaba"; font.pixelSize: 11; Layout.preferredWidth: 60 }
+            Text { text: qsTr("输出路径"); color: Theme.textSecondary; font.pixelSize: 11; Layout.preferredWidth: 60 }
 
             Rectangle {
                 Layout.fillWidth: true
                 height: 28; radius: 4
-                color: "#0f1318"
-                border.color: pathField.activeFocus ? "#22c564" : "#2e3848"
+                color: Theme.bgInset
+                border.color: pathField.activeFocus ? Theme.accent : Theme.borderInput
 
                 TextInput {
                     id: pathField
@@ -77,7 +77,7 @@ CxDialog {
                     anchors.verticalCenter: parent.verticalCenter
                     verticalAlignment: TextInput.AlignVCenter
                     text: "C:/Users/Output/print_job.gcode"
-                    color: "#c8d4e0"
+                    color: Theme.chromeText
                     font.pixelSize: 11
                     selectByMouse: true
                 }
@@ -85,7 +85,7 @@ CxDialog {
 
             Rectangle {
                 width: 26; height: 28; radius: 4
-                color: browseHov.containsMouse ? "#2e3848" : "#1e2535"
+                color: browseHov.containsMouse ? Theme.borderInput : Theme.bgCard
                 Text { anchors.centerIn: parent; text: "📂"; font.pixelSize: 12 }
                 MouseArea {
                     id: browseHov; anchors.fill: parent
@@ -102,17 +102,17 @@ CxDialog {
             CheckBox {
                 text: qsTr("切片后自动发送")
                 checked: true
-                contentItem: Text { text: parent.text; color: "#9daaba"; font.pixelSize: 11; leftPadding: parent.indicator.width + 6 }
+                contentItem: Text { text: parent.text; color: Theme.textSecondary; font.pixelSize: 11; leftPadding: parent.indicator.width + 6 }
             }
             CheckBox {
                 text: qsTr("完成后通知")
                 checked: false
-                contentItem: Text { text: parent.text; color: "#9daaba"; font.pixelSize: 11; leftPadding: parent.indicator.width + 6 }
+                contentItem: Text { text: parent.text; color: Theme.textSecondary; font.pixelSize: 11; leftPadding: parent.indicator.width + 6 }
             }
         }
 
         // Divider
-        Rectangle { Layout.fillWidth: true; height: 1; color: "#1e2535" }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Theme.bgCard }
 
         // Button row
         RowLayout {
@@ -124,9 +124,9 @@ CxDialog {
             // Export G-code
             Rectangle {
                 width: 110; height: 30; radius: 4
-                color: exportHov.containsMouse ? "#2e3848" : "#1e2840"
-                border.color: "#2e4060"
-                Text { anchors.centerIn: parent; text: qsTr("导出 G-code"); color: "#8eaad0"; font.pixelSize: 11 }
+                color: exportHov.containsMouse ? Theme.borderInput : Theme.chromePressed
+                border.color: Theme.bgPressed
+                Text { anchors.centerIn: parent; text: qsTr("导出 G-code"); color: Theme.chromeTextMuted; font.pixelSize: 11 }
                 MouseArea {
                     id: exportHov; anchors.fill: parent
                     hoverEnabled: true; cursorShape: Qt.PointingHandCursor
@@ -137,8 +137,8 @@ CxDialog {
             // Cancel
             Rectangle {
                 width: 60; height: 30; radius: 4
-                color: cancelHov.containsMouse ? "#2e2e2e" : "#232830"
-                Text { anchors.centerIn: parent; text: qsTr("取消"); color: "#9daaba"; font.pixelSize: 11 }
+                color: cancelHov.containsMouse ? Theme.chromePressed : Theme.bgCard
+                Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: 11 }
                 MouseArea {
                     id: cancelHov; anchors.fill: parent
                     hoverEnabled: true; cursorShape: Qt.PointingHandCursor
@@ -149,7 +149,7 @@ CxDialog {
             // Print
             Rectangle {
                 width: 80; height: 30; radius: 4
-                color: printHov.containsMouse ? "#19a84e" : "#157a39"
+                color: printHov.containsMouse ? Theme.accentDark : Theme.accentSubtle
                 Text { anchors.centerIn: parent; text: qsTr("▶ 打印"); color: "white"; font.pixelSize: 11; font.bold: true }
                 MouseArea {
                     id: printHov; anchors.fill: parent

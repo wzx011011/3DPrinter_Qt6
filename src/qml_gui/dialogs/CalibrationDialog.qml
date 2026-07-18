@@ -35,8 +35,8 @@ CxDialog {
 
         // Status icon
         Rectangle {
-            Layout.fillWidth: true; height: 72; radius: 6; color: "#111620"
-            border.color: root.calibrationVm && root.calibrationVm.isRunning ? "#22c564" : "#2e3848"
+            Layout.fillWidth: true; height: 72; radius: 6; color: Theme.bgSurface
+            border.color: root.calibrationVm && root.calibrationVm.isRunning ? Theme.accent : Theme.borderInput
 
             ColumnLayout {
                 anchors.centerIn: parent; spacing: 6
@@ -45,15 +45,15 @@ CxDialog {
                     text: root.calibrationVm && root.calibrationVm.isRunning ? "⚙"
                          : root.calibrationVm && root.calibrationVm.progress >= 100 ? "✔" : "◎"
                     font.pixelSize: 26
-                    color: root.calibrationVm && root.calibrationVm.isRunning ? "#22c564"
-                         : root.calibrationVm && root.calibrationVm.progress >= 100 ? "#1baa52" : "#7a8fa3"
+                    color: root.calibrationVm && root.calibrationVm.isRunning ? Theme.accent
+                         : root.calibrationVm && root.calibrationVm.progress >= 100 ? Theme.accentDark : Theme.textTertiary
                 }
                 Text {
                     Layout.alignment: Qt.AlignHCenter
                     text: root.calibrationVm && root.calibrationVm.isRunning ? qsTr("校准进行中，请勿移动打印机…")
                          : root.calibrationVm && root.calibrationVm.progress >= 100 ? qsTr("校准完成！")
                          : qsTr("准备开始校准")
-                    color: "#9daaba"; font.pixelSize: 11
+                    color: Theme.textSecondary; font.pixelSize: 11
                 }
             }
         }
@@ -63,11 +63,11 @@ CxDialog {
             Layout.fillWidth: true; spacing: 4
             RowLayout {
                 Layout.fillWidth: true
-                Text { text: qsTr("进度"); color: "#9daaba"; font.pixelSize: 11 }
+                Text { text: qsTr("进度"); color: Theme.textSecondary; font.pixelSize: 11 }
                 Item { Layout.fillWidth: true }
                 Text {
                     text: root.calibrationVm ? root.calibrationVm.progress + "%" : "0%"
-                    color: "#e2e8f1"; font.pixelSize: 11; font.bold: true
+                    color: Theme.textPrimary; font.pixelSize: 11; font.bold: true
                 }
             }
             CxProgressBar {
@@ -77,7 +77,7 @@ CxDialog {
         }
 
         // Divider
-        Rectangle { Layout.fillWidth: true; height: 1; color: "#1e2535" }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Theme.bgCard }
 
         // Hardware calibration options (aligns with upstream CalibrationDialog::create_check_option)
         // Upstream has 4 checkboxes: xcam_cali, bed_leveling, vibration, motor_noise
@@ -88,7 +88,7 @@ CxDialog {
 
             Text {
                 text: qsTr("硬件校准选项")
-                color: "#9daaba"
+                color: Theme.textSecondary
                 font.pixelSize: 11
                 font.bold: true
             }
@@ -98,7 +98,7 @@ CxDialog {
                 Layout.fillWidth: true
                 height: 28
                 radius: 4
-                color: lidarMA.containsMouse ? "#1e2535" : "transparent"
+                color: lidarMA.containsMouse ? Theme.bgCard : "transparent"
 
                 RowLayout {
                     anchors.fill: parent
@@ -108,8 +108,8 @@ CxDialog {
 
                     Rectangle {
                         width: 16; height: 16; radius: 3
-                        color: hardwareLidar ? "#22c55e" : "transparent"
-                        border.color: hardwareLidar ? "#22c55e" : "#4a5568"
+                        color: hardwareLidar ? Theme.accent : "transparent"
+                        border.color: hardwareLidar ? Theme.accent : Theme.scrollBarHoverColor
                         border.width: 1.5
                         Text {
                             anchors.centerIn: parent
@@ -122,7 +122,7 @@ CxDialog {
 
                     Text {
                         text: qsTr("微型激光雷达校准")
-                        color: "#c8d4e0"
+                        color: Theme.chromeText
                         font.pixelSize: 11
                     }
 
@@ -130,7 +130,7 @@ CxDialog {
 
                     Text {
                         text: qsTr("AI 监控")
-                        color: "#6b7a8d"
+                        color: Theme.borderActive
                         font.pixelSize: 9
                     }
                 }
@@ -149,7 +149,7 @@ CxDialog {
                 Layout.fillWidth: true
                 height: 28
                 radius: 4
-                color: bedMA.containsMouse ? "#1e2535" : "transparent"
+                color: bedMA.containsMouse ? Theme.bgCard : "transparent"
 
                 RowLayout {
                     anchors.fill: parent
@@ -159,8 +159,8 @@ CxDialog {
 
                     Rectangle {
                         width: 16; height: 16; radius: 3
-                        color: hardwareBedLevel ? "#22c55e" : "transparent"
-                        border.color: hardwareBedLevel ? "#22c55e" : "#4a5568"
+                        color: hardwareBedLevel ? Theme.accent : "transparent"
+                        border.color: hardwareBedLevel ? Theme.accent : Theme.scrollBarHoverColor
                         border.width: 1.5
                         Text {
                             anchors.centerIn: parent
@@ -173,7 +173,7 @@ CxDialog {
 
                     Text {
                         text: qsTr("热床调平")
-                        color: "#c8d4e0"
+                        color: Theme.chromeText
                         font.pixelSize: 11
                     }
 
@@ -181,7 +181,7 @@ CxDialog {
 
                     Text {
                         text: qsTr("自动")
-                        color: "#6b7a8d"
+                        color: Theme.borderActive
                         font.pixelSize: 9
                     }
                 }
@@ -200,7 +200,7 @@ CxDialog {
                 Layout.fillWidth: true
                 height: 28
                 radius: 4
-                color: vibMA.containsMouse ? "#1e2535" : "transparent"
+                color: vibMA.containsMouse ? Theme.bgCard : "transparent"
 
                 RowLayout {
                     anchors.fill: parent
@@ -210,8 +210,8 @@ CxDialog {
 
                     Rectangle {
                         width: 16; height: 16; radius: 3
-                        color: hardwareVibration ? "#22c55e" : "transparent"
-                        border.color: hardwareVibration ? "#22c55e" : "#4a5568"
+                        color: hardwareVibration ? Theme.accent : "transparent"
+                        border.color: hardwareVibration ? Theme.accent : Theme.scrollBarHoverColor
                         border.width: 1.5
                         Text {
                             anchors.centerIn: parent
@@ -224,7 +224,7 @@ CxDialog {
 
                     Text {
                         text: qsTr("振动补偿")
-                        color: "#c8d4e0"
+                        color: Theme.chromeText
                         font.pixelSize: 11
                     }
                 }
@@ -243,7 +243,7 @@ CxDialog {
                 Layout.fillWidth: true
                 height: 28
                 radius: 4
-                color: motorMA.containsMouse ? "#1e2535" : "transparent"
+                color: motorMA.containsMouse ? Theme.bgCard : "transparent"
 
                 RowLayout {
                     anchors.fill: parent
@@ -253,8 +253,8 @@ CxDialog {
 
                     Rectangle {
                         width: 16; height: 16; radius: 3
-                        color: hardwareMotor ? "#22c55e" : "transparent"
-                        border.color: hardwareMotor ? "#22c55e" : "#4a5568"
+                        color: hardwareMotor ? Theme.accent : "transparent"
+                        border.color: hardwareMotor ? Theme.accent : Theme.scrollBarHoverColor
                         border.width: 1.5
                         Text {
                             anchors.centerIn: parent
@@ -267,7 +267,7 @@ CxDialog {
 
                     Text {
                         text: qsTr("电机降噪")
-                        color: "#c8d4e0"
+                        color: Theme.chromeText
                         font.pixelSize: 11
                     }
 
@@ -275,7 +275,7 @@ CxDialog {
 
                     Text {
                         text: qsTr("可选")
-                        color: "#6b7a8d"
+                        color: Theme.borderActive
                         font.pixelSize: 9
                     }
                 }
@@ -291,7 +291,7 @@ CxDialog {
         }
 
         // Divider
-        Rectangle { Layout.fillWidth: true; height: 1; color: "#1e2535" }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Theme.bgCard }
 
         // Phase 125 (CALIB-02): calibration sweep range inputs (start/end/step).
         // Defaults come from the selected CalibrationType (Phase 124 hardcoded
@@ -307,13 +307,13 @@ CxDialog {
 
             Text {
                 text: qsTr("校准范围")
-                color: "#9daaba"
+                color: Theme.textSecondary
                 font.pixelSize: 11
                 font.bold: true
             }
             Text {
                 text: qsTr("编辑扫描范围（起始 / 结束 / 步长），覆盖默认值")
-                color: "#6b7a8d"
+                color: Theme.borderActive
                 font.pixelSize: 9
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
@@ -327,7 +327,7 @@ CxDialog {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 2
-                    Text { text: qsTr("起始"); color: "#6b7a8d"; font.pixelSize: 9 }
+                    Text { text: qsTr("起始"); color: Theme.borderActive; font.pixelSize: 9 }
                     CxTextField {
                         id: rangeStartField
                         Layout.fillWidth: true
@@ -337,7 +337,7 @@ CxDialog {
                             decimals: 4
                             notation: DoubleValidator.StandardNotation
                         }
-                        color: "#e2e8f1"
+                        color: Theme.textPrimary
                         font.pixelSize: 11
                         onEditingFinished: {
                             if (!root.calibrationVm) return
@@ -352,7 +352,7 @@ CxDialog {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 2
-                    Text { text: qsTr("结束"); color: "#6b7a8d"; font.pixelSize: 9 }
+                    Text { text: qsTr("结束"); color: Theme.borderActive; font.pixelSize: 9 }
                     CxTextField {
                         id: rangeEndField
                         Layout.fillWidth: true
@@ -362,7 +362,7 @@ CxDialog {
                             decimals: 4
                             notation: DoubleValidator.StandardNotation
                         }
-                        color: "#e2e8f1"
+                        color: Theme.textPrimary
                         font.pixelSize: 11
                         onEditingFinished: {
                             if (!root.calibrationVm) return
@@ -377,7 +377,7 @@ CxDialog {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 2
-                    Text { text: qsTr("步长"); color: "#6b7a8d"; font.pixelSize: 9 }
+                    Text { text: qsTr("步长"); color: Theme.borderActive; font.pixelSize: 9 }
                     CxTextField {
                         id: rangeStepField
                         Layout.fillWidth: true
@@ -387,7 +387,7 @@ CxDialog {
                             decimals: 4
                             notation: DoubleValidator.StandardNotation
                         }
-                        color: "#e2e8f1"
+                        color: Theme.textPrimary
                         font.pixelSize: 11
                         onEditingFinished: {
                             if (!root.calibrationVm) return
@@ -405,7 +405,7 @@ CxDialog {
         }
 
         // Divider
-        Rectangle { Layout.fillWidth: true; height: 1; color: "#1e2535" }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Theme.bgCard }
 
         // Button row
         RowLayout {
@@ -415,8 +415,8 @@ CxDialog {
             // Cancel calibration (visible during calibration)
             Rectangle {
                 width: 88; height: 30; radius: 4; visible: root.calibrationVm && root.calibrationVm.isRunning
-                color: stopHov.containsMouse ? "#5e1818" : "#3a1010"
-                border.color: "#6b2020"
+                color: stopHov.containsMouse ? Theme.bgErrorSubtle : Theme.bgErrorSubtle
+                border.color: Theme.statusErrorPressed
                 Text { anchors.centerIn: parent; text: qsTr("✕ 取消"); color: "#ff9090"; font.pixelSize: 11 }
                 MouseArea {
                     id: stopHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
@@ -428,7 +428,7 @@ CxDialog {
             Rectangle {
                 width: 80; height: 30; radius: 4
                 visible: !root.calibrationVm || !root.calibrationVm.isRunning
-                color: doneHov.containsMouse ? "#19a84e" : "#157a39"
+                color: doneHov.containsMouse ? Theme.accentDark : Theme.accentSubtle
                 Text {
                     anchors.centerIn: parent
                     text: root.calibrationVm && root.calibrationVm.progress >= 100 ? qsTr("完成") : qsTr("开始")

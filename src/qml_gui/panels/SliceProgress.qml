@@ -415,7 +415,7 @@ Item {
                             // Extruder color chip
                             Rectangle {
                                 width: 10; height: 10; radius: 2
-                                color: index === 0 ? "#18c75e" : index === 1 ? "#3b82f6" : index === 2 ? "#f59e0b" : "#ef4444"
+                                color: index === 0 ? Theme.accent : index === 1 ? Theme.statusInfo : index === 2 ? Theme.statusWarning : Theme.statusError
                                 Layout.alignment: Qt.AlignVCenter
                             }
 
@@ -499,8 +499,8 @@ Item {
             radius: Theme.radiusMD
             color: !root.primaryActionEnabled ? Theme.bgHover
                    : actionMA.containsMouse
-                     ? (root.slicingNow ? "#7d2020" : "#19a84e")
-                     : (root.slicingNow ? "#5e1818" : "#157a39")
+                     ? (root.slicingNow ? Theme.statusErrorPressed : Theme.accentDark)
+                     : (root.slicingNow ? Theme.bgErrorSubtle : Theme.accentSubtle)
 
             Text {
                 anchors.centerIn: parent
@@ -566,7 +566,7 @@ Item {
                 height: 28
                 radius: Theme.radiusSM
                 color: !root.canExportGCode ? Theme.bgHover
-                       : exportMA.containsMouse ? "#2563eb" : "#1d4ed8"
+                       : exportMA.containsMouse ? Theme.statusInfo : "#1d4ed8"
                 Text {
                     anchors.centerIn: parent
                     text: qsTr("导出 G-code")

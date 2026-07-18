@@ -76,7 +76,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: "#55575f"
+        color: Theme.borderStrong
     }
 
     ColumnLayout {
@@ -87,7 +87,7 @@ Item {
             id: previewHeader
             Layout.fillWidth: true
             Layout.preferredHeight: 40
-            color: "#2f3036"
+            color: Theme.switchTrackOff
 
             RowLayout {
                 anchors.fill: parent
@@ -115,14 +115,14 @@ Item {
                     Layout.preferredWidth: 72
                     Layout.preferredHeight: 24
                     radius: 4
-                    color: "#3a2f18"
+                    color: Theme.bgWarningSubtle
                     border.width: 1
-                    border.color: "#8a6a24"
+                    border.color: Theme.statusErrorPressed
 
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("No data")
-                        color: "#f3c969"
+                        color: Theme.statusWarning
                         font.pixelSize: 11
                         font.bold: true
                         elide: Text.ElideRight
@@ -232,9 +232,9 @@ Item {
                 id: leftPanel
                 Layout.preferredWidth: root.leftPanelWidth
                 Layout.fillHeight: true
-                color: "#27292f"
+                color: Theme.bgCard
                 border.width: 1
-                border.color: "#3a3d45"
+                border.color: Theme.borderDefault
                 clip: true
 
                 LeftSidebar {
@@ -303,9 +303,9 @@ Item {
                 id: rightPanel
                 Layout.preferredWidth: root.rightPanelWidth
                 Layout.fillHeight: true
-                color: "#202126"
+                color: Theme.bgFloating
                 border.width: 1
-                border.color: "#3a3d45"
+                border.color: Theme.borderDefault
                 clip: true
 
                 Behavior on Layout.preferredWidth { NumberAnimation { duration: 120 } }
@@ -364,7 +364,7 @@ Item {
                             Layout.fillHeight: true
                             Layout.minimumHeight: 150
                             radius: 4
-                            color: "#191b20"
+                            color: Theme.bgPanel
                             border.width: 1
                             border.color: Theme.borderSubtle
                             clip: true
@@ -405,7 +405,7 @@ Item {
                                         required property var modelData
                                         width: gcodeList.width
                                         height: 19
-                                        color: gcodeRow.modelData.current ? "#3a2515" : "transparent"
+                                        color: gcodeRow.modelData.current ? Theme.bgWarningSubtle : "transparent"
 
                                         RowLayout {
                                             anchors.fill: parent
@@ -416,7 +416,7 @@ Item {
                                             Text {
                                                 Layout.preferredWidth: 44
                                                 text: gcodeRow.modelData.line
-                                                color: gcodeRow.modelData.current ? "#ff9f40" : Theme.textTertiary
+                                                color: gcodeRow.modelData.current ? Theme.statusWarning : Theme.textTertiary
                                                 horizontalAlignment: Text.AlignRight
                                                 font.pixelSize: 10
                                                 font.family: "Consolas"
@@ -424,7 +424,7 @@ Item {
                                             Text {
                                                 Layout.fillWidth: true
                                                 text: gcodeRow.modelData.text
-                                                color: gcodeRow.modelData.current ? "#ffb866" : Theme.textSecondary
+                                                color: gcodeRow.modelData.current ? Theme.statusWarning : Theme.textSecondary
                                                 elide: Text.ElideRight
                                                 font.pixelSize: 10
                                                 font.family: "Consolas"
@@ -442,9 +442,9 @@ Item {
                 id: verticalLayerRail
                 Layout.preferredWidth: root.targetPreviewLayerRailWidth
                 Layout.fillHeight: true
-                color: "#2f323a"
+                color: Theme.bgElevated
                 border.width: 1
-                border.color: "#3a3d45"
+                border.color: Theme.borderDefault
 
                 Components.PreviewLayerRail {
                     anchors.fill: parent
@@ -458,9 +458,9 @@ Item {
             id: moveSliderBar
             Layout.fillWidth: true
             Layout.preferredHeight: root.targetPreviewMoveBarHeight
-            color: "#2f3036"
+            color: Theme.switchTrackOff
             border.width: 1
-            border.color: "#3a3d45"
+            border.color: Theme.borderDefault
 
             Components.MoveSlider {
                 anchors.fill: parent
@@ -481,7 +481,7 @@ Item {
         Layout.preferredHeight: 28
         Layout.preferredWidth: 118
         radius: 4
-        color: "#24272e"
+        color: Theme.bgCard
         border.width: 1
         border.color: Theme.borderSubtle
 

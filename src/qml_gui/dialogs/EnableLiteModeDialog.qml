@@ -72,8 +72,8 @@ CxDialog {
             Layout.fillWidth: true
             implicitHeight: featureCol.implicitHeight + 16
             radius: 6
-            color: "#1e2330"
-            border.color: "#2e3848"
+            color: Theme.scrollBarTrackColor
+            border.color: Theme.borderInput
             border.width: 1
 
             ColumnLayout {
@@ -97,10 +97,10 @@ CxDialog {
 
                     Text { Layout.preferredWidth: 100; text: qsTr("功能"); color: Theme.textTertiary; font.pixelSize: 10 }
                     Text { Layout.preferredWidth: 80; text: qsTr("完整模式"); color: Theme.textPrimary; font.pixelSize: 10; font.bold: true }
-                    Text { Layout.fillWidth: true; text: qsTr("精简模式"); color: "#18c75e"; font.pixelSize: 10; font.bold: true }
+                    Text { Layout.fillWidth: true; text: qsTr("精简模式"); color: Theme.accent; font.pixelSize: 10; font.bold: true }
                 }
 
-                Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: "#2e3848" }
+                Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.borderInput }
 
                 Repeater {
                     model: [
@@ -116,7 +116,7 @@ CxDialog {
                         spacing: 8
                         Text { Layout.preferredWidth: 100; text: modelData.feature; color: Theme.textSecondary; font.pixelSize: 10 }
                         Text { Layout.preferredWidth: 80; text: modelData.full; color: Theme.textPrimary; font.pixelSize: 10 }
-                        Text { Layout.fillWidth: true; text: modelData.lite; color: modelData.lite === "✓" ? "#18c75e" : "#EF4444"; font.pixelSize: 10 }
+                        Text { Layout.fillWidth: true; text: modelData.lite; color: modelData.lite === "✓" ? Theme.accent : Theme.statusError; font.pixelSize: 10 }
                     }
                 }
             }
@@ -146,7 +146,7 @@ CxDialog {
     footer: Rectangle {
         width: parent.width
         height: 48
-        color: "#141920"
+        color: Theme.bgSurface
         radius: 8
         Rectangle {
             anchors.top: parent.top

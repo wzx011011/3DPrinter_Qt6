@@ -14,12 +14,12 @@ Rectangle {
     signal exportRequested()
 
     readonly property int targetSidebarWidth: 392
-    readonly property color panelSurface: "#303236"
-    readonly property color sectionSurface: "#33363a"
-    readonly property color controlSurface: "#3b3e43"
-    readonly property color fieldSurface: "#2c2f33"
-    readonly property color dividerColor: "#45484d"
-    readonly property color mutedText: "#aeb4b9"
+    readonly property color panelSurface: Theme.bgElevated
+    readonly property color sectionSurface: Theme.bgHover
+    readonly property color controlSurface: Theme.borderDefault
+    readonly property color fieldSurface: Theme.chromePressed
+    readonly property color dividerColor: Theme.bgPressed
+    readonly property color mutedText: Theme.textSecondary
 
     property string paramsCurrentTab: "Quality"
     property string paramsSearchText: ""
@@ -89,9 +89,9 @@ Rectangle {
                         Layout.preferredWidth: 52
                         Layout.preferredHeight: 52
                         radius: 4
-                        color: "#d9dee3"
+                        color: Theme.chromeText
                         border.width: 1
-                        border.color: "#9ea6ad"
+                        border.color: Theme.textSecondary
 
                         Image {
                             anchors.centerIn: parent
@@ -199,7 +199,7 @@ Rectangle {
                     radius: 4
                     color: root.sectionSurface
                     border.width: 1
-                    border.color: root.configVm && !root.configVm.isFilamentCompatible(root.configVm.materialPresetName(filamentPixelRow.index)) ? "#f05545" : root.dividerColor
+                    border.color: root.configVm && !root.configVm.isFilamentCompatible(root.configVm.materialPresetName(filamentPixelRow.index)) ? Theme.statusError : root.dividerColor
 
                     RowLayout {
                         anchors.fill: parent
@@ -255,7 +255,7 @@ Rectangle {
                             Layout.preferredWidth: 8
                             Layout.preferredHeight: 8
                             radius: 4
-                            color: "#f05545"
+                            color: Theme.statusError
                             ToolTip.text: root.configVm ? root.configVm.currentPresetCompatibilityMessage : ""
                             ToolTip.visible: filamentCompatMA.containsMouse
                             MouseArea { id: filamentCompatMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
@@ -523,8 +523,8 @@ Rectangle {
     }
 
     function filamentColor(index) {
-        var colors = ["#b97914", "#b9b9b9", "#b9b9b9", "#214bc2", "#d63a21"]
-        return index < colors.length ? colors[index] : "#b9b9b9"
+        var colors = [Theme.statusWarning, Theme.textSecondary, Theme.textSecondary, "#214bc2", Theme.chromeDangerHover]
+        return index < colors.length ? colors[index] : Theme.textSecondary
     }
 
     component PixelHeader: Item {
@@ -638,7 +638,7 @@ Rectangle {
         implicitHeight: 24
         radius: 4
         color: !enabled ? root.fieldSurface
-              : iconMA.containsMouse ? "#44484d"
+              : iconMA.containsMouse ? Theme.bgPressed
               : root.controlSurface
         border.width: 1
         border.color: root.dividerColor

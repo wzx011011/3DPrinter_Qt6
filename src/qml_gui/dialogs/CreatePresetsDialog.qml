@@ -116,7 +116,7 @@ CxDialog {
         Text {
             id: dupWarning
             text: qsTr("A preset with this name already exists")
-            color: "#d33"
+            color: Theme.accentDark
             font.pixelSize: 10
             visible: false
             Layout.leftMargin: 80

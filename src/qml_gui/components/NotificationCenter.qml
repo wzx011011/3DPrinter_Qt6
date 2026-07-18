@@ -12,15 +12,15 @@ Item {
     // Severity color mapping (expanded 9-level, aligns with upstream NotificationLevel)
     function severityColor(sev) {
         switch (sev) {
-        case 3: return "#f05545";   // Error - red
-        case 4: return "#e04848";   // SeriousWarning - dark red
-        case 2: return "#c87840";   // Warning - amber
-        case 1: return "#18c75e";   // Success - green
-        case 5: return "#58a6ff";   // Hint - blue
-        case 6: return "#7c6aef";   // PrintInfo - purple
-        case 7: return "#7c6aef";   // PrintInfoShort - purple
-        case 8: return "#3b9cf0";   // Progress - light blue
-        default: return "#18c75e";  // Info - green
+        case 3: return Theme.statusError;   // Error - red
+        case 4: return Theme.statusError;   // SeriousWarning - dark red
+        case 2: return Theme.statusError;   // Warning - amber
+        case 1: return Theme.accent;   // Success - green
+        case 5: return Theme.statusInfo;   // Hint - blue
+        case 6: return Theme.textTertiary;   // PrintInfo - purple
+        case 7: return Theme.textTertiary;   // PrintInfoShort - purple
+        case 8: return Theme.statusInfo;   // Progress - light blue
+        default: return Theme.accent;  // Info - green
         }
     }
 
@@ -39,8 +39,8 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: 12
-        color: "#0f1217"
-        border.color: "#242a33"
+        color: Theme.bgInset
+        border.color: Theme.bgCard
         border.width: 1
 
         ColumnLayout {
@@ -55,7 +55,7 @@ Item {
 
                 Text {
                     text: qsTr("通知中心")
-                    color: "#e0e6ed"
+                    color: Theme.textPrimary
                     font.pixelSize: 14
                     font.bold: true
                     Layout.fillWidth: true
@@ -67,13 +67,13 @@ Item {
                     width: unreadBadge.implicitWidth + 12
                     height: 20
                     radius: 10
-                    color: "#f05545"
+                    color: Theme.statusError
 
                     Text {
                         id: unreadBadge
                         anchors.centerIn: parent
                         text: backend.unreadHistoryCount > 99 ? "99+" : backend.unreadHistoryCount.toString()
-                        color: "#fff"
+                        color: Theme.accentDark
                         font.pixelSize: 10
                         font.bold: true
                     }
@@ -88,7 +88,7 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: "✓"
-                        color: "#58a6ff"
+                        color: Theme.statusInfo
                         font.pixelSize: 13
                     }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -105,7 +105,7 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: "🗑"
-                        color: "#808890"
+                        color: Theme.textMuted
                         font.pixelSize: 12
                     }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -121,7 +121,7 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: "✕"
-                        color: "#808890"
+                        color: Theme.textMuted
                         font.pixelSize: 13
                     }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -130,7 +130,7 @@ Item {
                 }
             }
 
-            Rectangle { Layout.fillWidth: true; height: 1; color: "#242a33" }
+            Rectangle { Layout.fillWidth: true; height: 1; color: Theme.bgCard }
 
             // Notification list
             ListView {
@@ -144,8 +144,8 @@ Item {
                     width: ListView.view.width
                     height: delegateColumn.implicitHeight + 12
                     radius: 8
-                    color: "#151a22"
-                    border.color: "#1e2430"
+                    color: Theme.bgPanel
+                    border.color: Theme.scrollBarTrackColor
                     border.width: 1
 
                     RowLayout {
@@ -182,7 +182,7 @@ Item {
                             // Message
                             Text {
                                 text: backend.historyMessage(index)
-                                color: "#b0b8c4"
+                                color: Theme.chromeTextMuted
                                 font.pixelSize: 12
                                 elide: Text.ElideRight
                                 width: parent.width
@@ -193,7 +193,7 @@ Item {
                             // Time
                             Text {
                                 text: backend.historyTime(index)
-                                color: "#505860"
+                                color: Theme.borderStrong
                                 font.pixelSize: 9
                                 font.family: "Consolas, monospace"
                             }
@@ -207,7 +207,7 @@ Item {
                     width: 4
                     contentItem: Rectangle {
                         radius: 2
-                        color: "#363d4e"
+                        color: Theme.borderDefault
                     }
                 }
             }
@@ -220,7 +220,7 @@ Item {
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 text: qsTr("暂无通知记录")
-                color: "#505860"
+                color: Theme.borderStrong
                 font.pixelSize: 13
             }
         }

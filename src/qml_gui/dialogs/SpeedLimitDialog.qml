@@ -46,7 +46,7 @@ CxDialog {
         }
 
         // Separator
-        Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: "#2e3848" }
+        Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.borderInput }
 
         // Limit items list
         Repeater {
@@ -113,7 +113,7 @@ CxDialog {
                     Text {
                         anchors.centerIn: parent
                         text: "×"
-                        color: "#EF4444"
+                        color: Theme.statusError
                         font.pixelSize: 14
                     }
 
@@ -132,7 +132,7 @@ CxDialog {
     footer: Rectangle {
         width: parent.width
         height: 48
-        color: "#141920"
+        color: Theme.bgSurface
         radius: 8
         Rectangle {
             anchors.top: parent.top

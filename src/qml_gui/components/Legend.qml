@@ -26,7 +26,7 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             radius: 5
-            color: "#24272e"
+            color: Theme.bgCard
             border.width: 1
             border.color: Theme.borderSubtle
             implicitHeight: legendContent.implicitHeight + 16
@@ -49,16 +49,16 @@ Item {
                         Layout.preferredHeight: 16
                         radius: 4
                         gradient: Gradient {
-                            GradientStop { position: 0.0; color: "#0b2c7a" }
-                            GradientStop { position: 0.12; color: "#154d8a" }
-                            GradientStop { position: 0.24; color: "#1a6b8a" }
-                            GradientStop { position: 0.36; color: "#1a8a6b" }
-                            GradientStop { position: 0.48; color: "#2d9e3e" }
+                            GradientStop { position: 0.0; color: Theme.chromeBorder }
+                            GradientStop { position: 0.12; color: Theme.scrollBarHoverColor }
+                            GradientStop { position: 0.24; color: Theme.scrollBarHoverColor }
+                            GradientStop { position: 0.36; color: Theme.accentDark }
+                            GradientStop { position: 0.48; color: Theme.accentDark }
                             GradientStop { position: 0.6; color: "#7db828" }
-                            GradientStop { position: 0.72; color: "#c9b818" }
-                            GradientStop { position: 0.82; color: "#d98a14" }
-                            GradientStop { position: 0.91; color: "#d85a14" }
-                            GradientStop { position: 1.0; color: "#c22525" }
+                            GradientStop { position: 0.72; color: Theme.statusWarning }
+                            GradientStop { position: 0.82; color: Theme.statusWarning }
+                            GradientStop { position: 0.91; color: Theme.statusError }
+                            GradientStop { position: 1.0; color: Theme.chromeDangerPressed }
                         }
                         border.width: 1
                         border.color: Theme.borderSubtle

@@ -147,12 +147,12 @@ Item {
                     // Logout button
                     Rectangle {
                         width: 28; height: 28; radius: Theme.radiusLG
-                        color: logoutMA.containsMouse ? "#fef2f2" : "transparent"
+                        color: logoutMA.containsMouse ? Theme.textOnAccent : "transparent"
 
                         Text {
                             anchors.centerIn: parent
                             text: "\u23FB"
-                            color: logoutMA.containsMouse ? "#ef4444" : Theme.textTertiary
+                            color: logoutMA.containsMouse ? Theme.statusError : Theme.textTertiary
                             font.pixelSize: 14
                         }
                         MouseArea {
@@ -201,7 +201,7 @@ Item {
                                 width: 8; height: 8; radius: 4
                                 color: {
                                     var d = root.homeVm.cloudBoundDeviceAt(index)
-                                    return d.online ? "#22c55e" : "#6b7280"
+                                    return d.online ? Theme.accent : Theme.borderActive
                                 }
                             }
 
@@ -230,7 +230,7 @@ Item {
 
                             Text {
                                 text: qsTr("解绑")
-                                color: unbindMA.containsMouse ? "#ef4444" : Theme.textTertiary
+                                color: unbindMA.containsMouse ? Theme.statusError : Theme.textTertiary
                                 font.pixelSize: 11
                             }
                             MouseArea {
@@ -323,7 +323,7 @@ Item {
                 // Error message
                 Label {
                     text: loginError
-                    color: "#ef4444"
+                    color: Theme.statusError
                     font.pixelSize: 11
                     visible: loginError !== ""
                 }
@@ -417,7 +417,7 @@ Item {
 
                 Text {
                     text: bindError
-                    color: "#ef4444"
+                    color: Theme.statusError
                     font.pixelSize: 11
                     visible: bindError !== ""
                 }

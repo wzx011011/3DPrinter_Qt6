@@ -55,7 +55,7 @@ Item {
     // Phase 92 (ASMMEASURE-02): teal accent for the 测量 panel value text,
     // consistent with the on-canvas teal value box (rendered by
     // RhiViewportRenderer) and the upstream measure-panel #4ec9b0 family.
-    readonly property color measureAccent: "#4ec9b0"
+    readonly property color measureAccent: Theme.textTertiary
 
     // Phase 92 (ASMMEASURE-01): Ctrl+Y toggles the Assembly measurement gizmo,
     // mirroring upstream GLGizmoAssembly (WXK_CONTROL_Y,

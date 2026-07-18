@@ -70,7 +70,7 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             radius: 5
-            color: "#24272e"
+            color: Theme.bgCard
             border.width: 1
             border.color: Theme.borderSubtle
             implicitHeight: statValues.implicitHeight + 16
@@ -256,7 +256,7 @@ Item {
         Layout.fillWidth: true
         height: 28
         radius: 4
-        color: "#1c2027"
+        color: Theme.bgFloating
         border.width: 1
         border.color: Theme.borderSubtle
 

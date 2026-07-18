@@ -63,8 +63,8 @@ CxDialog {
                 Layout.fillWidth: true
                 implicitHeight: pluginCol.implicitHeight + 16
                 radius: 6
-                color: "#1e2330"
-                border.color: "#2e3848"
+                color: Theme.scrollBarTrackColor
+                border.color: Theme.borderInput
                 border.width: 1
 
                 ColumnLayout {
@@ -95,7 +95,7 @@ CxDialog {
                                 id: versionText
                                 anchors.centerIn: parent
                                 text: "v" + modelData.version
-                                color: "#18c75e"
+                                color: Theme.accent
                                 font.pixelSize: 9
                             }
                         }
@@ -129,7 +129,7 @@ CxDialog {
 
                         Text {
                             text: modelData.status
-                            color: modelData.installed ? "#18c75e" : Theme.textTertiary
+                            color: modelData.installed ? Theme.accent : Theme.textTertiary
                             font.pixelSize: 10
                         }
 
@@ -159,7 +159,7 @@ CxDialog {
     footer: Rectangle {
         width: parent.width
         height: 48
-        color: "#141920"
+        color: Theme.bgSurface
         radius: 8
         Rectangle {
             anchors.top: parent.top

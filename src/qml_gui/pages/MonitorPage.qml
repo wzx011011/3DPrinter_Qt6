@@ -113,7 +113,7 @@ Item {
                         // Scan / Add button（对齐上游 SSDP scan）
                         Rectangle {
                             width: 72; height: 26; radius: 4
-                            color: scanMA.containsMouse ? "#dbeafe" : Theme.accentSubtle
+                            color: scanMA.containsMouse ? Theme.textPrimary : Theme.accentSubtle
                             border.width: 1; border.color: Theme.accent
                             Text {
                                 anchors.centerIn: parent
@@ -296,10 +296,10 @@ Item {
                                                     height: 18
                                                     radius: 9
                                                     color: {
-                                                        if (devData.status === "printing") return "#1a3328"
-                                                        if (devData.status === "idle")     return "#1a2840"
-                                                        if (devData.status === "offline")  return "#2a2020"
-                                                        if (devData.status === "connecting") return "#2a2a18"
+                                                        if (devData.status === "printing") return Theme.bgCard
+                                                        if (devData.status === "idle")     return Theme.chromePressed
+                                                        if (devData.status === "offline")  return Theme.bgFloating
+                                                        if (devData.status === "connecting") return Theme.bgWarningSubtle
                                                         return Theme.bgElevated
                                                     }
                                                     visible: devData.status !== undefined
@@ -501,7 +501,7 @@ Item {
 
                 // Scan button
                 Rectangle {
-                    width: scanPanelMA.containsMouse ? "#2563eb" : "#3b82f6"
+                    width: scanPanelMA.containsMouse ? Theme.statusInfo : Theme.statusInfo
                     height: 36; radius: 8
                     anchors.horizontalCenter: parent.horizontalCenter
                     Text {
@@ -603,7 +603,7 @@ Item {
 
                 // Retry button
                 Rectangle {
-                    width: retryPanelMA.containsMouse ? "#2563eb" : "#3b82f6"
+                    width: retryPanelMA.containsMouse ? Theme.statusInfo : Theme.statusInfo
                     height: 36; radius: 8
                     anchors.horizontalCenter: parent.horizontalCenter
                     Text {
@@ -690,7 +690,7 @@ Item {
                         // Online/Offline badge
                         Rectangle {
                             width: onlineText.implicitWidth + 16; height: 22; radius: 11
-                            color: root.monitorVm.selectedDeviceOnline ? "#1a3328" : "#2a2020"
+                            color: root.monitorVm.selectedDeviceOnline ? Theme.bgCard : Theme.bgFloating
                             border.width: 1
                             border.color: root.monitorVm.selectedDeviceOnline
                                          ? Theme.statusSuccess : Theme.textDisabled
@@ -1008,9 +1008,9 @@ Item {
                                         }
                                         Rectangle {
                                             width: 56; height: 28; radius: 14
-                                            color: root.monitorVm.selectedDeviceChamberLightOn ? "#22c55e" : "#374151"
+                                            color: root.monitorVm.selectedDeviceChamberLightOn ? Theme.accent : Theme.borderDefault
                                             border.width: 1
-                                            border.color: root.monitorVm.selectedDeviceChamberLightOn ? "#16a34a" : "#4b5563"
+                                            border.color: root.monitorVm.selectedDeviceChamberLightOn ? Theme.accentDark : Theme.borderStrong
 
                                             Rectangle {
                                                 width: 22; height: 22; radius: 11
@@ -1045,9 +1045,9 @@ Item {
                                         }
                                         Rectangle {
                                             width: 56; height: 28; radius: 14
-                                            color: root.monitorVm.selectedDeviceWorkLightOn ? "#22c55e" : "#374151"
+                                            color: root.monitorVm.selectedDeviceWorkLightOn ? Theme.accent : Theme.borderDefault
                                             border.width: 1
-                                            border.color: root.monitorVm.selectedDeviceWorkLightOn ? "#16a34a" : "#4b5563"
+                                            border.color: root.monitorVm.selectedDeviceWorkLightOn ? Theme.accentDark : Theme.borderStrong
 
                                             Rectangle {
                                                 width: 22; height: 22; radius: 11
@@ -1082,9 +1082,9 @@ Item {
                                         }
                                         Rectangle {
                                             width: 56; height: 28; radius: 14
-                                            color: root.monitorVm.selectedDeviceCameraRecording ? "#ef4444" : "#374151"
+                                            color: root.monitorVm.selectedDeviceCameraRecording ? Theme.statusError : Theme.borderDefault
                                             border.width: 1
-                                            border.color: root.monitorVm.selectedDeviceCameraRecording ? "#dc2626" : "#4b5563"
+                                            border.color: root.monitorVm.selectedDeviceCameraRecording ? Theme.chromeDangerHover : Theme.borderStrong
 
                                             // Recording indicator dot
                                             Rectangle {
@@ -1129,9 +1129,9 @@ Item {
                                         }
                                         Rectangle {
                                             width: 56; height: 28; radius: 14
-                                            color: root.monitorVm.selectedDeviceCameraTimelapse ? "#3b82f6" : "#374151"
+                                            color: root.monitorVm.selectedDeviceCameraTimelapse ? Theme.statusInfo : Theme.borderDefault
                                             border.width: 1
-                                            border.color: root.monitorVm.selectedDeviceCameraTimelapse ? "#2563eb" : "#4b5563"
+                                            border.color: root.monitorVm.selectedDeviceCameraTimelapse ? Theme.statusInfo : Theme.borderStrong
 
                                             Rectangle {
                                                 width: 22; height: 22; radius: 11
@@ -1207,7 +1207,7 @@ Item {
                                     // Connect/Disconnect button
                                     Rectangle {
                                         width: 70; height: 26; radius: 4
-                                        color: connectMA.containsMouse ? "#dc2626" : "#ef4444"
+                                        color: connectMA.containsMouse ? Theme.chromeDangerHover : Theme.statusError
                                         visible: root.monitorVm.selectedDeviceOnline && root.monitorVm.selectedDeviceStatus !== "printing"
                                         Text {
                                             anchors.centerIn: parent
@@ -1227,7 +1227,7 @@ Item {
                                     // Start print button
                                     Rectangle {
                                         width: 70; height: 26; radius: 4
-                                        color: startMA.containsMouse ? "#16a34a" : "#22c55e"
+                                        color: startMA.containsMouse ? Theme.accentDark : Theme.accent
                                         visible: root.monitorVm.selectedDeviceOnline && root.monitorVm.selectedDeviceStatus === "idle"
                                         Text {
                                             anchors.centerIn: parent
@@ -1247,7 +1247,7 @@ Item {
                                     // Pause button
                                     Rectangle {
                                         width: 60; height: 26; radius: 4
-                                        color: pauseMA.containsMouse ? "#d97706" : "#f59e0b"
+                                        color: pauseMA.containsMouse ? Theme.statusWarning : Theme.statusWarning
                                         visible: root.monitorVm.selectedDeviceStatus === "printing"
                                         Text {
                                             anchors.centerIn: parent
@@ -1267,7 +1267,7 @@ Item {
                                     // Resume button
                                     Rectangle {
                                         width: 60; height: 26; radius: 4
-                                        color: resumeMA.containsMouse ? "#16a34a" : "#22c55e"
+                                        color: resumeMA.containsMouse ? Theme.accentDark : Theme.accent
                                         visible: root.monitorVm.selectedDeviceStatus === "paused"
                                         Text {
                                             anchors.centerIn: parent
@@ -1287,7 +1287,7 @@ Item {
                                     // Stop button
                                     Rectangle {
                                         width: 60; height: 26; radius: 4
-                                        color: stopMA.containsMouse ? "#dc2626" : "#ef4444"
+                                        color: stopMA.containsMouse ? Theme.chromeDangerHover : Theme.statusError
                                         visible: root.monitorVm.selectedDeviceStatus === "printing" || root.monitorVm.selectedDeviceStatus === "paused"
                                         Text {
                                             anchors.centerIn: parent
@@ -1307,7 +1307,7 @@ Item {
                                     // Connect offline device button
                                     Rectangle {
                                         width: 70; height: 26; radius: 4
-                                        color: connOnMA.containsMouse ? "#2563eb" : "#3b82f6"
+                                        color: connOnMA.containsMouse ? Theme.statusInfo : Theme.statusInfo
                                         visible: !root.monitorVm.selectedDeviceOnline && root.monitorVm.selectedDeviceStatus === "offline"
                                         Text {
                                             anchors.centerIn: parent
@@ -1618,8 +1618,8 @@ Item {
                                 spacing: 8
                                 Text { text: qsTr("已用"); color: Theme.textTertiary; font.pixelSize: 10 }
                                 Rectangle {
-                                    Layout.fillWidth: true; height: 8; radius: 4; color: "#2a3040"
-                                    Rectangle { width: parent.width * 0.35; height: parent.height; radius: 4; color: "#22c55e" }
+                                    Layout.fillWidth: true; height: 8; radius: 4; color: Theme.switchTrackOff
+                                    Rectangle { width: parent.width * 0.35; height: parent.height; radius: 4; color: Theme.accent }
                                 }
                                 Text { text: "1.8 / 5.2 GB"; color: Theme.textSecondary; font.pixelSize: 10 }
                             }
@@ -1689,7 +1689,7 @@ Item {
                             }
                             Rectangle {
                                 Layout.preferredWidth: 80; height: 28; radius: 6
-                                color: deleteMA.containsMouse ? "#7d2020" : Theme.bgElevated
+                                color: deleteMA.containsMouse ? Theme.statusErrorPressed : Theme.bgElevated
                                 border.width: 1; border.color: Theme.borderSubtle
                                 Text { anchors.centerIn: parent; text: qsTr("删除"); color: deleteMA.containsMouse ? "#ffaaaa" : Theme.textSecondary; font.pixelSize: 11 }
                                 MouseArea { id: deleteMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor }
@@ -1725,8 +1725,8 @@ Item {
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true
                                         radius: Theme.radiusMD
-                                        color: "#0a0e14"
-                                        border.width: 1; border.color: "#1e2836"
+                                        color: Theme.bgBase
+                                        border.width: 1; border.color: Theme.bgCard
                                         clip: true
 
                                         // ── v2.6 CAM-03: 实时 RTSP 视频帧 ──
@@ -1805,7 +1805,7 @@ Item {
                                             // Error message
                                             Text {
                                                 text: root.monitorVm.cameraErrorMessage
-                                                color: "#ef4444"
+                                                color: Theme.statusError
                                                 font.pixelSize: Theme.fontSizeSM
                                                 horizontalAlignment: Text.AlignHCenter
                                                 visible: root.monitorVm.cameraErrorMessage !== ""
@@ -1877,8 +1877,8 @@ Item {
                                         Rectangle {
                                             width: 70; height: 28; radius: 4
                                             color: streamMA.containsMouse
-                                                    ? (root.monitorVm.cameraStreamStatus <= 1 ? "#dc2626" : "#6b7280")
-                                                    : (root.monitorVm.cameraStreamStatus <= 1 ? "#ef4444" : "#4b5563")
+                                                    ? (root.monitorVm.cameraStreamStatus <= 1 ? Theme.chromeDangerHover : Theme.borderActive)
+                                                    : (root.monitorVm.cameraStreamStatus <= 1 ? Theme.statusError : Theme.borderStrong)
                                             Text {
                                                 anchors.centerIn: parent
                                                 text: root.monitorVm.cameraStreamStatus <= 1
@@ -1904,8 +1904,8 @@ Item {
                                         Rectangle {
                                             width: 70; height: 28; radius: 4
                                             color: recMA.containsMouse
-                                                    ? (root.monitorVm.cameraRecordingStatus >= 3 ? "#dc2626" : "#16a34a")
-                                                    : (root.monitorVm.cameraRecordingStatus >= 3 ? "#ef4444" : "#22c55e")
+                                                    ? (root.monitorVm.cameraRecordingStatus >= 3 ? Theme.chromeDangerHover : Theme.accentDark)
+                                                    : (root.monitorVm.cameraRecordingStatus >= 3 ? Theme.statusError : Theme.accent)
                                             visible: root.monitorVm.cameraStreamStatus === 3
                                             Text {
                                                 anchors.centerIn: parent
@@ -1927,8 +1927,8 @@ Item {
                                         Rectangle {
                                             width: 80; height: 28; radius: 4
                                             color: tlMA.containsMouse
-                                                    ? (root.monitorVm.cameraTimelapseStatus >= 3 ? "#d97706" : "#2563eb")
-                                                    : (root.monitorVm.cameraTimelapseStatus >= 3 ? "#f59e0b" : "#3b82f6")
+                                                    ? (root.monitorVm.cameraTimelapseStatus >= 3 ? Theme.statusWarning : Theme.statusInfo)
+                                                    : (root.monitorVm.cameraTimelapseStatus >= 3 ? Theme.statusWarning : Theme.statusInfo)
                                             visible: root.monitorVm.cameraStreamStatus === 3
                                             Text {
                                                 anchors.centerIn: parent
@@ -1951,7 +1951,7 @@ Item {
                                         // Switch camera
                                         Rectangle {
                                             width: 60; height: 28; radius: 4
-                                            color: switchMA.containsMouse ? "#374151" : "#1f2937"
+                                            color: switchMA.containsMouse ? Theme.borderDefault : Theme.bgCard
                                             visible: root.monitorVm.cameraStreamStatus === 3
                                             Text {
                                                 anchors.centerIn: parent
@@ -1971,7 +1971,7 @@ Item {
                                         // Screenshot
                                         Rectangle {
                                             width: 50; height: 28; radius: 4
-                                            color: shotMA.containsMouse ? "#374151" : "#1f2937"
+                                            color: shotMA.containsMouse ? Theme.borderDefault : Theme.bgCard
                                             visible: root.monitorVm.cameraStreamStatus === 3
                                             Text {
                                                 anchors.centerIn: parent
@@ -2005,10 +2005,10 @@ Item {
                                                 Rectangle {
                                                     width: 52; height: 22; radius: 4
                                                     color: index === root.monitorVm.cameraResolution
-                                                           ? Theme.accent : "#1f2937"
+                                                           ? Theme.accent : Theme.bgCard
                                                     border.width: 1
                                                     border.color: index === root.monitorVm.cameraResolution
-                                                                ? Theme.accent : "#374151"
+                                                                ? Theme.accent : Theme.borderDefault
                                                     Text {
                                                         anchors.centerIn: parent
                                                         text: modelData
@@ -2062,7 +2062,7 @@ Item {
                                 text: root.monitorVm.selectedUnreadHmsCount > 0
                                       ? qsTr("%1 条未读").arg(root.monitorVm.selectedUnreadHmsCount)
                                       : qsTr("暂无告警")
-                                color: root.monitorVm.selectedUnreadHmsCount > 0 ? "#f59e0b" : Theme.textTertiary
+                                color: root.monitorVm.selectedUnreadHmsCount > 0 ? Theme.statusWarning : Theme.textTertiary
                                 font.pixelSize: Theme.fontSizeSM
                             }
                         }
@@ -2095,13 +2095,13 @@ Item {
                                         width: parent.width - 4
                                         height: 64
                                         radius: Theme.radiusLG
-                                        color: hmsData.alreadyRead ? Theme.bgElevated : "#1a1e25"
+                                        color: hmsData.alreadyRead ? Theme.bgElevated : Theme.bgPanel
                                         border.width: 1
                                         border.color: {
-                                            if (hmsData.msgLevel === 1) return "#ef4444"
-                                            if (hmsData.msgLevel === 2) return "#f97316"
-                                            if (hmsData.msgLevel === 3) return "#f59e0b"
-                                            return "#22c55e"
+                                            if (hmsData.msgLevel === 1) return Theme.statusError
+                                            if (hmsData.msgLevel === 2) return Theme.statusWarning
+                                            if (hmsData.msgLevel === 3) return Theme.statusWarning
+                                            return Theme.accent
                                         }
                                         opacity: hmsData.alreadyRead ? 0.3 : 1.0
 
@@ -2117,10 +2117,10 @@ Item {
                                             Rectangle {
                                                 width: 32; height: 32; radius: Theme.radiusMD
                                                 color: {
-                                                    if (hmsData.msgLevel === 1) return "#2a1418"
-                                                    if (hmsData.msgLevel === 2) return "#2a1e10"
-                                                    if (hmsData.msgLevel === 3) return "#2a2510"
-                                                    return "#1a2218"
+                                                    if (hmsData.msgLevel === 1) return Theme.bgPanel
+                                                    if (hmsData.msgLevel === 2) return Theme.bgPanel
+                                                    if (hmsData.msgLevel === 3) return Theme.bgWarningSubtle
+                                                    return Theme.bgPanel
                                                 }
                                                 Text {
                                                     anchors.centerIn: parent
@@ -2132,10 +2132,10 @@ Item {
                                                     }
                                                     font.pixelSize: 16
                                                     color: {
-                                                        if (hmsData.msgLevel === 1) return "#ef4444"
-                                                        if (hmsData.msgLevel === 2) return "#f97316"
-                                                        if (hmsData.msgLevel === 3) return "#f59e0b"
-                                                        return "#22c55e"
+                                                        if (hmsData.msgLevel === 1) return Theme.statusError
+                                                        if (hmsData.msgLevel === 2) return Theme.statusWarning
+                                                        if (hmsData.msgLevel === 3) return Theme.statusWarning
+                                                        return Theme.accent
                                                     }
                                                 }
                                             }
@@ -2150,10 +2150,10 @@ Item {
                                                     Rectangle {
                                                         width: levelBadge.implicitWidth + 10; height: 16; radius: 8
                                                         color: {
-                                                            if (hmsData.msgLevel === 1) return "#2a1418"
-                                                            if (hmsData.msgLevel === 2) return "#2a1e10"
-                                                            if (hmsData.msgLevel === 3) return "#2a2510"
-                                                            return "#1a2218"
+                                                            if (hmsData.msgLevel === 1) return Theme.bgPanel
+                                                            if (hmsData.msgLevel === 2) return Theme.bgPanel
+                                                            if (hmsData.msgLevel === 3) return Theme.bgWarningSubtle
+                                                            return Theme.bgPanel
                                                         }
                                                         Text {
                                                             id: levelBadge
@@ -2165,10 +2165,10 @@ Item {
                                                                 return qsTr("信息")
                                                             }
                                                             color: {
-                                                                if (hmsData.msgLevel === 1) return "#ef4444"
-                                                                if (hmsData.msgLevel === 2) return "#f97316"
-                                                                if (hmsData.msgLevel === 3) return "#f59e0b"
-                                                                return "#22c55e"
+                                                                if (hmsData.msgLevel === 1) return Theme.statusError
+                                                                if (hmsData.msgLevel === 2) return Theme.statusWarning
+                                                                if (hmsData.msgLevel === 3) return Theme.statusWarning
+                                                                return Theme.accent
                                                             }
                                                             font.pixelSize: Theme.fontSizeXS
                                                             font.bold: true

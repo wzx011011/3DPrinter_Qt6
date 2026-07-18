@@ -59,18 +59,18 @@ CxDialog {
                 Layout.alignment: Qt.AlignHCenter
                 text: "⚙"
                 font.pixelSize: 36
-                color: "#3a4250"
+                color: Theme.borderDefault
             }
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: qsTr("暂无校准历史记录")
-                color: "#6b7a8d"
+                color: Theme.borderActive
                 font.pixelSize: 12
             }
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: qsTr("完成校准后会在此显示记录")
-                color: "#4a5568"
+                color: Theme.scrollBarHoverColor
                 font.pixelSize: 10
             }
 
@@ -95,8 +95,8 @@ CxDialog {
                 width: historyListView.width
                 height: 68
                 radius: 6
-                color: delegateHov.containsMouse ? "#1e2535" : "#151a24"
-                border.color: "#2e3848"
+                color: delegateHov.containsMouse ? Theme.bgCard : Theme.bgPanel
+                border.color: Theme.borderInput
                 border.width: 1
 
                 RowLayout {
@@ -108,12 +108,12 @@ CxDialog {
                     // Type icon
                     Rectangle {
                         width: 36; height: 36; radius: 6
-                        color: "#252d3a"
+                        color: Theme.chromePressed
                         Text {
                             anchors.centerIn: parent
                             text: "⚙"
                             font.pixelSize: 16
-                            color: "#7a8fa3"
+                            color: Theme.textTertiary
                         }
                     }
 
@@ -124,7 +124,7 @@ CxDialog {
 
                         Text {
                             text: modelData.name
-                            color: "#e2e8f5"
+                            color: Theme.textPrimary
                             font.pixelSize: 12
                             font.bold: true
                         }
@@ -133,17 +133,17 @@ CxDialog {
                             spacing: 12
                             Text {
                                 text: qsTr("K值: %1").arg(modelData.kValue.toFixed(3))
-                                color: "#7a8fa3"
+                                color: Theme.textTertiary
                                 font.pixelSize: 10
                             }
                             Text {
                                 text: qsTr("喷嘴: %1mm").arg(modelData.nozzleDiameter.toFixed(2))
-                                color: "#7a8fa3"
+                                color: Theme.textTertiary
                                 font.pixelSize: 10
                             }
                             Text {
                                 text: modelData.filamentId
-                                color: "#6b7a8d"
+                                color: Theme.borderActive
                                 font.pixelSize: 9
                             }
                         }
@@ -160,7 +160,7 @@ CxDialog {
                                     return ts
                                 }
                             }
-                            color: "#4a5568"
+                            color: Theme.scrollBarHoverColor
                             font.pixelSize: 9
                         }
                     }
@@ -168,8 +168,8 @@ CxDialog {
                     // Action buttons
                     Rectangle {
                         width: 28; height: 28; radius: 4
-                        color: exportHov.containsMouse ? "#2a3a4a" : "transparent"
-                        Text { anchors.centerIn: parent; text: "⤓"; color: "#7a8fa3"; font.pixelSize: 12 }
+                        color: exportHov.containsMouse ? Theme.borderInput : "transparent"
+                        Text { anchors.centerIn: parent; text: "⤓"; color: Theme.textTertiary; font.pixelSize: 12 }
                         MouseArea { id: exportHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: {} }
                     }
                 }
@@ -180,7 +180,7 @@ CxDialog {
 
         // Footer with clear button
         Rectangle {
-            Layout.fillWidth: true; height: 1; color: "#1e2535"
+            Layout.fillWidth: true; height: 1; color: Theme.bgCard
             visible: root._historyItems.length > 0
         }
 
@@ -190,7 +190,7 @@ CxDialog {
 
             Text {
                 text: qsTr("共 %1 条记录").arg(root._historyItems.length)
-                color: "#6b7a8d"
+                color: Theme.borderActive
                 font.pixelSize: 10
             }
 
@@ -198,8 +198,8 @@ CxDialog {
 
             Rectangle {
                 width: 72; height: 28; radius: 4
-                color: clearHov.containsMouse ? "#5e1818" : "#3a1010"
-                border.color: "#6b2020"
+                color: clearHov.containsMouse ? Theme.bgErrorSubtle : Theme.bgErrorSubtle
+                border.color: Theme.statusErrorPressed
                 Text { anchors.centerIn: parent; text: qsTr("清空"); color: "#ff9090"; font.pixelSize: 11 }
                 MouseArea {
                     id: clearHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor

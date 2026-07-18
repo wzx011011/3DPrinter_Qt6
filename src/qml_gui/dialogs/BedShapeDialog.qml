@@ -255,7 +255,7 @@ CxDialog {
                 var drawH = h - pad * 2
 
                 // Grid background
-                ctx.strokeStyle = "#1e2530"
+                ctx.strokeStyle = Theme.scrollBarTrackColor
                 ctx.lineWidth = 0.5
                 for (var gx = pad; gx <= pad + drawW; gx += 15) {
                     ctx.beginPath()
@@ -273,7 +273,7 @@ CxDialog {
                 // Origin crosshair
                 var ox = pad + drawW / 2
                 var oy = pad + drawH / 2
-                ctx.strokeStyle = "#3a4a5a"
+                ctx.strokeStyle = Theme.bgPressed
                 ctx.lineWidth = 0.5
                 ctx.beginPath()
                 ctx.moveTo(ox, pad)
@@ -283,7 +283,7 @@ CxDialog {
                 ctx.stroke()
 
                 // Bed shape outline
-                ctx.strokeStyle = "#18c75e"
+                ctx.strokeStyle = Theme.accent
                 ctx.lineWidth = 2
                 ctx.fillStyle = "rgba(24, 199, 94, 0.08)"
 
@@ -311,7 +311,7 @@ CxDialog {
                     ctx.stroke()
 
                     // Dimension labels
-                    ctx.fillStyle = "#7a8fa3"
+                    ctx.fillStyle = Theme.textTertiary
                     ctx.font = "9px sans-serif"
                     ctx.textAlign = "center"
                     ctx.fillText(bedW.toFixed(0) + "mm", ox, ry - 4)
@@ -323,7 +323,7 @@ CxDialog {
                 } else {
                     // Custom placeholder
                     ctx.setLineDash([4, 3])
-                    ctx.strokeStyle = "#566070"
+                    ctx.strokeStyle = Theme.textDisabled
                     ctx.fillStyle = "rgba(86, 96, 112, 0.06)"
                     ctx.beginPath()
                     ctx.roundRect(pad + 10, pad + 10, drawW - 20, drawH - 20, 4)
@@ -331,7 +331,7 @@ CxDialog {
                     ctx.stroke()
                     ctx.setLineDash([])
 
-                    ctx.fillStyle = "#566070"
+                    ctx.fillStyle = Theme.textDisabled
                     ctx.font = "11px sans-serif"
                     ctx.textAlign = "center"
                     ctx.fillText(qsTr("从 STL 导入"), ox, oy)
@@ -343,7 +343,7 @@ CxDialog {
     footer: Rectangle {
         width: parent.width
         height: 48
-        color: "#141920"
+        color: Theme.bgSurface
         radius: 8
         Rectangle {
             anchors.top: parent.top

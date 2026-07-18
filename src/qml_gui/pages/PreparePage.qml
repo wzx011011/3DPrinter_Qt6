@@ -572,7 +572,7 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true; height: 28; radius: 4
                     color: Theme.accent
-                    Label { anchors.centerIn: parent; text: qsTr("确认"); color: "#fff"; font.pixelSize: Theme.fontSizeSM }
+                    Label { anchors.centerIn: parent; text: qsTr("确认"); color: Theme.accentDark; font.pixelSize: Theme.fontSizeSM }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             if (root.editorVm && renameDialog.currentObjIndex >= 0) {
@@ -835,7 +835,7 @@ Item {
             width: 420
 
             // 挤出机颜色数组（对齐上游 DragCanvas extruder colors）
-            property var extruderColors: ["#FF4444", "#44AA44", "#4444FF", "#FF8800"]
+            property var extruderColors: [Theme.statusError, Theme.accentDark, "#4444FF", Theme.statusWarning]
 
             ColumnLayout {
                 anchors.fill: parent
@@ -1233,7 +1233,7 @@ Item {
                                             // 删除按钮
                                             Rectangle {
                                                 width: 20; height: 20; radius: 4
-                                                color: removeBtnMA.containsMouse ? "#FF4444" : Theme.bgSurface
+                                                color: removeBtnMA.containsMouse ? Theme.statusError : Theme.bgSurface
                                                 border.color: Theme.borderSubtle
                                                 Text { anchors.centerIn: parent; text: "✕"; color: removeBtnMA.containsMouse ? "white" : Theme.textDisabled; font.pixelSize: 10 }
                                                 TapHandler { id: removeBtnMA; onTapped: {
@@ -1973,7 +1973,7 @@ Item {
                 }
                 TransformMetric {
                     axisName: "Y"
-                    accentColor: "#4ec9b0"
+                    accentColor: Theme.textTertiary
                     valueText: viewport3d.gizmoMode === GLViewport.GizmoMove
                                ? root.editorVm.objectPosY.toFixed(1)
                                : viewport3d.gizmoMode === GLViewport.GizmoRotate
@@ -1982,7 +1982,7 @@ Item {
                 }
                 TransformMetric {
                     axisName: "Z"
-                    accentColor: "#569cd6"
+                    accentColor: Theme.statusInfo
                     valueText: viewport3d.gizmoMode === GLViewport.GizmoMove
                                ? root.editorVm.objectPosZ.toFixed(1)
                                : viewport3d.gizmoMode === GLViewport.GizmoRotate
@@ -2047,13 +2047,13 @@ Item {
                             required property var modelData
                             required property int index
                             width: 72; height: 24; radius: 4
-                            color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? "#1c2a3e" : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? "#569cd6" : Theme.bgHover
+                            color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? Theme.statusInfo : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? "#569cd6" : Theme.textTertiary
+                                color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? Theme.statusInfo : Theme.textTertiary
                                 font.pixelSize: 10
                             }
                             MouseArea {
@@ -2095,13 +2095,13 @@ Item {
                         delegate: Rectangle {
                             required property var modelData
                             width: 56; height: 22; radius: 4
-                            color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? "#1c2a3e" : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? "#569cd6" : Theme.bgHover
+                            color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.statusInfo : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData.label
-                                color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? "#569cd6" : Theme.textTertiary
+                                color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.statusInfo : Theme.textTertiary
                                 font.pixelSize: 10
                             }
                             MouseArea {
@@ -2161,13 +2161,13 @@ Item {
                             required property var modelData
                             required property int index
                             width: 60; height: 22; radius: 4
-                            color: root.editorVm && root.editorVm.measureSelectionMode === index ? "#1c2a3e" : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.measureSelectionMode === index ? "#569cd6" : Theme.bgHover
+                            color: root.editorVm && root.editorVm.measureSelectionMode === index ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.measureSelectionMode === index ? Theme.statusInfo : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: root.editorVm && root.editorVm.measureSelectionMode === index ? "#569cd6" : Theme.textTertiary
+                                color: root.editorVm && root.editorVm.measureSelectionMode === index ? Theme.statusInfo : Theme.textTertiary
                                 font.pixelSize: 10
                             }
                             MouseArea {
@@ -2183,9 +2183,9 @@ Item {
                     spacing: 16
                     Label { text: qsTr("X:"); color: "#e066a0"; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace" }
                     Label { text: root.editorVm ? root.editorVm.measureDimensions.x.toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace" }
-                    Label { text: qsTr("Y:"); color: "#4ec9b0"; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace" }
+                    Label { text: qsTr("Y:"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace" }
                     Label { text: root.editorVm ? root.editorVm.measureDimensions.y.toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace" }
-                    Label { text: qsTr("Z:"); color: "#569cd6"; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace" }
+                    Label { text: qsTr("Z:"); color: Theme.statusInfo; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace" }
                     Label { text: root.editorVm ? root.editorVm.measureDimensions.z.toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace" }
                 }
                 Label {
@@ -2370,7 +2370,7 @@ Item {
                             required property var modelData
                             required property int index
                             width: 58; height: 26; radius: 4
-                            color: root.editorVm && root.editorVm.cutAxis === index ? "#1c2a3e" : Theme.bgPanel
+                            color: root.editorVm && root.editorVm.cutAxis === index ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.cutAxis === index ? Theme.accent : Theme.bgHover
                             border.width: 1
                             Text {
@@ -2398,13 +2398,13 @@ Item {
                             required property var modelData
                             required property int index
                             width: 70; height: 24; radius: 4
-                            color: root.editorVm && root.editorVm.cutMode === index ? "#1c2a3e" : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.cutMode === index ? "#5b8def" : Theme.bgHover
+                            color: root.editorVm && root.editorVm.cutMode === index ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.cutMode === index ? Theme.statusInfo : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: root.editorVm && root.editorVm.cutMode === index ? "#5b8def" : Theme.textTertiary
+                                color: root.editorVm && root.editorVm.cutMode === index ? Theme.statusInfo : Theme.textTertiary
                                 font.pixelSize: 10
                             }
                             MouseArea {
@@ -2428,13 +2428,13 @@ Item {
                             required property var modelData
                             required property int index
                             width: 52; height: 22; radius: 4
-                            color: root.editorVm && root.editorVm.connectorType === index ? "#1c2a3e" : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.connectorType === index ? "#e8a838" : Theme.bgHover
+                            color: root.editorVm && root.editorVm.connectorType === index ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.connectorType === index ? Theme.statusWarning : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: root.editorVm && root.editorVm.connectorType === index ? "#e8a838" : Theme.textTertiary
+                                color: root.editorVm && root.editorVm.connectorType === index ? Theme.statusWarning : Theme.textTertiary
                                 font.pixelSize: 9
                             }
                             MouseArea {
@@ -2460,13 +2460,13 @@ Item {
                             required property var modelData
                             required property int index
                             width: 56; height: 22; radius: 4
-                            color: root.editorVm && root.editorVm.connectorStyle === index ? "#1c2a3e" : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.connectorStyle === index ? "#e8a838" : Theme.bgHover
+                            color: root.editorVm && root.editorVm.connectorStyle === index ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.connectorStyle === index ? Theme.statusWarning : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: root.editorVm && root.editorVm.connectorStyle === index ? "#e8a838" : Theme.textTertiary
+                                color: root.editorVm && root.editorVm.connectorStyle === index ? Theme.statusWarning : Theme.textTertiary
                                 font.pixelSize: 9
                             }
                             MouseArea {
@@ -2493,13 +2493,13 @@ Item {
                             required property var modelData
                             required property int index
                             width: 28; height: 22; radius: 4
-                            color: root.editorVm && root.editorVm.connectorShape === index ? "#1c2a3e" : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.connectorShape === index ? "#e8a838" : Theme.bgHover
+                            color: root.editorVm && root.editorVm.connectorShape === index ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.connectorShape === index ? Theme.statusWarning : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: root.editorVm && root.editorVm.connectorShape === index ? "#e8a838" : Theme.textTertiary
+                                color: root.editorVm && root.editorVm.connectorShape === index ? Theme.statusWarning : Theme.textTertiary
                                 font.pixelSize: Theme.fontSizeSM
                             }
                             MouseArea {
@@ -2577,7 +2577,7 @@ Item {
                             required property var modelData
                             required property int index
                             width: 70; height: 26; radius: 4
-                            color: root.editorVm && root.editorVm.cutKeepMode === index ? "#1c2a3e" : Theme.bgPanel
+                            color: root.editorVm && root.editorVm.cutKeepMode === index ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.cutKeepMode === index ? Theme.accent : Theme.bgHover
                             border.width: 1
                             Text {
@@ -2694,13 +2694,13 @@ Item {
                             required property var modelData
                             required property int index
                             width: 72; height: 24; radius: 4
-                            color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? "#1c2a3e" : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? "#569cd6" : Theme.bgHover
+                            color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? Theme.statusInfo : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
-                                color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? "#569cd6" : Theme.textTertiary
+                                color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? Theme.statusInfo : Theme.textTertiary
                                 font.pixelSize: 10
                             }
                             MouseArea {
@@ -3171,11 +3171,11 @@ Item {
                         Rectangle {
                             width: 28; height: 28; radius: 4
                             color: {
-                                var colors = ["#3B82F6", "#EF4444", "#22C55E", Theme.statusWarning,
-                                             "#8B5CF6", "#EC4899", "#06B6D4", "#F97316",
-                                             "#6366F1", "#14B8A6", "#F43F5E", "#84CC16", "#D946EF",
-                                             "#0EA5E9", "#A855F7", "#FBBF24", "#10B981"];
-                                var c = index < colors.length ? colors[index] : "#888888";
+                                var colors = [Theme.statusInfo, Theme.statusError, Theme.accent, Theme.statusWarning,
+                                             "#8B5CF6", "#EC4899", Theme.statusInfo, Theme.statusWarning,
+                                             Theme.statusInfo, Theme.accentLight, Theme.statusError, "#84CC16", "#D946EF",
+                                             Theme.statusInfo, "#A855F7", Theme.statusWarning, Theme.accentLight];
+                                var c = index < colors.length ? colors[index] : Theme.textMuted;
                                 root.editorVm && root.editorVm.mmuSelectedExtruder === index ? c : c + "66"
                             }
                             border.width: root.editorVm && root.editorVm.mmuSelectedExtruder === index ? 2 : 0
@@ -3896,15 +3896,15 @@ Item {
                     height: 14
                     radius: 7
                     color: objectInfoBar.hasErrors
-                           ? (root.editorVm.selectedObjectOpenEdges > 0 ? "#c0392b" : "#e67e22")
-                           : "#27ae60"
+                           ? (root.editorVm.selectedObjectOpenEdges > 0 ? Theme.statusErrorDark : Theme.statusWarning)
+                           : Theme.accentDark
 
                     Label {
                         anchors.centerIn: parent
                         text: objectInfoBar.hasErrors
                               ? (root.editorVm.selectedObjectOpenEdges > 0 ? "!" : "~")
                               : "OK"
-                        color: "#ffffff"
+                        color: Theme.textOnAccent
                         font.pixelSize: 7
                         font.bold: true
                     }
@@ -3922,7 +3922,7 @@ Item {
                     visible: root.editorVm && root.editorVm.selectedObjectOpenEdges > 0
                     anchors.verticalCenter: parent.verticalCenter
                     text: qsTr(" | %1 non-manifold edges").arg(root.editorVm.selectedObjectOpenEdges)
-                    color: "#c0392b"
+                    color: Theme.statusErrorDark
                     font.pixelSize: Theme.fontSizeSM
                 }
 
@@ -3931,7 +3931,7 @@ Item {
                     visible: root.editorVm && root.editorVm.selectedObjectRepairedErrors > 0
                     anchors.verticalCenter: parent.verticalCenter
                     text: qsTr(" | %1 errors repaired").arg(root.editorVm.selectedObjectRepairedErrors)
-                    color: "#e67e22"
+                    color: Theme.statusWarning
                     font.pixelSize: Theme.fontSizeSM
                 }
             }

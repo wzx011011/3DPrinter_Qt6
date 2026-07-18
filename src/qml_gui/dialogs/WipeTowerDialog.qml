@@ -30,7 +30,7 @@ CxDialog {
     ]
 
     property var extruderNames: [qsTr("耗材1"), qsTr("耗材2"), qsTr("耗材3"), qsTr("耗材4")]
-    property var extruderColors: ["#3B82F6", "#EF4444", "#22C55E", "#F59E0B"]
+    property var extruderColors: [Theme.statusInfo, Theme.statusError, Theme.accent, Theme.statusWarning]
 
     // Ramming settings
     property real rammingVolume: 10.0
@@ -142,8 +142,8 @@ CxDialog {
             Layout.fillWidth: true
             implicitHeight: flushGrid.implicitHeight + 12
             radius: 4
-            color: "#161b24"
-            border.color: "#2e3848"
+            color: Theme.bgPanel
+            border.color: Theme.borderInput
             border.width: 1
 
             Grid {
@@ -269,7 +269,7 @@ CxDialog {
     footer: Rectangle {
         width: parent.width
         height: 48
-        color: "#141920"
+        color: Theme.bgSurface
         radius: 8
         Rectangle {
             anchors.top: parent.top

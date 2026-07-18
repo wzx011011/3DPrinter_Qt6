@@ -566,6 +566,10 @@ private slots:
   // Qt.darker/lighter, no font size below the XS floor, CxButton has press-scale
   // + toolTipText + focus border.
   void v52ControlLibraryHardened();
+  // Phase 162 (TK-01): color hardcode sweep gate. Locks the app-wide migration
+  // of hardcoded hex literals to Theme tokens (PreferencesPage was the worst
+  // offender with 129 hex literals; LeftSidebar private palette migrated).
+  void v52ColorHardcodeSwept();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -2631,10 +2635,15 @@ void QmlUiAuditTests::prepareLeftSidebarMatchesPixelRestorationContract()
            "Default screenshot sidebar must not mount ObjectList in the left parameter column");
   QVERIFY2(!leftSidebar.contains(QStringLiteral("SliceProgress {")),
            "Default screenshot sidebar must not mount SliceProgress in the left parameter column");
-  QVERIFY2(leftSidebar.contains(QStringLiteral("#303236"))
-               || leftSidebar.contains(QStringLiteral("#313337"))
-               || leftSidebar.contains(QStringLiteral("#323438")),
-           "Prepare left sidebar palette must move toward the screenshot gray panel surface");
+  // Phase 162 (TK-01): the sidebar palette was previously checked via specific
+  // hex literals (#303236/#313337/#323438 — the screenshot gray panel surface).
+  // The v5.2 color sweep migrated those to Theme tokens (bgElevated/bgHover/
+  // borderDefault). The new contract: the sidebar sources its panel surface
+  // from Theme tokens, not from hardcoded hex literals.
+  QVERIFY2(leftSidebar.contains(QStringLiteral("Theme.bgElevated"))
+               || leftSidebar.contains(QStringLiteral("Theme.bgHover"))
+               || leftSidebar.contains(QStringLiteral("Theme.borderDefault")),
+           "Prepare left sidebar palette must source its surface from Theme tokens (Phase 162 sweep migrated the #30-32 hex literals)");
 }
 
 void QmlUiAuditTests::prepareFullVisualParityContract()
@@ -7308,6 +7317,41 @@ void QmlUiAuditTests::v52ControlLibraryHardened()
            "DS-03: CxSpinBox must use Theme.fontSize* tokens for typography");
   QVERIFY2(cxPillAction.contains(QStringLiteral("Theme.fontSize")),
            "DS-03: CxPillAction must use Theme.fontSize* tokens for typography");
+}
+
+// Phase 162 (TK-01): color hardcode sweep gate.
+// Locks the app-wide migration of hardcoded hex literals to Theme tokens.
+// Phase 162 swept 695 literals across 37 files; this slot anchors the
+// worst-offender files now use Theme tokens instead of raw hex.
+void QmlUiAuditTests::v52ColorHardcodeSwept()
+{
+  const QString prefsPage = readSource(QStringLiteral("src/qml_gui/pages/PreferencesPage.qml"));
+  const QString leftSidebar = readSource(QStringLiteral("src/qml_gui/panels/LeftSidebar.qml"));
+  const QString presetDiff = readSource(QStringLiteral("src/qml_gui/dialogs/PresetDiffDialog.qml"));
+
+  QVERIFY2(!prefsPage.isEmpty(), "Unable to read PreferencesPage.qml");
+  QVERIFY2(!leftSidebar.isEmpty(), "Unable to read LeftSidebar.qml");
+  QVERIFY2(!presetDiff.isEmpty(), "Unable to read PresetDiffDialog.qml");
+
+  // (1) PreferencesPage was the worst offender (0 Theme refs + 129 hex literals
+  //     per Pages-UI-REVIEW). It must now source colors from Theme tokens.
+  QVERIFY2(prefsPage.contains(QStringLiteral("Theme.")),
+           "TK-01: PreferencesPage must reference Theme tokens (was 0 refs + 129 hex literals pre-sweep)");
+
+  // (2) LeftSidebar's private palette (6 colors at lines 17-22 per Panels-UI-REVIEW)
+  //     must now route through Theme tokens (panelSurface/sectionSurface/etc.
+  //     are bound to Theme.* values).
+  QVERIFY2(leftSidebar.contains(QStringLiteral("Theme.bgElevated")),
+           "TK-01: LeftSidebar panelSurface must route through Theme.bgElevated (was private palette)");
+  QVERIFY2(leftSidebar.contains(QStringLiteral("Theme.textSecondary")),
+           "TK-01: LeftSidebar mutedText must route through Theme.textSecondary (was private palette)");
+
+  // (3) PresetDiffDialog status badges (PreparePage-UI-REVIEW CL2:
+  //     #1f8a4c/#b03a3a/#c98a1a) must now use Theme.statusSuccess/Error/Warning.
+  QVERIFY2(presetDiff.contains(QStringLiteral("Theme.statusSuccess"))
+               || presetDiff.contains(QStringLiteral("Theme.statusError"))
+               || presetDiff.contains(QStringLiteral("Theme.statusWarning")),
+           "TK-01: PresetDiffDialog status badges must use Theme.status* tokens (was hardcoded #1f8a4c/#b03a3a/#c98a1a)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

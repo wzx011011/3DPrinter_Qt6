@@ -20,7 +20,7 @@ CxDialog {
     height: 440
 
     // Mock filament data (aligns with upstream AMS slot model)
-    readonly property var slotColors: ["#3B82F6", "#EF4444", "#22C55E", "#F59E0B"]
+    readonly property var slotColors: [Theme.statusInfo, Theme.statusError, Theme.accent, Theme.statusWarning]
     readonly property var slotNames: [qsTr("蓝色 PLA"), qsTr("红色 ABS"), qsTr("绿色 PETG"), qsTr("黄色 TPU")]
     readonly property var slotMaterials: ["PLA", "ABS", "PETG", "TPU"]
     readonly property var slotAutoSwap: [true, false, true, false]
@@ -76,8 +76,8 @@ CxDialog {
                         Layout.fillWidth: true
                         implicitHeight: slotCol.implicitHeight + 16
                         radius: 6
-                        color: "#1e2330"
-                        border.color: "#2e3848"
+                        color: Theme.scrollBarTrackColor
+                        border.color: Theme.borderInput
                         border.width: 1
 
                         ColumnLayout {
@@ -98,7 +98,7 @@ CxDialog {
                                     height: 16
                                     radius: 8
                                     color: root.slotColors[index]
-                                    border.color: "#3a4050"
+                                    border.color: Theme.borderDefault
                                     border.width: 1
                                 }
 
@@ -175,7 +175,7 @@ CxDialog {
                                             height: 16
                                             radius: 3
                                             color: modelData
-                                            border.color: "#566070"
+                                            border.color: Theme.textDisabled
                                             border.width: 1
 
                                             MouseArea {
@@ -208,8 +208,8 @@ CxDialog {
                 Layout.fillWidth: true
                 implicitHeight: mappingList.contentHeight + 8
                 radius: 4
-                color: "#161b24"
-                border.color: "#2e3848"
+                color: Theme.bgPanel
+                border.color: Theme.borderInput
                 border.width: 1
 
                 ListView {
@@ -226,7 +226,7 @@ CxDialog {
                         width: ListView.view.width
                         height: 26
                         radius: 3
-                        color: index % 2 === 0 ? "#1a2030" : "#161b24"
+                        color: index % 2 === 0 ? Theme.chromeHover : Theme.bgPanel
 
                         RowLayout {
                             anchors.fill: parent
@@ -292,7 +292,7 @@ CxDialog {
                         height: 12
                         radius: 6
                         color: root.slotColors[index]
-                        border.color: "#3a4050"
+                        border.color: Theme.borderDefault
                         border.width: 1
                     }
 
@@ -308,8 +308,8 @@ CxDialog {
                         Layout.fillWidth: true
                         implicitHeight: 10
                         radius: 5
-                        color: "#1e2330"
-                        border.color: "#2e3848"
+                        color: Theme.scrollBarTrackColor
+                        border.color: Theme.borderInput
                         border.width: 1
 
                         Rectangle {
@@ -318,9 +318,9 @@ CxDialog {
                             radius: 5
                             color: {
                                 var pct = root.remainingPct[index]
-                                if (pct <= 20) return "#EF4444"
-                                if (pct <= 50) return "#F59E0B"
-                                return "#18c75e"
+                                if (pct <= 20) return Theme.statusError
+                                if (pct <= 50) return Theme.statusWarning
+                                return Theme.accent
                             }
                         }
                     }
@@ -329,8 +329,8 @@ CxDialog {
                         text: root.remainingPct[index] + "%"
                         color: {
                             var pct = root.remainingPct[index]
-                            if (pct <= 20) return "#EF4444"
-                            if (pct <= 50) return "#F59E0B"
+                            if (pct <= 20) return Theme.statusError
+                            if (pct <= 50) return Theme.statusWarning
                             return Theme.textPrimary
                         }
                         font.pixelSize: 11
@@ -346,7 +346,7 @@ CxDialog {
     footer: Rectangle {
         width: parent.width
         height: 48
-        color: "#141920"
+        color: Theme.bgSurface
         radius: 8
         Rectangle {
             anchors.top: parent.top

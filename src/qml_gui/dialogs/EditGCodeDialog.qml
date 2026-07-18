@@ -140,14 +140,14 @@ CxDialog {
                                     width: 14
                                     height: 14
                                     radius: 2
-                                    color: modelData.isVector ? "#1a3a5c" : "#1a3a2c"
-                                    border.color: modelData.isVector ? "#3b9eff" : Theme.accent
+                                    color: modelData.isVector ? Theme.borderInput : Theme.bgCard
+                                    border.color: modelData.isVector ? Theme.statusInfo : Theme.accent
                                     border.width: 1
 
                                     Text {
                                         anchors.centerIn: parent
                                         text: modelData.isVector ? "[]" : "S"
-                                        color: modelData.isVector ? "#3b9eff" : Theme.accent
+                                        color: modelData.isVector ? Theme.statusInfo : Theme.accent
                                         font.pixelSize: 7
                                         font.bold: true
                                     }
@@ -243,7 +243,7 @@ CxDialog {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                color: "#0d1017"
+                color: Theme.bgBase
                 radius: 4
                 border.color: gcodeEditor.activeFocus ? Theme.borderFocus : Theme.borderSubtle
                 border.width: 1
@@ -263,7 +263,7 @@ CxDialog {
                         font.family: "Consolas, Monaco, 'Courier New', monospace"
                         font.pixelSize: 12
                         color: Theme.textPrimary
-                        selectionColor: "#1a5c3a"
+                        selectionColor: Theme.accentSubtle
                         selectedTextColor: Theme.textPrimary
                         placeholderTextColor: Theme.textDisabled
                         background: null
@@ -285,7 +285,7 @@ CxDialog {
     footer: Rectangle {
         width: parent.width
         height: 48
-        color: "#141920"
+        color: Theme.bgSurface
         radius: 8
         Rectangle {
             anchors.top: parent.top

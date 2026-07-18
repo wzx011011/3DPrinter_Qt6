@@ -260,9 +260,9 @@ CxDialog {
                         Layout.preferredWidth: 60
                         Layout.preferredHeight: 18
                         radius: 9
-                        color: modelData.status === "added"   ? "#1f8a4c"
-                             : modelData.status === "removed" ? "#b03a3a"
-                             : modelData.status === "changed" ? "#c98a1a"
+                        color: modelData.status === "added"   ? Theme.accentDark
+                             : modelData.status === "removed" ? Theme.statusErrorDark
+                             : modelData.status === "changed" ? Theme.statusWarning
                                                               : Theme.bgPanel
                         Text {
                             anchors.centerIn: parent

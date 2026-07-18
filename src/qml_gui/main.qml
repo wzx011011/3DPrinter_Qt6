@@ -21,7 +21,7 @@ ApplicationWindow {
     height: 1000
     visible: true
     title: "OWzx Slicer"
-    color: "#0d0f12"
+    color: Theme.bgBase
     // Frameless + maximized by default for screenshot parity with OrcaSlicer.
     flags: Qt.Window | Qt.FramelessWindowHint
     visibility: Window.Maximized
@@ -163,7 +163,7 @@ ApplicationWindow {
                         spacing: 16
                         Rectangle {
                             width: 80; height: 22; radius: 4
-                            color: "#1a2233"
+                            color: Theme.bgTooltip
                             border.color: Theme.borderSubtle
                             Text {
                                 anchors.centerIn: parent
@@ -276,7 +276,7 @@ ApplicationWindow {
                 spacing: 8
                 Rectangle {
                     width: 80; height: 28; radius: 6
-                    color: "#1e2a38"
+                    color: Theme.chromePressed
                     border.color: Theme.borderSubtle
                     Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: 12 }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: newProjectDialog.close() }
@@ -363,7 +363,7 @@ ApplicationWindow {
         anchors.fill: parent
         anchors.margins: root.frameMargin
         radius: root.frameRadius
-        color: backend ? backend.bgColor : "#0d0f12"
+        color: backend ? backend.bgColor : Theme.bgBase
         border.color: backend.borderColor
         border.width: root.visibility === Window.Maximized ? 0 : 1
         clip: true

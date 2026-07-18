@@ -13,8 +13,8 @@ Item {
     readonly property string presetName: configVm ? configVm.materialPresetName(slotIndex) : ""
     readonly property bool compatible: configVm ? configVm.isFilamentCompatible(presetName) : true
     readonly property color slotColor: {
-        var colors = ["#b97914", "#b9b9b9", "#b9b9b9", "#214bc2", "#d63a21"]
-        return slotIndex < colors.length ? colors[slotIndex] : "#b9b9b9"
+        var colors = [Theme.statusWarning, Theme.textSecondary, Theme.textSecondary, "#214bc2", Theme.chromeDangerHover]
+        return slotIndex < colors.length ? colors[slotIndex] : Theme.textSecondary
     }
 
     implicitHeight: 34
@@ -25,7 +25,7 @@ Item {
         radius: Theme.radiusSM
         color: Theme.bgInset
         border.width: 1
-        border.color: root.compatible ? Theme.borderSubtle : "#f05545"
+        border.color: root.compatible ? Theme.borderSubtle : Theme.statusError
 
         RowLayout {
             anchors.fill: parent
@@ -70,8 +70,8 @@ Item {
                                 columnSpacing: 2
 
                                 Repeater {
-                                    model: ["#FFFFFF", "#F5F5DC", "#B9B9B9", "#808080", "#000000",
-                                            "#B97914", "#D63A21", "#214BC2", "#22C55E", "#EAB308"]
+                                    model: [Theme.textOnAccent, Theme.textPrimary, Theme.textSecondary, Theme.textMuted, Theme.bgBase,
+                                            Theme.statusWarning, Theme.chromeDangerHover, "#214BC2", Theme.accent, Theme.statusWarning]
                                     delegate: Rectangle {
                                         required property string modelData
                                         width: 18
@@ -126,7 +126,7 @@ Item {
             Text {
                 visible: !root.compatible
                 text: "!"
-                color: "#f05545"
+                color: Theme.statusError
                 font.pixelSize: Theme.fontSizeSM
                 font.bold: true
                 Layout.alignment: Qt.AlignVCenter

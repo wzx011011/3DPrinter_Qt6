@@ -30,27 +30,27 @@ CxDialog {
             Rectangle {
                 Layout.alignment: Qt.AlignHCenter
                 width: 64; height: 64; radius: 12
-                color: "#111e1a"
-                border.color: "#22c564"; border.width: 2
+                color: Theme.chromeSurface
+                border.color: Theme.accent; border.width: 2
                 Text { anchors.centerIn: parent; text: "🖨"; font.pixelSize: 30 }
             }
 
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: "OWzx Slicer"
-                color: "#e2e8f5"; font.pixelSize: 18; font.bold: true
+                color: Theme.textPrimary; font.pixelSize: 18; font.bold: true
             }
 
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: qsTr("版本 2.4.0-dev  (Qt6 QML)")
-                color: "#22c564"; font.pixelSize: 11
+                color: Theme.accent; font.pixelSize: 11
             }
         }
 
         // Version info table
         Rectangle {
-            Layout.fillWidth: true; radius: 6; color: "#111620"; border.color: "#1e2535"; height: infoCols.implicitHeight + 16
+            Layout.fillWidth: true; radius: 6; color: Theme.bgSurface; border.color: Theme.bgCard; height: infoCols.implicitHeight + 16
 
             ColumnLayout {
                 id: infoCols
@@ -60,8 +60,8 @@ CxDialog {
                     required property string label
                     required property string value
                     Layout.fillWidth: true; spacing: 0
-                    Text { text: parent.label; color: "#566070"; font.pixelSize: 11; Layout.preferredWidth: 120 }
-                    Text { text: parent.value; color: "#c8d4e0"; font.pixelSize: 11 }
+                    Text { text: parent.label; color: Theme.textDisabled; font.pixelSize: 11; Layout.preferredWidth: 120 }
+                    Text { text: parent.value; color: Theme.chromeText; font.pixelSize: 11 }
                 }
 
                 InfoRow { label: qsTr("Qt 版本");     value: "6.10.0" }
@@ -76,26 +76,26 @@ CxDialog {
 
         // License note
         Rectangle {
-            Layout.fillWidth: true; radius: 5; color: "#0f1318"; height: licText.implicitHeight + 16
+            Layout.fillWidth: true; radius: 5; color: Theme.bgInset; height: licText.implicitHeight + 16
             Text {
                 id: licText
                 anchors.left: parent.left; anchors.right: parent.right
                 anchors.top: parent.top; anchors.margins: 10
                 text: qsTr("本软件基于 Qt 6 框架构建，遵循 GNU LGPL v3 协议。使用本软件即代表您同意相关使用条款。")
-                color: "#566070"; font.pixelSize: 10
+                color: Theme.textDisabled; font.pixelSize: 10
                 wrapMode: Text.WordWrap
                 lineHeight: 1.5
             }
         }
 
         // Divider
-        Rectangle { Layout.fillWidth: true; height: 1; color: "#1e2535" }
+        Rectangle { Layout.fillWidth: true; height: 1; color: Theme.bgCard }
 
         // Confirm button
         Rectangle {
             Layout.alignment: Qt.AlignHCenter
             width: 100; height: 30; radius: 4
-            color: okHov.containsMouse ? "#19a84e" : "#157a39"
+            color: okHov.containsMouse ? Theme.accentDark : Theme.accentSubtle
             Text { anchors.centerIn: parent; text: qsTr("确认"); color: "white"; font.pixelSize: 12; font.bold: true }
             MouseArea { id: okHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.close() }
         }

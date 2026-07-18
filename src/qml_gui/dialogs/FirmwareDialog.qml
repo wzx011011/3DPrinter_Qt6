@@ -48,8 +48,8 @@ CxDialog {
             Layout.fillWidth: true
             implicitHeight: infoCol.implicitHeight + 20
             radius: 6
-            color: "#1e2330"
-            border.color: "#2e3848"
+            color: Theme.scrollBarTrackColor
+            border.color: Theme.borderInput
             border.width: 1
 
             ColumnLayout {
@@ -82,11 +82,11 @@ CxDialog {
                         width: 36
                         height: 16
                         radius: 3
-                        color: "#F59E0B"
+                        color: Theme.statusWarning
                         Text {
                             anchors.centerIn: parent
                             text: "BETA"
-                            color: "#000"
+                            color: Theme.accentDark
                             font.pixelSize: 8
                             font.bold: true
                         }
@@ -132,7 +132,7 @@ CxDialog {
                     Text {
                         visible: root.upgradeState === FirmwareDialog.UpgradeAvailable
                         text: qsTr("新版本可用: %1").arg(root.latestVersion)
-                        color: "#18c75e"
+                        color: Theme.accent
                         font.pixelSize: 11
                         font.bold: true
                     }
@@ -163,8 +163,8 @@ CxDialog {
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: 6
-            color: "#161b24"
-            border.color: "#2e3848"
+            color: Theme.bgPanel
+            border.color: Theme.borderInput
             border.width: 1
 
             ColumnLayout {
@@ -229,7 +229,7 @@ CxDialog {
 
             Text {
                 text: qsTr("升级过程中请勿断开电源或网络连接")
-                color: "#F59E0B"
+                color: Theme.statusWarning
                 font.pixelSize: 10
             }
         }
@@ -247,7 +247,7 @@ CxDialog {
                 color: root.upgradeState === FirmwareDialog.UpgradeState.UpgradeSuccess
                     ? "#1F18C75E" : "#1FEF4444"
                 border.color: root.upgradeState === FirmwareDialog.UpgradeState.UpgradeSuccess
-                    ? "#18c75e" : "#EF4444"
+                    ? Theme.accent : Theme.statusError
                 border.width: 1
 
                 Text {
@@ -256,7 +256,7 @@ CxDialog {
                         ? qsTr("升级成功！打印机将自动重启。")
                         : qsTr("升级失败，请检查网络连接后重试。")
                     color: root.upgradeState === FirmwareDialog.UpgradeState.UpgradeSuccess
-                        ? "#18c75e" : "#EF4444"
+                        ? Theme.accent : Theme.statusError
                     font.pixelSize: 11
                     font.bold: true
                 }
@@ -267,7 +267,7 @@ CxDialog {
     footer: Rectangle {
         width: parent.width
         height: 48
-        color: "#141920"
+        color: Theme.bgSurface
         radius: 8
         Rectangle {
             anchors.top: parent.top
