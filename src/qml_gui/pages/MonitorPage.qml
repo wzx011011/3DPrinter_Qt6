@@ -96,38 +96,34 @@ Item {
 
                         Item { Layout.fillWidth: true }
 
-                        // Refresh button
-                        Rectangle {
-                            width: 28; height: 28; radius: Theme.radiusLG
-                            color: refreshHover.containsMouse ? Theme.bgHover : "transparent"
+                        // Phase 168 (VS-01): Refresh button migrated from
+                        // Rectangle+Text+HoverHandler+TapHandler pseudo-button
+                        // to CxIconButton (gains press-scale, focus border,
+                        // consistent disabled state).
+                        CxIconButton {
+                            buttonSize: 28
+                            iconSize: 14
+                            cxStyle: CxIconButton.Style.Ghost
+                            iconSource: ""
+                            toolTipText: qsTr("刷新设备列表")
                             Text {
                                 anchors.centerIn: parent
                                 text: "\u21BB"
                                 color: Theme.textSecondary
                                 font.pixelSize: Theme.fontSizeLG
                             }
-                            HoverHandler { id: refreshHover }
-                            TapHandler { onTapped: root.monitorVm.refresh() }
+                            onClicked: root.monitorVm.refresh()
                         }
 
-                        // Scan / Add button（对齐上游 SSDP scan）
-                        Rectangle {
-                            width: 72; height: 26; radius: 4
-                            color: scanMA.containsMouse ? Theme.textPrimary : Theme.accentSubtle
-                            border.width: 1; border.color: Theme.accent
-                            Text {
-                                anchors.centerIn: parent
-                                text: qsTr("+ 添加")
-                                color: Theme.accent
-                                font.pixelSize: Theme.fontSizeSM
-                            }
-                            MouseArea {
-                                id: scanMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.monitorVm.scanDevices()
-                            }
+                        // Phase 168 (VS-01): Scan/Add button migrated from
+                        // Rectangle+Text+MouseArea pseudo-button to CxButton
+                        // (gains press-scale, focus border, ToolTip).
+                        CxButton {
+                            text: qsTr("+ 添加")
+                            compact: true
+                            cxStyle: CxButton.Style.Secondary
+                            toolTipText: qsTr("扫描并添加新设备")
+                            onClicked: root.monitorVm.scanDevices()
                         }
                     }
                 }

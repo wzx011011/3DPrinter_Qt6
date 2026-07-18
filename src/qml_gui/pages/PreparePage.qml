@@ -3323,7 +3323,9 @@ Item {
                 // persisted into TextConfiguration for round-trip fidelity but
                 // their geometry deformation is documented-deferred.
                 Text { text: qsTr("粗细"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
-                Slider {
+                // Phase 168 (VS-02): migrated from raw QtQuick Slider to CxSlider
+                // (consistency with peer gizmo panels — Simplify, Support paint).
+                CxSlider {
                     Layout.preferredWidth: 80
                     from: 0.0; to: 2.0; stepSize: 0.1
                     value: root.editorVm ? root.editorVm.embossBoldness : 0.0

@@ -587,6 +587,10 @@ private slots:
   // Phase 167 (Cmp-01/02/03): component coherence gate. Locks notification
   // severity palette consolidation + 4 orphan components removed from qrc.
   void v52ComponentCoherence();
+  // Phase 168 (VS-01/02): visual control migration gate. Locks the migration
+  // of Rectangle+Text+MouseArea pseudo-buttons to CxButton/CxIconButton +
+  // the Emboss boldness Slider → CxSlider.
+  void v52VisualControlMigration();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -7538,6 +7542,47 @@ void QmlUiAuditTests::v52ComponentCoherence()
            "Cmp-02: orphan FilamentSlot must be removed from qml.qrc");
   QVERIFY2(!qrc.contains(QStringLiteral("components/GroupNavSidebar.qml")),
            "Cmp-02: orphan GroupNavSidebar must be removed from qml.qrc");
+}
+
+// Phase 168 (VS-01/02): visual control migration gate.
+// Phase 168 migrates Rectangle+Text+MouseArea pseudo-buttons to CxButton/
+// CxIconButton, and the Phase 158 Emboss boldness Slider to CxSlider.
+//
+// Scope note: pseudo-buttons are hand-converted per site because each has
+// unique semantic context (signal args, disabled bindings, decorative vs
+// interactive Rectangles). Phase 168 converts the canonical examples
+// (MonitorPage refresh/add buttons, Emboss Slider) and locks the contract;
+// remaining sites are converted as they're touched in normal feature work.
+void QmlUiAuditTests::v52VisualControlMigration()
+{
+  const QString monitorPage = readSource(QStringLiteral("src/qml_gui/pages/MonitorPage.qml"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+
+  QVERIFY2(!monitorPage.isEmpty(), "Unable to read MonitorPage.qml");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+
+  // (1) VS-01: MonitorPage refresh + add buttons migrated to Cx* controls.
+  QVERIFY2(monitorPage.contains(QStringLiteral("CxIconButton")),
+           "VS-01: MonitorPage refresh button must be a CxIconButton (was Rectangle+Text+HoverHandler pseudo-button)");
+  QVERIFY2(monitorPage.contains(QStringLiteral("CxButton")),
+           "VS-01: MonitorPage add button must be a CxButton (was Rectangle+Text+MouseArea pseudo-button)");
+
+  // (2) VS-02: Phase 158 Emboss boldness Slider migrated to CxSlider.
+  //     Find the CxSlider binding embossBoldness.
+  QVERIFY2(preparePage.contains(QStringLiteral("CxSlider")),
+           "VS-02: PreparePage Emboss panel must use CxSlider for boldness (was raw QtQuick Slider — inconsistent with peer gizmo panels)");
+  // Verify there's no raw `Slider {` (excluding the CxSlider/CxSliderStyle
+  // matches). The check: count raw `\nSlider {` occurrences.
+  int rawSliderCount = 0;
+  int idx = 0;
+  while ((idx = preparePage.indexOf(QStringLiteral("Slider {"), idx)) != -1) {
+    rawSliderCount += 1;
+    idx += 8;
+  }
+  // CxSlider matches contain "Slider {" as a substring, so subtract those.
+  int cxSliderCount = preparePage.count(QStringLiteral("CxSlider"));
+  QVERIFY2(rawSliderCount - cxSliderCount <= 0,
+           "VS-02: PreparePage must have no raw `Slider {` (all migrated to CxSlider)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
