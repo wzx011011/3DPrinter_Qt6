@@ -24,19 +24,30 @@
 - ✅ **v4.8** Dependency Unlock, Assembly Transform & i18n Completion — Phases 136-140 (shipped 2026-07-16, tech_debt)
 - ✅ **v5.0** Advanced Feature Recovery & Tech-Debt Closure — Phases 141-153 (shipped 2026-07-17, tech_debt)
 - ✅ **v5.1** v5.0 Deferred Items Closure — Phases 154-159 (shipped 2026-07-17, clean)
+- 🚧 **v5.2** UI Excellence — Phases 160-170 (in planning)
 
-## Current Milestone: v5.1 v5.0 Deferred Items Closure
+## Current Milestone: v5.2 UI Excellence
 
-**Goal:** Close the 4 documented v5.0 partials (PSET-05 / EMB-06 / PLATE-05 / PLATE-06) plus the Emboss style/SVG follow-ups. Each item is a 1-phase completion of a primitive already shipped in v5.0 — low-risk closures, no new architecture.
+**Goal:** Drive every UI surface (pages, dialogs, components, controls, panels) to consistent, design-system-backed excellence. App-wide audit baseline average = 12/24 (50%); v5.2 target = ≥20/24 (83%) per surface. Driven by 6 retroactive UI audits (`/gsd-ui-review` of PreparePage + 5 parallel audits).
 
-**Scope rule:** All work is offline/local and maps to OrcaSlicer v7.0.1 upstream. SLA print path is explicitly deferred to v5.2 (a dedicated SLA milestone — research at `.planning/research/sla-scope.md` confirms it is ~4 phases for VDB-06 close, not the 8-10 previously estimated; libslic3r SLA files are already compiled and linked). LAN/device/cloud/network/Monitor/ModelMall/camera/printer-hardware workflows remain removed.
+**Quality rule (user 2026-07-19):** "不要在意实现难度和时间成本，只要最好的效果" — quality first, ignore cost/difficulty. The milestone is sized by what's needed for UI excellence, not by what fits one cycle.
 
-**Five workstreams (7 requirements across 6 phases, 154-159):**
-- **CLOS — v5.0 Partial Closures (CLOS-01..04, Phases 154-157):** four independent 1-phase closures, each completing a primitive already shipped in v5.0 — QML diff-view consumer for the existing `comparePresets` (PSET-05); 3MF `<text>` metadata round-trip via `TextConfigurationSerialization` (EMB-06); runtime thumbnail capture scheduler + `setPlateThumbnailFromBase64` write path (PLATE-05); live multi-plate round-trip ctest via a `ProjectServiceMock` fixture (PLATE-06).
-- **EMBO-F — Emboss Follow-ups (EMBO-F01 + EMBO-F02, Phase 158):** style controls wired to upstream `FontProp` axes (boldness/italic/use-surface/curve-projection) + SVG advanced features (curve projection + depth modifier on the existing `addSvgVolume` path). Combined into a single phase per granularity=standard.
-- **Cross-WS — REGRESS-05 (Phase 159):** consolidated v5.1 regression gate.
+**Scope rule:** All work is offline/local. No new product behavior — only consistency, polish, and design-system enforcement. SLA print path is DECLINED (user decision 2026-07-19; reclassified from tech_debt). Maps to OrcaSlicer v7.0.1 upstream where applicable.
 
-**Coverage:** 7/7 v5.1 requirements mapped to exactly one phase (CLOS-01→154, CLOS-02→155, CLOS-03→156, CLOS-04→157, EMBO-F01+F02→158, REGRESS-05→159). 0 unmapped.
+**Nine workstreams (14 requirements across 11 phases, 160-170):**
+- **DS — Design-System Foundation (DS-01..03, Phases 160-161):** Theme.qml token additions + dead-token cleanup (Phase 160); Cx* control library hardening as the design-system carrier (Phase 161). Serial foundation for all later phases.
+- **TK — Token Migration (TK-01..03, Phases 162-164):** color hardcode sweep (162); typography hardcode sweep (163); spacing hardcode sweep + sidebar width fix (164). Three mechanical-replacement phases, parallel-safe after 160-161 land.
+- **SW — Sidebar Width System (SW-01, Phase 164):** unbreak the 7-layer 392px lock; make DockableSidebar drag handle functional; honor Phase 74 UI-SPEC "compact" requirement. Bundled into Phase 164 (spacing sweep) because they share file touch points.
+- **CW — Copywriting & Language (CW-01..02, Phase 165):** pick ZH source language and sweep EN dialogs; kill dev-jargon strings; add qsTr() to Cx* library.
+- **Dlg — Dialog Consistency (Dlg-01..02, Phase 166):** fix 8 empty-header dialogs; replace pseudo-buttons with CxButton; standardize button-row + modal policy.
+- **Cmp — Component Coherence (Cmp-01..03, Phase 167):** collapse notification trio → NotificationCard base; resolve 4 orphan components; unify parallel idioms.
+- **VS — Visual Control Migration (VS-01..02, Phase 168):** replace Rectangle+MouseArea pseudo-buttons in pages with CxButton/CxIconButton; Emboss Slider → CxSlider.
+- **XD — Experience Safety (XD-01..02, Phase 169):** destructive-action confirmation component + route 12+ triggers; async spinner on Emboss; SliceProgress state coverage.
+- **Cross-WS — REGRESS-06 (Phase 170):** consolidated v5.2 regression gate — locks every UI contract from Phases 160-169 via source-audit slots.
+
+**Coverage:** 14/14 v5.2 requirements mapped to exactly one phase. 0 unmapped.
+
+## Phases
 
 ## Phases
 
@@ -46,6 +57,17 @@
 - [x] Phase 157: Live Multi-Plate Round-Trip ctest Fixture (CLOS, PLATE-06 closure)
 - [x] Phase 158: Emboss Style Controls + SVG Advanced Features (EMBO-F)
 - [x] Phase 159: v5.1 Cross-Workstream Regression Gate (REGRESS-05)
+- [ ] Phase 160: Theme Token Foundation (DS-01)
+- [ ] Phase 161: Cx* Control Library Hardening (DS-02, DS-03)
+- [ ] Phase 162: Color Hardcode Sweep (TK-01)
+- [ ] Phase 163: Typography Hardcode Sweep (TK-02)
+- [ ] Phase 164: Spacing Sweep + Sidebar Width Fix (TK-03, SW-01)
+- [ ] Phase 165: Copywriting & Language Sweep (CW-01, CW-02)
+- [ ] Phase 166: Dialog Consistency Repair (Dlg-01, Dlg-02)
+- [ ] Phase 167: Component Coherence (Cmp-01, Cmp-02, Cmp-03)
+- [ ] Phase 168: Visual Control Migration (VS-01, VS-02)
+- [ ] Phase 169: Experience Safety (XD-01, XD-02)
+- [ ] Phase 170: v5.2 Cross-Workstream UI Regression Gate (REGRESS-06)
 
 | Phase | Name | Goal | Requirements |
 |---|---|---|---|
@@ -162,16 +184,181 @@ Success criteria:
 2. The slot ALSO re-asserts the v5.0 (`v50RegressionLocked` from Phase 153), v4.8 (`v48CrossWorkstreamRegressionLocked`), v4.7, and v4.6 anchors — no regression introduced into earlier milestones by the v5.1 work; the 12 v5.0 regression slots still pass.
 3. Canonical build (`scripts/auto_verify_with_vcvars.ps1`) exits 0; 5/5 ctest groups PASS (PrepareScene / PartPlate / ViewModel / UI / PreviewParser); app launch liveness confirmed (the executable reaches the Prepare page without error).
 
+### Phase 160: Theme Token Foundation
+
+**Status:** Not started
+**Workstream:** DS (Design-System Foundation)
+**Goal:** Make Theme.qml the single source of truth by adding all missing tokens + removing/wiring dead ones. Foundation for all later v5.2 phases.
+**Depends on:** —
+**UI hint:** no (token additions only; no QML consumer changes in this phase)
+**Requirements:** DS-01
+
+Success criteria:
+1. Theme.qml gains ~25 missing tokens: statusErrorDark/Pressed, accentSubtlePressed, scrollBarColor, borderActive (referenced but undefined), fontMono, fontSize13, statusSeverity{0..9} palette (collapses 3 private notification severity tables), 11 missing sizing tokens (sliderTrackHeight, switchTrackWidth, dialogHeaderHeight, dialogFooterHeight, controlHeightXL, panelPaddingSM, sidebarWidthMin/Max/Default, rightPanelWidthMin/Max).
+2. Dead tokens resolved: Theme.sidebarWidth=240 and Theme.panelPadding=12 (currently never read) are either wired to real consumers (in later phases) or removed with a comment explaining why.
+3. Canonical token list documented in-code (Theme.qml header comment) so future audits can verify against it. Canonical build exits 0; 5/5 ctest groups PASS.
+
+### Phase 161: Cx* Control Library Hardening
+
+**Status:** Not started
+**Workstream:** DS
+**Goal:** Harden the Cx* primitives as the design-system carrier. Every control consumes Theme tokens, has unified state coverage, and ships no hardcodes.
+**Depends on:** Phase 160 (needs the new tokens)
+**UI hint:** yes (controls are visible everywhere — `ui_safety_gate` applies)
+**Requirements:** DS-02, DS-03
+
+Success criteria:
+1. Qt.darker() runtime manipulation removed from CxButton.qml:31-32 and CxIconButton.qml:48 — replaced with the new statusErrorDark/Pressed and accentSubtlePressed tokens from Phase 160.
+2. Disabled-state pattern unified across all 16 Cx* controls — one pattern (opacity 0.45 OR color branch), not both. Every interactive control has hover/press/disabled/focus states (CxButton gains press-scale; CxButton/CxPillAction gain focus border; ToolTip support expanded beyond CxIconButton).
+3. CxSpinBox text no longer renders at 8px (fontSizeXS-2 below the XS=10 floor). 4 FAIL-class controls (CxPillAction/CxScrollView/CxSpinBox/CxDialog) raised to PASS per Controls-UI-REVIEW.md verdicts.
+4. Zero hardcoded hex colors in Cx* controls; zero `font.pixelSize` literals in Cx* controls; zero missing `qsTr()` on user-visible strings in Cx* controls. Canonical build exits 0; 5/5 ctest groups PASS.
+
+### Phase 162: Color Hardcode Sweep
+
+**Status:** Not started
+**Workstream:** TK (Token Migration)
+**Goal:** Replace every hardcoded `#rrggbb` literal in pages/dialogs/components/panels with the matching Theme.* token.
+**Depends on:** Phase 160 (new tokens available); Phase 161 (controls are token-compliant so cascading consumers inherit)
+**UI hint:** yes (visible everywhere)
+**Requirements:** TK-01
+
+Success criteria:
+1. PreferencesPage.qml: 129 hardcoded hex literals → Theme.* tokens (this is the worst-offender file flagged by Pages audit). Mechanical replacement confirmed by `grep -cE '#[0-9A-Fa-f]{3,8}' src/qml_gui/pages/PreferencesPage.qml` returning ≤5 (status-color allowlist only).
+2. PreparePage: 46 literals → tokens. Dialogs: 228 literals across 14 dialogs → tokens. LeftSidebar private palette (6 colors) → Theme tokens. PresetDiffDialog status badges → Theme.statusSuccess/Error/Warning. ObjectList/StatusBar/GLToolbars hex literals → tokens.
+3. Accent drift fixed everywhere — `#22c564` literals (drift from Theme.accent #18c75e) replaced with Theme.accent. Canonical build exits 0; 5/5 ctest groups PASS.
+
+### Phase 163: Typography Hardcode Sweep
+
+**Status:** Not started
+**Workstream:** TK
+**Goal:** Replace every `font.pixelSize` literal with Theme.fontSize* tokens; consolidate off-scale sizes.
+**Depends on:** Phase 160 (fontSize13 token available); Phase 161 (Cx* controls compliant)
+**UI hint:** yes
+**Requirements:** TK-02
+
+Success criteria:
+1. PreparePage: 114/179 font.pixelSize literals → Theme.fontSize* tokens. Dialogs: 228 literals → tokens. Pages: 17 distinct sizes consolidated to the (now 7-token with fontSize13) scale.
+2. Off-scale sizes eliminated: 8px (CxSpinBox) → 10px (XS floor); scattered 9px → 10px; 17× size 13 → fontSize13 token.
+3. 26 `font.family: "Consolas"` hardcodes → Theme.fontMono across 8 component files. Canonical build exits 0; 5/5 ctest groups PASS.
+
+### Phase 164: Spacing Sweep + Sidebar Width Fix
+
+**Status:** Not started
+**Workstream:** TK + SW
+**Goal:** Introduce Theme.spacing*/panelPadding usage everywhere; unbreak the 7-layer 392px sidebar lock; make DockableSidebar drag handle functional.
+**Depends on:** Phase 160 (sidebarWidthMin/Max/Default tokens available)
+**UI hint:** yes (sidebar resize behavior is user-visible — `ui_safety_gate` applies)
+**Requirements:** TK-03, SW-01
+
+Success criteria:
+1. Sidebar width system unbroken: the 7-layer 392px hardcode (4 QML + 3 C++ constexpr at BackendContext.h:467-469) replaced with the new sidebarWidthMin/Max/Default tokens. DockableSidebar drag handle actually resizes (no more `qBound(392, w, 392)` no-op). Phase 74 UI-SPEC "compact" requirement honored — 392 was a screenshot comment, not a spec mandate.
+2. PreparePage: zero Theme.spacing* usage → consistent spacing-scale usage (worst pillar 1/4 in audit). main.qml/BBLTopbar/PreviewPage/PreferencesPage same. Arbitrary values (bottomMargin: 52, 5/8/10/14 mixed) replaced with the spacing scale.
+3. Theme.panelPadding=12 either wired across panels or removed. Canonical build exits 0; 5/5 ctest groups PASS.
+
+### Phase 165: Copywriting & Language Sweep
+
+**Status:** Not started
+**Workstream:** CW
+**Goal:** One source language (Chinese per project positioning); no dev jargon; complete qsTr() coverage.
+**Depends on:** —
+**UI hint:** yes (every visible string)
+**Requirements:** CW-01, CW-02
+
+Success criteria:
+1. One source language across all qsTr() strings. English-source dialogs (CreatePresets, PresetDiff, FilamentGroupPopup) swept to Chinese. English-in-Chinese-surface strings swept (PreparePage info bar Sliced/Stale/Ready/OK; MultiMachinePage 55 EN qsTr; CalibrationPage EN/zh splits; untranslated LAN/CP……). User never sees language flips between tabs/dialogs.
+2. No developer-jargon strings in user-facing UI. Phase 158 Emboss tooltips (`Emboss.hpp`/`ProjectCurve`/上游/持久化) replaced with user-appropriate copy.
+3. Cx* control library has complete qsTr() coverage on user-visible strings (was zero). Canonical build exits 0; 5/5 ctest groups PASS.
+
+### Phase 166: Dialog Consistency Repair
+
+**Status:** Not started
+**Workstream:** Dlg
+**Goal:** Make the 24 dialogs consistent: no empty headers, no pseudo-buttons, uniform button-row + modal policy.
+**Depends on:** Phase 161 (CxButton/CxIconButton hardened)
+**UI hint:** yes
+**Requirements:** Dlg-01, Dlg-02
+
+Success criteria:
+1. All 8 empty-header dialogs fixed: `title:` → `dialogTitle:` in CreatePresets, ExportPresetBundle, NetworkTest, PresetDiff, SavePreset, SelectMachine, Troubleshoot, UnsavedChanges (CxDialog.qml:14 suppresses `title: ""` so they currently render a 44px header with only ✕).
+2. No hand-rolled `Rectangle+Text+MouseArea` pseudo-buttons in dialogs — replaced with CxButton/CxIconButton. Button-row layout standardized using FilamentGroupPopup as the exemplar.
+3. Modal/closePolicy normalized across the 24 dialogs (currently 8 modal / 11 NoAutoClose / 1 conditional / 1 escape-only / 1 NonModal / 2 unset chaos). Canonical build exits 0; 5/5 ctest groups PASS.
+
+### Phase 167: Component Coherence
+
+**Status:** Not started
+**Workstream:** Cmp
+**Goal:** Collapse the notification trio; resolve orphan components; unify parallel idioms.
+**Depends on:** Phase 160 (statusSeverity palette); Phase 161 (Cx* base hardened)
+**UI hint:** yes
+**Requirements:** Cmp-01, Cmp-02, Cmp-03
+
+Success criteria:
+1. Notification system collapsed to one shared NotificationCard base + Theme.statusSeverity{0..9} palette. ErrorBanner/ErrorToast/NotificationCenter no longer maintain 3 private copies of the 10-level severity→color table. sev=1 no longer renders in both banner and toast simultaneously.
+2. 4 orphan components resolved (CxPanel, CxSectionHeader, FilamentSlot, GroupNavSidebar — registered in qml.qrc with zero consumers) — either deleted or wired into actual use.
+3. Parallel idioms unified: MoveSlider/PreviewLayerRail step-button idiom; LeftSidebar vs DockableSidebar redundancy resolved; OptionRow inline NumericEdit/Badge promoted to controls/ if broadly useful. Canonical build exits 0; 5/5 ctest groups PASS.
+
+### Phase 168: Visual Control Migration
+
+**Status:** Not started
+**Workstream:** VS
+**Goal:** Replace `Rectangle+Text+MouseArea` pseudo-buttons across pages with CxButton/CxIconButton; migrate Emboss Slider → CxSlider.
+**Depends on:** Phase 161 (Cx* controls hardened)
+**UI hint:** yes
+**Requirements:** VS-01, VS-02
+
+Success criteria:
+1. No `Rectangle+Text+MouseArea` pseudo-buttons in pages — replaced with CxButton/CxIconButton. Verified by grep on MonitorPage (92 instances), MultiMachinePage (51), CalibrationPage (27), PreparePage gizmo action rows. Each replacement preserves tooltip/disabled/hover states via the Cx* control's contract.
+2. Phase 158 boldness control migrated from raw `Slider` to `CxSlider` — consistent with every peer gizmo panel (Simplify, Support paint).
+3. Card-in-card nesting violations (Phase 74) resolved. Canonical build exits 0; 5/5 ctest groups PASS.
+
+### Phase 169: Experience Safety
+
+**Status:** Not started
+**Workstream:** XD
+**Goal:** Every destructive action confirms before firing; async operations show progress; states are complete.
+**Depends on:** Phase 166 (CxDialog base for the confirm component)
+**UI hint:** yes
+**Requirements:** XD-01, XD-02
+
+Success criteria:
+1. Every destructive action confirms before firing. A shared confirmation dialog component is built; 12+ triggers routed through it: PreparePage deleteSelection/removeAllOnPlate/deletePlate/clearAllPaintData; CaliHistoryDialog 清空; HomePage cloudUnbindDevice; MultiMachinePage removeDevice/stopAllLocalTasks/stopAllCloudTasks; MonitorPage disconnectDevice; ObjectList bulk delete.
+2. Async Emboss has a progress/spinner affordance (was zero feedback). SliceProgress has indeterminate/canceled/error states (was missing).
+3. Components-layer loading states backfilled where missing. Canonical build exits 0; 5/5 ctest groups PASS.
+
+### Phase 170: v5.2 Cross-Workstream UI Regression Gate
+
+**Status:** Not started
+**Workstream:** Cross-cutting (REGRESS-06)
+**Goal:** Consolidated v5.2 regression gate. Locks every UI contract from Phases 160-169 via source-audit slots AND re-asserts v5.1/v5.0/v4.x anchors.
+**Depends on:** Phases 160-169 (all feature phases)
+**UI hint:** no (test-only)
+**Requirements:** REGRESS-06
+
+Success criteria:
+1. A consolidated `v52RegressionLocked` source-audit slot re-asserts every v5.2 UI contract: zero hardcoded hex in Cx* controls; zero font.pixelSize literals in Cx* controls; every destructive trigger wrapped in confirm; sidebar width uses real tokens; etc.
+2. The slot ALSO re-asserts v5.1/v5.0/v4.8/v4.7/v4.6 anchors — no regression introduced into earlier milestones by the v5.2 work.
+3. Canonical build exits 0; 5/5 ctest groups PASS; app launch liveness confirmed.
+
+---
+
+### Build Order (parallelism guidance)
+
+- **Wave A (serial foundation, must complete first):** Phase 160 (Theme tokens) → Phase 161 (Cx* controls hardened). Phase 161 depends on 160.
+- **Wave B (parallel, after A):** Phase 162 (color sweep) ‖ Phase 163 (typography sweep) ‖ Phase 165 (copywriting). Three independent mechanical sweeps.
+- **Wave C (parallel with B):** Phase 164 (spacing + sidebar width). Touches BackendContext.h C++ — separate from pure-QML sweeps.
+- **Wave D (after B+C):** Phase 166 (dialogs) ‖ Phase 167 (components) ‖ Phase 168 (visual control migration) ‖ Phase 169 (experience safety). All consume the hardened Cx* controls from Phase 161.
+- **Wave E (tail, after all feature phases):** Phase 170 (REGRESS-06).
+
+**Critical path:** 160 → 161 → {162|163|164|165|166|167|168|169} → 170. With parallelization, ~3 waves of execution; serially, 11 phases.
+
 ---
 
 ## Next Milestone
 
-After v5.1 ships, the next milestone is **v5.2 SLA Print Path** — wire `SLAPrint` into SliceService via `PrinterTechnology` dispatch (currently FFF-only), close VDB-06, and unblock SlaSupports + FaceDetector. Research at `.planning/research/sla-scope.md` confirms the libslic3r SLA surface is already compiled and linked (the v5.0 audit's "wiring from scratch ~35 files" premise was wrong — those files already build); the real work is ~4 phases of Qt orchestration: (1) `PrinterTechnology` dispatch in SliceService + SL1Archive output + forward hollow Q_PROPERTYs; (2-3) SLA preset schema minimal (1 printer + 1 material + 1 print synthesized; `printer_technology` config option read); (4) `.sl1` output dialog + `exportArchiveToPath` API + verify VDB-06 cavity. SlaSupports gizmo port (1237 lines + RHI point rendering) is a follow-on cluster.
-
-Other candidate backlog (post-v5.1): de/fr/ja/ko translation long tail (~906 messages/lang remaining after v4.8 I18N-05); calibration `.drc` tower geometry (v4.6 CALIB tech debt); D3D12 default-backend promotion (deferred from v4.5).
+After v5.2 ships, the candidate backlog: de/fr/ja/ko translation long tail (~906 messages/lang remaining after v4.8 I18N-05); calibration `.drc` tower geometry (v4.6 CALIB tech debt); D3D12 default-backend promotion (deferred from v4.5). **SLA print path is DECLINED** (user decision 2026-07-19).
 
 **Archives:** `.planning/milestones/v{version}-ROADMAP.md`, `v{version}-REQUIREMENTS.md`, `v{version}-MILESTONE-AUDIT.md`, `v{version}-phases/`.
 
 ---
 
-*Last updated: 2026-07-17 via `/gsd:roadmapper` — v5.1 roadmap created (6 phases, 154-159, 7 requirements mapped, 0 unmapped).*
+*Last updated: 2026-07-19 via v5.2 planning — 11 phases (160-170), 14 requirements mapped to 9 workstreams, driven by 6 retroactive UI audits (`/gsd-ui-review` PreparePage + 5 parallel). SLA declined; quality-over-cost rule per user direction.*

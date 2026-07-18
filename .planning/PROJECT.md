@@ -88,11 +88,11 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 ## Current Milestone
 
-No active milestone. v5.1 shipped clean (2026-07-17).
+**v5.2 — UI Excellence** (planning 2026-07-19). Goal: drive every UI surface to consistent, design-system-backed excellence. App-wide audit baseline average = 12/24 (50%); target ≥20/24 (83%) per surface. 11 phases (160-170), 14 requirements mapped to 9 workstreams. Driven by 6 retroactive UI audits (`/gsd-ui-review` of PreparePage + 5 parallel audits of Pages/Dialogs/Components/Controls/Panels). Quality rule: "不要在意实现难度和时间成本，只要最好的效果" (quality first, ignore cost/difficulty). Synthesis at `.planning/research/v5.2-ui-excellence-audit-synthesis.md`.
 
 ## Next Milestone
 
-After v5.1, the next milestone is **v5.2 SLA Print Path** — wire `SLAPrint` into SliceService, close VDB-06, unblock SlaSupports + FaceDetector. Research at `.planning/research/sla-scope.md` confirms the libslic3r SLA surface is already compiled and linked; the real work is ~4 phases of Qt orchestration (PrinterTechnology dispatch + SLA preset schema + .sl1 output dialog + verify). Other candidate backlog: de/fr/ja/ko translation long tail; calibration .drc tower geometry.
+After v5.2 ships, candidate backlog: de/fr/ja/ko translation long tail (~906 messages/lang); calibration `.drc` tower geometry (v4.6 CALIB tech debt); D3D12 default-backend promotion (deferred from v4.5). **SLA print path is DECLINED** (user decision 2026-07-19) — OrcaSlicer itself doesn't push SLA (inherited PrusaSlicer tech debt), OWzx targets FDM users (FDM uses infill not hollowing), maintenance burden disproportionate. VDB-06 / SLA-related carried tech_debt reclassified as declined-with-reason; Hollow UI scaffolding stays but has no slice execution path.
 
 ## Requirements
 

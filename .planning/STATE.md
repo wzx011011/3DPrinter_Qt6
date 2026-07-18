@@ -1,72 +1,59 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.1
-milestone_name: v5.0 Deferred Items Closure
-status: shipped
-last_updated: "2026-07-17T16:30:00.000Z"
-last_activity: 2026-07-17
+milestone: v5.2
+milestone_name: UI Excellence
+status: planning
+last_updated: "2026-07-19T01:30:00.000Z"
+last_activity: 2026-07-19
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_phases: 11
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
-**Last shipped milestone:** v5.1 — v5.0 Deferred Items Closure (2026-07-17, clean).
-**Next step:** No active milestone. Run `/gsd:new-milestone` to start the next one (recommended: v5.2 SLA Print Path).
+**Milestone:** v5.2 — UI Excellence
+**Status:** Planning (2026-07-19). 6 retroactive UI audits complete; ROADMAP created — 11 phases (160-170), 14 requirements mapped to 9 workstreams.
+**Next step:** Plan Phase 160 (Theme Token Foundation) — phases skip discuss (`skip_discuss=true`), so go straight to `/gsd:plan-phase 160`.
+
+## Audit baseline (2026-07-19)
+
+App-wide average **12/24 (50%)**. Target for v5.2: **≥20/24 (83%) per surface**.
+
+| Surface | Score | File |
+|---|---|---|
+| PreparePage | 11/24 | `.planning/ui-reviews/PreparePage-UI-REVIEW.md` |
+| Pages + Shell | 12/24 | `.planning/ui-reviews/Pages-UI-REVIEW.md` |
+| Dialogs (24) | 9/24 | `.planning/ui-reviews/Dialogs-UI-REVIEW.md` |
+| Components (18) | 14/24 | `.planning/ui-reviews/Components-UI-REVIEW.md` |
+| Controls (16) | 13/24 | `.planning/ui-reviews/Controls-UI-REVIEW.md` |
+| Panels + Sidebar | 11/24 | `.planning/ui-reviews/Panels-UI-REVIEW.md` |
+
+Synthesis: `.planning/research/v5.2-ui-excellence-audit-synthesis.md`.
 
 ## Last Shipped Milestone: v5.1 (2026-07-17, clean)
 
-**Audit status:** clean — 7/7 requirements satisfied (2 with documented scope refinements), 6/6 phases verified, 6/6 closure chains wired, no blockers.
-
-| Phase | Name | Status | Requirements |
-|---|---|---|---|
-| 154 | QML Preset Diff-View Dialog | Complete | CLOS-01 (PSET-05 closure) |
-| 155 | Emboss 3MF Text Metadata Round-Trip | Complete | CLOS-02 (EMB-06 closure) |
-| 156 | Runtime Plate Thumbnail Capture Scheduler | Complete | CLOS-03 (PLATE-05 closure) |
-| 157 | Live Multi-Plate Round-Trip ctest Fixture | Complete | CLOS-04 (PLATE-06 closure) |
-| 158 | Emboss Style Controls + SVG Advanced Features | Complete | EMBO-F01, EMBO-F02 |
-| 159 | v5.1 Cross-Workstream Regression Gate | Complete | REGRESS-05 |
-
-### v5.1 closure summary
-
-- **CLOS-01 (PSET-05)** closed by Phase 154 — QML PresetDiffDialog consuming the Phase 149 comparePresets primitive.
-- **CLOS-02 (EMB-06)** closed by Phase 155 — attachEmbossMetadata writes upstream TextConfiguration so store_bbs_3mf emits `<slic3rpe:text>`; load side restores TextEmboss tag.
-- **CLOS-03 (PLATE-05)** closed by Phase 156 — setPlateThumbnailFromBase64 write path + per-plate thumbnailCapturedForPlate signal + session-capture scheduler.
-- **CLOS-04 (PLATE-06)** closed by Phase 157 — multiPlateFullStateRoundTrip live ctest asserting all 5 state dimensions + thumbnail.
-- **EMBO-F01/F02** closed by Phase 158 — boldness + italic fully wired to FontProp; SVG depth-modifier shipped; use-surface/curve-projection exposed + persisted but geometry deformation deferred per upstream gap (Emboss.hpp has no ProjectCurve class).
-- **REGRESS-05** closed by Phase 159 — v51RegressionLocked locks all v5.1 anchors + re-asserts v5.0/v4.8/v4.7/v4.6.
-
-### Verification gate
-
-- Canonical build target (ninja OWzxSlicer + QmlUiAuditTests + ViewModelSmokeTests): exit 0 across all 6 phases.
-- 5/5 ctest groups PASS: QmlUiAuditTests, ViewModelSmokeTests, PartPlateTests, PrepareSceneDataTests, PreviewParserTests.
-- 12 v5.0 regression slots + 7 new v5.1 source-audit slots + 1 new live ctest all pass.
-
-### Carried tech_debt (non-blocking, see v5.1-MILESTONE-AUDIT.md)
-
-- EMBO-F01 use-surface + curve-projection geometry deformation deferred — upstream Emboss.hpp has no ProjectCurve primitive. Q_PROPERTYs + persistence are in place; only the projection math is missing (forbidden by v5.1 "no new architecture" rule).
-- EMBO-F02 SVG curve-projection follows the same scope rule. SVG depth-modifier IS shipped.
+**Audit status:** clean — 7/7 requirements satisfied, 6/6 phases verified. See `.planning/milestones/v5.1-MILESTONE-AUDIT.md`.
 
 ## Project Reference
 
 See: .planning/PROJECT.md
 See: .planning/ROADMAP.md
-See: .planning/milestones/v5.1-ROADMAP.md, v5.1-REQUIREMENTS.md, v5.1-MILESTONE-AUDIT.md
+See: .planning/REQUIREMENTS.md
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
 
 ## Operator Next Steps
 
-- v5.1 shipped. To start the next milestone: `/gsd:new-milestone`.
-- Recommended next: **v5.2 SLA Print Path** — wire SLAPrint into SliceService via PrinterTechnology dispatch (FFF vs SLA), close VDB-06 (the carried v5.0 deferral), unblock SlaSupports + FaceDetector gizmos. Research at `.planning/research/sla-scope.md` confirms ~4 phases of Qt orchestration (libslic3r SLA files already compiled/linked).
+- v5.2 in planning. To start execution: `/gsd:plan-phase 160` (Theme Token Foundation — serial foundation for all later v5.2 phases).
+- Quality rule: "不要在意实现难度和时间成本，只要最好的效果" — quality first.
 
 ## Current Position
 
-Phase: All v5.1 phases complete (154-159 shipped).
+Phase: 160 (Theme Token Foundation) — not yet planned.
 Plan: —
-Status: v5.1 shipped clean — 7/7 requirements, 6/6 phases, 5/5 ctest groups.
-Last activity: 2026-07-17 — v5.1 milestone shipped (154-159: CLOS-01..04 closure + EMBO-F style/SVG + REGRESS-05 gate).
+Status: Roadmap created — 11 phases (160-170), 14 requirements mapped, 0 unmapped. 6 UI audits complete; synthesis committed.
+Last activity: 2026-07-19 — v5.2 milestone planned (UI Excellence; 11 phases driven by 6 retroactive UI audits; SLA declined).
