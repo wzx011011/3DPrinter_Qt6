@@ -594,6 +594,9 @@ private slots:
   // Phase 169 (XD-01/02): experience safety gate. Locks the shared
   // ConfirmDialog component + routing of destructive triggers through it.
   void v52ExperienceSafety();
+  // Phase 170 (REGRESS-06): v5.2 cross-workstream UI regression gate. Spots
+  // every v5.2 anchor (DS/TK/SW/CW/Dlg/Cmp/VS/XD) + re-asserts v5.1/v5.0/v4.x.
+  void v52RegressionLocked();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -7617,6 +7620,97 @@ void QmlUiAuditTests::v52ExperienceSafety()
            "XD-01: PreparePage must instantiate ConfirmDialog");
   QVERIFY2(preparePage.contains(QStringLiteral("deleteConfirm.openWithAction")),
            "XD-01: deleteSelection must route through deleteConfirm.openWithAction (was firing immediately)");
+}
+
+// Phase 170 (REGRESS-06): v5.2 cross-workstream UI regression gate.
+// Spot-checks one anchor per v5.2 workstream AND re-asserts the
+// v5.1/v5.0/v4.8/v4.7/v4.6 milestone anchors so v5.2 did not regress them.
+// Per-phase detail slots already run individually; this is the cross-cut rollup.
+void QmlUiAuditTests::v52RegressionLocked()
+{
+  const QString theme = readSource(QStringLiteral("src/qml_gui/Theme.qml"));
+  const QString cxButton = readSource(QStringLiteral("src/qml_gui/controls/CxButton.qml"));
+  const QString backendH = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString presetDiff = readSource(QStringLiteral("src/qml_gui/dialogs/PresetDiffDialog.qml"));
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  // v5.1/v5.0 anchors
+  const QString configVmH = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+  const QString vmTests = readSource(QStringLiteral("tests/ViewModelSmokeTests.cpp"));
+  const QString rootCmake = readSource(QStringLiteral("CMakeLists.txt"));
+  const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
+
+  QVERIFY2(!theme.isEmpty(), "Unable to read Theme.qml");
+
+  // ── v5.2 DS (Phase 160): Theme token foundation.
+  QVERIFY2(theme.contains(QStringLiteral("borderActive")),
+           "REGRESS-06/DS-01: Theme.borderActive must stay defined (was silent undefined)");
+  QVERIFY2(theme.contains(QStringLiteral("fontMono")),
+           "REGRESS-06/DS-01: Theme.fontMono must stay defined");
+
+  // ── v5.2 DS (Phase 161): Cx* hardening — no Qt.darker in controls.
+  QVERIFY2(!cxButton.contains(QStringLiteral("Qt.darker")),
+           "REGRESS-06/DS-02: CxButton must not use Qt.darker (Phase 161 removed it)");
+
+  // ── v5.2 TK (Phase 162/163): PreferencesPage now uses Theme tokens
+  //     (Pages-UI-REVIEW flagged it as the worst offender with 0 Theme refs).
+  const QString prefsPage = readSource(QStringLiteral("src/qml_gui/pages/PreferencesPage.qml"));
+  QVERIFY2(prefsPage.contains(QStringLiteral("Theme.")),
+           "REGRESS-06/TK-01: PreferencesPage must reference Theme tokens (was 0 refs + 129 hex pre-Phase 162)");
+
+  // ── v5.2 SW (Phase 164): sidebar width system unbroken.
+  QVERIFY2(backendH.contains(QStringLiteral("kSidebarMinWidth = 300"))
+               && backendH.contains(QStringLiteral("kSidebarMaxWidth = 520")),
+           "REGRESS-06/SW-01: BackendContext sidebar min/max must allow resize (was both 392)");
+
+  // ── v5.2 CW (Phase 165): dialogs unified on ZH source.
+  QVERIFY2(presetDiff.contains(QStringLiteral("qsTr(\"预设对比\")")),
+           "REGRESS-06/CW-01: PresetDiffDialog title must stay ZH source (Phase 165 sweep)");
+
+  // ── v5.2 Dlg (Phase 166): empty-header dialogs use dialogTitle:.
+  QVERIFY2(presetDiff.contains(QStringLiteral("dialogTitle:")),
+           "REGRESS-06/Dlg-01: PresetDiffDialog must use dialogTitle: (Phase 166 empty-header fix)");
+
+  // ── v5.2 Cmp (Phase 167): orphan components removed.
+  QVERIFY2(!qrc.contains(QStringLiteral("components/CxPanel.qml")),
+           "REGRESS-06/Cmp-02: orphan CxPanel must stay removed from qml.qrc");
+
+  // ── v5.2 VS (Phase 168): pseudo-button migration.
+  QVERIFY2(preparePage.contains(QStringLiteral("CxSlider")),
+           "REGRESS-06/VS-02: PreparePage Emboss boldness must stay CxSlider (Phase 168)");
+
+  // ── v5.2 XD (Phase 169): destructive-action confirms.
+  QVERIFY2(preparePage.contains(QStringLiteral("deleteConfirm.openWithAction")),
+           "REGRESS-06/XD-01: deleteSelection must route through deleteConfirm.openWithAction");
+
+  // ── v5.1 re-assertion: CLOS-01..04 + EMBO-F + REGRESS-05.
+  QVERIFY2(configVmH.contains(QStringLiteral("comparePresetsDetailed")),
+           "REGRESS-06/v5.1: ConfigViewModel.comparePresetsDetailed must stay (Phase 154)");
+  QVERIFY2(projSvc.contains(QStringLiteral("text_configuration = std::move(tc)")),
+           "REGRESS-06/v5.1: attachEmbossMetadata must keep writing text_configuration (Phase 155)");
+  QVERIFY2(vmTests.contains(QStringLiteral("multiPlateFullStateRoundTrip")),
+           "REGRESS-06/v5.1: multiPlateFullStateRoundTrip live ctest must stay (Phase 157)");
+
+  // ── v5.0 re-assertion.
+  QVERIFY2(rootCmake.contains(QStringLiteral("find_package(OpenVDB 5.0 COMPONENTS openvdb)")),
+           "REGRESS-06/v5.0: root CMakeLists must keep find_package(OpenVDB)");
+  QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
+           "REGRESS-06/v5.0: text2shapes pipeline must stay wired");
+  QVERIFY2(presetSvc.contains(QStringLiteral("comparePresets")),
+           "REGRESS-06/v5.0: comparePresets primitive must stay present");
+
+  // ── v4.8 re-assertion.
+  QVERIFY2(cxButton.contains(QStringLiteral("Theme.statusErrorDark"))
+               || cxButton.contains(QStringLiteral("Theme.statusErrorPressed")),
+           "REGRESS-06/v4.8+v5.2: CxButton Danger variant must use Phase 160 tokens (also v4.8 MeshBoolean context)");
+
+  // ── v4.6 re-assertion: calibration tower modes.
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
+           "REGRESS-06/v4.6: Vol_speed tower mode (7) must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
+           "REGRESS-06/v4.6: Retraction tower mode (9) must still dispatch");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
