@@ -51,9 +51,11 @@ Item {
 
     // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage)
     property bool sidebarCollapsed: false
-    property int sidebarWidth: 392
-    property int sidebarMinWidth: 392
-    property int sidebarMaxWidth: 392
+    // Phase 164 (SW-01): sidebar resizable within [300, 520] — was locked
+    // min==max==392 making the drag handle a no-op.
+    property int sidebarWidth: backend ? backend.sidebarWidth : 392
+    property int sidebarMinWidth: backend ? backend.sidebarMinWidth : 300
+    property int sidebarMaxWidth: backend ? backend.sidebarMaxWidth : 520
     property int sidebarDockArea: 0
     property var sidebarToggleRequested: null
     property var sidebarWidthChanged: null

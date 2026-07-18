@@ -463,10 +463,16 @@ private:
   /// Phase 3: current Plater view mode. Default is View3D.
   ViewMode currentViewMode_ = ViewMode::View3D;
   // Phase 4: dockable sidebar state is loaded from QSettings and saved by setters.
-  static constexpr int kSidebarSettingsVersion = 3; ///< Width persistence contract version.
-  static constexpr int kSidebarMinWidth = 392;   ///< Screenshot Prepare sidebar width.
-  static constexpr int kSidebarMaxWidth = 392;   ///< Screenshot Prepare sidebar width.
-  static constexpr int kSidebarDefaultWidth = 392; ///< Pixel-restored Prepare sidebar width.
+  // Phase 164 (SW-01, v5.2): bumped version + unbroken the 7-layer 392px lock —
+  // min/max are now real bounds (was min==max==392, which made the
+  // DockableSidebar drag handle a visible no-op per Panels-UI-REVIEW). Default
+  // stays 392 to preserve the current visual; users can now resize within
+  // [300, 520]. The previous "screenshot Prepare sidebar width" comment was
+  // misleading — Phase 74 UI-SPEC mandates "compact" not 392px specifically.
+  static constexpr int kSidebarSettingsVersion = 4; ///< Width persistence contract version.
+  static constexpr int kSidebarMinWidth = 300;
+  static constexpr int kSidebarMaxWidth = 520;
+  static constexpr int kSidebarDefaultWidth = 392;
   bool sidebarCollapsed_ = false;
   int sidebarWidth_ = kSidebarDefaultWidth;
   SidebarDockArea sidebarDockArea_ = SidebarDockArea::Left;

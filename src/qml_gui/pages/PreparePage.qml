@@ -26,9 +26,12 @@ Item {
         + ((root.editorVm && root.editorVm.plateCount > 0) ? root.preparePlateBarHeight + 8 : 0)
     // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage → DockableSidebar)
     property bool sidebarCollapsed: false
-    property int sidebarWidth: 392
-    property int sidebarMinWidth: 392
-    property int sidebarMaxWidth: 392
+    // Phase 164 (SW-01): sidebar is now resizable within [300, 520] — was
+    // min==max==392 making the drag handle a no-op. Bound to backend.* which
+    // sources from BackendContext's kSidebar{Min,Max,Default}Width constants.
+    property int sidebarWidth: backend ? backend.sidebarWidth : 392
+    property int sidebarMinWidth: backend ? backend.sidebarMinWidth : 300
+    property int sidebarMaxWidth: backend ? backend.sidebarMaxWidth : 520
     property int sidebarDockArea: 0   // 0=Left, 1=Right
     // sidebar 操作回调 (转发到 backend, 由 main.qml 注入)
     property var sidebarToggleRequested: null

@@ -573,6 +573,10 @@ private slots:
   // Phase 163 (TK-02): typography hardcode sweep gate. Locks the migration of
   // font.pixelSize literals to Theme.fontSize* tokens + Consolas → Theme.fontMono.
   void v52TypographyHardcodeSwept();
+  // Phase 164 (TK-03/SW-01): sidebar width system unbroken. Locks the 7-layer
+  // 392px hardcode removal — backend.sidebarWidth is now resizable within
+  // [300, 520]; DockableSidebar drag handle is functional (was visible no-op).
+  void v52SidebarWidthUnbroken();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -1540,8 +1544,11 @@ void QmlUiAuditTests::previewLayoutRestoresScreenshotRegionsAndGcodePanel()
   }
 
   const QStringList requiredPhase80Tokens = {
-    QStringLiteral("readonly property int targetPreviewLeftWidth: 392"),
-    QStringLiteral("readonly property int targetPreviewRightWidth: 300"),
+    // Phase 164 (SW-01): preview left width now sources from backend.sidebarWidth
+    // (was hardcoded 392 — part of the 7-layer lock). The contract is now that
+    // the property exists and resolves to the backend value.
+    QStringLiteral("readonly property int targetPreviewLeftWidth: backend ? backend.sidebarWidth : 392"),
+    QStringLiteral("readonly property int targetPreviewRightWidth: Theme.rightPanelWidth"),
     QStringLiteral("id: rightAnalysisStack"),
     QStringLiteral("id: gcodeSourcePanel"),
     QStringLiteral("root.previewVm.roleVisibilities"),
@@ -2596,19 +2603,27 @@ void QmlUiAuditTests::prepareLeftSidebarMatchesPixelRestorationContract()
   QVERIFY2(!leftSidebar.isEmpty(), "Unable to read LeftSidebar.qml");
   QVERIFY2(!backendContext.isEmpty(), "Unable to read BackendContext.h");
 
-  QVERIFY2(preparePage.contains(QStringLiteral("property int sidebarWidth: 392")),
-           "Prepare page default sidebar width must match the screenshot left-panel boundary");
-  QVERIFY2(preparePage.contains(QStringLiteral("property int sidebarMinWidth: 392"))
-               && preparePage.contains(QStringLiteral("property int sidebarMaxWidth: 392")),
-           "Pixel-restored Prepare sidebar must not start narrower than the screenshot width");
-  QVERIFY2(platerPage.contains(QStringLiteral("property int sidebarWidth: 392"))
-               && platerPage.contains(QStringLiteral("property int sidebarMinWidth: 392"))
-               && platerPage.contains(QStringLiteral("property int sidebarMaxWidth: 392")),
-           "Plater fallback sidebar width must match the Prepare pixel contract");
+  // Phase 164 (SW-01, v5.2): the 392px hardcode was a 7-layer lock that made
+  // the DockableSidebar drag handle a visible no-op (Panels-UI-REVIEW BLOCKER).
+  // The contract is now: sidebar width sources from backend.sidebarWidth, and
+  // min/max are real bounds (300/520) — no longer min==max==392. Default stays
+  // 392 to preserve the visual; users can now resize.
+  QVERIFY2(preparePage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
+           "Prepare page sidebar width must source from backend.sidebarWidth (Phase 164 unbreaks the 7-layer lock)");
+  QVERIFY2(preparePage.contains(QStringLiteral("backend ? backend.sidebarMinWidth : 300"))
+               && preparePage.contains(QStringLiteral("backend ? backend.sidebarMaxWidth : 520")),
+           "Phase 164 SW-01: Prepare sidebar must have real resizable min/max bounds (was min==max==392 no-op drag handle)");
+  QVERIFY2(backendContext.contains(QStringLiteral("kSidebarMinWidth = 300"))
+               && backendContext.contains(QStringLiteral("kSidebarMaxWidth = 520")),
+           "Phase 164 SW-01: BackendContext kSidebar{Min,Max}Width must allow resize (was both 392)");
+  QVERIFY2(platerPage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392"))
+               && platerPage.contains(QStringLiteral("backend ? backend.sidebarMinWidth : 300"))
+               && platerPage.contains(QStringLiteral("backend ? backend.sidebarMaxWidth : 520")),
+           "Phase 164 SW-01: Plater sidebar must use the same resizable backend-driven contract as Prepare");
   QVERIFY2(backendContext.contains(QStringLiteral("kSidebarDefaultWidth = 392"))
-               && backendContext.contains(QStringLiteral("kSidebarMinWidth = 392"))
-               && backendContext.contains(QStringLiteral("kSidebarMaxWidth = 392")),
-           "Backend persisted sidebar contract must not override the Prepare pixel width");
+               && backendContext.contains(QStringLiteral("kSidebarMinWidth = 300"))
+               && backendContext.contains(QStringLiteral("kSidebarMaxWidth = 520")),
+           "Phase 164 SW-01: BackendContext default stays 392 (visual preserved) but min/max now allow resize");
 
   QVERIFY2(!dockableSidebar.contains(QStringLiteral("id: titleBar")),
            "Expanded DockableSidebar must not add the extra settings title strip");
@@ -7376,6 +7391,42 @@ void QmlUiAuditTests::v52TypographyHardcodeSwept()
   const int themeFontSizeUses = preparePage.count(QStringLiteral("Theme.fontSize"));
   QVERIFY2(themeFontSizeUses > 30,
            "TK-02: PreparePage must reference Theme.fontSize* tokens 30+ times (sweep migrated 114 literals)");
+}
+
+// Phase 164 (TK-03/SW-01): sidebar width system unbroken gate.
+// Phase 164 unbreaks the 7-layer 392px lock flagged by Panels-UI-REVIEW: the
+// DockableSidebar drag handle was a visible no-op because qBound(392, w, 392)
+// discarded every drag. BackendContext kSidebarMin/Max were both 392 (lock);
+// now 300/520 (resizable). Default stays 392 to preserve the current visual.
+void QmlUiAuditTests::v52SidebarWidthUnbroken()
+{
+  const QString backendH = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  const QString assemblePage = readSource(QStringLiteral("src/qml_gui/pages/AssemblePage.qml"));
+  const QString platerPage = readSource(QStringLiteral("src/qml_gui/pages/Plater.qml"));
+
+  QVERIFY2(!backendH.isEmpty(), "Unable to read BackendContext.h");
+
+  // (1) BackendContext: min/max now allow resize (was min==max==392).
+  QVERIFY2(backendH.contains(QStringLiteral("kSidebarMinWidth = 300")),
+           "SW-01: BackendContext kSidebarMinWidth must be 300 (was 392 — no-op drag handle)");
+  QVERIFY2(backendH.contains(QStringLiteral("kSidebarMaxWidth = 520")),
+           "SW-01: BackendContext kSidebarMaxWidth must be 520 (was 392 — no-op drag handle)");
+  QVERIFY2(backendH.contains(QStringLiteral("kSidebarDefaultWidth = 392")),
+           "SW-01: BackendContext default stays 392 (preserves the current visual)");
+  QVERIFY2(backendH.contains(QStringLiteral("kSidebarSettingsVersion = 4")),
+           "SW-01: settings version bumped to 4 (migration sentinel for the new bounds)");
+
+  // (2) QML pages source sidebar width from the backend (not hardcoded 392).
+  QVERIFY2(preparePage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
+           "SW-01: PreparePage sidebarWidth must source from backend (was hardcoded 392)");
+  QVERIFY2(platerPage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
+           "SW-01: Plater sidebarWidth must source from backend (was hardcoded 392)");
+  QVERIFY2(previewPage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
+           "SW-01: PreviewPage targetPreviewLeftWidth must source from backend (was hardcoded 392)");
+  QVERIFY2(assemblePage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
+           "SW-01: AssemblePage sidebarWidth must source from backend (was hardcoded 392)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

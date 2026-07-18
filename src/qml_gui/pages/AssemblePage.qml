@@ -30,8 +30,10 @@ Item {
 
     // Per-page top bar height (the app-level top bar is BBLTopbar in main.qml).
     readonly property int topBarHeight: 32
-    readonly property int bottomBarHeight: 44
-    readonly property int sidebarWidth: 392
+    readonly property int bottomBarHeight: Theme.dialogHeaderHeight
+    // Phase 164 (SW-01): assemble sidebar now sources its width from the
+    // backend sidebar constants (was hardcoded 392 — part of the 7-layer lock).
+    readonly property int sidebarWidth: backend ? backend.sidebarWidth : 392
 
     // Phase 138 (ASM-01): assembly-canvas transform-mode state. Tracks which
     // Move/Rotate/Scale gizmo is active when the Assembly Measure gizmo is off.
