@@ -58,12 +58,12 @@
         <file>components/StatsPanel.qml</file>
         <file>components/ToolPositionTooltip.qml</file>
         <file>components/NotificationCenter.qml</file>
-        <file>components/CxPanel.qml</file>
-        <file>components/CxSectionHeader.qml</file>
+        <!-- Phase 167 (Cmp-02): 4 orphan components removed from the qrc bundle
+             (CxPanel, CxSectionHeader, FilamentSlot, GroupNavSidebar) — they
+             had zero QML consumers per Components-UI-REVIEW. Source files kept
+             on disk for potential future use; just no longer compiled in. -->
         <file>components/CollapsibleSection.qml</file>
         <file>components/OptionRow.qml</file>
-        <file>components/GroupNavSidebar.qml</file>
-        <file>components/FilamentSlot.qml</file>
         <file>components/GLToolbars.qml</file>
         <!-- Controls -->
         <file>controls/CxButton.qml</file>

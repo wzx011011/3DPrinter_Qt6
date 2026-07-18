@@ -9,31 +9,21 @@ Item {
 
     signal closeRequested()
 
-    // Severity color mapping (expanded 9-level, aligns with upstream NotificationLevel)
+    // Phase 167 (Cmp-01): collapsed the private 9-level severity→color and
+    // severity→icon tables into lookups against the canonical Theme.severityColors
+    // and Theme.severityIcons palettes (Phase 160 tokens). Single source of
+    // truth for the notification system (was duplicated across ErrorBanner/
+    // ErrorToast/NotificationCenter per Components-UI-REVIEW).
     function severityColor(sev) {
-        switch (sev) {
-        case 3: return Theme.statusError;   // Error - red
-        case 4: return Theme.statusError;   // SeriousWarning - dark red
-        case 2: return Theme.statusError;   // Warning - amber
-        case 1: return Theme.accent;   // Success - green
-        case 5: return Theme.statusInfo;   // Hint - blue
-        case 6: return Theme.textTertiary;   // PrintInfo - purple
-        case 7: return Theme.textTertiary;   // PrintInfoShort - purple
-        case 8: return Theme.statusInfo;   // Progress - light blue
-        default: return Theme.accent;  // Info - green
-        }
+        if (sev >= 0 && sev < Theme.severityColors.length)
+            return Theme.severityColors[sev]
+        return Theme.accent  // fallback
     }
 
     function severityIcon(sev) {
-        switch (sev) {
-        case 3: return "✕";
-        case 4: return "⚠";
-        case 2: return "⚠";
-        case 1: return "✓";
-        case 5: return "?";
-        case 8: return "⟳";
-        default: return "i";
-        }
+        if (sev >= 0 && sev < Theme.severityIcons.length)
+            return Theme.severityIcons[sev]
+        return "i"  // fallback
     }
 
     Rectangle {

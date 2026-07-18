@@ -584,6 +584,9 @@ private slots:
   // Phase 166 (Dlg-01/02): dialog consistency gate. Locks the 8 empty-header
   // fixes (title: → dialogTitle:) + SavePresetDialog EN→ZH sweep.
   void v52DialogConsistencyRepaired();
+  // Phase 167 (Cmp-01/02/03): component coherence gate. Locks notification
+  // severity palette consolidation + 4 orphan components removed from qrc.
+  void v52ComponentCoherence();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -3342,8 +3345,9 @@ void QmlUiAuditTests::settingsRestorationMilestoneHasFinalVerificationCoverage()
       QStringLiteral("        <file>dialogs/SettingsDialog.qml</file>"),
       QStringLiteral("        <file>dialogs/SavePresetDialog.qml</file>"),
       QStringLiteral("        <file>dialogs/UnsavedChangesDialog.qml</file>"),
-      QStringLiteral("        <file>components/OptionRow.qml</file>"),
-      QStringLiteral("        <file>components/GroupNavSidebar.qml</file>")
+      QStringLiteral("        <file>components/OptionRow.qml</file>")
+      // Phase 167 (Cmp-02): GroupNavSidebar removed — confirmed orphan (zero
+      // QML consumers per Components-UI-REVIEW).
   };
   for (const QString &entry : restoredResourceEntries) {
     QVERIFY2(qrc.contains(entry),
@@ -7503,6 +7507,37 @@ void QmlUiAuditTests::v52DialogConsistencyRepaired()
   const QString savePreset = readSource(QStringLiteral("src/qml_gui/dialogs/SavePresetDialog.qml"));
   QVERIFY2(savePreset.contains(QStringLiteral("qsTr(\"另存为预设\")")),
            "Dlg-02: SavePresetDialog title must be ZH source (was \"Save Preset\")");
+}
+
+// Phase 167 (Cmp-01/02/03): component coherence gate.
+// Phase 167 collapsed the NotificationCenter's private severity table into a
+// lookup against the canonical Theme.severityColors/severityIcons palettes
+// (Phase 160 tokens — single source of truth for the notification system), and
+// removed the 4 orphan components from the qrc bundle.
+void QmlUiAuditTests::v52ComponentCoherence()
+{
+  const QString notifCenter = readSource(QStringLiteral("src/qml_gui/components/NotificationCenter.qml"));
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+
+  QVERIFY2(!notifCenter.isEmpty(), "Unable to read NotificationCenter.qml");
+  QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
+
+  // (1) Cmp-01: NotificationCenter no longer has the private 9-level
+  //     switch-based severity table; it looks up Theme.severityColors instead.
+  QVERIFY2(notifCenter.contains(QStringLiteral("Theme.severityColors")),
+           "Cmp-01: NotificationCenter severityColor must look up Theme.severityColors (was a private 9-case switch)");
+  QVERIFY2(notifCenter.contains(QStringLiteral("Theme.severityIcons")),
+           "Cmp-01: NotificationCenter severityIcon must look up Theme.severityIcons (was a private switch)");
+
+  // (2) Cmp-02: 4 orphan components removed from the qrc bundle.
+  QVERIFY2(!qrc.contains(QStringLiteral("components/CxPanel.qml")),
+           "Cmp-02: orphan CxPanel must be removed from qml.qrc");
+  QVERIFY2(!qrc.contains(QStringLiteral("components/CxSectionHeader.qml")),
+           "Cmp-02: orphan CxSectionHeader must be removed from qml.qrc");
+  QVERIFY2(!qrc.contains(QStringLiteral("components/FilamentSlot.qml")),
+           "Cmp-02: orphan FilamentSlot must be removed from qml.qrc");
+  QVERIFY2(!qrc.contains(QStringLiteral("components/GroupNavSidebar.qml")),
+           "Cmp-02: orphan GroupNavSidebar must be removed from qml.qrc");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
