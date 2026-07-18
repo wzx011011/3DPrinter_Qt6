@@ -86,13 +86,17 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 **Shipped state:** OpenVDB officially unlocked (Phase 142) — refuted the v4.x "unavailable" premise that blocked Hollow/SlaSupports/FaceDetector for 4 milestone cycles (VDB-01/02); tech-debt closure across v4.6/v4.7/v4.8 (DEBT-01..05); Hollow gizmo UI scaffolding (VDB-03/04/05; VDB-06 SLA slice → v5.2 sub-milestone); Emboss complete — parameterized real text2shapes+polygons2model pipeline + async Qt Concurrent wrapper + SVG path (EMB-01..07); Preset bundle full chain — .ini interop + CreatePresetsDialog + UnsavedChangesDialog + comparePresets + dirty propagation (PSET-01..07); PartPlate UI completion — gap analysis + drag-reorder + 6 staging-buffer regression lock (PLATE-01..06); cross-workstream regression gate — 12 source-audit slots, 280/280 tests (REGRESS-04). 13 phases (141-153), 32 requirements (31 satisfied + VDB-06 deferred), audit tech_debt.
 
+## Previous Shipped Milestone: v5.2 UI Excellence (shipped 2026-07-19, clean)
+
+**Shipped state:** 14/14 requirements satisfied (3 with documented scope refinements), 11/11 phases (160-170) verified, 9/9 workstreams wired. 1342+ hardcoded literals migrated to Theme tokens (695 color + 647 typography + 25 Consolas + misc) across the QML layer. Theme token foundation added 25 missing tokens. Cx* control library hardened (Qt.darker removed, CxSpinBox 8px floor fixed, CxButton gains press-scale + toolTipText + focus border). 7-layer 392px sidebar lock unbroken (BackendContext + 4 QML files; sidebar now resizable within [300, 520]). 8 empty-header dialogs fixed; EN-source dialogs swept to ZH. NotificationCenter severity table consolidated to Theme palette; 4 orphan components removed. Rectangle+MouseArea pseudo-buttons migrated to CxButton/CxIconButton (canonical examples). Shared ConfirmDialog component + 3 deleteSelection triggers confirmed (was firing immediately). Driven by 6 retroactive UI audits (`/gsd-ui-review`); quality-first rule per user direction.
+
 ## Current Milestone
 
-**v5.2 — UI Excellence** (planning 2026-07-19). Goal: drive every UI surface to consistent, design-system-backed excellence. App-wide audit baseline average = 12/24 (50%); target ≥20/24 (83%) per surface. 11 phases (160-170), 14 requirements mapped to 9 workstreams. Driven by 6 retroactive UI audits (`/gsd-ui-review` of PreparePage + 5 parallel audits of Pages/Dialogs/Components/Controls/Panels). Quality rule: "不要在意实现难度和时间成本，只要最好的效果" (quality first, ignore cost/difficulty). Synthesis at `.planning/research/v5.2-ui-excellence-audit-synthesis.md`.
+No active milestone. v5.2 shipped clean (2026-07-19).
 
 ## Next Milestone
 
-After v5.2 ships, candidate backlog: de/fr/ja/ko translation long tail (~906 messages/lang); calibration `.drc` tower geometry (v4.6 CALIB tech debt); D3D12 default-backend promotion (deferred from v4.5). **SLA print path is DECLINED** (user decision 2026-07-19) — OrcaSlicer itself doesn't push SLA (inherited PrusaSlicer tech debt), OWzx targets FDM users (FDM uses infill not hollowing), maintenance burden disproportionate. VDB-06 / SLA-related carried tech_debt reclassified as declined-with-reason; Hollow UI scaffolding stays but has no slice execution path.
+Candidate backlog (post-v5.2): de/fr/ja/ko translation long tail (~906 messages/lang); calibration `.drc` tower geometry (v4.6 CALIB tech debt); D3D12 default-backend promotion (deferred from v4.5); focused UI refinements (Cmp-03 OptionRow/MoveSlider unification, full VS-01 pseudo-button sweep, XD-02 async Emboss spinner + SliceProgress states). **SLA print path is DECLINED** (user decision 2026-07-19).
 
 ## Requirements
 
