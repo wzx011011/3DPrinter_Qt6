@@ -35,6 +35,7 @@
         <file>dialogs/CreatePresetsDialog.qml</file>
         <file>dialogs/UnsavedChangesDialog.qml</file>
         <file>dialogs/PresetDiffDialog.qml</file>
+        <file>dialogs/ConfirmDialog.qml</file>
         <file>dialogs/ExportPresetBundleDialog.qml</file>
         <file>dialogs/FilamentGroupPopup.qml</file>
         <file>dialogs/SettingsDialog.qml</file>

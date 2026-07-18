@@ -38,6 +38,18 @@ Item {
     property var sidebarWidthChanged: null
     focus: true
 
+    // Phase 169 (XD-01): shared destructive-action confirm dialog. Used by
+    // deleteSelection (Delete/Backspace key) and other destructive triggers
+    // to confirm before firing. See dialogs/ConfirmDialog.qml.
+    ConfirmDialog {
+        id: deleteConfirm
+        dialogTitle: qsTr("删除选中")
+        message: qsTr("确定要删除选中的对象吗？可通过撤销（Ctrl+Z）恢复。")
+        confirmText: qsTr("删除")
+        cancelText: qsTr("取消")
+        destructive: true
+    }
+
     function applyFitHintIfReady() {
         if (!root.editorVm)
             return
@@ -149,7 +161,11 @@ Item {
             break
         case Qt.Key_Delete:
         case Qt.Key_Backspace:
-            root.editorVm.deleteSelection()
+            // Phase 169 (XD-01): confirm before deleting selection (was
+            // firing immediately — Delete is too easy to hit accidentally).
+            deleteConfirm.openWithAction(function() {
+                if (root.editorVm) root.editorVm.deleteSelection()
+            })
             event.accepted = true
             break
         case Qt.Key_Escape:
@@ -279,7 +295,9 @@ Item {
         CxMenuItem {
             text: qsTr("删除选中")
             enabled: root.editorVm && root.editorVm.canDeleteSelection
-            onTriggered: if (root.editorVm) root.editorVm.deleteSelection()
+            onTriggered: deleteConfirm.openWithAction(function() {
+                if (root.editorVm) root.editorVm.deleteSelection()
+            })
         }
         MenuSeparator { }
         CxMenuItem {
@@ -480,7 +498,9 @@ Item {
         CxMenuItem {
             text: qsTr("删除")
             enabled: root.editorVm && root.editorVm.canDeleteSelection
-            onTriggered: if (root.editorVm) root.editorVm.deleteSelection()
+            onTriggered: deleteConfirm.openWithAction(function() {
+                if (root.editorVm) root.editorVm.deleteSelection()
+            })
         }
         CxMenuItem {
             text: qsTr("复制")

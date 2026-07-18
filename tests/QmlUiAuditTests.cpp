@@ -591,6 +591,9 @@ private slots:
   // of Rectangle+Text+MouseArea pseudo-buttons to CxButton/CxIconButton +
   // the Emboss boldness Slider → CxSlider.
   void v52VisualControlMigration();
+  // Phase 169 (XD-01/02): experience safety gate. Locks the shared
+  // ConfirmDialog component + routing of destructive triggers through it.
+  void v52ExperienceSafety();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -7583,6 +7586,37 @@ void QmlUiAuditTests::v52VisualControlMigration()
   int cxSliderCount = preparePage.count(QStringLiteral("CxSlider"));
   QVERIFY2(rawSliderCount - cxSliderCount <= 0,
            "VS-02: PreparePage must have no raw `Slider {` (all migrated to CxSlider)");
+}
+
+// Phase 169 (XD-01/02): experience safety gate.
+// Phase 169 ships a shared ConfirmDialog component and routes the most
+// impact-prone destructive trigger (deleteSelection via Delete key + 2 menu
+// items) through it. Was firing immediately — Delete is too easy to hit
+// accidentally.
+void QmlUiAuditTests::v52ExperienceSafety()
+{
+  const QString confirmDialog = readSource(QStringLiteral("src/qml_gui/dialogs/ConfirmDialog.qml"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+
+  QVERIFY2(!confirmDialog.isEmpty(), "Unable to read ConfirmDialog.qml");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
+
+  // (1) XD-01: ConfirmDialog component exists + registered in qrc.
+  QVERIFY2(confirmDialog.contains(QStringLiteral("openWithAction")),
+           "XD-01: ConfirmDialog must expose openWithAction(action) API");
+  QVERIFY2(confirmDialog.contains(QStringLiteral("CxButton.Style.Danger")),
+           "XD-01: ConfirmDialog must style destructive confirms as Danger");
+  QVERIFY2(qrc.contains(QStringLiteral("dialogs/ConfirmDialog.qml")),
+           "XD-01: qml.qrc must register dialogs/ConfirmDialog.qml");
+
+  // (2) XD-01: PreparePage instantiates ConfirmDialog + routes deleteSelection
+  //     through it (was firing immediately on Delete key + menu items).
+  QVERIFY2(preparePage.contains(QStringLiteral("ConfirmDialog {")),
+           "XD-01: PreparePage must instantiate ConfirmDialog");
+  QVERIFY2(preparePage.contains(QStringLiteral("deleteConfirm.openWithAction")),
+           "XD-01: deleteSelection must route through deleteConfirm.openWithAction (was firing immediately)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
