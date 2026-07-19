@@ -400,28 +400,69 @@ endif()
 
 # libnoise: prefer OrcaSlicer's deps prefix; fall back to the local vcpkg layout.
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer/cmake/modules")
-# Phase 142 fix: force LIBNOISE_INCLUDE_DIR to the vcpkg path BEFORE find_package
-# so the upstream Findlibnoise.cmake module does not leave it as the
-# LIBNOISE_INCLUDE_DIR-NOTFOUND sentinel. That sentinel propagates through
-# noise::noise's INTERFACE_INCLUDE_DIRECTORIES and (now that OpenVDB pulls more
-# transitive includes into libslic3r_from_source) triggers CMake's strict
-# relative/non-existent path check on dependent targets. This was a latent
-# issue exposed by the Phase 142 OpenVDB link.
-if(NOT EXISTS "${LIBNOISE_INCLUDE_DIR}")
-    set(LIBNOISE_INCLUDE_DIR "${VCPKG_INSTALLED_DIR}/include" CACHE PATH "" FORCE)
+# Phase 142 fix (revised v5.2): the upstream Findlibnoise.cmake module can leave
+# LIBNOISE_INCLUDE_DIR as the LIBNOISE_INCLUDE_DIR-NOTFOUND sentinel, which
+# then propagates through noise::noise's INTERFACE_INCLUDE_DIRECTORIES and
+# (now that OpenVDB pulls more transitive includes into libslic3r_from_source)
+# triggers CMake's strict non-existent path check on dependent targets.
+#
+# Original Phase 142 fix unconditionally forced the cache to the vcpkg path
+# when LIBNOISE_INCLUDE_DIR was empty — but on CI the vcpkg_installed path is
+# never populated (libnoise ships from DEPS_PREFIX), so the force-set landed
+# on a non-existent path and broke the configure step (v5.1/v5.2 tag builds).
+#
+# Correct contract: only fall back to a known-good path that ACTUALLY EXISTS.
+# Priority: (1) existing cached value if it points at a real dir; (2) DEPS_PREFIX
+# (where CI/local both ship libnoise); (3) VCPKG_INSTALLED_DIR (local dev only);
+# (4) the NOTFOUND sentinel itself only if nothing exists.
+# Resolve inline (no function — direct scope) so the value survives the
+# subsequent find_package call. The original function-based approach let the
+# variable leak out of scope when find_package ran its own module code.
+set(_libnoise_dep_inc "")
+set(_libnoise_vcpkg_inc "")
+if(EXISTS "${DEPS_PREFIX}/include/libnoise/noise.h")
+    set(_libnoise_dep_inc "${DEPS_PREFIX}/include")
+endif()
+if(EXISTS "${VCPKG_INSTALLED_DIR}/include/libnoise/noise.h")
+    set(_libnoise_vcpkg_inc "${VCPKG_INSTALLED_DIR}/include")
+endif()
+# Priority: cached valid → DEPS_PREFIX → VCPKG_INSTALLED_DIR → empty
+set(_libnoise_inc "")
+if(DEFINED LIBNOISE_INCLUDE_DIR AND EXISTS "${LIBNOISE_INCLUDE_DIR}")
+    set(_libnoise_inc "${LIBNOISE_INCLUDE_DIR}")
+elseif(_libnoise_dep_inc)
+    set(_libnoise_inc "${_libnoise_dep_inc}")
+elseif(_libnoise_vcpkg_inc)
+    set(_libnoise_inc "${_libnoise_vcpkg_inc}")
+endif()
+if(_libnoise_inc)
+    set(LIBNOISE_INCLUDE_DIR "${_libnoise_inc}" CACHE PATH "" FORCE)
+endif()
+if(_libnoise_inc)
+    set(LIBNOISE_INCLUDE_DIR "${_libnoise_inc}" CACHE PATH "" FORCE)
 endif()
 find_package(libnoise QUIET)
 if(NOT libnoise_FOUND)
-    set(LIBNOISE_INCLUDE_DIR "${VCPKG_INSTALLED_DIR}/include" CACHE PATH "" FORCE)
-    set(LIBNOISE_LIBRARIES "${VCPKG_INSTALLED_DIR}/lib/noise.lib" CACHE FILEPATH "")
-    if(NOT EXISTS "${LIBNOISE_LIBRARIES}")
-        message(FATAL_ERROR "libnoise not found in DEPS_PREFIX or VCPKG_INSTALLED_DIR")
+    # Final fallback — synthesize the noise::noise target from whichever path
+    # we resolved above, plus the matching library. If neither path has the
+    # library, fail loudly (was silent NOTFOUND before Phase 142).
+    set(_libnoise_lib "")
+    if(EXISTS "${DEPS_PREFIX}/lib/noise.lib")
+        set(_libnoise_lib "${DEPS_PREFIX}/lib/noise.lib")
+    elseif(EXISTS "${VCPKG_INSTALLED_DIR}/lib/noise.lib")
+        set(_libnoise_lib "${VCPKG_INSTALLED_DIR}/lib/noise.lib")
     endif()
-    add_library(noise::noise INTERFACE IMPORTED GLOBAL)
-    set_target_properties(noise::noise PROPERTIES
-        INTERFACE_INCLUDE_DIRECTORIES "${LIBNOISE_INCLUDE_DIR}"
-        INTERFACE_LINK_LIBRARIES "${LIBNOISE_LIBRARIES}"
-    )
+    if(_libnoise_inc AND _libnoise_lib)
+        set(LIBNOISE_INCLUDE_DIR "${_libnoise_inc}" CACHE PATH "" FORCE)
+        set(LIBNOISE_LIBRARIES "${_libnoise_lib}" CACHE FILEPATH "" FORCE)
+        add_library(noise::noise INTERFACE IMPORTED GLOBAL)
+        set_target_properties(noise::noise PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${LIBNOISE_INCLUDE_DIR}"
+            INTERFACE_LINK_LIBRARIES "${LIBNOISE_LIBRARIES}"
+        )
+    else()
+        message(FATAL_ERROR "libnoise not found — neither DEPS_PREFIX (${DEPS_PREFIX}) nor VCPKG_INSTALLED_DIR (${VCPKG_INSTALLED_DIR}) ships libnoise/noise.h + noise.lib (inc=${_libnoise_inc}, lib=${_libnoise_lib})")
+    endif()
 endif()
 
 # GMP/MPFR for CGAL
