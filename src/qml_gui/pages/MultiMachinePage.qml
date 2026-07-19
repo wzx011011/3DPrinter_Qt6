@@ -21,6 +21,42 @@ Item {
         color: Theme.bgBase
     }
 
+    // Phase 171 (CL-01): destructive-action confirms for removeDevice +
+    // stopAllLocalTasks + stopAllCloudTasks (were firing immediately on tap).
+    property int _pendingRemoveIndex: -1
+    ConfirmDialog {
+        id: removeDeviceConfirm
+        dialogTitle: qsTr("移除设备")
+        message: qsTr("确定要从列表中移除该设备吗？此操作不会影响设备本身。")
+        confirmText: qsTr("移除")
+        cancelText: qsTr("取消")
+        destructive: true
+        onAccepted: {
+            if (root._pendingRemoveIndex >= 0)
+                multiMachineVm.removeDevice(root._pendingRemoveIndex)
+            root._pendingRemoveIndex = -1
+        }
+        onRejected: root._pendingRemoveIndex = -1
+    }
+    ConfirmDialog {
+        id: stopLocalTasksConfirm
+        dialogTitle: qsTr("停止本地任务")
+        message: qsTr("确定要停止所有本地打印任务吗？进行中的任务将被中止。")
+        confirmText: qsTr("停止")
+        cancelText: qsTr("取消")
+        destructive: true
+        onAccepted: multiMachineVm.stopAllLocalTasks()
+    }
+    ConfirmDialog {
+        id: stopCloudTasksConfirm
+        dialogTitle: qsTr("停止云任务")
+        message: qsTr("确定要停止所有云端打印任务吗？进行中的任务将被中止。")
+        confirmText: qsTr("停止")
+        cancelText: qsTr("取消")
+        destructive: true
+        onAccepted: multiMachineVm.stopAllCloudTasks()
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -658,7 +694,13 @@ Item {
                     color: Theme.textTertiary
                     font.pixelSize: Theme.fontSizeXS
                 }
-                TapHandler { onTapped: _vm.removeDevice(index) }
+                TapHandler {
+                    // Phase 171 (CL-01): confirm before removing device.
+                    onTapped: {
+                        root._pendingRemoveIndex = index
+                        removeDeviceConfirm.open()
+                    }
+                }
             }
         }
     }
@@ -737,7 +779,10 @@ Item {
                             color: Theme.textOnAccent
                             font.pixelSize: Theme.fontSizeSM
                         }
-                        TapHandler { onTapped: _vm.stopAllLocalTasks() }
+                        TapHandler {
+                            // Phase 171 (CL-01): confirm before stopping all local tasks.
+                            onTapped: stopLocalTasksConfirm.open()
+                        }
                     }
                     Item { Layout.fillWidth: true }
                 }
@@ -1061,7 +1106,10 @@ Item {
                             color: Theme.textOnAccent
                             font.pixelSize: Theme.fontSizeSM
                         }
-                        TapHandler { onTapped: _vm.stopAllCloudTasks() }
+                        TapHandler {
+                            // Phase 171 (CL-01): confirm before stopping all cloud tasks.
+                            onTapped: stopCloudTasksConfirm.open()
+                        }
                     }
                     Item { Layout.fillWidth: true }
                 }

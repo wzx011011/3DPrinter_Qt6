@@ -55,6 +55,20 @@ Item {
         color: Theme.bgBase
     }
 
+    // Phase 171 (CL-01): destructive-action confirm for device disconnect.
+    ConfirmDialog {
+        id: disconnectConfirm
+        dialogTitle: qsTr("断开设备")
+        message: qsTr("确定要断开与该设备的连接吗？断开后可通过设备列表重新连接。")
+        confirmText: qsTr("断开")
+        cancelText: qsTr("取消")
+        destructive: true
+        onAccepted: {
+            if (root.monitorVm)
+                root.monitorVm.disconnectDevice(0)
+        }
+    }
+
     // ── Main horizontal split: device list (left) + detail panel (right) ──
     RowLayout {
         anchors.fill: parent
@@ -1216,7 +1230,10 @@ Item {
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.monitorVm.disconnectDevice(0)
+                                            onClicked: {
+                                                // Phase 171 (CL-01): confirm before disconnecting.
+                                                disconnectConfirm.open()
+                                            }
                                         }
                                     }
 

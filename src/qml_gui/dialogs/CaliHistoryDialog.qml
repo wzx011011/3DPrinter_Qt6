@@ -19,6 +19,20 @@ CxDialog {
 
     property var _historyItems: []
 
+    // Phase 171 (CL-01): destructive-action confirm for 清空 (clear history).
+    ConfirmDialog {
+        id: clearConfirm
+        dialogTitle: qsTr("清空校准历史")
+        message: qsTr("确定要清空所有校准历史记录吗？此操作不可撤销。")
+        confirmText: qsTr("清空")
+        cancelText: qsTr("取消")
+        destructive: true
+        onAccepted: {
+            if (root.calibrationVm)
+                root.calibrationVm.clearHistory()
+        }
+    }
+
     function reloadHistory() {
         var arr = []
         var n = calibrationVm ? calibrationVm.historyCount() : 0
@@ -204,8 +218,8 @@ CxDialog {
                 MouseArea {
                     id: clearHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                        if (root.calibrationVm)
-                            root.calibrationVm.clearHistory()
+                        // Phase 171 (CL-01): confirm before clearing (was firing immediately).
+                        clearConfirm.open()
                     }
                 }
             }

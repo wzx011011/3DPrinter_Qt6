@@ -22,6 +22,23 @@ Item {
 
     Rectangle { anchors.fill: parent; color: Theme.bgBase }
 
+    // Phase 171 (CL-01): destructive-action confirm for cloud device unbind.
+    property int _pendingUnbindIndex: -1
+    ConfirmDialog {
+        id: unbindConfirm
+        dialogTitle: qsTr("解绑云设备")
+        message: qsTr("确定要解绑该云设备吗？解绑后将不再显示该设备的状态。")
+        confirmText: qsTr("解绑")
+        cancelText: qsTr("取消")
+        destructive: true
+        onAccepted: {
+            if (root._pendingUnbindIndex >= 0 && root.homeVm)
+                root.homeVm.cloudUnbindDevice(root._pendingUnbindIndex)
+            root._pendingUnbindIndex = -1
+        }
+        onRejected: root._pendingUnbindIndex = -1
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: Theme.spacingXXL
@@ -238,7 +255,11 @@ Item {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: root.homeVm.cloudUnbindDevice(index)
+                                onClicked: {
+                                    // Phase 171 (CL-01): confirm before unbinding (was firing immediately).
+                                    root._pendingUnbindIndex = index
+                                    unbindConfirm.open()
+                                }
                             }
                         }
                     }

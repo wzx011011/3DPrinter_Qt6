@@ -597,6 +597,10 @@ private slots:
   // Phase 170 (REGRESS-06): v5.2 cross-workstream UI regression gate. Spots
   // every v5.2 anchor (DS/TK/SW/CW/Dlg/Cmp/VS/XD) + re-asserts v5.1/v5.0/v4.x.
   void v52RegressionLocked();
+  // Phase 171 (CL-01): destructive-action confirm sweep gate. Locks that the
+  // 6 remaining destructive triggers route through ConfirmDialog (was firing
+  // immediately per v5.2 audit).
+  void v53DestructiveConfirmSweep();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -7711,6 +7715,44 @@ void QmlUiAuditTests::v52RegressionLocked()
            "REGRESS-06/v4.6: Vol_speed tower mode (7) must still dispatch");
   QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
            "REGRESS-06/v4.6: Retraction tower mode (9) must still dispatch");
+}
+
+// Phase 171 (CL-01): destructive-action confirm sweep gate.
+// Phase 171 routes 6 destructive triggers (CaliHistory 清空, HomePage
+// cloudUnbindDevice, MultiMachinePage removeDevice/stopAllLocalTasks/
+// stopAllCloudTasks, MonitorPage disconnectDevice) through ConfirmDialog.
+// Was firing immediately per v5.2 audit.
+void QmlUiAuditTests::v53DestructiveConfirmSweep()
+{
+  const QString caliHistory = readSource(QStringLiteral("src/qml_gui/dialogs/CaliHistoryDialog.qml"));
+  const QString homePage = readSource(QStringLiteral("src/qml_gui/pages/HomePage.qml"));
+  const QString multiMachine = readSource(QStringLiteral("src/qml_gui/pages/MultiMachinePage.qml"));
+  const QString monitorPage = readSource(QStringLiteral("src/qml_gui/pages/MonitorPage.qml"));
+
+  QVERIFY2(!caliHistory.isEmpty(), "Unable to read CaliHistoryDialog.qml");
+
+  // CaliHistoryDialog: 清空 now routes through ConfirmDialog.
+  QVERIFY2(caliHistory.contains(QStringLiteral("clearConfirm")),
+           "CL-01: CaliHistoryDialog must route clearHistory through clearConfirm (was firing immediately)");
+
+  // HomePage: cloudUnbindDevice now routes through ConfirmDialog.
+  QVERIFY2(homePage.contains(QStringLiteral("unbindConfirm")),
+           "CL-01: HomePage must route cloudUnbindDevice through unbindConfirm");
+  QVERIFY2(homePage.contains(QStringLiteral("_pendingUnbindIndex")),
+           "CL-01: HomePage must stage the pending index before confirm");
+
+  // MultiMachinePage: 3 destructive triggers (removeDevice / stopAllLocalTasks
+  // / stopAllCloudTasks) all route through ConfirmDialog.
+  QVERIFY2(multiMachine.contains(QStringLiteral("removeDeviceConfirm")),
+           "CL-01: MultiMachinePage must route removeDevice through removeDeviceConfirm");
+  QVERIFY2(multiMachine.contains(QStringLiteral("stopLocalTasksConfirm")),
+           "CL-01: MultiMachinePage must route stopAllLocalTasks through stopLocalTasksConfirm");
+  QVERIFY2(multiMachine.contains(QStringLiteral("stopCloudTasksConfirm")),
+           "CL-01: MultiMachinePage must route stopAllCloudTasks through stopCloudTasksConfirm");
+
+  // MonitorPage: disconnectDevice now routes through ConfirmDialog.
+  QVERIFY2(monitorPage.contains(QStringLiteral("disconnectConfirm")),
+           "CL-01: MonitorPage must route disconnectDevice through disconnectConfirm");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
