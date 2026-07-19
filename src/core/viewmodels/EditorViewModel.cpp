@@ -4677,9 +4677,12 @@ bool EditorViewModel::fixMeshSelected()
 
 bool EditorViewModel::simplifyMeshSelected()
 {
-  // Stub — needs simplify dialog (GLGizmoSimplify) integration
-  qWarning("[EditorViewModel] simplifyMeshSelected: not yet implemented (needs simplify dialog)");
-  return false;
+  // Phase 176 (FEAT-03): delegate to the real simplifySelected()
+  // implementation (which forwards to ProjectServiceMock::simplifyObject,
+  // which calls libslic3r its_quadric_edge_collapse). Was a v3.x stub that
+  // logged "not yet implemented" — PreparePage.qml:447 and ObjectList.qml:928
+  // call this method but it was a no-op.
+  return simplifySelected();
 }
 
 bool EditorViewModel::changeVolumeTypeByIndex(int objIdx, int volIdx, int newType)

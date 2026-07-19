@@ -615,6 +615,10 @@ private slots:
   // Phase 175 (FEAT-02): object layer-range editor gate. Locks the
   // ObjectLayersDialog + layer-range VM proxies + menu wiring.
   void v53LayerRangeEditor();
+  // Phase 176 (FEAT-03): Simplify mesh gizmo gate. Locks that the previously
+  // stubbed simplifyMeshSelected now delegates to the real simplifySelected
+  // implementation (libslic3r QuadricEdgeCollapse).
+  void v53SimplifyGizmoReal();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -7919,6 +7923,39 @@ void QmlUiAuditTests::v53LayerRangeEditor()
   // (5) qml.qrc registers the new dialog.
   QVERIFY2(qrc.contains(QStringLiteral("dialogs/ObjectLayersDialog.qml")),
            "FEAT-02: qml.qrc must register dialogs/ObjectLayersDialog.qml");
+}
+
+// Phase 176 (FEAT-03): Simplify mesh gizmo gate.
+// Phase 176 replaces the v3.x stub at EditorViewModel::simplifyMeshSelected
+// (was logging "not yet implemented") with a delegation to the real
+// simplifySelected implementation (which forwards to ProjectServiceMock::
+// simplifyObject → libslic3r its_quadric_edge_collapse).
+//
+// Investigation revealed the real simplify pipeline already existed:
+// simplifySelected() at EditorViewModel.cpp:1355 calls simplifyObject() which
+// already calls QuadricEdgeCollapse. The duplicate simplifyMeshSelected()
+// method was the no-op stub that PreparePage.qml:447 + ObjectList.qml:928
+// were calling. Phase 176 fixes the wiring (delegation) rather than re-
+// implementing the simplify math.
+void QmlUiAuditTests::v53SimplifyGizmoReal()
+{
+  const QString vmCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+
+  QVERIFY2(!vmCpp.isEmpty(), "Unable to read EditorViewModel.cpp");
+
+  // (1) simplifyMeshSelected is no longer a stub.
+  QVERIFY2(!vmCpp.contains(QStringLiteral("not yet implemented (needs simplify dialog)")),
+           "FEAT-03: simplifyMeshSelected must no longer log 'not yet implemented'");
+
+  // (2) It now delegates to the real implementation.
+  QVERIFY2(vmCpp.contains(QStringLiteral("return simplifySelected()")),
+           "FEAT-03: simplifyMeshSelected must delegate to simplifySelected (the real QuadricEdgeCollapse path)");
+
+  // (3) The real simplifyObject backend exists (this was already there but
+  //     audit missed it — Phase 176 confirms the full chain works).
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::its_quadric_edge_collapse")),
+           "FEAT-03: ProjectServiceMock::simplifyObject must call Slic3r::its_quadric_edge_collapse (the real simplify math)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
