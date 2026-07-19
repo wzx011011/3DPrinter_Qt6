@@ -92,11 +92,16 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 ## Current Milestone
 
-No active milestone. v5.2 shipped clean (2026-07-19).
+**v5.3 — Feature Completion & v5.2 Closure** (planning 2026-07-19). Three tracks in one cycle:
+1. Close v5.2 deferred BLOCKERs (11 destructive confirms + dialog spacing sweep + pseudo-button sweep)
+2. Ship 3 functional feature gaps from the v5.3 code-level parity audit (per-object settings dialog, object-layer range editor, Simplify mesh gizmo)
+3. Attack i18n long tail (de/fr/ja/ko)
+
+9 phases (171-179), 8 requirements mapped across 4 workstreams (CL/FEAT/I18N/REGRESS-07). User direction: "把剩下的工作全都规划到下个里程碑里边，一起完成". Build order: 8 feature phases parallelizable → Phase 179 (REGRESS-07) tail.
 
 ## Next Milestone
 
-Candidate backlog (post-v5.2): de/fr/ja/ko translation long tail (~906 messages/lang); calibration `.drc` tower geometry (v4.6 CALIB tech debt); D3D12 default-backend promotion (deferred from v4.5); focused UI refinements (Cmp-03 OptionRow/MoveSlider unification, full VS-01 pseudo-button sweep, XD-02 async Emboss spinner + SliceProgress states). **SLA print path is DECLINED** (user decision 2026-07-19).
+After v5.3 ships, candidate backlog: calibration `.drc` tower geometry (v4.6 CALIB tech debt); D3D12 default-backend promotion (deferred from v4.5); Cmp-03 OptionRow + MoveSlider/PreviewLayerRail unification; XD-02 async Emboss spinner + SliceProgress states; ConfigWizard depth; AMS material settings real backend (printer-hardware scope decision); KBShortcutsDialog / Auxiliary file-tree panel. **SLA print path is DECLINED** (user decision 2026-07-19).
 
 ## Requirements
 
