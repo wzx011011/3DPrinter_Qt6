@@ -90,18 +90,17 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 **Shipped state:** 14/14 requirements satisfied (3 with documented scope refinements), 11/11 phases (160-170) verified, 9/9 workstreams wired. 1342+ hardcoded literals migrated to Theme tokens (695 color + 647 typography + 25 Consolas + misc) across the QML layer. Theme token foundation added 25 missing tokens. Cx* control library hardened (Qt.darker removed, CxSpinBox 8px floor fixed, CxButton gains press-scale + toolTipText + focus border). 7-layer 392px sidebar lock unbroken (BackendContext + 4 QML files; sidebar now resizable within [300, 520]). 8 empty-header dialogs fixed; EN-source dialogs swept to ZH. NotificationCenter severity table consolidated to Theme palette; 4 orphan components removed. Rectangle+MouseArea pseudo-buttons migrated to CxButton/CxIconButton (canonical examples). Shared ConfirmDialog component + 3 deleteSelection triggers confirmed (was firing immediately). Driven by 6 retroactive UI audits (`/gsd-ui-review`); quality-first rule per user direction.
 
+## Previous Shipped Milestone: v5.3 Feature Completion & v5.2 Closure (shipped 2026-07-19, clean)
+
+**Shipped state:** 8/8 requirements satisfied (1 with documented scope refinement), 9/9 phases (171-179) verified. Three tracks: (1) CL closure — 6 destructive confirms, 247 dialog spacing literals migrated, 9 pseudo-buttons migrated; (2) FEAT — per-object settings dialog, object layer-range editor, Simplify mesh gizmo (fixed broken call chain); (3) I18N — de/fr/ja/ko ~44% → 68-70% coverage. Driven by code-level feature-parity audit (confirmed ~90% upstream parity).
+
 ## Current Milestone
 
-**v5.3 — Feature Completion & v5.2 Closure** (planning 2026-07-19). Three tracks in one cycle:
-1. Close v5.2 deferred BLOCKERs (11 destructive confirms + dialog spacing sweep + pseudo-button sweep)
-2. Ship 3 functional feature gaps from the v5.3 code-level parity audit (per-object settings dialog, object-layer range editor, Simplify mesh gizmo)
-3. Attack i18n long tail (de/fr/ja/ko)
-
-9 phases (171-179), 8 requirements mapped across 4 workstreams (CL/FEAT/I18N/REGRESS-07). User direction: "把剩下的工作全都规划到下个里程碑里边，一起完成". Build order: 8 feature phases parallelizable → Phase 179 (REGRESS-07) tail.
+No active milestone. v5.3 shipped clean (2026-07-19).
 
 ## Next Milestone
 
-After v5.3 ships, candidate backlog: calibration `.drc` tower geometry (v4.6 CALIB tech debt); D3D12 default-backend promotion (deferred from v4.5); Cmp-03 OptionRow + MoveSlider/PreviewLayerRail unification; XD-02 async Emboss spinner + SliceProgress states; ConfigWizard depth; AMS material settings real backend (printer-hardware scope decision); KBShortcutsDialog / Auxiliary file-tree panel. **SLA print path is DECLINED** (user decision 2026-07-19).
+Candidate backlog (post-v5.3): i18n remaining ~31% (needs full MT); calibration `.drc` tower geometry; D3D12 backend; Cmp-03 OptionRow/MoveSlider unification; XD-02 async spinner + SliceProgress states; ConfigWizard depth; AMS material settings; KBShortcutsDialog; Auxiliary file-tree panel. **SLA print path is DECLINED** (user decision 2026-07-19).
 
 ## Requirements
 
