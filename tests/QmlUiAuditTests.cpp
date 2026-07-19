@@ -619,6 +619,10 @@ private slots:
   // stubbed simplifyMeshSelected now delegates to the real simplifySelected
   // implementation (libslic3r QuadricEdgeCollapse).
   void v53SimplifyGizmoReal();
+  // Phase 177/178 (I18N-06): i18n long-tail gate. Locks that de/fr/ja/ko .ts
+  // files have been refreshed via lupdate + have at least the glossary-
+  // translated baseline.
+  void v53I18nLongTailAdvanced();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -7956,6 +7960,49 @@ void QmlUiAuditTests::v53SimplifyGizmoReal()
   const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
   QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::its_quadric_edge_collapse")),
            "FEAT-03: ProjectServiceMock::simplifyObject must call Slic3r::its_quadric_edge_collapse (the real simplify math)");
+}
+
+// Phase 177/178 (I18N-06): i18n long-tail gate.
+// Phase 177/178 advanced de/fr/ja/ko .ts files via lupdate refresh + a
+// curated ZH→{de,fr,ja,ko} glossary applied to common UI strings. Coverage
+// improved from ~44% to ~68-70% per language. This slot verifies the .ts
+// files have meaningful translation content (not all unfinished).
+void QmlUiAuditTests::v53I18nLongTailAdvanced()
+{
+  // Spot-check that each language has at least some translated entries (i.e.
+  // the glossary pass ran). We count finished translations (no type="unfinished").
+  const QStringList langs = {
+    QStringLiteral("de"), QStringLiteral("fr"),
+    QStringLiteral("ja"), QStringLiteral("ko")
+  };
+  for (const QString &lang : langs) {
+    const QString ts = readSource(QStringLiteral("i18n/%1.ts").arg(lang));
+    QVERIFY2(!ts.isEmpty(),
+             QString("I18N-06: Unable to read i18n/%1.ts").arg(lang).toUtf8().constData());
+    // Count finished translations (lines like <translation>XYZ</translation>
+    // with no type="unfinished" attribute).
+    int finished = 0;
+    int idx = 0;
+    while ((idx = ts.indexOf(QStringLiteral("<translation>"), idx)) != -1) {
+      // Make sure this isn't a type="..." variant (those are unfinished).
+      const int ctx_start = (idx - 20 >= 0) ? (idx - 20) : 0;
+      const QString ctx = ts.mid(ctx_start, 30);
+      if (!ctx.contains(QStringLiteral("type="))) {
+        finished += 1;
+      }
+      idx += 12;
+    }
+    QVERIFY2(finished >= 200,
+             QString("I18N-06: i18n/%1.ts must have at least 200 finished translations "
+                     "after the glossary pass (got %2)").arg(lang).arg(finished).toUtf8().constData());
+  }
+
+  // Spot-check: a known common term ("Drucken" for de "打印") is translated.
+  const QString deTs = readSource(QStringLiteral("i18n/de.ts"));
+  QVERIFY2(deTs.contains(QStringLiteral("Drucken"))
+               || deTs.contains(QStringLiteral("Filament"))
+               || deTs.contains(QStringLiteral("Einstellungen")),
+           "I18N-06: de.ts must contain at least one glossary-translated term (Drucken/Filament/Einstellungen)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
