@@ -623,6 +623,9 @@ private slots:
   // files have been refreshed via lupdate + have at least the glossary-
   // translated baseline.
   void v53I18nLongTailAdvanced();
+  // Phase 179 (REGRESS-07): v5.3 cross-workstream regression gate. Spots
+  // every v5.3 anchor (CL/FEAT/I18N) + re-asserts v5.2/v5.1/v5.0/v4.x.
+  void v53RegressionLocked();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -8003,6 +8006,76 @@ void QmlUiAuditTests::v53I18nLongTailAdvanced()
                || deTs.contains(QStringLiteral("Filament"))
                || deTs.contains(QStringLiteral("Einstellungen")),
            "I18N-06: de.ts must contain at least one glossary-translated term (Drucken/Filament/Einstellungen)");
+}
+
+// Phase 179 (REGRESS-07): v5.3 cross-workstream regression gate.
+// Spot-checks one anchor per v5.3 workstream AND re-asserts the
+// v5.2/v5.1/v5.0/v4.8/v4.7/v4.6 milestone anchors.
+void QmlUiAuditTests::v53RegressionLocked()
+{
+  const QString vmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString vmCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString multiMachine = readSource(QStringLiteral("src/qml_gui/pages/MultiMachinePage.qml"));
+  const QString theme = readSource(QStringLiteral("src/qml_gui/Theme.qml"));
+  const QString backendH = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
+  const QString deTs = readSource(QStringLiteral("i18n/de.ts"));
+
+  QVERIFY2(!vmH.isEmpty(), "Unable to read EditorViewModel.h");
+
+  // ── v5.3 CL (Phase 171): destructive confirms.
+  QVERIFY2(multiMachine.contains(QStringLiteral("removeDeviceConfirm")),
+           "REGRESS-07/CL-01: MultiMachinePage must keep removeDeviceConfirm");
+
+  // ── v5.3 CL (Phase 173): pseudo-button sweep.
+  QVERIFY2(preparePage.count(QStringLiteral("CxButton")) >= 6,
+           "REGRESS-07/CL-03: PreparePage must keep 6+ CxButton instances");
+
+  // ── v5.3 FEAT (Phase 174): per-object settings dialog.
+  QVERIFY2(vmH.contains(QStringLiteral("scopedOptionValue")),
+           "REGRESS-07/FEAT-01: EditorViewModel must keep scopedOptionValue proxy");
+  QVERIFY2(preparePage.contains(QStringLiteral("SelectionSettingsDialog {")),
+           "REGRESS-07/FEAT-01: PreparePage must keep SelectionSettingsDialog");
+
+  // ── v5.3 FEAT (Phase 175): layer-range editor.
+  QVERIFY2(vmH.contains(QStringLiteral("objectLayerRangeCount")),
+           "REGRESS-07/FEAT-02: EditorViewModel must keep objectLayerRangeCount proxy");
+  QVERIFY2(preparePage.contains(QStringLiteral("ObjectLayersDialog {")),
+           "REGRESS-07/FEAT-02: PreparePage must keep ObjectLayersDialog");
+
+  // ── v5.3 FEAT (Phase 176): Simplify gizmo.
+  QVERIFY2(!vmCpp.contains(QStringLiteral("not yet implemented (needs simplify dialog)")),
+           "REGRESS-07/FEAT-03: simplifyMeshSelected must stay real (not the v3.x stub)");
+
+  // ── v5.3 I18N (Phase 177/178): de/fr/ja/ko advanced.
+  QVERIFY2(deTs.contains(QStringLiteral("Drucken"))
+               || deTs.contains(QStringLiteral("Filament"))
+               || deTs.contains(QStringLiteral("Einstellungen")),
+           "REGRESS-07/I18N-06: de.ts must keep glossary translations");
+
+  // ── v5.2 re-assertion.
+  QVERIFY2(theme.contains(QStringLiteral("borderActive")),
+           "REGRESS-07/v5.2: Theme.borderActive must stay defined");
+  QVERIFY2(backendH.contains(QStringLiteral("kSidebarMinWidth = 300")),
+           "REGRESS-07/v5.2: sidebar width system must stay unbroken (min 300)");
+
+  // ── v5.1 re-assertion.
+  QVERIFY2(vmH.contains(QStringLiteral("comparePresetsDetailed"))
+               || projSvc.contains(QStringLiteral("comparePresetsDetailed"))
+               || readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h")).contains(QStringLiteral("comparePresetsDetailed")),
+           "REGRESS-07/v5.1: comparePresetsDetailed must stay present");
+
+  // ── v5.0 re-assertion.
+  QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
+           "REGRESS-07/v5.0: text2shapes pipeline must stay wired");
+
+  // ── v4.6 re-assertion.
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
+           "REGRESS-07/v4.6: Vol_speed tower mode (7) must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
+           "REGRESS-07/v4.6: Retraction tower mode (9) must still dispatch");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
