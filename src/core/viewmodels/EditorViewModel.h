@@ -682,6 +682,15 @@ public:
   /// 居中切割位置到选中对象中心
   Q_INVOKABLE void centerCutPlane();
   Q_INVOKABLE void requestSelectionSettings();
+  /// Phase 174 (FEAT-01): per-object/volume scoped option API proxies.
+  /// These forward to ProjectServiceMock so QML (SelectionSettingsDialog) can
+  /// read/write per-object print/filament parameter overrides without holding
+  /// a direct service reference (QML boundary rule).
+  Q_INVOKABLE QVariant scopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &fallback = QVariant()) const;
+  Q_INVOKABLE bool setScopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &value);
+  Q_INVOKABLE int scopedOverrideCount(int objectIndex, int volumeIndex) const;
+  Q_INVOKABLE QString scopedOverriddenKey(int objectIndex, int volumeIndex, int index) const;
+  Q_INVOKABLE bool resetScopedOptionValue(int objectIndex, int volumeIndex, const QString &key);
   Q_INVOKABLE QString plateName(int i) const;
   Q_INVOKABLE int plateObjectCount(int i) const;
   Q_INVOKABLE int objectPlateIndex(int i) const;

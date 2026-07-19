@@ -50,6 +50,25 @@ Item {
         destructive: true
     }
 
+    // Phase 174 (FEAT-01): per-object settings override dialog. Opens when
+    // selectionSettingsRequested fires (right-click Settings, GLToolbars
+    // settings button, ObjectList menu). Reads/writes via the scopedOption*
+    // VM proxies; backend lives on ProjectServiceMock.
+    SelectionSettingsDialog {
+        id: selectionSettingsDialog
+        editorVm: root.editorVm
+        objectIndex: root.editorVm ? root.editorVm.selectedObjectIndex : -1
+        volumeIndex: root.editorVm ? root.editorVm.selectedVolumeIndex : -1
+    }
+
+    Connections {
+        target: root.editorVm
+        // Phase 174 (FEAT-01): opens the per-object settings override dialog.
+        function onSelectionSettingsRequested() {
+            selectionSettingsDialog.open()
+        }
+    }
+
     function applyFitHintIfReady() {
         if (!root.editorVm)
             return

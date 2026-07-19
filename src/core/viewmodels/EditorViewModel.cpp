@@ -4928,6 +4928,45 @@ void EditorViewModel::requestSelectionSettings()
   emit selectionSettingsRequested();
 }
 
+// Phase 174 (FEAT-01): per-object/volume scoped option API proxies. Forward
+// to ProjectServiceMock so the SelectionSettingsDialog QML can read/write
+// per-object print/filament overrides via the viewmodel (QML boundary rule —
+// QML never holds direct service references).
+QVariant EditorViewModel::scopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &fallback) const
+{
+  return projectService_ ? projectService_->scopedOptionValue(objectIndex, volumeIndex, key, fallback) : fallback;
+}
+
+bool EditorViewModel::setScopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &value)
+{
+  if (!projectService_)
+    return false;
+  const bool ok = projectService_->setScopedOptionValue(objectIndex, volumeIndex, key, value);
+  if (ok)
+    emit stateChanged();
+  return ok;
+}
+
+int EditorViewModel::scopedOverrideCount(int objectIndex, int volumeIndex) const
+{
+  return projectService_ ? projectService_->scopedOverrideCount(objectIndex, volumeIndex) : 0;
+}
+
+QString EditorViewModel::scopedOverriddenKey(int objectIndex, int volumeIndex, int index) const
+{
+  return projectService_ ? projectService_->scopedOverriddenKey(objectIndex, volumeIndex, index) : QString();
+}
+
+bool EditorViewModel::resetScopedOptionValue(int objectIndex, int volumeIndex, const QString &key)
+{
+  if (!projectService_)
+    return false;
+  const bool ok = projectService_->resetScopedOptionValue(objectIndex, volumeIndex, key);
+  if (ok)
+    emit stateChanged();
+  return ok;
+}
+
 QString EditorViewModel::plateName(int i) const
 {
   if (!projectService_)

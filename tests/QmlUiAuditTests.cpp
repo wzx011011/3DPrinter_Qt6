@@ -609,6 +609,9 @@ private slots:
   // drill + cut + meshBoolean + faceDetect + addText + importSVG buttons)
   // have been migrated to CxButton.
   void v53PseudoButtonSwept();
+  // Phase 174 (FEAT-01): per-object settings override dialog gate. Locks the
+  // SelectionSettingsDialog + scopedOption* VM proxies + signal wiring.
+  void v53PerObjectSettingsDialog();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -7809,6 +7812,59 @@ void QmlUiAuditTests::v53PseudoButtonSwept()
   const int cxButtonCount = preparePage.count(QStringLiteral("CxButton"));
   QVERIFY2(cxButtonCount >= 6,
            "CL-03: PreparePage must have 6+ CxButton instances (Phase 173 migrated drill/cut/meshBoolean/faceDetect/addText/importSVG/emboss buttons)");
+}
+
+// Phase 174 (FEAT-01): per-object settings override dialog gate.
+// Phase 174 ships a SelectionSettingsDialog QML consumer for the existing
+// ProjectServiceMock scoped-option API + adds VM proxies. Wired via the
+// selectionSettingsRequested signal that was firing but had no consumer.
+void QmlUiAuditTests::v53PerObjectSettingsDialog()
+{
+  const QString vmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString vmCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString dialog = readSource(QStringLiteral("src/qml_gui/dialogs/SelectionSettingsDialog.qml"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+
+  QVERIFY2(!vmH.isEmpty(), "Unable to read EditorViewModel.h");
+
+  // (1) VM proxies the scoped-option API to QML.
+  QVERIFY2(vmH.contains(QStringLiteral("scopedOptionValue")),
+           "FEAT-01: EditorViewModel.h must expose scopedOptionValue Q_INVOKABLE proxy");
+  QVERIFY2(vmH.contains(QStringLiteral("setScopedOptionValue")),
+           "FEAT-01: EditorViewModel.h must expose setScopedOptionValue proxy");
+  QVERIFY2(vmH.contains(QStringLiteral("scopedOverrideCount")),
+           "FEAT-01: EditorViewModel.h must expose scopedOverrideCount proxy");
+  QVERIFY2(vmH.contains(QStringLiteral("resetScopedOptionValue")),
+           "FEAT-01: EditorViewModel.h must expose resetScopedOptionValue proxy");
+
+  // (2) Implementation forwards to projectService_.
+  QVERIFY2(vmCpp.contains(QStringLiteral("projectService_->scopedOptionValue")),
+           "FEAT-01: scopedOptionValue must forward to projectService_");
+  QVERIFY2(vmCpp.contains(QStringLiteral("projectService_->setScopedOptionValue")),
+           "FEAT-01: setScopedOptionValue must forward to projectService_");
+
+  // (3) SelectionSettingsDialog.qml exists and consumes the API.
+  QVERIFY2(dialog.contains(QStringLiteral("scopedOptionValue")),
+           "FEAT-01: SelectionSettingsDialog must call scopedOptionValue");
+  QVERIFY2(dialog.contains(QStringLiteral("setScopedOptionValue")),
+           "FEAT-01: SelectionSettingsDialog must call setScopedOptionValue");
+  QVERIFY2(dialog.contains(QStringLiteral("resetScopedOptionValue")),
+           "FEAT-01: SelectionSettingsDialog must call resetScopedOptionValue");
+  QVERIFY2(dialog.contains(QStringLiteral("layer_height"))
+               && dialog.contains(QStringLiteral("fill_density"))
+               && dialog.contains(QStringLiteral("support_material")),
+           "FEAT-01: SelectionSettingsDialog must surface the common FDM override keys");
+
+  // (4) PreparePage instantiates the dialog + binds onSelectionSettingsRequested.
+  QVERIFY2(preparePage.contains(QStringLiteral("SelectionSettingsDialog {")),
+           "FEAT-01: PreparePage must instantiate SelectionSettingsDialog");
+  QVERIFY2(preparePage.contains(QStringLiteral("onSelectionSettingsRequested")),
+           "FEAT-01: PreparePage must bind onSelectionSettingsRequested to dialog.open()");
+
+  // (5) qml.qrc registers the new dialog.
+  QVERIFY2(qrc.contains(QStringLiteral("dialogs/SelectionSettingsDialog.qml")),
+           "FEAT-01: qml.qrc must register dialogs/SelectionSettingsDialog.qml");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
