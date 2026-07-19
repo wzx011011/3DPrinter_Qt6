@@ -691,6 +691,16 @@ public:
   Q_INVOKABLE int scopedOverrideCount(int objectIndex, int volumeIndex) const;
   Q_INVOKABLE QString scopedOverriddenKey(int objectIndex, int volumeIndex, int index) const;
   Q_INVOKABLE bool resetScopedOptionValue(int objectIndex, int volumeIndex, const QString &key);
+  /// Phase 175 (FEAT-02): per-object layer-range editor API proxies.
+  /// Forward to ProjectServiceMock so the ObjectLayersDialog QML can manage
+  /// per-layer-height ranges (add/remove/set-value/get-value).
+  Q_INVOKABLE int objectLayerRangeCount(int objectIndex) const;
+  Q_INVOKABLE double layerRangeMinZ(int objectIndex, int rangeIndex) const;
+  Q_INVOKABLE double layerRangeMaxZ(int objectIndex, int rangeIndex) const;
+  Q_INVOKABLE QVariant layerRangeValue(int objectIndex, int rangeIndex, const QString &key, const QVariant &fallback = QVariant()) const;
+  Q_INVOKABLE bool addObjectLayerRange(int objectIndex, double minZ, double maxZ);
+  Q_INVOKABLE bool removeObjectLayerRange(int objectIndex, int rangeIndex);
+  Q_INVOKABLE bool setLayerRangeValue(int objectIndex, int rangeIndex, const QString &key, const QVariant &value);
   Q_INVOKABLE QString plateName(int i) const;
   Q_INVOKABLE int plateObjectCount(int i) const;
   Q_INVOKABLE int objectPlateIndex(int i) const;

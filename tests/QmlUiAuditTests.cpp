@@ -612,6 +612,9 @@ private slots:
   // Phase 174 (FEAT-01): per-object settings override dialog gate. Locks the
   // SelectionSettingsDialog + scopedOption* VM proxies + signal wiring.
   void v53PerObjectSettingsDialog();
+  // Phase 175 (FEAT-02): object layer-range editor gate. Locks the
+  // ObjectLayersDialog + layer-range VM proxies + menu wiring.
+  void v53LayerRangeEditor();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -7865,6 +7868,57 @@ void QmlUiAuditTests::v53PerObjectSettingsDialog()
   // (5) qml.qrc registers the new dialog.
   QVERIFY2(qrc.contains(QStringLiteral("dialogs/SelectionSettingsDialog.qml")),
            "FEAT-01: qml.qrc must register dialogs/SelectionSettingsDialog.qml");
+}
+
+// Phase 175 (FEAT-02): object layer-range editor gate.
+// Phase 175 ships the ObjectLayersDialog QML consumer for the existing
+// ProjectServiceMock layer-range API + adds VM proxies. Reachable via a new
+// "层高范围..." menu item.
+void QmlUiAuditTests::v53LayerRangeEditor()
+{
+  const QString vmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString vmCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString dialog = readSource(QStringLiteral("src/qml_gui/dialogs/ObjectLayersDialog.qml"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+
+  QVERIFY2(!vmH.isEmpty(), "Unable to read EditorViewModel.h");
+
+  // (1) VM proxies the layer-range API to QML.
+  QVERIFY2(vmH.contains(QStringLiteral("objectLayerRangeCount")),
+           "FEAT-02: EditorViewModel.h must expose objectLayerRangeCount proxy");
+  QVERIFY2(vmH.contains(QStringLiteral("addObjectLayerRange")),
+           "FEAT-02: EditorViewModel.h must expose addObjectLayerRange proxy");
+  QVERIFY2(vmH.contains(QStringLiteral("removeObjectLayerRange")),
+           "FEAT-02: EditorViewModel.h must expose removeObjectLayerRange proxy");
+  QVERIFY2(vmH.contains(QStringLiteral("setLayerRangeValue")),
+           "FEAT-02: EditorViewModel.h must expose setLayerRangeValue proxy");
+  QVERIFY2(vmH.contains(QStringLiteral("layerRangeMinZ")) && vmH.contains(QStringLiteral("layerRangeMaxZ")),
+           "FEAT-02: EditorViewModel.h must expose layerRangeMinZ + layerRangeMaxZ proxies");
+
+  // (2) Implementation forwards to projectService_.
+  QVERIFY2(vmCpp.contains(QStringLiteral("projectService_->objectLayerRanges")),
+           "FEAT-02: objectLayerRanges must be queried via projectService_");
+  QVERIFY2(vmCpp.contains(QStringLiteral("projectService_->addObjectLayerRange")),
+           "FEAT-02: addObjectLayerRange must forward to projectService_");
+
+  // (3) ObjectLayersDialog.qml exists and consumes the API.
+  QVERIFY2(dialog.contains(QStringLiteral("objectLayerRangeCount")),
+           "FEAT-02: ObjectLayersDialog must call objectLayerRangeCount");
+  QVERIFY2(dialog.contains(QStringLiteral("addObjectLayerRange")),
+           "FEAT-02: ObjectLayersDialog must call addObjectLayerRange");
+  QVERIFY2(dialog.contains(QStringLiteral("setLayerRangeValue")),
+           "FEAT-02: ObjectLayersDialog must call setLayerRangeValue");
+
+  // (4) PreparePage instantiates the dialog + has a menu entry.
+  QVERIFY2(preparePage.contains(QStringLiteral("ObjectLayersDialog {")),
+           "FEAT-02: PreparePage must instantiate ObjectLayersDialog");
+  QVERIFY2(preparePage.contains(QStringLiteral("objectLayersDialog.open()")),
+           "FEAT-02: PreparePage must open ObjectLayersDialog from a menu item");
+
+  // (5) qml.qrc registers the new dialog.
+  QVERIFY2(qrc.contains(QStringLiteral("dialogs/ObjectLayersDialog.qml")),
+           "FEAT-02: qml.qrc must register dialogs/ObjectLayersDialog.qml");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

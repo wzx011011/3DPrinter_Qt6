@@ -4967,6 +4967,59 @@ bool EditorViewModel::resetScopedOptionValue(int objectIndex, int volumeIndex, c
   return ok;
 }
 
+// Phase 175 (FEAT-02): per-object layer-range editor API proxies. Forward to
+// ProjectServiceMock so ObjectLayersDialog QML can manage per-layer-height
+// ranges (add/remove/set-value/get-value).
+int EditorViewModel::objectLayerRangeCount(int objectIndex) const
+{
+  return projectService_ ? projectService_->objectLayerRanges(objectIndex).size() : 0;
+}
+
+double EditorViewModel::layerRangeMinZ(int objectIndex, int rangeIndex) const
+{
+  if (!projectService_) return 0.0;
+  const auto ranges = projectService_->objectLayerRanges(objectIndex);
+  if (rangeIndex < 0 || rangeIndex >= ranges.size()) return 0.0;
+  return ranges[rangeIndex].minZ;
+}
+
+double EditorViewModel::layerRangeMaxZ(int objectIndex, int rangeIndex) const
+{
+  if (!projectService_) return 0.0;
+  const auto ranges = projectService_->objectLayerRanges(objectIndex);
+  if (rangeIndex < 0 || rangeIndex >= ranges.size()) return 0.0;
+  return ranges[rangeIndex].maxZ;
+}
+
+QVariant EditorViewModel::layerRangeValue(int objectIndex, int rangeIndex, const QString &key, const QVariant &fallback) const
+{
+  return projectService_ ? projectService_->layerRangeValue(objectIndex, rangeIndex, key, fallback) : fallback;
+}
+
+bool EditorViewModel::addObjectLayerRange(int objectIndex, double minZ, double maxZ)
+{
+  if (!projectService_) return false;
+  const bool ok = projectService_->addObjectLayerRange(objectIndex, minZ, maxZ);
+  if (ok) emit stateChanged();
+  return ok;
+}
+
+bool EditorViewModel::removeObjectLayerRange(int objectIndex, int rangeIndex)
+{
+  if (!projectService_) return false;
+  const bool ok = projectService_->removeObjectLayerRange(objectIndex, rangeIndex);
+  if (ok) emit stateChanged();
+  return ok;
+}
+
+bool EditorViewModel::setLayerRangeValue(int objectIndex, int rangeIndex, const QString &key, const QVariant &value)
+{
+  if (!projectService_) return false;
+  const bool ok = projectService_->setLayerRangeValue(objectIndex, rangeIndex, key, value);
+  if (ok) emit stateChanged();
+  return ok;
+}
+
 QString EditorViewModel::plateName(int i) const
 {
   if (!projectService_)

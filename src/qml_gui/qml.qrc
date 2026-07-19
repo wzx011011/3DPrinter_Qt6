@@ -37,6 +37,7 @@
         <file>dialogs/PresetDiffDialog.qml</file>
         <file>dialogs/ConfirmDialog.qml</file>
         <file>dialogs/SelectionSettingsDialog.qml</file>
+        <file>dialogs/ObjectLayersDialog.qml</file>
         <file>dialogs/ExportPresetBundleDialog.qml</file>
         <file>dialogs/FilamentGroupPopup.qml</file>
         <file>dialogs/SettingsDialog.qml</file>

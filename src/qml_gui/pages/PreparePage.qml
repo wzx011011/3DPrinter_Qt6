@@ -61,6 +61,14 @@ Item {
         volumeIndex: root.editorVm ? root.editorVm.selectedVolumeIndex : -1
     }
 
+    // Phase 175 (FEAT-02): per-object layer-range editor dialog. Reachable
+    // via a new "层高范围" menu item in the object context menu.
+    ObjectLayersDialog {
+        id: objectLayersDialog
+        editorVm: root.editorVm
+        objectIndex: root.editorVm ? root.editorVm.selectedObjectIndex : -1
+    }
+
     Connections {
         target: root.editorVm
         // Phase 174 (FEAT-01): opens the per-object settings override dialog.
@@ -467,6 +475,12 @@ Item {
             text: qsTr("替换为 STL...")
             enabled: root.editorVm && root.editorVm.hasSelectedVolume
             onTriggered: replaceWithStlDlg.open()
+        }
+        // Phase 175 (FEAT-02): layer-range editor entry (对齐上游 GUI_ObjectLayers).
+        CxMenuItem {
+            text: qsTr("层高范围...")
+            enabled: root.editorVm && root.editorVm.selectedObjectIndex >= 0
+            onTriggered: objectLayersDialog.open()
         }
         // 对齐上游 append_menu_item_change_filament — Change Filament submenu
         CxMenu {
