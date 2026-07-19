@@ -1523,22 +1523,25 @@ Item {
                 Layout.fillWidth: true
                 spacing: 8
                 Item { Layout.fillWidth: true }
-                Rectangle {
-                    width: 80; height: 28; radius: 4
-                    color: Theme.bgElevated
-                    border.color: Theme.borderDefault; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("Cancel"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: sendToDeviceDialog.close() }
+                // Phase 173 (CL-03): Cancel button migrated from Rectangle+
+                // Text+MouseArea pseudo-button to CxButton (Secondary style,
+                // compact). Gains press-scale, focus border, ToolTip.
+                CxButton {
+                    text: qsTr("Cancel")
+                    compact: true
+                    cxStyle: CxButton.Style.Secondary
+                    onClicked: sendToDeviceDialog.close()
                 }
-                Rectangle {
-                    width: 80; height: 28; radius: 4
-                    color: Theme.accent
-                    Text { anchors.centerIn: parent; text: qsTr("Send"); color: Theme.textOnAccent; font.pixelSize: Theme.fontSizeSM }
-                    MouseArea {
-                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (taskSelector.currentIndex >= 0 && sendToDeviceDialog.selectedDeviceIndex >= 0) {
-                                root.multiMachineVm.sendTaskToDevice(taskSelector.currentIndex, sendToDeviceDialog.selectedDeviceIndex)
+                // Phase 173 (CL-03): Send button migrated from Rectangle+
+                // Text+MouseArea pseudo-button to CxButton (Primary style,
+                // compact). Gains press-scale, focus border, ToolTip.
+                CxButton {
+                    text: qsTr("Send")
+                    compact: true
+                    cxStyle: CxButton.Style.Primary
+                    onClicked: {
+                        if (taskSelector.currentIndex >= 0 && sendToDeviceDialog.selectedDeviceIndex >= 0) {
+                            root.multiMachineVm.sendTaskToDevice(taskSelector.currentIndex, sendToDeviceDialog.selectedDeviceIndex)
                                 sendToDeviceDialog.close()
                             }
                         }

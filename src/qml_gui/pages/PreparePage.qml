@@ -3280,9 +3280,14 @@ Item {
                 Text { text: qsTr("方向"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                 CxComboBox { Layout.preferredWidth: 80; model: [qsTr("法线"), qsTr("平行平台"), qsTr("垂直屏幕")]; currentIndex: root.editorVm ? root.editorVm.drillDirection : 0; onActivated: if (root.editorVm) root.editorVm.drillDirection = currentIndex }
 
-                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("执行钻孔"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.drillSelected() }
+                // Phase 173 (CL-03): migrated from Rectangle+Text+MouseArea
+                // pseudo-button to CxButton (compact Secondary).
+                CxButton {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("执行钻孔")
+                    compact: true
+                    cxStyle: CxButton.Style.Secondary
+                    onClicked: if (root.editorVm) root.editorVm.drillSelected()
                 }
             }
         }
@@ -3380,16 +3385,23 @@ Item {
 
                 RowLayout {
                     Layout.alignment: Qt.AlignHCenter
-                    spacing: 6
-                    // 同步执行（pre-Phase-145 行为保留）
-                    Rectangle { Layout.preferredWidth: 70; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
-                        Text { anchors.centerIn: parent; text: qsTr("执行"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.embossSelected() }
+                    spacing: Theme.spacingSM
+                    // Phase 173 (CL-03): 同步执行 migrated from pseudo-button to CxButton.
+                    CxButton {
+                        Layout.preferredWidth: 70
+                        text: qsTr("执行")
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
+                        onClicked: if (root.editorVm) root.editorVm.embossSelected()
                     }
-                    // Phase 145 (EMB-03): async 执行 — 长文本不阻塞 UI。
-                    Rectangle { Layout.preferredWidth: 90; height: 24; radius: 4; color: Theme.accent
-                        Text { anchors.centerIn: parent; text: qsTr("异步执行"); color: "white"; font.pixelSize: Theme.fontSizeXS; font.bold: true }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.embossSelectedAsync() }
+                    // Phase 145 (EMB-03): async 执行 — 长文本不阻塞 UI.
+                    // Phase 173 (CL-03): migrated from pseudo-button to CxButton (Primary).
+                    CxButton {
+                        Layout.preferredWidth: 90
+                        text: qsTr("异步执行")
+                        compact: true
+                        cxStyle: CxButton.Style.Primary
+                        onClicked: if (root.editorVm) root.editorVm.embossSelectedAsync()
                     }
                 }
 
@@ -3440,9 +3452,14 @@ Item {
 
                 Text { text: qsTr("需选中 2 个以上对象"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; Layout.alignment: Qt.AlignHCenter }
 
-                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("执行运算"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.booleanExecute() }
+                // Phase 173 (CL-03): migrated from Rectangle+Text+MouseArea
+                // pseudo-button to CxButton (compact Secondary).
+                CxButton {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("执行运算")
+                    compact: true
+                    cxStyle: CxButton.Style.Secondary
+                    onClicked: if (root.editorVm) root.editorVm.booleanExecute()
                 }
             }
         }
@@ -3475,9 +3492,14 @@ Item {
                 CxCheckBox { text: qsTr("保留两侧"); checked: root.editorVm ? root.editorVm.cutKeepMode === 1 : true; onCheckedChanged: if (root.editorVm) root.editorVm.cutKeepMode = checked ? 1 : 0 }
                 CxCheckBox { text: qsTr("仅上半部"); checked: root.editorVm ? root.editorVm.cutKeepMode === 2 : false; onCheckedChanged: if (root.editorVm) root.editorVm.cutKeepMode = checked ? 2 : 1 }
 
-                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("执行切割"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.cutSelected() }
+                // Phase 173 (CL-03): migrated from Rectangle+Text+MouseArea
+                // pseudo-button to CxButton (compact Secondary).
+                CxButton {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("执行切割")
+                    compact: true
+                    cxStyle: CxButton.Style.Secondary
+                    onClicked: if (root.editorVm) root.editorVm.cutSelected()
                 }
             }
         }
@@ -3506,9 +3528,14 @@ Item {
 
                 Text { text: qsTr("检测与 Z 轴平行的平面"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; Layout.alignment: Qt.AlignHCenter }
 
-                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("执行检测"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.detectFlatFaces() }
+                // Phase 173 (CL-03): migrated from Rectangle+Text+MouseArea
+                // pseudo-button to CxButton (compact Secondary).
+                CxButton {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("执行检测")
+                    compact: true
+                    cxStyle: CxButton.Style.Secondary
+                    onClicked: if (root.editorVm) root.editorVm.detectFlatFaces()
                 }
             }
         }
@@ -3538,9 +3565,14 @@ Item {
                 Text { text: qsTr("字号"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.textSize : 20; from: 1; to: 200; onValueModified: if (root.editorVm) root.editorVm.textSize = value }
 
-                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("添加文字"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.addTextObject() }
+                // Phase 173 (CL-03): migrated from Rectangle+Text+MouseArea
+                // pseudo-button to CxButton (compact Secondary).
+                CxButton {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("添加文字")
+                    compact: true
+                    cxStyle: CxButton.Style.Secondary
+                    onClicked: if (root.editorVm) root.editorVm.addTextObject()
                 }
             }
         }
@@ -3570,9 +3602,14 @@ Item {
                 Text { text: qsTr("缩放"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.svgScale : 1; from: 1; to: 100; onValueModified: if (root.editorVm) root.editorVm.svgScale = value }
 
-                Rectangle { Layout.alignment: Qt.AlignHCenter; width: 80; height: 24; radius: 4; color: Theme.borderDefault; border.color: Theme.borderStrong; border.width: 1
-                    Text { anchors.centerIn: parent; text: qsTr("导入 SVG"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: if (root.editorVm) root.editorVm.importSVG() }
+                // Phase 173 (CL-03): migrated from Rectangle+Text+MouseArea
+                // pseudo-button to CxButton (compact Secondary).
+                CxButton {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("导入 SVG")
+                    compact: true
+                    cxStyle: CxButton.Style.Secondary
+                    onClicked: if (root.editorVm) root.editorVm.importSVG()
                 }
             }
         }

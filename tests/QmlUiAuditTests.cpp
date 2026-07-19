@@ -604,6 +604,11 @@ private slots:
   // Phase 172 (CL-02): dialog spacing sweep gate. Locks that dialogs use
   // Theme.spacing* tokens instead of hand-rolled pixel values.
   void v53DialogSpacingSwept();
+  // Phase 173 (CL-03): pseudo-button sweep gate. Locks that the canonical
+  // pseudo-button sites (MultiMachinePage Cancel/Send, PreparePage Emboss +
+  // drill + cut + meshBoolean + faceDetect + addText + importSVG buttons)
+  // have been migrated to CxButton.
+  void v53PseudoButtonSwept();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -7779,6 +7784,31 @@ void QmlUiAuditTests::v53DialogSpacingSwept()
            "CL-02: SavePresetDialog must use Theme.spacing* tokens");
   QVERIFY2(wipeTower.contains(QStringLiteral("Theme.spacing")),
            "CL-02: WipeTowerDialog must use Theme.spacing* tokens");
+}
+
+// Phase 173 (CL-03): pseudo-button sweep gate.
+// Phase 173 migrated the canonical pseudo-button sites from Rectangle+
+// Text+MouseArea to CxButton: MultiMachinePage Cancel/Send buttons +
+// PreparePage Emboss sync/async execute + drill + cut + meshBoolean +
+// faceDetect + addText + importSVG buttons.
+void QmlUiAuditTests::v53PseudoButtonSwept()
+{
+  const QString multiMachine = readSource(QStringLiteral("src/qml_gui/pages/MultiMachinePage.qml"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+
+  QVERIFY2(!multiMachine.isEmpty(), "Unable to read MultiMachinePage.qml");
+
+  // MultiMachinePage: Send/Cancel now use CxButton (was Rectangle+Text+MouseArea).
+  // The 'Send' button is the canonical primary-action pseudo-button.
+  QVERIFY2(multiMachine.contains(QStringLiteral("CxButton")),
+           "CL-03: MultiMachinePage must use CxButton for Send/Cancel (was Rectangle+Text+MouseArea pseudo-buttons)");
+
+  // PreparePage: multiple gizmo panel execute buttons migrated to CxButton.
+  // Spot-check that the file has multiple CxButton instances in the gizmo
+  // panels (was 0 before Phase 168 + Phase 173).
+  const int cxButtonCount = preparePage.count(QStringLiteral("CxButton"));
+  QVERIFY2(cxButtonCount >= 6,
+           "CL-03: PreparePage must have 6+ CxButton instances (Phase 173 migrated drill/cut/meshBoolean/faceDetect/addText/importSVG/emboss buttons)");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
