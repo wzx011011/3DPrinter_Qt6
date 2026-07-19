@@ -31,20 +31,19 @@ Dialog {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 24
-        spacing: 16
-
+        anchors.margins: Theme.spacingXXL
+        spacing: Theme.spacingXL
         // 标题
         RowLayout {
             Layout.fillWidth: true
-            spacing: 12
+            spacing: Theme.spacingLG
             Text {
                 text: "\u{1F5A5}\u{FE0F}"  // 🖥️ 打印机
                 font.pixelSize: 28
             }
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 2
+                spacing: Theme.spacingXS
                 Text {
                     text: deviceName.length > 0
                           ? qsTr("连接到 %1").arg(deviceName)
@@ -64,7 +63,7 @@ Dialog {
         // IP 输入
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 6
+            spacing: Theme.spacingSM
             Text {
                 text: qsTr("打印机 IP 地址")
                 color: Theme.textSecondary
@@ -82,7 +81,7 @@ Dialog {
         // Access code 输入
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 6
+            spacing: Theme.spacingSM
             Text {
                 text: qsTr("局域网访问码")
                 color: Theme.textSecondary
@@ -103,7 +102,7 @@ Dialog {
         // 端口（高级，默认隐藏）
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
+            spacing: Theme.spacingMD
             visible: advancedToggle.checked
             Text {
                 text: qsTr("MQTT 端口")
@@ -125,8 +124,7 @@ Dialog {
         // 按钮
         RowLayout {
             Layout.fillWidth: true
-            spacing: 12
-
+            spacing: Theme.spacingLG
             CheckBox {
                 id: advancedToggle
                 text: qsTr("高级")

@@ -24,14 +24,12 @@ CxDialog {
 
     contentItem: ColumnLayout {
         width: root.width
-        spacing: 12
-        anchors.margins: 20
-
+        spacing: Theme.spacingLG
+        anchors.margins: Theme.spacingXXL
         // Info icon + description
         RowLayout {
             Layout.fillWidth: true
-            spacing: 12
-
+            spacing: Theme.spacingLG
             Rectangle {
                 width: 40
                 height: 40
@@ -47,8 +45,7 @@ CxDialog {
 
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 4
-
+                spacing: Theme.spacingXS
                 Text {
                     text: qsTr("精简预览模式")
                     color: Theme.textPrimary
@@ -81,9 +78,8 @@ CxDialog {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 10
-                spacing: 6
-
+                anchors.margins: Theme.spacingMD
+                spacing: Theme.spacingSM
                 Text {
                     text: qsTr("模式对比")
                     color: Theme.textSecondary
@@ -93,8 +89,7 @@ CxDialog {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 8
-
+                    spacing: Theme.spacingMD
                     Text { Layout.preferredWidth: 100; text: qsTr("功能"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
                     Text { Layout.preferredWidth: 80; text: qsTr("完整模式"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS; font.bold: true }
                     Text { Layout.fillWidth: true; text: qsTr("精简模式"); color: Theme.accent; font.pixelSize: Theme.fontSizeXS; font.bold: true }
@@ -113,7 +108,7 @@ CxDialog {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 8
+                        spacing: Theme.spacingMD
                         Text { Layout.preferredWidth: 100; text: modelData.feature; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
                         Text { Layout.preferredWidth: 80; text: modelData.full; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
                         Text { Layout.fillWidth: true; text: modelData.lite; color: modelData.lite === "✓" ? Theme.accent : Theme.statusError; font.pixelSize: Theme.fontSizeXS }
@@ -125,8 +120,7 @@ CxDialog {
         // Toggle
         RowLayout {
             Layout.fillWidth: true
-            spacing: 12
-
+            spacing: Theme.spacingLG
             CxCheckBox {
                 text: qsTr("启用精简预览模式")
                 font.pixelSize: Theme.fontSizeMD
@@ -158,9 +152,8 @@ CxDialog {
 
         RowLayout {
             anchors.fill: parent
-            anchors.rightMargin: 16
-            spacing: 10
-
+            anchors.rightMargin: Theme.spacingXL
+            spacing: Theme.spacingMD
             Item { Layout.fillWidth: true }
 
             CxButton {

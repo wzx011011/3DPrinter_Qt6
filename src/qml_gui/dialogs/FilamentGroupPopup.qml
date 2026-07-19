@@ -74,7 +74,7 @@ CxPopup {
     contentItem: ColumnLayout {
         id: contentCol
         width: root.width - 24
-        anchors.margins: 12
+        anchors.margins: Theme.spacingLG
         spacing: Theme.spacingSM
 
         Text {
@@ -82,7 +82,7 @@ CxPopup {
             color: Theme.textPrimary
             font.pixelSize: Theme.fontSizeLG
             font.bold: true
-            Layout.topMargin: 4
+            Layout.topMargin: Theme.spacingXS
         }
 
         Text {
@@ -118,7 +118,7 @@ CxPopup {
                     root.applySelectedMode()
                 }
                 contentItem: ColumnLayout {
-                    spacing: 0
+                    spacing: Theme.spacingXS
                     Text {
                         text: parent.parent.text
                         color: Theme.textPrimary
@@ -153,9 +153,8 @@ CxPopup {
             ColumnLayout {
                 id: autoPreviewCol
                 anchors.fill: parent
-                anchors.margins: 6
-                spacing: 2
-
+                anchors.margins: Theme.spacingSM
+                spacing: Theme.spacingXS
                 Text {
                     text: qsTr("自动推荐映射（模式 %1）").arg(root.autoMode)
                     color: Theme.textSecondary

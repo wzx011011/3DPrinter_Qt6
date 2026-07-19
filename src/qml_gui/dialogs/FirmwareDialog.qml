@@ -40,9 +40,8 @@ CxDialog {
 
     contentItem: ColumnLayout {
         width: root.width
-        spacing: 12
-        anchors.margins: 20
-
+        spacing: Theme.spacingLG
+        anchors.margins: Theme.spacingXXL
         // -- Printer Info Section --
         Rectangle {
             Layout.fillWidth: true
@@ -57,13 +56,12 @@ CxDialog {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 12
-                spacing: 8
-
+                anchors.margins: Theme.spacingLG
+                spacing: Theme.spacingMD
                 // Printer model
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: Theme.spacingMD
                     Text {
                         Layout.preferredWidth: 90
                         text: qsTr("打印机型号")
@@ -96,7 +94,7 @@ CxDialog {
                 // Serial number
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: Theme.spacingMD
                     Text {
                         Layout.preferredWidth: 90
                         text: qsTr("序列号")
@@ -113,7 +111,7 @@ CxDialog {
                 // Current version
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: Theme.spacingMD
                     Text {
                         Layout.preferredWidth: 90
                         text: qsTr("当前版本")
@@ -141,7 +139,7 @@ CxDialog {
                 // Latest version (when upgrade not available)
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: Theme.spacingMD
                     visible: root.upgradeState === FirmwareDialog.UpgradeNotAvailable
                     Text {
                         Layout.preferredWidth: 90
@@ -169,9 +167,8 @@ CxDialog {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 10
-                spacing: 6
-
+                anchors.margins: Theme.spacingMD
+                spacing: Theme.spacingSM
                 Text {
                     text: qsTr("更新日志")
                     color: Theme.textSecondary
@@ -200,12 +197,12 @@ CxDialog {
         // -- Progress Bar (visible during upgrade) --
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 6
+            spacing: Theme.spacingSM
             visible: root.upgradeState === FirmwareDialog.UpgradeState.Upgrading
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Theme.spacingMD
                 Text {
                     text: qsTr("正在升级...")
                     color: Theme.accent
@@ -279,9 +276,8 @@ CxDialog {
 
         RowLayout {
             anchors.fill: parent
-            anchors.rightMargin: 16
-            spacing: 10
-
+            anchors.rightMargin: Theme.spacingXL
+            spacing: Theme.spacingMD
             Item { Layout.fillWidth: true }
 
             // Mock upgrade simulation button

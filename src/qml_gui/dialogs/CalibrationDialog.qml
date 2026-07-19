@@ -31,15 +31,14 @@ CxDialog {
     contentItem: ColumnLayout {
         id: contentCol
         width: root.width - 32
-        spacing: 16
-
+        spacing: Theme.spacingXL
         // Status icon
         Rectangle {
             Layout.fillWidth: true; height: 72; radius: 6; color: Theme.bgSurface
             border.color: root.calibrationVm && root.calibrationVm.isRunning ? Theme.accent : Theme.borderInput
 
             ColumnLayout {
-                anchors.centerIn: parent; spacing: 6
+                anchors.centerIn: parent; spacing: Theme.spacingSM
                 Text {
                     Layout.alignment: Qt.AlignHCenter
                     text: root.calibrationVm && root.calibrationVm.isRunning ? "⚙"
@@ -60,7 +59,7 @@ CxDialog {
 
         // Progress bar
         ColumnLayout {
-            Layout.fillWidth: true; spacing: 4
+            Layout.fillWidth: true; spacing: Theme.spacingXS
             RowLayout {
                 Layout.fillWidth: true
                 Text { text: qsTr("进度"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
@@ -83,7 +82,7 @@ CxDialog {
         // Upstream has 4 checkboxes: xcam_cali, bed_leveling, vibration, motor_noise
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 8
+            spacing: Theme.spacingMD
             visible: !root.calibrationVm || !root.calibrationVm.isRunning
 
             Text {
@@ -102,10 +101,9 @@ CxDialog {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 4
-                    anchors.rightMargin: 4
-                    spacing: 8
-
+                    anchors.leftMargin: Theme.spacingXS
+                    anchors.rightMargin: Theme.spacingXS
+                    spacing: Theme.spacingMD
                     Rectangle {
                         width: 16; height: 16; radius: 3
                         color: hardwareLidar ? Theme.accent : "transparent"
@@ -153,10 +151,9 @@ CxDialog {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 4
-                    anchors.rightMargin: 4
-                    spacing: 8
-
+                    anchors.leftMargin: Theme.spacingXS
+                    anchors.rightMargin: Theme.spacingXS
+                    spacing: Theme.spacingMD
                     Rectangle {
                         width: 16; height: 16; radius: 3
                         color: hardwareBedLevel ? Theme.accent : "transparent"
@@ -204,10 +201,9 @@ CxDialog {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 4
-                    anchors.rightMargin: 4
-                    spacing: 8
-
+                    anchors.leftMargin: Theme.spacingXS
+                    anchors.rightMargin: Theme.spacingXS
+                    spacing: Theme.spacingMD
                     Rectangle {
                         width: 16; height: 16; radius: 3
                         color: hardwareVibration ? Theme.accent : "transparent"
@@ -247,10 +243,9 @@ CxDialog {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 4
-                    anchors.rightMargin: 4
-                    spacing: 8
-
+                    anchors.leftMargin: Theme.spacingXS
+                    anchors.rightMargin: Theme.spacingXS
+                    spacing: Theme.spacingMD
                     Rectangle {
                         width: 16; height: 16; radius: 3
                         color: hardwareMotor ? Theme.accent : "transparent"
@@ -301,7 +296,7 @@ CxDialog {
         // selected (hardware modes have no sweep range).
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 8
+            spacing: Theme.spacingMD
             visible: (!root.calibrationVm || !root.calibrationVm.isRunning)
                      && root.calibrationVm && root.calibrationVm.selectedCategory === "slice"
 
@@ -321,12 +316,11 @@ CxDialog {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
-
+                spacing: Theme.spacingMD
                 // Start
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 2
+                    spacing: Theme.spacingXS
                     Text { text: qsTr("起始"); color: Theme.borderActive; font.pixelSize: Theme.fontSizeXS }
                     CxTextField {
                         id: rangeStartField
@@ -351,7 +345,7 @@ CxDialog {
                 // End
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 2
+                    spacing: Theme.spacingXS
                     Text { text: qsTr("结束"); color: Theme.borderActive; font.pixelSize: Theme.fontSizeXS }
                     CxTextField {
                         id: rangeEndField
@@ -376,7 +370,7 @@ CxDialog {
                 // Step
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 2
+                    spacing: Theme.spacingXS
                     Text { text: qsTr("步长"); color: Theme.borderActive; font.pixelSize: Theme.fontSizeXS }
                     CxTextField {
                         id: rangeStepField
@@ -409,7 +403,7 @@ CxDialog {
 
         // Button row
         RowLayout {
-            Layout.fillWidth: true; spacing: 8
+            Layout.fillWidth: true; spacing: Theme.spacingMD
             Item { Layout.fillWidth: true }
 
             // Cancel calibration (visible during calibration)

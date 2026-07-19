@@ -32,9 +32,8 @@ CxDialog {
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 12
-
+            anchors.margins: Theme.spacingXXL
+            spacing: Theme.spacingLG
             Text {
                 Layout.fillWidth: true
                 text: qsTr("将当前所有自定义预设导出为可分享的预设包文件。")
@@ -53,7 +52,7 @@ CxDialog {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Theme.spacingMD
                 Item { Layout.fillWidth: true }
                 CxButton {
                     text: qsTr("取消")

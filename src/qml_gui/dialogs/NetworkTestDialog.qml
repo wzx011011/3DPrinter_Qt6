@@ -27,9 +27,8 @@ CxDialog {
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 12
-
+            anchors.margins: Theme.spacingXXL
+            spacing: Theme.spacingLG
             Text {
                 Layout.fillWidth: true
                 text: qsTr("测试与打印机的网络连接性：")
@@ -47,7 +46,7 @@ CxDialog {
                 ]
                 delegate: RowLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: Theme.spacingMD
                     Text {
                         text: modelData.name
                         color: Theme.textSecondary

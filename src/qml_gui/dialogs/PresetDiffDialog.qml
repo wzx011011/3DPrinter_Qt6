@@ -89,14 +89,12 @@ CxDialog {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 16
-        spacing: 10
-
+        anchors.margins: Theme.spacingXL
+        spacing: Theme.spacingMD
         // Header row: scope + preset A + preset B + Compare button
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
-
+            spacing: Theme.spacingMD
             Text {
                 text: qsTr("范围：")
                 color: Theme.textMuted
@@ -167,10 +165,9 @@ CxDialog {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 10
-                anchors.rightMargin: 10
-                spacing: 0
-
+                anchors.leftMargin: Theme.spacingMD
+                anchors.rightMargin: Theme.spacingMD
+                spacing: Theme.spacingXS
                 Text {
                     Layout.preferredWidth: 240
                     text: qsTr("键名")
@@ -227,10 +224,9 @@ CxDialog {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 10
-                    spacing: 0
-
+                    anchors.leftMargin: Theme.spacingMD
+                    anchors.rightMargin: Theme.spacingMD
+                    spacing: Theme.spacingXS
                     // Key column
                     Text {
                         Layout.preferredWidth: 240

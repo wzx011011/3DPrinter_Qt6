@@ -67,13 +67,12 @@ CxDialog {
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 12
-
+            anchors.margins: Theme.spacingXXL
+            spacing: Theme.spacingLG
             // Tier 标签
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Theme.spacingMD
                 Text {
                     text: qsTr("预设类型：")
                     color: Theme.textSecondary
@@ -95,7 +94,7 @@ CxDialog {
             // 名称输入（ComboBox 可编辑）
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Theme.spacingMD
                 Text {
                     text: qsTr("Name:")
                     color: Theme.textPrimary
@@ -143,7 +142,7 @@ CxDialog {
             // 按钮区
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Theme.spacingMD
                 Item { Layout.fillWidth: true }
                 CxButton {
                     text: qsTr("取消")

@@ -24,16 +24,14 @@ CxDialog {
     required property var editorVm
 
     contentItem: RowLayout {
-        spacing: 16
+        spacing: Theme.spacingXL
         anchors.fill: parent
-        anchors.margins: 16
-
+        anchors.margins: Theme.spacingXL
         // -- Left: shape options + dimension inputs --
         ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 10
-
+            spacing: Theme.spacingMD
             // Shape type (aligns with upstream BedShape::PageType)
             Text {
                 text: qsTr("热床形状")
@@ -42,7 +40,7 @@ CxDialog {
             }
 
             RowLayout {
-                spacing: 6
+                spacing: Theme.spacingSM
                 Repeater {
                     model: [
                         qsTr("矩形"),
@@ -94,7 +92,7 @@ CxDialog {
             // Width (rectangle) or Diameter (circle)
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Theme.spacingMD
                 visible: root.editorVm ? root.editorVm.bedShapeType !== 2 : true
 
                 Text {
@@ -128,7 +126,7 @@ CxDialog {
             // Depth (rectangle only)
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Theme.spacingMD
                 visible: root.editorVm ? root.editorVm.bedShapeType === 0 : true
 
                 Text {
@@ -151,7 +149,7 @@ CxDialog {
             // Height
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Theme.spacingMD
                 visible: root.editorVm ? root.editorVm.bedShapeType !== 2 : true
 
                 Text {
@@ -181,8 +179,7 @@ CxDialog {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
-
+                spacing: Theme.spacingMD
                 Text {
                     width: 50
                     text: "X"
@@ -202,8 +199,7 @@ CxDialog {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
-
+                spacing: Theme.spacingMD
                 Text {
                     width: 50
                     text: "Y"
@@ -355,9 +351,8 @@ CxDialog {
 
         RowLayout {
             anchors.fill: parent
-            anchors.rightMargin: 16
-            spacing: 10
-
+            anchors.rightMargin: Theme.spacingXL
+            spacing: Theme.spacingMD
             Item { Layout.fillWidth: true }
 
             CxButton {

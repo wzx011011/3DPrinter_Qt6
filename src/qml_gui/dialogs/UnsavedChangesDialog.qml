@@ -43,9 +43,8 @@ CxDialog {
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 12
-
+            anchors.margins: Theme.spacingXXL
+            spacing: Theme.spacingLG
             // 标题说明
             Text {
                 Layout.fillWidth: true
@@ -75,7 +74,7 @@ CxDialog {
                 // 滚动区
                 Flickable {
                     anchors.fill: parent
-                    anchors.margins: 8
+                    anchors.margins: Theme.spacingMD
                     contentHeight: diffCol.implicitHeight
                     clip: true
                     boundsBehavior: Flickable.StopAtBounds
@@ -85,14 +84,12 @@ CxDialog {
                     ColumnLayout {
                         id: diffCol
                         width: parent.width
-                        spacing: 4
-
+                        spacing: Theme.spacingXS
                         Repeater {
                             model: root.configVm ? root.configVm.globalModifiedCount : 0
                             delegate: RowLayout {
                                 Layout.fillWidth: true
-                                spacing: 8
-
+                                spacing: Theme.spacingMD
                                 Text {
                                     text: root.configVm ? root.configVm.globalModifiedKey(index) : ""
                                     color: Theme.textSecondary
@@ -131,7 +128,7 @@ CxDialog {
             // 按钮区
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Theme.spacingMD
                 CxButton {
                     text: qsTr("取消")
                     onClicked: { root.action = "cancel"; root.reject() }

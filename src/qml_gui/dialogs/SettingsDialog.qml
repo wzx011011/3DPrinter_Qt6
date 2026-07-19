@@ -274,8 +274,7 @@ ApplicationWindow {
 
         ColumnLayout {
             anchors.fill: parent
-            spacing: 0
-
+            spacing: Theme.spacingXS
             // 1. Preset and action bar
             Rectangle {
                 Layout.fillWidth: true
@@ -284,10 +283,9 @@ ApplicationWindow {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 8
-                    spacing: 6
-
+                    anchors.leftMargin: Theme.spacingMD
+                    anchors.rightMargin: Theme.spacingMD
+                    spacing: Theme.spacingSM
                     // Preset selector
                     CxComboBox {
                         Layout.fillWidth: true
@@ -421,8 +419,7 @@ ApplicationWindow {
 
                 RowLayout {
                     anchors.fill: parent
-                    spacing: 0
-
+                    spacing: Theme.spacingXS
                     Repeater {
                         model: root.tabPages
 
@@ -464,8 +461,7 @@ ApplicationWindow {
             RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 0
-
+                spacing: Theme.spacingXS
                 // Option editing area
                 Rectangle {
                     Layout.fillWidth: true
@@ -477,8 +473,7 @@ ApplicationWindow {
                         anchors.fill: parent
                         clip: true
                         model: root.filteredIndices
-                        spacing: 0
-
+                        spacing: Theme.spacingXS
                         ScrollBar.vertical: ScrollBar {
                             visible: optionList.contentHeight > optionList.height
                         }

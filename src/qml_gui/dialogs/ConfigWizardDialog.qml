@@ -26,14 +26,12 @@ CxDialog {
     signal wizardFinished()
 
     contentItem: ColumnLayout {
-        spacing: 0
-
+        spacing: Theme.spacingXS
         // Page indicator (replaces header page count display)
         RowLayout {
             Layout.fillWidth: true
-            Layout.rightMargin: 16
-            spacing: 10
-
+            Layout.rightMargin: Theme.spacingXL
+            spacing: Theme.spacingMD
             Item { Layout.fillWidth: true }
 
             Text {
@@ -47,7 +45,7 @@ CxDialog {
             id: swipeView
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.margins: 20
+            Layout.margins: Theme.spacingXXL
             clip: true
             currentIndex: 0
             interactive: false
@@ -55,8 +53,7 @@ CxDialog {
             // -- Page 0: Welcome --
             Item {
                 ColumnLayout {
-                    anchors.fill: parent; spacing: 16
-
+                    anchors.fill: parent; spacing: Theme.spacingXL
                     Item { Layout.fillHeight: true }
 
                     // Logo
@@ -91,8 +88,7 @@ CxDialog {
             // -- Page 1: Printer Selection --
             Item {
                 ColumnLayout {
-                    anchors.fill: parent; spacing: 16
-
+                    anchors.fill: parent; spacing: Theme.spacingXL
                     Text {
                         text: qsTr("选择打印机")
                         color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXL; font.bold: true
@@ -109,7 +105,7 @@ CxDialog {
                         color: Theme.bgInset; border.color: Theme.switchTrackOff
 
                         RowLayout {
-                            anchors.fill: parent; anchors.margins: 8; spacing: 8
+                            anchors.fill: parent; anchors.margins: 8; spacing: Theme.spacingMD
                             Text { text: "🖨"; font.pixelSize: Theme.fontSizeLG }
                             CxComboBox {
                                 id: printerCombo
@@ -136,7 +132,7 @@ CxDialog {
                         color: Theme.bgInset; border.color: Theme.switchTrackOff
 
                         RowLayout {
-                            anchors.fill: parent; anchors.margins: 8; spacing: 8
+                            anchors.fill: parent; anchors.margins: 8; spacing: Theme.spacingMD
                             Text { text: "🟦"; font.pixelSize: Theme.fontSizeLG }
                             CxComboBox {
                                 id: bedCombo
@@ -157,7 +153,7 @@ CxDialog {
                         Layout.fillWidth: true; height: 32; radius: 4
                         color: Theme.bgSurface
                         RowLayout {
-                            anchors.fill: parent; anchors.leftMargin: 10; spacing: 6
+                            anchors.fill: parent; anchors.leftMargin: 10; spacing: Theme.spacingSM
                             Text { text: qsTr("喷嘴直径:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM }
                             Text { text: "0.4mm"; color: Theme.accent; font.pixelSize: Theme.fontSizeSM; font.bold: true }
                         }
@@ -170,8 +166,7 @@ CxDialog {
             // -- Page 2: Filament Selection --
             Item {
                 ColumnLayout {
-                    anchors.fill: parent; spacing: 16
-
+                    anchors.fill: parent; spacing: Theme.spacingXL
                     Text {
                         text: qsTr("选择耗材")
                         color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXL; font.bold: true
@@ -188,7 +183,7 @@ CxDialog {
                         color: Theme.bgInset; border.color: Theme.switchTrackOff
 
                         RowLayout {
-                            anchors.fill: parent; anchors.margins: 8; spacing: 8
+                            anchors.fill: parent; anchors.margins: 8; spacing: Theme.spacingMD
                             Text { text: "🟡"; font.pixelSize: Theme.fontSizeLG }
                             CxComboBox {
                                 id: filamentCombo
@@ -206,10 +201,9 @@ CxDialog {
 
                         ColumnLayout {
                             id: tempInfo
-                            anchors.fill: parent; anchors.margins: 12; spacing: 8
-
+                            anchors.fill: parent; anchors.margins: 12; spacing: Theme.spacingMD
                             RowLayout {
-                                spacing: 6
+                                spacing: Theme.spacingSM
                                 Text { text: qsTr("喷嘴温度:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM }
                                 Text {
                                     id: nozzleTempText
@@ -228,7 +222,7 @@ CxDialog {
                             }
 
                             RowLayout {
-                                spacing: 6
+                                spacing: Theme.spacingSM
                                 Text { text: qsTr("热床温度:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM }
                                 Text {
                                     id: bedTempText
@@ -272,8 +266,7 @@ CxDialog {
             // -- Page 3: Done --
             Item {
                 ColumnLayout {
-                    anchors.fill: parent; spacing: 16
-
+                    anchors.fill: parent; spacing: Theme.spacingXL
                     Item { Layout.fillHeight: true }
 
                     // Success icon
@@ -305,28 +298,27 @@ CxDialog {
 
                         ColumnLayout {
                             id: summaryCol
-                            anchors.fill: parent; anchors.margins: 12; spacing: 8
-
+                            anchors.fill: parent; anchors.margins: 12; spacing: Theme.spacingMD
                             Row {
-                                spacing: 8
+                                spacing: Theme.spacingMD
                                 Text { text: qsTr("打印机:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM; width: 70 }
                                 Text { text: printerCombo.displayText; color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
                             }
 
                             Row {
-                                spacing: 8
+                                spacing: Theme.spacingMD
                                 Text { text: qsTr("热床:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM; width: 70 }
                                 Text { text: bedCombo.displayText; color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
                             }
 
                             Row {
-                                spacing: 8
+                                spacing: Theme.spacingMD
                                 Text { text: qsTr("耗材:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM; width: 70 }
                                 Text { text: filamentCombo.displayText; color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
                             }
 
                             Row {
-                                spacing: 8
+                                spacing: Theme.spacingMD
                                 Text { text: qsTr("喷嘴温度:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM; width: 70 }
                                 Text { text: nozzleTempText.text; color: Theme.statusWarning; font.pixelSize: Theme.fontSizeSM }
                             }
@@ -341,9 +333,9 @@ CxDialog {
         // Page indicator dots
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
-            Layout.topMargin: 8
-            Layout.bottomMargin: 4
-            spacing: 8
+            Layout.topMargin: Theme.spacingMD
+            Layout.bottomMargin: Theme.spacingXS
+            spacing: Theme.spacingMD
             Repeater {
                 model: swipeView.count
                 Rectangle {
@@ -362,12 +354,11 @@ CxDialog {
 
         RowLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
-            Layout.topMargin: 12
-            Layout.bottomMargin: 16
-            spacing: 12
-
+            Layout.leftMargin: Theme.spacingXXL
+            Layout.rightMargin: Theme.spacingXXL
+            Layout.topMargin: Theme.spacingLG
+            Layout.bottomMargin: Theme.spacingXL
+            spacing: Theme.spacingLG
             // Back button
             Rectangle {
                 visible: swipeView.currentIndex > 0

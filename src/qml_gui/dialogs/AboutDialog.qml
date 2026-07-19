@@ -20,13 +20,11 @@ CxDialog {
     contentItem: ColumnLayout {
         id: contentCol
         width: root.width - 32
-        spacing: 16
-
+        spacing: Theme.spacingXL
         // Logo + product name
         ColumnLayout {
             Layout.alignment: Qt.AlignHCenter
-            spacing: 6
-
+            spacing: Theme.spacingSM
             Rectangle {
                 Layout.alignment: Qt.AlignHCenter
                 width: 64; height: 64; radius: 12
@@ -54,12 +52,11 @@ CxDialog {
 
             ColumnLayout {
                 id: infoCols
-                anchors.fill: parent; anchors.margins: 10; spacing: 6
-
+                anchors.fill: parent; anchors.margins: 10; spacing: Theme.spacingSM
                 component InfoRow: RowLayout {
                     required property string label
                     required property string value
-                    Layout.fillWidth: true; spacing: 0
+                    Layout.fillWidth: true; spacing: Theme.spacingXS
                     Text { text: parent.label; color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM; Layout.preferredWidth: 120 }
                     Text { text: parent.value; color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
                 }
@@ -80,7 +77,7 @@ CxDialog {
             Text {
                 id: licText
                 anchors.left: parent.left; anchors.right: parent.right
-                anchors.top: parent.top; anchors.margins: 10
+                anchors.top: parent.top; anchors.margins: Theme.spacingMD
                 text: qsTr("本软件基于 Qt 6 框架构建，遵循 GNU LGPL v3 协议。使用本软件即代表您同意相关使用条款。")
                 color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS
                 wrapMode: Text.WordWrap

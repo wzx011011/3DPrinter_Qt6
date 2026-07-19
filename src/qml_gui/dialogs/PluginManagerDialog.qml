@@ -52,9 +52,8 @@ CxDialog {
 
     contentItem: ColumnLayout {
         width: root.width
-        spacing: 8
-        anchors.margins: 16
-
+        spacing: Theme.spacingMD
+        anchors.margins: Theme.spacingXL
         // Plugin list
         Repeater {
             model: root.plugins
@@ -72,13 +71,11 @@ CxDialog {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.top: parent.top
-                    anchors.margins: 10
-                    spacing: 6
-
+                    anchors.margins: Theme.spacingMD
+                    spacing: Theme.spacingSM
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 8
-
+                        spacing: Theme.spacingMD
                         Text {
                             text: modelData.name
                             color: Theme.textPrimary
@@ -119,8 +116,7 @@ CxDialog {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 8
-
+                        spacing: Theme.spacingMD
                         CxCheckBox {
                             text: modelData.installed ? qsTr("启用") : qsTr("安装")
                             checked: modelData.enabled
@@ -171,9 +167,8 @@ CxDialog {
 
         RowLayout {
             anchors.fill: parent
-            anchors.rightMargin: 16
-            spacing: 10
-
+            anchors.rightMargin: Theme.spacingXL
+            spacing: Theme.spacingMD
             Text {
                 text: qsTr("从插件市场浏览更多插件")
                 color: Theme.textTertiary

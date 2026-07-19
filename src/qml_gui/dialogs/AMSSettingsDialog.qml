@@ -44,15 +44,14 @@ CxDialog {
     contentItem: ScrollView {
         id: scrollView
         anchors.fill: parent
-        anchors.margins: 12
+        anchors.margins: Theme.spacingLG
         clip: true
         contentWidth: availableWidth
         ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
         ColumnLayout {
             width: scrollView.availableWidth
-            spacing: 10
-
+            spacing: Theme.spacingMD
             // -- Section 1: Filament Slot Management --
             Text {
                 text: qsTr("耗材槽位管理")
@@ -85,14 +84,12 @@ CxDialog {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.top: parent.top
-                            anchors.margins: 10
-                            spacing: 6
-
+                            anchors.margins: Theme.spacingMD
+                            spacing: Theme.spacingSM
                             // Slot header: color indicator + name
                             RowLayout {
                                 Layout.fillWidth: true
-                                spacing: 6
-
+                                spacing: Theme.spacingSM
                                 Rectangle {
                                     width: 16
                                     height: 16
@@ -143,8 +140,7 @@ CxDialog {
                             // Material type + color picker row
                             RowLayout {
                                 Layout.fillWidth: true
-                                spacing: 6
-
+                                spacing: Theme.spacingSM
                                 CxComboBox {
                                     Layout.fillWidth: true
                                     implicitHeight: 24
@@ -165,7 +161,7 @@ CxDialog {
 
                                 // Preset color buttons
                                 Row {
-                                    spacing: 3
+                                    spacing: Theme.spacingXS
                                     Repeater {
                                         model: root.slotColors
                                         Rectangle {
@@ -215,9 +211,9 @@ CxDialog {
                 ListView {
                     id: mappingList
                     anchors.fill: parent
-                    anchors.margins: 4
+                    anchors.margins: Theme.spacingXS
                     model: root.mappingRules
-                    spacing: 2
+                    spacing: Theme.spacingXS
                     interactive: false
 
                     delegate: Rectangle {
@@ -230,10 +226,9 @@ CxDialog {
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 8
-                            anchors.rightMargin: 8
-                            spacing: 8
-
+                            anchors.leftMargin: Theme.spacingMD
+                            anchors.rightMargin: Theme.spacingMD
+                            spacing: Theme.spacingMD
                             Text {
                                 text: qsTr("Slot %1").arg(modelData.slot)
                                 color: Theme.textPrimary
@@ -285,8 +280,7 @@ CxDialog {
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 8
-
+                    spacing: Theme.spacingMD
                     Rectangle {
                         width: 12
                         height: 12
@@ -358,9 +352,8 @@ CxDialog {
 
         RowLayout {
             anchors.fill: parent
-            anchors.rightMargin: 16
-            spacing: 10
-
+            anchors.rightMargin: Theme.spacingXL
+            spacing: Theme.spacingMD
             Item { Layout.fillWidth: true }
 
             CxButton {

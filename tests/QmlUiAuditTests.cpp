@@ -601,6 +601,9 @@ private slots:
   // 6 remaining destructive triggers route through ConfirmDialog (was firing
   // immediately per v5.2 audit).
   void v53DestructiveConfirmSweep();
+  // Phase 172 (CL-02): dialog spacing sweep gate. Locks that dialogs use
+  // Theme.spacing* tokens instead of hand-rolled pixel values.
+  void v53DialogSpacingSwept();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -7753,6 +7756,29 @@ void QmlUiAuditTests::v53DestructiveConfirmSweep()
   // MonitorPage: disconnectDevice now routes through ConfirmDialog.
   QVERIFY2(monitorPage.contains(QStringLiteral("disconnectConfirm")),
            "CL-01: MonitorPage must route disconnectDevice through disconnectConfirm");
+}
+
+// Phase 172 (CL-02): dialog spacing sweep gate.
+// Phase 172 swept 247 hand-rolled spacing/margin values across 25 dialogs to
+// the Theme.spacing* scale (mirrors the Phase 162/163 color/typography pattern).
+void QmlUiAuditTests::v53DialogSpacingSwept()
+{
+  // Spot-check that dialogs now use Theme.spacing* tokens (was zero usage per
+  // Dialogs-UI-REVIEW: "23 of 24 dialogs use zero spacing tokens").
+  const QString bedShape = readSource(QStringLiteral("src/qml_gui/dialogs/BedShapeDialog.qml"));
+  const QString savePreset = readSource(QStringLiteral("src/qml_gui/dialogs/SavePresetDialog.qml"));
+  const QString wipeTower = readSource(QStringLiteral("src/qml_gui/dialogs/WipeTowerDialog.qml"));
+
+  QVERIFY2(!bedShape.isEmpty(), "Unable to read BedShapeDialog.qml");
+
+  // Each dialog must now reference Theme.spacing* tokens at least once
+  // (was hand-rolled only pre-Phase 172).
+  QVERIFY2(bedShape.contains(QStringLiteral("Theme.spacing")),
+           "CL-02: BedShapeDialog must use Theme.spacing* tokens (was hand-rolled values)");
+  QVERIFY2(savePreset.contains(QStringLiteral("Theme.spacing")),
+           "CL-02: SavePresetDialog must use Theme.spacing* tokens");
+  QVERIFY2(wipeTower.contains(QStringLiteral("Theme.spacing")),
+           "CL-02: WipeTowerDialog must use Theme.spacing* tokens");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

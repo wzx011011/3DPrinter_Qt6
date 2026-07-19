@@ -23,8 +23,7 @@ CxDialog {
     contentItem: ColumnLayout {
         id: contentCol
         width: root.width - 32
-        spacing: 14
-
+        spacing: Theme.spacingLG
         // Project info row
         Rectangle {
             Layout.fillWidth: true
@@ -35,13 +34,12 @@ CxDialog {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
-                spacing: 10
-
+                anchors.leftMargin: Theme.spacingLG
+                anchors.rightMargin: Theme.spacingLG
+                spacing: Theme.spacingMD
                 Text { text: "📄"; font.pixelSize: Theme.fontSizeXL }
                 ColumnLayout {
-                    spacing: 2
+                    spacing: Theme.spacingXS
                     Text {
                         text: root.editorVm ? root.editorVm.projectName : "—"
                         color: Theme.textPrimary; font.pixelSize: Theme.fontSizeMD; font.bold: true
@@ -60,8 +58,7 @@ CxDialog {
         // File output path
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
-
+            spacing: Theme.spacingMD
             Text { text: qsTr("输出路径"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; Layout.preferredWidth: 60 }
 
             Rectangle {
@@ -73,7 +70,7 @@ CxDialog {
                 TextInput {
                     id: pathField
                     anchors.fill: parent
-                    anchors.leftMargin: 8; anchors.rightMargin: 8
+                    anchors.leftMargin: 8; anchors.rightMargin: Theme.spacingMD
                     anchors.verticalCenter: parent.verticalCenter
                     verticalAlignment: TextInput.AlignVCenter
                     text: "C:/Users/Output/print_job.gcode"
@@ -97,8 +94,7 @@ CxDialog {
         // Quick options
         RowLayout {
             Layout.fillWidth: true
-            spacing: 16
-
+            spacing: Theme.spacingXL
             CheckBox {
                 text: qsTr("切片后自动发送")
                 checked: true
@@ -117,8 +113,7 @@ CxDialog {
         // Button row
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
-
+            spacing: Theme.spacingMD
             Item { Layout.fillWidth: true }
 
             // Export G-code

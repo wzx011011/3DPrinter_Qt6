@@ -43,14 +43,12 @@ CxDialog {
 
     contentItem: ColumnLayout {
         width: root.width
-        spacing: 10
-        anchors.margins: 16
-
+        spacing: Theme.spacingMD
+        anchors.margins: Theme.spacingXL
         // Mode toggle
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
-
+            spacing: Theme.spacingMD
             Text {
                 text: qsTr("模式")
                 color: Theme.textSecondary
@@ -150,7 +148,7 @@ CxDialog {
                 id: flushGrid
                 anchors.left: parent.left
                 anchors.top: parent.top
-                anchors.margins: 6
+                anchors.margins: Theme.spacingSM
                 columns: 5
                 rowSpacing: 4
                 columnSpacing: 4
@@ -180,8 +178,7 @@ CxDialog {
                     model: root.extruderNames.length
 
                     Row {
-                        spacing: 4
-
+                        spacing: Theme.spacingXS
                         // Row header
                         Rectangle {
                             width: 50
@@ -219,8 +216,7 @@ CxDialog {
         // Multiplier + min volume
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
-
+            spacing: Theme.spacingMD
             Text {
                 Layout.preferredWidth: 70
                 text: qsTr("擦洗倍率")
@@ -281,9 +277,8 @@ CxDialog {
 
         RowLayout {
             anchors.fill: parent
-            anchors.rightMargin: 16
-            spacing: 10
-
+            anchors.rightMargin: Theme.spacingXL
+            spacing: Theme.spacingMD
             Item { Layout.fillWidth: true }
 
             CxButton {

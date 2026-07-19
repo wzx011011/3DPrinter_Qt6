@@ -28,9 +28,8 @@ CxDialog {
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 12
-
+            anchors.margins: Theme.spacingXXL
+            spacing: Theme.spacingLG
             Text {
                 Layout.fillWidth: true
                 text: qsTr("选择目标打印机发送 G-code：")
@@ -50,7 +49,7 @@ CxDialog {
                 ListView {
                     id: deviceList
                     anchors.fill: parent
-                    anchors.margins: 8
+                    anchors.margins: Theme.spacingMD
                     clip: true
                     model: root.deviceVm ? root.deviceVm.filteredDeviceCount : 0
                     delegate: Rectangle {
@@ -65,10 +64,10 @@ CxDialog {
 
                         ColumnLayout {
                             anchors.fill: parent
-                            anchors.margins: 10
-                            spacing: 2
+                            anchors.margins: Theme.spacingMD
+                            spacing: Theme.spacingXS
                             RowLayout {
-                                spacing: 8
+                                spacing: Theme.spacingMD
                                 Text {
                                     text: devData.name || devData.model || "Unknown"
                                     color: Theme.textPrimary
@@ -111,7 +110,7 @@ CxDialog {
             // 按钮区
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Theme.spacingMD
                 CxButton {
                     text: qsTr("取消")
                     onClicked: root.reject()

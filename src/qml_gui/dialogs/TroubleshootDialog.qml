@@ -27,9 +27,8 @@ CxDialog {
 
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 12
-
+            anchors.margins: Theme.spacingXXL
+            spacing: Theme.spacingLG
             Text {
                 Layout.fillWidth: true
                 text: qsTr("设备连接问题排查（按顺序检查）：")
@@ -45,8 +44,7 @@ CxDialog {
 
                 ColumnLayout {
                     width: parent.width
-                    spacing: 8
-
+                    spacing: Theme.spacingMD
                     Repeater {
                         model: [
                             { step: "1", title: qsTr("检查设备电源"), desc: qsTr("确保打印机已开机且启动完成") },
@@ -66,9 +64,8 @@ CxDialog {
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.margins: 10
-                                spacing: 10
-
+                                anchors.margins: Theme.spacingMD
+                                spacing: Theme.spacingMD
                                 Rectangle {
                                     width: 24; height: 24; radius: 12
                                     color: Theme.accent
@@ -82,7 +79,7 @@ CxDialog {
                                 }
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: 2
+                                    spacing: Theme.spacingXS
                                     Text {
                                         text: modelData.title
                                         color: Theme.textPrimary

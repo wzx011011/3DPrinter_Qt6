@@ -64,9 +64,8 @@ CxDialog {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 16
-        spacing: 10
-
+        anchors.margins: Theme.spacingXL
+        spacing: Theme.spacingMD
         Text {
             text: qsTr("创建新的用户预设")
             color: Theme.textPrimary
@@ -76,7 +75,7 @@ CxDialog {
 
         // Scope selector (对齐上游 Preset::Type radio group)
         RowLayout {
-            spacing: 8
+            spacing: Theme.spacingMD
             Text { text: qsTr("范围："); color: Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
             CxComboBox {
                 id: scopeCombo
@@ -92,7 +91,7 @@ CxDialog {
 
         // Inherits-from selector (对齐上游 "Inherits from" combo)
         RowLayout {
-            spacing: 8
+            spacing: Theme.spacingMD
             Text { text: qsTr("继承自："); color: Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
             CxComboBox {
                 id: inheritsCombo
@@ -103,7 +102,7 @@ CxDialog {
 
         // Name input + duplicate warning
         RowLayout {
-            spacing: 8
+            spacing: Theme.spacingMD
             Text { text: qsTr("名称："); color: Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
             CxTextField {
                 id: nameInput
@@ -126,7 +125,7 @@ CxDialog {
 
         RowLayout {
             Layout.alignment: Qt.AlignRight
-            spacing: 8
+            spacing: Theme.spacingMD
             CxButton {
                 text: qsTr("取消")
                 onClicked: root.reject()

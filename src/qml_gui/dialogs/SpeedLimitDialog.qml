@@ -28,14 +28,12 @@ CxDialog {
 
     contentItem: ColumnLayout {
         width: root.width
-        spacing: 8
-        anchors.margins: 16
-
+        spacing: Theme.spacingMD
+        anchors.margins: Theme.spacingXL
         // Header row
         RowLayout {
             Layout.fillWidth: true
-            spacing: 6
-
+            spacing: Theme.spacingSM
             Text { Layout.preferredWidth: 20; text: ""; color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
             Text { Layout.preferredWidth: 50; text: qsTr("范围最小"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
             Text { Layout.preferredWidth: 50; text: qsTr("范围最大"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
@@ -54,9 +52,8 @@ CxDialog {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 6
-                Layout.topMargin: 4
-
+                spacing: Theme.spacingSM
+                Layout.topMargin: Theme.spacingXS
                 CxCheckBox {
                     Layout.preferredWidth: 20
                     checked: modelData.enabled
@@ -144,10 +141,9 @@ CxDialog {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 16
-            anchors.rightMargin: 16
-            spacing: 10
-
+            anchors.leftMargin: Theme.spacingXL
+            anchors.rightMargin: Theme.spacingXL
+            spacing: Theme.spacingMD
             CxButton {
                 text: qsTr("添加")
                 cxStyle: CxButton.Style.Secondary

@@ -31,16 +31,15 @@ CxDialog {
     height: 400
 
     contentItem: ColumnLayout {
-        spacing: 0
+        spacing: Theme.spacingXS
         anchors.fill: parent
-        anchors.margins: 0
-
+        anchors.margins: Theme.spacingXS
         // Top label (aligns with upstream "Built-in placeholders (Double click item to add to G-code)")
         Text {
             Layout.fillWidth: true
-            Layout.leftMargin: 16
-            Layout.topMargin: 8
-            Layout.bottomMargin: 4
+            Layout.leftMargin: Theme.spacingXL
+            Layout.topMargin: Theme.spacingMD
+            Layout.bottomMargin: Theme.spacingXS
             text: qsTr("内置占位符（双击项添加到 G-code）：")
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSizeSM
@@ -51,17 +50,15 @@ CxDialog {
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.leftMargin: 12
-            Layout.rightMargin: 12
-            Layout.bottomMargin: 8
-            spacing: 0
-
+            Layout.leftMargin: Theme.spacingLG
+            Layout.rightMargin: Theme.spacingLG
+            Layout.bottomMargin: Theme.spacingMD
+            spacing: Theme.spacingXS
             // -- Left panel: parameter list --
             ColumnLayout {
                 Layout.preferredWidth: 180
                 Layout.fillHeight: true
-                spacing: 6
-
+                spacing: Theme.spacingSM
                 // Search bar
                 CxTextField {
                     id: searchField
@@ -83,7 +80,7 @@ CxDialog {
                     ListView {
                         id: paramListView
                         anchors.fill: parent
-                        anchors.margins: 2
+                        anchors.margins: Theme.spacingXS
                         model: paramProxyModel
                         clip: true
                         boundsBehavior: Flickable.StopAtBounds
@@ -105,9 +102,9 @@ CxDialog {
                             // Category header row
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 6
-                                anchors.rightMargin: 6
-                                spacing: 4
+                                anchors.leftMargin: Theme.spacingSM
+                                anchors.rightMargin: Theme.spacingSM
+                                spacing: Theme.spacingXS
                                 visible: modelData.isCategory
 
                                 // Expand/collapse arrow
@@ -131,8 +128,8 @@ CxDialog {
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.leftMargin: modelData.isCategory ? 0 : 18
-                                anchors.rightMargin: 6
-                                spacing: 4
+                                anchors.rightMargin: Theme.spacingSM
+                                spacing: Theme.spacingXS
                                 visible: !modelData.isCategory
 
                                 // Type indicator icon (scalar vs vector)
@@ -197,8 +194,7 @@ CxDialog {
                 // Parameter description area (aligns with upstream m_param_label + m_param_description)
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 2
-
+                    spacing: Theme.spacingXS
                     Text {
                         Layout.fillWidth: true
                         id: paramLabelDisplay
@@ -228,8 +224,8 @@ CxDialog {
             // -- Add button (vertical, centered between list and editor) --
             CxButton {
                 Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: 8
-                Layout.rightMargin: 8
+                Layout.leftMargin: Theme.spacingMD
+                Layout.rightMargin: Theme.spacingMD
                 text: qsTr("添加")
                 compact: true
                 enabled: !!root.selectedParamCode
@@ -297,10 +293,9 @@ CxDialog {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 16
-            anchors.rightMargin: 16
-            spacing: 10
-
+            anchors.leftMargin: Theme.spacingXL
+            anchors.rightMargin: Theme.spacingXL
+            spacing: Theme.spacingMD
             Item { Layout.fillWidth: true }
 
             CxButton {

@@ -58,15 +58,13 @@ CxDialog {
     contentItem: ColumnLayout {
         id: contentCol
         width: root.width - 32
-        spacing: 12
-
+        spacing: Theme.spacingLG
         // Empty state
         ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: root._historyItems.length === 0
-            spacing: 8
-
+            spacing: Theme.spacingMD
             Item { Layout.fillHeight: true }
 
             Text {
@@ -99,8 +97,7 @@ CxDialog {
             Layout.fillHeight: true
             clip: true
             model: root._historyItems
-            spacing: 4
-
+            spacing: Theme.spacingXS
             ScrollBar.vertical: ScrollBar {
                 policy: ScrollBar.AsNeeded
             }
@@ -115,10 +112,9 @@ CxDialog {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 12
-                    spacing: 12
-
+                    anchors.leftMargin: Theme.spacingLG
+                    anchors.rightMargin: Theme.spacingLG
+                    spacing: Theme.spacingLG
                     // Type icon
                     Rectangle {
                         width: 36; height: 36; radius: 6
@@ -134,8 +130,7 @@ CxDialog {
                     // Details
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 2
-
+                        spacing: Theme.spacingXS
                         Text {
                             text: modelData.name
                             color: Theme.textPrimary
@@ -144,7 +139,7 @@ CxDialog {
                         }
 
                         RowLayout {
-                            spacing: 12
+                            spacing: Theme.spacingLG
                             Text {
                                 text: qsTr("K值: %1").arg(modelData.kValue.toFixed(3))
                                 color: Theme.textTertiary

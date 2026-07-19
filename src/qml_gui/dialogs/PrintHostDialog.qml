@@ -29,14 +29,12 @@ CxDialog {
 
     contentItem: ColumnLayout {
         width: root.width
-        spacing: 10
-        anchors.margins: 16
-
+        spacing: Theme.spacingMD
+        anchors.margins: Theme.spacingXL
         // Preset name
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
-
+            spacing: Theme.spacingMD
             Text {
                 Layout.preferredWidth: 80
                 text: qsTr("预设名称")
@@ -54,8 +52,7 @@ CxDialog {
         // Host type
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
-
+            spacing: Theme.spacingMD
             Text {
                 Layout.preferredWidth: 80
                 text: qsTr("主机类型")
@@ -74,8 +71,7 @@ CxDialog {
         // Host URL + port
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
-
+            spacing: Theme.spacingMD
             Text {
                 Layout.preferredWidth: 80
                 text: qsTr("主机地址")
@@ -99,8 +95,7 @@ CxDialog {
         // API Key
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
-
+            spacing: Theme.spacingMD
             Text {
                 Layout.preferredWidth: 80
                 text: qsTr("API Key")
@@ -119,8 +114,7 @@ CxDialog {
         // Auth type
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
-
+            spacing: Theme.spacingMD
             Text {
                 Layout.preferredWidth: 80
                 text: qsTr("认证方式")
@@ -139,8 +133,7 @@ CxDialog {
         // Test connection button
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
-
+            spacing: Theme.spacingMD
             Item { Layout.preferredWidth: 80 }
 
             CxButton {
@@ -175,9 +168,8 @@ CxDialog {
 
         RowLayout {
             anchors.fill: parent
-            anchors.rightMargin: 16
-            spacing: 10
-
+            anchors.rightMargin: Theme.spacingXL
+            spacing: Theme.spacingMD
             Item { Layout.fillWidth: true }
 
             CxButton {
