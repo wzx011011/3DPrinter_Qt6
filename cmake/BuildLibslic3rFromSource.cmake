@@ -533,6 +533,8 @@ add_library(libslic3r_cgal_from_source STATIC ${LIBSLIC3R_CGAL_SOURCES})
 # Debug info for crash address resolution
 if(MSVC)
     target_compile_options(libslic3r_cgal_from_source PRIVATE /Zi)
+    # Treat source files as UTF-8 (see note on libslic3r_from_source below).
+    target_compile_options(libslic3r_cgal_from_source PRIVATE /utf-8)
 endif()
 
 # Compile definitions needed by CGAL-dependent sources
@@ -785,6 +787,11 @@ endif()
 if(MSVC)
     # Debug info for crash address resolution (PDB with symbols for all libslic3r code)
     target_compile_options(libslic3r_from_source PRIVATE /Zi)
+    # Treat source files as UTF-8 regardless of system codepage. Upstream sources
+    # (e.g. PrintConfig.cpp uses L(u8"...") with non-ASCII chars like the degree-C
+    # symbol) are UTF-8 without BOM; without /utf-8 MSVC on a non-English locale
+    # (e.g. codepage 936) misinterprets multibyte sequences and fails with C2001.
+    target_compile_options(libslic3r_from_source PRIVATE /utf-8)
     target_link_options(libslic3r_from_source PUBLIC
         /DEBUG
         /NODEFAULTLIB:LIBCMT
