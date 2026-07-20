@@ -805,6 +805,42 @@ namespace
       return def->get_default_value<Slic3r::ConfigOptionFloatOrPercent>()->value;
     case Slic3r::coPercent:
       return def->get_default_value<Slic3r::ConfigOptionPercent>()->value;
+    // Vector types (per-extruder): bb3 upstream stores speed/accel/jerk/temp as
+    // coFloats/coInts/coBools/coFloatsOrPercents/coPercents. For the Qt6 single-value
+    // editor we surface the first element (extruder 0) as the default value — this
+    // is what single-extruder printers need, and matches the pre-bb3 OWzx behavior
+    // when these fields were rolled back to single-value types. Multi-extruder
+    // per-extruder editing is a follow-up UI surface (see v5.4 Phase 183 PLAN.md).
+    case Slic3r::coFloats:
+    {
+      const auto *v = def->get_default_value<Slic3r::ConfigOptionFloats>();
+      return v->values.empty() ? QVariant() : QVariant(v->values[0]);
+    }
+    case Slic3r::coInts:
+    {
+      const auto *v = def->get_default_value<Slic3r::ConfigOptionInts>();
+      return v->values.empty() ? QVariant() : QVariant(v->values[0]);
+    }
+    case Slic3r::coBools:
+    {
+      const auto *v = def->get_default_value<Slic3r::ConfigOptionBools>();
+      return v->values.empty() ? QVariant() : QVariant(v->values[0]);
+    }
+    case Slic3r::coFloatsOrPercents:
+    {
+      const auto *v = def->get_default_value<Slic3r::ConfigOptionFloatsOrPercents>();
+      return v->values.empty() ? QVariant() : QVariant::fromValue(v->values[0]);
+    }
+    case Slic3r::coPercents:
+    {
+      const auto *v = def->get_default_value<Slic3r::ConfigOptionPercents>();
+      return v->values.empty() ? QVariant() : QVariant(v->values[0]);
+    }
+    case Slic3r::coStrings:
+    {
+      const auto *v = def->get_default_value<Slic3r::ConfigOptionStrings>();
+      return v->values.empty() ? QVariant() : QString::fromStdString(v->values[0]);
+    }
     default:
       return {};
     }

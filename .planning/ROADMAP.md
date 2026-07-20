@@ -74,6 +74,8 @@
 
 ### Phase 183: Per-Extruder Config UI Bridge
 
+- [x] Phase 183: Per-Extruder Config UI Bridge (FEAT, FEAT-04) — Executed 2026-07-20: data layer fix shipped (extractDefault handles vector types, ~50 lines), full per-extruder UI editor deferred (single-extruder product scope)
+
 **Workstream:** FEAT
 **Requirement:** FEAT-04
 **Goal:** Recognize nullable config fields in ConfigOptionModel; surface a per-extruder editor entry (one row/column per extruder). Mirrors upstream `ConfigManipulation.cpp` multi-extruder UI logic. Decision (2026-07-20): keep as single phase, no 183a/b split.
