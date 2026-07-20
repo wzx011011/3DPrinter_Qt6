@@ -4285,6 +4285,43 @@ bool ProjectServiceMock::reloadFromDisk(int objectIndex)
     lastError_ = tr("重新加载失败：对象无源文件路径");
     return false;
   }
+  // Resolve the actual source path to re-read. After a 3MF save+reload cycle,
+  // obj->input_file may hold only a bare filename (store_bbs_3mf's default does
+  // not preserve the full source path), so ReadSTLFile on it fails. Mirror
+  // upstream OrcaSlicer #14591 (commit 5ba5c6672d): try the exact path first,
+  // then fall back to a path resolved relative to the current project directory
+  // (same-folder lookup). This is a Qt6-side adaptation — upstream does the
+  // fallback in Plater::reload_from_disk via a same-folder source lookup.
+  auto resolveSourcePath = [](const std::string &inputFile,
+                              const QString &projectPath) -> std::string {
+    if (inputFile.empty())
+      return std::string();
+    // Try the stored path as-is (covers absolute paths and same-cwd files).
+    Slic3r::TriangleMesh probe;
+    if (probe.ReadSTLFile(inputFile.c_str()))
+      return inputFile;
+    // Fall back: treat inputFile as a bare filename and resolve it next to the
+    // current project file (covers the 3MF save/reload case).
+    if (!projectPath.isEmpty())
+    {
+      const QFileInfo projInfo(projectPath);
+      const QString dir = projInfo.absolutePath();
+      // Extract the filename portion of inputFile (handles both bare filenames
+      // and full paths consistently; avoids a boost::filesystem dependency here).
+      const QString inputQ = QString::fromLocal8Bit(inputFile.c_str());
+      const QString leaf = QFileInfo(inputQ).fileName();
+      if (!leaf.isEmpty())
+      {
+        const QString resolved = QDir(dir).absoluteFilePath(leaf);
+        const std::string resolvedStd = resolved.toLocal8Bit().constData();
+        Slic3r::TriangleMesh probe2;
+        if (probe2.ReadSTLFile(resolvedStd.c_str()))
+          return resolvedStd;
+      }
+    }
+    return std::string(); // unreachable → caller falls back to existing mesh
+  };
+  const std::string sourcePath = resolveSourcePath(obj->input_file, currentProjectPath_);
   // Reload from disk: re-read the source file, then repair the mesh. If re-read
   // fails (file moved/deleted), fall back to repairing the existing mesh.
   // Phase 129 (POLISH-03): real mesh repair via its_merge_vertices +
@@ -4294,11 +4331,13 @@ bool ProjectServiceMock::reloadFromDisk(int objectIndex)
     if (vol)
     {
       Slic3r::TriangleMesh m = vol->mesh();
-      // Best-effort re-read from disk (replaces the mesh if the source file
-      // still exists and is readable).
-      if (!obj->input_file.empty()) {
+      // Best-effort re-read from disk (replaces the mesh if the resolved source
+      // file still exists and is readable). v5.4 CRASH-03 (A7): sourcePath is
+      // resolved with a project-relative fallback so reload works even after a
+      // 3MF save/reload cycle stripped the path to a bare filename.
+      if (!sourcePath.empty()) {
         Slic3r::TriangleMesh reloaded;
-        if (reloaded.ReadSTLFile(obj->input_file.c_str()))
+        if (reloaded.ReadSTLFile(sourcePath.c_str()))
           m = std::move(reloaded);
       }
       Slic3r::its_merge_vertices(m.its);
