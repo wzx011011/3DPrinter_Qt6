@@ -96,6 +96,6 @@ See: .planning/milestones/v5.3-{ROADMAP,REQUIREMENTS,MILESTONE-AUDIT}.md
 
 ## Current Position
 
-Phase: v5.4 phases 180-187 planned, none started yet.
-Status: v5.4 active — planning complete (2026-07-20), execution pending user decision on Open Questions.
-Last activity: 2026-07-20 — v5.4 planning artifacts created (ROADMAP, REQUIREMENTS, 8 phase PLAN.md files). 2026-07-19 — OrcaSlicer bb3 sync (`edbca0aa55`) + v5.3 shipped.
+Phase: v5.4 phases 180-187 — 6/8 complete (180/181/182/183/186/187), 184/185 deferred (i18n long tail needs dedicated session).
+Status: v5.4 code work fully closed. 1 real bug fixed (A7 STEP reload), 1 real regression fixed (extractDefault vector types), 9 N/A verdicts documented, 137 regression tests green.
+Last activity: 2026-07-20 — v5.4 Phase 186/187 shipped (commit 75d3b54). v54RegressionLocked slot added, 137/137 tests PASS. i18n Phase 184/185 deferred to dedicated translation session.
