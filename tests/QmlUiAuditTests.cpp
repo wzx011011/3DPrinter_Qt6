@@ -627,6 +627,10 @@ private slots:
   // every v5.3 anchor (CL/FEAT/I18N) + re-asserts v5.2/v5.1/v5.0/v4.x.
   void v53RegressionLocked();
 
+  // Phase 187 (REGRESS-08): v5.4 cross-workstream regression gate. Spots
+  // every v5.4 anchor (CRASH/FEAT/META) + re-asserts v5.3/v5.2/v5.1/v5.0/v4.6.
+  void v54RegressionLocked();
+
 private:
   QString readSource(const QString &relativePath) const;
 };
@@ -8076,6 +8080,117 @@ void QmlUiAuditTests::v53RegressionLocked()
            "REGRESS-07/v4.6: Vol_speed tower mode (7) must still dispatch");
   QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
            "REGRESS-07/v4.6: Retraction tower mode (9) must still dispatch");
+}
+
+// Phase 187 (REGRESS-08): v5.4 cross-workstream regression gate.
+// Spots every v5.4 anchor + re-asserts v5.3/v5.2/v5.1/v5.0/v4.6.
+// See .planning/milestones/v5.4-ROADMAP.md for phase mapping.
+void QmlUiAuditTests::v54RegressionLocked()
+{
+  // ── v5.4 CRASH-01 (Phase 180): A1 + A2 NOT APPLICABLE (Qt6 architecture immune).
+  // Anchor the immunity mechanism so a future refactor can't silently remove it.
+  // A1: RhiViewportRenderer holds QPointer<RhiViewport> for safe cross-thread callback.
+  {
+    const QString rendererH = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+    QVERIFY2(rendererH.contains(QStringLiteral("QPointer<RhiViewport>")),
+             "REGRESS-08/CRASH-01: RhiViewportRenderer must hold QPointer<RhiViewport> "
+             "(A1 immunity — null-safe cross-thread callback)");
+  }
+  // A2: EditorViewModel selection uses real source indices (QSet<int>), not synthetic ids.
+  {
+    const QString vmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+    QVERIFY2(vmH.contains(QStringLiteral("m_selectedSourceIndices")),
+             "REGRESS-08/CRASH-01: EditorViewModel must use m_selectedSourceIndices "
+             "(A2 immunity — no synthetic wipe-tower ids)");
+  }
+
+  // ── v5.4 CRASH-02 (Phase 181): A4 + A8 + A9 NOT APPLICABLE (Qt6 architecture immune).
+  // Anchor the immunity mechanisms.
+  // A4: PartPlate is a pure value object (no m_model, synchronous rebuild).
+  {
+    const QString plateH = readSource(QStringLiteral("src/core/model/PartPlate.h"));
+    QVERIFY2(plateH.contains(QStringLiteral("objToInstanceSet")) || plateH.contains(QStringLiteral("obj_to_instance_set")),
+             "REGRESS-08/CRASH-02: PartPlate must keep its instance-set value storage "
+             "(A4 immunity — pure value object, no m_model dereference)");
+  }
+  // A8: Qt6 export uses flat-array "presets" JSON schema (not upstream three-category).
+  {
+    const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+    QVERIFY2(presetSvc.contains(QStringLiteral("\"presets\"")) || presetSvc.contains(QStringLiteral("QStringLiteral(\"presets\")")),
+             "REGRESS-08/CRASH-02: PresetServiceMock must keep its flat-array presets JSON key "
+             "(A8 immunity — Qt6 schema is intentionally different from upstream)");
+  }
+  // A9: NotificationCenter uses QML native wrapping.
+  {
+    const QString ncQml = readSource(QStringLiteral("src/qml_gui/components/NotificationCenter.qml"));
+    QVERIFY2(ncQml.contains(QStringLiteral("wrapMode: Text.Wrap")) || ncQml.contains(QStringLiteral("wrapMode: Text.WordWrap")),
+             "REGRESS-08/CRASH-02: NotificationCenter must use QML native wrapMode "
+             "(A9 immunity — no upstream m_endlines line-counting)");
+  }
+
+  // ── v5.4 CRASH-03 (Phase 182): A7 STEP reload path resolution FIXED.
+  // Anchor the resolveSourcePath lambda so a future refactor can't silently drop
+  // the project-relative fallback (which would re-introduce the bare-filename bug).
+  {
+    const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+    QVERIFY2(projSvc.contains(QStringLiteral("resolveSourcePath")),
+             "REGRESS-08/CRASH-03: ProjectServiceMock::reloadFromDisk must keep resolveSourcePath "
+             "(A7 fix — project-relative fallback for bare-filename input_file after 3MF reload)");
+    QVERIFY2(projSvc.contains(QStringLiteral("currentProjectPath")),
+             "REGRESS-08/CRASH-03: ProjectServiceMock reloadFromDisk must reference currentProjectPath "
+             "(A7 fix — needs project dir for same-folder fallback)");
+  }
+
+  // ── v5.4 FEAT-04 (Phase 183): extractDefault handles vector types.
+  // Anchor the vector-type cases so a future refactor can't silently drop them
+  // (which would re-introduce the bb3-sync regression of empty default values).
+  {
+    const QString modelCpp = readSource(QStringLiteral("src/qml_gui/Models/ConfigOptionModel.cpp"));
+    QVERIFY2(modelCpp.contains(QStringLiteral("case Slic3r::coFloats:")),
+             "REGRESS-08/FEAT-04: ConfigOptionModel::extractDefault must handle coFloats "
+             "(bb3-sync regression fix — vector fields need values[0] default)");
+    QVERIFY2(modelCpp.contains(QStringLiteral("case Slic3r::coBools:")),
+             "REGRESS-08/FEAT-04: ConfigOptionModel::extractDefault must handle coBools");
+  }
+
+  // ── v5.4 META-01 (Phase 186): sync closure documentation landed.
+  {
+    const QString tracker = readSource(QStringLiteral("docs/源码对照迁移任务追踪.md"));
+    QVERIFY2(tracker.contains(QStringLiteral("absorbed by bb3")),
+             "REGRESS-08/META-01: P11.A tracker must record cherry-picks absorbed by bb3");
+    QVERIFY2(tracker.contains(QStringLiteral("NOT APPLICABLE")),
+             "REGRESS-08/META-01: P11.B tracker must record N/A verdicts for Qt6 architecture immunity");
+  }
+
+  // ── v5.3 re-assertion (carry forward from v53RegressionLocked).
+  {
+    const QString themeQml = readSource(QStringLiteral("src/qml_gui/Theme.qml"));
+    QVERIFY2(themeQml.contains(QStringLiteral("borderActive")),
+             "REGRESS-08/v5.3: Theme.borderActive must remain (CL-02 carry)");
+  }
+
+  // ── v5.2 re-assertion.
+  {
+    const QString backendH = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
+    QVERIFY2(backendH.contains(QStringLiteral("kSidebarMinWidth = 300")),
+             "REGRESS-08/v5.2: kSidebarMinWidth = 300 must remain");
+  }
+
+  // ── v5.0 re-assertion.
+  {
+    const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+    QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
+             "REGRESS-08/v5.0: Emboss text2shapes integration must remain");
+  }
+
+  // ── v4.6 re-assertion (canary — calibration tower modes).
+  {
+    const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
+    QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
+             "REGRESS-08/v4.6: Vol_speed tower mode (7) must still dispatch");
+    QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
+             "REGRESS-08/v4.6: Retraction tower mode (9) must still dispatch");
+  }
 }
 
 QTEST_MAIN(QmlUiAuditTests)

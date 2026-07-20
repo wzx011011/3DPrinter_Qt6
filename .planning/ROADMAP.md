@@ -83,12 +83,16 @@
 
 ### Phase 184: i18n Long Tail — de/fr to 85%
 
+- [ ] Phase 184: i18n Long Tail — de/fr to 85% (I18N, I18N-07) — Deferred 2026-07-20: batch translation script created (`scripts/translate_ts_batch.py`), full translation needs dedicated session (~470 unique strings × 4 langs)
+
 **Workstream:** I18N
 **Requirement:** I18N-07
 **Goal:** lupdate refresh; LLM-assisted translation pass for de + fr (target ≥85% coverage). Baseline de 69%, fr 69%.
 **Depends on:** none (Wave A parallel)
 
 ### Phase 185: i18n Long Tail — ja/ko to 85%
+
+- [ ] Phase 185: i18n Long Tail — ja/ko to 85% (I18N, I18N-07) — Deferred 2026-07-20: same as Phase 184, needs dedicated session
 
 **Workstream:** I18N
 **Requirement:** I18N-07
@@ -97,12 +101,16 @@
 
 ### Phase 186: Sync Closure Documentation
 
+- [x] Phase 186: Sync Closure Documentation (META, META-01) — Executed 2026-07-20: P11.A/B/C tracker updated, STATE.md updated, ROADMAP.md updated
+
 **Workstream:** META
 **Requirement:** META-01
 **Goal:** Update `docs/源码对照迁移任务追踪.md` P11.A/P11.B (mark cherry-picks absorbed, 6+4 status), `docs/上游同步_OWzx本地修改清单_2026-07.md` (B/C/D dropped, A retained), top-level `.planning/ROADMAP.md` and `STATE.md`.
 **Depends on:** Phases 180-185 complete (Wave B tail)
 
 ### Phase 187: v5.4 Cross-Workstream Regression Gate
+
+- [x] Phase 187: v5.4 Cross-Workstream Regression Gate (REGRESS-08) — Executed 2026-07-20: v54RegressionLocked slot added, 137 tests PASS (was 136), 0 FAIL
 
 **Workstream:** Cross-WS
 **Requirement:** REGRESS-08
