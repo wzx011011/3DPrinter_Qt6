@@ -283,6 +283,7 @@ private slots:
   void testSettingsDialogOpenFromSidebar();
   void testTabsAndGroupNavPerTier();
   void testConfigOptionModelSevenTypes();
+  void testVectorFieldsHaveNonEmptyDefaults();
   void testPerOptionDirtyAndValueSource();
   void testReadonlyBuiltinGating();
   void testSaveSaveAsResetOptionResetGroupResetAll();
@@ -3767,6 +3768,60 @@ void ViewModelSmokeTests::testConfigOptionModelSevenTypes()
     QVERIFY2(seen.contains(t),
              qPrintable(QStringLiteral("ConfigOptionModel must expose at least one '%1' option (got: %2)")
                             .arg(t, QStringList(seen.begin(), seen.end()).join(", "))));
+}
+
+void ViewModelSmokeTests::testVectorFieldsHaveNonEmptyDefaults()
+{
+  // v5.4 Phase 183 / FEAT-04: regression test for the bb3-sync extractDefault fix.
+  //
+  // Background: the 2026-07-19 bb3 sync dropped OWzx's type rollbacks. Fields
+  // like outer_wall_speed, default_acceleration, default_jerk changed from
+  // coFloat (single value) back to coFloats (per-extruder vector) — the
+  // upstream type. Before the Phase 183 fix, extractDefault() had no case for
+  // vector types, so they returned empty QVariant -> UI showed empty values
+  // for every speed/accel/jerk field.
+  //
+  // This test asserts that vector fields now have non-empty defaults.
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("V54VectorDefaults"));
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  QVERIFY2(printOpts->rowCount() > 0, "Print options model is empty");
+
+  // These keys are all coFloats (per-extruder vector) in upstream bb3 PrintConfig.
+  // Before Phase 183 they would have empty defaults; after Phase 183 they must
+  // surface values[0] as the default.
+  const QStringList vectorKeys = {
+    QStringLiteral("outer_wall_speed"),
+    QStringLiteral("inner_wall_speed"),
+    QStringLiteral("sparse_infill_speed"),
+    QStringLiteral("travel_speed"),
+    QStringLiteral("default_acceleration"),
+    QStringLiteral("default_jerk"),
+  };
+
+  for (const auto &key : vectorKeys)
+  {
+    const int idx = printOpts->indexOfKey(key);
+    QVERIFY2(idx >= 0, qPrintable(QStringLiteral("Option '%1' must be in print options").arg(key)));
+
+    // Verify the field is recognized as a vector (sanity check on bb3 type).
+    QVERIFY2(printOpts->optIsVector(idx),
+             qPrintable(QStringLiteral("Option '%1' must be isVector=true (bb3 vector type)").arg(key)));
+
+    // The load-bearing assertion: default value must NOT be empty.
+    // Before Phase 183, this would fail (extractDefault returned empty QVariant
+    // for coFloats). After Phase 183, it returns values[0] (e.g. 200.0 for
+    // outer_wall_speed, 500.0 for default_acceleration).
+    const QVariant value = printOpts->optValue(idx);
+    QVERIFY2(value.isValid() && !value.isNull(),
+             qPrintable(QStringLiteral("Vector option '%1' must have a non-empty default value after Phase 183 extractDefault fix (got: '%2')")
+                            .arg(key, value.toString())));
+  }
 }
 
 void ViewModelSmokeTests::testPerOptionDirtyAndValueSource()
