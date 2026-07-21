@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import ".."
 
 // Warning-level (severity=1) banner — spans full width below title bar
 // Supports notification queue with pending count badge

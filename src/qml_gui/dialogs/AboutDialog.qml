@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
 import "../controls"
 
 // D4 -- AboutDialog: version + Qt version + license + confirm close

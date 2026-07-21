@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
 import "../controls"
 
 // D3 -- CalibrationDialog: progress + status + cancel

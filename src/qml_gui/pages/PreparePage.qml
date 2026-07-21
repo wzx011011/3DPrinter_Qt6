@@ -3052,14 +3052,14 @@ Item {
             anchors.topMargin: root.gizmoPanelTopOffset
             anchors.horizontalCenter: parent.horizontalCenter
             width: hollowContent.implicitWidth + 24
-            height: hollowContent.implicitHeight + 16
+            height: hollowSettingsContent.implicitHeight + 16
             radius: 6
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoHollow && root.editorVm
 
             ColumnLayout {
-                id: hollowContent
+                id: hollowSettingsContent
                 anchors.centerIn: parent
                 spacing: 6
 

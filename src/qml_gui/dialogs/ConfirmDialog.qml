@@ -42,8 +42,13 @@ CxDialog {
     // The action to run on accept. Set via openWithAction(fn).
     property var _action: null
 
-    signal accepted()
-    signal rejected()
+    // Phase 171 hotfix: removed `signal accepted()` / `signal rejected()` —
+    // these are inherited from QtQuick.Controls Dialog (the CxDialog base)
+    // and redeclaring them triggered "Duplicate signal name" at QML compile
+    // time, which made ConfirmDialog fail to register as a type, which made
+    // HomePage (which uses ConfirmDialog) fail to load, which made the whole
+    // app exit with -1. The base Dialog emits accepted()/rejected()
+    // automatically when accept()/reject() are called.
 
     function openWithAction(action) {
         root._action = action

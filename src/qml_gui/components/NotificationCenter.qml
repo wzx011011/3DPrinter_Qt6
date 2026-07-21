@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
 
 // Notification center panel — shows notification history list
 // Opens from bell icon in topbar, aligns with upstream notification_manager scrollable area

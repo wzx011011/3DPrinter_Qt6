@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
 import "../controls"
 
 // P8.1 -- ConfigWizardDialog: first-run configuration wizard

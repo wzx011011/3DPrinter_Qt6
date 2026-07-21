@@ -1,7 +1,9 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
 import "../controls"
+import "../dialogs"
 
 // Aligns with upstream MultiMachinePage (Tabbook with 3 tabs):
 //   Tab 1: "Device"   -> MultiMachineManagerPage
@@ -1542,8 +1544,7 @@ Item {
                     onClicked: {
                         if (taskSelector.currentIndex >= 0 && sendToDeviceDialog.selectedDeviceIndex >= 0) {
                             root.multiMachineVm.sendTaskToDevice(taskSelector.currentIndex, sendToDeviceDialog.selectedDeviceIndex)
-                                sendToDeviceDialog.close()
-                            }
+                            sendToDeviceDialog.close()
                         }
                     }
                 }

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import ".."
 import "../controls"
 
 // D2 -- PrintDialog: send print / export G-code

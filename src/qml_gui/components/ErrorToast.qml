@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import ".."
 
 // Notification toast — slides up from bottom, supports queue, progress bar, confirm dialog
 // Severity levels (aligns with upstream NotificationLevel):
