@@ -131,6 +131,7 @@ class ObjectPickingTests final : public QObject
 private slots:
   void aabbHitTriangleMissDoesNotPickObject();
   void nearestTriangleHitWinsAcrossBatches();
+  void nearestTriangleHitCarriesVolumeAndInstanceIdentity();
   void invalidAndDegenerateBatchesAreIgnored();
   void screenRayUsesGizmoMathAndSceneVertices();
 };
@@ -174,6 +175,31 @@ void ObjectPickingTests::nearestTriangleHitWinsAcrossBatches()
   QCOMPARE(hit, 7);
 }
 
+void ObjectPickingTests::nearestTriangleHitCarriesVolumeAndInstanceIdentity()
+{
+  const QByteArray mesh = packedMeshWithTriangles(
+      QList<int>{100, 200},
+      QList<QList<float>>{
+          QList<float>{0.0f, 0.0f, 2.0f,
+                       1.0f, 0.0f, 2.0f,
+                       0.0f, 1.0f, 2.0f},
+          QList<float>{0.0f, 0.0f, 5.0f,
+                       1.0f, 0.0f, 5.0f,
+                       0.0f, 1.0f, 5.0f}});
+  PrepareSceneData scene;
+  scene.setPlateContext(0, 1, QList<int>{4, 7});
+  scene.setModelMeshData(mesh, QList<int>{4, 7}, QList<int>{2, 6},
+                         QList<int>{1, 3}, QList<int>{4, 7});
+
+  const ObjectPicking::Hit hit = ObjectPicking::pick(
+      QVector3D(0.25f, 0.25f, 10.0f), QVector3D(0.0f, 0.0f, -1.0f),
+      scene.modelVertices(), scene.modelBatches());
+  QVERIFY(hit.isValid());
+  QCOMPARE(hit.sourceObjectIndex, 7);
+  QCOMPARE(hit.volumeIndex, 6);
+  QCOMPARE(hit.instanceIndex, 3);
+}
+
 void ObjectPickingTests::invalidAndDegenerateBatchesAreIgnored()
 {
   QList<PrepareSceneData::ModelVertex> vertices;
@@ -187,9 +213,9 @@ void ObjectPickingTests::invalidAndDegenerateBatchesAreIgnored()
            << PrepareSceneData::ModelVertex{1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 
   QList<PrepareSceneData::ModelBatch> batches;
-  batches << PrepareSceneData::ModelBatch{101, -1, 0, 3, boundsFor(vertices, 0, 3)}
-          << PrepareSceneData::ModelBatch{102, 5, 3, 2, boundsFor(vertices, 3, 2)}
-          << PrepareSceneData::ModelBatch{103, 6, 5, 3, boundsFor(vertices, 5, 3)};
+  batches << PrepareSceneData::ModelBatch{101, -1, -1, -1, 0, 3, boundsFor(vertices, 0, 3)}
+          << PrepareSceneData::ModelBatch{102, 5, 0, 0, 3, 2, boundsFor(vertices, 3, 2)}
+          << PrepareSceneData::ModelBatch{103, 6, 0, 0, 5, 3, boundsFor(vertices, 5, 3)};
 
   const int hit = ObjectPicking::pickSourceObject(
       QVector3D(0.25f, 0.25f, 10.0f),

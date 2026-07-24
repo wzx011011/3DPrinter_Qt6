@@ -44,6 +44,8 @@ public:
   {
     int renderObjectId = -1;
     int sourceObjectIndex = -1;
+    int volumeIndex = -1;
+    int instanceIndex = -1;
     int firstVertex = 0;
     int vertexCount = 0;
     ModelBounds bounds;
@@ -74,7 +76,18 @@ public:
   void setMeshGeneration(qint64 generation);
   void setModelMeshData(const QByteArray &meshData,
                         const QList<int> &batchSourceObjectIndices,
+                        const QList<int> &batchVolumeIndices,
+                        const QList<int> &batchInstanceIndices,
                         const QList<int> &activeSourceObjectIndices);
+  void setModelMeshData(const QByteArray &meshData,
+                        const QList<int> &batchSourceObjectIndices,
+                        const QList<int> &activeSourceObjectIndices)
+  {
+    setModelMeshData(meshData, batchSourceObjectIndices,
+                     QList<int>(batchSourceObjectIndices.size(), 0),
+                     QList<int>(batchSourceObjectIndices.size(), 0),
+                     activeSourceObjectIndices);
+  }
   void setSelectedSourceObjectIndex(int sourceObjectIndex);
   void setHoveredSourceObjectIndex(int sourceObjectIndex);
   void markCameraDirty();
@@ -107,6 +120,7 @@ public:
   bool hasModelBounds() const;
   int selectedSourceObjectIndex() const;
   int hoveredSourceObjectIndex() const;
+  bool containsCurrentPlatePoint(float x, float z) const;
 
 private:
   static float sanitizeExtent(float value, float fallback);

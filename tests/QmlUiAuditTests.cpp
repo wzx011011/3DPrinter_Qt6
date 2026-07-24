@@ -44,6 +44,7 @@ private slots:
   void previewRoleColorModesAreHonestAndPayloadSafe();
   void previewRestorationMilestoneHasFinalCleanupCoverage();
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
+  void prepareViewportContextMenuWorkflowIsCppOwned();
   void rhiViewportModelDragOrbitsAfterClickThreshold();
   void rhiMoveGizmoDragBridgeStaysCppOwned();
   void rhiRotateScaleGizmoBridgeStaysCppOwned();
@@ -1741,6 +1742,101 @@ void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
            "Selection/hover changes must not reupload the full model vertex buffer");
 }
 
+void QmlUiAuditTests::prepareViewportContextMenuWorkflowIsCppOwned()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString objectList = readSource(QStringLiteral("src/qml_gui/panels/ObjectList.qml"));
+  const QString menuComponent = readSource(QStringLiteral("src/qml_gui/components/PrepareContextMenus.qml"));
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString projectService = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString rhiHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString softwareHeader = readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.h"));
+  const QString rhiSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString softwareSource = readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.cpp"));
+
+  QVERIFY2(preparePage.contains(QStringLiteral("onContextMenuRequested"))
+               && preparePage.contains(QStringLiteral("synchronizeViewportContext")),
+           "PreparePage must route viewport context requests through the ViewModel");
+  QVERIFY2(!preparePage.contains(QStringLiteral("propagateComposedEvents: true")),
+           "PreparePage must not retain the selection-only viewport MouseArea dispatcher");
+  QVERIFY2(editorHeader.contains(QStringLiteral("ContextMenuDefault"))
+               && editorHeader.contains(QStringLiteral("ContextMenuObject"))
+               && editorHeader.contains(QStringLiteral("ContextMenuPart"))
+               && editorHeader.contains(QStringLiteral("ContextMenuMulti"))
+               && editorHeader.contains(QStringLiteral("ContextMenuPlate"))
+               && editorHeader.contains(QStringLiteral("ContextMenuText"))
+               && editorHeader.contains(QStringLiteral("ContextMenuSvg")),
+           "EditorViewModel must own every resolved context-menu family");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("contextMenuRequested"))
+               && softwareHeader.contains(QStringLiteral("contextMenuRequested")),
+           "RHI and software viewports must expose the same context signal");
+  QVERIFY2(menuComponent.contains(QStringLiteral("defaultMenu"))
+               && menuComponent.contains(QStringLiteral("objectMenu"))
+               && menuComponent.contains(QStringLiteral("partMenu"))
+               && menuComponent.contains(QStringLiteral("textMenu"))
+               && menuComponent.contains(QStringLiteral("svgMenu"))
+               && menuComponent.contains(QStringLiteral("multiMenu"))
+               && menuComponent.contains(QStringLiteral("plateMenu")),
+           "Shared context presentation must contain all seven menu families");
+  QVERIFY2(!preparePage.contains(QStringLiteral("id: defaultContextMenu"))
+               && !preparePage.contains(QStringLiteral("id: objectContextMenu"))
+               && !preparePage.contains(QStringLiteral("id: multiContextMenu"))
+               && !preparePage.contains(QStringLiteral("id: plateContextMenu")),
+           "PreparePage must not retain legacy context-menu presentation surfaces");
+  QVERIFY2(menuComponent.contains(QStringLiteral("splitSelectedToObjects"))
+               && menuComponent.contains(QStringLiteral("splitSelectedToParts"))
+               && objectList.contains(QStringLiteral("splitSelectedToObjects"))
+               && objectList.contains(QStringLiteral("splitSelectedToParts")),
+           "Object and part split entries must route to distinct C++ actions");
+  QVERIFY2(menuComponent.contains(QStringLiteral("requestReplaceAll"))
+               && preparePage.contains(QStringLiteral("replaceAllOnPlateDlg"))
+               && preparePage.contains(QStringLiteral("replaceAllOnContextPlate"))
+               && editorHeader.contains(QStringLiteral("replaceAllOnContextPlate"))
+               && projectService.contains(QStringLiteral("replaceAllOnPlateWithFiles")),
+           "Plate replacement must use the context plate and a concrete service path");
+  QVERIFY2(menuComponent.contains(QStringLiteral("addPrimitiveToContextPlate"))
+               && menuComponent.contains(QStringLiteral("pasteToContextPlate"))
+               && menuComponent.contains(QStringLiteral("autoOrientContextPlate")),
+           "Plate actions must use explicit context-plate C++ routes");
+  QVERIFY2(preparePage.contains(QStringLiteral("addModelsToContextPlateDlg"))
+               && preparePage.contains(QStringLiteral("addFilesToContextPlate"))
+               && editorHeader.contains(QStringLiteral("addFilesToContextPlate"))
+               && projectService.contains(QStringLiteral("addFilesToPlate")),
+           "Context add-model must import selected files into the explicit plate");
+  QVERIFY2(menuComponent.contains(QStringLiteral("addHandyModelToContextPlate"))
+               && projectService.contains(QStringLiteral("addHandyModelToPlate"))
+               && projectService.contains(QStringLiteral("resources/handy_models")),
+           "Handy-model actions must use deployed upstream resources through C++");
+  QVERIFY2(menuComponent.contains(QStringLiteral("dropSelectedObjectsToBed"))
+               && menuComponent.contains(QStringLiteral("toggleSelectedObjectsAutoDrop"))
+               && menuComponent.contains(QStringLiteral("subdivideSelectedMesh"))
+               && menuComponent.contains(QStringLiteral("convertSelectedObjectUnits"))
+               && menuComponent.contains(QStringLiteral("copyContextProcessSettings"))
+               && menuComponent.contains(QStringLiteral("pasteContextProcessSettings")),
+           "Source-truth mesh, unit, and scoped process actions must be exposed in the menus");
+  QVERIFY2(projectService.contains(QStringLiteral("ensure_on_bed"))
+               && projectService.contains(QStringLiteral("TriangleMeshDeal::smooth_triangle_mesh"))
+               && projectService.contains(QStringLiteral("convert_units")),
+           "Source-truth actions must delegate to the upstream model operations");
+  QVERIFY2(preparePage.contains(QStringLiteral("contextToolInputCaptured = true"))
+               && preparePage.contains(QStringLiteral("contextToolInputCaptured = false"))
+               && preparePage.contains(QStringLiteral("layerEditingInputActive = true"))
+               && preparePage.contains(QStringLiteral("layerEditingInputActive = false")),
+           "Prepare input ownership must drive viewport context suppression");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_contextToolCapturedAtPress = activeToolCapturesContextGesture"))
+               && softwareSource.contains(QStringLiteral("m_contextToolCapturedAtPress = activeToolCapturesContextGesture"))
+               && rhiSource.contains(QStringLiteral("return m_contextToolInputCaptured || m_gizmoDragging"))
+               && softwareSource.contains(QStringLiteral("return m_contextToolInputCaptured")),
+           "Both renderers must suppress only a captured input gesture, not a selected transform mode");
+  const int replaceStart = projectService.indexOf(QStringLiteral("bool ProjectServiceMock::replaceAllOnPlateWithFiles"));
+  QVERIFY2(replaceStart >= 0, "ProjectServiceMock must expose the plate replacement implementation");
+  const QString replaceImplementation = projectService.mid(replaceStart,
+      projectService.indexOf(QStringLiteral("int ProjectServiceMock::addPrimitiveToPlate"), replaceStart) - replaceStart);
+  QVERIFY2(!replaceImplementation.contains(QStringLiteral("loadFile("))
+               && replaceImplementation.contains(QStringLiteral("targetPlate->addInstance")),
+           "Plate replacement must not reload the project and must assign imported instances to the target plate");
+}
+
 void QmlUiAuditTests::previewLayerMoveControlsAreActionableAndRendererSafe()
 {
   const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
@@ -2307,20 +2403,23 @@ void QmlUiAuditTests::plateContextMenuItemsWiredAndNonEmpty()
   // enabled) would pass the other 7 audit tests, since they only check generic
   // honest-UI rules, not the specific Phase 17 items.
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString menuComponent = readSource(QStringLiteral("src/qml_gui/components/PrepareContextMenus.qml"));
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!menuComponent.isEmpty(), "Unable to read PrepareContextMenus.qml");
 
-  // The three Phase 17 operations must be wired to real menu actions.
-  QVERIFY2(preparePage.contains(QStringLiteral("clonePlate(")),
-           "PreparePage must wire a clonePlate plate-context-menu action (PLATE-03)");
-  QVERIFY2(preparePage.contains(QStringLiteral("movePlate(")),
-           "PreparePage must wire a movePlate plate-context-menu action (PLATE-04)");
-  QVERIFY2(preparePage.contains(QStringLiteral("setPlatePrintable(")),
-           "PreparePage must wire a setPlatePrintable plate-context-menu action (PLATE-05)");
+  // The shared context component owns the plate-menu presentation.
+  QVERIFY2(menuComponent.contains(QStringLiteral("clonePlate(")),
+           "PrepareContextMenus must wire a clonePlate plate-context-menu action (PLATE-03)");
+  QVERIFY2(menuComponent.contains(QStringLiteral("movePlate(")),
+           "PrepareContextMenus must wire a movePlate plate-context-menu action (PLATE-04)");
+  QVERIFY2(menuComponent.contains(QStringLiteral("setPlatePrintable(")),
+           "PrepareContextMenus must wire a setPlatePrintable plate-context-menu action (PLATE-05)");
 
   // Strengthen the honest-UI contract: no empty onTriggered handlers anywhere in
   // PreparePage (Phase 14 forbade these; Phase 22 extends the guard here).
-  QVERIFY2(!preparePage.contains(QStringLiteral("onTriggered: {}")),
-           "PreparePage must not contain empty onTriggered: {} handlers");
+  QVERIFY2(!preparePage.contains(QStringLiteral("onTriggered: {}"))
+               && !menuComponent.contains(QStringLiteral("onTriggered: {}")),
+           "Prepare context menu routes must not contain empty onTriggered handlers");
 }
 
 // Phase 51-03 (SHELL-03): shell actions bind to BackendContext gates.
@@ -3351,9 +3450,11 @@ void QmlUiAuditTests::leftSidebarParamsPanelUsesRealOptionRows()
 {
   const QString sidebar = readSource(QStringLiteral("src/qml_gui/panels/LeftSidebar.qml"));
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString menuComponent = readSource(QStringLiteral("src/qml_gui/components/PrepareContextMenus.qml"));
   const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
   QVERIFY2(!sidebar.isEmpty(), "Unable to read LeftSidebar.qml");
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!menuComponent.isEmpty(), "Unable to read PrepareContextMenus.qml");
   QVERIFY2(!settingsDialog.isEmpty(), "Unable to read SettingsDialog.qml");
 
   QVERIFY2(!sidebar.contains(QStringLiteral("参数列表暂不可用")),
@@ -3375,8 +3476,9 @@ void QmlUiAuditTests::leftSidebarParamsPanelUsesRealOptionRows()
   QVERIFY2(!sidebar.contains(QStringLiteral("presetActionBlocker(2, root.configVm.currentPrinterPreset, \"rename\")"))
               && !sidebar.contains(QStringLiteral("presetActionBlocker(1, root.configVm.currentFilamentPreset, \"rename\")")),
            "LeftSidebar printer and filament settings entry buttons must not be disabled by preset rename blockers");
-  QVERIFY2(preparePage.contains(QStringLiteral("backend.forwardSettingsRequest(\"process\")")),
-           "Prepare context menu process settings entries must open the process SettingsDialog");
+  QVERIFY2(menuComponent.contains(QStringLiteral("requestSelectionSettings"))
+               && preparePage.contains(QStringLiteral("onSelectionSettingsRequested")),
+           "Prepare context-menu settings entries must open SelectionSettingsDialog");
   QVERIFY2(settingsDialog.contains(QStringLiteral("key: \"Other\""))
                && !settingsDialog.contains(QStringLiteral("key: \"Others\"")),
            "Process SettingsDialog tabs must use ConfigOptionModel page keys such as Other");

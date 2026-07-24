@@ -22,6 +22,7 @@
 #include <QtTest>
 
 #ifdef HAS_LIBSLIC3R
+#include <libslic3r/Model.hpp>
 #include <libslic3r/PrintConfig.hpp>
 #include <libslic3r/TriangleMesh.hpp>
 #include <libslic3r/TriangleSelector.hpp>
@@ -202,6 +203,7 @@ private slots:
   void editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid();
   void monitor_refresh_updates_network_and_device();
   void config_default_and_switch_preset();
+  void configEnumNullKeysMapGuards();
   void testUpstreamDefaultsContainVectorKeys();
   void testMachineOptionsLoaded();
   void testFilamentOptionsLoaded();
@@ -273,6 +275,12 @@ private slots:
   void prepareWorkflowGatesExposeSourceTruthState();
   void prepareMoveSelectionToPlateUsesSourceSelection();
   void prepareVisibleObjectActionsMapToSourceObjects();
+  void viewportContextSelectionSynchronizesBeforeMenuRouting();
+  void prepareContextMenuActionsAreRealAndPlateScoped();
+  void prepareContextPlateReplacementIsScopedToTargetPlate();
+  void prepareContextTargetedImportAndHandyModelsStayOnPlate();
+  void prepareContextMeshAndUnitActionsUseUpstreamModelOperations();
+  void prepareContextProcessSettingsCopyPasteUsesScopedConfig();
   // Phase 55-04 (GCODE-02/03): render-side role-toggle no-repack guard,
   // legend/global-scope coherence, currentMove atomicity, 17-view-mode contract.
   void roleVisibilityToggleDoesNotRepackGcodePreviewData();
@@ -488,6 +496,22 @@ void ViewModelSmokeTests::config_default_and_switch_preset()
   QVERIFY(spy.count() >= 1);
   QCOMPARE(config.currentPreset(), QStringLiteral("Unit Test Switch Print Preset"));
   QCOMPARE(config.currentPrintPreset(), QStringLiteral("Unit Test Switch Print Preset"));
+}
+
+void ViewModelSmokeTests::configEnumNullKeysMapGuards()
+{
+#ifdef HAS_LIBSLIC3R
+  // Upstream: src/libslic3r/Config.hpp null-map behavior for generic enums.
+  Slic3r::ConfigOptionEnumGeneric scalar(nullptr, 17);
+  QCOMPARE(QString::fromStdString(scalar.serialize()), QStringLiteral("17"));
+  QVERIFY(!scalar.deserialize("quality"));
+
+  Slic3r::ConfigOptionEnumsGeneric vector(nullptr, 2, 23);
+  QCOMPARE(QString::fromStdString(vector.serialize()), QStringLiteral("23,23"));
+  QVERIFY(!vector.deserialize("draft,normal"));
+#else
+  QSKIP("Config enum guard test requires HAS_LIBSLIC3R");
+#endif
 }
 
 void ViewModelSmokeTests::testUpstreamDefaultsContainVectorKeys()
@@ -2933,6 +2957,211 @@ void ViewModelSmokeTests::activePlateObjectIndicesFollowCurrentPlateWithoutFallb
   const QVariantList showAllStillEmpty = editor.activePlateObjectIndices();
   QVERIFY2(showAllStillEmpty.isEmpty(),
            "Renderer-facing active plate context must not inherit show-all object-list fallback");
+}
+
+void ViewModelSmokeTests::prepareContextPlateReplacementIsScopedToTargetPlate()
+{
+#ifdef HAS_LIBSLIC3R
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPlate());
+  QVERIFY(editor.setCurrentPlateIndex(1));
+  QVERIFY(editor.addPrimitiveToPlate(1));
+  QVERIFY(editor.addPrimitiveToPlate(2));
+
+  const QList<int> plateZeroBefore = project.plateObjectIndices(0);
+  const QList<int> targetPlateBefore = project.plateObjectIndices(1);
+  QVERIFY(!plateZeroBefore.isEmpty());
+  QVERIFY(!targetPlateBefore.isEmpty());
+  QCOMPARE(editor.synchronizeViewportContext(2, -1, -1, -1, 1), 4);
+  QCOMPARE(editor.contextPlateIndex(), 1);
+
+  QVERIFY2(editor.replaceAllOnContextPlate(QStringList{kStlPath}),
+           qPrintable(project.lastError()));
+  QCOMPARE(project.currentPlateIndex(), 1);
+  QCOMPARE(project.plateObjectIndices(0), plateZeroBefore);
+  QCOMPARE(project.plateObjectCount(0), plateZeroBefore.size());
+  QVERIFY(project.plateObjectIndices(1) != targetPlateBefore);
+  QVERIFY(!project.plateObjectIndices(1).isEmpty());
+#else
+  QSKIP("Plate replacement requires HAS_LIBSLIC3R");
+#endif
+}
+
+void ViewModelSmokeTests::viewportContextSelectionSynchronizesBeforeMenuRouting()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QCOMPARE(editor.synchronizeViewportContext(0, 0, -1, 0, 0), 1);
+  QCOMPARE(editor.contextMenuFamily(), 1);
+  QCOMPARE(editor.contextSourceObjectIndex(), 0);
+  QCOMPARE(editor.contextInstanceIndex(), 0);
+  QCOMPARE(editor.contextPlateIndex(), 0);
+  QCOMPARE(editor.selectedSourceObjectIndex(), 0);
+
+  QCOMPARE(editor.synchronizeViewportContext(1, 0, 0, 0, 0), 1);
+  QCOMPARE(editor.contextSourceObjectIndex(), 0);
+  QCOMPARE(editor.contextVolumeIndex(), 0);
+  QCOMPARE(editor.selectedSourceObjectIndex(), 0);
+  QVERIFY(editor.hasSelectedVolume());
+
+  QVERIFY(editor.addPlate());
+  QCOMPARE(editor.synchronizeViewportContext(2, -1, -1, -1, 1), 4);
+  QCOMPARE(editor.contextMenuFamily(), 4);
+  QCOMPARE(editor.contextPlateIndex(), 1);
+  QCOMPARE(editor.currentPlateIndex(), 1);
+  QCOMPARE(editor.selectedSourceObjectIndex(), -1);
+
+  QCOMPARE(editor.synchronizeViewportContext(3, -1, -1, -1, -1), 0);
+  QCOMPARE(editor.contextMenuFamily(), 0);
+  QCOMPARE(editor.contextPlateIndex(), 1);
+  QCOMPARE(editor.selectedSourceObjectIndex(), -1);
+}
+
+void ViewModelSmokeTests::prepareContextMenuActionsAreRealAndPlateScoped()
+{
+#ifdef HAS_LIBSLIC3R
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPlate());
+  QVERIFY(editor.setCurrentPlateIndex(1));
+  const QList<int> plateZeroBefore = project.plateObjectIndices(0);
+  QCOMPARE(editor.synchronizeViewportContext(2, -1, -1, -1, 1), 4);
+  QVERIFY2(editor.addFilesToContextPlate(QStringList{kStlPath}),
+           qPrintable(project.lastError()));
+  QCOMPARE(project.plateObjectIndices(0), plateZeroBefore);
+  const QList<int> importedObjects = project.plateObjectIndices(1);
+  QVERIFY(!importedObjects.isEmpty());
+  const int importedObject = importedObjects.front();
+
+  QCOMPARE(editor.synchronizeViewportContext(0, importedObject, -1, 0, 1), 1);
+  QVERIFY(editor.contextActionAvailable(QStringLiteral("drop")));
+  QVERIFY(editor.contextActionAvailable(QStringLiteral("autoDrop")));
+  QVERIFY(editor.contextActionAvailable(QStringLiteral("subdivide")));
+  QVERIFY(editor.contextActionAvailable(QStringLiteral("convertUnits")));
+  QVERIFY(editor.contextActionAvailable(QStringLiteral("copyProcessSettings")));
+
+  QVERIFY(project.setObjectAutoDrop(importedObject, false));
+  QVERIFY(editor.toggleSelectedObjectsAutoDrop());
+  QVERIFY(project.objectAutoDrop(importedObject));
+  QVERIFY(editor.toggleSelectedObjectsAutoDrop());
+  QVERIFY(!project.objectAutoDrop(importedObject));
+  QVERIFY(project.setObjectPosition(importedObject, 0.0f, 50.0f, 0.0f));
+  QVERIFY2(editor.dropSelectedObjectsToBed(), qPrintable(project.lastError()));
+  QVERIFY(qAbs(project.rawModel()->objects[size_t(importedObject)]->get_instance_min_z(0)) < 1e-6);
+
+  const int trianglesBefore = project.objectTriangleCount(importedObject);
+  QVERIFY2(editor.subdivideSelectedMesh(), qPrintable(project.lastError()));
+  QVERIFY(project.objectTriangleCount(importedObject) > trianglesBefore);
+  QVERIFY2(editor.convertSelectedObjectUnits(1), qPrintable(project.lastError()));
+
+  QVERIFY(project.setScopedOptionValue(importedObject, -1, QStringLiteral("layer_height"), 0.24));
+  QVERIFY(editor.copyContextProcessSettings());
+  QVERIFY(editor.addPrimitiveToContextPlate(0));
+  const QList<int> targetObjects = project.plateObjectIndices(1);
+  QVERIFY(targetObjects.size() > importedObjects.size());
+  const int targetObject = targetObjects.last();
+  QCOMPARE(editor.synchronizeViewportContext(0, targetObject, -1, 0, 1), 1);
+  QVERIFY(editor.contextActionAvailable(QStringLiteral("pasteProcessSettings")));
+  QVERIFY2(editor.pasteContextProcessSettings(), qPrintable(project.lastError()));
+  QCOMPARE(project.scopedOptionValue(targetObject, -1, QStringLiteral("layer_height")).toDouble(), 0.24);
+  QCOMPARE(project.plateObjectIndices(0), plateZeroBefore);
+#else
+  QSKIP("Prepare context source-truth actions require HAS_LIBSLIC3R");
+#endif
+}
+
+void ViewModelSmokeTests::prepareContextTargetedImportAndHandyModelsStayOnPlate()
+{
+#ifdef HAS_LIBSLIC3R
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPlate());
+  QVERIFY(editor.setCurrentPlateIndex(1));
+  const QList<int> plateZeroBefore = project.plateObjectIndices(0);
+  QVERIFY(!plateZeroBefore.isEmpty());
+  QCOMPARE(editor.synchronizeViewportContext(2, -1, -1, -1, 1), 4);
+
+  QVERIFY2(editor.addFilesToContextPlate(QStringList{kStlPath}),
+           qPrintable(project.lastError()));
+  QCOMPARE(project.plateObjectIndices(0), plateZeroBefore);
+  const int importedCount = project.plateObjectCount(1);
+  QVERIFY(importedCount > 0);
+
+  QVERIFY2(editor.addHandyModelToContextPlate(QStringLiteral("orca-badge")),
+           qPrintable(project.lastError()));
+  QCOMPARE(project.plateObjectIndices(0), plateZeroBefore);
+  QVERIFY(project.plateObjectCount(1) > importedCount);
+#else
+  QSKIP("Targeted model import requires HAS_LIBSLIC3R");
+#endif
+}
+
+void ViewModelSmokeTests::prepareContextMeshAndUnitActionsUseUpstreamModelOperations()
+{
+#ifdef HAS_LIBSLIC3R
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.selectSourceObject(0));
+  QCOMPARE(editor.synchronizeViewportContext(0, 0, -1, 0, 0), 1);
+  const int trianglesBefore = project.objectTriangleCount(0);
+  QVERIFY(trianglesBefore > 0);
+  QVERIFY2(editor.subdivideSelectedMesh(), qPrintable(project.lastError()));
+  QVERIFY(project.objectTriangleCount(0) > trianglesBefore);
+
+  QVERIFY(project.setObjectAutoDrop(0, false));
+  QVERIFY(editor.toggleSelectedObjectsAutoDrop());
+  QVERIFY(project.objectAutoDrop(0));
+  QVERIFY(editor.toggleSelectedObjectsAutoDrop());
+  QVERIFY(!project.objectAutoDrop(0));
+  QVERIFY(project.setObjectPosition(0, 0.0f, 50.0f, 0.0f));
+  QVERIFY2(editor.dropSelectedObjectsToBed(), qPrintable(project.lastError()));
+  QVERIFY(!project.objectAutoDrop(0));
+  QVERIFY(qAbs(project.rawModel()->objects[0]->get_instance_min_z(0)) < 1e-6);
+
+  const double widthBefore = project.rawModel()->objects[0]->raw_mesh_bounding_box().size().x();
+  QVERIFY2(editor.convertSelectedObjectUnits(1), qPrintable(project.lastError()));
+  const double widthAfter = project.rawModel()->objects[0]->raw_mesh_bounding_box().size().x();
+  QVERIFY(widthAfter > widthBefore * 25.0);
+#else
+  QSKIP("Mesh operations require HAS_LIBSLIC3R");
+#endif
+}
+
+void ViewModelSmokeTests::prepareContextProcessSettingsCopyPasteUsesScopedConfig()
+{
+#ifdef HAS_LIBSLIC3R
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPrimitiveToPlate(1));
+  QVERIFY(project.setScopedOptionValue(0, -1, QStringLiteral("layer_height"), 0.24));
+  QCOMPARE(editor.synchronizeViewportContext(0, 0, -1, 0, 0), 1);
+  QVERIFY(editor.copyContextProcessSettings());
+  QVERIFY(editor.hasContextProcessSettingsClipboard());
+  QCOMPARE(editor.synchronizeViewportContext(0, 1, -1, 0, 0), 1);
+  QVERIFY2(editor.pasteContextProcessSettings(), qPrintable(project.lastError()));
+  QCOMPARE(project.scopedOptionValue(1, -1, QStringLiteral("layer_height")).toDouble(), 0.24);
+#else
+  QSKIP("Scoped process settings require HAS_LIBSLIC3R");
+#endif
 }
 
 void ViewModelSmokeTests::rendererPickingSelectsSourceObjectThroughEditorViewModel()

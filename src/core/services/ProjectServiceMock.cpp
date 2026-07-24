@@ -10,12 +10,14 @@
 #include <QVariant>
 #include <QSet>
 #include <QRegularExpression>
+#include <QUrl>
 #include <QImage>
 #include <QPainter>
 #include <QBuffer>
 #include <algorithm>
 #include <QMetaObject>
 #include <QPointer>
+#include <QCoreApplication>
 #include <QtConcurrent/QtConcurrentRun>
 #include <limits>
 #include <cstdint>
@@ -26,10 +28,13 @@
 #include <libslic3r/Model.hpp>
 #include <libslic3r/Utils.hpp>
 #include <libslic3r/TriangleMesh.hpp>
+#include <libslic3r/TriangleMeshDeal.hpp>
 #include <libslic3r/TriangleSelector.hpp>
 #include <libslic3r/QuadricEdgeCollapse.hpp>
 #include <libslic3r/Format/3mf.hpp>
 #include <libslic3r/Format/bbs_3mf.hpp>
+#include <libslic3r/Format/DRC.hpp>
+#include <libslic3r/Format/STL.hpp>
 #include <libslic3r/PrintConfig.hpp>
 #include <libslic3r/Emboss.hpp>
 #include <libslic3r/TextConfiguration.hpp>
@@ -369,65 +374,96 @@ ProjectServiceMock::ProjectServiceMock(QObject *parent)
 #endif
 }
 
+#ifdef HAS_LIBSLIC3R
+namespace
+{
+  struct MeshBatchIdentity
+  {
+    int objectIndex = -1;
+    int volumeIndex = -1;
+    int instanceIndex = -1;
+  };
+
+  bool hasRenderableTriangle(const Slic3r::ModelVolume *volume)
+  {
+    if (!volume)
+      return false;
+    const auto &its = volume->mesh().its;
+    const int vertexCount = int(its.vertices.size());
+    if (vertexCount <= 0 || its.indices.empty())
+      return false;
+    for (const auto &face : its.indices) {
+      if (face(0) >= 0 && face(0) < vertexCount
+          && face(1) >= 0 && face(1) < vertexCount
+          && face(2) >= 0 && face(2) < vertexCount) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  QList<MeshBatchIdentity> collectMeshBatchIdentities(const Slic3r::Model *model)
+  {
+    QList<MeshBatchIdentity> identities;
+    if (!model)
+      return identities;
+
+    for (int objectIndex = 0; objectIndex < int(model->objects.size()); ++objectIndex) {
+      const Slic3r::ModelObject *object = model->objects[size_t(objectIndex)];
+      if (!object)
+        continue;
+      const int instanceCount = object->instances.empty() ? 1 : int(object->instances.size());
+      for (int instanceIndex = 0; instanceIndex < instanceCount; ++instanceIndex) {
+        if (!object->instances.empty() && !object->instances[size_t(instanceIndex)])
+          continue;
+        for (int volumeIndex = 0; volumeIndex < int(object->volumes.size()); ++volumeIndex) {
+          if (hasRenderableTriangle(object->volumes[size_t(volumeIndex)]))
+            identities.append(MeshBatchIdentity{objectIndex, volumeIndex, instanceIndex});
+        }
+      }
+    }
+    return identities;
+  }
+}
+#endif
+
 QList<int> ProjectServiceMock::meshBatchSourceObjectIndices() const
 {
 #ifdef HAS_LIBSLIC3R
-  // Phase 91 (ASMEXPLODE-02): emit one source-object index per VOLUME batch
-  // (mirroring meshData()'s per-volume emission). meshData() now produces one
-  // batch per volume per instance, so this parallel array must produce one
-  // entry per volume per instance, each carrying the parent objectIndex. The
-  // two arrays MUST stay length-aligned for PrepareSceneData's parser
-  // (batchSourceObjectIndices.size() == objectCount, PrepareSceneData.cpp:143);
-  // Prepare's highlight unions sibling volumes by this sourceObjectIndex.
   QList<int> indices;
-  if (!model_ || model_->objects.empty())
-    return indices;
+  const QList<MeshBatchIdentity> identities = collectMeshBatchIdentities(model_);
+  indices.reserve(identities.size());
+  for (const MeshBatchIdentity &identity : identities)
+    indices.append(identity.objectIndex);
 
-  auto volumeHasRenderableTriangles = [](const Slic3r::ModelVolume *vol) -> bool
-  {
-    if (!vol)
-      return false;
-    const auto &its = vol->mesh().its;
-    const int vcount = int(its.vertices.size());
-    if (vcount <= 0 || its.indices.empty())
-      return false;
+  return indices;
+#else
+  return {};
+#endif
+}
 
-    for (const auto &face : its.indices)
-    {
-      const int idx0 = face(0);
-      const int idx1 = face(1);
-      const int idx2 = face(2);
-      if (idx0 >= 0 && idx0 < vcount
-          && idx1 >= 0 && idx1 < vcount
-          && idx2 >= 0 && idx2 < vcount)
-        return true;
-    }
-    return false;
-  };
+QList<int> ProjectServiceMock::meshBatchVolumeIndices() const
+{
+#ifdef HAS_LIBSLIC3R
+  QList<int> indices;
+  const QList<MeshBatchIdentity> identities = collectMeshBatchIdentities(model_);
+  indices.reserve(identities.size());
+  for (const MeshBatchIdentity &identity : identities)
+    indices.append(identity.volumeIndex);
+  return indices;
+#else
+  return {};
+#endif
+}
 
-  for (int objectIndex = 0; objectIndex < int(model_->objects.size()); ++objectIndex)
-  {
-    const Slic3r::ModelObject *obj = model_->objects[objectIndex];
-    if (!obj)
-      continue;
-
-    const int instanceCount = obj->instances.empty() ? 1 : int(obj->instances.size());
-    for (int instIdx = 0; instIdx < instanceCount; ++instIdx)
-    {
-      // Skip an instance slot only if the object has instances and this slot is
-      // null; meshData() emits a single identity-instance slot when there are
-      // no instances.
-      if (!obj->instances.empty() && !obj->instances[instIdx])
-        continue;
-
-      for (const auto *vol : obj->volumes)
-      {
-        if (volumeHasRenderableTriangles(vol))
-          indices.append(objectIndex);
-      }
-    }
-  }
-
+QList<int> ProjectServiceMock::meshBatchInstanceIndices() const
+{
+#ifdef HAS_LIBSLIC3R
+  QList<int> indices;
+  const QList<MeshBatchIdentity> identities = collectMeshBatchIdentities(model_);
+  indices.reserve(identities.size());
+  for (const MeshBatchIdentity &identity : identities)
+    indices.append(identity.instanceIndex);
   return indices;
 #else
   return {};
@@ -4476,6 +4512,237 @@ bool ProjectServiceMock::replaceVolume(int objectIndex, int volumeIndex, const Q
 #endif
 }
 
+bool ProjectServiceMock::splitVolumeIntoParts(int objectIndex, int volumeIndex)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size() || volumeIndex < 0) {
+    lastError_ = tr("Invalid part split target");
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)]) {
+    lastError_ = tr("Invalid model object");
+    return false;
+  }
+
+  Slic3r::ModelObject *object = model_->objects[size_t(objectIndex)];
+  if (size_t(volumeIndex) >= object->volumes.size() || !object->volumes[size_t(volumeIndex)]) {
+    lastError_ = tr("Invalid model part");
+    return false;
+  }
+
+  try {
+    const size_t partCount = object->volumes[size_t(volumeIndex)]->split(1, false);
+    if (partCount <= 1) {
+      lastError_ = tr("Selected part cannot be split");
+      return false;
+    }
+    syncTransformsFromModel();
+    lastError_.clear();
+    emit projectChanged();
+    return true;
+  } catch (const std::exception &exception) {
+    lastError_ = QString::fromLatin1(exception.what());
+    return false;
+  }
+#else
+  Q_UNUSED(volumeIndex);
+  lastError_ = tr("Part splitting requires libslic3r");
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::dropObjectToBed(int objectIndex)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)]) {
+    lastError_ = tr("Invalid drop target");
+    return false;
+  }
+
+  Slic3r::ModelObject *object = model_->objects[size_t(objectIndex)];
+  try {
+    // Upstream ModelObject::ensure_on_bed only moves auto-drop instances.
+    // A direct Drop command must work even when the preference is disabled.
+    std::vector<bool> autoDropStates;
+    autoDropStates.reserve(object->instances.size());
+    for (Slic3r::ModelInstance *instance : object->instances) {
+      autoDropStates.push_back(instance && instance->auto_drop);
+      if (instance)
+        instance->auto_drop = true;
+    }
+    object->invalidate_bounding_box();
+    object->ensure_on_bed();
+    for (size_t index = 0; index < object->instances.size(); ++index) {
+      if (object->instances[index])
+        object->instances[index]->auto_drop = autoDropStates[index];
+    }
+    syncTransformsFromModel();
+    lastError_.clear();
+    emit projectChanged();
+    return true;
+  } catch (const std::exception &exception) {
+    lastError_ = QString::fromLatin1(exception.what());
+    return false;
+  }
+#else
+  Q_UNUSED(objectIndex);
+  lastError_ = tr("Drop requires libslic3r");
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::objectAutoDrop(int objectIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)] || model_->objects[size_t(objectIndex)]->instances.empty())
+    return false;
+  const Slic3r::ModelObject *object = model_->objects[size_t(objectIndex)];
+  return std::all_of(object->instances.cbegin(), object->instances.cend(),
+      [](const Slic3r::ModelInstance *instance) { return instance && instance->auto_drop; });
+#else
+  Q_UNUSED(objectIndex);
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::setObjectAutoDrop(int objectIndex, bool enabled)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)]) {
+    lastError_ = tr("Invalid auto-drop target");
+    return false;
+  }
+  Slic3r::ModelObject *object = model_->objects[size_t(objectIndex)];
+  if (object->instances.empty()) {
+    lastError_ = tr("Object has no instances");
+    return false;
+  }
+  for (Slic3r::ModelInstance *instance : object->instances) {
+    if (instance)
+      instance->auto_drop = enabled;
+  }
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(enabled);
+  lastError_ = tr("Auto-drop requires libslic3r");
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::subdivideObject(int objectIndex, int volumeIndex)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)]) {
+    lastError_ = tr("Invalid subdivision target");
+    return false;
+  }
+
+  Slic3r::ModelObject *object = model_->objects[size_t(objectIndex)];
+  std::vector<Slic3r::ModelVolume *> selectedVolumes;
+  if (volumeIndex >= 0) {
+    if (size_t(volumeIndex) >= object->volumes.size() || !object->volumes[size_t(volumeIndex)]) {
+      lastError_ = tr("Invalid subdivision part");
+      return false;
+    }
+    selectedVolumes.push_back(object->volumes[size_t(volumeIndex)]);
+  } else {
+    selectedVolumes.assign(object->volumes.cbegin(), object->volumes.cend());
+  }
+
+  try {
+    std::vector<std::pair<Slic3r::ModelVolume *, Slic3r::TriangleMesh>> replacements;
+    replacements.reserve(selectedVolumes.size());
+    for (Slic3r::ModelVolume *volume : selectedVolumes) {
+      if (!volume || volume->mesh().empty())
+        continue;
+      bool ok = false;
+      Slic3r::TriangleMesh subdivided = Slic3r::TriangleMeshDeal::smooth_triangle_mesh(volume->mesh(), ok);
+      if (!ok) {
+        lastError_ = tr("Mesh subdivision requires a repaired mesh");
+        return false;
+      }
+      replacements.emplace_back(volume, std::move(subdivided));
+    }
+    if (replacements.empty()) {
+      lastError_ = tr("No printable mesh is available for subdivision");
+      return false;
+    }
+    for (auto &replacement : replacements) {
+      replacement.first->set_mesh(std::move(replacement.second));
+      replacement.first->calculate_convex_hull();
+      replacement.first->invalidate_convex_hull_2d();
+      replacement.first->set_new_unique_id();
+    }
+    object->invalidate_bounding_box();
+    object->ensure_on_bed();
+    syncTransformsFromModel();
+    lastError_.clear();
+    emit projectChanged();
+    return true;
+  } catch (const std::exception &exception) {
+    lastError_ = QString::fromLatin1(exception.what());
+    return false;
+  }
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(volumeIndex);
+  lastError_ = tr("Subdivision requires libslic3r");
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::convertObjectUnits(int objectIndex, int conversionType)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)] || conversionType < 0 || conversionType > 3) {
+    lastError_ = tr("Invalid unit conversion target");
+    return false;
+  }
+
+  Slic3r::ModelObject *object = model_->objects[size_t(objectIndex)];
+  try {
+    const auto conversion = static_cast<Slic3r::ConversionType>(conversionType);
+    Slic3r::ModelObjectPtrs convertedObjects;
+    object->convert_units(convertedObjects, conversion, {});
+    if (convertedObjects.size() != 1 || !convertedObjects.front()) {
+      lastError_ = tr("Unit conversion did not produce a model object");
+      return false;
+    }
+
+    Slic3r::ModelObject *converted = convertedObjects.front();
+    Slic3r::Model convertedOwner;
+    convertedOwner.objects.push_back(converted);
+    Slic3r::ModelObject *replacement = model_->add_object(*converted);
+    std::swap(model_->objects[size_t(objectIndex)], model_->objects.back());
+    model_->delete_object(model_->objects.size() - 1);
+    replacement->invalidate_bounding_box();
+    replacement->ensure_on_bed();
+    syncTransformsFromModel();
+    lastError_.clear();
+    emit projectChanged();
+    return true;
+  } catch (const std::exception &exception) {
+    lastError_ = QString::fromLatin1(exception.what());
+    return false;
+  }
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(conversionType);
+  lastError_ = tr("Unit conversion requires libslic3r");
+  return false;
+#endif
+}
+
 bool ProjectServiceMock::assembleObjects(const QList<int> &objIndices)
 {
   if (objIndices.size() < 2)
@@ -4584,6 +4851,485 @@ bool ProjectServiceMock::duplicateInstanceAsObject(int objectIndex, int instance
 #else
   Q_UNUSED(instanceIndex);
   lastError_ = tr("复制实例需要 libslic3r");
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::setObjectInstanceCount(int objectIndex, int count)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size() || count < 1 || count > 1000) {
+    lastError_ = tr("Invalid instance count target");
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)]) {
+    lastError_ = tr("Invalid model object");
+    return false;
+  }
+
+  Slic3r::ModelObject *object = model_->objects[size_t(objectIndex)];
+  try {
+    while (int(object->instances.size()) < count) {
+      if (object->instances.empty())
+        object->add_instance();
+      else
+        object->add_instance(*object->instances.front());
+    }
+    while (int(object->instances.size()) > count)
+      object->delete_last_instance();
+
+    if (m_plateList) {
+      for (int plateIndex = 0; plateIndex < m_plateList->plateCount(); ++plateIndex) {
+        OWzx::PartPlate *plate = m_plateList->plate(plateIndex);
+        if (!plate)
+          continue;
+        QList<int> staleInstances;
+        for (const auto &entry : plate->objToInstanceSet()) {
+          if (entry.first == objectIndex && entry.second >= count)
+            staleInstances.append(entry.second);
+        }
+        for (int instanceIndex : staleInstances)
+          plate->removeInstance(objectIndex, instanceIndex);
+      }
+      const int targetPlate = plateIndexForObject(objectIndex);
+      OWzx::PartPlate *plate = m_plateList->plate(targetPlate);
+      if (plate) {
+        for (int instanceIndex = 0; instanceIndex < count; ++instanceIndex)
+          plate->addInstance(objectIndex, instanceIndex);
+      }
+    }
+    lastError_.clear();
+    emit projectChanged();
+    if (m_plateList)
+      emit plateDataLoaded(m_plateList->plateCount());
+    return true;
+  } catch (const std::exception &exception) {
+    lastError_ = QString::fromLatin1(exception.what());
+    return false;
+  }
+#else
+  Q_UNUSED(count);
+  lastError_ = tr("Instance operations require libslic3r");
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::exportObjects(const QList<int> &objectIndices,
+                                       const QString &outputPath,
+                                       bool separateFiles,
+                                       bool drcFormat)
+{
+  if (objectIndices.isEmpty() || outputPath.isEmpty()) {
+    lastError_ = tr("No export target was supplied");
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  if (!model_) {
+    lastError_ = tr("No model is loaded");
+    return false;
+  }
+
+  QList<int> uniqueIndices = objectIndices;
+  std::sort(uniqueIndices.begin(), uniqueIndices.end());
+  uniqueIndices.erase(std::unique(uniqueIndices.begin(), uniqueIndices.end()), uniqueIndices.end());
+  for (int objectIndex : uniqueIndices) {
+    if (objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+        || !model_->objects[size_t(objectIndex)]) {
+      lastError_ = tr("Invalid export object");
+      return false;
+    }
+  }
+
+  const QUrl outputUrl(outputPath);
+  const QString localOutputPath = outputUrl.isLocalFile() ? outputUrl.toLocalFile() : outputPath;
+  const QFileInfo outputInfo(localOutputPath);
+  QDir outputDirectory = separateFiles ? QDir(localOutputPath) : outputInfo.absoluteDir();
+  if (!outputDirectory.exists()) {
+    lastError_ = tr("Export directory does not exist");
+    return false;
+  }
+
+  auto meshForObject = [](const Slic3r::ModelObject &object) {
+    Slic3r::TriangleMesh combined;
+    for (const Slic3r::ModelVolume *volume : object.volumes) {
+      if (!volume || !volume->is_model_part())
+        continue;
+      Slic3r::TriangleMesh volumeMesh(volume->mesh());
+      volumeMesh.transform(volume->get_transformation().get_matrix(), true);
+      if (object.instances.empty()) {
+        combined.merge(volumeMesh);
+        continue;
+      }
+      for (const Slic3r::ModelInstance *instance : object.instances) {
+        if (!instance)
+          continue;
+        Slic3r::TriangleMesh instanceMesh(volumeMesh);
+        instanceMesh.transform(instance->get_transformation().get_matrix(), true);
+        combined.merge(instanceMesh);
+      }
+    }
+    return combined;
+  };
+
+  const QString extension = drcFormat ? QStringLiteral("drc") : QStringLiteral("stl");
+  auto store = [&](const QString &path, Slic3r::TriangleMesh &mesh) {
+    const QByteArray nativePath = QFile::encodeName(path);
+    return drcFormat ? Slic3r::store_drc(nativePath.constData(), &mesh, DRC_BITS_DEFAULT)
+                     : Slic3r::store_stl(nativePath.constData(), &mesh, true);
+  };
+
+  if (separateFiles) {
+    for (int objectIndex : uniqueIndices) {
+      Slic3r::TriangleMesh mesh = meshForObject(*model_->objects[size_t(objectIndex)]);
+      if (mesh.empty()) {
+        lastError_ = tr("Selected object has no printable mesh");
+        return false;
+      }
+      QString baseName = objectNames_.value(objectIndex, QStringLiteral("object"));
+      baseName.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
+      if (!store(outputDirectory.filePath(baseName + QLatin1Char('.') + extension), mesh)) {
+        lastError_ = tr("Export failed");
+        return false;
+      }
+    }
+  } else {
+    Slic3r::TriangleMesh combined;
+    for (int objectIndex : uniqueIndices)
+      combined.merge(meshForObject(*model_->objects[size_t(objectIndex)]));
+    if (combined.empty() || !store(localOutputPath, combined)) {
+      lastError_ = tr("Export failed");
+      return false;
+    }
+  }
+
+  lastError_.clear();
+  return true;
+#else
+  Q_UNUSED(separateFiles);
+  Q_UNUSED(drcFormat);
+  lastError_ = tr("Export requires libslic3r");
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::addFilesToPlate(int plateIndex, const QStringList &filePaths)
+{
+  if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount()
+      || filePaths.isEmpty()) {
+    lastError_ = tr("Invalid plate import request");
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  const QSet<QString> supportedSuffixes = {
+      QStringLiteral("3mf"), QStringLiteral("stl"), QStringLiteral("obj"),
+      QStringLiteral("step"), QStringLiteral("stp"), QStringLiteral("amf"),
+      QStringLiteral("drc")};
+  QList<Slic3r::Model> importedModels;
+  importedModels.reserve(filePaths.size());
+  for (const QString &pathValue : filePaths) {
+    const QUrl url(pathValue);
+    const QString localPath = url.isLocalFile() ? url.toLocalFile() : pathValue;
+    const QFileInfo fileInfo(localPath);
+    if (!fileInfo.isFile() || !supportedSuffixes.contains(fileInfo.suffix().toLower())) {
+      lastError_ = tr("Invalid model file");
+      return false;
+    }
+    try {
+      Slic3r::Model imported = Slic3r::Model::read_from_file(
+          fileInfo.absoluteFilePath().toStdString(), nullptr, nullptr,
+          Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel);
+      const bool hasImportableObject = std::any_of(imported.objects.cbegin(), imported.objects.cend(),
+          [](const Slic3r::ModelObject *object) { return object != nullptr; });
+      if (!hasImportableObject) {
+        lastError_ = tr("Model file has no objects");
+        return false;
+      }
+      importedModels.append(std::move(imported));
+    } catch (const std::exception &exception) {
+      lastError_ = QString::fromLatin1(exception.what());
+      return false;
+    }
+  }
+
+  if (!model_)
+    model_ = new Slic3r::Model();
+  OWzx::PartPlate *targetPlate = m_plateList->plate(plateIndex);
+  if (!targetPlate) {
+    lastError_ = tr("Target plate is unavailable");
+    return false;
+  }
+
+  for (const Slic3r::Model &imported : importedModels) {
+    for (const Slic3r::ModelObject *importedObject : imported.objects) {
+      if (!importedObject)
+        continue;
+      Slic3r::ModelObject *addedObject = model_->add_object(*importedObject);
+      if (!addedObject)
+        continue;
+      if (addedObject->instances.empty())
+        addedObject->add_instance();
+
+      const int objectIndex = int(model_->objects.size()) - 1;
+      objectNames_.append(addedObject->name.empty()
+                              ? tr("Object %1").arg(objectIndex + 1)
+                              : QString::fromStdString(addedObject->name));
+      objectModuleNames_.append(addedObject->module_name.empty()
+                                    ? QStringLiteral("default")
+                                    : QString::fromStdString(addedObject->module_name));
+      const bool printable = !addedObject->instances.empty()
+          && addedObject->instances.front() && addedObject->instances.front()->printable;
+      objectPrintableStates_.append(printable);
+      objectVisibleStates_.append(printable);
+      objectPositions_.append(QVector3D(0, 0, 0));
+      objectRotations_.append(QVector3D(0, 0, 0));
+      objectScales_.append(QVector3D(1, 1, 1));
+      for (int instanceIndex = 0; instanceIndex < int(addedObject->instances.size()); ++instanceIndex) {
+        if (addedObject->instances[size_t(instanceIndex)])
+          targetPlate->addInstance(objectIndex, instanceIndex);
+      }
+    }
+  }
+
+  modelCount_ = objectNames_.size();
+  syncTransformsFromModel();
+  lastError_.clear();
+  emit projectChanged();
+  emit plateDataLoaded(m_plateList->plateCount());
+  return true;
+#else
+  Q_UNUSED(filePaths);
+  lastError_ = tr("Plate import requires libslic3r");
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::addHandyModelToPlate(int plateIndex, const QString &modelId)
+{
+  struct HandyModelDefinition {
+    const char *id;
+    const char *files[3];
+  };
+  static const HandyModelDefinition handyModels[] = {
+      {"orca-cube", {"OrcaCube_v2.drc", "OrcaPlug_v2.drc", nullptr}},
+      {"orca-sliced-combo", {"OrcaSliced.3mf", "OrcaCube_v2.drc", "OrcaPlug_v2.drc"}},
+      {"orca-badge", {"OrcaBadge.3mf", nullptr, nullptr}},
+      {"orca-tolerance-test", {"OrcaToleranceTest.drc", nullptr, nullptr}},
+      {"3dbenchy", {"3DBenchy.drc", nullptr, nullptr}},
+      {"cali-cat", {"calicat.drc", nullptr, nullptr}},
+      {"autodesk-fdm-test", {"ksr_fdmtest_v4.drc", nullptr, nullptr}},
+      {"voron-cube", {"Voron_Design_Cube_v7.drc", nullptr, nullptr}},
+      {"stanford-bunny", {"Stanford_Bunny.drc", nullptr, nullptr}},
+      {"orca-string-hell", {"Orca_stringhell.drc", nullptr, nullptr}},
+  };
+
+  const HandyModelDefinition *definition = nullptr;
+  for (const HandyModelDefinition &candidate : handyModels) {
+    if (modelId == QLatin1String(candidate.id)) {
+      definition = &candidate;
+      break;
+    }
+  }
+  if (!definition) {
+    lastError_ = tr("Unknown handy model");
+    return false;
+  }
+
+  const QString deployedDirectory = QDir(QCoreApplication::applicationDirPath())
+      .filePath(QStringLiteral("resources/handy_models"));
+  const QString currentDirectory = QDir::current().filePath(
+      QStringLiteral("third_party/OrcaSlicer/resources/handy_models"));
+  const QString parentDirectory = QDir::current().filePath(
+      QStringLiteral("../third_party/OrcaSlicer/resources/handy_models"));
+  QString resourcePath;
+  for (const QString &candidate : {deployedDirectory, currentDirectory, parentDirectory}) {
+    if (QDir(candidate).exists()) {
+      resourcePath = candidate;
+      break;
+    }
+  }
+  const QDir resourceDirectory(resourcePath);
+  QStringList filePaths;
+  for (const char *fileName : definition->files) {
+    if (!fileName)
+      break;
+    const QString path = resourceDirectory.filePath(QLatin1String(fileName));
+    if (!QFileInfo(path).isFile()) {
+      lastError_ = tr("Handy model resource is unavailable");
+      return false;
+    }
+    filePaths.append(path);
+  }
+  return addFilesToPlate(plateIndex, filePaths);
+}
+
+bool ProjectServiceMock::replaceAllOnPlateWithFiles(int plateIndex, const QStringList &filePaths)
+{
+  if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount()
+      || filePaths.isEmpty()) {
+    lastError_ = tr("Invalid plate replacement request");
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  if (!model_) {
+    lastError_ = tr("No model is loaded");
+    return false;
+  }
+
+  const QSet<QString> supportedSuffixes = {
+      QStringLiteral("3mf"), QStringLiteral("stl"), QStringLiteral("obj"),
+      QStringLiteral("step"), QStringLiteral("stp"), QStringLiteral("amf"),
+      QStringLiteral("drc")};
+  QList<Slic3r::Model> importedModels;
+  importedModels.reserve(filePaths.size());
+  for (const QString &pathValue : filePaths) {
+    const QUrl url(pathValue);
+    const QString localPath = url.isLocalFile() ? url.toLocalFile() : pathValue;
+    const QFileInfo fileInfo(localPath);
+    if (!fileInfo.isFile() || !supportedSuffixes.contains(fileInfo.suffix().toLower())) {
+      lastError_ = tr("Invalid replacement model file");
+      return false;
+    }
+    try {
+      Slic3r::Model imported = Slic3r::Model::read_from_file(
+          fileInfo.absoluteFilePath().toStdString(), nullptr, nullptr,
+          Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel);
+      const bool hasImportableObject = std::any_of(imported.objects.cbegin(), imported.objects.cend(),
+          [](const Slic3r::ModelObject *object) { return object != nullptr; });
+      if (!hasImportableObject) {
+        lastError_ = tr("Replacement model has no objects");
+        return false;
+      }
+      importedModels.append(std::move(imported));
+    } catch (const std::exception &exception) {
+      lastError_ = QString::fromLatin1(exception.what());
+      return false;
+    }
+  }
+
+  OWzx::PartPlate *targetPlate = m_plateList->plate(plateIndex);
+  if (!targetPlate) {
+    lastError_ = tr("Target plate is unavailable");
+    return false;
+  }
+
+  const QList<int> targetObjects = m_plateList->objectIndicesOnPlate(plateIndex);
+  QSet<int> removedObjectIndices;
+  removedObjectIndices.reserve(targetObjects.size());
+  for (int objectIndex : targetObjects) {
+    if (objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+        || !model_->objects[size_t(objectIndex)]) {
+      lastError_ = tr("Target plate contains an invalid object");
+      return false;
+    }
+    for (int otherPlateIndex = 0; otherPlateIndex < m_plateList->plateCount(); ++otherPlateIndex) {
+      if (otherPlateIndex != plateIndex
+          && m_plateList->objectIndicesOnPlate(otherPlateIndex).contains(objectIndex)) {
+        lastError_ = tr("Replacement model belongs to more than one plate");
+        return false;
+      }
+    }
+    removedObjectIndices.insert(objectIndex);
+  }
+
+  // Keep the target PartPlate in place while remapping model-object indices.
+  QList<int> objectsToDelete = targetObjects;
+  std::sort(objectsToDelete.begin(), objectsToDelete.end(), std::greater<int>());
+  for (int objectIndex : objectsToDelete)
+    model_->delete_object(size_t(objectIndex));
+
+  auto remappedObjectIndex = [&removedObjectIndices](int objectIndex) {
+    if (removedObjectIndices.contains(objectIndex))
+      return -1;
+    int removedBefore = 0;
+    for (int removedIndex : removedObjectIndices) {
+      if (removedIndex < objectIndex)
+        ++removedBefore;
+    }
+    return objectIndex - removedBefore;
+  };
+  for (int existingPlateIndex = 0; existingPlateIndex < m_plateList->plateCount(); ++existingPlateIndex) {
+    OWzx::PartPlate *plate = m_plateList->plate(existingPlateIndex);
+    if (!plate)
+      continue;
+    std::set<std::pair<int, int>> remappedInstances;
+    for (const auto &entry : plate->objToInstanceSet()) {
+      const int remappedIndex = remappedObjectIndex(entry.first);
+      if (remappedIndex >= 0)
+        remappedInstances.insert({remappedIndex, entry.second});
+    }
+    plate->clearInstances();
+    for (const auto &entry : remappedInstances)
+      plate->addInstance(entry.first, entry.second);
+  }
+
+  objectNames_.clear();
+  objectModuleNames_.clear();
+  objectPrintableStates_.clear();
+  objectVisibleStates_.clear();
+  objectNames_.reserve(int(model_->objects.size()));
+  objectModuleNames_.reserve(int(model_->objects.size()));
+  objectPrintableStates_.reserve(int(model_->objects.size()));
+  objectVisibleStates_.reserve(int(model_->objects.size()));
+  for (size_t objectIndex = 0; objectIndex < model_->objects.size(); ++objectIndex) {
+    const Slic3r::ModelObject *object = model_->objects[objectIndex];
+    objectNames_.append(object && !object->name.empty()
+                            ? QString::fromStdString(object->name)
+                            : tr("Object %1").arg(int(objectIndex + 1)));
+    objectModuleNames_.append(object && !object->module_name.empty()
+                                  ? QString::fromStdString(object->module_name)
+                                  : QStringLiteral("default"));
+    const bool printable = object && !object->instances.empty()
+        && object->instances.front() && object->instances.front()->printable;
+    objectPrintableStates_.append(printable);
+    objectVisibleStates_.append(printable);
+  }
+  modelCount_ = objectNames_.size();
+  targetPlate = m_plateList->plate(plateIndex);
+  if (!targetPlate) {
+    lastError_ = tr("Target plate was removed during replacement");
+    return false;
+  }
+
+  for (const Slic3r::Model &imported : importedModels) {
+    for (const Slic3r::ModelObject *importedObject : imported.objects) {
+      if (!importedObject)
+        continue;
+      Slic3r::ModelObject *addedObject = model_->add_object(*importedObject);
+      if (!addedObject)
+        continue;
+      const int objectIndex = int(model_->objects.size()) - 1;
+      if (addedObject->instances.empty())
+        addedObject->add_instance();
+      objectNames_.append(addedObject->name.empty()
+                              ? tr("Object %1").arg(objectIndex + 1)
+                              : QString::fromStdString(addedObject->name));
+      objectModuleNames_.append(addedObject->module_name.empty()
+                                    ? QStringLiteral("default")
+                                    : QString::fromStdString(addedObject->module_name));
+      const bool printable = !addedObject->instances.empty()
+          && addedObject->instances.front() && addedObject->instances.front()->printable;
+      objectPrintableStates_.append(printable);
+      objectVisibleStates_.append(printable);
+      for (int instanceIndex = 0; instanceIndex < int(addedObject->instances.size()); ++instanceIndex) {
+        if (addedObject->instances[size_t(instanceIndex)])
+          targetPlate->addInstance(objectIndex, instanceIndex);
+      }
+    }
+  }
+
+  modelCount_ = objectNames_.size();
+  syncTransformsFromModel();
+  lastError_.clear();
+  emit projectChanged();
+  emit plateDataLoaded(m_plateList->plateCount());
+  return true;
+#else
+  Q_UNUSED(filePaths);
+  lastError_ = tr("Plate replacement requires libslic3r");
   return false;
 #endif
 }

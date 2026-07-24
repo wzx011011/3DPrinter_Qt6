@@ -69,6 +69,7 @@
         <file>components/CollapsibleSection.qml</file>
         <file>components/OptionRow.qml</file>
         <file>components/GLToolbars.qml</file>
+        <file>components/PrepareContextMenus.qml</file>
         <!-- Controls -->
         <file>controls/CxBadge.qml</file>
         <file>controls/CxButton.qml</file>

@@ -236,6 +236,36 @@ void RhiViewport::setMeshBatchSourceObjectIndices(const QVariantList &value)
   update();
 }
 
+void RhiViewport::setMeshBatchVolumeIndices(const QVariantList &value)
+{
+  if (m_meshBatchVolumeIndices == value)
+    return;
+  m_meshBatchVolumeIndices = value;
+  ++m_sceneGeneration;
+  ++m_modelGeneration;
+  update();
+}
+
+void RhiViewport::setMeshBatchInstanceIndices(const QVariantList &value)
+{
+  if (m_meshBatchInstanceIndices == value)
+    return;
+  m_meshBatchInstanceIndices = value;
+  ++m_sceneGeneration;
+  ++m_modelGeneration;
+  update();
+}
+
+void RhiViewport::setLayerEditingInputActive(bool value)
+{
+  m_layerEditingInputActive = value;
+}
+
+void RhiViewport::setContextToolInputCaptured(bool value)
+{
+  m_contextToolInputCaptured = value;
+}
+
 // Phase 138 (ASM-01): per-source-object assemble offset. Force a model re-upload
 // so buildModelVertices re-applies the per-object translation on the
 // CanvasAssembleView branch. Gated to CanvasAssembleView in buildModelVertices,
@@ -658,7 +688,12 @@ void RhiViewport::deliverThumbnail(const QImage &image, int plateIndex)
 void RhiViewport::mousePressEvent(QMouseEvent *event)
 {
   if (event->button() == Qt::RightButton) {
-    event->ignore();
+    m_contextPressPosition = event->position();
+    m_contextPressActive = true;
+    m_contextDragExceeded = false;
+    m_contextToolCapturedAtPress = activeToolCapturesContextGesture();
+    m_contextLayerEditingAtPress = m_layerEditingInputActive;
+    event->accept();
     return;
   }
 
@@ -742,6 +777,12 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
 
 void RhiViewport::mouseMoveEvent(QMouseEvent *event)
 {
+  if (m_contextPressActive) {
+    const QPointF delta = event->position() - m_contextPressPosition;
+    m_contextDragExceeded = m_contextDragExceeded || std::hypot(delta.x(), delta.y()) > 4.0;
+    event->accept();
+    return;
+  }
   // Phase 120 (PAINT-01): continuous-paint-on-drag. While a paint gizmo is
   // active and the left button is held, every mouse-move drives the
   // TriangleSelector brush (mirrors upstream GLGizmoPainterBase on_mouse
@@ -833,6 +874,24 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
 
 void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
 {
+  if (event->button() == Qt::RightButton) {
+    const bool suppress = !m_contextPressActive || m_contextDragExceeded
+        || m_contextLayerEditingAtPress || m_contextToolCapturedAtPress;
+    m_contextPressActive = false;
+    m_contextToolCapturedAtPress = false;
+    m_contextLayerEditingAtPress = false;
+    if (!suppress) {
+      const ViewportContextHit hit = classifyContextAt(event->position());
+      if (hit.isMenuRequest()) {
+        emit contextMenuRequested(int(hit.target), hit.sourceObjectIndex,
+                                  hit.volumeIndex, hit.instanceIndex,
+                                  hit.plateIndex, hit.popupPosition.x(),
+                                  hit.popupPosition.y());
+      }
+    }
+    event->accept();
+    return;
+  }
   // Phase 69: end the gizmo drag. The ViewModel coalesces all frame deltas
   // into one undo command.
   if (m_gizmoDragging && event->button() == Qt::LeftButton)
@@ -858,6 +917,11 @@ void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
       m_gizmoMode == GizmoMmuSegmentation)
     updateBrushCursorState(event->position(), 0 /*hover*/);
   event->accept();
+}
+
+bool RhiViewport::activeToolCapturesContextGesture() const
+{
+  return m_contextToolInputCaptured || m_gizmoDragging;
 }
 
 void RhiViewport::hoverMoveEvent(QHoverEvent *event)
@@ -974,7 +1038,7 @@ void RhiViewport::fitPreviewCameraToData()
 
 void RhiViewport::updatePickingScene()
 {
-  if (m_pickModelGeneration == m_modelGeneration)
+  if (m_pickModelGeneration == m_modelGeneration && m_pickSceneGeneration == m_sceneGeneration)
     return;
 
   QList<int> activeObjectIndices;
@@ -987,10 +1051,25 @@ void RhiViewport::updatePickingScene()
   for (const QVariant &value : m_meshBatchSourceObjectIndices)
     batchSourceObjectIndices.append(value.toInt());
 
+  QList<int> batchVolumeIndices;
+  batchVolumeIndices.reserve(m_meshBatchVolumeIndices.size());
+  for (const QVariant &value : m_meshBatchVolumeIndices)
+    batchVolumeIndices.append(value.toInt());
+
+  QList<int> batchInstanceIndices;
+  batchInstanceIndices.reserve(m_meshBatchInstanceIndices.size());
+  for (const QVariant &value : m_meshBatchInstanceIndices)
+    batchInstanceIndices.append(value.toInt());
+
   m_pickScene.setPlateContext(m_currentPlateIndex, m_plateCount, activeObjectIndices);
-  m_pickScene.setModelMeshData(m_meshData, batchSourceObjectIndices, activeObjectIndices);
+  m_pickScene.setBed(m_bedWidth, m_bedDepth, m_bedOriginX, m_bedOriginY,
+                     m_bedShapeType, m_bedDiameter);
+  m_pickScene.setModelMeshData(m_meshData, batchSourceObjectIndices,
+                               batchVolumeIndices, batchInstanceIndices,
+                               activeObjectIndices);
   m_pickScene.clearDirtyFlags();
   m_pickModelGeneration = m_modelGeneration;
+  m_pickSceneGeneration = m_sceneGeneration;
 }
 
 int RhiViewport::pickSourceObjectAt(const QPointF &position)
@@ -1011,6 +1090,59 @@ int RhiViewport::pickSourceObjectAt(const QPointF &position)
                                          rayDirection,
                                          m_pickScene.modelVertices(),
                                          m_pickScene.modelBatches());
+}
+
+ViewportContextHit RhiViewport::classifyContextAt(const QPointF &position)
+{
+  ViewportContextHit result;
+  result.popupPosition = position;
+  updatePickingScene();
+  if (width() <= 1.0 || height() <= 1.0) {
+    result.target = ViewportContextTarget::Empty;
+    return result;
+  }
+
+  const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+  const float aspect = float(viewSize.width()) / float(viewSize.height());
+  const auto [rayOrigin, rayDirection] = GizmoMath::computeRay(
+      float(position.x()), float(position.y()), viewSize,
+      m_camera.projMatrix(aspect), m_camera.viewMatrix());
+  const ObjectPicking::Hit objectHit = ObjectPicking::pick(
+      rayOrigin, rayDirection, m_pickScene.modelVertices(), m_pickScene.modelBatches());
+  if (objectHit.isValid()) {
+    result.target = ViewportContextTarget::Part;
+    result.sourceObjectIndex = objectHit.sourceObjectIndex;
+    result.volumeIndex = objectHit.volumeIndex;
+    result.instanceIndex = objectHit.instanceIndex;
+    result.plateIndex = m_pickScene.currentPlateIndex();
+    return result;
+  }
+
+  if (std::abs(rayDirection.y()) <= 1e-6f) {
+    result.target = ViewportContextTarget::Empty;
+    return result;
+  }
+  const float groundDistance = -rayOrigin.y() / rayDirection.y();
+  if (groundDistance < 0.0f) {
+    result.target = ViewportContextTarget::Empty;
+    return result;
+  }
+  const QVector3D groundPoint = rayOrigin + rayDirection * groundDistance;
+  if (m_showWipeTower && m_wipeTowerWidth > 0.0f && m_wipeTowerDepth > 0.0f
+      && groundPoint.x() >= m_wipeTowerX - m_wipeTowerWidth * 0.5f
+      && groundPoint.x() <= m_wipeTowerX + m_wipeTowerWidth * 0.5f
+      && groundPoint.z() >= m_wipeTowerZ - m_wipeTowerDepth * 0.5f
+      && groundPoint.z() <= m_wipeTowerZ + m_wipeTowerDepth * 0.5f) {
+    result.target = ViewportContextTarget::Suppressed;
+    return result;
+  }
+  if (m_pickScene.containsCurrentPlatePoint(groundPoint.x(), groundPoint.z())) {
+    result.target = ViewportContextTarget::Plate;
+    result.plateIndex = m_pickScene.currentPlateIndex();
+  } else {
+    result.target = ViewportContextTarget::Empty;
+  }
+  return result;
 }
 
 // ===========================================================================

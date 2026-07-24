@@ -347,6 +347,29 @@ public:
    */
   QByteArray meshData() const;
   QList<int> meshBatchSourceObjectIndices() const;
+  QList<int> meshBatchVolumeIndices() const;
+  QList<int> meshBatchInstanceIndices() const;
+
+  bool setObjectInstanceCount(int objectIndex, int count);
+  bool exportObjects(const QList<int> &objectIndices,
+                     const QString &outputPath,
+                     bool separateFiles,
+                     bool drcFormat);
+  /// Import model files into one explicit plate without changing other plates.
+  bool addFilesToPlate(int plateIndex, const QStringList &filePaths);
+  /// Import one upstream handy-model bundle from deployed resources/handy_models.
+  bool addHandyModelToPlate(int plateIndex, const QString &modelId);
+  bool replaceAllOnPlateWithFiles(int plateIndex, const QStringList &filePaths);
+
+  /// Align the object with the build plate using ModelObject::ensure_on_bed.
+  bool dropObjectToBed(int objectIndex);
+  /// Read or set the upstream per-instance auto-drop state for one object.
+  bool objectAutoDrop(int objectIndex) const;
+  bool setObjectAutoDrop(int objectIndex, bool enabled);
+  /// Subdivide selected mesh volumes through upstream TriangleMeshDeal.
+  bool subdivideObject(int objectIndex, int volumeIndex = -1);
+  /// Convert an object's mesh units using upstream ModelObject::convert_units.
+  bool convertObjectUnits(int objectIndex, int conversionType);
 
   /// 复制指定对象（对齐上游 Plater::clone_selection 行为）
   /// 返回新对象的索引，失败返回 -1
@@ -362,6 +385,7 @@ public:
   bool reloadFromDisk(int objectIndex);
   /// 用 STL 文件替换指定 volume 的网格（对齐上游 GUI_ObjectList::load_subobject）
   bool replaceVolume(int objectIndex, int volumeIndex, const QString &stlPath);
+  bool splitVolumeIntoParts(int objectIndex, int volumeIndex);
   /// 合并多个对象为一个多部件对象（对齐上游 GUI_ObjectList::assemble）
   bool assembleObjects(const QList<int> &objIndices);
   /// 将指定实例复制为独立对象（对齐上游 GUI_ObjectList::instance_to_object）

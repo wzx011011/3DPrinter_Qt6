@@ -14,6 +14,7 @@
 
 #include "CameraController.h"
 #include "PrepareSceneData.h"
+#include "ViewportContextHit.h"
 
 class RhiViewportRenderer;
 
@@ -43,6 +44,10 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(int plateCount READ plateCount WRITE setPlateCount)
   Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices WRITE setActivePlateObjectIndices)
   Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices WRITE setMeshBatchSourceObjectIndices)
+  Q_PROPERTY(QVariantList meshBatchVolumeIndices READ meshBatchVolumeIndices WRITE setMeshBatchVolumeIndices)
+  Q_PROPERTY(QVariantList meshBatchInstanceIndices READ meshBatchInstanceIndices WRITE setMeshBatchInstanceIndices)
+  Q_PROPERTY(bool layerEditingInputActive READ layerEditingInputActive WRITE setLayerEditingInputActive)
+  Q_PROPERTY(bool contextToolInputCaptured READ contextToolInputCaptured WRITE setContextToolInputCaptured)
   // Phase 138 (ASM-01): per-source-object assemble offset (GL X,Y,Z), one entry
   // per source object index (matches meshBatchSourceObjectIndices ordering).
   // Bound from editorVm.assembleOffsets in AssemblePage.qml. The renderer applies
@@ -216,6 +221,14 @@ public:
   void setActivePlateObjectIndices(const QVariantList &value);
   QVariantList meshBatchSourceObjectIndices() const { return m_meshBatchSourceObjectIndices; }
   void setMeshBatchSourceObjectIndices(const QVariantList &value);
+  QVariantList meshBatchVolumeIndices() const { return m_meshBatchVolumeIndices; }
+  void setMeshBatchVolumeIndices(const QVariantList &value);
+  QVariantList meshBatchInstanceIndices() const { return m_meshBatchInstanceIndices; }
+  void setMeshBatchInstanceIndices(const QVariantList &value);
+  bool layerEditingInputActive() const { return m_layerEditingInputActive; }
+  void setLayerEditingInputActive(bool value);
+  bool contextToolInputCaptured() const { return m_contextToolInputCaptured; }
+  void setContextToolInputCaptured(bool value);
   // Phase 138 (ASM-01): per-source-object assemble offset list (one QVector3D
   // per source object index, GL X,Y,Z).
   QVariantList assembleOffsets() const { return m_assembleOffsets; }
@@ -333,6 +346,13 @@ signals:
   /// QML bindings reading lastThumbnailData for the current plate's live preview.
   void thumbnailCapturedForPlate(int plateIndex, const QString &data);
   void objectPickedSource(int sourceIndex);
+  void contextMenuRequested(int targetKind,
+                            int sourceObjectIndex,
+                            int volumeIndex,
+                            int instanceIndex,
+                            int plateIndex,
+                            qreal popupX,
+                            qreal popupY);
   // Phase 69: emitted during a move-gizmo axis drag. worldDelta is the
   // incremental translation to apply to the selected object this frame
   // (in world mm). gizmoDragBegin fires once at press (before the first
@@ -400,7 +420,9 @@ private:
   QMatrix4x4 cameraMvp(float aspect) const;
   void fitPreviewCameraToData();
   void updatePickingScene();
+  bool activeToolCapturesContextGesture() const;
   int pickSourceObjectAt(const QPointF &position);
+  ViewportContextHit classifyContextAt(const QPointF &position);
   // Phase 69/70: gizmo-axis hit test and center derivation.
   int pickGizmoAxisAt(const QPointF &position);
   QVector3D currentGizmoCenter() const;
@@ -447,6 +469,10 @@ private:
   int m_plateCount = 1;
   QVariantList m_activePlateObjectIndices;
   QVariantList m_meshBatchSourceObjectIndices;
+  QVariantList m_meshBatchVolumeIndices;
+  QVariantList m_meshBatchInstanceIndices;
+  bool m_layerEditingInputActive = false;
+  bool m_contextToolInputCaptured = false;
   // Phase 138 (ASM-01): per-source-object assemble offset (GL X,Y,Z).
   QVariantList m_assembleOffsets;
   // Phase 141 (DEBT-04): parallel rotation/scale lists.
@@ -511,11 +537,17 @@ private:
   qint64 m_sceneGeneration = 1;
   qint64 m_modelGeneration = 1;
   qint64 m_pickModelGeneration = 0;
+  qint64 m_pickSceneGeneration = 0;
   CameraController m_camera;
   PrepareSceneData m_pickScene;
   QPointF m_lastMousePosition;
   QPointF m_pressPosition;
   Qt::MouseButton m_dragButton = Qt::NoButton;
+  QPointF m_contextPressPosition;
+  bool m_contextPressActive = false;
+  bool m_contextDragExceeded = false;
+  bool m_contextToolCapturedAtPress = false;
+  bool m_contextLayerEditingAtPress = false;
   int m_pressPickedSourceObjectIndex = -1;
   bool m_cameraDirty = true;
 

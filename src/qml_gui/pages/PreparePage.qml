@@ -61,12 +61,52 @@ Item {
         volumeIndex: root.editorVm ? root.editorVm.selectedVolumeIndex : -1
     }
 
+    PrepareContextMenus {
+        id: prepareContextMenus
+        editorVm: root.editorVm
+        onRequestAddModels: addModelsToContextPlateDlg.open()
+        onRequestReplacePart: replaceWithStlDlg.open()
+        onRequestReplaceAll: replaceAllOnPlateDlg.open()
+        onRequestConfirmDelete: deleteConfirm.openWithAction(function() {
+            if (root.editorVm) root.editorVm.deleteSelection()
+        })
+        onRequestRenameObject: {
+            if (!root.editorVm) return
+            renameDialog.currentObjIndex = root.editorVm.selectedObjectIndex
+            renameDialog.currentName = root.editorVm.objectName(root.editorVm.selectedObjectIndex)
+            renameDialog.open()
+        }
+        onRequestActivateGizmo: function(mode) { root.setGizmoIfAvailable(mode) }
+        onRequestObjectLayers: objectLayersDialog.open()
+        onRequestRenamePlate: {
+            if (!root.editorVm || root.editorVm.contextPlateIndex < 0) return
+            var dialog = plateRenameDialog.createObject(root)
+            dialog.plateIndex = root.editorVm.contextPlateIndex
+            dialog.currentName = root.editorVm.plateName(root.editorVm.contextPlateIndex)
+            dialog.open()
+        }
+        onRequestPlateSettings: {
+            if (!root.editorVm || root.editorVm.contextPlateIndex < 0) return
+            var dialog = plateSettingsDialogComp.createObject(root)
+            dialog.plateIndex = root.editorVm.contextPlateIndex
+            dialog.plateName = root.editorVm.plateName(root.editorVm.contextPlateIndex)
+            dialog.open()
+        }
+        onRequestExport: function(separateFiles, drcFormat) {
+            contextExportDialog.separateFiles = separateFiles
+            contextExportDialog.drcFormat = drcFormat
+            contextExportDialog.open()
+        }
+    }
+
     // Phase 175 (FEAT-02): per-object layer-range editor dialog. Reachable
     // via a new "层高范围" menu item in the object context menu.
     ObjectLayersDialog {
         id: objectLayersDialog
         editorVm: root.editorVm
         objectIndex: root.editorVm ? root.editorVm.selectedObjectIndex : -1
+        onOpened: viewport3d.layerEditingInputActive = true
+        onClosed: viewport3d.layerEditingInputActive = false
     }
 
     Connections {
@@ -144,6 +184,12 @@ Item {
         }
         exportGCodeDlg.currentFile = root.editorVm.defaultExportGCodeFileName()
         exportGCodeDlg.open()
+    }
+
+    function openContextExport() {
+        contextExportDialog.separateFiles = false
+        contextExportDialog.drcFormat = false
+        contextExportDialog.open()
     }
 
     // GL FBO 缩略图捕获（对齐上游 PartPlate::thumbnail_data）
@@ -261,334 +307,6 @@ Item {
         }
     }
 
-    // Default canvas context menu (right-click on empty space, no selection)
-    // 对齐 upstream Plater::priv::on_right_click → menus.default_menu()
-    CxMenu {
-        id: defaultContextMenu
-
-        CxMenuItem {
-            text: qsTr("添加模型...")
-            onTriggered: openFileDlg.open()
-        }
-        CxMenu {
-            title: qsTr("添加图元")
-            CxMenuItem {
-                text: qsTr("立方体")
-                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(0)
-            }
-            CxMenuItem {
-                text: qsTr("球体")
-                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(1)
-            }
-            CxMenuItem {
-                text: qsTr("圆柱体")
-                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(2)
-            }
-            CxMenuItem {
-                text: qsTr("圆锥体")
-                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(3)
-            }
-            CxMenuItem {
-                text: qsTr("截锥体")
-                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(4)
-            }
-            CxMenuItem {
-                text: qsTr("圆环体")
-                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(5)
-            }
-            CxMenuItem {
-                text: qsTr("圆盘")
-                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(6)
-            }
-            CxMenuItem {
-                text: qsTr("文字")
-                onTriggered: if (root.editorVm) root.editorVm.addTextObject()
-            }
-            CxMenuItem {
-                text: qsTr("SVG")
-                onTriggered: if (root.editorVm) root.editorVm.importSVG()
-            }
-        }
-        MenuSeparator { }
-        CxMenuItem {
-            text: editorVm && editorVm.showLabels ? qsTr("隐藏标签") : qsTr("显示标签")
-            onTriggered: if (root.editorVm) root.editorVm.showLabels = !root.editorVm.showLabels
-        }
-    }
-
-    // Object context menu (right-click on selected object, aligns with upstream create_object_menu/create_extra_object_menu)
-    CxMenu {
-        id: objectContextMenu
-
-        CxMenuItem {
-            text: qsTr("复制选中")
-            enabled: root.editorVm && root.editorVm.canDuplicateSelectedObjects
-            onTriggered: if (root.editorVm) root.editorVm.duplicateSelectedObjects()
-        }
-        CxMenuItem {
-            text: qsTr("删除选中")
-            enabled: root.editorVm && root.editorVm.canDeleteSelection
-            onTriggered: deleteConfirm.openWithAction(function() {
-                if (root.editorVm) root.editorVm.deleteSelection()
-            })
-        }
-        MenuSeparator { }
-        CxMenuItem {
-            text: qsTr("全选")
-            onTriggered: if (root.editorVm) root.editorVm.selectAllVisibleObjects()
-        }
-        CxMenuItem {
-            text: qsTr("取消选择")
-            onTriggered: if (root.editorVm) root.editorVm.clearObjectSelection()
-        }
-        MenuSeparator { }
-        // 对齐上游 create_extra_object_menu — Rename
-        CxMenuItem {
-            text: qsTr("重命名")
-            enabled: root.editorVm && root.editorVm.canRenameSelectedObject
-            onTriggered: {
-                renameDialog.currentObjIndex = root.editorVm.selectedObjectIndex
-                renameDialog.currentName = root.editorVm.objectName(root.editorVm.selectedObjectIndex)
-                renameDialog.open()
-            }
-        }
-        // 对齐上游 create_extra_object_menu — Center
-        CxMenuItem {
-            text: qsTr("居中到热床")
-            enabled: root.editorVm && root.editorVm.canTransformSelection
-            onTriggered: if (root.editorVm) root.editorVm.centerSelectedObjects()
-        }
-        // 对齐上游 create_extra_object_menu — Fill bed with copies
-        CxMenuItem {
-            text: qsTr("铺满热床")
-            enabled: root.editorVm && root.editorVm.canRenameSelectedObject
-            onTriggered: if (root.editorVm) root.editorVm.fillBedWithCopies()
-        }
-        // 对齐上游 create_extra_object_menu — Export as STL
-        CxMenuItem {
-            text: qsTr("导出为 STL")
-            enabled: root.editorVm && root.editorVm.canRenameSelectedObject
-            onTriggered: if (root.editorVm) root.editorVm.exportSelectedAsStl()
-        }
-        MenuSeparator { }
-        CxMenuItem {
-            text: qsTr("移动模式")
-            enabled: root.editorVm && ((root.editorVm.availableGizmoMask & (1 << GLViewport.GizmoMove)) !== 0)
-            onTriggered: root.setGizmoIfAvailable(GLViewport.GizmoMove)
-        }
-        CxMenuItem {
-            text: qsTr("旋转模式")
-            enabled: root.editorVm && ((root.editorVm.availableGizmoMask & (1 << GLViewport.GizmoRotate)) !== 0)
-            onTriggered: root.setGizmoIfAvailable(GLViewport.GizmoRotate)
-        }
-        CxMenuItem {
-            text: qsTr("缩放模式")
-            enabled: root.editorVm && ((root.editorVm.availableGizmoMask & (1 << GLViewport.GizmoScale)) !== 0)
-            onTriggered: root.setGizmoIfAvailable(GLViewport.GizmoScale)
-        }
-        MenuSeparator { }
-        CxMenuItem {
-            text: qsTr("自动朝向")
-            enabled: root.editorVm && root.editorVm.canTransformSelection
-            onTriggered: if (root.editorVm) root.editorVm.autoOrientSelected()
-        }
-        CxMenuItem {
-            text: qsTr("拆分对象")
-            enabled: root.editorVm && root.editorVm.canRenameSelectedObject
-            onTriggered: if (root.editorVm) root.editorVm.splitSelectedObject()
-        }
-        MenuSeparator { }
-        CxMenu {
-            title: qsTr("镜像")
-            enabled: root.editorVm && root.editorVm.canTransformSelection
-            CxMenuItem {
-                text: qsTr("沿 X 轴镜像")
-                onTriggered: if (root.editorVm) root.editorVm.mirrorSelectedObjects(0)
-            }
-            CxMenuItem {
-                text: qsTr("沿 Y 轴镜像")
-                onTriggered: if (root.editorVm) root.editorVm.mirrorSelectedObjects(1)
-            }
-            CxMenuItem {
-                text: qsTr("沿 Z 轴镜像")
-                onTriggered: if (root.editorVm) root.editorVm.mirrorSelectedObjects(2)
-            }
-        }
-        MenuSeparator { }
-        // 对齐上游 set_printable
-        CxMenuItem {
-            text: root.editorVm && root.editorVm.selectedObjectCount > 0
-                   && root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex)
-                   ? qsTr("设为不参与打印") : qsTr("设为可打印")
-            enabled: root.editorVm && root.editorVm.canSetSelectionPrintable
-            onTriggered: {
-                if (root.editorVm) {
-                    if (root.editorVm.selectedObjectCount > 1)
-                        root.editorVm.setSelectedObjectsPrintable(!root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex))
-                    else
-                        root.editorVm.setObjectPrintable(root.editorVm.selectedObjectIndex, !root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex))
-                }
-            }
-        }
-        CxMenuItem {
-            text: qsTr("显示/隐藏")
-            enabled: root.editorVm && root.editorVm.canTransformSelection
-            onTriggered: if (root.editorVm) root.editorVm.toggleSelectedObjectsVisibility()
-        }
-        CxMenuItem {
-            text: qsTr("适应视图")
-            onTriggered: root.applyFitHintIfReady()
-        }
-        MenuSeparator { }
-        // 对齐上游 create_extra_object_menu — Fix Model
-        CxMenuItem {
-            text: qsTr("修复模型")
-            enabled: root.editorVm && root.editorVm.canTransformSelection
-            onTriggered: if (root.editorVm) root.editorVm.fixMeshSelected()
-        }
-        // 对齐上游 create_extra_object_menu — Simplify
-        CxMenuItem {
-            text: qsTr("简化模型")
-            enabled: root.editorVm && ((root.editorVm.availableGizmoMask & (1 << GLViewport.GizmoSimplify)) !== 0)
-            onTriggered: if (root.editorVm) root.editorVm.simplifyMeshSelected()
-        }
-        // Phase 141 / DEBT-02: removed orphaned "网格布尔运算" CxMenuItem — the
-        // stub it called in EditorViewModel was a no-op (returned false, qWarning
-        // "not yet implemented"). The working boolean path is the boolean dialog
-        // (CxComboBox with 3 ops + booleanExecute button below), which routes
-        // through EditorViewModel booleanExecute → ProjectServiceMock meshBoolean.
-        // The dead menu + stub were removed together per the No-Deprecated-UI rule.
-        MenuSeparator { }
-        // 对齐上游 append_menu_item_per_object_settings
-        CxMenuItem {
-            text: qsTr("编辑参数表")
-            enabled: root.editorVm && root.editorVm.canOpenSelectionSettings
-            onTriggered: if (root.editorVm) root.editorVm.requestSelectionSettings()
-        }
-        CxMenuItem {
-            text: qsTr("编辑工艺设置")
-            onTriggered: backend.forwardSettingsRequest("process")
-        }
-        MenuSeparator { }
-        // 对齐上游 append_menu_item_reload_from_disk
-        CxMenuItem {
-            text: qsTr("从磁盘重新加载")
-            enabled: root.editorVm && root.editorVm.canTransformSelection
-            onTriggered: if (root.editorVm) root.editorVm.reloadSelectedFromDisk()
-        }
-        // 对齐上游 append_menu_item_replace_with_stl
-        CxMenuItem {
-            text: qsTr("替换为 STL...")
-            enabled: root.editorVm && root.editorVm.hasSelectedVolume
-            onTriggered: replaceWithStlDlg.open()
-        }
-        // Phase 175 (FEAT-02): layer-range editor entry (对齐上游 GUI_ObjectLayers).
-        CxMenuItem {
-            text: qsTr("层高范围...")
-            enabled: root.editorVm && root.editorVm.selectedObjectIndex >= 0
-            onTriggered: objectLayersDialog.open()
-        }
-        // 对齐上游 append_menu_item_change_filament — Change Filament submenu
-        CxMenu {
-            title: qsTr("更换耗材")
-            enabled: root.editorVm && root.editorVm.canRenameSelectedObject
-            CxMenuItem {
-                text: qsTr("默认")
-                onTriggered: if (root.editorVm) root.editorVm.setVolumeExtruderId(
-                                 root.editorVm.selectedObjectIndex, 0, -1)
-            }
-            Repeater {
-                model: root.configVm ? root.configVm.filamentPresetNames : []
-                delegate: CxMenuItem {
-                    text: qsTr("T%1 — %2").arg(index + 1).arg(modelData)
-                    onTriggered: if (root.editorVm) root.editorVm.setVolumeExtruderId(
-                                     root.editorVm.selectedObjectIndex, 0, index + 1)
-                }
-            }
-        }
-    }
-
-    // Multi-selection context menu (对齐上游 multi_selection_menu)
-    CxMenu {
-        id: multiContextMenu
-
-        // 对齐上游 append_menu_item_merge_to_multipart_object
-        CxMenuItem {
-            text: qsTr("组合")
-            enabled: root.editorVm && root.editorVm.canDuplicateSelectedObjects
-            onTriggered: if (root.editorVm) root.editorVm.assembleSelectedObjects()
-        }
-        CxMenuItem {
-            text: qsTr("克隆")
-            enabled: root.editorVm && root.editorVm.canDuplicateSelectedObjects
-            onTriggered: if (root.editorVm) root.editorVm.duplicateSelectedObjects()
-        }
-        MenuSeparator { }
-        CxMenuItem {
-            text: qsTr("居中到热床")
-            enabled: root.editorVm && root.editorVm.canTransformSelection
-            onTriggered: if (root.editorVm) root.editorVm.centerSelectedObjects()
-        }
-        CxMenuItem {
-            text: qsTr("修复模型")
-            enabled: root.editorVm && root.editorVm.canTransformSelection
-            onTriggered: if (root.editorVm) root.editorVm.fixMeshSelected()
-        }
-        CxMenuItem {
-            text: qsTr("删除")
-            enabled: root.editorVm && root.editorVm.canDeleteSelection
-            onTriggered: deleteConfirm.openWithAction(function() {
-                if (root.editorVm) root.editorVm.deleteSelection()
-            })
-        }
-        CxMenuItem {
-            text: qsTr("复制")
-            enabled: root.editorVm && root.editorVm.canDuplicateSelectedObjects
-            onTriggered: if (root.editorVm) root.editorVm.copySelectedObjects()
-        }
-        CxMenuItem {
-            text: qsTr("粘贴")
-            enabled: root.editorVm && root.editorVm.hasClipboardContent
-            onTriggered: if (root.editorVm) root.editorVm.pasteObjects()
-        }
-        MenuSeparator { }
-        // 对齐上游 append_menu_item_set_printable
-        CxMenuItem {
-            text: qsTr("设为可打印")
-            enabled: root.editorVm && root.editorVm.canSetSelectionPrintable
-            onTriggered: if (root.editorVm) root.editorVm.setSelectedObjectsPrintable(true)
-        }
-        CxMenuItem {
-            text: qsTr("编辑工艺设置")
-            onTriggered: backend.forwardSettingsRequest("process")
-        }
-        MenuSeparator { }
-        // 对齐上游 append_menu_item_change_filament — Change Filament submenu
-        CxMenu {
-            title: qsTr("更换耗材")
-            enabled: root.editorVm && root.editorVm.canDuplicateSelectedObjects
-            CxMenuItem {
-                text: qsTr("默认")
-                onTriggered: if (root.editorVm) root.editorVm.setVolumeExtruderId(
-                                 root.editorVm.selectedObjectIndex, 0, -1)
-            }
-            Repeater {
-                model: root.configVm ? root.configVm.filamentPresetNames : []
-                delegate: CxMenuItem {
-                    text: qsTr("T%1 — %2").arg(index + 1).arg(modelData)
-                    onTriggered: if (root.editorVm) root.editorVm.setVolumeExtruderId(
-                                     root.editorVm.selectedObjectIndex, 0, index + 1)
-                }
-            }
-        }
-        MenuSeparator { }
-        CxMenuItem {
-            text: qsTr("导出为 STL")
-            enabled: root.editorVm && root.editorVm.canRenameSelectedObject
-            onTriggered: if (root.editorVm) root.editorVm.exportSelectedAsStl()
-        }
-    }
-
     // Rename dialog (对齐上游 Plater::rename_object)
     Dialog {
         id: renameDialog
@@ -644,182 +362,6 @@ Item {
                         } }
                 }
             }
-        }
-    }
-
-    // Plate context menu (right-click on plate card)
-    property int contextPlateIndex: -1
-
-    CxMenu {
-        id: plateContextMenu
-
-        CxMenuItem {
-            text: qsTr("选择全部对象")
-            enabled: root.contextPlateIndex >= 0 && root.editorVm
-                     && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
-            onTriggered: if (root.editorVm) root.editorVm.selectAllOnPlate(root.contextPlateIndex)
-        }
-        CxMenuItem {
-            text: qsTr("清空平板")
-            enabled: root.contextPlateIndex >= 0 && root.editorVm
-                     && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
-            onTriggered: if (root.editorVm) root.editorVm.removeAllOnPlate(root.contextPlateIndex)
-        }
-        MenuSeparator { }
-        CxMenuItem {
-            text: qsTr("排列对象")
-            enabled: root.contextPlateIndex >= 0 && root.editorVm
-                     && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
-            onTriggered: {
-                if (root.editorVm) root.editorVm.selectAllOnPlate(root.contextPlateIndex)
-                if (root.editorVm) root.editorVm.arrangeAllObjects()
-            }
-        }
-        CxMenuItem {
-            text: qsTr("自动朝向")
-            enabled: root.contextPlateIndex >= 0 && root.editorVm
-                     && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
-            onTriggered: {
-                if (root.editorVm) root.editorVm.selectAllOnPlate(root.contextPlateIndex)
-                root.editorVm.autoOrientSelected()
-            }
-        }
-        MenuSeparator { }
-        CxMenuItem {
-            text: qsTr("重命名")
-            enabled: root.contextPlateIndex >= 0 && root.editorVm
-            onTriggered: {
-                if (!root.editorVm || root.contextPlateIndex < 0) return
-                var dialog = plateRenameDialog.createObject(root)
-                dialog.plateIndex = root.contextPlateIndex
-                dialog.currentName = root.editorVm.plateName(root.contextPlateIndex)
-                dialog.open()
-            }
-        }
-        CxMenuItem {
-            text: qsTr("平板设置")
-            enabled: root.contextPlateIndex >= 0 && root.editorVm
-            onTriggered: {
-                if (!root.editorVm || root.contextPlateIndex < 0) return
-                var dialog = plateSettingsDialogComp.createObject(root)
-                dialog.plateIndex = root.contextPlateIndex
-                dialog.plateName = root.editorVm.plateName(root.contextPlateIndex)
-                dialog.open()
-            }
-        }
-        CxMenuItem {
-            text: root.contextPlateIndex >= 0 && root.editorVm
-                  && root.editorVm.isPlateLocked(root.contextPlateIndex)
-                  ? qsTr("解锁平板") : qsTr("锁定平板")
-            enabled: root.contextPlateIndex >= 0 && root.editorVm
-            onTriggered: if (root.editorVm) root.editorVm.togglePlateLocked(root.contextPlateIndex)
-        }
-        // ── v3.0 Phase 17: plate lifecycle completion (PLATE-03/04/05) ──
-        // 对齐上游 create_plate_menu — 切换 per-plate printable（D-08）
-        CxMenuItem {
-            text: root.contextPlateIndex >= 0 && root.editorVm
-                  && root.editorVm.isPlatePrintable(root.contextPlateIndex)
-                  ? qsTr("设为不打印") : qsTr("设为可打印")
-            enabled: root.contextPlateIndex >= 0 && root.editorVm
-            onTriggered: if (root.editorVm) {
-                var cur = root.editorVm.isPlatePrintable(root.contextPlateIndex)
-                if (!root.editorVm.setPlatePrintable(root.contextPlateIndex, !cur))
-                    backend.postNotification(qsTr("设置打印状态失败"), qsTr("操作失败"), 1)
-            }
-        }
-        // 对齐上游 duplicate_plate — 克隆平板（D-06，深拷贝含对象）
-        CxMenuItem {
-            text: qsTr("克隆平板")
-            enabled: root.contextPlateIndex >= 0 && root.editorVm
-                     && root.editorVm.canAddPlate
-            onTriggered: if (root.editorVm) {
-                if (!root.editorVm.clonePlate(root.contextPlateIndex))
-                    backend.postNotification(qsTr("克隆平板失败：可能已达到最大平板数（36）"), qsTr("克隆失败"), 1)
-            }
-        }
-        // 对齐上游 move_plate_to_index — 左移/右移重排（D-07）
-        CxMenuItem {
-            text: qsTr("左移平板")
-            enabled: root.contextPlateIndex > 0 && root.editorVm
-            onTriggered: if (root.editorVm) {
-                if (!root.editorVm.movePlate(root.contextPlateIndex, root.contextPlateIndex - 1))
-                    backend.postNotification(qsTr("移动平板失败"), qsTr("操作失败"), 1)
-            }
-        }
-        CxMenuItem {
-            text: qsTr("右移平板")
-            enabled: root.contextPlateIndex >= 0 && root.editorVm
-                     && root.contextPlateIndex < root.editorVm.plateCount - 1
-            onTriggered: if (root.editorVm) {
-                if (!root.editorVm.movePlate(root.contextPlateIndex, root.contextPlateIndex + 1))
-                    backend.postNotification(qsTr("移动平板失败"), qsTr("操作失败"), 1)
-            }
-        }
-        MenuSeparator { }
-        // 对齐上游 create_plate_menu — Reload All
-        CxMenuItem {
-            text: qsTr("全部重新加载")
-            enabled: root.contextPlateIndex >= 0 && root.editorVm
-                     && root.editorVm.plateObjectCount(root.contextPlateIndex) > 0
-            onTriggered: if (root.editorVm) root.editorVm.reloadAllOnPlate()
-        }
-        // 对齐上游 create_plate_menu — Paste
-        CxMenuItem {
-            text: qsTr("粘贴")
-            onTriggered: if (root.editorVm) root.editorVm.pasteObjects()
-        }
-        MenuSeparator { }
-        // 对齐上游 create_plate_menu — Add Models
-        CxMenuItem {
-            text: qsTr("添加模型...")
-            onTriggered: openFileDlg.open()
-        }
-        // 对齐上游 create_plate_menu — Add Primitive submenu
-        CxMenu {
-            title: qsTr("添加图元")
-            CxMenuItem {
-                text: qsTr("立方体")
-                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(0)
-            }
-            CxMenuItem {
-                text: qsTr("球体")
-                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(1)
-            }
-            CxMenuItem {
-                text: qsTr("圆柱体")
-                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(2)
-            }
-            CxMenuItem {
-                text: qsTr("圆锥体")
-                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(3)
-            }
-            CxMenuItem {
-                text: qsTr("截锥体")
-                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(4)
-            }
-            CxMenuItem {
-                text: qsTr("圆环体")
-                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(5)
-            }
-            CxMenuItem {
-                text: qsTr("圆盘")
-                onTriggered: if (root.editorVm) root.editorVm.addPrimitiveToPlate(6)
-            }
-            CxMenuItem {
-                text: qsTr("文字")
-                onTriggered: if (root.editorVm) root.editorVm.addTextObject()
-            }
-            CxMenuItem {
-                text: qsTr("SVG")
-                onTriggered: if (root.editorVm) root.editorVm.importSVG()
-            }
-        }
-        MenuSeparator { }
-        CxMenuItem {
-            text: qsTr("删除平板")
-            enabled: root.contextPlateIndex >= 0 && root.editorVm
-                     && root.editorVm.plateCount > 1
-            onTriggered: if (root.editorVm) root.editorVm.deletePlate(root.contextPlateIndex)
         }
     }
 
@@ -1696,6 +1238,55 @@ Item {
         }
     }
 
+    FileDialog {
+        id: addModelsToContextPlateDlg
+        title: qsTr("Add models to this plate")
+        fileMode: FileDialog.OpenFiles
+        nameFilters: [
+            qsTr("3D model files (*.3mf *.stl *.obj *.step *.stp *.amf *.drc)"),
+            qsTr("All files (*)")
+        ]
+        onAccepted: {
+            if (root.editorVm) {
+                var paths = []
+                for (var i = 0; i < selectedFiles.length; ++i)
+                    paths.push(selectedFiles[i].toString())
+                root.editorVm.addFilesToContextPlate(paths)
+            }
+        }
+    }
+
+    FileDialog {
+        id: replaceAllOnPlateDlg
+        title: qsTr("Replace all models on this plate")
+        fileMode: FileDialog.OpenFiles
+        nameFilters: [
+            qsTr("3D model files (*.3mf *.stl *.obj *.step *.stp *.amf *.drc)"),
+            qsTr("All files (*)")
+        ]
+        onAccepted: {
+            if (root.editorVm) {
+                var paths = []
+                for (var i = 0; i < selectedFiles.length; ++i)
+                    paths.push(selectedFiles[i].toString())
+                root.editorVm.replaceAllOnContextPlate(paths)
+            }
+        }
+    }
+
+    FileDialog {
+        id: contextExportDialog
+        property bool separateFiles: false
+        property bool drcFormat: false
+        title: qsTr("Export selected model")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("STL files (*.stl)"), qsTr("DRC files (*.drc)")]
+        onAccepted: {
+            if (root.editorVm)
+                root.editorVm.exportSelectedObjects(selectedFile.toString(), separateFiles, drcFormat)
+        }
+    }
+
     Rectangle {
         anchors.fill: parent
         color: Theme.bgBase
@@ -1801,13 +1392,25 @@ Item {
                     plateCount: root.editorVm ? root.editorVm.plateCount : 0
                     activePlateObjectIndices: root.editorVm ? root.editorVm.activePlateObjectIndices : []
                     meshBatchSourceObjectIndices: root.editorVm ? root.editorVm.meshBatchSourceObjectIndices : []
+                    meshBatchVolumeIndices: root.editorVm ? root.editorVm.meshBatchVolumeIndices : []
+                    meshBatchInstanceIndices: root.editorVm ? root.editorVm.meshBatchInstanceIndices : []
                     selectedSourceObjectIndex: root.editorVm ? root.editorVm.selectedSourceObjectIndex : -1
                     onObjectPickedSource: function(sourceIndex) {
                         if (root.editorVm)
                             root.editorVm.selectSourceObject(sourceIndex)
                     }
+                    onContextMenuRequested: function(targetKind, sourceObjectIndex, volumeIndex, instanceIndex, plateIndex, popupX, popupY) {
+                        if (!root.editorVm)
+                            return
+                        var family = root.editorVm.synchronizeViewportContext(
+                                    targetKind, sourceObjectIndex, volumeIndex,
+                                    instanceIndex, plateIndex)
+                        if (family >= 0)
+                            prepareContextMenus.openResolved(family, popupX, popupY)
+                    }
                     onGizmoDragBegin: {
                         if (root.editorVm) {
+                            viewport3d.contextToolInputCaptured = true
                             root.activeGizmoDragMode = viewport3d.gizmoMode
                             if (root.activeGizmoDragMode === GLViewport.GizmoRotate)
                                 root.editorVm.beginGizmoRotateDrag()
@@ -1831,6 +1434,7 @@ Item {
                     }
                     onGizmoDragEnd: {
                         if (root.editorVm) {
+                            viewport3d.contextToolInputCaptured = false
                             if (root.activeGizmoDragMode === GLViewport.GizmoRotate)
                                 root.editorVm.endGizmoRotateDrag()
                             else if (root.activeGizmoDragMode === GLViewport.GizmoScale)
@@ -1871,29 +1475,6 @@ Item {
                     }
                     cutAxis: root.editorVm ? root.editorVm.cutAxis : 2
                     cutPosition: root.editorVm ? root.editorVm.cutPosition : 0.0
-
-                    // Right-click context menu dispatch
-                    // 对齐 upstream Plater::priv::on_right_click (Plater.cpp:9512-9566)
-                    MouseArea {
-                        anchors.fill: parent
-                        acceptedButtons: Qt.RightButton
-                        propagateComposedEvents: true
-                        onClicked: (mouse) => {
-                            if (root.editorVm && root.editorVm.selectedObjectIndex >= 0) {
-                                // Single object selected → object menu
-                                objectContextMenu.popup(mouse.x, mouse.y)
-                            } else if (root.editorVm && root.editorVm.selectedObjectCount > 1) {
-                                // Multiple objects selected → multi-selection menu (对齐上游 multi_selection_menu)
-                                multiContextMenu.popup(mouse.x, mouse.y)
-                            } else {
-                                // Nothing selected (empty canvas) → default menu
-                                defaultContextMenu.popup(mouse.x, mouse.y)
-                            }
-                            mouse.accepted = false
-                        }
-                        onPressed: (mouse) => mouse.accepted = false
-                        onReleased: (mouse) => mouse.accepted = false
-                    }
 
                     // Undo/Redo shortcuts (QML Shortcuts work better than Keys for Ctrl combos)
                     Shortcut {
@@ -3880,8 +3461,11 @@ Item {
                             onClicked: function(mouse) {
                                 if (!root.editorVm) return
                                 if (mouse.button === Qt.RightButton) {
-                                    root.contextPlateIndex = index
-                                    plateContextMenu.popup()
+                                    var family = root.editorVm.synchronizeViewportContext(2, -1, -1, -1, index)
+                                    if (family >= 0) {
+                                        var popupPoint = parent.mapToItem(root, mouse.x, mouse.y)
+                                        prepareContextMenus.openResolved(family, popupPoint.x, popupPoint.y)
+                                    }
                                     mouse.accepted = true
                                     return
                                 }

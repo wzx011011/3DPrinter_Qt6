@@ -1,5 +1,7 @@
 #include "SoftwareViewport.h"
 
+#include "core/rendering/ObjectPicking.h"
+
 #include <QBuffer>
 #include <QMouseEvent>
 #include <QPainter>
@@ -186,6 +188,32 @@ void SoftwareViewport::setMeshBatchSourceObjectIndices(const QVariantList &value
     return;
   m_meshBatchSourceObjectIndices = value;
   update();
+}
+
+void SoftwareViewport::setMeshBatchVolumeIndices(const QVariantList &value)
+{
+  if (m_meshBatchVolumeIndices == value)
+    return;
+  m_meshBatchVolumeIndices = value;
+  update();
+}
+
+void SoftwareViewport::setMeshBatchInstanceIndices(const QVariantList &value)
+{
+  if (m_meshBatchInstanceIndices == value)
+    return;
+  m_meshBatchInstanceIndices = value;
+  update();
+}
+
+void SoftwareViewport::setLayerEditingInputActive(bool value)
+{
+  m_layerEditingInputActive = value;
+}
+
+void SoftwareViewport::setContextToolInputCaptured(bool value)
+{
+  m_contextToolInputCaptured = value;
 }
 
 void SoftwareViewport::setSelectedSourceObjectIndex(int value)
@@ -766,6 +794,15 @@ void SoftwareViewport::fitToMeshes()
 
 void SoftwareViewport::mousePressEvent(QMouseEvent *event)
 {
+  if (event->button() == Qt::RightButton) {
+    m_contextPressPosition = event->position();
+    m_contextPressActive = true;
+    m_contextDragExceeded = false;
+    m_contextToolCapturedAtPress = activeToolCapturesContextGesture();
+    m_contextLayerEditingAtPress = m_layerEditingInputActive;
+    event->accept();
+    return;
+  }
   m_lastMouse = event->position();
   m_dragButton = event->button();
   event->accept();
@@ -773,6 +810,12 @@ void SoftwareViewport::mousePressEvent(QMouseEvent *event)
 
 void SoftwareViewport::mouseMoveEvent(QMouseEvent *event)
 {
+  if (m_contextPressActive) {
+    const QPointF delta = event->position() - m_contextPressPosition;
+    m_contextDragExceeded = m_contextDragExceeded || std::hypot(delta.x(), delta.y()) > 4.0;
+    event->accept();
+    return;
+  }
   const QPointF delta = event->position() - m_lastMouse;
   if (m_dragButton == Qt::LeftButton)
   {
@@ -790,8 +833,127 @@ void SoftwareViewport::mouseMoveEvent(QMouseEvent *event)
 
 void SoftwareViewport::mouseReleaseEvent(QMouseEvent *event)
 {
+  if (event->button() == Qt::RightButton) {
+    const bool suppress = !m_contextPressActive || m_contextDragExceeded
+        || m_contextLayerEditingAtPress || m_contextToolCapturedAtPress;
+    m_contextPressActive = false;
+    m_contextToolCapturedAtPress = false;
+    m_contextLayerEditingAtPress = false;
+    if (!suppress) {
+      const ViewportContextHit hit = classifyContextAt(event->position());
+      if (hit.isMenuRequest()) {
+        emit contextMenuRequested(int(hit.target), hit.sourceObjectIndex,
+                                  hit.volumeIndex, hit.instanceIndex,
+                                  hit.plateIndex, hit.popupPosition.x(),
+                                  hit.popupPosition.y());
+      }
+    }
+    event->accept();
+    return;
+  }
   m_dragButton = Qt::NoButton;
   event->accept();
+}
+
+bool SoftwareViewport::activeToolCapturesContextGesture() const
+{
+  return m_contextToolInputCaptured;
+}
+
+void SoftwareViewport::rebuildPickingScene()
+{
+  QList<int> activeIndices;
+  activeIndices.reserve(m_activePlateObjectIndices.size());
+  for (const QVariant &value : m_activePlateObjectIndices)
+    activeIndices.append(value.toInt());
+  QList<int> sourceIndices;
+  sourceIndices.reserve(m_meshBatchSourceObjectIndices.size());
+  for (const QVariant &value : m_meshBatchSourceObjectIndices)
+    sourceIndices.append(value.toInt());
+  QList<int> volumeIndices;
+  volumeIndices.reserve(m_meshBatchVolumeIndices.size());
+  for (const QVariant &value : m_meshBatchVolumeIndices)
+    volumeIndices.append(value.toInt());
+  QList<int> instanceIndices;
+  instanceIndices.reserve(m_meshBatchInstanceIndices.size());
+  for (const QVariant &value : m_meshBatchInstanceIndices)
+    instanceIndices.append(value.toInt());
+
+  m_pickScene.setBed(m_bedWidth, m_bedDepth, m_bedOriginX, m_bedOriginY,
+                     m_bedShapeType, m_bedDiameter);
+  m_pickScene.setPlateContext(m_currentPlateIndex, m_plateCount, activeIndices);
+  m_pickScene.setModelMeshData(m_meshData, sourceIndices, volumeIndices,
+                               instanceIndices, activeIndices);
+  m_pickScene.clearDirtyFlags();
+}
+
+QVector3D SoftwareViewport::inverseRotatePoint(const QVector3D &point) const
+{
+  const float yaw = degToRad(m_yaw);
+  const float pitch = degToRad(m_pitch);
+  const float cy = std::cos(yaw);
+  const float sy = std::sin(yaw);
+  const float cp = std::cos(pitch);
+  const float sp = std::sin(pitch);
+  const QVector3D unpitched(point.x(), point.y() * cp + point.z() * sp,
+                             -point.y() * sp + point.z() * cp);
+  return QVector3D(unpitched.x() * cy + unpitched.z() * sy,
+                   unpitched.y(),
+                   -unpitched.x() * sy + unpitched.z() * cy);
+}
+
+ViewportContextHit SoftwareViewport::classifyContextAt(const QPointF &position)
+{
+  ViewportContextHit result;
+  result.popupPosition = position;
+  rebuildPickingScene();
+  const QRectF rect = contentRect();
+  const float scale = (std::min(rect.width(), rect.height()) * 0.42f
+                       / std::max(30.0f, m_radius)) * m_zoom;
+  if (scale <= 0.0f) {
+    result.target = ViewportContextTarget::Empty;
+    return result;
+  }
+
+  const float rotatedX = float((position.x() - rect.center().x() - m_pan.x()) / scale);
+  const float rotatedY = float((rect.center().y() + m_pan.y() - position.y()) / scale);
+  const QVector3D localOrigin(rotatedX, rotatedY, -10000.0f);
+  const QVector3D rayOrigin = m_center + inverseRotatePoint(localOrigin);
+  const QVector3D rayDirection = inverseRotatePoint(QVector3D(0.0f, 0.0f, 1.0f)).normalized();
+  const ObjectPicking::Hit objectHit = ObjectPicking::pick(
+      rayOrigin, rayDirection, m_pickScene.modelVertices(), m_pickScene.modelBatches());
+  if (objectHit.isValid()) {
+    result.target = ViewportContextTarget::Part;
+    result.sourceObjectIndex = objectHit.sourceObjectIndex;
+    result.volumeIndex = objectHit.volumeIndex;
+    result.instanceIndex = objectHit.instanceIndex;
+    result.plateIndex = m_pickScene.currentPlateIndex();
+    return result;
+  }
+
+  if (std::abs(rayDirection.y()) <= 1e-6f) {
+    result.target = ViewportContextTarget::Empty;
+    return result;
+  }
+  const float groundDistance = -rayOrigin.y() / rayDirection.y();
+  if (groundDistance < 0.0f) {
+    result.target = ViewportContextTarget::Empty;
+    return result;
+  }
+  const QVector3D groundPoint = rayOrigin + rayDirection * groundDistance;
+  if (m_showWipeTower && m_wipeTowerWidth > 0.0f && m_wipeTowerDepth > 0.0f
+      && groundPoint.x() >= m_wipeTowerX - m_wipeTowerWidth * 0.5f
+      && groundPoint.x() <= m_wipeTowerX + m_wipeTowerWidth * 0.5f
+      && groundPoint.z() >= m_wipeTowerZ - m_wipeTowerDepth * 0.5f
+      && groundPoint.z() <= m_wipeTowerZ + m_wipeTowerDepth * 0.5f) {
+    result.target = ViewportContextTarget::Suppressed;
+  } else if (m_pickScene.containsCurrentPlatePoint(groundPoint.x(), groundPoint.z())) {
+    result.target = ViewportContextTarget::Plate;
+    result.plateIndex = m_pickScene.currentPlateIndex();
+  } else {
+    result.target = ViewportContextTarget::Empty;
+  }
+  return result;
 }
 
 void SoftwareViewport::wheelEvent(QWheelEvent *event)

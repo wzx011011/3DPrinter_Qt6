@@ -131,6 +131,8 @@ void PrepareSceneData::setMeshGeneration(qint64 generation)
 
 void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
                                         const QList<int> &batchSourceObjectIndices,
+                                        const QList<int> &batchVolumeIndices,
+                                        const QList<int> &batchInstanceIndices,
                                         const QList<int> &activeSourceObjectIndices)
 {
   clearModelGeometry();
@@ -140,7 +142,9 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
   bool valid = readValue(meshData, offset, objectCount)
       && objectCount >= 0
       && objectCount <= kMaxPackedObjects
-      && batchSourceObjectIndices.size() == objectCount;
+      && batchSourceObjectIndices.size() == objectCount
+      && batchVolumeIndices.size() == objectCount
+      && batchInstanceIndices.size() == objectCount;
 
   if (valid) {
     m_modelVertices.reserve(std::min<qsizetype>(meshData.size() / kPackedVertexBytes, 1000000));
@@ -164,10 +168,18 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     }
 
     const int sourceObjectIndex = batchSourceObjectIndices.at(objectIndex);
+    const int volumeIndex = batchVolumeIndices.at(objectIndex);
+    const int instanceIndex = batchInstanceIndices.at(objectIndex);
+    if (sourceObjectIndex < 0 || volumeIndex < 0 || instanceIndex < 0) {
+      valid = false;
+      break;
+    }
     const bool active = activeSourceContains(activeSourceObjectIndices, sourceObjectIndex);
     ModelBatch batch;
     batch.renderObjectId = renderObjectId;
     batch.sourceObjectIndex = sourceObjectIndex;
+    batch.volumeIndex = volumeIndex;
+    batch.instanceIndex = instanceIndex;
     batch.firstVertex = m_modelVertices.size();
     batch.vertexCount = int(vertexCount);
     bool batchHasBounds = false;
@@ -378,6 +390,28 @@ int PrepareSceneData::selectedSourceObjectIndex() const
 int PrepareSceneData::hoveredSourceObjectIndex() const
 {
   return m_hoveredSourceObjectIndex;
+}
+
+bool PrepareSceneData::containsCurrentPlatePoint(float x, float z) const
+{
+  if (m_currentPlateIndex < 0 || m_currentPlateIndex >= m_plateCount
+      || !std::isfinite(x) || !std::isfinite(z)) {
+    return false;
+  }
+
+  const float left = m_bedOriginX;
+  const float top = m_bedOriginY;
+  if (m_bedShapeType == 1) {
+    const float radius = m_bedDiameter * 0.5f;
+    const float cx = left + m_bedWidth * 0.5f;
+    const float cz = top + m_bedDepth * 0.5f;
+    const float dx = x - cx;
+    const float dz = z - cz;
+    return dx * dx + dz * dz <= radius * radius;
+  }
+
+  return x >= left && x <= left + m_bedWidth
+      && z >= top && z <= top + m_bedDepth;
 }
 
 float PrepareSceneData::sanitizeExtent(float value, float fallback)

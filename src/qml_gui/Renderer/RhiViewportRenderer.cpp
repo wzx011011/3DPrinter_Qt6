@@ -145,6 +145,19 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   batchSourceObjectIndices.reserve(viewport->m_meshBatchSourceObjectIndices.size());
   for (const QVariant &value : viewport->m_meshBatchSourceObjectIndices)
     batchSourceObjectIndices.append(value.toInt());
+  QList<int> batchVolumeIndices;
+  batchVolumeIndices.reserve(viewport->m_meshBatchVolumeIndices.size());
+  for (const QVariant &value : viewport->m_meshBatchVolumeIndices)
+    batchVolumeIndices.append(value.toInt());
+  QList<int> batchInstanceIndices;
+  batchInstanceIndices.reserve(viewport->m_meshBatchInstanceIndices.size());
+  for (const QVariant &value : viewport->m_meshBatchInstanceIndices)
+    batchInstanceIndices.append(value.toInt());
+  if (viewport->m_canvasType == RhiViewport::CanvasAssembleView
+      && batchVolumeIndices.isEmpty() && batchInstanceIndices.isEmpty()) {
+    batchVolumeIndices = QList<int>(batchSourceObjectIndices.size(), 0);
+    batchInstanceIndices = QList<int>(batchSourceObjectIndices.size(), 0);
+  }
 
   // Phase 138 (ASM-01): build the sourceObjectIndex -> assemble offset map by
   // zipping m_assembleOffsets with the parallel meshBatchSourceObjectIndices
@@ -228,6 +241,8 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
                                    activeObjectIndices);
     m_prepareScene.setModelMeshData(viewport->m_meshData,
                                     batchSourceObjectIndices,
+                                    batchVolumeIndices,
+                                    batchInstanceIndices,
                                     activeObjectIndices);
   }
   const int prevSelectedSourceObjectIndex = m_prepareScene.selectedSourceObjectIndex();

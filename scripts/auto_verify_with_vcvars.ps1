@@ -322,6 +322,8 @@ Invoke-NinjaTarget 'OWzxSlicer.exe'
 Invoke-NinjaTarget 'E2EWorkflowTests'
 Invoke-NinjaTarget 'ViewModelSmokeTests'
 Invoke-NinjaTarget 'PrepareSceneDataTests'
+Invoke-NinjaTarget 'ObjectPickingTests'
+Invoke-NinjaTarget 'ViewportContextMenuTests'
 Invoke-NinjaTarget 'QmlUiAuditTests'
 Invoke-NinjaTarget 'PartPlateTests'
 # Phase 55-01: PreviewParserTests target (parser/role/mode coverage scaffold).
@@ -447,6 +449,20 @@ if (Test-Path $partPlateExe) {
   exit 1
 }
 
+Write-Host "`n[ObjectPicking] Running precise object picking tests..." -ForegroundColor Cyan
+$objectPickingExe = './ObjectPickingTests.exe'
+if (Test-Path $objectPickingExe) {
+  & $objectPickingExe 2>&1 | ForEach-Object { Write-Host "  $_" }
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ObjectPicking] Object picking tests failed" -ForegroundColor Red
+    exit $LASTEXITCODE
+  }
+  Write-Host "[ObjectPicking] Object picking tests passed" -ForegroundColor Green
+} else {
+  Write-Host "[ObjectPicking] ObjectPickingTests.exe not found" -ForegroundColor Red
+  exit 1
+}
+
 Write-Host "`n[ViewModel] Running viewmodel smoke tests..." -ForegroundColor Cyan
 $viewModelSmokeExe = './ViewModelSmokeTests.exe'
 if (Test-Path $viewModelSmokeExe) {
@@ -472,6 +488,20 @@ if (Test-Path $uiAuditExe) {
   Write-Host "[UI] QML UI audit tests passed" -ForegroundColor Green
 } else {
   Write-Host "[UI] QmlUiAuditTests.exe not found" -ForegroundColor Red
+  exit 1
+}
+
+Write-Host "`n[ViewportContext] Running viewport context menu tests..." -ForegroundColor Cyan
+$viewportContextMenuExe = './ViewportContextMenuTests.exe'
+if (Test-Path $viewportContextMenuExe) {
+  & $viewportContextMenuExe 2>&1 | ForEach-Object { Write-Host "  $_" }
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ViewportContext] Viewport context menu tests failed" -ForegroundColor Red
+    exit $LASTEXITCODE
+  }
+  Write-Host "[ViewportContext] Viewport context menu tests passed" -ForegroundColor Green
+} else {
+  Write-Host "[ViewportContext] ViewportContextMenuTests.exe not found" -ForegroundColor Red
   exit 1
 }
 

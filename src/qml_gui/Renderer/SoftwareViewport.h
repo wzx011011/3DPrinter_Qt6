@@ -10,6 +10,9 @@
 #include <QVector3D>
 #include <vector>
 
+#include "PrepareSceneData.h"
+#include "ViewportContextHit.h"
+
 class SoftwareViewport : public QQuickPaintedItem
 {
   Q_OBJECT
@@ -31,6 +34,10 @@ class SoftwareViewport : public QQuickPaintedItem
   Q_PROPERTY(int plateCount READ plateCount WRITE setPlateCount)
   Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices WRITE setActivePlateObjectIndices)
   Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices WRITE setMeshBatchSourceObjectIndices)
+  Q_PROPERTY(QVariantList meshBatchVolumeIndices READ meshBatchVolumeIndices WRITE setMeshBatchVolumeIndices)
+  Q_PROPERTY(QVariantList meshBatchInstanceIndices READ meshBatchInstanceIndices WRITE setMeshBatchInstanceIndices)
+  Q_PROPERTY(bool layerEditingInputActive READ layerEditingInputActive WRITE setLayerEditingInputActive)
+  Q_PROPERTY(bool contextToolInputCaptured READ contextToolInputCaptured WRITE setContextToolInputCaptured)
   Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex WRITE setSelectedSourceObjectIndex)
   Q_PROPERTY(int hoveredSourceObjectIndex READ hoveredSourceObjectIndex WRITE setHoveredSourceObjectIndex)
   Q_PROPERTY(bool showWipeTower READ showWipeTower WRITE setShowWipeTower)
@@ -134,6 +141,14 @@ public:
   void setActivePlateObjectIndices(const QVariantList &value);
   QVariantList meshBatchSourceObjectIndices() const { return m_meshBatchSourceObjectIndices; }
   void setMeshBatchSourceObjectIndices(const QVariantList &value);
+  QVariantList meshBatchVolumeIndices() const { return m_meshBatchVolumeIndices; }
+  void setMeshBatchVolumeIndices(const QVariantList &value);
+  QVariantList meshBatchInstanceIndices() const { return m_meshBatchInstanceIndices; }
+  void setMeshBatchInstanceIndices(const QVariantList &value);
+  bool layerEditingInputActive() const { return m_layerEditingInputActive; }
+  void setLayerEditingInputActive(bool value);
+  bool contextToolInputCaptured() const { return m_contextToolInputCaptured; }
+  void setContextToolInputCaptured(bool value);
   int selectedSourceObjectIndex() const { return m_selectedSourceObjectIndex; }
   void setSelectedSourceObjectIndex(int value);
   int hoveredSourceObjectIndex() const { return m_hoveredSourceObjectIndex; }
@@ -209,6 +224,13 @@ signals:
   void gcodeViewModeChanged();
   void thumbnailCaptured();
   void objectPickedSource(int sourceIndex);
+  void contextMenuRequested(int targetKind,
+                            int sourceObjectIndex,
+                            int volumeIndex,
+                            int instanceIndex,
+                            int plateIndex,
+                            qreal popupX,
+                            qreal popupY);
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;
@@ -226,6 +248,10 @@ private:
   };
 
   void parseMeshData();
+  void rebuildPickingScene();
+  bool activeToolCapturesContextGesture() const;
+  ViewportContextHit classifyContextAt(const QPointF &position);
+  QVector3D inverseRotatePoint(const QVector3D &point) const;
   void fitToMeshes();
   QPointF project(const QVector3D &point) const;
   QVector3D rotatePoint(const QVector3D &point) const;
@@ -258,6 +284,10 @@ private:
   int m_plateCount = 1;
   QVariantList m_activePlateObjectIndices;
   QVariantList m_meshBatchSourceObjectIndices;
+  QVariantList m_meshBatchVolumeIndices;
+  QVariantList m_meshBatchInstanceIndices;
+  bool m_layerEditingInputActive = false;
+  bool m_contextToolInputCaptured = false;
   int m_selectedSourceObjectIndex = -1;
   int m_hoveredSourceObjectIndex = -1;
   // Phase 100 (WTREAD-02): aligned to false so the software path gates on real
@@ -293,5 +323,11 @@ private:
   QPointF m_pan;
   QPointF m_lastMouse;
   Qt::MouseButton m_dragButton = Qt::NoButton;
+  QPointF m_contextPressPosition;
+  bool m_contextPressActive = false;
+  bool m_contextDragExceeded = false;
+  bool m_contextToolCapturedAtPress = false;
+  bool m_contextLayerEditingAtPress = false;
+  PrepareSceneData m_pickScene;
   QString m_lastThumbnailData;
 };

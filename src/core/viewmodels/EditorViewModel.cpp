@@ -211,6 +211,8 @@ void EditorViewModel::refreshMeshCacheAndFitHint()
 {
   m_cachedMeshData = projectService_->meshData();
   m_cachedMeshBatchSourceObjectIndices = projectService_->meshBatchSourceObjectIndices();
+  m_cachedMeshBatchVolumeIndices = projectService_->meshBatchVolumeIndices();
+  m_cachedMeshBatchInstanceIndices = projectService_->meshBatchInstanceIndices();
   m_fitHint = QVector4D();
 
   constexpr int kBboxBytes = 6 * int(sizeof(float));
@@ -3449,6 +3451,24 @@ QVariantList EditorViewModel::meshBatchSourceObjectIndices() const
   return indices;
 }
 
+QVariantList EditorViewModel::meshBatchVolumeIndices() const
+{
+  QVariantList indices;
+  indices.reserve(m_cachedMeshBatchVolumeIndices.size());
+  for (int volumeIndex : m_cachedMeshBatchVolumeIndices)
+    indices.append(volumeIndex);
+  return indices;
+}
+
+QVariantList EditorViewModel::meshBatchInstanceIndices() const
+{
+  QVariantList indices;
+  indices.reserve(m_cachedMeshBatchInstanceIndices.size());
+  for (int instanceIndex : m_cachedMeshBatchInstanceIndices)
+    indices.append(instanceIndex);
+  return indices;
+}
+
 // Phase 138 (ASM-01): per-source-object assemble offset list (GL X,Y,Z). One
 // entry per source object index, matching meshBatchSourceObjectIndices ordering.
 // Read via ProjectServiceMock::assembleOffset (ModelInstance::m_assemble_transformation
@@ -3654,6 +3674,186 @@ int EditorViewModel::selectedSourceObjectIndex() const
 }
 
 int EditorViewModel::selectedObjectCount() const { return m_selectedSourceIndices.size(); }
+
+int EditorViewModel::contextMenuFamily() const
+{
+  return int(m_contextMenuFamily);
+}
+
+int EditorViewModel::contextSourceObjectIndex() const
+{
+  return m_contextSourceObjectIndex;
+}
+
+int EditorViewModel::contextVolumeIndex() const
+{
+  return m_contextVolumeIndex;
+}
+
+int EditorViewModel::contextInstanceIndex() const
+{
+  return m_contextInstanceIndex;
+}
+
+int EditorViewModel::contextPlateIndex() const
+{
+  return m_contextPlateIndex;
+}
+
+void EditorViewModel::clearContextState()
+{
+  m_contextMenuFamily = ContextMenuNone;
+  m_contextSourceObjectIndex = -1;
+  m_contextVolumeIndex = -1;
+  m_contextInstanceIndex = -1;
+  m_contextPlateIndex = -1;
+}
+
+int EditorViewModel::synchronizeViewportContext(int targetKind,
+                                                 int sourceObjectIndex,
+                                                 int volumeIndex,
+                                                 int instanceIndex,
+                                                 int plateIndex)
+{
+  clearContextState();
+  if (!projectService_)
+    return int(m_contextMenuFamily);
+
+  const auto target = static_cast<ViewportContextTarget>(targetKind);
+  if (target == ViewportContextTarget::Suppressed)
+    return int(m_contextMenuFamily);
+
+  if (target == ViewportContextTarget::Object || target == ViewportContextTarget::Part) {
+    const int currentPlate = projectService_->currentPlateIndex();
+    if (sourceObjectIndex < 0 || sourceObjectIndex >= projectService_->modelCount()
+        || projectService_->plateIndexForObject(sourceObjectIndex) != currentPlate
+        || instanceIndex < 0
+        || instanceIndex >= projectService_->objectInstanceCount(sourceObjectIndex)) {
+      emit stateChanged();
+      return int(m_contextMenuFamily);
+    }
+
+    if (!m_selectedSourceIndices.contains(sourceObjectIndex)) {
+      m_selectedSourceIndices.clear();
+      m_selectedSourceIndices.insert(sourceObjectIndex);
+    }
+    m_primarySelectedSourceIndex = sourceObjectIndex;
+    m_contextSourceObjectIndex = sourceObjectIndex;
+    m_contextInstanceIndex = instanceIndex;
+    m_contextPlateIndex = currentPlate;
+
+    const bool hasPartTarget = target == ViewportContextTarget::Part
+        && volumeIndex >= 0
+        && volumeIndex < projectService_->objectVolumeCount(sourceObjectIndex);
+    if (hasPartTarget) {
+      m_selectedVolumeObjectSourceIndex = sourceObjectIndex;
+      m_selectedVolumeIndices.clear();
+      m_selectedVolumeIndices.insert(volumeIndex);
+      m_selectedVolumeIndex = volumeIndex;
+      m_contextVolumeIndex = volumeIndex;
+      switch (projectService_->objectVolumeType(sourceObjectIndex, volumeIndex)) {
+      case int(MockVolumeType::TextEmboss):
+        m_contextMenuFamily = ContextMenuText;
+        break;
+      case int(MockVolumeType::SvgEmboss):
+        m_contextMenuFamily = ContextMenuSvg;
+        break;
+      default:
+        m_contextMenuFamily = projectService_->objectVolumeCount(sourceObjectIndex) > 1
+            ? ContextMenuPart : ContextMenuObject;
+        break;
+      }
+    } else {
+      m_selectedVolumeObjectSourceIndex = -1;
+      m_selectedVolumeIndices.clear();
+      m_selectedVolumeIndex = -1;
+      m_contextMenuFamily = m_selectedSourceIndices.size() > 1
+          ? ContextMenuMulti : ContextMenuObject;
+    }
+  } else if (target == ViewportContextTarget::Plate) {
+    if (plateIndex < 0 || plateIndex >= projectService_->plateCount()
+        || !projectService_->setCurrentPlateIndex(plateIndex)) {
+      emit stateChanged();
+      return int(m_contextMenuFamily);
+    }
+    m_showAllObjects = false;
+    m_selectedSourceIndices.clear();
+    m_primarySelectedSourceIndex = -1;
+    m_selectedVolumeObjectSourceIndex = -1;
+    m_selectedVolumeIndices.clear();
+    m_selectedVolumeIndex = -1;
+    m_contextPlateIndex = plateIndex;
+    m_contextMenuFamily = ContextMenuPlate;
+    refreshMeshCacheAndFitHint();
+  } else if (target == ViewportContextTarget::Empty) {
+    m_selectedSourceIndices.clear();
+    m_primarySelectedSourceIndex = -1;
+    m_selectedVolumeObjectSourceIndex = -1;
+    m_selectedVolumeIndices.clear();
+    m_selectedVolumeIndex = -1;
+    m_contextPlateIndex = projectService_->currentPlateIndex();
+    m_contextMenuFamily = ContextMenuDefault;
+  } else {
+    emit stateChanged();
+    return int(m_contextMenuFamily);
+  }
+
+  emit stateChanged();
+  return int(m_contextMenuFamily);
+}
+
+bool EditorViewModel::contextActionAvailable(const QString &action) const
+{
+  const QString normalized = action.trimmed();
+  const bool hasObject = m_contextSourceObjectIndex >= 0
+      && m_selectedSourceIndices.contains(m_contextSourceObjectIndex);
+  const bool hasPart = hasObject && m_contextVolumeIndex >= 0
+      && m_selectedVolumeObjectSourceIndex == m_contextSourceObjectIndex;
+  const bool hasPlate = m_contextPlateIndex >= 0 && m_contextPlateIndex < plateCount();
+
+  if (normalized == QStringLiteral("setInstances")
+      || normalized == QStringLiteral("addInstance")
+      || normalized == QStringLiteral("removeInstance")
+      || normalized == QStringLiteral("fillBedInstances")
+      || normalized == QStringLiteral("instanceToObject")) {
+    return hasObject && m_contextInstanceIndex >= 0;
+  }
+  if (normalized == QStringLiteral("splitParts") || normalized == QStringLiteral("replacePart"))
+    return hasPart;
+  if (normalized == QStringLiteral("delete"))
+    return hasObject && canDeleteSelection();
+  if (normalized == QStringLiteral("duplicate") || normalized == QStringLiteral("copy"))
+    return hasObject && canDuplicateSelectedObjects();
+  if (normalized == QStringLiteral("paste"))
+    return hasClipboardContent();
+  if (normalized == QStringLiteral("repair") || normalized == QStringLiteral("simplify")
+      || normalized == QStringLiteral("reload") || normalized == QStringLiteral("orient")
+      || normalized == QStringLiteral("mirror") || normalized == QStringLiteral("visibility"))
+    return hasObject && canTransformSelection();
+  if (normalized == QStringLiteral("drop") || normalized == QStringLiteral("autoDrop")
+      || normalized == QStringLiteral("subdivide") || normalized == QStringLiteral("convertUnits")
+      || normalized == QStringLiteral("copyProcessSettings"))
+    return hasObject;
+  if (normalized == QStringLiteral("pasteProcessSettings"))
+    return hasObject && hasContextProcessSettingsClipboard();
+  if (normalized == QStringLiteral("settings"))
+    return hasObject && canOpenSelectionSettings();
+  if (normalized == QStringLiteral("rename"))
+    return hasObject && canRenameSelectedObject();
+  if (normalized == QStringLiteral("printable"))
+    return hasObject && canSetSelectionPrintable();
+  if (normalized == QStringLiteral("textEdit"))
+    return m_contextMenuFamily == ContextMenuText;
+  if (normalized == QStringLiteral("svgEdit"))
+    return m_contextMenuFamily == ContextMenuSvg;
+  if (normalized == QStringLiteral("addPrimitive"))
+    return projectService_->currentPlateIndex() >= 0;
+  if (normalized.startsWith(QStringLiteral("plate")))
+    return hasPlate;
+  if (normalized == QStringLiteral("export") || normalized == QStringLiteral("splitObjects"))
+    return hasObject;
+  return hasObject || m_contextMenuFamily == ContextMenuDefault;
+}
 
 QString EditorViewModel::objectName(int i) const
 {
@@ -4791,12 +4991,16 @@ bool EditorViewModel::replaceWithStl(const QString &path)
   return true;
 }
 
-bool EditorViewModel::reloadAllOnPlate()
+bool EditorViewModel::reloadAllOnPlate(int plateIndex)
 {
   if (!projectService_)
     return false;
 
-  QList<int> plateObjs = projectService_->currentPlateObjectIndices();
+  const int targetPlate = plateIndex >= 0 ? plateIndex : projectService_->currentPlateIndex();
+  if (targetPlate < 0 || targetPlate >= projectService_->plateCount())
+    return false;
+
+  QList<int> plateObjs = projectService_->plateObjectIndices(targetPlate);
   bool anyReloaded = false;
   for (int idx : plateObjs)
   {
@@ -4854,6 +5058,9 @@ bool EditorViewModel::instanceToObject(int instIdx)
   if (sourceIndex < 0)
     return false;
 
+  if (instIdx < 0)
+    instIdx = m_contextInstanceIndex;
+
   if (!projectService_->duplicateInstanceAsObject(sourceIndex, instIdx))
   {
     statusText_ = projectService_->lastError();
@@ -4865,6 +5072,332 @@ bool EditorViewModel::instanceToObject(int instIdx)
   statusText_ = tr("已将实例转换为独立对象");
   emit stateChanged();
   return true;
+}
+
+bool EditorViewModel::setSelectedInstanceCount(int count)
+{
+  const int sourceIndex = selectedSourceObjectIndex();
+  if (!projectService_ || sourceIndex < 0 || count < 1)
+    return false;
+
+  if (!projectService_->setObjectInstanceCount(sourceIndex, count)) {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+
+  const QString printableArea = QStringLiteral("0,0,%1,0,%1,%2,0,%2")
+      .arg(m_bedWidth).arg(m_bedDepth);
+  projectService_->arrangeObjects(m_arrangeDistance, m_arrangeRotation,
+                                  m_arrangeAlignY, printableArea);
+  refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForCurrentPlate();
+  emit stateChanged();
+  return true;
+}
+
+bool EditorViewModel::addSelectedInstance()
+{
+  const int sourceIndex = selectedSourceObjectIndex();
+  return sourceIndex >= 0 && projectService_
+      && setSelectedInstanceCount(projectService_->objectInstanceCount(sourceIndex) + 1);
+}
+
+bool EditorViewModel::removeSelectedInstance()
+{
+  const int sourceIndex = selectedSourceObjectIndex();
+  if (!projectService_ || sourceIndex < 0)
+    return false;
+  const int currentCount = projectService_->objectInstanceCount(sourceIndex);
+  return currentCount > 1 && setSelectedInstanceCount(currentCount - 1);
+}
+
+bool EditorViewModel::fillBedWithInstances()
+{
+  const int sourceIndex = selectedSourceObjectIndex();
+  if (!projectService_ || sourceIndex < 0)
+    return false;
+
+  const QString printableArea = QStringLiteral("0,0,%1,0,%1,%2,0,%2")
+      .arg(m_bedWidth).arg(m_bedDepth);
+  int instanceCount = projectService_->objectInstanceCount(sourceIndex);
+  if (instanceCount < 1)
+    return false;
+
+  bool grew = false;
+  while (instanceCount < 1000) {
+    if (!projectService_->setObjectInstanceCount(sourceIndex, instanceCount + 1))
+      break;
+    if (!projectService_->arrangeObjects(m_arrangeDistance, m_arrangeRotation,
+                                         m_arrangeAlignY, printableArea)) {
+      projectService_->setObjectInstanceCount(sourceIndex, instanceCount);
+      projectService_->arrangeObjects(m_arrangeDistance, m_arrangeRotation,
+                                      m_arrangeAlignY, printableArea);
+      break;
+    }
+    ++instanceCount;
+    grew = true;
+  }
+
+  if (grew) {
+    refreshMeshCacheAndFitHint();
+    invalidateSliceResultsForCurrentPlate();
+  }
+  emit stateChanged();
+  return grew;
+}
+
+bool EditorViewModel::splitSelectedToObjects()
+{
+  const int beforeCount = modelCount();
+  splitSelectedObject();
+  return modelCount() != beforeCount;
+}
+
+bool EditorViewModel::splitSelectedToParts()
+{
+  if (!projectService_ || !hasSelectedVolume())
+    return false;
+  if (!projectService_->splitVolumeIntoParts(m_selectedVolumeObjectSourceIndex,
+                                              m_selectedVolumeIndex)) {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForCurrentPlate();
+  emit stateChanged();
+  return true;
+}
+
+bool EditorViewModel::exportSelectedObjects(const QString &outputPath,
+                                             bool separateFiles,
+                                             bool drcFormat)
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return false;
+  const QList<int> sourceIndices = m_selectedSourceIndices.values();
+  const bool ok = projectService_->exportObjects(sourceIndices, outputPath,
+                                                  separateFiles, drcFormat);
+  statusText_ = ok ? tr("Export completed") : projectService_->lastError();
+  emit stateChanged();
+  return ok;
+}
+
+bool EditorViewModel::addFilesToContextPlate(const QStringList &filePaths)
+{
+  if (!projectService_ || m_contextPlateIndex < 0 || m_contextPlateIndex >= plateCount()
+      || !projectService_->setCurrentPlateIndex(m_contextPlateIndex))
+    return false;
+  if (!projectService_->addFilesToPlate(m_contextPlateIndex, filePaths)) {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForPlate(m_contextPlateIndex);
+  emit stateChanged();
+  return true;
+}
+
+bool EditorViewModel::addHandyModelToContextPlate(const QString &modelId)
+{
+  if (!projectService_ || m_contextPlateIndex < 0 || m_contextPlateIndex >= plateCount()
+      || !projectService_->setCurrentPlateIndex(m_contextPlateIndex))
+    return false;
+  if (!projectService_->addHandyModelToPlate(m_contextPlateIndex, modelId)) {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForPlate(m_contextPlateIndex);
+  if (modelId == QStringLiteral("orca-cube")
+      || modelId == QStringLiteral("orca-sliced-combo")) {
+    arrangePlate(m_contextPlateIndex);
+    refreshMeshCacheAndFitHint();
+  }
+  emit stateChanged();
+  return true;
+}
+
+bool EditorViewModel::replaceAllOnContextPlate(const QStringList &filePaths)
+{
+  if (!projectService_ || m_contextPlateIndex < 0 || m_contextPlateIndex >= plateCount())
+    return false;
+  if (!projectService_->replaceAllOnPlateWithFiles(m_contextPlateIndex, filePaths)) {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+
+  m_selectedSourceIndices.clear();
+  m_primarySelectedSourceIndex = -1;
+  m_selectedVolumeObjectSourceIndex = -1;
+  m_selectedVolumeIndices.clear();
+  m_selectedVolumeIndex = -1;
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForPlate(m_contextPlateIndex);
+  emit stateChanged();
+  return true;
+}
+
+bool EditorViewModel::addPrimitiveToContextPlate(int type)
+{
+  if (!projectService_ || m_contextPlateIndex < 0 || m_contextPlateIndex >= plateCount()
+      || !projectService_->setCurrentPlateIndex(m_contextPlateIndex))
+    return false;
+  return addPrimitiveToPlate(type);
+}
+
+bool EditorViewModel::pasteToContextPlate()
+{
+  if (!projectService_ || m_contextPlateIndex < 0 || m_contextPlateIndex >= plateCount()
+      || !projectService_->setCurrentPlateIndex(m_contextPlateIndex) || m_clipboard.isEmpty())
+    return false;
+  const int beforeCount = modelCount();
+  pasteObjects();
+  return modelCount() > beforeCount;
+}
+
+bool EditorViewModel::autoOrientContextPlate()
+{
+  if (!projectService_ || m_contextPlateIndex < 0 || m_contextPlateIndex >= plateCount()
+      || !projectService_->setCurrentPlateIndex(m_contextPlateIndex)
+      || projectService_->plateObjectIndices(m_contextPlateIndex).isEmpty())
+    return false;
+  selectAllOnPlate(m_contextPlateIndex);
+  autoOrientSelected();
+  return true;
+}
+
+bool EditorViewModel::dropSelectedObjectsToBed()
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return false;
+  bool changed = false;
+  for (int objectIndex : m_selectedSourceIndices)
+    changed = projectService_->dropObjectToBed(objectIndex) || changed;
+  if (!changed)
+    statusText_ = projectService_->lastError();
+  else {
+    refreshMeshCacheAndFitHint();
+    invalidateSliceResultsForCurrentPlate();
+  }
+  emit stateChanged();
+  return changed;
+}
+
+bool EditorViewModel::selectedObjectsAutoDrop() const
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return false;
+  return std::all_of(m_selectedSourceIndices.cbegin(), m_selectedSourceIndices.cend(),
+      [this](int objectIndex) { return projectService_->objectAutoDrop(objectIndex); });
+}
+
+bool EditorViewModel::toggleSelectedObjectsAutoDrop()
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return false;
+  const bool enabled = !selectedObjectsAutoDrop();
+  bool changed = false;
+  for (int objectIndex : m_selectedSourceIndices)
+    changed = projectService_->setObjectAutoDrop(objectIndex, enabled) || changed;
+  if (!changed)
+    statusText_ = projectService_->lastError();
+  emit stateChanged();
+  return changed;
+}
+
+bool EditorViewModel::subdivideSelectedMesh()
+{
+  if (!projectService_ || m_contextSourceObjectIndex < 0)
+    return false;
+  const int volumeIndex = m_contextVolumeIndex >= 0 ? m_contextVolumeIndex : -1;
+  const bool ok = projectService_->subdivideObject(m_contextSourceObjectIndex, volumeIndex);
+  if (ok) {
+    refreshMeshCacheAndFitHint();
+    invalidateSliceResultsForCurrentPlate();
+  } else {
+    statusText_ = projectService_->lastError();
+  }
+  emit stateChanged();
+  return ok;
+}
+
+bool EditorViewModel::convertSelectedObjectUnits(int conversionType)
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return false;
+  bool changed = false;
+  for (int objectIndex : m_selectedSourceIndices)
+    changed = projectService_->convertObjectUnits(objectIndex, conversionType) || changed;
+  if (changed) {
+    refreshMeshCacheAndFitHint();
+    invalidateSliceResultsForCurrentPlate();
+  } else {
+    statusText_ = projectService_->lastError();
+  }
+  emit stateChanged();
+  return changed;
+}
+
+bool EditorViewModel::copyContextProcessSettings()
+{
+  if (!projectService_ || m_contextSourceObjectIndex < 0)
+    return false;
+  const int volumeIndex = m_contextVolumeIndex >= 0 ? m_contextVolumeIndex : -1;
+  const int count = projectService_->scopedOverrideCount(m_contextSourceObjectIndex, volumeIndex);
+  QHash<QString, QVariant> copied;
+  for (int index = 0; index < count; ++index) {
+    const QString key = projectService_->scopedOverriddenKey(
+        m_contextSourceObjectIndex, volumeIndex, index);
+    if (!key.isEmpty())
+      copied.insert(key, projectService_->scopedOptionValue(
+          m_contextSourceObjectIndex, volumeIndex, key));
+  }
+  if (copied.isEmpty()) {
+    statusText_ = tr("No process settings are overridden on this selection");
+    emit stateChanged();
+    return false;
+  }
+  m_contextProcessSettingsClipboard = copied;
+  m_contextProcessSettingsAreVolumeScoped = volumeIndex >= 0;
+  statusText_ = tr("Process settings copied");
+  emit stateChanged();
+  return true;
+}
+
+bool EditorViewModel::pasteContextProcessSettings()
+{
+  if (!projectService_ || m_contextSourceObjectIndex < 0
+      || m_contextProcessSettingsClipboard.isEmpty())
+    return false;
+  const int volumeIndex = m_contextProcessSettingsAreVolumeScoped ? m_contextVolumeIndex : -1;
+  if (volumeIndex < 0 && m_contextProcessSettingsAreVolumeScoped) {
+    statusText_ = tr("Select a part to paste part process settings");
+    emit stateChanged();
+    return false;
+  }
+  bool changed = false;
+  for (auto it = m_contextProcessSettingsClipboard.cbegin();
+       it != m_contextProcessSettingsClipboard.cend(); ++it) {
+    changed = projectService_->setScopedOptionValue(
+        m_contextSourceObjectIndex, volumeIndex, it.key(), it.value()) || changed;
+  }
+  statusText_ = changed ? tr("Process settings pasted") : projectService_->lastError();
+  emit stateChanged();
+  return changed;
+}
+
+bool EditorViewModel::hasContextProcessSettingsClipboard() const
+{
+  return !m_contextProcessSettingsClipboard.isEmpty();
 }
 
 int EditorViewModel::getSelectedVolumeType() const
@@ -4950,12 +5483,10 @@ void EditorViewModel::exportObjectAsStl(int i)
   if (sourceIndex < 0)
     return;
 
-  statusText_ = tr("STL 导出功能准备中...");
-  emit stateChanged();
-  // Actual file dialog + export is deferred to a dedicated export service
-  // For now, record the intent
-  statusText_ = tr("请使用主菜单 文件 > 导出 STL 功能");
-  emit stateChanged();
+  m_selectedSourceIndices.clear();
+  m_selectedSourceIndices.insert(sourceIndex);
+  m_primarySelectedSourceIndex = sourceIndex;
+  exportSelectedObjects(QString(), false, false);
 }
 
 void EditorViewModel::requestSelectionSettings()
@@ -5595,44 +6126,12 @@ void EditorViewModel::centerSelectedObjects()
 
 void EditorViewModel::fillBedWithCopies()
 {
-  // 对齐上游 Plater::priv::on_fill_bed
-  // Mock 模式：生成 9 个副本（3x3 网格）
-  if (!projectService_)
-    return;
-  const int sel = selectedSourceObjectIndex();
-  if (sel < 0)
-    return;
-  const QString name = projectService_->objectNames().value(sel, "Object");
-  for (int r = 0; r < 3; ++r)
-  {
-    for (int c = 0; c < 3; ++c)
-    {
-      if (r == 0 && c == 0)
-        continue;
-      const int idx = projectService_->addObject(name + "_" + QString::number(r * 3 + c + 1));
-      if (idx >= 0)
-        projectService_->setObjectPosition(idx, (c - 1) * 60.0f, (r - 1) * 60.0f, 0);
-    }
-  }
-  invalidateSliceResultsForCurrentPlate();
-  emit stateChanged();
+  fillBedWithInstances();
 }
 
 void EditorViewModel::exportSelectedAsStl()
 {
-  // 对齐上游 Plater::priv::on_export_stl
-  // Mock 模式：仅通知用户（实际 STL 导出需要 libslic3r mesh 序列化）
-  if (!projectService_)
-    return;
-  const int sel = selectedSourceObjectIndex();
-  if (sel >= 0)
-  {
-    const QString name = projectService_->objectNames().value(sel, "object");
-    emit stateChanged();
-    // 通知通过 BackendContext 显示
-    emit stateChanged(); // 触发 UI 更新
-    // TODO: 实际模式下调用 libslic3r IO::STL::write_ascii 或 store_stl
-  }
+  exportSelectedObjects(QString(), false, false);
 }
 
 // ---------- slice bridge ----------
@@ -6247,6 +6746,28 @@ void EditorViewModel::arrangeAllObjects()
   }
   // If real arrange is not available (no HAS_LIBSLIC3R), the viewport fallback
   // arrange path remains a no-op rather than mutating model state in QML.
+}
+
+bool EditorViewModel::arrangePlate(int plateIndex)
+{
+  if (!projectService_ || plateIndex < 0 || plateIndex >= plateCount())
+    return false;
+  if (!projectService_->setCurrentPlateIndex(plateIndex))
+    return false;
+
+  const float spacing = (m_arrangeDistance > 0.f) ? m_arrangeDistance : 6.0f;
+  QString printableArea;
+  if (configViewModel_)
+    printableArea = configViewModel_->mergedConfigValues().value(QStringLiteral("printable_area")).toString();
+
+  const bool arranged = projectService_->arrangeObjects(spacing, m_arrangeRotation,
+                                                         m_arrangeAlignY, printableArea);
+  if (arranged) {
+    projectService_->syncTransformsFromModel();
+    invalidateSliceResultsForPlate(plateIndex);
+  }
+  emit stateChanged();
+  return arranged;
 }
 
 bool EditorViewModel::canActivateGizmo(int gizmoMode) const

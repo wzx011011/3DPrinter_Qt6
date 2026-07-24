@@ -98,6 +98,8 @@ bool rayTriangleMoller(const QVector3D &origin,
 bool validBatchSpan(const PrepareSceneData::ModelBatch &batch, int vertexCount)
 {
   return batch.sourceObjectIndex >= 0
+      && batch.volumeIndex >= 0
+      && batch.instanceIndex >= 0
       && batch.firstVertex >= 0
       && batch.vertexCount >= 3
       && (batch.vertexCount % 3) == 0
@@ -106,18 +108,18 @@ bool validBatchSpan(const PrepareSceneData::ModelBatch &batch, int vertexCount)
 }
 }
 
-int ObjectPicking::pickSourceObject(
+ObjectPicking::Hit ObjectPicking::pick(
     const QVector3D &rayOrigin,
     const QVector3D &rayDirection,
     const QList<PrepareSceneData::ModelVertex> &vertices,
     const QList<PrepareSceneData::ModelBatch> &batches)
 {
   if (!isFiniteVec(rayOrigin) || !isFiniteVec(rayDirection) || rayDirection.lengthSquared() <= 1e-12f)
-    return -1;
+    return {};
 
   const QVector3D direction = rayDirection.normalized();
   float bestT = std::numeric_limits<float>::max();
-  int bestSourceObjectIndex = -1;
+  Hit bestHit;
 
   for (const PrepareSceneData::ModelBatch &batch : batches) {
     if (!validBatchSpan(batch, vertices.size()))
@@ -139,10 +141,23 @@ int ObjectPicking::pickSourceObject(
 
       if (tTriangle < bestT) {
         bestT = tTriangle;
-        bestSourceObjectIndex = batch.sourceObjectIndex;
+        bestHit.sourceObjectIndex = batch.sourceObjectIndex;
+        bestHit.volumeIndex = batch.volumeIndex;
+        bestHit.instanceIndex = batch.instanceIndex;
+        bestHit.distance = tTriangle;
+        bestHit.position = rayOrigin + direction * tTriangle;
       }
     }
   }
 
-  return bestSourceObjectIndex;
+  return bestHit;
+}
+
+int ObjectPicking::pickSourceObject(
+    const QVector3D &rayOrigin,
+    const QVector3D &rayDirection,
+    const QList<PrepareSceneData::ModelVertex> &vertices,
+    const QList<PrepareSceneData::ModelBatch> &batches)
+{
+  return pick(rayOrigin, rayDirection, vertices, batches).sourceObjectIndex;
 }

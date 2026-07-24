@@ -19,6 +19,27 @@
 class ObjectPicking final
 {
 public:
+  struct Hit
+  {
+    int sourceObjectIndex = -1;
+    int volumeIndex = -1;
+    int instanceIndex = -1;
+    QVector3D position;
+    float distance = -1.0f;
+
+    bool isValid() const
+    {
+      return sourceObjectIndex >= 0 && volumeIndex >= 0 && instanceIndex >= 0
+          && distance >= 0.0f;
+    }
+  };
+
+  static Hit pick(
+      const QVector3D &rayOrigin,
+      const QVector3D &rayDirection,
+      const QList<PrepareSceneData::ModelVertex> &vertices,
+      const QList<PrepareSceneData::ModelBatch> &batches);
+
   static int pickSourceObject(
       const QVector3D &rayOrigin,
       const QVector3D &rayDirection,

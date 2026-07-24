@@ -8,6 +8,7 @@
 #include <QVariant>
 #include <QVector3D>
 #include <QVector4D>
+#include <QHash>
 #include <memory>
 
 #include "core/rendering/SupportPaintTypes.h"
@@ -20,6 +21,7 @@
 // included so the Assembly-measure bounds helper can return ModelBounds values
 // (mirrors the GizmoCenter.h include pattern).
 #include "qml_gui/Renderer/PrepareSceneData.h"
+#include "qml_gui/Renderer/ViewportContextHit.h"
 // Phase 100 (WTREAD-01): SliceService.h defines the WipeTowerGeometry POD
 // struct captured by value in the worker; included here so the
 // onWipeTowerGeometryReady slot signature has the complete type.
@@ -48,6 +50,8 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(int currentPlateIndex READ currentPlateIndex NOTIFY stateChanged)
   Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices NOTIFY stateChanged)
   Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList meshBatchVolumeIndices READ meshBatchVolumeIndices NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList meshBatchInstanceIndices READ meshBatchInstanceIndices NOTIFY stateChanged)
   // Phase 138 (ASM-01): per-source-object assemble offset (GL X,Y,Z), one entry
   // per source object index, paralleling meshBatchSourceObjectIndices. Consumed
   // by RhiViewport on the CanvasAssembleView path so assembled volumes render at
@@ -91,6 +95,11 @@ class EditorViewModel final : public QObject
   /// per-object settings / layer-range dialogs. Exposed so QML dialogs bound
   /// to `editorVm.selectedVolumeIndex` resolve (previously undefined).
   Q_PROPERTY(int selectedVolumeIndex READ selectedVolumeIndex NOTIFY stateChanged)
+  Q_PROPERTY(int contextMenuFamily READ contextMenuFamily NOTIFY stateChanged)
+  Q_PROPERTY(int contextSourceObjectIndex READ contextSourceObjectIndex NOTIFY stateChanged)
+  Q_PROPERTY(int contextVolumeIndex READ contextVolumeIndex NOTIFY stateChanged)
+  Q_PROPERTY(int contextInstanceIndex READ contextInstanceIndex NOTIFY stateChanged)
+  Q_PROPERTY(int contextPlateIndex READ contextPlateIndex NOTIFY stateChanged)
   /// 模型网格数据（TLV 格式，用于 GLViewport 渲染）
   Q_PROPERTY(QByteArray meshData READ meshData NOTIFY stateChanged)
   /// 加载完成后的相机适应提示: (cx, cy, cz, radius)，全零表示无效
@@ -165,6 +174,19 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(QVector3D measureDistanceXyz READ measureDistanceXyz NOTIFY measureReadoutChanged)
 
 public:
+  enum ContextMenuFamily
+  {
+    ContextMenuNone = -1,
+    ContextMenuDefault = 0,
+    ContextMenuObject = 1,
+    ContextMenuPart = 2,
+    ContextMenuMulti = 3,
+    ContextMenuPlate = 4,
+    ContextMenuText = 5,
+    ContextMenuSvg = 6
+  };
+  Q_ENUM(ContextMenuFamily)
+
   enum SliceResultStatus {
     SliceResultMissing = 0,
     SliceResultValid = 1,
@@ -185,6 +207,8 @@ public:
   int currentPlateIndex() const;
   QVariantList activePlateObjectIndices() const;
   QVariantList meshBatchSourceObjectIndices() const;
+  QVariantList meshBatchVolumeIndices() const;
+  QVariantList meshBatchInstanceIndices() const;
   // Phase 138 (ASM-01): per-source-object assemble offset list (one QVector3D
   // per source object index). Mirrors meshBatchSourceObjectIndices indexing.
   QVariantList assembleOffsets() const;
@@ -481,6 +505,17 @@ public:
   int selectedObjectCount() const;
   /// Phase 198 (PHASE198): getter backing the selectedVolumeIndex Q_PROPERTY.
   int selectedVolumeIndex() const;
+  int contextMenuFamily() const;
+  int contextSourceObjectIndex() const;
+  int contextVolumeIndex() const;
+  int contextInstanceIndex() const;
+  int contextPlateIndex() const;
+  Q_INVOKABLE int synchronizeViewportContext(int targetKind,
+                                             int sourceObjectIndex,
+                                             int volumeIndex,
+                                             int instanceIndex,
+                                             int plateIndex);
+  Q_INVOKABLE bool contextActionAvailable(const QString &action) const;
   Q_INVOKABLE QString objectName(int i) const;
   Q_INVOKABLE QString objectModuleName(int i) const;
   Q_INVOKABLE QString objectGroupLabel(int i) const;
@@ -559,11 +594,34 @@ public:
   /// 用 STL 文件替换选中 volume 的网格（对齐上游 GUI_ObjectList::load_subobject）
   Q_INVOKABLE bool replaceWithStl(const QString &path);
   /// 重新加载当前平板所有对象（对齐上游 Plater::reload_all_from_disk）
-  Q_INVOKABLE bool reloadAllOnPlate();
+  Q_INVOKABLE bool reloadAllOnPlate(int plateIndex);
   /// 合并选中对象为单一多部件对象（对齐上游 GUI_ObjectList::assemble）
   Q_INVOKABLE bool assembleSelectedObjects();
   /// 将指定实例复制为独立对象（对齐上游 GUI_ObjectList::instance_to_object）
   Q_INVOKABLE bool instanceToObject(int instIdx);
+  Q_INVOKABLE bool setSelectedInstanceCount(int count);
+  Q_INVOKABLE bool addSelectedInstance();
+  Q_INVOKABLE bool removeSelectedInstance();
+  Q_INVOKABLE bool fillBedWithInstances();
+  Q_INVOKABLE bool splitSelectedToObjects();
+  Q_INVOKABLE bool splitSelectedToParts();
+  Q_INVOKABLE bool exportSelectedObjects(const QString &outputPath,
+                                         bool separateFiles = false,
+                                         bool drcFormat = false);
+  Q_INVOKABLE bool addFilesToContextPlate(const QStringList &filePaths);
+  Q_INVOKABLE bool addHandyModelToContextPlate(const QString &modelId);
+  Q_INVOKABLE bool replaceAllOnContextPlate(const QStringList &filePaths);
+  Q_INVOKABLE bool dropSelectedObjectsToBed();
+  Q_INVOKABLE bool toggleSelectedObjectsAutoDrop();
+  Q_INVOKABLE bool selectedObjectsAutoDrop() const;
+  Q_INVOKABLE bool subdivideSelectedMesh();
+  Q_INVOKABLE bool convertSelectedObjectUnits(int conversionType);
+  Q_INVOKABLE bool copyContextProcessSettings();
+  Q_INVOKABLE bool pasteContextProcessSettings();
+  Q_INVOKABLE bool hasContextProcessSettingsClipboard() const;
+  Q_INVOKABLE bool addPrimitiveToContextPlate(int type);
+  Q_INVOKABLE bool pasteToContextPlate();
+  Q_INVOKABLE bool autoOrientContextPlate();
   /// 获取选中 volume 的类型枚举（对齐上游 ModelVolumeType）
   Q_INVOKABLE int getSelectedVolumeType() const;
   /// 添加原始几何体到当前平板（对齐上游 create_mesh + add_volume）
@@ -922,6 +980,7 @@ public:
   void setArrangeMultiMaterial(bool v);
   /// 自动排列全部对象（对齐上游 Plater::priv::on_arrange → arrange_objects）
   Q_INVOKABLE void arrangeAllObjects();
+  Q_INVOKABLE bool arrangePlate(int plateIndex);
   bool arrangeAvoidCalibration() const;
   void setArrangeAvoidCalibration(bool v);
   /// 重置排列设置到默认值（对齐上游 ArrangeSettings Reset）
@@ -1197,6 +1256,7 @@ private:
   void rebuildObjectEntriesFromService();
   bool deleteSelectedVolumesBySource();
   void ensureValidObjectSelection(bool preferFirstVisible);
+  void clearContextState();
   QList<int> baseVisibleObjectIndices() const;
   QString sourceObjectGroupLabel(int sourceIndex) const;
   QString sourceObjectGroupKey(int sourceIndex) const;
@@ -1298,6 +1358,15 @@ private:
   int m_measureSelectionMode = 0; ///< 0=Default point, 1=Feature selection
   QByteArray m_cachedMeshData;
   QList<int> m_cachedMeshBatchSourceObjectIndices;
+  QList<int> m_cachedMeshBatchVolumeIndices;
+  QList<int> m_cachedMeshBatchInstanceIndices;
+  ContextMenuFamily m_contextMenuFamily = ContextMenuNone;
+  int m_contextSourceObjectIndex = -1;
+  int m_contextVolumeIndex = -1;
+  int m_contextInstanceIndex = -1;
+  int m_contextPlateIndex = -1;
+  QHash<QString, QVariant> m_contextProcessSettingsClipboard;
+  bool m_contextProcessSettingsAreVolumeScoped = false;
   QList<int> m_sliceAllQueue; ///< plate indices queued for Slice All
   bool m_slicingAll = false;
   QSet<int> m_slicedPlateIndices; ///< tracks which plates have valid slice results

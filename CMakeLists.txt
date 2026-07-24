@@ -262,6 +262,7 @@ if(OWZX_QML_GUI)
         src/qml_gui/Renderer/RhiViewportRenderer.h
         src/qml_gui/Renderer/PrepareSceneData.cpp
         src/qml_gui/Renderer/PrepareSceneData.h
+        src/qml_gui/Renderer/ViewportContextHit.h
     )
     if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/src/core/debug/CrashHandlerWin.cpp")
         target_sources(owzx_app_core PRIVATE
@@ -438,7 +439,11 @@ if(OWZX_QML_GUI)
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:OWzxSlicer>/resources/info"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${OWZX_UPSTREAM_ROOT}/resources/info"
-            "$<TARGET_FILE_DIR:OWzxSlicer>/resources/info")
+            "$<TARGET_FILE_DIR:OWzxSlicer>/resources/info"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:OWzxSlicer>/resources/handy_models"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${OWZX_UPSTREAM_ROOT}/resources/handy_models"
+            "$<TARGET_FILE_DIR:OWzxSlicer>/resources/handy_models")
 else()
     find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
@@ -529,6 +534,7 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
         tests/PrepareSceneDataTests.cpp
         src/qml_gui/Renderer/PrepareSceneData.cpp
         src/qml_gui/Renderer/PrepareSceneData.h
+        src/qml_gui/Renderer/ViewportContextHit.h
     )
     target_include_directories(PrepareSceneDataTests PRIVATE src)
     target_link_libraries(PrepareSceneDataTests PRIVATE Qt6::Test Qt6::Core)
@@ -569,11 +575,22 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
         src/core/rendering/GizmoMath.h
         src/qml_gui/Renderer/PrepareSceneData.cpp
         src/qml_gui/Renderer/PrepareSceneData.h
+        src/qml_gui/Renderer/ViewportContextHit.h
     )
     target_include_directories(ObjectPickingTests PRIVATE src)
     target_link_libraries(ObjectPickingTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
     add_test(NAME ObjectPickingTests COMMAND ObjectPickingTests)
     set_tests_properties(ObjectPickingTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
+    qt_add_executable(ViewportContextMenuTests tests/ViewportContextMenuTests.cpp)
+    target_link_libraries(ViewportContextMenuTests PRIVATE owzx_app_core
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Test
+    )
+    target_link_options(ViewportContextMenuTests PRIVATE /FORCE:MULTIPLE)
+    add_test(NAME ViewportContextMenuTests COMMAND ViewportContextMenuTests)
+    set_tests_properties(ViewportContextMenuTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 

@@ -171,7 +171,7 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: fileMenu.popup()
+                    onClicked: fileMenu.popup(fileBtn, 0, fileBtn.height)
                 }
             }
 
@@ -195,7 +195,7 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: topMenu.popup()
+                    onClicked: topMenu.popup(dropBtn, 0, dropBtn.height)
                 }
             }
 

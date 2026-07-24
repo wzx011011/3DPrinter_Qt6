@@ -54,6 +54,8 @@ private slots:
   void invalidBedDimensionsDoNotGenerateUnboundedBuffers();
   void modelBatchesParsePackedMeshWithSourceIndices();
   void modelBatchesRejectMalformedPayloads();
+  void modelBatchesRejectMisalignedIdentityMetadata();
+  void currentPlateFootprintClassifiesRectangleAndCircle();
   void activePlateFilteringKeepsOnlyCurrentPlateSources();
   void emptyActivePlateDoesNotFallbackToAllModelBatches();
   void selectionAndHoverDoNotDirtyModelGeometry();
@@ -204,6 +206,34 @@ void PrepareSceneDataTests::modelBatchesRejectMalformedPayloads()
   QVERIFY(scene.modelBatches().isEmpty());
   QVERIFY(!scene.hasModelBounds());
   QVERIFY((scene.peekDirtyFlags() & PrepareSceneData::DirtyMesh) != 0);
+}
+
+void PrepareSceneDataTests::modelBatchesRejectMisalignedIdentityMetadata()
+{
+  PrepareSceneData scene;
+  const QByteArray mesh = packedMeshWithBatches(
+      QList<int>{10},
+      QList<QList<float>>{QList<float>{0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f}});
+  scene.setModelMeshData(mesh, QList<int>{1}, QList<int>{0, 1},
+                         QList<int>{0}, QList<int>{1});
+  QVERIFY(scene.modelBatches().isEmpty());
+  QVERIFY(scene.modelVertices().isEmpty());
+}
+
+void PrepareSceneDataTests::currentPlateFootprintClassifiesRectangleAndCircle()
+{
+  PrepareSceneData scene;
+  scene.setPlateContext(0, 1, QList<int>{});
+  scene.setBed(200.0f, 100.0f, 10.0f, 20.0f, 0, 100.0f);
+  QVERIFY(scene.containsCurrentPlatePoint(10.0f, 20.0f));
+  QVERIFY(scene.containsCurrentPlatePoint(210.0f, 120.0f));
+  QVERIFY(!scene.containsCurrentPlatePoint(211.0f, 120.0f));
+
+  scene.setBed(100.0f, 100.0f, 0.0f, 0.0f, 1, 100.0f);
+  QVERIFY(scene.containsCurrentPlatePoint(50.0f, 50.0f));
+  QVERIFY(!scene.containsCurrentPlatePoint(0.0f, 0.0f));
+  scene.setPlateContext(2, 1, QList<int>{});
+  QVERIFY(!scene.containsCurrentPlatePoint(50.0f, 50.0f));
 }
 
 void PrepareSceneDataTests::activePlateFilteringKeepsOnlyCurrentPlateSources()

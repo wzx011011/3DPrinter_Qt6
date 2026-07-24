@@ -543,7 +543,7 @@ Item {
                 CxMenuItem {
                     text: qsTr("拆分为对象")
                     enabled: !!root.editorVm && row.isSelected && root.editorVm.canRenameSelectedObject
-                    onTriggered: { if (root.editorVm) root.editorVm.splitSelectedObject() }
+                    onTriggered: { if (root.editorVm) root.editorVm.splitSelectedToObjects() }
                 }
 
                 // Fix Mesh (对齐上游 menu_item_fix_mesh)
@@ -554,12 +554,6 @@ Item {
                 }
 
                 // Export as STL (对齐上游 export_stl / export_mesh)
-                CxMenuItem {
-                    text: qsTr("导出为 STL...")
-                    enabled: !!root.editorVm && row.isSelected && root.editorVm.canRenameSelectedObject
-                    onTriggered: { if (root.editorVm) root.editorVm.exportObjectAsStl(row.index) }
-                }
-
                 // Instance to Object (对齐上游 MenuFactory::append_menu_item_instance_to_object)
                 CxMenuItem {
                     text: root.editorVm && root.editorVm.objectInstanceCount(row.index) > 1
@@ -1068,11 +1062,11 @@ Item {
 
                                 CxMenuItem {
                                     text: qsTr("拆分为对象")
-                                    onTriggered: { if (root.editorVm) root.editorVm.splitSelectedObject() }
+                                    onTriggered: { if (root.editorVm) root.editorVm.splitSelectedToObjects() }
                                 }
                                 CxMenuItem {
                                     text: qsTr("拆分为部件")
-                                    onTriggered: { if (root.editorVm) root.editorVm.splitSelectedObject() }
+                                    onTriggered: { if (root.editorVm) root.editorVm.splitSelectedToParts() }
                                 }
                             }
 
@@ -1220,8 +1214,12 @@ Item {
                                     root.editorVm.toggleVolumeSelection(row.index, index)
                                 else
                                     root.editorVm.selectVolume(row.index, index)
-                                if (mouse.button === Qt.RightButton)
+                                if (mouse.button === Qt.RightButton) {
+                                    root.editorVm.synchronizeViewportContext(
+                                                1, root.editorVm.selectedSourceObjectIndex,
+                                                index, 0, row.plateIndex)
                                     volumeMenu.popup()
+                                }
                             }
                         }
                     }
@@ -1299,8 +1297,12 @@ Item {
                     } else
                         root.editorVm.selectObject(row.index)
 
-                    if (mouse.button === Qt.RightButton)
+                    if (mouse.button === Qt.RightButton) {
+                        root.editorVm.synchronizeViewportContext(
+                                    0, root.editorVm.selectedSourceObjectIndex,
+                                    -1, 0, row.plateIndex)
                         rowMenu.popup()
+                    }
                 }
             }
         }
