@@ -24,6 +24,7 @@
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Model.hpp>
+#include <libslic3r/Utils.hpp>
 #include <libslic3r/TriangleMesh.hpp>
 #include <libslic3r/TriangleSelector.hpp>
 #include <libslic3r/QuadricEdgeCollapse.hpp>
@@ -47,6 +48,18 @@
 // root-cause writeup) is below near qimageToThumbnailData. The model-load
 // read blocks (loadFile/loadProject) call it before the definition site.
 static QImage extractPlateThumbnailFrom3mf(const QString &archivePath, int plateIndex);
+
+struct OwzxPlateFilamentState
+{
+  int mode = int(OWzx::FilamentMapMode::fmmAutoForFlush);
+  QList<int> maps;
+};
+
+using OwzxPlateFilamentStates = QHash<int, OwzxPlateFilamentState>;
+
+static OwzxPlateFilamentStates readOwzxPlateFilamentStates(const QString &archivePath);
+static bool writeOwzxPlateFilamentStates(const QString &archivePath,
+                                         const QByteArray &payload);
 #endif
 
 namespace
@@ -102,6 +115,42 @@ namespace
   std::unique_ptr<Slic3r::DynamicPrintConfig> defaultConfigForKey(const std::string &key)
   {
     return std::unique_ptr<Slic3r::DynamicPrintConfig>(Slic3r::DynamicPrintConfig::new_from_defaults_keys({key}));
+  }
+
+  int upstreamPrintSequenceForUiIndex(int uiIndex)
+  {
+    switch (uiIndex)
+    {
+    case 1:
+      return int(Slic3r::PrintSequence::ByLayer);
+    case 2:
+      return int(Slic3r::PrintSequence::ByObject);
+    default:
+      return int(Slic3r::PrintSequence::ByDefault);
+    }
+  }
+
+  int uiPrintSequenceIndexForUpstream(int upstreamValue)
+  {
+    switch (static_cast<Slic3r::PrintSequence>(upstreamValue))
+    {
+    case Slic3r::PrintSequence::ByLayer:
+      return 1;
+    case Slic3r::PrintSequence::ByObject:
+      return 2;
+    default:
+      return 0;
+    }
+  }
+
+  void syncPlatePrintSequenceConfig(Slic3r::DynamicPrintConfig &config, int uiIndex)
+  {
+    config.erase("print_sequence");
+    if (uiIndex == 0)
+      return;
+
+    if (auto *option = config.option("print_sequence", true))
+      option->setInt(upstreamPrintSequenceForUiIndex(uiIndex));
   }
 
   const ScopedConfig *scopedConfigForRead(const Slic3r::Model *model, int objectIndex, int volumeIndex)
@@ -315,6 +364,7 @@ ProjectServiceMock::ProjectServiceMock(QObject *parent)
     , m_plateList(std::make_unique<OWzx::PartPlateList>())
 {
 #ifdef HAS_LIBSLIC3R
+  Slic3r::set_temporary_dir(QDir::tempPath().toStdString());
   model_ = new Slic3r::Model();
 #endif
 }
@@ -643,6 +693,8 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
           receiver->pendingPlateFilamentMaps_.clear();   // v3.2 Phase 31 (FMAP-02)
           receiver->pendingPlateFilamentMapMode_.clear(); // v3.2 Phase 31 (FMAP-02)
 
+          const OwzxPlateFilamentStates persistedFilamentStates =
+              readOwzxPlateFilamentStates(localPath);
           if (!plateDataList.empty())
           {
             loadedPlateNames.reserve(loadedPlateCount);
@@ -663,7 +715,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                 if (auto *opt = plate->config.option("curr_bed_type"))
                   bedType = int(opt->getInt());
                 if (auto *opt = plate->config.option("print_sequence"))
-                  printSeq = int(opt->getInt());
+                  printSeq = uiPrintSequenceIndexForUpstream(int(opt->getInt()));
                 // Phase 97 fix (THUMBRT-01): spiral_mode is coBool; ConfigOptionBool
                 // does NOT override getInt (only ConfigOptionEnum/Int do, Config.hpp),
                 // so getInt() throws "Calling ConfigOption::getInt on a non-int
@@ -684,7 +736,9 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
               // the legacy raw-int-1 -> fmmManual mapping are identical.
               QList<int> fmap;
               if (plate) {
-                for (int m : plate->filament_maps) fmap.append(m);
+                if (auto *opt = plate->config.option<Slic3r::ConfigOptionInts>("filament_map")) {
+                  for (int m : opt->values) fmap.append(m);
+                }
               }
               int fmapMode = int(OWzx::FilamentMapMode::fmmAutoForFlush);
               if (plate) {
@@ -707,6 +761,11 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                     fmapMode = int(OWzx::migrateLegacyFilamentMapMode(int(opt->getInt())));
                   }
                 }
+              }
+              if (persistedFilamentStates.contains(plateIdx)) {
+                const OwzxPlateFilamentState state = persistedFilamentStates.value(plateIdx);
+                fmap = state.maps;
+                fmapMode = state.mode;
               }
               receiver->pendingPlateFilamentMaps_.append(fmap);
               receiver->pendingPlateFilamentMapMode_.append(fmapMode);
@@ -948,7 +1007,11 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
             // from PlateData so multi-plate state round-trips.
             if (pi < receiver->pendingPlateLocked_.size()) p->setLocked(receiver->pendingPlateLocked_[pi]);
             if (pi < receiver->pendingPlateBedType_.size()) p->setBedType(receiver->pendingPlateBedType_[pi]);
-            if (pi < receiver->pendingPlatePrintSeq_.size()) p->setPrintSequence(receiver->pendingPlatePrintSeq_[pi]);
+            if (pi < receiver->pendingPlatePrintSeq_.size()) {
+              const int printSequence = receiver->pendingPlatePrintSeq_[pi];
+              p->setPrintSequence(printSequence);
+              syncPlatePrintSequenceConfig(p->config(), printSequence);
+            }
             if (pi < receiver->pendingPlateSpiral_.size()) p->setSpiralMode(receiver->pendingPlateSpiral_[pi]);
             // v3.2 Phase 31 (FMAP-02) + v4.5 Phase 107 (FMAP-02): restore
             // filament maps + mode (the mode was migrated in the read block).
@@ -3360,7 +3423,7 @@ int ProjectServiceMock::cutObjectWithGroove(int objectIndex, int axis, double po
 
     // Perform the groove cut (对齐上游 perform_cut → cut.perform_with_groove)
     Slic3r::Cut cut(obj, instance_idx, cut_matrix, attributes);
-    const Slic3r::ModelObjectPtrs &new_objects = cut.perform_with_groove(groove, rotation_m, 0, 0.0f, 0.0f, false);
+    const Slic3r::ModelObjectPtrs &new_objects = cut.perform_with_groove(groove, rotation_m, false);
 
     if (new_objects.empty())
       return -1;
@@ -4722,8 +4785,11 @@ int ProjectServiceMock::platePrintSequence(int plateIndex) const
 bool ProjectServiceMock::setPlatePrintSequence(int plateIndex, int seq)
 {
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
-  if (!p) return false;
+  if (!p || seq < 0 || seq > 2) return false;
   p->setPrintSequence(seq);
+#ifdef HAS_LIBSLIC3R
+  syncPlatePrintSequenceConfig(p->config(), seq);
+#endif
   emit projectChanged();
   return true;
 }
@@ -5167,7 +5233,7 @@ QList<int> ProjectServiceMock::splitObject(int objectIndex)
     auto *tempObj = tempModel.objects[size_t(objectIndex)];
 
     Slic3r::ModelObjectPtrs newObjects;
-    tempObj->split(&newObjects, false);
+    tempObj->split(&newObjects);
 
     // 对齐上游：如果只有一个结果，表示无法拆分
     if (newObjects.size() <= 1)
@@ -5498,7 +5564,7 @@ QVector3D ProjectServiceMock::assembleOffset(int index) const
     const auto *inst = model_->objects[size_t(index)]->instances.front();
     if (inst)
     {
-      const auto off = inst->get_assemble_offset();  // Model.hpp:1289
+      const auto off = inst->get_assemble_transformation().get_offset();
       // slic3r(X,Y,Z) -> GL(X,Z,Y): GL.x=slic3r.x, GL.y=slic3r.z, GL.z=slic3r.y
       return QVector3D(static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y()));
     }
@@ -5583,13 +5649,10 @@ bool ProjectServiceMock::setAssembleRotation(int index, float x, float y, float 
     auto *inst = model_->objects[size_t(index)]->instances.front();
     if (inst)
     {
-      // degrees -> radians, written to m_assemble_transformation (Model.hpp:1291)
-      inst->set_assemble_rotation(Slic3r::Vec3d(
+      auto assemble = inst->get_assemble_transformation();
+      assemble.set_rotation(Slic3r::Vec3d(
         qDegreesToRadians(x), qDegreesToRadians(y), qDegreesToRadians(z)));
-      // set_assemble_rotation does NOT flip m_assemble_initialized; re-assign through
-      // set_assemble_transformation (Model.hpp:1281) so the 3MF <assemble> write gate
-      // (bbs_3mf.cpp:8076) passes and the transform round-trips.
-      inst->set_assemble_transformation(inst->get_assemble_transformation());
+      inst->set_assemble_transformation(assemble);
     }
   }
 #endif
@@ -5767,6 +5830,110 @@ static QImage extractPlateThumbnailFrom3mf(const QString &archivePath, int plate
   Slic3r::close_zip_reader(&archive);
   return thumb;
 }
+
+static constexpr const char *kOwzxPlateStateEntry = "Metadata/owzx_plate_state.json";
+
+static OwzxPlateFilamentStates readOwzxPlateFilamentStates(const QString &archivePath)
+{
+  OwzxPlateFilamentStates states;
+  if (archivePath.isEmpty())
+    return states;
+
+  mz_zip_archive archive;
+  mz_zip_zero_struct(&archive);
+  if (!Slic3r::open_zip_reader(&archive, QDir::toNativeSeparators(archivePath).toStdString()))
+    return states;
+
+  const int entryIndex = mz_zip_reader_locate_file(&archive, kOwzxPlateStateEntry, nullptr, 0);
+  if (entryIndex >= 0)
+  {
+    mz_zip_archive_file_stat stat;
+    if (mz_zip_reader_file_stat(&archive, static_cast<mz_uint>(entryIndex), &stat) &&
+        stat.m_uncomp_size <= 1024 * 1024)
+    {
+      QByteArray payload(static_cast<int>(stat.m_uncomp_size), Qt::Uninitialized);
+      if (mz_zip_reader_extract_to_mem(&archive, static_cast<mz_uint>(entryIndex),
+                                       payload.data(), payload.size(), 0))
+      {
+        const QJsonDocument document = QJsonDocument::fromJson(payload);
+        const QJsonArray plates = document.object().value(QStringLiteral("plates")).toArray();
+        for (const QJsonValue &value : plates)
+        {
+          const QJsonObject plate = value.toObject();
+          const int index = plate.value(QStringLiteral("index")).toInt(-1);
+          const int mode = plate.value(QStringLiteral("filamentMapMode")).toInt(-1);
+          if (index < 0 || mode < int(OWzx::FilamentMapMode::fmmAutoForFlush) ||
+              mode > int(OWzx::FilamentMapMode::fmmDefault))
+            continue;
+
+          OwzxPlateFilamentState state;
+          state.mode = mode;
+          for (const QJsonValue &mapValue : plate.value(QStringLiteral("filamentMaps")).toArray())
+          {
+            if (mapValue.isDouble())
+              state.maps.append(mapValue.toInt());
+          }
+          states.insert(index, state);
+        }
+      }
+    }
+  }
+
+  Slic3r::close_zip_reader(&archive);
+  return states;
+}
+
+static bool writeOwzxPlateFilamentStates(const QString &archivePath,
+                                         const QByteArray &payload)
+{
+  const QString temporaryPath = archivePath + QStringLiteral(".owzx.tmp");
+  QFile::remove(temporaryPath);
+
+  mz_zip_archive source;
+  mz_zip_zero_struct(&source);
+  if (!Slic3r::open_zip_reader(&source, QDir::toNativeSeparators(archivePath).toStdString()))
+    return false;
+
+  mz_zip_archive target;
+  mz_zip_zero_struct(&target);
+  if (!Slic3r::open_zip_writer(&target, QDir::toNativeSeparators(temporaryPath).toStdString()))
+  {
+    Slic3r::close_zip_reader(&source);
+    return false;
+  }
+
+  bool ok = true;
+  const int previousState = mz_zip_reader_locate_file(&source, kOwzxPlateStateEntry, nullptr, 0);
+  const mz_uint fileCount = mz_zip_reader_get_num_files(&source);
+  for (mz_uint index = 0; ok && index < fileCount; ++index)
+  {
+    if (int(index) == previousState)
+      continue;
+    ok = mz_zip_writer_add_from_zip_reader(&target, &source, index);
+  }
+  if (ok)
+  {
+    ok = mz_zip_writer_add_mem(&target, kOwzxPlateStateEntry, payload.constData(),
+                               static_cast<size_t>(payload.size()), MZ_DEFAULT_COMPRESSION);
+  }
+  if (ok)
+    ok = mz_zip_writer_finalize_archive(&target);
+
+  Slic3r::close_zip_writer(&target);
+  Slic3r::close_zip_reader(&source);
+  if (!ok)
+  {
+    QFile::remove(temporaryPath);
+    return false;
+  }
+
+  if (!QFile::remove(archivePath) || !QFile::rename(temporaryPath, archivePath))
+  {
+    QFile::remove(temporaryPath);
+    return false;
+  }
+  return true;
+}
 #endif // HAS_LIBSLIC3R
 
 // v3.0 Phase 18 (D-10): build a PlateData list from a PartPlateList so multi-plate
@@ -5811,8 +5978,7 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
       // set_key_value("spiral_mode", new ConfigOptionBool(...)) (Plater.cpp).
       if (auto *opt = pd->config.option("curr_bed_type", true))
         opt->setInt(p->bedType());
-      if (auto *opt = pd->config.option("print_sequence", true))
-        opt->setInt(p->printSequence());
+      syncPlatePrintSequenceConfig(pd->config, p->printSequence());
       if (auto *opt = pd->config.option<Slic3r::ConfigOptionBool>("spiral_mode", true))
         opt->value = (p->spiralMode() != 0);
 
@@ -5836,21 +6002,20 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
       // that the writer expects -- an earlier draft used set_key_value with a
       // raw ConfigOptionEnum<FilamentMapMode> which crashed
       // _add_project_config_file_to_archive on the type mismatch.
-      pd->filament_maps = p->filamentMaps();
-      Slic3r::FilamentMapMode writeMode = Slic3r::FilamentMapMode::fmmAutoForFlush;
+      int writeMode = int(OWzx::FilamentMapMode::fmmAutoForFlush);
       switch (p->filamentMapMode()) {
         case OWzx::FilamentMapMode::fmmAutoForFlush:
-          writeMode = Slic3r::FilamentMapMode::fmmAutoForFlush; break;
+          writeMode = int(OWzx::FilamentMapMode::fmmAutoForFlush); break;
         case OWzx::FilamentMapMode::fmmAutoForMatch:
-          writeMode = Slic3r::FilamentMapMode::fmmAutoForMatch; break;
+          writeMode = int(OWzx::FilamentMapMode::fmmAutoForMatch); break;
         case OWzx::FilamentMapMode::fmmManual:
-          writeMode = Slic3r::FilamentMapMode::fmmManual; break;
+          writeMode = int(OWzx::FilamentMapMode::fmmManual); break;
         // fmmDefault is the per-plate "inherit from global" sentinel; resolve
         // to the upstream default here so the on-disk int stays in [0,2]
         // (avoids the names[3] OOB in the writer). See FM-02 / FM-07.
         case OWzx::FilamentMapMode::fmmDefault:
         default:
-          writeMode = Slic3r::FilamentMapMode::fmmAutoForFlush; break;
+          writeMode = int(OWzx::FilamentMapMode::fmmAutoForFlush); break;
       }
       if (auto *opt = pd->config.option("filament_map_mode", true))
         opt->setInt(static_cast<int>(writeMode));
@@ -6004,6 +6169,36 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
     if (!ok)
     {
       lastError_ = tr("3MF 保存失败");
+      emit projectChanged();
+      return false;
+    }
+
+    QJsonArray plateStates;
+    if (m_plateList)
+    {
+      for (int plateIndex = 0; plateIndex < m_plateList->plateCount(); ++plateIndex)
+      {
+        const OWzx::PartPlate *plate = m_plateList->plate(plateIndex);
+        if (!plate)
+          continue;
+
+        QJsonObject plateState;
+        plateState.insert(QStringLiteral("index"), plateIndex);
+        plateState.insert(QStringLiteral("filamentMapMode"), int(plate->filamentMapMode()));
+        QJsonArray maps;
+        for (int map : plate->filamentMaps())
+          maps.append(map);
+        plateState.insert(QStringLiteral("filamentMaps"), maps);
+        plateStates.append(plateState);
+      }
+    }
+    QJsonObject stateRoot;
+    stateRoot.insert(QStringLiteral("version"), 1);
+    stateRoot.insert(QStringLiteral("plates"), plateStates);
+    if (!writeOwzxPlateFilamentStates(filePath,
+                                       QJsonDocument(stateRoot).toJson(QJsonDocument::Compact)))
+    {
+      lastError_ = tr("Unable to write OWzx plate state");
       emit projectChanged();
       return false;
     }
@@ -6261,6 +6456,8 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
       receiver->pendingPlateFilamentMaps_.clear();   // v3.2 Phase 31 (FMAP-02)
       receiver->pendingPlateFilamentMapMode_.clear(); // v3.2 Phase 31 (FMAP-02)
 
+      const OwzxPlateFilamentStates persistedFilamentStates =
+          readOwzxPlateFilamentStates(localPath);
       if (ok && !plateDataList.empty())
       {
         loadedPlateCount = int(plateDataList.size());
@@ -6282,7 +6479,7 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
             if (auto *opt = plate->config.option("curr_bed_type"))
               bedType = int(opt->getInt());
             if (auto *opt = plate->config.option("print_sequence"))
-              printSeq = int(opt->getInt());
+              printSeq = uiPrintSequenceIndexForUpstream(int(opt->getInt()));
             // Phase 97 fix (THUMBRT-01): spiral_mode is coBool; getInt() throws on
             // ConfigOptionBool (it does NOT override getInt). Read via the typed
             // Bool accessor instead. (Mirrors the loadFile read at ~608 and the
@@ -6300,7 +6497,9 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           // the new fmmAutoForMatch=1.
           QList<int> fmap;
           if (plate) {
-            for (int m : plate->filament_maps) fmap.append(m);
+            if (auto *opt = plate->config.option<Slic3r::ConfigOptionInts>("filament_map")) {
+              for (int m : opt->values) fmap.append(m);
+            }
           }
           int fmapMode = int(OWzx::FilamentMapMode::fmmAutoForFlush);
           if (plate) {
@@ -6321,6 +6520,11 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
                 fmapMode = int(OWzx::migrateLegacyFilamentMapMode(int(opt->getInt())));
               }
             }
+          }
+          if (persistedFilamentStates.contains(plateIdx)) {
+            const OwzxPlateFilamentState state = persistedFilamentStates.value(plateIdx);
+            fmap = state.maps;
+            fmapMode = state.mode;
           }
           receiver->pendingPlateFilamentMaps_.append(fmap);
           receiver->pendingPlateFilamentMapMode_.append(fmapMode);
@@ -6518,7 +6722,11 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
               // v3.0 Phase 18 (D-12): restore locked + bed-type/print-seq/spiral.
               if (pi < receiver->pendingPlateLocked_.size()) p->setLocked(receiver->pendingPlateLocked_[pi]);
               if (pi < receiver->pendingPlateBedType_.size()) p->setBedType(receiver->pendingPlateBedType_[pi]);
-              if (pi < receiver->pendingPlatePrintSeq_.size()) p->setPrintSequence(receiver->pendingPlatePrintSeq_[pi]);
+              if (pi < receiver->pendingPlatePrintSeq_.size()) {
+                const int printSequence = receiver->pendingPlatePrintSeq_[pi];
+                p->setPrintSequence(printSequence);
+                syncPlatePrintSequenceConfig(p->config(), printSequence);
+              }
               if (pi < receiver->pendingPlateSpiral_.size()) p->setSpiralMode(receiver->pendingPlateSpiral_[pi]);
               // v3.2 Phase 31 (FMAP-02): restore filament maps + mode (Manual).
               if (pi < receiver->pendingPlateFilamentMaps_.size()) {

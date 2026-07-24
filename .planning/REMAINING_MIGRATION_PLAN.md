@@ -1,13 +1,13 @@
 # Remaining Feature Migration Plan
 
-Last updated: 2026-07-07
+Last updated: 2026-07-23
 
 This is the ordered backlog after reconciling planning with current implementation. If older milestone wording conflicts with the dated audits or current code evidence, the code evidence and latest audit win.
 
 ## Scope and Assumptions
 
 - Active product target: OWzx Slicer, Qt6/QML GUI, upstream behavior mapped from `third_party/OrcaSlicer`.
-- Current active milestone: v4.1 Parameter Settings Dialogs Source-Truth Restoration.
+- Current active milestone: v5.5 Build/Run Parity and Dependency Provenance.
 - Historical CrealityPrint-era notes are evidence only. New work must cite active OrcaSlicer upstream paths unless the task explicitly cleans historical compatibility.
 - Build verification remains: `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`.
 - Build directory remains: `build/`.
@@ -122,7 +122,8 @@ Do not promote ModelMall/Home WebView, cloud account/sync, LAN device discovery,
 
 ## Backlog Rule
 
-Current promoted candidate: v4.1 Parameter Settings Dialogs Source-Truth Restoration.
+Current promoted candidate: none. v5.5 is an execution gate, not a migration
+candidate.
 
 Next recommended promotion candidate after v4.1: AssembleView, unless v4.1 uncovers a blocking settings/preset follow-up.
 

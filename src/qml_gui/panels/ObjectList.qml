@@ -232,6 +232,10 @@ Item {
             readonly property string groupLabel: root.editorVm ? root.editorVm.objectGroupLabel(row.index) : ""
             readonly property bool groupExpanded: root.editorVm ? root.editorVm.objectGroupExpanded(row.index) : true
             readonly property int volumeCount: root.editorVm ? root.editorVm.objectVolumeCount(row.index) : 0
+            // Phase 198 (PHASE198): read-only layer-range count for this
+            // object, surfaced as a badge + the "Layer Ranges..." menu label.
+            // Backend is the Phase 175 objectLayerRangeCount proxy.
+            readonly property int layerRangeCount: root.editorVm ? root.editorVm.objectLayerRangeCount(row.index) : 0
             readonly property bool objectExpanded: root.editorVm ? root.editorVm.objectExpanded(row.index) : true
             readonly property bool hasVolumeChildren: row.volumeCount > 0
             readonly property bool showGroupHeader: root.editorVm
@@ -486,6 +490,23 @@ Item {
                     }
                 }
 
+                // Phase 198 (PHASE198): per-object layer-range editor entry.
+                // Upstream opens GUI_ObjectLayers dialog from the object
+                // right-click. Here we delegate to requestObjectLayerRanges(),
+                // which emits a signal the host page observes (对齐上游
+                // GUI_ObjectList::OnContextMenu "Layers" + GUI_ObjectLayers).
+                CxMenuItem {
+                    text: row.layerRangeCount > 0
+                          ? qsTr("层高范围... (%1)").arg(row.layerRangeCount)
+                          : qsTr("层高范围...")
+                    enabled: !!root.editorVm && row.isSelected
+                             && root.editorVm.canRenameSelectedObject
+                    onTriggered: {
+                        if (root.editorVm)
+                            root.editorVm.requestObjectLayerRanges()
+                    }
+                }
+
                 MenuSeparator { }
 
                 // 复制/粘贴/克隆/剪切（对齐上游 create_extra_object_menu）
@@ -661,46 +682,87 @@ Item {
                 anchors.rightMargin: 4
                 spacing: 6
 
-                    Rectangle {
+                    // Phase 198 (PHASE198): expand/collapse disclosure triangle
+                    // for objects with volumes, matching upstream wxDataView
+                    // tree geometry (rotated arrow instead of +/- glyph).
+                    Item {
                         visible: row.hasVolumeChildren
-                        width: 14
-                        height: 14
-                        radius: 3
-                        color: objectExpandMA.containsMouse ? Theme.bgHover : "transparent"
+                        width: 16
+                        height: objectRow.height
 
-                        Text {
+                        Rectangle {
                             anchors.centerIn: parent
-                            text: row.objectExpanded ? "-" : "+"
-                            color: Theme.textDisabled
-                            font.pixelSize: Theme.fontSizeSM
-                            font.bold: true
-                        }
+                            width: 16
+                            height: 16
+                            radius: 3
+                            color: objectExpandMA.containsMouse ? Theme.bgHover : "transparent"
 
-                        MouseArea {
-                            id: objectExpandMA
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                if (root.editorVm)
-                                    root.editorVm.toggleObjectExpanded(row.index)
+                            Canvas {
+                                // Right-pointing triangle when collapsed, rotated
+                                // 90deg (down-pointing) when expanded.
+                                id: expandTriangle
+                                anchors.centerIn: parent
+                                width: 8
+                                height: 8
+                                rotation: row.objectExpanded ? 90 : 0
+                                Behavior on rotation { NumberAnimation { duration: 100 } }
+                                onPaint: {
+                                    var ctx = getContext("2d")
+                                    ctx.reset()
+                                    ctx.fillStyle = objectExpandMA.containsMouse
+                                                    ? Theme.textSecondary
+                                                    : Theme.textDisabled
+                                    ctx.beginPath()
+                                    ctx.moveTo(1, 1)
+                                    ctx.lineTo(7, 4)
+                                    ctx.lineTo(1, 7)
+                                    ctx.closePath()
+                                    ctx.fill()
+                                }
+                                // Repaint when hover/expanded state changes so the
+                                // fill color follows objectExpandMA.containsMouse.
+                                Connections {
+                                    target: objectExpandMA
+                                    function onContainsMouseChanged() { expandTriangle.requestPaint() }
+                                }
+                                Connections {
+                                    target: row
+                                    function onObjectExpandedChanged() { expandTriangle.requestPaint() }
+                                }
+                            }
+
+                            MouseArea {
+                                id: objectExpandMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (root.editorVm)
+                                        root.editorVm.toggleObjectExpanded(row.index)
+                                }
                             }
                         }
                     }
 
                     Item {
                         visible: !row.hasVolumeChildren
-                        width: visible ? 14 : 0
-                        height: 14
+                        width: visible ? 16 : 0
+                        height: objectRow.height
                     }
 
                 // 可见性切换小圆点
+                // Phase 198 (PHASE198): tooltip clarifies the print-state toggle.
                 Rectangle {
                     width: 8; height: 8; radius: 4
                     color: row.objPrintable ? Theme.accent : Theme.textDisabled
+                    ToolTip.visible: printToggleMA.containsMouse
+                    ToolTip.text: row.objPrintable ? qsTr("参与打印（点击禁用）")
+                                                   : qsTr("不参与打印（点击启用）")
                     MouseArea {
+                        id: printToggleMA
                         anchors.fill: parent
                         z: 2
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             if (root.editorVm)
@@ -758,6 +820,7 @@ Item {
                         spacing: 4
                         visible: row.plateLabel.length > 0 || !row.objPrintable
                                  || (root.editorVm && root.editorVm.objectOrganizeMode === 0 && row.moduleLabel.length > 0)
+                                 || row.layerRangeCount > 0
 
                         Rectangle {
                             id: objectListStatusPill
@@ -797,11 +860,56 @@ Item {
                             }
                         }
 
+                        // Phase 198 (PHASE198): layer-range count badge. Shows
+                        // the object has per-height overrides configured. Click
+                        // opens the layer-range editor (对齐上游 GUI_ObjectLayers
+                        // tree node hint).
+                        Rectangle {
+                            visible: row.layerRangeCount > 0
+                            radius: 3
+                            color: Theme.accentSubtle
+                            border.width: 1
+                            border.color: Theme.borderSubtle
+                            implicitWidth: layerRangeText.implicitWidth + 8
+                            implicitHeight: 16
+
+                            Text {
+                                id: layerRangeText
+                                anchors.centerIn: parent
+                                text: qsTr("层高 ×%1").arg(row.layerRangeCount)
+                                color: Theme.accent
+                                font.pixelSize: 8
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (root.editorVm) {
+                                        if (!row.isSelected)
+                                            root.editorVm.selectObject(row.index)
+                                        root.editorVm.requestObjectLayerRanges()
+                                    }
+                                }
+                            }
+                        }
+
                         Text {
                             visible: !row.objPrintable
                             text: qsTr("不参与打印")
                             color: Theme.textDisabled
                             font.pixelSize: Theme.fontSizeXS
+                        }
+
+                        // Phase 198 (PHASE198): volume-count hint, signals the
+                        // object is a multipart assembly (对齐上游 wxDataView
+                        // collapsed node showing child count implicitly).
+                        Text {
+                            visible: row.volumeCount > 0
+                            text: qsTr("%1 部件").arg(row.volumeCount)
+                            color: Theme.textTertiary
+                            font.pixelSize: 8
                         }
                     }
                 }

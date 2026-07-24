@@ -112,91 +112,10 @@ ApplicationWindow {
         }
     }
 
-    // Keyboard shortcuts dialog
-    Dialog {
+    // Keyboard shortcuts dialog (extracted to dialogs/KBShortcutsDialog.qml,
+    // Phase 195 UI-02; 5-group layout aligned with upstream KBShortcutsDialog.cpp).
+    KBShortcutsDialog {
         id: shortcutDialog
-        title: qsTr("快捷键一览")
-        modal: true
-        anchors.centerIn: parent
-        width: 480
-        height: 460
-        padding: 20
-
-        ScrollView {
-            anchors.fill: parent
-            clip: true
-            contentWidth: availableWidth
-            Column {
-                width: parent.width
-                spacing: 4
-                Repeater {
-                    model: [
-                        { key: "Ctrl+Z", desc: qsTr("撤销") },
-                        { key: "Ctrl+Y", desc: qsTr("重做") },
-                        { key: "Ctrl+X", desc: qsTr("剪切选中") },
-                        { key: "Ctrl+C", desc: qsTr("复制选中") },
-                        { key: "Ctrl+V", desc: qsTr("粘贴") },
-                        { key: "Ctrl+D", desc: qsTr("克隆选中") },
-                        { key: "Ctrl+K", desc: qsTr("克隆选中 (备)") },
-                        { key: "Delete", desc: qsTr("删除选中") },
-                        { key: "Escape", desc: qsTr("取消选择") },
-                        { key: "Ctrl+A", desc: qsTr("全选") },
-                        { key: "F", desc: qsTr("适应视图") },
-                        { key: "W", desc: qsTr("移动模式") },
-                        { key: "E", desc: qsTr("旋转模式") },
-                        { key: "R", desc: qsTr("缩放模式") },
-                        { key: "Space", desc: qsTr("播放/暂停预览动画") },
-                        { key: "Ctrl+U", desc: qsTr("测量工具") },
-                        { key: "Ctrl+I", desc: qsTr("导入模型") },
-                        { key: "Ctrl+O", desc: qsTr("打开项目") },
-                        { key: "Ctrl+S", desc: qsTr("保存项目") },
-                        { key: "Ctrl+P", desc: qsTr("偏好设置") },
-                        { key: "←/→", desc: qsTr("预览步进 ±100") },
-                        { key: "Home/End", desc: qsTr("预览跳到头/尾") },
-                        { key: "PgUp/PgDn", desc: qsTr("层范围 ±1 层") },
-                        { key: "Shift+PgUp/Dn", desc: qsTr("层范围 ±10 层") },
-                        { key: "Ctrl+1/3/6", desc: qsTr("预设视角 顶/右/等轴") },
-                        { key: "Ctrl+0", desc: qsTr("预设视角 前视") },
-                    ]
-                    delegate: RowLayout {
-                        width: parent.width
-                        spacing: 16
-                        Rectangle {
-                            width: 80; height: 22; radius: 4
-                            color: Theme.bgTooltip
-                            border.color: Theme.borderSubtle
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData.key; color: Theme.accent
-                                font.pixelSize: Theme.fontSizeSM; font.bold: true
-                            }
-                        }
-                        Text {
-                            text: modelData.desc; color: Theme.textSecondary
-                            font.pixelSize: Theme.fontSizeMD
-                        }
-                    }
-                }
-            }
-        }
-
-        footer: Rectangle {
-            width: parent.width; height: 40
-            color: "transparent"
-            Rectangle {
-                anchors.centerIn: parent
-                width: 60; height: 26; radius: 6; color: Theme.accent
-                Text {
-                    anchors.centerIn: parent
-                    text: qsTr("关闭"); color: Theme.textOnAccent
-                    font.pixelSize: Theme.fontSizeMD
-                }
-                MouseArea {
-                    anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                    onClicked: shortcutDialog.close()
-                }
-            }
-        }
     }
 
     // About dialog
@@ -631,7 +550,11 @@ ApplicationWindow {
     }
 
     // P8.4 — AMS settings dialog
-    AMSSettingsDialog { id: amsSettingsDialog }
+    // Phase 201 (v5.6): bound to AmsMaterialsViewModel (mock data + QSettings persistence).
+    AMSSettingsDialog {
+        id: amsSettingsDialog
+        amsVm: backend.amsMaterialsViewModel
+    }
 
     // P8.5 — Firmware dialog
     FirmwareDialog { id: firmwareDialog }
@@ -645,8 +568,11 @@ ApplicationWindow {
     // P8.6c — Print host dialog
     PrintHostDialog { id: printHostDialog }
 
-    // P10.1 — Plugin manager dialog
-    PluginManagerDialog { id: pluginManagerDialog }
+    // P10.1 — Plugin manager dialog (Phase 202: PluginService real backend)
+    PluginManagerDialog {
+        id: pluginManagerDialog
+        pluginService: backend.pluginService
+    }
 
     // P10.2 — Enable lite mode dialog
     EnableLiteModeDialog { id: enableLiteModeDialog }

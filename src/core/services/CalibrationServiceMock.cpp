@@ -1,9 +1,13 @@
 #include "CalibrationServiceMock.h"
 #include "SliceService.h"
+#include "ProjectServiceMock.h"
 #include <QTimer>
 #include <QDateTime>
 #include <QDebug>
 #include <QFile>
+#include <QDir>
+#include <QTemporaryFile>
+#include <QFileInfo>
 #include <QTextStream>
 #include <QRegularExpression>
 #include <cmath>
@@ -44,11 +48,14 @@ void CalibrationServiceMock::buildMockData()
     //   Start -> Preset -> Calibration -> [CoarseSave -> FineCalibration -> FineSave ->] Save
     //
     // Tech-debt: upstream CalibUtils loads dedicated test-tower models
-    // (resources/calib/*.drc) and applies per-mode config overrides (spiral_mode,
-    // wall_loops). Qt6 slices the current-plate geometry via cloneCurrentPlateModel().
-    // The GCode parameter sweep (speed/temperature/retraction) works regardless of
-    // the tower shape; only the precision geometry differs. Documented as
-    // deferred in 124-CONTEXT.md, NOT a Phase 124 blocker.
+    // (resources/calib/*.stl/.3mf/.step) and applies per-mode config overrides
+    // (spiral_mode, wall_loops). Qt6 slices the current-plate geometry via
+    // cloneCurrentPlateModel(). The GCode parameter sweep
+    // (speed/temperature/retraction) works regardless of the tower shape; only
+    // the precision geometry differs. Documented as deferred in 124-CONTEXT.md,
+    // NOT a Phase 124 blocker. Phase 197 closes this gap for the four tower
+    // modes (TempTower/Vol_speed/VFA/Retraction) by loading the bundled tower
+    // model from qrc:/qml/assets/calib/ as an extra object on the current plate.
 
     CalibrationType flowDynamics;
     flowDynamics.id = "flow_dynamics";
@@ -480,12 +487,66 @@ void CalibrationServiceMock::startCalibration(int itemIndex)
         if (calibType.calibMode != 0) {
             emit calibrationSliceRequested(calibType.calibMode, calibType.calibStart, calibType.calibEnd,
                                            calibType.calibStep, calibType.printNumbers, projectName);
-            m_sliceService->setCalibParams(calibType.calibMode, calibType.calibStart, calibType.calibEnd,
-                                           calibType.calibStep, calibType.printNumbers);
-            m_sliceService->startSlice(projectName);
-            dispatchedRealSlice = true;
-            qDebug("[Calib] calib slice dispatched: mode=%d start=%.3f end=%.3f step=%.4f",
-                   calibType.calibMode, calibType.calibStart, calibType.calibEnd, calibType.calibStep);
+
+            // Phase 197: for the four tower modes, load the dedicated upstream
+            // tower model onto the current plate BEFORE slicing -- mirrors
+            // upstream Plater::calib_temp/vol_speed/VFA/retraction which call
+            // new_project()+add_model(<calib>/<tower>.stl). This replaces the
+            // user's current-plate geometry with the precision tower; the
+            // G-code parameter sweep (temp/speed/retraction injection in
+            // GCode.cpp) is mode-driven and tower-shape-agnostic, so it is
+            // unchanged. PA (1) and FlowRate (5) keep the current-plate model.
+            // loadFile is async (QtConcurrent::run + loadFinished), so we defer
+            // setCalibParams/startSlice to onCalibTowerLoadFinished. When
+            // ProjectServiceMock is unavailable or extraction fails, fall back
+            // to the legacy cloneCurrentPlateModel() geometry path.
+            const QString towerQrc = towerModelQrcPathForMode(calibType.calibMode);
+            if (m_projectService && !towerQrc.isEmpty()) {
+                const QString towerTempPath = extractQrcToTempFile(towerQrc);
+                if (!towerTempPath.isEmpty()) {
+                    m_pendingCalibTowerLoad = true;
+                    // Wire one-shot loadFinished -> setCalibParams + startSlice.
+                    // The connection removes itself after firing so a later user
+                    // loadFile is not intercepted.
+                    connect(m_projectService, &ProjectServiceMock::loadFinished, this,
+                            [this, mode = calibType.calibMode, start = calibType.calibStart,
+                             end = calibType.calibEnd, step = calibType.calibStep,
+                             printNumbers = calibType.printNumbers, projectName]
+                            (bool ok, const QString & /*msg*/) {
+                        if (!m_pendingCalibTowerLoad) return;
+                        m_pendingCalibTowerLoad = false;
+                        disconnect(m_projectService, &ProjectServiceMock::loadFinished, this, nullptr);
+                        if (!ok || !m_sliceService) {
+                            qWarning("[Calib] tower load failed or no SliceService - aborting slice");
+                            if (m_currentItem >= 0)
+                                setStatus(m_currentItem, CalibrationStatus::Failed);
+                            m_isRunning = false;
+                            emit isRunningChanged();
+                            emit calibrationFinished(false);
+                            return;
+                        }
+                        m_sliceService->setCalibParams(mode, start, end, step, printNumbers);
+                        m_sliceService->startSlice(projectName);
+                    });
+                    m_projectService->loadFile(towerTempPath);
+                    dispatchedRealSlice = true; // slice will start after loadFinished
+                    qDebug("[Calib] tower model load requested: mode=%d qrc=%s",
+                           calibType.calibMode, towerQrc.toUtf8().constData());
+                } else {
+                    qWarning("[Calib] tower extract failed - falling back to current plate; mode=%d",
+                             calibType.calibMode);
+                }
+            }
+
+            if (!dispatchedRealSlice) {
+                // Legacy / fallback path: slice the current-plate geometry as-is.
+                m_sliceService->setCalibParams(calibType.calibMode, calibType.calibStart, calibType.calibEnd,
+                                               calibType.calibStep, calibType.printNumbers);
+                m_sliceService->startSlice(projectName);
+                dispatchedRealSlice = true;
+                qDebug("[Calib] calib slice dispatched: mode=%d start=%.3f end=%.3f step=%.4f",
+                       calibType.calibMode, calibType.calibStart, calibType.calibEnd, calibType.calibStep);
+            }
         } else {
             qDebug("[Calib] type '%s' has no CalibMode mapping - mock only", calibType.id.toUtf8().constData());
         }
@@ -511,6 +572,13 @@ void CalibrationServiceMock::cancelCalibration()
     if (!m_isRunning) return;
     m_timer->stop();
     m_isRunning = false;
+
+    // Phase 197: if a dedicated tower-model load is in flight, drop the
+    // one-shot loadFinished connection so the deferred slice never starts.
+    if (m_pendingCalibTowerLoad && m_projectService) {
+        disconnect(m_projectService, &ProjectServiceMock::loadFinished, this, nullptr);
+    }
+    m_pendingCalibTowerLoad = false;
 
     // Revert to NotStarted on cancel
     if (m_currentItem >= 0)
@@ -866,4 +934,83 @@ void CalibrationServiceMock::setSliceService(SliceService *slice)
         connect(m_sliceService, &SliceService::sliceFailed,
                 this, &CalibrationServiceMock::onSliceFailed);
     }
+}
+
+void CalibrationServiceMock::setProjectService(ProjectServiceMock *project)
+{
+    // Phase 197: weak reference; ProjectServiceMock owns its own lifetime
+    // (created in BackendContext). We only store the pointer for the tower
+    // loadFile() path; no signal wiring is needed because loadFile emits its
+    // own loadFinished and we do not block on it here.
+    m_projectService = project;
+}
+
+// Phase 197: map a CalibMode to its bundled tower-model qrc path. Mirrors the
+// per-mode add_model() call site in upstream Plater.cpp:
+//   calib_temp            -> resources/calib/temperature_tower/temperature_tower.stl  (Plater.cpp:9804)
+//   calib_max_vol_speed   -> resources/calib/volumetric_speed/SpeedTestStructure.step (Plater.cpp:9853)
+//   calib_VFA             -> resources/calib/vfa/VFA.stl                              (Plater.cpp:9971)
+//   calib_retraction      -> resources/calib/retraction/retraction_tower.stl         (Plater.cpp:9930)
+// The bundled copies live under qrc:/qml/assets/calib/ (registered in
+// qml.qrc). PA (mode 1) and FlowRate (mode 5) intentionally have no tower
+// model here: upstream generates their geometry in-code (pa_pattern.3mf /
+// flowrate-test-pass*.3mf are handled by separate wizard paths), so the Qt6
+// calibration slice keeps using the current-plate geometry for those.
+QString CalibrationServiceMock::towerModelQrcPathForMode(int calibMode)
+{
+    switch (calibMode) {
+        case 6: return QStringLiteral(":/qml/assets/calib/temperature_tower.stl");
+        case 7: return QStringLiteral(":/qml/assets/calib/SpeedTestStructure.step");
+        case 8: return QStringLiteral(":/qml/assets/calib/VFA.stl");
+        case 9: return QStringLiteral(":/qml/assets/calib/retraction_tower.stl");
+        default: return QString{};
+    }
+}
+
+// Phase 197: libslic3r's Model::read_from_file uses plain filesystem I/O
+// (load_stl/load_step via boost::nowide), so it cannot read Qt's virtual qrc
+// path directly. We materialize the bundled resource into a temp file with the
+// correct extension (load_step keys off the .step suffix, Model.cpp:213-215)
+// and hand back the filesystem path. QTemporaryFile::close() + autoRemove
+// semantics would delete the file before read_from_file runs, so we set
+// autoRemove=false and leave cleanup to the OS temp dir.
+QString CalibrationServiceMock::extractQrcToTempFile(const QString &qrcPath)
+{
+    if (qrcPath.isEmpty()) return QString{};
+    QFile in(qrcPath);
+    if (!in.open(QIODevice::ReadOnly)) {
+        qWarning("[Calib] tower extract: cannot open qrc %s",
+                 qrcPath.toUtf8().constData());
+        return QString{};
+    }
+    const QByteArray bytes = in.readAll();
+    in.close();
+    if (bytes.isEmpty()) {
+        qWarning("[Calib] tower extract: empty qrc %s", qrcPath.toUtf8().constData());
+        return QString{};
+    }
+
+    // Preserve the extension so load_step / load_stl dispatch correctly.
+    const QString suffix = QFileInfo(qrcPath).suffix();
+    QString templateName = QStringLiteral("calib_tower_XXXXXX");
+    if (!suffix.isEmpty())
+        templateName += QStringLiteral(".") + suffix;
+
+    QTemporaryFile tmp(QDir::tempPath() + QDir::separator() + templateName);
+    tmp.setAutoRemove(false);
+    if (!tmp.open()) {
+        qWarning("[Calib] tower extract: cannot create temp file");
+        return QString{};
+    }
+    if (tmp.write(bytes) != bytes.size()) {
+        qWarning("[Calib] tower extract: short write to %s",
+                 tmp.fileName().toUtf8().constData());
+        return QString{};
+    }
+    tmp.close();
+    qDebug("[Calib] tower extract: %s -> %s (%lld bytes)",
+           qrcPath.toUtf8().constData(),
+           tmp.fileName().toUtf8().constData(),
+           static_cast<qint64>(bytes.size()));
+    return tmp.fileName();
 }

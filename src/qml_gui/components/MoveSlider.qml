@@ -15,20 +15,20 @@ Item {
         anchors.fill: parent
         spacing: 6
 
-        MoveStepButton {
+        CxStepButton {
             id: prevMajorMoveButton
             label: "<<"
-            delta: -10
+            stepValue: -10
             controlEnabled: root.previewVm && root.totalMoves > 0
-            onTriggered: root.previewVm.stepCurrentMove(prevMajorMoveButton.delta)
+            onTriggered: root.previewVm.stepCurrentMove(prevMajorMoveButton.stepValue)
         }
 
-        MoveStepButton {
+        CxStepButton {
             id: prevMoveButton
             label: "<"
-            delta: -1
+            stepValue: -1
             controlEnabled: root.previewVm && root.totalMoves > 0
-            onTriggered: root.previewVm.stepCurrentMove(prevMoveButton.delta)
+            onTriggered: root.previewVm.stepCurrentMove(prevMoveButton.stepValue)
         }
 
         CxButton {
@@ -161,53 +161,20 @@ Item {
             horizontalAlignment: Text.AlignRight
         }
 
-        MoveStepButton {
+        CxStepButton {
             id: nextMoveButton
             label: ">"
-            delta: 1
+            stepValue: 1
             controlEnabled: root.previewVm && root.totalMoves > 0
-            onTriggered: root.previewVm.stepCurrentMove(nextMoveButton.delta)
+            onTriggered: root.previewVm.stepCurrentMove(nextMoveButton.stepValue)
         }
 
-        MoveStepButton {
+        CxStepButton {
             id: nextMajorMoveButton
             label: ">>"
-            delta: 10
+            stepValue: 10
             controlEnabled: root.previewVm && root.totalMoves > 0
-            onTriggered: root.previewVm.stepCurrentMove(nextMajorMoveButton.delta)
-        }
-    }
-
-    component MoveStepButton: Rectangle {
-        id: moveStepButtonRoot
-        property string label: ""
-        property int delta: 0
-        property bool controlEnabled: true
-        signal triggered()
-
-        Layout.preferredWidth: 28
-        Layout.preferredHeight: 26
-        radius: 4
-        color: stepMouse.containsMouse && moveStepButtonRoot.controlEnabled ? Theme.bgHover : Theme.bgElevated
-        border.width: 1
-        border.color: stepMouse.containsMouse && moveStepButtonRoot.controlEnabled ? Theme.accentDark : Theme.borderSubtle
-        opacity: moveStepButtonRoot.controlEnabled ? 1.0 : 0.45
-
-        Text {
-            anchors.centerIn: parent
-            text: moveStepButtonRoot.label
-            color: Theme.textPrimary
-            font.pixelSize: Theme.fontSizeSM
-            font.family: Theme.fontMono
-        }
-
-        MouseArea {
-            id: stepMouse
-            anchors.fill: parent
-            enabled: moveStepButtonRoot.controlEnabled
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: moveStepButtonRoot.triggered()
+            onTriggered: root.previewVm.stepCurrentMove(nextMajorMoveButton.stepValue)
         }
     }
 }

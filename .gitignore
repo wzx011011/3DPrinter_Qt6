@@ -59,3 +59,13 @@ __pycache__/
 # third_party/ directories are tracked individually
 
 docs/
+
+# === Local Qt/deps caches and logs (v5.5+) ===
+.deps/
+aqtinstall.log
+
+# === Translation backups (v5.6 Phase 204) ===
+i18n/_backup_phase204/
+
+# === ZCode session plans (ephemeral) ===
+.zcode/plans/

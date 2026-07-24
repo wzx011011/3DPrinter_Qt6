@@ -1654,12 +1654,29 @@ void EditorViewModel::embossSelectedAsync()
             refreshMeshCacheAndFitHint();
             emit stateChanged();
             emit embossVolumeAdded(objectIndex, volumeName);
+            if (m_embossRunning)
+            {
+              m_embossRunning = false;
+              emit embossRunningChanged();
+            }
           }, Qt::UniqueConnection);
   connect(projectService_, &ProjectServiceMock::embossVolumeFailed,
           this, [this](const QString &reason) {
             qWarning("[EditorViewModel] async emboss failed: %s", qUtf8Printable(reason));
             emit embossVolumeFailed(reason);
+            if (m_embossRunning)
+            {
+              m_embossRunning = false;
+              emit embossRunningChanged();
+            }
           }, Qt::UniqueConnection);
+  // Phase 196 (FEAT-01): mark running so QML shows the spinner (CxBusyIndicator)
+  // during the async text generation.
+  if (!m_embossRunning)
+  {
+    m_embossRunning = true;
+    emit embossRunningChanged();
+  }
   projectService_->addTextVolumeAsync(idx, m_embossText);
 }
 
@@ -1667,6 +1684,17 @@ void EditorViewModel::cancelEmboss()
 {
   if (projectService_)
     projectService_->cancelEmbossVolume();
+  if (m_embossRunning)
+  {
+    m_embossRunning = false;
+    emit embossRunningChanged();
+  }
+}
+
+// Phase 196 (FEAT-01): true while an async emboss job is in flight.
+bool EditorViewModel::embossRunning() const
+{
+  return m_embossRunning;
 }
 
 // ── MeshBoolean gizmo (对齐上游 GLGizmoMeshBoolean) ──
@@ -3478,6 +3506,13 @@ int EditorViewModel::selectedVolumeCount() const
   return m_selectedVolumeIndices.size();
 }
 
+// Phase 198 (PHASE198): getter for the selectedVolumeIndex Q_PROPERTY. Mirrors
+// the private member used by settingsTargetVolumeIndex.
+int EditorViewModel::selectedVolumeIndex() const
+{
+  return m_selectedVolumeIndex;
+}
+
 bool EditorViewModel::canOpenSelectionSettings() const
 {
   if (m_selectedVolumeObjectSourceIndex >= 0)
@@ -4931,6 +4966,17 @@ void EditorViewModel::requestSelectionSettings()
   emit selectionSettingsRequested();
 }
 
+// Phase 198 (PHASE198): request opening the per-object layer-range editor.
+// Requires exactly one source object selected (the dialog reads ranges by
+// selectedObjectIndex). Mirrors requestSelectionSettings's signal pattern.
+void EditorViewModel::requestObjectLayerRanges()
+{
+  if (m_selectedSourceIndices.size() != 1)
+    return;
+
+  emit objectLayerRangeRequested();
+}
+
 // Phase 174 (FEAT-01): per-object/volume scoped option API proxies. Forward
 // to ProjectServiceMock so the SelectionSettingsDialog QML can read/write
 // per-object print/filament overrides via the viewmodel (QML boundary rule —
@@ -5601,6 +5647,12 @@ int EditorViewModel::sliceProgress() const
 }
 
 bool EditorViewModel::isSlicing() const { return sliceService_ && sliceService_->slicing(); }
+
+// Phase 196 (FEAT-01): expose SliceService::State to QML.
+int EditorViewModel::sliceState() const
+{
+  return sliceService_ ? static_cast<int>(sliceService_->sliceState()) : 0;
+}
 
 QString EditorViewModel::sliceStatusLabel() const
 {

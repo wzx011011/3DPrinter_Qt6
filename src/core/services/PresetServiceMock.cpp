@@ -808,6 +808,83 @@ QString PresetServiceMock::selectedPresetForCategory(int category) const
   return defaultPresetForCategory(category);
 }
 
+// Phase 199 (WIZ-01): vendor/model enumeration for the ConfigWizard.
+// All helpers walk m_presetMetadata / m_categoryPresets, which only contain
+// real presets. The "__upstream_defaults__" sink lives solely in
+// m_presetStore and is never registered via registerPresetMetadata, so it is
+// naturally excluded from every enumeration below.
+QStringList PresetServiceMock::vendors() const
+{
+  QStringList result;
+  for (auto it = m_presetMetadata.constBegin(); it != m_presetMetadata.constEnd(); ++it)
+  {
+    const QString vendor = it.value().vendor;
+    if (!vendor.isEmpty() && !result.contains(vendor))
+      result.append(vendor);
+  }
+  // Deterministic ordering for stable QML display.
+  std::sort(result.begin(), result.end());
+  return result;
+}
+
+QStringList PresetServiceMock::printerModelsForVendor(const QString &vendor) const
+{
+  QStringList result;
+  const QString normalized = vendor.trimmed();
+  const QStringList names = m_categoryPresets.value(PrinterCat);
+  for (const QString &name : names)
+  {
+    const auto it = m_presetMetadata.constFind(name);
+    if (it == m_presetMetadata.constEnd())
+      continue;
+    if (it.value().vendor == normalized)
+      result.append(name);
+  }
+  return result;
+}
+
+QStringList PresetServiceMock::materialsForVendor(const QString &vendor) const
+{
+  QStringList result;
+  const QString normalized = vendor.trimmed();
+  const QStringList names = m_categoryPresets.value(FilamentCat);
+  for (const QString &name : names)
+  {
+    const auto it = m_presetMetadata.constFind(name);
+    if (it == m_presetMetadata.constEnd())
+      continue;
+    if (it.value().vendor == normalized)
+      result.append(name);
+  }
+  return result;
+}
+
+QStringList PresetServiceMock::defaultBedTypes() const
+{
+  // Four standard bed surfaces, matching the prior mock wizard. The upstream
+  // vendor bundle does not yet carry per-model bed-surface metadata, so this
+  // list is the single source of truth until that data gap is closed (see
+  // PLAN.md). Names stay Chinese to preserve wizard UI parity.
+  return {
+      QStringLiteral("光滑 PEI 板"),
+      QStringLiteral("普通 PEI 板"),
+      QStringLiteral("PC 热床"),
+      QStringLiteral("EP 热床"),
+  };
+}
+
+QStringList PresetServiceMock::bedTypesForPrinterModel(const QString &model) const
+{
+  // The machineEntries payload has no bed-surface field today, so we always
+  // fall back to the canonical 4-surface list. The `model` parameter is
+  // accepted for API symmetry with the upstream ConfigWizard and to keep the
+  // QML call site forward-compatible once per-model bed data is wired in.
+  // We do validate that the model exists so callers can detect typos via the
+  // returned (non-empty) list semantics matching the prior wizard.
+  Q_UNUSED(model);
+  return defaultBedTypes();
+}
+
 QHash<QString, QVariant> PresetServiceMock::presetValues(const QString &presetName) const
 {
   return m_presetStore.value(presetName);

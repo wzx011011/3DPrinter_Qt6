@@ -136,6 +136,10 @@ class SliceService final : public QObject
   Q_PROPERTY(bool slicing READ slicing NOTIFY slicingChanged)
   Q_PROPERTY(QString statusLabel READ statusLabel NOTIFY progressChanged)
   Q_PROPERTY(QString outputPath READ outputPath NOTIFY resultChanged)
+  // Phase 196 (FEAT-01): expose the slice state enum so SliceProgress.qml can
+  // render Cancelled/Error-specific UI (aligned with upstream
+  // BackgroundSlicingProcess / ProgressIndicator).
+  Q_PROPERTY(State sliceState READ sliceState NOTIFY sliceStateChanged)
 
 public:
   enum class State {
@@ -225,6 +229,10 @@ signals:
   void slicingChanged();
   void progressUpdated(int percent, const QString &label);
   void resultChanged();
+  /// Phase 196 (FEAT-01): emitted when sliceState_ changes (Idle/Slicing/
+  /// Exporting/Completed/Cancelled/Error). SliceProgress.qml binds this to
+  /// render Cancelled/Error-specific UI.
+  void sliceStateChanged();
   void sliceResultCleared();
   void sliceFinished(const QString &estimatedTime);
   /// Phase 100 (WTREAD-01): delivers the captured-by-value wipe-tower geometry

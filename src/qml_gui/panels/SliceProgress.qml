@@ -12,6 +12,11 @@ Item {
 
     readonly property int pct: root.editorVm ? root.editorVm.sliceProgress() : 0
     readonly property bool slicingNow: root.editorVm ? root.editorVm.isSlicing() : false
+    // Phase 196 (FEAT-01): SliceService::State (Idle=0,Slicing=1,Exporting=2,
+    // Completed=3,Cancelled=4,Error=5). Drives dedicated Cancelled/Error banners.
+    readonly property int sliceStateEnum: root.editorVm ? root.editorVm.sliceState() : 0
+    readonly property bool sliceCancelled: root.sliceStateEnum === 4
+    readonly property bool sliceError: root.sliceStateEnum === 5
     readonly property string statusLabel: root.editorVm ? root.editorVm.sliceStatusLabel : qsTr("等待切片")
     readonly property string estimatedTime: root.editorVm ? root.editorVm.sliceEstimatedTime : ""
     readonly property string outputPath: root.editorVm ? root.editorVm.sliceOutputPath : ""
@@ -66,6 +71,28 @@ Item {
                     color: root.slicingNow ? Theme.textPrimary : Theme.textTertiary
                     font.pixelSize: Theme.fontSizeMD
                 }
+            }
+        }
+
+        // ── Phase 196 (FEAT-01): Cancelled/Error 状态横幅（对齐上游
+        // BackgroundSlicingProcess / ProgressIndicator 的状态展示） ──────
+        Rectangle {
+            Layout.fillWidth: true
+            visible: root.sliceCancelled || root.sliceError
+            height: visible ? 36 : 0
+            radius: 4
+            color: root.sliceError ? Theme.bgErrorSubtle : Theme.bgWarningSubtle
+            border.width: 1
+            border.color: root.sliceError ? Theme.statusError : Theme.statusWarning
+
+            Text {
+                anchors.centerIn: parent
+                text: root.sliceError
+                      ? qsTr("✖ 切片失败，请检查模型与参数后重试")
+                      : qsTr("✖ 切片已取消")
+                color: root.sliceError ? Theme.statusError : Theme.statusWarning
+                font.pixelSize: Theme.fontSizeSM
+                font.bold: true
             }
         }
 

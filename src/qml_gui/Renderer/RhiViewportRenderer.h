@@ -186,6 +186,14 @@ private:
   bool m_highlightVertexBufferUploaded = false;
   bool m_cameraUniformBufferUploaded = false;
   bool m_pipelineFailed = false;
+  // Phase 210 (MIT-03 / Seam C): frame counter for the first-N-frames force
+  // window. After a swapchain rebuild (initialize()) the counter resets to 0
+  // and the first 3 frames unconditionally upload the camera UBO (and all
+  // scene buffers, via the *Uploaded flag resets) so the first SRB bind never
+  // sees uninitialized GPU memory under D3D12. Incremented at the start of
+  // render(); the value seen during upload logic is 1-based on frame 1, so
+  // the force window is m_frameCount <= 3 (frames 1..3).
+  int m_frameCount = 0;
   quint32 m_bedFillBufferBytes = 0;
   quint32 m_bedLineBufferBytes = 0;
   quint32 m_modelVertexBufferBytes = 0;
@@ -374,6 +382,16 @@ private:
   QRhiReadbackResult m_thumbnailReadbackResult;
   int m_thumbnailResultPlateIndex = 0;
   int m_thumbnailResultSize = 0;
+  // Phase 208 (MIT-01 / Seam A): thumbnail readback batch deferred from the
+  // frame in which the offscreen capture pass ran to the NEXT frame's on-
+  // screen beginPass. The previous code issued cb->resourceUpdate() directly
+  // on the bare command buffer after the thumbnail pass ended - the only
+  // pass-external resourceUpdate in this file, and a plausible D3D12 0xC0000005
+  // contributor. Holding the batch for one frame and merging it into the next
+  // beginPass's 4th-argument batch keeps all resource updates folded into a
+  // pass, matching QRhi's documented usage. Render-thread owned; QRhi does not
+  // take ownership (the batch is returned to the pool via delete after merge).
+  QRhiResourceUpdateBatch *m_pendingReadbackUpdates = nullptr;
   // Item pointer for the queued callback (QPointer survives item recreation
   // and nulls itself if the item is destroyed before the readback completes).
   QPointer<RhiViewport> m_viewportItem;

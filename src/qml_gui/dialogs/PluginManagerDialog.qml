@@ -4,9 +4,14 @@ import QtQuick.Layouts
 import ".."
 import "../controls"
 
-// P10.1 -- PluginManagerDialog (aligns with upstream WebDownPluginDlg / plugin management)
-// Plugin download, install, enable/disable management
-// Usage: PluginManagerDialog { id: dlg }  ->  dlg.open()
+// P10.1 -- PluginManagerDialog (Phase 202: real PluginService backend).
+// Aligns with upstream WebDownPluginDlg (plugin download / install /
+// enable-disable management). The data source is PluginService (C++) with
+// QSettings persistence under plugins/*. installPlugin is a mock state flip
+// (no real HTTP download / no Python) -- see PLAN.md.
+//
+// Usage: PluginManagerDialog { id: dlg; pluginService: backend.pluginService }
+//   -> dlg.open()
 
 CxDialog {
     id: root
@@ -19,36 +24,14 @@ CxDialog {
     width: 440
     height: 340
 
-    // Mock plugin data (aligns with upstream plugin registry)
-    property var plugins: [
-        {
-            name: qsTr("网络通信插件"),
-            version: "1.2.0",
-            description: qsTr("Bambu Lab 打印机网络通信支持"),
-            installed: true,
-            enabled: true,
-            size: qsTr("12.5 MB"),
-            status: qsTr("已安装")
-        },
-        {
-            name: qsTr("高级支撑生成器"),
-            version: "2.0.1",
-            description: qsTr("基于树形结构的智能支撑生成"),
-            installed: false,
-            enabled: false,
-            size: qsTr("8.3 MB"),
-            status: qsTr("可下载")
-        },
-        {
-            name: qsTr("AI 切片优化"),
-            version: "0.9.0",
-            description: qsTr("基于 AI 模型的切片参数自动优化"),
-            installed: false,
-            enabled: false,
-            size: qsTr("45.2 MB"),
-            status: qsTr("可下载")
-        }
-    ]
+    // Phase 202: backend binding. Caller (main.qml) sets
+    // pluginService: backend.pluginService. Falls back to a null-safe render
+    // when unset so the dialog stays usable in isolation.
+    property var pluginService: null
+
+    // Live view of the registry. Re-evaluated on every pluginService
+    // stateChanged (the single batch NOTIFY signal).
+    readonly property var _plugins: pluginService ? pluginService.plugins : []
 
     contentItem: ColumnLayout {
         width: root.width
@@ -56,7 +39,7 @@ CxDialog {
         anchors.margins: Theme.spacingXL
         // Plugin list
         Repeater {
-            model: root.plugins
+            model: root._plugins
 
             Rectangle {
                 Layout.fillWidth: true
@@ -117,32 +100,52 @@ CxDialog {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Theme.spacingMD
+                        // Phase 202: enable/disable routes through the
+                        // PluginService (persisted). Disabled until the row is
+                        // installed (mirrors pre-Phase-202 behavior).
                         CxCheckBox {
-                            text: modelData.installed ? qsTr("启用") : qsTr("安装")
-                            checked: modelData.enabled
-                            enabled: modelData.installed
+                            text: modelData.isInstalled ? qsTr("启用") : qsTr("安装")
+                            checked: modelData.isEnabled
+                            enabled: modelData.isInstalled
+                            onCheckedChanged: {
+                                if (!root.pluginService)
+                                    return
+                                // Guard against the binding seeding the value:
+                                // only act on a real user-initiated delta.
+                                if (checked !== modelData.isEnabled)
+                                    root.pluginService.setPluginEnabled(index, checked)
+                            }
                         }
 
                         Text {
                             text: modelData.status
-                            color: modelData.installed ? Theme.accent : Theme.textTertiary
+                            color: modelData.isInstalled ? Theme.accent : Theme.textTertiary
                             font.pixelSize: Theme.fontSizeXS
                         }
 
                         Item { Layout.fillWidth: true }
 
+                        // Phase 202: mock install (state flip, no real download).
                         CxButton {
-                            visible: !modelData.installed
+                            visible: !modelData.isInstalled
                             text: qsTr("下载")
                             cxStyle: CxButton.Style.Secondary
                             compact: true
+                            onClicked: {
+                                if (root.pluginService)
+                                    root.pluginService.installPlugin(index)
+                            }
                         }
 
                         CxButton {
-                            visible: modelData.installed
+                            visible: modelData.isInstalled
                             text: qsTr("卸载")
                             cxStyle: CxButton.Style.Secondary
                             compact: true
+                            onClicked: {
+                                if (root.pluginService)
+                                    root.pluginService.uninstallPlugin(index)
+                            }
                         }
                     }
                 }
@@ -176,6 +179,16 @@ CxDialog {
             }
 
             Item { Layout.fillWidth: true }
+
+            // Phase 202: refresh reloads the registry + persisted state.
+            CxButton {
+                text: qsTr("刷新")
+                cxStyle: CxButton.Style.Secondary
+                onClicked: {
+                    if (root.pluginService)
+                        root.pluginService.refreshPluginList()
+                }
+            }
 
             CxButton {
                 text: qsTr("关闭")

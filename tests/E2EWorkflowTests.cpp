@@ -33,9 +33,11 @@ namespace
   static const QString kStlPath = QDir::cleanPath(
       QStringLiteral(QT_TESTCASE_SOURCEDIR) +
       QStringLiteral("/third_party/OrcaSlicer/tests/data/test_3mf/Prusa.stl"));
+  // Keep the multi-material fixture owned by this repository rather than the
+  // local state of the optional OrcaSlicer submodule.
   static const QString k3mfPath = QDir::cleanPath(
       QStringLiteral(QT_TESTCASE_SOURCEDIR) +
-      QString::fromUtf8("/third_party/OrcaSlicer/tests/data/test_3mf/Ger\303\244te/B\303\274chse.3mf"));
+      QStringLiteral("/tests/data/multi_material_fixture.3mf"));
   static const QString kObjPath = QDir::cleanPath(
       QStringLiteral(QT_TESTCASE_SOURCEDIR) +
       QStringLiteral("/third_party/OrcaSlicer/tests/data/20mm_cube.obj"));
@@ -54,7 +56,17 @@ namespace
     QStringList matches;
     QDirIterator it(root, patterns, QDir::Files, QDirIterator::Subdirectories);
     while (it.hasNext())
-      matches.append(QDir::toNativeSeparators(it.next()));
+    {
+      const QString path = QDir::toNativeSeparators(it.next());
+      // Phase 197 (FEAT-02) ships upstream calibration tower models under
+      // assets/calib/ (temperature_tower.stl, SpeedTestStructure.step, etc.).
+      // These are slice-input geometry, not import-format test fixtures, so
+      // exclude the calib asset directory from the import-coverage scan.
+      if (path.contains(QStringLiteral("assets\\calib")) ||
+          path.contains(QStringLiteral("assets/calib")))
+        continue;
+      matches.append(path);
+    }
     matches.sort(Qt::CaseInsensitive);
     return matches;
   }

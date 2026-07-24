@@ -244,7 +244,7 @@ Item {
                 Layout.fillHeight: true
                 spacing: 4
 
-                Badge {
+                CxBadge {
                     id: sourceBadge
                     visible: root.valueSource !== ""
                     label: root.displayValueSource(root.valueSource)
@@ -252,7 +252,7 @@ Item {
                     fillToken: Theme.bgInset
                 }
 
-                Badge {
+                CxBadge {
                     id: readOnlyBadge
                     visible: root.oRO
                     label: "RO"
@@ -260,7 +260,7 @@ Item {
                     fillToken: Theme.bgPanel
                 }
 
-                Badge {
+                CxBadge {
                     id: nullableBadge
                     visible: root.oNullable
                     label: "Inh"
@@ -268,7 +268,7 @@ Item {
                     fillToken: Theme.bgInset
                 }
 
-                Badge {
+                CxBadge {
                     id: vectorBadge
                     visible: root.oIsVector
                     label: "E"
@@ -276,7 +276,7 @@ Item {
                     fillToken: Theme.bgInset
                 }
 
-                Badge {
+                CxBadge {
                     id: boundsBadge
                     visible: root.hasBounds
                     label: "rng"
@@ -322,10 +322,11 @@ Item {
                         onValueModified: root.optionModel.setValue(root.optIdx, value)
                     }
 
-                    NumericEdit {
+                    CxNumericEdit {
                         visible: root.oType === "double"
                         Layout.preferredWidth: root.compact ? root.compactFieldWidth : 90
-                        height: root.compact ? 24 : Theme.controlHeightSM
+                        Layout.preferredHeight: root.compact ? 24 : Theme.controlHeightSM
+                        decimals: root.oType === "int" || root.oType === "percent" ? 0 : 3
                         text: root.formattedNumber(root.oVal)
                         enabled: !root.oRO
                         onCommit: (valueText) => root.setNumericValue(valueText)
@@ -356,10 +357,11 @@ Item {
                         Layout.alignment: Qt.AlignVCenter
                     }
 
-                    NumericEdit {
+                    CxNumericEdit {
                         id: rangeMinEditor
                         Layout.preferredWidth: root.compactFieldWidth
-                        height: root.compact ? 24 : Theme.controlHeightSM
+                        Layout.preferredHeight: root.compact ? 24 : Theme.controlHeightSM
+                        decimals: root.oType === "int" || root.oType === "percent" ? 0 : 3
                         text: root.formattedNumber(root.oVal)
                         enabled: !root.oRO
                         onCommit: (valueText) => root.setNumericValue(valueText)
@@ -381,10 +383,11 @@ Item {
                         Layout.alignment: Qt.AlignVCenter
                     }
 
-                    NumericEdit {
+                    CxNumericEdit {
                         id: rangeMaxEditor
                         Layout.preferredWidth: root.compactFieldWidth
-                        height: root.compact ? 24 : Theme.controlHeightSM
+                        Layout.preferredHeight: root.compact ? 24 : Theme.controlHeightSM
+                        decimals: root.oType === "int" || root.oType === "percent" ? 0 : 3
                         text: root.formattedNumber(root.oMax)
                         enabled: !root.oRO
                         onCommit: (valueText) => root.setNumericValue(valueText)
@@ -472,60 +475,5 @@ Item {
         hoverEnabled: true
         acceptedButtons: Qt.NoButton
         z: -1
-    }
-
-    component Badge: Rectangle {
-        property string label: ""
-        property color colorToken: Theme.textTertiary
-        property color fillToken: Theme.bgInset
-
-        Layout.preferredWidth: Math.max(18, badgeText.implicitWidth + 8)
-        Layout.preferredHeight: 16
-        radius: 3
-        color: fillToken
-        border.width: 1
-        border.color: Theme.borderSubtle
-
-        Text {
-            id: badgeText
-            anchors.centerIn: parent
-            text: parent.label
-            color: parent.colorToken
-            font.pixelSize: Theme.fontSizeXS
-            font.bold: true
-        }
-    }
-
-    component NumericEdit: Rectangle {
-        id: editor
-        property alias text: edit.text
-        signal commit(string valueText)
-
-        radius: Theme.radiusSM
-        color: Theme.bgInset
-        border.width: 1
-        border.color: edit.activeFocus ? Theme.borderFocus
-                     : enabled ? Theme.borderInput
-                     : Theme.borderSubtle
-        opacity: enabled ? 1.0 : 0.55
-
-        TextInput {
-            id: edit
-            anchors.fill: parent
-            anchors.leftMargin: 6
-            anchors.rightMargin: 6
-            verticalAlignment: Text.AlignVCenter
-            horizontalAlignment: Text.AlignRight
-            color: Theme.textPrimary
-            font.pixelSize: Theme.fontSizeSM
-            font.bold: true
-            selectByMouse: true
-            readOnly: !editor.enabled
-            validator: DoubleValidator {
-                decimals: root.oType === "int" || root.oType === "percent" ? 0 : 3
-                notation: DoubleValidator.StandardNotation
-            }
-            onEditingFinished: editor.commit(text)
-        }
     }
 }

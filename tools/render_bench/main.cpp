@@ -153,8 +153,11 @@ QVector<BackendCandidate> backendCandidates(const QString &requested)
       {QStringLiteral("vulkan"), QRhi::Vulkan},
       {QStringLiteral("d3d11"), QRhi::D3D11},
   };
-  // D3D11-first to match the app's RhiBackendSelector (D3D12 crashes in app
-  // Prepare render; D3D11 is the safe default). Phase 27 alignment.
+  // D3D11-first to match the app's RhiBackendSelector (Phase 211 real-machine
+  // verification found D3D12 crashes at QQuickWindow swapchain init on AMD
+  // Radeon APU, so D3D11 is the default and D3D12 is opt-in). The caller
+  // iterates candidates in order and picks the first that probes clean, so a
+  // failed D3D11 benchmark run would degrade to D3D12. Phase 211 alignment.
   const QVector<BackendCandidate> stableAuto = {
       {QStringLiteral("d3d11"), QRhi::D3D11},
       {QStringLiteral("d3d12"), QRhi::D3D12},

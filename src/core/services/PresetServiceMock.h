@@ -33,10 +33,35 @@ public:
   Q_INVOKABLE bool setSelectedPresetForCategory(int category, const QString &presetName);
   Q_INVOKABLE QString selectedPresetForCategory(int category) const;
 
+  /// Phase 199 (WIZ-01): vendor/model enumeration for the ConfigWizard.
+  /// These reuse the already-parsed m_presetMetadata / m_categoryPresets
+  /// (no re-parse of vendor JSON). All enumerations exclude the internal
+  /// "__upstream_defaults__" sink (which lives only in m_presetStore, never
+  /// in the metadata/category maps, so it is naturally absent here).
+  /// Mirrors the upstream ConfigWizard vendor/printer/filament picker model.
+  /// Return distinct vendor names across all categories. With only the
+  /// built-in bundle this yields "OWzx Builtin"; once vendor JSON (e.g.
+  /// Creality) is loaded it yields "Creality".
+  Q_INVOKABLE QStringList vendors() const;
+  /// Printer (machine) preset names whose vendor matches `vendor`.
+  Q_INVOKABLE QStringList printerModelsForVendor(const QString &vendor) const;
+  /// Filament preset names whose vendor matches `vendor`.
+  Q_INVOKABLE QStringList materialsForVendor(const QString &vendor) const;
+  /// Supported bed-surface types for a printer model. The upstream bundle
+  /// does not yet expose per-model bed-surface metadata in machineEntries,
+  /// so this returns a 4-entry default list (mirrors the prior mock). Data
+  /// gap documented in PLAN.md. Falls back to the default list when the
+  /// model is unknown.
+  Q_INVOKABLE QStringList bedTypesForPrinterModel(const QString &model) const;
+  /// Default bed-surface list (4 entries) shared by the wizard when a model
+  /// has no per-model override. Exposed for QML/tests.
+  Q_INVOKABLE QStringList defaultBedTypes() const;
+
   /// 获取指定预设的值映射（不存在则返回空）
   QHash<QString, QVariant> presetValues(const QString &presetName) const;
   /// 获取指定预设中单个 key 的值（不存在返回无效 QVariant）
-  QVariant presetValue(const QString &presetName, const QString &key) const;
+  /// Q_INVOKABLE so the ConfigWizard can read per-preset temperatures.
+  Q_INVOKABLE QVariant presetValue(const QString &presetName, const QString &key) const;
   /// 保存当前值到指定预设
   bool savePresetValues(const QString &presetName, const QHash<QString, QVariant> &values);
   /// 检查指定预设是否存在

@@ -7,6 +7,7 @@
 
 class QTimer;
 class SliceService;
+class ProjectServiceMock;
 
 // Calibration step in a wizard flow
 struct CalibrationStep
@@ -82,6 +83,14 @@ public:
     /// Inject SliceService for real calibration slices.
     /// It sets calib_params and runs the slice/export pipeline for PA, Flow Rate, and Temp Tower.
     void setSliceService(SliceService *slice);
+    /// Phase 197: inject ProjectServiceMock so the four tower modes
+    /// (TempTower/Vol_speed/VFA/Retraction) can load a dedicated tower model
+    /// from the bundled qrc:/qml/assets/calib/ resources onto the current plate
+    /// before slicing -- mirroring upstream Plater::calib_temp/vol_speed/VFA/
+    /// retraction (Plater.cpp:9797+), which call add_model() with
+    /// resources/calib/<mode>/<tower>.stl. Optional: when null, the tower modes
+    /// fall back to the legacy cloneCurrentPlateModel() geometry path.
+    void setProjectService(ProjectServiceMock *project);
 
     // Calibration type list
     Q_INVOKABLE int calibTypeCount() const;
@@ -188,6 +197,22 @@ private:
     /// quality), so we never fabricate a K-value.
     static QString manualInterpretationNote(const QString &modeName);
 
+    /// Phase 197: map a CalibMode (6=TempTower, 7=Vol_speed, 8=VFA,
+    /// 9=Retraction) to its bundled tower-model qrc path under
+    /// qrc:/qml/assets/calib/. Returns an empty string for modes without a
+    /// dedicated upstream tower (PA=1, FlowRate=5) -- those keep using the
+    /// current-plate geometry. Aligned with the per-mode add_model() calls in
+    /// upstream Plater.cpp (calib_temp:9804, calib_max_vol_speed:9853,
+    /// calib_VFA:9971, calib_retraction:9930).
+    static QString towerModelQrcPathForMode(int calibMode);
+    /// Phase 197: extract a bundled qrc tower model to a temp file so
+    /// libslic3r's Model::read_from_file (which uses plain filesystem I/O, not
+    /// Qt's qrc virtual FS) can load it. Returns the temp file path on success
+    /// or an empty string on failure (qrc missing / write failed). The caller
+    /// owns the temp file (QFile::rename on destruction is not needed; the OS
+    /// temp dir is cleaned by the system).
+    static QString extractQrcToTempFile(const QString &qrcPath);
+
     QList<CalibrationType> m_calibTypes;
     QMap<int, CalibrationStatus> m_statusMap; // typeIndex -> status
     QList<CalibrationHistoryEntry> m_history; // Calibration history records
@@ -198,4 +223,13 @@ private:
     QTimer *m_timer = nullptr;
     /// SliceService reference injected by setSliceService for calibration slices.
     SliceService *m_sliceService = nullptr;
+    /// Phase 197: ProjectServiceMock reference injected by setProjectService.
+    /// Used by the tower modes to loadFile() a dedicated tower model before the
+    /// slice starts (mirrors upstream Plater::add_model). Null when not injected
+    /// (tower modes then fall back to the legacy current-plate geometry path).
+    ProjectServiceMock *m_projectService = nullptr;
+    /// Phase 197: true while a dedicated tower-model loadFile() is in flight.
+    /// Gates the one-shot loadFinished connection in startCalibration so a
+    /// later user-initiated loadFile is not mistaken for the calibration load.
+    bool m_pendingCalibTowerLoad = false;
 };

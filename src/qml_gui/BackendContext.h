@@ -18,6 +18,7 @@ class NetworkServiceMock;
 class CalibrationServiceMock;
 class CameraServiceMock;
 class AppSettingsService;
+class PluginService;
 
 class EditorViewModel;
 class PreviewViewModel;
@@ -29,6 +30,7 @@ class ProjectViewModel;
 class CalibrationViewModel;
 class ModelMallViewModel;
 class MultiMachineViewModel;
+class AmsMaterialsViewModel;
 
 /// Notification severity exposed to QML.
 enum NotificationLevel {
@@ -89,6 +91,17 @@ class BackendContext final : public QObject
   Q_PROPERTY(QObject *calibrationViewModel READ calibrationViewModel CONSTANT)
   Q_PROPERTY(QObject *modelMallViewModel READ modelMallViewModel CONSTANT)
   Q_PROPERTY(QObject *multiMachineViewModel READ multiMachineViewModel CONSTANT)
+  // Phase 199 (WIZ-01): expose the preset data service to QML so the
+  // ConfigWizard can enumerate vendors / printer models / materials /
+  // bed surfaces via Q_INVOKABLE. Returned as QObject* to avoid pulling
+  // the PresetServiceMock header into every QML-facing include.
+  Q_PROPERTY(QObject *presetServiceMock READ presetServiceMock CONSTANT)
+  // Phase 201 (v5.6 AMS Architecture Cleanup): mock->viewmodel for AMSSettingsDialog.
+  Q_PROPERTY(QObject *amsMaterialsViewModel READ amsMaterialsViewModel CONSTANT)
+  // Phase 202 (v5.6 Plugin Manager UI Real Backend): mock->service for
+  // PluginManagerDialog. Owns the plugin registry + persisted enable/install
+  // state. installPlugin is a mock (no real download source).
+  Q_PROPERTY(QObject *pluginService READ pluginService CONSTANT)
   Q_PROPERTY(QObject *appSettings READ appSettings CONSTANT)
   Q_PROPERTY(bool visualCompareMode READ visualCompareMode CONSTANT)
   // Phase 51: shell-level action gate properties (SHELL-03) - forward to EditorViewModel/PreviewViewModel.
@@ -256,6 +269,12 @@ public:
   QObject *calibrationViewModel() const;
   QObject *modelMallViewModel() const;
   QObject *multiMachineViewModel() const;
+  QObject *amsMaterialsViewModel() const;
+  /// Plugin registry + persisted enable/install state (Phase 202). Mock data
+  /// source; installPlugin is a state flip, not a real download.
+  QObject *pluginService() const;
+  /// Phase 199 (WIZ-01): preset data service for ConfigWizard enumeration.
+  QObject *presetServiceMock() const;
   QObject *appSettings() const;
   /// Camera image provider used by Monitor preview surfaces.
   CameraServiceMock *cameraService() const { return cameraService_; }
@@ -347,7 +366,7 @@ public:
   Q_INVOKABLE void showWipeTowerDialog();
   /// Request a QML-owned dialog or workflow surface.
   Q_INVOKABLE void showPrintHostDialog();
-  /// Show plugin manager dialog placeholder until QML implements WebDownPluginDlg.
+  /// Open the plugin manager dialog (Phase 202: backed by pluginService_).
   Q_INVOKABLE void showPluginManagerDialog();
   /// Show lite-mode dialog placeholder until QML implements EnableLiteModeDialog.
   Q_INVOKABLE void showEnableLiteModeDialog();
@@ -446,6 +465,9 @@ private:
   CameraServiceMock *cameraService_ = nullptr;
   /// v2.8 W3: application-level persisted settings, including bed size.
   AppSettingsService *appSettings_ = nullptr;
+  /// Phase 202 (v5.6 Plugin Manager UI Real Backend): plugin registry +
+  /// persisted enable/install state. Mock data; installPlugin is a state flip.
+  PluginService *pluginService_ = nullptr;
 
   EditorViewModel *editorViewModel_ = nullptr;
   PreviewViewModel *previewViewModel_ = nullptr;
@@ -457,6 +479,7 @@ private:
   CalibrationViewModel *calibrationViewModel_ = nullptr;
   ModelMallViewModel *modelMallViewModel_ = nullptr;
   MultiMachineViewModel *multiMachineViewModel_ = nullptr;
+  AmsMaterialsViewModel *amsMaterialsViewModel_ = nullptr;
 
   bool visualCompareMode_ = false;
   int currentPage_ = 1;

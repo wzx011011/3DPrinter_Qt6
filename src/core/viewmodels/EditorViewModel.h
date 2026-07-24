@@ -87,6 +87,10 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(int selectedObjectIndex READ selectedObjectIndex NOTIFY stateChanged)
   Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex NOTIFY stateChanged)
   Q_PROPERTY(int selectedObjectCount READ selectedObjectCount NOTIFY stateChanged)
+  /// Phase 198 (PHASE198): currently selected single volume index for the
+  /// per-object settings / layer-range dialogs. Exposed so QML dialogs bound
+  /// to `editorVm.selectedVolumeIndex` resolve (previously undefined).
+  Q_PROPERTY(int selectedVolumeIndex READ selectedVolumeIndex NOTIFY stateChanged)
   /// 模型网格数据（TLV 格式，用于 GLViewport 渲染）
   Q_PROPERTY(QByteArray meshData READ meshData NOTIFY stateChanged)
   /// 加载完成后的相机适应提示: (cx, cy, cz, radius)，全零表示无效
@@ -408,6 +412,8 @@ public:
   /// A second invocation auto-cancels the prior job.
   Q_INVOKABLE void embossSelectedAsync();
   Q_INVOKABLE void cancelEmboss();
+  /// Phase 196 (FEAT-01): true while an async emboss job is in flight.
+  bool embossRunning() const;
 
   /// ── MeshBoolean gizmo properties (对齐上游 GLGizmoMeshBoolean) ──
   int booleanOperation() const; // 0=union, 1=diff, 2=intersect
@@ -473,6 +479,8 @@ public:
   int selectedObjectIndex() const;
   int selectedSourceObjectIndex() const;
   int selectedObjectCount() const;
+  /// Phase 198 (PHASE198): getter backing the selectedVolumeIndex Q_PROPERTY.
+  int selectedVolumeIndex() const;
   Q_INVOKABLE QString objectName(int i) const;
   Q_INVOKABLE QString objectModuleName(int i) const;
   Q_INVOKABLE QString objectGroupLabel(int i) const;
@@ -657,6 +665,11 @@ public:
   Q_PROPERTY(bool embossItalic READ embossItalic WRITE setEmbossItalic NOTIFY stateChanged)
   Q_PROPERTY(bool embossUseSurface READ embossUseSurface WRITE setEmbossUseSurface NOTIFY stateChanged)
   Q_PROPERTY(bool embossCurveProjection READ embossCurveProjection WRITE setEmbossCurveProjection NOTIFY stateChanged)
+  /// Phase 196 (FEAT-01): true while an async emboss job is in flight.
+  /// QML binds this to a spinner (CxBusyIndicator) so the user sees feedback
+  /// during async text generation. Set true on embossSelectedAsync() start,
+  /// false on embossVolumeAdded/embossVolumeFailed.
+  Q_PROPERTY(bool embossRunning READ embossRunning NOTIFY embossRunningChanged)
   /// Phase 158 (EMBO-F02): SVG depth-modifier (Z-scale on the imported mesh;
   /// 1.0 = no change). Forwarded via importSVG() → addSvgVolume(idx, path, dz).
   Q_PROPERTY(float svgDepthModifier READ svgDepthModifier WRITE setSvgDepthModifier NOTIFY stateChanged)
@@ -701,6 +714,11 @@ public:
   Q_INVOKABLE bool addObjectLayerRange(int objectIndex, double minZ, double maxZ);
   Q_INVOKABLE bool removeObjectLayerRange(int objectIndex, int rangeIndex);
   Q_INVOKABLE bool setLayerRangeValue(int objectIndex, int rangeIndex, const QString &key, const QVariant &value);
+  /// Phase 198 (PHASE198): request opening the per-object layer-range editor
+  /// dialog for the currently selected object. Mirrors requestSelectionSettings
+  /// -- Q_INVOKABLE emits a signal the page observes, rather than the list
+  /// holding a dialog reference (对齐上游 GUI_ObjectList right-click "Layers").
+  Q_INVOKABLE void requestObjectLayerRanges();
   Q_INVOKABLE QString plateName(int i) const;
   Q_INVOKABLE int plateObjectCount(int i) const;
   Q_INVOKABLE int objectPlateIndex(int i) const;
@@ -873,6 +891,11 @@ public:
   Q_PROPERTY(QString sliceActionHint READ sliceActionHint NOTIFY stateChanged)
   Q_INVOKABLE int sliceProgress() const;
   Q_INVOKABLE bool isSlicing() const;
+  /// Phase 196 (FEAT-01): returns the SliceService::State enum value so QML
+  /// (SliceProgress.qml) can render Cancelled/Error-specific UI. Values map to
+  /// SliceService::State (Idle=0, Slicing=1, Exporting=2, Completed=3,
+  /// Cancelled=4, Error=5).
+  Q_INVOKABLE int sliceState() const;
   QString sliceStatusLabel() const;
   QString sliceEstimatedTime() const;
   QString sliceOutputPath() const;
@@ -1146,6 +1169,8 @@ signals:
   /// EditorViewModel signal source.
   void embossVolumeAdded(int objectIndex, const QString &volumeName);
   void embossVolumeFailed(const QString &reason);
+  /// Phase 196 (FEAT-01): emitted when m_embossRunning changes.
+  void embossRunningChanged();
   /// Phase 100 (WTREAD-01): emitted whenever the wipe-tower geometry is
   /// refreshed from a SliceService readback (valid or invalid). Drives the
   /// six wipe-tower Q_PROPERTYs above.
@@ -1159,6 +1184,9 @@ signals:
   /// measure* Q_PROPERTYs above.
   void measureReadoutChanged();
   void selectionSettingsRequested();
+  /// Phase 198 (PHASE198): emitted by requestObjectLayerRanges() so the host
+  /// page opens the per-object layer-range editor (对齐上游 GUI_ObjectLayers).
+  void objectLayerRangeRequested();
   /// 请求切换到预览页面（对齐上游 Plater::priv::on_preview）
   void previewRequested();
 
@@ -1330,6 +1358,8 @@ private:
   bool m_embossItalic = false;
   bool m_embossUseSurface = false;
   bool m_embossCurveProjection = false;
+  // Phase 196 (FEAT-01): true while an async emboss job is in flight.
+  bool m_embossRunning = false;
   // Phase 158 (EMBO-F02): SVG depth-modifier (Z-scale on the imported mesh).
   float m_svgDepthModifier = 1.0f;
   // MeshBoolean (对齐上游 GLGizmoMeshBoolean)

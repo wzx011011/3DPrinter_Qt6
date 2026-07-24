@@ -15,7 +15,21 @@
 // 异步模式: paho-mqtt MQTTAsync API, 回调通过 Qt 信号通知 UI 层
 
 // 直接 include paho-mqtt 头（避免前置声明冲突）
-#include <MQTTAsync.h>
+#if defined(__has_include)
+#  if __has_include(<MQTTAsync.h>)
+#    include <MQTTAsync.h>
+#    define OWZX_HAS_PAHO_MQTT 1
+#  else
+#    define OWZX_HAS_PAHO_MQTT 0
+using MQTTAsync = void *;
+struct MQTTAsync_successData;
+struct MQTTAsync_failureData;
+struct MQTTAsync_message;
+#  endif
+#else
+#  include <MQTTAsync.h>
+#  define OWZX_HAS_PAHO_MQTT 1
+#endif
 
 namespace owzx {
 

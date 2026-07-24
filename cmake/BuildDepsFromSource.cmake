@@ -8,16 +8,36 @@
 message(STATUS "=== BuildDepsFromSource: Compiling deps from source ===")
 
 # ─── Path definitions ────────────────────────────────────────────────────────
-set(UPSTREAM_ROOT    "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer")
+if(NOT DEFINED OWZX_UPSTREAM_ROOT)
+    set(OWZX_UPSTREAM_ROOT "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer" CACHE PATH "Upstream OrcaSlicer source checkout")
+endif()
+set(UPSTREAM_ROOT    "${OWZX_UPSTREAM_ROOT}")
 set(UPSTREAM_SRC     "${UPSTREAM_ROOT}/src")
-set(UPSTREAM_DEPS    "${UPSTREAM_ROOT}/deps_src")
+if(EXISTS "${UPSTREAM_ROOT}/deps_src")
+    set(UPSTREAM_DEPS "${UPSTREAM_ROOT}/deps_src")
+else()
+    set(UPSTREAM_DEPS "${UPSTREAM_ROOT}/src")
+endif()
 set(DEPS_GEN_DIR     "${CMAKE_CURRENT_BINARY_DIR}/deps_generated")
 set(UPSTREAM_BUILD_DIR "E:/ai/3D-Printer/out/vs2026-x64-release/build/src")
 
 file(MAKE_DIRECTORY "${DEPS_GEN_DIR}")
 
 # ─── Eigen3 (external, same as OrcaSlicer upstream) ──────────────────────────
-find_package(Eigen3 5.0 CONFIG REQUIRED)
+find_package(Eigen3 CONFIG QUIET)
+if(NOT TARGET Eigen3::Eigen)
+    if(EXISTS "${UPSTREAM_SRC}/eigen/Eigen/Core")
+        add_library(Eigen3::Eigen INTERFACE IMPORTED)
+        set_target_properties(Eigen3::Eigen PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${UPSTREAM_SRC}/eigen"
+        )
+        set(Eigen3_FOUND TRUE)
+        set(Eigen3_VERSION "3.3.7")
+        message(STATUS "Using vendored Eigen headers: ${UPSTREAM_SRC}/eigen")
+    else()
+        find_package(Eigen3 5.0 CONFIG REQUIRED)
+    endif()
+endif()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SECTION A: Header-only INTERFACE libraries (matching upstream CMakeLists)
@@ -164,14 +184,48 @@ if(MSVC)
     )
 endif()
 
-# ─── nowide (pre-built from upstream deps) ─────────────────────────────────────
-# Use the Boost nowide package/lib from the active deps prefix. CI may build it
-# with a newer MSVC toolset suffix than local development machines.
-find_package(boost_nowide CONFIG QUIET)
-if(TARGET Boost::nowide)
-    add_library(nowide_from_source INTERFACE)
-    target_link_libraries(nowide_from_source INTERFACE Boost::nowide Boost::locale)
+# ─── nowide ───────────────────────────────────────────────────────────────────
+# Prefer the nowide sources vendored with the selected upstream checkout. The
+# upstream tree also puts ${UPSTREAM_SRC} before Boost include directories, so
+# compiling this local source keeps the boost::nowide::detail(s) ABI consistent.
+if(EXISTS "${UPSTREAM_SRC}/boost/nowide/iostream.cpp")
+    add_library(nowide_from_source STATIC
+        "${UPSTREAM_SRC}/boost/nowide/args.hpp"
+        "${UPSTREAM_SRC}/boost/nowide/cenv.hpp"
+        "${UPSTREAM_SRC}/boost/nowide/config.hpp"
+        "${UPSTREAM_SRC}/boost/nowide/convert.hpp"
+        "${UPSTREAM_SRC}/boost/nowide/cstdio.hpp"
+        "${UPSTREAM_SRC}/boost/nowide/cstdlib.hpp"
+        "${UPSTREAM_SRC}/boost/nowide/filebuf.hpp"
+        "${UPSTREAM_SRC}/boost/nowide/fstream.hpp"
+        "${UPSTREAM_SRC}/boost/nowide/integration/filesystem.hpp"
+        "${UPSTREAM_SRC}/boost/nowide/iostream.cpp"
+        "${UPSTREAM_SRC}/boost/nowide/iostream.hpp"
+        "${UPSTREAM_SRC}/boost/nowide/stackstring.hpp"
+        "${UPSTREAM_SRC}/boost/nowide/system.hpp"
+        "${UPSTREAM_SRC}/boost/nowide/utf8_codecvt.hpp"
+        "${UPSTREAM_SRC}/boost/nowide/windows.hpp"
+    )
+    target_include_directories(nowide_from_source PUBLIC "${UPSTREAM_SRC}")
+    if(Boost_INCLUDE_DIRS)
+        target_include_directories(nowide_from_source SYSTEM PUBLIC ${Boost_INCLUDE_DIRS})
+    endif()
+    target_compile_definitions(nowide_from_source PUBLIC
+        BOOST_ALL_NO_LIB
+        BOOST_USE_WINAPI_VERSION=0x602
+        BOOST_SYSTEM_USE_UTF8
+        NOMINMAX
+    )
+    if(TARGET Boost::locale)
+        target_link_libraries(nowide_from_source PUBLIC Boost::locale)
+    endif()
 else()
+    # Fall back to the Boost nowide package/lib from the active deps prefix.
+    find_package(boost_nowide CONFIG QUIET)
+    if(TARGET Boost::nowide)
+        add_library(nowide_from_source INTERFACE)
+        target_link_libraries(nowide_from_source INTERFACE Boost::nowide Boost::locale)
+    else()
     find_library(NOWIDE_LIB
         NAMES
             libboost_nowide-vc145-mt-x64-1_84
@@ -191,6 +245,7 @@ else()
     else()
         message(WARNING "nowide pre-built lib not found in ${DEPS_PREFIX}/lib, using header-only fallback")
         add_library(nowide_from_source INTERFACE)
+    endif()
     endif()
 endif()
 
@@ -228,6 +283,10 @@ if(EXISTS "${DEPS_PREFIX}/lib/qhullstatic_r.lib")
         )
     endif()
 else()
+    # qhull's upstream CMake expects LIBDIR from the top-level OrcaSlicer build.
+    # Point it at the real upstream src root so the generated include path is
+    # ${UPSTREAM_SRC}/qhull/src instead of a broken relative path.
+    set(LIBDIR "${UPSTREAM_SRC}")
     add_subdirectory("${UPSTREAM_DEPS}/qhull" "${DEPS_GEN_DIR}/qhull")
     add_library(qhull_from_source INTERFACE)
     target_link_libraries(qhull_from_source INTERFACE qhull)

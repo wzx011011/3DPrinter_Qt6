@@ -9,7 +9,58 @@
 #include <QHash>
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
+
+// Phase 207 (REPRO-01): env-gated structured render diagnostics. Enable with
+// OWZX_RHI_TRACE=1 to emit a tagged log line per render() milestone so the
+// D3D12 0xC0000005 crash frame can be located without a native debugger. The
+// gate is read once and cached; release builds with the env unset emit zero
+// overhead.
+namespace {
+bool rhiTraceEnabled()
+{
+  static const bool enabled = qEnvironmentVariableIsSet("OWZX_RHI_TRACE");
+  return enabled;
+}
+void rhiTrace(const char *milestone)
+{
+  if (rhiTraceEnabled())
+    qInfo("[RHI-TRACE] %s", milestone);
+}
+} // namespace
+
+// Phase 209 (MIT-02 / Seam B): POD mirror of the GLSL std140 CameraBlock
+// declared by the gizmo shader (mesh shader's CameraBlock declares only the
+// mat4 mvp and ignores the trailing bytes). Packing all three sub-ranges into
+// one struct lets uploadCameraUniform issue a single updateDynamicBuffer
+// instead of three separate sub-range writes, which is more efficient and
+// avoids the D3D12 multi-record coalescing path (a plausible 0xC0000005
+// source when binding the SRB against a buffer with three pending uploads).
+//
+// std140 layout (matches the existing inline comment in uploadCameraUniform):
+//   offset 0:  mat4 mvp        (64 bytes; QMatrix4x4 is 16 contiguous floats)
+//   offset 64: vec3 gizmoCenter (12 bytes; QVector3D is 3 contiguous floats)
+//   offset 76: float gizmoScale (4 bytes; packs into the vec3's std140 tail)
+// Total = 80 bytes. The C++ struct is bit-identical to std140 here because
+// QMatrix4x4 and QVector3D have float (4-byte) alignment and no internal
+// padding, and 64 is already 16-aligned for the vec3 base. The 256-byte
+// backing buffer is allocated elsewhere (D3D12 cbuffer alignment); only the
+// first 80 bytes are written.
+struct CameraBlockPacked {
+  QMatrix4x4 mvp;        // offset 0,  64 bytes
+  QVector3D gizmoCenter; // offset 64, 12 bytes
+  float gizmoScale;      // offset 76, 4 bytes
+};
+// Phase 209 (MIT-02): the GLSL std140 CameraBlock is exactly 80 bytes
+// (mat4 + vec3 + float). QMatrix4x4 (float[16]) and QVector3D (float[3]) may
+// carry ABI alignment padding on some compilers, so the C++ struct can be
+// larger than 80. Only the first 80 bytes are uploaded to the UBO (the
+// std140 layout), so the assert checks the lower bound. The explicit
+// upload size below stays 80.
+static_assert(sizeof(CameraBlockPacked) >= 80,
+              "CameraBlockPacked must be at least 80 bytes to hold the GLSL "
+              "std140 CameraBlock layout (mat4 + vec3 + float).");
 
 RhiViewportRenderer::RhiViewportRenderer() = default;
 
@@ -21,15 +72,47 @@ RhiViewportRenderer::~RhiViewportRenderer()
 void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
 {
   Q_UNUSED(cb);
+  rhiTrace("initialize-enter");
+  static std::atomic<int> s_initCount{0};
+  const int n = ++s_initCount;
+  if (rhiTraceEnabled())
+    qInfo("[RHI-TRACE] initialize-call#%d canvasType=%d backend=%s", n, int(m_canvasType),
+          rhi() ? rhi()->backendName() : "(null)");
   // BUG FIX: do NOT call releaseResources() here unconditionally.
   // QQuickRhiItemRenderer::initialize() is called on every swapchain rebuild
   // (window resize, visibility change, etc). Clearing all GPU buffers here
   // forces a full re-upload every frame, which makes the bed grid flash or
   // disappear entirely (the original "blank viewport" symptom).
-  // Only reset the per-frame upload flag so the next render re-uploads scene
-  // buffers; the pipelines and buffers themselves are reused.
+  // The pipelines and buffers themselves are reused; only the per-buffer
+  // upload flags are reset so the next render re-uploads their contents.
   m_pipelineFailed = false;
+  // Phase 210 (MIT-03 / Seam C): reset ALL buffer-uploaded flags on every
+  // swapchain rebuild. D3D12 may invalidate the GPU-side backing memory of
+  // buffers tied to the previous swapchain's device-context state; without
+  // this reset, the first render() after a rebuild would skip re-uploading
+  // camera/model/highlight/gizmo/cutplane/wipetower/paint/assembly buffers
+  // and bind stale or invalid memory. Re-uploading once per rebuild is cheap
+  // and backend-agnostic (D3D11/Vulkan/Metal tolerate it as a no-op cost).
+  // This mirrors what releaseResources() does for the full-destroy path.
   m_sceneBuffersUploaded = false;
+  m_modelVertexBufferUploaded = false;
+  m_highlightVertexBufferUploaded = false;
+  m_cameraUniformBufferUploaded = false;
+  m_gizmoVertexBufferUploaded = false;
+  m_cutPlaneFillBufferUploaded = false;
+  m_cutPlaneOutlineBufferUploaded = false;
+  m_wipeTowerBufferUploaded = false;
+  m_paintOverlayBufferUploaded = false;
+  m_brushCursorBufferUploaded = false;
+  m_assemblyConnectorBufferUploaded = false;
+  m_assemblyMeasureLineBufferUploaded = false;
+  m_assemblyMeasureTriBufferUploaded = false;
+  m_assemblyMeasureValueBufferUploaded = false;
+  m_previewSegmentBufferUploaded = false;
+  // Reset the first-N-frames force window so the new swapchain gets a
+  // guaranteed camera UBO upload on its first render() (see render()).
+  m_frameCount = 0;
+  rhiTrace("seamC-initialize-reset");
 }
 
 void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
@@ -320,6 +403,14 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   if (cb == nullptr || rhi() == nullptr || renderTarget() == nullptr) {
     return;
   }
+  rhiTrace("render-enter");
+
+  // Phase 210 (MIT-03 / Seam C): bump the frame counter first so the value
+  // seen by the upload logic below is 1-based. The first 3 frames after every
+  // initialize() fall in the force window (m_frameCount <= 3) and get an
+  // unconditional camera UBO upload so the first SRB bind never reads
+  // uninitialized GPU memory (a D3D12 0xC0000005 candidate).
+  ++m_frameCount;
 
   // Phase 95 (THUMBCAP-01/03): poll the async thumbnail readback at the START
   // of render(), before the on-screen pass. readBackTexture completes on a
@@ -395,11 +486,59 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       if (uploadPreviewSegmentBuffer(updates))
         m_previewSegmentBufferUploaded = true;
     }
-    // Camera uniform upload (merged into the same pre-beginPass batch)
-    uploadCameraUniform(updates, PrepareSceneData::DirtyCamera);
+    // Camera uniform upload (merged into the same pre-beginPass batch).
+    // Phase 210 (MIT-03 / Seam C): in the first-N-frames force window OR the
+    // DirtyGpu/DirtySelection case, pass DirtyGpu in addition to DirtyCamera
+    // so the upload is guaranteed even if m_cameraUniformBufferUploaded was
+    // left stale by a swapchain rebuild (the flag is also reset in
+    // initialize(), but DirtyGpu is belt-and-suspenders for the very first
+    // bind).
+    const quint32 camFlags = (m_frameCount <= 3)
+        ? (PrepareSceneData::DirtyCamera | PrepareSceneData::DirtyGpu)
+        : PrepareSceneData::DirtyCamera;
+    uploadCameraUniform(updates, camFlags);
+  }
+  else if (!m_pipelineFailed && m_frameCount <= 3
+           && m_cameraUniformBuffer != nullptr) {
+    // Phase 210 (MIT-03 / Seam C): View3D/AssembleView first-N-frames force
+    // upload of the camera UBO. When the scene is not dirty and the buffers
+    // are already flagged uploaded (the common steady-state path), the
+    // scene-dirty guard above does not allocate an updates batch and the
+    // camera UBO is not re-issued. After a swapchain rebuild that leaves the
+    // GPU-side buffer contents invalid under D3D12, the first SRB bind would
+    // then read uninitialized memory. Force a camera upload here for the
+    // first 3 frames regardless of dirty state. uploadSceneBuffers (taken on
+    // the scene-dirty branch above) already uploads the camera, so this arm
+    // only fires on the steady-state path.
+    if (updates == nullptr)
+      updates = rhi()->nextResourceUpdateBatch();
+    uploadCameraUniform(updates,
+                        PrepareSceneData::DirtyCamera | PrepareSceneData::DirtyGpu);
+    rhiTrace("seamC-force-frame");
+  }
+
+  // Phase 208 (MIT-01 / Seam A): fold the deferred thumbnail readback batch
+  // into this frame's on-screen beginPass. The previous frame's capture
+  // stashed its readback batch here instead of issuing it on the bare command
+  // buffer (the only pass-external resourceUpdate in this file). QRhi's merge()
+  // copies the queued readBackTexture op into the current batch; the pending
+  // batch becomes inert and is returned to the pool via delete. This is one
+  // frame later than the original issue, but the readback is already async
+  // (m_thumbnailReadbackResult is polled on a later render anyway), so the
+  // extra frame of latency is invisible. The readback still targets
+  // m_thumbnailTexture, which lives until releaseThumbnailResources(), so the
+  // one-frame deferral is safe.
+  if (m_pendingReadbackUpdates != nullptr) {
+    if (updates == nullptr)
+      updates = rhi()->nextResourceUpdateBatch();
+    updates->merge(m_pendingReadbackUpdates);
+    delete m_pendingReadbackUpdates;
+    m_pendingReadbackUpdates = nullptr;
+    rhiTrace("seamA-folded");
   }
 
   cb->beginPass(renderTarget(), m_clearColor, {1.0f, 0}, updates);
+  rhiTrace("beginPass-done");
   // Phase 90: CanvasAssembleView shares the View3D mesh draw block (bed +
   // model vertex buffer) so the AssembleView canvas is not empty at runtime.
   // Guard widened to != CanvasPreview; the CanvasPreview draw block below
@@ -408,6 +547,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     cb->setViewport(QRhiViewport(0, 0, float(renderTarget()->pixelSize().width()),
                                  float(renderTarget()->pixelSize().height())));
     cb->setShaderResources(m_srb.get());
+    rhiTrace("setShaderResources-done");
     if (m_prepareScene.showBed() && m_bedFillBuffer && m_bedFillVertexCount > 0) {
       cb->setGraphicsPipeline(m_fillPipeline.get());
       const QRhiCommandBuffer::VertexInput fillBinding(m_bedFillBuffer.get(), 0);
@@ -499,6 +639,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   }
 
   cb->endPass();
+  rhiTrace("endPass-done");
 
   // Phase 95 (THUMBCAP-01/02/03): offscreen thumbnail pass runs AFTER the
   // on-screen pass completes, as a second beginPass/endPass pair on the same
@@ -511,7 +652,9 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       && m_thumbnailSize > 0
       && ensureThumbnailRenderTarget(m_thumbnailSize))
   {
+    rhiTrace("thumbnail-pass-begin");
     renderThumbnailPass(cb);
+    rhiTrace("thumbnail-pass-done");
     // Issue the readback on a fresh batch merged into the next beginPass of
     // the on-screen RT — but since the offscreen pass just ended, use a
     // resource-update batch that the QRhi processes as part of this frame's
@@ -519,11 +662,17 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // on a subsequent frame.
     QRhiResourceUpdateBatch *readbackUpdates = rhi()->nextResourceUpdateBatch();
     issueThumbnailReadback(readbackUpdates);
-    // Merge the readback into the on-screen RT by ending the frame with it
-    // pending: QRhi processes resource-update batches via
-    // cb->resourceUpdate() — issue it directly here so the readback is
-    // scheduled before the frame ends.
-    cb->resourceUpdate(readbackUpdates);
+    // Phase 208 (MIT-01 / Seam A): stash the readback batch for the NEXT
+    // frame's on-screen beginPass instead of issuing it directly on the bare
+    // command buffer here. cb->resourceUpdate() between two passes (the
+    // thumbnail pass just ended) is the only pass-external resourceUpdate in
+    // this file and a plausible D3D12 0xC0000005 contributor (BUG-V31-1
+    // pattern: resource updates must be folded into beginPass's 4th arg).
+    // The next render() merges m_pendingReadbackUpdates into its updates batch
+    // before beginPass. m_thumbnailReadbackInFlight is still set now so no
+    // duplicate capture is attempted during the one-frame deferral window.
+    m_pendingReadbackUpdates = readbackUpdates;
+    rhiTrace("seamA-deferred");
     m_thumbnailReadbackInFlight = true;
     m_thumbnailResultPlateIndex = m_thumbnailPlateIndex;
     m_thumbnailResultSize = m_thumbnailSize;
@@ -537,6 +686,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
                                 Qt::QueuedConnection);
     }
   }
+  rhiTrace("render-exit");
 }
 
 void RhiViewportRenderer::releaseResources()
@@ -544,6 +694,13 @@ void RhiViewportRenderer::releaseResources()
   // Phase 95 (THUMBCAP-01): release offscreen thumbnail RT + pipelines +
   // pending readback state before the on-screen resources are torn down.
   releaseThumbnailResources();
+  // Phase 208 (MIT-01 / Seam A): drop a deferred readback batch that never
+  // got folded into a beginPass (e.g. the capture frame was the last frame
+  // before teardown). delete returns it to QRhi's pool.
+  if (m_pendingReadbackUpdates != nullptr) {
+    delete m_pendingReadbackUpdates;
+    m_pendingReadbackUpdates = nullptr;
+  }
   m_thumbnailRequestPending = false;
   m_linePipeline.reset();
   m_fillPipeline.reset();
@@ -872,6 +1029,7 @@ void RhiViewportRenderer::resetPreviewGpuState(bool keepCpuStaging)
 
 bool RhiViewportRenderer::ensurePipelines()
 {
+  rhiTrace("ensurePipelines-enter");
   if (m_fillPipeline && m_linePipeline && m_translucentFillPipeline
       && m_translucentLinePipeline)
     return true;
@@ -978,6 +1136,7 @@ bool RhiViewportRenderer::ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &
 
 bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags)
 {
+  rhiTrace("uploadSceneBuffers-enter");
   if (updates == nullptr || rhi() == nullptr)
     return false;
 
@@ -1558,6 +1717,7 @@ void RhiViewportRenderer::renderAssemblyMeasureOverlay(QRhiCommandBuffer *cb)
 
 bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags)
 {
+  rhiTrace("uploadCameraUniform-enter");
   if (updates == nullptr || rhi() == nullptr)
     return false;
 
@@ -1582,25 +1742,24 @@ bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, 
     return false;
 
   const QMatrix4x4 corrected = rhi()->clipSpaceCorrMatrix() * m_cameraMvp;
-  updates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 0, 64, corrected.constData());
 
-  // Phase 68: pack gizmoCenter (vec3 at offset 64) + gizmoScale (float at
-  // offset 76) into the same uniform buffer. The mesh shader's CameraBlock
-  // only declares mat4 mvp (64 bytes) so it ignores the extra data; the gizmo
-  // shader's CameraBlock declares the full { mat4; vec3; float; } and reads it.
-  // std140 padding: vec3 is followed by 4 bytes of pad to reach the float at
-  // offset 76 (= 64 + 12 + 4? no: std140 vec3 takes 16 bytes, but we pack the
-  // float in the vec3's tail padding). Match the GLSL std140 layout exactly:
-  //   offset 0:  mat4 mvp       (64 bytes)
-  //   offset 64: vec3 gizmoCenter (12 bytes) + float gizmoScale (4 bytes) = 16 bytes
-  // Total CameraBlock = 80 bytes, well within the 256-byte buffer.
+  // Phase 209 (MIT-02 / Seam B): pack MVP + gizmoCenter + gizmoScale into a
+  // single 80-byte struct and issue ONE updateDynamicBuffer. Previously this
+  // was three separate sub-range writes (offsets 0/64/76); each enqueued a
+  // distinct upload record on the same buffer, forcing the D3D12 backend to
+  // coalesce them and risking an off-by-one during SRB bind (a plausible
+  // 0xC0000005 source). The pack matches the GLSL std140 CameraBlock exactly
+  // (see CameraBlockPacked above): mesh shader reads only the first 64 bytes
+  // (mat4 mvp), gizmo shader reads the full 80. gizmoScale is computed the
+  // same way as before (distance-based, clamped to >= 5).
   const float gizmoScale = std::max((m_gizmoCenter - m_cameraEye).length() * 0.15f, 5.f);
-  // QVector3D has no data() method; take the address of the first component.
-  // The three floats (x,y,z) are contiguous in memory per the Qt GUI ABI.
-  updates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 64, 12,
-                               &m_gizmoCenter[0]);
-  updates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 76, 4,
-                               &gizmoScale);
+  CameraBlockPacked packed;
+  packed.mvp = corrected;
+  packed.gizmoCenter = m_gizmoCenter;
+  packed.gizmoScale = gizmoScale;
+  updates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 0,
+                               80, &packed);
+  rhiTrace("seamB-packed");
 
   m_cameraUniformBufferUploaded = true;
   return true;

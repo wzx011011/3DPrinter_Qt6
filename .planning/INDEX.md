@@ -1,6 +1,6 @@
 # Planning Index
 
-Last updated: 2026-07-07
+Last updated: 2026-07-24
 
 This is the canonical entry point for `.planning/`. Historical phase files are evidence; current work starts from the files below.
 
@@ -13,43 +13,61 @@ This is the canonical entry point for `.planning/`. Historical phase files are e
 - v3.6 starting inventory: [research/v3.6-SCREENSHOT-SOURCE-TRUTH.md](research/v3.6-SCREENSHOT-SOURCE-TRUTH.md)
 - Remaining migration plan: [REMAINING_MIGRATION_PLAN.md](REMAINING_MIGRATION_PLAN.md)
 - Milestone history: [MILESTONES.md](MILESTONES.md)
-- Latest completed milestone audit: [milestones/v4.0-MILESTONE-AUDIT.md](milestones/v4.0-MILESTONE-AUDIT.md)
+- Active milestone roadmap: [milestones/v5.7-ROADMAP.md](milestones/v5.7-ROADMAP.md)
+- Active milestone requirements: [milestones/v5.7-REQUIREMENTS.md](milestones/v5.7-REQUIREMENTS.md)
+- Latest completed milestone audit: [milestones/v5.7-MILESTONE-AUDIT.md](milestones/v5.7-MILESTONE-AUDIT.md)
 - Archived milestone audit: [milestones/v3.2-MILESTONE-AUDIT.md](milestones/v3.2-MILESTONE-AUDIT.md)
 - Retrospective: [RETROSPECTIVE.md](RETROSPECTIVE.md)
 - Prior alignment audit: [audits/2026-06-24-plan-implementation-alignment.md](audits/2026-06-24-plan-implementation-alignment.md)
 - Prior implementation audit: [audits/2026-06-23-implementation-audit.md](audits/2026-06-23-implementation-audit.md)
 - Prior code drift audit: [audits/2026-06-23-code-drift-audit.md](audits/2026-06-23-code-drift-audit.md)
 
-## Active Milestone
+## Latest Completed Milestone
 
-**v4.1 Parameter Settings Dialogs Source-Truth Restoration** is active.
+**v5.7 D3D12 Backend Investigation** is complete (closed 2026-07-24).
 
-Primary objective:
+Primary outcome:
 
-- Restore printer, material, and process settings dialogs to screenshot/source-truth parity while preserving existing Phase 56 backend semantics.
+- D3D12 promotion attempted, verified on real hardware, **reverted** — D3D12
+  crashes at QQuickWindow swapchain init on AMD Radeon APU (mainstream iGPU).
+  D3D11 remains the default; D3D12 is opt-in. Phase 207-210 retained
+  (diagnostics + seam A/B/C mitigations). Canonical build (D3D11 default) exited
+  `0`, `APP_RUNNING_PID=80404`, all ctest + E2E passed.
 
-Active phases:
+Previous milestone **v5.6 Deferred Backlog Closure** is complete (closed
+2026-07-24). Canonical build exited `0`, `APP_RUNNING_PID=79708`, all ctest +
+E2E passed.
 
-- Phase 84: Settings Source-Truth Gap Audit
-- Phase 85: Settings Shell And Tab Layout Restoration
-- Phase 86: Settings Option Sections And Typed Controls
-- Phase 87: Settings Preset Semantics And Workflow Stability
-- Phase 88: Settings Verification And Cleanup
+Phases (193-205):
 
-Carry-forward:
+- Phase 193: Planning State Reconciliation
+- Phase 194: Cmp-03 OptionRow and Slider Unification
+- Phase 195: KBShortcutsDialog Extraction and Grouping
+- Phase 196: XD-02 Emboss Spinner and SliceProgress States
+- Phase 197: Calibration Dedicated Tower Geometry
+- Phase 198: ObjectList Tree Deepening (Auxiliary file-tree panel)
+- Phase 199: ConfigWizard Vendor/Model Enumeration Layer
+- Phase 200: ConfigWizard Single-Vendor Wizard Rewrite
+- Phase 201: AMS Architecture Cleanup (mock to ViewModel)
+- Phase 202: Plugin Manager UI Real Backend (no Python)
+- Phase 203: D3D12 Root-Cause Confirmation (no default promotion)
+- Phase 204: de/fr/ja/ko Translation Long Tail to >=85%
+- Phase 205: Cross-Workstream Regression Gate and Milestone Audit
 
-- v3.4 Phase 43 manual UAT is closed by canonical E2E coverage and current runtime launch evidence, not by a separate user click-through.
-- v3.5 Phase 47-49 are superseded by v3.6 and should not be resumed as standalone work unless explicitly reopened.
+Carry-forward from v5.5:
 
-Deferred until after v4.1:
+- The canonical build/run contract is the entry gate for every v5.6 phase.
+- `third_party/OrcaSlicer` submodule is not checked out locally; upstream
+  comparison uses `D:/work/OrcaSlicer`.
 
-- AssembleView
-- Auto filament-map recommendation
-- Wipe-tower geometry/rendering
-- `THUMB-03` real GL/QRhi-capture thumbnails and 3MF pixel round-trip
-- `FIXTURE-02` full PLATE-09 save/reload assertions after writer integration fix
-- D3D12 crash root cause and future Vulkan/D3D12 backend promotion
-- Missing CLI test fixtures
+Deferred after v5.6 (per user decisions 2026-07-24):
+
+- H2C/A2L multi-nozzle UI (bb3 fork submodule + product decision pending).
+- Per-extruder config editor UI (Cmp-03 sub-item; needs multi-extruder fixture).
+- ConfigWizard multi-vendor selection + PresetUpdater + AppConfig.
+- D3D12 default-backend promotion itself (pending root cause).
+- AMS real device/cloud data sources (printer-hardware scope).
+- Python script/macro framework / CPython embedding.
 
 Removed from forward scope:
 
@@ -86,14 +104,6 @@ Do not treat phase completion as product completion unless the exact workflow is
 
 ## Next Step
 
-Start Phase 84:
-
-```text
-$gsd-discuss-phase 84 --auto
-```
-
-or plan directly:
-
-```text
-$gsd-plan-phase 84
-```
+Select the next product migration milestone from the deferred backlog (H2C/A2L,
+per-extruder editor, ConfigWizard multi-vendor, D3D12 promotion, AMS real
+backend, Python framework). Keep the canonical verification gate in place.

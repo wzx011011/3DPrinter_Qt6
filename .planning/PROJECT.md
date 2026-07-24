@@ -10,7 +10,31 @@ The project currently has a usable Qt6/QML shell, real model/project IO, real sl
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current State: post-v4.7 (planning v4.8)
+## Current State: v5.7 D3D12 Backend Investigation
+
+**Latest completed milestone:** v5.7 D3D12 Backend Investigation (closed
+2026-07-24).
+
+- D3D12 promotion attempted, verified on real hardware, **reverted** — D3D12
+  crashes at QQuickWindow swapchain init on AMD Radeon APU (mainstream iGPU).
+  D3D11 remains the default; D3D12 is opt-in.
+- Phase 207-210 retained: env-gated diagnostics, seam A/B/C mitigations,
+  render_bench swapchain-path isolation.
+- Canonical build (D3D11 default) exited `0`, `APP_RUNNING_PID=80404`, all
+  ctest + E2E passed. See `.planning/milestones/v5.7-MILESTONE-AUDIT.md`.
+
+**v5.6 baseline (closed 2026-07-24):** all 11 v5.5 deferred items disposed of
+(8 implemented, 3 documented). Canonical build exited `0`,
+`APP_RUNNING_PID=79708`, all ctest + E2E passed. See
+`.planning/milestones/v5.6-MILESTONE-AUDIT.md`.
+
+**v5.5 baseline (closed 2026-07-23):** the canonical build/run path is
+documented and reproducible. The launch liveness gate reports a PID after five
+seconds, and the complete E2E workflow passes. CI/local source-root divergence
+is documented as a reproducibility follow-up in
+`.planning/milestones/v5.5-MILESTONE-AUDIT.md`.
+
+## Historical State: post-v4.7 (planning v4.8)
 
 **Last shipped milestone:** v4.6 Core Feature Completion Sweep (Mega-Milestone) (2026-07-15).
 
@@ -96,11 +120,46 @@ OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inher
 
 ## Current Milestone
 
-No active milestone. v5.3 shipped clean (2026-07-19).
+v5.6 Deferred Backlog Closure is active (2026-07-24).
+
+**Goal:** Clear the v5.5 deferred backlog. Implement the 8 offline-deliverable
+items; document the remaining 3 per user decisions.
+
+**Scope:** UI component unification, dialog deepening, calibration geometry,
+object tree, Emboss/SliceProgress feedback, AMS architecture cleanup, plugin
+download UI, i18n strings, D3D12 root-cause investigation. No product behavior
+unmapped to upstream; no upstream OrcaSlicer patches; no alternate build
+scripts/directories.
+
+**Phases:** 193-205:
+
+- Phase 193: Planning State Reconciliation
+- Phase 194: Cmp-03 OptionRow and Slider Unification
+- Phase 195: KBShortcutsDialog Extraction and Grouping
+- Phase 196: XD-02 Emboss Spinner and SliceProgress States
+- Phase 197: Calibration Dedicated Tower Geometry
+- Phase 198: ObjectList Tree Deepening (Auxiliary file-tree panel)
+- Phase 199: ConfigWizard Vendor/Model Enumeration Layer
+- Phase 200: ConfigWizard Single-Vendor Wizard Rewrite
+- Phase 201: AMS Architecture Cleanup (mock to ViewModel)
+- Phase 202: Plugin Manager UI Real Backend (no Python)
+- Phase 203: D3D12 Root-Cause Confirmation (no default promotion)
+- Phase 204: de/fr/ja/ko Translation Long Tail to >=85%
+- Phase 205: Cross-Workstream Regression Gate and Milestone Audit
 
 ## Next Milestone
 
-Candidate backlog (post-v5.3): i18n remaining ~31% (needs full MT); calibration `.drc` tower geometry; D3D12 backend; Cmp-03 OptionRow/MoveSlider unification; XD-02 async spinner + SliceProgress states; ConfigWizard depth; AMS material settings; KBShortcutsDialog; Auxiliary file-tree panel. **SLA print path is DECLINED** (user decision 2026-07-19).
+After v5.6, the remaining deferred items (per explicit user decisions on
+2026-07-24):
+
+- H2C/A2L multi-nozzle UI (bb3 fork submodule + product decision pending).
+- Per-extruder config editor UI (Cmp-03 sub-item; needs multi-extruder fixture).
+- ConfigWizard multi-vendor selection + PresetUpdater + AppConfig.
+- D3D12 default-backend promotion itself (pending root cause).
+- AMS real device/cloud data sources (printer-hardware scope).
+- Python script/macro framework / CPython embedding.
+
+**SLA print path remains DECLINED** (user decision 2026-07-19).
 
 ## Requirements
 
@@ -133,7 +192,8 @@ These are current baseline capabilities inferred from implementation, git histor
 
 ### Active
 
-None — v5.0 shipped 2026-07-17. All v5.0 WS1-WS5 requirements moved to Validated above (see "Previous Milestone: v5.0" section). Run `/gsd:new-milestone` to define the next cycle.
+Historical note: v5.0 shipped 2026-07-17. The active v5.5 milestone is
+described in the Current Milestone section above.
 
 ### Future
 
@@ -251,4 +311,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-17 after v5.1 milestone planning.*
+*Last updated: 2026-07-24 after v5.7 milestone closure.*

@@ -214,6 +214,7 @@ void SliceService::clearResults()
   emit resultChanged();
   emit sliceResultCleared();
   emit stateChanged();
+  emit sliceStateChanged();
 }
 
 void SliceService::setMergedPresetConfig(const QHash<QString, QVariant> &config)
@@ -320,6 +321,47 @@ namespace
     }
 #endif
   }
+
+  void restoreGenericEnumMaps(Slic3r::DynamicPrintConfig &config)
+  {
+#ifdef HAS_LIBSLIC3R
+    for (const std::string &key : config.keys())
+    {
+      const Slic3r::ConfigOption *option = config.option(key);
+      const auto *enumOption = dynamic_cast<const Slic3r::ConfigOptionEnumsGeneric *>(option);
+      const auto *nullableEnumOption = dynamic_cast<const Slic3r::ConfigOptionEnumsGenericNullable *>(option);
+      if ((!enumOption || enumOption->keys_map != nullptr) &&
+          (!nullableEnumOption || nullableEnumOption->keys_map != nullptr))
+      {
+        continue;
+      }
+
+      const Slic3r::ConfigOptionDef *definition = Slic3r::print_config_def.get(key);
+      const auto *values = dynamic_cast<const Slic3r::ConfigOptionInts *>(option);
+      if (!definition || !values)
+        continue;
+
+      std::unique_ptr<Slic3r::ConfigOption> restored(definition->create_default_option());
+      if (auto *restoredEnum = dynamic_cast<Slic3r::ConfigOptionEnumsGeneric *>(restored.get()))
+      {
+        restoredEnum->values = values->values;
+      }
+      else if (auto *restoredNullableEnum =
+                   dynamic_cast<Slic3r::ConfigOptionEnumsGenericNullable *>(restored.get()))
+      {
+        restoredNullableEnum->values = values->values;
+      }
+      else
+      {
+        continue;
+      }
+
+      config.set_key_value(key, restored.release());
+    }
+#else
+    Q_UNUSED(config);
+#endif
+  }
 } // anonymous namespace
 
 void SliceService::startSlice(const QString &projectName)
@@ -363,6 +405,7 @@ void SliceService::startSlice(const QString &projectName)
              statusLabel_.toUtf8().constData());
     emit progressChanged();
     emit stateChanged();
+  emit sliceStateChanged();
     emit sliceFailed(statusLabel_);
     activeTargetPlateIndex_ = -1;
     return;
@@ -379,6 +422,7 @@ void SliceService::startSlice(const QString &projectName)
              statusLabel_.toUtf8().constData());
     emit progressChanged();
     emit stateChanged();
+  emit sliceStateChanged();
     emit sliceFailed(statusLabel_);
     activeTargetPlateIndex_ = -1;
     return;
@@ -466,6 +510,9 @@ void SliceService::startSlice(const QString &projectName)
 
       notify(10, QObject::tr("Preparing slice parameters"));
       Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
+      // full_print_config() copies generic enum values without their key maps.
+      // Restore them before preset deserialization can invoke enum parsing.
+      restoreGenericEnumMaps(config);
       // v2.7 P0: bed_shape injection (mirror CLI CliRunner.cpp:397-399)
       // v2.8 W3: use persisted bed size when bedShape_ was not set explicitly.
       QVector<QPointF> bedPoints = receiver->bedShape_;
@@ -515,6 +562,8 @@ void SliceService::startSlice(const QString &projectName)
           }
         }
       }
+
+      restoreGenericEnumMaps(config);
 
       Slic3r::Print print;
       receiver->activePrint_.store(&print, std::memory_order_release);
@@ -574,7 +623,6 @@ void SliceService::startSlice(const QString &projectName)
         cp.end = receiver->calibConfig_.end;
         cp.step = receiver->calibConfig_.step;
         cp.print_numbers = receiver->calibConfig_.printNumbers;
-        cp.test_model = receiver->calibConfig_.testModel;
         print.set_calib_params(cp);
       }
 
@@ -631,120 +679,37 @@ void SliceService::startSlice(const QString &projectName)
       if (printStats.total_cost > 0.0)
         resultCostLabel = QStringLiteral("$%1").arg(QString::number(printStats.total_cost, 'f', 2));
 
-      // Phase 100 (WTREAD-01): capture real wipe-tower geometry BY VALUE before
-      // the Print is invalidated (activePrint_.store(nullptr) below). No Print*
-      // or WipeTowerData* may escape the worker (Frozen Decision 1). The
-      // width/position derivation matches upstream Print.cpp:2871-2873
-      // (bbx span + rib_offset). The Qt renderer uses X/Z as the bed plane
-      // (upstream Y maps to Qt Z). has_wipe_tower() (Print.hpp:988) is the gate:
-      // when false, capturedGeometry.valid stays false (WTREAD-02).
-      //
-      // Phase 100 REVIEW W1: upstream pt0 = bbx.min + rib_offset is the tower
-      // CORNER, but the Qt consumer GizmoGeometry::buildWipeTowerVertices
-      // (GizmoGeometry.cpp:465-469) treats its x/z args as a box CENTER
-      // (uses x - hw / x + hw). Convert corner -> center here so the rendered
-      // box sits on the true sliced position (otherwise it is offset by
-      // +width/2, +depth/2).
+      // Capture wipe-tower geometry using the APIs present in the locked
+      // OrcaSlicer source tree. This version exposes WipeTowerData and the
+      // print config, but not the newer mesh/getter readback helpers.
       if (print.has_wipe_tower())
       {
-        const Slic3r::BoundingBoxf bbx = print.get_wipe_tower_bbx();
-        const float depth = print.get_wipe_tower_depth();
-        const Slic3r::Vec2f ribOffset = print.get_rib_offset();
         const Slic3r::WipeTowerData &wtData = print.wipe_tower_data();
+        const Slic3r::PrintConfig &printConfig = print.config();
+        const Slic3r::Vec3d plateOrigin = print.get_plate_origin();
+        const int plateIndex = targetPlateIndex >= 0 ? targetPlateIndex : 0;
+        const float towerX = float(printConfig.wipe_tower_x.get_at(plateIndex) + plateOrigin(0));
+        const float towerY = float(printConfig.wipe_tower_y.get_at(plateIndex) + plateOrigin(1));
+        const float bodyWidth = float(printConfig.prime_tower_width.value);
+        const float bodyDepth = wtData.depth;
+        const float brimWidth = wtData.brim_width;
         capturedGeometry.valid = true;
-        capturedGeometry.width = float(bbx.max.x() - bbx.min.x());
-        capturedGeometry.depth = depth;
+        capturedGeometry.width = bodyWidth + 2.0f * brimWidth;
+        capturedGeometry.depth = bodyDepth + 2.0f * brimWidth;
         capturedGeometry.height = wtData.height;
-        capturedGeometry.brimWidth = wtData.brim_width;
-        // Corner -> center: add half the bed-plane extents so the consumer
-        // (which expects a center) renders the box at the true position.
-        capturedGeometry.x = float(bbx.min.x() + ribOffset.x()) + capturedGeometry.width * 0.5f;
-        capturedGeometry.z = float(bbx.min.y() + ribOffset.y()) + capturedGeometry.depth * 0.5f;
-        capturedGeometry.ribOffsetX = ribOffset.x();
-        capturedGeometry.ribOffsetY = ribOffset.y();
-
-        // Phase 109 (WTMESH-01/02): capture the real wipe-tower mesh BY VALUE
-        // when the engine populated wipe_tower_mesh_data (Print.hpp:766). This
-        // RE-OPENS Phase 99 Frozen Decision 2 (Option B was LOCKED future
-        // upgrade). The Option A dim fields above stay populated so the Option
-        // A fallback still works when hasRealMesh is false.
-        //
-        // Mirrors upstream load_real_wipe_tower_preview (3DScene.cpp:906-914):
-        // start from real_wipe_tower_mesh, merge real_brim_mesh when present,
-        // run convex_hull_3d() to get the silhouette shell, extract its.vertices
-        // as flattened XYZ floats. NO TriangleMesh* or its* escapes the worker
-        // -- meshVertices is a pure float vector (Frozen Decision 1 extended).
-        // wipe_tower_mesh_data->clear() resets it to nullopt (Print.hpp:776), so
-        // single-material / pre-slice / mock paths leave hasRealMesh=false and
-        // the renderer takes the Option A dimensioned-box path.
-        if (wtData.wipe_tower_mesh_data != std::nullopt)
-        {
-          const Slic3r::WipeTowerData::WipeTowerMeshData &meshData =
-              *wtData.wipe_tower_mesh_data;
-          Slic3r::TriangleMesh mergedMesh = meshData.real_wipe_tower_mesh;
-          // Upstream 3DScene.cpp:907-909 conditionally merges the brim mesh.
-          // We mirror that: merge when the brim mesh carries geometry. The
-          // engine populates real_brim_mesh alongside real_wipe_tower_mesh when
-          // a brim is present, so the vertex count check is the safe gate.
-          if (!meshData.real_brim_mesh.its.vertices.empty())
-            mergedMesh.merge(meshData.real_brim_mesh);
-          if (!mergedMesh.its.vertices.empty())
-          {
-            const Slic3r::TriangleMesh shell = mergedMesh.convex_hull_3d();
-            // Phase 109 REVIEW CRITICAL-1: shell.its.vertices is a DEDUPLICATED
-            // POINT CLOUD, not a triangle soup (its_convex_hull at
-            // TriangleMesh.cpp:1342-1424 builds a separate its.indices facet
-            // list). Upstream renders the hull via init_from(shell) which uses
-            // BOTH. Expand the indices into a flattened XYZ triangle soup here
-            // so downstream consumers (buildWipeTowerMeshVertices + SoftwareViewport
-            // mirror) receive the triangle payload they expect, not a point cloud
-            // that would render as garbage GL_TRIANGLES.
-            const auto &sv = shell.its.vertices;
-            const auto &si = shell.its.indices;
-            if (!sv.empty() && !si.empty())
-            {
-              capturedGeometry.meshVertices.reserve(si.size() * 9);
-              for (const Slic3r::Vec3i32 &f : si)
-              {
-                for (int k = 0; k < 3; ++k)
-                {
-                  const Slic3r::Vec3f &v = sv[f[k]];
-                  capturedGeometry.meshVertices.push_back(v.x());
-                  capturedGeometry.meshVertices.push_back(v.y());
-                  capturedGeometry.meshVertices.push_back(v.z());
-                }
-              }
-              capturedGeometry.hasRealMesh = true;
-            }
-          }
-        }
+        capturedGeometry.brimWidth = brimWidth;
+        capturedGeometry.x = towerX + bodyWidth * 0.5f;
+        capturedGeometry.z = towerY + bodyDepth * 0.5f;
+        capturedGeometry.hasRealMesh = false;
       }
 
       resultPlateLabel = targetPlateLabel;
       resultPlateIndex = targetPlateIndex;
 
-      // Phase 108 (FMAP-01): capture the filament-map auto-recommendation BY
-      // VALUE before the Print is invalidated (activePrint_.store(nullptr)
-      // below). Mirrors the WipeTowerGeometry capture above (Frozen Decision 1:
-      // no Print* may escape the worker). Reads Print::get_filament_maps()
-      // (Print.cpp:3051) -- the per-extruder mapping the engine computed inside
-      // print.process() at Print.cpp:2484-2491 (only when mode < fmmManual).
-      // The mode is read via Print::get_filament_map_mode() (Print.cpp:3056)
-      // and stored as the Phase 107 OWzx::FilamentMapMode enum (the upstream
-      // Slic3r::FilamentMapMode has identical numeric values, so a
-      // static_cast<int> round-trips losslessly). valid is set ONLY when the
-      // auto-recommendation actually ran (mode < fmmManual per Print.cpp:2485):
-      // when the user picked Manual, the engine does not compute an auto-map
-      // and there is nothing to surface (mirrors WTREAD-02 gate logic).
-      {
-        const int mapModeInt = static_cast<int>(print.get_filament_map_mode());
-        capturedFilamentMap.mode =
-            static_cast<OWzx::FilamentMapMode>(mapModeInt);
-        if (mapModeInt < static_cast<int>(OWzx::FilamentMapMode::fmmManual)) {
-          capturedFilamentMap.maps = print.get_filament_maps();
-          capturedFilamentMap.valid = true;
-        }
-      }
+      // This upstream source tree does not expose get_filament_maps() /
+      // get_filament_map_mode(), so leave the readback invalid and keep the UI
+      // from surfacing a stale auto recommendation.
+      capturedFilamentMap.valid = false;
 
       receiver->activePrint_.store(nullptr, std::memory_order_release);
     }
@@ -925,6 +890,7 @@ void SliceService::cancelSlice()
 #endif
   emit progressChanged();
   emit stateChanged();
+  emit sliceStateChanged();
 }
 
 bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
@@ -951,6 +917,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
              statusLabel_.toUtf8().constData());
     emit progressChanged();
     emit stateChanged();
+  emit sliceStateChanged();
     emit sliceFailed(statusLabel_);
     activeTargetPlateIndex_ = -1;
     return false;
@@ -1223,6 +1190,7 @@ void SliceService::setExportStatus(State state, int progress, const QString &lab
   statusLabel_ = label;
   emit progressChanged();
   emit stateChanged();
+  emit sliceStateChanged();
 }
 
 bool SliceService::exportSourceToPath(const QString &sourcePath, const QString &targetPath, const QString &displayName)
@@ -1399,6 +1367,7 @@ bool SliceService::activatePlateResult(int plateIndex)
       emit resultChanged();
       emit sliceResultCleared();
       emit stateChanged();
+  emit sliceStateChanged();
     }
     return false;
   }
@@ -1430,6 +1399,7 @@ bool SliceService::activatePlateResult(int plateIndex)
   emit progressChanged();
   emit resultChanged();
   emit stateChanged();
+  emit sliceStateChanged();
   return true;
 }
 
@@ -1440,6 +1410,7 @@ void SliceService::clearPlateResults()
   emit resultChanged();
   emit sliceResultCleared();
   emit stateChanged();
+  emit sliceStateChanged();
 }
 
 void SliceService::removePlateResult(int plateIndex)
@@ -1458,6 +1429,7 @@ void SliceService::removePlateResult(int plateIndex)
     if (clearedCurrentOutput)
       emit sliceResultCleared();
     emit stateChanged();
+  emit sliceStateChanged();
   }
 }
 

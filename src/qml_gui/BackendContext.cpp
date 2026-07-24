@@ -9,6 +9,7 @@
 #include "core/services/CalibrationServiceMock.h"
 #include "core/services/PresetServiceMock.h"
 #include "core/services/ProjectServiceMock.h"
+#include "core/services/PluginService.h"
 #include "core/services/SliceService.h"
 #include "core/services/UndoRedoManager.h"
 #include "core/services/AppSettingsService.h"
@@ -22,6 +23,7 @@
 #include "core/viewmodels/CalibrationViewModel.h"
 #include "core/viewmodels/ModelMallViewModel.h"
 #include "core/viewmodels/MultiMachineViewModel.h"
+#include "core/viewmodels/AmsMaterialsViewModel.h"
 
 #include <QByteArray>
 #include <QGuiApplication>
@@ -65,6 +67,9 @@ BackendContext::BackendContext(QObject *parent)
   sliceService_ = new SliceService(projectService_, this);
   // v2.7 P1：注入 SliceService 到 CalibrationService（校准时触发 calib slice）
   calibrationService_->setSliceService(sliceService_);
+  // Phase 197: inject ProjectServiceMock so the tower modes can load a
+  // dedicated tower model (qrc:/qml/assets/calib/*.stl/.step) before slicing.
+  calibrationService_->setProjectService(projectService_);
   networkService_ = new NetworkServiceMock(this);
   cameraService_ = new CameraServiceMock(this);
   auto *cloudService = new CloudServiceMock(this);
@@ -108,10 +113,16 @@ BackendContext::BackendContext(QObject *parent)
   calibrationViewModel_->setPresetService(presetService_);
   modelMallViewModel_ = new ModelMallViewModel(this);
   multiMachineViewModel_ = new MultiMachineViewModel(this);
+  // Phase 201 (v5.6 AMS Architecture Cleanup): mock data + persistence for
+  // AMSSettingsDialog. Data source stays mock; persistence is local QSettings.
+  amsMaterialsViewModel_ = new AmsMaterialsViewModel(this);
   // v2.8 W3: application-level persisted settings.
   appSettings_ = new AppSettingsService(this);
   // v2.8 W3: inject settings into SliceService for persisted bed size lookup.
   sliceService_->setAppSettings(appSettings_);
+  // Phase 202 (v5.6 Plugin Manager UI Real Backend): plugin registry + mock
+  // install/enable state with QSettings persistence under plugins/*.
+  pluginService_ = new PluginService(this);
 
   // 初始化提示数据库（对齐上游 HintDatabase::init）
   initHintDatabase();
@@ -242,7 +253,14 @@ QObject *BackendContext::projectViewModel() const { return projectViewModel_; }
 QObject *BackendContext::calibrationViewModel() const { return calibrationViewModel_; }
 QObject *BackendContext::modelMallViewModel() const { return modelMallViewModel_; }
 QObject *BackendContext::multiMachineViewModel() const { return multiMachineViewModel_; }
+QObject *BackendContext::amsMaterialsViewModel() const { return amsMaterialsViewModel_; }
 QObject *BackendContext::appSettings() const { return appSettings_; }
+
+QObject *BackendContext::pluginService() const { return pluginService_; }
+
+// Phase 199 (WIZ-01): expose the preset data service so the ConfigWizard can
+// enumerate vendors / printer models / materials / bed surfaces.
+QObject *BackendContext::presetServiceMock() const { return presetService_; }
 
 bool BackendContext::visualCompareMode() const
 {

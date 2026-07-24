@@ -704,4 +704,86 @@ Historical migration foundation based on CrealityPrint-era work. These artifacts
 
 ---
 
-*Last updated: 2026-07-01 after v3.6 planning.*
+*Historical entries through v3.6 were last updated: 2026-07-01.*
+
+---
+
+### v5.5 - Build/Run Parity and Dependency Provenance
+
+**Completed:** 2026-07-23
+**Status:** Complete
+**Phases:** 188-192
+
+**Goal:** Make the local canonical build/run path explainable, reproducible,
+and comparable with GitHub CI without changing product behavior.
+
+**Outcome:** The canonical script now records its selected Qt, upstream,
+dependency, compiler, Ninja, and build-directory inputs; classifies stage
+failures; verifies launch liveness; and passes the full local regression and
+E2E workflow. The local fallback to `D:\work\OrcaSlicer` is recorded as a
+submodule-provenance follow-up in the v5.5 milestone audit.
+
+---
+
+### v5.6 - Deferred Backlog Closure
+
+**Started:** 2026-07-24
+**Completed:** 2026-07-24
+**Status:** Complete
+**Phases:** 193-205
+
+**Goal:** Dispose of all 11 v5.5 deferred items in one milestone. Implement the
+8 offline-deliverable items; document the remaining 3 per user decisions.
+
+**Scope rule:** No reopening of LAN/device/cloud/printer-hardware scope; no
+CPython embedding; no D3D12 default promotion; no upstream OrcaSlicer patches;
+sole canonical build command and `build/` directory.
+
+**Planned phases:**
+
+- Phase 193: Planning State Reconciliation
+- Phase 194: Cmp-03 OptionRow and Slider Unification
+- Phase 195: KBShortcutsDialog Extraction and Grouping
+- Phase 196: XD-02 Emboss Spinner and SliceProgress States
+- Phase 197: Calibration Dedicated Tower Geometry
+- Phase 198: ObjectList Tree Deepening (Auxiliary file-tree panel)
+- Phase 199: ConfigWizard Vendor/Model Enumeration Layer
+- Phase 200: ConfigWizard Single-Vendor Wizard Rewrite
+- Phase 201: AMS Architecture Cleanup (mock to ViewModel)
+- Phase 202: Plugin Manager UI Real Backend (no Python)
+- Phase 203: D3D12 Root-Cause Confirmation (no default promotion)
+- Phase 204: de/fr/ja/ko Translation Long Tail to >=85%
+- Phase 205: Cross-Workstream Regression Gate and Milestone Audit
+
+**User decisions (2026-07-24):**
+
+1. H2C/A2L multi-nozzle UI: kept deferred (bb3 fork + product decision).
+2. AMS material settings: architecture cleanup only, no network.
+3. Python plugin framework: align with WebDownPluginDlg, no CPython.
+4. D3D12: root-cause confirmation only, no default promotion.
+
+---
+
+### v5.7 - D3D12 Backend Investigation
+
+**Started:** 2026-07-24
+**Completed:** 2026-07-24
+**Status:** Complete (D3D12 promotion reverted; D3D11 default restored)
+**Phases:** 206-211
+
+**Goal:** Investigate promoting D3D12 to the default QRhi backend; mitigate the
+three candidate seams; verify on real hardware.
+
+**Outcome:** D3D12 promotion attempted then **reverted**. Real-machine
+verification found D3D12 crashes at QQuickWindow swapchain init on AMD Radeon
+APU (mainstream integrated graphics) — confirmed on the dev host (AMD Radeon
+Graphics, real display, no virtual-display software running). D3D11-first
+default restored; D3D12 remains opt-in (`OWZX_RHI_RENDERER=d3d12`). Phase 207-210
+retained: env-gated diagnostics, seam A/B/C mitigations (correct QRhi-usage
+improvements), render_bench isolating the failure to the swapchain path. The
+"promote D3D12?" question (deferred since v4.5) is closed with hard evidence:
+**no**, until the AMD APU swapchain issue is resolved.
+
+---
+
+*Last updated: 2026-07-24 after v5.7 milestone closure.*

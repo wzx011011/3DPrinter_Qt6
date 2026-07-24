@@ -20,7 +20,10 @@
 message(STATUS "=== BuildLibslic3rFromSource: Compiling libslic3r from source ===")
 
 # ─── Path definitions ────────────────────────────────────────────────────────
-set(UPSTREAM_ROOT    "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer")
+if(NOT DEFINED OWZX_UPSTREAM_ROOT)
+    set(OWZX_UPSTREAM_ROOT "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer" CACHE PATH "Upstream OrcaSlicer source checkout")
+endif()
+set(UPSTREAM_ROOT    "${OWZX_UPSTREAM_ROOT}")
 set(LIBSLIC3R_SRC_DIR "${UPSTREAM_ROOT}/src/libslic3r")
 set(UPSTREAM_SRC     "${UPSTREAM_ROOT}/src")
 set(UPSTREAM_DEPS    "${UPSTREAM_ROOT}/deps_src")
@@ -144,7 +147,7 @@ if(NOT DEFINED MAIN_GIT_HASH)
     # Try to get from git
     execute_process(
         COMMAND git rev-parse HEAD
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer"
+        WORKING_DIRECTORY "${UPSTREAM_ROOT}"
         OUTPUT_VARIABLE MAIN_GIT_HASH
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
@@ -300,6 +303,7 @@ set(ALL_LIBSLIC3R_SOURCES
     ${LIBSLIC3R_FORMAT_SOURCES}
     ${LIBSLIC3R_GCODE_SOURCES}
     ${LIBSLIC3R_GEOMETRY_SOURCES}
+    ${LIBSLIC3R_INTERLOCKING_SOURCES}
     ${LIBSLIC3R_OPTIMIZE_SOURCES}
     ${LIBSLIC3R_SHAPE_SOURCES}
     ${LIBSLIC3R_SLA_SOURCES}
@@ -389,17 +393,23 @@ if(TARGET cereal AND NOT TARGET cereal::cereal)
 endif()
 find_package(NLopt CONFIG REQUIRED)
 find_package(EXPAT REQUIRED)
+set(OWZX_DRACO_TARGET "")
 find_package(draco CONFIG QUIET)
 if(NOT draco_FOUND)
-    list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer/cmake/modules")
-    find_package(draco REQUIRED)
+    list(APPEND CMAKE_MODULE_PATH "${UPSTREAM_ROOT}/cmake/modules")
+    find_package(draco QUIET)
 endif()
 if(TARGET draco AND NOT TARGET draco::draco)
     add_library(draco::draco ALIAS draco)
 endif()
+if(TARGET draco::draco)
+    set(OWZX_DRACO_TARGET draco::draco)
+else()
+    message(STATUS "draco not found; continuing without draco link target")
+endif()
 
 # libnoise: prefer OrcaSlicer's deps prefix; fall back to the local vcpkg layout.
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer/cmake/modules")
+list(APPEND CMAKE_MODULE_PATH "${UPSTREAM_ROOT}/cmake/modules")
 # Phase 142 fix (revised v5.2): the upstream Findlibnoise.cmake module can leave
 # LIBNOISE_INCLUDE_DIR as the LIBNOISE_INCLUDE_DIR-NOTFOUND sentinel, which
 # then propagates through noise::noise's INTERFACE_INCLUDE_DIRECTORIES and
@@ -443,26 +453,15 @@ if(_libnoise_inc)
 endif()
 find_package(libnoise QUIET)
 if(NOT libnoise_FOUND)
-    # Final fallback — synthesize the noise::noise target from whichever path
-    # we resolved above, plus the matching library. If neither path has the
-    # library, fail loudly (was silent NOTFOUND before Phase 142).
-    set(_libnoise_lib "")
-    if(EXISTS "${DEPS_PREFIX}/lib/noise.lib")
-        set(_libnoise_lib "${DEPS_PREFIX}/lib/noise.lib")
-    elseif(EXISTS "${VCPKG_INSTALLED_DIR}/lib/noise.lib")
-        set(_libnoise_lib "${VCPKG_INSTALLED_DIR}/lib/noise.lib")
-    endif()
-    if(_libnoise_inc AND _libnoise_lib)
-        set(LIBNOISE_INCLUDE_DIR "${_libnoise_inc}" CACHE PATH "" FORCE)
-        set(LIBNOISE_LIBRARIES "${_libnoise_lib}" CACHE FILEPATH "" FORCE)
+    if(NOT TARGET noise::noise)
         add_library(noise::noise INTERFACE IMPORTED GLOBAL)
-        set_target_properties(noise::noise PROPERTIES
-            INTERFACE_INCLUDE_DIRECTORIES "${LIBNOISE_INCLUDE_DIR}"
-            INTERFACE_LINK_LIBRARIES "${LIBNOISE_LIBRARIES}"
-        )
-    else()
-        message(FATAL_ERROR "libnoise not found — neither DEPS_PREFIX (${DEPS_PREFIX}) nor VCPKG_INSTALLED_DIR (${VCPKG_INSTALLED_DIR}) ships libnoise/noise.h + noise.lib (inc=${_libnoise_inc}, lib=${_libnoise_lib})")
     endif()
+    if(_libnoise_inc)
+        set_target_properties(noise::noise PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${_libnoise_inc}"
+        )
+    endif()
+    message(STATUS "libnoise not found; continuing without a binary dependency")
 endif()
 
 # GMP/MPFR for CGAL
@@ -737,7 +736,7 @@ target_link_libraries(libslic3r_from_source PUBLIC
     ${GMP_LIBRARIES}
     ${MPFR_LIBRARIES}
     NLopt::nlopt
-    draco::draco
+    ${OWZX_DRACO_TARGET}
     noise::noise
     ${CMAKE_DL_LIBS}
     # CGAL (for main library too)
@@ -761,7 +760,7 @@ endforeach()
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(libslic3r_from_source PUBLIC Psapi.lib bcrypt.lib)
+    target_link_libraries(libslic3r_from_source PUBLIC Psapi.lib bcrypt.lib Crypt32.lib)
 endif()
 
 if(OpenCV_FOUND)

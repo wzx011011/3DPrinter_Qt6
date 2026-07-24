@@ -5,8 +5,14 @@ import ".."
 import "../controls"
 
 // P8.4 -- AMS Settings Dialog (aligns with upstream AMSMaterialsSetting / AMSSetting / AmsMappingPopup)
-// Filament slot management (4 slots), mapping rules, filament remaining progress
+// Filament slot management (4 slots), mapping rules, filament remaining progress.
 // Usage: AMSSettingsDialog { id: dlg }  ->  dlg.open()
+//
+// Phase 201 (v5.6 AMS Architecture Cleanup): all mock data previously hardcoded
+// as readonly QML properties is now sourced from AmsMaterialsViewModel
+// (backend.amsMaterialsViewModel). Edits go through the viewmodel's set* /
+// addMappingRule / removeMappingRule / resetToDefaults APIs and are persisted
+// to local QSettings (ams/materials/*). No network / device / cloud access.
 
 CxDialog {
     id: root
@@ -19,27 +25,20 @@ CxDialog {
     width: 500
     height: 440
 
-    // Mock filament data (aligns with upstream AMS slot model)
-    readonly property var slotColors: [Theme.statusInfo, Theme.statusError, Theme.accent, Theme.statusWarning]
-    readonly property var slotNames: [qsTr("蓝色 PLA"), qsTr("红色 ABS"), qsTr("绿色 PETG"), qsTr("黄色 TPU")]
-    readonly property var slotMaterials: ["PLA", "ABS", "PETG", "TPU"]
-    readonly property var slotAutoSwap: [true, false, true, false]
-    readonly property var materialTypes: ["PLA", "ABS", "PETG", "TPU", "ASA", "PC", "PA-CF", "PVA"]
+    // ViewModel binding (Phase 201). Set by main.qml via required property or
+    // directly. When null the dialog renders with empty state safely.
+    property var amsVm: null
 
-    // Mock mapping data (aligns with upstream AmsMappingPopup)
-    readonly property var mappingRules: [
-        { slot: 1, extruder: 1, temp: 215 },
-        { slot: 2, extruder: 2, temp: 230 },
-        { slot: 3, extruder: 3, temp: 240 }
-    ]
-
-    // Mock remaining percentages (aligns with upstream AMS filament remaining)
-    readonly property var remainingPct: [65, 42, 88, 15]
-
-    // Editable state
-    property var editNames: []
-    property var editMaterials: []
-    property var editAutoSwap: []
+    // Convenience read-only views over the viewmodel. Empty fallbacks keep the
+    // dialog robust before the viewmodel is wired.
+    readonly property var _slotColors: amsVm ? amsVm.slotColors : []
+    readonly property var _slotNames: amsVm ? amsVm.slotNames : []
+    readonly property var _slotMaterials: amsVm ? amsVm.slotMaterials : []
+    readonly property var _slotAutoSwap: amsVm ? amsVm.slotAutoSwap : []
+    readonly property var _remainingPct: amsVm ? amsVm.remainingPct : []
+    readonly property var _materialTypes: amsVm ? amsVm.materialTypes : []
+    readonly property var _mappingRules: amsVm ? amsVm.mappingRules : []
+    readonly property int _slotCount: amsVm ? amsVm.slotCount : 4
 
     contentItem: ScrollView {
         id: scrollView
@@ -68,7 +67,7 @@ CxDialog {
                 rowSpacing: 8
 
                 Repeater {
-                    model: 4
+                    model: root._slotCount
 
                     Rectangle {
                         required property int index
@@ -94,7 +93,7 @@ CxDialog {
                                     width: 16
                                     height: 16
                                     radius: 8
-                                    color: root.slotColors[index]
+                                    color: root._slotColors[index] || Theme.borderDefault
                                     border.color: Theme.borderDefault
                                     border.width: 1
                                 }
@@ -111,13 +110,11 @@ CxDialog {
                                 CxCheckBox {
                                     text: qsTr("自动换色")
                                     font.pixelSize: Theme.fontSizeXS
-                                    Component.onCompleted: checked = (root.editAutoSwap[index] !== undefined)
-                                        ? root.editAutoSwap[index]
-                                        : root.slotAutoSwap[index]
+                                    // Bind directly to the viewmodel so edits persist immediately.
+                                    checked: root._slotAutoSwap[index] === true
                                     onCheckedChanged: {
-                                        var arr = root.editAutoSwap.slice()
-                                        arr[index] = checked
-                                        root.editAutoSwap = arr
+                                        if (root.amsVm)
+                                            root.amsVm.setSlotAutoSwap(index, checked)
                                     }
                                 }
                             }
@@ -127,13 +124,10 @@ CxDialog {
                                 Layout.fillWidth: true
                                 implicitHeight: 24
                                 font.pixelSize: Theme.fontSizeSM
-                                text: root.editNames[index] !== undefined
-                                    ? root.editNames[index]
-                                    : root.slotNames[index]
+                                text: root._slotNames[index] || ""
                                 onEditingFinished: {
-                                    var arr = root.editNames.slice()
-                                    arr[index] = text
-                                    root.editNames = arr
+                                    if (root.amsVm)
+                                        root.amsVm.setSlotName(index, text)
                                 }
                             }
 
@@ -145,17 +139,14 @@ CxDialog {
                                     Layout.fillWidth: true
                                     implicitHeight: 24
                                     font.pixelSize: Theme.fontSizeSM
-                                    model: root.materialTypes
+                                    model: root._materialTypes
                                     currentIndex: {
-                                        var m = root.editMaterials[index] !== undefined
-                                            ? root.editMaterials[index]
-                                            : root.slotMaterials[index]
-                                        return root.materialTypes.indexOf(m)
+                                        var m = root._slotMaterials[index] || ""
+                                        return root._materialTypes.indexOf(m)
                                     }
                                     onActivated: function(idx) {
-                                        var arr = root.editMaterials.slice()
-                                        arr[index] = root.materialTypes[idx]
-                                        root.editMaterials = arr
+                                        if (root.amsVm)
+                                            root.amsVm.setSlotMaterial(index, root._materialTypes[idx])
                                     }
                                 }
 
@@ -163,7 +154,7 @@ CxDialog {
                                 Row {
                                     spacing: Theme.spacingXS
                                     Repeater {
-                                        model: root.slotColors
+                                        model: root._slotColors
                                         Rectangle {
                                             required property int index
                                             required property string modelData
@@ -212,7 +203,7 @@ CxDialog {
                     id: mappingList
                     anchors.fill: parent
                     anchors.margins: Theme.spacingXS
-                    model: root.mappingRules
+                    model: root._mappingRules
                     spacing: Theme.spacingXS
                     interactive: false
 
@@ -253,17 +244,41 @@ CxDialog {
                                 color: Theme.accent
                                 font.pixelSize: Theme.fontSizeSM
                             }
+
+                            Item { Layout.fillWidth: true }
+
+                            // Remove a single mapping rule (Phase 201: previously no delete UI).
+                            CxButton {
+                                text: "x"
+                                cxStyle: CxButton.Style.Secondary
+                                compact: true
+                                onClicked: {
+                                    if (root.amsVm)
+                                        root.amsVm.removeMappingRule(index)
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            CxButton {
-                Layout.alignment: Qt.AlignRight
-                text: qsTr("添加映射")
-                cxStyle: CxButton.Style.Secondary
-                compact: true
-                enabled: false
+            // Phase 201: "Add mapping" is now functional (was enabled:false).
+            // Appends a default rule for the next slot/extruder pair; the user
+            // tunes values via the same viewmodel APIs in a follow-up editor.
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                CxButton {
+                    Layout.alignment: Qt.AlignRight
+                    text: qsTr("添加映射")
+                    cxStyle: CxButton.Style.Secondary
+                    compact: true
+                    enabled: root.amsVm !== null
+                    onClicked: {
+                        var next = root.amsVm.mappingRuleCount + 1
+                        root.amsVm.addMappingRule(next, next, 210)
+                    }
+                }
             }
 
             // -- Section 3: Filament Remaining --
@@ -276,7 +291,7 @@ CxDialog {
             }
 
             Repeater {
-                model: 4
+                model: root._slotCount
 
                 RowLayout {
                     Layout.fillWidth: true
@@ -285,7 +300,7 @@ CxDialog {
                         width: 12
                         height: 12
                         radius: 6
-                        color: root.slotColors[index]
+                        color: root._slotColors[index] || Theme.borderDefault
                         border.color: Theme.borderDefault
                         border.width: 1
                     }
@@ -307,11 +322,11 @@ CxDialog {
                         border.width: 1
 
                         Rectangle {
-                            width: parent.width * (root.remainingPct[index] / 100)
+                            width: parent.width * ((root._remainingPct[index] || 0) / 100)
                             height: parent.height
                             radius: 5
                             color: {
-                                var pct = root.remainingPct[index]
+                                var pct = root._remainingPct[index] || 0
                                 if (pct <= 20) return Theme.statusError
                                 if (pct <= 50) return Theme.statusWarning
                                 return Theme.accent
@@ -320,9 +335,9 @@ CxDialog {
                     }
 
                     Text {
-                        text: root.remainingPct[index] + "%"
+                        text: (root._remainingPct[index] || 0) + "%"
                         color: {
-                            var pct = root.remainingPct[index]
+                            var pct = root._remainingPct[index] || 0
                             if (pct <= 20) return Theme.statusError
                             if (pct <= 50) return Theme.statusWarning
                             return Theme.textPrimary
@@ -356,17 +371,22 @@ CxDialog {
             spacing: Theme.spacingMD
             Item { Layout.fillWidth: true }
 
+            // Phase 201: reset mock data + clear persisted overrides.
+            CxButton {
+                text: qsTr("重置默认")
+                cxStyle: CxButton.Style.Secondary
+                enabled: root.amsVm !== null
+                onClicked: {
+                    if (root.amsVm)
+                        root.amsVm.resetToDefaults()
+                }
+            }
+
             CxButton {
                 text: qsTr("关闭")
                 cxStyle: CxButton.Style.Secondary
                 onClicked: root.close()
             }
         }
-    }
-
-    onOpened: {
-        editNames = slotNames.slice()
-        editMaterials = slotMaterials.slice()
-        editAutoSwap = slotAutoSwap.slice()
     }
 }

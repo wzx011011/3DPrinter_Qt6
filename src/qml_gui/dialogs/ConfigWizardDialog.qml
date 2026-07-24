@@ -4,8 +4,16 @@ import QtQuick.Layouts
 import ".."
 import "../controls"
 
-// P8.1 -- ConfigWizardDialog: first-run configuration wizard
+// P8.1 / Phase 200 (WIZ-02) -- ConfigWizardDialog: first-run configuration
+// wizard. Single-vendor wizard driven by PresetServiceMock enumeration.
+//
 // Multi-page wizard: Welcome -> Printer -> Filament -> Done
+// Printer / filament / bed lists come from backend.presetServiceMock
+// (Phase 199 WIZ-01), replacing the prior hard-coded mock. This wizard is
+// single-vendor by design: it picks the first vendor returned by
+// vendors() and enumerates only that vendor's printer models and
+// materials. Multi-vendor selection + PresetUpdater is Deferred.
+//
 // Usage: ConfigWizardDialog { id: wizard }  ->  wizard.open()
 CxDialog {
     id: root
@@ -25,6 +33,22 @@ CxDialog {
     property string selectedNozzle: "0.4"
 
     signal wizardFinished()
+
+    // Phase 200 (WIZ-02): single-vendor wizard data bindings.
+    // Lazily resolve the preset service; null-safe (typeof guard matches the
+    // PreparePage.qml convention) so the dialog still renders in designer /
+    // contexts without a backend context property.
+    readonly property var presetSvc: typeof backend !== "undefined" && backend
+        ? backend.presetServiceMock : null
+    readonly property var vendorList: presetSvc ? presetSvc.vendors() : []
+    // Single vendor: the first one returned. Empty when no presets loaded.
+    readonly property string activeVendor: vendorList.length > 0 ? vendorList[0] : ""
+    readonly property var printerModelList: presetSvc && activeVendor.length > 0
+        ? presetSvc.printerModelsForVendor(activeVendor) : []
+    readonly property var materialList: presetSvc && activeVendor.length > 0
+        ? presetSvc.materialsForVendor(activeVendor) : []
+    readonly property var bedTypeList: presetSvc
+        ? presetSvc.defaultBedTypes() : []
 
     contentItem: ColumnLayout {
         spacing: Theme.spacingXS
@@ -96,14 +120,18 @@ CxDialog {
                     }
 
                     Text {
-                        text: qsTr("请选择您使用的打印机型号：")
+                        text: activeVendor.length > 0
+                            ? qsTr("请选择您使用的 %1 打印机型号：").arg(activeVendor)
+                            : qsTr("请选择您使用的打印机型号：")
                         color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM
+                        visible: printerModelList.length > 0
                     }
 
-                    // Printer preset combo
+                    // Printer preset combo (Phase 200: dynamic from enumeration)
                     Rectangle {
                         Layout.fillWidth: true; height: 36; radius: 5
                         color: Theme.bgInset; border.color: Theme.switchTrackOff
+                        visible: printerModelList.length > 0
 
                         RowLayout {
                             anchors.fill: parent; anchors.margins: 8; spacing: Theme.spacingMD
@@ -111,26 +139,32 @@ CxDialog {
                             CxComboBox {
                                 id: printerCombo
                                 Layout.fillWidth: true
-                                model: [
-                                    qsTr("Creality K1C 0.4 nozzle"),
-                                    qsTr("K1 Max 0.4 nozzle"),
-                                    qsTr("Ender-3 S1 0.4 nozzle"),
-                                    qsTr("CR-10 Smart Pro 0.4 nozzle")
-                                ]
+                                model: printerModelList
                                 currentIndex: 0
                             }
                         }
+                    }
+
+                    // Empty-state hint when no printer preset is available
+                    Text {
+                        Layout.fillWidth: true
+                        visible: printerModelList.length === 0
+                        wrapMode: Text.WordWrap
+                        color: Theme.statusWarning; font.pixelSize: Theme.fontSizeSM
+                        text: qsTr("未发现打印机预设，请稍后在设置中导入厂商配置。")
                     }
 
                     // Bed type
                     Text {
                         text: qsTr("热床类型：")
                         color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM
+                        visible: bedTypeList.length > 0
                     }
 
                     Rectangle {
                         Layout.fillWidth: true; height: 36; radius: 5
                         color: Theme.bgInset; border.color: Theme.switchTrackOff
+                        visible: bedTypeList.length > 0
 
                         RowLayout {
                             anchors.fill: parent; anchors.margins: 8; spacing: Theme.spacingMD
@@ -138,12 +172,7 @@ CxDialog {
                             CxComboBox {
                                 id: bedCombo
                                 Layout.fillWidth: true
-                                model: [
-                                    qsTr("光滑 PEI 板"),
-                                    qsTr("普通 PEI 板"),
-                                    qsTr("PC 热床"),
-                                    qsTr("EP 热床")
-                                ]
+                                model: bedTypeList
                                 currentIndex: 0
                             }
                         }
@@ -176,12 +205,14 @@ CxDialog {
                     Text {
                         text: qsTr("请选择您常用的耗材类型：")
                         color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM
+                        visible: materialList.length > 0
                     }
 
-                    // Filament preset combo
+                    // Filament preset combo (Phase 200: dynamic from enumeration)
                     Rectangle {
                         Layout.fillWidth: true; height: 36; radius: 5
                         color: Theme.bgInset; border.color: Theme.switchTrackOff
+                        visible: materialList.length > 0
 
                         RowLayout {
                             anchors.fill: parent; anchors.margins: 8; spacing: Theme.spacingMD
@@ -189,16 +220,29 @@ CxDialog {
                             CxComboBox {
                                 id: filamentCombo
                                 Layout.fillWidth: true
-                                model: ["PLA", "ABS", "PETG", "TPU", "ASA"]
+                                model: materialList
                                 currentIndex: 0
                             }
                         }
                     }
 
-                    // Temperature info card
+                    // Empty-state hint when no material preset is available
+                    Text {
+                        Layout.fillWidth: true
+                        visible: materialList.length === 0
+                        wrapMode: Text.WordWrap
+                        color: Theme.statusWarning; font.pixelSize: Theme.fontSizeSM
+                        text: qsTr("未发现耗材预设，请稍后在设置中导入厂商配置。")
+                    }
+
+                    // Temperature info card. Preset names are now the source
+                    // of truth; temperatures come from the selected preset's
+                    // stored values (nozzle_temp / bed_temp) instead of the
+                    // prior switch-case mock.
                     Rectangle {
                         Layout.fillWidth: true; radius: 6; color: Theme.bgSurface; border.color: Theme.bgCard
                         Layout.preferredHeight: tempInfo.implicitHeight + 24
+                        visible: materialList.length > 0
 
                         ColumnLayout {
                             id: tempInfo
@@ -207,17 +251,10 @@ CxDialog {
                                 spacing: Theme.spacingSM
                                 Text { text: qsTr("喷嘴温度:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM }
                                 Text {
-                                    id: nozzleTempText
                                     color: Theme.statusWarning; font.pixelSize: Theme.fontSizeMD; font.bold: true
                                     text: {
-                                        switch (filamentCombo.currentIndex) {
-                                        case 0: return "210°C";  // PLA
-                                        case 1: return "240°C";  // ABS
-                                        case 2: return "230°C";  // PETG
-                                        case 3: return "220°C";  // TPU
-                                        case 4: return "250°C";  // ASA
-                                        default: return "210°C";
-                                        }
+                                        var t = currentNozzleTemp();
+                                        return t >= 0 ? (t + "°C") : "--";
                                     }
                                 }
                             }
@@ -226,17 +263,10 @@ CxDialog {
                                 spacing: Theme.spacingSM
                                 Text { text: qsTr("热床温度:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM }
                                 Text {
-                                    id: bedTempText
                                     color: Theme.statusInfo; font.pixelSize: Theme.fontSizeMD; font.bold: true
                                     text: {
-                                        switch (filamentCombo.currentIndex) {
-                                        case 0: return "60°C";   // PLA
-                                        case 1: return "100°C";  // ABS
-                                        case 2: return "80°C";   // PETG
-                                        case 3: return "50°C";   // TPU
-                                        case 4: return "100°C";  // ASA
-                                        default: return "60°C";
-                                        }
+                                        var t = currentBedTemp();
+                                        return t >= 0 ? (t + "°C") : "--";
                                     }
                                 }
                             }
@@ -246,16 +276,7 @@ CxDialog {
                                 color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS
                                 wrapMode: Text.WordWrap
                                 lineHeight: 1.5
-                                text: {
-                                    switch (filamentCombo.currentIndex) {
-                                    case 0: return qsTr("PLA 是最常用的耗材，易于打印，适合初学者。建议打印时开启风扇冷却。");
-                                    case 1: return qsTr("ABS 强度高，耐热性好，适合工程零件。打印时建议关闭风扇，防止翘边。");
-                                    case 2: return qsTr("PETG 兼具强度和韧性，透明度可选，适合功能性零件。");
-                                    case 3: return qsTr("TPU 是柔性耗材，适合打印弹性零件。建议降低打印速度以获得更好质量。");
-                                    case 4: return qsTr("ASA 具有优异的户外耐候性，适合户外使用的零件。打印时建议关闭风扇。");
-                                    default: return "";
-                                    }
-                                }
+                                text: currentFilamentDescription()
                             }
                         }
                     }
@@ -302,26 +323,36 @@ CxDialog {
                             anchors.fill: parent; anchors.margins: 12; spacing: Theme.spacingMD
                             Row {
                                 spacing: Theme.spacingMD
+                                visible: printerModelList.length > 0
                                 Text { text: qsTr("打印机:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM; width: 70 }
                                 Text { text: printerCombo.displayText; color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
                             }
 
                             Row {
                                 spacing: Theme.spacingMD
+                                visible: bedTypeList.length > 0
                                 Text { text: qsTr("热床:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM; width: 70 }
                                 Text { text: bedCombo.displayText; color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
                             }
 
                             Row {
                                 spacing: Theme.spacingMD
+                                visible: materialList.length > 0
                                 Text { text: qsTr("耗材:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM; width: 70 }
                                 Text { text: filamentCombo.displayText; color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
                             }
 
                             Row {
                                 spacing: Theme.spacingMD
+                                visible: materialList.length > 0
                                 Text { text: qsTr("喷嘴温度:"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeSM; width: 70 }
-                                Text { text: nozzleTempText.text; color: Theme.statusWarning; font.pixelSize: Theme.fontSizeSM }
+                                Text {
+                                    color: Theme.statusWarning; font.pixelSize: Theme.fontSizeSM
+                                    text: {
+                                        var t = currentNozzleTemp();
+                                        return t >= 0 ? (t + "°C") : "--";
+                                    }
+                                }
                             }
                         }
                     }
@@ -394,6 +425,12 @@ CxDialog {
                     anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                     onClicked: {
                         if (swipeView.currentIndex === 3) {
+                            // Phase 200 (WIZ-02): close the loop. Persist the
+                            // wizard-completed flag via the WRITE setter
+                            // (BackendContext::setConfigWizardCompleted),
+                            // which stores "wizard/completed" in QSettings
+                            // and emits configWizardCompletedChanged so
+                            // main.qml won't re-open the wizard on restart.
                             root.selectedPrinter = printerCombo.currentText;
                             root.selectedBedType = bedCombo.currentText;
                             root.selectedFilament = filamentCombo.currentText;
@@ -407,5 +444,44 @@ CxDialog {
                 }
             }
         }
+    }
+
+    // Phase 200 (WIZ-02): temperature helpers backed by the live preset
+    // store. Reads nozzle_temp / bed_temp from the currently selected
+    // material preset; returns -1 when unknown so the UI shows "--".
+    function currentNozzleTemp() {
+        if (!presetSvc || filamentCombo.currentText.length === 0)
+            return -1;
+        var v = presetSvc.presetValue(filamentCombo.currentText, "nozzle_temp");
+        var n = parseFloat(v);
+        return isNaN(n) ? -1 : Math.round(n);
+    }
+
+    function currentBedTemp() {
+        if (!presetSvc || filamentCombo.currentText.length === 0)
+            return -1;
+        var v = presetSvc.presetValue(filamentCombo.currentText, "bed_temp");
+        var n = parseFloat(v);
+        return isNaN(n) ? -1 : Math.round(n);
+    }
+
+    // Short human-readable hint derived from the material preset name.
+    // Keeps the wizard self-explanatory without re-introducing the prior
+    // hard-coded per-material switch-case.
+    function currentFilamentDescription() {
+        var name = filamentCombo.currentText;
+        if (name.length === 0)
+            return "";
+        if (name.indexOf("PLA") >= 0)
+            return qsTr("PLA 易于打印，适合初学者。建议打印时开启风扇冷却。");
+        if (name.indexOf("ABS") >= 0)
+            return qsTr("ABS 强度高、耐热性好，适合工程零件。打印时建议关闭风扇以防翘边。");
+        if (name.indexOf("PETG") >= 0)
+            return qsTr("PETG 兼具强度与韧性，适合功能性零件。");
+        if (name.indexOf("TPU") >= 0)
+            return qsTr("TPU 为柔性耗材，适合弹性零件。建议降低打印速度以获得更好质量。");
+        if (name.indexOf("ASA") >= 0)
+            return qsTr("ASA 具有优异的户外耐候性，适合户外零件。打印时建议关闭风扇。");
+        return qsTr("当前耗材：%1。").arg(name);
     }
 }

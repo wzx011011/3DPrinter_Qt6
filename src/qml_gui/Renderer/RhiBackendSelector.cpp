@@ -55,9 +55,19 @@ bool d3d12DebugLayerRequested()
 
 QVector<RhiBackendCandidate> defaultWindowsCandidates()
 {
-  // D3D11-first: D3D12 has a rendering crash on startup (Phase 26 isolation:
-  // prepare render Segfault under D3D12, D3D11 works). Make D3D11 the safe
-  // default for "auto", and D3D12 only via explicit OWZX_RHI_RENDERER=d3d12.
+  // D3D11-first: D3D12 crashes at QQuickWindow swapchain init on AMD Radeon
+  // APU (integrated graphics) — confirmed on a real machine (AMD Radeon
+  // Graphics, driver 32.0.12033.1030, real display, no virtual-display
+  // software running) in v5.7 Phase 211. The D3D12 probe (QRhi::create)
+  // succeeds and offscreen render_bench runs 60 frames clean, but the
+  // QQuickWindow flip-model swapchain path crashes with 0xC0000005 right
+  // after app.exec() (before RhiViewportRenderer::render() is reached). AMD
+  // APU is mainstream integrated graphics, so a D3D12 default would crash on
+  // launch for a large user share. D3D11 is the safe default; D3D12 remains
+  // available via explicit OWZX_RHI_RENDERER=d3d12 for discrete-GPU hosts
+  // where it has been verified. The Phase 208/209/210 seam mitigations are
+  // retained (correct QRhi-usage improvements) even though the crash is in
+  // the swapchain path, not render(). See v5.7-MILESTONE-AUDIT.md.
   return {
       {QStringLiteral("d3d11"), QSGRendererInterface::Direct3D11, QRhi::D3D11},
       {QStringLiteral("d3d12"), QSGRendererInterface::Direct3D12, QRhi::D3D12},

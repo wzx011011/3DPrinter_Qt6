@@ -7,6 +7,9 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 # ── 预编译依赖库路径（来自 E:\ai\3D-Printer\deps\build） ─────────────────
 set(DEPS_PREFIX "E:/ai/3D-Printer/deps/build/OrcaSlicer_dep/usr/local"
     CACHE PATH "Pre-built dependencies prefix from upstream OrcaSlicer build")
+set(OWZX_UPSTREAM_ROOT "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer"
+    CACHE PATH "Upstream OrcaSlicer source checkout")
+file(TO_CMAKE_PATH "${OWZX_UPSTREAM_ROOT}" OWZX_UPSTREAM_ROOT)
 
 # 将预编译依赖加入 CMAKE_PREFIX_PATH
 list(APPEND CMAKE_PREFIX_PATH
@@ -69,6 +72,7 @@ endif()
 # libslic3r_from_source target must already exist; we append OpenVDB to its
 # link line via the existing `if(TARGET openvdb_libs)` gate in
 # BuildLibslic3rFromSource.cmake:718 (which now evaluates true).
+if(OWZX_ENABLE_OPENVDB)
 set(OPENVDB_USE_STATIC_LIBS ON)
 set(USE_BLOSC TRUE)
 # Make the upstream FindOpenVDB.cmake + OpenVDBUtils.cmake discoverable. The
@@ -76,7 +80,7 @@ set(USE_BLOSC TRUE)
 # deps superbuild) and is also vendored at the OrcaSlicer source tree.
 list(APPEND CMAKE_MODULE_PATH
     "${DEPS_PREFIX}/lib/cmake/OpenVDB"
-    "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer/cmake/modules")
+    "${OWZX_UPSTREAM_ROOT}/cmake/modules")
 # The FindOpenVDB.cmake module uses OpenVDB_ROOT / OPENVDB_ROOT / OPENVDB_LIBRARYDIR
 # (not CMAKE_PREFIX_PATH) to locate the library binary. Set them explicitly so
 # libopenvdb.lib in DEPS_PREFIX/lib resolves. libblosc.lib is in the same dir.
@@ -122,6 +126,7 @@ if(OpenVDB_FOUND)
 else()
     message(WARNING "OpenVDB NOT found — Hollow/SLA features stay gated off. "
                     "Phase 142 could not locate OpenVDB in DEPS_PREFIX or the bundled find module.")
+endif()
 endif()
 
 if(OWZX_QML_GUI)
@@ -170,6 +175,8 @@ if(OWZX_QML_GUI)
         src/core/services/CalibrationServiceMock.h
         src/core/services/AppSettingsService.cpp
         src/core/services/AppSettingsService.h
+        src/core/services/PluginService.cpp
+        src/core/services/PluginService.h
         src/core/rendering/GLShaderUtil.cpp
         src/core/rendering/GLShaderUtil.h
         src/core/rendering/GizmoMath.cpp
@@ -237,6 +244,8 @@ if(OWZX_QML_GUI)
         src/core/viewmodels/ModelMallViewModel.h
         src/core/viewmodels/MultiMachineViewModel.cpp
         src/core/viewmodels/MultiMachineViewModel.h
+        src/core/viewmodels/AmsMaterialsViewModel.cpp
+        src/core/viewmodels/AmsMaterialsViewModel.h
         src/qml_gui/Models/ConfigOptionModel.cpp
         src/qml_gui/Models/ConfigOptionModel.h
         src/qml_gui/Models/PresetListModel.cpp
@@ -344,7 +353,7 @@ if(OWZX_QML_GUI)
 
     target_include_directories(owzx_app_core PUBLIC
         src
-        ${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer/src
+        ${OWZX_UPSTREAM_ROOT}/src
     )
     target_compile_definitions(owzx_app_core PUBLIC OWZX_QML_GUI=1)
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
@@ -428,7 +437,7 @@ if(OWZX_QML_GUI)
     add_custom_command(TARGET OWzxSlicer POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:OWzxSlicer>/resources/info"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer/resources/info"
+            "${OWZX_UPSTREAM_ROOT}/resources/info"
             "$<TARGET_FILE_DIR:OWzxSlicer>/resources/info")
 else()
     find_package(Qt6 REQUIRED COMPONENTS Widgets)
@@ -701,7 +710,7 @@ if(BUILD_CLI AND BUILD_LIBSLIC3R AND TARGET libslic3r)
     )
     target_include_directories(owzx_cli_core PUBLIC
         src
-        ${CMAKE_SOURCE_DIR}/third_party/OrcaSlicer/src
+        ${OWZX_UPSTREAM_ROOT}/src
     )
     target_compile_definitions(owzx_cli_core PUBLIC
         HAS_LIBSLIC3R=1

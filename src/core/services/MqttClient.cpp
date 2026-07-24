@@ -3,10 +3,9 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QUuid>
+#include <cstring>
 
 // paho-mqtt C 异步接口（DEPS_PREFIX/include）
-#include <MQTTAsync.h>
-
 namespace owzx {
 
 MqttClient::MqttClient(QObject *parent)
@@ -19,6 +18,8 @@ MqttClient::~MqttClient()
 {
     disconnectFromHost();
 }
+
+#if OWZX_HAS_PAHO_MQTT
 
 void MqttClient::connectToHost(const QString &host, int port, const QString &accessCode)
 {
@@ -165,6 +166,46 @@ bool MqttClient::publish(const QString &topic, const QString &payload)
     return true;
 }
 
+#else
+
+void MqttClient::connectToHost(const QString &host, int port, const QString &accessCode)
+{
+    Q_UNUSED(accessCode);
+    m_host = host;
+    m_port = port;
+    qWarning("[MQTT] paho-mqtt is not available; real MQTT connection disabled");
+    setState(ConnectionFailed);
+    emit errorOccurred(QStringLiteral("MQTT support is not available in this build"));
+}
+
+void MqttClient::disconnectFromHost()
+{
+    m_subscribedTopics.clear();
+    m_client = nullptr;
+    setState(Disconnected);
+}
+
+bool MqttClient::subscribe(const QString &topic)
+{
+    Q_UNUSED(topic);
+    return false;
+}
+
+bool MqttClient::unsubscribe(const QString &topic)
+{
+    Q_UNUSED(topic);
+    return false;
+}
+
+bool MqttClient::publish(const QString &topic, const QString &payload)
+{
+    Q_UNUSED(topic);
+    Q_UNUSED(payload);
+    return false;
+}
+
+#endif
+
 void MqttClient::setState(ConnectionState state)
 {
     if (m_state != state)
@@ -175,6 +216,8 @@ void MqttClient::setState(ConnectionState state)
 }
 
 // ── paho-mqtt C 回调（static，转发到 Qt 信号）──
+
+#if OWZX_HAS_PAHO_MQTT
 
 void MqttClient::onConnect(void *context, MQTTAsync_successData *response)
 {
@@ -242,5 +285,48 @@ void MqttClient::onSubscribeFailure(void *context, MQTTAsync_failureData *respon
     int code = response ? response->code : -1;
     qWarning("[MQTT] subscribe failure: %d", code);
 }
+
+#else
+
+void MqttClient::onConnect(void *context, MQTTAsync_successData *response)
+{
+    Q_UNUSED(context);
+    Q_UNUSED(response);
+}
+
+void MqttClient::onConnectFailure(void *context, MQTTAsync_failureData *response)
+{
+    Q_UNUSED(context);
+    Q_UNUSED(response);
+}
+
+void MqttClient::onDisconnect(void *context, MQTTAsync_successData *response)
+{
+    Q_UNUSED(context);
+    Q_UNUSED(response);
+}
+
+int MqttClient::onMessageArrived(void *context, char *topicName, int topicLen, MQTTAsync_message *message)
+{
+    Q_UNUSED(context);
+    Q_UNUSED(topicName);
+    Q_UNUSED(topicLen);
+    Q_UNUSED(message);
+    return 1;
+}
+
+void MqttClient::onSubscribe(void *context, MQTTAsync_successData *response)
+{
+    Q_UNUSED(context);
+    Q_UNUSED(response);
+}
+
+void MqttClient::onSubscribeFailure(void *context, MQTTAsync_failureData *response)
+{
+    Q_UNUSED(context);
+    Q_UNUSED(response);
+}
+
+#endif
 
 } // namespace owzx

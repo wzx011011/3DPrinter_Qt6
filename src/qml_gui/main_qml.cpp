@@ -286,6 +286,9 @@ int main(int argc, char *argv[])
     qputenv("QSG_RHI_DEBUG", "1");
 
   // RhiBackendSelector owns D3D11-first / D3D12 explicit opt-in policy.
+  // D3D12 is NOT the default because it crashes at QQuickWindow swapchain
+  // init on AMD Radeon APU (v5.7 Phase 211 finding). OWZX_RHI_RENDERER=d3d12
+  // opts in on verified discrete-GPU hosts.
   const RhiBackendSelection rhiSelection = selectRhiBackendFromEnvironment();
 
   if (rhiSelection.canUseRhi) {
@@ -329,6 +332,7 @@ int main(int argc, char *argv[])
     qmlRegisterType<SoftwareViewport>("OWzxGL", 1, 0, "GLViewport");
 
   BackendContext backend;
+  appendStartupLog(QStringLiteral("BackendContext constructed"));
 
   // Intentionally leak the engine to skip late Qt teardown hazards seen in
   // VisualRegressionTests. The OS reclaims all memory on process exit.
@@ -347,6 +351,7 @@ int main(int argc, char *argv[])
                      QCoreApplication::exit(-1); }, Qt::QueuedConnection);
 
   engine->rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+  appendStartupLog(QStringLiteral("context property set, loading main.qml"));
   engine->rootContext()->setContextProperty(QStringLiteral("startupSkipFirstRun"),
                                             startupOpenRequest.skipFirstRun);
   // The main window is frameless + maximized by default (declared directly in
@@ -358,7 +363,9 @@ int main(int argc, char *argv[])
   engine->addImageProvider(QStringLiteral("camera"),
                            new CameraImageProvider(backend.cameraService()));
 
+  appendStartupLog(QStringLiteral("calling engine->load(main.qml)"));
   engine->load(QUrl(QStringLiteral("qrc:/qml/main.qml")));
+  appendStartupLog(QStringLiteral("engine->load returned"));
 
   // Retranslate all QML qsTr() after language switch
   QObject::connect(&backend, &BackendContext::languageChanged,
@@ -415,5 +422,6 @@ int main(int argc, char *argv[])
   }
 #endif
 
+  appendStartupLog(QStringLiteral("entering app.exec() event loop"));
   return app.exec();
 }

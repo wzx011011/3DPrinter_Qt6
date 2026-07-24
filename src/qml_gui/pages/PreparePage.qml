@@ -75,6 +75,12 @@ Item {
         function onSelectionSettingsRequested() {
             selectionSettingsDialog.open()
         }
+        // Phase 198 (PHASE198): opens the per-object layer-range editor. Wired
+        // via signal so ObjectList right-click can trigger it without holding a
+        // dialog reference (对齐上游 GUI_ObjectLayers dialog launch).
+        function onObjectLayerRangeRequested() {
+            objectLayersDialog.open()
+        }
     }
 
     function applyFitHintIfReady() {
@@ -3429,20 +3435,32 @@ Item {
                     }
                     // Phase 145 (EMB-03): async 执行 — 长文本不阻塞 UI.
                     // Phase 173 (CL-03): migrated from pseudo-button to CxButton (Primary).
+                    // Phase 196 (FEAT-01): spinner bound to embossRunning.
                     CxButton {
                         Layout.preferredWidth: 90
                         text: qsTr("异步执行")
                         compact: true
                         cxStyle: CxButton.Style.Primary
+                        enabled: !(root.editorVm && root.editorVm.embossRunning)
                         onClicked: if (root.editorVm) root.editorVm.embossSelectedAsync()
+                    }
+                    CxBusyIndicator {
+                        Layout.preferredWidth: 18
+                        Layout.preferredHeight: 18
+                        running: root.editorVm && root.editorVm.embossRunning
+                        visible: running
                     }
                 }
 
                 // Phase 145 (EMB-03): status feedback for async emboss.
+                // Phase 196 (FEAT-01): show running/ready state instead of static placeholder.
                 Text {
                     Layout.alignment: Qt.AlignHCenter
-                    text: qsTr("(异步执行后状态显示于此)")
-                    color: Theme.textMuted
+                    text: (root.editorVm && root.editorVm.embossRunning)
+                          ? qsTr("生成中…")
+                          : qsTr("(输入文本后点异步执行)")
+                    color: (root.editorVm && root.editorVm.embossRunning)
+                           ? Theme.accent : Theme.textMuted
                     font.pixelSize: Theme.fontSizeXS
                     font.italic: true
                     visible: root.editorVm && root.editorVm.embossText.length > 0

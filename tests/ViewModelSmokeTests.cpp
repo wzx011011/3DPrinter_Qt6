@@ -1,4 +1,4 @@
-// ViewModelSmokeTests — Phase 55-04 additions.
+// ViewModelSmokeTests -- Phase 55-04 additions.
 //
 // AUTOMOC caveat (v3.0 retrospective, see ViewModelSmokeTests CMake comment):
 // single-file QtTest with cpp-internal Q_OBJECT has weak moc dependency
@@ -38,10 +38,12 @@
 #include "core/services/PresetServiceMock.h"
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceService.h"
+#include "core/services/PluginService.h"
 #include "core/services/UndoRedoManager.h"
 #include "core/services/FtpUploader.h"
 #include "core/services/SsdpDiscovery.h"
 #include "core/rendering/AssemblyMeasureGeometry.h"
+#include "core/viewmodels/AmsMaterialsViewModel.h"
 #include "core/viewmodels/ConfigViewModel.h"
 #include "core/viewmodels/CalibrationViewModel.h"
 #include "core/viewmodels/EditorViewModel.h"
@@ -156,7 +158,7 @@ class ViewModelSmokeTests final : public QObject
 
 private slots:
   void initTestCase();
-  // Phase 02-01: pure-Qt enum/signal tests — do NOT depend on HAS_LIBSLIC3R
+  // Phase 02-01: pure-Qt enum/signal tests -- do NOT depend on HAS_LIBSLIC3R
   void testTabPositionEnumValues();
   void testRequestSelectTabSignal();
   void testRequestSelectTabOutOfRange();
@@ -165,7 +167,7 @@ private slots:
   void testCurrentViewModeDefault();
   void testRequestChangeViewModeSignal();
   void testTabSelectDrivesViewMode();
-  // Phase 51-03: SHELL-02 + SHELL-03 — shell gates registered, round-trip
+  // Phase 51-03: SHELL-02 + SHELL-03 -- shell gates registered, round-trip
   // preserves state, stateChanged forwarding wired from the editor viewmodel.
   void shellStateGatesForwardToEditorViewModelAndPreserveRoundTrip();
   // Phase 52-03 (PREPSB-05): config/preset change invalidates prior slice
@@ -203,6 +205,12 @@ private slots:
   void testUpstreamDefaultsContainVectorKeys();
   void testMachineOptionsLoaded();
   void testFilamentOptionsLoaded();
+  // Phase 199 (WIZ-01): vendor/model enumeration for the ConfigWizard.
+  void testVendorEnumeration();
+  void testPrinterModelsForVendor();
+  void testMaterialsForVendor();
+  void testBedTypesForPrinterModel();
+  void testEnumerationExcludesUpstreamDefaults();
   void testMachineEditFlowsToGlobal();
   void testTierAwareSaveFiltersByTier();
   void configPresetDirtyTracksActiveTierAgainstSelectedPreset();
@@ -237,7 +245,7 @@ private slots:
   void projectServicePerPlatePrintableRoundTrip();
   // v3.0 Phase 18: 3MF multi-plate persistence round-trip (PLATE-09, the v2.9 blocker)
   void multiPlate3mfRoundTripPreservesState();
-  // Phase 157 (CLOS-04): full-state multi-plate round-trip — extends the
+  // Phase 157 (CLOS-04): full-state multi-plate round-trip -- extends the
   // existing PLATE-09 test (which covers count/locked/bed type) to assert all
   // 5 CLOS-04 dimensions + per-plate thumbnails survive save→reload. This is
   // the live ctest that Phase 152 could only source-audit-lock.
@@ -360,6 +368,14 @@ private slots:
   // renderer. Mirrors the Phase 114 MeasureEngine readback pattern (synthetic
   // input + pure helper assertion).
   void paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt();
+  // Phase 205 (GATE-01): v5.6 cross-workstream ViewModel smoke gate. Verifies
+  // the key viewmodel/service APIs landed by Phases 196-202 are callable at
+  // the C++ boundary: EditorViewModel::embossRunning, SliceService::sliceState,
+  // PresetServiceMock vendor/model enumeration, AmsMaterialsViewModel slot
+  // data, and PluginService local registry. Source-audit siblings live in
+  // QmlUiAuditTests::v56CrossWorkstreamRegressionLocked. Headless-only: no
+  // device, no network, no Python.
+  void v56CrossWorkstreamViewModelsCallable();
 
 private:
   bool hasLibslic3r() const;
@@ -379,7 +395,7 @@ void ViewModelSmokeTests::initTestCase()
   QCoreApplication::setOrganizationName(QStringLiteral("OWzx"));
   QCoreApplication::setApplicationName(QStringLiteral("OWzxSlicer"));
   if (!hasLibslic3r())
-    QSKIP("ViewModel smoke tests require HAS_LIBSLIC3R — skipping all tests");
+    QSKIP("ViewModel smoke tests require HAS_LIBSLIC3R -- skipping all tests");
   QVERIFY2(QFileInfo::exists(kStlPath), qPrintable(
       QStringLiteral("Test STL not found: %1").arg(kStlPath)));
 }
@@ -479,17 +495,17 @@ void ViewModelSmokeTests::testUpstreamDefaultsContainVectorKeys()
   PresetServiceMock preset;
   auto defaults = preset.presetValues(QStringLiteral("__upstream_defaults__"));
 
-  // coFloats type — previously skipped by extraction
+  // coFloats type -- previously skipped by extraction
   QVERIFY2(defaults.contains(QStringLiteral("machine_max_speed_x")),
            "machine_max_speed_x missing from upstream defaults (coFloats)");
   QVERIFY2(defaults.contains(QStringLiteral("nozzle_diameter")),
            "nozzle_diameter missing from upstream defaults (coFloats)");
 
-  // coEnum type — previously skipped
+  // coEnum type -- previously skipped
   QVERIFY2(defaults.contains(QStringLiteral("gcode_flavor")),
            "gcode_flavor missing from upstream defaults (coEnum)");
 
-  // coPoints type — previously skipped
+  // coPoints type -- previously skipped
   QVERIFY2(defaults.contains(QStringLiteral("printable_area")),
            "printable_area missing from upstream defaults (coPoints)");
 }
@@ -533,6 +549,96 @@ void ViewModelSmokeTests::testFilamentOptionsLoaded()
            "nozzle_temperature missing from filament options");
   QVERIFY2(filamentOpts->indexOfKey(QStringLiteral("fan_max_speed")) >= 0,
            "fan_max_speed missing from filament options");
+}
+
+// Phase 199 (WIZ-01): vendor/model enumeration for the ConfigWizard.
+// These mirror how the QML wizard consumes PresetServiceMock enumeration.
+void ViewModelSmokeTests::testVendorEnumeration()
+{
+  PresetServiceMock preset;
+  const QStringList vendors = preset.vendors();
+  QVERIFY2(!vendors.isEmpty(), "vendors() must return at least one vendor");
+  // __upstream_defaults__ is never registered in m_presetMetadata, so it must
+  // not surface as a vendor nor as a vendor name.
+  QVERIFY2(!vendors.contains(QStringLiteral("__upstream_defaults__")),
+           "__upstream_defaults__ leaked into vendors()");
+  // Built-in fallback bundle uses "OWzx Builtin"; vendor JSON (when present)
+  // contributes "Creality". At minimum the built-in vendor is expected.
+  QVERIFY2(vendors.contains(QStringLiteral("OWzx Builtin")) ||
+               vendors.contains(QStringLiteral("Creality")),
+           "expected OWzx Builtin or Creality vendor not found");
+}
+
+void ViewModelSmokeTests::testPrinterModelsForVendor()
+{
+  PresetServiceMock preset;
+  const QStringList vendors = preset.vendors();
+  QVERIFY(!vendors.isEmpty());
+
+  // Any vendor must yield at least one printer model.
+  bool anyVendorHasModels = false;
+  for (const QString &vendor : vendors)
+  {
+    const QStringList models = preset.printerModelsForVendor(vendor);
+    QVERIFY2(!models.contains(QStringLiteral("__upstream_defaults__")),
+             "__upstream_defaults__ leaked into printerModelsForVendor");
+    if (!models.isEmpty())
+      anyVendorHasModels = true;
+  }
+  QVERIFY2(anyVendorHasModels,
+           "no vendor exposes any printer model");
+
+  // Unknown vendor must yield an empty list.
+  QVERIFY(preset.printerModelsForVendor(QStringLiteral("__nonexistent_vendor__")).isEmpty());
+}
+
+void ViewModelSmokeTests::testMaterialsForVendor()
+{
+  PresetServiceMock preset;
+  const QStringList vendors = preset.vendors();
+  QVERIFY(!vendors.isEmpty());
+
+  bool anyVendorHasMaterials = false;
+  for (const QString &vendor : vendors)
+  {
+    const QStringList materials = preset.materialsForVendor(vendor);
+    QVERIFY2(!materials.contains(QStringLiteral("__upstream_defaults__")),
+             "__upstream_defaults__ leaked into materialsForVendor");
+    if (!materials.isEmpty())
+      anyVendorHasMaterials = true;
+  }
+  QVERIFY2(anyVendorHasMaterials,
+           "no vendor exposes any material");
+  QVERIFY(preset.materialsForVendor(QStringLiteral("__nonexistent_vendor__")).isEmpty());
+}
+
+void ViewModelSmokeTests::testBedTypesForPrinterModel()
+{
+  PresetServiceMock preset;
+  const QStringList defaults = preset.defaultBedTypes();
+  QVERIFY2(defaults.size() == 4, "default bed-type list must have 4 entries");
+
+  // Any model (even unknown) returns the default 4-surface list; this is the
+  // documented data-gap fallback until per-model bed metadata is wired in.
+  const QStringList beds = preset.bedTypesForPrinterModel(QStringLiteral("Creality K1C 0.4"));
+  QCOMPARE(beds, defaults);
+  const QStringList bedsUnknown = preset.bedTypesForPrinterModel(QStringLiteral("__unknown_model__"));
+  QCOMPARE(bedsUnknown, defaults);
+}
+
+void ViewModelSmokeTests::testEnumerationExcludesUpstreamDefaults()
+{
+  PresetServiceMock preset;
+  // Defensive: the pollution sink must not be enumerable via the category
+  // lists either, since those drive the vendor/model/material enumerations.
+  const auto printerNames = preset.presetNamesForCategory(PresetServiceMock::PrinterCat);
+  const auto filamentNames = preset.presetNamesForCategory(PresetServiceMock::FilamentCat);
+  QVERIFY2(!printerNames.contains(QStringLiteral("__upstream_defaults__")),
+           "__upstream_defaults__ leaked into PrinterCat list");
+  QVERIFY2(!filamentNames.contains(QStringLiteral("__upstream_defaults__")),
+           "__upstream_defaults__ leaked into FilamentCat list");
+  QVERIFY2(preset.presetCategory(QStringLiteral("__upstream_defaults__")) == -1,
+           "__upstream_defaults__ resolved to a category");
 }
 
 void ViewModelSmokeTests::testMachineEditFlowsToGlobal()
@@ -590,7 +696,7 @@ void ViewModelSmokeTests::testTierAwareSaveFiltersByTier()
   config.setCurrentPrintPreset(QStringLiteral("Unit Test Save Print Preset"));
   printOpts->setValue(printIdx, 0.35);
 
-  // Save as print tier — should only include print model keys.
+  // Save as print tier -- should only include print model keys.
   config.setActivePresetTier(QStringLiteral("print"));
   config.saveCurrentPreset();
 
@@ -606,7 +712,7 @@ void ViewModelSmokeTests::testTierAwareSaveFiltersByTier()
   config.setCurrentPrinterPreset(QStringLiteral("Unit Test Save Printer Preset"));
   machineOpts->setValue(machineIdx, 999.0);
 
-  // Now save as printer tier — machine key should be saved there.
+  // Now save as printer tier -- machine key should be saved there.
   config.setActivePresetTier(QStringLiteral("printer"));
   config.saveCurrentPreset();
 
@@ -1435,7 +1541,7 @@ void ViewModelSmokeTests::presetReadOnlyActionBlockerReasons()
                                       QStringLiteral("delete")).isEmpty());
 }
 
-// ── Phase 02-01: TabPosition Q_ENUM + requestSelectTab unit tests ──
+// -- Phase 02-01: TabPosition Q_ENUM + requestSelectTab unit tests --
 // These tests construct BackendContext standalone. They do NOT touch any
 // libslic3r-dependent method, so they run regardless of the HAS_LIBSLIC3R
 // define (the initTestCase() QSKIP gate only applies to the other slots).
@@ -1455,7 +1561,7 @@ void ViewModelSmokeTests::testTabPositionEnumValues()
   QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpPlaceholder1), 7);
   QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpPlaceholder2), 8);
 
-  // Confirm Q_ENUM registration — proves QML can read backend.TabPosition.tpX
+  // Confirm Q_ENUM registration -- proves QML can read backend.TabPosition.tpX
   const QMetaEnum meta = QMetaEnum::fromType<BackendContext::TabPosition>();
   QVERIFY(meta.isValid());
   QCOMPARE(meta.keyToValue("tpHome"), 0);
@@ -1473,7 +1579,7 @@ void ViewModelSmokeTests::testRequestSelectTabSignal()
 {
   BackendContext ctx;
 
-  // Default currentPage must remain 1 (Prepare tab) — no regression from Phase 1
+  // Default currentPage must remain 1 (Prepare tab) -- no regression from Phase 1
   QCOMPARE(ctx.currentPage(), 1);
 
   QSignalSpy spy(&ctx, &BackendContext::tabSelectRequested);
@@ -1506,7 +1612,7 @@ void ViewModelSmokeTests::testRequestSelectTabOutOfRange()
   QCOMPARE(ctx.currentPage(), before);
 }
 
-// ── Phase 03-01: ViewMode enum + requestChangeViewMode unit tests ──
+// -- Phase 03-01: ViewMode enum + requestChangeViewMode unit tests --
 
 void ViewModelSmokeTests::testViewModeEnumValues()
 {
@@ -1522,7 +1628,7 @@ void ViewModelSmokeTests::testViewModeEnumValues()
   QCOMPARE(ctx.vmPreview(), 1);
   QCOMPARE(ctx.vmAssembleView(), 2);
 
-  // Q_ENUM registration — proves C++ meta-object and future QML introspection
+  // Q_ENUM registration -- proves C++ meta-object and future QML introspection
   const QMetaEnum meta = QMetaEnum::fromType<BackendContext::ViewMode>();
   QVERIFY(meta.isValid());
   QCOMPARE(meta.keyToValue("View3D"), 0);
@@ -1597,7 +1703,7 @@ void ViewModelSmokeTests::testTabSelectDrivesViewMode()
   QCOMPARE(ctx.currentViewMode(), vmBefore);
 }
 
-// ── Phase 51-03: SHELL-02 + SHELL-03 shell gate viewmodel-state test ──
+// -- Phase 51-03: SHELL-02 + SHELL-03 shell gate viewmodel-state test --
 // Verifies the 8 BackendContext shell gate Q_PROPERTY are registered, that
 // canUndo/canRedo reflect the empty undo stack, that the Prepare -> Preview ->
 // Prepare round-trip preserves page/view state without reset, and that the
@@ -1635,7 +1741,7 @@ void ViewModelSmokeTests::shellStateGatesForwardToEditorViewModelAndPreserveRoun
   QVERIFY2(!ctx.property("canRedo").toBool(),
            "canRedo must be false on a fresh BackendContext (empty undo stack)");
 
-  // canSave forwards to !isSlicing() && !isBusy() — true while idle, so the
+  // canSave forwards to !isSlicing() && !isBusy() -- true while idle, so the
   // project can be mutated. The slicing-disable path is unit-covered by the
   // canSave() body (Plan 51-01 acceptance); a full isSlicing=true assertion
   // would require a running slice and is out of scope here.
@@ -1687,7 +1793,7 @@ void ViewModelSmokeTests::shellStateGatesForwardToEditorViewModelAndPreserveRoun
   QTRY_VERIFY_WITH_TIMEOUT(editor->modelCount() >= 1, 10000);
 }
 
-// ── Phase 52-03 (PREPSB-05): config/preset change invalidates slice results ──
+// -- Phase 52-03 (PREPSB-05): config/preset change invalidates slice results --
 // CRITICAL gap fix from Plan 52-01: before the BackendContext composition-root
 // connect, a config/preset/scope change did NOT invalidate a previously-sliced
 // result, so a user could change a filament preset and export G-code based on
@@ -1799,7 +1905,7 @@ void ViewModelSmokeTests::settingsOpenDoesNotInvalidateSliceResults()
   QCOMPARE(editorSpy.count(), 0);
 }
 
-// ── Phase 52-03 (PREPSB-02): settings forward signal is honest ──
+// -- Phase 52-03 (PREPSB-02): settings forward signal is honest --
 // The sidebar "Setting" entry point forwards to BackendContext::forwardSettingsRequest,
 // which must emit settingsRequested (interim no-op log until Phase 56 wires the dialog).
 // This asserts the signal fires so the entry point is honest, not silent dead UI.
@@ -1820,7 +1926,7 @@ void ViewModelSmokeTests::sidebarSettingsForwardEmitsRequestedSignal()
   QCOMPARE(spy.takeFirst().at(0).toString(), QStringLiteral("process"));
 }
 
-// ── Phase 04-01: Sidebar Dockable 状态 + 持久化 unit tests ──
+// -- Phase 04-01: Sidebar Dockable 状态 + 持久化 unit tests --
 // 注意：QSettings 持久化在测试进程内可验证（同 QSettings 默认 ini 路径）。
 // 为隔离，每个测试先 reset 三个 key，验证后再 reset。
 
@@ -1840,7 +1946,7 @@ void ViewModelSmokeTests::testSidebarCollapsedDefault()
   BackendContext ctx;
 
   // Sidebar is visible by default, matching upstream Plater.
-  // Phase 164 (SW-01): sidebar is now resizable within [300, 520] — was
+  // Phase 164 (SW-01): sidebar is now resizable within [300, 520] -- was
   // min==max==392 making the drag handle a no-op. Default stays 392 to
   // preserve the visual.
   QCOMPARE(ctx.sidebarCollapsed(), false);
@@ -2020,7 +2126,7 @@ void ViewModelSmokeTests::int01_SsdpDiscoveryParsesMockResponse()
 #endif
 }
 
-// ── v2.6 Phase 4: INT-03 摄像头视频流自回归（状态机 + 帧令牌） ──────
+// -- v2.6 Phase 4: INT-03 摄像头视频流自回归（状态机 + 帧令牌） ------
 // 验证 CameraServiceMock 状态机 + MonitorViewModel 帧令牌转发：
 //   - 初始 streamStatus=0 (Disconnected), frameToken=0
 //   - updateForDevice(online=true) → cameraAvailable=true
@@ -2087,7 +2193,7 @@ void ViewModelSmokeTests::int03_CameraStateMachineAndFrameToken()
   QVERIFY(!camera.errorMessage().isEmpty());
 }
 
-// ── v2.7 P1: INT-02 校准自回归（calib slice 生成 G-code） ──────────
+// -- v2.7 P1: INT-02 校准自回归（calib slice 生成 G-code） ----------
 // 验证 SliceService::setCalibParams → Print.set_calib_params → GCode::do_export
 // 走 Calib_PA_Line 分支生成校准 G-code（路径 B，镜像上游 CalibUtils::send_to_print）。
 //
@@ -2126,7 +2232,7 @@ void ViewModelSmokeTests::int02_CalibrationGeneratesCalibGcode()
   // 等待切片完成（校准切片可能比普通切片稍慢）
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
 
-  // 校准切片应成功（若环境/配置导致失败，QSKIP 而非 FAIL —— 校准 G-code 生成
+  // 校准切片应成功（若环境/配置导致失败，QSKIP 而非 FAIL -- 校准 G-code 生成
   // 依赖完整 Print.apply + do_export 路径，某些上游版本可能行为不同）
   if (failedSpy.count() > 0) {
     const QString reason = failedSpy.first().at(0).toString();
@@ -2307,7 +2413,7 @@ void ViewModelSmokeTests::calibrationFallbackAndSliceCallbacksDriveProgress()
   QCOMPARE(service.calibStatus(flowIndex), static_cast<int>(CalibrationStatus::Failed));
 }
 
-// ── v2.7 P2-A: INT-04 MQTT 连接参数 + 遥测字段映射自回归 ──────────
+// -- v2.7 P2-A: INT-04 MQTT 连接参数 + 遥测字段映射自回归 ----------
 // 不连真机（CI 无设备）。验证：
 //   - MockDevice access code + port 设置/读取往返（连接对话框流程）
 //   - 新遥测字段 getter（bedTemperature/nozzleTarget/currentLayerNum/remainingTime）
@@ -2396,7 +2502,7 @@ void ViewModelSmokeTests::int04_MqttConnectionParamsAndTelemetryFields()
   QVERIFY(device.selectedDeviceAccessCode().isEmpty());
 }
 
-// ── v2.7 P2-B: INT-05 MQTT 命令构造 + 控制流自回归 ──────────
+// -- v2.7 P2-B: INT-05 MQTT 命令构造 + 控制流自回归 ----------
 // 不连真机。验证：
 //   - publishPrintCommand 在未连接时安全返回 false（不崩溃）
 //   - lastPublishPayload/Topic 初始为空
@@ -2479,7 +2585,7 @@ void ViewModelSmokeTests::int05_MqttCommandConstructionAndControlFlow()
   QVERIFY(!device.isMqttConnected());
 }
 
-// ── v2.8 P2-C: INT-06 FTP URL 构造 + send-print 路由自回归 ──────────
+// -- v2.8 P2-C: INT-06 FTP URL 构造 + send-print 路由自回归 ----------
 // 不连真机。验证：
 //   - FtpUploader::buildFtpUrl 生成正确的 Bambu FTP URL 格式
 //   - sendPrintViaFtp 在未连接时安全返回 false
@@ -2596,7 +2702,7 @@ void ViewModelSmokeTests::appSettingsAndEditorBedShapePersistDeterministically()
   }
 }
 
-// ── v3.0 Phase 16-01: PartPlate/PartPlateList domain-model unit tests ──
+// -- v3.0 Phase 16-01: PartPlate/PartPlateList domain-model unit tests --
 // Pure-domain tests (no libslic3r dependency, no ProjectServiceMock). They exercise
 // the new src/core/model/ classes directly to lock in the data structure before the
 // big-bang migration in plan 16-02.
@@ -2677,7 +2783,7 @@ void ViewModelSmokeTests::partPlateListInstanceMembershipDerivesObjectIndices()
 
 void ViewModelSmokeTests::partPlateListRefusesExceedMaxPlateCount()
 {
-  // MAX_PLATE_COUNT=36 enforced — upstream create_plate guard.
+  // MAX_PLATE_COUNT=36 enforced -- upstream create_plate guard.
   OWzx::PartPlateList list;
   QCOMPARE(list.plateCount(), 1);
   // create 35 more to reach 36 total
@@ -2721,7 +2827,7 @@ void ViewModelSmokeTests::projectServicePlateOpsBackedByPartPlateList()
   QCOMPARE(project.plateCount(), 1);
 }
 
-// ── v3.0 Phase 17: plate lifecycle completion (clone/reorder/printable) ──
+// -- v3.0 Phase 17: plate lifecycle completion (clone/reorder/printable) --
 
 void ViewModelSmokeTests::partPlateListMovePlateReindexesAndAdjustsCurrent()
 {
@@ -3016,7 +3122,7 @@ void ViewModelSmokeTests::prepareWorkflowGatesExposeSourceTruthState()
   QVERIFY(editor.gizmoStatusText(13) != QStringLiteral("Blocked: CGAL MeshBoolean unavailable"));
   QVERIFY(!editor.canActivateGizmo(8));
   // Phase 170 (REGRESS-06): v5.0 Phase 143 unblocked the Hollow gizmo (gizmo 8)
-  // when OpenVDB was unlocked — the old "Blocked: OpenVDB unavailable" status
+  // when OpenVDB was unlocked -- the old "Blocked: OpenVDB unavailable" status
   // is gone. With no object selected, the status is empty (the gizmo is
   // reachable but disabled; the source-truth gate returns hasSingleObject).
   QCOMPARE(editor.gizmoStatusText(8), QStringLiteral(""));
@@ -3133,7 +3239,7 @@ void ViewModelSmokeTests::prepareVisibleObjectActionsMapToSourceObjects()
 
 void ViewModelSmokeTests::multiPlate3mfRoundTripPreservesState()
 {
-  // PLATE-09 (D-13) + FIXTURE-02 (v3.2 Phase 32): the v2.9 blocker — multi-plate
+  // PLATE-09 (D-13) + FIXTURE-02 (v3.2 Phase 32): the v2.9 blocker -- multi-plate
   // state must survive save→reload. Uses the committed real-model fixture
   // (tests/data/test_model.stl, FIXTURE-01) so the project has a valid mesh,
   // enabling the full store_bbs_3mf → read_from_archive round-trip.
@@ -3166,7 +3272,7 @@ void ViewModelSmokeTests::multiPlate3mfRoundTripPreservesState()
     saved = saver.saveProject(path);
   } catch (...) {
     // store_bbs_3mf may still throw on edge cases (writer integration coupled to
-    // real GL capture — see Phase 30 THUMB-03 deferral). If it throws, the full
+    // real GL capture -- see Phase 30 THUMB-03 deferral). If it throws, the full
     // round-trip can't be verified here; skip rather than fail.
     QFile::remove(path);
     QSKIP("store_bbs_3mf threw on the fixture-loaded project (writer integration "
@@ -3293,7 +3399,7 @@ void ViewModelSmokeTests::multiPlateFullStateRoundTrip()
   QFile::remove(path);
   QVERIFY2(loaded, "loadProject should succeed on the saved file");
 
-  // ── CLOS-04 round-trip assertions (all 5 dimensions + thumbnail). ──
+  // -- CLOS-04 round-trip assertions (all 5 dimensions + thumbnail). --
 
   // Dim 1: count + names.
   QVERIFY2(loader.plateCount() >= 3, "CLOS-04: reloaded project must have >= 3 plates");
@@ -3306,7 +3412,7 @@ void ViewModelSmokeTests::multiPlateFullStateRoundTrip()
   QVERIFY2(reloadedNames.contains(QStringLiteral("Gamma")),
            "CLOS-04: plate name 'Gamma' must round-trip");
 
-  // Dim 4: mixed bed types round-trip (the most reliable of the dimensions —
+  // Dim 4: mixed bed types round-trip (the most reliable of the dimensions -
   // bed type is a direct PlateData field, no config-merge ambiguity).
   QCOMPARE(loader.plateBedType(0), 1);
   QCOMPARE(loader.plateBedType(1), 3);
@@ -3321,14 +3427,14 @@ void ViewModelSmokeTests::multiPlateFullStateRoundTrip()
   // Dim 3: non-default print sequence on plate 2 round-trips.
   QCOMPARE(loader.platePrintSequence(2), 2);
 
-  // Dim 2: per-plate config override — the override on plate 1 must surface
+  // Dim 2: per-plate config override -- the override on plate 1 must surface
   // through the scoped-value accessor after reload.
   const QVariant reloadedLayerHeight = loader.plateScopedOptionValue(
       1, QStringLiteral("layer_height"), QVariant(0.0));
   QVERIFY2(reloadedLayerHeight.isValid(),
            "CLOS-04: per-plate config override must surface after reload");
 
-  // Dim 6: per-plate thumbnail — plate 0 must have a non-empty thumbnail
+  // Dim 6: per-plate thumbnail -- plate 0 must have a non-empty thumbnail
   // after reload (extracted from Metadata/plate_0.png in the archive).
   QVERIFY2(!loader.plateThumbnailBase64(0).isEmpty(),
            "CLOS-04: plate 0 thumbnail must round-trip (non-empty base64 after reload)");
@@ -3344,7 +3450,7 @@ void ViewModelSmokeTests::testAssembleTransformRoundTrip()
   // the transform survives. The upstream <assemble> block contract
   // (bbs_3mf.cpp:8070-8088 write gated on is_assemble_initialized, 4734-4741
   // read via set_assemble_from_transform + set_offset_to_assembly) is reused
-  // as-is — this test proves the Qt accessors feed it correctly, including the
+  // as-is -- this test proves the Qt accessors feed it correctly, including the
   // GL(X,Z,Y)<->slic3r(X,Y,Z) Y/Z swap and deg<->rad conventions (T-06/T-08).
   #ifndef HAS_LIBSLIC3R
   QSKIP("assemble-transform round-trip requires libslic3r (real store_3mf + reader)");
@@ -3425,7 +3531,7 @@ void ViewModelSmokeTests::testAssembleTransformRoundTrip()
   #endif
 }
 
-// ── v3.0 Phase 19: per-plate config merge + scoped-value stub fix ──
+// -- v3.0 Phase 19: per-plate config merge + scoped-value stub fix --
 
 void ViewModelSmokeTests::projectServicePerPlateConfigOverrideRoundTrips()
 {
@@ -3485,13 +3591,13 @@ void ViewModelSmokeTests::sliceServiceConfigMergeDirectionPlateWins()
   base.apply(plate);
   const auto *merged = base.option("layer_height");
   QVERIFY2(merged != nullptr, "merged config must retain layer_height");
-  // Plate (0.4) must win over preset (0.2) — confirms apply(other) makes other win.
+  // Plate (0.4) must win over preset (0.2) -- confirms apply(other) makes other win.
   // Compare as double (getFloat is double) to avoid float-literal precision mismatch.
   QCOMPARE(double(dynamic_cast<const Slic3r::ConfigOptionFloat *>(merged)->getFloat()), 0.4);
 #endif
 }
 
-// ── Phase 55-04 (GCODE-02/03): Preview render-side contract guards ──
+// -- Phase 55-04 (GCODE-02/03): Preview render-side contract guards --
 // These four methods load the committed OrcaSlicer-style fixture
 // (tests/fixtures/orca_sample.gcode) via PreviewViewModel::loadGCodeForPreview
 // and assert the invariants the disappearing-preview regression class depends
@@ -3776,7 +3882,7 @@ void ViewModelSmokeTests::testVectorFieldsHaveNonEmptyDefaults()
   //
   // Background: the 2026-07-19 bb3 sync dropped OWzx's type rollbacks. Fields
   // like outer_wall_speed, default_acceleration, default_jerk changed from
-  // coFloat (single value) back to coFloats (per-extruder vector) — the
+  // coFloat (single value) back to coFloats (per-extruder vector) -- the
   // upstream type. Before the Phase 183 fix, extractDefault() had no case for
   // vector types, so they returned empty QVariant -> UI showed empty values
   // for every speed/accel/jerk field.
@@ -3792,16 +3898,13 @@ void ViewModelSmokeTests::testVectorFieldsHaveNonEmptyDefaults()
   QVERIFY(printOpts);
   QVERIFY2(printOpts->rowCount() > 0, "Print options model is empty");
 
-  // These keys are all coFloats (per-extruder vector) in upstream bb3 PrintConfig.
+  // These keys are all coFloats (per-extruder vector) in the locked upstream PrintConfig.
   // Before Phase 183 they would have empty defaults; after Phase 183 they must
   // surface values[0] as the default.
   const QStringList vectorKeys = {
-    QStringLiteral("outer_wall_speed"),
-    QStringLiteral("inner_wall_speed"),
-    QStringLiteral("sparse_infill_speed"),
-    QStringLiteral("travel_speed"),
-    QStringLiteral("default_acceleration"),
-    QStringLiteral("default_jerk"),
+    QStringLiteral("retraction_speed"),
+    QStringLiteral("deretraction_speed"),
+    QStringLiteral("z_hop"),
   };
 
   for (const auto &key : vectorKeys)
@@ -3815,8 +3918,7 @@ void ViewModelSmokeTests::testVectorFieldsHaveNonEmptyDefaults()
 
     // The load-bearing assertion: default value must NOT be empty.
     // Before Phase 183, this would fail (extractDefault returned empty QVariant
-    // for coFloats). After Phase 183, it returns values[0] (e.g. 200.0 for
-    // outer_wall_speed, 500.0 for default_acceleration).
+    // for coFloats). After Phase 183, it returns values[0].
     const QVariant value = printOpts->optValue(idx);
     QVERIFY2(value.isValid() && !value.isNull(),
              qPrintable(QStringLiteral("Vector option '%1' must have a non-empty default value after Phase 183 extractDefault fix (got: '%2')")
@@ -4154,7 +4256,7 @@ void ViewModelSmokeTests::editorExplosionRatioDefaultsAndResetMirrorsUpstream()
 {
   // Phase 91-01 (ASMEXPLODE-01): explosionRatio mirrors upstream m_explosion_ratio
   // (GLCanvas3D.hpp:596, default 1.0) and reset mirrors reset_explosion_ratio()
-  // (GLCanvas3D.hpp:770-771). The property is pure state — no model load needed.
+  // (GLCanvas3D.hpp:770-771). The property is pure state -- no model load needed.
   ProjectServiceMock project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
@@ -4194,7 +4296,7 @@ void ViewModelSmokeTests::assemblyMeasureGizmoActivabilityMirrorsUpstream()
   // abs(explosion_ratio - 1.0) < 1e-2 AND selection.volumes_count() >= 2.
   // Parts (a)-(c) need no model (the gate fails before the selection count);
   // parts (d)-(e) add two primitives via addPrimitiveToPlate (synchronous +
-  // additive — loadFile replaces rather than appends, so it cannot reach the
+  // additive -- loadFile replaces rather than appends, so it cannot reach the
   // >=2 count) so >=2 volumes can be selected.
   ProjectServiceMock project;
   SliceService slice(&project);
@@ -4223,7 +4325,7 @@ void ViewModelSmokeTests::assemblyMeasureGizmoActivabilityMirrorsUpstream()
 
   // (d) AssembleView + ratio 1.0 + >=2 selected: activate returns true and flips
   //     the active flag. QSignalSpy records the stateChanged transition.
-  //     Fixture: two primitives via addPrimitiveToPlate (synchronous + additive —
+  //     Fixture: two primitives via addPrimitiveToPlate (synchronous + additive -
   //     loadFile replaces rather than appends, so it cannot reach the >=2 count).
   QVERIFY2(editor.addPrimitiveToPlate(0), "adding the first primitive should succeed");
   QVERIFY2(editor.addPrimitiveToPlate(0), "adding the second primitive should succeed");
@@ -4256,7 +4358,7 @@ void ViewModelSmokeTests::assemblyMeasureGeometryComputesDistanceAndAngle()
 {
   // Phase 92-01 (ASMMEASURE-02): AssemblyMeasureGeometry::measure computes the
   // correct center-to-center distance + per-axis XYZ delta + angle between the
-  // two volumes' longest-AABB-axis directions. Pure math — no model needed.
+  // two volumes' longest-AABB-axis directions. Pure math -- no model needed.
   // Box A: longest axis = X (extent 10). Box B: longest axis = Y (extent 10),
   // offset +16 in X and +4 in Y from A's center.
   PrepareSceneData::ModelBounds a;
@@ -4309,7 +4411,7 @@ void ViewModelSmokeTests::assemblyMeasureGeometryComputesDistanceAndAngle()
   QVERIFY2(!bad.valid, "measure() must return invalid for a degenerate AABB");
 }
 
-// ── Phase 100-01 (WTREAD-01/02): wipe-tower geometry readback wiring ──
+// -- Phase 100-01 (WTREAD-01/02): wipe-tower geometry readback wiring --
 //
 // Drives the SliceService::wipeTowerGeometryReady signal directly (no real
 // libslic3r slice needed) and asserts the EditorViewModel Q_PROPERTYs reflect
@@ -4649,14 +4751,14 @@ void ViewModelSmokeTests::assembleViewDataPoolIsolatedFromPrepareAndPreview()
 
   // (a) Default canvas (View3D = 0): pool not populated even with objects
   //     loaded. Fixture: two primitives via addPrimitiveToPlate (synchronous +
-  //     additive — loadFile replaces rather than appends).
+  //     additive -- loadFile replaces rather than appends).
   QVERIFY2(editor.addPrimitiveToPlate(0), "adding the first primitive should succeed");
   QVERIFY2(editor.addPrimitiveToPlate(0), "adding the second primitive should succeed");
   QVERIFY2(editor.objectCount() >= 2,
            "two addPrimitiveToPlate calls should yield >=2 objects");
   QCOMPARE(editor.activeCanvasType(), 0);
   QVERIFY2(editor.assembleViewDataPoolObjectCountForTest() == 0,
-           "pool must stay empty on Prepare (View3D) — isolation constraint");
+           "pool must stay empty on Prepare (View3D) -- isolation constraint");
 
   // (b) Switch to AssembleView (2): pool refreshes and the ModelObjectsInfo
   //     resource reflects the loaded per-object info (count >= 2).
@@ -4879,6 +4981,96 @@ void ViewModelSmokeTests::paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt(
   QSKIP("PaintEngine smoke test requires HAS_LIBSLIC3R -- skipping");
 }
 #endif
+
+// Phase 205 (GATE-01): v5.6 cross-workstream ViewModel smoke gate.
+// Verifies the key viewmodel/service APIs landed by Phases 196-202 are callable
+// at the C++ boundary. Pure object-construction + getter smoke: no slicing, no
+// device I/O, no network. The QmlUiAuditTests::v56CrossWorkstreamRegressionLocked
+// slot locks the source anchors; this slot proves the compiled symbols are real
+// (not just text in a header). Mirrors the existing smoke pattern (construct the
+// object, call the getter, QVERIFY2 it returns a sane value with a GATE-01
+// message that names the requirement).
+void ViewModelSmokeTests::v56CrossWorkstreamViewModelsCallable()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("V56Gate"));
+
+  // -- FEAT-01 (Phase 196): EditorViewModel::embossRunning + SliceService::sliceState.
+  // embossRunning defaults false (no async emboss in flight); sliceState defaults
+  // Idle (the Q_PROPERTY the SliceProgress Cancelled/Error banner binds to).
+  {
+    ProjectServiceMock project;
+    SliceService slice(&project);
+    EditorViewModel editor(&project, &slice);
+
+    QVERIFY2(editor.embossRunning() == false,
+             "GATE-01/FEAT-01: EditorViewModel::embossRunning must be callable and default false");
+    QVERIFY2(slice.sliceState() == SliceService::State::Idle,
+             "GATE-01/FEAT-01: SliceService::sliceState must be callable and default Idle");
+  }
+
+  // -- FEAT-03 (Phase 198): EditorViewModel::selectedVolumeIndex.
+  // Defaults -1 (no volume selected), the contract the deepened ObjectList tree
+  // binds to via editorVm.selectedVolumeIndex.
+  {
+    ProjectServiceMock project;
+    SliceService slice(&project);
+    EditorViewModel editor(&project, &slice);
+
+    QVERIFY2(editor.selectedVolumeIndex() == -1,
+             "GATE-01/FEAT-03: EditorViewModel::selectedVolumeIndex must be callable and default -1");
+  }
+
+  // -- DLG-01 (Phase 199): PresetServiceMock vendor/model enumeration.
+  // vendors() must be non-empty; printerModelsForVendor/materialsForVendor/
+  // bedTypesForPrinterModel must be callable and return lists (possibly empty
+  // for unknown keys, but never crash).
+  {
+    PresetServiceMock preset;
+    const QStringList vendors = preset.vendors();
+    QVERIFY2(!vendors.isEmpty(),
+             "GATE-01/DLG-01: PresetServiceMock::vendors() must enumerate at least the builtin vendor");
+    const QStringList models = preset.printerModelsForVendor(vendors.first());
+    QVERIFY2(models.size() >= 0,
+             "GATE-01/DLG-01: PresetServiceMock::printerModelsForVendor() must be callable for a known vendor");
+    const QStringList materials = preset.materialsForVendor(vendors.first());
+    QVERIFY2(materials.size() >= 0,
+             "GATE-01/DLG-01: PresetServiceMock::materialsForVendor() must be callable for a known vendor");
+    const QStringList bedTypes = preset.bedTypesForPrinterModel(
+        models.isEmpty() ? QStringLiteral("__unknown__") : models.first());
+    QVERIFY2(!bedTypes.isEmpty(),
+             "GATE-01/DLG-01: PresetServiceMock::bedTypesForPrinterModel() must return the default bed-surface list");
+  }
+
+  // -- DLG-03 (Phase 201): AmsMaterialsViewModel slot data.
+  // The typed ViewModel must construct and expose slotCount + slotNames (the
+  // AMSSettingsDialog binds to these instead of building an inline model).
+  {
+    AmsMaterialsViewModel ams;
+    QVERIFY2(ams.slotCount() >= 0,
+             "GATE-01/DLG-03: AmsMaterialsViewModel::slotCount() must be callable");
+    QVERIFY2(ams.slotNames().size() == ams.slotCount(),
+             "GATE-01/DLG-03: AmsMaterialsViewModel slotNames must align with slotCount");
+    QVERIFY2(ams.materialTypes().size() >= 0,
+             "GATE-01/DLG-03: AmsMaterialsViewModel::materialTypes() must be callable");
+  }
+
+  // -- DLG-04 (Phase 202): PluginService local registry.
+  // The local registry must seed the default mock plugins and expose the
+  // install/uninstall Q_INVOKABLEs that the plugin-manager dialog binds to.
+  {
+    PluginService plugins;
+    QVERIFY2(plugins.pluginCount() > 0,
+             "GATE-01/DLG-04: PluginService must seed the default mock plugins into its local registry");
+    QVERIFY2(plugins.pluginNames().size() == plugins.pluginCount(),
+             "GATE-01/DLG-04: PluginService pluginNames must align with pluginCount");
+    const QVariantMap first = plugins.pluginAt(0);
+    QVERIFY2(first.contains(QStringLiteral("name")),
+             "GATE-01/DLG-04: PluginService::pluginAt must return a row with the 'name' key the QML Repeater consumes");
+    QVERIFY2(first.contains(QStringLiteral("isEnabled")),
+             "GATE-01/DLG-04: PluginService::pluginAt must return a row with the 'isEnabled' key");
+  }
+}
 
 QTEST_MAIN(ViewModelSmokeTests)
 #include "ViewModelSmokeTests.moc"

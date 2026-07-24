@@ -38,9 +38,12 @@ Item {
         anchors.fill: parent
         spacing: 5
 
-        RailButton {
+        CxStepButton {
             label: "|^"
             tooltip: qsTr("Top layer")
+            preferredWidth: 30
+            preferredHeight: 24
+            smallFont: true
             controlEnabled: root.previewVm && root.totalLayers > 0
             onTriggered: root.previewVm.jumpToLayer(root.totalLayers)
         }
@@ -53,9 +56,12 @@ Item {
             font.bold: true
         }
 
-        RailButton {
+        CxStepButton {
             label: "+"
             tooltip: qsTr("Move layer range up")
+            preferredWidth: 30
+            preferredHeight: 24
+            smallFont: true
             controlEnabled: root.previewVm && root.totalLayers > 0
             onTriggered: root.previewVm.moveLayerRange(1)
         }
@@ -207,9 +213,12 @@ Item {
             }
         }
 
-        RailButton {
+        CxStepButton {
             label: "-"
             tooltip: qsTr("Move layer range down")
+            preferredWidth: 30
+            preferredHeight: 24
+            smallFont: true
             controlEnabled: root.previewVm && root.totalLayers > 0
             onTriggered: root.previewVm.moveLayerRange(-1)
         }
@@ -222,9 +231,12 @@ Item {
             font.family: Theme.fontMono
         }
 
-        RailButton {
+        CxStepButton {
             label: "|v"
             tooltip: qsTr("First layer")
+            preferredWidth: 30
+            preferredHeight: 24
+            smallFont: true
             controlEnabled: root.previewVm && root.totalLayers > 0
             onTriggered: root.previewVm.jumpToLayer(1)
         }
@@ -352,43 +364,5 @@ Item {
         dialogTitle: qsTr("Edit Custom G-code")
         isEditMode: true
         anchors.centerIn: parent.parent ? parent.parent : parent
-    }
-
-    component RailButton: Rectangle {
-        id: railButtonRoot
-        property string label: ""
-        property string tooltip: ""
-        property bool controlEnabled: true
-        signal triggered()
-
-        Layout.preferredWidth: 30
-        Layout.preferredHeight: 24
-        Layout.alignment: Qt.AlignHCenter
-        radius: 4
-        color: railMouse.containsMouse && railButtonRoot.controlEnabled ? Theme.bgHover : Theme.bgElevated
-        border.width: 1
-        border.color: railMouse.containsMouse && railButtonRoot.controlEnabled ? Theme.accentDark : Theme.borderSubtle
-        opacity: railButtonRoot.controlEnabled ? 1.0 : 0.45
-
-        Text {
-            anchors.centerIn: parent
-            text: railButtonRoot.label
-            color: Theme.textPrimary
-            font.pixelSize: Theme.fontSizeXS
-            font.family: Theme.fontMono
-        }
-
-        MouseArea {
-            id: railMouse
-            anchors.fill: parent
-            enabled: railButtonRoot.controlEnabled
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: railButtonRoot.triggered()
-        }
-
-        ToolTip.visible: railMouse.containsMouse && railButtonRoot.tooltip.length > 0
-        ToolTip.text: railButtonRoot.tooltip
-        ToolTip.delay: 450
     }
 }

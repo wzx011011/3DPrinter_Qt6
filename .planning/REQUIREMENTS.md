@@ -1,71 +1,71 @@
-# Requirements: OWzx Slicer — OrcaSlicer Qt6/QML Migration
+# Requirements: OWzx Slicer
 
-**Defined:** 2026-07-19 (v5.3)
-**Core Value:** OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
+## Latest Completed Milestone: v5.7 D3D12 Backend Investigation
 
-## v5.3 Requirements — Feature Completion & v5.2 Closure
+For the full requirement text, see
+`.planning/milestones/v5.7-REQUIREMENTS.md`.
 
-**Milestone goal:** Three parallel tracks in one cycle — (1) close the v5.2 UI Excellence BLOCKERs that were honestly deferred (destructive confirms + dialog spacing + pseudo-button sweep); (2) ship the 3 functional feature gaps identified by the v5.3 code-level feature-parity audit (per-object settings dialog, object-layer range editor, simplify mesh gizmo); (3) attack the i18n long tail (de/fr/ja/ko).
+**Status:** Complete (2026-07-24). D3D12 promotion **reverted** after
+real-machine verification showed a crash on AMD Radeon APU. D3D11-first
+restored. Phase 207-210 retained. Canonical build (D3D11 default) exited `0`,
+all ctest + E2E passed.
 
-**Scope rule:** All work is offline/local. No new product behavior without upstream mapping. SLA print path remains DECLINED. LAN/cloud/camera/printer-hardware stay out.
+## Completed Requirements (v5.7)
 
-**Phases start at 171** (continuing from v5.2 phase 170).
+| Requirement | Phase | Summary |
+|---|---:|---|
+| DOC-01 | 206 | Top-level planning files identify v5.7 as active; v5.6 archived. |
+| REPRO-01 | 207 | Diagnostics + reproduction; root cause located (AMD APU swapchain). |
+| MIT-01 | 208 | Seam A: fold readback resourceUpdate into next beginPass (retained). |
+| MIT-02 | 209 | Seam B: pack camera UBO into single 80-byte write (retained). |
+| MIT-03 | 210 | Seam C: first-frame force upload + initialize buffer-flag reset (retained). |
+| PROMO-01 | 211 | D3D12 promotion attempted → reverted (AMD APU crash); D3D11-first restored. |
 
----
+| Requirement | Phase | Summary |
+|---|---:|---|
+| DOC-01 | 193 | Top-level planning files identify v5.6 as active; v5.5 archived as complete. |
+| UI-01 | 194 | Promote inline OptionRow components; unify step-button idioms into Cx controls. |
+| UI-02 | 195 | Extract KBShortcutsDialog into a 5-group dialog aligned with upstream. |
+| FEAT-01 | 196 | Emboss async spinner; SliceProgress Cancelled/Error state coverage. |
+| FEAT-02 | 197 | Calibration dedicated tower geometry loading; correct the `.drc` term. |
+| FEAT-03 | 198 | ObjectList tree deepening toward upstream GUI_ObjectList.cpp. |
+| DLG-01 | 199 | PresetServiceMock vendor/model enumeration layer for ConfigWizard. |
+| DLG-02 | 200 | ConfigWizard single-vendor wizard rewrite; close the completion loop. |
+| DLG-03 | 201 | AMS mock-to-ViewModel architecture cleanup; data source stays mock. |
+| DLG-04 | 202 | Plugin manager real backend aligned with WebDownPluginDlg; no Python. |
+| RHI-01 | 203 | D3D12 root-cause confirmation; default stays D3D11. |
+| I18N-01 | 204 | de/fr/ja/ko translation coverage to >=85%. |
+| GATE-01 | 205 | Cross-workstream regression gate and v5.6 milestone audit. |
 
-### CL — v5.2 BLOCKER Closure
+## Global Constraints
 
-- [ ] **CL-01**: Every destructive action confirms before firing. v5.2 Phase 169 shipped the ConfirmDialog component but only routed deleteSelection through it. The remaining 11 triggers must be wired: CaliHistoryDialog 清空; HomePage cloudUnbindDevice; MultiMachinePage removeDevice/stopAllLocalTasks/stopAllCloudTasks; MonitorPage disconnectDevice; ObjectList bulk delete; plus any other destructive trigger surfaced by the v5.2 audits.
-- [ ] **CL-02**: Dialog spacing sweep — 23 of 24 dialogs use zero `Theme.spacing*` tokens (hand-rolled 0/1/2/3/4/6/8/10/12/14/16/20/24 values). Migrate to the spacing scale via a script-based mechanical sweep (mirroring the Phase 162/163 color/typography pattern).
-- [ ] **CL-03**: Pseudo-button sweep — the ~13 true Rectangle+Text+MouseArea pseudo-button candidates identified by v5.2 Phase 168 hand-convert to CxButton/CxIconButton. Each requires site-specific context (signal args, disabled bindings) — hand-converted, not script-converted.
+- Canonical build command:
+  `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`
+- Canonical build directory: `build/`
+- Qt 6.10 is a prebuilt dependency, not built from source by this project.
+- OrcaSlicer upstream behavior remains the source truth for product behavior.
+- v5.6 must not reopen LAN/device/cloud/printer-hardware scope.
+- v5.6 must not embed CPython.
+- v5.6 must not promote D3D12 to the default backend.
+- v5.6 must not patch upstream OrcaSlicer source.
+- LAN/cloud/device/camera/printer-hardware workflows remain declined unless
+  explicitly reopened by the user.
 
-### FEAT — Functional Feature Gaps (from v5.3 parity audit)
+## Previously Completed (v5.5, archived 2026-07-23)
 
-- [ ] **FEAT-01**: Per-object settings override dialog (upstream `GUI_ObjectSettings`). Backend APIs exist (`setObjectPrintable`, `setVolumeExtruderId`, scoped overrides, `selectionSettingsRequested` signal). Ship the QML inspector that opens on right-click → shows the object/volume's print/filament params, allows per-object override of layer_height/infill/support/etc. Mirrors upstream `GUI_ObjectSettings::SettingsFactory`.
-- [ ] **FEAT-02**: Object layer-range editor (upstream `GUI_ObjectLayers`). Backend is fully ready (`MockLayerRange`, `objectLayerRanges`, `setLayerRangeValue`). Ship the QML dialog to add/edit/delete per-layer-height ranges (e.g. bottom 0.1mm, top 0.2mm) — reachable from the ObjectList context menu. UI-only addition; the data layer is done.
-- [ ] **FEAT-03**: Simplify mesh gizmo (upstream `GLGizmoSimplify`). Currently explicit stub at `EditorViewModel.cpp:1355` ("not yet implemented"). Ship the real implementation: call libslic3r's `QuadricEdgeCollapse::quadric_edge_collapse(...)` on the selected volume's mesh, expose the wanted-face-count + max-error params via the existing Q_PROPERTYs, add a SimplifyDialog for preview/apply. Mirrors upstream `GLGizmoSimplify.cpp`.
+| Requirement | Phase | Summary |
+|---|---:|---|
+| DOC-01 | 188 | Complete: planning handoff and milestone state reconciled. |
+| PROV-01 | 189 | Complete: Qt, Orca source, and dependency provenance documented. |
+| VERIFY-01 | 190 | Complete: the canonical script reports inputs and failure stages. |
+| RUN-01 | 191 | Complete: the canonical script records `OWzxSlicer.exe` liveness. |
+| GATE-01 | 192 | Complete: the audit compares CI/local evidence and classifies differences. |
 
-### I18N — Translation Long Tail
+## Deferred after v5.6 (per user decisions 2026-07-24)
 
-- [ ] **I18N-06**: de/fr/ja/ko translation long tail completion. Baseline ~8641 messages/lang × 4 langs. Many source strings are new since v4.8 (Emboss/PresetBundle/PartPlate/v5.0/v5.1/v5.2 surfaces). Approach: run `lupdate` to refresh the .ts files, then translate via batched LLM-assisted passes (per-language). Target: ≥85% translation coverage per language (vs current ~44%).
-
-### Cross-Workstream
-
-- [ ] **REGRESS-07**: v5.3 regression gate. A `v53RegressionLocked` source-audit slot re-asserts every v5.3 anchor (CL/FEAT/I18N) AND re-asserts the v5.2/v5.1/v5.0/v4.x anchors. Canonical build exits 0 + 5/5 ctest groups PASS.
-
----
-
-## Deferred / Declined
-
-### SLA print path — DECLINED (user decision 2026-07-19)
-
-**VDB-06 / SLA-01..06 / Hollow 3MF persistence / SlaSupports gizmo / FaceDetector gizmo** — all reclassified as declined-with-reason. See v5.2 REQUIREMENTS for full rationale.
-
-### Future (post-v5.3 candidate backlog)
-
-- Calibration `.drc` tower geometry (v4.6 CALIB tech debt)
-- D3D12 default-backend promotion (deferred from v4.5)
-- Cmp-03 OptionRow + MoveSlider/PreviewLayerRail unification (deeper refactor)
-- XD-02 async Emboss spinner + SliceProgress state coverage
-- ConfigWizard depth (multi-stage with vendor profile download)
-- AMS material settings real backend (depends on printer-hardware scope decision)
-- KBShortcutsDialog / Auxiliary file-tree panel (low-impact)
-
-## Out of Scope
-
-Explicitly excluded from v5.3. Documented to prevent scope creep.
-
-| Feature | Reason |
-|---------|--------|
-| SLA print path / SlaSupports / FaceDetector | DECLINED — see above |
-| LAN device discovery, device send/upload, MQTT/SSDP | Removed from forward scope by user direction 2026-07-07. |
-| Cloud print, cloud account/sync, OAuth | Removed from forward scope by user direction 2026-07-07. |
-| Monitor task lifecycle, ModelMall/Home WebView | Removed from forward scope by user direction 2026-07-07. |
-| Live camera / RTSP / WebRTC streams | Removed from forward scope; FFmpeg/WebRTC deps unavailable. |
-| Printer-connected hardware workflows | Hardware-dependent; stays out under printer-hardware removal rule. |
-| libslic3r slicing algorithm changes | Out of scope — GUI migration only. |
-| New build directories or non-canonical build scripts | Build rules: only `build/` + `scripts/auto_verify_with_vcvars.ps1`. |
-
-## Traceability
-
-Populated during ROADMAP.md creation.
+- H2C/A2L multi-nozzle UI (bb3 fork submodule + product decision pending).
+- Per-extruder config editor UI (Cmp-03 sub-item; needs multi-extruder fixture).
+- ConfigWizard multi-vendor selection + PresetUpdater + AppConfig.
+- D3D12 default-backend promotion itself (pending root cause).
+- AMS real device/cloud data sources (printer-hardware scope).
+- Python script/macro framework / CPython embedding.

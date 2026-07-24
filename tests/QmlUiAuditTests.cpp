@@ -1,4 +1,4 @@
-// QmlUiAuditTests — Phase 55-04 additions.
+// QmlUiAuditTests -- Phase 55-04 additions.
 //
 // AUTOMOC caveat (v3.0 retrospective, see ViewModelSmokeTests CMake comment):
 // single-file QtTest with cpp-internal Q_OBJECT has weak moc dependency
@@ -191,20 +191,18 @@ private slots:
   // QString::contains + QVERIFY2 with a D3D12-01-named message). Source-level
   // only; runs in the regression ctest.
   void d3d12DebugLayerWiredBehindEnvFlag();
-  // Phase 106-01 (D3D12-03): D3D12 stays opt-in and the default Windows
-  // candidate order keeps D3D11 before D3D12 so the v3.2 startup
-  // 0xc0000005 access violation cannot recur for default-`auto` users. The
-  // Phase 106-01 root-cause investigation (.planning/research/
-  // D3D12-CRASH-ROOT-CAUSE.md) is time-boxed per DR-04; until a confirmed
-  // root cause + clean repro on the original machine land, D3D12 must NOT be
-  // promoted to default. This slot locks that decision at the source level:
-  // (a) defaultWindowsCandidates() keeps D3D11 before D3D12 (position-ordered
-  // assertion, mirrors the Phase 105 position-order check); (b) the D3D11-first
-  // comment is still present (documents WHY the order is load-bearing); (c)
-  // D3D12 remains reachable only via the explicit OWZX_RHI_RENDERER=d3d12 opt-in
-  // (the candidatesForRequest exact-match path). Mirrors the Phase 102/103/104/
-  // 105 source-audit pattern (QFile + QT_TESTCASE_SOURCEDIR + QString::contains
-  // + QVERIFY2 with a D3D12-03-named message). Source-level only; runs in the
+  // v5.7 Phase 211 rollback: D3D12 was briefly promoted to the default backend
+  // for `auto` on Windows, but real-machine verification found that D3D12
+  // crashes at QQuickWindow swapchain init on AMD Radeon APU (mainstream
+  // integrated graphics). D3D11 is the default again; D3D12 stays as an opt-in
+  // behind OWZX_RHI_RENDERER=d3d12. This slot locks the rollback at the source
+  // level: (a) defaultWindowsCandidates() keeps D3D11 before D3D12 (position-
+  // ordered assertion); (b) the D3D11-first rationale comment is present
+  // (documents WHY the order exists); (c) D3D12 remains in the candidate list
+  // (opt-in mechanism intact); (d) D3D12 is still reachable via the explicit
+  // OWZX_RHI_RENDERER=d3d12 opt-in. Mirrors the Phase 102/103/104/105
+  // source-audit pattern (QFile + QT_TESTCASE_SOURCEDIR + QString::contains +
+  // QVERIFY2 with a D3D12-04-named message). Source-level only; runs in the
   // regression ctest.
   void d3d12StaysOptInBehindEnvFlag();
   // Phase 107-01 (FMAP-02): the Qt6 filament-map mode enum is widened from the
@@ -427,7 +425,7 @@ private slots:
   // Phase 126 (CLEAN-01): the legacy dead-code pages (DeviceListPage,
   // AuxiliaryPage, ModelMallPage, AuxiliaryListPanel) + AuxiliaryService must
   // stay deleted (No-Deprecated-UI rule). These were in the removed LAN/device/
-  // cloud scope — deletion, not repair. Source-level only.
+  // cloud scope -- deletion, not repair. Source-level only.
   void legacyDeadCodePagesRemoved();
   // Phase 121 (PAINT-02 + PAINT-03): source-audit lock that the painted-facet
   // overlay render + brush interaction wiring is in place. Locks: (a)
@@ -449,7 +447,7 @@ private slots:
   // Phase 127 (I18N-01): the i18n pipeline is documented + zh_CN has finished
   // translations for v4.6-touched strings (proof-of-pipeline).
   void translationPipelineDocumented();
-  // Phase 128 (REGRESS-01): v4.6 cross-workstream regression — all v4.6
+  // Phase 128 (REGRESS-01): v4.6 cross-workstream regression -- all v4.6
   // source-audit slots + key anchors consolidated in one milestone gate.
   void v46CrossWorkstreamRegressionLocked();
   // Phase 129 (POLISH-01/02/03): paint-gizmo gate flag flipped + Flatten real
@@ -468,7 +466,7 @@ private slots:
   // work did not regress the v4.8 contract.
   void v50TechDebtRegressionLocked();
   // Phase 142 (VDB-01/VDB-02): OpenVDB unlock gate. Locks the CMake wiring that
-  // corrects the v4.x "OpenVDB unavailable" premise — find_package(OpenVDB) +
+  // corrects the v4.x "OpenVDB unavailable" premise -- find_package(OpenVDB) +
   // openvdb_libs alias + libnoise latent-issue fix. The real proof is that
   // OWzxSlicer.exe links clean (no LNK2019 on mesh_to_grid/grid_to_mesh/
   // redistance_grid); this slot anchors the source-level evidence.
@@ -478,7 +476,7 @@ private slots:
   // hasSingleObject, not false), the removal of the "Blocked: OpenVDB unavailable"
   // tooltip for case 8, the new Hollow button in GLToolbars.qml, and the Hollow
   // panel in PreparePage.qml. The full SLA slice path (VDB-06) is a v5.1+
-  // follow-up — it requires wiring SLAPrint from scratch.
+  // follow-up -- it requires wiring SLAPrint from scratch.
   void v50HollowGizmoReachable();
   // Phase 144 (EMB-01/02): Emboss font + parameterization gate. The real Emboss
   // pipeline (text2shapes + polygons2model) was already wired before v5.0; this
@@ -558,7 +556,7 @@ private slots:
   // Mirrors the v50RegressionLocked pattern (which is itself re-asserted here).
   void v51RegressionLocked();
   // Phase 160 (DS-01): Theme token foundation gate. Locks the canonical
-  // token list — every Theme.X referenced in QML must be defined in Theme.qml
+  // token list -- every Theme.X referenced in QML must be defined in Theme.qml
   // (no silent undefined); the v5.2 audit's missing tokens must be present;
   // header documentation exists.
   void v52ThemeTokenFoundationWired();
@@ -574,7 +572,7 @@ private slots:
   // font.pixelSize literals to Theme.fontSize* tokens + Consolas → Theme.fontMono.
   void v52TypographyHardcodeSwept();
   // Phase 164 (TK-03/SW-01): sidebar width system unbroken. Locks the 7-layer
-  // 392px hardcode removal — backend.sidebarWidth is now resizable within
+  // 392px hardcode removal -- backend.sidebarWidth is now resizable within
   // [300, 520]; DockableSidebar drag handle is functional (was visible no-op).
   void v52SidebarWidthUnbroken();
   // Phase 165 (CW-01/02): copywriting & language sweep gate. Locks one source
@@ -630,6 +628,9 @@ private slots:
   // Phase 187 (REGRESS-08): v5.4 cross-workstream regression gate. Spots
   // every v5.4 anchor (CRASH/FEAT/META) + re-asserts v5.3/v5.2/v5.1/v5.0/v4.6.
   void v54RegressionLocked();
+  // Phase 205 (GATE-01): v5.6 cross-workstream regression gate. Spots every
+  // v5.6 anchor (UI/FEAT/DLG/RHI/I18N) + re-asserts v5.4/v5.0/v4.6.
+  void v56CrossWorkstreamRegressionLocked();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -706,7 +707,7 @@ void QmlUiAuditTests::sidebarCopyIsLocalizedAndOperationalTextIsReadable()
     QStringLiteral("qsTr(\"Print Speed\")"),
     QStringLiteral("qsTr(\"Variable Layer Height\")"),
     QStringLiteral("qsTr(\"Variable layer height editor (reserved)\")"),
-    QStringLiteral("qsTr(\"(parameter list — reserved)\")"),
+    QStringLiteral("qsTr(\"(parameter list -- reserved)\")"),
     QStringLiteral("qsTr(\"Rename Preset\")")
   };
 
@@ -808,11 +809,13 @@ void QmlUiAuditTests::mainRegistersRhiViewportByDefaultWithSoftwareFallback()
                                                        candidatesForRequestStart - defaultCandidatesStart);
   QVERIFY2(defaultCandidates.indexOf(QStringLiteral("Direct3D11"))
                < defaultCandidates.indexOf(QStringLiteral("Direct3D12")),
-           "default QRhi auto policy must prefer stable D3D11 before D3D12");
+           "default QRhi auto policy must keep D3D11 before D3D12 (Phase 211 D3D11-first default; D3D12 is opt-in)");
   QVERIFY2(!verifyScript.contains(QStringLiteral("OWZX_OPENGL")),
            "canonical startup smoke should cover the default QRhi/D3D11 path");
-  QVERIFY2(!verifyScript.contains(QStringLiteral("$env:OWZX_RHI_RENDERER")),
-           "canonical startup smoke should not force a non-default QRhi backend");
+  QVERIFY2(!verifyScript.contains(QStringLiteral("$env:OWZX_RHI_RENDERER = \"")),
+           "canonical startup smoke must not unconditionally force a QRhi backend "
+           "(Phase 211 rollback: D3D11 is the app-side default; the script may "
+           "only conditionally override via OWZX_VERIFY_RHI_BACKEND for IDD/virtual-display hosts)");
 }
 
 void QmlUiAuditTests::mainRegistersRhiViewportOnlyBehindExplicitGate()
@@ -848,8 +851,10 @@ void QmlUiAuditTests::mainRegistersRhiViewportOnlyBehindExplicitGate()
            "SoftwareViewport must remain the fallback GLViewport registration");
   QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
            "RhiViewport must be registered under the existing OWzxGL.GLViewport type behind QRhi gate");
-  QVERIFY2(!verifyScript.contains(QStringLiteral("OWZX_RHI_RENDERER")),
-           "canonical verification must not enable QRhi by default");
+  QVERIFY2(!verifyScript.contains(QStringLiteral("$env:OWZX_RHI_RENDERER = \"")),
+           "canonical verification must not unconditionally enable a QRhi backend "
+           "(Phase 211 rollback: conditional override via OWZX_VERIFY_RHI_BACKEND "
+           "for IDD hosts is allowed, but D3D11 is the app-side default)");
 
   QVERIFY2(selectorHeader.contains(QStringLiteral("RhiBackendSelection")),
            "RhiBackendSelector must expose structured backend diagnostics");
@@ -865,7 +870,7 @@ void QmlUiAuditTests::mainRegistersRhiViewportOnlyBehindExplicitGate()
                                                        candidatesForRequestStart - defaultCandidatesStart);
   QVERIFY2(defaultCandidates.indexOf(QStringLiteral("Direct3D11"))
                < defaultCandidates.indexOf(QStringLiteral("Direct3D12")),
-           "QRhi app auto policy must prefer stable D3D11 before D3D12 opt-in fallback");
+           "QRhi app auto policy must keep D3D11 before D3D12 (Phase 211 rollback: D3D11-first default, D3D12 opt-in)");
   QVERIFY2(!selectorSource.contains(QStringLiteral("QRhi::Vulkan")),
            "Vulkan must not be part of the default app selector while QtGui Vulkan is disabled");
   QVERIFY2(rhiViewportHeader.contains(QStringLiteral("QQuickRhiItem")),
@@ -911,8 +916,10 @@ void QmlUiAuditTests::renderBenchmarkMatchesRhiBackendPolicy()
   QVERIFY2(verifyScript.contains(QStringLiteral("OWZX_RENDER_BENCH"))
                && verifyScript.contains(QStringLiteral("-DOWZX_RENDER_BENCH=$(if ($renderBenchEnabled) { 'ON' } else { 'OFF' })")),
            "Canonical verification must keep render benchmark optional behind OWZX_RENDER_BENCH");
-  QVERIFY2(!verifyScript.contains(QStringLiteral("$env:OWZX_RHI_RENDERER")),
-           "Canonical verification must not enable the app QRhi viewport while running benchmark checks");
+  QVERIFY2(!verifyScript.contains(QStringLiteral("$env:OWZX_RHI_RENDERER = \"")),
+           "Canonical verification must not unconditionally enable the app QRhi "
+           "viewport while running benchmark checks (Phase 211 rollback: "
+           "conditional OWZX_VERIFY_RHI_BACKEND override for IDD hosts is allowed)");
   QVERIFY2(cmake.contains(QStringLiteral("option(OWZX_RENDER_BENCH"))
                 && cmake.contains(QStringLiteral("qt_add_executable(owzx-render-bench"))
                 && cmake.contains(QStringLiteral("qt_add_shaders(owzx-render-bench \"render_bench_shaders\"")),
@@ -1466,7 +1473,7 @@ void QmlUiAuditTests::previewNormalPathCoversFullWorkflowBindingsAndDiagnostics(
                                                        candidatesForRequestStart - defaultCandidatesStart);
   QVERIFY2(defaultCandidates.indexOf(QStringLiteral("Direct3D11"))
                < defaultCandidates.indexOf(QStringLiteral("Direct3D12")),
-           "Normal Windows Preview path must keep D3D11 before D3D12");
+           "Normal Windows Preview path must keep D3D11 before D3D12 (Phase 211 rollback: D3D11-first default, D3D12 opt-in)");
   QVERIFY2(!defaultCandidates.contains(QStringLiteral("Vulkan")),
            "Vulkan must not become the normal Preview path during v3.4 closeout");
 
@@ -1598,7 +1605,7 @@ void QmlUiAuditTests::previewLayoutRestoresScreenshotRegionsAndGcodePanel()
 
   const QStringList requiredPhase80Tokens = {
     // Phase 164 (SW-01): preview left width now sources from backend.sidebarWidth
-    // (was hardcoded 392 — part of the 7-layer lock). The contract is now that
+    // (was hardcoded 392 -- part of the 7-layer lock). The contract is now that
     // the property exists and resolves to the backend value.
     QStringLiteral("readonly property int targetPreviewLeftWidth: backend ? backend.sidebarWidth : 392"),
     QStringLiteral("readonly property int targetPreviewRightWidth: Theme.rightPanelWidth"),
@@ -2537,7 +2544,7 @@ void QmlUiAuditTests::prepareWorkflowActionsBindCppGates()
   }
 }
 
-// ── Phase 55-04 (GCODE-04/05): Preview renderer source-audit guards ──
+// -- Phase 55-04 (GCODE-04/05): Preview renderer source-audit guards --
 // These three source-audit tests lock the renderer/UI contracts that defend
 // the disappearing-preview regression class: PreviewPage must never instantiate
 // SoftwareViewport, computePreviewDrawRanges must consult the role-visibility
@@ -2659,7 +2666,7 @@ void QmlUiAuditTests::prepareLeftSidebarMatchesPixelRestorationContract()
   // Phase 164 (SW-01, v5.2): the 392px hardcode was a 7-layer lock that made
   // the DockableSidebar drag handle a visible no-op (Panels-UI-REVIEW BLOCKER).
   // The contract is now: sidebar width sources from backend.sidebarWidth, and
-  // min/max are real bounds (300/520) — no longer min==max==392. Default stays
+  // min/max are real bounds (300/520) -- no longer min==max==392. Default stays
   // 392 to preserve the visual; users can now resize.
   QVERIFY2(preparePage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
            "Prepare page sidebar width must source from backend.sidebarWidth (Phase 164 unbreaks the 7-layer lock)");
@@ -2707,7 +2714,7 @@ void QmlUiAuditTests::prepareLeftSidebarMatchesPixelRestorationContract()
   QVERIFY2(!leftSidebar.contains(QStringLiteral("SliceProgress {")),
            "Default screenshot sidebar must not mount SliceProgress in the left parameter column");
   // Phase 162 (TK-01): the sidebar palette was previously checked via specific
-  // hex literals (#303236/#313337/#323438 — the screenshot gray panel surface).
+  // hex literals (#303236/#313337/#323438 -- the screenshot gray panel surface).
   // The v5.2 color sweep migrated those to Theme tokens (bgElevated/bgHover/
   // borderDefault). The new contract: the sidebar sources its panel surface
   // from Theme tokens, not from hardcoded hex literals.
@@ -3389,7 +3396,7 @@ void QmlUiAuditTests::settingsRestorationMilestoneHasFinalVerificationCoverage()
       QStringLiteral("        <file>dialogs/SavePresetDialog.qml</file>"),
       QStringLiteral("        <file>dialogs/UnsavedChangesDialog.qml</file>"),
       QStringLiteral("        <file>components/OptionRow.qml</file>")
-      // Phase 167 (Cmp-02): GroupNavSidebar removed — confirmed orphan (zero
+      // Phase 167 (Cmp-02): GroupNavSidebar removed -- confirmed orphan (zero
       // QML consumers per Components-UI-REVIEW).
   };
   for (const QString &entry : restoredResourceEntries) {
@@ -3710,7 +3717,7 @@ void QmlUiAuditTests::assembleViewMeasurementGizmoWiredAndOverlayRenders()
 
   // (5) Geometry helper file exists (ASMMEASURE-02). Resolve against
   // QT_TESTCASE_SOURCEDIR (repo root) the same way the other file-existence
-  // checks do (QmlUiAuditTests.cpp:2361-2368) — the test exe runs from build/.
+  // checks do (QmlUiAuditTests.cpp:2361-2368) -- the test exe runs from build/.
   const QString assemblyMeasureHeaderPath =
       QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR))
           .filePath(QStringLiteral("src/core/rendering/AssemblyMeasureGeometry.h"));
@@ -3786,7 +3793,7 @@ void QmlUiAuditTests::assembleViewRestorationMilestoneHasFinalVerificationCovera
 
   // (6) Data pool present (ASMROUTE-02): the AssembleViewDataPool header
   //     exists on disk + EditorViewModel references the pool. File existence
-  //     resolves against QT_TESTCASE_SOURCEDIR (repo root) — the Phase 92
+  //     resolves against QT_TESTCASE_SOURCEDIR (repo root) -- the Phase 92
   //     fixture convention.
   const QString poolHeaderPath =
       QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR))
@@ -3862,7 +3869,7 @@ void QmlUiAuditTests::rhiViewportThumbnailCaptureUsesRealReadback()
   // requestThumbnailCapture solid-color stub is replaced with real QRhi texture
   // readback. Mirrors the rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads
   // pattern: reads the item + renderer sources and asserts the replacement is
-  // real. Source-level only — no GPU/runtime dependency — so this runs in the
+  // real. Source-level only -- no GPU/runtime dependency -- so this runs in the
   // regression ctest. Runtime pixel proof (non-solid-color capture) is routed
   // to Phase 98.
   const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
@@ -3949,7 +3956,7 @@ void QmlUiAuditTests::projectServiceWrites3mfThumbnails()
   // write-side thumbnail hooks are populated with real captured pixels.
   // Mirrors the rhiViewportThumbnailCaptureUsesRealReadback pattern
   // (Phase 95): reads ProjectServiceMock.cpp and asserts the replacement is
-  // real. Source-level only — no 3MF save runtime dependency — so this runs
+  // real. Source-level only -- no 3MF save runtime dependency -- so this runs
   // in the regression ctest. Runtime save-reload round-trip proof is routed
   // to Phase 97.
   const QString src = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
@@ -4110,14 +4117,10 @@ void QmlUiAuditTests::wipeTowerReadbackAndRenderAnchorsPresent()
 
 void QmlUiAuditTests::optionBWipeTowerMeshCoexistsWithOptionA()
 {
-  // Phase 109-01 (WTMESH-01/02/03): Option B real wipe-tower mesh COEXISTS
-  // with Option A baseline source-audit lock. Phase 99 Frozen Decision 2 froze
-  // Option A as the v4.4 baseline and locked Option B as a future upgrade;
-  // Phase 109 RE-OPENS that decision and adds Option B as a PARALLEL path
-  // (Option A is preserved as the fallback branch). This test locks the
-  // coexistence contract so a future regression cannot silently remove
-  // Option B (dropping the real mesh path) OR Option A (breaking the
-  // single-material / pre-slice fallback).
+  // Phase 109-01 (WTMESH-01/02/03): preserve the optional real-mesh pipeline
+  // while locking the dimensions-only fallback required by the current locked
+  // upstream. This upstream exposes WipeTowerData dimensions but not the mesh
+  // getter used by the optional path, so SliceService must not invent it.
   //
   // Pattern: QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with
   // a WTMESH-named message (deterministic, build-dir-independent). Mirrors the
@@ -4154,21 +4157,18 @@ void QmlUiAuditTests::optionBWipeTowerMeshCoexistsWithOptionA()
   QVERIFY2(sliceHeader.contains(QStringLiteral("std::vector<float> meshVertices;")),
            "WTMESH-01: WipeTowerGeometry must have a meshVertices std::vector<float> field (flattened XYZ, capture-by-value)");
 
-  // (2) WTMESH-02 (worker capture-by-value): the worker must read
-  //     wipe_tower_mesh_data, merge real_brim_mesh, run convex_hull_3d(), and
-  //     extract its.vertices into the flat float vector. NO TriangleMesh* or
-  //     its* may escape -- the capturedGeometry.meshVertices.push_back chain
-  //     proves the pure-float extraction.
-  QVERIFY2(sliceSource.contains(QStringLiteral("wipe_tower_mesh_data != std::nullopt")),
-           "WTMESH-02: SliceService worker must gate the mesh capture on wipe_tower_mesh_data != std::nullopt");
-  QVERIFY2(sliceSource.contains(QStringLiteral("real_brim_mesh")),
-           "WTMESH-02: SliceService worker must read real_brim_mesh (mirrors upstream 3DScene.cpp:906-909 merge)");
-  QVERIFY2(sliceSource.contains(QStringLiteral("convex_hull_3d()")),
-           "WTMESH-02: SliceService worker must run convex_hull_3d() on the merged mesh (mirrors upstream 3DScene.cpp:914)");
-  QVERIFY2(sliceSource.contains(QStringLiteral("capturedGeometry.meshVertices.push_back")),
-           "WTMESH-02: SliceService worker must extract its.vertices into meshVertices as flattened floats (capture-by-value, no TriangleMesh* escape)");
-  QVERIFY2(sliceSource.contains(QStringLiteral("capturedGeometry.hasRealMesh = true")),
-           "WTMESH-02: SliceService worker must set capturedGeometry.hasRealMesh = true only when the mesh is populated");
+  // (2) WTMESH-02 (current-upstream fallback): capture the dimensions exposed
+  //     by the locked upstream and explicitly retain the non-mesh state. This
+  //     protects the source-compatible path until the upstream provides a
+  //     stable mesh getter.
+  QVERIFY2(sliceSource.contains(QStringLiteral("const Slic3r::WipeTowerData &wtData = print.wipe_tower_data()")),
+           "WTMESH-02: SliceService worker must capture WipeTowerData from the current upstream API");
+  QVERIFY2(sliceSource.contains(QStringLiteral("const Slic3r::PrintConfig &printConfig = print.config()")),
+           "WTMESH-02: SliceService worker must use the print config for fallback dimensions");
+  QVERIFY2(sliceSource.contains(QStringLiteral("const float bodyDepth = wtData.depth;")),
+           "WTMESH-02: SliceService worker must use the upstream wipe-tower depth");
+  QVERIFY2(sliceSource.contains(QStringLiteral("capturedGeometry.hasRealMesh = false;")),
+           "WTMESH-02: SliceService worker must retain the dimensions-only fallback when no upstream mesh getter exists");
 
   // (3) WTMESH-03 (Option B builder PARALLEL to Option A): buildWipeTower-
   //     MeshVertices must exist in BOTH the header (declaration) and the cpp
@@ -4431,20 +4431,22 @@ void QmlUiAuditTests::d3d12DebugLayerWiredBehindEnvFlag()
 
 void QmlUiAuditTests::d3d12StaysOptInBehindEnvFlag()
 {
-  // Phase 106-01 (D3D12-03): D3D12 must stay opt-in and the default Windows
-  // candidate order must keep D3D11 before D3D12. The Phase 106-01 root-cause
-  // investigation (.planning/research/D3D12-CRASH-ROOT-CAUSE.md) is time-boxed
-  // per DR-04: the 0xc0000005 access violation could NOT be reproduced in the
-  // test environment, so D3D12 must NOT be promoted to default until a
-  // confirmed root cause + clean repro on the original machine land. This slot
-  // is the D3D12-03 hard-rule regression lock (DR-05): it prevents a future
-  // refactor from reordering defaultWindowsCandidates() to put D3D12 first,
-  // which would re-introduce the v3.2 startup crash for every default-`auto`
-  // user. Each QVERIFY2 message names the D3D12-03 contract it locks so a
-  // failure points directly at the truth.
+  // v5.7 Phase 211 rollback: D3D12 was briefly promoted to the default backend
+  // for `auto` on Windows, but real-machine verification found that D3D12
+  // crashes at QQuickWindow swapchain init on AMD Radeon APU (mainstream
+  // integrated graphics). The D3D12 probe (QRhi::create) succeeds and
+  // offscreen render_bench runs 60 frames clean, but the QQuickWindow flip-
+  // model swapchain path crashes with 0xC0000005 right after app.exec() (before
+  // RhiViewportRenderer::render() is reached). D3D11 is the default again;
+  // D3D12 stays as an opt-in behind OWZX_RHI_RENDERER=d3d12 for discrete-GPU
+  // hosts where it has been verified. This slot is the rollback regression
+  // lock: it prevents a future refactor from reordering
+  // defaultWindowsCandidates() back to D3D12-first, which would crash on launch
+  // for a large user share. Each QVERIFY2 message names the contract it locks
+  // so a failure points directly at the truth.
   //
   // Pattern: QFile + QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with
-  // a D3D12-03-named message (deterministic, build-dir-independent). Mirrors
+  // a D3D12-04-named message (deterministic, build-dir-independent). Mirrors
   // the Phase 102/103/104/105 source-audit slots in this file, and reuses the
   // exact position-ordered defaultWindowsCandidates boundary check the Phase
   // 55/73/105 slots already assert.
@@ -4452,46 +4454,52 @@ void QmlUiAuditTests::d3d12StaysOptInBehindEnvFlag()
   const QString selectorSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiBackendSelector.cpp"));
   QVERIFY2(!selectorSource.isEmpty(), "Unable to read RhiBackendSelector.cpp");
 
-  // D3D12-03 / DR-05 (D3D11-first order): defaultWindowsCandidates() must keep
-  // D3D11 before D3D12. Reuse the position-ordered boundary check established
-  // by the Phase 55/73/105 slots: slice the defaultWindowsCandidates body
-  // between its signature and candidatesForRequest, then assert Direct3D11
-  // appears before Direct3D12 inside that slice. A future regression that
-  // flips the order (or moves D3D12 above D3D11) fails here deterministically.
+  // D3D12-04 / ROLLBACK-01 (D3D11-first order): defaultWindowsCandidates() must
+  // keep D3D11 before D3D12. Reuse the position-ordered boundary check
+  // established by the Phase 55/73/105 slots: slice the defaultWindowsCandidates
+  // body between its signature and candidatesForRequest, then assert Direct3D11
+  // appears before Direct3D12 inside that slice. A future regression that flips
+  // the order (or moves D3D12 above D3D11) fails here deterministically.
   const int defaultCandidatesStart = selectorSource.indexOf(QStringLiteral("QVector<RhiBackendCandidate> defaultWindowsCandidates()"));
   const int candidatesForRequestStart = selectorSource.indexOf(QStringLiteral("QVector<RhiBackendCandidate> candidatesForRequest"));
   QVERIFY2(defaultCandidatesStart >= 0 && candidatesForRequestStart > defaultCandidatesStart,
-           "D3D12-03/DR-05: RhiBackendSelector default candidate boundaries changed; update the D3D12-03 audit");
+           "D3D12-04/ROLLBACK-01: RhiBackendSelector default candidate boundaries changed; update the D3D12-04 audit");
   const QString defaultCandidates = selectorSource.mid(defaultCandidatesStart,
                                                        candidatesForRequestStart - defaultCandidatesStart);
   QVERIFY2(defaultCandidates.indexOf(QStringLiteral("Direct3D11"))
                < defaultCandidates.indexOf(QStringLiteral("Direct3D12")),
-           "D3D12-03/DR-05: defaultWindowsCandidates() must keep D3D11 before D3D12 (promotion blocked until Phase 106 root cause is confirmed)");
+           "D3D12-04/ROLLBACK-01: defaultWindowsCandidates() must keep D3D11 before D3D12 (Phase 211 rollback; D3D12 crashes at swapchain init on AMD Radeon APU)");
   QVERIFY2(defaultCandidates.indexOf(QStringLiteral("QRhi::D3D11"))
                < defaultCandidates.indexOf(QStringLiteral("QRhi::D3D12")),
-           "D3D12-03/DR-05: defaultWindowsCandidates() must keep the D3D11 QRhi implementation before the D3D12 one");
+           "D3D12-04/ROLLBACK-01: defaultWindowsCandidates() must keep the D3D11 QRhi implementation before the D3D12 one");
 
-  // D3D12-03 (D3D11-first rationale comment present): the load-bearing
+  // D3D12-04 (D3D11-first rationale comment present): the load-bearing
   // D3D11-first comment must stay so a future reader knows the order exists
-  // BECAUSE of the unresolved D3D12 crash, not by accident. Removing the
-  // comment would let a refactor reorder the candidates without understanding
-  // the consequence.
+  // BECAUSE of the Phase 211 rollback (D3D12 crashes on AMD APU), not by
+  // accident. Removing the comment would let a refactor reorder the candidates
+  // without understanding the consequence.
   QVERIFY2(defaultCandidates.contains(QStringLiteral("D3D11-first")),
-           "D3D12-03: defaultWindowsCandidates() must keep the D3D11-first rationale comment (documents WHY the order is load-bearing)");
+           "D3D12-04: defaultWindowsCandidates() must keep the D3D11-first rationale comment (documents WHY the order is load-bearing)");
 
-  // D3D12-03 (opt-in only): D3D12 must remain reachable ONLY via the explicit
-  // OWZX_RHI_RENDERER=d3d12 opt-in (candidatesForRequest exact-match), never
-  // via the default `auto` selection. The selector must keep reading
-  // OWZX_RHI_RENDERER as the gate.
+  // D3D12-04 (opt-in intact): D3D12 must remain in the default candidate list
+  // so a power user can pin d3d12 via OWZX_RHI_RENDERER=d3d12 on a discrete-GPU
+  // host. Removing D3D12 would turn the opt-in path into a hard failure.
+  QVERIFY2(defaultCandidates.contains(QStringLiteral("Direct3D12")),
+           "D3D12-04: defaultWindowsCandidates() must keep D3D12 in the list as the opt-in backend (Phase 211 rollback)");
+
+  // D3D12-04 (explicit override gate): OWZX_RHI_RENDERER must remain the
+  // explicit override gate so power users can pin d3d12 on verified discrete-
+  // GPU hosts, and so anyone who needs to escape a problematic default can do
+  // so. The selector must keep reading OWZX_RHI_RENDERER as the gate.
   QVERIFY2(selectorSource.contains(QStringLiteral("OWZX_RHI_RENDERER")),
-           "D3D12-03: RhiBackendSelector must keep OWZX_RHI_RENDERER as the D3D12 opt-in gate");
+           "D3D12-04: RhiBackendSelector must keep OWZX_RHI_RENDERER as the backend override gate (d3d12 opt-in / d3d11 default)");
 
-  // D3D12-03 (no Vulkan in the default selector): Vulkan is SDK-blocked (Qt
+  // D3D12-04 (no Vulkan in the default selector): Vulkan is SDK-blocked (Qt
   // disables the `vulkan` public feature) and must not appear in the default
   // Windows candidate list. This locks the "Vulkan is evaluation-only, not a
-  // v4.5 deliverable" part of D3D12-03.
+  // v4.5 deliverable" part of D3D12-03/D3D12-04.
   QVERIFY2(!defaultCandidates.contains(QStringLiteral("QRhi::Vulkan")),
-           "D3D12-03: defaultWindowsCandidates() must not include Vulkan (SDK-blocked; PROJECT.md:143)");
+           "D3D12-04: defaultWindowsCandidates() must not include Vulkan (SDK-blocked; PROJECT.md:143)");
 }
 
 void QmlUiAuditTests::filamentMapModeEnumWidenedToUpstream4Value()
@@ -4571,14 +4579,10 @@ void QmlUiAuditTests::filamentMapModeEnumWidenedToUpstream4Value()
 
 void QmlUiAuditTests::filamentMapAutoRecommendationReadbackPresent()
 {
-  // FMAP-01: the filament-map auto-recommendation readback must stay wired
-  // end-to-end -- the FilamentMapResult POD + filamentMapReady signal + worker
-  // capture site (Print::get_filament_maps) in SliceService, and the
-  // onFilamentMapReady slot + 3 auto* Q_PROPERTYs + filamentMapChanged NOTIFY
-  // in EditorViewModel. Locks the source anchors so a future regression (drop
-  // the POD, drop the signal, remove the worker capture, or unwire the slot)
-  // fails here deterministically. Mirrors the Phase 100/101/102 wipe-tower
-  // source-audit pattern.
+  // FMAP-01: keep the end-to-end result wiring while locking the current
+  // upstream fallback. This source tree does not expose the filament-map
+  // getters, so SliceService must emit an explicitly invalid result rather
+  // than show stale recommendations in the UI.
 
   const QString sliceHeader = readSource(QStringLiteral("src/core/services/SliceService.h"));
   QVERIFY2(!sliceHeader.isEmpty(), "Unable to read SliceService.h");
@@ -4606,19 +4610,16 @@ void QmlUiAuditTests::filamentMapAutoRecommendationReadbackPresent()
   QVERIFY2(sliceHeader.contains(QStringLiteral("void filamentMapReady(const FilamentMapResult &result);")),
            "FMAP-01/FR-02: SliceService must declare the filamentMapReady signal (mirrors wipeTowerGeometryReady)");
 
-  // FMAP-01 / FR-03 (worker capture site): the SliceService worker must read
-  // Print::get_filament_maps() AND Print::get_filament_map_mode() inside the
-  // HAS_LIBSLIC3R branch, and the mode < fmmManual gate must be present (the
-  // upstream Print.cpp:2485 condition that determines whether the auto-
-  // recommendation ran). A removal of the capture or the gate fails here.
-  QVERIFY2(sliceSource.contains(QStringLiteral("print.get_filament_maps()")),
-           "FMAP-01/FR-03: SliceService worker must read Print::get_filament_maps() (Print.cpp:3051) inside the Print-lifetime window");
-  QVERIFY2(sliceSource.contains(QStringLiteral("print.get_filament_map_mode()")),
-           "FMAP-01/FR-03: SliceService worker must read Print::get_filament_map_mode() (Print.cpp:3056) to resolve the mode");
-  QVERIFY2(sliceSource.contains(QStringLiteral("fmmManual")),
-           "FMAP-01/FR-03: SliceService worker must gate valid on mode < fmmManual (upstream Print.cpp:2485 auto-recommendation condition)");
+  // FMAP-01 / FR-03 (worker fallback): the locked upstream lacks the getter
+  // pair, so the worker must document the limitation and invalidate the
+  // result. The value object remains capture-by-value across the worker/UI
+  // boundary for a future upstream implementation.
+  QVERIFY2(sliceSource.contains(QStringLiteral("does not expose get_filament_maps()")),
+           "FMAP-01/FR-03: SliceService must document the missing current-upstream filament-map getter");
+  QVERIFY2(sliceSource.contains(QStringLiteral("capturedFilamentMap.valid = false;")),
+           "FMAP-01/FR-03: SliceService must invalidate filament-map readback when the upstream getter is unavailable");
   QVERIFY2(sliceSource.contains(QStringLiteral("capturedFilamentMap")),
-           "FMAP-01/FR-03: SliceService worker must capture the result by value into a worker-local FilamentMapResult (Frozen Decision 1: no Print* escape)");
+           "FMAP-01/FR-03: SliceService worker must keep a worker-local FilamentMapResult (no Print pointer escape)");
 
   // FMAP-01 / FR-02 (emit on success branch): the worker must emit
   // filamentMapReady on the success branch of the sliceFinished queued lambda
@@ -5283,14 +5284,14 @@ void QmlUiAuditTests::v45CrossWorkstreamRegressionLocked()
   QVERIFY2(partPlateHeader.contains(QStringLiteral("migrateLegacyFilamentMapMode")),
            "VV-01c/WS1: PartPlate.h must declare migrateLegacyFilamentMapMode (R-01 legacy raw-int-1 -> fmmManual migration helper, Phase 111)");
 
-  // WS2: Option B real wipe-tower mesh (covered in depth by VV-01a above;
-  // this anchor confirms the SliceService capture path is wired).
+  // WS2: the optional mesh pipeline remains available, while the locked
+  // upstream SliceService path captures the dimensions-only fallback.
   const QString sliceSource = readSource(QStringLiteral("src/core/services/SliceService.cpp"));
   QVERIFY2(!sliceSource.isEmpty(), "Unable to read SliceService.cpp");
-  QVERIFY2(sliceSource.contains(QStringLiteral("wipe_tower_mesh_data")),
-           "VV-01c/WS2: SliceService.cpp must read wipe_tower_mesh_data (the Option B real-mesh capture, Phase 109)");
-  QVERIFY2(sliceSource.contains(QStringLiteral("convex_hull_3d()")),
-           "VV-01c/WS2: SliceService.cpp must run convex_hull_3d() on the merged wipe-tower mesh (Phase 109, mirrors upstream 3DScene.cpp:914)");
+  QVERIFY2(sliceSource.contains(QStringLiteral("print.wipe_tower_data()")),
+           "VV-01c/WS2: SliceService.cpp must read the current upstream WipeTowerData dimensions");
+  QVERIFY2(sliceSource.contains(QStringLiteral("capturedGeometry.hasRealMesh = false;")),
+           "VV-01c/WS2: SliceService.cpp must retain the dimensions-only fallback while the upstream mesh getter is unavailable");
 
   // WS3: CLI fixtures (multi-material fixture model + argv recipe doc). The
   // runtime-visual-evidence workaround per STATE.md. Phases 103/104.
@@ -5305,16 +5306,16 @@ void QmlUiAuditTests::v45CrossWorkstreamRegressionLocked()
   QVERIFY2(recipeInfo.exists(),
            "VV-01c/WS3: tests/data/fixture_recipes.md must exist (argv recipe doc, Phase 104 FIXTURE-03)");
 
-  // WS4: D3D12 opt-in (debug layer wired behind env flag, stays opt-in --
-  // NOT the default backend). Phases 105/106. The D3D12-03 anti-feature
-  // contract: default promotion stays out of scope until a confirmed root
-  // cause.
+  // WS4: D3D11 default backend (debug layer wired behind env flag; D3D12 kept
+  // as opt-in after the Phase 211 real-machine rollback). Phases 105/106/211.
+  // OWZX_RHI_RENDERER stays the explicit override gate so power users can pin
+  // d3d12 on verified discrete-GPU hosts, and d3d11 remains the default.
   const QString rhiBackendSelector = readSource(QStringLiteral("src/qml_gui/Renderer/RhiBackendSelector.cpp"));
   QVERIFY2(!rhiBackendSelector.isEmpty(), "Unable to read RhiBackendSelector.cpp");
   QVERIFY2(rhiBackendSelector.contains(QStringLiteral("OWZX_RHI_RENDERER")),
-           "VV-01c/WS4: RhiBackendSelector.cpp must read the OWZX_RHI_RENDERER env flag (D3D12 stays opt-in, Phase 105/106)");
+           "VV-01c/WS4: RhiBackendSelector.cpp must read the OWZX_RHI_RENDERER env flag (D3D11 default after Phase 211 rollback, env flag stays the override gate)");
   QVERIFY2(rhiBackendSelector.contains(QStringLiteral("d3d12")),
-           "VV-01c/WS4: RhiBackendSelector.cpp must accept the d3d12 opt-in value (Phase 105/106 backend readiness)");
+           "VV-01c/WS4: RhiBackendSelector.cpp must accept the d3d12 value (Phase 211 opt-in backend)");
 
   // WS5: GLGizmoMeasure engine (per-volume ITS + raycaster + Measuring +
   // snap UX). Phases 112/113/114/115. This is the measure chain VV-01b
@@ -5818,7 +5819,7 @@ void QmlUiAuditTests::calibrationRangeInputAndKValueReadback()
 void QmlUiAuditTests::legacyDeadCodePagesRemoved()
 {
   // Phase 126 (CLEAN-01): the legacy dead-code pages + AuxiliaryService must
-  // stay deleted. These were in the removed LAN/device/cloud scope — deletion,
+  // stay deleted. These were in the removed LAN/device/cloud scope -- deletion,
   // not repair (No-Deprecated-UI rule). Each QVERIFY2 names the CLEAN-01
   // contract it locks.
   const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
@@ -6102,19 +6103,22 @@ void QmlUiAuditTests::paintGizmoGateFlattenedAndFlattenFixMeshReal()
 void QmlUiAuditTests::kbShortcutsDialogAndProjectPagePropertyPanelWired()
 {
   // Phase 130 (POLISH-04/05): KBShortcutsDialog exists in main.qml +
-  // ProjectPage property panel wired to real values (not all hardcoded "—").
+  // ProjectPage property panel wired to real values (not all hardcoded "-").
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   const QString projectPage = readSource(QStringLiteral("src/qml_gui/pages/ProjectPage.qml"));
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
   QVERIFY2(!projectPage.isEmpty(), "Unable to read ProjectPage.qml");
 
-  // POLISH-04: KBShortcutsDialog exists (the shortcutDialog in main.qml).
+  // POLISH-04: KBShortcutsDialog exists. Phase 195 (UI-02) extracted the
+  // shortcut list from main.qml into dialogs/KBShortcutsDialog.qml, so the
+  // shortcut entries now live there; main.qml only hosts the component.
   QVERIFY2(mainQml.contains(QStringLiteral("shortcutDialog")),
            "POLISH-04: main.qml must have a keyboard shortcuts dialog (shortcutDialog)");
-  QVERIFY2(mainQml.contains(QStringLiteral("Ctrl+Z")),
-           "POLISH-04: the shortcuts dialog must list keyboard shortcuts");
+  const QString kbShortcutsQml = readSource(QStringLiteral("src/qml_gui/dialogs/KBShortcutsDialog.qml"));
+  QVERIFY2(kbShortcutsQml.contains(QStringLiteral("Ctrl+Z")),
+           "POLISH-04/UI-02: KBShortcutsDialog.qml must list keyboard shortcuts (Ctrl+Z)");
 
-  // POLISH-05: ProjectPage property panel wired to real values (not all "—").
+  // POLISH-05: ProjectPage property panel wired to real values (not all "-").
   QVERIFY2(projectPage.contains(QStringLiteral("currentProjectPath")),
            "POLISH-05: ProjectPage property panel must use currentProjectPath (real values)");
   QVERIFY2(projectPage.contains(QStringLiteral("Format")),
@@ -6190,7 +6194,7 @@ void QmlUiAuditTests::v48CrossWorkstreamRegressionLocked()
            "REGRESS-03/WS2: RhiViewport must expose assembleOffsets Q_PROPERTY (ASM-01)");
 
   // WS3 (i18n): en.ts must be filled (I18N-04). Assert the unfinished count is
-  // low — a fully-filled en.ts has 0, but allow a tiny tolerance for any
+  // low -- a fully-filled en.ts has 0, but allow a tiny tolerance for any
   // genuinely-ambiguous residual.
   const int unfinished = enTs.count(QStringLiteral("type=\"unfinished\""));
   QVERIFY2(unfinished <= 5,
@@ -6198,7 +6202,7 @@ void QmlUiAuditTests::v48CrossWorkstreamRegressionLocked()
                                      "(I18N-04), found %1").arg(unfinished)));
 
   // v4.7 regression: the v4.7 anchors (paint gate, flatten, fixMesh, calibration
-  // modes) must still hold — the v4.8 work must not have regressed them.
+  // modes) must still hold -- the v4.8 work must not have regressed them.
   QVERIFY2(evm.contains(QStringLiteral("kViewportTrianglePickingAvailable = true")),
            "REGRESS-03/v4.7: paint-gizmo gate flag must still be true");
   QVERIFY2(evm.contains(QStringLiteral("orientObject")),
@@ -6236,7 +6240,7 @@ void QmlUiAuditTests::v50TechDebtRegressionLocked()
 
   // DEBT-02: the orphaned CxMenuItem + meshBooleanSelected stub are gone. The
   // working boolean dialog path (booleanExecute) is unchanged. Note: a documentation
-  // comment block in PreparePage.qml mentions the removed menu text — that is
+  // comment block in PreparePage.qml mentions the removed menu text -- that is
   // intentional (grep-traceable deletion record), so we assert on the call site
   // (meshBooleanSelected() QML invocation) instead of the raw menu label.
   QVERIFY2(!preparePage.contains(QStringLiteral("meshBooleanSelected()")),
@@ -6286,7 +6290,7 @@ void QmlUiAuditTests::v50TechDebtRegressionLocked()
 void QmlUiAuditTests::v50OpenVdbUnlockWired()
 {
   // Phase 142 (VDB-01/VDB-02): OpenVDB unlock. The v4.x "OpenVDB unavailable"
-  // premise was an incomplete CMake port — the Qt6 fork dropped the upstream
+  // premise was an incomplete CMake port -- the Qt6 fork dropped the upstream
   // find_package(OpenVDB) call and renamed the gating target to `openvdb_libs`
   // which no file ever created. This slot anchors the wiring that corrects it.
   // The strongest proof is that OWzxSlicer.exe links clean with OpenVDB
@@ -6518,7 +6522,7 @@ void QmlUiAuditTests::v50EmbossWiringAndSvgWired()
   // round-trips through 3MF via the standard store_3mf path (no special
   // text-metadata block needed for geometry preservation). Editable-text
   // metadata persistence (upstream 3MF <text> block via
-  // TextConfigurationSerialization) is documented future work — the volume
+  // TextConfigurationSerialization) is documented future work -- the volume
   // reloads with correct geometry but currently not as a re-editable TextEmboss.
   QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::ModelVolumeType::MODEL_PART")),
            "EMB-06: addTextVolume must add the volume as MODEL_PART (so geometry round-trips through 3MF)");
@@ -6673,7 +6677,7 @@ void QmlUiAuditTests::v50PartPlateUiImplementationWired()
   // (drag-reorder + EditorViewModel movePlate proxy); PLATE-03/04 were already
   // implemented pre-v5.0 (locked); PLATE-05 is documented as refined scope
   // (persisted-plate thumbnails work via plateThumbnailBase64; runtime capture
-  // for session-created plates is deferred — see .planning/research/partplate-ui-gap.md).
+  // for session-created plates is deferred -- see .planning/research/partplate-ui-gap.md).
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString evmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
   const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
@@ -6696,13 +6700,13 @@ void QmlUiAuditTests::v50PartPlateUiImplementationWired()
   QVERIFY2(projSvcH.contains(QStringLiteral("movePlate")),
            "PLATE-02: ProjectServiceMock must expose movePlate (delegates to PartPlateList)");
 
-  // PLATE-03: per-plate print sequence dialog (pre-existing — verify still present).
+  // PLATE-03: per-plate print sequence dialog (pre-existing -- verify still present).
   QVERIFY2(preparePage.contains(QStringLiteral("platePrintSequence")),
            "PLATE-03: PreparePage must bind the per-plate print-sequence combo");
   QVERIFY2(preparePage.contains(QStringLiteral("setPlatePrintSequence")),
            "PLATE-03: PreparePage must write back via setPlatePrintSequence");
 
-  // PLATE-04: per-plate config override (pre-existing — verify the scope path).
+  // PLATE-04: per-plate config override (pre-existing -- verify the scope path).
   QVERIFY2(evmH.contains(QStringLiteral("requestPlateScope")) ||
            readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h")).contains(QStringLiteral("requestPlateScope")),
            "PLATE-04: ConfigViewModel must expose requestPlateScope (the plate-scope switch)");
@@ -6719,8 +6723,8 @@ void QmlUiAuditTests::v50PartPlateUiImplementationWired()
 void QmlUiAuditTests::v50PartPlateSaveReloadRegressionWired()
 {
   // Phase 152 (PLATE-06): multi-plate save/reload regression. The full plate
-  // state — count, names, per-plate config overrides, print sequence, bed type,
-  // locked/printable flags, filament maps, thumbnails — round-trips through 3MF
+  // state -- count, names, per-plate config overrides, print sequence, bed type,
+  // locked/printable flags, filament maps, thumbnails -- round-trips through 3MF
   // via the pendingPlate* staging buffers in ProjectServiceMock. This slot
   // anchors that all staging paths exist. A live ctest is gated on a
   // ProjectServiceMock context the unit tests don't have.
@@ -6780,49 +6784,49 @@ void QmlUiAuditTests::v50RegressionLocked()
   QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
   QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
 
-  // ── v5.0 WS1 (tech-debt) anchor: CGAL-02 true intersection.
+  // -- v5.0 WS1 (tech-debt) anchor: CGAL-02 true intersection.
   QVERIFY2(projSvc.contains(QStringLiteral("MeshBoolean::cgal::intersect")),
            "REGRESS-04/WS1: meshBoolean op==2 must still call MeshBoolean::cgal::intersect");
 
-  // ── v5.0 WS2 (OpenVDB) anchor: find_package(OpenVDB) + openvdb_libs shim.
+  // -- v5.0 WS2 (OpenVDB) anchor: find_package(OpenVDB) + openvdb_libs shim.
   QVERIFY2(rootCmake.contains(QStringLiteral("find_package(OpenVDB 5.0 COMPONENTS openvdb)")),
            "REGRESS-04/WS2: root CMakeLists must keep find_package(OpenVDB)");
   QVERIFY2(rootCmake.contains(QStringLiteral("add_library(openvdb_libs INTERFACE IMPORTED)")),
            "REGRESS-04/WS2: root CMakeLists must keep the openvdb_libs shim");
 
-  // ── v5.0 WS2 (Hollow) anchor: case 8 reachable.
+  // -- v5.0 WS2 (Hollow) anchor: case 8 reachable.
   QVERIFY2(evm.contains(QStringLiteral("case 8: // Hollow\n    return hasSingleObject")),
            "REGRESS-04/WS2: Hollow gizmo (case 8) must stay reachable (hasSingleObject)");
 
-  // ── v5.0 WS3 (Emboss) anchor: parameterized text2shapes pipeline.
+  // -- v5.0 WS3 (Emboss) anchor: parameterized text2shapes pipeline.
   QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
            "REGRESS-04/WS3: text2shapes pipeline must stay wired");
   QVERIFY2(projSvc.contains(QStringLiteral("m_embossFontPath")),
            "REGRESS-04/WS3: emboss font path must stay parameterized (not hardcoded)");
 
-  // ── v5.0 WS3 (Emboss async) anchor: Qt Concurrent worker.
+  // -- v5.0 WS3 (Emboss async) anchor: Qt Concurrent worker.
   QVERIFY2(projSvc.contains(QStringLiteral("addTextVolumeAsync")),
            "REGRESS-04/WS3: async emboss API must stay present");
 
-  // ── v5.0 WS4 (Preset) anchor: .ini bundle + comparePresets.
+  // -- v5.0 WS4 (Preset) anchor: .ini bundle + comparePresets.
   QVERIFY2(presetSvc.contains(QStringLiteral("exportBundleIni")),
            "REGRESS-04/WS4: PresetServiceMock must keep exportBundleIni (.ini interop)");
   QVERIFY2(presetSvc.contains(QStringLiteral("comparePresets")),
            "REGRESS-04/WS4: comparePresets primitive must stay present");
 
-  // ── v5.0 WS5 (PartPlate) anchor: drag-reorder + staging buffers.
+  // -- v5.0 WS5 (PartPlate) anchor: drag-reorder + staging buffers.
   QVERIFY2(preparePage.contains(QStringLiteral("\"plate-drag\"")),
            "REGRESS-04/WS5: PreparePage must keep the plate-drag DropArea (drag-reorder)");
   QVERIFY2(readSource(QStringLiteral("src/core/services/ProjectServiceMock.h")).contains(QStringLiteral("pendingPlateThumbnails_")),
            "REGRESS-04/WS5: ProjectServiceMock must keep pendingPlateThumbnails_ (3MF round-trip)");
 
-  // ── v4.8 re-assertion: CGAL MeshBoolean + Drill + Assembly ASM-01.
+  // -- v4.8 re-assertion: CGAL MeshBoolean + Drill + Assembly ASM-01.
   QVERIFY2(evm.contains(QStringLiteral("kCgalMeshBooleanAvailable = true")),
            "REGRESS-04/v4.8: kCgalMeshBooleanAvailable must still be true");
   QVERIFY2(projSvc.contains(QStringLiteral("MeshBoolean::minus")),
            "REGRESS-04/v4.8: MeshBoolean::minus must still be wired for difference/drill");
 
-  // ── v4.7 re-assertion: paint-gate flag + flatten + fixMesh.
+  // -- v4.7 re-assertion: paint-gate flag + flatten + fixMesh.
   QVERIFY2(evm.contains(QStringLiteral("kViewportTrianglePickingAvailable = true")),
            "REGRESS-04/v4.7: paint-gizmo gate flag must still be true");
   QVERIFY2(evm.contains(QStringLiteral("orientObject")),
@@ -6830,7 +6834,7 @@ void QmlUiAuditTests::v50RegressionLocked()
   QVERIFY2(projSvc.contains(QStringLiteral("its_merge_vertices")),
            "REGRESS-04/v4.7: fixMesh must still call its_merge_vertices");
 
-  // ── v4.6 re-assertion: calibration tower modes.
+  // -- v4.6 re-assertion: calibration tower modes.
   QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
            "REGRESS-04/v4.6: Vol_speed tower mode (7) must still dispatch");
   QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
@@ -6931,7 +6935,7 @@ void QmlUiAuditTests::v51EmbossTextMetadataRoundTripWired()
            "CLOS-02: ProjectServiceMock.h must declare attachEmbossMetadata helper");
 
   // (3) Save side: the helper builds and assigns a TextConfiguration. Asserts
-  //     the key struct field assignments — these are what upstream
+  //     the key struct field assignments -- these are what upstream
   //     TextConfigurationSerialization::to_xml serializes to <slic3rpe:text>.
   QVERIFY2(projCpp.contains(QStringLiteral("Slic3r::TextConfiguration tc;")),
            "CLOS-02: attachEmbossMetadata must construct a Slic3r::TextConfiguration");
@@ -7003,7 +7007,7 @@ void QmlUiAuditTests::v51PartPlateSessionThumbnailWired()
            "CLOS-03: setPlateThumbnailFromBase64 must route the QImage into PartPlate::setThumbnail");
 
   // (2) EditorViewModel proxy so QML goes through the viewmodel (QML boundary
-  //     rule — QML never holds direct references to services).
+  //     rule -- QML never holds direct references to services).
   QVERIFY2(editorH.contains(QStringLiteral("setPlateThumbnailFromBase64")),
            "CLOS-03: EditorViewModel.h must expose the setPlateThumbnailFromBase64 proxy");
   QVERIFY2(editorCpp.contains(QStringLiteral("EditorViewModel::setPlateThumbnailFromBase64")),
@@ -7011,7 +7015,7 @@ void QmlUiAuditTests::v51PartPlateSessionThumbnailWired()
 
   // (3) RhiViewport carries the plateIndex through a per-plate signal so
   //     captured bytes can be routed back to the right plate. (deliverThumbnail
-  //     previously Q_UNUSED'd the index — Phase 156 closes that.)
+  //     previously Q_UNUSED'd the index -- Phase 156 closes that.)
   QVERIFY2(rhiH.contains(QStringLiteral("thumbnailCapturedForPlate(int plateIndex, const QString &data)")),
            "CLOS-03: RhiViewport.h must declare thumbnailCapturedForPlate(int, QString) signal carrying the plate index");
   QVERIFY2(rhiCpp.contains(QStringLiteral("emit thumbnailCapturedForPlate(plateIndex, m_lastThumbnailData)")),
@@ -7045,25 +7049,25 @@ void QmlUiAuditTests::v51MultiPlateRoundTripLiveCtest()
            "CLOS-04: ViewModelSmokeTests must implement multiPlateFullStateRoundTrip (the live ctest Phase 152 lacked)");
 
   // (2) Coverage breadth: all 5 CLOS-04 dimensions + thumbnail are exercised.
-  // Dim 1 — plate count + names.
+  // Dim 1 -- plate count + names.
   QVERIFY2(vmTests.contains(QStringLiteral("renamePlate(0, QStringLiteral(\"Alpha\"))")),
            "CLOS-04: live ctest must rename plates (dim 1: names)");
   QVERIFY2(vmTests.contains(QStringLiteral("loader.plateNames()")),
            "CLOS-04: live ctest must assert plateNames after reload (dim 1: names)");
 
-  // Dim 2 — per-plate config override.
+  // Dim 2 -- per-plate config override.
   QVERIFY2(vmTests.contains(QStringLiteral("setPlateScopedOptionValue(1, QStringLiteral(\"layer_height\"), 0.25)")),
            "CLOS-04: live ctest must set a per-plate config override (dim 2)");
   QVERIFY2(vmTests.contains(QStringLiteral("plateScopedOptionValue(")),
            "CLOS-04: live ctest must assert the per-plate config override after reload (dim 2)");
 
-  // Dim 3 — non-default print sequence.
+  // Dim 3 -- non-default print sequence.
   QVERIFY2(vmTests.contains(QStringLiteral("setPlatePrintSequence(2, 2)")),
            "CLOS-04: live ctest must set a non-default print sequence (dim 3)");
   QVERIFY2(vmTests.contains(QStringLiteral("loader.platePrintSequence(2)")),
            "CLOS-04: live ctest must assert the print sequence after reload (dim 3)");
 
-  // Dim 4 — mixed bed types.
+  // Dim 4 -- mixed bed types.
   QVERIFY2(vmTests.contains(QStringLiteral("setPlateBedType(0, 1)")) &&
            vmTests.contains(QStringLiteral("setPlateBedType(1, 3)")) &&
            vmTests.contains(QStringLiteral("setPlateBedType(2, 4)")),
@@ -7071,7 +7075,7 @@ void QmlUiAuditTests::v51MultiPlateRoundTripLiveCtest()
   QVERIFY2(vmTests.contains(QStringLiteral("loader.plateBedType(0)")),
            "CLOS-04: live ctest must assert bed types after reload (dim 4)");
 
-  // Dim 5 — mixed locked / printable flags.
+  // Dim 5 -- mixed locked / printable flags.
   QVERIFY2(vmTests.contains(QStringLiteral("setPlateLocked(1, true)")),
            "CLOS-04: live ctest must set mixed locked flags (dim 5)");
   QVERIFY2(vmTests.contains(QStringLiteral("setPlatePrintable(2, false)")),
@@ -7079,7 +7083,7 @@ void QmlUiAuditTests::v51MultiPlateRoundTripLiveCtest()
   QVERIFY2(vmTests.contains(QStringLiteral("loader.isPlateLocked(1)")),
            "CLOS-04: live ctest must assert locked state after reload (dim 5)");
 
-  // Dim 6 — per-plate thumbnail (uses the Phase 156 write path).
+  // Dim 6 -- per-plate thumbnail (uses the Phase 156 write path).
   QVERIFY2(vmTests.contains(QStringLiteral("setPlateThumbnailFromBase64(0, thumbB64)")),
            "CLOS-04: live ctest must write a per-plate thumbnail (dim 6: thumbnail)");
   QVERIFY2(vmTests.contains(QStringLiteral("loader.plateThumbnailBase64(0).isEmpty()")),
@@ -7141,7 +7145,7 @@ void QmlUiAuditTests::v51EmbossStyleControlsAndSvgAdvancedWired()
            "EMBO-F01: italic must populate font_prop.skew (the upstream italic axis)");
 
   // (4) Async worker captures the new fields (so the off-thread job reads a
-  //     consistent snapshot — mirrors the existing fontPath/height/depth captures).
+  //     consistent snapshot -- mirrors the existing fontPath/height/depth captures).
   QVERIFY2(projCpp.contains(QStringLiteral("const float boldness = m_embossBoldness;")),
            "EMBO-F01: async worker must snapshot m_embossBoldness before QtConcurrent::run");
   QVERIFY2(projCpp.contains(QStringLiteral("const bool italic = m_embossItalic;")),
@@ -7201,27 +7205,27 @@ void QmlUiAuditTests::v51RegressionLocked()
   QVERIFY2(!configVmH.isEmpty(), "Unable to read ConfigViewModel.h");
   QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
 
-  // ── v5.1 CLOS-01 (Phase 154) anchor: QML Preset Diff-View Dialog.
+  // -- v5.1 CLOS-01 (Phase 154) anchor: QML Preset Diff-View Dialog.
   QVERIFY2(configVmH.contains(QStringLiteral("comparePresetsDetailed")),
            "REGRESS-05/CLOS-01: ConfigViewModel must keep the comparePresetsDetailed proxy");
 
-  // ── v5.1 CLOS-02 (Phase 155) anchor: Emboss 3MF text metadata round-trip.
+  // -- v5.1 CLOS-02 (Phase 155) anchor: Emboss 3MF text metadata round-trip.
   QVERIFY2(projSvc.contains(QStringLiteral("text_configuration = std::move(tc)")),
            "REGRESS-05/CLOS-02: attachEmbossMetadata must keep writing text_configuration");
 
-  // ── v5.1 CLOS-03 (Phase 156) anchor: runtime plate thumbnail write path.
+  // -- v5.1 CLOS-03 (Phase 156) anchor: runtime plate thumbnail write path.
   QVERIFY2(projSvcH.contains(QStringLiteral("setPlateThumbnailFromBase64")),
            "REGRESS-05/CLOS-03: ProjectServiceMock must keep the setPlateThumbnailFromBase64 write path");
 
-  // ── v5.1 CLOS-04 (Phase 157) anchor: live multi-plate full-state round-trip ctest.
+  // -- v5.1 CLOS-04 (Phase 157) anchor: live multi-plate full-state round-trip ctest.
   QVERIFY2(vmTests.contains(QStringLiteral("multiPlateFullStateRoundTrip")),
            "REGRESS-05/CLOS-04: ViewModelSmokeTests must keep the multiPlateFullStateRoundTrip live ctest");
 
-  // ── v5.1 EMBO-F (Phase 158) anchor: boldness is no longer hardcoded.
+  // -- v5.1 EMBO-F (Phase 158) anchor: boldness is no longer hardcoded.
   QVERIFY2(projSvc.contains(QStringLiteral("font_prop.boldness = m_embossBoldness")),
            "REGRESS-05/EMBO-F: font_prop.boldness must stay parameterized from m_embossBoldness (not hardcoded)");
 
-  // ── v5.0 re-assertion (REGRESS-04): OpenVDB unlock + CGAL-02 + Emboss + Preset + PartPlate.
+  // -- v5.0 re-assertion (REGRESS-04): OpenVDB unlock + CGAL-02 + Emboss + Preset + PartPlate.
   QVERIFY2(rootCmake.contains(QStringLiteral("find_package(OpenVDB 5.0 COMPONENTS openvdb)")),
            "REGRESS-05/v5.0: root CMakeLists must keep find_package(OpenVDB)");
   QVERIFY2(rootCmake.contains(QStringLiteral("add_library(openvdb_libs INTERFACE IMPORTED)")),
@@ -7239,13 +7243,13 @@ void QmlUiAuditTests::v51RegressionLocked()
   QVERIFY2(projSvcH.contains(QStringLiteral("pendingPlateThumbnails_")),
            "REGRESS-05/v5.0: ProjectServiceMock must keep pendingPlateThumbnails_ (3MF round-trip)");
 
-  // ── v4.8 re-assertion: CGAL MeshBoolean + Drill + Assembly ASM-01.
+  // -- v4.8 re-assertion: CGAL MeshBoolean + Drill + Assembly ASM-01.
   QVERIFY2(evm.contains(QStringLiteral("kCgalMeshBooleanAvailable = true")),
            "REGRESS-05/v4.8: kCgalMeshBooleanAvailable must still be true");
   QVERIFY2(projSvc.contains(QStringLiteral("MeshBoolean::minus")),
            "REGRESS-05/v4.8: MeshBoolean::minus must still be wired for difference/drill");
 
-  // ── v4.7 re-assertion: paint-gate flag + flatten + fixMesh.
+  // -- v4.7 re-assertion: paint-gate flag + flatten + fixMesh.
   QVERIFY2(evm.contains(QStringLiteral("kViewportTrianglePickingAvailable = true")),
            "REGRESS-05/v4.7: paint-gizmo gate flag must still be true");
   QVERIFY2(evm.contains(QStringLiteral("orientObject")),
@@ -7253,7 +7257,7 @@ void QmlUiAuditTests::v51RegressionLocked()
   QVERIFY2(projSvc.contains(QStringLiteral("its_merge_vertices")),
            "REGRESS-05/v4.7: fixMesh must still call its_merge_vertices");
 
-  // ── v4.6 re-assertion: calibration tower modes.
+  // -- v4.6 re-assertion: calibration tower modes.
   QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
            "REGRESS-05/v4.6: Vol_speed tower mode (7) must still dispatch");
   QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
@@ -7277,27 +7281,27 @@ void QmlUiAuditTests::v52ThemeTokenFoundationWired()
            "DS-01: Theme.qml header must declare it is the single source of truth");
 
   // (2) Audit-flagged MISSING tokens now defined.
-  // borderActive — was referenced but undefined (silent undefined runtime).
+  // borderActive -- was referenced but undefined (silent undefined runtime).
   QVERIFY2(theme.contains(QStringLiteral("property color borderActive")),
            "DS-01: Theme.borderActive must be defined (was referenced but undefined)");
-  // statusErrorDark / statusErrorPressed — replace Qt.darker(statusError, 1.2).
+  // statusErrorDark / statusErrorPressed -- replace Qt.darker(statusError, 1.2).
   QVERIFY2(theme.contains(QStringLiteral("statusErrorDark")),
            "DS-01: Theme.statusErrorDark must be defined (replaces Qt.darker() in CxButton danger)");
   QVERIFY2(theme.contains(QStringLiteral("statusErrorPressed")),
            "DS-01: Theme.statusErrorPressed must be defined (replaces Qt.darker() in CxButton danger)");
-  // accentSubtlePressed — replace Qt.darker(accentSubtle, 1.2).
+  // accentSubtlePressed -- replace Qt.darker(accentSubtle, 1.2).
   QVERIFY2(theme.contains(QStringLiteral("accentSubtlePressed")),
            "DS-01: Theme.accentSubtlePressed must be defined (replaces Qt.darker() in CxIconButton)");
-  // scrollBarColor — was hardcoded across CxScrollView.
+  // scrollBarColor -- was hardcoded across CxScrollView.
   QVERIFY2(theme.contains(QStringLiteral("scrollBarColor")),
            "DS-01: Theme.scrollBarColor must be defined (was hardcoded scrollbar color)");
-  // fontMono — replaces 26 `font.family: \"Consolas\"` hardcodes.
+  // fontMono -- replaces 26 `font.family: \"Consolas\"` hardcodes.
   QVERIFY2(theme.contains(QStringLiteral("property string fontMono")),
            "DS-01: Theme.fontMono must be defined (replaces 26 Consolas hardcodes)");
-  // fontSize13 — used 17x in pages but missing from scale.
+  // fontSize13 -- used 17x in pages but missing from scale.
   QVERIFY2(theme.contains(QStringLiteral("fontSize13")),
            "DS-01: Theme.fontSize13 must be defined (size 13 used 17x but was missing from scale)");
-  // Component sizing tokens — replace hand-rolled values in Cx*/dialogs.
+  // Component sizing tokens -- replace hand-rolled values in Cx*/dialogs.
   QVERIFY2(theme.contains(QStringLiteral("sliderTrackHeight")),
            "DS-01: Theme.sliderTrackHeight must be defined (was hand-rolled in CxSlider)");
   QVERIFY2(theme.contains(QStringLiteral("switchTrackWidth")),
@@ -7307,7 +7311,7 @@ void QmlUiAuditTests::v52ThemeTokenFoundationWired()
   QVERIFY2(theme.contains(QStringLiteral("controlHeightXL")),
            "DS-01: Theme.controlHeightXL must be defined (extends the 28/34/40 scale)");
 
-  // (3) Sidebar width system — Phase 164 will consume these to unbreak the
+  // (3) Sidebar width system -- Phase 164 will consume these to unbreak the
   //     7-layer 392px lock.
   QVERIFY2(theme.contains(QStringLiteral("sidebarWidthMin")) &&
            theme.contains(QStringLiteral("sidebarWidthMax")) &&
@@ -7317,18 +7321,18 @@ void QmlUiAuditTests::v52ThemeTokenFoundationWired()
            theme.contains(QStringLiteral("rightPanelWidthMax")),
            "DS-01: Theme.rightPanelWidth{Min,Max} must be defined");
 
-  // (4) Notification severity palette — Phase 167 will collapse the 3 private
+  // (4) Notification severity palette -- Phase 167 will collapse the 3 private
   //     10-level tables in ErrorBanner/ErrorToast/NotificationCenter.
   QVERIFY2(theme.contains(QStringLiteral("severityColors")),
            "DS-01: Theme.severityColors palette must be defined (Phase 167 collapses 3 private tables)");
   QVERIFY2(theme.contains(QStringLiteral("severityIcons")),
            "DS-01: Theme.severityIcons palette must be defined");
 
-  // (5) panelPaddingSM — for scroll gutters / dense rows (Phase 164 consumer).
+  // (5) panelPaddingSM -- for scroll gutters / dense rows (Phase 164 consumer).
   QVERIFY2(theme.contains(QStringLiteral("panelPaddingSM")),
            "DS-01: Theme.panelPaddingSM must be defined (smaller padding for scroll gutters)");
 
-  // (6) No silent undefined — programmatically verify every Theme.X referenced
+  // (6) No silent undefined -- programmatically verify every Theme.X referenced
   //     in *.qml is defined in Theme.qml. This is the load-bearing assertion.
   const QDir guiDir(QStringLiteral(QT_TESTCASE_SOURCEDIR) + QStringLiteral("/src/qml_gui"));
   QVERIFY2(guiDir.exists(), "Unable to locate src/qml_gui for token scan");
@@ -7372,7 +7376,7 @@ void QmlUiAuditTests::v52ControlLibraryHardened()
   QVERIFY2(cxButton.contains(QStringLiteral("ToolTip.visible")),
            "DS-02: CxButton must wire ToolTip (was missing)");
   QVERIFY2(cxButton.contains(QStringLiteral("scale: root.pressed")),
-           "DS-02: CxButton must have press-scale (was missing — CxIconButton has 0.92)");
+           "DS-02: CxButton must have press-scale (was missing -- CxIconButton has 0.92)");
   QVERIFY2(cxButton.contains(QStringLiteral("activeFocus")) && cxButton.contains(QStringLiteral("borderFocus")),
            "DS-02: CxButton must show a focus border for keyboard accessibility");
 
@@ -7464,9 +7468,9 @@ void QmlUiAuditTests::v52SidebarWidthUnbroken()
 
   // (1) BackendContext: min/max now allow resize (was min==max==392).
   QVERIFY2(backendH.contains(QStringLiteral("kSidebarMinWidth = 300")),
-           "SW-01: BackendContext kSidebarMinWidth must be 300 (was 392 — no-op drag handle)");
+           "SW-01: BackendContext kSidebarMinWidth must be 300 (was 392 -- no-op drag handle)");
   QVERIFY2(backendH.contains(QStringLiteral("kSidebarMaxWidth = 520")),
-           "SW-01: BackendContext kSidebarMaxWidth must be 520 (was 392 — no-op drag handle)");
+           "SW-01: BackendContext kSidebarMaxWidth must be 520 (was 392 -- no-op drag handle)");
   QVERIFY2(backendH.contains(QStringLiteral("kSidebarDefaultWidth = 392")),
            "SW-01: BackendContext default stays 392 (preserves the current visual)");
   QVERIFY2(backendH.contains(QStringLiteral("kSidebarSettingsVersion = 4")),
@@ -7498,17 +7502,17 @@ void QmlUiAuditTests::v52CopywritingSwept()
   QVERIFY2(!createPresets.isEmpty(), "Unable to read CreatePresetsDialog.qml");
   QVERIFY2(!filamentPopup.isEmpty(), "Unable to read FilamentGroupPopup.qml");
 
-  // (1) PresetDiffDialog: previously all-English — now ZH source.
+  // (1) PresetDiffDialog: previously all-English -- now ZH source.
   QVERIFY2(presetDiff.contains(QStringLiteral("qsTr(\"预设对比\")")),
            "CW-01: PresetDiffDialog title must be ZH source (was \"Compare Presets\")");
   QVERIFY2(presetDiff.contains(QStringLiteral("qsTr(\"范围：\")")),
            "CW-01: PresetDiffDialog Scope label must be ZH source");
 
-  // (2) CreatePresetsDialog: previously all-English — now ZH source.
+  // (2) CreatePresetsDialog: previously all-English -- now ZH source.
   QVERIFY2(createPresets.contains(QStringLiteral("qsTr(\"创建预设\")")),
            "CW-01: CreatePresetsDialog title must be ZH source (was \"Create Preset\")");
 
-  // (3) FilamentGroupPopup: previously all-English — now ZH source.
+  // (3) FilamentGroupPopup: previously all-English -- now ZH source.
   QVERIFY2(filamentPopup.contains(QStringLiteral("qsTr(\"耗材分组\")")),
            "CW-01: FilamentGroupPopup title must be ZH source (was \"Filament Group\")");
 
@@ -7523,7 +7527,7 @@ void QmlUiAuditTests::v52CopywritingSwept()
 // Phase 166 (Dlg-01/02): dialog consistency gate.
 // Phase 166 fixed the 8 empty-header dialogs flagged by Dialogs-UI-REVIEW:
 // they used `title:` but CxDialog.qml:14 explicitly suppresses title ("")
-// and exposes `dialogTitle:` instead — so they were rendering a 44px header
+// and exposes `dialogTitle:` instead -- so they were rendering a 44px header
 // bar with only the ✕ button.
 void QmlUiAuditTests::v52DialogConsistencyRepaired()
 {
@@ -7543,7 +7547,7 @@ void QmlUiAuditTests::v52DialogConsistencyRepaired()
     const QString src = readSource(path);
     QVERIFY2(!src.isEmpty(), QString("Unable to read %1").arg(path).toUtf8().constData());
     QVERIFY2(src.contains(QStringLiteral("dialogTitle:")),
-             QString("Dlg-01: %1 must use dialogTitle: (was title: — rendered empty header)").arg(path).toUtf8().constData());
+             QString("Dlg-01: %1 must use dialogTitle: (was title: -- rendered empty header)").arg(path).toUtf8().constData());
   }
 
   // SavePresetDialog was EN-source; Phase 166 also swept it to ZH.
@@ -7555,7 +7559,7 @@ void QmlUiAuditTests::v52DialogConsistencyRepaired()
 // Phase 167 (Cmp-01/02/03): component coherence gate.
 // Phase 167 collapsed the NotificationCenter's private severity table into a
 // lookup against the canonical Theme.severityColors/severityIcons palettes
-// (Phase 160 tokens — single source of truth for the notification system), and
+// (Phase 160 tokens -- single source of truth for the notification system), and
 // removed the 4 orphan components from the qrc bundle.
 void QmlUiAuditTests::v52ComponentCoherence()
 {
@@ -7609,7 +7613,7 @@ void QmlUiAuditTests::v52VisualControlMigration()
   // (2) VS-02: Phase 158 Emboss boldness Slider migrated to CxSlider.
   //     Find the CxSlider binding embossBoldness.
   QVERIFY2(preparePage.contains(QStringLiteral("CxSlider")),
-           "VS-02: PreparePage Emboss panel must use CxSlider for boldness (was raw QtQuick Slider — inconsistent with peer gizmo panels)");
+           "VS-02: PreparePage Emboss panel must use CxSlider for boldness (was raw QtQuick Slider -- inconsistent with peer gizmo panels)");
   // Verify there's no raw `Slider {` (excluding the CxSlider/CxSliderStyle
   // matches). The check: count raw `\nSlider {` occurrences.
   int rawSliderCount = 0;
@@ -7627,7 +7631,7 @@ void QmlUiAuditTests::v52VisualControlMigration()
 // Phase 169 (XD-01/02): experience safety gate.
 // Phase 169 ships a shared ConfirmDialog component and routes the most
 // impact-prone destructive trigger (deleteSelection via Delete key + 2 menu
-// items) through it. Was firing immediately — Delete is too easy to hit
+// items) through it. Was firing immediately -- Delete is too easy to hit
 // accidentally.
 void QmlUiAuditTests::v52ExperienceSafety()
 {
@@ -7677,48 +7681,48 @@ void QmlUiAuditTests::v52RegressionLocked()
 
   QVERIFY2(!theme.isEmpty(), "Unable to read Theme.qml");
 
-  // ── v5.2 DS (Phase 160): Theme token foundation.
+  // -- v5.2 DS (Phase 160): Theme token foundation.
   QVERIFY2(theme.contains(QStringLiteral("borderActive")),
            "REGRESS-06/DS-01: Theme.borderActive must stay defined (was silent undefined)");
   QVERIFY2(theme.contains(QStringLiteral("fontMono")),
            "REGRESS-06/DS-01: Theme.fontMono must stay defined");
 
-  // ── v5.2 DS (Phase 161): Cx* hardening — no Qt.darker in controls.
+  // -- v5.2 DS (Phase 161): Cx* hardening -- no Qt.darker in controls.
   QVERIFY2(!cxButton.contains(QStringLiteral("Qt.darker")),
            "REGRESS-06/DS-02: CxButton must not use Qt.darker (Phase 161 removed it)");
 
-  // ── v5.2 TK (Phase 162/163): PreferencesPage now uses Theme tokens
+  // -- v5.2 TK (Phase 162/163): PreferencesPage now uses Theme tokens
   //     (Pages-UI-REVIEW flagged it as the worst offender with 0 Theme refs).
   const QString prefsPage = readSource(QStringLiteral("src/qml_gui/pages/PreferencesPage.qml"));
   QVERIFY2(prefsPage.contains(QStringLiteral("Theme.")),
            "REGRESS-06/TK-01: PreferencesPage must reference Theme tokens (was 0 refs + 129 hex pre-Phase 162)");
 
-  // ── v5.2 SW (Phase 164): sidebar width system unbroken.
+  // -- v5.2 SW (Phase 164): sidebar width system unbroken.
   QVERIFY2(backendH.contains(QStringLiteral("kSidebarMinWidth = 300"))
                && backendH.contains(QStringLiteral("kSidebarMaxWidth = 520")),
            "REGRESS-06/SW-01: BackendContext sidebar min/max must allow resize (was both 392)");
 
-  // ── v5.2 CW (Phase 165): dialogs unified on ZH source.
+  // -- v5.2 CW (Phase 165): dialogs unified on ZH source.
   QVERIFY2(presetDiff.contains(QStringLiteral("qsTr(\"预设对比\")")),
            "REGRESS-06/CW-01: PresetDiffDialog title must stay ZH source (Phase 165 sweep)");
 
-  // ── v5.2 Dlg (Phase 166): empty-header dialogs use dialogTitle:.
+  // -- v5.2 Dlg (Phase 166): empty-header dialogs use dialogTitle:.
   QVERIFY2(presetDiff.contains(QStringLiteral("dialogTitle:")),
            "REGRESS-06/Dlg-01: PresetDiffDialog must use dialogTitle: (Phase 166 empty-header fix)");
 
-  // ── v5.2 Cmp (Phase 167): orphan components removed.
+  // -- v5.2 Cmp (Phase 167): orphan components removed.
   QVERIFY2(!qrc.contains(QStringLiteral("components/CxPanel.qml")),
            "REGRESS-06/Cmp-02: orphan CxPanel must stay removed from qml.qrc");
 
-  // ── v5.2 VS (Phase 168): pseudo-button migration.
+  // -- v5.2 VS (Phase 168): pseudo-button migration.
   QVERIFY2(preparePage.contains(QStringLiteral("CxSlider")),
            "REGRESS-06/VS-02: PreparePage Emboss boldness must stay CxSlider (Phase 168)");
 
-  // ── v5.2 XD (Phase 169): destructive-action confirms.
+  // -- v5.2 XD (Phase 169): destructive-action confirms.
   QVERIFY2(preparePage.contains(QStringLiteral("deleteConfirm.openWithAction")),
            "REGRESS-06/XD-01: deleteSelection must route through deleteConfirm.openWithAction");
 
-  // ── v5.1 re-assertion: CLOS-01..04 + EMBO-F + REGRESS-05.
+  // -- v5.1 re-assertion: CLOS-01..04 + EMBO-F + REGRESS-05.
   QVERIFY2(configVmH.contains(QStringLiteral("comparePresetsDetailed")),
            "REGRESS-06/v5.1: ConfigViewModel.comparePresetsDetailed must stay (Phase 154)");
   QVERIFY2(projSvc.contains(QStringLiteral("text_configuration = std::move(tc)")),
@@ -7726,7 +7730,7 @@ void QmlUiAuditTests::v52RegressionLocked()
   QVERIFY2(vmTests.contains(QStringLiteral("multiPlateFullStateRoundTrip")),
            "REGRESS-06/v5.1: multiPlateFullStateRoundTrip live ctest must stay (Phase 157)");
 
-  // ── v5.0 re-assertion.
+  // -- v5.0 re-assertion.
   QVERIFY2(rootCmake.contains(QStringLiteral("find_package(OpenVDB 5.0 COMPONENTS openvdb)")),
            "REGRESS-06/v5.0: root CMakeLists must keep find_package(OpenVDB)");
   QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
@@ -7734,12 +7738,12 @@ void QmlUiAuditTests::v52RegressionLocked()
   QVERIFY2(presetSvc.contains(QStringLiteral("comparePresets")),
            "REGRESS-06/v5.0: comparePresets primitive must stay present");
 
-  // ── v4.8 re-assertion.
+  // -- v4.8 re-assertion.
   QVERIFY2(cxButton.contains(QStringLiteral("Theme.statusErrorDark"))
                || cxButton.contains(QStringLiteral("Theme.statusErrorPressed")),
            "REGRESS-06/v4.8+v5.2: CxButton Danger variant must use Phase 160 tokens (also v4.8 MeshBoolean context)");
 
-  // ── v4.6 re-assertion: calibration tower modes.
+  // -- v4.6 re-assertion: calibration tower modes.
   QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
            "REGRESS-06/v4.6: Vol_speed tower mode (7) must still dispatch");
   QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
@@ -7963,7 +7967,7 @@ void QmlUiAuditTests::v53SimplifyGizmoReal()
            "FEAT-03: simplifyMeshSelected must delegate to simplifySelected (the real QuadricEdgeCollapse path)");
 
   // (3) The real simplifyObject backend exists (this was already there but
-  //     audit missed it — Phase 176 confirms the full chain works).
+  //     audit missed it -- Phase 176 confirms the full chain works).
   const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
   QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::its_quadric_edge_collapse")),
            "FEAT-03: ProjectServiceMock::simplifyObject must call Slic3r::its_quadric_edge_collapse (the real simplify math)");
@@ -8029,53 +8033,53 @@ void QmlUiAuditTests::v53RegressionLocked()
 
   QVERIFY2(!vmH.isEmpty(), "Unable to read EditorViewModel.h");
 
-  // ── v5.3 CL (Phase 171): destructive confirms.
+  // -- v5.3 CL (Phase 171): destructive confirms.
   QVERIFY2(multiMachine.contains(QStringLiteral("removeDeviceConfirm")),
            "REGRESS-07/CL-01: MultiMachinePage must keep removeDeviceConfirm");
 
-  // ── v5.3 CL (Phase 173): pseudo-button sweep.
+  // -- v5.3 CL (Phase 173): pseudo-button sweep.
   QVERIFY2(preparePage.count(QStringLiteral("CxButton")) >= 6,
            "REGRESS-07/CL-03: PreparePage must keep 6+ CxButton instances");
 
-  // ── v5.3 FEAT (Phase 174): per-object settings dialog.
+  // -- v5.3 FEAT (Phase 174): per-object settings dialog.
   QVERIFY2(vmH.contains(QStringLiteral("scopedOptionValue")),
            "REGRESS-07/FEAT-01: EditorViewModel must keep scopedOptionValue proxy");
   QVERIFY2(preparePage.contains(QStringLiteral("SelectionSettingsDialog {")),
            "REGRESS-07/FEAT-01: PreparePage must keep SelectionSettingsDialog");
 
-  // ── v5.3 FEAT (Phase 175): layer-range editor.
+  // -- v5.3 FEAT (Phase 175): layer-range editor.
   QVERIFY2(vmH.contains(QStringLiteral("objectLayerRangeCount")),
            "REGRESS-07/FEAT-02: EditorViewModel must keep objectLayerRangeCount proxy");
   QVERIFY2(preparePage.contains(QStringLiteral("ObjectLayersDialog {")),
            "REGRESS-07/FEAT-02: PreparePage must keep ObjectLayersDialog");
 
-  // ── v5.3 FEAT (Phase 176): Simplify gizmo.
+  // -- v5.3 FEAT (Phase 176): Simplify gizmo.
   QVERIFY2(!vmCpp.contains(QStringLiteral("not yet implemented (needs simplify dialog)")),
            "REGRESS-07/FEAT-03: simplifyMeshSelected must stay real (not the v3.x stub)");
 
-  // ── v5.3 I18N (Phase 177/178): de/fr/ja/ko advanced.
+  // -- v5.3 I18N (Phase 177/178): de/fr/ja/ko advanced.
   QVERIFY2(deTs.contains(QStringLiteral("Drucken"))
                || deTs.contains(QStringLiteral("Filament"))
                || deTs.contains(QStringLiteral("Einstellungen")),
            "REGRESS-07/I18N-06: de.ts must keep glossary translations");
 
-  // ── v5.2 re-assertion.
+  // -- v5.2 re-assertion.
   QVERIFY2(theme.contains(QStringLiteral("borderActive")),
            "REGRESS-07/v5.2: Theme.borderActive must stay defined");
   QVERIFY2(backendH.contains(QStringLiteral("kSidebarMinWidth = 300")),
            "REGRESS-07/v5.2: sidebar width system must stay unbroken (min 300)");
 
-  // ── v5.1 re-assertion.
+  // -- v5.1 re-assertion.
   QVERIFY2(vmH.contains(QStringLiteral("comparePresetsDetailed"))
                || projSvc.contains(QStringLiteral("comparePresetsDetailed"))
                || readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h")).contains(QStringLiteral("comparePresetsDetailed")),
            "REGRESS-07/v5.1: comparePresetsDetailed must stay present");
 
-  // ── v5.0 re-assertion.
+  // -- v5.0 re-assertion.
   QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
            "REGRESS-07/v5.0: text2shapes pipeline must stay wired");
 
-  // ── v4.6 re-assertion.
+  // -- v4.6 re-assertion.
   QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
            "REGRESS-07/v4.6: Vol_speed tower mode (7) must still dispatch");
   QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
@@ -8087,73 +8091,73 @@ void QmlUiAuditTests::v53RegressionLocked()
 // See .planning/milestones/v5.4-ROADMAP.md for phase mapping.
 void QmlUiAuditTests::v54RegressionLocked()
 {
-  // ── v5.4 CRASH-01 (Phase 180): A1 + A2 NOT APPLICABLE (Qt6 architecture immune).
+  // -- v5.4 CRASH-01 (Phase 180): A1 + A2 NOT APPLICABLE (Qt6 architecture immune).
   // Anchor the immunity mechanism so a future refactor can't silently remove it.
   // A1: RhiViewportRenderer holds QPointer<RhiViewport> for safe cross-thread callback.
   {
     const QString rendererH = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
     QVERIFY2(rendererH.contains(QStringLiteral("QPointer<RhiViewport>")),
              "REGRESS-08/CRASH-01: RhiViewportRenderer must hold QPointer<RhiViewport> "
-             "(A1 immunity — null-safe cross-thread callback)");
+             "(A1 immunity -- null-safe cross-thread callback)");
   }
   // A2: EditorViewModel selection uses real source indices (QSet<int>), not synthetic ids.
   {
     const QString vmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
     QVERIFY2(vmH.contains(QStringLiteral("m_selectedSourceIndices")),
              "REGRESS-08/CRASH-01: EditorViewModel must use m_selectedSourceIndices "
-             "(A2 immunity — no synthetic wipe-tower ids)");
+             "(A2 immunity -- no synthetic wipe-tower ids)");
   }
 
-  // ── v5.4 CRASH-02 (Phase 181): A4 + A8 + A9 NOT APPLICABLE (Qt6 architecture immune).
+  // -- v5.4 CRASH-02 (Phase 181): A4 + A8 + A9 NOT APPLICABLE (Qt6 architecture immune).
   // Anchor the immunity mechanisms.
   // A4: PartPlate is a pure value object (no m_model, synchronous rebuild).
   {
     const QString plateH = readSource(QStringLiteral("src/core/model/PartPlate.h"));
     QVERIFY2(plateH.contains(QStringLiteral("objToInstanceSet")) || plateH.contains(QStringLiteral("obj_to_instance_set")),
              "REGRESS-08/CRASH-02: PartPlate must keep its instance-set value storage "
-             "(A4 immunity — pure value object, no m_model dereference)");
+             "(A4 immunity -- pure value object, no m_model dereference)");
   }
   // A8: Qt6 export uses flat-array "presets" JSON schema (not upstream three-category).
   {
     const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
     QVERIFY2(presetSvc.contains(QStringLiteral("\"presets\"")) || presetSvc.contains(QStringLiteral("QStringLiteral(\"presets\")")),
              "REGRESS-08/CRASH-02: PresetServiceMock must keep its flat-array presets JSON key "
-             "(A8 immunity — Qt6 schema is intentionally different from upstream)");
+             "(A8 immunity -- Qt6 schema is intentionally different from upstream)");
   }
   // A9: NotificationCenter uses QML native wrapping.
   {
     const QString ncQml = readSource(QStringLiteral("src/qml_gui/components/NotificationCenter.qml"));
     QVERIFY2(ncQml.contains(QStringLiteral("wrapMode: Text.Wrap")) || ncQml.contains(QStringLiteral("wrapMode: Text.WordWrap")),
              "REGRESS-08/CRASH-02: NotificationCenter must use QML native wrapMode "
-             "(A9 immunity — no upstream m_endlines line-counting)");
+             "(A9 immunity -- no upstream m_endlines line-counting)");
   }
 
-  // ── v5.4 CRASH-03 (Phase 182): A7 STEP reload path resolution FIXED.
+  // -- v5.4 CRASH-03 (Phase 182): A7 STEP reload path resolution FIXED.
   // Anchor the resolveSourcePath lambda so a future refactor can't silently drop
   // the project-relative fallback (which would re-introduce the bare-filename bug).
   {
     const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
     QVERIFY2(projSvc.contains(QStringLiteral("resolveSourcePath")),
              "REGRESS-08/CRASH-03: ProjectServiceMock::reloadFromDisk must keep resolveSourcePath "
-             "(A7 fix — project-relative fallback for bare-filename input_file after 3MF reload)");
+             "(A7 fix -- project-relative fallback for bare-filename input_file after 3MF reload)");
     QVERIFY2(projSvc.contains(QStringLiteral("currentProjectPath")),
              "REGRESS-08/CRASH-03: ProjectServiceMock reloadFromDisk must reference currentProjectPath "
-             "(A7 fix — needs project dir for same-folder fallback)");
+             "(A7 fix -- needs project dir for same-folder fallback)");
   }
 
-  // ── v5.4 FEAT-04 (Phase 183): extractDefault handles vector types.
+  // -- v5.4 FEAT-04 (Phase 183): extractDefault handles vector types.
   // Anchor the vector-type cases so a future refactor can't silently drop them
   // (which would re-introduce the bb3-sync regression of empty default values).
   {
     const QString modelCpp = readSource(QStringLiteral("src/qml_gui/Models/ConfigOptionModel.cpp"));
     QVERIFY2(modelCpp.contains(QStringLiteral("case Slic3r::coFloats:")),
              "REGRESS-08/FEAT-04: ConfigOptionModel::extractDefault must handle coFloats "
-             "(bb3-sync regression fix — vector fields need values[0] default)");
+             "(bb3-sync regression fix -- vector fields need values[0] default)");
     QVERIFY2(modelCpp.contains(QStringLiteral("case Slic3r::coBools:")),
              "REGRESS-08/FEAT-04: ConfigOptionModel::extractDefault must handle coBools");
   }
 
-  // ── v5.4 META-01 (Phase 186): sync closure documentation landed.
+  // -- v5.4 META-01 (Phase 186): sync closure documentation landed.
   {
     const QString tracker = readSource(QStringLiteral("docs/源码对照迁移任务追踪.md"));
     QVERIFY2(tracker.contains(QStringLiteral("absorbed by bb3")),
@@ -8162,34 +8166,269 @@ void QmlUiAuditTests::v54RegressionLocked()
              "REGRESS-08/META-01: P11.B tracker must record N/A verdicts for Qt6 architecture immunity");
   }
 
-  // ── v5.3 re-assertion (carry forward from v53RegressionLocked).
+  // -- v5.3 re-assertion (carry forward from v53RegressionLocked).
   {
     const QString themeQml = readSource(QStringLiteral("src/qml_gui/Theme.qml"));
     QVERIFY2(themeQml.contains(QStringLiteral("borderActive")),
              "REGRESS-08/v5.3: Theme.borderActive must remain (CL-02 carry)");
   }
 
-  // ── v5.2 re-assertion.
+  // -- v5.2 re-assertion.
   {
     const QString backendH = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
     QVERIFY2(backendH.contains(QStringLiteral("kSidebarMinWidth = 300")),
              "REGRESS-08/v5.2: kSidebarMinWidth = 300 must remain");
   }
 
-  // ── v5.0 re-assertion.
+  // -- v5.0 re-assertion.
   {
     const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
     QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
              "REGRESS-08/v5.0: Emboss text2shapes integration must remain");
   }
 
-  // ── v4.6 re-assertion (canary — calibration tower modes).
+  // -- v4.6 re-assertion (canary -- calibration tower modes).
   {
     const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
     QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
              "REGRESS-08/v4.6: Vol_speed tower mode (7) must still dispatch");
     QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
              "REGRESS-08/v4.6: Retraction tower mode (9) must still dispatch");
+  }
+}
+
+// Phase 205 (GATE-01): v5.6 cross-workstream regression gate.
+// Spots every v5.6 anchor (UI/FEAT/DLG/RHI/I18N) + re-asserts v5.4/v5.0/v4.6.
+// See .planning/milestones/v5.6-ROADMAP.md for phase mapping.
+//
+// Source-audit only (QFile + QT_TESTCASE_SOURCEDIR + QString::contains /
+// QFile::exists + QVERIFY2 with GATE-01-named messages). Runs in the regression
+// ctest. Runtime visual / device / network behavior is not unit-tested per the
+// v5.6 scope rule (no hardware, no cloud, no Python). Each QVERIFY2 message
+// names the v5.6 requirement it locks so a future regression points directly
+// at the workstream contract it broke.
+void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
+{
+  // -- v5.6 UI-01 (Phase 194): Cmp-03 control unification.
+  // (a) The 4 new Cx controls must live under controls/ as standalone files so
+  // every consumer binds them by type, not via an inlined component instance.
+  {
+    const QDir sourceDir(QStringLiteral(QT_TESTCASE_SOURCEDIR));
+    const QStringList newCxControls = {
+      QStringLiteral("src/qml_gui/controls/CxBadge.qml"),
+      QStringLiteral("src/qml_gui/controls/CxNumericEdit.qml"),
+      QStringLiteral("src/qml_gui/controls/CxStepButton.qml"),
+      QStringLiteral("src/qml_gui/controls/CxBusyIndicator.qml"),
+    };
+    for (const QString &path : newCxControls) {
+      QVERIFY2(QFileInfo::exists(sourceDir.filePath(path)),
+               qPrintable(QStringLiteral("GATE-01/UI-01: Cmp-03 control must exist as a standalone file: %1").arg(path)));
+    }
+  }
+  // (b) OptionRow / MoveSlider / PreviewLayerRail must have shed their inline
+  // component declarations and consume the extracted Cx controls instead.
+  {
+    const QString optionRow = readSource(QStringLiteral("src/qml_gui/components/OptionRow.qml"));
+    QVERIFY2(!optionRow.isEmpty(), "GATE-01/UI-01: Unable to read OptionRow.qml");
+    QVERIFY2(!optionRow.contains(QStringLiteral("component Badge:")),
+             "GATE-01/UI-01: OptionRow must not redeclare inline 'component Badge:' (use CxBadge)");
+    QVERIFY2(!optionRow.contains(QStringLiteral("component NumericEdit:")),
+             "GATE-01/UI-01: OptionRow must not redeclare inline 'component NumericEdit:' (use CxNumericEdit)");
+    QVERIFY2(optionRow.contains(QStringLiteral("CxNumericEdit")),
+             "GATE-01/UI-01: OptionRow must consume CxNumericEdit");
+    QVERIFY2(optionRow.contains(QStringLiteral("CxBadge")),
+             "GATE-01/UI-01: OptionRow must consume CxBadge");
+
+    const QString moveSlider = readSource(QStringLiteral("src/qml_gui/components/MoveSlider.qml"));
+    QVERIFY2(!moveSlider.isEmpty(), "GATE-01/UI-01: Unable to read MoveSlider.qml");
+    QVERIFY2(!moveSlider.contains(QStringLiteral("component MoveStepButton:")),
+             "GATE-01/UI-01: MoveSlider must not redeclare inline 'component MoveStepButton:' (use CxStepButton)");
+    QVERIFY2(moveSlider.contains(QStringLiteral("CxStepButton")),
+             "GATE-01/UI-01: MoveSlider must consume CxStepButton");
+
+    const QString layerRail = readSource(QStringLiteral("src/qml_gui/components/PreviewLayerRail.qml"));
+    QVERIFY2(!layerRail.isEmpty(), "GATE-01/UI-01: Unable to read PreviewLayerRail.qml");
+    QVERIFY2(!layerRail.contains(QStringLiteral("component RailButton:")),
+             "GATE-01/UI-01: PreviewLayerRail must not redeclare inline 'component RailButton:' (use CxStepButton)");
+    QVERIFY2(layerRail.contains(QStringLiteral("CxStepButton")),
+             "GATE-01/UI-01: PreviewLayerRail must consume CxStepButton");
+  }
+
+  // -- v5.6 UI-02 (Phase 195): KBShortcutsDialog extracted to its own file.
+  {
+    const QDir sourceDir(QStringLiteral(QT_TESTCASE_SOURCEDIR));
+    QVERIFY2(QFileInfo::exists(sourceDir.filePath(QStringLiteral("src/qml_gui/dialogs/KBShortcutsDialog.qml"))),
+             "GATE-01/UI-02: dialogs/KBShortcutsDialog.qml must exist (extracted from main.qml)");
+    const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+    QVERIFY2(!mainQml.isEmpty(), "GATE-01/UI-02: Unable to read main.qml");
+    QVERIFY2(mainQml.contains(QStringLiteral("KBShortcutsDialog")),
+             "GATE-01/UI-02: main.qml must instantiate KBShortcutsDialog (not an inline Dialog)");
+  }
+
+  // -- v5.6 FEAT-01 (Phase 196): Emboss spinner + SliceProgress states.
+  // EditorViewModel exposes the embossRunning getter (QML binds a CxBusyIndicator
+  // to it); SliceService exposes the sliceState Q_PROPERTY + sliceStateChanged.
+  {
+    const QString vmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+    QVERIFY2(!vmH.isEmpty(), "GATE-01/FEAT-01: Unable to read EditorViewModel.h");
+    QVERIFY2(vmH.contains(QStringLiteral("bool embossRunning() const")),
+             "GATE-01/FEAT-01: EditorViewModel must keep the embossRunning getter (Emboss spinner)");
+
+    const QString sliceH = readSource(QStringLiteral("src/core/services/SliceService.h"));
+    QVERIFY2(!sliceH.isEmpty(), "GATE-01/FEAT-01: Unable to read SliceService.h");
+    QVERIFY2(sliceH.contains(QStringLiteral("Q_PROPERTY(State sliceState READ sliceState NOTIFY sliceStateChanged")),
+             "GATE-01/FEAT-01: SliceService must keep the sliceState Q_PROPERTY (SliceProgress Cancelled/Error banner)");
+    QVERIFY2(sliceH.contains(QStringLiteral("void sliceStateChanged()")),
+             "GATE-01/FEAT-01: SliceService must keep the sliceStateChanged signal");
+  }
+
+  // -- v5.6 FEAT-02 (Phase 197): calibration dedicated tower geometry.
+  // (a) The 4 bundled tower models must ship under assets/calib/.
+  {
+    const QDir sourceDir(QStringLiteral(QT_TESTCASE_SOURCEDIR));
+    const QStringList towerModels = {
+      QStringLiteral("src/qml_gui/assets/calib/temperature_tower.stl"),
+      QStringLiteral("src/qml_gui/assets/calib/SpeedTestStructure.step"),
+      QStringLiteral("src/qml_gui/assets/calib/VFA.stl"),
+      QStringLiteral("src/qml_gui/assets/calib/retraction_tower.stl"),
+    };
+    for (const QString &path : towerModels) {
+      QVERIFY2(QFileInfo::exists(sourceDir.filePath(path)),
+               qPrintable(QStringLiteral("GATE-01/FEAT-02: bundled calibration tower model must exist: %1").arg(path)));
+    }
+  }
+  // (b) CalibrationServiceMock must materialize the qrc tower into a temp file
+  // for libslic3r's read_from_file, and must NOT carry the legacy ".drc" term.
+  {
+    const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
+    QVERIFY2(!calibSvc.isEmpty(), "GATE-01/FEAT-02: Unable to read CalibrationServiceMock.cpp");
+    QVERIFY2(calibSvc.contains(QStringLiteral("towerModelQrcPathForMode")),
+             "GATE-01/FEAT-02: CalibrationServiceMock must keep towerModelQrcPathForMode (qrc tower dispatch)");
+    QVERIFY2(calibSvc.contains(QStringLiteral("extractQrcToTempFile")),
+             "GATE-01/FEAT-02: CalibrationServiceMock must keep extractQrcToTempFile (qrc -> temp file bridge for libslic3r)");
+    QVERIFY2(calibSvc.contains(QStringLiteral("QTemporaryFile")),
+             "GATE-01/FEAT-02: CalibrationServiceMock must use QTemporaryFile for the tower materialization");
+    QVERIFY2(!calibSvc.contains(QStringLiteral(".drc")),
+             "GATE-01/FEAT-02: CalibrationServiceMock must not carry the legacy '.drc' term (3DPrinter is an FDM slicer)");
+  }
+
+  // -- v5.6 FEAT-03 (Phase 198): ObjectList tree deepening.
+  // EditorViewModel exposes selectedVolumeIndex as a Q_PROPERTY so the deepened
+  // ObjectList tree (layer-range entry + fold triangle) binds to a real index.
+  {
+    const QString vmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+    QVERIFY2(vmH.contains(QStringLiteral("Q_PROPERTY(int selectedVolumeIndex READ selectedVolumeIndex NOTIFY stateChanged")),
+             "GATE-01/FEAT-03: EditorViewModel must keep the selectedVolumeIndex Q_PROPERTY (ObjectList tree deepening)");
+    QVERIFY2(vmH.contains(QStringLiteral("int selectedVolumeIndex() const")),
+             "GATE-01/FEAT-03: EditorViewModel must keep the selectedVolumeIndex getter");
+  }
+
+  // -- v5.6 DLG-01 (Phase 199): ConfigWizard vendor/model enumeration layer.
+  // PresetServiceMock must expose the enumeration Q_INVOKABLEs the wizard reads.
+  {
+    const QString presetH = readSource(QStringLiteral("src/core/services/PresetServiceMock.h"));
+    QVERIFY2(!presetH.isEmpty(), "GATE-01/DLG-01: Unable to read PresetServiceMock.h");
+    QVERIFY2(presetH.contains(QStringLiteral("Q_INVOKABLE QStringList vendors() const")),
+             "GATE-01/DLG-01: PresetServiceMock must keep vendors() enumeration");
+    QVERIFY2(presetH.contains(QStringLiteral("printerModelsForVendor")),
+             "GATE-01/DLG-01: PresetServiceMock must keep printerModelsForVendor() enumeration");
+    QVERIFY2(presetH.contains(QStringLiteral("materialsForVendor")),
+             "GATE-01/DLG-01: PresetServiceMock must keep materialsForVendor() enumeration");
+    QVERIFY2(presetH.contains(QStringLiteral("bedTypes")),
+             "GATE-01/DLG-01: PresetServiceMock must keep bedTypes*() enumeration");
+  }
+
+  // -- v5.6 DLG-03 (Phase 201): AMS mock-to-ViewModel architecture cleanup.
+  // AmsMaterialsViewModel must exist as the typed ViewModel (replaces inline
+  // model construction inside AMSSettingsDialog).
+  {
+    const QDir sourceDir(QStringLiteral(QT_TESTCASE_SOURCEDIR));
+    QVERIFY2(QFileInfo::exists(sourceDir.filePath(QStringLiteral("src/core/viewmodels/AmsMaterialsViewModel.h"))),
+             "GATE-01/DLG-03: AmsMaterialsViewModel.h must exist (AMS architecture cleanup ViewModel)");
+    const QString amsH = readSource(QStringLiteral("src/core/viewmodels/AmsMaterialsViewModel.h"));
+    QVERIFY2(!amsH.isEmpty(), "GATE-01/DLG-03: Unable to read AmsMaterialsViewModel.h");
+    QVERIFY2(amsH.contains(QStringLiteral("Q_PROPERTY(int slotCount")),
+             "GATE-01/DLG-03: AmsMaterialsViewModel must keep its slotCount Q_PROPERTY");
+  }
+
+  // -- v5.6 DLG-04 (Phase 202): plugin manager real (local) backend.
+  // PluginService must exist with the local-registry + QSettings persistence.
+  {
+    const QDir sourceDir(QStringLiteral(QT_TESTCASE_SOURCEDIR));
+    QVERIFY2(QFileInfo::exists(sourceDir.filePath(QStringLiteral("src/core/services/PluginService.h"))),
+             "GATE-01/DLG-04: PluginService.h must exist (plugin manager local backend)");
+    const QString pluginH = readSource(QStringLiteral("src/core/services/PluginService.h"));
+    QVERIFY2(!pluginH.isEmpty(), "GATE-01/DLG-04: Unable to read PluginService.h");
+    QVERIFY2(pluginH.contains(QStringLiteral("installPlugin")),
+             "GATE-01/DLG-04: PluginService must keep installPlugin (mock install backend)");
+    QVERIFY2(pluginH.contains(QStringLiteral("uninstallPlugin")),
+             "GATE-01/DLG-04: PluginService must keep uninstallPlugin (mock uninstall backend)");
+    QVERIFY2(pluginH.contains(QStringLiteral("QSettings")),
+             "GATE-01/DLG-04: PluginService must reference QSettings (local persistence)");
+  }
+
+  // -- v5.6 I18N-01 (Phase 204): de/fr/ja/ko to 100%.
+  // Lock the 100% coverage contract directly: each of the four .ts files must
+  // carry zero 'type="unfinished"' entries (the exact signal Phase 204 closed
+  // on). This is stricter and fully ASCII-only, so a future lupdate pass that
+  // reintroduces unfinished entries fails here deterministically.
+  {
+    const QStringList localeTs = {
+      QStringLiteral("i18n/de.ts"),
+      QStringLiteral("i18n/fr.ts"),
+      QStringLiteral("i18n/ja.ts"),
+      QStringLiteral("i18n/ko.ts"),
+    };
+    const QString unfinishedToken = QStringLiteral("type=\"unfinished\"");
+    for (const QString &path : localeTs) {
+      const QString ts = readSource(path);
+      QVERIFY2(!ts.isEmpty(),
+               qPrintable(QStringLiteral("GATE-01/I18N-01: Unable to read %1").arg(path)));
+      QVERIFY2(!ts.contains(unfinishedToken),
+               qPrintable(QStringLiteral("GATE-01/I18N-01: %1 must have 0 unfinished entries (100%% coverage per Phase 204); "
+                                         "a future lupdate pass that reintroduces 'type=\"unfinished\"' fails here").arg(path)));
+    }
+  }
+
+  // -- v5.7 RHI-01 (Phase 211 rollback): D3D11 is the default again, D3D12
+  // stays as the opt-in. Re-assert the D3D11-first order that
+  // d3d12StaysOptInBehindEnvFlag already locks; this slot carries the contract
+  // forward under the GATE-01 message prefix so a v5.7 reader sees RHI-01 in the
+  // same place as the other anchors.
+  {
+    const QString selectorSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiBackendSelector.cpp"));
+    QVERIFY2(!selectorSource.isEmpty(), "GATE-01/RHI-01: Unable to read RhiBackendSelector.cpp");
+    QVERIFY2(selectorSource.contains(QStringLiteral("OWZX_RHI_RENDERER")),
+             "GATE-01/RHI-01: RhiBackendSelector must keep OWZX_RHI_RENDERER as the backend override gate (D3D11 default after Phase 211 rollback, d3d12 opt-in)");
+    QVERIFY2(selectorSource.contains(QStringLiteral("D3D11-first")),
+             "GATE-01/RHI-01: RhiBackendSelector must keep the D3D11-first rationale comment (Phase 211 rollback)");
+  }
+
+  // -- v5.4 re-assertion (carry forward from v54RegressionLocked).
+  // The immunity mechanism anchors must survive a v5.6 refactor.
+  {
+    const QString rendererH = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+    QVERIFY2(rendererH.contains(QStringLiteral("QPointer<RhiViewport>")),
+             "GATE-01/v5.4: RhiViewportRenderer QPointer<RhiViewport> immunity must remain (CRASH-01 carry)");
+    const QString vmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+    QVERIFY2(vmH.contains(QStringLiteral("m_selectedSourceIndices")),
+             "GATE-01/v5.4: EditorViewModel m_selectedSourceIndices immunity must remain (CRASH-01 carry)");
+  }
+
+  // -- v5.0 re-assertion.
+  {
+    const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+    QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
+             "GATE-01/v5.0: Emboss text2shapes integration must remain");
+  }
+
+  // -- v4.6 re-assertion (canary -- calibration tower modes).
+  {
+    const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
+    QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
+             "GATE-01/v4.6: Vol_speed tower mode (7) must still dispatch");
+    QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
+             "GATE-01/v4.6: Retraction tower mode (9) must still dispatch");
   }
 }
 
