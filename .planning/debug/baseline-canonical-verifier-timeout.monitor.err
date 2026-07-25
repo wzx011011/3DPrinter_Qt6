@@ -1,0 +1,24 @@
+CANONICAL_PID=29964 : 无法将“CANONICAL_PID=29964”项识别为 cmdlet、函数、脚本文件或可运行程序的名称。请检查名称的拼写
+，如果包括路径，请确保路径正确，然后再试一次。
+所在位置 行:1 字符: 79
++ ... ion Stop; $p.WaitForExit(); Write-Output (CANONICAL_PID=29964); Write ...
++                                               ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (CANONICAL_PID=29964:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+EXIT_CODE= : 无法将“EXIT_CODE=”项识别为 cmdlet、函数、脚本文件或可运行程序的名称。请检查名称的拼写，如果包括路径，请
+确保路径正确，然后再试一次。
+所在位置 行:1 字符: 115
++ ...  Write-Output (CANONICAL_PID=29964); Write-Output (EXIT_CODE= + $p.Ex ...
++                                                        ~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (EXIT_CODE=:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+EXIT_TIME= : 无法将“EXIT_TIME=”项识别为 cmdlet、函数、脚本文件或可运行程序的名称。请检查名称的拼写，如果包括路径，请
+确保路径正确，然后再试一次。
+所在位置 行:1 字符: 156
++ ... e-Output (EXIT_CODE= + $p.ExitCode); Write-Output (EXIT_TIME= + (Get- ...
++                                                        ~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (EXIT_TIME=:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 

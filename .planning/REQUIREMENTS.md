@@ -1,14 +1,16 @@
 # Requirements: OWzx Slicer
 
-## Latest Completed Milestone: v5.7 D3D12 Backend Investigation
+## Latest Completed Milestone: v5.8 Submodule Baseline Alignment + Hollow Editing
 
 For the full requirement text, see
-`.planning/milestones/v5.7-REQUIREMENTS.md`.
+`.planning/milestones/v5.8-REQUIREMENTS.md`.
 
-**Status:** Complete (2026-07-24). D3D12 promotion **reverted** after
-real-machine verification showed a crash on AMD Radeon APU. D3D11-first
-restored. Phase 207-210 retained. Canonical build (D3D11 default) exited `0`,
-all ctest + E2E passed.
+**Status:** Complete (2026-07-25). The v5.7→main merge build break is repaired
+(submodule aligned to `0632bae8` + OWzx-compat patches). MMU extruder
+colours/count are config-driven. The Hollow gizmo edits/persists drain holes
+end to end (SLA slicing deferred). All verification gates PASS:
+`multiPlateFullStateRoundTrip`, `test_slice_produces_gcode_file`,
+`mmuSegmentationPaintFeedsSlice`, and the three v5.0 dialog regression locks.
 
 ## Completed Requirements (v5.7)
 

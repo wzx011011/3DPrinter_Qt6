@@ -32,7 +32,7 @@ Screenshot-driven UI milestones use screenshots as visual/layout truth and OrcaS
 ### Constraints
 
 - **Tech Stack**: C++17 / Qt 6.10 / QML / CMake / Ninja / MSVC — Windows 10 构建环境
-- **Upstream Lock**: 官方 `upstream/main` 锁定为 `8b93cc5df3347c657ce6ac9a58f6923a21c2959b`；OWzx 本地兼容子提交为 `4cb3b9ce792f15c38fabfb4bb9700895d32b1166`，不得自由设计新行为
+- **Upstream Lock**: 官方 `upstream/main` 锁定为 `8b93cc5df3347c657ce6ac9a58f6923a21c2959b`；OWzx 本地兼容子提交为 `bdbc7ecb84c51ac70ede8bddeea3f259b9e1b127`（分支 `owzx-cgal54-on-0632` = `0632bae8` + CGAL5.4/mcut-chrono/TriangleMeshDeal/DRC 兼容补丁，对齐 origin/main 的 API 面），不得自由设计新行为
 - **Build Command**: 唯一构建命令 `scripts/auto_verify_with_vcvars.ps1`，唯一构建目录 `build/`
 - **Architecture**: 业务逻辑在 core/，QML 仅做呈现，不得在 QML 内联脚本中承载业务逻辑
 - **Dependency**: CGAL 可用（libslic3r_cgal），OpenVDB 不可用，FFmpeg 不可用

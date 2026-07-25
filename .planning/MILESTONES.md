@@ -1,5 +1,29 @@
 # Milestones History
 
+## v5.8 Submodule Baseline Alignment + Hollow Editing (Shipped: 2026-07-25)
+
+**Phases completed:** 4 phases (212-215), 4 plans, 13 requirements (all satisfied).
+**Audit status:** `complete` — reactive milestone repairing the v5.7→main merge
+build break + delivering two feature gaps.
+
+**Key accomplishments:**
+
+- **Submodule 0632bae8 baseline alignment (Phase 212, BASE-01..04):** the merge
+  had pinned the submodule to `4cb3b9ce` while origin/main's ProjectServiceMock
+  had migrated to `0632bae8`'s API surface, breaking the build. Created branch
+  `owzx-cgal54-on-0632` = `0632bae8` + 5 OWzx-compat patches (CGAL 5.4 hole
+  refinement, mcut `<chrono>`, TriangleMeshDeal loop subdivision adapted to
+  igl::loop, DRC.hpp+stub, loop overload). ProjectServiceMock adapted (split
+  1-arg, auto_drop removed).
+- **MMU config-driven state (Phase 213, MMU-01..03):** extruder colours/count
+  read from `filament_colour` config (对齐 upstream `m_extruders_colors`);
+  single-material honest notice.
+- **Hollow drain hole editing (Phases 214-215, HOLLOW-01..06):** full interactive
+  loop — place via SceneRaycaster, render translucent discs, 3MF-persist via
+  upstream `sla_drain_holes`. SLA slicing deferred.
+
+See `.planning/milestones/v5.8-MILESTONE-AUDIT.md`.
+
 ## v5.0 Advanced Feature Recovery & Tech-Debt Closure (Shipped: 2026-07-17)
 
 **Phases completed:** 13 phases (141-153), 13 plans, 32 requirements (31 satisfied + VDB-06 deferred to v5.1+ SLA sub-milestone)

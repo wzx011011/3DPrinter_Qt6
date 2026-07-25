@@ -1,6 +1,6 @@
 # Planning Index
 
-Last updated: 2026-07-24
+Last updated: 2026-07-25
 
 This is the canonical entry point for `.planning/`. Historical phase files are evidence; current work starts from the files below.
 
@@ -13,10 +13,10 @@ This is the canonical entry point for `.planning/`. Historical phase files are e
 - v3.6 starting inventory: [research/v3.6-SCREENSHOT-SOURCE-TRUTH.md](research/v3.6-SCREENSHOT-SOURCE-TRUTH.md)
 - Remaining migration plan: [REMAINING_MIGRATION_PLAN.md](REMAINING_MIGRATION_PLAN.md)
 - Milestone history: [MILESTONES.md](MILESTONES.md)
-- Active milestone roadmap: [milestones/v5.7-ROADMAP.md](milestones/v5.7-ROADMAP.md)
-- Active milestone requirements: [milestones/v5.7-REQUIREMENTS.md](milestones/v5.7-REQUIREMENTS.md)
-- Latest completed milestone audit: [milestones/v5.7-MILESTONE-AUDIT.md](milestones/v5.7-MILESTONE-AUDIT.md)
-- Archived milestone audit: [milestones/v3.2-MILESTONE-AUDIT.md](milestones/v3.2-MILESTONE-AUDIT.md)
+- Active milestone roadmap: [milestones/v5.8-ROADMAP.md](milestones/v5.8-ROADMAP.md)
+- Active milestone requirements: [milestones/v5.8-REQUIREMENTS.md](milestones/v5.8-REQUIREMENTS.md)
+- Latest completed milestone audit: [milestones/v5.8-MILESTONE-AUDIT.md](milestones/v5.8-MILESTONE-AUDIT.md)
+- Archived milestone audit: [milestones/v5.7-MILESTONE-AUDIT.md](milestones/v5.7-MILESTONE-AUDIT.md)
 - Retrospective: [RETROSPECTIVE.md](RETROSPECTIVE.md)
 - Prior alignment audit: [audits/2026-06-24-plan-implementation-alignment.md](audits/2026-06-24-plan-implementation-alignment.md)
 - Prior implementation audit: [audits/2026-06-23-implementation-audit.md](audits/2026-06-23-implementation-audit.md)
@@ -24,7 +24,25 @@ This is the canonical entry point for `.planning/`. Historical phase files are e
 
 ## Latest Completed Milestone
 
-**v5.7 D3D12 Backend Investigation** is complete (closed 2026-07-24).
+**v5.8 Submodule Baseline Alignment + Hollow Editing** is complete (closed 2026-07-25).
+
+Primary outcome:
+
+- The v5.7→main merge build break is repaired: the submodule now points to
+  `bdbc7ec` on branch `owzx-cgal54-on-0632` (`0632bae8` + 5 OWzx-compat
+  patches), matching origin/main's API surface.
+- MMU extruder colours/count are now config-driven (对齐 upstream
+  `m_extruders_colors` / `filament_colour`), with an honest single-material
+  notice when `mmuExtruderCount <= 1`.
+- The Hollow gizmo edits/persists drain holes end to end (place via
+  SceneRaycaster, render as translucent discs, 3MF-persist via upstream
+  `sla_drain_holes` serialization). SLA slicing remains deferred.
+- All verification gates PASS: `multiPlateFullStateRoundTrip`,
+  `test_slice_produces_gcode_file`, `mmuSegmentationPaintFeedsSlice`, and the
+  three v5.0 dialog regression locks.
+
+Previous milestone **v5.7 D3D12 Backend Investigation** is complete (closed
+2026-07-24). D3D12 promotion reverted (AMD APU crash); D3D11 default retained.
 
 Primary outcome:
 

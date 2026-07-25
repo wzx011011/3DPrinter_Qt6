@@ -4,6 +4,17 @@ build_*/
 cmake-build-*/
 out/
 
+# === Root-level scratch logs/outputs (v5.8: ad-hoc build/test capture) ===
+# These accumulate from manual verify runs and debug sessions; never tracked.
+build_*.log
+build_*.err
+build_*.out
+cli_help_latest.*
+p13*_*.txt
+p13*_vm*.txt
+i18n_unfinished_sources.txt
+*_result.txt
+
 # === IDE / Editor ===
 .vs/
 .vscode/
