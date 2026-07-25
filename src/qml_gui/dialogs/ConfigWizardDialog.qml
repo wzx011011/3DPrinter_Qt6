@@ -61,8 +61,14 @@ CxDialog {
     readonly property var vendorList: presetSvc ? presetSvc.vendors() : []
     readonly property var printerModelList: presetSvc && activeVendor.length > 0
         ? presetSvc.printerModelsForVendor(activeVendor) : []
+    // Phase 224 (WIZ-04): the printer model currently selected in the wizard's
+    // Printer page combo (drives material filtering). Updated by printerCombo.
+    property string currentPrinterModel: ""
     readonly property var materialList: presetSvc && activeVendor.length > 0
-        ? presetSvc.materialsForVendor(activeVendor) : []
+        // Filter materials by vendor AND the selected printer model (对齐上游
+        // PageMaterials::update_lists printer-dimension filter). Empty printer
+        // falls back to vendor-only (materialsForVendorAndPrinter handles it).
+        ? presetSvc.materialsForVendorAndPrinter(activeVendor, currentPrinterModel) : []
     readonly property var bedTypeList: presetSvc
         ? presetSvc.defaultBedTypes() : []
 
@@ -190,6 +196,12 @@ CxDialog {
                                 Layout.fillWidth: true
                                 model: printerModelList
                                 currentIndex: 0
+                                // Phase 224 (WIZ-04): track the selected printer
+                                // model so materialList filters by it.
+                                onCurrentIndexChanged: if (count > 0)
+                                    root.currentPrinterModel = currentText
+                                Component.onCompleted: if (count > 0)
+                                    root.currentPrinterModel = currentText
                             }
                         }
                     }

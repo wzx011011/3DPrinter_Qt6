@@ -1416,11 +1416,14 @@ QList<int> ProjectServiceMock::plateFilamentMaps(int plateIndex) const
 
 QStringList ProjectServiceMock::plateFilamentColours() const
 {
+  // Phase 222 (FIL-COLOUR): prefer the active filament colours synced from
+  // PresetServiceMock (setActiveFilamentColours). These come from the loaded
+  // filament presets' default_filament_colour, which is where the user's
+  // actual filament colours live (the plate-local config rarely carries
+  // filament_colour). Falls back to the plate config, then a single default.
+  if (!m_activeFilamentColours.isEmpty())
+    return m_activeFilamentColours;
 #ifdef HAS_LIBSLIC3R
-  // Mirrors upstream Plater::get_extruders_colors(): read the filament_colour
-  // coStrings option from the current plate's config (or fall back to the
-  // global default). The MMU segmentation gizmo binds these colour swatches
-  // instead of hard-coded Theme constants.
   const Slic3r::DynamicPrintConfig *cfg = plateDynamicConfig(currentPlateIndex());
   if (cfg) {
     const auto *opt = cfg->option<Slic3r::ConfigOptionStrings>("filament_colour");
@@ -1436,14 +1439,14 @@ QStringList ProjectServiceMock::plateFilamentColours() const
 #else
   Q_UNUSED(currentPlateIndex);
 #endif
-  // Fallback: single default filament colour (matches PrintConfig default
-  // #F2754E for filament_colour). Keeps the gizmo usable without a loaded
-  // project / before any plate config is materialised.
   return QStringList{QStringLiteral("#F2754E")};
 }
 
 int ProjectServiceMock::filamentCount() const
 {
+  // Phase 222: prefer the active filament colour list length.
+  if (!m_activeFilamentColours.isEmpty())
+    return m_activeFilamentColours.size();
 #ifdef HAS_LIBSLIC3R
   const Slic3r::DynamicPrintConfig *cfg = plateDynamicConfig(currentPlateIndex());
   if (cfg) {
@@ -4747,12 +4750,13 @@ bool ProjectServiceMock::setObjectAutoDrop(int objectIndex, bool enabled)
 {
 #ifdef HAS_LIBSLIC3R
   // 0632bae8 baseline: no per-instance auto_drop toggle. Accept the call
-  // (no-op) so QML setters remain wired; the 4cb3b9ce per-instance flag is
-  // not available on this baseline.
+  // as a no-op so QML setters remain wired; the 4cb3b9ce per-instance flag is
+  // not available on this baseline. Do NOT emit projectChanged — a no-op must
+  // not mark the project dirty (otherwise the unsaved-changes prompt fires
+  // spuriously).
   Q_UNUSED(objectIndex);
   Q_UNUSED(enabled);
   lastError_.clear();
-  emit projectChanged();
   return true;
 #else
   Q_UNUSED(objectIndex);

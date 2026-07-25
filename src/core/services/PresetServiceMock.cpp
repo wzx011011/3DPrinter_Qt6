@@ -889,6 +889,72 @@ QStringList PresetServiceMock::materialsForVendor(const QString &vendor) const
   return result;
 }
 
+QStringList PresetServiceMock::activeFilamentColours() const
+{
+  // Phase 222 (FIL-COLOUR): enumerate all loaded filament presets and read
+  // each one's default_filament_colour (对齐 upstream Preset filament_colour /
+  // default_filament_colour). This is the source the MMU gizmo's swatch and
+  // painted-face colours should bind to so they stay consistent. Presets
+  // without an explicit colour fall back to the PrintConfig default #F2754E.
+  QStringList colours;
+  const QStringList names = m_categoryPresets.value(FilamentCat);
+  colours.reserve(names.size());
+  for (const QString &name : names) {
+    const auto it = m_presetStore.constFind(name);
+    if (it == m_presetStore.constEnd()) {
+      colours.append(QStringLiteral("#F2754E"));
+      continue;
+    }
+    // default_filament_colour is coStrings (per-extruder); take the first
+    // entry, matching how upstream displays the swatch.
+    const QVariant v = it.value().value(QStringLiteral("default_filament_colour"));
+    if (v.userType() == QMetaType::QStringList) {
+      const QStringList sl = v.toStringList();
+      colours.append(!sl.isEmpty() ? sl.first() : QStringLiteral("#F2754E"));
+    } else if (v.userType() == QMetaType::QString) {
+      colours.append(v.toString());
+    } else {
+      // Also try filament_colour (some presets use it directly).
+      const QVariant v2 = it.value().value(QStringLiteral("filament_colour"));
+      if (v2.userType() == QMetaType::QStringList) {
+        const QStringList sl = v2.toStringList();
+        colours.append(!sl.isEmpty() ? sl.first() : QStringLiteral("#F2754E"));
+      } else if (v2.userType() == QMetaType::QString) {
+        colours.append(v2.toString());
+      } else {
+        colours.append(QStringLiteral("#F2754E"));
+      }
+    }
+  }
+  return colours;
+}
+
+QStringList PresetServiceMock::materialsForVendorAndPrinter(const QString &vendor, const QString &printerModel) const
+{
+  // Phase 224 (WIZ-04): filament presets of the given vendor that are
+  // compatible with the given printer model (对齐上游 ConfigWizard
+  // PageMaterials::update_lists printer-dimension filter). Reuses the parsed
+  // compatible_printers field + isPresetCompatibleWithPrinter. When
+  // printerModel is empty, falls back to the vendor-only filter.
+  if (printerModel.isEmpty())
+    return materialsForVendor(vendor);
+  QStringList result;
+  const QString normalizedVendor = vendor.trimmed();
+  const QStringList names = m_categoryPresets.value(FilamentCat);
+  for (const QString &name : names) {
+    const auto it = m_presetMetadata.constFind(name);
+    if (it == m_presetMetadata.constEnd())
+      continue;
+    if (it.value().vendor != normalizedVendor)
+      continue;
+    // A preset is compatible if it has no compatible_printers restriction
+    // (universal) OR explicitly lists this printer model.
+    if (isPresetCompatibleWithPrinter(FilamentCat, name, printerModel))
+      result.append(name);
+  }
+  return result;
+}
+
 QStringList PresetServiceMock::defaultBedTypes() const
 {
   // Four standard bed surfaces, matching the prior mock wizard. The upstream

@@ -7,6 +7,7 @@
 #include "core/model/PartPlateList.h"
 #include "core/rendering/AssemblyMeasureGeometry.h"
 #include "core/viewmodels/ConfigViewModel.h"
+#include "core/services/PresetServiceMock.h" // Phase 222: activeFilamentColours()
 #ifdef HAS_LIBSLIC3R
 // Phase 114 (MEASURE-03): MeasureEngine instantiates Measure::Measuring per
 // volume from ProjectServiceMock::volumeMeshIts (Phase 112 ITS accessor) and
@@ -1357,7 +1358,7 @@ void EditorViewModel::setHollowClosingDistance(float v)
 {
   if (!qFuzzyCompare(m_hollowClosingDistance, v)) { m_hollowClosingDistance = v; emit stateChanged(); }
 }
-int EditorViewModel::hollowSelectedHoleCount() const { return m_hollowSelectedHoleCount; }
+int EditorViewModel::hollowHoleCount() const { return m_hollowHoleCount; }
 QByteArray EditorViewModel::hollowMarkerData() const { return m_hollowMarkerData; }
 
 void EditorViewModel::deleteSelectedHollowPoints()
@@ -1370,7 +1371,20 @@ void EditorViewModel::deleteSelectedHollowPoints()
     projectService_->clearObjectDrainHoles(obj);
     rebuildHollowMarkerData();
   }
-  m_hollowSelectedHoleCount = 0;
+  m_hollowHoleCount = 0;
+  emit stateChanged();
+  emit hollowDataChanged();
+}
+
+void EditorViewModel::refreshHollowMarkers()
+{
+  // Phase 220 (HOLLOW-REFRESH): rebuild the marker stream + hole count for
+  // the current selection. Called from QML on gizmo-mode change so drain
+  // holes loaded from 3MF render when the user enters the Hollow gizmo,
+  // without needing a place/delete first.
+  rebuildHollowMarkerData();
+  const int obj = primarySelectedSourceIndex(this);
+  m_hollowHoleCount = (obj >= 0 && projectService_) ? projectService_->objectDrainHoleCount(obj) : 0;
   emit stateChanged();
   emit hollowDataChanged();
 }
@@ -1441,7 +1455,7 @@ bool EditorViewModel::placeHollowPoint(int pickedSourceIndex, QVector3D rayOrigi
     return false;
 
   rebuildHollowMarkerData();
-  m_hollowSelectedHoleCount =
+  m_hollowHoleCount =
       projectService_->objectDrainHoleCount(pickedSourceIndex);
   emit stateChanged();
   emit hollowDataChanged();
@@ -1475,14 +1489,26 @@ void EditorViewModel::rebuildHollowMarkerData()
   const Slic3r::Transform3d worldTransform =
       hollowWorldTransform(translation, rotationRad, scale);
 
-  // Build a small disc (16 segments) per hole at its world position.
-  // Reuse the canonical GizmoVertex layout (7 floats) shared with the
-  // renderer, so the packed byte stream matches uploadHollowMarkerBuffer's
-  // parse exactly (no duplicate struct to drift out of sync).
+  // Build a cylinder per hole (对齐上游 GLGizmoHollow::render_points which
+  // renders a cylinder along the hole normal). We generate the cylinder
+  // inline (mesh-local, along -Z offset by height, then rotated to the hole
+  // normal) rather than calling DrainHole::to_mesh() so the link does not
+  // pull OpenVDB symbols (Hollowing.cpp's other code depends on VDB; the SLA
+  // slice path is permanently out of scope). Each cylinder is 16 segments,
+  // two end caps + side wall, lifted to world space by the object transform.
+  // Reuse the canonical GizmoVertex layout (7 floats) shared with renderer.
   std::vector<GizmoVertex> verts;
-  constexpr int kSegments = 16;
   constexpr float kMarkerColor[4] = {0.95f, 0.35f, 0.35f, 0.85f}; // red-ish, semi-transparent
-  verts.reserve(int(holes.size()) * kSegments * 3);
+  constexpr int kSegs = 16;
+  // ~96 triangles per cylinder (2 caps*16 + side 16*2) * 3 verts.
+  verts.reserve(int(holes.size()) * 96 * 3);
+
+  auto pushTri = [&verts, &kMarkerColor](const Slic3r::Vec3f &a, const Slic3r::Vec3f &b,
+                                         const Slic3r::Vec3f &c) {
+    verts.push_back({a.x(), a.y(), a.z(), kMarkerColor[0], kMarkerColor[1], kMarkerColor[2], kMarkerColor[3]});
+    verts.push_back({b.x(), b.y(), b.z(), kMarkerColor[0], kMarkerColor[1], kMarkerColor[2], kMarkerColor[3]});
+    verts.push_back({c.x(), c.y(), c.z(), kMarkerColor[0], kMarkerColor[1], kMarkerColor[2], kMarkerColor[3]});
+  };
 
   for (const QVariant &hv : holes) {
     const QVariantMap hm = hv.toMap();
@@ -1493,33 +1519,33 @@ void EditorViewModel::rebuildHollowMarkerData()
                           hm.value(QStringLiteral("ny")).toFloat(),
                           hm.value(QStringLiteral("nz")).toFloat());
     const float radius = hm.value(QStringLiteral("radius")).toFloat();
-    // Lift center to world space.
-    const Slic3r::Vec3d worldCenterD = worldTransform * pos.cast<double>();
-    const Slic3r::Vec3f worldCenter(float(worldCenterD.x()), float(worldCenterD.y()),
-                                    float(worldCenterD.z()));
-    // Build two tangent axes perpendicular to the (world) normal-ish direction.
-    // Use the mesh-local normal rotated to world for the disc orientation.
-    Slic3r::Vec3d worldNormalD = (worldTransform.linear() * n.cast<double>());
-    if (worldNormalD.norm() < 1e-6) worldNormalD = Slic3r::Vec3d::UnitZ();
-    worldNormalD.normalize();
-    const Slic3r::Vec3f worldNormal(float(worldNormalD.x()), float(worldNormalD.y()),
-                                    float(worldNormalD.z()));
-    Slic3r::Vec3f axis = std::abs(worldNormal.x()) > 0.9f
-                             ? Slic3r::Vec3f::UnitY() : Slic3r::Vec3f::UnitX();
-    Slic3r::Vec3f u = worldNormal.cross(axis).normalized();
-    Slic3r::Vec3f v = worldNormal.cross(u).normalized();
-    // Triangle fan: center + ring.
-    Slic3r::Vec3f prev = worldCenter + (u * std::cos(0.f) + v * std::sin(0.f)) * radius;
-    for (int s = 1; s <= kSegments; ++s) {
-      const float ang = float(s) * 2.f * float(M_PI) / float(kSegments);
-      const Slic3r::Vec3f cur = worldCenter + (u * std::cos(ang) + v * std::sin(ang)) * radius;
-      verts.push_back({worldCenter.x(), worldCenter.y(), worldCenter.z(),
-                       kMarkerColor[0], kMarkerColor[1], kMarkerColor[2], kMarkerColor[3]});
-      verts.push_back({prev.x(), prev.y(), prev.z(),
-                       kMarkerColor[0], kMarkerColor[1], kMarkerColor[2], kMarkerColor[3]});
-      verts.push_back({cur.x(), cur.y(), cur.z(),
-                       kMarkerColor[0], kMarkerColor[1], kMarkerColor[2], kMarkerColor[3]});
-      prev = cur;
+    const float height = hm.value(QStringLiteral("height")).toFloat();
+    // Build the cylinder in mesh-local space. Base ring at pos (on the
+    // surface), top ring along +normal by height. Two perpendicular axes
+    // tangent to the normal orient the rings.
+    Slic3r::Vec3f axis = std::abs(n.x()) > 0.9f ? Slic3r::Vec3f::UnitY()
+                                                 : Slic3r::Vec3f::UnitX();
+    Slic3r::Vec3f u = n.cross(axis).normalized();
+    Slic3r::Vec3f v = n.cross(u).normalized();
+    const Slic3r::Vec3f top = pos + n * height;
+    // Ring points (base + top).
+    std::vector<Slic3r::Vec3f> baseRing(kSegs), topRing(kSegs);
+    for (int s = 0; s < kSegs; ++s) {
+      const float ang = float(s) * 2.f * float(M_PI) / float(kSegs);
+      const Slic3r::Vec3f off = (u * std::cos(ang) + v * std::sin(ang)) * radius;
+      baseRing[s] = pos + off;
+      topRing[s] = top + off;
+    }
+    // Side wall (quads = 2 tris each).
+    for (int s = 0; s < kSegs; ++s) {
+      const int s2 = (s + 1) % kSegs;
+      // Lift each mesh-local vertex to world space via worldTransform.
+      auto W = [&](const Slic3r::Vec3f &p) {
+        const Slic3r::Vec3d wp = worldTransform * p.cast<double>();
+        return Slic3r::Vec3f(float(wp.x()), float(wp.y()), float(wp.z()));
+      };
+      pushTri(W(baseRing[s]), W(baseRing[s2]), W(topRing[s]));
+      pushTri(W(baseRing[s2]), W(topRing[s2]), W(topRing[s]));
     }
   }
 
@@ -2463,6 +2489,27 @@ int EditorViewModel::mapFilteredToSourceIndex(int filteredIndex) const
 void EditorViewModel::setConfigViewModel(ConfigViewModel *vm)
 {
   configViewModel_ = vm;
+  // Phase 222 (FIL-COLOUR): once the ConfigViewModel (and its PresetServiceMock)
+  // is wired, sync the active filament colours so the MMU gizmo and renderer
+  // reflect the configured filaments immediately.
+  syncFilamentColours();
+}
+
+void EditorViewModel::syncFilamentColours()
+{
+  // Phase 222 (FIL-COLOUR): read the active filament colours from
+  // PresetServiceMock (via ConfigViewModel) and push them into
+  // ProjectServiceMock so plateFilamentColours()/filamentCount() return the
+  // configured filament set instead of the plate-config fallback (which is
+  // almost always empty). The ConfigViewModel must expose presetService();
+  // if not yet wired, this is a no-op.
+  if (!configViewModel_ || !projectService_)
+    return;
+  PresetServiceMock *presetSvc = configViewModel_->presetService();
+  if (!presetSvc)
+    return;
+  const QStringList colours = presetSvc->activeFilamentColours();
+  projectService_->setActiveFilamentColours(colours);
 }
 
 void EditorViewModel::setUndoRedoManager(UndoRedoManager *manager)
@@ -3398,15 +3445,20 @@ QByteArray EditorViewModel::paintOverlayData() const
 // back to the cycle so an out-of-range index never yields an empty color.
 QVariantList EditorViewModel::extrudersColors() const
 {
+  // Phase 223 (FIL-COLOUR-UNIFY): read the configured filament colours (same
+  // source as mmuExtruderColors / plateFilamentColours) so the painted MMU
+  // faces match the swatch UI. Falls back to the 8-colour cycle only to pad
+  // out-of-range extruder indices or a missing config source.
   static const char *kCycle[] = {
       "#009688", "#f44336", "#2196f3", "#ff9800",
       "#9c27b0", "#4caf50", "#ff5722", "#607d8b",
   };
+  const QStringList cfg = projectService_ ? projectService_->plateFilamentColours() : QStringList{};
   QVariantList out;
   const int n = std::max(1, m_mmuExtruderCount);
   out.reserve(n);
   for (int i = 0; i < n; ++i)
-    out.append(QString::fromUtf8(kCycle[size_t(i) % 8]));
+    out.append(i < cfg.size() ? QVariant(cfg[i]) : QVariant(QString::fromUtf8(kCycle[size_t(i) % 8])));
   return out;
 }
 #else
@@ -3503,6 +3555,16 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
   connect(projectService_, &ProjectServiceMock::projectChanged, this, [this]()
           {
         statusText_ = QStringLiteral("已更新项目对象");
+        // Phase 220 (HOLLOW-REFRESH): a project change can alter the selected
+        // object's drain holes. Guarded by try-catch + a valid-selection check
+        // because projectChanged fires mid-load (model half-constructed) where
+        // objectDrainHoles could touch an invalid object index.
+        try {
+          if (primarySelectedSourceIndex(this) >= 0) {
+            rebuildHollowMarkerData();
+            emit hollowDataChanged();
+          }
+        } catch (...) { /* model mid-mutation: skip this refresh */ }
         emit stateChanged(); });
 
   connect(projectService_, &ProjectServiceMock::plateSelectionChanged, this, [this]()
@@ -3510,6 +3572,14 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
         if (sliceService_ && projectService_)
           sliceService_->activatePlateResult(projectService_->currentPlateIndex());
         ensureValidObjectSelection(true);
+        // Phase 220: plate switch changes the selected object set, so the
+        // hollow markers must be rebuilt for the new plate's object.
+        try {
+          if (primarySelectedSourceIndex(this) >= 0) {
+            rebuildHollowMarkerData();
+            emit hollowDataChanged();
+          }
+        } catch (...) { /* skip on half-constructed model */ }
         emit stateChanged(); });
 
   connect(sliceService_, &SliceService::slicingChanged, this, [this]()

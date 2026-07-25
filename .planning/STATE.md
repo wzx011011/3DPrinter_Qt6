@@ -1,37 +1,64 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.9
-milestone_name: ConfigWizard Multi-Vendor Selection
-status: completed
-last_updated: "2026-07-25T20:30:00.000Z"
-last_activity: 2026-07-25
+milestone: v5.10
+milestone_name: Polish & Source-Truth Consolidation
+status: active
+last_updated: "2026-07-26T01:00:00.000Z"
+last_activity: 2026-07-26
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
+  total_phases: 6
+  completed_phases: 6
+  total_plans: 6
+  completed_plans: 6
   percent: 100
 ---
 
 # Project State
 
-**Latest completed milestone:** v5.9 ConfigWizard Multi-Vendor Selection,
-closed on 2026-07-25.
+**Latest completed milestone:** v5.10 Polish & Source-Truth Consolidation,
+closed on 2026-07-26.
 
-**Completion evidence:** The ConfigWizard is now multi-vendor. Users pick from
-46 upstream vendor JSONs (Anker/Anycubic/BBL/Creality/Dremel/Elegoo/...); the
-chosen vendor's presets load on demand (loadSingleVendor/loadVendor); the
-selection persists across launches (AppConfig-lite QSettings). PresetUpdater
-(network) stays deferred. All verification gates PASS:
-v56CrossWorkstreamRegressionLocked (incl. new WIZ-03 checks),
-mmuSegmentationPaintFeedsSlice, v50PresetIniAndCreateDialogWired,
-multiPlateFullStateRoundTrip. See `.planning/milestones/v5.9-MILESTONE-AUDIT.md`.
+**SLA permanently removed from scope (user decision 2026-07-26):** the SLA
+slice path (SLAPrint, PNG layers, SLA presets) is permanently out of scope.
+Hollow drain-hole editing remains (it edits/persists holes and is useful for
+FFF models too), but SLA slicing will never be implemented. Do not propose SLA
+as a milestone candidate.
 
-**Next step:** select the next milestone from the deferred backlog (SLA slice
-path now that Hollow editing exists; full 3-way material compatibility
-filtering; or H2C/A2L if the product decision + bb3 submodule land).
+**Completion evidence:** Hollow gizmo now refreshes markers on project/plate/
+selection change (H1 fix) and renders full cylinders (DrainHole-style). The
+filament_colour data channel is established (PresetServiceMock → ProjectServiceMock),
+and MMU colour sources are unified (extrudersColors now reads configured
+filament colours, matching the swatch UI). ConfigWizard filters materials by
+selected printer model. All verification gates PASS:
+v56CrossWorkstreamRegressionLocked, mmuSegmentationPaintFeedsSlice,
+v50UnsavedChangesAndFilterWired, multiPlateFullStateRoundTrip.
 
-## Latest Milestone: v5.9 ConfigWizard Multi-Vendor Selection
+**Next step:** select the next milestone from the deferred backlog. SLA is
+permanently removed (see above). Remaining candidates: Hollow per-point
+selection, full 3-way material compatibility filtering, H2C/A2L (needs product
+decision + bb3 submodule).
+
+## Latest Milestone: v5.10 Polish & Source-Truth Consolidation
+
+**Result:** Consolidated review findings + backlog candidates. Hollow H1 refresh
+fixed (markers now rebuild on project/plate/selection change + gizmo enter).
+Hollow cylinder rendering (inline cylinder along hole normal, replacing the
+16-seg disc). hollowSelectedHoleCount renamed to hollowHoleCount (semantics
+clarified). filament_colour data channel (PresetServiceMock.activeFilamentColours
+→ ProjectServiceMock.setActiveFilamentColours, synced by EditorViewModel).
+MMU colour source unified (extrudersColors reads configured colours). ConfigWizard
+3-way material filter (materialsForVendorAndPrinter). SLA permanently removed.
+
+| Phase | Name | Status | Requirement |
+|---|---|---|---|
+| 220 | Hollow Refresh + Semantics | Complete | HOLLOW-REFRESH |
+| 221 | Hollow Cylinder Rendering | Complete | HOLLOW-CYL |
+| 222 | filament_colour Data Channel | Complete | FIL-COLOUR |
+| 223 | MMU Colour Source Unification | Complete | MMU-UNIFY |
+| 224 | ConfigWizard Material Filter | Complete | WIZ-04 |
+| 225 | Regression + SLA Removal + Tests | Complete | VER, SLA-REMOVE |
+
+## Previous Milestone: v5.9 ConfigWizard Multi-Vendor Selection
 
 **Result:** The wizard was single-vendor by design (Phase 200 fixed
 activeVendor to vendorList[0]). v5.9 makes the vendor user-selectable with

@@ -56,6 +56,10 @@ class ConfigViewModel final : public QObject
 public:
   explicit ConfigViewModel(PresetServiceMock *presetService, ProjectServiceMock *projectService, QObject *parent = nullptr);
 
+  /// Phase 222 (FIL-COLOUR): expose the PresetServiceMock so EditorViewModel
+  /// can sync active filament colours into ProjectServiceMock.
+  PresetServiceMock *presetService() const { return presetService_; }
+
   QStringList presetNames() const;
   QString currentPreset() const;
   double layerHeight() const;

@@ -1387,6 +1387,11 @@ Item {
                     // Phase HOLLOW: drain-hole marker disc byte stream
                     // (same byte-pipe pattern as paintOverlayData).
                     hollowMarkerData: root.editorVm ? root.editorVm.hollowMarkerData : null
+                    // Phase 220 (HOLLOW-REFRESH): when entering the Hollow
+                    // gizmo, rebuild the marker stream so drain holes loaded
+                    // from 3MF render without a place/delete first.
+                    onGizmoModeChanged: if (gizmoMode === GLViewport.GizmoHollow && root.editorVm)
+                        root.editorVm.refreshHollowMarkers()
                     extrudersColors: root.editorVm ? root.editorVm.extrudersColors : []
                     brushRadius: root.editorVm ? _activeBrushRadius() : 2
                     brushCursorType: root.editorVm ? _activeBrushCursorType() : 1
@@ -2529,7 +2534,7 @@ Item {
                         anchors.centerIn: parent
                         // MVP clears ALL holes on the object (no per-point
                         // selection yet), so label says "删除全部" not "删除选中".
-                        text: qsTr("删除全部 (%1)").arg(root.editorVm ? root.editorVm.hollowSelectedHoleCount : 0)
+                        text: qsTr("删除全部 (%1)").arg(root.editorVm ? root.editorVm.hollowHoleCount : 0)
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
                     }

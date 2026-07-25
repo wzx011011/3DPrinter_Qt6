@@ -375,9 +375,13 @@ public:
   void setHollowQuality(float v);
   float hollowClosingDistance() const;
   void setHollowClosingDistance(float v);
-  int hollowSelectedHoleCount() const;
+  int hollowHoleCount() const;
   QByteArray hollowMarkerData() const;
   Q_INVOKABLE void deleteSelectedHollowPoints();
+  /// Phase 220 (HOLLOW-REFRESH): rebuild the hollow marker stream on demand.
+  /// Called from QML on gizmo-mode change (entering GizmoHollow) so loaded
+  /// drain holes render without a place/delete first.
+  Q_INVOKABLE void refreshHollowMarkers();
   /// Place a drain hole at the mesh surface hit by the given world ray
   /// (对齐上游 GLGizmoHollow::on_mouse → unproject_on_mesh). Reuses the
   /// shared SceneRaycaster to find the mesh-local intersection, then appends
@@ -704,7 +708,7 @@ public:
   Q_PROPERTY(float hollowOffset READ hollowOffset WRITE setHollowOffset NOTIFY stateChanged)
   Q_PROPERTY(float hollowQuality READ hollowQuality WRITE setHollowQuality NOTIFY stateChanged)
   Q_PROPERTY(float hollowClosingDistance READ hollowClosingDistance WRITE setHollowClosingDistance NOTIFY stateChanged)
-  Q_PROPERTY(int hollowSelectedHoleCount READ hollowSelectedHoleCount NOTIFY stateChanged)
+  Q_PROPERTY(int hollowHoleCount READ hollowHoleCount NOTIFY stateChanged)
   /// Drain-hole marker geometry for the renderer (对齐上游 GLGizmoHollow point
   /// rendering). A packed vertex byte stream (world-space small-disc per hole)
   /// consumed by RhiViewportRenderer. Refreshed whenever holes change.
@@ -1202,6 +1206,10 @@ public:
   /// object's drain holes (mesh-local → world). Emits hollowDataChanged via
   /// callers; this only mutates m_hollowMarkerData.
   void rebuildHollowMarkerData();
+  /// Phase 222 (FIL-COLOUR): sync the active filament colours from
+  /// PresetServiceMock (via ConfigViewModel) into ProjectServiceMock so
+  /// plateFilamentColours()/filamentCount() reflect the configured filaments.
+  void syncFilamentColours();
   /// Phase 114 (MEASURE-03): test accessor exposing the cached Measuring
   /// count for the measureEngineInstantiatedPerVolume smoke assertion.
   /// Returns 0 when no Measuring is cached (or HAS_LIBSLIC3R is off).
@@ -1425,7 +1433,7 @@ private:
   float m_hollowOffset = 3.0f;            ///< m_offset_stash
   float m_hollowQuality = 0.5f;           ///< m_quality_stash
   float m_hollowClosingDistance = 2.0f;    ///< m_closing_d_stash
-  int m_hollowSelectedHoleCount = 0;      ///< selected drain holes count
+  int m_hollowHoleCount = 0;      ///< selected drain holes count
   QByteArray m_hollowMarkerData;         ///< packed world-space disc vertices for renderer
   int m_simplifyWantedCount = 0;          ///< target triangle count (0=auto)
   float m_simplifyMaxError = 0.0f;       ///< max quadric error (0=auto)

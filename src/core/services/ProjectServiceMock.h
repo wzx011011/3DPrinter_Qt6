@@ -198,6 +198,11 @@ public:
   /// filaments_count). Used by the MMU gizmo to show the honest
   /// "requires multi-material" notice when <= 1.
   Q_INVOKABLE int filamentCount() const;
+  /// Phase 222 (FIL-COLOUR): the active filament colour list, synced from
+  /// PresetServiceMock by EditorViewModel. plateFilamentColours()/filamentCount()
+  /// read this first (falls back to plate config when empty).
+  void setActiveFilamentColours(const QStringList &colours) { m_activeFilamentColours = colours; }
+  QStringList activeFilamentColours() const { return m_activeFilamentColours; }
 #ifdef HAS_LIBSLIC3R
   // v3.0 Phase 19 (D-15): per-plate DynamicPrintConfig for slice config merge.
   // Returns Slic3r::DynamicPrintConfig* (forward-declared in the HAS_LIBSLIC3R block).
@@ -740,4 +745,7 @@ private:
   class DynamicPrintConfig;
   Slic3r::Model *model_ = nullptr;
 #endif
+  /// Phase 222: active filament colours synced from PresetServiceMock.
+  /// Read first by plateFilamentColours()/filamentCount() (plate config fallback).
+  QStringList m_activeFilamentColours;
 };

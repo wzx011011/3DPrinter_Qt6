@@ -99,6 +99,16 @@ public:
   bool isBuiltinPreset(const QString &presetName) const;
   /// 检查耗材预设是否与打印机预设兼容（对齐上游 PresetBundle::update_compatible）
   bool isFilamentCompatibleWithPrinter(const QString &filamentName, const QString &printerName) const;
+  /// Phase 222 (FIL-COLOUR): the colour hex strings of all loaded filament
+  /// presets (default_filament_colour), in enumeration order. Drives the MMU
+  /// gizmo's extruder colour source so the swatches and painted faces match
+  /// the configured filament colours. Falls back to the PrintConfig default
+  /// (#F2754E) for presets without an explicit colour.
+  Q_INVOKABLE QStringList activeFilamentColours() const;
+  /// Phase 224 (WIZ-04): filament presets of the given vendor that are
+  /// compatible with the given printer model (对齐上游 PageMaterials 3-way
+  /// filter's printer dimension). Reuses the parsed compatible_printers field.
+  Q_INVOKABLE QStringList materialsForVendorAndPrinter(const QString &vendor, const QString &printerModel) const;
   Q_INVOKABLE QStringList compatiblePresetNamesForCategory(int category, const QString &printerName) const;
   Q_INVOKABLE bool isPresetCompatibleWithPrinter(int category, const QString &presetName, const QString &printerName) const;
   Q_INVOKABLE QString presetCompatibilityMessage(int category, const QString &presetName, const QString &printerName) const;
