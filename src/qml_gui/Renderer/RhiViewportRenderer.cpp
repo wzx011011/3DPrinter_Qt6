@@ -103,6 +103,7 @@ void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
   m_cutPlaneOutlineBufferUploaded = false;
   m_wipeTowerBufferUploaded = false;
   m_paintOverlayBufferUploaded = false;
+  m_hollowMarkerBufferUploaded = false;
   m_brushCursorBufferUploaded = false;
   m_assemblyConnectorBufferUploaded = false;
   m_assemblyMeasureLineBufferUploaded = false;
@@ -381,6 +382,12 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   if (m_paintOverlayData != prevPaintOverlay)
     m_paintOverlayBufferUploaded = false;
 
+  // Phase HOLLOW: drain-hole marker byte stream (same pipe as paint overlay).
+  const QByteArray prevHollowMarker = m_hollowMarkerData;
+  m_hollowMarkerData = viewport->m_hollowMarkerData;
+  if (m_hollowMarkerData != prevHollowMarker)
+    m_hollowMarkerBufferUploaded = false;
+
   // Render-side per-role visibility mask (no repack). The viewport carries a
   // 20-element QVariantList of bools indexed by canonical libvgcode role; convert
   // to QVector<bool> for the draw-range skip check. Missing entries default visible.
@@ -484,6 +491,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
         // uploadBrushCursorBuffer rebuilds the sphere when inputs change.
         uploadPaintOverlayBuffer(updates);
         uploadBrushCursorBuffer(updates);
+        uploadHollowMarkerBuffer(updates);
       }
     }
   }
@@ -585,6 +593,9 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // model mesh, before highlight. Reuses m_fillPipeline (opaque vertex-color
     // fill). Gated to the three paint gizmos (Support=6, Seam=7, MMU=10).
     renderPaintOverlay(cb);
+    // Phase HOLLOW: render drain-hole marker discs (translucent fill).
+    // Gated to GizmoHollow (8); drawn after paint overlay, before highlight.
+    renderHollowMarkers(cb);
   if (m_highlightVertexBuffer && m_highlightVertexCount > 0) {
       // Highlight is translucent: test depth but do not write it, so it does
       // not occlude opaque geometry drawn in subsequent frames/passes.
@@ -729,6 +740,7 @@ void RhiViewportRenderer::releaseResources()
   m_cutPlaneOutlineBuffer.reset();
   m_wipeTowerBuffer.reset();
   m_paintOverlayBuffer.reset();   // Phase 121 (PAINT-02)
+  m_hollowMarkerBuffer.reset();   // Phase HOLLOW
   m_brushCursorBuffer.reset();    // Phase 121 (PAINT-03)
   m_assemblyConnectorBuffer.reset();  // Phase 91
   m_srb.reset();
@@ -748,6 +760,7 @@ void RhiViewportRenderer::releaseResources()
   m_cutPlaneOutlineBufferUploaded = false;
   m_wipeTowerBufferUploaded = false;
   m_paintOverlayBufferUploaded = false;   // Phase 121 (PAINT-02)
+  m_hollowMarkerBufferUploaded = false;   // Phase HOLLOW
   m_brushCursorBufferUploaded = false;    // Phase 121 (PAINT-03)
   m_assemblyConnectorBufferUploaded = false;  // Phase 91
   m_gizmoPipelineCreated = false;            // Phase 68
@@ -761,6 +774,7 @@ void RhiViewportRenderer::releaseResources()
   m_cutPlaneOutlineBufferBytes = 0;
   m_wipeTowerBufferBytes = 0;
   m_paintOverlayBufferBytes = 0;   // Phase 121 (PAINT-02)
+  m_hollowMarkerBufferBytes = 0;   // Phase HOLLOW
   m_brushCursorBufferBytes = 0;    // Phase 121 (PAINT-03)
   m_moveGizmoOffsets = {};
   m_rotateGizmoOffsets = {};
@@ -2442,6 +2456,81 @@ void RhiViewportRenderer::renderPaintOverlay(QRhiCommandBuffer *cb)
   const QRhiCommandBuffer::VertexInput binding(m_paintOverlayBuffer.get(), 0);
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_paintOverlayVertexCount);
+}
+
+// ===========================================================================
+// Phase HOLLOW: drain-hole marker disc upload + render.
+//
+// EditorViewModel::hollowMarkerData packs: a 4-byte uint32 vertex count
+// followed by N GizmoVertex (7 floats: x,y,z,r,g,b,a) in libslic3r world
+// space. The renderer swaps Y/Z to scene space (same as paint overlay) and
+// uploads into m_hollowMarkerBuffer. Render uses the translucent fill pipeline
+// (depth test, no depth write) so the semi-transparent red discs do not
+// occlude the mesh beneath. Gated to GizmoHollow (mode 8).
+// ===========================================================================
+bool RhiViewportRenderer::uploadHollowMarkerBuffer(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+  if (m_hollowMarkerBufferUploaded)
+    return true;
+
+  QVector<Vertex> vertices;
+  // Header: uint32 vertex count (little-endian), then raw GizmoVertex stream.
+  if (m_hollowMarkerData.size() >= 4) {
+    quint32 count = 0;
+    std::memcpy(&count, m_hollowMarkerData.constData(), 4);
+    const qint64 expected = 4 + qint64(count) * qint64(sizeof(GizmoVertex));
+    if (count > 0 && m_hollowMarkerData.size() >= expected) {
+      const auto *gv = reinterpret_cast<const GizmoVertex *>(
+          m_hollowMarkerData.constData() + 4);
+      vertices.reserve(int(count));
+      for (quint32 i = 0; i < count; ++i) {
+        Vertex v;
+        // libslic3r world (X,Y,Z) -> scene (X,Z,Y): Z becomes up, Y goes into bed.
+        v.x = gv[i].x;
+        v.y = gv[i].z;
+        v.z = gv[i].y;
+        v.r = gv[i].r;
+        v.g = gv[i].g;
+        v.b = gv[i].b;
+        v.a = gv[i].a;
+        vertices.append(v);
+      }
+    }
+  }
+
+  const quint32 byteSize = quint32(vertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_hollowMarkerBuffer, byteSize, m_hollowMarkerBufferBytes,
+                    QRhiBuffer::VertexBuffer))
+    return false;
+
+  m_hollowMarkerVertexCount = quint32(vertices.size());
+  if (m_hollowMarkerBuffer && byteSize > 0) {
+    updates->uploadStaticBuffer(m_hollowMarkerBuffer.get(), 0, byteSize,
+                                vertices.constData());
+  }
+  m_hollowMarkerBufferUploaded = true;
+  return true;
+}
+
+void RhiViewportRenderer::renderHollowMarkers(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr)
+    return;
+  // Gate to the hollow gizmo only (对齐上游 GLGizmoHollow active render).
+  if (m_gizmoMode != 8)
+    return;
+  if (m_translucentFillPipeline == nullptr || m_hollowMarkerBuffer == nullptr ||
+      m_hollowMarkerVertexCount == 0)
+    return;
+
+  cb->setShaderResources(m_srb.get());
+  // Translucent fill: depth-tested, no depth write (discs don't occlude mesh).
+  cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+  const QRhiCommandBuffer::VertexInput binding(m_hollowMarkerBuffer.get(), 0);
+  cb->setVertexInput(0, 1, &binding);
+  cb->draw(m_hollowMarkerVertexCount);
 }
 
 // ===========================================================================

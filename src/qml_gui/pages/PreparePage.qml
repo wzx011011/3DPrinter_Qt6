@@ -1384,6 +1384,9 @@ Item {
                     // brushButtonState are driven by the C++ mouse handlers inside
                     // RhiViewport (updateBrushCursorState) -- NOT bound from QML.
                     paintOverlayData: root.editorVm ? root.editorVm.paintOverlayData : null
+                    // Phase HOLLOW: drain-hole marker disc byte stream
+                    // (same byte-pipe pattern as paintOverlayData).
+                    hollowMarkerData: root.editorVm ? root.editorVm.hollowMarkerData : null
                     extrudersColors: root.editorVm ? root.editorVm.extrudersColors : []
                     brushRadius: root.editorVm ? _activeBrushRadius() : 2
                     brushCursorType: root.editorVm ? _activeBrushCursorType() : 1
@@ -1472,6 +1475,14 @@ Item {
                     onPaintPickRequested: function(worldOrigin, worldDirection, pickedSourceIndex, brushRadius, cursorType, paintState) {
                         if (root.editorVm)
                             root.editorVm.paintAtFacet(-1, -1, -1, 0.0, 0.0, 0.0, paintState, brushRadius, cursorType, pickedSourceIndex, worldOrigin, worldDirection)
+                    }
+                    // Phase HOLLOW: forward the hollow-gizmo click to the
+                    // ViewModel, which runs the stage-2 SceneRaycaster pick and
+                    // appends a sla::DrainHole at the mesh-local intersection.
+                    // Same opaque-forward contract as the measure/paint handlers.
+                    onHollowPickRequested: function(worldOrigin, worldDirection, pickedSourceIndex) {
+                        if (root.editorVm)
+                            root.editorVm.placeHollowPoint(pickedSourceIndex, worldOrigin, worldDirection)
                     }
                     cutAxis: root.editorVm ? root.editorVm.cutAxis : 2
                     cutPosition: root.editorVm ? root.editorVm.cutPosition : 0.0

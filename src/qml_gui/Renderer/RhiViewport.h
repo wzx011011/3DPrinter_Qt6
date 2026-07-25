@@ -102,6 +102,12 @@ class RhiViewport : public QQuickRhiItem
   // setter calls update() so a paintDataChanged -> QML binding -> setter ->
   // synchronize() -> uploadPaintOverlayBuffer loop closes on every paint stroke.
   Q_PROPERTY(QByteArray paintOverlayData READ paintOverlayData WRITE setPaintOverlayData)
+  // Phase HOLLOW: drain-hole marker vertex byte stream (flattened by
+  // EditorViewModel::hollowMarkerData). Same Q_PROPERTY-as-byte-pipe pattern
+  // as paintOverlayData: QML binds viewport3d.hollowMarkerData to
+  // editorVm.hollowMarkerData, the setter stashes it, and synchronize() hands
+  // it to the renderer for upload.
+  Q_PROPERTY(QByteArray hollowMarkerData READ hollowMarkerData WRITE setHollowMarkerData)
   // Phase 121 (PAINT-03/OV-02/OV-05): brush params. emitPaintPickIfActive
   // forwards these to the ViewModel instead of the Phase 120 hardcoded
   // defaults (2.0/1/1). brushRadius is the world-space sphere/circle radius
@@ -296,6 +302,8 @@ public:
   // Phase 121 (PAINT-02/OV-02): paint overlay reverse-channel getter/setter.
   QByteArray paintOverlayData() const { return m_paintOverlayData; }
   void setPaintOverlayData(const QByteArray &data);
+  QByteArray hollowMarkerData() const { return m_hollowMarkerData; }
+  void setHollowMarkerData(const QByteArray &data);
   // Phase 121 (PAINT-03/OV-02/OV-05): brush params. Setters call update() so
   // the renderer re-renders the sphere cursor + overlay on every change.
   float brushRadius() const { return m_brushRadius; }
@@ -383,6 +391,13 @@ signals:
                             QVector3D worldDirection,
                             int pickedSourceIndex,
                             bool shiftHeld);
+  // Phase HOLLOW: emitted on left-click while the hollow gizmo is active
+  // (m_gizmoMode == GizmoHollow). QML forwards to
+  // EditorViewModel::placeHollowPoint, which runs the stage-2 SceneRaycaster
+  // pick and appends a sla::DrainHole at the mesh-local intersection.
+  void hollowPickRequested(QVector3D worldOrigin,
+                           QVector3D worldDirection,
+                           int pickedSourceIndex);
   // Phase 115 (MEASURE-04): emitted on cursor-leave while the measure gizmo
   // is active. QML forwards to EditorViewModel::clearMeasureReadout so no
   // stale feature highlight lingers off-mesh.
@@ -434,6 +449,12 @@ private:
   // No-op when m_gizmoMode != GizmoMeasure (only the measure gizmo drives this).
   void emitMeasurePickIfActive(const QPointF &position,
                                Qt::KeyboardModifiers modifiers);
+  // Phase HOLLOW: emit hollowPickRequested for the active hollow gizmo.
+  // Mirrors emitMeasurePickIfActive: stage-1 pick (pickSourceObjectAt) for
+  // the candidate source index, world ray via GizmoMath::computeRay. No-op
+  // when m_gizmoMode != GizmoHollow.
+  void emitHollowPickIfActive(const QPointF &position,
+                              Qt::KeyboardModifiers modifiers);
   // Phase 120 (PAINT-01): emit paintPickRequested for the active paint gizmos
   // (GizmoSupportPaint / GizmoSeamPaint / GizmoMmuSegmentation). Mirrors
   // emitMeasurePickIfActive: stage-1 pick (pickSourceObjectAt) for the candidate
@@ -512,6 +533,8 @@ private:
   // Phase 121 (PAINT-02/OV-02): painted-facet overlay reverse-channel payload.
   // Flattened by EditorViewModel::paintOverlayData (world-transformed bytes).
   QByteArray m_paintOverlayData;
+  // Flattened by EditorViewModel::hollowMarkerData (world-space disc fans).
+  QByteArray m_hollowMarkerData;
   // Phase 121 (PAINT-03/OV-02/OV-05): brush params. emitPaintPickIfActive
   // forwards brushRadius/brushCursorType/paintState; renderBrushCursor uses
   // brushMouseScreenX/Y + brushButtonState for the sphere cursor.

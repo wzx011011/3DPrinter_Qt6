@@ -525,6 +525,12 @@ void RhiViewport::setPaintOverlayData(const QByteArray &data)
   update();
 }
 
+void RhiViewport::setHollowMarkerData(const QByteArray &data)
+{
+  m_hollowMarkerData = data;
+  update();
+}
+
 // Phase 121 (PAINT-03/OV-02/OV-05): brush param setters. Each calls update()
 // so renderBrushCursor + the overlay stay in sync with the UI controls.
 void RhiViewport::setBrushRadius(float r)
@@ -712,6 +718,16 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
   // gizmo_event handling LeftDown (the upstream two-click measure flow).
   if (event->button() == Qt::LeftButton && m_gizmoMode == GizmoMeasure) {
     emitMeasurePickIfActive(event->position(), event->modifiers());
+    event->accept();
+    return;
+  }
+
+  // Phase HOLLOW: a left click in the hollow gizmo places a drain hole at
+  // the mesh surface under the cursor (对齐上游 GLGizmoHollow::on_mouse
+  // LeftDown → unproject_on_mesh). Emit hollowPickRequested so the ViewModel
+  // runs the stage-2 SceneRaycaster pick + appendObjectDrainHole.
+  if (event->button() == Qt::LeftButton && m_gizmoMode == GizmoHollow) {
+    emitHollowPickIfActive(event->position(), event->modifiers());
     event->accept();
     return;
   }
@@ -1240,6 +1256,37 @@ void RhiViewport::emitMeasurePickIfActive(const QPointF &position,
   // rayOrigin/rayDirection) to keep the literal "ray" out of PreparePage.qml
   // (the rhiViewportSelectionPickingBridgeStaysCppOwned audit forbids it).
   emit measurePickRequested(rayOrigin, rayDirection, pickedSourceIndex, shiftHeld);
+}
+
+// ===========================================================================
+// Phase HOLLOW: hollow-gizmo pick wiring (drain hole placement)
+// ===========================================================================
+void RhiViewport::emitHollowPickIfActive(const QPointF &position,
+                                         Qt::KeyboardModifiers modifiers)
+{
+  // Only the hollow gizmo drives this path (mirror of emitMeasurePickIfActive).
+  if (m_gizmoMode != GizmoHollow)
+    return;
+
+  Q_UNUSED(modifiers); // hollow placement is single-click, no modifier branching
+
+  // Stage-1: cheap ray->AABB prefilter over the scene vertices.
+  const int pickedSourceIndex = pickSourceObjectAt(position);
+  if (pickedSourceIndex < 0)
+    return; // missed every object's AABB -- no hole placed
+
+  // Build the world-space pick ray (same GizmoMath::computeRay the measure
+  // path uses). The ViewModel feeds this to SceneRaycaster::hitTest.
+  const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+  if (viewSize.width() <= 1 || viewSize.height() <= 1)
+    return;
+  const float aspect = float(viewSize.width()) / float(viewSize.height());
+  auto [rayOrigin, rayDirection] = GizmoMath::computeRay(
+      float(position.x()), float(position.y()),
+      viewSize,
+      m_camera.projMatrix(aspect), m_camera.viewMatrix());
+
+  emit hollowPickRequested(rayOrigin, rayDirection, pickedSourceIndex);
 }
 
 // ===========================================================================

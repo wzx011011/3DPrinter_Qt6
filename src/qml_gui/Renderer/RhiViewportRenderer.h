@@ -63,6 +63,9 @@ private:
   // pipeline (m_fillPipeline); no new shader/pipeline.
   bool uploadPaintOverlayBuffer(QRhiResourceUpdateBatch *updates);
   void renderPaintOverlay(QRhiCommandBuffer *cb);
+  // Phase HOLLOW: drain-hole marker disc upload + render (translucent fill).
+  bool uploadHollowMarkerBuffer(QRhiResourceUpdateBatch *updates);
+  void renderHollowMarkers(QRhiCommandBuffer *cb);
   // Phase 121 (PAINT-03/OV-05): translucent sphere cursor that follows the
   // mouse while a paint gizmo is active. Built from buildBrushSphereVertices.
   bool uploadBrushCursorBuffer(QRhiResourceUpdateBatch *updates);
@@ -142,6 +145,8 @@ private:
   // Phase 121 (PAINT-02/OV-03): painted-facet overlay buffer. Reuses the mesh
   // pipeline (m_fillPipeline + GizmoVertex). Uploaded from m_paintOverlayData.
   std::unique_ptr<QRhiBuffer> m_paintOverlayBuffer;
+  // Phase HOLLOW: drain-hole marker disc buffer (translucent fill pipeline).
+  std::unique_ptr<QRhiBuffer> m_hollowMarkerBuffer;
   // Phase 121 (PAINT-03/OV-05): brush sphere cursor buffer (translucent).
   std::unique_ptr<QRhiBuffer> m_brushCursorBuffer;
   // Phase 91 (ASMEXPLODE-02): assembly connector guide-line buffer.
@@ -161,6 +166,8 @@ private:
   // Phase 121 (PAINT-02/OV-03): overlay + brush-cursor upload flags.
   bool m_paintOverlayBufferUploaded = false;
   bool m_brushCursorBufferUploaded = false;
+  // Phase HOLLOW: drain-hole marker disc upload flag.
+  bool m_hollowMarkerBufferUploaded = false;
   bool m_assemblyConnectorBufferUploaded = false;
   bool m_assemblyMeasureLineBufferUploaded = false;
   bool m_assemblyMeasureTriBufferUploaded = false;
@@ -172,6 +179,7 @@ private:
   quint32 m_wipeTowerBufferBytes = 0;
   // Phase 121 (PAINT-02/OV-03): overlay + brush-cursor buffer byte sizes.
   quint32 m_paintOverlayBufferBytes = 0;
+  quint32 m_hollowMarkerBufferBytes = 0;
   quint32 m_brushCursorBufferBytes = 0;
   quint32 m_assemblyConnectorBufferBytes = 0;
   quint32 m_assemblyMeasureLineBufferBytes = 0;
@@ -208,6 +216,7 @@ private:
   quint32 m_wipeTowerVertexCount = 0;
   // Phase 121 (PAINT-02/OV-03): overlay + brush-cursor vertex counts.
   quint32 m_paintOverlayVertexCount = 0;
+  quint32 m_hollowMarkerVertexCount = 0;
   quint32 m_brushCursorVertexCount = 0;
   quint32 m_assemblyConnectorVertexCount = 0;
   quint32 m_assemblyMeasureLineVertexCount = 0;
@@ -289,6 +298,9 @@ private:
   // m_extrudersColors carries the MMU hex strings for ExtruderN coloring.
   // Brush fields drive the sphere cursor (position/color/radius).
   QByteArray m_paintOverlayData;
+  // Phase HOLLOW: drain-hole marker byte stream from
+  // EditorViewModel::hollowMarkerData (world-space disc-fan GizmoVertex).
+  QByteArray m_hollowMarkerData;
   QVariantList m_extrudersColors;
   float m_brushRadius = 2.0f;
   int m_brushCursorType = 1;     // 1=Sphere
