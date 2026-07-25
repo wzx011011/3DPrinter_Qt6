@@ -188,6 +188,16 @@ public:
   Q_INVOKABLE bool setPlateFilamentMapMode(int plateIndex, int mode);
   Q_INVOKABLE int plateFilamentMapMode(int plateIndex) const;
   Q_INVOKABLE QList<int> plateFilamentMaps(int plateIndex) const;
+  /// Filament colours for the current print config (对齐上游
+  /// Plater::get_extruders_colors / filament_colour coStrings option).
+  /// Returns the configured filament colour hex strings (e.g. "#F2754E");
+  /// falls back to the single default colour when the option is absent.
+  /// Drives the MMU segmentation gizmo's extruder colour swatches.
+  Q_INVOKABLE QStringList plateFilamentColours() const;
+  /// Number of filaments/extruders in the current config (对齐上游
+  /// filaments_count). Used by the MMU gizmo to show the honest
+  /// "requires multi-material" notice when <= 1.
+  Q_INVOKABLE int filamentCount() const;
 #ifdef HAS_LIBSLIC3R
   // v3.0 Phase 19 (D-15): per-plate DynamicPrintConfig for slice config merge.
   // Returns Slic3r::DynamicPrintConfig* (forward-declared in the HAS_LIBSLIC3R block).

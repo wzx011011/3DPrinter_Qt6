@@ -1470,7 +1470,22 @@ bool EditorViewModel::selectedObjectIsManifold() const
 
 int EditorViewModel::mmuSelectedExtruder() const { return m_mmuSelectedExtruder; }
 void EditorViewModel::setMmuSelectedExtruder(int idx) { m_mmuSelectedExtruder = idx; emit stateChanged(); }
-int EditorViewModel::mmuExtruderCount() const { return m_mmuExtruderCount; }
+int EditorViewModel::mmuExtruderCount() const
+{
+  // Bind to the configured filament count (对齐上游 extruders count) instead
+  // of a hard-coded 4. Falls back to the legacy constant when no project is
+  // loaded, so the gizmo stays usable pre-load.
+  if (projectService_)
+    if (int n = projectService_->filamentCount(); n > 0)
+      return n;
+  return m_mmuExtruderCount;
+}
+QStringList EditorViewModel::mmuExtruderColors() const
+{
+  if (projectService_)
+    return projectService_->plateFilamentColours();
+  return {};
+}
 
 bool EditorViewModel::clearMmuSegmentation()
 {

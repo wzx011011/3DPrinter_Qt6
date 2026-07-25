@@ -2809,16 +2809,26 @@ Item {
                 Row {
                     spacing: 4
                     Layout.alignment: Qt.AlignHCenter
+                    // MMU painting only makes sense with >1 extruder (对齐上游
+                    // is_mm_painted guard). When the printer config is single-
+                    // material, show the honest notice below and disable picking.
+                    visible: root.editorVm && root.editorVm.mmuExtruderCount > 1
                     Repeater {
                         model: root.editorVm ? root.editorVm.mmuExtruderCount : 4
                         Rectangle {
                             width: 28; height: 28; radius: 4
                             color: {
-                                var colors = [Theme.statusInfo, Theme.statusError, Theme.accent, Theme.statusWarning,
+                                // Bind to configured filament colours (对齐上游
+                                // m_extruders_colors) with a hard-coded fallback
+                                // palette only when the config list is shorter
+                                // than the extruder count (e.g. pre-load).
+                                var cfgColors = root.editorVm ? root.editorVm.mmuExtruderColors : [];
+                                var fallback = [Theme.statusInfo, Theme.statusError, Theme.accent, Theme.statusWarning,
                                              "#8B5CF6", "#EC4899", Theme.statusInfo, Theme.statusWarning,
                                              Theme.statusInfo, Theme.accentLight, Theme.statusError, "#84CC16", "#D946EF",
                                              Theme.statusInfo, "#A855F7", Theme.statusWarning, Theme.accentLight];
-                                var c = index < colors.length ? colors[index] : Theme.textMuted;
+                                var c = index < cfgColors.length ? cfgColors[index]
+                                     : (index < fallback.length ? fallback[index] : Theme.textMuted);
                                 root.editorVm && root.editorVm.mmuSelectedExtruder === index ? c : c + "66"
                             }
                             border.width: root.editorVm && root.editorVm.mmuSelectedExtruder === index ? 2 : 0
@@ -2837,6 +2847,17 @@ Item {
                             }
                         }
                     }
+                }
+
+                // Honest single-material notice (对齐上游 MM-03: when
+                // mmuExtruderCount<=1, the gizmo should explain that multi-
+                // material painting requires a multi-extruder printer config).
+                Text {
+                    visible: root.editorVm && root.editorVm.mmuExtruderCount <= 1
+                    text: qsTr("需要多耗材打印机配置")
+                    color: Theme.statusWarning
+                    font.pixelSize: Theme.fontSizeXS
+                    Layout.alignment: Qt.AlignHCenter
                 }
 
                 // 当前选中耗材提示（对齐上游 m_selected_extruder_idx）

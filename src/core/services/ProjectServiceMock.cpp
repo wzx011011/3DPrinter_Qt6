@@ -1413,6 +1413,48 @@ QList<int> ProjectServiceMock::plateFilamentMaps(int plateIndex) const
   return result;
 }
 
+QStringList ProjectServiceMock::plateFilamentColours() const
+{
+#ifdef HAS_LIBSLIC3R
+  // Mirrors upstream Plater::get_extruders_colors(): read the filament_colour
+  // coStrings option from the current plate's config (or fall back to the
+  // global default). The MMU segmentation gizmo binds these colour swatches
+  // instead of hard-coded Theme constants.
+  const Slic3r::DynamicPrintConfig *cfg = plateDynamicConfig(currentPlateIndex());
+  if (cfg) {
+    const auto *opt = cfg->option<Slic3r::ConfigOptionStrings>("filament_colour");
+    if (opt) {
+      QStringList colours;
+      colours.reserve(int(opt->values.size()));
+      for (const std::string &c : opt->values)
+        colours.append(QString::fromStdString(c));
+      if (!colours.isEmpty())
+        return colours;
+    }
+  }
+#else
+  Q_UNUSED(currentPlateIndex);
+#endif
+  // Fallback: single default filament colour (matches PrintConfig default
+  // #F2754E for filament_colour). Keeps the gizmo usable without a loaded
+  // project / before any plate config is materialised.
+  return QStringList{QStringLiteral("#F2754E")};
+}
+
+int ProjectServiceMock::filamentCount() const
+{
+#ifdef HAS_LIBSLIC3R
+  const Slic3r::DynamicPrintConfig *cfg = plateDynamicConfig(currentPlateIndex());
+  if (cfg) {
+    if (const auto *opt = cfg->option<Slic3r::ConfigOptionStrings>("filament_colour"))
+      return int(opt->values.size());
+  }
+#else
+  Q_UNUSED(currentPlateIndex);
+#endif
+  return 1;
+}
+
 bool ProjectServiceMock::movePlate(int oldIndex, int newIndex)
 {
   if (loading_ || !m_plateList) return false;

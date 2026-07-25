@@ -388,6 +388,7 @@ public:
   int mmuSelectedExtruder() const;
   void setMmuSelectedExtruder(int idx);
   int mmuExtruderCount() const;
+  QStringList mmuExtruderColors() const;
   Q_INVOKABLE bool clearMmuSegmentation();
 
   /// ── Drill gizmo properties (对齐上游 GLGizmoDrill) ──
@@ -703,6 +704,10 @@ public:
   /// MMU 多耗材分段设置（对齐上游 GLGizmoMmuSegmentation）
   Q_PROPERTY(int mmuSelectedExtruder READ mmuSelectedExtruder WRITE setMmuSelectedExtruder NOTIFY stateChanged)
   Q_PROPERTY(int mmuExtruderCount READ mmuExtruderCount NOTIFY stateChanged)
+  /// Configured filament colours for the MMU swatches (对齐上游
+  /// m_extruders_colors). Bound from ProjectServiceMock::plateFilamentColours
+  /// instead of hard-coded Theme constants.
+  Q_PROPERTY(QStringList mmuExtruderColors READ mmuExtruderColors NOTIFY stateChanged)
   /// Drill 设置（对齐上游 GLGizmoDrill）
   Q_PROPERTY(float drillRadius READ drillRadius WRITE setDrillRadius NOTIFY stateChanged)
   Q_PROPERTY(float drillDepth READ drillDepth WRITE setDrillDepth NOTIFY stateChanged)
