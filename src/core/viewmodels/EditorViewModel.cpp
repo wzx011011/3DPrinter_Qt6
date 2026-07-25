@@ -260,6 +260,23 @@ static int primarySelectedSourceIndex(const EditorViewModel *vm)
   return -1; // Multi-select: no numeric editing
 }
 
+#ifdef HAS_LIBSLIC3R
+// Rebuild a Slic3r::Transform3d from QML-facing translation/rotation/scale.
+// Same composition as the later anonymous-namespace rebuildWorldTransform
+// (Geometry::assemble_transform: T = translation * RotZ * RotY * RotX * Scale),
+// inlined here so early gizmo paths (hollow) can use it without a forward
+// declaration crossing anonymous-namespace boundaries.
+static Slic3r::Transform3d hollowWorldTransform(QVector3D translation,
+                                                QVector3D rotationRad,
+                                                QVector3D scale)
+{
+  return Slic3r::Geometry::assemble_transform(
+      Slic3r::Vec3d(double(translation.x()), double(translation.y()), double(translation.z())),
+      Slic3r::Vec3d(double(rotationRad.x()), double(rotationRad.y()), double(rotationRad.z())),
+      Slic3r::Vec3d(double(scale.x()), double(scale.y()), double(scale.z())));
+}
+#endif
+
 float EditorViewModel::objectPosX() const { return projectService_ ? projectService_->objectPosition(primarySelectedSourceIndex(this)).x() : 0; }
 float EditorViewModel::objectPosY() const { return projectService_ ? projectService_->objectPosition(primarySelectedSourceIndex(this)).y() : 0; }
 float EditorViewModel::objectPosZ() const { return projectService_ ? projectService_->objectPosition(primarySelectedSourceIndex(this)).z() : 0; }
@@ -1340,11 +1357,175 @@ void EditorViewModel::setHollowClosingDistance(float v)
   if (!qFuzzyCompare(m_hollowClosingDistance, v)) { m_hollowClosingDistance = v; emit stateChanged(); }
 }
 int EditorViewModel::hollowSelectedHoleCount() const { return m_hollowSelectedHoleCount; }
+QByteArray EditorViewModel::hollowMarkerData() const { return m_hollowMarkerData; }
+
 void EditorViewModel::deleteSelectedHollowPoints()
 {
-  // TODO: Implement actual deletion when hollow point selection is available
+  // Phase HOLLOW: clear the selected object's drain holes (对齐上游
+  // GLGizmoHollow delete selection). MVP clears all holes on the primary
+  // selected object; per-point selection/selection-rect is a later refinement.
+  const int obj = primarySelectedSourceIndex(this);
+  if (obj >= 0 && projectService_) {
+    projectService_->clearObjectDrainHoles(obj);
+    rebuildHollowMarkerData();
+  }
   m_hollowSelectedHoleCount = 0;
   emit stateChanged();
+  emit hollowDataChanged();
+}
+
+bool EditorViewModel::placeHollowPoint(int pickedSourceIndex, QVector3D rayOrigin, QVector3D rayDir)
+{
+  // Phase HOLLOW (对齐上游 GLGizmoHollow::on_mouse → unproject_on_mesh):
+  // cast the world ray through the picked object's volumes, take the nearest
+  // mesh-local intersection, and append a sla::DrainHole there. Reuses the
+  // shared SceneRaycaster (same instance the measure/paint paths use).
+  if (!projectService_ || pickedSourceIndex < 0)
+    return false;
+
+  // Lazy-construct the shared SceneRaycaster (same contract as paintAtFacet).
+  if (!m_sceneRaycaster) {
+    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const indexed_triangle_set> {
+          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
+        });
+  }
+
+  // Reconstruct the candidate object's world transform (Eigen types cannot
+  // cross QML -- mirror of paintAtFacet).
+  const QVector3D translation = projectService_->objectPosition(pickedSourceIndex);
+  const QVector3D rotationDeg = projectService_->objectRotation(pickedSourceIndex);
+  const QVector3D scale = projectService_->objectScale(pickedSourceIndex);
+  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
+                              float(rotationDeg.y() * float(M_PI) / 180.0f),
+                              float(rotationDeg.z() * float(M_PI) / 180.0f));
+  const Slic3r::Transform3d worldTransform =
+      hollowWorldTransform(translation, rotationRad, scale);
+
+  // Enumerate every volume of the picked object as a ray candidate.
+  std::vector<OWzx::SceneRaycasterCandidate> candidates;
+  const int volumeCount = projectService_->objectVolumeCount(pickedSourceIndex);
+  candidates.reserve(std::max(1, volumeCount));
+  for (int v = 0; v < std::max(1, volumeCount); ++v) {
+    OWzx::SceneRaycasterCandidate cand;
+    cand.objectIndex = pickedSourceIndex;
+    cand.volumeIndex = v;
+    cand.worldTransform = worldTransform;
+    candidates.push_back(cand);
+  }
+
+  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
+                             double(rayOrigin.z()));
+  const Slic3r::Vec3d dir(double(rayDir.x()), double(rayDir.y()),
+                          double(rayDir.z()));
+  const OWzx::SceneRaycasterHit hit = m_sceneRaycaster->hitTest(origin, dir, candidates);
+  if (!hit.hit)
+    return false; // ray missed every volume -- no hole placed
+
+  // SceneRaycasterHit exposes worldNormal but DrainHole::normal lives in
+  // mesh-local space. Convert via the inverse of the world transform's
+  // linear part (translation does not affect normals).
+  Slic3r::Vec3d localNormalD = worldTransform.linear().inverse() * hit.worldNormal;
+  Slic3r::Vec3f localNormal(float(localNormalD.x()), float(localNormalD.y()),
+                            float(localNormalD.z()));
+
+  // Append the hole. pos is already mesh-local (SceneRaycasterHit preserves it).
+  const bool ok = projectService_->appendObjectDrainHole(
+      hit.objectIndex,
+      hit.meshLocalPosition.x(), hit.meshLocalPosition.y(), hit.meshLocalPosition.z(),
+      localNormal.x(), localNormal.y(), localNormal.z(),
+      m_hollowHoleRadius, m_hollowHoleHeight);
+  if (!ok)
+    return false;
+
+  rebuildHollowMarkerData();
+  m_hollowSelectedHoleCount =
+      projectService_->objectDrainHoleCount(pickedSourceIndex);
+  emit stateChanged();
+  emit hollowDataChanged();
+  return true;
+}
+
+void EditorViewModel::rebuildHollowMarkerData()
+{
+  // Flatten the selected object's drain holes into a packed world-space
+  // vertex byte stream for RhiViewportRenderer. Each hole is rendered as a
+  // small disc oriented along its mesh-local normal, lifted to world space by
+  // the object transform. Format mirrors paintOverlayData: a 4-byte header
+  // (vertex count) followed by N * (6 floats: x,y,z, r,g,b,a) GizmoVertex.
+  m_hollowMarkerData.clear();
+  const int obj = primarySelectedSourceIndex(this);
+  if (!projectService_ || obj < 0)
+    return;
+
+  const QVariantList holes = projectService_->objectDrainHoles(obj);
+  if (holes.isEmpty())
+    return;
+
+  // Object world transform (to lift mesh-local hole positions to world space).
+  const QVector3D translation = projectService_->objectPosition(obj);
+  const QVector3D rotationDeg = projectService_->objectRotation(obj);
+  const QVector3D scale = projectService_->objectScale(obj);
+  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
+                              float(rotationDeg.y() * float(M_PI) / 180.0f),
+                              float(rotationDeg.z() * float(M_PI) / 180.0f));
+  const Slic3r::Transform3d worldTransform =
+      hollowWorldTransform(translation, rotationRad, scale);
+
+  // Build a small disc (16 segments) per hole at its world position.
+  struct GVertex { float x, y, z, r, g, b, a; };
+  std::vector<GVertex> verts;
+  constexpr int kSegments = 16;
+  constexpr float kMarkerColor[4] = {0.95f, 0.35f, 0.35f, 0.85f}; // red-ish, semi-transparent
+  verts.reserve(int(holes.size()) * kSegments * 3);
+
+  for (const QVariant &hv : holes) {
+    const QVariantMap hm = hv.toMap();
+    const Slic3r::Vec3f pos(hm.value(QStringLiteral("px")).toFloat(),
+                            hm.value(QStringLiteral("py")).toFloat(),
+                            hm.value(QStringLiteral("pz")).toFloat());
+    const Slic3r::Vec3f n(hm.value(QStringLiteral("nx")).toFloat(),
+                          hm.value(QStringLiteral("ny")).toFloat(),
+                          hm.value(QStringLiteral("nz")).toFloat());
+    const float radius = hm.value(QStringLiteral("radius")).toFloat();
+    // Lift center to world space.
+    const Slic3r::Vec3d worldCenterD = worldTransform * pos.cast<double>();
+    const Slic3r::Vec3f worldCenter(float(worldCenterD.x()), float(worldCenterD.y()),
+                                    float(worldCenterD.z()));
+    // Build two tangent axes perpendicular to the (world) normal-ish direction.
+    // Use the mesh-local normal rotated to world for the disc orientation.
+    Slic3r::Vec3d worldNormalD = (worldTransform.linear() * n.cast<double>());
+    if (worldNormalD.norm() < 1e-6) worldNormalD = Slic3r::Vec3d::UnitZ();
+    worldNormalD.normalize();
+    const Slic3r::Vec3f worldNormal(float(worldNormalD.x()), float(worldNormalD.y()),
+                                    float(worldNormalD.z()));
+    Slic3r::Vec3f axis = std::abs(worldNormal.x()) > 0.9f
+                             ? Slic3r::Vec3f::UnitY() : Slic3r::Vec3f::UnitX();
+    Slic3r::Vec3f u = worldNormal.cross(axis).normalized();
+    Slic3r::Vec3f v = worldNormal.cross(u).normalized();
+    // Triangle fan: center + ring.
+    Slic3r::Vec3f prev = worldCenter + (u * std::cos(0.f) + v * std::sin(0.f)) * radius;
+    for (int s = 1; s <= kSegments; ++s) {
+      const float ang = float(s) * 2.f * float(M_PI) / float(kSegments);
+      const Slic3r::Vec3f cur = worldCenter + (u * std::cos(ang) + v * std::sin(ang)) * radius;
+      verts.push_back({worldCenter.x(), worldCenter.y(), worldCenter.z(),
+                       kMarkerColor[0], kMarkerColor[1], kMarkerColor[2], kMarkerColor[3]});
+      verts.push_back({prev.x(), prev.y(), prev.z(),
+                       kMarkerColor[0], kMarkerColor[1], kMarkerColor[2], kMarkerColor[3]});
+      verts.push_back({cur.x(), cur.y(), cur.z(),
+                       kMarkerColor[0], kMarkerColor[1], kMarkerColor[2], kMarkerColor[3]});
+      prev = cur;
+    }
+  }
+
+  // Pack: 4-byte vertex count (uint32 LE) + raw vertex bytes.
+  const uint32_t count = uint32_t(verts.size());
+  const int totalBytes = 4 + int(verts.size()) * int(sizeof(GVertex));
+  m_hollowMarkerData.resize(totalBytes);
+  char *out = m_hollowMarkerData.data();
+  std::memcpy(out, &count, 4);
+  std::memcpy(out + 4, verts.data(), verts.size() * sizeof(GVertex));
 }
 
 // ── Simplify gizmo (对齐上游 GLGizmoSimplify) ──

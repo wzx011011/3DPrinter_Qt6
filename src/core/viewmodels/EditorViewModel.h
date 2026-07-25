@@ -376,7 +376,14 @@ public:
   float hollowClosingDistance() const;
   void setHollowClosingDistance(float v);
   int hollowSelectedHoleCount() const;
+  QByteArray hollowMarkerData() const;
   Q_INVOKABLE void deleteSelectedHollowPoints();
+  /// Place a drain hole at the mesh surface hit by the given world ray
+  /// (对齐上游 GLGizmoHollow::on_mouse → unproject_on_mesh). Reuses the
+  /// shared SceneRaycaster to find the mesh-local intersection, then appends
+  /// a sla::DrainHole to ModelObject::sla_drain_holes via ProjectServiceMock.
+  /// Returns true if a hole was placed.
+  Q_INVOKABLE bool placeHollowPoint(int pickedSourceIndex, QVector3D rayOrigin, QVector3D rayDir);
   // Simplify gizmo (对齐上游 GLGizmoSimplify)
   int simplifyWantedCount() const;
   void setSimplifyWantedCount(int count);
@@ -698,6 +705,10 @@ public:
   Q_PROPERTY(float hollowQuality READ hollowQuality WRITE setHollowQuality NOTIFY stateChanged)
   Q_PROPERTY(float hollowClosingDistance READ hollowClosingDistance WRITE setHollowClosingDistance NOTIFY stateChanged)
   Q_PROPERTY(int hollowSelectedHoleCount READ hollowSelectedHoleCount NOTIFY stateChanged)
+  /// Drain-hole marker geometry for the renderer (对齐上游 GLGizmoHollow point
+  /// rendering). A packed vertex byte stream (world-space small-disc per hole)
+  /// consumed by RhiViewportRenderer. Refreshed whenever holes change.
+  Q_PROPERTY(QByteArray hollowMarkerData READ hollowMarkerData NOTIFY hollowDataChanged)
   /// 网格简化设置（对齐上游 GLGizmoSimplify）
   Q_PROPERTY(int simplifyWantedCount READ simplifyWantedCount WRITE setSimplifyWantedCount NOTIFY stateChanged)
   Q_PROPERTY(float simplifyMaxError READ simplifyMaxError WRITE setSimplifyMaxError NOTIFY stateChanged)
@@ -1187,6 +1198,10 @@ public:
   /// change signal (GLGizmoMeasure.cpp m_curr_measuring rebuild, pitfall 6).
   /// Without this, a stale Measuring would serve features from the OLD mesh.
   Q_INVOKABLE void invalidateMeasureEngine();
+  /// Rebuild the packed hollow-marker vertex byte stream from the selected
+  /// object's drain holes (mesh-local → world). Emits hollowDataChanged via
+  /// callers; this only mutates m_hollowMarkerData.
+  void rebuildHollowMarkerData();
   /// Phase 114 (MEASURE-03): test accessor exposing the cached Measuring
   /// count for the measureEngineInstantiatedPerVolume smoke assertion.
   /// Returns 0 when no Measuring is cached (or HAS_LIBSLIC3R is off).
@@ -1227,6 +1242,7 @@ private slots:
 signals:
   void stateChanged();
   void paintDataChanged();
+  void hollowDataChanged();
   void bedShapeChanged();
   /// Phase 145 (EMB-03): async emboss result delivery. Re-emitted from
   /// ProjectServiceMock's embossVolumeAdded/Failed so QML binds to a single
@@ -1410,6 +1426,7 @@ private:
   float m_hollowQuality = 0.5f;           ///< m_quality_stash
   float m_hollowClosingDistance = 2.0f;    ///< m_closing_d_stash
   int m_hollowSelectedHoleCount = 0;      ///< selected drain holes count
+  QByteArray m_hollowMarkerData;         ///< packed world-space disc vertices for renderer
   int m_simplifyWantedCount = 0;          ///< target triangle count (0=auto)
   float m_simplifyMaxError = 0.0f;       ///< max quadric error (0=auto)
   int m_mmuSelectedExtruder = 0;          ///< currently selected extruder for MMU painting

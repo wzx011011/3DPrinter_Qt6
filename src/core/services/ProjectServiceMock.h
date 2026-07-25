@@ -214,6 +214,21 @@ public:
   Q_INVOKABLE bool objectVisible(int index) const;
   Q_INVOKABLE bool setObjectVisible(int index, bool visible);
   Q_INVOKABLE int objectVolumeCount(int index) const;
+  /// ── Hollow / drain hole editing (对齐上游 ModelObject::sla_drain_holes) ──
+  /// SLA drain holes live on ModelObject (libslic3r/Model.hpp:384) and are
+  /// persisted to 3MF by upstream. These accessors read/append/clear them
+  /// through a QML-friendly variant form so the Hollow gizmo can place and
+  /// remove holes without exposing libslic3r types.
+  Q_INVOKABLE int objectDrainHoleCount(int objectIndex) const;
+  /// Each hole is a QVariantMap{px,py,pz, nx,ny,nz, radius, height} in
+  /// MESH-LOCAL coordinates (matches upstream DrainHole::pos/normal space).
+  Q_INVOKABLE QVariantList objectDrainHoles(int objectIndex) const;
+  /// Append a drain hole at the mesh-local point/normal. Returns true on
+  /// success and emits projectChanged so the renderer refreshes markers.
+  Q_INVOKABLE bool appendObjectDrainHole(int objectIndex, float px, float py, float pz,
+                                         float nx, float ny, float nz,
+                                         float radius, float height);
+  Q_INVOKABLE bool clearObjectDrainHoles(int objectIndex);
   /// 每个对象的实例数量（对齐上游 ModelObject::instances.size()）
   Q_INVOKABLE int objectInstanceCount(int index) const;
   Q_INVOKABLE QString objectVolumeName(int objectIndex, int volumeIndex) const;

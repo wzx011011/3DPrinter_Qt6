@@ -45,6 +45,7 @@
 #include <libslic3r/Geometry.hpp>
 #include <libslic3r/CutUtils.hpp>
 #include <libslic3r/Semver.hpp>
+#include <libslic3r/SLA/Hollowing.hpp>   // Phase HOLLOW: sla::DrainHole for hollow gizmo
 #include <libslic3r/miniz_extension.hpp>  // Phase 97: open_zip_reader/close_zip_reader for thumbnail extraction
 #include <cstring> // memcpy
 
@@ -1453,6 +1454,103 @@ int ProjectServiceMock::filamentCount() const
   Q_UNUSED(currentPlateIndex);
 #endif
   return 1;
+}
+
+// ── Hollow / drain hole editing (对齐上游 ModelObject::sla_drain_holes) ──────
+// Drain holes are stored mesh-local on ModelObject (libslic3r/Model.hpp:384),
+// typed sla::DrainHoles = vector<DrainHole{pos, normal, radius, height}>.
+// 3MF persistence is handled upstream (Format/3mf.cpp). Qt6 only reads/
+// writes the in-memory member; saving the project serializes automatically.
+
+int ProjectServiceMock::objectDrainHoleCount(int objectIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)])
+    return 0;
+  return int(model_->objects[size_t(objectIndex)]->sla_drain_holes.size());
+#else
+  Q_UNUSED(objectIndex);
+  return 0;
+#endif
+}
+
+QVariantList ProjectServiceMock::objectDrainHoles(int objectIndex) const
+{
+  QVariantList holes;
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)])
+    return holes;
+  const Slic3r::sla::DrainHoles &dh = model_->objects[size_t(objectIndex)]->sla_drain_holes;
+  holes.reserve(int(dh.size()));
+  for (const Slic3r::sla::DrainHole &h : dh) {
+    QVariantMap m;
+    m.insert(QStringLiteral("px"), h.pos.x());
+    m.insert(QStringLiteral("py"), h.pos.y());
+    m.insert(QStringLiteral("pz"), h.pos.z());
+    m.insert(QStringLiteral("nx"), h.normal.x());
+    m.insert(QStringLiteral("ny"), h.normal.y());
+    m.insert(QStringLiteral("nz"), h.normal.z());
+    m.insert(QStringLiteral("radius"), h.radius);
+    m.insert(QStringLiteral("height"), h.height);
+    holes.append(m);
+  }
+#else
+  Q_UNUSED(objectIndex);
+#endif
+  return holes;
+}
+
+bool ProjectServiceMock::appendObjectDrainHole(int objectIndex, float px, float py, float pz,
+                                               float nx, float ny, float nz,
+                                               float radius, float height)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)]) {
+    lastError_ = tr("Invalid hollow target");
+    return false;
+  }
+  // Normalize the hole normal (upstream DrainHole expects a unit normal).
+  float nlen = std::sqrt(nx * nx + ny * ny + nz * nz);
+  if (nlen < 1e-6f) {
+    lastError_ = tr("Hole normal is degenerate");
+    return false;
+  }
+  nx /= nlen; ny /= nlen; nz /= nlen;
+  Slic3r::ModelObject *obj = model_->objects[size_t(objectIndex)];
+  obj->sla_drain_holes.emplace_back(
+      Slic3r::Vec3f(px, py, pz), Slic3r::Vec3f(nx, ny, nz), radius, height);
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+#else
+  Q_UNUSED(objectIndex); Q_UNUSED(px); Q_UNUSED(py); Q_UNUSED(pz);
+  Q_UNUSED(nx); Q_UNUSED(ny); Q_UNUSED(nz); Q_UNUSED(radius); Q_UNUSED(height);
+  lastError_ = tr("Hollow requires libslic3r");
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::clearObjectDrainHoles(int objectIndex)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)]) {
+    lastError_ = tr("Invalid hollow target");
+    return false;
+  }
+  Slic3r::ModelObject *obj = model_->objects[size_t(objectIndex)];
+  obj->sla_drain_holes.clear();
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+#else
+  Q_UNUSED(objectIndex);
+  lastError_ = tr("Hollow requires libslic3r");
+  return false;
+#endif
 }
 
 bool ProjectServiceMock::movePlate(int oldIndex, int newIndex)
