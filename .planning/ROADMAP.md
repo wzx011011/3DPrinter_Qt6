@@ -31,23 +31,23 @@
 - Complete: v5.6 Deferred Backlog Closure - Phases 193-205
 - Complete: v5.7 D3D12 Backend Investigation - Phases 206-211
 - Complete: v5.8 Submodule Baseline Alignment + Hollow Editing - Phases 212-215
+- Complete: v5.9 ConfigWizard Multi-Vendor Selection - Phases 216-219
 
-## Latest Completed Milestone: v5.8 Submodule Baseline Alignment + Hollow Editing
+## Latest Completed Milestone: v5.9 ConfigWizard Multi-Vendor Selection
 
-**Goal:** Repair the build break from the v5.7→main merge (submodule pinned to
-4cb3b9ce while origin/main code targets 0632bae8), then deliver two feature
-gaps surfaced by the post-merge code-truth audit: MMU config-driven state and
-an interactive Hollow (drain hole) editing gizmo.
+**Goal:** Promote the ConfigWizard from single-vendor (hard-coded Creality) to
+multi-vendor selection with on-demand loading + AppConfig-lite persistence.
 
-**Completion:** Submodule aligned to `bdbc7ec` on branch `owzx-cgal54-on-0632`
-(`0632bae8` + 5 OWzx-compat patches). ProjectServiceMock adapted to 0632's API
-surface. MMU extruder colours/count now config-driven. Hollow gizmo
-edits/persists drain holes end to end (SLA slicing deferred). All verification
-gates PASS: `multiPlateFullStateRoundTrip`, `test_slice_produces_gcode_file`,
-`mmuSegmentationPaintFeedsSlice`, and the three v5.0 dialog regression locks.
-See `.planning/milestones/v5.8-MILESTONE-AUDIT.md`.
+**Completion:** Backend `loadSingleVendor` extracted vendor-agnostically;
+`availableVendorNames` scans 46 vendor JSONs; `loadVendor` loads on demand;
+`selectedVendor`/`selectedPrinterModel` persist (QSettings). ConfigWizard
+vendor picker combo added; completion persists. PresetUpdater (network)
+deferred. All gates PASS: `v56CrossWorkstreamRegressionLocked` (incl. WIZ-03),
+`mmuSegmentationPaintFeedsSlice`, `v50PresetIniAndCreateDialogWired`,
+`multiPlateFullStateRoundTrip`. See
+`.planning/milestones/v5.9-MILESTONE-AUDIT.md`.
 
-## Previous Completed Milestone: v5.7 D3D12 Backend Investigation
+## Previous Completed Milestone: v5.8 Submodule Baseline Alignment + Hollow Editing
 
 **Goal:** Investigate promoting D3D12 to the default QRhi backend; mitigate
 the three candidate seams; verify on real hardware.

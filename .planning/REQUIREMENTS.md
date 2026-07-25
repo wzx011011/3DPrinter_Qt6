@@ -1,16 +1,15 @@
 # Requirements: OWzx Slicer
 
-## Latest Completed Milestone: v5.8 Submodule Baseline Alignment + Hollow Editing
+## Latest Completed Milestone: v5.9 ConfigWizard Multi-Vendor Selection
 
 For the full requirement text, see
-`.planning/milestones/v5.8-REQUIREMENTS.md`.
+`.planning/milestones/v5.9-REQUIREMENTS.md`.
 
-**Status:** Complete (2026-07-25). The v5.7→main merge build break is repaired
-(submodule aligned to `0632bae8` + OWzx-compat patches). MMU extruder
-colours/count are config-driven. The Hollow gizmo edits/persists drain holes
-end to end (SLA slicing deferred). All verification gates PASS:
-`multiPlateFullStateRoundTrip`, `test_slice_produces_gcode_file`,
-`mmuSegmentationPaintFeedsSlice`, and the three v5.0 dialog regression locks.
+**Status:** Complete (2026-07-25). The ConfigWizard is now multi-vendor: users
+pick from 46 upstream vendor JSONs; presets load on demand; selection persists
+(AppConfig-lite). PresetUpdater (network) deferred. All gates PASS:
+`v56CrossWorkstreamRegressionLocked` (incl. WIZ-03), `mmuSegmentationPaintFeedsSlice`,
+`v50PresetIniAndCreateDialogWired`, `multiPlateFullStateRoundTrip`.
 
 ## Completed Requirements (v5.7)
 

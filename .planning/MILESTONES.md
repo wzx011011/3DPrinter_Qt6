@@ -1,5 +1,26 @@
 # Milestones History
 
+## v5.9 ConfigWizard Multi-Vendor Selection (Shipped: 2026-07-25)
+
+**Phases completed:** 4 phases (216-219), 4 plans, 10 requirements (all satisfied).
+**Audit status:** `complete`.
+
+**Key accomplishments:**
+
+- **Multi-vendor preset loading (Phase 216, WIZ-01/02):** extracted the
+  Creality-specific parse into `loadSingleVendor` (vendor-agnostic);
+  `availableVendorNames` scans 46 upstream vendor JSONs; `loadVendor` loads on
+  demand (idempotent via `m_loadedVendors`).
+- **AppConfig-lite persistence (Phase 217, WIZ-03):** `selectedVendor`/
+  `selectedPrinterModel` + setters persist the wizard choice (QSettings).
+- **Multi-vendor wizard UI (Phase 218, WIZ-04/05):** `activeVendor`
+  user-selectable; vendor picker combo at the top of the Printer page;
+  completion persists vendor + model.
+- **Regression + test hardening (Phase 219, WIZ-06/VER):** WIZ-03 source-audit
+  checks added to v56CrossWorkstreamRegressionLocked.
+
+See `.planning/milestones/v5.9-MILESTONE-AUDIT.md`.
+
 ## v5.8 Submodule Baseline Alignment + Hollow Editing (Shipped: 2026-07-25)
 
 **Phases completed:** 4 phases (212-215), 4 plans, 13 requirements (all satisfied).
