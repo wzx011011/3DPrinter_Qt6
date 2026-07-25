@@ -475,7 +475,8 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
                                    !m_cutPlaneFillBufferUploaded ||
                                    !m_wipeTowerBufferUploaded ||
                                    !m_paintOverlayBufferUploaded ||
-                                   !m_brushCursorBufferUploaded)) {
+                                   !m_brushCursorBufferUploaded ||
+                                   !m_hollowMarkerBufferUploaded)) {
       updates = rhi()->nextResourceUpdateBatch();
       if (!uploadCutPlaneBuffers(updates, dirtyFlags) ||
           !uploadWipeTowerBuffer(updates))

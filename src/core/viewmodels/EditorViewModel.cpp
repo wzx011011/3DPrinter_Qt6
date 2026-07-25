@@ -19,6 +19,7 @@
 // stage-1 survivor (RhiViewport::pickSourceObjectAt), so the per-frame cost
 // is O(hit volume), NOT O(all volumes) (the upstream perf bug).
 #include "core/rendering/SceneRaycaster.h"
+#include "core/rendering/GizmoVertex.h" // canonical 7-float vertex layout (shared with renderer)
 // Phase 120 (PAINT-01): PaintEngine owns per-volume TriangleSelector instances
 // (reused libslic3r code -- TriangleSelector.hpp, NOT reimplemented) and drives
 // select_patch from the stage-2 hit. Built from the same ProjectServiceMock
@@ -1452,8 +1453,9 @@ void EditorViewModel::rebuildHollowMarkerData()
   // Flatten the selected object's drain holes into a packed world-space
   // vertex byte stream for RhiViewportRenderer. Each hole is rendered as a
   // small disc oriented along its mesh-local normal, lifted to world space by
-  // the object transform. Format mirrors paintOverlayData: a 4-byte header
-  // (vertex count) followed by N * (6 floats: x,y,z, r,g,b,a) GizmoVertex.
+  // the object transform. Packed format (consumed by uploadHollowMarkerBuffer,
+  // RhiViewportRenderer.cpp): [uint32 vertex count] + N * GizmoVertex
+  // (7 floats: x,y,z, r,g,b,a). NOTE: NOT the paintOverlayData layout.
   m_hollowMarkerData.clear();
   const int obj = primarySelectedSourceIndex(this);
   if (!projectService_ || obj < 0)
@@ -1474,8 +1476,10 @@ void EditorViewModel::rebuildHollowMarkerData()
       hollowWorldTransform(translation, rotationRad, scale);
 
   // Build a small disc (16 segments) per hole at its world position.
-  struct GVertex { float x, y, z, r, g, b, a; };
-  std::vector<GVertex> verts;
+  // Reuse the canonical GizmoVertex layout (7 floats) shared with the
+  // renderer, so the packed byte stream matches uploadHollowMarkerBuffer's
+  // parse exactly (no duplicate struct to drift out of sync).
+  std::vector<GizmoVertex> verts;
   constexpr int kSegments = 16;
   constexpr float kMarkerColor[4] = {0.95f, 0.35f, 0.35f, 0.85f}; // red-ish, semi-transparent
   verts.reserve(int(holes.size()) * kSegments * 3);
@@ -1521,11 +1525,11 @@ void EditorViewModel::rebuildHollowMarkerData()
 
   // Pack: 4-byte vertex count (uint32 LE) + raw vertex bytes.
   const uint32_t count = uint32_t(verts.size());
-  const int totalBytes = 4 + int(verts.size()) * int(sizeof(GVertex));
+  const int totalBytes = 4 + int(verts.size()) * int(sizeof(GizmoVertex));
   m_hollowMarkerData.resize(totalBytes);
   char *out = m_hollowMarkerData.data();
   std::memcpy(out, &count, 4);
-  std::memcpy(out + 4, verts.data(), verts.size() * sizeof(GVertex));
+  std::memcpy(out + 4, verts.data(), verts.size() * sizeof(GizmoVertex));
 }
 
 // ── Simplify gizmo (对齐上游 GLGizmoSimplify) ──

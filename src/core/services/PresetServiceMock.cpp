@@ -402,10 +402,11 @@ int PresetServiceMock::loadSingleVendor(const QString &profilesDir, const QStrin
     return 0;
   const QString vendorName = root.value(QStringLiteral("name")).toString(vendorKey);
 
-  // vendorDir points to the <vendorName>/ subdirectory for sub_path resolution.
-  // The subdir uses the vendor's display name from the JSON (matches upstream:
-  // Creality.json -> name "Creality" -> Creality/ subdir).
-  const QString vendorDir = profilesDir + QStringLiteral("/") + vendorName;
+  // vendorDir points to the vendor's subdirectory for sub_path resolution.
+  // The subdir is named after the JSON FILE (e.g. BBL.json -> BBL/), NOT the
+  // JSON "name" field (BBL.json has name "Bambulab" but the dir is BBL/).
+  // Using vendorKey (filename) matches the on-disk layout for all 46 vendors.
+  const QString vendorDir = profilesDir + QStringLiteral("/") + vendorKey;
 
   // Parse vendor index to get sub-file lists
   struct SubFileEntry

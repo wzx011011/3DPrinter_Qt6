@@ -2527,7 +2527,9 @@ Item {
                     border.color: Theme.borderDefault; border.width: 1
                     Text {
                         anchors.centerIn: parent
-                        text: qsTr("删除选中 (%1)").arg(root.editorVm ? root.editorVm.hollowSelectedHoleCount : 0)
+                        // MVP clears ALL holes on the object (no per-point
+                        // selection yet), so label says "删除全部" not "删除选中".
+                        text: qsTr("删除全部 (%1)").arg(root.editorVm ? root.editorVm.hollowSelectedHoleCount : 0)
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
                     }
