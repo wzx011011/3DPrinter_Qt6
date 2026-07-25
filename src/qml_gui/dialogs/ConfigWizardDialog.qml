@@ -4,15 +4,18 @@ import QtQuick.Layouts
 import ".."
 import "../controls"
 
-// P8.1 / Phase 200 (WIZ-02) -- ConfigWizardDialog: first-run configuration
-// wizard. Single-vendor wizard driven by PresetServiceMock enumeration.
+// P8.1 / Phase 200 (WIZ-02) / Phase 218 (WIZ-03) -- ConfigWizardDialog:
+// first-run configuration wizard. Multi-vendor wizard driven by
+// PresetServiceMock enumeration.
 //
 // Multi-page wizard: Welcome -> Printer -> Filament -> Done
 // Printer / filament / bed lists come from backend.presetServiceMock
-// (Phase 199 WIZ-01), replacing the prior hard-coded mock. This wizard is
-// single-vendor by design: it picks the first vendor returned by
-// vendors() and enumerates only that vendor's printer models and
-// materials. Multi-vendor selection + PresetUpdater is Deferred.
+// (Phase 199 WIZ-01), replacing the prior hard-coded mock. Phase 218 (WIZ-03)
+// made the vendor user-selectable: a vendor combo at the top of the Printer
+// page lists all availableVendorNames() and loads the chosen vendor's presets
+// on demand (loadVendor). The selected vendor/model is persisted via
+// AppConfig-lite (wizard/selectedVendor, wizard/selectedPrinterModel).
+// PresetUpdater (network) remains deferred.
 //
 // Usage: ConfigWizardDialog { id: wizard }  ->  wizard.open()
 CxDialog {
@@ -40,9 +43,22 @@ CxDialog {
     // contexts without a backend context property.
     readonly property var presetSvc: typeof backend !== "undefined" && backend
         ? backend.presetServiceMock : null
+    // Phase 218 (WIZ-03): all available vendor names (filename scan, no preset
+    // load). Drives the vendor picker combo.
+    readonly property var availableVendors: presetSvc ? presetSvc.availableVendorNames() : []
+    // Phase 218 (WIZ-03): the selected vendor is now user-selectable. Default
+    // to the persisted value (AppConfig-lite), else the first already-loaded
+    // vendor, else empty.
+    property string activeVendor: {
+        if (!presetSvc) return ""
+        const saved = presetSvc.selectedVendor()
+        if (saved.length > 0) return saved
+        const loaded = presetSvc.vendors()
+        return loaded.length > 0 ? loaded[0] : ""
+    }
+    // Ensure the active vendor's presets are loaded when it changes.
+    onActiveVendorChanged: if (presetSvc && activeVendor.length > 0) presetSvc.loadVendor(activeVendor)
     readonly property var vendorList: presetSvc ? presetSvc.vendors() : []
-    // Single vendor: the first one returned. Empty when no presets loaded.
-    readonly property string activeVendor: vendorList.length > 0 ? vendorList[0] : ""
     readonly property var printerModelList: presetSvc && activeVendor.length > 0
         ? presetSvc.printerModelsForVendor(activeVendor) : []
     readonly property var materialList: presetSvc && activeVendor.length > 0
@@ -117,6 +133,39 @@ CxDialog {
                     Text {
                         text: qsTr("选择打印机")
                         color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXL; font.bold: true
+                    }
+
+                    // Phase 218 (WIZ-03): vendor picker. Lists all available
+                    // vendor JSON names; selecting one loads its presets on
+                    // demand (onActiveVendorChanged) and refreshes the model/
+                    // material lists below.
+                    Text {
+                        text: qsTr("厂商：")
+                        color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM
+                        visible: availableVendors.length > 0
+                    }
+                    Rectangle {
+                        Layout.fillWidth: true; height: 36; radius: 5
+                        color: Theme.bgInset; border.color: Theme.switchTrackOff
+                        visible: availableVendors.length > 0
+                        RowLayout {
+                            anchors.fill: parent; anchors.margins: 8; spacing: Theme.spacingMD
+                            Text { text: "🏭"; font.pixelSize: Theme.fontSizeLG }
+                            CxComboBox {
+                                id: vendorCombo
+                                Layout.fillWidth: true
+                                model: availableVendors
+                                // Bind currentIndex to activeVendor (two-way via onActivated).
+                                currentIndex: {
+                                    const idx = availableVendors.indexOf(activeVendor)
+                                    return idx >= 0 ? idx : 0
+                                }
+                                onActivated: {
+                                    if (index >= 0 && index < availableVendors.length)
+                                        activeVendor = availableVendors[index]
+                                }
+                            }
+                        }
                     }
 
                     Text {
@@ -434,6 +483,15 @@ CxDialog {
                             root.selectedPrinter = printerCombo.currentText;
                             root.selectedBedType = bedCombo.currentText;
                             root.selectedFilament = filamentCombo.currentText;
+                            // Phase 218 (WIZ-03): persist the selected vendor +
+                            // printer model (AppConfig-lite) so the next launch
+                            // restores them.
+                            if (presetSvc) {
+                                if (activeVendor.length > 0)
+                                    presetSvc.setSelectedVendor(activeVendor)
+                                if (root.selectedPrinter.length > 0)
+                                    presetSvc.setSelectedPrinterModel(root.selectedPrinter)
+                            }
                             backend.configWizardCompleted = true;
                             root.wizardFinished();
                             root.close();

@@ -8440,6 +8440,39 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
              "GATE-01/DLG-01: PresetServiceMock must keep bedTypes*() enumeration");
   }
 
+  // -- v5.9 WIZ-03 (Phase 216/217/218): ConfigWizard multi-vendor selection.
+  // PresetServiceMock must expose the on-demand vendor load + AppConfig-lite
+  // persistence surface the wizard's vendor picker reads.
+  {
+    const QString presetH = readSource(QStringLiteral("src/core/services/PresetServiceMock.h"));
+    QVERIFY2(!presetH.isEmpty(), "GATE-01/WIZ-03: Unable to read PresetServiceMock.h");
+    QVERIFY2(presetH.contains(QStringLiteral("availableVendorNames()")),
+             "GATE-01/WIZ-03: PresetServiceMock must expose availableVendorNames() for the vendor picker");
+    QVERIFY2(presetH.contains(QStringLiteral("Q_INVOKABLE bool loadVendor(")),
+             "GATE-01/WIZ-03: PresetServiceMock must expose loadVendor() for on-demand vendor load");
+    QVERIFY2(presetH.contains(QStringLiteral("selectedVendor()")),
+             "GATE-01/WIZ-03: PresetServiceMock must expose selectedVendor() (AppConfig-lite)");
+    QVERIFY2(presetH.contains(QStringLiteral("selectedPrinterModel()")),
+             "GATE-01/WIZ-03: PresetServiceMock must expose selectedPrinterModel() (AppConfig-lite)");
+    QVERIFY2(presetH.contains(QStringLiteral("loadSingleVendor(")),
+             "GATE-01/WIZ-03: PresetServiceMock must keep the vendor-agnostic loadSingleVendor() helper");
+    QVERIFY2(presetH.contains(QStringLiteral("m_loadedVendors")),
+             "GATE-01/WIZ-03: PresetServiceMock must keep the m_loadedVendors dedup set");
+
+    const QString wizardQml = readSource(QStringLiteral("src/qml_gui/dialogs/ConfigWizardDialog.qml"));
+    QVERIFY2(!wizardQml.isEmpty(), "GATE-01/WIZ-03: Unable to read ConfigWizardDialog.qml");
+    QVERIFY2(wizardQml.contains(QStringLiteral("availableVendorNames()")),
+             "GATE-01/WIZ-03: ConfigWizard must bind availableVendorNames() to the vendor picker");
+    QVERIFY2(wizardQml.contains(QStringLiteral("presetSvc.loadVendor(")),
+             "GATE-01/WIZ-03: ConfigWizard must call loadVendor() on vendor change");
+    QVERIFY2(wizardQml.contains(QStringLiteral("setSelectedVendor(")),
+             "GATE-01/WIZ-03: ConfigWizard must persist selectedVendor on completion");
+    QVERIFY2(wizardQml.contains(QStringLiteral("setSelectedPrinterModel(")),
+             "GATE-01/WIZ-03: ConfigWizard must persist selectedPrinterModel on completion");
+    QVERIFY2(!wizardQml.contains(QStringLiteral("single-vendor by design")),
+             "GATE-01/WIZ-03: ConfigWizard must no longer be marked 'single-vendor by design'");
+  }
+
   // -- v5.6 DLG-03 (Phase 201): AMS mock-to-ViewModel architecture cleanup.
   // AmsMaterialsViewModel must exist as the typed ViewModel (replaces inline
   // model construction inside AMSSettingsDialog).

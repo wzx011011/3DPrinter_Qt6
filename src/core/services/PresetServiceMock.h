@@ -132,6 +132,8 @@ private:
   QMap<QString, QString> m_presetInherits;
   QMap<QString, PresetMetadata> m_presetMetadata;
   QMap<int, QString> m_selectedPresets;
+  /// 已加载的厂商文件名集合（loadSingleVendor 去重，避免重复解析）
+  QStringList m_loadedVendors;
 
   /// 初始化内置默认预设值（对齐上游 PresetBundle 默认值）
   void initBuiltinDefaults();
@@ -142,10 +144,36 @@ private:
   void updateSelectedPresetFallback(int category);
   static QString selectionSettingsKey(int category);
   static QString bundleCategoryName(int category);
+  /// Resolve the vendor profiles directory (source tree or installed).
+  /// Returns empty when not found. Shared by loadVendorPresets /
+  /// loadSingleVendor / availableVendorNames.
+  QString resolveProfilesDir() const;
 
 #ifdef HAS_LIBSLIC3R
   /// 从上游 vendor JSON 预设文件加载真实预设（对齐上游 PresetBundle::load_vendor_configs_from_json）
   bool loadVendorPresets();
+  /// 加载单个厂商的全部预设（machine/filament/process）。厂商无关：读
+  /// `<profilesDir>/<vendorFileName>.json` + 解析 `<profilesDir>/<vendorName>/`
+  /// 子目录。对齐上游 ConfigWizard BundleMap::load 的单厂商路径。返回加载的
+  /// 预设数（0 表示失败或空）。已加载的厂商会被跳过（m_loadedVendors 去重）。
+  int loadSingleVendor(const QString &profilesDir, const QString &vendorFileName);
+#endif
+public:
+  /// 列出 profiles 目录下所有可用厂商 JSON 文件名（不含路径和 .json 后缀）。
+  /// 不加载任何预设，只扫描文件名供 ConfigWizard 厂商选择器使用。
+  Q_INVOKABLE QStringList availableVendorNames() const;
+  /// 按需加载一个厂商的预设（对齐上游 ConfigWizard 选厂商时加载该厂商
+  /// bundle）。幂等：已加载的厂商返回 true 不重复加载。返回 false 表示
+  /// profiles 目录未找到或解析失败。
+  Q_INVOKABLE bool loadVendor(const QString &vendorName);
+  /// AppConfig-lite: 用户在 ConfigWizard 选的厂商（QSettings wizard/selectedVendor）
+  Q_INVOKABLE QString selectedVendor() const;
+  Q_INVOKABLE void setSelectedVendor(const QString &vendor);
+  /// AppConfig-lite: 用户在 ConfigWizard 选的打印机型号（QSettings wizard/selectedPrinterModel）
+  Q_INVOKABLE QString selectedPrinterModel() const;
+  Q_INVOKABLE void setSelectedPrinterModel(const QString &model);
+private:
+#ifdef HAS_LIBSLIC3R
   /// 从上游 print_config_def schema 提取所有默认值到 __upstream_defaults__
   void loadUpstreamSchemaDefaults();
   /// 加载单个预设 JSON 文件并解析继承链

@@ -356,41 +356,56 @@ void PresetServiceMock::initBuiltinDefaults()
 
 bool PresetServiceMock::loadVendorPresets()
 {
-  // Locate vendor profile directory (对齐上游 PresetBundle data_dir / resource_dir)
-  // Vendor index is at resources/profiles/Creality.json, sub-directories at resources/profiles/Creality/
-  QString vendorDir;
+  // Phase 216 (WIZ-03): load the default vendor (Creality) on startup for
+  // single-vendor parity. Additional vendors are loaded on demand via
+  // loadVendor() from the ConfigWizard. The profiles dir is shared.
+  const QString profilesDir = resolveProfilesDir();
+  if (profilesDir.isEmpty())
+    return false;
+  return loadSingleVendor(profilesDir, QStringLiteral("Creality")) > 0;
+}
+
+QString PresetServiceMock::resolveProfilesDir() const
+{
+  // Locate vendor profile directory (对齐上游 PresetBundle data_dir / resource_dir).
   const QStringList searchPaths = {
-      // Source tree: index at profiles/Creality.json, subdirs at profiles/Creality/
       QDir::currentPath() + QStringLiteral("/third_party/OrcaSlicer/resources/profiles"),
-      // Installed resource path
       QCoreApplication::applicationDirPath() + QStringLiteral("/resources/profiles"),
   };
-
-  QString profilesDir;
   for (const auto &path : searchPaths)
   {
     if (QFileInfo::exists(path + QStringLiteral("/Creality.json")))
-    {
-      profilesDir = path;
-      break;
-    }
+      return path;
   }
+  return {};
+}
 
-  if (profilesDir.isEmpty())
-    return false;
+int PresetServiceMock::loadSingleVendor(const QString &profilesDir, const QString &vendorFileName)
+{
+  // Phase 216 (WIZ-03): vendor-agnostic single-vendor loader. Reads
+  // `<profilesDir>/<vendorFileName>.json` + parses `<profilesDir>/<vendorName>/`
+  // subdirectory machine/filament/process sub-files. Mirrors upstream
+  // ConfigWizard BundleMap::load's per-vendor path. Returns the number of
+  // presets registered (0 = failure/empty). Idempotent via m_loadedVendors.
+  const QString vendorKey = vendorFileName.trimmed();
+  if (m_loadedVendors.contains(vendorKey))
+    return 0; // already loaded -- skip re-parse
 
-  // vendorDir points to the Creality/ subdirectory for machine/filament/process sub_path resolution
-  vendorDir = profilesDir + QStringLiteral("/Creality");
-  const QString indexFile = profilesDir + QStringLiteral("/Creality.json");
+  const QString indexFile = profilesDir + QStringLiteral("/") + vendorKey + QStringLiteral(".json");
   QFile f(indexFile);
   if (!f.open(QIODevice::ReadOnly))
-    return false;
+    return 0;
 
   QJsonParseError err;
   const QJsonObject root = QJsonDocument::fromJson(f.readAll(), &err).object();
   if (err.error != QJsonParseError::NoError)
-    return false;
-  const QString vendorName = root.value(QStringLiteral("name")).toString(QStringLiteral("Creality"));
+    return 0;
+  const QString vendorName = root.value(QStringLiteral("name")).toString(vendorKey);
+
+  // vendorDir points to the <vendorName>/ subdirectory for sub_path resolution.
+  // The subdir uses the vendor's display name from the JSON (matches upstream:
+  // Creality.json -> name "Creality" -> Creality/ subdir).
+  const QString vendorDir = profilesDir + QStringLiteral("/") + vendorName;
 
   // Parse vendor index to get sub-file lists
   struct SubFileEntry
@@ -398,8 +413,6 @@ bool PresetServiceMock::loadVendorPresets()
     QString name;
     QString subPath;
   };
-  QList<SubFileEntry> machineEntries, processEntries, filamentEntries;
-
   auto parseSubFileList = [](const QJsonObject &root, const QString &key) -> QList<SubFileEntry> {
     QList<SubFileEntry> result;
     const QJsonArray arr = root.value(key).toArray();
@@ -415,101 +428,117 @@ bool PresetServiceMock::loadVendorPresets()
     return result;
   };
 
-  machineEntries = parseSubFileList(root, QStringLiteral("machine_list"));
-  processEntries = parseSubFileList(root, QStringLiteral("process_list"));
-  filamentEntries = parseSubFileList(root, QStringLiteral("filament_list"));
+  const QList<SubFileEntry> machineEntries = parseSubFileList(root, QStringLiteral("machine_list"));
+  const QList<SubFileEntry> processEntries = parseSubFileList(root, QStringLiteral("process_list"));
+  const QList<SubFileEntry> filamentEntries = parseSubFileList(root, QStringLiteral("filament_list"));
 
-  // Resolved config cache (preset_name → merged key-values)
+  // Resolved config cache (preset_name → merged key-values). Per-call so
+  // cross-vendor inheritance collisions don't bleed (each vendor's inheritance
+  // chain is self-contained within its own subdirectory).
   QMap<QString, QHash<QString, QVariant>> resolvedConfigs;
   QMap<QString, QString> inheritMap;
 
-  // Load machine (printer) presets
-  for (const auto &entry : machineEntries)
-  {
-    const QString filePath = vendorDir + QStringLiteral("/") + entry.subPath;
-    const QHash<QString, QVariant> resolved = resolveInheritance(entry.name, filePath, resolvedConfigs, inheritMap);
-    if (resolved.isEmpty())
-      continue;
+  int registered = 0;
 
-    // Only store presets with instantiation=true (real printer configs, not base templates)
-    const QString instantiation = resolved.value(QStringLiteral("__instantiation__")).toString();
-    if (instantiation == QStringLiteral("false"))
+  // Reusable register lambda: resolve + clean metadata + store + register.
+  auto registerCategory = [&](const QList<SubFileEntry> &entries, int category) {
+    for (const auto &entry : entries)
     {
-      resolvedConfigs[entry.name] = resolved;
-      continue;
+      const QString filePath = vendorDir + QStringLiteral("/") + entry.subPath;
+      const QHash<QString, QVariant> resolved = resolveInheritance(entry.name, filePath, resolvedConfigs, inheritMap);
+      if (resolved.isEmpty())
+        continue;
+
+      // Only store presets with instantiation=true (real configs, not base templates)
+      const QString instantiation = resolved.value(QStringLiteral("__instantiation__")).toString();
+      if (instantiation == QStringLiteral("false"))
+      {
+        resolvedConfigs[entry.name] = resolved;
+        continue;
+      }
+
+      QHash<QString, QVariant> cleanValues = resolved;
+      cleanValues.remove(QStringLiteral("__instantiation__"));
+      cleanValues.remove(QStringLiteral("__inherits__"));
+      cleanValues.remove(QStringLiteral("__type__"));
+      cleanValues.remove(QStringLiteral("__from__"));
+      cleanValues.remove(QStringLiteral("__name__"));
+
+      m_presetStore[entry.name] = cleanValues;
+      registerPresetMetadata(entry.name, category, true, true, vendorName);
+      if (!inheritMap.value(entry.name).isEmpty())
+        m_presetInherits[entry.name] = inheritMap[entry.name];
+      ++registered;
     }
+  };
 
-    // Remove internal metadata keys
-    QHash<QString, QVariant> cleanValues = resolved;
-    cleanValues.remove(QStringLiteral("__instantiation__"));
-    cleanValues.remove(QStringLiteral("__inherits__"));
-    cleanValues.remove(QStringLiteral("__type__"));
-    cleanValues.remove(QStringLiteral("__from__"));
-    cleanValues.remove(QStringLiteral("__name__"));
+  registerCategory(machineEntries, PrinterCat);
+  registerCategory(filamentEntries, FilamentCat);
+  registerCategory(processEntries, PrintCat);
 
-    m_presetStore[entry.name] = cleanValues;
-    registerPresetMetadata(entry.name, PrinterCat, true, true, vendorName);
-    if (!inheritMap.value(entry.name).isEmpty())
-      m_presetInherits[entry.name] = inheritMap[entry.name];
-  }
+  if (registered > 0)
+    m_loadedVendors.append(vendorKey);
+  return registered;
+}
 
-  // Load filament presets
-  for (const auto &entry : filamentEntries)
+QStringList PresetServiceMock::availableVendorNames() const
+{
+  // Scan the profiles dir for *.json vendor index files. Returns vendor file
+  // names (without .json) for the ConfigWizard vendor picker. Does NOT load
+  // any presets -- purely a filename scan (对齐 upstream BundleMap::load
+  // enumerating vendor JSONs without materialising them).
+  const QString profilesDir = resolveProfilesDir();
+  if (profilesDir.isEmpty())
+    return {};
+  QDir dir(profilesDir);
+  QStringList names;
+  const QStringList files = dir.entryList({QStringLiteral("*.json")}, QDir::Files);
+  for (const QString &fn : files)
   {
-    const QString filePath = vendorDir + QStringLiteral("/") + entry.subPath;
-    const QHash<QString, QVariant> resolved = resolveInheritance(entry.name, filePath, resolvedConfigs, inheritMap);
-    if (resolved.isEmpty())
-      continue;
-
-    const QString instantiation = resolved.value(QStringLiteral("__instantiation__")).toString();
-    if (instantiation == QStringLiteral("false"))
-    {
-      resolvedConfigs[entry.name] = resolved;
-      continue;
-    }
-
-    QHash<QString, QVariant> cleanValues = resolved;
-    cleanValues.remove(QStringLiteral("__instantiation__"));
-    cleanValues.remove(QStringLiteral("__inherits__"));
-    cleanValues.remove(QStringLiteral("__type__"));
-    cleanValues.remove(QStringLiteral("__from__"));
-    cleanValues.remove(QStringLiteral("__name__"));
-
-    m_presetStore[entry.name] = cleanValues;
-    registerPresetMetadata(entry.name, FilamentCat, true, true, vendorName);
-    if (!inheritMap.value(entry.name).isEmpty())
-      m_presetInherits[entry.name] = inheritMap[entry.name];
+    if (fn.compare(QStringLiteral("Private.json"), Qt::CaseInsensitive) == 0)
+      continue; // upstream internal metadata, not a vendor index
+    names.append(fn.chopped(5)); // strip ".json"
   }
+  std::sort(names.begin(), names.end());
+  return names;
+}
 
-  // Load process (print) presets
-  for (const auto &entry : processEntries)
-  {
-    const QString filePath = vendorDir + QStringLiteral("/") + entry.subPath;
-    const QHash<QString, QVariant> resolved = resolveInheritance(entry.name, filePath, resolvedConfigs, inheritMap);
-    if (resolved.isEmpty())
-      continue;
+bool PresetServiceMock::loadVendor(const QString &vendorName)
+{
+  // Phase 216 (WIZ-03): on-demand vendor load from the ConfigWizard. Idempotent
+  // -- returns true when the vendor is already loaded or loads now.
+  const QString key = vendorName.trimmed();
+  if (m_loadedVendors.contains(key))
+    return true; // already loaded
+  const QString profilesDir = resolveProfilesDir();
+  if (profilesDir.isEmpty())
+    return false;
+  return loadSingleVendor(profilesDir, key) > 0;
+}
 
-    const QString instantiation = resolved.value(QStringLiteral("__instantiation__")).toString();
-    if (instantiation == QStringLiteral("false"))
-    {
-      resolvedConfigs[entry.name] = resolved;
-      continue;
-    }
+QString PresetServiceMock::selectedVendor() const
+{
+  // AppConfig-lite (对齐 upstream AppConfig wizard/selected_vendor).
+  QSettings settings;
+  return settings.value(QStringLiteral("wizard/selectedVendor")).toString();
+}
 
-    QHash<QString, QVariant> cleanValues = resolved;
-    cleanValues.remove(QStringLiteral("__instantiation__"));
-    cleanValues.remove(QStringLiteral("__inherits__"));
-    cleanValues.remove(QStringLiteral("__type__"));
-    cleanValues.remove(QStringLiteral("__from__"));
-    cleanValues.remove(QStringLiteral("__name__"));
+void PresetServiceMock::setSelectedVendor(const QString &vendor)
+{
+  QSettings settings;
+  settings.setValue(QStringLiteral("wizard/selectedVendor"), vendor);
+}
 
-    m_presetStore[entry.name] = cleanValues;
-    registerPresetMetadata(entry.name, PrintCat, true, true, vendorName);
-    if (!inheritMap.value(entry.name).isEmpty())
-      m_presetInherits[entry.name] = inheritMap[entry.name];
-  }
+QString PresetServiceMock::selectedPrinterModel() const
+{
+  QSettings settings;
+  return settings.value(QStringLiteral("wizard/selectedPrinterModel")).toString();
+}
 
-  return !m_presetStore.isEmpty();
+void PresetServiceMock::setSelectedPrinterModel(const QString &model)
+{
+  QSettings settings;
+  settings.setValue(QStringLiteral("wizard/selectedPrinterModel"), model);
 }
 
 void PresetServiceMock::loadUpstreamSchemaDefaults()
