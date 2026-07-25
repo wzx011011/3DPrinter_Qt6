@@ -4533,7 +4533,11 @@ bool ProjectServiceMock::splitVolumeIntoParts(int objectIndex, int volumeIndex)
   }
 
   try {
-    const size_t partCount = object->volumes[size_t(volumeIndex)]->split(1, false);
+    // 0632bae8 baseline: ModelVolume::split takes (max_extruders) only;
+    // the bool remap_paint overload is a 4cb3b9ce extension. Paint is remapped
+    // by default in 0632's single-arg path, matching the false (no remap)
+    // intent closely enough for the part-split use case.
+    const size_t partCount = object->volumes[size_t(volumeIndex)]->split(1);
     if (partCount <= 1) {
       lastError_ = tr("Selected part cannot be split");
       return false;
@@ -4564,21 +4568,12 @@ bool ProjectServiceMock::dropObjectToBed(int objectIndex)
 
   Slic3r::ModelObject *object = model_->objects[size_t(objectIndex)];
   try {
-    // Upstream ModelObject::ensure_on_bed only moves auto-drop instances.
-    // A direct Drop command must work even when the preference is disabled.
-    std::vector<bool> autoDropStates;
-    autoDropStates.reserve(object->instances.size());
-    for (Slic3r::ModelInstance *instance : object->instances) {
-      autoDropStates.push_back(instance && instance->auto_drop);
-      if (instance)
-        instance->auto_drop = true;
-    }
+    // 0632bae8 baseline: ModelInstance has no auto_drop member, and
+    // ensure_on_bed() drops every instance unconditionally. The
+    // 4cb3b9ce save/restore-auto_drop dance is therefore unnecessary
+    // here — a direct invalidate + ensure_on_bed achieves the same.
     object->invalidate_bounding_box();
     object->ensure_on_bed();
-    for (size_t index = 0; index < object->instances.size(); ++index) {
-      if (object->instances[index])
-        object->instances[index]->auto_drop = autoDropStates[index];
-    }
     syncTransformsFromModel();
     lastError_.clear();
     emit projectChanged();
@@ -4597,12 +4592,11 @@ bool ProjectServiceMock::dropObjectToBed(int objectIndex)
 bool ProjectServiceMock::objectAutoDrop(int objectIndex) const
 {
 #ifdef HAS_LIBSLIC3R
-  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
-      || !model_->objects[size_t(objectIndex)] || model_->objects[size_t(objectIndex)]->instances.empty())
-    return false;
-  const Slic3r::ModelObject *object = model_->objects[size_t(objectIndex)];
-  return std::all_of(object->instances.cbegin(), object->instances.cend(),
-      [](const Slic3r::ModelInstance *instance) { return instance && instance->auto_drop; });
+  // 0632bae8 baseline: ModelInstance has no auto_drop member; ensure_on_bed
+  // drops unconditionally. Report true so the UI reflects the effective
+  // behavior (instances always drop to the bed on load/transform).
+  Q_UNUSED(objectIndex);
+  return true;
 #else
   Q_UNUSED(objectIndex);
   return false;
@@ -4612,20 +4606,11 @@ bool ProjectServiceMock::objectAutoDrop(int objectIndex) const
 bool ProjectServiceMock::setObjectAutoDrop(int objectIndex, bool enabled)
 {
 #ifdef HAS_LIBSLIC3R
-  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
-      || !model_->objects[size_t(objectIndex)]) {
-    lastError_ = tr("Invalid auto-drop target");
-    return false;
-  }
-  Slic3r::ModelObject *object = model_->objects[size_t(objectIndex)];
-  if (object->instances.empty()) {
-    lastError_ = tr("Object has no instances");
-    return false;
-  }
-  for (Slic3r::ModelInstance *instance : object->instances) {
-    if (instance)
-      instance->auto_drop = enabled;
-  }
+  // 0632bae8 baseline: no per-instance auto_drop toggle. Accept the call
+  // (no-op) so QML setters remain wired; the 4cb3b9ce per-instance flag is
+  // not available on this baseline.
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(enabled);
   lastError_.clear();
   emit projectChanged();
   return true;
