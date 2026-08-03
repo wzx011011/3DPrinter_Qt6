@@ -10,7 +10,29 @@ The project currently has a usable Qt6/QML shell, real model/project IO, real sl
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current State: v5.7 D3D12 Backend Investigation
+## Current Milestone: v5.11 Process Settings Source-Truth Convergence
+
+**Goal:** Make the Process Settings dialog a complete, efficient, and
+upstream-aligned parameter-editing workspace rather than a flat list with
+decorative group headers.
+
+**Target features:**
+- Functional group expansion and collapse with state preserved across tab,
+  search, and advanced-mode changes.
+- Upstream-derived Process page and group navigation with accurate visible and
+  dirty-option counts.
+- Dense, readable option rows with correct source, unit, inheritance,
+  read-only, reset, validation, and vector-value affordances.
+- Preset actions, dirty/compatibility feedback, and responsive visual details
+  verified against the Process Settings source and screenshot truth.
+
+**Recent baseline:** v5.10 Polish & Source-Truth Consolidation closed on
+2026-07-26. Hollow marker refresh/rendering, configured filament colour flow,
+MMU colour-source unification, and ConfigWizard printer-material filtering are
+verified. SLA slicing remains permanently out of scope; multi-nozzle UI and
+printer-hardware/network workflows remain deferred.
+
+## Historical State: v5.7 D3D12 Backend Investigation
 
 **Latest completed milestone:** v5.7 D3D12 Backend Investigation (closed
 2026-07-24).
@@ -118,7 +140,7 @@ is documented as a reproducibility follow-up in
 
 **Shipped state:** 8/8 requirements satisfied (1 with documented scope refinement), 9/9 phases (171-179) verified. Three tracks: (1) CL closure — 6 destructive confirms, 247 dialog spacing literals migrated, 9 pseudo-buttons migrated; (2) FEAT — per-object settings dialog, object layer-range editor, Simplify mesh gizmo (fixed broken call chain); (3) I18N — de/fr/ja/ko ~44% → 68-70% coverage. Driven by code-level feature-parity audit (confirmed ~90% upstream parity).
 
-## Current Milestone
+## Historical Milestone Plan: v5.6 Deferred Backlog Closure
 
 v5.6 Deferred Backlog Closure is active (2026-07-24).
 
@@ -192,8 +214,16 @@ These are current baseline capabilities inferred from implementation, git histor
 
 ### Active
 
-Historical note: v5.0 shipped 2026-07-17. The active v5.5 milestone is
-described in the Current Milestone section above.
+- Process settings groups can expand and collapse functionally, preserving the
+  appropriate state while users switch page, search, and change mode.
+- Process settings expose the upstream page/group hierarchy and option counts
+  needed to navigate a large parameter set efficiently.
+- Process option rows expose source, unit, inheritance, read-only, reset,
+  validation, and vector-value state without layout regressions.
+- Process preset actions and dirty/compatibility feedback are discoverable,
+  accurate, and responsive.
+- The Process Settings window matches the applicable OrcaSlicer behavior and
+  screenshot layout, with automated regressions for the restored workflow.
 
 ### Future
 
@@ -218,6 +248,11 @@ described in the Current Milestone section above.
 - Making D3D12 or Vulkan the default backend before the backend crash/runtime constraints are resolved.
 - Claiming separate manual user click-through for v3.4 Phase 43. It is closed by E2E/runtime evidence, not by a distinct manual session.
 - Resuming v3.5 Phase 47-49 unless the user explicitly reopens that milestone.
+- SLA slicing, including SLAPrint, PNG layer output, and SLA preset workflows.
+  This scope was permanently removed by user decision on 2026-07-26; FFF-useful
+  hollow drain-hole editing remains allowed.
+- H2C/A2L multi-nozzle and per-extruder UI. These require a separate product
+  decision and are excluded from v5.11.
 
 ## Context
 
@@ -311,4 +346,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-07-24 after v5.7 milestone closure.*
+*Last updated: 2026-08-03 after v5.11 milestone initialization.*

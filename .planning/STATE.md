@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.10
-milestone_name: Polish & Source-Truth Consolidation
-status: active
-last_updated: "2026-07-26T01:00:00.000Z"
-last_activity: 2026-07-26
+milestone: v5.11
+milestone_name: Process Settings Source-Truth Convergence
+status: planning
+last_updated: "2026-08-03T07:04:00.805Z"
+last_activity: 2026-08-03
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -84,3 +84,10 @@ See:
 - `.planning/milestones/v5.9-REQUIREMENTS.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
+
+## Current Position
+
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-08-03 — Milestone v5.11 started
