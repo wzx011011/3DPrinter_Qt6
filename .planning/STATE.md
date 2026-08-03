@@ -3,8 +3,9 @@ gsd_state_version: 1.0
 milestone: v5.11
 milestone_name: Process Settings Source-Truth Convergence
 status: planning
-last_updated: "2026-08-03T07:04:00.805Z"
-last_activity: 2026-08-03
+stopped_at: Phase 226 UI-SPEC approved
+last_updated: "2026-08-03T08:17:58.923Z"
+last_activity: 2026-08-03 - v5.11 requirements confirmed and roadmap created
 progress:
   total_phases: 5
   completed_phases: 0
@@ -51,6 +52,7 @@ Progress: [----------] 0%
 ## Performance Metrics
 
 **v5.11:**
+
 - Total plans completed: 0 of 7
 - Completed phases: 0 of 5
 - Average duration: Not available
@@ -64,6 +66,7 @@ Progress: [----------] 0%
 - Group identity is an untranslated, page-qualified technical key.
 - Collapse state is C++ presentation-model session state; it is not stored in
   presets, projects, or QSettings, and QML remains presentation and wiring.
+
 - Existing `ConfigViewModel`, preset, edit, reset, validation, and
   slice-invalidation routes remain authoritative. `GroupNavSidebar` stays retired.
 
@@ -80,11 +83,12 @@ None.
 
 - Printer and Material hierarchy expansion; H2C/A2L, multi-nozzle,
   per-extruder, and full vector-value editing.
+
 - Device, hardware, network, cloud, camera, monitor, SLA settings or slicing,
   libslic3r changes, and unmapped cross-option auto-correction.
 
 ## Session Continuity
 
-Last session: 2026-08-03
-Stopped at: Roadmap creation; Phase 226 is ready for detailed planning.
-Resume file: None
+Last session: 2026-08-03T08:17:58.910Z
+Stopped at: Phase 226 UI-SPEC approved
+Resume file: .planning/phases/226-source-mapped-process-hierarchy/226-UI-SPEC.md
