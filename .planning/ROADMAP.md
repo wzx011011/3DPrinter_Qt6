@@ -1,232 +1,107 @@
 # Roadmap: OWzx Slicer
 
-## Milestones
+## Overview
 
-- Complete: v2.9 Implementation Realignment and Stabilization - Phases 10-15
-- Complete: v3.0 PartPlate Core - Phases 16-22
-- Complete: v3.1 QRhi Rendering - Phases 23-28
-- Complete: v3.2 Multi-Plate Data Polish - Phases 29-32
-- Complete: v3.3 Slice Preview Main Flow MVP - Phases 33-36
-- Complete: v3.4 Import to G-code Complete Workflow - Phases 37-43
-- Complete: v3.5 Preset Authoring Complete Workflow - Phases 44-49
-- Complete: v3.6 Screenshot-Driven OrcaSlicer UI Restoration - Phases 50-58
-- Complete: v3.7 Screenshot-Level UI Parity Closure - Phases 59-64
-- Complete: v3.8 RHI Gizmo Parity - Phases 65-73
-- Complete: v3.9 Prepare Page UI Restoration - Phases 74-78
-- Complete: v4.0 Preview Page UI Restoration - Phases 79-83
-- Complete: v4.1 Parameter Settings Dialogs Source-Truth Restoration - Phases 84-88
-- Complete: v4.2 AssembleView Source-Truth Restoration - Phases 89-93
-- Complete: v4.3 Real Thumbnail Capture And 3MF Round-Trip - Phases 94-98
-- Complete: v4.4 Wipe-Tower Geometry Readback And Real Rendering - Phases 99-102
-- Complete: v4.5 Backlog Closure - Phases 103-116
-- Complete: v4.6 Core Feature Completion Sweep - Phases 117-128
-- Complete: v4.7 Polish, i18n & Advanced Feature Recovery - Phases 129-135
-- Complete: v4.8 Dependency Unlock, Assembly Transform & i18n Completion - Phases 136-140
-- Complete: v5.0 Advanced Feature Recovery & Tech-Debt Closure - Phases 141-153
-- Complete: v5.1 v5.0 Deferred Items Closure - Phases 154-159
-- Complete: v5.2 UI Excellence - Phases 160-170
-- Complete: v5.3 Feature Completion & v5.2 Closure - Phases 171-179
-- Code-closed: v5.4 Upstream Sync Closure - Phases 180-187, with i18n 184/185 deferred
-- Complete: v5.5 Build/Run Parity and Dependency Provenance - Phases 188-192
-- Complete: v5.6 Deferred Backlog Closure - Phases 193-205
-- Complete: v5.7 D3D12 Backend Investigation - Phases 206-211
-- Complete: v5.8 Submodule Baseline Alignment + Hollow Editing - Phases 212-215
-- Complete: v5.9 ConfigWizard Multi-Vendor Selection - Phases 216-219
+v5.11 converges the FFF Process (`print`) SettingsDialog on OrcaSlicer source
+truth. It replaces the flat decorative grouping with a source-mapped Process
+projection, stable session disclosure, safe typed editing, preserved preset
+workflow semantics, and end-to-end evidence. Printer and Material expansion,
+multi-nozzle and per-extruder editing, device/network/cloud, SLA, libslic3r
+changes, and unmapped auto-correction are outside this milestone.
 
-## Latest Completed Milestone: v5.9 ConfigWizard Multi-Vendor Selection
+## Milestone History
 
-**Goal:** Promote the ConfigWizard from single-vendor (hard-coded Creality) to
-multi-vendor selection with on-demand loading + AppConfig-lite persistence.
-
-**Completion:** Backend `loadSingleVendor` extracted vendor-agnostically;
-`availableVendorNames` scans 46 vendor JSONs; `loadVendor` loads on demand;
-`selectedVendor`/`selectedPrinterModel` persist (QSettings). ConfigWizard
-vendor picker combo added; completion persists. PresetUpdater (network)
-deferred. All gates PASS: `v56CrossWorkstreamRegressionLocked` (incl. WIZ-03),
-`mmuSegmentationPaintFeedsSlice`, `v50PresetIniAndCreateDialogWired`,
-`multiPlateFullStateRoundTrip`. See
-`.planning/milestones/v5.9-MILESTONE-AUDIT.md`.
-
-## Previous Completed Milestone: v5.8 Submodule Baseline Alignment + Hollow Editing
-
-**Goal:** Investigate promoting D3D12 to the default QRhi backend; mitigate
-the three candidate seams; verify on real hardware.
-
-**Completion:** D3D12 promotion attempted then **reverted** — real-machine
-verification found D3D12 crashes at QQuickWindow swapchain init on AMD Radeon
-APU (mainstream integrated graphics). D3D11-first default restored. Phase 207-210
-retained (diagnostics + seam A/B/C mitigations). Canonical build (D3D11 default)
-exited `0`, `APP_RUNNING_PID=80404`, all ctest + E2E passed. The "promote
-D3D12?" question is closed: **no**, until the AMD APU swapchain issue is
-resolved. See `.planning/milestones/v5.7-MILESTONE-AUDIT.md`.
-
-## Previous Completed Milestone: v5.6 Deferred Backlog Closure
-
-**Goal:** Dispose of all 11 v5.5 deferred items in one milestone. Implement the
-8 offline-deliverable items; document the remaining 3 per user decisions
-(H2C/A2L kept deferred, AMS architecture-only, D3D12 root-cause-only).
-
-**Scope rule:** No reopening of LAN/device/cloud/printer-hardware scope; no
-CPython embedding; no D3D12 default promotion; no upstream OrcaSlicer patches;
-sole canonical build command and `build/` directory.
-
-**Completion:** The canonical script exited `0` on 2026-07-24, reported
-`APP_RUNNING_PID=79708`, all ctest targets passed (incl.
-`v56CrossWorkstreamRegressionLocked`), and the E2E pipeline reported "All
-pipeline tests passed". See `.planning/milestones/v5.6-MILESTONE-AUDIT.md`.
-
-## Previous Completed Milestone: v5.5 Build/Run Parity and Dependency Provenance
-
-**Goal:** Make the local build/run path explainable, reproducible, and
-comparable with GitHub CI without changing product behavior.
-
-**Scope rule:** All work uses the canonical build command and `build/` only.
-Qt is consumed as a prebuilt dependency. v5.5 may update planning docs and the
-canonical verification script; it must not change slicer behavior or patch
-upstream OrcaSlicer source.
-
-**Completion:** The canonical script exited `0` on 2026-07-23, logged selected
-build inputs and `APP_RUNNING_PID=104080`, and passed E2E. See
-`.planning/milestones/v5.5-MILESTONE-AUDIT.md`.
+- Historical milestones v2.9 through v5.7 are complete; see
+  `.planning/MILESTONES.md` for their archived history.
+- Complete: v5.8 Submodule Baseline Alignment + Hollow Editing - Phases 212-215.
+- Complete: v5.9 ConfigWizard Multi-Vendor Selection - Phases 216-219.
+- Complete: v5.10 Polish & Source-Truth Consolidation - Phases 220-225,
+  recorded complete in `.planning/STATE.md` on 2026-07-26.
+- Planned: v5.11 Process Settings Source-Truth Convergence - Phases 226-230.
 
 ## Phases
 
-### Phase 193: Planning State Reconciliation
+- [ ] **Phase 226: Source-Mapped Process Hierarchy** - Establish the exact
+  upstream Process page and group navigation contract.
+- [ ] **Phase 227: Process Projection, Disclosure, And Filtering** - Deliver
+  stable page-qualified group rows, session disclosure, counts, search, and mode behavior.
+- [ ] **Phase 228: Typed Process Editing** - Make Process option rows clear,
+  resettable, validated, and honest about unsupported vector values.
+- [ ] **Phase 229: Preset Feedback And Workflow Safety** - Preserve visible
+  Process preset state and lifecycle behavior through navigation and edits.
+- [ ] **Phase 230: Process Workflow Evidence** - Prove the complete Process
+  workflow through automated, end-to-end, and fixed-size visual verification.
 
-- [x] Phase 193: Planning State Reconciliation (DOC, DOC-01)
+## Phase Details
 
-Update `.planning/STATE.md`, `.planning/ROADMAP.md`, `.planning/PROJECT.md`,
-and `.planning/INDEX.md` so v5.6 is active and v5.5 is archived as complete.
+### Phase 226: Source-Mapped Process Hierarchy
+**Goal**: Users can navigate the FFF Process settings through the exact upstream
+page and group hierarchy rather than a divergent flat or fallback list.
+**Depends on**: Nothing (first v5.11 phase)
+**Requirements**: HIER-01, HIER-02
+**Success Criteria** (what must be TRUE):
+  1. User sees the Process pages in this upstream order: Quality, Strength, Speed, Support, Multimaterial, and Others.
+  2. User can reach every supported Process option from its source-mapped page and group, with no alphabetical or category fallback moving an unmapped option.
+**Plans**: 1 plan
+**UI hint**: yes
 
-### Phase 194: Cmp-03 OptionRow and Slider Unification
+### Phase 227: Process Projection, Disclosure, And Filtering
+**Goal**: Users can scan, search, and disclose stable Process groups whose
+identity and counts remain correct as the current page, mode, and data change.
+**Depends on**: Phase 226
+**Requirements**: HIER-03, DISC-01, DISC-02, DISC-03, DISC-04, FILT-01, FILT-02, FILT-03
+**Success Criteria** (what must be TRUE):
+  1. User sees only non-empty groups on the active Process page, each with accurate visible-option and dirty-option counts.
+  2. User can independently expand or collapse one group by pointer or keyboard, and its glyph, focus behavior, and accessible name report its actual state.
+  3. User retains a group's session disclosure state while changing page, query, Advanced mode, preset, or dialog visibility; search temporarily reveals matches without overwriting that saved state.
+  4. User can search option keys and labels on the active Process page, retains the query across page or mode changes, and sees Advanced include every Simple option plus upstream Advanced and Develop options.
+  5. User sees rows and group counts refresh without reopening the dialog after an edit, reset, preset change, or read-only-state change.
+**Plans**: 2 plans
+**UI hint**: yes
 
-- [x] Phase 194: Cmp-03 OptionRow and Slider Unification (UI, UI-01)
+### Phase 228: Typed Process Editing
+**Goal**: Users can understand and safely change supported Process values with
+the same C++ configuration and effective-value route that already owns preset behavior.
+**Depends on**: Phase 227
+**Requirements**: ROW-01, ROW-02, ROW-03, ROW-04, ROW-05
+**Success Criteria** (what must be TRUE):
+  1. User can identify a Process option's label, value, unit, source, inheritance, read-only state, dirty state, and help information in the compact dialog layout.
+  2. User can reset a writable dirty option to its current effective reference and reset a dirty group without affecting an identically named group on another Process page.
+  3. User can submit only supported typed, bounded, and enumerated values and receives a clear result when validation or read-only protection rejects input.
+  4. User sees unsupported vector Process values as explicitly limited scalar/status presentation, never as a multi-nozzle or per-extruder editor.
+**Plans**: 2 plans
+**UI hint**: yes
 
-Promote inline `NumericEdit`/`Badge` from `OptionRow.qml` to
-`controls/CxNumericEdit.qml`/`CxBadge.qml`; unify `MoveStepButton` +
-`RailButton` into `controls/CxStepButton.qml`; add `controls/CxBusyIndicator.qml`;
-migrate all reference sites.
+### Phase 229: Preset Feedback And Workflow Safety
+**Goal**: Users retain accurate Process preset feedback and lifecycle safeguards
+while navigating the restored hierarchy and editing Process values.
+**Depends on**: Phase 228
+**Requirements**: PSET-01, PSET-02
+**Success Criteria** (what must be TRUE):
+  1. User can distinguish dirty, compatible, incompatible, and read-only Process preset states before choosing an action.
+  2. User retains correct Save, Save As, discard, and close-guard behavior after navigating pages and groups or editing Process values.
+  3. User sees the existing slice-invalidation behavior after a Process edit or accepted preset workflow action, without losing the current preset selection or compatibility feedback.
+**Plans**: 1 plan
+**UI hint**: yes
 
-### Phase 195: KBShortcutsDialog Extraction and Grouping
+### Phase 230: Process Workflow Evidence
+**Goal**: Reviewers can verify that the restored Process Settings workflow is
+source-aligned, interactive, and visually stable without widening the milestone scope.
+**Depends on**: Phase 229
+**Requirements**: VER-01
+**Success Criteria** (what must be TRUE):
+  1. A reviewer can run automated checks that prove the source order, page-qualified grouping, disclosure, search reveal, Advanced mode, reset, preset feedback, and slice invalidation behavior.
+  2. A reviewer can exercise the Process dialog end to end and observe correct behavior after navigation, edits, resets, preset changes, and guarded close or discard actions.
+  3. A reviewer can inspect the fixed-size Process dialog and see stable tabs, group headers, long metadata, read-only and dirty states, reset affordances, and compatibility feedback without clipping or overlap.
+**Plans**: 1 plan
+**UI hint**: yes
 
-- [x] Phase 195: KBShortcutsDialog Extraction and Grouping (UI, UI-02)
+## Progress
 
-Extract inline Dialog from `main.qml` to `dialogs/KBShortcutsDialog.qml`;
-reorganize as 5 groups (Global/Prepare/Toolbar/ObjectsList/Preview) aligned
-with upstream; reconcile displayed vs bound shortcuts.
-
-### Phase 196: XD-02 Emboss Spinner and SliceProgress States
-
-- [x] Phase 196: XD-02 Emboss Spinner and SliceProgress States (FEAT, FEAT-01)
-
-Add `EditorViewModel::embossRunning` Q_PROPERTY; Emboss panel shows spinner via
-`CxBusyIndicator`; `SliceProgress.qml` binds `sliceState` enum with
-Cancelled/Error branches.
-
-### Phase 197: Calibration Dedicated Tower Geometry
-
-- [x] Phase 197: Calibration Dedicated Tower Geometry (FEAT, FEAT-02)
-
-Correct the `.drc` term to `.stl`/`.3mf`/`.step`; package upstream
-`resources/calib/*` tower models; `CalibrationServiceMock` loads the
-mode-matching tower; apply per-mode config overrides.
-
-### Phase 198: ObjectList Tree Deepening (Auxiliary file-tree panel)
-
-- [x] Phase 198: ObjectList Tree Deepening (FEAT, FEAT-03)
-
-Deepen `ObjectList.qml` from 2-level toward upstream `GUI_ObjectList.cpp`;
-add layer level and object/part settings sub-panel entries. Does NOT revive
-the deleted `AuxiliaryPage` (removed device scope).
-
-### Phase 199: ConfigWizard Vendor/Model Enumeration Layer
-
-- [x] Phase 199: ConfigWizard Vendor/Model Enumeration Layer (DLG, DLG-01)
-
-Extend `PresetServiceMock` with `vendors()`, `printerModelsForVendor(v)`,
-`materialsForVendor(v)` reusing parsed `machineEntries`/`filamentEntries`;
-exclude `__upstream_defaults__`; add regression test.
-
-### Phase 200: ConfigWizard Single-Vendor Wizard Rewrite
-
-- [x] Phase 200: ConfigWizard Single-Vendor Wizard Rewrite (DLG, DLG-02)
-
-Rewrite `ConfigWizardDialog.qml` to read lists dynamically; close the
-`wizardFinished` loop via `setConfigWizardCompleted(true)`; position as
-single-vendor (Creality) wizard.
-
-### Phase 201: AMS Architecture Cleanup (mock to ViewModel)
-
-- [x] Phase 201: AMS Architecture Cleanup (mock to ViewModel) (DLG, DLG-03)
-
-New `AmsMaterialsViewModel` carries the hardcoded `AMSSettingsDialog` data;
-dialog rebinds; enable the "add mapping" button. Data source stays mock; no
-network.
-
-### Phase 202: Plugin Manager UI Real Backend (no Python)
-
-- [x] Phase 202: Plugin Manager UI Real Backend (no Python) (DLG, DLG-04)
-
-New `PluginService` (C++): local registry + download/install/uninstall;
-`PluginManagerDialog.qml` binds the real service, aligned with upstream
-`WebDownPluginDlg`. No CPython embedding.
-
-### Phase 203: D3D12 Root-Cause Confirmation (no default promotion)
-
-- [x] Phase 203: D3D12 Root-Cause Confirmation (no default promotion) (RHI, RHI-01)
-
-Time-boxed root-cause of the `0xC0000005` crash (original machine + debugger,
-historical minidumps, A/B/C mitigation probes). Deliverable is a report;
-default stays D3D11; the regression slot keeps its direction.
-
-### Phase 204: de/fr/ja/ko Translation Long Tail to >=85%
-
-- [x] Phase 204: de/fr/ja/ko Translation Long Tail to >=85% (I18N, I18N-01)
-
-Reuse `scripts/translate_core_i18n.py` + glossary; drop unfinished to <=252 per
-language; `lupdate` refresh; `lrelease`; UTF-8/XML validity check.
-
-### Phase 205: Cross-Workstream Regression Gate and Milestone Audit
-
-- [x] Phase 205: Cross-Workstream Regression Gate and Milestone Audit (GATE, GATE-01)
-
-`v56CrossWorkstreamRegressionLocked` slot + per-phase slots; canonical build
-exit 0; ctest PASS; E2E PASS; launch liveness; produce
-`v5.6-MILESTONE-AUDIT.md`.
-
-## v5.5 Phase Archive (188-192, completed 2026-07-23)
-
-| Phase | Name | Status | Requirement |
-|---|---|---|---|
-| 188 | Planning State Reconciliation | Complete | DOC-01 |
-| 189 | Dependency Provenance Contract | Complete | PROV-01 |
-| 190 | Canonical Script Result Classification | Complete | VERIFY-01 |
-| 191 | Local App Launch Liveness Gate | Complete | RUN-01 |
-| 192 | CI/Local Parity Audit | Complete | GATE-01 |
-
-Phases 188-192 completed in order. Phase 192 uses the fresh canonical-script
-evidence recorded in `v5.5-MILESTONE-AUDIT.md`.
-
-## Archives
-
-- `.planning/milestones/v5.6-ROADMAP.md`
-- `.planning/milestones/v5.6-REQUIREMENTS.md`
-- `.planning/milestones/v5.6-phases/`
-- `.planning/milestones/v5.5-ROADMAP.md`
-- `.planning/milestones/v5.5-REQUIREMENTS.md`
-- `.planning/milestones/v5.5-phases/`
-
-## Future Candidates
-
-After v5.6, the remaining deferred items (per explicit user decisions on
-2026-07-24):
-
-- H2C/A2L multi-nozzle UI (bb3 fork submodule + product decision pending).
-- Per-extruder config editor UI (Cmp-03 sub-item; needs multi-extruder fixture).
-- ConfigWizard multi-vendor selection + PresetUpdater + AppConfig.
-- D3D12 default-backend promotion itself (pending root cause).
-- AMS real device/cloud data sources (printer-hardware scope).
-- Python script/macro framework / CPython embedding.
-
-SLA print path and LAN/cloud/device/camera/printer-hardware workflows remain
-declined unless the user explicitly reopens them.
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 226. Source-Mapped Process Hierarchy | 0/1 | Not started | - |
+| 227. Process Projection, Disclosure, And Filtering | 0/2 | Not started | - |
+| 228. Typed Process Editing | 0/2 | Not started | - |
+| 229. Preset Feedback And Workflow Safety | 0/1 | Not started | - |
+| 230. Process Workflow Evidence | 0/1 | Not started | - |

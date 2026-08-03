@@ -91,30 +91,30 @@ without an explicit upstream mapping or documented block.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HIER-01 | TBD | Pending |
-| HIER-02 | TBD | Pending |
-| HIER-03 | TBD | Pending |
-| DISC-01 | TBD | Pending |
-| DISC-02 | TBD | Pending |
-| DISC-03 | TBD | Pending |
-| DISC-04 | TBD | Pending |
-| FILT-01 | TBD | Pending |
-| FILT-02 | TBD | Pending |
-| FILT-03 | TBD | Pending |
-| ROW-01 | TBD | Pending |
-| ROW-02 | TBD | Pending |
-| ROW-03 | TBD | Pending |
-| ROW-04 | TBD | Pending |
-| ROW-05 | TBD | Pending |
-| PSET-01 | TBD | Pending |
-| PSET-02 | TBD | Pending |
-| VER-01 | TBD | Pending |
+| HIER-01 | Phase 226 | Pending |
+| HIER-02 | Phase 226 | Pending |
+| HIER-03 | Phase 227 | Pending |
+| DISC-01 | Phase 227 | Pending |
+| DISC-02 | Phase 227 | Pending |
+| DISC-03 | Phase 227 | Pending |
+| DISC-04 | Phase 227 | Pending |
+| FILT-01 | Phase 227 | Pending |
+| FILT-02 | Phase 227 | Pending |
+| FILT-03 | Phase 227 | Pending |
+| ROW-01 | Phase 228 | Pending |
+| ROW-02 | Phase 228 | Pending |
+| ROW-03 | Phase 228 | Pending |
+| ROW-04 | Phase 228 | Pending |
+| ROW-05 | Phase 228 | Pending |
+| PSET-01 | Phase 229 | Pending |
+| PSET-02 | Phase 229 | Pending |
+| VER-01 | Phase 230 | Pending |
 
 **Coverage:**
 - v5.11 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18
+- Mapped to phases: 18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-08-03*
-*Last updated: 2026-08-03 after v5.11 requirement approval*
+*Last updated: 2026-08-03 after v5.11 roadmap creation*
