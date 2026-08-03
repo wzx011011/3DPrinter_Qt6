@@ -1,72 +1,120 @@
 # Requirements: OWzx Slicer
 
-## Latest Completed Milestone: v5.9 ConfigWizard Multi-Vendor Selection
+**Milestone:** v5.11 Process Settings Source-Truth Convergence
+**Defined:** 2026-08-03
+**Core Value:** OrcaSlicer upstream behavior is the product source of truth;
+Qt6 code must inherit that behavior and must not invent new product behavior
+without an explicit upstream mapping or documented block.
 
-For the full requirement text, see
-`.planning/milestones/v5.9-REQUIREMENTS.md`.
+## v5.11 Requirements
 
-**Status:** Complete (2026-07-25). The ConfigWizard is now multi-vendor: users
-pick from 46 upstream vendor JSONs; presets load on demand; selection persists
-(AppConfig-lite). PresetUpdater (network) deferred. All gates PASS:
-`v56CrossWorkstreamRegressionLocked` (incl. WIZ-03), `mmuSegmentationPaintFeedsSlice`,
-`v50PresetIniAndCreateDialogWired`, `multiPlateFullStateRoundTrip`.
+### HIER: Process Hierarchy And Navigation
 
-## Completed Requirements (v5.7)
+- [ ] **HIER-01**: User can see the Process pages in the upstream order:
+  Quality, Strength, Speed, Support, Multimaterial, and Others.
+- [ ] **HIER-02**: User can reach every supported Process option from its
+  upstream-derived page and group.
+- [ ] **HIER-03**: User can see the visible-option and dirty-option count for
+  each Process group on the active page.
 
-| Requirement | Phase | Summary |
-|---|---:|---|
-| DOC-01 | 206 | Top-level planning files identify v5.7 as active; v5.6 archived. |
-| REPRO-01 | 207 | Diagnostics + reproduction; root cause located (AMD APU swapchain). |
-| MIT-01 | 208 | Seam A: fold readback resourceUpdate into next beginPass (retained). |
-| MIT-02 | 209 | Seam B: pack camera UBO into single 80-byte write (retained). |
-| MIT-03 | 210 | Seam C: first-frame force upload + initialize buffer-flag reset (retained). |
-| PROMO-01 | 211 | D3D12 promotion attempted → reverted (AMD APU crash); D3D11-first restored. |
+### DISC: Group Disclosure
 
-| Requirement | Phase | Summary |
-|---|---:|---|
-| DOC-01 | 193 | Top-level planning files identify v5.6 as active; v5.5 archived as complete. |
-| UI-01 | 194 | Promote inline OptionRow components; unify step-button idioms into Cx controls. |
-| UI-02 | 195 | Extract KBShortcutsDialog into a 5-group dialog aligned with upstream. |
-| FEAT-01 | 196 | Emboss async spinner; SliceProgress Cancelled/Error state coverage. |
-| FEAT-02 | 197 | Calibration dedicated tower geometry loading; correct the `.drc` term. |
-| FEAT-03 | 198 | ObjectList tree deepening toward upstream GUI_ObjectList.cpp. |
-| DLG-01 | 199 | PresetServiceMock vendor/model enumeration layer for ConfigWizard. |
-| DLG-02 | 200 | ConfigWizard single-vendor wizard rewrite; close the completion loop. |
-| DLG-03 | 201 | AMS mock-to-ViewModel architecture cleanup; data source stays mock. |
-| DLG-04 | 202 | Plugin manager real backend aligned with WebDownPluginDlg; no Python. |
-| RHI-01 | 203 | D3D12 root-cause confirmation; default stays D3D11. |
-| I18N-01 | 204 | de/fr/ja/ko translation coverage to >=85%. |
-| GATE-01 | 205 | Cross-workstream regression gate and v5.6 milestone audit. |
+- [ ] **DISC-01**: User can toggle one Process group with a pointer or keyboard
+  without changing another group.
+- [ ] **DISC-02**: User retains each Process group state while changing page,
+  search text, Advanced mode, preset, or dialog visibility during the session.
+- [ ] **DISC-03**: User can see search matches in a collapsed Process group;
+  clearing search restores its saved disclosure state.
+- [ ] **DISC-04**: User sees only non-empty Process groups and can identify a
+  group's real expanded/collapsed state through its glyph, focus, and accessible
+  name.
 
-## Global Constraints
+### FILT: Search And Mode Behavior
 
-- Canonical build command:
-  `powershell -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`
-- Canonical build directory: `build/`
-- Qt 6.10 is a prebuilt dependency, not built from source by this project.
-- OrcaSlicer upstream behavior remains the source truth for product behavior.
-- v5.6 must not reopen LAN/device/cloud/printer-hardware scope.
-- v5.6 must not embed CPython.
-- v5.6 must not promote D3D12 to the default backend.
-- v5.6 must not patch upstream OrcaSlicer source.
-- LAN/cloud/device/camera/printer-hardware workflows remain declined unless
-  explicitly reopened by the user.
+- [ ] **FILT-01**: User can search option keys and labels within the active
+  Process page, and the query persists while the user changes page or mode.
+- [ ] **FILT-02**: User sees every Simple Process option in Advanced mode plus
+  the additional upstream Advanced and Develop options.
+- [ ] **FILT-03**: User sees Process rows and counts refresh without reopening
+  the dialog after an edit, reset, preset switch, or read-only-state change.
 
-## Previously Completed (v5.5, archived 2026-07-23)
+### ROW: Typed Option Rows
 
-| Requirement | Phase | Summary |
-|---|---:|---|
-| DOC-01 | 188 | Complete: planning handoff and milestone state reconciled. |
-| PROV-01 | 189 | Complete: Qt, Orca source, and dependency provenance documented. |
-| VERIFY-01 | 190 | Complete: the canonical script reports inputs and failure stages. |
-| RUN-01 | 191 | Complete: the canonical script records `OWzxSlicer.exe` liveness. |
-| GATE-01 | 192 | Complete: the audit compares CI/local evidence and classifies differences. |
+- [ ] **ROW-01**: User can identify an option's label, value, unit, source,
+  inheritance, read-only state, dirty state, and help information without a
+  layout regression.
+- [ ] **ROW-02**: User can reset a writable dirty Process option to its current
+  effective reference value.
+- [ ] **ROW-03**: User can reset the dirty options of a Process group without
+  affecting an identically named group on another page.
+- [ ] **ROW-04**: User can submit only supported typed, bounded, and enumerated
+  Process values and receives a clear validation result when input is rejected.
+- [ ] **ROW-05**: User sees an honest limited representation for unsupported
+  vector Process options; the UI does not present them as multi-nozzle editors.
 
-## Deferred after v5.6 (per user decisions 2026-07-24)
+### PSET: Preset Feedback And Workflow Safety
 
-- H2C/A2L multi-nozzle UI (bb3 fork submodule + product decision pending).
-- Per-extruder config editor UI (Cmp-03 sub-item; needs multi-extruder fixture).
-- ConfigWizard multi-vendor selection + PresetUpdater + AppConfig.
-- D3D12 default-backend promotion itself (pending root cause).
-- AMS real device/cloud data sources (printer-hardware scope).
-- Python script/macro framework / CPython embedding.
+- [ ] **PSET-01**: User can distinguish dirty, compatible, incompatible, and
+  read-only Process preset states.
+- [ ] **PSET-02**: User retains correct save, Save As, discard, close-guard,
+  and slice-invalidation behavior after Process navigation and edits.
+
+### VER: Workflow Evidence
+
+- [ ] **VER-01**: Automated and visual verification proves Process hierarchy,
+  disclosure, search, mode, reset, preset feedback, and slice invalidation.
+
+## Future Requirements
+
+### Search And Configuration Scope
+
+- **FUT-01**: User can navigate search results across Process pages with a
+  source-mapped page/group destination.
+- **FUT-02**: User receives equivalent source-truth hierarchy improvements for
+  Printer and Material settings after separate scope approval.
+- **FUT-03**: User can edit full vector/per-extruder values after multi-nozzle
+  product scope is explicitly approved.
+
+## Out Of Scope
+
+| Feature | Reason |
+|---------|--------|
+| H2C/A2L, multi-nozzle, AMS, or per-extruder editors | Separate product decision and architecture scope. |
+| Printer and Material settings feature expansion | v5.11 is limited to the Process tier. |
+| Device, hardware, network, cloud, camera, or monitor behavior | Removed product scope unless explicitly reopened. |
+| SLA settings or slicing | Permanently removed from scope on 2026-07-26. |
+| libslic3r algorithm changes | This is a GUI migration milestone. |
+| Unmapped cross-option auto-correction | Requires its own OrcaSlicer source mapping and behavior tests. |
+| Persisting disclosure state in presets, projects, or QSettings | v5.11 disclosure state is session-only presentation state. |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| HIER-01 | TBD | Pending |
+| HIER-02 | TBD | Pending |
+| HIER-03 | TBD | Pending |
+| DISC-01 | TBD | Pending |
+| DISC-02 | TBD | Pending |
+| DISC-03 | TBD | Pending |
+| DISC-04 | TBD | Pending |
+| FILT-01 | TBD | Pending |
+| FILT-02 | TBD | Pending |
+| FILT-03 | TBD | Pending |
+| ROW-01 | TBD | Pending |
+| ROW-02 | TBD | Pending |
+| ROW-03 | TBD | Pending |
+| ROW-04 | TBD | Pending |
+| ROW-05 | TBD | Pending |
+| PSET-01 | TBD | Pending |
+| PSET-02 | TBD | Pending |
+| VER-01 | TBD | Pending |
+
+**Coverage:**
+- v5.11 requirements: 18 total
+- Mapped to phases: 0
+- Unmapped: 18
+
+---
+*Requirements defined: 2026-08-03*
+*Last updated: 2026-08-03 after v5.11 requirement approval*
