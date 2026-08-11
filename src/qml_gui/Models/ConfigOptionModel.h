@@ -143,6 +143,11 @@ public:
   Q_INVOKABLE QVariantList indicesForCategory(const QString &category) const;
   /// Returns list of unique page names (对齐上游 Tab::Page)
   Q_INVOKABLE QStringList pageNames() const;
+  Q_INVOKABLE QStringList processPageNames() const;
+  Q_INVOKABLE QStringList processGroupsForPage(const QString &page) const;
+  Q_INVOKABLE QList<int> orderedProcessIndicesForGroup(const QList<int> &candidateIndices,
+                                                        const QString &page,
+                                                        const QString &group) const;
   /// Returns indices filtered by page
   Q_INVOKABLE QList<int> filterIndicesByPage(const QList<int> &indices, const QString &page) const;
   /// Returns indices filtered by option group

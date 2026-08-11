@@ -233,6 +233,7 @@ private slots:
   void configPrinterChangeRepairsIncompatibleSelections();
   void configKeepsInvalidSelectionWhenNoCompatibleFallback();
   void presetReadOnlyActionBlockerReasons();
+  void sourceMappedProcessHierarchyMatchesTabPrint();
   // v3.0 Phase 16-01: PartPlate/PartPlateList domain model (pure-data, no libslic3r dep)
   void partPlateInstanceMembershipTracksObjectInstancePairs();
   void partPlateSliceStateMachineGatesCanSlice();
@@ -4109,12 +4110,9 @@ void ViewModelSmokeTests::testVectorFieldsHaveNonEmptyDefaults()
 {
   // v5.4 Phase 183 / FEAT-04: regression test for the bb3-sync extractDefault fix.
   //
-  // Background: the 2026-07-19 bb3 sync dropped OWzx's type rollbacks. Fields
-  // like outer_wall_speed, default_acceleration, default_jerk changed from
-  // coFloat (single value) back to coFloats (per-extruder vector) -- the
-  // upstream type. Before the Phase 183 fix, extractDefault() had no case for
-  // vector types, so they returned empty QVariant -> UI showed empty values
-  // for every speed/accel/jerk field.
+  // Background: schema vector fields must retain their first effective value.
+  // Before the Phase 183 fix, extractDefault() had no vector case, so these
+  // values reached the UI as empty QVariant instances.
   //
   // This test asserts that vector fields now have non-empty defaults.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
@@ -4123,32 +4121,31 @@ void ViewModelSmokeTests::testVectorFieldsHaveNonEmptyDefaults()
   ProjectServiceMock project;
   ConfigViewModel config(&preset, &project);
 
-  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
-  QVERIFY(printOpts);
-  QVERIFY2(printOpts->rowCount() > 0, "Print options model is empty");
+  auto *filamentOpts = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
+  QVERIFY(filamentOpts);
+  QVERIFY2(filamentOpts->rowCount() > 0, "Filament options model is empty");
 
-  // These keys are all coFloats (per-extruder vector) in the locked upstream PrintConfig.
-  // Before Phase 183 they would have empty defaults; after Phase 183 they must
-  // surface values[0] as the default.
+  // These keys are coInts (per-extruder vectors) in the locked upstream schema.
+  // Process no longer loads filament/retraction keys into its manifest, so this
+  // existing vector-default regression belongs to the Material option model.
   const QStringList vectorKeys = {
-    QStringLiteral("retraction_speed"),
-    QStringLiteral("deretraction_speed"),
-    QStringLiteral("z_hop"),
+    QStringLiteral("nozzle_temperature"),
+    QStringLiteral("nozzle_temperature_initial_layer"),
   };
 
   for (const auto &key : vectorKeys)
   {
-    const int idx = printOpts->indexOfKey(key);
-    QVERIFY2(idx >= 0, qPrintable(QStringLiteral("Option '%1' must be in print options").arg(key)));
+    const int idx = filamentOpts->indexOfKey(key);
+    QVERIFY2(idx >= 0, qPrintable(QStringLiteral("Option '%1' must be in filament options").arg(key)));
 
     // Verify the field is recognized as a vector (sanity check on bb3 type).
-    QVERIFY2(printOpts->optIsVector(idx),
+    QVERIFY2(filamentOpts->optIsVector(idx),
              qPrintable(QStringLiteral("Option '%1' must be isVector=true (bb3 vector type)").arg(key)));
 
     // The load-bearing assertion: default value must NOT be empty.
     // Before Phase 183, this would fail (extractDefault returned empty QVariant
     // for coFloats). After Phase 183, it returns values[0].
-    const QVariant value = printOpts->optValue(idx);
+    const QVariant value = filamentOpts->optValue(idx);
     QVERIFY2(value.isValid() && !value.isNull(),
              qPrintable(QStringLiteral("Vector option '%1' must have a non-empty default value after Phase 183 extractDefault fix (got: '%2')")
                             .arg(key, value.toString())));
@@ -5299,6 +5296,144 @@ void ViewModelSmokeTests::v56CrossWorkstreamViewModelsCallable()
     QVERIFY2(first.contains(QStringLiteral("isEnabled")),
              "GATE-01/DLG-04: PluginService::pluginAt must return a row with the 'isEnabled' key");
   }
+}
+
+void ViewModelSmokeTests::sourceMappedProcessHierarchyMatchesTabPrint()
+{
+  struct ExpectedGroup
+  {
+    QString page;
+    QString group;
+    QStringList keys;
+  };
+
+  const auto keys = [](std::initializer_list<const char *> entries) {
+    QStringList result;
+    result.reserve(static_cast<qsizetype>(entries.size()));
+    for (const char *entry : entries)
+      result.append(QString::fromLatin1(entry));
+    return result;
+  };
+
+  // Source: third_party/OrcaSlicer/src/slic3r/GUI/Tab.cpp:2005-2376.
+  const QList<ExpectedGroup> expected = {
+      {QStringLiteral("Quality"), QStringLiteral("Layer height"), keys({"layer_height", "initial_layer_print_height"})},
+      {QStringLiteral("Quality"), QStringLiteral("Line width"), keys({"line_width", "initial_layer_line_width", "outer_wall_line_width", "inner_wall_line_width", "top_surface_line_width", "sparse_infill_line_width", "internal_solid_infill_line_width", "support_line_width"})},
+      {QStringLiteral("Quality"), QStringLiteral("Seam"), keys({"seam_position", "staggered_inner_seams", "seam_gap", "seam_slope_type", "seam_slope_conditional", "scarf_angle_threshold", "scarf_overhang_threshold", "scarf_joint_speed", "seam_slope_start_height", "seam_slope_entire_loop", "seam_slope_min_length", "seam_slope_steps", "scarf_joint_flow_ratio", "seam_slope_inner_walls", "role_based_wipe_speed", "wipe_speed", "wipe_on_loops", "wipe_before_external_loop"})},
+      {QStringLiteral("Quality"), QStringLiteral("Precision"), keys({"slice_closing_radius", "resolution", "enable_arc_fitting", "xy_hole_compensation", "xy_contour_compensation", "elefant_foot_compensation", "elefant_foot_compensation_layers", "precise_outer_wall", "precise_z_height", "hole_to_polyhole", "hole_to_polyhole_threshold", "hole_to_polyhole_twisted"})},
+      {QStringLiteral("Quality"), QStringLiteral("Ironing"), keys({"ironing_type", "ironing_pattern", "ironing_speed", "ironing_flow", "ironing_spacing", "ironing_angle"})},
+      {QStringLiteral("Quality"), QStringLiteral("Wall generator"), keys({"wall_generator", "wall_transition_angle", "wall_transition_filter_deviation", "wall_transition_length", "wall_distribution_count", "initial_layer_min_bead_width", "min_bead_width", "min_feature_size", "min_length_factor"})},
+      {QStringLiteral("Quality"), QStringLiteral("Walls and surfaces"), keys({"wall_sequence", "is_infill_first", "wall_direction", "print_flow_ratio", "top_solid_infill_flow_ratio", "bottom_solid_infill_flow_ratio", "only_one_wall_top", "min_width_top_surface", "only_one_wall_first_layer", "reduce_crossing_wall", "max_travel_detour_distance", "small_area_infill_flow_compensation", "small_area_infill_flow_compensation_model"})},
+      {QStringLiteral("Quality"), QStringLiteral("Bridging"), keys({"bridge_flow", "internal_bridge_flow", "bridge_density", "thick_bridges", "thick_internal_bridges", "dont_filter_internal_bridges", "counterbore_hole_bridging"})},
+      {QStringLiteral("Quality"), QStringLiteral("Overhangs"), keys({"detect_overhang_wall", "make_overhang_printable", "make_overhang_printable_angle", "make_overhang_printable_hole_size", "extra_perimeters_on_overhangs", "overhang_reverse", "overhang_reverse_internal_only", "overhang_reverse_threshold"})},
+      {QStringLiteral("Strength"), QStringLiteral("Walls"), keys({"wall_loops", "alternate_extra_wall", "detect_thin_wall"})},
+      {QStringLiteral("Strength"), QStringLiteral("Top/bottom shells"), keys({"top_shell_layers", "top_shell_thickness", "top_surface_pattern", "bottom_shell_layers", "bottom_shell_thickness", "bottom_surface_pattern", "top_bottom_infill_wall_overlap"})},
+      {QStringLiteral("Strength"), QStringLiteral("Infill"), keys({"sparse_infill_density", "sparse_infill_pattern", "infill_anchor_max", "infill_anchor", "internal_solid_infill_pattern", "gap_fill_target", "filter_out_gap_fill", "infill_wall_overlap"})},
+      {QStringLiteral("Strength"), QStringLiteral("Advanced"), keys({"infill_direction", "solid_infill_direction", "rotate_solid_infill_direction", "bridge_angle", "minimum_sparse_infill_area", "infill_combination", "infill_combination_max_layer_height", "detect_narrow_internal_solid_infill", "ensure_vertical_shell_thickness"})},
+      {QStringLiteral("Speed"), QStringLiteral("Initial layer speed"), keys({"initial_layer_speed", "initial_layer_infill_speed", "initial_layer_travel_speed", "slow_down_layers"})},
+      {QStringLiteral("Speed"), QStringLiteral("Other layers speed"), keys({"outer_wall_speed", "inner_wall_speed", "small_perimeter_speed", "small_perimeter_threshold", "sparse_infill_speed", "internal_solid_infill_speed", "top_surface_speed", "gap_infill_speed", "support_speed", "support_interface_speed"})},
+      {QStringLiteral("Speed"), QStringLiteral("Overhang speed"), keys({"enable_overhang_speed", "slowdown_for_curled_perimeters", "overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed", "bridge_speed", "internal_bridge_speed"})},
+      {QStringLiteral("Speed"), QStringLiteral("Travel speed"), keys({"travel_speed"})},
+      {QStringLiteral("Speed"), QStringLiteral("Acceleration"), keys({"default_acceleration", "outer_wall_acceleration", "inner_wall_acceleration", "bridge_acceleration", "sparse_infill_acceleration", "internal_solid_infill_acceleration", "initial_layer_acceleration", "top_surface_acceleration", "travel_acceleration", "accel_to_decel_enable", "accel_to_decel_factor"})},
+      {QStringLiteral("Speed"), QStringLiteral("Jerk(XY)"), keys({"default_jerk", "outer_wall_jerk", "inner_wall_jerk", "infill_jerk", "top_surface_jerk", "initial_layer_jerk", "travel_jerk"})},
+      {QStringLiteral("Speed"), QStringLiteral("Advanced"), keys({"max_volumetric_extrusion_rate_slope", "max_volumetric_extrusion_rate_slope_segment_length", "extrusion_rate_smoothing_external_perimeter_only"})},
+      {QStringLiteral("Support"), QStringLiteral("Support"), keys({"enable_support", "support_type", "support_style", "support_threshold_angle", "raft_first_layer_density", "raft_first_layer_expansion", "support_on_build_plate_only", "support_critical_regions_only", "support_remove_small_overhang"})},
+      {QStringLiteral("Support"), QStringLiteral("Raft"), keys({"raft_layers", "raft_contact_distance"})},
+      {QStringLiteral("Support"), QStringLiteral("Support filament"), keys({"support_filament", "support_interface_filament", "support_interface_not_for_body"})},
+      {QStringLiteral("Support"), QStringLiteral("Advanced"), keys({"support_top_z_distance", "support_bottom_z_distance", "support_base_pattern", "support_base_pattern_spacing", "support_angle", "support_interface_top_layers", "support_interface_bottom_layers", "support_interface_pattern", "support_interface_spacing", "support_bottom_interface_spacing", "support_expansion", "support_object_xy_distance", "bridge_no_support", "max_bridge_length", "independent_support_layer_height"})},
+      {QStringLiteral("Support"), QStringLiteral("Tree supports"), keys({"tree_support_tip_diameter", "tree_support_branch_distance", "tree_support_branch_distance_organic", "tree_support_top_rate", "tree_support_branch_diameter", "tree_support_branch_diameter_organic", "tree_support_branch_diameter_angle", "tree_support_branch_angle", "tree_support_branch_angle_organic", "tree_support_angle_slow", "tree_support_branch_diameter_double_wall", "tree_support_wall_count", "tree_support_adaptive_layer_height", "tree_support_auto_brim", "tree_support_brim_width"})},
+      {QStringLiteral("Multimaterial"), QStringLiteral("Prime tower"), keys({"enable_prime_tower", "prime_tower_width", "prime_volume", "prime_tower_brim_width", "wipe_tower_rotation_angle", "wipe_tower_bridging", "wipe_tower_cone_angle", "wipe_tower_extra_spacing", "wipe_tower_extra_flow", "wipe_tower_max_purge_speed", "wipe_tower_no_sparse_layers", "single_extruder_multi_material_priming"})},
+      {QStringLiteral("Multimaterial"), QStringLiteral("Filament for Features"), keys({"wall_filament", "sparse_infill_filament", "solid_infill_filament", "wipe_tower_filament"})},
+      {QStringLiteral("Multimaterial"), QStringLiteral("Ooze prevention"), keys({"ooze_prevention", "standby_temperature_delta", "preheat_time", "preheat_steps"})},
+      {QStringLiteral("Multimaterial"), QStringLiteral("Flush options"), keys({"flush_into_infill", "flush_into_objects", "flush_into_support"})},
+      {QStringLiteral("Multimaterial"), QStringLiteral("Advanced"), keys({"interlocking_beam", "mmu_segmented_region_max_width", "mmu_segmented_region_interlocking_depth", "interlocking_beam_width", "interlocking_orientation", "interlocking_beam_layer_count", "interlocking_depth", "interlocking_boundary_avoidance"})},
+      {QStringLiteral("Others"), QStringLiteral("Skirt"), keys({"skirt_loops", "skirt_type", "min_skirt_length", "skirt_distance", "skirt_start_angle", "skirt_height", "skirt_speed", "draft_shield"})},
+      {QStringLiteral("Others"), QStringLiteral("Brim"), keys({"brim_type", "brim_width", "brim_object_gap", "brim_ears_max_angle", "brim_ears_detection_length"})},
+      {QStringLiteral("Others"), QStringLiteral("Special mode"), keys({"slicing_mode", "print_sequence", "print_order", "spiral_mode", "spiral_mode_smooth", "spiral_mode_max_xy_smoothing", "timelapse_type", "fuzzy_skin", "fuzzy_skin_point_distance", "fuzzy_skin_thickness", "fuzzy_skin_first_layer"})},
+      {QStringLiteral("Others"), QStringLiteral("G-code output"), keys({"reduce_infill_retraction", "gcode_add_line_number", "gcode_comments", "gcode_label_objects", "exclude_object", "filename_format"})},
+      {QStringLiteral("Others"), QStringLiteral("Post-processing Scripts"), keys({"post_process"})},
+      {QStringLiteral("Others"), QStringLiteral("Notes"), keys({"notes"})},
+  };
+
+  const QStringList expectedPages = {
+      QStringLiteral("Quality"), QStringLiteral("Strength"), QStringLiteral("Speed"),
+      QStringLiteral("Support"), QStringLiteral("Multimaterial"), QStringLiteral("Others")};
+
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("SourceMappedProcessHierarchy"));
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+  auto *model = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(model);
+
+  QCOMPARE(model->processPageNames(), expectedPages);
+  for (const QString &legacyPage : {QStringLiteral("Base"), QStringLiteral("Cooling"),
+                                    QStringLiteral("Retraction"), QStringLiteral("Other")})
+    QVERIFY2(!model->processPageNames().contains(legacyPage),
+             qPrintable(QStringLiteral("Legacy Process page must be absent: %1").arg(legacyPage)));
+
+  QHash<QString, QStringList> expectedGroups;
+  QSet<QString> expectedKeys;
+  for (const ExpectedGroup &entry : expected) {
+    expectedGroups[entry.page].append(entry.group);
+    for (const QString &key : entry.keys) {
+      QVERIFY2(!expectedKeys.contains(key), qPrintable(QStringLiteral("Duplicate source key: %1").arg(key)));
+      expectedKeys.insert(key);
+    }
+  }
+  for (const QString &page : expectedPages)
+    QCOMPARE(model->processGroupsForPage(page), expectedGroups.value(page));
+  QVERIFY(model->processGroupsForPage(QStringLiteral("Other")).isEmpty());
+
+  QList<int> allIndices;
+  allIndices.reserve(model->rowCount());
+  for (int index = 0; index < model->rowCount(); ++index)
+    allIndices.append(index);
+  QCOMPARE(allIndices.size(), expectedKeys.size());
+  for (const QString &key : expectedKeys)
+    QVERIFY2(model->indexOfKey(key) >= 0,
+             qPrintable(QStringLiteral("Source-mapped Process key was not loaded: %1").arg(key)));
+
+  QSet<int> projectedIndices;
+  for (const ExpectedGroup &entry : expected) {
+    const QList<int> ordered = model->orderedProcessIndicesForGroup(allIndices, entry.page, entry.group);
+    QStringList actualKeys;
+    for (int index : ordered) {
+      QVERIFY2(!projectedIndices.contains(index), "A Process row must have exactly one manifest location");
+      projectedIndices.insert(index);
+      QCOMPARE(model->optPage(index), entry.page);
+      QCOMPARE(model->optGroup(index), entry.group);
+      actualKeys.append(model->optKey(index));
+    }
+    QCOMPARE(actualKeys, entry.keys);
+  }
+
+  QCOMPARE(projectedIndices.size(), allIndices.size());
+  for (int index : allIndices) {
+    QVERIFY2(projectedIndices.contains(index), "No Process row may use category, alphabetical, or Others fallback");
+    QVERIFY2(expectedKeys.contains(model->optKey(index)),
+             qPrintable(QStringLiteral("Unmapped Process key loaded: %1").arg(model->optKey(index))));
+  }
+
+  const QList<int> filteredCandidates = config.filterOptionIndices(QStringLiteral("print"), QString(), true);
+  QVERIFY(!filteredCandidates.isEmpty());
+  QSet<int> filteredProjection;
+  for (const ExpectedGroup &entry : expected) {
+    const QList<int> ordered = model->orderedProcessIndicesForGroup(filteredCandidates, entry.page, entry.group);
+    for (int index : ordered) {
+      QVERIFY2(!filteredProjection.contains(index), "A filtered Process row must project exactly once");
+      filteredProjection.insert(index);
+    }
+  }
+  QCOMPARE(filteredProjection.size(), filteredCandidates.size());
+
+  auto *machine = qobject_cast<ConfigOptionModel *>(config.machineOptions());
+  auto *filament = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
+  QVERIFY(machine);
+  QVERIFY(filament);
+  QVERIFY(machine->pageNames().contains(QStringLiteral("Basic information")));
+  QVERIFY(filament->pageNames().contains(QStringLiteral("Cooling")));
 }
 
 QTEST_MAIN(ViewModelSmokeTests)

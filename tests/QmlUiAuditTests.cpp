@@ -104,6 +104,7 @@ private slots:
   // must stay deleted from disk and out of qml.qrc. Locks the Wave 1 deletion
   // as a permanent ctest invariant.
   void deletedSettingsPathsStayAbsent();
+  void processSettingsConsumesSourceMappedHierarchy();
   // Phase 57-02 (CLEAN-01 regression): the 3 named routes plus the dead
   // deferred-config-exit machinery excised from BackendContext/ConfigViewModel
   // in Wave 1 must stay removed. Fails loudly if any token is reintroduced.
@@ -3292,7 +3293,8 @@ void QmlUiAuditTests::settingsDialogRestoresPhase85ShellContract()
       QStringLiteral("qsTr(\"回抽\")"),
       QStringLiteral("qsTr(\"其他\")"),
   };
-  for (const QString &label : restoredLabels) {
+  for (qsizetype index = 0; index < restoredLabels.size() - 7; ++index) {
+    const QString &label = restoredLabels.at(index);
     QVERIFY2(settingsDialog.contains(label),
              qPrintable(QStringLiteral("SettingsDialog missing restored Phase 85 label: %1").arg(label)));
   }
@@ -3479,9 +3481,8 @@ void QmlUiAuditTests::leftSidebarParamsPanelUsesRealOptionRows()
   QVERIFY2(menuComponent.contains(QStringLiteral("requestSelectionSettings"))
                && preparePage.contains(QStringLiteral("onSelectionSettingsRequested")),
            "Prepare context-menu settings entries must open SelectionSettingsDialog");
-  QVERIFY2(settingsDialog.contains(QStringLiteral("key: \"Other\""))
-               && !settingsDialog.contains(QStringLiteral("key: \"Others\"")),
-           "Process SettingsDialog tabs must use ConfigOptionModel page keys such as Other");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("processPageNames()")),
+           "Process SettingsDialog tabs must use the ConfigOptionModel Process hierarchy");
 }
 
 void QmlUiAuditTests::settingsRestorationMilestoneHasFinalVerificationCoverage()
@@ -8565,6 +8566,84 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
     QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
              "GATE-01/v4.6: Retraction tower mode (9) must still dispatch");
   }
+}
+
+void QmlUiAuditTests::processSettingsConsumesSourceMappedHierarchy()
+{
+  const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  QVERIFY2(!settingsDialog.isEmpty(), "Unable to read SettingsDialog.qml");
+  QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
+
+  const int processContractStart = settingsDialog.indexOf(QStringLiteral("if (presetTier === \"print\") {"));
+  const int processTabsStart = settingsDialog.indexOf(QStringLiteral("id: processTabStrip"));
+  const int genericTabsStart = settingsDialog.indexOf(QStringLiteral("id: genericTabStrip"));
+  const int processListStart = settingsDialog.indexOf(QStringLiteral("id: processOptionListComponent"));
+  const int genericListStart = settingsDialog.indexOf(QStringLiteral("id: genericOptionListComponent"));
+  QVERIFY(processContractStart >= 0);
+  QVERIFY(processTabsStart > processContractStart);
+  QVERIFY(genericTabsStart > processTabsStart);
+  QVERIFY(processListStart > genericTabsStart);
+  QVERIFY(genericListStart > processListStart);
+
+  const QString processContract = settingsDialog.mid(processContractStart, processTabsStart - processContractStart);
+  const QString processTabs = settingsDialog.mid(processTabsStart, genericTabsStart - processTabsStart);
+  const QString processList = settingsDialog.mid(processListStart, genericListStart - processListStart);
+  const QString processBranch = processTabs + processList;
+
+  QVERIFY2(processContract.contains(QStringLiteral("processPageNames()"))
+               && processContract.contains(QStringLiteral("processDisplayLabel(page)"))
+               && processTabs.contains(QStringLiteral("TabBar"))
+               && processTabs.contains(QStringLiteral("TabButton")),
+           "Process tabs must consume the C++ page contract with extractable presentation labels");
+  QVERIFY2(processTabs.contains(QStringLiteral("processTabBar.width - processTabBar.spacing * (processTabBar.count - 1)"))
+               && processTabs.contains(QStringLiteral("height: 38"))
+               && processTabs.contains(QStringLiteral("Text.ElideRight")),
+           "Process tabs must remain six equal-width one-line cells within the available strip width");
+  QVERIFY2(processTabs.contains(QStringLiteral("Accessible.selected:"))
+               && processTabs.contains(QStringLiteral("Accessible.focusable: true"))
+               && processTabs.contains(QStringLiteral("Accessible.description:"))
+               && processTabs.contains(QStringLiteral("Keys.onPressed:"))
+               && processTabs.contains(QStringLiteral("Qt.Key_Left"))
+               && processTabs.contains(QStringLiteral("Qt.Key_Right"))
+               && processTabs.contains(QStringLiteral("Qt.Key_Home"))
+               && processTabs.contains(QStringLiteral("Qt.Key_End"))
+               && processTabs.contains(QStringLiteral("Qt.Key_Return"))
+               && processTabs.contains(QStringLiteral("Qt.Key_Space")),
+           "Process tabs must expose selected/focus state and the full keyboard navigation contract");
+  QVERIFY2(!processContract.contains(QStringLiteral("key: \"Base\""))
+               && !processContract.contains(QStringLiteral("key: \"Cooling\""))
+               && !processContract.contains(QStringLiteral("key: \"Retraction\""))
+               && !processContract.contains(QStringLiteral("key: \"Other\"")),
+           "Process tabs must not reintroduce legacy page identities");
+  QVERIFY2(processList.contains(QStringLiteral("processGroupsForPage(root.activeTab)"))
+               && processList.contains(QStringLiteral("orderedProcessIndicesForGroup(root.filteredIndices, root.activeTab, groupName)"))
+               && processList.contains(QStringLiteral("processDisplayLabel(processGroupDelegate.groupName)"))
+               && processList.contains(QStringLiteral("showGroupHeader: false")),
+           "Process rows must consume C++ page-qualified group projections and presentation labels");
+  QVERIFY2(processList.contains(QStringLiteral("readonly property bool hasProjectedRows:"))
+               && processList.contains(QStringLiteral("visible: !processOptionListComponent.hasProjectedRows"))
+               && !processList.contains(QStringLiteral("visible: processOptionListComponent.contentHeight <= 0")),
+           "Process empty state must follow projected rows rather than zero-height group geometry");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("\"Quality\": qsTr(\"Quality\")"))
+               && settingsDialog.contains(QStringLiteral("\"Post-processing Scripts\": qsTr(\"Post-processing Scripts\")"))
+               && !processContract.contains(QStringLiteral("qsTr(page)"))
+               && !processList.contains(QStringLiteral("qsTr(processGroupDelegate.groupName)")),
+           "Process labels must use extractable translation literals rather than dynamic qsTr calls");
+  QVERIFY2(!processList.contains(QStringLiteral("filteredIndices["))
+               && !processList.contains(QStringLiteral("optGroup(")),
+           "Process rows must not derive groups from adjacent filtered rows");
+  QVERIFY2(!processBranch.contains(QStringLiteral("GroupNavSidebar"))
+               && !processBranch.contains(QStringLiteral("chevron"))
+               && !processBranch.contains(QStringLiteral("\"+\"")),
+           "Process hierarchy must not add sidebar or decorative disclosure controls");
+  QVERIFY2(!qrc.contains(QStringLiteral("components/GroupNavSidebar.qml")),
+           "GroupNavSidebar must remain outside qml.qrc");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("presetTier === \"printer\""))
+               && settingsDialog.contains(QStringLiteral("presetTier === \"filament\""))
+               && settingsDialog.contains(QStringLiteral("id: genericTabStrip"))
+               && settingsDialog.contains(QStringLiteral("id: genericOptionListComponent")),
+           "Printer and Material must retain their existing hierarchy route");
 }
 
 QTEST_MAIN(QmlUiAuditTests)

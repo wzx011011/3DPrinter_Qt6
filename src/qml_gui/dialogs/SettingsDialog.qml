@@ -49,6 +49,51 @@ ApplicationWindow {
     property bool closeAfterUnsavedResolution: false
     property var filteredIndices: []
 
+    // Presentation-only labels; C++ remains the hierarchy and ordering authority.
+    function processDisplayLabel(sourceKey) {
+        var labels = {
+            "Quality": qsTr("Quality"),
+            "Strength": qsTr("Strength"),
+            "Speed": qsTr("Speed"),
+            "Support": qsTr("Support"),
+            "Multimaterial": qsTr("Multimaterial"),
+            "Others": qsTr("Others"),
+            "Layer height": qsTr("Layer height"),
+            "Line width": qsTr("Line width"),
+            "Seam": qsTr("Seam"),
+            "Precision": qsTr("Precision"),
+            "Ironing": qsTr("Ironing"),
+            "Wall generator": qsTr("Wall generator"),
+            "Walls and surfaces": qsTr("Walls and surfaces"),
+            "Bridging": qsTr("Bridging"),
+            "Overhangs": qsTr("Overhangs"),
+            "Walls": qsTr("Walls"),
+            "Top/bottom shells": qsTr("Top/bottom shells"),
+            "Infill": qsTr("Infill"),
+            "Advanced": qsTr("Advanced"),
+            "Initial layer speed": qsTr("Initial layer speed"),
+            "Other layers speed": qsTr("Other layers speed"),
+            "Overhang speed": qsTr("Overhang speed"),
+            "Travel speed": qsTr("Travel speed"),
+            "Acceleration": qsTr("Acceleration"),
+            "Jerk(XY)": qsTr("Jerk(XY)"),
+            "Raft": qsTr("Raft"),
+            "Support filament": qsTr("Support filament"),
+            "Tree supports": qsTr("Tree supports"),
+            "Prime tower": qsTr("Prime tower"),
+            "Filament for Features": qsTr("Filament for Features"),
+            "Ooze prevention": qsTr("Ooze prevention"),
+            "Flush options": qsTr("Flush options"),
+            "Skirt": qsTr("Skirt"),
+            "Brim": qsTr("Brim"),
+            "Special mode": qsTr("Special mode"),
+            "G-code output": qsTr("G-code output"),
+            "Post-processing Scripts": qsTr("Post-processing Scripts"),
+            "Notes": qsTr("Notes")
+        }
+        return labels[sourceKey] || sourceKey
+    }
+
     // Tab pages per tier. The label is visual text; key stays aligned with upstream page ids.
     readonly property var tabPages: {
         if (presetTier === "printer") return [
@@ -68,16 +113,12 @@ ApplicationWindow {
             { key: "Dependencies", label: qsTr("依赖") },
             { key: "Notes", label: qsTr("注释") }
         ]
-        if (presetTier === "print") return [
-            { key: "Quality", label: qsTr("质量") },
-            { key: "Strength", label: qsTr("强度") },
-            { key: "Speed", label: qsTr("速度") },
-            { key: "Support", label: qsTr("支撑") },
-            { key: "Base", label: qsTr("底板") },
-            { key: "Cooling", label: qsTr("冷却") },
-            { key: "Retraction", label: qsTr("回抽") },
-            { key: "Other", label: qsTr("其他") }
-        ]
+        if (presetTier === "print") {
+            var processPages = optionModel ? optionModel.processPageNames() : []
+            return processPages.map(function(page) {
+                return { key: page, label: root.processDisplayLabel(page) }
+            })
+        }
         return []
     }
 
@@ -107,7 +148,7 @@ ApplicationWindow {
     function rebuildFilter() {
         if (!configVm || !optionModel) { filteredIndices = []; return }
         var indices = configVm.filterOptionIndices(presetTier, searchText, advancedMode)
-        if (activeTab !== "")
+        if (activeTab !== "" && presetTier !== "print")
             indices = optionModel.filterIndicesByPage(indices, activeTab)
         filteredIndices = indices
     }
@@ -411,10 +452,108 @@ ApplicationWindow {
                 }
             }
 
-            // 2. Tab strip
+            // 2. Process tab strip
             Rectangle {
+                id: processTabStrip
                 Layout.fillWidth: true
                 height: 38
+                visible: root.presetTier === "print"
+                color: Theme.bgPanel
+
+                TabBar {
+                    id: processTabBar
+                    anchors.fill: parent
+                    spacing: Theme.spacingXS
+                    background: Rectangle { color: Theme.bgPanel }
+                    currentIndex: root.tabPages.length > 0
+                                  ? Math.max(0, root.tabPages.map(function(page) { return page.key }).indexOf(root.activeTab))
+                                  : 0
+                    onCurrentIndexChanged: {
+                        var tab = itemAt(currentIndex)
+                        if (tab)
+                            root.activeTab = tab.pageKey
+                    }
+
+                    Repeater {
+                        model: root.tabPages
+
+                        delegate: TabButton {
+                            id: processTab
+                            required property var modelData
+                            required property int index
+                            readonly property string pageKey: modelData.key
+                            width: processTabBar.count > 0
+                                   ? (processTabBar.width - processTabBar.spacing * (processTabBar.count - 1))
+                                     / processTabBar.count
+                                   : 0
+                            height: 38
+                            text: modelData.label
+                            focusPolicy: Qt.StrongFocus
+                            Accessible.name: processTab.text
+                            Accessible.role: Accessible.PageTab
+                            Accessible.focusable: true
+                            Accessible.selected: root.activeTab === processTab.pageKey
+                            Accessible.description: qsTr("%1 of %2").arg(index + 1).arg(processTabBar.count)
+
+                            contentItem: Text {
+                                text: processTab.text
+                                color: root.activeTab === processTab.pageKey ? Theme.accent : Theme.textSecondary
+                                font.pixelSize: root.activeTab === processTab.pageKey ? Theme.fontSizeMD : Theme.fontSizeSM
+                                font.weight: root.activeTab === processTab.pageKey ? Font.DemiBold : Font.Normal
+                                elide: Text.ElideRight
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                maximumLineCount: 1
+                            }
+
+                            background: Rectangle {
+                                color: processTab.hovered ? Theme.bgHover : "transparent"
+                                border.width: processTab.activeFocus ? 1 : 0
+                                border.color: Theme.borderFocus
+
+                                Rectangle {
+                                    anchors.bottom: parent.bottom
+                                    width: parent.width
+                                    height: 2
+                                    color: root.activeTab === processTab.pageKey ? Theme.accent : "transparent"
+                                }
+                            }
+
+                            onClicked: root.activeTab = pageKey
+
+                            Keys.onPressed: function(event) {
+                                var targetIndex = index
+                                if (event.key === Qt.Key_Left) {
+                                    targetIndex = Math.max(0, index - 1)
+                                } else if (event.key === Qt.Key_Right) {
+                                    targetIndex = Math.min(processTabBar.count - 1, index + 1)
+                                } else if (event.key === Qt.Key_Home) {
+                                    targetIndex = 0
+                                } else if (event.key === Qt.Key_End) {
+                                    targetIndex = processTabBar.count - 1
+                                } else if (event.key !== Qt.Key_Return
+                                           && event.key !== Qt.Key_Enter
+                                           && event.key !== Qt.Key_Space) {
+                                    return
+                                }
+
+                                processTabBar.currentIndex = targetIndex
+                                var targetTab = processTabBar.itemAt(targetIndex)
+                                if (targetTab)
+                                    targetTab.forceActiveFocus()
+                                event.accepted = true
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Non-Process tab strip
+            Rectangle {
+                id: genericTabStrip
+                Layout.fillWidth: true
+                height: 38
+                visible: root.presetTier !== "print"
                 color: Theme.bgPanel
 
                 RowLayout {
@@ -430,7 +569,6 @@ ApplicationWindow {
                             Layout.fillHeight: true
                             color: tabHov.containsMouse ? Theme.bgHover : "transparent"
 
-                            // Active tab underline
                             Rectangle {
                                 anchors.bottom: parent.bottom
                                 width: parent.width
@@ -469,13 +607,117 @@ ApplicationWindow {
                     color: Theme.bgBase
 
                     ListView {
-                        id: optionList
+                        id: processOptionListComponent
                         anchors.fill: parent
+                        visible: root.presetTier === "print"
+                        clip: true
+                        model: root.optionModel && root.activeTab !== ""
+                               ? root.optionModel.processGroupsForPage(root.activeTab) : []
+                        readonly property bool hasProjectedRows: {
+                            if (!root.optionModel || root.activeTab === "")
+                                return false
+                            const groups = root.optionModel.processGroupsForPage(root.activeTab)
+                            for (let groupIndex = 0; groupIndex < groups.length; ++groupIndex) {
+                                if (root.optionModel.orderedProcessIndicesForGroup(
+                                      root.filteredIndices, root.activeTab, groups[groupIndex]).length > 0)
+                                    return true
+                            }
+                            return false
+                        }
+                        spacing: Theme.spacingXS
+                        ScrollBar.vertical: ScrollBar {
+                            visible: processOptionListComponent.contentHeight > processOptionListComponent.height
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: !processOptionListComponent.hasProjectedRows
+                            text: qsTr("No options")
+                            color: Theme.textDisabled
+                            font.pixelSize: Theme.fontSizeMD
+                        }
+
+                        delegate: Item {
+                            id: processGroupDelegate
+                            required property var modelData
+                            required property int index
+                            readonly property string groupName: modelData
+                            readonly property var orderedIndices: root.optionModel
+                                ? root.optionModel.orderedProcessIndicesForGroup(root.filteredIndices, root.activeTab, groupName)
+                                : []
+
+                            visible: orderedIndices.length > 0
+                            width: processOptionListComponent.width
+                            height: visible ? processGroupColumn.implicitHeight : 0
+
+                            Column {
+                                id: processGroupColumn
+                                width: parent.width
+                                spacing: Theme.spacingXS
+
+                                Rectangle {
+                                    width: parent.width
+                                    height: 28
+                                    color: "transparent"
+
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.leftMargin: Theme.spacingMD
+                                        anchors.rightMargin: Theme.spacingMD
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: root.processDisplayLabel(processGroupDelegate.groupName)
+                                        color: Theme.textSecondary
+                                        font.pixelSize: Theme.fontSizeMD
+                                        font.weight: Font.DemiBold
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Rectangle {
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.bottom: parent.bottom
+                                        height: 1
+                                        color: Theme.borderSubtle
+                                    }
+                                }
+
+                                Repeater {
+                                    model: processGroupDelegate.orderedIndices
+
+                                    delegate: OptionRow {
+                                        width: processGroupColumn.width
+                                        height: totalHeight
+                                        optionModel: root.optionModel
+                                        optIdx: modelData
+                                        rowIndex: index
+                                        searchText: root.searchText
+                                        showGroupHeader: false
+                                        oGroup: processGroupDelegate.groupName
+                                        compact: true
+                                        compactLabelWidth: 210
+                                        compactFieldWidth: 96
+                                        compactEnumWidth: 190
+                                        valueSource: {
+                                            if (!root.configVm || !root.optionModel) return ""
+                                            var key = root.optionModel.optKey(modelData)
+                                            return root.configVm.valueSourceForKey(key)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    ListView {
+                        id: genericOptionListComponent
+                        anchors.fill: parent
+                        visible: root.presetTier !== "print"
                         clip: true
                         model: root.filteredIndices
                         spacing: Theme.spacingXS
                         ScrollBar.vertical: ScrollBar {
-                            visible: optionList.contentHeight > optionList.height
+                            visible: genericOptionListComponent.contentHeight > genericOptionListComponent.height
                         }
 
                         // Empty state
@@ -504,7 +746,7 @@ ApplicationWindow {
                                 return optGroup !== "" && optGroup !== prevGroup
                             }
 
-                            width: optionList.width
+                            width: genericOptionListComponent.width
                             height: optRow.totalHeight
 
                             // OptionRow inlined in the delegate (not via Loader/Component)
