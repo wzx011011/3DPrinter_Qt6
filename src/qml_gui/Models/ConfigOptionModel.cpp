@@ -1,12 +1,14 @@
 #include "ConfigOptionModel.h"
 
 #include <QByteArray>
+#include <QDebug>
 #include <QVector>
 #include <initializer_list>
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/PrintConfig.hpp>
 #include <libslic3r/Config.hpp>
+#include <libslic3r/Preset.hpp>
 #endif
 
 ConfigOptionModel::ConfigOptionModel(QObject *parent)
@@ -154,6 +156,8 @@ ConfigOptionModel::ConfigOptionModel(QObject *parent)
     if (it != kTooltips.cend())
       option.tooltip = tr(it.value());
   }
+
+  assignProcessHierarchyMetadata();
 }
 
 // Category-to-Page mapping (对齐上游 Tab::Page hierarchy)
@@ -699,10 +703,9 @@ int ConfigOptionModel::findIndex(const QString &key) const
   return -1;
 }
 
-#ifdef HAS_LIBSLIC3R
-
 namespace
 {
+#ifdef HAS_LIBSLIC3R
   // Map upstream ConfigOptionType to Qt6 type string
   QString mapType(Slic3r::ConfigOptionType t)
   {
@@ -988,6 +991,8 @@ namespace
     return m;
   }
 
+#endif // HAS_LIBSLIC3R
+
   struct ProcessGroupDefinition
   {
     QString name;
@@ -1110,6 +1115,56 @@ namespace
     return result;
   }
 
+#ifdef HAS_LIBSLIC3R
+  // Preset::print_options() includes a small set of source-backed preset fields
+  // that TabPrint intentionally does not render as editable rows.
+  static const QSet<QString> &processNonUiPresetKeys()
+  {
+    static const QSet<QString> keys = {
+        QStringLiteral("travel_speed_z"),
+        QStringLiteral("enforce_support_layers"),
+        QStringLiteral("raft_expansion"),
+        QStringLiteral("support_interface_loop_pattern"),
+        QStringLiteral("interface_shells"),
+        QStringLiteral("compatible_printers"),
+        QStringLiteral("compatible_printers_condition"),
+        QStringLiteral("inherits"),
+        QStringLiteral("overhang_speed_classic"),
+        QStringLiteral("wiping_volumes_extruders"),
+    };
+    return keys;
+  }
+
+  static QStringList auditProcessManifest()
+  {
+    const auto &lookup = processPageGroupLookup();
+    const auto &nonUiKeys = processNonUiPresetKeys();
+    QSet<QString> upstreamKeys;
+    QStringList errors;
+
+    for (const std::string &rawKey : Slic3r::Preset::print_options()) {
+      const QString key = QString::fromStdString(rawKey);
+      upstreamKeys.insert(key);
+      if (!lookup.contains(key) && !nonUiKeys.contains(key))
+        errors.append(QStringLiteral("Unmapped Process preset key: %1").arg(key));
+    }
+
+    for (const QString &key : processManifestKeys()) {
+      if (!upstreamKeys.contains(key))
+        errors.append(QStringLiteral("Process manifest key is not a print preset option: %1").arg(key));
+      if (!Slic3r::print_config_def.has(key.toStdString()))
+        errors.append(QStringLiteral("Process manifest key is missing from print_config_def: %1").arg(key));
+    }
+
+    for (const QString &key : nonUiKeys) {
+      if (!upstreamKeys.contains(key))
+        errors.append(QStringLiteral("Stale non-UI Process preset key: %1").arg(key));
+    }
+
+    errors.sort(Qt::CaseSensitive);
+    return errors;
+  }
+
 static const char *kMachineKeys[] = {
   // Page: 基础信息 — 打印空间
   "printable_area", "bed_exclude_area", "printable_height",
@@ -1190,6 +1245,8 @@ static const char *kFilamentKeys[] = {
   nullptr
 };
 
+#endif // HAS_LIBSLIC3R
+
 } // anonymous namespace
 
 // Assign page/group from the tier-specific mapping table.
@@ -1260,6 +1317,29 @@ QList<int> ConfigOptionModel::orderedProcessIndicesForGroup(const QList<int> &ca
   return result;
 }
 
+QStringList ConfigOptionModel::processMappingErrors() const
+{
+#ifdef HAS_LIBSLIC3R
+  return auditProcessManifest();
+#else
+  return {};
+#endif
+}
+
+void ConfigOptionModel::assignProcessHierarchyMetadata()
+{
+  const auto &lookup = processPageGroupLookup();
+  for (ConfigOption &option : m_options) {
+    const auto location = lookup.constFind(option.key);
+    if (location == lookup.cend())
+      continue;
+    option.page = location.value().first;
+    option.group = location.value().second;
+  }
+}
+
+#ifdef HAS_LIBSLIC3R
+
 void ConfigOptionModel::loadSchemaFromKeys(const char *const keys[])
 {
   beginResetModel();
@@ -1328,6 +1408,14 @@ void ConfigOptionModel::loadSchemaFromKeys(const char *const keys[])
 
 void ConfigOptionModel::loadFromUpstreamSchema()
 {
+  const QStringList mappingErrors = processMappingErrors();
+  if (!mappingErrors.isEmpty()) {
+    qCritical().noquote() << "Process settings hierarchy audit failed:" << mappingErrors.join(QStringLiteral("; "));
+    static const char *const kNoKeys[] = {nullptr};
+    loadSchemaFromKeys(kNoKeys);
+    return;
+  }
+
   const QStringList manifestKeys = processManifestKeys();
   QVector<QByteArray> encodedKeys;
   encodedKeys.reserve(manifestKeys.size());
@@ -1339,7 +1427,7 @@ void ConfigOptionModel::loadFromUpstreamSchema()
   }
   keyPointers.append(nullptr);
   loadSchemaFromKeys(keyPointers.constData());
-  assignPageGroupForTier(this, processPageGroupLookup());
+  assignProcessHierarchyMetadata();
 }
 
 void ConfigOptionModel::loadMachineSchema()
@@ -1354,25 +1442,6 @@ void ConfigOptionModel::loadFilamentSchema()
   loadSchemaFromKeys(kFilamentKeys);
   // Upstream: Tab.cpp:3892-4216 (TabFilament::build) - assign page/group metadata
   assignPageGroupForTier(this, kFilamentPageGroupMap());
-}
-
-#else
-
-QStringList ConfigOptionModel::processPageNames() const
-{
-  return {};
-}
-
-QStringList ConfigOptionModel::processGroupsForPage(const QString &) const
-{
-  return {};
-}
-
-QList<int> ConfigOptionModel::orderedProcessIndicesForGroup(const QList<int> &,
-                                                            const QString &,
-                                                            const QString &) const
-{
-  return {};
 }
 
 #endif // HAS_LIBSLIC3R

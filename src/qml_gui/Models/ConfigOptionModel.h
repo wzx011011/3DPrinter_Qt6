@@ -145,6 +145,7 @@ public:
   Q_INVOKABLE QStringList pageNames() const;
   Q_INVOKABLE QStringList processPageNames() const;
   Q_INVOKABLE QStringList processGroupsForPage(const QString &page) const;
+  Q_INVOKABLE QStringList processMappingErrors() const;
   Q_INVOKABLE QList<int> orderedProcessIndicesForGroup(const QList<int> &candidateIndices,
                                                         const QString &page,
                                                         const QString &group) const;
@@ -179,6 +180,7 @@ signals:
 
 private:
   int findIndex(const QString &key) const;
+  void assignProcessHierarchyMetadata();
   QList<ConfigOption> m_options;
   QSet<QString> m_baseReadonlyKeys;
   QHash<QString, QVariant> m_defaultValues;
