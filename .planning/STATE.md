@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v5.11
 milestone_name: Process Settings Source-Truth Convergence
-status: executing
-stopped_at: Phase 226 UI-SPEC approved
-last_updated: "2026-08-03T09:31:49.936Z"
-last_activity: 2026-08-03 -- Phase 226 planning complete
+status: ready_to_plan
+stopped_at: Phase 226 complete (1/1) — ready to discuss Phase 227
+last_updated: 2026-08-13T07:09:51.380Z
+last_activity: 2026-08-11 -- Phase 226 execution started
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 1
-  completed_plans: 0
+  completed_plans: 58
   percent: 0
 ---
 
@@ -38,14 +38,14 @@ See:
 - `.planning/research/v5.11-PROCESS-SETTINGS-SUMMARY.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-**Current focus:** Phase 226 - Source-Mapped Process Hierarchy.
+**Current focus:** Phase 227 — process projection, disclosure, and filtering
 
 ## Current Position
 
-Phase: 226 of 230 (Source-Mapped Process Hierarchy)
-Plan: 0 of 1 in current phase
-Status: Ready to execute
-Last activity: 2026-08-03 -- Phase 226 planning complete
+Phase: 227
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-13
 
 Progress: [----------] 0%
 
@@ -53,7 +53,7 @@ Progress: [----------] 0%
 
 **v5.11:**
 
-- Total plans completed: 0 of 7
+- Total plans completed: 1 of 7
 - Completed phases: 0 of 5
 - Average duration: Not available
 

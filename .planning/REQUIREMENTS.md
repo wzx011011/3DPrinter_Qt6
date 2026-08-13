@@ -10,9 +10,9 @@ without an explicit upstream mapping or documented block.
 
 ### HIER: Process Hierarchy And Navigation
 
-- [ ] **HIER-01**: User can see the Process pages in the upstream order:
+- [x] **HIER-01**: User can see the Process pages in the upstream order:
   Quality, Strength, Speed, Support, Multimaterial, and Others.
-- [ ] **HIER-02**: User can reach every supported Process option from its
+- [x] **HIER-02**: User can reach every supported Process option from its
   upstream-derived page and group.
 - [ ] **HIER-03**: User can see the visible-option and dirty-option count for
   each Process group on the active page.
@@ -91,8 +91,8 @@ without an explicit upstream mapping or documented block.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HIER-01 | Phase 226 | Pending |
-| HIER-02 | Phase 226 | Pending |
+| HIER-01 | Phase 226 | Complete |
+| HIER-02 | Phase 226 | Complete |
 | HIER-03 | Phase 227 | Pending |
 | DISC-01 | Phase 227 | Pending |
 | DISC-02 | Phase 227 | Pending |

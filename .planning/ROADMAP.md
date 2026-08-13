@@ -21,7 +21,7 @@ changes, and unmapped auto-correction are outside this milestone.
 
 ## Phases
 
-- [ ] **Phase 226: Source-Mapped Process Hierarchy** - Establish the exact
+- [x] **Phase 226: Source-Mapped Process Hierarchy** - Establish the exact (completed 2026-08-11)
   upstream Process page and group navigation contract.
 - [ ] **Phase 227: Process Projection, Disclosure, And Filtering** - Deliver
   stable page-qualified group rows, session disclosure, counts, search, and mode behavior.
@@ -100,7 +100,7 @@ source-aligned, interactive, and visually stable without widening the milestone 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 226. Source-Mapped Process Hierarchy | 0/1 | Not started | - |
+| 226. Source-Mapped Process Hierarchy | 1/1 | Complete    | 2026-08-13 |
 | 227. Process Projection, Disclosure, And Filtering | 0/2 | Not started | - |
 | 228. Typed Process Editing | 0/2 | Not started | - |
 | 229. Preset Feedback And Workflow Safety | 0/1 | Not started | - |
