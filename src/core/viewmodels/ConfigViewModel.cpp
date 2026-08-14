@@ -614,6 +614,16 @@ void ConfigViewModel::setCurrentPrinterPreset(const QString &name)
     emit sliceAffectingConfigChanged();
 }
 
+QString ConfigViewModel::bedTextureFile() const
+{
+  // v5.15 (BEDTEX): PresetServiceMock resolves the machine_model JSON's
+  // bed_texture against the vendor profile dir (upstream
+  // PresetUtils::system_printer_bed_texture mapping).
+  if (presetService_ == nullptr || currentPrinterPreset_.isEmpty())
+    return {};
+  return presetService_->bedTextureFileForPreset(currentPrinterPreset_);
+}
+
 void ConfigViewModel::setCurrentFilamentPreset(const QString &name)
 {
   const QString before = currentFilamentPreset_;

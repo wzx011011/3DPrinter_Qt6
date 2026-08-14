@@ -1372,6 +1372,9 @@ Item {
                     canvasType: GLViewport.CanvasView3D
                     meshData: root.editorVm ? root.editorVm.meshData : null
                     bedWidth: root.editorVm ? root.editorVm.bedWidth : 220
+                    // v5.15 (BEDTEX): printer bed texture image (upstream
+                    // PartPlate render_logo).
+                    bedTextureUrl: root.editorVm ? root.editorVm.bedTextureUrl : ""
                     bedDepth: root.editorVm ? root.editorVm.bedDepth : 220
                     bedOriginX: root.editorVm ? root.editorVm.bedOriginX : 0
                     bedOriginY: root.editorVm ? root.editorVm.bedOriginY : 0

@@ -212,6 +212,8 @@ private slots:
   void testPrinterModelsForVendor();
   void testMaterialsForVendor();
   void testBedTypesForPrinterModel();
+  // v5.15 (BEDTEX): printer-preset bed texture resolution.
+  void testBedTextureFileForPreset();
   void testEnumerationExcludesUpstreamDefaults();
   void testMachineEditFlowsToGlobal();
   void testTierAwareSaveFiltersByTier();
@@ -649,6 +651,41 @@ void ViewModelSmokeTests::testBedTypesForPrinterModel()
   QCOMPARE(beds, defaults);
   const QStringList bedsUnknown = preset.bedTypesForPrinterModel(QStringLiteral("__unknown_model__"));
   QCOMPARE(bedsUnknown, defaults);
+}
+
+// v5.15 (BEDTEX): bedTextureFileForPreset resolves the machine_model JSON's
+// bed_texture against the vendor profile dir (upstream
+// PresetUtils::system_printer_bed_texture mapping). Requires the upstream
+// profiles on disk (skipped when absent).
+void ViewModelSmokeTests::testBedTextureFileForPreset()
+{
+  const QString profiles = QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR))
+      .filePath(QStringLiteral("third_party/OrcaSlicer/resources/profiles"));
+  if (!QFileInfo::exists(profiles + QStringLiteral("/Creality.json")))
+    QSKIP("upstream Creality profiles not available");
+
+  // The default ctor already loads upstream vendors from the repo profiles
+  // (loadVendorPresets -> resolveProfilesDir); running from the source tree,
+  // Creality is registered without an explicit dir argument.
+  PresetServiceMock preset;
+  const QStringList models = preset.printerModelsForVendor(QStringLiteral("Creality"));
+  if (models.isEmpty())
+    QSKIP("Creality vendor presets not registered from cwd");
+  QString found;
+  for (const QString &model : models) {
+    const QString tex = preset.bedTextureFileForPreset(model);
+    if (!tex.isEmpty()) {
+      found = tex;
+      break;
+    }
+  }
+  QVERIFY2(!found.isEmpty(),
+           "Creality machine presets expose at least one bed texture");
+  QVERIFY(found.endsWith(QStringLiteral(".png"), Qt::CaseInsensitive)
+          || found.endsWith(QStringLiteral(".svg"), Qt::CaseInsensitive));
+  QVERIFY2(QFileInfo::exists(found), "resolved texture must exist on disk");
+
+  QVERIFY(preset.bedTextureFileForPreset(QStringLiteral("__nonexistent__")).isEmpty());
 }
 
 void ViewModelSmokeTests::testEnumerationExcludesUpstreamDefaults()
@@ -1972,12 +2009,12 @@ void ViewModelSmokeTests::testSidebarCollapsedDefault()
 
   // Sidebar is visible by default, matching upstream Plater.
   // Phase 164 (SW-01): sidebar is now resizable within [300, 520] -- was
-  // min==max==392 making the drag handle a no-op. Default stays 392 to
-  // preserve the visual.
+  // min==max==392 making the drag handle a no-op. v5.14: default narrows to
+  // 320 to match the screenshot-truth compact density.
   QCOMPARE(ctx.sidebarCollapsed(), false);
   QCOMPARE(ctx.sidebarMinWidth(), 300);
   QCOMPARE(ctx.sidebarMaxWidth(), 520);
-  QCOMPARE(ctx.sidebarWidth(), 392);
+  QCOMPARE(ctx.sidebarWidth(), 320);
   QCOMPARE(ctx.sidebarDockArea(), static_cast<int>(BackendContext::SidebarDockArea::Left));
 }
 
@@ -2063,7 +2100,7 @@ void ViewModelSmokeTests::testSidebarWidthClamp()
     s.sync();
   }
   BackendContext legacyCtx;
-  QCOMPARE(legacyCtx.sidebarWidth(), 392);  // migrated to kSidebarDefaultWidth
+  QCOMPARE(legacyCtx.sidebarWidth(), 320);  // migrated to kSidebarDefaultWidth (v5.14: 320)
 
   resetSidebarSettings();
 }

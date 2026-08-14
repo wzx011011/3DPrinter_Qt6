@@ -86,6 +86,12 @@ private:
   bool uploadCameraUniform(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool ensureGizmoPipeline();                                  // Phase 68
   bool uploadGizmoBuffer(QRhiResourceUpdateBatch *updates);   // Phase 68/70
+  // v5.15 (BEDTEX/MODELLIT): bed texture upload (image + quad) and the
+  // per-face model normal upload for the lit pipeline.
+  bool ensureBedTexturePipeline();
+  void uploadBedTexture(QRhiResourceUpdateBatch *updates);
+  void renderBedTexture(QRhiCommandBuffer *cb);
+  bool ensureModelLitPipeline();
   void renderMoveGizmo(QRhiCommandBuffer *cb);                // Phase 68
   void renderRotateGizmo(QRhiCommandBuffer *cb);              // Phase 70
   void renderScaleGizmo(QRhiCommandBuffer *cb);               // Phase 70
@@ -134,6 +140,29 @@ private:
   // and enable source-alpha blending so baked vertex alpha is visible.
   std::unique_ptr<QRhiGraphicsPipeline> m_translucentFillPipeline;
   std::unique_ptr<QRhiGraphicsPipeline> m_translucentLinePipeline;
+  // v5.15 (BEDTEX): textured print-bed quad. Mirrors upstream PartPlate
+  // render_logo_texture — the printer profile's bed_texture image drawn over
+  // the plate background/grid, blended, depth test+write off. Separate SRB
+  // because binding 1 carries the sampled texture.
+  std::unique_ptr<QRhiGraphicsPipeline> m_bedTexturePipeline;
+  std::unique_ptr<QRhiShaderResourceBindings> m_bedTextureSrb;
+  std::unique_ptr<QRhiTexture> m_bedTexture;
+  std::unique_ptr<QRhiSampler> m_bedTextureSampler;
+  std::unique_ptr<QRhiBuffer> m_bedTextureVertexBuffer;
+  QImage m_bedTextureImage;
+  QString m_bedTexturePath;
+  QString m_pendingBedTexturePath;
+  bool m_bedTextureDirty = false;
+  bool m_bedTextureQuadDirty = true;
+  quint32 m_bedTextureVertexBytes = 0;
+  quint32 m_bedTextureVertexCount = 0;
+  // v5.15 (MODELLIT): two-light gouraud pipeline for model meshes (upstream
+  // gouraud.vs constants). Shares m_srb (camera UBO only) and reads a
+  // parallel per-face-normal buffer alongside m_modelVertexBuffer.
+  std::unique_ptr<QRhiGraphicsPipeline> m_modelLitPipeline;
+  std::unique_ptr<QRhiBuffer> m_modelNormalBuffer;
+  quint32 m_modelNormalBufferBytes = 0;
+  bool m_modelLitEnabled = true;
   // Phase 68: gizmo pipelines. Separate from m_fill/m_line because the gizmo
   // shader applies position*scale+center displacement. Lines for shafts,
   // triangles for cones/rings/boxes. No depth write so the gizmo stays
@@ -267,6 +296,7 @@ private:
   qint64 m_modelGeneration = 0;
   PrepareSceneData m_prepareScene;
   QMatrix4x4 m_cameraMvp;
+  QMatrix4x4 m_cameraView;      // v5.15 (MODELLIT): world->eye for gouraud lighting
   QColor m_clearColor = QColor(14, 20, 28);
 
   // ── Phase 67: Gizmo state read from RhiViewport in synchronize() ──

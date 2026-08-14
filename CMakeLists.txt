@@ -136,10 +136,10 @@ if(OWZX_QML_GUI)
     if(BUILD_LIBSLIC3R)
         # BUILD_LIBSLIC3R=ON 时 Boost_ALL_NO_LIB 干扰 Qt 的 auto-link，
         # 需要跳过低版本检查以避免 Qt 查找失败
-        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools)
+        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools Svg)
     else()
         # 低版本 Qt 兼容：允许 Qt 3.21 与 Qt 6.10 配对
-        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools)
+        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools Svg)
         set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/third_party/Qt6_10")
         set(QT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT 3.21)
     endif()
@@ -370,7 +370,7 @@ if(OWZX_QML_GUI)
     # Qt AUTOMOC needs compile definitions and include paths from Qt modules.
     # libslic3r PUBLIC linkage propagates generated-header dirs (libslic3r_version.h).
     target_link_libraries(owzx_app_core PUBLIC
-        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::GuiPrivate
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::GuiPrivate Qt6::Svg
     )
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
         target_link_libraries(owzx_app_core PUBLIC libslic3r)
@@ -383,7 +383,7 @@ if(OWZX_QML_GUI)
     )
     target_link_libraries(OWzxSlicer PRIVATE owzx_app_core)
     target_link_libraries(OWzxSlicer PRIVATE
-        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Svg
     )
     qt_add_shaders(OWzxSlicer "rhi_viewport_shaders"
         PREFIX
@@ -395,6 +395,10 @@ if(OWZX_QML_GUI)
             src/qml_gui/Renderer/shaders/rhi_viewport.frag
             src/qml_gui/Renderer/shaders/rhi_gizmo.vert
             src/qml_gui/Renderer/shaders/rhi_gizmo.frag
+            src/qml_gui/Renderer/shaders/bed_texture.vert
+            src/qml_gui/Renderer/shaders/bed_texture.frag
+            src/qml_gui/Renderer/shaders/model_lit.vert
+            src/qml_gui/Renderer/shaders/model_lit.frag
     )
     if(MSVC)
         target_compile_options(OWzxSlicer PRIVATE /Zi)

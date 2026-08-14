@@ -512,19 +512,15 @@ bool PrepareSceneData::activeSourceContains(const QList<int> &activeSourceObject
 
 quint32 PrepareSceneData::colorForSourceObject(int sourceObjectIndex, float &r, float &g, float &b)
 {
-  static constexpr float kPalette[][3] = {
-    {0.48f, 0.68f, 0.95f},
-    {0.70f, 0.58f, 0.88f},
-    {0.95f, 0.64f, 0.38f},
-    {0.42f, 0.76f, 0.58f},
-    {0.88f, 0.54f, 0.58f},
-    {0.62f, 0.72f, 0.42f}
-  };
-  const quint32 index = quint32(std::abs(sourceObjectIndex)) % (sizeof(kPalette) / sizeof(kPalette[0]));
-  r = kPalette[index][0];
-  g = kPalette[index][1];
-  b = kPalette[index][2];
-  return index;
+  // v5.15 (MODELLIT): upstream renders default model volumes in a single
+  // neutral color (GLVolume::NEUTRAL_COLOR = 0.8/0.8/0.8, 3DScene.cpp:169);
+  // distinct per-object hues were an OWzx invention. The return value keeps
+  // the historical palette-index contract (callers use it as a stable hash).
+  static constexpr float kNeutral[3] = {0.8f, 0.8f, 0.8f};
+  r = kNeutral[0];
+  g = kNeutral[1];
+  b = kNeutral[2];
+  return quint32(std::abs(sourceObjectIndex)) % 6;
 }
 
 void PrepareSceneData::appendLine(float x1, float y1, float x2, float y2, float r, float g, float b, float a)

@@ -468,6 +468,11 @@ int PresetServiceMock::loadSingleVendor(const QString &profilesDir, const QStrin
 
       m_presetStore[entry.name] = cleanValues;
       registerPresetMetadata(entry.name, category, true, true, vendorName);
+      // v5.15 (BEDTEX): remember the vendor directory so relative asset keys
+      // like bed_texture can be resolved to absolute file paths (mirrors
+      // upstream PresetUtils::system_printer_bed_texture's profiles-dir join).
+      if (category == PrinterCat)
+        m_presetVendorDir[entry.name] = vendorDir;
       if (!inheritMap.value(entry.name).isEmpty())
         m_presetInherits[entry.name] = inheritMap[entry.name];
       ++registered;
@@ -535,6 +540,52 @@ QString PresetServiceMock::selectedPrinterModel() const
 {
   QSettings settings;
   return settings.value(QStringLiteral("wizard/selectedPrinterModel")).toString();
+}
+
+QString PresetServiceMock::bedTextureFileForPreset(const QString &presetName) const
+{
+  // v5.15 (BEDTEX): mirrors upstream Plater::set_bed_shape ->
+  // PresetUtils::system_printer_bed_texture (Preset.cpp:3561-3571). The
+  // machine preset links its machine_model JSON via the printer_model key;
+  // that model JSON carries the bed_texture asset filename, resolved against
+  // the vendor profile directory. Only .png/.svg files that exist are
+  // returned (upstream update_logo_texture_filename validation).
+  const QString vendorDir = m_presetVendorDir.value(presetName);
+  const QHash<QString, QVariant> resolved = m_presetStore.value(presetName);
+  QString printerModel = resolved.value(QStringLiteral("printer_model")).toString();
+  if (vendorDir.isEmpty() || printerModel.isEmpty()) {
+    // Fallback for presets without a machine_model link: a direct relative
+    // bed_texture value in the preset itself.
+    const QString direct = resolved.value(QStringLiteral("bed_texture")).toString();
+    if (direct.isEmpty())
+      return {};
+    return validatedTexturePath(vendorDir.isEmpty() ? QString() : vendorDir, direct);
+  }
+
+  const QString modelFile = vendorDir + QStringLiteral("/machine/") + printerModel
+      + QStringLiteral(".json");
+  QFile f(modelFile);
+  if (!f.open(QIODevice::ReadOnly))
+    return {};
+  const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+  if (!doc.isObject())
+    return {};
+  const QString bedTexture = doc.object().value(QStringLiteral("bed_texture")).toString();
+  if (bedTexture.isEmpty())
+    return {};
+  return validatedTexturePath(vendorDir, bedTexture);
+}
+
+QString PresetServiceMock::validatedTexturePath(const QString &vendorDir,
+                                                const QString &bedTexture) const
+{
+  if (vendorDir.isEmpty())
+    return {};
+  if (!bedTexture.endsWith(QStringLiteral(".png"), Qt::CaseInsensitive)
+      && !bedTexture.endsWith(QStringLiteral(".svg"), Qt::CaseInsensitive))
+    return {};
+  const QString path = vendorDir + QStringLiteral("/") + bedTexture;
+  return QFileInfo::exists(path) ? path : QString();
 }
 
 void PresetServiceMock::setSelectedPrinterModel(const QString &model)

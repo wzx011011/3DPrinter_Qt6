@@ -37,6 +37,10 @@ $env:CL = "/Zm300 /bigobj $env:CL"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 Write-Host "[targeted] cwd: $(Get-Location)"
+# Accept comma-separated targets (powershell.exe -File passes them as one arg).
+if ($Targets.Count -eq 1 -and $Targets[0].Contains(',')) {
+  $Targets = $Targets[0].Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+}
 foreach ($t in $Targets) {
   Write-Host "[targeted] building $t"
   ninja -C build -j6 $t

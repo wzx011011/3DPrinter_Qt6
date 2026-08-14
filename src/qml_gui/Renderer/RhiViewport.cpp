@@ -196,6 +196,16 @@ void RhiViewport::setBedDiameter(float value)
   update();
 }
 
+void RhiViewport::setBedTextureUrl(const QUrl &value)
+{
+  if (m_bedTextureUrl == value)
+    return;
+  m_bedTextureUrl = value;
+  m_bedTextureDirty = true;
+  emit bedTextureUrlChanged();
+  update();
+}
+
 void RhiViewport::setCurrentPlateIndex(int value)
 {
   if (m_currentPlateIndex == value)

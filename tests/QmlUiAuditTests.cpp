@@ -633,6 +633,8 @@ private slots:
   // Phase 205 (GATE-01): v5.6 cross-workstream regression gate. Spots every
   // v5.6 anchor (UI/FEAT/DLG/RHI/I18N) + re-asserts v5.4/v5.0/v4.6.
   void v56CrossWorkstreamRegressionLocked();
+  // v5.15 (BEDTEX/MODELLIT): textured bed + lit model rendering contracts.
+  void v515BedTextureAndModelLitWired();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -8666,3 +8668,86 @@ void QmlUiAuditTests::processSettingsConsumesSourceMappedHierarchy()
 
 QTEST_MAIN(QmlUiAuditTests)
 #include "QmlUiAuditTests.moc"
+
+
+// ── v5.15 (BEDTEX/MODELLIT) ─────────────────────────────────────────────────
+// Source-audit guards for the two upstream render-parity features:
+// 1. Bed texture: the printer profile's bed_texture image (PNG/SVG) drawn as
+//    a textured quad over the plate background/grid (upstream
+//    PartPlate::render_logo_texture), with the data chain
+//    PresetServiceMock -> ConfigViewModel -> EditorViewModel -> RhiViewport ->
+//    RhiViewportRenderer wired end to end.
+// 2. Model lighting: two-light gouraud shading with upstream gouraud.vs
+//    constants and the upstream GLVolume::NEUTRAL_COLOR default object color.
+void QmlUiAuditTests::v515BedTextureAndModelLitWired()
+{
+  const QString renderer = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString viewportH = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString sceneData = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.cpp"));
+  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+  const QString configVm = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.cpp"));
+  const QString editorVm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  QVERIFY2(!renderer.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!viewportH.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!sceneData.isEmpty(), "Unable to read PrepareSceneData.cpp");
+  QVERIFY2(!presetSvc.isEmpty(), "Unable to read PresetServiceMock.cpp");
+  QVERIFY2(!configVm.isEmpty(), "Unable to read ConfigViewModel.cpp");
+  QVERIFY2(!editorVm.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
+
+  // Renderer: textured bed pipeline + SVG/PNG loading + upstream 2048 cap.
+  QVERIFY2(renderer.contains(QStringLiteral("bed_texture.vert.qsb"))
+               && renderer.contains(QStringLiteral("bed_texture.frag.qsb")),
+           "BEDTEX: renderer must load the bed texture shader pair");
+  QVERIFY2(renderer.contains(QStringLiteral("QSvgRenderer")),
+           "BEDTEX: renderer must rasterize SVG bed textures (upstream load_from_svg_file)");
+  QVERIFY2(renderer.contains(QStringLiteral("kMaxTex = 2048")),
+           "BEDTEX: SVG rasterization must keep the upstream 2048px cap");
+  QVERIFY2(renderer.contains(QStringLiteral("renderBedTexture(cb)")),
+           "BEDTEX: render() must layer the texture over background + grid");
+  QVERIFY2(renderer.contains(QStringLiteral("m_bedTexturePipeline->setDepthTest(false)")),
+           "BEDTEX: texture quad draws with depth test off (upstream render_logo_texture)");
+
+  // Renderer: lit model pipeline with the upstream gouraud shader pair and a
+  // parallel per-face normal buffer.
+  QVERIFY2(renderer.contains(QStringLiteral("model_lit.vert.qsb"))
+               && renderer.contains(QStringLiteral("model_lit.frag.qsb")),
+           "MODELLIT: renderer must load the lit model shader pair");
+  QVERIFY2(renderer.contains(QStringLiteral("ensureModelLitPipeline")),
+           "MODELLIT: lit pipeline creation must exist");
+  QVERIFY2(renderer.contains(QStringLiteral("m_modelNormalBuffer")),
+           "MODELLIT: per-face normal upload must exist");
+
+  // Shader: upstream gouraud.vs lighting constants.
+  const QString litVert = readSource(QStringLiteral("src/qml_gui/Renderer/shaders/model_lit.vert"));
+  QVERIFY2(!litVert.isEmpty(), "Unable to read model_lit.vert");
+  QVERIFY2(litVert.contains(QStringLiteral("LIGHT_TOP_DIFFUSE = 0.8"))
+               && litVert.contains(QStringLiteral("INTENSITY_AMBIENT = 0.3"))
+               && litVert.contains(QStringLiteral("LIGHT_FRONT_DIFFUSE = 0.3"))
+               && litVert.contains(QStringLiteral("LIGHT_TOP_SPECULAR = 0.125")),
+           "MODELLIT: lighting constants must mirror upstream gouraud.vs");
+
+  // Data chain: preset -> config VM -> editor VM -> viewport -> QML.
+  QVERIFY2(presetSvc.contains(QStringLiteral("bedTextureFileForPreset")),
+           "BEDTEX: PresetServiceMock must resolve the bed texture file");
+  QVERIFY2(configVm.contains(QStringLiteral("bedTextureFileForPreset")),
+           "BEDTEX: ConfigViewModel must expose the selected preset's texture");
+  QVERIFY2(editorVm.contains(QStringLiteral("syncBedFromPrinterPreset")),
+           "BEDTEX: EditorViewModel must sync bed + texture from the preset");
+  QVERIFY2(viewportH.contains(QStringLiteral("Q_PROPERTY(QUrl bedTextureUrl")),
+           "BEDTEX: RhiViewport must expose bedTextureUrl");
+  QVERIFY2(preparePage.contains(QStringLiteral("bedTextureUrl: root.editorVm"))
+               && previewPage.contains(QStringLiteral("bedTextureUrl: root.editorVm")),
+           "BEDTEX: Prepare + Preview viewports must bind editorVm.bedTextureUrl");
+
+  // Preview renders the bed behind toolpaths (upstream GCodeViewer bed).
+  QVERIFY2(renderer.contains(QStringLiteral("upstream Preview also renders the print bed")),
+           "BEDTEX: preview canvas must draw the bed + texture");
+
+  // Model default color: upstream GLVolume::NEUTRAL_COLOR (0.8 gray).
+  QVERIFY2(sceneData.contains(QStringLiteral("GLVolume::NEUTRAL_COLOR")),
+           "MODELLIT: default object color must reference upstream NEUTRAL_COLOR");
+}

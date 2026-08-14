@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.14
-milestone_name: UI Visual Parity (Screenshot-Truth Alignment)
+milestone: v5.15
+milestone_name: Bed Texture & Model Lighting (Upstream Render Parity)
 status: executing
-stopped_at: Phase 228 (v5.14 visual parity) complete — all suites green; tagged v5.14
+stopped_at: Phase 229 (v5.15 bed texture + model lighting) complete — all suites green; tagged v5.15
 last_updated: 2026-08-14
-last_activity: 2026-08-14 -- Phase 228 visual-parity batch (GLToolbars anchors, sidebar density, destructive confirms)
+last_activity: 2026-08-14 -- Phase 229 render-parity batch (bed texture pipeline, gouraud model lighting, preview bed)
 progress:
   total_phases: 1
   completed_phases: 0
@@ -32,15 +32,16 @@ See:
 - `.planning/research/v5.11-PROCESS-SETTINGS-SUMMARY.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-**Current focus:** v5.14 UI visual parity complete (2026-08-14). Next: resume
-the deferred v5.11 Phase 227 process-projection workstream (planning artifact
-at `.planning/phases/227-process-projection-disclosure-and-filtering/`).
+**Current focus:** v5.15 render parity complete (2026-08-14): bed texture
+image + gouraud model lighting aligned with upstream. Next: resume the
+deferred v5.11 Phase 227 process-projection workstream (planning artifact at
+`.planning/phases/227-process-projection-disclosure-and-filtering/`).
 
 ## Current Position
 
-Phase: 228 (v5.14 visual parity) — complete
+Phase: 229 (v5.15 render parity) — complete
 Plan: Complete (single batch)
-Status: Tagged v5.14
+Status: Tagged v5.15
 Last activity: 2026-08-14
 
 Progress: [########--] 80%

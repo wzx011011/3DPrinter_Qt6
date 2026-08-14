@@ -36,6 +36,7 @@
 #include <QVector4D>
 #include <QSettings>
 #include <algorithm>
+#include <limits>
 #include <QSet>
 #include <QTimer>
 #include <cstring> // memcpy
@@ -2717,7 +2718,70 @@ void EditorViewModel::setConfigViewModel(ConfigViewModel *vm)
   // is wired, sync the active filament colours so the MMU gizmo and renderer
   // reflect the configured filaments immediately.
   syncFilamentColours();
+  // v5.15 (BEDTEX): apply the selected printer preset's printable_area +
+  // bed_texture to the viewport bed (mirrors upstream set_bed_shape on
+  // preset selection), and keep following later preset switches.
+  syncBedFromPrinterPreset();
+  if (configViewModel_) {
+    connect(configViewModel_, &ConfigViewModel::stateChanged, this, [this]() {
+      syncBedFromPrinterPreset();
+    });
+  }
 }
+
+void EditorViewModel::syncBedFromPrinterPreset()
+{
+  if (!configViewModel_)
+    return;
+
+  // Only re-apply when the printer preset actually changed — stateChanged
+  // also fires for unrelated option edits.
+  const QString preset = configViewModel_->currentPrinterPreset();
+  if (preset == m_bedSyncedPreset)
+    return;
+  m_bedSyncedPreset = preset;
+
+  // printable_area: "x1,y1,x2,y2,..." (polygon). Use the bounding box as the
+  // viewport bed rect (upstream BedShape::Type::RECT / bounding_box()).
+  const QString area = configViewModel_->mergedConfigValues()
+      .value(QStringLiteral("printable_area")).toString();
+  if (!area.isEmpty()) {
+    const QStringList parts = area.split(QLatin1Char(','), Qt::SkipEmptyParts);
+    if (parts.size() >= 8 && (parts.size() % 2) == 0) {
+      float minX = std::numeric_limits<float>::max();
+      float minY = std::numeric_limits<float>::max();
+      float maxX = std::numeric_limits<float>::lowest();
+      float maxY = std::numeric_limits<float>::lowest();
+      bool ok = true;
+      for (int i = 0; i + 1 < parts.size() && ok; i += 2) {
+        const float x = parts[i].trimmed().toFloat(&ok);
+        const float y = parts[i + 1].trimmed().toFloat(&ok);
+        if (!ok) break;
+        minX = std::min(minX, x); maxX = std::max(maxX, x);
+        minY = std::min(minY, y); maxY = std::max(maxY, y);
+      }
+      if (ok && maxX > minX && maxY > minY) {
+        setBedOriginX(minX);
+        setBedOriginY(minY);
+        setBedWidth(maxX - minX);
+        setBedDepth(maxY - minY);
+        setBedShapeType(0);
+      }
+    }
+  }
+
+  // Bed texture image from the preset's machine_model (upstream
+  // PartPlate::update_logo_texture_filename path).
+  const QString texture = configViewModel_->bedTextureFile();
+  const QUrl url = texture.isEmpty() ? QUrl() : QUrl::fromLocalFile(texture);
+  if (url != m_bedTextureUrl) {
+    m_bedTextureUrl = url;
+    emit bedShapeChanged();
+    emit stateChanged();
+  }
+}
+
+QUrl EditorViewModel::bedTextureUrl() const { return m_bedTextureUrl; }
 
 void EditorViewModel::syncFilamentColours()
 {

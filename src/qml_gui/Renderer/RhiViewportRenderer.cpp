@@ -7,6 +7,8 @@
 #include <QDebug>
 #include <QFile>
 #include <QHash>
+#include <QPainter>
+#include <QSvgRenderer>
 
 #include <algorithm>
 #include <atomic>
@@ -42,25 +44,26 @@ void rhiTrace(const char *milestone)
 //   offset 0:  mat4 mvp        (64 bytes; QMatrix4x4 is 16 contiguous floats)
 //   offset 64: vec3 gizmoCenter (12 bytes; QVector3D is 3 contiguous floats)
 //   offset 76: float gizmoScale (4 bytes; packs into the vec3's std140 tail)
-// Total = 80 bytes. The C++ struct is bit-identical to std140 here because
-// QMatrix4x4 and QVector3D have float (4-byte) alignment and no internal
-// padding, and 64 is already 16-aligned for the vec3 base. The 256-byte
-// backing buffer is allocated elsewhere (D3D12 cbuffer alignment); only the
-// first 80 bytes are written.
+//   offset 80: mat4 view        (64 bytes; v5.15 MODELLIT eye-space lighting)
+// Total = 144 bytes. The first 80 bytes are bit-identical to the mesh/gizmo
+// std140 CameraBlock; the v5.15 lit/bed shaders extend the block with the
+// raw view matrix at offset 80 (declared as vec4 gizmoCenter + mat4 view,
+// which reads the same bytes at [64,80)). The 256-byte backing buffer is
+// allocated elsewhere (D3D12 cbuffer alignment); only the first 144 bytes
+// are written.
 struct CameraBlockPacked {
   QMatrix4x4 mvp;        // offset 0,  64 bytes
   QVector3D gizmoCenter; // offset 64, 12 bytes
   float gizmoScale;      // offset 76, 4 bytes
+  QMatrix4x4 view;       // offset 80, 64 bytes (v5.15 MODELLIT)
 };
-// Phase 209 (MIT-02): the GLSL std140 CameraBlock is exactly 80 bytes
-// (mat4 + vec3 + float). QMatrix4x4 (float[16]) and QVector3D (float[3]) may
-// carry ABI alignment padding on some compilers, so the C++ struct can be
-// larger than 80. Only the first 80 bytes are uploaded to the UBO (the
-// std140 layout), so the assert checks the lower bound. The explicit
-// upload size below stays 80.
-static_assert(sizeof(CameraBlockPacked) >= 80,
-              "CameraBlockPacked must be at least 80 bytes to hold the GLSL "
-              "std140 CameraBlock layout (mat4 + vec3 + float).");
+// QMatrix4x4 (float[16]) and QVector3D (float[3]) may carry ABI alignment
+// padding on some compilers, so the C++ struct can be larger than the std140
+// layout. Only the first 144 bytes are uploaded; the assert checks the lower
+// bound.
+static_assert(sizeof(CameraBlockPacked) >= 144,
+              "CameraBlockPacked must be at least 144 bytes to hold the GLSL "
+              "std140 CameraBlock layout (mat4 + vec4 + mat4).");
 
 RhiViewportRenderer::RhiViewportRenderer() = default;
 
@@ -255,6 +258,18 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
       ? float(std::max(1, pixelSize.width())) / float(std::max(1, pixelSize.height()))
       : 1.0f;
   m_cameraMvp = viewport->cameraMvp(aspect);
+  // v5.15 (MODELLIT): raw world->eye matrix for the gouraud lighting in
+  // model_lit.vert (no clip-space correction — lighting is view-relative).
+  m_cameraView = viewport->m_camera.viewMatrix();
+  // v5.15 (BEDTEX): pick up a pending bed texture path change.
+  if (viewport->m_bedTextureDirty) {
+    viewport->m_bedTextureDirty = false;
+    const QString path = viewport->m_bedTextureUrl.toLocalFile();
+    if (path != m_pendingBedTexturePath) {
+      m_pendingBedTexturePath = path;
+      m_bedTextureDirty = true;
+    }
+  }
   if (viewport->m_cameraDirty) {
     m_prepareScene.markCameraDirty();
     viewport->m_cameraDirty = false;
@@ -593,10 +608,28 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->setVertexInput(0, 1, &lineBinding);
       cb->draw(m_bedLineVertexCount);
     }
+    // v5.15 (BEDTEX): printer bed texture image drawn over the background +
+    // grid, layered exactly like upstream render_logo (blended, no depth
+    // writes). Drawn before the model so the mesh (which does depth-test)
+    // still occludes it from below-camera angles.
+    if (m_prepareScene.showBed())
+      renderBedTexture(cb);
     if (m_modelVertexBuffer && m_modelVertexCount > 0) {
-      cb->setGraphicsPipeline(m_fillPipeline.get());
-      const QRhiCommandBuffer::VertexInput modelBinding(m_modelVertexBuffer.get(), 0);
-      cb->setVertexInput(0, 1, &modelBinding);
+      // v5.15 (MODELLIT): lit draw path (two-light gouraud) with the parallel
+      // per-face normal buffer. Falls back to the flat vertex-color pipeline
+      // when the lit pipeline or normal buffer is unavailable.
+      if (m_modelLitEnabled && ensureModelLitPipeline() && m_modelNormalBuffer) {
+        cb->setGraphicsPipeline(m_modelLitPipeline.get());
+        const QRhiCommandBuffer::VertexInput modelBindings[2] = {
+            QRhiCommandBuffer::VertexInput(m_modelVertexBuffer.get(), 0),
+            QRhiCommandBuffer::VertexInput(m_modelNormalBuffer.get(), 1),
+        };
+        cb->setVertexInput(0, 2, modelBindings);
+      } else {
+        cb->setGraphicsPipeline(m_fillPipeline.get());
+        const QRhiCommandBuffer::VertexInput modelBinding(m_modelVertexBuffer.get(), 0);
+        cb->setVertexInput(0, 1, &modelBinding);
+      }
       cb->draw(m_modelVertexCount);
     }
     // Phase 121 (PAINT-02/OV-03): render the painted-facet overlay after the
@@ -652,6 +685,23 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     cb->setViewport(QRhiViewport(0, 0, float(renderTarget()->pixelSize().width()),
                                  float(renderTarget()->pixelSize().height())));
     cb->setShaderResources(m_srb.get());
+    // v5.15 (BEDTEX): upstream Preview also renders the print bed
+    // (GCodeViewer -> _render_bed) behind the toolpath segments, including
+    // the bed texture image.
+    if (m_prepareScene.showBed() && m_bedFillBuffer && m_bedFillVertexCount > 0) {
+      cb->setGraphicsPipeline(m_fillPipeline.get());
+      const QRhiCommandBuffer::VertexInput fillBinding(m_bedFillBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &fillBinding);
+      cb->draw(m_bedFillVertexCount);
+    }
+    if (m_prepareScene.showBed() && m_bedLineBuffer && m_bedLineVertexCount > 0) {
+      cb->setGraphicsPipeline(m_linePipeline.get());
+      const QRhiCommandBuffer::VertexInput lineBinding(m_bedLineBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &lineBinding);
+      cb->draw(m_bedLineVertexCount);
+    }
+    if (m_prepareScene.showBed())
+      renderBedTexture(cb);
     cb->setGraphicsPipeline(m_linePipeline.get());
 
     const QVector<PreviewDrawRange> drawRanges = computePreviewDrawRanges();
@@ -743,6 +793,22 @@ void RhiViewportRenderer::releaseResources()
   m_fillPipeline.reset();
   m_translucentFillPipeline.reset();
   m_translucentLinePipeline.reset();
+  // v5.15 (BEDTEX/MODELLIT): bed texture + lit model resources.
+  m_bedTexturePipeline.reset();
+  m_bedTextureSrb.reset();
+  m_bedTexture.reset();
+  m_bedTextureSampler.reset();
+  m_bedTextureVertexBuffer.reset();
+  m_bedTextureImage = QImage();
+  m_bedTexturePath.clear();
+  m_pendingBedTexturePath.clear();
+  m_bedTextureDirty = false;
+  m_bedTextureQuadDirty = true;
+  m_bedTextureVertexBytes = 0;
+  m_bedTextureVertexCount = 0;
+  m_modelLitPipeline.reset();
+  m_modelNormalBuffer.reset();
+  m_modelNormalBufferBytes = 0;
   // Phase 68: gizmo pipelines + vertex buffer.
   m_gizmoLinePipeline.reset();
   m_gizmoTriPipeline.reset();
@@ -1177,6 +1243,258 @@ bool RhiViewportRenderer::ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &
   return true;
 }
 
+// ── v5.15 (BEDTEX): textured print-bed quad ────────────────────────────────
+// Upstream contract: PartPlate::render_logo / render_logo_texture load the
+// printer profile's bed_texture image (PNG directly, SVG rasterized, capped
+// at 2048px) and draw it blended over the plate background + grid with depth
+// test/write off (see PartPlate.cpp:736-878).
+bool RhiViewportRenderer::ensureBedTexturePipeline()
+{
+  if (m_bedTexturePipeline)
+    return true;
+  if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr)
+    return false;
+  // The SRB references the texture + sampler, so creation is deferred until
+  // a texture has actually been uploaded.
+  if (!m_bedTexture || !m_bedTextureSampler || !m_cameraUniformBuffer)
+    return false;
+
+  if (!m_bedTextureSrb) {
+    m_bedTextureSrb.reset(rhi()->newShaderResourceBindings());
+    m_bedTextureSrb->setBindings({
+        QRhiShaderResourceBinding::uniformBuffer(
+            0, QRhiShaderResourceBinding::VertexStage, m_cameraUniformBuffer.get()),
+        QRhiShaderResourceBinding::sampledTexture(
+            1, QRhiShaderResourceBinding::FragmentStage,
+            m_bedTexture.get(), m_bedTextureSampler.get()),
+    });
+    if (!m_bedTextureSrb->create())
+      return false;
+  }
+
+  const QShader vertexShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/bed_texture.vert.qsb"));
+  const QShader fragmentShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/bed_texture.frag.qsb"));
+  if (!vertexShader.isValid() || !fragmentShader.isValid())
+    return false;
+
+  // 5 floats: pos.xyz + uv.xy
+  struct BedTextureVertex { float x, y, z, u, v; };
+  QRhiVertexInputLayout inputLayout;
+  inputLayout.setBindings({QRhiVertexInputBinding(sizeof(BedTextureVertex))});
+  inputLayout.setAttributes({
+      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, 0),
+      QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float2, 3 * sizeof(float)),
+  });
+
+  m_bedTexturePipeline.reset(rhi()->newGraphicsPipeline());
+  m_bedTexturePipeline->setTopology(QRhiGraphicsPipeline::Triangles);
+  m_bedTexturePipeline->setShaderStages({
+      QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
+      QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
+  });
+  m_bedTexturePipeline->setShaderResourceBindings(m_bedTextureSrb.get());
+  m_bedTexturePipeline->setVertexInputLayout(inputLayout);
+  m_bedTexturePipeline->setRenderPassDescriptor(renderTarget()->renderPassDescriptor());
+  // Upstream draws the logo texture with depth writes off and (effectively)
+  // no depth test, layered over the already-drawn background + grid.
+  m_bedTexturePipeline->setDepthTest(false);
+  m_bedTexturePipeline->setDepthWrite(false);
+  QRhiGraphicsPipeline::TargetBlend blend;
+  blend.enable = true;
+  blend.srcColor = QRhiGraphicsPipeline::SrcAlpha;
+  blend.dstColor = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+  blend.srcAlpha = QRhiGraphicsPipeline::One;
+  blend.dstAlpha = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+  m_bedTexturePipeline->setTargetBlends({blend});
+  if (!m_bedTexturePipeline->create()) {
+    m_bedTexturePipeline.reset();
+    m_bedTextureSrb.reset();
+    return false;
+  }
+  return true;
+}
+
+void RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return;
+
+  // 1. (Re)load the source image when the pending path changed. Mirrors
+  // upstream update_logo_texture_filename: only .png/.svg are considered;
+  // anything else (or a missing file) clears the texture.
+  if (m_bedTextureDirty) {
+    m_bedTextureDirty = false;
+    if (m_pendingBedTexturePath != m_bedTexturePath) {
+      m_bedTexturePath = m_pendingBedTexturePath;
+      QImage image;
+      const bool isSvg = m_bedTexturePath.endsWith(QStringLiteral(".svg"), Qt::CaseInsensitive);
+      const bool isPng = m_bedTexturePath.endsWith(QStringLiteral(".png"), Qt::CaseInsensitive);
+      if (isSvg) {
+        QSvgRenderer svg(m_bedTexturePath);
+        if (svg.isValid()) {
+          QSize sz = svg.defaultSize();
+          if (sz.isEmpty())
+            sz = QSize(1024, 1024);
+          // Upstream caps the rasterized logo texture at 2048px
+          // (logo_tex_size in PartPlate::render_logo).
+          const int kMaxTex = 2048;
+          if (sz.width() > kMaxTex || sz.height() > kMaxTex) {
+            const float s = float(kMaxTex) / float(std::max(sz.width(), sz.height()));
+            sz = QSize(int(sz.width() * s), int(sz.height() * s));
+          }
+          QImage raster(sz, QImage::Format_RGBA8888);
+          raster.fill(Qt::transparent);
+          QPainter painter(&raster);
+          svg.render(&painter);
+          painter.end();
+          image = raster;
+        }
+      } else if (isPng) {
+        image = QImage(m_bedTexturePath);
+        if (!image.isNull())
+          image = image.convertToFormat(QImage::Format_RGBA8888);
+      }
+      if (image.isNull()) {
+        if (!m_bedTexturePath.isEmpty())
+          qWarning("[RHI] bed texture load failed: %s", qPrintable(m_bedTexturePath));
+        m_bedTextureImage = QImage();
+      } else {
+        m_bedTextureImage = image;
+      }
+      // GPU state is rebuilt from scratch on any path change (SRB references
+      // the texture object, so the pipeline must be recreated too).
+      m_bedTexture.reset();
+      m_bedTextureSampler.reset();
+      m_bedTextureSrb.reset();
+      m_bedTexturePipeline.reset();
+      m_bedTextureQuadDirty = true;
+    }
+  }
+
+  if (m_bedTextureImage.isNull())
+    return;
+
+  // 2. Create + upload the GPU texture.
+  if (!m_bedTexture) {
+    m_bedTexture.reset(rhi()->newTexture(QRhiTexture::RGBA8, m_bedTextureImage.size()));
+    if (!m_bedTexture->create()) {
+      m_bedTexture.reset();
+      return;
+    }
+    m_bedTextureSampler.reset(rhi()->newSampler(
+        QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
+        QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
+    if (!m_bedTextureSampler->create()) {
+      m_bedTextureSampler.reset();
+      m_bedTexture.reset();
+      return;
+    }
+    updates->uploadTexture(m_bedTexture.get(), m_bedTextureImage);
+  }
+
+  // 3. Rebuild the bed quad when the bed rect changed. The quad uses the
+  // same scene mapping as buildSceneVertices: (x, 0, z=y_mm).
+  struct BedTextureVertex { float x, y, z, u, v; };
+  const float left = m_prepareScene.bedOriginX();
+  const float top = m_prepareScene.bedOriginY();
+  const float right = left + m_prepareScene.bedWidth();
+  const float bottom = top + m_prepareScene.bedDepth();
+  if (m_bedTextureQuadDirty) {
+    m_bedTextureQuadDirty = false;
+    QVector<BedTextureVertex> quad;
+    quad.reserve(6);
+    // QRhi texture uploads keep the image's top row at v=0, so v grows with
+    // the bed's +depth axis (image top edge maps to the bed's top edge).
+    const auto append = [&](float x, float z, float u, float v) {
+      quad.append(BedTextureVertex{x, 0.0f, z, u, v});
+    };
+    append(left,  top,    0.f, 0.f);
+    append(right, top,    1.f, 0.f);
+    append(right, bottom, 1.f, 1.f);
+    append(left,  top,    0.f, 0.f);
+    append(right, bottom, 1.f, 1.f);
+    append(left,  bottom, 0.f, 1.f);
+    const quint32 bytes = quint32(quad.size() * int(sizeof(BedTextureVertex)));
+    if (ensureBuffer(m_bedTextureVertexBuffer, bytes, m_bedTextureVertexBytes, QRhiBuffer::VertexBuffer)
+        && m_bedTextureVertexBuffer && bytes > 0) {
+      updates->uploadStaticBuffer(m_bedTextureVertexBuffer.get(), 0, bytes, quad.constData());
+      m_bedTextureVertexCount = quint32(quad.size());
+    } else {
+      m_bedTextureVertexCount = 0;
+    }
+  }
+}
+
+void RhiViewportRenderer::renderBedTexture(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr || !m_prepareScene.showBed())
+    return;
+  if (!m_bedTexturePipeline || !m_bedTextureVertexBuffer || m_bedTextureVertexCount == 0)
+    return;
+  if (!ensureBedTexturePipeline())
+    return;
+  cb->setGraphicsPipeline(m_bedTexturePipeline.get());
+  cb->setShaderResources(m_bedTextureSrb.get());
+  const QRhiCommandBuffer::VertexInput binding(m_bedTextureVertexBuffer.get(), 0);
+  cb->setVertexInput(0, 1, &binding);
+  cb->draw(m_bedTextureVertexCount);
+  // Restore the shared camera-only SRB for the draws that follow.
+  cb->setShaderResources(m_srb.get());
+}
+
+// ── v5.15 (MODELLIT): two-light gouraud pipeline for model meshes ──────────
+// Upstream contract: resources/shaders/140/gouraud.vs — ambient 0.3, top
+// light (dir -0.457,0.457,0.762 / diffuse 0.8 / specular 0.125 / shininess
+// 20) + front light (dir 0.699,0.140,0.699 / diffuse 0.3), evaluated in eye
+// space. Shares m_srb (camera UBO); reads the per-face normal buffer at
+// vertex-input binding 1 alongside the shared position/color buffer.
+bool RhiViewportRenderer::ensureModelLitPipeline()
+{
+  if (m_modelLitPipeline)
+    return true;
+  if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr || m_srb == nullptr)
+    return false;
+
+  const QShader vertexShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_lit.vert.qsb"));
+  const QShader fragmentShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_lit.frag.qsb"));
+  if (!vertexShader.isValid() || !fragmentShader.isValid())
+    return false;
+
+  QRhiVertexInputLayout inputLayout;
+  inputLayout.setBindings({
+      QRhiVertexInputBinding(sizeof(Vertex)),          // pos3 + color4
+      QRhiVertexInputBinding(3 * sizeof(float)),       // normal3 (parallel)
+  });
+  inputLayout.setAttributes({
+      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, offsetof(Vertex, x)),
+      QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float4, offsetof(Vertex, r)),
+      QRhiVertexInputAttribute(1, 2, QRhiVertexInputAttribute::Float3, 0),
+  });
+
+  m_renderPassDescriptor = renderTarget()->renderPassDescriptor();
+  m_modelLitPipeline.reset(rhi()->newGraphicsPipeline());
+  m_modelLitPipeline->setTopology(QRhiGraphicsPipeline::Triangles);
+  m_modelLitPipeline->setShaderStages({
+      QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
+      QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
+  });
+  m_modelLitPipeline->setShaderResourceBindings(m_srb.get());
+  m_modelLitPipeline->setVertexInputLayout(inputLayout);
+  m_modelLitPipeline->setRenderPassDescriptor(m_renderPassDescriptor);
+  m_modelLitPipeline->setDepthTest(true);
+  m_modelLitPipeline->setDepthWrite(true);
+  m_modelLitPipeline->setTargetBlends({});
+  if (!m_modelLitPipeline->create()) {
+    m_modelLitPipeline.reset();
+    return false;
+  }
+  return true;
+}
+
 bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags)
 {
   rhiTrace("uploadSceneBuffers-enter");
@@ -1187,6 +1505,8 @@ bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, q
     return false;
   if (!uploadBedBuffers(updates, dirtyFlags))
     return false;
+  // v5.15 (BEDTEX): texture image + bed quad (no-op when no texture path).
+  uploadBedTexture(updates);
   if (!uploadModelBuffer(updates, dirtyFlags))
     return false;
   if (!uploadHighlightBuffer(updates, dirtyFlags))
@@ -1218,6 +1538,10 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
                         | PrepareSceneData::DirtyGpu)) != 0;
   if (!uploadScene)
     return true;
+
+  // v5.15 (BEDTEX): the texture quad follows the bed rect, so a bed
+  // geometry change must rebuild it too.
+  m_bedTextureQuadDirty = true;
 
   const QVector<Vertex> fillVertices = buildSceneVertices(m_prepareScene.bedFillVertices());
   const QVector<Vertex> lineVertices = buildSceneVertices(m_prepareScene.bedLineVertices());
@@ -1271,6 +1595,44 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
                                 modelBytes,
                                 modelVertices.constData());
   }
+
+  // v5.15 (MODELLIT): parallel per-face normal array (one normal per model
+  // vertex, i.e. three identical normals per triangle) for the lit pipeline.
+  // Computed here so the normal buffer always matches the position buffer
+  // even when the mesh stream rebuilds.
+  {
+    QVector<float> normals;
+    normals.reserve(modelVertices.size() * 3);
+    const int triCount = modelVertices.size() / 3;
+    const Vertex *v = modelVertices.constData();
+    for (int t = 0; t < triCount; ++t) {
+      const Vertex &a = v[t * 3 + 0];
+      const Vertex &b = v[t * 3 + 1];
+      const Vertex &c = v[t * 3 + 2];
+      const float ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z;
+      const float wx = c.x - a.x, wy = c.y - a.y, wz = c.z - a.z;
+      float nx = uy * wz - uz * wy;
+      float ny = uz * wx - ux * wz;
+      float nz = ux * wy - uy * wx;
+      const float len = std::sqrt(nx * nx + ny * ny + nz * nz);
+      if (len > 1e-9f) {
+        nx /= len; ny /= len; nz /= len;
+      } else {
+        nx = 0.f; ny = 1.f; nz = 0.f;
+      }
+      for (int k = 0; k < 3; ++k) {
+        normals.append(nx);
+        normals.append(ny);
+        normals.append(nz);
+      }
+    }
+    const quint32 normalBytes = quint32(normals.size() * int(sizeof(float)));
+    if (ensureBuffer(m_modelNormalBuffer, normalBytes, m_modelNormalBufferBytes, QRhiBuffer::VertexBuffer)
+        && m_modelNormalBuffer && normalBytes > 0) {
+      updates->uploadStaticBuffer(m_modelNormalBuffer.get(), 0, normalBytes, normals.constData());
+    }
+  }
+
   m_modelVertexBufferUploaded = true;
   return true;
 }
@@ -1800,8 +2162,9 @@ bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, 
   packed.mvp = corrected;
   packed.gizmoCenter = m_gizmoCenter;
   packed.gizmoScale = gizmoScale;
+  packed.view = m_cameraView;
   updates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 0,
-                               80, &packed);
+                               144, &packed);
   rhiTrace("seamB-packed");
 
   m_cameraUniformBufferUploaded = true;

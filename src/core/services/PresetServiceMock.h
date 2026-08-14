@@ -53,6 +53,11 @@ public:
   /// gap documented in PLAN.md. Falls back to the default list when the
   /// model is unknown.
   Q_INVOKABLE QStringList bedTypesForPrinterModel(const QString &model) const;
+  /// v5.15 (BEDTEX): absolute path of the printer preset's bed texture image
+  /// (.png/.svg from the linked machine_model JSON, resolved against the
+  /// vendor profile dir). Empty when the preset has no usable texture.
+  /// Mirrors upstream PresetUtils::system_printer_bed_texture.
+  Q_INVOKABLE QString bedTextureFileForPreset(const QString &presetName) const;
   /// Default bed-surface list (4 entries) shared by the wizard when a model
   /// has no per-model override. Exposed for QML/tests.
   Q_INVOKABLE QStringList defaultBedTypes() const;
@@ -149,6 +154,10 @@ private:
   QMap<int, QString> m_selectedPresets;
   /// 已加载的厂商文件名集合（loadSingleVendor 去重，避免重复解析）
   QStringList m_loadedVendors;
+  /// v5.15 (BEDTEX): printer preset name -> vendor profile dir (absolute),
+  /// recorded by loadSingleVendor for bed-texture asset resolution.
+  QMap<QString, QString> m_presetVendorDir;
+  QString validatedTexturePath(const QString &vendorDir, const QString &bedTexture) const;
 
   /// 初始化内置默认预设值（对齐上游 PresetBundle 默认值）
   void initBuiltinDefaults();

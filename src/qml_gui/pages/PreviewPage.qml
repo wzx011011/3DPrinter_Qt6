@@ -257,6 +257,16 @@ Item {
                     anchors.fill: parent
                     canvasType: GLViewport.CanvasPreview
                     previewData: root.previewVm.gcodePreviewData
+                    // v5.15 (BEDTEX): preview renders the printer bed
+                    // (geometry + texture) behind the toolpath, matching
+                    // upstream GCodeViewer -> _render_bed.
+                    bedWidth: root.editorVm ? root.editorVm.bedWidth : 220
+                    bedDepth: root.editorVm ? root.editorVm.bedDepth : 220
+                    bedOriginX: root.editorVm ? root.editorVm.bedOriginX : 0
+                    bedOriginY: root.editorVm ? root.editorVm.bedOriginY : 0
+                    bedShapeType: root.editorVm ? root.editorVm.bedShapeType : 0
+                    bedDiameter: root.editorVm ? root.editorVm.bedDiameter : 220
+                    bedTextureUrl: root.editorVm ? root.editorVm.bedTextureUrl : ""
                     layerMin: root.previewVm.currentLayerMin
                     layerMax: root.previewVm.currentLayerMax
                     moveEnd: root.previewVm.currentMove

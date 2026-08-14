@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QUrl>
 #include <QHoverEvent>
 #include <QImage>
 #include <QPointF>
@@ -40,6 +41,9 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(float bedOriginY READ bedOriginY WRITE setBedOriginY)
   Q_PROPERTY(int bedShapeType READ bedShapeType WRITE setBedShapeType)
   Q_PROPERTY(float bedDiameter READ bedDiameter WRITE setBedDiameter)
+  // v5.15 (BEDTEX): printer-profile bed texture image (upstream PartPlate
+  // m_logo_texture_filename sourced from the machine model's bed_texture).
+  Q_PROPERTY(QUrl bedTextureUrl READ bedTextureUrl WRITE setBedTextureUrl NOTIFY bedTextureUrlChanged)
   Q_PROPERTY(int currentPlateIndex READ currentPlateIndex WRITE setCurrentPlateIndex)
   Q_PROPERTY(int plateCount READ plateCount WRITE setPlateCount)
   Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices WRITE setActivePlateObjectIndices)
@@ -229,6 +233,8 @@ public:
   void setBedShapeType(int value);
   float bedDiameter() const { return m_bedDiameter; }
   void setBedDiameter(float value);
+  QUrl bedTextureUrl() const { return m_bedTextureUrl; }
+  void setBedTextureUrl(const QUrl &value);
   int currentPlateIndex() const { return m_currentPlateIndex; }
   void setCurrentPlateIndex(int value);
   int plateCount() const { return m_plateCount; }
@@ -360,6 +366,7 @@ public:
   void deliverThumbnail(const QImage &image, int plateIndex);
 
 signals:
+  void bedTextureUrlChanged();
   void canvasTypeChanged();
   void explosionRatioChanged();
   void assemblyMeasureSelectionChanged();
@@ -516,6 +523,7 @@ private:
   float m_bedOriginY = 0.f;
   int m_bedShapeType = 0;
   float m_bedDiameter = 220.f;
+  QUrl m_bedTextureUrl;
   int m_currentPlateIndex = 0;
   int m_plateCount = 1;
   QVariantList m_activePlateObjectIndices;
@@ -610,6 +618,7 @@ private:
   bool m_contextLayerEditingAtPress = false;
   int m_pressPickedSourceObjectIndex = -1;
   bool m_cameraDirty = true;
+  bool m_bedTextureDirty = true;   // v5.15 (BEDTEX): consumed by renderer synchronize
 
   // Phase 69/70: gizmo drag state.
   // m_gizmoAxis: 0=none, 1=X, 2=Y, 3=Z.

@@ -891,3 +891,61 @@ functional/API-level; floating-toolbar placement was tuned to one window size.
 **Fixed in passing:** startup segfault (stale owzx_app_core object ABI after
 v5.13 header changes — purged object dirs + rebuilt via canonical script;
 ViewportContextMenuTests target needed the same purge).
+
+---
+
+### v5.15 - Bed Texture & Model Lighting (Upstream Render Parity)
+
+**Started:** 2026-08-14
+**Status:** Complete
+**Phases:** 229 (single-phase render-parity batch)
+
+**Goal:** Close the viewport render gap the user reported ("平台的渲染效果差
+很多，我记得上游的渲染是用图片渲染上的"). Upstream renders the print bed
+with the printer profile's bed texture image; OWzx drew a flat-color quad +
+grid only. Models were flat vertex colors with zero lighting.
+
+**Upstream truth established:**
+- PartPlate::render_logo / render_logo_texture (PartPlate.cpp:736-878): the
+  machine model's bed_texture (PNG direct / SVG rasterized, 2048px cap) drawn
+  blended over background + grid, depth test/write off, selected plate only.
+- Plater::set_bed_shape -> PresetUtils::system_printer_bed_texture
+  (Preset.cpp:3561): vendor profiles dir + machine_model JSON bed_texture.
+- gouraud.vs lighting: ambient 0.3, top light (-0.457,0.457,0.762 / diffuse
+  0.8 / specular 0.125 / shininess 20) + front light (0.699,0.140,0.699 /
+  diffuse 0.3), eye space; GLVolume::NEUTRAL_COLOR (0.8 gray) default object
+  color.
+- Preview also renders the bed (GCodeViewer -> _render_bed).
+
+**Outcome:**
+1. **Bed texture pipeline** (BEDTEX): QRhi textured quad (bed_texture.vert/
+   .frag, texture SRB binding 1), PNG via QImage, SVG via QSvgRenderer
+   (2048px cap), layered like upstream (blend on, depth off) in both the
+   Prepare and Preview canvases. Quad follows the bed rect (rebuilds on
+   DirtyBed).
+2. **Data chain**: PresetServiceMock records per-preset vendor dir and
+   resolves machine_model JSON bed_texture (validated .png/.svg + exists);
+   ConfigViewModel::bedTextureFile; EditorViewModel::syncBedFromPrinterPreset
+   also applies printable_area to the viewport bed (bed follows the printer
+   preset, upstream set_bed_shape behavior) and exposes bedTextureUrl;
+   RhiViewport Q_PROPERTY; PreparePage/PreviewPage bindings.
+3. **Model lighting** (MODELLIT): model_lit.vert/.frag with the exact
+   upstream gouraud constants (eye-space via a view matrix packed into the
+   camera UBO at offset 80 — layout stays compatible with the mesh/gizmo
+   blocks), parallel per-face normal buffer (binding 1), winding-agnostic
+   diffuse. Default object color switched to upstream NEUTRAL_COLOR 0.8 gray
+   (per-object hue palette was an OWzx invention).
+4. **Preview bed**: preview canvas now draws bed background/grid/texture
+   behind toolpaths (was segments-only).
+5. **Tests**: QmlUiAuditTests v515BedTextureAndModelLitWired (source-audit
+   of the full chain + shader constants); ViewModelSmokeTests
+   testBedTextureFileForPreset (real Creality vendor resolution, PASS).
+6. **Fixed in passing**: ViewModelSmokeTests sidebar-width assertions were
+   masked by stale object files since v5.14 (binary still had the 392
+   constant baked in); rebuilt all test targets from scratch and updated the
+   two assertions to the v5.14 default (320).
+
+**Verification:** canonical verify exit 0 (all suites, all test targets
+rebuilt from purged objects); runtime screenshots confirm the bed texture
+(coverage/orientation correct) and lit neutral-gray model (top-bright,
+side-dark shading) match the upstream look.
