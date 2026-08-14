@@ -945,6 +945,40 @@ bool ConfigViewModel::requestCurrentFilamentPreset(const QString &name)
   return false;
 }
 
+QString ConfigViewModel::filamentPresetForSlot(int slot) const
+{
+  // Slot 0 is the global selection; slots 1..N index filamentSlotPresets_.
+  if (slot <= 0)
+    return currentFilamentPreset_;
+  if (slot - 1 < filamentSlotPresets_.size())
+    return filamentSlotPresets_.at(slot - 1);
+  return currentFilamentPreset_;
+}
+
+bool ConfigViewModel::requestFilamentPresetForSlot(int slot, const QString &name)
+{
+  if (slot <= 0)
+    return requestCurrentFilamentPreset(name);
+  if (queuePendingAction(QStringLiteral("switch-filament-preset-%1").arg(slot), name))
+  {
+    while (filamentSlotPresets_.size() < slot)
+      filamentSlotPresets_.append(currentFilamentPreset_);
+    if (filamentSlotPresets_.at(slot - 1) == name)
+      return true;
+    filamentSlotPresets_[slot - 1] = name;
+    emit stateChanged();
+    // A per-slot preset change alters the effective multi-material config.
+    emit sliceAffectingConfigChanged();
+    return true;
+  }
+  return false;
+}
+
+bool ConfigViewModel::isFilamentCompatibleForSlot(int slot) const
+{
+  return isFilamentCompatible(filamentPresetForSlot(slot));
+}
+
 bool ConfigViewModel::requestCurrentPrintPreset(const QString &name)
 {
   if (queuePendingAction(QStringLiteral("switch-print-preset"), name))

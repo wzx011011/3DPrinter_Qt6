@@ -193,6 +193,8 @@ private slots:
   void calibrationImplementedModesEmitSliceRequests();
   void calibrationUnsupportedModesAreExplicitlyUnavailable();
   void calibrationFallbackAndSliceCallbacksDriveProgress();
+  // v5.16 (CIRC-04): per-slot filament presets hold independent selections.
+  void filamentSlotPresetsAreIndependent();
   // v2.7 P2-A: INT-04 MQTT connection params + telemetry field mapping
   void int04_MqttConnectionParamsAndTelemetryFields();
   // v2.7 P2-B: INT-05 MQTT command construction + control flow
@@ -2398,6 +2400,55 @@ void ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests()
     QCOMPARE(args.at(3).toDouble(), item.step);
     QCOMPARE(args.at(4).toBool(), item.printNumbers);
     QCOMPARE(args.at(5).toString(), QStringLiteral("calib_%1").arg(id));
+  }
+}
+
+void ViewModelSmokeTests::filamentSlotPresetsAreIndependent()
+{
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  // v5.16 (CIRC-04): slot 0 mirrors the global selection; slots 1..N hold
+  // their own preset (upstream filament_presets vector semantics). Before the
+  // fix every slot combo drove the single global preset.
+  const QStringList names = config.filamentPresetNames();
+  QVERIFY(!names.isEmpty());
+
+  QCOMPARE(config.filamentPresetForSlot(0), config.currentFilamentPreset());
+  // Unset slots fall back to the global selection, never empty.
+  QCOMPARE(config.filamentPresetForSlot(1), config.currentFilamentPreset());
+
+  // Pick two distinct presets for slot 1 and slot 2.
+  const QString a = names.first();
+  QString b;
+  for (const QString &n : names) {
+    if (n != a) { b = n; break; }
+  }
+  if (!b.isEmpty()) {
+    QSignalSpy sliceSpy(&config, &ConfigViewModel::sliceAffectingConfigChanged);
+    QVERIFY(config.requestFilamentPresetForSlot(1, a));
+    QVERIFY(config.requestFilamentPresetForSlot(2, b));
+    QCOMPARE(config.filamentPresetForSlot(1), a);
+    QCOMPARE(config.filamentPresetForSlot(2), b);
+    QVERIFY(config.filamentPresetForSlot(1) != config.filamentPresetForSlot(2));
+    // The invalidation signal fires once per actual slot change (slot 1 may
+    // already hold preset a, in which case no signal for that request).
+    QVERIFY(sliceSpy.count() >= 1);
+    // Global selection untouched by slot edits.
+    QCOMPARE(config.filamentPresetForSlot(0), config.currentFilamentPreset());
+    // Per-slot compatibility reads the slot's own preset.
+    QCOMPARE(config.isFilamentCompatibleForSlot(1),
+             config.isFilamentCompatible(a));
+    QCOMPARE(config.isFilamentCompatibleForSlot(2),
+             config.isFilamentCompatible(b));
+  }
+
+  // Slot 0 routes through the global switch path (dirty-guard semantics kept).
+  const QString global0 = config.currentFilamentPreset();
+  if (names.size() > 1 && names.constFirst() != global0) {
+    QVERIFY(config.requestFilamentPresetForSlot(0, names.constFirst()));
+    QCOMPARE(config.currentFilamentPreset(), names.constFirst());
   }
 }
 

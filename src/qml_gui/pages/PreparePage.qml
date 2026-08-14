@@ -3248,23 +3248,91 @@ Item {
 
                 Text { text: qsTr("高级切割"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true; Layout.alignment: Qt.AlignHCenter }
 
+                // v5.16 (CIRC-03): mode selector aligned with advCutSelected's
+                // dispatch — 0 planar / 1 tongue-groove / discrete connectors.
+                // (The executor branches on cutMode==1 then advCutConnectors.)
+                RowLayout {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    Repeater {
+                        model: [qsTr("平面"), qsTr("舌槽"), qsTr("连接销")]
+                        Rectangle {
+                            width: 52; height: 22; radius: 4
+                            readonly property bool activeMode: index === 2
+                                ? (root.editorVm && root.editorVm.advCutConnectors)
+                                : (root.editorVm && root.editorVm.cutMode === index && !root.editorVm.advCutConnectors)
+                            color: activeMode ? Theme.chromePressed : Theme.bgPanel
+                            border.color: activeMode ? Theme.statusInfo : Theme.bgHover
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData
+                                color: activeMode ? Theme.statusInfo : Theme.textTertiary
+                                font.pixelSize: Theme.fontSizeXS
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: if (root.editorVm) {
+                                    if (index === 2) {
+                                        root.editorVm.advCutConnectors = true
+                                    } else {
+                                        root.editorVm.advCutConnectors = false
+                                        root.editorVm.cutMode = index
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Text { text: qsTr("切割轴"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
-                CxComboBox { Layout.preferredWidth: 80; model: ["X", "Y", "Z"]; currentIndex: root.editorVm ? root.editorVm.cutAxis : 2; onActivated: if (root.editorVm) root.editorVm.cutAxis = currentIndex }
+                CxComboBox { Layout.preferredWidth: 80; model: ["X", "Y", "Z"]; currentIndex: root.editorVm ? root.editorVm.advCutAxis : 2; onActivated: if (root.editorVm) root.editorVm.advCutAxis = currentIndex }
 
                 Text { text: qsTr("位置"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
-                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.cutPosition : 0; from: -500; to: 500; onValueModified: if (root.editorVm) root.editorVm.cutPosition = value }
+                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.advCutPosition : 0; from: -500; to: 500; onValueModified: if (root.editorVm) root.editorVm.advCutPosition = value }
 
-                CxCheckBox { text: qsTr("保留两侧"); checked: root.editorVm ? root.editorVm.cutKeepMode === 1 : true; onCheckedChanged: if (root.editorVm) root.editorVm.cutKeepMode = checked ? 1 : 0 }
-                CxCheckBox { text: qsTr("仅上半部"); checked: root.editorVm ? root.editorVm.cutKeepMode === 2 : false; onCheckedChanged: if (root.editorVm) root.editorVm.cutKeepMode = checked ? 2 : 1 }
+                CxCheckBox { text: qsTr("保留两侧"); checked: root.editorVm ? root.editorVm.advCutKeepBoth : true; onCheckedChanged: if (root.editorVm) root.editorVm.advCutKeepBoth = checked }
+
+                // Tongue-groove parameters (executor: independent groove params
+                // if >0, else connectorSize-derived defaults — upstream Cut::Groove).
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm ? (root.editorVm.cutMode === 1 && !root.editorVm.advCutConnectors) : false
+                    Text { text: qsTr("槽深:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSpinBox { Layout.preferredWidth: 60; value: root.editorVm ? root.editorVm.grooveDepth : 0; from: 0; to: 50; onValueModified: if (root.editorVm) root.editorVm.grooveDepth = value }
+                    Text { text: qsTr("槽宽:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSpinBox { Layout.preferredWidth: 60; value: root.editorVm ? root.editorVm.grooveWidth : 0; from: 0; to: 50; onValueModified: if (root.editorVm) root.editorVm.grooveWidth = value }
+                }
+
+                // Discrete connector pins: click the model surface to place
+                // (click routing is active in GizmoAdvancedCut mode).
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm ? root.editorVm.advCutConnectors : false
+                    Text {
+                        text: qsTr("已放连接销: %1").arg(root.editorVm ? root.editorVm.advancedCutConnectorCount : 0)
+                        color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS
+                    }
+                    CxButton {
+                        text: qsTr("清除")
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
+                        visible: root.editorVm && root.editorVm.advancedCutConnectorCount > 0
+                        onClicked: if (root.editorVm) root.editorVm.clearAdvancedCutConnectors()
+                    }
+                }
 
                 // Phase 173 (CL-03): migrated from Rectangle+Text+MouseArea
                 // pseudo-button to CxButton (compact Secondary).
+                // v5.16 (CIRC-03): executes the real groove/connector executor
+                // advCutSelected() — was wired to plain cutSelected().
                 CxButton {
                     Layout.alignment: Qt.AlignHCenter
                     text: qsTr("执行切割")
                     compact: true
                     cxStyle: CxButton.Style.Secondary
-                    onClicked: if (root.editorVm) root.editorVm.cutSelected()
+                    onClicked: if (root.editorVm) root.editorVm.advCutSelected()
                 }
             }
         }

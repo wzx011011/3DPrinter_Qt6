@@ -110,6 +110,12 @@ public:
   Q_INVOKABLE void setCurrentPrintPreset(const QString &name);
   Q_INVOKABLE bool requestCurrentPrinterPreset(const QString &name);
   Q_INVOKABLE bool requestCurrentFilamentPreset(const QString &name);
+  /// v5.16 (CIRC-04): per-slot filament preset selection (upstream
+  /// PresetBundle::filament_presets vector semantics). Slot 0 mirrors the
+  /// global current selection; slots 1..N hold their own preset.
+  Q_INVOKABLE QString filamentPresetForSlot(int slot) const;
+  Q_INVOKABLE bool requestFilamentPresetForSlot(int slot, const QString &name);
+  Q_INVOKABLE bool isFilamentCompatibleForSlot(int slot) const;
   Q_INVOKABLE bool requestCurrentPrintPreset(const QString &name);
   Q_INVOKABLE void saveCurrentPreset();
   /// Phase 147 (PSET-02): request opening the CreatePresetsDialog. Emits
@@ -275,6 +281,8 @@ private:
   QString currentPrinterPreset_;
   QString currentFilamentPreset_;
   QString currentPrintPreset_;
+  /// v5.16 (CIRC-04): slots 1..N; slot 0 is currentFilamentPreset_ itself.
+  QStringList filamentSlotPresets_;
   QHash<QString, QVariant> printerPresetValues_;
   QHash<QString, QVariant> filamentPresetValues_;
   QHash<QString, QVariant> printPresetValues_;

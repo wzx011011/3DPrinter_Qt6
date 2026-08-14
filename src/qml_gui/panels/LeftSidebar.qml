@@ -156,7 +156,7 @@ Rectangle {
                     radius: 4
                     color: root.sectionSurface
                     border.width: 1
-                    border.color: root.configVm && !root.configVm.isFilamentCompatible(root.configVm.materialPresetName(filamentPixelRow.index)) ? Theme.statusError : root.dividerColor
+                    border.color: root.configVm && !root.configVm.isFilamentCompatibleForSlot(filamentPixelRow.index) ? Theme.statusError : root.dividerColor
 
                     RowLayout {
                         anchors.fill: parent
@@ -187,9 +187,12 @@ Rectangle {
                             model: root.configVm ? root.configVm.filamentPresetNames : []
                             currentIndex: {
                                 if (!root.configVm) return -1
+                                // v5.16 (CIRC-04): each slot shows ITS OWN preset
+                                // (was: the category list's Nth entry for all slots).
+                                var slotPreset = root.configVm.filamentPresetForSlot(filamentPixelRow.index)
                                 var names = root.configVm.filamentPresetNames
                                 for (var i = 0; i < names.length; i++) {
-                                    if (names[i] === root.configVm.materialPresetName(filamentPixelRow.index)) return i
+                                    if (names[i] === slotPreset) return i
                                 }
                                 return -1
                             }
@@ -197,7 +200,7 @@ Rectangle {
                                 if (!root.configVm) return
                                 var names = root.configVm.filamentPresetNames
                                 if (i >= 0 && i < names.length)
-                                    root.configVm.requestCurrentFilamentPreset(names[i])
+                                    root.configVm.requestFilamentPresetForSlot(filamentPixelRow.index, names[i])
                             }
                         }
 
@@ -208,7 +211,7 @@ Rectangle {
                         }
 
                         Rectangle {
-                            visible: !!root.configVm && !root.configVm.isFilamentCompatible(root.configVm.materialPresetName(filamentPixelRow.index))
+                            visible: !!root.configVm && !root.configVm.isFilamentCompatibleForSlot(filamentPixelRow.index)
                             Layout.preferredWidth: 8
                             Layout.preferredHeight: 8
                             radius: 4
@@ -480,6 +483,11 @@ Rectangle {
     }
 
     function filamentColor(index) {
+        // v5.16 (CIRC-04): configured filament colours (same source as the
+        // MMU paint palette) instead of a hardcoded theme palette.
+        if (root.editorVm && root.editorVm.extrudersColors
+            && index < root.editorVm.extrudersColors.length)
+            return root.editorVm.extrudersColors[index]
         var colors = [Theme.statusWarning, Theme.textSecondary, Theme.textSecondary, "#214bc2", Theme.chromeDangerHover]
         return index < colors.length ? colors[index] : Theme.textSecondary
     }
