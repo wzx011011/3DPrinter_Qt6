@@ -151,12 +151,6 @@ Item {
             enabled: root.editorVm && root.editorVm.contextActionAvailable("drop")
             onTriggered: root.editorVm.dropSelectedObjectsToBed()
         }
-        CxMenuItem {
-            text: root.editorVm && root.editorVm.selectedObjectsAutoDrop()
-                  ? qsTr("Disable auto drop") : qsTr("Enable auto drop")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("autoDrop")
-            onTriggered: root.editorVm.toggleSelectedObjectsAutoDrop()
-        }
         CxMenu {
             title: qsTr("Mirror")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("mirror")
@@ -357,12 +351,6 @@ Item {
             text: qsTr("Drop to build plate")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("drop")
             onTriggered: root.editorVm.dropSelectedObjectsToBed()
-        }
-        CxMenuItem {
-            text: root.editorVm && root.editorVm.selectedObjectsAutoDrop()
-                  ? qsTr("Disable auto drop") : qsTr("Enable auto drop")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("autoDrop")
-            onTriggered: root.editorVm.toggleSelectedObjectsAutoDrop()
         }
         CxMenuItem {
             text: qsTr("Delete")

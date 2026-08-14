@@ -346,6 +346,10 @@ public:
   /// direction: 0=Normal(top-down), 1=Bottom-up, 2=Both
   /// Simplified: drills from top of bounding box along -Z at object center
   Q_INVOKABLE bool drillObject(int objectIndex, float radius, float depth, int shape, int direction, bool oneLayerOnly);
+  /// v5.11 gap-closure: rectangular array (对齐上游 instance-array). Generates
+  /// rows*cols instances of the object on a grid with the given X/Y spacing
+  /// (mm). Each instance gets a grid-offset translation. Emits projectChanged.
+  Q_INVOKABLE bool arrayObject(int objectIndex, int rows, int cols, float spacingX, float spacingY);
   /// 从真实模型同步变换到 Mock 数组（orient/split/arrange/cut 等 API 变更模型后调用）
   void syncTransformsFromModel();
 
@@ -393,9 +397,6 @@ public:
 
   /// Align the object with the build plate using ModelObject::ensure_on_bed.
   bool dropObjectToBed(int objectIndex);
-  /// Read or set the upstream per-instance auto-drop state for one object.
-  bool objectAutoDrop(int objectIndex) const;
-  bool setObjectAutoDrop(int objectIndex, bool enabled);
   /// Subdivide selected mesh volumes through upstream TriangleMeshDeal.
   bool subdivideObject(int objectIndex, int volumeIndex = -1);
   /// Convert an object's mesh units using upstream ModelObject::convert_units.

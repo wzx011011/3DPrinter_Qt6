@@ -4100,8 +4100,8 @@ bool EditorViewModel::contextActionAvailable(const QString &action) const
       || normalized == QStringLiteral("reload") || normalized == QStringLiteral("orient")
       || normalized == QStringLiteral("mirror") || normalized == QStringLiteral("visibility"))
     return hasObject && canTransformSelection();
-  if (normalized == QStringLiteral("drop") || normalized == QStringLiteral("autoDrop")
-      || normalized == QStringLiteral("subdivide") || normalized == QStringLiteral("convertUnits")
+  if (normalized == QStringLiteral("drop") || normalized == QStringLiteral("subdivide")
+      || normalized == QStringLiteral("convertUnits")
       || normalized == QStringLiteral("copyProcessSettings"))
     return hasObject;
   if (normalized == QStringLiteral("pasteProcessSettings"))
@@ -5417,6 +5417,24 @@ bool EditorViewModel::fillBedWithInstances()
   return grew;
 }
 
+bool EditorViewModel::arraySelectedObject(int rows, int cols, float spacingX, float spacingY)
+{
+  // v5.11 gap-closure: rectangular array (对齐上游 instance-array).
+  const int sourceIndex = selectedSourceObjectIndex();
+  if (!projectService_ || sourceIndex < 0)
+    return false;
+  const bool ok = projectService_->arrayObject(sourceIndex, rows, cols, spacingX, spacingY);
+  if (ok) {
+    refreshMeshCacheAndFitHint();
+    invalidateSliceResultsForCurrentPlate();
+    emit stateChanged();
+  } else {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+  }
+  return ok;
+}
+
 bool EditorViewModel::splitSelectedToObjects()
 {
   const int beforeCount = modelCount();
@@ -5558,28 +5576,6 @@ bool EditorViewModel::dropSelectedObjectsToBed()
     refreshMeshCacheAndFitHint();
     invalidateSliceResultsForCurrentPlate();
   }
-  emit stateChanged();
-  return changed;
-}
-
-bool EditorViewModel::selectedObjectsAutoDrop() const
-{
-  if (!projectService_ || m_selectedSourceIndices.isEmpty())
-    return false;
-  return std::all_of(m_selectedSourceIndices.cbegin(), m_selectedSourceIndices.cend(),
-      [this](int objectIndex) { return projectService_->objectAutoDrop(objectIndex); });
-}
-
-bool EditorViewModel::toggleSelectedObjectsAutoDrop()
-{
-  if (!projectService_ || m_selectedSourceIndices.isEmpty())
-    return false;
-  const bool enabled = !selectedObjectsAutoDrop();
-  bool changed = false;
-  for (int objectIndex : m_selectedSourceIndices)
-    changed = projectService_->setObjectAutoDrop(objectIndex, enabled) || changed;
-  if (!changed)
-    statusText_ = projectService_->lastError();
   emit stateChanged();
   return changed;
 }
@@ -7082,8 +7078,14 @@ bool EditorViewModel::canActivateGizmo(int gizmoMode) const
   // lands.
   case 8: // Hollow
     return hasSingleObject;
-  case 10: // MMU segmentation
-  case 15: // Face detector
+  case 10: // MMU segmentation — core paint path complete (Phase 123); the
+           // gizmo is reachable whenever a single object is selected, matching
+           // the Support/Seam paint gizmos. The single-material honest notice
+           // (mmuExtruderCount<=1) is handled in the QML panel.
+    return hasSingleObject;
+  case 15: // Face detector — panel + angle param exist; detectFlatFaces is a
+           // stub but the gizmo should be reachable so the UI is visible.
+    return hasSingleObject;
   case 18: // SLA supports
     return false;
   default:

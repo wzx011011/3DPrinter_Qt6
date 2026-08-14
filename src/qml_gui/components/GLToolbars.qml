@@ -290,6 +290,13 @@ Item {
                 // returns hasSingleObject after Phase 142 linked OpenVDB). The
                 // full SLA print path is a v5.1+ follow-up.
                 GizmoToolButton { toolId: GLViewport.GizmoHollow; textTip: qsTr("Hollow"); iconSource: iconForTool(toolId) }
+                // v5.11 gap-closure: wire the remaining real/stub gizmos whose
+                // backends exist but had no toolbar entry (or whose mask was
+                // permanently false). Each is gated by availableGizmoMask.
+                GizmoToolButton { toolId: GLViewport.GizmoMmuSegmentation; textTip: qsTr("Multicolor painting"); iconSource: iconForTool(toolId) }
+                GizmoToolButton { toolId: GLViewport.GizmoFaceDetector; textTip: qsTr("Face detect"); iconSource: iconForTool(toolId) }
+                GizmoToolButton { toolId: GLViewport.GizmoDrill; textTip: qsTr("Drill holes"); iconSource: iconForTool(toolId) }
+                GizmoToolButton { toolId: GLViewport.GizmoText; textTip: qsTr("Text emboss"); iconSource: iconForTool(toolId) }
             }
         }
     }

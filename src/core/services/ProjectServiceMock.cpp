@@ -4732,40 +4732,6 @@ bool ProjectServiceMock::dropObjectToBed(int objectIndex)
 #endif
 }
 
-bool ProjectServiceMock::objectAutoDrop(int objectIndex) const
-{
-#ifdef HAS_LIBSLIC3R
-  // 0632bae8 baseline: ModelInstance has no auto_drop member; ensure_on_bed
-  // drops unconditionally. Report true so the UI reflects the effective
-  // behavior (instances always drop to the bed on load/transform).
-  Q_UNUSED(objectIndex);
-  return true;
-#else
-  Q_UNUSED(objectIndex);
-  return false;
-#endif
-}
-
-bool ProjectServiceMock::setObjectAutoDrop(int objectIndex, bool enabled)
-{
-#ifdef HAS_LIBSLIC3R
-  // 0632bae8 baseline: no per-instance auto_drop toggle. Accept the call
-  // as a no-op so QML setters remain wired; the 4cb3b9ce per-instance flag is
-  // not available on this baseline. Do NOT emit projectChanged — a no-op must
-  // not mark the project dirty (otherwise the unsaved-changes prompt fires
-  // spuriously).
-  Q_UNUSED(objectIndex);
-  Q_UNUSED(enabled);
-  lastError_.clear();
-  return true;
-#else
-  Q_UNUSED(objectIndex);
-  Q_UNUSED(enabled);
-  lastError_ = tr("Auto-drop requires libslic3r");
-  return false;
-#endif
-}
-
 bool ProjectServiceMock::subdivideObject(int objectIndex, int volumeIndex)
 {
 #ifdef HAS_LIBSLIC3R
@@ -5040,6 +5006,63 @@ bool ProjectServiceMock::setObjectInstanceCount(int objectIndex, int count)
 #else
   Q_UNUSED(count);
   lastError_ = tr("Instance operations require libslic3r");
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::arrayObject(int objectIndex, int rows, int cols, float spacingX, float spacingY)
+{
+  // v5.11 gap-closure: rectangular array (对齐上游 instance-based array).
+  // Generates rows*cols instances on a grid. The first instance keeps its
+  // current offset (anchor); each subsequent instance gets a grid offset
+  // (col*spacingX, row*spacingY) relative to the anchor.
+  if (objectIndex < 0 || objectIndex >= objectNames_.size()
+      || rows < 1 || cols < 1 || rows * cols > 1000) {
+    lastError_ = tr("Invalid array parameters");
+    return false;
+  }
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)]) {
+    lastError_ = tr("Invalid model object");
+    return false;
+  }
+  Slic3r::ModelObject *object = model_->objects[size_t(objectIndex)];
+  try {
+    // Ensure at least one instance (the anchor).
+    if (object->instances.empty())
+      object->add_instance();
+    const Slic3r::Vec3d anchorOffset = object->instances.front()->get_offset();
+    const int target = rows * cols;
+    // Grow instances to target count (cloning the anchor).
+    while (int(object->instances.size()) < target)
+      object->add_instance(*object->instances.front());
+    // Trim excess.
+    while (int(object->instances.size()) > target)
+      object->delete_last_instance();
+    // Assign grid offsets: row-major (row 0 = front of bed / +Y).
+    for (int r = 0; r < rows; ++r) {
+      for (int c = 0; c < cols; ++c) {
+        const int idx = r * cols + c;
+        if (idx < int(object->instances.size()) && object->instances[size_t(idx)]) {
+          object->instances[size_t(idx)]->set_offset(
+              anchorOffset + Slic3r::Vec3d(double(c) * spacingX, double(r) * spacingY, 0.0));
+        }
+      }
+    }
+    object->ensure_on_bed();
+    lastError_.clear();
+    emit projectChanged();
+    if (m_plateList)
+      emit plateDataLoaded(m_plateList->plateCount());
+    return true;
+  } catch (const std::exception &exception) {
+    lastError_ = QString::fromLatin1(exception.what());
+    return false;
+  }
+#else
+  Q_UNUSED(rows); Q_UNUSED(cols); Q_UNUSED(spacingX); Q_UNUSED(spacingY);
+  lastError_ = tr("Array requires libslic3r");
   return false;
 #endif
 }

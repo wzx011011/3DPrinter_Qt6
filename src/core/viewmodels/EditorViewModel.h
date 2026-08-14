@@ -615,6 +615,9 @@ public:
   Q_INVOKABLE bool addSelectedInstance();
   Q_INVOKABLE bool removeSelectedInstance();
   Q_INVOKABLE bool fillBedWithInstances();
+  /// v5.11 gap-closure: rectangular array of the selected object (对齐上游
+  /// instance-array). rows*cols instances on a grid with the given spacing.
+  Q_INVOKABLE bool arraySelectedObject(int rows, int cols, float spacingX, float spacingY);
   Q_INVOKABLE bool splitSelectedToObjects();
   Q_INVOKABLE bool splitSelectedToParts();
   Q_INVOKABLE bool exportSelectedObjects(const QString &outputPath,
@@ -624,8 +627,6 @@ public:
   Q_INVOKABLE bool addHandyModelToContextPlate(const QString &modelId);
   Q_INVOKABLE bool replaceAllOnContextPlate(const QStringList &filePaths);
   Q_INVOKABLE bool dropSelectedObjectsToBed();
-  Q_INVOKABLE bool toggleSelectedObjectsAutoDrop();
-  Q_INVOKABLE bool selectedObjectsAutoDrop() const;
   Q_INVOKABLE bool subdivideSelectedMesh();
   Q_INVOKABLE bool convertSelectedObjectUnits(int conversionType);
   Q_INVOKABLE bool copyContextProcessSettings();
