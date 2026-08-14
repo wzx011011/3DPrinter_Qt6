@@ -3791,13 +3791,22 @@ EditorViewModel::~EditorViewModel() = default;
 void EditorViewModel::undo()
 {
   if (m_undoManager)
+  {
     m_undoManager->undo();
+    // v5.16 (CIRC-01): upstream invalidates slicing on any undo (TakeSnapshot
+    // restore marks plates dirty). The command writes service state directly,
+    // so the invalidation must happen here, not inside the command.
+    invalidateAllSliceResults();
+  }
 }
 
 void EditorViewModel::redo()
 {
   if (m_undoManager)
+  {
     m_undoManager->redo();
+    invalidateAllSliceResults();
+  }
 }
 
 void EditorViewModel::clearUndoStack()

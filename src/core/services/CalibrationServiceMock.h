@@ -102,6 +102,9 @@ public:
     Q_INVOKABLE QString calibTypeLongDesc(int index) const;
     Q_INVOKABLE QString calibTypePreviewLabel(int index) const;
     Q_INVOKABLE int calibTypeIndexById(const QString &id) const;
+    /// v5.16 (CIRC-02): upstream CalibMode value this type dispatches to
+    /// SliceService (symbolic constant, never a hardcoded int). -1 if absent.
+    Q_INVOKABLE int calibTypeMode(int index) const;
     Q_INVOKABLE bool calibTypeImplemented(int index) const;
     Q_INVOKABLE bool calibTypeStartable(int index) const;
     Q_INVOKABLE QString calibTypeUnavailableReason(int index) const;

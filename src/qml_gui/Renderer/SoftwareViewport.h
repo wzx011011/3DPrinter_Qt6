@@ -205,9 +205,7 @@ public:
 
   Q_INVOKABLE void requestFitView(float cx, float cy, float cz, float r);
   Q_INVOKABLE void requestViewPreset(int preset);
-  Q_INVOKABLE void undo() {}
-  Q_INVOKABLE void redo() {}
-  Q_INVOKABLE void clearHistory() {}
+  // v5.16 (CIRC-01): history no-ops removed with the RhiViewport ones.
   Q_INVOKABLE void mirrorSelection(int axis) { Q_UNUSED(axis); }
   Q_INVOKABLE void arrangeSelected(float spacing = 0.f, bool rotation = false, bool alignY = false)
   {

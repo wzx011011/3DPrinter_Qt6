@@ -1333,8 +1333,11 @@ QString ConfigViewModel::materialPresetName(int localIndex) const
 {
   if (!presetList_ || localIndex < 0)
     return {};
-  // Use "鑰楁潗" to match PresetListModel's category (original QML used "鑰楁潗涓? which was a bug)
-  const int globalIdx = presetList_->globalIndex(tr("鑰楁潗"), localIndex);
+  // v5.16 (CIRC-06): match PresetListModel's literal category tr("耗材").
+  // The previous tr("鑰楁潗") was GBK mojibake and never matched, so every
+  // filament slot displayed as unselected. (Per-slot selection itself is
+  // reworked in Phase 232 / CIRC-04.)
+  const int globalIdx = presetList_->globalIndex(QStringLiteral("耗材"), localIndex);
   return globalIdx >= 0 ? presetList_->presetName(globalIdx) : QString{};
 }
 

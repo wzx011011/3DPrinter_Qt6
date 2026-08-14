@@ -5804,15 +5804,20 @@ void QmlUiAuditTests::calibrationTowerModesDispatchToLibslic3r()
       readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
   QVERIFY2(!calibSource.isEmpty(), "Unable to read CalibrationServiceMock.cpp");
 
-  // CM-01 (a): calibMode 7/8/9 must each appear in buildMockData, mapping the
-  // 3 tower modes to upstream Calib_Vol_speed_Tower / Calib_VFA_Tower /
-  // Calib_Retraction_tower (calib.hpp:24-26).
-  QVERIFY2(calibSource.contains(QStringLiteral("maxVolSpeed.calibMode = 7")),
-           "CALIB-01/CM-01: max_volumetric_speed must map to calibMode 7 (Calib_Vol_speed_Tower)");
-  QVERIFY2(calibSource.contains(QStringLiteral("vfaTower.calibMode = 8")),
-           "CALIB-01/CM-01: vfa_tower must map to calibMode 8 (Calib_VFA_Tower)");
-  QVERIFY2(calibSource.contains(QStringLiteral("retractionTune.calibMode = 9")),
-           "CALIB-01/CM-01: retraction_tune must map to calibMode 9 (Calib_Retraction_tower)");
+  // CM-01 (a) / v5.16 (CIRC-02): the old assertions locked the STALE integer
+  // mapping (7/8/9 predate the upstream Calib_Auto_PA_Line deletion and made
+  // every tower mode sweep the wrong axis). buildMockData must pin modes by
+  // the kCalibMode* symbolic constants only.
+  QVERIFY2(!calibSource.contains(QStringLiteral(".calibMode = 1;")),
+           "CALIB-01/CM-01: calibMode must not be pinned by integer literal");
+  QVERIFY2(calibSource.contains(QStringLiteral("flowDynamics.calibMode = kCalibModePA_Line")),
+           "CALIB-01/CM-01: flow_dynamics must map the Calib_PA_Line symbol");
+  QVERIFY2(calibSource.contains(QStringLiteral("maxVolSpeed.calibMode = kCalibModeVolSpeed")),
+           "CALIB-01/CM-01: max_volumetric_speed must map the Calib_Vol_speed_Tower symbol");
+  QVERIFY2(calibSource.contains(QStringLiteral("vfaTower.calibMode = kCalibModeVFA")),
+           "CALIB-01/CM-01: vfa_tower must map the Calib_VFA_Tower symbol");
+  QVERIFY2(calibSource.contains(QStringLiteral("retractionTune.calibMode = kCalibModeRetract")),
+           "CALIB-01/CM-01: retraction_tune must map the Calib_Retraction_tower symbol");
 
   // The 3 new tower-mode ids must be registered in the m_calibTypes list so
   // CalibrationPage.qml (which auto-enumerates calibItemCount) surfaces them.
@@ -6182,10 +6187,10 @@ void QmlUiAuditTests::v46CrossWorkstreamRegressionLocked()
            "REGRESS-01/WS2: EditorViewModel must write paint to ModelVolume FacetsAnnotation");
 
   // WS3 (Calibration): 6 software modes dispatch.
-  QVERIFY2(svc.contains(QStringLiteral("calibMode = 7")),
-           "REGRESS-01/WS3: CalibrationServiceMock must dispatch Vol_speed_Tower (7)");
-  QVERIFY2(svc.contains(QStringLiteral("calibMode = 9")),
-           "REGRESS-01/WS3: CalibrationServiceMock must dispatch Retraction_tower (9)");
+  QVERIFY2(svc.contains(QStringLiteral("calibMode = kCalibModeVolSpeed")),
+           "REGRESS-01/WS3: CalibrationServiceMock must dispatch Vol_speed_Tower");
+  QVERIFY2(svc.contains(QStringLiteral("calibMode = kCalibModeRetract")),
+           "REGRESS-01/WS3: CalibrationServiceMock must dispatch Retraction_tower ");
 
   // WS4 (Cleanup): no LayerSlider orphan.
   const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
@@ -6272,10 +6277,10 @@ void QmlUiAuditTests::v47CrossWorkstreamRegressionLocked()
   // v4.6 regression: paint bridge + calibration modes still hold.
   QVERIFY2(evm.contains(QStringLiteral("writePaintToModelVolume")),
            "REGRESS-02/v4.6: paint FacetsAnnotation bridge must still be present");
-  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeVolSpeed")),
            "REGRESS-02/v4.6: calibration tower modes must still dispatch");
-  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
-           "REGRESS-02/v4.6: Retraction tower mode (9) must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeRetract")),
+           "REGRESS-02/v4.6: Retraction tower mode  must still dispatch");
 }
 
 void QmlUiAuditTests::v48CrossWorkstreamRegressionLocked()
@@ -6329,10 +6334,10 @@ void QmlUiAuditTests::v48CrossWorkstreamRegressionLocked()
            "REGRESS-03/v4.7: flattenSelected must still call orientObject");
   QVERIFY2(projSvc.contains(QStringLiteral("its_merge_vertices")),
            "REGRESS-03/v4.7: fixMesh must still call its_merge_vertices");
-  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
-           "REGRESS-03/v4.6: Vol_speed tower mode (7) must still dispatch");
-  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
-           "REGRESS-03/v4.6: Retraction tower mode (9) must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeVolSpeed")),
+           "REGRESS-03/v4.6: Vol_speed tower mode must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeRetract")),
+           "REGRESS-03/v4.6: Retraction tower mode  must still dispatch");
 }
 
 void QmlUiAuditTests::v50TechDebtRegressionLocked()
@@ -6958,10 +6963,10 @@ void QmlUiAuditTests::v50RegressionLocked()
            "REGRESS-04/v4.7: fixMesh must still call its_merge_vertices");
 
   // -- v4.6 re-assertion: calibration tower modes.
-  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
-           "REGRESS-04/v4.6: Vol_speed tower mode (7) must still dispatch");
-  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
-           "REGRESS-04/v4.6: Retraction tower mode (9) must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeVolSpeed")),
+           "REGRESS-04/v4.6: Vol_speed tower mode must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeRetract")),
+           "REGRESS-04/v4.6: Retraction tower mode  must still dispatch");
 }
 
 // Phase 154 (CLOS-01): QML Preset Diff-View Dialog wiring gate.
@@ -7381,10 +7386,10 @@ void QmlUiAuditTests::v51RegressionLocked()
            "REGRESS-05/v4.7: fixMesh must still call its_merge_vertices");
 
   // -- v4.6 re-assertion: calibration tower modes.
-  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
-           "REGRESS-05/v4.6: Vol_speed tower mode (7) must still dispatch");
-  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
-           "REGRESS-05/v4.6: Retraction tower mode (9) must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeVolSpeed")),
+           "REGRESS-05/v4.6: Vol_speed tower mode must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeRetract")),
+           "REGRESS-05/v4.6: Retraction tower mode  must still dispatch");
 }
 
 // Phase 160 (DS-01): Theme token foundation gate.
@@ -7867,10 +7872,10 @@ void QmlUiAuditTests::v52RegressionLocked()
            "REGRESS-06/v4.8+v5.2: CxButton Danger variant must use Phase 160 tokens (also v4.8 MeshBoolean context)");
 
   // -- v4.6 re-assertion: calibration tower modes.
-  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
-           "REGRESS-06/v4.6: Vol_speed tower mode (7) must still dispatch");
-  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
-           "REGRESS-06/v4.6: Retraction tower mode (9) must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeVolSpeed")),
+           "REGRESS-06/v4.6: Vol_speed tower mode must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeRetract")),
+           "REGRESS-06/v4.6: Retraction tower mode  must still dispatch");
 }
 
 // Phase 171 (CL-01): destructive-action confirm sweep gate.
@@ -8203,10 +8208,10 @@ void QmlUiAuditTests::v53RegressionLocked()
            "REGRESS-07/v5.0: text2shapes pipeline must stay wired");
 
   // -- v4.6 re-assertion.
-  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
-           "REGRESS-07/v4.6: Vol_speed tower mode (7) must still dispatch");
-  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
-           "REGRESS-07/v4.6: Retraction tower mode (9) must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeVolSpeed")),
+           "REGRESS-07/v4.6: Vol_speed tower mode must still dispatch");
+  QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeRetract")),
+           "REGRESS-07/v4.6: Retraction tower mode  must still dispatch");
 }
 
 // Phase 187 (REGRESS-08): v5.4 cross-workstream regression gate.
@@ -8313,10 +8318,10 @@ void QmlUiAuditTests::v54RegressionLocked()
   // -- v4.6 re-assertion (canary -- calibration tower modes).
   {
     const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
-    QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
-             "REGRESS-08/v4.6: Vol_speed tower mode (7) must still dispatch");
-    QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
-             "REGRESS-08/v4.6: Retraction tower mode (9) must still dispatch");
+    QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeVolSpeed")),
+             "REGRESS-08/v4.6: Vol_speed tower mode must still dispatch");
+    QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeRetract")),
+             "REGRESS-08/v4.6: Retraction tower mode  must still dispatch");
   }
 }
 
@@ -8581,10 +8586,10 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
   // -- v4.6 re-assertion (canary -- calibration tower modes).
   {
     const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
-    QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 7")),
-             "GATE-01/v4.6: Vol_speed tower mode (7) must still dispatch");
-    QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = 9")),
-             "GATE-01/v4.6: Retraction tower mode (9) must still dispatch");
+    QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeVolSpeed")),
+             "GATE-01/v4.6: Vol_speed tower mode must still dispatch");
+    QVERIFY2(calibSvc.contains(QStringLiteral("calibMode = kCalibModeRetract")),
+             "GATE-01/v4.6: Retraction tower mode  must still dispatch");
   }
 }
 

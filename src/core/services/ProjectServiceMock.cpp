@@ -1195,22 +1195,44 @@ bool ProjectServiceMock::exportModel(const QString &filePath, const QString &for
         return false;
     }
     auto ext = format.toLower().toStdString();
-    if (ext == "stl") {
-        // 导出 STL（write_binary，简化：第一个对象）
-        if (!model_->objects.empty()) {
-            return model_->objects.front()->mesh().write_binary(filePath.toUtf8().constData());
+    if (ext == "stl" || ext == "obj") {
+        // v5.16 (CIRC-05): upstream export_stl(as_one) merges every object's
+        // instance meshes. The old branch exported only objects.front() and
+        // ignored instance transforms. Mirrors exportObjects' meshForObject.
+        Slic3r::TriangleMesh combined;
+        for (const Slic3r::ModelObject *object : model_->objects) {
+            if (!object)
+                continue;
+            for (const Slic3r::ModelVolume *volume : object->volumes) {
+                if (!volume || !volume->is_model_part())
+                    continue;
+                Slic3r::TriangleMesh volumeMesh(volume->mesh());
+                volumeMesh.transform(volume->get_transformation().get_matrix(), true);
+                if (object->instances.empty()) {
+                    combined.merge(volumeMesh);
+                    continue;
+                }
+                for (const Slic3r::ModelInstance *instance : object->instances) {
+                    if (!instance)
+                        continue;
+                    Slic3r::TriangleMesh instanceMesh(volumeMesh);
+                    instanceMesh.transform(instance->get_transformation().get_matrix(), true);
+                    combined.merge(instanceMesh);
+                }
+            }
         }
-        return false;
+        if (combined.empty()) {
+            lastError_ = tr("No printable mesh to export");
+            return false;
+        }
+        const QByteArray nativePath = QFile::encodeName(filePath);
+        if (ext == "stl")
+            return combined.write_binary(nativePath.constData());
+        combined.WriteOBJFile(nativePath.constData());
+        return true;
     } else if (ext == "3mf") {
         // 导出 3MF（复用 store_3mf）
         return saveProjectAs(filePath);
-    } else if (ext == "obj") {
-        // 导出 OBJ（TriangleMesh::WriteOBJFile 接受 const char*）
-        if (!model_->objects.empty()) {
-            model_->objects.front()->mesh().WriteOBJFile(filePath.toUtf8().constData());
-            return true;
-        }
-        return false;
     }
     qWarning("[Project] exportModel: unsupported format %s", format.toUtf8().constData());
     return false;

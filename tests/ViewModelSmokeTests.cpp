@@ -24,6 +24,7 @@
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Model.hpp>
 #include <libslic3r/PrintConfig.hpp>
+#include <libslic3r/Calib.hpp>
 #include <libslic3r/TriangleMesh.hpp>
 #include <libslic3r/TriangleSelector.hpp>
 #include "core/rendering/PaintEngine.h"
@@ -2328,18 +2329,20 @@ void ViewModelSmokeTests::calibrationImplementedModesExposeStableRouting()
   CalibrationServiceMock service;
   CalibrationViewModel vm(&service);
 
-  // Phase 124-01 (CALIB-01): the 3 libslic3r tower modes are now dispatched
-  // (Vol_speed=7, VFA=8, Retraction=9). The full emit-path (start/end/step)
-  // is asserted by calibrationImplementedModesEmitSliceRequests; this slot
-  // locks the model/ViewModel-level exposure: each id is present, implemented,
+  // v5.16 (CIRC-02): modes pinned to the live upstream enum by symbol. The
+  // old literals (5/6/7/8/9) predate the upstream Calib_Auto_PA_Line deletion
+  // and locked the off-by-one that made every tower sweep the wrong axis.
+  // The full emit-path (start/end/step) is asserted by
+  // calibrationImplementedModesEmitSliceRequests; this slot locks the
+  // model/ViewModel-level exposure: each id is present, implemented,
   // startable, and carries no unavailableReason.
   const ExpectedCalibRequest expected[] = {
-      {"flow_dynamics", 1, 0.0, 0.1, 0.002, true},
-      {"flow_rate", 5, 0.90, 1.10, 0.01, true},
-      {"temp_tower", 6, 190.0, 240.0, 5.0, true},
-      {"max_volumetric_speed", 7, 5.0, 30.0, 0.5, true},
-      {"vfa_tower", 8, 10.0, 100.0, 5.0, true},
-      {"retraction_tune", 9, 0.0, 2.0, 0.1, true},
+      {"flow_dynamics", static_cast<int>(Slic3r::CalibMode::Calib_PA_Line), 0.0, 0.1, 0.002, true},
+      {"flow_rate", static_cast<int>(Slic3r::CalibMode::Calib_Flow_Rate), 0.90, 1.10, 0.01, true},
+      {"temp_tower", static_cast<int>(Slic3r::CalibMode::Calib_Temp_Tower), 190.0, 240.0, 5.0, true},
+      {"max_volumetric_speed", static_cast<int>(Slic3r::CalibMode::Calib_Vol_speed_Tower), 5.0, 30.0, 0.5, true},
+      {"vfa_tower", static_cast<int>(Slic3r::CalibMode::Calib_VFA_Tower), 10.0, 100.0, 5.0, true},
+      {"retraction_tune", static_cast<int>(Slic3r::CalibMode::Calib_Retraction_tower), 0.0, 2.0, 0.1, true},
   };
 
   for (const auto &item : expected)
@@ -2348,6 +2351,9 @@ void ViewModelSmokeTests::calibrationImplementedModesExposeStableRouting()
     const int index = service.calibTypeIndexById(id);
     QVERIFY2(index >= 0, qPrintable(QStringLiteral("Missing calibration id %1").arg(id)));
     QCOMPARE(service.calibTypeId(index), id);
+    // v5.16 (CIRC-02): the dispatched mode must equal the live upstream enum
+    // value — the regression that made every tower sweep the wrong axis.
+    QCOMPARE(service.calibTypeMode(index), item.mode);
     QVERIFY(service.calibTypeImplemented(index));
     QVERIFY(service.calibTypeStartable(index));
     QVERIFY(service.calibTypeUnavailableReason(index).isEmpty());
@@ -2372,9 +2378,9 @@ void ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests()
   QVERIFY(requestSpy.isValid());
 
   const ExpectedCalibRequest expected[] = {
-      {"flow_dynamics", 1, 0.0, 0.1, 0.002, true},
-      {"flow_rate", 5, 0.90, 1.10, 0.01, true},
-      {"temp_tower", 6, 190.0, 240.0, 5.0, true},
+      {"flow_dynamics", static_cast<int>(Slic3r::CalibMode::Calib_PA_Line), 0.0, 0.1, 0.002, true},
+      {"flow_rate", static_cast<int>(Slic3r::CalibMode::Calib_Flow_Rate), 0.90, 1.10, 0.01, true},
+      {"temp_tower", static_cast<int>(Slic3r::CalibMode::Calib_Temp_Tower), 190.0, 240.0, 5.0, true},
   };
 
   for (const auto &item : expected)

@@ -352,9 +352,8 @@ public:
   Q_INVOKABLE void requestFitView(float cx, float cy, float cz, float r);
   Q_INVOKABLE void requestPreviewFit();
   Q_INVOKABLE void requestViewPreset(int preset);
-  Q_INVOKABLE void undo() { update(); }
-  Q_INVOKABLE void redo() { update(); }
-  Q_INVOKABLE void clearHistory() { update(); }
+  // v5.16 (CIRC-01): undo()/redo()/clearHistory() repaint-only no-ops removed.
+  // History actions live on EditorViewModel (QUndoStack) and BackendContext.
   Q_INVOKABLE void mirrorSelection(int axis);
   Q_INVOKABLE void arrangeSelected(float spacing = 0.f, bool rotation = false, bool alignY = false);
   Q_INVOKABLE void requestThumbnailCapture(int plateIndex, int size = 128);

@@ -274,20 +274,35 @@ int CliRunner::runSlice()
                          : outputDir_;
     QDir().mkpath(outDir);
 
-    // Set plate index if specified
-    if (plateIndex_ > 0 && projectService_->plateCount() > 0) {
-        projectService_->setCurrentPlateIndex(plateIndex_ - 1);
+    // v5.16 (CIRC-07): --plate 0 (the default) now genuinely slices ALL
+    // printable plates, one G-code file per plate, matching the declared help
+    // (upstream slices every plate by default). --plate N stays 1-based
+    // single-plate slicing.
+    const int plateCount = projectService_->plateCount();
+    QList<int> plateQueue;
+    if (plateIndex_ > 0) {
+        if (plateIndex_ - 1 >= plateCount) {
+            QTextStream err(stderr);
+            err << "Error: plate index " << plateIndex_ << " out of range (1.."
+                << plateCount << ")\n";
+            return CLI_INVALID_PARAMS;
+        }
+        plateQueue.append(plateIndex_ - 1);
+    } else {
+        for (int p = 0; p < plateCount; ++p) {
+            if (projectService_->isPlatePrintable(p))
+                plateQueue.append(p);
+            else if (!quiet_)
+                out << "Skipping non-printable plate " << (p + 1) << "\n";
+        }
+    }
+    if (plateQueue.isEmpty()) {
+        QTextStream err(stderr);
+        err << "Error: no printable plates to slice\n";
+        return CLI_SLICING_ERROR;
     }
 
-    if (!quiet_) {
-        out << "Slicing...\n";
-        out << "  Plate index: " << projectService_->currentPlateIndex() << "\n";
-        out << "  Model count: " << projectService_->modelCount() << "\n";
-        out << "  Plate count: " << projectService_->plateCount() << "\n";
-        out.flush();
-    }
-
-    // Connect progress
+    // Connect progress once for the whole queue
     if (!quiet_) {
         connect(sliceService_, &SliceService::progressUpdated,
                 this, [this](int percent, const QString &label) {
@@ -297,55 +312,65 @@ int CliRunner::runSlice()
         });
     }
 
-    // Wait for sliceFinished
-    int sliceExitCode = CLI_SLICING_ERROR;
-    QString sliceError;
-    QEventLoop loop;
-    connect(sliceService_, &SliceService::sliceFinished,
-            &loop, [&](const QString &estimatedTime) {
-        sliceExitCode = CLI_SUCCESS;
+    for (int plate : plateQueue) {
+        projectService_->setCurrentPlateIndex(plate);
+
         if (!quiet_) {
-            QTextStream out(stdout);
-            out << "Slice complete: " << estimatedTime << "\n";
-            out << "  Weight: " << sliceService_->resultWeightLabel() << "\n";
-            out << "  Filament: " << sliceService_->resultFilamentLabel() << "\n";
-            out << "  Layers: " << sliceService_->resultLayerCount() << "\n";
+            out << "Slicing plate " << (plate + 1) << " of " << plateCount << "\n";
+            out << "  Model count: " << projectService_->modelCount() << "\n";
+            out.flush();
         }
-        loop.quit();
-    });
-    connect(sliceService_, &SliceService::sliceFailed,
-            &loop, [&](const QString &message) {
-        sliceError = message;
-        loop.quit();
-    });
 
-    sliceService_->startSlice(projectService_->projectName());
-    loop.exec();
+        // Fresh event loop per plate; its connections die with it.
+        int sliceExitCode = CLI_SLICING_ERROR;
+        QString sliceError;
+        QEventLoop loop;
+        connect(sliceService_, &SliceService::sliceFinished,
+                &loop, [&](const QString &estimatedTime) {
+            sliceExitCode = CLI_SUCCESS;
+            if (!quiet_) {
+                QTextStream out(stdout);
+                out << "Slice complete: " << estimatedTime << "\n";
+                out << "  Weight: " << sliceService_->resultWeightLabel() << "\n";
+                out << "  Filament: " << sliceService_->resultFilamentLabel() << "\n";
+                out << "  Layers: " << sliceService_->resultLayerCount() << "\n";
+            }
+            loop.quit();
+        });
+        connect(sliceService_, &SliceService::sliceFailed,
+                &loop, [&](const QString &message) {
+            sliceError = message;
+            loop.quit();
+        });
 
-    if (sliceExitCode != CLI_SUCCESS) {
-        QTextStream err(stderr);
-        err << "Error: slice failed: " << sliceError << "\n";
-        return sliceExitCode;
+        sliceService_->startSlice(projectService_->projectName());
+        loop.exec();
+
+        if (sliceExitCode != CLI_SUCCESS) {
+            QTextStream err(stderr);
+            err << "Error: slice failed on plate " << (plate + 1) << ": "
+                << sliceError << "\n";
+            return sliceExitCode;
+        }
+
+        // Export G-code to output directory (plate-labeled name when multi-plate)
+        const QString gcodeSrc = sliceService_->outputPath();
+        if (gcodeSrc.isEmpty()) {
+            QTextStream err(stderr);
+            err << "Error: no G-code output from slice\n";
+            return CLI_SLICING_ERROR;
+        }
+        const QString gcodeDest = outDir + QStringLiteral("/")
+            + sliceService_->defaultExportGCodeFileName(plate);
+        if (!sliceService_->exportGCodeToPath(gcodeDest)) {
+            QTextStream err(stderr);
+            err << "Error: failed to export G-code to: " << gcodeDest << "\n";
+            return CLI_SLICING_ERROR;
+        }
+
+        if (!quiet_)
+            out << "G-code written: " << gcodeDest << "\n";
     }
-
-    // Export G-code to output directory
-    const QString gcodeSrc = sliceService_->outputPath();
-    if (gcodeSrc.isEmpty()) {
-        QTextStream err(stderr);
-        err << "Error: no G-code output from slice\n";
-        return CLI_SLICING_ERROR;
-    }
-
-    const QString baseName = QFileInfo(projectService_->sourceFilePath()).completeBaseName();
-    const QString gcodeDest = outDir + QStringLiteral("/") + baseName + QStringLiteral(".gcode");
-    if (!sliceService_->exportGCodeToPath(gcodeDest)) {
-        QTextStream err(stderr);
-        err << "Error: failed to export G-code to: " << gcodeDest << "\n";
-        return CLI_SLICING_ERROR;
-    }
-
-    if (!quiet_)
-        out << "G-code written: " << gcodeDest << "\n";
 
     return CLI_SUCCESS;
 }

@@ -172,7 +172,7 @@ BackendContext::BackendContext(QObject *parent)
             { postExportFinished(filePath); });
     connect(sliceService_, &SliceService::exportFailed, this,
             [this](const QString &message)
-            { postNotification(message, tr("瀵煎嚭澶辫触"), NotiError); });
+            { postNotification(message, tr("Export failed"), NotiError); });
 
     // Propagate 3MF embedded config to ConfigViewModel on project load
     connect(projectService_, &ProjectServiceMock::projectConfigLoaded,

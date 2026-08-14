@@ -16,6 +16,29 @@
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Calib.hpp>
 #include <libslic3r/PrintConfig.hpp>
+
+// v5.16 (CIRC-02): upstream deleted Calib_Auto_PA_Line (cb35e89f) and the
+// CalibMode enum shifted down by one. The previously hardcoded ints made every
+// tower mode sweep the wrong axis (FlowRate=5 executed Temp_Tower, ..., 
+// Retraction=9 matched nothing). Modes are now pinned by symbol only.
+namespace {
+constexpr int kCalibModePA_Line    = static_cast<int>(Slic3r::CalibMode::Calib_PA_Line);
+constexpr int kCalibModeFlowRate   = static_cast<int>(Slic3r::CalibMode::Calib_Flow_Rate);
+constexpr int kCalibModeTempTower  = static_cast<int>(Slic3r::CalibMode::Calib_Temp_Tower);
+constexpr int kCalibModeVolSpeed   = static_cast<int>(Slic3r::CalibMode::Calib_Vol_speed_Tower);
+constexpr int kCalibModeVFA        = static_cast<int>(Slic3r::CalibMode::Calib_VFA_Tower);
+constexpr int kCalibModeRetract    = static_cast<int>(Slic3r::CalibMode::Calib_Retraction_tower);
+} // namespace
+#else
+// Non-HAS builds never reach the slicing engine; mirror the current enum.
+namespace {
+constexpr int kCalibModePA_Line   = 1;
+constexpr int kCalibModeFlowRate  = 4;
+constexpr int kCalibModeTempTower = 5;
+constexpr int kCalibModeVolSpeed  = 6;
+constexpr int kCalibModeVFA       = 7;
+constexpr int kCalibModeRetract   = 8;
+} // namespace
 #endif
 
 CalibrationServiceMock::CalibrationServiceMock(QObject *parent)
@@ -35,14 +58,15 @@ void CalibrationServiceMock::buildMockData()
     //   FlowRateWizard (Flow Rate / Calib_Flow_Rate)
     // Upstream CalibrationDialog provides hardware calibration:
     //   xcam_cali, bed_leveling, vibration, motor_noise
-    // Additional CalibMode values from upstream calib.hpp:16-30:
-    //   Temp_Tower=6, Vol_speed_Tower=7, VFA_Tower=8, Retraction_tower=9
+    // Upstream calib.hpp values are pinned symbolically at the top of this
+    // file (kCalibMode*). v5.16 (CIRC-02): upstream deleted Calib_Auto_PA_Line
+    // so the enum shifted; never restore the old ints (FlowRate was wrongly 5,
+    // Retraction wrongly 9, etc.).
     //
     // We expose 7 calibration types covering both slice and hardware domains:
-    //   6 software-sliceable modes (PA=1, FlowRate=5, TempTower=6,
-    //     Vol_speed=7, VFA=8, Retraction=9) dispatched via the generic
-    //     calibMode!=0 path to SliceService -> libslic3r GCode branches
-    //     (GCode.cpp:4608 TempTower / :4617 Vol_speed / :4612 VFA / :4622 Retraction).
+    //   6 software-sliceable modes (PA_Line, Flow_Rate, Temp_Tower,
+    //     Vol_speed_Tower, VFA_Tower, Retraction_tower) dispatched via the
+    //     generic calibMode!=0 path to SliceService -> libslic3r GCode branches.
     //   2 hardware modes (bed_leveling, vibration) kept unavailable.
     // Each type has 2-4 wizard steps aligned to upstream CalibrationWizard page chain:
     //   Start -> Preset -> Calibration -> [CoarseSave -> FineCalibration -> FineSave ->] Save
@@ -74,7 +98,7 @@ void CalibrationServiceMock::buildMockData()
     flowDynamics.previewLabel = tr("Pressure Advance test pattern");
     flowDynamics.implemented = true;
     flowDynamics.startable = true;
-    flowDynamics.calibMode = 1;
+    flowDynamics.calibMode = kCalibModePA_Line;
     flowDynamics.calibStart = 0.0;
     flowDynamics.calibEnd = 0.1;
     flowDynamics.calibStep = 0.002;
@@ -102,7 +126,7 @@ void CalibrationServiceMock::buildMockData()
     flowRate.previewLabel = tr("Flow rate test pattern");
     flowRate.implemented = true;
     flowRate.startable = true;
-    flowRate.calibMode = 5;
+    flowRate.calibMode = kCalibModeFlowRate;
     flowRate.calibStart = 0.90;
     flowRate.calibEnd = 1.10;
     flowRate.calibStep = 0.01;
@@ -128,7 +152,7 @@ void CalibrationServiceMock::buildMockData()
     tempTower.previewLabel = tr("Temperature tower test pattern");
     tempTower.implemented = true;
     tempTower.startable = true;
-    tempTower.calibMode = 6;
+    tempTower.calibMode = kCalibModeTempTower;
     tempTower.calibStart = 190.0;
     tempTower.calibEnd = 240.0;
     tempTower.calibStep = 5.0;
@@ -199,7 +223,7 @@ void CalibrationServiceMock::buildMockData()
     maxVolSpeed.previewLabel = tr("Speed tower test pattern");
     maxVolSpeed.implemented = true;
     maxVolSpeed.startable = true;
-    maxVolSpeed.calibMode = 7;
+    maxVolSpeed.calibMode = kCalibModeVolSpeed;
     // Sweep outer_wall_speed across the tower (mm/s). Range aligned to the
     // volumetric-speed sweep upstream exposes for the speed tower.
     maxVolSpeed.calibStart = 5.0;
@@ -231,7 +255,7 @@ void CalibrationServiceMock::buildMockData()
     vfaTower.previewLabel = tr("VFA speed tower test pattern");
     vfaTower.implemented = true;
     vfaTower.startable = true;
-    vfaTower.calibMode = 8;
+    vfaTower.calibMode = kCalibModeVFA;
     // Sweep outer_wall_speed across the tower (mm/s). 5mm bands per step,
     // matching GCode.cpp:4613 (std::floor(print_z / 5.0) * step).
     vfaTower.calibStart = 10.0;
@@ -262,7 +286,7 @@ void CalibrationServiceMock::buildMockData()
     retractionTune.previewLabel = tr("Retraction tower test pattern");
     retractionTune.implemented = true;
     retractionTune.startable = true;
-    retractionTune.calibMode = 9;
+    retractionTune.calibMode = kCalibModeRetract;
     // Sweep retraction_length across the tower (mm). GCode.cpp:4623 applies the
     // length per layer above 0.4mm (std::floor(max(0.0,print_z-0.4)) * step).
     retractionTune.calibStart = 0.0;
@@ -333,6 +357,13 @@ int CalibrationServiceMock::calibTypeIndexById(const QString &id) const
             return i;
     }
     return -1;
+}
+
+int CalibrationServiceMock::calibTypeMode(int index) const
+{
+    if (index < 0 || index >= m_calibTypes.size())
+        return -1;
+    return m_calibTypes[index].calibMode;
 }
 
 bool CalibrationServiceMock::calibTypeImplemented(int index) const
@@ -959,10 +990,12 @@ void CalibrationServiceMock::setProjectService(ProjectServiceMock *project)
 QString CalibrationServiceMock::towerModelQrcPathForMode(int calibMode)
 {
     switch (calibMode) {
-        case 6: return QStringLiteral(":/qml/assets/calib/temperature_tower.stl");
-        case 7: return QStringLiteral(":/qml/assets/calib/SpeedTestStructure.step");
-        case 8: return QStringLiteral(":/qml/assets/calib/VFA.stl");
-        case 9: return QStringLiteral(":/qml/assets/calib/retraction_tower.stl");
+        // v5.16 (CIRC-02): symbolic cases — the old ints 6/7/8/9 predate the
+        // upstream enum shift and no longer match the dispatched modes.
+        case kCalibModeTempTower: return QStringLiteral(":/qml/assets/calib/temperature_tower.stl");
+        case kCalibModeVolSpeed: return QStringLiteral(":/qml/assets/calib/SpeedTestStructure.step");
+        case kCalibModeVFA: return QStringLiteral(":/qml/assets/calib/VFA.stl");
+        case kCalibModeRetract: return QStringLiteral(":/qml/assets/calib/retraction_tower.stl");
         default: return QString{};
     }
 }

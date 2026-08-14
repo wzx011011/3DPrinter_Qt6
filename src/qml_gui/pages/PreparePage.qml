@@ -197,10 +197,14 @@ Item {
     }
 
     function undoFromTopbar() {
-        viewport3d.undo()
+        // v5.16 (CIRC-01): dispatch to the real QUndoStack path. The previous
+        // viewport3d.undo() call was a repaint-only no-op (RhiViewport.h).
+        if (root.editorVm)
+            root.editorVm.undo()
     }
     function redoFromTopbar() {
-        viewport3d.redo()
+        if (root.editorVm)
+            root.editorVm.redo()
     }
     function openPrintDialog() {
         printDlg.open()
@@ -1542,11 +1546,11 @@ Item {
                     // Undo/Redo shortcuts (QML Shortcuts work better than Keys for Ctrl combos)
                     Shortcut {
                         sequences: ["Ctrl+Z"]
-                        onActivated: viewport3d.undo()
+                        onActivated: root.undoFromTopbar()
                     }
                     Shortcut {
                         sequences: ["Ctrl+Shift+Z", "Ctrl+Y"]
-                        onActivated: viewport3d.redo()
+                        onActivated: root.redoFromTopbar()
                     }
 
                     Connections {
