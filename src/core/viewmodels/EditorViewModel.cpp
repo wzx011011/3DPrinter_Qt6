@@ -1070,6 +1070,13 @@ void EditorViewModel::setConnectorSize(float v)
     emit stateChanged();
   }
 }
+// v5.12 gap-closure: independent groove params (对齐上游 Cut::Groove).
+float EditorViewModel::grooveDepth() const { return m_grooveDepth; }
+void EditorViewModel::setGrooveDepth(float v) { m_grooveDepth = v; emit stateChanged(); }
+float EditorViewModel::grooveWidth() const { return m_grooveWidth; }
+void EditorViewModel::setGrooveWidth(float v) { m_grooveWidth = v; emit stateChanged(); }
+float EditorViewModel::grooveFlapsAngle() const { return m_grooveFlapsAngle; }
+void EditorViewModel::setGrooveFlapsAngle(float v) { m_grooveFlapsAngle = v; emit stateChanged(); }
 float EditorViewModel::connectorDepth() const { return m_connectorDepth; }
 void EditorViewModel::setConnectorDepth(float v)
 {
@@ -2019,14 +2026,15 @@ bool EditorViewModel::advCutSelected()
 
   if (m_cutMode == 1)
   {
-    // Tongue and Groove mode (对齐上游 CutMode::cutTongueAndGroove)
-    // Map connector parameters to groove struct
-    // groove.depth = connectorSize (mm), groove.width = connectorSize * 4 (upstream default ratio)
-    // groove.flaps_angle = PI/3 (upstream default), groove.angle = 0 (upstream default)
-    const float grooveDepth = m_connectorSize;                           // depth in mm
-    const float grooveWidth = m_connectorSize * 4.0f;                   // width = 4x depth (upstream default)
-    const float grooveFlapsAngle = float(M_PI) / 3.0f;                 // 60 degrees (upstream default)
-    const float grooveAngle = 0.0f;                                     // 0 degrees (upstream default)
+    // Tongue and Groove mode (对齐上游 CutMode::cutTongueAndGroove).
+    // v5.12 gap-closure: use independent groove params if set (>0), else fall
+    // back to the connectorSize-derived defaults (对齐上游 Cut::Groove struct).
+    const float grooveDepth = m_grooveDepth > 0.f ? m_grooveDepth : m_connectorSize;
+    const float grooveWidth = m_grooveWidth > 0.f ? m_grooveWidth : m_connectorSize * 4.0f;
+    // grooveFlapsAngle stored in degrees from QML; convert to radians. 0 = default 60°.
+    const float grooveFlapsAngleDeg = m_grooveFlapsAngle > 0.f ? m_grooveFlapsAngle : 60.0f;
+    const float grooveFlapsAngle = grooveFlapsAngleDeg * float(M_PI) / 180.0f;
+    const float grooveAngle = 0.0f;
 
     cutNewIdx = projectService_->cutObjectWithGroove(
         srcIdx, m_advCutAxis, m_advCutPosition, keepMode,
@@ -2069,7 +2077,49 @@ bool EditorViewModel::advCutSelected()
 
 float EditorViewModel::faceDetectorAngle() const { return m_faceDetectorAngle; }
 void EditorViewModel::setFaceDetectorAngle(float a) { m_faceDetectorAngle = a; emit stateChanged(); }
-bool EditorViewModel::detectFlatFaces() { qWarning() << "detectFlatFaces: mock"; return false; }
+int EditorViewModel::faceDetectorResultCount() const { return m_faceDetectorResultCount; }
+bool EditorViewModel::detectFlatFaces()
+{
+  // v5.12 gap-closure: real flat-face detection (对齐 UI "检测与 Z 轴平行的平面").
+  // Iterates the selected object's volume meshes, computes each triangle face
+  // normal's angle to ±Z, and counts faces within the angle threshold as
+  // "flat/near-horizontal". Uses the shared volumeMeshIts (Phase 112 ITS source).
+  m_faceDetectorResultCount = 0;
+  const int obj = primarySelectedSourceIndex(this);
+  if (!projectService_ || obj < 0) {
+    emit stateChanged();
+    return false;
+  }
+  const float thresholdRad = m_faceDetectorAngle * float(M_PI) / 180.0f;
+  const float cosThreshold = std::cos(thresholdRad);
+  const int volCount = projectService_->objectVolumeCount(obj);
+  int foundFaces = 0;
+  for (int v = 0; v < std::max(1, volCount); ++v) {
+    const auto its = projectService_->volumeMeshIts(obj, v);
+    if (!its || its->indices.empty())
+      continue;
+    // Precompute face normals (mesh-local space).
+    for (size_t fi = 0; fi < its->indices.size(); ++fi) {
+      const auto &face = its->indices[fi];
+      const Slic3r::Vec3f &v0 = its->vertices[size_t(face[0])];
+      const Slic3r::Vec3f &v1 = its->vertices[size_t(face[1])];
+      const Slic3r::Vec3f &v2 = its->vertices[size_t(face[2])];
+      // Face normal = (v1-v0) × (v2-v0), normalized.
+      Slic3r::Vec3f n = (v1 - v0).cross(v2 - v0);
+      const float nlen = n.norm();
+      if (nlen < 1e-8f)
+        continue; // degenerate
+      n /= nlen;
+      // Angle to ±Z: |n·Z| > cos(threshold) means the face is within threshold
+      // of horizontal (perpendicular to Z = "flat face facing up/down").
+      if (std::abs(n.z()) >= cosThreshold)
+        ++foundFaces;
+    }
+  }
+  m_faceDetectorResultCount = foundFaces;
+  emit stateChanged();
+  return foundFaces > 0;
+}
 
 // ── Text gizmo (对齐上游 GLGizmoText) ──
 

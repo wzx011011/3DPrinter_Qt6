@@ -110,6 +110,11 @@ public:
   /// filter's printer dimension). Reuses the parsed compatible_printers field.
   Q_INVOKABLE QStringList materialsForVendorAndPrinter(const QString &vendor, const QString &printerModel) const;
   Q_INVOKABLE QStringList compatiblePresetNamesForCategory(int category, const QString &printerName) const;
+  /// v5.12 gap-closure: compute the N×N flush matrix from filament colours
+  /// (对齐上游 WipeTowerDialog calc_flushing_volumes → FlushVolCalculator).
+  /// Returns a flat QVariantList of N*N ints (row-major); flush[i*N+j] = flush
+  /// volume from extruder i to extruder j. Uses the loaded filament colours.
+  Q_INVOKABLE QVariantList calculateFlushMatrix() const;
   Q_INVOKABLE bool isPresetCompatibleWithPrinter(int category, const QString &presetName, const QString &printerName) const;
   Q_INVOKABLE QString presetCompatibilityMessage(int category, const QString &presetName, const QString &printerName) const;
   Q_INVOKABLE bool isCurrentSelectionCompatible(const QString &printerName, const QString &filamentName, const QString &printName) const;

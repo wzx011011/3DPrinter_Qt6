@@ -53,6 +53,11 @@ void SettingsViewModel::loadFromSettings()
   m_undoLimit        = s.value("undoLimit", m_undoLimit).toInt();
   m_defaultNozzleIndex = s.value("defaultNozzleIndex", m_defaultNozzleIndex).toInt();
   m_defaultBedShape  = s.value("defaultBedShape", m_defaultBedShape).toInt();
+  // v5.12 camera settings
+  m_cameraNavStyle   = s.value("cameraNavStyle", m_cameraNavStyle).toInt();
+  m_zoomToMouse      = s.value("zoomToMouse", m_zoomToMouse).toBool();
+  m_freeCamera       = s.value("freeCamera", m_freeCamera).toBool();
+  m_reverseZoom      = s.value("reverseZoom", m_reverseZoom).toBool();
   m_autoUpload       = s.value("autoUpload", m_autoUpload).toBool();
   m_updateChannel    = s.value("updateChannel", m_updateChannel).toInt();
   m_notificationsEnabled = s.value("notificationsEnabled", m_notificationsEnabled).toBool();
@@ -250,6 +255,23 @@ void SettingsViewModel::setDefaultNozzleIndex(int idx)
 void SettingsViewModel::setDefaultBedShape(int shape)
 {
   if (m_defaultBedShape != shape) { m_defaultBedShape = shape; SAVE_SETTING("defaultBedShape", shape); emit settingsChanged(); }
+}
+// v5.12 camera settings
+void SettingsViewModel::setCameraNavStyle(int style)
+{
+  if (m_cameraNavStyle != style) { m_cameraNavStyle = style; SAVE_SETTING("cameraNavStyle", style); emit settingsChanged(); }
+}
+void SettingsViewModel::setZoomToMouse(bool on)
+{
+  if (m_zoomToMouse != on) { m_zoomToMouse = on; SAVE_SETTING("zoomToMouse", on); emit settingsChanged(); }
+}
+void SettingsViewModel::setFreeCamera(bool on)
+{
+  if (m_freeCamera != on) { m_freeCamera = on; SAVE_SETTING("freeCamera", on); emit settingsChanged(); }
+}
+void SettingsViewModel::setReverseZoom(bool on)
+{
+  if (m_reverseZoom != on) { m_reverseZoom = on; SAVE_SETTING("reverseZoom", on); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setAutoUpload(bool v)

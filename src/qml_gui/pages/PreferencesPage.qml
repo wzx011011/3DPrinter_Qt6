@@ -539,6 +539,37 @@ Item {
                         }
                     }
 
+                    // v5.12 gap-closure: camera settings (对齐上游 Preferences
+                    // General tab, Preferences.cpp:1123-1128).
+                    Text {
+                        text: qsTr("相机设置")
+                        color: Theme.textPrimary; font.pixelSize: Theme.fontSizeMD; font.bold: true
+                    }
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("相机风格"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 200 }
+                        CxComboBox {
+                            model: [qsTr("默认"), qsTr("触摸板")]
+                            currentIndex: root.settingsVm.cameraNavStyle
+                            onActivated: root.settingsVm.setCameraNavStyle(index)
+                        }
+                    }
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("缩放到鼠标位置"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 200 }
+                        CxSwitch { checked: root.settingsVm.zoomToMouse; onToggled: root.settingsVm.setZoomToMouse(checked) }
+                    }
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("自由相机"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 200 }
+                        CxSwitch { checked: root.settingsVm.freeCamera; onToggled: root.settingsVm.setFreeCamera(checked) }
+                    }
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("反转滚轮缩放"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 200 }
+                        CxSwitch { checked: root.settingsVm.reverseZoom; onToggled: root.settingsVm.setReverseZoom(checked) }
+                    }
+
                     // Print host upload
                     RowLayout {
                         spacing: 16

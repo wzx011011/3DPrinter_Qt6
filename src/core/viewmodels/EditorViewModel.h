@@ -278,7 +278,15 @@ public:
   int connectorShape() const;
   void setConnectorShape(int v);
   float connectorSize() const;
+  /// v5.12 gap-closure: independent groove parameters (对齐上游 Cut::Groove).
+  /// When set, these override the connectorSize-derived defaults in advCutSelected.
+  float grooveDepth() const;
+  float grooveWidth() const;
+  float grooveFlapsAngle() const;  // radians
   void setConnectorSize(float v);
+  void setGrooveDepth(float v);
+  void setGrooveWidth(float v);
+  void setGrooveFlapsAngle(float v);
   float connectorDepth() const;
   void setConnectorDepth(float v);
   // Measure selection (对齐上游 GLGizmoMeasure)
@@ -469,6 +477,7 @@ public:
 
   /// ── FaceDetector gizmo properties (对齐上游 GLGizmoFaceDetector) ──
   float faceDetectorAngle() const;
+  int faceDetectorResultCount() const;
   void setFaceDetectorAngle(float a);
   Q_INVOKABLE bool detectFlatFaces();
 
@@ -659,6 +668,10 @@ public:
   Q_PROPERTY(int connectorStyle READ connectorStyle WRITE setConnectorStyle NOTIFY stateChanged)
   Q_PROPERTY(int connectorShape READ connectorShape WRITE setConnectorShape NOTIFY stateChanged)
   Q_PROPERTY(float connectorSize READ connectorSize WRITE setConnectorSize NOTIFY stateChanged)
+  /// v5.12 gap-closure: independent groove params (override connectorSize defaults)
+  Q_PROPERTY(float grooveDepth READ grooveDepth WRITE setGrooveDepth NOTIFY stateChanged)
+  Q_PROPERTY(float grooveWidth READ grooveWidth WRITE setGrooveWidth NOTIFY stateChanged)
+  Q_PROPERTY(float grooveFlapsAngle READ grooveFlapsAngle WRITE setGrooveFlapsAngle NOTIFY stateChanged)
   Q_PROPERTY(float connectorDepth READ connectorDepth WRITE setConnectorDepth NOTIFY stateChanged)
   /// 测量拾取模式（对齐上游 GLGizmoMeasure feature/point selection）
   Q_PROPERTY(int measureSelectionMode READ measureSelectionMode WRITE setMeasureSelectionMode NOTIFY stateChanged)
@@ -761,6 +774,8 @@ public:
   Q_PROPERTY(bool advCutConnectors READ advCutConnectors WRITE setAdvCutConnectors NOTIFY stateChanged)
   /// FaceDetector 设置（对齐上游 GLGizmoFaceDetector）
   Q_PROPERTY(float faceDetectorAngle READ faceDetectorAngle WRITE setFaceDetectorAngle NOTIFY stateChanged)
+  /// v5.12 gap-closure: number of flat faces found by detectFlatFaces.
+  Q_PROPERTY(int faceDetectorResultCount READ faceDetectorResultCount NOTIFY stateChanged)
   /// Text 设置（对齐上游 GLGizmoText）
   Q_PROPERTY(QString textContent READ textContent WRITE setTextContent NOTIFY stateChanged)
   Q_PROPERTY(float textSize READ textSize WRITE setTextSize NOTIFY stateChanged)
@@ -1383,6 +1398,12 @@ private:
   int m_connectorStyle = 0;       ///< 0=Prism, 1=Frustum
   int m_connectorShape = 3;       ///< 0=Triangle, 1=Square, 2=Hexagon, 3=Circle
   float m_connectorSize = 5.0f;   ///< 连接器尺寸 mm
+  /// v5.12 gap-closure: independent groove params (对齐上游 Cut::Groove).
+  /// When >0, override the connectorSize-derived defaults. grooveFlapsAngle
+  /// is in degrees from QML; advCutSelected converts to radians.
+  float m_grooveDepth = 0.0f;         ///< 0 = use connectorSize default
+  float m_grooveWidth = 0.0f;         ///< 0 = use connectorSize*4 default
+  float m_grooveFlapsAngle = 0.0f;    ///< 0 = use 60° (PI/3) default
   float m_connectorDepth = 0.5f;  ///< 深度比 0-1
   // Measure selection (对齐上游 GLGizmoMeasure)
   int m_measureSelectionMode = 0; ///< 0=Default point, 1=Feature selection
@@ -1482,6 +1503,7 @@ private:
   bool m_advCutConnectors = false;
   // FaceDetector (对齐上游 GLGizmoFaceDetector)
   float m_faceDetectorAngle = 5.0f;
+  int m_faceDetectorResultCount = 0;  ///< v5.12: faces found by detectFlatFaces
   // Text (对齐上游 GLGizmoText)
   QString m_textContent;
   float m_textSize = 20.0f;

@@ -34,6 +34,12 @@ class SettingsViewModel : public QObject
   Q_PROPERTY(int defaultNozzleIndex READ defaultNozzleIndex WRITE setDefaultNozzleIndex NOTIFY settingsChanged)
   /// 默认热床形状（对齐上游 bed_shape）
   Q_PROPERTY(int defaultBedShape READ defaultBedShape WRITE setDefaultBedShape NOTIFY settingsChanged)
+  /// v5.12 gap-closure: camera settings (对齐上游 Preferences General tab,
+  /// Preferences.cpp:1123-1128). Persisted to QSettings.
+  Q_PROPERTY(int cameraNavStyle READ cameraNavStyle WRITE setCameraNavStyle NOTIFY settingsChanged)
+  Q_PROPERTY(bool zoomToMouse READ zoomToMouse WRITE setZoomToMouse NOTIFY settingsChanged)
+  Q_PROPERTY(bool freeCamera READ freeCamera WRITE setFreeCamera NOTIFY settingsChanged)
+  Q_PROPERTY(bool reverseZoom READ reverseZoom WRITE setReverseZoom NOTIFY settingsChanged)
   /// 切片完成后自动上传（对齐上游 print host upload after slicing）
   Q_PROPERTY(bool autoUpload READ autoUpload WRITE setAutoUpload NOTIFY settingsChanged)
   /// 更新通道（对齐上游 update_channel: 0=Stable, 1=Beta, 2=Dev）
@@ -83,6 +89,11 @@ public:
   int undoLimit() const { return m_undoLimit; }
   int defaultNozzleIndex() const { return m_defaultNozzleIndex; }
   int defaultBedShape() const { return m_defaultBedShape; }
+  // v5.12 camera settings
+  int cameraNavStyle() const { return m_cameraNavStyle; }
+  bool zoomToMouse() const { return m_zoomToMouse; }
+  bool freeCamera() const { return m_freeCamera; }
+  bool reverseZoom() const { return m_reverseZoom; }
   bool autoUpload() const { return m_autoUpload; }
   int updateChannel() const { return m_updateChannel; }
   bool notificationsEnabled() const { return m_notificationsEnabled; }
@@ -129,6 +140,11 @@ public slots:
   void setUndoLimit(int limit);
   void setDefaultNozzleIndex(int idx);
   void setDefaultBedShape(int shape);
+  // v5.12 camera settings
+  void setCameraNavStyle(int style);
+  void setZoomToMouse(bool on);
+  void setFreeCamera(bool on);
+  void setReverseZoom(bool on);
   void setAutoUpload(bool v);
   void setUpdateChannel(int channel);
   void setNotificationsEnabled(bool v);
@@ -170,6 +186,11 @@ private:
   int m_undoLimit = 100;      // undo stack limit
   int m_defaultNozzleIndex = 1; // 0=0.2mm, 1=0.4mm, 2=0.6mm, 3=0.8mm
   int m_defaultBedShape = 0;    // 0=Rectangular, 1=Round
+  // v5.12 camera settings (persisted)
+  int m_cameraNavStyle = 0;     // 0=Default, 1=Touchpad
+  bool m_zoomToMouse = true;
+  bool m_freeCamera = false;
+  bool m_reverseZoom = false;
   bool m_autoUpload = false;    // auto upload after slicing
   int m_updateChannel = 0;      // 0=Stable, 1=Beta, 2=Dev
   bool m_notificationsEnabled = true;

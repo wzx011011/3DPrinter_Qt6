@@ -12,6 +12,7 @@
 #include <QCoreApplication>
 #include <QSettings>
 #include <cmath>
+#include "core/FlushVolCalculator.h"  // v5.12: flush matrix calc
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/PrintConfig.hpp>
@@ -927,6 +928,40 @@ QStringList PresetServiceMock::activeFilamentColours() const
     }
   }
   return colours;
+}
+
+QVariantList PresetServiceMock::calculateFlushMatrix() const
+{
+  // v5.12 gap-closure: compute the N×N flush matrix from filament colours
+  // (对齐 upstream WipeTowerDialog calc_flushing_volumes). Uses the
+  // FlushVolCalculator colour-distance formula on the active filament colours.
+  const QStringList colours = activeFilamentColours();
+  const int n = colours.size();
+  QVariantList matrix;
+  if (n == 0)
+    return matrix;
+  matrix.reserve(n * n);
+  const OWzx::FlushVolCalculator calc(/*min*/ 0, /*max*/ 800, /*multiplier*/ 1.0f);
+  // Parse hex colours (#RRGGBB) to RGB bytes.
+  auto parseHex = [](const QString &hex) -> std::tuple<int, int, int> {
+    QString h = hex.trimmed();
+    if (h.startsWith(QLatin1Char('#')))
+      h = h.mid(1);
+    bool ok = false;
+    const unsigned int val = h.toUInt(&ok, 16);
+    if (!ok || h.length() < 6)
+      return {255, 255, 255}; // white fallback
+    return {int((val >> 16) & 0xFF), int((val >> 8) & 0xFF), int(val & 0xFF)};
+  };
+  for (int i = 0; i < n; ++i) {
+    const auto [sr, sg, sb] = parseHex(colours[i]);
+    for (int j = 0; j < n; ++j) {
+      if (i == j) { matrix.append(0); continue; }
+      const auto [dr, dg, db] = parseHex(colours[j]);
+      matrix.append(calc.calcFlushVol(255, sr, sg, sb, 255, dr, dg, db));
+    }
+  }
+  return matrix;
 }
 
 QStringList PresetServiceMock::materialsForVendorAndPrinter(const QString &vendor, const QString &printerModel) const

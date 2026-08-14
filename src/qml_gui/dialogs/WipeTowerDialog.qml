@@ -21,16 +21,52 @@ CxDialog {
 
     property bool advancedMode: false
 
-    // Mock flush volume matrix (aligns with upstream extruder-to-extruder flush volumes)
-    property var flushMatrix: [
-        [0, 140, 160, 120],
-        [140, 0, 150, 130],
-        [160, 150, 0, 140],
-        [120, 130, 140, 0]
-    ]
-
+    // v5.12 gap-closure: flush volume matrix computed from filament colours
+    // via PresetServiceMock::calculateFlushMatrix (FlushVolCalculator). Falls
+    // back to a flat default when no preset service is available.
+    property var presetSvc: typeof backend !== "undefined" && backend
+        ? backend.presetServiceMock : null
+    property var flushMatrix: defaultMatrix(4)
     property var extruderNames: [qsTr("耗材1"), qsTr("耗材2"), qsTr("耗材3"), qsTr("耗材4")]
     property var extruderColors: [Theme.statusInfo, Theme.statusError, Theme.accent, Theme.statusWarning]
+
+    // Default (uniform) matrix for N extruders.
+    function defaultMatrix(n) {
+        var m = []
+        for (var i = 0; i < n; ++i) {
+            var row = []
+            for (var j = 0; j < n; ++j)
+                row.push(i === j ? 0 : 140)
+            m.push(row)
+        }
+        return m
+    }
+    // Convert a flat QVariantList (row-major N*N) to a 2D array.
+    function flatToMatrix(flat, n) {
+        if (!flat || flat.length === 0) return defaultMatrix(n)
+        var m = []
+        for (var i = 0; i < n; ++i) {
+            var row = []
+            for (var j = 0; j < n; ++j)
+                row.push(flat[i * n + j])
+            m.push(row)
+        }
+        return m
+    }
+    Component.onCompleted: {
+        if (presetSvc) {
+            var flat = presetSvc.calculateFlushMatrix()
+            if (flat && flat.length > 0) {
+                var n = Math.sqrt(flat.length)
+                if (n > 0) {
+                    extruderNames = []
+                    for (var i = 0; i < n; ++i)
+                        extruderNames.push(qsTr("耗材") + (i + 1))
+                    flushMatrix = flatToMatrix(flat, n)
+                }
+            }
+        }
+    }
 
     // Ramming settings
     property real rammingVolume: 10.0
@@ -249,13 +285,24 @@ CxDialog {
                 text: qsTr("计算")
                 cxStyle: CxButton.Style.Secondary
                 compact: true
-                enabled: false
+                // v5.12: recompute flush matrix from filament colours.
+                enabled: presetSvc !== null
+                onClicked: {
+                    if (!presetSvc) return
+                    var flat = presetSvc.calculateFlushMatrix()
+                    if (flat && flat.length > 0) {
+                        var n = Math.sqrt(flat.length)
+                        if (n > 0)
+                            flushMatrix = flatToMatrix(flat, n)
+                    }
+                }
             }
 
             CxButton {
                 text: qsTr("重置")
                 cxStyle: CxButton.Style.Secondary
                 compact: true
+                onClicked: flushMatrix = defaultMatrix(extruderNames.length)
             }
         }
 
