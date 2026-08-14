@@ -62,8 +62,14 @@ namespace
       // assets/calib/ (temperature_tower.stl, SpeedTestStructure.step, etc.).
       // These are slice-input geometry, not import-format test fixtures, so
       // exclude the calib asset directory from the import-coverage scan.
+      // v5.12: the 0632bae8 submodule baseline also ships calib geometry under
+      // third_party/OrcaSlicer/resources/calib/ (e.g. volumetric_speed/) and
+      // resources under third_party in general are upstream's, not our
+      // fixtures -- exclude the whole third_party subtree.
       if (path.contains(QStringLiteral("assets\\calib")) ||
-          path.contains(QStringLiteral("assets/calib")))
+          path.contains(QStringLiteral("assets/calib")) ||
+          path.contains(QStringLiteral("third_party\\")) ||
+          path.contains(QStringLiteral("third_party/")))
         continue;
       matches.append(path);
     }
@@ -264,7 +270,9 @@ void E2EWorkflowTests::test_import_format_coverage_matrix_real_fixtures()
                                                  QStringList{QStringLiteral("*.step"),
                                                              QStringLiteral("*.stp")});
   QVERIFY2(stepFiles.isEmpty(),
-           "STEP/STP is expected to be classified in Phase 43 verification unless a committed fixture is added");
+           qPrintable(QStringLiteral("STEP/STP is expected to be classified in Phase 43 "
+                                     "verification unless a committed fixture is added; found: %1")
+                          .arg(stepFiles.join(QStringLiteral(", ")))));
 }
 
 void E2EWorkflowTests::test_slice_produces_gcode_file()

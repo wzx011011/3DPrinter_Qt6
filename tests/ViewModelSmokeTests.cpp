@@ -3046,16 +3046,15 @@ void ViewModelSmokeTests::prepareContextMenuActionsAreRealAndPlateScoped()
 
   QCOMPARE(editor.synchronizeViewportContext(0, importedObject, -1, 0, 1), 1);
   QVERIFY(editor.contextActionAvailable(QStringLiteral("drop")));
-  QVERIFY(editor.contextActionAvailable(QStringLiteral("autoDrop")));
+  // 0632bae8 baseline: ModelInstance has no auto_drop member; the autoDrop
+  // context action and toggle were removed in v5.11 (ensure_on_bed drops
+  // unconditionally). Drop remains available.
   QVERIFY(editor.contextActionAvailable(QStringLiteral("subdivide")));
   QVERIFY(editor.contextActionAvailable(QStringLiteral("convertUnits")));
   QVERIFY(editor.contextActionAvailable(QStringLiteral("copyProcessSettings")));
 
-  QVERIFY(project.setObjectAutoDrop(importedObject, false));
-  QVERIFY(editor.toggleSelectedObjectsAutoDrop());
-  QVERIFY(project.objectAutoDrop(importedObject));
-  QVERIFY(editor.toggleSelectedObjectsAutoDrop());
-  QVERIFY(!project.objectAutoDrop(importedObject));
+  // 0632bae8: objectAutoDrop() is a constant true (no per-instance toggle);
+  // the save/toggle/restore round-trip assertions were removed with the API.
   QVERIFY(project.setObjectPosition(importedObject, 0.0f, 50.0f, 0.0f));
   QVERIFY2(editor.dropSelectedObjectsToBed(), qPrintable(project.lastError()));
   QVERIFY(qAbs(project.rawModel()->objects[size_t(importedObject)]->get_instance_min_z(0)) < 1e-6);
@@ -3125,14 +3124,10 @@ void ViewModelSmokeTests::prepareContextMeshAndUnitActionsUseUpstreamModelOperat
   QVERIFY2(editor.subdivideSelectedMesh(), qPrintable(project.lastError()));
   QVERIFY(project.objectTriangleCount(0) > trianglesBefore);
 
-  QVERIFY(project.setObjectAutoDrop(0, false));
-  QVERIFY(editor.toggleSelectedObjectsAutoDrop());
-  QVERIFY(project.objectAutoDrop(0));
-  QVERIFY(editor.toggleSelectedObjectsAutoDrop());
-  QVERIFY(!project.objectAutoDrop(0));
+  // 0632bae8: autoDrop toggle API removed (v5.11); ensure_on_bed drops
+  // unconditionally. The drop path itself is still asserted below.
   QVERIFY(project.setObjectPosition(0, 0.0f, 50.0f, 0.0f));
   QVERIFY2(editor.dropSelectedObjectsToBed(), qPrintable(project.lastError()));
-  QVERIFY(!project.objectAutoDrop(0));
   QVERIFY(qAbs(project.rawModel()->objects[0]->get_instance_min_z(0)) < 1e-6);
 
   const double widthBefore = project.rawModel()->objects[0]->raw_mesh_bounding_box().size().x();

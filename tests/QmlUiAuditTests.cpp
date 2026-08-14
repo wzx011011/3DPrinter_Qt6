@@ -1809,7 +1809,8 @@ void QmlUiAuditTests::prepareViewportContextMenuWorkflowIsCppOwned()
                && projectService.contains(QStringLiteral("resources/handy_models")),
            "Handy-model actions must use deployed upstream resources through C++");
   QVERIFY2(menuComponent.contains(QStringLiteral("dropSelectedObjectsToBed"))
-               && menuComponent.contains(QStringLiteral("toggleSelectedObjectsAutoDrop"))
+               // 0632bae8: toggleSelectedObjectsAutoDrop removed (v5.11, no
+               // per-instance auto_drop on this baseline); drop stays.
                && menuComponent.contains(QStringLiteral("subdivideSelectedMesh"))
                && menuComponent.contains(QStringLiteral("convertSelectedObjectUnits"))
                && menuComponent.contains(QStringLiteral("copyContextProcessSettings"))
@@ -3120,9 +3121,11 @@ void QmlUiAuditTests::rhiViewportRendererHasGcvPackedSegmentRoleGuard()
   const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
   QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
 
-  QVERIFY2(rendererSource.contains(QStringLiteral("static_assert(sizeof(GcvPackedSegment) == 76")),
-           "RhiViewportRenderer must contain static_assert(sizeof(GcvPackedSegment) == 76) "
-           "(Plan 02 wire-format lockstep guard)");
+  // v5.11: layout extended to 92 bytes (20 floats + 4 ints) after adding
+  // jerk/pressure_advance/actual_speed/actual_flow for the Preview view modes.
+  QVERIFY2(rendererSource.contains(QStringLiteral("static_assert(sizeof(GcvPackedSegment) == 92")),
+           "RhiViewportRenderer must contain static_assert(sizeof(GcvPackedSegment) == 92) "
+           "(Plan 02 wire-format lockstep guard, v5.11 92-byte layout)");
 }
 
 // Phase 55/73 (GCODE-04/GRET-02): D3D11 default + SoftwareViewport fallback

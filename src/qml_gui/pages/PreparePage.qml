@@ -1487,8 +1487,8 @@ Item {
                             root.editorVm.paintAtFacet(-1, -1, -1, 0.0, 0.0, 0.0, paintState, brushRadius, cursorType, pickedSourceIndex, worldOrigin, worldDirection)
                     }
                     // Phase HOLLOW: forward the hollow-gizmo click to the
-                    // ViewModel, which runs the stage-2 SceneRaycaster pick and
-                    // appends a sla::DrainHole at the mesh-local intersection.
+                    // ViewModel, which runs the stage-2 surface hit test and
+                    // appends a sla::DrainHole at the mesh-local hit point.
                     // Same opaque-forward contract as the measure/paint handlers.
                     onHollowPickRequested: function(worldOrigin, worldDirection, pickedSourceIndex) {
                         if (root.editorVm)
@@ -3124,7 +3124,7 @@ Item {
                 Text { text: qsTr("布尔运算"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true; Layout.alignment: Qt.AlignHCenter }
 
                 Text { text: qsTr("运算类型"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
-                CxComboBox { Layout.preferredWidth: 100; model: [qsTr("并集 (Union)"), qsTr("差集 (Difference)"), qsTr("交集 (Intersection)")]; currentIndex: root.editorVm ? root.editorVm.booleanOperation : 1; onActivated: if (root.editorVm) root.editorVm.booleanOperation = currentIndex }
+                CxComboBox { Layout.preferredWidth: 100; model: [qsTr("并集"), qsTr("差集"), qsTr("交集")]; currentIndex: root.editorVm ? root.editorVm.booleanOperation : 1; onActivated: if (root.editorVm) root.editorVm.booleanOperation = currentIndex }
 
                 Text { text: qsTr("需选中 2 个以上对象"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; Layout.alignment: Qt.AlignHCenter }
 
