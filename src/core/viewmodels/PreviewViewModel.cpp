@@ -66,6 +66,10 @@ namespace
     float width;
     float layer_time;
     float acceleration;
+    float jerk;              // v5.11: M205 jerk (mm/s)
+    float pressure_advance;  // v5.11: M900 / SET_PRESSURE_ADVANCE PA value
+    float actual_speed;      // v5.11: feedrate * M220 speed factor (actual mm/s)
+    float actual_flow;       // v5.11: M221 flow factor percent
     int extruder_id;
     int layer;
     int move;
@@ -75,7 +79,7 @@ namespace
   // the static_assert previously existed only on the renderer side). PackedSegment
   // must be byte-identical to GcvPackedSegment in RhiViewportRenderer.cpp; a
   // layout drift here would silently corrupt the GCV1 preview blob at runtime.
-  static_assert(sizeof(PackedSegment) == 76, "PackedSegment must be 76 bytes (matches GcvPackedSegment)");
+  static_assert(sizeof(PackedSegment) == 92, "PackedSegment must be 92 bytes (20 floats + 4 ints, matches GcvPackedSegment)");
 
   // Upstream-matched gradient: 10-color Range_Colors from CrealityPrint GCodeViewer
   struct ColorResult { float r, g, b; };
@@ -237,16 +241,11 @@ namespace
   // so users are informed without spamming on every recolor.
   bool viewModeUsesUnavailableData(int mode)
   {
-    switch (mode)
-    {
-    case VT_ActualSpeed:
-    case VT_Jerk:
-    case VT_ActualFlow:
-    case VT_PressureAdvance:
-      return true;
-    default:
-      return false;
-    }
+    // v5.11: all 4 previously-unavailable modes (ActualSpeed/Jerk/ActualFlow/
+    // PressureAdvance) now parse real data from M220/M221/M205/M900. None are
+    // unavailable anymore.
+    Q_UNUSED(mode);
+    return false;
   }
 
   bool logOnceIfNeeded(int mode)
@@ -996,6 +995,11 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   float currentFanSpeed = 0.f;
   float currentTemp = 0.f;
   float currentAccel = 0.f;
+  // v5.11: M-code state for ActualSpeed/Jerk/ActualFlow/PressureAdvance view modes.
+  float currentSpeedFactor = 1.f;   // M220 S<percent>/100
+  float currentFlowFactor = 1.f;    // M221 S<percent>/100
+  float currentJerk = 0.f;          // M205 X/Y/E value
+  float currentPA = 0.f;            // M900 K value / SET_PRESSURE_ADVANCE ADVANCE
   int currentExtruder = 0;
   bool relativeExtrusion = false;
   float currentWidth = 0.f;
@@ -1209,6 +1213,35 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       else if (parseAxis(upper, 'S', val) && val > 0.f) currentAccel = val;
     }
 
+    // v5.11: Speed factor (M220 S<percent>) — drives ActualSpeed view mode.
+    if (upper.startsWith(QStringLiteral("M220")))
+    {
+      float val = 0.f;
+      if (parseAxis(upper, 'S', val) && val >= 0.f)
+        currentSpeedFactor = val / 100.f;
+    }
+    // v5.11: Flow factor (M221 S<percent>) — drives ActualFlow view mode.
+    if (upper.startsWith(QStringLiteral("M221")))
+    {
+      float val = 0.f;
+      if (parseAxis(upper, 'S', val) && val >= 0.f)
+        currentFlowFactor = val / 100.f;
+    }
+    // v5.11: Jerk (M205 X/Y/E<value>) — drives Jerk view mode.
+    if (upper.startsWith(QStringLiteral("M205")))
+    {
+      float val = 0.f;
+      if (parseAxis(upper, 'X', val) && val > 0.f) currentJerk = val;
+      else if (parseAxis(upper, 'Y', val) && val > 0.f) currentJerk = val;
+      else if (parseAxis(upper, 'E', val) && val > 0.f) currentJerk = val;
+    }
+    // v5.11: Pressure advance (M900 K<value>) — drives PressureAdvance view mode.
+    if (upper.startsWith(QStringLiteral("M900")))
+    {
+      float val = 0.f;
+      if (parseAxis(upper, 'K', val) && val >= 0.f) currentPA = val;
+    }
+
     const bool isG0 = upper == QStringLiteral("G0") || upper.startsWith(QStringLiteral("G0 "));
     const bool isG1 = upper == QStringLiteral("G1") || upper.startsWith(QStringLiteral("G1 "));
     if (!isG0 && !isG1)
@@ -1332,6 +1365,10 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     seg.layer_time = currentLayerTime;
     seg.acceleration = currentAccel;
     seg.volumetric_rate = volumetricRate;
+    seg.jerk = currentJerk;
+    seg.pressure_advance = currentPA;
+    seg.actual_speed = currentFeedrate * currentSpeedFactor;
+    seg.actual_flow = currentFlowFactor;
     seg.extruder_id = currentExtruder;
     seg.layer = layer;
     seg.move = moveIndex;
@@ -1599,7 +1636,12 @@ void PreviewViewModel::recolorAndPackSegments()
     case VT_LayerTimeLog: v = s.layer_time > 0.f ? std::log(s.layer_time) : 0.f; break;
     case VT_FanSpeed:     v = qMax(0.f, s.fan_speed); break;
     case VT_Temperature:  v = s.temperature; break;
-    default: continue;  // VT_Summary, VT_LineType, VT_Filament, VT_Tool, and the
+    // v5.11: the 4 previously-unavailable modes now have real data.
+    case VT_ActualSpeed:      v = s.actual_speed; break;
+    case VT_Jerk:             v = s.jerk; break;
+    case VT_ActualFlow:       v = s.actual_flow; break;
+    case VT_PressureAdvance:  v = s.pressure_advance; break;
+    default: continue;  // VT_Summary, VT_LineType, VT_Filament, VT_Tool do not
                         // data-unavailable modes (ActualSpeed/Jerk/ActualFlow/PA)
                         // do not compute a gradient range.
     }
@@ -1637,6 +1679,10 @@ void PreviewViewModel::recolorAndPackSegments()
     p.width = s.width;
     p.layer_time = s.layer_time;
     p.acceleration = s.acceleration;
+    p.jerk = s.jerk;
+    p.pressure_advance = s.pressure_advance;
+    p.actual_speed = s.actual_speed;
+    p.actual_flow = s.actual_flow;
     p.extruder_id = s.extruder_id;
     p.layer = s.layer;
     p.move = s.move;
@@ -1657,10 +1703,17 @@ void PreviewViewModel::recolorAndPackSegments()
     }
     else if (mode == VT_ActualSpeed || mode == VT_Jerk || mode == VT_ActualFlow || mode == VT_PressureAdvance)
     {
-      // Data unavailable in the fixture-driven path: render a uniform mid-gradient
-      // color. Log once per mode so users are informed without spamming.
-      logOnceIfNeeded(mode);
-      const ColorResult c = valueToGradient((minV + maxV) * 0.5f, minV, maxV);
+      // v5.11: these modes now have real data (parsed from M220/M221/M205/M900).
+      // Map the segment's value to the gradient like the other scalar modes.
+      float value = 0.f;
+      switch (mode) {
+      case VT_ActualSpeed:     value = s.actual_speed; break;
+      case VT_Jerk:            value = s.jerk; break;
+      case VT_ActualFlow:      value = s.actual_flow; break;
+      case VT_PressureAdvance: value = s.pressure_advance; break;
+      default: break;
+      }
+      const ColorResult c = valueToGradient(value, minV, maxV);
       p.r = c.r; p.g = c.g; p.b = c.b;
     }
     else if (mode == VT_Summary)

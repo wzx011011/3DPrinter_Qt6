@@ -2660,12 +2660,13 @@ struct GcvPackedSegment
   float x1, y1, z1, x2, y2, z2;
   float r, g, b;
   float feedrate, fan_speed, temperature, width, layer_time, acceleration;
+  float jerk, pressure_advance, actual_speed, actual_flow;  // v5.11: 4 extra fields
   int extruder_id, layer, move;
   int role;  // must match PackedSegment layout exactly (canonical libvgcode index).
 };
 // Wire-format lock-step guard: PackedSegment and GcvPackedSegment carry the
-// identical 76-byte layout (16 floats + 4 ints) so the GCV1 blob memcpy is safe.
-static_assert(sizeof(GcvPackedSegment) == 76, "GcvPackedSegment must be 76 bytes after adding role");
+// identical 92-byte layout (20 floats + 4 ints) so the GCV1 blob memcpy is safe.
+static_assert(sizeof(GcvPackedSegment) == 92, "GcvPackedSegment must be 92 bytes (20 floats + 4 ints)");
 // PackedSegment is 76 bytes (16 floats + 4 ints, packed); if the platform adds
 // padding the parse logic uses sizeof explicitly.
 } // namespace

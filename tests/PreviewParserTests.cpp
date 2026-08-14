@@ -168,20 +168,20 @@ void PreviewParserTests::test_view_mode_availability_reports_data_unavailable_mo
   PreviewViewModel preview(&project, &slice);
 
   const QStringList modes = preview.viewModes();
-  const QStringList unavailableModes = {
+  // v5.11: these 4 modes now parse real data (M220/M221/M205/M900) and are
+  // available. They were previously gated as unavailable.
+  const QStringList nowAvailableModes = {
     QStringLiteral("Actual Speed"),
     QStringLiteral("Jerk"),
     QStringLiteral("Actual Flow"),
     QStringLiteral("Pressure Advance")
   };
 
-  for (const QString &modeName : unavailableModes) {
+  for (const QString &modeName : nowAvailableModes) {
     const int index = modes.indexOf(modeName);
     QVERIFY2(index >= 0, qPrintable(QStringLiteral("Missing mode: %1").arg(modeName)));
-    QVERIFY2(!preview.viewModeAvailable(index),
-             qPrintable(QStringLiteral("%1 must be marked unavailable for the current Qt data path").arg(modeName)));
-    QVERIFY2(!preview.viewModeStatusText(index).isEmpty(),
-             qPrintable(QStringLiteral("%1 must expose an honest status string").arg(modeName)));
+    QVERIFY2(preview.viewModeAvailable(index),
+             qPrintable(QStringLiteral("%1 must be available after v5.11 G-code parse extension").arg(modeName)));
   }
 
   const QStringList availableModes = {
@@ -202,10 +202,10 @@ void PreviewParserTests::test_view_mode_availability_reports_data_unavailable_mo
 
   const int actualSpeedIndex = modes.indexOf(QStringLiteral("Actual Speed"));
   preview.setViewModeIndex(actualSpeedIndex);
-  QVERIFY2(!preview.currentViewModeAvailable(),
-           "currentViewModeAvailable must follow setViewModeIndex");
-  QVERIFY2(!preview.currentViewModeStatus().isEmpty(),
-           "currentViewModeStatus must follow setViewModeIndex");
+  // v5.11: Actual Speed is now available (parses M220); currentViewModeAvailable
+  // must follow setViewModeIndex and report true.
+  QVERIFY2(preview.currentViewModeAvailable(),
+           "currentViewModeAvailable must follow setViewModeIndex (Actual Speed is available after v5.11)");
 }
 
 // GREEN since Plan 55-02: Summary mode (upstream EViewType index 0) renders

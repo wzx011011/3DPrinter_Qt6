@@ -332,6 +332,10 @@ private:
     float layer_time;
     float acceleration;
     float volumetric_rate;
+    float jerk = 0.f;             // v5.11: M205 jerk
+    float pressure_advance = 0.f; // v5.11: M900 PA
+    float actual_speed = 0.f;     // v5.11: feedrate * M220 speed factor
+    float actual_flow = 0.f;      // v5.11: M221 flow factor percent
     int extruder_id;
     int layer;
     int move;
