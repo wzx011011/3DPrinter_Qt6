@@ -17,13 +17,19 @@ Item {
     readonly property int gizmoToolbarWidth: 36
     readonly property int toolbarGap: 3
     readonly property int targetActionToolbarTop: 22
-    readonly property int targetActionToolbarLeft: 598
-    readonly property int targetRightToolbarTop: 392
-    readonly property int targetRightToolbarCenterOffset: 300
+    // v5.14: viewport-relative anchors replace the Phase 77 absolute pixel
+    // offsets (left 598 / top 392 / center+300) which only landed correctly
+    // at one window size. Screenshot truth: action bar hugs the viewport
+    // top-left; the gizmo rail hugs the viewport right edge starting ~22%
+    // down, with overflow collapsed behind a "more" affordance.
+    readonly property int targetActionToolbarLeft: 10
+    readonly property real gizmoRailTopRatio: 0.22
+    readonly property int gizmoRailRightMargin: 14
+    property bool gizmoRailExpanded: false
     readonly property int targetViewControlsBottom: 42
     property int viewControlsBottomMargin: root.targetViewControlsBottom
-    readonly property color targetToolbarSurface: "#3b3e46aa"
-    readonly property color targetToolbarBorder: "#71757d88"
+    readonly property color targetToolbarSurface: Theme.bgFloating
+    readonly property color targetToolbarBorder: Theme.borderSubtle
     readonly property string iconBase: "qrc:/qml/assets/icons/"
 
     signal addModelRequested()
@@ -247,9 +253,12 @@ Item {
     Item {
         id: prepareRightGizmoToolbar
         anchors.top: parent.top
-        anchors.topMargin: root.targetRightToolbarTop
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.horizontalCenterOffset: root.targetRightToolbarCenterOffset
+        anchors.right: parent.right
+        // Screenshot truth: rail floats just inside the viewport right edge,
+        // starting ~22% of the viewport height down (not vertically centered,
+        // not top-docked). Ratio-based so it scales with the window.
+        anchors.topMargin: Math.round(parent.height * root.gizmoRailTopRatio)
+        anchors.rightMargin: root.gizmoRailRightMargin
         width: root.gizmoToolbarWidth
         height: gizmoColumn.implicitHeight + 12
 
@@ -257,9 +266,9 @@ Item {
             id: viewportGizmoToolbar
             anchors.fill: parent
             radius: 4
-            color: "#7a7d8466"
+            color: root.targetToolbarSurface
             border.width: 1
-            border.color: "#c3c7cd77"
+            border.color: root.targetToolbarBorder
 
             ColumnLayout {
                 id: gizmoColumn
@@ -276,27 +285,45 @@ Item {
                 GizmoToolButton { toolId: GLViewport.GizmoCut; textTip: qsTr("Cut"); iconSource: iconForTool(toolId) }
                 GizmoToolButton { toolId: GLViewport.GizmoAdvancedCut; textTip: qsTr("Advanced cut"); iconSource: iconForTool(toolId) }
 
+                // ── Overflow gizmos: collapsed behind the expander (screenshot
+                // truth shows ~6 primary icons + a "more" affordance). ──
+                ToolbarSeparator { visible: root.gizmoRailExpanded }
+
+                Repeater {
+                    model: [
+                        { tool: GLViewport.GizmoSupportPaint, tip: qsTr("Support painting") },
+                        { tool: GLViewport.GizmoSeamPaint, tip: qsTr("Seam painting") },
+                        { tool: GLViewport.GizmoSimplify, tip: qsTr("Simplify mesh") },
+                        { tool: GLViewport.GizmoMeasure, tip: qsTr("Measure") },
+                        { tool: GLViewport.GizmoMeshBoolean, tip: qsTr("Mesh boolean") },
+                        { tool: GLViewport.GizmoEmboss, tip: qsTr("Emboss") },
+                        { tool: GLViewport.GizmoSVG, tip: qsTr("SVG emboss") },
+                        { tool: GLViewport.GizmoHollow, tip: qsTr("Hollow") },
+                        { tool: GLViewport.GizmoMmuSegmentation, tip: qsTr("Multicolor painting") },
+                        { tool: GLViewport.GizmoFaceDetector, tip: qsTr("Face detect") },
+                        { tool: GLViewport.GizmoDrill, tip: qsTr("Drill holes") },
+                        { tool: GLViewport.GizmoText, tip: qsTr("Text emboss") }
+                    ]
+                    delegate: GizmoToolButton {
+                        required property var modelData
+                        toolId: modelData.tool
+                        textTip: modelData.tip
+                        iconSource: iconForTool(toolId)
+                        visible: root.gizmoRailExpanded
+                    }
+                }
+
                 ToolbarSeparator { }
 
-                GizmoToolButton { toolId: GLViewport.GizmoSupportPaint; textTip: qsTr("Support painting"); iconSource: iconForTool(toolId) }
-                GizmoToolButton { toolId: GLViewport.GizmoSeamPaint; textTip: qsTr("Seam painting"); iconSource: iconForTool(toolId) }
-                GizmoToolButton { toolId: GLViewport.GizmoSimplify; textTip: qsTr("Simplify mesh"); iconSource: iconForTool(toolId) }
-                GizmoToolButton { toolId: GLViewport.GizmoMeasure; textTip: qsTr("Measure"); iconSource: iconForTool(toolId) }
-                GizmoToolButton { toolId: GLViewport.GizmoMeshBoolean; textTip: qsTr("Mesh boolean"); iconSource: iconForTool(toolId) }
-                GizmoToolButton { toolId: GLViewport.GizmoEmboss; textTip: qsTr("Emboss"); iconSource: iconForTool(toolId) }
-                GizmoToolButton { toolId: GLViewport.GizmoSVG; textTip: qsTr("SVG emboss"); iconSource: iconForTool(toolId) }
-                // Phase 143 (VDB-04): Hollow gizmo button. Visible when the
-                // Hollow bit is set in availableGizmoMask (EditorViewModel case 8
-                // returns hasSingleObject after Phase 142 linked OpenVDB). The
-                // full SLA print path is a v5.1+ follow-up.
-                GizmoToolButton { toolId: GLViewport.GizmoHollow; textTip: qsTr("Hollow"); iconSource: iconForTool(toolId) }
-                // v5.11 gap-closure: wire the remaining real/stub gizmos whose
-                // backends exist but had no toolbar entry (or whose mask was
-                // permanently false). Each is gated by availableGizmoMask.
-                GizmoToolButton { toolId: GLViewport.GizmoMmuSegmentation; textTip: qsTr("Multicolor painting"); iconSource: iconForTool(toolId) }
-                GizmoToolButton { toolId: GLViewport.GizmoFaceDetector; textTip: qsTr("Face detect"); iconSource: iconForTool(toolId) }
-                GizmoToolButton { toolId: GLViewport.GizmoDrill; textTip: qsTr("Drill holes"); iconSource: iconForTool(toolId) }
-                GizmoToolButton { toolId: GLViewport.GizmoText; textTip: qsTr("Text emboss"); iconSource: iconForTool(toolId) }
+                GizmoToolButton {
+                    toolId: -1
+                    iconSource: root.iconBase + (root.gizmoRailExpanded ? "x.svg" : "dots.svg")
+                    textTip: root.gizmoRailExpanded ? qsTr("Hide more tools") : qsTr("More tools")
+                    toolTipText: root.gizmoRailExpanded ? qsTr("Hide more tools") : qsTr("More tools")
+                    selected: root.gizmoRailExpanded
+                    enabled: true
+                    onClicked: root.gizmoRailExpanded = !root.gizmoRailExpanded
+                }
             }
         }
     }
@@ -360,7 +387,7 @@ Item {
         property bool vertical: false
         Layout.preferredWidth: vertical ? 1 : 24
         Layout.preferredHeight: vertical ? 22 : 1
-        color: "#9097a066"
+        color: Theme.borderStrong
     }
 
     component ActionToolButton: CxIconButton {

@@ -11,6 +11,8 @@ Item {
     signal requestReplaceAll()
     signal requestExport(bool separateFiles, bool drcFormat)
     signal requestConfirmDelete()
+    signal requestConfirmClearPlate()
+    signal requestConfirmDeletePlate()
     signal requestRenameObject()
     signal requestActivateGizmo(int mode)
     signal requestObjectLayers()
@@ -389,7 +391,7 @@ Item {
         CxMenuItem {
             text: qsTr("Clear plate")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("plateClear")
-            onTriggered: root.editorVm.removeAllOnPlate(root.editorVm.contextPlateIndex)
+            onTriggered: root.requestConfirmClearPlate()
         }
         CxMenuItem {
             text: qsTr("Arrange objects")
@@ -489,7 +491,7 @@ Item {
         CxMenuItem {
             text: qsTr("Delete plate")
             enabled: root.editorVm && root.editorVm.canDeletePlate(root.editorVm.contextPlateIndex)
-            onTriggered: root.editorVm.deletePlate(root.editorVm.contextPlateIndex)
+            onTriggered: root.requestConfirmDeletePlate()
         }
     }
 

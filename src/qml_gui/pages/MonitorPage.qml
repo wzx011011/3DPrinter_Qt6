@@ -1100,7 +1100,7 @@ Item {
                                             Rectangle {
                                                 visible: root.monitorVm.selectedDeviceCameraRecording
                                                 width: 8; height: 8; radius: 4
-                                                color: "#ff0000"
+                                                color: Theme.statusError
                                                 anchors.left: parent.left
                                                 anchors.leftMargin: 8
                                                 anchors.verticalCenter: parent.verticalCenter
@@ -1763,7 +1763,7 @@ Item {
                                             Rectangle {
                                                 anchors.centerIn: parent
                                                 width: 40; height: 40; radius: 20
-                                                color: "#80000000"
+                                                color: Theme.overlayDim
                                                 visible: liveVideo.status === Image.Loading
                                                 Text {
                                                     anchors.centerIn: parent
@@ -1840,7 +1840,7 @@ Item {
                                             RowLayout {
                                                 anchors.centerIn: parent
                                                 spacing: 4
-                                                Rectangle { width: 8; height: 8; radius: 4; color: "#ff0000" }
+                                                Rectangle { width: 8; height: 8; radius: 4; color: Theme.statusError }
                                                 Text {
                                                     id: recordingLabel
                                                     text: qsTr("REC")

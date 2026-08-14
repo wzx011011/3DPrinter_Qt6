@@ -13,7 +13,7 @@ Rectangle {
     property string processCategory: ""
     signal exportRequested()
 
-    readonly property int targetSidebarWidth: 392
+    readonly property int targetSidebarWidth: 320
     readonly property color panelSurface: Theme.bgElevated
     readonly property color sectionSurface: Theme.bgHover
     readonly property color controlSurface: Theme.borderDefault
@@ -29,7 +29,6 @@ Rectangle {
     }
     readonly property string paramsTier: "print"
     property var paramsFilteredIndices: []
-    property bool printerExpanded: true
 
     color: panelSurface
     radius: 0
@@ -70,10 +69,13 @@ Rectangle {
                 onActionTriggered: backend.forwardSettingsRequest("printer")
             }
 
+            // v5.14: compact preset row replaces the 76px hero card (screenshot
+            // truth shows preset selectors as dense single rows, matching the
+            // filament/process rows below).
             Rectangle {
-                id: printerHeroCard
+                id: printerPresetRow
                 Layout.fillWidth: true
-                Layout.preferredHeight: 76
+                Layout.preferredHeight: 38
                 radius: 4
                 color: root.sectionSurface
                 border.width: 1
@@ -81,100 +83,55 @@ Rectangle {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 8
-                    spacing: 8
+                    anchors.leftMargin: 8
+                    anchors.rightMargin: 8
+                    spacing: 7
+
+                    Image {
+                        Layout.preferredWidth: 18
+                        Layout.preferredHeight: 18
+                        source: "qrc:/qml/assets/icons/printer.svg"
+                        fillMode: Image.PreserveAspectFit
+                        opacity: 0.8
+                    }
+
+                    CxComboBox {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 28
+                        font.pixelSize: Theme.fontSizeSM
+                        model: root.configVm ? root.configVm.printerPresetNames : []
+                        currentIndex: {
+                            if (!root.configVm) return -1
+                            return root.configVm.printerPresetNames.indexOf(root.configVm.currentPrinterPreset)
+                        }
+                        onActivated: (i) => {
+                            if (!root.configVm) return
+                            if (i >= 0 && i < model.length)
+                                root.configVm.requestCurrentPrinterPreset(model[i])
+                        }
+                    }
 
                     Rectangle {
-                        id: printerThumbnail
-                        Layout.preferredWidth: 52
-                        Layout.preferredHeight: 52
+                        visible: !!root.configVm && root.configVm.isPresetDirty
+                        Layout.preferredWidth: 8
+                        Layout.preferredHeight: 8
                         radius: 4
-                        color: Theme.chromeText
-                        border.width: 1
-                        border.color: Theme.textSecondary
-
-                        Image {
-                            anchors.centerIn: parent
-                            width: 28
-                            height: 28
-                            source: "qrc:/qml/assets/icons/printer.svg"
-                            fillMode: Image.PreserveAspectFit
-                            opacity: 0.75
-                        }
+                        color: Theme.accent
+                        ToolTip.text: qsTr("预设已修改（未保存）")
+                        ToolTip.visible: printerDirtyMA.containsMouse
+                        MouseArea { id: printerDirtyMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
                     }
 
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 5
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 6
-
-                            Text {
-                                Layout.fillWidth: true
-                                text: root.configVm && root.configVm.currentPrinterPreset !== ""
-                                      ? root.configVm.currentPrinterPreset
-                                      : qsTr("Creality K2 Plus")
-                                color: Theme.textPrimary
-                                font.pixelSize: Theme.fontSizeMD
-                                font.bold: true
-                                elide: Text.ElideRight
-                            }
-
-                            Rectangle {
-                                visible: !!root.configVm && root.configVm.isPresetDirty
-                                Layout.preferredWidth: 8
-                                Layout.preferredHeight: 8
-                                radius: 4
-                                color: Theme.accent
-                                ToolTip.text: qsTr("预设已修改（未保存）")
-                                ToolTip.visible: printerDirtyMA.containsMouse
-                                MouseArea { id: printerDirtyMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
-                            }
-                        }
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 5
-
-                            InfoTile {
-                                id: nozzleTile
-                                Layout.fillWidth: true
-                                label: qsTr("喷嘴")
-                                value: "0.4 mm"
-                            }
-                            InfoTile {
-                                id: buildPlateTile
-                                Layout.fillWidth: true
-                                label: qsTr("热床")
-                                value: root.editorVm ? root.bedTypeName(root.editorVm.plateBedType(root.editorVm.currentPlateIndex)) : "PEI"
-                            }
-                            InfoTile {
-                                id: heaterTile
-                                Layout.fillWidth: true
-                                label: qsTr("温度")
-                                value: root.configVm ? (root.configVm.nozzleTemp + " / " + root.configVm.bedTemp) : "220 / 65"
-                            }
-                        }
+                    PixelIconButton {
+                        iconSource: "qrc:/qml/assets/icons/settings.svg"
+                        toolTipText: qsTr("编辑打印机预设")
+                        onClicked: backend.forwardSettingsRequest("printer")
                     }
 
-                    ColumnLayout {
-                        Layout.preferredWidth: 28
-                        spacing: 6
-                        Layout.alignment: Qt.AlignTop
-
-                        PixelIconButton {
-                            iconSource: "qrc:/qml/assets/icons/settings.svg"
-                            toolTipText: qsTr("编辑打印机预设")
-                            onClicked: backend.forwardSettingsRequest("printer")
-                        }
-
-                        PixelIconButton {
-                            iconSource: "qrc:/qml/assets/icons/send-2.svg"
-                            toolTipText: qsTr("打印机连接")
-                            onClicked: backend.showPrintHostDialog()
-                        }
+                    PixelIconButton {
+                        iconSource: "qrc:/qml/assets/icons/send-2.svg"
+                        toolTipText: qsTr("打印机连接")
+                        onClicked: backend.showPrintHostDialog()
                     }
                 }
             }
@@ -585,43 +542,6 @@ Rectangle {
                 toolTipText: headerRoot.actionToolTip
                 enabled: headerRoot.enabled
                 onClicked: headerRoot.actionTriggered()
-            }
-        }
-    }
-
-    component InfoTile: Rectangle {
-        id: tileRoot
-        property string label: ""
-        property string value: ""
-
-        implicitHeight: 30
-        radius: 3
-        color: root.fieldSurface
-        border.width: 1
-        border.color: root.dividerColor
-
-        Column {
-            anchors.fill: parent
-            anchors.leftMargin: 6
-            anchors.rightMargin: 6
-            anchors.topMargin: 3
-            spacing: 0
-
-            Text {
-                width: parent.width
-                text: tileRoot.label
-                color: root.mutedText
-                font.pixelSize: Theme.fontSizeXS
-                elide: Text.ElideRight
-            }
-
-            Text {
-                width: parent.width
-                text: tileRoot.value
-                color: Theme.textPrimary
-                font.pixelSize: Theme.fontSizeXS
-                font.bold: true
-                elide: Text.ElideRight
             }
         }
     }

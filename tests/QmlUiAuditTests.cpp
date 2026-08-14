@@ -1609,7 +1609,7 @@ void QmlUiAuditTests::previewLayoutRestoresScreenshotRegionsAndGcodePanel()
     // Phase 164 (SW-01): preview left width now sources from backend.sidebarWidth
     // (was hardcoded 392 -- part of the 7-layer lock). The contract is now that
     // the property exists and resolves to the backend value.
-    QStringLiteral("readonly property int targetPreviewLeftWidth: backend ? backend.sidebarWidth : 392"),
+    QStringLiteral("readonly property int targetPreviewLeftWidth: backend ? backend.sidebarWidth : 320"),
     QStringLiteral("readonly property int targetPreviewRightWidth: Theme.rightPanelWidth"),
     QStringLiteral("id: rightAnalysisStack"),
     QStringLiteral("id: gcodeSourcePanel"),
@@ -2767,9 +2767,10 @@ void QmlUiAuditTests::prepareLeftSidebarMatchesPixelRestorationContract()
   // Phase 164 (SW-01, v5.2): the 392px hardcode was a 7-layer lock that made
   // the DockableSidebar drag handle a visible no-op (Panels-UI-REVIEW BLOCKER).
   // The contract is now: sidebar width sources from backend.sidebarWidth, and
-  // min/max are real bounds (300/520) -- no longer min==max==392. Default stays
-  // 392 to preserve the visual; users can now resize.
-  QVERIFY2(preparePage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
+  // min/max are real bounds (300/520) -- no longer min==max==392. v5.14: the
+  // default narrows to 320 to match the screenshot truth's compact density
+  // (~15% of a 1920 window); users can still resize within 300/520.
+  QVERIFY2(preparePage.contains(QStringLiteral("backend ? backend.sidebarWidth : 320")),
            "Prepare page sidebar width must source from backend.sidebarWidth (Phase 164 unbreaks the 7-layer lock)");
   QVERIFY2(preparePage.contains(QStringLiteral("backend ? backend.sidebarMinWidth : 300"))
                && preparePage.contains(QStringLiteral("backend ? backend.sidebarMaxWidth : 520")),
@@ -2777,14 +2778,14 @@ void QmlUiAuditTests::prepareLeftSidebarMatchesPixelRestorationContract()
   QVERIFY2(backendContext.contains(QStringLiteral("kSidebarMinWidth = 300"))
                && backendContext.contains(QStringLiteral("kSidebarMaxWidth = 520")),
            "Phase 164 SW-01: BackendContext kSidebar{Min,Max}Width must allow resize (was both 392)");
-  QVERIFY2(platerPage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392"))
+  QVERIFY2(platerPage.contains(QStringLiteral("backend ? backend.sidebarWidth : 320"))
                && platerPage.contains(QStringLiteral("backend ? backend.sidebarMinWidth : 300"))
                && platerPage.contains(QStringLiteral("backend ? backend.sidebarMaxWidth : 520")),
            "Phase 164 SW-01: Plater sidebar must use the same resizable backend-driven contract as Prepare");
-  QVERIFY2(backendContext.contains(QStringLiteral("kSidebarDefaultWidth = 392"))
+  QVERIFY2(backendContext.contains(QStringLiteral("kSidebarDefaultWidth = 320"))
                && backendContext.contains(QStringLiteral("kSidebarMinWidth = 300"))
                && backendContext.contains(QStringLiteral("kSidebarMaxWidth = 520")),
-           "Phase 164 SW-01: BackendContext default stays 392 (visual preserved) but min/max now allow resize");
+           "v5.14: BackendContext default is 320 (compact density) with resizable 300/520 bounds");
 
   QVERIFY2(!dockableSidebar.contains(QStringLiteral("id: titleBar")),
            "Expanded DockableSidebar must not add the extra settings title strip");
@@ -2792,12 +2793,8 @@ void QmlUiAuditTests::prepareLeftSidebarMatchesPixelRestorationContract()
            "LeftSidebar must start at the top of the expanded dock body");
 
   const QStringList layoutTokens = {
-    QStringLiteral("readonly property int targetSidebarWidth: 392"),
-    QStringLiteral("id: printerHeroCard"),
-    QStringLiteral("id: printerThumbnail"),
-    QStringLiteral("id: nozzleTile"),
-    QStringLiteral("id: buildPlateTile"),
-    QStringLiteral("id: heaterTile"),
+    QStringLiteral("readonly property int targetSidebarWidth: 320"),
+    QStringLiteral("id: printerPresetRow"),
     QStringLiteral("id: filamentPixelRow"),
     QStringLiteral("id: processScopeBar"),
     QStringLiteral("id: processPresetRow"),
@@ -2809,6 +2806,12 @@ void QmlUiAuditTests::prepareLeftSidebarMatchesPixelRestorationContract()
     QVERIFY2(leftSidebar.contains(token),
              qPrintable(QStringLiteral("Prepare left sidebar lost pixel-restoration token: %1").arg(token)));
   }
+
+  // v5.14: the 76px printer hero card (thumbnail + InfoTiles) was replaced by
+  // a compact preset row; the hero-card tokens must not return.
+  QVERIFY2(!leftSidebar.contains(QStringLiteral("id: printerHeroCard"))
+               && !leftSidebar.contains(QStringLiteral("id: printerThumbnail")),
+           "v5.14: printer preset must stay a compact row (hero card removed for screenshot-truth density)");
 
   QVERIFY2(!leftSidebar.contains(QStringLiteral("ObjectList {")),
            "Default screenshot sidebar must not mount ObjectList in the left parameter column");
@@ -2851,8 +2854,8 @@ void QmlUiAuditTests::prepareFullVisualParityContract()
 
   const QStringList toolbarTokens = {
     QStringLiteral("readonly property int targetActionToolbarTop: 22"),
-    QStringLiteral("readonly property int targetActionToolbarLeft: 598"),
-    QStringLiteral("readonly property int targetRightToolbarTop: 392"),
+    QStringLiteral("readonly property int targetActionToolbarLeft: 10"),
+    QStringLiteral("readonly property real gizmoRailTopRatio: 0.22"),
     QStringLiteral("readonly property int targetViewControlsBottom: 42"),
     QStringLiteral("id: prepareTopActionToolbar"),
     QStringLiteral("id: prepareRightGizmoToolbar"),
@@ -2863,6 +2866,15 @@ void QmlUiAuditTests::prepareFullVisualParityContract()
     QVERIFY2(glToolbars.contains(token),
              qPrintable(QStringLiteral("Prepare GL toolbar visual parity token missing: %1").arg(token)));
   }
+
+  // v5.14: the Phase 77 absolute pixel offsets (left 598 / top 392 /
+  // center+300) only landed correctly at one window size. The gizmo rail
+  // now anchors to the viewport right edge at a ratio-based top margin;
+  // the absolute offsets must not return.
+  QVERIFY2(!glToolbars.contains(QStringLiteral("targetActionToolbarLeft: 598"))
+               && !glToolbars.contains(QStringLiteral("targetRightToolbarTop: 392"))
+               && !glToolbars.contains(QStringLiteral("targetRightToolbarCenterOffset")),
+           "Prepare GL toolbar must stay resolution-independent (no 598/392/300 absolute offsets)");
 
   const QStringList shellTokens = {
     QStringLiteral("readonly property int prepareChromeHeight: 70"),
@@ -6460,9 +6472,11 @@ void QmlUiAuditTests::v50HollowGizmoReachable()
   QVERIFY2(evm.contains(QStringLiteral("Phase 143 (VDB-03): Hollow gizmo is now reachable")),
            "VDB-03: case 8 must document the Phase 143 reachability change");
 
-  // VDB-04: GLToolbars must have a GizmoHollow button + an iconForTool mapping.
-  QVERIFY2(glToolbars.contains(QStringLiteral("toolId: GLViewport.GizmoHollow")),
-           "VDB-04: GLToolbars.qml must have a GizmoToolButton with toolId GizmoHollow");
+  // VDB-04: GLToolbars must have a GizmoHollow entry + an iconForTool mapping.
+  // v5.14: the long-tail gizmos (Hollow included) render through the overflow
+  // Repeater as { tool: GLViewport.GizmoHollow, ... } model entries.
+  QVERIFY2(glToolbars.contains(QStringLiteral("GLViewport.GizmoHollow")),
+           "VDB-04: GLToolbars.qml must keep the GizmoHollow entry (overflow Repeater model)");
   QVERIFY2(glToolbars.contains(QStringLiteral("case GLViewport.GizmoHollow:")),
            "VDB-04: GLToolbars iconForTool must handle GizmoHollow");
 
@@ -6610,11 +6624,12 @@ void QmlUiAuditTests::v50EmbossWiringAndSvgWired()
 
   // EMB-05: GLToolbars Emboss + SVG buttons already existed (pre-v5.0); assert
   // they are still present (no regression). Click behavior is wired through the
-  // standard toolId → gizmoMode plumbing.
-  QVERIFY2(glToolbars.contains(QStringLiteral("toolId: GLViewport.GizmoEmboss")),
-           "EMB-05: GLToolbars must keep the GizmoEmboss button");
-  QVERIFY2(glToolbars.contains(QStringLiteral("toolId: GLViewport.GizmoSVG")),
-           "EMB-07: GLToolbars must keep the GizmoSVG button");
+  // standard toolId → gizmoMode plumbing. v5.14: rendered via the overflow
+  // Repeater model ({ tool: GLViewport.GizmoEmboss, ... } entries).
+  QVERIFY2(glToolbars.contains(QStringLiteral("GLViewport.GizmoEmboss")),
+           "EMB-05: GLToolbars must keep the GizmoEmboss entry (overflow Repeater model)");
+  QVERIFY2(glToolbars.contains(QStringLiteral("GLViewport.GizmoSVG")),
+           "EMB-07: GLToolbars must keep the GizmoSVG entry (overflow Repeater model)");
 
   // EMB-05: no-selection auto-attach fallback. addTextObject + embossSelected +
   // embossSelectedAsync must all fall back to the first current-plate object
@@ -7577,19 +7592,19 @@ void QmlUiAuditTests::v52SidebarWidthUnbroken()
            "SW-01: BackendContext kSidebarMinWidth must be 300 (was 392 -- no-op drag handle)");
   QVERIFY2(backendH.contains(QStringLiteral("kSidebarMaxWidth = 520")),
            "SW-01: BackendContext kSidebarMaxWidth must be 520 (was 392 -- no-op drag handle)");
-  QVERIFY2(backendH.contains(QStringLiteral("kSidebarDefaultWidth = 392")),
-           "SW-01: BackendContext default stays 392 (preserves the current visual)");
+  QVERIFY2(backendH.contains(QStringLiteral("kSidebarDefaultWidth = 320")),
+           "v5.14: BackendContext default is 320 (compact screenshot-truth density)");
   QVERIFY2(backendH.contains(QStringLiteral("kSidebarSettingsVersion = 4")),
            "SW-01: settings version bumped to 4 (migration sentinel for the new bounds)");
 
   // (2) QML pages source sidebar width from the backend (not hardcoded 392).
-  QVERIFY2(preparePage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
+  QVERIFY2(preparePage.contains(QStringLiteral("backend ? backend.sidebarWidth : 320")),
            "SW-01: PreparePage sidebarWidth must source from backend (was hardcoded 392)");
-  QVERIFY2(platerPage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
+  QVERIFY2(platerPage.contains(QStringLiteral("backend ? backend.sidebarWidth : 320")),
            "SW-01: Plater sidebarWidth must source from backend (was hardcoded 392)");
-  QVERIFY2(previewPage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
+  QVERIFY2(previewPage.contains(QStringLiteral("backend ? backend.sidebarWidth : 320")),
            "SW-01: PreviewPage targetPreviewLeftWidth must source from backend (was hardcoded 392)");
-  QVERIFY2(assemblePage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
+  QVERIFY2(assemblePage.contains(QStringLiteral("backend ? backend.sidebarWidth : 320")),
            "SW-01: AssemblePage sidebarWidth must source from backend (was hardcoded 392)");
 }
 

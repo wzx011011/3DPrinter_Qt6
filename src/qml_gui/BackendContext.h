@@ -495,7 +495,7 @@ private:
   static constexpr int kSidebarSettingsVersion = 4; ///< Width persistence contract version.
   static constexpr int kSidebarMinWidth = 300;
   static constexpr int kSidebarMaxWidth = 520;
-  static constexpr int kSidebarDefaultWidth = 392;
+  static constexpr int kSidebarDefaultWidth = 320;
   bool sidebarCollapsed_ = false;
   int sidebarWidth_ = kSidebarDefaultWidth;
   SidebarDockArea sidebarDockArea_ = SidebarDockArea::Left;

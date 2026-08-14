@@ -832,3 +832,62 @@ improvements), render_bench isolating the failure to the swapchain path. The
 ---
 
 *Last updated: 2026-07-24 after v5.7 milestone closure.*
+
+### v5.8 - v5.13 - Scoped Gap Closure Batch
+
+**Status:** Complete (2026-07-27 → 2026-08-13, tags v5.8-v5.13 on origin)
+
+**Summary:** Six scoped gap-closure milestones executed in batch mode:
+gizmo reachability + array (v5.8), Preview view modes + camera prefs (v5.9),
+hollow cylinder markers + filament_colour channel + MMU colour unification +
+ConfigWizard 3-way filtering (v5.10), Preview ActualSpeed/Jerk/Flow/PA modes
+(v5.11), FaceDetector/WipeTower flush calc/Cut groove/camera wiring (v5.12),
+AdvancedCut connector-pin system (v5.13). Full suite 372 tests green at each
+tag. (Entry back-filled during v5.14; per-phase detail lives in the commit
+history and tags.)
+
+---
+
+### v5.14 - UI Visual Parity (Screenshot-Truth Alignment)
+
+**Started:** 2026-08-14
+**Status:** Complete
+**Phases:** 228 (single-phase visual-parity batch; 227 reserved for the v5.11 process-projection workstream)
+
+**Goal:** Close the visual/layout gaps surfaced by comparing runtime
+screenshots against the screenshot truth (`shotScreen/准备页.png`,
+`shotScreen/预览页.png`) with upstream source (`GLCanvas3D.cpp`,
+`GLGizmosManager.cpp`) as behavior truth.
+
+**Trigger:** User report "ui差距我感觉还很多" — all prior audits were
+functional/API-level; floating-toolbar placement was tuned to one window size.
+
+**Outcome:**
+1. **GLToolbars resolution independence** (Critical): Phase 77's absolute
+   pixel offsets (`targetActionToolbarLeft: 598`, `targetRightToolbarTop: 392`,
+   `targetRightToolbarCenterOffset: 300`) only landed correctly at one window
+   size. Action bar now hugs the viewport top-left (`left: 10`); the gizmo
+   rail anchors to the viewport right edge with a ratio-based top margin
+   (`gizmoRailTopRatio: 0.22`), matching the screenshot truth. Regression
+   guard added (no 598/392/300 offsets may return).
+2. **Gizmo rail overflow** (screenshot truth shows ~6 primary icons + a
+   "more" affordance): primary set (Move/Rotate/Scale | Flatten/Cut/AdvancedCut)
+   always visible; the 12 long-tail gizmos collapse behind a dots/x expander.
+3. **LeftSidebar compact printer preset row** (Critical from v3.9 Phase 74):
+   the 76px hero card (thumbnail + 3 InfoTiles) replaced by a dense preset
+   row (printer combo + dirty dot + edit/connect), matching the filament and
+   process rows and the screenshot truth's compact preset selectors.
+   InfoTile component removed with its last usage.
+4. **Sidebar default width 392 → 320** (density): matches the screenshot
+   truth's ~15% panel proportion; resizable bounds unchanged (300/520).
+5. **Destructive-action confirms**: plate Clear/Delete and paint "清除全部"
+   now route through the shared ConfirmDialog (UI-REVIEW blocker: they fired
+   instantly).
+6. **Token sweep remainder**: MonitorPage red/overlay hexes → Theme
+   statusError/overlayDim; PreparePage drag overlay → Theme.overlayDim
+   (verified PreferencesPage/MultiMachine/BBLTopbar token sweeps were already
+   complete — v5.1 audit numbers were stale).
+
+**Fixed in passing:** startup segfault (stale owzx_app_core object ABI after
+v5.13 header changes — purged object dirs + rebuilt via canonical script;
+ViewportContextMenuTests target needed the same purge).

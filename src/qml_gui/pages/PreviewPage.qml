@@ -18,7 +18,7 @@ Item {
     property bool rightPanelExpanded: true
     // Phase 164 (SW-01): preview left panel now sources its width from the
     // backend sidebar constants (was hardcoded 392 — part of the 7-layer lock).
-    readonly property int targetPreviewLeftWidth: backend ? backend.sidebarWidth : 392
+    readonly property int targetPreviewLeftWidth: backend ? backend.sidebarWidth : 320
     readonly property int targetPreviewRightWidth: Theme.rightPanelWidth
     readonly property int targetPreviewLayerRailWidth: 38
     readonly property int targetPreviewMoveBarHeight: 50

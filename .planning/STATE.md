@@ -1,32 +1,26 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.11
-milestone_name: Process Settings Source-Truth Convergence
-status: ready_to_plan
-stopped_at: Phase 226 complete (1/1) — ready to discuss Phase 227
-last_updated: 2026-08-13T07:09:51.380Z
-last_activity: 2026-08-11 -- Phase 226 execution started
+milestone: v5.14
+milestone_name: UI Visual Parity (Screenshot-Truth Alignment)
+status: executing
+stopped_at: Phase 228 (v5.14 visual parity) complete — all suites green; tagged v5.14
+last_updated: 2026-08-14
+last_activity: 2026-08-14 -- Phase 228 visual-parity batch (GLToolbars anchors, sidebar density, destructive confirms)
 progress:
-  total_phases: 5
-  completed_phases: 1
-  total_plans: 7
-  completed_plans: 1
-  percent: 20
+  total_phases: 1
+  completed_phases: 0
+  total_plans: 1
+  completed_plans: 0
+  percent: 80
 ---
 
 # Project State
 
 ## Latest Completed Milestone
 
-v5.10 Polish & Source-Truth Consolidation closed on 2026-07-26 at Phase 225.
-Its completion is recorded here as the current baseline; this planning pass does
-not invent or reconstruct v5.10 audit artifacts.
-
-Relevant retained baseline: Hollow marker refresh and cylinder rendering,
-configured `filament_colour` flow, MMU colour-source unification, and
-ConfigWizard printer-material filtering were verified. SLA slicing remains
-permanently out of scope; multi-nozzle UI and printer-hardware/network workflows
-remain deferred or excluded.
+v5.13 AdvancedCut connector-pin system closed 2026-08-13 (tag v5.13 on
+origin, HEAD 590c4fb, 372 tests green). v5.8-v5.13 milestone entries were
+back-filled into MILESTONES.md during v5.14.
 
 ## Project Reference
 
@@ -38,16 +32,18 @@ See:
 - `.planning/research/v5.11-PROCESS-SETTINGS-SUMMARY.md`
 
 **Core value:** OrcaSlicer upstream behavior is the product source of truth.
-**Current focus:** Phase 227 — process projection, disclosure, and filtering
+**Current focus:** v5.14 UI visual parity complete (2026-08-14). Next: resume
+the deferred v5.11 Phase 227 process-projection workstream (planning artifact
+at `.planning/phases/227-process-projection-disclosure-and-filtering/`).
 
 ## Current Position
 
-Phase: 227
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-08-13
+Phase: 228 (v5.14 visual parity) — complete
+Plan: Complete (single batch)
+Status: Tagged v5.14
+Last activity: 2026-08-14
 
-Progress: [##--------] 20%
+Progress: [########--] 80%
 
 ## Performance Metrics
 

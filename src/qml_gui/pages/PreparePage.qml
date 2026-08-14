@@ -29,7 +29,7 @@ Item {
     // Phase 164 (SW-01): sidebar is now resizable within [300, 520] — was
     // min==max==392 making the drag handle a no-op. Bound to backend.* which
     // sources from BackendContext's kSidebar{Min,Max,Default}Width constants.
-    property int sidebarWidth: backend ? backend.sidebarWidth : 392
+    property int sidebarWidth: backend ? backend.sidebarWidth : 320
     property int sidebarMinWidth: backend ? backend.sidebarMinWidth : 300
     property int sidebarMaxWidth: backend ? backend.sidebarMaxWidth : 520
     property int sidebarDockArea: 0   // 0=Left, 1=Right
@@ -50,6 +50,18 @@ Item {
         destructive: true
     }
 
+    // All destructive triggers set the dialog copy imperatively before
+    // opening, so the shared dialog must be re-titled per action (the
+    // declaration-time bindings are only defaults).
+    function confirmDeleteSelection() {
+        deleteConfirm.dialogTitle = qsTr("删除选中")
+        deleteConfirm.message = qsTr("确定要删除选中的对象吗？可通过撤销（Ctrl+Z）恢复。")
+        deleteConfirm.confirmText = qsTr("删除")
+        deleteConfirm.openWithAction(function() {
+            if (root.editorVm) root.editorVm.deleteSelection()
+        })
+    }
+
     // Phase 174 (FEAT-01): per-object settings override dialog. Opens when
     // selectionSettingsRequested fires (right-click Settings, GLToolbars
     // settings button, ObjectList menu). Reads/writes via the scopedOption*
@@ -67,9 +79,26 @@ Item {
         onRequestAddModels: addModelsToContextPlateDlg.open()
         onRequestReplacePart: replaceWithStlDlg.open()
         onRequestReplaceAll: replaceAllOnPlateDlg.open()
-        onRequestConfirmDelete: deleteConfirm.openWithAction(function() {
-            if (root.editorVm) root.editorVm.deleteSelection()
-        })
+        onRequestConfirmDelete: root.confirmDeleteSelection()
+        // v5.14: plate-level destructive actions route through the shared
+        // confirm dialog (Panels/Pages UI-REVIEW blocker: they used to fire
+        // instantly with no confirm step).
+        onRequestConfirmClearPlate: {
+            deleteConfirm.dialogTitle = qsTr("清空平板")
+            deleteConfirm.message = qsTr("确定要清空该平板上的全部对象吗？可通过撤销（Ctrl+Z）恢复。")
+            deleteConfirm.confirmText = qsTr("清空")
+            deleteConfirm.openWithAction(function() {
+                if (root.editorVm) root.editorVm.removeAllOnPlate(root.editorVm.contextPlateIndex)
+            })
+        }
+        onRequestConfirmDeletePlate: {
+            deleteConfirm.dialogTitle = qsTr("删除平板")
+            deleteConfirm.message = qsTr("确定要删除该平板吗？其上对象将一并移除，可通过撤销（Ctrl+Z）恢复。")
+            deleteConfirm.confirmText = qsTr("删除")
+            deleteConfirm.openWithAction(function() {
+                if (root.editorVm) root.editorVm.deletePlate(root.editorVm.contextPlateIndex)
+            })
+        }
         onRequestRenameObject: {
             if (!root.editorVm) return
             renameDialog.currentObjIndex = root.editorVm.selectedObjectIndex
@@ -242,9 +271,7 @@ Item {
         case Qt.Key_Backspace:
             // Phase 169 (XD-01): confirm before deleting selection (was
             // firing immediately — Delete is too easy to hit accidentally).
-            deleteConfirm.openWithAction(function() {
-                if (root.editorVm) root.editorVm.deleteSelection()
-            })
+            root.confirmDeleteSelection()
             event.accepted = true
             break
         case Qt.Key_Escape:
@@ -1543,7 +1570,7 @@ Item {
 
                         Rectangle {
                             anchors.fill: parent
-                            color: "#4a0b1018"
+                            color: Theme.overlayDim
                             visible: parent.containsDrag
 
                             Rectangle {
@@ -1804,7 +1831,16 @@ Item {
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: if (root.editorVm) root.editorVm.clearAllPaintData()
+                        // v5.14: confirm before wiping all painted facets
+                        // (UI-REVIEW blocker: fired instantly before).
+                        onClicked: {
+                            deleteConfirm.dialogTitle = qsTr("清除全部绘制数据")
+                            deleteConfirm.message = qsTr("确定要清除当前对象的全部绘制数据吗？")
+                            deleteConfirm.confirmText = qsTr("清除")
+                            deleteConfirm.openWithAction(function() {
+                                if (root.editorVm) root.editorVm.clearAllPaintData()
+                            })
+                        }
                     }
                 }
             }
