@@ -863,8 +863,13 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
   }
 
   const QPointF delta = event->position() - m_lastMousePosition;
+  // v5.12 gap-closure: cameraNavStyle Touchpad (1) swaps orbit/pan between
+  // left and middle button (对齐 upstream camera_navigation_style=Touchpad).
+  // Default (0): Left=orbit, Middle=pan. Touchpad (1): Left=pan, Middle=orbit.
+  const bool touchpad = (m_cameraNavStyle == 1);
+  const bool leftIsOrbit = !touchpad;
   if (m_dragButton == Qt::LeftButton) {
-    if (m_pressPickedSourceObjectIndex >= 0) {
+    if (leftIsOrbit && m_pressPickedSourceObjectIndex >= 0) {
       const QPointF pressDelta = event->position() - m_pressPosition;
       const bool becameDrag = std::hypot(pressDelta.x(), pressDelta.y()) > 4.0;
       if (!becameDrag) {
@@ -874,14 +879,27 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
         setHoveredSourceObjectIndex(pickSourceObjectAt(event->position()));
       }
     }
-    if (m_pressPickedSourceObjectIndex < 0) {
-      m_camera.orbit(float(delta.x()) * 0.5f, -float(delta.y()) * 0.5f);
+    if (leftIsOrbit) {
+      if (m_pressPickedSourceObjectIndex < 0) {
+        m_camera.orbit(float(delta.x()) * 0.5f, -float(delta.y()) * 0.5f);
+        m_cameraDirty = true;
+        update();
+      }
+    } else {
+      // Touchpad: left drag = pan
+      m_camera.pan(float(delta.x()), float(delta.y()));
       m_cameraDirty = true;
       update();
     }
   } else if (m_dragButton == Qt::MiddleButton) {
-    m_camera.pan(float(delta.x()), float(delta.y()));
-    m_cameraDirty = true;
+    if (touchpad) {
+      // Touchpad: middle drag = orbit
+      m_camera.orbit(float(delta.x()) * 0.5f, -float(delta.y()) * 0.5f);
+      m_cameraDirty = true;
+    } else {
+      m_camera.pan(float(delta.x()), float(delta.y()));
+      m_cameraDirty = true;
+    }
     update();
   }
   m_lastMousePosition = event->position();
@@ -967,7 +985,11 @@ void RhiViewport::hoverLeaveEvent(QHoverEvent *event)
 
 void RhiViewport::wheelEvent(QWheelEvent *event)
 {
-  m_camera.zoom(float(event->angleDelta().y()));
+  // v5.12 gap-closure: reverseZoom inverts the wheel direction.
+  float delta = float(event->angleDelta().y());
+  if (m_reverseZoom)
+    delta = -delta;
+  m_camera.zoom(delta);
   m_cameraDirty = true;
   event->accept();
   update();

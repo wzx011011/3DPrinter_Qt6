@@ -11,6 +11,11 @@
 class CameraController
 {
 public:
+  // v5.12: freeCamera allows the elevation to exceed the normal ±89° clamp,
+  // enabling roll-over (view from below). Set from RhiViewport.
+  void setFreeCamera(bool free) { m_freeCamera = free; }
+  bool freeCamera() const { return m_freeCamera; }
+
   void orbit(float dAzimuth, float dElevation);
   void pan(float dx, float dy);
   void zoom(float delta);
@@ -38,4 +43,5 @@ private:
   float m_distance = 380.0f;  // world units
   // 默认 target = K1C 打印平台中心 (GL: x=110, y=0, z=110)
   QVector3D m_target{110.f, 0.f, 110.f};
+  bool m_freeCamera = false;  // v5.12: bypass elevation clamp
 };

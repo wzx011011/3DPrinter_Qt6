@@ -1393,6 +1393,11 @@ Item {
                     onGizmoModeChanged: if (gizmoMode === GLViewport.GizmoHollow && root.editorVm)
                         root.editorVm.refreshHollowMarkers()
                     extrudersColors: root.editorVm ? root.editorVm.extrudersColors : []
+                    // v5.12: camera preferences wired from settingsViewModel
+                    reverseZoom: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.reverseZoom : false
+                    zoomToMouse: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.zoomToMouse : true
+                    freeCamera: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.freeCamera : false
+                    cameraNavStyle: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.cameraNavStyle : 0
                     brushRadius: root.editorVm ? _activeBrushRadius() : 2
                     brushCursorType: root.editorVm ? _activeBrushCursorType() : 1
                     paintState: root.editorVm ? _activePaintState() : 1

@@ -126,6 +126,13 @@ class RhiViewport : public QQuickRhiItem
   // strings (mirrors EditorViewModel.extrudersColors). The renderer maps
   // ExtruderN -> colors[N-1] for the MMU overlay coloring.
   Q_PROPERTY(QVariantList extrudersColors READ extrudersColors WRITE setExtrudersColors)
+  // v5.12 gap-closure: camera preferences (bound from settingsVm in QML).
+  // Consumed by wheelEvent (reverseZoom/zoomToMouse) and mousePressEvent
+  // (cameraNavStyle: touchpad swaps left/right drag; freeCamera allows roll).
+  Q_PROPERTY(bool reverseZoom READ reverseZoom WRITE setReverseZoom)
+  Q_PROPERTY(bool zoomToMouse READ zoomToMouse WRITE setZoomToMouse)
+  Q_PROPERTY(bool freeCamera READ freeCamera WRITE setFreeCamera)
+  Q_PROPERTY(int cameraNavStyle READ cameraNavStyle WRITE setCameraNavStyle)
 
 public:
   // Mirrors upstream ECanvasType { CanvasView3D=0, CanvasPreview=1,
@@ -318,6 +325,15 @@ public:
   void setBrushMouseScreenY(float y);
   int brushButtonState() const { return m_brushButtonState; }
   void setBrushButtonState(int s);
+  // v5.12 camera preferences
+  bool reverseZoom() const { return m_reverseZoom; }
+  void setReverseZoom(bool r) { m_reverseZoom = r; update(); }
+  bool zoomToMouse() const { return m_zoomToMouse; }
+  void setZoomToMouse(bool z) { m_zoomToMouse = z; update(); }
+  bool freeCamera() const { return m_freeCamera; }
+  void setFreeCamera(bool f) { m_freeCamera = f; m_camera.setFreeCamera(f); update(); }
+  int cameraNavStyle() const { return m_cameraNavStyle; }
+  void setCameraNavStyle(int s) { m_cameraNavStyle = s; update(); }
   // Phase 121 (PAINT-02/OV-04): MMU per-extruder filament colors.
   QVariantList extrudersColors() const { return m_extrudersColors; }
   void setExtrudersColors(const QVariantList &c);
@@ -544,6 +560,11 @@ private:
   float m_brushMouseScreenX = 0.f;
   float m_brushMouseScreenY = 0.f;
   int m_brushButtonState = 0; // 0=hover, 1=left, 2=right
+  // v5.12 camera preferences (bound from SettingsViewModel via QML)
+  bool m_reverseZoom = false;
+  bool m_zoomToMouse = true;
+  bool m_freeCamera = false;
+  int m_cameraNavStyle = 0;  // 0=Default, 1=Touchpad
   // Phase 121 (PAINT-02/OV-04): MMU per-extruder filament colors (hex strings).
   QVariantList m_extrudersColors;
   int m_fitRequestCount = 0;

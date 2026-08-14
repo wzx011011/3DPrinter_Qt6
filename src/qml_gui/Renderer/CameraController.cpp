@@ -5,7 +5,12 @@
 void CameraController::orbit(float dAzimuth, float dElevation)
 {
   m_azimuth += dAzimuth;
-  m_elevation = qBound(-89.0f, m_elevation + dElevation, 89.0f);
+  // v5.12: freeCamera removes the ±89° elevation clamp so the user can
+  // roll the camera over to view from below (对齐 upstream use_free_camera).
+  if (m_freeCamera)
+    m_elevation += dElevation;
+  else
+    m_elevation = qBound(-89.0f, m_elevation + dElevation, 89.0f);
 }
 
 void CameraController::pan(float dx, float dy)
