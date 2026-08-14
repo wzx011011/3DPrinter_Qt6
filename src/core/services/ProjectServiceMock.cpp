@@ -5067,6 +5067,261 @@ bool ProjectServiceMock::arrayObject(int objectIndex, int rows, int cols, float 
 #endif
 }
 
+// ── v5.13 gap-closure: discrete AdvancedCut connector pins ─────────────────
+// 对齐上游 GLGizmoAdvancedCut 的 connector 系统。上游的网格生成器
+// apply_cut_connectors 位于 GUI 层（不参与编译），此处是其移植：
+// cut_connectors（CutConnector 列表）→ NEGATIVE_VOLUME（cut_info 置位）→
+// Cut::perform_with_plane 内部 process_connector_cut 消费（两半各生成孔/凸台）。
+
+int ProjectServiceMock::objectCutConnectorCount(int objectIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)])
+    return 0;
+  return int(model_->objects[size_t(objectIndex)]->cut_connectors.size());
+#else
+  Q_UNUSED(objectIndex);
+  return 0;
+#endif
+}
+
+QVariantList ProjectServiceMock::objectCutConnectors(int objectIndex) const
+{
+  QVariantList result;
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)])
+    return result;
+  const Slic3r::CutConnectors &cs = model_->objects[size_t(objectIndex)]->cut_connectors;
+  result.reserve(int(cs.size()));
+  for (const Slic3r::CutConnector &c : cs) {
+    QVariantMap m;
+    m.insert(QStringLiteral("px"), c.pos.x());
+    m.insert(QStringLiteral("py"), c.pos.y());
+    m.insert(QStringLiteral("pz"), c.pos.z());
+    m.insert(QStringLiteral("radius"), c.radius);
+    m.insert(QStringLiteral("height"), c.height);
+    const Slic3r::Vec3d n = (c.rotation_m * Slic3r::Vec3d::UnitZ()).normalized();
+    m.insert(QStringLiteral("nx"), n.x());
+    m.insert(QStringLiteral("ny"), n.y());
+    m.insert(QStringLiteral("nz"), n.z());
+    result.append(m);
+  }
+#else
+  Q_UNUSED(objectIndex);
+#endif
+  return result;
+}
+
+bool ProjectServiceMock::addCutConnector(int objectIndex, double px, double py, double pz,
+                                         float radius, float height,
+                                         int type, int style, int shape, int axis)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)]) {
+    lastError_ = tr("Invalid connector target");
+    return false;
+  }
+  if (radius <= 0.f || height <= 0.f) {
+    lastError_ = tr("Connector radius/height must be positive");
+    return false;
+  }
+  // Connector Z axis aligns to the cut-axis normal (mesh-local). Rotation via
+  // quaternion Z→normal（同 Hollowing::to_mesh 的定向方式）.
+  const Slic3r::Vec3d normal = axis == 0 ? Slic3r::Vec3d::UnitX()
+                                          : (axis == 1 ? Slic3r::Vec3d::UnitY() : Slic3r::Vec3d::UnitZ());
+  const Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(Slic3r::Vec3d::UnitZ(), normal);
+  Slic3r::CutConnector connector;
+  connector.pos = Slic3r::Vec3d(px, py, pz);
+  connector.rotation_m = q * Slic3r::Transform3d::Identity();
+  connector.radius = radius;
+  connector.height = height;
+  connector.radius_tolerance = 0.f;
+  connector.height_tolerance = 0.1f;  // upstream default
+  connector.z_angle = 0.f;
+  // 0632 枚举只有 Plug/Dowel；UI 的 type=2（Snap）收敛为 Dowel（枚举安全）。
+  const int safeType = (type == 0) ? 0 : 1;
+  connector.attribs = Slic3r::CutConnectorAttributes(
+      static_cast<Slic3r::CutConnectorType>(safeType),
+      static_cast<Slic3r::CutConnectorStyle>(style == 0 ? 0 : 1),
+      static_cast<Slic3r::CutConnectorShape>(shape));
+  model_->objects[size_t(objectIndex)]->cut_connectors.push_back(connector);
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+#else
+  Q_UNUSED(objectIndex); Q_UNUSED(px); Q_UNUSED(py); Q_UNUSED(pz);
+  Q_UNUSED(radius); Q_UNUSED(height); Q_UNUSED(type); Q_UNUSED(style);
+  Q_UNUSED(shape); Q_UNUSED(axis);
+  lastError_ = tr("Cut connectors require libslic3r");
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::clearCutConnectors(int objectIndex)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)]) {
+    lastError_ = tr("Invalid connector target");
+    return false;
+  }
+  model_->objects[size_t(objectIndex)]->cut_connectors.clear();
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+#else
+  Q_UNUSED(objectIndex);
+  lastError_ = tr("Cut connectors require libslic3r");
+  return false;
+#endif
+}
+
+int ProjectServiceMock::applyCutConnectorsInModel(int objectIndex)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)]) {
+    lastError_ = tr("Invalid connector target");
+    return 0;
+  }
+  Slic3r::ModelObject *obj = model_->objects[size_t(objectIndex)];
+  if (obj->cut_connectors.empty())
+    return 0;
+  try {
+    using Slic3r::CutConnectorShape;
+    int applied = 0;
+    for (const Slic3r::CutConnector &connector : obj->cut_connectors) {
+      // 对齐上游 GLGizmoCut3D::get_connector_mesh：按 shape 取 sectorCount，
+      // 按 type/style 选 its_make_* 原型网格（单位 1x1，后经 scale 变换）。
+      int sectorCount = 1;
+      switch (connector.attribs.shape) {
+      case CutConnectorShape::Triangle: sectorCount = 3; break;
+      case CutConnectorShape::Square:   sectorCount = 4; break;
+      case CutConnectorShape::Circle:   sectorCount = 360; break;
+      case CutConnectorShape::Hexagon:  sectorCount = 6; break;
+      default: break;
+      }
+      indexed_triangle_set its;
+      if (connector.attribs.style == Slic3r::CutConnectorStyle::Prism)
+        its = Slic3r::its_make_cylinder(1.0, 1.0, 2.0 * M_PI / double(sectorCount));
+      else if (connector.attribs.type == Slic3r::CutConnectorType::Plug)
+        its = Slic3r::its_make_frustum(1.0, 1.0, 2.0 * M_PI / double(sectorCount));
+      else
+        its = Slic3r::its_make_frustum_dowel(1.0, 1.0, sectorCount);
+      Slic3r::TriangleMesh mesh(std::move(its));
+      Slic3r::ModelVolume *vol = obj->add_volume(
+          std::move(mesh), Slic3r::ModelVolumeType::NEGATIVE_VOLUME);
+      if (!vol)
+        continue;
+      // 对齐上游变换：translation * rotation_m * rotZ(-z_angle) * scale(r,r,h)
+      vol->set_transformation(
+          Slic3r::Geometry::translation_transform(connector.pos)
+          * connector.rotation_m
+          * Slic3r::Geometry::rotation_transform(-double(connector.z_angle) * Slic3r::Vec3d::UnitZ())
+          * Slic3r::Geometry::scale_transform(
+                Slic3r::Vec3f(connector.radius, connector.radius, connector.height).cast<double>()));
+      vol->cut_info = Slic3r::ModelVolume::CutInfo(
+          connector.attribs.type, connector.radius_tolerance, connector.height_tolerance);
+      vol->name = "Connector-" + std::to_string(size_t(applied) + 1);
+      ++applied;
+    }
+    obj->cut_connectors.clear();
+    lastError_.clear();
+    return applied;
+  } catch (const std::exception &exception) {
+    lastError_ = QString::fromLatin1(exception.what());
+    return 0;
+  }
+#else
+  Q_UNUSED(objectIndex);
+  return 0;
+#endif
+}
+
+int ProjectServiceMock::cutObjectWithConnectors(int objectIndex, int axis, double position, int keepMode)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)]) {
+    lastError_ = tr("Invalid cut target");
+    return -1;
+  }
+  Slic3r::ModelObject *obj = model_->objects[size_t(objectIndex)];
+  try {
+    // 先物化连接器（若有）。物化后的 NEGATIVE_VOLUME 由 perform_with_plane
+    // 内部 process_connector_cut 消费。
+    if (!obj->cut_connectors.empty())
+      applyCutConnectorsInModel(objectIndex);
+
+    // cut_matrix 构造与 cutObjectWithGroove 相同（axis → Z 对齐旋转 + 平移）。
+    Slic3r::Transform3d rotation_m = Slic3r::Transform3d::Identity();
+    Slic3r::Vec3d cut_translation = Slic3r::Vec3d::Zero();
+    if (axis == 0) {
+      rotation_m = Eigen::AngleAxisd(-M_PI / 2.0, Slic3r::Vec3d::UnitY()) * Slic3r::Transform3d::Identity();
+      cut_translation = Slic3r::Vec3d(position, 0.0, 0.0);
+    } else if (axis == 1) {
+      rotation_m = Eigen::AngleAxisd(M_PI / 2.0, Slic3r::Vec3d::UnitX()) * Slic3r::Transform3d::Identity();
+      cut_translation = Slic3r::Vec3d(0.0, position, 0.0);
+    } else {
+      cut_translation = Slic3r::Vec3d(0.0, 0.0, position);
+    }
+    Slic3r::Transform3d cut_matrix = Eigen::Translation3d(cut_translation) * rotation_m;
+
+    using MCA = Slic3r::ModelObjectCutAttribute;
+    Slic3r::ModelObjectCutAttributes attributes =
+        Slic3r::only_if(keepMode == 0 || keepMode == 1, MCA::KeepUpper) |
+        Slic3r::only_if(keepMode == 0 || keepMode == 2, MCA::KeepLower) |
+        MCA::KeepAsParts;
+
+    const int instance_idx = 0;
+    Slic3r::Cut cut(obj, instance_idx, cut_matrix, attributes);
+    const Slic3r::ModelObjectPtrs &new_objects = cut.perform_with_plane();
+    if (new_objects.empty())
+      return -1;
+
+    // 结果回填模式与 cutObjectWithGroove 相同：第一个结果替换原对象，
+    // 后续结果追加为新对象。
+    bool firstResult = true;
+    int newObjectIdx = -1;
+    for (auto *newObj : new_objects) {
+      if (!newObj || newObj->volumes.empty())
+        continue;
+      if (firstResult) {
+        obj->clear_volumes();
+        for (auto *vol : newObj->volumes)
+          obj->add_volume(*vol);
+        obj->invalidate_bounding_box();
+        obj->ensure_on_bed();
+        newObjectIdx = objectIndex;
+        firstResult = false;
+      } else {
+        auto *added = model_->add_object(*newObj);
+        if (added) {
+          added->ensure_on_bed();
+          newObjectIdx = int(model_->objects.size()) - 1;
+        }
+      }
+    }
+    syncTransformsFromModel();
+    lastError_.clear();
+    emit projectChanged();
+    if (m_plateList)
+      emit plateDataLoaded(m_plateList->plateCount());
+    return newObjectIdx;
+  } catch (const std::exception &exception) {
+    lastError_ = QString::fromLatin1(exception.what());
+    return -1;
+  }
+#else
+  Q_UNUSED(objectIndex); Q_UNUSED(axis); Q_UNUSED(position); Q_UNUSED(keepMode);
+  lastError_ = tr("Connector cut requires libslic3r");
+  return -1;
+#endif
+}
+
 bool ProjectServiceMock::exportObjects(const QList<int> &objectIndices,
                                        const QString &outputPath,
                                        bool separateFiles,

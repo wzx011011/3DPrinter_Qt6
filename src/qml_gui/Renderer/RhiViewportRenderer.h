@@ -66,6 +66,9 @@ private:
   // Phase HOLLOW: drain-hole marker disc upload + render (translucent fill).
   bool uploadHollowMarkerBuffer(QRhiResourceUpdateBatch *updates);
   void renderHollowMarkers(QRhiCommandBuffer *cb);
+  // v5.13: connector-pin marker upload + render (AdvancedCut gizmo).
+  bool uploadAdvancedCutMarkerBuffer(QRhiResourceUpdateBatch *updates);
+  void renderAdvancedCutMarkers(QRhiCommandBuffer *cb);
   // Phase 121 (PAINT-03/OV-05): translucent sphere cursor that follows the
   // mouse while a paint gizmo is active. Built from buildBrushSphereVertices.
   bool uploadBrushCursorBuffer(QRhiResourceUpdateBatch *updates);
@@ -147,6 +150,7 @@ private:
   std::unique_ptr<QRhiBuffer> m_paintOverlayBuffer;
   // Phase HOLLOW: drain-hole marker disc buffer (translucent fill pipeline).
   std::unique_ptr<QRhiBuffer> m_hollowMarkerBuffer;
+  std::unique_ptr<QRhiBuffer> m_advancedCutMarkerBuffer;  // v5.13
   // Phase 121 (PAINT-03/OV-05): brush sphere cursor buffer (translucent).
   std::unique_ptr<QRhiBuffer> m_brushCursorBuffer;
   // Phase 91 (ASMEXPLODE-02): assembly connector guide-line buffer.
@@ -168,6 +172,7 @@ private:
   bool m_brushCursorBufferUploaded = false;
   // Phase HOLLOW: drain-hole marker disc upload flag.
   bool m_hollowMarkerBufferUploaded = false;
+  bool m_advancedCutMarkerBufferUploaded = false;  // v5.13
   bool m_assemblyConnectorBufferUploaded = false;
   bool m_assemblyMeasureLineBufferUploaded = false;
   bool m_assemblyMeasureTriBufferUploaded = false;
@@ -180,6 +185,7 @@ private:
   // Phase 121 (PAINT-02/OV-03): overlay + brush-cursor buffer byte sizes.
   quint32 m_paintOverlayBufferBytes = 0;
   quint32 m_hollowMarkerBufferBytes = 0;
+  quint32 m_advancedCutMarkerBufferBytes = 0;  // v5.13
   quint32 m_brushCursorBufferBytes = 0;
   quint32 m_assemblyConnectorBufferBytes = 0;
   quint32 m_assemblyMeasureLineBufferBytes = 0;
@@ -217,6 +223,7 @@ private:
   // Phase 121 (PAINT-02/OV-03): overlay + brush-cursor vertex counts.
   quint32 m_paintOverlayVertexCount = 0;
   quint32 m_hollowMarkerVertexCount = 0;
+  quint32 m_advancedCutMarkerVertexCount = 0;  // v5.13
   quint32 m_brushCursorVertexCount = 0;
   quint32 m_assemblyConnectorVertexCount = 0;
   quint32 m_assemblyMeasureLineVertexCount = 0;
@@ -301,6 +308,9 @@ private:
   // Phase HOLLOW: drain-hole marker byte stream from
   // EditorViewModel::hollowMarkerData (world-space disc-fan GizmoVertex).
   QByteArray m_hollowMarkerData;
+  // v5.13: connector-pin marker byte stream from
+  // EditorViewModel::advancedCutMarkerData.
+  QByteArray m_advancedCutMarkerData;
   QVariantList m_extrudersColors;
   float m_brushRadius = 2.0f;
   int m_brushCursorType = 1;     // 1=Sphere

@@ -108,6 +108,9 @@ class RhiViewport : public QQuickRhiItem
   // editorVm.hollowMarkerData, the setter stashes it, and synchronize() hands
   // it to the renderer for upload.
   Q_PROPERTY(QByteArray hollowMarkerData READ hollowMarkerData WRITE setHollowMarkerData)
+  // v5.13: connector-pin marker byte stream (same format as hollowMarkerData;
+  // EditorViewModel::advancedCutMarkerData producer).
+  Q_PROPERTY(QByteArray advancedCutMarkerData READ advancedCutMarkerData WRITE setAdvancedCutMarkerData)
   // Phase 121 (PAINT-03/OV-02/OV-05): brush params. emitPaintPickIfActive
   // forwards these to the ViewModel instead of the Phase 120 hardcoded
   // defaults (2.0/1/1). brushRadius is the world-space sphere/circle radius
@@ -311,6 +314,8 @@ public:
   void setPaintOverlayData(const QByteArray &data);
   QByteArray hollowMarkerData() const { return m_hollowMarkerData; }
   void setHollowMarkerData(const QByteArray &data);
+  QByteArray advancedCutMarkerData() const { return m_advancedCutMarkerData; }
+  void setAdvancedCutMarkerData(const QByteArray &data);
   // Phase 121 (PAINT-03/OV-02/OV-05): brush params. Setters call update() so
   // the renderer re-renders the sphere cursor + overlay on every change.
   float brushRadius() const { return m_brushRadius; }
@@ -414,6 +419,11 @@ signals:
   void hollowPickRequested(QVector3D worldOrigin,
                            QVector3D worldDirection,
                            int pickedSourceIndex);
+  // v5.13: emitted on left-click while the AdvancedCut gizmo is active with
+  // connectors enabled. QML forwards to EditorViewModel::placeAdvancedCutConnector.
+  void advancedCutPickRequested(QVector3D worldOrigin,
+                                QVector3D worldDirection,
+                                int pickedSourceIndex);
   // Phase 115 (MEASURE-04): emitted on cursor-leave while the measure gizmo
   // is active. QML forwards to EditorViewModel::clearMeasureReadout so no
   // stale feature highlight lingers off-mesh.
@@ -471,6 +481,10 @@ private:
   // when m_gizmoMode != GizmoHollow.
   void emitHollowPickIfActive(const QPointF &position,
                               Qt::KeyboardModifiers modifiers);
+  // v5.13: emit advancedCutPickRequested for the AdvancedCut gizmo (connector
+  // pin placement). Mirror of emitHollowPickIfActive.
+  void emitAdvancedCutPickIfActive(const QPointF &position,
+                                   Qt::KeyboardModifiers modifiers);
   // Phase 120 (PAINT-01): emit paintPickRequested for the active paint gizmos
   // (GizmoSupportPaint / GizmoSeamPaint / GizmoMmuSegmentation). Mirrors
   // emitMeasurePickIfActive: stage-1 pick (pickSourceObjectAt) for the candidate
@@ -551,6 +565,8 @@ private:
   QByteArray m_paintOverlayData;
   // Flattened by EditorViewModel::hollowMarkerData (world-space disc fans).
   QByteArray m_hollowMarkerData;
+  // v5.13: connector-pin markers (EditorViewModel::advancedCutMarkerData).
+  QByteArray m_advancedCutMarkerData;
   // Phase 121 (PAINT-03/OV-02/OV-05): brush params. emitPaintPickIfActive
   // forwards brushRadius/brushCursorType/paintState; renderBrushCursor uses
   // brushMouseScreenX/Y + brushButtonState for the sphere cursor.

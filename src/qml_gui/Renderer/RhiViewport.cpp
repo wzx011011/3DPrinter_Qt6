@@ -531,6 +531,12 @@ void RhiViewport::setHollowMarkerData(const QByteArray &data)
   update();
 }
 
+void RhiViewport::setAdvancedCutMarkerData(const QByteArray &data)
+{
+  m_advancedCutMarkerData = data;
+  update();
+}
+
 // Phase 121 (PAINT-03/OV-02/OV-05): brush param setters. Each calls update()
 // so renderBrushCursor + the overlay stay in sync with the UI controls.
 void RhiViewport::setBrushRadius(float r)
@@ -728,6 +734,13 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
   // runs the stage-2 SceneRaycaster pick + appendObjectDrainHole.
   if (event->button() == Qt::LeftButton && m_gizmoMode == GizmoHollow) {
     emitHollowPickIfActive(event->position(), event->modifiers());
+    event->accept();
+    return;
+  }
+
+  // v5.13: AdvancedCut connector-pin placement (VM guards the toggle).
+  if (event->button() == Qt::LeftButton && m_gizmoMode == GizmoAdvancedCut) {
+    emitAdvancedCutPickIfActive(event->position(), event->modifiers());
     event->accept();
     return;
   }
@@ -1309,6 +1322,34 @@ void RhiViewport::emitHollowPickIfActive(const QPointF &position,
       m_camera.projMatrix(aspect), m_camera.viewMatrix());
 
   emit hollowPickRequested(rayOrigin, rayDirection, pickedSourceIndex);
+}
+
+// ===========================================================================
+// v5.13: AdvancedCut connector-pin pick wiring (place connector on click)
+// ===========================================================================
+void RhiViewport::emitAdvancedCutPickIfActive(const QPointF &position,
+                                              Qt::KeyboardModifiers modifiers)
+{
+  // Only the AdvancedCut gizmo drives this path. The ViewModel's
+  // placeAdvancedCutConnector no-ops unless the connectors toggle is on.
+  if (m_gizmoMode != GizmoAdvancedCut)
+    return;
+  Q_UNUSED(modifiers);
+
+  const int pickedSourceIndex = pickSourceObjectAt(position);
+  if (pickedSourceIndex < 0)
+    return;
+
+  const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+  if (viewSize.width() <= 1 || viewSize.height() <= 1)
+    return;
+  const float aspect = float(viewSize.width()) / float(viewSize.height());
+  auto [rayOrigin, rayDirection] = GizmoMath::computeRay(
+      float(position.x()), float(position.y()),
+      viewSize,
+      m_camera.projMatrix(aspect), m_camera.viewMatrix());
+
+  emit advancedCutPickRequested(rayOrigin, rayDirection, pickedSourceIndex);
 }
 
 // ===========================================================================

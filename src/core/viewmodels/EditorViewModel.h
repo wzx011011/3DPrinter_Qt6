@@ -474,6 +474,20 @@ public:
   bool advCutConnectors() const;
   void setAdvCutConnectors(bool v);
   Q_INVOKABLE bool advCutSelected();
+  /// v5.13 gap-closure: place a connector pin on the mesh surface hit by the
+  /// given world ray（对齐上游 GLGizmoAdvancedCut add_connector）。The pin's
+  /// axis aligns to the current adv-cut axis; radius/height/type/style/shape
+  /// come from the connector* properties. Returns true when placed.
+  Q_INVOKABLE bool placeAdvancedCutConnector(int pickedSourceIndex,
+                                             QVector3D rayOrigin, QVector3D rayDir);
+  /// v5.13: placed connector count on the selected object（面板显示）。
+  Q_INVOKABLE int advancedCutConnectorCount() const;
+  QByteArray advancedCutMarkerData() const;
+  /// v5.13: rebuild pin markers on gizmo entry (called from QML
+  /// onGizmoModeChanged), mirroring refreshHollowMarkers.
+  Q_INVOKABLE void refreshAdvancedCutConnectors();
+  /// v5.13: clear the selected object's connector pins.
+  Q_INVOKABLE bool clearAdvancedCutConnectors();
 
   /// ── FaceDetector gizmo properties (对齐上游 GLGizmoFaceDetector) ──
   float faceDetectorAngle() const;
@@ -772,6 +786,12 @@ public:
   Q_PROPERTY(float advCutPosition READ advCutPosition WRITE setAdvCutPosition NOTIFY stateChanged)
   Q_PROPERTY(bool advCutKeepBoth READ advCutKeepBoth WRITE setAdvCutKeepBoth NOTIFY stateChanged)
   Q_PROPERTY(bool advCutConnectors READ advCutConnectors WRITE setAdvCutConnectors NOTIFY stateChanged)
+  /// v5.13: placed connector pin count on the selected object.
+  Q_PROPERTY(int advancedCutConnectorCount READ advancedCutConnectorCount NOTIFY stateChanged)
+  /// v5.13: connector-pin marker geometry for the renderer (same packed
+  /// [uint32 count][GizmoVertex...] format as hollowMarkerData; one
+  /// axis-aligned cylinder per pin, world space).
+  Q_PROPERTY(QByteArray advancedCutMarkerData READ advancedCutMarkerData NOTIFY advancedCutConnectorDataChanged)
   /// FaceDetector 设置（对齐上游 GLGizmoFaceDetector）
   Q_PROPERTY(float faceDetectorAngle READ faceDetectorAngle WRITE setFaceDetectorAngle NOTIFY stateChanged)
   /// v5.12 gap-closure: number of flat faces found by detectFlatFaces.
@@ -1222,6 +1242,9 @@ public:
   /// object's drain holes (mesh-local → world). Emits hollowDataChanged via
   /// callers; this only mutates m_hollowMarkerData.
   void rebuildHollowMarkerData();
+  /// v5.13: rebuild the connector-pin marker byte stream from the selected
+  /// object's cut_connectors（同 hollow 标记打包格式）。
+  void rebuildAdvancedCutConnectorMarkers();
   /// Phase 222 (FIL-COLOUR): sync the active filament colours from
   /// PresetServiceMock (via ConfigViewModel) into ProjectServiceMock so
   /// plateFilamentColours()/filamentCount() reflect the configured filaments.
@@ -1267,6 +1290,7 @@ signals:
   void stateChanged();
   void paintDataChanged();
   void hollowDataChanged();
+  void advancedCutConnectorDataChanged();
   void bedShapeChanged();
   /// Phase 145 (EMB-03): async emboss result delivery. Re-emitted from
   /// ProjectServiceMock's embossVolumeAdded/Failed so QML binds to a single
@@ -1457,6 +1481,7 @@ private:
   float m_hollowClosingDistance = 2.0f;    ///< m_closing_d_stash
   int m_hollowHoleCount = 0;      ///< selected drain holes count
   QByteArray m_hollowMarkerData;         ///< packed world-space disc vertices for renderer
+  QByteArray m_advancedCutMarkerData;    ///< v5.13: packed connector-pin marker vertices
   int m_simplifyWantedCount = 0;          ///< target triangle count (0=auto)
   float m_simplifyMaxError = 0.0f;       ///< max quadric error (0=auto)
   int m_mmuSelectedExtruder = 0;          ///< currently selected extruder for MMU painting

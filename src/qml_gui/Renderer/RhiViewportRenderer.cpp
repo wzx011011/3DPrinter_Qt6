@@ -104,6 +104,7 @@ void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
   m_wipeTowerBufferUploaded = false;
   m_paintOverlayBufferUploaded = false;
   m_hollowMarkerBufferUploaded = false;
+  m_advancedCutMarkerBufferUploaded = false;  // v5.13
   m_brushCursorBufferUploaded = false;
   m_assemblyConnectorBufferUploaded = false;
   m_assemblyMeasureLineBufferUploaded = false;
@@ -388,6 +389,12 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   if (m_hollowMarkerData != prevHollowMarker)
     m_hollowMarkerBufferUploaded = false;
 
+  // v5.13: connector-pin marker byte stream (same pipe pattern).
+  const QByteArray prevAdvCutMarker = m_advancedCutMarkerData;
+  m_advancedCutMarkerData = viewport->m_advancedCutMarkerData;
+  if (m_advancedCutMarkerData != prevAdvCutMarker)
+    m_advancedCutMarkerBufferUploaded = false;
+
   // Render-side per-role visibility mask (no repack). The viewport carries a
   // 20-element QVariantList of bools indexed by canonical libvgcode role; convert
   // to QVector<bool> for the draw-range skip check. Missing entries default visible.
@@ -476,7 +483,8 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
                                    !m_wipeTowerBufferUploaded ||
                                    !m_paintOverlayBufferUploaded ||
                                    !m_brushCursorBufferUploaded ||
-                                   !m_hollowMarkerBufferUploaded)) {
+                                   !m_hollowMarkerBufferUploaded ||
+                                   !m_advancedCutMarkerBufferUploaded)) {
       updates = rhi()->nextResourceUpdateBatch();
       if (!uploadCutPlaneBuffers(updates, dirtyFlags) ||
           !uploadWipeTowerBuffer(updates))
@@ -493,6 +501,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
         uploadPaintOverlayBuffer(updates);
         uploadBrushCursorBuffer(updates);
         uploadHollowMarkerBuffer(updates);
+        uploadAdvancedCutMarkerBuffer(updates);
       }
     }
   }
@@ -597,6 +606,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // Phase HOLLOW: render drain-hole marker discs (translucent fill).
     // Gated to GizmoHollow (8); drawn after paint overlay, before highlight.
     renderHollowMarkers(cb);
+    renderAdvancedCutMarkers(cb);
   if (m_highlightVertexBuffer && m_highlightVertexCount > 0) {
       // Highlight is translucent: test depth but do not write it, so it does
       // not occlude opaque geometry drawn in subsequent frames/passes.
@@ -742,6 +752,7 @@ void RhiViewportRenderer::releaseResources()
   m_wipeTowerBuffer.reset();
   m_paintOverlayBuffer.reset();   // Phase 121 (PAINT-02)
   m_hollowMarkerBuffer.reset();   // Phase HOLLOW
+  m_advancedCutMarkerBuffer.reset();  // v5.13
   m_brushCursorBuffer.reset();    // Phase 121 (PAINT-03)
   m_assemblyConnectorBuffer.reset();  // Phase 91
   m_srb.reset();
@@ -762,6 +773,7 @@ void RhiViewportRenderer::releaseResources()
   m_wipeTowerBufferUploaded = false;
   m_paintOverlayBufferUploaded = false;   // Phase 121 (PAINT-02)
   m_hollowMarkerBufferUploaded = false;   // Phase HOLLOW
+  m_advancedCutMarkerBufferUploaded = false;   // v5.13
   m_brushCursorBufferUploaded = false;    // Phase 121 (PAINT-03)
   m_assemblyConnectorBufferUploaded = false;  // Phase 91
   m_gizmoPipelineCreated = false;            // Phase 68
@@ -776,6 +788,7 @@ void RhiViewportRenderer::releaseResources()
   m_wipeTowerBufferBytes = 0;
   m_paintOverlayBufferBytes = 0;   // Phase 121 (PAINT-02)
   m_hollowMarkerBufferBytes = 0;   // Phase HOLLOW
+  m_advancedCutMarkerBufferBytes = 0;   // v5.13
   m_brushCursorBufferBytes = 0;    // Phase 121 (PAINT-03)
   m_moveGizmoOffsets = {};
   m_rotateGizmoOffsets = {};
@@ -2532,6 +2545,75 @@ void RhiViewportRenderer::renderHollowMarkers(QRhiCommandBuffer *cb)
   const QRhiCommandBuffer::VertexInput binding(m_hollowMarkerBuffer.get(), 0);
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_hollowMarkerVertexCount);
+}
+
+// ===========================================================================
+// v5.13: AdvancedCut connector-pin marker upload + render.
+// Same packed format as the hollow markers ([uint32 count][GizmoVertex...] in
+// libslic3r world space; Y/Z swapped to scene here). Gated to GizmoAdvancedCut
+// (mode 14); translucent fill so pins don't occlude the mesh.
+// ===========================================================================
+bool RhiViewportRenderer::uploadAdvancedCutMarkerBuffer(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+  if (m_advancedCutMarkerBufferUploaded)
+    return true;
+
+  QVector<Vertex> vertices;
+  if (m_advancedCutMarkerData.size() >= 4) {
+    quint32 count = 0;
+    std::memcpy(&count, m_advancedCutMarkerData.constData(), 4);
+    const qint64 expected = 4 + qint64(count) * qint64(sizeof(GizmoVertex));
+    if (count > 0 && m_advancedCutMarkerData.size() >= expected) {
+      const auto *gv = reinterpret_cast<const GizmoVertex *>(
+          m_advancedCutMarkerData.constData() + 4);
+      vertices.reserve(int(count));
+      for (quint32 i = 0; i < count; ++i) {
+        Vertex v;
+        // libslic3r world (X,Y,Z) -> scene (X,Z,Y).
+        v.x = gv[i].x;
+        v.y = gv[i].z;
+        v.z = gv[i].y;
+        v.r = gv[i].r;
+        v.g = gv[i].g;
+        v.b = gv[i].b;
+        v.a = gv[i].a;
+        vertices.append(v);
+      }
+    }
+  }
+
+  const quint32 byteSize = quint32(vertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_advancedCutMarkerBuffer, byteSize, m_advancedCutMarkerBufferBytes,
+                    QRhiBuffer::VertexBuffer))
+    return false;
+
+  m_advancedCutMarkerVertexCount = quint32(vertices.size());
+  if (m_advancedCutMarkerBuffer && byteSize > 0) {
+    updates->uploadStaticBuffer(m_advancedCutMarkerBuffer.get(), 0, byteSize,
+                                vertices.constData());
+  }
+  m_advancedCutMarkerBufferUploaded = true;
+  return true;
+}
+
+void RhiViewportRenderer::renderAdvancedCutMarkers(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr)
+    return;
+  // Gate to the AdvancedCut gizmo only (mode 14).
+  if (m_gizmoMode != 14)
+    return;
+  if (m_translucentFillPipeline == nullptr || m_advancedCutMarkerBuffer == nullptr ||
+      m_advancedCutMarkerVertexCount == 0)
+    return;
+
+  cb->setShaderResources(m_srb.get());
+  cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+  const QRhiCommandBuffer::VertexInput binding(m_advancedCutMarkerBuffer.get(), 0);
+  cb->setVertexInput(0, 1, &binding);
+  cb->draw(m_advancedCutMarkerVertexCount);
 }
 
 // ===========================================================================

@@ -1387,11 +1387,16 @@ Item {
                     // Phase HOLLOW: drain-hole marker disc byte stream
                     // (same byte-pipe pattern as paintOverlayData).
                     hollowMarkerData: root.editorVm ? root.editorVm.hollowMarkerData : null
+                    // v5.13: connector-pin marker byte stream (same pipe pattern).
+                    advancedCutMarkerData: root.editorVm ? root.editorVm.advancedCutMarkerData : null
                     // Phase 220 (HOLLOW-REFRESH): when entering the Hollow
                     // gizmo, rebuild the marker stream so drain holes loaded
                     // from 3MF render without a place/delete first.
                     onGizmoModeChanged: if (gizmoMode === GLViewport.GizmoHollow && root.editorVm)
                         root.editorVm.refreshHollowMarkers()
+                    // v5.13: entering AdvancedCut rebuilds the pin markers.
+                    else if (gizmoMode === GLViewport.GizmoAdvancedCut && root.editorVm)
+                        root.editorVm.refreshAdvancedCutConnectors()
                     extrudersColors: root.editorVm ? root.editorVm.extrudersColors : []
                     // v5.12: camera preferences wired from settingsViewModel
                     reverseZoom: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.reverseZoom : false
@@ -1493,6 +1498,13 @@ Item {
                     onHollowPickRequested: function(worldOrigin, worldDirection, pickedSourceIndex) {
                         if (root.editorVm)
                             root.editorVm.placeHollowPoint(pickedSourceIndex, worldOrigin, worldDirection)
+                    }
+                    // v5.13: forward the AdvancedCut click to the ViewModel,
+                    // which places a connector pin (no-ops when the connectors
+                    // toggle is off). Opaque-forward contract, same as hollow.
+                    onAdvancedCutPickRequested: function(worldOrigin, worldDirection, pickedSourceIndex) {
+                        if (root.editorVm)
+                            root.editorVm.placeAdvancedCutConnector(pickedSourceIndex, worldOrigin, worldDirection)
                     }
                     cutAxis: root.editorVm ? root.editorVm.cutAxis : 2
                     cutPosition: root.editorVm ? root.editorVm.cutPosition : 0.0
@@ -2208,6 +2220,40 @@ Item {
                         font.pixelSize: Theme.fontSizeXS
                         font.family: "Consolas, monospace"
                         Layout.preferredWidth: 30
+                    }
+                }
+
+                // v5.13: 离散连接销开关 + 计数 + 清除（对齐上游 connectors 编辑）。
+                // 开启后：点击模型表面放置销钉；执行切割走 connector 消费路径。
+                RowLayout {
+                    spacing: 8
+                    Layout.alignment: Qt.AlignHCenter
+                    CxSwitch {
+                        checked: root.editorVm ? root.editorVm.advCutConnectors : false
+                        onToggled: if (root.editorVm) root.editorVm.advCutConnectors = checked
+                    }
+                    Text {
+                        text: qsTr("连接销") + (root.editorVm && root.editorVm.advCutConnectors
+                              ? qsTr("（点击放置，已放 %1）").arg(root.editorVm.advancedCutConnectorCount)
+                              : "")
+                        color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS
+                    }
+                    Rectangle {
+                        width: 44; height: 20; radius: 4
+                        visible: root.editorVm && root.editorVm.advancedCutConnectors
+                                 && root.editorVm.advancedCutConnectorCount > 0
+                        color: Theme.bgElevated
+                        border.color: Theme.borderDefault; border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("清除")
+                            color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: if (root.editorVm) root.editorVm.clearAdvancedCutConnectors()
+                        }
                     }
                 }
 

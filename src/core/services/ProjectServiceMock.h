@@ -335,6 +335,29 @@ public:
   /// Returns the index of the new object created (≥0 on success, -1 on failure)
   Q_INVOKABLE int cutObjectWithGroove(int objectIndex, int axis, double position, int keepMode,
                                        float grooveDepth, float grooveWidth, float grooveFlapsAngle, float grooveAngle);
+  /// ── v5.13 gap-closure: discrete AdvancedCut connector pins（对齐上游
+  /// GLGizmoAdvancedCut 的 connector 系统）──
+  /// 连接器存在 ModelObject::cut_connectors（mesh-local pos + 轴向旋转）。
+  /// applyCutConnectorsInModel 把它们物化为 NEGATIVE_VOLUME（cut_info 置位），
+  /// cutObjectWithConnectors 走 Cut::perform_with_plane（内部
+  /// process_connector_cut 消费连接器，在两半生成孔/凸台）。
+  Q_INVOKABLE int objectCutConnectorCount(int objectIndex) const;
+  /// 每个 connector 是 QVariantMap{px,py,pz, radius,height, nx,ny,nz}（mesh-local
+  /// 位置 + 半径/高度 + 轴向单位向量，供标记渲染重建）。
+  Q_INVOKABLE QVariantList objectCutConnectors(int objectIndex) const;
+  /// 追加一个连接器。px/py/pz 是 mesh-local 位置；radius/height 单位 mm；
+  /// type 0=Plug 1=Dowel；style 0=Prism 1=Frustum；shape 0=Triangle 1=Square
+  /// 2=Hexagon 3=Circle；axis 是切割轴（0=X 1=Y 2=Z），连接器 Z 轴对齐该轴。
+  Q_INVOKABLE bool addCutConnector(int objectIndex, double px, double py, double pz,
+                                   float radius, float height,
+                                   int type, int style, int shape, int axis);
+  Q_INVOKABLE bool clearCutConnectors(int objectIndex);
+  /// 上游 GLGizmoCut3D::apply_cut_connectors 的移植：把 cut_connectors 物化为
+  /// 带 cut_info 的负体积。返回物化数量（0=无连接器/失败）。
+  int applyCutConnectorsInModel(int objectIndex);
+  /// 走 Cut::perform_with_plane 的平面切（与 cutObject 的裸 cut_mesh 不同，
+  /// 该路径消费连接器体积）。返回新对象索引（≥0 成功）。
+  Q_INVOKABLE int cutObjectWithConnectors(int objectIndex, int axis, double position, int keepMode);
   /// 镜像对象（对齐上游 ModelInstance::set_mirror）
   Q_INVOKABLE bool mirrorObject(int objectIndex, int axis);
   /// 布尔运算（对齐上游 GLGizmoMeshBoolean::execute_mesh_boolean）

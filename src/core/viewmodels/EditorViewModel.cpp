@@ -1565,6 +1565,79 @@ void EditorViewModel::rebuildHollowMarkerData()
   std::memcpy(out + 4, verts.data(), verts.size() * sizeof(GizmoVertex));
 }
 
+void EditorViewModel::rebuildAdvancedCutConnectorMarkers()
+{
+  // v5.13: connector-pin 标记（同 hollow 圆柱标记的打包格式，供
+  // renderAdvancedCutMarkers 消费）。每个 pin 是一根沿其轴向的 16 段圆柱，
+  // 以 pos 为底、沿 normal 延伸 height（mesh-local → world）。
+  m_advancedCutMarkerData.clear();
+  const int obj = primarySelectedSourceIndex(this);
+  if (!projectService_ || obj < 0)
+    return;
+  const QVariantList connectors = projectService_->objectCutConnectors(obj);
+  if (connectors.isEmpty())
+    return;
+
+  const QVector3D translation = projectService_->objectPosition(obj);
+  const QVector3D rotationDeg = projectService_->objectRotation(obj);
+  const QVector3D scale = projectService_->objectScale(obj);
+  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
+                              float(rotationDeg.y() * float(M_PI) / 180.0f),
+                              float(rotationDeg.z() * float(M_PI) / 180.0f));
+  const Slic3r::Transform3d worldTransform =
+      hollowWorldTransform(translation, rotationRad, scale);
+
+  std::vector<GizmoVertex> verts;
+  constexpr float kColor[4] = {0.30f, 0.65f, 0.95f, 0.85f}; // blue-ish pins
+  constexpr int kSegs = 16;
+  verts.reserve(int(connectors.size()) * 96 * 3);
+  auto pushTri = [&verts](const Slic3r::Vec3f &a, const Slic3r::Vec3f &b, const Slic3r::Vec3f &c) {
+    verts.push_back({a.x(), a.y(), a.z(), kColor[0], kColor[1], kColor[2], kColor[3]});
+    verts.push_back({b.x(), b.y(), b.z(), kColor[0], kColor[1], kColor[2], kColor[3]});
+    verts.push_back({c.x(), c.y(), c.z(), kColor[0], kColor[1], kColor[2], kColor[3]});
+  };
+  for (const QVariant &cv : connectors) {
+    const QVariantMap cm = cv.toMap();
+    const Slic3r::Vec3f pos(cm.value(QStringLiteral("px")).toFloat(),
+                            cm.value(QStringLiteral("py")).toFloat(),
+                            cm.value(QStringLiteral("pz")).toFloat());
+    const Slic3r::Vec3f n(cm.value(QStringLiteral("nx")).toFloat(),
+                          cm.value(QStringLiteral("ny")).toFloat(),
+                          cm.value(QStringLiteral("nz")).toFloat());
+    const float radius = cm.value(QStringLiteral("radius")).toFloat();
+    const float height = cm.value(QStringLiteral("height")).toFloat();
+    Slic3r::Vec3f nn = (n.norm() > 1e-6f) ? n.normalized() : Slic3r::Vec3f::UnitZ();
+    Slic3r::Vec3f axis = std::abs(nn.x()) > 0.9f ? Slic3r::Vec3f::UnitY()
+                                                 : Slic3r::Vec3f::UnitX();
+    Slic3r::Vec3f u = nn.cross(axis).normalized();
+    Slic3r::Vec3f v = nn.cross(u).normalized();
+    const Slic3r::Vec3f top = pos + nn * height;
+    std::vector<Slic3r::Vec3f> baseRing(kSegs), topRing(kSegs);
+    for (int s = 0; s < kSegs; ++s) {
+      const float ang = float(s) * 2.f * float(M_PI) / float(kSegs);
+      const Slic3r::Vec3f off = (u * std::cos(ang) + v * std::sin(ang)) * radius;
+      baseRing[s] = pos + off;
+      topRing[s] = top + off;
+    }
+    for (int s = 0; s < kSegs; ++s) {
+      const int s2 = (s + 1) % kSegs;
+      auto W = [&](const Slic3r::Vec3f &p) {
+        const Slic3r::Vec3d wp = worldTransform * p.cast<double>();
+        return Slic3r::Vec3f(float(wp.x()), float(wp.y()), float(wp.z()));
+      };
+      pushTri(W(baseRing[s]), W(baseRing[s2]), W(topRing[s]));
+      pushTri(W(baseRing[s2]), W(topRing[s2]), W(topRing[s]));
+    }
+  }
+  const uint32_t cnt = uint32_t(verts.size());
+  const int bytes = 4 + int(verts.size()) * int(sizeof(GizmoVertex));
+  m_advancedCutMarkerData.resize(bytes);
+  char *out = m_advancedCutMarkerData.data();
+  std::memcpy(out, &cnt, 4);
+  std::memcpy(out + 4, verts.data(), verts.size() * sizeof(GizmoVertex));
+  emit advancedCutConnectorDataChanged();
+}
+
 // ── Simplify gizmo (对齐上游 GLGizmoSimplify) ──
 
 int EditorViewModel::simplifyWantedCount() const { return m_simplifyWantedCount; }
@@ -2040,6 +2113,14 @@ bool EditorViewModel::advCutSelected()
         srcIdx, m_advCutAxis, m_advCutPosition, keepMode,
         grooveDepth, grooveWidth, grooveFlapsAngle, grooveAngle);
   }
+  else if (m_advCutConnectors)
+  {
+    // v5.13 gap-closure: discrete connector-pin mode（对齐上游
+    // GLGizmoAdvancedCut connectors 分支）。若有已放置连接器，先物化为负
+    // 体积再走 perform_with_plane（process_connector_cut 消费）。
+    cutNewIdx = projectService_->cutObjectWithConnectors(
+        srcIdx, m_advCutAxis, m_advCutPosition, keepMode);
+  }
   else
   {
     // Planar cut mode (对齐上游 CutMode::cutPlanar)
@@ -2073,7 +2154,100 @@ bool EditorViewModel::advCutSelected()
   return false;
 }
 
+// ── v5.13 gap-closure: discrete AdvancedCut connector pins ────────────────
+
+int EditorViewModel::advancedCutConnectorCount() const
+{
+  const int obj = primarySelectedSourceIndex(this);
+  return (obj >= 0 && projectService_) ? projectService_->objectCutConnectorCount(obj) : 0;
+}
+
+QByteArray EditorViewModel::advancedCutMarkerData() const { return m_advancedCutMarkerData; }
+void EditorViewModel::refreshAdvancedCutConnectors()
+{
+  // v5.13: rebuild pin markers + count for the current selection (gizmo entry).
+  rebuildAdvancedCutConnectorMarkers();
+  emit stateChanged();
+}
+
+bool EditorViewModel::clearAdvancedCutConnectors()
+{
+  const int obj = primarySelectedSourceIndex(this);
+  if (obj < 0 || !projectService_)
+    return false;
+  const bool ok = projectService_->clearCutConnectors(obj);
+  if (ok) {
+    rebuildAdvancedCutConnectorMarkers();
+    emit stateChanged();
+  }
+  return ok;
+}
+
+bool EditorViewModel::placeAdvancedCutConnector(int pickedSourceIndex,
+                                                QVector3D rayOrigin, QVector3D rayDir)
+{
+  // 对齐上游 GLGizmoAdvancedCut::add_connector：世界射线 → 网格表面命中 →
+  // 以 mesh-local 命中点放置连接器（Z 轴对齐当前切割轴）。复用共享的
+  // SceneRaycaster（measure/paint/hollow 同一实例）。
+  if (!projectService_ || pickedSourceIndex < 0 || !m_advCutConnectors)
+    return false;
+  if (!m_sceneRaycaster) {
+    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const indexed_triangle_set> {
+          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
+        });
+  }
+  const QVector3D translation = projectService_->objectPosition(pickedSourceIndex);
+  const QVector3D rotationDeg = projectService_->objectRotation(pickedSourceIndex);
+  const QVector3D scale = projectService_->objectScale(pickedSourceIndex);
+  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
+                              float(rotationDeg.y() * float(M_PI) / 180.0f),
+                              float(rotationDeg.z() * float(M_PI) / 180.0f));
+  const Slic3r::Transform3d worldTransform =
+      hollowWorldTransform(translation, rotationRad, scale);
+
+  std::vector<OWzx::SceneRaycasterCandidate> candidates;
+  const int volumeCount = projectService_->objectVolumeCount(pickedSourceIndex);
+  candidates.reserve(std::max(1, volumeCount));
+  for (int v = 0; v < std::max(1, volumeCount); ++v) {
+    OWzx::SceneRaycasterCandidate cand;
+    cand.objectIndex = pickedSourceIndex;
+    cand.volumeIndex = v;
+    cand.worldTransform = worldTransform;
+    candidates.push_back(cand);
+  }
+  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
+                             double(rayOrigin.z()));
+  const Slic3r::Vec3d dir(double(rayDir.x()), double(rayDir.y()),
+                          double(rayDir.z()));
+  const OWzx::SceneRaycasterHit hit = m_sceneRaycaster->hitTest(origin, dir, candidates);
+  if (!hit.hit)
+    return false;
+
+  // Pin dimensions (对齐上游 add_connector 的量纲)：radius = size/2（size 是
+  // 直径语义的滑块值），height = size × depth 比例。
+  const float pinRadius = m_connectorSize * 0.5f;
+  const float pinHeight = std::max(0.5f, m_connectorSize * m_connectorDepth);
+  const bool ok = projectService_->addCutConnector(
+      hit.objectIndex,
+      double(hit.meshLocalPosition.x()), double(hit.meshLocalPosition.y()),
+      double(hit.meshLocalPosition.z()),
+      pinRadius, pinHeight,
+      int(m_connectorType), int(m_connectorStyle), int(m_connectorShape),
+      m_advCutAxis);
+  if (!ok) {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+  rebuildAdvancedCutConnectorMarkers();
+  emit stateChanged();
+  return true;
+}
+
 // ── FaceDetector gizmo (对齐上游 GLGizmoFaceDetector) ──
+
 
 float EditorViewModel::faceDetectorAngle() const { return m_faceDetectorAngle; }
 void EditorViewModel::setFaceDetectorAngle(float a) { m_faceDetectorAngle = a; emit stateChanged(); }
