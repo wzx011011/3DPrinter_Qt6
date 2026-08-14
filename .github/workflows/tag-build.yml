@@ -11,7 +11,11 @@ permissions:
 
 jobs:
   build-windows:
-    runs-on: windows-latest
+    # windows-2022 keeps VS 2022 installed so the OrcaSlicer deps build's
+    # VS generator (17 2022) resolves. windows-latest now ships only VS 18,
+    # where that generator is absent and the deps configure fails (the root
+    # cause of the v5.7-v5.15 Tag Build failures).
+    runs-on: windows-2022
     env:
       TAG_NAME: ${{ github.ref_name }}
       ORCA_DEPS_ROOT: ${{ github.workspace }}/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep
@@ -53,7 +57,10 @@ jobs:
         shell: pwsh
         run: |
           $hash = git -C third_party/OrcaSlicer ls-files deps | git -C third_party/OrcaSlicer hash-object --stdin
-          "ORCA_DEPS_CACHE_KEY=windows-orcaslicer-deps-$hash" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          # -v2: the v5.15 run saved a broken (empty) deps cache under the
+          # unversioned key after a 35s no-op deps "build"; the suffix makes
+          # every old poisoned entry permanently unreachable.
+          "ORCA_DEPS_CACHE_KEY=windows-orcaslicer-deps-v2-$hash" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Restore OrcaSlicer deps cache
         id: restore-orca-deps
