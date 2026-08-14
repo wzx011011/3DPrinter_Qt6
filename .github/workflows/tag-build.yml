@@ -151,7 +151,13 @@ jobs:
       - name: Configure (CMake)
         shell: pwsh
         run: |
+          # CMAKE_POLICY_VERSION_MINIMUM: CI runs CMake 4.3, which removed
+          # compatibility with cmake_minimum_required(<3.5) — upstream
+          # subprojects bundled in the tree (e.g. src/qhull declares 3.1)
+          # fail to configure without this. Local dev uses CMake 3.21 where
+          # the old minimums are still accepted.
           cmake -S . -B build -G Ninja `
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 `
             -DCMAKE_BUILD_TYPE=Release `
             -DBUILD_LIBSLIC3R=ON `
             -DLIBSLIC3R_FROM_SOURCE=ON `
