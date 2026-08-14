@@ -10,27 +10,32 @@ The project currently has a usable Qt6/QML shell, real model/project IO, real sl
 
 OrcaSlicer upstream behavior is the product source of truth; Qt6 code must inherit that behavior and must not invent new product behavior without an explicit upstream mapping or documented block.
 
-## Current Milestone: v5.11 Process Settings Source-Truth Convergence
+## Current Milestone: v5.16 Full Gap Closure
 
-**Goal:** Make the Process Settings dialog a complete, efficient, and
-upstream-aligned parameter-editing workspace rather than a flat list with
-decorative group headers.
+**Goal:** Close every gap found by the 2026-08-15 full-delta re-audit — fix all
+fake-green/circuit-break defects so existing UI does what it claims, and fill
+the missing upstream features by domain. Baseline:
+`.planning/research/v5.16-GAP-BASELINE.md`.
 
 **Target features:**
-- Functional group expansion and collapse with state preserved across tab,
-  search, and advanced-mode changes.
-- Upstream-derived Process page and group navigation with accurate visible and
-  dirty-option counts.
-- Dense, readable option rows with correct source, unit, inheritance,
-  read-only, reset, validation, and vector-value affordances.
-- Preset actions, dirty/compatibility feedback, and responsive visual details
-  verified against the Process Settings source and screenshot truth.
+- P0 circuit breaks: undo/redo dispatch, CalibMode enum shift + stale test
+  decontamination, AdvancedCut wiring, mojibake, export-all-STL.
+- P0 data-link breaks: multi-filament slots, plate config chain (bed type,
+  spiral, filament sequence), 3MF load membership, delete-undo mesh, preset
+  persistence + CreatePresets/invert + triple dirty-guard.
+- P1 feature fill: dialog reachability, View menu, file drag&drop, import
+  pipeline (unit inference, 3MF warnings), preview gaps (ghost shells, marker,
+  tick completion), undo coverage, notification stacking, engine reslice.
+- P2 interaction depth: gizmo numeric input, painter smart fill, measure
+  overlay, page fixes (Home/Project/Preferences), CLI transforms.
 
-**Recent baseline:** v5.10 Polish & Source-Truth Consolidation closed on
-2026-07-26. Hollow marker refresh/rendering, configured filament colour flow,
-MMU colour-source unification, and ConfigWizard printer-material filtering are
-verified. SLA slicing remains permanently out of scope; multi-nozzle UI and
-printer-hardware/network workflows remain deferred.
+**Carried-over deferred workstream:** v5.11 Process Settings phases 227-230
+remain reserved (Phase 227 planning artifact exists); v5.16 does not renumber
+them.
+
+## Historical State: v5.11 Process Settings Source-Truth Convergence
+
+**Status:** Phase 226 complete (2026-08-11); Phases 227-230 deferred, reserved.
 
 ## Historical State: v5.7 D3D12 Backend Investigation
 
@@ -346,4 +351,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-*Last updated: 2026-08-03 after v5.11 milestone initialization.*
+*Last updated: 2026-08-15 after v5.16 milestone initialization.*
