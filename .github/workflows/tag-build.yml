@@ -150,16 +150,16 @@ jobs:
 
       - name: Configure (CMake)
         shell: pwsh
+        # CMAKE_POLICY_VERSION_MINIMUM goes through the ENV (not -D): CI's
+        # CMake 4.3 removed <3.5 compatibility, and the value must satisfy
+        # both qhull's cmake_minimum_required(3.1) and Boost 1.84's installed
+        # *-targets.cmake cmake_policy(VERSION 3) calls — 3.0 satisfies both
+        # (3.5, the generic hint, makes Boost error out). Local dev uses
+        # CMake 3.21 where old minimums still work.
+        env:
+          CMAKE_POLICY_VERSION_MINIMUM: '3.0'
         run: |
-          # CMAKE_POLICY_VERSION_MINIMUM: CI runs CMake 4.3, which removed
-          # compatibility with cmake_minimum_required(<3.5). The value must
-          # satisfy both ends of the tree: qhull declares 3.1 (needs <= 3.1)
-          # and Boost 1.84's *-targets.cmake files call cmake_policy(VERSION 3)
-          # (needs <= 3.0) — 3.5 (the generic hint) breaks Boost with
-          # "Invalid CMAKE_POLICY_VERSION_MINIMUM value". 3.0 satisfies both.
-          # Local dev builds with CMake 3.21 where old minimums still work.
           cmake -S . -B build -G Ninja `
-            -DCMAKE_POLICY_VERSION_MINIMUM=3.0 `
             -DCMAKE_BUILD_TYPE=Release `
             -DBUILD_LIBSLIC3R=ON `
             -DLIBSLIC3R_FROM_SOURCE=ON `
