@@ -949,3 +949,30 @@ grid only. Models were flat vertex colors with zero lighting.
 rebuilt from purged objects); runtime screenshots confirm the bed texture
 (coverage/orientation correct) and lit neutral-gray model (top-bright,
 side-dark shading) match the upstream look.
+
+---
+
+### v5.16 - Full Bed-Render Alignment (render slice)
+
+**Started/Completed:** 2026-08-15
+**Status:** Complete (tag v5.16/v5.16.1, CI green, Release v5.16.1)
+**Phases:** render slice of the shared v5.16 window
+
+**Goal:** Close every remaining branch of upstream bed rendering the user
+required ("都要做"): multi-plate grid, bed_model 3D frame, BBL bed-type
+textures + cali overlay, bed_custom_texture override.
+
+**Outcome:** all four implemented with upstream citations in code:
+multi-plate ceil(sqrt(n)) grid with SELECT/UNSELECT_DARK palettes
+(PartPlate.cpp:77-85, PartPlate.hpp:38, LOGICAL_PART_PLATE_GAP);
+bed_model STL via TriangleMesh::ReadSTLFile rendered with the lit pipeline
+in DEFAULT_MODEL_COLOR_DARK at -0.41+GROUND_Z (Bed3D::render_model
+contract); BBL-gated bed-type part table + cali lines ported verbatim
+(init_bed_type_info / has_cali_lines gates); bed_custom_texture priority
+(Plater.cpp:12996). Tests: PrepareSceneDataTests multi-plate grid case
+(15/15). Runtime screenshot: texture + dark-gray lit printer frame +
+neutral-gray lit model, no artifacts (.planning/v5.16-full-bed.png).
+
+Note: a concurrent settings workstream (PSET2-x/UNDO) shares the v5.16
+window; this slice was committed via hunk-split to avoid touching its WIP
+(one missed header hunk required v5.16.1).
