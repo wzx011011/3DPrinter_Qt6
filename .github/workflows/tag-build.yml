@@ -31,7 +31,11 @@ jobs:
       - name: Setup CMake
         uses: lukka/get-cmake@latest
         with:
-          cmakeVersion: "~4.3.0"
+          # CMake 3.x: the bundled tree still declares pre-3.5 minimums
+          # (qhull 3.1, Boost 1.84's exported cmake_policy(VERSION 3)) which
+          # CMake 4 removed. Local dev uses CMake 3.21; 3.31 is the closest
+          # available modern 3.x and needs no policy overrides.
+          cmakeVersion: "~3.31.0"
           useLocalCache: true
           useCloudCache: true
 
@@ -150,14 +154,6 @@ jobs:
 
       - name: Configure (CMake)
         shell: pwsh
-        # CMAKE_POLICY_VERSION_MINIMUM goes through the ENV (not -D): CI's
-        # CMake 4.3 removed <3.5 compatibility, and the value must satisfy
-        # both qhull's cmake_minimum_required(3.1) and Boost 1.84's installed
-        # *-targets.cmake cmake_policy(VERSION 3) calls — 3.0 satisfies both
-        # (3.5, the generic hint, makes Boost error out). Local dev uses
-        # CMake 3.21 where old minimums still work.
-        env:
-          CMAKE_POLICY_VERSION_MINIMUM: '3.0'
         run: |
           cmake -S . -B build -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
