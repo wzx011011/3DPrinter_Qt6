@@ -44,6 +44,14 @@ class RhiViewport : public QQuickRhiItem
   // v5.15 (BEDTEX): printer-profile bed texture image (upstream PartPlate
   // m_logo_texture_filename sourced from the machine model's bed_texture).
   Q_PROPERTY(QUrl bedTextureUrl READ bedTextureUrl WRITE setBedTextureUrl NOTIFY bedTextureUrlChanged)
+  // v5.16 (BEDMODEL): printer bed_model STL triangle stream (scene coords).
+  Q_PROPERTY(QByteArray bedModelMeshData READ bedModelMeshData WRITE setBedModelMeshData)
+  // v5.16 (BEDTYPE-TEX): BBL-only bed-type texture gates + assets + the
+  // current plate's bed type index (Slic3r BedType).
+  Q_PROPERTY(bool bedTypeTexturesActive READ bedTypeTexturesActive WRITE setBedTypeTexturesActive)
+  Q_PROPERTY(bool bedCaliLinesActive READ bedCaliLinesActive WRITE setBedCaliLinesActive)
+  Q_PROPERTY(QString bedTypeImagesDir READ bedTypeImagesDir WRITE setBedTypeImagesDir)
+  Q_PROPERTY(int currentPlateBedType READ currentPlateBedType WRITE setCurrentPlateBedType)
   Q_PROPERTY(int currentPlateIndex READ currentPlateIndex WRITE setCurrentPlateIndex)
   Q_PROPERTY(int plateCount READ plateCount WRITE setPlateCount)
   Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices WRITE setActivePlateObjectIndices)
@@ -235,6 +243,16 @@ public:
   void setBedDiameter(float value);
   QUrl bedTextureUrl() const { return m_bedTextureUrl; }
   void setBedTextureUrl(const QUrl &value);
+  QByteArray bedModelMeshData() const { return m_bedModelMeshData; }
+  void setBedModelMeshData(const QByteArray &value);
+  bool bedTypeTexturesActive() const { return m_bedTypeTexturesActive; }
+  void setBedTypeTexturesActive(bool value);
+  bool bedCaliLinesActive() const { return m_bedCaliLinesActive; }
+  void setBedCaliLinesActive(bool value);
+  QString bedTypeImagesDir() const { return m_bedTypeImagesDir; }
+  void setBedTypeImagesDir(const QString &value);
+  int currentPlateBedType() const { return m_currentPlateBedType; }
+  void setCurrentPlateBedType(int value);
   int currentPlateIndex() const { return m_currentPlateIndex; }
   void setCurrentPlateIndex(int value);
   int plateCount() const { return m_plateCount; }
@@ -523,6 +541,11 @@ private:
   int m_bedShapeType = 0;
   float m_bedDiameter = 220.f;
   QUrl m_bedTextureUrl;
+  QByteArray m_bedModelMeshData;
+  bool m_bedTypeTexturesActive = false;
+  bool m_bedCaliLinesActive = false;
+  QString m_bedTypeImagesDir;
+  int m_currentPlateBedType = 0;
   int m_currentPlateIndex = 0;
   int m_plateCount = 1;
   QVariantList m_activePlateObjectIndices;

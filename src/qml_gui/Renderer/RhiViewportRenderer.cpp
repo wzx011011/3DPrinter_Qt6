@@ -270,6 +270,44 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
       m_bedTextureDirty = true;
     }
   }
+  // v5.16 (BEDMODEL/BEDTYPE-TEX): bed_model stream + bed-type gates. The
+  // current plate's grid offset (upstream compute_shape_position) is baked
+  // into both the bed model vertices and the bed-type part quads.
+  {
+    const int plateCount = viewport->m_plateCount;
+    const int cols = PrepareSceneData::computePlateColumns(plateCount > 0 ? plateCount : 1);
+    const int row = plateCount > 0 ? viewport->m_currentPlateIndex / cols : 0;
+    const int col = plateCount > 0 ? viewport->m_currentPlateIndex % cols : 0;
+    const float strideX = viewport->m_bedWidth * 1.2f;
+    const float strideD = viewport->m_bedDepth * 1.2f;
+    m_bedTypePlateOffsetX = float(col) * strideX;
+    m_bedTypePlateOffsetZ = float(row) * strideD;
+
+    static float s_lastBedModelOffX = 1e9f;
+    static float s_lastBedModelOffZ = 1e9f;
+    if (viewport->m_bedModelMeshData != m_bedModelMeshBytes
+        || m_bedTypePlateOffsetX != s_lastBedModelOffX
+        || m_bedTypePlateOffsetZ != s_lastBedModelOffZ) {
+      m_bedModelMeshBytes = viewport->m_bedModelMeshData;
+      m_bedModelUploaded = false;
+      s_lastBedModelOffX = m_bedTypePlateOffsetX;
+      s_lastBedModelOffZ = m_bedTypePlateOffsetZ;
+    }
+    const bool typeActive = viewport->m_bedTypeTexturesActive;
+    if (typeActive != m_bedTypeActive
+        || viewport->m_bedCaliLinesActive != m_bedCaliActive
+        || viewport->m_bedTypeImagesDir != m_bedTypeImagesDir) {
+      m_bedTypeActive = typeActive;
+      m_bedCaliActive = viewport->m_bedCaliLinesActive;
+      m_bedTypeImagesDir = viewport->m_bedTypeImagesDir;
+      releaseBedTypeParts();
+    }
+    if (viewport->m_currentPlateBedType != m_bedTypeIndex) {
+      m_bedTypeIndex = viewport->m_currentPlateBedType;
+      // Different bed type -> different part set; drop the stale quads.
+      releaseBedTypeParts();
+    }
+  }
   if (viewport->m_cameraDirty) {
     m_prepareScene.markCameraDirty();
     viewport->m_cameraDirty = false;
@@ -611,9 +649,17 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // v5.15 (BEDTEX): printer bed texture image drawn over the background +
     // grid, layered exactly like upstream render_logo (blended, no depth
     // writes). Drawn before the model so the mesh (which does depth-test)
-    // still occludes it from below-camera angles.
-    if (m_prepareScene.showBed())
-      renderBedTexture(cb);
+    // still occludes it from below-camera angles. For BBL vendors the
+    // bed-type overlay parts replace the single image (upstream
+    // PartPlate::render_logo bedtype branch).
+    if (m_prepareScene.showBed()) {
+      if (m_bedTypeActive)
+        renderBedTypeParts(cb);
+      else
+        renderBedTexture(cb);
+    }
+    // v5.16 (BEDMODEL): printer frame STL under the working mesh.
+    renderBedModel(cb);
     if (m_modelVertexBuffer && m_modelVertexCount > 0) {
       // v5.15 (MODELLIT): lit draw path (two-light gouraud) with the parallel
       // per-face normal buffer. Falls back to the flat vertex-color pipeline
@@ -700,8 +746,13 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->setVertexInput(0, 1, &lineBinding);
       cb->draw(m_bedLineVertexCount);
     }
-    if (m_prepareScene.showBed())
-      renderBedTexture(cb);
+    if (m_prepareScene.showBed()) {
+      if (m_bedTypeActive)
+        renderBedTypeParts(cb);
+      else
+        renderBedTexture(cb);
+    }
+    renderBedModel(cb);
     cb->setGraphicsPipeline(m_linePipeline.get());
 
     const QVector<PreviewDrawRange> drawRanges = computePreviewDrawRanges();
@@ -809,6 +860,15 @@ void RhiViewportRenderer::releaseResources()
   m_modelLitPipeline.reset();
   m_modelNormalBuffer.reset();
   m_modelNormalBufferBytes = 0;
+  // v5.16 (BEDMODEL/BEDTYPE-TEX)
+  m_bedModelVertexBuffer.reset();
+  m_bedModelNormalBuffer.reset();
+  m_bedModelVertexBytes = 0;
+  m_bedModelNormalBytes = 0;
+  m_bedModelVertexCount = 0;
+  m_bedModelMeshBytes.clear();
+  m_bedModelUploaded = false;
+  releaseBedTypeParts();
   // Phase 68: gizmo pipelines + vertex buffer.
   m_gizmoLinePipeline.reset();
   m_gizmoTriPipeline.reset();
@@ -1243,6 +1303,35 @@ bool RhiViewportRenderer::ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &
   return true;
 }
 
+// ── v5.16 (BEDTYPE-TEX): BBL bed-type texture part tables ───────────────────
+// Ported verbatim from upstream PartPlateList::init_bed_type_info /
+// init_cali_texture_info (PartPlate.cpp:5505-5575): per-bed-type overlay
+// strips positioned in mm relative to the plate origin. BedType indices
+// follow libslic3r PrintConfig.hpp:255 (btDefault=0, SuperTack=1, PC=2,
+// EP=3, PEI=4, PTE=5, PCT=6).
+namespace {
+struct BedTypePartDef {
+  const char *file;
+  float x, y, w, h;
+};
+const BedTypePartDef kBedTypeParts[][3] = {
+    /* btDefault */ {},
+    /* btSuperTack */ {{"bbl_bed_st_left.svg", 9, 70, 12.5f, 170},
+                        {"bbl_bed_st_bottom.svg", 74, -10, 148, 12}, {}},
+    /* btPC */ {{"bbl_bed_pc_left.svg", 10, 130, 10, 110},
+                 {"bbl_bed_pc_bottom.svg", 74, -10, 148, 12}, {}},
+    /* btEP */ {{"bbl_bed_ep_left.svg", 7.5f, 90, 12.5f, 150},
+                 {"bbl_bed_ep_bottom.svg", 74, -10, 148, 12}, {}},
+    /* btPEI */ {{"bbl_bed_pei_left.svg", 7.5f, 50, 12.5f, 190},
+                  {"bbl_bed_pei_bottom.svg", 74, -10, 148, 12}, {}},
+    /* btPTE */ {{"bbl_bed_pte_left.svg", 10, 80, 10, 160},
+                  {"bbl_bed_pte_bottom.svg", 74, -10, 148, 12}, {}},
+    /* btPCT */ {{"orca_bed_pct_left.svg", 10, 130, 10, 110},
+                  {"bbl_bed_pc_bottom.svg", 74, -10, 148, 12}, {}},
+};
+const BedTypePartDef kCaliPart = {"bbl_cali_lines.svg", 18, 2, 224, 16};
+} // namespace
+
 // ── v5.15 (BEDTEX): textured print-bed quad ────────────────────────────────
 // Upstream contract: PartPlate::render_logo / render_logo_texture load the
 // printer profile's bed_texture image (PNG directly, SVG rasterized, capped
@@ -1450,6 +1539,262 @@ void RhiViewportRenderer::renderBedTexture(QRhiCommandBuffer *cb)
 // 20) + front light (dir 0.699,0.140,0.699 / diffuse 0.3), evaluated in eye
 // space. Shares m_srb (camera UBO); reads the per-face normal buffer at
 // vertex-input binding 1 alongside the shared position/color buffer.
+// ── v5.16 (BEDMODEL): printer frame STL (upstream Bed3D::render_model) ─────
+void RhiViewportRenderer::uploadBedModelMesh(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return;
+  if (!m_bedModelUploaded && m_bedModelMeshBytes.isEmpty())
+    return;
+
+  // Parse the stream: [uint32 vertexCount][float x,y,z] * count.
+  QVector<Vertex> vertices;
+  if (m_bedModelMeshBytes.size() >= 4) {
+    quint32 count = 0;
+    std::memcpy(&count, m_bedModelMeshBytes.constData(), 4);
+    const qint64 needed = 4 + qint64(count) * 12;
+    if (count > 0 && m_bedModelMeshBytes.size() >= needed) {
+      vertices.reserve(int(count));
+      const float *src = reinterpret_cast<const float *>(m_bedModelMeshBytes.constData() + 4);
+      // Upstream Bed3D::update_model_offset: plate position + z = -0.41 +
+      // GROUND_Z(-0.03) below the bed plane to avoid z-fighting.
+      const float offsetX = m_bedTypePlateOffsetX;
+      const float offsetZ = m_bedTypePlateOffsetZ;
+      const float offsetY = -0.44f;
+      for (quint32 i = 0; i < count; ++i) {
+        vertices.append(Vertex{src[0] + offsetX, src[1] + offsetY, src[2] + offsetZ,
+                                0.255f, 0.255f, 0.283f, 1.0f});
+        src += 3;
+      }
+    }
+  }
+
+  const quint32 bytes = quint32(vertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_bedModelVertexBuffer, bytes, m_bedModelVertexBytes, QRhiBuffer::VertexBuffer))
+    return;
+  if (m_bedModelVertexBuffer && bytes > 0)
+    updates->uploadStaticBuffer(m_bedModelVertexBuffer.get(), 0, bytes, vertices.constData());
+
+  // Parallel per-face normals for the lit pipeline (same layout as the model
+  // mesh path).
+  {
+    QVector<float> normals;
+    normals.reserve(vertices.size() * 3);
+    const int triCount = vertices.size() / 3;
+    const Vertex *v = vertices.constData();
+    for (int t = 0; t < triCount; ++t) {
+      const Vertex &a = v[t * 3 + 0];
+      const Vertex &b = v[t * 3 + 1];
+      const Vertex &c = v[t * 3 + 2];
+      const float ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z;
+      const float wx = c.x - a.x, wy = c.y - a.y, wz = c.z - a.z;
+      float nx = uy * wz - uz * wy;
+      float ny = uz * wx - ux * wz;
+      float nz = ux * wy - uy * wx;
+      const float len = std::sqrt(nx * nx + ny * ny + nz * nz);
+      if (len > 1e-9f) {
+        nx /= len; ny /= len; nz /= len;
+      } else {
+        nx = 0.f; ny = 1.f; nz = 0.f;
+      }
+      for (int k = 0; k < 3; ++k) {
+        normals.append(nx);
+        normals.append(ny);
+        normals.append(nz);
+      }
+    }
+    const quint32 normalBytes = quint32(normals.size() * int(sizeof(float)));
+    if (ensureBuffer(m_bedModelNormalBuffer, normalBytes, m_bedModelNormalBytes, QRhiBuffer::VertexBuffer)
+        && m_bedModelNormalBuffer && normalBytes > 0)
+      updates->uploadStaticBuffer(m_bedModelNormalBuffer.get(), 0, normalBytes, normals.constData());
+  }
+  m_bedModelVertexCount = quint32(vertices.size());
+  m_bedModelUploaded = true;
+}
+
+void RhiViewportRenderer::renderBedModel(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr || !m_bedModelVertexBuffer || m_bedModelVertexCount == 0)
+    return;
+  if (!m_modelLitEnabled || !ensureModelLitPipeline() || !m_bedModelNormalBuffer)
+    return;
+  // Upstream Bed3D::update_model_offset: the frame sits slightly below the
+  // bed plane (-0.41 + GROUND_Z). The stream positions are authored in bed
+  // coordinates, so the y offset is baked at upload via a stream rewrite in
+  // synchronize (see the bed-model sync block); here it is a plain lit draw.
+  cb->setGraphicsPipeline(m_modelLitPipeline.get());
+  const QRhiCommandBuffer::VertexInput bindings[2] = {
+      QRhiCommandBuffer::VertexInput(m_bedModelVertexBuffer.get(), 0),
+      QRhiCommandBuffer::VertexInput(m_bedModelNormalBuffer.get(), 1),
+  };
+  cb->setVertexInput(0, 2, bindings);
+  cb->draw(m_bedModelVertexCount);
+  cb->setShaderResources(m_srb.get());
+}
+
+// ── v5.16 (BEDTYPE-TEX): BBL bed-type overlay parts ────────────────────────
+void RhiViewportRenderer::releaseBedTypeParts()
+{
+  qDeleteAll(m_bedTypePartGpu);
+  m_bedTypePartGpu.clear();
+}
+
+void RhiViewportRenderer::prepareBedTypeParts(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr || renderTarget() == nullptr)
+    return;
+  if (m_bedTypeImagesDir.isEmpty() || m_bedTypeIndex <= 0
+      || m_bedTypeIndex >= int(sizeof(kBedTypeParts) / sizeof(kBedTypeParts[0])))
+    return;
+
+  const BedTypePartDef *parts[4] = {nullptr, nullptr, nullptr, nullptr};
+  int partCount = 0;
+  for (const BedTypePartDef &def : kBedTypeParts[m_bedTypeIndex]) {
+    if (def.file == nullptr || def.w <= 0.f)
+      continue;
+    parts[partCount++] = &def;
+  }
+  if (m_bedCaliActive)
+    parts[partCount++] = &kCaliPart;
+  if (partCount == 0)
+    return;
+
+  // Plate origin in scene coords; upstream part rects are measured from the
+  // plate's lower-left corner (y grows up), the bed quad maps depth growing
+  // downward from the origin, so a part row y maps to depth (bedDepth - y).
+  const float plateLeft = m_prepareScene.bedOriginX() + m_bedTypePlateOffsetX;
+  const float plateDepth = m_prepareScene.bedDepth();
+  const float plateTopMm = m_prepareScene.bedOriginY() + m_bedTypePlateOffsetZ;
+
+  for (int i = 0; i < partCount; ++i) {
+    const BedTypePartDef &def = *parts[i];
+    const QString path = m_bedTypeImagesDir + QLatin1Char('/') + QLatin1String(def.file);
+    BedTypePartGpu *gpu = m_bedTypePartGpu.value(path, nullptr);
+    if (gpu == nullptr) {
+      // Lazily rasterize the SVG (upstream GLTexture::load_from_svg_file,
+      // 2048 cap) and create the texture + pipeline trio.
+      QSvgRenderer svg(path);
+      if (!svg.isValid())
+        continue;
+      QSize sz = svg.defaultSize();
+      if (sz.isEmpty())
+        sz = QSize(256, 256);
+      const int kMaxTex = 2048;
+      if (sz.width() > kMaxTex || sz.height() > kMaxTex) {
+        const float scale = float(kMaxTex) / float(std::max(sz.width(), sz.height()));
+        sz = QSize(int(sz.width() * scale), int(sz.height() * scale));
+      }
+      QImage image(sz, QImage::Format_RGBA8888);
+      image.fill(Qt::transparent);
+      QPainter painter(&image);
+      svg.render(&painter);
+      painter.end();
+
+      gpu = new BedTypePartGpu;
+      gpu->texture.reset(rhi()->newTexture(QRhiTexture::RGBA8, image.size()));
+      gpu->sampler.reset(rhi()->newSampler(
+          QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
+          QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
+      if (!gpu->texture->create() || !gpu->sampler->create()) {
+        delete gpu;
+        continue;
+      }
+      gpu->srb.reset(rhi()->newShaderResourceBindings());
+      gpu->srb->setBindings({
+          QRhiShaderResourceBinding::uniformBuffer(
+              0, QRhiShaderResourceBinding::VertexStage, m_cameraUniformBuffer.get()),
+          QRhiShaderResourceBinding::sampledTexture(
+              1, QRhiShaderResourceBinding::FragmentStage,
+              gpu->texture.get(), gpu->sampler.get()),
+      });
+      if (!gpu->srb->create()) {
+        delete gpu;
+        continue;
+      }
+      QShader vs = loadShader(QStringLiteral(":/rhi_viewport/shaders/bed_texture.vert.qsb"));
+      QShader fs = loadShader(QStringLiteral(":/rhi_viewport/shaders/bed_texture.frag.qsb"));
+      if (!vs.isValid() || !fs.isValid()) {
+        delete gpu;
+        continue;
+      }
+      struct BedTextureVertex { float x, y, z, u, v; };
+      QRhiVertexInputLayout inputLayout;
+      inputLayout.setBindings({QRhiVertexInputBinding(sizeof(BedTextureVertex))});
+      inputLayout.setAttributes({
+          QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, 0),
+          QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float2, 3 * sizeof(float)),
+      });
+      gpu->pipeline.reset(rhi()->newGraphicsPipeline());
+      gpu->pipeline->setTopology(QRhiGraphicsPipeline::Triangles);
+      gpu->pipeline->setShaderStages({
+          QRhiShaderStage(QRhiShaderStage::Vertex, vs),
+          QRhiShaderStage(QRhiShaderStage::Fragment, fs),
+      });
+      gpu->pipeline->setShaderResourceBindings(gpu->srb.get());
+      gpu->pipeline->setVertexInputLayout(inputLayout);
+      gpu->pipeline->setRenderPassDescriptor(renderTarget()->renderPassDescriptor());
+      gpu->pipeline->setDepthTest(false);
+      gpu->pipeline->setDepthWrite(false);
+      QRhiGraphicsPipeline::TargetBlend blend;
+      blend.enable = true;
+      blend.srcColor = QRhiGraphicsPipeline::SrcAlpha;
+      blend.dstColor = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+      blend.srcAlpha = QRhiGraphicsPipeline::One;
+      blend.dstAlpha = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+      gpu->pipeline->setTargetBlends({blend});
+      if (!gpu->pipeline->create()) {
+        delete gpu;
+        continue;
+      }
+      updates->uploadTexture(gpu->texture.get(), image);
+      m_bedTypePartGpu.insert(path, gpu);
+    }
+
+    if (gpu->vertexCount == 0) {
+      // Quad for this part (y = 0.02, upstream GROUND_Z + 0.02).
+      struct BedTextureVertex { float x, y, z, u, v; };
+      const float leftX = plateLeft + def.x;
+      const float rightX = leftX + def.w;
+      const float topZ = plateTopMm + (plateDepth - def.y - def.h);
+      const float bottomZ = plateTopMm + (plateDepth - def.y);
+      QVector<BedTextureVertex> quad;
+      quad.reserve(6);
+      const auto append = [&quad](float x, float z, float u, float v) {
+        quad.append(BedTextureVertex{x, 0.02f, z, u, v});
+      };
+      append(leftX, topZ, 0.f, 0.f);
+      append(rightX, topZ, 1.f, 0.f);
+      append(rightX, bottomZ, 1.f, 1.f);
+      append(leftX, topZ, 0.f, 0.f);
+      append(rightX, bottomZ, 1.f, 1.f);
+      append(leftX, bottomZ, 0.f, 1.f);
+      const quint32 bytes = quint32(quad.size() * int(sizeof(BedTextureVertex)));
+      if (ensureBuffer(gpu->vertexBuffer, bytes, gpu->vertexBytes, QRhiBuffer::VertexBuffer)
+          && gpu->vertexBuffer && bytes > 0) {
+        updates->uploadStaticBuffer(gpu->vertexBuffer.get(), 0, bytes, quad.constData());
+        gpu->vertexCount = quint32(quad.size());
+      }
+    }
+  }
+}
+
+void RhiViewportRenderer::renderBedTypeParts(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr || !m_bedTypeActive)
+    return;
+  for (auto it = m_bedTypePartGpu.cbegin(); it != m_bedTypePartGpu.cend(); ++it) {
+    BedTypePartGpu *gpu = it.value();
+    if (gpu == nullptr || gpu->vertexCount == 0 || !gpu->pipeline)
+      continue;
+    cb->setGraphicsPipeline(gpu->pipeline.get());
+    cb->setShaderResources(gpu->srb.get());
+    const QRhiCommandBuffer::VertexInput binding(gpu->vertexBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &binding);
+    cb->draw(gpu->vertexCount);
+  }
+  cb->setShaderResources(m_srb.get());
+}
+
 bool RhiViewportRenderer::ensureModelLitPipeline()
 {
   if (m_modelLitPipeline)
@@ -1507,6 +1852,12 @@ bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, q
     return false;
   // v5.15 (BEDTEX): texture image + bed quad (no-op when no texture path).
   uploadBedTexture(updates);
+  // v5.16 (BEDMODEL/BEDTYPE-TEX): printer frame mesh + BBL bed-type parts.
+  // The bed-model vertices bake the current plate offset + the upstream
+  // -0.41 Z placement at upload time.
+  uploadBedModelMesh(updates);
+  if (m_bedTypeActive)
+    prepareBedTypeParts(updates);
   if (!uploadModelBuffer(updates, dirtyFlags))
     return false;
   if (!uploadHighlightBuffer(updates, dirtyFlags))

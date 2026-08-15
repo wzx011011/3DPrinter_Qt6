@@ -624,6 +624,33 @@ QString ConfigViewModel::bedTextureFile() const
   return presetService_->bedTextureFileForPreset(currentPrinterPreset_);
 }
 
+QString ConfigViewModel::bedModelFile() const
+{
+  if (presetService_ == nullptr || currentPrinterPreset_.isEmpty())
+    return {};
+  return presetService_->bedModelFileForPreset(currentPrinterPreset_);
+}
+
+bool ConfigViewModel::bedTypeTexturesActive() const
+{
+  if (presetService_ == nullptr || currentPrinterPreset_.isEmpty())
+    return false;
+  return presetService_->isBblVendorPreset(currentPrinterPreset_);
+}
+
+bool ConfigViewModel::bedCaliLinesActive() const
+{
+  if (presetService_ == nullptr || currentPrinterPreset_.isEmpty())
+    return false;
+  return presetService_->isBblVendorPreset(currentPrinterPreset_)
+      && presetService_->presetHasCaliLines(currentPrinterPreset_);
+}
+
+QString ConfigViewModel::bedTypeImagesDir() const
+{
+  return presetService_ ? presetService_->resourcesImagesDir() : QString();
+}
+
 void ConfigViewModel::setCurrentFilamentPreset(const QString &name)
 {
   const QString before = currentFilamentPreset_;

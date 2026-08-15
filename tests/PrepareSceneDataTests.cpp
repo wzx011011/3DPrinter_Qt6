@@ -48,6 +48,8 @@ class PrepareSceneDataTests final : public QObject
 
 private slots:
   void bedGeometryUsesDimensionsAndGridIntervals();
+  // v5.16: upstream PartPlateList multi-plate grid + select/unselect colors.
+  void bedGridRendersEveryPlateWithSelectionColors();
   void dirtyFlagsAreConsumedOnlyOnRequest();
   void activePlateContextDoesNotLeakInactiveObjects();
   void plateContextDirtyFlagsOnlyChangeOnPlateDifferences();
@@ -303,6 +305,48 @@ void PrepareSceneDataTests::selectionAndHoverDoNotDirtyModelGeometry()
   scene.takeDirtyFlags();
   scene.setHoveredSourceObjectIndex(5);
   QCOMPARE(scene.peekDirtyFlags(), quint32(PrepareSceneData::DirtyNone));
+}
+
+
+
+// v5.16: upstream renders every plate in a ceil(sqrt(n))-column grid with
+// stride = bed size * 1.2 (PartPlate.hpp:38, PartPlate.cpp:53). The
+// selected plate uses SELECT_COLOR (0.2666/0.2784/0.2784), the others
+// UNSELECT_DARK_COLOR (0.384/0.384/0.412) — PartPlate.cpp:77-79.
+void PrepareSceneDataTests::bedGridRendersEveryPlateWithSelectionColors()
+{
+  QCOMPARE(PrepareSceneData::computePlateColumns(1), 1);
+  QCOMPARE(PrepareSceneData::computePlateColumns(4), 2);
+  QCOMPARE(PrepareSceneData::computePlateColumns(5), 3);
+  QCOMPARE(PrepareSceneData::computePlateColumns(36), 6);
+
+  PrepareSceneData scene;
+  scene.setBed(200.0f, 200.0f, 0.0f, 0.0f, 0, 200.0f);
+  scene.setShowBed(true);
+  scene.setPlateContext(1, 2, QList<int>{0});
+
+  // Two plates -> two 6-vertex fills.
+  QCOMPARE(scene.bedFillVertices().size(), 12);
+
+  bool hasSelected = false;
+  bool hasUnselected = false;
+  for (const auto &v : scene.bedFillVertices()) {
+    if (v.r == 0.2666f && v.g == 0.2784f && v.b == 0.2784f)
+      hasSelected = true;
+    if (v.r == 0.384f && v.g == 0.384f && v.b == 0.412f)
+      hasUnselected = true;
+  }
+  QVERIFY2(hasSelected, "selected plate fill must use upstream SELECT_COLOR");
+  QVERIFY2(hasUnselected, "unselected plate fill must use upstream UNSELECT_DARK_COLOR");
+
+  // Second plate sits one stride (bed width * 1.2) to the right.
+  const float strideX = 200.0f * 1.2f;
+  bool foundAtStride = false;
+  for (const auto &v : scene.bedFillVertices()) {
+    if (v.x >= strideX - 0.5f && v.x <= strideX + 200.5f)
+      foundAtStride = true;
+  }
+  QVERIFY2(foundAtStride, "plate 2 must be laid out one stride right of plate 1");
 }
 
 QTEST_MAIN(PrepareSceneDataTests)

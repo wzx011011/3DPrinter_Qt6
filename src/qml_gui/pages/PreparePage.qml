@@ -1379,6 +1379,13 @@ Item {
                     // v5.15 (BEDTEX): printer bed texture image (upstream
                     // PartPlate render_logo).
                     bedTextureUrl: root.editorVm ? root.editorVm.bedTextureUrl : ""
+                    // v5.16 (BEDMODEL/BEDTYPE-TEX): printer frame STL +
+                    // BBL bed-type texture system gates.
+                    bedModelMeshData: root.editorVm ? root.editorVm.bedModelMeshData : ""
+                    bedTypeTexturesActive: root.editorVm ? root.editorVm.bedTypeTexturesActive : false
+                    bedCaliLinesActive: root.editorVm ? root.editorVm.bedCaliLinesActive : false
+                    bedTypeImagesDir: root.editorVm ? root.editorVm.bedTypeImagesDir : ""
+                    currentPlateBedType: root.editorVm ? root.editorVm.currentPlateBedType : 0
                     bedDepth: root.editorVm ? root.editorVm.bedDepth : 220
                     bedOriginX: root.editorVm ? root.editorVm.bedOriginX : 0
                     bedOriginY: root.editorVm ? root.editorVm.bedOriginY : 0

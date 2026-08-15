@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QElapsedTimer>
+#include <QHash>
 #include <QImage>
 #include <QMatrix4x4>
 #include <QPointer>
@@ -92,6 +93,12 @@ private:
   void uploadBedTexture(QRhiResourceUpdateBatch *updates);
   void renderBedTexture(QRhiCommandBuffer *cb);
   bool ensureModelLitPipeline();
+  // v5.16 (BEDMODEL/BEDTYPE-TEX)
+  void uploadBedModelMesh(QRhiResourceUpdateBatch *updates);
+  void renderBedModel(QRhiCommandBuffer *cb);
+  void releaseBedTypeParts();
+  void prepareBedTypeParts(QRhiResourceUpdateBatch *updates);
+  void renderBedTypeParts(QRhiCommandBuffer *cb);
   void renderMoveGizmo(QRhiCommandBuffer *cb);                // Phase 68
   void renderRotateGizmo(QRhiCommandBuffer *cb);              // Phase 70
   void renderScaleGizmo(QRhiCommandBuffer *cb);               // Phase 70
@@ -163,6 +170,33 @@ private:
   std::unique_ptr<QRhiBuffer> m_modelNormalBuffer;
   quint32 m_modelNormalBufferBytes = 0;
   bool m_modelLitEnabled = true;
+  // v5.16 (BEDMODEL): printer bed_model STL drawn with the lit pipeline in
+  // DEFAULT_MODEL_COLOR_DARK (upstream Bed3D::render_model).
+  std::unique_ptr<QRhiBuffer> m_bedModelVertexBuffer;
+  std::unique_ptr<QRhiBuffer> m_bedModelNormalBuffer;
+  quint32 m_bedModelVertexBytes = 0;
+  quint32 m_bedModelNormalBytes = 0;
+  quint32 m_bedModelVertexCount = 0;
+  QByteArray m_bedModelMeshBytes;
+  bool m_bedModelUploaded = false;
+  // v5.16 (BEDTYPE-TEX): BBL bed-type texture parts (upstream PartPlateList
+  // bed_texture_info). One texture+pipeline per part (2-3 visible).
+  struct BedTypePartGpu {
+    std::unique_ptr<QRhiTexture> texture;
+    std::unique_ptr<QRhiSampler> sampler;
+    std::unique_ptr<QRhiShaderResourceBindings> srb;
+    std::unique_ptr<QRhiGraphicsPipeline> pipeline;
+    std::unique_ptr<QRhiBuffer> vertexBuffer;
+    quint32 vertexBytes = 0;
+    quint32 vertexCount = 0;
+  };
+  QHash<QString, BedTypePartGpu *> m_bedTypePartGpu;
+  bool m_bedTypeActive = false;
+  bool m_bedCaliActive = false;
+  QString m_bedTypeImagesDir;
+  int m_bedTypeIndex = -1;
+  float m_bedTypePlateOffsetX = 0.0f;
+  float m_bedTypePlateOffsetZ = 0.0f;
   // Phase 68: gizmo pipelines. Separate from m_fill/m_line because the gizmo
   // shader applies position*scale+center displacement. Lines for shafts,
   // triangles for cones/rings/boxes. No depth write so the gizmo stays

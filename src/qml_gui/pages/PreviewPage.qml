@@ -267,6 +267,12 @@ Item {
                     bedShapeType: root.editorVm ? root.editorVm.bedShapeType : 0
                     bedDiameter: root.editorVm ? root.editorVm.bedDiameter : 220
                     bedTextureUrl: root.editorVm ? root.editorVm.bedTextureUrl : ""
+                    // v5.16 (BEDMODEL/BEDTYPE-TEX)
+                    bedModelMeshData: root.editorVm ? root.editorVm.bedModelMeshData : ""
+                    bedTypeTexturesActive: root.editorVm ? root.editorVm.bedTypeTexturesActive : false
+                    bedCaliLinesActive: root.editorVm ? root.editorVm.bedCaliLinesActive : false
+                    bedTypeImagesDir: root.editorVm ? root.editorVm.bedTypeImagesDir : ""
+                    currentPlateBedType: root.editorVm ? root.editorVm.currentPlateBedType : 0
                     layerMin: root.previewVm.currentLayerMin
                     layerMax: root.previewVm.currentLayerMax
                     moveEnd: root.previewVm.currentMove

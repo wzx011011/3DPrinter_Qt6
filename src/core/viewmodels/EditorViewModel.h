@@ -966,6 +966,16 @@ public:
   /// m_logo_texture_filename). READ-only + NOTIFY: the path flows from the
   /// selected printer preset via ConfigViewModel/PresetServiceMock.
   Q_PROPERTY(QUrl bedTextureUrl READ bedTextureUrl NOTIFY bedShapeChanged)
+  /// v5.16 (BEDMODEL): the printer's bed_model STL packed as a triangle
+  /// stream ([uint32 vertexCount][float x,y,z scene-space] * count).
+  Q_PROPERTY(QByteArray bedModelMeshData READ bedModelMeshData NOTIFY bedShapeChanged)
+  /// v5.16 (BEDTYPE-TEX): BBL-only bed-type texture system gates + assets.
+  Q_PROPERTY(bool bedTypeTexturesActive READ bedTypeTexturesActive NOTIFY bedShapeChanged)
+  Q_PROPERTY(bool bedCaliLinesActive READ bedCaliLinesActive NOTIFY bedShapeChanged)
+  Q_PROPERTY(QString bedTypeImagesDir READ bedTypeImagesDir NOTIFY bedShapeChanged)
+  /// v5.16: current plate's bed type (Slic3r BedType index) driving the
+  /// bed-type texture parts.
+  Q_PROPERTY(int currentPlateBedType READ currentPlateBedType NOTIFY stateChanged)
   /// Phase 100 (WTREAD-01): post-slice wipe-tower geometry read back from
   /// Print::wipe_tower_data() via SliceService. READ-only + NOTIFY because the
   /// dims flow from SliceService (libslic3r worker), not from QML. showWipeTower
@@ -1071,9 +1081,21 @@ public:
   void setBedDiameter(float v);
   // v5.15 (BEDTEX): bed texture path from the selected printer preset.
   QUrl bedTextureUrl() const;
+  // v5.16 (BEDMODEL/BEDTYPE-TEX): bed model mesh + bed-type texture state
+  // (accessors for the Q_PROPERTYs above; definitions live with the
+  // syncBedFromPrinterPreset body).
+  QByteArray bedModelMeshData() const { return m_bedModelMeshData; }
+  bool bedTypeTexturesActive() const { return m_bedTypeTexturesActive; }
+  bool bedCaliLinesActive() const { return m_bedCaliLinesActive; }
+  QString bedTypeImagesDir() const { return m_bedTypeImagesDir; }
+  /// v5.16: current plate's bed type (Slic3r BedType index).
+  int currentPlateBedType() const;
   /// v5.15: pull printable_area + bed_texture from the selected printer
   /// preset into the viewport bed state (mirrors upstream set_bed_shape).
   void syncBedFromPrinterPreset();
+  /// v5.16 (BEDMODEL): load the printer's bed_model STL into the triangle
+  /// stream consumed by the viewport (defined in the .cpp).
+  QByteArray loadBedModelMesh(const QString &stlPath) const;
   // Phase 100 (WTREAD-01): wipe-tower geometry getters (read-only; set from
   // the SliceService-received WipeTowerGeometry struct, not from QML).
   bool showWipeTower() const;
@@ -1568,6 +1590,10 @@ private:
   // the stateChanged-driven re-sync so only preset changes re-apply the bed).
   QUrl m_bedTextureUrl;
   QString m_bedSyncedPreset;
+  QByteArray m_bedModelMeshData;
+  bool m_bedTypeTexturesActive = false;
+  bool m_bedCaliLinesActive = false;
+  QString m_bedTypeImagesDir;
   // Phase 100 (WTREAD-01): wipe-tower geometry mirrored from the SliceService
   // readback (Print::wipe_tower_data() captured by value in the worker).
   // Defaults match RhiViewport.h:304-309 (show=false, 10/10/50/100/25) so the

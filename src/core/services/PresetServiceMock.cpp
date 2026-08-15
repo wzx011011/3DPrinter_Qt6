@@ -576,6 +576,63 @@ QString PresetServiceMock::bedTextureFileForPreset(const QString &presetName) co
   return validatedTexturePath(vendorDir, bedTexture);
 }
 
+QString PresetServiceMock::bedModelFileForPreset(const QString &presetName) const
+{
+  // v5.16 (BEDMODEL): mirrors the bed_texture resolution but for the
+  // machine_model JSON's bed_model STL (upstream Bed3D::detect_type ->
+  // PresetUtils::system_printer_bed_model path join).
+  const QString vendorDir = m_presetVendorDir.value(presetName);
+  const QHash<QString, QVariant> resolved = m_presetStore.value(presetName);
+  QString printerModel = resolved.value(QStringLiteral("printer_model")).toString();
+  if (vendorDir.isEmpty() || printerModel.isEmpty())
+    return {};
+  const QString modelFile = vendorDir + QStringLiteral("/machine/") + printerModel
+      + QStringLiteral(".json");
+  QFile f(modelFile);
+  if (!f.open(QIODevice::ReadOnly))
+    return {};
+  const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+  if (!doc.isObject())
+    return {};
+  const QString bedModel = doc.object().value(QStringLiteral("bed_model")).toString();
+  if (bedModel.isEmpty() || !bedModel.endsWith(QStringLiteral(".stl"), Qt::CaseInsensitive))
+    return {};
+  const QString path = vendorDir + QStringLiteral("/") + bedModel;
+  return QFileInfo::exists(path) ? path : QString();
+}
+
+bool PresetServiceMock::isBblVendorPreset(const QString &presetName) const
+{
+  // Upstream Tab.cpp:1817 gate: bed-type textures render only for the BBL
+  // vendor; every other vendor uses the printer's own bed_texture image.
+  const QString vendorDir = m_presetVendorDir.value(presetName);
+  if (vendorDir.isEmpty())
+    return false;
+  const QString key = QFileInfo(vendorDir).fileName();
+  return key.compare(QStringLiteral("BBL"), Qt::CaseInsensitive) == 0;
+}
+
+bool PresetServiceMock::presetHasCaliLines(const QString &presetName) const
+{
+  // Upstream Preset::has_cali_lines (Preset.cpp:754-761): only specific BBL
+  // machine model ids carry the calibration-line bed overlay.
+  const QHash<QString, QVariant> resolved = m_presetStore.value(presetName);
+  const QString printerModel = resolved.value(QStringLiteral("printer_model")).toString();
+  return printerModel == QStringLiteral("BL-P001")
+      || printerModel == QStringLiteral("BL-P002")
+      || printerModel == QStringLiteral("C13");
+}
+
+QString PresetServiceMock::resourcesImagesDir() const
+{
+  // The shared image assets (bbl_bed_*.svg / bbl_cali_lines.svg) live in the
+  // upstream resources tree next to the profiles dir.
+  const QString profiles = resolveProfilesDir();
+  if (profiles.isEmpty())
+    return {};
+  return QFileInfo(profiles).absolutePath() + QStringLiteral("/images");
+}
+
 QString PresetServiceMock::validatedTexturePath(const QString &vendorDir,
                                                 const QString &bedTexture) const
 {

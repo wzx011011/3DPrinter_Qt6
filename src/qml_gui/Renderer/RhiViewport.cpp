@@ -206,6 +206,48 @@ void RhiViewport::setBedTextureUrl(const QUrl &value)
   update();
 }
 
+// v5.16 setters: plain value + update(); the renderer diff-checks the
+// members each synchronize (same pattern as meshData).
+void RhiViewport::setBedModelMeshData(const QByteArray &value)
+{
+  if (m_bedModelMeshData == value)
+    return;
+  m_bedModelMeshData = value;
+  update();
+}
+
+void RhiViewport::setBedTypeTexturesActive(bool value)
+{
+  if (m_bedTypeTexturesActive == value)
+    return;
+  m_bedTypeTexturesActive = value;
+  update();
+}
+
+void RhiViewport::setBedCaliLinesActive(bool value)
+{
+  if (m_bedCaliLinesActive == value)
+    return;
+  m_bedCaliLinesActive = value;
+  update();
+}
+
+void RhiViewport::setBedTypeImagesDir(const QString &value)
+{
+  if (m_bedTypeImagesDir == value)
+    return;
+  m_bedTypeImagesDir = value;
+  update();
+}
+
+void RhiViewport::setCurrentPlateBedType(int value)
+{
+  if (m_currentPlateBedType == value)
+    return;
+  m_currentPlateBedType = value;
+  update();
+}
+
 void RhiViewport::setCurrentPlateIndex(int value)
 {
   if (m_currentPlateIndex == value)

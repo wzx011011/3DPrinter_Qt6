@@ -72,6 +72,9 @@ public:
               int shapeType,
               float diameterMm);
   void setShowBed(bool showBed);
+  /// Upstream compute_colum_count (PartPlate.hpp:38): ceil(sqrt(count)).
+  /// Public: the renderer bakes plate-grid offsets with the same formula.
+  static int computePlateColumns(int plateCount);
   void setPlateContext(int currentPlateIndex, int plateCount, const QList<int> &activeObjectIndices);
   void setMeshGeneration(qint64 generation);
   void setModelMeshData(const QByteArray &meshData,
@@ -134,8 +137,11 @@ private:
   static bool activeSourceContains(const QList<int> &activeSourceObjectIndices, int sourceObjectIndex);
   static quint32 colorForSourceObject(int sourceObjectIndex, float &r, float &g, float &b);
   void appendLine(float x1, float y1, float x2, float y2, float r, float g, float b, float a);
-  void appendRectFill(float left, float top, float right, float bottom);
-  void appendRectBorder(float left, float top, float right, float bottom);
+  void appendRectFill(float left, float top, float right, float bottom,
+                      float r, float g, float b, float a);
+  void appendRectBorder(float left, float top, float right, float bottom,
+                        float r, float g, float b);
+
 
   float m_bedWidth = 220.0f;
   float m_bedDepth = 220.0f;

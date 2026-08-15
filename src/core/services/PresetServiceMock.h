@@ -58,6 +58,17 @@ public:
   /// vendor profile dir). Empty when the preset has no usable texture.
   /// Mirrors upstream PresetUtils::system_printer_bed_texture.
   Q_INVOKABLE QString bedTextureFileForPreset(const QString &presetName) const;
+  /// v5.16 (BEDMODEL): absolute path of the preset's bed_model STL (the 3D
+  /// printer frame, upstream Bed3D::render_model). Empty when unavailable.
+  Q_INVOKABLE QString bedModelFileForPreset(const QString &presetName) const;
+  /// v5.16 (BEDTYPE-TEX): upstream enables the bed-type texture system only
+  /// for BBL-vendor printers (Tab.cpp on_presets_changed is_bbl_vendor).
+  Q_INVOKABLE bool isBblVendorPreset(const QString &presetName) const;
+  /// v5.16 (CALI): upstream render_cali gate — BBL printer model ids
+  /// BL-P001/BL-P002/C13 (Preset::has_cali_lines, Preset.cpp:754).
+  Q_INVOKABLE bool presetHasCaliLines(const QString &presetName) const;
+  /// v5.16: upstream resources/images dir (bed-type/cali SVG assets).
+  Q_INVOKABLE QString resourcesImagesDir() const;
   /// Default bed-surface list (4 entries) shared by the wizard when a model
   /// has no per-model override. Exposed for QML/tests.
   Q_INVOKABLE QStringList defaultBedTypes() const;

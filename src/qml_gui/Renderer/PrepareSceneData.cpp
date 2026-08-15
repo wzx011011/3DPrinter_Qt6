@@ -13,16 +13,25 @@ namespace
   constexpr float kFineGridMm = 10.0f;
   constexpr float kCoarseGridMm = 50.0f;
 
-  constexpr float kFillR = 0.12f;
-  constexpr float kFillG = 0.14f;
-  constexpr float kFillB = 0.16f;
-  constexpr float kFillA = 0.70f;
-
-  constexpr float kBorderR = 0.56f;
-  constexpr float kBorderG = 0.63f;
-  constexpr float kBorderB = 0.70f;
-  constexpr float kGridFine = 0.24f;
-  constexpr float kGridCoarse = 0.34f;
+  // Upstream plate palette (PartPlate.cpp:77-85, dark theme variants):
+  // selected plate fill, unselected fill, per-plate grid/border line colors.
+  constexpr float kFillSelR = 0.2666f;
+  constexpr float kFillSelG = 0.2784f;
+  constexpr float kFillSelB = 0.2784f;
+  constexpr float kFillSelA = 1.0f;
+  constexpr float kFillUnselR = 0.384f;
+  constexpr float kFillUnselG = 0.384f;
+  constexpr float kFillUnselB = 0.412f;
+  constexpr float kFillUnselA = 1.0f;
+  constexpr float kLineSelR = 0.5294f;
+  constexpr float kLineSelG = 0.5451f;
+  constexpr float kLineSelB = 0.5333f;
+  constexpr float kLineUnselR = 0.431f;
+  constexpr float kLineUnselG = 0.431f;
+  constexpr float kLineUnselB = 0.463f;
+  // Upstream LOGICAL_PART_PLATE_GAP = 1/5 (PartPlate.cpp:53): the stride
+  // between plate origins is bed size * (1 + gap).
+  constexpr float kPlateGapRatio = 1.0f / 5.0f;
   constexpr float kAxisR = 0.12f;
   constexpr float kAxisG = 0.78f;
   constexpr float kAxisB = 0.37f;
@@ -117,7 +126,11 @@ void PrepareSceneData::setPlateContext(int currentPlateIndex,
   m_currentPlateIndex = normalizedCurrentPlate;
   m_plateCount = normalizedPlateCount;
   m_activeObjectIndices = normalizedObjects;
-  markDirty(DirtyPlate | DirtyGpu);
+  // v5.16: the plate grid layout/selection colors follow the plate context,
+  // so the bed geometry rebuilds with it (upstream repositions PartPlates on
+  // every plate-count change).
+  rebuildBedGeometry();
+  markDirty(DirtyPlate | DirtyBed | DirtyGpu);
 }
 
 void PrepareSceneData::setMeshGeneration(qint64 generation)
@@ -442,6 +455,14 @@ void PrepareSceneData::markDirty(quint32 flags)
   m_dirtyFlags |= flags;
 }
 
+int PrepareSceneData::computePlateColumns(int plateCount)
+{
+  // Upstream PartPlate.hpp:38 compute_colum_count.
+  const float value = std::sqrt(float(std::max(1, plateCount)));
+  const float rounded = std::round(value);
+  return value > rounded ? int(rounded) + 1 : int(rounded);
+}
+
 void PrepareSceneData::rebuildBedGeometry()
 {
   m_bedFillVertices.clear();
@@ -450,35 +471,53 @@ void PrepareSceneData::rebuildBedGeometry()
   if (!m_showBed)
     return;
 
-  // Functional source-truth mapping: upstream 3DBed/PartPlate/GLCanvas3D render
-  // a plate footprint with border, grid, and origin axes. QRhi owns only the
-  // transport; these deterministic vertices keep that behavior testable.
-  const float left = m_bedOriginX;
-  const float top = m_bedOriginY;
-  const float right = left + m_bedWidth;
-  const float bottom = top + m_bedDepth;
+  // Source-truth mapping: upstream PartPlateList renders EVERY plate in a
+  // grid — cols = ceil(sqrt(count)) (PartPlate.hpp:38 compute_colum_count),
+  // stride = bed size * (1 + 1/5) (PartPlate.cpp:53 LOGICAL_PART_PLATE_GAP,
+  // compute_shape_position PartPlate.cpp:3206). The selected plate uses
+  // SELECT_COLOR + LINE_TOP_SEL_COLOR; the others UNSELECT_DARK_COLOR +
+  // LINE_TOP_DARK_COLOR (PartPlate::render_background/render_grid).
+  const int plateCount = m_plateCount > 0 ? m_plateCount : 1;
+  const float strideX = m_bedWidth * (1.0f + kPlateGapRatio);
+  const float strideD = m_bedDepth * (1.0f + kPlateGapRatio);
+  const int cols = computePlateColumns(plateCount);
 
-  appendRectFill(left, top, right, bottom);
-  appendRectBorder(left, top, right, bottom);
+  for (int i = 0; i < plateCount; ++i) {
+    const int row = i / cols;
+    const int col = i % cols;
+    const float left = m_bedOriginX + float(col) * strideX;
+    const float top = m_bedOriginY + float(row) * strideD;
+    const float right = left + m_bedWidth;
+    const float bottom = top + m_bedDepth;
+    const bool selected = (m_plateCount <= 0) || (i == m_currentPlateIndex);
 
-  for (float x = left + kFineGridMm; x < right; x += kFineGridMm) {
-    const bool coarse = nearlyEqual(std::fmod(std::abs(x - left), kCoarseGridMm), 0.0f)
-        || nearlyEqual(std::fmod(std::abs(x - left), kCoarseGridMm), kCoarseGridMm);
-    const float c = coarse ? kGridCoarse : kGridFine;
-    appendLine(x, top, x, bottom, c, c, c, 0.74f);
+    const float fillR = selected ? kFillSelR : kFillUnselR;
+    const float fillG = selected ? kFillSelG : kFillUnselG;
+    const float fillB = selected ? kFillSelB : kFillUnselB;
+    const float fillA = selected ? kFillSelA : kFillUnselA;
+    const float lineR = selected ? kLineSelR : kLineUnselR;
+    const float lineG = selected ? kLineSelG : kLineUnselG;
+    const float lineB = selected ? kLineSelB : kLineUnselB;
+
+    appendRectFill(left, top, right, bottom, fillR, fillG, fillB, fillA);
+    appendRectBorder(left, top, right, bottom, lineR, lineG, lineB);
+
+    for (float x = left + kFineGridMm; x < right; x += kFineGridMm) {
+      appendLine(x, top, x, bottom, lineR, lineG, lineB, 0.6f);
+    }
+    for (float y = top + kFineGridMm; y < bottom; y += kFineGridMm) {
+      appendLine(left, y, right, y, lineR, lineG, lineB, 0.6f);
+    }
+
+    // Origin axes only on the selected plate (upstream draws the origin
+    // cross per plate shape; the selected plate is the working surface).
+    if (selected) {
+      const float originX = std::clamp(m_bedOriginX, left, right);
+      const float originY = std::clamp(m_bedOriginY, top, bottom);
+      appendLine(originX, top, originX, bottom, kAxisR, kAxisG, kAxisB, 0.95f);
+      appendLine(left, originY, right, originY, kAxisR, kAxisG, kAxisB, 0.95f);
+    }
   }
-
-  for (float y = top + kFineGridMm; y < bottom; y += kFineGridMm) {
-    const bool coarse = nearlyEqual(std::fmod(std::abs(y - top), kCoarseGridMm), 0.0f)
-        || nearlyEqual(std::fmod(std::abs(y - top), kCoarseGridMm), kCoarseGridMm);
-    const float c = coarse ? kGridCoarse : kGridFine;
-    appendLine(left, y, right, y, c, c, c, 0.74f);
-  }
-
-  const float originX = std::clamp(m_bedOriginX, left, right);
-  const float originY = std::clamp(m_bedOriginY, top, bottom);
-  appendLine(originX, top, originX, bottom, kAxisR, kAxisG, kAxisB, 0.95f);
-  appendLine(left, originY, right, originY, kAxisR, kAxisG, kAxisB, 0.95f);
 }
 
 void PrepareSceneData::clearModelGeometry()
@@ -529,20 +568,22 @@ void PrepareSceneData::appendLine(float x1, float y1, float x2, float y2, float 
   m_bedLineVertices.append(Vertex{x2, y2, r, g, b, a});
 }
 
-void PrepareSceneData::appendRectFill(float left, float top, float right, float bottom)
+void PrepareSceneData::appendRectFill(float left, float top, float right, float bottom,
+                                       float r, float g, float b, float a)
 {
-  m_bedFillVertices.append(Vertex{left, top, kFillR, kFillG, kFillB, kFillA});
-  m_bedFillVertices.append(Vertex{right, top, kFillR, kFillG, kFillB, kFillA});
-  m_bedFillVertices.append(Vertex{right, bottom, kFillR, kFillG, kFillB, kFillA});
-  m_bedFillVertices.append(Vertex{left, top, kFillR, kFillG, kFillB, kFillA});
-  m_bedFillVertices.append(Vertex{right, bottom, kFillR, kFillG, kFillB, kFillA});
-  m_bedFillVertices.append(Vertex{left, bottom, kFillR, kFillG, kFillB, kFillA});
+  m_bedFillVertices.append(Vertex{left, top, r, g, b, a});
+  m_bedFillVertices.append(Vertex{right, top, r, g, b, a});
+  m_bedFillVertices.append(Vertex{right, bottom, r, g, b, a});
+  m_bedFillVertices.append(Vertex{left, top, r, g, b, a});
+  m_bedFillVertices.append(Vertex{right, bottom, r, g, b, a});
+  m_bedFillVertices.append(Vertex{left, bottom, r, g, b, a});
 }
 
-void PrepareSceneData::appendRectBorder(float left, float top, float right, float bottom)
+void PrepareSceneData::appendRectBorder(float left, float top, float right, float bottom,
+                                         float r, float g, float b)
 {
-  appendLine(left, top, right, top, kBorderR, kBorderG, kBorderB, 0.95f);
-  appendLine(right, top, right, bottom, kBorderR, kBorderG, kBorderB, 0.95f);
-  appendLine(right, bottom, left, bottom, kBorderR, kBorderG, kBorderB, 0.95f);
-  appendLine(left, bottom, left, top, kBorderR, kBorderG, kBorderB, 0.95f);
+  appendLine(left, top, right, top, r, g, b, 0.95f);
+  appendLine(right, top, right, bottom, r, g, b, 0.95f);
+  appendLine(right, bottom, left, bottom, r, g, b, 0.95f);
+  appendLine(left, bottom, left, top, r, g, b, 0.95f);
 }

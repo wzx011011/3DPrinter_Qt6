@@ -30,6 +30,7 @@
 #include <libslic3r/Geometry.hpp>  // Geometry::assemble_transform (canonical TRS)
 #include <libslic3r/Point.hpp>     // Vec3d / Transform3d for world-transform rebuild
 #include <libslic3r/TriangleSelector.hpp>  // EnforcerBlockerType + select_patch
+#include <libslic3r/TriangleMesh.hpp>  // v5.16 bed_model STL loader (ReadSTLFile)
 #endif
 #include <QFileInfo>
 #include <QUrl>
@@ -2770,18 +2771,74 @@ void EditorViewModel::syncBedFromPrinterPreset()
     }
   }
 
-  // Bed texture image from the preset's machine_model (upstream
-  // PartPlate::update_logo_texture_filename path).
-  const QString texture = configViewModel_->bedTextureFile();
+  // Bed texture image: bed_custom_texture overrides the machine_model asset
+  // (upstream Plater.cpp:12996 priority — custom wins when non-empty), and
+  // the BBL bed-type texture system replaces both when active (the printer
+  // bed_texture is only consulted for non-BBL vendors, Tab.cpp:1817).
+  QString texture = configViewModel_->mergedConfigValues()
+      .value(QStringLiteral("bed_custom_texture")).toString();
+  if (texture.isEmpty() || !QFileInfo::exists(texture))
+    texture = configViewModel_->bedTextureFile();
   const QUrl url = texture.isEmpty() ? QUrl() : QUrl::fromLocalFile(texture);
-  if (url != m_bedTextureUrl) {
+  if (url != m_bedTextureUrl)
     m_bedTextureUrl = url;
-    emit bedShapeChanged();
-    emit stateChanged();
-  }
+
+  // v5.16 (BEDMODEL): bed_model STL triangle stream (upstream Bed3D::
+  // render_model). Rebuilt whenever the printer preset changes.
+  m_bedModelMeshData = loadBedModelMesh(configViewModel_->bedModelFile());
+
+  // v5.16 (BEDTYPE-TEX): BBL gates + shared asset dir.
+  m_bedTypeTexturesActive = configViewModel_->bedTypeTexturesActive();
+  m_bedCaliLinesActive = configViewModel_->bedCaliLinesActive();
+  m_bedTypeImagesDir = configViewModel_->bedTypeImagesDir();
+
+  emit bedShapeChanged();
+  emit stateChanged();
 }
 
 QUrl EditorViewModel::bedTextureUrl() const { return m_bedTextureUrl; }
+
+int EditorViewModel::currentPlateBedType() const
+{
+  return plateBedType(currentPlateIndex());
+}
+
+QByteArray EditorViewModel::loadBedModelMesh(const QString &stlPath) const
+{
+  // v5.16 (BEDMODEL): loads the printer frame STL and packs a triangle
+  // stream in scene coordinates (x, height=z_stl, depth=y_stl — the same
+  // slic3r->GL mapping ProjectServiceMock::meshData applies). Offsets stay
+  // renderer-side (upstream Bed3D::update_model_offset shifts by the plate
+  // position and -0.44 on Z).
+  if (stlPath.isEmpty())
+    return {};
+#ifdef HAS_LIBSLIC3R
+  Slic3r::TriangleMesh mesh;
+  if (!mesh.ReadSTLFile(stlPath.toStdString().c_str()))
+    return {};
+  const auto &its = mesh.its;
+  if (its.indices.empty())
+    return {};
+  const quint32 vertexCount = quint32(its.indices.size() * 3);
+  if (vertexCount > 20u * 1000u * 1000u)
+    return {};
+  QByteArray bytes(int(4 + vertexCount * 3 * 4), Qt::Uninitialized);
+  char *out = bytes.data();
+  std::memcpy(out, &vertexCount, 4);
+  out += 4;
+  for (const auto &face : its.indices) {
+    for (int k = 0; k < 3; ++k) {
+      const Slic3r::Vec3f &v = its.vertices[size_t(face(k))];
+      const float coords[3] = {v.x(), v.z(), v.y()};
+      std::memcpy(out, coords, 12);
+      out += 12;
+    }
+  }
+  return bytes;
+#else
+  return {};
+#endif
+}
 
 void EditorViewModel::syncFilamentColours()
 {
