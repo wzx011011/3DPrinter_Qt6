@@ -47,6 +47,12 @@ class ConfigViewModel final : public QObject
   // v5.15 (BEDTEX): absolute bed texture path for the selected printer
   // preset (empty when none). Feeds the viewport's textured bed quad.
   Q_PROPERTY(QString bedTextureFile READ bedTextureFile NOTIFY stateChanged)
+  // v5.16 (BEDMODEL/BEDTYPE-TEX): bed_model STL + the BBL-only bed-type
+  // texture system gates (upstream Tab.cpp on_presets_changed).
+  Q_PROPERTY(QString bedModelFile READ bedModelFile NOTIFY stateChanged)
+  Q_PROPERTY(bool bedTypeTexturesActive READ bedTypeTexturesActive NOTIFY stateChanged)
+  Q_PROPERTY(bool bedCaliLinesActive READ bedCaliLinesActive NOTIFY stateChanged)
+  Q_PROPERTY(QString bedTypeImagesDir READ bedTypeImagesDir NOTIFY stateChanged)
   Q_PROPERTY(QString currentFilamentPreset READ currentFilamentPreset NOTIFY stateChanged)
   Q_PROPERTY(QString currentPrintPreset READ currentPrintPreset NOTIFY stateChanged)
   Q_PROPERTY(bool currentPresetCombinationValid READ currentPresetCombinationValid NOTIFY stateChanged)
@@ -95,6 +101,10 @@ public:
   QStringList compatiblePrintPresetNames() const;
   QString currentPrinterPreset() const { return currentPrinterPreset_; }
   QString bedTextureFile() const;
+  QString bedModelFile() const;
+  bool bedTypeTexturesActive() const;
+  bool bedCaliLinesActive() const;
+  QString bedTypeImagesDir() const;
   QString currentFilamentPreset() const { return currentFilamentPreset_; }
   QString currentPrintPreset() const { return currentPrintPreset_; }
   bool currentPresetCombinationValid() const;
