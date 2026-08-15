@@ -89,6 +89,17 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(int settingsTargetVolumeIndex READ settingsTargetVolumeIndex NOTIFY stateChanged)
   // Object-list panel support
   Q_PROPERTY(int objectCount READ objectCount NOTIFY stateChanged)
+  // Phase 236 (DLG-03): RecenterDialog data — entries are
+  // { "index": <source object index>, "name": <display name> } maps for every
+  // object whose estimated footprint leaves the printable area. Refreshed by
+  // checkObjectsOutsideBed() via stateChanged (upstream RecenterDialog input).
+  Q_PROPERTY(QVariantList objectsOutsideBed READ objectsOutsideBed NOTIFY stateChanged)
+  // Phase 236 (DLG-03): ObjColorDialog data — "#RRGGBB" strings parsed from
+  // the .mtl next to a freshly imported .obj (upstream
+  // ObjImportColorDialog). Non-empty only between load completion and
+  // applyPendingObjColors/dismiss; objColorMappingRequested announces it.
+  Q_PROPERTY(QVariantList pendingObjColors READ pendingObjColors NOTIFY stateChanged)
+  Q_PROPERTY(int pendingObjObjectIndex READ pendingObjObjectIndex NOTIFY stateChanged)
   Q_PROPERTY(int selectedObjectIndex READ selectedObjectIndex NOTIFY stateChanged)
   Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex NOTIFY stateChanged)
   Q_PROPERTY(int selectedObjectCount READ selectedObjectCount NOTIFY stateChanged)
@@ -544,6 +555,11 @@ public:
 
   // Object list accessors (safe Q_INVOKABLE — no QVariantList)
   int objectCount() const;
+  /// Phase 236 (DLG-03): backing store of the objectsOutsideBed Q_PROPERTY
+  /// (populated by checkObjectsOutsideBed()).
+  QVariantList objectsOutsideBed() const { return m_objectsOutsideBed; }
+  QVariantList pendingObjColors() const { return m_pendingObjColors; }
+  int pendingObjObjectIndex() const { return m_pendingObjObjectIndex; }
   int selectedObjectIndex() const;
   int selectedSourceObjectIndex() const;
   int selectedObjectCount() const;
@@ -1147,6 +1163,27 @@ public:
   Q_INVOKABLE QString gizmoStatusText(int gizmoMode) const;
   /// 加载模型文件 (3MF/STL/OBJ)
   Q_INVOKABLE bool loadFile(const QString &filePath);
+  // Phase 236 (DLG-03): RecenterDialog plumbing (upstream
+  // Plater::priv::update_undo_redo_gui / RecenterDialog). Re-runs the
+  // outside-bed detection against the real bed Q_PROPERTYs and returns the
+  // number of offending objects; objectsOutsideBed refreshes via stateChanged.
+  Q_INVOKABLE int checkObjectsOutsideBed();
+  /// Phase 236 (DLG-03): move every outside-bed object back into the
+  /// printable area (clamp to the bed rectangle, keep the current height).
+  /// Returns the number of moved objects; invalidates slice results.
+  Q_INVOKABLE int recenterObjectsOutsideBed();
+  /// Phase 236 (DLG-03): list the importable model entries of a zip archive
+  /// (FileArchiveDialog data source; proxies ProjectServiceMock).
+  Q_INVOKABLE QStringList listArchiveEntries(const QString &archivePath) const;
+  /// Phase 236 (DLG-03): extract the selected entries of a zip archive into a
+  /// per-import temp directory and load each through the normal loadFile()
+  /// path (FileArchiveDialog "import selected"). Returns the number of
+  /// successfully started imports.
+  Q_INVOKABLE int importArchiveEntries(const QString &archivePath, const QStringList &entries);
+  /// Phase 236 (DLG-03): apply the user's ObjColorDialog mapping — sets every
+  /// volume of the pending object to the chosen extruder (upstream
+  /// ObjImportColorDialog on_confirm sets the object extruder per color).
+  Q_INVOKABLE bool applyPendingObjColors(int extruderId);
   /// 清空当前场景与项目状态（用于顶部工具栏新建）
   Q_INVOKABLE void clearWorkspace();
   /// JSON 项目加载后刷新 UI 状态（供 BackendContext 调用）
@@ -1332,6 +1369,9 @@ signals:
   void hollowDataChanged();
   void advancedCutConnectorDataChanged();
   void bedShapeChanged();
+  /// Phase 236 (DLG-03): an .obj with a multi-color .mtl finished loading —
+  /// pendingObjColors holds the colors, the ObjColorDialog should open.
+  void objColorMappingRequested(const QString &objectName);
   /// Phase 145 (EMB-03): async emboss result delivery. Re-emitted from
   /// ProjectServiceMock's embossVolumeAdded/Failed so QML binds to a single
   /// EditorViewModel signal source.
@@ -1435,6 +1475,14 @@ private:
   AssembleViewDataPool m_assembleViewDataPool;
   QString statusText_ = tr("就绪");
   QList<ObjectEntry> m_objects;
+  /// Phase 236 (DLG-03): outside-bed detection results (source indices +
+  /// names) and the pending ObjColorDialog payload. m_pendingObjCheckPath
+  /// carries the .obj path between loadFile() and the loadFinished handler.
+  QVariantList m_objectsOutsideBed;
+  QVariantList m_pendingObjColors;
+  int m_pendingObjObjectIndex = -1;
+  QString m_pendingObjCheckPath;
+  int m_preLoadModelCount = 0;
   QSet<int> m_selectedSourceIndices;
   QSet<QString> m_collapsedGroupKeys;
   QSet<int> m_collapsedObjectSourceIndices;

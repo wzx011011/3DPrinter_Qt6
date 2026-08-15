@@ -72,6 +72,12 @@ class ProjectServiceMock final : public QObject
   Q_PROPERTY(QString lastError READ lastError NOTIFY projectChanged)
   Q_PROPERTY(int loadProgress READ loadProgress NOTIFY loadProgressChanged)
   Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
+  // Phase 236 (DLG-03): slicer/generator version string read from a loaded
+  // 3MF's Metadata (upstream Application tag, e.g. "OrcaSlicer-2.2.0").
+  // Empty when the project carries no version metadata. Aligned with the
+  // upstream Newer3mfVersion/MsgDataIncompatible warning family — OWzx
+  // surfaces it as a notification instead of a modal (no update server).
+  Q_PROPERTY(QString projectVersionInfo READ projectVersionInfo NOTIFY projectVersionInfoChanged)
 
 public:
   explicit ProjectServiceMock(QObject *parent = nullptr);
@@ -137,6 +143,26 @@ public:
 
   /// 加载 3MF/STL/OBJ 等模型文件（真正调用 libslic3r）
   Q_INVOKABLE bool loadFile(const QString &filePath);
+  /// Phase 236 (DLG-03): enumerate the importable model entries inside a
+  /// zip archive (upstream FileArchiveDialog). Only *.stl/*.obj/*.3mf/*.amf
+  /// entries are listed, in central-directory order. Uses miniz read-only
+  /// (no extraction). Empty when the path is not a readable zip or holds no
+  /// model entries.
+  Q_INVOKABLE QStringList listArchiveEntries(const QString &archivePath);
+  /// Phase 236 (DLG-03): extract one archive entry into destDir (created on
+  /// demand) and return the absolute path of the extracted file; empty on
+  /// failure. Feeds loadFile() for the FileArchiveDialog "import selected"
+  /// flow.
+  Q_INVOKABLE QString extractArchiveEntry(const QString &archivePath, const QString &entryName,
+                                           const QString &destDir);
+  /// Phase 236 (DLG-03): diffuse (Kd) colours declared by the .mtl material
+  /// library that sits next to an .obj file (upstream ObjImportColorDialog
+  /// input). Returns "#RRGGBB" hex strings, de-duplicated in file order.
+  /// Empty when there is no sibling .mtl or it declares no Kd colors.
+  Q_INVOKABLE QStringList objMtlColors(const QString &objPath) const;
+  /// Phase 236 (DLG-03): slicer/generator version recorded in a 3MF
+  /// (Application metadata, e.g. "OrcaSlicer-2.2.0"). Empty when absent.
+  QString projectVersionInfo() const { return m_projectVersionInfo; }
   Q_INVOKABLE void cancelLoad();
 
   // v2.4 IO-01: 项目保存（调用 libslic3r store_3mf 真实导出 .3mf）
@@ -740,6 +766,8 @@ signals:
   void loadFinished(bool success, const QString &message);
   /// Emitted when a 3MF project loads with embedded config (对齐上游 Plater::priv::load_config_file)
   void projectConfigLoaded(const QHash<QString, QVariant> &config);
+  /// Phase 236 (DLG-03): fired with the loaded 3MF's generator version.
+  void projectVersionInfoChanged();
   /// Phase 145 (EMB-03): async emboss result delivery. Fires on the GUI thread
   /// after addTextVolumeAsync's worker completes successfully. objectIndex is
   /// the target object; volumeName is the (possibly truncated) text label.
@@ -752,6 +780,9 @@ signals:
 private:
   /// v2.4: 当前项目保存路径（saveProjectAs 后更新）
   QString currentProjectPath_;
+  /// Phase 236 (DLG-03): generator version string parsed from the loaded
+  /// 3MF's Application metadata (empty when the file carries none).
+  QString m_projectVersionInfo;
   /// v5.16 (PSET2-06): preset-selection overlay applied into the stored
   /// project config by saveProjectAs (see setProjectConfigOverlay).
   QVariantMap m_projectConfigOverlay;

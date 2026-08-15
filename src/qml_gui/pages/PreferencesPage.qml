@@ -14,6 +14,22 @@ Item {
         id: aboutDlg
     }
 
+    // Phase 236 (DLG-01): orphan dialogs get reachable entry points. Both
+    // are placeholder implementations (real network/device probes pending);
+    // the monitor viewmodel feeds their required bindings. Opened from the
+    // Advanced "工具与设备对话框" launchers above.
+    NetworkTestDialog {
+        id: networkTestDialog
+        parent: Overlay.overlay
+        networkVm: backend.monitorViewModel
+    }
+
+    TroubleshootDialog {
+        id: troubleshootDialog
+        parent: Overlay.overlay
+        monitorVm: backend.monitorViewModel
+    }
+
     // 切换到《关于》分类时自动弹出
     Connections {
         target: root.settingsVm
@@ -700,6 +716,64 @@ Item {
                 ColumnLayout {
                     visible: root.settingsVm.prefCategory === 7
                     Layout.fillWidth: true; spacing: 16
+
+                    // Phase 236 (DLG-01): dialog launchers that upstream hosts
+                    // in Preferences (AMS / Firmware / SpeedLimit / Plugin
+                    // Manager / Lite Mode). Each opens the already-instantiated
+                    // main.qml dialog via the BackendContext request signals.
+                    // NetworkTestDialog and TroubleshootDialog are diagnostics
+                    // entry points (placeholder implementations).
+                    Text {
+                        text: qsTr("工具与设备对话框")
+                        color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
+                    }
+
+                    RowLayout {
+                        spacing: Theme.spacingSM
+                        CxButton {
+                            text: qsTr("AMS 设置…")
+                            onClicked: backend.showAMSSettingsDialog()
+                        }
+                        CxButton {
+                            text: qsTr("固件…")
+                            onClicked: backend.showFirmwareDialog()
+                        }
+                        CxButton {
+                            text: qsTr("速度限制…")
+                            onClicked: backend.showSpeedLimitDialog()
+                        }
+                        CxButton {
+                            text: qsTr("插件管理…")
+                            onClicked: backend.showPluginManagerDialog()
+                        }
+                        CxButton {
+                            text: qsTr("精简模式…")
+                            onClicked: backend.showEnableLiteModeDialog()
+                        }
+                        CxButton {
+                            text: qsTr("擦料塔…")
+                            onClicked: backend.showWipeTowerDialog()
+                        }
+                    }
+
+                    RowLayout {
+                        spacing: Theme.spacingSM
+                        CxButton {
+                            text: qsTr("网络测试…")
+                            onClicked: networkTestDialog.open()
+                        }
+                        CxButton {
+                            text: qsTr("设备排错…")
+                            onClicked: troubleshootDialog.open()
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("AMS 与固件等对话框当前使用占位数据（真实设备通道在设备页）。")
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
+                        Layout.preferredWidth: 500
+                    }
 
                     // Compact/LOD mode（对齐上游 3D view LOD / enable_reduce_detail）
                     RowLayout {

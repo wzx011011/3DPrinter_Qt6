@@ -37,6 +37,14 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QDesktopServices>
+#include <QMetaEnum>
+#include <QOpenGLContext>
+#include <QOpenGLFunctions>
+#include <QStandardPaths>
+#include <QSurfaceFormat>
+#include <QtQuick/QQuickWindow>
+#include <QtQuick/QSGRendererInterface>
+#include <QSysInfo>
 
 // 主题颜色预设
 struct ThemeColors
@@ -151,6 +159,11 @@ BackendContext::BackendContext(QObject *parent)
               clearError();
             else
               postError(message.isEmpty() ? tr("导入失败") : message, 2);
+            // Phase 236 (DLG-03): after a successful load/drop, re-run the
+            // outside-bed detection (upstream shows the outside-bed prompt on
+            // import). A non-empty result raises the RecenterDialog.
+            if (success && editorViewModel_ && editorViewModel_->checkObjectsOutsideBed() > 0)
+              emit recenterPromptRequested();
           });
 
   // 切片进度通知（对齐上游 NotificationManager::SlicingProgressNotification）
@@ -185,6 +198,22 @@ BackendContext::BackendContext(QObject *parent)
     // Propagate 3MF embedded config to ConfigViewModel on project load
     connect(projectService_, &ProjectServiceMock::projectConfigLoaded,
             configViewModel_, &ConfigViewModel::applyProjectConfig);
+    // Phase 236 (DLG-03): 3MF generator-version notice (upstream
+    // Newer3mfVersion / MsgDataIncompatible warning family). projectVersionInfo
+    // is parsed on the load worker, so the check is signal-driven; the notice
+    // is a non-modal plater warning + log line rather than upstream's modal
+    // (no update server — out of scope).
+    connect(projectService_, &ProjectServiceMock::projectVersionInfoChanged, this, [this]()
+            {
+      if (!projectService_)
+        return;
+      const QString versionInfo = projectService_->projectVersionInfo();
+      if (versionInfo.isEmpty() || versionInfo.startsWith(QStringLiteral("OWzx"), Qt::CaseInsensitive))
+        return;
+      qInfo("[Backend] 3mf generator=%s", versionInfo.toUtf8().constData());
+      postPlaterWarning(tr("Project was saved by %1. Some settings may differ from this version.")
+                            .arg(versionInfo));
+    });
     // v5.16 (PLATE-05): real edits (objects/plates/configs) drive the
     // unsaved-changes indicator. Loads are excluded — ProjectViewModel's
     // openProject/newProject clear the flag after loadFinished anyway.
@@ -577,6 +606,86 @@ void BackendContext::showEnableLiteModeDialog()
   emit showEnableLiteModeDialogRequested();
 }
 
+void BackendContext::showExportPresetBundleDialog()
+{
+  // Phase 236 (DLG-01): File > Export Preset Bundle entry point (upstream
+  // Mainframe menu opens ExportPresetBundleDialog).
+  emit showExportPresetBundleDialogRequested();
+}
+
+void BackendContext::showSysInfoDialog()
+{
+  // Phase 236 (DLG-03): Help menu entry for the system-info dump (upstream
+  // Help > About > System Information opens a SysInfoDialog).
+  emit showSysInfoDialogRequested();
+}
+
+QVariantMap BackendContext::systemInfo() const
+{
+  // Phase 236 (DLG-03): runtime environment dump for SysInfoDialog —
+  // compile-time constants, graphics-API/GL strings (when an OpenGL context
+  // is current), and the key config paths.
+  QVariantMap info;
+  info.insert(QStringLiteral("appName"), QStringLiteral("OWzx Slicer"));
+  info.insert(QStringLiteral("appVersion"), QStringLiteral("2.4.0-dev (Qt6 QML)"));
+  info.insert(QStringLiteral("qtVersion"), QString::fromLatin1(qVersion()));
+  info.insert(QStringLiteral("buildDate"), QString::fromLatin1(__DATE__));
+  info.insert(QStringLiteral("platform"),
+              QSysInfo::prettyProductName() + QStringLiteral(" [") + QSysInfo::buildCpuArchitecture() +
+                  QStringLiteral("]"));
+  // Graphics API selected by the QML runtime (OpenGL is forced at startup).
+  // Qt6: QSGRendererInterface::GraphicsApi is not a Q_ENUM, so QMetaEnum
+  // cannot stringify it — map manually (main_qml.cpp forces OpenGL).
+  const QSGRendererInterface::GraphicsApi api = QQuickWindow::graphicsApi();
+  const QString graphicsApi =
+      api == QSGRendererInterface::OpenGL ? QStringLiteral("OpenGL") :
+      api == QSGRendererInterface::Vulkan ? QStringLiteral("Vulkan") :
+      api == QSGRendererInterface::Direct3D11 ? QStringLiteral("Direct3D11") :
+      api == QSGRendererInterface::Direct3D12 ? QStringLiteral("Direct3D12") :
+      api == QSGRendererInterface::Metal ? QStringLiteral("Metal") :
+      api == QSGRendererInterface::Software ? QStringLiteral("Software") :
+      api == QSGRendererInterface::Null ? QStringLiteral("Null") :
+      QStringLiteral("Unknown");
+  info.insert(QStringLiteral("graphicsApi"), graphicsApi);
+  // Surface format actually used by the render loop.
+  const QSurfaceFormat format = QSurfaceFormat::defaultFormat();
+  info.insert(QStringLiteral("surfaceFormat"),
+              QStringLiteral("OpenGL %1.%2 %3")
+                  .arg(format.majorVersion())
+                  .arg(format.minorVersion())
+                  .arg(format.profile() == QSurfaceFormat::CoreProfile
+                           ? QStringLiteral("Core")
+                           : QStringLiteral("Compatibility")));
+  // GL vendor/renderer: only readable with a current context; the QML scene
+  // thread usually owns one. Missing values degrade to "n/a".
+  QString glVendor = QStringLiteral("n/a");
+  QString glRenderer = QStringLiteral("n/a");
+  QString glVersion = QStringLiteral("n/a");
+  if (QOpenGLContext *context = QOpenGLContext::currentContext())
+  {
+    QOpenGLFunctions functions(context);
+    functions.initializeOpenGLFunctions();
+    const unsigned char *vendor = functions.glGetString(GL_VENDOR);
+    const unsigned char *renderer = functions.glGetString(GL_RENDERER);
+    const unsigned char *version = functions.glGetString(GL_VERSION);
+    if (vendor)
+      glVendor = QString::fromLatin1(reinterpret_cast<const char *>(vendor));
+    if (renderer)
+      glRenderer = QString::fromLatin1(reinterpret_cast<const char *>(renderer));
+    if (version)
+      glVersion = QString::fromLatin1(reinterpret_cast<const char *>(version));
+  }
+  info.insert(QStringLiteral("glVendor"), glVendor);
+  info.insert(QStringLiteral("glRenderer"), glRenderer);
+  info.insert(QStringLiteral("glVersion"), glVersion);
+  // Key configuration paths.
+  info.insert(QStringLiteral("appDataLocation"),
+              QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
+  if (presetService_)
+    info.insert(QStringLiteral("userPresetDir"), presetService_->userPresetDir());
+  return info;
+}
+
 void BackendContext::topbarNewProject()
 {
   const qint64 start = m_latencyClock.elapsed();
@@ -614,6 +723,9 @@ bool BackendContext::topbarOpenProject(const QString &filePath)
     if (projectViewModel_)
       projectViewModel_->openProject(localPath);
     setCurrentPage(1);
+    // Phase 236 (DLG-03): the 3MF version notice is emitted by the
+    // projectVersionInfoChanged connection above (the parse runs on the
+    // load worker thread; this call site would race it).
   }
   pushLatencySample(QStringLiteral("topbar-open-project"), int(m_latencyClock.elapsed() - start), localPath);
   return loaded;

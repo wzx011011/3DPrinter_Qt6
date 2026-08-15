@@ -1271,6 +1271,26 @@ QStringList PresetServiceMock::activeFilamentColours() const
 
 QVariantList PresetServiceMock::calculateFlushMatrix() const
 {
+  // Phase 236 (DLG-02): a saved flush_volumes_matrix wins over the derived
+  // one so the WipeTowerDialog round-trips (upstream keeps the matrix on the
+  // project config and only recomputes when the user asks).
+  const QStringList filamentNames = m_categoryPresets.value(FilamentCat);
+  for (const QString &name : filamentNames) {
+    const auto it = m_presetStore.constFind(name);
+    if (it == m_presetStore.constEnd())
+      continue;
+    const QVariant stored = it.value().value(QStringLiteral("flush_volumes_matrix"));
+    const QVariantList flat = stored.userType() == QMetaType::QVariantList
+                                  ? stored.toList()
+                                  : QVariantList();
+    if (flat.size() > 1) {
+      // Round-square guard: only accept perfect N*N matrices.
+      const int n = int(std::lround(std::sqrt(double(flat.size()))));
+      if (n > 1 && n * n == flat.size())
+        return flat;
+    }
+  }
+
   // v5.12 gap-closure: compute the N×N flush matrix from filament colours
   // (对齐 upstream WipeTowerDialog calc_flushing_volumes). Uses the
   // FlushVolCalculator colour-distance formula on the active filament colours.
@@ -1301,6 +1321,59 @@ QVariantList PresetServiceMock::calculateFlushMatrix() const
     }
   }
   return matrix;
+}
+
+bool PresetServiceMock::saveFlushVolumes(const QVariantList &rows)
+{
+  // QML path: nested JS arrays arrive as QVariantList of QVariantList rows.
+  QList<QList<double>> matrix;
+  matrix.reserve(rows.size());
+  for (const QVariant &row : rows) {
+    const QVariantList cells = row.toList();
+    QList<double> parsed;
+    parsed.reserve(cells.size());
+    for (const QVariant &cell : cells)
+      parsed.append(cell.toDouble());
+    matrix.append(parsed);
+  }
+  return saveFlushVolumes(matrix);
+}
+
+bool PresetServiceMock::saveFlushVolumes(const QList<QList<double>> &rows)
+{
+  // Phase 236 (DLG-02): persist the WipeTowerDialog matrix under the upstream
+  // key "flush_volumes_matrix" (coFloats, row-major flat — PrintConfig.cpp
+  // :5049; upstream writes the same flat vector after the dialog closes,
+  // Plater.cpp:2125). The matrix is global to the multi-material setup, so
+  // every filament preset receives it; user presets are re-persisted.
+  if (rows.isEmpty())
+    return false;
+  const int n = rows.size();
+  for (const QList<double> &row : rows) {
+    if (row.size() != n)
+      return false; // non-square input
+  }
+  QVariantList flat;
+  flat.reserve(n * n);
+  for (int i = 0; i < n; ++i)
+    for (int j = 0; j < n; ++j)
+      flat.append(rows[i][j]);
+
+  bool wroteAny = false;
+  const QStringList names = m_categoryPresets.value(FilamentCat);
+  for (const QString &name : names) {
+    const auto it = m_presetStore.find(name);
+    if (it == m_presetStore.end())
+      continue;
+    it.value().insert(QStringLiteral("flush_volumes_matrix"), flat);
+    // Read-only (system) presets keep the in-memory value so the current
+    // session round-trips; only user presets persist to disk, mirroring
+    // upstream read-only preset semantics.
+    if (!isReadOnlyPreset(name))
+      writeUserPresetFile(FilamentCat, name, it.value());
+    wroteAny = true;
+  }
+  return wroteAny;
 }
 
 QStringList PresetServiceMock::materialsForVendorAndPrinter(const QString &vendor, const QString &printerModel) const

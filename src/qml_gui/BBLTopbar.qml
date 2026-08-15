@@ -794,6 +794,14 @@ Item {
                 text: qsTr("Export Model")
                 onTriggered: root.exportModelRequested()
             }
+            MenuSeparator {}
+            // Phase 236 (DLG-01): Export Preset Bundle entry (upstream
+            // ExportPresetBundleDialog; preset export is always available,
+            // not gated on a sliced result).
+            CxMenuItem {
+                text: qsTr("导出预设包...")
+                onTriggered: backend.showExportPresetBundleDialog()
+            }
         }
 
         MenuSeparator {}
@@ -894,6 +902,39 @@ Item {
             onTriggered: root.preferencesRequested()
         }
 
+        // Phase 236 (DLG-01): tool dialogs that upstream hosts in the
+        // Preferences dialog. The OWzx PreferencesPage is not yet mounted in
+        // the shell (pre-existing gap), so the shell menu carries the
+        // reachable entry points; the same dialog ids open via the
+        // BackendContext request signals.
+        CxMenu {
+            title: qsTr("工具")
+            CxMenuItem {
+                text: qsTr("AMS 设置...")
+                onTriggered: backend.showAMSSettingsDialog()
+            }
+            CxMenuItem {
+                text: qsTr("固件...")
+                onTriggered: backend.showFirmwareDialog()
+            }
+            CxMenuItem {
+                text: qsTr("速度限制...")
+                onTriggered: backend.showSpeedLimitDialog()
+            }
+            CxMenuItem {
+                text: qsTr("擦料塔...")
+                onTriggered: backend.showWipeTowerDialog()
+            }
+            CxMenuItem {
+                text: qsTr("插件管理...")
+                onTriggered: backend.showPluginManagerDialog()
+            }
+            CxMenuItem {
+                text: qsTr("精简模式...")
+                onTriggered: backend.showEnableLiteModeDialog()
+            }
+        }
+
         MenuSeparator {}
 
         // Calibration submenu aligned with upstream BBLTopbar::GetCalibMenu.
@@ -937,6 +978,12 @@ Item {
             CxMenuItem { text: qsTr("Documentation"); enabled: false }
             CxMenuItem { text: qsTr("Check for Updates"); enabled: false }
             MenuSeparator {}
+            // Phase 236 (DLG-03): system information dump entry (upstream
+            // Help > System Information).
+            CxMenuItem {
+                text: qsTr("系统信息")
+                onTriggered: backend.showSysInfoDialog()
+            }
             CxMenuItem { text: qsTr("About"); onTriggered: root.aboutRequested() }
             CxMenuItem { text: qsTr("Shortcut Overview"); onTriggered: root.shortcutOverviewRequested() }
         }

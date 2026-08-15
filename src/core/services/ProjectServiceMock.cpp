@@ -10,6 +10,7 @@
 #include <QVariant>
 #include <QSet>
 #include <QRegularExpression>
+#include <QTextStream>
 #include <QUrl>
 #include <QTemporaryFile>
 #include <QDataStream>
@@ -25,6 +26,7 @@
 #include <cstdint>
 #include <unordered_set>
 #include <QtMath>
+#include <cmath>
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Model.hpp>
@@ -542,6 +544,178 @@ bool ProjectServiceMock::loading() const
 QString ProjectServiceMock::sourceFilePath() const
 {
   return sourceFilePath_;
+}
+
+// Phase 236 (DLG-03): static helpers shared by the archive/3MF/mtl readers
+// below. All read through the miniz wrapper already used for plate
+// thumbnails (open_zip_reader/close_zip_reader).
+namespace
+{
+  // Extensions considered importable models inside an archive (upstream
+  // FileArchiveDialog filters). Compared lower-case, dot included.
+  bool isArchiveModelEntry(const QString &name)
+  {
+    const QString lowered = name.toLower();
+    return lowered.endsWith(QStringLiteral(".stl")) || lowered.endsWith(QStringLiteral(".obj")) ||
+           lowered.endsWith(QStringLiteral(".3mf")) || lowered.endsWith(QStringLiteral(".amf"));
+  }
+
+  QByteArray extractZipEntry(const QString &archivePath, const QString &entryName, qint64 maxSize)
+  {
+    mz_zip_archive archive;
+    mz_zip_zero_struct(&archive);
+    if (!Slic3r::open_zip_reader(&archive, QDir::toNativeSeparators(archivePath).toStdString()))
+      return {};
+    QByteArray payload;
+    const int index = mz_zip_reader_locate_file(&archive, entryName.toStdString().c_str(), nullptr, 0);
+    if (index >= 0)
+    {
+      mz_zip_archive_file_stat stat;
+      if (mz_zip_reader_file_stat(&archive, static_cast<mz_uint>(index), &stat) &&
+          stat.m_uncomp_size <= static_cast<mz_uint64>(maxSize))
+      {
+        payload.resize(int(stat.m_uncomp_size));
+        if (!mz_zip_reader_extract_to_mem(&archive, static_cast<mz_uint>(index),
+                                          payload.data(), payload.size(), 0))
+          payload.clear();
+      }
+    }
+    Slic3r::close_zip_reader(&archive);
+    return payload;
+  }
+
+  // Reads the generator/application version recorded in a 3MF (upstream
+  // bbs_3mf.cpp:3639 Application tag, value like "OrcaSlicer-2.2.0").
+  QString read3mfGeneratorVersion(const QString &archivePath)
+  {
+    // The <metadata name="Application"> node lives in the model XML.
+    static const QRegularExpression appTag(
+        QStringLiteral("<metadata[^>]*name\\s*=\\s*[\"']Application[\"'][^>]*>([^<]+)<"));
+    for (const char *entry : {"3D/3dmodel.model", "Metadata/Slic3r_PE_model.config"})
+    {
+      const QByteArray xml = extractZipEntry(archivePath, QString::fromLatin1(entry), 8 * 1024 * 1024);
+      if (xml.isEmpty())
+        continue;
+      const QRegularExpressionMatch match = appTag.match(QString::fromUtf8(xml));
+      if (match.hasMatch())
+        return match.captured(1).trimmed();
+    }
+    return {};
+  }
+} // namespace
+
+QStringList ProjectServiceMock::listArchiveEntries(const QString &archivePath)
+{
+  // Phase 236 (DLG-03): upstream FileArchiveDialog enumerates the archive's
+  // importable models for its tree view. Central-directory only — no
+  // extraction happens here.
+  QStringList entries;
+  mz_zip_archive archive;
+  mz_zip_zero_struct(&archive);
+  if (!Slic3r::open_zip_reader(&archive, QDir::toNativeSeparators(archivePath).toStdString()))
+    return entries;
+  const mz_uint count = mz_zip_reader_get_num_files(&archive);
+  for (mz_uint i = 0; i < count; ++i)
+  {
+    mz_zip_archive_file_stat stat;
+    if (!mz_zip_reader_file_stat(&archive, i, &stat))
+      continue;
+    // Directory entries end with '/' and carry the directory attribute.
+    if (stat.m_is_directory)
+      continue;
+    const QString name = QString::fromUtf8(stat.m_filename);
+    if (isArchiveModelEntry(name))
+      entries.append(name);
+  }
+  Slic3r::close_zip_reader(&archive);
+  return entries;
+}
+
+QString ProjectServiceMock::extractArchiveEntry(const QString &archivePath, const QString &entryName,
+                                                const QString &destDir)
+{
+  // Phase 236 (DLG-03): extract one selected model file so loadFile() can
+  // import it through the normal path (upstream FileArchiveDialog imports
+  // the checked entries).
+  if (archivePath.isEmpty() || entryName.isEmpty() || destDir.isEmpty())
+    return {};
+  QDir dir(destDir);
+  if (!dir.mkpath(QStringLiteral(".")))
+    return {};
+  const QFileInfo info(entryName);
+  const QString baseName = info.fileName().isEmpty() ? QStringLiteral("entry") : info.fileName();
+  const QString destPath = dir.filePath(baseName);
+  mz_zip_archive archive;
+  mz_zip_zero_struct(&archive);
+  if (!Slic3r::open_zip_reader(&archive, QDir::toNativeSeparators(archivePath).toStdString()))
+    return {};
+  QString result;
+  const int index = mz_zip_reader_locate_file(&archive, entryName.toStdString().c_str(), nullptr, 0);
+  if (index >= 0)
+  {
+    if (mz_zip_reader_extract_to_file(&archive, static_cast<mz_uint>(index),
+                                      QDir::toNativeSeparators(destPath).toStdString().c_str(), 0))
+      result = destPath;
+  }
+  Slic3r::close_zip_reader(&archive);
+  return result;
+}
+
+QStringList ProjectServiceMock::objMtlColors(const QString &objPath) const
+{
+  // Phase 236 (DLG-03): parse the .mtl library that sits next to an .obj
+  // (the OBJ loader's default mtl_ref search path) and collect the diffuse
+  // Kd colors — upstream feeds these into ObjImportColorDialog so the user
+  // can map each color to an extruder. Simple line scan: "newmtl" starts a
+  // material, "Kd r g b" (0..1 floats or spectral three-pair form) sets its
+  // diffuse color.
+  QStringList colors;
+  const QFileInfo objInfo(objPath);
+  if (objInfo.suffix().compare(QStringLiteral("obj"), Qt::CaseInsensitive) != 0)
+    return colors;
+  const QString mtlPath = objInfo.absolutePath() + QLatin1Char('/') + objInfo.completeBaseName() + QStringLiteral(".mtl");
+  QFileInfo mtlInfo(mtlPath);
+  if (!mtlInfo.exists())
+  {
+    // Also accept the generic "material.mtl" some exporters emit.
+    const QString generic = objInfo.absolutePath() + QStringLiteral("/material.mtl");
+    if (QFileInfo::exists(generic))
+      mtlInfo = QFileInfo(generic);
+    else
+      return colors;
+  }
+  QFile file(mtlInfo.absoluteFilePath());
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    return colors;
+  static const QRegularExpression kdLine(
+      QStringLiteral("^\\s*Kd\\s+([0-9.eE+-]+)(?:\\s+([0-9.eE+-]+))?(?:\\s+([0-9.eE+-]+))?"));
+  QTextStream stream(&file);
+  while (!stream.atEnd())
+  {
+    const QString line = stream.readLine();
+    if (!line.startsWith(QLatin1Char('K')) && !line.startsWith(QLatin1Char('k')))
+      continue;
+    const QRegularExpressionMatch match = kdLine.match(line);
+    if (!match.hasMatch())
+      continue;
+    bool okR = false, okG = false, okB = false;
+    const double r = match.captured(1).toDouble(&okR);
+    const double g = match.captured(2).isEmpty() ? r : match.captured(2).toDouble(&okG);
+    const double b = match.captured(3).isEmpty() ? r : match.captured(3).toDouble(&okB);
+    if (!okR || (!match.captured(2).isEmpty() && !okG) || (!match.captured(3).isEmpty() && !okB))
+      continue;
+    const int ri = qBound(0, int(std::lround(r * 255.0)), 255);
+    const int gi = qBound(0, int(std::lround(g * 255.0)), 255);
+    const int bi = qBound(0, int(std::lround(b * 255.0)), 255);
+    const QString hex = QStringLiteral("#%1%2%3")
+                            .arg(ri, 2, 16, QLatin1Char('0'))
+                            .arg(gi, 2, 16, QLatin1Char('0'))
+                            .arg(bi, 2, 16, QLatin1Char('0'))
+                            .toUpper();
+    if (!colors.contains(hex))
+      colors.append(hex);
+  }
+  return colors;
 }
 
 #ifdef HAS_LIBSLIC3R
@@ -7999,6 +8173,12 @@ void ProjectServiceMock::clearProject()
   objectRotations_.clear();
   objectScales_.clear();
   m_mockVolumes.clear();
+  // Phase 236 (DLG-03): a cleared workspace carries no project version.
+  if (!m_projectVersionInfo.isEmpty())
+  {
+    m_projectVersionInfo.clear();
+    emit projectVersionInfoChanged();
+  }
   lastError_.clear();
   loadProgress_ = 0;
   loading_ = false;
@@ -9113,6 +9293,20 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           }
           receiver->lastError_.clear();
 
+          // Phase 236 (DLG-03): record the generator version parsed from the
+          // 3MF metadata (Application tag). BackendContext turns this into the
+          // Newer3mfVersion-style notification after loadProject returns.
+          {
+            const QString version = read3mfGeneratorVersion(localPath);
+            if (version != receiver->m_projectVersionInfo)
+            {
+              receiver->m_projectVersionInfo = version;
+              QMetaObject::invokeMethod(receiver, [receiver]() {
+                emit receiver->projectVersionInfoChanged();
+              }, Qt::QueuedConnection);
+            }
+          }
+
           // v5.16 (PLATE-04): project restore keeps the exact saved plate
           // membership — upstream load_project never re-arranges. Re-derive
           // membership from the restored instance offsets only (no object
@@ -9153,6 +9347,14 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           receiver->objectModuleNames_.clear();
           receiver->objectPrintableStates_.clear();
           receiver->objectVisibleStates_.clear();
+          // Phase 236 (DLG-03): failed load leaves no version behind.
+          if (!receiver->m_projectVersionInfo.isEmpty())
+          {
+            receiver->m_projectVersionInfo.clear();
+            QMetaObject::invokeMethod(receiver, [receiver]() {
+              emit receiver->projectVersionInfoChanged();
+            }, Qt::QueuedConnection);
+          }
           receiver->lastError_ = errorText;
           emit receiver->projectChanged();
           emit receiver->plateDataLoaded(0);

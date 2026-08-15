@@ -372,6 +372,24 @@ ApplicationWindow {
                         }
                     }
 
+                    // Phase 236 (DLG-01): create-preset entry. Upstream preset
+                    // combos embed an "add" affordance that opens
+                    // CreatePresetsDialog; here the "+" button requests
+                    // ConfigViewModel::requestCreatePreset, which emits
+                    // createPresetRequired -> onCreatePresetRequired above.
+                    CxIconButton {
+                        buttonSize: 28
+                        iconSize: 15
+                        cxStyle: CxIconButton.Style.Ghost
+                        iconSource: "qrc:/qml/assets/icons/plus.svg"
+                        toolTipText: qsTr("新建预设")
+                        enabled: root.configVm !== null
+                        onClicked: {
+                            if (root.configVm)
+                                root.configVm.requestCreatePreset()
+                        }
+                    }
+
                     // Compact dirty marker.
                     Rectangle {
                         visible: root.configVm && root.configVm.isPresetDirty

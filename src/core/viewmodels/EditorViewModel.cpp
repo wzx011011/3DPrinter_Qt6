@@ -33,9 +33,13 @@
 #include <libslic3r/TriangleMesh.hpp>  // v5.16 bed_model STL loader (ReadSTLFile)
 #endif
 #include <QFileInfo>
+#include <QDir>
 #include <QUrl>
 #include <QVector4D>
 #include <QSettings>
+#include <QTemporaryDir>
+#include <QCoreApplication>
+#include <QEventLoop>
 #include <algorithm>
 #include <limits>
 #include <QSet>
@@ -4062,7 +4066,7 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
       emit stateChanged(); });
   connect(projectService_, &ProjectServiceMock::loadFinished, this, [this](bool success, const QString &message)
           {
-    if (success)
+            if (success)
     {
     m_collapsedGroupKeys.clear();
     m_collapsedObjectSourceIndices.clear();
@@ -4070,6 +4074,34 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
       ensureValidObjectSelection(true);
       statusText_ = QStringLiteral("已加载 %1 个模型，%2 个平板").arg(m_objects.size()).arg(projectService_->plateCount());
       refreshMeshCacheAndFitHint();
+      // Phase 236 (DLG-03): after a successful .obj import, collect the mtl
+      // diffuse colors and offer the extruder mapping (upstream
+      // ObjImportColorDialog). Only multi-color files raise the prompt — a
+      // missing .mtl or a single color imports silently.
+      if (!m_pendingObjCheckPath.isEmpty() && projectService_)
+      {
+        const QStringList colors = projectService_->objMtlColors(m_pendingObjCheckPath);
+        const int newObjectIndex = projectService_->modelCount() - 1;
+        if (colors.size() > 1 && newObjectIndex >= m_preLoadModelCount)
+        {
+          QVariantList colorVariants;
+          colorVariants.reserve(colors.size());
+          for (const QString &color : colors)
+            colorVariants.append(color);
+          m_pendingObjColors = colorVariants;
+          m_pendingObjObjectIndex = newObjectIndex;
+          QString objectName;
+          const QStringList names = projectService_->objectNames();
+          if (newObjectIndex >= 0 && newObjectIndex < names.size())
+            objectName = names.at(newObjectIndex);
+          emit objColorMappingRequested(objectName);
+        }
+        m_pendingObjCheckPath.clear();
+      }
+      else
+      {
+        m_pendingObjCheckPath.clear();
+      }
     }
     else
     {
@@ -7345,6 +7377,13 @@ bool EditorViewModel::loadFile(const QString &filePath)
   // Accept both local paths and file:// URLs (from QML FileDialog)
   QUrl url(filePath);
   const QString localPath = url.isLocalFile() ? url.toLocalFile() : filePath;
+  // Phase 236 (DLG-03): remember the .obj import for the mtl-color prompt.
+  // Cleared in the loadFinished handler (both outcomes).
+  m_pendingObjCheckPath = QFileInfo(localPath).suffix().compare(
+                              QStringLiteral("obj"), Qt::CaseInsensitive) == 0
+                              ? localPath
+                              : QString();
+  m_preLoadModelCount = projectService_ ? projectService_->modelCount() : 0;
   const bool started = projectService_->loadFile(localPath);
   if (started)
   {
@@ -7370,6 +7409,158 @@ bool EditorViewModel::loadFile(const QString &filePath)
   }
   emit stateChanged();
   return started;
+}
+
+int EditorViewModel::checkObjectsOutsideBed()
+{
+  // Phase 236 (DLG-03): RecenterDialog input (upstream
+  // Plater::check_outside_state feeds the outside-bed warning dialog). Uses
+  // the real bed Q_PROPERTYs plus the same scale-based footprint estimate as
+  // checkViewportWarnings() so detection and recentering agree.
+  m_objectsOutsideBed.clear();
+  if (!projectService_)
+    return 0;
+
+  const float bedW = bedWidth();
+  const float bedD = bedDepth();
+  const float originX = bedOriginX();
+  const float originY = bedOriginY();
+  constexpr float margin = 5.0f; // tolerance, same as checkViewportWarnings
+
+  const QStringList names = projectService_->objectNames();
+  const int count = projectService_->modelCount();
+  for (int i = 0; i < count; ++i)
+  {
+    if (i >= names.size())
+      break;
+    const QVector3D pos = projectService_->objectPosition(i);
+    const QVector3D scl = projectService_->objectScale(i);
+    const float halfW = scl.x() * 5.0f; // footprint estimate (mock heuristics)
+    const float halfD = scl.z() * 5.0f;
+    const bool xOutside = (pos.x() - halfW < originX - margin) ||
+                          (pos.x() + halfW > originX + bedW + margin);
+    const bool yOutside = (pos.y() - halfD < originY - margin) ||
+                          (pos.y() + halfD > originY + bedD + margin);
+    if (xOutside || yOutside)
+    {
+      QVariantMap entry;
+      entry.insert(QStringLiteral("index"), i);
+      entry.insert(QStringLiteral("name"), names.at(i));
+      m_objectsOutsideBed.append(entry);
+    }
+  }
+  emit stateChanged();
+  return m_objectsOutsideBed.size();
+}
+
+int EditorViewModel::recenterObjectsOutsideBed()
+{
+  // Phase 236 (DLG-03): RecenterDialog confirm action. Clamps each outside
+  // object's footprint into the printable rectangle (keeps height). The
+  // footprint estimate mirrors checkObjectsOutsideBed so a recenter run
+  // clears the detection.
+  if (!projectService_)
+    return 0;
+  const float bedW = bedWidth();
+  const float bedD = bedDepth();
+  const float originX = bedOriginX();
+  const float originY = bedOriginY();
+  constexpr float margin = 5.0f;
+
+  int moved = 0;
+  const QVariantList outsideEntries = m_objectsOutsideBed; // implicitly shared
+  for (const QVariant &variant : outsideEntries)
+  {
+    const QVariantMap entry = variant.toMap();
+    const int index = entry.value(QStringLiteral("index"), -1).toInt();
+    if (index < 0 || index >= projectService_->modelCount())
+      continue;
+    const QVector3D pos = projectService_->objectPosition(index);
+    const QVector3D scl = projectService_->objectScale(index);
+    const float halfW = scl.x() * 5.0f;
+    const float halfD = scl.z() * 5.0f;
+    const float lowX = originX + margin + halfW;
+    const float highX = originX + bedW - margin - halfW;
+    const float lowY = originY + margin + halfD;
+    const float highY = originY + bedD - margin - halfD;
+    const float newX = highX > lowX ? qBound(lowX, pos.x(), highX)
+                                    : originX + bedW * 0.5f;
+    const float newY = highY > lowY ? qBound(lowY, pos.y(), highY)
+                                    : originY + bedD * 0.5f;
+    if (projectService_->setObjectPosition(index, newX, newY, pos.z()))
+      ++moved;
+  }
+  if (moved > 0)
+  {
+    invalidateSliceResultsForCurrentPlate();
+    checkObjectsOutsideBed(); // refresh the property (emits stateChanged)
+  }
+  return moved;
+}
+
+QStringList EditorViewModel::listArchiveEntries(const QString &archivePath) const
+{
+  return projectService_ ? projectService_->listArchiveEntries(archivePath) : QStringList();
+}
+
+int EditorViewModel::importArchiveEntries(const QString &archivePath, const QStringList &entries)
+{
+  // Phase 236 (DLG-03): FileArchiveDialog confirm — extract each checked
+  // entry into a temp directory and run the normal loadFile() path.
+  // loadFile() parses on a worker under HAS_LIBSLIC3R, so the extracted
+  // files must outlive this call: the per-import temp dir disables
+  // auto-remove and relies on OS temp cleanup.
+  if (!projectService_ || archivePath.isEmpty() || entries.isEmpty())
+    return 0;
+  int imported = 0;
+  for (const QString &entry : entries)
+  {
+    QTemporaryDir tempDir(QDir::temp().filePath(QStringLiteral("owzx-archive-XXXXXX")));
+    tempDir.setAutoRemove(false); // async load reads the files after return
+    if (!tempDir.isValid())
+      break;
+    const QString extracted = projectService_->extractArchiveEntry(archivePath, entry, tempDir.path());
+    if (extracted.isEmpty())
+      continue;
+    if (loadFile(extracted))
+      ++imported;
+    // Sequential loads: the service's loading_ guard rejects concurrent
+    // starts, so wait (bounded) for the current import to finish before the
+    // next entry.
+    int waitMs = 0;
+    while (projectService_->loading() && waitMs < 10000)
+    {
+      QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+      waitMs += 50;
+    }
+  }
+  return imported;
+}
+
+bool EditorViewModel::applyPendingObjColors(int extruderId)
+{
+  // Phase 236 (DLG-03): ObjColorDialog confirm — route the pending object's
+  // volumes onto the chosen extruder (upstream sets the object extruder from
+  // the color mapping; OWzx applies it to every volume of the new object).
+  if (!projectService_ || m_pendingObjObjectIndex < 0 || extruderId < 0)
+    return false;
+  const int objectIndex = m_pendingObjObjectIndex;
+  if (objectIndex >= projectService_->modelCount())
+  {
+    m_pendingObjColors.clear();
+    m_pendingObjObjectIndex = -1;
+    emit stateChanged();
+    return false;
+  }
+  const int volumeCount = projectService_->objectVolumeCount(objectIndex);
+  bool applied = false;
+  for (int v = 0; v < volumeCount; ++v)
+    applied = projectService_->setVolumeExtruderId(objectIndex, v, extruderId) || applied;
+  m_pendingObjColors.clear();
+  m_pendingObjObjectIndex = -1;
+  invalidateSliceResultsForCurrentPlate();
+  emit stateChanged();
+  return applied;
 }
 
 void EditorViewModel::clearWorkspace()

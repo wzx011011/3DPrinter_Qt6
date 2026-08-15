@@ -119,6 +119,17 @@ Item {
     readonly property bool isColorLike:
         root.oKey.toLowerCase().indexOf("colour") >= 0
         || root.oKey.toLowerCase().indexOf("color") >= 0
+    // Phase 236 (DLG-01): keys whose value is edited in a dedicated dialog
+    // rather than the inline field — G-code fields (machine_start_gcode,
+    // machine_end_gcode, ...) open EditGCodeDialog; the bed geometry keys
+    // (printable_area / bed_shape) open BedShapeDialog. Mirrors upstream
+    // ConfigOptionsGroup button pickers for these option types.
+    readonly property bool isGcodeOption:
+        root.oType === "string" && root.oKey.length > 6
+        && root.oKey.slice(-6) === "_gcode"
+    readonly property bool isBedShapeOption:
+        root.oKey === "printable_area" || root.oKey === "bed_shape"
+    readonly property bool hasTrailingDialogAction: root.isGcodeOption || root.isBedShapeOption
     readonly property bool hasBounds: root.isNumeric && root.oMax > root.oMin
 
     readonly property int headerHeight: root.showGroupHeader ? (root.compact ? 28 : 32) : 0
@@ -455,6 +466,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     anchors.right: parent.right
+                    anchors.rightMargin: root.hasTrailingDialogAction ? 34 : 0
                     height: root.compact ? 42 : 60
                     text: typeof root.oVal === "string" ? root.oVal : (root.oVal ? root.oVal.toString() : "")
                     font.pixelSize: Theme.fontSizeSM
@@ -463,6 +475,45 @@ Item {
                     onTextChanged: {
                         if (root.optionModel && activeFocus)
                             root.optionModel.setValue(root.optIdx, text)
+                    }
+                }
+
+                // Phase 236 (DLG-01): whole-option editor affordance. The
+                // "edit" button next to G-code / bed-shape rows requests the
+                // dedicated dialog from BackendContext, which routes the
+                // current key + value through showEditGCodeDialogRequested /
+                // showBedShapeDialogRequested (value forwarded so the dialog
+                // opens with the preset's current text).
+                Row {
+                    visible: root.hasTrailingDialogAction
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right: parent.right
+                    anchors.rightMargin: 2
+                    spacing: 4
+                    z: 2
+
+                    CxIconButton {
+                        buttonSize: 24
+                        iconSize: 13
+                        cxStyle: CxIconButton.Style.Ghost
+                        iconSource: root.isGcodeOption
+                            ? "qrc:/qml/assets/icons/clipboard.svg"
+                            : "qrc:/qml/assets/icons/settings.svg"
+                        toolTipText: root.isGcodeOption
+                            ? qsTr("编辑 G-code…")
+                            : qsTr("编辑热床形状…")
+                        enabled: true
+                        onClicked: {
+                            if (typeof backend === "undefined" || !backend)
+                                return
+                            if (root.isGcodeOption)
+                                backend.showEditGCodeDialog(
+                                    root.oKey,
+                                    typeof root.oVal === "string" ? root.oVal
+                                        : (root.oVal ? root.oVal.toString() : ""))
+                            else
+                                backend.showBedShapeDialog()
+                        }
                     }
                 }
             }

@@ -66,9 +66,17 @@ ApplicationWindow {
             qsTr("OBJ 文件 (*.obj)"),
             qsTr("STEP 文件 (*.step *.stp)"),
             qsTr("AMF 文件 (*.amf)"),
+            qsTr("压缩包 (*.zip)"),
             qsTr("所有文件 (*)")
         ]
         onAccepted: {
+            // Phase 236 (DLG-03): zip archives open the FileArchiveDialog tree
+            // (upstream FileArchiveDialog) instead of a direct import.
+            var modelPath = selectedFile.toString()
+            if (modelPath.toLowerCase().substring(modelPath.length - 4) === ".zip") {
+                fileArchiveDialog.openFor(modelPath)
+                return
+            }
             backend.topbarImportModel(selectedFile.toString())
         }
     }
@@ -136,56 +144,12 @@ ApplicationWindow {
         id: shortcutDialog
     }
 
-    // About dialog
-    Dialog {
+    // About dialog (Phase 236 DLG-04: replaced the inline duplicate with the
+    // shared AboutDialog component so the Help menu surfaces the corrected
+    // AGPL-3.0 license + open-source components list from one place; the
+    // Preferences "About" category opens the same component).
+    AboutDialog {
         id: aboutDialog
-        title: qsTr("关于 OWzx")
-        modal: true
-        anchors.centerIn: parent
-        width: 360
-        height: 200
-        padding: 20
-
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 12
-
-            Text {
-                text: "OWzx Slicer"
-                color: Theme.textPrimary
-                font.pixelSize: Theme.fontSizeXL
-                font.bold: true
-            }
-            Text {
-                text: qsTr("基于 OrcaSlicer 开源版本")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSizeMD
-            }
-            Text {
-                text: qsTr("Qt 6.10 + QML 重写迁移版")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSizeMD
-            }
-            Text {
-                text: qsTr("上游基线: 0d4ac73a6f3224a2bf753d7b9e67d7d515bc8557")
-                color: Theme.textDisabled
-                font.pixelSize: Theme.fontSizeXS
-            }
-            Item { Layout.fillHeight: true }
-            Rectangle {
-                Layout.alignment: Qt.AlignHCenter
-                width: 60; height: 26; radius: 6; color: Theme.accent
-                Text {
-                    anchors.centerIn: parent
-                    text: qsTr("确定"); color: Theme.textOnAccent
-                    font.pixelSize: Theme.fontSizeMD
-                }
-                MouseArea {
-                    anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                    onClicked: aboutDialog.close()
-                }
-            }
-        }
     }
 
     // New project confirmation dialog
@@ -564,6 +528,7 @@ ApplicationWindow {
         function onShowBedShapeDialogRequested() { bedShapeDialog.open() }
         function onShowEditGCodeDialogRequested(key, value) {
             editGCodeDialog.dialogTitle = qsTr("编辑自定义 G-code (%1)").arg(key || "")
+            editGCodeDialog.optionKey = key || ""
             editGCodeDialog.initialGCode = value || ""
             editGCodeDialog.open()
         }
@@ -574,6 +539,10 @@ ApplicationWindow {
         function onShowPrintHostDialogRequested() { printHostDialog.open() }
         function onShowPluginManagerDialogRequested() { pluginManagerDialog.open() }
         function onShowEnableLiteModeDialogRequested() { enableLiteModeDialog.open() }
+        // Phase 236 (DLG-01): Export Preset Bundle dialog (File menu).
+        function onShowExportPresetBundleDialogRequested() { exportPresetBundleDialog.open() }
+        // Phase 236 (DLG-03): system information dialog (Help menu).
+        function onShowSysInfoDialogRequested() { sysInfoDialog.open() }
         // Phase 56 — independent settings dialogs (region SETPRINT/SETMAT/SETPROC-SHELL).
         // BackendContext::forwardSettingsRequest(category) already ran
         // setActivePresetTier(category) before emitting, so the dialog opens scoped
@@ -595,7 +564,16 @@ ApplicationWindow {
     EditGCodeDialog {
         id: editGCodeDialog
         onGcodeAccepted: function(gcode) {
-            // Future: forward edited G-code to ConfigViewModel / PresetService
+            // Phase 236 (DLG-02): write the edited text back onto the source
+            // option key. ConfigViewModel::setValue routes through the owning
+            // ConfigOptionModel (tier mapping + dirty tracking), identical to
+            // an inline OptionRow edit. Key-less opens (template browsing
+            // without a source field) skip the write-back.
+            if (editGCodeDialog.optionKey !== "" && backend.configViewModel) {
+                if (!backend.configViewModel.setValue(editGCodeDialog.optionKey, gcode))
+                    console.warn("[EditGCode] no owning option for key:",
+                                 editGCodeDialog.optionKey)
+            }
         }
     }
 
@@ -626,6 +604,63 @@ ApplicationWindow {
 
     // P10.2 — Enable lite mode dialog
     EnableLiteModeDialog { id: enableLiteModeDialog }
+
+    // Phase 236 (DLG-01) — Export Preset Bundle (File > 导出预设包...).
+    ExportPresetBundleDialog {
+        id: exportPresetBundleDialog
+        configVm: backend.configViewModel
+    }
+
+    // Phase 236 (DLG-03) — system information dump (Help > 系统信息).
+    SysInfoDialog { id: sysInfoDialog }
+
+    // Phase 236 (DLG-03) — out-of-bed objects prompt. Opened via
+    // backend.recenterPromptRequested after a load; "全部居中" routes through
+    // EditorViewModel::recenterObjectsOutsideBed.
+    RecenterDialog {
+        id: recenterDialog
+        editorVm: backend.editorViewModel
+        onRecenterRequested: {
+            if (backend.editorViewModel)
+                backend.editorViewModel.recenterObjectsOutsideBed()
+        }
+    }
+
+    // Phase 236 (DLG-03) — zip archive import tree. openFor() lists the
+    // model entries; confirm extracts + loads the checked entries.
+    FileArchiveDialog {
+        id: fileArchiveDialog
+        editorVm: backend.editorViewModel
+        onImportRequested: function(archivePath, selectedEntries) {
+            if (backend.editorViewModel && selectedEntries.length > 0)
+                backend.editorViewModel.importArchiveEntries(archivePath, selectedEntries)
+        }
+    }
+
+    // Phase 236 (DLG-03) — OBJ mtl color → extruder mapping. Opened via
+    // editorVm.objColorMappingRequested after a multi-color .obj import.
+    ObjColorDialog {
+        id: objColorDialog
+        editorVm: backend.editorViewModel
+        onApplyRequested: function(extruderId) {
+            if (backend.editorViewModel)
+                backend.editorViewModel.applyPendingObjColors(extruderId)
+        }
+    }
+
+    // Phase 236 (DLG-03): editor-triggered dialog opens (obj color prompt)
+    // and the outside-bed recenter prompt.
+    Connections {
+        target: backend.editorViewModel
+        function onObjColorMappingRequested(objectName) {
+            objColorDialog.targetObjectName = objectName || ""
+            objColorDialog.open()
+        }
+    }
+    Connections {
+        target: backend
+        function onRecenterPromptRequested() { recenterDialog.open() }
+    }
 
     // Phase 56 — three independent non-modal settings dialogs (one per
     // PresetCollection scope). Opened from the Prepare sidebar via the

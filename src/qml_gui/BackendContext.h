@@ -370,6 +370,16 @@ public:
   Q_INVOKABLE void showPluginManagerDialog();
   /// Show lite-mode dialog placeholder until QML implements EnableLiteModeDialog.
   Q_INVOKABLE void showEnableLiteModeDialog();
+  /// Phase 236 (DLG-01): request the Export Preset Bundle dialog
+  /// (File > Export Preset Bundle, upstream ExportPresetBundleDialog).
+  Q_INVOKABLE void showExportPresetBundleDialog();
+  /// Phase 236 (DLG-03): request the system information dialog
+  /// (Help menu, upstream SysInfoDialog).
+  Q_INVOKABLE void showSysInfoDialog();
+  /// Phase 236 (DLG-03): runtime environment dump for SysInfoDialog —
+  /// compile-time constants, graphics API / surface format / GL strings
+  /// (when a context is current), and key configuration paths.
+  Q_INVOKABLE QVariantMap systemInfo() const;
   bool configWizardCompleted() const;
   void setConfigWizardCompleted(bool completed);
   Q_INVOKABLE void topbarNewProject();
@@ -452,6 +462,13 @@ signals:
   void showPrintHostDialogRequested();
   void showPluginManagerDialogRequested();
   void showEnableLiteModeDialogRequested();
+  /// Phase 236 (DLG-01): open the Export Preset Bundle dialog.
+  void showExportPresetBundleDialogRequested();
+  /// Phase 236 (DLG-03): open the system information dialog.
+  void showSysInfoDialogRequested();
+  /// Phase 236 (DLG-03): objects landed outside the bed after a load/drop —
+  /// open the RecenterDialog (upstream outside-bed prompt).
+  void recenterPromptRequested();
   void exportGCodeRequested();
 
 private:

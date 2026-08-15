@@ -16,6 +16,10 @@ CxDialog {
 
     // Public API -- set before opening
     property string initialGCode: ""
+    // Phase 236 (DLG-02): config option key this editor instance edits
+    // (e.g. "machine_start_gcode"). Empty for key-less uses (template
+    // browsing); onGcodeAccepted callers skip the write-back then.
+    property string optionKey: ""
     // Note: dialogTitle is used by CxDialog for the header.
     // This dialog also uses dialogTitle as its title text.
     dialogTitle: qsTr("编辑自定义 G-code")

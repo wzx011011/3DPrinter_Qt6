@@ -146,7 +146,21 @@ public:
   /// (对齐上游 WipeTowerDialog calc_flushing_volumes → FlushVolCalculator).
   /// Returns a flat QVariantList of N*N ints (row-major); flush[i*N+j] = flush
   /// volume from extruder i to extruder j. Uses the loaded filament colours.
+  /// Phase 236 (DLG-02): a previously saved flush_volumes_matrix (see
+  /// saveFlushVolumes) takes precedence over the colour-derived calculation,
+  /// making the WipeTowerDialog OK button a real round trip.
   Q_INVOKABLE QVariantList calculateFlushMatrix() const;
+  /// Phase 236 (DLG-02): persist the WipeTowerDialog flush matrix under the
+  /// upstream key "flush_volumes_matrix" (PrintConfig.cpp:5049, coFloats,
+  /// row-major flat N*N). Upstream stores it on the project config after the
+  /// dialog closes (Plater.cpp:2125); the preset store's filament presets are
+  /// the OWzx equivalent sink, so every filament preset receives the same
+  /// matrix (the matrix is global to the multi-material setup, not per
+  /// filament). User presets are re-persisted to the user tree.
+  Q_INVOKABLE bool saveFlushVolumes(const QVariantList &rows);
+  /// C++ overload (tests / non-QML callers): rows[i][j] = flush volume from
+  /// extruder i to extruder j. Non-square input is rejected.
+  bool saveFlushVolumes(const QList<QList<double>> &rows);
   Q_INVOKABLE bool isPresetCompatibleWithPrinter(int category, const QString &presetName, const QString &printerName) const;
   Q_INVOKABLE QString presetCompatibilityMessage(int category, const QString &presetName, const QString &printerName) const;
   Q_INVOKABLE bool isCurrentSelectionCompatible(const QString &printerName, const QString &filamentName, const QString &printName) const;

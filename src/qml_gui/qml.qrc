@@ -45,6 +45,11 @@
         <file>dialogs/NetworkTestDialog.qml</file>
         <file>dialogs/TroubleshootDialog.qml</file>
         <file>dialogs/SelectMachineDialog.qml</file>
+        <file>dialogs/SingleChoiceDialog.qml</file>
+        <file>dialogs/RecenterDialog.qml</file>
+        <file>dialogs/FileArchiveDialog.qml</file>
+        <file>dialogs/ObjColorDialog.qml</file>
+        <file>dialogs/SysInfoDialog.qml</file>
         <!-- Panels -->
         <file>panels/ObjectList.qml</file>
         <file>panels/SliceProgress.qml</file>

@@ -240,6 +240,11 @@ public:
   Q_INVOKABLE QList<int> searchOptions(const QString &query) const;
   Q_INVOKABLE QString valueSourceForKey(const QString &key) const;
   Q_INVOKABLE QString valueChainForKey(const QString &key) const;
+  /// Phase 236 (DLG-02): write a single option value by key (EditGCodeDialog
+  /// save path). Routes through the owning ConfigOptionModel::setValue so the
+  /// existing tier-mapping / dirty / scope pipeline applies — identical to an
+  /// inline OptionRow edit. Returns false when no option model owns the key.
+  Q_INVOKABLE bool setValue(const QString &key, const QVariant &value);
   Q_INVOKABLE bool resetOptionToLevel(const QString &key, int level);
   Q_INVOKABLE QString searchResultSource(int searchIndex) const;
   Q_INVOKABLE QString searchResultPath(int searchIndex) const;

@@ -241,6 +241,13 @@ private slots:
   void testUpstreamDefaultsContainVectorKeys();
   void testMachineOptionsLoaded();
   void testFilamentOptionsLoaded();
+  // v5.16 Phase 236 (DLG-02): WipeTowerDialog OK persists the flush matrix
+  // under the upstream flush_volumes_matrix key and calculateFlushMatrix
+  // round-trips the saved values.
+  void wipeTowerSaveFlushVolumesRoundTrip();
+  // v5.16 Phase 236 (DLG-03): outside-bed detection feeds the RecenterDialog;
+  // recenter clamps the offenders back into the printable area.
+  void editorCheckObjectsOutsideBedDetectsOutsideObject();
   // Phase 199 (WIZ-01): vendor/model enumeration for the ConfigWizard.
   void testVendorEnumeration();
   void testPrinterModelsForVendor();
@@ -608,6 +615,97 @@ void ViewModelSmokeTests::testUpstreamDefaultsContainVectorKeys()
   // coPoints type -- previously skipped
   QVERIFY2(defaults.contains(QStringLiteral("printable_area")),
            "printable_area missing from upstream defaults (coPoints)");
+}
+
+// v5.16 Phase 236 (DLG-02): WipeTowerDialog OK persists the flush matrix via
+// PresetServiceMock::saveFlushVolumes under the upstream key
+// "flush_volumes_matrix" (PrintConfig.cpp:5049, row-major flat); the next
+// calculateFlushMatrix returns the saved values instead of re-deriving from
+// filament colours.
+void ViewModelSmokeTests::wipeTowerSaveFlushVolumesRoundTrip()
+{
+  QTemporaryDir userDir;
+  QVERIFY(userDir.isValid());
+  PresetServiceMock preset;
+  preset.setUserPresetDir(userDir.path());
+
+  const QStringList filamentNames = preset.presetNamesForCategory(PresetServiceMock::FilamentCat);
+  QVERIFY2(!filamentNames.isEmpty(), "expected at least one built-in filament preset");
+
+  QList<QList<double>> matrix;
+  matrix.append(QList<double>{0.0, 111.0});
+  matrix.append(QList<double>{222.0, 0.0});
+  QVERIFY(preset.saveFlushVolumes(matrix));
+
+  // Stored under the upstream key on the filament presets (flat row-major).
+  const QString firstFilament = filamentNames.first();
+  const QVariant stored = preset.presetValue(firstFilament, QStringLiteral("flush_volumes_matrix"));
+  QVERIFY(stored.userType() == QMetaType::QVariantList);
+  const QVariantList flat = stored.toList();
+  QCOMPARE(flat.size(), 4);
+  QCOMPARE(flat.at(0).toDouble(), 0.0);
+  QCOMPARE(flat.at(1).toDouble(), 111.0);
+  QCOMPARE(flat.at(2).toDouble(), 222.0);
+  QCOMPARE(flat.at(3).toDouble(), 0.0);
+
+  // calculateFlushMatrix round-trips the saved matrix (saved values win).
+  const QVariantList roundTrip = preset.calculateFlushMatrix();
+  QCOMPARE(roundTrip.size(), 4);
+  QCOMPARE(roundTrip.at(1).toDouble(), 111.0);
+  QCOMPARE(roundTrip.at(2).toDouble(), 222.0);
+
+  // Non-square input is rejected (a corrupted matrix never reaches storage).
+  QList<QList<double>> broken;
+  broken.append(QList<double>{0.0, 1.0});
+  broken.append(QList<double>{1.0});
+  QVERIFY(!preset.saveFlushVolumes(broken));
+}
+
+// v5.16 Phase 236 (DLG-03): the outside-bed detection feeds the
+// RecenterDialog — an object parked outside the printable area is reported
+// with its index + name, and recenterObjectsOutsideBed clamps it back in so
+// a follow-up detection comes back clean.
+void ViewModelSmokeTests::editorCheckObjectsOutsideBedDetectsOutsideObject()
+{
+  // Deterministic bed geometry regardless of test ordering (other slots
+  // persist bed/* QSettings values).
+  ScopedSettingsSnapshot bedKeys({
+      QStringLiteral("bed/width"),
+      QStringLiteral("bed/depth"),
+      QStringLiteral("bed/maxHeight"),
+      QStringLiteral("bed/originX"),
+      QStringLiteral("bed/originY"),
+      QStringLiteral("bed/shapeType"),
+      QStringLiteral("bed/diameter"),
+  });
+  bedKeys.clear();
+
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  QCOMPARE(editor.bedWidth(), 220.0f);
+
+  const int index = project.addObject(QStringLiteral("Outside Bed Object"));
+  QVERIFY(index >= 0);
+  QVERIFY(project.setObjectPosition(index, 999.0f, 999.0f, 0.0f));
+
+  QCOMPARE(editor.checkObjectsOutsideBed(), 1);
+  QCOMPARE(editor.objectsOutsideBed().size(), 1);
+  const QVariantMap entry = editor.objectsOutsideBed().first().toMap();
+  QCOMPARE(entry.value(QStringLiteral("index")).toInt(), index);
+  QVERIFY2(entry.value(QStringLiteral("name")).toString().contains(QStringLiteral("Outside Bed Object")),
+           "outside-bed entry must carry the object display name");
+
+  // Recenter clamps the object back into the bed rectangle.
+  QCOMPARE(editor.recenterObjectsOutsideBed(), 1);
+  QCOMPARE(editor.checkObjectsOutsideBed(), 0);
+  QVERIFY(editor.objectsOutsideBed().isEmpty());
+
+  // Objects inside the bed never trigger the prompt.
+  const int insideIndex = project.addObject(QStringLiteral("Inside Object"));
+  QVERIFY(insideIndex >= 0);
+  QVERIFY(project.setObjectPosition(insideIndex, 110.0f, 110.0f, 0.0f));
+  QCOMPARE(editor.checkObjectsOutsideBed(), 0);
 }
 
 void ViewModelSmokeTests::testMachineOptionsLoaded()

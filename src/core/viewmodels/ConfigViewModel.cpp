@@ -1885,6 +1885,27 @@ QString ConfigViewModel::valueSourceForKey(const QString &key) const
   return valueSources_.value(key, QStringLiteral("default"));
 }
 
+bool ConfigViewModel::setValue(const QString &key, const QVariant &value)
+{
+  // Phase 236 (DLG-02): single-key write entry for QML surfaces that edit a
+  // whole option outside OptionRow (EditGCodeDialog's editor saves its text
+  // back onto machine_start_gcode / machine_end_gcode / ...). Find the option
+  // model that owns the key (machine first: gcode keys live there), then run
+  // the normal row-based edit so tier routing, dirty tracking and scope
+  // handling behave exactly like an inline edit.
+  ConfigOptionModel *const models[] = {machineOptions_, filamentOptions_, printOptions_};
+  for (ConfigOptionModel *model : models) {
+    if (!model)
+      continue;
+    const int row = model->indexOfKey(key);
+    if (row >= 0) {
+      model->setValue(row, value);
+      return true;
+    }
+  }
+  return false;
+}
+
 QString ConfigViewModel::valueChainForKey(const QString &key) const
 {
   // Return a JSON value chain for default/printer/filament/print levels.

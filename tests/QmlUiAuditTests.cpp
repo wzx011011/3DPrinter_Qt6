@@ -65,6 +65,12 @@ private slots:
   // single-modal gate + Transfer, no empty settings tabs, corrected
   // create-preset scope mapping, sidebar rename/delete affordance.
   void presetSystemCompletionSourceAudit();
+  // v5.16 Phase 236 (DLG-01..04): dialog reachability and completion —
+  // every dialogs/*.qml is qrc-registered, instantiated somewhere, and has
+  // at least one trigger (BackendContext emitter call, menu item, or open
+  // action); AboutDialog carries AGPL-3.0; EditGCode saves via
+  // ConfigViewModel::setValue; WipeTowerDialog persists via saveFlushVolumes.
+  void dialogReachabilitySourceAudit();
   // Phase 53: Prepare object, plate, and viewport actions bind to C++ gates.
   void prepareWorkflowActionsBindCppGates();
   // Phase 76: Prepare workflow panels must stay compact and backend-gated.
@@ -8851,3 +8857,208 @@ void QmlUiAuditTests::v515BedTextureAndModelLitWired()
   QVERIFY2(sceneData.contains(QStringLiteral("GLVolume::NEUTRAL_COLOR")),
            "MODELLIT: default object color must reference upstream NEUTRAL_COLOR");
 }
+
+// v5.16 Phase 236 (DLG-01..04): dialog reachability and completion audit.
+// Three layers of assertions:
+//   1. Every dialogs/*.qml file is registered in qml.qrc AND appears in the
+//      reachability table below (a new dialog that is not wired fails here).
+//   2. Every non-exempt dialog is instantiated (component brace) in some QML
+//      file other than its own AND its trigger token fires somewhere outside
+//      its own file (BackendContext emitter call, menu item, or open action).
+//   3. Task-specific locks: AboutDialog carries the upstream AGPL-3.0
+//      license (AboutDialog.cpp:148-156), EditGCodeDialog saves back through
+//      ConfigViewModel::setValue, WipeTowerDialog persists via
+//      PresetServiceMock::saveFlushVolumes.
+void QmlUiAuditTests::dialogReachabilitySourceAudit()
+{
+  const QDir qmlRoot(QStringLiteral(QT_TESTCASE_SOURCEDIR) + QStringLiteral("/src/qml_gui"));
+
+  // Corpus: relative path -> file content for every QML file under
+  // src/qml_gui (the four known QML trees).
+  QMap<QString, QString> corpus;
+  const QStringList directories = {QStringLiteral("."), QStringLiteral("pages"), QStringLiteral("panels"),
+                                   QStringLiteral("components"), QStringLiteral("controls"),
+                                   QStringLiteral("dialogs"), QStringLiteral("Models")};
+  for (const QString &dir : directories) {
+    const QDir current(qmlRoot.filePath(dir));
+    const auto entries = current.entryList(QStringList() << QStringLiteral("*.qml"), QDir::Files);
+    for (const QString &entry : entries) {
+      const QString relative = (dir == QLatin1String(".")) ? entry : dir + QLatin1Char('/') + entry;
+      if (!corpus.contains(relative))
+        corpus.insert(relative, readSource(QStringLiteral("src/qml_gui/") + relative));
+    }
+  }
+  QVERIFY2(!corpus.isEmpty(), "Unable to read the QML corpus under src/qml_gui");
+
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
+
+  // Reachability table: dialog file name -> trigger token that must appear
+  // in a QML file OTHER than the dialog's own source. Tokens are either a
+  // BackendContext emitter call (backend.showXxxDialog...) or the opening
+  // action on an instantiated id.
+  const QStringList exemptDialogs = {
+      // Shared generic single-choice picker (DLG-03): registered component
+      // with a selected(index, value) signal, consumed by feature dialogs;
+      // no direct business wiring by design.
+      QStringLiteral("SingleChoiceDialog.qml"),
+  };
+  const QMap<QString, QString> triggerTable = {
+      {QStringLiteral("PrintDialog.qml"), QStringLiteral("openPrintDialog()")},
+      {QStringLiteral("CalibrationDialog.qml"), QStringLiteral("calibDlg.open()")},
+      {QStringLiteral("CaliHistoryDialog.qml"), QStringLiteral("historyDlg.open()")},
+      {QStringLiteral("AboutDialog.qml"), QStringLiteral("aboutDialog.open()")},
+      {QStringLiteral("ConfigWizardDialog.qml"), QStringLiteral("configWizardDialog.open()")},
+      {QStringLiteral("BedShapeDialog.qml"), QStringLiteral("showBedShapeDialog()")},
+      {QStringLiteral("EditGCodeDialog.qml"), QStringLiteral("showEditGCodeDialog(")},
+      {QStringLiteral("AccessCodeInputDialog.qml"), QStringLiteral("accessCodeDialog.open()")},
+      {QStringLiteral("AMSSettingsDialog.qml"), QStringLiteral("showAMSSettingsDialog()")},
+      {QStringLiteral("FirmwareDialog.qml"), QStringLiteral("showFirmwareDialog()")},
+      {QStringLiteral("SpeedLimitDialog.qml"), QStringLiteral("showSpeedLimitDialog()")},
+      {QStringLiteral("WipeTowerDialog.qml"), QStringLiteral("showWipeTowerDialog()")},
+      {QStringLiteral("PrintHostDialog.qml"), QStringLiteral("showPrintHostDialog()")},
+      {QStringLiteral("PluginManagerDialog.qml"), QStringLiteral("showPluginManagerDialog()")},
+      {QStringLiteral("EnableLiteModeDialog.qml"), QStringLiteral("showEnableLiteModeDialog()")},
+      {QStringLiteral("KBShortcutsDialog.qml"), QStringLiteral("shortcutDialog.open()")},
+      {QStringLiteral("SavePresetDialog.qml"), QStringLiteral("saveAsDialog.open()")},
+      {QStringLiteral("CreatePresetsDialog.qml"), QStringLiteral("requestCreatePreset()")},
+      {QStringLiteral("UnsavedChangesDialog.qml"), QStringLiteral("openUnsavedChangesGuard")},
+      {QStringLiteral("PresetDiffDialog.qml"), QStringLiteral("requestComparePresets()")},
+      {QStringLiteral("ConfirmDialog.qml"), QStringLiteral("unbindConfirm.open()")},
+      {QStringLiteral("SelectionSettingsDialog.qml"), QStringLiteral("selectionSettingsDialog.open()")},
+      {QStringLiteral("ObjectLayersDialog.qml"), QStringLiteral("objectLayersDialog.open()")},
+      {QStringLiteral("ExportPresetBundleDialog.qml"), QStringLiteral("showExportPresetBundleDialog()")},
+      {QStringLiteral("FilamentGroupPopup.qml"), QStringLiteral("openForCurrentPlate()")},
+      {QStringLiteral("SettingsDialog.qml"), QStringLiteral("forwardSettingsRequest(")},
+      {QStringLiteral("NetworkTestDialog.qml"), QStringLiteral("networkTestDialog.open()")},
+      {QStringLiteral("TroubleshootDialog.qml"), QStringLiteral("troubleshootDialog.open()")},
+      {QStringLiteral("SelectMachineDialog.qml"), QStringLiteral("selectMachineDialog.open()")},
+      {QStringLiteral("RecenterDialog.qml"), QStringLiteral("recenterPromptRequested")},
+      {QStringLiteral("FileArchiveDialog.qml"), QStringLiteral("fileArchiveDialog.openFor(")},
+      {QStringLiteral("ObjColorDialog.qml"), QStringLiteral("objColorMappingRequested")},
+      {QStringLiteral("SysInfoDialog.qml"), QStringLiteral("showSysInfoDialog()")},
+  };
+
+  // 1. Every dialogs/*.qml on disk is qrc-registered and present in the table.
+  const QDir dialogsDir(qmlRoot.filePath(QStringLiteral("dialogs")));
+  QVERIFY2(dialogsDir.exists(), "src/qml_gui/dialogs not found");
+  const auto dialogFiles = dialogsDir.entryList(QStringList() << QStringLiteral("*.qml"), QDir::Files);
+  QVERIFY2(dialogFiles.size() >= 30, "dialogs directory unexpectedly small");
+  for (const QString &file : dialogFiles) {
+    QVERIFY2(qrc.contains(QStringLiteral("dialogs/") + file),
+             qPrintable(QStringLiteral("dialogs/%1 is missing from qml.qrc").arg(file)));
+    QVERIFY2(triggerTable.contains(file) || exemptDialogs.contains(file),
+             qPrintable(QStringLiteral("dialogs/%1 has no reachability entry (instantiation + trigger required)").arg(file)));
+  }
+  // And the table stays honest: no entries for files that do not exist.
+  for (auto it = triggerTable.cbegin(); it != triggerTable.cend(); ++it) {
+    QVERIFY2(dialogFiles.contains(it.key()),
+             qPrintable(QStringLiteral("reachability table references missing dialog %1").arg(it.key())));
+  }
+
+  // 2. Instantiation + trigger per dialog (outside its own file).
+  for (const QString &file : dialogFiles) {
+    if (exemptDialogs.contains(file))
+      continue;
+    const QString ownPath = QStringLiteral("dialogs/") + file;
+    const QString componentName = file.left(file.length() - 4); // strip .qml
+    const QString instantiationToken = componentName + QStringLiteral(" {");
+
+    bool instantiated = false;
+    bool triggered = false;
+    for (auto it = corpus.cbegin(); it != corpus.cend(); ++it) {
+      if (it.key() == ownPath)
+        continue;
+      if (it.value().contains(instantiationToken))
+        instantiated = true;
+      if (it.value().contains(triggerTable.value(file)))
+        triggered = true;
+    }
+    QVERIFY2(instantiated,
+             qPrintable(QStringLiteral("%1 must be instantiated in a QML file outside its own source").arg(componentName)));
+    QVERIFY2(triggered,
+             qPrintable(QStringLiteral("%1 trigger token '%2' not found outside its own source")
+                            .arg(componentName, triggerTable.value(file))));
+  }
+
+  // BackendContext emitters exist for every signal-routed dialog (DLG-01).
+  const QString backendHeader = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
+  const QString backendImpl = readSource(QStringLiteral("src/qml_gui/BackendContext.cpp"));
+  QVERIFY2(!backendHeader.isEmpty() && !backendImpl.isEmpty(), "Unable to read BackendContext sources");
+  const QStringList emitters = {
+      QStringLiteral("showBedShapeDialog"),     QStringLiteral("showEditGCodeDialog"),
+      QStringLiteral("showAMSSettingsDialog"),  QStringLiteral("showFirmwareDialog"),
+      QStringLiteral("showSpeedLimitDialog"),   QStringLiteral("showWipeTowerDialog"),
+      QStringLiteral("showPrintHostDialog"),    QStringLiteral("showPluginManagerDialog"),
+      QStringLiteral("showEnableLiteModeDialog"),
+      QStringLiteral("showExportPresetBundleDialog"),
+      QStringLiteral("showSysInfoDialog"),
+  };
+  for (const QString &emitter : emitters) {
+    QVERIFY2(backendHeader.contains(emitter),
+             qPrintable(QStringLiteral("BackendContext.h must declare %1").arg(emitter)));
+    // Parameterized emitters (e.g. showEditGCodeDialog(key, value)) define
+    // with arguments, so match the definition's opening paren, not "()".
+    QVERIFY2(backendImpl.contains(emitter + QStringLiteral("(")),
+             qPrintable(QStringLiteral("BackendContext.cpp must implement %1").arg(emitter)));
+  }
+
+  // 3a. AboutDialog: upstream license is AGPL-3.0 (AboutDialog.cpp:148-156);
+  // the old LGPL v3 text must stay gone, and the open-source components
+  // list mirrors upstream m_entries.
+  const QString aboutDialog = corpus.value(QStringLiteral("dialogs/AboutDialog.qml"));
+  QVERIFY2(!aboutDialog.isEmpty(), "Unable to read AboutDialog.qml");
+  QVERIFY2(aboutDialog.contains(QStringLiteral("AGPL-3.0")),
+           "DLG-04: AboutDialog must state the GNU Affero General Public License v3");
+  // The ban targets the project-license claim ("GNU LGPL"); the Qt
+  // "(GPL/LGPL)" attribution in the components list is accurate and allowed.
+  QVERIFY2(!aboutDialog.contains(QStringLiteral("GNU LGPL")),
+           "DLG-04: AboutDialog must not claim the Lesser GPL (upstream OrcaSlicer is AGPL-3.0)");
+  QVERIFY2(aboutDialog.contains(QStringLiteral("PrusaSlicer")),
+           "DLG-04: AboutDialog must credit the upstream lineage (OrcaSlicer/PrusaSlicer/BambuStudio)");
+  QVERIFY2(aboutDialog.contains(QStringLiteral("开源组件")),
+           "DLG-04: AboutDialog must list the open-source components (upstream m_entries)");
+
+  // 3b. EditGCode save path (DLG-02): main.qml writes the accepted text back
+  // via ConfigViewModel::setValue; the dialog exposes the option key.
+  const QString mainQml = corpus.value(QStringLiteral("main.qml"));
+  const QString editGcode = corpus.value(QStringLiteral("dialogs/EditGCodeDialog.qml"));
+  QVERIFY2(!mainQml.isEmpty() && !editGcode.isEmpty(), "Unable to read main.qml / EditGCodeDialog.qml");
+  QVERIFY2(editGcode.contains(QStringLiteral("property string optionKey")),
+           "DLG-02: EditGCodeDialog must expose the edited option key");
+  QVERIFY2(mainQml.contains(QStringLiteral("setValue(editGCodeDialog.optionKey")),
+           "DLG-02: onGcodeAccepted must persist via ConfigViewModel::setValue");
+  const QString configVmHeader = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
+  QVERIFY2(configVmHeader.contains(QStringLiteral("Q_INVOKABLE bool setValue(const QString &key, const QVariant &value)")),
+           "DLG-02: ConfigViewModel must expose setValue(key, value)");
+
+  // 3c. WipeTower save path (DLG-02): OK persists the matrix and the service
+  // stores it under the upstream key.
+  const QString wipeTower = corpus.value(QStringLiteral("dialogs/WipeTowerDialog.qml"));
+  QVERIFY2(wipeTower.contains(QStringLiteral("saveFlushVolumes(flushMatrix)")),
+           "DLG-02: WipeTowerDialog OK must call saveFlushVolumes");
+  const QString presetSvcHeader = readSource(QStringLiteral("src/core/services/PresetServiceMock.h"));
+  QVERIFY2(presetSvcHeader.contains(QStringLiteral("saveFlushVolumes")),
+           "DLG-02: PresetServiceMock must declare saveFlushVolumes");
+  const QString presetSvcImpl = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+  QVERIFY2(presetSvcImpl.contains(QStringLiteral("\"flush_volumes_matrix\"")),
+           "DLG-02: saveFlushVolumes must write the upstream flush_volumes_matrix key");
+
+  // 3d. New DLG-03 dialogs keep their service plumbing: outside-bed check,
+  // archive enumeration, mtl colors, project version notice.
+  const QString editorVmHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  QVERIFY2(editorVmHeader.contains(QStringLiteral("checkObjectsOutsideBed")),
+           "DLG-03: EditorViewModel must expose checkObjectsOutsideBed");
+  QVERIFY2(editorVmHeader.contains(QStringLiteral("listArchiveEntries")),
+           "DLG-03: EditorViewModel must proxy listArchiveEntries");
+  QVERIFY2(editorVmHeader.contains(QStringLiteral("applyPendingObjColors")),
+           "DLG-03: EditorViewModel must expose applyPendingObjColors");
+  const QString projectSvcHeader = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  QVERIFY2(projectSvcHeader.contains(QStringLiteral("objMtlColors")),
+           "DLG-03: ProjectServiceMock must expose objMtlColors");
+  QVERIFY2(projectSvcHeader.contains(QStringLiteral("projectVersionInfo")),
+           "DLG-03: ProjectServiceMock must expose projectVersionInfo");
+  QVERIFY2(backendHeader.contains(QStringLiteral("systemInfo")),
+           "DLG-03: BackendContext must expose systemInfo for SysInfoDialog");
+}
+

@@ -331,7 +331,16 @@ CxDialog {
             CxButton {
                 text: qsTr("确定")
                 cxStyle: CxButton.Style.Primary
-                onClicked: root.accept()
+                // Phase 236 (DLG-02): OK persists the edited flush matrix via
+                // PresetServiceMock::saveFlushVolumes (upstream writes
+                // flush_volumes_matrix on the project config at
+                // Plater.cpp:2125). The saved matrix wins over the derived
+                // one on the next open (calculateFlushMatrix reads it back).
+                onClicked: {
+                    if (presetSvc && flushMatrix && flushMatrix.length > 0)
+                        presetSvc.saveFlushVolumes(flushMatrix)
+                    root.accept()
+                }
             }
 
             CxButton {
