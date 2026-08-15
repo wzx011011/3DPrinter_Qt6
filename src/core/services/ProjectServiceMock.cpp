@@ -11,6 +11,8 @@
 #include <QSet>
 #include <QRegularExpression>
 #include <QUrl>
+#include <QTemporaryFile>
+#include <QDataStream>
 #include <QImage>
 #include <QPainter>
 #include <QBuffer>
@@ -4163,6 +4165,911 @@ bool ProjectServiceMock::restoreObjectMeshSnapshot(int objectIndex, const QByteA
 #endif
 }
 
+// ── v5.16 UNDO-01/UNDO-05: 整对象快照（对齐上游 Plater::_take_snapshot）──
+
+QByteArray ProjectServiceMock::captureFullObjectSnapshot(int objectIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return {};
+  Slic3r::ModelObject *obj = model_->objects[size_t(objectIndex)];
+  if (!obj)
+    return {};
+
+  try
+  {
+    // 深拷贝进单对象 Model（Model::add_object(const ModelObject&) →
+    // ModelObject::new_clone 深拷贝 volumes/instances/config，Model.cpp:435，
+    // 与 duplicateObject 的深拷贝手法一致）。
+    Slic3r::Model single;
+    single.add_object(*obj);
+    if (single.objects.empty() || !single.objects.front())
+      return {};
+
+    // 经临时 3MF 文件序列化（复用 saveProjectAs 的 store_3mf 路径，Format/3mf.hpp:60）
+    QTemporaryFile temp(QDir::temp().absoluteFilePath(
+        QStringLiteral("owzx_obj_snap_XXXXXX.3mf")));
+    temp.setAutoRemove(true);
+    if (!temp.open())
+      return {};
+    const QString tmpPath = temp.fileName();
+    temp.close();
+
+    Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
+    if (!Slic3r::store_3mf(tmpPath.toStdString().c_str(), &single, &config,
+                           false, nullptr, true))
+      return {};
+
+    QFile result(tmpPath);
+    if (!result.open(QIODevice::ReadOnly))
+      return {};
+    return result.readAll();
+  }
+  catch (...)
+  {
+    return {};
+  }
+#else
+  Q_UNUSED(objectIndex);
+  return {};
+#endif
+}
+
+int ProjectServiceMock::restoreFullObjectSnapshot(const QByteArray &snapshot, int insertAt,
+                                                  const QString &name, bool printable,
+                                                  bool visible, int plateIndex)
+{
+#ifdef HAS_LIBSLIC3R
+  if (loading_)
+  {
+    lastError_ = tr("加载中，无法恢复对象");
+    emit projectChanged();
+    return -1;
+  }
+  if (snapshot.isEmpty())
+    return -1;
+
+  try
+  {
+    if (!model_)
+    {
+      model_ = new Slic3r::Model();
+      model_->add_default_instances();
+    }
+
+    // 写临时文件 → read_from_file（.3mf 分发到 load_bbs_3mf，Model.cpp:259）
+    QTemporaryFile temp(QDir::temp().absoluteFilePath(
+        QStringLiteral("owzx_obj_restore_XXXXXX.3mf")));
+    temp.setAutoRemove(true);
+    if (!temp.open())
+      return -1;
+    temp.write(snapshot);
+    temp.close();
+
+    Slic3r::Model loaded = Slic3r::Model::read_from_file(
+        temp.fileName().toStdString(), nullptr, nullptr,
+        Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel);
+    if (loaded.objects.empty() || !loaded.objects.front())
+      return -1;
+
+    // 深拷贝进 model_（add_object(const ModelObject&) 走 new_clone，
+    // Model.cpp:435——与 captureFullObjectSnapshot/duplicateObject 同手法；
+    // ModelObject::set_model 是 private（friend Print），不能直接移交所有权）。
+    Slic3r::ModelObject *restored = model_->add_object(*loaded.objects.front());
+    if (!restored)
+      return -1;
+
+    // add_object 追加到尾部；insertAt 合法时把指针旋转到目标位置（vector
+    // 内指针搬移，所有权始终归 model_）。
+    const bool insertValid = insertAt >= 0 && insertAt < int(model_->objects.size());
+    if (insertValid)
+      std::rotate(model_->objects.begin() + insertAt, model_->objects.end() - 1,
+                  model_->objects.end());
+    const int newIdx = insertValid ? insertAt : int(model_->objects.size()) - 1;
+
+    // 名字由调用方决定（快照里带原名字，此处允许覆盖）
+    restored->name = name.toStdString();
+    // printable 落到实例（对齐上游 ModelInstance::printable）
+    for (auto *inst : restored->instances)
+    {
+      if (inst)
+        inst->printable = printable;
+    }
+    if (restored->instances.empty())
+    {
+      auto *inst = restored->add_instance();
+      if (inst)
+        inst->printable = printable;
+    }
+
+    // 重建元数据镜像（对齐 addObject/duplicateObject 的同步代码段）
+    objectNames_.clear();
+    objectNames_.reserve(int(model_->objects.size()));
+    objectModuleNames_.clear();
+    objectModuleNames_.reserve(int(model_->objects.size()));
+    objectPrintableStates_.clear();
+    objectVisibleStates_.clear();
+    objectPrintableStates_.reserve(int(model_->objects.size()));
+    objectVisibleStates_.reserve(int(model_->objects.size()));
+    objectPositions_.clear();
+    objectRotations_.clear();
+    objectScales_.clear();
+    for (size_t i = 0; i < model_->objects.size(); ++i)
+    {
+      const auto *o = model_->objects[i];
+      objectNames_ << (o && !o->name.empty() ? QString::fromStdString(o->name)
+                                             : tr("对象 %1").arg(int(i + 1)));
+      objectModuleNames_ << (o && !o->module_name.empty()
+                                 ? QString::fromStdString(o->module_name)
+                                 : tr("默认模块"));
+      const bool pr = o && !o->instances.empty() ? o->instances.front()->printable : true;
+      objectPrintableStates_.append(pr);
+      objectVisibleStates_.append(o && !o->instances.empty()
+                                      ? o->instances.front()->is_printable()
+                                      : true);
+      if (o && !o->instances.empty() && o->instances.front())
+      {
+        const auto *inst = o->instances.front();
+        const auto off = inst->get_offset();
+        objectPositions_.append(QVector3D(
+            static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y())));
+        const auto rot = inst->get_rotation();
+        objectRotations_.append(QVector3D(
+            qRadiansToDegrees(static_cast<float>(rot.x())),
+            qRadiansToDegrees(static_cast<float>(rot.y())),
+            qRadiansToDegrees(static_cast<float>(rot.z()))));
+        const auto sc = inst->get_scaling_factor();
+        objectScales_.append(QVector3D(
+            static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z())));
+      }
+      else
+      {
+        objectPositions_.append(QVector3D(0, 0, 0));
+        objectRotations_.append(QVector3D(0, 0, 0));
+        objectScales_.append(QVector3D(1, 1, 1));
+      }
+    }
+
+    // visibility 是 GL 侧概念（Qt6 镜像数组），不属于 slic3r 实例状态
+    if (newIdx >= 0 && newIdx < objectVisibleStates_.size())
+      objectVisibleStates_[newIdx] = visible;
+
+    // 中间插入会使 >=newIdx 的对象索引 +1——先平移各 plate 的成员索引再归盘
+    if (m_plateList && m_plateList->plateCount() > 0 && int(model_->objects.size()) > 1)
+    {
+      for (int pi = 0; pi < m_plateList->plateCount(); ++pi)
+      {
+        OWzx::PartPlate *p = m_plateList->plate(pi);
+        if (!p)
+          continue;
+        std::set<std::pair<int, int>> rebuilt;
+        for (const auto &pair : p->objToInstanceSet())
+        {
+          std::pair<int, int> adj = pair;
+          if (pair.first >= newIdx)
+            ++adj.first;
+          rebuilt.insert(adj);
+        }
+        p->clearInstances();
+        for (const auto &pair : rebuilt)
+          p->addInstance(pair.first, pair.second);
+      }
+    }
+
+    modelCount_ = objectNames_.size();
+
+    // Seed empty plate membership（对齐 deleteObject 的播种——删光后 undo 恢复的
+    // 对象也要落在平板 1 上，否则平板视图看不到它）
+    if (m_plateList && m_plateList->plateCount() > 0)
+    {
+      OWzx::PartPlate *first = m_plateList->plate(0);
+      if (first && first->objToInstanceSet().empty())
+      {
+        for (int i = 0; i < modelCount_; ++i)
+          first->addInstance(i, 0);
+        if (first->name().empty())
+          first->setName(tr("平板 1").toStdString());
+      }
+    }
+
+    lastError_.clear();
+    emit projectChanged();
+    emit plateDataLoaded(m_plateList ? m_plateList->plateCount() : 0);
+
+    // plate 归属用现有 API（依赖上面已同步的 objectNames_ 镜像）
+    if (plateIndex >= 0)
+      setObjectPlateForIndex(newIdx, plateIndex);
+
+    return newIdx;
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = QString::fromStdString(ex.what());
+    emit projectChanged();
+    return -1;
+  }
+  catch (...)
+  {
+    lastError_ = tr("恢复对象快照失败：未知错误");
+    emit projectChanged();
+    return -1;
+  }
+#else
+  Q_UNUSED(snapshot);
+  Q_UNUSED(insertAt);
+  Q_UNUSED(name);
+  Q_UNUSED(printable);
+  Q_UNUSED(visible);
+  Q_UNUSED(plateIndex);
+  return -1;
+#endif
+}
+
+// ── v5.16 UNDO-02: volume 级网格快照 ──
+
+QByteArray ProjectServiceMock::captureVolumeMeshSnapshot(int objectIndex, int volumeIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return {};
+  const auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || volumeIndex < 0 || size_t(volumeIndex) >= obj->volumes.size())
+    return {};
+  const auto *vol = obj->volumes[size_t(volumeIndex)];
+  if (!vol)
+    return {};
+  const auto &its = vol->mesh().its;
+  if (its.indices.empty())
+    return {};
+
+  // Serialize: vCount/iCount/volType/extruderId (int32 x4) + transform matrix
+  // (double x16) + vertices (float*3) + indices (int32*3)
+  const int32_t vCount = int32_t(its.vertices.size());
+  const int32_t iCount = int32_t(its.indices.size());
+  const int32_t volType = int32_t(vol->type());
+  const int32_t extruderId = int32_t(vol->extruder_id());
+  const auto &matrix = vol->get_transformation().get_matrix();
+
+  const size_t dataBytes = 4 * sizeof(int32_t) + 16 * sizeof(double)
+      + size_t(vCount) * 3 * sizeof(float)
+      + size_t(iCount) * 3 * sizeof(int32_t);
+  QByteArray ba;
+  ba.resize(int(dataBytes));
+  int offset = 0;
+  std::memcpy(ba.data() + offset, &vCount, sizeof(int32_t)); offset += sizeof(int32_t);
+  std::memcpy(ba.data() + offset, &iCount, sizeof(int32_t)); offset += sizeof(int32_t);
+  std::memcpy(ba.data() + offset, &volType, sizeof(int32_t)); offset += sizeof(int32_t);
+  std::memcpy(ba.data() + offset, &extruderId, sizeof(int32_t)); offset += sizeof(int32_t);
+  for (int r = 0; r < 4; ++r)
+  {
+    for (int c = 0; c < 4; ++c)
+    {
+      const double v = matrix(r, c);
+      std::memcpy(ba.data() + offset, &v, sizeof(double));
+      offset += sizeof(double);
+    }
+  }
+  if (vCount > 0)
+  {
+    std::memcpy(ba.data() + offset, its.vertices.data(), vCount * 3 * sizeof(float));
+    offset += vCount * 3 * sizeof(float);
+  }
+  if (iCount > 0)
+  {
+    std::memcpy(ba.data() + offset, its.indices.data(), iCount * 3 * sizeof(int32_t));
+  }
+  return ba;
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(volumeIndex);
+  return {};
+#endif
+}
+
+bool ProjectServiceMock::restoreVolumeSnapshot(int objectIndex, int volumeIndex,
+                                               const QByteArray &snapshot,
+                                               const QString &volName, int volType)
+{
+#ifdef HAS_LIBSLIC3R
+  if (loading_)
+  {
+    lastError_ = tr("加载中，无法恢复部件");
+    emit projectChanged();
+    return false;
+  }
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return false;
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || snapshot.isEmpty())
+    return false;
+
+  const int kHeaderBytes = int(4 * sizeof(int32_t) + 16 * sizeof(double));
+  if (snapshot.size() < kHeaderBytes)
+    return false;
+
+  int offset = 0;
+  int32_t vCount = 0, iCount = 0, snapType = 0, snapExtruder = -1;
+  std::memcpy(&vCount, snapshot.constData() + offset, sizeof(int32_t)); offset += sizeof(int32_t);
+  std::memcpy(&iCount, snapshot.constData() + offset, sizeof(int32_t)); offset += sizeof(int32_t);
+  std::memcpy(&snapType, snapshot.constData() + offset, sizeof(int32_t)); offset += sizeof(int32_t);
+  std::memcpy(&snapExtruder, snapshot.constData() + offset, sizeof(int32_t)); offset += sizeof(int32_t);
+  if (vCount <= 0 || iCount <= 0)
+    return false;
+  if (offset + vCount * 3 * int(sizeof(float)) + iCount * 3 * int(sizeof(int32_t)) > snapshot.size())
+    return false;
+
+  Slic3r::Transform3d trafo = Slic3r::Transform3d::Identity();
+  for (int r = 0; r < 4; ++r)
+    for (int c = 0; c < 4; ++c)
+    {
+      double v = 0.0;
+      std::memcpy(&v, snapshot.constData() + offset, sizeof(double));
+      offset += sizeof(double);
+      trafo(r, c) = v;
+    }
+
+  indexed_triangle_set restored;
+  restored.vertices.resize(size_t(vCount));
+  restored.indices.resize(size_t(iCount));
+  std::memcpy(restored.vertices.data(), snapshot.constData() + offset, vCount * 3 * sizeof(float));
+  offset += vCount * 3 * sizeof(float);
+  std::memcpy(restored.indices.data(), snapshot.constData() + offset, iCount * 3 * sizeof(int32_t));
+
+  try
+  {
+    // 快照里带真实的 ModelVolumeType（0..4）；volType 仅作越界兜底
+    const int effectiveType = (snapType >= 0 && snapType <= 4) ? snapType : volType;
+    auto *vol = obj->add_volume(Slic3r::TriangleMesh(std::move(restored)),
+                                static_cast<Slic3r::ModelVolumeType>(effectiveType));
+    if (!vol)
+      return false;
+    vol->set_transformation(trafo);
+    vol->name = volName.toStdString();
+    if (snapExtruder >= 0)
+      vol->config.set_key_value("extruder", new Slic3r::ConfigOptionInt(snapExtruder));
+    vol->set_new_unique_id();
+
+    // add_volume 追加到末尾——挪回 volumeIndex 位置保持顺序（越界则保持追加）
+    if (volumeIndex >= 0 && volumeIndex < int(obj->volumes.size()) - 1)
+    {
+      Slic3r::ModelVolume *moved = obj->volumes.back();
+      obj->volumes.pop_back();
+      obj->volumes.insert(obj->volumes.begin() + volumeIndex, moved);
+    }
+
+    lastError_.clear();
+    emit projectChanged();
+    return true;
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = QString::fromStdString(ex.what());
+    emit projectChanged();
+    return false;
+  }
+  catch (...)
+  {
+    lastError_ = tr("恢复部件快照失败：未知错误");
+    emit projectChanged();
+    return false;
+  }
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(volumeIndex);
+  Q_UNUSED(snapshot);
+  Q_UNUSED(volName);
+  Q_UNUSED(volType);
+  return false;
+#endif
+}
+
+// ── v5.16 UNDO-03: whole plate-list snapshot ───────────────────────────────
+// Upstream truth: plate ops enter the undo stack through Plater::
+// _take_snapshot (PartPlate.cpp:7060 "add partplate", :13993 "lock partplate",
+// :14033 "move plate", :14074 "delete partplate"). The Qt6 per-command
+// equivalent snapshots the whole PartPlateList state into one QByteArray.
+
+namespace {
+// "OWPS" plate snapshot header; bumped on any format change.
+constexpr quint32 kPlateSnapshotMagic = 0x4F575053u;
+constexpr quint32 kPlateSnapshotVersion = 1;
+
+struct PlateSnapshotEntry {
+  bool valid = false;
+  QString name;
+  bool locked = false;
+  bool printable = true;
+  qint32 bedType = 0;
+  qint32 printSequence = 0;
+  qint32 spiralMode = 0;
+  qint32 firstLayerSeqChoice = 0;
+  QList<qint32> firstLayerSeqOrder;
+  qint32 otherLayersSeqChoice = 0;
+  struct SeqEntry {
+    qint32 beginLayer = 2;
+    qint32 endLayer = 100;
+    QList<qint32> extruderOrder;
+  };
+  QList<SeqEntry> otherLayersSeqEntries;
+  QList<qint32> filamentMaps;
+  qint32 filamentMapMode = 0;
+  QList<QPair<qint32, qint32>> members;  ///< (objectIndex, instanceIndex)
+  QList<QPair<QString, QString>> configOptions;  ///< (key, serialized value)
+};
+
+struct PlateObjectSnapshot {
+  qint32 objectIndex = -1;
+  QByteArray full3mf;
+  QString name;
+  double pos[3] = {0, 0, 0};
+  double rot[3] = {0, 0, 0};
+  double scale[3] = {1, 1, 1};
+  bool printable = true;
+  bool visible = true;
+  qint32 plateIndex = -1;
+};
+}  // namespace
+
+QByteArray ProjectServiceMock::capturePlateListSnapshot(bool deepObjects) const
+{
+  if (!m_plateList)
+    return {};
+
+  QByteArray buffer;
+  QDataStream ds(&buffer, QIODevice::WriteOnly);
+  ds << kPlateSnapshotMagic << kPlateSnapshotVersion;
+
+  const int count = m_plateList->plateCount();
+  ds << qint32(count) << qint32(m_plateList->currentPlateIndex());
+
+  for (int i = 0; i < count; ++i)
+  {
+    const OWzx::PartPlate *p = m_plateList->plate(i);
+    if (!p)
+    {
+      ds << false;
+      continue;
+    }
+    ds << true;
+    ds << QString::fromStdString(p->name());
+    ds << p->isLocked() << p->isPrintable();
+    ds << qint32(p->bedType()) << qint32(p->printSequence()) << qint32(p->spiralMode());
+    ds << qint32(p->firstLayerSeqChoice());
+    const QList<qint32> firstOrder(p->firstLayerSeqOrder().begin(),
+                                   p->firstLayerSeqOrder().end());
+    ds << qint32(firstOrder.size());
+    for (qint32 v : firstOrder) ds << v;
+    ds << qint32(p->otherLayersSeqChoice());
+    const auto &entries = p->otherLayersSeqEntries();
+    ds << qint32(entries.size());
+    for (const auto &e : entries)
+    {
+      ds << qint32(e.beginLayer) << qint32(e.endLayer);
+      const QList<qint32> order(e.extruderOrder.begin(), e.extruderOrder.end());
+      ds << qint32(order.size());
+      for (qint32 v : order) ds << v;
+    }
+    const QList<qint32> maps(p->filamentMaps().begin(), p->filamentMaps().end());
+    ds << qint32(maps.size());
+    for (qint32 v : maps) ds << v;
+    ds << qint32(int(p->filamentMapMode()));
+    const auto &members = p->objToInstanceSet();
+    ds << qint32(members.size());
+    for (const auto &pair : members)
+      ds << qint32(pair.first) << qint32(pair.second);
+#ifdef HAS_LIBSLIC3R
+    // Per-plate DynamicPrintConfig (D-04): key -> ConfigOption::serialize()
+    // string; restored via set_deserialize_strict (Config.hpp:2170).
+    const std::vector<std::string> keys = p->config().keys();
+    ds << qint32(keys.size());
+    for (const std::string &k : keys)
+    {
+      const Slic3r::ConfigOption *opt = p->config().option(k);
+      ds << QString::fromStdString(k)
+         << QString::fromStdString(opt ? opt->serialize() : std::string());
+    }
+#else
+    ds << qint32(0);
+#endif
+  }
+
+  // Object-list identity (name per index). restore() removes objects that are
+  // not present here — that is how clone-plate undo deletes the duplicated
+  // copies (duplicateObject names them "<name> (副本)", ProjectServiceMock.cpp:6817).
+  const QStringList names = objectNames();
+  ds << qint32(names.size());
+  for (const QString &n : names) ds << n;
+
+  // Deep per-object 3MF blobs for every object referenced by any plate.
+  // delete-plate undo uses these to restore members with full mesh fidelity
+  // (mirrors upstream whole-model snapshot fidelity).
+  if (deepObjects)
+  {
+    QSet<qint32> plateObjects;
+    for (int i = 0; i < count; ++i)
+    {
+      const OWzx::PartPlate *p = m_plateList->plate(i);
+      if (!p)
+        continue;
+      for (const auto &pair : p->objToInstanceSet())
+        plateObjects.insert(qint32(pair.first));
+    }
+    QList<qint32> sorted = plateObjects.values();
+    std::sort(sorted.begin(), sorted.end());
+    ds << qint32(sorted.size());
+    for (qint32 idx : sorted)
+    {
+      const QVector3D pos = objectPosition(int(idx));
+      const QVector3D rot = objectRotation(int(idx));
+      const QVector3D scl = objectScale(int(idx));
+      ds << idx << captureFullObjectSnapshot(int(idx))
+         << objectNames().value(int(idx));
+      ds << double(pos.x()) << double(pos.y()) << double(pos.z());
+      ds << double(rot.x()) << double(rot.y()) << double(rot.z());
+      ds << double(scl.x()) << double(scl.y()) << double(scl.z());
+      ds << objectPrintable(int(idx)) << objectVisible(int(idx))
+         << qint32(plateIndexForObject(int(idx)));
+    }
+  }
+  else
+  {
+    ds << qint32(0);
+  }
+  return buffer;
+}
+
+bool ProjectServiceMock::restorePlateListSnapshot(const QByteArray &snapshot)
+{
+  if (loading_ || !m_plateList || snapshot.isEmpty())
+    return false;
+
+  // ── Phase 1: parse everything first; state stays untouched on failure ──
+  QDataStream ds(snapshot);
+  quint32 magic = 0, version = 0;
+  ds >> magic >> version;
+  if (magic != kPlateSnapshotMagic || version != kPlateSnapshotVersion)
+    return false;
+
+  qint32 count = 0, currentIdx = 0;
+  ds >> count >> currentIdx;
+  if (count < 1)
+    return false;
+
+  QList<PlateSnapshotEntry> plates;
+  plates.reserve(count);
+  for (qint32 i = 0; i < count; ++i)
+  {
+    PlateSnapshotEntry e;
+    ds >> e.valid;
+    if (e.valid)
+    {
+      ds >> e.name >> e.locked >> e.printable;
+      ds >> e.bedType >> e.printSequence >> e.spiralMode;
+      ds >> e.firstLayerSeqChoice;
+      qint32 n = 0;
+      ds >> n;
+      for (qint32 k = 0; k < n; ++k) { qint32 v = 0; ds >> v; e.firstLayerSeqOrder.append(v); }
+      ds >> e.otherLayersSeqChoice;
+      ds >> n;
+      for (qint32 k = 0; k < n; ++k)
+      {
+        PlateSnapshotEntry::SeqEntry se;
+        qint32 m = 0;
+        ds >> se.beginLayer >> se.endLayer >> m;
+        for (qint32 j = 0; j < m; ++j) { qint32 v = 0; ds >> v; se.extruderOrder.append(v); }
+        e.otherLayersSeqEntries.append(se);
+      }
+      ds >> n;
+      for (qint32 k = 0; k < n; ++k) { qint32 v = 0; ds >> v; e.filamentMaps.append(v); }
+      ds >> e.filamentMapMode;
+      ds >> n;
+      for (qint32 k = 0; k < n; ++k)
+      {
+        qint32 obj = 0, inst = 0;
+        ds >> obj >> inst;
+        e.members.append(qMakePair(obj, inst));
+      }
+      ds >> n;
+      for (qint32 k = 0; k < n; ++k)
+      {
+        QString key, value;
+        ds >> key >> value;
+        e.configOptions.append(qMakePair(key, value));
+      }
+    }
+    plates.append(e);
+  }
+
+  qint32 nameCount = 0;
+  ds >> nameCount;
+  QStringList targetNames;
+  targetNames.reserve(nameCount);
+  for (qint32 i = 0; i < nameCount; ++i)
+  {
+    QString n;
+    ds >> n;
+    targetNames.append(n);
+  }
+
+  qint32 deepCount = 0;
+  ds >> deepCount;
+  QList<PlateObjectSnapshot> deepObjects;
+  deepObjects.reserve(deepCount);
+  for (qint32 i = 0; i < deepCount; ++i)
+  {
+    PlateObjectSnapshot o;
+    double posx = 0, posy = 0, posz = 0, rotx = 0, roty = 0, rotz = 0;
+    double sclx = 1, scly = 1, sclz = 1;
+    ds >> o.objectIndex >> o.full3mf >> o.name;
+    ds >> posx >> posy >> posz >> rotx >> roty >> rotz >> sclx >> scly >> sclz;
+    ds >> o.printable >> o.visible >> o.plateIndex;
+    o.pos[0] = posx; o.pos[1] = posy; o.pos[2] = posz;
+    o.rot[0] = rotx; o.rot[1] = roty; o.rot[2] = rotz;
+    o.scale[0] = sclx; o.scale[1] = scly; o.scale[2] = sclz;
+    deepObjects.append(o);
+  }
+  if (ds.status() != QDataStream::Ok)
+    return false;
+
+  const int prevCurrent = m_plateList->currentPlateIndex();
+
+  // ── Phase 2: reconcile the object list ──
+  // 2a. Remove objects that were not in the snapshot (clone-plate undo). The
+  // mock duplicateObject branch can insert mid-list, so re-scan after each
+  // delete instead of assuming the extras sit at the tail.
+  bool removedAny = true;
+  while (removedAny)
+  {
+    removedAny = false;
+    const QStringList current = objectNames();
+    QStringList remaining = targetNames;
+    for (int i = 0; i < current.size(); ++i)
+    {
+      const int pos = remaining.indexOf(current[i]);
+      if (pos < 0)
+      {
+        deleteObject(i);
+        removedAny = true;
+        break;
+      }
+      remaining.removeAt(pos);
+    }
+  }
+
+  // 2b. Re-insert missing deep-snapshot objects at their original indices
+  // (delete-plate undo: members that died with the plate come back with full
+  // mesh/volumes/config — UNDO-01 captureFullObjectSnapshot fidelity).
+  for (const PlateObjectSnapshot &o : deepObjects)
+  {
+    if (o.full3mf.isEmpty())
+      continue;
+    if (o.objectIndex >= 0 && o.objectIndex < objectNames().size()
+        && objectNames().value(o.objectIndex) == o.name)
+      continue;  // object survived the operation — nothing to restore
+    const int newIdx = restoreFullObjectSnapshot(
+        o.full3mf, o.objectIndex, o.name, o.printable, o.visible, o.plateIndex);
+    if (newIdx >= 0)
+    {
+      setObjectPosition(newIdx, float(o.pos[0]), float(o.pos[1]), float(o.pos[2]));
+      setObjectRotation(newIdx, float(o.rot[0]), float(o.rot[1]), float(o.rot[2]));
+      setObjectScale(newIdx, float(o.scale[0]), float(o.scale[1]), float(o.scale[2]));
+    }
+  }
+
+  // ── Phase 3: rebuild the plate list itself ──
+  while (m_plateList->plateCount() > count)
+    m_plateList->deletePlate(m_plateList->plateCount() - 1);
+  while (m_plateList->plateCount() < count)
+    m_plateList->createPlate();
+
+  for (qint32 i = 0; i < count; ++i)
+  {
+    OWzx::PartPlate *p = m_plateList->plate(int(i));
+    const PlateSnapshotEntry &e = plates[int(i)];
+    if (!p || !e.valid)
+      continue;
+    p->setName(e.name.toStdString());
+    p->setLocked(e.locked);
+    p->setPrintable(e.printable);
+    p->setBedType(int(e.bedType));
+    p->setPrintSequence(int(e.printSequence));
+    p->setSpiralMode(int(e.spiralMode));
+    p->setFirstLayerSeqChoice(int(e.firstLayerSeqChoice));
+    p->setFirstLayerSeqOrder(std::vector<int>(e.firstLayerSeqOrder.begin(),
+                                              e.firstLayerSeqOrder.end()));
+    p->setOtherLayersSeqChoice(int(e.otherLayersSeqChoice));
+    std::vector<OWzx::LayerSeqEntry> entries;
+    entries.reserve(size_t(e.otherLayersSeqEntries.size()));
+    for (const auto &se : e.otherLayersSeqEntries)
+    {
+      OWzx::LayerSeqEntry le;
+      le.beginLayer = int(se.beginLayer);
+      le.endLayer = int(se.endLayer);
+      le.extruderOrder.assign(se.extruderOrder.begin(), se.extruderOrder.end());
+      entries.push_back(std::move(le));
+    }
+    p->setOtherLayersSeqEntries(std::move(entries));
+    p->setFilamentMaps(std::vector<int>(e.filamentMaps.begin(), e.filamentMaps.end()));
+    p->setFilamentMapMode(int(e.filamentMapMode));
+    p->clearInstances();
+    for (const auto &pair : e.members)
+      p->addInstance(int(pair.first), int(pair.second));
+#ifdef HAS_LIBSLIC3R
+    p->config().clear();
+    for (const auto &kv : e.configOptions)
+    {
+      try
+      {
+        p->config().set_deserialize_strict(kv.first.toStdString(),
+                                           kv.second.toStdString());
+      }
+      catch (...)
+      {
+        // Unknown key / bad value for this build's config schema — skip it
+        // (the scalar plate fields above already carry the visible state).
+      }
+    }
+#endif
+  }
+
+  m_plateList->setCurrentPlateIndex(int(qBound<qint32>(0, currentIdx, count - 1)));
+  m_plateList->refreshPlateOrigins();
+
+  emit projectChanged();
+  emit plateDataLoaded(m_plateList->plateCount());
+  if (m_plateList->currentPlateIndex() != prevCurrent)
+    emit plateSelectionChanged();
+  return true;
+}
+
+// ── v5.16 UNDO-04: FacetsAnnotation snapshot ───────────────────────────────
+// Upstream truth: painter gizmos commit through Plater::_take_snapshot(
+// GizmoAction) so every stroke is undoable. The Qt6 equivalent serializes the
+// FacetsAnnotation's TriangleSplittingData (TriangleSelector.hpp:253) — the
+// same data the 3MF writer persists (Model.cpp:3336 get_triangle_as_string
+// reads exactly these vectors).
+
+namespace {
+// "OWPT" paint snapshot header; bumped on any format change.
+constexpr quint32 kPaintSnapshotMagic = 0x4F575054u;
+constexpr quint32 kPaintSnapshotVersion = 1;
+}  // namespace
+
+QByteArray ProjectServiceMock::capturePaintSnapshot(int objectIndex, int volumeIndex,
+                                                    int kind) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return {};
+  const Slic3r::ModelObject *mo = model_->objects[size_t(objectIndex)];
+  if (!mo || volumeIndex < 0 || size_t(volumeIndex) >= mo->volumes.size())
+    return {};
+  const Slic3r::ModelVolume *mv = mo->volumes[size_t(volumeIndex)];
+  if (!mv || kind < 0 || kind > 2)
+    return {};
+  const Slic3r::FacetsAnnotation &fa =
+      kind == 0 ? mv->supported_facets
+                : (kind == 1 ? mv->seam_facets : mv->mmu_segmentation_facets);
+  const auto &data = fa.get_data();
+
+  QByteArray buffer;
+  QDataStream ds(&buffer, QIODevice::WriteOnly);
+  ds << kPaintSnapshotMagic << kPaintSnapshotVersion;
+  ds << qint32(data.triangles_to_split.size());
+  for (const auto &m : data.triangles_to_split)
+    ds << qint32(m.triangle_idx) << qint32(m.bitstream_start_idx);
+  ds << qint32(data.bitstream.size());
+  for (bool b : data.bitstream) ds << quint8(b ? 1 : 0);
+  ds << qint32(data.used_states.size());
+  for (bool b : data.used_states) ds << quint8(b ? 1 : 0);
+  return buffer;
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(volumeIndex);
+  Q_UNUSED(kind);
+  return {};
+#endif
+}
+
+bool ProjectServiceMock::restorePaintSnapshot(int objectIndex, int volumeIndex,
+                                              int kind, const QByteArray &snapshot)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return false;
+  if (snapshot.isEmpty())
+    return false;
+  QDataStream ds(snapshot);
+  quint32 magic = 0, version = 0;
+  ds >> magic >> version;
+  if (magic != kPaintSnapshotMagic || version != kPaintSnapshotVersion)
+    return false;
+
+  Slic3r::TriangleSelector::TriangleSplittingData data;
+  qint32 n = 0;
+  ds >> n;
+  if (n < 0)
+    return false;
+  data.triangles_to_split.reserve(size_t(n));
+  for (qint32 i = 0; i < n; ++i)
+  {
+    qint32 triangleIdx = -1, bitStart = -1;
+    ds >> triangleIdx >> bitStart;
+    data.triangles_to_split.emplace_back(int(triangleIdx), int(bitStart));
+  }
+  ds >> n;
+  if (n < 0)
+    return false;
+  data.bitstream.reserve(size_t(n));
+  for (qint32 i = 0; i < n; ++i)
+  {
+    quint8 bit = 0;
+    ds >> bit;
+    data.bitstream.push_back(bit != 0);
+  }
+  ds >> n;
+  if (n > 0)
+  {
+    data.used_states.reserve(size_t(n));
+    for (qint32 i = 0; i < n; ++i)
+    {
+      quint8 bit = 0;
+      ds >> bit;
+      data.used_states.push_back(bit != 0);
+    }
+  }
+  if (ds.status() != QDataStream::Ok)
+    return false;
+
+  const PaintKind pk = static_cast<PaintKind>(kind);
+
+  // Rebuild a selector over the live volume mesh, deserialize the snapshot
+  // into it (the same route upstream's 3MF paint load takes) and write it
+  // back through FacetsAnnotation::set (serialize + touch -> re-slice). An
+  // empty snapshot takes the same path: deserializing empty data leaves the
+  // selector pristine and serialize() re-emits an empty TriangleSplittingData
+  // (FacetsAnnotation::reset would leave used_states dirty from the previous
+  // paint — serialize() recomputes it, Model.cpp:3315-3324).
+  auto mesh = volumeMeshTriangleMesh(objectIndex, volumeIndex);
+  if (!mesh)
+    return false;
+  Slic3r::TriangleSelector selector(*mesh);
+  selector.deserialize(data, /*needs_reset=*/true);
+  return writePaintToModelVolume(objectIndex, volumeIndex, pk, selector);
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(volumeIndex);
+  Q_UNUSED(kind);
+  Q_UNUSED(snapshot);
+  return false;
+#endif
+}
+
+#ifdef HAS_LIBSLIC3R
+bool ProjectServiceMock::deserializePaintIntoSelector(int objectIndex, int volumeIndex,
+                                                      PaintKind kind,
+                                                      Slic3r::TriangleSelector &selector) const
+{
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return false;
+  const Slic3r::ModelObject *mo = model_->objects[size_t(objectIndex)];
+  if (!mo || volumeIndex < 0 || size_t(volumeIndex) >= mo->volumes.size())
+    return false;
+  const Slic3r::ModelVolume *mv = mo->volumes[size_t(volumeIndex)];
+  if (!mv)
+    return false;
+  const Slic3r::FacetsAnnotation &fa =
+      kind == PaintKind::Support ? mv->supported_facets
+                                 : (kind == PaintKind::Seam ? mv->seam_facets
+                                                            : mv->mmu_segmentation_facets);
+  if (fa.get_data().triangles_to_split.empty())
+    selector.reset();
+  else
+    selector.deserialize(fa.get_data(), /*needs_reset=*/true);
+  return true;
+}
+#endif
+
 #ifdef HAS_LIBSLIC3R
 int ProjectServiceMock::objectTriangleCount(int objectIndex) const
 {
@@ -4306,7 +5213,63 @@ bool ProjectServiceMock::addObjectLayerRange(int objectIndex, double minZ, doubl
   range.minZ = minZ;
   range.maxZ = maxZ;
   m_mockLayerRanges[objectIndex].append(range);
+  // v5.16 (UNDO-06): upstream GUI_ObjectLayers::add_range trims overlapping
+  // parts of existing ranges so ranges never overlap, then the map feeds
+  // ModelObject::layer_config_ranges which Print consumes for variable layer
+  // heights. Mirror the trim on the mock mirror + sync to the real model.
+  auto &ranges = m_mockLayerRanges[objectIndex];
+  for (int i = ranges.size() - 2; i >= 0; --i)
+  {
+    MockLayerRange &r = ranges[i];
+    if (r.maxZ <= range.minZ || r.minZ >= range.maxZ)
+      continue; // no overlap
+    if (r.minZ < range.minZ && r.maxZ > range.maxZ)
+    {
+      // Strictly contains the new range -> split into two neighbors.
+      MockLayerRange upper;
+      upper.minZ = range.maxZ;
+      upper.maxZ = r.maxZ;
+      upper.overrides = r.overrides;
+      r.maxZ = range.minZ;
+      ranges.insert(i + 1, upper);
+    }
+    else if (r.maxZ > range.minZ && r.minZ < range.minZ)
+      r.maxZ = range.minZ; // trim the tail
+    else if (r.minZ < range.maxZ && r.maxZ > range.maxZ)
+      r.minZ = range.maxZ; // trim the head
+    else
+      ranges.removeAt(i); // fully covered by the new range
+  }
+  syncLayerRangesToModel(objectIndex);
+  emit projectChanged();
   return true;
+}
+
+void ProjectServiceMock::syncLayerRangesToModel(int objectIndex)
+{
+#ifdef HAS_LIBSLIC3R
+  // v5.16 (UNDO-06): bridge the mock layer ranges into the real
+  // ModelObject::layer_config_ranges (Slicing.hpp:147-148 map of
+  // (minZ,maxZ)->ModelConfig) so slicing consumes variable layer heights.
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return;
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj)
+    return;
+  obj->layer_config_ranges.clear();
+  const auto ranges = m_mockLayerRanges.value(objectIndex);
+  for (const auto &r : ranges)
+  {
+    Slic3r::ModelConfig &cfg = obj->layer_config_ranges[{r.minZ, r.maxZ}];
+    for (auto it = r.overrides.constBegin(); it != r.overrides.constEnd(); ++it)
+    {
+      const QString key = it.key();
+      if (key == QStringLiteral("layer_height"))
+        cfg.set_key_value("layer_height",
+                          new Slic3r::ConfigOptionFloat(it.value().toDouble()));
+    }
+  }
+#endif
 }
 
 bool ProjectServiceMock::removeObjectLayerRange(int objectIndex, int rangeIndex)
@@ -4317,6 +5280,8 @@ bool ProjectServiceMock::removeObjectLayerRange(int objectIndex, int rangeIndex)
   if (rangeIndex < 0 || rangeIndex >= it->size())
     return false;
   it->removeAt(rangeIndex);
+  syncLayerRangesToModel(objectIndex);
+  emit projectChanged();
   return true;
 }
 
@@ -4328,6 +5293,8 @@ bool ProjectServiceMock::setLayerRangeValue(int objectIndex, int rangeIndex, con
   if (rangeIndex < 0 || rangeIndex >= it->size())
     return false;
   it->operator[](rangeIndex).overrides[key] = value;
+  syncLayerRangesToModel(objectIndex);
+  emit projectChanged();
   return true;
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QUndoCommand>
+#include <QByteArray>
 #include <QVector3D>
 #include <QSet>
 #include <QString>
@@ -93,6 +94,11 @@ private:
 // ── DeleteObjectsCommand ────────────────────────────────────────────────────
 /// Records object data before deletion. On undo, re-inserts objects.
 /// On redo, re-deletes.
+// v5.16 (UNDO-01): upstream takes whole-model snapshots (Plater::_take_snapshot)
+// so undo restores the deleted object with its full mesh/volumes. This command
+// now captures a single-object 3MF snapshot (captureFullObjectSnapshot) and
+/// restores via restoreFullObjectSnapshot; the old name-only addObject path
+/// stays as the mock-mode fallback (empty snapshot).
 class DeleteObjectsCommand : public QUndoCommand
 {
 public:
@@ -114,8 +120,15 @@ private:
     bool visible;
     int volumeCount;
     int plateIndex;
+    int originalIndex = -1;   ///< index at capture time (insert target for undo)
+    QByteArray full3mf;       ///< v5.16 UNDO-01: single-object 3MF snapshot
+    int restoredIndex = -1;   ///< index returned by restore (redo delete target)
   };
   QList<ObjectSnapshot> m_snapshots;
+  /// QUndoStack::push() invokes redo() once while the objects are already
+  /// deleted — skip that first call (otherwise a duplicate name still present
+  /// in the scene would be mis-deleted by the name fallback).
+  bool m_firstRedoDone = false;
   ProjectServiceMock *m_service;
   EditorViewModel *m_viewModel;
 };
@@ -123,10 +136,18 @@ private:
 // ── AddObjectCommand ────────────────────────────────────────────────────────
 /// Records the index/name of a newly added object. On undo, removes it.
 /// On redo, re-adds it.
+// v5.16 (UNDO-01/UNDO-05): the object already exists when the command is
+// constructed (paste pushes after addObject), so the constructor captures a
+// full 3MF snapshot + transform; redo restores the mesh-bearing object instead
+// of re-adding an empty one. undo deletes by index, falling back to a
+// name lookup when indices drifted (name collision risk is low: the object
+// was just added).
 class AddObjectCommand : public QUndoCommand
 {
 public:
-  /// objectIndex is the index returned by ProjectServiceMock::addObject().
+  /// objectIndex is the index returned by ProjectServiceMock::addObject() /
+  /// restoreFullObjectSnapshot(). Must be constructed while the object still
+  /// exists so the snapshot can be captured.
   AddObjectCommand(int objectIndex, const QString &objectName,
                    ProjectServiceMock *service,
                    QUndoCommand *parent = nullptr);
@@ -138,6 +159,14 @@ private:
   int m_objectIndex;
   QString m_objectName;
   ProjectServiceMock *m_service;
+  QByteArray m_full3mf;          ///< v5.16: single-object 3MF snapshot for redo
+  QVector3D m_pos, m_rot, m_scale;
+  bool m_printable = true;
+  bool m_visible = true;
+  int m_plateIndex = -1;
+  /// QUndoStack::push() invokes redo() once on push; the object already exists
+  /// at that point, so the first redo is a no-op (Qt skip-first pattern).
+  bool m_firstRedoDone = false;
 };
 
 // ── SelectionCommand ────────────────────────────────────────────────────────
@@ -217,11 +246,16 @@ private:
 
 // ── VolumeDeleteCommand ─────────────────────────────────────────────────────
 /// Records volume data before deletion. On undo, restores. On redo, re-deletes.
+// v5.16 (UNDO-02): captures the volume mesh + type/transform/extruder via
+// captureVolumeMeshSnapshot so undo rebuilds the real volume (the old
+// addVolume fallback created a mesh-less placeholder). Must be constructed
+// BEFORE the volume is deleted.
 class VolumeDeleteCommand : public QUndoCommand
 {
 public:
   VolumeDeleteCommand(int objectIndex, int volumeIndex,
                       ProjectServiceMock *service,
+                      EditorViewModel *viewModel = nullptr,
                       QUndoCommand *parent = nullptr);
 
   void undo() override;
@@ -233,7 +267,13 @@ private:
   QString m_volumeName;
   int m_volumeType;
   int m_extruderId;
+  QByteArray m_volumeMesh;  ///< v5.16 UNDO-02: serialized its+type+transform+extruder
+  /// QUndoStack::push() invokes redo() once on push; the volume is already
+  /// deleted at that point, so the first redo is a no-op (Qt skip-first
+  /// pattern) — otherwise the push would delete the WRONG successor volume.
+  bool m_firstRedoDone = false;
   ProjectServiceMock *m_service;
+  EditorViewModel *m_viewModel;
 };
 
 // ── BooleanCommand ──────────────────────────────────────────────────────────
@@ -376,6 +416,91 @@ private:
   int m_operationType;  ///< 0=text, 1=svg, 2=emboss
   QString m_param;       ///< text string, svg file path, or emboss text
   int m_volumeCountBefore;
+  ProjectServiceMock *m_service;
+  EditorViewModel *m_viewModel;
+};
+
+// ── PlateCommand ────────────────────────────────────────────────────────────
+// v5.16 (UNDO-03): plate operations enter the undo stack. Upstream truth:
+// every plate op takes a whole-model snapshot (PartPlate.cpp:7060
+// "add partplate", :13993 "lock partplate", :14033 "move plate",
+// :14074 "delete partplate"). Qt6 equivalent under the per-command
+// architecture: capture the full plate-list state (plate fields + instance
+// membership + current index; DeletePlate additionally embeds per-object 3MF
+// snapshots via capturePlateListSnapshot(deep)) BEFORE the operation, capture
+// the state again AFTER it, and swap the two snapshots on undo/redo.
+class PlateCommand : public QUndoCommand
+{
+public:
+  enum Action {
+    AddPlate = 0,
+    DeletePlate,
+    MovePlate,
+    ClonePlate,
+    LockPlate,
+    SetPrintable
+  };
+
+  /// Captures the BEFORE snapshot (deep object blobs for DeletePlate — its
+  /// members must be restorable with mesh fidelity). Construct BEFORE the
+  /// plate operation runs.
+  PlateCommand(Action action, ProjectServiceMock *service,
+               EditorViewModel *viewModel, QUndoCommand *parent = nullptr);
+
+  /// Captures the AFTER snapshot. Call after the operation succeeded and
+  /// before push() (two-phase construction, same as TransformCommand).
+  void setAfterState();
+
+  void undo() override;
+  void redo() override;
+
+private:
+  Action m_action;
+  QByteArray m_before;
+  QByteArray m_after;
+  /// QUndoStack::push() invokes redo() once while the operation's result is
+  /// already applied — skip that first call (Qt skip-first pattern, same as
+  /// DeleteObjectsCommand / VolumeDeleteCommand).
+  bool m_firstRedoDone = false;
+  ProjectServiceMock *m_service;
+  EditorViewModel *m_viewModel;
+};
+
+// ── PaintCommand ────────────────────────────────────────────────────────────
+// v5.16 (UNDO-04): paint strokes enter the undo stack. Upstream truth: the
+// painter gizmos commit each stroke through Plater::_take_snapshot(
+// GizmoAction) (GLGizmoPainterBase). Qt6 equivalent: every paintAtFacet call
+// pushes a command holding the FacetsAnnotation serialization (kind-specific
+// supported/seam/mmu_segmentation facets) before and after the stroke;
+// consecutive commands on the same (object, volume, kind) merge via
+// mergeWith so one drag = one undo step (TransformCommand coalescing
+// pattern). undo/redo also re-sync the PaintEngine's cached TriangleSelector
+// so the overlay keeps rendering the restored state.
+class PaintCommand : public QUndoCommand
+{
+public:
+  /// `before` is captured before the stroke modifies the FacetsAnnotation;
+  /// call setNewResult() with the post-stroke capture before push().
+  PaintCommand(int objectIndex, int volumeIndex, int kind,
+               const QByteArray &before, ProjectServiceMock *service,
+               EditorViewModel *viewModel, QUndoCommand *parent = nullptr);
+
+  void setNewResult(const QByteArray &after);
+
+  void undo() override;
+  void redo() override;
+  int id() const override { return 8; }
+  bool mergeWith(const QUndoCommand *other) override;
+
+private:
+  int m_objectIndex;
+  int m_volumeIndex;
+  int m_kind;  ///< 0=Support, 1=Seam, 2=Mmu (PaintKind)
+  QByteArray m_before;
+  QByteArray m_after;
+  /// QUndoStack::push() invokes redo() once while the paint is already
+  /// applied — skip that first call (Qt skip-first pattern).
+  bool m_firstRedoDone = false;
   ProjectServiceMock *m_service;
   EditorViewModel *m_viewModel;
 };

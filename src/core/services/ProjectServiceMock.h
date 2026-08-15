@@ -384,6 +384,74 @@ public:
   /// Returns true on success.
   bool restoreObjectMeshSnapshot(int objectIndex, const QByteArray &snapshot);
 
+  // ── v5.16 UNDO-01/UNDO-05: 整对象快照（对齐上游 Plater::_take_snapshot 的
+  // 全对象保真——Qt6 逐命令模式下用单对象 3MF 序列化保存网格/volumes/配置）──
+  // 把指定对象深拷贝进单对象 Slic3r::Model（Model::add_object(const ModelObject&)
+  // → ModelObject::new_clone，Model.cpp:435），经临时 3MF 文件（store_3mf，对齐
+  // saveProjectAs 路径）序列化为 QByteArray。失败返回空。
+  QByteArray captureFullObjectSnapshot(int objectIndex) const;
+  // 把快照恢复为 model_ 的新对象：写临时文件 → Model::read_from_file → 把
+  // objects[0] 移进 model_->objects（insertAt 合法则插入该索引，否则 append）。
+  // 本 API 只负责网格+volumes+name/printable/visible/plate 归属；instance 变换由
+  // 调用方通过 setObjectPosition/Rotation/Scale 负责。返回新索引，失败 -1。
+  int restoreFullObjectSnapshot(const QByteArray &snapshot, int insertAt,
+                                const QString &name, bool printable, bool visible,
+                                int plateIndex);
+
+  // ── v5.16 UNDO-02: volume 级网格快照（deleteVolume undo 保真）──
+  // 序列化指定 volume 的 its + 类型/耗材/4x4 变换矩阵（名字由调用方保存）。
+  // 失败返回空。
+  QByteArray captureVolumeMeshSnapshot(int objectIndex, int volumeIndex) const;
+  // 在 objectIndex 的 volumeIndex 处用快照重建 volume（its+类型+变换+耗材恢复，
+  // 名字用 volName）。失败返回 false。
+  bool restoreVolumeSnapshot(int objectIndex, int volumeIndex,
+                             const QByteArray &snapshot, const QString &volName,
+                             int volType);
+
+  // ── v5.16 UNDO-03: whole plate-list snapshot (plate-op undo fidelity) ──
+  // Upstream truth: every plate operation takes a whole-model snapshot
+  // (PartPlate.cpp:7060 "add partplate", :13993 "lock partplate",
+  // :14033 "move plate", :14074 "delete partplate"). Qt6 equivalent in the
+  // per-command architecture: serialize the full PartPlateList state (plate
+  // count, current index, per-plate name/locked/printable/bedType/
+  // printSequence/spiralMode/first+other layer sequences/filament maps+mode/
+  // instance membership + per-plate DynamicPrintConfig) into one QByteArray.
+  // deepObjects=true additionally embeds per-object captureFullObjectSnapshot
+  // blobs for every object referenced by any plate — delete-plate undo uses
+  // this so members that die with the plate come back with their meshes.
+  QByteArray capturePlateListSnapshot(bool deepObjects = false) const;
+  // Rebuilds the plate list to the snapshot state: objects not present in the
+  // snapshot name list are removed (clone-plate undo deletes the copies),
+  // missing deep-snapshot objects are re-inserted at their original indices
+  // (delete-plate undo), then the plates/membership/current index are
+  // restored. Returns false on parse failure (state untouched on failure).
+  bool restorePlateListSnapshot(const QByteArray &snapshot);
+
+  // ── v5.16 UNDO-04: FacetsAnnotation snapshot (paint-stroke undo) ──
+  // Serializes the ModelVolume FacetsAnnotation of the given paint kind
+  // (0=Support, 1=Seam, 2=Mmu) — the TriangleSplittingData
+  // (triangles_to_split + bitstream + used_states, TriangleSelector.hpp:253).
+  // Returns a header-only (still non-empty) buffer when the annotation holds
+  // no paint; returns an empty QByteArray on invalid object/volume/kind
+  // (capture failure — callers treat empty as "nothing to restore").
+  QByteArray capturePaintSnapshot(int objectIndex, int volumeIndex, int kind) const;
+  // Restores the annotation from a capturePaintSnapshot buffer: a
+  // TriangleSelector is rebuilt over the volume mesh, the data is
+  // deserialized into it (TriangleSelector::deserialize, upstream 3MF paint
+  // load path) and written back through FacetsAnnotation::set (touch ->
+  // re-slice). Empty paint data round-trips to a pristine annotation the
+  // same way. Mirrors upstream GLGizmoPainterBase undo semantics.
+  bool restorePaintSnapshot(int objectIndex, int volumeIndex, int kind,
+                            const QByteArray &snapshot);
+#ifdef HAS_LIBSLIC3R
+  // Mirror the (just restored) FacetsAnnotation into an existing
+  // TriangleSelector so the PaintEngine cache stays in sync after undo/redo
+  // (the cache does NOT auto-reload from the ModelVolume).
+  bool deserializePaintIntoSelector(int objectIndex, int volumeIndex,
+                                    PaintKind kind,
+                                    Slic3r::TriangleSelector &selector) const;
+#endif
+
   /// ── Layer range support (对齐上游 ModelObject::layer_config_ranges) ──
   /// Get layer ranges for an object
   QList<MockLayerRange> objectLayerRanges(int objectIndex) const;
@@ -395,6 +463,10 @@ public:
   Q_INVOKABLE bool setLayerRangeValue(int objectIndex, int rangeIndex, const QString &key, const QVariant &value);
   /// Get override value for a specific layer range
   QVariant layerRangeValue(int objectIndex, int rangeIndex, const QString &key, const QVariant &fallback = QVariant()) const;
+  /// v5.16 (UNDO-06): bridge the mock layer ranges into the real
+  /// ModelObject::layer_config_ranges so slicing consumes variable layer
+  /// heights (upstream GUI_ObjectLayers -> ModelObject::layer_config_ranges).
+  void syncLayerRangesToModel(int objectIndex);
 
   Q_INVOKABLE bool deleteObject(int index);
 

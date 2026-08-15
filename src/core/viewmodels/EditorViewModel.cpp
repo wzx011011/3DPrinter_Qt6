@@ -3578,10 +3578,24 @@ bool EditorViewModel::paintAtFacet(int obj, int vol, int facetIdx,
                             hit.objectIndex, hit.volumeIndex)
                       : nullptr;
     if (selector) {
-      const PaintKind kind = static_cast<PaintKind>(
-          (m_activePaintKind < 0 || m_activePaintKind > 2) ? 0 : m_activePaintKind);
+      const int kindInt =
+          (m_activePaintKind < 0 || m_activePaintKind > 2) ? 0 : m_activePaintKind;
+      const PaintKind kind = static_cast<PaintKind>(kindInt);
+      // v5.16 (UNDO-04): capture the annotation before/after the write so the
+      // stroke enters the undo stack (upstream Plater::_take_snapshot(
+      // GizmoAction) per GLGizmoPainterBase stroke; consecutive strokes on
+      // the same volume merge via PaintCommand::mergeWith).
+      const QByteArray paintBefore = projectService_->capturePaintSnapshot(
+          hit.objectIndex, hit.volumeIndex, kindInt);
       projectService_->writePaintToModelVolume(
           hit.objectIndex, hit.volumeIndex, kind, *selector);
+      if (!paintBefore.isEmpty() && m_undoManager) {
+        auto *cmd = new PaintCommand(hit.objectIndex, hit.volumeIndex, kindInt,
+                                     paintBefore, projectService_, this);
+        cmd->setNewResult(projectService_->capturePaintSnapshot(
+            hit.objectIndex, hit.volumeIndex, kindInt));
+        m_undoManager->push(cmd);
+      }
     }
 #endif
   }
@@ -3604,6 +3618,37 @@ void EditorViewModel::clearPaintOnObject(int objectIndex)
       ++it;
   }
   emit paintDataChanged();
+}
+
+// v5.16 (UNDO-04): PaintCommand undo/redo restored the ModelVolume
+// FacetsAnnotation (supported/seam/mmu_segmentation facets). The PaintEngine's
+// cached TriangleSelector does NOT observe that write, so it is re-synced here
+// by deserializing the annotation into the cached selector (upstream
+// equivalent: GLGizmoPainterBase::data_changed -> update_model_object keeps
+// the gizmo selector and the model annotation in lockstep). Emits
+// paintDataChanged + invalidates slice results so the overlay and the stale
+// slice cache both drop the un-painted state.
+void EditorViewModel::resyncPaintSelector(int objectIndex, int volumeIndex, int kind)
+{
+  if (!projectService_ || objectIndex < 0 || kind < 0 || kind > 2)
+    return;
+  if (!m_paintEngine) {
+    m_paintEngine = std::make_unique<OWzx::PaintEngine>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const Slic3r::TriangleMesh> {
+          return svc ? svc->volumeMeshTriangleMesh(objIdx, volIdx) : nullptr;
+        });
+  }
+  Slic3r::TriangleSelector *selector =
+      m_paintEngine ? m_paintEngine->ensureSelector(objectIndex, volumeIndex)
+                    : nullptr;
+  if (!selector)
+    return;
+  if (projectService_->deserializePaintIntoSelector(
+          objectIndex, volumeIndex, static_cast<PaintKind>(kind), *selector)) {
+    emit paintDataChanged();
+    invalidateSliceResultsForCurrentPlate();
+  }
 }
 
 // Phase 121 (PAINT-02/OV-01): reverse data channel. Flattens the selected
@@ -3762,6 +3807,11 @@ void EditorViewModel::clearPaintOnObject(int)
   // HAS_LIBSLIC3R off: drop only the Qt data layer (no PaintEngine to clear).
   m_paintData.clear();
   emit paintDataChanged();
+}
+// v5.16 (UNDO-04): non-lib stub. Without libslic3r there is no
+// FacetsAnnotation to resync from (paint strokes never reach the model).
+void EditorViewModel::resyncPaintSelector(int, int, int)
+{
 }
 // Phase 121 (PAINT-02): stubs for the non-lib build. paintOverlayData returns
 // empty (nothing to overlay without PaintEngine); extrudersColors returns the
@@ -4648,16 +4698,43 @@ bool EditorViewModel::deleteSelectedVolumesBySource()
   std::sort(volumeIndices.begin(), volumeIndices.end(), std::greater<int>());
   volumeIndices.erase(std::unique(volumeIndices.begin(), volumeIndices.end()), volumeIndices.end());
 
+  // v5.16 (UNDO-02): capture each volume before its deletion and push the
+  // commands onto the undo stack (they were previously bypassed entirely).
+  // One command per volume; wrapped in a macro when >1 so a single Ctrl+Z
+  // restores the whole selection.
+  QList<VolumeDeleteCommand *> pendingCommands;
   int deletedCount = 0;
   for (int volumeIndex : volumeIndices)
   {
+    VolumeDeleteCommand *cmd = nullptr;
+    if (m_undoManager)
+      cmd = new VolumeDeleteCommand(m_selectedVolumeObjectSourceIndex, volumeIndex,
+                                    projectService_, this);
     if (!projectService_->deleteObjectVolume(m_selectedVolumeObjectSourceIndex, volumeIndex))
     {
+      delete cmd;
       statusText_ = projectService_->lastError();
       emit stateChanged();
       return deletedCount > 0;
     }
+    if (cmd)
+      pendingCommands.append(cmd);
     ++deletedCount;
+  }
+
+  if (m_undoManager && !pendingCommands.isEmpty())
+  {
+    if (pendingCommands.size() == 1)
+    {
+      m_undoManager->push(pendingCommands.first());
+    }
+    else
+    {
+      m_undoManager->beginMacro(QObject::tr("Delete %1 Volumes").arg(pendingCommands.size()));
+      for (VolumeDeleteCommand *cmd : pendingCommands)
+        m_undoManager->push(cmd);
+      m_undoManager->endMacro();
+    }
   }
 
   m_selectedVolumeObjectSourceIndex = -1;
@@ -4682,12 +4759,22 @@ void EditorViewModel::deleteVolume(int i, int volumeIndex)
     return;
   }
 
+  // v5.16 (UNDO-02): capture the volume BEFORE deleting so undo restores the
+  // real mesh/type/transform (previously this action bypassed the stack).
+  VolumeDeleteCommand *deleteCmd = nullptr;
+  if (m_undoManager)
+    deleteCmd = new VolumeDeleteCommand(sourceIndex, volumeIndex, projectService_, this);
+
   if (!projectService_->deleteObjectVolume(sourceIndex, volumeIndex))
   {
+    delete deleteCmd;
     statusText_ = projectService_->lastError();
     emit stateChanged();
     return;
   }
+
+  if (m_undoManager && deleteCmd)
+    m_undoManager->push(deleteCmd);
 
   if (m_selectedVolumeObjectSourceIndex == sourceIndex && m_selectedVolumeIndex == volumeIndex)
   {
@@ -5260,12 +5347,20 @@ void EditorViewModel::copySelectedObjects()
 
   // 复制选中对象元数据到内部剪贴板（对齐上游 Selection::copy_to_clipboard）
   m_clipboard.clear();
+  m_clipboardSnapshots.clear();
   QList<int> sorted = m_selectedSourceIndices.values();
   std::sort(sorted.begin(), sorted.end());
   for (int srcIdx : sorted)
   {
     if (srcIdx >= 0 && srcIdx < m_objects.size())
+    {
       m_clipboard.append(m_objects[srcIdx]);
+      // v5.16 (UNDO-05): 深拷贝对象为 3MF 快照，粘贴时恢复网格/变换/配置
+      // 覆盖（对齐上游 Selection::copy_to_clipboard 的对象深拷贝语义）。
+      m_clipboardSnapshots.append(projectService_
+                                      ? projectService_->captureFullObjectSnapshot(srcIdx)
+                                      : QByteArray());
+    }
   }
   emit stateChanged();
 }
@@ -5277,10 +5372,36 @@ void EditorViewModel::pasteObjects()
   // 粘贴：对每个剪贴板条目添加新对象（对齐上游 Selection::paste_objects_from_clipboard）
   m_selectedSourceIndices.clear();
   QList<QPair<int, QString>> addedPairs; // (newIndex, name)
+  // Paste lands on the current plate; after a delete-all the plate list is
+  // reset with current == -1, in which case plate 0 is the (single) target.
+  const int currentPlate = projectService_->currentPlateIndex();
+  const int pastePlate = currentPlate >= 0 ? currentPlate : 0;
 
-  for (const auto &entry : m_clipboard)
+  for (int e = 0; e < m_clipboard.size(); ++e)
   {
-    const int newIdx = projectService_->addObject(entry.name);
+    const auto &entry = m_clipboard[e];
+    const QByteArray snap = e < m_clipboardSnapshots.size()
+                                ? m_clipboardSnapshots[e]
+                                : QByteArray();
+    int newIdx = -1;
+    if (!snap.isEmpty())
+    {
+      // v5.16 (UNDO-05): 用整对象快照恢复网格/volumes/配置（末端 append），
+      // 再对 pos.x + 5mm 平移防重叠（对齐上游 paste 后 find_displacements 思想）。
+      newIdx = projectService_->restoreFullObjectSnapshot(snap, -1, entry.name,
+                                                          entry.printable, true,
+                                                          pastePlate);
+      if (newIdx >= 0)
+      {
+        const QVector3D pos = projectService_->objectPosition(newIdx);
+        projectService_->setObjectPosition(newIdx, pos.x() + 5.0f, pos.y(), pos.z());
+      }
+    }
+    if (newIdx < 0)
+    {
+      // 无快照回退：旧名字路径（mock 模式）
+      newIdx = projectService_->addObject(entry.name);
+    }
     if (newIdx >= 0)
     {
       m_selectedSourceIndices.insert(newIdx);
@@ -6234,12 +6355,24 @@ bool EditorViewModel::addPlate()
 {
   if (!canAddPlate())
     return false;
+  // v5.16 (UNDO-03): plate ops enter the undo stack. The BEFORE snapshot is
+  // captured here (upstream truth: "add partplate" takes a whole-model
+  // snapshot, PartPlate.cpp:7060); setAfterState + push happen post-success.
+  PlateCommand *cmd = m_undoManager
+      ? new PlateCommand(PlateCommand::AddPlate, projectService_, this)
+      : nullptr;
   if (projectService_->addPlate())
   {
+    if (cmd)
+    {
+      cmd->setAfterState();
+      m_undoManager->push(cmd);
+    }
     rebuildObjectEntriesFromService();
     emit stateChanged();
     return true;
   }
+  delete cmd;
   return false;
 }
 
@@ -6252,13 +6385,25 @@ bool EditorViewModel::deletePlate(int plateIndex)
 {
   if (!canDeletePlate(plateIndex))
     return false;
+  // v5.16 (UNDO-03): DeletePlate embeds per-object 3MF snapshots for the
+  // plate's members in the BEFORE capture (upstream "delete partplate",
+  // PartPlate.cpp:14074) so undo restores them with mesh fidelity.
+  PlateCommand *cmd = m_undoManager
+      ? new PlateCommand(PlateCommand::DeletePlate, projectService_, this)
+      : nullptr;
   if (projectService_->deletePlate(plateIndex))
   {
+    if (cmd)
+    {
+      cmd->setAfterState();
+      m_undoManager->push(cmd);
+    }
     invalidateAllSliceResults();
     rebuildObjectEntriesFromService();
     emit stateChanged();
     return true;
   }
+  delete cmd;
   return false;
 }
 
@@ -6313,8 +6458,24 @@ void EditorViewModel::togglePlateLocked(int plateIndex)
 {
   if (!projectService_)
     return;
+  // v5.16 (UNDO-03): lock flips enter the undo stack (upstream "lock
+  // partplate", PartPlate.cpp:13993).
   const bool current = projectService_->isPlateLocked(plateIndex);
-  projectService_->setPlateLocked(plateIndex, !current);
+  PlateCommand *cmd = m_undoManager
+      ? new PlateCommand(PlateCommand::LockPlate, projectService_, this)
+      : nullptr;
+  if (projectService_->setPlateLocked(plateIndex, !current))
+  {
+    if (cmd)
+    {
+      cmd->setAfterState();
+      m_undoManager->push(cmd);
+    }
+  }
+  else
+  {
+    delete cmd;
+  }
   invalidateSliceResultsForPlate(plateIndex);
   emit stateChanged();
 }
@@ -6325,10 +6486,25 @@ bool EditorViewModel::clonePlate(int sourceIndex)
 {
   if (!projectService_)
     return false;
+  // v5.16 (UNDO-03): the BEFORE snapshot records the pre-clone object-name
+  // list so undo deletes the duplicated copies (upstream duplicate_plate
+  // takes a whole-model snapshot).
+  PlateCommand *cmd = m_undoManager
+      ? new PlateCommand(PlateCommand::ClonePlate, projectService_, this)
+      : nullptr;
   const bool ok = projectService_->clonePlate(sourceIndex);
   if (ok) {
+    if (cmd)
+    {
+      cmd->setAfterState();
+      m_undoManager->push(cmd);
+    }
     invalidateAllSliceResults();
     emit stateChanged();
+  }
+  else
+  {
+    delete cmd;
   }
   return ok;
 }
@@ -6337,10 +6513,24 @@ bool EditorViewModel::movePlate(int oldIndex, int newIndex)
 {
   if (!projectService_)
     return false;
+  // v5.16 (UNDO-03): reorder enters the undo stack (upstream "move plate",
+  // PartPlate.cpp:14033); undo swaps the before/after plate-list snapshots.
+  PlateCommand *cmd = m_undoManager
+      ? new PlateCommand(PlateCommand::MovePlate, projectService_, this)
+      : nullptr;
   const bool ok = projectService_->movePlate(oldIndex, newIndex);
   if (ok) {
+    if (cmd)
+    {
+      cmd->setAfterState();
+      m_undoManager->push(cmd);
+    }
     invalidateAllSliceResults();
     emit stateChanged();
+  }
+  else
+  {
+    delete cmd;
   }
   return ok;
 }
@@ -6349,10 +6539,25 @@ bool EditorViewModel::setPlatePrintable(int plateIndex, bool printable)
 {
   if (!projectService_)
     return false;
+  // v5.16 (UNDO-03): printable flips enter the undo stack (part of the
+  // plate-op snapshot coverage; the service-side per-plate flag is scalar
+  // state carried inside the plate-list snapshot).
+  PlateCommand *cmd = m_undoManager
+      ? new PlateCommand(PlateCommand::SetPrintable, projectService_, this)
+      : nullptr;
   const bool ok = projectService_->setPlatePrintable(plateIndex, printable);
   if (ok) {
+    if (cmd)
+    {
+      cmd->setAfterState();
+      m_undoManager->push(cmd);
+    }
     invalidateSliceResultsForPlate(plateIndex);
     emit stateChanged();
+  }
+  else
+  {
+    delete cmd;
   }
   return ok;
 }

@@ -42,6 +42,7 @@
 #include "core/services/SliceService.h"
 #include "core/services/PluginService.h"
 #include "core/services/UndoRedoManager.h"
+#include "core/services/UndoCommands.h"
 #include "core/services/FtpUploader.h"
 #include "core/services/SsdpDiscovery.h"
 #include "core/rendering/AssemblyMeasureGeometry.h"
@@ -395,6 +396,38 @@ private slots:
   // QmlUiAuditTests::v56CrossWorkstreamRegressionLocked. Headless-only: no
   // device, no network, no Python.
   void v56CrossWorkstreamViewModelsCallable();
+  // v5.16 (UNDO-01): delete-object undo restores the FULL object. Covers the
+  // captureFullObjectSnapshot/restoreFullObjectSnapshot 3MF round-trip at the
+  // service level AND the DeleteObjectsCommand undo/redo cycle (undo restores
+  // mesh + name + transform + plate; redo re-deletes by captured identity,
+  // not by name). Upstream truth: Plater::_take_snapshot whole-model undo.
+  void deleteUndoRestoresFullObject();
+  // v5.16 (UNDO-05): copy/paste keeps mesh fidelity. copySelectedObjects
+  // captures per-object 3MF snapshots; pasteObjects restores them (mesh +
+  // volumes) with a +5mm X anti-overlap offset; undo/redo of the paste
+  // (AddObjectCommand) round-trips the mesh too.
+  void pasteSnapshotRestoresMeshFidelity();
+  // v5.16 (UNDO-02): volume-level mesh snapshot round-trip. Builds a
+  // 2-volume object (assembleObjects), deletes one volume, and restores it
+  // via captureVolumeMeshSnapshot/restoreVolumeSnapshot — the data path
+  // VolumeDeleteCommand undo uses.
+  void volumeDeleteUndoRestoresMesh();
+  // v5.16 (UNDO-06): layer-range edits bridge into the real
+  // ModelObject::layer_config_ranges so slicing consumes variable layer
+  // heights (upstream GUI_ObjectLayers semantics incl. overlap trimming).
+  void layerRangesReachModelConfig();
+  // v5.16 (UNDO-03): plate operations (delete/add/move/lock) round-trip
+  // through the undo stack via PlateCommand's before/after plate-list
+  // snapshots — plate count, names, membership and member-object meshes are
+  // restored on undo (upstream PartPlate.cpp:7060/13993/14033/14074
+  // whole-model snapshots).
+  void plateOperationsUndoRestoresState();
+  // v5.16 (UNDO-04): paint strokes enter the undo stack. Service-level
+  // capturePaintSnapshot/restorePaintSnapshot round-trip the FacetsAnnotation
+  // (TriangleSplittingData), and PaintCommand undo/redo swaps the captured
+  // before/after annotation states (upstream Plater::_take_snapshot(
+  // GizmoAction) per GLGizmoPainterBase stroke).
+  void paintStrokeUndoRestoresFacets();
 
 private:
   bool hasLibslic3r() const;
@@ -5586,6 +5619,375 @@ void ViewModelSmokeTests::sourceMappedProcessHierarchyMatchesTabPrint()
   QVERIFY(filament);
   QVERIFY(machine->pageNames().contains(QStringLiteral("Basic information")));
   QVERIFY(filament->pageNames().contains(QStringLiteral("Cooling")));
+}
+
+// -- v5.16 Phase 234 (UNDO-01): delete-object undo restores the full object --
+void ViewModelSmokeTests::deleteUndoRestoresFullObject()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("UNDO-01 full-object snapshot requires libslic3r (store_3mf + read_from_file)");
+#else
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  // Two synchronous mesh-bearing primitives (no async STL load needed).
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);  // cube
+  QVERIFY(project.addPrimitiveToPlate(1) >= 0);  // sphere
+  QCOMPARE(project.modelCount(), 2);
+
+  const QString victimName = project.objectNames().value(1);
+  QVERIFY(project.setObjectPosition(1, 10.0f, 20.0f, 30.0f));
+  const QVector3D victimPos = project.objectPosition(1);
+  auto itsBefore = project.volumeMeshIts(1, 0);
+  QVERIFY2(itsBefore != nullptr && !itsBefore->vertices.empty(),
+           "UNDO-01: object 1 must have a mesh before deletion");
+  const int verticesBefore = int(itsBefore->vertices.size());
+  const int trianglesBefore = int(itsBefore->indices.size());
+
+  // -- Part 1: service-level 3MF snapshot round-trip --
+  const QByteArray snap = project.captureFullObjectSnapshot(1);
+  QVERIFY2(!snap.isEmpty(),
+           "UNDO-01: captureFullObjectSnapshot must serialize a single-object 3MF");
+
+  QVERIFY(project.deleteObject(1));
+  QCOMPARE(project.modelCount(), 1);
+
+  const int restoredIdx = project.restoreFullObjectSnapshot(
+      snap, /*insertAt=*/1, victimName, /*printable=*/true, /*visible=*/true,
+      /*plateIndex=*/0);
+  QVERIFY2(restoredIdx >= 0, "UNDO-01: restoreFullObjectSnapshot must re-insert the object");
+  QCOMPARE(project.modelCount(), 2);
+  QCOMPARE(restoredIdx, 1);  // insertAt honored — original list order restored
+  QCOMPARE(project.objectNames().value(1), victimName);
+  QCOMPARE(project.plateIndexForObject(1), 0);
+  auto itsRestored = project.volumeMeshIts(1, 0);
+  QVERIFY2(itsRestored != nullptr && !itsRestored->vertices.empty(),
+           "UNDO-01: restored object must have a mesh (not an empty addObject shell)");
+  QCOMPARE(int(itsRestored->vertices.size()), verticesBefore);
+  QCOMPARE(int(itsRestored->indices.size()), trianglesBefore);
+
+  // -- Part 2: DeleteObjectsCommand undo/redo cycle through the undo stack --
+  // Part 1 mutated the service directly; resync the VM's entry list first
+  // (selectSourceObject validates against m_objects, refreshed by rebuild).
+  editor.rebuildAndNotify();
+  QVERIFY(editor.selectSourceObject(1));
+  editor.deleteObject(1);  // pushes DeleteObjectsCommand (snapshot captured pre-delete)
+  QCOMPARE(project.modelCount(), 1);
+
+  undoManager.undo();
+  QVERIFY2(project.modelCount() == 2,
+           "UNDO-01: undo must restore the deleted object");
+  QCOMPARE(project.objectNames().value(1), victimName);
+  // Mesh fidelity: the restored object's volume 0 has the pre-delete topology.
+  auto itsUndo = project.volumeMeshIts(1, 0);
+  QVERIFY2(itsUndo != nullptr && int(itsUndo->vertices.size()) == verticesBefore
+               && int(itsUndo->indices.size()) == trianglesBefore,
+           "UNDO-01: undo-restored object must carry the original mesh");
+  // Transform fidelity: the command re-applies the captured instance transform.
+  QVERIFY2(qFuzzyCompare(project.objectPosition(1).x(), victimPos.x())
+               && qFuzzyCompare(project.objectPosition(1).y(), victimPos.y())
+               && qFuzzyCompare(project.objectPosition(1).z(), victimPos.z()),
+           "UNDO-01: undo-restored object must keep its pre-delete transform");
+
+  undoManager.redo();
+  QCOMPARE(project.modelCount(), 1);
+  QCOMPARE(project.objectNames().size(), 1);
+#endif
+}
+
+// -- v5.16 Phase 234 (UNDO-05): paste keeps mesh fidelity --
+void ViewModelSmokeTests::pasteSnapshotRestoresMeshFidelity()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("UNDO-05 paste fidelity requires libslic3r (store_3mf + read_from_file)");
+#else
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  QVERIFY(project.addPrimitiveToPlate(1) >= 0);  // sphere
+  QCOMPARE(project.modelCount(), 1);
+  // Service-level add; resync the VM entry list before selecting.
+  editor.rebuildAndNotify();
+  const QString originalName = project.objectNames().value(0);
+  const QVector3D originalPos = project.objectPosition(0);
+  auto itsBefore = project.volumeMeshIts(0, 0);
+  QVERIFY(itsBefore != nullptr && !itsBefore->vertices.empty());
+  const int verticesBefore = int(itsBefore->vertices.size());
+  const int trianglesBefore = int(itsBefore->indices.size());
+
+  QVERIFY(editor.selectSourceObject(0));
+  editor.copySelectedObjects();
+  QVERIFY(editor.hasClipboardContent());
+
+  // Copy → delete → paste: the paste must restore the mesh, not a name shell.
+  editor.deleteObject(0);
+  QCOMPARE(project.modelCount(), 0);
+
+  editor.pasteObjects();
+  QVERIFY2(project.modelCount() == 1,
+           "UNDO-05: paste must re-add the clipboard object");
+  QCOMPARE(project.objectNames().value(0), originalName);
+  auto itsPasted = project.volumeMeshIts(0, 0);
+  QVERIFY2(itsPasted != nullptr && int(itsPasted->vertices.size()) == verticesBefore
+               && int(itsPasted->indices.size()) == trianglesBefore,
+           "UNDO-05: pasted object must carry the copied mesh topology");
+  // Anti-overlap: pasted instance is offset +5mm on X from the copied one.
+  QVERIFY2(qFuzzyCompare(project.objectPosition(0).x(), originalPos.x() + 5.0f),
+           "UNDO-05: pasted object must be shifted +5mm on X");
+
+  // Paste undo removes it; paste redo restores it WITH the mesh
+  // (AddObjectCommand redo uses the captured full3mf snapshot).
+  undoManager.undo();
+  QCOMPARE(project.modelCount(), 0);
+  undoManager.redo();
+  QCOMPARE(project.modelCount(), 1);
+  auto itsRedone = project.volumeMeshIts(0, 0);
+  QVERIFY2(itsRedone != nullptr && int(itsRedone->vertices.size()) == verticesBefore,
+           "UNDO-05: redo of a paste must restore the mesh, not an empty object");
+#endif
+}
+
+// -- v5.16 Phase 234 (UNDO-02): volume delete undo restores the volume mesh --
+void ViewModelSmokeTests::volumeDeleteUndoRestoresMesh()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("UNDO-02 volume snapshot requires libslic3r");
+#else
+  ProjectServiceMock project;
+
+  // Build a 2-volume object directly: a cube object + a sphere volume added
+  // into it via addPrimitive(objectIndex, type). (assembleObjects was tried
+  // first but leaves the modelCount_ mirror stale — it never updates
+  // objectNames_/modelCount_, so modelCount()-based fixtures mislead.)
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  QVERIFY(project.addPrimitive(0, 1));
+  QVERIFY2(project.objectVolumeCount(0) == 2,
+           qPrintable(QStringLiteral("UNDO-02 diag: modelCount=%1 vol0=%2")
+                          .arg(project.modelCount())
+                          .arg(project.objectVolumeCount(0))));
+
+  auto volIts = project.volumeMeshIts(0, 1);
+  QVERIFY2(volIts != nullptr && !volIts->vertices.empty(),
+           "UNDO-02: volume 1 must have a mesh before deletion");
+  const int verticesBefore = int(volIts->vertices.size());
+  const int trianglesBefore = int(volIts->indices.size());
+  const QString volName = project.objectVolumeName(0, 1);
+  const int volType = project.objectVolumeType(0, 1);
+
+  // The data path VolumeDeleteCommand stores / replays.
+  const QByteArray volSnap = project.captureVolumeMeshSnapshot(0, 1);
+  QVERIFY2(!volSnap.isEmpty(), "UNDO-02: captureVolumeMeshSnapshot must serialize the volume");
+
+  QVERIFY(project.deleteObjectVolume(0, 1));
+  QCOMPARE(project.objectVolumeCount(0), 1);
+
+  QVERIFY2(project.restoreVolumeSnapshot(0, 1, volSnap, volName, volType),
+           "UNDO-02: restoreVolumeSnapshot must rebuild the deleted volume");
+  QCOMPARE(project.objectVolumeCount(0), 2);
+  auto volRestored = project.volumeMeshIts(0, 1);
+  QVERIFY2(volRestored != nullptr
+               && int(volRestored->vertices.size()) == verticesBefore
+               && int(volRestored->indices.size()) == trianglesBefore,
+           "UNDO-02: restored volume must carry the original mesh topology");
+  QCOMPARE(project.objectVolumeName(0, 1), volName);
+  QCOMPARE(project.objectVolumeType(0, 1), volType);
+#endif
+}
+
+// -- v5.16 Phase 234 (UNDO-06): layer ranges reach ModelObject::layer_config_ranges --
+void ViewModelSmokeTests::layerRangesReachModelConfig()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("UNDO-06 layer_config_ranges bridge requires libslic3r");
+#else
+  ProjectServiceMock project;
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+
+  const Slic3r::Model *model = project.rawModel();
+  QVERIFY(model != nullptr && !model->objects.empty());
+  const Slic3r::ModelObject *obj = model->objects.front();
+  QVERIFY(obj != nullptr);
+  QVERIFY(obj->layer_config_ranges.empty());
+
+  // Add two disjoint ranges with a layer_height override each.
+  QVERIFY(project.addObjectLayerRange(0, 0.0, 2.0));
+  QVERIFY(project.setLayerRangeValue(0, 0, QStringLiteral("layer_height"), 0.12));
+  QVERIFY(project.addObjectLayerRange(0, 4.0, 6.0));
+  QVERIFY(project.setLayerRangeValue(0, 1, QStringLiteral("layer_height"), 0.28));
+
+  model = project.rawModel();
+  obj = model->objects.front();
+  QCOMPARE(int(obj->layer_config_ranges.size()), 2);
+  bool sawThin = false, sawThick = false;
+  for (const auto &kv : obj->layer_config_ranges)
+  {
+    const auto *lh = kv.second.get().option<Slic3r::ConfigOptionFloat>("layer_height");
+    QVERIFY(lh != nullptr);
+    if (kv.first.first == 0.0 && kv.first.second == 2.0)
+    {
+      QCOMPARE(lh->value, 0.12);
+      sawThin = true;
+    }
+    if (kv.first.first == 4.0 && kv.first.second == 6.0)
+    {
+      QCOMPARE(lh->value, 0.28);
+      sawThick = true;
+    }
+  }
+  QVERIFY(sawThin && sawThick);
+
+  // Upstream GUI_ObjectLayers::add_range trims overlaps: inserting
+  // [1.0, 5.0] splits/shortens the neighbors instead of overlapping.
+  QVERIFY(project.addObjectLayerRange(0, 1.0, 5.0));
+  model = project.rawModel();
+  obj = model->objects.front();
+  QCOMPARE(int(obj->layer_config_ranges.size()), 3);
+  double prevEnd = -1.0;
+  for (const auto &kv : obj->layer_config_ranges)
+  {
+    QVERIFY2(kv.first.first >= prevEnd, "UNDO-06: ranges must not overlap after trim");
+    QVERIFY2(kv.first.first < kv.first.second, "UNDO-06: ranges must be non-empty");
+    prevEnd = kv.first.second;
+  }
+
+  // Remove restores the model-side map.
+  QVERIFY(project.removeObjectLayerRange(0, 0));
+  model = project.rawModel();
+  obj = model->objects.front();
+  QCOMPARE(int(obj->layer_config_ranges.size()), 2);
+#endif
+}
+
+// -- v5.16 Phase 234 (UNDO-03): plate operations enter the undo stack --
+void ViewModelSmokeTests::plateOperationsUndoRestoresState()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("UNDO-03 plate snapshot requires libslic3r (store_3mf + read_from_file)");
+#else
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  // Two objects on two plates: cube on plate 0, sphere on plate 1.
+  // (addPrimitiveToPlate targets the CURRENT plate, so switch first.)
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);  // cube -> plate 0
+  QVERIFY(project.addPlate());
+  QVERIFY(project.setCurrentPlateIndex(1));
+  QVERIFY(project.addPrimitiveToPlate(1) >= 0);  // sphere -> plate 1
+  QVERIFY(project.setCurrentPlateIndex(0));
+  QCOMPARE(project.plateCount(), 2);
+  QCOMPARE(project.modelCount(), 2);
+  const QString plate1Name = project.plateNames().value(1);
+  auto itsBefore = project.volumeMeshIts(1, 0);
+  QVERIFY2(itsBefore != nullptr && !itsBefore->vertices.empty(),
+           "UNDO-03: object 1 must have a mesh before the plate delete");
+  const int verticesBefore = int(itsBefore->vertices.size());
+
+  // -- delete plate 1 (with its member object) through the viewmodel --
+  QVERIFY(editor.deletePlate(1));
+  QCOMPARE(project.plateCount(), 1);
+
+  // undo restores the plate (count + name + membership) and the member
+  // object keeps full mesh fidelity (PlateCommand deep object snapshot).
+  undoManager.undo();
+  QCOMPARE(project.plateCount(), 2);
+  QCOMPARE(project.plateNames().value(1), plate1Name);
+  QCOMPARE(project.modelCount(), 2);
+  QVERIFY(project.plateObjectIndices(1).contains(1));
+  auto itsUndo = project.volumeMeshIts(1, 0);
+  QVERIFY2(itsUndo != nullptr && int(itsUndo->vertices.size()) == verticesBefore,
+           "UNDO-03: undo-restored plate member must keep its mesh topology");
+
+  // redo re-deletes the plate.
+  undoManager.redo();
+  QCOMPARE(project.plateCount(), 1);
+
+  // restore the 2-plate scene for the remaining sub-cases.
+  undoManager.undo();
+  QCOMPARE(project.plateCount(), 2);
+
+  // -- add plate: undo removes it again --
+  QVERIFY(editor.addPlate());
+  QCOMPARE(project.plateCount(), 3);
+  undoManager.undo();
+  QCOMPARE(project.plateCount(), 2);
+
+  // -- move plate: undo restores the order --
+  const QStringList namesBefore = project.plateNames();
+  QVERIFY(editor.movePlate(1, 0));
+  QCOMPARE(project.plateNames().value(0), namesBefore.value(1));
+  undoManager.undo();
+  QCOMPARE(project.plateNames(), namesBefore);
+
+  // -- lock plate: undo flips it back --
+  editor.togglePlateLocked(1);
+  QVERIFY(project.isPlateLocked(1));
+  undoManager.undo();
+  QVERIFY(!project.isPlateLocked(1));
+#endif
+}
+
+// -- v5.16 Phase 234 (UNDO-04): paint strokes enter the undo stack --
+void ViewModelSmokeTests::paintStrokeUndoRestoresFacets()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("UNDO-04 paint snapshot requires libslic3r (FacetsAnnotation + TriangleSelector)");
+#else
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);  // cube
+
+  // Part 1: service-level capture/restore round-trip. The pristine
+  // annotation serializes to a header-only (still non-empty) buffer.
+  const QByteArray emptySnap = project.capturePaintSnapshot(0, 0, /*kind=*/0);
+  QVERIFY2(!emptySnap.isEmpty(),
+           "UNDO-04: empty annotation must still serialize a snapshot header");
+
+  // Paint facet 0 as Enforcer through a TriangleSelector — the same write
+  // route paintAtFacet uses (writePaintToModelVolume).
+  {
+    auto mesh = project.volumeMeshTriangleMesh(0, 0);
+    QVERIFY(mesh != nullptr);
+    Slic3r::TriangleSelector selector(*mesh);
+    selector.set_facet(0, Slic3r::EnforcerBlockerType::ENFORCER);
+    QVERIFY(project.writePaintToModelVolume(0, 0, PaintKind::Support, selector));
+  }
+  const QByteArray paintedSnap = project.capturePaintSnapshot(0, 0, 0);
+  QVERIFY2(!paintedSnap.isEmpty() && paintedSnap != emptySnap,
+           "UNDO-04: painted annotation must serialize and differ from empty");
+
+  // Round-trip: restore the empty state, then the painted state — the
+  // re-captured bytes must match what was captured before (deserialize ->
+  // serialize identity through TriangleSelector, the upstream 3MF paint
+  // round-trip).
+  QVERIFY(project.restorePaintSnapshot(0, 0, 0, emptySnap));
+  QCOMPARE(project.capturePaintSnapshot(0, 0, 0), emptySnap);
+  QVERIFY(project.restorePaintSnapshot(0, 0, 0, paintedSnap));
+  QCOMPARE(project.capturePaintSnapshot(0, 0, 0), paintedSnap);
+
+  // Part 2: command-level undo/redo through the stack. The stroke (empty ->
+  // painted) is already applied; the pushed PaintCommand's first redo is
+  // skipped, undo reverts to empty, redo re-applies the paint.
+  auto *cmd = new PaintCommand(0, 0, /*kind=*/0, emptySnap, &project, &editor);
+  cmd->setNewResult(paintedSnap);
+  undoManager.push(cmd);
+  undoManager.undo();
+  QCOMPARE(project.capturePaintSnapshot(0, 0, 0), emptySnap);
+  undoManager.redo();
+  QCOMPARE(project.capturePaintSnapshot(0, 0, 0), paintedSnap);
+#endif
 }
 
 QTEST_MAIN(ViewModelSmokeTests)

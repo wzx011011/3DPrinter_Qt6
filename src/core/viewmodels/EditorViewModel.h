@@ -350,6 +350,14 @@ public:
   /// Phase 120 (PAINT-01): drop all PaintEngine selectors for one object.
   /// Called on gizmo-exit cleanup (mirrors GLGizmoPainterBase on_exit).
   Q_INVOKABLE void clearPaintOnObject(int objectIndex);
+  /// v5.16 (UNDO-04): re-sync the PaintEngine's cached TriangleSelector for
+  /// (objectIndex, volumeIndex) from the ModelVolume FacetsAnnotation of the
+  /// given paint kind (0=Support, 1=Seam, 2=Mmu). Called by PaintCommand after
+  /// undo/redo restored the annotation — the PaintEngine cache does NOT
+  /// auto-reload from the ModelVolume, so without this the overlay would keep
+  /// rendering the pre-undo paint (mirrors upstream GLGizmoPainterBase
+  /// data_changed -> update_model_object round-trip).
+  Q_INVOKABLE void resyncPaintSelector(int objectIndex, int volumeIndex, int kind);
   int enforcedSupportCount() const;
   int blockedSupportCount() const;
   int totalPaintedTriangleCount() const;
@@ -1409,6 +1417,9 @@ private:
   QSet<QString> m_collapsedGroupKeys;
   QSet<int> m_collapsedObjectSourceIndices;
   QList<ObjectEntry> m_clipboard; ///< 剪贴板缓冲区
+  /// v5.16 (UNDO-05): 剪贴板整对象 3MF 快照（与 m_clipboard 条目平行，对齐上游
+  /// Selection::copy_to_clipboard 的对象深拷贝语义——粘贴恢复网格/变换/覆盖而非仅名字）
+  QList<QByteArray> m_clipboardSnapshots;
   int m_primarySelectedSourceIndex = -1;
   int m_selectedVolumeObjectSourceIndex = -1;
   QSet<int> m_selectedVolumeIndices;

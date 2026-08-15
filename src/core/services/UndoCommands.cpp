@@ -180,6 +180,11 @@ DeleteObjectsCommand::DeleteObjectsCommand(const QList<int> &indicesToDelete,
     snap.visible = service->objectVisible(idx);
     snap.volumeCount = service->objectVolumeCount(idx);
     snap.plateIndex = service->plateIndexForObject(idx);
+    snap.originalIndex = idx;
+    // v5.16 (UNDO-01): full-object 3MF snapshot (mesh + volumes + config) —
+    // mirrors upstream Plater::_take_snapshot whole-object fidelity. Empty in
+    // mock mode / on capture failure; undo falls back to the name-only path.
+    snap.full3mf = service->captureFullObjectSnapshot(idx);
     m_snapshots.append(snap);
   }
 }
@@ -195,16 +200,36 @@ void DeleteObjectsCommand::undo()
   for (int i = m_snapshots.size() - 1; i >= 0; --i)
   {
     const auto &snap = m_snapshots[i];
-    int newIdx = m_service->addObject(snap.name);
+    int newIdx = -1;
+    if (!snap.full3mf.isEmpty())
+    {
+      // v5.16 (UNDO-01): restore mesh + volumes + name/printable/visible/plate,
+      // then re-apply the instance transform (restore leaves transforms alone).
+      newIdx = m_service->restoreFullObjectSnapshot(snap.full3mf, snap.originalIndex,
+                                                    snap.name, snap.printable,
+                                                    snap.visible, snap.plateIndex);
+      if (newIdx >= 0)
+      {
+        m_service->setObjectPosition(newIdx, snap.pos.x(), snap.pos.y(), snap.pos.z());
+        m_service->setObjectRotation(newIdx, snap.rot.x(), snap.rot.y(), snap.rot.z());
+        m_service->setObjectScale(newIdx, snap.scale.x(), snap.scale.y(), snap.scale.z());
+      }
+    }
     if (newIdx < 0)
-      continue;
-    m_service->setObjectPosition(newIdx, snap.pos.x(), snap.pos.y(), snap.pos.z());
-    m_service->setObjectRotation(newIdx, snap.rot.x(), snap.rot.y(), snap.rot.z());
-    m_service->setObjectScale(newIdx, snap.scale.x(), snap.scale.y(), snap.scale.z());
-    m_service->setObjectPrintable(newIdx, snap.printable);
-    m_service->setObjectVisible(newIdx, snap.visible);
-    if (snap.plateIndex >= 0)
-      m_service->setObjectPlateForIndex(newIdx, snap.plateIndex);
+    {
+      // Fallback (mock mode / snapshot failure): old name-only restore.
+      newIdx = m_service->addObject(snap.name);
+      if (newIdx < 0)
+        continue;
+      m_service->setObjectPosition(newIdx, snap.pos.x(), snap.pos.y(), snap.pos.z());
+      m_service->setObjectRotation(newIdx, snap.rot.x(), snap.rot.y(), snap.rot.z());
+      m_service->setObjectScale(newIdx, snap.scale.x(), snap.scale.y(), snap.scale.z());
+      m_service->setObjectPrintable(newIdx, snap.printable);
+      m_service->setObjectVisible(newIdx, snap.visible);
+      if (snap.plateIndex >= 0)
+        m_service->setObjectPlateForIndex(newIdx, snap.plateIndex);
+    }
+    m_snapshots[i].restoredIndex = newIdx;
   }
 
   // Trigger view model rebuild
@@ -219,20 +244,56 @@ void DeleteObjectsCommand::redo()
   // we need to delete the re-inserted objects.
   if (!m_service)
     return;
+  // QUndoStack::push() invokes redo() once right after the deletion — skip it
+  // (Qt skip-first pattern; the old name-matching no-op could mis-delete a
+  // same-named survivor on push).
+  if (!m_firstRedoDone)
+  {
+    m_firstRedoDone = true;
+    return;
+  }
 
-  // Find objects by name that match our snapshots and delete them
-  const QStringList currentNames = m_service->objectNames();
+  // v5.16 (UNDO-01): prefer the restore indices captured by undo (identity,
+  // immune to duplicate-name mismatches); name matching stays as the fallback
+  // for snapshots restored through the mock path (restoredIndex < 0).
+  QList<int> deleteIndices;
+  bool haveRestoreIndices = true;
   for (const auto &snap : m_snapshots)
   {
-    // Find the first object matching this name
-    for (int i = 0; i < currentNames.size(); ++i)
+    int idx = snap.restoredIndex;
+    if (idx < 0)
     {
-      if (currentNames[i] == snap.name)
+      haveRestoreIndices = false;
+      break;
+    }
+    deleteIndices.append(idx);
+  }
+  if (!haveRestoreIndices)
+  {
+    deleteIndices.clear();
+    const QStringList currentNames = m_service->objectNames();
+    for (const auto &snap : m_snapshots)
+    {
+      // Find the first object matching this name
+      for (int i = 0; i < currentNames.size(); ++i)
       {
-        m_service->deleteObject(i);
-        break;
+        if (currentNames[i] == snap.name)
+        {
+          deleteIndices.append(i);
+          break;
+        }
       }
     }
+  }
+
+  // Delete highest index first so lower indices stay stable mid-loop.
+  std::sort(deleteIndices.begin(), deleteIndices.end(), std::greater<int>());
+  deleteIndices.erase(std::unique(deleteIndices.begin(), deleteIndices.end()),
+                      deleteIndices.end());
+  for (int idx : deleteIndices)
+  {
+    if (idx >= 0 && idx < m_service->objectNames().size())
+      m_service->deleteObject(idx);
   }
 
   if (m_viewModel)
@@ -248,23 +309,70 @@ AddObjectCommand::AddObjectCommand(int objectIndex, const QString &objectName,
       m_objectName(objectName), m_service(service)
 {
   Q_UNUSED(parent)
+  // v5.16 (UNDO-01/UNDO-05): the object exists at push time (paste pushes
+  // after addObject), so capture the full state here — redo restores the
+  // mesh-bearing object instead of re-adding an empty one. The capture may
+  // legitimately come back empty (mock mode / IO failure): redo then falls
+  // back to the old name-only path.
+  if (m_service && m_objectIndex >= 0 && m_objectIndex < m_service->objectNames().size())
+  {
+    m_full3mf = m_service->captureFullObjectSnapshot(m_objectIndex);
+    m_pos = m_service->objectPosition(m_objectIndex);
+    m_rot = m_service->objectRotation(m_objectIndex);
+    m_scale = m_service->objectScale(m_objectIndex);
+    m_printable = m_service->objectPrintable(m_objectIndex);
+    m_visible = m_service->objectVisible(m_objectIndex);
+    m_plateIndex = m_service->plateIndexForObject(m_objectIndex);
+  }
 }
 
 void AddObjectCommand::undo()
 {
   if (!m_service || m_objectIndex < 0)
     return;
-  // Delete the added object by index
-  m_service->deleteObject(m_objectIndex);
+  // Delete the added object. The recorded index may have drifted if other
+  // commands shifted the list; prefer the index when the name still matches
+  // at that slot, else locate by name (name-collision risk is low here: the
+  // object was just added — upstream undo of an add simply removes it).
+  const QStringList currentNames = m_service->objectNames();
+  int idx = -1;
+  if (m_objectIndex < currentNames.size() && currentNames.value(m_objectIndex) == m_objectName)
+    idx = m_objectIndex;
+  else
+    idx = currentNames.indexOf(m_objectName);
+  if (idx >= 0)
+    m_service->deleteObject(idx);
 }
 
 void AddObjectCommand::redo()
 {
-  // The object was already added before push. Re-create on redo-after-undo.
   if (!m_service)
     return;
-  int newIdx = m_service->addObject(m_objectName);
-  Q_UNUSED(newIdx)
+  // QUndoStack::push() invokes redo() once while the object already exists —
+  // skip that first call (Qt skip-first pattern).
+  if (!m_firstRedoDone)
+  {
+    m_firstRedoDone = true;
+    return;
+  }
+  if (!m_full3mf.isEmpty())
+  {
+    // v5.16 (UNDO-01/UNDO-05): restore the full mesh + volumes + state at the
+    // tail (matches the original addObject append position).
+    const int newIdx = m_service->restoreFullObjectSnapshot(
+        m_full3mf, -1, m_objectName, m_printable, m_visible, m_plateIndex);
+    if (newIdx >= 0)
+    {
+      m_service->setObjectPosition(newIdx, m_pos.x(), m_pos.y(), m_pos.z());
+      m_service->setObjectRotation(newIdx, m_rot.x(), m_rot.y(), m_rot.z());
+      m_service->setObjectScale(newIdx, m_scale.x(), m_scale.y(), m_scale.z());
+    }
+  }
+  else
+  {
+    int newIdx = m_service->addObject(m_objectName);
+    Q_UNUSED(newIdx)
+  }
 }
 
 // ── SelectionCommand ────────────────────────────────────────────────────────
@@ -364,9 +472,10 @@ void CloneCommand::redo()
 
 VolumeDeleteCommand::VolumeDeleteCommand(int objectIndex, int volumeIndex,
                                          ProjectServiceMock *service,
+                                         EditorViewModel *viewModel,
                                          QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Delete Volume")), m_objectIndex(objectIndex),
-      m_volumeIndex(volumeIndex), m_service(service)
+      m_volumeIndex(volumeIndex), m_service(service), m_viewModel(viewModel)
 {
   Q_UNUSED(parent)
   // Capture volume data before deletion
@@ -384,6 +493,10 @@ VolumeDeleteCommand::VolumeDeleteCommand(int objectIndex, int volumeIndex,
     else
       m_volumeType = 0;
     m_extruderId = m_service->volumeExtruderId(m_objectIndex, m_volumeIndex);
+    // v5.16 (UNDO-02): serialize the real mesh + type/transform/extruder so
+    // undo rebuilds the true volume (addVolume fallback inherits the first
+    // model_part mesh, which is wrong for a deleted part with own geometry).
+    m_volumeMesh = m_service->captureVolumeMeshSnapshot(m_objectIndex, m_volumeIndex);
   }
 }
 
@@ -391,18 +504,40 @@ void VolumeDeleteCommand::undo()
 {
   if (!m_service)
     return;
-  // Re-create the deleted volume
-  m_service->addVolume(m_objectIndex, m_volumeType);
-  // Set the extruder if it was non-default
-  if (m_extruderId >= 0)
-    m_service->setVolumeExtruderId(m_objectIndex, m_volumeIndex, m_extruderId);
+  if (!m_volumeMesh.isEmpty())
+  {
+    // v5.16 (UNDO-02): rebuild the exact volume (its + type + transform +
+    // extruder) at its original slot.
+    m_service->restoreVolumeSnapshot(m_objectIndex, m_volumeIndex, m_volumeMesh,
+                                     m_volumeName, m_volumeType);
+  }
+  else
+  {
+    // Fallback (mock mode / capture failure): re-create a placeholder volume.
+    m_service->addVolume(m_objectIndex, m_volumeType);
+    // Set the extruder if it was non-default
+    if (m_extruderId >= 0)
+      m_service->setVolumeExtruderId(m_objectIndex, m_volumeIndex, m_extruderId);
+  }
+  if (m_viewModel)
+    QMetaObject::invokeMethod(m_viewModel, "rebuildAndNotify", Qt::QueuedConnection);
 }
 
 void VolumeDeleteCommand::redo()
 {
   if (!m_service)
     return;
+  // QUndoStack::push() invokes redo() once after the volume was already
+  // deleted — skip that first call, otherwise it would delete the successor
+  // volume that shifted into m_volumeIndex.
+  if (!m_firstRedoDone)
+  {
+    m_firstRedoDone = true;
+    return;
+  }
   m_service->deleteObjectVolume(m_objectIndex, m_volumeIndex);
+  if (m_viewModel)
+    QMetaObject::invokeMethod(m_viewModel, "rebuildAndNotify", Qt::QueuedConnection);
 }
 
 // ── BooleanCommand ──────────────────────────────────────────────────────────
@@ -681,4 +816,129 @@ void AddVolumeCommand::redo()
 
   if (m_viewModel)
     QMetaObject::invokeMethod(m_viewModel, "rebuildAndNotify", Qt::QueuedConnection);
+}
+
+// ── PlateCommand (v5.16 UNDO-03) ──────────────────────────────────────────
+// Upstream truth: plate ops take whole-model snapshots (PartPlate.cpp:7060
+// "add partplate", :13993 "lock partplate", :14033 "move plate",
+// :14074 "delete partplate"). This command swaps before/after plate-list
+// snapshots captured around the operation, so every plate action (add /
+// delete / move / clone / lock / printable) round-trips through the stack.
+
+PlateCommand::PlateCommand(Action action, ProjectServiceMock *service,
+                           EditorViewModel *viewModel, QUndoCommand *parent)
+    : QUndoCommand(QObject::tr("Plate Operation")), m_action(action),
+      m_service(service), m_viewModel(viewModel)
+{
+  Q_UNUSED(parent)
+  // DeletePlate embeds per-object 3MF snapshots for the plate's members so
+  // undo can restore them with full mesh fidelity if they die with the plate.
+  if (m_service)
+    m_before = m_service->capturePlateListSnapshot(action == DeletePlate);
+  switch (action)
+  {
+  case AddPlate:     setText(QObject::tr("Add Plate")); break;
+  case DeletePlate:  setText(QObject::tr("Delete Plate")); break;
+  case MovePlate:    setText(QObject::tr("Move Plate")); break;
+  case ClonePlate:   setText(QObject::tr("Clone Plate")); break;
+  case LockPlate:    setText(QObject::tr("Lock Plate")); break;
+  case SetPrintable: setText(QObject::tr("Plate Printable")); break;
+  }
+}
+
+void PlateCommand::setAfterState()
+{
+  if (m_service)
+    m_after = m_service->capturePlateListSnapshot(false);
+}
+
+void PlateCommand::undo()
+{
+  if (!m_service || m_before.isEmpty())
+    return;
+  m_service->restorePlateListSnapshot(m_before);
+  // Paint state follows the objects (a restored/removed object changes the
+  // cached selectors), and the scene/object lists must be rebuilt.
+  if (m_viewModel)
+    QMetaObject::invokeMethod(m_viewModel, "rebuildAndNotify", Qt::QueuedConnection);
+}
+
+void PlateCommand::redo()
+{
+  if (!m_service)
+    return;
+  // QUndoStack::push() invokes redo() once right after the operation already
+  // applied its effect — skip that first call (Qt skip-first pattern).
+  if (!m_firstRedoDone)
+  {
+    m_firstRedoDone = true;
+    return;
+  }
+  if (m_after.isEmpty())
+    return;
+  m_service->restorePlateListSnapshot(m_after);
+  if (m_viewModel)
+    QMetaObject::invokeMethod(m_viewModel, "rebuildAndNotify", Qt::QueuedConnection);
+}
+
+// ── PaintCommand (v5.16 UNDO-04) ──────────────────────────────────────────
+// Upstream truth: GLGizmoPainterBase commits strokes via
+// Plater::_take_snapshot(GizmoAction). Each paintAtFacet call pushes one
+// command; mergeWith coalesces consecutive strokes on the same
+// (object, volume, kind) so one drag collapses into one undo step.
+
+PaintCommand::PaintCommand(int objectIndex, int volumeIndex, int kind,
+                           const QByteArray &before, ProjectServiceMock *service,
+                           EditorViewModel *viewModel, QUndoCommand *parent)
+    : QUndoCommand(QObject::tr("Paint")), m_objectIndex(objectIndex),
+      m_volumeIndex(volumeIndex), m_kind(kind), m_before(before),
+      m_service(service), m_viewModel(viewModel)
+{
+  Q_UNUSED(parent)
+}
+
+void PaintCommand::setNewResult(const QByteArray &after)
+{
+  m_after = after;
+}
+
+void PaintCommand::undo()
+{
+  if (!m_service)
+    return;
+  m_service->restorePaintSnapshot(m_objectIndex, m_volumeIndex, m_kind, m_before);
+  // Direct call (SelectionCommand's restoreSelection pattern): the selector
+  // must mirror the restored annotation before the next paintAt reads it.
+  if (m_viewModel)
+    m_viewModel->resyncPaintSelector(m_objectIndex, m_volumeIndex, m_kind);
+}
+
+void PaintCommand::redo()
+{
+  if (!m_service)
+    return;
+  // QUndoStack::push() invokes redo() once while the paint is already
+  // applied — skip that first call (Qt skip-first pattern).
+  if (!m_firstRedoDone)
+  {
+    m_firstRedoDone = true;
+    return;
+  }
+  m_service->restorePaintSnapshot(m_objectIndex, m_volumeIndex, m_kind, m_after);
+  if (m_viewModel)
+    m_viewModel->resyncPaintSelector(m_objectIndex, m_volumeIndex, m_kind);
+}
+
+bool PaintCommand::mergeWith(const QUndoCommand *other)
+{
+  if (other->id() != id())
+    return false;
+  const auto *otherCmd = static_cast<const PaintCommand *>(other);
+  if (otherCmd->m_objectIndex != m_objectIndex || otherCmd->m_volumeIndex != m_volumeIndex
+      || otherCmd->m_kind != m_kind)
+    return false;
+  // Same stroke target: keep this command's BEFORE, take the newest AFTER
+  // (TransformCommand merge semantics — the pair spans the whole drag).
+  m_after = otherCmd->m_after;
+  return true;
 }
