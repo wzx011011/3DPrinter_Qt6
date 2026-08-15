@@ -35,9 +35,27 @@ ApplicationWindow {
     readonly property int frameRadius: (backend.visualCompareMode) ? 0 : 18
     readonly property int prepareChromeHeight: 70
 
+    // v5.16 (PLATE-05): upstream close_with_confirm — block window close on
+    // unsaved changes; the guard dialog's confirm discards and quits.
+    property bool pendingQuitAfterGuard: false
+    onClosing: function(close) {
+        if (root.pendingQuitAfterGuard)
+            return // guard already accepted; allow the close
+        if (backend.projectViewModel && backend.projectViewModel.isDirty) {
+            close.accepted = false
+            root.pendingQuitAfterGuard = true
+            root.pendingOpenAfterGuard = false
+            newProjectDialog.open()
+        }
+    }
+
     // 当前 tab-switch latency token (BBLTopbar 写入, Connections onCurrentPageChanged 收尾)
     // 替代旧的 pendingSwitchToken / pendingSwitchTargetPage（Plan 02-02 Pitfall 3 迁移）
     property int activeTabSwitchToken: -1
+    // v5.16 (PLATE-05): the unsaved-changes guard doubles for "open project
+    // over unsaved work" — set before showing the guard, consumed by the
+    // dialog's confirm button.
+    property bool pendingOpenAfterGuard: false
 
     FileDialog {
         id: openModelDialog
@@ -198,13 +216,31 @@ ApplicationWindow {
                     color: Theme.chromePressed
                     border.color: Theme.borderSubtle
                     Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: newProjectDialog.close() }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { root.pendingOpenAfterGuard = false; root.pendingQuitAfterGuard = false; newProjectDialog.close() } }
                 }
                 Rectangle {
                     width: 80; height: 28; radius: 6
                     color: Theme.accent
                     Text { anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: Theme.fontSizeMD; font.bold: true }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { backend.topbarNewProject(); newProjectDialog.close() } }
+                    MouseArea {
+                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            // v5.16 (PLATE-05): discard unsaved work, then run
+                            // whichever action was guarded (quit / open / new).
+                            if (root.pendingQuitAfterGuard) {
+                                root.pendingQuitAfterGuard = false
+                                newProjectDialog.close()
+                                Qt.quit()
+                            } else if (root.pendingOpenAfterGuard) {
+                                root.pendingOpenAfterGuard = false
+                                newProjectDialog.close()
+                                openProjectDialog.open()
+                            } else {
+                                backend.topbarNewProject()
+                                newProjectDialog.close()
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -310,8 +346,22 @@ ApplicationWindow {
                 Layout.preferredHeight: root.prepareChromeHeight
                 windowVisibility: root.visibility
 
-                onNewProjectRequested: newProjectDialog.open()
-                onOpenProjectRequested: openProjectDialog.open()
+                // v5.16 (PLATE-05): confirm only when unsaved changes exist
+                // (upstream close_with_confirm semantics); a clean project
+                // starts immediately.
+                onNewProjectRequested: {
+                    if (backend.projectViewModel && backend.projectViewModel.isDirty)
+                        newProjectDialog.open()
+                    else
+                        backend.topbarNewProject()
+                }
+                // Opening a project over unsaved work also guards.
+                onOpenProjectRequested: {
+                    if (backend.projectViewModel && backend.projectViewModel.isDirty)
+                        pendingOpenAfterGuard = true, newProjectDialog.open()
+                    else
+                        openProjectDialog.open()
+                }
                 onSaveAsRequested: saveProjectAsDialog.open()
                 onImportModelRequested: function(nameFilter) {
                     openModelDialog.nameFilters = [nameFilter, qsTr("所有文件 (*)")]

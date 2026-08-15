@@ -455,6 +455,10 @@ public:
   /// 平板设置（对齐上游 PlateSettingsDialog）
   Q_INVOKABLE int plateBedType(int plateIndex) const;
   Q_INVOKABLE bool setPlateBedType(int plateIndex, int bedType);
+  /// v5.16 (PLATE-01/02/03): read a plate-config key back (int / bool /
+  /// ints-as-QVariantList). Proves the UI settings landed in the
+  /// DynamicPrintConfig that SliceService merges.
+  Q_INVOKABLE QVariant plateConfigValue(int plateIndex, const QString &key) const;
   Q_INVOKABLE int platePrintSequence(int plateIndex) const;
   Q_INVOKABLE bool setPlatePrintSequence(int plateIndex, int seq);
   Q_INVOKABLE int plateSpiralMode(int plateIndex) const;
@@ -756,6 +760,12 @@ private:
   QList<int> pendingPlateBedType_;
   QList<int> pendingPlatePrintSeq_;
   QList<int> pendingPlateSpiral_;
+  // v5.16 (PLATE-03): per-plate filament print sequences from the upstream
+  // plate config block (first_layer_print_sequence coInts;
+  // other_layers_print_sequence flattened + other_layers_print_sequence_nums).
+  QList<QList<int>> pendingPlateFirstLayerSeq_;
+  QList<QList<int>> pendingPlateOtherLayersSeq_;
+  QList<int> pendingPlateOtherLayersSeqNums_;
   // v3.2 Phase 31 (FMAP-02): per-plate filament maps + mode extracted from 3MF
   // PlateData during load; applied to PartPlate in the rebuild.
   QList<QList<int>> pendingPlateFilamentMaps_;

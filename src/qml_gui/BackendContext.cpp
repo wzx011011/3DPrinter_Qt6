@@ -177,6 +177,14 @@ BackendContext::BackendContext(QObject *parent)
     // Propagate 3MF embedded config to ConfigViewModel on project load
     connect(projectService_, &ProjectServiceMock::projectConfigLoaded,
             configViewModel_, &ConfigViewModel::applyProjectConfig);
+    // v5.16 (PLATE-05): real edits (objects/plates/configs) drive the
+    // unsaved-changes indicator. Loads are excluded — ProjectViewModel's
+    // openProject/newProject clear the flag after loadFinished anyway.
+    connect(projectService_, &ProjectServiceMock::projectChanged, this, [this]()
+            {
+              if (projectService_ && !projectService_->loading() && projectViewModel_)
+                projectViewModel_->markDirty();
+            });
   }
 
   // 实时监听偏好设置变化

@@ -159,6 +159,30 @@ namespace
       option->setInt(upstreamPrintSequenceForUiIndex(uiIndex));
   }
 
+  // v5.16 (PLATE-03): other_layers_print_sequence is coInts (flattened
+  // per-range orders) + other_layers_print_sequence_nums is coInt (range
+  // count) — the shape the upstream GCode consumer reads. "Auto" (choice 0)
+  // erases both keys so the global default applies.
+  void syncPlateOtherLayersSeqConfig(OWzx::PartPlate *p)
+  {
+    if (!p)
+      return;
+    auto &config = p->config();
+    if (p->otherLayersSeqChoice() == 0) {
+      config.erase("other_layers_print_sequence");
+      config.erase("other_layers_print_sequence_nums");
+      return;
+    }
+    const auto &entries = p->otherLayersSeqEntries();
+    if (auto *opt = config.option<Slic3r::ConfigOptionInts>("other_layers_print_sequence", true)) {
+      opt->values.clear();
+      for (const auto &e : entries)
+        opt->values.insert(opt->values.end(), e.extruderOrder.begin(), e.extruderOrder.end());
+    }
+    if (auto *numOpt = config.option("other_layers_print_sequence_nums", true))
+      numOpt->setInt(int(entries.size()));
+  }
+
   const ScopedConfig *scopedConfigForRead(const Slic3r::Model *model, int objectIndex, int volumeIndex)
   {
     if (!model || objectIndex < 0 || size_t(objectIndex) >= model->objects.size())
@@ -724,6 +748,9 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
           receiver->pendingPlateBedType_.clear();
           receiver->pendingPlatePrintSeq_.clear();
           receiver->pendingPlateSpiral_.clear();
+          receiver->pendingPlateFirstLayerSeq_.clear();   // v5.16 (PLATE-03)
+          receiver->pendingPlateOtherLayersSeq_.clear();  // v5.16 (PLATE-03)
+          receiver->pendingPlateOtherLayersSeqNums_.clear(); // v5.16 (PLATE-03)
           receiver->pendingPlateThumbnails_.clear();  // v3.2 Phase 30 (THUMB-02)
       receiver->pendingPlateFilamentMaps_.clear();   // v3.2 Phase 31 (FMAP-02)
       receiver->pendingPlateFilamentMapMode_.clear(); // v3.2 Phase 31 (FMAP-02)
@@ -764,6 +791,23 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
               receiver->pendingPlateBedType_.append(bedType);
               receiver->pendingPlatePrintSeq_.append(printSeq);
               receiver->pendingPlateSpiral_.append(spiral);
+              // v5.16 (PLATE-03): filament print sequences (coInts keys).
+              {
+                QList<int> firstSeq;
+                QList<int> otherSeq;
+                int otherNums = 0;
+                if (plate) {
+                  if (auto *opt = plate->config.option<Slic3r::ConfigOptionInts>("first_layer_print_sequence"))
+                    for (int v : opt->values) firstSeq.append(v);
+                  if (auto *opt = plate->config.option<Slic3r::ConfigOptionInts>("other_layers_print_sequence"))
+                    for (int v : opt->values) otherSeq.append(v);
+                  if (auto *opt = plate->config.option("other_layers_print_sequence_nums"))
+                    otherNums = int(opt->getInt());
+                }
+                receiver->pendingPlateFirstLayerSeq_.append(firstSeq);
+                receiver->pendingPlateOtherLayersSeq_.append(otherSeq);
+                receiver->pendingPlateOtherLayersSeqNums_.append(otherNums);
+              }
 
               // v3.2 Phase 31 (FMAP-02) + v4.5 Phase 107 (FMAP-02): extract
               // filament maps + mode. The mode read applies the Pitfall 2 /
@@ -1084,13 +1128,17 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
               receiver->modelCount_,
               receiver->m_plateList ? receiver->m_plateList->plateCount() : 0);
 
-        // Auto-arrange after load (对齐上游 arrange_loaded_object_to_new_position)
-        // 传入默认 220x220 热床（与 CLI bed_shape 一致）：ProjectServiceMock 不持有
-        // 打印机预设，但导入后自动摆放需要有效热床；InfiniteBed 路径在当前 OrcaSlicer
-        // 源码下 libnest2d remove_unpackable_items 会让某些几何 bed_idx=-1，
-        // 传具体热床 + 容错 vfn（见 arrangeObjects）保证导入后模型在床内且不抛异常。
-        receiver->arrangeObjects(5.0f, false, false,
-                                 QStringLiteral("0,0,220,0,220,220,0,220"));
+        // v5.16 (PLATE-04): upstream arranges only NEW model imports
+        // (arrange_loaded_object_to_new_position) — a 3MF that carries plate
+        // data restores exact membership instead of re-arranging (which
+        // collapsed non-locked plates to plate 0 and recycled empty tail
+        // plates). Plain imports (STL/OBJ/STEP) keep the auto-arrange.
+        const bool hadPlateData = loadedPlateCount > 0;
+        if (hadPlateData)
+          receiver->rebuildPlateMembership(/*exceptLocked=*/true);
+        else
+          receiver->arrangeObjects(5.0f, false, false,
+                                   QStringLiteral("0,0,220,0,220,220,0,220"));
 
         // Phase 97 fix (THUMBRT-01): restore persisted thumbnails AFTER
         // arrangeObjects. arrangeObjects -> rebuildPlatesAfterArrangement
@@ -5947,8 +5995,36 @@ bool ProjectServiceMock::setPlateBedType(int plateIndex, int bedType)
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return false;
   p->setBedType(bedType);
+#ifdef HAS_LIBSLIC3R
+  // v5.16 (PLATE-01): sync the plate's DynamicPrintConfig so slicing consumes
+  // the bed type (SliceService merges plate config; upstream applies
+  // plate->config() in BackgroundSlicingProcess). Mirrors the 3MF write side
+  // (buildPlateDataList) — curr_bed_type is a coEnum so setInt is valid.
+  if (auto *opt = p->config().option("curr_bed_type", true))
+    opt->setInt(bedType);
+#endif
   emit projectChanged();
   return true;
+}
+
+QVariant ProjectServiceMock::plateConfigValue(int plateIndex, const QString &key) const
+{
+#ifdef HAS_LIBSLIC3R
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!p) return {};
+  const std::string k = key.toStdString();
+  if (const auto *opt = p->config().option<Slic3r::ConfigOptionInts>(k.c_str())) {
+    QVariantList list;
+    for (int v : opt->values) list.append(v);
+    return list;
+  }
+  if (const auto *opt = p->config().option<Slic3r::ConfigOptionBool>(k.c_str()))
+    return opt->value;
+  if (const auto *opt = p->config().option(k.c_str())) {
+    try { return opt->getInt(); } catch (...) { return opt->serialize().c_str(); }
+  }
+#endif
+  return {};
 }
 
 int ProjectServiceMock::platePrintSequence(int plateIndex) const
@@ -5980,6 +6056,13 @@ bool ProjectServiceMock::setPlateSpiralMode(int plateIndex, int mode)
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return false;
   p->setSpiralMode(mode);
+#ifdef HAS_LIBSLIC3R
+  // v5.16 (PLATE-02): spiral_mode is a coBool — ConfigOptionBool does NOT
+  // override setInt (throws), so write via the typed accessor (same as the
+  // 3MF write side / Phase 97 read-side fix).
+  if (auto *opt = p->config().option<Slic3r::ConfigOptionBool>("spiral_mode", true))
+    opt->value = (mode != 0);
+#endif
   emit projectChanged();
   return true;
 }
@@ -5997,6 +6080,17 @@ bool ProjectServiceMock::setPlateFirstLayerSeqChoice(int plateIndex, int choice)
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return false;
   p->setFirstLayerSeqChoice(choice);
+#ifdef HAS_LIBSLIC3R
+  // v5.16 (PLATE-03): first_layer_print_sequence is coInts. "Auto" (choice 0)
+  // erases the key so the global default applies — the same semantics
+  // syncPlatePrintSequenceConfig uses for ByDefault print sequence.
+  if (choice == 0)
+    p->config().erase("first_layer_print_sequence");
+  else if (auto *opt = p->config().option<Slic3r::ConfigOptionInts>("first_layer_print_sequence", true)) {
+    const auto &order = p->firstLayerSeqOrder();
+    opt->values.assign(order.begin(), order.end());
+  }
+#endif
   emit projectChanged();
   return true;
 }
@@ -6020,6 +6114,15 @@ bool ProjectServiceMock::setPlateFirstLayerSeqOrder(int plateIndex, const QVaria
   for (const auto &v : order)
     intOrder.push_back(v.toInt());
   p->setFirstLayerSeqOrder(std::move(intOrder));
+#ifdef HAS_LIBSLIC3R
+  // v5.16 (PLATE-03): keep the config key in sync with the edited order.
+  if (p->firstLayerSeqChoice() != 0) {
+    if (auto *opt = p->config().option<Slic3r::ConfigOptionInts>("first_layer_print_sequence", true)) {
+      const auto &o = p->firstLayerSeqOrder();
+      opt->values.assign(o.begin(), o.end());
+    }
+  }
+#endif
   emit projectChanged();
   return true;
 }
@@ -6037,6 +6140,9 @@ bool ProjectServiceMock::setPlateOtherLayersSeqChoice(int plateIndex, int choice
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return false;
   p->setOtherLayersSeqChoice(choice);
+#ifdef HAS_LIBSLIC3R
+  syncPlateOtherLayersSeqConfig(p);
+#endif
   emit projectChanged();
   return true;
 }
@@ -6098,6 +6204,9 @@ bool ProjectServiceMock::addPlateOtherLayersSeqEntry(int plateIndex, int beginLa
               return a.beginLayer < b.beginLayer;
             });
   p->setOtherLayersSeqEntries(std::move(entries));
+#ifdef HAS_LIBSLIC3R
+  syncPlateOtherLayersSeqConfig(p);
+#endif
   emit projectChanged();
   return true;
 }
@@ -6110,6 +6219,9 @@ bool ProjectServiceMock::removePlateOtherLayersSeqEntry(int plateIndex, int entr
   if (entryIndex < 0 || entryIndex >= int(entries.size())) return false;
   entries.erase(entries.begin() + entryIndex);
   p->setOtherLayersSeqEntries(std::move(entries));
+#ifdef HAS_LIBSLIC3R
+  syncPlateOtherLayersSeqConfig(p);
+#endif
   emit projectChanged();
   return true;
 }
@@ -6130,6 +6242,9 @@ bool ProjectServiceMock::setPlateOtherLayersSeqRange(int plateIndex, int entryIn
               return a.beginLayer < b.beginLayer;
             });
   p->setOtherLayersSeqEntries(std::move(entries));
+#ifdef HAS_LIBSLIC3R
+  syncPlateOtherLayersSeqConfig(p);
+#endif
   emit projectChanged();
   return true;
 }
@@ -6146,6 +6261,9 @@ bool ProjectServiceMock::setPlateOtherLayersSeqOrder(int plateIndex, int entryIn
     intOrder.push_back(v.toInt());
   entries[size_t(entryIndex)].extruderOrder = std::move(intOrder);
   p->setOtherLayersSeqEntries(std::move(entries));
+#ifdef HAS_LIBSLIC3R
+  syncPlateOtherLayersSeqConfig(p);
+#endif
   emit projectChanged();
   return true;
 }
@@ -7156,6 +7274,30 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
       syncPlatePrintSequenceConfig(pd->config, p->printSequence());
       if (auto *opt = pd->config.option<Slic3r::ConfigOptionBool>("spiral_mode", true))
         opt->value = (p->spiralMode() != 0);
+      // v5.16 (PLATE-03): persist the per-plate filament sequences into the
+      // upstream plate config block (bbs_3mf.cpp:7458-7500 writes
+      // FIRST_LAYER_PRINT_SEQUENCE / OTHER_LAYERS_PRINT_SEQUENCE[_NUMS]).
+      if (p->firstLayerSeqChoice() != 0) {
+        if (auto *opt = pd->config.option<Slic3r::ConfigOptionInts>("first_layer_print_sequence", true)) {
+          const auto &o = p->firstLayerSeqOrder();
+          opt->values.assign(o.begin(), o.end());
+        }
+      } else {
+        pd->config.erase("first_layer_print_sequence");
+      }
+      if (p->otherLayersSeqChoice() != 0) {
+        const auto &entries = p->otherLayersSeqEntries();
+        if (auto *opt = pd->config.option<Slic3r::ConfigOptionInts>("other_layers_print_sequence", true)) {
+          opt->values.clear();
+          for (const auto &e : entries)
+            opt->values.insert(opt->values.end(), e.extruderOrder.begin(), e.extruderOrder.end());
+        }
+        if (auto *numOpt = pd->config.option("other_layers_print_sequence_nums", true))
+          numOpt->setInt(int(entries.size()));
+      } else {
+        pd->config.erase("other_layers_print_sequence");
+        pd->config.erase("other_layers_print_sequence_nums");
+      }
 
       // v3.2 Phase 31 (FMAP-01/02) + v4.5 Phase 107 (FMAP-02): populate
       // filament_maps from the plate's manual mapping (1-based, matching
@@ -7896,13 +8038,67 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
                 p->addInstance(objIdx, 0);
               // v3.0 Phase 18 (D-12): restore locked + bed-type/print-seq/spiral.
               if (pi < receiver->pendingPlateLocked_.size()) p->setLocked(receiver->pendingPlateLocked_[pi]);
-              if (pi < receiver->pendingPlateBedType_.size()) p->setBedType(receiver->pendingPlateBedType_[pi]);
+              if (pi < receiver->pendingPlateBedType_.size()) {
+                p->setBedType(receiver->pendingPlateBedType_[pi]);
+                // v5.16 (PLATE-01): this rebuilt plate starts with an empty
+                // config — sync the key so slicing consumes the bed type.
+                if (auto *opt = p->config().option("curr_bed_type", true))
+                  opt->setInt(receiver->pendingPlateBedType_[pi]);
+              }
               if (pi < receiver->pendingPlatePrintSeq_.size()) {
                 const int printSequence = receiver->pendingPlatePrintSeq_[pi];
                 p->setPrintSequence(printSequence);
                 syncPlatePrintSequenceConfig(p->config(), printSequence);
               }
-              if (pi < receiver->pendingPlateSpiral_.size()) p->setSpiralMode(receiver->pendingPlateSpiral_[pi]);
+              if (pi < receiver->pendingPlateSpiral_.size()) {
+                p->setSpiralMode(receiver->pendingPlateSpiral_[pi]);
+                // v5.16 (PLATE-02): mirror the spiral field into config
+                // (typed Bool accessor — setInt throws on coBool).
+                if (auto *opt = p->config().option<Slic3r::ConfigOptionBool>("spiral_mode", true))
+                  opt->value = (receiver->pendingPlateSpiral_[pi] != 0);
+              }
+              // v5.16 (PLATE-03): restore filament print sequences (field +
+              // config; upstream reconstructs other-layers by splitting the
+              // flattened ints into N equal per-range orders).
+              if (pi < receiver->pendingPlateFirstLayerSeq_.size()) {
+                const QList<int> &firstSeq = receiver->pendingPlateFirstLayerSeq_[pi];
+                p->setFirstLayerSeqChoice(firstSeq.isEmpty() ? 0 : 1);
+                p->setFirstLayerSeqOrder(std::vector<int>(firstSeq.begin(), firstSeq.end()));
+                if (firstSeq.isEmpty()) {
+                  p->config().erase("first_layer_print_sequence");
+                } else if (auto *opt = p->config().option<Slic3r::ConfigOptionInts>("first_layer_print_sequence", true)) {
+                  const auto &o = p->firstLayerSeqOrder();
+                  opt->values.assign(o.begin(), o.end());
+                }
+              }
+              if (pi < receiver->pendingPlateOtherLayersSeq_.size()) {
+                const QList<int> &otherSeq = receiver->pendingPlateOtherLayersSeq_[pi];
+                const int nums = (pi < receiver->pendingPlateOtherLayersSeqNums_.size())
+                                     ? receiver->pendingPlateOtherLayersSeqNums_[pi] : 0;
+                if (otherSeq.isEmpty() || nums <= 0) {
+                  p->setOtherLayersSeqChoice(0);
+                  p->setOtherLayersSeqEntries({});
+                  p->config().erase("other_layers_print_sequence");
+                  p->config().erase("other_layers_print_sequence_nums");
+                } else {
+                  p->setOtherLayersSeqChoice(1);
+                  std::vector<OWzx::LayerSeqEntry> entries;
+                  const int perEntry = qMax(1, int(otherSeq.size()) / nums);
+                  for (int e = 0; e < nums; ++e) {
+                    OWzx::LayerSeqEntry entry;
+                    entry.beginLayer = 2;
+                    entry.endLayer = 100;
+                    for (int k = 0; k < perEntry; ++k) {
+                      const int idx = e * perEntry + k;
+                      if (idx < otherSeq.size())
+                        entry.extruderOrder.push_back(otherSeq[idx]);
+                    }
+                    entries.push_back(std::move(entry));
+                  }
+                  p->setOtherLayersSeqEntries(std::move(entries));
+                  syncPlateOtherLayersSeqConfig(p);
+                }
+              }
               // v3.2 Phase 31 (FMAP-02): restore filament maps + mode (Manual).
               if (pi < receiver->pendingPlateFilamentMaps_.size()) {
                 const QList<int> &fm = receiver->pendingPlateFilamentMaps_[pi];
@@ -7935,11 +8131,11 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           }
           receiver->lastError_.clear();
 
-          // Auto-arrange after project load (对齐上游 arrange_loaded_object_to_new_position)
-          // 同 loadFile：传入默认 220x220 热床 + 容错 vfn，避免 InfiniteBed 路径抛
-          // bed_idx==-1（详见 arrangeObjects 注释）。
-          receiver->arrangeObjects(5.0f, false, false,
-                                   QStringLiteral("0,0,220,0,220,220,0,220"));
+          // v5.16 (PLATE-04): project restore keeps the exact saved plate
+          // membership — upstream load_project never re-arranges. Re-derive
+          // membership from the restored instance offsets only (no object
+          // moves, no empty-plate recycling).
+          receiver->rebuildPlateMembership(/*exceptLocked=*/true);
 
           // Phase 97 fix (THUMBRT-01): restore persisted thumbnails AFTER
           // arrangeObjects. arrangeObjects -> rebuildPlatesAfterArrangement
@@ -8078,6 +8274,26 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
       }
       pp->setOtherLayersSeqEntries(std::move(entries));
     }
+#ifdef HAS_LIBSLIC3R
+    // v5.16 (PLATE-01/02/03): this JSON restore path writes the plate fields
+    // directly, bypassing the service setters — mirror their config syncs so
+    // the restored bed type / spiral / filament sequences reach slicing.
+    {
+      auto &cfg = pp->config();
+      if (auto *opt = cfg.option("curr_bed_type", true))
+        opt->setInt(pp->bedType());
+      syncPlatePrintSequenceConfig(cfg, pp->printSequence());
+      if (auto *opt = cfg.option<Slic3r::ConfigOptionBool>("spiral_mode", true))
+        opt->value = (pp->spiralMode() != 0);
+      if (pp->firstLayerSeqChoice() == 0) {
+        cfg.erase("first_layer_print_sequence");
+      } else if (auto *opt = cfg.option<Slic3r::ConfigOptionInts>("first_layer_print_sequence", true)) {
+        const auto &o = pp->firstLayerSeqOrder();
+        opt->values.assign(o.begin(), o.end());
+      }
+      syncPlateOtherLayersSeqConfig(pp);
+    }
+#endif
     pp->clearInstances();
 
     QList<int> objIndices;

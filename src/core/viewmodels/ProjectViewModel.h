@@ -43,6 +43,16 @@ public slots:
   void importModel(const QStringList &paths);
   void selectFile(const QString &path);
   void clearRecentProjects();
+  /// v5.16 (PLATE-05): real edit flows (object/plate/config mutations via
+  /// ProjectServiceMock::projectChanged) mark the project dirty; the guard
+  /// dialogs and title indicator consume it. Loading does NOT mark dirty.
+  void markDirty()
+  {
+    if (!m_isDirty) {
+      m_isDirty = true;
+      emit dirtyChanged();
+    }
+  }
 
 private:
   struct FileEntry

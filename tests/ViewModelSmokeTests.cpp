@@ -195,6 +195,11 @@ private slots:
   void calibrationFallbackAndSliceCallbacksDriveProgress();
   // v5.16 (CIRC-04): per-slot filament presets hold independent selections.
   void filamentSlotPresetsAreIndependent();
+  // v5.16 (PLATE-01/02/03): plate-level UI settings land in the plate's
+  // DynamicPrintConfig so slicing consumes them.
+  void plateSettingsSyncIntoPlateConfig();
+  // v5.16 (PLATE-05): real edits mark the project dirty; load/save clear it.
+  void projectEditsDriveDirtyState();
   // v2.7 P2-A: INT-04 MQTT connection params + telemetry field mapping
   void int04_MqttConnectionParamsAndTelemetryFields();
   // v2.7 P2-B: INT-05 MQTT command construction + control flow
@@ -2450,6 +2455,64 @@ void ViewModelSmokeTests::filamentSlotPresetsAreIndependent()
     QVERIFY(config.requestFilamentPresetForSlot(0, names.constFirst()));
     QCOMPARE(config.currentFilamentPreset(), names.constFirst());
   }
+}
+
+void ViewModelSmokeTests::plateSettingsSyncIntoPlateConfig()
+{
+#ifdef HAS_LIBSLIC3R
+  ProjectServiceMock service;
+  QVERIFY(service.plateCount() > 0);
+
+  // PLATE-01: bed type reaches curr_bed_type in the plate config.
+  QVERIFY(service.setPlateBedType(0, 3));
+  QCOMPARE(service.plateConfigValue(0, QStringLiteral("curr_bed_type")).toInt(), 3);
+
+  // PLATE-02: spiral reaches spiral_mode (coBool) in the plate config.
+  QVERIFY(service.setPlateSpiralMode(0, 1));
+  QCOMPARE(service.plateConfigValue(0, QStringLiteral("spiral_mode")).toBool(), true);
+  QVERIFY(service.setPlateSpiralMode(0, 0));
+  QCOMPARE(service.plateConfigValue(0, QStringLiteral("spiral_mode")).toBool(), false);
+
+  // PLATE-03: first-layer sequence lands as coInts; "auto" erases the key.
+  QVERIFY(service.setPlateFirstLayerSeqChoice(0, 1));
+  QVariantList order{2, 1};
+  QVERIFY(service.setPlateFirstLayerSeqOrder(0, order));
+  QVariantList readBack = service.plateConfigValue(0, QStringLiteral("first_layer_print_sequence")).toList();
+  QCOMPARE(readBack.size(), 2);
+  QCOMPARE(readBack.at(0).toInt(), 2);
+  QCOMPARE(readBack.at(1).toInt(), 1);
+  QVERIFY(service.setPlateFirstLayerSeqChoice(0, 0));
+  QCOMPARE(service.plateConfigValue(0, QStringLiteral("first_layer_print_sequence")),
+           QVariant()); // erased — global default applies
+
+  // PLATE-03: other-layers flattened + nums land; entry CRUD keeps them fresh.
+  QVERIFY(service.setPlateOtherLayersSeqChoice(0, 1));
+  QVERIFY(service.addPlateOtherLayersSeqEntry(0, 2, 50));
+  QVariantList other = service.plateConfigValue(0, QStringLiteral("other_layers_print_sequence")).toList();
+  QVERIFY(!other.isEmpty());
+  QCOMPARE(service.plateConfigValue(0, QStringLiteral("other_layers_print_sequence_nums")).toInt(), 1);
+  QVERIFY(service.removePlateOtherLayersSeqEntry(0, 0));
+  QVERIFY(service.setPlateOtherLayersSeqChoice(0, 0));
+  QCOMPARE(service.plateConfigValue(0, QStringLiteral("other_layers_print_sequence")), QVariant());
+#else
+  QSKIP("This test requires libslic3r plate config plumbing");
+#endif
+}
+
+void ViewModelSmokeTests::projectEditsDriveDirtyState()
+{
+  ProjectServiceMock service;
+  ProjectViewModel project;
+  // v5.16 (PLATE-05): markDirty is the slot the composition root wires to
+  // ProjectServiceMock::projectChanged (loads excluded upstream-side).
+  QVERIFY(!project.isDirty());
+  project.markDirty();
+  QVERIFY(project.isDirty());
+  project.saveProject();
+  QVERIFY(!project.isDirty());
+  project.markDirty();
+  project.openProject(QStringLiteral("C:/tmp/x.3mf"));
+  QVERIFY(!project.isDirty());
 }
 
 void ViewModelSmokeTests::calibrationUnsupportedModesAreExplicitlyUnavailable()

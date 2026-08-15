@@ -7169,8 +7169,14 @@ void EditorViewModel::requestSliceAll()
   m_sliceAllQueue.clear();
   for (int i = 0; i < projectService_->plateCount(); ++i) {
     // D-08 (Phase 17): exclude locked AND non-printable plates from slice-all.
-    if (!isPlateLocked(i) && projectService_->isPlatePrintable(i))
-      m_sliceAllQueue.append(i);
+    if (isPlateLocked(i) || !projectService_->isPlatePrintable(i))
+      continue;
+    // v5.16 (ENGN-04): skip empty plates — an empty plate fails the slice and
+    // the failure handler clears the whole queue (upstream slice_all advances
+    // plate by plate instead).
+    if (plateObjectCount(i) <= 0)
+      continue;
+    m_sliceAllQueue.append(i);
   }
   if (m_sliceAllQueue.isEmpty())
     return;
