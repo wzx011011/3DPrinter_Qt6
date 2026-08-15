@@ -42,6 +42,10 @@ QVariant PresetListModel::data(const QModelIndex &index, int role) const
     return p.category;
   case IsDefaultRole:
     return p.isDefault;
+  case SectionRole:
+    return p.section;
+  case IncompatibleRole:
+    return p.incompatible;
   default:
     return {};
   }
@@ -53,12 +57,16 @@ QHash<int, QByteArray> PresetListModel::roleNames() const
       {NameRole, "presetName"},
       {CategoryRole, "presetCategory"},
       {IsDefaultRole, "presetIsDefault"},
+      {SectionRole, "presetSection"},
+      {IncompatibleRole, "presetIncompatible"},
   };
 }
 
 QString PresetListModel::presetName(int i) const { return (i >= 0 && i < m_presets.size()) ? m_presets[i].name : QString{}; }
 QString PresetListModel::presetCategory(int i) const { return (i >= 0 && i < m_presets.size()) ? m_presets[i].category : QString{}; }
 bool PresetListModel::presetIsDefault(int i) const { return (i >= 0 && i < m_presets.size()) && m_presets[i].isDefault; }
+QString PresetListModel::presetSection(int i) const { return (i >= 0 && i < m_presets.size()) ? m_presets[i].section : QString{}; }
+bool PresetListModel::presetIncompatible(int i) const { return (i >= 0 && i < m_presets.size()) && m_presets[i].incompatible; }
 
 int PresetListModel::countByCategory(const QString &category) const
 {
@@ -85,6 +93,11 @@ int PresetListModel::globalIndex(const QString &category, int localIndex) const
 }
 
 void PresetListModel::refreshFromService(PresetServiceMock *service)
+{
+  refreshFromService(service, QString());
+}
+
+void PresetListModel::refreshFromService(PresetServiceMock *service, const QString &printerName)
 {
   if (!service)
     return;
@@ -120,6 +133,12 @@ void PresetListModel::refreshFromService(PresetServiceMock *service)
       entry.name = name;
       entry.category = catLabel;
       entry.isDefault = (name == defaults[ci]);
+      // v5.16 (PSET2-05): combo section + compatibility graying. Printer
+      // combos never gray (upstream update_compatible only filters
+      // filament/process presets against the active printer).
+      entry.section = service->isUserPreset(name) ? tr("用户预设") : tr("系统预设");
+      if (!printerName.isEmpty() && categories[ci] != PresetServiceMock::PrinterCat)
+        entry.incompatible = !service->isPresetCompatibleWithPrinter(categories[ci], name, printerName);
       m_presets.append(entry);
     }
   }

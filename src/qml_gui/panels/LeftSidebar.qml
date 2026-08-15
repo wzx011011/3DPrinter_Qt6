@@ -99,15 +99,18 @@ Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 28
                         font.pixelSize: Theme.fontSizeSM
-                        model: root.configVm ? root.configVm.printerPresetNames : []
+                        // v5.16 (PSET2-05): decorated list — section
+                        // separators + incompatibility gray-out.
+                        model: root.configVm ? root.configVm.decoratedPrinterPresetNames : []
                         currentIndex: {
                             if (!root.configVm) return -1
-                            return root.configVm.printerPresetNames.indexOf(root.configVm.currentPrinterPreset)
+                            return root.configVm.decoratedPrinterPresetNames.indexOf(root.configVm.currentPrinterPreset)
                         }
                         onActivated: (i) => {
                             if (!root.configVm) return
                             if (i >= 0 && i < model.length)
-                                root.configVm.requestCurrentPrinterPreset(model[i])
+                                root.configVm.requestCurrentPrinterPreset(
+                                    root.configVm.plainPresetName(model[i]))
                         }
                     }
 
@@ -120,6 +123,14 @@ Rectangle {
                         ToolTip.text: qsTr("预设已修改（未保存）")
                         ToolTip.visible: printerDirtyMA.containsMouse
                         MouseArea { id: printerDirtyMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
+                    }
+
+                    // v5.16 (PSET2-07): per-row preset edit affordance
+                    // (rename/delete, upstream preset combo right-click menu).
+                    PixelIconButton {
+                        iconSource: "qrc:/qml/assets/icons/dots.svg"
+                        toolTipText: qsTr("预设操作")
+                        onClicked: root.editPreset(2, root.configVm ? root.configVm.currentPrinterPreset : "")
                     }
 
                     PixelIconButton {
@@ -184,24 +195,40 @@ Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 28
                             font.pixelSize: Theme.fontSizeSM
-                            model: root.configVm ? root.configVm.filamentPresetNames : []
+                            // v5.16 (PSET2-05): decorated list — section
+                            // separators + incompatibility gray-out.
+                            model: root.configVm ? root.configVm.decoratedFilamentPresetNames : []
                             currentIndex: {
                                 if (!root.configVm) return -1
                                 // v5.16 (CIRC-04): each slot shows ITS OWN preset
                                 // (was: the category list's Nth entry for all slots).
+                                // PSET2-05: compare against plain names since the
+                                // list entries may carry the display suffix.
                                 var slotPreset = root.configVm.filamentPresetForSlot(filamentPixelRow.index)
-                                var names = root.configVm.filamentPresetNames
+                                var names = root.configVm.decoratedFilamentPresetNames
                                 for (var i = 0; i < names.length; i++) {
-                                    if (names[i] === slotPreset) return i
+                                    if (root.configVm.plainPresetName(names[i]) === slotPreset) return i
                                 }
                                 return -1
                             }
                             onActivated: (i) => {
                                 if (!root.configVm) return
-                                var names = root.configVm.filamentPresetNames
+                                var names = root.configVm.decoratedFilamentPresetNames
                                 if (i >= 0 && i < names.length)
-                                    root.configVm.requestFilamentPresetForSlot(filamentPixelRow.index, names[i])
+                                    root.configVm.requestFilamentPresetForSlot(
+                                        filamentPixelRow.index,
+                                        root.configVm.plainPresetName(names[i]))
                             }
+                        }
+
+                        // v5.16 (PSET2-07): per-row preset edit affordance
+                        // (renames/deletes the GLOBAL filament preset of this
+                        // slot's selection, upstream preset combo menu).
+                        PixelIconButton {
+                            iconSource: "qrc:/qml/assets/icons/dots.svg"
+                            toolTipText: qsTr("预设操作")
+                            onClicked: root.editPreset(1, root.configVm
+                                ? root.configVm.filamentPresetForSlot(filamentPixelRow.index) : "")
                         }
 
                         PixelIconButton {
@@ -288,14 +315,17 @@ Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 28
                         font.pixelSize: Theme.fontSizeSM
-                        model: root.configVm ? root.configVm.printPresetNames : []
+                        // v5.16 (PSET2-05): decorated list — section
+                        // separators + incompatibility gray-out.
+                        model: root.configVm ? root.configVm.decoratedPrintPresetNames : []
                         currentIndex: {
                             if (!root.configVm) return -1
-                            return root.configVm.printPresetNames.indexOf(root.configVm.currentPrintPreset)
+                            return root.configVm.decoratedPrintPresetNames.indexOf(root.configVm.currentPrintPreset)
                         }
                         onActivated: (i) => {
                             if (root.configVm && i >= 0)
-                                root.configVm.requestCurrentPrintPreset(model[i])
+                                root.configVm.requestCurrentPrintPreset(
+                                    root.configVm.plainPresetName(model[i]))
                         }
                     }
 
@@ -308,6 +338,13 @@ Rectangle {
                         ToolTip.text: qsTr("预设已修改（未保存）")
                         ToolTip.visible: processDirtyMA.containsMouse
                         MouseArea { id: processDirtyMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
+                    }
+
+                    // v5.16 (PSET2-07): per-row preset edit affordance.
+                    PixelIconButton {
+                        iconSource: "qrc:/qml/assets/icons/dots.svg"
+                        toolTipText: qsTr("预设操作")
+                        onClicked: root.editPreset(0, root.configVm ? root.configVm.currentPrintPreset : "")
                     }
 
                     PixelIconButton {
@@ -472,6 +509,186 @@ Rectangle {
             }
 
             Item { Layout.preferredHeight: 18 }
+        }
+    }
+
+    // ── v5.16 (PSET2-07): preset rename/delete affordance ────────────────
+    // Upstream exposes rename/delete on each preset combo's context menu;
+    // here each preset row's "⋮" button opens the same actions.
+    property int presetEditCategory: -1
+    property string presetEditName: ""
+
+    function editPreset(category, currentName) {
+        if (!root.configVm || !currentName || currentName.length === 0)
+            return
+        root.presetEditCategory = category
+        root.presetEditName = currentName
+        presetEditMenu.popup()
+    }
+
+    CxMenu {
+        id: presetEditMenu
+
+        CxMenuItem {
+            text: qsTr("重命名…")
+            onTriggered: {
+                renamePresetField.text = root.presetEditName
+                renamePresetError.visible = false
+                renamePresetDialog.open()
+            }
+        }
+        CxMenuItem {
+            text: qsTr("删除…")
+            onTriggered: {
+                // canDeletePreset guards read-only/built-ins (service-side
+                // delete would reject them too); in-use presets warn first.
+                if (!root.configVm)
+                    return
+                if (!root.configVm.canDeletePreset(root.presetEditName)) {
+                    backend.postError(root.configVm.presetActionBlocker(
+                        root.presetEditCategory, root.presetEditName, "delete"), 1)
+                    return
+                }
+                deleteConfirmInUse.visible = root.configVm.isPresetInUse(root.presetEditName)
+                deletePresetDialog.open()
+            }
+        }
+    }
+
+    // Inline rename dialog (upstream SavePresetDialog rename path).
+    CxDialog {
+        id: renamePresetDialog
+        modal: true
+        dialogTitle: qsTr("重命名预设")
+        width: 380
+        height: 160
+        padding: 0
+
+        onAccepted: {
+            if (!root.configVm)
+                return
+            const newName = renamePresetField.text.trim()
+            if (newName.length === 0 || newName === root.presetEditName)
+                return
+            if (!root.configVm.renamePreset(root.presetEditCategory, root.presetEditName, newName)) {
+                renamePresetError.visible = true
+                renamePresetDialog.open()
+            } else {
+                root.presetEditName = newName
+            }
+        }
+
+        contentItem: Rectangle {
+            color: Theme.bgPanel
+            anchors.fill: parent
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: Theme.spacingXL
+                spacing: Theme.spacingMD
+
+                Text {
+                    text: root.presetEditName
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeSM
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+
+                CxTextField {
+                    id: renamePresetField
+                    Layout.fillWidth: true
+                    implicitHeight: 28
+                    font.pixelSize: Theme.fontSizeSM
+                    placeholderText: qsTr("输入新的预设名称")
+                    onAccepted: renamePresetDialog.accept()
+                }
+
+                Text {
+                    id: renamePresetError
+                    text: qsTr("重命名失败（名称为空、重复或内置预设）")
+                    color: Theme.statusError
+                    font.pixelSize: Theme.fontSizeXS
+                    visible: false
+                }
+
+                Item { Layout.fillHeight: true }
+
+                RowLayout {
+                    Layout.alignment: Qt.AlignRight
+                    spacing: Theme.spacingMD
+                    CxButton {
+                        text: qsTr("取消")
+                        onClicked: renamePresetDialog.reject()
+                    }
+                    CxButton {
+                        text: qsTr("确定")
+                        cxStyle: CxButton.Style.Primary
+                        onClicked: renamePresetDialog.accept()
+                    }
+                }
+            }
+        }
+    }
+
+    // Delete confirmation (upstream deletes the selected user preset and
+    // falls the selection back to the category default).
+    CxDialog {
+        id: deletePresetDialog
+        modal: true
+        dialogTitle: qsTr("删除预设")
+        width: 380
+        height: 170
+        padding: 0
+
+        onAccepted: {
+            if (root.configVm)
+                root.configVm.deletePreset(root.presetEditCategory, root.presetEditName)
+        }
+
+        contentItem: Rectangle {
+            color: Theme.bgPanel
+            anchors.fill: parent
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: Theme.spacingXL
+                spacing: Theme.spacingMD
+
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("确定删除预设 “%1”？").arg(root.presetEditName)
+                    color: Theme.textPrimary
+                    font.pixelSize: Theme.fontSizeMD
+                    wrapMode: Text.WordWrap
+                }
+
+                Text {
+                    id: deleteConfirmInUse
+                    Layout.fillWidth: true
+                    text: qsTr("该预设正在使用，删除后将切换回默认预设。")
+                    color: Theme.statusWarning
+                    font.pixelSize: Theme.fontSizeXS
+                    wrapMode: Text.WordWrap
+                    visible: false
+                }
+
+                Item { Layout.fillHeight: true }
+
+                RowLayout {
+                    Layout.alignment: Qt.AlignRight
+                    spacing: Theme.spacingMD
+                    CxButton {
+                        text: qsTr("取消")
+                        onClicked: deletePresetDialog.reject()
+                    }
+                    CxButton {
+                        text: qsTr("删除")
+                        cxStyle: CxButton.Style.Primary
+                        onClicked: deletePresetDialog.accept()
+                    }
+                }
+            }
         }
     }
 

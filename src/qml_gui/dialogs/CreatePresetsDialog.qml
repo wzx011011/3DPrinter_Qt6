@@ -34,32 +34,41 @@ CxDialog {
 
     property var editorVm: null
     property var configVm: null
-    // Phase 147 (PSET-02): scope enum mirrors upstream Preset::Type
-    //   0 = printer, 1 = filament (material), 2 = print (process)
-    property int selectedScope: 2
+    // v5.16 (PSET2-02): the UI scope order is 打印机/耗材/工艺, which maps to
+    // PresetServiceMock::Category PrinterCat=2 / FilamentCat=1 / PrintCat=0
+    // (PresetServiceMock.h:18). The previous code passed the raw combo index
+    // as the category, so choosing "打印机" created a PRINT preset. Index
+    // order below follows the combo: 0=打印机, 1=材料, 2=工艺.
+    readonly property var scopeCategories: [2, 1, 0]
+    // Selected category (PresetServiceMock::Category int). Default: process.
+    property int selectedCategory: 0
+    // Selected parent preset name ("" = no inheritance).
+    property string selectedInherits: ""
 
     onOpened: {
-        // Default scope = process (the most common create flow).
+        // Default scope = process (the most common create flow) → PrintCat.
         scopeCombo.currentIndex = 2
-        root.selectedScope = 2
+        root.selectedCategory = root.scopeCategories[2]
         refreshInheritsList()
     }
 
     function refreshInheritsList() {
         if (!root.configVm) return
-        // Phase 147 (PSET-02): pull the existing-scope preset list. ConfigViewModel
-        // exposes per-scope QStringList Q_PROPERTYs (printerPresetNames /
+        // Pull the existing-scope preset list. ConfigViewModel exposes
+        // per-scope QStringList Q_PROPERTYs (printerPresetNames /
         // filamentPresetNames / printPresetNames) — use the one matching the
-        // selected scope so the "inherits from" dropdown only shows relevant presets.
+        // selected category so the "inherits from" dropdown only shows
+        // relevant presets.
         var names = []
-        if (root.selectedScope === 0 && root.configVm.printerPresetNames)
+        if (root.selectedCategory === 2 && root.configVm.printerPresetNames)
             names = root.configVm.printerPresetNames
-        else if (root.selectedScope === 1 && root.configVm.filamentPresetNames)
+        else if (root.selectedCategory === 1 && root.configVm.filamentPresetNames)
             names = root.configVm.filamentPresetNames
-        else if (root.selectedScope === 2 && root.configVm.printPresetNames)
+        else if (root.selectedCategory === 0 && root.configVm.printPresetNames)
             names = root.configVm.printPresetNames
-        inheritsCombo.model = (names && names.length > 0) ? names : [qsTr("（无）")]
+        inheritsCombo.model = (names && names.length > 0) ? names : []
         inheritsCombo.currentIndex = 0
+        root.selectedInherits = (names && names.length > 0) ? names[0] : ""
     }
 
     ColumnLayout {
@@ -81,9 +90,11 @@ CxDialog {
                 id: scopeCombo
                 Layout.preferredWidth: 160
                 model: [qsTr("打印机"), qsTr("材料"), qsTr("工艺")]
-                onActivated: {
-                    // 0=Printer, 1=Material, 2=Process (matches upstream Type enum order)
-                    root.selectedScope = currentIndex
+                onActivated: function(i) {
+                    // UI 打印机/耗材/工艺 → PrinterCat/FilamentCat/PrintCat
+                    // via scopeCategories (PSET2-02 mapping fix).
+                    if (i >= 0 && i < root.scopeCategories.length)
+                        root.selectedCategory = root.scopeCategories[i]
                     root.refreshInheritsList()
                 }
             }
@@ -97,6 +108,10 @@ CxDialog {
                 id: inheritsCombo
                 Layout.preferredWidth: 260
                 // model is set by refreshInheritsList()
+                onActivated: function(i) {
+                    var names = inheritsCombo.model
+                    root.selectedInherits = (names && i >= 0 && i < names.length) ? names[i] : ""
+                }
             }
         }
 
@@ -136,16 +151,16 @@ CxDialog {
                 onClicked: {
                     if (!root.configVm) { root.reject(); return }
                     const name = nameInput.text.trim()
-                    // Phase 147 (PSET-02): delegate to ConfigViewModel.createCustomPreset
-                    // which proxies to PresetServiceMock::createCustomPreset. The existing
-                    // 2-arg signature (category, name) creates an empty preset that
-                    // inherits from the currently-selected preset in that scope; the user
-                    // then edits values in the settings panel and saves via the dirty flow.
-                    const ok = root.configVm.createCustomPreset(root.selectedScope, name)
+                    // v5.16 (PSET2-02): pass the inherits selection through.
+                    // ConfigViewModel::createCustomPreset(category, name,
+                    // inherits) seeds the new preset from the parent's
+                    // resolved chain (upstream CreatePresetsDialog inherits).
+                    const ok = root.configVm.createCustomPreset(
+                        root.selectedCategory, name, root.selectedInherits)
                     if (ok) {
                         root.accept()
                     } else {
-                        dupWarning.text = qsTr("创建失败（名称重复或范围无效）")
+                        dupWarning.text = qsTr("创建失败（名称重复、范围无效或继承的预设不存在）")
                         dupWarning.visible = true
                     }
                 }

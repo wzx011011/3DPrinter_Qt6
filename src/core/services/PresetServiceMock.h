@@ -85,17 +85,20 @@ public:
   // v2.4 IO-04/05: 预设包导入导出（JSON 格式，简化版）
   Q_INVOKABLE bool exportBundle(const QString &filePath) const;
   Q_INVOKABLE bool importBundle(const QString &filePath);
-  /// Phase 147 (PSET-01): upstream-compatible `.ini` bundle export. Writes one
-  /// `.ini` file per user preset to a directory (dirPath), with each file
-  /// following the upstream Preset `key = value` format + a `[preset]` header
-  /// carrying metadata (name/category/vendor/inherits). This is the interop
-  /// layer for OrcaSlicer installs (the JSON exportBundle remains as the
-  /// internal fast-path format). Returns the count of exported presets
-  /// (-1 = directory creation failure).
+  /// Phase 147 (PSET-01) / v5.16 (PSET2-04): upstream-compatible bundle
+  /// export. Writes one JSON file per user preset under
+  /// `<dirPath>/{printer,filament,process}/` in the upstream user-preset
+  /// shape (Config.cpp:1390-1433 save_to_json + Preset::save
+  /// type/inherits, Preset.cpp:498-536), plus an `index.json` manifest.
+  /// Upstream packs this per-preset JSON tree into a .zip
+  /// (ExportPresetBundleDialog); zip packaging is deferred — the directory
+  /// tree + manifest is the interop unit. Returns the count of exported
+  /// presets (-1 = directory creation failure).
   Q_INVOKABLE int exportBundleIni(const QString &dirPath) const;
-  /// Phase 147 (PSET-01): upstream-compatible `.ini` bundle import. Reads all
-  /// `*.ini` files in the directory and ingests them as user presets. Returns
-  /// the count of imported presets (-1 = directory access failure).
+  /// Phase 147 (PSET-01) / v5.16 (PSET2-04): upstream-compatible bundle
+  /// import. Reads the export tree (index.json or per-category subdirs of
+  /// upstream-shaped JSON) plus legacy flat `.ini` files. Returns the count
+  /// of imported presets (-1 = directory access failure).
   Q_INVOKABLE int importBundleIni(const QString &dirPath);
   /// Phase 149 (PSET-05): compare two presets key-by-key. Returns a QVariantList
   /// of {key, valueA, valueB} maps for every key where the two presets differ
@@ -107,6 +110,19 @@ public:
 
   /// 创建自定义预设（对齐上游 PresetBundle::save_current_preset）
   bool createCustomPreset(int category, const QString &name, const QHash<QString, QVariant> &values);
+  /// v5.16 (PSET2-02): create with an explicit parent preset. The stored
+  /// values start from the parent's resolved chain (resolveInheritance output
+  /// captured at vendor-load time) overlaid with `values`, and the preset
+  /// records `inherits` (upstream Preset::inherits). Fails when the parent
+  /// does not exist.
+  bool createCustomPreset(int category, const QString &name, const QHash<QString, QVariant> &values,
+                          const QString &inherits);
+  /// v5.16 (PSET2-03): merge `values` into an existing user preset without
+  /// replacing its other keys and persist to disk. This is the Transfer
+  /// primitive (upstream UnsavedChangesDialog Action::Transfer,
+  /// UnsavedChangesDialog.cpp:1087/2380): selected keys move onto the target
+  /// preset; the source preset is never saved. Read-only targets reject.
+  bool mergePresetValues(const QString &presetName, const QHash<QString, QVariant> &values);
   /// 删除自定义预设（内置预设不可删除）
   bool deletePreset(const QString &presetName);
   /// 重命名自定义预设（对齐上游 PresetBundle 重命名，内置预设不可重命名）
@@ -142,6 +158,15 @@ public:
 
   /// 获取预设继承的父预设名（对齐上游 Preset::inherits）
   QString presetInherits(const QString &presetName) const;
+
+  /// v5.16 (PSET2-01): user preset persistence root. Defaults to
+  /// QStandardPaths AppDataLocation + "/user/presets" (mirrors upstream
+  /// data_dir/user/<category>, PresetBundle.cpp:565-602). create/rename/
+  /// delete/save all touch this tree and the constructor loads it. Tests
+  /// redirect to a throwaway directory via setUserPresetDir (changing it
+  /// re-scans the new location; names already loaded are kept).
+  Q_INVOKABLE QString userPresetDir() const;
+  Q_INVOKABLE void setUserPresetDir(const QString &dir);
 
 private:
   struct PresetMetadata
@@ -179,6 +204,30 @@ private:
   void updateSelectedPresetFallback(int category);
   static QString selectionSettingsKey(int category);
   static QString bundleCategoryName(int category);
+
+  // ── v5.16 (PSET2-01): user preset disk persistence ───────────────────
+  /// Effective user preset root (injection dir when set, AppData default).
+  QString userPresetDirResolved() const;
+  /// Directory name per category under the user preset root
+  /// ("printer"/"filament"/"process").
+  static QString userPresetCategoryDir(int category);
+  /// Filesystem-safe preset file name (upstream replaces path-hostile chars).
+  static QString safePresetFileName(const QString &name);
+  /// <baseDir>/<category>/<name>.json
+  static QString presetJsonFilePath(const QString &baseDir, int category, const QString &name);
+  /// Write one preset as upstream-shaped user JSON (Config.cpp:1390-1433
+  /// save_to_json header + Preset::save type/inherits, Preset.cpp:498-536).
+  static bool writePresetJsonFile(const QString &baseDir, int category, const QString &name,
+                                  const QHash<QString, QVariant> &values, const QString &inherits);
+  bool writeUserPresetFile(int category, const QString &name, const QHash<QString, QVariant> &values) const;
+  bool removeUserPresetFile(int category, const QString &name) const;
+  /// Scan <userDir>/{printer,filament,process}/*.json and register each as a
+  /// user preset ahead of the system presets (upstream load_user_presets).
+  void loadUserPresets();
+  /// Parse one upstream-shaped user preset JSON file. Returns false when the
+  /// file is not valid JSON or carries no usable name.
+  bool loadUserPresetJson(const QString &filePath, int category);
+  QString m_userPresetDir;
   /// Resolve the vendor profiles directory (source tree or installed).
   /// Returns empty when not found. Shared by loadVendorPresets /
   /// loadSingleVendor / availableVendorNames.

@@ -21,7 +21,7 @@ ConfigViewModel::ConfigViewModel(PresetServiceMock *presetService, ProjectServic
   filamentOptions_->loadFilamentSchema();
 #endif
   presetList_ = new PresetListModel(this);
-  presetList_->refreshFromService(presetService_);
+  refreshPresetListModel();
 
   scopedWritableKeys_ = {
       // Layer
@@ -378,6 +378,18 @@ bool ConfigViewModel::applyPendingAction()
     setCurrentFilamentPreset(target);
     return true;
   }
+  // v5.16 (PSET2-03/PSET2-06): per-slot filament switch actions queued by
+  // requestFilamentPresetForSlot ("switch-filament-preset-<n>"). These
+  // previously fell through the exact-match branches above and the switch
+  // was silently dropped after the dirty guard resolved.
+  if (action.startsWith(QStringLiteral("switch-filament-preset-"))) {
+    const int slot = action.mid(QStringLiteral("switch-filament-preset-").size()).toInt();
+    if (slot > 0)
+      requestFilamentPresetForSlot(slot, target);
+    else
+      setCurrentFilamentPreset(target);
+    return true;
+  }
   if (action == QStringLiteral("switch-printer-preset")) {
     setCurrentPrinterPreset(target);
     return true;
@@ -501,11 +513,35 @@ bool ConfigViewModel::importBundle(const QString &filePath)
     if (!presetService_) return false;
     const bool ok = presetService_->importBundle(filePath);
     if (ok) {
-      if (presetList_)
-        presetList_->refreshFromService(presetService_);
+      refreshPresetListModel();
       emit stateChanged();
     }
     return ok;
+}
+
+// v5.16 (PSET2-04): per-preset upstream-shape JSON bundle proxies.
+int ConfigViewModel::exportBundleIni(const QString &dirPath) const
+{
+    return presetService_ ? presetService_->exportBundleIni(dirPath) : -1;
+}
+
+int ConfigViewModel::importBundleIni(const QString &dirPath)
+{
+    if (!presetService_) return -1;
+    const int imported = presetService_->importBundleIni(dirPath);
+    if (imported > 0) {
+      refreshPresetListModel();
+      emit stateChanged();
+    }
+    return imported;
+}
+
+void ConfigViewModel::refreshPresetListModel()
+{
+  // v5.16 (PSET2-05): pass the active printer so the model can compute the
+  // per-preset compatibility used for the in-list graying.
+  if (presetList_ && presetService_)
+    presetList_->refreshFromService(presetService_, currentPrinterPreset_);
 }
 
 void ConfigViewModel::saveCurrentPreset()
@@ -585,6 +621,96 @@ QStringList ConfigViewModel::compatiblePrintPresetNames() const
   if (!currentPrintPreset_.isEmpty() && !names.contains(currentPrintPreset_))
     names.prepend(currentPrintPreset_);
   return names;
+}
+
+// ── v5.16 (PSET2-05): sectioned/grayed combo display lists ────────────────
+// Upstream truth: PresetComboBoxes.cpp:1281-1317 — non-system (user) presets
+// and system presets render under "User presets" / "System presets"
+// separators, and incompatible entries are disabled with
+// LABEL_ITEM_DISABLED. CxComboBox renders "— … —" entries as non-selectable
+// section headers and " (不兼容)"-suffixed entries as disabled, so the plain
+// preset lists above stay machine-readable and the decorated ones
+// presentation-only.
+
+namespace {
+const QString kIncompatibleSuffix = QStringLiteral(" (不兼容)");
+
+QString decoratedSectionHeader(const QString &label)
+{
+  return QStringLiteral("— ") + label + QStringLiteral(" —");
+}
+} // namespace
+
+QString ConfigViewModel::plainPresetName(const QString &displayName) const
+{
+  if (displayName.endsWith(kIncompatibleSuffix))
+    return displayName.left(displayName.size() - kIncompatibleSuffix.size());
+  return displayName;
+}
+
+QStringList ConfigViewModel::decoratedPrinterPresetNames() const
+{
+  return decoratedPresetNamesForCategory(PresetServiceMock::PrinterCat);
+}
+
+QStringList ConfigViewModel::decoratedFilamentPresetNames() const
+{
+  return decoratedPresetNamesForCategory(PresetServiceMock::FilamentCat);
+}
+
+QStringList ConfigViewModel::decoratedPrintPresetNames() const
+{
+  return decoratedPresetNamesForCategory(PresetServiceMock::PrintCat);
+}
+
+QStringList ConfigViewModel::decoratedPresetNamesForCategory(int category) const
+{
+  if (!presetService_ || category < PresetServiceMock::PrintCat ||
+      category > PresetServiceMock::PrinterCat)
+    return {};
+
+  const QStringList names = presetService_->presetNamesForCategory(category);
+  QString current;
+  if (category == PresetServiceMock::PrinterCat)
+    current = currentPrinterPreset_;
+  else if (category == PresetServiceMock::FilamentCat)
+    current = currentFilamentPreset_;
+  else
+    current = currentPrintPreset_;
+
+  // Compatibility graying applies to filament/process presets against the
+  // active printer (upstream update_compatible); printer combos never gray.
+  const bool compatibilityRelevant = category != PresetServiceMock::PrinterCat;
+
+  QStringList userEntries, systemEntries;
+  for (const QString &name : names)
+  {
+    QString display = name;
+    if (compatibilityRelevant && name != current &&
+        !presetService_->isPresetCompatibleWithPrinter(category, name, currentPrinterPreset_))
+    {
+      // The current selection stays undecorated so combo lookup keeps
+      // matching (upstream validate_selection keeps it selectable).
+      display += kIncompatibleSuffix;
+    }
+    if (presetService_->isUserPreset(name))
+      userEntries.append(display);
+    else
+      systemEntries.append(display);
+  }
+
+  QStringList result;
+  if (!userEntries.isEmpty())
+  {
+    result.append(decoratedSectionHeader(tr("用户预设")));
+    result.append(userEntries);
+  }
+  if (!systemEntries.isEmpty())
+  {
+    result.append(decoratedSectionHeader(tr("系统预设")));
+    result.append(systemEntries);
+  }
+  return result;
 }
 
 bool ConfigViewModel::currentPresetCombinationValid() const
@@ -679,6 +805,11 @@ void ConfigViewModel::mergePresetHierarchy()
 
 bool ConfigViewModel::createCustomPreset(int category, const QString &name)
 {
+  return createCustomPreset(category, name, QString());
+}
+
+bool ConfigViewModel::createCustomPreset(int category, const QString &name, const QString &inherits)
+{
   if (!presetService_)
     return false;
 
@@ -692,16 +823,29 @@ bool ConfigViewModel::createCustomPreset(int category, const QString &name)
   else
     return false;
 
-  const QHash<QString, QVariant> tierValues = editableValuesForTier(tier);
+  // v5.16 (PSET2-02): with an explicit parent, seed the new preset from the
+  // parent's resolved chain (CreatePresetsDialog "inherits from"); otherwise
+  // fall back to the current tier edits (upstream save_current_preset).
+  const QString parent = inherits.trimmed();
+  QHash<QString, QVariant> tierValues;
+  if (!parent.isEmpty())
+  {
+    if (!presetService_->hasPreset(parent))
+      return false;
+    tierValues = presetService_->presetValues(parent);
+  }
+  else
+  {
+    tierValues = editableValuesForTier(tier);
+  }
 
   const QString trimmedName = name.trimmed();
-  if (!presetService_->createCustomPreset(category, trimmedName, tierValues))
+  if (!presetService_->createCustomPreset(category, trimmedName, tierValues, parent))
     return false;
 
   setCurrentPresetTierValue(tier, trimmedName);
 
-  if (presetList_)
-    presetList_->refreshFromService(presetService_);
+  refreshPresetListModel();
   mergePresetHierarchy();
   emit stateChanged();
   if (hasPendingUnsavedChanges())
@@ -716,25 +860,49 @@ bool ConfigViewModel::deletePreset(int category, const QString &name)
   if (presetService_->presetCategory(name) != category)
     return false;
 
-  // 涓嶅厑璁稿垹闄ゅ綋鍓嶆鍦ㄤ娇鐢ㄧ殑棰勮
-  if (name == currentPrinterPreset_ || name == currentFilamentPreset_ || name == currentPrintPreset_)
-    return false;
-
+  // v5.16 (PSET2-07): the previous blanket "in use" early return made the
+  // default-switch branches below unreachable dead code. Upstream allows
+  // deleting the selected user preset and falls the selection back to the
+  // category default (PresetCollection::delete_preset); the UI warns first
+  // via isPresetInUse.
   bool ok = presetService_->deletePreset(name);
   if (ok)
   {
-    // 濡傛灉鍒犻櫎鐨勬槸褰撳墠绫诲埆涓鍦ㄤ娇鐢ㄧ殑棰勮锛屽垏鎹㈠洖榛樿
+    // If the deleted preset was the tier's active selection, fall back to
+    // the category default.
     if (name == currentPrintPreset_)
       setCurrentPrintPreset(presetService_->defaultPresetForCategory(PresetServiceMock::PrintCat));
     if (name == currentFilamentPreset_)
       setCurrentFilamentPreset(presetService_->defaultPresetForCategory(PresetServiceMock::FilamentCat));
     if (name == currentPrinterPreset_)
       setCurrentPrinterPreset(presetService_->defaultPresetForCategory(PresetServiceMock::PrinterCat));
-    if (presetList_)
-      presetList_->refreshFromService(presetService_);
+    // Per-extruder slots referencing the deleted preset fall back to the
+    // (already repaired) global selection.
+    bool slotsChanged = false;
+    for (QString &slot : filamentSlotPresets_)
+    {
+      if (slot == name)
+      {
+        slot = currentFilamentPreset_;
+        slotsChanged = true;
+      }
+    }
+    if (slotsChanged)
+      emit sliceAffectingConfigChanged();
+    refreshPresetListModel();
     emit stateChanged();
   }
   return ok;
+}
+
+bool ConfigViewModel::isPresetInUse(const QString &name) const
+{
+  // v5.16 (PSET2-07): drives the delete confirmation copy — a preset counts
+  // as in use when it is any tier's current selection or a per-extruder
+  // slot's preset.
+  return name == currentPrinterPreset_ || name == currentFilamentPreset_ ||
+         name == currentPrintPreset_ || name == currentPreset_ ||
+         filamentSlotPresets_.contains(name);
 }
 
 bool ConfigViewModel::renamePreset(int category, const QString &oldName, const QString &newName)
@@ -747,7 +915,7 @@ bool ConfigViewModel::renamePreset(int category, const QString &oldName, const Q
   bool ok = presetService_->renamePreset(oldName, newName.trimmed());
   if (ok)
   {
-    // 鏇存柊褰撳墠娲昏穬棰勮鍚嶅紩鐢?
+    // Keep the current tier preset names in sync with the rename.
     if (oldName == currentPrintPreset_)
       currentPrintPreset_ = newName.trimmed();
     if (oldName == currentPreset_)
@@ -756,8 +924,14 @@ bool ConfigViewModel::renamePreset(int category, const QString &oldName, const Q
       currentFilamentPreset_ = newName.trimmed();
     if (oldName == currentPrinterPreset_)
       currentPrinterPreset_ = newName.trimmed();
-    if (presetList_)
-      presetList_->refreshFromService(presetService_);
+    // v5.16 (PSET2-07): keep per-extruder slot selections pointing at the
+    // renamed preset (upstream rename keeps filament_presets in sync).
+    for (QString &slot : filamentSlotPresets_)
+    {
+      if (slot == oldName)
+        slot = newName.trimmed();
+    }
+    refreshPresetListModel();
     emit stateChanged();
   }
   return ok;
@@ -954,9 +1128,11 @@ void ConfigViewModel::activatePlateScope(int plateIndex)
 
 bool ConfigViewModel::requestCurrentPrinterPreset(const QString &name)
 {
-  if (queuePendingAction(QStringLiteral("switch-printer-preset"), name))
+  // v5.16 (PSET2-05): accept both plain and decorated (combo display) names.
+  const QString plain = plainPresetName(name);
+  if (queuePendingAction(QStringLiteral("switch-printer-preset"), plain))
   {
-    setCurrentPrinterPreset(name);
+    setCurrentPrinterPreset(plain);
     return true;
   }
   return false;
@@ -964,9 +1140,10 @@ bool ConfigViewModel::requestCurrentPrinterPreset(const QString &name)
 
 bool ConfigViewModel::requestCurrentFilamentPreset(const QString &name)
 {
-  if (queuePendingAction(QStringLiteral("switch-filament-preset"), name))
+  const QString plain = plainPresetName(name);
+  if (queuePendingAction(QStringLiteral("switch-filament-preset"), plain))
   {
-    setCurrentFilamentPreset(name);
+    setCurrentFilamentPreset(plain);
     return true;
   }
   return false;
@@ -984,15 +1161,16 @@ QString ConfigViewModel::filamentPresetForSlot(int slot) const
 
 bool ConfigViewModel::requestFilamentPresetForSlot(int slot, const QString &name)
 {
+  const QString plain = plainPresetName(name);
   if (slot <= 0)
-    return requestCurrentFilamentPreset(name);
-  if (queuePendingAction(QStringLiteral("switch-filament-preset-%1").arg(slot), name))
+    return requestCurrentFilamentPreset(plain);
+  if (queuePendingAction(QStringLiteral("switch-filament-preset-%1").arg(slot), plain))
   {
     while (filamentSlotPresets_.size() < slot)
       filamentSlotPresets_.append(currentFilamentPreset_);
-    if (filamentSlotPresets_.at(slot - 1) == name)
+    if (filamentSlotPresets_.at(slot - 1) == plain)
       return true;
-    filamentSlotPresets_[slot - 1] = name;
+    filamentSlotPresets_[slot - 1] = plain;
     emit stateChanged();
     // A per-slot preset change alters the effective multi-material config.
     emit sliceAffectingConfigChanged();
@@ -1006,11 +1184,49 @@ bool ConfigViewModel::isFilamentCompatibleForSlot(int slot) const
   return isFilamentCompatible(filamentPresetForSlot(slot));
 }
 
+void ConfigViewModel::setExtruderCount(int count)
+{
+  // v5.16 (PSET2-06): keep the per-slot vector sized to the extruder count
+  // (upstream PresetBundle::update_multi_material_filament_presets resizes
+  // filament_presets). Slots beyond the count drop; new slots inherit the
+  // global selection.
+  // NOTE: the local must NOT be named "slots" — it is a Qt keyword macro
+  // and would expand to nothing, breaking the declaration (C2513).
+  const int slotCount = qMax(0, count - 1);
+  if (filamentSlotPresets_.size() == slotCount)
+    return;
+  while (filamentSlotPresets_.size() > slotCount)
+    filamentSlotPresets_.removeLast();
+  while (filamentSlotPresets_.size() < slotCount)
+    filamentSlotPresets_.append(currentFilamentPreset_);
+  emit stateChanged();
+}
+
+QVariantMap ConfigViewModel::projectPresetConfigOverlay() const
+{
+  // v5.16 (PSET2-06): preset selection state persisted with the project —
+  // the tier preset ids plus the filament_presets slot vector (";"
+  // separated, slot 0 mirrors the global selection; upstream stores the
+  // vector in the 3MF config).
+  QVariantMap overlay;
+  overlay.insert(QStringLiteral("printer_preset_id"), currentPrinterPreset_);
+  overlay.insert(QStringLiteral("filament_preset_id"), currentFilamentPreset_);
+  overlay.insert(QStringLiteral("print_preset_id"), currentPrintPreset_);
+  // NOTE: named slotList — "slots" is a Qt keyword macro (same as above).
+  QStringList slotList;
+  slotList.reserve(filamentSlotPresets_.size() + 1);
+  slotList.append(currentFilamentPreset_);
+  slotList.append(filamentSlotPresets_);
+  overlay.insert(QStringLiteral("filament_presets"), slotList.join(QLatin1Char(';')));
+  return overlay;
+}
+
 bool ConfigViewModel::requestCurrentPrintPreset(const QString &name)
 {
-  if (queuePendingAction(QStringLiteral("switch-print-preset"), name))
+  const QString plain = plainPresetName(name);
+  if (queuePendingAction(QStringLiteral("switch-print-preset"), plain))
   {
-    setCurrentPrintPreset(name);
+    setCurrentPrintPreset(plain);
     return true;
   }
   return false;
@@ -1089,6 +1305,70 @@ bool ConfigViewModel::requestCancelPendingChanges()
 {
   clearPendingAction();
   return true;
+}
+
+bool ConfigViewModel::beginUnsavedDialog()
+{
+  // v5.16 (PSET2-03): re-entry gate — the first SettingsDialog listener to
+  // call this owns the modal; the other two shared-configVm instances get
+  // false and must not open theirs.
+  if (m_unsavedDialogActive)
+    return false;
+  m_unsavedDialogActive = true;
+  emit stateChanged();
+  return true;
+}
+
+void ConfigViewModel::endUnsavedDialog()
+{
+  if (!m_unsavedDialogActive)
+    return;
+  m_unsavedDialogActive = false;
+  emit stateChanged();
+}
+
+bool ConfigViewModel::transferPendingChanges(const QStringList &keys)
+{
+  // v5.16 (PSET2-03): upstream Transfer (UnsavedChangesDialog.cpp:1087,
+  // 2380) — move the selected modified keys onto the pending target preset,
+  // leave the source preset unsaved, then proceed with the pending switch.
+  if (!presetService_ || pendingUnsavedAction_.isEmpty() ||
+      !pendingUnsavedAction_.startsWith(QStringLiteral("switch-")))
+    return false;
+
+  const QString target = pendingUnsavedTarget_;
+  if (target.isEmpty() || !presetService_->hasPreset(target) ||
+      presetService_->isReadOnlyPreset(target))
+    return false;
+
+  const QString tier = normalizedTier(activePresetTier_);
+  const QHash<QString, QVariant> effective = effectivePresetValuesForTier(tier);
+  QHash<QString, QVariant> selected;
+  for (const QString &key : keys)
+  {
+    const auto it = effective.constFind(key);
+    if (it != effective.constEnd())
+      selected.insert(key, it.value());
+  }
+  if (!presetService_->mergePresetValues(target, selected))
+    return false;
+
+  // The source preset stays unsaved: revert the tier's edited values so the
+  // dirty state clears (upstream Transfer moves values, source reverts).
+  if (tier == QStringLiteral("printer"))
+    printerPresetValues_ = selectedPresetValuesForTier(tier);
+  else if (tier == QStringLiteral("filament"))
+    filamentPresetValues_ = selectedPresetValuesForTier(tier);
+  else
+    printPresetValues_ = selectedPresetValuesForTier(tier);
+  updateMergedPresetValues();
+  applyScopeValues();
+
+  const bool applied = applyPendingAction();
+  refreshPresetListModel();
+  emit stateChanged();
+  emit sliceAffectingConfigChanged();
+  return applied;
 }
 
 void ConfigViewModel::applyScopeValues()
@@ -1850,6 +2130,27 @@ void ConfigViewModel::applyProjectConfig(const QHash<QString, QVariant> &config)
       setCurrentPrintPreset(name);
   }
 
+  // v5.16 (PSET2-06): restore the per-slot filament preset vector. The key
+  // carries every slot including 0 (the global selection — upstream
+  // filament_presets semantics); the first entry wins over
+  // filament_preset_id when both are present.
+  const auto slotsIt = config.find(QStringLiteral("filament_presets"));
+  if (slotsIt != config.end())
+  {
+    const QStringList slotNames = slotsIt.value().toString().split(QLatin1Char(';'), Qt::SkipEmptyParts);
+    if (!slotNames.isEmpty())
+    {
+      const QString globalName = plainPresetName(slotNames.first());
+      if (!globalName.isEmpty() && presetService_ && presetService_->hasPreset(globalName))
+        setCurrentFilamentPreset(globalName);
+      QStringList rest;
+      rest.reserve(slotNames.size() - 1);
+      for (int i = 1; i < slotNames.size(); ++i)
+        rest.append(plainPresetName(slotNames.at(i)));
+      filamentSlotPresets_ = rest;
+    }
+  }
+
   // Apply remaining config keys into the editable print-tier state.
   for (auto it = config.constBegin(); it != config.constEnd(); ++it)
   {
@@ -1858,6 +2159,7 @@ void ConfigViewModel::applyProjectConfig(const QHash<QString, QVariant> &config)
     if (key == QStringLiteral("printer_preset_id") ||
         key == QStringLiteral("filament_preset_id") ||
         key == QStringLiteral("print_preset_id") ||
+        key == QStringLiteral("filament_presets") ||
         key == QStringLiteral("print_sequence") ||
         key == QStringLiteral("total_filament_names"))
       continue;

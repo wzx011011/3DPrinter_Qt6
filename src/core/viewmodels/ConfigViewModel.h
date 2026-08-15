@@ -61,6 +61,19 @@ class ConfigViewModel final : public QObject
   Q_PROPERTY(QString pendingUnsavedTarget READ pendingUnsavedTarget NOTIFY stateChanged)
   Q_PROPERTY(bool hasPendingUnsavedChanges READ hasPendingUnsavedChanges NOTIFY stateChanged)
   Q_PROPERTY(int globalModifiedCount READ globalModifiedCount NOTIFY stateChanged)
+  // v5.16 (PSET2-03): single dirty-guard modal gate. Three SettingsDialog
+  // instances share this viewmodel and all connect
+  // pendingUnsavedChangesRequested; begin/endUnsavedDialog makes only the
+  // first listener open its modal (upstream shows exactly one
+  // UnsavedChangesDialog at a time).
+  Q_PROPERTY(bool unsavedDialogActive READ unsavedDialogActive NOTIFY stateChanged)
+  // v5.16 (PSET2-05): sectioned display lists ("— 用户预设 —" / "— 系统预设 —"
+  // separators + " (不兼容)" gray-out suffixes) for the preset combos
+  // (upstream PresetComboBoxes.cpp:1281-1317 Project/User/System sections +
+  // LABEL_ITEM_DISABLED graying).
+  Q_PROPERTY(QStringList decoratedPrinterPresetNames READ decoratedPrinterPresetNames NOTIFY stateChanged)
+  Q_PROPERTY(QStringList decoratedFilamentPresetNames READ decoratedFilamentPresetNames NOTIFY stateChanged)
+  Q_PROPERTY(QStringList decoratedPrintPresetNames READ decoratedPrintPresetNames NOTIFY stateChanged)
 
 public:
   explicit ConfigViewModel(PresetServiceMock *presetService, ProjectServiceMock *projectService, QObject *parent = nullptr);
@@ -112,6 +125,10 @@ public:
   QString pendingUnsavedAction() const { return pendingUnsavedAction_; }
   QString pendingUnsavedTarget() const { return pendingUnsavedTarget_; }
   bool hasPendingUnsavedChanges() const { return !pendingUnsavedAction_.isEmpty(); }
+  bool unsavedDialogActive() const { return m_unsavedDialogActive; }
+  QStringList decoratedPrinterPresetNames() const;
+  QStringList decoratedFilamentPresetNames() const;
+  QStringList decoratedPrintPresetNames() const;
 
   Q_INVOKABLE void loadDefault();
   Q_INVOKABLE void setCurrentPreset(const QString &presetName);
@@ -133,12 +150,26 @@ public:
   Q_INVOKABLE void requestCreatePreset() { emit createPresetRequired(); }
   Q_INVOKABLE bool exportBundle(const QString &filePath) const;
   Q_INVOKABLE bool importBundle(const QString &filePath);
+  /// v5.16 (PSET2-04): per-preset upstream-shape JSON bundle export/import
+  /// (directory tree + index.json manifest). Proxies PresetServiceMock.
+  Q_INVOKABLE int exportBundleIni(const QString &dirPath) const;
+  Q_INVOKABLE int importBundleIni(const QString &dirPath);
   bool isPresetDirty() const;
   int globalModifiedCount() const;
   Q_INVOKABLE bool createCustomPreset(int category, const QString &name);
+  /// v5.16 (PSET2-02): create a preset inheriting from `inherits` — the new
+  /// preset's values start from the parent's resolved chain (CreatePresetsDialog
+  /// "inherits from" selection, upstream CreatePresetsDialog.cpp).
+  Q_INVOKABLE bool createCustomPreset(int category, const QString &name, const QString &inherits);
   Q_INVOKABLE bool deletePreset(int category, const QString &name);
   Q_INVOKABLE bool renamePreset(int category, const QString &oldName, const QString &newName);
   Q_INVOKABLE bool canDeletePreset(const QString &name) const;
+  /// v5.16 (PSET2-07): true when the preset is the current selection of any
+  /// tier or per-extruder slot (drives the in-use delete warning).
+  Q_INVOKABLE bool isPresetInUse(const QString &name) const;
+  // v5.16 (PSET2-05): reverse of the decorated display lists — strips the
+  // " (不兼容)" suffix so QML activation handlers can pass plain preset names.
+  Q_INVOKABLE QString plainPresetName(const QString &displayName) const;
   Q_INVOKABLE QStringList comparePresets(const QString &presetA, const QString &presetB) const;
   /// Phase 154 (CLOS-01): structured diff variant — proxies to
   /// PresetServiceMock::comparePresets(A, B) which returns a QVariantList of
@@ -185,6 +216,24 @@ public:
   Q_INVOKABLE bool requestSavePendingChanges();
   Q_INVOKABLE bool requestDiscardPendingChanges();
   Q_INVOKABLE bool requestCancelPendingChanges();
+  /// v5.16 (PSET2-03): single dirty-guard modal gate. Returns false when a
+  /// dialog is already up (the caller must not open a second one).
+  Q_INVOKABLE bool beginUnsavedDialog();
+  Q_INVOKABLE void endUnsavedDialog();
+  /// v5.16 (PSET2-03): Transfer — apply the selected modified keys onto the
+  /// pending target preset without saving the source (upstream
+  /// UnsavedChangesDialog Action::Transfer, UnsavedChangesDialog.cpp:1087,
+  /// 2380). Only valid for preset-switch pending actions. Reverts the
+  /// source tier's edits and proceeds with the pending switch.
+  Q_INVOKABLE bool transferPendingChanges(const QStringList &keys);
+  /// v5.16 (PSET2-06): resize the per-extruder filament preset slot vector
+  /// (upstream update_multi_material_filament_presets resizes
+  /// filament_presets with the extruder count).
+  Q_INVOKABLE void setExtruderCount(int count);
+  /// v5.16 (PSET2-06): preset-selection overlay persisted into the saved
+  /// project config (printer/filament/print preset ids + the
+  /// ";"-separated filament_presets slot vector, slot 0 = global selection).
+  QVariantMap projectPresetConfigOverlay() const;
 
   Q_INVOKABLE QList<int> filterOptionIndices(const QString &category, const QString &searchText, bool advancedMode = false) const;
   Q_INVOKABLE QList<int> moveListItem(int fromRow, int toRow) const;
@@ -265,6 +314,11 @@ private:
   bool applyPendingAction();
   void setCurrentPresetTierValue(const QString &tier, const QString &presetName);
   void mergePresetHierarchy();
+  /// v5.16 (PSET2-05): shared builder for the three decorated* Q_PROPERTYs.
+  QStringList decoratedPresetNamesForCategory(int category) const;
+  /// v5.16 (PSET2-05): refresh presetList_ from the service including the
+  /// per-preset section + compatibility data for the active printer.
+  void refreshPresetListModel();
 
   QString currentPreset_;
   double layerHeight_ = 0.2;
@@ -299,5 +353,7 @@ private:
   QHash<QString, QString> valueSources_;
   QString pendingUnsavedAction_;
   QString pendingUnsavedTarget_;
+  /// v5.16 (PSET2-03): dirty-guard modal re-entry gate.
+  bool m_unsavedDialogActive = false;
   mutable QList<int> m_lastSearchResults_;
 };

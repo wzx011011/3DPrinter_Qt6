@@ -11,6 +11,7 @@
 #include <QDateTime>
 #include <QCoreApplication>
 #include <QSettings>
+#include <QStandardPaths>
 #include <cmath>
 #include "core/FlushVolCalculator.h"  // v5.12: flush matrix calc
 
@@ -86,6 +87,47 @@ bool explicitlyMatchesPrinter(const QHash<QString, QVariant> &values, const QStr
   return compatiblePrinters.contains(printerName) ||
          (!parentPrinter.isEmpty() && compatiblePrinters.contains(parentPrinter));
 }
+
+// v5.16 (PSET2-01): header keys of the upstream user-preset JSON shape —
+// ConfigBase::save_to_json writes version/name/from/is_custom (Config.cpp:1390-1433)
+// and Preset::save adds type/inherits (Preset.cpp:498-536). They are metadata,
+// never config values.
+bool isUserPresetHeaderKey(const QString &key)
+{
+  return key == QStringLiteral("version") || key == QStringLiteral("name") ||
+         key == QStringLiteral("from") || key == QStringLiteral("is_custom") ||
+         key == QStringLiteral("type") || key == QStringLiteral("inherits") ||
+         key == QStringLiteral("setting_id") || key == QStringLiteral("vendor") ||
+         key == QStringLiteral("readonly");
+}
+
+// v5.16 (PSET2-01): JSON value -> QVariant with the same integral coercion
+// resolveInheritance applies to string numbers (int when the value has no
+// fractional part), so disk round-trips keep the in-memory QVariant types
+// stable.
+QVariant variantFromJsonValue(const QJsonValue &value)
+{
+  if (value.isBool())
+    return value.toBool();
+  if (value.isDouble())
+  {
+    const double d = value.toDouble();
+    if (d == std::floor(d) && std::abs(d) < 2147483648.0)
+      return static_cast<int>(d);
+    return d;
+  }
+  if (value.isString())
+    return value.toString();
+  if (value.isArray())
+  {
+    QVariantList list;
+    const QJsonArray arr = value.toArray();
+    for (const QJsonValue &item : arr)
+      list.append(variantFromJsonValue(item));
+    return list;
+  }
+  return value.toVariant();
+}
 }
 
 PresetServiceMock::PresetServiceMock(QObject *parent)
@@ -98,6 +140,9 @@ PresetServiceMock::PresetServiceMock(QObject *parent)
 #else
   initBuiltinDefaults();
 #endif
+  // v5.16 (PSET2-01): load persisted user presets ahead of the selection
+  // restore so a saved selection referencing a user preset resolves.
+  loadUserPresets();
   loadSelectedPresets();
 }
 
@@ -181,6 +226,185 @@ void PresetServiceMock::updateSelectedPresetFallback(int category)
   const QString current = m_selectedPresets.value(category);
   if (!names.contains(current))
     m_selectedPresets[category] = names.first();
+}
+
+// ── v5.16 (PSET2-01): user preset disk persistence ───────────────────────
+// Upstream truth: Preset::save (Preset.cpp:498-536) writes each user preset
+// as JSON via ConfigBase::save_to_json (Config.cpp:1390-1433) with a
+// version/name/from/is_custom header (+ type/inherits), under
+// data_dir/user/<category>; PresetBundle::load_user_presets
+// (PresetBundle.cpp:565-602) reloads that tree at startup.
+
+QString PresetServiceMock::userPresetDirResolved() const
+{
+  if (!m_userPresetDir.isEmpty())
+    return m_userPresetDir;
+  return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+             + QStringLiteral("/user/presets");
+}
+
+QString PresetServiceMock::userPresetDir() const
+{
+  return userPresetDirResolved();
+}
+
+void PresetServiceMock::setUserPresetDir(const QString &dir)
+{
+  if (m_userPresetDir == dir)
+    return;
+  m_userPresetDir = dir;
+  // Re-scan: presets already in memory keep their state; the new location
+  // only contributes presets not seen yet (createCustomPreset-style guard).
+  loadUserPresets();
+}
+
+QString PresetServiceMock::userPresetCategoryDir(int category)
+{
+  switch (category)
+  {
+  case PrinterCat: return QStringLiteral("printer");
+  case FilamentCat: return QStringLiteral("filament");
+  case PrintCat: return QStringLiteral("process");
+  default: return {};
+  }
+}
+
+QString PresetServiceMock::safePresetFileName(const QString &name)
+{
+  // Upstream names preset files after the preset and escapes path-hostile
+  // characters; mirror that for Windows-invalid chars.
+  QString safe = name;
+  const QString invalid = QStringLiteral("<>:\"/\\|?*");
+  for (QChar &c : safe)
+  {
+    if (invalid.contains(c) || c.category() == QChar::Other_Control)
+      c = QLatin1Char('_');
+  }
+  return safe;
+}
+
+QString PresetServiceMock::presetJsonFilePath(const QString &baseDir, int category, const QString &name)
+{
+  return baseDir + QStringLiteral("/") + userPresetCategoryDir(category) + QStringLiteral("/")
+             + safePresetFileName(name) + QStringLiteral(".json");
+}
+
+bool PresetServiceMock::writePresetJsonFile(const QString &baseDir, int category, const QString &name,
+                                            const QHash<QString, QVariant> &values, const QString &inherits)
+{
+  const QString dir = baseDir + QStringLiteral("/") + userPresetCategoryDir(category);
+  if (!QDir().mkpath(dir))
+  {
+    qWarning("[Preset] writePresetJsonFile: cannot create directory %s", dir.toUtf8().constData());
+    return false;
+  }
+
+  QJsonObject root;
+  root[QStringLiteral("version")] = QStringLiteral("1.0.0.0");
+  root[QStringLiteral("name")] = name;
+  root[QStringLiteral("from")] = QStringLiteral("User");
+  root[QStringLiteral("is_custom")] = QStringLiteral("1");
+  // Upstream type names: "machine" for printer presets, "filament", "process".
+  switch (category)
+  {
+  case PrinterCat: root[QStringLiteral("type")] = QStringLiteral("machine"); break;
+  case FilamentCat: root[QStringLiteral("type")] = QStringLiteral("filament"); break;
+  case PrintCat: root[QStringLiteral("type")] = QStringLiteral("process"); break;
+  default: return false;
+  }
+  if (!inherits.isEmpty())
+    root[QStringLiteral("inherits")] = inherits;
+  for (auto it = values.constBegin(); it != values.constEnd(); ++it)
+    root[it.key()] = QJsonValue::fromVariant(it.value());
+
+  QFile f(presetJsonFilePath(baseDir, category, name));
+  if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+  {
+    qWarning("[Preset] writePresetJsonFile: cannot write %s", f.fileName().toUtf8().constData());
+    return false;
+  }
+  f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+  f.close();
+  return true;
+}
+
+bool PresetServiceMock::writeUserPresetFile(int category, const QString &name,
+                                            const QHash<QString, QVariant> &values) const
+{
+  if (!isValidCategory(category))
+    return false;
+  return writePresetJsonFile(userPresetDirResolved(), category, name, values,
+                             m_presetInherits.value(name));
+}
+
+bool PresetServiceMock::removeUserPresetFile(int category, const QString &name) const
+{
+  if (!isValidCategory(category))
+    return false;
+  const QString path = presetJsonFilePath(userPresetDirResolved(), category, name);
+  return !QFile::exists(path) || QFile::remove(path);
+}
+
+bool PresetServiceMock::loadUserPresetJson(const QString &filePath, int category)
+{
+  QFile f(filePath);
+  if (!f.open(QIODevice::ReadOnly))
+    return false;
+
+  QJsonParseError err;
+  const QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &err);
+  if (err.error != QJsonParseError::NoError || !doc.isObject())
+    return false;
+
+  const QJsonObject root = doc.object();
+  const QString name = root.value(QStringLiteral("name")).toString().trimmed();
+  if (name.isEmpty() || m_presetStore.contains(name))
+    return false;
+
+  QHash<QString, QVariant> values;
+  for (auto it = root.constBegin(); it != root.constEnd(); ++it)
+  {
+    if (isUserPresetHeaderKey(it.key()))
+      continue;
+    values.insert(it.key(), variantFromJsonValue(it.value()));
+  }
+
+  m_presetStore[name] = values;
+  registerPresetMetadata(name, category, false, false);
+  const QString inherits = root.value(QStringLiteral("inherits")).toString();
+  if (!inherits.isEmpty())
+    m_presetInherits[name] = inherits;
+  return true;
+}
+
+void PresetServiceMock::loadUserPresets()
+{
+  const QString base = userPresetDirResolved();
+  for (int category : {PrintCat, FilamentCat, PrinterCat})
+  {
+    QDir dir(base + QStringLiteral("/") + userPresetCategoryDir(category));
+    if (!dir.exists())
+      continue;
+    const QStringList files = dir.entryList({QStringLiteral("*.json")}, QDir::Files, QDir::Name);
+    for (const QString &fileName : files)
+      loadUserPresetJson(dir.absoluteFilePath(fileName), category);
+  }
+
+  // User presets list ahead of the system presets (upstream combo layout:
+  // Project/User before System, PresetComboBoxes.cpp:1289-1317).
+  for (auto it = m_categoryPresets.begin(); it != m_categoryPresets.end(); ++it)
+  {
+    QStringList userNames, systemNames;
+    for (const QString &name : it.value())
+    {
+      if (m_presetMetadata.value(name).builtin)
+        systemNames.append(name);
+      else
+        userNames.append(name);
+    }
+    if (!userNames.isEmpty())
+      it.value() = userNames + systemNames;
+  }
 }
 
 void PresetServiceMock::initBuiltinDefaults()
@@ -1148,6 +1372,9 @@ bool PresetServiceMock::savePresetValues(const QString &presetName, const QHash<
     return false;
 
   m_presetStore[presetName] = values;
+  // v5.16 (PSET2-01): persist the saved preset to the user tree (upstream
+  // Preset::save on every dirty-save).
+  writeUserPresetFile(presetCategory(presetName), presetName, values);
   return true;
 }
 
@@ -1303,6 +1530,9 @@ bool PresetServiceMock::importBundle(const QString &filePath)
     registerPresetMetadata(item.name, item.category, false, item.readOnly, item.vendor, item.settingId);
     if (!item.inherits.isEmpty())
       m_presetInherits[item.name] = item.inherits;
+    // v5.16 (PSET2-04): imported user presets persist to disk like any
+    // user-created preset (upstream import lands in the user preset tree).
+    writeUserPresetFile(item.category, item.name, item.values);
   }
 
   qDebug("[Preset] imported %d presets from: %s", int(pending.size()), filePath.toUtf8().constData());
@@ -1466,11 +1696,13 @@ QString PresetServiceMock::findCompatiblePresetForCategory(int category, const Q
   return firstGeneric;
 }
 
-// Phase 147 (PSET-01): upstream-compatible `.ini` bundle export. Writes one
-// `.ini` file per user preset to a directory, with each file using the upstream
-// Preset `[preset]` header + `key = value` body format. Mirrors the on-disk
-// format OrcaSlicer uses for user presets under `user/<category>/`. The JSON
-// exportBundle remains as the internal fast-path format.
+// v5.16 (PSET2-04): upstream-compatible bundle export. Each user preset is
+// written as one upstream-shaped JSON file (Config.cpp:1390-1433 save_to_json
+// header + Preset::save type/inherits, Preset.cpp:498-536) under
+// <dirPath>/{printer,filament,process}/, plus an index.json manifest.
+// Upstream ExportPresetBundleDialog packs the per-preset JSON tree into a
+// .zip; zip packaging is deferred here — the directory tree + manifest is
+// the interop unit (importBundleIni reads either).
 int PresetServiceMock::exportBundleIni(const QString &dirPath) const
 {
   QDir dir(dirPath);
@@ -1480,6 +1712,7 @@ int PresetServiceMock::exportBundleIni(const QString &dirPath) const
     return -1;
   }
 
+  QJsonArray manifestPresets;
   int exported = 0;
   for (auto it = m_presetStore.constBegin(); it != m_presetStore.constEnd(); ++it)
   {
@@ -1488,61 +1721,46 @@ int PresetServiceMock::exportBundleIni(const QString &dirPath) const
     if (metaIt == m_presetMetadata.constEnd() || metaIt->builtin)
       continue;
 
-    // File name: <category>-<safe-name>.ini (mirrors upstream user/ layout).
-    const QString safeName = name;
-    const QString fileName = QStringLiteral("%1-%2.ini")
-                                  .arg(bundleCategoryName(metaIt->category), safeName);
-    const QString filePath = dir.absoluteFilePath(fileName);
-
-    QStringList lines;
-    lines << QStringLiteral("[preset]");
-    lines << QStringLiteral("name = ") + name;
-    lines << QStringLiteral("category = ") + bundleCategoryName(metaIt->category);
-    if (!metaIt->vendor.isEmpty())
-      lines << QStringLiteral("vendor = ") + metaIt->vendor;
-    if (!metaIt->settingId.isEmpty())
-      lines << QStringLiteral("setting_id = ") + metaIt->settingId;
-    lines << QStringLiteral("readonly = ") + (metaIt->readOnly ? QStringLiteral("1") : QStringLiteral("0"));
-    const QString inherits = m_presetInherits.value(name);
-    if (!inherits.isEmpty())
-      lines << QStringLiteral("inherits = ") + inherits;
-    lines << QString(); // blank line separating header from values
-    // Body: `key = value` per upstream Preset format. Variant stringification
-    // matches the upstream convention (numbers as-is, strings raw, bools as 1/0).
-    for (auto vit = it.value().constBegin(); vit != it.value().constEnd(); ++vit)
+    const QString categoryDir = userPresetCategoryDir(metaIt->category);
+    if (!writePresetJsonFile(dirPath, metaIt->category, name, it.value(),
+                             m_presetInherits.value(name)))
     {
-      const QVariant &v = vit.value();
-      QString str;
-      switch (v.type())
-      {
-      case QVariant::Bool: str = v.toBool() ? QStringLiteral("1") : QStringLiteral("0"); break;
-      case QVariant::Double: str = QString::number(v.toDouble(), 'g', 12); break;
-      case QVariant::Int:
-      case QVariant::LongLong: str = QString::number(v.toLongLong()); break;
-      default: str = v.toString(); break;
-      }
-      lines << QStringLiteral("%1 = %2").arg(vit.key(), str);
+      qWarning("[Preset] exportBundleIni: cannot write preset %s", name.toUtf8().constData());
+      continue;
     }
 
-    QFile f(filePath);
-    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
-    {
-      f.write(lines.join(QStringLiteral("\n")).toUtf8());
-      f.write("\n");
-      f.close();
-      ++exported;
-    }
-    else
-    {
-      qWarning("[Preset] exportBundleIni: cannot write %s", filePath.toUtf8().constData());
-    }
+    QJsonObject entry;
+    entry[QStringLiteral("name")] = name;
+    entry[QStringLiteral("category")] = metaIt->category;
+    entry[QStringLiteral("categoryName")] = bundleCategoryName(metaIt->category);
+    entry[QStringLiteral("file")] = categoryDir + QStringLiteral("/")
+                                        + safePresetFileName(name) + QStringLiteral(".json");
+    manifestPresets.append(entry);
+    ++exported;
   }
+
+  // Manifest: upstream bundles carry a machine index; ours lists the exported
+  // preset files so imports stay name/category-exact without path guessing.
+  QJsonObject manifest;
+  manifest[QStringLiteral("kind")] = QStringLiteral("owzx-preset-bundle-dir");
+  manifest[QStringLiteral("version")] = QStringLiteral("1.0");
+  manifest[QStringLiteral("exported")] = QDateTime::currentDateTime().toString(Qt::ISODate);
+  manifest[QStringLiteral("presets")] = manifestPresets;
+  QFile manifestFile(dir.absoluteFilePath(QStringLiteral("index.json")));
+  if (manifestFile.open(QIODevice::WriteOnly | QIODevice::Truncate))
+  {
+    manifestFile.write(QJsonDocument(manifest).toJson(QJsonDocument::Indented));
+    manifestFile.close();
+  }
+
   qDebug("[Preset] exportBundleIni: exported %d user presets to %s", exported, dirPath.toUtf8().constData());
   return exported;
 }
 
-// Phase 147 (PSET-01): upstream-compatible `.ini` bundle import. Reads all
-// `*.ini` files in the directory and ingests them as user presets.
+// v5.16 (PSET2-04): upstream-compatible bundle import. Reads the export
+// tree: index.json manifest first, then per-category subdirs of
+// upstream-shaped JSON, then legacy flat `.ini` files (category header with
+// the corrected enum mapping — the previous code swapped printer/print).
 int PresetServiceMock::importBundleIni(const QString &dirPath)
 {
   QDir dir(dirPath);
@@ -1551,8 +1769,115 @@ int PresetServiceMock::importBundleIni(const QString &dirPath)
     qWarning("[Preset] importBundleIni: directory does not exist %s", dirPath.toUtf8().constData());
     return -1;
   }
-  const QStringList iniFiles = dir.entryList({QStringLiteral("*.ini")}, QDir::Files);
+
+  struct PendingImport
+  {
+    QString name;
+    int category = -1;
+    QString inherits;
+    QString vendor;
+    QString settingId;
+    QHash<QString, QVariant> values;
+  };
+  QList<PendingImport> pending;
+
+  // Category directory names -> enum. "machine" is upstream's name for
+  // printer presets (PRESET_PRINTER_NAME); "print" is accepted as a legacy
+  // alias of "process".
+  auto categoryFromDirName = [](const QString &dirName) -> int {
+    if (dirName == QLatin1String("printer") || dirName == QLatin1String("machine"))
+      return PrinterCat;
+    if (dirName == QLatin1String("filament"))
+      return FilamentCat;
+    if (dirName == QLatin1String("process") || dirName == QLatin1String("print"))
+      return PrintCat;
+    return -1;
+  };
+  auto categoryFromTypeName = [](const QString &typeName) -> int {
+    if (typeName == QLatin1String("machine") || typeName == QLatin1String("printer"))
+      return PrinterCat;
+    if (typeName == QLatin1String("filament"))
+      return FilamentCat;
+    if (typeName == QLatin1String("process") || typeName == QLatin1String("print"))
+      return PrintCat;
+    return -1;
+  };
+  auto ingestJsonFile = [&](const QString &filePath, int categoryHint) {
+    QFile f(filePath);
+    if (!f.open(QIODevice::ReadOnly))
+      return;
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject())
+      return;
+    const QJsonObject root = doc.object();
+    PendingImport item;
+    item.name = root.value(QStringLiteral("name")).toString().trimmed();
+    item.inherits = root.value(QStringLiteral("inherits")).toString();
+    int category = categoryHint >= 0 ? categoryHint
+                                     : categoryFromTypeName(root.value(QStringLiteral("type")).toString());
+    if (item.name.isEmpty() || !isValidCategory(category))
+      return;
+    item.category = category;
+    for (auto it = root.constBegin(); it != root.constEnd(); ++it)
+    {
+      if (isUserPresetHeaderKey(it.key()))
+        continue;
+      item.values.insert(it.key(), variantFromJsonValue(it.value()));
+    }
+    pending.append(item);
+  };
+
+  // 1) Manifest-driven import (exact name/category/file triples).
+  QFile manifestFile(dir.absoluteFilePath(QStringLiteral("index.json")));
+  if (manifestFile.open(QIODevice::ReadOnly))
+  {
+    const QJsonDocument doc = QJsonDocument::fromJson(manifestFile.readAll());
+    manifestFile.close();
+    if (doc.isObject() && doc.object().value(QStringLiteral("kind")).toString()
+                              == QStringLiteral("owzx-preset-bundle-dir"))
+    {
+      const QJsonArray presets = doc.object().value(QStringLiteral("presets")).toArray();
+      for (const QJsonValue &v : presets)
+      {
+        const QJsonObject entry = v.toObject();
+        const int category = entry.value(QStringLiteral("category")).toInt(-1);
+        const QString file = entry.value(QStringLiteral("file")).toString();
+        if (!isValidCategory(category) || file.isEmpty())
+          continue;
+        ingestJsonFile(dir.absoluteFilePath(file), category);
+      }
+    }
+  }
+
+  // 2) Category-subdir scan (upstream user preset layout, no manifest).
+  const QStringList subDirs = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+  for (const QString &subDir : subDirs)
+  {
+    const int category = categoryFromDirName(subDir);
+    if (!isValidCategory(category))
+      continue;
+    const QDir catDir(dir.absoluteFilePath(subDir));
+    const QStringList files = catDir.entryList({QStringLiteral("*.json")}, QDir::Files);
+    for (const QString &fileName : files)
+      ingestJsonFile(catDir.absoluteFilePath(fileName), category);
+  }
+
+  // 3) Loose upstream JSON at the root (category from the "type" header).
+  {
+    const QStringList files = dir.entryList({QStringLiteral("*.json")}, QDir::Files);
+    for (const QString &fileName : files)
+    {
+      if (fileName == QLatin1String("index.json"))
+        continue;
+      ingestJsonFile(dir.absoluteFilePath(fileName), -1);
+    }
+  }
+
   int imported = 0;
+
+  // 4) Legacy flat `.ini` files (the Phase 147 format, kept readable).
+  const QStringList iniFiles = dir.entryList({QStringLiteral("*.ini")}, QDir::Files);
   for (const QString &fileName : iniFiles)
   {
     QFile f(dir.absoluteFilePath(fileName));
@@ -1560,7 +1885,7 @@ int PresetServiceMock::importBundleIni(const QString &dirPath)
       continue;
 
     QString name;
-    int category = 0; // default to print
+    int category = PrintCat; // default to process
     QString vendor, settingId, inherits;
     bool readOnly = false;
     QHash<QString, QVariant> values;
@@ -1587,9 +1912,12 @@ int PresetServiceMock::importBundleIni(const QString &dirPath)
         if (key == QLatin1String("name")) name = val;
         else if (key == QLatin1String("category"))
         {
-          if (val == QLatin1String("printer")) category = 0;
-          else if (val == QLatin1String("filament")) category = 1;
-          else if (val == QLatin1String("print")) category = 2;
+          // v5.16 (PSET2-04) fix: enum is Print=0/Filament=1/Printer=2
+          // (PresetServiceMock.h). The previous mapping swapped
+          // printer<->print so imported printers landed as process presets.
+          if (val == QLatin1String("printer")) category = PrinterCat;
+          else if (val == QLatin1String("filament")) category = FilamentCat;
+          else if (val == QLatin1String("print")) category = PrintCat;
         }
         else if (key == QLatin1String("vendor")) vendor = val;
         else if (key == QLatin1String("setting_id")) settingId = val;
@@ -1607,18 +1935,29 @@ int PresetServiceMock::importBundleIni(const QString &dirPath)
 
     if (name.isEmpty())
       continue;
-    if (createCustomPreset(category, name, values))
+    PendingImport item;
+    item.name = name;
+    item.category = category;
+    item.inherits = inherits;
+    item.vendor = vendor;
+    item.settingId = settingId;
+    item.values = values;
+    pending.append(item);
+  }
+
+  for (const PendingImport &item : pending)
+  {
+    if (item.name.isEmpty() || !isValidCategory(item.category))
+      continue;
+    if (createCustomPreset(item.category, item.name, item.values, item.inherits))
     {
       // Patch metadata that createCustomPreset doesn't take.
-      auto metaIt = m_presetMetadata.find(name);
+      auto metaIt = m_presetMetadata.find(item.name);
       if (metaIt != m_presetMetadata.end())
       {
-        if (!vendor.isEmpty()) metaIt->vendor = vendor;
-        if (!settingId.isEmpty()) metaIt->settingId = settingId;
-        metaIt->readOnly = readOnly;
+        if (!item.vendor.isEmpty()) metaIt->vendor = item.vendor;
+        if (!item.settingId.isEmpty()) metaIt->settingId = item.settingId;
       }
-      if (!inherits.isEmpty())
-        m_presetInherits.insert(name, inherits);
       ++imported;
     }
   }
@@ -1682,13 +2021,53 @@ QVariantList PresetServiceMock::comparePresets(const QString &presetA, const QSt
 
 bool PresetServiceMock::createCustomPreset(int category, const QString &name, const QHash<QString, QVariant> &values)
 {
+  return createCustomPreset(category, name, values, QString());
+}
+
+bool PresetServiceMock::createCustomPreset(int category, const QString &name,
+                                           const QHash<QString, QVariant> &values, const QString &inherits)
+{
   const QString trimmedName = name.trimmed();
   if (!isValidCategory(category) || trimmedName.isEmpty() || m_presetStore.contains(trimmedName))
     return false;
 
-  m_presetStore[trimmedName] = values;
+  // v5.16 (PSET2-02): resolve the inheritance chain — the parent's stored
+  // values already carry its full resolved chain (resolveInheritance output
+  // captured at vendor-load time), so overlaying `values` on top reproduces
+  // upstream Preset inheritance semantics at creation.
+  const QString parent = inherits.trimmed();
+  if (!parent.isEmpty() && !m_presetStore.contains(parent))
+    return false;
+
+  QHash<QString, QVariant> resolved;
+  if (!parent.isEmpty())
+    resolved = m_presetStore.value(parent);
+  for (auto it = values.constBegin(); it != values.constEnd(); ++it)
+    resolved.insert(it.key(), it.value());
+
+  m_presetStore[trimmedName] = resolved;
   registerPresetMetadata(trimmedName, category, false, false);
+  if (!parent.isEmpty())
+    m_presetInherits[trimmedName] = parent;
+  // v5.16 (PSET2-01): persist to the user preset tree (upstream
+  // PresetBundle::save_current_preset -> Preset::save).
+  writeUserPresetFile(category, trimmedName, resolved);
   setSelectedPresetForCategory(category, trimmedName);
+  return true;
+}
+
+bool PresetServiceMock::mergePresetValues(const QString &presetName, const QHash<QString, QVariant> &values)
+{
+  // v5.16 (PSET2-03): Transfer primitive — selected keys land on the target
+  // user preset (and disk) while every other key is kept; the source preset
+  // is never written (upstream UnsavedChangesDialog Action::Transfer).
+  if (!m_presetStore.contains(presetName) || isReadOnlyPreset(presetName) || values.isEmpty())
+    return false;
+
+  QHash<QString, QVariant> &target = m_presetStore[presetName];
+  for (auto it = values.constBegin(); it != values.constEnd(); ++it)
+    target.insert(it.key(), it.value());
+  writeUserPresetFile(presetCategory(presetName), presetName, target);
   return true;
 }
 
@@ -1705,6 +2084,9 @@ bool PresetServiceMock::deletePreset(const QString &presetName)
   // 从所有分类中移除
   for (auto it = m_categoryPresets.begin(); it != m_categoryPresets.end(); ++it)
     it->removeAll(presetName);
+  // v5.16 (PSET2-01): delete the persisted user preset file (upstream
+  // PresetCollection erases the user JSON + .info).
+  removeUserPresetFile(category, presetName);
   updateSelectedPresetFallback(category);
   if (isValidCategory(category))
   {
@@ -1739,6 +2121,13 @@ bool PresetServiceMock::renamePreset(const QString &oldName, const QString &newN
       if (it->at(i) == oldName)
         (*it)[i] = trimmedNewName;
     }
+  }
+  // v5.16 (PSET2-01): rename the persisted file (old JSON removed, new JSON
+  // written; upstream keeps the file name in sync with the preset name).
+  if (isValidCategory(category))
+  {
+    removeUserPresetFile(category, oldName);
+    writeUserPresetFile(category, trimmedNewName, m_presetStore.value(trimmedNewName));
   }
   if (isValidCategory(category) && m_selectedPresets.value(category) == oldName)
     setSelectedPresetForCategory(category, trimmedNewName);

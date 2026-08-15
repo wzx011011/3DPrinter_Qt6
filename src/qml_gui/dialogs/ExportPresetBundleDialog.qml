@@ -6,14 +6,16 @@ import ".."
 import "../controls"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ExportPresetBundleDialog.qml — V21-02 PRESET-03 导出预设包（简化版）
+// ExportPresetBundleDialog.qml — V21-02 PRESET-03 导出预设包
 //
 // 上游: third_party/OrcaSlicer/src/slic3r/GUI/ExportPresetBundleDialog.cpp (23KB)
 //   - 多选预设 + 压缩导出 .zip/.bbscfg
 //
-// OWzx 简化版:
-//   - 选路径 → 导出全部自定义预设（占位，真实导出需 PresetService 扩展）
-//   - 复用 FileDialog SaveFile 模式
+// OWzx 实现 (v5.16 PSET2-04):
+//   - 选目录 → 导出全部自定义预设为逐预设上游形状 JSON 文件
+//     （<目录>/{printer,filament,process}/<名称>.json + index.json 清单；
+//     PresetServiceMock::exportBundleIni。上游是打 zip 包，zip 打包暂缓，
+//     目录树 + 清单为互操作单元，importBundleIni 两者皆可读）
 // ─────────────────────────────────────────────────────────────────────────────
 
 CxDialog {
@@ -36,16 +38,18 @@ CxDialog {
             spacing: Theme.spacingLG
             Text {
                 Layout.fillWidth: true
-                text: qsTr("将当前所有自定义预设导出为可分享的预设包文件。")
+                text: qsTr("将当前所有自定义预设导出为可分享的预设包目录。")
                 color: Theme.textPrimary
                 font.pixelSize: Theme.fontSizeMD
                 wrapMode: Text.WordWrap
             }
 
             Text {
-                text: qsTr("格式: .zip（含 print/filament/printer 自定义预设）")
+                text: qsTr("格式: 目录（printer/filament/process 逐预设 JSON + index.json，对齐上游用户预设格式）")
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSizeXS
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
             }
 
             Item { Layout.fillHeight: true }
@@ -59,26 +63,24 @@ CxDialog {
                     onClicked: root.reject()
                 }
                 CxButton {
-                    text: qsTr("选择路径...")
+                    text: qsTr("选择目录...")
                     cxStyle: CxButton.Style.Primary
-                    onClicked: exportFileDialog.open()
+                    onClicked: exportFolderDialog.open()
                 }
             }
         }
     }
 
-    FileDialog {
-        id: exportFileDialog
+    FolderDialog {
+        id: exportFolderDialog
         title: qsTr("导出预设包")
-        fileMode: FileDialog.SaveFile
-        nameFilters: [qsTr("预设包 (*.json)")]
-        defaultSuffix: "json"
         onAccepted: {
-            // v2.4 IO-06: 真实导出（configVm.exportBundle → PresetService.exportBundle → JSON）
-            var path = currentFile.toString().replace("file:///", "")
-            if (root.configVm) {
-                var ok = root.configVm.exportBundle(path)
-                console.log("[ExportPresetBundle] export to: " + path + " result=" + ok)
+            // v5.16 (PSET2-04): per-preset upstream-shape JSON export
+            // (configVm.exportBundleIni → PresetServiceMock::exportBundleIni).
+            var path = selectedFolder.toString().replace("file:///", "")
+            if (root.configVm && path.length > 0) {
+                var count = root.configVm.exportBundleIni(path)
+                console.log("[ExportPresetBundle] export to: " + path + " count=" + count)
             }
             root.accept()
         }

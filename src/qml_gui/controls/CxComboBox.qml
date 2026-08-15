@@ -9,6 +9,15 @@ ComboBox {
     implicitHeight: Theme.controlHeightSM
     font.pixelSize: Theme.fontSizeMD
 
+    // v5.16 (PSET2-05): section headers + disabled entries in plain string
+    // models (upstream PresetComboBoxes.cpp:1281-1317 — "User presets"/
+    // "System presets" separators and LABEL_ITEM_DISABLED graying).
+    // Entries starting with sectionPrefix render as non-selectable group
+    // headers; entries ending with disabledSuffix render grayed and cannot
+    // be activated.
+    property string sectionPrefix: "—"
+    property string disabledSuffix: " (不兼容)"
+
     background: Rectangle {
         radius: Theme.radiusSM
         color: {
@@ -63,17 +72,36 @@ ComboBox {
     }
 
     delegate: ItemDelegate {
+        id: comboItem
+        readonly property string entryText: root.textRole
+            ? (Array.isArray(root.model) ? modelData[root.textRole] : model[root.textRole])
+            : modelData
+        // v5.16 (PSET2-05): section headers ("— … —") and incompatible
+        // entries ("… (不兼容)") are disabled so they never activate.
+        readonly property bool isSection: typeof entryText === "string"
+            && entryText.length > 0
+            && entryText.startsWith(root.sectionPrefix)
+        readonly property bool isDisabledEntry: typeof entryText === "string"
+            && entryText.length > root.disabledSuffix.length
+            && entryText.endsWith(root.disabledSuffix)
+
         width: root.width
         height: Theme.controlHeightSM - 2
+        enabled: !isSection && !isDisabledEntry
         highlighted: root.highlightedIndex === index
+        opacity: enabled ? 1.0 : (isSection ? 0.9 : 0.45)
         background: Rectangle {
-            color: highlighted ? Theme.accentSubtle : "transparent"
+            color: highlighted && comboItem.enabled ? Theme.accentSubtle : "transparent"
         }
         contentItem: Text {
             leftPadding: Theme.spacingLG
-            text: root.textRole ? (Array.isArray(root.model) ? modelData[root.textRole] : model[root.textRole]) : modelData
-            color: Theme.textPrimary
-            font.pixelSize: Theme.fontSizeMD
+            text: comboItem.entryText
+            color: comboItem.isSection ? Theme.textMuted
+                 : comboItem.enabled ? Theme.textPrimary
+                 : Theme.textDisabled
+            font.pixelSize: comboItem.isSection ? Theme.fontSizeXS : Theme.fontSizeMD
+            font.bold: comboItem.isSection
+            horizontalAlignment: comboItem.isSection ? Text.AlignHCenter : Text.AlignLeft
             elide: Text.ElideRight
             verticalAlignment: Text.AlignVCenter
         }

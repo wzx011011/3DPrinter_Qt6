@@ -106,6 +106,14 @@ BackendContext::BackendContext(QObject *parent)
   // Wire ConfigViewModel into EditorViewModel for preset injection at slice time
   // (对齐上游 PresetBundle::full_fff_config → BackgroundSlicingProcess)
   editorViewModel_->setConfigViewModel(configViewModel_);
+  // v5.16 (PSET2-06): keep the per-extruder filament preset slot vector sized
+  // to the extruder count (upstream update_multi_material_filament_presets).
+  // setExtruderCount no-ops when the count is unchanged, so riding
+  // stateChanged is cheap.
+  configViewModel_->setExtruderCount(editorViewModel_->extruderCount());
+  connect(editorViewModel_, &EditorViewModel::stateChanged, this, [this]() {
+    configViewModel_->setExtruderCount(editorViewModel_->extruderCount());
+  });
   homeViewModel_ = new HomeViewModel(cloudService, this);
   settingsViewModel_ = new SettingsViewModel(this);
   projectViewModel_ = new ProjectViewModel(this);
@@ -640,6 +648,11 @@ bool BackendContext::topbarSaveProject()
     return false;
 
   // 实际保存项目数据到磁盘（对齐上游 Plater::save_project）
+  // v5.16 (PSET2-06): overlay the preset selection state (tier preset ids +
+  // per-extruder filament_presets vector) into the stored project config so
+  // a reload restores it (upstream embeds the PresetBundle selections).
+  if (projectService_ && configViewModel_)
+    projectService_->setProjectConfigOverlay(configViewModel_->projectPresetConfigOverlay());
   if (projectService_ && !projectService_->saveProject(projectViewModel_->currentProjectPath()))
   {
     postError(projectService_->lastError(), 1);
@@ -665,6 +678,9 @@ bool BackendContext::topbarSaveProjectAs(const QString &filePath)
     return false;
 
   // 实际保存项目数据到磁盘
+  // v5.16 (PSET2-06): same preset-selection overlay as topbarSaveProject.
+  if (projectService_ && configViewModel_)
+    projectService_->setProjectConfigOverlay(configViewModel_->projectPresetConfigOverlay());
   if (projectService_ && !projectService_->saveProject(localPath))
   {
     postError(projectService_->lastError(), 1);

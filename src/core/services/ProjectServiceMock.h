@@ -141,6 +141,12 @@ public:
 
   // v2.4 IO-01: 项目保存（调用 libslic3r store_3mf 真实导出 .3mf）
   Q_INVOKABLE bool saveProjectAs(const QString &filePath);
+  /// v5.16 (PSET2-06): preset-selection overlay written into the stored
+  /// project config on the next save (printer/filament/print preset ids +
+  /// the ";"-separated filament_presets slot vector). Upstream embeds the
+  /// PresetBundle selections in the 3MF config; BackendContext pushes the
+  /// ConfigViewModel state here before saveProject/saveProjectAs.
+  void setProjectConfigOverlay(const QVariantMap &overlay);
   // v2.4 IO-02: 导出模型（STL/3MF/OBJ 格式）
   Q_INVOKABLE bool exportModel(const QString &filePath, const QString &format);
   /// v2.4: 当前项目路径（saveProjectAs 后更新）
@@ -746,6 +752,9 @@ signals:
 private:
   /// v2.4: 当前项目保存路径（saveProjectAs 后更新）
   QString currentProjectPath_;
+  /// v5.16 (PSET2-06): preset-selection overlay applied into the stored
+  /// project config by saveProjectAs (see setProjectConfigOverlay).
+  QVariantMap m_projectConfigOverlay;
   /// Phase 144 (EMB-01/02): emboss font path + height/depth. Set by the
   /// viewmodel from EditorViewModel Q_PROPERTYs before addTextVolume runs.
   /// Empty path = fall back to a known system font. Defaults preserve the

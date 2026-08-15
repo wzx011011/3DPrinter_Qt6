@@ -1206,6 +1206,14 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
 
 // v2.4 IO-01: 项目保存（调用 libslic3r store_3mf 真实导出 .3mf）
 // 对齐上游 Plater::save_project → export_3mf (Plater.cpp:12165)
+void ProjectServiceMock::setProjectConfigOverlay(const QVariantMap &overlay)
+{
+  // v5.16 (PSET2-06): stored verbatim; saveProjectAs applies it into the
+  // DynamicPrintConfig handed to store_3mf so a reload restores the preset
+  // selection state (ConfigViewModel::applyProjectConfig consumes the keys).
+  m_projectConfigOverlay = overlay;
+}
+
 bool ProjectServiceMock::saveProjectAs(const QString &filePath)
 {
 #ifdef HAS_LIBSLIC3R
@@ -1215,6 +1223,13 @@ bool ProjectServiceMock::saveProjectAs(const QString &filePath)
     }
     // 构建 config（从当前 model 的 default config）
     Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
+    // v5.16 (PSET2-06): apply the preset-selection overlay (tier preset ids +
+    // filament_presets slot vector) as string options so they round-trip
+    // through the 3MF config like upstream's embedded PresetBundle state.
+    for (auto it = m_projectConfigOverlay.constBegin(); it != m_projectConfigOverlay.constEnd(); ++it) {
+        config.set_key_value(it.key().toStdString(),
+                             new Slic3r::ConfigOptionString(it.value().toString().toStdString()));
+    }
     // 调用 libslic3r store_3mf（Format/3mf.hpp:60）
     // model_ 是裸指针 Slic3r::Model*（非 unique_ptr）
     bool ok = Slic3r::store_3mf(filePath.toStdString().c_str(),

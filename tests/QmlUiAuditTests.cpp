@@ -61,6 +61,10 @@ private slots:
   // Phase 52-03 (PREPSB-01..04): LeftSidebar + FilamentSlot bindings are
   // present and there is no silent dead UI or empty handler.
   void leftSidebarPresetControlsAreWiredAndHonest();
+  // v5.16 Phase 235 (PSET2-01..08): preset system completion — dirty-guard
+  // single-modal gate + Transfer, no empty settings tabs, corrected
+  // create-preset scope mapping, sidebar rename/delete affordance.
+  void presetSystemCompletionSourceAudit();
   // Phase 53: Prepare object, plate, and viewport actions bind to C++ gates.
   void prepareWorkflowActionsBindCppGates();
   // Phase 76: Prepare workflow panels must stay compact and backend-gated.
@@ -2600,6 +2604,83 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
            "LeftSidebar must have a Plate scope toggle");
 }
 
+// v5.16 Phase 235 (PSET2-01..08): preset system completion source audit.
+// Locks the structural fixes so regressions surface as test failures:
+// the single dirty-guard modal (PSET2-03), the removed empty settings tabs
+// (PSET2-08), the corrected create-preset scope mapping (PSET2-02), and the
+// sidebar rename/delete affordance (PSET2-07).
+void QmlUiAuditTests::presetSystemCompletionSourceAudit()
+{
+  const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
+  const QString unsavedDialog = readSource(QStringLiteral("src/qml_gui/dialogs/UnsavedChangesDialog.qml"));
+  const QString createDialog = readSource(QStringLiteral("src/qml_gui/dialogs/CreatePresetsDialog.qml"));
+  const QString sidebar = readSource(QStringLiteral("src/qml_gui/panels/LeftSidebar.qml"));
+  const QString configVmHeader = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
+  QVERIFY2(!settingsDialog.isEmpty(), "Unable to read SettingsDialog.qml");
+  QVERIFY2(!unsavedDialog.isEmpty(), "Unable to read UnsavedChangesDialog.qml");
+  QVERIFY2(!createDialog.isEmpty(), "Unable to read CreatePresetsDialog.qml");
+  QVERIFY2(!sidebar.isEmpty(), "Unable to read LeftSidebar.qml");
+  QVERIFY2(!configVmHeader.isEmpty(), "Unable to read ConfigViewModel.h");
+
+  // PSET2-03: the dirty guard is single-modal. ConfigViewModel owns the
+  // re-entry flag; every SettingsDialog listener gates on it and releases
+  // it when the dialog resolves (three instances share the viewmodel).
+  QVERIFY2(configVmHeader.contains(QStringLiteral("unsavedDialogActive")),
+           "ConfigViewModel must own the unsavedDialogActive re-entry gate");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("beginUnsavedDialog()")),
+           "SettingsDialog must gate its unsaved-changes modal on beginUnsavedDialog()");
+  QVERIFY2(settingsDialog.count(QStringLiteral("endUnsavedDialog()")) >= 2,
+           "SettingsDialog must release the gate on both accept and reject");
+
+  // PSET2-03: Transfer + per-item checkboxes exist in the dialog.
+  QVERIFY2(unsavedDialog.contains(QStringLiteral("transferPendingChanges")),
+           "UnsavedChangesDialog must offer Transfer via transferPendingChanges");
+  QVERIFY2(unsavedDialog.contains(QStringLiteral("checkedKeys")),
+           "UnsavedChangesDialog must track per-item checkbox selection");
+  QVERIFY2(unsavedDialog.contains(QStringLiteral("CxCheckBox")),
+           "UnsavedChangesDialog rows must carry a checkbox control");
+
+  // PSET2-08: no permanently-empty settings tabs. Printer "Material"/
+  // "Extruder" and filament "Overrides"/"Multimaterial"/"Dependencies" have
+  // no option-model sources (kMachineKeys/kFilamentKeys never map those
+  // pages) and were removed.
+  const QStringList deadTabPatterns = {
+      QStringLiteral("key: \"Material\""),
+      QStringLiteral("key: \"Extruder\""),
+      QStringLiteral("key: \"Overrides\""),
+      QStringLiteral("key: \"Multimaterial\""),
+      QStringLiteral("key: \"Dependencies\""),
+  };
+  for (const QString &pattern : deadTabPatterns) {
+    QVERIFY2(!settingsDialog.contains(pattern),
+             qPrintable(QStringLiteral("SettingsDialog still declares a source-less tab: %1").arg(pattern)));
+  }
+
+  // PSET2-02: UI scope order 打印机/耗材/工艺 maps to category ids
+  // PrinterCat=2/FilamentCat=1/PrintCat=0 (no raw combo index as category).
+  QVERIFY2(createDialog.contains(QStringLiteral("scopeCategories: [2, 1, 0]")),
+           "CreatePresetsDialog must map UI scopes to [2, 1, 0] (printer/filament/print)");
+  QVERIFY2(createDialog.contains(QStringLiteral("createCustomPreset")),
+           "CreatePresetsDialog must create presets through ConfigViewModel");
+
+  // PSET2-07: sidebar preset rows expose rename/delete with the in-use guard.
+  QVERIFY2(sidebar.contains(QStringLiteral("function editPreset(")),
+           "LeftSidebar must route preset row edits through editPreset()");
+  QVERIFY2(sidebar.contains(QStringLiteral("configVm.renamePreset(")),
+           "LeftSidebar rename flow must call ConfigViewModel::renamePreset");
+  QVERIFY2(sidebar.contains(QStringLiteral("configVm.deletePreset(")),
+           "LeftSidebar delete flow must call ConfigViewModel::deletePreset");
+  QVERIFY2(sidebar.contains(QStringLiteral("isPresetInUse")),
+           "LeftSidebar delete confirmation must consult the in-use guard");
+
+  // PSET2-05: combos consume the sectioned/grayed display lists and the
+  // plain-name reverse mapping.
+  QVERIFY2(sidebar.contains(QStringLiteral("decoratedPrinterPresetNames")),
+           "LeftSidebar printer combo must use the decorated sectioned list");
+  QVERIFY2(sidebar.contains(QStringLiteral("plainPresetName(")),
+           "LeftSidebar combos must normalize decorated names via plainPresetName()");
+}
+
 void QmlUiAuditTests::prepareWorkflowActionsBindCppGates()
 {
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
@@ -3287,33 +3368,36 @@ void QmlUiAuditTests::settingsDialogRestoresPhase85ShellContract()
   const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
   QVERIFY2(!settingsDialog.isEmpty(), "Unable to read SettingsDialog.qml");
 
+  // v5.16 (PSET2-08) update: the five permanently-empty tabs (printer
+  // 材料/挤出机, filament 参数覆盖/多材料/依赖) were intentionally removed
+  // because kMachineKeys/kFilamentKeys never map options to those pages
+  // (multi-nozzle scope). The contract now asserts the KEPT labels and that
+  // the removed tab labels are gone from the tab bar.
   const QStringList restoredLabels = {
       QStringLiteral("qsTr(\"打印机设置\")"),
       QStringLiteral("qsTr(\"材料设置\")"),
       QStringLiteral("qsTr(\"工艺设置\")"),
       QStringLiteral("qsTr(\"基础信息\")"),
       QStringLiteral("qsTr(\"打印机G-code\")"),
-      QStringLiteral("qsTr(\"材料\")"),
-      QStringLiteral("qsTr(\"挤出机\")"),
       QStringLiteral("qsTr(\"移动能力\")"),
       QStringLiteral("qsTr(\"注释\")"),
       QStringLiteral("qsTr(\"耗材丝\")"),
       QStringLiteral("qsTr(\"冷却\")"),
-      QStringLiteral("qsTr(\"参数覆盖\")"),
       QStringLiteral("qsTr(\"高级\")"),
-      QStringLiteral("qsTr(\"依赖\")"),
-      QStringLiteral("qsTr(\"质量\")"),
-      QStringLiteral("qsTr(\"强度\")"),
-      QStringLiteral("qsTr(\"速度\")"),
-      QStringLiteral("qsTr(\"支撑\")"),
-      QStringLiteral("qsTr(\"底板\")"),
-      QStringLiteral("qsTr(\"回抽\")"),
-      QStringLiteral("qsTr(\"其他\")"),
   };
-  for (qsizetype index = 0; index < restoredLabels.size() - 7; ++index) {
-    const QString &label = restoredLabels.at(index);
+  for (const QString &label : restoredLabels) {
     QVERIFY2(settingsDialog.contains(label),
              qPrintable(QStringLiteral("SettingsDialog missing restored Phase 85 label: %1").arg(label)));
+  }
+  const QStringList removedEmptyTabs = {
+      QStringLiteral("qsTr(\"材料\")"),
+      QStringLiteral("qsTr(\"挤出机\")"),
+      QStringLiteral("qsTr(\"参数覆盖\")"),
+      QStringLiteral("qsTr(\"依赖\")"),
+  };
+  for (const QString &label : removedEmptyTabs) {
+    QVERIFY2(!settingsDialog.contains(label),
+             qPrintable(QStringLiteral("PSET2-08: empty settings tab must stay removed: %1").arg(label)));
   }
 
   const QStringList oldShellTokens = {
@@ -6678,15 +6762,26 @@ void QmlUiAuditTests::v50PresetIniAndCreateDialogWired()
   QVERIFY2(!presetSvc.isEmpty(), "Unable to read PresetServiceMock.cpp");
   QVERIFY2(!createDialog.isEmpty(), "Unable to read CreatePresetsDialog.qml");
 
-  // PSET-01: upstream-compatible .ini bundle export/import.
+  // PSET-01 / v5.16 (PSET2-04): per-preset upstream-shape JSON bundle
+  // export/import. The Phase 147 `[preset]`-header .ini export format was
+  // fabricated (no upstream counterpart) and was replaced by one
+  // upstream-shaped JSON file per preset (Config.cpp:1390-1433 save_to_json
+  // header + Preset::save type/inherits, Preset.cpp:498-536) under
+  // {printer,filament,process}/ plus an index.json manifest. The legacy
+  // .ini READER stays (import compatibility with previously exported
+  // bundles, category mapping corrected).
   QVERIFY2(presetSvcH.contains(QStringLiteral("exportBundleIni")),
-           "PSET-01: PresetServiceMock must expose exportBundleIni (upstream-compatible .ini)");
+           "PSET-01: PresetServiceMock must expose exportBundleIni");
   QVERIFY2(presetSvcH.contains(QStringLiteral("importBundleIni")),
            "PSET-01: PresetServiceMock must expose importBundleIni");
+  QVERIFY2(presetSvc.contains(QStringLiteral("writePresetJsonFile")),
+           "PSET2-04: bundle export must write per-preset upstream-shape JSON files");
+  QVERIFY2(presetSvc.contains(QStringLiteral("is_custom")),
+           "PSET2-04: user preset JSON must carry the upstream is_custom header");
   QVERIFY2(presetSvc.contains(QStringLiteral("[preset]")),
-           "PSET-01: exportBundleIni must write the upstream [preset] section header");
-  QVERIFY2(presetSvc.contains(QStringLiteral("inherits = ")),
-           "PSET-01: exportBundleIni must persist the inheritance chain (inherits = ...)");
+           "PSET2-04: the legacy [preset] .ini reader must stay import-compatible");
+  QVERIFY2(presetSvc.contains(QStringLiteral("inherits")),
+           "PSET2-04: bundle IO must persist the inheritance chain");
 
   // PSET-02: CreatePresetsDialog QML + wiring.
   QVERIFY2(qrc.contains(QStringLiteral("dialogs/CreatePresetsDialog.qml")),

@@ -95,22 +95,26 @@ ApplicationWindow {
     }
 
     // Tab pages per tier. The label is visual text; key stays aligned with upstream page ids.
+    // v5.16 (PSET2-08): only tabs with real option-model sources are listed.
+    // The printer "Material"/"Extruder" pages and the filament "Overrides"/
+    // "Multimaterial"/"Dependencies" pages have no keys assigned by
+    // ConfigOptionModel's printer/filament page-group maps (kMachineKeys /
+    // kFilamentKeys never map those page names), so they rendered zero rows.
+    // Extruder/Overrides/Multimaterial need the per-extruder (multi-nozzle)
+    // model — deferred to that scope. Dependencies would map
+    // compatible_printers, which is not in kFilamentKeys/kMachineKeys
+    // (it stays a preset-level compatibility field, not an edited row).
     readonly property var tabPages: {
         if (presetTier === "printer") return [
             { key: "Basic information", label: qsTr("基础信息") },
             { key: "Machine G-code", label: qsTr("打印机G-code") },
-            { key: "Material", label: qsTr("材料") },
-            { key: "Extruder", label: qsTr("挤出机") },
             { key: "Motion ability", label: qsTr("移动能力") },
             { key: "Notes", label: qsTr("注释") }
         ]
         if (presetTier === "filament") return [
             { key: "Filament", label: qsTr("耗材丝") },
             { key: "Cooling", label: qsTr("冷却") },
-            { key: "Overrides", label: qsTr("参数覆盖") },
             { key: "Advanced", label: qsTr("高级") },
-            { key: "Multimaterial", label: qsTr("材料") },
-            { key: "Dependencies", label: qsTr("依赖") },
             { key: "Notes", label: qsTr("注释") }
         ]
         if (presetTier === "print") {
@@ -122,11 +126,13 @@ ApplicationWindow {
         return []
     }
 
-    // Current preset names list per tier
+    // Current preset names list per tier (v5.16 PSET2-05: decorated lists —
+    // section separators + incompatibility gray-out suffixes; plain names
+    // recover via configVm.plainPresetName).
     readonly property var presetNames: {
-        if (presetTier === "printer") return configVm ? configVm.printerPresetNames : []
-        if (presetTier === "filament") return configVm ? configVm.filamentPresetNames : []
-        if (presetTier === "print") return configVm ? configVm.printPresetNames : []
+        if (presetTier === "printer") return configVm ? configVm.decoratedPrinterPresetNames : []
+        if (presetTier === "filament") return configVm ? configVm.decoratedFilamentPresetNames : []
+        if (presetTier === "print") return configVm ? configVm.decoratedPrintPresetNames : []
         return []
     }
 
@@ -166,6 +172,12 @@ ApplicationWindow {
     }
 
     function openUnsavedChangesGuard(closeOnResolve) {
+        // v5.16 (PSET2-03): three SettingsDialog instances share this
+        // configVm and all listen to pendingUnsavedChangesRequested; the
+        // begin/endUnsavedDialog gate makes only the first listener open
+        // its modal (upstream shows one UnsavedChangesDialog at a time).
+        if (root.configVm && !root.configVm.beginUnsavedDialog())
+            return
         closeAfterUnsavedResolution = closeOnResolve
         unsavedDialog.openDialog()
     }
@@ -184,9 +196,12 @@ ApplicationWindow {
     // Preset selection changed
     function onPresetActivated(presetName) {
         if (!configVm) return
-        if (presetTier === "printer") configVm.requestCurrentPrinterPreset(presetName)
-        else if (presetTier === "filament") configVm.requestCurrentFilamentPreset(presetName)
-        else if (presetTier === "print") configVm.requestCurrentPrintPreset(presetName)
+        // v5.16 (PSET2-05): presetName comes from the decorated display
+        // list — normalize before dispatching.
+        const plain = configVm.plainPresetName(presetName)
+        if (presetTier === "printer") configVm.requestCurrentPrinterPreset(plain)
+        else if (presetTier === "filament") configVm.requestCurrentFilamentPreset(plain)
+        else if (presetTier === "print") configVm.requestCurrentPrintPreset(plain)
     }
 
     // Dirty-guarded close
@@ -233,12 +248,25 @@ ApplicationWindow {
                 if (root.closeAfterUnsavedResolution)
                     root.close()
                 root.closeAfterUnsavedResolution = false
+            } else if (unsavedDialog.action === "transfer") {
+                // v5.16 (PSET2-03): move the checked keys onto the pending
+                // target preset, then proceed with the pending switch.
+                if (root.configVm)
+                    root.configVm.transferPendingChanges(unsavedDialog.checkedKeys)
+                if (root.closeAfterUnsavedResolution)
+                    root.close()
+                root.closeAfterUnsavedResolution = false
             }
+            // v5.16 (PSET2-03): release the single-modal gate.
+            if (root.configVm)
+                root.configVm.endUnsavedDialog()
         }
 
         onRejected: {
-            if (root.configVm)
+            if (root.configVm) {
                 root.configVm.requestCancelPendingChanges()
+                root.configVm.endUnsavedDialog()
+            }
             root.closeAfterUnsavedResolution = false
         }
     }
@@ -305,8 +333,11 @@ ApplicationWindow {
 
     // Removed dead deleteConfirmDialog/resetAllConfirmDialog: their openers
     // (Preset bar Delete/Reset All buttons) were removed in the compact-layout
-    // refactor. Preset deletion now goes through the sidebar's per-row edit
-    // affordance; Reset is per-group via OptionRow's reset control.
+    // refactor. Preset deletion goes through the sidebar's per-row "⋮" edit
+    // menu (LeftSidebar, PSET2-07). There is no per-row reset control in
+    // OptionRow; resetting is per-group via ConfigViewModel::resetGroup,
+    // which currently has no settings-dialog button (upstream renders a
+    // reset button per group header — wiring it is deferred).
 
     // Dialog layout (top to bottom)
     Rectangle {

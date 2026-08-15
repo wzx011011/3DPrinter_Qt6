@@ -14,11 +14,14 @@
 #include <QJsonObject>
 #include <QMetaEnum>
 #include <QSettings>
+#include <QStandardPaths>
+#include <QTemporaryDir>
 #include <QHostAddress>
 #include <QUdpSocket>
 #include <QBuffer>
 #include <QImage>
 #include <cstring>
+#include <memory>
 #include <QtTest>
 
 #ifdef HAS_LIBSLIC3R
@@ -142,6 +145,12 @@ namespace
     {
       QCoreApplication::setOrganizationName(org);
       QCoreApplication::setApplicationName(app);
+      // v5.16 (PSET2-01): PresetServiceMock now persists user presets under
+      // AppDataLocation/user/presets, which is keyed by the org/app identity.
+      // Wipe that tree on entry so every run starts from the same on-disk
+      // state (QSettings itself lives in the Windows registry, not here).
+      QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
+          .removeRecursively();
     }
 
     ~ScopedApplicationIdentity()
@@ -152,6 +161,22 @@ namespace
 
     QString oldOrg;
     QString oldApp;
+  };
+
+  // v5.16 (PSET2-01): scoped user-preset dir redirect. For tests that must
+  // control the persistence location explicitly (restart-round-trip tests
+  // sharing one throwaway directory across two service instances).
+  struct ScopedUserPresetDir
+  {
+    explicit ScopedUserPresetDir(PresetServiceMock &service)
+    {
+      temp.reset(new QTemporaryDir(
+          QDir::temp().filePath(QStringLiteral("owzx-user-presets-XXXXXX"))));
+      temp->setAutoRemove(true);
+      service.setUserPresetDir(temp->path());
+    }
+
+    std::unique_ptr<QTemporaryDir> temp;
   };
 }
 
@@ -244,6 +269,13 @@ private slots:
   void configPrinterChangeRepairsIncompatibleSelections();
   void configKeepsInvalidSelectionWhenNoCompatibleFallback();
   void presetReadOnlyActionBlockerReasons();
+  // v5.16 Phase 235 (PSET2-01..07): preset system completion.
+  void userPresetPersistsAcrossRestart();
+  void createPresetHonorsScopeAndInherits();
+  void bundleImportCategoriesRoundTrip();
+  void configTransferPendingChangesAndDialogGate();
+  void configDeleteCurrentPresetFallsBackToDefault();
+  void filamentSlotVectorResizesAndPersistsWithProject();
   void sourceMappedProcessHierarchyMatchesTabPrint();
   // v3.0 Phase 16-01: PartPlate/PartPlateList domain model (pure-data, no libslic3r dep)
   void partPlateInstanceMembershipTracksObjectInstancePairs();
@@ -1288,6 +1320,16 @@ void ViewModelSmokeTests::configPresetMutationsRejectWrongCategory()
 
 void ViewModelSmokeTests::presetServiceMetadataClassifiesBuiltinAndCustomPresets()
 {
+  // v5.16 (PSET2-01): identity guard wipes the user-preset tree so the
+  // created preset cannot leak into later runs.
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("PresetMetadataClassification"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
   PresetServiceMock preset;
 
   const QString builtin = preset.defaultPresetForCategory(PresetServiceMock::PrintCat);
@@ -1375,6 +1417,16 @@ void ViewModelSmokeTests::presetServiceImportRejectsMalformedBundleWithoutMutati
 
 void ViewModelSmokeTests::presetServiceExportsAndImportsUserBundleWithMetadata()
 {
+  // v5.16 (PSET2-01): identity guard — createCustomPreset/importBundle now
+  // persist user presets to disk; keep the run deterministic.
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("PresetBundleRoundTrip"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
   PresetServiceMock source;
   QHash<QString, QVariant> values;
   values.insert(QStringLiteral("layer_height"), 0.24);
@@ -1387,7 +1439,15 @@ void ViewModelSmokeTests::presetServiceExportsAndImportsUserBundleWithMetadata()
   QFile::remove(tempPath);
   QVERIFY(source.exportBundle(tempPath));
 
+  // v5.16 (PSET2-01): createCustomPreset persists to the identity's user
+  // preset dir, so a same-identity `target` would auto-load the exported
+  // preset at construction and importBundle would reject it as a duplicate.
+  // Give the target its own (wiped) identity so the import path stays real.
+  ScopedApplicationIdentity targetIdentity(QStringLiteral("OWzxTests"),
+                                           QStringLiteral("PresetBundleRoundTripTarget"));
   PresetServiceMock target;
+  QVERIFY(!target.presetNamesForCategory(PresetServiceMock::PrintCat)
+               .contains(QStringLiteral("Unit Test Exported Print Preset")));
   QVERIFY(target.importBundle(tempPath));
   QCOMPARE(target.presetCategory(QStringLiteral("Unit Test Exported Print Preset")), int(PresetServiceMock::PrintCat));
   QVERIFY(target.isUserPreset(QStringLiteral("Unit Test Exported Print Preset")));
@@ -1620,6 +1680,15 @@ void ViewModelSmokeTests::configKeepsInvalidSelectionWhenNoCompatibleFallback()
 
 void ViewModelSmokeTests::presetReadOnlyActionBlockerReasons()
 {
+  // v5.16 (PSET2-01): identity guard (see presetServiceMetadata… note above).
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("PresetActionBlocker"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
   PresetServiceMock preset;
   const QString builtinPrint = preset.defaultPresetForCategory(PresetServiceMock::PrintCat);
   QVERIFY(!builtinPrint.isEmpty());
@@ -1642,6 +1711,340 @@ void ViewModelSmokeTests::presetReadOnlyActionBlockerReasons()
   QVERIFY(!preset.presetActionBlocker(PresetServiceMock::FilamentCat,
                                       QStringLiteral("Unit Test Action User Print"),
                                       QStringLiteral("delete")).isEmpty());
+}
+
+// v5.16 (PSET2-01): user presets persist to disk in the upstream user-preset
+// JSON shape (Preset::save Preset.cpp:498-536 + save_to_json
+// Config.cpp:1390-1433 under user/<category>/, reloaded by
+// load_user_presets PresetBundle.cpp:565-602). A fresh service instance
+// pointed at the same directory must list the preset with identical values;
+// rename/delete must touch the same tree.
+void ViewModelSmokeTests::userPresetPersistsAcrossRestart()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("UserPresetRestart"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  QHash<QString, QVariant> values;
+  values.insert(QStringLiteral("layer_height"), 0.21);
+  values.insert(QStringLiteral("wall_loops"), 4);
+  values.insert(QStringLiteral("brim_enable"), true);
+  const QString presetName = QStringLiteral("UT Restart Print Preset");
+  const QString printerPresetName = QStringLiteral("UT Restart Printer Preset");
+
+  // The throwaway user-preset tree must outlive the first service instance
+  // (a "restart" reads the same directory afterwards).
+  QTemporaryDir userTemp(QDir::temp().filePath(QStringLiteral("owzx-user-presets-XXXXXX")));
+  userTemp.setAutoRemove(true);
+  const QString userDir = userTemp.path();
+  {
+    PresetServiceMock first;
+    first.setUserPresetDir(userDir);
+    QVERIFY(first.createCustomPreset(PresetServiceMock::PrintCat, presetName, values));
+    QVERIFY(first.createCustomPreset(PresetServiceMock::PrinterCat, printerPresetName,
+                                     {{QStringLiteral("nozzle_diameter"), 0.6}}));
+    // Upstream user-preset layout: <userDir>/{process,printer}/<name>.json.
+    QVERIFY(QFile::exists(userDir + QStringLiteral("/process/") + presetName
+                                      + QStringLiteral(".json")));
+    QVERIFY(QFile::exists(userDir + QStringLiteral("/printer/") + printerPresetName
+                                      + QStringLiteral(".json")));
+  }
+
+  // "Restart": a new instance pointed at the same directory loads both.
+  PresetServiceMock second;
+  second.setUserPresetDir(userDir);
+  QVERIFY(second.presetNamesForCategory(PresetServiceMock::PrintCat).contains(presetName));
+  QVERIFY(second.presetNamesForCategory(PresetServiceMock::PrinterCat).contains(printerPresetName));
+  QVERIFY(second.isUserPreset(presetName));
+  const auto restored = second.presetValues(presetName);
+  QCOMPARE(restored.value(QStringLiteral("layer_height")).toDouble(), 0.21);
+  QCOMPARE(restored.value(QStringLiteral("wall_loops")).toInt(), 4);
+  QCOMPARE(restored.value(QStringLiteral("brim_enable")).toBool(), true);
+
+  // User presets list ahead of system presets (upstream combo layout:
+  // User section before System, PresetComboBoxes.cpp:1289-1317).
+  const QStringList printNames = second.presetNamesForCategory(PresetServiceMock::PrintCat);
+  int systemIdx = -1;
+  for (const QString &name : printNames)
+  {
+    if (second.isBuiltinPreset(name))
+    {
+      systemIdx = printNames.indexOf(name);
+      break;
+    }
+  }
+  QVERIFY(systemIdx >= 0);
+  QVERIFY(printNames.indexOf(presetName) < systemIdx);
+
+  // Rename rewrites the file; delete removes it and a third instance (same
+  // directory) sees neither.
+  const QString renamed = presetName + QStringLiteral(" R");
+  QVERIFY(second.renamePreset(presetName, renamed));
+  QVERIFY(QFile::exists(userDir + QStringLiteral("/process/") + renamed + QStringLiteral(".json")));
+  QVERIFY(!QFile::exists(userDir + QStringLiteral("/process/") + presetName + QStringLiteral(".json")));
+  QVERIFY(second.deletePreset(renamed));
+  QVERIFY(!QFile::exists(userDir + QStringLiteral("/process/") + renamed + QStringLiteral(".json")));
+
+  PresetServiceMock third;
+  third.setUserPresetDir(userDir);
+  QVERIFY(!third.presetNamesForCategory(PresetServiceMock::PrintCat).contains(presetName));
+  QVERIFY(!third.presetNamesForCategory(PresetServiceMock::PrintCat).contains(renamed));
+}
+
+// v5.16 (PSET2-02): the CreatePresetsDialog scope mapping — UI "打印机"
+// (combo index 0) maps to PresetServiceMock::PrinterCat (2), and the
+// inherits selection seeds the new preset from the parent's resolved chain
+// (upstream CreatePresetsDialog "Inherits from").
+void ViewModelSmokeTests::createPresetHonorsScopeAndInherits()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("CreatePresetScopeInherits"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  const QString parentPrinter = preset.selectedPresetForCategory(PresetServiceMock::PrinterCat);
+  QVERIFY(!parentPrinter.isEmpty());
+  const auto parentValues = preset.presetValues(parentPrinter);
+  QVERIFY(!parentValues.isEmpty());
+
+  // UI scope "打印机" → category 2 (PrinterCat), inheriting the parent.
+  QVERIFY(config.createCustomPreset(2, QStringLiteral("UT Scope Printer"), parentPrinter));
+  QCOMPARE(preset.presetCategory(QStringLiteral("UT Scope Printer")), int(PresetServiceMock::PrinterCat));
+  QCOMPARE(preset.presetInherits(QStringLiteral("UT Scope Printer")), parentPrinter);
+  // Inheritance resolution: the child carries the parent's resolved keys.
+  const auto childValues = preset.presetValues(QStringLiteral("UT Scope Printer"));
+  QVERIFY(!childValues.isEmpty());
+  for (auto it = parentValues.constBegin(); it != parentValues.constEnd(); ++it)
+    QVERIFY2(childValues.contains(it.key()),
+             qPrintable(QStringLiteral("inherited key missing: %1").arg(it.key())));
+  QCOMPARE(config.currentPrinterPreset(), QStringLiteral("UT Scope Printer"));
+
+  // A non-existent parent is rejected (the dialog surfaces the failure).
+  QVERIFY(!config.createCustomPreset(0, QStringLiteral("UT Bad Parent Print"),
+                                     QStringLiteral("No Such Parent")));
+}
+
+// v5.16 (PSET2-04): exportBundleIni writes the per-preset upstream-shape
+// JSON tree; importBundleIni lands categories exactly (the previous import
+// swapped printer<->print, FIX-14).
+void ViewModelSmokeTests::bundleImportCategoriesRoundTrip()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("BundleCategoryRoundTrip"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  const QString exportDir = QDir::temp().filePath(QStringLiteral("owzx_pset2_bundle_export"));
+  QDir(exportDir).removeRecursively();
+
+  {
+    PresetServiceMock source;
+    ScopedUserPresetDir dir(source);
+    QVERIFY(source.createCustomPreset(PresetServiceMock::PrinterCat,
+                                      QStringLiteral("UT Bundle Printer"),
+                                      {{QStringLiteral("nozzle_diameter"), 0.6}}));
+    QVERIFY(source.createCustomPreset(PresetServiceMock::FilamentCat,
+                                      QStringLiteral("UT Bundle Filament"),
+                                      {{QStringLiteral("nozzle_temp"), 230}}));
+    QVERIFY(source.createCustomPreset(PresetServiceMock::PrintCat,
+                                      QStringLiteral("UT Bundle Process"),
+                                      {{QStringLiteral("layer_height"), 0.24}}));
+    QCOMPARE(source.exportBundleIni(exportDir), 3);
+    QVERIFY(QFile::exists(exportDir + QStringLiteral("/index.json")));
+    QVERIFY(QFile::exists(exportDir + QStringLiteral("/printer/UT Bundle Printer.json")));
+    QVERIFY(QFile::exists(exportDir + QStringLiteral("/filament/UT Bundle Filament.json")));
+    QVERIFY(QFile::exists(exportDir + QStringLiteral("/process/UT Bundle Process.json")));
+  }
+
+  // Fresh instance (own wiped AppData tree) imports the directory bundle.
+  PresetServiceMock target;
+  ScopedUserPresetDir dir(target);
+  QCOMPARE(target.importBundleIni(exportDir), 3);
+  QCOMPARE(target.presetCategory(QStringLiteral("UT Bundle Printer")), int(PresetServiceMock::PrinterCat));
+  QCOMPARE(target.presetCategory(QStringLiteral("UT Bundle Filament")), int(PresetServiceMock::FilamentCat));
+  QCOMPARE(target.presetCategory(QStringLiteral("UT Bundle Process")), int(PresetServiceMock::PrintCat));
+  QCOMPARE(target.presetValue(QStringLiteral("UT Bundle Printer"),
+                              QStringLiteral("nozzle_diameter")).toDouble(), 0.6);
+  QCOMPARE(target.presetValue(QStringLiteral("UT Bundle Process"),
+                              QStringLiteral("layer_height")).toDouble(), 0.24);
+
+  QDir(exportDir).removeRecursively();
+}
+
+// v5.16 (PSET2-03): the dirty-guard dialog gate is single-entry, and
+// Transfer moves the SELECTED keys onto the pending target preset without
+// saving the source (upstream UnsavedChangesDialog Action::Transfer).
+void ViewModelSmokeTests::configTransferPendingChangesAndDialogGate()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("ConfigTransferGate"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ScopedUserPresetDir presetDir(preset);
+  ProjectServiceMock project;
+
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("UT Transfer Print A"),
+                                    {{QStringLiteral("layer_height"), 0.16}}));
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("UT Transfer Print B"),
+                                    {{QStringLiteral("layer_height"), 0.28},
+                                     {QStringLiteral("top_shell_layers"), 3}}));
+
+  ConfigViewModel config(&preset, &project);
+  config.setCurrentPrintPreset(QStringLiteral("UT Transfer Print A"));
+  config.setActivePresetTier(QStringLiteral("print"));
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  const int layerIdx = printOpts->indexOfKey(QStringLiteral("layer_height"));
+  const int topIdx = printOpts->indexOfKey(QStringLiteral("top_shell_layers"));
+  QVERIFY(layerIdx >= 0);
+  QVERIFY(topIdx >= 0);
+
+  printOpts->setValue(layerIdx, 0.22);
+  printOpts->setValue(topIdx, 6);
+  QVERIFY(config.isPresetDirty());
+
+  // Single-modal gate: the first begin wins, a second is rejected, end
+  // releases (three SettingsDialog instances share this viewmodel).
+  QVERIFY(config.beginUnsavedDialog());
+  QVERIFY(!config.beginUnsavedDialog());
+  QVERIFY(config.property("unsavedDialogActive").toBool());
+  config.endUnsavedDialog();
+  QVERIFY(!config.property("unsavedDialogActive").toBool());
+  QVERIFY(config.beginUnsavedDialog());
+  config.endUnsavedDialog();
+
+  // Queue the dirty switch, then transfer ONLY layer_height.
+  bool switchOk = true;
+  QVERIFY(QMetaObject::invokeMethod(&config, "requestCurrentPrintPreset",
+                                    Q_RETURN_ARG(bool, switchOk),
+                                    Q_ARG(QString, QStringLiteral("UT Transfer Print B"))));
+  QVERIFY(!switchOk);
+  QCOMPARE(config.property("pendingUnsavedAction").toString(), QStringLiteral("switch-print-preset"));
+  QCOMPARE(config.property("pendingUnsavedTarget").toString(), QStringLiteral("UT Transfer Print B"));
+
+  bool transferOk = false;
+  QVERIFY(QMetaObject::invokeMethod(&config, "transferPendingChanges",
+                                    Q_RETURN_ARG(bool, transferOk),
+                                    Q_ARG(QStringList, QStringList{QStringLiteral("layer_height")})));
+  QVERIFY(transferOk);
+
+  // The switch proceeded and the target carries only the transferred key.
+  QCOMPARE(config.currentPrintPreset(), QStringLiteral("UT Transfer Print B"));
+  const auto targetValues = preset.presetValues(QStringLiteral("UT Transfer Print B"));
+  QCOMPARE(targetValues.value(QStringLiteral("layer_height")).toDouble(), 0.22);
+  QCOMPARE(targetValues.value(QStringLiteral("top_shell_layers")).toInt(), 3);
+  // The source preset was never saved.
+  QCOMPARE(preset.presetValues(QStringLiteral("UT Transfer Print A"))
+               .value(QStringLiteral("layer_height")).toDouble(), 0.16);
+  QVERIFY(!config.isPresetDirty());
+  QVERIFY(!config.property("hasPendingUnsavedChanges").toBool());
+}
+
+// v5.16 (PSET2-07): deleting the ACTIVE user preset succeeds and falls the
+// selection back to the category default (the blanket in-use early return
+// used to make these branches dead code).
+void ViewModelSmokeTests::configDeleteCurrentPresetFallsBackToDefault()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("ConfigDeleteFallback"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ScopedUserPresetDir presetDir(preset);
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  const QString doomed = QStringLiteral("UT Delete Print");
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat, doomed,
+                                     {{QStringLiteral("layer_height"), 0.19}}));
+  config.setCurrentPrintPreset(doomed);
+  QCOMPARE(config.currentPrintPreset(), doomed);
+  QVERIFY(config.isPresetInUse(doomed));
+
+  QVERIFY(config.deletePreset(int(PresetServiceMock::PrintCat), doomed));
+  QVERIFY(!preset.hasPreset(doomed));
+  QCOMPARE(config.currentPrintPreset(),
+           preset.defaultPresetForCategory(PresetServiceMock::PrintCat));
+
+  // Built-in presets stay undeletable through the same path.
+  const QString builtin = preset.defaultPresetForCategory(PresetServiceMock::PrintCat);
+  QVERIFY(!builtin.isEmpty());
+  QVERIFY(preset.isBuiltinPreset(builtin));
+  QVERIFY(!config.deletePreset(int(PresetServiceMock::PrintCat), builtin));
+}
+
+// v5.16 (PSET2-06): the per-extruder filament preset slot vector resizes
+// with the extruder count and round-trips through the project config
+// (filament_presets, slot 0 = global selection).
+void ViewModelSmokeTests::filamentSlotVectorResizesAndPersistsWithProject()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("FilamentSlotPersistence"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  config.setExtruderCount(3);
+  QCOMPARE(config.filamentPresetForSlot(0), config.currentFilamentPreset());
+  QCOMPARE(config.filamentPresetForSlot(2), config.currentFilamentPreset());
+
+  const QStringList filamentNames = preset.presetNamesForCategory(PresetServiceMock::FilamentCat);
+  QVERIFY(filamentNames.size() >= 2);
+  QString other = filamentNames.first();
+  if (other == config.currentFilamentPreset())
+    other = filamentNames.at(1);
+  QVERIFY(config.requestFilamentPresetForSlot(2, other));
+  QCOMPARE(config.filamentPresetForSlot(2), other);
+
+  // Project overlay carries the whole slot vector.
+  const QVariantMap overlay = config.projectPresetConfigOverlay();
+  QVERIFY(overlay.contains(QStringLiteral("filament_presets")));
+  const QStringList overlaySlots = overlay.value(QStringLiteral("filament_presets")).toString()
+                                       .split(QLatin1Char(';'));
+  QCOMPARE(overlaySlots.size(), 3);
+  QCOMPARE(overlaySlots.first(), config.currentFilamentPreset());
+  QCOMPARE(overlaySlots.last(), other);
+
+  // Collapse the slots, then restore via the project config path.
+  config.setExtruderCount(1);
+  QCOMPARE(config.filamentPresetForSlot(1), config.currentFilamentPreset());
+  QHash<QString, QVariant> projectConfig;
+  projectConfig.insert(QStringLiteral("filament_presets"),
+                       overlay.value(QStringLiteral("filament_presets")));
+  config.applyProjectConfig(projectConfig);
+  QCOMPARE(config.filamentPresetForSlot(2), other);
 }
 
 // -- Phase 02-01: TabPosition Q_ENUM + requestSelectTab unit tests --
