@@ -645,6 +645,10 @@ private slots:
   void v56CrossWorkstreamRegressionLocked();
   // v5.15 (BEDTEX/MODELLIT): textured bed + lit model rendering contracts.
   void v515BedTextureAndModelLitWired();
+  // Phase 237 (VIEW-01..06): View menu wiring, shortcut parity, drag-drop,
+  // unit-inference plumbing, project-config restore routing, and sliced-file
+  // export surface.
+  void viewMenuShortcutsAndImportSourceAudit();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -9060,5 +9064,164 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
            "DLG-03: ProjectServiceMock must expose projectVersionInfo");
   QVERIFY2(backendHeader.contains(QStringLiteral("systemInfo")),
            "DLG-03: BackendContext must expose systemInfo for SysInfoDialog");
+}
+
+// Phase 237 (VIEW-01..06) source audit: the View menu carries the 7 upstream
+// camera presets wired to the active viewport, the upstream global shortcut
+// set is bound in main.qml, the window accepts model drops, Ctrl+D matches
+// the upstream "Delete all" action, the unit-inference / project-config /
+// sliced-file-export plumbing exists, and no unjustified disabled stub items
+// remain in the View menu.
+void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
+{
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
+  const QString kbDialog = readSource(QStringLiteral("src/qml_gui/dialogs/KBShortcutsDialog.qml"));
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+  QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
+  QVERIFY2(!kbDialog.isEmpty(), "Unable to read KBShortcutsDialog.qml");
+  QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
+
+  // ── VIEW-01: View menu preset items are wired to the active viewport ──
+  // (upstream MainFrame.cpp:2213-2235 routes each item to select_view).
+  const QStringList viewDirections = {
+      QStringLiteral("plate"),   QStringLiteral("top"),    QStringLiteral("bottom"),
+      QStringLiteral("front"),   QStringLiteral("rear"),   QStringLiteral("left"),
+      QStringLiteral("right")};
+  for (const QString &direction : viewDirections)
+  {
+    QVERIFY2(topbar.contains(QStringLiteral("selectViewOnActiveViewport(\"") + direction + "\")"),
+             qPrintable(QStringLiteral("VIEW-01: View menu item for direction '%1' must call selectViewOnActiveViewport").arg(direction)));
+  }
+  // Every preset item carries an enabled gate (no dead menu entries).
+  QVERIFY2(topbar.contains(QStringLiteral("viewMenu.viewEnabled && root.activeViewport !== null")),
+           "VIEW-01: View menu preset items must gate on the active viewport");
+  // The projection toggle is a real toggle (upstream MainFrame.cpp:2604-2620).
+  QVERIFY2(topbar.contains(QStringLiteral("orthographicCamera = true"))
+               && topbar.contains(QStringLiteral("orthographicCamera = false")),
+           "VIEW-01: perspective/orthographic items must flip the viewport camera projection");
+  // G-code window check item toggles the viewmodel (upstream
+  // MainFrame.cpp:2623-2629) and stays Preview-gated.
+  QVERIFY2(topbar.contains(QStringLiteral("setShowGcodeWindow(!backend.previewViewModel.showGcodeWindow)")),
+           "VIEW-01: Show G-code Window must toggle PreviewViewModel::showGcodeWindow");
+  // The old disabled stub items must stay gone (no fake-green entries).
+  for (const QString &stub : {QStringLiteral("显示/隐藏 Gizmo"), QStringLiteral("显示层"),
+                              QStringLiteral("隐藏层")})
+  {
+    QVERIFY2(!topbar.contains(stub),
+             qPrintable(QStringLiteral("VIEW-01: leftover disabled View-menu stub remains: %1").arg(stub)));
+  }
+
+  // Renderer/camera plumbing: upstream-named selectView + the extra presets
+  // + the ortho branch exist (upstream Camera::select_view Camera.cpp:86).
+  const QString rhiHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString rhiImpl = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString cameraHeader = readSource(QStringLiteral("src/qml_gui/Renderer/CameraController.h"));
+  const QString cameraImpl = readSource(QStringLiteral("src/qml_gui/Renderer/CameraController.cpp"));
+  QVERIFY2(!rhiHeader.isEmpty() && !rhiImpl.isEmpty(), "Unable to read RhiViewport sources");
+  QVERIFY2(!cameraHeader.isEmpty() && !cameraImpl.isEmpty(), "Unable to read CameraController sources");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("Q_INVOKABLE void selectView(const QString &direction)")),
+           "VIEW-01: RhiViewport must expose upstream-named selectView(direction)");
+  QVERIFY2(cameraHeader.contains(QStringLiteral("void viewBottom();"))
+               && cameraHeader.contains(QStringLiteral("void viewRear();"))
+               && cameraHeader.contains(QStringLiteral("void viewLeft();")),
+           "VIEW-01: CameraController must declare the bottom/rear/left presets");
+  QVERIFY2(cameraImpl.contains(QStringLiteral("mat.ortho(")),
+           "VIEW-01: CameraController must implement the orthographic projection branch");
+
+  // PreviewPage exposes the preview viewport + binds the G-code panel to the
+  // viewmodel property (active-canvas routing + Show G-code Window consumer).
+  QVERIFY2(previewPage.contains(QStringLiteral("property alias previewViewportRef: previewViewport")),
+           "VIEW-01: PreviewPage must expose the preview viewport for active-canvas routing");
+  QVERIFY2(previewPage.contains(QStringLiteral("root.previewVm ? root.previewVm.showGcodeWindow : true")),
+           "VIEW-01: PreviewPage right panel must bind to PreviewViewModel::showGcodeWindow");
+  const QString previewVmHeader = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.h"));
+  QVERIFY2(previewVmHeader.contains(QStringLiteral("bool showGcodeWindow READ showGcodeWindow WRITE setShowGcodeWindow")),
+           "VIEW-01: PreviewViewModel must declare the showGcodeWindow property");
+
+  // ── VIEW-02: upstream shortcut set bound in main.qml ──────────────────
+  const QStringList requiredSequences = {
+      QStringLiteral("sequence: \"Ctrl+0\""), QStringLiteral("sequence: \"Ctrl+1\""),
+      QStringLiteral("sequence: \"Ctrl+2\""), QStringLiteral("sequence: \"Ctrl+3\""),
+      QStringLiteral("sequence: \"Ctrl+4\""), QStringLiteral("sequence: \"Ctrl+5\""),
+      QStringLiteral("sequence: \"Ctrl+6\""), QStringLiteral("sequence: \"Ctrl+N\""),
+      QStringLiteral("sequence: \"Ctrl+Shift+S\""), QStringLiteral("sequence: \"Ctrl+A\""),
+      QStringLiteral("sequence: \"Esc\""), QStringLiteral("sequence: \"Ctrl+P\""),
+      QStringLiteral("sequence: \"Ctrl+D\""), QStringLiteral("sequence: \"Ctrl+G\"")};
+  for (const QString &sequence : requiredSequences)
+  {
+    QVERIFY2(mainQml.contains(sequence),
+             qPrintable(QStringLiteral("VIEW-02: main.qml must bind shortcut %1").arg(sequence)));
+  }
+  // Each binding calls a real API (spot anchors).
+  QVERIFY2(mainQml.contains(QStringLiteral("selectAllVisibleObjects()")),
+           "VIEW-02: Ctrl+A must call selectAllVisibleObjects");
+  QVERIFY2(mainQml.contains(QStringLiteral("clearObjectSelection()")),
+           "VIEW-02: Esc must call clearObjectSelection");
+  QVERIFY2(mainQml.contains(QStringLiteral("backend.openSettings()")),
+           "VIEW-02: Ctrl+P must open Preferences (upstream KBShortcutsDialog.cpp:197)");
+  QVERIFY2(mainQml.contains(QStringLiteral("backend.editorViewModel.clearWorkspace()")),
+           "VIEW-02: delete-all confirm must run EditorViewModel::clearWorkspace");
+  QVERIFY2(mainQml.contains(QStringLiteral("requestExportGcode3mf(")),
+           "VIEW-06: the sliced-file dialog must call requestExportGcode3mf");
+
+  // KBShortcutsDialog Ctrl+D matches the upstream action ("Delete all",
+  // KBShortcutsDialog.cpp:256), and the camera preset labels match the
+  // upstream list (:247-253).
+  QVERIFY2(kbDialog.contains(QStringLiteral("{ key: \"Ctrl+D\", desc: qsTr(\"Delete all\") }")),
+           "VIEW-02: KBShortcutsDialog must label Ctrl+D as Delete all (upstream action)");
+  QVERIFY2(!kbDialog.contains(QStringLiteral("qsTr(\"Duplicate selection\")")),
+           "VIEW-02: Ctrl+D must not be labeled Duplicate selection (that is Ctrl+K upstream)");
+  QVERIFY2(kbDialog.contains(QStringLiteral("Camera view - Default"))
+               && kbDialog.contains(QStringLiteral("Camera view - Bottom"))
+               && kbDialog.contains(QStringLiteral("Camera Angle - Left side")),
+           "VIEW-01: KBShortcutsDialog camera labels must match the upstream Ctrl+0..6 list");
+
+  // Menu entries for the import/export additions exist.
+  QVERIFY2(topbar.contains(QStringLiteral("Import Zip Archive")),
+           "VIEW-02: File menu must carry the Import Zip Archive entry");
+  QVERIFY2(topbar.contains(QStringLiteral("导入配置")),
+           "VIEW-02: File menu must carry the Import Configs entry");
+  QVERIFY2(topbar.contains(QStringLiteral("导出切片文件")),
+           "VIEW-06: File menu must carry the export sliced file entry");
+  const QString backendHeader = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
+  const QString backendImpl = readSource(QStringLiteral("src/qml_gui/BackendContext.cpp"));
+  QVERIFY2(backendHeader.contains(QStringLiteral("topbarImportConfigs")),
+           "VIEW-02: BackendContext must declare topbarImportConfigs");
+  QVERIFY2(backendImpl.contains(QStringLiteral("importBundle")),
+           "VIEW-02: topbarImportConfigs must route through PresetServiceMock::importBundle");
+
+  // ── VIEW-03: window-level DropArea wired to the import surface ────────
+  QVERIFY2(mainQml.contains(QStringLiteral("DropArea {")),
+           "VIEW-03: main.qml must declare a window-level DropArea");
+  QVERIFY2(mainQml.contains(QStringLiteral("addFilesToCurrentPlate(paths)")),
+           "VIEW-03: multi-file drops must import through addFilesToCurrentPlate");
+  QVERIFY2(mainQml.contains(QStringLiteral("backend.requestSelectTab(backend.tp3DEditor)")),
+           "VIEW-03: drops must switch to the Prepare tab (upstream Plater.cpp:2745-2748)");
+  QVERIFY2(mainQml.contains(QStringLiteral("backend.editorViewModel.importSVG()")),
+           "VIEW-03: single .svg drops must route into the SVG emboss flow");
+
+  // ── VIEW-04/05/06: service + viewmodel plumbing exists ────────────────
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString projectHeader = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  QVERIFY2(!editorHeader.isEmpty() && !projectHeader.isEmpty(),
+           "Unable to read EditorViewModel/ProjectServiceMock headers");
+  QVERIFY2(projectHeader.contains(QStringLiteral("loadedObjectUnitHint")),
+           "VIEW-04: ProjectServiceMock must expose loadedObjectUnitHint");
+  QVERIFY2(projectHeader.contains(QStringLiteral("removeObjectsWithZeroVolume")),
+           "VIEW-04: ProjectServiceMock must expose removeObjectsWithZeroVolume");
+  QVERIFY2(editorHeader.contains(QStringLiteral("applyUnitConversion")),
+           "VIEW-04: EditorViewModel must expose applyUnitConversion");
+  QVERIFY2(editorHeader.contains(QStringLiteral("unitConversionPromptRequested")),
+           "VIEW-04: EditorViewModel must emit unitConversionPromptRequested");
+  QVERIFY2(backendImpl.contains(QStringLiteral("loadProject(localPath)")),
+           "VIEW-05: topbarOpenProject must route .3mf opens through loadProject");
+  QVERIFY2(projectHeader.contains(QStringLiteral("exportGcode3mf")),
+           "VIEW-06: ProjectServiceMock must expose exportGcode3mf");
+  QVERIFY2(editorHeader.contains(QStringLiteral("scaleSelectionToFitBed")),
+           "VIEW-06: EditorViewModel must expose scaleSelectionToFitBed");
+  QVERIFY2(projectHeader.contains(QStringLiteral("selectionWorldBoundingBox")),
+           "VIEW-06: ProjectServiceMock must expose selectionWorldBoundingBox");
 }
 

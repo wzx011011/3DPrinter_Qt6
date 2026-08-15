@@ -385,6 +385,11 @@ public:
   Q_INVOKABLE void topbarNewProject();
   Q_INVOKABLE bool topbarOpenProject(const QString &filePath);
   Q_INVOKABLE bool topbarImportModel(const QString &filePath);
+  /// Phase 237 (VIEW-02): Import Configs entry (upstream MainFrame::
+  /// load_config_file, MainFrame.cpp:3204-3247). Loads a .json preset bundle
+  /// through PresetServiceMock::importBundle and posts an import-result
+  /// notification. Returns true when at least one preset was imported.
+  Q_INVOKABLE bool topbarImportConfigs(const QString &filePath);
   Q_INVOKABLE bool topbarSaveProject();
   Q_INVOKABLE bool topbarSaveProjectAs(const QString &filePath);
   Q_INVOKABLE int beginLatency(const QString &operation, const QString &detail = QString());
@@ -469,6 +474,10 @@ signals:
   /// Phase 236 (DLG-03): objects landed outside the bed after a load/drop —
   /// open the RecenterDialog (upstream outside-bed prompt).
   void recenterPromptRequested();
+  /// Phase 237 (VIEW-04): a freshly imported object tripped the upstream
+  /// saved-unit heuristic — the shell opens the unit-conversion confirm.
+  /// unitHint: 1 = meters (x1000), 2 = imperial (x25.4).
+  void unitConversionPromptRequested(int objectIndex, int unitHint, const QString &objectName);
   void exportGCodeRequested();
 
 private:

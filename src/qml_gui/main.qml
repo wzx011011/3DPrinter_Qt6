@@ -114,6 +114,32 @@ ApplicationWindow {
         }
     }
 
+    // Phase 237 (VIEW-02): Import Configs file dialog (upstream MainFrame::
+    // load_config_file, MainFrame.cpp:3209-3211). Only *.json has a real Qt6
+    // importer (PresetServiceMock::importBundle).
+    FileDialog {
+        id: importConfigsDialog
+        title: qsTr("导入配置")
+        nameFilters: [qsTr("配置文件 (*.json)"), qsTr("所有文件 (*)")]
+        onAccepted: backend.topbarImportConfigs(selectedFile.toString())
+    }
+
+    // Phase 237 (VIEW-06): export the plate sliced file as .gcode.3mf
+    // (upstream Plater::export_gcode_3mf "Save Sliced file as:",
+    // Plater.cpp:11436-11448). No defaultSuffix: the target carries a
+    // double extension (.gcode.3mf) and the ViewModel appends it when
+    // missing (upstream appends .3mf the same way, Plater.cpp:11546-11547).
+    FileDialog {
+        id: exportGcode3mfDialog
+        title: qsTr("保存切片文件")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("切片文件 (*.gcode.3mf)")]
+        onAccepted: {
+            if (backend.editorViewModel)
+                backend.editorViewModel.requestExportGcode3mf(selectedFile.toString())
+        }
+    }
+
     // Latency 跟踪迁移：endLatency 在 currentPage 改变后触发
     // (替代旧 onFrameSwapped + pendingSwitchTargetPage 逻辑 — Pitfall 3)
     FolderDialog {
@@ -135,6 +161,104 @@ ApplicationWindow {
         }
         function onExportGCodeRequested() {
             plater.preparePageRef.openExportDialog()
+        }
+    }
+
+    // Phase 237 (VIEW-02): delete-all destructive confirm (upstream
+    // "All objects will be removed, continue?" message, Plater.cpp:11107;
+    // confirm runs EditorViewModel::clearWorkspace, the OWzx equivalent of
+    // delete_all_objects_from_model, Plater.cpp:4939).
+    ConfirmDialog {
+        id: deleteAllConfirm
+        dialogTitle: qsTr("全部删除")
+        message: qsTr("将移除所有对象，是否继续？")
+        confirmText: qsTr("删除")
+        onAccepted: if (backend.editorViewModel) backend.editorViewModel.clearWorkspace()
+    }
+
+    // Phase 237 (VIEW-04): unit-conversion confirm (upstream "Object too
+    // small" dialog, Plater.cpp:4237-4253 — offers scaling a meters/imperial
+    // authored mesh to millimeters). The conversion type maps the hint to
+    // the upstream ConversionType (1 = CONV_FROM_INCH x25.4,
+    // 3 = CONV_FROM_METER x1000).
+    ConfirmDialog {
+        id: unitConvertConfirm
+        property int targetObjectIndex: -1
+        property int targetUnitHint: 0
+        property string targetObjectName: ""
+        dialogTitle: qsTr("对象过小")
+        destructive: false
+        message: qsTr("来自文件 %1 的对象过小，可能以米或英寸为单位。\n是否缩放为毫米？").arg(targetObjectName)
+        confirmText: qsTr("缩放")
+        onAccepted: {
+            if (backend.editorViewModel && targetObjectIndex >= 0) {
+                // meters -> CONV_FROM_METER (3); imperial -> CONV_FROM_INCH (1)
+                backend.editorViewModel.applyUnitConversion(
+                            targetObjectIndex, targetUnitHint === 1 ? 3 : 1)
+            }
+        }
+    }
+
+    // Phase 237 (VIEW-04): editor prompt relayed by BackendContext.
+    Connections {
+        target: backend
+        function onUnitConversionPromptRequested(objectIndex, unitHint, objectName) {
+            unitConvertConfirm.targetObjectIndex = objectIndex
+            unitConvertConfirm.targetUnitHint = unitHint
+            unitConvertConfirm.targetObjectName = objectName || ""
+            unitConvertConfirm.open()
+        }
+    }
+
+    // Phase 237 (VIEW-03): window-level file drop (upstream
+    // PlaterDropTarget::OnDropFiles, Plater.cpp:2738-2767). Accepted model
+    // extensions match the upstream load_files surface; non-model files are
+    // filtered out silently. A single .svg routes into the existing SVG
+    // emboss flow (EditorViewModel::importSVG, upstream emboss_svg,
+    // Plater.cpp:2158-2177); multiple files import into the current plate.
+    DropArea {
+        anchors.fill: parent
+        onDropped: function(drop) {
+            var modelSuffixes = ["3mf", "stl", "obj", "step", "stp", "amf", "svg", "zip"]
+            var paths = []
+            for (var i = 0; i < drop.urls.length; ++i) {
+                var path = drop.urls[i].toString()
+                // Local file URLs only (upstream OnDropFiles receives paths).
+                if (path.indexOf("file:///") !== 0)
+                    continue
+                path = decodeURIComponent(path.substring(8))
+                var dot = path.lastIndexOf(".")
+                var suffix = dot >= 0 ? path.substring(dot + 1).toLowerCase() : ""
+                if (modelSuffixes.indexOf(suffix) >= 0)
+                    paths.push(path)
+            }
+            if (paths.length === 0)
+                return
+            // Upstream raises the window and switches to the Prepare tab
+            // before importing (Plater.cpp:2745-2748).
+            root.requestActivate()
+            if (backend.currentPage !== backend.tp3DEditor)
+                backend.requestSelectTab(backend.tp3DEditor)
+            // Single .svg: SVG emboss flow (upstream emboss_svg). OWzx's
+            // importer adds the SVG volume to the selected object; without a
+            // selection the path is parked on editorVm.svgFilePath for the
+            // SVG gizmo panel (PreparePage binds the field).
+            if (paths.length === 1 && paths[0].toLowerCase().endsWith(".svg")) {
+                if (backend.editorViewModel) {
+                    backend.editorViewModel.svgFilePath = paths[0]
+                    if (backend.editorViewModel.hasSelection)
+                        backend.editorViewModel.importSVG()
+                }
+                return
+            }
+            // Zip archives open the Phase 236 FileArchiveDialog tree instead
+            // of a direct import (same routing as the import dialog).
+            if (paths.length === 1 && paths[0].toLowerCase().endsWith(".zip")) {
+                fileArchiveDialog.openFor(paths[0])
+                return
+            }
+            if (backend.editorViewModel)
+                backend.editorViewModel.addFilesToCurrentPlate(paths)
         }
     }
 
@@ -267,6 +391,131 @@ ApplicationWindow {
         enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
         onActivated: backend.editorViewModel.duplicateSelectedObjects()
     }
+    // ── Phase 237 (VIEW-02): upstream global shortcut bindings ────────────
+    // Each binding calls a real existing API (upstream KBShortcutsDialog.cpp
+    // global list, lines 173-215).
+    Shortcut {
+        // New Project (upstream Ctrl+N, KBShortcutsDialog.cpp:175)
+        sequence: "Ctrl+N"
+        onActivated: {
+            if (backend.projectViewModel && backend.projectViewModel.isDirty)
+                newProjectDialog.open()
+            else
+                backend.topbarNewProject()
+        }
+    }
+    Shortcut {
+        // Save Project as (upstream Ctrl+Shift+S, KBShortcutsDialog.cpp:178)
+        sequence: "Ctrl+Shift+S"
+        onActivated: saveProjectAsDialog.open()
+    }
+    Shortcut {
+        // Select all objects (upstream plater Ctrl+A, KBShortcutsDialog.cpp:255)
+        sequence: "Ctrl+A"
+        enabled: backend.currentPage === backend.tp3DEditor && backend.editorViewModel
+        onActivated: backend.editorViewModel.selectAllVisibleObjects()
+    }
+    Shortcut {
+        // Deselect all (upstream WXK_ESCAPE -> deselect_all,
+        // GLCanvas3D.cpp:3234; KBShortcutsDialog.cpp:245)
+        sequence: "Esc"
+        enabled: backend.currentPage === backend.tp3DEditor && backend.editorViewModel
+        onActivated: backend.editorViewModel.clearObjectSelection()
+    }
+    Shortcut {
+        // Delete all (upstream Ctrl+D "Delete all", GLCanvas3D.cpp:3210
+        // -3213 -> EVT_GLTOOLBAR_DELETE_ALL; KBShortcutsDialog.cpp:256).
+        // Destructive: confirmed via the shared ConfirmDialog first.
+        sequence: "Ctrl+D"
+        enabled: backend.currentPage === backend.tp3DEditor
+                 && backend.editorViewModel
+                 && backend.editorViewModel.modelCount > 0
+        onActivated: deleteAllConfirm.openWithAction(function() {
+            if (backend.editorViewModel)
+                backend.editorViewModel.clearWorkspace()
+        })
+    }
+    Shortcut {
+        // Preferences (upstream Ctrl+P, KBShortcutsDialog.cpp:197 /
+        // MainFrame.cpp:2697)
+        sequence: "Ctrl+P"
+        onActivated: backend.openSettings()
+    }
+    Shortcut {
+        // Slice plate (upstream Ctrl+R "Slice plate", KBShortcutsDialog.cpp:184)
+        sequence: "Ctrl+R"
+        enabled: backend.editorViewModel && backend.editorViewModel.canRequestSlice
+        onActivated: backend.editorViewModel.requestSlice()
+    }
+    Shortcut {
+        // Export plate sliced file as .gcode.3mf (upstream Ctrl+G "Export
+        // plate sliced file", KBShortcutsDialog.cpp:182 -> Plater::
+        // export_gcode_3mf, Plater.cpp:7298)
+        sequence: "Ctrl+G"
+        enabled: backend.editorViewModel && backend.editorViewModel.canExportGCode
+        onActivated: {
+            exportGcode3mfDialog.currentFile = defaultSlicedFileUrl()
+            exportGcode3mfDialog.open()
+        }
+    }
+    Shortcut {
+        // Print plate (upstream Ctrl+Shift+G "Print plate",
+        // KBShortcutsDialog.cpp:189)
+        sequence: "Ctrl+Shift+G"
+        enabled: backend.currentPage === backend.tp3DEditor
+        onActivated: plater.preparePageRef.openPrintDialog()
+    }
+    // ── Phase 237 (VIEW-01): camera view presets (upstream Ctrl+0..6,
+    // GLCanvas3D.cpp:3192-3201 / KBShortcutsDialog.cpp:247-253). The
+    // active-viewport routing lives on BBLTopbar (same helper the View menu
+    // uses; upstream routes to the current canvas3D, MainFrame.cpp:3455).
+    Shortcut {
+        sequence: "Ctrl+0"
+        enabled: backend.currentPage === backend.tp3DEditor || backend.currentPage === backend.tpPreview
+        onActivated: bblTopbar.selectViewOnActiveViewport("plate")
+    }
+    Shortcut {
+        sequence: "Ctrl+1"
+        enabled: backend.currentPage === backend.tp3DEditor || backend.currentPage === backend.tpPreview
+        onActivated: bblTopbar.selectViewOnActiveViewport("top")
+    }
+    Shortcut {
+        sequence: "Ctrl+2"
+        enabled: backend.currentPage === backend.tp3DEditor || backend.currentPage === backend.tpPreview
+        onActivated: bblTopbar.selectViewOnActiveViewport("bottom")
+    }
+    Shortcut {
+        sequence: "Ctrl+3"
+        enabled: backend.currentPage === backend.tp3DEditor || backend.currentPage === backend.tpPreview
+        onActivated: bblTopbar.selectViewOnActiveViewport("front")
+    }
+    Shortcut {
+        sequence: "Ctrl+4"
+        enabled: backend.currentPage === backend.tp3DEditor || backend.currentPage === backend.tpPreview
+        onActivated: bblTopbar.selectViewOnActiveViewport("rear")
+    }
+    Shortcut {
+        sequence: "Ctrl+5"
+        enabled: backend.currentPage === backend.tp3DEditor || backend.currentPage === backend.tpPreview
+        onActivated: bblTopbar.selectViewOnActiveViewport("left")
+    }
+    Shortcut {
+        sequence: "Ctrl+6"
+        enabled: backend.currentPage === backend.tp3DEditor || backend.currentPage === backend.tpPreview
+        onActivated: bblTopbar.selectViewOnActiveViewport("right")
+    }
+
+    // Phase 237 (VIEW-06): default .gcode.3mf suggestion derived from the
+    // gcode export name (upstream derives it from the output template,
+    // Plater.cpp:11508-11529).
+    function defaultSlicedFileUrl() {
+        if (!backend.editorViewModel)
+            return ""
+        var name = backend.editorViewModel.defaultExportGCodeFileName()
+        if (name.endsWith(".gcode"))
+            name = name.substring(0, name.length - 6)
+        return "file:///" + name + ".gcode.3mf"
+    }
 
     // Visual compare reference PNG 映射 — 使用 TabPosition 枚举替代整数（Pitfall 1）
     readonly property string compareReferenceSource: backend.currentPage === backend.tp3DEditor
@@ -306,6 +555,10 @@ ApplicationWindow {
                 id: bblTopbar
                 // Phase 3: preparePage 现在是 Plater 内部子组件，通过 plater.preparePageRef 访问
                 preparePageRef: plater.preparePageRef
+                // Phase 237 (VIEW-01): preview canvas for the View menu / Ctrl+0..6
+                // active-viewport routing (upstream MainFrame::select_view targets
+                // the current canvas3D, MainFrame.cpp:3455).
+                previewPageRef: plater.previewPageRef
                 Layout.fillWidth: true
                 Layout.preferredHeight: root.prepareChromeHeight
                 windowVisibility: root.visibility
@@ -344,6 +597,22 @@ ApplicationWindow {
                 onSliceRequested: sliceTopMenuExternal.popup()
                 onSliceSinglePlateRequested: if (backend.editorViewModel) backend.editorViewModel.requestSlice()
                 onPrintRequested: printTopMenuExternal.popup()
+                // Phase 237 (VIEW-02): destructive delete-all confirm (upstream
+                // message "All objects will be removed, continue?",
+                // Plater.cpp:11107) routes through the shared ConfirmDialog.
+                onDeleteAllRequested: deleteAllConfirm.open()
+                // Phase 237 (VIEW-02): zip import reuses the Phase 236
+                // FileArchiveDialog flow (openModelDialog's zip branch).
+                onImportZipRequested: {
+                    openModelDialog.nameFilters = [qsTr("压缩包 (*.zip)"), qsTr("所有文件 (*)")]
+                    openModelDialog.open()
+                }
+                onImportConfigsRequested: importConfigsDialog.open()
+                // Phase 237 (VIEW-06): export plate sliced file (.gcode.3mf).
+                onExportSlicedFileRequested: {
+                    exportGcode3mfDialog.currentFile = defaultSlicedFileUrl()
+                    exportGcode3mfDialog.open()
+                }
                 onBellClicked: notificationCenterPopup.open()
                 onWindowMinimizeRequested: root.showMinimized()
                 onWindowMaximizeRequested: root.visibility === Window.Maximized ? root.showNormal() : root.showMaximized()

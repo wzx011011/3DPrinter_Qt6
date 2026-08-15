@@ -30,6 +30,20 @@ public:
   void viewFront();
   void viewRight();
   void viewIso();
+  // Phase 237 (VIEW-01): remaining upstream Camera::select_view directions
+  // (Camera.cpp:86-107). Azimuth/elevation table derived from the established
+  // Qt6 mapping (Y-up, azimuth measured from +Z toward +X, front=+Z,
+  // right=+X, established by viewFront/viewRight above).
+  void viewBottom();
+  void viewRear();
+  void viewLeft();
+
+  // Phase 237 (VIEW-01): perspective/orthographic projection toggle.
+  // Upstream Camera::EType { Perspective, Ortho } switched by the View menu
+  // radio items "Use Perspective View" / "Use Orthogonal View"
+  // (MainFrame.cpp:2604-2620, app_config use_perspective_camera).
+  void setUseOrtho(bool ortho) { m_useOrtho = ortho; }
+  bool useOrtho() const { return m_useOrtho; }
 
   QMatrix4x4 viewMatrix() const;
   QMatrix4x4 projMatrix(float aspect) const;
@@ -44,4 +58,5 @@ private:
   // 默认 target = K1C 打印平台中心 (GL: x=110, y=0, z=110)
   QVector3D m_target{110.f, 0.f, 110.f};
   bool m_freeCamera = false;  // v5.12: bypass elevation clamp
+  bool m_useOrtho = false;    // Phase 237 (VIEW-01): orthographic projection
 };

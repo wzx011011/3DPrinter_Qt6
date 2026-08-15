@@ -141,8 +141,20 @@ public:
   bool clearPaintOnModelVolume(int objectIndex, int volumeIndex, PaintKind kind);
 #endif
 
-  /// 加载 3MF/STL/OBJ 等模型文件（真正调用 libslic3r）
+  /// Load 3MF/STL/OBJ and other model files (real libslic3r path)
   Q_INVOKABLE bool loadFile(const QString &filePath);
+  /// Phase 237 (VIEW-04): unit-inference hint for one object, porting the
+  /// upstream saved-unit heuristics (Model.cpp:763-815): the object's raw STL
+  /// volume is compared against volume_threshold_meters (0.008 = 0.2m cube)
+  /// first and volume_threshold_inches (8.0 = 2in cube) second -- the same
+  /// else-if order as Plater.cpp:4237-4253. Returns 0 = none, 1 = meters
+  /// (offer x1000), 2 = imperial (offer x25.4).
+  Q_INVOKABLE int loadedObjectUnitHint(int objectIndex) const;
+  /// Phase 237 (VIEW-04): remove objects whose raw STL volume is below the
+  /// upstream zero-volume epsilon (Model.cpp:830 zero_volume = 1e-10,
+  /// Model::removed_objects_with_zero_volume, Plater.cpp:4231). Returns the
+  /// number of objects removed.
+  Q_INVOKABLE int removeObjectsWithZeroVolume();
   /// Phase 236 (DLG-03): enumerate the importable model entries inside a
   /// zip archive (upstream FileArchiveDialog). Only *.stl/*.obj/*.3mf/*.amf
   /// entries are listed, in central-directory order. Uses miniz read-only
@@ -638,6 +650,20 @@ public:
 
   /// 清空当前项目（新建项目/重置场景）
   Q_INVOKABLE void clearProject();
+  /// Phase 237 (VIEW-06): world-space (GL coords: x=sx, y=sz, z=sy) union
+  /// bounding box of the given objects across all their instances. Returns
+  /// an empty map when libslic3r is unavailable or no object resolves.
+  /// Backs scaleSelectionToFitBed (upstream Selection::get_bounding_box).
+  QVariantMap selectionWorldBoundingBox(const QList<int> &objectIndices) const;
+  /// Phase 237 (VIEW-06): export the current plate's sliced G-code plus the
+  /// plate 3MF block into one zip named *.gcode.3mf (upstream
+  /// Plater::export_gcode_3mf, Plater.cpp:11499-11573; the G-code entry
+  /// name follows the upstream GCODE_FILE_FORMAT
+  /// "Metadata/plate_%1%.gcode", bbs_3mf.hpp:22). gcodeSourcePath is the
+  /// sliced .gcode file produced by SliceService. Returns false on any
+  /// writer failure (lastError_ carries the reason).
+  Q_INVOKABLE bool exportGcode3mf(int plateIndex, const QString &destPath,
+                                  const QString &gcodeSourcePath);
   /// 加载项目元数据（对齐上游 Plater::load_project，Mock 模式从 JSON 恢复）
   Q_INVOKABLE bool loadProject(const QString &filePath);
   /// 保存项目元数据（对齐上游 MainFrame::do_save / Plater::save_project）
@@ -818,6 +844,10 @@ private:
   void attachEmbossMetadata(void *volume, const QString &text,
                             const std::string &fontPath, float height, float depth,
                             float boldness = 0.0f, bool italic = false);
+  /// Phase 237 (VIEW-06): shared store_bbs_3mf writer (the block saveProject
+  /// used inline). Writes the model + plate list + per-plate thumbnails.
+  /// Returns false on failure (lastError_ set).
+  bool storeProject3mf(const QString &filePath);
   /// Mock-mode per-object scoped overrides (objectIndex → key-value map)
   QHash<int, QHash<QString, QVariant>> m_mockObjectOverrides;
   /// Mock-mode per-volume scoped overrides ((objectIndex << 16 | volumeIndex) → key-value map)

@@ -28,22 +28,22 @@ to exactly one phase.
 
 ## Phases
 
-- [ ] **Phase 231: P0 Circuit Break Quick Fixes** - Make the visibly dead
+- [x] **Phase 231: P0 Circuit Break Quick Fixes** - Make the visibly dead
   quick-fix circuits real: undo/redo dispatch, CalibMode correctness,
   export-all-STL merge, mojibake, CLI `--plate 0`.
-- [ ] **Phase 232: P0 AdvancedCut Execution And Multi-Slot Filaments** - Wire
+- [x] **Phase 232: P0 AdvancedCut Execution And Multi-Slot Filaments** - Wire
   AdvancedCut execution/connector interaction and real per-extruder slot
   filament selection.
-- [ ] **Phase 233: P0 Plate Data Chain** - Sync plate bed type, spiral, and
+- [x] **Phase 233: P0 Plate Data Chain** - Sync plate bed type, spiral, and
   filament sequence into slicing/3MF; exact 3MF plate restore; unsaved-changes
   guard; slice-all empty-plate safety.
-- [ ] **Phase 234: Undo Coverage And Fidelity** - Undo restores meshes,
+- [x] **Phase 234: Undo Coverage And Fidelity** - Undo restores meshes,
   volumes, plates, paint strokes, and full paste payloads; layer ranges reach
   slicing.
-- [ ] **Phase 235: Preset System Completion** - Disk persistence, honest
+- [x] **Phase 235: Preset System Completion** - Disk persistence, honest
   CreatePresets scope, single dirty-guard modal, bundle interop, sectioned
   combos, multi-slot model, rename/delete guards, no empty tabs.
-- [ ] **Phase 236: Dialog Reachability And Completion** - Every implemented
+- [x] **Phase 236: Dialog Reachability And Completion** - Every implemented
   dialog reachable or honestly gated; edits land in config; upstream
   load-feedback dialogs; correct AGPL About.
 - [ ] **Phase 237: Menus, Shortcuts, Drag-Drop, And Import** - View menu,

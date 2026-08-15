@@ -10,6 +10,7 @@
 #include <QDebug>
 #include <QFile>
 #include <QRegularExpression>
+#include <QSettings>
 #include <QTimer>
 #include <QFileInfo>
 #include <QHash>
@@ -413,6 +414,10 @@ PreviewViewModel::PreviewViewModel(ProjectServiceMock *projectService, SliceServ
   // All extrusion roles visible by default, matching upstream extrusion_roles_visibility
   // (libvgcode/src/Settings.hpp:49-71). showTravelMoves_ defaults to false in the header.
   m_roleVisibility.fill(true);
+  // Phase 237 (VIEW-01): restore the persisted G-code window visibility
+  // (upstream app_config show_gcode_window; default true).
+  QSettings settings;
+  showGcodeWindow_ = settings.value(QStringLiteral("preview/showGcodeWindow"), true).toBool();
   playTimer_ = new QTimer(this);
   playTimer_->setInterval(24);
   connect(playTimer_, &QTimer::timeout, this, [this]()
@@ -802,6 +807,21 @@ void PreviewViewModel::setShowTravelMoves(bool enabled)
     return;
   showTravelMoves_ = enabled;
   recolorAndPackSegments();
+  emit stateChanged();
+}
+
+// Phase 237 (VIEW-01): G-code window visibility toggle. Upstream routes the
+// View-menu "Show G-code Window" check item through
+// wxGetApp::toggle_show_gcode_window() (MainFrame.cpp:2623-2629), which
+// stores the app_config show_gcode_window flag; OWzx persists the same flag
+// in QSettings and defaults it to true (the panel was always shown before).
+void PreviewViewModel::setShowGcodeWindow(bool enabled)
+{
+  if (showGcodeWindow_ == enabled)
+    return;
+  showGcodeWindow_ = enabled;
+  QSettings settings;
+  settings.setValue(QStringLiteral("preview/showGcodeWindow"), enabled);
   emit stateChanged();
 }
 

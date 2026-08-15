@@ -27,7 +27,8 @@ Item {
     // `backend` 是 rootContext 的 context property（main_qml.cpp:134 注入），
     // 因此 BBLTopbar 内部直接通过 `backend` 引用，无需重复声明为 required property
     // （QML required property 在构造时绑定求值会先于 main.qml 的属性赋值，导致 undefined 误报）。
-    property var preparePageRef: null        // PreparePage 引用（用于 undo/redo dispatch）
+    property var preparePageRef: null        // PreparePage reference (undo/redo dispatch)
+    property var previewPageRef: null        // PreviewPage reference (VIEW-01 preview-canvas viewport routing)
     property int windowVisibility: Window.Windowed  // 用于 Maximize/Restore 图标切换
 
     // ── BBLTopbar 对外发射的信号（main.qml 监听并 dispatch） ──────────────
@@ -45,6 +46,16 @@ Item {
     signal sliceRequested()
     signal sliceSinglePlateRequested()
     signal printRequested()
+    // Phase 237 (VIEW-02): Edit-menu delete-all confirm (upstream Ctrl+D
+    // "Delete all", GLCanvas3D.cpp:3210-3213 -> EVT_GLTOOLBAR_DELETE_ALL).
+    signal deleteAllRequested()
+    // Phase 237 (VIEW-02): File-menu entries (upstream MainFrame.cpp:2327
+    // -2332 import_zip_archive / load_config_file, and the export-sliced-file
+    // entry backing Ctrl+G "Export plate sliced file",
+    // KBShortcutsDialog.cpp:182).
+    signal importZipRequested()
+    signal importConfigsRequested()
+    signal exportSlicedFileRequested()
     signal bellClicked()
     signal windowMinimizeRequested()
     signal windowMaximizeRequested()
@@ -68,6 +79,24 @@ Item {
             return
         root.lastTabSwitchToken = backend.beginLatency("tab-switch", tab.label)
         backend.requestSelectTab(tab.pos)
+    }
+
+    // ── Phase 237 (VIEW-01): View-menu camera routing ────────────────────
+    // Upstream routes select_view() to the CURRENT canvas
+    // (MainFrame.cpp:3455 -> Plater::select_view -> current canvas3D). The
+    // Preview tab hosts its own RhiViewport inside PreviewPage, so the
+    // active-viewport resolution follows backend.currentPage.
+    readonly property var activeViewport: {
+        if (backend.currentPage === backend.tpPreview && root.previewPageRef)
+            return root.previewPageRef.previewViewportRef
+        if (root.preparePageRef)
+            return root.preparePageRef.viewport3dRef
+        return null
+    }
+
+    function selectViewOnActiveViewport(direction) {
+        if (root.activeViewport)
+            root.activeViewport.selectView(direction)
     }
 
     implicitHeight: 70
@@ -769,6 +798,24 @@ Item {
                 text: qsTr("Import AMF")
                 onTriggered: root.importModelRequested(qsTr("AMF 文件 (*.amf)"))
             }
+            // Phase 237 (VIEW-02): Import Zip Archive (upstream
+            // Plater::import_zip_archive, MainFrame.cpp:2327-2329). The
+            // existing openModelDialog zip branch opens the FileArchiveDialog
+            // (Phase 236), so this reuses the same file dialog + routing.
+            CxMenuItem {
+                enabled: backend.canImport
+                text: qsTr("Import Zip Archive")
+                onTriggered: root.importZipRequested()
+            }
+            // Phase 237 (VIEW-02): Import Configs (upstream MainFrame::
+            // load_config_file, MainFrame.cpp:2330-2332). The Qt6 consumer
+            // surface is the .json preset bundle (PresetServiceMock::
+            // importBundle); upstream's zip/orca_* formats have no importer
+            // here so they stay out of the filter.
+            CxMenuItem {
+                text: qsTr("导入配置...")
+                onTriggered: root.importConfigsRequested()
+            }
         }
 
         // Export 子菜单 — TOPBAR-02 完整覆盖 — Phase 51 SHELL-03: canExport gate
@@ -778,6 +825,16 @@ Item {
                 enabled: backend.canExport
                 text: qsTr("Export G-code")
                 onTriggered: root.exportGcodeRequested()
+            }
+            // Phase 237 (VIEW-06): Export plate sliced file as .gcode.3mf
+            // (upstream Plater::export_gcode_3mf, Plater.cpp:11499; Ctrl+G
+            // "Export plate sliced file", KBShortcutsDialog.cpp:182). Gated
+            // on a valid current-plate slice result, matching the Prepare
+            // export button's canExportGCode gate.
+            CxMenuItem {
+                enabled: backend.editorViewModel && backend.editorViewModel.canExportGCode
+                text: qsTr("导出切片文件...") + "\tCtrl+G"
+                onTriggered: root.exportSlicedFileRequested()
             }
             CxMenuItem {
                 enabled: backend.canExport
@@ -851,6 +908,15 @@ Item {
                 enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
                 onTriggered: backend.editorViewModel.deleteSelectedObjects()
             }
+            // Phase 237 (VIEW-02): Delete All (upstream Ctrl+D, KBShortcuts
+            // .cpp:256 "Delete all"; GLCanvas3D.cpp:3210-3213 posts
+            // EVT_GLTOOLBAR_DELETE_ALL -> Plater::delete_all_objects_from_
+            // model, Plater.cpp:4939). main.qml confirms first.
+            CxMenuItem {
+                text: qsTr("全部删除") + "\tCtrl+D"
+                enabled: backend.editorViewModel && backend.editorViewModel.modelCount > 0
+                onTriggered: root.deleteAllRequested()
+            }
             CxMenuItem {
                 text: qsTr("全选")
                 onTriggered: if (backend.editorViewModel) backend.editorViewModel.selectAllVisibleObjects()
@@ -867,30 +933,93 @@ Item {
             }
         }
 
-        // View 子菜单
+        // View submenu -- Phase 237 (VIEW-01). Mirrors the upstream View
+        // menu camera presets (MainFrame.cpp:2213-2235 add_common_view_menu_
+        // items) plus the projection radio pair and the G-code window check
+        // item from MainFrame.cpp:2601-2629. Upstream items with no Qt6
+        // consumer (Show 3D Navigator, Reset Window Layout, Show Labels
+        // Ctrl+E, Show Overhang, Show Selected Outline -- no navigator UI, no
+        // layout-reset API, and the renderer has no label/overhang/outline
+        // draw pass) are deliberately not added as fake toggles.
         CxMenu {
-            title: qsTr("视图")
+            id: viewMenu
+
+            readonly property bool viewEnabled: backend.currentPage === backend.tp3DEditor
+                                                || backend.currentPage === backend.tpPreview
+
             CxMenuItem {
-                text: qsTr("显示/隐藏 Gizmo")
-                enabled: false
-                visible: false
+                text: qsTr("默认视图") + "\tCtrl+0"
+                enabled: viewMenu.viewEnabled && root.activeViewport !== null
+                onTriggered: root.selectViewOnActiveViewport("plate")
             }
+            CxMenuItem {
+                text: qsTr("顶部视图") + "\tCtrl+1"
+                enabled: viewMenu.viewEnabled && root.activeViewport !== null
+                onTriggered: root.selectViewOnActiveViewport("top")
+            }
+            CxMenuItem {
+                text: qsTr("底部视图") + "\tCtrl+2"
+                enabled: viewMenu.viewEnabled && root.activeViewport !== null
+                onTriggered: root.selectViewOnActiveViewport("bottom")
+            }
+            CxMenuItem {
+                text: qsTr("前部视图") + "\tCtrl+3"
+                enabled: viewMenu.viewEnabled && root.activeViewport !== null
+                onTriggered: root.selectViewOnActiveViewport("front")
+            }
+            CxMenuItem {
+                text: qsTr("后部视图") + "\tCtrl+4"
+                enabled: viewMenu.viewEnabled && root.activeViewport !== null
+                onTriggered: root.selectViewOnActiveViewport("rear")
+            }
+            CxMenuItem {
+                text: qsTr("左侧视图") + "\tCtrl+5"
+                enabled: viewMenu.viewEnabled && root.activeViewport !== null
+                onTriggered: root.selectViewOnActiveViewport("left")
+            }
+            CxMenuItem {
+                text: qsTr("右侧视图") + "\tCtrl+6"
+                enabled: viewMenu.viewEnabled && root.activeViewport !== null
+                onTriggered: root.selectViewOnActiveViewport("right")
+            }
+
             MenuSeparator {}
+
             CxMenuItem {
                 text: qsTr("重置视图")
                 enabled: root.preparePageRef !== null
                 onTriggered: if (root.preparePageRef) root.preparePageRef.applyFitHintIfReady()
             }
+
             MenuSeparator {}
+
+            // Projection toggle (upstream View-menu radio pair "Use
+            // Perspective View" / "Use Orthogonal View", MainFrame.cpp:2604
+            // -2620; persisted upstream as use_perspective_camera).
             CxMenuItem {
-                text: qsTr("显示层")
-                enabled: false
-                visible: false
+                text: (root.activeViewport && !root.activeViewport.orthographicCamera ? "● " : "○ ")
+                      + qsTr("使用透视投影")
+                enabled: viewMenu.viewEnabled && root.activeViewport !== null
+                onTriggered: if (root.activeViewport) root.activeViewport.orthographicCamera = false
             }
             CxMenuItem {
-                text: qsTr("隐藏层")
-                enabled: false
-                visible: false
+                text: (root.activeViewport && root.activeViewport.orthographicCamera ? "● " : "○ ")
+                      + qsTr("使用正交投影")
+                enabled: viewMenu.viewEnabled && root.activeViewport !== null
+                onTriggered: if (root.activeViewport) root.activeViewport.orthographicCamera = true
+            }
+
+            MenuSeparator {}
+
+            // Show G-code Window (upstream MainFrame.cpp:2623-2629 -- enabled
+            // only on the Preview tab, toggles show_gcode_window). The Qt6
+            // PreviewPage right-panel G-code source view is the consumer.
+            CxMenuItem {
+                text: (backend.previewViewModel && backend.previewViewModel.showGcodeWindow ? "✓ " : "")
+                      + qsTr("显示 G-code 窗口")
+                enabled: backend.currentPage === backend.tpPreview && backend.previewViewModel !== null
+                onTriggered: if (backend.previewViewModel)
+                    backend.previewViewModel.setShowGcodeWindow(!backend.previewViewModel.showGcodeWindow)
             }
         }
 

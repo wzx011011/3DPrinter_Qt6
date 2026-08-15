@@ -34,15 +34,25 @@ Dialog {
     ]
 
     // Shortcut entries mapped to the upstream 5-group structure.
-    // Global: app-wide actions bound via QML Shortcut{} in main.qml.
+    // Global: app-wide actions bound via QML Shortcut{} in main.qml
+    // (upstream global list, KBShortcutsDialog.cpp:173-215).
     readonly property var globalShortcuts: [
         { key: "Ctrl+Z", desc: qsTr("Undo") },
         { key: "Ctrl+Y", desc: qsTr("Redo") },
         { key: "Ctrl+Shift+Z", desc: qsTr("Redo (alternate)") },
-        { key: "Ctrl+I", desc: qsTr("Import model") },
-        { key: "Ctrl+O", desc: qsTr("Open project") },
-        { key: "Ctrl+S", desc: qsTr("Save project") },
-        { key: "Ctrl+P", desc: qsTr("Preferences") }
+        { key: "Ctrl+N", desc: qsTr("New Project") },
+        { key: "Ctrl+O", desc: qsTr("Open Project") },
+        { key: "Ctrl+S", desc: qsTr("Save Project") },
+        { key: "Ctrl+Shift+S", desc: qsTr("Save Project as") },
+        { key: "Ctrl+I", desc: qsTr("Import geometry data from STL/STEP/3MF/OBJ/AMF files") },
+        { key: "Ctrl+G", desc: qsTr("Export plate sliced file") },
+        { key: "Ctrl+R", desc: qsTr("Slice plate") },
+        { key: "Ctrl+Shift+G", desc: qsTr("Print plate") },
+        { key: "Ctrl+X", desc: qsTr("Cut") },
+        { key: "Ctrl+C", desc: qsTr("Copy to clipboard") },
+        { key: "Ctrl+V", desc: qsTr("Paste from clipboard") },
+        { key: "Ctrl+P", desc: qsTr("Preferences") },
+        { key: "Del", desc: qsTr("Delete selected") }
     ]
     // Prepare: canvas interaction (handled in C++ keyPressEvent).
     readonly property var prepareShortcuts: [
@@ -52,22 +62,27 @@ Dialog {
         { key: "R", desc: qsTr("Scale mode") },
         { key: "Escape", desc: qsTr("Deselect / cancel gizmo") }
     ]
-    // Toolbar: preset camera views (handled in C++ keyPressEvent).
+    // Toolbar: preset camera views (Phase 237 VIEW-01, bound via QML
+    // Shortcut{} in main.qml; upstream list at KBShortcutsDialog.cpp:247-253).
     readonly property var toolbarShortcuts: [
-        { key: "Ctrl+1", desc: qsTr("Top view") },
-        { key: "Ctrl+3", desc: qsTr("Right view") },
-        { key: "Ctrl+6", desc: qsTr("Isometric view") },
-        { key: "Ctrl+0", desc: qsTr("Front view") }
+        { key: "Ctrl+0", desc: qsTr("Camera view - Default") },
+        { key: "Ctrl+1", desc: qsTr("Camera view - Top") },
+        { key: "Ctrl+2", desc: qsTr("Camera view - Bottom") },
+        { key: "Ctrl+3", desc: qsTr("Camera view - Front") },
+        { key: "Ctrl+4", desc: qsTr("Camera view - Behind") },
+        { key: "Ctrl+5", desc: qsTr("Camera Angle - Left side") },
+        { key: "Ctrl+6", desc: qsTr("Camera Angle - Right side") }
     ]
     // Objects List: selection/edit actions bound via QML Shortcut{} in main.qml.
     readonly property var objectsShortcuts: [
-        { key: "Ctrl+A", desc: qsTr("Select all") },
+        { key: "Ctrl+A", desc: qsTr("Select all objects") },
         { key: "Ctrl+X", desc: qsTr("Cut selection") },
         { key: "Ctrl+C", desc: qsTr("Copy selection") },
         { key: "Ctrl+V", desc: qsTr("Paste") },
-        { key: "Ctrl+D", desc: qsTr("Duplicate selection") },
-        { key: "Ctrl+K", desc: qsTr("Duplicate (alternate)") },
-        { key: "Delete", desc: qsTr("Delete selection") }
+        { key: "Ctrl+D", desc: qsTr("Delete all") },
+        { key: "Ctrl+K", desc: qsTr("Clone selected") },
+        { key: "Delete", desc: qsTr("Delete selection") },
+        { key: "Escape", desc: qsTr("Deselect all") }
     ]
     // Preview: playback and layer navigation (handled in C++ keyPressEvent).
     readonly property var previewShortcuts: [

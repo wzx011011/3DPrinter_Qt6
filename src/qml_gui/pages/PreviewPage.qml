@@ -15,7 +15,18 @@ Item {
     property string processCategory: ""
     focus: true
 
-    property bool rightPanelExpanded: true
+    // Phase 237 (VIEW-01): expose the preview RhiViewport so the shell View
+    // menu / Ctrl+0..6 shortcuts can route camera presets to the ACTIVE
+    // canvas (upstream MainFrame::select_view targets the current canvas3D,
+    // MainFrame.cpp:3455).
+    property alias previewViewportRef: previewViewport
+
+    // Phase 237 (VIEW-01): G-code window visibility is owned by the
+    // viewmodel (upstream View menu "Show G-code Window" toggles the
+    // app_config show_gcode_window flag, MainFrame.cpp:2623-2629); the panel
+    // collapses but keeps its collapsed rail (same visual as the old local
+    // bool).
+    property bool rightPanelExpanded: root.previewVm ? root.previewVm.showGcodeWindow : true
     // Phase 164 (SW-01): preview left panel now sources its width from the
     // backend sidebar constants (was hardcoded 392 — part of the 7-layer lock).
     readonly property int targetPreviewLeftWidth: backend ? backend.sidebarWidth : 320
@@ -336,7 +347,9 @@ Item {
                     SidePanelHeader {
                         title: qsTr("分析")
                         expanded: root.rightPanelExpanded
-                        onToggleRequested: root.rightPanelExpanded = !root.rightPanelExpanded
+                        // Phase 237 (VIEW-01): route through the viewmodel so
+                        // the View-menu toggle and this header stay in sync.
+                        onToggleRequested: if (root.previewVm) root.previewVm.setShowGcodeWindow(!root.previewVm.showGcodeWindow)
                     }
 
                     ColumnLayout {

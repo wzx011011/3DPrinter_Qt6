@@ -11,6 +11,7 @@
 #include <QSet>
 #include <QRegularExpression>
 #include <QTextStream>
+#include <QTemporaryDir>
 #include <QUrl>
 #include <QTemporaryFile>
 #include <QDataStream>
@@ -5295,6 +5296,208 @@ float ProjectServiceMock::objectVolume(int objectIndex) const
   return model_->objects[size_t(objectIndex)]->get_object_stl_stats().volume;
 }
 
+// Phase 237 (VIEW-04): per-object unit inference, porting the upstream
+// saved-unit heuristics (Model.cpp:763-815 volume thresholds + the else-if
+// order Plater.cpp:4237-4253 applies them in). The raw STL volume is the
+// exact metric Model::looks_like_saved_in_meters / looks_like_imperial_units
+// read, and objectVolume() already exposes get_object_stl_stats().volume.
+int ProjectServiceMock::loadedObjectUnitHint(int objectIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  static constexpr double kVolumeThresholdMeters = 0.008;   // Model.cpp:803 (0.2*0.2*0.2)
+  static constexpr double kVolumeThresholdInches = 8.0;    // Model.cpp:763 (2*2*2)
+
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)])
+    return 0;
+  const double volume = double(model_->objects[size_t(objectIndex)]->get_object_stl_stats().volume);
+  if (volume < kVolumeThresholdMeters)
+    return 1; // looks_like_saved_in_meters: offer x1000 (m -> mm)
+  if (volume < kVolumeThresholdInches)
+    return 2; // looks_like_imperial_units: offer x25.4 (in -> mm)
+#else
+  Q_UNUSED(objectIndex);
+#endif
+  return 0;
+}
+
+// Phase 237 (VIEW-04): port of Model::removed_objects_with_zero_volume
+// (Model.cpp:830-844, called from Plater.cpp:4231 after every non-project
+// model load). Deletes objects whose raw STL volume is below the 1e-10
+// epsilon and refreshes the mirror arrays so the UI list stays consistent.
+int ProjectServiceMock::removeObjectsWithZeroVolume()
+{
+#ifdef HAS_LIBSLIC3R
+  static constexpr double kZeroVolume = 0.0000000001; // Model.cpp:830
+
+  if (!model_ || model_->objects.empty())
+    return 0;
+
+  int removed = 0;
+  for (int i = int(model_->objects.size()) - 1; i >= 0; --i)
+  {
+    const auto *obj = model_->objects[size_t(i)];
+    if (obj && double(obj->get_object_stl_stats().volume) < kZeroVolume)
+    {
+      deleteObject(i);
+      ++removed;
+    }
+  }
+  if (removed > 0)
+    syncTransformsFromModel();
+  return removed;
+#else
+  return 0;
+#endif
+}
+
+// Phase 237 (VIEW-06): world-space union bbox of the given objects across
+// their instances, in GL coords (x=sx, y=sz, z=sy — the same swap
+// objectPosition applies). Backs EditorViewModel::scaleSelectionToFitBed,
+// which ports upstream Selection::scale_to_fit_print_volume
+// (Selection.cpp:1419-1508, rectangle branch at :1449-1462).
+QVariantMap ProjectServiceMock::selectionWorldBoundingBox(const QList<int> &objectIndices) const
+{
+  QVariantMap box;
+#ifdef HAS_LIBSLIC3R
+  if (!model_)
+    return box;
+
+  bool valid = false;
+  double minX = 0, minY = 0, minZ = 0, maxX = 0, maxY = 0, maxZ = 0;
+  for (const int objectIndex : objectIndices)
+  {
+    if (objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+      continue;
+    const auto *obj = model_->objects[size_t(objectIndex)];
+    if (!obj || obj->instances.empty())
+      continue;
+    for (size_t instanceIdx = 0; instanceIdx < obj->instances.size(); ++instanceIdx)
+    {
+      const Slic3r::BoundingBoxf3 instanceBox = obj->instance_bounding_box(instanceIdx);
+      if (!instanceBox.defined)
+        continue;
+      // slic3r Z-up -> GL Y-up swap: GL.x = sx, GL.y = sz, GL.z = sy.
+      const double glMin[3] = {instanceBox.min.x(), instanceBox.min.z(), instanceBox.min.y()};
+      const double glMax[3] = {instanceBox.max.x(), instanceBox.max.z(), instanceBox.max.y()};
+      if (!valid)
+      {
+        minX = glMin[0]; minY = glMin[1]; minZ = glMin[2];
+        maxX = glMax[0]; maxY = glMax[1]; maxZ = glMax[2];
+        valid = true;
+      }
+      else
+      {
+        minX = std::min(minX, glMin[0]); minY = std::min(minY, glMin[1]); minZ = std::min(minZ, glMin[2]);
+        maxX = std::max(maxX, glMax[0]); maxY = std::max(maxY, glMax[1]); maxZ = std::max(maxZ, glMax[2]);
+      }
+    }
+  }
+  if (valid)
+  {
+    box.insert(QStringLiteral("minX"), minX);
+    box.insert(QStringLiteral("minY"), minY);
+    box.insert(QStringLiteral("minZ"), minZ);
+    box.insert(QStringLiteral("maxX"), maxX);
+    box.insert(QStringLiteral("maxY"), maxY);
+    box.insert(QStringLiteral("maxZ"), maxZ);
+  }
+#else
+  Q_UNUSED(objectIndices);
+#endif
+  return box;
+}
+
+// Phase 237 (VIEW-06): export the plate's sliced G-code + the plate 3MF
+// block into one *.gcode.3mf zip (upstream Plater::export_gcode_3mf,
+// Plater.cpp:11499-11573 -> export_3mf(... WithGcode ...); the G-code entry
+// follows the upstream GCODE_FILE_FORMAT "Metadata/plate_%1%.gcode"
+// (bbs_3mf.hpp:22, writer at bbs_3mf.cpp:7729-7791)). The 3MF payload is
+// produced by the shared storeProject3mf writer into a temp file, then every
+// entry is copied into the destination archive and the G-code entry is
+// appended.
+bool ProjectServiceMock::exportGcode3mf(int plateIndex, const QString &destPath,
+                                        const QString &gcodeSourcePath)
+{
+  if (destPath.isEmpty())
+  {
+    lastError_ = tr("Export path is empty");
+    return false;
+  }
+  QFile gcodeFile(gcodeSourcePath);
+  if (!gcodeFile.exists() || !gcodeFile.open(QIODevice::ReadOnly))
+  {
+    lastError_ = tr("Sliced G-code not available: %1").arg(gcodeSourcePath);
+    return false;
+  }
+  const QByteArray gcodeBytes = gcodeFile.readAll();
+  gcodeFile.close();
+  if (gcodeBytes.isEmpty())
+  {
+    lastError_ = tr("Sliced G-code is empty");
+    return false;
+  }
+  if (plateIndex < 0)
+  {
+    lastError_ = tr("Invalid plate index");
+    return false;
+  }
+
+  // 1. Plate 3MF payload via the shared writer (upstream embeds the plate
+  //    model block through export_3mf, Plater.cpp:11562).
+  QTemporaryDir tempDir(QDir::temp().filePath(QStringLiteral("owzx-gcode3mf-XXXXXX")));
+  if (!tempDir.isValid())
+  {
+    lastError_ = tr("Unable to create temp directory");
+    return false;
+  }
+  const QString plate3mfPath = tempDir.filePath(QStringLiteral("plate.3mf"));
+  if (!storeProject3mf(plate3mfPath))
+    return false;
+
+  // 2. Copy every 3MF entry into the destination and append the G-code entry
+  //    (upstream entry name: Metadata/plate_{plateIndex+1}.gcode).
+  mz_zip_archive source;
+  mz_zip_zero_struct(&source);
+  if (!Slic3r::open_zip_reader(&source, QDir::toNativeSeparators(plate3mfPath).toStdString()))
+  {
+    lastError_ = tr("Unable to read the plate 3MF payload");
+    return false;
+  }
+
+  mz_zip_archive target;
+  mz_zip_zero_struct(&target);
+  if (!Slic3r::open_zip_writer(&target, QDir::toNativeSeparators(destPath).toStdString()))
+  {
+    Slic3r::close_zip_reader(&source);
+    lastError_ = tr("Unable to write %1").arg(destPath);
+    return false;
+  }
+
+  bool ok = true;
+  const mz_uint fileCount = mz_zip_reader_get_num_files(&source);
+  for (mz_uint index = 0; ok && index < fileCount; ++index)
+    ok = mz_zip_writer_add_from_zip_reader(&target, &source, index);
+
+  const std::string gcodeEntry = "Metadata/plate_" + std::to_string(plateIndex + 1) + ".gcode";
+  if (ok)
+    ok = mz_zip_writer_add_mem(&target, gcodeEntry.c_str(), gcodeBytes.constData(),
+                               static_cast<size_t>(gcodeBytes.size()), MZ_DEFAULT_COMPRESSION);
+  if (ok)
+    ok = mz_zip_writer_finalize_archive(&target);
+
+  Slic3r::close_zip_writer(&target);
+  Slic3r::close_zip_reader(&source);
+
+  if (!ok)
+  {
+    QFile::remove(destPath);
+    lastError_ = tr("Unable to assemble the sliced-file archive");
+    return false;
+  }
+  return true;
+}
+
 // Phase 112 (MEASURE-01): per-volume ITS accessor. See the ownership contract
 // in ProjectServiceMock.h (MI-02/MI-03/MI-04/MI-05/MI-06). Shallow-share via
 // the shared_ptr aliasing constructor: the returned shared_ptr shares the
@@ -8543,6 +8746,116 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
   return result;
 }
 
+// Phase 237 (VIEW-06): shared store_bbs_3mf writer extracted from saveProject
+// (same body; saveProject keeps the plate-state JSON + bookkeeping on top).
+// Mirrors upstream Plater::export_3mf -> store_bbs_3mf with plate_data_list
+// populated (Plater.cpp:11462 for the sliced-file variant).
+bool ProjectServiceMock::storeProject3mf(const QString &filePath)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_)
+    return false;
+
+  // Real 3MF export via store_bbs_3mf (对齐上游 Plater::export_3mf → store_bbs_3mf)
+  Slic3r::StoreParams params;
+  params.path = filePath.toUtf8().constData();
+  params.model = model_;
+  params.strategy = Slic3r::SaveStrategy::Zip64;
+  // Phase 107-01 diagnostic: StoreParams::config (bbs_3mf.hpp:234) is declared
+  // WITHOUT a default member initializer and the empty StoreParams() {}
+  // constructor does NOT zero it, so an unassigned params.config is a WILD
+  // pointer. store_bbs_3mf dereferences it after a `config != nullptr` guard
+  // (bbs_3mf.cpp:6350) which is UB on a wild pointer and intermittently
+  // SEGFAULTs in _add_project_config_file_to_archive during ctest. We do not
+  // currently persist a global project config (Qt6 has no preset-bundle write
+  // path yet), so explicitly null it out to skip that writer branch. This is a
+  // pre-existing latent hazard independent of FMAP-02; tracked separately.
+  params.config = nullptr;
+
+  // v3.0 Phase 18 (D-10): populate plate_data_list so multi-plate state round-trips.
+  // Fixes the v2.9 blocker where save lost all plate names/locked/objects/config.
+  Slic3r::PlateDataPtrs plateData = buildPlateDataList(m_plateList.get());
+  params.plate_data_list = plateData;
+
+  // Phase 96 (THUMBWRITE-02) + Phase 98 (THUMBVERIFY, REVIEW MEDIUM-3):
+  // populate StoreParams::thumbnail_data with one entry per plate so the
+  // writer archives Metadata/plate_{i+1}.png for EVERY plate with a valid
+  // cached thumbnail. The writer iterates thumbnail_data by INDEX and maps
+  // entry[index] to plate index (bbs_3mf.cpp:6133-6143, name built at 6550 as
+  // "Metadata/plate_{index+1}.png"), so the vector MUST be plate-index
+  // aligned. buildPlateDataList (above) emits the matching XML <metadata
+  // thumbnail_file="Metadata/plate_N.png"> reference per plate (bbs_3mf.cpp
+  // :7987). Phase 96 pushed only the current plate as thumbnail_data[0]; for
+  // multi-plate projects that left plates > 0 with an XML ref but NO archived
+  // PNG bytes, so on reload the read helper (extractPlateThumbnailFrom3mf)
+  // could not find the entry and plates > 0 silently lost thumbnails
+  // (Phase 97 REVIEW MEDIUM-3). Phase 98 pushes one entry per plate in order.
+  // Plates with no cached thumbnail get a default (invalid) ThumbnailData
+  // placeholder so indices stay aligned; the writer skips invalid entries
+  // (is_valid() guard at bbs_3mf.cpp:6135). The vector guard at
+  // bbs_3mf.cpp:6101 only rejects size > plate count, so equal size is valid.
+  //
+  // LIFETIME: StoreParams::thumbnail_data is vector<ThumbnailData*> (raw
+  // pointers, bbs_3mf.hpp:235). The pointed-to ThumbnailData MUST outlive
+  // store_bbs_3mf. plateThumbs is a single local vector in this block; we
+  // reserve() the full capacity up front and take addresses only AFTER all
+  // pushes are done, so no reallocation can invalidate the pointers before
+  // store_bbs_3mf (called below at :5187) returns and the block exits past
+  // the release_PlateData_list cleanup.
+  std::vector<Slic3r::ThumbnailData> plateThumbs;
+  if (m_plateList && m_plateList->plateCount() > 0)
+  {
+    plateThumbs.reserve(m_plateList->plateCount());
+    for (int i = 0; i < m_plateList->plateCount(); ++i)
+    {
+      const OWzx::PartPlate *p = m_plateList->plate(i);
+      if (p && !p->thumbnail().isNull())
+        plateThumbs.push_back(qimageToThumbnailData(p->thumbnail()));
+      else
+        plateThumbs.push_back(Slic3r::ThumbnailData());  // invalid placeholder
+    }
+    // Take addresses of the non-const ThumbnailData entries and push as raw
+    // pointers into StoreParams::thumbnail_data (vector<ThumbnailData*>,
+    // bbs_3mf.hpp:235). store_bbs_3mf treats these as read-only inputs
+    // (is_valid() + pixels/width/height reads, no mutation). plateThumbs
+    // outlives the store call (single local vector, reserved up front — see
+    // LIFETIME above). (Phase 95 REVIEW W-3: removed the prior const_cast by
+    // iterating with a non-const reference so the address is already
+    // ThumbnailData*.)
+    for (Slic3r::ThumbnailData &td : plateThumbs)
+      params.thumbnail_data.push_back(&td);
+  }
+
+  bool ok = false;
+  try
+  {
+    ok = Slic3r::store_bbs_3mf(params);
+  }
+  catch (const std::exception &ex)
+  {
+    Slic3r::release_PlateData_list(plateData);  // free heap PlateData even on throw
+    lastError_ = tr("3MF 保存异常: %1").arg(QString::fromStdString(ex.what()));
+    emit projectChanged();
+    return false;
+  }
+
+  // Free the heap PlateData objects after store (success or failure).
+  Slic3r::release_PlateData_list(plateData);
+
+  if (!ok)
+  {
+    lastError_ = tr("3MF 保存失败");
+    emit projectChanged();
+    return false;
+  }
+  return true;
+#else
+  Q_UNUSED(filePath);
+  lastError_ = tr("3MF writer requires libslic3r");
+  return false;
+#endif
+}
+
 bool ProjectServiceMock::saveProject(const QString &filePath)
 {
   if (loading_)
@@ -8559,98 +8872,9 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
   }
   else
   {
-    // Real 3MF export via store_bbs_3mf (对齐上游 Plater::export_3mf → store_bbs_3mf)
-    Slic3r::StoreParams params;
-    params.path = filePath.toUtf8().constData();
-    params.model = model_;
-    params.strategy = Slic3r::SaveStrategy::Zip64;
-    // Phase 107-01 diagnostic: StoreParams::config (bbs_3mf.hpp:234) is declared
-    // WITHOUT a default member initializer and the empty StoreParams() {}
-    // constructor does NOT zero it, so an unassigned params.config is a WILD
-    // pointer. store_bbs_3mf dereferences it after a `config != nullptr` guard
-    // (bbs_3mf.cpp:6350) which is UB on a wild pointer and intermittently
-    // SEGFAULTs in _add_project_config_file_to_archive during ctest. We do not
-    // currently persist a global project config (Qt6 has no preset-bundle write
-    // path yet), so explicitly null it out to skip that writer branch. This is a
-    // pre-existing latent hazard independent of FMAP-02; tracked separately.
-    params.config = nullptr;
-
-    // v3.0 Phase 18 (D-10): populate plate_data_list so multi-plate state round-trips.
-    // Fixes the v2.9 blocker where save lost all plate names/locked/objects/config.
-    Slic3r::PlateDataPtrs plateData = buildPlateDataList(m_plateList.get());
-    params.plate_data_list = plateData;
-
-    // Phase 96 (THUMBWRITE-02) + Phase 98 (THUMBVERIFY, REVIEW MEDIUM-3):
-    // populate StoreParams::thumbnail_data with one entry per plate so the
-    // writer archives Metadata/plate_{i+1}.png for EVERY plate with a valid
-    // cached thumbnail. The writer iterates thumbnail_data by INDEX and maps
-    // entry[index] to plate index (bbs_3mf.cpp:6133-6143, name built at 6550 as
-    // "Metadata/plate_{index+1}.png"), so the vector MUST be plate-index
-    // aligned. buildPlateDataList (above) emits the matching XML <metadata
-    // thumbnail_file="Metadata/plate_N.png"> reference per plate (bbs_3mf.cpp
-    // :7987). Phase 96 pushed only the current plate as thumbnail_data[0]; for
-    // multi-plate projects that left plates > 0 with an XML ref but NO archived
-    // PNG bytes, so on reload the read helper (extractPlateThumbnailFrom3mf)
-    // could not find the entry and plates > 0 silently lost thumbnails
-    // (Phase 97 REVIEW MEDIUM-3). Phase 98 pushes one entry per plate in order.
-    // Plates with no cached thumbnail get a default (invalid) ThumbnailData
-    // placeholder so indices stay aligned; the writer skips invalid entries
-    // (is_valid() guard at bbs_3mf.cpp:6135). The vector guard at
-    // bbs_3mf.cpp:6101 only rejects size > plate count, so equal size is valid.
-    //
-    // LIFETIME: StoreParams::thumbnail_data is vector<ThumbnailData*> (raw
-    // pointers, bbs_3mf.hpp:235). The pointed-to ThumbnailData MUST outlive
-    // store_bbs_3mf. plateThumbs is a single local vector in this block; we
-    // reserve() the full capacity up front and take addresses only AFTER all
-    // pushes are done, so no reallocation can invalidate the pointers before
-    // store_bbs_3mf (called below at :5187) returns and the block exits past
-    // the release_PlateData_list cleanup.
-    std::vector<Slic3r::ThumbnailData> plateThumbs;
-    if (m_plateList && m_plateList->plateCount() > 0)
-    {
-      plateThumbs.reserve(m_plateList->plateCount());
-      for (int i = 0; i < m_plateList->plateCount(); ++i)
-      {
-        const OWzx::PartPlate *p = m_plateList->plate(i);
-        if (p && !p->thumbnail().isNull())
-          plateThumbs.push_back(qimageToThumbnailData(p->thumbnail()));
-        else
-          plateThumbs.push_back(Slic3r::ThumbnailData());  // invalid placeholder
-      }
-      // Take addresses of the non-const ThumbnailData entries and push as raw
-      // pointers into StoreParams::thumbnail_data (vector<ThumbnailData*>,
-      // bbs_3mf.hpp:235). store_bbs_3mf treats these as read-only inputs
-      // (is_valid() + pixels/width/height reads, no mutation). plateThumbs
-      // outlives the store call (single local vector, reserved up front — see
-      // LIFETIME above). (Phase 95 REVIEW W-3: removed the prior const_cast by
-      // iterating with a non-const reference so the address is already
-      // ThumbnailData*.)
-      for (Slic3r::ThumbnailData &td : plateThumbs)
-        params.thumbnail_data.push_back(&td);
-    }
-
-    bool ok = false;
-    try
-    {
-      ok = Slic3r::store_bbs_3mf(params);
-    }
-    catch (const std::exception &ex)
-    {
-      Slic3r::release_PlateData_list(plateData);  // free heap PlateData even on throw
-      lastError_ = tr("3MF 保存异常: %1").arg(QString::fromStdString(ex.what()));
-      emit projectChanged();
+    // Phase 237 (VIEW-06): the writer block lives in storeProject3mf now.
+    if (!storeProject3mf(filePath))
       return false;
-    }
-
-    // Free the heap PlateData objects after store (success or failure).
-    Slic3r::release_PlateData_list(plateData);
-
-    if (!ok)
-    {
-      lastError_ = tr("3MF 保存失败");
-      emit projectChanged();
-      return false;
-    }
 
     QJsonArray plateStates;
     if (m_plateList)

@@ -62,6 +62,11 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(bool stealthMode READ stealthMode WRITE setStealthMode NOTIFY stateChanged)
   /// Travel visibility toggle aligned with upstream GCodeViewer.
   Q_PROPERTY(bool showTravelMoves READ showTravelMoves WRITE setShowTravelMoves NOTIFY stateChanged)
+  /// Phase 237 (VIEW-01): G-code window visibility toggle (upstream View
+  /// menu "Show G-code Window" / key C, MainFrame.cpp:2623-2629; upstream
+  /// persists it as the app_config show_gcode_window flag). Drives the
+  /// PreviewPage right-panel G-code source view.
+  Q_PROPERTY(bool showGcodeWindow READ showGcodeWindow WRITE setShowGcodeWindow NOTIFY stateChanged)
   /// Bed-grid visibility aligned with upstream GCodeViewer show_bed.
   Q_PROPERTY(bool showBed READ showBed WRITE setShowBed NOTIFY stateChanged)
   /// Tool marker visibility aligned with upstream GCodeViewer show_marker.
@@ -171,6 +176,9 @@ public:
   Q_INVOKABLE void setStealthMode(bool enabled);
   bool showTravelMoves() const { return showTravelMoves_; }
   Q_INVOKABLE void setShowTravelMoves(bool enabled);
+  /// Phase 237 (VIEW-01): G-code window visibility (see the Q_PROPERTY).
+  bool showGcodeWindow() const { return showGcodeWindow_; }
+  Q_INVOKABLE void setShowGcodeWindow(bool enabled);
   bool showBed() const { return showBed_; }
   Q_INVOKABLE void setShowBed(bool enabled);
   bool showMarker() const { return showMarker_; }
@@ -315,6 +323,7 @@ private:
   // Travel hidden after first view, matching upstream Travels/Wipes=false defaults
   // and CONTEXT.md "travel and wipe hidden after first view" (55-RESEARCH Pitfall 3).
   bool showTravelMoves_ = false;  ///< Travel-move visibility aligned with upstream GCodeViewer.
+  bool showGcodeWindow_ = true;   ///< Phase 237 (VIEW-01): G-code window visibility (upstream show_gcode_window).
   bool showBed_ = true;          ///< Bed-grid visibility aligned with upstream GCodeViewer.
   bool showMarker_ = true;       ///< Tool-marker visibility aligned with upstream GCodeViewer.
   QTimer *playTimer_ = nullptr;

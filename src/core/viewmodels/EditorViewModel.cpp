@@ -4070,6 +4070,20 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
     {
     m_collapsedGroupKeys.clear();
     m_collapsedObjectSourceIndices.clear();
+      // Phase 237 (VIEW-04): upstream post-load cleanup for model imports —
+      // zero-volume objects are removed first (Model::
+      // removed_objects_with_zero_volume, Plater.cpp:4231-4233), then the
+      // saved-unit inference runs (Plater.cpp:4237-4253). Both are gated on
+      // !is_project_file upstream; OWzx marks loadFile-driven imports with
+      // m_pendingLoadIsModelImport (project opens route through loadProject).
+      const bool wasModelImport = m_pendingLoadIsModelImport;
+      m_pendingLoadIsModelImport = false;
+      if (wasModelImport && projectService_)
+      {
+        const int removedZeroVolume = projectService_->removeObjectsWithZeroVolume();
+        if (removedZeroVolume > 0)
+          emit zeroVolumeObjectsRemoved(removedZeroVolume);
+      }
       rebuildObjectEntriesFromService();
       ensureValidObjectSelection(true);
       statusText_ = QStringLiteral("已加载 %1 个模型，%2 个平板").arg(m_objects.size()).arg(projectService_->plateCount());
@@ -4101,6 +4115,28 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
       else
       {
         m_pendingObjCheckPath.clear();
+      }
+      // Phase 237 (VIEW-04): saved-unit inference for the freshly imported
+      // objects (upstream checks the whole loaded-file model and prompts
+      // once per file, Plater.cpp:4237-4253; meters is checked before
+      // imperial, which loadedObjectUnitHint mirrors). loadFile REPLACES the
+      // scene model, so every current object belongs to the file just
+      // loaded. Only the first tripping object is surfaced — the confirm
+      // dialog applies per object.
+      if (wasModelImport && projectService_)
+      {
+        const QStringList names = projectService_->objectNames();
+        const int modelCount = projectService_->modelCount();
+        for (int i = 0; i < modelCount; ++i)
+        {
+          const int unitHint = projectService_->loadedObjectUnitHint(i);
+          if (unitHint != 0)
+          {
+            emit unitConversionPromptRequested(
+                i, unitHint, i < names.size() ? names.at(i) : QString());
+            break;
+          }
+        }
       }
     }
     else
@@ -5997,6 +6033,30 @@ bool EditorViewModel::addFilesToContextPlate(const QStringList &filePaths)
   return true;
 }
 
+// Phase 237 (VIEW-03): drop-target batch import into the CURRENT plate
+// (upstream PlaterDropTarget::OnDropFiles -> Plater::load_files,
+// Plater.cpp:2738-2767 -> 2764). Same post-import refresh as the
+// context-plate variant.
+bool EditorViewModel::addFilesToCurrentPlate(const QStringList &filePaths)
+{
+  if (!projectService_ || filePaths.isEmpty())
+    return false;
+  const int plate = currentPlateIndex();
+  if (plate < 0 || !projectService_->setCurrentPlateIndex(plate))
+    return false;
+  if (!projectService_->addFilesToPlate(plate, filePaths)) {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForPlate(plate);
+  statusText_ = tr("Dropped %1 file(s) imported").arg(filePaths.size());
+  emit stateChanged();
+  return true;
+}
+
 bool EditorViewModel::addHandyModelToContextPlate(const QString &modelId)
 {
   if (!projectService_ || m_contextPlateIndex < 0 || m_contextPlateIndex >= plateCount()
@@ -7383,6 +7443,11 @@ bool EditorViewModel::loadFile(const QString &filePath)
                               QStringLiteral("obj"), Qt::CaseInsensitive) == 0
                               ? localPath
                               : QString();
+  // Phase 237 (VIEW-04): mark this as a model import so the loadFinished
+  // handler runs the upstream post-load checks (zero-volume removal +
+  // saved-unit inference, Plater.cpp:4229-4253 — gated on !is_project_file
+  // upstream; project opens arrive through loadProject instead).
+  m_pendingLoadIsModelImport = true;
   m_preLoadModelCount = projectService_ ? projectService_->modelCount() : 0;
   const bool started = projectService_->loadFile(localPath);
   if (started)
@@ -7409,6 +7474,177 @@ bool EditorViewModel::loadFile(const QString &filePath)
   }
   emit stateChanged();
   return started;
+}
+
+// Phase 237 (VIEW-04): unit-inference proxy + conversion application.
+// Detection: ProjectServiceMock::loadedObjectUnitHint (ported upstream
+// thresholds, Model.cpp:763-815). Application: the existing
+// ProjectServiceMock::convertObjectUnits path (ModelObject::convert_units),
+// which is the OWzx equivalent of upstream convert_from_meters(true) /
+// convert_from_imperial_units(true) (Plater.cpp:4244/4252).
+int EditorViewModel::loadedObjectUnitHint(int objectIndex) const
+{
+  return projectService_ ? projectService_->loadedObjectUnitHint(objectIndex) : 0;
+}
+
+bool EditorViewModel::applyUnitConversion(int objectIndex, int conversionType)
+{
+  if (!projectService_)
+    return false;
+  const bool ok = projectService_->convertObjectUnits(objectIndex, conversionType);
+  if (ok)
+  {
+    // Mirror convertSelectedObjectUnits' post-conditions: rebuild the object
+    // entries + scene caches, drop the stale slice results.
+    rebuildObjectEntriesFromService();
+    refreshMeshCacheAndFitHint();
+    invalidateSliceResultsForCurrentPlate();
+    statusText_ = tr("Units converted");
+  }
+  else
+  {
+    statusText_ = projectService_->lastError();
+  }
+  emit stateChanged();
+  return ok;
+}
+
+// Phase 237 (VIEW-06): uniform scale-to-fit for the selection. Port of the
+// upstream rectangle branch (Selection.cpp:1449-1462): the printable volume
+// is the bed rectangle extended to bedMaxHeight; the selection bbox gets a
+// +0.02 mm guard; s = min(pv.x/box.x, pv.y/box.y, pv.z/box.z); after the
+// uniform scale the selection is re-centered on the bed and dropped so
+// min z sits on the plate (upstream fit lambda, Selection.cpp:1421-1447 —
+// "center selection on print bed" + offset.z = -bbox.min.z).
+double EditorViewModel::scaleSelectionToFitBed()
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return 0.0;
+
+  const QVariantMap box = projectService_->selectionWorldBoundingBox(m_selectedSourceIndices.values());
+  if (box.isEmpty())
+    return 0.0;
+
+  // Printable volume in GL coords: X = [originX, originX + bedWidth],
+  // Z (GL y) = [originY, originY + bedDepth], Y (GL z) = [0, bedMaxHeight].
+  const float pvX = bedWidth();
+  const float pvY = bedDepth();
+  const float pvZ = bedMaxHeight();
+  // +0.02mm guard (Selection.cpp:1453-1454).
+  const double boxX = box.value(QStringLiteral("maxX")).toDouble() - box.value(QStringLiteral("minX")).toDouble() + 0.02;
+  const double boxY = box.value(QStringLiteral("maxZ")).toDouble() - box.value(QStringLiteral("minZ")).toDouble() + 0.02;
+  const double boxZ = box.value(QStringLiteral("maxY")).toDouble() - box.value(QStringLiteral("minY")).toDouble() + 0.02;
+  const double sx = boxX > 0.0 ? double(pvX) / boxX : 0.0;
+  const double sy = boxY > 0.0 ? double(pvY) / boxY : 0.0;
+  const double sz = boxZ > 0.0 ? double(pvZ) / boxZ : 0.0;
+  if (sx <= 0.0 || sy <= 0.0 || sz <= 0.0)
+    return 0.0;
+  const double s = std::min(sx, std::min(sy, sz));
+  if (s <= 0.0 || std::abs(s - 1.0) < 1e-9)
+    return 0.0;
+
+  // Capture pre-transform state for the undo macro (upstream takes one
+  // "Scale To Fit" snapshot, Selection.cpp:1425).
+  struct ObjectBefore
+  {
+    int index;
+    QVector3D position;
+    QVector3D rotation;
+    QVector3D scale;
+  };
+  QList<ObjectBefore> before;
+  before.reserve(m_selectedSourceIndices.size());
+  for (const int index : m_selectedSourceIndices)
+    before.append(ObjectBefore{index, projectService_->objectPosition(index),
+                               projectService_->objectRotation(index),
+                               projectService_->objectScale(index)});
+
+  // Uniform scale (multiply every scale component; upstream scales the
+  // instance scaling vector by s * Vec3d::Ones()).
+  for (const ObjectBefore &entry : before)
+  {
+    const QVector3D scale = projectService_->objectScale(entry.index);
+    projectService_->setObjectScale(entry.index,
+                                    float(scale.x() * s), float(scale.y() * s), float(scale.z() * s));
+  }
+
+  // Re-center the scaled selection on the bed center, then drop min height
+  // to the plate (upstream translate(print_volume.center() - bbox.center())
+  // with offset.z = -bbox.min.z).
+  const QVariantMap scaledBox = projectService_->selectionWorldBoundingBox(m_selectedSourceIndices.values());
+  if (!scaledBox.isEmpty())
+  {
+    const double centerX = 0.5 * (scaledBox.value(QStringLiteral("minX")).toDouble()
+                                  + scaledBox.value(QStringLiteral("maxX")).toDouble());
+    const double centerZ = 0.5 * (scaledBox.value(QStringLiteral("minZ")).toDouble()
+                                  + scaledBox.value(QStringLiteral("maxZ")).toDouble());
+    const double minY = scaledBox.value(QStringLiteral("minY")).toDouble();
+    const double targetX = double(bedOriginX() + bedWidth() * 0.5f);
+    const double targetZ = double(bedOriginY() + bedDepth() * 0.5f);
+    for (const ObjectBefore &entry : before)
+    {
+      const QVector3D pos = projectService_->objectPosition(entry.index);
+      projectService_->setObjectPosition(entry.index,
+                                          float(pos.x() + (targetX - centerX)),
+                                          float(pos.y() - minY),
+                                          float(pos.z() + (targetZ - centerZ)));
+    }
+  }
+
+  if (m_undoManager)
+  {
+    m_undoManager->beginMacro(tr("Scale To Fit"));
+    for (const ObjectBefore &entry : before)
+    {
+      auto *cmd = new TransformCommand(entry.index, entry.position, entry.rotation,
+                                       entry.scale, projectService_);
+      cmd->setNewTransform(projectService_->objectPosition(entry.index),
+                           projectService_->objectRotation(entry.index),
+                           projectService_->objectScale(entry.index));
+      m_undoManager->push(cmd);
+    }
+    m_undoManager->endMacro();
+  }
+
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForCurrentPlate();
+  statusText_ = tr("Selection scaled to fit (x%1)").arg(s, 0, 'f', 3);
+  emit stateChanged();
+  return s;
+}
+
+// Phase 237 (VIEW-06): export the current plate's sliced G-code + 3MF block
+// as *.gcode.3mf (upstream Plater::export_gcode_3mf, Plater.cpp:11499-11573).
+bool EditorViewModel::requestExportGcode3mf(const QString &targetPath)
+{
+  if (!projectService_ || !sliceService_)
+    return false;
+  if (!canExportGCode())
+  {
+    statusText_ = exportActionHint();
+    emit stateChanged();
+    return false;
+  }
+  QUrl url(targetPath);
+  QString localPath = url.isLocalFile() ? url.toLocalFile() : targetPath;
+  if (localPath.isEmpty())
+    return false;
+  // Upstream appends the .3mf suffix when the picked path lacks it
+  // (Plater.cpp:11546-11547); the sliced-file convention is *.gcode.3mf.
+  if (!localPath.endsWith(QStringLiteral(".gcode.3mf"), Qt::CaseInsensitive)
+      && !localPath.endsWith(QStringLiteral(".3mf"), Qt::CaseInsensitive))
+    localPath += QStringLiteral(".gcode.3mf");
+  else if (localPath.endsWith(QStringLiteral(".gcode"), Qt::CaseInsensitive))
+    localPath += QStringLiteral(".3mf");
+
+  const int plate = currentPlateIndex();
+  const QString gcodeSource = sliceService_->plateOutputPath(plate);
+  const bool ok = projectService_->exportGcode3mf(plate, localPath, gcodeSource);
+  statusText_ = ok ? tr("Sliced file exported: %1").arg(QFileInfo(localPath).fileName())
+                   : projectService_->lastError();
+  emit stateChanged();
+  return ok;
 }
 
 int EditorViewModel::checkObjectsOutsideBed()

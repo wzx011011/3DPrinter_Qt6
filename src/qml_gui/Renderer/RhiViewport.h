@@ -148,6 +148,11 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(bool zoomToMouse READ zoomToMouse WRITE setZoomToMouse)
   Q_PROPERTY(bool freeCamera READ freeCamera WRITE setFreeCamera)
   Q_PROPERTY(int cameraNavStyle READ cameraNavStyle WRITE setCameraNavStyle)
+  // Phase 237 (VIEW-01): projection toggle for the upstream View-menu radio
+  // pair "Use Perspective View" / "Use Orthogonal View"
+  // (MainFrame.cpp:2604-2620, app_config use_perspective_camera). The setter
+  // calls update() so the next render rebuilds the projection.
+  Q_PROPERTY(bool orthographicCamera READ orthographicCamera WRITE setOrthographicCamera NOTIFY cameraProjectionChanged)
 
 public:
   // Mirrors upstream ECanvasType { CanvasView3D=0, CanvasPreview=1,
@@ -363,6 +368,10 @@ public:
   void setFreeCamera(bool f) { m_freeCamera = f; m_camera.setFreeCamera(f); update(); }
   int cameraNavStyle() const { return m_cameraNavStyle; }
   void setCameraNavStyle(int s) { m_cameraNavStyle = s; update(); }
+  // Phase 237 (VIEW-01): orthographic projection toggle (see the
+  // orthographicCamera Q_PROPERTY above).
+  bool orthographicCamera() const { return m_camera.useOrtho(); }
+  void setOrthographicCamera(bool ortho);
   // Phase 121 (PAINT-02/OV-04): MMU per-extruder filament colors.
   QVariantList extrudersColors() const { return m_extrudersColors; }
   void setExtrudersColors(const QVariantList &c);
@@ -370,6 +379,13 @@ public:
   Q_INVOKABLE void requestFitView(float cx, float cy, float cz, float r);
   Q_INVOKABLE void requestPreviewFit();
   Q_INVOKABLE void requestViewPreset(int preset);
+  // Phase 237 (VIEW-01): upstream-named view selection (mirrors
+  // GLCanvas3D::select_view -> Camera::select_view, Camera.cpp:86-107). The
+  // accepted directions match the upstream key map "plate"/"top"/"bottom"/
+  // "front"/"rear"/"left"/"right" (GLCanvas3D.cpp:3192-3201 Ctrl+0..6).
+  // "plate" additionally zooms to the bed (upstream zoom_to_bed) using the
+  // viewport bed Q_PROPERTYs.
+  Q_INVOKABLE void selectView(const QString &direction);
   // v5.16 (CIRC-01): undo()/redo()/clearHistory() repaint-only no-ops removed.
   // History actions live on EditorViewModel (QUndoStack) and BackendContext.
   Q_INVOKABLE void mirrorSelection(int axis);
@@ -386,6 +402,8 @@ signals:
   void bedTextureUrlChanged();
   void canvasTypeChanged();
   void explosionRatioChanged();
+  // Phase 237 (VIEW-01): projection toggle notify (orthographicCamera).
+  void cameraProjectionChanged();
   void assemblyMeasureSelectionChanged();
   void gizmoModeChanged();
   void wireframeModeChanged();

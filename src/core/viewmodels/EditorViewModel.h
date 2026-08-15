@@ -672,6 +672,11 @@ public:
                                          bool separateFiles = false,
                                          bool drcFormat = false);
   Q_INVOKABLE bool addFilesToContextPlate(const QStringList &filePaths);
+  /// Phase 237 (VIEW-03): synchronous batch import into the CURRENT plate
+  /// (upstream PlaterDropTarget::OnDropFiles -> Plater::load_files,
+  /// Plater.cpp:2738-2767). Thin sibling of addFilesToContextPlate that
+  /// targets currentPlateIndex instead of the context-menu plate.
+  Q_INVOKABLE bool addFilesToCurrentPlate(const QStringList &filePaths);
   Q_INVOKABLE bool addHandyModelToContextPlate(const QString &modelId);
   Q_INVOKABLE bool replaceAllOnContextPlate(const QStringList &filePaths);
   Q_INVOKABLE bool dropSelectedObjectsToBed();
@@ -1163,6 +1168,31 @@ public:
   Q_INVOKABLE QString gizmoStatusText(int gizmoMode) const;
   /// 加载模型文件 (3MF/STL/OBJ)
   Q_INVOKABLE bool loadFile(const QString &filePath);
+  /// Phase 237 (VIEW-04): apply a unit conversion to one object (upstream
+  /// Plater.cpp:4237-4253 offers model.convert_from_meters(true) /
+  /// convert_from_imperial_units(true) after the looks_likeSavedInMeters /
+  /// looks_like_imperial_units checks). conversionType is the upstream
+  /// Slic3r::ConversionType int (1 = CONV_FROM_INCH x25.4,
+  /// 3 = CONV_FROM_METER x1000) forwarded to
+  /// ProjectServiceMock::convertObjectUnits -> ModelObject::convert_units.
+  Q_INVOKABLE bool applyUnitConversion(int objectIndex, int conversionType);
+  /// Phase 237 (VIEW-04): unit-inference hint for one object (0 = none,
+  /// 1 = meters, 2 = imperial); proxies
+  /// ProjectServiceMock::loadedObjectUnitHint.
+  Q_INVOKABLE int loadedObjectUnitHint(int objectIndex) const;
+  /// Phase 237 (VIEW-06): uniform-scale the current selection so it fits the
+  /// printable bed bbox, preserving proportions (port of upstream
+  /// priv::scale_selection_to_fit_print_volume, Plater.cpp:5135 ->
+  /// Selection::scale_to_fit_print_volume, Selection.cpp:1419-1508 rectangle
+  /// branch). Returns the applied scale factor (0 = no-op / nothing
+  /// selected).
+  Q_INVOKABLE double scaleSelectionToFitBed();
+  /// Phase 237 (VIEW-06): export the current plate's sliced G-code + plate
+  /// 3MF block as *.gcode.3mf (upstream Plater::export_gcode_3mf,
+  /// Plater.cpp:11499-11573). targetPath gets the .gcode.3mf suffix appended
+  /// when missing (upstream appends .3mf the same way, Plater.cpp:11546
+  /// -11547). Returns false when no valid slice result exists.
+  Q_INVOKABLE bool requestExportGcode3mf(const QString &targetPath);
   // Phase 236 (DLG-03): RecenterDialog plumbing (upstream
   // Plater::priv::update_undo_redo_gui / RecenterDialog). Re-runs the
   // outside-bed detection against the real bed Q_PROPERTYs and returns the
@@ -1372,6 +1402,15 @@ signals:
   /// Phase 236 (DLG-03): an .obj with a multi-color .mtl finished loading —
   /// pendingObjColors holds the colors, the ObjColorDialog should open.
   void objColorMappingRequested(const QString &objectName);
+  /// Phase 237 (VIEW-04): a freshly imported object tripped the upstream
+  /// saved-unit heuristic (Plater.cpp:4237-4253) — the shell should offer the
+  /// scale-to-millimeters confirm. unitHint: 1 = meters (x1000),
+  /// 2 = imperial (x25.4).
+  void unitConversionPromptRequested(int objectIndex, int unitHint, const QString &objectName);
+  /// Phase 237 (VIEW-04): zero-volume objects were auto-removed after an
+  /// import (upstream Model::removed_objects_with_zero_volume +
+  /// Plater.cpp:4231-4233 info dialog; OWzx surfaces a notification).
+  void zeroVolumeObjectsRemoved(int removedCount);
   /// Phase 145 (EMB-03): async emboss result delivery. Re-emitted from
   /// ProjectServiceMock's embossVolumeAdded/Failed so QML binds to a single
   /// EditorViewModel signal source.
@@ -1482,6 +1521,10 @@ private:
   QVariantList m_pendingObjColors;
   int m_pendingObjObjectIndex = -1;
   QString m_pendingObjCheckPath;
+  /// Phase 237 (VIEW-04): set by loadFile and consumed by the loadFinished
+  /// handler so the zero-volume / unit-inference checks only run for model
+  /// imports (upstream gates them on !is_project_file, Plater.cpp:4229).
+  bool m_pendingLoadIsModelImport = false;
   int m_preLoadModelCount = 0;
   QSet<int> m_selectedSourceIndices;
   QSet<QString> m_collapsedGroupKeys;

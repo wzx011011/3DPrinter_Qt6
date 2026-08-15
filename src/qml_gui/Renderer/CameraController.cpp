@@ -112,9 +112,44 @@ void CameraController::viewIso()
   m_azimuth   = 45.0f;
 }
 
+// Phase 237 (VIEW-01): remaining Camera::select_view directions (upstream
+// Camera.cpp:94-101). Qt6 Y-up mapping: bottom = -Y, rear = -Z, left = -X.
+// viewBottom writes elevation directly (the ±89° clamp only applies inside
+// orbit()), mirroring how viewTop pins +89.
+void CameraController::viewBottom()
+{
+  m_elevation = -89.0f;
+  m_azimuth   = 0.0f;
+}
+
+void CameraController::viewRear()
+{
+  m_elevation = 0.0f;
+  m_azimuth   = 180.0f;
+}
+
+void CameraController::viewLeft()
+{
+  m_elevation = 0.0f;
+  m_azimuth   = -90.0f;
+}
+
 QMatrix4x4 CameraController::projMatrix(float aspect) const
 {
   QMatrix4x4 mat;
+  // Phase 237 (VIEW-01): orthographic branch for the upstream View-menu
+  // "Use Orthogonal View" toggle (upstream Camera EType::Ortho,
+  // MainFrame.cpp:2611-2616). The ortho half-height matches the perspective
+  // frustum half-height at the target distance (distance * tan(fov/2)) so the
+  // toggle preserves the apparent scene size.
+  if (m_useOrtho)
+  {
+    const float halfH = m_distance * 0.4142f; // tan(45 deg / 2)
+    const float clampedAspect = std::max(0.01f, aspect);
+    mat.ortho(-halfH * clampedAspect, halfH * clampedAspect,
+              -halfH, halfH, 1.0f, 10000.0f);
+    return mat;
+  }
   mat.perspective(45.0f, std::max(0.01f, aspect), 1.0f, 10000.0f);
   return mat;
 }

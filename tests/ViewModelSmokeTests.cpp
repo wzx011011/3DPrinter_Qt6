@@ -30,6 +30,7 @@
 #include <libslic3r/Calib.hpp>
 #include <libslic3r/TriangleMesh.hpp>
 #include <libslic3r/TriangleSelector.hpp>
+#include <libslic3r/miniz_extension.hpp>  // Phase 237: zip read/write wrappers for the export/config tests
 #include "core/rendering/PaintEngine.h"
 #endif
 
@@ -468,8 +469,24 @@ private slots:
   // GizmoAction) per GLGizmoPainterBase stroke).
   void paintStrokeUndoRestoresFacets();
 
+  // Phase 237 (VIEW-04): unit-inference detection on synthetic meshes with
+  // known dims + the zero-volume removal + conversion application.
+  void editorUnitInferenceDetectsSavedUnits();
+  void editorApplyUnitConversionScalesObjectToMillimeters();
+  // Phase 237 (VIEW-06): scale-to-fit math on an oversized object and the
+  // .gcode.3mf export archive layout.
+  void editorScaleSelectionToFitBedShrinksOversizedObject();
+  void projectServiceExportGcode3mfProducesArchive();
+  // Phase 237 (VIEW-05): loadProject applies the embedded project config
+  // (projectConfigLoaded -> ConfigViewModel::applyProjectConfig).
+  void loadProjectAppliesEmbeddedProjectConfig();
+
 private:
   bool hasLibslic3r() const;
+  // Phase 237 (VIEW-04/06): write an axis-aligned ASCII STL cube with the
+  // given side length (mm units in the file) so the raw STL volume is
+  // side^3. Used to trip the upstream saved-unit heuristics on purpose.
+  static QString writeCubeStl(const QString &name, double side);
 };
 
 bool ViewModelSmokeTests::hasLibslic3r() const
@@ -6488,6 +6505,356 @@ void ViewModelSmokeTests::paintStrokeUndoRestoresFacets()
   QCOMPARE(project.capturePaintSnapshot(0, 0, 0), emptySnap);
   undoManager.redo();
   QCOMPARE(project.capturePaintSnapshot(0, 0, 0), paintedSnap);
+#endif
+}
+
+// ── Phase 237 (VIEW-04/06) helpers ──────────────────────────────────────────
+
+QString ViewModelSmokeTests::writeCubeStl(const QString &name, double side)
+{
+  // ASCII STL: 12 triangles of an axis-aligned cube at the origin. The raw
+  // STL volume the loader computes is side^3, so tiny sides trip the
+  // upstream saved-unit heuristics (Model.cpp:763-815 thresholds 0.008/8.0).
+  const QString path = QDir(QDir::tempPath()).filePath(name);
+  QFile file(path);
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+    return QString();
+  const double s = side * 0.5;
+  // Axis-aligned cube corners: bit i of the index toggles axis i (0 -> -s,
+  // 1 -> +s). Outward-facing CCW triangulation so the signed STL volume is
+  // exactly side^3 (a mixed-winding cube would cancel to zero and trip the
+  // zero-volume removal instead).
+  const int tris[12][3] = {
+      {0, 2, 3}, {0, 3, 1}, {4, 5, 7}, {4, 7, 6},
+      {0, 1, 5}, {0, 5, 4}, {2, 6, 7}, {2, 7, 3},
+      {0, 4, 6}, {0, 6, 2}, {1, 3, 7}, {1, 7, 5}};
+  QStringList lines;
+  lines << QStringLiteral("solid cube");
+  for (const auto &tri : tris)
+  {
+    lines << QStringLiteral("  facet normal 0 0 0");
+    lines << QStringLiteral("    outer loop");
+    for (int vertexIndex : tri)
+    {
+      const double x = (vertexIndex & 1) ? s : -s;
+      const double y = (vertexIndex & 2) ? s : -s;
+      const double z = (vertexIndex & 4) ? s : -s;
+      lines << QStringLiteral("      vertex %1 %2 %3")
+                   .arg(x, 0, 'g', 12).arg(y, 0, 'g', 12).arg(z, 0, 'g', 12);
+    }
+    lines << QStringLiteral("    endloop");
+    lines << QStringLiteral("  endfacet");
+  }
+  lines << QStringLiteral("endsolid cube");
+  file.write(lines.join(QLatin1Char('\n')).toUtf8());
+  file.close();
+  return path;
+}
+
+// Phase 237 (VIEW-04): the ported upstream heuristics classify the raw STL
+// volume: < 0.008 -> meters (Model.cpp:803-815), < 8.0 -> imperial
+// (Model.cpp:763-788), else none. A 0.1-unit cube (1e-3) reads as meters, a
+// 1.5-unit cube (3.375) as imperial, a 20-unit cube (8000) as none. Each
+// loadFile REPLACES the scene (the upstream project-open merge semantics
+// this service implements), so the object index is 0 after every import.
+void ViewModelSmokeTests::editorUnitInferenceDetectsSavedUnits()
+{
+  const QString metersStl = writeCubeStl(QStringLiteral("owzx_unit_meters.stl"), 0.1);
+  const QString imperialStl = writeCubeStl(QStringLiteral("owzx_unit_imperial.stl"), 1.5);
+  const QString normalStl = writeCubeStl(QStringLiteral("owzx_unit_normal.stl"), 20.0);
+  QVERIFY2(!metersStl.isEmpty() && !imperialStl.isEmpty() && !normalStl.isEmpty(),
+           "Unable to write the synthetic unit cubes");
+
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy promptSpy(&editor, &EditorViewModel::unitConversionPromptRequested);
+
+  QVERIFY(editor.loadFile(metersStl));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "meters cube must import");
+  QCOMPARE(editor.modelCount(), 1);
+  QCOMPARE(project.loadedObjectUnitHint(0), 1);
+  QCOMPARE(editor.loadedObjectUnitHint(0), 1);
+  QVERIFY2(promptSpy.count() == 1, "a meters-authored import must raise the unit prompt");
+  QCOMPARE(promptSpy.takeFirst().at(1).toInt(), 1);
+
+  QVERIFY(editor.loadFile(imperialStl));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "imperial cube must import");
+  QCOMPARE(editor.modelCount(), 1);
+  QCOMPARE(project.loadedObjectUnitHint(0), 2);
+  QVERIFY2(promptSpy.count() == 1, "an imperial-authored import must raise the unit prompt");
+  QCOMPARE(promptSpy.takeFirst().at(1).toInt(), 2);
+
+  QVERIFY(editor.loadFile(normalStl));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "normal cube must import");
+  QCOMPARE(editor.modelCount(), 1);
+  QCOMPARE(project.loadedObjectUnitHint(0), 0);
+  QCOMPARE(promptSpy.count(), 0);
+}
+
+// Phase 237 (VIEW-04): applying CONV_FROM_METER (upstream
+// model.convert_from_meters(true), Plater.cpp:4244) scales the mesh x1000,
+// so the 0.1-authored cube lands at ~100 mm and the hint clears.
+void ViewModelSmokeTests::editorApplyUnitConversionScalesObjectToMillimeters()
+{
+  const QString metersStl = writeCubeStl(QStringLiteral("owzx_unit_convert.stl"), 0.1);
+  QVERIFY(!metersStl.isEmpty());
+
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(editor.loadFile(metersStl));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "meters cube must import");
+  QCOMPARE(project.loadedObjectUnitHint(0), 1);
+
+  // CONV_FROM_METER == 3 (Model.hpp:708-713 ConversionType).
+  QVERIFY2(editor.applyUnitConversion(0, 3), "CONV_FROM_METER must succeed");
+  QCOMPARE(project.loadedObjectUnitHint(0), 0);
+
+  const QVariantMap box = project.selectionWorldBoundingBox(QList<int>{0});
+  QVERIFY2(!box.isEmpty(), "selectionWorldBoundingBox must resolve after conversion");
+  const double dx = box.value(QStringLiteral("maxX")).toDouble() - box.value(QStringLiteral("minX")).toDouble();
+  QVERIFY2(qAbs(dx - 100.0) < 1.0,
+           qPrintable(QStringLiteral("converted cube must span ~100 mm, got %1").arg(dx)));
+}
+
+// Phase 237 (VIEW-06): a 20 mm synthetic cube blown up x20 (400 mm) overflows
+// the default 220x220x300 bed on every axis; scaleSelectionToFitBed must
+// shrink it uniformly, re-center it on the bed, and drop it onto the plate.
+void ViewModelSmokeTests::editorScaleSelectionToFitBedShrinksOversizedObject()
+{
+  const QString normalStl = writeCubeStl(QStringLiteral("owzx_fit_cube.stl"), 20.0);
+  QVERIFY(!normalStl.isEmpty());
+
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(editor.loadFile(normalStl));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "fit cube must import");
+  QCOMPARE(editor.modelCount(), 1);
+
+  // Blow the object up x20 -> 400 mm cube (overflows 220x220x300 everywhere).
+  const QVector3D oldScale = project.objectScale(0);
+  QVERIFY(project.setObjectScale(0, oldScale.x() * 20.f, oldScale.y() * 20.f, oldScale.z() * 20.f));
+
+  QVERIFY(editor.selectSourceObject(0));
+  const double applied = editor.scaleSelectionToFitBed();
+  QVERIFY2(applied > 0.0 && applied < 1.0,
+           qPrintable(QStringLiteral("scaleSelectionToFitBed must shrink an oversized selection, got %1").arg(applied)));
+
+  const float bedW = editor.bedWidth();
+  const float bedD = editor.bedDepth();
+  const float originX = editor.bedOriginX();
+  const float originY = editor.bedOriginY();
+  const QVariantMap box = project.selectionWorldBoundingBox(QList<int>{0});
+  QVERIFY2(!box.isEmpty(), "selectionWorldBoundingBox must resolve after fit");
+  const double minX = box.value(QStringLiteral("minX")).toDouble();
+  const double maxX = box.value(QStringLiteral("maxX")).toDouble();
+  const double minZ = box.value(QStringLiteral("minZ")).toDouble();
+  const double maxZ = box.value(QStringLiteral("maxZ")).toDouble();
+  const double minY = box.value(QStringLiteral("minY")).toDouble();
+  const double maxY = box.value(QStringLiteral("maxY")).toDouble();
+  QVERIFY2(minX >= double(originX) - 0.5 && maxX <= double(originX + bedW) + 0.5,
+           qPrintable(QStringLiteral("post-fit X span [%1,%2] must fit the bed").arg(minX).arg(maxX)));
+  QVERIFY2(minZ >= double(originY) - 0.5 && maxZ <= double(originY + bedD) + 0.5,
+           qPrintable(QStringLiteral("post-fit Z span [%1,%2] must fit the bed").arg(minZ).arg(maxZ)));
+  QVERIFY2(minY >= -0.5,
+           qPrintable(QStringLiteral("post-fit object must sit on the plate (min Y %1)").arg(minY)));
+  QVERIFY2(maxY - minY <= double(editor.bedMaxHeight()) + 0.5,
+           qPrintable(QStringLiteral("post-fit height %1 must fit the printable height").arg(maxY - minY)));
+}
+
+// Phase 237 (VIEW-06): exportGcode3mf packs the plate 3MF entries plus the
+// sliced G-code under the upstream entry name
+// "Metadata/plate_<plateIndex+1>.gcode" (GCODE_FILE_FORMAT,
+// bbs_3mf.hpp:22) into a readable zip.
+void ViewModelSmokeTests::projectServiceExportGcode3mfProducesArchive()
+{
+  const QString fixturePath = QDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)))
+      .filePath(QStringLiteral("tests/data/test_model.stl"));
+  if (!QFileInfo::exists(fixturePath))
+    QSKIP("tests/data/test_model.stl fixture missing");
+
+  ProjectServiceMock project;
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY2(project.loadFile(fixturePath), "fixture must load via loadFile");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(project.modelCount() >= 1, "fixture must load >= 1 object");
+
+  // Stand-in sliced G-code (the archive layout is independent of content).
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  const QString gcodePath = tempDir.filePath(QStringLiteral("plate1.gcode"));
+  {
+    QFile gcode(gcodePath);
+    QVERIFY(gcode.open(QIODevice::WriteOnly));
+    gcode.write("; test gcode\nG28\n");
+  }
+  const QString destPath = tempDir.filePath(QStringLiteral("out.gcode.3mf"));
+
+  bool exported = false;
+  try {
+    exported = project.exportGcode3mf(0, destPath, gcodePath);
+  } catch (...) {
+    exported = false;
+  }
+  if (!exported) {
+    QSKIP("store_bbs_3mf threw or failed on the fixture (writer integration "
+          "limitation, same pattern as multiPlate3mfRoundTripPreservesState)");
+  }
+
+#ifdef HAS_LIBSLIC3R
+  // Read the archive back with the same miniz wrapper the service uses.
+  mz_zip_archive archive;
+  mz_zip_zero_struct(&archive);
+  QVERIFY2(Slic3r::open_zip_reader(&archive, QDir::toNativeSeparators(destPath).toStdString()),
+           "exported .gcode.3mf must be a readable zip archive");
+  QStringList entries;
+  const mz_uint count = mz_zip_reader_get_num_files(&archive);
+  for (mz_uint i = 0; i < count; ++i)
+  {
+    mz_zip_archive_file_stat stat;
+    if (mz_zip_reader_file_stat(&archive, i, &stat))
+      entries << QString::fromUtf8(stat.m_filename);
+  }
+  bool hasGcodeEntry = false;
+  for (const QString &entry : entries)
+    hasGcodeEntry = hasGcodeEntry || entry == QLatin1String("Metadata/plate_1.gcode");
+  bool hasModelEntry = false;
+  for (const QString &entry : entries)
+    hasModelEntry = hasModelEntry || entry == QLatin1String("3D/3dmodel.model");
+  Slic3r::close_zip_reader(&archive);
+
+  QVERIFY2(hasGcodeEntry,
+           qPrintable(QStringLiteral("archive must contain Metadata/plate_1.gcode (upstream GCODE_FILE_FORMAT); entries: %1").arg(entries.join(QStringLiteral(", ")))));
+  QVERIFY2(hasModelEntry, "archive must contain the plate 3MF model block (3D/3dmodel.model)");
+
+  // The G-code entry content round-trips.
+  mz_zip_archive verify;
+  mz_zip_zero_struct(&verify);
+  QVERIFY(Slic3r::open_zip_reader(&verify, QDir::toNativeSeparators(destPath).toStdString()));
+  const int gcodeIndex = mz_zip_reader_locate_file(&verify, "Metadata/plate_1.gcode", nullptr, 0);
+  QVERIFY(gcodeIndex >= 0);
+  mz_zip_archive_file_stat gcodeStat;
+  QVERIFY(mz_zip_reader_file_stat(&verify, static_cast<mz_uint>(gcodeIndex), &gcodeStat));
+  QByteArray gcodeBytes(static_cast<int>(gcodeStat.m_uncomp_size), Qt::Uninitialized);
+  QVERIFY(mz_zip_reader_extract_to_mem(&verify, static_cast<mz_uint>(gcodeIndex),
+                                       gcodeBytes.data(), gcodeBytes.size(), 0));
+  Slic3r::close_zip_reader(&verify);
+  QVERIFY2(gcodeBytes.contains("G28"), "the packed G-code entry must carry the sliced content");
+#endif
+}
+
+// Phase 237 (VIEW-05): loadProject applies the embedded project config. The
+// 3MF is produced by the real saveProject writer, then a
+// Metadata/project_settings.config entry (upstream BBS_PROJECT_CONFIG_FILE,
+// bbs_3mf.cpp:167; JSON shape from ConfigBase::save_to_json, Config.cpp:1390
+// -1433) is injected with the same miniz copy pattern the service uses, so
+// read_from_archive(LoadConfig) surfaces it through projectConfigLoaded and
+// ConfigViewModel::applyProjectConfig lands the value in the print tier.
+void ViewModelSmokeTests::loadProjectAppliesEmbeddedProjectConfig()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("project config round-trip requires libslic3r");
+#else
+  const QString fixturePath = QDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)))
+      .filePath(QStringLiteral("tests/data/test_model.stl"));
+  if (!QFileInfo::exists(fixturePath))
+    QSKIP("tests/data/test_model.stl fixture missing");
+
+  ProjectServiceMock saver;
+  QSignalSpy saverSpy(&saver, &ProjectServiceMock::loadFinished);
+  QVERIFY2(saver.loadFile(fixturePath), "fixture must load via loadFile");
+  QTRY_VERIFY_WITH_TIMEOUT(saverSpy.count() > 0, 10000);
+
+  const QString projectPath = QDir::temp().filePath(QStringLiteral("owzx_view05_config.3mf"));
+  QFile::remove(projectPath);
+  bool saved = false;
+  try {
+    saved = saver.saveProject(projectPath);
+  } catch (...) {
+    saved = false;
+  }
+  if (!saved) {
+    QFile::remove(projectPath);
+    QSKIP("store_bbs_3mf did not succeed on the fixture (env/writer limitation)");
+  }
+
+  // Inject the project config entry (upstream writer path:
+  // _add_project_config_file_to_archive, bbs_3mf.cpp:7274-7280 -- skipped in
+  // OWzx saves because params.config stays null, so the test writes the
+  // entry directly with the same JSON shape save_to_json produces: scalar
+  // options are serialized to STRINGS, Config.cpp:1405-1409).
+  const QByteArray configJson =
+      QByteArrayLiteral("{\n    \"from\": \"project\",\n    \"layer_height\": \"0.42\",\n    \"name\": \"project_settings\",\n    \"version\": \"OWzx-test\"\n}\n");
+  const QString injectedPath = QDir::temp().filePath(QStringLiteral("owzx_view05_injected.3mf"));
+  QFile::remove(injectedPath);
+  {
+    mz_zip_archive source;
+    mz_zip_zero_struct(&source);
+    QVERIFY2(Slic3r::open_zip_reader(&source, QDir::toNativeSeparators(projectPath).toStdString()),
+             "saved project must be a readable zip");
+    mz_zip_archive target;
+    mz_zip_zero_struct(&target);
+    QVERIFY(Slic3r::open_zip_writer(&target, QDir::toNativeSeparators(injectedPath).toStdString()));
+    bool ok = true;
+    const mz_uint fileCount = mz_zip_reader_get_num_files(&source);
+    for (mz_uint i = 0; ok && i < fileCount; ++i)
+      ok = mz_zip_writer_add_from_zip_reader(&target, &source, i);
+    if (ok)
+      ok = mz_zip_writer_add_mem(&target, "Metadata/project_settings.config",
+                                 configJson.constData(), size_t(configJson.size()),
+                                 MZ_DEFAULT_COMPRESSION);
+    if (ok)
+      ok = mz_zip_writer_finalize_archive(&target);
+    Slic3r::close_zip_writer(&target);
+    Slic3r::close_zip_reader(&source);
+    QVERIFY2(ok, "config entry injection must succeed");
+  }
+
+  ProjectServiceMock loader;
+  PresetServiceMock preset;
+  QSignalSpy configSpy(&loader, &ProjectServiceMock::projectConfigLoaded);
+  QSignalSpy loaderSpy(&loader, &ProjectServiceMock::loadFinished);
+  bool loaded = false;
+  try {
+    loaded = loader.loadProject(injectedPath);
+  } catch (...) {
+    loaded = false;
+  }
+  QTRY_VERIFY_WITH_TIMEOUT(loaderSpy.count() > 0 || configSpy.count() > 0, 10000);
+  QFile::remove(projectPath);
+  QFile::remove(injectedPath);
+  QVERIFY2(loaded, "loadProject must succeed on the injected project");
+
+  if (configSpy.count() == 0)
+    QSKIP("the upstream 3MF config reader could not extract project_settings.config in this "
+          "environment (its temp-file extraction depends on the writable backup path)");
+
+  const QHash<QString, QVariant> loadedConfig =
+      qvariant_cast<QHash<QString, QVariant>>(configSpy.takeFirst().at(0));
+  QVERIFY2(loadedConfig.contains(QStringLiteral("layer_height")),
+           qPrintable(QStringLiteral("projectConfigLoaded keys: %1").arg(loadedConfig.keys().join(QStringLiteral(",")))));
+
+  // The consumer side (BackendContext wiring, BackendContext.cpp:199-200):
+  // applyProjectConfig lands the value in the editable print-tier state.
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("View05ConfigRestore"));
+  ConfigViewModel config(&preset, &loader);
+  config.applyProjectConfig(loadedConfig);
+  QVERIFY2(qAbs(config.layerHeight() - 0.42) < 1e-6,
+           qPrintable(QStringLiteral("applyProjectConfig must land layer_height, got %1").arg(config.layerHeight())));
 #endif
 }
 

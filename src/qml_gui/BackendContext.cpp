@@ -165,6 +165,22 @@ BackendContext::BackendContext(QObject *parent)
             if (success && editorViewModel_ && editorViewModel_->checkObjectsOutsideBed() > 0)
               emit recenterPromptRequested();
           });
+  // Phase 237 (VIEW-04): forward the editor viewmodel's post-import prompts.
+  // Zero-volume removal mirrors upstream Model::removed_objects_with_
+  // zero_volume + the Plater.cpp:4231-4233 info dialog (OWzx uses a
+  // notification); the unit prompt re-emits so main.qml opens the confirm.
+  if (editorViewModel_)
+  {
+    connect(editorViewModel_, &EditorViewModel::zeroVolumeObjectsRemoved, this,
+            [this](int removedCount)
+            {
+              postNotification(tr("%1 object(s) with zero volume were removed.")
+                                   .arg(removedCount),
+                               tr("Objects with zero volume removed"));
+            });
+    connect(editorViewModel_, &EditorViewModel::unitConversionPromptRequested, this,
+            &BackendContext::unitConversionPromptRequested);
+  }
 
   // 切片进度通知（对齐上游 NotificationManager::SlicingProgressNotification）
   if (sliceService_)
@@ -705,7 +721,24 @@ bool BackendContext::topbarOpenProject(const QString &filePath)
   if (localPath.isEmpty())
     return false;
 
-  bool loaded = editorViewModel_ ? editorViewModel_->loadFile(localPath) : false;
+  // Phase 237 (VIEW-05): .3mf/.cxprj project opens route through
+  // ProjectServiceMock::loadProject, which loads with LoadModel|LoadConfig
+  // and emits projectConfigLoaded so the embedded config/presets apply
+  // (upstream Plater::load_project / load_files is_project_file path;
+  // the wiring above forwards projectConfigLoaded to
+  // ConfigViewModel::applyProjectConfig). Plain model imports keep the
+  // loadFile path (LoadModel only).
+  const QString suffix = QFileInfo(localPath).suffix().toLower();
+  bool loaded = false;
+  if ((suffix == QStringLiteral("3mf") || suffix == QStringLiteral("cxprj"))
+      && projectService_)
+  {
+    loaded = projectService_->loadProject(localPath);
+    if (loaded && editorViewModel_)
+      editorViewModel_->refreshAfterLoad();
+  }
+  if (!loaded)
+    loaded = editorViewModel_ ? editorViewModel_->loadFile(localPath) : false;
 
   // In Mock mode (no libslic3r), loadFile() fails for 3MF — try JSON project load
   if (!loaded && projectService_)
@@ -729,6 +762,31 @@ bool BackendContext::topbarOpenProject(const QString &filePath)
   }
   pushLatencySample(QStringLiteral("topbar-open-project"), int(m_latencyClock.elapsed() - start), localPath);
   return loaded;
+}
+
+// Phase 237 (VIEW-02): Import Configs (upstream MainFrame::load_config_file,
+// MainFrame.cpp:3204-3247). The upstream file dialog accepts
+// *.json/zip/orca_* files; the OWzx import surface with a real consumer is
+// the .json bundle (PresetServiceMock::importBundle), so the QML dialog
+// filters .json and this entry routes there. The import result surfaces as
+// a notification (upstream shows a summary dialog).
+bool BackendContext::topbarImportConfigs(const QString &filePath)
+{
+  const qint64 start = m_latencyClock.elapsed();
+  const QUrl url(filePath);
+  const QString localPath = url.isLocalFile() ? url.toLocalFile() : filePath;
+  if (localPath.isEmpty() || !presetService_)
+    return false;
+
+  const bool imported = presetService_->importBundle(localPath);
+  if (imported)
+    postNotification(tr("There is 1 config imported."),
+                     tr("Import result"));
+  else
+    postError(tr("Config import failed: %1").arg(QFileInfo(localPath).fileName()), 1);
+  pushLatencySample(QStringLiteral("topbar-import-configs"),
+                    int(m_latencyClock.elapsed() - start), localPath);
+  return imported;
 }
 
 bool BackendContext::topbarImportModel(const QString &filePath)

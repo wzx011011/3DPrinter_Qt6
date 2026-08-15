@@ -696,6 +696,70 @@ void RhiViewport::requestViewPreset(int preset)
   update();
 }
 
+// Phase 237 (VIEW-01): upstream-named view selection (upstream
+// GLCanvas3D::select_view -> Camera::select_view, Camera.cpp:86-107). The
+// direction strings match the upstream Ctrl+0..6 key map
+// (GLCanvas3D.cpp:3192-3201) and the View-menu items
+// (MainFrame.cpp:2213-2235 add_common_view_menu_items):
+//   "plate"  -> select_view("plate") + zoom_to_bed()
+//   "top" / "bottom" / "front" / "rear" / "left" / "right" -> orientation only
+// "plate" zooms to the bed using the same bed Q_PROPERTYs the renderer draws
+// with (upstream MainFrame.cpp:2216-2219 pairs the two calls).
+void RhiViewport::selectView(const QString &direction)
+{
+  const QString dir = direction.toLower();
+  if (dir == QLatin1String("top"))
+    m_camera.viewTop();
+  else if (dir == QLatin1String("bottom"))
+    m_camera.viewBottom();
+  else if (dir == QLatin1String("front"))
+    m_camera.viewFront();
+  else if (dir == QLatin1String("rear"))
+    m_camera.viewRear();
+  else if (dir == QLatin1String("left"))
+    m_camera.viewLeft();
+  else if (dir == QLatin1String("right"))
+    m_camera.viewRight();
+  else // "plate" / "iso" / unknown: default orientation
+    m_camera.viewIso();
+
+  if (dir == QLatin1String("plate"))
+  {
+    // zoom_to_bed equivalent: fit the camera to the bed rectangle. The bed
+    // lives in the GL XZ plane (Y up); bedOriginX/bedOriginY are slic3r X/Y
+    // which map to GL X/Z (same mapping as meshData's coordinate swap).
+    const float w = qMax(1.0f, m_bedWidth);
+    const float d = qMax(1.0f, m_bedDepth);
+    if (m_bedShapeType == 1)
+    {
+      const float radius = qMax(1.0f, m_bedDiameter);
+      m_camera.fitView(m_bedOriginX, 0.f, m_bedOriginY, radius * 0.5f);
+    }
+    else
+    {
+      m_camera.fitView(m_bedOriginX + w * 0.5f, 0.f, m_bedOriginY + d * 0.5f,
+                       0.5f * std::sqrt(w * w + d * d));
+    }
+  }
+  m_viewPreset = 3; // isometric family; legacy int preset stays for GLToolbars
+  m_cameraDirty = true;
+  update();
+}
+
+// Phase 237 (VIEW-01): orthographic projection toggle (upstream View-menu
+// radio pair, MainFrame.cpp:2604-2620). Render MVP and picking both derive
+// from CameraController::projMatrix, so flipping the flag re-renders
+// consistently.
+void RhiViewport::setOrthographicCamera(bool ortho)
+{
+  if (m_camera.useOrtho() == ortho)
+    return;
+  m_camera.setUseOrtho(ortho);
+  m_cameraDirty = true;
+  emit cameraProjectionChanged();
+  update();
+}
+
 void RhiViewport::mirrorSelection(int axis)
 {
   Q_UNUSED(axis);
