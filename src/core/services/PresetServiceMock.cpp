@@ -369,14 +369,21 @@ bool PresetServiceMock::loadVendorPresets()
 QString PresetServiceMock::resolveProfilesDir() const
 {
   // Locate vendor profile directory (对齐上游 PresetBundle data_dir / resource_dir).
+  // Three probes so the tree resolves regardless of the process working
+  // directory (double-clicking the exe in build/ leaves cwd = build/, where
+  // the cwd-relative probe used to fail and silently disabled vendor
+  // presets — no printer bed texture / bed model at runtime).
+  const QString appDir = QCoreApplication::applicationDirPath();
   const QStringList searchPaths = {
       QDir::currentPath() + QStringLiteral("/third_party/OrcaSlicer/resources/profiles"),
-      QCoreApplication::applicationDirPath() + QStringLiteral("/resources/profiles"),
+      appDir + QStringLiteral("/resources/profiles"),
+      // Dev layout: <repo>/build/OWzxSlicer.exe -> <repo>/third_party/...
+      appDir + QStringLiteral("/../third_party/OrcaSlicer/resources/profiles"),
   };
   for (const auto &path : searchPaths)
   {
     if (QFileInfo::exists(path + QStringLiteral("/Creality.json")))
-      return path;
+      return QDir::cleanPath(path);
   }
   return {};
 }
