@@ -28,6 +28,12 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Compute artifact name
+        shell: pwsh
+        run: |
+          $safeName = $env:TAG_NAME -replace '[\\/:*?"<>|]', '-'
+          "ARTIFACT_NAME=$safeName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Setup CMake
         uses: lukka/get-cmake@latest
         with:
@@ -185,7 +191,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: build-diagnostics-${{ env.TAG_NAME }}
+          name: build-diagnostics-${{ env.ARTIFACT_NAME }}
           path: |
             build/ninja_log.txt
             build/CMakeError.log
@@ -195,7 +201,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: OWzxSlicer-${{ env.TAG_NAME }}-windows
+          name: OWzxSlicer-${{ env.ARTIFACT_NAME }}-windows
           path: |
             build/OWzxSlicer.exe
             build/*.dll
@@ -215,15 +221,15 @@ jobs:
           windeployqt --release --qmldir src "$outDir/OWzxSlicer.exe"
           Remove-Item "$outDir/TK*.dll" -Force -ErrorAction SilentlyContinue
           Remove-Item "$outDir/cr_tpms_library.dll" -Force -ErrorAction SilentlyContinue
-          $zipPath = "build/OWzxSlicer-${{ env.TAG_NAME }}-windows.zip"
+          $zipPath = "build/OWzxSlicer-${{ env.ARTIFACT_NAME }}-windows.zip"
           if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
           Compress-Archive -Path "$outDir/*" -DestinationPath $zipPath
 
       - name: Upload release package
         uses: actions/upload-artifact@v4
         with:
-          name: OWzxSlicer-${{ env.TAG_NAME }}-windows-zip
-          path: build/OWzxSlicer-${{ env.TAG_NAME }}-windows.zip
+          name: OWzxSlicer-${{ env.ARTIFACT_NAME }}-windows-zip
+          path: build/OWzxSlicer-${{ env.ARTIFACT_NAME }}-windows.zip
           if-no-files-found: error
 
       - name: Create GitHub Release
@@ -236,4 +242,4 @@ jobs:
           fail_on_unmatched_files: false
           overwrite_files: true
           files: |
-            build/OWzxSlicer-${{ env.TAG_NAME }}-windows.zip
+            build/OWzxSlicer-${{ env.ARTIFACT_NAME }}-windows.zip
