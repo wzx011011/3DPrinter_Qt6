@@ -134,9 +134,37 @@ Item {
                             case 0: return Theme.statusWarning    // PausePrint - orange
                             case 1: return Theme.accentSubtle     // CustomGcode - deep green (distinct from ColorChange)
                             case 3: return Theme.statusInfo       // ToolChange - blue
-                            case 4: return Theme.accent           // ColorChange - green
+                            case 4: return (tickDelegate.modelData.color && tickDelegate.modelData.color !== "")
+                                     ? tickDelegate.modelData.color : Theme.accent  // ColorChange - picked color
                             default: return Theme.textSecondary   // Template - gray
                             }
+                        }
+                    }
+
+                    // Phase 238 (PREV-04): tick hover tooltip aligned with the
+                    // upstream IMSlider::show_tooltip(TickCode) -- elapsed time
+                    // at the END of the previous layer (ticks sit at the START
+                    // of their layer) plus the type-specific gcode info
+                    // (IMSlider.cpp:774-797: Pause "M601", Change Filament,
+                    // Custom G-code extra, ...). Attached ToolTip form matches
+                    // the BBLTopbar/GroupNavSidebar convention.
+                    HoverHandler { id: tickHover }
+                    ToolTip.visible: tickHover.hovered
+                    ToolTip.delay: 400
+                    ToolTip.text: {
+                        if (!root.previewVm)
+                            return ""
+                        const timePart = tickLayer > 0
+                            ? root.previewVm.layerTimeLabel(tickLayer - 1) : ""
+                        switch (tickType) {
+                        case 0: return timePart + (timePart ? "\n" : "") + qsTr("Pause") + ": M601"
+                        case 1: return timePart + (timePart ? "\n" : "")
+                                + qsTr("Custom G-code") + ": " + (tickDelegate.modelData.extra || "")
+                        case 2: return timePart + (timePart ? "\n" : "") + qsTr("Custom Template")
+                        case 3: return timePart + (timePart ? "\n" : "") + qsTr("Change Filament")
+                        case 4: return timePart + (timePart ? "\n" : "") + qsTr("Color Change")
+                                + ": " + (tickDelegate.modelData.color || "")
+                        default: return timePart
                         }
                     }
 
@@ -262,16 +290,27 @@ Item {
                 customGcodeAddDialog.open()
             }
         }
-        // Phase 119 (TICK-04): close the 5-type coverage gap. ColorChange +
-        // Template were reachable in the data + convert layers but missing from
-        // the Add menu. ColorChange uses a default extruder + color (extruder 1,
-        // red) for now; a dedicated extruder+color picker is a future enhancement
-        // (CustomGcodeDialog extension). Template needs no extra input.
+        // Phase 119 (TICK-04) + Phase 238 (PREV-04): ColorChange +
+        // Template + Change Filament + Jump to Layer round out the upstream
+        // add menu (IMSlider.cpp:1327-1395). ColorChange and Change
+        // Filament open pickers (extruder + color) instead of hardcoded
+        // values; Jump to Layer opens the layer dialog
+        // (IMSlider.cpp:1221-1313).
+        CxMenuItem {
+            text: qsTr("Change Filament...")
+            // Upstream gates the entry on m_extruder_colors.size() > 1
+            // (IMSlider.cpp:1374).
+            enabled: root.previewVm && root.previewVm.configuredExtruderCount() > 1
+            onTriggered: {
+                filamentChangeDialog.targetLayer = root.addMenuTargetLayer
+                filamentChangeDialog.open()
+            }
+        }
         CxMenuItem {
             text: qsTr("Add Color Change")
             onTriggered: {
-                if (root.previewVm && root.addMenuTargetLayer >= 0)
-                    root.previewVm.addColorChangeAtLayer(root.addMenuTargetLayer, 1, "#FF0000")
+                colorChangeDialog.targetLayer = root.addMenuTargetLayer
+                colorChangeDialog.open()
             }
         }
         CxMenuItem {
@@ -280,6 +319,10 @@ Item {
                 if (root.previewVm && root.addMenuTargetLayer >= 0)
                     root.previewVm.addTemplateAtLayer(root.addMenuTargetLayer)
             }
+        }
+        CxMenuItem {
+            text: qsTr("Jump to Layer")
+            onTriggered: jumpToLayerDialog.open()
         }
     }
 
@@ -331,6 +374,15 @@ Item {
 
         // ToolChange tick (type 3)
         CxMenuItem {
+            text: qsTr("Change Filament...")
+            visible: root.editMenuTickType === 3
+            onTriggered: {
+                filamentChangeDialog.targetLayer = root.editMenuTickLayer
+                filamentChangeDialog.editMode = true
+                filamentChangeDialog.open()
+            }
+        }
+        CxMenuItem {
             text: qsTr("Delete Filament Change")
             visible: root.editMenuTickType === 3
             onTriggered: {
@@ -364,5 +416,283 @@ Item {
         dialogTitle: qsTr("Edit Custom G-code")
         isEditMode: true
         anchors.centerIn: parent.parent ? parent.parent : parent
+    }
+
+    // Phase 238 (PREV-04): filament (ToolChange) picker. Lists the configured
+    // extruders with their color swatches and calls addFilamentChangeAtLayer
+    // (previously zero QML callers). Edit mode re-picks an existing tick via
+    // editFilamentChangeAtLayer (upstream edit menu, IMSlider.cpp:1414-1424).
+    CxDialog {
+        id: filamentChangeDialog
+
+        property int targetLayer: -1
+        property bool editMode: false
+
+        dialogTitle: editMode ? qsTr("Change Filament") : qsTr("Add Filament Change")
+        width: 300
+        modal: true
+
+        ColumnLayout {
+            spacing: Theme.spacingSM
+
+            Text {
+                text: qsTr("Select the filament to use from layer %1 on:").arg(filamentChangeDialog.targetLayer + 1)
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeMD
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+
+            Repeater {
+                model: root.previewVm ? root.previewVm.configuredExtruderCount() : 0
+
+                delegate: Rectangle {
+                    id: filamentRow
+                    required property int index
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 32
+                    radius: Theme.radiusSM
+                    color: filamentRowMouse.containsMouse ? Theme.bgHover : "transparent"
+                    border.width: 1
+                    border.color: Theme.borderSubtle
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        spacing: 8
+
+                        Rectangle {
+                            Layout.preferredWidth: 14
+                            Layout.preferredHeight: 14
+                            radius: 3
+                            color: root.previewVm ? root.previewVm.extruderColor(filamentRow.index) : Theme.accent
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: qsTr("Filament %1").arg(filamentRow.index + 1)
+                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSizeMD
+                        }
+                    }
+
+                    MouseArea {
+                        id: filamentRowMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (!root.previewVm || filamentChangeDialog.targetLayer < 0)
+                                return
+                            if (filamentChangeDialog.editMode)
+                                root.previewVm.editFilamentChangeAtLayer(
+                                            filamentChangeDialog.targetLayer, filamentRow.index)
+                            else
+                                root.previewVm.addFilamentChangeAtLayer(
+                                            filamentChangeDialog.targetLayer, filamentRow.index)
+                            filamentChangeDialog.close()
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                spacing: Theme.spacingSM
+                CxButton {
+                    text: qsTr("Cancel")
+                    onClicked: filamentChangeDialog.close()
+                }
+            }
+        }
+
+        onClosed: filamentChangeDialog.editMode = false
+    }
+
+    // Phase 238 (PREV-04): color-change picker replacing the hardcoded
+    // extruder 1 + #FF0000. Extruder row + the upstream default color palette
+    // (GCodeProcessor Default_Colors, exposed by
+    // PreviewViewModel::defaultColorChangePalette).
+    CxDialog {
+        id: colorChangeDialog
+
+        property int targetLayer: -1
+        property int selectedExtruder: 0
+        property string selectedColor: ""
+
+        dialogTitle: qsTr("Add Color Change")
+        width: 320
+        modal: true
+
+        onOpened: {
+            selectedExtruder = 0
+            selectedColor = root.previewVm ? root.previewVm.defaultColorChangePalette()[0] : ""
+        }
+
+        ColumnLayout {
+            spacing: Theme.spacingSM
+
+            Text {
+                text: qsTr("Pick the extruder and color for layer %1:").arg(colorChangeDialog.targetLayer + 1)
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeMD
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+
+            Repeater {
+                model: root.previewVm ? root.previewVm.configuredExtruderCount() : 0
+
+                delegate: Rectangle {
+                    id: colorExtruderRow
+                    required property int index
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 32
+                    radius: Theme.radiusSM
+                    color: colorExtruderMouse.containsMouse ? Theme.bgHover : "transparent"
+                    border.width: 1
+                    border.color: colorChangeDialog.selectedExtruder === colorExtruderRow.index
+                                   ? Theme.accent : Theme.borderSubtle
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        spacing: 8
+
+                        Rectangle {
+                            Layout.preferredWidth: 14
+                            Layout.preferredHeight: 14
+                            radius: 3
+                            color: root.previewVm ? root.previewVm.extruderColor(colorExtruderRow.index) : Theme.accent
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: qsTr("Filament %1").arg(colorExtruderRow.index + 1)
+                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSizeMD
+                        }
+                    }
+
+                    MouseArea {
+                        id: colorExtruderMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: colorChangeDialog.selectedExtruder = colorExtruderRow.index
+                    }
+                }
+            }
+
+            Text {
+                text: qsTr("Color")
+                color: Theme.textTertiary
+                font.pixelSize: Theme.fontSizeSM
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                Repeater {
+                    model: root.previewVm ? root.previewVm.defaultColorChangePalette() : []
+
+                    delegate: Rectangle {
+                        id: paletteSwatch
+                        required property string modelData
+                        Layout.preferredWidth: 28
+                        Layout.preferredHeight: 28
+                        radius: 4
+                        color: paletteSwatch.modelData
+                        border.width: colorChangeDialog.selectedColor === paletteSwatch.modelData ? 2 : 1
+                        border.color: colorChangeDialog.selectedColor === paletteSwatch.modelData
+                                      ? Theme.textPrimary : Theme.borderDefault
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: colorChangeDialog.selectedColor = paletteSwatch.modelData
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                spacing: Theme.spacingSM
+
+                CxButton {
+                    text: qsTr("Cancel")
+                    onClicked: colorChangeDialog.close()
+                }
+                CxButton {
+                    text: qsTr("OK")
+                    highlighted: true
+                    onClicked: {
+                        if (root.previewVm && colorChangeDialog.targetLayer >= 0
+                                && colorChangeDialog.selectedColor !== "")
+                            root.previewVm.addColorChangeAtLayer(
+                                        colorChangeDialog.targetLayer,
+                                        colorChangeDialog.selectedExtruder,
+                                        colorChangeDialog.selectedColor)
+                        colorChangeDialog.close()
+                    }
+                }
+            }
+        }
+    }
+
+    // Phase 238 (PREV-04): Jump-to-Layer dialog (upstream
+    // IMSlider::render_go_to_layer_dialog, IMSlider.cpp:1221-1313 -- a
+    // number input clamped to the layer range with OK/Cancel; OK jumps the
+    // layer range to the picked 1-indexed layer).
+    CxDialog {
+        id: jumpToLayerDialog
+
+        dialogTitle: qsTr("Jump to Layer")
+        width: 280
+        modal: true
+
+        onOpened: jumpLayerSpin.value = (root.previewVm ? root.previewVm.currentLayerMax : 0) + 1
+
+        ColumnLayout {
+            spacing: Theme.spacingSM
+
+            Text {
+                text: qsTr("Please enter the layer number (%1 - %2):")
+                        .arg(1).arg(root.totalLayers)
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeMD
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+
+            CxSpinBox {
+                id: jumpLayerSpin
+                Layout.fillWidth: true
+                from: 1
+                to: Math.max(1, root.totalLayers)
+                editable: true
+            }
+
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                spacing: Theme.spacingSM
+
+                CxButton {
+                    text: qsTr("Cancel")
+                    onClicked: jumpToLayerDialog.close()
+                }
+                CxButton {
+                    text: qsTr("OK")
+                    highlighted: true
+                    onClicked: {
+                        if (root.previewVm && root.totalLayers > 0)
+                            root.previewVm.jumpToLayer(jumpLayerSpin.value)
+                        jumpToLayerDialog.close()
+                    }
+                }
+            }
+        }
     }
 }

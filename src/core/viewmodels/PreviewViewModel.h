@@ -71,6 +71,39 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(bool showBed READ showBed WRITE setShowBed NOTIFY stateChanged)
   /// Tool marker visibility aligned with upstream GCodeViewer show_marker.
   Q_PROPERTY(bool showMarker READ showMarker WRITE setShowMarker NOTIFY stateChanged)
+  /// Phase 238 (PREV-03): per-move-type visibility toggles aligned with the
+  /// upstream GCodeViewer options_items legend checkboxes (GCodeViewer.cpp:
+  /// 913-921: Travel, Retract, Unretract, Wipe, Seam). Wipe defaults to false
+  /// matching the existing travel-after-first-view behavior note above
+  /// (upstream Travels/Wipes default hidden); retract/unretract/seam default
+  /// visible (upstream Retractions/Unretractions/Seams buffers).
+  Q_PROPERTY(bool showRetractMoves READ showRetractMoves WRITE setShowRetractMoves NOTIFY stateChanged)
+  Q_PROPERTY(bool showUnretractMoves READ showUnretractMoves WRITE setShowUnretractMoves NOTIFY stateChanged)
+  Q_PROPERTY(bool showWipeMoves READ showWipeMoves WRITE setShowWipeMoves NOTIFY stateChanged)
+  Q_PROPERTY(bool showSeamMarks READ showSeamMarks WRITE setShowSeamMarks NOTIFY stateChanged)
+  /// Phase 238 (PREV-05): filament usage split aligned with the upstream
+  /// statistics columns Model/Support/Flushed/Tower
+  /// (GCodeViewer.cpp:5161-5277 append_headers/columns; volume accounting in
+  /// GCodeProcessor.cpp:3002-3010). Rows are {key,label,lengthText,weightText,
+  /// lengthM,weightG} in upstream column order.
+  Q_PROPERTY(QVariantList filamentSplit READ filamentSplit NOTIFY stateChanged)
+  /// Phase 238 (PREV-05): true while the stealth total time is the x1.4
+  /// heuristic instead of a parsed "; estimated printing time (silent mode)"
+  /// comment (upstream writes normal/silent mode headers, GCodeProcessor.cpp
+  /// TimeProcessor "; estimated printing time (normal mode) = ").
+  Q_PROPERTY(bool stealthTimeEstimated READ stealthTimeEstimated NOTIFY stateChanged)
+  /// Phase 238 (PREV-05): filament price per kg actually used for the cost
+  /// estimate. Sourced from the "; filament_cost = " gcode config block
+  /// (upstream filament_cost config key, GCodeProcessor.cpp:1252-1260; default
+  /// DEFAULT_FILAMENT_COST 29.99, GCodeProcessor.cpp:49). 0 when no price is
+  /// known at all.
+  Q_PROPERTY(double filamentPricePerKg READ filamentPricePerKg NOTIFY stateChanged)
+  /// Phase 238 (PREV-06): per-extruder legend rows {extruderId,label,color,
+  /// visible} using the CONFIGURED extruder colors (upstream
+  /// m_tools.m_tool_colors from plater extruder_colors config,
+  /// GCodeViewer.cpp:1109-1127) instead of a fixed palette. Visibility toggles
+  /// mirror upstream m_tool_visibles (GCodeViewer.cpp:5088, ColorPrint view).
+  Q_PROPERTY(QVariantList extruderVisibilities READ extruderVisibilities NOTIFY stateChanged)
   /// Tool-position tooltip data aligned with upstream GCodeViewer::Marker::render.
   Q_PROPERTY(bool hasToolPosition READ hasToolPosition NOTIFY stateChanged)
   Q_PROPERTY(double toolX READ toolX NOTIFY stateChanged)
@@ -150,6 +183,12 @@ public:
   /// Per-layer time chart data aligned with upstream IMSlider m_layers_times.
   Q_INVOKABLE int layerTimeCount() const;
   Q_INVOKABLE float layerTimeAt(int layer) const;  // seconds
+  /// Phase 238 (PREV-04): cumulative elapsed time at the END of a layer
+  /// (upstream IMSlider m_layers_times is cumulative, IMSlider.cpp:307-308;
+  /// the tick hover tooltip reads the layer BELOW the tick, IMSlider.cpp:774-781).
+  Q_INVOKABLE float layerTimeCumulative(int layer) const;  // seconds
+  /// Phase 238 (PREV-04): formatted cumulative layer time for the tick tooltip.
+  Q_INVOKABLE QString layerTimeLabel(int layer) const;
   Q_INVOKABLE float maxLayerTime() const;
   Q_INVOKABLE float minLayerTime() const;
   Q_INVOKABLE float avgLayerTime() const;
@@ -159,8 +198,25 @@ public:
   Q_INVOKABLE int toolChangePositionCount() const;
   Q_INVOKABLE int toolChangePositionAt(int i) const;  // move index
   Q_INVOKABLE int toolChangeExtruderIdAt(int i) const; // extruder ID at that point
-  /// Extruder colors aligned with upstream extruder_colors.
+  /// Extruder colors aligned with upstream extruder_colors. Phase 238
+  /// (PREV-06): sourced from the CONFIGURED filament colors
+  /// (ProjectServiceMock::plateFilamentColours, i.e. the filament_colour /
+  /// default_filament_colour presets -- upstream plater
+  /// get_extruder_colors_from_plater_config, GCodeViewer.cpp:1109-1127).
+  /// Falls back to the legacy fixed 8-color cycle only when the config has
+  /// no colors.
   Q_INVOKABLE QString extruderColor(int extruderId) const;
+  /// Phase 238 (PREV-06): configured color list for the Tool/Filament view
+  /// modes (may be empty -> caller uses the fixed-cycle fallback).
+  QStringList configuredExtruderColors() const;
+  /// Phase 238 (PREV-04): CONFIGURED extruder count (gates the rail's
+  /// "Change Filament" submenu, upstream m_extruder_colors.size(),
+  /// IMSlider.cpp:1374).
+  Q_INVOKABLE int configuredExtruderCount() const;
+  /// Phase 238 (PREV-04): the default color-change palette shown in the
+  /// ColorChange picker (upstream GCodeProcessor Default_Colors,
+  /// GCodeProcessor.cpp:2305-2312).
+  Q_INVOKABLE QStringList defaultColorChangePalette() const;
   /// Per-extruder filament usage aligned with upstream all-plate statistics.
   Q_INVOKABLE int extruderCount() const;
   Q_INVOKABLE double extruderUsedLength(int extruderId) const;  // meters
@@ -183,6 +239,39 @@ public:
   Q_INVOKABLE void setShowBed(bool enabled);
   bool showMarker() const { return showMarker_; }
   Q_INVOKABLE void setShowMarker(bool enabled);
+  // Phase 238 (PREV-03): move-type visibility (see the Q_PROPERTY block).
+  bool showRetractMoves() const { return showRetractMoves_; }
+  Q_INVOKABLE void setShowRetractMoves(bool enabled);
+  bool showUnretractMoves() const { return showUnretractMoves_; }
+  Q_INVOKABLE void setShowUnretractMoves(bool enabled);
+  bool showWipeMoves() const { return showWipeMoves_; }
+  Q_INVOKABLE void setShowWipeMoves(bool enabled);
+  bool showSeamMarks() const { return showSeamMarks_; }
+  Q_INVOKABLE void setShowSeamMarks(bool enabled);
+  /// Phase 238 (PREV-03): canonical move kinds aligned with the upstream
+  /// GCodeProcessor::EMoveType classification relevant to preview
+  /// (GCodeProcessor.cpp:2954-2968): 0=Extrude, 1=Travel, 2=Retract,
+  /// 3=Unretract, 4=Wipe, 5=Seam.
+  enum MoveKind { KindExtrude = 0, KindTravel = 1, KindRetract = 2, KindUnretract = 3, KindWipe = 4, KindSeam = 5 };
+  Q_ENUM(MoveKind)
+  /// Phase 238 (PREV-03): parsed segment count of a MoveKind (regression
+  /// anchor for the retract/unretract/wipe/seam parser paths).
+  Q_INVOKABLE int moveCountOfKind(int kind) const;
+  /// Phase 238 (PREV-05): filament split rows for the stats panel QML.
+  QVariantList filamentSplit() const;
+  /// Phase 238 (PREV-05): total extruded grams (cost test anchor).
+  Q_INVOKABLE double filamentUsedGrams() const;
+  /// Phase 238 (PREV-05): stealth heuristic flag (see the Q_PROPERTY).
+  bool stealthTimeEstimated() const;
+  /// Phase 238 (PREV-05): filament price per kg in use (see the Q_PROPERTY).
+  double filamentPricePerKg() const;
+  /// Phase 238 (PREV-06): per-extruder legend rows (see the Q_PROPERTY).
+  QVariantList extruderVisibilities() const;
+  /// Phase 238 (PREV-06): per-extruder visibility state (upstream
+  /// m_tool_visibles, applied in the Filament/ColorPrint view only --
+  /// GCodeViewer.cpp:3337).
+  Q_INVOKABLE bool isExtruderVisible(int extruderId) const;
+  Q_INVOKABLE void toggleExtruderVisibility(int extruderId);
   bool hasToolPosition() const { return hasToolPosition_; }
   double toolX() const { return toolX_; }
   double toolY() const { return toolY_; }
@@ -237,6 +326,10 @@ public:
   Q_INVOKABLE void removeTickAtLayer(int layer);
   Q_INVOKABLE void editCustomGcodeAtLayer(int layer, const QString& newGcode);
   Q_INVOKABLE void addFilamentChangeAtLayer(int layer, int extruderId);
+  /// Phase 238 (PREV-04): edit the extruder of an EXISTING ToolChange tick
+  /// in place (upstream edit menu re-picks the filament of a ToolChange tick,
+  /// IMSlider.cpp:1414-1424) instead of delete+re-add.
+  Q_INVOKABLE void editFilamentChangeAtLayer(int layer, int extruderId);
   // Phase 119 (TICK-04): close the 5-type coverage gap. addColorChangeAtLayer
   // stores type=ColorChange with the user's extruder + color; addTemplateAtLayer
   // stores type=Template (an upstream "save current state" anchor). Both follow
@@ -326,6 +419,13 @@ private:
   bool showGcodeWindow_ = true;   ///< Phase 237 (VIEW-01): G-code window visibility (upstream show_gcode_window).
   bool showBed_ = true;          ///< Bed-grid visibility aligned with upstream GCodeViewer.
   bool showMarker_ = true;       ///< Tool-marker visibility aligned with upstream GCodeViewer.
+  // Phase 238 (PREV-03): move-type visibility flags (see the Q_PROPERTY
+  // block). Wipe defaults false to match the upstream Travels/Wipes
+  // hidden-after-first-view default; retract/unretract/seam default true.
+  bool showRetractMoves_ = true;
+  bool showUnretractMoves_ = true;
+  bool showWipeMoves_ = false;
+  bool showSeamMarks_ = true;
   QTimer *playTimer_ = nullptr;
 
   // Stored parsed segments for view-mode recoloring
@@ -350,6 +450,7 @@ private:
     int move;
     bool isTravel;
     int role = 0;  ///< Canonical libvgcode EGCodeExtrusionRole index (0=None..19=Mixed).
+    int kind = 0;  ///< Phase 238 (PREV-03): MoveKind (upstream GCodeProcessor::EMoveType classification).
   };
   std::vector<StoredSegment> segments_;
   /// Per-role extrusion visibility mask, indexed by canonical libvgcode
@@ -363,6 +464,28 @@ private:
   };
   QVector<SourceGcodeLine> m_gcodeSourceLines;
   QHash<QString, int> featureCount_;
+  // ── Phase 238 (PREV-03/05/06) parser state results ──
+  int m_kindCounts[6] = {0, 0, 0, 0, 0, 0};  ///< Parsed segment count per MoveKind.
+  /// Filament length (mm) split by category, aligned with the upstream
+  /// UsedFilaments caches (GCodeProcessor.cpp:783-803): 0=Model, 1=Support,
+  /// 2=Flushed, 3=Tower (WipeTower).
+  double m_filamentSplitLength[4] = {0.0, 0.0, 0.0, 0.0};
+  /// Parsed filament_diameter / filament_density gcode config values (mm / g
+  /// per cm3) kept so filamentSplit() can convert lengths to weights.
+  float m_filamentDiameter = 1.75f;
+  float m_filamentDensity = 1.24f;
+  /// Total extruded grams (model+support+tower+flushed), set at parse end.
+  double m_totalFilamentGrams = 0.0;
+  /// Parsed "; estimated printing time (normal mode) = " seconds (<=0 absent).
+  float m_normalTimeSecs = 0.f;
+  /// Parsed "; estimated printing time (silent mode) = " seconds (<=0 absent).
+  /// Upstream silent == libvgcode Stealth time mode.
+  float m_stealthTimeSecs = 0.f;
+  /// Per-extruder "; filament_cost = " price per kg (upstream DEFAULT_FILAMENT_COST
+  /// 29.99 fallback, GCodeProcessor.cpp:49).
+  QMap<int, double> m_filamentPrices;
+  /// Per-extruder visibility, upstream m_tool_visibles (ColorPrint view only).
+  QMap<int, bool> m_extruderVisibility;
   /// Accumulated elapsed time per move aligned with upstream IMSlider m_layers_times.
   std::vector<float> m_moveAccumulatedTime;
   // Tool position data (updated when currentMove changes)

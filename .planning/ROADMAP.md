@@ -46,7 +46,7 @@ to exactly one phase.
 - [x] **Phase 236: Dialog Reachability And Completion** - Every implemented
   dialog reachable or honestly gated; edits land in config; upstream
   load-feedback dialogs; correct AGPL About.
-- [ ] **Phase 237: Menus, Shortcuts, Drag-Drop, And Import** - View menu,
+- [x] **Phase 237: Menus, Shortcuts, Drag-Drop, And Import** - View menu,
   Delete All, missing shortcuts, window drag&drop, unit inference, embedded
   config restore, .gcode.3mf export, scale-to-fit.
 - [ ] **Phase 238: Preview Completion** - Ghost shells, tool marker,

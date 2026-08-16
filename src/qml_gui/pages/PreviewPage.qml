@@ -268,6 +268,19 @@ Item {
                     anchors.fill: parent
                     canvasType: GLViewport.CanvasPreview
                     previewData: root.previewVm.gcodePreviewData
+                    // Phase 238 (PREV-01): ghost shells -- the preview canvas
+                    // receives the SAME object mesh stream the Prepare canvas
+                    // uses (upstream always loads shells at preview,
+                    // GCodeViewer.cpp:3076 load_shells + :983-988). The
+                    // renderer draws them semi-transparent behind the
+                    // toolpaths (render_shells :4023).
+                    meshData: root.editorVm ? root.editorVm.meshData : null
+                    meshBatchSourceObjectIndices: root.editorVm ? root.editorVm.meshBatchSourceObjectIndices : []
+                    meshBatchVolumeIndices: root.editorVm ? root.editorVm.meshBatchVolumeIndices : []
+                    meshBatchInstanceIndices: root.editorVm ? root.editorVm.meshBatchInstanceIndices : []
+                    activePlateObjectIndices: root.editorVm ? root.editorVm.activePlateObjectIndices : []
+                    currentPlateIndex: root.editorVm ? root.editorVm.currentPlateIndex : 0
+                    plateCount: root.editorVm ? root.editorVm.plateCount : 1
                     // v5.15 (BEDTEX): preview renders the printer bed
                     // (geometry + texture) behind the toolpath, matching
                     // upstream GCodeViewer -> _render_bed.
@@ -290,7 +303,13 @@ Item {
                     showTravelMoves: root.previewVm.showTravelMoves
                     roleVisibility: root.previewVm.roleVisibilityMask
                     showBed: root.previewVm.showBed
-                    showMarker: root.previewVm.showMarker
+                    // Phase 238 (PREV-02): the marker renders only when a real
+                    // tool position exists (upstream shows the marker only
+                    // while a render path/current position is set,
+                    // GCodeViewer.cpp:1258 m_show_marker || current != end).
+                    showMarker: root.previewVm
+                                ? (root.previewVm.showMarker && root.previewVm.hasToolPosition)
+                                : false
                     gcodeViewMode: root.previewVm.viewModeIndex
                     markerX: root.previewVm.toolX
                     markerY: root.previewVm.toolY

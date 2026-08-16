@@ -114,6 +114,9 @@ void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
   m_assemblyMeasureTriBufferUploaded = false;
   m_assemblyMeasureValueBufferUploaded = false;
   m_previewSegmentBufferUploaded = false;
+  // Phase 238 (PREV-01/02): ghost shells + tool marker re-upload on rebuild.
+  m_ghostShellBufferUploaded = false;
+  m_toolMarkerBufferUploaded = false;
   // Reset the first-N-frames force window so the new swapchain gets a
   // guaranteed camera UBO upload on its first render() (see render()).
   m_frameCount = 0;
@@ -331,6 +334,24 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   m_moveEnd = viewport->m_moveEnd;
   m_showTravelMoves = viewport->m_showTravelMoves;
   m_gcodeViewMode = viewport->m_gcodeViewMode;
+
+  // ── Phase 238 (PREV-02): tool-marker state mirrored from RhiViewport.
+  // markerX/Y/Z + showMarker already existed as Q_PROPERTYs (bound to
+  // previewVm.toolX/Y/Z in PreviewPage.qml, updated on every playback tick by
+  // PreviewViewModel::updateToolPositionData) but were never consumed. A
+  // position/visibility change forces a marker buffer rebuild.
+  m_markerX = viewport->m_markerX;
+  m_markerY = viewport->m_markerY;
+  m_markerZ = viewport->m_markerZ;
+  m_showMarker = viewport->m_showMarker;
+  if (m_markerX != m_lastMarkerX || m_markerY != m_lastMarkerY
+      || m_markerZ != m_lastMarkerZ)
+  {
+    m_lastMarkerX = m_markerX;
+    m_lastMarkerY = m_markerY;
+    m_lastMarkerZ = m_markerZ;
+    m_toolMarkerBufferUploaded = false;
+  }
 
   // ── Phase 67: Gizmo state pipeline ──
   // Read gizmoMode/cutAxis/cutPosition from the viewport item and compute
@@ -572,6 +593,13 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       if (uploadPreviewSegmentBuffer(updates))
         m_previewSegmentBufferUploaded = true;
     }
+    // Phase 238 (PREV-01): ghost-shell mesh upload (upstream always loads
+    // shells for preview, GCodeViewer.cpp:3076; the buffer rebuilds when the
+    // model generation changes).
+    uploadGhostShellBuffer(updates);
+    // Phase 238 (PREV-02): tool-marker upload (rebuilds when the marker
+    // position or visibility changed in synchronize()).
+    uploadToolMarkerBuffer(updates);
     // Camera uniform upload (merged into the same pre-beginPass batch).
     // Phase 210 (MIT-03 / Seam C): in the first-N-frames force window OR the
     // DirtyGpu/DirtySelection case, pass DirtyGpu in addition to DirtyCamera
@@ -724,8 +752,11 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   }
 
   // ── Phase 26/27: Preview segment rendering + timing (CanvasPreview branch) ──
-  if (m_canvasType == RhiViewport::CanvasPreview && ensurePipelines()
-      && m_previewSegmentBuffer && m_previewSegmentVertexCount > 0) {
+  // Phase 238 (PREV-01/02): the outer gate no longer requires a non-empty
+  // segment buffer -- ghost shells and the tool marker render even while the
+  // segment payload is being replaced. Segment drawing keeps its own
+  // non-empty guard below.
+  if (m_canvasType == RhiViewport::CanvasPreview && ensurePipelines()) {
     m_previewFrameTimer.start();
     // Camera uniform was already uploaded before beginPass (BUG-V31-1 fix).
     cb->setViewport(QRhiViewport(0, 0, float(renderTarget()->pixelSize().width()),
@@ -753,16 +784,44 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
         renderBedTexture(cb);
     }
     renderBedModel(cb);
+
+    // Phase 238 (PREV-01): ghost object shells BEHIND the toolpaths
+    // (upstream render_shells, GCodeViewer.cpp:4023, drawn before
+    // render_toolpaths in the render() order :1247; BBS always loads shells
+    // for preview, :983-988). Translucent fill pipeline = blended, depth test
+    // but no depth write -- mirrors the upstream glDepthMask(GL_FALSE).
+    if (m_ghostShellBuffer && m_ghostShellVertexCount > 0) {
+      cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+      const QRhiCommandBuffer::VertexInput ghostBinding(m_ghostShellBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &ghostBinding);
+      cb->draw(m_ghostShellVertexCount);
+    }
+
     cb->setGraphicsPipeline(m_linePipeline.get());
 
-    const QVector<PreviewDrawRange> drawRanges = computePreviewDrawRanges();
-    if (!drawRanges.isEmpty()) {
-      const QRhiCommandBuffer::VertexInput segBinding(m_previewSegmentBuffer.get(), 0);
-      cb->setVertexInput(0, 1, &segBinding);
-      for (const PreviewDrawRange &range : drawRanges) {
-        if (range.vertexCount > 0)
-          cb->draw(range.vertexCount, 1, range.firstVertex);
+    if (m_previewSegmentBuffer && m_previewSegmentVertexCount > 0) {
+      const QVector<PreviewDrawRange> drawRanges = computePreviewDrawRanges();
+      if (!drawRanges.isEmpty()) {
+        const QRhiCommandBuffer::VertexInput segBinding(m_previewSegmentBuffer.get(), 0);
+        cb->setVertexInput(0, 1, &segBinding);
+        for (const PreviewDrawRange &range : drawRanges) {
+          if (range.vertexCount > 0)
+            cb->draw(range.vertexCount, 1, range.firstVertex);
+        }
       }
+    }
+
+    // Phase 238 (PREV-02): 3D tool-position marker, drawn after the segments
+    // so it stays visible over toolpaths via the no-depth-write translucent
+    // pipeline (upstream Marker::render, GCodeViewer.cpp:306-330: blended
+    // white 0.5-alpha model at the current sequential-view position). The
+    // G-code axis convention (x,y,z) maps to scene (x,z,y), matching the
+    // segment axis swap in parsePreviewSegments.
+    if (m_showMarker && m_toolMarkerBuffer && m_toolMarkerVertexCount > 0) {
+      cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+      const QRhiCommandBuffer::VertexInput markerBinding(m_toolMarkerBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &markerBinding);
+      cb->draw(m_toolMarkerVertexCount);
     }
 
     // Phase 27 (PERF-01): capture Preview frame timing.
@@ -888,6 +947,17 @@ void RhiViewportRenderer::releaseResources()
   m_bedLineBuffer.reset();
   m_bedFillBuffer.reset();
   resetPreviewGpuState(true);
+  // Phase 238 (PREV-01/02): drop the preview ghost-shell + tool-marker GPU
+  // buffers with the rest of the scene resources.
+  m_ghostShellBuffer.reset();
+  m_ghostShellBufferBytes = 0;
+  m_ghostShellVertexCount = 0;
+  m_ghostShellBufferUploaded = false;
+  m_ghostShellModelGeneration = 0;
+  m_toolMarkerBuffer.reset();
+  m_toolMarkerBufferBytes = 0;
+  m_toolMarkerVertexCount = 0;
+  m_toolMarkerBufferUploaded = false;
   m_renderPassDescriptor = nullptr;
   m_sceneBuffersUploaded = false;
   m_modelVertexBufferUploaded = false;
@@ -3537,6 +3607,98 @@ bool RhiViewportRenderer::uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *up
                               m_previewVertices.constData());
   // Phase 27 (PERF-01): capture upload timing.
   m_previewLastUploadMs = 0; // uploadStaticBuffer is deferred; actual timing measured at frame level
+  return true;
+}
+
+// Phase 238 (PREV-01): ghost shells -- semi-transparent object meshes drawn
+// behind the preview toolpaths (upstream GCodeViewer ALWAYS renders the
+// shells in preview: load_shells GCodeViewer.cpp:3076 + the always-on call
+// site :983-988 "BBS: always load shell at preview", render_shells :4023
+// with glDepthMask(GL_FALSE) + Transparent volume render). The vertices come
+// from the SAME prepare-pass mesh staging (m_prepareScene.modelVertices --
+// fed by PreviewPage.qml's meshData/meshBatch* bindings, mirroring
+// PreparePage), with the per-vertex alpha overridden to the ghost alpha.
+bool RhiViewportRenderer::uploadGhostShellBuffer(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+  // Rebuild only when the model generation changed (object edits) or after a
+  // swapchain rebuild. Not tied to PrepareSceneData dirty flags: the preview
+  // path never takes them, so they can stay set indefinitely.
+  if (m_ghostShellBufferUploaded && m_ghostShellModelGeneration == m_modelGeneration)
+    return true;
+
+  const QVector<Vertex> source = buildModelVertices(m_prepareScene.modelVertices());
+  if (source.isEmpty())
+  {
+    // No meshes loaded (e.g. empty plate) -- nothing to ghost; still record
+    // the generation so empty scenes do not rebuild every frame.
+    m_ghostShellModelGeneration = m_modelGeneration;
+    m_ghostShellBufferUploaded = true;
+    m_ghostShellVertexCount = 0;
+    return true;
+  }
+
+  // Ghost alpha override (upstream renders the shell volumes in Transparent
+  // mode so toolpaths stay readable on top).
+  constexpr float kGhostAlpha = 0.35f;
+  QVector<Vertex> ghost;
+  ghost.resize(source.size());
+  for (int i = 0; i < source.size(); ++i)
+  {
+    const Vertex &v = source[i];
+    ghost[i] = Vertex{v.x, v.y, v.z, v.r, v.g, v.b, kGhostAlpha};
+  }
+
+  const quint32 byteSize = quint32(ghost.size()) * sizeof(Vertex);
+  if (!ensureBuffer(m_ghostShellBuffer, byteSize, m_ghostShellBufferBytes,
+                    QRhiBuffer::VertexBuffer))
+    return false;
+  updates->uploadStaticBuffer(m_ghostShellBuffer.get(), 0, byteSize,
+                              ghost.constData());
+  m_ghostShellVertexCount = quint32(ghost.size());
+  m_ghostShellModelGeneration = m_modelGeneration;
+  m_ghostShellBufferUploaded = true;
+  return true;
+}
+
+// Phase 238 (PREV-02): tool marker -- the stylized-arrow nozzle at the
+// current sequential-view position (upstream GCodeViewer::SequentialView::
+// Marker::render GCodeViewer.cpp:306-330; geometry from Marker::init
+// stilized_arrow(16, 1.5, 3.0, 0.8, 3.0) :285-292, white 0.5 alpha, flipped
+// so the tip touches the position :295-299). Position/visibility come from
+// the RhiViewport markerX/Y/Z/showMarker properties (driven by
+// PreviewViewModel::updateToolPositionData during playback); the G-code
+// (x,y,z) convention maps to scene (x,z,y) like the preview segments.
+bool RhiViewportRenderer::uploadToolMarkerBuffer(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+  if (m_toolMarkerBufferUploaded)
+    return true;
+  if (!m_showMarker)
+  {
+    // Hidden: record as uploaded so the rebuild waits for the next real
+    // position/visibility change (synchronize clears the flag).
+    m_toolMarkerBufferUploaded = true;
+    m_toolMarkerVertexCount = 0;
+    return true;
+  }
+
+  const QVector<GizmoVertex> marker =
+      GizmoGeometry::buildToolMarkerVertices(
+          QVector3D(m_markerX, m_markerZ, m_markerY));
+  if (marker.isEmpty())
+    return false;
+
+  const quint32 byteSize = quint32(marker.size()) * sizeof(GizmoVertex);
+  if (!ensureBuffer(m_toolMarkerBuffer, byteSize, m_toolMarkerBufferBytes,
+                    QRhiBuffer::VertexBuffer))
+    return false;
+  updates->uploadStaticBuffer(m_toolMarkerBuffer.get(), 0, byteSize,
+                              marker.constData());
+  m_toolMarkerVertexCount = quint32(marker.size());
+  m_toolMarkerBufferUploaded = true;
   return true;
 }
 

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import ".."
+import "../controls"
 
 Item {
     id: root
@@ -103,6 +104,23 @@ Item {
                             color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeSM
                             elide: Text.ElideRight
+                        }
+                        // Phase 238 (PREV-06): per-extruder visibility toggle.
+                        // The Filament (ColorPrint) / Tool legend rows carry
+                        // extruderId; upstream toggles m_tool_visibles from the
+                        // legend row click and refreshes the render paths
+                        // (GCodeViewer.cpp:5088-5094). Applies in those two
+                        // view modes only (upstream gates the skip on
+                        // ColorPrint, GCodeViewer.cpp:3337).
+                        CxCheckBox {
+                            visible: root.legendType === 2
+                                     && legendRow.modelData.extruderId !== undefined
+                            checked: legendRow.modelData.visible !== undefined
+                                     ? legendRow.modelData.visible : true
+                            onToggled: if (visible && root.previewVm
+                                            && legendRow.modelData.extruderId !== undefined)
+                                           root.previewVm.toggleExtruderVisibility(
+                                                       legendRow.modelData.extruderId)
                         }
                     }
                 }

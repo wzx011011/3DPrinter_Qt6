@@ -649,6 +649,10 @@ private slots:
   // unit-inference plumbing, project-config restore routing, and sliced-file
   // export surface.
   void viewMenuShortcutsAndImportSourceAudit();
+  // Phase 238 (PREV-01..07): preview completion source audits -- ghost
+  // shells, tool marker consumption, move-kind toggles, tick pickers,
+  // stats split display, extruder legend visibility, software fallback.
+  void previewCompletionSourceAudit();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -1466,7 +1470,11 @@ void QmlUiAuditTests::previewNormalPathCoversFullWorkflowBindingsAndDiagnostics(
     QStringLiteral("moveEnd: root.previewVm.currentMove"),
     QStringLiteral("showTravelMoves: root.previewVm.showTravelMoves"),
     QStringLiteral("showBed: root.previewVm.showBed"),
-    QStringLiteral("showMarker: root.previewVm.showMarker"),
+    // Phase 238 (PREV-02): the binding now gates on hasToolPosition (the
+    // marker renders only when a real tool position exists); the raw
+    // showMarker property stays part of the binding expression.
+    QStringLiteral("showMarker: root.previewVm"),
+    QStringLiteral("(root.previewVm.showMarker && root.previewVm.hasToolPosition)"),
     QStringLiteral("gcodeViewMode: root.previewVm.viewModeIndex"),
     QStringLiteral("markerX: root.previewVm.toolX"),
     QStringLiteral("markerY: root.previewVm.toolY"),
@@ -2016,7 +2024,10 @@ void QmlUiAuditTests::previewRestorationMilestoneHasFinalCleanupCoverage()
     QStringLiteral("showTravelMoves: root.previewVm.showTravelMoves"),
     QStringLiteral("roleVisibility: root.previewVm.roleVisibilityMask"),
     QStringLiteral("showBed: root.previewVm.showBed"),
-    QStringLiteral("showMarker: root.previewVm.showMarker"),
+    // Phase 238 (PREV-02): the binding gates on hasToolPosition now; the
+    // raw showMarker property remains part of the binding expression.
+    QStringLiteral("showMarker: root.previewVm"),
+    QStringLiteral("(root.previewVm.showMarker && root.previewVm.hasToolPosition)"),
     QStringLiteral("gcodeViewMode: root.previewVm.viewModeIndex"),
     QStringLiteral("markerX: root.previewVm.toolX"),
     QStringLiteral("markerY: root.previewVm.toolY"),
@@ -9225,3 +9236,127 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
            "VIEW-06: ProjectServiceMock must expose selectionWorldBoundingBox");
 }
 
+
+// ── Phase 238 (PREV-01..07): preview completion source audit ───────────────
+// Mirrors the Phase 117/120/237 readSource + QVERIFY2 source-audit pattern.
+// Each assertion is named PREV-nn so a failure maps 1:1 to the plan task in
+// .planning/phases/238-preview/238-01-PLAN.md. Upstream anchors are cited in
+// the messages so a regression can be diffed against OrcaSlicer directly.
+void QmlUiAuditTests::previewCompletionSourceAudit()
+{
+  const QString rendererCpp = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString rendererH = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  const QString layerRail = readSource(QStringLiteral("src/qml_gui/components/PreviewLayerRail.qml"));
+  const QString visFilter = readSource(QStringLiteral("src/qml_gui/components/VisibilityFilter.qml"));
+  const QString statsPanel = readSource(QStringLiteral("src/qml_gui/components/StatsPanel.qml"));
+  const QString legend = readSource(QStringLiteral("src/qml_gui/components/Legend.qml"));
+  const QString softwareVp = readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.cpp"));
+  const QString previewVmCpp = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.cpp"));
+  QVERIFY2(!rendererCpp.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!rendererH.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
+  QVERIFY2(!layerRail.isEmpty(), "Unable to read PreviewLayerRail.qml");
+  QVERIFY2(!visFilter.isEmpty(), "Unable to read VisibilityFilter.qml");
+  QVERIFY2(!statsPanel.isEmpty(), "Unable to read StatsPanel.qml");
+  QVERIFY2(!legend.isEmpty(), "Unable to read Legend.qml");
+  QVERIFY2(!softwareVp.isEmpty(), "Unable to read SoftwareViewport.cpp");
+  QVERIFY2(!previewVmCpp.isEmpty(), "Unable to read PreviewViewModel.cpp");
+
+  // ── PREV-01: ghost shells rendered in the preview pass ────────────────
+  // Upstream ALWAYS loads + renders shells in preview (GCodeViewer.cpp:3076
+  // load_shells, render_shells :4023 drawn before render_toolpaths :1247).
+  QVERIFY2(rendererCpp.contains(QStringLiteral("uploadGhostShellBuffer")),
+           "PREV-01: RhiViewportRenderer must upload a ghost-shell buffer in the preview pass");
+  QVERIFY2(rendererCpp.contains(QStringLiteral("m_ghostShellBuffer.get()")),
+           "PREV-01: preview render pass must bind the ghost-shell vertex buffer");
+  QVERIFY2(rendererCpp.contains(QStringLiteral("m_translucentFillPipeline.get()")),
+           "PREV-01: ghost shells must draw with the translucent (alpha, no depth write) pipeline");
+  QVERIFY2(rendererH.contains(QStringLiteral("m_ghostShellBufferUploaded")),
+           "PREV-01: ghost-shell GPU state must track upload + model generation");
+  // The Preview canvas must feed the mesh stream the ghost pass reads
+  // (mirrors the upstream shells-always-loaded behavior).
+  QVERIFY2(previewPage.contains(QStringLiteral("meshData: root.editorVm ? root.editorVm.meshData : null")),
+           "PREV-01: PreviewPage must bind editorVm.meshData so shells have data in preview");
+
+  // ── PREV-02: tool marker consumed by the renderer ─────────────────────
+  // Upstream Marker::render (GCodeViewer.cpp:306-330) draws the stylized
+  // arrow at the sequential-view position; RhiViewport's markerX/Y/Z +
+  // showMarker existed but were never read before Phase 238.
+  QVERIFY2(rendererCpp.contains(QStringLiteral("m_showMarker")) && rendererCpp.contains(QStringLiteral("m_markerX")),
+           "PREV-02: RhiViewportRenderer must consume showMarker/markerX in synchronize()");
+  QVERIFY2(rendererCpp.contains(QStringLiteral("uploadToolMarkerBuffer")),
+           "PREV-02: RhiViewportRenderer must upload a tool-marker buffer");
+  QVERIFY2(rendererCpp.contains(QStringLiteral("buildToolMarkerVertices")),
+           "PREV-02: the marker mesh must come from GizmoGeometry::buildToolMarkerVertices");
+  QVERIFY2(previewPage.contains(QStringLiteral("markerX: root.previewVm.toolX")),
+           "PREV-02: PreviewPage must drive the marker position from previewVm.toolX (playback)");
+  QVERIFY2(previewPage.contains(QStringLiteral("previewVm.hasToolPosition")),
+           "PREV-02: the marker must only show when a real tool position exists");
+
+  // ── PREV-03: retract/unretract/wipe/seam parsed + toggleable ──────────
+  // Upstream options_items checkboxes (GCodeViewer.cpp:913-921) and
+  // GCodeProcessor EMoveType classification (:2954-2968).
+  QVERIFY2(previewVmCpp.contains(QStringLiteral("classifyMoveKind")),
+           "PREV-03: the parser must classify moves with the upstream move_type port");
+  QVERIFY2(previewVmCpp.contains(QStringLiteral("appendMarkerSegment(KindRetract")),
+           "PREV-03: G10 must append a retract marker");
+  QVERIFY2(previewVmCpp.contains(QStringLiteral("appendMarkerSegment(KindUnretract")),
+           "PREV-03: G11 must append an unretract marker");
+  QVERIFY2(previewVmCpp.contains(QStringLiteral("appendMarkerSegment(KindSeam")),
+           "PREV-03: the closed outer-wall loop must append a seam marker");
+  QVERIFY2(visFilter.contains(QStringLiteral("setShowRetractMoves")) && visFilter.contains(QStringLiteral("setShowUnretractMoves")),
+           "PREV-03: VisibilityFilter must host the retract/unretract toggles");
+  QVERIFY2(visFilter.contains(QStringLiteral("setShowWipeMoves")) && visFilter.contains(QStringLiteral("setShowSeamMarks")),
+           "PREV-03: VisibilityFilter must host the wipe/seam toggles");
+
+  // ── PREV-04: tick pickers + tooltip + jump-to-layer ───────────────────
+  // Upstream IMSlider.cpp:1221-1313 (jump-to-layer dialog),
+  // :1327-1395 (add menu), :1414-1424 (edit tool-change).
+  QVERIFY2(layerRail.contains(QStringLiteral("addFilamentChangeAtLayer")),
+           "PREV-04: addFilamentChangeAtLayer must have a QML caller (filament picker)");
+  QVERIFY2(layerRail.contains(QStringLiteral("editFilamentChangeAtLayer")),
+           "PREV-04: the edit menu must re-pick the filament of an existing tick");
+  QVERIFY2(layerRail.contains(QStringLiteral("addColorChangeAtLayer")),
+           "PREV-04: the color-change picker must call addColorChangeAtLayer");
+  QVERIFY2(layerRail.contains(QStringLiteral("defaultColorChangePalette")),
+           "PREV-04: the color picker must use the upstream Default_Colors palette");
+  QVERIFY2(!layerRail.contains(QStringLiteral("\"#FF0000\"")),
+           "PREV-04: PreviewLayerRail must not hardcode the old red color change");
+  QVERIFY2(layerRail.contains(QStringLiteral("layerTimeLabel")),
+           "PREV-04: tick hover tooltip must show the cumulative layer time");
+  QVERIFY2(layerRail.contains(QStringLiteral("jumpToLayer(")),
+           "PREV-04: the Jump-to-Layer dialog must call previewVm.jumpToLayer");
+
+  // ── PREV-05: stats split + stealth + cost in the stats panel ──────────
+  // Upstream statistics columns Model/Support/Flushed/Tower
+  // (GCodeViewer.cpp:5161-5277); stealth from "; estimated printing time
+  // (silent mode)"; cost from filament_cost (:4387-4398).
+  QVERIFY2(statsPanel.contains(QStringLiteral("filamentSplit")),
+           "PREV-05: StatsPanel must display the Model/Support/Flushed/Tower split");
+  QVERIFY2(statsPanel.contains(QStringLiteral("stealthTimeEstimated")),
+           "PREV-05: StatsPanel must flag the heuristic stealth total");
+  QVERIFY2(statsPanel.contains(QStringLiteral("filamentPricePerKg")),
+           "PREV-05: StatsPanel must show the price per kg used for the cost");
+  QVERIFY2(previewVmCpp.contains(QStringLiteral("m_filamentSplitLength")),
+           "PREV-05: the parser must accumulate the per-category filament split");
+
+  // ── PREV-06: configured extruder colors + legend visibility ───────────
+  // Upstream m_tool_colors from the plater extruder_colors config
+  // (GCodeViewer.cpp:1109-1127) + m_tool_visibles legend toggles
+  // (GCodeViewer.cpp:5088).
+  QVERIFY2(previewVmCpp.contains(QStringLiteral("configuredExtruderColors")),
+           "PREV-06: Tool/Filament recolor must source the configured extruder colors");
+  QVERIFY2(legend.contains(QStringLiteral("toggleExtruderVisibility")),
+           "PREV-06: the legend rows must toggle per-extruder visibility");
+
+  // ── PREV-07: software fallback paints the preview segments ────────────
+  // SoftwareViewport previously painted only the bed grid; the fallback
+  // preview must draw the GCV1 segments so the page is not blank.
+  QVERIFY2(softwareVp.contains(QStringLiteral("parsePreviewData")),
+           "PREV-07: SoftwareViewport must parse the GCV1 preview blob");
+  QVERIFY2(softwareVp.contains(QStringLiteral("drawPreviewSegments")),
+           "PREV-07: SoftwareViewport::paintScene must draw the preview segments");
+  QVERIFY2(softwareVp.contains(QStringLiteral("GCV1")),
+           "PREV-07: the fallback parser must validate the GCV1 wire format");
+}

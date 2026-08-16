@@ -245,7 +245,27 @@ private:
     QVector3D max;
   };
 
+  // Phase 238 (PREV-07): one parsed GCV1 preview segment (wire-compatible
+  // with PreviewViewModel::PackedSegment / RhiViewportRenderer::
+  // GcvPackedSegment -- 20 floats + 4 ints = 92 bytes; the layout is
+  // static_asserted in SoftwareViewport.cpp).
+  struct PreviewSegment
+  {
+    float x1, y1, z1, x2, y2, z2;
+    float r, g, b;
+    float feedrate, fan_speed, temperature, width, layer_time, acceleration;
+    float jerk, pressure_advance, actual_speed, actual_flow;
+    int extruder_id, layer, move;
+    int role;
+    bool visible = true;  // layer/move filter result (recomputed per paint)
+  };
+
   void parseMeshData();
+  // Phase 238 (PREV-07): parse the GCV1 blob from setPreviewData.
+  void parsePreviewData();
+  // Phase 238 (PREV-07): QPainter draw of the layer-clipped preview
+  // segments (color per segment, orthographic projection via project()).
+  void drawPreviewSegments(QPainter *painter);
   void rebuildPickingScene();
   bool activeToolCapturesContextGesture() const;
   ViewportContextHit classifyContextAt(const QPointF &position);
@@ -313,6 +333,9 @@ private:
   float m_markerZ = 0.f;
   bool m_showMarker = true;
   QVector<MeshObject> m_meshes;
+  // Phase 238 (PREV-07): parsed GCV1 preview segments (CPU staging for the
+  // software-fallback preview pass).
+  QVector<PreviewSegment> m_previewSegments;
   QVector3D m_center = QVector3D(110.f, 0.f, 110.f);
   float m_radius = 180.f;
   float m_yaw = -35.f;

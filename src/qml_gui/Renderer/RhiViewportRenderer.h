@@ -115,6 +115,22 @@ private:
   QVector<PreviewDrawRange> computePreviewDrawRanges() const;
   quint64 computePreviewRangeCacheKey() const;
 
+  // ── Phase 238 (PREV-01): ghost shells ──
+  // Semi-transparent object meshes drawn behind the toolpaths in the preview
+  // pass (upstream ALWAYS loads + renders shells in preview:
+  // GCodeViewer.cpp:3076 load_shells / :4023 render_shells, drawn before
+  // render_toolpaths). Reuses the prepare-pass mesh staging
+  // (m_prepareScene.modelVertices) with a ghost alpha override, uploaded to a
+  // dedicated buffer and drawn with m_translucentFillPipeline (blended, depth
+  // test but no depth write -- mirrors upstream glDepthMask(GL_FALSE)).
+  bool uploadGhostShellBuffer(QRhiResourceUpdateBatch *updates);
+  // ── Phase 238 (PREV-02): tool marker ──
+  // The 3D tool-position arrow (upstream GCodeViewer::SequentialView::Marker,
+  // Marker::render GCodeViewer.cpp:306-330) rendered at markerX/Y/Z while
+  // showMarker is true. The properties already existed on RhiViewport but the
+  // renderer never consumed them; this closes the gap.
+  bool uploadToolMarkerBuffer(QRhiResourceUpdateBatch *updates);
+
   QVector<Vertex> buildSceneVertices(const QList<PrepareSceneData::Vertex> &source) const;
   QVector<Vertex> buildModelVertices(const QList<PrepareSceneData::ModelVertex> &source) const;
   QVector<Vertex> buildHighlightVertices() const;
@@ -412,6 +428,28 @@ private:
   quint32 m_previewSegmentBufferBytes = 0;
   quint32 m_previewSegmentVertexCount = 0;
   bool m_previewSegmentBufferUploaded = false;
+
+  // ── Phase 238 (PREV-01/02): preview ghost-shell + tool-marker GPU state ──
+  std::unique_ptr<QRhiBuffer> m_ghostShellBuffer;
+  std::unique_ptr<QRhiBuffer> m_toolMarkerBuffer;
+  quint32 m_ghostShellBufferBytes = 0;
+  quint32 m_toolMarkerBufferBytes = 0;
+  quint32 m_ghostShellVertexCount = 0;
+  quint32 m_toolMarkerVertexCount = 0;
+  bool m_ghostShellBufferUploaded = false;
+  bool m_toolMarkerBufferUploaded = false;
+  /// Model generation at the last ghost-shell upload (rebuild trigger).
+  qint64 m_ghostShellModelGeneration = 0;
+  // Marker state mirrored from RhiViewport in synchronize() (PREV-02). The
+  // last* fields detect position changes so the small marker buffer is only
+  // rebuilt when the tool actually moves (playback) or toggles.
+  float m_markerX = 0.f;
+  float m_markerY = 0.f;
+  float m_markerZ = 0.f;
+  bool m_showMarker = true;
+  float m_lastMarkerX = std::numeric_limits<float>::lowest();
+  float m_lastMarkerY = std::numeric_limits<float>::lowest();
+  float m_lastMarkerZ = std::numeric_limits<float>::lowest();
 
   // Cache for computePreviewDrawRanges — the function is called every render
   // frame but its inputs (layer range, moveEnd, role visibility, span set)

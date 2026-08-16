@@ -672,3 +672,75 @@ GizmoGeometry::buildBrushSphereVertices(const QVector3D &center,
   }
   return verts;
 }
+
+// ===========================================================================
+// buildToolMarkerVertices
+//
+// Phase 238 (PREV-02) - 3D tool-position marker for the G-code preview.
+// Port of the upstream sequential-view marker: the default stylized arrow
+// stilized_arrow(16, /*tipRadius*/1.5f, /*tipHeight*/3.0f,
+//                      /*stemRadius*/0.8f, /*stemHeight*/3.0f)
+// (GCodeViewer.cpp:285-292) in white with alpha 0.5, flipped M_PI about X by
+// set_world_position so the TIP touches the tracked position
+// (GCodeViewer.cpp:295-299; Marker::render :306-330 draws it blended with
+// depth-mask off). Here the flip is baked into the geometry: the apex sits at
+// `position` and points DOWN, the cone widens upward to tipRadius across
+// tipHeight, then a stem cylinder of stemRadius runs to tipHeight+stemHeight.
+// Triangles only (16-sided cone + 16-sided open cylinder) -> translucent
+// triangle pipeline in the renderer.
+// ===========================================================================
+QVector<GizmoVertex>
+GizmoGeometry::buildToolMarkerVertices(const QVector3D &position)
+{
+  // Upstream stilized_arrow parameters (GCodeViewer.cpp:288).
+  constexpr int kResolution = 16;
+  constexpr float kTipRadius = 1.5f;
+  constexpr float kTipHeight = 3.0f;
+  constexpr float kStemRadius = 0.8f;
+  constexpr float kStemHeight = 3.0f;
+  // Upstream Marker::init color: white, 50% alpha.
+  constexpr float kColor[4] = {1.0f, 1.0f, 1.0f, 0.5f};
+
+  QVector<GizmoVertex> verts;
+  verts.reserve(kResolution * 6 + kResolution * 6);
+
+  const float px = position.x();
+  const float py = position.y();
+  const float pz = position.z();
+
+  auto vertexAt = [&](float radius, float height, float angle) {
+    return GizmoVertex{px + radius * std::cos(angle),
+                       py + height,
+                       pz + radius * std::sin(angle),
+                       kColor[0], kColor[1], kColor[2], kColor[3]};
+  };
+
+  // Cone (flipped: apex at y=0 pointing down, base at y=+kTipHeight).
+  for (int i = 0; i < kResolution; ++i)
+  {
+    const float a0 = 2.f * float(M_PI) * float(i) / float(kResolution);
+    const float a1 = 2.f * float(M_PI) * float(i + 1) / float(kResolution);
+    const GizmoVertex apex{px, py, pz, kColor[0], kColor[1], kColor[2], kColor[3]};
+    verts.append(apex);
+    verts.append(vertexAt(kTipRadius, kTipHeight, a0));
+    verts.append(vertexAt(kTipRadius, kTipHeight, a1));
+  }
+
+  // Stem cylinder (open, from y=+kTipHeight to y=+kTipHeight+kStemHeight).
+  for (int i = 0; i < kResolution; ++i)
+  {
+    const float a0 = 2.f * float(M_PI) * float(i) / float(kResolution);
+    const float a1 = 2.f * float(M_PI) * float(i + 1) / float(kResolution);
+    const GizmoVertex b0 = vertexAt(kStemRadius, kTipHeight, a0);
+    const GizmoVertex b1 = vertexAt(kStemRadius, kTipHeight, a1);
+    const GizmoVertex t0 = vertexAt(kStemRadius, kTipHeight + kStemHeight, a0);
+    const GizmoVertex t1 = vertexAt(kStemRadius, kTipHeight + kStemHeight, a1);
+    verts.append(b0);
+    verts.append(b1);
+    verts.append(t1);
+    verts.append(b0);
+    verts.append(t1);
+    verts.append(t0);
+  }
+  return verts;
+}

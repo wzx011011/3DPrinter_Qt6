@@ -211,6 +211,147 @@ namespace
     return 0;
   }
 
+  // Phase 238 (PREV-03): base colors for the non-extrusion move kinds.
+  // Travel = upstream Travel_Colors[0] "Move", Retract/Unretract/Seam =
+  // upstream Options_Colors (GCodeViewer.cpp:718-727), Wipe = upstream
+  // Wipe_Color YELLOW (GCodeViewer.cpp:750). Upstream renders retract/
+  // unretract/seam as GL_POINTS with these colors; the Qt6 line pipeline
+  // renders them as small vertical tick segments (documented delta -- the
+  // RHI abstraction has no glPointSize equivalent).
+  static const float kTravelColor[3]  = {0.219f, 0.282f, 0.609f};
+  static const float kRetractColor[3] = {0.803f, 0.135f, 0.839f};
+  static const float kUnretractColor[3] = {0.287f, 0.679f, 0.810f};
+  static const float kSeamColor[3]    = {0.900f, 0.900f, 0.900f};
+  static const float kWipeColor[3]    = {1.000f, 1.000f, 0.000f};
+
+  // Height of the vertical tick segment used to render zero-displacement
+  // moves (retract/unretract/seam) in the line pipeline.
+  constexpr float kMarkerTickHeight = 0.6f;
+
+  // Phase 238 (PREV-03): base color for a non-extrusion move kind.
+  const float *kindBaseColor(int kind)
+  {
+    switch (kind)
+    {
+      case 1: return kTravelColor;    // Travel
+      case 2: return kRetractColor;   // Retract
+      case 3: return kUnretractColor; // Unretract
+      case 4: return kWipeColor;      // Wipe
+      case 5: return kSeamColor;      // Seam
+      default: return kRoleColors[0]; // None
+    }
+  }
+
+  // Phase 238 (PREV-03): legend label for a non-extrusion move kind,
+  // matching the upstream options_items display strings
+  // (GCodeViewer.cpp:4936-4950: Travel/Seams/Retract/Unretract/Wipe).
+  QString kindFeatureLabel(int kind)
+  {
+    switch (kind)
+    {
+      case 1: return QStringLiteral("Travel");
+      case 2: return QStringLiteral("Retract");
+      case 3: return QStringLiteral("Unretract");
+      case 4: return QStringLiteral("Wipe");
+      case 5: return QStringLiteral("Seam");
+      default: return QString::fromUtf8(kRoleLabels[0]);
+    }
+  }
+
+  // Phase 238 (PREV-05): filament split categories in upstream column order
+  // (GCodeViewer.cpp:4893-4903: Model / Support / Flushed / Tower).
+  const char *kFilamentSplitKeys[4] = {"model", "support", "flushed", "tower"};
+  const char *kFilamentSplitLabels[4] = {"Model", "Support", "Flushed", "Tower"};
+
+  // Phase 238 (PREV-06): the legacy fixed 8-color extruder cycle, kept as the
+  // fallback when the configured filament colors are unavailable.
+  static const float kLegacyExtruderColors[][3] = {
+      {0.95f, 0.55f, 0.22f},  // extruder 0 - orange
+      {0.22f, 0.55f, 0.87f},  // extruder 1 - blue
+      {0.30f, 0.69f, 0.46f},  // extruder 2 - green
+      {0.61f, 0.35f, 0.71f},  // extruder 3 - purple
+      {0.91f, 0.30f, 0.24f},  // extruder 4 - red
+      {0.10f, 0.74f, 0.61f},  // extruder 5 - teal
+      {0.95f, 0.77f, 0.06f},  // extruder 6 - yellow
+      {0.91f, 0.12f, 0.55f},  // extruder 7 - pink
+  };
+  constexpr int kLegacyExtruderColorCount = 8;
+
+  // Phase 238 (PREV-06): effective color for an extruder -- the CONFIGURED
+  // filament color when present (upstream m_tool_colors sourced from the
+  // plater extruder_colors config, GCodeViewer.cpp:1109-1127), else the
+  // legacy cycle. Single source shared by extruderColor(), the Tool/Filament
+  // recolor path, and the legend rows so the three can never diverge.
+  ColorResult effectiveExtruderColor(int extruderId, const QStringList &configured)
+  {
+    if (extruderId >= 0 && extruderId < configured.size())
+    {
+      const QColor c(configured.at(extruderId));
+      if (c.isValid())
+        return {float(c.redF()), float(c.greenF()), float(c.blueF())};
+    }
+    const int idx = ((extruderId % kLegacyExtruderColorCount) + kLegacyExtruderColorCount) % kLegacyExtruderColorCount;
+    const auto &tc = kLegacyExtruderColors[idx];
+    return {tc[0], tc[1], tc[2]};
+  }
+
+  QString colorHex(const ColorResult &c)
+  {
+    return QStringLiteral("#%1%2%3")
+        .arg(qBound(0, int(c.r * 255.f + 0.5f), 255), 2, 16, QLatin1Char('0'))
+        .arg(qBound(0, int(c.g * 255.f + 0.5f), 255), 2, 16, QLatin1Char('0'))
+        .arg(qBound(0, int(c.b * 255.f + 0.5f), 255), 2, 16, QLatin1Char('0'));
+  }
+
+  // Upstream EMoveType classification port (GCodeProcessor.cpp:2954-2968
+  // move_type lambda). xyMoved/zMoved/moved follow the parsed axis deltas;
+  // wiping mirrors the upstream "; WIPE_START"/"; WIPE_END" comment state.
+  int classifyMoveKind(float dE, bool xyMoved, bool zMoved, bool wiping)
+  {
+    if (wiping)
+      return 4;  // Wipe
+    if (dE < 0.f)
+      return xyMoved || zMoved ? 1 /*Travel*/ : 2 /*Retract*/;
+    if (dE > 0.f)
+    {
+      if (!xyMoved)
+        return zMoved ? 1 /*Travel (z lift)*/ : 3 /*Unretract*/;
+      return 0;  // Extrude
+    }
+    return xyMoved || zMoved ? 1 /*Travel*/ : -1 /*Noop -- skip*/;
+  }
+
+  // Parse a "H:MM:SS" / "1h23m" / "MM:SS" duration from an upstream
+  // "; estimated printing time (normal|silent mode) = <dhms>" comment value.
+  float parseEstimatedTimeValue(const QString &value)
+  {
+    const QString v = value.trimmed();
+    const auto parts = v.split(':');
+    if (parts.size() == 3)
+      return parts[0].toFloat() * 3600.f + parts[1].toFloat() * 60.f + parts[2].toFloat();
+    if (parts.size() == 2)
+      return parts[0].toFloat() * 60.f + parts[1].toFloat();
+    const QRegularExpression re(QStringLiteral("(\\d+)h(\\d+)m"));
+    const auto m = re.match(v);
+    if (m.hasMatch())
+      return m.captured(1).toFloat() * 3600.f + m.captured(2).toFloat() * 60.f;
+    if (v.endsWith('s'))
+      return v.left(v.size() - 1).toFloat();
+    bool ok = false;
+    const float secs = v.toFloat(&ok);
+    return ok ? secs : 0.f;
+  }
+
+  QString formatFilamentLength(double lengthMm)
+  {
+    return QStringLiteral("%1 m").arg(lengthMm / 1000.0, 0, 'f', 2);
+  }
+
+  QString formatFilamentWeight(double grams)
+  {
+    return QStringLiteral("%1 g").arg(grams, 0, 'f', 1);
+  }
+
   // Canonical view-mode indices matching upstream libvgcode EViewType order
   // (libvgcode/include/Types.hpp:80-103). Every mode-to-field mapping in
   // recolorAndPackSegments() and buildLegendItems() uses these named constants
@@ -790,13 +931,24 @@ void PreviewViewModel::setStealthMode(bool enabled)
   if (stealthMode_ == enabled)
     return;
   stealthMode_ = enabled;
-  // Recalculate totalTime with stealth multiplier (~1.4x slower due to reduced accel/jerk)
-  // Aligned with upstream PrintEstimatedStatistics::modes[1] stealth mode.
+  // Recalculate totalTime for stealth mode. Phase 238 (PREV-05): when the
+  // gcode carries an "; estimated printing time (silent mode)" comment, use
+  // the slicer's own stealth estimate (upstream PrintEstimatedStatistics
+  // modes, GCodeProcessor TimeProcessor export); otherwise keep the x1.4
+  // heuristic (~1.4x slower due to reduced accel/jerk) and flag it as an
+  // estimate via stealthTimeEstimated().
   if (!totalTime_.contains("--"))
   {
-    totalTime_ = stealthMode_
-        ? formatTime(parseTimeSecs(estimatedTime_) * 1.4f)
-        : estimatedTime_;
+    if (stealthMode_)
+    {
+      totalTime_ = m_stealthTimeSecs > 0.f
+          ? formatTime(m_stealthTimeSecs)
+          : formatTime(parseTimeSecs(estimatedTime_) * 1.4f);
+    }
+    else
+    {
+      totalTime_ = estimatedTime_;
+    }
   }
   emit stateChanged();
 }
@@ -838,6 +990,133 @@ void PreviewViewModel::setShowMarker(bool enabled)
   if (showMarker_ == enabled)
     return;
   showMarker_ = enabled;
+  emit stateChanged();
+}
+
+// Phase 238 (PREV-03): move-type visibility setters. All follow the
+// setShowTravelMoves pattern: flip the flag, repack the GCV1 payload with the
+// newly-visible/hidden move kinds, and emit stateChanged (upstream toggles
+// m_buffers[buffer_id(type)].visible then refreshes render paths,
+// GCodeViewer.cpp:4936-4946).
+void PreviewViewModel::setShowRetractMoves(bool enabled)
+{
+  if (showRetractMoves_ == enabled)
+    return;
+  showRetractMoves_ = enabled;
+  recolorAndPackSegments();
+  emit stateChanged();
+}
+
+void PreviewViewModel::setShowUnretractMoves(bool enabled)
+{
+  if (showUnretractMoves_ == enabled)
+    return;
+  showUnretractMoves_ = enabled;
+  recolorAndPackSegments();
+  emit stateChanged();
+}
+
+void PreviewViewModel::setShowWipeMoves(bool enabled)
+{
+  if (showWipeMoves_ == enabled)
+    return;
+  showWipeMoves_ = enabled;
+  recolorAndPackSegments();
+  emit stateChanged();
+}
+
+void PreviewViewModel::setShowSeamMarks(bool enabled)
+{
+  if (showSeamMarks_ == enabled)
+    return;
+  showSeamMarks_ = enabled;
+  recolorAndPackSegments();
+  emit stateChanged();
+}
+
+int PreviewViewModel::moveCountOfKind(int kind) const
+{
+  if (kind < 0 || kind >= 6)
+    return 0;
+  return m_kindCounts[kind];
+}
+
+QVariantList PreviewViewModel::filamentSplit() const
+{
+  // Phase 238 (PREV-05): rows in upstream column order Model / Support /
+  // Flushed / Tower (GCodeViewer.cpp:4893-4903), length in meters and weight
+  // in grams using the same area/density conversion as the totals.
+  QVariantList rows;
+  const float radius = m_filamentDiameter * 0.5f;
+  const float area = 3.14159265f * radius * radius;
+  for (int i = 0; i < 4; ++i)
+  {
+    QVariantMap row;
+    const double lengthMm = m_filamentSplitLength[i];
+    const double grams = lengthMm * area * m_filamentDensity * 0.001;
+    row.insert(QStringLiteral("key"), QString::fromLatin1(kFilamentSplitKeys[i]));
+    row.insert(QStringLiteral("label"), QString::fromLatin1(kFilamentSplitLabels[i]));
+    row.insert(QStringLiteral("lengthM"), lengthMm / 1000.0);
+    row.insert(QStringLiteral("weightG"), grams);
+    row.insert(QStringLiteral("lengthText"), formatFilamentLength(lengthMm));
+    row.insert(QStringLiteral("weightText"), formatFilamentWeight(grams));
+    rows.append(row);
+  }
+  return rows;
+}
+
+double PreviewViewModel::filamentUsedGrams() const
+{
+  return m_totalFilamentGrams;
+}
+
+bool PreviewViewModel::stealthTimeEstimated() const
+{
+  // True only while the heuristic (not a parsed silent-mode comment) drives
+  // the stealth total.
+  return stealthMode_ && m_stealthTimeSecs <= 0.f;
+}
+
+double PreviewViewModel::filamentPricePerKg() const
+{
+  if (!m_filamentPrices.isEmpty())
+    return m_filamentPrices.first();
+  return !segments_.empty() ? 29.99 : 0.0;
+}
+
+QVariantList PreviewViewModel::extruderVisibilities() const
+{
+  // Phase 238 (PREV-06): legend rows for the per-extruder visibility toggles
+  // (upstream m_tool_visibles + m_tool_colors, GCodeViewer.cpp:5081-5093).
+  QVariantList rows;
+  QList<int> ids = m_extruderUsedLength.keys();
+  std::sort(ids.begin(), ids.end());
+  const QStringList configured = configuredExtruderColors();
+  for (int id : ids)
+  {
+    QVariantMap row;
+    row.insert(QStringLiteral("extruderId"), id);
+    row.insert(QStringLiteral("label"), QStringLiteral("Extruder %1").arg(id));
+    row.insert(QStringLiteral("color"), colorHex(effectiveExtruderColor(id, configured)));
+    row.insert(QStringLiteral("visible"), isExtruderVisible(id));
+    rows.append(row);
+  }
+  return rows;
+}
+
+bool PreviewViewModel::isExtruderVisible(int extruderId) const
+{
+  // Default visible, matching the upstream m_tool_visibles reload
+  // (GCodeViewer.cpp:1109-1116 fills all-true on load).
+  return m_extruderVisibility.value(extruderId, true);
+}
+
+void PreviewViewModel::toggleExtruderVisibility(int extruderId)
+{
+  // Applied at pack time in the Filament/ColorPrint view only (upstream
+  // gates the skip on EViewType::ColorPrint, GCodeViewer.cpp:3337).
+  m_extruderVisibility[extruderId] = !isExtruderVisible(extruderId);
+  recolorAndPackSegments();
   emit stateChanged();
 }
 
@@ -947,6 +1226,18 @@ void PreviewViewModel::resetPreviewState()
   const bool hadTicks = !tickMarks_.isEmpty();
   tickMarks_.clear();
   m_maxLayerTime = 0.f;
+  // Phase 238 (PREV-03/05/06): clear the parser-side move-kind counts, the
+  // filament split, the estimated-time comments, and the per-extruder price /
+  // visibility maps (visibility resets to all-visible like upstream
+  // m_tool_visibles reload, GCodeViewer.cpp:1109-1116).
+  for (int &c : m_kindCounts)
+    c = 0;
+  for (double &v : m_filamentSplitLength)
+    v = 0.0;
+  m_normalTimeSecs = 0.f;
+  m_stealthTimeSecs = 0.f;
+  m_filamentPrices.clear();
+  m_extruderVisibility.clear();
   layerCount_ = 0;
   moveCount_ = 0;
   currentMove_ = 0;
@@ -1040,12 +1331,62 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   double feedrateSum = 0.0;
   int feedrateCount = 0;
 
+  // Phase 238 (PREV-03): wipe/flush comment state + seam detector, ported
+  // from the upstream GCodeProcessor comment tags (" WIPE_START"/" WIPE_END"
+  // and " FLUSH_START"/" FLUSH_END", GCodeProcessor.cpp:2261-2278 + :2283-2291)
+  // and the outer-wall loop seam detector (GCodeProcessor.cpp:3307-3345).
+  bool wiping = false;
+  bool flushing = false;
+  bool seamDetectorActive = false;
+  bool seamHasFirstVertex = false;
+  float seamFirstX = 0.f, seamFirstY = 0.f, seamFirstZ = 0.f;
+
   // Per-role time tracking aligned with upstream PrintEstimatedStatistics::roles_times.
   QHash<QString, double> roleTimeAccum; // TYPE label to accumulated time in seconds.
   auto accumulateRoleTime = [&](const QString &role, float dx, float dy, float dz, float feed) {
     if (feed <= 0.f) return;
     const float dist = std::sqrt(dx*dx + dy*dy + dz*dz);
     roleTimeAccum[role] += dist / feed * 60.0; // feed is mm/min, dist is mm to seconds.
+  };
+
+  // Phase 238 (PREV-03): append a zero-displacement move marker (retract /
+  // unretract / seam) as a short vertical tick segment. Upstream renders
+  // these as GL_POINTS with the Options_Colors palette
+  // (GCodeViewer.cpp:718-727); the Qt6 line pipeline has no glPointSize
+  // equivalent, so a kMarkerTickHeight tick stands in (documented delta).
+  // The marker advances moveIndex so playback reveals it at the right time.
+  auto appendMarkerSegment = [&](int markerKind, float mx, float my, float mz) {
+    StoredSegment seg;
+    seg.x1 = mx;
+    seg.y1 = my;
+    seg.z1 = mz;
+    seg.x2 = mx;
+    seg.y2 = my;
+    seg.z2 = mz + kMarkerTickHeight;
+    const float *kc = kindBaseColor(markerKind);
+    seg.baseR = kc[0];
+    seg.baseG = kc[1];
+    seg.baseB = kc[2];
+    seg.feedrate = 0.f;
+    seg.fan_speed = currentFanSpeed;
+    seg.temperature = currentTemp;
+    seg.width = currentWidth;
+    seg.height = currentHeight;
+    seg.layer_time = currentLayerTime;
+    seg.acceleration = 0.f;
+    seg.extruder_id = currentExtruder;
+    seg.layer = layer;
+    seg.move = moveIndex;
+    seg.isTravel = true;
+    seg.role = 0;
+    seg.kind = markerKind;
+    segments_.push_back(seg);
+    m_kindCounts[markerKind] += 1;
+    featureCount_[kindFeatureLabel(markerKind)] += 1;
+    // No elapsed time passes for a zero-displacement marker.
+    const float prev = m_moveAccumulatedTime.empty() ? 0.f : m_moveAccumulatedTime.back();
+    m_moveAccumulatedTime.push_back(prev);
+    ++moveIndex;
   };
 
   int sourceLineNumber = 0;
@@ -1079,6 +1420,22 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       }
 
       const QString upperComment = raw.toUpper();
+      // Phase 238 (PREV-03): wipe state tags. Upstream Reserved_Tags are
+      // " WIPE_START"/" WIPE_END" (GCodeProcessor.cpp:55-75) -- matched here
+      // contains-wise so both the BBS ("; WIPE_START") and plain forms work.
+      // " WIPE_TOWER_START" does NOT contain "WIPE_START" so tower tags do
+      // not leak into the wiping flag.
+      if (upperComment.contains(QStringLiteral("WIPE_START")))
+        wiping = true;
+      else if (upperComment.contains(QStringLiteral("WIPE_END")))
+        wiping = false;
+      // Phase 238 (PREV-05): flush volume tags " FLUSH_START"/" FLUSH_END"
+      // (GCodeProcessor.cpp:98-99). Unretract moves inside the region count
+      // as flushed filament (upstream :3064-3074).
+      if (upperComment.contains(QStringLiteral("FLUSH_START")))
+        flushing = true;
+      else if (upperComment.contains(QStringLiteral("FLUSH_END")))
+        flushing = false;
       auto appendTick = [&](OWzx::TickType type, const QString &extra = QString{}) {
         OWzx::TickCode tick;
         tick.tick = qMax(0, layer);
@@ -1129,7 +1486,10 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       }
       if (raw.contains(QStringLiteral("filament_diameter")))
       {
-        const QRegularExpression re(QLatin1String("filament_diameter[=:]\\s*(\\d+(?:\\.\\d+)?)"), QRegularExpression::CaseInsensitiveOption);
+        // Phase 238 (PREV-05): allow the "; key = value" spacing of the real
+        // gcode config footer (the old [=:] without leading \s* never matched
+        // "; filament_diameter = 1.75").
+        const QRegularExpression re(QLatin1String("filament_diameter\\s*[=:]\\s*(\\d+(?:\\.\\d+)?)"), QRegularExpression::CaseInsensitiveOption);
         const auto m = re.match(raw);
         if (m.hasMatch())
         {
@@ -1140,13 +1500,53 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       }
       if (raw.contains(QStringLiteral("filament_density")))
       {
-        const QRegularExpression re(QLatin1String("filament_density[=:]\\s*(\\d+(?:\\.\\d+)?)"), QRegularExpression::CaseInsensitiveOption);
+        const QRegularExpression re(QLatin1String("filament_density\\s*[=:]\\s*(\\d+(?:\\.\\d+)?)"), QRegularExpression::CaseInsensitiveOption);
         const auto m = re.match(raw);
         if (m.hasMatch())
         {
           bool ok = false;
           const float v = m.captured(1).toFloat(&ok);
           if (ok && v > 0.f) filamentDensity = v;
+        }
+      }
+      // Phase 238 (PREV-05): per-extruder filament price per kg from the
+      // gcode config block ("; filament_cost = 29.99" / comma list). Upstream
+      // reads the filament_cost config key (GCodeProcessor.cpp:1252-1260) and
+      // defaults to DEFAULT_FILAMENT_COST 29.99 (GCodeProcessor.cpp:49).
+      if (raw.contains(QStringLiteral("filament_cost")))
+      {
+        const QRegularExpression re(QLatin1String("filament_cost\\s*[=:]\\s*([\\d.,\\s]+)"), QRegularExpression::CaseInsensitiveOption);
+        const auto m = re.match(raw);
+        if (m.hasMatch())
+        {
+          const QStringList prices = m.captured(1).split(QLatin1Char(','), Qt::SkipEmptyParts);
+          for (int i = 0; i < prices.size(); ++i)
+          {
+            bool ok = false;
+            const double price = prices.at(i).trimmed().toDouble(&ok);
+            if (ok && price > 0.0)
+              m_filamentPrices[i] = price;
+          }
+        }
+      }
+      // Phase 238 (PREV-05): estimated printing time comments. Upstream
+      // writes "; estimated printing time (normal mode) = X" and
+      // "; estimated printing time (silent mode) = X" (GCodeProcessor.cpp
+      // TimeProcessor post-process, Estimated_Printing_Time_Placeholder);
+      // silent == the libvgcode Stealth time mode used by the stealth toggle.
+      if (upperComment.contains(QStringLiteral("ESTIMATED PRINTING TIME")))
+      {
+        const int eq = raw.indexOf(QLatin1Char('='));
+        if (eq >= 0)
+        {
+          const float secs = parseEstimatedTimeValue(raw.mid(eq + 1));
+          if (secs > 0.f)
+          {
+            if (upperComment.contains(QStringLiteral("SILENT MODE")))
+              m_stealthTimeSecs = secs;
+            else if (upperComment.contains(QStringLiteral("NORMAL MODE")))
+              m_normalTimeSecs = secs;
+          }
         }
       }
       continue;
@@ -1262,6 +1662,23 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       if (parseAxis(upper, 'K', val) && val >= 0.f) currentPA = val;
     }
 
+    // Phase 238 (PREV-03): explicit firmware retract/unretract commands.
+    // Upstream G10/G11 synthesize a G1 with E = -/+ retraction_length from
+    // the printer config (GCodeProcessor.cpp:3818-3854). The Qt6 parser has
+    // no config access here, so the event is recorded as a zero-displacement
+    // retract/unretract tick at the current position (documented delta: no
+    // E delta or retraction time is attributed).
+    if (upper == QStringLiteral("G10") || upper.startsWith(QStringLiteral("G10 ")))
+    {
+      appendMarkerSegment(KindRetract, x, y, z);
+      continue;
+    }
+    if (upper == QStringLiteral("G11") || upper.startsWith(QStringLiteral("G11 ")))
+    {
+      appendMarkerSegment(KindUnretract, x, y, z);
+      continue;
+    }
+
     const bool isG0 = upper == QStringLiteral("G0") || upper.startsWith(QStringLiteral("G0 "));
     const bool isG1 = upper == QStringLiteral("G1") || upper.startsWith(QStringLiteral("G1 "));
     if (!isG0 && !isG1)
@@ -1296,8 +1713,21 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       }
     }
 
-    const bool moved = (nx != x) || (ny != y) || (nz != z);
-    if (!moved)
+    const bool xyMoved = (nx != x) || (ny != y);
+    const bool zMoved = (nz != z);
+    // Phase 238 (PREV-03): upstream move classification. E-only lines are
+    // no longer dropped: dE<0 without movement = Retract, dE>0 without XY
+    // movement = Unretract (GCodeProcessor.cpp:2954-2968). Lines with no
+    // displacement at all stay skipped (upstream Noop).
+    if (!xyMoved && !zMoved && !hasE)
+    {
+      x = nx;
+      y = ny;
+      z = nz;
+      continue;
+    }
+    const int kind = classifyMoveKind(extrusionDelta, xyMoved, zMoved, wiping);
+    if (kind < 0)
     {
       x = nx;
       y = ny;
@@ -1306,8 +1736,8 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
         e = ne;
       continue;
     }
+    const bool extruding = (kind == KindExtrude) && extrusionDelta > 0.00001f;
 
-    const bool extruding = hasE && extrusionDelta > 0.00001f;
     if (extruding)
     {
       // Upstream Preview layers are printed extrusion layers. Z-hop/travel
@@ -1327,6 +1757,55 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
         m_layerZs.append(printLayerZ);
         layerStartElapsed = elapsedTime;
         currentLayerTime = 0.f;
+      }
+    }
+
+    // Phase 238 (PREV-03): seam detection, ported from upstream
+    // GCodeProcessor.cpp:3305-3345. The detector activates on the first
+    // Outer wall (erExternalPerimeter, canonical index 2) extrusion and
+    // records the loop's FIRST vertex ONCE (upstream has_first_vertex,
+    // GCodeProcessor.cpp:3310-3311). Any move that is not an extrusion, or
+    // an extrusion whose role is neither Outer wall nor Overhang wall
+    // (indices 2/3), closes the detector: when that closing move's start
+    // (= the previous move endpoint, upstream m_result.moves.back().position)
+    // is within the upstream squared threshold 0.0625 (= 0.25mm) of the
+    // first vertex, a Seam marker is stored at the midpoint.
+    {
+      const int currentRole = roleForTypeImpl(currentType);
+      const bool wallLoopRole = (currentRole == 2 || currentRole == 3);
+      if (seamDetectorActive)
+      {
+        if (kind == KindExtrude && currentRole == 2)
+        {
+          if (!seamHasFirstVertex)
+          {
+            seamFirstX = x;
+            seamFirstY = y;
+            seamFirstZ = z;
+            seamHasFirstVertex = true;
+          }
+        }
+        else if ((kind != KindExtrude || !wallLoopRole) && seamHasFirstVertex)
+        {
+          const float sdx = x - seamFirstX;
+          const float sdy = y - seamFirstY;
+          const float sdz = z - seamFirstZ;
+          if (sdx * sdx + sdy * sdy + sdz * sdz < 0.0625f)
+            appendMarkerSegment(KindSeam,
+                                0.5f * (x + seamFirstX),
+                                0.5f * (y + seamFirstY),
+                                0.5f * (z + seamFirstZ));
+          seamDetectorActive = false;
+          seamHasFirstVertex = false;
+        }
+      }
+      else if (kind == KindExtrude && currentRole == 2)
+      {
+        seamDetectorActive = true;
+        seamFirstX = x;
+        seamFirstY = y;
+        seamFirstZ = z;
+        seamHasFirstVertex = true;
       }
     }
 
@@ -1355,17 +1834,43 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       m_extruderUsedLength[currentExtruder] += extrusionDelta;
       accumulateRoleTime(currentType, dx, dy, dz, currentFeedrate);
     }
-    else
+    else if (kind == KindUnretract && flushing)
     {
-      ++travelMoveCount;
-      accumulateRoleTime(QStringLiteral("TRAVEL"), dx, dy, dz, currentFeedrate);
+      // Phase 238 (PREV-05): unretract inside a FLUSH_START..FLUSH_END region
+      // counts as flushed filament and participates in the total (upstream
+      // GCodeProcessor.cpp:3064-3074 update_flush_per_filament).
+      totalFilamentUsed += extrusionDelta;
+      m_extruderUsedLength[currentExtruder] += extrusionDelta;
     }
+
+    if (kind == KindTravel)
+      ++travelMoveCount;
     // Fine-grained role assignment: map the ;TYPE: display string DIRECTLY to
     // the canonical libvgcode index and bake the per-role base color from
     // kRoleColors (FeatureType mode). Both arrays use the same canonical index,
     // so every role -- including the divergent ones (Ironing->7, Bottom
     // surface->15) -- gets the correct color and visibility slot.
     const int role = extruding ? roleForTypeImpl(currentType) : 0;
+
+    // Phase 238 (PREV-05): category split for the extruded volume, ported
+    // from upstream GCodeProcessor.cpp:3002-3010 -- support roles
+    // (SupportMaterial 11 / SupportMaterialInterface 12 / SupportTransition
+    // 18) -> support, WipeTower (Prime tower, 13) -> tower, everything else
+    // -> model. Flushed is accumulated at the unretract-while-flushing branch
+    // above (upstream update_flush_per_filament).
+    if (extruding)
+    {
+      if (role == 11 || role == 12 || role == 18)
+        m_filamentSplitLength[1] += extrusionDelta;
+      else if (role == 13)
+        m_filamentSplitLength[3] += extrusionDelta;
+      else
+        m_filamentSplitLength[0] += extrusionDelta;
+    }
+    else if (kind == KindUnretract && flushing)
+    {
+      m_filamentSplitLength[2] += extrusionDelta;
+    }
 
     StoredSegment seg;
     seg.x1 = x;
@@ -1374,9 +1879,22 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     seg.x2 = nx;
     seg.y2 = ny;
     seg.z2 = nz;
-    seg.baseR = kRoleColors[role][0];
-    seg.baseG = kRoleColors[role][1];
-    seg.baseB = kRoleColors[role][2];
+    if (extruding)
+    {
+      seg.baseR = kRoleColors[role][0];
+      seg.baseG = kRoleColors[role][1];
+      seg.baseB = kRoleColors[role][2];
+    }
+    else
+    {
+      // Phase 238 (PREV-03): travel/retract/unretract/wipe use the upstream
+      // Travel_Colors[0]/Options_Colors/Wipe_Color base colors
+      // (GCodeViewer.cpp:718-751).
+      const float *kc = kindBaseColor(kind);
+      seg.baseR = kc[0];
+      seg.baseG = kc[1];
+      seg.baseB = kc[2];
+    }
     seg.feedrate = currentFeedrate;
     seg.fan_speed = currentFanSpeed;
     seg.temperature = currentTemp;
@@ -1392,8 +1910,9 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     seg.extruder_id = currentExtruder;
     seg.layer = layer;
     seg.move = moveIndex;
-    seg.isTravel = !extruding;
+    seg.isTravel = (kind == KindTravel || kind == KindWipe);
     seg.role = role;
+    seg.kind = kind;
     segments_.push_back(seg);
 
     // Accumulate elapsed time for the move slider, aligned with upstream IMSlider m_layers_times.
@@ -1403,7 +1922,11 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       m_moveAccumulatedTime.push_back(prev + dt);
     }
 
-    featureCount_[QString::fromUtf8(kRoleLabels[role])] += 1;
+    if (extruding)
+      featureCount_[QString::fromUtf8(kRoleLabels[role])] += 1;
+    else
+      featureCount_[kindFeatureLabel(kind)] += 1;
+    m_kindCounts[kind] += 1;
 
     x = nx;
     y = ny;
@@ -1438,6 +1961,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     filamentUsed_ = QStringLiteral("--");
     filamentWeight_ = QStringLiteral("--");
     estimatedCost_ = QStringLiteral("--");
+    m_totalFilamentGrams = 0.0;
   }
   else
   {
@@ -1447,6 +1971,11 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     const float volume_mm3 = totalFilamentUsed * 3.14159265f * (filamentDiameter * 0.5f) * (filamentDiameter * 0.5f);
     const float weight_g = volume_mm3 * filamentDensity * 0.001f;
     filamentWeight_ = QStringLiteral("%1 g").arg(weight_g, 0, 'f', 1);
+    m_totalFilamentGrams = weight_g;
+    // Phase 238 (PREV-05): keep the parsed diameter/density so the split
+    // formatter can convert lengths to grams with the same formula.
+    m_filamentDiameter = filamentDiameter;
+    m_filamentDensity = filamentDensity;
 
     // Compute per-extruder filament weight, aligned with upstream PrintEstimatedStatistics.
     m_extruderUsedWeight.clear();
@@ -1456,9 +1985,18 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       m_extruderUsedWeight[it.key()] = vol * filamentDensity * 0.001f;
     }
 
-    // Estimated cost: weight_kg * price_per_kg (default ~$20/kg PLA)
-    constexpr float pricePerKg = 20.0f; // dollars per kg
-    estimatedCost_ = QStringLiteral("$%1").arg(weight_g / 1000.0f * pricePerKg, 0, 'f', 2);
+    // Phase 238 (PREV-05): estimated cost = sum over extruders of
+    // grams * price_per_kg * 0.001 (upstream GCodeProcessor.cpp:4387-4398).
+    // Price comes from the "; filament_cost" gcode config block when present;
+    // the fallback default is the upstream DEFAULT_FILAMENT_COST 29.99/kg
+    // (GCodeProcessor.cpp:49) -- no longer a hardcoded $20/kg.
+    double totalCost = 0.0;
+    for (auto it = m_extruderUsedWeight.constBegin(); it != m_extruderUsedWeight.constEnd(); ++it)
+    {
+      const double pricePerKg = m_filamentPrices.value(it.key(), 29.99);
+      totalCost += it.value() * pricePerKg * 0.001;
+    }
+    estimatedCost_ = QStringLiteral("$%1").arg(totalCost, 0, 'f', 2);
   }
 
   // Build role time breakdown, aligned with upstream PrintEstimatedStatistics::roles_times.
@@ -1499,6 +2037,21 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   updateToolPositionData();
   rebuildGcodeLineWindow();
   recolorAndPackSegments();
+  // Phase 238 (PREV-05): honor the parsed "; estimated printing time"
+  // comments. When the slice service did not supply a label, the normal-mode
+  // comment becomes the total; the stealth total switches to the parsed
+  // silent-mode value when present (else the documented x1.4 heuristic).
+  if (m_normalTimeSecs > 0.f && estimatedTime_.contains(QStringLiteral("--")))
+  {
+    estimatedTime_ = formatTime(m_normalTimeSecs);
+    totalTime_ = estimatedTime_;
+  }
+  if (stealthMode_)
+  {
+    totalTime_ = m_stealthTimeSecs > 0.f
+        ? formatTime(m_stealthTimeSecs)
+        : formatTime(parseTimeSecs(estimatedTime_) * 1.4f);
+  }
   qInfo("[PreviewViewModel] payload file=%s bytes=%lld layers=%d moves=%d segments=%d travelVisible=%d",
         filePath.toUtf8().constData(),
         static_cast<long long>(QFileInfo(filePath).size()),
@@ -1591,12 +2144,61 @@ int PreviewViewModel::toolChangeExtruderIdAt(int i) const
 
 QString PreviewViewModel::extruderColor(int extruderId) const
 {
-  // Upstream extruder_colors: fixed 8-color cycle.
-  static const char *colors[] = {
-    "#009688", "#f44336", "#2196f3", "#ff9800",
-    "#9c27b0", "#4caf50", "#ff5722", "#607d8b"
+  // Phase 238 (PREV-06): configured filament colors first (upstream plater
+  // extruder_colors / m_tool_colors, GCodeViewer.cpp:1109-1127), legacy
+  // fixed-cycle fallback handled by effectiveExtruderColor.
+  return colorHex(effectiveExtruderColor(extruderId, configuredExtruderColors()));
+}
+
+QStringList PreviewViewModel::configuredExtruderColors() const
+{
+  // The configured per-filament colors live on the project service
+  // (PresetServiceMock default_filament_colour sync -> plateFilamentColours,
+  // the Qt6 equivalent of upstream get_extruder_colors_from_plater_config).
+  return projectService_ ? projectService_->plateFilamentColours() : QStringList{};
+}
+
+int PreviewViewModel::configuredExtruderCount() const
+{
+  // Phase 238 (PREV-04): the CONFIGURED extruder count (upstream gates the
+  // IMSlider "Change Filament" submenu on m_extruder_colors.size() > 1,
+  // IMSlider.cpp:1374). This counts configured filaments, not just the ones
+  // used by the current slice.
+  return projectService_ ? projectService_->filamentCount() : 1;
+}
+
+QStringList PreviewViewModel::defaultColorChangePalette() const
+{
+  // Phase 238 (PREV-04): upstream GCodeProcessor Default_Colors
+  // (GCodeProcessor.cpp:2305-2312), used when a color change is decoded
+  // without an explicit color.
+  return {
+      QStringLiteral("#0B2C7A"),
+      QStringLiteral("#1C8891"),
+      QStringLiteral("#AAF200"),
+      QStringLiteral("#F5CE0A"),
+      QStringLiteral("#D16830"),
+      QStringLiteral("#942616"),
   };
-  return QString::fromUtf8(colors[extruderId % 8]);
+}
+
+float PreviewViewModel::layerTimeCumulative(int layer) const
+{
+  // Upstream IMSlider m_layers_times is CUMULATIVE (IMSlider.cpp:307-308
+  // adds the previous entry); m_layerTimes stores per-layer durations, so
+  // sum 0..layer here. Out-of-range -> 0.
+  if (layer < 0)
+    return 0.f;
+  double total = 0.0;
+  const int last = qMin(layer, m_layerTimes.size() - 1);
+  for (int i = 0; i <= last; ++i)
+    total += m_layerTimes[i];
+  return float(total);
+}
+
+QString PreviewViewModel::layerTimeLabel(int layer) const
+{
+  return formatTime(layerTimeCumulative(layer));
 }
 
 int PreviewViewModel::extruderCount() const
@@ -1627,7 +2229,25 @@ void PreviewViewModel::recolorAndPackSegments()
   visibleIndices.reserve(segments_.size());
   for (int i = 0; i < int(segments_.size()); ++i)
   {
-    if (showTravelMoves_ || !segments_[i].isTravel)
+    // Phase 238 (PREV-03): per-move-kind visibility (upstream options_items
+    // checkbox filters, GCodeViewer.cpp:4936-4950): Travel / Retract /
+    // Unretract / Wipe / Seam each keep their own flag; extrusions always
+    // pass. Phase 238 (PREV-06): in the Filament/ColorPrint view the
+    // per-extruder m_tool_visibles mask also applies (GCodeViewer.cpp:3337).
+    const auto &s = segments_[i];
+    bool visible = true;
+    switch (s.kind)
+    {
+      case KindTravel:     visible = showTravelMoves_;      break;
+      case KindRetract:    visible = showRetractMoves_;     break;
+      case KindUnretract:  visible = showUnretractMoves_;   break;
+      case KindWipe:       visible = showWipeMoves_;        break;
+      case KindSeam:       visible = showSeamMarks_;        break;
+      default:             visible = true;                  break;
+    }
+    if (visible && mode == VT_Filament)
+      visible = isExtruderVisible(s.extruder_id);
+    if (visible)
       visibleIndices.push_back(i);
   }
 
@@ -1673,18 +2293,11 @@ void PreviewViewModel::recolorAndPackSegments()
   std::vector<PackedSegment> packed;
   packed.resize(count);
 
-  // Tool/extruder color palette (matching upstream m_tool_colors)
-  static const float toolColors[][3] = {
-    {0.95f, 0.55f, 0.22f},  // Extruder 0 - orange
-    {0.22f, 0.55f, 0.87f},  // Extruder 1 - blue
-    {0.30f, 0.69f, 0.46f},  // Extruder 2 - green
-    {0.61f, 0.35f, 0.71f},  // Extruder 3 - purple
-    {0.91f, 0.30f, 0.24f},  // Extruder 4 - red
-    {0.10f, 0.74f, 0.61f},  // Extruder 5 - teal
-    {0.95f, 0.77f, 0.06f},  // Extruder 6 - yellow
-    {0.91f, 0.12f, 0.55f},  // Extruder 7 - pink
-  };
-  static constexpr int kToolColorCount = int(sizeof(toolColors) / sizeof(toolColors[0]));
+  // Phase 238 (PREV-06): Tool/Filament modes color by the CONFIGURED
+  // extruder colors (upstream m_tool_colors from the plater
+  // extruder_colors config, GCodeViewer.cpp:1109-1127), with the legacy
+  // 8-color cycle as fallback (effectiveExtruderColor).
+  const QStringList configuredColors = configuredExtruderColors();
 
   for (int i = 0; i < count; ++i)
   {
@@ -1717,9 +2330,10 @@ void PreviewViewModel::recolorAndPackSegments()
     }
     else if (mode == VT_Filament || mode == VT_Tool)
     {
-      // Filament (ColorPrint) / Tool: fixed palette per extruder.
-      const auto &tc = toolColors[s.extruder_id % kToolColorCount];
-      p.r = tc[0]; p.g = tc[1]; p.b = tc[2];
+      // Filament (ColorPrint) / Tool: per-extruder palette from the
+      // CONFIGURED filament colors (Phase 238 PREV-06).
+      const ColorResult tc = effectiveExtruderColor(s.extruder_id, configuredColors);
+      p.r = tc.r; p.g = tc.g; p.b = tc.b;
     }
     else if (mode == VT_ActualSpeed || mode == VT_Jerk || mode == VT_ActualFlow || mode == VT_PressureAdvance)
     {
@@ -1809,40 +2423,44 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
           break;
         }
       }
+      // Phase 238 (PREV-03): non-extrusion move kinds (Travel / Retract /
+      // Unretract / Wipe / Seam) match their own Options_Colors-based palette
+      // (upstream shows them in the FeatureType legend, GCodeViewer.cpp:4948-4957).
+      for (int k = 1; k <= 5; ++k)
+      {
+        if (it.key() == kindFeatureLabel(k))
+        {
+          color = colorHex({kindBaseColor(k)[0], kindBaseColor(k)[1], kindBaseColor(k)[2]});
+          break;
+        }
+      }
       legendItems_.append(legendItem(it.key(), color, it.value()));
     }
   }
   else if (mode == VT_Filament || mode == VT_Tool)
   {
-    // Filament (ColorPrint) / Tool legend: extruder palette.
+    // Filament (ColorPrint) / Tool legend: extruder palette from the
+    // CONFIGURED filament colors (Phase 238 PREV-06). Rows carry extruderId
+    // and visible so the QML legend can host the per-extruder visibility
+    // checkbox (upstream m_tool_visibles, GCodeViewer.cpp:5081-5093).
     m_legendType = 2; // extruder palette
+    const QStringList configuredColors = configuredExtruderColors();
     QSet<int> usedIds;
     for (const auto &s : segments_)
       usedIds.insert(s.extruder_id);
     QList<int> sortedIds = usedIds.values();
     std::sort(sortedIds.begin(), sortedIds.end());
-    static const float toolColors[][3] = {
-        {0.95f, 0.55f, 0.22f},
-        {0.22f, 0.55f, 0.87f},
-        {0.30f, 0.69f, 0.46f},
-        {0.61f, 0.35f, 0.71f},
-        {0.91f, 0.30f, 0.24f},
-        {0.10f, 0.74f, 0.61f},
-        {0.95f, 0.77f, 0.06f},
-        {0.91f, 0.12f, 0.55f}};
-    static constexpr int kN = int(sizeof(toolColors) / sizeof(toolColors[0]));
     for (int id : sortedIds)
     {
-      const auto &tc = toolColors[id % kN];
-      const QString col = QStringLiteral("#%1%2%3")
-          .arg(int(tc[0]*255), 2, 16, QLatin1Char('0'))
-          .arg(int(tc[1]*255), 2, 16, QLatin1Char('0'))
-          .arg(int(tc[2]*255), 2, 16, QLatin1Char('0'));
+      const QString col = colorHex(effectiveExtruderColor(id, configuredColors));
       const QString label = QStringLiteral("Extruder %1").arg(id);
       int cnt = 0;
       for (const auto &s : segments_)
         if (s.extruder_id == id) ++cnt;
-      legendItems_.append(legendItem(label, col, cnt));
+      QVariantMap row = legendItem(label, col, cnt);
+      row.insert(QStringLiteral("extruderId"), id);
+      row.insert(QStringLiteral("visible"), isExtruderVisible(id));
+      legendItems_.append(row);
     }
   }
   else
@@ -1994,6 +2612,24 @@ void PreviewViewModel::addFilamentChangeAtLayer(int layer, int extruderId)
   emit tickMarksChanged();
   // Phase 118 (TICK-02/TICK-03): persist into libslic3r custom-g-code store + re-slice.
   writeTicksToModel();
+}
+
+void PreviewViewModel::editFilamentChangeAtLayer(int layer, int extruderId)
+{
+  // Phase 238 (PREV-04): in-place extruder update for an existing ToolChange
+  // tick (upstream edit menu, IMSlider.cpp:1414-1424). Follows the
+  // editCustomGcodeAtLayer pattern: mutate + emit + writeTicksToModel.
+  for (auto& tc : tickMarks_) {
+    if (tc.tick == layer && tc.type == OWzx::TickType::ToolChange) {
+      if (tc.extruder == extruderId)
+        return;
+      tc.extruder = extruderId;
+      emit tickMarksChanged();
+      writeTicksToModel();
+      return;
+    }
+  }
+  qWarning("editFilamentChangeAtLayer: no ToolChange tick at layer %d", layer);
 }
 
 void PreviewViewModel::addColorChangeAtLayer(int layer, int extruder, const QString& color)

@@ -83,7 +83,16 @@ Item {
                 anchors.margins: 8
                 spacing: 5
 
-                StatRow { label: qsTr("总时间"); value: root.previewVm ? root.previewVm.totalTime : "--:--:--" }
+                StatRow {
+                    label: qsTr("总时间")
+                    // Phase 238 (PREV-05): flag the heuristic stealth total.
+                    // Upstream reads the slicer's "; estimated printing time
+                    // (silent mode)" comment; when absent the Qt6 x1.4
+                    // heuristic stands in and is marked as an estimate.
+                    value: (root.previewVm ? root.previewVm.totalTime : "--:--:--")
+                           + (root.previewVm && root.previewVm.stealthTimeEstimated
+                              ? qsTr(" (估算)") : "")
+                }
                 StatRow { label: qsTr("层数"); value: root.previewVm ? String(root.previewVm.layerCount) : "0" }
                 StatRow { label: qsTr("移动"); value: root.previewVm ? String(root.previewVm.moveCount) : "0" }
                 StatRow { label: qsTr("挤出移动"); value: root.previewVm ? String(root.previewVm.extrudeMoveCount) : "0" }
@@ -92,7 +101,64 @@ Item {
                 StatRow { label: qsTr("耗材重量"); value: root.previewVm ? root.previewVm.filamentWeight : "--" }
                 StatRow { label: qsTr("平均速度"); value: root.previewVm ? root.previewVm.avgSpeed : "--" }
                 StatRow { label: qsTr("工具切换"); value: root.previewVm ? String(root.previewVm.toolChangeCount) : "0" }
+                // Phase 238 (PREV-05): the per-kg price actually used for the
+                // cost estimate, from the "; filament_cost" gcode config block
+                // (upstream filament_cost key, default 29.99/kg).
+                StatRow {
+                    label: qsTr("耗材单价")
+                    visible: root.previewVm && root.previewVm.filamentPricePerKg > 0
+                    value: root.previewVm
+                           ? "$" + root.previewVm.filamentPricePerKg.toFixed(2) + "/kg" : "--"
+                }
                 StatRow { label: qsTr("预计成本"); value: root.previewVm ? root.previewVm.estimatedCost : "--" }
+
+                // Phase 238 (PREV-05): filament usage split aligned with the
+                // upstream statistics columns Model / Support / Flushed /
+                // Tower (GCodeViewer.cpp:5161-5277; volume accounting in
+                // GCodeProcessor.cpp:3002-3010).
+                Label {
+                    visible: root.previewVm && root.previewVm.filamentSplit.length > 0
+                             && root.previewVm.filamentUsedGrams > 0
+                    text: qsTr("耗材分类")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeSM
+                    font.bold: true
+                    Layout.topMargin: 3
+                }
+
+                Repeater {
+                    model: root.previewVm
+                           && root.previewVm.filamentUsedGrams > 0
+                           ? root.previewVm.filamentSplit : []
+                    delegate: RowLayout {
+                        id: splitRow
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 6
+                        visible: splitRow.modelData.weightG > 0.05
+
+                        Label {
+                            Layout.fillWidth: true
+                            text: qsTr(splitRow.modelData.label)
+                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSizeSM
+                            elide: Text.ElideRight
+                        }
+                        Label {
+                            text: splitRow.modelData.lengthText
+                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSizeXS
+                            font.family: Theme.fontMono
+                        }
+                        Label {
+                            Layout.preferredWidth: 64
+                            text: splitRow.modelData.weightText
+                            color: Theme.textSecondary
+                            font.pixelSize: Theme.fontSizeXS
+                            horizontalAlignment: Text.AlignRight
+                        }
+                    }
+                }
 
                 Label {
                     visible: root.previewVm && root.previewVm.extruderCount() > 0

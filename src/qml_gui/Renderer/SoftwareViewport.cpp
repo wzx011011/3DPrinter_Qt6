@@ -32,6 +32,22 @@ QColor objectColor(int index)
       QColor(26, 188, 156)};
   return colors[index % (sizeof(colors) / sizeof(colors[0]))];
 }
+
+// Phase 238 (PREV-07): wire-format mirror of PreviewViewModel::PackedSegment
+// / RhiViewportRenderer::GcvPackedSegment (20 floats + 4 ints = 92 bytes).
+// Both producers static_assert the same layout; this local copy keeps the
+// software fallback free of the RHI headers.
+struct GcvSegmentWire
+{
+  float x1, y1, z1, x2, y2, z2;
+  float r, g, b;
+  float feedrate, fan_speed, temperature, width, layer_time, acceleration;
+  float jerk, pressure_advance, actual_speed, actual_flow;
+  int extruder_id, layer, move;
+  int role;
+};
+static_assert(sizeof(GcvSegmentWire) == 92,
+              "GcvSegmentWire must be 92 bytes (GCV1 wire format lockstep)");
 }
 
 SoftwareViewport::SoftwareViewport(QQuickItem *parent)
@@ -67,6 +83,10 @@ void SoftwareViewport::setPreviewData(const QByteArray &data)
   if (m_previewData == data)
     return;
   m_previewData = data;
+  // Phase 238 (PREV-07): parse the GCV1 blob immediately so the software
+  // fallback path can paint the preview segments (paintScene -> 
+  // drawPreviewSegments).
+  parsePreviewData();
   update();
 }
 
@@ -672,6 +692,14 @@ void SoftwareViewport::paintScene(QPainter *painter, const QRectF &target)
     painter->drawPolygon(face.poly);
   }
 
+  // Phase 238 (PREV-07): G-code preview on the software fallback path. The
+  // bed grid alone left the Preview canvas blank; draw the GCV1 segments
+  // (color per role/mode, layer-clipped) after the meshes so toolpaths stay
+  // on top (upstream renders toolpaths after the shells,
+  // GCodeViewer.cpp:1246-1248).
+  if (m_canvasType == CanvasPreview)
+    drawPreviewSegments(painter);
+
   painter->setPen(QColor(218, 226, 234));
   painter->setFont(QFont(QStringLiteral("Microsoft YaHei UI"), 10));
   painter->drawText(target.adjusted(14, 12, -14, -12),
@@ -760,6 +788,99 @@ void SoftwareViewport::parseMeshData()
     }
     m_meshes.append(mesh);
     p += byteCount;
+  }
+}
+
+// Phase 238 (PREV-07): GCV1 parse. The blob layout is "GCV1" + int32 count +
+// count * 92-byte segments (PreviewViewModel::recolorAndPackSegments packs,
+// RhiViewportRenderer::parsePreviewSegments consumes on the GPU path).
+// Travel/move-kind visibility is already resolved pack-time by the
+// ViewModel, so only layer/move filtering remains for painting.
+void SoftwareViewport::parsePreviewData()
+{
+  m_previewSegments.clear();
+  if (m_previewData.size() < 8)
+    return;
+  if (std::memcmp(m_previewData.constData(), "GCV1", 4) != 0)
+    return;
+
+  int count = 0;
+  std::memcpy(&count, m_previewData.constData() + 4, 4);
+  if (count <= 0)
+    return;
+
+  const qsizetype payloadSize = qsizetype(count) * qsizetype(sizeof(GcvSegmentWire));
+  if (m_previewData.size() < 8 + payloadSize)
+    return;
+
+  const auto *wire = reinterpret_cast<const GcvSegmentWire *>(m_previewData.constData() + 8);
+  m_previewSegments.reserve(count);
+  for (int i = 0; i < count; ++i)
+  {
+    PreviewSegment seg;
+    const GcvSegmentWire &w = wire[i];
+    seg.x1 = w.x1; seg.y1 = w.y1; seg.z1 = w.z1;
+    seg.x2 = w.x2; seg.y2 = w.y2; seg.z2 = w.z2;
+    seg.r = w.r; seg.g = w.g; seg.b = w.b;
+    seg.feedrate = w.feedrate;
+    seg.layer = w.layer;
+    seg.move = w.move;
+    seg.role = w.role;
+    seg.visible = true;
+    m_previewSegments.append(seg);
+  }
+}
+
+// Phase 238 (PREV-07): QPainter preview pass. Draw each visible GCV1 segment
+// with its baked color using the same orthographic rotate+project pipeline
+// as the bed grid (G-code (x,y,z) -> scene (x,z,y), matching the RHI path's
+// axis swap in RhiViewportRenderer::parsePreviewSegments). Simplifications
+// vs the GPU path (documented honestly): 1px lines with no width-by-height
+// toolpath geometry, and the tool marker is a small circle instead of the
+// stylized-arrow mesh. Layer range + moveEnd clipping match the GPU path
+// (computePreviewDrawRanges) so the fallback is not blank.
+void SoftwareViewport::drawPreviewSegments(QPainter *painter)
+{
+  if (m_previewSegments.isEmpty())
+    return;
+
+  const int layerLow = std::min(m_layerMin, m_layerMax);
+  const int layerHigh = std::max(m_layerMin, m_layerMax);
+
+  // Batch by color so the pen switches once per unique color instead of per
+  // segment (large G-code files repeat few distinct colors).
+  QHash<QRgb, QVector<QLineF>> linesByColor;
+  for (const PreviewSegment &seg : m_previewSegments)
+  {
+    if (seg.layer < layerLow || seg.layer > layerHigh)
+      continue;
+    if (m_moveEnd > 0 && seg.move >= m_moveEnd)
+      continue;
+    // Axis swap: G-code (x,y,z) -> scene (x,z,y).
+    const QVector3D a(seg.x1, seg.z1, seg.y1);
+    const QVector3D b(seg.x2, seg.z2, seg.y2);
+    const QRgb color = qRgb(qBound(0, int(seg.r * 255.f + 0.5f), 255),
+                            qBound(0, int(seg.g * 255.f + 0.5f), 255),
+                            qBound(0, int(seg.b * 255.f + 0.5f), 255));
+    linesByColor[color].append(QLineF(project(a), project(b)));
+  }
+
+  for (auto it = linesByColor.constBegin(); it != linesByColor.constEnd(); ++it)
+  {
+    painter->setPen(QPen(QColor(it.key()), 1));
+    painter->drawLines(it.value());
+  }
+
+  // Tool marker (upstream Marker::render, GCodeViewer.cpp:306-330): a small
+  // white semi-transparent dot at the current tool position when enabled.
+  if (m_showMarker && (m_markerX != 0.f || m_markerY != 0.f || m_markerZ != 0.f))
+  {
+    const QPointF markerPos = project(QVector3D(m_markerX, m_markerZ, m_markerY));
+    QColor markerColor(255, 255, 255, 128);
+    painter->setPen(QPen(QColor(255, 255, 255, 200), 1));
+    painter->setBrush(markerColor);
+    painter->drawEllipse(markerPos, 3.5, 3.5);
+    painter->setBrush(Qt::NoBrush);
   }
 }
 

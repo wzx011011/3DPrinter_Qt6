@@ -123,6 +123,19 @@ public:
       float radius,
       const float color[4]);
 
+  // Phase 238 (PREV-02): 3D tool-position marker for the G-code preview --
+  // the stylized arrow nozzle upstream renders at the current sequential-view
+  // position (GCodeViewer::SequentialView::Marker::init default
+  // stilized_arrow(16, 1.5f, 3.0f, 0.8f, 3.0f), GCodeViewer.cpp:285-292, in
+  // white with alpha 0.5; set_world_position flips it M_PI about X so the
+  // TIP touches the tracked position, GCodeViewer.cpp:295-299). The tip
+  // points DOWN at `position` (apex at position, cone widening upward to
+  // tipRadius at tipHeight, then a stem cylinder of stemRadius up to
+  // tipHeight + stemHeight). `position` must already be in scene space
+  // (the caller applies the G-code (x,y,z) -> scene (x,z,y) axis swap).
+  static QVector<GizmoVertex> buildToolMarkerVertices(
+      const QVector3D &position);
+
   // Axis color constants - single source of truth (X=0, Y=1, Z=2).
   // Alpha is always 1.0; callers that need transparency set it post-build.
   // Matches the GL kAxisColors[3] (GLViewportRenderer.cpp:128-132 at HEAD
