@@ -41,6 +41,13 @@ CxDialog {
         }
         return m
     }
+    function copyMatrix(matrix) {
+        var copy = []
+        for (var row = 0; row < matrix.length; ++row)
+            copy.push(matrix[row].slice())
+        return copy
+    }
+
     // Convert a flat QVariantList (row-major N*N) to a 2D array.
     function flatToMatrix(flat, n) {
         if (!flat || flat.length === 0) return defaultMatrix(n)
@@ -214,18 +221,21 @@ CxDialog {
                     model: root.extruderNames.length
 
                     Row {
+                        id: dataRow
+                        required property int index
+                        readonly property int rowIndex: index
                         spacing: Theme.spacingXS
                         // Row header
                         Rectangle {
                             width: 50
                             height: 22
                             radius: 3
-                            color: root.extruderColors[index]
+                            color: root.extruderColors[dataRow.rowIndex]
                             opacity: 0.3
                             Text {
                                 anchors.centerIn: parent
-                                text: qsTr("耗材%1").arg(index + 1)
-                                color: root.extruderColors[index]
+                                text: qsTr("耗材%1").arg(dataRow.rowIndex + 1)
+                                color: root.extruderColors[dataRow.rowIndex]
                                 font.pixelSize: 8
                                 font.bold: true
                             }
@@ -235,13 +245,24 @@ CxDialog {
                         Repeater {
                             model: root.extruderNames.length
                             CxTextField {
+                                required property int index
+                                readonly property int columnIndex: index
+                                readonly property int rowIndex: dataRow.rowIndex
                                 width: 60
                                 implicitHeight: 22
                                 font.pixelSize: Theme.fontSizeXS
                                 horizontalAlignment: Text.AlignHCenter
-                                text: parent.Repeater ? (root.flushMatrix[index] !== undefined
-                                    ? root.flushMatrix[index][modelData] : "0") : "0"
-                                enabled: index !== parent.parent.parent.index
+                                text: root.flushMatrix[rowIndex] !== undefined
+                                    ? root.flushMatrix[rowIndex][columnIndex] : "0"
+                                enabled: rowIndex !== columnIndex
+                                onEditingFinished: {
+                                    var value = Number(text)
+                                    if (!isFinite(value))
+                                        return
+                                    var matrix = root.copyMatrix(root.flushMatrix)
+                                    matrix[rowIndex][columnIndex] = value
+                                    root.flushMatrix = matrix
+                                }
                             }
                         }
                     }
@@ -338,7 +359,7 @@ CxDialog {
                 // one on the next open (calculateFlushMatrix reads it back).
                 onClicked: {
                     if (presetSvc && flushMatrix && flushMatrix.length > 0)
-                        presetSvc.saveFlushVolumes(flushMatrix)
+                        presetSvc.saveFlushVolumes(root.copyMatrix(flushMatrix))
                     root.accept()
                 }
             }

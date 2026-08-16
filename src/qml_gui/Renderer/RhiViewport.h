@@ -549,6 +549,7 @@ signals:
   // "ray" substring in QML; QML forwards these opaquely, no ray math in QML).
   void paintPickRequested(QVector3D worldOrigin,
                           QVector3D worldDirection,
+                          QVector3D cameraPosition,
                           int pickedSourceIndex,
                           double brushRadius,
                           int cursorType,

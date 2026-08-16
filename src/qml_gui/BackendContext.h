@@ -176,6 +176,7 @@ class BackendContext final : public QObject
   Q_PROPERTY(int tpProject READ tpProject CONSTANT)
   Q_PROPERTY(int tpCalibration READ tpCalibration CONSTANT)
   Q_PROPERTY(int tpPlaceholder1 READ tpPlaceholder1 CONSTANT)
+  Q_PROPERTY(int tpPreferences READ tpPreferences CONSTANT)
   Q_PROPERTY(int tpPlaceholder2 READ tpPlaceholder2 CONSTANT)
   // Phase 3: ViewMode ids mirror Plater canvas modes.
   // Upstream-aligned QML API.
@@ -210,7 +211,8 @@ public:
     tpProject = 5,
     tpCalibration = 6,
     tpPlaceholder1 = 7,   // upstream: tpAuxiliary; reserved for future use
-    tpPlaceholder2 = 8,   // upstream: toDebugTool; reserved for future use
+    tpPreferences = 8,    // upstream PreferencesDialog, hosted as a Qt page
+    tpPlaceholder2 = tpPreferences, // compatibility alias for the former slot name
   };
   Q_ENUM(TabPosition)
 
@@ -244,7 +246,8 @@ public:
   int tpProject() const { return static_cast<int>(TabPosition::tpProject); }
   int tpCalibration() const { return static_cast<int>(TabPosition::tpCalibration); }
   int tpPlaceholder1() const { return static_cast<int>(TabPosition::tpPlaceholder1); }
-  int tpPlaceholder2() const { return static_cast<int>(TabPosition::tpPlaceholder2); }
+  int tpPreferences() const { return static_cast<int>(TabPosition::tpPreferences); }
+  int tpPlaceholder2() const { return tpPreferences(); }
 
   // QML-friendly ViewMode accessors (Q_PROPERTY constants)
   int vmView3D() const { return static_cast<int>(ViewMode::View3D); }
@@ -339,6 +342,8 @@ public:
   /// QML toast delegates call this from their per-entry close button /
   /// auto-dismiss timer). Upstream equivalent: PopNotification::close().
   Q_INVOKABLE void dismissNotificationById(int id);
+  Q_INVOKABLE void confirmNotificationById(int id);
+  Q_INVOKABLE void cancelNotificationById(int id);
 
   /// Convenience notification helpers aligned with upstream NotificationManager.
   Q_INVOKABLE void postSlicingProgress(int percent, const QString &stage = {});

@@ -9,6 +9,8 @@ import "../dialogs"
 Item {
     id: root
     required property var homeVm
+    signal newProjectRequested()
+    signal openProjectRequested(string filePath)
     // Pure-JS copy - avoids Qt6 V4 VariantAssociationObject lifetime crash
     // Initialized to [] so Repeater componentComplete() sees empty model.
     // Phase 241 (PAGE-01): mirrors homeVm's real recent list, which itself
@@ -37,15 +39,6 @@ Item {
     Connections {
         target: root.homeVm
         function onRecentProjectsChanged() { root.reloadRecentProjects() }
-    }
-
-    // Phase 241 (PAGE-01): quick-action "open project" file dialog (routes
-    // through BackendContext::topbarOpenProject, upstream Plater::load_file).
-    FileDialog {
-        id: homeOpenProjectDlg
-        title: qsTr("打开项目")
-        nameFilters: [qsTr("项目文件 (*.3mf *.cxprj *.json)"), qsTr("所有文件 (*)")]
-        onAccepted: backend.topbarOpenProject(selectedFile.toString())
     }
 
     Rectangle { anchors.fill: parent; color: Theme.bgBase }
@@ -536,13 +529,17 @@ Item {
                         id: dailyTipBody
                         Layout.fillWidth: true
                         text: {
-                            if (typeof backend === "undefined" || !backend.currentHintText)
+                            if (typeof backend === "undefined")
                                 return qsTr("暂无提示")
-                            var s = backend.currentHintText
-                            if (backend.currentHintHasDocumentationLink && backend.currentHintHypertext)
-                                s = s + "<a href=\"" + backend.currentHintHypertext + "\">" + backend.currentHintHypertext + "</a>"
-                            if (backend.currentHintFollowText)
-                                s = s + backend.currentHintFollowText
+                            var s = backend.currentHintText()
+                            if (s === "")
+                                return qsTr("暂无提示")
+                            var hypertext = backend.currentHintHypertext()
+                            if (backend.currentHintHasDocumentationLink() && hypertext !== "")
+                                s = s + "<a href=\"" + hypertext + "\">" + hypertext + "</a>"
+                            var followText = backend.currentHintFollowText()
+                            if (followText !== "")
+                                s = s + followText
                             return s
                         }
                         color: Theme.textSecondary
@@ -618,7 +615,7 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: root.homeVm.openRecentProject(index)
+                            onClicked: root.openProjectRequested(modelData.path || "")
                         }
                     }
                 }
@@ -669,10 +666,10 @@ Item {
                         onClicked: {
                             switch (parent.parent.modelData.action) {
                                 case "open":
-                                    homeOpenProjectDlg.open()
+                                    root.openProjectRequested("")
                                     break
                                 case "new":
-                                    backend.topbarNewProject()
+                                    root.newProjectRequested()
                                     break
                                 case "calibration":
                                     backend.requestSelectTab(backend.tpCalibration)

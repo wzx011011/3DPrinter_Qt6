@@ -282,6 +282,8 @@ private:
   /// Phase 239 (ENGN-03): cancel flag for the QtConcurrent export worker
   /// (exportSourceToPath / exportAllPlateGCodeToDirectory). Null when idle.
   std::shared_ptr<std::atomic_bool> activeExportCancelFlag_;
+  bool exportActive_ = false;
+  quint64 exportGeneration_ = 0;
 #ifdef HAS_LIBSLIC3R
   std::atomic<Slic3r::Print *> activePrint_{nullptr};
 #endif

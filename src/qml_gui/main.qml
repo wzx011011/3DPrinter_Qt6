@@ -35,16 +35,21 @@ ApplicationWindow {
     readonly property int frameRadius: (backend.visualCompareMode) ? 0 : 18
     readonly property int prepareChromeHeight: 70
 
-    // v5.16 (PLATE-05): upstream close_with_confirm — block window close on
-    // unsaved changes; the guard dialog's confirm discards and quits.
-    property bool pendingQuitAfterGuard: false
+    // The force-close bypass remains set through the Qt.quit-generated close
+    // event. Clearing it before Qt.quit would reopen the dirty-project guard.
+    property bool forceClose: false
+    property string pendingGuardAction: ""
+    property string pendingOpenPath: ""
+    property bool openDialogGuardApproved: false
     onClosing: function(close) {
-        if (root.pendingQuitAfterGuard)
-            return // guard already accepted; allow the close
+        if (root.forceClose) {
+            close.accepted = true
+            return
+        }
         if (backend.projectViewModel && backend.projectViewModel.isDirty) {
             close.accepted = false
-            root.pendingQuitAfterGuard = true
-            root.pendingOpenAfterGuard = false
+            root.pendingGuardAction = "quit"
+            root.pendingOpenPath = ""
             newProjectDialog.open()
         }
     }
@@ -52,10 +57,35 @@ ApplicationWindow {
     // 当前 tab-switch latency token (BBLTopbar 写入, Connections onCurrentPageChanged 收尾)
     // 替代旧的 pendingSwitchToken / pendingSwitchTargetPage（Plan 02-02 Pitfall 3 迁移）
     property int activeTabSwitchToken: -1
-    // v5.16 (PLATE-05): the unsaved-changes guard doubles for "open project
-    // over unsaved work" — set before showing the guard, consumed by the
-    // dialog's confirm button.
-    property bool pendingOpenAfterGuard: false
+
+    function requestNewProject() {
+        if (backend.projectViewModel && backend.projectViewModel.isDirty) {
+            root.pendingGuardAction = "new"
+            root.pendingOpenPath = ""
+            newProjectDialog.open()
+            return
+        }
+        backend.topbarNewProject()
+    }
+
+    function requestOpenProject(filePath) {
+        var path = filePath || ""
+        if (path !== "" && root.openDialogGuardApproved) {
+            root.openDialogGuardApproved = false
+            backend.topbarOpenProject(path)
+            return
+        }
+        if (backend.projectViewModel && backend.projectViewModel.isDirty) {
+            root.pendingGuardAction = "open"
+            root.pendingOpenPath = path
+            newProjectDialog.open()
+            return
+        }
+        if (path !== "")
+            backend.topbarOpenProject(path)
+        else
+            openProjectDialog.open()
+    }
 
     FileDialog {
         id: openModelDialog
@@ -85,9 +115,8 @@ ApplicationWindow {
         id: openProjectDialog
         title: qsTr("打开项目")
         nameFilters: [qsTr("项目文件 (*.3mf *.cxprj *.json)"), qsTr("所有文件 (*)")]
-        onAccepted: {
-            backend.topbarOpenProject(selectedFile.toString())
-        }
+        onAccepted: root.requestOpenProject(selectedFile.toString())
+        onRejected: root.openDialogGuardApproved = false
     }
 
     FileDialog {
@@ -304,7 +333,15 @@ ApplicationWindow {
                     color: Theme.chromePressed
                     border.color: Theme.borderSubtle
                     Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { root.pendingOpenAfterGuard = false; root.pendingQuitAfterGuard = false; newProjectDialog.close() } }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            root.pendingGuardAction = ""
+                            root.pendingOpenPath = ""
+                            newProjectDialog.close()
+                        }
+                    }
                 }
                 Rectangle {
                     width: 80; height: 28; radius: 6
@@ -313,19 +350,23 @@ ApplicationWindow {
                     MouseArea {
                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            // v5.16 (PLATE-05): discard unsaved work, then run
-                            // whichever action was guarded (quit / open / new).
-                            if (root.pendingQuitAfterGuard) {
-                                root.pendingQuitAfterGuard = false
-                                newProjectDialog.close()
+                            var action = root.pendingGuardAction
+                            var path = root.pendingOpenPath
+                            root.pendingGuardAction = ""
+                            root.pendingOpenPath = ""
+                            newProjectDialog.close()
+                            if (action === "quit") {
+                                root.forceClose = true
                                 Qt.quit()
-                            } else if (root.pendingOpenAfterGuard) {
-                                root.pendingOpenAfterGuard = false
-                                newProjectDialog.close()
-                                openProjectDialog.open()
-                            } else {
+                            } else if (action === "open") {
+                                if (path !== "")
+                                    backend.topbarOpenProject(path)
+                                else {
+                                    root.openDialogGuardApproved = true
+                                    openProjectDialog.open()
+                                }
+                            } else if (action === "new") {
                                 backend.topbarNewProject()
-                                newProjectDialog.close()
                             }
                         }
                     }
@@ -369,7 +410,7 @@ ApplicationWindow {
     }
     Shortcut {
         sequence: "Ctrl+O"
-        onActivated: openProjectDialog.open()
+        onActivated: root.requestOpenProject("")
     }
     Shortcut {
         sequence: "Ctrl+X"
@@ -397,12 +438,7 @@ ApplicationWindow {
     Shortcut {
         // New Project (upstream Ctrl+N, KBShortcutsDialog.cpp:175)
         sequence: "Ctrl+N"
-        onActivated: {
-            if (backend.projectViewModel && backend.projectViewModel.isDirty)
-                newProjectDialog.open()
-            else
-                backend.topbarNewProject()
-        }
+        onActivated: root.requestNewProject()
     }
     Shortcut {
         // Save Project as (upstream Ctrl+Shift+S, KBShortcutsDialog.cpp:178)
@@ -430,10 +466,7 @@ ApplicationWindow {
         enabled: backend.currentPage === backend.tp3DEditor
                  && backend.editorViewModel
                  && backend.editorViewModel.modelCount > 0
-        onActivated: deleteAllConfirm.openWithAction(function() {
-            if (backend.editorViewModel)
-                backend.editorViewModel.clearWorkspace()
-        })
+        onActivated: deleteAllConfirm.open()
     }
     Shortcut {
         // Preferences (upstream Ctrl+P, KBShortcutsDialog.cpp:197 /
@@ -566,18 +599,9 @@ ApplicationWindow {
                 // v5.16 (PLATE-05): confirm only when unsaved changes exist
                 // (upstream close_with_confirm semantics); a clean project
                 // starts immediately.
-                onNewProjectRequested: {
-                    if (backend.projectViewModel && backend.projectViewModel.isDirty)
-                        newProjectDialog.open()
-                    else
-                        backend.topbarNewProject()
-                }
-                // Opening a project over unsaved work also guards.
-                onOpenProjectRequested: {
-                    if (backend.projectViewModel && backend.projectViewModel.isDirty)
-                        pendingOpenAfterGuard = true, newProjectDialog.open()
-                    else
-                        openProjectDialog.open()
+                onNewProjectRequested: root.requestNewProject()
+                onOpenProjectRequested: function(filePath) {
+                    root.requestOpenProject(filePath)
                 }
                 onSaveAsRequested: saveProjectAsDialog.open()
                 onImportModelRequested: function(nameFilter) {
@@ -692,7 +716,13 @@ ApplicationWindow {
                 Loader {
                     active: backend.currentPage === backend.tpHome
                     sourceComponent: Component {
-                        HomePage { homeVm: backend.homeViewModel }
+                        HomePage {
+                            homeVm: backend.homeViewModel
+                            onNewProjectRequested: root.requestNewProject()
+                            onOpenProjectRequested: function(filePath) {
+                                root.requestOpenProject(filePath)
+                            }
+                        }
                     }
                 }
                 // Page 1 (tp3DEditor) + Page 2 (tpPreview) — Plater 单实例共享
@@ -740,7 +770,12 @@ ApplicationWindow {
                     Layout.fillHeight: true
                     active: backend.currentPage === backend.tpProject
                     sourceComponent: Component {
-                        ProjectPage { projectVm: backend.projectViewModel; editorVm: backend.editorViewModel }
+                        ProjectPage {
+                            projectVm: backend.projectViewModel
+                            editorVm: backend.editorViewModel
+                            onNewProjectRequested: root.requestNewProject()
+                            onOpenProjectDialogRequested: root.requestOpenProject("")
+                        }
                     }
                 }
                 // Page 6 (tpCalibration) — Calibration
@@ -763,11 +798,17 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                 }
-                // Page 8 (tpPlaceholder2) — reserved by upstream debug tooling; not exposed in navigation.
-                Item {
-                    visible: false
+                // Page 8 (tpPreferences) - Preferences.
+                Loader {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    active: backend.currentPage === backend.tpPreferences
+                    sourceComponent: Component {
+                        PreferencesPage {
+                            settingsVm: backend.settingsViewModel
+                            backend: backend
+                        }
+                    }
                 }
             }
 

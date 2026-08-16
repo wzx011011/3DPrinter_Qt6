@@ -33,7 +33,7 @@ Item {
 
     // ── BBLTopbar 对外发射的信号（main.qml 监听并 dispatch） ──────────────
     signal newProjectRequested()
-    signal openProjectRequested()
+    signal openProjectRequested(string filePath)
     signal saveAsRequested()
     signal importModelRequested(string nameFilter)
     signal exportGcodeRequested()
@@ -111,7 +111,7 @@ Item {
             Menu {
                 title: qsTr("文件")
                 MenuItem { text: qsTr("新建项目"); onTriggered: root.newProjectRequested() }
-                MenuItem { text: qsTr("打开项目..."); onTriggered: root.openProjectRequested() }
+                MenuItem { text: qsTr("打开项目..."); onTriggered: root.openProjectRequested("") }
                 MenuItem { text: qsTr("保存项目"); onTriggered: if (!backend.topbarSaveProject()) root.saveAsRequested() }
                 MenuItem { text: qsTr("退出"); onTriggered: Qt.quit() }
             }
@@ -323,7 +323,7 @@ Item {
                 // 仅当 currentIndex 与 backend.currentPage 不同时才发请求
                 onCurrentIndexChanged: {
                     if (currentIndex !== backend.currentPage
-                            && currentIndex >= 0 && currentIndex <= backend.tpPlaceholder2) {
+                            && currentIndex >= 0 && currentIndex <= backend.tpPreferences) {
                         backend.requestSelectTab(currentIndex)
                     }
                 }
@@ -726,7 +726,7 @@ Item {
         }
         CxMenuItem {
             text: qsTr("打开项目...")
-            onTriggered: root.openProjectRequested()
+            onTriggered: root.openProjectRequested("")
         }
 
         // Recent 子菜单 — Instantiator 动态绑定 recentProjects
@@ -741,7 +741,7 @@ Item {
                     // WR-04: modelData is a local QString path (ProjectViewModel::recentProjects),
                     // not QUrl-encoded. topbarOpenProject tolerates both via QUrl::isLocalFile()
                     // fallback — see BackendContext::topbarOpenProject.
-                    onTriggered: backend.topbarOpenProject(modelData)
+                    onTriggered: root.openProjectRequested(modelData)
                 }
                 onObjectAdded: (index, object) => fileRecentMenu.insertItem(index, object)
                 onObjectRemoved: (index, object) => fileRecentMenu.removeItem(object)

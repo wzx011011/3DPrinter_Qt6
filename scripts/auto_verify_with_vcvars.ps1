@@ -420,14 +420,29 @@ if ($renderBenchEnabled) {
   }
 }
 
+function Invoke-QtTestReport([string]$Exe, [string]$ReportName) {
+  $reportPath = Join-Path (Get-Location) $ReportName
+  $nativeLogPath = $reportPath + '.native.log'
+  Remove-Item $reportPath, $nativeLogPath -Force -ErrorAction SilentlyContinue
+  & $Exe -o ($reportPath + ',txt') *> $nativeLogPath
+  $exitCode = $LASTEXITCODE
+  if (Test-Path $nativeLogPath) {
+    Get-Content $nativeLogPath | ForEach-Object { Write-Host "  $_" }
+  }
+  if (Test-Path $reportPath) {
+    Get-Content $reportPath | ForEach-Object { Write-Host "  $_" }
+  }
+  return $exitCode
+}
+
 # Run static UI audit tests before launching the app.
 Write-Host "`n[PrepareScene] Running Prepare scene data tests..." -ForegroundColor Cyan
 $prepareSceneDataExe = './PrepareSceneDataTests.exe'
 if (Test-Path $prepareSceneDataExe) {
-  & $prepareSceneDataExe 2>&1 | ForEach-Object { Write-Host "  $_" }
-  if ($LASTEXITCODE -ne 0) {
+  $prepareSceneExitCode = Invoke-QtTestReport $prepareSceneDataExe 'PrepareSceneDataTests.verify.txt'
+  if ($prepareSceneExitCode -ne 0) {
     Write-Host "[PrepareScene] Prepare scene data tests failed" -ForegroundColor Red
-    exit $LASTEXITCODE
+    exit $prepareSceneExitCode
   }
   Write-Host "[PrepareScene] Prepare scene data tests passed" -ForegroundColor Green
 } else {
@@ -438,10 +453,10 @@ if (Test-Path $prepareSceneDataExe) {
 Write-Host "`n[PartPlate] Running PartPlate geometry + arrangement tests..." -ForegroundColor Cyan
 $partPlateExe = './PartPlateTests.exe'
 if (Test-Path $partPlateExe) {
-  & $partPlateExe 2>&1 | ForEach-Object { Write-Host "  $_" }
-  if ($LASTEXITCODE -ne 0) {
+  $partPlateExitCode = Invoke-QtTestReport $partPlateExe 'PartPlateTests.verify.txt'
+  if ($partPlateExitCode -ne 0) {
     Write-Host "[PartPlate] PartPlate tests failed" -ForegroundColor Red
-    exit $LASTEXITCODE
+    exit $partPlateExitCode
   }
   Write-Host "[PartPlate] PartPlate tests passed" -ForegroundColor Green
 } else {
@@ -452,10 +467,10 @@ if (Test-Path $partPlateExe) {
 Write-Host "`n[ObjectPicking] Running precise object picking tests..." -ForegroundColor Cyan
 $objectPickingExe = './ObjectPickingTests.exe'
 if (Test-Path $objectPickingExe) {
-  & $objectPickingExe 2>&1 | ForEach-Object { Write-Host "  $_" }
-  if ($LASTEXITCODE -ne 0) {
+  $objectPickingExitCode = Invoke-QtTestReport $objectPickingExe 'ObjectPickingTests.verify.txt'
+  if ($objectPickingExitCode -ne 0) {
     Write-Host "[ObjectPicking] Object picking tests failed" -ForegroundColor Red
-    exit $LASTEXITCODE
+    exit $objectPickingExitCode
   }
   Write-Host "[ObjectPicking] Object picking tests passed" -ForegroundColor Green
 } else {
@@ -466,10 +481,10 @@ if (Test-Path $objectPickingExe) {
 Write-Host "`n[ViewModel] Running viewmodel smoke tests..." -ForegroundColor Cyan
 $viewModelSmokeExe = './ViewModelSmokeTests.exe'
 if (Test-Path $viewModelSmokeExe) {
-  & $viewModelSmokeExe 2>&1 | ForEach-Object { Write-Host "  $_" }
-  if ($LASTEXITCODE -ne 0) {
+  $viewModelExitCode = Invoke-QtTestReport $viewModelSmokeExe 'ViewModelSmokeTests.verify.txt'
+  if ($viewModelExitCode -ne 0) {
     Write-Host "[ViewModel] ViewModel smoke tests failed" -ForegroundColor Red
-    exit $LASTEXITCODE
+    exit $viewModelExitCode
   }
   Write-Host "[ViewModel] ViewModel smoke tests passed" -ForegroundColor Green
 } else {
@@ -480,10 +495,10 @@ if (Test-Path $viewModelSmokeExe) {
 Write-Host "`n[UI] Running QML UI audit tests..." -ForegroundColor Cyan
 $uiAuditExe = './QmlUiAuditTests.exe'
 if (Test-Path $uiAuditExe) {
-  & $uiAuditExe 2>&1 | ForEach-Object { Write-Host "  $_" }
-  if ($LASTEXITCODE -ne 0) {
+  $uiAuditExitCode = Invoke-QtTestReport $uiAuditExe 'QmlUiAuditTests.verify.txt'
+  if ($uiAuditExitCode -ne 0) {
     Write-Host "[UI] QML UI audit tests failed" -ForegroundColor Red
-    exit $LASTEXITCODE
+    exit $uiAuditExitCode
   }
   Write-Host "[UI] QML UI audit tests passed" -ForegroundColor Green
 } else {
@@ -494,10 +509,10 @@ if (Test-Path $uiAuditExe) {
 Write-Host "`n[ViewportContext] Running viewport context menu tests..." -ForegroundColor Cyan
 $viewportContextMenuExe = './ViewportContextMenuTests.exe'
 if (Test-Path $viewportContextMenuExe) {
-  & $viewportContextMenuExe 2>&1 | ForEach-Object { Write-Host "  $_" }
-  if ($LASTEXITCODE -ne 0) {
+  $viewportContextExitCode = Invoke-QtTestReport $viewportContextMenuExe 'ViewportContextMenuTests.verify.txt'
+  if ($viewportContextExitCode -ne 0) {
     Write-Host "[ViewportContext] Viewport context menu tests failed" -ForegroundColor Red
-    exit $LASTEXITCODE
+    exit $viewportContextExitCode
   }
   Write-Host "[ViewportContext] Viewport context menu tests passed" -ForegroundColor Green
 } else {
@@ -508,10 +523,10 @@ if (Test-Path $viewportContextMenuExe) {
 Write-Host "`n[PreviewParser] Running G-code parser/role/mode tests..." -ForegroundColor Cyan
 $previewParserExe = './PreviewParserTests.exe'
 if (Test-Path $previewParserExe) {
-  & $previewParserExe 2>&1 | ForEach-Object { Write-Host "  $_" }
-  if ($LASTEXITCODE -ne 0) {
+  $previewParserExitCode = Invoke-QtTestReport $previewParserExe 'PreviewParserTests.verify.txt'
+  if ($previewParserExitCode -ne 0) {
     Write-Host "[PreviewParser] PreviewParser tests failed" -ForegroundColor Red
-    exit $LASTEXITCODE
+    exit $previewParserExitCode
   }
   Write-Host "[PreviewParser] PreviewParser tests passed" -ForegroundColor Green
 } else {
@@ -558,8 +573,8 @@ Stop-Process -Id $p.Id -Force
 Write-Stage 'E2E' "Running pipeline tests (non-blocking)"
 $e2eExe = './E2EWorkflowTests.exe'
 if (Test-Path $e2eExe) {
-  & $e2eExe 2>&1 | ForEach-Object { Write-Host "  $_" }
-  if ($LASTEXITCODE -ne 0) {
+  $e2eExitCode = Invoke-QtTestReport $e2eExe 'E2EWorkflowTests.verify.txt'
+  if ($e2eExitCode -ne 0) {
     Write-Host "[E2E] Pipeline tests reported failures (non-blocking)" -ForegroundColor Yellow
   } else {
     Write-Host "[E2E] All pipeline tests passed" -ForegroundColor Green

@@ -81,6 +81,18 @@ void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
   if (rhiTraceEnabled())
     qInfo("[RHI-TRACE] initialize-call#%d canvasType=%d backend=%s", n, int(m_canvasType),
           rhi() ? rhi()->backendName() : "(null)");
+  QRhiRenderPassDescriptor *currentRenderPass = renderTarget()
+      ? renderTarget()->renderPassDescriptor() : nullptr;
+  if (m_renderPassDescriptor != nullptr
+      && currentRenderPass != m_renderPassDescriptor)
+  {
+    // QRhi graphics pipelines are render-pass compatible objects. A swapchain
+    // rebuild may replace the descriptor even when the QRhi and buffers survive,
+    // so every on-screen dependent pipeline must be recreated before drawing.
+    releaseRenderPassDependentResources();
+  }
+  m_renderPassDescriptor = currentRenderPass;
+
   // BUG FIX: do NOT call releaseResources() here unconditionally.
   // QQuickRhiItemRenderer::initialize() is called on every swapchain rebuild
   // (window resize, visibility change, etc). Clearing all GPU buffers here
@@ -922,6 +934,23 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   rhiTrace("render-exit");
 }
 
+void RhiViewportRenderer::releaseRenderPassDependentResources()
+{
+  m_linePipeline.reset();
+  m_fillPipeline.reset();
+  m_translucentFillPipeline.reset();
+  m_translucentLinePipeline.reset();
+  m_bedTexturePipeline.reset();
+  m_modelLitPipeline.reset();
+  m_gizmoLinePipeline.reset();
+  m_gizmoTriPipeline.reset();
+  m_gizmoPipelineCreated = false;
+  // Bed-type parts own per-part pipelines bound to the old descriptor. Rebuild
+  // their complete GPU bundles lazily so SRB/texture ownership stays simple.
+  releaseBedTypeParts();
+  m_pipelineFailed = false;
+}
+
 void RhiViewportRenderer::releaseResources()
 {
   // Phase 95 (THUMBCAP-01): release offscreen thumbnail RT + pipelines +
@@ -1276,11 +1305,18 @@ void RhiViewportRenderer::deliverCompletedThumbnail()
                         QImage::Format_RGBA8888).copy();
 
   const int plateIndex = m_thumbnailResultPlateIndex;
-  QMetaObject::invokeMethod(m_viewportItem.data(),
-                            "deliverThumbnail",
-                            Qt::QueuedConnection,
-                            Q_ARG(QImage, image),
-                            Q_ARG(int, plateIndex));
+  const QPointer<RhiViewport> viewport = m_viewportItem;
+  if (viewport == nullptr)
+    return;
+  QMetaObject::invokeMethod(
+      viewport.data(),
+      [viewport, image, plateIndex]() {
+        // The queued callback runs on the GUI thread. Recheck the guarded item
+        // there because it may have been destroyed after readback completion.
+        if (viewport != nullptr)
+          viewport->deliverThumbnail(image, plateIndex);
+      },
+      Qt::QueuedConnection);
 }
 
 void RhiViewportRenderer::resetPreviewGpuState(bool keepCpuStaging)
@@ -3811,10 +3847,8 @@ struct GcvPackedSegment
   int role;  // must match PackedSegment layout exactly (canonical libvgcode index).
 };
 // Wire-format lock-step guard: PackedSegment and GcvPackedSegment carry the
-// identical 92-byte layout (20 floats + 4 ints) so the GCV1 blob memcpy is safe.
-static_assert(sizeof(GcvPackedSegment) == 92, "GcvPackedSegment must be 92 bytes (20 floats + 4 ints)");
-// PackedSegment is 76 bytes (16 floats + 4 ints, packed); if the platform adds
-// padding the parse logic uses sizeof explicitly.
+// identical 92-byte layout (19 floats + 4 ints) so the GCV1 blob memcpy is safe.
+static_assert(sizeof(GcvPackedSegment) == 92, "GcvPackedSegment must be 92 bytes (19 floats + 4 ints)");
 } // namespace
 
 void RhiViewportRenderer::parsePreviewSegments()

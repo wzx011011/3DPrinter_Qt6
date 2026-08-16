@@ -87,6 +87,7 @@ private slots:
   // CliRunner exposes the transform/export/key-override surface with schema
   // validation.
   void pageHonestyAndCliSourceAudit();
+  void shellGuardNotificationAndDialogRegressionAudit();
   // Phase 53: Prepare object, plate, and viewport actions bind to C++ gates.
   void prepareWorkflowActionsBindCppGates();
   // Phase 76: Prepare workflow panels must stay compact and backend-gated.
@@ -108,6 +109,7 @@ private slots:
   void previewPageNeverReferencesSoftwareViewport();
   void rhiViewportRendererComputePreviewDrawRangeAppliesRoleFilter();
   void rhiViewportRendererHasGcvPackedSegmentRoleGuard();
+  void rendererViewmodelSafetyRegressionAudit();
   // Phase 55-05 (GCODE-04): D3D11 default + SoftwareViewport fallback-only startup
   // policy. Phase-55-tagged so a future regression that flips the default points
   // directly at the requirement (complements the existing mainRegistersRhiViewport*
@@ -3382,20 +3384,62 @@ void QmlUiAuditTests::rhiViewportRendererComputePreviewDrawRangeAppliesRoleFilte
            "render() must draw each visible range independently");
 }
 
-// Phase 55 (GCODE-05): GcvPackedSegment must carry a compile-time sizeof==76
+// Phase 55 (GCODE-05): GcvPackedSegment must carry a compile-time sizeof==92
 // guard so the GCV1 wire format stays lockstep between PreviewViewModel packing
 // and renderer unpacking. A struct layout change would silently break the
 // preview at runtime; the static_assert makes it a build error.
 void QmlUiAuditTests::rhiViewportRendererHasGcvPackedSegmentRoleGuard()
 {
   const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
   QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
 
-  // v5.11: layout extended to 92 bytes (20 floats + 4 ints) after adding
+  // v5.11: layout extended to 92 bytes (19 floats + 4 ints) after adding
   // jerk/pressure_advance/actual_speed/actual_flow for the Preview view modes.
   QVERIFY2(rendererSource.contains(QStringLiteral("static_assert(sizeof(GcvPackedSegment) == 92")),
-           "RhiViewportRenderer must contain static_assert(sizeof(GcvPackedSegment) == 92) "
-           "(Plan 02 wire-format lockstep guard, v5.11 92-byte layout)");
+           "RhiViewportRenderer must contain the canonical 92-byte wire guard");
+  QVERIFY2(viewportSource.contains(QStringLiteral("float jerk, pressure_advance, actual_speed, actual_flow"))
+               && viewportSource.contains(QStringLiteral("static_assert(sizeof(GcvPackedSegment) == 92")),
+           "RhiViewport preview fitting must parse the same multi-segment 92-byte layout");
+}
+
+void QmlUiAuditTests::rendererViewmodelSafetyRegressionAudit()
+{
+  const QString vmCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString paintCpp = readSource(QStringLiteral("src/core/rendering/PaintEngine.cpp"));
+  const QString viewportCpp = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString rendererCpp = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+
+  QVERIFY2(vmCpp.contains(QStringLiteral("meshCopies = std::move(meshCopies)"))
+               && !vmCpp.contains(QStringLiteral("QtConcurrent::run([this, idx]")),
+           "Simplify preview workers must own detached meshes and never capture live this/project state");
+  QVERIFY2(vmCpp.contains(QStringLiteral("generation != m_simplifyPreviewGeneration"))
+               && vmCpp.contains(QStringLiteral("selectedSourceObjectIndex() != objectIndex")),
+           "Simplify preview completion must reject stale generations and wrong selections");
+  QVERIFY2(paintCpp.indexOf(QStringLiteral("selector.seed_fill_apply_on_triangles"))
+               < paintCpp.indexOf(QStringLiteral("selector.seed_fill_select_triangles")),
+           "Smart Fill must apply the prior seed region before selecting the clicked region");
+
+  QVERIFY2(viewportCpp.contains(QStringLiteral("m_camera.eye()"))
+               && preparePage.contains(QStringLiteral("cameraPosition"))
+               && vmCpp.contains(QStringLiteral("worldTransform.inverse() * cameraWorld")),
+           "Paint brush picks must thread camera eye and transform world camera to mesh local");
+  QVERIFY2(viewportCpp.contains(QStringLiteral("if (qFuzzyIsNull(dir.y()))"))
+               && viewportCpp.contains(QStringLiteral("const float t = -orig.y() / dir.y()"))
+               && viewportCpp.contains(QStringLiteral("return QPointF(double(hit.x()), double(hit.z()))")),
+           "screenToBedPoint must intersect scene Y=0 and return bed (X,Z)");
+
+  QVERIFY2(vmCpp.contains(QStringLiteral("size_t(idx(corner)) >= its->vertices.size()"))
+               && vmCpp.contains(QStringLiteral("size_t(idx[t]) >= worldVerts.size()")),
+           "Flatten and paint overlay flattening must bounds-check every vertex index");
+  QVERIFY2(rendererCpp.contains(QStringLiteral("currentRenderPass != m_renderPassDescriptor"))
+               && rendererCpp.contains(QStringLiteral("releaseRenderPassDependentResources()")),
+           "Swapchain render-pass changes must recreate dependent pipelines");
+  QVERIFY2(rendererCpp.contains(QStringLiteral("const QPointer<RhiViewport> viewport = m_viewportItem"))
+               && rendererCpp.contains(QStringLiteral("if (viewport != nullptr)\n          viewport->deliverThumbnail")),
+           "Thumbnail delivery must capture QPointer and recheck it on the GUI thread");
 }
 
 // Phase 55/73 (GCODE-04/GRET-02): D3D11 default + SoftwareViewport fallback
@@ -9204,8 +9248,10 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
   // 3c. WipeTower save path (DLG-02): OK persists the matrix and the service
   // stores it under the upstream key.
   const QString wipeTower = corpus.value(QStringLiteral("dialogs/WipeTowerDialog.qml"));
-  QVERIFY2(wipeTower.contains(QStringLiteral("saveFlushVolumes(flushMatrix)")),
-           "DLG-02: WipeTowerDialog OK must call saveFlushVolumes");
+  QVERIFY2(wipeTower.contains(QStringLiteral("matrix[rowIndex][columnIndex] = value")),
+           "DLG-02: WipeTowerDialog edits must write back to the matrix");
+  QVERIFY2(wipeTower.contains(QStringLiteral("saveFlushVolumes(root.copyMatrix(flushMatrix))")),
+           "DLG-02: WipeTowerDialog OK must persist the edited matrix copy");
   const QString presetSvcHeader = readSource(QStringLiteral("src/core/services/PresetServiceMock.h"));
   QVERIFY2(presetSvcHeader.contains(QStringLiteral("saveFlushVolumes")),
            "DLG-02: PresetServiceMock must declare saveFlushVolumes");
@@ -9587,6 +9633,53 @@ void QmlUiAuditTests::engineSemanticsSourceAudit()
 }
 
 // v5.16 Phase 241 (PAGE-01..04 + CLI-01..02)
+void QmlUiAuditTests::shellGuardNotificationAndDialogRegressionAudit()
+{
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
+  const QString homePage = readSource(QStringLiteral("src/qml_gui/pages/HomePage.qml"));
+  const QString projectPage = readSource(QStringLiteral("src/qml_gui/pages/ProjectPage.qml"));
+  const QString confirmDialog = readSource(QStringLiteral("src/qml_gui/dialogs/ConfirmDialog.qml"));
+  const QString wipeTower = readSource(QStringLiteral("src/qml_gui/dialogs/WipeTowerDialog.qml"));
+  const QString errorToast = readSource(QStringLiteral("src/qml_gui/components/ErrorToast.qml"));
+  const QString backendCpp = readSource(QStringLiteral("src/qml_gui/BackendContext.cpp"));
+
+  QVERIFY2(mainQml.contains(QStringLiteral("property bool forceClose: false")),
+           "Dirty-project quit must keep a force-close bypass through Qt.quit");
+  QVERIFY2(mainQml.contains(QStringLiteral("root.forceClose = true\n                                Qt.quit()")),
+           "Quit confirmation must set forceClose before Qt.quit");
+  QVERIFY2(mainQml.contains(QStringLiteral("function requestNewProject()")) &&
+               mainQml.contains(QStringLiteral("function requestOpenProject(filePath)")) &&
+               mainQml.contains(QStringLiteral("onAccepted: root.requestOpenProject(selectedFile.toString())")),
+           "New/open destructive routing must be centralized in shell guard functions");
+  QVERIFY2(!homePage.contains(QStringLiteral("backend.topbarNewProject()")) &&
+               !homePage.contains(QStringLiteral("backend.topbarOpenProject(")) &&
+               !projectPage.contains(QStringLiteral("backend.topbarNewProject()")) &&
+               !topbar.contains(QStringLiteral("backend.topbarOpenProject(modelData)")),
+           "Page and recent-menu triggers must not bypass the shell dirty guard");
+  QVERIFY2(mainQml.contains(QStringLiteral("PreferencesPage {")) &&
+               backendCpp.contains(QStringLiteral("TabPosition::tpPreferences")),
+           "Preferences must have a real shell page route");
+
+  QCOMPARE(confirmDialog.count(QStringLiteral("root.accepted()")), 0);
+  QCOMPARE(confirmDialog.count(QStringLiteral("root.rejected()")), 0);
+  QVERIFY2(confirmDialog.contains(QStringLiteral("root.accept()")) &&
+               confirmDialog.contains(QStringLiteral("root.reject()")),
+           "ConfirmDialog must rely on inherited accept/reject signal emission exactly once");
+  QVERIFY2(wipeTower.contains(QStringLiteral("readonly property int rowIndex")) &&
+               wipeTower.contains(QStringLiteral("readonly property int columnIndex")) &&
+               wipeTower.contains(QStringLiteral("var matrix = root.copyMatrix(root.flushMatrix)")),
+           "WipeTower cells must capture row/column and use copy-on-write edits");
+
+  QVERIFY2(errorToast.contains(QStringLiteral("visible: entry.requiresConfirm")),
+           "Toast confirm controls must only show for requiresConfirm entries");
+  QVERIFY2(errorToast.contains(QStringLiteral("confirmNotificationById(entry.entryId)")) &&
+               errorToast.contains(QStringLiteral("cancelNotificationById(entry.entryId)")),
+           "Toast confirm/cancel actions must target the delegate notification ID");
+  QVERIFY2(!errorToast.contains(QStringLiteral("opacity: 0\n        Component.onCompleted")),
+           "Toast opacity animation must have one owner");
+}
+
 void QmlUiAuditTests::pageHonestyAndCliSourceAudit()
 {
   const QString homePage = readSource(QStringLiteral("src/qml_gui/pages/HomePage.qml"));
@@ -9623,15 +9716,15 @@ void QmlUiAuditTests::pageHonestyAndCliSourceAudit()
   QVERIFY2(!projectVmCpp.isEmpty(), "Unable to read ProjectViewModel.cpp");
   QVERIFY2(projectVmCpp.contains(QStringLiteral("QSettings")),
            "PAGE-01: ProjectViewModel must persist recentProjects via QSettings");
-  QVERIFY2(homePage.contains(QStringLiteral("openRecentProject(")),
-           "PAGE-01: HomePage recent cards must call openRecentProject");
+  QVERIFY2(homePage.contains(QStringLiteral("openProjectRequested(modelData.path")),
+           "PAGE-01: HomePage recent cards must route through the shell guard signal");
   QVERIFY2(!homePage.contains(QStringLiteral("模型商城")),
            "PAGE-01: the dead ModelMall quick action must stay removed (out of scope)");
   // Every quick action is wired to a real handler.
-  QVERIFY2(homePage.contains(QStringLiteral("backend.topbarNewProject()")),
-           "PAGE-01: the New Project quick action must route through topbarNewProject");
-  QVERIFY2(homePage.contains(QStringLiteral("homeOpenProjectDlg.open()")),
-           "PAGE-01: the Open Project quick action must open the project dialog");
+  QVERIFY2(homePage.contains(QStringLiteral("root.newProjectRequested()")),
+           "PAGE-01: the New Project quick action must route through the shell guard signal");
+  QVERIFY2(homePage.contains(QStringLiteral("root.openProjectRequested(\"\")")),
+           "PAGE-01: the Open Project quick action must route through the shell guard signal");
   QVERIFY2(homePage.contains(QStringLiteral("backend.requestSelectTab(backend.tpCalibration)")),
            "PAGE-01: the Calibration quick action must route to the Calibration tab");
   // Daily Tips rotate the hint database with link support.
@@ -9641,8 +9734,8 @@ void QmlUiAuditTests::pageHonestyAndCliSourceAudit()
            "PAGE-01: Daily Tips must honor the hint documentation link");
 
   // ── PAGE-02: ProjectPage honesty ──────────────────────────────────────
-  QVERIFY2(projectPage.contains(QStringLiteral("backend.topbarNewProject()")),
-           "PAGE-02: the New Project button must call backend.topbarNewProject");
+  QVERIFY2(projectPage.contains(QStringLiteral("root.newProjectRequested()")),
+           "PAGE-02: the New Project button must route through the shell guard signal");
   QVERIFY2(!projectPage.contains(QStringLiteral("console.log(\"[ProjectPage] new project\")")),
            "PAGE-02: the console.log New Project placeholder must stay removed");
   QVERIFY2(projectPage.contains(QStringLiteral("projectFileSizeText")),

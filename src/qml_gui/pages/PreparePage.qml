@@ -1535,9 +1535,9 @@ Item {
                     // Phase 240 (GIZ-02): smart-fill picks arrive on the
                     // dedicated smartFillPickRequested signal (brush picks keep
                     // this one; the trailing smartFill flag is always 0 here).
-                    onPaintPickRequested: function(worldOrigin, worldDirection, pickedSourceIndex, brushRadius, cursorType, paintState, smartFill) {
+                    onPaintPickRequested: function(worldOrigin, worldDirection, cameraPosition, pickedSourceIndex, brushRadius, cursorType, paintState, smartFill) {
                         if (root.editorVm && !smartFill)
-                            root.editorVm.paintAtFacet(-1, -1, -1, 0.0, 0.0, 0.0, paintState, brushRadius, cursorType, pickedSourceIndex, worldOrigin, worldDirection)
+                            root.editorVm.paintAtFacet(-1, -1, -1, 0.0, 0.0, 0.0, paintState, brushRadius, cursorType, pickedSourceIndex, worldOrigin, worldDirection, cameraPosition)
                     }
                     // Phase 240 (GIZ-02): smart (seed) fill pick -- routed to
                     // EditorViewModel::smartFillAtFacet (upstream SMART_FILL

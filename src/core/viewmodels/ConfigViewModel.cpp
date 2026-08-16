@@ -544,10 +544,10 @@ void ConfigViewModel::refreshPresetListModel()
     presetList_->refreshFromService(presetService_, currentPrinterPreset_);
 }
 
-void ConfigViewModel::saveCurrentPreset()
+bool ConfigViewModel::saveCurrentPreset()
 {
   if (!presetService_)
-    return;
+    return false;
 
   const QString tier = normalizedTier(activePresetTier_);
   QString targetPreset;
@@ -560,12 +560,12 @@ void ConfigViewModel::saveCurrentPreset()
   }
 
   if (targetPreset.isEmpty())
-    return;
+    return false;
 
   const QHash<QString, QVariant> tierValues = editableValuesForTier(tier);
 
   if (!presetService_->savePresetValues(targetPreset, tierValues))
-    return;
+    return false;
 
   if (tier == QStringLiteral("printer"))
     printerPresetValues_ = tierValues;
@@ -576,6 +576,7 @@ void ConfigViewModel::saveCurrentPreset()
   updateMergedPresetValues();
   applyScopeValues();
   emit stateChanged();
+  return true;
 }
 
 bool ConfigViewModel::isPresetDirty() const
@@ -1278,7 +1279,8 @@ bool ConfigViewModel::requestSavePendingChanges()
     return false;
   }
 
-  saveCurrentPreset();
+  if (!saveCurrentPreset())
+    return false;
   return applyPendingAction();
 }
 

@@ -479,7 +479,7 @@ void SliceService::startSlice(const QString &projectName)
 {
   Q_UNUSED(projectName);
 
-  if (slicing_)
+  if (slicing_ || exportActive_)
     return;
 
   const QString sourcePath = projectService_ ? projectService_->sourceFilePath() : QString{};
@@ -655,7 +655,6 @@ void SliceService::startSlice(const QString &projectName)
       if (receiver && !receiver->mergedPresetConfig_.isEmpty())
       {
         injectPresetConfig(config, receiver->mergedPresetConfig_);
-        receiver->mergedPresetConfig_.clear(); // one-shot injection per slice
       }
 
       // v3.0 Phase 19 (D-15): merge the FULL per-plate config (not just 3 hardcoded
@@ -1025,7 +1024,7 @@ void SliceService::cancelSlice()
 
 bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
 {
-  if (slicing_)
+  if (slicing_ || exportActive_)
     return false;
 
   const QFileInfo info(gcodeFilePath);
@@ -1288,14 +1287,13 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
     return false;
   }
 
-  if (sliceState_ == State::Exporting)
+  if (slicing_ || exportActive_)
   {
-    setExportStatus(State::Completed, progress_, QObject::tr("A G-code export is already in progress"));
-    logExportFailure(QStringLiteral("all"),
-                     QString{},
-                     cleanDirectory,
-                     statusLabel_);
-    emit exportFailed(statusLabel_);
+    const QString reason = slicing_
+        ? QObject::tr("Cannot export while slicing")
+        : QObject::tr("A G-code export is already in progress");
+    logExportFailure(QStringLiteral("all"), QString{}, cleanDirectory, reason);
+    emit exportFailed(reason);
     return false;
   }
 
@@ -1348,6 +1346,8 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
   }
 
   activeExportCancelFlag_ = std::make_shared<std::atomic_bool>(false);
+  exportActive_ = true;
+  const quint64 generation = ++exportGeneration_;
   const QPointer<SliceService> receiver(this);
   const auto cancelFlag = activeExportCancelFlag_;
   const int totalJobs = jobs.size();
@@ -1355,7 +1355,7 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
   setExportStatus(State::Exporting, 0, QObject::tr("Exporting G-code"));
   emit exportStarted(statusLabel_);
 
-  QtConcurrent::run([receiver, cancelFlag, jobs, totalJobs]() {
+  QtConcurrent::run([receiver, cancelFlag, jobs, totalJobs, generation]() {
     QString failureReason;
     QString failureSource;
     QString failureTarget;
@@ -1405,10 +1405,11 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
       return;
 
     QMetaObject::invokeMethod(receiver, [receiver, cancelled, failureReason, failureSource,
-                                         failureTarget, exportedPaths]() {
-      if (!receiver)
+                                         failureTarget, exportedPaths, generation]() {
+      if (!receiver || receiver->exportGeneration_ != generation)
         return;
 
+      receiver->exportActive_ = false;
       receiver->activeExportCancelFlag_.reset();
 
       if (cancelled || !failureReason.isEmpty())
@@ -1443,9 +1444,10 @@ void SliceService::setExportStatus(State state, int progress, const QString &lab
 bool SliceService::exportSourceToPath(const QString &sourcePath, const QString &targetPath, const QString &displayName)
 {
   const auto failExport = [this, &sourcePath, &targetPath](const QString &reason) {
-    setExportStatus(State::Completed, progress_, reason);
-    logExportFailure(QStringLiteral("single"), sourcePath, targetPath, statusLabel_);
-    emit exportFailed(statusLabel_);
+    if (!slicing_ && !exportActive_)
+      setExportStatus(sliceState_, progress_, reason);
+    logExportFailure(QStringLiteral("single"), sourcePath, targetPath, reason);
+    emit exportFailed(reason);
     return false;
   };
 
@@ -1488,10 +1490,10 @@ bool SliceService::exportSourceToPath(const QString &sourcePath, const QString &
     return failExport(QObject::tr("Choose a different G-code export path"));
   }
 
-  if (sliceState_ == State::Exporting)
-  {
+  if (slicing_)
+    return failExport(QObject::tr("Cannot export while slicing"));
+  if (exportActive_)
     return failExport(QObject::tr("A G-code export is already in progress"));
-  }
 
   // Phase 239 (ENGN-03): the copy itself runs on a QtConcurrent worker so a
   // multi-hundred-MB G-code never freezes the GUI thread (upstream runs the
@@ -1500,6 +1502,8 @@ bool SliceService::exportSourceToPath(const QString &sourcePath, const QString &
   // exportFinished / exportFailed. cancelExport() flips the shared flag and
   // the worker aborts at the next 1 MiB chunk boundary.
   activeExportCancelFlag_ = std::make_shared<std::atomic_bool>(false);
+  exportActive_ = true;
+  const quint64 generation = ++exportGeneration_;
   const QPointer<SliceService> receiver(this);
   const auto cancelFlag = activeExportCancelFlag_;
   const QString sourceAbs = srcInfo.absoluteFilePath();
@@ -1509,7 +1513,7 @@ bool SliceService::exportSourceToPath(const QString &sourcePath, const QString &
   setExportStatus(State::Exporting, 0, QObject::tr("Exporting G-code"));
   emit exportStarted(statusLabel_);
 
-  QtConcurrent::run([receiver, cancelFlag, sourceAbs, targetAbs, displayName, totalBytes]() {
+  QtConcurrent::run([receiver, cancelFlag, sourceAbs, targetAbs, displayName, totalBytes, generation]() {
     const auto onProgress = [receiver](int percent) {
       if (!receiver)
         return;
@@ -1527,10 +1531,11 @@ bool SliceService::exportSourceToPath(const QString &sourcePath, const QString &
     if (!receiver)
       return;
 
-    QMetaObject::invokeMethod(receiver, [receiver, outcome, sourceAbs, targetAbs, displayName]() {
-      if (!receiver)
+    QMetaObject::invokeMethod(receiver, [receiver, outcome, sourceAbs, targetAbs, displayName, generation]() {
+      if (!receiver || receiver->exportGeneration_ != generation)
         return;
 
+      receiver->exportActive_ = false;
       receiver->activeExportCancelFlag_.reset();
 
       if (outcome.cancelled)
@@ -1565,7 +1570,7 @@ bool SliceService::exportSourceToPath(const QString &sourcePath, const QString &
 
 void SliceService::cancelExport()
 {
-  if (sliceState_ != State::Exporting || !activeExportCancelFlag_)
+  if (!exportActive_ || !activeExportCancelFlag_)
     return;
 
   activeExportCancelFlag_->store(true);

@@ -6525,14 +6525,19 @@ bool ProjectServiceMock::assembleObjects(const QList<int> &objIndices)
       }
     }
 
-    // Remove source objects in reverse order to preserve indices
+    // Remove every source in descending order while retaining the actual target,
+    // regardless of where its index falls in the sorted list.
     QList<int> sorted = objIndices;
     std::sort(sorted.begin(), sorted.end(), std::greater<int>());
-    for (int i = 1; i < sorted.size(); ++i)
+    const int targetIndex = objIndices.front();
+    for (int index : sorted)
     {
-      model_->delete_object(size_t(sorted[i]));
+      if (index != targetIndex)
+        model_->delete_object(size_t(index));
     }
 
+    syncTransformsFromModel();
+    modelCount_ = objectNames_.size();
     lastError_.clear();
     emit projectChanged();
     return true;

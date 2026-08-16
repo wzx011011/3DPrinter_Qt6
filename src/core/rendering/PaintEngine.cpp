@@ -73,18 +73,17 @@ bool PaintEngine::paintAt(int objectIndex, int volumeIndex, int facetIdx,
                           float brushRadius, PaintCursorType cursor,
                           Slic3r::EnforcerBlockerType state,
                           const Slic3r::Transform3d &trafo,
+                          const Slic3r::Vec3f &cameraPosMeshLocal,
                           float highlightByAngleDeg)
 {
   Slic3r::TriangleSelector *selector = ensureSelector(objectIndex, volumeIndex);
   if (!selector)
     return false; // mesh source had no mesh for the pair
 
-  // Default camera source = the hit point itself (Sphere/Circle containment
-  // does not depend on a real camera position for the TS-08 unit-test path).
-  // Phase 121 (brush UI) will thread the real camera position through here.
+  // Upstream GLGizmoPainterBase supplies the camera source separately from the
+  // surface hit so Circle cursor clipping follows the actual view direction.
   applyPaintToSelector(*selector, facetIdx, meshLocalHit, brushRadius, cursor,
-                        state, trafo, /*cameraPosMeshLocal=*/meshLocalHit,
-                        highlightByAngleDeg);
+                        state, trafo, cameraPosMeshLocal, highlightByAngleDeg);
   return true;
 }
 
@@ -226,10 +225,9 @@ void applyPaintToSelector(Slic3r::TriangleSelector &selector,
 
 // applySmartFillToSelector -- pure helper (Phase 240 GIZ-02). Unit-testable
 // without a Model. Mirrors the upstream SMART_FILL click sequence
-// (GLGizmoPainterBase.cpp:773-781): seed_fill_select_triangles computes the
-// region (angle-bounded growth from the seed facet + optional overhang
-// filter, force_reselection=true so re-clicking the same facet re-paints),
-// then seed_fill_apply_on_triangles commits it with `state`.
+// (GLGizmoPainterBase.cpp:773-781): seed_fill_apply_on_triangles commits the
+// region staged by the previous click, then seed_fill_select_triangles stages
+// the current angle-bounded region (force_reselection=true supports re-click).
 void applySmartFillToSelector(Slic3r::TriangleSelector &selector,
                               int facetIdx,
                               const Slic3r::Vec3f &meshLocalHit,
@@ -238,6 +236,11 @@ void applySmartFillToSelector(Slic3r::TriangleSelector &selector,
                               const Slic3r::Transform3d &trafo)
 {
   const Slic3r::TriangleSelector::ClippingPlane clippingPlane;
+  // Upstream applies the region selected by the previous click before
+  // selecting the region under the current click. The first click therefore
+  // stages a region, while the second click paints the first and stages the
+  // second (GLGizmoPainterBase.cpp SMART_FILL LeftDown ordering).
+  selector.seed_fill_apply_on_triangles(/*new_state=*/state);
   selector.seed_fill_select_triangles(/*hit=*/meshLocalHit,
                                       /*facet_start=*/facetIdx,
                                       /*trafo_no_translate=*/trafo,
@@ -245,7 +248,6 @@ void applySmartFillToSelector(Slic3r::TriangleSelector &selector,
                                       /*seed_fill_angle=*/seedFillAngle,
                                       /*highlight_by_angle_deg=*/highlightByAngleDeg,
                                       /*force_reselection=*/true);
-  selector.seed_fill_apply_on_triangles(/*new_state=*/state);
 }
 
 } // namespace OWzx

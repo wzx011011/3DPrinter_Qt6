@@ -47,6 +47,7 @@ protected:
 
 private:
   void releaseResources();
+  void releaseRenderPassDependentResources();
   void resetPreviewGpuState(bool keepCpuStaging);
   bool ensurePipelines();
   bool ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &pipeline,

@@ -8,6 +8,8 @@ import "../controls"
 Item {
     id: root
     required property var projectVm
+    signal newProjectRequested()
+    signal openProjectDialogRequested()
     /// Viewmodel used by project import/save actions. Passed through from main.qml.
     property var editorVm: null
     property var _fileTree: []
@@ -38,17 +40,6 @@ Item {
     Rectangle { anchors.fill: parent; color: Theme.bgBase }
 
     // PAGE-01: Project operation file dialogs.
-    FileDialog {
-        id: openProjectDlg
-        title: qsTr("打开项目")
-        nameFilters: [qsTr("3MF 项目 (*.3mf)"), qsTr("所有文件 (*)")]
-        onAccepted: {
-            // Opening a .3mf project loads it through EditorViewModel.
-            if (root.editorVm)
-                root.editorVm.loadFile(currentFile.toString().replace("file:///", ""))
-        }
-    }
-
     FileDialog {
         id: importModelDlg
         title: qsTr("导入模型")
@@ -128,15 +119,10 @@ Item {
                         onClicked: {
                             switch (modelData.action) {
                                 case "new":
-                                    // Phase 241 (PAGE-02): real New Project via
-                                    // BackendContext::topbarNewProject (clears
-                                    // the workspace + resets the project state,
-                                    // upstream MainFrame new-project path). The
-                                    // old console.log placeholder is gone.
-                                    backend.topbarNewProject()
+                                    root.newProjectRequested()
                                     break
                                 case "open":
-                                    openProjectDlg.open()
+                                    root.openProjectDialogRequested()
                                     break
                                 case "save":
                                 case "saveAs":

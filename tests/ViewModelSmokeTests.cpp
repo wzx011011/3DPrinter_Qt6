@@ -232,6 +232,7 @@ private slots:
   void calibrationImplementedModesEmitSliceRequests();
   void calibrationUnsupportedModesAreExplicitlyUnavailable();
   void calibrationFallbackAndSliceCallbacksDriveProgress();
+  void calibrationTowerPreservesLiveProject();
   // v5.16 (CIRC-04): per-slot filament presets hold independent selections.
   void filamentSlotPresetsAreIndependent();
   // v5.16 (PLATE-01/02/03): plate-level UI settings land in the plate's
@@ -251,6 +252,7 @@ private slots:
   // Phase 241 (PAGE-04): startup-page preference drives currentPage and the
   // mm<->inch display conversion math is exact.
   void preferencesStartupPageAndInchesConversion();
+  void settingsResetPreservesUnownedKeysAndResetsAllProperties();
   // Phase 241 (PAGE-04): the backup primitive writes a real .3mf snapshot
   // without hijacking the current project path.
   void projectBackupWritesSnapshotFile();
@@ -309,6 +311,7 @@ private slots:
   void configUnsavedTransitionsQueueAndCancelPendingChanges();
   void configDiscardAppliesPendingTransitionAndRestoresValues();
   void configWritableSaveAppliesPendingTransition();
+  void configFailedSaveRetainsDirtyPendingTransition();
   void configReadOnlySaveAsAppliesPendingTransition();
   void configPresetCategoryMappingUsesServiceEnums();
   void configPresetMutationsRejectWrongCategory();
@@ -322,6 +325,8 @@ private slots:
   void presetReadOnlyActionBlockerReasons();
   // v5.16 Phase 235 (PSET2-01..07): preset system completion.
   void userPresetPersistsAcrossRestart();
+  void userPresetNamesDoNotCollideOnDisk();
+  void userPresetWriteFailureLeavesMemoryUnchanged();
   void createPresetHonorsScopeAndInherits();
   void bundleImportCategoriesRoundTrip();
   void configTransferPendingChangesAndDialogGate();
@@ -547,6 +552,7 @@ private slots:
   // mutating the model; Cancel-equivalent (plain drop) leaves the object
   // untouched.
   void simplifyPreviewDecimatesWithoutMutation();
+  void simplifyPreviewRejectsStaleWrongSelectionResult();
 
 private:
   bool hasLibslic3r() const;
@@ -1603,6 +1609,44 @@ void ViewModelSmokeTests::configWritableSaveAppliesPendingTransition()
   QCOMPARE(savedValues.value(QStringLiteral("layer_height")).toDouble(), 0.26);
 }
 
+void ViewModelSmokeTests::configFailedSaveRetainsDirtyPendingTransition()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("ConfigFailedSave"));
+  ScopedSettingsSnapshot snapshot({QStringLiteral("presets/selectedPrint")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ScopedUserPresetDir presetDir(preset);
+  ProjectServiceMock project;
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("UT Failed Save A"),
+                                    {{QStringLiteral("layer_height"), 0.18}}));
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                    QStringLiteral("UT Failed Save B"),
+                                    {{QStringLiteral("layer_height"), 0.30}}));
+
+  ConfigViewModel config(&preset, &project);
+  config.setCurrentPrintPreset(QStringLiteral("UT Failed Save A"));
+  config.setActivePresetTier(QStringLiteral("print"));
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  printOpts->setValue(printOpts->indexOfKey(QStringLiteral("layer_height")), 0.24);
+  QVERIFY(!config.requestCurrentPrintPreset(QStringLiteral("UT Failed Save B")));
+
+  // A regular file used as the preset base path makes directory creation fail.
+  const QString blockedPath = presetDir.temp->filePath(QStringLiteral("blocked"));
+  QFile blocker(blockedPath);
+  QVERIFY(blocker.open(QIODevice::WriteOnly));
+  blocker.close();
+  preset.setUserPresetDir(blockedPath);
+  QVERIFY(!config.requestSavePendingChanges());
+  QCOMPARE(config.currentPrintPreset(), QStringLiteral("UT Failed Save A"));
+  QVERIFY(config.isPresetDirty());
+  QCOMPARE(config.pendingUnsavedAction(), QStringLiteral("switch-print-preset"));
+  QCOMPARE(config.pendingUnsavedTarget(), QStringLiteral("UT Failed Save B"));
+}
+
 void ViewModelSmokeTests::configReadOnlySaveAsAppliesPendingTransition()
 {
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
@@ -2175,11 +2219,10 @@ void ViewModelSmokeTests::userPresetPersistsAcrossRestart()
     QVERIFY(first.createCustomPreset(PresetServiceMock::PrintCat, presetName, values));
     QVERIFY(first.createCustomPreset(PresetServiceMock::PrinterCat, printerPresetName,
                                      {{QStringLiteral("nozzle_diameter"), 0.6}}));
-    // Upstream user-preset layout: <userDir>/{process,printer}/<name>.json.
-    QVERIFY(QFile::exists(userDir + QStringLiteral("/process/") + presetName
-                                      + QStringLiteral(".json")));
-    QVERIFY(QFile::exists(userDir + QStringLiteral("/printer/") + printerPresetName
-                                      + QStringLiteral(".json")));
+    QCOMPARE(QDir(userDir + QStringLiteral("/process"))
+                 .entryList({QStringLiteral("*.json")}, QDir::Files).size(), 1);
+    QCOMPARE(QDir(userDir + QStringLiteral("/printer"))
+                 .entryList({QStringLiteral("*.json")}, QDir::Files).size(), 1);
   }
 
   // "Restart": a new instance pointed at the same directory loads both.
@@ -2212,10 +2255,11 @@ void ViewModelSmokeTests::userPresetPersistsAcrossRestart()
   // directory) sees neither.
   const QString renamed = presetName + QStringLiteral(" R");
   QVERIFY(second.renamePreset(presetName, renamed));
-  QVERIFY(QFile::exists(userDir + QStringLiteral("/process/") + renamed + QStringLiteral(".json")));
-  QVERIFY(!QFile::exists(userDir + QStringLiteral("/process/") + presetName + QStringLiteral(".json")));
+  QCOMPARE(QDir(userDir + QStringLiteral("/process"))
+               .entryList({QStringLiteral("*.json")}, QDir::Files).size(), 1);
   QVERIFY(second.deletePreset(renamed));
-  QVERIFY(!QFile::exists(userDir + QStringLiteral("/process/") + renamed + QStringLiteral(".json")));
+  QCOMPARE(QDir(userDir + QStringLiteral("/process"))
+               .entryList({QStringLiteral("*.json")}, QDir::Files).size(), 0);
 
   PresetServiceMock third;
   third.setUserPresetDir(userDir);
@@ -2227,6 +2271,42 @@ void ViewModelSmokeTests::userPresetPersistsAcrossRestart()
 // (combo index 0) maps to PresetServiceMock::PrinterCat (2), and the
 // inherits selection seeds the new preset from the parent's resolved chain
 // (upstream CreatePresetsDialog "Inherits from").
+void ViewModelSmokeTests::userPresetNamesDoNotCollideOnDisk()
+{
+  QTemporaryDir userTemp(QDir::temp().filePath(QStringLiteral("owzx-user-presets-XXXXXX")));
+  QVERIFY(userTemp.isValid());
+  {
+    PresetServiceMock preset;
+    preset.setUserPresetDir(userTemp.path());
+    QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                      QStringLiteral("A/B"),
+                                      {{QStringLiteral("wall_loops"), 2}}));
+    QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                      QStringLiteral("A\\B"),
+                                      {{QStringLiteral("wall_loops"), 5}}));
+    QCOMPARE(QDir(userTemp.path() + QStringLiteral("/process"))
+                 .entryList({QStringLiteral("*.json")}, QDir::Files).size(), 2);
+  }
+
+  PresetServiceMock restored;
+  restored.setUserPresetDir(userTemp.path());
+  QCOMPARE(restored.presetValue(QStringLiteral("A/B"), QStringLiteral("wall_loops")).toInt(), 2);
+  QCOMPARE(restored.presetValue(QStringLiteral("A\\B"), QStringLiteral("wall_loops")).toInt(), 5);
+}
+
+void ViewModelSmokeTests::userPresetWriteFailureLeavesMemoryUnchanged()
+{
+  QTemporaryFile notDirectory;
+  QVERIFY(notDirectory.open());
+
+  PresetServiceMock preset;
+  preset.setUserPresetDir(notDirectory.fileName());
+  QVERIFY(!preset.createCustomPreset(PresetServiceMock::PrintCat,
+                                     QStringLiteral("Cannot Persist"),
+                                     {{QStringLiteral("wall_loops"), 7}}));
+  QVERIFY(!preset.hasPreset(QStringLiteral("Cannot Persist")));
+}
+
 void ViewModelSmokeTests::createPresetHonorsScopeAndInherits()
 {
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
@@ -2292,10 +2372,28 @@ void ViewModelSmokeTests::bundleImportCategoriesRoundTrip()
                                       QStringLiteral("UT Bundle Process"),
                                       {{QStringLiteral("layer_height"), 0.24}}));
     QCOMPARE(source.exportBundleIni(exportDir), 3);
-    QVERIFY(QFile::exists(exportDir + QStringLiteral("/index.json")));
-    QVERIFY(QFile::exists(exportDir + QStringLiteral("/printer/UT Bundle Printer.json")));
-    QVERIFY(QFile::exists(exportDir + QStringLiteral("/filament/UT Bundle Filament.json")));
-    QVERIFY(QFile::exists(exportDir + QStringLiteral("/process/UT Bundle Process.json")));
+    QFile manifestFile(exportDir + QStringLiteral("/index.json"));
+    QVERIFY(manifestFile.open(QIODevice::ReadOnly));
+    const QJsonArray entries = QJsonDocument::fromJson(manifestFile.readAll())
+                                   .object().value(QStringLiteral("presets")).toArray();
+    QCOMPARE(entries.size(), 3);
+
+    QHash<QString, QString> exportedFiles;
+    for (const QJsonValue &value : entries)
+    {
+      const QJsonObject entry = value.toObject();
+      exportedFiles.insert(entry.value(QStringLiteral("name")).toString(),
+                           entry.value(QStringLiteral("file")).toString());
+    }
+    const QStringList exportedNames = exportedFiles.keys();
+    const QSet<QString> exportedNameSet(exportedNames.cbegin(), exportedNames.cend());
+    QCOMPARE(exportedNameSet,
+             QSet<QString>({QStringLiteral("UT Bundle Printer"),
+                            QStringLiteral("UT Bundle Filament"),
+                            QStringLiteral("UT Bundle Process")}));
+    for (auto it = exportedFiles.constBegin(); it != exportedFiles.constEnd(); ++it)
+      QVERIFY2(QFile::exists(QDir(exportDir).filePath(it.value())),
+               qPrintable(QStringLiteral("manifest file missing: %1").arg(it.value())));
   }
 
   // Fresh instance (own wiped AppData tree) imports the directory bundle.
@@ -3501,18 +3599,25 @@ void ViewModelSmokeTests::calibrationHistoryPersistsAcrossServiceInstances()
   {
     CalibrationServiceMock service;
     service.clearHistory();
+    service.addHistoryEntry(QStringLiteral("Older"),
+                            QStringLiteral("Unit Test Filament"),
+                            0.020f, 0.4f,
+                            QStringLiteral("2026-08-15T12:00:00"),
+                            true,
+                            QStringLiteral("Older result."));
     service.addHistoryEntry(QStringLiteral("Flow Dynamics"),
                             QStringLiteral("Unit Test Filament"),
                             0.031f, 0.4f,
                             QStringLiteral("2026-08-16T12:00:00"),
                             true,
                             QStringLiteral("PA K-value read back from sliced G-code."));
-    QCOMPARE(service.historyCount(), 1);
+    QCOMPARE(service.historyCount(), 2);
   }
 
   CalibrationServiceMock restored;
-  QCOMPARE(restored.historyCount(), 1);
+  QCOMPARE(restored.historyCount(), 2);
   QCOMPARE(restored.historyName(0), QStringLiteral("Flow Dynamics"));
+  QCOMPARE(restored.historyName(1), QStringLiteral("Older"));
   QCOMPARE(restored.historyFilamentId(0), QStringLiteral("Unit Test Filament"));
   QCOMPARE(restored.historyKValue(0), 0.031f);
   QVERIFY(restored.historyHasRealReadback(0));
@@ -3565,6 +3670,47 @@ void ViewModelSmokeTests::preferencesStartupPageAndInchesConversion()
   backendSettings->setDefaultPage(0); // Home page preference
   backend.applyStartupPagePreference();
   QCOMPARE(backend.currentPage(), backend.tpHome());
+}
+
+void ViewModelSmokeTests::settingsResetPreservesUnownedKeysAndResetsAllProperties()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("SettingsResetIsolation"));
+  QSettings stored;
+  stored.clear();
+  stored.setValue(QStringLiteral("unowned/sentinel"), QStringLiteral("keep"));
+
+  SettingsViewModel settings;
+  settings.setThemeIndex(2);
+  settings.setFontSize(18);
+  settings.setDefaultNozzleIndex(3);
+  settings.setDefaultBedShape(1);
+  settings.setCameraNavStyle(1);
+  settings.setZoomToMouse(false);
+  settings.setFreeCamera(true);
+  settings.setReverseZoom(true);
+  settings.setAutoUpload(true);
+  settings.setUpdateChannel(2);
+  settings.resetPreferences();
+
+  QCOMPARE(settings.themeIndex(), 0);
+  QCOMPARE(settings.fontSize(), 12);
+  QCOMPARE(settings.defaultNozzleIndex(), 1);
+  QCOMPARE(settings.defaultBedShape(), 0);
+  QCOMPARE(settings.cameraNavStyle(), 0);
+  QVERIFY(settings.zoomToMouse());
+  QVERIFY(!settings.freeCamera());
+  QVERIFY(!settings.reverseZoom());
+  QVERIFY(!settings.autoUpload());
+  QCOMPARE(settings.updateChannel(), 0);
+  QCOMPARE(stored.value(QStringLiteral("unowned/sentinel")).toString(),
+           QStringLiteral("keep"));
+
+  SettingsViewModel restored;
+  QCOMPARE(restored.defaultNozzleIndex(), 1);
+  QCOMPARE(restored.cameraNavStyle(), 0);
+  QVERIFY(restored.zoomToMouse());
+  stored.clear();
 }
 
 void ViewModelSmokeTests::projectBackupWritesSnapshotFile()
@@ -3634,6 +3780,26 @@ void ViewModelSmokeTests::calibrationUnsupportedModesAreExplicitlyUnavailable()
     QCOMPARE(service.isRunning(), false);
     QCOMPARE(service.calibStatus(index), static_cast<int>(CalibrationStatus::NotStarted));
   }
+}
+
+void ViewModelSmokeTests::calibrationTowerPreservesLiveProject()
+{
+  ProjectServiceMock project;
+  const int objectIndex = project.addObject(QStringLiteral("User Model"));
+  QVERIFY(objectIndex >= 0);
+  const QStringList before = project.objectNames();
+
+  CalibrationServiceMock service;
+  service.setProjectService(&project);
+  QSignalSpy finishedSpy(&service, &CalibrationServiceMock::calibrationFinished);
+  const int towerIndex = service.calibTypeIndexById(QStringLiteral("pa_tower"));
+  QVERIFY(towerIndex >= 0);
+  service.startCalibration(towerIndex);
+
+  QCOMPARE(finishedSpy.count(), 1);
+  QCOMPARE(finishedSpy.takeFirst().at(0).toBool(), false);
+  QCOMPARE(service.isRunning(), false);
+  QCOMPARE(project.objectNames(), before);
 }
 
 void ViewModelSmokeTests::calibrationFallbackAndSliceCallbacksDriveProgress()
@@ -6420,7 +6586,8 @@ void ViewModelSmokeTests::paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt(
   const bool painted = engine.paintAt(
       /*obj=*/0, /*vol=*/0, /*facetIdx=*/0, facet0Center,
       /*brushRadius=*/2.0f, OWzx::PaintCursorType::Sphere,
-      Slic3r::EnforcerBlockerType::ENFORCER, trafo);
+      Slic3r::EnforcerBlockerType::ENFORCER, trafo,
+      /*cameraPosMeshLocal=*/Slic3r::Vec3f(0.5f, 0.5f, 10.f));
   QVERIFY2(painted,
            "PAINT-01/TS-04: paintAt must return true when the selector exists");
   QVERIFY2(engine.cachedSelectorCount() == 1,
@@ -7449,6 +7616,10 @@ void ViewModelSmokeTests::notificationStackOrdersCompressesAndDismissesById()
   // (d) dismissNotificationById removes ONLY its own entry (upstream
   // PopNotification::close()).
   const int errorId = stack3.first().toMap().value(QStringLiteral("id")).toInt();
+  QVERIFY(stack3.first().toMap().contains(QStringLiteral("requiresConfirm")));
+  QVERIFY(!stack3.first().toMap().value(QStringLiteral("requiresConfirm")).toBool());
+  ctx.confirmNotificationById(errorId);
+  QCOMPARE(ctx.notificationStack().size(), 2);
   ctx.dismissNotificationById(errorId);
   const QVariantList stack4 = ctx.notificationStack();
   QVERIFY2(stack4.size() == 1,
@@ -7499,6 +7670,13 @@ void ViewModelSmokeTests::paintEngineSmartFillRespectsAngleAndOverhangFilter()
                                    /*highlightByAngleDeg=*/0.f,
                                    Slic3r::EnforcerBlockerType::ENFORCER,
                                    trafo);
+    QVERIFY2(!selector.has_facets(Slic3r::EnforcerBlockerType::ENFORCER),
+             "GIZ-02: first smart-fill click must only stage the seed region");
+    OWzx::applySmartFillToSelector(selector, /*facetIdx=*/0, facet0Center,
+                                   /*seedFillAngle=*/30.f,
+                                   /*highlightByAngleDeg=*/0.f,
+                                   Slic3r::EnforcerBlockerType::ENFORCER,
+                                   trafo);
     const int filled = selector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER);
     QVERIFY2(filled > 0 && filled <= 2,
              qPrintable(QStringLiteral("GIZ-02: small-angle seed fill must mark >=1 facet, got %1").arg(filled)));
@@ -7520,6 +7698,11 @@ void ViewModelSmokeTests::paintEngineSmartFillRespectsAngleAndOverhangFilter()
                                    /*highlightByAngleDeg=*/1.f,
                                    Slic3r::EnforcerBlockerType::ENFORCER,
                                    trafo);
+    OWzx::applySmartFillToSelector(selector, /*facetIdx=*/0, facet0Center,
+                                   /*seedFillAngle=*/30.f,
+                                   /*highlightByAngleDeg=*/1.f,
+                                   Slic3r::EnforcerBlockerType::ENFORCER,
+                                   trafo);
     QVERIFY2(!selector.has_facets(Slic3r::EnforcerBlockerType::ENFORCER),
              "GIZ-02: the overhang filter must exclude the horizontal facet");
   }
@@ -7528,12 +7711,18 @@ void ViewModelSmokeTests::paintEngineSmartFillRespectsAngleAndOverhangFilter()
   {
     auto meshPtr = std::make_shared<Slic3r::TriangleMesh>(its);
     OWzx::PaintEngine engine([meshPtr](int, int) { return meshPtr; });
-    const bool filled = engine.smartFillAt(
+    const bool first = engine.smartFillAt(
         0, 0, 0, facet0Center, 30.f, 0.f,
         Slic3r::EnforcerBlockerType::ENFORCER, trafo);
-    QVERIFY2(filled, "GIZ-02: smartFillAt must return true for a valid volume");
+    QVERIFY2(first, "GIZ-02: smartFillAt must accept the first valid seed");
+    QVERIFY2(!engine.hasFacets(0, 0, Slic3r::EnforcerBlockerType::ENFORCER),
+             "GIZ-02: the first wrapper click must only stage the region");
+    const bool second = engine.smartFillAt(
+        0, 0, 0, facet0Center, 30.f, 0.f,
+        Slic3r::EnforcerBlockerType::ENFORCER, trafo);
+    QVERIFY2(second, "GIZ-02: smartFillAt must accept the second valid seed");
     QVERIFY2(engine.hasFacets(0, 0, Slic3r::EnforcerBlockerType::ENFORCER),
-             "GIZ-02: the engine-cached selector must hold the seed fill");
+             "GIZ-02: the second wrapper click must apply the prior region");
   }
 }
 #else
@@ -7670,10 +7859,45 @@ void ViewModelSmokeTests::simplifyPreviewDecimatesWithoutMutation()
            qPrintable(QStringLiteral("GIZ-06: preview must NOT mutate the model (%1 -> %2)")
                           .arg(before).arg(after)));
 }
+
+void ViewModelSmokeTests::simplifyPreviewRejectsStaleWrongSelectionResult()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPrimitiveToPlate(1));
+  QVERIFY(editor.selectSourceObject(0));
+  const int firstBefore = project.objectTriangleCount(0);
+  const int secondBefore = project.objectTriangleCount(1);
+  QVERIFY(firstBefore > 0 && secondBefore > 0);
+
+  editor.setSimplifyWantedCount(std::max(1, firstBefore / 2));
+  editor.simplifyPreviewStart();
+
+  // Selection changes invalidate both an already-completed preview and a late
+  // worker result. Neither may be applied while object 1 is active.
+  QVERIFY(editor.selectSourceObject(1));
+  QVERIFY(!editor.simplifyPreviewRunning());
+  QTest::qWait(500);
+  QVERIFY(!editor.simplifyPreviewValid());
+  QCOMPARE(editor.selectedSourceObjectIndex(), 1);
+  QCOMPARE(project.objectTriangleCount(0), firstBefore);
+  QCOMPARE(project.objectTriangleCount(1), secondBefore);
+  editor.simplifyPreviewApply();
+  QCOMPARE(project.objectTriangleCount(0), firstBefore);
+  QCOMPARE(project.objectTriangleCount(1), secondBefore);
+}
 #else
 void ViewModelSmokeTests::simplifyPreviewDecimatesWithoutMutation()
 {
   QSKIP("Simplify preview test requires HAS_LIBSLIC3R -- skipping");
+}
+
+void ViewModelSmokeTests::simplifyPreviewRejectsStaleWrongSelectionResult()
+{
+  QSKIP("Simplify async stale-result test requires HAS_LIBSLIC3R -- skipping");
 }
 #endif
 

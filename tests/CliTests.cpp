@@ -249,6 +249,27 @@ private slots:
         QVERIFY(r.stderr_.contains(QLatin1String("axis")));
     }
 
+    void testNumericOptionsRejectInvalidAndNonFiniteValues()
+    {
+        const QString model = modelPath(QStringLiteral("profiles/hotend.stl"));
+        auto plate = runCli({QStringLiteral("--load"), model,
+                             QStringLiteral("--plate"), QStringLiteral("abc")});
+        QVERIFY(plate.exitCode != 0);
+        QVERIFY(plate.stderr_.contains(QLatin1String("--plate")));
+
+        auto cut = runCli({QStringLiteral("--load"), model,
+                           QStringLiteral("--cut"), QStringLiteral("z:nan"),
+                           QStringLiteral("--export-stl")});
+        QVERIFY(cut.exitCode != 0);
+        QVERIFY(cut.stderr_.contains(QLatin1String("finite number")));
+
+        auto scale = runCli({QStringLiteral("--load"), model,
+                             QStringLiteral("--scale-to-fit"), QStringLiteral("10,inf,10"),
+                             QStringLiteral("--export-stl")});
+        QVERIFY(scale.exitCode != 0);
+        QVERIFY(scale.stderr_.contains(QLatin1String("positive volume")));
+    }
+
     void testRepairTransform()
     {
         QTemporaryDir tmpDir;

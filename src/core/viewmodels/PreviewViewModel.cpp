@@ -80,7 +80,7 @@ namespace
   // the static_assert previously existed only on the renderer side). PackedSegment
   // must be byte-identical to GcvPackedSegment in RhiViewportRenderer.cpp; a
   // layout drift here would silently corrupt the GCV1 preview blob at runtime.
-  static_assert(sizeof(PackedSegment) == 92, "PackedSegment must be 92 bytes (20 floats + 4 ints, matches GcvPackedSegment)");
+  static_assert(sizeof(PackedSegment) == 92, "PackedSegment must be 92 bytes (19 floats + 4 ints, matches GcvPackedSegment)");
 
   // Upstream-matched gradient: 10-color Range_Colors from CrealityPrint GCodeViewer
   struct ColorResult { float r, g, b; };

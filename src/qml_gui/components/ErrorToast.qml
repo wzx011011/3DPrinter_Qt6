@@ -45,12 +45,13 @@ Item {
         readonly property int repeatCount: modelData.repeatCount !== undefined ? modelData.repeatCount : 1
         readonly property bool isHint: entry.notiType === 10 // NotiTypeDidYouKnowHint
         readonly property bool isSlicingComplete: entry.notiType === 2 && !entry.hasProgress
+        readonly property bool requiresConfirm: modelData.requiresConfirm === true
         readonly property bool showExportBtn: modelData.showExportButton === true
         readonly property bool showPreviewBtn: modelData.showPreviewButton === true
 
         // Dynamic width based on content
-        readonly property bool hasExtraButtons: entry.isHint || entry.isSlicingComplete
-        readonly property bool hasDocLink: entry.isHint && backend.currentHintHasDocumentationLink
+        readonly property bool hasExtraButtons: entry.isHint || entry.isSlicingComplete || entry.requiresConfirm
+        readonly property bool hasDocLink: entry.isHint && backend.currentHintHasDocumentationLink()
         width: Math.max(toastLabel.implicitWidth + (entry.repeatCount > 1 ? 96 : 76),
                         entry.hasProgress ? 320 : (entry.hasExtraButtons ? (entry.hasDocLink ? 410 : 360) : 160))
         height: {
@@ -68,7 +69,6 @@ Item {
         // Auto-dismiss uses user preference (in seconds)
         readonly property int autoDismissMs: backend.autoDismissSec * 1000
 
-        opacity: 0
         Component.onCompleted: {
             slideAnim.restart()
             if (!entry.isPersistent)
@@ -225,8 +225,8 @@ Item {
 
                     // Hint index
                     Text {
-                        text: backend.currentHintIndex >= 0
-                              ? (backend.currentHintIndex + 1) + "/" + backend.hintCount
+                        text: backend.currentHintIndex() >= 0
+                              ? (backend.currentHintIndex() + 1) + "/" + backend.hintCount()
                               : ""
                         color: Theme.textTertiary
                         font.pixelSize: Theme.fontSizeXS
@@ -248,7 +248,7 @@ Item {
 
                     // Documentation link button (aligns with upstream HintNotification documentation button)
                     Rectangle {
-                        visible: backend.currentHintHasDocumentationLink
+                        visible: backend.currentHintHasDocumentationLink()
                         width: 40; height: 22; radius: 4
                         color: docMA.containsMouse ? Theme.bgWarningSubtle : Theme.bgCard
                         Text { anchors.centerIn: parent; text: qsTr("文档"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; font.bold: true }
@@ -336,7 +336,7 @@ Item {
 
                 // Confirm/Cancel buttons (aligns with upstream notification_manager confirm dialog)
                 RowLayout {
-                    visible: entry.isPersistent && !entry.hasProgress && !entry.isHint && !entry.isSlicingComplete
+                    visible: entry.requiresConfirm
                     Layout.alignment: Qt.AlignHCenter
                     Layout.topMargin: 4
                     spacing: 8
@@ -347,14 +347,14 @@ Item {
                         border.color: Theme.borderDefault; border.width: 1
                         Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
                         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: backend.cancelCurrentNotification() }
+                            onClicked: backend.cancelNotificationById(entry.entryId) }
                     }
                     Rectangle {
                         width: 60; height: 24; radius: 4
                         color: iconColor
                         Text { anchors.centerIn: parent; text: qsTr("确认"); color: Theme.accentDark; font.pixelSize: Theme.fontSizeSM }
                         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: backend.confirmCurrentNotification() }
+                            onClicked: backend.confirmNotificationById(entry.entryId) }
                     }
                 }
             }

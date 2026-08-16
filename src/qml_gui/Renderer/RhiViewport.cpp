@@ -25,10 +25,12 @@ struct GcvPackedSegment
   float x1, y1, z1, x2, y2, z2;
   float r, g, b;
   float feedrate, fan_speed, temperature, width, layer_time, acceleration;
+  float jerk, pressure_advance, actual_speed, actual_flow;
   int extruder_id, layer, move;
   int role;  // must match PackedSegment layout exactly (canonical libvgcode index).
 };
-static_assert(sizeof(GcvPackedSegment) == 76, "GcvPackedSegment must be 76 bytes after adding role");
+static_assert(sizeof(GcvPackedSegment) == 92,
+              "GcvPackedSegment must be 92 bytes (19 floats + 4 ints)");
 
 static const QVector3D kGizmoAxes[3] = {
     QVector3D(1, 0, 0), QVector3D(0, 1, 0), QVector3D(0, 0, 1)};
@@ -1652,8 +1654,8 @@ void RhiViewport::emitPaintPickIfActive(const QPointF &position,
 
   // Forward to QML opaquely (no ray math in QML -- same contract as
   // measurePickRequested). QML connects this to EditorViewModel::paintAtFacet.
-  emit paintPickRequested(rayOrigin, rayDirection, pickedSourceIndex,
-                          brushRadius, cursorType, paintState,
+  emit paintPickRequested(rayOrigin, rayDirection, m_camera.eye(),
+                          pickedSourceIndex, brushRadius, cursorType, paintState,
                           /*smartFill=*/0);
 }
 
@@ -1846,14 +1848,15 @@ QPointF RhiViewport::screenToBedPoint(qreal screenX, qreal screenY) const
   auto [orig, dir] = GizmoMath::computeRay(
       float(screenX), float(screenY), viewSize,
       m_camera.projMatrix(aspect), m_camera.viewMatrix());
-  // Intersect with the Z=0 bed plane.
-  if (qFuzzyIsNull(dir.z()))
+  // Scene coordinates use Y as vertical, so the bed is the Y=0 plane and the
+  // 2D bed coordinates are (X,Z). Reject parallel and behind-camera hits.
+  if (qFuzzyIsNull(dir.y()))
     return QPointF();
-  const float t = -orig.z() / dir.z();
+  const float t = -orig.y() / dir.y();
   if (t < 0.f)
     return QPointF();
   const QVector3D hit = orig + dir * t;
-  return QPointF(double(hit.x()), double(hit.y()));
+  return QPointF(double(hit.x()), double(hit.z()));
 }
 
 // Phase 121 (PAINT-03/OV-05): track the mouse screen position + button state so

@@ -10,6 +10,7 @@
 #include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <cmath>
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Model.hpp>
@@ -193,7 +194,13 @@ int CliRunner::run()
     loadFiles_ = parser.values(loadOption);
     loadSettingsPath_ = parser.value(loadSettingsOption);
     doSlice_ = parser.isSet(sliceOption);
-    plateIndex_ = parser.value(plateOption).toInt();
+    bool plateOk = false;
+    plateIndex_ = parser.value(plateOption).toInt(&plateOk);
+    if (!plateOk || plateIndex_ < 0) {
+        QTextStream err(stderr);
+        err << "Error: --plate expects a non-negative integer\n";
+        return CLI_INVALID_PARAMS;
+    }
     outputDir_ = parser.value(outputDirOption);
     quiet_ = parser.isSet(quietOption);
     arrange_ = parser.isSet(arrangeOption);
@@ -218,10 +225,16 @@ int CliRunner::run()
             err << "Error: --scale-to-fit expects X,Y,Z (e.g. 100,100,100)\n";
             return CLI_INVALID_PARAMS;
         }
-        scaleToFitX_ = parts.at(0).toDouble();
-        scaleToFitY_ = parts.at(1).toDouble();
-        scaleToFitZ_ = parts.at(2).toDouble();
-        if (scaleToFitX_ <= 0 || scaleToFitY_ <= 0 || scaleToFitZ_ <= 0) {
+        bool xOk = false;
+        bool yOk = false;
+        bool zOk = false;
+        scaleToFitX_ = parts.at(0).toDouble(&xOk);
+        scaleToFitY_ = parts.at(1).toDouble(&yOk);
+        scaleToFitZ_ = parts.at(2).toDouble(&zOk);
+        if (!xOk || !yOk || !zOk
+            || !std::isfinite(scaleToFitX_) || !std::isfinite(scaleToFitY_)
+            || !std::isfinite(scaleToFitZ_)
+            || scaleToFitX_ <= 0 || scaleToFitY_ <= 0 || scaleToFitZ_ <= 0) {
             // Upstream: "--scale-to-fit requires a positive volume"
             // (OrcaSlicer.cpp:3591).
             QTextStream err(stderr);
@@ -240,7 +253,13 @@ int CliRunner::run()
             return CLI_INVALID_PARAMS;
         }
         const QString axis = value.left(sep).toLower();
-        const double pos = value.mid(sep + 1).toDouble();
+        bool posOk = false;
+        const double pos = value.mid(sep + 1).toDouble(&posOk);
+        if (!posOk || !std::isfinite(pos)) {
+            QTextStream err(stderr);
+            err << "Error: --cut position must be a finite number\n";
+            return CLI_INVALID_PARAMS;
+        }
         if (axis == QLatin1String("x"))
             cutAxis_ = 0;
         else if (axis == QLatin1String("y"))
@@ -471,7 +490,7 @@ int CliRunner::applyTransforms()
     if (split_) {
         int count = projectService_->modelCount();
         int totalNew = 0;
-        for (int i = 0; i < count; ++i) {
+        for (int i = count - 1; i >= 0; --i) {
             const QList<int> created = projectService_->splitObject(i);
             totalNew += created.size();
         }
@@ -730,7 +749,6 @@ int CliRunner::runSlice(QHash<int, QString> *slicedGcodes)
     }
 
     if (!mergedConfig.isEmpty()) {
-        sliceService_->setMergedPresetConfig(mergedConfig);
         if (!quiet_) {
             out << "Preset config: " << mergedConfig.size() << " keys\n";
             out.flush();
@@ -786,6 +804,7 @@ int CliRunner::runSlice(QHash<int, QString> *slicedGcodes)
 
     for (int plate : plateQueue) {
         projectService_->setCurrentPlateIndex(plate);
+        sliceService_->setMergedPresetConfig(mergedConfig);
 
         if (!quiet_) {
             out << "Slicing plate " << (plate + 1) << " of " << plateCount << "\n";

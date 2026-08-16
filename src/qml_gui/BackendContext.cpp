@@ -29,6 +29,7 @@
 #include <QGuiApplication>
 #include <QFont>
 #include <iterator>
+#include <utility>
 #include <QUrl>
 #include <algorithm>
 #include <QTimer>
@@ -133,8 +134,6 @@ BackendContext::BackendContext(QObject *parent)
   // reads the live project service. Recent-card activation routes through
   // topbarOpenProject (upstream Plater::load_file).
   homeViewModel_->setProjectViewModel(projectViewModel_);
-  connect(homeViewModel_, &HomeViewModel::openProjectRequested,
-          this, &BackendContext::topbarOpenProject);
   projectViewModel_->setProjectService(projectService_);
   calibrationViewModel_ = new CalibrationViewModel(calibrationService_, this);
   calibrationViewModel_->setPresetService(presetService_);
@@ -474,8 +473,8 @@ void BackendContext::setCurrentPage(int page)
 void BackendContext::requestSelectTab(int position)
 {
   // 越界拒绝（对齐 Pitfall A3 — 防止 StackLayout currentIndex 越界破坏绑定）
-  // 上界引用 TabPosition::tpPlaceholder2 而非魔法数 8，避免未来新增 tpPlaceholder3=9 被静默丢弃 (CR-01)。
-  constexpr int kLastTab = static_cast<int>(TabPosition::tpPlaceholder2);
+  // Use the final semantic tab value instead of a numeric bound.
+  constexpr int kLastTab = static_cast<int>(TabPosition::tpPreferences);
   if (position < 0 || position > kLastTab) {
     qWarning("[Backend] requestSelectTab: invalid position %d (valid 0..%d)", position, kLastTab);
     return;
@@ -581,11 +580,7 @@ void BackendContext::requestSetSidebarDockArea(int area)
 }
 void BackendContext::openSettings()
 {
-  // Phase 56: settings routing moved to forwardSettingsRequest(), which emits
-  // settingsRequested(category) and is dispatched in main.qml to the
-  // SettingsDialog ApplicationWindow. This stub is retained for any legacy
-  // caller that still wants to land on the Project tab.
-  setCurrentPage(static_cast<int>(TabPosition::tpProject));
+  requestSelectTab(static_cast<int>(TabPosition::tpPreferences));
 }
 
 // ── ConfigWizard first-run trigger ──
@@ -1253,6 +1248,30 @@ void BackendContext::dismissNotificationById(int id)
   }
 }
 
+void BackendContext::confirmNotificationById(int id)
+{
+  for (const NotificationEntry &entry : std::as_const(m_activeNotifications))
+  {
+    if (entry.id == id && entry.requiresConfirm)
+    {
+      dismissNotificationById(id);
+      return;
+    }
+  }
+}
+
+void BackendContext::cancelNotificationById(int id)
+{
+  for (const NotificationEntry &entry : std::as_const(m_activeNotifications))
+  {
+    if (entry.id == id && entry.requiresConfirm)
+    {
+      dismissNotificationById(id);
+      return;
+    }
+  }
+}
+
 void BackendContext::clearError()
 {
   dismissNotification();
@@ -1291,6 +1310,7 @@ QVariantList BackendContext::notificationStack() const
     m.insert(QStringLiteral("hasProgress"), e.hasProgress);
     m.insert(QStringLiteral("progressValue"), e.progressValue);
     m.insert(QStringLiteral("repeatCount"), e.repeatCount);
+    m.insert(QStringLiteral("requiresConfirm"), e.requiresConfirm);
     m.insert(QStringLiteral("showExportButton"), e.showExportButton);
     m.insert(QStringLiteral("showPreviewButton"), e.showPreviewButton);
     list.append(m);

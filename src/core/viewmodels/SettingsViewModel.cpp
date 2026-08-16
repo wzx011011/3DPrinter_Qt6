@@ -154,8 +154,29 @@ void SettingsViewModel::setLayerHeight(double h)
 
 void SettingsViewModel::resetPreferences()
 {
+  // Reset only keys owned by this viewmodel so unrelated application state survives.
   QSettings s;
-  s.clear();
+  const QStringList keys = {
+      QStringLiteral("themeIndex"), QStringLiteral("fontSize"),
+      QStringLiteral("uiScaleIndex"), QStringLiteral("languageIndex"),
+      QStringLiteral("showHomePage"), QStringLiteral("defaultPage"),
+      QStringLiteral("units"), QStringLiteral("autoSave"),
+      QStringLiteral("autoSaveInterval"), QStringLiteral("checkUpdates"),
+      QStringLiteral("region"), QStringLiteral("autoBackup"),
+      QStringLiteral("undoLimit"), QStringLiteral("defaultNozzleIndex"),
+      QStringLiteral("defaultBedShape"), QStringLiteral("cameraNavStyle"),
+      QStringLiteral("zoomToMouse"), QStringLiteral("freeCamera"),
+      QStringLiteral("reverseZoom"), QStringLiteral("autoUpload"),
+      QStringLiteral("updateChannel"), QStringLiteral("notificationsEnabled"),
+      QStringLiteral("hintsEnabled"), QStringLiteral("autoDismissSec"),
+      QStringLiteral("showProgressNotifications"), QStringLiteral("developerMode"),
+      QStringLiteral("showDebugOverlay"), QStringLiteral("logLevel"),
+      QStringLiteral("verboseGcode"), QStringLiteral("glDebugContext"),
+      QStringLiteral("maxLogSizeMb")};
+  for (const QString &key : keys)
+    s.remove(key);
+  s.sync();
+
   setThemeIndex(0);
   setFontSize(12);
   setUiScaleIndex(0);
@@ -169,6 +190,14 @@ void SettingsViewModel::resetPreferences()
   setRegion(0);
   setAutoBackup(false);
   setUndoLimit(100);
+  setDefaultNozzleIndex(1);
+  setDefaultBedShape(0);
+  setCameraNavStyle(0);
+  setZoomToMouse(true);
+  setFreeCamera(false);
+  setReverseZoom(false);
+  setAutoUpload(false);
+  setUpdateChannel(0);
   setNotificationsEnabled(true);
   setHintsEnabled(true);
   setAutoDismissSec(5);

@@ -567,6 +567,18 @@ void CalibrationServiceMock::startCalibration(int itemIndex)
         return;
     }
 
+    const int mode = m_calibTypes[itemIndex].calibMode;
+    const bool needsIsolatedGeometry = mode == kCalibModePA_Pattern
+        || !towerModelQrcPathForMode(mode, m_flowRatePass).isEmpty();
+    if (needsIsolatedGeometry && m_projectService && m_projectService->modelCount() > 0) {
+        // Upstream starts these jobs in a new calibration project. Until OWzx
+        // owns an isolated model context, fail closed instead of replacing or
+        // mutating the user's live workspace.
+        qWarning("[Calib] calibration requires an empty workspace; live project preserved");
+        emit calibrationFinished(false);
+        return;
+    }
+
     m_currentItem = itemIndex;
     m_progress = 0;
     m_currentStepIndex = 0;
@@ -829,9 +841,8 @@ void CalibrationServiceMock::loadHistoryFromDisk()
         return;
     m_history.clear();
     const QJsonArray array = doc.array();
-    // Stored oldest-first; prepend in reverse so index 0 stays the newest.
-    for (int i = array.size() - 1; i >= 0; --i) {
-        const QJsonObject obj = array.at(i).toObject();
+    for (const QJsonValue &value : array) {
+        const QJsonObject obj = value.toObject();
         CalibrationHistoryEntry entry;
         entry.name = obj.value(QStringLiteral("name")).toString();
         entry.filamentId = obj.value(QStringLiteral("filamentId")).toString();
@@ -841,8 +852,13 @@ void CalibrationServiceMock::loadHistoryFromDisk()
         entry.hasRealReadback = obj.value(QStringLiteral("hasRealReadback")).toBool(false);
         entry.notes = obj.value(QStringLiteral("notes")).toString();
         if (!entry.name.isEmpty())
-            m_history.prepend(entry);
+            m_history.append(entry);
     }
+    std::stable_sort(m_history.begin(), m_history.end(),
+                     [](const CalibrationHistoryEntry &a, const CalibrationHistoryEntry &b) {
+        return QDateTime::fromString(a.timestamp, Qt::ISODate)
+             > QDateTime::fromString(b.timestamp, Qt::ISODate);
+    });
     if (!m_history.isEmpty())
         emit historyChanged();
 }
@@ -851,9 +867,8 @@ void CalibrationServiceMock::persistHistoryToDisk()
 {
     QDir().mkpath(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
     QJsonArray array;
-    // Write oldest-first so loadHistoryFromDisk's reverse prepend round-trips.
-    for (int i = m_history.size() - 1; i >= 0; --i) {
-        const auto &e = m_history[i];
+    // Persist the public newest-first order directly.
+    for (const auto &e : m_history) {
         QJsonObject obj;
         obj.insert(QStringLiteral("name"), e.name);
         obj.insert(QStringLiteral("filamentId"), e.filamentId);
@@ -1000,15 +1015,18 @@ void CalibrationServiceMock::onTick()
             // Store the honest manual-interpretation note instead -- the user
             // reads the calibration print by eye (mirrors upstream CalibUtils,
             // which has no auto-readback for the timer-only fallback either).
-            addHistoryEntry(
-                m_calibTypes[m_currentItem].name,
-                QString("filament_%1").arg(m_currentItem), // Mock filament ID
-                0.0f,                                      // No fabricated K
-                0.4f,                                      // Default nozzle diameter
-                QDateTime::currentDateTime().toString(Qt::ISODate),
-                false,                                     // No machine-readable readback
-                manualInterpretationNote(m_calibTypes[m_currentItem].name)
-            );
+            const int mode = m_calibTypes[m_currentItem].calibMode;
+            if (mode != kCalibModePA_Pattern && mode != kCalibModePA_Tower) {
+                addHistoryEntry(
+                    m_calibTypes[m_currentItem].name,
+                    QString("filament_%1").arg(m_currentItem),
+                    0.0f,
+                    0.4f,
+                    QDateTime::currentDateTime().toString(Qt::ISODate),
+                    false,
+                    manualInterpretationNote(m_calibTypes[m_currentItem].name)
+                );
+            }
         }
 
         emit isRunningChanged();
@@ -1070,7 +1088,12 @@ void CalibrationServiceMock::onSliceFinished(const QString &estimatedTime)
             parsed = parsePressureAdvanceFromGcode(gcodePath, realK);
         }
 
-        if (parsed) {
+        const bool requiresUserSelection = calibMode == kCalibModePA_Pattern
+            || calibMode == kCalibModePA_Tower;
+        if (requiresUserSelection) {
+            // Upstream saves Pattern/Tower only after the user selects the best
+            // row or height. The sweep endpoint is not a measured result.
+        } else if (parsed) {
             addHistoryEntry(
                 modeName,
                 QString("filament_%1").arg(m_currentItem),

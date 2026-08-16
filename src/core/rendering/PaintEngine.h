@@ -151,6 +151,7 @@ public:
                float brushRadius, PaintCursorType cursor,
                Slic3r::EnforcerBlockerType state,
                const Slic3r::Transform3d &trafo,
+               const Slic3r::Vec3f &cameraPosMeshLocal,
                float highlightByAngleDeg = 0.f);
 
   // Phase 240 (GIZ-02): smart (seed) fill. Mirrors the upstream SMART_FILL

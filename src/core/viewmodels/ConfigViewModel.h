@@ -144,7 +144,7 @@ public:
   Q_INVOKABLE bool requestFilamentPresetForSlot(int slot, const QString &name);
   Q_INVOKABLE bool isFilamentCompatibleForSlot(int slot) const;
   Q_INVOKABLE bool requestCurrentPrintPreset(const QString &name);
-  Q_INVOKABLE void saveCurrentPreset();
+  Q_INVOKABLE bool saveCurrentPreset();
   /// Phase 147 (PSET-02): request opening the CreatePresetsDialog. Emits
   /// createPresetRequired which SettingsDialog binds to dialog.open().
   Q_INVOKABLE void requestCreatePreset() { emit createPresetRequired(); }

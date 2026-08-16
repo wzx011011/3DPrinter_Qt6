@@ -12,6 +12,8 @@
 #include <QCoreApplication>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QSaveFile>
+#include <QCryptographicHash>
 #include <cmath>
 #include "core/FlushVolCalculator.h"  // v5.12: flush matrix calc
 
@@ -271,8 +273,8 @@ QString PresetServiceMock::userPresetCategoryDir(int category)
 
 QString PresetServiceMock::safePresetFileName(const QString &name)
 {
-  // Upstream names preset files after the preset and escapes path-hostile
-  // characters; mirror that for Windows-invalid chars.
+  // Preserve a readable prefix while the hash keeps every legal preset name
+  // distinct on Windows, including names that differ only by path separators.
   QString safe = name;
   const QString invalid = QStringLiteral("<>:\"/\\|?*");
   for (QChar &c : safe)
@@ -280,7 +282,13 @@ QString PresetServiceMock::safePresetFileName(const QString &name)
     if (invalid.contains(c) || c.category() == QChar::Other_Control)
       c = QLatin1Char('_');
   }
-  return safe;
+  while (safe.endsWith(QLatin1Char('.')) || safe.endsWith(QLatin1Char(' ')))
+    safe.chop(1);
+  if (safe.isEmpty())
+    safe = QStringLiteral("preset");
+  const QByteArray digest = QCryptographicHash::hash(
+      name.toUtf8(), QCryptographicHash::Sha256).toHex().left(16);
+  return safe.left(80) + QStringLiteral("--") + QString::fromLatin1(digest);
 }
 
 QString PresetServiceMock::presetJsonFilePath(const QString &baseDir, int category, const QString &name)
@@ -317,14 +325,18 @@ bool PresetServiceMock::writePresetJsonFile(const QString &baseDir, int category
   for (auto it = values.constBegin(); it != values.constEnd(); ++it)
     root[it.key()] = QJsonValue::fromVariant(it.value());
 
-  QFile f(presetJsonFilePath(baseDir, category, name));
-  if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+  QSaveFile f(presetJsonFilePath(baseDir, category, name));
+  if (!f.open(QIODevice::WriteOnly))
   {
     qWarning("[Preset] writePresetJsonFile: cannot write %s", f.fileName().toUtf8().constData());
     return false;
   }
-  f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-  f.close();
+  const QByteArray payload = QJsonDocument(root).toJson(QJsonDocument::Indented);
+  if (f.write(payload) != payload.size() || !f.commit())
+  {
+    qWarning("[Preset] writePresetJsonFile: failed to commit %s", f.fileName().toUtf8().constData());
+    return false;
+  }
   return true;
 }
 
@@ -341,8 +353,23 @@ bool PresetServiceMock::removeUserPresetFile(int category, const QString &name) 
 {
   if (!isValidCategory(category))
     return false;
-  const QString path = presetJsonFilePath(userPresetDirResolved(), category, name);
-  return !QFile::exists(path) || QFile::remove(path);
+  const QString baseDir = userPresetDirResolved();
+  const QString path = presetJsonFilePath(baseDir, category, name);
+  if (QFile::exists(path) && !QFile::remove(path))
+    return false;
+
+  // Files written by older builds used only character replacement. Remove that
+  // legacy path as well so rename/delete work after an upgrade.
+  QString legacy = name;
+  const QString invalid = QStringLiteral("<>:\"/\\|?*");
+  for (QChar &c : legacy)
+  {
+    if (invalid.contains(c) || c.category() == QChar::Other_Control)
+      c = QLatin1Char('_');
+  }
+  const QString legacyPath = baseDir + QStringLiteral("/") + userPresetCategoryDir(category)
+                           + QStringLiteral("/") + legacy + QStringLiteral(".json");
+  return legacyPath == path || !QFile::exists(legacyPath) || QFile::remove(legacyPath);
 }
 
 bool PresetServiceMock::loadUserPresetJson(const QString &filePath, int category)
@@ -1362,15 +1389,16 @@ bool PresetServiceMock::saveFlushVolumes(const QList<QList<double>> &rows)
   bool wroteAny = false;
   const QStringList names = m_categoryPresets.value(FilamentCat);
   for (const QString &name : names) {
-    const auto it = m_presetStore.find(name);
-    if (it == m_presetStore.end())
+    const auto it = m_presetStore.constFind(name);
+    if (it == m_presetStore.constEnd())
       continue;
-    it.value().insert(QStringLiteral("flush_volumes_matrix"), flat);
+    QHash<QString, QVariant> updated = it.value();
+    updated.insert(QStringLiteral("flush_volumes_matrix"), flat);
     // Read-only (system) presets keep the in-memory value so the current
-    // session round-trips; only user presets persist to disk, mirroring
-    // upstream read-only preset semantics.
-    if (!isReadOnlyPreset(name))
-      writeUserPresetFile(FilamentCat, name, it.value());
+    // session round-trips; user presets become visible only after persistence.
+    if (!isReadOnlyPreset(name) && !writeUserPresetFile(FilamentCat, name, updated))
+      return false;
+    m_presetStore[name] = updated;
     wroteAny = true;
   }
   return wroteAny;
@@ -1444,10 +1472,10 @@ bool PresetServiceMock::savePresetValues(const QString &presetName, const QHash<
   if (!m_presetStore.contains(presetName) || isReadOnlyPreset(presetName))
     return false;
 
+  // Persist first so a failed durable write cannot make memory diverge from disk.
+  if (!writeUserPresetFile(presetCategory(presetName), presetName, values))
+    return false;
   m_presetStore[presetName] = values;
-  // v5.16 (PSET2-01): persist the saved preset to the user tree (upstream
-  // Preset::save on every dirty-save).
-  writeUserPresetFile(presetCategory(presetName), presetName, values);
   return true;
 }
 
@@ -1597,15 +1625,25 @@ bool PresetServiceMock::importBundle(const QString &filePath)
     pending.append(item);
   }
 
+  QList<ImportPreset> persisted;
+  for (const ImportPreset &item : pending)
+  {
+    if (!writePresetJsonFile(userPresetDirResolved(), item.category, item.name,
+                             item.values, item.inherits))
+    {
+      for (const ImportPreset &written : persisted)
+        removeUserPresetFile(written.category, written.name);
+      return false;
+    }
+    persisted.append(item);
+  }
+
   for (const ImportPreset &item : pending)
   {
     m_presetStore[item.name] = item.values;
     registerPresetMetadata(item.name, item.category, false, item.readOnly, item.vendor, item.settingId);
     if (!item.inherits.isEmpty())
       m_presetInherits[item.name] = item.inherits;
-    // v5.16 (PSET2-04): imported user presets persist to disk like any
-    // user-created preset (upstream import lands in the user preset tree).
-    writeUserPresetFile(item.category, item.name, item.values);
   }
 
   qDebug("[Preset] imported %d presets from: %s", int(pending.size()), filePath.toUtf8().constData());
@@ -2118,13 +2156,13 @@ bool PresetServiceMock::createCustomPreset(int category, const QString &name,
   for (auto it = values.constBegin(); it != values.constEnd(); ++it)
     resolved.insert(it.key(), it.value());
 
+  if (!writePresetJsonFile(userPresetDirResolved(), category, trimmedName, resolved, parent))
+    return false;
+
   m_presetStore[trimmedName] = resolved;
   registerPresetMetadata(trimmedName, category, false, false);
   if (!parent.isEmpty())
     m_presetInherits[trimmedName] = parent;
-  // v5.16 (PSET2-01): persist to the user preset tree (upstream
-  // PresetBundle::save_current_preset -> Preset::save).
-  writeUserPresetFile(category, trimmedName, resolved);
   setSelectedPresetForCategory(category, trimmedName);
   return true;
 }
@@ -2137,10 +2175,12 @@ bool PresetServiceMock::mergePresetValues(const QString &presetName, const QHash
   if (!m_presetStore.contains(presetName) || isReadOnlyPreset(presetName) || values.isEmpty())
     return false;
 
-  QHash<QString, QVariant> &target = m_presetStore[presetName];
+  QHash<QString, QVariant> target = m_presetStore.value(presetName);
   for (auto it = values.constBegin(); it != values.constEnd(); ++it)
     target.insert(it.key(), it.value());
-  writeUserPresetFile(presetCategory(presetName), presetName, target);
+  if (!writeUserPresetFile(presetCategory(presetName), presetName, target))
+    return false;
+  m_presetStore[presetName] = target;
   return true;
 }
 
@@ -2150,6 +2190,8 @@ bool PresetServiceMock::deletePreset(const QString &presetName)
     return false;
 
   const int category = presetCategory(presetName);
+  if (!removeUserPresetFile(category, presetName))
+    return false;
   m_presetStore.remove(presetName);
   m_presetMetadata.remove(presetName);
   m_builtinPresetNames.remove(presetName);
@@ -2157,9 +2199,6 @@ bool PresetServiceMock::deletePreset(const QString &presetName)
   // 从所有分类中移除
   for (auto it = m_categoryPresets.begin(); it != m_categoryPresets.end(); ++it)
     it->removeAll(presetName);
-  // v5.16 (PSET2-01): delete the persisted user preset file (upstream
-  // PresetCollection erases the user JSON + .info).
-  removeUserPresetFile(category, presetName);
   updateSelectedPresetFallback(category);
   if (isValidCategory(category))
   {
@@ -2180,6 +2219,18 @@ bool PresetServiceMock::renamePreset(const QString &oldName, const QString &newN
     return false;
 
   const int category = presetCategory(oldName);
+  const QHash<QString, QVariant> values = m_presetStore.value(oldName);
+  const QString inherits = m_presetInherits.value(oldName);
+  // Write the replacement first. If deleting the old file fails, remove the
+  // replacement and leave the in-memory identity unchanged.
+  if (!writePresetJsonFile(userPresetDirResolved(), category, trimmedNewName, values, inherits))
+    return false;
+  if (!removeUserPresetFile(category, oldName))
+  {
+    removeUserPresetFile(category, trimmedNewName);
+    return false;
+  }
+
   // 移动预设值
   m_presetStore.insert(trimmedNewName, m_presetStore.take(oldName));
   if (m_presetMetadata.contains(oldName))
@@ -2194,13 +2245,6 @@ bool PresetServiceMock::renamePreset(const QString &oldName, const QString &newN
       if (it->at(i) == oldName)
         (*it)[i] = trimmedNewName;
     }
-  }
-  // v5.16 (PSET2-01): rename the persisted file (old JSON removed, new JSON
-  // written; upstream keeps the file name in sync with the preset name).
-  if (isValidCategory(category))
-  {
-    removeUserPresetFile(category, oldName);
-    writeUserPresetFile(category, trimmedNewName, m_presetStore.value(trimmedNewName));
   }
   if (isValidCategory(category) && m_selectedPresets.value(category) == oldName)
     setSelectedPresetForCategory(category, trimmedNewName);

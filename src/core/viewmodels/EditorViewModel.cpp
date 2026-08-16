@@ -29,6 +29,7 @@
 #include "core/rendering/PaintEngine.h"
 #include <libslic3r/Geometry.hpp>  // Geometry::assemble_transform (canonical TRS)
 #include <libslic3r/Point.hpp>     // Vec3d / Transform3d for world-transform rebuild
+#include <libslic3r/QuadricEdgeCollapse.hpp>
 #include <libslic3r/TriangleSelector.hpp>  // EnforcerBlockerType + select_patch
 #include <libslic3r/TriangleMesh.hpp>  // v5.16 bed_model STL loader (ReadSTLFile)
 #endif
@@ -250,6 +251,8 @@ void EditorViewModel::refreshMeshCacheAndFitHint()
   m_cachedMeshBatchVolumeIndices = projectService_->meshBatchVolumeIndices();
   m_cachedMeshBatchInstanceIndices = projectService_->meshBatchInstanceIndices();
   m_fitHint = QVector4D();
+  // Any project mesh refresh invalidates both staged and in-flight previews.
+  simplifyPreviewCancel();
 
   constexpr int kBboxBytes = 6 * int(sizeof(float));
   if (m_cachedMeshData.size() < kBboxBytes)
@@ -1687,9 +1690,23 @@ void EditorViewModel::rebuildAdvancedCutConnectorMarkers()
 // ── Simplify gizmo (对齐上游 GLGizmoSimplify) ──
 
 int EditorViewModel::simplifyWantedCount() const { return m_simplifyWantedCount; }
-void EditorViewModel::setSimplifyWantedCount(int count) { m_simplifyWantedCount = count; emit stateChanged(); }
+void EditorViewModel::setSimplifyWantedCount(int count)
+{
+  if (m_simplifyWantedCount == count)
+    return;
+  m_simplifyWantedCount = count;
+  simplifyPreviewCancel();
+  emit stateChanged();
+}
 float EditorViewModel::simplifyMaxError() const { return m_simplifyMaxError; }
-void EditorViewModel::setSimplifyMaxError(float error) { m_simplifyMaxError = error; emit stateChanged(); }
+void EditorViewModel::setSimplifyMaxError(float error)
+{
+  if (qFuzzyCompare(m_simplifyMaxError, error))
+    return;
+  m_simplifyMaxError = error;
+  simplifyPreviewCancel();
+  emit stateChanged();
+}
 
 bool EditorViewModel::simplifySelected()
 {
@@ -2149,57 +2166,119 @@ bool EditorViewModel::updateEmbossVolume()
 // ===========================================================================
 void EditorViewModel::simplifyPreviewStart()
 {
+#ifndef HAS_LIBSLIC3R
+  return;
+#else
   if (!projectService_ || m_simplifyPreviewRunning)
     return;
-  const int idx = selectedSourceObjectIndex();
-  if (idx < 0)
+  const int objectIndex = selectedSourceObjectIndex();
+  if (objectIndex < 0)
     return;
 
+  // Snapshot every volume ITS and all apply parameters on the GUI thread.
+  // The worker receives value copies only: no QObject, Model, or raw `this`
+  // crosses threads (upstream GLGizmoSimplify processes detached mesh data).
+  std::vector<indexed_triangle_set> meshCopies;
+  const int volumeCount = std::max(1, projectService_->objectVolumeCount(objectIndex));
+  meshCopies.reserve(size_t(volumeCount));
+  for (int volumeIndex = 0; volumeIndex < volumeCount; ++volumeIndex)
+  {
+    const auto mesh = projectService_->volumeMeshIts(objectIndex, volumeIndex);
+    if (mesh && !mesh->vertices.empty())
+      meshCopies.push_back(*mesh);
+  }
+  if (meshCopies.empty())
+    return;
+
+  const int wantedCount = m_simplifyWantedCount;
+  const float maxError = m_simplifyMaxError;
+  const quint64 generation = ++m_simplifyPreviewGeneration;
   m_simplifyPreviewRunning = true;
   m_simplifyPreviewTriangleCount = -1;
+  m_simplifyPreviewObjectIndex = -1;
   emit stateChanged();
 
-  // Run the preview decimation off the GUI thread (pure compute on a mesh
-  // copy; same QtConcurrent pattern as addTextVolumeAsync). The result is
-  // marshalled back via a queued lambda on this QObject.
-  (void)QtConcurrent::run([this, idx]() {
-    ProjectServiceMock *svc = projectService_;
-    if (!svc)
-      return -1;
-    return svc->simplifyObjectPreview(idx, m_simplifyWantedCount,
-                                      m_simplifyMaxError);
-  }).then(this, [this](int result) {
-    m_simplifyPreviewRunning = false;
-    m_simplifyPreviewTriangleCount = result;
-    statusText_ = result >= 0
-                      ? tr("Simplify preview: %1 triangles").arg(result)
-                      : tr("Simplify preview failed");
-    emit stateChanged();
-  });
+  (void)QtConcurrent::run(
+      [meshCopies = std::move(meshCopies), wantedCount, maxError]() mutable {
+        try
+        {
+          int totalAfter = 0;
+          for (indexed_triangle_set &mesh : meshCopies)
+          {
+            const uint32_t targetCount = wantedCount > 0
+                ? uint32_t(wantedCount) : 0;
+            float errorValue = maxError > 0.f
+                ? maxError : std::numeric_limits<float>::max();
+            Slic3r::its_quadric_edge_collapse(mesh, targetCount, &errorValue);
+            totalAfter += int(mesh.indices.size());
+          }
+          return totalAfter;
+        }
+        catch (const std::exception &)
+        {
+          return -1;
+        }
+      }).then(this, [this, generation, objectIndex, wantedCount, maxError](int result) {
+        if (generation != m_simplifyPreviewGeneration)
+          return;
+        m_simplifyPreviewRunning = false;
+        if (selectedSourceObjectIndex() != objectIndex)
+        {
+          m_simplifyPreviewTriangleCount = -1;
+          return;
+        }
+        m_simplifyPreviewTriangleCount = result;
+        m_simplifyPreviewObjectIndex = result >= 0 ? objectIndex : -1;
+        m_simplifyPreviewWantedCount = wantedCount;
+        m_simplifyPreviewMaxError = maxError;
+        statusText_ = result >= 0
+                          ? tr("Simplify preview: %1 triangles").arg(result)
+                          : tr("Simplify preview failed");
+        emit stateChanged();
+      });
+#endif
 }
 
 void EditorViewModel::simplifyPreviewApply()
 {
-  if (!simplifyPreviewValid())
+  const int objectIndex = m_simplifyPreviewObjectIndex;
+  const int wantedCount = m_simplifyPreviewWantedCount;
+  const float maxError = m_simplifyPreviewMaxError;
+  if (!projectService_ || !simplifyPreviewValid() || objectIndex < 0
+      || selectedSourceObjectIndex() != objectIndex)
     return;
-  // Commit through the existing undoable path.
-  if (simplifySelected())
+
+  auto *cmd = new SimplifyCommand(objectIndex, wantedCount, maxError,
+                                  projectService_, this);
+  const bool ok = projectService_->simplifyObject(objectIndex, wantedCount,
+                                                  maxError);
+  if (!ok)
   {
-    m_simplifyPreviewTriangleCount = -1;
-    emit stateChanged();
+    delete cmd;
+    return;
   }
+  if (m_undoManager)
+    m_undoManager->push(cmd);
+  else
+    delete cmd;
+  simplifyPreviewCancel();
+  refreshMeshCacheAndFitHint();
+  rebuildObjectEntriesFromService();
+  emit stateChanged();
 }
 
 void EditorViewModel::simplifyPreviewCancel()
 {
-  // Upstream Cancel restores the original mesh -- the preview never mutated
-  // it (decimation ran on a copy), so dropping the staged count is enough.
-  if (m_simplifyPreviewTriangleCount >= 0 || m_simplifyPreviewRunning)
-  {
-    m_simplifyPreviewTriangleCount = -1;
-    m_simplifyPreviewRunning = false;
+  // Generation invalidation makes late worker completions no-ops. The preview
+  // never mutated the model, so no mesh restoration is required.
+  ++m_simplifyPreviewGeneration;
+  const bool changed = m_simplifyPreviewTriangleCount >= 0
+      || m_simplifyPreviewRunning || m_simplifyPreviewObjectIndex >= 0;
+  m_simplifyPreviewTriangleCount = -1;
+  m_simplifyPreviewRunning = false;
+  m_simplifyPreviewObjectIndex = -1;
+  if (changed)
     emit stateChanged();
-  }
 }
 
 // ── MeshBoolean gizmo (对齐上游 GLGizmoMeshBoolean) ──
@@ -2896,6 +2975,11 @@ void EditorViewModel::flattenHoverPick(int pickedSourceIndex,
       rebuildWorldTransform(translation, rotationRad, scale);
 
   const Slic3r::Vec3i32 idx = its->indices[pick.hit.facetIdx];
+  for (int corner = 0; corner < 3; ++corner)
+  {
+    if (idx(corner) < 0 || size_t(idx(corner)) >= its->vertices.size())
+      return;
+  }
   const Slic3r::Vec3f local[3] = {its->vertices[size_t(idx(0))],
                                   its->vertices[size_t(idx(1))],
                                   its->vertices[size_t(idx(2))]};
@@ -3083,6 +3167,7 @@ void EditorViewModel::rebuildObjectEntriesFromService()
 
 void EditorViewModel::ensureValidObjectSelection(bool preferFirstVisible)
 {
+  simplifyPreviewCancel();
   const QList<int> visibleIndices = visibleObjectIndices();
   QSet<int> visibleSet;
   visibleSet.reserve(visibleIndices.size());
@@ -4135,7 +4220,8 @@ bool EditorViewModel::paintAtFacet(int obj, int vol, int facetIdx,
                                    double hitX, double hitY, double hitZ,
                                    int state, double brushRadius, int cursorType,
                                    int pickedSourceIndex,
-                                   QVector3D rayOrigin, QVector3D rayDir)
+                                   QVector3D rayOrigin, QVector3D rayDir,
+                                   QVector3D cameraPosition)
 {
   // TS-05: require the project service + a stage-1 survivor. Without
   // libslic3r's mesh there is nothing to paint; the early-out keeps QML safe.
@@ -4218,6 +4304,13 @@ bool EditorViewModel::paintAtFacet(int obj, int vol, int facetIdx,
   // reusing rebuildWorldTransform with a zero translation.
   const Slic3r::Transform3d trafoNoTranslate =
       rebuildWorldTransform(QVector3D(0.f, 0.f, 0.f), rotationRad, scale);
+  const Slic3r::Vec3d cameraWorld(double(cameraPosition.x()),
+                                  double(cameraPosition.y()),
+                                  double(cameraPosition.z()));
+  const Slic3r::Vec3d cameraLocalD = worldTransform.inverse() * cameraWorld;
+  const Slic3r::Vec3f cameraLocal(float(cameraLocalD.x()),
+                                  float(cameraLocalD.y()),
+                                  float(cameraLocalD.z()));
 
   // Drive PaintEngine.paintAt on the hit volume. The mesh-local hit point
   // (TS-02 meshLocalPosition, preserved by SceneRaycaster) is the cursor
@@ -4235,6 +4328,7 @@ bool EditorViewModel::paintAtFacet(int obj, int vol, int facetIdx,
   const bool painted = m_paintEngine->paintAt(
       hit.objectIndex, hit.volumeIndex, int(hit.facetIdx),
       hit.meshLocalPosition, float(brushRadius), cursor, ebt, trafoNoTranslate,
+      cameraLocal,
       m_supportPaintOnOverhangsOnly ? m_supportPaintOverhangAngle : 0.f);
 
   if (painted)
@@ -4520,6 +4614,18 @@ QByteArray EditorViewModel::paintOverlayData() const
       }
       for (const auto &idx : its->indices)
       {
+        bool valid = true;
+        for (int t = 0; t < 3; ++t)
+        {
+          if (idx[t] < 0 || size_t(idx[t]) >= worldVerts.size())
+          {
+            valid = false;
+            break;
+          }
+        }
+        if (!valid)
+          continue;
+
         TriRecord rec;
         rec.state = stateInt;
         for (int t = 0; t < 3; ++t)
@@ -4571,7 +4677,7 @@ QVariantList EditorViewModel::extrudersColors() const
 #else
 bool EditorViewModel::paintAtFacet(int, int, int, double, double, double,
                                    int, double, int, int,
-                                   QVector3D, QVector3D)
+                                   QVector3D, QVector3D, QVector3D)
 {
   // HAS_LIBSLIC3R off: PaintEngine + SceneRaycaster do not exist. No paint.
   return false;
@@ -4651,6 +4757,7 @@ bool EditorViewModel::canRedo() const
 
 void EditorViewModel::restoreSelection(const QSet<int> &sourceIndices, int primaryIndex)
 {
+  simplifyPreviewCancel();
   m_selectedSourceIndices = sourceIndices;
   m_primarySelectedSourceIndex = primaryIndex;
   // Clear volume selection when restoring object-level selection
@@ -4675,6 +4782,7 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
 {
   connect(projectService_, &ProjectServiceMock::projectChanged, this, [this]()
           {
+        simplifyPreviewCancel();
         statusText_ = QStringLiteral("已更新项目对象");
         // Phase 220 (HOLLOW-REFRESH): a project change can alter the selected
         // object's drain holes. Guarded by try-catch + a valid-selection check
@@ -5483,6 +5591,7 @@ bool EditorViewModel::isVolumeSelected(int i, int volumeIndex) const
 
 void EditorViewModel::selectVolume(int i, int volumeIndex)
 {
+  simplifyPreviewCancel();
   const int sourceIndex = mapFilteredToSourceIndex(i);
   if (sourceIndex < 0)
     return;
@@ -5501,6 +5610,7 @@ void EditorViewModel::selectVolume(int i, int volumeIndex)
 
 void EditorViewModel::toggleVolumeSelection(int i, int volumeIndex)
 {
+  simplifyPreviewCancel();
   const int sourceIndex = mapFilteredToSourceIndex(i);
   if (sourceIndex < 0)
     return;
@@ -5976,6 +6086,7 @@ void EditorViewModel::selectObject(int i)
   if (m_selectedSourceIndices.size() == 1 && m_selectedSourceIndices.contains(sourceIndex) && m_primarySelectedSourceIndex == sourceIndex)
     return;
 
+  simplifyPreviewCancel();
   m_selectedSourceIndices.clear();
   m_selectedSourceIndices.insert(sourceIndex);
   m_primarySelectedSourceIndex = sourceIndex;
@@ -6017,6 +6128,7 @@ bool EditorViewModel::selectSourceObject(int sourceIndex)
       && m_primarySelectedSourceIndex == sourceIndex)
     return true;
 
+  simplifyPreviewCancel();
   m_selectedSourceIndices.clear();
   m_selectedSourceIndices.insert(sourceIndex);
   m_primarySelectedSourceIndex = sourceIndex;
@@ -6029,6 +6141,7 @@ bool EditorViewModel::selectSourceObject(int sourceIndex)
 
 void EditorViewModel::toggleObjectSelection(int i)
 {
+  simplifyPreviewCancel();
   const int sourceIndex = mapFilteredToSourceIndex(i);
   if (sourceIndex < 0)
     return;
@@ -6060,6 +6173,7 @@ void EditorViewModel::toggleObjectSelection(int i)
 
 void EditorViewModel::clearObjectSelection()
 {
+  simplifyPreviewCancel();
   if (m_selectedSourceIndices.isEmpty() && m_primarySelectedSourceIndex < 0)
     return;
 
@@ -6073,6 +6187,7 @@ void EditorViewModel::clearObjectSelection()
 
 void EditorViewModel::selectAllVisibleObjects()
 {
+  simplifyPreviewCancel();
   const QList<int> visibleIndices = visibleObjectIndices();
   if (visibleIndices.isEmpty())
     return;

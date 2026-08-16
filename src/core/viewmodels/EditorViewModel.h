@@ -365,7 +365,8 @@ public:
                                 double hitX, double hitY, double hitZ,
                                 int state, double brushRadius, int cursorType,
                                 int pickedSourceIndex,
-                                QVector3D rayOrigin, QVector3D rayDir);
+                                QVector3D rayOrigin, QVector3D rayDir,
+                                QVector3D cameraPosition);
   /// Phase 240 (GIZ-02): smart (seed) fill pick entry. Same two-stage pick
   /// contract as paintAtFacet, but instead of the brush cursor it drives
   /// TriangleSelector::seed_fill_select_triangles + seed_fill_apply_on_
@@ -1855,6 +1856,10 @@ private:
   // GLGizmoSimplify m_state running/success + preview triangle count).
   bool m_simplifyPreviewRunning = false;
   int m_simplifyPreviewTriangleCount = -1;
+  quint64 m_simplifyPreviewGeneration = 0;
+  int m_simplifyPreviewObjectIndex = -1;
+  int m_simplifyPreviewWantedCount = 0;
+  float m_simplifyPreviewMaxError = 0.f;
   // FaceDetector (对齐上游 GLGizmoFaceDetector)
   float m_faceDetectorAngle = 5.0f;
   int m_faceDetectorResultCount = 0;  ///< v5.12: faces found by detectFlatFaces

@@ -82,10 +82,7 @@ CxDialog {
             CxButton {
                 text: root.cancelText
                 cxStyle: CxButton.Style.Secondary
-                onClicked: {
-                    root.rejected()
-                    root.reject()
-                }
+                onClicked: root.reject()
             }
             CxButton {
                 text: root.confirmText
@@ -94,7 +91,6 @@ CxDialog {
                     if (root._action) {
                         try { root._action() } catch (e) { console.warn("ConfirmDialog action threw:", e) }
                     }
-                    root.accepted()
                     root.accept()
                 }
             }
