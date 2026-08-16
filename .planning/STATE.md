@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v5.16
 milestone_name: Full Gap Closure
-status: executing-ready
-last_updated: "2026-08-14T17:30:00.000Z"
-last_activity: 2026-08-14
+status: executing
+stopped_at: v5.16 all 11 phases complete; milestone close-out audit done
+last_updated: "2026-08-15T19:55:00.000Z"
+last_activity: 2026-08-16 -- Phase 241 committed, canonical verify exit 0; 11/11 phases
 progress:
   total_phases: 11
-  completed_phases: 0
-  total_plans: 25
-  completed_plans: 0
-  percent: 0
+  completed_phases: 11
+  total_plans: 11
+  completed_plans: 11
+  percent: 100
 ---
 
 # Project State
@@ -39,17 +40,17 @@ ready to execute Phase 231.
 
 ## Current Position
 
-Phase: 231 (P0 Circuit Break Quick Fixes)
+Phase: 241 — COMPLETE (final)
 Plan: —
-Status: Ready to execute Phase 231
-Last activity: 2026-08-14 — v5.16 roadmap created (phases 231-241, 60/60 requirements mapped)
+Status: v5.16 milestone complete (11/11 phases)
+Last activity: 2026-08-16 -- Phase 241 committed
 
 ## Performance Metrics
 
 **v5.16:**
 
-- Total plans completed: 0 of 25
-- Completed phases: 0 of 11
+- Total plans completed: 11 of 11
+- Completed phases: 11 of 11
 - Average duration: Not available
 
 ## Accumulated Context
@@ -59,9 +60,11 @@ Last activity: 2026-08-14 — v5.16 roadmap created (phases 231-241, 60/60 requi
 - v5.16 phases are numbered 231-241. Numbers 227-230 stay reserved for the
   deferred v5.11 Process Settings workstream and must not be renumbered or
   reused.
+
 - Every v5.16 requirement maps to exactly one phase (60 REQ-IDs across 11
   phases; 100% coverage). The earlier "55 total" figure was an arithmetic
   slip; the actual count is 60.
+
 - Every fix cites `.planning/research/v5.16-GAP-BASELINE.md` (file:line
   evidence per gap). Corrected prior-audit conclusions (object group/ungroup
   is not a gap; GLGizmoLayerHeight absent upstream; MeshBoolean/Drill/
@@ -80,6 +83,7 @@ None.
 
 - v5.11 Process Settings Phases 227-230 (reserved workstream; resumed
   separately, never renumbered).
+
 - Device, hardware, network, cloud, camera, monitor, model-mall WebView,
   multi-machine send; SLA settings or slicing; libslic3r algorithm changes;
   unmapped cross-option auto-correction (see `.planning/REQUIREMENTS.md`).

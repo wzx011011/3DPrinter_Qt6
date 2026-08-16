@@ -976,3 +976,21 @@ neutral-gray lit model, no artifacts (.planning/v5.16-full-bed.png).
 Note: a concurrent settings workstream (PSET2-x/UNDO) shares the v5.16
 window; this slice was committed via hunk-split to avoid touching its WIP
 (one missed header hunk required v5.16.1).
+
+## v5.16 Full Gap Closure — closed 2026-08-16
+
+Closed every gap from the 2026-08-15 full-delta re-audit
+(.planning/research/v5.16-GAP-BASELINE.md): 60 REQ-IDs across 11 phases
+(231-241), each committed with canonical auto_verify_with_vcvars.ps1
+exit 0 (8 test suites + app launch + E2E). Commits: 8fbda73 072a6e6
+61ed2f2 7591b14 6968b2c 31703fd 035364f ad0d1e3 d7c318e 4cb10b1 12e4f5b.
+Highlights: P0 circuit breaks (undo dispatch/CalibMode enum/export merge/
+mojibake/CLI plates), plate config data chain, whole-model+volume+plate+
+paint undo fidelity, preset system completion (disk persistence, dirty
+guard w/ Transfer, bundle I/O), dialog reachability + AGPL, View menu +
+shortcuts + drag-drop + unit inference + .gcode.3mf, preview completion
+(ghost shells, seam/retract/wipe, stats split, configured colors, software
+fallback), engine semantics (auto-reslice, G-code reuse, non-blocking
+export, validate warnings), notification stacking + 6 gizmo-depth items,
+page honesty + CLI transforms/exports/key overrides. Honest gates and
+upstream deltas documented per-phase in each *-SUMMARY.md.

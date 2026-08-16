@@ -58,7 +58,7 @@ to exactly one phase.
 - [x] **Phase 240: Notification Stacking And Gizmo Interaction Depth** -
   Stacked priority notifications; gizmo numeric input, smart fill, Flatten
   face pick, 3D cut-plane drag, measure overlay, Emboss/Simplify/SVG depth.
-- [ ] **Phase 241: Page Honesty And CLI Surface** - Real Home/Project/
+- [x] **Phase 241: Page Honesty And CLI Surface** - Real Home/Project/
   Calibration/Preferences behavior; upstream CLI transforms, exports, and
   PrintConfig overrides.
 
