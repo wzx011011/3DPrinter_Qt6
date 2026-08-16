@@ -4,6 +4,8 @@
 #include <QString>
 #include <QStringList>
 
+class ProjectServiceMock;
+
 class ProjectViewModel : public QObject
 {
   Q_OBJECT
@@ -16,6 +18,12 @@ class ProjectViewModel : public QObject
 public:
   explicit ProjectViewModel(QObject *parent = nullptr);
 
+  /// Phase 241 (PAGE-02): inject the project data service so the file tree /
+  /// details read the REAL loaded project (plates + object source modules)
+  /// instead of a hardcoded list. Without a service the tree renders the
+  /// honest empty state when no project path is set.
+  void setProjectService(ProjectServiceMock *projectService);
+
   QString currentProjectPath() const { return m_currentProjectPath; }
   bool isDirty() const { return m_isDirty; }
   QVariantList fileTree() const;
@@ -25,6 +33,11 @@ public:
   Q_INVOKABLE QString fileTreeName(int i) const;
   Q_INVOKABLE bool fileTreeIsDir(int i) const;
   Q_INVOKABLE int fileTreeDepth(int i) const;
+
+  /// Phase 241 (PAGE-02): QFileInfo-derived details for the properties panel
+  /// (upstream ProjectPage-style metadata). Empty strings when no project.
+  Q_INVOKABLE QString projectFileSizeText() const;
+  Q_INVOKABLE QString projectLastModifiedText() const;
 
   QString selectedFile() const { return m_selectedFile; }
   QStringList recentProjects() const { return m_recentProjects; }
@@ -53,8 +66,14 @@ public slots:
       emit dirtyChanged();
     }
   }
+  /// Phase 241 (PAGE-02): rebuild the resource tree from the live project
+  /// service state. Called by the QML page on projectChanged and after
+  /// object-level edits so the tree does not go stale.
+  Q_INVOKABLE void refreshFileTree();
 
 private:
+  void persistRecentProjects();
+
   struct FileEntry
   {
     QString name;
@@ -66,4 +85,5 @@ private:
   bool m_isDirty = false;
   QString m_selectedFile;
   QStringList m_recentProjects;
+  ProjectServiceMock *m_projectService = nullptr;
 };

@@ -79,6 +79,14 @@ private slots:
   // action); AboutDialog carries AGPL-3.0; EditGCode saves via
   // ConfigViewModel::setValue; WipeTowerDialog persists via saveFlushVolumes.
   void dialogReachabilitySourceAudit();
+  // v5.16 Phase 241 (PAGE-01..04 + CLI-01..02): page honesty + CLI surface —
+  // HomePage binds the real recent model + rotating hint database with no
+  // dead quick action, ProjectPage has no console.log New Project button and
+  // derives its tree/details from the real project, PreferencesPage carries
+  // consumers or honest notYetEffectiveHint tokens for every setting, and
+  // CliRunner exposes the transform/export/key-override surface with schema
+  // validation.
+  void pageHonestyAndCliSourceAudit();
   // Phase 53: Prepare object, plate, and viewport actions bind to C++ gates.
   void prepareWorkflowActionsBindCppGates();
   // Phase 76: Prepare workflow panels must stay compact and backend-gated.
@@ -2633,8 +2641,11 @@ void QmlUiAuditTests::gizmoDepthAndNotificationSourceAudit()
            "GIZ-01: the transform mini panel must use the editable field component");
   QVERIFY2(preparePage.contains(QStringLiteral("onEditingFinished")),
            "GIZ-01: transform fields must commit on editing finished (not per keystroke)");
-  QVERIFY2(preparePage.contains(QStringLiteral("editorVm.objectPosX = v")),
-           "GIZ-01: the X field must write through setObjectPosX (undoable setter)");
+  QVERIFY2(preparePage.contains(QStringLiteral("editorVm.objectPosX = ")),
+           "GIZ-01: the X field must write through setObjectPosX (undoable setter). "
+           "Phase 241 (PAGE-04): the commit expression may wrap the value in "
+           "storageLength() for the inch display conversion — the write through "
+           "the VM setter is what matters.");
   QVERIFY2(vmCpp.contains(QStringLiteral("TransformCommand")),
            "GIZ-01: the VM setters must keep pushing TransformCommand (undo)");
   QVERIFY2(!preparePage.contains(QStringLiteral("component TransformMetric: Row")),
@@ -9573,4 +9584,150 @@ void QmlUiAuditTests::engineSemanticsSourceAudit()
   QVERIFY2(backendCpp.contains(QStringLiteral("&SliceService::validateWarning"))
                && backendCpp.contains(QStringLiteral("postValidateWarning(")),
            "ENGN-03: BackendContext must route validateWarning to postValidateWarning");
+}
+
+// v5.16 Phase 241 (PAGE-01..04 + CLI-01..02)
+void QmlUiAuditTests::pageHonestyAndCliSourceAudit()
+{
+  const QString homePage = readSource(QStringLiteral("src/qml_gui/pages/HomePage.qml"));
+  const QString projectPage = readSource(QStringLiteral("src/qml_gui/pages/ProjectPage.qml"));
+  const QString prefsPage = readSource(QStringLiteral("src/qml_gui/pages/PreferencesPage.qml"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
+  const QString backendHeader = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
+  const QString homeVmHeader = readSource(QStringLiteral("src/core/viewmodels/HomeViewModel.h"));
+  const QString projectVmHeader = readSource(QStringLiteral("src/core/viewmodels/ProjectViewModel.h"));
+  const QString settingsVmHeader = readSource(QStringLiteral("src/core/viewmodels/SettingsViewModel.h"));
+  const QString cliRunnerHeader = readSource(QStringLiteral("src/cli/CliRunner.h"));
+  const QString cliRunnerCpp = readSource(QStringLiteral("src/cli/CliRunner.cpp"));
+  QVERIFY2(!homePage.isEmpty(), "Unable to read HomePage.qml");
+  QVERIFY2(!projectPage.isEmpty(), "Unable to read ProjectPage.qml");
+  QVERIFY2(!prefsPage.isEmpty(), "Unable to read PreferencesPage.qml");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main_qml.cpp");
+  QVERIFY2(!backendHeader.isEmpty(), "Unable to read BackendContext.h");
+  QVERIFY2(!homeVmHeader.isEmpty(), "Unable to read HomeViewModel.h");
+  QVERIFY2(!projectVmHeader.isEmpty(), "Unable to read ProjectViewModel.h");
+  QVERIFY2(!settingsVmHeader.isEmpty(), "Unable to read SettingsViewModel.h");
+  QVERIFY2(!cliRunnerHeader.isEmpty(), "Unable to read CliRunner.h");
+  QVERIFY2(!cliRunnerCpp.isEmpty(), "Unable to read CliRunner.cpp");
+
+  // ── PAGE-01: HomePage honesty ─────────────────────────────────────────
+  // Recent cards bind the real (persisted) recent model and are clickable.
+  QVERIFY2(homeVmHeader.contains(QStringLiteral("setProjectViewModel")),
+           "PAGE-01: HomeViewModel must mirror the persisted ProjectViewModel recent list");
+  QVERIFY2(homeVmHeader.contains(QStringLiteral("openProjectRequested")),
+           "PAGE-01: card activation must route through openProjectRequested");
+  const QString projectVmCpp = readSource(
+      QStringLiteral("src/core/viewmodels/ProjectViewModel.cpp"));
+  QVERIFY2(!projectVmCpp.isEmpty(), "Unable to read ProjectViewModel.cpp");
+  QVERIFY2(projectVmCpp.contains(QStringLiteral("QSettings")),
+           "PAGE-01: ProjectViewModel must persist recentProjects via QSettings");
+  QVERIFY2(homePage.contains(QStringLiteral("openRecentProject(")),
+           "PAGE-01: HomePage recent cards must call openRecentProject");
+  QVERIFY2(!homePage.contains(QStringLiteral("模型商城")),
+           "PAGE-01: the dead ModelMall quick action must stay removed (out of scope)");
+  // Every quick action is wired to a real handler.
+  QVERIFY2(homePage.contains(QStringLiteral("backend.topbarNewProject()")),
+           "PAGE-01: the New Project quick action must route through topbarNewProject");
+  QVERIFY2(homePage.contains(QStringLiteral("homeOpenProjectDlg.open()")),
+           "PAGE-01: the Open Project quick action must open the project dialog");
+  QVERIFY2(homePage.contains(QStringLiteral("backend.requestSelectTab(backend.tpCalibration)")),
+           "PAGE-01: the Calibration quick action must route to the Calibration tab");
+  // Daily Tips rotate the hint database with link support.
+  QVERIFY2(homePage.contains(QStringLiteral("backend.showDailyTip()")),
+           "PAGE-01: Daily Tips must rotate via BackendContext::showDailyTip");
+  QVERIFY2(homePage.contains(QStringLiteral("openHintDocumentation")),
+           "PAGE-01: Daily Tips must honor the hint documentation link");
+
+  // ── PAGE-02: ProjectPage honesty ──────────────────────────────────────
+  QVERIFY2(projectPage.contains(QStringLiteral("backend.topbarNewProject()")),
+           "PAGE-02: the New Project button must call backend.topbarNewProject");
+  QVERIFY2(!projectPage.contains(QStringLiteral("console.log(\"[ProjectPage] new project\")")),
+           "PAGE-02: the console.log New Project placeholder must stay removed");
+  QVERIFY2(projectPage.contains(QStringLiteral("projectFileSizeText")),
+           "PAGE-02: the Size detail must read QFileInfo data through the viewmodel");
+  QVERIFY2(projectPage.contains(QStringLiteral("projectLastModifiedText")),
+           "PAGE-02: the Modified detail must read QFileInfo data through the viewmodel");
+  QVERIFY2(projectVmHeader.contains(QStringLiteral("refreshFileTree")),
+           "PAGE-02: the resource tree must rebuild from the live project state");
+  QVERIFY2(projectPage.contains(QStringLiteral("_fileTree.length === 0")),
+           "PAGE-02: the resource tree must show an honest empty state");
+
+  // ── PAGE-03: calibration completion (source anchors) ──────────────────
+  const QString calibService = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
+  const QString calibVmHeader = readSource(QStringLiteral("src/core/viewmodels/CalibrationViewModel.h"));
+  QVERIFY2(!calibService.isEmpty(), "Unable to read CalibrationServiceMock.cpp");
+  QVERIFY2(!calibVmHeader.isEmpty(), "Unable to read CalibrationViewModel.h");
+  QVERIFY2(calibService.contains(QStringLiteral("kCalibModePA_Pattern")),
+           "PAGE-03: the PA Pattern mode must be routed symbolically");
+  QVERIFY2(calibService.contains(QStringLiteral("tower_with_seam.stl")),
+           "PAGE-03: the PA Tower mode must load the bundled tower_with_seam model");
+  QVERIFY2(calibService.contains(QStringLiteral("flowrate-test-pass2.3mf")),
+           "PAGE-03: the Flow Rate fine pass must load the pass2 asset");
+  QVERIFY2(calibVmHeader.contains(QStringLiteral("saveCalibrationResultToPreset")),
+           "PAGE-03: save-to-preset must go through the preset-write path");
+  QVERIFY2(calibVmHeader.contains(QStringLiteral("startFineCalibration")),
+           "PAGE-03: the Flow Rate two-stage flow needs the fine-pass entry point");
+  QVERIFY2(calibService.contains(QStringLiteral("persistHistoryToDisk")),
+           "PAGE-03: calibration history must persist to disk");
+
+  // ── PAGE-04: preferences take effect ──────────────────────────────────
+  QVERIFY2(mainQml.contains(QStringLiteral("applyStartupPagePreference")),
+           "PAGE-04: startup must apply the saved startup-page preference");
+  QVERIFY2(settingsVmHeader.contains(QStringLiteral("displayLength")),
+           "PAGE-04: SettingsViewModel must expose the mm<->inch display conversion");
+  QVERIFY2(preparePage.contains(QStringLiteral("storageLength(")),
+           "PAGE-04: committed Move values must convert back to mm storage");
+  QVERIFY2(backendHeader.contains(QStringLiteral("triggerProjectBackup")),
+           "PAGE-04: the periodic backup setting needs the real backup path");
+  // Dead settings stay removed; every remaining not-yet-effective setting
+  // carries an explicit notYetEffectiveHint token in its QML row.
+  QVERIFY2(!prefsPage.contains(QStringLiteral("userRole")),
+           "PAGE-04: userRole (no upstream mapping, no consumer) must stay removed");
+  QVERIFY2(!prefsPage.contains(QStringLiteral("reducedMotion")),
+           "PAGE-04: reducedMotion (no upstream mapping, no consumer) must stay removed");
+  QVERIFY2(!prefsPage.contains(QStringLiteral("compactMode")),
+           "PAGE-04: compactMode (no upstream mapping, no consumer) must stay removed");
+  QVERIFY2(prefsPage.count(QStringLiteral("notYetEffectiveHint")) >= 4,
+           "PAGE-04: persisted-only settings must carry honest notYetEffectiveHint tokens");
+  QVERIFY2(prefsPage.contains(QStringLiteral("settingsVm.developerMode")),
+           "PAGE-04: developerMode must gate the Developer category visibility");
+
+  // -- CLI-01/02: transforms, exports, key overrides ---------------------
+  // QCommandLineOption names carry no leading dashes; each flag must be
+  // registered with the parser by its exact option name in the .cpp.
+  for (const QString &flag : {QStringLiteral("arrange"), QStringLiteral("orient"),
+                              QStringLiteral("cut"), QStringLiteral("split"),
+                              QStringLiteral("assemble"), QStringLiteral("repair"),
+                              QStringLiteral("scale-to-fit"),
+                              QStringLiteral("export-stl"), QStringLiteral("export-3mf"),
+                              QStringLiteral("export-slicedata")}) {
+    QVERIFY2(cliRunnerCpp.contains(
+                 QStringLiteral("QStringLiteral(\"%1\")").arg(flag)),
+             qPrintable(QStringLiteral("CLI-01/02: CliRunner must declare the --%1 flag").arg(flag)));
+  }
+  QVERIFY2(cliRunnerCpp.contains(QStringLiteral("arrangeObjects(")),
+           "CLI-01: --arrange must route through the real arrange service");
+  QVERIFY2(cliRunnerCpp.contains(QStringLiteral("orientObject(")),
+           "CLI-01: --orient must route through the real orient service");
+  QVERIFY2(cliRunnerCpp.contains(QStringLiteral("cutObject(")),
+           "CLI-01: --cut must route through the real cut service");
+  QVERIFY2(cliRunnerCpp.contains(QStringLiteral("splitObject(")),
+           "CLI-01: --split must route through the real split service");
+  QVERIFY2(cliRunnerCpp.contains(QStringLiteral("assembleObjects(")),
+           "CLI-01: --assemble must route through the real assemble service");
+  QVERIFY2(cliRunnerCpp.contains(QStringLiteral("fixMesh(")),
+           "CLI-01: --repair must route through the real fixMesh service");
+  QVERIFY2(cliRunnerCpp.contains(QStringLiteral("selectionWorldBoundingBox(")),
+           "CLI-01: --scale-to-fit must measure via the real bounding box");
+  QVERIFY2(cliRunnerCpp.contains(QStringLiteral("exportGcode3mf(")),
+           "CLI-02: --export-slicedata must bundle through exportGcode3mf");
+  // Arbitrary --key value overrides validated against the PrintConfig schema.
+  QVERIFY2(cliRunnerCpp.contains(QStringLiteral("print_config_def.get")),
+           "CLI-02: key overrides must be validated against the PrintConfig schema");
+  QVERIFY2(cliRunnerCpp.contains(QStringLiteral("unknown option")),
+           "CLI-02: unknown keys must error out explicitly");
+  QVERIFY2(cliRunnerCpp.contains(QStringLiteral("extractConfigOverrides")),
+           "CLI-02: the unregistered-override extraction path must exist");
 }

@@ -115,6 +115,17 @@ public:
 
     /// 保存校准结果到历史（对齐上游 CalibrationWizardSavePage save）
     Q_INVOKABLE void saveCalibrationResult();
+    /// Phase 241 (PAGE-03): write the measured value into the selected
+    /// filament preset (upstream CalibrationWizardSavePage on_save →
+    /// preset value write). PA modes write pressure_advance; FlowRate
+    /// writes filament_flow_ratio. Also records a history entry. Returns
+    /// false when there is no preset service / the preset is read-only /
+    /// the write failed.
+    Q_INVOKABLE bool saveCalibrationResultToPreset();
+    /// Phase 241 (PAGE-03): Flow Rate fine pass (upstream
+    /// CalibState::FineCalibration loads flowrate-test-pass2.3mf).
+    /// Resets to the coarse pass on the next plain startCalibration.
+    Q_INVOKABLE void startFineCalibration();
     /// 加载历史记录的 K/N 值（对齐上游 FlowCalibHeaderView load）
     Q_INVOKABLE void loadHistoryEntry(int index);
 

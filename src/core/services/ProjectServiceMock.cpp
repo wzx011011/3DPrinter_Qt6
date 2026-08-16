@@ -1426,6 +1426,40 @@ bool ProjectServiceMock::saveProjectAs(const QString &filePath)
 #endif
 }
 
+bool ProjectServiceMock::writeProjectSnapshot(const QString &filePath)
+{
+#ifdef HAS_LIBSLIC3R
+    // Phase 241 (PAGE-04): backup primitive. Same store_3mf payload as
+    // saveProjectAs, but currentProjectPath_ stays untouched so a backup
+    // never hijacks the user's current project (upstream backup_switch also
+    // writes to a separate cache copy, not the project file).
+    if (!model_) {
+        qWarning("[Project] writeProjectSnapshot: no model loaded");
+        return false;
+    }
+    Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
+    for (auto it = m_projectConfigOverlay.constBegin(); it != m_projectConfigOverlay.constEnd(); ++it) {
+        config.set_key_value(it.key().toStdString(),
+                             new Slic3r::ConfigOptionString(it.value().toString().toStdString()));
+    }
+    const bool ok = Slic3r::store_3mf(filePath.toStdString().c_str(),
+                                      model_,
+                                      &config,
+                                      false,   // fullpath_sources=false
+                                      nullptr, // thumbnail=nullptr
+                                      true);   // zip64=true
+    if (!ok)
+        qWarning("[Project] snapshot store_3mf failed for: %s", filePath.toUtf8().constData());
+    else
+        qDebug("[Project] project snapshot written: %s", filePath.toUtf8().constData());
+    return ok;
+#else
+    Q_UNUSED(filePath)
+    qWarning("[Project] writeProjectSnapshot: HAS_LIBSLIC3R not enabled");
+    return false;
+#endif
+}
+
 // v2.4 IO-02: 导出模型（STL/3MF/OBJ）
 bool ProjectServiceMock::exportModel(const QString &filePath, const QString &format)
 {

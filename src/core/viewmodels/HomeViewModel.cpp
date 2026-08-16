@@ -1,18 +1,16 @@
 #include "HomeViewModel.h"
 
 #include "core/services/CloudServiceMock.h"
+#include "core/viewmodels/ProjectViewModel.h"
+#include <QFileInfo>
 
 HomeViewModel::HomeViewModel(CloudServiceMock *cloudService, QObject *parent)
     : QObject(parent), cloudService_(cloudService)
 {
-  // Mock recent projects stored as plain structs (no QVariantList member - prevents V4 GC destructor crash)
-  m_entries = {
-      {"benchy.3mf", "2026-03-02", "C:/projects/benchy.3mf"},
-      {"phone_stand.3mf", "2026-03-01", "C:/projects/phone_stand.3mf"},
-      {"bracket.stl", "2026-02-28", "C:/projects/bracket.stl"},
-      {"miniature_figure.3mf", "2026-02-25", "C:/projects/figure.3mf"},
-      {"cable_clip.stl", "2026-02-20", "C:/projects/cable_clip.stl"},
-  };
+  // Phase 241 (PAGE-01): the hardcoded mock recent list is gone. Entries now
+  // mirror ProjectViewModel's persisted recent-projects list (upstream
+  // app_config "recent_projects", wxFrame recent-files menu). Empty until a
+  // source viewmodel is injected via setProjectViewModel.
 
   if (cloudService_) {
     connect(cloudService_, &CloudServiceMock::loginStateChanged,
@@ -24,6 +22,23 @@ HomeViewModel::HomeViewModel(CloudServiceMock *cloudService, QObject *parent)
     connect(cloudService_, &CloudServiceMock::loginFailed,
             this, [this](const QString &err) { emit cloudLoginFailed(err); });
   }
+}
+
+void HomeViewModel::setProjectViewModel(ProjectViewModel *projectViewModel)
+{
+  // Drop any previous source wiring before attaching the new one.
+  if (projectViewModel_)
+    disconnect(projectViewModel_, &ProjectViewModel::recentChanged,
+               this, &HomeViewModel::refreshRecentProjects);
+  projectViewModel_ = projectViewModel;
+  if (projectViewModel_)
+  {
+    // Keep the HomePage cards live whenever the persisted recent list
+    // changes (open/save/clear), independent of the composition root.
+    connect(projectViewModel_, &ProjectViewModel::recentChanged,
+            this, &HomeViewModel::refreshRecentProjects);
+  }
+  refreshRecentProjects();
 }
 
 QVariantList HomeViewModel::recentProjects() const
@@ -42,9 +57,44 @@ QString HomeViewModel::recentProjectName(int i) const { return (i >= 0 && i < m_
 QString HomeViewModel::recentProjectDate(int i) const { return (i >= 0 && i < m_entries.size()) ? m_entries[i].date : QString{}; }
 QString HomeViewModel::recentProjectPath(int i) const { return (i >= 0 && i < m_entries.size()) ? m_entries[i].path : QString{}; }
 
-void HomeViewModel::openProject(const QString &path) { Q_UNUSED(path) }
-void HomeViewModel::openRecentProject(int index) { Q_UNUSED(index) }
-void HomeViewModel::refreshRecentProjects() { emit recentProjectsChanged(); }
+void HomeViewModel::openProject(const QString &path)
+{
+  // Phase 241 (PAGE-01): routes through BackendContext::topbarOpenProject
+  // (upstream Plater::load_file) — never a silent no-op.
+  if (!path.isEmpty())
+    emit openProjectRequested(path);
+}
+
+void HomeViewModel::openRecentProject(int index)
+{
+  if (index >= 0 && index < m_entries.size())
+    emit openProjectRequested(m_entries[index].path);
+}
+
+void HomeViewModel::refreshRecentProjects()
+{
+  // Phase 241 (PAGE-01): rebuild from the persisted source list. name/date
+  // derive from the real file (QFileInfo) instead of stored strings — matches
+  // upstream, which shows the file name and last-modified stamp.
+  m_entries.clear();
+  if (projectViewModel_)
+  {
+    const QStringList paths = projectViewModel_->recentProjects();
+    m_entries.reserve(paths.size());
+    for (const QString &path : paths)
+    {
+      const QFileInfo fi(path);
+      ProjectEntry entry;
+      entry.path = path;
+      entry.name = fi.fileName().isEmpty() ? path : fi.fileName();
+      entry.date = fi.exists()
+                       ? fi.lastModified().toString(QStringLiteral("yyyy-MM-dd"))
+                       : QString{};
+      m_entries.append(entry);
+    }
+  }
+  emit recentProjectsChanged();
+}
 
 // ── Cloud account ────────────────────────────────────────────
 

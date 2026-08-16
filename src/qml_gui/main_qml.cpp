@@ -332,6 +332,11 @@ int main(int argc, char *argv[])
     qmlRegisterType<SoftwareViewport>("OWzxGL", 1, 0, "GLViewport");
 
   BackendContext backend;
+  // Phase 241 (PAGE-04): the persisted startup-page preference
+  // (showHomePage/defaultPage, upstream app_config "show_home_page" /
+  // "default_page") drives the initial page BEFORE QML loads, so the
+  // StackLayout lands on the user's chosen page on the first frame.
+  backend.applyStartupPagePreference();
   appendStartupLog(QStringLiteral("BackendContext constructed"));
 
   // Intentionally leak the engine to skip late Qt teardown hazards seen in

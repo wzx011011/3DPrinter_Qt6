@@ -4,6 +4,7 @@
 #include <QString>
 
 class CloudServiceMock;
+class ProjectViewModel;
 
 class HomeViewModel : public QObject
 {
@@ -20,6 +21,12 @@ class HomeViewModel : public QObject
 
 public:
   explicit HomeViewModel(CloudServiceMock *cloudService, QObject *parent = nullptr);
+
+  /// Phase 241 (PAGE-01): inject the recent-projects source viewmodel. The
+  /// persisted recent list lives in ProjectViewModel (shared with the topbar
+  /// Recent submenu, upstream app_config "recent_projects"); HomePage cards
+  /// mirror it. Without a source the list stays empty (honest empty state).
+  void setProjectViewModel(ProjectViewModel *projectViewModel);
 
   QVariantList recentProjects() const;
 
@@ -48,6 +55,9 @@ signals:
   void recentProjectsChanged();
   void cloudStateChanged();
   void cloudLoginFailed(const QString &error);
+  /// Phase 241 (PAGE-01): a recent card was activated. BackendContext routes
+  /// it through topbarOpenProject (upstream Plater::load_file path).
+  void openProjectRequested(const QString &path);
 
 public slots:
   void openProject(const QString &path);
@@ -56,6 +66,7 @@ public slots:
 
 private:
   CloudServiceMock *cloudService_ = nullptr;
+  ProjectViewModel *projectViewModel_ = nullptr;
 
   // Stored as plain structs to avoid QVariantList member corruption by V4 GC
   struct ProjectEntry

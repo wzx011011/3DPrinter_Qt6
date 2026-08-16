@@ -15,17 +15,16 @@ class SettingsViewModel : public QObject
   Q_PROPERTY(QString language READ language NOTIFY languageIndexChanged)
   Q_PROPERTY(bool showHomePage READ showHomePage WRITE setShowHomePage NOTIFY settingsChanged)
   Q_PROPERTY(int defaultPage READ defaultPage WRITE setDefaultPage NOTIFY settingsChanged)
+  /// Units: 0=Metric (mm), 1=Imperial (inch) — upstream app_config
+  /// "use_inches" (Preferences.cpp:1110). Display-only conversion; storage
+  /// stays in mm (Phase 241 PAGE-04).
   Q_PROPERTY(int units READ units WRITE setUnits NOTIFY settingsChanged)
-  Q_PROPERTY(int userRole READ userRole WRITE setUserRole NOTIFY settingsChanged)
   /// 通用偏好扩展（对齐上游 PreferencesDialog::create_general_page）
   Q_PROPERTY(bool autoSave READ autoSave WRITE setAutoSave NOTIFY settingsChanged)
   Q_PROPERTY(int autoSaveInterval READ autoSaveInterval WRITE setAutoSaveInterval NOTIFY settingsChanged)
   Q_PROPERTY(bool checkUpdates READ checkUpdates WRITE setCheckUpdates NOTIFY settingsChanged)
-  Q_PROPERTY(bool reducedMotion READ reducedMotion WRITE setReducedMotion NOTIFY settingsChanged)
   /// 区域设置（对齐上游 PreferencesDialog::create_general_page region combo）
   Q_PROPERTY(int region READ region WRITE setRegion NOTIFY settingsChanged)
-  /// 3D 视图低细节模式（对齐上游 enable_reduce_detail / LOD 开关）
-  Q_PROPERTY(bool compactMode READ compactMode WRITE setCompactMode NOTIFY settingsChanged)
   /// 自动备份到云端（对齐上游 cloud sync backup）
   Q_PROPERTY(bool autoBackup READ autoBackup WRITE setAutoBackup NOTIFY settingsChanged)
   /// 撤销栈上限（对齐上游 undo/redo 历史限制）
@@ -49,7 +48,8 @@ class SettingsViewModel : public QObject
   Q_PROPERTY(bool hintsEnabled READ hintsEnabled WRITE setHintsEnabled NOTIFY settingsChanged)
   Q_PROPERTY(int autoDismissSec READ autoDismissSec WRITE setAutoDismissSec NOTIFY settingsChanged)
   Q_PROPERTY(bool showProgressNotifications READ showProgressNotifications WRITE setShowProgressNotifications NOTIFY settingsChanged)
-  /// 开发者模式（对齐上游 PreferencesDialog::create_debug_page）
+  /// 开发者模式（对齐上游 PreferencesDialog::create_debug_page）。Gates the
+  /// Preferences Developer category visibility (Phase 241 PAGE-04 consumer).
   Q_PROPERTY(bool developerMode READ developerMode WRITE setDeveloperMode NOTIFY settingsChanged)
   /// 调试覆盖层
   Q_PROPERTY(bool showDebugOverlay READ showDebugOverlay WRITE setShowDebugOverlay NOTIFY settingsChanged)
@@ -68,6 +68,17 @@ class SettingsViewModel : public QObject
 public:
   explicit SettingsViewModel(QObject *parent = nullptr);
 
+  // Phase 241 (PAGE-04): mm <-> inch display conversion for length readouts
+  // (upstream use_inches consumers: object manipulation fields
+  // Plater.cpp:14147, GCodeViewer.cpp:4081). STORAGE STAYS IN mm — only the
+  // displayed number converts (1 inch = 25.4 mm exactly).
+  Q_INVOKABLE double displayLength(double mm) const;
+  /// Inverse of displayLength: converts a user-entered display value back to
+  /// the mm storage unit before it is written into a transform/size field.
+  Q_INVOKABLE double storageLength(double display) const;
+  /// Unit suffix for length readouts: "mm" or "in".
+  Q_INVOKABLE QString lengthUnitLabel() const;
+
   int prefCategory() const { return m_prefCategory; }
   QString prefCategoryTitle() const;
   int fontSize() const { return m_fontSize; }
@@ -78,13 +89,10 @@ public:
   bool showHomePage() const { return m_showHomePage; }
   int defaultPage() const { return m_defaultPage; }
   int units() const { return m_units; }
-  int userRole() const { return m_userRole; }
   bool autoSave() const { return m_autoSave; }
   int autoSaveInterval() const { return m_autoSaveInterval; }
   bool checkUpdates() const { return m_checkUpdates; }
-  bool reducedMotion() const { return m_reducedMotion; }
   int region() const { return m_region; }
-  bool compactMode() const { return m_compactMode; }
   bool autoBackup() const { return m_autoBackup; }
   int undoLimit() const { return m_undoLimit; }
   int defaultNozzleIndex() const { return m_defaultNozzleIndex; }
@@ -129,13 +137,10 @@ public slots:
   void setShowHomePage(bool v);
   void setDefaultPage(int page);
   void setUnits(int u);
-  void setUserRole(int role);
   void setAutoSave(bool v);
   void setAutoSaveInterval(int minutes);
   void setCheckUpdates(bool v);
-  void setReducedMotion(bool v);
   void setRegion(int r);
-  void setCompactMode(bool v);
   void setAutoBackup(bool v);
   void setUndoLimit(int limit);
   void setDefaultNozzleIndex(int idx);
@@ -175,13 +180,12 @@ private:
   bool m_showHomePage = true;
   int m_defaultPage = 1;   // 0=Home, 1=Prepare (对齐上游 default_page radio)
   int m_units = 0;          // 0=Metric, 1=Imperial
-  int m_userRole = 0;       // 0=Basic, 1=Professional
+  // Phase 241 (PAGE-04): userRole / reducedMotion / compactMode removed —
+  // zero upstream Preferences mapping and zero consumers (dead UI).
   bool m_autoSave = true;
   int m_autoSaveInterval = 10;  // minutes
   bool m_checkUpdates = true;
-  bool m_reducedMotion = false;
   int m_region = 0;           // 0=System, 1=China, 2=US, 3=EU, 4=Japan
-  bool m_compactMode = false; // 3D view LOD / compact mode
   bool m_autoBackup = false;  // cloud sync backup
   int m_undoLimit = 100;      // undo stack limit
   int m_defaultNozzleIndex = 1; // 0=0.2mm, 1=0.4mm, 2=0.6mm, 3=0.8mm

@@ -144,6 +144,22 @@ public:
     Q_INVOKABLE void goToStep(int stepIndex);
     Q_INVOKABLE void resetCalibration(int itemIndex);
 
+    /// Phase 241 (PAGE-03): Flow Rate two-pass selection (upstream
+    /// CalibState CoarseSave -> FineCalibration, Plater.cpp:9784-9791 loads
+    /// flowrate-test-pass1.3mf / pass2.3mf per pass). 1 = coarse pass1
+    /// (default), 2 = fine pass2. Affects which bundled model the FlowRate
+    /// mode loads before slicing.
+    Q_INVOKABLE void setFlowRatePass(int pass);
+    Q_INVOKABLE int flowRatePass() const { return m_flowRatePass; }
+
+    /// Phase 241 (PAGE-03): symbolic CalibMode accessors for callers outside
+    /// this translation unit (the kCalibMode* constants are file-local and
+    /// pinned to the upstream Slic3r::CalibMode enum by symbol).
+    static int calibModePaLine();
+    static int calibModePaPattern();
+    static int calibModePaTower();
+    static int calibModeFlowRate();
+
     // History accessors aligned with upstream FlowCalibHeaderView.
     Q_INVOKABLE int historyCount() const;
     Q_INVOKABLE QString historyName(int index) const;
@@ -183,6 +199,14 @@ private:
     void buildMockData();
     void setStatus(int typeIndex, CalibrationStatus status);
     void advanceStep();
+    /// Phase 241 (PAGE-03): calibration history persistence — JSON file in
+    /// AppDataLocation (upstream CaliHistoryDialog persists per-printer
+    /// calibration history in the device profile; OWzx stores it locally
+    /// because the device channel is out of scope). Loaded once in the
+    /// constructor, written on every mutation.
+    QString historyFilePath() const;
+    void loadHistoryFromDisk();
+    void persistHistoryToDisk();
     /// Phase 125 (CALIB-03): parse the last PA K-value from a sliced G-code
     /// file. Recognizes the markers emitted by upstream GCodeWriter::
     /// set_pressure_advance (GCodeWriter.cpp:370-392):
@@ -207,7 +231,9 @@ private:
     /// current-plate geometry. Aligned with the per-mode add_model() calls in
     /// upstream Plater.cpp (calib_temp:9804, calib_max_vol_speed:9853,
     /// calib_VFA:9971, calib_retraction:9930).
-    static QString towerModelQrcPathForMode(int calibMode);
+    /// Phase 241 (PAGE-03): flowRatePass selects the bundled FlowRate model
+    /// (1 = flowrate-test-pass1.3mf coarse, 2 = pass2.3mf fine).
+    static QString towerModelQrcPathForMode(int calibMode, int flowRatePass = 1);
     /// Phase 197: extract a bundled qrc tower model to a temp file so
     /// libslic3r's Model::read_from_file (which uses plain filesystem I/O, not
     /// Qt's qrc virtual FS) can load it. Returns the temp file path on success
@@ -235,4 +261,13 @@ private:
     /// Gates the one-shot loadFinished connection in startCalibration so a
     /// later user-initiated loadFile is not mistaken for the calibration load.
     bool m_pendingCalibTowerLoad = false;
+    /// Phase 241 (PAGE-03): selected Flow Rate pass (1=coarse pass1, 2=fine
+    /// pass2). Selects the bundled flowrate-test-passN.3mf model.
+    int m_flowRatePass = 1;
+    /// Phase 241 (PAGE-03): in-code PA Pattern generation path (upstream
+    /// Plater::_calib_pa_pattern, Plater.cpp:9418). Builds the pattern
+    /// custom-G-code into the live model via CalibPressureAdvancePattern,
+    /// then dispatches the Calib_PA_Pattern slice. Returns false (and keeps
+    /// the calibration state honest) when the model/service is unavailable.
+    bool generateAndDispatchPaPattern(const QString &projectName);
 };

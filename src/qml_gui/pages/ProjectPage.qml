@@ -13,12 +13,26 @@ Item {
     property var _fileTree: []
 
     Component.onCompleted: {
-        // Use Q_INVOKABLE accessors - never touch QVariantList to avoid Qt6 V4 VariantAssociationObject crash
+        root.reloadFileTree()
+    }
+
+    function reloadFileTree() {
+        // Use Q_INVOKABLE accessors - never touch QVariantList to avoid Qt6 V4 VariantAssociationObject crash.
+        // Phase 241 (PAGE-02): entries derive from the REAL loaded project
+        // (project file + plates + object source modules) via
+        // ProjectViewModel::refreshFileTree; empty until something loads.
         var arr = []
         var n = projectVm.fileTreeCount()
         for (var i = 0; i < n; ++i)
             arr.push({ name: projectVm.fileTreeName(i), isDir: projectVm.fileTreeIsDir(i), depth: projectVm.fileTreeDepth(i) })
         _fileTree = arr
+    }
+
+    // Phase 241 (PAGE-02): keep the tree live across project open/new/save
+    // and object edits (ProjectViewModel emits projectChanged on refresh).
+    Connections {
+        target: root.projectVm
+        function onProjectChanged() { root.reloadFileTree() }
     }
 
     Rectangle { anchors.fill: parent; color: Theme.bgBase }
@@ -114,8 +128,12 @@ Item {
                         onClicked: {
                             switch (modelData.action) {
                                 case "new":
-                                    // TODO: Route New Project through ProjectService once clearProject is available.
-                                    console.log("[ProjectPage] new project")
+                                    // Phase 241 (PAGE-02): real New Project via
+                                    // BackendContext::topbarNewProject (clears
+                                    // the workspace + resets the project state,
+                                    // upstream MainFrame new-project path). The
+                                    // old console.log placeholder is gone.
+                                    backend.topbarNewProject()
                                     break
                                 case "open":
                                     openProjectDlg.open()
@@ -166,22 +184,48 @@ Item {
                                text: qsTr("项目资源"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; font.bold: true }
                     }
 
-                    Repeater {
-                        model: root._fileTree
-                        delegate: Rectangle {
-                            required property var modelData
-                            width: parent.width; height: 32
-                            radius: 8
-                            color: itemHov.containsMouse ? Theme.bgHover : "transparent"
-                            Row {
-                                anchors.verticalCenter: parent.verticalCenter
-                                anchors.left: parent.left
-                                anchors.leftMargin: 12 + (modelData.depth || 0) * 16
-                                spacing: 6
-                                Text { text: modelData.isDir ? "📁" : "📄"; font.pixelSize: Theme.fontSizeMD }
-                                Text { text: modelData.name; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
+                    // Phase 241 (PAGE-02): honest empty state — no fabricated
+                    // tree entries before a project is opened or a model is
+                    // imported.
+                    Text {
+                        visible: root._fileTree.length === 0
+                        text: qsTr("未加载项目：打开项目或导入模型后在此显示资源结构")
+                        color: Theme.textDisabled
+                        font.pixelSize: Theme.fontSizeXS
+                        wrapMode: Text.WordWrap
+                        width: parent.width - 24
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        topPadding: 16
+                    }
+
+                    ScrollView {
+                        width: parent.width
+                        height: parent.height - 40
+                        clip: true
+                        ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+                        Column {
+                            width: parent.width
+                            spacing: 0
+
+                            Repeater {
+                                model: root._fileTree
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    width: parent.width; height: 32
+                                    radius: 8
+                                    color: itemHov.containsMouse ? Theme.bgHover : "transparent"
+                                    Row {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 12 + (modelData.depth || 0) * 16
+                                        spacing: 6
+                                        Text { text: modelData.isDir ? "📁" : "📄"; font.pixelSize: Theme.fontSizeMD }
+                                        Text { text: modelData.name; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; elide: Text.ElideRight; width: 160 }
+                                    }
+                                    HoverHandler { id: itemHov }
+                                }
                             }
-                            HoverHandler { id: itemHov }
                         }
                     }
                 }
@@ -226,18 +270,18 @@ Item {
                         topPadding: 12
 
                         Repeater {
-                            // Phase 130 (POLISH-05): wire real values from
-                            // currentProjectPath (path + format derived). Size/
-                            // modified need file IO not yet exposed by the
-                            // ViewModel — shown as "—" until then.
+                            // Phase 130 (POLISH-05) + Phase 241 (PAGE-02):
+                            // Path/Format derive from currentProjectPath;
+                            // Size/Modified read real QFileInfo data through
+                            // ProjectViewModel (no more permanent "-").
                             model: {
                               var p = root.projectVm.currentProjectPath
                               var fmt = p ? p.split('.').pop().toUpperCase() : "—"
                               return [
                                 [qsTr("Path"), p || qsTr("No project")],
                                 [qsTr("Format"), p ? fmt : "—"],
-                                [qsTr("Size"), "—"],
-                                [qsTr("Modified"), "—"],
+                                [qsTr("Size"), p ? (root.projectVm.projectFileSizeText() || "—") : "—"],
+                                [qsTr("Modified"), p ? (root.projectVm.projectLastModifiedText() || "—") : "—"],
                               ]
                             }
                             delegate: Rectangle {

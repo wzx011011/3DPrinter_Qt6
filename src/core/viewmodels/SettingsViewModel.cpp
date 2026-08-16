@@ -42,13 +42,10 @@ void SettingsViewModel::loadFromSettings()
   m_showHomePage     = s.value("showHomePage", m_showHomePage).toBool();
   m_defaultPage      = s.value("defaultPage", m_defaultPage).toInt();
   m_units            = s.value("units", m_units).toInt();
-  m_userRole         = s.value("userRole", m_userRole).toInt();
   m_autoSave         = s.value("autoSave", m_autoSave).toBool();
   m_autoSaveInterval = s.value("autoSaveInterval", m_autoSaveInterval).toInt();
   m_checkUpdates     = s.value("checkUpdates", m_checkUpdates).toBool();
-  m_reducedMotion    = s.value("reducedMotion", m_reducedMotion).toBool();
   m_region           = s.value("region", m_region).toInt();
-  m_compactMode      = s.value("compactMode", m_compactMode).toBool();
   m_autoBackup       = s.value("autoBackup", m_autoBackup).toBool();
   m_undoLimit        = s.value("undoLimit", m_undoLimit).toInt();
   m_defaultNozzleIndex = s.value("defaultNozzleIndex", m_defaultNozzleIndex).toInt();
@@ -166,13 +163,10 @@ void SettingsViewModel::resetPreferences()
   setShowHomePage(true);
   setDefaultPage(1);
   setUnits(0);
-  setUserRole(0);
   setAutoSave(true);
   setAutoSaveInterval(10);
   setCheckUpdates(true);
-  setReducedMotion(false);
   setRegion(0);
-  setCompactMode(false);
   setAutoBackup(false);
   setUndoLimit(100);
   setNotificationsEnabled(true);
@@ -202,11 +196,6 @@ void SettingsViewModel::setUnits(int u)
   if (m_units != u) { m_units = u; SAVE_SETTING("units", u); emit settingsChanged(); }
 }
 
-void SettingsViewModel::setUserRole(int role)
-{
-  if (m_userRole != role) { m_userRole = role; SAVE_SETTING("userRole", role); emit settingsChanged(); }
-}
-
 void SettingsViewModel::setAutoSave(bool v)
 {
   if (m_autoSave != v) { m_autoSave = v; SAVE_SETTING("autoSave", v); emit settingsChanged(); }
@@ -222,19 +211,9 @@ void SettingsViewModel::setCheckUpdates(bool v)
   if (m_checkUpdates != v) { m_checkUpdates = v; SAVE_SETTING("checkUpdates", v); emit settingsChanged(); }
 }
 
-void SettingsViewModel::setReducedMotion(bool v)
-{
-  if (m_reducedMotion != v) { m_reducedMotion = v; SAVE_SETTING("reducedMotion", v); emit settingsChanged(); }
-}
-
 void SettingsViewModel::setRegion(int r)
 {
   if (m_region != r) { m_region = r; SAVE_SETTING("region", r); emit settingsChanged(); }
-}
-
-void SettingsViewModel::setCompactMode(bool v)
-{
-  if (m_compactMode != v) { m_compactMode = v; SAVE_SETTING("compactMode", v); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setAutoBackup(bool v)
@@ -332,4 +311,22 @@ void SettingsViewModel::setGlDebugContext(bool v)
 void SettingsViewModel::setMaxLogSizeMb(int v)
 {
   if (m_maxLogSizeMb != v) { m_maxLogSizeMb = v; SAVE_SETTING("maxLogSizeMb", v); emit settingsChanged(); }
+}
+
+// Phase 241 (PAGE-04): mm <-> inch display conversion (upstream
+// use_inches, Preferences.cpp:1109-1110). Display-only — every stored
+// transform / size value stays in mm.
+double SettingsViewModel::displayLength(double mm) const
+{
+  return m_units == 1 ? mm / 25.4 : mm;
+}
+
+double SettingsViewModel::storageLength(double display) const
+{
+  return m_units == 1 ? display * 25.4 : display;
+}
+
+QString SettingsViewModel::lengthUnitLabel() const
+{
+  return m_units == 1 ? QStringLiteral("in") : QStringLiteral("mm");
 }

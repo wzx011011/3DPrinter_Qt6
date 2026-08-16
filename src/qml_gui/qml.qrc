@@ -146,6 +146,11 @@
         <file>assets/calib/pressure_advance_test.stl</file>
         <file>assets/calib/flowrate-test-pass1.3mf</file>
         <file>assets/calib/flowrate-test-pass2.3mf</file>
+        <!-- Phase 241 (PAGE-03): PA Tower model (upstream
+             Plater::_calib_pa_tower adds
+             resources/calib/pressure_advance/tower_with_seam.stl,
+             Plater.cpp:9585). -->
+        <file>assets/calib/tower_with_seam.stl</file>
         <!-- Data files -->
         <file>data/hints.json</file>
     </qresource>

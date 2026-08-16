@@ -55,7 +55,7 @@ to exactly one phase.
 - [x] **Phase 239: Slicing Engine Semantics** - Auto-reslice on stale preview
   switch, G-code reuse on re-entry, non-blocking export with surfaced
   validation warnings.
-- [ ] **Phase 240: Notification Stacking And Gizmo Interaction Depth** -
+- [x] **Phase 240: Notification Stacking And Gizmo Interaction Depth** -
   Stacked priority notifications; gizmo numeric input, smart fill, Flatten
   face pick, 3D cut-plane drag, measure overlay, Emboss/Simplify/SVG depth.
 - [ ] **Phase 241: Page Honesty And CLI Surface** - Real Home/Project/

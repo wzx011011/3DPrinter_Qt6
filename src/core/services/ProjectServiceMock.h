@@ -179,6 +179,11 @@ public:
 
   // v2.4 IO-01: 项目保存（调用 libslic3r store_3mf 真实导出 .3mf）
   Q_INVOKABLE bool saveProjectAs(const QString &filePath);
+  /// Phase 241 (PAGE-04): write the current project to a .3mf snapshot
+  /// WITHOUT changing currentProjectPath_ (unlike saveProjectAs). Backs the
+  /// periodic auto-backup feature (upstream backup_switch). Returns false
+  /// when no model is loaded or store_3mf fails.
+  Q_INVOKABLE bool writeProjectSnapshot(const QString &filePath);
   /// v5.16 (PSET2-06): preset-selection overlay written into the stored
   /// project config on the next save (printer/filament/print preset ids +
   /// the ";"-separated filament_presets slot vector). Upstream embeds the

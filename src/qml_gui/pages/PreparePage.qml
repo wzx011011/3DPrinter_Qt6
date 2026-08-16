@@ -19,6 +19,10 @@ Item {
     property int activeGizmoDragMode: GLViewport.GizmoMove
     readonly property int gizmoPanelTopOffset: 74
     readonly property bool visualCompareActive: typeof backend !== "undefined" && backend.visualCompareMode
+    // Phase 241 (PAGE-04): units preference (upstream use_inches,
+    // Preferences.cpp:1109) for length readouts — display-only mm <-> inch
+    // conversion; every stored transform stays in mm.
+    readonly property var settingsVm: (typeof backend !== "undefined" && backend) ? backend.settingsViewModel : null
     readonly property int targetViewportTopInset: 58
     readonly property int targetViewportBottomInset: 50
     readonly property int preparePlateBarHeight: 44
@@ -1790,16 +1794,22 @@ Item {
                     axisName: "X"
                     accentColor: "#e066a0"
                     decimals: viewport3d.gizmoMode === GLViewport.GizmoScale ? 2 : 1
-                    value: viewport3d.gizmoMode === GLViewport.GizmoMove
-                           ? root.editorVm.objectPosX
-                           : viewport3d.gizmoMode === GLViewport.GizmoRotate
-                             ? root.editorVm.objectRotX
-                             : root.editorVm.objectScaleX
+                    // Phase 241 (PAGE-04): Move positions display in the
+                    // preferred unit (mm or inch, upstream use_inches);
+                    // committed values convert back to mm storage.
+                    value: {
+                        if (viewport3d.gizmoMode === GLViewport.GizmoMove)
+                            return root.settingsVm ? root.settingsVm.displayLength(root.editorVm.objectPosX)
+                                                   : root.editorVm.objectPosX
+                        return viewport3d.gizmoMode === GLViewport.GizmoRotate
+                                   ? root.editorVm.objectRotX
+                                   : root.editorVm.objectScaleX
+                    }
                     onCommitValue: function(v) {
                         if (!root.editorVm)
                             return
                         if (viewport3d.gizmoMode === GLViewport.GizmoMove)
-                            root.editorVm.objectPosX = v
+                            root.editorVm.objectPosX = root.settingsVm ? root.settingsVm.storageLength(v) : v
                         else if (viewport3d.gizmoMode === GLViewport.GizmoRotate)
                             root.editorVm.objectRotX = v
                         else
@@ -1810,16 +1820,19 @@ Item {
                     axisName: "Y"
                     accentColor: Theme.textTertiary
                     decimals: viewport3d.gizmoMode === GLViewport.GizmoScale ? 2 : 1
-                    value: viewport3d.gizmoMode === GLViewport.GizmoMove
-                           ? root.editorVm.objectPosY
-                           : viewport3d.gizmoMode === GLViewport.GizmoRotate
-                             ? root.editorVm.objectRotY
-                             : root.editorVm.objectScaleY
+                    value: {
+                        if (viewport3d.gizmoMode === GLViewport.GizmoMove)
+                            return root.settingsVm ? root.settingsVm.displayLength(root.editorVm.objectPosY)
+                                                   : root.editorVm.objectPosY
+                        return viewport3d.gizmoMode === GLViewport.GizmoRotate
+                                   ? root.editorVm.objectRotY
+                                   : root.editorVm.objectScaleY
+                    }
                     onCommitValue: function(v) {
                         if (!root.editorVm)
                             return
                         if (viewport3d.gizmoMode === GLViewport.GizmoMove)
-                            root.editorVm.objectPosY = v
+                            root.editorVm.objectPosY = root.settingsVm ? root.settingsVm.storageLength(v) : v
                         else if (viewport3d.gizmoMode === GLViewport.GizmoRotate)
                             root.editorVm.objectRotY = v
                         else
@@ -1830,21 +1843,32 @@ Item {
                     axisName: "Z"
                     accentColor: Theme.statusInfo
                     decimals: viewport3d.gizmoMode === GLViewport.GizmoScale ? 2 : 1
-                    value: viewport3d.gizmoMode === GLViewport.GizmoMove
-                           ? root.editorVm.objectPosZ
-                           : viewport3d.gizmoMode === GLViewport.GizmoRotate
-                             ? root.editorVm.objectRotZ
-                             : root.editorVm.objectScaleZ
+                    value: {
+                        if (viewport3d.gizmoMode === GLViewport.GizmoMove)
+                            return root.settingsVm ? root.settingsVm.displayLength(root.editorVm.objectPosZ)
+                                                   : root.editorVm.objectPosZ
+                        return viewport3d.gizmoMode === GLViewport.GizmoRotate
+                                   ? root.editorVm.objectRotZ
+                                   : root.editorVm.objectScaleZ
+                    }
                     onCommitValue: function(v) {
                         if (!root.editorVm)
                             return
                         if (viewport3d.gizmoMode === GLViewport.GizmoMove)
-                            root.editorVm.objectPosZ = v
+                            root.editorVm.objectPosZ = root.settingsVm ? root.settingsVm.storageLength(v) : v
                         else if (viewport3d.gizmoMode === GLViewport.GizmoRotate)
                             root.editorVm.objectRotZ = v
                         else
                             root.editorVm.objectScaleZ = v
                     }
+                }
+
+                // Phase 241 (PAGE-04): unit suffix for Move positions.
+                Text {
+                    visible: viewport3d.gizmoMode === GLViewport.GizmoMove
+                    text: root.settingsVm ? root.settingsVm.lengthUnitLabel() : "mm"
+                    color: Theme.textTertiary
+                    font.pixelSize: Theme.fontSizeXS
                 }
             }
         }
@@ -2156,12 +2180,17 @@ Item {
 
                 Row {
                     spacing: 16
+                    // Phase 241 (PAGE-04): measure dimensions convert mm ->
+                    // inch for display when the units preference is Imperial
+                    // (upstream use_inches); the stored value stays mm.
                     Label { text: qsTr("X:"); color: "#e066a0"; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace" }
-                    Label { text: root.editorVm ? root.editorVm.measureDimensions.x.toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace" }
+                    Label { text: root.editorVm ? (root.settingsVm ? root.settingsVm.displayLength(root.editorVm.measureDimensions.x) : root.editorVm.measureDimensions.x).toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace" }
                     Label { text: qsTr("Y:"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace" }
-                    Label { text: root.editorVm ? root.editorVm.measureDimensions.y.toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace" }
+                    Label { text: root.editorVm ? (root.settingsVm ? root.settingsVm.displayLength(root.editorVm.measureDimensions.y) : root.editorVm.measureDimensions.y).toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace" }
                     Label { text: qsTr("Z:"); color: Theme.statusInfo; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace" }
-                    Label { text: root.editorVm ? root.editorVm.measureDimensions.z.toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace" }
+                    Label { text: root.editorVm ? (root.settingsVm ? root.settingsVm.displayLength(root.editorVm.measureDimensions.z) : root.editorVm.measureDimensions.z).toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace" }
+                    // Unit suffix for the converted readout.
+                    Label { text: root.settingsVm ? root.settingsVm.lengthUnitLabel() : "mm"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                 }
                 Label {
                     text: root.editorVm

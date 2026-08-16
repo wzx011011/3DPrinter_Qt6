@@ -743,11 +743,21 @@ Item {
                                                     Layout.topMargin: Theme.spacingSM
                                                     spacing: Theme.spacingMD
 
+                                                    // Phase 241 (PAGE-03): real
+                                                    // preset write — PA modes store
+                                                    // pressure_advance, FlowRate
+                                                    // stores filament_flow_ratio
+                                                    // (upstream CalibrationWizard-
+                                                    // SavePage on_save).
                                                     CxButton {
                                                         text: qsTr("保存到预设")
                                                         cxStyle: CxButton.Style.Primary
                                                         enabled: root.calibrationVm.hasCalibrationResult
-                                                        onClicked: root.calibrationVm.saveCalibrationResult()
+                                                        onClicked: {
+                                                            var ok = root.calibrationVm.saveCalibrationResultToPreset()
+                                                            if (!ok)
+                                                                backend.postError(qsTr("写入预设失败：预设可能为只读或不支持该模式的保存"), 1)
+                                                        }
                                                     }
 
                                                     CxButton {
@@ -952,8 +962,14 @@ Item {
                                 if (root.calibrationVm.selectedIndex >= 0
                                         && !root.calibrationVm.calibItemStartable(root.calibrationVm.selectedIndex))
                                     return qsTr("Unavailable")
+                                // Phase 241 (PAGE-03): Flow Rate two-stage flow —
+                                // after the coarse pass completes, the button starts
+                                // the fine pass (upstream CalibState::FineCalibration
+                                // loads flowrate-test-pass2.3mf).
                                 if (root.calibrationVm.selectedStatus === 2)
-                                    return qsTr("Recalibrate")
+                                    return root.calibrationVm.calibItemId(root.calibrationVm.selectedIndex) === "flow_rate"
+                                           ? qsTr("Fine Calibration (Pass 2)")
+                                           : qsTr("Recalibrate")
                                 return qsTr("Start Calibration")
                             }
                             cxStyle: root.calibrationVm.isRunning ? CxButton.Style.Danger : CxButton.Style.Primary
@@ -963,8 +979,13 @@ Item {
                             onClicked: {
                                 if (root.calibrationVm.isRunning)
                                     root.calibrationVm.cancelCalibration()
-                                else if (root.calibrationVm.calibItemStartable(root.calibrationVm.selectedIndex))
-                                    calibDlg.open()
+                                else if (root.calibrationVm.calibItemStartable(root.calibrationVm.selectedIndex)) {
+                                    if (root.calibrationVm.selectedStatus === 2
+                                            && root.calibrationVm.calibItemId(root.calibrationVm.selectedIndex) === "flow_rate")
+                                        root.calibrationVm.startFineCalibration()
+                                    else
+                                        calibDlg.open()
+                                }
                             }
                         }
 

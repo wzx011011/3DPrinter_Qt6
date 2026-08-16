@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 import ".."
 import "../controls"
 import "../dialogs"
@@ -9,16 +10,42 @@ Item {
     id: root
     required property var homeVm
     // Pure-JS copy - avoids Qt6 V4 VariantAssociationObject lifetime crash
-    // Initialized to [] so Repeater componentComplete() sees empty model
+    // Initialized to [] so Repeater componentComplete() sees empty model.
+    // Phase 241 (PAGE-01): mirrors homeVm's real recent list, which itself
+    // mirrors the persisted ProjectViewModel recentProjects (upstream
+    // app_config "recent_projects"). Empty until a project is opened.
     property var _recentProjects: []
 
     Component.onCompleted: {
         // Use Q_INVOKABLE accessors - never touch QVariantList to avoid Qt6 V4 VariantAssociationObject crash
+        root.reloadRecentProjects()
+        // Phase 241 (PAGE-01): Daily Tips rotate the BackendContext hint
+        // database (hints.json, upstream DailyTips/MarkdownTip) instead of a
+        // single static string.
+        if (typeof backend !== "undefined")
+            backend.showDailyTip()
+    }
+
+    function reloadRecentProjects() {
         var arr = []
         var n = homeVm.recentProjectCount()
         for (var i = 0; i < n; ++i)
             arr.push({ name: homeVm.recentProjectName(i), date: homeVm.recentProjectDate(i), path: homeVm.recentProjectPath(i) })
         _recentProjects = arr
+    }
+
+    Connections {
+        target: root.homeVm
+        function onRecentProjectsChanged() { root.reloadRecentProjects() }
+    }
+
+    // Phase 241 (PAGE-01): quick-action "open project" file dialog (routes
+    // through BackendContext::topbarOpenProject, upstream Plater::load_file).
+    FileDialog {
+        id: homeOpenProjectDlg
+        title: qsTr("打开项目")
+        nameFilters: [qsTr("项目文件 (*.3mf *.cxprj *.json)"), qsTr("所有文件 (*)")]
+        onAccepted: backend.topbarOpenProject(selectedFile.toString())
     }
 
     Rectangle { anchors.fill: parent; color: Theme.bgBase }
@@ -475,10 +502,13 @@ Item {
             onOpened: { bindDeviceName.text = ""; bindPinCode.text = ""; bindError = ""; bindDeviceName.forceActiveFocus() }
         }
 
-        // PAGE-04: Daily Tips（对齐上游 MarkdownTip / DailyTips.cpp）
+        // PAGE-04: Daily Tips（对齐上游 MarkdownTip / DailyTips.cpp）。
+        // Phase 241 (PAGE-01): rotates the BackendContext hint database
+        // (hints.json) with prev/next navigation and documentation-link
+        // support where the hint carries one — no more static single string.
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 60
+            Layout.preferredHeight: 64
             radius: 10
             color: Theme.bgElevated
             border.width: 1
@@ -503,12 +533,47 @@ Item {
                         font.bold: true
                     }
                     Text {
+                        id: dailyTipBody
                         Layout.fillWidth: true
-                        text: qsTr("切片前确保模型已平放在热床上。使用 W/E/R 切换移动/旋转/缩放工具。")
+                        text: {
+                            if (typeof backend === "undefined" || !backend.currentHintText)
+                                return qsTr("暂无提示")
+                            var s = backend.currentHintText
+                            if (backend.currentHintHasDocumentationLink && backend.currentHintHypertext)
+                                s = s + "<a href=\"" + backend.currentHintHypertext + "\">" + backend.currentHintHypertext + "</a>"
+                            if (backend.currentHintFollowText)
+                                s = s + backend.currentHintFollowText
+                            return s
+                        }
                         color: Theme.textSecondary
                         font.pixelSize: Theme.fontSizeSM
                         wrapMode: Text.WordWrap
                         elide: Text.ElideRight
+                        textFormat: Text.RichText
+                        // Upstream HintNotification hypertext_type=documentation.
+                        onLinkActivated: function(link) { backend.openHintDocumentation() }
+                    }
+                }
+
+                // Prev/next navigation (upstream HintNotification arrows)
+                Rectangle {
+                    width: 26; height: 26; radius: 13
+                    color: tipPrevMA.containsMouse ? Theme.bgHover : "transparent"
+                    Text { anchors.centerIn: parent; text: "‹"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXL }
+                    MouseArea {
+                        id: tipPrevMA
+                        anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: backend.prevHint()
+                    }
+                }
+                Rectangle {
+                    width: 26; height: 26; radius: 13
+                    color: tipNextMA.containsMouse ? Theme.bgHover : "transparent"
+                    Text { anchors.centerIn: parent; text: "›"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXL }
+                    MouseArea {
+                        id: tipNextMA
+                        anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: backend.showDailyTip()
                     }
                 }
             }
@@ -518,8 +583,19 @@ Item {
 
         ScrollView {
             Layout.fillWidth: true; Layout.preferredHeight: 188; clip: true
+
+            // Phase 241 (PAGE-01): honest empty state — the persisted recent
+            // list starts empty on a fresh install (no fabricated entries).
+            Text {
+                visible: root._recentProjects.length === 0
+                text: qsTr("暂无最近项目，打开或保存一个项目后将显示在这里")
+                color: Theme.textDisabled
+                font.pixelSize: Theme.fontSizeSM
+                anchors.centerIn: parent
+            }
             Flow {
                 width: parent.width; spacing: Theme.spacingMD
+                visible: root._recentProjects.length > 0
                 Repeater {
                     model: root._recentProjects
                     delegate: Rectangle {
@@ -535,6 +611,15 @@ Item {
                         }
                         HoverHandler { id: recentHover }
                         Rectangle { anchors.fill: parent; radius: parent.radius; color: recentHover.hovered ? "#1018c75e" : "transparent" }
+                        // Phase 241 (PAGE-01): cards are clickable — opens the
+                        // project through the same path as the topbar Recent
+                        // submenu (upstream recent-files menu).
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.homeVm.openRecentProject(index)
+                        }
                     }
                 }
             }
@@ -548,10 +633,12 @@ Item {
 
             Repeater {
                 model: [
-                    { icon: "📂", title: qsTr("打开项目"),   sub: qsTr("打开已有 3MF/STL 文件") },
-                    { icon: "➕", title: qsTr("新建项目"),   sub: qsTr("从空白开始创建") },
-                    { icon: "🔧", title: qsTr("校准"),       sub: qsTr("打印机校准向导") },
-                    { icon: "🌐", title: qsTr("模型商城"),   sub: qsTr("在线下载模型") }
+                    // Phase 241 (PAGE-01): every quick action is wired to a
+                    // real handler. The dead ModelMall entry (model mall out
+                    // of scope per REQUIREMENTS) was removed.
+                    { icon: "📂", title: qsTr("打开项目"),   sub: qsTr("打开已有 3MF/STL 文件"), action: "open" },
+                    { icon: "➕", title: qsTr("新建项目"),   sub: qsTr("从空白开始创建"),        action: "new" },
+                    { icon: "🔧", title: qsTr("校准"),       sub: qsTr("打印机校准向导"),        action: "calibration" }
                 ]
                 delegate: Rectangle {
                     required property var modelData
@@ -572,6 +659,27 @@ Item {
                     }
 
                     HoverHandler { id: qaHover }
+                    // Phase 241 (PAGE-01): open = file dialog ->
+                    // topbarOpenProject; new = topbarNewProject; calibration
+                    // = Calibration tab route (upstream menu routing).
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            switch (parent.parent.modelData.action) {
+                                case "open":
+                                    homeOpenProjectDlg.open()
+                                    break
+                                case "new":
+                                    backend.topbarNewProject()
+                                    break
+                                case "calibration":
+                                    backend.requestSelectTab(backend.tpCalibration)
+                                    break
+                            }
+                        }
+                    }
                 }
             }
         }

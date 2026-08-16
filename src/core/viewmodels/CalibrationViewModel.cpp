@@ -212,6 +212,28 @@ void CalibrationViewModel::setSelectedFilamentPreset(const QString &name)
 void CalibrationViewModel::startCalibration()
 {
     if (m_selectedIndex < 0) return;
+    // Phase 241 (PAGE-03): plain start = Flow Rate coarse pass 1 (upstream
+    // flowrate-test-pass1.3mf); the fine pass is started explicitly through
+    // startFineCalibration().
+    if (m_service)
+        m_service->setFlowRatePass(1);
+    if (m_service && m_service->calibTypeStartable(m_selectedIndex))
+        m_service->startCalibration(m_selectedIndex);
+    else
+    {
+        emit runningChanged();
+        emit progressChanged();
+    }
+}
+
+void CalibrationViewModel::startFineCalibration()
+{
+    if (m_selectedIndex < 0) return;
+    // Phase 241 (PAGE-03): Flow Rate two-stage flow — the fine pass loads
+    // flowrate-test-pass2.3mf (upstream Plater.cpp:9789). Non-FlowRate modes
+    // ignore the pass selector, so this routes to the same start path.
+    if (m_service)
+        m_service->setFlowRatePass(2);
     if (m_service && m_service->calibTypeStartable(m_selectedIndex))
         m_service->startCalibration(m_selectedIndex);
     else
@@ -332,6 +354,54 @@ void CalibrationViewModel::saveCalibrationResult()
         m_currentNValue,
         QDateTime::currentDateTime().toString(Qt::ISODate));
     emit calibrationParamsChanged();
+}
+
+bool CalibrationViewModel::saveCalibrationResultToPreset()
+{
+    // Phase 241 (PAGE-03): write the measured value into the selected
+    // filament preset. Upstream CalibrationWizardSavePage::on_save_btn writes
+    // the PA K-value into the filament preset's pressure_advance and the flow
+    // ratio into filament_flow_ratio. Read-modify-write keeps every other
+    // preset value intact; savePresetValues rejects read-only presets.
+    if (!m_service || m_selectedIndex < 0 || !m_presetService)
+        return false;
+
+    const int mode = m_service->calibTypeMode(m_selectedIndex);
+    QString key;
+    if (mode == CalibrationServiceMock::calibModePaLine()
+        || mode == CalibrationServiceMock::calibModePaPattern()
+        || mode == CalibrationServiceMock::calibModePaTower())
+        key = QStringLiteral("pressure_advance");
+    else if (mode == CalibrationServiceMock::calibModeFlowRate())
+        key = QStringLiteral("filament_flow_ratio");
+    else
+        return false; // tower modes are manual-interpretation, nothing to write
+
+    const QString presetName = m_selectedFilamentPreset.isEmpty()
+                                   ? m_presetService->defaultPresetForCategory(
+                                         PresetServiceMock::FilamentCat)
+                                   : m_selectedFilamentPreset;
+    if (presetName.isEmpty() || !m_presetService->hasPreset(presetName))
+        return false;
+
+    QHash<QString, QVariant> values = m_presetService->presetValues(presetName);
+    values.insert(key, m_currentKValue);
+    if (!m_presetService->savePresetValues(presetName, values))
+        return false;
+
+    // Upstream save also appends a history entry.
+    m_hasResult = true;
+    m_service->addHistoryEntry(
+        m_service->calibTypeName(m_selectedIndex),
+        presetName,
+        m_currentKValue,
+        m_currentNValue,
+        QDateTime::currentDateTime().toString(Qt::ISODate),
+        true,
+        QStringLiteral("%1 = %2 written to preset '%3'")
+            .arg(key, QString::number(m_currentKValue), presetName));
+    emit calibrationParamsChanged();
+    return true;
 }
 
 void CalibrationViewModel::loadHistoryEntry(int index)

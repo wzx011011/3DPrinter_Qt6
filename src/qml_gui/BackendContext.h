@@ -355,6 +355,11 @@ public:
   Q_INVOKABLE void postHint();
   Q_INVOKABLE void nextHint();
   Q_INVOKABLE void prevHint();
+  /// Phase 241 (PAGE-01): advance the hint cursor WITHOUT posting a
+  /// notification — the HomePage Daily Tips card drives the same hint
+  /// database (hints.json, upstream DailyTips/MarkdownTip) through this
+  /// entry point. Emits dailyTipChanged.
+  Q_INVOKABLE void showDailyTip();
   Q_INVOKABLE int hintCount() const;
   Q_INVOKABLE int currentHintIndex() const;
   Q_INVOKABLE QString currentHintText() const;
@@ -364,6 +369,19 @@ public:
   Q_INVOKABLE bool openHintDocumentation() const;
   /// Upstream-aligned QML API.
   Q_INVOKABLE bool currentHintHasDocumentationLink() const;
+
+  /// Phase 241 (PAGE-04): apply the persisted startup-page preference
+  /// (showHomePage + defaultPage, upstream app_config "show_home_page" /
+  /// "default_page") to currentPage. Called once from main_qml.cpp after
+  /// BackendContext construction, before QML loads.
+  Q_INVOKABLE void applyStartupPagePreference();
+  /// Phase 241 (PAGE-04): write one project backup into the app-data backup
+  /// directory (upstream backup_switch "Auto-Backup ... for restoring from
+  /// the occasional crash", Preferences.cpp:1179 — OWzx delta: periodic
+  /// save-on-change backup at minute granularity instead of the upstream
+  /// seconds-level crash timer). Returns the backup file path, or an empty
+  /// string when there is nothing to back up / the save failed.
+  Q_INVOKABLE QString triggerProjectBackup();
 
   Q_INVOKABLE void openSettings(); // H3
   // Phase 52 PREPSB-02: forward sidebar settings request (interim no-op log;
@@ -458,6 +476,9 @@ signals:
   void currentPageChanged();
   /// Phase 51 SHELL-03: bulk shell-state refresh signal for action gates + labels.
   void stateChanged();
+  /// Phase 241 (PAGE-01): the hint cursor moved (showDailyTip / nextHint /
+  /// prevHint). The HomePage Daily Tips card rebinds on this signal.
+  void dailyTipChanged();
   /// Emitted when a tab selection is requested.
   /// Current Plater view mode derived from page and canvas state.
   void tabSelectRequested(int position);
@@ -649,6 +670,10 @@ private:
   int m_currentHintIndex = -1;
   QSet<QString> m_displayedHintIds;
   QTimer *m_hintTimer = nullptr; ///< Timer for periodic hint notifications.
+  /// Phase 241 (PAGE-04): periodic project backup timer. Interval follows
+  /// settingsViewModel autoSaveInterval (minutes); each tick backs up the
+  /// dirty project when autoSave is enabled.
+  QTimer *m_backupTimer = nullptr;
   void initHintDatabase();
   void initFallbackHintDatabase();
   int selectNextHint(bool random = true);

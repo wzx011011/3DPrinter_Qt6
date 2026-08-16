@@ -10,6 +10,10 @@
 #include <QFileInfo>
 #include <QTextStream>
 #include <QRegularExpression>
+#include <QStandardPaths>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <cmath>
 #include <algorithm>
 
@@ -23,6 +27,8 @@
 // Retraction=9 matched nothing). Modes are now pinned by symbol only.
 namespace {
 constexpr int kCalibModePA_Line    = static_cast<int>(Slic3r::CalibMode::Calib_PA_Line);
+constexpr int kCalibModePA_Pattern = static_cast<int>(Slic3r::CalibMode::Calib_PA_Pattern);
+constexpr int kCalibModePA_Tower   = static_cast<int>(Slic3r::CalibMode::Calib_PA_Tower);
 constexpr int kCalibModeFlowRate   = static_cast<int>(Slic3r::CalibMode::Calib_Flow_Rate);
 constexpr int kCalibModeTempTower  = static_cast<int>(Slic3r::CalibMode::Calib_Temp_Tower);
 constexpr int kCalibModeVolSpeed   = static_cast<int>(Slic3r::CalibMode::Calib_Vol_speed_Tower);
@@ -32,12 +38,14 @@ constexpr int kCalibModeRetract    = static_cast<int>(Slic3r::CalibMode::Calib_R
 #else
 // Non-HAS builds never reach the slicing engine; mirror the current enum.
 namespace {
-constexpr int kCalibModePA_Line   = 1;
-constexpr int kCalibModeFlowRate  = 4;
-constexpr int kCalibModeTempTower = 5;
-constexpr int kCalibModeVolSpeed  = 6;
-constexpr int kCalibModeVFA       = 7;
-constexpr int kCalibModeRetract   = 8;
+constexpr int kCalibModePA_Line    = 1;
+constexpr int kCalibModePA_Pattern = 2;
+constexpr int kCalibModePA_Tower   = 3;
+constexpr int kCalibModeFlowRate   = 4;
+constexpr int kCalibModeTempTower  = 5;
+constexpr int kCalibModeVolSpeed   = 6;
+constexpr int kCalibModeVFA        = 7;
+constexpr int kCalibModeRetract    = 8;
 } // namespace
 #endif
 
@@ -47,6 +55,9 @@ CalibrationServiceMock::CalibrationServiceMock(QObject *parent)
     m_timer->setInterval(200);
     connect(m_timer, &QTimer::timeout, this, &CalibrationServiceMock::onTick);
     buildMockData();
+    // Phase 241 (PAGE-03): restore persisted calibration history so the
+    // history dialog survives restarts.
+    loadHistoryFromDisk();
 }
 
 CalibrationServiceMock::~CalibrationServiceMock() = default;
@@ -108,6 +119,69 @@ void CalibrationServiceMock::buildMockData()
         {"preset",  tr("Select Filament"), tr("Choose the filament preset and nozzle diameter for calibration.")},
         {"cali",    tr("Calibrate"), tr("Send calibration job to printer. Wait for completion.")},
         {"save",    tr("Save Result"), tr("Review calibration result and save to preset.")}
+    };
+
+    // Phase 241 (PAGE-03): PA Pattern — upstream Plater::calib_pa routes
+    // Calib_PA_Pattern to _calib_pa_pattern (Plater.cpp:9408), which builds
+    // the pattern in-code via CalibPressureAdvancePattern (handle cube +
+    // per-layer custom G-code) and applies the SuggestedConfigCalibPAPattern
+    // overrides. OWzx mirrors the generation + dispatch with default config
+    // values (documented delta: preset-derived accel/jerk normalization is
+    // upstream-only; the sweep geometry itself is engine-generated).
+    CalibrationType paPattern;
+    paPattern.id = "pa_pattern";
+    paPattern.name = tr("PA Pattern");
+    paPattern.icon = "\u{1F4CF}";
+    paPattern.category = "slice";
+    paPattern.description = tr("Pressure Advance pattern calibration");
+    paPattern.longDesc = tr(
+        "PA Pattern generates the upstream OrcaSlicer pressure-advance test "
+        "pattern in-code: an anchoring frame plus pattern rows whose "
+        "pressure advance sweeps from start to end. Read the cleanest row "
+        "off the print and save it to the filament preset.");
+    paPattern.previewLabel = tr("Pressure Advance pattern (in-code)");
+    paPattern.implemented = true;
+    paPattern.startable = true;
+    paPattern.calibMode = kCalibModePA_Pattern;
+    paPattern.calibStart = 0.0;
+    paPattern.calibEnd = 0.08;
+    paPattern.calibStep = 0.005;
+    paPattern.printNumbers = true;
+    paPattern.steps = {
+        {"start",  tr("Introduction"), tr("Learn when to use the PA pattern calibration.")},
+        {"preset", tr("Select Filament"), tr("Choose filament and nozzle diameter.")},
+        {"cali",   tr("Calibrate"), tr("Generate the PA pattern and slice it.")},
+        {"save",   tr("Save Result"), tr("Pick the cleanest row and save its PA value to the preset.")}
+    };
+
+    // Phase 241 (PAGE-03): PA Tower — upstream _calib_pa_tower
+    // (Plater.cpp:9584) adds resources/calib/pressure_advance/
+    // tower_with_seam.stl; the engine sweeps PA per layer
+    // (GCode.cpp:3721: start + int(print_z) * step).
+    CalibrationType paTower;
+    paTower.id = "pa_tower";
+    paTower.name = tr("PA Tower");
+    paTower.icon = "\u{1F5FC}";
+    paTower.category = "slice";
+    paTower.description = tr("Pressure Advance tower calibration");
+    paTower.longDesc = tr(
+        "PA Tower prints the upstream tower-with-seam model; every millimeter "
+        "of height applies a new pressure advance value (start + z * step). "
+        "Find the height band with the most consistent seam and save its PA "
+        "value to the filament preset.");
+    paTower.previewLabel = tr("Pressure Advance tower");
+    paTower.implemented = true;
+    paTower.startable = true;
+    paTower.calibMode = kCalibModePA_Tower;
+    paTower.calibStart = 0.0;
+    paTower.calibEnd = 0.06;
+    paTower.calibStep = 0.005;
+    paTower.printNumbers = false;
+    paTower.steps = {
+        {"start",  tr("Introduction"), tr("Learn when to use the PA tower calibration.")},
+        {"preset", tr("Select Filament"), tr("Choose filament and the PA sweep range.")},
+        {"cali",   tr("Calibrate"), tr("Load the tower model and slice it.")},
+        {"save",   tr("Save Result"), tr("Read the best height band and save its PA value.")}
     };
 
     CalibrationType flowRate;
@@ -301,7 +375,7 @@ void CalibrationServiceMock::buildMockData()
     };
 
     m_calibTypes = {
-        flowDynamics, flowRate, tempTower,
+        flowDynamics, paPattern, paTower, flowRate, tempTower,
         bedLeveling, vibration,
         maxVolSpeed, vfaTower, retractionTune
     };
@@ -519,19 +593,37 @@ void CalibrationServiceMock::startCalibration(int itemIndex)
             emit calibrationSliceRequested(calibType.calibMode, calibType.calibStart, calibType.calibEnd,
                                            calibType.calibStep, calibType.printNumbers, projectName);
 
-            // Phase 197: for the four tower modes, load the dedicated upstream
+            // Phase 241 (PAGE-03): PA Pattern bypasses the tower-model path —
+            // its geometry + sweep come from in-code generation
+            // (CalibPressureAdvancePattern), mirroring upstream
+            // Plater::_calib_pa_pattern (Plater.cpp:9418-9563).
+            if (calibType.calibMode == kCalibModePA_Pattern) {
+                if (generateAndDispatchPaPattern(projectName)) {
+                    dispatchedRealSlice = true;
+                } else {
+                    qWarning("[Calib] PA pattern generation failed - aborting");
+                    setStatus(itemIndex, CalibrationStatus::Failed);
+                    m_isRunning = false;
+                    emit isRunningChanged();
+                    emit calibrationFinished(false);
+                    return;
+                }
+            }
+
+            // Phase 197: for the tower modes, load the dedicated upstream
             // tower model onto the current plate BEFORE slicing -- mirrors
             // upstream Plater::calib_temp/vol_speed/VFA/retraction which call
             // new_project()+add_model(<calib>/<tower>.stl). This replaces the
             // user's current-plate geometry with the precision tower; the
             // G-code parameter sweep (temp/speed/retraction injection in
             // GCode.cpp) is mode-driven and tower-shape-agnostic, so it is
-            // unchanged. PA (1) and FlowRate (5) keep the current-plate model.
-            // loadFile is async (QtConcurrent::run + loadFinished), so we defer
+            // unchanged. PA_Line (engine-drawn lines, GCode.cpp:2451) keeps
+            // the current-plate model. loadFile is async
+            // (QtConcurrent::run + loadFinished), so we defer
             // setCalibParams/startSlice to onCalibTowerLoadFinished. When
-            // ProjectServiceMock is unavailable or extraction fails, fall back
-            // to the legacy cloneCurrentPlateModel() geometry path.
-            const QString towerQrc = towerModelQrcPathForMode(calibType.calibMode);
+            // ProjectServiceMock is unavailable or extraction fails, fall
+            // back to the legacy cloneCurrentPlateModel() geometry path.
+            const QString towerQrc = towerModelQrcPathForMode(calibType.calibMode, m_flowRatePass);
             if (m_projectService && !towerQrc.isEmpty()) {
                 const QString towerTempPath = extractQrcToTempFile(towerQrc);
                 if (!towerTempPath.isEmpty()) {
@@ -701,6 +793,8 @@ void CalibrationServiceMock::addHistoryEntry(const QString &name, const QString 
     entry.hasRealReadback = hasRealReadback;
     entry.notes = notes;
     m_history.prepend(entry); // Most recent first
+    // Phase 241 (PAGE-03): history survives restarts (JSON in AppData).
+    persistHistoryToDisk();
     emit historyChanged();
 }
 
@@ -708,7 +802,76 @@ void CalibrationServiceMock::clearHistory()
 {
     if (m_history.isEmpty()) return;
     m_history.clear();
+    persistHistoryToDisk();
     emit historyChanged();
+}
+
+// Phase 241 (PAGE-03): calibration history persistence. Upstream keeps the
+// calibration history inside the printer's device profile
+// (CaliHistoryPane/FlowCalibHeaderView read MachineObject::cali_history);
+// the OWzx device channel is out of scope, so the history lands in a local
+// JSON file under AppDataLocation instead. Same honest data: name,
+// filament id, K value, nozzle diameter, timestamp, readback flag, notes.
+QString CalibrationServiceMock::historyFilePath() const
+{
+    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+           + QStringLiteral("/calibration_history.json");
+}
+
+void CalibrationServiceMock::loadHistoryFromDisk()
+{
+    QFile file(historyFilePath());
+    if (!file.open(QIODevice::ReadOnly))
+        return;
+    const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+    if (!doc.isArray())
+        return;
+    m_history.clear();
+    const QJsonArray array = doc.array();
+    // Stored oldest-first; prepend in reverse so index 0 stays the newest.
+    for (int i = array.size() - 1; i >= 0; --i) {
+        const QJsonObject obj = array.at(i).toObject();
+        CalibrationHistoryEntry entry;
+        entry.name = obj.value(QStringLiteral("name")).toString();
+        entry.filamentId = obj.value(QStringLiteral("filamentId")).toString();
+        entry.kValue = float(obj.value(QStringLiteral("kValue")).toDouble());
+        entry.nozzleDiameter = float(obj.value(QStringLiteral("nozzleDiameter")).toDouble());
+        entry.timestamp = obj.value(QStringLiteral("timestamp")).toString();
+        entry.hasRealReadback = obj.value(QStringLiteral("hasRealReadback")).toBool(false);
+        entry.notes = obj.value(QStringLiteral("notes")).toString();
+        if (!entry.name.isEmpty())
+            m_history.prepend(entry);
+    }
+    if (!m_history.isEmpty())
+        emit historyChanged();
+}
+
+void CalibrationServiceMock::persistHistoryToDisk()
+{
+    QDir().mkpath(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
+    QJsonArray array;
+    // Write oldest-first so loadHistoryFromDisk's reverse prepend round-trips.
+    for (int i = m_history.size() - 1; i >= 0; --i) {
+        const auto &e = m_history[i];
+        QJsonObject obj;
+        obj.insert(QStringLiteral("name"), e.name);
+        obj.insert(QStringLiteral("filamentId"), e.filamentId);
+        obj.insert(QStringLiteral("kValue"), double(e.kValue));
+        obj.insert(QStringLiteral("nozzleDiameter"), double(e.nozzleDiameter));
+        obj.insert(QStringLiteral("timestamp"), e.timestamp);
+        obj.insert(QStringLiteral("hasRealReadback"), e.hasRealReadback);
+        obj.insert(QStringLiteral("notes"), e.notes);
+        array.append(obj);
+    }
+    QFile file(historyFilePath());
+    if (!file.open(QIODevice::WriteOnly)) {
+        qWarning("[Calib] cannot write history file: %s",
+                 historyFilePath().toUtf8().constData());
+        return;
+    }
+    file.write(QJsonDocument(array).toJson(QJsonDocument::Compact));
+    file.close();
 }
 
 // Phase 125 (CALIB-03): parse the last PA K-value the slice engine wrote into
@@ -886,20 +1049,23 @@ void CalibrationServiceMock::onSliceFinished(const QString &estimatedTime)
         setStatus(m_currentItem, CalibrationStatus::Completed);
         emit stepChanged();
 
-        // Phase 125 (CALIB-03): real K-value readback replaces the mock
-        // 0.04f + item*0.01. For PA (calibMode==1) the slice engine wrote an
-        // M900 K / SET_PRESSURE_ADVANCE marker into the generated G-code; we
-        // parse it now and store the REAL value with hasRealReadback=true.
-        // For every other mode (FlowRate/TempTower/Vol_speed/VFA/Retraction)
-        // the outcome is read from the physical print (band/layer inspection)
-        // -- upstream CalibUtils never auto-parses those either -- so we store
-        // the honest manual-interpretation note with kValue=0 and
+        // Phase 125 (CALIB-03) + Phase 241 (PAGE-03): real K-value readback
+        // replaces the mock 0.04f + item*0.01. For the PA modes (PA_Line,
+        // PA_Pattern, PA_Tower) the slice engine wrote an M900 K /
+        // SET_PRESSURE_ADVANCE marker into the generated G-code; we parse it
+        // now and store the REAL value with hasRealReadback=true. For every
+        // other mode (FlowRate/TempTower/Vol_speed/VFA/Retraction) the
+        // outcome is read from the physical print (band/layer inspection)
+        // -- upstream CalibUtils never auto-parses those either -- so we
+        // store the honest manual-interpretation note with kValue=0 and
         // hasRealReadback=false. No fabricated values.
         const int calibMode = m_calibTypes[m_currentItem].calibMode;
         const QString modeName = m_calibTypes[m_currentItem].name;
         float realK = 0.0f;
         bool parsed = false;
-        if (calibMode == 1 /* Calib_PA_Line */ && m_sliceService) {
+        if ((calibMode == kCalibModePA_Line || calibMode == kCalibModePA_Pattern
+             || calibMode == kCalibModePA_Tower)
+            && m_sliceService) {
             const QString gcodePath = m_sliceService->outputPath();
             parsed = parsePressureAdvanceFromGcode(gcodePath, realK);
         }
@@ -976,18 +1142,20 @@ void CalibrationServiceMock::setProjectService(ProjectServiceMock *project)
     m_projectService = project;
 }
 
-// Phase 197: map a CalibMode to its bundled tower-model qrc path. Mirrors the
-// per-mode add_model() call site in upstream Plater.cpp:
+// Phase 197 + Phase 241 (PAGE-03): map a CalibMode to its bundled tower-model
+// qrc path. Mirrors the per-mode add_model() call site in upstream Plater.cpp:
 //   calib_temp            -> resources/calib/temperature_tower/temperature_tower.stl  (Plater.cpp:9804)
 //   calib_max_vol_speed   -> resources/calib/volumetric_speed/SpeedTestStructure.step (Plater.cpp:9853)
 //   calib_VFA             -> resources/calib/vfa/VFA.stl                              (Plater.cpp:9971)
 //   calib_retraction      -> resources/calib/retraction/retraction_tower.stl         (Plater.cpp:9930)
+//   _calib_pa_tower       -> resources/calib/pressure_advance/tower_with_seam.stl    (Plater.cpp:9585)
+//   calib_flow_rate       -> resources/calib/filament_flow/flowrate-test-passN.3mf   (Plater.cpp:9784-9791)
 // The bundled copies live under qrc:/qml/assets/calib/ (registered in
-// qml.qrc). PA (mode 1) and FlowRate (mode 5) intentionally have no tower
-// model here: upstream generates their geometry in-code (pa_pattern.3mf /
-// flowrate-test-pass*.3mf are handled by separate wizard paths), so the Qt6
-// calibration slice keeps using the current-plate geometry for those.
-QString CalibrationServiceMock::towerModelQrcPathForMode(int calibMode)
+// qml.qrc). PA_Line (engine-drawn lines) and PA_Pattern (in-code generated)
+// intentionally have no tower model here: their geometry is generated by the
+// slicing engine / CalibPressureAdvancePattern, so those modes keep using the
+// current-plate geometry / the generation path.
+QString CalibrationServiceMock::towerModelQrcPathForMode(int calibMode, int flowRatePass)
 {
     switch (calibMode) {
         // v5.16 (CIRC-02): symbolic cases — the old ints 6/7/8/9 predate the
@@ -996,8 +1164,118 @@ QString CalibrationServiceMock::towerModelQrcPathForMode(int calibMode)
         case kCalibModeVolSpeed: return QStringLiteral(":/qml/assets/calib/SpeedTestStructure.step");
         case kCalibModeVFA: return QStringLiteral(":/qml/assets/calib/VFA.stl");
         case kCalibModeRetract: return QStringLiteral(":/qml/assets/calib/retraction_tower.stl");
+        // Phase 241 (PAGE-03): PA Tower uses the upstream tower-with-seam
+        // model; the engine sweeps PA per layer (GCode.cpp:3721).
+        case kCalibModePA_Tower: return QStringLiteral(":/qml/assets/calib/tower_with_seam.stl");
+        // Phase 241 (PAGE-03): Flow Rate two-pass flow — pass1 coarse /
+        // pass2 fine (upstream Plater.cpp:9784-9791 loads
+        // flowrate-test-pass1.3mf / flowrate-test-pass2.3mf).
+        case kCalibModeFlowRate:
+            return flowRatePass == 2
+                       ? QStringLiteral(":/qml/assets/calib/flowrate-test-pass2.3mf")
+                       : QStringLiteral(":/qml/assets/calib/flowrate-test-pass1.3mf");
         default: return QString{};
     }
+}
+
+void CalibrationServiceMock::setFlowRatePass(int pass)
+{
+    // Phase 241 (PAGE-03): clamp to the two upstream passes (1=coarse, 2=fine).
+    m_flowRatePass = (pass == 2) ? 2 : 1;
+}
+
+// Phase 241 (PAGE-03): symbolic mode accessors (see header). Keep these in
+// sync with the kCalibMode* constants pinned at the top of this file.
+int CalibrationServiceMock::calibModePaLine() { return kCalibModePA_Line; }
+int CalibrationServiceMock::calibModePaPattern() { return kCalibModePA_Pattern; }
+int CalibrationServiceMock::calibModePaTower() { return kCalibModePA_Tower; }
+int CalibrationServiceMock::calibModeFlowRate() { return kCalibModeFlowRate; }
+
+// Phase 241 (PAGE-03): in-code PA Pattern generation, mirroring upstream
+// Plater::_calib_pa_pattern (Plater.cpp:9418-9563). The upstream flow:
+// add a handle cube, apply the SuggestedConfigCalibPAPattern overrides
+// (retraction off, fixed accel/jerk, optimal PA speed), construct
+// CalibPressureAdvancePattern over the full config, and let it write the
+// pattern into the model as per-layer custom G-code (consumed by
+// Print.cpp:470 through model.plates_custom_gcodes). OWzx mirrors the
+// generation with default-config values. Documented deltas: (a) the preset-
+// derived accel/jerk normalization collapses to engine defaults, (b) the
+// anchor is a regular printable cube primitive instead of an INVALID-type
+// handle cube (the pattern itself is drawn entirely by the generated custom
+// G-code, the cube only anchors the print).
+bool CalibrationServiceMock::generateAndDispatchPaPattern(const QString &projectName)
+{
+#ifdef HAS_LIBSLIC3R
+    if (!m_projectService || !m_sliceService)
+        return false;
+    Slic3r::Model *model = m_projectService->rawModel();
+    if (!model)
+        return false;
+
+    try {
+        // Anchor object: upstream adds a Cube handle first
+        // (Plater.cpp:9421 load_generic_subobject("Cube", INVALID)).
+        if (model->objects.empty() || model->objects.front()->volumes.empty())
+            if (m_projectService->addPrimitiveToPlate(0) < 0)
+                return false;
+
+        const auto &calibType = m_calibTypes[m_currentItem];
+        Slic3r::Calib_Params params;
+        params.mode = Slic3r::CalibMode::Calib_PA_Pattern;
+        params.start = calibType.calibStart;
+        params.end = calibType.calibEnd;
+        params.step = calibType.calibStep;
+        params.print_numbers = calibType.printNumbers;
+
+        Slic3r::DynamicPrintConfig config =
+            Slic3r::DynamicPrintConfig::full_print_config();
+        // Upstream retraction overrides for a clean PA readout
+        // (Plater.cpp:9430-9433).
+        config.set_key_value("wipe", new Slic3r::ConfigOptionBool{false});
+        config.set_key_value("retract_when_changing_layer", new Slic3r::ConfigOptionBool{false});
+        config.set_key_value("filament_retract_when_changing_layer",
+                             new Slic3r::ConfigOptionBoolsNullable{false});
+        config.set_key_value("filament_wipe", new Slic3r::ConfigOptionBoolsNullable{false});
+        // SuggestedConfigCalibPAPattern overrides (Calib.hpp:233-244).
+        for (const auto &pair : Slic3r::SuggestedConfigCalibPAPattern().float_pairs)
+            config.set_key_value(pair.first, new Slic3r::ConfigOptionFloat(pair.second));
+        for (const auto &pair : Slic3r::SuggestedConfigCalibPAPattern().nozzle_ratio_pairs) {
+            const double nozzle = config.opt_float("nozzle_diameter", 0);
+            config.set_key_value(pair.first,
+                                 new Slic3r::ConfigOptionFloatOrPercent(
+                                     nozzle * pair.second / 100, false));
+        }
+        for (const auto &pair : Slic3r::SuggestedConfigCalibPAPattern().int_pairs)
+            config.set_key_value(pair.first, new Slic3r::ConfigOptionInt(pair.second));
+        config.set_key_value(Slic3r::SuggestedConfigCalibPAPattern().brim_pair.first,
+                             new Slic3r::ConfigOptionEnum<Slic3r::BrimType>(
+                                 Slic3r::SuggestedConfigCalibPAPattern().brim_pair.second));
+
+        // Generate the pattern into the live model (writes
+        // model.plates_custom_gcodes for the current plate; consumed by
+        // Print.cpp:470 during slicing).
+        Slic3r::CalibPressureAdvancePattern paPattern(
+            params, config, /*is_bbl_machine=*/false, *model, Slic3r::Vec3d::Zero());
+        paPattern.generate_custom_gcodes(config, /*is_bbl_machine=*/false, *model,
+                                         Slic3r::Vec3d::Zero());
+
+        m_sliceService->setCalibParams(kCalibModePA_Pattern, calibType.calibStart,
+                                       calibType.calibEnd, calibType.calibStep,
+                                       calibType.printNumbers);
+        m_sliceService->startSlice(projectName);
+        qDebug("[Calib] PA pattern generated in-code and dispatched");
+        return true;
+    } catch (const std::exception &ex) {
+        qWarning("[Calib] PA pattern generation threw: %s", ex.what());
+        return false;
+    } catch (...) {
+        qWarning("[Calib] PA pattern generation threw an unknown exception");
+        return false;
+    }
+#else
+    Q_UNUSED(projectName)
+    return false;
+#endif
 }
 
 // Phase 197: libslic3r's Model::read_from_file uses plain filesystem I/O

@@ -58,17 +58,22 @@ Item {
                         { icon: "🎨", name: qsTr("外观") },
                         { icon: "🌍", name: qsTr("语言") },
                         { icon: "⌨",  name: qsTr("快捷键") },
-                        { icon: "🖨",  name: qsTr("打印机") },
-                        { icon: "🔒",  name: qsTr("账号与隐私") },
-                        { icon: "📦",  name: qsTr("更新") },
-                        { icon: "🛠",  name: qsTr("高级") },
-                        { icon: "🐛",  name: qsTr("开发者") },
-                        { icon: "❓",  name: qsTr("关于") }
+                        { icon: "🖨", name: qsTr("打印机") },
+                        { icon: "🔒", name: qsTr("账号与隐私") },
+                        { icon: "📦", name: qsTr("更新") },
+                        { icon: "🛠", name: qsTr("高级") },
+                        { icon: "🐛", name: qsTr("开发者") },
+                        { icon: "❓", name: qsTr("关于") }
                     ]
                     delegate: Rectangle {
                         required property var modelData
                         required property int index
                         width: parent.width - 12; x: 6; height: 36; radius: 4
+                        // Phase 241 (PAGE-04): developerMode gates the
+                        // Developer category — the toggle now has a real
+                        // consumer (upstream hides debug surfaces the same
+                        // way behind the debug build flag).
+                        visible: index !== 8 || root.settingsVm.developerMode
                         color: root.settingsVm.prefCategory === index ? Theme.chromePressed
                              : (catHov.containsMouse ? Theme.bgPanel : "transparent")
                         border.color: root.settingsVm.prefCategory === index ? Theme.accent : "transparent"
@@ -166,35 +171,20 @@ Item {
                         }
                     }
 
-                    // User role
-                    RowLayout {
-                        spacing: 16
-                        Text { text: qsTr("用户角色"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
-                        Row {
-                            spacing: 4
-                            Repeater {
-                                model: [qsTr("基础"), qsTr("专业")]
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    required property int index
-                                    width: 70; height: 28; radius: 4
-                                    color: root.settingsVm.userRole === index ? Theme.chromePressed : Theme.bgFloating
-                                    border.color: root.settingsVm.userRole === index ? Theme.accent : Theme.bgHover
-                                    border.width: 1
-                                    Text { anchors.centerIn: parent; text: modelData; color: root.settingsVm.userRole === index ? Theme.accent : Theme.textMuted; font.pixelSize: Theme.fontSizeSM }
-                                    MouseArea {
-                                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.settingsVm.setUserRole(index)
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    // User role row removed (Phase 241 PAGE-04): no upstream
+                    // Preferences mapping and no consumer — dead UI must go.
 
-                    // Auto-save（对齐上游 auto_save 选项）
+                    // Auto-save / periodic backup（对齐上游 backup_switch，
+                    // Preferences.cpp:1179 "Backup your project periodically
+                    // for restoring from the occasional crash"）。
+                    // Phase 241 (PAGE-04) honest semantics: OWzx writes a
+                    // project snapshot to the app-data backup directory every
+                    // N minutes while there are unsaved changes (delta from
+                    // the upstream seconds-level crash backup timer — the
+                    // label says exactly what this build does).
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("自动保存"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("定期备份"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
                         CxSwitch {
                             checked: root.settingsVm.autoSave
                             onToggled: root.settingsVm.setAutoSave(checked)
@@ -212,6 +202,17 @@ Item {
                         Text { text: qsTr("分钟"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM }
                     }
 
+                    Text {
+                        // notYetEffectiveHint: this setting IS effective (a
+                        // real backup file lands in AppData/backup); the hint
+                        // documents the upstream interval-semantics delta.
+                        text: qsTr("开启后，每 N 分钟将未保存的项目快照写入应用数据 backup 目录（上游为秒级崩溃备份；本版本为分钟级定期备份）。")
+                        color: Theme.textDisabled
+                        font.pixelSize: Theme.fontSizeXS
+                        wrapMode: Text.Wrap
+                        Layout.preferredWidth: 500
+                    }
+
                     // Check for updates（对齐上游 preset_update/版本检查）
                     RowLayout {
                         spacing: 16
@@ -222,14 +223,14 @@ Item {
                         }
                     }
 
-                    // Reduced motion（对齐上游 enable_reduce_motion）
-                    RowLayout {
-                        spacing: 16
-                        Text { text: qsTr("减少动画效果"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
-                        CxSwitch {
-                            checked: root.settingsVm.reducedMotion
-                            onToggled: root.settingsVm.setReducedMotion(checked)
-                        }
+                    Text {
+                        // notYetEffectiveHint: persisted only — no update
+                        // server is wired (mock mode).
+                        text: qsTr("仅持久化该偏好：当前无更新服务器通道，切换后不会触发网络请求。")
+                        color: Theme.textDisabled
+                        font.pixelSize: Theme.fontSizeXS
+                        wrapMode: Text.Wrap
+                        Layout.preferredWidth: 500
                     }
 
                     // Notification preferences（对齐上游 notification_manager preferences）
@@ -313,6 +314,17 @@ Item {
                             currentIndex: root.settingsVm.region
                             onActivated: root.settingsVm.setRegion(currentIndex)
                         }
+                    }
+
+                    Text {
+                        // notYetEffectiveHint: persisted only — upstream feeds
+                        // the region into the login/network agent; the cloud
+                        // account channel is out of scope here.
+                        text: qsTr("仅持久化该偏好：区域仅在上游登录/网络通道中使用，本版本暂无该通道。")
+                        color: Theme.textDisabled
+                        font.pixelSize: Theme.fontSizeXS
+                        wrapMode: Text.Wrap
+                        Layout.preferredWidth: 500
                     }
                 }
 
@@ -597,9 +609,12 @@ Item {
                     }
 
                     Text {
-                        Layout.fillWidth: true
-                        text: qsTr("启用后，切片完成后将自动上传 G-code 到连接的打印机（需先在设备页面连接打印机）。")
-                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
+                        // notYetEffectiveHint: persisted only — device send is
+                        // out of scope (REQUIREMENTS), so no upload happens.
+                        text: qsTr("仅持久化该偏好：设备发送通道不在当前范围内，开启后暂不会执行上传。")
+                        color: Theme.textDisabled
+                        font.pixelSize: Theme.fontSizeXS
+                        wrapMode: Text.Wrap
                         Layout.preferredWidth: 400
                     }
                 }
@@ -775,25 +790,9 @@ Item {
                         Layout.preferredWidth: 500
                     }
 
-                    // Compact/LOD mode（对齐上游 3D view LOD / enable_reduce_detail）
-                    RowLayout {
-                        spacing: 16
-                        Text { text: qsTr("低细节模式"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
-                        CxSwitch {
-                            checked: root.settingsVm.compactMode
-                            onToggled: root.settingsVm.setCompactMode(checked)
-                        }
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        text: qsTr("启用后，3D 视口将降低渲染细节以提升性能。适合模型较多或硬件性能不足时使用。")
-                        color: Theme.textDisabled
-                        font.pixelSize: Theme.fontSizeXS
-                        wrapMode: Text.Wrap
-                        Layout.preferredWidth: 400
-                        visible: root.settingsVm.compactMode
-                    }
+                    // Low-detail mode row removed (Phase 241 PAGE-04): no
+                    // upstream Preferences mapping (enable_reduce_detail does
+                    // not exist upstream) and no renderer consumer — dead UI.
 
                     // Undo stack limit（对齐上游 undo/redo 历史限制）
                     RowLayout {
@@ -833,7 +832,10 @@ Item {
 
                 // Developer settings (对齐上游 PreferencesDialog::create_debug_page, index=8)
                 ColumnLayout {
+                    // Phase 241 (PAGE-04): content hidden with its sidebar
+                    // entry when developerMode is off.
                     visible: root.settingsVm.prefCategory === 8
+                             && root.settingsVm.developerMode
                     Layout.fillWidth: true; spacing: 16
 
                     Text {
@@ -857,6 +859,15 @@ Item {
                             checked: root.settingsVm.developerMode
                             onToggled: root.settingsVm.setDeveloperMode(checked)
                         }
+                    }
+
+                    Text {
+                        // notYetEffectiveHint: developerMode IS effective (it
+                        // shows/hides this whole category); the knobs below
+                        // persist only.
+                        text: qsTr("开发者模式控制本分类的显隐；下方各项当前仅持久化，尚未接入运行时。")
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
+                        Layout.preferredWidth: 500
                     }
 
                     // Debug Overlay toggle

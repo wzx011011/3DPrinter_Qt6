@@ -45,6 +45,7 @@
 #include <QtQuick/QQuickWindow>
 #include <QtQuick/QSGRendererInterface>
 #include <QSysInfo>
+#include <QDir>
 
 // 主题颜色预设
 struct ThemeColors
@@ -125,6 +126,16 @@ BackendContext::BackendContext(QObject *parent)
   homeViewModel_ = new HomeViewModel(cloudService, this);
   settingsViewModel_ = new SettingsViewModel(this);
   projectViewModel_ = new ProjectViewModel(this);
+  // Phase 241 (PAGE-01/PAGE-02): Home mirrors the persisted recent list from
+  // ProjectViewModel (single source of truth, upstream app_config
+  // "recent_projects"); the recentChanged -> refresh wiring lives INSIDE
+  // HomeViewModel::setProjectViewModel. ProjectViewModel's resource tree
+  // reads the live project service. Recent-card activation routes through
+  // topbarOpenProject (upstream Plater::load_file).
+  homeViewModel_->setProjectViewModel(projectViewModel_);
+  connect(homeViewModel_, &HomeViewModel::openProjectRequested,
+          this, &BackendContext::topbarOpenProject);
+  projectViewModel_->setProjectService(projectService_);
   calibrationViewModel_ = new CalibrationViewModel(calibrationService_, this);
   calibrationViewModel_->setPresetService(presetService_);
   modelMallViewModel_ = new ModelMallViewModel(this);
@@ -151,6 +162,28 @@ BackendContext::BackendContext(QObject *parent)
       postHint();
   });
   m_hintTimer->start();
+
+  // Phase 241 (PAGE-04): periodic project backup (upstream backup_switch,
+  // Preferences.cpp:1179 "Backup your project periodically for restoring
+  // from the occasional crash"). Interval follows the autoSaveInterval
+  // preference in minutes; each tick backs up only when autoSave is on AND
+  // the project has unsaved changes (save-on-change semantics — documented
+  // delta from the upstream seconds-level crash backup timer).
+  m_backupTimer = new QTimer(this);
+  m_backupTimer->setInterval(settingsViewModel_->autoSaveInterval() * 60 * 1000);
+  connect(m_backupTimer, &QTimer::timeout, this, [this]()
+          {
+    if (settingsViewModel_ && settingsViewModel_->autoSave()
+        && projectViewModel_ && projectViewModel_->isDirty())
+      triggerProjectBackup();
+  });
+  connect(settingsViewModel_, &SettingsViewModel::settingsChanged, this, [this]()
+          {
+    if (m_backupTimer && settingsViewModel_)
+      m_backupTimer->setInterval(
+          qMax(1, settingsViewModel_->autoSaveInterval()) * 60 * 1000);
+  });
+  m_backupTimer->start();
 
   connect(projectService_, &ProjectServiceMock::loadFinished, this,
           [this](bool success, const QString &message)
@@ -240,10 +273,15 @@ BackendContext::BackendContext(QObject *parent)
     // v5.16 (PLATE-05): real edits (objects/plates/configs) drive the
     // unsaved-changes indicator. Loads are excluded — ProjectViewModel's
     // openProject/newProject clear the flag after loadFinished anyway.
+    // Phase 241 (PAGE-02): the same edits refresh the ProjectPage resource
+    // tree so object add/delete/rename show up without a page re-entry.
     connect(projectService_, &ProjectServiceMock::projectChanged, this, [this]()
             {
               if (projectService_ && !projectService_->loading() && projectViewModel_)
+              {
                 projectViewModel_->markDirty();
+                projectViewModel_->refreshFileTree();
+              }
             });
   }
 
@@ -721,6 +759,66 @@ void BackendContext::topbarNewProject()
   pushLatencySample(QStringLiteral("topbar-new-project"), int(m_latencyClock.elapsed() - start), QString());
 }
 
+void BackendContext::applyStartupPagePreference()
+{
+  // Phase 241 (PAGE-04): the persisted startup-page preference now actually
+  // drives the initial page. showHomePage=false + defaultPage=0 (Home) still
+  // lands on Home — only showHomePage=false + defaultPage=1 (Prepare) starts
+  // on the editor, matching the two upstream app_config keys
+  // "show_home_page" / "default_page" consumed at MainFrame startup.
+  if (!settingsViewModel_)
+    return;
+  const int target = (settingsViewModel_->showHomePage()
+                          || settingsViewModel_->defaultPage() == 0)
+                         ? static_cast<int>(TabPosition::tpHome)
+                         : static_cast<int>(TabPosition::tp3DEditor);
+  setCurrentPage(target);
+}
+
+QString BackendContext::triggerProjectBackup()
+{
+  // Phase 241 (PAGE-04): write one project snapshot into the app-data backup
+  // directory. Upstream backup_switch copies the live project on a
+  // seconds-level crash timer (Preferences.cpp:1179); the OWzx delta is a
+  // periodic save-on-change backup (minute granularity, driven by the
+  // autoSave/autoSaveInterval preferences) — the setting label says exactly
+  // that. Returns the backup path, or an empty string when there is no
+  // project content to back up or the write failed.
+  if (!projectService_ || projectService_->modelCount() <= 0)
+    return QString();
+  const QString backupDir = QStandardPaths::writableLocation(
+                                QStandardPaths::AppDataLocation)
+                            + QStringLiteral("/backup");
+  if (!QDir().mkpath(backupDir))
+    return QString();
+  const QString stamp = QDateTime::currentDateTime().toString(
+      QStringLiteral("yyyyMMdd-HHmmss"));
+  const QString base = projectService_->projectName().isEmpty()
+                           ? QStringLiteral("project")
+                           : projectService_->projectName();
+  // ASCII-safe file-stem sanitize (keep CJK letters, drop path separators).
+  QString safeBase;
+  for (const QChar &c : base)
+    safeBase += (c.isLetterOrNumber() || c == QLatin1Char('-')
+                 || c == QLatin1Char('_'))
+                    ? c
+                    : QLatin1Char('_');
+  if (safeBase.isEmpty())
+    safeBase = QStringLiteral("project");
+  const QString backupPath = backupDir + QStringLiteral("/") + safeBase
+                             + QStringLiteral("-") + stamp + QStringLiteral(".3mf");
+  // writeProjectSnapshot keeps currentProjectPath_ intact (a backup must not
+  // hijack the user's current project file).
+  if (!projectService_->writeProjectSnapshot(backupPath))
+  {
+    postError(tr("Project backup failed"), 1);
+    return QString();
+  }
+  postNotification(tr("Project backup saved: %1").arg(backupPath),
+                   tr("Auto backup"));
+  return backupPath;
+}
+
 bool BackendContext::topbarOpenProject(const QString &filePath)
 {
   const qint64 start = m_latencyClock.elapsed();
@@ -809,7 +907,13 @@ bool BackendContext::topbarImportModel(const QString &filePath)
   if (loaded)
   {
     if (projectViewModel_)
+    {
       projectViewModel_->importModel(QStringList{localPath});
+      // Phase 241 (PAGE-02): keep the ProjectPage resource tree in sync with
+      // the freshly imported objects (import marks dirty, tree re-reads the
+      // live service state).
+      projectViewModel_->refreshFileTree();
+    }
     setCurrentPage(1);
   }
   pushLatencySample(QStringLiteral("topbar-import-model"), int(m_latencyClock.elapsed() - start), localPath);
@@ -1537,6 +1641,23 @@ void BackendContext::postHint()
   // keeps at most one HintNotification). Non-hint notifications stay
   // visible (stacked surface).
   pushNotificationEntry(entry, /*dedupByTypeOnly=*/true);
+  emit dailyTipChanged();
+}
+
+void BackendContext::showDailyTip()
+{
+  // Phase 241 (PAGE-01): advance the hint cursor for the HomePage Daily Tips
+  // card WITHOUT posting a notification (postHint is the notification-path
+  // twin). Mirrors upstream DailyTips rotation over the hints database
+  // (hints.ini upstream, hints.json here); weighted random selection.
+  if (m_hints.isEmpty())
+    return;
+  const int idx = selectNextHint(true);
+  if (idx < 0 || idx >= m_hints.size())
+    return;
+  m_currentHintIndex = idx;
+  m_displayedHintIds.insert(m_hints[idx].id);
+  emit dailyTipChanged();
 }
 
 void BackendContext::nextHint()
@@ -1561,6 +1682,7 @@ void BackendContext::nextHint()
     }
   }
   emit errorChanged();
+  emit dailyTipChanged();
 }
 
 void BackendContext::prevHint()
@@ -1580,6 +1702,7 @@ void BackendContext::prevHint()
     }
   }
   emit errorChanged();
+  emit dailyTipChanged();
 }
 
 int BackendContext::hintCount() const

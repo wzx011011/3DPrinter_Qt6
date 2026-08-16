@@ -55,9 +55,11 @@
 #include "core/viewmodels/ConfigViewModel.h"
 #include "core/viewmodels/CalibrationViewModel.h"
 #include "core/viewmodels/EditorViewModel.h"
+#include "core/viewmodels/HomeViewModel.h"
 #include "core/viewmodels/MonitorViewModel.h"
 #include "core/viewmodels/PreviewViewModel.h"
 #include "core/viewmodels/ProjectViewModel.h"
+#include "core/viewmodels/SettingsViewModel.h"
 #include "qml_gui/BackendContext.h"
 #include "qml_gui/Models/ConfigOptionModel.h"
 #include "qml_gui/Renderer/PrepareSceneData.h"
@@ -237,6 +239,21 @@ private slots:
   void plateSettingsSyncIntoPlateConfig();
   // v5.16 (PLATE-05): real edits mark the project dirty; load/save clear it.
   void projectEditsDriveDirtyState();
+  // Phase 241 (PAGE-01): recent projects persist across viewmodel instances
+  // and HomePage cards route through openProjectRequested.
+  void homeRecentProjectsPersistAndCardsRouteThroughSignal();
+  // Phase 241 (PAGE-03): save-to-preset writes pressure_advance /
+  // filament_flow_ratio into the filament preset via the preset-write path.
+  void calibrationSaveToPresetWritesPresetValues();
+  // Phase 241 (PAGE-03): calibration history survives service re-instantiation
+  // (JSON persistence in AppDataLocation).
+  void calibrationHistoryPersistsAcrossServiceInstances();
+  // Phase 241 (PAGE-04): startup-page preference drives currentPage and the
+  // mm<->inch display conversion math is exact.
+  void preferencesStartupPageAndInchesConversion();
+  // Phase 241 (PAGE-04): the backup primitive writes a real .3mf snapshot
+  // without hijacking the current project path.
+  void projectBackupWritesSnapshotFile();
   // v2.7 P2-A: INT-04 MQTT connection params + telemetry field mapping
   void int04_MqttConnectionParamsAndTelemetryFields();
   // v2.7 P2-B: INT-05 MQTT command construction + control flow
@@ -3192,6 +3209,11 @@ void ViewModelSmokeTests::calibrationImplementedModesExposeStableRouting()
   // startable, and carries no unavailableReason.
   const ExpectedCalibRequest expected[] = {
       {"flow_dynamics", static_cast<int>(Slic3r::CalibMode::Calib_PA_Line), 0.0, 0.1, 0.002, true},
+      // Phase 241 (PAGE-03): the two upstream PA modes routed from
+      // Plater::calib_pa (Plater.cpp:9401-9413) — pattern via in-code
+      // generation, tower via tower_with_seam.stl.
+      {"pa_pattern", static_cast<int>(Slic3r::CalibMode::Calib_PA_Pattern), 0.0, 0.08, 0.005, true},
+      {"pa_tower", static_cast<int>(Slic3r::CalibMode::Calib_PA_Tower), 0.0, 0.06, 0.005, false},
       {"flow_rate", static_cast<int>(Slic3r::CalibMode::Calib_Flow_Rate), 0.90, 1.10, 0.01, true},
       {"temp_tower", static_cast<int>(Slic3r::CalibMode::Calib_Temp_Tower), 190.0, 240.0, 5.0, true},
       {"max_volumetric_speed", static_cast<int>(Slic3r::CalibMode::Calib_Vol_speed_Tower), 5.0, 30.0, 0.5, true},
@@ -3233,6 +3255,11 @@ void ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests()
 
   const ExpectedCalibRequest expected[] = {
       {"flow_dynamics", static_cast<int>(Slic3r::CalibMode::Calib_PA_Line), 0.0, 0.1, 0.002, true},
+      // Phase 241 (PAGE-03): PA pattern emits its sweep before the in-code
+      // generation path (generation itself needs a project service, absent
+      // here by design); PA tower mirrors the other tower modes.
+      {"pa_pattern", static_cast<int>(Slic3r::CalibMode::Calib_PA_Pattern), 0.0, 0.08, 0.005, true},
+      {"pa_tower", static_cast<int>(Slic3r::CalibMode::Calib_PA_Tower), 0.0, 0.06, 0.005, false},
       {"flow_rate", static_cast<int>(Slic3r::CalibMode::Calib_Flow_Rate), 0.90, 1.10, 0.01, true},
       {"temp_tower", static_cast<int>(Slic3r::CalibMode::Calib_Temp_Tower), 190.0, 240.0, 5.0, true},
   };
@@ -3348,6 +3375,11 @@ void ViewModelSmokeTests::plateSettingsSyncIntoPlateConfig()
 
 void ViewModelSmokeTests::projectEditsDriveDirtyState()
 {
+  // Phase 241 (PAGE-01): recentProjects now persists to QSettings, so this
+  // slot must keep the setting scoped (openProject touches the recent list).
+  ScopedSettingsSnapshot snapshot({QStringLiteral("recentProjects")});
+  snapshot.clear();
+
   ProjectServiceMock service;
   ProjectViewModel project;
   // v5.16 (PLATE-05): markDirty is the slot the composition root wires to
@@ -3360,6 +3392,214 @@ void ViewModelSmokeTests::projectEditsDriveDirtyState()
   project.markDirty();
   project.openProject(QStringLiteral("C:/tmp/x.3mf"));
   QVERIFY(!project.isDirty());
+}
+
+void ViewModelSmokeTests::homeRecentProjectsPersistAndCardsRouteThroughSignal()
+{
+  // Phase 241 (PAGE-01): the recent list persists through QSettings (upstream
+  // app_config "recent_projects") and HomeViewModel mirrors it + routes card
+  // clicks through openProjectRequested (BackendContext wires that to
+  // topbarOpenProject). The hardcoded mock entries are gone for good.
+  ScopedSettingsSnapshot snapshot({QStringLiteral("recentProjects")});
+  snapshot.clear();
+
+  const QString pathA = QStringLiteral("C:/owzx-test/recent-a.3mf");
+  const QString pathB = QStringLiteral("C:/owzx-test/recent-b.3mf");
+
+  {
+    ProjectViewModel project;
+    QVERIFY(project.recentProjects().isEmpty()); // honest empty start
+    project.openProject(pathA);
+    project.openProject(pathB);
+    project.openProject(pathA); // re-open moves to front, no duplicates
+    QCOMPARE(project.recentProjects(),
+             QStringList({pathA, pathB}));
+  }
+
+  // A fresh viewmodel instance (simulated restart) restores the same list.
+  ProjectViewModel restored;
+  QCOMPARE(restored.recentProjects(), QStringList({pathA, pathB}));
+
+  // HomeViewModel mirrors the persisted source and emits the open request.
+  HomeViewModel home(nullptr);
+  home.setProjectViewModel(&restored);
+  QCOMPARE(home.recentProjectCount(), 2);
+  QCOMPARE(home.recentProjectName(0), QStringLiteral("recent-a.3mf"));
+  QCOMPARE(home.recentProjectPath(0), pathA);
+
+  QSignalSpy openSpy(&home, &HomeViewModel::openProjectRequested);
+  QVERIFY(openSpy.isValid());
+  home.openRecentProject(0);
+  QCOMPARE(openSpy.count(), 1);
+  QCOMPARE(openSpy.takeFirst().at(0).toString(), pathA);
+
+  // Clearing the recent list empties the HomePage cards too.
+  restored.clearRecentProjects();
+  QCOMPARE(home.recentProjectCount(), 0);
+}
+
+void ViewModelSmokeTests::calibrationSaveToPresetWritesPresetValues()
+{
+  // Phase 241 (PAGE-03): "save to preset" writes the measured value into the
+  // filament preset through PresetServiceMock::savePresetValues (upstream
+  // CalibrationWizardSavePage on_save): PA modes -> pressure_advance,
+  // FlowRate -> filament_flow_ratio.
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("CalibSaveToPreset"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  CalibrationServiceMock calib;
+  CalibrationViewModel vm(&calib);
+  vm.setPresetService(&preset);
+
+  const QString presetName = QStringLiteral("Unit Test Calib Filament");
+  QHash<QString, QVariant> values;
+  values.insert(QStringLiteral("filament_flow_ratio"), 0.98);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::FilamentCat, presetName, values));
+
+  // PA mode writes pressure_advance.
+  QVERIFY(vm.selectItemById(QStringLiteral("flow_dynamics")));
+  vm.setSelectedFilamentPreset(presetName);
+  vm.setCurrentKValue(0.032f);
+  QVERIFY2(vm.saveCalibrationResultToPreset(),
+           "PA save-to-preset must succeed on a writable user preset");
+  // K travels through a float property — compare as float.
+  QCOMPARE(preset.presetValue(presetName, QStringLiteral("pressure_advance")).toFloat(), 0.032f);
+  // The pre-existing flow ratio survives the read-modify-write.
+  QCOMPARE(preset.presetValue(presetName, QStringLiteral("filament_flow_ratio")).toDouble(), 0.98);
+
+  // FlowRate mode writes filament_flow_ratio.
+  QVERIFY(vm.selectItemById(QStringLiteral("flow_rate")));
+  vm.setSelectedFilamentPreset(presetName);
+  vm.setCurrentKValue(0.95f);
+  QVERIFY(vm.saveCalibrationResultToPreset());
+  QCOMPARE(preset.presetValue(presetName, QStringLiteral("filament_flow_ratio")).toFloat(), 0.95f);
+
+  // Manual-interpretation modes (temp tower) have nothing machine-writable —
+  // an honest failure, not a silent success.
+  QVERIFY(vm.selectItemById(QStringLiteral("temp_tower")));
+  QVERIFY(!vm.saveCalibrationResultToPreset());
+
+  // The preset write also lands in the calibration history.
+  QVERIFY(calib.historyCount() >= 2);
+}
+
+void ViewModelSmokeTests::calibrationHistoryPersistsAcrossServiceInstances()
+{
+  // Phase 241 (PAGE-03): calibration history survives service
+  // re-instantiation through the AppDataLocation JSON file (upstream keeps
+  // the history in the printer device profile; the device channel is out of
+  // scope, so OWzx persists locally — same honest fields).
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("CalibHistoryPersistence"));
+
+  {
+    CalibrationServiceMock service;
+    service.clearHistory();
+    service.addHistoryEntry(QStringLiteral("Flow Dynamics"),
+                            QStringLiteral("Unit Test Filament"),
+                            0.031f, 0.4f,
+                            QStringLiteral("2026-08-16T12:00:00"),
+                            true,
+                            QStringLiteral("PA K-value read back from sliced G-code."));
+    QCOMPARE(service.historyCount(), 1);
+  }
+
+  CalibrationServiceMock restored;
+  QCOMPARE(restored.historyCount(), 1);
+  QCOMPARE(restored.historyName(0), QStringLiteral("Flow Dynamics"));
+  QCOMPARE(restored.historyFilamentId(0), QStringLiteral("Unit Test Filament"));
+  QCOMPARE(restored.historyKValue(0), 0.031f);
+  QVERIFY(restored.historyHasRealReadback(0));
+
+  restored.clearHistory();
+  QCOMPARE(restored.historyCount(), 0);
+}
+
+void ViewModelSmokeTests::preferencesStartupPageAndInchesConversion()
+{
+  // Phase 241 (PAGE-04): the persisted startup-page preference drives
+  // BackendContext::currentPage (applyStartupPagePreference), and the
+  // mm<->inch display conversion is exact with storage staying in mm
+  // (upstream use_inches, Preferences.cpp:1109-1110).
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("showHomePage"),
+      QStringLiteral("defaultPage"),
+      QStringLiteral("units")});
+  snapshot.clear();
+
+  SettingsViewModel settings;
+  // Metric default: identity conversion + mm label.
+  QCOMPARE(settings.units(), 0);
+  QCOMPARE(settings.displayLength(25.4), 25.4);
+  QCOMPARE(settings.storageLength(25.4), 25.4);
+  QCOMPARE(settings.lengthUnitLabel(), QStringLiteral("mm"));
+
+  // Imperial: 1 inch == 25.4 mm exactly, round-trip is lossless within
+  // double precision.
+  settings.setUnits(1);
+  QCOMPARE(settings.displayLength(25.4), 1.0);
+  QCOMPARE(settings.storageLength(1.0), 25.4);
+  QCOMPARE(settings.lengthUnitLabel(), QStringLiteral("in"));
+
+  // Startup page mapping: showHomePage=true lands on Home; false+Prepare
+  // lands on the 3D editor tab (upstream show_home_page / default_page).
+  BackendContext backend;
+  QCOMPARE(backend.currentPage(), 1); // 3D editor default before applying
+  auto *backendSettings = qobject_cast<SettingsViewModel *>(backend.settingsViewModel());
+  QVERIFY(backendSettings != nullptr);
+  backendSettings->setShowHomePage(true);
+  backend.applyStartupPagePreference();
+  QCOMPARE(backend.currentPage(), backend.tpHome());
+
+  backendSettings->setShowHomePage(false);
+  backendSettings->setDefaultPage(1); // Prepare
+  backend.applyStartupPagePreference();
+  QCOMPARE(backend.currentPage(), backend.tp3DEditor());
+
+  backendSettings->setDefaultPage(0); // Home page preference
+  backend.applyStartupPagePreference();
+  QCOMPARE(backend.currentPage(), backend.tpHome());
+}
+
+void ViewModelSmokeTests::projectBackupWritesSnapshotFile()
+{
+#ifdef HAS_LIBSLIC3R
+  // Phase 241 (PAGE-04): the auto-backup primitive writes a real 3MF
+  // snapshot WITHOUT hijacking currentProjectPath_ (a backup must never
+  // become the user's project file). Nothing to back up -> honest empty
+  // response from the composition root.
+  ProjectServiceMock project;
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(project.loadFile(kStlPath));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY(loadSpy.takeFirst().at(0).toBool());
+  QVERIFY(project.modelCount() > 0);
+
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString snapshotPath = dir.path() + QStringLiteral("/backup-snapshot.3mf");
+  QVERIFY(project.writeProjectSnapshot(snapshotPath));
+  QVERIFY2(QFile::exists(snapshotPath),
+           "the backup snapshot .3mf must exist on disk");
+  QVERIFY(QFileInfo(snapshotPath).size() > 0);
+  // The snapshot must not change the current project path.
+  const QString before = project.currentProjectPath();
+  QVERIFY(project.writeProjectSnapshot(dir.path() + QStringLiteral("/second.3mf")));
+  QCOMPARE(project.currentProjectPath(), before);
+
+  // The composition root reports "nothing to back up" for an empty project
+  // instead of writing a fabricated backup file.
+  BackendContext backendEmpty;
+  QVERIFY(backendEmpty.triggerProjectBackup().isEmpty());
+#else
+  QSKIP("This test requires libslic3r");
+#endif
 }
 
 void ViewModelSmokeTests::calibrationUnsupportedModesAreExplicitlyUnavailable()
